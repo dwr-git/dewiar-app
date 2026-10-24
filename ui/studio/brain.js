@@ -8,14 +8,15 @@
 /* ---------- мозг ----------
    llm.profiles в patch ядро заменяет целиком (settings._merge: удалённый профиль не должен вернуться), поэтому
    любая правка профиля шлёт весь словарь S.llm.profiles. */
-let openProf = null;
+let openProf = null, profSig = "";
 function uid() { return "p" + Math.random().toString(36).slice(2, 8); }
 function renderProfiles() {
   const box = $("#profiles"); box.innerHTML = "";
   const profs = S.llm.profiles || {};
+  profSig = JSON.stringify([S.llm.active, profs]);
   if (!Object.keys(profs).length) box.innerHTML = '<p class="hint" style="margin-bottom:10px">Пока ни одной — выберите выше, где будет думать ассистент.</p>';
   Object.entries(profs).forEach(([id, p]) => {
-    const el = document.createElement("div"); el.className = "prof" + (S.llm.active === id ? " on" : "") + (openProf === id ? " open" : "");
+    const el = document.createElement("div"); el.className = "prof" + (S.llm.active === id ? " on" : "") + (openProf === id ? " open" : ""); el.dataset.id = id;
     el.innerHTML = `<div class="head"><input type="radio" name="act" ${S.llm.active === id ? "checked" : ""} title="Сделать активной"><div class="t"><b></b><small></small></div><span class="res"></span><button class="btn small">Настроить</button></div>
     <div class="body"><div class="row" style="margin-top:12px">
       <label class="f">Название<input type="text" data-f="name"></label>
@@ -59,6 +60,17 @@ function renderProfiles() {
     $('[data-a="del"]', el).onclick = () => { delete S.llm.profiles[id]; const patch = { llm: { profiles: S.llm.profiles } }; if (S.llm.active === id) patch.llm.active = Object.keys(S.llm.profiles)[0] || ""; save(patch).then(renderProfiles); };
     box.appendChild(el);
   });
+}
+/* GitHub #18 (24.10): событие settings (ядро само сменило модель — engine_brain) не перерисовывало «Мозг»: радиокнопка
+   оставалась у прежней модели. Ничего не поменялось — не трогаем (список моделей и итог «Проверить» остаются); человек
+   печатает в поле профиля — перерисовка сбила бы ввод: тогда только отметка. */
+function profilesSync() {
+  const box = $("#profiles"); if (!box || !S.llm || JSON.stringify([S.llm.active, S.llm.profiles || {}]) === profSig) return;
+  const a = document.activeElement, ids = Object.keys((S.llm && S.llm.profiles) || {});
+  const typing = a && box.contains(a) && a.matches("input,select,textarea") && a.type !== "radio";
+  if (typing && ids.join() === $$(".prof", box).map(e => e.dataset.id).join()) {
+    $$(".prof", box).forEach(e => { const on = e.dataset.id === S.llm.active; e.classList.toggle("on", on); $(".head input", e).checked = on; });
+  } else renderProfiles();
 }
 function addProfile(preset, extra = {}) {
   if (!(S_presets[preset] || extra.base_url)) { toast("Студия ещё не на связи с ядром — попробуйте через секунду"); return Promise.resolve(); }

@@ -92,6 +92,9 @@ function update(g, dt) {
     if (!S.flip && S.demo > .35) { S.demo = 0; if (S.rows.length >= 3) fresh('title'); else if (S.cur.length < LEN) S.cur += (S.rows.length === 2 ? S.word : A.pick(WORDS))[S.cur.length]; else submit(g); }
     typed = []; return;
   }
+  // GitHub #17 (24.10): после итога S.done оставался, и finish() звался каждый кадр — экран пересоздавался,
+  // защита от раннего клика не истекала, и «Следующее слово» не срабатывало. Вне игры — ничего не делаем.
+  if (S.mode !== 'play') { typed = []; return; }
   if (S.done) { S.done += dt; if (S.done > 1.3) finish(g); typed = []; return; }
   for (const ch of typed) type(g, ch); typed = [];
   const inp = g.input;

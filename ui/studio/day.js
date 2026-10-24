@@ -24,10 +24,17 @@ function itemText(it) {
   if (it.type === "money") return `${it.kind === "income" ? "+" : "−"}${fmtMoney(it.amount, it.currency)} ${it.title || ""}`;
   return `${it.time && (it.type === "reminder" || it.type === "event") ? it.time + " " : ""}${it.title || ""}`;
 }
+let calReq = 0;
 async function loadCalendar() {
   if (calY === null) { const d = new Date(); calY = d.getFullYear(); calM = d.getMonth() + 1; calSel = isoD(d); }
-  try { calData = await core.call("calendar_month", { year: calY, month: calM }); }
-  catch (e) { $("#cal-grid").textContent = e.message; return; }
+  // GitHub #19 (24.10): ядро отвечает параллельно, и поздний ответ за ноябрь затирал октябрь выбранного 31-го —
+  // «ничего нет». Применяем только ответ на последний запрос.
+  const my = ++calReq;
+  let d;
+  try { d = await core.call("calendar_month", { year: calY, month: calM }); }
+  catch (e) { if (my === calReq) $("#cal-grid").textContent = e.message; return; }
+  if (my !== calReq) return;
+  calData = d;
   renderCalFilter(); renderCal(); renderSide(); if (calTab === "feed") renderFeed();
   if (calTab === "money") loadMoney();
   if ($("#day-dlg").open) renderDay();

@@ -381,13 +381,25 @@ class TaskManager:
         """Создать папку задачи и начальные файлы; project — папка проекта для режима «Код». Нет папки — ValueError."""
         title = _clean(title or goal[:50])
         tid = uuid.uuid4().hex[:8]
-        d = self.root / f"{dt.datetime.now():%Y-%m-%d %H%M} {title}"
-        d.mkdir(parents=True, exist_ok=True)
         if project:
             p = Path(project).expanduser()
             if not p.is_dir():
                 raise ValueError(f"папки проекта нет: {project}")
             project = str(p.resolve())
+        # GitHub #12 (24.10): две задачи с одним названием в одну минуту делили папку — вторая затирала задача.json
+        # первой, а удаление одной стирало обе. Занята — берём «(2)», «(3)»…; mkdir без exist_ok не отдаст чужую.
+        base = f"{dt.datetime.now():%Y-%m-%d %H%M} {title}"
+        self.root.mkdir(parents=True, exist_ok=True)
+        for n in range(1, 1000):
+            d = self.root / (base if n == 1 else f"{base} ({n})")
+            try:
+                d.mkdir()
+                break
+            except FileExistsError:
+                continue
+        else:
+            d = self.root / f"{base} {tid}"
+            d.mkdir()
         data = {"id": tid, "title": title, "goal": goal.strip(), "project": project or "", "status": "paused",
                 "created": _now(), "updated": _now(), "steps": 0, "persona": persona or self.host.persona_name(),
                 "question": "", "result": "", "error": "", "activity": ""}
@@ -1623,7 +1635,13 @@ class TaskManager:
                 t.journal("⏹ Остановлено.")
         except (LLMError, OSError, CodeError) as e:
             n = int(t.data.get("retries") or 0)
-            if isinstance(e, LLMError) and self._transient(e) and n < len(RETRY_MIN):
+            if t.cancel.is_set():
+                # GitHub #15 (24.10): человек нажал «Остановить», а зависший запрос потом упал ReadTimeout — повтор
+                # назначался без проверки отмены, и start() снимал её. Остановка важнее позднего сбоя: без повтора.
+                if t.status != "paused":
+                    t.data.update(status="stopped", wake_at="", error="")
+                t.journal(f"⏹ Остановлено (запрос к модели завершился позже: {self._short(str(e), 160)}).")
+            elif isinstance(e, LLMError) and self._transient(e) and n < len(RETRY_MIN):
                 when = dt.datetime.now() + dt.timedelta(minutes=RETRY_MIN[n])      # временный сбой — попробуем позже
                 t.data.update(retries=n + 1, status="sleeping", wake_at=when.isoformat(timespec="seconds"),
                               wait_reason="модель или сеть не ответили — пробую снова", error="")

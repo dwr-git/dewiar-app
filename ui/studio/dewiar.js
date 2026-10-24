@@ -528,7 +528,7 @@ core.on("hello", d => {
 .on("voices", () => loadVosk())
 .on("persona", e => { active = e.persona; renderPersonas(); })
 .on("personas", e => { personas = e.personas; renderPersonas(); fillNamePick(); })
-.on("settings", e => { S = e.settings; refreshStatic(); renderCurrent(); })
+.on("settings", e => { S = e.settings; refreshStatic(); renderCurrent(); profilesSync(); })   // GitHub #18 (24.10)
 .on("mcp", e => { if ($("#p-skills").classList.contains("cur")) renderMcp(e.status); })
 .on("status", e => renderStatus(e.status));
 bindFields();

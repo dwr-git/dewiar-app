@@ -302,7 +302,9 @@ class CodeWork:
             patch = subprocess.run(["git", "-C", str(self.project), "diff", "HEAD", "--binary"], capture_output=True).stdout
             if patch.strip():
                 subprocess.run(["git", "-C", str(self.work), "apply", "--whitespace=nowarn"], input=patch, capture_output=True)
-            for rel in _git(self.project, "ls-files", "--others", "--exclude-standard").splitlines():
+            # GitHub #16 (24.10): без -z git отдаёт «новый.py» C-кавычками ("\320\275…"), и файл не находился —
+            # в копию не попадали неотслеживаемые файлы с кириллицей. С -z имена как есть, через NUL.
+            for rel in filter(None, _git(self.project, "ls-files", "-z", "--others", "--exclude-standard").split("\0")):
                 src, dst = self.project / rel, self.work / rel
                 if src.is_file():
                     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -320,12 +322,28 @@ class CodeWork:
                     continue
                 if size > MAX_COPY:
                     raise CodeError("проект без git больше 400 МБ — инициализируйте git (git init), и я возьму его рабочей копией")
+            skipped = []
             try:
                 shutil.copytree(self.project, self.work, ignore=shutil.ignore_patterns(*IGNORE_DIRS), symlinks=True)
             except shutil.Error as e:              # часть файлов не прочиталась (нет доступа) — работаем с остальными
                 bad = e.args[0] if e.args and isinstance(e.args[0], list) else []
                 log.warning("Рабочая копия: не скопировано файлов без доступа — %d", len(bad))
-            self.meta.write_text('{"mode": "copy"}', encoding="utf-8")
+                # GitHub #14 (24.10): нескопированный файл _copy_changes считал удалённым, и «Принять» стирал оригинал.
+                # Запоминаем такие пути: их исходного состояния копия не видела — accept их не удаляет и не перезаписывает.
+                for item in bad:
+                    try:
+                        src, dst = Path(item[0]), Path(item[1])
+                        rel = src.relative_to(self.project).as_posix()
+                    except (TypeError, ValueError, IndexError):
+                        continue
+                    if dst.is_file() and not src.is_dir():
+                        dst.unlink(missing_ok=True)   # обрывок файла после сбоя чтения — не выдаём модели за целый
+                    elif dst.exists():
+                        continue                      # папка скопирована, не удались только её атрибуты (copystat)
+                    skipped.append(rel)
+            import json
+            self.meta.write_text(json.dumps({"mode": "copy", "skipped": sorted(set(skipped))}, ensure_ascii=False),
+                                 encoding="utf-8")
         log.info("Рабочая копия: %s → %s", self.project, self.work)
 
     @property
@@ -491,9 +509,12 @@ class CodeWork:
         """Без git: [(статус, путь)] — файлы, которые отличаются от проекта. Читает все файлы целиком."""
         work = {str(p) for p in _walk(self.work, limit=200000)}
         proj = {str(p) for p in _walk(self.project, limit=200000)}
+        skipped = self.mode.get("skipped") or []
         changed = []
         for rel in sorted(work | proj):
             a, b = self.project / rel, self.work / rel
+            if rel in proj and any(rel == s or rel.startswith(s + "/") for s in skipped):
+                continue                              # GitHub #14 (24.10): не скопировался при подготовке — не трогаем
             if rel not in proj:
                 changed.append(("added", rel))
             elif rel not in work:
@@ -510,11 +531,16 @@ class CodeWork:
         m = self.mode
         if m.get("mode") == "git":
             _git(self.work, *GIT_ADD)
-            out = _git(self.work, "diff", "--cached", "--name-status", m["base"])
-            res = []
-            for ln in out.splitlines():
-                st, *paths = ln.split("\t")
-                res.append(({"A": "added", "D": "deleted"}.get(st[0], "modified"), paths[-1]))
+            # GitHub #16 (24.10): -z — и здесь имена с кириллицей без C-кавычек; R/C — два пути, берём новый
+            parts = _git(self.work, "diff", "--cached", "-z", "--name-status", m["base"]).split("\0")
+            res, i = [], 0
+            while i < len(parts) and parts[i]:
+                st = parts[i]
+                k = 2 if st[0] in "RC" else 1
+                rel = parts[i + k] if i + k < len(parts) else ""
+                i += k + 1
+                if rel:
+                    res.append(({"A": "added", "D": "deleted"}.get(st[0], "modified"), rel))
             return res
         return self._copy_changes()
 
@@ -648,6 +674,7 @@ class CodeWork:
         не вышло — CodeError, копия остаётся. Без git — копирование файлов поверх проекта."""
         m = self.mode
         n = len(self.changes())                       # до переноса: после него копия и проект совпадают, и счёт был бы 0
+        skipped = m.get("skipped") or []
         if m.get("mode") == "git":
             patch = subprocess.run(["git", "-C", str(self.work), "diff", "--cached", "--binary", m["base"]], capture_output=True).stdout
             if not patch.strip():
@@ -668,7 +695,8 @@ class CodeWork:
                     a.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(b, a)
         self.discard()
-        return f"Изменения перенесены в проект ({n} файлов)."
+        return f"Изменения перенесены в проект ({n} файлов)." + (
+            f" Файлы, которые не удалось прочитать при подготовке ({len(skipped)}), остались как были." if skipped else "")
 
     def discard(self):
         """Удалить рабочую копию (и worktree из списка git) — проект не меняется."""
