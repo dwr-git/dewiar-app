@@ -22,8 +22,8 @@ def ok(c, m):
 ARC = ROOT / "ui/assets/arcade"
 web = [f for f in ARC.rglob("*") if f.suffix in (".html", ".js", ".css") and re.search(r"https?://", f.read_text(encoding="utf-8"))]
 ok(not web, f"игры не ходят в интернет (шрифты свои): {web}")
-ok(all((ARC / g / "index.html").is_file() and (ARC / g / "cover.jpg").is_file() for g in ("plane", "bip", "bricks", "snake", "racer", "blocks", "candy", "merge", "sudoku", "fifteen", "reversi", "tictac", "crossword", "words"))
-   and (ARC / "shared/fonts/OFL-Rubik.txt").is_file(), "четырнадцать игр с обложками, лицензия шрифта рядом")
+ok(all((ARC / g / "index.html").is_file() and (ARC / g / "cover.jpg").is_file() for g in ("plane", "bip", "bricks", "snake", "racer", "blocks", "candy", "merge", "sudoku", "fifteen", "reversi", "tictac", "crossword", "words", "glow"))
+   and (ARC / "shared/fonts/OFL-Rubik.txt").is_file(), "пятнадцать игр с обложками, лицензия шрифта рядом")
 
 import engine_base as EB  # noqa: E402
 for t, k, g in (("Лира, давай поиграем", "play", ""), ("хочу поиграть", "play", ""), ("поиграем в змейку", "play", "snake"),
@@ -61,7 +61,7 @@ with sync_playwright() as p:
     ok(pg.is_visible("#b-play"), "в блокноте — кнопка «Досуг»")
     pg.click("#b-play"); pg.wait_for_timeout(500)
     names = pg.evaluate("[...document.querySelectorAll('#shelf .ag b')].map(b => b.textContent)")
-    ok(names == ["Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
+    ok(names == ["Огонёк", "Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
        f"«Досуг»: полка игр вместо вкладок и листа: {names}")
     ok(["pad_mode_mark", "play"] in pg.evaluate("apiCalls"), "виджет узнаёт, что открыт «Досуг» (подсветка кнопки)")
     pg.screenshot(path="/tmp/claude-0/games_shelf.png")
@@ -83,7 +83,7 @@ with sync_playwright() as p:
     pg.evaluate("padGame('racer')"); pg.wait_for_timeout(800)
     ok(pg.evaluate("document.querySelector('#game').getAttribute('src')").startswith("assets/arcade/racer/"), "«поиграем в гонку» — сразу игра")
     # каждая игра запускается и играет без ошибок (светлая и тёмная оболочка); «Играть» — первая кнопка на заставке
-    for gid in ("blocks", "candy", "merge", "tictac", "crossword", "words", "sudoku", "fifteen", "reversi", "plane", "bip", "bricks", "snake", "racer"):
+    for gid in ("glow", "blocks", "candy", "merge", "tictac", "crossword", "words", "sudoku", "fifteen", "reversi", "plane", "bip", "bricks", "snake", "racer"):
         gp = b.new_page(viewport={"width": 420, "height": 860}); ge = []; gp.on("pageerror", lambda e, ge=ge: ge.append(str(e)))
         gp.route(re.compile(r"^https?://"), lambda r: r.abort())
         gp.goto((ARC / gid / "index.html").as_uri() + ("?light=1" if gid in ("sudoku", "fifteen") else "")); gp.wait_for_timeout(700)

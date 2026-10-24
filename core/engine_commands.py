@@ -126,7 +126,7 @@ class CommandsMixin:
                 game = play_game(text)
                 names = {"snake": "Змейку", "racer": "Гонку", "bricks": "Кирпичики", "plane": "Небесного пилота", "bip": "Бипа",
                          "blocks": "Блоки", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
-                         "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»"}
+                         "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»"}
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
                 self._say_quick(say, text, then=lambda: self.emit("window", do="play", game=game))
         elif kind == "show":
@@ -462,6 +462,15 @@ class CommandsMixin:
         if cmd == "skills_folder":
             self.skills.user_dir.mkdir(parents=True, exist_ok=True)
             return str(self.skills.user_dir)
+        if cmd in ("ann", "ann_seen"):                # объявления для всех (кабинет → «Новости»; news.announcements)
+            if cmd == "ann_seen":
+                seen = max(int(self.s.get("ui", "ann_seen") or 0), int(a.get("id") or 0))
+                self.s.update({"ui": {"ann_seen": seen}})
+                self.emit("ann", item=None)           # прочитано в студии — строка у виджета исчезает
+                return {"ok": True, "seen": seen}
+            if a.get("refresh"):
+                self._ann_fetch()
+            return {"items": list(getattr(self, "_ann", []) or []), "seen": int(self.s.get("ui", "ann_seen") or 0)}
         if cmd in ("news", "news_seen"):              # «Что нового» после обновления (news.py)
             import news
             seen = self.s.get("ui", "news_seen") or ""

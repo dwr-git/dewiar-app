@@ -150,7 +150,7 @@ DEFAULTS = {
            "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None},               # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
     "reminders": {"ring_minutes": 2,    # сколько звенит, если никто не ответил (потом — «пропущено» в окне)
-                  "sound": "signature",  # signature (фирменный мотив) | bells | soft | classic
+                  "sound": "signature",  # signature («Струна») | chasha | kolodec | hor | glubina | motif | bells | soft | classic
                   "window": True,       # окно-будильник по центру экрана
                   "speak": True},       # произнести текст напоминания голосом
     # «Безопасность» (core/security.py): стоп-кран «Ничего не уходит в интернет» (core/egress.py) и модель, к которой вернуться

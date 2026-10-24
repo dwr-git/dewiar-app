@@ -6,6 +6,24 @@ import json
 
 from settings import DATA_DIR
 
+ANN_EVERY = 30 * 60                   # объявления для всех — раз в полчаса
+
+
+def announcements(url, timeout=10):
+    """Объявления для всех (cloud.php ?p=/news, без ключа; кабинет → «Новости», 24.10) -> [{id, title, text, level, link,
+    link_label, img (полный адрес или ""), ts}], новые первыми. Нет связи — исключение (вызывающий молчит)."""
+    import httpx
+    from cloud import DEFAULT_URL, base_of
+    base = base_of(url or DEFAULT_URL)
+    r = httpx.get(base + "?p=/news", timeout=timeout)
+    r.raise_for_status()
+    out = []
+    for i in r.json().get("items") or []:
+        if isinstance(i, dict) and int(i.get("id") or 0) > 0:
+            img = str(i.get("img") or "")
+            out.append(dict(i, id=int(i["id"]), img=(base + "?p=" + img) if img.startswith("/news/img") else ""))
+    return sorted(out, key=lambda x: -x["id"])
+
 
 def ver_key(v):
     out = []

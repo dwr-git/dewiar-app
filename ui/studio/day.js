@@ -30,6 +30,8 @@ async function loadCalendar() {
   catch (e) { $("#cal-grid").textContent = e.message; return; }
   renderCalFilter(); renderCal(); renderSide(); if (calTab === "feed") renderFeed();
   if (calTab === "money") loadMoney();
+  if ($("#day-dlg").open) renderDay();
+  sideWidth();
 }
 function renderCalFilter() {
   $("#cal-filter").innerHTML = Object.entries(CT).map(([k, [n, c]]) => `<button data-k="${k}" class="${calOff.has(k) ? "off" : ""}"><i style="background:${c}"></i>${n}</button>`).join("");
@@ -58,6 +60,7 @@ function renderCal() {
     const d = el.dataset.d; calSel = d;
     if (el.classList.contains("out")) { const x = parseD(d); calY = x.getFullYear(); calM = x.getMonth() + 1; loadCalendar(); return; }
     $$("#cal-grid .day").forEach(x => x.classList.toggle("sel", x === el)); renderSide();
+    openDay(d);                                                       // 24.10: день — крупно, поверх месяца
   });
 }
 function itemRow(it, withDate) {
@@ -83,29 +86,107 @@ function renderSide() {
   const side = $("#cal-side"), d = calSel; if (!d) { side.innerHTML = ""; return; }
   const its = dayItems(d), dt = parseD(d);
   // id не cs-list: так называется список подключённых календарей в настройках (csFill), а $ берёт первый в DOM
-  side.innerHTML = `<h3>${dt.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</h3><div id="cs-day"></div>
-    <div class="k" style="margin-top:14px">Добавить на этот день</div>
-    <div class="qadd">
-      <div class="row2"><input type="time" id="cs-time" value="10:00"><input type="text" id="cs-text" placeholder="напомнить: позвонить Лёше"></div>
-      <button class="btn small" id="cs-rem">Напомнить</button>
-      <div class="row2"><select id="cs-kind"><option value="expense">Расход</option><option value="income">Доход</option></select><input type="number" id="cs-amount" placeholder="сумма" min="0" step="0.01"></div>
-      <input type="text" id="cs-note" placeholder="на что (кофе, такси, зарплата…)">
-      <button class="btn small" id="cs-money">Записать деньги</button>
-    </div>`;
+  side.innerHTML = `<h3><button class="linkb" id="cs-open" title="Открыть день крупно">${dt.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</button></h3><div id="cs-day"></div>
+    <div class="k" style="margin-top:14px">Добавить на этот день</div>${addForm("cs")}<i class="calgrip" id="cal-grip" title="Потяните, чтобы сделать шире"></i>`;
   const box = $("#cs-day");
   if (!its.length) box.innerHTML = `<p class="hint">В этот день ничего нет.</p>`;
   its.forEach(it => box.appendChild(itemRow(it)));
-  $("#cs-rem").onclick = async () => {
-    const t = $("#cs-text").value.trim(), tm = $("#cs-time").value || "10:00"; if (!t) return $("#cs-text").focus();
+  $("#cs-open").onclick = () => openDay(d);
+  bindAdd("cs", d); bindGrip();
+}
+/* «Добавить на этот день»: напоминание и деньги — в столбце справа (cs) и в окне дня (dd) */
+function addForm(p, wide) {
+  if (wide) return `<div class="qadd wide">
+      <div class="row2"><input type="time" id="${p}-time" value="10:00"><input type="text" id="${p}-text" placeholder="напомнить: позвонить Лёше" class="grow"><button class="btn small" id="${p}-rem">Напомнить</button></div>
+      <div class="row2"><select id="${p}-kind"><option value="expense">Расход</option><option value="income">Доход</option></select><input type="number" id="${p}-amount" placeholder="сумма" min="0" step="0.01"><input type="text" id="${p}-note" placeholder="на что (кофе, такси…)" class="grow"><button class="btn small" id="${p}-money">Записать</button></div>
+    </div>`;
+  return `<div class="qadd">
+      <div class="row2"><input type="time" id="${p}-time" value="10:00"><input type="text" id="${p}-text" placeholder="напомнить: позвонить Лёше"></div>
+      <button class="btn small" id="${p}-rem">Напомнить</button>
+      <div class="row2"><select id="${p}-kind"><option value="expense">Расход</option><option value="income">Доход</option></select><input type="number" id="${p}-amount" placeholder="сумма" min="0" step="0.01"></div>
+      <input type="text" id="${p}-note" placeholder="на что (кофе, такси, зарплата…)">
+      <button class="btn small" id="${p}-money">Записать деньги</button>
+    </div>`;
+}
+function bindAdd(p, d) {
+  $(`#${p}-rem`).onclick = async () => {
+    const t = $(`#${p}-text`).value.trim(), tm = $(`#${p}-time`).value || "10:00"; if (!t) return $(`#${p}-text`).focus();
     if (new Date(`${d}T${tm}`) <= new Date()) return toast("Это время уже прошло — выберите позже");
     try { await core.call("reminder_add", { at: `${d} ${tm}`, text: t }); toast("Напоминание добавлено"); loadCalendar(); } catch (e) { toast(e.message); }
   };
-  $("#cs-money").onclick = async () => {
-    const amt = parseFloat(($("#cs-amount").value || "").replace(",", ".")); if (!(amt > 0)) return $("#cs-amount").focus();
-    try { await core.call("money_add", { kind: $("#cs-kind").value, amount: amt, note: $("#cs-note").value.trim(), date: d }); toast("Записано"); loadCalendar(); }
+  $(`#${p}-money`).onclick = async () => {
+    const amt = parseFloat(($(`#${p}-amount`).value || "").replace(",", ".")); if (!(amt > 0)) return $(`#${p}-amount`).focus();
+    try { await core.call("money_add", { kind: $(`#${p}-kind`).value, amount: amt, note: $(`#${p}-note`).value.trim(), date: d }); toast("Записано"); loadCalendar(); }
     catch (e) { toast(e.message); }
   };
 }
+/* Правый столбец тянется мышью за левый край (владелец 24.10: «пытаюсь сделать блок справа больше»); ширина — ui.cal_side_w.
+   Месяц при этом не сжимается мельче читаемого: столбец 260…560 px. */
+const SIDE_MIN = 260, SIDE_MAX = 560;
+function sideWidth(w) {
+  w = Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, w || (S && S.ui && S.ui.cal_side_w) || 290)));
+  const wrap = $(".calwrap"); if (wrap) wrap.style.setProperty("--side", w + "px");
+  return w;
+}
+function bindGrip() {
+  const g = $("#cal-grip"); if (!g) return;
+  g.onpointerdown = (e) => {
+    e.preventDefault(); g.setPointerCapture(e.pointerId); g.classList.add("on");
+    const x0 = e.clientX, w0 = $("#cal-side").getBoundingClientRect().width; let w = w0;
+    g.onpointermove = (m) => { w = sideWidth(w0 + (x0 - m.clientX)); };
+    g.onpointerup = g.onpointercancel = () => { g.onpointermove = g.onpointerup = g.onpointercancel = null; g.classList.remove("on");
+      S.ui = Object.assign({}, S.ui, { cal_side_w: w }); save({ ui: { cal_side_w: w } }, true); };
+  };
+  g.ondblclick = () => { S.ui = Object.assign({}, S.ui, { cal_side_w: 290 }); sideWidth(290); save({ ui: { cal_side_w: 290 } }, true); };
+}
+/* День крупно (владелец 24.10: «хочется нажать на день и просмотреть подробнее»): окно поверх месяца — сначала то, что по
+   времени, потом задачи, заметки, дневник, деньги с итогом; текст целиком. ← → — соседние дни, Esc — назад к месяцу. */
+const DAY_GROUPS = [["Задачи", (it) => it.type === "task"], ["Заметки", (it) => it.type === "note"], ["Дневник", (it) => it.type === "diary"]];
+function openDay(d) {
+  calSel = d; const dlg = $("#day-dlg");
+  renderDay(); if (!dlg.open) dlg.showModal(); $("#dd-title").focus();
+}
+async function dayShift(n) {
+  const x = parseD(calSel); x.setDate(x.getDate() + n); const k = isoD(x);
+  calSel = k;
+  if (x.getFullYear() !== calY || x.getMonth() + 1 !== calM) { calY = x.getFullYear(); calM = x.getMonth() + 1; await loadCalendar(); }
+  else { renderCal(); renderSide(); renderDay(); }
+}
+function renderDay() {
+  const d = calSel, dt = parseD(d), its = dayItems(d), body = $("#dd-body");
+  $("#dd-title").textContent = dt.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+  const today = isoD(new Date()), rel = d === today ? "сегодня" : d === isoD(new Date(Date.now() + 864e5)) ? "завтра" : d === isoD(new Date(Date.now() - 864e5)) ? "вчера" : String(dt.getFullYear());
+  let inc = 0, exp = 0; its.forEach(it => { if (it.type === "money" && it.currency === (calData.currency || it.currency)) it.kind === "income" ? inc += it.amount : exp += it.amount; });
+  const money = [exp ? "расход " + fmtMoney(exp, calData.currency) : "", inc ? "доход " + fmtMoney(inc, calData.currency) : ""].filter(Boolean).join(", ");
+  // plural — из memory.js (файлы студии делят одну глобальную область)
+  $("#dd-sub").textContent = [rel, its.length ? its.length + " " + plural(its.length, "запись", "записи", "записей") : "пока пусто", money].filter(Boolean).join(" · ");
+  body.innerHTML = "";
+  const sec = (title, list, timed) => {
+    if (!list.length) return;
+    // div, не section: section в студии — это страницы, они скрыты, пока не открыты
+    const s = document.createElement("div"); s.className = "dd-sec"; s.innerHTML = `<div class="k">${title}</div>`;
+    list.forEach(it => { const el = itemRow(it); el.classList.add("big");
+      if (timed) el.insertAdjacentHTML("afterbegin", `<b class="tm">${escH(it.time || "")}</b>`);
+      if (el.onclick && el.classList.contains("link")) { const go = el.onclick; el.onclick = (e) => { $("#day-dlg").close(); go(e); }; }
+      s.appendChild(el); });
+    body.appendChild(s);
+  };
+  const timed = its.filter(it => (it.type === "event" || it.type === "reminder") && it.time).sort((a, b) => a.time.localeCompare(b.time));
+  sec("По времени", timed, true);
+  sec("Весь день", its.filter(it => (it.type === "event" || it.type === "reminder") && !it.time));
+  DAY_GROUPS.forEach(([t, f]) => sec(t, its.filter(f)));
+  sec("Деньги", its.filter(it => it.type === "money"));
+  if (!its.length) body.innerHTML = `<p class="dd-empty">В этот день ничего нет. Добавьте напоминание ниже или скажите Лире: «напомни ${d === today ? "сегодня" : dt.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} в 18:00 позвонить маме».</p>`;
+  $("#dd-add").innerHTML = addForm("dd", true); bindAdd("dd", d);
+}
+$("#dd-prev").onclick = () => dayShift(-1);
+$("#dd-next").onclick = () => dayShift(1);
+$("#dd-x").onclick = () => $("#day-dlg").close();
+$("#day-dlg").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });   // щелчок мимо окна
+$("#day-dlg").addEventListener("keydown", (e) => {
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); dayShift(-1); } else if (e.key === "ArrowRight") { e.preventDefault(); dayShift(1); }
+});
 function renderFeed() {
   // «Сегодня и дальше» — от сегодня вперёд (повторяющееся напоминание — только ближайший раз), «Было» — назад от сегодня;
   // всё в пределах загруженного месяца (calData)

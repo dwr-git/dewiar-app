@@ -37,7 +37,7 @@ try:
         ok(pg.is_visible("#b-play"), "значок «Досуг» вверху")
         pg.click("#b-play"); pg.wait_for_timeout(500)
         names = pg.evaluate("[...document.querySelectorAll('#play-body .ag b')].map(b => b.textContent)")
-        ok(pg.is_visible("#sh-play") and names == ["Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"], f"лист «Досуг» — все игры по порядку: {names}")
+        ok(pg.is_visible("#sh-play") and names == ["Огонёк", "Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"], f"лист «Досуг» — все игры по порядку: {names}")
         pg.screenshot(path="/tmp/claude-0/phone_shelf.png")
         pg.click("#play-body .ag[data-game='bricks']"); pg.wait_for_timeout(1500)
         st = pg.evaluate("() => ({ ov: !$('#gameov').hidden, src: $('#gamef').getAttribute('src'), sheet: $('#sh-play').classList.contains('on'), z: getComputedStyle($('#gameov')).zIndex })")

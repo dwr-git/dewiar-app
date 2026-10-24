@@ -14,7 +14,8 @@ import java.util.List;
 
 /** Звук напоминаний и будильников. Выбор — в настройках интерфейса («Ещё» → «Звук напоминаний», Bridge.alarmSound*),
  *  хранится в SharedPreferences "dewiar" под ключом alarm_sound:
- *    signature (фирменный мотив Dewiar) | drops | orbit | chime | marimba | harp | dawn — свои мелодии (res/raw/alarm_*.ogg, синтез — tools/alarm_sounds.py);
+ *    signature (фирменный: «Струна», 24.10) | chasha | kolodec | hor | glubina (tools/brand_sounds.py) | motif (прежний мотив Dewiar) |
+ *    drops | orbit | chime | marimba | harp | dawn — свои мелодии (res/raw/alarm_*.ogg, синтез — tools/alarm_sounds.py);
  *    system — системный звук будильника; custom — свой файл (files/alarm_custom, отдаёт SoundProvider).
  *  Канал уведомлений Android запоминает звук при создании, поэтому у каждого звука свой канал alarm_<звук> (у своего
  *  файла — ещё и с отметкой времени файла); при смене прежний канал удаляется. Уведомление играет мелодию один раз,
@@ -43,6 +44,11 @@ final class Sounds {
     static int res(String id) {
         switch (id == null ? "" : id) {
             case "signature": return R.raw.alarm_signature;
+            case "chasha": return R.raw.alarm_chasha;
+            case "kolodec": return R.raw.alarm_kolodec;
+            case "hor": return R.raw.alarm_hor;
+            case "glubina": return R.raw.alarm_glubina;
+            case "motif": return R.raw.alarm_motif;
             case "drops": return R.raw.alarm_drops;
             case "orbit": return R.raw.alarm_orbit;
             case "chime": return R.raw.alarm_chime;
@@ -55,7 +61,12 @@ final class Sounds {
 
     static String label(String id) {
         switch (id) {
-            case "signature": return "Фирменный";
+            case "signature": return "Струна";
+            case "chasha": return "Чаша";
+            case "kolodec": return "Колодец";
+            case "hor": return "Хор";
+            case "glubina": return "Глубина";
+            case "motif": return "Прежний мотив";
             case "drops": return "Капли";
             case "orbit": return "Орбита";
             case "chime": return "Колокольчики";
@@ -73,7 +84,8 @@ final class Sounds {
             return u != null ? u : RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
         }
         if ("custom".equals(id)) return Uri.parse("content://" + SoundProvider.AUTH + "/custom?v=" + customFile(c).lastModified());
-        return Uri.parse("android.resource://" + c.getPackageName() + "/" + res(id));
+        // по имени, а не по числу: числа R.raw меняются, когда добавляются звуки (24.10), а канал хранит адрес навсегда
+        return Uri.parse("android.resource://" + c.getPackageName() + "/raw/" + c.getResources().getResourceEntryName(res(id)));
     }
 
     static AudioAttributes attrs() {
@@ -83,7 +95,8 @@ final class Sounds {
     /** Канал для будильников под текущий звук (создаёт; лишние alarm_* и старый «alarms» убирает). До Android 8 — без каналов. */
     static String channel(Context c) {
         String sound = current(c);
-        String id = "alarm_" + sound + ("custom".equals(sound) ? "_" + customFile(c).lastModified() : "");
+        // «_2» (24.10): прежние каналы помнили звук по числу ресурса и фирменный стал «Струной» — каналы пересоздаются
+        String id = "alarm_" + sound + ("custom".equals(sound) ? "_" + customFile(c).lastModified() : "_2");
         if (Build.VERSION.SDK_INT < 26) return id;
         try {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);

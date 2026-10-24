@@ -268,7 +268,32 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, Remote
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()
         threading.Thread(target=self._brain_watch, name="brain", daemon=True).start()
+        if not self.wav_input:
+            threading.Thread(target=self._ann_loop, name="announcements", daemon=True).start()
         self.max.start()
+
+    def _ann_fetch(self):
+        """Объявления для всех с облака (news.announcements); новое (номер больше ui.ann_seen и ещё не объявленное) —
+        событие ann: виджет показывает строку «📣 …», студия — окно с фото, текстом и ссылкой (один раз)."""
+        import news
+        try:
+            self._ann = news.announcements(self.s.get("cloud", "url") or "")
+        except Exception as e:  # noqa: BLE001 — нет связи: в следующий раз
+            log.debug("объявления: %s", e)
+            return
+        fresh = [i for i in self._ann if i["id"] > int(self.s.get("ui", "ann_seen") or 0)]
+        if fresh and fresh[0]["id"] > getattr(self, "_ann_told", 0):
+            self._ann_told = fresh[0]["id"]
+            self.emit("ann", item=fresh[0])
+
+    def _ann_loop(self):
+        if self.stopping.wait(25):
+            return
+        import news
+        while not self.stopping.is_set():
+            self._ann_fetch()
+            if self.stopping.wait(news.ANN_EVERY):
+                return
 
     def _start_hearing(self):
         """Поток hearing-init: ждёт модель Vosk (без неё нет слова запуска; повтор раз в минуту), затем

@@ -16,8 +16,8 @@ def ok(c, m):
 
 SRC = ROOT / "android/src/pro/dewiar/app"
 raw = ROOT / "android/res/raw"
-names = ["signature", "drops", "orbit", "chime", "marimba", "harp", "dawn"]
-ok(all((raw / f"alarm_{n}.ogg").stat().st_size > 10000 for n in names), "семь своих мелодий лежат в res/raw (фирменный мотив — первый)")
+names = ["signature", "chasha", "kolodec", "hor", "glubina", "motif", "drops", "orbit", "chime", "marimba", "harp", "dawn"]
+ok(all((raw / f"alarm_{n}.ogg").stat().st_size > 10000 for n in names), "двенадцать своих мелодий в res/raw (фирменный «Струна» — первый, прежний мотив — motif)")
 if shutil.which("ffprobe"):
     durs = [float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(raw / f"alarm_{n}.ogg")],
                                  capture_output=True, text=True).stdout or 0) for n in names]
@@ -25,6 +25,8 @@ if shutil.which("ffprobe"):
 snd = (SRC / "Sounds.java").read_text(encoding="utf-8")
 ok(all(f"R.raw.alarm_{n}" in snd for n in names) and '"system"' in snd and '"custom"' in snd, "Sounds: свои мелодии, системный звук и свой файл")
 ok('"alarm_" + sound' in snd and "deleteNotificationChannel" in snd and "USAGE_ALARM" in snd, "у каждого звука свой канал уведомлений, прежний убирается")
+ok('"/raw/" + c.getResources().getResourceEntryName(res(id))' in snd and ': "_2")' in snd,
+   "звук канала — по имени ресурса (числа R.raw меняются при новых звуках), каналы пересоздаются под «Струну»")
 act = (SRC / "AlarmActivity.java").read_text(encoding="utf-8")
 ok("Sounds.play(this, Sounds.current(this), true, vol)" in act and "vol + 0.0375f" in act and "AlarmReceiver.quiet(" in act,
    "окно будильника: выбранный звук по кругу, громкость нарастает, уведомление смолкает")
@@ -61,8 +63,8 @@ with sync_playwright() as p:
     pg.goto((www / "index.html").as_uri()); pg.wait_for_timeout(900)
     pg.evaluate("openSettings('more')"); pg.wait_for_timeout(400)
     rows = pg.evaluate("() => [$$('.snd').map(x => x.dataset.snd), $('.snd.on').dataset.snd, $('.snd[data-snd=custom]').classList.contains('nofile')]")
-    ok(rows[0] == ["signature", "drops", "orbit", "chime", "marimba", "harp", "dawn", "system", "custom"] and rows[1] == "signature" and rows[2],
-       f"«Звук напоминаний»: восемь звуков и свой, по умолчанию — фирменный мотив: {rows}")
+    ok(rows[0] == names + ["system", "custom"] and rows[1] == "signature" and rows[2],
+       f"«Звук напоминаний»: все звуки и свой, по умолчанию — фирменный «Струна»: {rows}")
     pg.click('.snd[data-snd="harp"]'); pg.wait_for_timeout(150)
     st = pg.evaluate("() => [$('.snd.on').dataset.snd, $('.snd.play') && $('.snd.play').dataset.snd, JSON.parse(D.alarmSound()).id]")
     ok(st == ["harp", "harp", "harp"], f"нажатие — выбрано и звучит проба: {st}")

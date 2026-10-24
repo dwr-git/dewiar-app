@@ -242,6 +242,13 @@
   #cloudlow { display: none; text-align: center; font-size: 12px; line-height: 1.35; padding: 7px 10px; border-radius: 12px; cursor: pointer;
               color: #FFE2B8; background: linear-gradient(135deg, rgba(255,138,101,.18), rgba(255,201,120,.12)); }
   #cloudlow.on { display: block; } #cloudlow.empty { color: #FFD0DA; background: rgba(255,107,138,.16); }
+  /* объявление для всех (событие ann): строка над полем — нажать, откроется в студии */
+  #annb { display: none; align-items: center; gap: 6px; font-size: 12.5px; line-height: 1.35; padding: 7px 8px 7px 11px; border-radius: 12px; cursor: pointer;
+          color: #fff; background: linear-gradient(135deg, rgba(110,140,255,.32), rgba(190,120,255,.24)); }
+  #annb.on { display: flex; } #annb.warn { background: linear-gradient(135deg, rgba(255,170,80,.34), rgba(255,120,120,.22)); }
+  #annb span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #annb button { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: 12px; padding: 0 2px; } #annb button:hover { opacity: 1; }
+  body.light #annb { color: var(--ink); }
   .srcs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .srcs button { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; border: 0; border-radius: 999px; padding: 4px 10px 4px 8px;
                  cursor: pointer; background: rgba(138,155,255,.16); color: #DDE2FF; font: 600 11.5px/1.3 inherit; }
@@ -445,6 +452,7 @@
     <div id="task"></div>
     <div id="upd"></div>
     <div id="cloudlow"></div>
+    <div id="annb" role="button" tabindex="0"><span id="annb-t"></span><button id="annb-x" title="Скрыть" aria-label="Скрыть">✕</button></div>
     <div id="ask">
       <div class="askbox" id="askbox">
         <textarea id="askin" rows="1" placeholder="Спросите что-нибудь…" title="Enter — отправить, Shift+Enter — новая строка" autocomplete="off" spellcheck="true"></textarea>
@@ -1044,7 +1052,8 @@ card.addEventListener("pointerdown", async (ev) => {
   // строки задачи и обновления — кнопки: не перехватываем указатель, иначе щелчок до них не дойдёт
   // большая картинка (#lightbox) — тоже: захват указателя уводил щелчок «закрыть» на карточку, и картинка закрывала
   // виджет намертво (отчёт 70: «при картинке виснет виджет — нужно перезапускать»)
-  if (ev.button !== 0 || ev.target.closest("button, input, #cap, #note, #upd, #task, #yn, #lightbox")) return;
+  // строки «ИИ-баланс…» и объявления — тоже кнопки (24.10: щелчок по #cloudlow уходил в перетаскивание и студия не открывалась)
+  if (ev.button !== 0 || ev.target.closest("button, input, #cap, #note, #upd, #task, #yn, #lightbox, #cloudlow, #annb")) return;
   card.setPointerCapture(ev.pointerId);
   drag = { sx: ev.screenX, sy: ev.screenY, moved: false, pos: null, orb: !!ev.target.closest("#orb") };
   if (drag.orb) holdBegin("mouse");
@@ -1102,6 +1111,17 @@ core.on("cloud", c => {
     : `ИИ-баланс: ${c.site ? (c.balance_text || c.balance + " тал.") : c.percent + "%"} — скоро пополнить`;
 });
 $("cloudlow").onclick = () => { const a = api(); if (a) a.open_settings("brain"); };
+/* объявления для всех (core: _ann_fetch, событие ann): строка «📣 заголовок»; нажали — студия покажет окно с фото и ссылкой */
+let annHidden = 0;
+function annSet(it) {
+  const el = $("annb"); if (!it || it.id <= annHidden) { el.className = ""; return; }
+  el.dataset.id = it.id; el.className = "on" + (it.level === "warn" ? " warn" : "");
+  $("annb-t").textContent = (it.level === "warn" ? "⚠️ " : "📣 ") + (it.title || it.text || "Новость Dewiar");
+}
+core.on("ann", e => annSet(e.item));
+core.on("hello", () => setTimeout(() => core.call("ann").then(r => annSet((r.items || []).find(i => i.id > (r.seen || 0)))).catch(() => {}), 1500));
+$("annb").onclick = () => { const a = api(); if (a) a.open_settings(); };        // студия при появлении сама покажет непрочитанное
+$("annb-x").onclick = (e) => { e.stopPropagation(); annHidden = +($("annb").dataset.id || 0); $("annb").className = ""; };
 $("b-cal").onclick = () => { const a = api(); if (a) a.open_settings("calendar"); };
 function setLocal(on) { $("b-lo").hidden = !on; $("corner-l").classList.toggle("lo", !!on); }
 $("b-lo").onclick = () => { const a = api(); if (a) a.open_settings("safety"); };

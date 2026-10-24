@@ -27,7 +27,7 @@ import org.json.JSONObject;
  *  (visible), уведомлений нет — всё показывает оно. Что спрашивать (адрес, вход, курсор) — тот же close_watch, что у
  *  CloseWatch; включена ли — close_live (Bridge.closeLive). */
 public class CloseLive extends Service {
-    static final int NOTE = 7301, RING_NOTE = 7302;
+    static final int NOTE = 7301, RING_NOTE = 7302, NEWS_NOTE = 7303;
     static final String CH_LIVE = "close_live", CH_CALL = "close_call", ACT_DECLINE = "pro.dewiar.CLOSE_DECLINE";
     static volatile boolean visible = false;
     private static volatile Thread loop;
@@ -115,7 +115,23 @@ public class CloseLive extends Service {
             }
         }
         pr.edit().putLong("close_notified", last).apply();
+        // объявление для всех (кабинет → «Объявления»): уведомление один раз по номеру; на экране — покажет само приложение
+        JSONObject nw = d.optJSONObject("news");
+        if (nw != null && nw.optLong("id") > pr.getLong("news_notified", 0)) {
+            if (!visible) news(nw);
+            pr.edit().putLong("news_notified", nw.optLong("id")).apply();
+        }
         return true;
+    }
+
+    private void news(JSONObject nw) {
+        PendingIntent pi = PendingIntent.getActivity(this, 11, new Intent(this, MainActivity.class).setAction("pro.dewiar.NEWS"),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        String title = nw.optString("title"), text = nw.optString("text");
+        Notification.Builder b = Compat.builder(this, Compat.CH_INFO);
+        b.setSmallIcon(R.drawable.ic_stat).setContentTitle(("warn".equals(nw.optString("level")) ? "⚠️ " : "📣 ") + (title.isEmpty() ? "Dewiar" : title))
+                .setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setAutoCancel(true).setContentIntent(pi);
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(NEWS_NOTE, b.build());
     }
 
     private void message(String name) {

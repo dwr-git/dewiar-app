@@ -1042,7 +1042,10 @@ function miniOrb(p) {          // значок персонажа без фот�
 const PHONE_SKINS = (window.DEWIAR_SKINS || []).slice();
 const SKINS = PHONE_SKINS.length ? PHONE_SKINS.map(x => x.id) : ["brand"];
 const lookSkin = () => (SKINS.includes(S.skin) ? S.skin : SKINS.includes("neusky") ? "neusky" : SKINS[0]);   // 20.10: по умолчанию — «Небесный»
-const ALARM_SOUNDS = [["signature", "Фирменный", "Мотив Dewiar — узнаётся с первых нот"], ["drops", "Капли", "Мелодия из капель воды"],
+// 24.10: фирменный звонок — «Струна» (владелец выбрал из пяти); остальные новые и прежний мотив — в коллекции
+const ALARM_SOUNDS = [["signature", "Струна · фирменный", "Низкая струна и звонкий флажолет"], ["chasha", "Чаша", "Две поющие чаши, долгий звук"],
+  ["kolodec", "Колодец", "Капли в каменном гроте"], ["hor", "Хор", "Тёплое «м-м-м» на три голоса"], ["glubina", "Глубина", "Аккорд снизу и мотив Dewiar сверху"],
+  ["motif", "Прежний мотив", "Фирменный мотив Dewiar до 0.6.92"], ["drops", "Капли", "Мелодия из капель воды"],
   ["orbit", "Орбита", "Мягкий взлёт и пузырьки с эхом"], ["chime", "Колокольчики", "Стеклянные, вверх и обратно"], ["marimba", "Маримба", "Тёплое дерево, напев"],
   ["harp", "Арфа", "Перебор струн"], ["dawn", "Рассвет", "Аккорд нарастает, сверху — искры"], ["system", "Системный", "Звук будильника телефона"]];
 const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></svg>';
@@ -2690,12 +2693,12 @@ async function quick(text) {
   let m;
   // «Досуг» (24.10): «Лира, давай поиграем», «хочу поиграть», «поиграем в змейку» — полка игр без модели.
   // «давай сыграем в города» — разговорная игра, её ведёт модель (сюда не попадает: только свои игры)
-  { const G = "(?:змейк\\S*|змею|гонк\\S*|кирпичик\\S*|арканоид\\S*|пилот\\S*|самолет\\S*|самолетик\\S*|бип\\S*|бегалк\\S*|блоки|тетрис\\S*|конфетк\\S*|три в ряд|слияни\\S*|2048|судоку|пятнашк\\S*|реверси|отелло|крестик\\S*(?:[\\s-]+нолик\\S*)?|нолик\\S*|кроссворд\\S*|пять букв|вордл\\S*)";
+  { const G = "(?:змейк\\S*|змею|гонк\\S*|кирпичик\\S*|арканоид\\S*|пилот\\S*|самолет\\S*|самолетик\\S*|бип\\S*|бегалк\\S*|блоки|тетрис\\S*|конфетк\\S*|три в ряд|слияни\\S*|2048|судоку|пятнашк\\S*|реверси|отелло|крестик\\S*(?:[\\s-]+нолик\\S*)?|нолик\\S*|кроссворд\\S*|пять букв|вордл\\S*|ог[оа]н[её]к\\S*|огоньк\\S*|сказк\\S*)";
     const PLAY_RX = new RegExp(`^(?:(?!не\\s)[а-я-]+[\\s,]+)?(?:(?:ну|а|давай|теперь|можешь)\\s+)*(?:(?:поиграем|сыграем|поиграть|поиграй со мной|сыграй со мной)(?:\\s+(?:во что-?\\s*нибудь|в игр[уы]|немного|чуть-?\\s*чуть|в ${G}))*|хочу (?:поиграть|играть|в игр[уы])(?: в ${G})?|(?:открой|запусти|включи|покажи) (?:игры|игру|досуг|аркаду|${G})(?: ${G})?|во что (?:бы )?(?:поиграть|поиграем|сыграть))(?: пожалуйста)?$`);
     if (PLAY_RX.test(t)) {
       const GM = [["snake", /змейк|змею/, "Змейку"], ["racer", /гонк/, "Гонку"], ["bricks", /кирпичик|арканоид/, "Кирпичики"], ["plane", /пилот|самолет/, "Небесного пилота"], ["bip", /(?:^|\s)(?:бип|бегалк)/, "Бипа"],
         ["blocks", /блоки|тетрис/, "Блоки"], ["candy", /конфетк|три в ряд/, "Конфетки"], ["merge", /слияни|2048/, "Слияние"], ["sudoku", /судоку/, "Судоку"], ["fifteen", /пятнашк/, "Пятнашки"], ["reversi", /реверси|отелло/, "Реверси"],
-        ["tictac", /крестик|нолик/, "Крестики-нолики"], ["crossword", /кроссворд/, "Кроссворд"], ["words", /пять букв|вордл/, "«Пять букв»"]];
+        ["tictac", /крестик|нолик/, "Крестики-нолики"], ["crossword", /кроссворд/, "Кроссворд"], ["words", /пять букв|вордл/, "«Пять букв»"], ["glow", /ог[оа]н[её]к|огоньк|сказк/, "«Огонька»"]];
       const g = GM.find(([, rx]) => rx.test(t));
       if (!feat("games")) return { say: "«Досуг» выключен. Включить — «Настройки» → «Ещё» → «Возможности»." };
       setTimeout(() => playOpen(g ? g[0] : ""), 400);
@@ -4950,6 +4953,36 @@ window.addEventListener("message", (e) => { if (e.data && e.data.arcade === "hom
 $("#b-play").onclick = () => playOpen("");
 function featApply() { $("#b-play").hidden = !feat("games"); document.body.classList.toggle("has-play", feat("games")); if (!feat("games") && gameOn()) gameClose(false); }
 featApply();
+/* Объявления для всех (24.10, владелец: «чтобы я для всех мог опубликовать, а у всех это на экранах всплыло»): кабинет →
+   «Новости», здесь — ?p=/news без ключа раз в полчаса, при запуске и из уведомления службы «Близких» (CloseLive). Новое
+   (номер больше S.annSeen) — карточка с фото, текстом и кнопкой ссылки, один раз; в разговоре и в игре — ждёт. */
+let annAt = 0, annItems = [];
+const annBase = () => { const c = syncCred(); return (c ? c.base : siteUrl("dwrapp/cloud.php")).split("?")[0]; };
+async function annCheck(open) {
+  if (!open && Date.now() - annAt < 30 * 60000) return; annAt = Date.now();
+  try {
+    const r = await http("GET", annBase() + "?p=/news", { timeout: 15000 });
+    const d = JSON.parse(r.body || "{}"); annItems = (d.items || []).filter(n => n && n.id).sort((a, b) => b.id - a.id);
+  } catch (e) { return; }
+  const fresh = annItems.filter(n => n.id > (+S.annSeen || 0));
+  if (open && annItems.length) annShow(fresh[0] || annItems[0]);
+  else if (fresh.length && state === "idle" && !gameOn() && !$(".sheet.on")) annShow(fresh[0]);
+}
+function annShow(n) {
+  const when = new Date(n.ts * 1000), esc = (t) => String(t || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  $("#ann-body").innerHTML = (n.img ? `<img class="nw-img" src="${esc(annBase() + "?p=" + n.img)}" alt="">` : "")
+    + `<p class="nw-k${n.level === "warn" ? " warn" : ""}">${n.level === "warn" ? "Предупреждение" : "Новость Dewiar"} · ${when.getDate()} ${MON_G[when.getMonth()]}</p>`
+    + (n.title ? `<h2 id="an-h">${esc(n.title)}</h2>` : "") + (n.text ? `<p class="nw-t">${esc(n.text)}</p>` : "")
+    + `<div class="nw-row">${n.link ? `<button class="btn pri" id="nw-go">${esc(n.link_label || "Смотреть")}</button>` : ""}<button class="btn" id="nw-ok">Понятно</button></div>`;
+  const img = $("#ann-body .nw-img"); if (img) img.onerror = () => img.remove();
+  if ($("#nw-go")) $("#nw-go").onclick = () => D.openUrl(n.link);
+  $("#nw-ok").onclick = () => closeSheets();
+  S.annSeen = Math.max(+S.annSeen || 0, n.id); saveS();
+  openSheet("#sh-ann");
+}
+setTimeout(() => annCheck(false), 6000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(() => annCheck(false), 1500); });
+setInterval(() => { if (!document.hidden) annCheck(false); }, 5 * 60000);
 const MON_G = MON;
 function dayHuman(iso) { const d = new Date(iso + "T12:00"); if (isNaN(d)) return iso; const t = new Date(); const y = new Date(Date.now() - 864e5);
   const same = (a, b) => a.toDateString() === b.toDateString();
@@ -6747,6 +6780,7 @@ function handleIntent(e) {
     } catch (x) { showBot("Код с настройками не подошёл: " + x.message, "err"); }
   }
   else if (e.action === "close") openClose("");                                     // нажали уведомление «Близких»
+  else if (e.action === "news") { closeSheets(); annCheck(true); }                   // уведомление объявления (CloseLive)
   else if (e.action === "close_call") {                                             // уведомление звонка близкого (CloseLive)
     clAutoAnswer = e.answer ? { pid: e.pid, until: Date.now() + 40000 } : null; clPoll(); }
   else if (e.action === "link" && /^dewiar:\/\/close/.test(e.url || "")) clAcceptLink(e.url);    // приглашение в «Близкие»

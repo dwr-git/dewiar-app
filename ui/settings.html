@@ -296,7 +296,7 @@
     <div class="jpre" id="j-pre"></div>
     <h2>Будильник</h2>
     <div class="row">
-      <label class="f">Звонок<span style="display:flex;gap:8px"><select data-k="reminders.sound" id="r-sound"><option value="signature">Фирменный Dewiar</option><option value="bells">Колокольчики</option><option value="soft">Мягкий</option><option value="classic">Классический будильник</option></select><button class="btn" id="r-listen">Послушать</button></span></label>
+      <label class="f">Звонок<span style="display:flex;gap:8px"><select data-k="reminders.sound" id="r-sound"><option value="signature">Струна — фирменный Dewiar</option><option value="chasha">Чаша</option><option value="kolodec">Колодец</option><option value="hor">Хор</option><option value="glubina">Глубина</option><option value="motif">Прежний мотив Dewiar</option><option value="bells">Колокольчики</option><option value="soft">Мягкий</option><option value="classic">Классический будильник</option></select><button class="btn" id="r-listen">Послушать</button></span></label>
       <label class="f">Звенит, пока не ответите<select data-k="reminders.ring_minutes"><option value="1">1 минуту</option><option value="2">2 минуты</option><option value="5">5 минут</option><option value="10">10 минут</option></select></label>
     </div>
     <div class="switch"><div>Окно по центру экрана<span>Большая карточка поверх всех окон с кнопками «Готово» и «Отложить». Выключено — только звонок, голос и уведомление.</span></div><label class="tg"><input type="checkbox" data-k="reminders.window"><i></i></label></div>
@@ -1171,7 +1171,7 @@
     <h1>Возможности</h1>
     <p class="lead">Dewiar умеет много. Включите только то, чем пользуетесь, — остальное не будет попадаться на глаза.
       Выключенное ничего не теряет: включите — и всё на месте. Разговор, заметки, напоминания и блокнот есть всегда.</p>
-    <div class="switch"><div>Досуг — милые игры<span>Четырнадцать игр на пару минут: головоломки (Блоки, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
+    <div class="switch"><div>Досуг — милые игры<span>Пятнадцать игр на пару минут: атмосферная сказка «Огонёк», головоломки (Блоки, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
     <div class="switch"><div>Рядом<span>«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом.</span></div><label class="tg"><input type="checkbox" data-k="features.near"><i></i></label></div>
     <div class="switch"><div>Встречи<span>«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном.</span></div><label class="tg"><input type="checkbox" data-k="features.meet"><i></i></label></div>
     <div class="switch"><div>Суфлёр<span>Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить.</span></div><label class="tg"><input type="checkbox" data-k="features.prompter"><i></i></label></div>
@@ -1332,6 +1332,24 @@
     </div>
   </section>
 
+  <dialog class="nwdlg daydlg" id="day-dlg" aria-labelledby="dd-title">
+    <div class="dd-head">
+      <button class="btn icon" id="dd-prev" title="Предыдущий день (←)" aria-label="Предыдущий день">‹</button>
+      <div class="dd-t"><h2 id="dd-title" tabindex="-1">День</h2><p class="nwsub" id="dd-sub"></p></div>
+      <button class="btn icon" id="dd-next" title="Следующий день (→)" aria-label="Следующий день">›</button>
+      <button class="btn icon dd-x" id="dd-x" title="К месяцу (Esc)" aria-label="Закрыть">✕</button>
+    </div>
+    <div id="dd-body"></div>
+    <div class="dd-addk">Добавить на этот день</div>
+    <div id="dd-add"></div>
+  </dialog>
+  <dialog class="nwdlg anndlg" id="ann-dlg" aria-labelledby="an-title">
+    <img id="an-img" alt="" hidden>
+    <p class="nwsub" id="an-k"></p>
+    <h2 id="an-title" tabindex="-1"></h2>
+    <p id="an-text"></p>
+    <div class="an-row"><a class="btn pri" id="an-go" target="_blank" rel="noopener" hidden></a><button class="btn" id="an-ok">Понятно</button></div>
+  </dialog>
   <dialog class="nwdlg" id="news-dlg" aria-labelledby="nw-title">
     <h2 id="nw-title" tabindex="-1" autofocus>Что нового</h2><p class="nwsub" id="nw-sub"></p><div id="nw-list"></div>
     <div class="actions" style="margin:16px 0 0;justify-content:flex-end"><button class="btn primary" id="nw-ok">Понятно</button></div>

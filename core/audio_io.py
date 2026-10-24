@@ -629,10 +629,37 @@ def signature_tone(rate=22050):
     return (out * 32767).astype(np.int16).tobytes()
 
 
+BRAND_SOUNDS = ("struna", "chasha", "kolodec", "hor", "glubina")     # data/sounds/alarm_*.wav (tools/brand_sounds.py)
+
+
+def _wav_tone(name, rate):
+    """Готовый звонок из data/sounds (моно 16 бит); другая частота — пересчёт линейной интерполяцией. Нет файла — None."""
+    import wave
+    from settings import DATA_DIR
+    p = DATA_DIR / "sounds" / f"alarm_{name}.wav"
+    try:
+        with wave.open(str(p), "rb") as w:
+            sr, ch, data = w.getframerate(), w.getnchannels(), w.readframes(w.getnframes())
+    except (OSError, EOFError, wave.Error):
+        return None
+    a = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+    if ch > 1:
+        a = a.reshape(-1, ch).mean(axis=1)
+    if sr != rate:
+        n = int(len(a) * rate / sr)
+        a = np.interp(np.linspace(0, len(a) - 1, n), np.arange(len(a)), a)
+    return np.clip(a, -32768, 32767).astype(np.int16).tobytes()
+
+
 def alarm_tone(style="bells", rate=22050) -> bytes:
-    """Звонок будильника (~2,4 с): колокольчики — арпеджио с затуханием и обертонами, заметно, но не резко;
-    signature — фирменный мотив Dewiar (signature_tone)."""
-    if style == "signature":
+    """Звонок будильника: signature — фирменный «Струна» (24.10, data/sounds/alarm_struna.wav); chasha, kolodec, hor,
+    glubina — коллекция; motif — прежний фирменный мотив (signature_tone); bells/soft/classic — синтез ниже."""
+    if style == "signature" or style in BRAND_SOUNDS:
+        pcm = _wav_tone("struna" if style == "signature" else style, rate)
+        if pcm:
+            return pcm
+        return signature_tone(rate)
+    if style == "motif":
         return signature_tone(rate)
     pats = {"bells": [(1046.5, 0.0), (1318.5, 0.18), (1568.0, 0.36), (2093.0, 0.54), (1568.0, 1.2), (2093.0, 1.38)],
             "soft": [(659.3, 0.0), (783.99, 0.3), (987.8, 0.6), (783.99, 1.2), (987.8, 1.5)],
