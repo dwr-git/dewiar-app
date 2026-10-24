@@ -108,6 +108,51 @@
         max-height: min(340px, calc(100% - 70px)); overflow-y: auto; padding: 6px; border-radius: 14px; background: var(--paper);
         box-shadow: 0 12px 30px -10px rgba(0,0,0,.5), inset 0 0 0 1px var(--line); }
   #tl.on { display: flex; }
+  /* ИИ-правка (padai.js): меню у курсора и карточка ответа снизу */
+  #b-ai:hover { color: var(--ink); }
+  #aim { position: fixed; z-index: 20; min-width: 236px; max-width: 290px; padding: 6px; border-radius: 14px; background: var(--paper);
+         box-shadow: 0 16px 40px -12px rgba(0,0,0,.55), inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 1px; }
+  #aim[hidden] { display: none; }
+  #aim button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 9px; text-align: left; color: var(--ink); font-size: 13.5px; }
+  #aim button span { flex: 1; } #aim button svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #aim button:hover, #aim button:focus-visible { background: var(--chip2); outline: none; }
+  #aim button:hover svg, #aim button:focus-visible svg { stroke: var(--ink); }
+  #aim .airow { display: flex; gap: 2px; } #aim .airow button { flex: 1; }
+  #aim .aig { padding: 6px 10px 3px; font-size: 11.5px; font-weight: 700; color: var(--faint); }
+  #aim .aisep { display: block; height: 1px; margin: 4px 8px; background: var(--line); }
+  #aim .aifoot { padding: 6px 10px 2px; font-size: 11px; color: var(--faint); }
+  #aim .aisub { position: absolute; min-width: 170px; padding: 6px; border-radius: 14px; background: var(--paper);
+                box-shadow: 0 16px 40px -12px rgba(0,0,0,.55), inset 0 0 0 1px var(--line); }
+  #aim .aisub[hidden] { display: none; }
+  #aip { position: absolute; left: calc(var(--gap-l, 0px) + 12px); right: calc(var(--gap-r, 0px) + 12px); bottom: 38px; z-index: 8; display: flex; flex-direction: column;
+         max-height: min(62%, 460px); border-radius: 16px; background: var(--paper); box-shadow: 0 18px 44px -14px rgba(0,0,0,.6), inset 0 0 0 1px var(--line);
+         transform: translateY(8px); opacity: 0; transition: transform .2s cubic-bezier(.2,.8,.2,1), opacity .16s; }
+  #aip.on { transform: none; opacity: 1; } #aip[hidden] { display: none; }
+  body.light #aip, body.light #aim, body.light #aim .aisub { box-shadow: 0 18px 44px -16px rgba(20,32,60,.35), inset 0 0 0 1px var(--line); }
+  #aip .aih { display: flex; align-items: center; gap: 8px; padding: 10px 10px 4px 14px; }
+  #aip .ait { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; }
+  #aip .ait svg { width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linejoin: round; }
+  #aip.busy .ait svg { animation: aiSpin 1.6s ease-in-out infinite; }
+  @keyframes aiSpin { 50% { transform: scale(1.18) rotate(12deg); opacity: .7; } }
+  #aip .ais { color: var(--faint); font-size: 12px; flex: 1; }
+  #aip .aix { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--faint); }
+  #aip .aix:hover { background: var(--chip); color: var(--ink); }
+  #aip .aix svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+  #aip .aib { overflow-y: auto; padding: 4px 16px 8px; font-size: 14px; line-height: 1.6; min-height: 54px; outline: none; }
+  #aip .aib > * + * { margin-top: .55em; } #aip .aib ul, #aip .aib ol { padding-left: 1.3em; }
+  #aip .aib h1, #aip .aib h2, #aip .aib h3 { font-size: 15px; } #aip .aib pre { white-space: pre-wrap; font-size: 12.5px; background: var(--code); padding: 8px 10px; border-radius: 9px; }
+  #aip .aib table { border-collapse: collapse; } #aip .aib td, #aip .aib th { border: 1px solid var(--line); padding: 3px 7px; }
+  #aip .aie { color: #e5677d; }
+  #aip .aisk { display: flex; flex-direction: column; gap: 8px; padding: 6px 0; }
+  #aip .aisk i { height: 10px; border-radius: 6px; background: linear-gradient(90deg, var(--chip), var(--chip2), var(--chip)); background-size: 200% 100%; animation: aiSk 1.4s linear infinite; }
+  #aip .aisk i:nth-child(2) { width: 86%; } #aip .aisk i:nth-child(3) { width: 58%; }
+  @keyframes aiSk { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { #aip, #aip.busy .ait svg, #aip .aisk i { animation: none; transition: none; } }
+  #aip .aia { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid var(--line); }
+  #aip .aib2 { padding: 6px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--chip); }
+  #aip .aib2:hover { background: var(--chip2); } #aip .aib2.p { background: var(--acc); color: #fff; } #aip .aib2.p:hover { filter: brightness(1.08); }
+  #aip .aib2.ghost { background: none; color: var(--muted); margin-left: auto; }
+  #ed .dw-diagram { cursor: default; user-select: none; }
   #tl button { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px; text-align: left; color: var(--muted); }
   #tl button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   #tl button i { width: 6px; height: 6px; flex: none; border-radius: 50%; }
@@ -123,7 +168,8 @@
   .tool { height: 28px; min-width: 28px; padding: 0 6px; display: grid; place-items: center; border-radius: 8px; color: var(--faint); font-weight: 700; font-size: 12.5px; }
   .tool:hover, .tool.on { color: var(--ink); background: var(--chip); }
   .sep { width: 1px; height: 16px; background: var(--line); margin: 0 5px; }
-  @media (max-width: 560px) { .tool { min-width: 25px; padding: 0 4px; } .sep { margin: 0 3px; } }   /* узкий лист — панель в одну строку */
+  @media (max-width: 560px) { .tool { min-width: 25px; padding: 0 4px; } .sep { margin: 0 3px; } }
+  @media (max-width: 470px) { .tool { min-width: 23px; padding: 0 3px; } .sep { margin: 0 2px; } }   /* узкий лист — панель в одну строку */
 
   /* лист */
   #sheet { flex: 1; overflow-y: auto; padding: 6px 22px 22px; scrollbar-width: thin; scrollbar-color: var(--chip2) transparent; }
@@ -153,6 +199,21 @@
   #ed pre code { background: none; padding: 0; white-space: pre; }
   #ed hr { border: 0; height: 1px; background: var(--line); margin: 1em 0; }
   #ed mark { background: rgba(255,214,102,.35); color: inherit; border-radius: 3px; padding: 0 2px; }
+  /* Цвет в тексте листа (24.10, владелец: «содержимое чуть ярче… осторожно добавить цветов»): два оттенка темы —
+     акцент (заголовки, маркеры, ссылки, цитаты) и тёплый (жирное, код); всё через color-mix от цветов темы, без кислотности */
+  #ed { --h1c: color-mix(in srgb, var(--acc) 72%, var(--ink)); --h2c: color-mix(in srgb, var(--acc) 50%, var(--ink));
+        --warm: #c4572e; --warm-soft: rgba(224,122,74,.12); }
+  body:not(.light) #ed { --h1c: color-mix(in srgb, var(--acc) 70%, #fff); --h2c: color-mix(in srgb, var(--acc) 45%, #fff); --warm: #ffb38a; --warm-soft: rgba(255,179,138,.12); }
+  #ed h1 { color: var(--h1c); }
+  #ed h2 { color: var(--h2c); }
+  #ed h1 + p, #ed h2 + p { margin-top: .35em; }
+  #ed strong { color: var(--warm); font-weight: 700; }
+  #ed em { color: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
+  #ed li::marker { color: var(--acc); }
+  #ed ol > li::marker { font-weight: 700; }
+  #ed code { color: var(--warm); background: var(--warm-soft); }
+  #ed blockquote { box-shadow: inset 3px 0 0 var(--acc); background: linear-gradient(90deg, var(--acc-soft), transparent 70%); border-radius: 0 10px 10px 0; padding: 6px 12px 6px 14px; color: var(--ink); }
+  #ed hr { height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--acc-soft), var(--acc), var(--acc-soft)); opacity: .55; }
   #ed img { max-width: 100%; border-radius: 12px; display: block; margin: 6px 0; min-height: 24px; background: var(--chip); }
   #ed img.sel { outline: 2px solid var(--acc); }
   #imgx { position: absolute; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
@@ -222,6 +283,7 @@
   </div>
   <div id="tl" role="menu" aria-label="Все вкладки"></div>
   <div id="tools" aria-label="Оформление">
+    <button class="tool" id="b-ai" title="ИИ-правка: выделите текст — переформулировать, упростить, перевести; без выделения — вся вкладка (или правая кнопка в тексте)" aria-label="ИИ-правка" aria-haspopup="menu"><svg viewBox="0 0 24 24"><path d="M12 3.5l1.6 4.4 4.4 1.6-4.4 1.6L12 15.5l-1.6-4.4L6 9.5l4.4-1.6zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg></button>
     <button class="tool" data-c="h1" title="Заголовок (# пробел)">H1</button>
     <button class="tool" data-c="h2" title="Подзаголовок (## пробел)">H2</button>
     <button class="tool" data-c="bold" title="Жирный (Ctrl+B)"><svg viewBox="0 0 24 24"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></svg></button>
@@ -254,6 +316,8 @@
 <script src="assets/dialog.js"></script>
 <script src="assets/padmd.js"></script>
 <script src="assets/arcade/shelf.js"></script>
+<script src="assets/rich.js"></script>
 <script src="pad.js"></script>
+<script src="padai.js"></script>
 </body>
 </html>

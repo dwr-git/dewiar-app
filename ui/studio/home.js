@@ -4,26 +4,85 @@
    Сверху — приветствие и «Сегодня» (ближайшее дело, письмо близкого, задача ждёт ответа, сделано сегодня); ниже —
    «Приложения» (значки; «Настроить главную» — показать или скрыть, перетащить), «Продолжить» (последний разговор и
    блокнот), «Настройка» (то, что настраивают один раз). Выбор значков — ui.home_apps (порядок и состав). */
-const HM_SVG = (g, d) => `<svg viewBox="0 0 24 24" stroke="url(#hg${g})" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+/* рисунки — маленькие сцены из тонких линий на сетке 48×48 (24.10, владелец: «прекрасен»): ln — главный штрих, th — тонкие
+   детали, sf — мягкая заливка, dt — точки, bg — подложка цвета плитки (чтобы детали не просвечивали), tx — цифра даты */
+const HM_SVG = (g, d) => `<svg viewBox="0 0 48 48" class="hmx" style="--hg:url(#hg${g})">${d}</svg>`;
 const HM_APPS = [
-  { id: "chat", name: "Чат", sub: "с персонажами", g: 1, d: '<path d="M5 18.5V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H8.5z"/><path d="M9 10h6M9 13h3.5"/>' },
-  { id: "close", name: "Близкие", sub: "переписка и звонки", g: 2, d: '<path d="M12 19s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 7.6a3.8 3.8 0 0 1 7 2.2C19 14.7 12 19 12 19z"/>' },
-  { id: "calendar", name: "Календарь", sub: "события и дни", g: 3, d: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4M8 14h2M12 14h2"/>' },
-  { id: "reminders", name: "Дела", sub: "и напоминания", g: 4, d: '<path d="M6.5 16V11a5.5 5.5 0 0 1 11 0v5l1.5 2h-14zM10 20.5h4"/>' },
-  { id: "notes", name: "Заметки", sub: "поиск, фото, файлы", g: 5, d: '<path d="M6.5 3.5h8L18.5 7.5v13h-12z"/><path d="M14.5 3.5v4h4M9.5 12h6M9.5 15.5h4"/>' },
-  { id: "tasks", name: "Задачи", sub: "большая работа", g: 6, d: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4 6.5l1.2 1.2L7.5 5.4M4.5 12h2M4.5 17.5h2"/>' },
-  { id: "play", name: "Досуг", sub: "игры на пару минут", g: 7, d: '<path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3M15.5 11h.01M17.5 13h.01"/>' },
-  { id: "pad", name: "Блокнот", sub: "у виджета", g: 5, d: '<rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8.5 8h7M8.5 11.5h7M8.5 15h4"/>' },
-  { id: "prompter", name: "Суфлёр", sub: "подсказки на встрече", g: 8, d: '<rect x="3.5" y="5" width="17" height="11" rx="2.5"/><path d="M7 9h10M7 12h6M9 20h6M12 16v4"/>' },
-  { id: "memory", name: "Память", sub: "что Лира знает", g: 1, d: '<circle cx="6" cy="6.5" r="2"/><circle cx="18" cy="7.5" r="2"/><circle cx="12" cy="17.5" r="2"/><path d="M7.6 7.8 10.6 15.6M16.5 9 13.3 15.8M8 6.8l8 .5"/>' },
-  { id: "folder", name: "Папка", sub: "файлы ассистента", g: 3, d: '<path d="M4 7.5a1.5 1.5 0 0 1 1.5-1.5H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/>' },
-  { id: "ref", name: "Рефералы", sub: "приглашённые друзья", g: 2, d: '<circle cx="12" cy="12" r="2.2"/><circle cx="5" cy="6" r="1.6"/><circle cx="19" cy="6.5" r="1.6"/><circle cx="6" cy="18.5" r="1.6"/><circle cx="18.5" cy="18" r="1.6"/><path d="M6.3 7.1 10.4 10.6M17.7 7.6l-4 3.1M7.4 17.5l3.1-3.8M17.2 17l-3.4-3.3"/>' }];
-const HM_DEFAULT = ["chat", "close", "calendar", "reminders", "notes", "tasks", "play", "pad"];
+  { id: "chat", name: "Чат", sub: "с персонажами", g: 1, d: '<path class="sf" d="M6 12a6 6 0 0 1 6-6h16a6 6 0 0 1 6 6v9a6 6 0 0 1-6 6H17l-7 5.5V26.6A6 6 0 0 1 6 21z"/><path class="ln" d="M6 12a6 6 0 0 1 6-6h16a6 6 0 0 1 6 6v9a6 6 0 0 1-6 6H17l-7 5.5V26.6A6 6 0 0 1 6 21z"/><path class="ln" d="M23 30.5v.5a5 5 0 0 0 5 5h7l5.5 4.5V35.6A5 5 0 0 0 43 31v-6a5 5 0 0 0-5-5h-1.5"/><circle class="dt" cx="14" cy="16.5" r="1.7"/><circle class="dt" cx="20" cy="16.5" r="1.7"/><circle class="dt" cx="26" cy="16.5" r="1.7"/><path class="th" d="M29 31h7M29 34.5h4"/>' },
+  { id: "close", name: "Близкие", sub: "переписка и звонки", g: 2, d: '<path class="sf" d="M17 40S5 32.6 5 23.5A6.5 6.5 0 0 1 17 20a6.5 6.5 0 0 1 12 3.5C29 32.6 17 40 17 40z"/><path class="ln" d="M17 40S5 32.6 5 23.5A6.5 6.5 0 0 1 17 20a6.5 6.5 0 0 1 12 3.5C29 32.6 17 40 17 40z"/><path class="sf2" d="M33 24s-8-4.8-8-10.4A4.4 4.4 0 0 1 33 11a4.4 4.4 0 0 1 8 2.6C41 19.2 33 24 33 24z"/><path class="ln" d="M33 24s-8-4.8-8-10.4A4.4 4.4 0 0 1 33 11a4.4 4.4 0 0 1 8 2.6C41 19.2 33 24 33 24z"/><path class="th" d="M10.5 24a3 3 0 0 1 3-2.5M40 32c1.6 1 2.6 2.6 2.8 4.5M37.5 35.5c.8.6 1.3 1.4 1.4 2.4"/><circle class="dt" cx="8" cy="12" r="1.4"/>' },
+  { id: "calendar", name: "Календарь", sub: "события и дни", g: 3, d: `<rect class="sf" x="7" y="10" width="34" height="31" rx="7"/><rect class="ln" x="7" y="10" width="34" height="31" rx="7"/><path class="ln" d="M7 19h34M16 6v8M32 6v8"/><text class="tx" x="24" y="35.5" text-anchor="middle">${new Date().getDate()}</text><path class="th" d="M12 24h3M33 24h3"/>` },
+  { id: "reminders", name: "Дела", sub: "и напоминания", g: 4, d: '<path class="sf" d="M13 32V22a11 11 0 0 1 22 0v10l3 4H10z"/><path class="ln" d="M13 32V22a11 11 0 0 1 22 0v10l3 4H10z"/><path class="ln" d="M20 40a4.2 4.2 0 0 0 8 0M24 8v3"/><path class="th" d="M6 18a17 17 0 0 1 5-8M42 18a17 17 0 0 0-5-8M3.5 21a21 21 0 0 1 3-10M44.5 21a21 21 0 0 0-3-10"/><circle class="bg" cx="36" cy="33.5" r="6.5"/><circle class="ln" cx="36" cy="33.5" r="6.5"/><path class="ln" d="M33.2 33.6l2 2 3.6-3.8"/>' },
+  { id: "notes", name: "Заметки", sub: "поиск, фото, файлы", g: 5, d: '<rect class="sf" x="11" y="7" width="27" height="35" rx="4"/><rect class="ln" x="11" y="7" width="27" height="35" rx="4"/><path class="ln" d="M8 12h6M8 19h6M8 26h6M8 33h6"/><path class="th" d="M19 15h13M19 20h13M19 25h9"/><path class="bg" d="M27.5 37.5l13-13 3 3-13 13-4 1z"/><path class="ln" d="M27.5 37.5l13-13 3 3-13 13-4 1z"/><path class="th" d="M38 27l3 3"/>' },
+  { id: "tasks", name: "Задачи", sub: "большая работа", g: 6, d: '<rect class="sf" x="9" y="9" width="30" height="33" rx="5"/><rect class="ln" x="9" y="9" width="30" height="33" rx="5"/><path class="bg" d="M18 6.5h12a2 2 0 0 1 2 2V12H16V8.5a2 2 0 0 1 2-2z"/><path class="ln" d="M18 6.5h12a2 2 0 0 1 2 2V12H16V8.5a2 2 0 0 1 2-2z"/><path class="ln" d="M14.5 20l2 2 3.6-3.8M14.5 29l2 2 3.6-3.8"/><path class="th" d="M24 20.5h9M24 29.5h9"/><path class="ln" d="M15 37h18" opacity=".35"/><path class="ln" d="M15 37h11"/>' },
+  { id: "play", name: "Досуг", sub: "игры на пару минут", g: 7, d: '<path class="sf" d="M15 15h18a10 10 0 0 1 9.6 12.8l-2.2 7.5a5 5 0 0 1-8.6 1.9L28 33h-8l-3.8 4.2a5 5 0 0 1-8.6-1.9l-2.2-7.5A10 10 0 0 1 15 15z"/><path class="ln" d="M15 15h18a10 10 0 0 1 9.6 12.8l-2.2 7.5a5 5 0 0 1-8.6 1.9L28 33h-8l-3.8 4.2a5 5 0 0 1-8.6-1.9l-2.2-7.5A10 10 0 0 1 15 15z"/><path class="ln" d="M15.5 21v7M12 24.5h7"/><circle class="dt" cx="31" cy="22.5" r="2"/><circle class="dt" cx="35" cy="26.5" r="2"/><path class="th" d="M24 6v4M18 8l2 3M30 8l-2 3"/>' },
+  { id: "pad", name: "Блокнот", sub: "у виджета", g: 5, d: '<rect class="sf2" x="14" y="5" width="26" height="26" rx="4" transform="rotate(8 27 18)"/><path class="bg" d="M8 12h26v18L26 38H8z"/><path class="sf" d="M8 12h26v18L26 38H8z"/><path class="ln" d="M8 12h26v18L26 38H8z"/><path class="ln" d="M26 38v-8h8"/><path class="th" d="M13 19h16M13 24h11M13 29h7"/><circle class="dt" cx="21" cy="12" r="2.2"/>' },
+  { id: "prompter", name: "Суфлёр", sub: "подсказки на встречах", g: 8, d: '<rect class="sf" x="5" y="8" width="38" height="24" rx="5"/><rect class="ln" x="5" y="8" width="38" height="24" rx="5"/><path class="th" d="M11 15h17M11 20h22M11 25h12"/><path class="ln" d="M35 13.5v4M33 15.5h4"/><path class="ln" d="M24 32v8M16 41h16"/><path class="th" d="M38 40a5 5 0 0 0 4-4.5"/>' },
+  { id: "memory", name: "Память", sub: "что Лира знает", g: 1, d: '<circle class="sf" cx="24" cy="24" r="17"/><circle class="ln" cx="24" cy="24" r="17"/><ellipse class="th" cx="24" cy="24" rx="17" ry="7"/><ellipse class="th" cx="24" cy="24" rx="7" ry="17"/><path class="ln" d="M14 18l9 5 9-9M23 23l2 11 9-5M14 18l-1 12 12 4"/><circle class="dt" cx="14" cy="18" r="2.2"/><circle class="dt" cx="23" cy="23" r="2.6"/><circle class="dt" cx="32" cy="14" r="2"/><circle class="dt" cx="25" cy="34" r="2"/><circle class="dt" cx="34" cy="29" r="1.6"/><circle class="dt" cx="13" cy="30" r="1.6"/>' },
+  { id: "folder", name: "Папка", sub: "файлы ассистента", g: 3, d: '<path class="bg" d="M12 22V7.5h17l5 5V22z"/><path class="ln" d="M12 22V7.5h17l5 5V22"/><path class="th" d="M29 7.5v5h5M16 12.5h8M16 16.5h13"/><path class="bg" d="M5 17a3 3 0 0 1 3-3h8l3.5 4H40a3 3 0 0 1 3 3v15a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z"/><path class="sf" d="M5 17a3 3 0 0 1 3-3h8l3.5 4H40a3 3 0 0 1 3 3v15a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z"/><path class="ln" d="M5 17a3 3 0 0 1 3-3h8l3.5 4H40a3 3 0 0 1 3 3v15a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z"/><path class="th" d="M20 31h8"/>' },
+  { id: "ref", name: "Рефералы", sub: "приглашённые", g: 2, d: '<circle class="sf" cx="24" cy="24" r="8"/><circle class="ln" cx="24" cy="21.5" r="3.2"/><path class="ln" d="M18.5 30a5.5 5.5 0 0 1 11 0"/><path class="th" d="M17 18L11 12M31 18l6-6M17 31l-6 5M31 31l6 5"/><circle class="ln" cx="9" cy="10" r="3"/><circle class="ln" cx="39" cy="10" r="3"/><circle class="ln" cx="9" cy="38" r="3"/><circle class="ln" cx="39" cy="38" r="3"/><path class="dt" d="M39 18.5l.8 1.7 1.8.3-1.3 1.3.3 1.8-1.6-.9-1.6.9.3-1.8-1.3-1.3 1.8-.3z"/>' }];
+// по умолчанию видно всё (у тех, кто ещё не настраивал, ничего не пропадает); скрытое с главной — скрыто и в меню слева
+// (24.10, владелец: «если с главной отключаю „Рефералы“ — то и слева должно исчезать… иначе не решили нахлобученность»)
+const HM_DEFAULT = ["chat", "close", "calendar", "reminders", "notes", "tasks", "play", "pad", "prompter", "memory", "folder", "ref"];
+const HM_NAV = { chat: ["chat"], close: ["close"], calendar: ["calendar"], reminders: ["reminders"], notes: ["notes"], tasks: ["tasks"],
+  prompter: ["prompter"], memory: ["memory"], folder: ["folder"], ref: ["ref"] };
+/* Два разных переключателя (24.10, владелец: «включить или нет вообще — или показать или скрыть, это разное»):
+   — здесь, на «Главной», — только ПОКАЗАТЬ / СКРЫТЬ: значок и раздел в меню; сама функция работает (Лира помнит,
+     письма близких приходят, напоминания звенят);
+   — «Возможности» — ВКЛЮЧИТЬ / ВЫКЛЮЧИТЬ совсем (игры, суфлёр…): выключенное пропадает отовсюду само. */
+const HM_FEAT = { play: "games", prompter: "prompter" };
+const hmFeat = (id) => !HM_FEAT[id] || (((S && S.features) || {})[HM_FEAT[id]] !== false);
+/** Меню слева — по главной: скрытый значок прячет свой раздел; открыт спрятанный раздел — на «Главную». */
+function hmNav() {
+  if (!S) return;
+  const shown = hmApps();
+  for (const [id, ps] of Object.entries(HM_NAV)) {
+    const off = !shown.includes(id) || !hmFeat(id);
+    for (const p of ps) { const b = $(`nav button[data-p="${p}"]`); if (b) b.hidden = off; }
+  }
+  const cur = $("nav button.cur");
+  if (cur && cur.hidden) { const h = $('nav button[data-p="home"]'); if (h) h.click(); }
+  $$("nav .ng").forEach(g => {                                   // заголовок группы, под которым всё скрыто, — тоже прочь
+    let n = g.nextElementSibling, any = false;
+    while (n && !n.classList.contains("ng")) { if (n.tagName === "BUTTON" && !n.hidden) any = true; n = n.nextElementSibling; }
+    g.hidden = !any;
+  });
+}
+window.hmNav = hmNav;
+
+/* Группы меню сворачиваются (24.10, владелец: «„Настройка“, „Знания“ — сворачиваемыми, с запоминанием»): щелчок по
+   заголовку; что свёрнуто — ui.nav_fold (в настройках, переживает перезапуск). Открытый раздел в свёрнутой группе
+   остаётся виден — чтобы было понятно, где вы. */
+const ngKey = (g) => g.dataset.k || (g.dataset.k = g.textContent.trim());
+function ngApply() {
+  const f = new Set(((S && S.ui) || {}).nav_fold || []);
+  $$("nav .ng").forEach(g => {
+    const on = f.has(ngKey(g));
+    g.classList.toggle("fold", on); g.setAttribute("aria-expanded", String(!on));
+    let n = g.nextElementSibling;
+    while (n && !n.classList.contains("ng")) { if (n.tagName === "BUTTON") n.classList.toggle("folded", on && !n.classList.contains("cur")); n = n.nextElementSibling; }
+  });
+}
+function ngToggle(g) {
+  const f = new Set(((S && S.ui) || {}).nav_fold || []), k = ngKey(g);
+  f.has(k) ? f.delete(k) : f.add(k);
+  const list = [...f];
+  if (S) S.ui = Object.assign({}, S.ui, { nav_fold: list });
+  ngApply();
+  core.call("settings_save", { patch: { ui: { nav_fold: list } } }).catch(() => { });
+}
+$$("nav .ng").forEach(g => {
+  g.setAttribute("role", "button"); g.tabIndex = 0; g.title = "Свернуть или развернуть";
+  g.onclick = () => ngToggle(g);
+  g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ngToggle(g); } };
+});
+document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("nav button[data-p]")) setTimeout(ngApply, 0); });
+window.ngApply = ngApply;
 const HM_SET = [["personas", "Персонажи"], ["brain", "Мозг"], ["ears", "Слух"], ["voice", "Голос"], ["look", "Оформление"], ["sound", "Звук и поведение"],
   ["hands", "Руки"], ["connect", "Подключение"], ["features", "Возможности"], ["dw", "Dewiar.pro"], ["safety", "Безопасность"], ["about", "О программе"]];
 const HM = { edit: false, data: {} };
 const hmEsc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function hmApps() { const a = ((S && S.ui) || {}).home_apps; return Array.isArray(a) && a.length ? a.filter(id => HM_APPS.some(x => x.id === id)) : HM_DEFAULT.slice(); }
+const hmWho = (id) => { const p = (Array.isArray(window.personas) ? personas : []).find(x => x.id === id); return (p && p.name) || "Лира"; };
 function hmGreet() {
   const h = new Date().getHours(), name = String(((S && S.user_name) || "")).trim().split(/\s+/)[0];
   const w = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
@@ -64,19 +123,19 @@ function hmBadge(id) {
 }
 function hmRender() {
   const box = $("#hm-body"); if (!box) return;
-  const shown = hmApps(), list = HM.edit ? shown.map(id => HM_APPS.find(x => x.id === id)).concat(HM_APPS.filter(x => !shown.includes(x.id))) : shown.map(id => HM_APPS.find(x => x.id === id));
+  const shown = hmApps().filter(hmFeat), list = HM.edit ? shown.map(id => HM_APPS.find(x => x.id === id)).concat(HM_APPS.filter(x => !shown.includes(x.id) && hmFeat(x.id))) : shown.map(id => HM_APPS.find(x => x.id === id));
   $("#hm-greet").textContent = hmGreet(); $("#hm-date").textContent = hmDate();
   const t = hmToday();
   $("#hm-today").innerHTML = t.map(c => `<button class="hm-card ${c.cls}" data-go="${c.go}"><small>${hmEsc(c.lab)}</small><b>${hmEsc(c.b)}</b><span>${hmEsc(c.s)}</span></button>`).join("");
   $("#hm-apps").classList.toggle("edit", HM.edit);
   $("#hm-apps").innerHTML = list.filter(Boolean).map(a => { const on = shown.includes(a.id), n = hmBadge(a.id);
     return `<div class="hm-app${on ? "" : " off"}" data-app="${a.id}" ${HM.edit ? 'draggable="true"' : ""}><button class="hm-ic" data-open="${a.id}" title="${hmEsc(a.name)} — ${hmEsc(a.sub)}">${HM_SVG(a.g, a.d)}${n && !HM.edit ? `<em>${n}</em>` : ""}</button>`
-      + `<b>${hmEsc(a.name)}</b><small>${hmEsc(a.sub)}</small>${HM.edit ? `<label class="tg hm-tg" title="${on ? "Скрыть с главной" : "Показать на главной"}"><input type="checkbox" data-tg="${a.id}" ${on ? "checked" : ""}><i></i></label>` : ""}</div>`; }).join("");
+      + `<b>${hmEsc(a.name)}</b><small>${hmEsc(a.sub)}</small>${HM.edit ? `<label class="tg hm-tg" title="${on ? "Скрыть с главной и из меню (сама функция продолжит работать)" : "Показать на главной и в меню"}"><input type="checkbox" data-tg="${a.id}" ${on ? "checked" : ""}><i></i></label>` : ""}</div>`; }).join("");
   $("#hm-edit").textContent = HM.edit ? "Готово" : "Настроить главную";
   $("#hm-edit-hint").hidden = !HM.edit;
   const ch = (HM.data.ch && HM.data.ch.items) || [], lastU = [...ch].reverse().find(x => x.role === "user"), lastA = [...ch].reverse().find(x => x.role === "assistant");
   $("#hm-chat").innerHTML = ch.length ? `<small>Последний разговор · ${new Date((lastA || lastU).ts * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</small>`
-    + (lastU ? `<p class="u">Вы: ${hmEsc(lastU.text.slice(0, 120))}</p>` : "") + (lastA ? `<p>${hmEsc((lastA.who || "Лира") + ": " + lastA.text.slice(0, 220))}${lastA.text.length > 220 ? "…" : ""}</p>` : "")
+    + (lastU ? `<p class="u">Вы: ${hmEsc(lastU.text.slice(0, 120))}</p>` : "") + (lastA ? `<p>${hmEsc(hmWho(lastA.who) + ": " + lastA.text.slice(0, 220))}${lastA.text.length > 220 ? "…" : ""}</p>` : "")
     + `<button class="hm-more" data-go="chat">Продолжить в чате</button>` : `<small>Чат</small><p>Здесь появится последний разговор. Можно писать и голосом, и текстом.</p><button class="hm-more" data-go="chat">Открыть чат</button>`;
   const pd = HM.data.pad, lines = pd ? pd.text.split("\n").map(s => s.replace(/^#+\s*|^[-*]\s+|^\d+\.\s+|^\[[ x]\]\s*/g, "").trim()).filter(Boolean) : [];
   $("#hm-pad").innerHTML = `<small>Блокнот${pd ? " · «" + hmEsc(pd.name) + "»" : ""}</small>` + (lines.length ? `<b>${hmEsc(lines[0].slice(0, 60))}</b><ul>${lines.slice(1, 4).map(l => `<li>${hmEsc(l.slice(0, 70))}</li>`).join("")}</ul>` : `<p>Блокнот у виджета — для мыслей на лету. Пишется само.</p>`)
@@ -91,7 +150,7 @@ function hmOpen(id) {
   if (id === "pad") { if (a && a.pad_toggle) a.pad_toggle("notes"); return; }
   hmGo(id);
 }
-function hmSave(list) { core.call("settings_save", { patch: { ui: { home_apps: list } } }).then(() => { S.ui = Object.assign({}, S.ui, { home_apps: list }); }).catch(e => toast(e.message)); S.ui = Object.assign({}, S.ui, { home_apps: list }); }
+function hmSave(list) { core.call("settings_save", { patch: { ui: { home_apps: list } } }).then(() => { S.ui = Object.assign({}, S.ui, { home_apps: list }); hmNav(); }).catch(e => toast(e.message)); S.ui = Object.assign({}, S.ui, { home_apps: list }); hmNav(); }
 function hmWire() {
   $$("#hm-body [data-go]").forEach(b => b.onclick = () => hmGo(b.dataset.go));
   $$("#hm-body [data-pad]").forEach(b => b.onclick = () => hmOpen("pad"));
@@ -115,5 +174,5 @@ function hmWire() {
 $("#hm-edit").onclick = () => { HM.edit = !HM.edit; hmRender(); };
 const hmCur = () => $("#p-home").classList.contains("cur");
 let hmT = 0; const hmSoon = () => { clearTimeout(hmT); hmT = setTimeout(() => { if (hmCur()) loadHome(); }, 400); };
-core.on("hello", hmSoon).on("close", hmSoon).on("tasks", hmSoon).on("done", hmSoon);
+core.on("hello", () => setTimeout(() => { hmNav(); ngApply(); }, 0)).on("settings", () => setTimeout(() => { hmNav(); ngApply(); }, 0)).on("hello", hmSoon).on("close", hmSoon).on("tasks", hmSoon).on("done", hmSoon);
 setInterval(() => { if (hmCur() && !document.hidden) hmRender(); }, 60000);    // «Дальше сегодня» и приветствие — по часам

@@ -76,6 +76,11 @@ class CommandsMixin:
         """pad_tabs / pad_read {name} / pad_write {name, text, base} / pad_new {name} / pad_rename {name, to} /
         pad_delete {name} / pad_order {names} / pad_attach {name, filename, b64} / pad_file {link}."""
         P = self.pad
+        if cmd in ("pad_ai", "pad_ai_stop"):                    # ИИ-правка в блокноте (core/padai.py, ui/padai.js)
+            if getattr(self, "padai", None) is None:
+                from padai import PadAI
+                self.padai = PadAI(self)
+            return self.padai.start(a) if cmd == "pad_ai" else self.padai.stop(a.get("id", ""))
         try:
             if cmd == "pad_tabs":
                 return P.tabs()
@@ -126,7 +131,8 @@ class CommandsMixin:
                 game = play_game(text)
                 names = {"snake": "Змейку", "racer": "Гонку", "bricks": "Кирпичики", "plane": "Небесного пилота", "bip": "Бипа",
                          "blocks": "Тетрис", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
-                         "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»", "five": "«Пять в ряд»", "pairs": "«Найди пару»"}
+                         "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»", "five": "«Пять в ряд»", "pairs": "«Найди пару»",
+                         "farm": "«Хутор Одуванчик»", "dark": "«Кто боится темноты»", "post": "«Колючую почту»", "doodle": "«Каляку»", "hop": "«Выше облаков»"}
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
                 self._say_quick(say, text, then=lambda: self.emit("window", do="play", game=game))
         elif kind == "show":
@@ -1174,6 +1180,10 @@ class CommandsMixin:
             return self.soul.public(name)
         if cmd == "diary_list":
             return self.diary.entries()
+        if cmd == "ctx_view":                                   # «О программе» → «Для отладки: что Лира сейчас учитывает»
+            return self.ctx_view()
+        if cmd == "diary_insight_drop":                         # «Дневник»: вывод ночи — не учитывать в разговоре
+            return self.diary.drop_insight(a.get("i"))
         if cmd == "diary_write_now":                           # «Записать сейчас»: запись о сегодняшнем (или указанном) дне
             got = self.diary.write(a.get("day") or None, force=True)
             if not got:

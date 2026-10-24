@@ -125,6 +125,7 @@
     const t = n.tagName;
     if (/^H[1-6]$/.test(t)) { const lv = Math.min(3, +t[1]); const x = [...n.childNodes].map(inl).join("").replace(/\n/g, " ").trim(); return x ? "#".repeat(lv) + " " + x : ""; }
     if (t === "HR") return "---";
+    if (n.classList && n.classList.contains("dw-diagram")) return "```mermaid\n" + (n.getAttribute("data-src") || "").trim() + "\n```";   // схема в блокноте (padai.js)
     if (t === "PRE") { const c = n.textContent.replace(/\n$/, ""); return "```" + (n.getAttribute("data-lang") || "") + "\n" + c + "\n```"; }
     if (t === "BLOCKQUOTE") return blocks(n, depth).split("\n").map(l => "> " + l).join("\n");
     if (t === "UL" || t === "OL") return lst(n, 0);

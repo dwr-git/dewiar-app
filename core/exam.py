@@ -109,6 +109,24 @@ def draw_image(kind):
         d.rectangle([150, 90, 490, 390], fill=(255, 236, 120))
         d.text((185, 170), "Позвонить Ольге", font=_font(34, True), fill=(30, 30, 90))
         d.text((250, 240), "в 17:00", font=_font(40, True), fill=(30, 30, 90))
+    elif kind == "notice_en":          # перевод с фото (идеи пользователей 24.10)
+        im = Image.new("RGB", (720, 460), (246, 244, 236))
+        d = ImageDraw.Draw(im)
+        d.rectangle([24, 24, 696, 436], outline=(200, 40, 40), width=6)
+        d.text((60, 60), "NOTICE", font=_font(44, True), fill=(200, 40, 40))
+        for i, line in enumerate(["Wet paint — please do not touch", "the railings until Monday.", "The elevator is closed for",
+                                  "repairs from 9 am to 5 pm."]):
+            d.text((60, 140 + i * 56), line, font=_font(32), fill=(30, 30, 30))
+    elif kind == "letter":             # «пришла повестка — что делать?» (идеи пользователей 24.10)
+        im = Image.new("RGB", (640, 820), (252, 252, 250))
+        d = ImageDraw.Draw(im)
+        y = 40
+        d.text((150, y), "ИЗВЕЩЕНИЕ", font=_font(34, True), fill=(20, 20, 20)); y += 70
+        for line in ["Отдел МФЦ «Северный»", "ул. Лесная, 14, окно 7", "", "Уважаемый Иванов И. И.!",
+                     "Ваш заграничный паспорт готов.", "Получить его нужно до 15 ноября",
+                     "лично, с 9:00 до 18:00.", "", "При себе иметь:", "— паспорт гражданина РФ;",
+                     "— старый заграничный паспорт.", "", "Не полученный в срок документ", "передаётся в архив."]:
+            d.text((40, y), line, font=f, fill=(30, 30, 30)); y += 42
     else:
         return None
     buf = io.BytesIO()

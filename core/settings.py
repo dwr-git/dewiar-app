@@ -71,6 +71,8 @@ LLM_PRESETS = {
     "qwen":      {"name": "Qwen (Alibaba)",    "kind": "openai", "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
     "mistral":   {"name": "Mistral",           "kind": "openai", "base_url": "https://api.mistral.ai/v1"},
     "xai":       {"name": "Grok (xAI)",        "kind": "openai", "base_url": "https://api.x.ai/v1"},
+    # GitHub #8 (24.10): «не подключается opencode» — у OpenCode Go свой OpenAI-совместимый адрес (не …/inference/…)
+    "opencode":  {"name": "OpenCode Go",       "kind": "openai", "base_url": "https://opencode.ai/zen/go/v1"},
     # российские агрегаторы — оплата картой РФ (№141). Только давно работающие: ProxyAPI и VseGPT (с 2023 г.); AITunnel и
     # Polza.ai убраны 20.10 по решению владельца — у кого подключены, работают как прежде (адрес хранится в профиле)
     "proxyapi":  {"name": "ProxyAPI",          "kind": "openai", "base_url": "https://api.proxyapi.ru/openai/v1"},
@@ -150,7 +152,8 @@ DEFAULTS = {
            "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
            "pad_side": "auto",              # блокнот у виджета: "auto" (к середине экрана), "left", "right" — кнопка ⇄ (pad.js)
-           "home_apps": None},              # студия → «Главная»: какие значки и в каком порядке (home.js); пусто — как задумано
+           "home_apps": None,
+           "nav_fold": None},               # студия: свёрнутые группы меню («Знания», «Настройка»…) — home.js              # студия → «Главная»: какие значки и в каком порядке (home.js); пусто — как задумано
     "reminders": {"ring_minutes": 2,    # сколько звенит, если никто не ответил (потом — «пропущено» в окне)
                   "sound": "signature",  # signature («Струна») | chasha | kolodec | hor | glubina | motif | bells | soft | classic
                   "window": True,       # окно-будильник по центру экрана

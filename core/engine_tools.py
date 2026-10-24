@@ -34,6 +34,15 @@ def _att_word(att):
     return " и ".join(parts)
 
 
+
+# «запиши в книгу / статью / стихи…: текст» — черновики автора (_draft_cmd)
+DRAFT_KINDS = [("книг", "Книга"), ("стат", "Статья"), ("стих", "Стихи"), ("рассказ", "Рассказ"), ("роман", "Роман"),
+               ("сценари", "Сценарий"), ("черновик", "Черновик"), ("песн", "Песня"), ("пост", "Пост"), ("сказк", "Сказка"),
+               ("мемуар", "Мемуары")]
+DRAFT_RX = re.compile(r"^(?:[А-ЯЁа-яёA-Za-z]+,\s*)?(?:запиши|допиши|добавь|занеси)\s+(?:в|во)\s+(?:мо[юйеи]\s+|наш[уеи]?\s+)?"
+                      r"(?P<kind>книг[уеи]|стать[юи]|стих[иа]?|рассказ|роман|сценари[йи]|черновик|песн[юи]|пост|сказк[уи]|мемуары)"
+                      r"(?:\s+[«\"](?P<name>[^»\"]{2,40})[»\"])?\s*(?:[:,—–-]\s*|\s+)(?:что\s+)?(?P<body>\S.{2,})$", re.I | re.S)
+
 class ToolsMixin:
     # ---------- инструменты ----------
 
@@ -552,6 +561,30 @@ class ToolsMixin:
             if all(match_name(x, [p]) is p for x in who.split()) and msg.strip():
                 return {"who": who, "msg": msg}
         return None
+
+    def _draft_cmd(self, text, via=None):
+        """«Лира, запиши в книгу: герой проснулся рано утром…» — дословно, без модели, в конец заметки «Заметки/Черновики/Книга»
+        со временем (идеи пользователей 24.10: «отдельная папка для голосовых — пишу книгу, статью, стихи»). Модель не
+        переписывает слова автора; разбирать и собирать черновик потом — в блокноте ИИ-правкой. -> True, если это оно."""
+        m = DRAFT_RX.match((text or "").strip())
+        if not m:
+            return False
+        kind = m.group("kind").lower().replace("ё", "е")
+        title = (m.group("name") or "").strip() or next(v for k, v in DRAFT_KINDS if kind.startswith(k))
+        body = m.group("body").strip()
+        body = body[:1].upper() + body[1:]
+        if body[-1:] not in ".!?…»\"":
+            body += "."
+        try:
+            self.workspace.save_note(title, body, folder="Черновики", append=True)
+        except Exception as e:  # noqa: BLE001
+            log.warning("черновик: %s", e)
+            return False
+        n = len(body.split())
+        w = "слово" if n % 10 == 1 and n % 100 != 11 else "слова" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "слов"
+        acc = {"Книга": "Книгу", "Статья": "Статью", "Песня": "Песню", "Сказка": "Сказку"}.get(title, title)   # «в «Книгу»»
+        self._say_quick(f"Записала в «{acc}» — {n} {w}.", text, via)
+        return True
 
     def _timer_cmd(self, text, via=None):
         """Таймеры голосом, без модели: «сколько осталось (на таймере)?», «добавь минуту / ещё 5 минут к таймеру»,
@@ -1089,8 +1122,12 @@ class ToolsMixin:
         note — как получен ответ (расчёт с числами): только в историю, чтобы на «как ты посчитал?» модель знала."""
         msg = self._g(msg)                                  # в роде персонажа: «Выключила музыку»
         log.info("⚡ %s → %s", redact(said), redact(msg))      # быстрый ответ без модели — тоже в журнал
+        self._last_quick = (said, time.monotonic())          # «а теперь?» / «ещё раз» сразу после — повторить (engine_answer.ask)
         if via:
             via["done"](msg)
+            # из мессенджера — тоже в разговор: иначе на «а теперь?» модель не знает, о чём речь (24.10)
+            self.history += [{"role": "user", "content": said}, {"role": "assistant", "content": msg, "who": self.s.get("persona")}]
+            self._conv_after()
             return
         self.emit("heard", text=said)
         self.emit("answer", text=msg, done=True)

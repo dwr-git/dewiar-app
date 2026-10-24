@@ -44,7 +44,7 @@
   function source(pre) {
     const code = pre.querySelector("code") || pre;
     let t = code.textContent || "";
-    const lang = /language-mermaid|lang-mermaid|\bmermaid\b/.test(code.className || "");
+    const lang = /language-mermaid|lang-mermaid|\bmermaid\b/.test(code.className || "") || pre.getAttribute("data-lang") === "mermaid";
     if (/^\s*mermaid\s*\n/.test(t)) t = t.replace(/^\s*mermaid\s*\n/, "");   // Markdown оставил имя языка в тексте
     return (lang || KW.test(t)) ? t.trim() : "";
   }

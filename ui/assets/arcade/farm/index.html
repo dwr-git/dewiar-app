@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#86c45f">
+<title>Хутор Одуванчик</title>
+<link rel="stylesheet" href="../shared/fonts.css">
+<link rel="stylesheet" href="../shared/arcade.css">
+<style>
+/* Карточки меню — бумажные, как таблички на хуторе: кремовый лист, тёмная пиксельная обводка, тень ступенькой.
+   Своё только здесь: общий arcade.css не трогаем. */
+.overlay { background: radial-gradient(ellipse at 50% 45%, rgba(40, 28, 60, .08), rgba(40, 28, 60, .34)) !important; }
+.card {
+  --ink: #3a2a3c; --muted: #6e5466; --line: rgba(58, 42, 60, .18); --glass: #efe0bf;
+  color: var(--ink); background: #fff6e2 !important; border: 4px solid #3a2a3c !important; border-radius: 8px !important;
+  box-shadow: 6px 10px 0 rgba(40, 25, 50, .32) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+.card h2 { background: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; color: #3a2a3c !important; letter-spacing: -.01em; }
+.card .kicker { color: #a8404c !important; font-weight: 800; }
+.card p { color: var(--muted); }
+.card p b { color: var(--ink); }
+.card .score { color: #3a2a3c; }
+.card .record { color: #cf6430 !important; font-weight: 800; }
+.card .keys { color: #8a7385; }
+.card .go { background: #f28b3b !important; color: #fff; border: 3px solid #3a2a3c !important; border-radius: 10px; box-shadow: 0 5px 0 #b4532a !important; text-shadow: 0 2px 0 rgba(58, 42, 60, .35); }
+.card .go:active { transform: translateY(3px); box-shadow: 0 2px 0 #b4532a !important; }
+.card .ghost { background: #efe0bf !important; color: #3a2a3c !important; border: 3px solid #3a2a3c !important; border-radius: 10px; font-weight: 700; }
+.card ul { color: var(--ink); }
+/* итог после праздника — карточка у верха поля, праздник внизу остаётся виден */
+.farm-final .overlay { align-items: start; }
+</style>
+</head>
+<body>
+<script src="../shared/arcade.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

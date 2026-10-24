@@ -35,6 +35,15 @@ COLLECT = r"""([scope]) => {
     // сам текст поверх чего-то, что его перекрывает (модальное окно), — не наш случай
     const cx = Math.min(W - 1, Math.max(0, b.left + b.width / 2)), cy = Math.min(H - 1, Math.max(0, b.top + b.height / 2));
     const top = document.elementFromPoint(cx, cy); if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;
+    // прокручено за край своего окошка (длинный список в диалоге «Что нового») — не видно, не проверяем
+    let clip = false;
+    for (let q = el.parentElement; q && q !== document.body; q = q.parentElement) {
+      const qs = getComputedStyle(q);
+      if (!/(auto|scroll|hidden|clip)/.test(qs.overflow + qs.overflowY + qs.overflowX)) continue;
+      const qr = q.getBoundingClientRect();
+      if (cy < qr.top || cy > qr.bottom || cx < qr.left || cx > qr.right) { clip = true; break; }
+    }
+    if (clip) continue;
     const id = out.length; el.dataset.cxi = id;
     out.push({ id, text: t.slice(0, 60), x: b.left, y: b.top, w: b.width, h: b.height, c, op, size: parseFloat(cs.fontSize), weight: +cs.fontWeight || 400,
       sel: el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".") : "") });

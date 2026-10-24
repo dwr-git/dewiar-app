@@ -424,4 +424,5 @@ function featuresApply() {
   const cur = $("#cl-tabs button.on");
   if (cur && cur.hidden && window.rdTab) rdTab("chat");
   if (nb && nb.hidden && nb.classList.contains("cur")) { const fb = $('nav button[data-p="features"]'); if (fb) fb.click(); }
+  if (window.hmNav) hmNav();                                     // меню — ещё и по «Главной» (home.js): скрытое там скрыто и тут
 }

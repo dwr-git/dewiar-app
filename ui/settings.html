@@ -114,7 +114,7 @@
     <div id="hm-body">
       <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p></div></div>
       <div class="hm-today" id="hm-today"></div>
-      <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть, перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
+      <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
       <div class="hm-apps" id="hm-apps"></div>
       <div class="hm-more2"><div class="hm-card2" id="hm-chat"></div><div class="hm-card2" id="hm-pad"></div></div>
       <div class="hm-h"><h2>Настройка</h2><span class="hint">раз настроили — и можно не возвращаться</span></div>
@@ -1195,7 +1195,7 @@
     <h1>Возможности</h1>
     <p class="lead">Dewiar умеет много. Включите только то, чем пользуетесь, — остальное не будет попадаться на глаза.
       Выключенное ничего не теряет: включите — и всё на месте. Разговор, заметки, напоминания и блокнот есть всегда.</p>
-    <div class="switch"><div>Досуг — милые игры<span>Семнадцать игр на пару минут: атмосферная сказка «Огонёк», «Найди пару» на память, «Пять в ряд» против Лиры, головоломки (Тетрис, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
+    <div class="switch"><div>Досуг — милые игры<span>Двадцать две игры на пару минут: сказки «Огонёк», «Хутор Одуванчик» и «Кто боится темноты», «Каляка» — дорисуй мостик ручкой, «Колючая почта», «Выше облаков» — прыжки до луны, «Найди пару» на память, «Пять в ряд» против Лиры, головоломки (Тетрис, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
     <div class="switch"><div>Рядом<span>«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом.</span></div><label class="tg"><input type="checkbox" data-k="features.near"><i></i></label></div>
     <div class="switch"><div>Встречи<span>«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном.</span></div><label class="tg"><input type="checkbox" data-k="features.meet"><i></i></label></div>
     <div class="switch"><div>Суфлёр<span>Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить.</span></div><label class="tg"><input type="checkbox" data-k="features.prompter"><i></i></label></div>
@@ -1424,6 +1424,14 @@
       </div>
       <label class="f" style="margin-top:12px">Адрес обновлений<input type="url" placeholder="https://dewiar.pro/dwrapp/latest.json" data-k="updates.url"></label>
     </div>
+    <details class="prof on ctxv" id="ctxv" style="padding:14px 18px;margin-top:18px">
+      <summary><b>Для отладки: что Лира сейчас учитывает</b> <span class="hint">— из чего складывается каждый её ответ</span></summary>
+      <p class="hint" style="margin:10px 0">Это читает модель перед каждым ответом. Если ответы «плывут» — посмотрите, нет ли тут
+        лишнего или неверного, и поправьте там, куда ведёт ссылка.</p>
+      <div id="ctxv-list"></div>
+      <div class="actions" style="margin-top:10px"><button class="btn small" id="ctxv-re">Обновить</button><button class="btn small" id="ctxv-full">Показать подсказку целиком</button></div>
+      <pre id="ctxv-pre" hidden></pre>
+    </details>
     <dl class="status" id="status"></dl>
   </section>
 </main>

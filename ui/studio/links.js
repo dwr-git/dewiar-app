@@ -572,3 +572,23 @@ function loadMeetings() {
     });
   }).catch(() => {});
 }
+
+/* «О программе» → «Для отладки: что Лира сейчас учитывает» (24.10): части подсказки модели — размер, начало, где поправить */
+async function ctxvLoad() {
+  const box = $("#ctxv-list"); if (!box) return;
+  box.innerHTML = '<div class="hint">Собираю…</div>';
+  let r; try { r = await core.call("ctx_view"); } catch (e) { box.textContent = e.message; return; }
+  const esc = (t) => String(t || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  box.innerHTML = r.parts.map(p => `<details class="ctxp${p.chars ? "" : " empty"}"><summary><b>${esc(p.title)}</b>`
+    + `<span class="hint">${p.chars ? p.chars.toLocaleString("ru-RU") + " знаков" : "пусто"}${p.note ? " · " + esc(p.note) : ""}</span>`
+    + `<button class="btn small ghost" data-go="${esc(p.go)}">Открыть</button></summary>`
+    + (p.chars ? `<pre>${esc(p.text)}</pre>` : "") + `</details>`).join("")
+    + `<p class="hint" style="margin-top:8px">Плюс последние ${r.turns} реплик разговора дословно. Всего подсказка — ${r.full_chars.toLocaleString("ru-RU")} знаков (с правилами и инструментами).</p>`;
+  $$("#ctxv-list [data-go]").forEach(b => b.onclick = (e) => { e.preventDefault(); const n = $(`nav button[data-p="${b.dataset.go}"]`); if (n) n.click(); });
+  $("#ctxv-pre").textContent = r.full || "";
+}
+if ($("#ctxv")) {
+  $("#ctxv").addEventListener("toggle", () => { if ($("#ctxv").open) ctxvLoad(); });
+  $("#ctxv-re").onclick = () => ctxvLoad();
+  $("#ctxv-full").onclick = () => { const p = $("#ctxv-pre"); p.hidden = !p.hidden; $("#ctxv-full").textContent = p.hidden ? "Показать подсказку целиком" : "Скрыть подсказку"; };
+}

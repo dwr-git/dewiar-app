@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#cfe8ef">
+<title>Выше облаков</title>
+<link rel="stylesheet" href="../shared/fonts.css">
+<link rel="stylesheet" href="../shared/arcade.css">
+<style>
+/* Карточки меню — как бумажная аппликация из игры: тёплый лист, сливовые чернила, кнопка цвета ягодки.
+   Цвета заданы явно: без ?light=1 у движка светлая карточка получала бледный текст тёмной темы. Общий arcade.css не трогаем. */
+:root.tone-light .overlay { background: radial-gradient(ellipse at 50% 45%, rgba(255, 248, 236, .05), rgba(80, 52, 84, .3)); }
+:root.tone-light .card {
+  --ink: #4a3550; --muted: #6e5a6c; --line: rgba(74, 53, 80, .16); --glass: rgba(74, 53, 80, .06);
+  color: var(--ink); background: rgba(255, 250, 240, .96); border: 1px solid #fff; border-radius: 26px;
+  box-shadow: 0 2px 0 rgba(239, 225, 200, 1), 0 20px 46px rgba(70, 40, 74, .3);
+}
+:root.tone-light .card h2 { background: linear-gradient(90deg, #ff7b6b, #e25d8c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root.tone-light .card p { color: var(--muted); }
+:root.tone-light .card p b { color: var(--ink); }
+:root.tone-light .card .kicker { color: #7f6278; }
+:root.tone-light .card .score { color: var(--ink); }
+:root.tone-light .card .sum { font-size: 15px; }
+:root.tone-light .card .record { color: #e0603a; font-weight: 700; }
+:root.tone-light .card .keys { color: #7f6a7c; }
+:root.tone-light .go { background: linear-gradient(135deg, #ff8a6e, #ef6383); box-shadow: 0 6px 18px rgba(239, 99, 131, .35); }
+:root.tone-light .ghost { color: var(--ink); background: rgba(74, 53, 80, .06); border: 1px solid rgba(74, 53, 80, .18); }
+.hop-help { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 6px 0 4px; text-align: left; font-size: 14px; line-height: 1.25; color: var(--ink); }
+.hop-help div { display: flex; align-items: center; gap: 8px; }
+.hop-help img { width: 50px; height: 29px; flex: none; }
+.hop-end .overlay { align-items: end; }
+/* строка-сообщение движка (например, «Наклон не отвечает — играем касанием») — бумажная, переносится на узком экране */
+.tip { white-space: normal; max-width: calc(100% - 32px); box-sizing: border-box; text-align: center; background: #fffaf0; color: #4a3550; font-weight: 600; font-size: 14px; box-shadow: 0 8px 22px rgba(70, 40, 74, .3); }
+/* выбор управления на телефоне и картинка-схема */
+.hop-ctl { display: inline-flex; gap: 4px; padding: 4px; margin: 4px 0 2px; border-radius: 16px; background: rgba(74, 53, 80, .07); }
+.hop-ctl button { min-height: 40px; padding: 0 18px; border: 0; border-radius: 12px; background: transparent; color: #6e5a6c; font: 700 16px var(--f); cursor: pointer; }
+.hop-ctl button[aria-pressed="true"] { background: #fff; color: #4a3550; box-shadow: 0 2px 8px rgba(74, 53, 80, .18); }
+.hop-ctl button:disabled { opacity: .4; }
+.hop-ctl button:focus-visible { outline: 2px solid #ef6383; outline-offset: 1px; }
+.hop-ctlpic { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px 0 2px; }
+.hop-ctlpic .hop-ctlnote { margin: 0; max-width: 200px; text-align: left; font-size: 15px; font-weight: 500; color: #4a3550; }
+.hop-pic { width: 92px; height: 52px; flex: none; }
+.hop-tilt .ar { fill: none; stroke: #ff7b6b; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.hop-tilt .ar.l { animation: hopArL 2.4s ease-in-out infinite; } .hop-tilt .ar.r { animation: hopArR 2.4s ease-in-out infinite; }
+.hop-tilt .ph { transform-box: view-box; transform-origin: 66px 68px; animation: hopRock 2.4s ease-in-out infinite; }
+.hop-tilt .ch { animation: hopSlide 2.4s ease-in-out infinite; }
+@keyframes hopRock { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(16deg); } }
+@keyframes hopSlide { 0%, 100% { transform: translateX(-7px); } 50% { transform: translateX(7px); } }
+@keyframes hopArL { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+@keyframes hopArR { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+.hop-touch .hl, .hop-touch .hr { fill: rgba(255, 123, 107, .3); } .hop-touch .fl, .hop-touch .fr { fill: #ff7b6b; }
+.hop-touch .hl, .hop-touch .fl { animation: hopTapL 2s steps(1) infinite; } .hop-touch .hr, .hop-touch .fr { animation: hopTapR 2s steps(1) infinite; }
+@keyframes hopTapL { 0% { opacity: 1; } 50% { opacity: .15; } } @keyframes hopTapR { 0% { opacity: .15; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .hop-tilt .ph, .hop-tilt .ch, .hop-tilt .ar, .hop-touch * { animation: none !important; } .hop-tilt .ph { transform: rotate(-12deg); } }
+@media (max-width: 460px) { .hop-help { grid-template-columns: 1fr; gap: 4px; font-size: 14.5px; } .hop-help div { gap: 12px; } }
+</style>
+</head>
+<body>
+<script src="../shared/arcade.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -54,7 +54,12 @@ async function loadDiary(focus) {
     const r = await core.call("diary_list");
     dDays = r.days || [];
     const ins = r.insights || {};
-    $("#d-ins").innerHTML = (ins.lines || []).length ? `<h3>🌙 Что учесть сегодня — выводы ночной записи${ins.who ? " · " + escH(ins.who) : ""}</h3><ul>${ins.lines.map(x => `<li>${escH(x)}</li>`).join("")}</ul>` : "";
+    $("#d-ins").innerHTML = (ins.lines || []).length ? `<h3>🌙 Что учесть сегодня — выводы ночной записи${ins.who ? " · " + escH(ins.who) : ""}</h3>`
+      + `<p class="hint" style="margin:0 0 6px">Ассистент держит это в голове в разговорах до послезавтра. Неверное — уберите «×»: запись в дневнике останется.</p>`
+      + `<ul>${ins.lines.map((x, k) => `<li>${escH(x)} <button class="dins-x" data-i="${k}" title="Не учитывать в разговоре" aria-label="Убрать вывод">×</button></li>`).join("")}</ul>`
+      + `<button class="btn small ghost" id="dins-all">Не учитывать ни один</button>` : "";
+    $$("#d-ins .dins-x").forEach(b => b.onclick = async () => { await core.call("diary_insight_drop", { i: +b.dataset.i }).catch(e => toast(e.message)); loadDiary(dCur); });
+    if ($("#dins-all")) $("#dins-all").onclick = async () => { await core.call("diary_insight_drop", {}).catch(e => toast(e.message)); toast("Выводы больше не подмешиваются в разговор"); loadDiary(dCur); };
     const box = $("#d-days"); box.innerHTML = "";
     dDays.forEach(x => {
       const d = dDate(x.day), el = document.createElement("div"); el.className = "dday"; el.dataset.d = x.day;

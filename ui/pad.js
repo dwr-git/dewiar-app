@@ -198,7 +198,7 @@ function ensureP() {
   }
   blank();
 }
-function blank() { ED.classList.toggle("blank", !ED.textContent.trim() && !ED.querySelector("li, img, table, hr, pre")); }
+function blank() { ED.classList.toggle("blank", !ED.textContent.trim() && !ED.querySelector("li, img, table, hr, pre, .dw-diagram")); }
 function paint() {
   ensureP();
   for (const img of ED.querySelectorAll("img[data-src]:not([src])")) {
@@ -207,7 +207,9 @@ function paint() {
     if (P.imgCache[link]) { img.src = P.imgCache[link]; continue; }
     core.call("pad_file", { link }).then(r => { P.imgCache[link] = r.url; img.src = r.url; }).catch(() => { img.alt = "картинка не найдена: " + link; });
   }
+  if (window.padDiagrams) padDiagrams();                       // схемы Mermaid — картинкой (padai.js, assets/rich.js)
 }
+window.padAfterAi = () => { paint(); tidy(); changed(); };     // ИИ-правка вставила текст (padai.js)
 async function addImages(files) {
   for (const f of files) {
     if (!/^image\//.test(f.type)) continue;
@@ -423,15 +425,16 @@ async function cmd(c) {
 $$("#tools .tool").forEach(b => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => cmd(b.dataset.c); });
 /* Chrome/WebKit при правке иногда оставляют <div> вместо <p> и <span style> — приводим к нашему виду */
 function tidy() {
-  for (const d of ED.querySelectorAll(":scope > div")) { const p = document.createElement("p"); p.innerHTML = d.innerHTML; d.replaceWith(p); }
+  for (const d of ED.querySelectorAll(":scope > div:not(.dw-diagram)")) {   // схема (padai.js) — своя, не трогать
+  const p = document.createElement("p"); p.innerHTML = d.innerHTML; d.replaceWith(p); }
   for (const p of ED.querySelectorAll(":scope > p")) {          // список или таблица внутри абзаца (так делает Chrome) — наружу; курсор остаётся
     const k = p.firstElementChild;
     if (k && p.childNodes.length === 1 && /^(UL|OL|TABLE|PRE|BLOCKQUOTE|H[1-3])$/.test(k.tagName)) p.replaceWith(k);
   }
-  for (const s of ED.querySelectorAll("span[style], font")) s.replaceWith(...s.childNodes);
-  for (const b of ED.querySelectorAll("b")) { const n = document.createElement("strong"); n.innerHTML = b.innerHTML; b.replaceWith(n); }
-  for (const i of ED.querySelectorAll("i")) { const n = document.createElement("em"); n.innerHTML = i.innerHTML; i.replaceWith(n); }
-  for (const s of ED.querySelectorAll("strike")) { const n = document.createElement("s"); n.innerHTML = s.innerHTML; s.replaceWith(n); }
+  for (const s of ED.querySelectorAll("span[style], font")) if (!s.closest(".dw-diagram")) s.replaceWith(...s.childNodes);
+  for (const b of ED.querySelectorAll("b")) { if (b.closest(".dw-diagram")) continue; const n = document.createElement("strong"); n.innerHTML = b.innerHTML; b.replaceWith(n); }
+  for (const i of ED.querySelectorAll("i")) { if (i.closest(".dw-diagram")) continue; const n = document.createElement("em"); n.innerHTML = i.innerHTML; i.replaceWith(n); }
+  for (const s of ED.querySelectorAll("strike")) { if (s.closest(".dw-diagram")) continue; const n = document.createElement("s"); n.innerHTML = s.innerHTML; s.replaceWith(n); }
 }
 
 /* ---------- размер текста (22.10): «Aa» на панели — ползунок 80–170 %, Ctrl + колёсико, Ctrl+= / Ctrl+− / Ctrl+0;

@@ -185,6 +185,20 @@ class Diary:
             log.warning("дневник: состояние не сохранилось: %s", e)
 
     # ---------- мысли на завтра — в подсказку ----------
+    def drop_insight(self, i=None):
+        """Убрать вывод ночи из разговора (24.10, владелец: «накопился мусор… боюсь, что подмешивается в беседу»):
+        i — номер строки, None — все. Запись в дневнике остаётся, в подсказку модели вывод больше не попадает."""
+        ins = self.data.get("insights") or {}
+        lines = list(ins.get("lines") or [])
+        if i is None:
+            lines = []
+        elif 0 <= int(i) < len(lines):
+            lines.pop(int(i))
+        ins["lines"] = lines
+        self.data["insights"] = ins
+        self._save()
+        return {"lines": lines}
+
     def prompt(self):
         """Добавка к системной подсказке: выводы ночи. Старше двух дней — не добавляем: устаревшие советы вредят."""
         ins = self.data.get("insights") or {}

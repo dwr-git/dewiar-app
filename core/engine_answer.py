@@ -115,6 +115,21 @@ def _put_context(msgs, ctx):
         c = head + str(c or "")
     return msgs[:-1] + [dict(msgs[-1], content=c)]
 
+
+# идеи пользователей 24.10: «перевод текста с фото или скриншота», «пришла повестка — что делать?» (по фото документа),
+# «подсчёт калорий по фото еды». Справка к вопросу с картинкой — как отвечать на такие просьбы (сама просьба — у человека)
+VISION_HINT = ("К сообщению приложено фото. Если просят перевести — переведи весь текст на фото дословно и естественно "
+               "(на русский, если язык не назван), сохрани строки и порядок; ничего не додумывай там, где не видно. "
+               "Если на фото документ, письмо или повестка и спрашивают, что это или что делать, — простыми словами: что это "
+               "за документ и от кого, главное (даты, сроки, суммы, адрес, куда и с чем прийти), что сделать по шагам; "
+               "если дело серьёзное (суд, долги, штраф, полиция, военкомат) — посоветуй уточнить у юриста; не пугай и не "
+               "выдумывай того, чего на фото нет. Если спрашивают про калории еды — назови, что видишь на тарелке, и "
+               "примерную калорийность диапазоном (например, «примерно 450–600 ккал»), одной-двумя фразами, без советов есть "
+               "меньше и без оценок; записать — только если человек сам попросил.")
+
+REPEAT_RX = re.compile(r"^\W*(?:\w+,\s*)?(?:ну\s+)?(?:а\s+)?(?:теперь|сейчас|ещё\s+раз|еще\s+раз|снова|опять|повтори|попробуй\s+(?:ещё|еще)\s+раз|"
+                       r"проверь\s+(?:ещё|еще)\s+раз|(?:а\s+)?теперь\s+(?:как|что)|ну\s+что|и\s+как\s+теперь)\W*$", re.I)
+
 class AnswerMixin:
     # ---------- ответ ----------
 
@@ -144,6 +159,12 @@ class AnswerMixin:
             return
         if via:
             quiet = False
+        # 24.10 (владелец: «попросил обновиться — нет; „а теперь“ — она что-то не связанное»): короткое «а теперь?»,
+        # «ещё раз», «проверь ещё раз» сразу после быстрой команды без модели — та же команда ещё раз
+        lq = getattr(self, "_last_quick", None)
+        if not raw and not quiet and not images and lq and time.monotonic() - lq[1] < 600 and REPEAT_RX.match(text):
+            log.info("🔁 «%s» — повторяю «%s»", text, lq[0])
+            text = lq[0]
         if not raw and not quiet and not images and self.alarm and not via and self._alarm_voice(text):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._bug_cmd(text, via):
@@ -171,6 +192,8 @@ class AnswerMixin:
             if qm:
                 self._say_quick(qm["say"], text, via, note=qm.get("how"))
                 return
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._draft_cmd(text, via):
+            return                                       # «запиши в книгу: …» — дословно в черновик автора
         if not raw and not quiet and not images and "\n\nВложения:" not in text:
             from capture import parse as parse_capture
             c = parse_capture(text)
@@ -314,6 +337,38 @@ class AnswerMixin:
         self.history = []
         self.conv.reset()
         self.emit("conversation", **self.conv.public(self.history))
+
+    def ctx_view(self):
+        """Для отладки (студия → «О программе»): из чего сейчас складывается подсказка модели — по частям, с размером и
+        тем, где это поправить; full — подсказка целиком (с инструментами), turns — сколько реплик разговора уходит дословно."""
+        parts = []
+
+        def add(key, title, text, go, note=""):
+            text = (text or "").strip()
+            parts.append({"key": key, "title": title, "text": text[:6000], "chars": len(text), "go": go, "note": note})
+        add("persona", "Персонаж", self.personas.system_prompt(self.s.get("persona"), self.s.get("user_name") or "", ""), "personas")
+        add("memory", "Что знает о вас («Обо мне»)", self.workspace.memory_text(), "me")
+        try:
+            import quality as Q
+            add("lessons", "Уроки из ваших поправок", Q.talk_lessons_block(self.workspace.root / Q.TALK_LESSONS_FILE), "memory",
+                "заметка «Память/Уроки.md»")
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            add("soul", "Душа и конституция", self.soul.prompt(self.persona_name()), "soul",
+                "" if self.s.get("soul", "on") is not False else "душа в разговорах выключена")
+        except Exception:  # noqa: BLE001
+            pass
+        add("insights", "Выводы ночи (до послезавтра)", self.diary.prompt(), "diary", "убрать — «×» в «Дневнике»")
+        add("summary", "Содержание долгого разговора", self.conv.prompt(), "chat", "«новый разговор» — с чистого листа")
+        turns = int(self.s.get("llm", "history_turns") or 0)
+        mine = self.conv.window(self.history, turns) if turns > 0 else []
+        full = ""
+        try:
+            full = self._system(True)
+        except Exception as e:  # noqa: BLE001
+            full = f"(не собралась: {e})"
+        return {"parts": parts, "turns": len(mine), "full": full[:60000], "full_chars": len(full)}
 
     def _system(self, with_tools=False):
         """Системная подсказка: персонаж, память о пользователе, душа, содержание разговора, выводы из дневника;
@@ -1288,6 +1343,8 @@ class AnswerMixin:
             kb = self._persona_knowledge(text, turn)
             if kb:
                 ctx.append(kb.strip())
+            if images:
+                ctx.append(VISION_HINT)                      # фото: перевод, документ, еда (идеи пользователей 24.10)
             msgs = _put_context(msgs, "\n\n".join(c for c in ctx if c))
             split, last, codef = SentenceSplitter(), 0.0, CodeFilter()
             # вслух — не больше ~900 символов (около минуты): длинный ответ дальше только на экране («Открыть целиком»);

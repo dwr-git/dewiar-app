@@ -1528,10 +1528,15 @@ html.st-light .chip.shd.on small { opacity: .8 !important; }
   background: linear-gradient(145deg, rgba(255,255,255,.14), rgba(255,255,255,.04)); box-shadow: var(--raise, 0 10px 26px rgba(0,0,0,.25)); transition: transform .15s; }
 html.st-light .hm-ic { background: linear-gradient(145deg, #eef2f9, #d9e1ee); }
 .hm-ic:hover { transform: translateY(-3px); } .hm-ic:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.hm-ic svg { width: 44px; height: 44px; }
+.hm-ic svg { width: 58px; height: 58px; overflow: visible; }
+.hmx .ln { fill: none; stroke: var(--hg); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.hmx .th { fill: none; stroke: var(--hg); stroke-width: 1; stroke-linecap: round; opacity: .55; }
+.hmx .sf { fill: var(--hg); opacity: .16; } .hmx .sf2 { fill: var(--hg); opacity: .3; } .hmx .dt { fill: var(--hg); }
+.hmx .bg { fill: #e6ecf5; } html:not(.st-light) .hmx .bg { fill: #2a2f45; }
+.hmx .tx { fill: var(--hg); font: 800 13px "Unbounded", "Manrope", sans-serif; }
 .hm-ic em { position: absolute; top: -6px; right: -6px; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; display: grid; place-items: center;
   font: 700 12px/1 inherit; font-style: normal; color: #fff; background: #ff6f9c; box-shadow: 0 4px 10px rgba(255,111,156,.45); }
-.hm-app b { font-size: 13.5px; } .hm-app small { color: var(--dim); font-size: 11.5px; margin-top: -6px; line-height: 1.3; }
+.hm-app b { font-size: 13.5px; } .hm-app small { color: var(--dim); font-size: 11.5px; margin-top: -6px; line-height: 1.3; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hm-apps.edit .hm-app { cursor: grab; } .hm-apps.edit .hm-ic { animation: hmWig 2.4s ease-in-out infinite; }
 .hm-app.off { opacity: .45; } .hm-app.off .hm-ic { animation: none; filter: grayscale(.7); }
 .hm-app.drag { opacity: .3; } .hm-app.over { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -1547,3 +1552,26 @@ html.st-light .hm-ic { background: linear-gradient(145deg, #eef2f9, #d9e1ee); }
 .hm-pill { padding: 9px 15px; border: 0; border-radius: 999px; background: var(--glass); box-shadow: var(--raise-s, none); color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer; }
 .hm-pill:hover { color: var(--accent); }
 @media (max-width: 860px) { .hm-more2 { grid-template-columns: 1fr; } }
+
+/* сворачиваемые группы меню (home.js ngApply) */
+nav .ng { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; border-radius: 8px; }
+nav .ng[hidden] { display: none; }
+nav .ng::after { content: ""; width: 6px; height: 6px; margin-left: auto; margin-right: 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px); opacity: 0; transition: transform .18s, opacity .18s; }
+nav .ng:hover::after, nav .ng:focus-visible::after, nav .ng.fold::after { opacity: .9; }
+nav .ng.fold::after { transform: rotate(-45deg); }
+nav .ng:hover { opacity: 1; color: var(--ink); } nav .ng:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+nav button.folded { display: none !important; }
+@media (prefers-reduced-motion: reduce) { nav .ng::after { transition: none; } }
+
+.dins-x { border: 0; background: none; color: var(--dim); font-size: 15px; line-height: 1; padding: 0 4px; cursor: pointer; border-radius: 6px; vertical-align: 1px; }
+.dins-x:hover { color: #e5677d; background: rgba(229,103,125,.1); }
+
+/* «Для отладки: что Лира сейчас учитывает» (links.js ctxvLoad) */
+.ctxv > summary { cursor: pointer; list-style: none; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.ctxv > summary::-webkit-details-marker { display: none; }
+.ctxp { border-top: 1px solid rgba(127,127,127,.15); padding: 6px 0; }
+.ctxp > summary { cursor: pointer; display: flex; gap: 10px; align-items: center; list-style: none; }
+.ctxp > summary::-webkit-details-marker { display: none; }
+.ctxp > summary .hint { margin: 0; flex: 1; } .ctxp.empty > summary b { opacity: .55; }
+.ctxp pre, #ctxv-pre { white-space: pre-wrap; font-size: 12px; line-height: 1.5; max-height: 320px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: rgba(127,127,127,.08); margin: 6px 0 4px; }

@@ -41,7 +41,7 @@
       const box = document.createElement("div"); box.className = "dwq"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
       const p = document.createElement("p"); p.textContent = text; box.appendChild(p);
       let inp = null;
-      if (input) { inp = document.createElement("input"); inp.value = input.value || ""; inp.spellcheck = false; box.appendChild(inp); }
+      if (input) { inp = document.createElement("input"); inp.value = input.value || ""; inp.spellcheck = false; if (opts && opts.ph) inp.placeholder = opts.ph; box.appendChild(inp); }
       const verb = (opts && opts.ok) || (String(text).match(VERB) || [])[1] || (input ? "Готово" : "Да");
       const row = document.createElement("div"); row.className = "row";
       const no = document.createElement("button"); no.textContent = (opts && opts.cancel) || "Отмена";
