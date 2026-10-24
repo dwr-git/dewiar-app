@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<title>Аркада</title>
+<link rel="stylesheet" href="shared/fonts.css">
+<link rel="stylesheet" href="shared/arcade.css">
+<style>
+/* Layout: шапка с названием, затем мозаика плиток — две большие, три поменьше. */
+.page {
+  box-sizing: border-box;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-top: max(22px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.brand { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.brand h1 {
+  margin: 0;
+  font: 900 clamp(40px, 8vw, 72px)/1 var(--f);
+  letter-spacing: -.01em;
+  background: linear-gradient(90deg, var(--neon), #9b8cff 45%, var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand p { margin: 0; color: var(--muted); font-size: 17px; max-width: 46ch; text-wrap: balance; }
+
+.grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+@media (min-width: 640px) { .grid { grid-template-columns: repeat(2, 1fr); } .tile:first-child { grid-column: span 2; } }
+@media (min-width: 1000px) {
+  .grid { grid-template-columns: repeat(6, 1fr); }
+  .tile { grid-column: span 2; }
+  .tile:nth-child(-n+2) { grid-column: span 3; }
+}
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 22px;
+  background: var(--solid);
+  box-shadow: rgb(0 0 0) 0 8px 32px;
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  transition: transform .18s ease;
+}
+.tile:hover { transform: translateY(-4px); }
+.tile:focus-visible { outline: 3px solid var(--neon); outline-offset: 3px; }
+.cover { position: relative; aspect-ratio: 16 / 10; max-width: 100%; overflow: hidden; background: var(--cover-bg, linear-gradient(135deg, var(--brand-a), var(--brand-b))); }
+.tile:first-child .cover, .tile:nth-child(2) .cover { aspect-ratio: 16 / 9; }
+.cover img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .4s ease; }
+.tile:hover .cover img { transform: scale(1.04); }
+.cover::after { content: ""; position: absolute; inset: auto 0 0 0; height: 40%; background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, .55)); pointer-events: none; }
+.play {
+  position: absolute; right: 14px; bottom: 14px; z-index: 1;
+  width: 54px; height: 54px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--brand-a), var(--brand-b));
+  box-shadow: 0 6px 20px rgba(102, 126, 234, .5);
+  color: #fff;
+}
+.play svg { width: 22px; height: 22px; margin-left: 3px; }
+.info { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 18px; }
+.row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.info h2 { margin: 0; font: 800 23px/1.15 var(--f); }
+.chip { font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: var(--glass); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.info p { margin: 0; color: var(--muted); font-size: 15px; }
+.best { color: var(--amber); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; min-height: 1.5em; }
+
+.notes { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 760px) { .notes { grid-template-columns: repeat(3, 1fr); } }
+.note { border-radius: 18px; padding: 16px 18px; background: var(--glass); border: 1px solid var(--line); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); min-width: 0; }
+.note h3 { margin: 0 0 6px; font: 700 16px var(--f); }
+.note p { margin: 0; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="head">
+    <div class="brand">
+      <h1>Аркада</h1>
+      <p>Пять ярких игр на пару минут или на целый вечер. Играйте на компьютере, телефоне или с геймпада.</p>
+    </div>
+    <a class="tbtn" id="homeBtn" href="../">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+      <span class="lbl">Домой</span>
+    </a>
+  </header>
+
+  <section class="grid" id="grid" aria-label="Игры"></section>
+
+  <section class="notes" aria-label="Подсказки">
+    <div class="note"><h3>На компьютере</h3><p>Стрелки или WASD, пробел — действие, P — пауза, M — музыка. Геймпад подключается сам.</p></div>
+    <div class="note"><h3>На телефоне</h3><p>Касания и свайпы. Кнопка «На весь экран» в игре уберёт панели браузера.</p></div>
+    <div class="note"><h3>Как приложение</h3><p>В Chrome на Android: меню ⋮ → «Добавить на главный экран». Аркада откроется без адресной строки.</p></div>
+  </section>
+</main>
+<script>
+(() => {
+  const GAMES = [
+    { id: 'plane',  name: 'Небесный пилот', genre: 'Стрелялка',   text: 'Самолётик против пчёл, хмурых тучек и дирижабля-босса.', bg: 'linear-gradient(160deg,#4fb8ff,#fff0d6)' },
+    { id: 'bip',    name: 'Бип',            genre: 'Бегалка',     text: 'Робот бежит по неоновым крышам, собирает кристаллы и ищет портал.', bg: 'linear-gradient(160deg,#1a1a2e,#764ba2)' },
+    { id: 'bricks', name: 'Кирпичики',      genre: 'Арканоид',    text: 'Разбейте конфетные стенки мячиком и ловите бонусы.', bg: 'linear-gradient(160deg,#ffd6f0,#c8f1ff)' },
+    { id: 'snake',  name: 'Змейка',         genre: 'Классика',    text: 'Садовая змейка ест ягоды и растёт. Не врежьтесь в себя!', bg: 'linear-gradient(160deg,#a8e66b,#4fbf6a)' },
+    { id: 'racer',  name: 'Гонка',          genre: 'Гонки',       text: 'Бесконечная дорога, пробки и монетки. Проскочите впритирку!', bg: 'linear-gradient(160deg,#ffd166,#ff8a3d)' }
+  ];
+  const best = (id) => { try { return +localStorage.getItem('arcade.best.' + id) || 0; } catch (e) { return 0; } };
+  const grid = document.getElementById('grid');
+  grid.innerHTML = GAMES.map((g) => {
+    const b = best(g.id);
+    return `<a class="tile" href="${g.id}/index.html">
+      <div class="cover" style="--cover-bg:${g.bg}">
+        <img src="${g.id}/cover.jpg" alt="" loading="lazy" onerror="this.remove()">
+        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></span>
+      </div>
+      <div class="info">
+        <div class="row1"><h2>${g.name}</h2><span class="chip">${g.genre}</span></div>
+        <p>${g.text}</p>
+        <div class="best">${b ? 'Ваш рекорд: ' + b.toLocaleString('ru-RU') : ''}</div>
+      </div>
+    </a>`;
+  }).join('');
+  let framed = true; try { framed = window.self !== window.top; } catch (e) { framed = true; }
+  if (framed) document.getElementById('homeBtn').hidden = true;
+})();
+</script>
+</body>
+</html>

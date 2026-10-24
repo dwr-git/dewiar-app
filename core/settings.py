@@ -156,6 +156,10 @@ DEFAULTS = {
     # «Безопасность» (core/security.py): стоп-кран «Ничего не уходит в интернет» (core/egress.py) и модель, к которой вернуться
     # после него; замки: files — all | folder (удалять и отправлять только из папки ассистента), mic — name | button
     "privacy": {"local_only": False, "prev_llm": "", "files": "all", "mic": "name"},
+    # «Возможности» (24.10, владелец: «много всего появилось — люди пугаются; сделать опциональное включение части
+    # функций»): необязательное прячется из меню, пока его не включат. У новых — «Встречи», «Рядом» (радар) и «Суфлёр»
+    # выключены, «Досуг» (игры) включён; у тех, кто уже пользуется Dewiar, всё остаётся как было (Settings.load).
+    "features": {"meet": False, "near": False, "prompter": False, "games": True},
     "tools": {"enabled": {}, "confirm": {}, "search_url": ""},   # пусто = как задумано по умолчанию
     "skills": {"disabled": [], "catalog_url": ""},   # каталог навыков с сайта (JSON)
     "plugins": {"on": {}},              # установленные плагины (core/plugins.py): id -> {at, values, jobs}
@@ -228,6 +232,8 @@ class Settings:
                 if ui.get("skin", "brand") == "brand" and not ui.get("skin_v2"):
                     self.data["ui"]["skin"] = "neusky"                   # 20.10: «Небесный» — новый стиль по умолчанию (один раз;
                 self.data["ui"]["skin_v2"] = True                         # выбранную потом «Фирменную» больше не трогаем)
+                if "features" not in raw:                                # уже пользуются — ничего не прячем (24.10)
+                    self.data["features"] = {"meet": True, "near": True, "prompter": True, "games": True}
                 if (raw.get("llm") or {}).get("history_reset_seconds") in (300, 1200):
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
             except FileNotFoundError:

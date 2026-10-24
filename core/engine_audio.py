@@ -1151,7 +1151,8 @@ class AudioMixin:
                              if apps else "Созвон закончился — слушаю как обычно")
                 self.status["meeting"] = {"apps": apps, "mode": self._meeting_mode()} if apps else None
                 self.emit("status", status=self.status)
-                if apps and not was and not self.prompter.on and self.s.get("ui", "prompter_offer") is not False:
+                if apps and not was and not self.prompter.on and self.s.get("ui", "prompter_offer") is not False \
+                        and (self.s.get("features") or {}).get("prompter") is not False:      # «Возможности»: суфлёр выключен — не предлагаем
                     self.emit("prompter_offer", apps=apps)     # созвон начался — виджет предложит суфлёр
             self.stopping.wait(3.0)
 

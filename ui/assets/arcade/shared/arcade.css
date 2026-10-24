@@ -1,0 +1,265 @@
+/* Аркада — общий стиль страниц игр.
+   Фон — фирменный ночной градиент, сцена — сплошной чёрный блок с тенью, кнопки — стекло. */
+:root {
+  color-scheme: dark;
+  --void: #0a0a0f;
+  --night: #1a1a2e;
+  --deep: #16213e;
+  --ink: #f1f0ff;
+  --muted: #a9acd9;
+  --glass: rgba(255, 255, 255, .1);
+  --glass-hi: rgba(255, 255, 255, .18);
+  --line: rgba(255, 255, 255, .14);
+  --neon: #3bd5ff;
+  --pink: #ff77c6;
+  --amber: #f5a04a;
+  --brand-a: #667eea;
+  --brand-b: #764ba2;
+  --solid: #000;
+  --glow-violet: rgba(120, 119, 198, .3);
+  --glow-pink: rgba(255, 119, 198, .3);
+  --glow-cyan: rgba(120, 219, 255, .2);
+  --f: "Rubik", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+html, body { height: 100%; margin: 0; }
+[hidden] { display: none !important; }
+body {
+  background-color: var(--void);
+  background-image:
+    radial-gradient(circle at 20% 80%, var(--glow-violet) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, var(--glow-pink) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, var(--glow-cyan) 0%, transparent 50%),
+    linear-gradient(135deg, var(--void) 0%, var(--night) 50%, var(--deep) 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font: 400 15px/1.5 var(--f);
+  -webkit-tap-highlight-color: transparent;
+}
+body.game {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* ---------- верхняя панель ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
+  padding-bottom: 8px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.topbar h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0 4px;
+  font: 800 19px/1.2 var(--f);
+  letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--ink);
+  font: 500 15px var(--f);
+  text-decoration: none;
+  cursor: pointer;
+}
+.tbtn:hover { background: var(--glass-hi); }
+.tbtn:focus-visible, .go:focus-visible, .ghost:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
+.tbtn svg { width: 20px; height: 20px; flex: none; }
+.tbtn.icon { padding: 0; width: 42px; }
+.tbtn[aria-pressed="false"] .on-only { display: none; }
+.tbtn[aria-pressed="true"] .off-only { display: none; }
+
+/* ---------- сцена ---------- */
+.stagewrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+}
+.stage {
+  position: relative;
+  background: var(--solid);
+  box-shadow: rgb(0 0 0) 0 8px 32px;
+  border-radius: 18px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+
+.help {
+  margin: 0;
+  padding: 0 16px max(12px, env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.help kbd {
+  font: 500 12px/1 var(--f);
+  color: var(--ink);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 7px;
+}
+
+/* ---------- экраны меню ---------- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  box-sizing: border-box;
+  background: rgba(6, 7, 18, .38);
+  overflow: auto;
+}
+.card {
+  width: 100%;
+  max-width: 400px;
+  box-sizing: border-box;
+  padding: 26px 24px 22px;
+  border-radius: 22px;
+  background: var(--solid);
+  box-shadow: rgb(0 0 0) 0 8px 32px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  text-align: center;
+  animation: pop .32s cubic-bezier(.2, 1.4, .4, 1) both;
+}
+.card .kicker { margin: 0 0 6px; font-size: 13px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.card h2 {
+  margin: 0 0 10px;
+  font: 900 clamp(26px, 7vw, 38px)/1.1 var(--f);
+  text-wrap: balance;
+  background: linear-gradient(90deg, var(--neon), var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.card p { margin: 0 0 10px; color: var(--muted); font-size: 16px; text-wrap: balance; }
+.card .score { margin: 4px 0 2px; font: 900 48px/1 var(--f); color: var(--ink); font-variant-numeric: tabular-nums; }
+.card .record { color: var(--amber); font-weight: 500; }
+.card .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 16px; }
+.go, .ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 28px;
+  border-radius: 16px;
+  border: 0;
+  font: 700 18px var(--f);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+.go { background: linear-gradient(135deg, var(--brand-a), var(--brand-b)); box-shadow: 0 6px 20px rgba(102, 126, 234, .45); }
+.go:hover { filter: brightness(1.08); }
+.ghost { background: var(--glass); border: 1px solid var(--line); font-weight: 500; }
+.card .keys { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.card .keys b { color: var(--ink); font-weight: 500; }
+@keyframes pop { from { transform: scale(.85); opacity: 0; } }
+
+/* ---------- экранные кнопки ---------- */
+.touchpad {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 14px;
+  pointer-events: none;
+}
+.tp-group { display: flex; gap: 14px; pointer-events: auto; }
+.stagewrap.has-below { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.touchpad.below { position: static; width: 100%; max-width: 560px; box-sizing: border-box; padding: 14px 6px 4px; }
+.touchpad.below .tp { background: var(--solid); box-shadow: rgb(0 0 0) 0 8px 32px; }
+.tp {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .35);
+  background: rgba(0, 0, 0, .35);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font: 800 20px var(--f);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+.tp.big { width: 92px; height: 92px; }
+.tp.on { background: rgba(102, 126, 234, .65); border-color: #fff; }
+
+.tip {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--solid);
+  box-shadow: rgb(0 0 0) 0 8px 32px;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* режим снимка обложки */
+.shot .topbar, .shot .overlay, .shot .touchpad, .shot .help, .shot .tip { display: none !important; }
+.shot .stagewrap { padding: 0; }
+.shot .stage { border-radius: 0; box-shadow: none; }
+
+@media (max-width: 560px) {
+  .topbar h1 { font-size: 17px; }
+  .tbtn .lbl { display: none; }
+  .tbtn { padding: 0; width: 42px; }
+}
+@media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+
+/* ---------- светлая тема Dewiar (?light=1: «Небесный», «Белоснежная»…) ----------
+   24.10: игры открываются в блокноте у виджета и в «Досуге» телефона — вокруг поля тот же светлый неоморфизм, что у
+   Лиры: фон темы, чернильные надписи, мягкие тени вместо чёрных. Само поле игры рисует холст — его цвета не трогаем. */
+:root.light {
+  color-scheme: light;
+  --void: #dbe5f1; --night: #e3eaf4; --deep: #d6e0ee;
+  --ink: #24324a; --muted: rgba(36, 50, 74, .64);
+  --glass: rgba(255, 255, 255, .55); --glass-hi: rgba(255, 255, 255, .8); --line: rgba(36, 50, 74, .1);
+  --solid: #eef3f9;
+  --glow-violet: rgba(139, 140, 247, .16); --glow-pink: rgba(255, 150, 200, .14); --glow-cyan: rgba(120, 200, 255, .14);
+  --neon: #4f6cf0; --pink: #c04fa2; --amber: #b8691a;
+}
+:root.light .stage, :root.light .card, :root.light .tip, :root.light .touchpad.below .tp {
+  box-shadow: 8px 8px 20px #b8c5d6, -6px -6px 16px rgba(255, 255, 255, .9);
+}
+:root.light .card { border-color: rgba(255, 255, 255, .7); }
+:root.light .overlay { background: rgba(219, 229, 241, .45); }
+:root.light .tbtn { box-shadow: 3px 3px 8px #c3cfdf, -3px -3px 8px rgba(255, 255, 255, .9); }
+:root.light .ghost { color: var(--ink); }
+/* внутри Dewiar «Игры» — рядом свои кнопки хозяина; полоса панели — чуть плотнее */
+.framed .topbar { padding-top: 8px; padding-bottom: 6px; }

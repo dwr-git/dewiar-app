@@ -57,7 +57,7 @@ c.in_tray, c.popped = False, False
 c.to_tray(quiet=True)
 ok(c.hidden == 1 and c._pad_on is False and c._pad_back is True, "кнопка «В трей» по-прежнему прячет виджет вместе с блокнотом")
 
-body = src[src.index("    def pad_open(self):"):src.index("    def pad_hide(self):")]
+body = src[src.index("    def pad_open(self, mode=\"notes\"):"):src.index("    def pad_hide(self):")]
 ok(body.index("self._stay()") < body.index("self._pad_on = g"), "открыть блокнот у показавшегося из трея виджета — выйти из трея")
 
 if fails:

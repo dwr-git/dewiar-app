@@ -117,6 +117,18 @@ class CommandsMixin:
                 return True
             self._tray_at = time.monotonic()            # спрятали — не заговаривать первой (_welcome_back)
             self._say_quick("Прячусь. Позовёте по имени — появлюсь.", text, then=lambda: self.emit("window", do="tray"))
+        elif kind == "play":                             # «Досуг» (24.10): полка игр в листе у виджета
+            if (self.s.get("features") or {}).get("games") is False:
+                self._say_quick("Игры сейчас выключены. Включить — в студии, раздел «Возможности» → «Досуг».", text)
+            elif not ui:
+                self._say_quick("Игры открываются в окне Dewiar, а его сейчас нет на экране. Скажите «покажись» — и снова «давай поиграем».", text)
+            else:
+                game = play_game(text)
+                names = {"snake": "Змейку", "racer": "Гонку", "bricks": "Кирпичики", "plane": "Небесного пилота", "bip": "Бипа",
+                         "blocks": "Блоки", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
+                         "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»"}
+                say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
+                self._say_quick(say, text, then=lambda: self.emit("window", do="play", game=game))
         elif kind == "show":
             if ui:
                 self._say_quick("Я здесь.", text, then=lambda: self.emit("window", do="show"))

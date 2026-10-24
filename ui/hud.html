@@ -347,8 +347,9 @@
   #b-lo[hidden] { display: none; }                                    /* стоп-кран включён — щит виден всегда */
   #corner-l #b-lo, body.light #corner-l #b-lo { color: #2fbf83; }
   #corner-l.lo:not(:hover):not(:focus-within) #b-bug { opacity: 0; }                                  /* блокнот открыт — кнопка видна и подсвечена */
-  #b-pad.on { color: var(--accent, #8B8CF7); background: rgba(139,140,247,.14); }
-  body.light #b-pad.on { color: var(--accent, #4f6cf0); background: rgba(79,108,240,.12); }
+  #b-pad.on, #b-play.on { color: var(--accent, #8B8CF7); background: rgba(139,140,247,.14); }
+  body.light #b-pad.on, body.light #b-play.on { color: var(--accent, #4f6cf0); background: rgba(79,108,240,.12); }
+  #b-play[hidden] { display: none; }
   body.mini #corner, body.mini #corner-l { display: none; }
 
   /* ---------- значок ---------- */
@@ -471,6 +472,8 @@
   </div>
   <div id="corner">
     <!-- блокнот у виджета (20.10): вкладки, ссылки, картинки, таблицы, задачи — выезжает рядом, синхронизируется (ui/pad.html) -->
+    <!-- «Досуг» (24.10): милые игры в том же листе, что блокнот (ui/pad.html, assets/arcade); выключается в «Возможностях» -->
+    <button class="btn" id="b-play" hidden title="Досуг — милые игры на пару минут. Или скажите: «Лира, давай поиграем»"><svg viewBox="0 0 24 24"><path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg></button>
     <button class="btn" id="b-pad" title="Блокнот — вкладки под рукой: ссылки, задачи, таблицы, картинки. Синхронизируется между устройствами"><svg viewBox="0 0 24 24"><rect x="4.5" y="3.5" width="13" height="17" rx="2.5"/><path d="M8 8h6M8 11.5h6M8 15h3.5"/><path d="M17.5 7h2M17.5 11h2"/></svg></button>
     <button class="btn" id="b-tray" title="Спрятать — появлюсь сам, когда позовёте по имени или придёт напоминание"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
   </div>
@@ -806,6 +809,7 @@ function tmrDraw() {
 core.on("hello", d => {
   tmrSet(d.reminders);
   applyLook(d.settings.ui);
+  featuresSet(d.settings.features);
   setLocal(d.settings.privacy && d.settings.privacy.local_only);
   personas = d.personas; muted = d.muted; $("b-mic").classList.toggle("on", muted); setTextOnly(d.settings.tts && d.settings.tts.text_only);
   applyPersona(d.persona); setRadio(d.radio); setState(d.state); note(d.status);
@@ -826,7 +830,7 @@ core.on("hello", d => {
   clearTimeout(window._turnT);                    // полоса дотаяла — надпись обычная, даже если ядро ещё не сказало «покой»
   window._turnT = setTimeout(() => { if (Date.now() >= turnUntil - 50) setState(state); }, (e.seconds || 0) * 1000 + 100);
 })
-.on("settings", e => { applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); })   // студия → «Оформление» и «Безопасность»
+.on("settings", e => { applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
 .on("persona", e => applyPersona(e.persona))
 .on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); })
 .on("level", e => entity.set({ level: e.v, voice: e.src === "voice" }))
@@ -1258,17 +1262,22 @@ core.on("confirm", () => { const a = api(); if (mode === "mini") setMode("card",
 let backT = null;
 function popUp() { const a = api(); if (a && mode === "card") { clearTimeout(backT); a.show(); } }
 function backLater(ms) { const a = api(); if (!a || mode !== "card") return; clearTimeout(backT); backT = setTimeout(() => a.tray_back && a.tray_back(), ms); }
-$("b-pad").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle(); };
-const padCheck = () => { const a = api(); $("b-pad").hidden = !(a && a.pad_toggle); };   // окно без блокнота (старая оболочка) — кнопки нет
+$("b-pad").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("notes"); };
+$("b-play").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("play"); };
+let gamesFeature = true;                                  // «Возможности» → «Досуг» (features.games); нет ключа — включено
+const padCheck = () => { const a = api(); $("b-pad").hidden = !(a && a.pad_toggle); $("b-play").hidden = !(a && a.play_open) || !gamesFeature; };   // окно без блокнота (старая оболочка) — кнопки нет
 window.addEventListener("pywebviewready", padCheck); setTimeout(padCheck, 1500);
-window.padMark = (on) => { $("b-pad").classList.toggle("on", !!on); $("corner").classList.toggle("pinned", !!on); };
+const featuresSet = (f) => { gamesFeature = !(f && f.games === false); padCheck(); };
+window.padMark = (on, m) => { const play = !!on && m === "play"; $("b-pad").classList.toggle("on", !!on && !play); $("b-play").classList.toggle("on", play);
+  $("corner").classList.toggle("pinned", !!on); };
 $("b-tray").onclick = () => { const a = api(); if (!a || !a.to_tray) return; a.to_tray();
   core.call("settings_save", { patch: { ui: { hud_tray: true } } }).catch(() => {}); };
 /* окно голосом (ядро: _window_cmd): «спрячься» — как кнопка «В трей», «покажись» — вернуть, «отключись» — выйти совсем */
 core.on("window", e => { const a = api(); if (!a || mode !== "card") return;
   if (e.do === "tray" && a.to_tray) { a.to_tray(); core.call("settings_save", { patch: { ui: { hud_tray: true } } }).catch(() => {}); }
   else if (e.do === "show" && a.from_tray) a.from_tray();
-  else if (e.do === "quit" && a.quit_all) a.quit_all(); });
+  else if (e.do === "quit" && a.quit_all) a.quit_all();
+  else if (e.do === "play" && a.play_open) a.play_open(e.game || ""); });                // «Лира, давай поиграем» — «Досуг» в листе у виджета
 window.trayLeft = () => { if (mode === "card") core.call("settings_save", { patch: { ui: { hud_tray: false } } }).catch(() => {}); };
 core.on("state", e => { if (e.state === "listening") popUp(); if (e.state === "idle") backLater(9000); else clearTimeout(backT); })
     .on("push", () => { popUp(); backLater(12000); })

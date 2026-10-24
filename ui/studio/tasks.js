@@ -9,18 +9,33 @@
 /* ---------- задачи ---------- */
 let tCur = "", tTab = "plan", tTimer = null;
 const tsince = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
+function taskPin(id, on, pins) {
+  const next = pins.filter(x => x !== id).concat(on ? [id] : []);
+  S.ui = Object.assign({}, S.ui, { task_pins: next });                 // сразу — без ожидания ответа ядра
+  save({ ui: { task_pins: next } }, true).then(loadTasks); loadTasks();
+}
 async function loadTasks() {
   try {
-    const list = await core.call("tasks_list");
+    let list = await core.call("tasks_list");
     const box = $("#t-list"); box.innerHTML = list.length ? "" : '<div class="fempty" style="padding:30px 8px">Пока пусто</div>';
     $("#t-box").style.display = list.length ? "" : "none";
     $("#t-ideas").style.display = list.length ? "none" : "";
+    // №201 (24.10): «закреплять пин — видеть, что исполняется, а не скролить вверх и вниз»: закреплённые — сверху,
+    // в порядке закрепления (ui.task_pins); булавка — при наведении, у закреплённых — всегда
+    const ids = new Set(list.map(t => t.id)), pins = ((S.ui && S.ui.task_pins) || []).filter(id => ids.has(id));
+    list = pins.map(id => list.find(t => t.id === id)).concat(list.filter(t => !pins.includes(t.id)));
     list.forEach(t => {
-      const el = document.createElement("div"); el.className = "titem" + (t.id === tCur ? " cur" : "");
+      const pinned = pins.includes(t.id);
+      const el = document.createElement("div"); el.className = "titem" + (t.id === tCur ? " cur" : "") + (pinned ? " pinned" : "");
       const pr = t.progress && t.progress[1] ? t.progress[0] / t.progress[1] : 0;
       el.innerHTML = `<b></b><span><i class="badge ${t.status}">${t.status_ru}</i>${tsince(t.created)}${t.project ? " · код" : ""}</span>` +
         (["running", "waiting", "sleeping"].includes(t.status) || pr ? `<i class="tbar${t.status === "running" ? " live" : ""}"><b style="width:${Math.max(3, (t.status === "done" ? 1 : pr) * 100)}%"></b></i>` : "");
-      $("b", el).textContent = t.title; el.onclick = () => openTask(t.id); box.appendChild(el);
+      $("b", el).textContent = t.title; el.onclick = () => openTask(t.id);
+      const pb = document.createElement("button"); pb.className = "tpin"; pb.type = "button";
+      pb.title = pinned ? "Открепить" : "Закрепить сверху"; pb.setAttribute("aria-label", pb.title); pb.setAttribute("aria-pressed", String(pinned));
+      pb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5.5 3.5 3.5v1.5h-11V12.5L10 9z"/><path d="M12 14v6.5"/></svg>';
+      pb.onclick = (e) => { e.stopPropagation(); taskPin(t.id, !pinned, pins); };
+      el.appendChild(pb); box.appendChild(el);
     });
     if (!tCur && list.length) openTask(list[0].id);
     $("#t-llm").innerHTML = `<option value="">Та же, что для разговора</option>` + Object.entries(S.llm.profiles || {}).map(([k, p]) => `<option value="${k}">${escH(p.name || k)}</option>`).join("");

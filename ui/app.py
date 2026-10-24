@@ -2133,12 +2133,37 @@ class Api:
         win = getattr(self, "_pad", None)
         return {"open": bool(win is not None and getattr(self, "_pad_on", False)), "side": getattr(self, "_pad_side", "left")}
 
-    def pad_toggle(self):
-        """Кнопка блокнота в углу виджета: открыть / закрыть (страница сама «въезжает» и «уезжает»)."""
+    def pad_toggle(self, mode="notes"):
+        """Кнопка блокнота (или «Досуга», mode="play") в углу виджета: открыть / закрыть (страница сама «въезжает» и
+        «уезжает»). Лист открыт в другом режиме — не закрываем, а переключаем: блокнот ↔ игры."""
+        mode = "play" if mode == "play" else "notes"
         if getattr(self, "_pad_on", False):
+            if getattr(self, "_pad_mode", "notes") != mode:
+                self._pad_mode = mode
+                self._pad_js(f"window.padMode && padMode('{mode}')")
+                self._js(f"window.padMark && padMark(true, '{mode}')")
+                return True
             self._pad_js("window.padClose && padClose()")
             return False
-        return self.pad_open()
+        return self.pad_open(mode)
+
+    def play_open(self, game=""):
+        """«Досуг»: «Лира, давай поиграем» (ядро — событие window: play) — лист у виджета с полкой игр;
+        game — сразу эта игра («поиграем в змейку» -> "snake")."""
+        game = game if re.fullmatch(r"[a-z]{2,12}", str(game or "")) else ""
+        if getattr(self, "_pad_on", False):
+            self._pad_mode = "play"
+            self._pad_js(f"window.padGame && padGame('{game}')")
+            self._js("window.padMark && padMark(true, 'play')")
+            return True
+        self._pad_game = game
+        return self.pad_open("play")
+
+    def pad_mode_mark(self, mode):
+        """Страница блокнота сама сменила режим (кнопки 🎮 и «к блокноту» на листе) — отметить у виджета."""
+        self._pad_mode = "play" if mode == "play" else "notes"
+        self._js(f"window.padMark && padMark(true, '{self._pad_mode}')")
+        return True
 
     def _pad_cfg_js(self, g):
         import json
@@ -2165,8 +2190,11 @@ class Api:
             return True
         self._gtk(run, timeout=3)
 
-    def pad_open(self):
-        """Окно блокнота (pad.html): одно на всё время; открыть — поставить у карточки и показать."""
+    def pad_open(self, mode="notes"):
+        """Окно блокнота (pad.html): одно на всё время; открыть — поставить у карточки и показать.
+        mode="play" — сразу «Досуг» (полка игр в том же листе)."""
+        mode = "play" if mode == "play" else "notes"
+        self._pad_mode = mode
         import threading
         import webview
         if self.mode != "card":
@@ -2199,15 +2227,19 @@ class Api:
                         return True
                     if not self._gtk(run, timeout=5):
                         raise RuntimeError("окна блокнота нет")
-                self._pad_js(self._pad_cfg_js(g) + f"; window.padShown && padShown('{g['side']}')")
-                self._js("window.padMark && padMark(true)")
+                game, self._pad_game = getattr(self, "_pad_game", ""), ""
+                self._pad_js(self._pad_cfg_js(g) + f"; window.padShown && padShown('{g['side']}'); window.padMode && padMode('{mode}')"
+                             + (f"; window.padGame && padGame('{game}')" if mode == "play" and game else ""))
+                self._js(f"window.padMark && padMark(true, '{mode}')")
                 return True
             except Exception as e:  # noqa: BLE001
                 print(f"Окно блокнота: открыть снова не вышло ({e}) — создаю заново", file=sys.stderr)
                 self._pad = None
         skin, light = ui_skin()
         import json
-        q = "&cfg=" + urllib.parse.quote(json.dumps({"side": g["side"], "gap": g["gap"], "clips": g["clips"]})) + "&skin=" + urllib.parse.quote(skin)
+        q = "&cfg=" + urllib.parse.quote(json.dumps({"side": g["side"], "gap": g["gap"], "clips": g["clips"]})) + "&skin=" + urllib.parse.quote(skin) \
+            + ("&mode=play" if mode == "play" else "") + ("&game=" + getattr(self, "_pad_game", "") if mode == "play" and getattr(self, "_pad_game", "") else "")
+        self._pad_game = ""
         win = webview.create_window(PAD_TITLE, self._url("pad.html", q), width=W, height=g["h"], x=g["x"], y=g["y"],
                                     resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
                                     background_color="#dbe5f1" if light else "#12131b", js_api=self, **_no_shadow())
@@ -2243,7 +2275,7 @@ class Api:
                         return True
                     if not self._gtk(run, timeout=5):
                         win.show()
-                self._js("window.padMark && padMark(true)")
+                self._js("window.padMark && padMark(true, '" + mode + "')")
             except Exception as e:  # noqa: BLE001 — не скруглилось: покажем как есть
                 print(f"Окно блокнота: {e}", file=sys.stderr)
                 try:

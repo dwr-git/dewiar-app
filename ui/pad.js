@@ -26,8 +26,8 @@ window.padCfg = (c) => {
 try { padCfg(JSON.parse(Q.get("cfg") || "null") || { side: Q.get("side") || "left" }); } catch (e) { padCfg({ side: Q.get("side") || "left" }); }
 window.padShown = (side) => { if (side) padSide(side); document.body.classList.remove("snap"); $("#wrap").classList.add("away");
   requestAnimationFrame(() => requestAnimationFrame(() => { $("#wrap").classList.remove("away"); document.body.classList.add("snap"); }));
-  setTimeout(() => ED.focus(), 280); refresh(); };
-window.padClose = async () => { await saveNow(); document.body.classList.remove("snap"); setTimeout(() => $("#wrap").classList.add("away"), 90);
+  setTimeout(() => { if (!document.body.classList.contains("play")) ED.focus(); }, 280); refresh(); };
+window.padClose = async () => { gameStop(); await saveNow(); document.body.classList.remove("snap"); setTimeout(() => $("#wrap").classList.add("away"), 90);
   setTimeout(() => { const a = api(); if (a && a.pad_hide) a.pad_hide(); }, 320); };
 $("#b-close").onclick = () => padClose();
 
@@ -179,9 +179,9 @@ core.on("pad_changed", async (e) => {                 // правка с дру�
   const r = await core.call("pad_read", { name: P.active }).catch(() => null);
   if (r && r.mtime !== P.base) { P.base = r.mtime; ED.innerHTML = PadMD.md2html(r.text); paint(); status("Обновлено с другого устройства"); }
 });
-core.on("hello", (d) => { try { const u = (d && d.settings && d.settings.ui) || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); } catch (e) { }
+core.on("hello", (d) => { try { const u = (d && d.settings && d.settings.ui) || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); gamesOn((d.settings || {}).features); } catch (e) { }
   if (P.loaded) { P.loaded = false; refresh(); } });
-core.on("settings", (e) => { try { const u = ((e && e.settings) || e || {}).ui || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); } catch (x) { } });   // тему сменили в студии        // ядро перезапустилось — перечитать
+core.on("settings", (e) => { try { const st = (e && e.settings) || e || {}, u = st.ui || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); gamesOn(st.features); } catch (x) { } });   // тему сменили в студии        // ядро перезапустилось — перечитать
 
 /* ---------- картинки ---------- */
 /* пустой лист — всегда с абзацем: иначе первая строка — голый текст без блока, и «- », «[] » не срабатывают (WebKitGTK) */
@@ -221,12 +221,25 @@ $("#file").onchange = (e) => { addImages([...e.target.files]); e.target.value = 
 
 /* ---------- вставка: картинки, таблицы, ссылки, Markdown ---------- */
 function insertHtml(html) { ED.focus(); document.execCommand("insertHTML", false, html); }
+/* 24.10, владелец (Ubuntu): «вставить скриншот из буфера — не работает»: WebKitGTK отдаёт странице при вставке только
+   текст, картинки нет. Как у виджета (hud: pasteImage) — берём её у окна (Api.clipboard_image: буфер GTK, на Windows —
+   Pillow) и кладём как файл. */
+async function clipImage() {
+  const a = window.pywebview && window.pywebview.api;
+  const url = a && a.clipboard_image ? await a.clipboard_image().catch(() => "") : "";
+  if (!url) { status("В буфере обмена нет картинки — скопируйте снимок экрана или фото и вставьте ещё раз.", "bad"); return false; }
+  const blob = await (await fetch(url)).blob();
+  addImages([new File([blob], "image.png", { type: blob.type || "image/png" })]);
+  return true;
+}
 ED.addEventListener("paste", (e) => {
   const dt = e.clipboardData; if (!dt) return;
-  const imgs = [...dt.files].filter(f => /^image\//.test(f.type));
-  if (imgs.length) { e.preventDefault(); addImages(imgs); return; }
+  const imgs = [...dt.files].filter(f => /^image\//.test(f.type))
+    .concat([...(dt.items || [])].filter(x => x.kind === "file" && /^image\//.test(x.type)).map(x => x.getAsFile()).filter(Boolean));
+  if (imgs.length) { e.preventDefault(); addImages(imgs.slice(0, dt.files.length || imgs.length)); return; }
   const html = dt.getData("text/html"), text = dt.getData("text/plain");
   e.preventDefault();
+  if (!text && (!(html && html.trim()) || /^\s*(?:<meta[^>]*>\s*)?<img[^>]*>\s*$/i.test(html))) { clipImage(); return; }   // ни текста — значит, картинка
   const after = (h) => /<\/(table|pre|ul|ol|blockquote)>$/.test(h) ? h + "<p><br></p>" : h;   // после таблицы и списка — дальше обычной строкой
   if (html && !/^\s*$/.test(html)) { insertHtml(after(PadMD.md2html(PadMD.html2md(html)))); }      // сайт, Word, таблица — в наш вид, лишнее прочь
   else if (/^\s*https?:\/\/\S+\s*$/.test(text)) {
@@ -447,3 +460,38 @@ textSize(1, true);
 try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { }   // новый абзац — <p>, а не <div>
 /* первое открытие */
 const wait = setInterval(() => { if (core.connected) { clearInterval(wait); padShown(Q.get("side")); } }, 120);
+
+/* ---------- «Досуг»: игры в том же листе (24.10, владелец: «людям нравится, как смотрится блокнот, — можно в него игры») ----------
+   padMode('play') — полка игр (assets/arcade/shelf.js), выбрали — игра во фрейме; padMode('notes') — снова блокнот.
+   Игра во фрейме не уходит со страницы: «Игры» в ней шлют {arcade: 'home'} — показываем полку. Ушли из «Досуга» или
+   убрали лист — фрейм пустеет (музыка и игра останавливаются; рекорды игры хранит сама). Кнопка 🎮 — только если
+   «Досуг» включён в «Возможностях» (features.games), сам режим открывают кнопка у виджета и «Лира, давай поиграем». */
+const ARC = "assets/arcade/";
+let GAMES_ON = true;
+function gamesOn(f) { GAMES_ON = !(f && f.games === false); $("#b-play").hidden = !GAMES_ON; if (!GAMES_ON && document.body.classList.contains("play")) padMode("notes"); }
+function shelfDraw() {
+  if (!window.DewiarArcade) return;
+  $("#shelf").innerHTML = DewiarArcade.html(ARC) + '<p class="tip">Стрелки или WASD — движение, пробел — действие, P — пауза, M — музыка. Геймпад подключается сам.</p>';
+  $$("#shelf .ag").forEach(b => { b.onclick = () => gameOpen(b.dataset.game); });
+}
+function gameOpen(id) {
+  const f = $("#game"), light = document.body.classList.contains("light");
+  f.src = DewiarArcade.url(ARC, id) + (light ? "?light=1" : "");
+  $("#play").classList.add("in");
+  f.onload = () => { try { f.focus(); f.contentWindow.focus(); const c = f.contentDocument && f.contentDocument.querySelector("canvas"); if (c) c.focus(); } catch (e) { } };
+}
+function gameStop() { const f = $("#game"); if (f.getAttribute("src") && f.getAttribute("src") !== "about:blank") f.src = "about:blank"; $("#play").classList.remove("in"); }
+window.padMode = (m) => {
+  const play = m === "play" && GAMES_ON;
+  if (play === document.body.classList.contains("play")) { if (play && $("#play").classList.contains("in")) { gameStop(); shelfDraw(); } return; }
+  document.body.classList.toggle("play", play);
+  $("#b-play").classList.toggle("on", play);
+  if (play) { saveNow(); gameStop(); shelfDraw(); setTimeout(() => { const b = $("#shelf .ag"); if (b) b.focus(); }, 300); }
+  else { gameStop(); setTimeout(() => ED.focus(), 120); }
+  const a = window.pywebview && window.pywebview.api; if (a && a.pad_mode_mark) a.pad_mode_mark(play ? "play" : "notes");
+};
+window.addEventListener("message", (e) => { if (e.data && e.data.arcade === "home" && e.source === $("#game").contentWindow) { gameStop(); shelfDraw(); } });
+$("#b-play").onclick = () => padMode("play");
+$("#b-notes").onclick = () => padMode("notes");
+window.padGame = (id) => { padMode("play"); if (id && window.DewiarArcade && DewiarArcade.find(id) && GAMES_ON) gameOpen(id); };
+if (Q.get("mode") === "play") padGame(Q.get("game") || "");

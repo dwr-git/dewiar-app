@@ -18,7 +18,7 @@ def ok(c, m):
 
 
 src = (ROOT / "ui/app.py").read_text(encoding="utf-8")
-body = src[src.index("    def pad_open(self):"):src.index("    def _pad_place(self, x, y):")]
+body = src[src.index("    def pad_open(self, mode=\"notes\"):"):src.index("    def _pad_place(self, x, y):")]
 reopen = body[:body.index("skin, light = ui_skin()")]
 ok("gw.show_all()" in reopen and "gw.present()" in reopen, "повторное открытие на Linux — через GTK, как первое")
 hide = body[body.index("def pad_hide"):]

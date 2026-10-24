@@ -102,7 +102,7 @@ const N = window.N = {
   handlers: {},
   on(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); },
   ev(raw) { let e; try { e = typeof raw === "string" ? JSON.parse(raw) : raw; } catch (x) { return; } (this.handlers[e.type] || []).forEach(f => { try { f(e); } catch (x) { console.error(x); } }); },
-  back() { const s = $(".sheet.on"); if (s) { closeSheets(); return true; } if (state !== "idle") { interrupt(); return true; } return false; },
+  back() { if (gameOn()) { gameClose(); return true; } const s = $(".sheet.on"); if (s) { closeSheets(); return true; } if (state !== "idle") { interrupt(); return true; } return false; },
 };
 
 /* ---------- радио: играет внутри приложения (как на компьютере), а не на сайтах и в чужих приложениях ----------
@@ -364,9 +364,15 @@ const DEF = {
   report: { auto: null },        // отчёты разработчику при сбое: null — ещё не спрашивали
   pulse: true, who: "", dev: "", // анонимный пульс для «Здоровья»; как подписать в «Помощниках проекта»; случайный номер установки
   complaints: [],                // мои жалобы: {id, s (секрет), base, note, ts, status, reply, fixed, reward, shot}
+  // «Возможности» (24.10, владелец: «люди пугаются всего — опциональное включение функций»): у новых «Рядом» и «Встречи»
+  // выключены, «Досуг» (игры) включён; у тех, кто уже пользуется, всё как было (ниже, после чтения настроек)
+  features: { games: true, near: false, meet: false },
 };
 let S = (() => { try { return Object.assign({}, DEF, JSON.parse(prefGet("settings") || "{}")); } catch (e) { return Object.assign({}, DEF); } })();
 for (const k of ["llm", "stt", "tts", "home", "account", "net", "tg"]) S[k] = Object.assign({}, DEF[k], S[k] || {});
+{ let raw = {}; try { raw = JSON.parse(prefGet("settings") || "{}") || {}; } catch (e) { }
+  if (!raw.features || typeof raw.features !== "object") S.features = Object.keys(raw).length ? { games: true, near: true, meet: true } : Object.assign({}, DEF.features); }
+const feat = (k) => (S.features || {})[k] !== false;      // «Возможности»: включено ли (нет ключа — да)
 // 22.10: облако отклоняло chat_template_kwargs, а телефон сразу переходил на функции текстом и запоминал это — один раз
 // проверим заново: теперь сначала пробуется запрос без chat_template_kwargs, с функциями полем (так они работают лучше)
 // 22.10, вечер: настоящая причина — сайт превращал пустой {} в схеме функции в [] (cloud.php chat_schema_fix): ещё раз
@@ -2682,6 +2688,19 @@ async function quick(text) {
     if (w) { const said = await worldTime(w[2], w[1]); if (said) return { say: said }; } }
   if (/^(какое (сегодня )?число|какой сегодня день)$/.test(t)) { const d = new Date(); return { say: `Сегодня ${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}.` }; }
   let m;
+  // «Досуг» (24.10): «Лира, давай поиграем», «хочу поиграть», «поиграем в змейку» — полка игр без модели.
+  // «давай сыграем в города» — разговорная игра, её ведёт модель (сюда не попадает: только свои игры)
+  { const G = "(?:змейк\\S*|змею|гонк\\S*|кирпичик\\S*|арканоид\\S*|пилот\\S*|самолет\\S*|самолетик\\S*|бип\\S*|бегалк\\S*|блоки|тетрис\\S*|конфетк\\S*|три в ряд|слияни\\S*|2048|судоку|пятнашк\\S*|реверси|отелло|крестик\\S*(?:[\\s-]+нолик\\S*)?|нолик\\S*|кроссворд\\S*|пять букв|вордл\\S*)";
+    const PLAY_RX = new RegExp(`^(?:(?!не\\s)[а-я-]+[\\s,]+)?(?:(?:ну|а|давай|теперь|можешь)\\s+)*(?:(?:поиграем|сыграем|поиграть|поиграй со мной|сыграй со мной)(?:\\s+(?:во что-?\\s*нибудь|в игр[уы]|немного|чуть-?\\s*чуть|в ${G}))*|хочу (?:поиграть|играть|в игр[уы])(?: в ${G})?|(?:открой|запусти|включи|покажи) (?:игры|игру|досуг|аркаду|${G})(?: ${G})?|во что (?:бы )?(?:поиграть|поиграем|сыграть))(?: пожалуйста)?$`);
+    if (PLAY_RX.test(t)) {
+      const GM = [["snake", /змейк|змею/, "Змейку"], ["racer", /гонк/, "Гонку"], ["bricks", /кирпичик|арканоид/, "Кирпичики"], ["plane", /пилот|самолет/, "Небесного пилота"], ["bip", /(?:^|\s)(?:бип|бегалк)/, "Бипа"],
+        ["blocks", /блоки|тетрис/, "Блоки"], ["candy", /конфетк|три в ряд/, "Конфетки"], ["merge", /слияни|2048/, "Слияние"], ["sudoku", /судоку/, "Судоку"], ["fifteen", /пятнашк/, "Пятнашки"], ["reversi", /реверси|отелло/, "Реверси"],
+        ["tictac", /крестик|нолик/, "Крестики-нолики"], ["crossword", /кроссворд/, "Кроссворд"], ["words", /пять букв|вордл/, "«Пять букв»"]];
+      const g = GM.find(([, rx]) => rx.test(t));
+      if (!feat("games")) return { say: "«Досуг» выключен. Включить — «Настройки» → «Ещё» → «Возможности»." };
+      setTimeout(() => playOpen(g ? g[0] : ""), 400);
+      return { say: g ? `Открываю ${g[2]}.` : "Давайте! Выбирайте игру." };
+    } }
   // фонарик — сразу, без модели. №227 (24.10): «Лера выключи фонарик», «выключи фонарик на телефоне», «фонарик включён,
   // выключи его» уходили модели, та отвечала «Фонарик выключен.», не выключив. Имя (и ослышка имени) в начале не мешает.
   if ((m = t.match(/^(?:(?!не[\s,])[а-яё-]+[\s,]+)?(?:(?:а\s+)?(?:фонарик|фонарь)\s+(?:(?:всё\s+|все\s+|ещё\s+|еще\s+)?(?:включ[её]н|горит|не\s+выключ[а-яё]*|светит)[\s,]+))?(?:(включи|зажги|выключи|отключи|погаси|убери)\s+(?:мне\s+)?(фонарик|фонарь|вспышку|его)|(посвети)(?:\s+мне)?(?:\s+фонариком)?|(?:фонарик|фонарь)\s+(включи|выключи|отключи|погаси))(?:\s+на\s+телефоне)?(?:,?\s+пожалуйста)?$/))
@@ -4898,6 +4917,39 @@ function taskDoneCard(id) {
 let soulTab = "diary";
 $$("#soul-tabs button").forEach(b => b.onclick = () => { soulTab = b.dataset.t; $("#soul-body").dataset.edit = ""; $$("#soul-tabs button").forEach(x => x.classList.toggle("on", x === b)); renderSoul(); });
 $("#b-soul").onclick = () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); };
+
+/* ---------- «Досуг»: милые игры (24.10, владелец: «сидишь в очереди к врачу — „Лира, давай поиграем“ — и набор
+   ненадоедающих миленьких игр прямо в интерфейсе Лиры») ----------
+   Полка — лист «Досуг» (arcade/shelf.js — тот же список, что у компьютера), игра — во весь экран во фрейме (#gameov).
+   «Игры» в игре (сообщение {arcade: 'home'}) и «Назад» телефона — снова полка; игра при этом выгружается (музыка
+   не играет в фоне, рекорды игра хранит сама). Выключено в «Возможностях» — ни значка, ни листа. */
+const ARC = "arcade/";
+function playShelf() {
+  if (!window.DewiarArcade) return;
+  $("#play-body").innerHTML = `<p class="hint" style="margin:0 2px 12px">Игры на пару минут — касаниями, свайпами или с геймпада. Скажите «Лира, давай поиграем» — откроется эта полка.</p>`
+    + `<div class="shelf">${DewiarArcade.html(ARC)}</div>`;
+  $$("#play-body .ag").forEach(b => b.onclick = () => gameOpen(b.dataset.game));
+}
+function playOpen(game) {
+  if (!feat("games")) { toast("«Досуг» выключен — включить: «Настройки» → «Ещё» → «Возможности»", 4000); return false; }
+  playShelf(); openSheet("#sh-play");
+  if (game && window.DewiarArcade && DewiarArcade.find(game)) gameOpen(game);
+  return true;
+}
+const gameOn = () => !$("#gameov").hidden;
+function gameOpen(id) {
+  if (state !== "idle") interrupt();                        // игра на весь экран — голос и прослушивание замолкают
+  const f = $("#gamef"); f.src = DewiarArcade.url(ARC, id) + (document.body.classList.contains("light") ? "?light=1" : "");
+  $("#gameov").hidden = false; closeSheets();
+}
+function gameClose(toShelf = true) {
+  const f = $("#gamef"); f.src = "about:blank"; $("#gameov").hidden = true;
+  if (toShelf && feat("games")) { playShelf(); openSheet("#sh-play"); }
+}
+window.addEventListener("message", (e) => { if (e.data && e.data.arcade === "home" && e.source === $("#gamef").contentWindow) gameClose(); });
+$("#b-play").onclick = () => playOpen("");
+function featApply() { $("#b-play").hidden = !feat("games"); document.body.classList.toggle("has-play", feat("games")); if (!feat("games") && gameOn()) gameClose(false); }
+featApply();
 const MON_G = MON;
 function dayHuman(iso) { const d = new Date(iso + "T12:00"); if (isNaN(d)) return iso; const t = new Date(); const y = new Date(Date.now() - 864e5);
   const same = (a, b) => a.toDateString() === b.toDateString();
@@ -5146,6 +5198,12 @@ function renderSettings() {
       <label class="f" style="margin-top:6px"><span>Когда говорит</span><select id="ap-fx">${opt([["bars", "Лучи"], ["pulse", "Пульс"], ["wave", "Волна"]], lookFx())}</select></label>
       <div class="sw" style="margin-top:10px"><div>Портрет следит за наклоном<small class="hint" style="display:block;margin:2px 0 0">Наклоните телефон — персонаж чуть повернётся и посмотрит на вас. Камера не нужна.</small></div>
         <label class="tg"><input type="checkbox" id="ap-tilt" ${S.tilt === true ? "checked" : ""}><i></i></label></div></div>`);
+    // «Возможности» (24.10): необязательное — по желанию; выключенное прячется, ничего не теряя
+    const fsw = (id, k, t, x) => `<div class="sw" style="margin-top:8px"><div>${t}<small>${x}</small></div><label class="tg"><input type="checkbox" id="${id}" data-feat="${k}" ${feat(k) ? "checked" : ""}><i></i></label></div>`;
+    h.push(`<h3>Возможности</h3><div class="card"><p class="hint" style="margin:0 0 4px">Включите только то, чем пользуетесь, — остальное не будет мешать. Выключенное ничего не теряет.</p>
+      ${fsw("ft-games", "games", "Досуг — милые игры", "Головоломки, судоку, реверси против Лиры и аркады; значок с джойстиком вверху или «Лира, давай поиграем»")}
+      ${fsw("ft-near", "near", "Рядом", "«Близкие» → «Рядом»: где близкие, если они сами делятся местом")}
+      ${fsw("ft-meet", "meet", "Встречи", "«Близкие» → «Встречи»: знакомства с теми, кто рядом")}</div>`);
     liteApply();
     h.push(`<h3>Лёгкий режим</h3><div class="card"><label class="f" style="margin-top:0"><span>Для слабых телефонов и экономии батареи</span><select id="ap-lite">${opt([["auto", "Сам, когда нужно"], ["on", "Всегда"], ["off", "Никогда"]], S.lite || "auto")}</select></label>
       <p class="hint" id="lite-now" style="margin:6px 2px 0">${liteOn() ? `Сейчас включён: ${esc(liteWhyNow)}.` : "Сейчас выключен."} Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут.</p></div>`);
@@ -5213,6 +5271,8 @@ function wireSettings(info) {
   $$(".skm").forEach(b => b.onclick = () => { S.skin = b.dataset.skin; saveS(); applyLook(); $$(".skm").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", String(x === b)); }); });
   if (g("ap-fx")) g("ap-fx").onchange = () => { S.voice_fx = g("ap-fx").value; saveS(); applyLook(); };
   if (g("ap-tilt")) g("ap-tilt").onchange = () => { S.tilt = g("ap-tilt").checked; saveS(); tiltSync(); };
+  $$("[data-feat]").forEach(x => x.onchange = () => { S.features = Object.assign({}, S.features || {}, { [x.dataset.feat]: x.checked }); saveS(); featApply();
+    toast(x.checked ? "Включено" : "Выключено — включить можно здесь же", 2200); });
   if (g("ap-lite")) g("ap-lite").onchange = () => { S.lite = g("ap-lite").value; saveS(); liteApply();
     g("lite-now").textContent = (liteOn() ? `Сейчас включён: ${liteWhyNow}.` : "Сейчас выключен.") + " Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут."; };
   // звук напоминаний: нажатие — выбрать и послушать (ещё раз — стоп); «Свой звук» без файла — сразу выбор файла
@@ -7166,7 +7226,8 @@ function clRender() {
     clReBind(p, h);
     return;
   }
-  const tabs = `<div class="tabs" id="cl-tabs"><button data-t="close" class="${clTab === "close" ? "on" : ""}">Близкие</button><button data-t="near" class="${clTab === "near" ? "on" : ""}">Рядом</button><button data-t="meet" class="${clTab === "meet" ? "on" : ""}">Встречи</button><button data-t="ref" class="${clTab === "ref" ? "on" : ""}">Рефералы</button></div>`;
+  if ((clTab === "near" || clTab === "meet") && !feat(clTab)) clTab = "close";      // «Возможности»: выключено — вкладки нет
+  const tabs = `<div class="tabs" id="cl-tabs"><button data-t="close" class="${clTab === "close" ? "on" : ""}">Близкие</button>${feat("near") ? `<button data-t="near" class="${clTab === "near" ? "on" : ""}">Рядом</button>` : ""}${feat("meet") ? `<button data-t="meet" class="${clTab === "meet" ? "on" : ""}">Встречи</button>` : ""}<button data-t="ref" class="${clTab === "ref" ? "on" : ""}">Рефералы</button></div>`;
   if (clTab === "ref") { if (!$("#rf-body")) { box.innerHTML = tabs + `<div id="rf-body"></div>`; clTabs(); } refTab(); return; }
   if (clTab === "meet") { if (!$("#meet-body")) { box.innerHTML = tabs + `<div id="meet-body"></div>`; clTabs(); } meetRender(); mtLoad(); return; }
   if (clTab === "near") { if (!$("#rad-body")) { box.innerHTML = tabs + `<div id="rad-body"></div>`; clTabs(); } radRender(); return; }
@@ -7178,7 +7239,7 @@ function clRender() {
     VI = `<svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg>`;
   const rc = radCfg(), rseen = radOn() ? rc.to.map(pid => st.people.find(p => p.pid === pid)).filter(Boolean).map(p => esc(radFirst(p.name))) : [];
   box.innerHTML = tabs + clOffers(st)
-    + (rseen.length ? `<button class="rad-mini" id="rad-mini"><i class="dot"></i><span>${rseen.length === 1 ? "Вас видит" : "Вас видят"} ${radList(rseen)} · ${radUntil(rc.until)}</span><b>Рядом</b></button>` : "")
+    + (rseen.length && feat("near") ? `<button class="rad-mini" id="rad-mini"><i class="dot"></i><span>${rseen.length === 1 ? "Вас видит" : "Вас видят"} ${radList(rseen)} · ${radUntil(rc.until)}</span><b>Рядом</b></button>` : "")
     + `<div class="clfaces">${st.people.map(x => `<button class="clface" data-pid="${esc(x.pid)}"><i class="clava" style="--c:${clCol(x.pid)}">${esc((x.name || "?")[0].toUpperCase())}${st.unread[x.pid] ? `<em>${st.unread[x.pid]}</em>` : ""}</i><span>${esc(String(x.name || "").split(/\s+/)[0])}</span></button>`).join("")}
         <button class="clface add" id="cl-add"><i class="clava">+</i><span>Добавить</span></button></div>`
     + (st.people.length ? st.people.map(x => `<div class="clp" data-pid="${esc(x.pid)}"><i class="clava" style="--c:${clCol(x.pid)}">${esc((x.name || "?")[0].toUpperCase())}</i>

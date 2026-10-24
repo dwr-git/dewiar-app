@@ -71,6 +71,35 @@
   #tabs.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
   #tabs.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
                         mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+  /* «Досуг» (24.10, владелец: «людям нравится, как смотрится блокнот, — можно в него игры»): тот же лист, вместо
+     вкладок и текста — полка игр (assets/arcade/shelf.js) и сама игра во фрейме. Вкладки, панель, лист и строка
+     внизу на это время прячутся; уголок размера остаётся — игру можно сделать крупнее. */
+  #play-t { display: none; flex: 1; min-width: 0; padding-left: 4px; font: 600 15px/1 "Unbounded", "Manrope", sans-serif; letter-spacing: .01em; }
+  #b-play[hidden], #b-notes[hidden] { display: none; }
+  #b-play.on { color: var(--acc); }
+  #play { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  body.play #play { display: flex; }
+  body.play #tabs, body.play #b-list, body.play #b-new, body.play #b-play, body.play #tools, body.play #sheet, body.play #foot { display: none !important; }
+  body.play #play-t { display: block; }
+  body:not(.play) #b-notes { display: none; }
+  #shelf { flex: 1; overflow-y: auto; padding: 2px 14px 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: var(--chip2) transparent; }
+  #shelf .ag { display: flex; gap: 14px; align-items: center; padding: 9px; border-radius: 18px; text-align: left; background: var(--chip); transition: background .15s, transform .15s; }
+  #shelf .ag:hover, #shelf .ag:focus-visible { background: var(--chip2); outline: none; }
+  #shelf .ag:active { transform: scale(.985); }
+  body.neu.light #shelf .ag { background: var(--paper); box-shadow: 5px 5px 12px var(--neu-dark, #b8c5d6), -5px -5px 12px var(--neu-light, #fff); }
+  body.neu.light #shelf .ag:hover, body.neu.light #shelf .ag:focus-visible { box-shadow: 3px 3px 8px var(--neu-dark, #b8c5d6), -3px -3px 8px var(--neu-light, #fff); }
+  .ag-cover { position: relative; flex: none; width: 118px; aspect-ratio: 16 / 10; border-radius: 13px; overflow: hidden; background: var(--chip2); }
+  .ag-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ag-play { position: absolute; right: 6px; bottom: 6px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+             background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 3px 10px rgba(102,126,234,.45); }
+  .ag-play svg { width: 12px; height: 12px; fill: #fff; margin-left: 2px; }
+  .ag-t { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .ag-t b { font-size: 15px; font-weight: 700; color: var(--ink); }
+  .ag-t em { font-style: normal; font-size: 12.5px; line-height: 1.4; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ag-t small { font-size: 11.5px; color: var(--faint); }
+  #shelf .tip { margin: 2px 4px 0; font-size: 12px; line-height: 1.5; color: var(--faint); }
+  #game { flex: 1; width: 100%; min-height: 0; border: 0; display: block; background: var(--paper); }
+  #play.in #shelf { display: none; } #play:not(.in) #game { display: none; }
   #b-list[hidden] { display: none; }
   #b-list.on { background: var(--chip2); color: var(--ink); }
   #tl { position: absolute; top: 44px; right: 46px; z-index: 6; display: none; flex-direction: column; gap: 1px; min-width: 190px; max-width: min(300px, calc(100% - 24px));
@@ -177,6 +206,9 @@
   <div id="top">
     <div id="tabs" role="tablist" aria-label="Вкладки блокнота"></div>
     <button class="ib" id="b-list" hidden title="Все вкладки" aria-label="Все вкладки" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></button>
+    <b id="play-t">Досуг</b>
+    <button class="ib" id="b-play" hidden title="Досуг — милые игры на пару минут" aria-label="Досуг: игры"><svg viewBox="0 0 24 24"><path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg></button>
+    <button class="ib" id="b-notes" title="Назад к блокноту" aria-label="Назад к блокноту"><svg viewBox="0 0 24 24"><rect x="4.5" y="3.5" width="13" height="17" rx="2.5"/><path d="M8 8h6M8 11.5h6M8 15h3.5"/></svg></button>
     <button class="ib" id="b-new" title="Новая вкладка (Ctrl+T)" aria-label="Новая вкладка"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
     <button class="ib" id="b-close" title="Убрать блокнот (Esc)" aria-label="Убрать блокнот"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
@@ -201,6 +233,7 @@
     <div id="sz" role="group" aria-label="Размер текста" title="Размер текста (Ctrl + колёсико, Ctrl+= и Ctrl+−)"><button class="ib" id="sz-m" aria-label="Мельче">A−</button><input type="range" id="sz-r" min="80" max="170" step="5" aria-label="Размер текста, %"><button class="ib" id="sz-p" aria-label="Крупнее">A+</button><b id="sz-v" title="Щелчок — как было">100 %</b></div>
     <input type="file" id="file" accept="image/*" hidden multiple>
   </div>
+  <div id="play"><div id="shelf" role="list" aria-label="Игры"></div><iframe id="game" title="Игра" allow="autoplay; gamepad"></iframe></div>
   <div id="sheet"><div id="ed" contenteditable="true" spellcheck="true" data-ph="Пишите прямо здесь — сохранится само.&#10;- пробел — список, [] пробел — задача, # пробел — заголовок.&#10;Ссылки, таблицы и картинки — просто вставьте (Ctrl+V)."></div></div>
   <div id="foot"><i class="dot"></i><span id="st">Открываю…</span><em id="hint"></em></div>
   <div id="grip" title="Потяните — размер блокнота. Двойной щелчок — как было"></div>
@@ -210,6 +243,7 @@
 <script src="assets/dewiar.js"></script>
 <script src="assets/dialog.js"></script>
 <script src="assets/padmd.js"></script>
+<script src="assets/arcade/shelf.js"></script>
 <script src="pad.js"></script>
 </body>
 </html>

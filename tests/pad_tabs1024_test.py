@@ -56,6 +56,17 @@ with sync_playwright() as p:
     p2.add_init_script(FAKE); p2.add_init_script(CORE % json.dumps(["Главное", "Идеи"]))
     p2.goto(URL); p2.wait_for_timeout(1000)
     ok(not p2.is_visible("#b-list") and "more-" not in p2.evaluate("document.querySelector('#tabs').className"), "все влезли — ни «⌄», ни тающих краёв")
+    # 24.10, владелец (Ubuntu): «вставить скриншот из буфера — не работает» — WebKitGTK отдаёт при вставке только текст;
+    # картинку берём у окна (Api.clipboard_image), как виджет
+    PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    p3 = b.new_page(viewport={"width": 440, "height": 560}); p3.on("pageerror", lambda e: errs.append(str(e)))
+    p3.add_init_script("window.pywebview = { api: new Proxy({}, { get: (_, k) => (...a) => Promise.resolve(k === 'clipboard_image' ? %r : k === 'get_pos' ? [1500, 300] : true) }) };" % PNG)
+    p3.add_init_script((CORE % json.dumps(["Главное"])).replace('return {}; };', 'if (c === "pad_attach") return { line: "![](Вложения/снимок.png)" }; return {}; };'))
+    p3.goto(URL); p3.wait_for_timeout(1000)
+    p3.click("#ed"); p3.evaluate("() => { const dt = new DataTransfer(); ED.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }")
+    p3.wait_for_timeout(600)
+    ok(p3.evaluate("!!document.querySelector('#ed img[data-src=\"Вложения/снимок.png\"]')") and any(c[0] == "pad_attach" for c in p3.evaluate("calls")),
+       "Ctrl+V со снимком экрана (странице дали пустой буфер) — картинка из буфера окна в листе")
     ok(not errs, f"без ошибок на странице: {errs[:2]}")
     b.close()
 

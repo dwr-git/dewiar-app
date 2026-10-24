@@ -22,6 +22,7 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
   <button id="who" class="who" title="Персонаж"><img id="who-img" alt=""><span id="who-name">Агент</span><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></button>
   <div class="sp"></div>
   <button class="ib" id="b-voice" title="Отвечать текстом, без голоса" aria-pressed="false"><svg class="i-on" viewBox="0 0 24 24"><path d="M2.5 9h4.2L12 4.5v15L6.7 15H2.5z"/><path d="M15.8 8.3a5.2 5.2 0 0 1 0 7.4M18.9 5.2a9.6 9.6 0 0 1 0 13.6"/></svg><svg class="i-off" viewBox="0 0 24 24"><path d="M2.5 9h4.2L12 4.5v15L6.7 15H2.5z"/><path d="m15.5 9 6 6M21.5 9l-6 6"/></svg></button>
+  <button class="ib" id="b-play" title="Досуг — милые игры" hidden><svg viewBox="0 0 24 24"><path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg></button>
   <button class="ib" id="b-soul" title="Душа: дневник, душа, конституция"><svg viewBox="0 0 24 24"><path d="M10.5 2.8l1.9 5.5 5.6 1.9-5.6 1.9-1.9 5.6-1.9-5.6L3 10.2l5.6-1.9z"/><path d="M18.5 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/></svg></button>
   <button class="ib" id="b-close" title="Близкие: переписка помощников"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.6c0 5.5-7.5 10.1-7.5 10.1z"/></svg><i class="dot"></i></button>
   <button class="ib" id="b-day" title="Напоминания и заметки"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
@@ -74,8 +75,10 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 </section>
 <section class="sheet tall" id="sh-close"><div class="grab"></div><h2 id="cl-h">Близкие<button class="lnk" id="cl-inv">Пригласить</button></h2><div id="close-body"></div></section>
 <section class="sheet tall" id="sh-set"><div class="grab"></div><h2>Настройки</h2><div id="set-body"></div></section>
+<section class="sheet tall" id="sh-play" aria-labelledby="pl-h"><div class="grab"></div><h2 id="pl-h">Досуг</h2><div id="play-body"></div></section>
 <section class="sheet tall" id="sh-tricks"><div class="grab"></div><h2>Что я умею</h2><div id="tricks-body"></div></section>
 
+<div id="gameov" hidden><iframe id="gamef" title="Игра" allow="autoplay; gamepad"></iframe></div>
 <div id="toast"></div>
 <div id="dim"></div>
 
@@ -94,6 +97,7 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 <script src="whatsnew.js"></script>
 <script src="refnet.js"></script>
 <script src="rich.js"></script>
+<script src="arcade/shelf.js"></script>
 <script src="radio.js"></script>
 <script src="app.js"></script>
 <script src="exam.js"></script>

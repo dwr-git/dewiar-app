@@ -34,6 +34,7 @@ const ICONS = {
   about: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>',
   servers: '<rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/><path d="M7.5 7.3h.01M7.5 16.8h.01M11 7.3h5.5M11 16.8h5.5"/>',
   safety: '<path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.3 7.5 9.5 4.3-1.2 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.3 2.3 4.3-4.6"/>',
+  features: '<rect x="3.5" y="5" width="17" height="6" rx="3"/><circle cx="17.5" cy="8" r="1.6"/><rect x="3.5" y="13" width="17" height="6" rx="3"/><circle cx="6.5" cy="16" r="1.6"/>',
 };
 $$("nav button[data-p]").forEach(b => { const i = b.dataset.p === "diary" ? ICONS.soul : ICONS[b.dataset.p]; if (i) b.insertAdjacentHTML("afterbegin", `<svg class="ni" viewBox="0 0 24 24">${i}</svg>`); });
 // заголовок с id переписывается кодом целиком (textContent) — значок в нём не выжил бы, такие пропускаем

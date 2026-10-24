@@ -110,6 +110,7 @@ function bindFields() {
 }
 function refreshStatic() {
   if (window.studioSkin) studioSkin(get("ui.skin"));     // студия — в стиле виджета (studio/theme.js)
+  featuresApply();
   if (window.DewiarZoom) { DewiarZoom.apply(get("ui")); if (window.zoomSync) zoomSync(); }   // масштаб и текст (look.js)
   const wf = $("#wf-box"); if (wf) wf.style.display = (+get("ui.widget_fail2") || 0) >= 2 ? "" : "none";
   $$("[data-k]").forEach(inp => {
@@ -413,3 +414,14 @@ $("#r-add").onclick = async () => { const v = $("#r-phrase").value.trim(); if (!
 $("#r-listen").onclick = () => core.call("alarm_test", { sound: $("#r-sound").value }).catch(e => toast(e.message));
 $("#r-try").onclick = () => core.call("reminder_add", { phrase: "через 10 секунд проверка будильника" }).then(() => { toast("Через 10 секунд прозвенит"); loadReminders(); }).catch(e => toast(e.message));
 core.on("reminders", e => { if ($("#p-reminders").classList.contains("cur")) renderReminders(e.items); });
+
+/* «Возможности» (24.10): выключенное прячется из меню — «Суфлёр» в списке разделов, «Рядом» и «Встречи» во вкладках
+   «Близких». Открыта спрятанная вкладка — возвращаемся к переписке; открыт спрятанный раздел — к «Возможностям». */
+function featuresApply() {
+  const f = get("features") || {}, on = (k) => f[k] !== false;
+  const nb = $('nav button[data-p="prompter"]'); if (nb) nb.hidden = !on("prompter");
+  for (const t of ["near", "meet"]) { const b = $(`#cl-tabs button[data-t="${t}"]`); if (b) b.hidden = !on(t); }
+  const cur = $("#cl-tabs button.on");
+  if (cur && cur.hidden && window.rdTab) rdTab("chat");
+  if (nb && nb.hidden && nb.classList.contains("cur")) { const fb = $('nav button[data-p="features"]'); if (fb) fb.click(); }
+}
