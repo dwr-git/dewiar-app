@@ -249,6 +249,16 @@
   #annb span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #annb button { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: 12px; padding: 0 2px; } #annb button:hover { opacity: 1; }
   body.light #annb { color: var(--ink); }
+  /* письмо от близкого (24.10, владелец: «на компе тоже бы видеть, если придёт сообщение от близкого»): строка «💌 Анна: …»
+     держится, пока не прочитали; нажать — студия, «Близкие», эта переписка */
+  #clb { display: none; align-items: center; gap: 6px; font-size: 12.5px; line-height: 1.35; padding: 7px 8px 7px 11px; border-radius: 12px; cursor: pointer;
+         color: #fff; background: linear-gradient(135deg, rgba(255,122,182,.34), rgba(183,140,255,.26)); animation: clbIn .35s ease-out; }
+  #clb.on { display: flex; } #clb span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #clb em { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.28); }
+  #clb button { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: 12px; padding: 0 2px; } #clb button:hover { opacity: 1; }
+  body.light #clb { color: var(--ink); } body.light #clb em { background: rgba(255,255,255,.7); }
+  @keyframes clbIn { from { opacity: 0; transform: translateY(4px); } }
+  @media (prefers-reduced-motion: reduce) { #clb { animation: none; } }
   .srcs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .srcs button { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; border: 0; border-radius: 999px; padding: 4px 10px 4px 8px;
                  cursor: pointer; background: rgba(138,155,255,.16); color: #DDE2FF; font: 600 11.5px/1.3 inherit; }
@@ -453,6 +463,7 @@
     <div id="upd"></div>
     <div id="cloudlow"></div>
     <div id="annb" role="button" tabindex="0"><span id="annb-t"></span><button id="annb-x" title="Скрыть" aria-label="Скрыть">✕</button></div>
+    <div id="clb" role="button" tabindex="0" title="Открыть переписку"><span id="clb-t"></span><em id="clb-n" hidden></em><button id="clb-x" title="Скрыть" aria-label="Скрыть">✕</button></div>
     <div id="ask">
       <div class="askbox" id="askbox">
         <textarea id="askin" rows="1" placeholder="Спросите что-нибудь…" title="Enter — отправить, Shift+Enter — новая строка" autocomplete="off" spellcheck="true"></textarea>
@@ -1053,7 +1064,7 @@ card.addEventListener("pointerdown", async (ev) => {
   // большая картинка (#lightbox) — тоже: захват указателя уводил щелчок «закрыть» на карточку, и картинка закрывала
   // виджет намертво (отчёт 70: «при картинке виснет виджет — нужно перезапускать»)
   // строки «ИИ-баланс…» и объявления — тоже кнопки (24.10: щелчок по #cloudlow уходил в перетаскивание и студия не открывалась)
-  if (ev.button !== 0 || ev.target.closest("button, input, #cap, #note, #upd, #task, #yn, #lightbox, #cloudlow, #annb")) return;
+  if (ev.button !== 0 || ev.target.closest("button, input, #cap, #note, #upd, #task, #yn, #lightbox, #cloudlow, #annb, #clb")) return;
   card.setPointerCapture(ev.pointerId);
   drag = { sx: ev.screenX, sy: ev.screenY, moved: false, pos: null, orb: !!ev.target.closest("#orb") };
   if (drag.orb) holdBegin("mouse");
@@ -1122,6 +1133,23 @@ core.on("ann", e => annSet(e.item));
 core.on("hello", () => setTimeout(() => core.call("ann").then(r => annSet((r.items || []).find(i => i.id > (r.seen || 0)))).catch(() => {}), 1500));
 $("annb").onclick = () => { const a = api(); if (a) a.open_settings(); };        // студия при появлении сама покажет непрочитанное
 $("annb-x").onclick = (e) => { e.stopPropagation(); annHidden = +($("annb").dataset.id || 0); $("annb").className = ""; };
+/* письма близких (core/close.py: события close_msg — новое, close — непрочитанное): строка держится, пока есть непрочитанное */
+const CLB = { pid: "", hid: 0 };
+function clbSet(st, last) {
+  const people = (st && st.people) || [], n = people.reduce((a, p) => a + (p.unread || 0), 0), el = $("clb");
+  if (!n || n <= CLB.hid) { el.className = ""; if (!n) CLB.hid = 0; return; }
+  const p = (last && people.find(x => x.pid === last.pid)) || people.find(x => x.pid === CLB.pid && x.unread) || people.find(x => x.unread);
+  if (!p) { el.className = ""; return; }
+  const l = last && last.pid === p.pid ? { t: last.text, f: last.files } : (p.last && !p.last.out ? { t: p.last.t, f: (p.last.f || []).map(x => x.name) } : {});
+  CLB.pid = p.pid; el.className = "on";
+  $("clb-t").textContent = `💌 ${p.name}: ${l.t || ((l.f || []).length ? "📎 " + l.f[0] : "новое сообщение")}`;
+  $("clb-n").hidden = n < 2; $("clb-n").textContent = n;
+}
+core.on("close_msg", e => { CLB.hid = 0; core.call("close_state").then(st => clbSet(st, e)).catch(() => clbSet({ people: [{ pid: e.pid, name: e.name, unread: 1 }] }, e)); })
+  .on("close", e => { if ($("clb").classList.contains("on") || CLB.hid) clbSet(e.state); })
+  .on("hello", () => setTimeout(() => core.call("close_state").then(st => clbSet(st)).catch(() => {}), 2000));
+$("clb").onclick = () => { const a = api(); if (a) a.open_settings("close"); };
+$("clb-x").onclick = (e) => { e.stopPropagation(); CLB.hid = +($("clb-n").textContent || 1) || 1; $("clb").className = ""; };
 $("b-cal").onclick = () => { const a = api(); if (a) a.open_settings("calendar"); };
 function setLocal(on) { $("b-lo").hidden = !on; $("corner-l").classList.toggle("lo", !!on); }
 $("b-lo").onclick = () => { const a = api(); if (a) a.open_settings("safety"); };

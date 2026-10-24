@@ -5,9 +5,15 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280, N = 8;
+/* Широкое окно (лист «Досуг» на компьютере) — доска слева во всю высоту, справа название, счёт, слова Лиры и подсказка;
+   узкое (телефон) — сверху вниз, как было. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280, N = 8;
 const BG = '#e9ebef', DARK = '#c3c7cf', LIGHT = '#ffffff', INK = '#1d1f24', MUTED = 'rgba(29,31,36,.5)';
-const BX = 56, BY = 330, SZ = 608, CELL = SZ / N;
+const BX = LAND ? 90 : 56, BY = LAND ? 60 : 330, SZ = LAND ? 600 : 608, CELL = SZ / N;
+const L = LAND
+  ? { title: [990, 104], cards: [[760, 168], [1000, 168]], cw: 220, disc: 50, num: 140, sub: 20, say: { x: 760, y: 356, w: 460, h: 96 }, sayT: 26, hintT: 22, tip: { x: 760, y: 536, w: 460, h: 124 } }
+  : { title: [W / 2, 104], cards: [[W / 2 - 280, 168], [W / 2 + 20, 168]], cw: 260, disc: 56, num: 150, sub: 18, say: { x: 80, y: BY + SZ + 90, w: W - 160, h: 96 }, sayT: 28, hintT: 24, tip: null };
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const WEIGHT = [
   [120, -20, 20, 5, 5, 20, -20, 120], [-20, -40, -5, -5, -5, -5, -40, -20], [20, -5, 15, 3, 3, 15, -5, 20], [5, -5, 3, 3, 3, 3, -5, 5],
@@ -164,16 +170,22 @@ function draw(ctx, g) {
   SC = g.scale;
   const t = g.t;
   ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
-  A.text(ctx, 'Реверси', W / 2, 104, { size: 62, weight: 900, color: INK });
+  A.text(ctx, 'Реверси', L.title[0], L.title[1], { size: 62, weight: 900, color: INK });
   // счёт: вы и Лира
   const me = count(S.b, ME), ai = count(S.b, AI);
   for (const [i, who, name, n] of [[0, ME, 'Вы', me], [1, AI, 'Лира', ai]]) {
-    const x = i ? W / 2 + 20 : W / 2 - 280, y = 168, on = S.turn === who && S.mode === 'play' && !S.end;
-    soft(ctx, x, y, 260, 104, 30, on ? 9 : 5, false);
-    if (on) { A.rr(ctx, x + 2, y + 2, 256, 100, 28); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(29,31,36,.35)'; ctx.stroke(); }
-    disc(ctx, x + 56, y + 52, 26, who);
-    A.text(ctx, String(n), x + 150, y + 46, { size: 44, weight: 900, color: INK });
-    A.text(ctx, name + (on ? (who === AI ? ' · думает' : ' · ваш ход') : ''), x + 150, y + 82, { size: 18, weight: 600, color: MUTED });
+    const [x, y] = L.cards[i], cw = L.cw, on = S.turn === who && S.mode === 'play' && !S.end;
+    soft(ctx, x, y, cw, 104, 30, on ? 9 : 5, false);
+    if (on) { A.rr(ctx, x + 2, y + 2, cw - 4, 100, 28); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(29,31,36,.35)'; ctx.stroke(); }
+    disc(ctx, x + L.disc, y + 52, 26, who);
+    A.text(ctx, String(n), x + L.num, y + 46, { size: 44, weight: 900, color: INK });
+    A.text(ctx, name + (on && !LAND ? (who === AI ? ' · думает' : ' · ваш ход') : ''), x + L.num, y + 82, { size: L.sub, weight: 600, color: MUTED });
+  }
+  if (L.tip) {                                   // широкое окно: памятка под счётом
+    const r = L.tip;
+    soft(ctx, r.x, r.y, r.w, r.h, 30, 4, true);
+    A.text(ctx, 'Углы — самые ценные', r.x + r.w / 2, r.y + 46, { size: 26, weight: 700, color: INK });
+    A.text(ctx, 'фишку в углу уже не перевернуть', r.x + r.w / 2, r.y + 84, { size: 21, weight: 600, color: MUTED });
   }
   // доска
   soft(ctx, BX - 18, BY - 18, SZ + 36, SZ + 36, 44, 14, false);
@@ -198,18 +210,18 @@ function draw(ctx, g) {
   }
   if (S.last && S.mode === 'play') { ctx.beginPath(); ctx.arc(BX + (S.last.x + .5) * CELL, BY + (S.last.y + .5) * CELL, 5, 0, Math.PI * 2); ctx.fillStyle = S.b[S.last.y][S.last.x] === ME ? 'rgba(255,255,255,.7)' : 'rgba(29,31,36,.5)'; ctx.fill(); }
   // Лира говорит — облачко внизу
-  const by = BY + SZ + 90;
+  const sb = L.say, by = sb.y, bx = sb.x + sb.w / 2;
   if (S.sayT > 0 && S.say) {
     const a = Math.min(1, S.sayT / .3, (2.4 - S.sayT) / .2);
     ctx.save(); ctx.globalAlpha = Math.max(0, a);
-    soft(ctx, 80, by, W - 160, 96, 34, 7, false);
-    A.text(ctx, S.say, W / 2, by + 50, { size: 28, weight: 600, color: INK });
+    soft(ctx, sb.x, by, sb.w, sb.h, 34, 7, false);
+    A.text(ctx, S.say, bx, by + 50, { size: L.sayT, weight: 600, color: INK });
     ctx.restore();
-  } else if (S.mode === 'play') A.text(ctx, S.turn === ME ? 'Точки — куда можно поставить фишку' : 'Лира думает…', W / 2, by + 50, { size: 24, weight: 500, color: MUTED });
+  } else if (S.mode === 'play') A.text(ctx, S.turn === ME ? 'Точки — куда можно поставить фишку' : 'Лира думает…', bx, by + 50, { size: L.hintT, weight: 500, color: MUTED });
 }
 
 A.game({
-  id: 'reversi', tone: 'light', title: 'Реверси', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'reversi', tone: 'light', title: 'Реверси', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'garden',
   help: { desktop: 'Щелчок по клетке с точкой — поставить фишку · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: 'Щелчок по клетке с точкой', touch: 'Коснитесь клетки с точкой — там можно ходить' },
   init(g) { titleScreen(g); window.__reversi = () => S; },
   update, draw

@@ -4,9 +4,23 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280;
-const BX = 36, BY = 250, SZ = 648, C = SZ / 9;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: поле слева во всю высоту, справа — название,
+   время и ошибки, панель цифр 3×3 и «Стереть». Узкое (телефон) — сверху вниз, как было. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280;
+const BX = LAND ? 58 : 36, BY = LAND ? 54 : 250, SZ = LAND ? 612 : 648, C = SZ / 9;
 const PAD_Y = BY + SZ + 50, PAD_W = (W - 72) / 9;
+/* кнопки цифр: «гнездо» (по нему попадание) и надписи; кнопка рисуется с отступом 4 по бокам */
+const L = LAND ? {
+  title: [728, 88], status: [730, 146], statusSize: 24,
+  key: (k) => ({ x: 728 + (k % 3) * 166, y: 196 + ((k / 3) | 0) * 124, w: 166, h: 110 }), keyTxt: [48, 90], keySub: 20,
+  erase: { x: 732, y: 586, w: 490, h: 80 }, eraseTxt: 42
+} : {
+  title: [BX, 96], status: [BX + 2, 160], statusSize: 26,
+  key: (k) => ({ x: 36 + k * PAD_W, y: PAD_Y, w: PAD_W, h: 110 }), keyTxt: [46, 90], keySub: 18,
+  erase: { x: W / 2 - 120, y: PAD_Y + 130, w: 240, h: 80 }, eraseTxt: 42
+};
+const inR = (x, y, r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 const INK = '#2b3550', SOFT = '#eef2fa', ACC = '#5b6cf0', BAD = '#e5486a';
 let S = null;
 
@@ -105,6 +119,7 @@ function update(g, dt) {
   if (inp.tap) {
     const { x, y } = inp.tap;
     if (x >= BX && x < BX + SZ && y >= BY && y < BY + SZ) { S.sel = ((y - BY) / C | 0) * 9 + ((x - BX) / C | 0); g.sfx('click', { vol: .3 }); }
+    else if (LAND) { for (let k = 0; k < 9; k++) if (inR(x, y, L.key(k))) put(g, k + 1); if (inR(x, y, L.erase)) put(g, 0); }
     else if (y >= PAD_Y && y <= PAD_Y + 110) { const k = Math.floor((x - 36) / PAD_W); if (k >= 0 && k < 9) put(g, k + 1); }
     else if (y >= PAD_Y + 130 && y <= PAD_Y + 210 && x > W / 2 - 120 && x < W / 2 + 120) put(g, 0);
   }
@@ -114,10 +129,10 @@ function update(g, dt) {
 function draw(ctx, g) {
   const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#f3f6fd'); bg.addColorStop(1, '#e6ecfa');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  A.text(ctx, 'Судоку', BX, 96, { align: 'left', size: 58, weight: 900, color: INK });
+  A.text(ctx, 'Судоку', L.title[0], L.title[1], { align: 'left', size: 58, weight: 900, color: INK });
   if (S.mode !== 'title') {
     const mm = Math.floor(S.time / 60), ss = String(Math.floor(S.time % 60)).padStart(2, '0');
-    A.text(ctx, `${S.level === 'easy' ? 'лёгкое' : 'среднее'} · ${mm}:${ss} · ошибок ${S.errs}`, BX + 2, 160, { align: 'left', size: 26, weight: 600, color: 'rgba(43,53,80,.6)' });
+    A.text(ctx, `${S.level === 'easy' ? 'лёгкое' : 'среднее'} · ${mm}:${ss} · ошибок ${S.errs}`, L.status[0], L.status[1], { align: 'left', size: L.statusSize, weight: 600, color: 'rgba(43,53,80,.6)' });
   }
   const sel = S.sel, sr = (sel / 9) | 0, sc = sel % 9, sv = sel >= 0 ? S.cur[sel] : 0;
   ctx.save(); ctx.shadowColor = 'rgba(60,80,140,.18)'; ctx.shadowBlur = 30 * g.scale; ctx.shadowOffsetY = 10 * g.scale;
@@ -147,19 +162,20 @@ function draw(ctx, g) {
   // панель цифр: сколько каждой осталось
   if (S.mode !== 'title') {
     for (let k = 0; k < 9; k++) {
-      const v = k + 1, left = 9 - S.cur.filter((x, i) => x === v && !S.bad[i]).length, x = 36 + k * PAD_W;
-      A.rr(ctx, x + 4, PAD_Y, PAD_W - 8, 110, 22); ctx.fillStyle = left ? '#fff' : 'rgba(255,255,255,.4)'; ctx.fill();
+      const v = k + 1, left = 9 - S.cur.filter((x, i) => x === v && !S.bad[i]).length, r = L.key(k), x = r.x, ky = r.y;
+      A.rr(ctx, x + 4, ky, r.w - 8, r.h, 22); ctx.fillStyle = left ? '#fff' : 'rgba(255,255,255,.4)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(43,53,80,.08)'; ctx.stroke();
-      A.text(ctx, String(v), x + PAD_W / 2, PAD_Y + 46, { size: 46, weight: 800, color: left ? ACC : 'rgba(43,53,80,.25)' });
-      A.text(ctx, left ? String(left) : '✓', x + PAD_W / 2, PAD_Y + 90, { size: 18, weight: 600, color: 'rgba(43,53,80,.45)' });
+      A.text(ctx, String(v), x + r.w / 2, ky + L.keyTxt[0], { size: 46, weight: 800, color: left ? ACC : 'rgba(43,53,80,.25)' });
+      A.text(ctx, left ? String(left) : '✓', x + r.w / 2, ky + L.keyTxt[1], { size: L.keySub, weight: 600, color: 'rgba(43,53,80,.45)' });
     }
-    A.rr(ctx, W / 2 - 120, PAD_Y + 130, 240, 80, 24); ctx.fillStyle = '#fff'; ctx.fill();
-    A.text(ctx, '⌫  Стереть', W / 2, PAD_Y + 172, { size: 28, weight: 700, color: INK });
+    const e = L.erase;
+    A.rr(ctx, e.x, e.y, e.w, e.h, 24); ctx.fillStyle = '#fff'; ctx.fill();
+    A.text(ctx, '⌫  Стереть', e.x + e.w / 2, e.y + L.eraseTxt, { size: 28, weight: 700, color: INK });
   }
 }
 
 A.game({
-  id: 'sudoku', tone: 'light', title: 'Судоку', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'sudoku', tone: 'light', title: 'Судоку', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'garden',
   help: { desktop: '<kbd>1</kbd>–<kbd>9</kbd> — цифра · <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> — клетка · <kbd>Delete</kbd> — стереть · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: 'Клетка — щелчком или стрелками, цифра — клавишами 1–9', touch: 'Коснитесь клетки, потом цифры внизу' },
   init(g) { titleScreen(g); window.__sudoku = () => S; },
   update, draw

@@ -8,6 +8,7 @@ const LOOK_FX = [
   ["wave", "Волна", "Живая линия по кругу"],
 ];
 let lookEnts = [];
+if (typeof IS_WIN !== "undefined" && IS_WIN && $("#lk-smooth")) $("#lk-smooth").style.display = "none";   // прозрачное окно — только Linux (№234)
 
 function loadLook() {
   const ui = (S && S.ui) || {};

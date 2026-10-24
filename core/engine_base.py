@@ -327,7 +327,8 @@ GAME_NAMES = {"snake": r"змейк\w*|змею", "racer": r"гонк\w*", "bric
               "blocks": r"блоки|тетрис\w*", "candy": r"конфетк\w*|три\s+в\s+ряд", "merge": r"слияни\w*|2048",
               "sudoku": r"судоку", "fifteen": r"пятнашк\w*", "reversi": r"реверси|отелло",
               "tictac": r"крестик\w*(?:[\s-]+нолик\w*)?|нолик\w*", "crossword": r"кроссворд\w*", "words": r"пять\s+букв|вордл\w*|wordle",
-              "glow": r"ог[оа]н[её]к\w*|огоньк\w*|сказк\w*"}
+              "glow": r"ог[оа]н[её]к\w*|огоньк\w*|сказк\w*",
+              "five": r"пять\s+в\s+(?:ряд|линию)|гомоку", "pairs": r"найди\s+пару|пар[ыу]|мемори"}
 _GAMES_NOM = "(?:" + "|".join(GAME_NAMES.values()) + ")"
 _GAMES = r"в\s+" + _GAMES_NOM
 

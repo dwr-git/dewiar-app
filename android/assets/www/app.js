@@ -2693,12 +2693,12 @@ async function quick(text) {
   let m;
   // «Досуг» (24.10): «Лира, давай поиграем», «хочу поиграть», «поиграем в змейку» — полка игр без модели.
   // «давай сыграем в города» — разговорная игра, её ведёт модель (сюда не попадает: только свои игры)
-  { const G = "(?:змейк\\S*|змею|гонк\\S*|кирпичик\\S*|арканоид\\S*|пилот\\S*|самолет\\S*|самолетик\\S*|бип\\S*|бегалк\\S*|блоки|тетрис\\S*|конфетк\\S*|три в ряд|слияни\\S*|2048|судоку|пятнашк\\S*|реверси|отелло|крестик\\S*(?:[\\s-]+нолик\\S*)?|нолик\\S*|кроссворд\\S*|пять букв|вордл\\S*|ог[оа]н[её]к\\S*|огоньк\\S*|сказк\\S*)";
+  { const G = "(?:змейк\\S*|змею|гонк\\S*|кирпичик\\S*|арканоид\\S*|пилот\\S*|самолет\\S*|самолетик\\S*|бип\\S*|бегалк\\S*|блоки|тетрис\\S*|конфетк\\S*|три в ряд|слияни\\S*|2048|судоку|пятнашк\\S*|реверси|отелло|крестик\\S*(?:[\\s-]+нолик\\S*)?|нолик\\S*|кроссворд\\S*|пять букв|вордл\\S*|ог[оа]н[её]к\\S*|огоньк\\S*|сказк\\S*|пять в ряд|пять в линию|гомоку|найди пару|пар[ыу]|мемори)";
     const PLAY_RX = new RegExp(`^(?:(?!не\\s)[а-я-]+[\\s,]+)?(?:(?:ну|а|давай|теперь|можешь)\\s+)*(?:(?:поиграем|сыграем|поиграть|поиграй со мной|сыграй со мной)(?:\\s+(?:во что-?\\s*нибудь|в игр[уы]|немного|чуть-?\\s*чуть|в ${G}))*|хочу (?:поиграть|играть|в игр[уы])(?: в ${G})?|(?:открой|запусти|включи|покажи) (?:игры|игру|досуг|аркаду|${G})(?: ${G})?|во что (?:бы )?(?:поиграть|поиграем|сыграть))(?: пожалуйста)?$`);
     if (PLAY_RX.test(t)) {
       const GM = [["snake", /змейк|змею/, "Змейку"], ["racer", /гонк/, "Гонку"], ["bricks", /кирпичик|арканоид/, "Кирпичики"], ["plane", /пилот|самолет/, "Небесного пилота"], ["bip", /(?:^|\s)(?:бип|бегалк)/, "Бипа"],
         ["blocks", /блоки|тетрис/, "Блоки"], ["candy", /конфетк|три в ряд/, "Конфетки"], ["merge", /слияни|2048/, "Слияние"], ["sudoku", /судоку/, "Судоку"], ["fifteen", /пятнашк/, "Пятнашки"], ["reversi", /реверси|отелло/, "Реверси"],
-        ["tictac", /крестик|нолик/, "Крестики-нолики"], ["crossword", /кроссворд/, "Кроссворд"], ["words", /пять букв|вордл/, "«Пять букв»"], ["glow", /ог[оа]н[её]к|огоньк|сказк/, "«Огонька»"]];
+        ["tictac", /крестик|нолик/, "Крестики-нолики"], ["crossword", /кроссворд/, "Кроссворд"], ["words", /пять букв|вордл/, "«Пять букв»"], ["glow", /ог[оа]н[её]к|огоньк|сказк/, "«Огонька»"], ["five", /пять в (?:ряд|линию)|гомоку/, "«Пять в ряд»"], ["pairs", /найди пару|(?:^|\s)пар[ыу](?:\s|$)|мемори/, "«Найди пару»"]];
       const g = GM.find(([, rx]) => rx.test(t));
       if (!feat("games")) return { say: "«Досуг» выключен. Включить — «Настройки» → «Ещё» → «Возможности»." };
       setTimeout(() => playOpen(g ? g[0] : ""), 400);
@@ -3259,6 +3259,8 @@ function toolSpecs() {
   if (typeof D.handsState === "function") t.push(...HANDS_TOOLS);
   if (loggedIn()) t.push({ name: "ask_knowledge", description: "Спросить Знания пользователя на сайте Dewiar — его документы и папки, публичную библиотеку. Ответ с источниками. base — название папки или раздела, если пользователь его назвал.",
     parameters: O({ question: STR, base: STR }, ["question"]) });
+  if (Object.keys(mind().tasks || {}).length) t.push({ name: "remove_task", description: "Удалить большую задачу из «Мой день» → «Сделанное» (и на компьютере): «удали задачу …», «хватит напоминать про задачу». name — часть названия.", parameters: O({ name: STR }, ["name"]) },
+    { name: "answer_task", description: "Ответить на вопрос задачи, которая «ждёт ответа»: text — ответ пользователя; name — часть названия (пусто — единственная ждущая).", parameters: O({ name: STR, text: STR }, ["text"]) });
   if (S.sync.on && syncCred() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное».",
     parameters: O({ title: STR, goal: STR }, ["goal"]) });
   if (S.home.token && !D.web) t.push({ name: "smart_home", description: "Умный дом Яндекса: action list|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
@@ -3507,6 +3509,12 @@ async function runTool(name, a) {
       return typeof r === "string" ? r + notCloseNote(turnAsk) : r;
     }
     case "ask_knowledge": return await askKnowledge(a.question || "", a.base || "");
+    case "remove_task": case "answer_task": {
+      const f = taskFind(a.name || "");
+      if (!f) return "Такой задачи нет. Задачи: " + (Object.values(mind().tasks).map(t => `«${t.title}» (${TASK_RU[t.status] || t.status})`).join(", ") || "нет");
+      if (name === "answer_task") { if (!String(a.text || "").trim()) return "Нужен текст ответа."; taskCmd(f[0], "answer", a.text); return `Ответ передан задаче «${f[1].title}» — она продолжит.`; }
+      taskCmd(f[0], "delete"); return `Задача «${f[1].title}» удалена — и здесь, и на компьютере; напоминаний о ней больше не будет.`;
+    }
   }
   return "Неизвестный инструмент.";
 }
@@ -4982,6 +4990,7 @@ function annShow(n) {
 }
 setTimeout(() => annCheck(false), 6000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(() => annCheck(false), 1500); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && clCur && $("#sh-close").classList.contains("on")) clSeen(clCur); });   // вернулись в открытую переписку — «прочитано»
 setInterval(() => { if (!document.hidden) annCheck(false); }, 5 * 60000);
 const MON_G = MON;
 function dayHuman(iso) { const d = new Date(iso + "T12:00"); if (isNaN(d)) return iso; const t = new Date(); const y = new Date(Date.now() - 864e5);
@@ -5001,9 +5010,35 @@ function tasksHtml() {
       <button class="btn p w" id="tk-go">Передать</button><p class="hint">${pcOnline() ? "Компьютер на связи — сделает он." : "Компьютер не на связи — сделает облако Dewiar: найдёт, напишет, соберёт файл. Программы на компьютере облако не запускает."}</p></div>`
     + q.map(x => `<div class="it"><div class="bd"><b>${esc(x.title)}</b><small>⏳ отправляю…</small></div></div>`).join("")
     + (ts.length ? `<div class="bugh">Задачи</div>` + ts.map(([id, t]) => `<details class="dday task ${esc(t.status || "")}"${t.status === "done" && (t.files || []).length ? " open" : ""}><summary><div class="bd"><b>${esc(t.title)}</b><small><span class="tst">${esc(TASK_RU[t.status] || t.status || "")}</span>${t.where === "cloud" ? " · в облаке" : ""}${t.activity && t.status === "running" ? " · " + esc(t.activity) : ""}</small></div></summary>
-        <div class="dtext tk">${t.question && t.status === "waiting" ? `<p><b>Вопрос:</b> ${esc(t.question)}</p>` : ""}${t.result ? `<p>${mdLite(t.result)}</p>` : `<p class="hint">${esc(t.goal || "")}</p>`}${t.error ? `<p style="color:#FF8FA8">${esc(t.error)}</p>` : ""}${taskFiles(t)}</div></details>`).join("") : "");
+        <div class="dtext tk">${t.question && t.status === "waiting" ? `<p><b>Вопрос:</b> ${esc(t.question)}</p>` : ""}${t.result ? `<p>${mdLite(t.result)}</p>` : `<p class="hint">${esc(t.goal || "")}</p>`}${t.error ? `<p style="color:#FF8FA8">${esc(t.error)}</p>` : ""}${taskFiles(t)}
+        ${t.status === "waiting" && t.where !== "cloud" ? `<div class="tkans"><textarea rows="2" data-ans-t="${esc(id)}" placeholder="Ваш ответ — задача продолжит"></textarea><button class="btn p" data-ans="${esc(id)}">Ответить</button></div>` : ""}
+        <button class="tkdel" data-del="${esc(id)}"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Удалить задачу</button></div></details>`).join("") : "");
+}
+/* Удалить задачу, ответить на её вопрос — с телефона (24.10, владелец: «Лира замучила напоминанием про задачу
+   „Исследование“… попросил удалить — она не умеет, на телефоне не понятно, где удалить»). Команда уходит компьютеру
+   записью задачи с want (core/sync.py _task_want); у себя задача пропадает сразу и больше не возвращается (m.hid). */
+function taskCmd(id, want, text) {
+  const m = mind(), t = m.tasks[id];
+  if (!t) throw new Error("такой задачи нет");
+  const q = qGet("taskcmd").filter(x => !(x.id === id && x.want === want));
+  q.push({ id, want, text: String(text || "").slice(0, 4000), ts: Date.now(), data: Object.assign({}, t) });
+  qSet("taskcmd", q);
+  if (want === "delete") { delete m.tasks[id]; m.hid = Object.assign({}, m.hid, { [id]: Date.now() }); }
+  else if (want === "answer") Object.assign(t, { status: "running", question: "" });
+  saveMind(m); syncSoon();
+  return t;
+}
+function taskFind(name) {
+  const m = mind(), w = String(name || "").toLowerCase().trim(), all = Object.entries(m.tasks);
+  return all.find(([, t]) => w && String(t.title || "").toLowerCase().includes(w)) || (all.filter(([, t]) => t.status === "waiting").length === 1 && !w ? all.find(([, t]) => t.status === "waiting") : null);
 }
 function wireTasks(box, again) {
+  $$("[data-del]", box).forEach(b => b.onclick = (e) => { e.preventDefault(); const id = b.dataset.del, t = mind().tasks[id] || {};
+    if (!confirm(`Удалить задачу «${t.title || ""}»? ${(t.files || []).length || (t.outputs || []).length ? "Её файлы на компьютере тоже удалятся. " : ""}Напоминаний о ней больше не будет.`)) return;
+    try { taskCmd(id, "delete"); toast("Задача удалена"); again(); } catch (x) { toast(x.message); } });
+  $$("[data-ans]", box).forEach(b => b.onclick = () => { const id = b.dataset.ans, ta = $(`[data-ans-t="${CSS.escape(id)}"]`, box), v = ta ? ta.value.trim() : "";
+    if (!v) { if (ta) ta.focus(); return; }
+    try { taskCmd(id, "answer", v); toast(pcOnline() ? "Ответ передан — задача продолжит" : "Ответ уйдёт, когда компьютер будет на связи", 3000); again(); } catch (x) { toast(x.message); } });
   if ($("#tk-go")) $("#tk-go").onclick = () => { const g = $("#tk-goal").value.trim(); if (!g) return; try { taskToPc(g.slice(0, 60), g); toast(pcOnline() ? "Передано компьютеру" : "Делаю в облаке Dewiar — пришлю, когда будет готово", 3000); again(); } catch (e) { toast(e.message); } };
   if ($("#so-sync")) $("#so-sync").onclick = () => openSettings("more");
   wireFiles(box);
@@ -5594,7 +5629,7 @@ function recentPrompt() {
   let out = "ЧТО БЫЛО НЕДАВНО (ваши разговоры и дела за неделю; спросят «что мы делали», «где калькулятор» — отвечай по этому, подробнее — recall; открыть сделанное — open_made):";
   if (lines.length) out += "\nРазговоры по дням: " + lines.join(" | ").slice(0, 1400);
   if (made.length) out += "\nСделано на телефоне («Мой день» → «Сделанное»): " + made.join(", ");
-  if (tasks.length) out += "\nБольшие задачи: " + tasks.join("; ");
+  if (tasks.length) out += "\nБольшие задачи: " + tasks.join("; ") + " (удалить — remove_task, ответить на вопрос задачи — answer_task)";
   return out;
 }
 function recall(days, query) {
@@ -5648,6 +5683,7 @@ function syncSnapshot() {
   }
   if (ks.includes("dayturn")) qGet("dayq").forEach(x => { out["dayturn:" + x.id] = { ts: x.ts, who: x.who, you: x.you, bot: x.bot }; });
   if (ks.includes("taskreq")) qGet("taskq").forEach(x => { out["taskreq:" + x.id] = { title: x.title, goal: x.goal, ts: x.ts, cloud: !!x.cloud }; });
+  if (ks.includes("task")) qGet("taskcmd").forEach(x => { out["task:" + x.id] = Object.assign({}, x.data, { want: x.want, text: x.text, at: x.ts }); });   // «удалить», «ответ» — компьютеру
   if (ks.includes("done")) doneList().forEach(x => { out["done:" + x.id] = { title: x.title, at: +x.at, src: x.src || "", rid: x.rid || "" }; });   // сделанные дела (core/done.py)
   if (ks.includes("persona")) myPersonas().forEach(x => { out["persona:" + x.id] = { name: x.name, gender: x.gender || "female", role: x.role || "", about: x.about || "", color: x.color || "", avatar: x.avatar || "" }; });   // свои персонажи — и на компьютер
   return out;
@@ -5691,7 +5727,9 @@ function syncApply(it) {
     if (!del && d.text) S.memory.push(d.text);
     S.memory = S.memory.slice(-120); prefSet("settings", JSON.stringify(S));
   } else if (["soul", "mind", "diary", "task"].includes(it.kind)) {
-    if (del) return false;                                   // душа, дневник и задачи удалением не стираются
+    if (del && it.kind === "task") { const m = mind(); if (m.tasks[it.id]) { delete m.tasks[it.id]; saveMind(m); } return false; }   // компьютер удалил задачу
+    if (it.kind === "task" && ((mind().hid || {})[it.id] || (it.data || {}).want)) return false;   // удалили здесь / наша же команда
+    if (del) return false;                                   // душа, дневник удалением не стираются
     const m = mind();
     // душа и конституция идут в подсказку модели: из облака — только текст разумной длины без невидимых знаков (как sync._mind_text)
     if (it.kind === "soul") { const t = mindText(d); if (!t) return false; m.souls[it.id] = { text: t, u: it.updated }; }
@@ -5758,13 +5796,14 @@ async function syncRun(manual) {
       try { d = JSON.parse(r.body || "{}"); } catch (e) { d = {}; }
       if (r.status >= 400) throw new Error((d.error && d.error.message) || "облако ответило " + r.status);
       const srv = d.kinds || ["reminder", "note", "money", "memory"];
-      const qdone = { dayturn: [], taskreq: [] };
+      const qdone = { dayturn: [], taskreq: [], task: [] };
       body.changes.forEach(x => { if (!srv.includes(x.kind)) return;
         const k = x.kind + ":" + x.id, src = changes.find(y => y.kind === x.kind && y.id === x.id);
         if (x.kind in qdone) { qdone[x.kind].push(x.id); st.idx[k] = { h: null, u: x.updated, skip: true }; return; }   // отдали компьютеру — у себя забываем
         st.idx[k] = { h: src ? src._h : null, u: x.updated, del: !!x.deleted }; });
       if (qdone.dayturn.length) qSet("dayq", qGet("dayq").filter(x => !qdone.dayturn.includes(x.id)));
       if (qdone.taskreq.length) qSet("taskq", qGet("taskq").filter(x => !qdone.taskreq.includes(x.id)));
+      if (qdone.task.length) qSet("taskcmd", qGet("taskcmd").filter(x => !qdone.task.includes(x.id)));   // команда задаче ушла — дальше решает компьютер
       body.changes = [];
       if (srv.some(k => !(st.kinds || []).includes(k))) { st.kinds = srv; st.rev = 0; body.since = 0; prefSet("sync", JSON.stringify(st)); continue; }   // сервер узнал новое — история с начала
       for (let it of d.items || []) {
@@ -6803,7 +6842,7 @@ const DC = () => window.DewiarCrypto;
 function clLoad() {
   if (CLS) return CLS;
   try { CLS = JSON.parse(fileGet("close.json") || "{}") || {}; } catch (e) { CLS = {}; }
-  CLS = Object.assign({ me: {}, people: [], cursor: 0, hist: {}, unread: {}, invite: null, hello: 0 }, CLS);
+  CLS = Object.assign({ me: {}, people: [], cursor: 0, hist: {}, unread: {}, invite: null, hello: 0, marks: {}, readUp: {} }, CLS);
   return CLS;
 }
 const clSave = () => fileSave("close.json", JSON.stringify(CLS));
@@ -6959,7 +6998,7 @@ async function clSend(who, text, files, kind, extra) {
   const env = DC().encryptFor(body, DC().b64d(k.priv), k.dev, clTargets(p));
   const d = await clReq("POST", "/close/send", { to: p.pid, env, kind: kind || "msg" });
   if ((kind || "msg") !== "msg") return d;
-  const it = { mid: body.mid, ts: body.ts, out: true, t: body.t, f: fl };
+  const it = { mid: body.mid, ts: body.ts, out: true, t: body.t, f: fl, sid: +d.id || 0 };   // sid — номер письма у близкого: «доставлено», «прочитано»
   clAdd(p.pid, it); plog("info", `💌 близким: ${p.name} ← ${clip(body.t || "файл")}`); return Object.assign({ to: p.name }, it);
 }
 function clAdd(pid, it) {
@@ -6971,6 +7010,24 @@ function clAdd(pid, it) {
    Реакция — обычное сообщение {re: mid, e, t: e}: новые программы (здесь и core/close.py) ставят её значком на сообщение
    mid, а старые покажут просто «👍» — ничего не теряется. В истории: m.rx = {me, them}. */
 const CL_EMO = ["👍", "🤝", "✋", "😁", "😊", "😂", "😳", "🤔", "😱", "❤️"];
+/* Больше смайлов (24.10, владелец: «в раздел Близкие нужно больше смайлов»): вкладки по темам, первая — частые (они же
+   реакции). Только эмодзи, которые есть и на старых телефонах и в Windows 10 (без новинок Unicode 14+). */
+const CL_EMO_SETS = [["Частые", CL_EMO],
+  ["Смайлы", ["😀", "😃", "😄", "😅", "🤣", "🙂", "😉", "😍", "🥰", "😘", "😋", "😎", "🤩", "🥳", "😌", "😏", "🤗", "🤭", "😇", "🙃", "😴", "🙄", "😬", "😮", "🤯", "😢", "😭", "🥺", "😤", "😡", "🥶", "🥵", "🤒", "🤧", "😷", "🤐"]],
+  ["Жесты", ["👋", "👌", "✌️", "🤞", "🤙", "👏", "🙌", "🙏", "💪", "👎", "👉", "☝️", "🤷", "🤦", "🙈", "🙉", "🙊", "💃", "🕺", "👀"]],
+  ["Сердца", ["🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "💕", "💖", "💘", "💋", "✨", "🔥", "⭐", "🌟", "💯", "🎉", "🎊", "🥂"]],
+  ["Природа", ["☀️", "🌤️", "🌧️", "⛈️", "❄️", "🌈", "🌙", "🌸", "🌹", "🌷", "🌻", "🌿", "🍀", "🍁", "🐱", "🐶", "🐻", "🐰", "🦊", "🐼", "🐸", "🐝", "🦋", "🐟"]],
+  ["Еда", ["☕", "🍵", "🍰", "🎂", "🍫", "🍪", "🍎", "🍓", "🍉", "🍌", "🍕", "🍔", "🍟", "🍝", "🥗", "🍲", "🥞", "🍷", "🍺", "🥤"]],
+  ["Дела", ["🏠", "🚗", "🚕", "✈️", "🚆", "🏖️", "⚽", "🏃", "🎵", "🎮", "🎁", "📞", "📷", "💻", "📚", "📌", "💡", "⏰", "💤", "✅", "❌", "❓", "⚠️", "💰"]]];
+let clEmoTab = 0;
+const clEmoHtml = () => `<div class="clemo-tabs">${CL_EMO_SETS.map(([n, l], i) => `<button data-t="${i}" class="${i === clEmoTab ? "on" : ""}" aria-label="${n}">${l[0]}</button>`).join("")}</div>`
+  + `<div class="clemo-g">${CL_EMO_SETS[clEmoTab][1].map(e => `<button data-e="${e}" aria-label="Вставить ${e}">${e}</button>`).join("")}</div>`;
+function clEmoBind() {
+  $$("#cl-emo [data-t]").forEach(b => b.onclick = () => { clEmoTab = +b.dataset.t; $("#cl-emo").innerHTML = clEmoHtml(); clEmoBind(); });
+  $$("#cl-emo button[data-e]").forEach(b => b.onclick = () => {           // вставить в текст там, где курсор
+    const ta = $("#cl-text"), a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? a;
+    ta.value = ta.value.slice(0, a) + b.dataset.e + ta.value.slice(z); ta.selectionStart = ta.selectionEnd = a + b.dataset.e.length; });
+}
 function clReAt(pid, mid, who, e) {
   const st = clLoad(), m = (st.hist[pid] || []).find(x => x.mid === mid);
   if (!m) return false;
@@ -7019,14 +7076,18 @@ async function clPoll() {
         }
         continue;
       }
-      const m = { mid: body.mid || String(it.id), ts: +body.ts || it.ts * 1000, out: !!it.out, t: String(body.t || "").slice(0, 20000), f: (body.f || []).filter(x => x && typeof x === "object").slice(0, 10), ...(body.wave ? { wave: 1 } : {}) };
+      const m = { mid: body.mid || String(it.id), ts: +body.ts || it.ts * 1000, out: !!it.out, t: String(body.t || "").slice(0, 20000), f: (body.f || []).filter(x => x && typeof x === "object").slice(0, 10), ...(body.wave ? { wave: 1 } : {}),
+        sid: it.out ? (+it.rid || 0) : (+it.id || 0) };
       if (!clAdd(it.peer, m) || m.out) continue;
       got++;
       if (!(clCur === it.peer && $("#sh-close").classList.contains("on"))) { st.unread[it.peer] = (st.unread[it.peer] || 0) + 1; clSave(); }
       clTell(it.name || "Близкий", m, it.peer);
     }
-    st.cursor = Math.max(+st.cursor || 0, +d.last || 0); clSave(); clBadge(); clWatch();
-    if (got && $("#sh-close").classList.contains("on")) clRender();
+    st.cursor = Math.max(+st.cursor || 0, +d.last || 0);
+    let mk = false;                                       // мои письма у близких: доставлено / прочитано до номера
+    if (d.marks && typeof d.marks === "object" && JSON.stringify(d.marks) !== JSON.stringify(st.marks || {})) { st.marks = d.marks; mk = true; }
+    clSave(); clBadge(); clWatch();
+    if ((got || (mk && clCur)) && $("#sh-close").classList.contains("on")) clRender();
     return got;
   } catch (e) { plog("info", "близкие: " + e.message); return 0; }
   finally { clBusy = false; }
@@ -7061,9 +7122,25 @@ function clPrompt() {
   return "БЛИЗКИЕ (переписка с их помощниками Dewiar, сообщения шифруются): " + st.people.map(p => p.name).join(", ")
     + ". Кто-то из них (в любой форме имени: «Люде» = Людмила, «Исаевой Людмиле» = Людмила Исаева) — СНАЧАЛА через Dewiar: «напиши/передай/скажи» — close_send (дойдёт в его Dewiar, он услышит вслух), «позвони» — close_call (video true — «по видео»); «что мне писали», «что ответила мама» — close_read; «где мама?», «далеко ли Андрей?» — close_where (по радару «Рядом»; адресов не называй); «помаши маме» — close_wave. Только людям НЕ из этого списка — телефон (call) и мессенджеры.";
 }
+/* «Отправлено» ✓, «Доставлено» ✓✓, «Прочитано» ✓✓ мятным (24.10, владелец: «не понятно, прочитал ли человек сообщение,
+   дошло ли оно»). sid — номер письма в ящике близкого (/close/send), marks[pid] = [забрал до, прочитал до] (/close/inbox). */
+function clMark(m, pid) {
+  if (!m.out || !m.sid) return "";
+  const mk = (clLoad().marks || {})[pid] || [0, 0];
+  return mk[1] >= m.sid ? "read" : mk[0] >= m.sid ? "dlv" : "sent";
+}
+const CL_TICK = { sent: ["Отправлено", "M5 12.5l4 4 9-9"], dlv: ["Доставлено", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"], read: ["Прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"] };
+const clTick = (m, pid) => { const k = clMark(m, pid); return k ? `<i class="clck ${k}" aria-label="${CL_TICK[k][0]}"><svg viewBox="0 0 24 24"><path d="${CL_TICK[k][1]}"/></svg></i>` : ""; };
+const CL_MARK_RU = { read: " [прочитано]", dlv: " [доставлено, ещё не прочитано]", sent: " [ещё не доставлено — его Dewiar не забирал почту]" };
+/* переписку открыли (или помощница прочитала её вслух) — близкому «прочитано»: его письма до последнего номера */
+function clSeen(pid) {
+  const st = clLoad(), top = Math.max(0, ...(st.hist[pid] || []).filter(m => !m.out).map(m => +m.sid || 0));
+  if (!top || top <= (+(st.readUp || {})[pid] || 0) || document.hidden) return;
+  clReq("POST", "/close/seen", { peer: pid, upto: top }).then(() => { const s = clLoad(); s.readUp = Object.assign({}, s.readUp, { [pid]: top }); clSave(); }).catch(() => { });
+}
 function clRecent(who, n = 8) {
   const st = clLoad(), ps = who ? [clPerson(who)] : st.people, out = [];
-  for (const p of ps) { (st.hist[p.pid] || []).slice(-n).forEach(m => out.push([m.ts, `${new Date(m.ts).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} ${m.out ? "вы → " + p.name : p.name}: ${m.t || ""}${(m.f || []).length ? " [файлы: " + m.f.map(x => x.name).join(", ") + "]" : ""}${m.rx && (m.rx.me || m.rx.them) ? ` [реакции: ${[m.rx.them && p.name + " " + m.rx.them, m.rx.me && "вы " + m.rx.me].filter(Boolean).join(", ")}]` : ""}`])); delete st.unread[p.pid]; }
+  for (const p of ps) { (st.hist[p.pid] || []).slice(-n).forEach(m => out.push([m.ts, `${new Date(m.ts).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} ${m.out ? "вы → " + p.name : p.name}: ${m.t || ""}${(m.f || []).length ? " [файлы: " + m.f.map(x => x.name).join(", ") + "]" : ""}${m.rx && (m.rx.me || m.rx.them) ? ` [реакции: ${[m.rx.them && p.name + " " + m.rx.them, m.rx.me && "вы " + m.rx.me].filter(Boolean).join(", ")}]` : ""}${(st.marks || {})[p.pid] ? CL_MARK_RU[clMark(m, p.pid)] || "" : ""}`])); delete st.unread[p.pid]; clSeen(p.pid); }
   clSave(); clBadge(); out.sort((a, b) => a[0] - b[0]);
   return out.slice(-n * 2).map(x => x[1]).join("\n") || "Сообщений пока нет.";
 }
@@ -7228,17 +7305,17 @@ function clRender() {
   if (!syncCred()) { box.innerHTML = `<div class="card"><b>Нужен Dewiar</b><p class="hint" style="margin:6px 0 10px">«Близкие» работают через облако Dewiar: подключите мозг бесплатно или войдите аккаунтом dewiar.pro.</p><button class="btn p w" id="cl-brain">Подключить</button></div>`;
     $("#cl-brain").onclick = () => openSettings("brain"); return; }
   if (p) {
-    delete st.unread[p.pid]; clSave(); clBadge();
+    delete st.unread[p.pid]; clSave(); clBadge(); clSeen(p.pid);
     const h = st.hist[p.pid] || [];
     box.innerHTML = `<div class="clh"><button class="ib soft" id="cl-back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><i class="clava" style="--c:${clCol(p.pid)}">${esc((p.name || "?")[0].toUpperCase())}</i>
         <div style="flex:1;min-width:0"><b>${esc(p.name)}</b><small>${(p.devs || []).length ? "сообщения шифруются" : "ещё не открывал Dewiar"}</small></div>
         ${(p.devs || []).length && window.DewiarCall ? `<button class="ib soft" id="cl-call" title="Позвонить"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></button>
           <button class="ib soft" id="cl-vcall" title="Видеозвонок"><svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg></button>` : ""}
         ${h.length ? `<button class="ib soft" id="cl-wipe" title="Очистить переписку" aria-label="Очистить переписку"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg></button>` : ""}</div>
-      <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${m.rx && (m.rx.me || m.rx.them) ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => `<button class="clf" data-i="${i}" data-j="${j}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${esc(f.name)}</span><small>${f.saved ? "сохранён" : clKb(f.size || 0)}</small></button>`).join("")}<time>${clTime(m.ts)}</time>${m.rx && (m.rx.me || m.rx.them) ? `<span class="clrx">${esc([m.rx.them, m.rx.me].filter(Boolean).join(""))}</span>` : ""}</div>`).join("")
+      <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${m.rx && (m.rx.me || m.rx.them) ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => `<button class="clf" data-i="${i}" data-j="${j}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${esc(f.name)}</span><small>${f.saved ? "сохранён" : clKb(f.size || 0)}</small></button>`).join("")}<time>${clTime(m.ts)}${clTick(m, p.pid)}</time>${m.rx && (m.rx.me || m.rx.them) ? `<span class="clrx">${esc([m.rx.them, m.rx.me].filter(Boolean).join(""))}</span>` : ""}</div>`).join("")
         || `<p class="hint" style="text-align:center;margin:24px 8px">Напишите первое сообщение — или скажите: «Напиши ${esc(p.name)}, …»</p>`}</div>
       <div class="clatts" id="cl-atts">${clFiles.map((f, i) => `<span>${esc(f.name)} <button data-i="${i}">✕</button></span>`).join("")}</div>
-      <div class="clemo" id="cl-emo" hidden>${CL_EMO.map(e => `<button data-e="${e}" aria-label="Вставить ${e}">${e}</button>`).join("")}</div>
+      <div class="clemo" id="cl-emo" hidden>${clEmoHtml()}</div>
       <div class="clsend"><button class="ib att" id="cl-emo-b" aria-label="Эмодзи" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4.2 4.2 0 0 0 7 0"/><path d="M9 9.6v.01M15 9.6v.01"/></svg></button><label class="ib att"><input type="file" id="cl-file" multiple hidden><svg viewBox="0 0 24 24"><path d="M20.5 11.5 12.6 19.4a5 5 0 0 1-7.1-7.1l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg></label>
         <textarea id="cl-text" rows="1" placeholder="Сообщение…"></textarea><button class="ib" id="cl-go"><svg viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-2.5-6.5z"/></svg></button></div>`;
     const msgs = $("#cl-msgs"); msgs.scrollTop = msgs.scrollHeight;
@@ -7254,9 +7331,7 @@ function clRender() {
       try { await clSend(p.pid, t, clFiles); clFiles = []; clRender(); } catch (e) { toast(e.message, 4000); b.disabled = false; } };
     $("#cl-go").onclick = go;
     $("#cl-emo-b").onclick = () => { const e = $("#cl-emo"); e.hidden = !e.hidden; $("#cl-emo-b").setAttribute("aria-expanded", String(!e.hidden)); };
-    $$("#cl-emo button").forEach(b => b.onclick = () => {           // вставить в текст там, где курсор
-      const ta = $("#cl-text"), a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? a;
-      ta.value = ta.value.slice(0, a) + b.dataset.e + ta.value.slice(z); ta.selectionStart = ta.selectionEnd = a + b.dataset.e.length; ta.focus(); });
+    clEmoBind();
     clReBind(p, h);
     return;
   }

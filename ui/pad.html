@@ -121,6 +121,7 @@
   .tool { height: 28px; min-width: 28px; padding: 0 6px; display: grid; place-items: center; border-radius: 8px; color: var(--faint); font-weight: 700; font-size: 12.5px; }
   .tool:hover, .tool.on { color: var(--ink); background: var(--chip); }
   .sep { width: 1px; height: 16px; background: var(--line); margin: 0 5px; }
+  @media (max-width: 560px) { .tool { min-width: 25px; padding: 0 4px; } .sep { margin: 0 3px; } }   /* узкий лист — панель в одну строку */
 
   /* лист */
   #sheet { flex: 1; overflow-y: auto; padding: 6px 22px 22px; scrollbar-width: thin; scrollbar-color: var(--chip2) transparent; }
@@ -152,6 +153,10 @@
   #ed mark { background: rgba(255,214,102,.35); color: inherit; border-radius: 3px; padding: 0 2px; }
   #ed img { max-width: 100%; border-radius: 12px; display: block; margin: 6px 0; min-height: 24px; background: var(--chip); }
   #ed img.sel { outline: 2px solid var(--acc); }
+  #imgx { position: absolute; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
+          background: rgba(20,22,30,.72); color: #fff; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.25); transition: background .15s; }
+  #imgx[hidden] { display: none; } #imgx:hover, #imgx:focus-visible { background: #e5484d; outline: none; }
+  #imgx svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
   #ed table { border-collapse: collapse; width: 100%; font-size: .93em; }
   #ed th, #ed td { padding: 6px 9px; text-align: left; box-shadow: inset 0 -1px 0 var(--line); vertical-align: top; }
   #ed th { font-weight: 700; color: var(--muted); font-size: .92em; }
@@ -210,6 +215,7 @@
     <button class="ib" id="b-play" hidden title="Досуг — милые игры на пару минут" aria-label="Досуг: игры"><svg viewBox="0 0 24 24"><path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg></button>
     <button class="ib" id="b-notes" title="Назад к блокноту" aria-label="Назад к блокноту"><svg viewBox="0 0 24 24"><rect x="4.5" y="3.5" width="13" height="17" rx="2.5"/><path d="M8 8h6M8 11.5h6M8 15h3.5"/></svg></button>
     <button class="ib" id="b-new" title="Новая вкладка (Ctrl+T)" aria-label="Новая вкладка"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="ib" id="b-side" title="На другую сторону от виджета" aria-label="Блокнот — на другую сторону от виджета"><svg viewBox="0 0 24 24"><path d="M4 9h15l-3.5-3.5M20 15H5l3.5 3.5"/></svg></button>
     <button class="ib" id="b-close" title="Убрать блокнот (Esc)" aria-label="Убрать блокнот"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
   <div id="tl" role="menu" aria-label="Все вкладки"></div>
@@ -222,11 +228,13 @@
     <span class="sep"></span>
     <button class="tool" data-c="ul" title="Список (- пробел)"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg></button>
     <button class="tool" data-c="ol" title="Нумерованный (1. пробел)"><svg viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v5M4 14.5a1.5 1.5 0 0 1 3 0c0 1.5-3 2-3 3.5h3"/></svg></button>
+    <button class="tool" data-c="quote" title="Цитата (&gt; пробел)"><svg viewBox="0 0 24 24"><path d="M5 18c2.5-1 4-3 4-6V7H5v5h4M14 18c2.5-1 4-3 4-6V7h-4v5h4"/></svg></button>
     <button class="tool" data-c="task" title="Задачи с галочками ([] пробел)"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="6" height="6" rx="1.5"/><path d="m4.8 7 1.2 1.2 2.2-2.4M13 7h7.5M3.5 15.5h6v6h-6zM13 18.5h7.5"/></svg></button>
     <span class="sep"></span>
     <button class="tool" data-c="link" title="Ссылка (Ctrl+K)"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
     <button class="tool" data-c="table" title="Таблица"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M3.5 14.5h17M10 9.5v10"/></svg></button>
     <button class="tool" data-c="image" title="Картинка (или Ctrl+V)"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 15.5-5-5-9 9"/></svg></button>
+    <button class="tool" data-c="hr" title="Разделитель — черта (--- и Enter)"><svg viewBox="0 0 24 24"><path d="M3.5 12h17"/><path d="M8 6.5h8M8 17.5h8" opacity=".4"/></svg></button>
     <button class="tool" data-c="code" title="Код"><svg viewBox="0 0 24 24"><path d="m9 8-4 4 4 4M15 8l4 4-4 4"/></svg></button>
     <span class="sep"></span>
     <button class="tool" id="b-size" title="Размер текста (Ctrl + колёсико, Ctrl+= и Ctrl+−)" aria-label="Размер текста" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M3 18 8 6l5 12M4.7 14h6.6M15 18l3.2-7.5L21.4 18M15.9 16h4.6"/></svg></button>
@@ -234,7 +242,7 @@
     <input type="file" id="file" accept="image/*" hidden multiple>
   </div>
   <div id="play"><div id="shelf" role="list" aria-label="Игры"></div><iframe id="game" title="Игра" allow="autoplay; gamepad"></iframe></div>
-  <div id="sheet"><div id="ed" contenteditable="true" spellcheck="true" data-ph="Пишите прямо здесь — сохранится само.&#10;- пробел — список, [] пробел — задача, # пробел — заголовок.&#10;Ссылки, таблицы и картинки — просто вставьте (Ctrl+V)."></div></div>
+  <div id="sheet"><div id="ed" contenteditable="true" spellcheck="true" data-ph="Пишите прямо здесь — сохранится само.&#10;- пробел — список, [] пробел — задача, # пробел — заголовок.&#10;Ссылки, таблицы и картинки — просто вставьте (Ctrl+V)."></div><button id="imgx" hidden title="Убрать картинку (Delete)" aria-label="Убрать картинку"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div id="foot"><i class="dot"></i><span id="st">Открываю…</span><em id="hint"></em></div>
   <div id="grip" title="Потяните — размер блокнота. Двойной щелчок — как было"></div>
   <div id="ask" role="alertdialog"><b id="ask-t"></b><button id="ask-no">Нет</button><button class="danger" id="ask-yes">Удалить</button></div>

@@ -30,6 +30,25 @@ from settings import STATE_DIR
 log = logging.getLogger("dewiar.night")
 KIND_RU = {"error": "ошибки программы", "task": "задачи", "job": "дела по расписанию", "llm": "связь с моделью"}
 NO_RETRY = ("bug", "loop", "idle_model", "access")
+# Не ошибки программы, а состояние модели и сети человека: заряд, ключ, связь, занятость, окно контекста.
+# №235 (24.10): «Дело по расписанию не удалось: Заряд Dewiar Облака закончился» уходило разработчику отчётом «при сбое».
+SETUP_RX = re.compile(r"заряд|талер|баланс|credits|quota|402|max_tokens|ключ|401|403|forbidden|подключ|connect|интернет|сеть|network|"
+                      r"resolve|много людей|занят|перегруж|429|503|busy|не ответил вовремя|timed? ?out|таймаут|окна контекста|context|"
+                      r"не запущена|не отвечает|недоступ", re.I)
+
+
+def setup_issue(text):
+    """Сбой из-за модели, связи или заряда человека (а не из-за программы)?"""
+    return bool(SETUP_RX.search(str(text or "")))
+
+
+def _sig(text, n=160):
+    """Подпись сбоя: цифры — #, переносы и пробелы — одним пробелом, длинное — по слову с «…»."""
+    s = re.sub(r"\s+", " ", re.sub(r"\d+", "#", str(text or ""))).strip()
+    if len(s) <= n:
+        return s
+    cut = s[:n].rsplit(" ", 1)[0]
+    return (cut if len(cut) > n // 2 else s[:n]).rstrip(" ,.:;—-") + "…"
 
 
 class NightWatch:
@@ -77,11 +96,11 @@ class NightWatch:
         now = now or dt.datetime.now()
         since = float(self.data.get("last_ts") or (time.time() - 86400))
         h = self.host
-        problems, repaired, left = [], [], []
+        problems, repaired, left, setup_left = [], [], [], set()
 
         # 1) журнал сбоев за сутки
         inc = [r for r in (h.incidents(since) if hasattr(h, "incidents") else []) if r.get("ts", 0) > since]
-        by = Counter((r.get("kind") or "error", re.sub(r"\d+", "#", r.get("text") or "")[:160]) for r in inc)
+        by = Counter((r.get("kind") or "error", _sig(r.get("text"))) for r in inc)
         for (kind, sig), n in by.most_common(12):
             problems.append({"kind": kind, "text": sig, "n": n})
 
@@ -113,7 +132,10 @@ class NightWatch:
         try:
             for it in getattr(getattr(h, "reminders", None), "items", []) or []:
                 if it.get("kind") == "job" and it.get("last_ok") is False:
-                    left.append(f"Дело по расписанию «{str(it.get('text') or '')[:80]}» не удалось: {str(it.get('last_error') or '')[:120]}")
+                    err = str(it.get('last_error') or '')
+                    left.append(f"Дело по расписанию «{str(it.get('text') or '')[:80]}» не удалось: {_sig(err, 120)}")
+                    if setup_issue(err):
+                        setup_left.add(left[-1])
         except Exception:  # noqa: BLE001
             pass
 
@@ -141,8 +163,10 @@ class NightWatch:
         # — это настройки человека, их он видит утром сам (пакет 22.10, №193: «сбоев 4, не решено 0» — все про модель)
         # задачи (застряла, не хватило окна) — поведение и настройки модели; «модель не отвечает» в «не решено» — тоже настройки
         # (пакет 23.10, №204, №209, №210)
-        ours = sum(p["n"] for p in problems if p.get("kind") != "task" and not str(p["text"]).startswith("Модель"))
-        left_ours = [x for x in left if not x.startswith("Модель")]
+        # дело по расписанию, не удавшееся из-за заряда, ключа или сети, — тоже настройки человека (№235)
+        ours = sum(p["n"] for p in problems if p.get("kind") != "task" and not str(p["text"]).startswith("Модель")
+                   and not (p.get("kind") == "job" and setup_issue(p["text"])))
+        left_ours = [x for x in left if not x.startswith("Модель") and x not in setup_left]
         sent = self._report(now, problems, repaired, left) if left_ours or ours >= 3 else None
         log.info("🌙 Ночной обход: сбоев %d, починила %d, осталось %d%s", sum(p["n"] for p in problems), len(repaired), len(left),
                  f", отчёт №{sent}" if sent else "")

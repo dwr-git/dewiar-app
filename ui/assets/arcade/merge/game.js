@@ -4,8 +4,12 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280, N = 4;
-const BX = 60, BY = 360, SZ = 600, GAP = 18, CELL = (SZ - GAP * (N + 1)) / N;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: поле посередине во всю высоту, слева —
+   название, счёт, рекорд и «2 + 2 = 4», справа — самая большая плитка, «Назад» и подсказка. Книжная — как была. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280, N = 4;
+const BX = LAND ? 330 : 60, BY = LAND ? 50 : 360, SZ = LAND ? 620 : 600, GAP = 18, CELL = (SZ - GAP * (N + 1)) / N;
+const CL = 165, CR = W - 165;                   // широкая: середины левой и правой колонок
 const INK = '#4a3b2f';
 const COLORS = {
   2: ['#fff6e8', '#f3e3c9'], 4: ['#ffeccf', '#f2d3a3'], 8: ['#ffd3a8', '#f6a96b'], 16: ['#ffbfa1', '#f2895e'], 32: ['#ffb0b9', '#ef6f84'],
@@ -62,7 +66,7 @@ function slide(g, dir) {
       const c = cellXY(gh.x, gh.y), v = gh.v * 2;
       if (v >= 64) g.fx.burst(c.x + CELL / 2, c.y + CELL / 2, { n: 8, colors: (COLORS[v] || COLORS.big).concat('#fff'), speed: 220, size: 7, life: .5, shape: 'star' });
     }
-    if (gained) g.fx.text(BX + SZ / 2, BY - 40, '+' + gained, { size: 34, color: '#fff' });
+    if (gained) { if (LAND) g.fx.text(CL, 150, '+' + gained, { size: 38, color: '#fff' }); else g.fx.text(BX + SZ / 2, BY - 40, '+' + gained, { size: 34, color: '#fff' }); }
   }
   setTimeout(() => { addTile(); if (!canMove()) S.over = .001; }, 110);
   return true;
@@ -134,22 +138,50 @@ function tile(ctx, v, x, y, s) {
   A.text(ctx, str, 0, 4, { size, weight: 900, color: v <= 4 ? INK : '#fff', stroke: v <= 4 ? null : 'rgba(80,40,20,.35)', strokeW: 6 });
   ctx.restore();
 }
+/* широкая раскладка: боковые колонки (кнопка «Назад» рисуется в draw — там же, где книжная) */
+function sides(ctx, g) {
+  const demo = S.mode === 'title';                // на заставке плитки ходят сами — их счёт не показываем
+  A.text(ctx, 'Слияние', CL, 102, { size: 54, weight: 900, color: INK });
+  for (const [i, lbl, val] of [[0, 'счёт', demo ? 0 : Math.round(S.shown)], [1, 'рекорд', demo ? g.best || 0 : Math.max(g.best || 0, S.score)]]) {
+    const x = CL - 120, y = 168 + i * 130;
+    A.rr(ctx, x, y, 240, 112, 28); ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fill();
+    A.text(ctx, val.toLocaleString('ru-RU'), x + 120, y + 50, { size: 42, weight: 900, color: INK });
+    A.text(ctx, lbl, x + 120, y + 90, { size: 21, weight: 600, color: 'rgba(74,59,47,.55)' });
+  }
+  // «2 2 → 4» — как сливаются плитки
+  const my = 586, s2 = 56 / CELL, s4 = 68 / CELL;
+  A.text(ctx, 'одинаковые', CL, 482, { size: 22, weight: 500, color: 'rgba(74,59,47,.55)' });
+  A.text(ctx, 'сливаются', CL, 510, { size: 22, weight: 500, color: 'rgba(74,59,47,.55)' });
+  tile(ctx, 2, CL - 86 - CELL / 2, my - CELL / 2, s2);
+  tile(ctx, 2, CL - 26 - CELL / 2, my - CELL / 2, s2);
+  A.text(ctx, '→', CL + 28, my + 1, { size: 30, weight: 900, color: 'rgba(74,59,47,.45)' });
+  tile(ctx, 4, CL + 82 - CELL / 2, my - CELL / 2, s4);
+  // справа: цель и самая большая плитка
+  const m = maxTile() || 2;
+  A.text(ctx, m >= 2048 ? 'Цель взята!' : 'Цель — 2048', CR, 102, { size: 34, weight: 900, color: m >= 2048 ? '#e09a00' : INK });
+  A.rr(ctx, CR - 120, 168, 240, 242, 28); ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fill();
+  A.text(ctx, 'самая большая', CR, 200, { size: 21, weight: 600, color: 'rgba(74,59,47,.55)' });
+  tile(ctx, m, CR - CELL / 2, 306 - CELL / 2, .88);
+  const tip = A.isTouch ? ['Смахивайте', 'в любую сторону'] : ['Стрелки — сдвинуть', 'Z — назад'];
+  tip.forEach((l, i) => A.text(ctx, l, CR, 616 + i * 30, { size: 22, weight: 500, color: 'rgba(74,59,47,.55)' }));
+}
 function draw(ctx, g) {
   S.sc = g.scale;
   const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#fff3e6'); bg.addColorStop(1, '#ffe4ec');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  A.text(ctx, 'Слияние', BX, 112, { align: 'left', size: 64, weight: 900, color: INK });
-  for (const [i, lbl, val] of [[0, 'счёт', Math.round(S.shown)], [1, 'рекорд', Math.max(g.best || 0, S.score)]]) {
+  if (LAND) sides(ctx, g);
+  else A.text(ctx, 'Слияние', BX, 112, { align: 'left', size: 64, weight: 900, color: INK });
+  if (!LAND) for (const [i, lbl, val] of [[0, 'счёт', Math.round(S.shown)], [1, 'рекорд', Math.max(g.best || 0, S.score)]]) {
     const x = BX + i * 200, y = 170;
     A.rr(ctx, x, y, 180, 96, 26); ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fill();
     A.text(ctx, val.toLocaleString('ru-RU'), x + 90, y + 42, { size: 34, weight: 900, color: INK });
     A.text(ctx, lbl, x + 90, y + 76, { size: 18, weight: 600, color: 'rgba(74,59,47,.55)' });
   }
   // отменить
-  UNDO_RECT = { x: W - BX - 150, y: 186, w: 150, h: 64 };
+  UNDO_RECT = LAND ? { x: CR - 120, y: 470, w: 240, h: 76 } : { x: W - BX - 150, y: 186, w: 150, h: 64 };
   const u = UNDO_RECT, can = S.undo && S.mode === 'play';
-  A.rr(ctx, u.x, u.y, u.w, u.h, 22); ctx.fillStyle = can ? '#ffffff' : 'rgba(255,255,255,.4)'; ctx.fill();
-  A.text(ctx, '↶ Назад', u.x + u.w / 2, u.y + u.h / 2 + 2, { size: 24, weight: 700, color: can ? INK : 'rgba(74,59,47,.35)' });
+  A.rr(ctx, u.x, u.y, u.w, u.h, LAND ? 26 : 22); ctx.fillStyle = can ? '#ffffff' : 'rgba(255,255,255,.4)'; ctx.fill();
+  A.text(ctx, '↶ Назад', u.x + u.w / 2, u.y + u.h / 2 + 2, { size: LAND ? 28 : 24, weight: 700, color: can ? INK : 'rgba(74,59,47,.35)' });
   // поле
   A.rr(ctx, BX, BY, SZ, SZ, 40); ctx.fillStyle = '#e8cfb8'; ctx.fill();
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const c = cellXY(x, y); A.rr(ctx, c.x, c.y, CELL, CELL, 28); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill(); }
@@ -162,11 +194,11 @@ function draw(ctx, g) {
     const v = t.merged > 0 && S.anim > 0 ? t.v / 2 : t.v;
     tile(ctx, v, A.lerp(a.x, b.x, S.anim > 0 ? k : 1), A.lerp(a.y, b.y, S.anim > 0 ? k : 1), s);
   }
-  A.text(ctx, A.isTouch ? 'Смахивайте в любую сторону' : 'Стрелки — сдвинуть плитки · Z — назад', W / 2, BY + SZ + 70, { size: 24, weight: 500, color: 'rgba(74,59,47,.55)' });
+  if (!LAND) A.text(ctx, A.isTouch ? 'Смахивайте в любую сторону' : 'Стрелки — сдвинуть плитки · Z — назад', W / 2, BY + SZ + 70, { size: 24, weight: 500, color: 'rgba(74,59,47,.55)' });
 }
 
 A.game({
-  id: 'merge', tone: 'light', title: 'Слияние', width: W, height: H, orientation: 'portrait', music: 'candy', keys: { KeyZ: 'undo', Backspace: 'undo' },
+  id: 'merge', tone: 'light', title: 'Слияние', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'candy', keys: { KeyZ: 'undo', Backspace: 'undo' },
   help: { desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> — сдвинуть · <kbd>Z</kbd> — назад · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: '<b>Стрелки</b> — сдвинуть плитки', touch: 'Смахивайте пальцем — плитки едут, одинаковые сливаются' },
   init(g) { titleScreen(g); window.__merge = () => S; },
   update, draw

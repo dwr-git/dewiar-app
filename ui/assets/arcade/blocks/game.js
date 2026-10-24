@@ -5,10 +5,15 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280;
-const COLS = 10, ROWS = 20, CELL = 50;
-const BX = 34, BY = 176;                 // поле 500 × 1000
-const PX = BX + COLS * CELL + 22;        // правая колонка
+/* Широкое окно (лист «Досуг» на компьютере; 24.10, владелец: «Блоки выглядят странновато» — узкое поле посередине,
+   мелкие надписи) — своя раскладка 1280×720: поле посередине во всю высоту, очки слева, «Дальше / Запас / Рекорд» справа. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280;
+const COLS = 10, ROWS = 20, CELL = LAND ? 31 : 50;
+const BX = LAND ? 485 : 34, BY = LAND ? 50 : 176;      // поле 310 × 620 (широкое) или 500 × 1000
+const PX = BX + COLS * CELL + (LAND ? 52 : 22);        // правая колонка
+const PW = LAND ? 236 : W - PX - 20;
+const PN = LAND ? { next: [0, 196, 88, 158], hold: [216, 150], rec: [386, 130] } : { next: [0, 210, 95, 170], hold: [230, 150], rec: [410, 140] };
 const INK = '#3b2a5c';
 /* фигуры: клетки в повороте 0 на сетке 4×4; цвета — конфетные */
 const SHAPES = {
@@ -157,7 +162,7 @@ function gameOver(g) {
 }
 
 /* ---------------- ввод ---------------- */
-const HOLD_BOX = { x: PX, y: BY + 230, w: W - PX - 20, h: 150 };
+const HOLD_BOX = { x: PX, y: BY + PN.hold[0], w: PW, h: PN.hold[1] };
 function readInput(g, dt) {
   const inp = g.input, p = S.piece;
   if (!p) return;
@@ -238,9 +243,10 @@ function jelly(ctx, x, y, s, c, alpha = 1, wob = 0) {
   const h = s / 2 - 2;
   const gr = ctx.createLinearGradient(0, -h, 0, h); gr.addColorStop(0, c[0]); gr.addColorStop(1, c[1]);
   A.rr(ctx, -h, -h, h * 2, h * 2, s * .26); ctx.fillStyle = gr; ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(59,42,92,.55)'; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.55)'; A.rr(ctx, -h + 6, -h + 5, h * 1.1, s * .17, s * .09); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(h - 9, -h + 9, 2.6, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = Math.max(1.8, s * .06); ctx.strokeStyle = 'rgba(59,42,92,.55)'; ctx.stroke();
+  const k = s / 50;
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; A.rr(ctx, -h + 6 * k, -h + 5 * k, h * 1.1, s * .17, s * .09); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(h - 9 * k, -h + 9 * k, 2.6 * Math.max(.6, k), 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 function mini(ctx, kind, cx, cy, s, alpha = 1) {
@@ -266,12 +272,21 @@ function draw(ctx, g) {
   for (const d of BG) { ctx.globalAlpha = .55; ctx.beginPath(); ctx.arc(d.x, (d.y + t * d.s * 20) % (H + 80) - 40, d.r, 0, Math.PI * 2); ctx.fillStyle = d.c; ctx.fill(); }
   ctx.globalAlpha = 1;
   // заголовок и очки
-  A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), BX, 66, { align: 'left', size: 54, color: '#fff', stroke: INK, strokeW: 10, weight: 900 });
-  A.text(ctx, 'Уровень ' + S.level + ' · рядов ' + S.lines, BX + 2, 116, { align: 'left', size: 24, weight: 700, color: '#6c5a94' });
+  if (LAND) {                                        // слева от поля: очки крупно, уровень и ряды
+    const sx = BX - 52;
+    A.text(ctx, 'Очки', sx, BY + 26, { align: 'right', size: 22, weight: 700, color: '#8a7bb0' });
+    A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), sx, BY + 84, { align: 'right', size: 64, color: '#fff', stroke: INK, strokeW: 11, weight: 900 });
+    A.text(ctx, 'Уровень ' + S.level, sx, BY + 150, { align: 'right', size: 26, weight: 800, color: '#6c5a94' });
+    A.text(ctx, 'рядов ' + S.lines + (S.level < 99 ? ' · до следующего ' + (10 - S.lines % 10) : ''), sx, BY + 184, { align: 'right', size: 19, weight: 600, color: '#8a7bb0' });
+  } else {
+    A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), BX, 66, { align: 'left', size: 54, color: '#fff', stroke: INK, strokeW: 10, weight: 900 });
+    A.text(ctx, 'Уровень ' + S.level + ' · рядов ' + S.lines, BX + 2, 116, { align: 'left', size: 24, weight: 700, color: '#6c5a94' });
+  }
   // поле
-  A.rr(ctx, BX - 12, BY - 12, COLS * CELL + 24, ROWS * CELL + 24, 30); ctx.fillStyle = '#5b4a86'; ctx.fill();
-  A.rr(ctx, BX - 4, BY - 4, COLS * CELL + 8, ROWS * CELL + 8, 24); ctx.fillStyle = '#463870'; ctx.fill();
-  ctx.save(); A.rr(ctx, BX, BY, COLS * CELL, ROWS * CELL, 20); ctx.clip();
+  const fr = LAND ? .7 : 1;
+  A.rr(ctx, BX - 12 * fr, BY - 12 * fr, COLS * CELL + 24 * fr, ROWS * CELL + 24 * fr, 30 * fr); ctx.fillStyle = '#5b4a86'; ctx.fill();
+  A.rr(ctx, BX - 4 * fr, BY - 4 * fr, COLS * CELL + 8 * fr, ROWS * CELL + 8 * fr, 24 * fr); ctx.fillStyle = '#463870'; ctx.fill();
+  ctx.save(); A.rr(ctx, BX, BY, COLS * CELL, ROWS * CELL, 20 * fr); ctx.clip();
   ctx.fillStyle = '#3c2f62'; ctx.fillRect(BX, BY, COLS * CELL, ROWS * CELL);
   ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 2;
   for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(BX + x * CELL, BY); ctx.lineTo(BX + x * CELL, BY + ROWS * CELL); ctx.stroke(); }
@@ -289,25 +304,25 @@ function draw(ctx, g) {
     const gy = ghostY(p);
     for (const [x, y] of rot(p.kind, p.r)) {
       if (gy + y < 0) continue;
-      A.rr(ctx, BX + (p.x + x) * CELL + 4, BY + (gy + y) * CELL + 4, CELL - 8, CELL - 8, 12);
-      ctx.lineWidth = 3; ctx.strokeStyle = SHAPES[p.kind].c[0]; ctx.globalAlpha = .55; ctx.stroke(); ctx.globalAlpha = 1;
+      A.rr(ctx, BX + (p.x + x) * CELL + CELL * .08, BY + (gy + y) * CELL + CELL * .08, CELL * .84, CELL * .84, CELL * .24);
+      ctx.lineWidth = Math.max(2, CELL * .06); ctx.strokeStyle = SHAPES[p.kind].c[0]; ctx.globalAlpha = .55; ctx.stroke(); ctx.globalAlpha = 1;
     }
     const k = gravity(), smooth = fits(p.kind, p.r, p.x, p.y + 1) ? Math.min(1, S.grav / k) * .5 : 0;
     for (const [x, y] of rot(p.kind, p.r)) if (p.y + y + smooth > -1) jelly(ctx, BX + (p.x + x) * CELL, BY + (p.y + y + smooth) * CELL, CELL, SHAPES[p.kind].c);
   }
   ctx.restore();
   // правая колонка
-  const pw = W - PX - 20;
-  panel(ctx, PX, BY, pw, 210, 'Дальше');
-  mini(ctx, S.queue[0], PX + pw / 2, BY + 95, 34);
-  mini(ctx, S.queue[1], PX + pw / 2, BY + 170, 22, .55);
+  const pw = PW;
+  panel(ctx, PX, BY, pw, PN.next[1], 'Дальше');
+  mini(ctx, S.queue[0], PX + pw / 2, BY + PN.next[2], 34);
+  mini(ctx, S.queue[1], PX + pw / 2, BY + PN.next[3], 22, .55);
   panel(ctx, HOLD_BOX.x, HOLD_BOX.y, HOLD_BOX.w, HOLD_BOX.h, 'Запас');
   if (S.hold) mini(ctx, S.hold, PX + pw / 2, HOLD_BOX.y + 88, 30, S.canHold ? 1 : .4);
   else A.text(ctx, A.isTouch ? 'коснитесь' : 'клавиша X', PX + pw / 2, HOLD_BOX.y + 92, { size: 18, weight: 500, color: '#a497c4' });
-  panel(ctx, PX, BY + 410, pw, 140, 'Рекорд');
-  A.text(ctx, (g.best || 0).toLocaleString('ru-RU'), PX + pw / 2, BY + 488, { size: 28, color: INK, weight: 800 });
-  // милое облачко-маскот: смотрит на фигурку
-  const mx = PX + pw / 2, my = BY + 700 + Math.sin(t * 2) * 8;
+  panel(ctx, PX, BY + PN.rec[0], pw, PN.rec[1], 'Рекорд');
+  A.text(ctx, (g.best || 0).toLocaleString('ru-RU'), PX + pw / 2, BY + PN.rec[0] + PN.rec[1] * .56, { size: 28, color: INK, weight: 800 });
+  // милое облачко-маскот: смотрит на фигурку (широкое окно — слева, под очками)
+  const mx = LAND ? BX - 190 : PX + pw / 2, my = (LAND ? BY + 470 : BY + 700) + Math.sin(t * 2) * 8;
   ctx.save(); ctx.translate(mx, my);
   ctx.fillStyle = '#fff'; for (const [ox, oy, r] of [[-30, 6, 28], [0, -10, 36], [30, 6, 28], [0, 14, 30]]) { ctx.beginPath(); ctx.arc(ox, oy, r, 0, Math.PI * 2); ctx.fill(); }
   const look = p ? A.clamp((BX + (p.x + 1.5) * CELL - mx) / 300, -1, 1) * 4 : 0;
@@ -316,7 +331,7 @@ function draw(ctx, g) {
   ctx.beginPath(); ctx.arc(look, 10, 6, .15 * Math.PI, .85 * Math.PI); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.lineCap = 'round'; ctx.stroke();
   ctx.restore();
   if (S.mode === 'title') {
-    ctx.save(); ctx.translate(W / 2, BY + 380); ctx.rotate(Math.sin(t * 1.4) * .03);
+    ctx.save(); ctx.translate(BX + COLS * CELL / 2, BY + ROWS * CELL * .38); ctx.rotate(Math.sin(t * 1.4) * .03);
     A.text(ctx, 'Блоки', 0, 0, { size: 96, weight: 900, color: '#fff', stroke: INK, strokeW: 16 });
     ctx.restore();
   }
@@ -330,7 +345,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'blocks', tone: 'light', title: 'Блоки', width: W, height: H, orientation: 'portrait', music: 'candy',
+  id: 'blocks', tone: 'light', title: 'Блоки', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'candy',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> — сдвиг · <kbd>↑</kbd> — поворот · <kbd>↓</kbd> — быстрее · <kbd>Пробел</kbd> — уронить · <kbd>X</kbd> — в запас · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> — двигать и крутить, <b>Пробел</b> — уронить',

@@ -673,6 +673,9 @@ class Sync:
                 return False
             if str(d.get("goal") or d.get("title") or "").strip() and not d.get("taken_by"):
                 self._claims[iid] = (dict(d), int(it_updated or 0))
+        elif kind == "task" and isinstance(d, dict) and d.get("want") in ("delete", "stop", "answer"):
+            self._task_want(iid, d)
+            return False
         elif kind == "task" or (kind == "mind" and iid.startswith("jobs")):
             return False                                   # ход задач и дела по расписанию другого компьютера — для телефона
         elif kind == "done":
@@ -690,6 +693,27 @@ class Sync:
                 except Exception:  # noqa: BLE001
                     log.debug("дела: emit", exc_info=True)
         return None
+
+    def _task_want(self, iid, d):
+        """С телефона: «Удалить задачу», «Остановить», ответ на её вопрос (24.10, владелец: «Лира замучила напоминанием
+        про задачу „Исследование“… попросил удалить — она не умеет, на телефоне не понятно, где удалить»). Телефон кладёт
+        в облако запись задачи с want; задача не наша (другого компьютера) — молчим. Удалили — следующий снимок без неё,
+        облако её забывает, телефон тоже."""
+        tasks = getattr(self.host, "tasks", None)
+        if tasks is None or iid not in tasks.tasks:
+            return
+        want = d.get("want")
+        try:
+            if want == "delete":
+                title = tasks.tasks[iid].title
+                tasks.delete(iid)
+                log.info("🔄 Задача «%s» удалена с телефона", title)
+            elif want == "stop":
+                tasks.stop(iid)
+            elif want == "answer" and str(d.get("text") or "").strip():
+                tasks.answer(iid, str(d.get("text"))[:4000])
+        except (KeyError, ValueError) as e:
+            log.info("🔄 Задача с телефона (%s): %s", want, e)
 
     def _upload_outputs(self, url, token):
         """Файлы-результаты законченных задач (показанные show, до 10 МБ) — в облако (?p=/files), один раз каждый:

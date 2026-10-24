@@ -993,6 +993,8 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .cl-m.out { align-self: flex-end; border-radius: 18px 18px 6px 18px; background: linear-gradient(135deg, rgba(102,126,234,.42), rgba(118,75,162,.42)); }
 .cl-m .tx { white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(14px * var(--dw-text, 1)); line-height: 1.5; }
 .cl-m time { align-self: flex-end; font-size: 11px; color: var(--dim); }
+.cl-m time { display: inline-flex; align-items: center; gap: 4px; }
+.cl-ck { display: inline-grid; font-style: normal; } .cl-ck.sent, .cl-ck.dlv { opacity: .8; } .cl-ck.read { color: #5ff0c4; opacity: 1; }   /* ✓ отправлено, ✓✓ доставлено, ✓✓ мятный — прочитано */
 .cl-f { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 12px; padding: 8px 10px; background: rgba(0,0,0,.18); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
 .cl-f:disabled { cursor: default; opacity: .75; } .cl-f span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cl-f small { color: var(--muted); font-size: 11.5px; }
@@ -1116,11 +1118,16 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .cl-repick button:hover { transform: scale(1.22); }
 .cl-repick button.on { background: rgba(139,140,247,.3); }
 @keyframes clre { from { transform: translateY(5px) scale(.95); opacity: 0; } }
-.cl-emo { display: flex; gap: 2px; margin: 0 14px; padding: 4px; border-radius: 14px; background: rgba(127,127,127,.12); }
+.cl-emo { display: flex; flex-direction: column; gap: 4px; margin: 0 14px; padding: 6px; border-radius: 14px; background: rgba(127,127,127,.12); }
+.cl-emo-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.cl-emo .cl-emo-tabs button { flex: none; height: 32px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; font-size: 16px; }
+.cl-emo-tabs button span { font-size: 12.5px; color: var(--muted); } .cl-emo-tabs button[aria-selected="true"] { background: rgba(127,127,127,.2); }
+.cl-emo-tabs button[aria-selected="true"] span { color: var(--ink); }
+.cl-emo-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); max-height: 128px; overflow-y: auto; scrollbar-width: thin; }
 .cl-emo[hidden] { display: none; }
 .cl-emo button, .cl-repick button, .cl-reb { border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; font-family: inherit; }
 .cl-reb { background: var(--frost); color: var(--muted); }
-.cl-emo button { flex: 1; height: 38px; border-radius: 10px; font-size: 20px; }
+.cl-emo-g button { height: 40px; border-radius: 10px; font-size: 22px; }
 .cl-emo button:hover { background: rgba(127,127,127,.18); }
 .cl-send #cl-emo-b { width: 42px; height: 42px; padding: 0; display: grid; place-items: center; flex: none; }
 html.st-light .cl-rx, html.st-light .cl-repick { background: #fff; box-shadow: 0 6px 18px -8px rgba(20,30,60,.35); }

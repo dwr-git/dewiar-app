@@ -126,7 +126,7 @@ class CommandsMixin:
                 game = play_game(text)
                 names = {"snake": "Змейку", "racer": "Гонку", "bricks": "Кирпичики", "plane": "Небесного пилота", "bip": "Бипа",
                          "blocks": "Блоки", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
-                         "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»"}
+                         "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»", "five": "«Пять в ряд»", "pairs": "«Найди пару»"}
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
                 self._say_quick(say, text, then=lambda: self.emit("window", do="play", game=game))
         elif kind == "show":
@@ -978,8 +978,8 @@ class CommandsMixin:
                 if cmd == "close_forget":           # убрать сообщения у себя: mids — выбранные, без mids — всю переписку
                     mids = a.get("mids")
                     return c.forget(a.get("pid", ""), None if mids is None else list(mids))
-                if cmd == "close_history":
-                    return c.history(a.get("pid", ""))
+                if cmd == "close_history":           # read: false — окно студии скрыто, «прочитано» не ставим
+                    return c.history(a.get("pid", ""), mark_read=a.get("read", True) is not False)
                 if cmd == "close_send":
                     files = list(a.get("files") or [])
                     if a.get("files_b64"):                # студия: файл, выбранный в окне, — во временную папку и отправить

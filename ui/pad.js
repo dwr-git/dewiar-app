@@ -30,6 +30,12 @@ window.padShown = (side) => { if (side) padSide(side); document.body.classList.r
 window.padClose = async () => { gameStop(); await saveNow(); document.body.classList.remove("snap"); setTimeout(() => $("#wrap").classList.add("away"), 90);
   setTimeout(() => { const a = api(); if (a && a.pad_hide) a.pad_hide(); }, 320); };
 $("#b-close").onclick = () => padClose();
+/* ⇄ — лист на другую сторону от виджета; выбор запоминается (ui.pad_side). Владелец 24.10: «раньше был слева — можно
+   переключать на одну или другую сторону?» Не помещается с той стороны (виджет у края экрана) — остаётся, где был. */
+$("#b-side").onclick = async () => { const a = api(); if (!a || !a.pad_flip) return;
+  const before = document.body.classList.contains("side-right") ? "right" : "left";
+  try { const s = await a.pad_flip(); if (s === before) { const h = $("#hint"); h.textContent = "С той стороны не хватает места на экране — отодвиньте виджет от края"; setTimeout(() => { if (/места на экране/.test(h.textContent)) h.textContent = ""; }, 6000); }
+    core.call("settings_save", { patch: { ui: { pad_side: s } } }).catch(() => { }); } catch (e) { } };
 
 /* ---------- состояние внизу ---------- */
 function status(t, cls) { $("#st").textContent = t; $("#foot").className = cls || ""; }
@@ -170,7 +176,7 @@ async function saveNow() {
   P.saving = false;
   if (P.dirty) changed();
 }
-ED.addEventListener("input", () => { tidy(); ensureP(); changed(); });
+ED.addEventListener("input", () => { P.lastInput = performance.now(); tidy(); ensureP(); changed(); });
 ED.addEventListener("focus", ensureP);
 window.addEventListener("beforeunload", () => { if (P.dirty) saveNow(); });
 core.on("pad_changed", async (e) => {                 // правка с другого устройства
@@ -213,6 +219,8 @@ async function addImages(files) {
       const link = r.line.match(/\]\(([^)]+)\)/)[1];
       P.imgCache[link] = b64;
       insertHtml(`<p><img alt="" data-src="${link.replace(/"/g, "&quot;")}" src="${b64}"></p><p><br></p>`);
+      const im = [...ED.querySelectorAll("img[data-src]")].find(i => i.getAttribute("data-src") === link);
+      if (im) lastImg = { img: im, t: performance.now() };
       changed();
     } catch (e) { status("Картинка не легла: " + e.message, "bad"); }
   }
@@ -257,6 +265,12 @@ const block = () => { let n = getSelection().anchorNode; while (n && n !== ED &&
 ED.addEventListener("keydown", (e) => {
   lastKey = Date.now();
   const k = e.key, mod = e.ctrlKey || e.metaKey;
+  const si = selImg();
+  if (si && (k === "Delete" || k === "Backspace")) { e.preventDefault(); imgRemove(si); return; }
+  if (mod && !e.shiftKey && (k === "z" || k === "я") && lastImg && ED.contains(lastImg.img) && !(P.lastInput > lastImg.t + 50)) {
+    e.preventDefault(); imgRemove(lastImg.img); return;             // отмена сразу после вставки картинки — убрать её
+  }
+  if (si && !mod && k.length === 1) imgSel(null);
   if (mod && (k === "b" || k === "и")) { e.preventDefault(); cmd("bold"); return; }
   if (mod && (k === "i" || k === "ш")) { e.preventDefault(); cmd("italic"); return; }
   if (mod && (k === "k" || k === "л")) { e.preventDefault(); cmd("link"); return; }
@@ -333,9 +347,40 @@ ED.addEventListener("mousedown", (e) => {
 ED.addEventListener("click", (e) => {
   const a = e.target.closest && e.target.closest("a[href]");
   if (a && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const x = api(); const u = a.getAttribute("href"); if (/^https?:/i.test(u)) { if (x && x.open_url) x.open_url(u); else window.open(u, "_blank"); } }
-  ED.querySelectorAll("img.sel").forEach(i => i.classList.remove("sel"));
-  if (e.target.tagName === "IMG") e.target.classList.add("sel");
+  imgSel(e.target.tagName === "IMG" ? e.target : null);
 });
+/* Картинка: щелчок — рамка и «×»; Delete, Backspace или «×» — убрать; Ctrl+Z сразу после вставки — тоже. 24.10, владелец:
+   «вставил скриншот из буфера, пробовал убрать Ctrl+Z, пробовал Delete — не получается»: рамка была только видом, а
+   клавиши работали с курсором; отмену WebKit теряет, потому что картинка встаёт после загрузки файла. */
+let lastImg = null;
+const selImg = () => ED.querySelector("img.sel");
+function imgSel(img) {
+  ED.querySelectorAll("img.sel").forEach(i => { if (i !== img) i.classList.remove("sel"); });
+  if (img) img.classList.add("sel");
+  imgBtn();
+}
+function imgBtn() {
+  const b = $("#imgx"), img = selImg();
+  if (!img) { b.hidden = true; return; }
+  const sh = $("#sheet"), r = img.getBoundingClientRect(), s = sh.getBoundingClientRect();
+  b.style.top = (r.top - s.top + sh.scrollTop + 8) + "px"; b.style.left = (Math.max(r.left + 8, r.right - 38) - s.left + sh.scrollLeft) + "px"; b.hidden = false;
+}
+function imgRemove(img) {
+  if (!img || !ED.contains(img)) return false;
+  const p = img.closest("p, div:not(#ed), li, td, th");
+  img.remove(); if (lastImg && lastImg.img === img) lastImg = null;
+  if (p && ED.contains(p) && p.tagName === "P" && !p.textContent.trim() && !p.querySelector("img")) {
+    const nx = p.nextElementSibling;
+    if (nx && nx.tagName === "P" && !nx.textContent.trim() && !nx.querySelector("img")) { p.remove(); caretIn(nx); }
+    else { p.innerHTML = "<br>"; caretIn(p); }
+  }
+  ensureP(); blank(); imgBtn(); changed(); status("Картинка убрана", "");
+  return true;
+}
+$("#imgx").addEventListener("mousedown", (e) => e.preventDefault());
+$("#imgx").onclick = () => imgRemove(selImg());
+$("#sheet").addEventListener("scroll", () => { if (selImg()) imgBtn(); }, { passive: true });
+addEventListener("resize", () => { if (selImg()) imgBtn(); });
 ED.addEventListener("mouseover", (e) => { $("#hint").textContent = e.target.closest && e.target.closest("a[href]") ? "Ctrl+щелчок — открыть ссылку" : ""; });
 
 /* ---------- панель ---------- */
@@ -354,6 +399,24 @@ async function cmd(c) {
     if (s && !s.isCollapsed) document.execCommand("createLink", false, u); else insertHtml(`<a href="${u.replace(/"/g, "%22")}">${u.replace(/</g, "&lt;")}</a>&nbsp;`);
   } else if (c === "table") insertHtml("<table><thead><tr><th>Столбец</th><th>Столбец</th></tr></thead><tbody><tr><td><br></td><td><br></td></tr><tr><td><br></td><td><br></td></tr></tbody></table><p><br></p>");
   else if (c === "image") { $("#file").click(); return; }
+  else if (c === "hr" || c === "quote") {            // 24.10, владелец: «не хватает разделителя-черты» — сами, через DOM (как shortcut)
+    ensureP();
+    const b = block(); let top = b; while (top && top.parentNode !== ED) top = top.parentNode;
+    if (c === "hr") {
+      const hr = document.createElement("hr"); let p = document.createElement("p"); p.innerHTML = "<br>";
+      if (!top) { ED.appendChild(hr); ED.appendChild(p); }
+      else {
+        if (top.tagName === "P" && !top.textContent.trim() && !top.querySelector("img")) top.replaceWith(hr); else top.after(hr);
+        const nx = hr.nextElementSibling;
+        if (nx && nx.tagName === "P" && !nx.textContent.trim() && !nx.querySelector("img")) p = nx; else hr.after(p);
+      }
+      caretIn(p);
+    } else if (b) {
+      const q = b.closest("blockquote");
+      if (q) { while (q.firstChild) q.parentNode.insertBefore(q.firstChild, q); q.remove(); }
+      else { const t = b.tagName === "LI" ? b.parentNode : b; const nq = document.createElement("blockquote"); t.replaceWith(nq); nq.appendChild(t); caretIn(t.tagName === "P" ? t : b); }
+    }
+  }
   else if (c === "code") { const s = getSelection(); const t = s ? s.toString() : ""; if (t && !t.includes("\n")) insertHtml(`<code>${t.replace(/</g, "&lt;")}</code>&nbsp;`); else document.execCommand("formatBlock", false, "pre"); }
   tidy(); changed();
 }

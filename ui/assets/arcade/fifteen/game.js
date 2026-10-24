@@ -4,7 +4,11 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: поле посередине во всю высоту, слева —
+   название, ходы, время и «Лира-значок», справа — образец «как собрать» и подсказка. Книжная — как была. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280;
+const CL = 165, CR = W - 150;                   // широкая: середины левой и правой колонок (правая — чуть к краю, мимо карточки меню)
 const BG = '#dbe5f1', DARK = '#b8c5d6', LIGHT = '#f7fbff', INK = '#24324a', MUTED = 'rgba(36,50,74,.55)', ACC = '#5b6cf0';
 let S = null, SC = 1;          // SC — масштаб холста: тени холста не подчиняются transform, их умножаем сами
 
@@ -28,7 +32,7 @@ function neighbors(i) {
   return out;
 }
 function isSolved() { return S.tiles.every((v, i) => v === (i + 1) % (S.n * S.n)); }
-const geo = () => { const n = S.n, size = 600, gap = n === 3 ? 22 : 18, cell = (size - gap * (n + 1)) / n; return { n, size, gap, cell, x0: (W - size) / 2, y0: 330 }; };
+const geo = () => { const n = S.n, size = LAND ? 620 : 600, gap = n === 3 ? 22 : 18, cell = (size - gap * (n + 1)) / n; return { n, size, gap, cell, x0: (W - size) / 2, y0: LAND ? 50 : 330 }; };
 const cellXY = (i) => { const g = geo(); return { x: g.x0 + g.gap + (i % g.n) * (g.cell + g.gap), y: g.y0 + g.gap + ((i / g.n) | 0) * (g.cell + g.gap) }; };
 
 function slide(g, i) {
@@ -121,14 +125,46 @@ function neu(ctx, x, y, w, h, r, d0 = 10, pressed = false) {
   }
   ctx.restore();
 }
+/* широкая раскладка: боковые колонки */
+function sides(ctx, g) {
+  const play = S.mode !== 'title';
+  A.text(ctx, 'Пятнашки', CL, 104, { size: 50, weight: 900, color: INK });
+  if (play) {
+    const mm = Math.floor(S.time / 60), ss = String(Math.floor(S.time % 60)).padStart(2, '0');
+    for (const [i, lbl, val] of [[0, 'ходов', String(S.moves)], [1, 'время', `${mm}:${ss}`]]) {
+      const x = CL - 110, y = 168 + i * 132;
+      neu(ctx, x, y, 220, 104, 28, 8);
+      A.text(ctx, val, x + 110, y + 46, { size: 40, weight: 800, color: INK });
+      A.text(ctx, lbl, x + 110, y + 84, { size: 21, weight: 500, color: MUTED });
+    }
+  } else {
+    A.text(ctx, 'головоломка', CL - 8, 160, { size: 21, weight: 500, color: MUTED });
+    A.text(ctx, 'в стиле Dewiar', CL - 8, 189, { size: 21, weight: 500, color: MUTED });
+  }
+  // справа: образец «как собрать» — плитки, что уже на месте, подсвечены
+  const n = S.n, gs = 208, gx = CR - gs / 2, gy = 140, gp = n === 3 ? 12 : 10, gc = (gs - gp * (n + 1)) / n;
+  A.text(ctx, 'как собрать', CR, 104, { size: 24, weight: 700, color: MUTED });
+  neu(ctx, gx, gy, gs, gs, 26, 8, true);
+  let home = 0;
+  for (let i = 0; i < n * n - 1; i++) {
+    const x = gx + gp + (i % n) * (gc + gp), y = gy + gp + ((i / n) | 0) * (gc + gp), ok = play && S.tiles[i] === i + 1;
+    if (ok) home++;
+    neu(ctx, x, y, gc, gc, n === 3 ? 16 : 12, 4);
+    A.text(ctx, String(i + 1), x + gc / 2, y + gc / 2 + 1, { size: n === 3 ? 28 : 21, weight: 800, color: ok ? ACC : 'rgba(36,50,74,.7)' });
+  }
+  if (play) A.text(ctx, S.done ? 'Собрано!' : `на месте ${home} из ${n * n - 1}`, CR, gy + gs + 46, { size: S.done ? 30 : 23, weight: S.done ? 800 : 600, color: S.done ? ACC : INK });
+  const tip = !play ? [] : S.done ? [] : A.isTouch ? ['Коснитесь плитки', 'рядом с пустым местом'] : ['Стрелки', 'или щелчок по плитке'];
+  tip.forEach((l, i) => A.text(ctx, l, CR, 590 + i * 30, { size: 22, weight: 500, color: MUTED }));
+}
 function draw(ctx, g) {
   SC = g.scale;
   ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
   const gg = geo(), t = g.t;
   // заголовок
-  A.text(ctx, 'Пятнашки', W / 2, 120, { size: 64, weight: 900, color: INK });
+  if (LAND) sides(ctx, g);
+  else A.text(ctx, 'Пятнашки', W / 2, 120, { size: 64, weight: 900, color: INK });
   const mm = Math.floor(S.time / 60), ss = String(Math.floor(S.time % 60)).padStart(2, '0');
-  if (S.mode !== 'title') {
+  if (LAND) { /* ходы и время — в левой колонке */ } else if (S.mode !== 'title') {
     for (const [i, lbl, val] of [[0, 'ходов', String(S.moves)], [1, 'время', `${mm}:${ss}`]]) {
       const x = W / 2 - 170 + i * 200;
       neu(ctx, x, 190, 140, 92, 26, 7);
@@ -149,18 +185,20 @@ function draw(ctx, g) {
   }
   // подсказка снизу
   const tip = S.mode === 'title' ? '' : S.done ? 'Собрано!' : A.isTouch ? 'Коснитесь плитки рядом с пустым местом' : 'Стрелки или щелчок по плитке';
-  if (tip) A.text(ctx, tip, W / 2, gg.y0 + gg.size + 70, { size: 24, weight: 500, color: MUTED });
-  // маленький «Лира-значок»: мягкий кружок с улыбкой
-  const bx = W / 2, by = H - 150 + Math.sin(t * 2) * 5;
+  if (tip && !LAND) A.text(ctx, tip, W / 2, gg.y0 + gg.size + 70, { size: 24, weight: 500, color: MUTED });
+  // маленький «Лира-значок»: мягкий кружок с улыбкой (широкая — внизу левой колонки)
+  const bx = LAND ? CL : W / 2, by = (LAND ? 560 : H - 150) + Math.sin(t * 2) * 5;
+  if (LAND) { ctx.save(); ctx.translate(bx, by); ctx.scale(1.3, 1.3); ctx.translate(-bx, -by); }
   ctx.save(); ctx.shadowColor = DARK; ctx.shadowBlur = 18 * SC; ctx.shadowOffsetX = 6 * SC; ctx.shadowOffsetY = 6 * SC;
   ctx.beginPath(); ctx.arc(bx, by, 46, 0, Math.PI * 2); ctx.fillStyle = BG; ctx.fill();
   ctx.shadowColor = LIGHT; ctx.shadowOffsetX = -6 * SC; ctx.shadowOffsetY = -6 * SC; ctx.fill(); ctx.restore();
   ctx.fillStyle = INK; for (const ex of [-14, 14]) { ctx.beginPath(); ctx.ellipse(bx + ex, by - 6, 4, Math.sin(t * 1.3) > .97 ? 1 : 6, 0, 0, Math.PI * 2); ctx.fill(); }
   ctx.beginPath(); ctx.arc(bx, by + 6, 12, .15 * Math.PI, .85 * Math.PI); ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.strokeStyle = INK; ctx.stroke();
+  if (LAND) { ctx.restore(); A.text(ctx, S.done ? 'Ура, собрано!' : 'Лира болеет за вас', CL, 652, { size: 21, weight: 500, color: MUTED }); }
 }
 
 A.game({
-  id: 'fifteen', tone: 'light', title: 'Пятнашки', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'fifteen', tone: 'light', title: 'Пятнашки', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'garden',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> — двигать плитку в пустое место · или щелчок по плитке · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или щелчок по плитке',

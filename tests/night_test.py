@@ -99,6 +99,20 @@ h2.incidents = lambda since: [{"ts": time.time() - 30, "kind": "task", "text": "
 h2.s = types.SimpleNamespace(get=lambda *k: cfg.get(k), active_llm=lambda: None)
 sent2.clear(); nw2.data = {}; nw2.run()
 ok(not sent2, "задача застряла или не хватило окна модели — это модель, отчёт не уходит (№204, №210)")
+# №235 (24.10): «Заряд Dewiar Облака закончился» и у дела по расписанию — настройки человека; подпись сбоя без переносов
+charge = "Заряд Dewiar Облака закончился. После перевода средств, прикрепите скриншот или фото оплаты.\n\nПополнить можно через донат:\nhttps://donate.example/x"
+h2.incidents = lambda since: [{"ts": time.time() - 30, "kind": "error", "text": "Модель (openai): " + charge}] * 4 + \
+    [{"ts": time.time() - 30, "kind": "job", "text": "Дело по расписанию: " + charge}] * 2
+h2.reminders = types.SimpleNamespace(items=[{"kind": "job", "last_ok": False, "text": "Утренняя сводка", "last_error": charge}])
+sent2.clear(); nw2.data = {}; r4 = nw2.run()
+ok(not sent2, f"заряд кончился — и дело по расписанию не удалось: не ошибка программы, отчёт не уходит (№235): {r4['left']}")
+ok(all("\n" not in p["text"] and len(p["text"]) <= 161 for p in r4["problems"]) and any(p["text"].endswith("…") for p in r4["problems"]),
+   f"подпись сбоя — одной строкой, длинная обрезана по слову: {[p['text'][-30:] for p in r4['problems']]}")
+h2.incidents = lambda since: []
+h2.reminders = types.SimpleNamespace(items=[{"kind": "job", "last_ok": False, "text": "Сводка", "last_error": "KeyError: 'deliver'"}])
+sent2.clear(); nw2.data = {}; nw2.run()
+ok(sent2, "дело не удалось из-за ошибки программы — отчёт уходит, как раньше")
+h2.reminders = types.SimpleNamespace(items=[])
 
 # второй обход: та же задача снова упала — повтора нет; согласия на отчёты нет — не шлём; спокойно — молчим
 tasks["a"].data.update(failed_at=dt.datetime.now().isoformat(timespec="seconds"))

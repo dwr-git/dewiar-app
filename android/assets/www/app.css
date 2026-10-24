@@ -612,7 +612,9 @@ body.neu .snd.on i, body.neu .snd.play i { background: var(--brand); }
 .clm { align-self: flex-start; max-width: 82%; padding: 9px 13px 6px; border-radius: 18px 18px 18px 6px; background: var(--frost); display: flex; flex-direction: column; gap: 6px;
   white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; -webkit-user-select: text; user-select: text; }
 .clm.out { align-self: flex-end; border-radius: 18px 18px 6px 18px; background: linear-gradient(135deg, rgba(102,126,234,.5), rgba(118,75,162,.5)); }
-.clm time { align-self: flex-end; font-size: 11px; color: var(--dim); }
+.clm time { align-self: flex-end; font-size: 11px; color: var(--dim); display: inline-flex; align-items: center; gap: 4px; }
+.clck { display: inline-grid; } .clck svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.clck.sent, .clck.dlv { opacity: .8; } .clck.read { color: #5ff0c4; }   /* ✓ отправлено, ✓✓ доставлено, ✓✓ мятный — прочитано */
 .clf { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(0,0,0,.2); text-align: left; font-size: 13.5px; }
 .clf svg { width: 18px; height: 18px; flex: none; } .clf span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clf small { color: var(--muted); font-size: 11.5px; }
@@ -731,9 +733,12 @@ body.neu .clsend textarea, body.neu #cl-name { background: var(--glass); box-sha
 .clrepick .acts svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 body.light .clrepick .acts { border-top-color: rgba(20,30,60,.1); }
 @keyframes clre { from { transform: translateY(6px) scale(.94); opacity: 0; } }
-.clemo { display: flex; justify-content: space-between; gap: 2px; margin-top: 8px; padding: 4px; border-radius: 16px; background: var(--field); }
+.clemo { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 4px; border-radius: 16px; background: var(--field); }
 .clemo[hidden] { display: none; }
-.clemo button { flex: 1; height: 40px; border-radius: 12px; font-size: 21px; }
+.clemo-tabs { display: flex; gap: 2px; } .clemo-tabs button { flex: 1; height: 34px; border-radius: 10px; font-size: 18px; opacity: .55; }
+.clemo-tabs button.on { opacity: 1; background: var(--frost-hi); }
+.clemo-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); max-height: 176px; overflow-y: auto; }
+.clemo-g button { height: 44px; border-radius: 12px; font-size: 24px; }
 .clemo button:active { background: var(--frost-hi); }
 body.light .clrx, body.light .clrepick { background: #fff; box-shadow: 0 6px 18px -8px rgba(20,30,60,.35); }
 @media (prefers-reduced-motion: reduce) { .clrepick { animation: none; } }
@@ -967,3 +972,8 @@ body.neu .shelf .ag { box-shadow: 6px 6px 14px var(--neu-dark, #b8c5d6), -6px -6
 body.has-play #top { gap: 2px; } body.has-play #top .ib { width: 38px; height: 38px; } body.has-play #top .ib svg { width: 21px; height: 21px; }
 @media (max-width: 380px) { body.has-play #top .ib { width: 36px; height: 36px; } body.has-play #top .ib svg { width: 19px; height: 19px; } }
 @media (max-width: 360px) { body.has-play #top { padding-left: 8px; padding-right: 8px; gap: 1px; } }
+
+/* задача: ответить и удалить (24.10) */
+.tkans { display: flex; gap: 8px; align-items: flex-end; margin: 10px 0 4px; } .tkans textarea { flex: 1; min-width: 0; padding: 10px 12px; border: 0; border-radius: 14px; background: var(--field); color: inherit; font: inherit; resize: none; }
+.tkdel { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 2px; padding: 8px 12px; border: 0; border-radius: 12px; background: transparent; color: var(--dim); font: inherit; font-size: 13px; }
+.tkdel svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .tkdel:active { color: #FF8FA8; background: rgba(255,107,138,.1); }

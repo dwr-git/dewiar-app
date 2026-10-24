@@ -287,4 +287,5 @@ body.game {
 }
 .stagewrap { border-radius: 22px; transition: background .9s; }
 .stagewrap.tinted { background: var(--edge); }
+.framed .stagewrap { margin: 2px 12px 10px; }   /* 24.10, владелец: «окошко игры примыкает к надписям и бортам» — в листе «Досуг» отступы со всех сторон (всегда, чтобы поле не прыгало) */
 .stagewrap.tinted .stage, :root.light .stagewrap.tinted .stage { box-shadow: none; border-radius: 6px; }

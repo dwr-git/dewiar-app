@@ -2,7 +2,17 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: дорога посередине во всю высоту (мир прежний,
+   книжный, только уменьшен), а лес, пляж и город продолжаются до краёв окна; слева — очки, метры, места и жизни,
+   справа — спидометр, рекорд и управление. Узкое окно (телефон) — как было. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = 720, H = 1280;                                   // мир игры — всегда книжный
+const SW = LAND ? 1280 : W, SH = LAND ? 720 : H;           // холст
+const VH = LAND ? 1200 : H;                                // в широком окне мир виден до этой высоты
+const FS = SH / VH, FW = W * FS, FX = (SW - FW) / 2;
+const GX0 = LAND ? -FX / FS - 12 : 0, GX1 = LAND ? W + FX / FS + 12 : W;   // земля — до краёв холста
+/* боковые колонки — у краёв: карточка меню в листе «Досуг» (~770 px) закрывает x ≈ 250…1030, y ≈ 175…550 */
+const PW = 218, LCX = 26 + PW / 2, RCX = SW - 26 - PW / 2;
 const OUT = '#2b2550';
 const ROAD_L = 150, ROAD_R = 570, LANE_W = 140;
 const LANES = [220, 360, 500];
@@ -44,23 +54,51 @@ function makeSegment(y, meters) {
     it.push({ t: 'lamp', x: 132, y: 40 }); it.push({ t: 'lamp', x: 588, y: 200 });
     if (Math.random() < .6) it.push({ t: 'potTree', x: Math.random() < .5 ? 112 : 608, y: R(120, 280) });
   }
+  if (LAND) sideDecor(seg);
   return seg;
+}
+/* широкое окно: окрестности по сторонам от дороги (за краями книжного мира) */
+function sideDecor(seg) {
+  const it = seg.items, R = A.rand, L = () => R(GX0 + 30, -30), Rt = () => R(W + 30, GX1 - 30), any = () => (Math.random() < .5 ? L() : Rt());
+  if (seg.zone === 'forest') {
+    for (let i = 0; i < 16; i++) it.push({ t: 'flower', x: any(), y: R(10, 310), c: A.pick(['#ff77c6', '#ffd43b', '#ffffff', '#b39dff', '#ff8a5c']) });
+    for (let i = 0; i < 4; i++) it.push({ t: 'bush', x: any(), y: R(20, 300), r: R(14, 22) });
+    for (let i = 0; i < 9; i++) it.push({ t: 'tree', x: any(), y: R(20, 300), r: R(34, 54), c: A.pick(['#3fbf5f', '#4fcf6a', '#2fae5a', '#66d36e']) });
+  } else if (seg.zone === 'seaside') {
+    if (seg.kind === 'bridge') { for (let i = 0; i < 3; i++) it.push({ t: 'boat', x: any(), y: R(40, 280), c: A.pick(['#ff6b6b', '#4f8bff', '#ffd43b']) }); }
+    else {
+      for (let i = 0; i < 4; i++) it.push({ t: 'umbrella', x: L(), y: R(30, 290), c: A.pick(['#ff6b8b', '#4f8bff', '#ffb347', '#4fe0c0']) });
+      for (let i = 0; i < 3; i++) it.push({ t: 'palm', x: L(), y: R(30, 290), r: R(40, 54) });
+      for (let i = 0; i < 2; i++) it.push({ t: 'boat', x: Rt(), y: R(40, 280), c: A.pick(['#ff6b6b', '#4f8bff', '#ffd43b']) });
+      for (let i = 0; i < 2; i++) it.push({ t: 'buoy', x: Rt(), y: R(20, 300) });
+    }
+  } else {
+    for (let k = 0; k < 5; k++) {                         // кварталы: домики с просветами, между ними — деревца в кадках
+      for (const side of [-1, 1]) {
+        const x0 = side < 0 ? -44 - k * 156 : W + 44 + k * 156;
+        if (Math.random() < .28) { it.push({ t: 'potTree', x: x0 + side * 50, y: R(50, 270) }); continue; }
+        const w = R(92, 122);
+        it.push({ t: 'house', x: side < 0 ? x0 - w : x0, y: R(12, 80), w, h: R(120, 200), c: A.pick(['#ff8a6b', '#7c8cff', '#ffc857', '#62d2a2', '#ff9ccf']) });
+        if (Math.random() < .4) it.push({ t: 'potTree', x: x0 + side * w * .5, y: 296 });
+      }
+    }
+  }
 }
 function drawGround(ctx, seg, t) {
   const y = seg.y;
   if (seg.zone === 'forest') {
-    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#7ed957' : '#74cf4e'; ctx.fillRect(0, y + i * 80, W, 81); }
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#7ed957' : '#74cf4e'; ctx.fillRect(GX0, y + i * 80, GX1 - GX0, 81); }
   } else if (seg.zone === 'seaside') {
-    if (seg.kind === 'bridge') drawWater(ctx, 0, y, W, SEG_H + 1, t, seg.ph);
+    if (seg.kind === 'bridge') drawWater(ctx, GX0, y, GX1 - GX0, SEG_H + 1, t, seg.ph);
     else {
-      ctx.fillStyle = '#f7dc9a'; ctx.fillRect(0, y, ROAD_L, SEG_H + 1);
+      ctx.fillStyle = '#f7dc9a'; ctx.fillRect(GX0, y, ROAD_L - GX0, SEG_H + 1);
       ctx.fillStyle = '#f7dc9a'; ctx.fillRect(ROAD_R, y, 40, SEG_H + 1);
-      drawWater(ctx, ROAD_R + 40, y, W - ROAD_R - 40, SEG_H + 1, t, seg.ph);
+      drawWater(ctx, ROAD_R + 40, y, GX1 - ROAD_R - 40, SEG_H + 1, t, seg.ph);
       ctx.fillStyle = 'rgba(255,255,255,.75)';
       for (let k = 0; k < 4; k++) { const yy = y + k * 80 + 30 + Math.sin(t * 2 + k) * 6; ctx.beginPath(); ctx.ellipse(ROAD_R + 42, yy, 6, 26, 0, 0, Math.PI * 2); ctx.fill(); }
     }
   } else {
-    ctx.fillStyle = '#b9e88f'; ctx.fillRect(0, y, W, SEG_H + 1);
+    ctx.fillStyle = '#b9e88f'; ctx.fillRect(GX0, y, GX1 - GX0, SEG_H + 1);
     ctx.fillStyle = '#dfe3ec'; ctx.fillRect(96, y, ROAD_L - 96, SEG_H + 1); ctx.fillRect(ROAD_R, y, 624 - ROAD_R, SEG_H + 1);
     ctx.strokeStyle = '#c4c9d6'; ctx.lineWidth = 2;
     for (let k = 0; k < 8; k++) { const yy = y + k * 40; ctx.beginPath(); ctx.moveTo(96, yy); ctx.lineTo(ROAD_L, yy); ctx.moveTo(ROAD_R, yy); ctx.lineTo(624, yy); ctx.stroke(); }
@@ -69,8 +107,8 @@ function drawGround(ctx, seg, t) {
 function drawWater(ctx, x, y, w, h, t, ph) {
   ctx.fillStyle = '#4fc3f7'; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-  for (let k = 0; k < 6; k++) {
-    const yy = y + 25 + k * 55, xx = x + ((k * 53 + ph * 40) % Math.max(40, w - 40)) + Math.sin(t * 1.5 + k + ph) * 6;
+  for (let k = 0, n = 6 * Math.max(1, Math.round(w / 700)); k < n; k++) {   // в широком окне вода шире — и волн больше
+    const yy = y + 25 + (k % 6) * 55, xx = x + ((k * 53 + ph * 40) % Math.max(40, w - 40)) + Math.sin(t * 1.5 + k + ph) * 6;
     ctx.beginPath(); ctx.arc(xx, yy, 10, Math.PI * 1.1, Math.PI * 1.9); ctx.arc(xx + 18, yy, 10, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
   }
 }
@@ -383,8 +421,20 @@ function spawnItem(kind) {
 }
 
 /* ---------------- обновление ---------------- */
+/* широкое окно: касания и мышь — в координаты мира (поле уменьшено и сдвинуто) */
+function wIn(inp) {
+  if (!LAND) return inp;
+  const p = inp.pointer, k = 1 / FS, wx = (x) => (x - FX) * k, wy = (y) => y * k;
+  return {
+    down: (n) => inp.down(n), pressed: (n) => inp.pressed(n), swipe: inp.swipe,
+    get mouseActive() { return inp.mouseActive; }, set mouseActive(v) { inp.mouseActive = v; },
+    tap: inp.tap && { x: wx(inp.tap.x), y: wy(inp.tap.y) },
+    pointer: Object.assign({}, p, { x: wx(p.x), y: wy(p.y), sx: wx(p.sx), sy: wy(p.sy), dx: p.dx * k, dy: p.dy * k })
+  };
+}
+
 function update(g, dt) {
-  const inp = g.input, p = S.p;
+  const inp = wIn(g.input), p = S.p;
   if (S.banner) { S.banner.t += dt; if (S.banner.t > 2) S.banner = null; }
   S.shown += (S.score - S.shown) * Math.min(1, dt * 8);
   if (S.mode === 'over') return;
@@ -556,11 +606,22 @@ function collide(g) {
 
 /* ---------------- отрисовка ---------------- */
 function drawHud(ctx, g) {
+  if (!LAND) drawGauges(ctx);                               // в широком окне — на боковых панелях
+  drawBanner(ctx);
+}
+function drawGauges(ctx) {
   A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), 28, 56, { align: 'left', size: 46, color: '#fff', stroke: OUT, strokeW: 9 });
   A.text(ctx, meters().toLocaleString('ru-RU') + ' м', 30, 104, { align: 'left', size: 28, color: '#ffe066', stroke: OUT, strokeW: 7 });
   for (let i = 0; i < 3; i++) A.heart(ctx, W - 46 - i * 50, 58, 44, i < S.lives ? '#ff4f7b' : 'rgba(43,37,80,.35)', OUT);
-  // спидометр
-  const cx = W - 92, cy = H - 84, r = 64, kmh = Math.round(S.speed / 5);
+  speedo(ctx, W - 92, H - 84, 64);
+  if (S.nitro > 0) {
+    A.rr(ctx, 30, 130, 180, 16, 8); ctx.fillStyle = 'rgba(43,37,80,.45)'; ctx.fill();
+    A.rr(ctx, 30, 130, 180 * Math.min(1, S.nitro / 3.2), 16, 8); ctx.fillStyle = '#7ad8ff'; ctx.fill();
+    A.rr(ctx, 30, 130, 180, 16, 8); ctx.lineWidth = 3.5; ctx.strokeStyle = OUT; ctx.stroke();
+  }
+}
+function speedo(ctx, cx, cy, r, big) {                      // спидометр (в широком окне — крупнее, с подписями крупнее)
+  const kmh = Math.round(S.speed / 5);
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, cy, r + 10, 0, Math.PI * 2); ctx.fillStyle = 'rgba(20,18,45,.72)'; ctx.fill();
   ctx.lineWidth = 4; ctx.strokeStyle = OUT; ctx.stroke();
@@ -571,14 +632,16 @@ function drawHud(ctx, g) {
   const na = a0 + (a1 - a0) * k;
   ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(na) * (r - 18), cy + Math.sin(na) * (r - 18)); ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.stroke();
   ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
-  A.text(ctx, String(kmh), cx, cy + 30, { size: 24, color: '#fff' });
-  A.text(ctx, 'км/ч', cx, cy + 52, { size: 13, weight: 500, color: 'rgba(255,255,255,.7)' });
-  ctx.restore();
-  if (S.nitro > 0) {
-    A.rr(ctx, 30, 130, 180, 16, 8); ctx.fillStyle = 'rgba(43,37,80,.45)'; ctx.fill();
-    A.rr(ctx, 30, 130, 180 * Math.min(1, S.nitro / 3.2), 16, 8); ctx.fillStyle = '#7ad8ff'; ctx.fill();
-    A.rr(ctx, 30, 130, 180, 16, 8); ctx.lineWidth = 3.5; ctx.strokeStyle = OUT; ctx.stroke();
+  if (big) {
+    A.text(ctx, String(kmh), cx, cy + r * .5, { size: 32, color: '#fff' });
+    A.text(ctx, 'км/ч', cx, cy + r * .5 + 30, { size: 20, weight: 600, color: 'rgba(255,255,255,.75)' });
+  } else {
+    A.text(ctx, String(kmh), cx, cy + 30, { size: 24, color: '#fff' });
+    A.text(ctx, 'км/ч', cx, cy + 52, { size: 13, weight: 500, color: 'rgba(255,255,255,.7)' });
   }
+  ctx.restore();
+}
+function drawBanner(ctx) {
   if (S.banner) {
     const t = S.banner.t, kk = t < .35 ? A.ease.outBack(t / .35) : 1, a = t > 1.6 ? 1 - (t - 1.6) / .4 : 1;
     ctx.save(); ctx.globalAlpha = Math.max(0, a); ctx.translate(W / 2, H * .3); ctx.scale(kk, kk);
@@ -588,7 +651,7 @@ function drawHud(ctx, g) {
   }
 }
 
-function draw(ctx, g) {
+function drawWorld(ctx, g) {
   const t = g.t, p = S.p;
   for (const s of S.segs) drawGround(ctx, s, t);
   drawRoad(ctx, S.dist, S.segs);
@@ -610,15 +673,122 @@ function draw(ctx, g) {
   }
   if (S.mode !== 'title') drawHud(ctx, g);
 }
+/* ---------------- широкое окно ---------------- */
+const LABEL = { size: 22, weight: 700, color: 'rgba(43,37,80,.6)' };
+const ZONE_COL = { forest: '#40c057', seaside: '#4dabf7', city: '#ff922b' };
+function plate(ctx, x, y, w, h) {                           // наклейка, как машинки: белая, с обводкой и тенью
+  ctx.fillStyle = 'rgba(20,20,50,.22)'; A.rr(ctx, x + 7, y + 10, w, h, 24); ctx.fill();
+  A.rr(ctx, x, y, w, h, 24); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = OUT; ctx.lineJoin = 'round'; ctx.stroke();
+}
+function fitText(ctx, str, x, y, o, maxW) {                 // крупное число, которое не вылезет за наклейку
+  ctx.font = `${o.weight || 800} ${o.size}px ${A.FONT}`;
+  const w = ctx.measureText(str).width, k = w > maxW ? maxW / w : 1;
+  A.text(ctx, str, x, y, Object.assign({}, o, { size: o.size * k, strokeW: (o.strokeW || 9) * Math.max(.7, k) }));
+}
+function keycap(ctx, x, y, label) {
+  const s = 42;
+  A.rr(ctx, x - s / 2, y - s / 2 + 5, s, s, 11); ctx.fillStyle = 'rgba(43,37,80,.25)'; ctx.fill();
+  A.rr(ctx, x - s / 2, y - s / 2, s, s, 11); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+  A.text(ctx, label, x, y + 1, { size: 22, weight: 800, color: OUT });
+}
+function drawLight(ctx, x, y, t) {                          // светофорчик-болельщик: моргает огоньками и глазками
+  ctx.save(); ctx.translate(x, y); ctx.lineJoin = 'round'; ctx.strokeStyle = OUT;
+  ctx.fillStyle = 'rgba(20,20,50,.22)'; ctx.beginPath(); ctx.ellipse(12, 108, 36, 10, 0, 0, Math.PI * 2); ctx.fill();
+  A.rr(ctx, -7, 50, 14, 58, 5); ctx.fillStyle = '#7d849e'; ctx.fill(); ctx.lineWidth = 3.5; ctx.stroke();
+  A.rr(ctx, -40, -104, 80, 160, 26); ctx.fillStyle = '#ffd43b'; ctx.fill(); ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.45)'; A.rr(ctx, -31, -94, 12, 56, 6); ctx.fill();
+  const on = Math.floor(t / 1.2) % 3;
+  ['#ff5a5a', '#ffb000', '#40c057'].forEach((c, i) => {
+    const cy = -78 + i * 32;
+    if (i === on) { ctx.fillStyle = c; ctx.globalAlpha = .3; ctx.beginPath(); ctx.arc(0, cy, 19, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.beginPath(); ctx.arc(0, cy, 12, 0, Math.PI * 2); ctx.fillStyle = i === on ? c : 'rgba(43,37,80,.28)'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+  });
+  const blink = (t % 3.3) > 3.15;
+  ctx.fillStyle = OUT;
+  for (const ex of [-14, 14]) { ctx.beginPath(); if (blink) ctx.ellipse(ex, 22, 6, 1.6, 0, 0, Math.PI * 2); else ctx.ellipse(ex, 20, 5, 6.5, 0, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,120,120,.55)'; ctx.beginPath(); ctx.arc(-26, 32, 5.5, 0, Math.PI * 2); ctx.arc(26, 32, 5.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 30, 7, .15 * Math.PI, .85 * Math.PI); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.restore();
+}
+function drawLand(ctx, g) {
+  const t = g.t;
+  // мир: дорога посередине, окрестности — до краёв
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, SW, SH); ctx.clip();
+  ctx.translate(FX, 0); ctx.scale(FS, FS);
+  drawWorld(ctx, g);
+  if (g.fxWorld) g.fxWorld(ctx);
+  ctx.restore();
+  // слева: очки, метры, места, жизни
+  const lx = LCX, lp = lx - PW / 2, m = S.mode === 'title' ? 0 : meters();
+  plate(ctx, lp, 26, PW, 476);
+  A.text(ctx, 'Очки', lx, 60, LABEL);
+  fitText(ctx, Math.round(S.shown).toLocaleString('ru-RU'), lx, 110, { size: 58, color: '#fff', stroke: OUT, strokeW: 11, weight: 900 }, PW - 30);
+  fitText(ctx, m.toLocaleString('ru-RU') + ' м', lx, 162, { size: 30, color: '#ffe066', stroke: OUT, strokeW: 8 }, PW - 30);
+  const z = zoneAt(m), next = ZONES[(ZONES.indexOf(z) + 1) % ZONES.length];
+  A.text(ctx, ZONE_NAME[z], lx, 212, { size: 26, weight: 800, color: OUT });
+  A.rr(ctx, lx - 84, 236, 168, 14, 7); ctx.fillStyle = 'rgba(43,37,80,.14)'; ctx.fill();
+  A.rr(ctx, lx - 84, 236, Math.max(14, 168 * (m % 1000) / 1000), 14, 7); ctx.fillStyle = ZONE_COL[z]; ctx.fill();
+  A.rr(ctx, lx - 84, 236, 168, 14, 7); ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+  A.text(ctx, 'дальше: ' + ZONE_NAME[next], lx, 272, { size: 20, weight: 600, color: 'rgba(43,37,80,.65)' });
+  A.text(ctx, 'Жизни', lx, 322, LABEL);
+  for (let i = 0; i < 3; i++) A.heart(ctx, lx + (i - 1) * 56, 364, 50, i < S.lives ? '#ff4f7b' : 'rgba(43,37,80,.25)', OUT);
+  ctx.fillStyle = 'rgba(43,37,80,.12)'; ctx.fillRect(lx - 70, 404, 140, 2);
+  if (S.nitro > 0) {
+    A.text(ctx, 'Нитро!', lx, 436, { size: 24, weight: 800, color: '#1c7ed6' });
+    A.rr(ctx, lx - 84, 458, 168, 18, 9); ctx.fillStyle = 'rgba(43,37,80,.18)'; ctx.fill();
+    A.rr(ctx, lx - 84, 458, 168 * Math.min(1, S.nitro / 3.2), 18, 9); ctx.fillStyle = '#7ad8ff'; ctx.fill();
+    A.rr(ctx, lx - 84, 458, 168, 18, 9); ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+  } else {
+    ctx.save(); ctx.translate(lx - 44, 452); drawItem(ctx, { kind: 'coin', x: 0, y: 0, ph: 0 }, t); ctx.restore();
+    A.text(ctx, '× ' + S.coins, lx - 16, 453, { align: 'left', size: 28, weight: 800, color: OUT });
+    if (S.shield) {
+      ctx.save(); ctx.translate(lx + 70, 452); ctx.scale(.8, .8); drawItem(ctx, { kind: 'shield', x: 0, y: 0, ph: 0 }, t); ctx.restore();
+    }
+  }
+  drawLight(ctx, lx, 600, t);
+  // справа: спидометр, рекорд, управление
+  const rx = RCX, rp = rx - PW / 2;
+  speedo(ctx, rx, 112, 78, true);
+  plate(ctx, rp, 222, PW, 122);
+  A.text(ctx, 'Рекорд', rx, 256, LABEL);
+  fitText(ctx, (g.best || 0).toLocaleString('ru-RU'), rx, 302, { size: 42, color: '#fff', stroke: OUT, strokeW: 10, weight: 900 }, PW - 30);
+  plate(ctx, rp, 366, PW, 300);
+  A.text(ctx, 'Управление', rx, 400, LABEL);
+  if (A.isTouch) {
+    A.text(ctx, 'ведите пальцем', rx, 452, { size: 22, weight: 800, color: OUT });
+    A.text(ctx, 'влево-вправо', rx, 484, { size: 22, weight: 800, color: OUT });
+    A.text(ctx, 'в любом месте', rx, 526, { size: 20, weight: 600, color: 'rgba(43,37,80,.65)' });
+    A.text(ctx, 'экрана', rx, 554, { size: 20, weight: 600, color: 'rgba(43,37,80,.65)' });
+  } else {
+    keycap(ctx, rp + 40, 448, '←'); keycap(ctx, rp + 88, 448, '→');
+    A.text(ctx, 'руль', rp + 120, 449, { align: 'left', size: 22, weight: 800, color: OUT });
+    keycap(ctx, rp + 40, 504, '↑');
+    A.text(ctx, 'газ', rp + 72, 505, { align: 'left', size: 22, weight: 800, color: OUT });
+    keycap(ctx, rp + 40, 560, '↓');
+    A.text(ctx, 'тормоз', rp + 72, 561, { align: 'left', size: 22, weight: 800, color: OUT });
+    A.text(ctx, 'мышь — тоже руль', rx, 622, { size: 20, weight: 600, color: 'rgba(43,37,80,.65)' });
+  }
+}
+function draw(ctx, g) {
+  if (LAND) drawLand(ctx, g); else drawWorld(ctx, g);
+}
 
 A.game({
-  id: 'racer', tone: 'light', title: 'Гонка', width: W, height: H, orientation: 'portrait', music: 'road',
+  id: 'racer', tone: 'light', title: 'Гонка', width: SW, height: SH, orientation: LAND ? 'landscape' : 'portrait', music: 'road',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> или мышь — руль · <kbd>↑</kbd> газ · <kbd>↓</kbd> тормоз · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или <b>мышь</b> — руль, <b>↑ ↓</b> — газ и тормоз',
     touch: 'Ведите пальцем влево-вправо в любом месте экрана — машина повторит'
   },
-  init(g) { S = fresh(); titleScreen(g); },
+  init(g) {
+    if (LAND) {                                             // эффекты — в координатах мира: рисуем их внутри мира, надписи крупнее
+      const fxDraw = g.fx.draw.bind(g.fx), fxText = g.fx.text.bind(g.fx);
+      g.fx.draw = () => {}; g.fxWorld = fxDraw;
+      g.fx.text = (x, y, str, o = {}) => fxText(x, y, str, Object.assign({}, o, { size: (o.size || 34) * 1.3, rise: (o.rise || 70) * 1.2 }));
+    }
+    S = fresh(); titleScreen(g);
+  },
   update, draw
 });
 window.__racer = () => S;

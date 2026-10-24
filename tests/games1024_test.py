@@ -22,13 +22,15 @@ def ok(c, m):
 ARC = ROOT / "ui/assets/arcade"
 web = [f for f in ARC.rglob("*") if f.suffix in (".html", ".js", ".css") and re.search(r"https?://", f.read_text(encoding="utf-8"))]
 ok(not web, f"игры не ходят в интернет (шрифты свои): {web}")
-ok(all((ARC / g / "index.html").is_file() and (ARC / g / "cover.jpg").is_file() for g in ("plane", "bip", "bricks", "snake", "racer", "blocks", "candy", "merge", "sudoku", "fifteen", "reversi", "tictac", "crossword", "words", "glow"))
-   and (ARC / "shared/fonts/OFL-Rubik.txt").is_file(), "пятнадцать игр с обложками, лицензия шрифта рядом")
+ok(all((ARC / g / "index.html").is_file() and (ARC / g / "cover.jpg").is_file() for g in ("plane", "bip", "bricks", "snake", "racer", "blocks", "candy", "merge", "sudoku", "fifteen", "reversi", "tictac", "crossword", "words", "glow", "five", "pairs"))
+   and (ARC / "shared/fonts/OFL-Rubik.txt").is_file(), "семнадцать игр с обложками, лицензия шрифта рядом")
 
 import engine_base as EB  # noqa: E402
 for t, k, g in (("Лира, давай поиграем", "play", ""), ("хочу поиграть", "play", ""), ("поиграем в змейку", "play", "snake"),
                 ("открой гонку", "play", "racer"), ("поиграем в судоку", "play", "sudoku"), ("давай в тетрис поиграем", None, ""), ("открой блокнот", None, ""), ("давай сыграем в города", None, ""), ("спрячься", "tray", ""),
-                ("давай поиграем в крестики нолики", "play", "tictac"), ("лира, сыграем в кроссворд", "play", "crossword"), ("хочу поиграть в пять букв", "play", "words")):
+                ("давай поиграем в крестики нолики", "play", "tictac"), ("лира, сыграем в кроссворд", "play", "crossword"), ("хочу поиграть в пять букв", "play", "words"),
+                ("давай поиграем в пять в ряд", "play", "five"), ("сыграем в гомоку", "play", "five"), ("открой найди пару", "play", "pairs"), ("поиграем в пары", "play", "pairs"),
+                ("давай поиграем пару минут", None, "")):
     ok(EB.window_phrase(t) == k and (k != "play" or EB.play_game(t) == g), f"«{t}» → {EB.window_phrase(t)} {EB.play_game(t)!r}")
 cmd = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
 ok('kind == "play"' in cmd and '.get("games") is False' in cmd and 'self.emit("window", do="play", game=game)' in cmd, "ядро: «поиграем» — событие окну, выключено — подсказка про «Возможности»")
@@ -61,7 +63,7 @@ with sync_playwright() as p:
     ok(pg.is_visible("#b-play"), "в блокноте — кнопка «Досуг»")
     pg.click("#b-play"); pg.wait_for_timeout(500)
     names = pg.evaluate("[...document.querySelectorAll('#shelf .ag b')].map(b => b.textContent)")
-    ok(names == ["Огонёк", "Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
+    ok(names == ["Огонёк", "Найди пару", "Пять в ряд", "Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
        f"«Досуг»: полка игр вместо вкладок и листа: {names}")
     ok(["pad_mode_mark", "play"] in pg.evaluate("apiCalls"), "виджет узнаёт, что открыт «Досуг» (подсветка кнопки)")
     pg.screenshot(path="/tmp/claude-0/games_shelf.png")
@@ -83,7 +85,7 @@ with sync_playwright() as p:
     pg.evaluate("padGame('racer')"); pg.wait_for_timeout(800)
     ok(pg.evaluate("document.querySelector('#game').getAttribute('src')").startswith("assets/arcade/racer/"), "«поиграем в гонку» — сразу игра")
     # каждая игра запускается и играет без ошибок (светлая и тёмная оболочка); «Играть» — первая кнопка на заставке
-    for gid in ("glow", "blocks", "candy", "merge", "tictac", "crossword", "words", "sudoku", "fifteen", "reversi", "plane", "bip", "bricks", "snake", "racer"):
+    for gid in ("glow", "pairs", "five", "blocks", "candy", "merge", "tictac", "crossword", "words", "sudoku", "fifteen", "reversi", "plane", "bip", "bricks", "snake", "racer"):
         gp = b.new_page(viewport={"width": 420, "height": 860}); ge = []; gp.on("pageerror", lambda e, ge=ge: ge.append(str(e)))
         gp.route(re.compile(r"^https?://"), lambda r: r.abort())
         gp.goto((ARC / gid / "index.html").as_uri() + ("?light=1" if gid in ("sudoku", "fifteen") else "")); gp.wait_for_timeout(700)
@@ -92,6 +94,20 @@ with sync_playwright() as p:
             gp.keyboard.press(k); gp.wait_for_timeout(120)
         gp.mouse.click(210, 430); gp.wait_for_timeout(300)
         ok(not ge and gp.evaluate("window.__game && window.__game.playing !== undefined"), f"«{gid}»: запускается и играет без ошибок {ge[:1]}")
+        gp.close()
+    # 24.10, владелец: «Блоки выглядят странновато» → «нравится, как сделал для тетриса, и для других так же» — в широком
+    # окне (лист «Досуг» на компьютере) у каждой игры своя раскладка 1280×720; на телефоне (книжное окно) — прежняя 720×1280
+    for gid in ("blocks", "candy", "merge", "fifteen", "sudoku", "reversi", "tictac", "crossword", "words", "snake", "plane", "bricks", "racer", "glow", "five", "pairs"):
+        gp = b.new_page(viewport={"width": 772, "height": 560}); ge = []; gp.on("pageerror", lambda e, ge=ge: ge.append(str(e)))
+        gp.route(re.compile(r"^https?://"), lambda r: r.abort())
+        gp.goto((ARC / gid / "index.html").as_uri() + "?light=1"); gp.wait_for_timeout(600)
+        wide = gp.evaluate("__game.W") == 1280 and gp.evaluate("__game.H") == 720
+        gp.click("#aGo"); gp.wait_for_timeout(300)
+        for k in ("ArrowLeft", "ArrowUp", "ArrowRight", "Space", "ArrowDown"):
+            gp.keyboard.press(k); gp.wait_for_timeout(100)
+        bx = gp.query_selector("canvas").bounding_box()
+        gp.mouse.click(bx["x"] + bx["width"] * .5, bx["y"] + bx["height"] * .5); gp.wait_for_timeout(250)
+        ok(wide and not ge and bx["width"] > 640, f"«{gid}» в широком окне: своя раскладка 1280×720, поле {int(bx['width'])} px шириной, без ошибок {ge[:1]}")
         gp.close()
     # 24.10, владелец: «игра должна занимать ширину блока», «окна белые размытые» — поле в широком окне «разлито» цветами
     # своих краёв, экраны меню — в тон игры (тёмная Бип — тёмное стекло и в светлой теме Dewiar)

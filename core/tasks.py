@@ -146,7 +146,7 @@ ACT_RU = {"write_file": "пишу файл", "read_file": "читаю файл",
           "finish": "подвожу итог", "code_run": "запускаю в проекте", "code_edit": "правлю код", "code_read": "читаю код",
           "remember": "записываю в блокнот", "notes": "обновляю блокнот", "notify": "сообщаю вам", "wait": "жду и вернусь"}
 # инструменты чата, которые не нужны внутри задачи
-SKIP_IN_TASK = {"start_task", "task_status", "stop_task", "resume_task", "tell_task", "call_persona", "write_diary"}
+SKIP_IN_TASK = {"start_task", "task_status", "stop_task", "remove_task", "resume_task", "tell_task", "call_persona", "write_diary"}
 ACT_RU.update(spawn_parts="раздаю части помощникам", wait_parts="жду части", code_process="смотрю фоновый процесс",
               code_undo="откатываю правку", code_search="ищу в коде", code_diff="проверяю изменения")
 

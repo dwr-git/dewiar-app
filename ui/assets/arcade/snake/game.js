@@ -2,9 +2,13 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280;
-const COLS = 15, ROWS = 24, CELL = 44;
-const FX0 = (W - COLS * CELL) / 2, FY0 = 168;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: поле по-настоящему широкое (20×14 клеток того же
+   размера) во всю высоту между живыми изгородями; слева — таблички «Очки» и «Уровень», справа — «Фрукты», «Рекорд»
+   и подсказка управления. Змейка стартует слева и ползёт вправо. Книжная — как прежде (15×24). */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280;
+const COLS = LAND ? 20 : 15, ROWS = LAND ? 14 : 24, CELL = 44;
+const FX0 = (W - COLS * CELL) / 2, FY0 = LAND ? (H - ROWS * CELL) / 2 : 168;
 const OUT = '#24502f';
 const DIRS = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 const FRUITS = ['apple', 'strawberry', 'cherry', 'grape'];
@@ -17,6 +21,15 @@ const cy = (y) => FY0 + y * CELL + CELL / 2;
 function makeDecor() {
   const d = [];
   const flowerCols = ['#ff7aa8', '#ffd43b', '#ffffff', '#b38cff', '#ff9f5a'];
+  if (LAND) {                                    // широкое окно: цветы и камешки на газонах слева и справа
+    const fr = FX0 + COLS * CELL;
+    for (const side of [0, 1]) {
+      const x0 = side ? fr + 16 : 14, x1 = side ? W - 14 : FX0 - 16;
+      for (let i = 0; i < 16; i++) d.push({ kind: 'flower', x: A.rand(x0, x1), y: A.rand(48, H - 48), r: A.rand(6, 10), c: A.pick(flowerCols), rot: Math.random() * 6 });
+      for (let i = 0; i < 5; i++) d.push({ kind: 'pebble', x: A.rand(x0, x1), y: A.rand(56, H - 56), r: A.rand(5, 9) });
+    }
+    return d;
+  }
   for (let i = 0; i < 22; i++) d.push({ kind: 'flower', x: A.rand(14, W - 14), y: A.rand(FY0 + ROWS * CELL + 14, H - 12), r: A.rand(7, 11), c: A.pick(flowerCols), rot: Math.random() * 6 });
   for (let i = 0; i < 10; i++) d.push({ kind: 'pebble', x: A.rand(14, W - 14), y: A.rand(FY0 + ROWS * CELL + 16, H - 10), r: A.rand(5, 9) });
   for (let i = 0; i < 14; i++) d.push({ kind: 'flower', x: A.rand(20, W - 20), y: A.rand(132, FY0 - 12), r: A.rand(6, 9), c: A.pick(flowerCols), rot: Math.random() * 6 });
@@ -109,12 +122,17 @@ function drawRock(ctx, r) {
 
 /* ---------------- состояние ---------------- */
 function newSnake() {
+  if (LAND) {                                    // широкое поле: слева посередине, головой вправо
+    const sx = 5, sy = 7;
+    const cur = [{ x: sx, y: sy }, { x: sx - 1, y: sy }, { x: sx - 2, y: sy }, { x: sx - 3, y: sy }];
+    return { cur, prev: cur.map((c) => ({ ...c })), dir: 'right', queue: [], grow: 0, acc: 0, bulges: [] };
+  }
   const sx = 7, sy = 16;
   const cur = [{ x: sx, y: sy }, { x: sx, y: sy + 1 }, { x: sx, y: sy + 2 }, { x: sx, y: sy + 3 }];
   return { cur, prev: cur.map((c) => ({ ...c })), dir: 'up', queue: [], grow: 0, acc: 0, bulges: [] };
 }
 function fresh(mode) {
-  const s = { mode, score: 0, shown: 0, eaten: 0, stage: 1, snake: newSnake(), food: null, bonus: null, rocks: [], banner: null, dead: 0, blinkT: 2, tongue: 0, look: { x: 0, y: -1 }, bonusCount: 0 };
+  const s = { mode, score: 0, shown: 0, eaten: 0, stage: 1, snake: newSnake(), food: null, bonus: null, rocks: [], banner: null, dead: 0, blinkT: 2, tongue: 0, look: LAND ? { x: 1, y: 0 } : { x: 0, y: -1 }, bonusCount: 0 };
   S = s;
   spawnFood();
   return s;
@@ -421,7 +439,9 @@ function drawField(ctx, g) {
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#2f7d46'); bg.addColorStop(.12, '#4a9d4f'); bg.addColorStop(1, '#3f8f45');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  if (LAND) landGarden(ctx);
   // шапка — живая изгородь
+  else {
   ctx.fillStyle = '#2a6b3d';
   for (let x = -20; x < W + 40; x += 46) { ctx.beginPath(); ctx.arc(x, 128, 34, 0, Math.PI * 2); ctx.fill(); }
   ctx.fillStyle = '#34804a';
@@ -430,6 +450,7 @@ function drawField(ctx, g) {
   const sky = ctx.createLinearGradient(0, 0, 0, 110);
   sky.addColorStop(0, '#1d4a2c'); sky.addColorStop(1, '#2a6b3d');
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, 112);
+  }
   for (const d of DECOR) {
     if (d.kind === 'flower') drawFlower(ctx, d, g.t);
     else { ctx.beginPath(); ctx.ellipse(d.x, d.y, d.r, d.r * .7, 0, 0, Math.PI * 2); ctx.fillStyle = '#c9c2b5'; ctx.fill(); ctx.beginPath(); ctx.ellipse(d.x - d.r * .3, d.y - d.r * .25, d.r * .35, d.r * .2, 0, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fill(); }
@@ -457,8 +478,8 @@ function drawField(ctx, g) {
 }
 function drawFly(ctx, f, t) {
   const tt = t * .23 + f.ph;
-  const x = W / 2 + Math.sin(tt * 1.3) * 300 + Math.sin(tt * 3.1) * 40;
-  const y = 640 + Math.sin(tt * .9 + 1) * 520 + Math.cos(tt * 2.7) * 30;
+  const x = W / 2 + Math.sin(tt * 1.3) * (LAND ? 560 : 300) + Math.sin(tt * 3.1) * 40;
+  const y = (LAND ? H / 2 : 640) + Math.sin(tt * .9 + 1) * (LAND ? 300 : 520) + Math.cos(tt * 2.7) * 30;
   const flap = Math.abs(Math.sin(t * 14 + f.ph));
   ctx.save(); ctx.translate(x, y); ctx.rotate(Math.cos(tt * 1.3) * .4);
   ctx.globalAlpha = .9;
@@ -471,11 +492,51 @@ function drawFly(ctx, f, t) {
   ctx.beginPath(); ctx.ellipse(0, 0, 2.5, 9, 0, 0, Math.PI * 2); ctx.fillStyle = OUT; ctx.fill();
   ctx.restore(); ctx.globalAlpha = 1;
 }
+/* широкое окно: живые изгороди сверху и снизу во всю ширину */
+function landGarden(ctx) {
+  for (const [y0, k] of [[0, 1], [H, -1]]) {
+    ctx.fillStyle = '#2a6b3d';
+    for (let x = -20; x < W + 40; x += 46) { ctx.beginPath(); ctx.arc(x, y0 + k * 2, 30, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#34804a';
+    for (let x = 3; x < W + 40; x += 46) { ctx.beginPath(); ctx.arc(x, y0 + k * 8, 23, 0, Math.PI * 2); ctx.fill(); }
+  }
+}
+/* деревянная табличка на двух столбиках — как вывеска «Змейка» */
+function woodSign(ctx, x, y, w, h) {
+  ctx.save(); ctx.globalAlpha = .2; ctx.fillStyle = '#1d3d1a'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 4, y + h + 30, w * .42, 7, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  ctx.lineWidth = 4; ctx.strokeStyle = '#6b4226'; ctx.fillStyle = '#9a6537';
+  for (const px of [x + w * .26, x + w * .74]) { A.rr(ctx, px - 6, y + h - 12, 12, 42, 5); ctx.fill(); ctx.stroke(); }
+  A.rr(ctx, x, y, w, h, 20); ctx.fillStyle = '#c98a4b'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#6b4226'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; A.rr(ctx, x + 10, y + 8, w - 20, 14, 7); ctx.fill();
+}
+function hudLand(ctx, g) {
+  const LX = FX0 / 2, RX = W - FX0 / 2, sw = 164, lab = { size: 22, weight: 800, color: '#fff7e0', stroke: '#6b4226', strokeW: 6 };
+  const sc = Math.round(S.shown).toLocaleString('ru-RU');
+  woodSign(ctx, LX - sw / 2, 74, sw, 128);
+  A.text(ctx, 'Очки', LX, 106, lab);
+  A.text(ctx, sc, LX, 156, { size: sc.length > 5 ? 38 : 46, color: '#fff', stroke: OUT, strokeW: 9 });
+  woodSign(ctx, LX - sw / 2, 270, sw, 116);
+  A.text(ctx, 'Уровень', LX, 302, lab);
+  A.text(ctx, String(S.stage), LX, 348, { size: 44, color: '#fff', stroke: OUT, strokeW: 9 });
+  woodSign(ctx, RX - sw / 2, 74, sw, 128);
+  A.text(ctx, 'Фрукты', RX, 106, lab);
+  drawFruit(ctx, 'apple', RX - 36, 154, 1.1, g.t);
+  A.text(ctx, '× ' + S.eaten, RX - 10, 156, { align: 'left', size: 38, color: '#fff', stroke: OUT, strokeW: 8 });
+  woodSign(ctx, RX - sw / 2, 270, sw, 116);
+  A.text(ctx, 'Рекорд', RX, 302, lab);
+  const best = Math.max(g.best || 0, S.score).toLocaleString('ru-RU');
+  A.text(ctx, best, RX, 348, { size: best.length > 5 ? 32 : 38, color: '#ffe066', stroke: OUT, strokeW: 8 });
+  const tip = A.isTouch ? ['Проведите', 'пальцем'] : ['Стрелки', 'или WASD'];
+  tip.forEach((l, i) => A.text(ctx, l, RX, 590 + i * 32, { size: 22, weight: 700, color: '#d8ffc2', stroke: OUT, strokeW: 6 }));
+}
 function drawHud(ctx, g) {
+  if (LAND) hudLand(ctx, g);
+  else {
   A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), 32, 58, { align: 'left', size: 46, color: '#fff', stroke: OUT, strokeW: 9 });
   A.text(ctx, 'Уровень ' + S.stage, 34, 100, { align: 'left', size: 22, weight: 700, color: '#d8ffc2', stroke: OUT, strokeW: 6 });
   drawFruit(ctx, 'apple', W - 150, 60, 1.1, g.t);
   A.text(ctx, '× ' + S.eaten, W - 122, 62, { align: 'left', size: 38, color: '#fff', stroke: OUT, strokeW: 8 });
+  }
   if (S.banner) {
     const t = S.banner.t, k = t < .35 ? A.ease.outBack(t / .35) : 1, a = t > 1.6 ? 1 - (t - 1.6) / .4 : 1;
     ctx.save(); ctx.globalAlpha = Math.max(0, a); ctx.translate(W / 2, H * .4); ctx.scale(k, k);
@@ -502,7 +563,7 @@ function draw(ctx, g) {
   for (const f of FLIES) drawFly(ctx, f, t);
   if (S.mode !== 'title') drawHud(ctx, g);
   else {
-    ctx.save(); ctx.translate(W / 2, 62); ctx.rotate(Math.sin(t * 1.2) * .02);
+    ctx.save(); ctx.translate(W / 2, LAND ? 48 : 62); ctx.rotate(Math.sin(t * 1.2) * .02);
     A.rr(ctx, -150, -40, 300, 80, 22); ctx.fillStyle = '#c98a4b'; ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#6b4226'; ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,.18)'; A.rr(ctx, -140, -32, 280, 16, 8); ctx.fill();
     A.text(ctx, 'Змейка', 0, 3, { size: 48, weight: 900, color: '#fff7e0', stroke: '#6b4226', strokeW: 8 });
@@ -511,7 +572,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'snake', tone: 'light', title: 'Змейка', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'snake', tone: 'light', title: 'Змейка', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'garden',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> или <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> — поворот · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или <b>WASD</b> — поворот',

@@ -2,7 +2,16 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: небо во всю ширину, поле-«окошко» посередине во
+   всю высоту (мир прежний, книжный 720×1280, только уменьшен), слева — очки, волна, залп и жизни крупно, справа —
+   рекорд, подсказка управления и облачко-болельщик. Узкое окно (телефон) — как было. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = 720, H = 1280;                                // мир игры — всегда книжный
+const SW = LAND ? 1280 : W, SH = LAND ? 720 : H;        // холст
+const FS = LAND ? SH / H : 1, FW = W * FS, FH = H * FS; // поле на холсте: во всю высоту, посередине
+const FX = (SW - FW) / 2, FY = (SH - FH) / 2;
+/* боковые колонки — у краёв: карточка меню в листе «Досуг» (~770 px) закрывает x ≈ 250…1030, y ≈ 175…550 */
+const PW = 218, LCX = 26 + PW / 2, RCX = SW - 26 - PW / 2;
 const OUT = '#2b2550';
 let S = null;
 
@@ -336,9 +345,38 @@ function updateClouds(dt, mul) {
   }
 }
 
+/* широкое окно: касания и мышь — в координаты мира (поле уменьшено и сдвинуто) */
+function wIn(inp) {
+  if (!LAND) return inp;
+  const p = inp.pointer, k = 1 / FS, wx = (x) => (x - FX) * k, wy = (y) => (y - FY) * k;
+  return {
+    down: (n) => inp.down(n), pressed: (n) => inp.pressed(n), swipe: inp.swipe,
+    get mouseActive() { return inp.mouseActive; }, set mouseActive(v) { inp.mouseActive = v; },
+    tap: inp.tap && { x: wx(inp.tap.x), y: wy(inp.tap.y) },
+    pointer: Object.assign({}, p, { x: wx(p.x), y: wy(p.y), sx: wx(p.sx), sy: wy(p.sy), dx: p.dx * k, dy: p.dy * k })
+  };
+}
+/* широкое окно: облака по сторонам от поля (в координатах холста) */
+const SKY = [];
+if (LAND) {
+  for (let i = 0; i < 10; i++) {
+    const c = makeCloud(i % 3 === 2 ? 1 : 0);
+    c.x = skyX(i % 2 === 0); c.y = A.rand(-60, SH + 60);
+    c.s *= .62; c.speed *= .32; SKY.push(c);
+  }
+}
+function skyX(left) { return left ? A.rand(FX - 170, FX - 50) : A.rand(FX + FW + 50, FX + FW + 170); }   // между колонкой и полем
+function updateSky(dt, mul) {
+  for (const c of SKY) {
+    c.y += c.speed * dt * mul;
+    if (c.y - 90 * c.s > SH) { c.y = -90 * c.s - A.rand(0, 120); c.x = skyX(c.x < SW / 2); }
+  }
+}
+
 function update(g, dt) {
-  const inp = g.input, p = S.p;
+  const inp = wIn(g.input), p = S.p;
   updateClouds(dt, S.mode === 'title' ? .6 : 1);
+  if (LAND) updateSky(dt, S.mode === 'title' ? .6 : 1);
   if (S.banner) { S.banner.t += dt; if (S.banner.t > 2) S.banner = null; }
   S.shown += (S.score - S.shown) * Math.min(1, dt * 8);
 
@@ -478,6 +516,7 @@ function drawSky(ctx, g) {
   const gr = ctx.createLinearGradient(0, 0, 0, H);
   gr.addColorStop(0, '#4fb8ff'); gr.addColorStop(.55, '#9fe0ff'); gr.addColorStop(1, '#fff0d6');
   ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  if (LAND) return;                                     // солнце в широком окне — на холсте, справа вверху
   const sun = ctx.createRadialGradient(W - 120, 120, 10, W - 120, 120, 320);
   sun.addColorStop(0, 'rgba(255,255,240,.85)'); sun.addColorStop(.25, 'rgba(255,250,220,.35)'); sun.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = sun; ctx.fillRect(0, 0, W, H);
@@ -503,13 +542,15 @@ function drawBullet(ctx, b, t) {
   ctx.beginPath(); ctx.arc(b.x - 2, b.y - 2, b.r * .42, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
 }
 function drawHud(ctx, g) {
-  A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), 30, 56, { align: 'left', size: 46, color: '#fff', stroke: OUT, strokeW: 9 });
-  for (let i = 0; i < 5; i++) {
-    A.rr(ctx, 32 + i * 30, 92, 24, 12, 6);
-    ctx.fillStyle = i < S.power ? '#ffd43b' : 'rgba(43,37,80,.35)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+  if (!LAND) {                                          // в широком окне очки, залп и жизни — на боковых панелях
+    A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), 30, 56, { align: 'left', size: 46, color: '#fff', stroke: OUT, strokeW: 9 });
+    for (let i = 0; i < 5; i++) {
+      A.rr(ctx, 32 + i * 30, 92, 24, 12, 6);
+      ctx.fillStyle = i < S.power ? '#ffd43b' : 'rgba(43,37,80,.35)'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+    }
+    for (let i = 0; i < Math.max(3, S.lives); i++) A.heart(ctx, W - 46 - i * 50, 58, 44, i < S.lives ? '#ff4f7b' : 'rgba(43,37,80,.3)', OUT);
   }
-  for (let i = 0; i < Math.max(3, S.lives); i++) A.heart(ctx, W - 46 - i * 50, 58, 44, i < S.lives ? '#ff4f7b' : 'rgba(43,37,80,.3)', OUT);
   if (S.boss && S.boss.y > 100) {
     const b = S.boss, k = Math.max(0, b.hp / b.maxhp);
     A.rr(ctx, 120, 128, W - 240, 20, 10); ctx.fillStyle = 'rgba(43,37,80,.5)'; ctx.fill();
@@ -525,7 +566,7 @@ function drawHud(ctx, g) {
   }
 }
 
-function draw(ctx, g) {
+function drawWorld(ctx, g) {
   const t = g.t, p = S.p;
   drawSky(ctx, g);
   for (const c of S.clouds) if (c.layer < 2) drawCloud(ctx, c);
@@ -552,15 +593,135 @@ function draw(ctx, g) {
   for (const c of S.clouds) if (c.layer === 2) drawCloud(ctx, c);
   if (S.mode !== 'title') drawHud(ctx, g);
 }
+/* ---------------- широкое окно ---------------- */
+const LABEL = { size: 24, weight: 700, color: 'rgba(43,37,80,.62)' };
+function plate(ctx, x, y, w, h) {                      // мягкая «облачная» плашка под надписями
+  A.rr(ctx, x, y, w, h, 28); ctx.fillStyle = 'rgba(255,255,255,.58)'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.stroke();
+}
+function fitText(ctx, str, x, y, o, maxW) {             // крупное число, которое не вылезет за плашку
+  ctx.font = `${o.weight || 800} ${o.size}px ${A.FONT}`;
+  const w = ctx.measureText(str).width, k = w > maxW ? maxW / w : 1;
+  A.text(ctx, str, x, y, Object.assign({}, o, { size: o.size * k, strokeW: (o.strokeW || 9) * Math.max(.7, k) }));
+}
+function keycap(ctx, x, y, label) {
+  const s = 46;
+  A.rr(ctx, x - s / 2, y - s / 2 + 5, s, s, 12); ctx.fillStyle = 'rgba(43,37,80,.25)'; ctx.fill();
+  A.rr(ctx, x - s / 2, y - s / 2, s, s, 12); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+  A.text(ctx, label, x, y + 1, { size: 24, weight: 800, color: OUT });
+}
+function drawFriend(ctx, x, y, look, t) {             // облачко-болельщик: смотрит на самолёт
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = '#cfe0f7'; for (const [ox, oy, r] of [[-44, 10, 38], [0, -12, 50], [44, 10, 38], [0, 20, 40]]) { ctx.beginPath(); ctx.arc(ox, oy + 8, r, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = '#fff'; for (const [ox, oy, r] of [[-44, 10, 38], [0, -12, 50], [44, 10, 38], [0, 20, 40]]) { ctx.beginPath(); ctx.arc(ox, oy, r, 0, Math.PI * 2); ctx.fill(); }
+  const blink = (t % 3.6) > 3.45;
+  ctx.fillStyle = OUT;
+  for (const ex of [-17, 17]) { ctx.beginPath(); if (blink) ctx.ellipse(ex + look, 4, 7, 1.6, 0, 0, Math.PI * 2); else ctx.ellipse(ex + look, 2, 6.5, 8.5, 0, 0, Math.PI * 2); ctx.fill(); }
+  if (!blink) { ctx.fillStyle = '#fff'; for (const ex of [-17, 17]) { ctx.beginPath(); ctx.arc(ex + look - 2, -1, 2.4, 0, Math.PI * 2); ctx.fill(); } }
+  ctx.fillStyle = 'rgba(255,143,177,.6)'; ctx.beginPath(); ctx.arc(-34 + look, 18, 8, 0, Math.PI * 2); ctx.arc(34 + look, 18, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(look, 16, 9, .15 * Math.PI, .85 * Math.PI); ctx.lineWidth = 3.5; ctx.strokeStyle = OUT; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.restore();
+}
+function drawRainbow(ctx, x, y, t) {
+  ctx.save(); ctx.lineCap = 'butt';
+  ['#ff8fb1', '#ffb35c', '#ffe066', '#8ce99a', '#74c0fc', '#b197fc'].forEach((c, i) => {
+    ctx.beginPath(); ctx.arc(x, y, 92 - i * 11, Math.PI, Math.PI * 2); ctx.lineWidth = 11.5; ctx.strokeStyle = c; ctx.globalAlpha = .82; ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+  for (const sx of [-1, 1]) {
+    const cx = x + sx * 64, cy = y + 4 + Math.sin(t * 1.4 + sx) * 3;
+    ctx.fillStyle = '#cfe0f7'; for (const [ox, oy, r] of [[-26, 6, 22], [0, -6, 28], [26, 6, 22]]) { ctx.beginPath(); ctx.arc(cx + ox, cy + oy + 6, r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#fff'; for (const [ox, oy, r] of [[-26, 6, 22], [0, -6, 28], [26, 6, 22]]) { ctx.beginPath(); ctx.arc(cx + ox, cy + oy, r, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+function drawLand(ctx, g) {
+  const t = g.t, p = S.p;
+  // небо во всю ширину — то же, что в поле
+  const gr = ctx.createLinearGradient(0, 0, 0, SH);
+  gr.addColorStop(0, '#4fb8ff'); gr.addColorStop(.55, '#9fe0ff'); gr.addColorStop(1, '#fff0d6');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, SW, SH);
+  const sun = ctx.createRadialGradient(SW - 110, 70, 10, SW - 110, 70, 300);
+  sun.addColorStop(0, 'rgba(255,255,240,.85)'); sun.addColorStop(.25, 'rgba(255,250,220,.35)'); sun.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sun; ctx.fillRect(0, 0, SW, SH);
+  for (const c of SKY) drawCloud(ctx, c);
+  // поле: мир во всю высоту; вокруг — то же небо, чуть в дымке, края поля — мягкий свет
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(0, 0, SW, SH);
+  for (const [x0, dir] of [[FX, -1], [FX + FW, 1]]) {
+    const sh = ctx.createLinearGradient(x0, 0, x0 + dir * 26, 0);
+    sh.addColorStop(0, 'rgba(27,58,107,.16)'); sh.addColorStop(1, 'rgba(27,58,107,0)');
+    ctx.fillStyle = sh; ctx.fillRect(Math.min(x0, x0 + dir * 26), 0, 26, SH);
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(FX, FY, FW, FH); ctx.clip();
+  ctx.translate(FX, FY); ctx.scale(FS, FS);
+  drawWorld(ctx, g);
+  if (g.fxWorld) g.fxWorld(ctx);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(FX - 3, 0, 3, SH); ctx.fillRect(FX + FW, 0, 3, SH);
+  // слева: очки, волна, залп, жизни
+  const lx = LCX, px = lx - PW / 2;
+  plate(ctx, px, 26, PW, S.shield > 0 ? 556 : 480);
+  A.text(ctx, 'Очки', lx, 66, LABEL);
+  fitText(ctx, Math.round(S.shown).toLocaleString('ru-RU'), lx, 122, { size: 64, color: '#fff', stroke: OUT, strokeW: 12, weight: 900 }, PW - 30);
+  A.text(ctx, 'Волна ' + S.wave, lx, 190, { size: 32, color: '#ffe066', stroke: OUT, strokeW: 9 });
+  A.text(ctx, 'Залп', lx, 262, LABEL);
+  for (let i = 0; i < 5; i++) {
+    A.rr(ctx, lx - 93 + i * 38, 288, 34, 20, 10);
+    ctx.fillStyle = i < S.power ? '#ffd43b' : 'rgba(43,37,80,.25)'; ctx.fill();
+    ctx.lineWidth = 3.5; ctx.strokeStyle = OUT; ctx.stroke();
+  }
+  A.text(ctx, 'Жизни', lx, 366, LABEL);
+  const n = Math.max(3, S.lives), hs = Math.min(58, 160 / (n - 1));
+  for (let i = 0; i < n; i++) A.heart(ctx, lx + (i - (n - 1) / 2) * hs, 414, n > 3 ? 38 : 52, i < S.lives ? '#ff4f7b' : 'rgba(43,37,80,.28)', OUT);
+  if (S.shield > 0) {
+    A.text(ctx, 'Щит', lx, 482, { size: 24, weight: 700, color: '#1f86c9' });
+    A.rr(ctx, lx - 88, 506, 176, 20, 10); ctx.fillStyle = 'rgba(43,37,80,.25)'; ctx.fill();
+    A.rr(ctx, lx - 88, 506, 176 * Math.min(1, S.shield / 10), 20, 10); ctx.fillStyle = '#5fd3ff'; ctx.fill();
+    A.rr(ctx, lx - 88, 506, 176, 20, 10); ctx.lineWidth = 3.5; ctx.strokeStyle = OUT; ctx.stroke();
+  }
+  // справа: рекорд, управление
+  const rx = RCX, rp = rx - PW / 2;
+  plate(ctx, rp, 26, PW, 140);
+  A.text(ctx, 'Рекорд', rx, 66, LABEL);
+  fitText(ctx, (g.best || 0).toLocaleString('ru-RU'), rx, 116, { size: 48, color: '#fff', stroke: OUT, strokeW: 10, weight: 900 }, PW - 30);
+  plate(ctx, rp, 186, PW, 318);
+  A.text(ctx, 'Полёт', rx, 224, LABEL);
+  if (A.isTouch) {
+    A.text(ctx, 'ведите', rx, 282, { size: 26, weight: 800, color: OUT });
+    A.text(ctx, 'пальцем', rx, 316, { size: 26, weight: 800, color: OUT });
+    A.text(ctx, 'по экрану', rx, 362, { size: 22, weight: 600, color: 'rgba(43,37,80,.75)' });
+  } else {
+    keycap(ctx, rx, 268, '↑');
+    keycap(ctx, rx - 54, 322, '←'); keycap(ctx, rx, 322, '↓'); keycap(ctx, rx + 54, 322, '→');
+    A.text(ctx, 'или мышь', rx, 382, { size: 24, weight: 800, color: OUT });
+  }
+  ctx.fillStyle = 'rgba(43,37,80,.14)'; ctx.fillRect(rx - 70, 414, 140, 2);
+  A.text(ctx, 'Стрельба', rx, 444, LABEL);
+  A.text(ctx, 'автоматическая', rx, 476, { size: 21, weight: 700, color: OUT });
+  // слева внизу — радуга на облачках, справа — облачко-болельщик: смотрит на самолёт
+  drawRainbow(ctx, LCX, 668, t);
+  const fx = rx, fy = 618 + Math.sin(t * 1.6) * 7;
+  drawFriend(ctx, fx, fy, A.clamp((FX + p.x * FS - fx) / 300, -1, 1) * 5, t);
+}
+function draw(ctx, g) {
+  if (LAND) drawLand(ctx, g); else drawWorld(ctx, g);
+}
 
 A.game({
-  id: 'plane', tone: 'light', title: 'Небесный пилот', width: W, height: H, orientation: 'portrait', music: 'sky',
+  id: 'plane', tone: 'light', title: 'Небесный пилот', width: SW, height: SH, orientation: LAND ? 'landscape' : 'portrait', music: 'sky',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> или мышь — полёт · стрельба автоматическая · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или <b>мышь</b> — полёт, пушки стреляют сами',
     touch: 'Ведите пальцем по экрану — самолёт полетит следом'
   },
-  init(g) { S = fresh(); window.__planeS = () => S; titleScreen(g); },
+  init(g) {
+    if (LAND) {                                         // эффекты — в координатах мира: рисуем их внутри поля, надписи крупнее
+      const fxDraw = g.fx.draw.bind(g.fx), fxText = g.fx.text.bind(g.fx);
+      g.fx.draw = () => {}; g.fxWorld = fxDraw;
+      g.fx.text = (x, y, str, o = {}) => fxText(x, y, str, Object.assign({}, o, { size: (o.size || 34) * 1.35, rise: (o.rise || 70) * 1.2 }));
+    }
+    S = fresh(); window.__planeS = () => S; titleScreen(g);
+  },
   update, draw
 });
 })();

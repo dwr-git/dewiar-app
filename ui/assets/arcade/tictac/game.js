@@ -5,13 +5,19 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280;
+/* Широкое окно (лист «Досуг» на компьютере) — лист в клетку на всю ширину: поле 3×3 слева во всю высоту (линии поля
+   легли на клетки тетради), справа название, счёт, подсказки и памятка «крестик — две черты, нолик — петля».
+   Рисунок пальцем/мышью распознаётся по тем же BX/BY/CELL. Узкое (телефон) — как было. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280;
 const PAPER = '#fbf9f2', LINE = 'rgba(80,130,210,.16)', MARGIN = 'rgba(226,90,110,.45)';
 const PEN = '#2848b0', PENCIL = '#7a52c9', INK = '#283055';
-const BX = 90, BY = 360, CELL = 180;
+const BX = LAND ? 110 : 90, BY = LAND ? 60 : 360, CELL = LAND ? 200 : 180;
+const COL = 770, COL_W = 420;                 // правая колонка широкой раскладки (до красной черты полей)
 const LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
 const rnd = (a, b) => a + Math.random() * (b - a);
 let S = null, T = { you: 0, lira: 0, draw: 0, streak: 0, sym: '', round: 0 };
+let MINI = null;                              // наброски для памятки (только широкая раскладка — не трогаем случайность книжной)
 
 /* ---------------- рисованные штрихи ---------------- */
 function wobble(x1, y1, x2, y2, n, amp) {
@@ -184,6 +190,38 @@ function update(g, dt) {
   }
 }
 
+/* текст в несколько строк по ширине; возвращает y под последней строкой */
+function wrapText(ctx, str, x, y, maxW, lh, o) {
+  ctx.font = `${o.weight || 800} ${o.size}px ${A.FONT}`;
+  const lines = []; let cur = '';
+  for (const w of String(str).split(' ')) { const t = cur ? cur + ' ' + w : w; if (cur && ctx.measureText(t).width > maxW) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur);
+  lines.forEach((l, i) => A.text(ctx, l, x, y + i * lh, o));
+  return y + lines.length * lh;
+}
+function drawSide(ctx) {
+  const x0 = COL, soft = 'rgba(40,48,85,.5)';
+  A.text(ctx, 'Крестики-нолики', x0, 98, { align: 'left', size: 44, weight: 900, color: INK });
+  if (S.mode === 'play') {
+    A.text(ctx, 'Вы', x0 + 2, 178, { align: 'left', size: 30, weight: 700, color: PEN });
+    A.text(ctx, T.you + ' : ' + T.lira, x0 + 100, 178, { size: 40, weight: 900, color: INK });
+    A.text(ctx, 'Лира', x0 + 156, 178, { align: 'left', size: 30, weight: 700, color: PENCIL });
+    if (T.draw) A.text(ctx, 'ничьих ' + T.draw, x0 + COL_W, 178, { align: 'right', size: 22, weight: 600, color: 'rgba(40,48,85,.45)' });
+    const col = S.warn > 0 ? '#c2410c' : S.over ? (S.over.who === 'p' ? PEN : S.over.who === 'l' ? PENCIL : INK) : INK;
+    const y1 = wrapText(ctx, S.msg, x0, 280, COL_W, 44, { align: 'left', size: 34, weight: 800, color: col });
+    const sub = S.over ? (S.overT > 1 ? 'Коснитесь листа — новый раунд' : '') : S.turn === 'p' ? (T.sym ? 'Вы играете ' + (T.sym === 'x' ? 'крестиками' : 'ноликами') + ' · рисуйте или коснитесь клетки' : 'Рисуйте прямо в клетке — пальцем или мышью') : '';
+    if (sub) wrapText(ctx, sub, x0, y1 + 6, COL_W, 32, { align: 'left', size: 22, weight: 600, color: soft });
+  }
+  // памятка: как рисовать знаки (а когда знак выбран — чей какой)
+  if (!MINI) MINI = { x: handX(), o: handO() };
+  const pick = S.mode === 'play' && T.sym;
+  [['x', 'крестик', 'две черты'], ['o', 'нолик', 'петля']].forEach(([sym, name, how], k) => {
+    const bx = x0 + k * 214, by = 556, mine = pick && T.sym === sym;
+    inkStrokes(ctx, MINI[sym], pick ? (mine ? PEN : PENCIL) : INK, 6, 1, bx, by, 84);
+    A.text(ctx, name, bx + 96, by + 30, { align: 'left', size: 26, weight: 800, color: pick ? (mine ? PEN : PENCIL) : INK });
+    A.text(ctx, pick ? (mine ? 'это вы' : 'это Лира') : how, bx + 96, by + 62, { align: 'left', size: 21, weight: 600, color: soft });
+  });
+}
 function draw(ctx, g) {
   ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
   ctx.lineWidth = 2; ctx.strokeStyle = LINE; ctx.beginPath();
@@ -191,8 +229,8 @@ function draw(ctx, g) {
   for (let y = 20; y < H; y += 40) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
   ctx.stroke();
   ctx.strokeStyle = MARGIN; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(W - 70, 0); ctx.lineTo(W - 70, H); ctx.stroke();
-  A.text(ctx, 'Крестики-нолики', 50, 112, { align: 'left', size: 50, weight: 900, color: INK });
-  if (S.mode === 'play') {
+  if (LAND) drawSide(ctx); else A.text(ctx, 'Крестики-нолики', 50, 112, { align: 'left', size: 50, weight: 900, color: INK });
+  if (S.mode === 'play' && !LAND) {
     A.text(ctx, 'Вы', 52, 196, { align: 'left', size: 30, weight: 700, color: PEN });
     A.text(ctx, T.you + ' : ' + T.lira, 150, 196, { size: 40, weight: 900, color: INK });
     A.text(ctx, 'Лира', 206, 196, { align: 'left', size: 30, weight: 700, color: PENCIL });
@@ -218,7 +256,7 @@ function draw(ctx, g) {
   }
   // подпись снизу
   const my = BY + 3 * CELL + 110;
-  if (S.mode === 'play') {
+  if (S.mode === 'play' && !LAND) {
     A.text(ctx, S.msg, W / 2 - 30, my, { size: 36, weight: 800, color: S.warn > 0 ? '#c2410c' : S.over ? (S.over.who === 'p' ? PEN : S.over.who === 'l' ? PENCIL : INK) : INK });
     const sub = S.over ? (S.overT > 1 ? 'Коснитесь листа — новый раунд' : '') : S.turn === 'p' ? (T.sym ? 'Вы играете ' + (T.sym === 'x' ? 'крестиками' : 'ноликами') + ' · рисуйте или коснитесь клетки' : 'замкнутая петля — нолик, две черты — крестик') : '';
     if (sub) A.text(ctx, sub, W / 2 - 30, my + 52, { size: 23, weight: 600, color: 'rgba(40,48,85,.5)' });
@@ -226,7 +264,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'tictac', tone: 'light', title: 'Крестики-нолики', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'tictac', tone: 'light', title: 'Крестики-нолики', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'garden',
   help: { desktop: 'Рисуйте мышью в клетке · стрелки и <kbd>Enter</kbd> — поставить знак', short: 'Нарисуйте знак в клетке', touch: 'Рисуйте пальцем крестик или нолик в клетке' },
   init(g) { titleScreen(g); window.__tictac = () => ({ S, T }); },
   update, draw

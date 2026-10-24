@@ -4,7 +4,11 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280, N = 8, CELL = 80, BX = (W - N * CELL) / 2, BY = 330;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: доска посередине во всю высоту, слева —
+   название, очки, ходы и конфетки-друзья, справа — банка звёзд, рекорд и подсказка. Книжная — как была. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280, N = 8, CELL = LAND ? 74 : 80, BX = (W - N * CELL) / 2, BY = LAND ? 64 : 330;
+const CL = 165, CR = W - 165;                   // широкая: середины левой и правой колонок
 const INK = '#5a2a4a';
 const KINDS = [
   { c: ['#ff8fab', '#e83e6c'], shape: 'heart' }, { c: ['#ffd56b', '#f5a623'], shape: 'star' }, { c: ['#9ee6a0', '#3fbf6a'], shape: 'drop' },
@@ -69,7 +73,7 @@ function startClear(g, hit) {
   if (S.mode === 'play') {
     g.sfx('pling', { pitch: 1 + S.chain * .12, vol: .7 });
     g.fx.text(BX + (sx / hit.size + .5) * CELL, BY + (sy / hit.size + .5) * CELL, '+' + pts, { size: 30 + Math.min(4, S.chain) * 4, color: '#fff' });
-    if (S.chain >= 3) { g.sfx('coin'); g.fx.text(W / 2, BY - 30, ['Сладко!', 'Вкусно!', 'Конфетно!', 'Ого-го!'][Math.min(3, S.chain - 3)], { size: 52, color: '#ffe066' }); }
+    if (S.chain >= 3) { g.sfx('coin'); g.fx.text(W / 2, LAND ? BY + 60 : BY - 30, ['Сладко!', 'Вкусно!', 'Конфетно!', 'Ого-го!'][Math.min(3, S.chain - 3)], { size: 52, color: '#ffe066' }); }
   }
   S.phase = 'clear'; S.t = 0;
 }
@@ -180,14 +184,55 @@ function candy(ctx, k, x, y, s, t) {
   ctx.beginPath(); ctx.arc(0, r * .2, r * .13, .15 * Math.PI, .85 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(70,25,50,.8)'; ctx.stroke();
   ctx.restore();
 }
+/* широкая раскладка: боковые колонки */
+function card(ctx, x, y, w, h, val, lbl, vs = 44) {
+  A.rr(ctx, x, y, w, h, 30); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fill();
+  A.text(ctx, val, x + w / 2, y + h * .44, { size: vs, weight: 900, color: INK });
+  A.text(ctx, lbl, x + w / 2, y + h * .8, { size: 21, weight: 600, color: 'rgba(90,42,74,.55)' });
+}
+function sides(ctx, g, t) {
+  const play = S.mode !== 'title';
+  // слева: название, очки и ходы, конфетки-друзья
+  A.text(ctx, 'Конфетки', CL, 104, { size: 50, weight: 900, color: '#fff', stroke: INK, strokeW: 10 });
+  if (play) {
+    card(ctx, CL - 120, 162, 240, 112, Math.round(S.shown).toLocaleString('ru-RU'), 'очки');
+    card(ctx, CL - 120, 294, 240, 112, String(S.moves), S.moves <= 5 && S.mode === 'play' ? 'ходов — скоро конец' : 'ходов');
+  } else {
+    A.text(ctx, 'три в ряд', CL, 164, { size: 26, weight: 700, color: 'rgba(90,42,74,.6)' });
+  }
+  const bob = (k) => Math.sin(t * 2.2 + k) * 6;
+  candy(ctx, 1, CL - 80, 574 + bob(1), 1.25, t);
+  candy(ctx, 2, CL + 82, 580 + bob(2.4), 1.2, t);
+  candy(ctx, 0, CL, 530 + bob(0), 1.75, t);
+  // справа: банка звёзд, рекорд, подсказка
+  const px = CR - 125, top = 64, ph = 384;
+  A.rr(ctx, px, top, 250, ph, 30); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fill();
+  A.text(ctx, 'звёзды', CR, top + 38, { size: 22, weight: 700, color: 'rgba(90,42,74,.55)' });
+  const bx = px + 52, bw = 28, by0 = top + 84, by1 = top + ph - 34, bh = by1 - by0, k = Math.min(1, S.shown / STARS[2]);
+  A.rr(ctx, bx, by0, bw, bh, bw / 2); ctx.fillStyle = 'rgba(255,225,238,.9)'; ctx.fill();
+  if (k > 0) {
+    const fh = Math.max(bw, bh * k);
+    A.rr(ctx, bx, by1 - fh, bw, fh, bw / 2); const gr = ctx.createLinearGradient(0, by1, 0, by0); gr.addColorStop(0, '#ff8fab'); gr.addColorStop(1, '#ffd56b'); ctx.fillStyle = gr; ctx.fill();
+  }
+  for (const s of STARS) {
+    const y = by1 - bh * s / STARS[2] + (s === STARS[2] ? 14 : 0), got = S.shown >= s;
+    ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.fillRect(bx + 4, y - 1.5, bw - 8, 3);
+    A.star(ctx, bx + bw + 40, y, 21, 5, .5); ctx.fillStyle = got ? '#ffd84d' : '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+    A.text(ctx, s.toLocaleString('ru-RU'), bx + bw + 74, y + 1, { align: 'left', size: 26, weight: 800, color: got ? INK : 'rgba(90,42,74,.45)' });
+  }
+  card(ctx, px, 472, 250, 104, Math.max(g.best || 0, S.mode === 'title' ? 0 : S.score).toLocaleString('ru-RU'), 'рекорд', 38);
+  const tip = A.isTouch ? ['Потяните конфету', 'к соседке'] : ['Перетащите конфету', 'или щёлкните', 'две соседние'];
+  tip.forEach((l, i) => A.text(ctx, l, CR, 618 + i * 28 - (tip.length - 2) * 14, { size: 21, weight: 500, color: 'rgba(90,42,74,.6)' }));
+}
 function draw(ctx, g) {
   S.sc = g.scale; const t = g.t;
   const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#ffe3ef'); bg.addColorStop(1, '#e9e1ff');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 18; i++) { ctx.globalAlpha = .35; ctx.beginPath(); ctx.arc((i * 137) % W, (i * 271 + t * 12) % H, 10 + (i % 4) * 6, 0, Math.PI * 2); ctx.fillStyle = ['#fff', '#ffd1e3', '#d9ccff'][i % 3]; ctx.fill(); }
+  for (let i = 0; i < (LAND ? 28 : 18); i++) { ctx.globalAlpha = .35; ctx.beginPath(); ctx.arc((i * 137) % W, (i * 271 + t * 12) % H, 10 + (i % 4) * 6, 0, Math.PI * 2); ctx.fillStyle = ['#fff', '#ffd1e3', '#d9ccff'][i % 3]; ctx.fill(); }
   ctx.globalAlpha = 1;
-  A.text(ctx, 'Конфетки', W / 2, 96, { size: 62, weight: 900, color: '#fff', stroke: INK, strokeW: 12 });
-  if (S.mode !== 'title') {
+  if (LAND) sides(ctx, g, t);
+  else A.text(ctx, 'Конфетки', W / 2, 96, { size: 62, weight: 900, color: '#fff', stroke: INK, strokeW: 12 });
+  if (!LAND && S.mode !== 'title') {
     for (const [i, lbl, val] of [[0, 'очки', Math.round(S.shown).toLocaleString('ru-RU')], [1, 'ходов', String(S.moves)]]) {
       const x = i ? W / 2 + 20 : W / 2 - 260, y = 150;
       A.rr(ctx, x, y, 240, 96, 30); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fill();
@@ -218,11 +263,11 @@ function draw(ctx, g) {
   ctx.restore();
   if (S.sel) { A.rr(ctx, BX + S.sel.x * CELL + 2, BY + S.sel.y * CELL + 2, CELL - 4, CELL - 4, 20); ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.stroke(); }
   if (S.mode === 'play' && !g.input.mouseActive && !A.isTouch) { A.rr(ctx, BX + S.cur.x * CELL + 4, BY + S.cur.y * CELL + 4, CELL - 8, CELL - 8, 18); ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.strokeStyle = INK; ctx.stroke(); ctx.setLineDash([]); }
-  A.text(ctx, A.isTouch ? 'Потяните конфету к соседке' : 'Перетащите конфету или щёлкните две соседние', W / 2, BY + N * CELL + 70, { size: 24, weight: 500, color: 'rgba(90,42,74,.6)' });
+  if (!LAND) A.text(ctx, A.isTouch ? 'Потяните конфету к соседке' : 'Перетащите конфету или щёлкните две соседние', W / 2, BY + N * CELL + 70, { size: 24, weight: 500, color: 'rgba(90,42,74,.6)' });
 }
 
 A.game({
-  id: 'candy', tone: 'light', title: 'Конфетки', width: W, height: H, orientation: 'portrait', music: 'candy',
+  id: 'candy', tone: 'light', title: 'Конфетки', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'candy',
   help: { desktop: 'Перетащите конфету к соседней · или <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> и <kbd>Пробел</kbd> · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: 'Перетащите конфету к соседней', touch: 'Потяните конфету к соседке — три одинаковых лопнут' },
   init(g) { titleScreen(g); window.__candy = () => S; },
   update, draw

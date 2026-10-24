@@ -4,12 +4,17 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280, ROWS = 6, LEN = 5;
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: плитки слева во всю высоту, справа — название,
+   подсказка о цветах и клавиатура. Книжная — как прежде. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = LAND ? 1280 : 720, H = LAND ? 720 : 1280, ROWS = 6, LEN = 5;
 const WORDS = 'абзац автор агент адрес актер акула акция аллея алмаз ангел апорт арбуз арена афиша багаж бадья базар бакен балда балет банан банда банка баран барон басня батон башня берег бетон бидон бизон билет битва благо блеск блоха блюдо бобер бокал ботва бочка бровь бубен будка буква булка бурав буран бутон буфер бухта вагон вальс ванна варка ватка вафля вдова веник венок верба весло весна ветер ветка вечер взлет видео вилка вилла винил вирус вишня влага вобла вожак вождь вожжи вокал волна вопль ворон ворот ворох время вывод выдра вьюга газон гайка галка гамак гамма гараж гений герой гетры глина говор голос гомон гонец горка горох гость грань грива гриль гроза груша гряда гуашь губка гусли дамба дверь дебри дебют девиз декор диван дичок дождь доска драма древо дрова дубок дудка дуэль дымок дятел ежиха жажда жакет жених жетон живот жилет жираф забор завод загар заказ закат залив замок запас запах заряд зачет звено зверь зебра зелье земля зенит зерно зефир злато знамя игрок икона индюк искра кабан кадка казак кайма какао калач камин канат капля капот карта касса катер каток кашне каюта кварц кефир киоск кисет кисть класс клерк клоун книга кобра козел колос комар конек копия короб кость котел кофта кошка кража крона кросс крыло крыша кубик кукла кулак кулон купол кураж курок кусок кухня лазер лампа лапша ласка лента лесок лиана лидер лилия лимит лимон линия лодка ложка локон лотос лунка лучик лыжня магия майка майор малыш манго манеж марка маска масло мачта медик мелок метла метод метро мечта мираж миска модем мойка молот мороз мотив мотор мохер мышка мэрия мюсли набор навес навык нарды народ насос наука недра нерпа нефть нитка ножик ножны нолик норка норма носок оазис обзор образ обруч обувь овраг огонь океан оклад окрас олень опера опора орган осень отвар отдых отель отряд отчет охота очерк пакет палас палец палка панда папка парад парик парта парус паста пасха пауза пачка певец пемза пенал пепел перец песня петух печка пилот пирог пицца пламя плита повар поезд показ полка помпа порох почта право приют проза птица пудра пульс пурга пушка пчела пьеса радио разум рамка раунд рация ребус режим рейка роман рубин рубка рукав рулет ручей ручка рыбак рынок рысак сабля сайка салат салют самба сахар свеча свита сеанс север седло семья сетка сироп скала скрип слава слива слово смена смесь сокол сосна сотня спина спица спорт ссора стадо сталь старт стена стиль столб стриж ступа судно судья сукно сумка сфера сцена сырок табло тайга тайна такси танец тапок тачка театр тезис тембр тенор тепло терем тесто товар толпа точка трава тракт трель тропа туман тумба тунец тыква тюбик уголь удача узник уклон улица устье факел факир фасад ферма фильм финиш фокус форма фраза фрукт фужер хакер халва хвост химия холод хомяк хорал хорек хруст хурма цапля цифра чайка чалма чашка черта чехол чудак шалаш шапка шарик шахта шашка шланг шорох шпага шпиль шрифт штиль штора шутка шхуна щенок щиток экран эскиз ягода якорь ямщик ярлык ясень'.split(' ');
 const BG = '#dbe5f1', DARK = '#b8c5d6', LIGHT = '#f7fbff', INK = '#24324a', MUTED = 'rgba(36,50,74,.55)';
 const GOOD = '#4cbf8c', NEAR = '#f2b84b', NO = '#9aa7ba';
 const KB = ['йцукенгшщзхъ', 'фывапролджэ', '↵ячсмитьбю⌫'];
-const TX = 110, TY = 250, TS = 92, TG = 14;
+const TX = LAND ? 60 : 110, TY = LAND ? 78 : 250, TS = LAND ? 84 : 92, TG = LAND ? 12 : 14;
+const TR = LAND ? 20 : 22, TF = LAND ? 46 : 50;           // скругление и буква плитки
+const P = { x: 600, w: 620 };                            // широкое окно: правая колонка
 let S = null, SC = 1, KEYS = [];
 
 function fresh(mode, streak = 0) {
@@ -99,11 +104,23 @@ function soft(ctx, x, y, w, h, r, d0, fill) {
   A.rr(ctx, x, y, w, h, r); ctx.fillStyle = fill || BG; ctx.fill();
   ctx.shadowColor = LIGHT; ctx.shadowOffsetX = -d * .7; ctx.shadowOffsetY = -d * .7; ctx.fill(); ctx.restore();
 }
+/* широкое окно: что значат цвета — три плитки с подписями */
+function legend(ctx) {
+  const cx = P.x + P.w / 2, y = 262, s = 60, gap = 190;
+  [['К', GOOD, 'на своём месте'], ['О', NEAR, 'есть, но не здесь'], ['Т', NO, 'нет в слове']].forEach(([ch, col, cap], i) => {
+    const x = cx + (i - 1) * gap;
+    A.rr(ctx, x - s / 2, y, s, s, 16); ctx.fillStyle = col; ctx.fill();
+    A.text(ctx, ch, x, y + s / 2 + 2, { size: 34, weight: 800, color: '#fff' });
+    A.text(ctx, cap, x, y + s + 28, { size: 20, weight: 600, color: MUTED });
+  });
+}
 function draw(ctx, g) {
   SC = g.scale; const t = g.t;
   ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
-  A.text(ctx, 'Пять букв', W / 2, 104, { size: 60, weight: 900, color: INK });
-  A.text(ctx, S.mode === 'play' ? (S.streak ? 'серия: ' + S.streak : 'угадайте слово') : 'угадайте слово из пяти букв', W / 2, 172, { size: 24, weight: 500, color: MUTED });
+  const hx = LAND ? P.x + P.w / 2 : W / 2, hy = LAND ? -2 : 0;      // шапка: в широком окне — над правой колонкой
+  A.text(ctx, 'Пять букв', hx, 104 + hy, { size: 60, weight: 900, color: INK });
+  A.text(ctx, S.mode === 'play' ? (S.streak ? 'серия: ' + S.streak : 'угадайте слово') : 'угадайте слово из пяти букв', hx, 172 + hy, { size: 24, weight: 500, color: MUTED });
+  if (LAND) legend(ctx);
   for (let r = 0; r < ROWS; r++) {
     const word = r < S.rows.length ? S.rows[r] : r === S.rows.length ? S.cur : '';
     const sx = r === S.rows.length && S.shake > 0 ? Math.sin(S.shake * 60) * 10 * S.shake : 0;
@@ -112,33 +129,34 @@ function draw(ctx, g) {
       let m = r < S.marks.length ? S.marks[r][i] : null, sy = 1;
       if (S.flip && S.flip.row === r) { const k = (S.flip.t - i * .18) / .3; if (k < 0) m = null; else if (k < 1) { sy = Math.abs(Math.cos(k * Math.PI)); if (k < .5) m = null; } }
       ctx.save(); ctx.translate(x + TS / 2, y + TS / 2); ctx.scale(1, Math.max(.05, sy)); ctx.translate(-x - TS / 2, -y - TS / 2);
-      if (m) { A.rr(ctx, x, y, TS, TS, 22); ctx.fillStyle = m === 'good' ? GOOD : m === 'near' ? NEAR : NO; ctx.fill(); }
-      else soft(ctx, x, y, TS, TS, 22, ch ? 9 : 5);
-      if (ch) A.text(ctx, ch.toUpperCase(), x + TS / 2, y + TS / 2 + 3, { size: 50, weight: 800, color: m ? '#fff' : INK });
+      if (m) { A.rr(ctx, x, y, TS, TS, TR); ctx.fillStyle = m === 'good' ? GOOD : m === 'near' ? NEAR : NO; ctx.fill(); }
+      else soft(ctx, x, y, TS, TS, TR, ch ? 9 : 5);
+      if (ch) A.text(ctx, ch.toUpperCase(), x + TS / 2, y + TS / 2 + 3, { size: TF, weight: 800, color: m ? '#fff' : INK });
       ctx.restore();
     }
   }
   // клавиатура
   KEYS = [];
-  const ky0 = TY + ROWS * (TS + TG) + 40, kh = 78, kg = 8;
+  const ky0 = LAND ? TY + ROWS * (TS + TG) - TG - 3 * 74 - 2 * 8 : TY + ROWS * (TS + TG) + 40, kh = LAND ? 74 : 78, kg = 8;
+  const kcx = LAND ? P.x + P.w / 2 : W / 2, kww = LAND ? P.w : W - 40;
   KB.forEach((row, ri) => {
-    const chars = [...row], kw = (W - 40 - kg * 11) / 12;
+    const chars = [...row], kw = (kww - kg * 11) / 12;
     const wide = (ch) => (ch === '↵' || ch === '⌫') ? kw * 1.5 + kg / 2 : kw;
     const tot = chars.reduce((a, ch) => a + wide(ch), 0) + kg * (chars.length - 1);
-    let x = (W - tot) / 2; const y = ky0 + ri * (kh + kg);
+    let x = kcx - tot / 2; const y = ky0 + ri * (kh + kg);
     for (const ch of chars) {
       const w = wide(ch), st = S.keys[ch];
       if (st) { A.rr(ctx, x, y, w, kh, 16); ctx.fillStyle = st === 'good' ? GOOD : st === 'near' ? NEAR : '#c3ccd9'; ctx.fill(); }
       else soft(ctx, x, y, w, kh, 16, 5);
-      A.text(ctx, ch === '↵' ? '✓' : ch === '⌫' ? '⌫' : ch.toUpperCase(), x + w / 2, y + kh / 2 + 2, { size: ch.length && /[а-я]/.test(ch) ? 30 : 34, weight: 700, color: st && st !== 'no' ? '#fff' : st === 'no' ? 'rgba(36,50,74,.45)' : INK });
+      A.text(ctx, ch === '↵' ? '✓' : ch === '⌫' ? '⌫' : ch.toUpperCase(), x + w / 2, y + kh / 2 + 2, { size: (ch.length && /[а-я]/.test(ch) ? 30 : 34) - (LAND ? 2 : 0), weight: 700, color: st && st !== 'no' ? '#fff' : st === 'no' ? 'rgba(36,50,74,.45)' : INK });
       KEYS.push({ x, y, w, h: kh, ch }); x += w + kg;
     }
   });
-  if (S.msgT > 0) { const a = Math.min(1, S.msgT / .3); ctx.globalAlpha = a; soft(ctx, W / 2 - 170, 196, 340, 44, 22, 4); A.text(ctx, S.msg, W / 2, 219, { size: 22, weight: 700, color: INK }); ctx.globalAlpha = 1; }
+  if (S.msgT > 0) { const a = Math.min(1, S.msgT / .3); ctx.globalAlpha = a; soft(ctx, hx - 170, 196 + hy, 340, 44, 22, 4); A.text(ctx, S.msg, hx, 219 + hy, { size: 22, weight: 700, color: INK }); ctx.globalAlpha = 1; }
 }
 
 A.game({
-  id: 'words', tone: 'light', title: 'Пять букв', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'words', tone: 'light', title: 'Пять букв', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'garden',
   keys: { Enter: 'none', Space: 'none', KeyA: 'none', KeyD: 'none', KeyW: 'none', KeyS: 'none', KeyZ: 'none', KeyX: 'none', KeyJ: 'none', KeyK: 'none', KeyL: 'none', KeyM: 'none', KeyP: 'none', ArrowLeft: 'none', ArrowRight: 'none', ArrowUp: 'none', ArrowDown: 'none' },
   help: { desktop: 'Печатайте слово — раскладка любая · <kbd>Enter</kbd> — проверить · <kbd>Backspace</kbd> — стереть', short: 'Печатайте слово и нажмите <b>Enter</b>', touch: 'Набирайте слово на клавиатуре внизу и нажмите ✓' },
   init(g) { titleScreen(g); window.__words = () => S; },

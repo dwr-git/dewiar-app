@@ -186,10 +186,22 @@ def set_card_base(w, h):
     return w, h
 
 
+NVIDIA_PROC = "/proc/driver/nvidia/version"
+
+
+def nvidia_driver():
+    """Загружен ли собственный драйвер NVIDIA (и при гибридной графике тоже)."""
+    return os.path.exists(NVIDIA_PROC)
+
+
 def composited_x11():
     """Можно ли сделать виджет прозрачным окном (гладкие скругления вместо ступенек формы X Shape): X11 с
-    композитором (GNOME, KDE, Xfce с compositing). Выключить — ui.hud_smooth: false или DEWIAR_HUD_SOLID=1."""
-    if os.environ.get("DEWIAR_HUD_SOLID") == "1" or ui_settings().get("hud_smooth") is False:
+    композитором (GNOME, KDE, Xfce с compositing). Выключить — ui.hud_smooth: false (студия → «Оформление») или
+    DEWIAR_HUD_SOLID=1. №234 (24.10, Альт 11.2, гибридная графика NVIDIA): «GUI вокруг аватара проявляется на долю
+    секунды раз в 20–30 секунд… при наведении элементы вспыхивают на один кадр и пропадают» — прозрачное окно на
+    драйвере NVIDIA показывало только что перерисованное (портрет), фон и кнопки — лишь при полной перерисовке.
+    С драйвером NVIDIA — сплошное окно с формой X Shape, как до прозрачности (углы чуть ступенькой, зато всё видно)."""
+    if os.environ.get("DEWIAR_HUD_SOLID") == "1" or ui_settings().get("hud_smooth") is False or nvidia_driver():
         return False
     try:
         import gi
@@ -2037,7 +2049,8 @@ class Api:
                 mx, my, mw, mh = g.x, g.y, g.width, g.height
         except Exception:  # noqa: BLE001
             pass
-        side = "left" if cx + cw / 2 > mx + mw / 2 else "right"
+        pref = self._pad_pref_side()
+        side = pref if pref in ("left", "right") else ("left" if cx + cw / 2 > mx + mw / 2 else "right")
         x = cx - gap - w if side == "left" else cx + cw
         if x < mx or x + w + gap > mx + mw:                # с этой стороны не помещается — с другой
             side = "right" if side == "left" else "left"
@@ -2052,6 +2065,19 @@ class Api:
         clips = [(min(hi, max(lo, top + int(ch * k) - clip // 2)), clip) for k in (0.2, 0.8)] if hi > lo else []
         clips = [c for i, c in enumerate(clips) if not i or c[0] - clips[i - 1][0] >= 2 * clip]
         return {"x": int(x), "y": int(y), "w": w, "h": h, "side": side, "gap": gap, "clips": clips, "dy": dy}
+
+    def _pad_pref_side(self):
+        """Сторона блокнота, выбранная кнопкой ⇄ на его панели (ui.pad_side: "left" | "right"), или "auto" — к середине
+        экрана. Владелец 24.10: «редактор стал справа от Лиры, раньше был слева — можно переключать?» Не помещается
+        с выбранной стороны — встаёт с другой (_pad_geom)."""
+        s = getattr(self, "_pad_side_pref", None)
+        if s is None:
+            try:
+                s = ui_settings().get("pad_side") or "auto"
+            except Exception:  # noqa: BLE001
+                s = "auto"
+            self._pad_side_pref = s
+        return s
 
     def _pad_base(self):
         """Свой размер листа при масштабе 100 % ([ш, в] или [None, None] — как задумано). Читается из настроек один раз."""
@@ -2089,6 +2115,22 @@ class Api:
             [round(max(PAD_W_MIN, min(PAD_W_MAX, float(w) / z))), round(max(PAD_H_MIN, float(h) / z))]
         g = self._pad_geom()
         self._pad_g, self._pad_side = g, g["side"]
+        self._pad_apply(g, final)
+        return list(self._pad_size)
+
+    def pad_flip(self):
+        """Кнопка ⇄ на панели блокнота: лист — на другую сторону от виджета, и так впредь (pad.js сохраняет ui.pad_side).
+        -> сторона, где лист оказался (если с той стороны не поместился — прежняя)."""
+        cur = getattr(self, "_pad_side", None) or self._pad_geom()["side"]
+        self._pad_side_pref = "right" if cur == "left" else "left"
+        g = self._pad_geom()
+        self._pad_g, self._pad_side = g, g["side"]
+        self._pad_apply(g, True)
+        return g["side"]
+
+    def _pad_apply(self, g, final=False):
+        """Окно блокнота — по геометрии g: размер, место у виджета, форма; final — и страница (стороной и креплениями)."""
+        z = ZOOM[0] or 1.0
         W, H = g["w"] + g["gap"], g["h"]
         try:
             if WIN:
@@ -2127,7 +2169,6 @@ class Api:
                 self._pad_js(self._pad_cfg_js(g))
         except Exception as e:  # noqa: BLE001
             print(f"Размер блокнота: {e}", file=sys.stderr)
-        return list(self._pad_size)
 
     def pad_state(self):
         win = getattr(self, "_pad", None)
@@ -2762,6 +2803,8 @@ def main():
     set_card_base(uis.get("hud_w") or CARD_DEFAULT[0], uis.get("hud_h") or CARD_DEFAULT[1])   # свой размер карточки
     set_zoom_sizes(uis.get("zoom"))                          # окна виджета — под масштаб интерфейса
     TRANSPARENT[0] = composited_x11()                        # гладкие скругления, если есть композитор
+    if not TRANSPARENT[0] and nvidia_driver():
+        _ui_log("виджет: сплошное окно (драйвер NVIDIA — прозрачное мигало, №234)")
     mode = "card"                                            # шарика больше нет: сохранённый hud_mode «mini» — тоже карточка
     x, y = uis.get("hud_x"), uis.get("hud_y")                 # положение карточки
     if x is None or y is None:

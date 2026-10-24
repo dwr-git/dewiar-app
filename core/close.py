@@ -41,6 +41,14 @@ def _rx_text(rx, name):
     return f" [реакции: {', '.join(parts)}]" if parts else ""
 
 
+def _mark_text(m, mk):
+    """Моё письмо: дошло ли и прочитано ли — для модели («Андрей прочитал?»). Старые письма без номера — ничего."""
+    sid = _int((m or {}).get("sid"))
+    if not m.get("out") or not sid or not isinstance(mk, (list, tuple)) or len(mk) != 2:
+        return ""
+    return " [прочитано]" if _int(mk[1]) >= sid else " [доставлено, ещё не прочитано]" if _int(mk[0]) >= sid else " [ещё не доставлено — его Dewiar не забирал почту]"
+
+
 def _int(v):
     """Число из чужих данных: не число — 0 (кривое сообщение не должно ронять приём)."""
     try:
@@ -153,6 +161,8 @@ class Close:
         d.setdefault("hist", {})
         d.setdefault("unread", {})
         d.setdefault("seen_mid", [])
+        d.setdefault("marks", {})                # pid -> [доставлено до, прочитано до] — номера моих писем в его ящике (sid)
+        d.setdefault("read_up", {})              # pid -> до какого номера его письма уже отмечены прочитанными на сервере
         return d
 
     def _save(self):
@@ -234,7 +244,7 @@ class Close:
 
     def state(self):
         with self._lock:
-            people = [dict(p, unread=int(self.st["unread"].get(p["pid"], 0)),
+            people = [dict(p, unread=int(self.st["unread"].get(p["pid"], 0)), marks=list((self.st.get("marks") or {}).get(p["pid"]) or [0, 0]),
                            last=(self.st["hist"].get(p["pid"]) or [{}])[-1]) for p in self.st["people"]]
             out = {"me": self.st.get("me") or {}, "people": people, "offers": list(self.st.get("offers") or []),
                    "error": self.error, "invite": self.st.get("invite") or None,
@@ -304,7 +314,28 @@ class Close:
             if mark_read and self.st["unread"].pop(pid, None):
                 self._save()
                 self.host.emit("close", state=self.state())
-            return list(self.st["hist"].get(pid) or [])
+            h = list(self.st["hist"].get(pid) or [])
+        if mark_read:
+            self._mark_read(pid, h)
+        return h
+
+    def _mark_read(self, pid, h=None):
+        """Переписку открыли (или помощница прочитала её вслух) — близкому «прочитано»: его письма до последнего номера
+        (24.10, владелец: «не понятно, прочитал ли человек сообщение, дошло ли оно»). Сервер видит только номер."""
+        h = h if h is not None else list(self.st["hist"].get(pid) or [])
+        top = max([int(m.get("sid") or 0) for m in h if not m.get("out")] or [0])
+        if top <= int(self.st.setdefault("read_up", {}).get(pid) or 0):
+            return
+
+        def run():
+            try:
+                self._req("POST", "/close/seen", {"peer": pid, "upto": top})
+                with self._lock:
+                    self.st["read_up"][pid] = max(top, int(self.st["read_up"].get(pid) or 0))
+                    self._save()
+            except Exception as e:  # noqa: BLE001 — старый сайт без /close/seen или нет связи: попробуем в следующий раз
+                log.debug("близкие: «прочитано» не ушло: %s", e)
+        threading.Thread(target=run, daemon=True).start()
 
     def set_name(self, name):
         self.host.s.update({"close": {"name": (name or "").strip()[:40]}})
@@ -568,7 +599,8 @@ class Close:
         d = self._req("POST", "/close/send", {"to": p["pid"], "env": env, "kind": kind}).json()
         if kind != "msg":
             return d
-        item = {"mid": body["mid"], "ts": body["ts"], "out": True, "t": body["t"], "f": [dict(x, path=str(Path(f).resolve())) for x, f in zip(fl, files or [])]}
+        item = {"mid": body["mid"], "ts": body["ts"], "out": True, "t": body["t"], "f": [dict(x, path=str(Path(f).resolve())) for x, f in zip(fl, files or [])],
+                "sid": _int(d.get("id"))}                 # номер письма у близкого: по нему «доставлено» и «прочитано»
         self._add(p["pid"], item)
         log.info("💌 Близким: %s ← %s", p["name"], f"текст, {len(body['t'])} зн." if body["t"] else "файл")   # содержимое — не в журнал
         return item
@@ -646,9 +678,17 @@ class Close:
             self._save()
         if self.st.get("natt"):
             self._natt_kick()
+        marks = d.get("marks")
+        if isinstance(marks, dict):                  # мои письма у близких: доставлено / прочитано до номера
+            mk = {str(k): [_int(v[0]), _int(v[1])] for k, v in marks.items() if isinstance(v, list) and len(v) == 2}
+            if mk != self.st.get("marks"):
+                with self._lock:
+                    self.st["marks"] = mk
+                    self._save()
+                got = got or -1                      # сообщений нет, а отметки сменились — студии перерисовать
         if got:
             self.host.emit("close", state=self.state())
-        return got
+        return max(got, 0)
 
     def _take(self, it, priv, refreshed):
         """Одно входящее из ящика. -> (1, если новое сообщение — для счёта, обновлён ли список устройств)."""
@@ -699,7 +739,8 @@ class Close:
                 self.host.emit("close_react", pid=peer, mid=str(body["re"]), e=str(body.get("e") or "")[:8], name=it.get("name") or "")
             return 0, refreshed
         item = {"mid": body.get("mid") or str(it.get("id")), "ts": _int(body.get("ts")) or _int(it.get("ts")) * 1000, "out": bool(it.get("out")),
-                "t": str(body.get("t") or "")[:20000], "f": [x for x in body.get("f") or [] if isinstance(x, dict)][:10]}
+                "t": str(body.get("t") or "")[:20000], "f": [x for x in body.get("f") or [] if isinstance(x, dict)][:10],
+                "sid": _int(it.get("rid")) if it.get("out") else _int(it.get("id"))}   # номер письма в ящике получателя
         if body.get("wave"):
             item["wave"] = 1
         if not self._add(peer, item) or item["out"]:
@@ -923,8 +964,9 @@ class Close:
                 out.append((m.get("ts", 0), f"{time.strftime('%d.%m %H:%M', time.localtime(m.get('ts', 0) / 1000))} "
                                             f"{'вы → ' + p['name'] if m.get('out') else p['name']}: {m.get('t') or ''}"
                                             + (f" [файлы: {', '.join(x.get('name', '') for x in m.get('f') or [])}]" if m.get("f") else "")
-                                            + _rx_text(m.get("rx"), p["name"])))
+                                            + _rx_text(m.get("rx"), p["name"]) + _mark_text(m, (self.st.get("marks") or {}).get(p["pid"]))))
             self.st["unread"].pop(p["pid"], None)
+            self._mark_read(p["pid"])
         self._save()
         out.sort()
         return "\n".join(x for _, x in out[-n * 2:]) or "Сообщений пока нет."

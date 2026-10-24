@@ -2,7 +2,16 @@
 (() => {
 'use strict';
 const A = Arcade;
-const W = 720, H = 1280, OUT = '#2b2550';
+/* Широкое окно (лист «Досуг» на компьютере) — своя раскладка 1280×720: конфетный фон во всю ширину, поле между
+   полосатыми бортиками посередине во всю высоту (мир прежний, книжный, без верхней полосы очков), слева — очки,
+   уровень, жизни и бонусы, справа — рекорд, капсулы и управление. Узкое окно (телефон) — как было. */
+const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } catch (e) { return false; } })();
+const W = 720, H = 1280, OUT = '#2b2550';                // мир игры — всегда книжный
+const SW = LAND ? 1280 : W, SH = LAND ? 720 : H;          // холст
+const VY = LAND ? 110 : 0;                                // в широком окне мир виден с этой высоты (выше — бывшая полоса очков)
+const FS = SH / (H - VY), FW = W * FS, FX = (SW - FW) / 2, FY = -VY * FS;
+/* боковые колонки — у краёв: карточка меню в листе «Досуг» (~770 px) закрывает x ≈ 250…1030, y ≈ 175…550 */
+const PW = 218, LCX = 26 + PW / 2, RCX = SW - 26 - PW / 2;
 const COLS = 10, BW = 62, BH = 40, GAP = 6, LEFT = (W - (COLS * BW + (COLS - 1) * GAP)) / 2, TOP = 214;
 const WALL = 14, TOPWALL = 150, PADDLE_Y = 1130, PADDLE_H = 36, BALL_R = 16;
 const BASE_W = 150, WIDE_W = 236;
@@ -280,8 +289,20 @@ function moveBall(g, b, dt) {
   }
 }
 
+/* широкое окно: касания и мышь — в координаты мира (поле уменьшено и сдвинуто) */
+function wIn(inp) {
+  if (!LAND) return inp;
+  const p = inp.pointer, k = 1 / FS, wx = (x) => (x - FX) * k, wy = (y) => (y - FY) * k;
+  return {
+    down: (n) => inp.down(n), pressed: (n) => inp.pressed(n), swipe: inp.swipe,
+    get mouseActive() { return inp.mouseActive; }, set mouseActive(v) { inp.mouseActive = v; },
+    tap: inp.tap && { x: wx(inp.tap.x), y: wy(inp.tap.y) },
+    pointer: Object.assign({}, p, { x: wx(p.x), y: wy(p.y), sx: wx(p.sx), sy: wy(p.sy), dx: p.dx * k, dy: p.dy * k })
+  };
+}
+
 function update(g, dt) {
-  const P = S.P, inp = g.input;
+  const P = S.P, inp = wIn(g.input);
   if (S.banner) { S.banner.t += dt; if (S.banner.t > 2.2) S.banner = null; }
   S.shown += (S.score - S.shown) * Math.min(1, dt * 8);
   if (S.mode === 'over' || S.mode === 'clear') { tickFx(dt); return; }
@@ -490,6 +511,7 @@ function drawCap(ctx, c, t) {
   ctx.restore();
 }
 function drawHud(ctx, g) {
+  if (LAND) return;                                       // в широком окне — на боковых панелях
   A.text(ctx, Math.round(S.shown).toLocaleString('ru-RU'), 26, 56, { align: 'left', size: 46, color: '#fff', stroke: OUT, strokeW: 9 });
   A.text(ctx, 'Уровень ' + (S.level + 1), W / 2, 56, { size: 28, color: '#fff', stroke: OUT, strokeW: 7, weight: 700 });
   for (let i = 0; i < Math.max(3, S.lives); i++) A.heart(ctx, W - 40 - i * 46, 58, 40, i < S.lives ? '#ff4f7b' : 'rgba(43,37,80,.25)', OUT);
@@ -506,7 +528,7 @@ function drawHud(ctx, g) {
   });
 }
 
-function draw(ctx, g) {
+function drawWorld(ctx, g) {
   const t = g.t;
   drawBackground(ctx, t);
   drawRails(ctx);
@@ -518,7 +540,7 @@ function draw(ctx, g) {
     drawHud(ctx, g);
     if (S.mode === 'play' && S.balls.some((b) => b.stuck) && !g.paused) {
       ctx.globalAlpha = .6 + Math.sin(t * 5) * .4;
-      A.text(ctx, A.isTouch ? 'Коснитесь, чтобы запустить' : 'Пробел или клик — запустить', W / 2, PADDLE_Y - 120, { size: 30, color: '#fff', stroke: OUT, strokeW: 7, weight: 700 });
+      A.text(ctx, A.isTouch ? 'Коснитесь, чтобы запустить' : 'Пробел или клик — запустить', W / 2, PADDLE_Y - 120, LAND ? { size: 38, color: '#fff', stroke: OUT, strokeW: 9, weight: 700 } : { size: 30, color: '#fff', stroke: OUT, strokeW: 7, weight: 700 });
       ctx.globalAlpha = 1;
     }
   }
@@ -530,15 +552,154 @@ function draw(ctx, g) {
     ctx.restore();
   }
 }
+/* ---------------- широкое окно ---------------- */
+const LBG = LAND ? {                                      // фон по сторонам поля — свои пузыри и посыпка
+  bubbles: Array.from({ length: 16 }, () => ({ x: A.rand(0, SW), y: A.rand(0, SH), r: A.rand(24, 70), sp: A.rand(8, 20), ph: A.rand(0, 6) })),
+  sprinkles: Array.from({ length: 46 }, () => ({ x: A.rand(0, SW), y: A.rand(0, SH), rot: A.rand(0, 6), vr: A.rand(-.6, .6), sp: A.rand(10, 26), col: A.pick(['#ff8fb1', '#ffd43b', '#74c0fc', '#8ce99a', '#b197fc', '#ffa94d']) }))
+} : null;
+const LABEL = { size: 23, weight: 700, color: 'rgba(43,37,80,.6)' };
+function plate(ctx, x, y, w, h) {                        // сахарная плашка под надписями
+  ctx.save(); ctx.globalAlpha = .1; ctx.fillStyle = OUT; A.rr(ctx, x + 3, y + 7, w, h, 28); ctx.fill(); ctx.restore();
+  A.rr(ctx, x, y, w, h, 28); ctx.fillStyle = 'rgba(255,255,255,.66)'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+}
+function fitText(ctx, str, x, y, o, maxW) {               // крупное число, которое не вылезет за плашку
+  ctx.font = `${o.weight || 800} ${o.size}px ${A.FONT}`;
+  const w = ctx.measureText(str).width, k = w > maxW ? maxW / w : 1;
+  A.text(ctx, str, x, y, Object.assign({}, o, { size: o.size * k, strokeW: (o.strokeW || 9) * Math.max(.7, k) }));
+}
+function keycap(ctx, x, y, label) {
+  const s = 44;
+  A.rr(ctx, x - s / 2, y - s / 2 + 5, s, s, 12); ctx.fillStyle = 'rgba(43,37,80,.22)'; ctx.fill();
+  A.rr(ctx, x - s / 2, y - s / 2, s, s, 12); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+  A.text(ctx, label, x, y + 1, { size: 23, weight: 800, color: OUT });
+}
+function drawCandy(ctx, x, y, t) {                        // конфетка-болельщица в фантике: смотрит на мячик
+  const ball = S.balls.length ? S.balls.reduce((a, b) => (b.y > a.y ? b : a)) : null;
+  const look = ball ? A.clamp((FX + ball.x * FS - x) / 300, -1, 1) * 4 : 0;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 1.3) * .06);
+  ctx.lineJoin = 'round'; ctx.strokeStyle = OUT; ctx.lineWidth = 4;
+  for (const sx of [-1, 1]) {                             // хвостики фантика
+    ctx.beginPath(); ctx.moveTo(sx * 46, 0); ctx.lineTo(sx * 84, -28 + Math.sin(t * 3) * 3); ctx.quadraticCurveTo(sx * 74, 0, sx * 84, 28 - Math.sin(t * 3) * 3); ctx.closePath();
+    ctx.fillStyle = '#ffd6ec'; ctx.fill(); ctx.stroke();
+  }
+  const gr = ctx.createLinearGradient(0, -40, 0, 40); gr.addColorStop(0, '#ffa3b8'); gr.addColorStop(1, '#ff5c85');
+  ctx.beginPath(); ctx.ellipse(0, 0, 56, 42, 0, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+  ctx.save(); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.45)';
+  for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(k * 26 - 8, -44); ctx.lineTo(k * 26 + 4, -44); ctx.lineTo(k * 26 + 26, 44); ctx.lineTo(k * 26 + 14, 44); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.ellipse(-18, -24, 20, 7, -.2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.ellipse(0, 0, 56, 42, 0, 0, Math.PI * 2); ctx.stroke();
+  const blink = (t % 3.4) > 3.25;
+  for (const ex of [-16, 16]) {
+    if (blink) { ctx.beginPath(); ctx.moveTo(ex - 6, 0); ctx.lineTo(ex + 6, 0); ctx.lineWidth = 3; ctx.stroke(); continue; }
+    ctx.beginPath(); ctx.ellipse(ex, -2, 7, 8.5, 0, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(ex + look, 0, 4, 0, Math.PI * 2); ctx.fillStyle = OUT; ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(-32, 12, 6, 0, Math.PI * 2); ctx.arc(32, 12, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 12, 8, .15 * Math.PI, .85 * Math.PI); ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.restore();
+}
+function drawLand(ctx, g) {
+  const t = g.t;
+  // конфетный фон во всю ширину
+  const gr = ctx.createLinearGradient(0, 0, 0, SH);
+  gr.addColorStop(0, '#ffd6ec'); gr.addColorStop(.5, '#e7ddff'); gr.addColorStop(1, '#cfeaff');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, SW, SH);
+  for (const b of LBG.bubbles) {
+    const y = ((b.y - t * b.sp) % (SH + 160) + SH + 160) % (SH + 160) - 80, x = b.x + Math.sin(t * .5 + b.ph) * 14;
+    const rg = ctx.createRadialGradient(x - b.r * .3, y - b.r * .3, 2, x, y, b.r);
+    rg.addColorStop(0, 'rgba(255,255,255,.55)'); rg.addColorStop(.7, 'rgba(255,255,255,.12)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(x, y, b.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = .5;
+  for (const s of LBG.sprinkles) {
+    const y = ((s.y - t * s.sp) % (SH + 30) + SH + 30) % (SH + 30) - 15;
+    ctx.save(); ctx.translate(s.x, y); ctx.rotate(s.rot + t * s.vr);
+    A.rr(ctx, -6, -2, 12, 4, 2); ctx.fillStyle = s.col; ctx.fill(); ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  // поле: мир между бортиками, во всю высоту; мягкая тень вокруг
+  for (const [x0, dir] of [[FX, -1], [FX + FW, 1]]) {
+    const sh = ctx.createLinearGradient(x0, 0, x0 + dir * 22, 0);
+    sh.addColorStop(0, 'rgba(43,37,80,.16)'); sh.addColorStop(1, 'rgba(43,37,80,0)');
+    ctx.fillStyle = sh; ctx.fillRect(Math.min(x0, x0 + dir * 22), 0, 22, SH);
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(FX, 0, FW, SH); ctx.clip();
+  ctx.translate(FX, FY); ctx.scale(FS, FS);
+  drawWorld(ctx, g);
+  if (g.fxWorld) g.fxWorld(ctx);
+  ctx.restore();
+  const playing = !S.attract;
+  // слева: очки, уровень, жизни, бонусы
+  const lx = LCX, lp = lx - PW / 2;
+  plate(ctx, lp, 26, PW, 498);
+  A.text(ctx, 'Очки', lx, 62, LABEL);
+  fitText(ctx, Math.round(S.shown).toLocaleString('ru-RU'), lx, 114, { size: 62, color: '#fff', stroke: OUT, strokeW: 12, weight: 900 }, PW - 30);
+  A.text(ctx, 'Уровень ' + (S.level + 1), lx, 174, { size: 30, color: '#fff', stroke: OUT, strokeW: 8, weight: 800 });
+  A.text(ctx, LEVELS[S.level % LEVELS.length].name, lx, 208, { size: 22, weight: 700, color: '#e64980' });
+  A.text(ctx, 'Жизни', lx, 262, LABEL);
+  const n = Math.max(3, S.lives), hs = Math.min(56, 160 / (n - 1));
+  for (let i = 0; i < n; i++) A.heart(ctx, lx + (i - (n - 1) / 2) * hs, 306, n > 3 ? 38 : 50, i < S.lives ? '#ff4f7b' : 'rgba(43,37,80,.25)', OUT);
+  ctx.fillStyle = 'rgba(43,37,80,.12)'; ctx.fillRect(lx - 70, 346, 140, 2);
+  A.text(ctx, 'Бонусы', lx, 374, LABEL);
+  const act = [];
+  if (playing && S.P.wideT > 0) act.push(['wide', S.P.wideT / 15]);
+  if (playing && S.P.stickyT > 0) act.push(['sticky', S.P.stickyT / 15]);
+  if (playing && S.slowT > 0) act.push(['slow', S.slowT / 10]);
+  if (!act.length) A.text(ctx, 'ловите капсулы', lx, 414, { size: 20, weight: 600, color: 'rgba(43,37,80,.5)' });
+  act.forEach(([type, k], i) => {
+    const x = lp + 40, y = 414 + i * 38;
+    ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, 15, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.closePath(); ctx.fillStyle = CAP[type].col; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.lineWidth = 3; ctx.strokeStyle = OUT; ctx.stroke();
+    A.text(ctx, CAP[type].label, x + 28, y + 1, { align: 'left', size: 21, weight: 700, color: OUT });
+  });
+  drawCandy(ctx, lx, 624 + Math.sin(t * 1.7) * 6, t);
+  // справа: рекорд, капсулы, управление
+  const rx = RCX, rp = rx - PW / 2;
+  plate(ctx, rp, 26, PW, 136);
+  A.text(ctx, 'Рекорд', rx, 64, LABEL);
+  fitText(ctx, (g.best || 0).toLocaleString('ru-RU'), rx, 112, { size: 46, color: '#fff', stroke: OUT, strokeW: 10, weight: 900 }, PW - 30);
+  plate(ctx, rp, 180, PW, 300);
+  A.text(ctx, 'Капсулы', rx, 216, LABEL);
+  ['wide', 'multi', 'slow', 'sticky', 'life'].forEach((type, i) => {
+    const y = 258 + i * 46;
+    ctx.save(); ctx.translate(rp + 50, y); ctx.scale(.62, .62); drawCap(ctx, { type, x: 0, y: 0, ph: i }, t); ctx.restore();
+    A.text(ctx, CAP[type].label, rp + 84, y + 1, { align: 'left', size: 21, weight: 700, color: OUT });
+  });
+  plate(ctx, rp, 498, PW, 196);
+  A.text(ctx, 'Ракетка', rx, 532, LABEL);
+  if (A.isTouch) {
+    A.text(ctx, 'ведите пальцем', rx, 570, { size: 22, weight: 800, color: OUT });
+    A.text(ctx, 'Запуск', rx, 622, LABEL);
+    A.text(ctx, 'касание', rx, 658, { size: 22, weight: 800, color: OUT });
+  } else {
+    keycap(ctx, rp + 44, 574, '←'); keycap(ctx, rp + 94, 574, '→');
+    A.text(ctx, 'мышь', rp + 128, 575, { align: 'left', size: 22, weight: 800, color: OUT });
+    A.text(ctx, 'Запуск', rx, 626, LABEL);
+    A.text(ctx, 'пробел или клик', rx, 660, { size: 21, weight: 800, color: OUT });
+  }
+}
+function draw(ctx, g) {
+  if (LAND) drawLand(ctx, g); else drawWorld(ctx, g);
+}
 
 A.game({
-  id: 'bricks', tone: 'light', title: 'Кирпичики', width: W, height: H, orientation: 'portrait', music: 'candy',
+  id: 'bricks', tone: 'light', title: 'Кирпичики', width: SW, height: SH, orientation: LAND ? 'landscape' : 'portrait', music: 'candy',
   help: {
     desktop: 'Мышь или <kbd>←</kbd> <kbd>→</kbd> — ракетка · <kbd>Пробел</kbd> или клик — запуск · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Мышь</b> или <b>стрелки</b> — ракетка, <b>Пробел</b> — запуск',
     touch: 'Ведите пальцем по экрану — ракетка поедет следом. Коснитесь, чтобы запустить мячик'
   },
-  init(g) { titleScreen(g); },
+  init(g) {
+    if (LAND) {                                           // эффекты — в координатах мира: рисуем их внутри поля, надписи крупнее
+      const fxDraw = g.fx.draw.bind(g.fx), fxText = g.fx.text.bind(g.fx);
+      g.fx.draw = () => {}; g.fxWorld = fxDraw;
+      g.fx.text = (x, y, str, o = {}) => fxText(x, y, str, Object.assign({}, o, { size: (o.size || 34) * 1.3, rise: (o.rise || 70) * 1.2 }));
+    }
+    titleScreen(g);
+  },
   update, draw
 });
 
