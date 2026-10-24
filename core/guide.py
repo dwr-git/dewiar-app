@@ -57,6 +57,25 @@ def search(query, where="", n=2):
     return [s for _, s in out[:n]]
 
 
+def hint(query, where=""):
+    """Вопрос явно про само приложение («как защищены мои данные?», «что за значки у меня в „Делах“?») — раздел
+    руководства сразу в подсказку модели, без вызова app_help (экзамен 25.10: модель не спросила руководство и выдумала).
+    Только уверенное попадание: два слова вопроса совпали с ключевыми словами или заголовком раздела. -> текст или ""."""
+    q = [_stem(w) for w in _words(query) if len(w) > 2 and w not in STOP]
+    best, top = 0, None
+    for s in load():
+        if where and where not in (s.get("where") or []):
+            continue
+        kw = _words(" ".join(s.get("keywords") or []) + " " + s.get("title", ""))
+        k = sum(1 for w in set(q) if any(x.startswith(w) for x in kw))
+        if k > best:
+            best, top = k, s
+    if best < 2 or top is None:
+        return ""
+    return ("Вопрос про само приложение — вот раздел руководства (отвечай по нему своими словами, коротко; не выдумывай "
+            "того, чего тут нет):\n" + text(top))
+
+
 def text(s):
     parts = [f"«{s['title']}» ({', '.join({'pc': 'компьютер', 'phone': 'телефон'}.get(w, w) for w in s.get('where') or [])})", s.get("lead", "")]
     parts += ["— " + h for h in s.get("how") or []]

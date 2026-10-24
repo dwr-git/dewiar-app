@@ -824,6 +824,9 @@ def tools_of(events):
             out.append({"name": e.get("name", ""), "args": json.dumps(args or {}, ensure_ascii=False)[:200],
                         "result": str(e.get("result") or "")[:1500], "error": str(e.get("error") or "")[:300],
                         "ok": e.get("status") == "done"})
+        elif e.get("type") == "window" and e.get("do") == "play":      # быстрая команда без модели — игра открылась в окне
+            out.append({"name": "open_game", "args": json.dumps({"game": e.get("game") or ""}, ensure_ascii=False),
+                        "result": "игра открыта в окне Dewiar (лист «Досуг»)", "error": "", "ok": True})
     return out[:20]
 
 

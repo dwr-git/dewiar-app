@@ -69,7 +69,7 @@ with sync_playwright() as p:
     ok(r[0] == ["Умный дом"] and r[1] >= 1, f"поиск на лету с подсветкой: {r}")
     pg.fill("#nt-q", ""); pg.wait_for_timeout(400)
     pg.click(f'#nt-list .nt-row[data-p="{BUY}"]'); pg.wait_for_timeout(500)
-    r = pg.evaluate("() => [document.querySelector('.nt-h').textContent, document.querySelectorAll('.nt-body li.ck').length, document.querySelectorAll('.nt-pics figure').length, [...document.querySelectorAll('.nt-f')].map(x => x.textContent.trim()), document.querySelector('.nt-body').textContent.includes('Вложения')]")
+    r = pg.evaluate("() => [document.querySelector('.nt-h').textContent, document.querySelectorAll('.nt-body li.task').length, document.querySelectorAll('.nt-pics figure').length, [...document.querySelectorAll('.nt-f')].map(x => x.textContent.trim()), document.querySelector('.nt-body').textContent.includes('Вложения')]")
     ok(r == ["Покупки", 1, 1, ["список.pdf"], False], f"чтение: название, дела списком, фото плиткой, файл, ссылки в тексте не видны: {r}")
     if os.environ.get("DEWIAR_SHOTS"): pg.screenshot(path=str(Path(os.environ["DEWIAR_SHOTS"]) / "studio-notes.png"))
     pg.click("#nt-edit"); pg.wait_for_timeout(300)
@@ -87,6 +87,17 @@ with sync_playwright() as p:
        "переименование — и файл, и заголовок в тексте")
     pg.click("#nt-add"); pg.wait_for_timeout(500)
     ok(any(c[0] == "ws_new_note" for c in pg.evaluate("_calls")) and pg.evaluate("!!document.querySelector('#nt-title')"), "«Новая заметка» — сразу на правку")
+    # 25.10, владелец: «в заметках диаграммы сырые и нет цветовых схем… сырой маркдаун»
+    pg.evaluate("""() => { S = S || {}; S.ui = Object.assign({}, S.ui, { pad_colors: 'sea' }); NT.edit = false;
+      _files['Заметки/Блокнот/Идея.md'] = '# Идея\\n\\n**Ответы для GitHub** — по одному.\\n\\n> Спасибо за описание\\n\\n```mermaid\\nflowchart TD\\n  A[Запрос] --> B[Ответ]\\n```\\n\\nСсылка: https://dewiar.pro/help';
+      return ntOpen('Заметки/Блокнот/Идея.md'); }""")
+    pg.wait_for_timeout(2500)
+    r = pg.evaluate("""() => { const b = document.querySelector('.nt-body'); return { cs: b.dataset.cs, raw: /\\*\\*|```|^> /m.test(b.innerText),
+      q: !!b.querySelector('blockquote'), bold: !!b.querySelector('b, strong'), dia: !!b.querySelector('.dw-diagram > svg'), link: !!b.querySelector('a[data-ext]'),
+      plain: ntPlain('**НА ПОНЕДЕЛЬНИК** *ИДЕЯ* > цитата ```mermaid\\nA-->B```') }; }""")
+    ok(r["cs"] == "sea" and not r["raw"] and r["q"] and r["bold"] and r["link"], f"заметка — оформлена, без сырого Markdown, цвета как в блокноте: {r}")
+    ok(r["dia"], "схема Mermaid в заметке — картинкой")
+    ok("**" not in r["plain"] and "```" not in r["plain"] and "схема" in r["plain"], f"строка в списке — без значков Markdown: {r['plain']}")
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
 cmds = (ROOT / "core/engine_commands.py").read_text()

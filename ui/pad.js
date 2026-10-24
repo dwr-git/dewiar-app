@@ -185,9 +185,9 @@ core.on("pad_changed", async (e) => {                 // правка с дру�
   const r = await core.call("pad_read", { name: P.active }).catch(() => null);
   if (r && r.mtime !== P.base) { P.base = r.mtime; ED.innerHTML = PadMD.md2html(r.text); paint(); status("Обновлено с другого устройства"); }
 });
-core.on("hello", (d) => { try { const u = (d && d.settings && d.settings.ui) || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); gamesOn((d.settings || {}).features); } catch (e) { }
+core.on("hello", (d) => { try { const u = (d && d.settings && d.settings.ui) || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); colorScheme(u.pad_colors, true); gamesOn((d.settings || {}).features); } catch (e) { }
   if (P.loaded) { P.loaded = false; refresh(); } });
-core.on("settings", (e) => { try { const st = (e && e.settings) || e || {}, u = st.ui || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); gamesOn(st.features); } catch (x) { } });   // тему сменили в студии        // ядро перезапустилось — перечитать
+core.on("settings", (e) => { try { const st = (e && e.settings) || e || {}, u = st.ui || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); colorScheme(u.pad_colors, true); gamesOn(st.features); } catch (x) { } });   // тему сменили в студии        // ядро перезапустилось — перечитать
 
 /* ---------- картинки ---------- */
 /* пустой лист — всегда с абзацем: иначе первая строка — голый текст без блока, и «- », «[] » не срабатывают (WebKitGTK) */
@@ -447,6 +447,39 @@ function textSize(v, quiet) {
   $("#sz-r").value = Math.round(n * 100); $("#sz-v").textContent = Math.round(n * 100) + " %";
   if (!quiet) { clearTimeout(pzT); pzT = setTimeout(() => core.call("settings_save", { patch: { ui: { pad_text: n === 1 ? null : n } } }).catch(() => { }), 400); }
 }
+/* ---------- цвета текста (25.10, владелец: «выбор темы схемы цветовой… разные схемы под настроение»): палитра рядом с
+   размером текста; схема — атрибут data-cs листа, оттенки — в pad.html; хранится в ui.pad_colors ---------- */
+const CS = [["ink", "Чернила", "спокойная, по умолчанию"], ["forest", "Лес", "зелёная"], ["sea", "Море", "бирюзовая"],
+            ["dusk", "Вечер", "сливовая"], ["theme", "Как тема", "цвет оформления"], ["plain", "Без цвета", "только чёрное"]];
+let CSV = "ink";
+function colorScheme(id, quiet) {
+  const v = CS.some(c => c[0] === id) ? id : "ink";
+  if (quiet && v === CSV) return;
+  CSV = v; if (v === "ink") ED.removeAttribute("data-cs"); else ED.dataset.cs = v;
+  $$("#cs button").forEach(b => b.setAttribute("aria-checked", String(b.dataset.cs === v)));
+  if (!quiet) core.call("settings_save", { patch: { ui: { pad_colors: v === "ink" ? null : v } } }).catch(() => { });
+}
+$("#cs").innerHTML = CS.map(([id, name, note]) => `<button role="menuitemradio" aria-checked="${id === CSV}" data-cs="${id}">`
+  + `<b>${name}</b><small><u>Заголовок</u> и <em>главное</em> · ${note}</small>`
+  + `<span class="dots"><i style="background:var(--h1c)"></i><i style="background:var(--h2c)"></i><i style="background:var(--warm)"></i></span></button>`).join("");
+const csOpen = (on) => {
+  const m = $("#cs"), b = $("#b-cs");
+  m.classList.toggle("on", on); b.setAttribute("aria-expanded", String(on)); b.classList.toggle("on", on);
+  if (!on) return;
+  const r = b.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px";
+  m.style.top = (r.bottom + 6 + h < innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6)) + "px";
+  (m.querySelector('[aria-checked="true"]') || m.querySelector("button")).focus();
+};
+$("#b-cs").onmousedown = (e) => e.preventDefault();
+$("#b-cs").onclick = () => csOpen(!$("#cs").classList.contains("on"));
+$("#cs").onclick = (e) => { const b = e.target.closest("button[data-cs]"); if (b) { colorScheme(b.dataset.cs); csOpen(false); } };
+$("#cs").onkeydown = (e) => {
+  const bs = [...$$("#cs button")], i = bs.indexOf(document.activeElement);
+  if (e.key === "Escape") { e.preventDefault(); csOpen(false); $("#b-cs").focus(); }
+  else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); bs[(i + (e.key === "ArrowDown" ? 1 : bs.length - 1)) % bs.length].focus(); }
+};
+document.addEventListener("mousedown", (e) => { if ($("#cs").classList.contains("on") && !e.target.closest("#cs, #b-cs")) csOpen(false); });
 const szOpen = (on) => { $("#sz").classList.toggle("on", on); $("#b-size").classList.toggle("on", on); $("#b-size").setAttribute("aria-expanded", String(on)); };
 $("#b-size").onmousedown = (e) => e.preventDefault();
 $("#b-size").onclick = () => szOpen(!$("#sz").classList.contains("on"));
@@ -454,7 +487,7 @@ $("#sz-r").oninput = () => textSize($("#sz-r").value / 100);
 $("#sz-m").onclick = () => textSize(PZ - 0.1);
 $("#sz-p").onclick = () => textSize(PZ + 0.1);
 $("#sz-v").onclick = () => textSize(1);
-document.addEventListener("mousedown", (e) => { if ($("#sz").classList.contains("on") && !e.target.closest("#sz, #b-size")) szOpen(false); });
+document.addEventListener("mousedown", (e) => { if ($("#sz").classList.contains("on") && !e.target.closest("#sz, #b-size, #cs")) szOpen(false); });
 $("#sheet").addEventListener("wheel", (e) => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); textSize(PZ + (e.deltaY < 0 ? 0.05 : -0.05)); }, { passive: false });
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;

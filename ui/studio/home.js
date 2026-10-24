@@ -121,6 +121,28 @@ function hmBadge(id) {
   if (id === "tasks") return tk.filter(t => t.status === "waiting").length;
   return 0;
 }
+/* Начало листа блокнота на «Главной» — как в самом блокноте, а не сырой Markdown (25.10, владелец: «там сырой маркдаун
+   с решётками»): заголовок, жирное, курсив, код, пункты, задачи, цитаты; схемы и картинки — короткой пометкой. */
+function hmPadLines(text, max = 5) {
+  const inl = (s) => hmEsc(s.length > 110 ? s.slice(0, 108).replace(/\s+\S*$/, "") + "…" : s)
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*\*([^*]+)$/, "<strong>$1</strong>")
+    .replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<em>$2</em>").replace(/==([^=]+)==/g, "<mark>$1</mark>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  const out = []; let fence = null;
+  for (const raw of String(text || "").split("\n")) {
+    if (out.length >= max) break;
+    const l = raw.trim(); let m;
+    if (/^```/.test(l)) { if (fence === null) { fence = l.slice(3).trim(); if (fence === "mermaid") out.push('<p class="pv-x">◇ схема</p>'); } else fence = null; continue; }
+    if (fence !== null || !l || /^(-{3,}|\*{3,})$/.test(l) || /^\|?\s*:?-{2,}/.test(l)) continue;
+    if (/^!\[[^\]]*\]\([^)]*\)$/.test(l)) { out.push('<p class="pv-x">▣ картинка</p>'); continue; }
+    if ((m = l.match(/^(#{1,6})\s+(.*)$/))) out.push(`<p class="pv-h${m[1].length > 1 ? " h2" : ""}">${inl(m[2])}</p>`);
+    else if ((m = l.match(/^[-*+]\s+\[([ xX])\]\s*(.*)$/))) out.push(`<p class="pv-li pv-t${m[1] !== " " ? " done" : ""}"><i></i>${inl(m[2])}</p>`);
+    else if ((m = l.match(/^(?:[-*+•]|\d+[.)])\s+(.*)$/))) out.push(`<p class="pv-li"><i></i>${inl(m[1])}</p>`);
+    else if ((m = l.match(/^>\s?(.*)$/))) { if (m[1].trim()) out.push(`<p class="pv-q">${inl(m[1])}</p>`); }
+    else if (/^\|.*\|$/.test(l)) out.push(`<p class="pv-x">${inl(l.replace(/^\||\|$/g, "").split("|").map(c => c.trim()).filter(Boolean).join(" · "))}</p>`);
+    else out.push(`<p>${inl(l)}</p>`);
+  }
+  return out;
+}
 function hmRender() {
   const box = $("#hm-body"); if (!box) return;
   const shown = hmApps().filter(hmFeat), list = HM.edit ? shown.map(id => HM_APPS.find(x => x.id === id)).concat(HM_APPS.filter(x => !shown.includes(x.id) && hmFeat(x.id))) : shown.map(id => HM_APPS.find(x => x.id === id));
@@ -137,8 +159,8 @@ function hmRender() {
   $("#hm-chat").innerHTML = ch.length ? `<small>Последний разговор · ${new Date((lastA || lastU).ts * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</small>`
     + (lastU ? `<p class="u">Вы: ${hmEsc(lastU.text.slice(0, 120))}</p>` : "") + (lastA ? `<p>${hmEsc(hmWho(lastA.who) + ": " + lastA.text.slice(0, 220))}${lastA.text.length > 220 ? "…" : ""}</p>` : "")
     + `<button class="hm-more" data-go="chat">Продолжить в чате</button>` : `<small>Чат</small><p>Здесь появится последний разговор. Можно писать и голосом, и текстом.</p><button class="hm-more" data-go="chat">Открыть чат</button>`;
-  const pd = HM.data.pad, lines = pd ? pd.text.split("\n").map(s => s.replace(/^#+\s*|^[-*]\s+|^\d+\.\s+|^\[[ x]\]\s*/g, "").trim()).filter(Boolean) : [];
-  $("#hm-pad").innerHTML = `<small>Блокнот${pd ? " · «" + hmEsc(pd.name) + "»" : ""}</small>` + (lines.length ? `<b>${hmEsc(lines[0].slice(0, 60))}</b><ul>${lines.slice(1, 4).map(l => `<li>${hmEsc(l.slice(0, 70))}</li>`).join("")}</ul>` : `<p>Блокнот у виджета — для мыслей на лету. Пишется само.</p>`)
+  const pd = HM.data.pad, lines = pd ? hmPadLines(pd.text) : [];
+  $("#hm-pad").innerHTML = `<small>Блокнот${pd ? " · «" + hmEsc(pd.name) + "»" : ""}</small>` + (lines.length ? `<div class="hm-pv">${lines.join("")}</div>` : `<p>Блокнот у виджета — для мыслей на лету. Пишется само.</p>`)
     + `<button class="hm-more" data-pad="1">Открыть блокнот</button>`;
   $("#hm-set").innerHTML = HM_SET.map(([p, n]) => `<button class="hm-pill" data-go="${p}">${hmEsc(n)}</button>`).join("");
   hmWire();

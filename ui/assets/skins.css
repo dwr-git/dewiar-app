@@ -1,6 +1,6 @@
 /* Темы оформления Dewiar — общие для виджета (ui/hud.html), студии (образцы в «Оформлении») и телефона.
    Класс .skin-<id> задаёт переменные: --skin-bg — фон (значение для свойства background), --glass и --glass-shadow —
-   стеклянные блоки, --muted — второстепенный текст (на светлых темах — плотнее). Список, названия и группы —
+   стеклянные блоки, --muted — второстепенный текст (на светлых темах — плотнее; 25.10 ещё плотнее, №242: «неудобно читать светлые буквы на сером фоне»). Список, названия и группы —
    assets/skins.js. Текстура — зерно матового стекла (skins/grain.webp; url() — прямыми правилами: относительный url в var() считается от страницы, а не от этого файла; #card — карточка виджета
    (прямо в body; у телефона #card — другой блок внутри сцены), #scene — фон телефона) — картинки skins/*.webp из tools/skin_textures.py. */
 
@@ -85,18 +85,18 @@ html body.skin-fog > #card, html body.skin-fog #scene, .lk-prev.skin-fog {
              radial-gradient(75% 55% at 50% 105%, rgba(255,200,170,.9) 0%, transparent 75%),
              linear-gradient(160deg, #ffd3df 0%, #f1d6ff 50%, #ffe2d3 100%);
   --glass: rgba(255,255,255,.42); --glass-shadow: inset 0 1px 0 rgba(255,255,255,.75), 0 10px 30px rgba(120,60,140,.16);
-  --ink: #2b2540; --muted: rgba(43,37,64,.62);
+  --ink: #2b2540; --muted: rgba(43,37,64,.74);
 }
 .skin-snow {
   --skin-bg: radial-gradient(120% 60% at 50% 0%, #ffffff 0%, transparent 70%), linear-gradient(180deg, #f8f9fb 0%, #eceff4 100%);
   --glass: #ffffff; --glass-shadow: 0 8px 24px rgba(20,30,60,.08), 0 1px 3px rgba(20,30,60,.07);
-  --ink: #1d2230; --muted: rgba(29,34,48,.58);
+  --ink: #1d2230; --muted: rgba(29,34,48,.72);
 }
 /* неоморфизм: фон и блоки — один материал, форма — от двух теней (светлой сверху-слева и тёмной снизу-справа) */
 .skin-neu {
   --skin-bg: #e4e9f0; --glass: #e4e9f0; --neu-dark: #c2c9d4; --neu-light: #ffffff;
   --glass-shadow: 7px 7px 16px var(--neu-dark), -7px -7px 16px var(--neu-light);
-  --ink: #2a3140; --muted: rgba(42,49,64,.6);
+  --ink: #2a3140; --muted: rgba(42,49,64,.73);
 }
 .skin-neudark {
   --skin-bg: #262a31; --glass: #262a31; --neu-dark: #191c21; --neu-light: #333943;
@@ -105,7 +105,7 @@ html body.skin-fog > #card, html body.skin-fog #scene, .lk-prev.skin-fog {
 .skin-neusky {
   --skin-bg: #dbe5f1; --glass: #dbe5f1; --neu-dark: #b8c5d6; --neu-light: #f7fbff;
   --glass-shadow: 7px 7px 16px var(--neu-dark), -7px -7px 16px var(--neu-light);
-  --ink: #24324a; --muted: rgba(36,50,74,.6);
+  --ink: #24324a; --muted: rgba(36,50,74,.73);
 }
 /* «Небесный вечер» — тёмная пара «Небесного» (20.10): тот же оттенок неба, только сумерки — дымчатый сине-серый,
    свет по краю чуть холоднее, чем у «Графитового», и без глубокой синевы «Ночного» */
@@ -117,7 +117,7 @@ html body.skin-fog > #card, html body.skin-fog #scene, .lk-prev.skin-fog {
 .skin-neumint {
   --skin-bg: #dde9e5; --glass: #dde9e5; --neu-dark: #bccdc7; --neu-light: #fafffd;
   --glass-shadow: 7px 7px 16px var(--neu-dark), -7px -7px 16px var(--neu-light);
-  --ink: #233b35; --muted: rgba(35,59,53,.6);
+  --ink: #233b35; --muted: rgba(35,59,53,.73);
 }
 .skin-neunavy {
   --skin-bg: #1e2638; --glass: #1e2638; --neu-dark: #141a27; --neu-light: #2a344b;

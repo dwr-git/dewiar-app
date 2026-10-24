@@ -405,6 +405,30 @@ class ToolsMixin:
         self._say_quick(dayplan.plan_say(p), text, via, acts=acts)
         return True
 
+    TASK_DEL_RX = re.compile(r"^(?:[\w-]+,\s*)?(?:удали|удалите|убери|уберите|сотри)\s+(?:фонов\w+\s+)?задач[уи]\s+"
+                             r"[«\"“„']?(?P<name>[^»\"”'.,!?]{2,60}?)[»\"”']?\s*(?:[,.!—–-].*)?$", re.I)
+
+    def _task_del_cmd(self, text, via=None):
+        """«Удали задачу „Исследование“» — сразу, без модели (экзамен 25.10: модель искала заметки и стёрла файлы,
+        а задача осталась; ответила «Удалил»). Нашлась ровно одна задача и у неё нет готовых файлов — удаляем; есть
+        файлы или не нашлась — решает модель (спросит, сохранить ли результат)."""
+        m = self.TASK_DEL_RX.match((text or "").strip())
+        tm = getattr(self, "tasks", None)
+        if not m or tm is None:
+            return False
+        name = m.group("name").strip()
+        found = [t for t in tm.tasks.values() if name.lower() in t.title.lower()]
+        if len(found) != 1 or found[0].data.get("outputs"):
+            return False
+        t = found[0]
+        title = t.title
+        tm.delete(t.id)
+        res = f"Задача «{title}» удалена — напоминаний о ней больше не будет."
+        self.emit("tool", name="remove_task", title="Задачи: удалить", status="done", args={"name": name}, detail=title, result=res)
+        log.info("🗑 Задача удалена (без модели): %s", title)
+        self._say_quick(f"Удалил задачу «{title}».", text, via, acts=["remove_task"])
+        return True
+
     def _mark_cmd(self, text, via=None):
         """«Я позвонил в банк», «готово, купил подарок маме», «отметь тренировку» — отметка без модели (отзыв 17.10: для
         съёмки геймификации). Без «отметь / готово» — только если каждое дело совпало с напоминанием из плана."""

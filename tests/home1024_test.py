@@ -116,6 +116,17 @@ try:
         ok(pg.is_visible("nav button[data-p='ears']"), "развернули с клавиатуры (Enter)")
         pg.set_viewport_size({"width": 760, "height": 900}); time.sleep(0.4)
         ok(pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), "узкое окно — без прокрутки вбок")
+        # 25.10, владелец: «в блоке „Блокнот · «Главное»“ сырой маркдаун без форматирования с решётками»
+        pg.set_viewport_size({"width": 1400, "height": 1000}); pg.evaluate("document.querySelector('nav button[data-p=\"home\"]').click()"); time.sleep(0.4)
+        pg.evaluate("""HM.data.pad = { name: 'Главное', text: '# Главное\\n**Ответы для GitHub** — по одному на обращение, `можно` вставлять\\n## Шаги\\n- [x] поставить vLLM\\n- *спокойно* [ссылка](https://x.y)\\n> Спасибо за точное описание\\n```mermaid\\nflowchart TD\\nA-->B\\n```' }; hmRender()""")
+        time.sleep(0.3)
+        pv = pg.inner_text("#hm-pad")
+        ok("#" not in pv and "**" not in pv and "`" not in pv and "[x]" not in pv and "](" not in pv and "> " not in pv,
+           f"блокнот на «Главной» — без решёток и звёздочек Markdown: {pv[:160]!r}")
+        ok(pg.locator("#hm-pad .pv-h").count() >= 1 and pg.locator("#hm-pad strong").count() == 1 and pg.locator("#hm-pad .pv-t.done").count() == 1,
+           "заголовок, жирное и выполненная задача — с оформлением")
+        if SHOTS:
+            pg.locator("#hm-pad").screenshot(path=os.path.join(SHOTS, "home-pad.png"))
         b.close()
 finally:
     core.terminate(); mock.terminate()

@@ -1262,7 +1262,10 @@ function sttServerUrl(u) { return u.replace(/\/+$/, "") + (/(transcriptions)$/.t
 async function listen() {
   stopVoice();
   if (!(await needPerm(MIC))) { showBot("Без микрофона я вас не услышу. Разрешите микрофон — или напишите текстом.", "err"); return; }
-  heardPartial = ""; sttUserStop = false; showYou(dict ? dict + " …" : ""); showBot(""); clearCard();
+  // ответ не стираем, пока человек не сказал новое (№241: «чат закрывается сам, дочитывать нужно в чате» — Лира
+  // спросила «…?», слушание включилось само и убрало ответ); новый вопрос (ask) сменит его сам
+  heardPartial = ""; sttUserStop = false; showYou(dict ? dict + " …" : ""); clearCard();
+  if (/\b(err|wait)\b/.test($("#bot").className)) showBot("");
   setState("listening"); sttActive = true; sttStarted = false; if (!dict) D.vibrate(18);
   let server = S.stt.engine === "server" && S.stt.url ? { url: S.stt.url, key: S.stt.key || "", model: S.stt.model || "" } : null;
   if (!server && (!D.recognizer() || sttOnce)) { const c = sttOnce || cloudEars(); sttOnce = null; if (c) server = { url: c.url, key: c.key, model: "gigaam" }; }
@@ -1790,6 +1793,8 @@ const HARD_ASK = new RegExp("стих|стишок|поэм|сонет|рифм|
 /* Творческая просьба (отзыв 17.10 про креатив): температура не ниже 0.95, стихам — ремесло рифмы (как llm.CREATIVE_ASK,
    POEM_ASK, POEM_NOTE на компьютере). creativeTurn ставит ход разговора, llmStream берёт температуру отсюда. */
 const CREATIVE_ASK = /стих|стишок|поэм|сонет|рифм|частушк|четверостиш|(?:напиши|придумай|сочини) песн|текст песни|сказк|сочини|поздрав|тост|шутк|анекдот|каламбур|слоган|придумай|выдумай|нафантазируй|(?:напиши|расскажи) (?:рассказ|историю|сказку|сценарий)|креатив|оригинальн/i;
+const RECO_ASK = /(?:посоветуй|порекомендуй|подбери|что посмотреть|что почитать|что послушать|составь)[^.?!]{0,60}?(?:фильм|сериал|кино|посмотреть|книг|почитать|песн|музык|послушать|плейлист|трек|альбом)|плейлист/i;   // как RECO_ASK в core/llm.py
+const RECO_NOTE = "\n\nСейчас просят посоветовать фильмы, сериалы, книги, песни или плейлист. Называй только то, что точно существует и что ты точно знаешь: название, автор или исполнитель, год — без догадок; из результатов поиска бери названия ровно как там. Нет уверенности, что у исполнителя есть такая песня, — не называй её (лучше три верных, чем пять с выдуманными). 1–3 пункта с одной живой фразой «почему именно это», а не справочный список.";
 const POEM_ASK = /стих|стишок|поэм|сонет|рифм|частушк|четверостиш|в стихах|текст песни|(?:напиши|придумай|сочини) песн/i;
 const POEM_NOTE = "\n\nСейчас просят стихи. Ремесло: сначала про себя выбери размер (например, хорей или ямб) и подбери пары рифм по ударному слогу — совпадают ударная гласная и всё после неё (осень — просинь, листва — синева, дождя — шутя); глагольные рифмы («шла — пришла») и «рифмы» без совпадения ударения не годятся. Образы — простые, точные и живые, без нелепых сравнений. Количество строк — ровно как просили. Перед ответом проверь каждую пару рифм.";
 let creativeTurn = false;
@@ -2169,7 +2174,11 @@ async function ask(text, opts = {}) {
   // экзамен 17.10: на «Ты тупая железяка, скажи который час» модель ответила одним временем — граница потерялась.
   // Граница теперь — сразу и всегда, своей фразой; модель только помогает с просьбой
   if (rudeNow) { hCount("rude"); plog("info", "🛡 грубость в адрес помощника — спокойная граница, потом помощь"); sink.push("Мне неприятно, когда со мной так разговаривают, но помогу. "); }
-  const msgs = [{ role: "system", content: systemPrompt() + (!opts.hidden && POEM_ASK.test(text) ? POEM_NOTE : "") + (rudeNow ? BOUNDARY_NOTE + " Эту фразу ты уже сказала вслух: «Мне неприятно, когда со мной так разговаривают, но помогу». Не повторяй её — сразу помоги с просьбой одной-двумя фразами." : "") }]
+  // тот же вопрос второй раз (экзамен 25.10: «расскажи о себе» дважды — ответ слово в слово) — прошлый не повторять
+  const nq = (t) => String(t || "").toLowerCase().replace(/ё/g, "е").replace(/[^a-zа-я0-9]+/g, " ").trim();
+  const againAsk = !opts.hidden && text.length < 300 && liveHistory().slice(-12).some(m => m.role === "user" && nq(m.content) === nq(text));
+  const AGAIN_NOTE = "\n\nЧеловек повторил вопрос, на который ответ уже был, — значит, прошлый ответ его не устроил. Не повторяй его: ответь иначе — конкретнее, с другими примерами, другими словами.";
+  const msgs = [{ role: "system", content: systemPrompt() + (!opts.hidden && POEM_ASK.test(text) ? POEM_NOTE : !opts.hidden && RECO_ASK.test(text) ? RECO_NOTE : "") + (againAsk ? AGAIN_NOTE : "") + (rudeNow ? BOUNDARY_NOTE + " Эту фразу ты уже сказала вслух: «Мне неприятно, когда со мной так разговаривают, но помогу». Не повторяй её — сразу помоги с просьбой одной-двумя фразами." : "") }]
     .concat(chatHistory(liveHistory().slice(-2 * (CONV_TURNS + 2 * CONV_MARGIN)), text));
   if (att.length) {                               // вложения — в последнюю реплику человека: текст файлов и картинки
     const last = msgs[msgs.length - 1];
@@ -2638,6 +2647,17 @@ function stopPhrase(t) {
   return hit;
 }
 
+/* «запиши на послезавтра в 12 к Юле на массаж» — дело со временем в «Делах», а не событие календаря и не заметка (экзамен
+   25.10: модель спрашивала «записать в календарь?»). Как APPT_RX в core/engine_answer.py. t — уже в нижнем регистре. */
+const APPT_RX = /^(?:запиши|запишите|записать|занеси|внеси|поставь|добавь)\s+(?:мне\s+|меня\s+)?(?:в\s+(?:дела|планы|список\s+дел)\s+)?((?:на\s+)?(?:сегодня|завтра|послезавтра|понедельник|вторник|сред[уа]|четверг|пятниц[уа]|суббот[уа]|воскресенье|\d{1,2}(?:\s+[а-я]+|\.\d{1,2}))(?![а-я]).*)$/;
+const APPT_TIME_RX = /(?:^|\s)в\s+\d{1,2}(?:[:.]\d\d)?(?!\d)|\d{1,2}:\d\d|утр|вечер|дн[её]м|в\s+обед/;
+function apptQuick(t) {
+  const m = APPT_RX.exec(t); if (!m || !APPT_TIME_RX.test(m[1])) return null;
+  const w = parseWhen(m[1].replace(/^на\s+/, "")); if (!w || w.repeat) return null;
+  const what = remindWhat(w.rest); if (!what) return null;
+  const x = addAlarm(what[0].toUpperCase() + what.slice(1), w.at, "reminder", "");
+  return { say: `В делах: ${whenText(w.at)} — ${what}.`, card: alarmCard(x) };
+}
 async function quick(text) {
   { const bq = await bugQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (bq) return bq; }
   // «Лира, позвони…», «Лира открой сканер» — имя персонажа в начале не мешает быстрым ответам
@@ -2650,6 +2670,7 @@ async function quick(text) {
   { const pq = planQuick(text); if (pq) return pq; }
   { const dq = doneQuick(text); if (dq) return dq; }
   { const dr = draftQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (dr) return { say: dr }; }
+  { const ap = apptQuick(t); if (ap) return ap; }
   { const n = noteQuick(text); if (n) return { say: n }; }
   { const f = factQuick(text); if (f) return { say: f }; }
   // «покажи напоминания», «какие у меня напоминания» — открыть и сказать, сколько (модель иногда отвечала «чистый лист»,
@@ -3949,6 +3970,33 @@ const noteBody = (t) => String(t || "").replace(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/
 // в тексте на телефоне их не показываем, а при сохранении возвращаем в конец — иначе ссылки потерялись бы на компьютере
 const NOTE_LINK_LINE = /^[ \t]*(?:📎\s*)?!?\[[^\]\n]*\]\(Вложения\/[^)\s]+\)[ \t]*$/gm;
 const noteShown = (t) => noteBody(t).replace(NOTE_LINK_LINE, "").replace(/\n{3,}/g, "\n\n").trim();
+/* Начало заметки в списке — без значков Markdown (№246: «в заметках на телефоне сырой маркдаун»; блокнот компьютера
+   пишет **жирное**, ## заголовки, > цитаты): жирное и заголовки — жирным, пункты — «•», задачи — ☐/☑, схема — пометкой.
+   -> HTML не длиннее max видимых знаков. */
+function mdPreview(t, max = 220) {
+  const out = []; let n = 0, fence = null;
+  const plain = (s) => s.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/==([^=]+)==/g, "$1");
+  for (const raw of String(t || "").split("\n")) {
+    if (n >= max) break;
+    const l = raw.trim(); let m, s, bold = false;
+    if (/^```/.test(l)) { if (fence === null) { fence = l.slice(3).trim(); if (fence === "mermaid") { out.push("◇ схема"); n += 8; } } else fence = null; continue; }
+    if (fence !== null || !l || /^(-{3,}|\*{3,}|_{3,})$/.test(l) || /^\|?\s*:?-{2,}/.test(l)) continue;
+    if ((m = l.match(/^#{1,6}\s+(.*)$/))) { s = m[1]; bold = true; }
+    else if ((m = l.match(/^[-*+]\s+\[([ xX])\]\s*(.*)$/))) s = (m[1] === " " ? "☐ " : "☑ ") + m[2];
+    else if ((m = l.match(/^(?:[-*+•]|\d+[.)])\s+(.*)$/))) s = "• " + m[1];
+    else if ((m = l.match(/^>\s?(.*)$/))) s = m[1];
+    else if (/^\|.*\|$/.test(l)) s = l.replace(/^\||\|$/g, "").split("|").map(c => c.trim()).filter(Boolean).join(" · ");
+    else s = l;
+    s = plain(s); if (!s.trim()) continue;
+    const vis = s.replace(/\*\*|__|(^|\s)[*_](?=\S)|(?<=\S)[*_](?=\s|$|[.,!?:;])|`/g, "$1");
+    let piece = vis.length > max - n ? vis.slice(0, Math.max(0, max - n)).replace(/\s+\S*$/, "") + "…" : null;
+    n += vis.length + 1;
+    let h = esc(piece || s);
+    if (!piece) h = h.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/\*\*/g, "").replace(/(^|[\s(«])[*_]([^*_\n]+)[*_](?=$|[\s.,!?:;)»])/g, "$1<i>$2</i>").replace(/`([^`]+)`/g, "$1");
+    out.push(bold ? `<b>${h}</b>` : h);
+  }
+  return out.join(" ");
+}
 const noteLinks = (t) => (String(t || "").match(NOTE_LINK_LINE) || []).map(x => x.trim());
 const noteAttGet = (id) => fileGet("natt-" + id) || "";
 const noteAttCount = (n) => (n.att || []).length || noteLinks(n.text).length;     // свои вложения или ссылки на вложения компьютера
@@ -4298,7 +4346,7 @@ function renderDay() {
       const img = (x.att || []).find(a => a.type === "image"), more = (x.att || []).length;
       // папка заметки с компьютера (№216: вкладки блокнота у виджета приходят заметками — «Главное» без пометки не узнать)
       const fold = x.folder && !ntFolder ? `<span class="ntf">${esc(x.folder.split("/").pop())}</span>` : "";
-      return `<div class="it note" data-id="${esc(x.id)}">${img ? `<img class="nthumb" src="${noteAttGet(img.id)}" alt="">` : ""}<div class="bd"><b>${esc(x.title)}${more ? `<span class="ntc">📎${more}</span>` : ""}${fold}</b><small>${esc(noteShown(x.text).slice(0, 220))}</small></div></div>`; }).join("")
+      return `<div class="it note" data-id="${esc(x.id)}">${img ? `<img class="nthumb" src="${noteAttGet(img.id)}" alt="">` : ""}<div class="bd"><b>${esc(x.title)}${more ? `<span class="ntc">📎${more}</span>` : ""}${fold}</b><small class="ntpv">${mdPreview(noteShown(x.text))}</small></div></div>`; }).join("")
       : `<div class="empty">Заметок нет.<br>Скажите: «запиши в заметки: купить хлеб и молоко» — или нажмите «Новая заметка».</div>`);
     $("#nt-new").onclick = () => openNote("");
     $$(".ntfolds button", box).forEach(b => b.onclick = () => { ntFolder = b.dataset.f; renderDay(); });
@@ -4394,7 +4442,7 @@ function hitOk(title, said) {
 function remMatch(title, now = Date.now(), ahead = true) {
   const w = stems(title); if (!w.length) return null;
   const ends = [Math.max(new Date(now).setHours(23, 59, 59, 0), now + 3 * 3600e3)];   // поздно вечером — и сразу после полуночи
-  if (ahead) ends.push(now + 36 * 3600e3);
+  if (ahead) { const tm = new Date(now + 864e5); tm.setHours(23, 59, 59, 0); ends.push(Math.max(now + 36 * 3600e3, +tm)); }   // и весь завтрашний день (экзамен 25.10)
   for (const end of ends) {
     let best = null, bs = 0;
     for (const x of alarmsNow()) {
@@ -4997,7 +5045,8 @@ let gameFullOn = false;
 function gameFull(on) { if (gameFullOn === !!on) return; gameFullOn = !!on; document.body.classList.toggle("gamefull", gameFullOn); try { D.immersive(gameFullOn); } catch (e) { } }
 window.addEventListener("message", (e) => { if (!e.data || e.source !== $("#gamef").contentWindow) return;
   if (e.data.arcade === "home") gameClose();
-  else if (e.data.arcade === "full") gameFull(!!e.data.on); });
+  else if (e.data.arcade === "full") gameFull(!!e.data.on);
+  else if (e.data.arcade === "log") plog("warn", "🎮 игра: " + String(e.data.text || "").slice(0, 300)); });   // сбой или медленно — в журнал
 $("#b-play").onclick = () => playOpen("");
 function featApply() { $("#b-play").hidden = !feat("games"); document.body.classList.toggle("has-play", feat("games")); if (!feat("games") && gameOn()) gameClose(false); }
 featApply();
@@ -5021,10 +5070,12 @@ function annShow(n) {
   $("#ann-body").innerHTML = (n.img ? `<img class="nw-img" src="${esc(annBase() + "?p=" + n.img)}" alt="">` : "")
     + `<p class="nw-k${n.level === "warn" ? " warn" : ""}">${n.level === "warn" ? "Предупреждение" : "Новость Dewiar"} · ${when.getDate()} ${MON_G[when.getMonth()]}</p>`
     + (n.title ? `<h2 id="an-h">${esc(n.title)}</h2>` : "") + (n.text ? `<p class="nw-t">${esc(n.text)}</p>` : "")
-    + `<div class="nw-row">${n.link ? `<button class="btn pri" id="nw-go">${esc(n.link_label || "Смотреть")}</button>` : ""}<button class="btn" id="nw-ok">Понятно</button></div>`;
+    + `<div class="nw-row">${n.link ? `<button class="btn pri" id="an-go">${esc(n.link_label || "Смотреть")}</button>` : ""}<button class="btn" id="an-ok">Понятно</button></div>`;
   const img = $("#ann-body .nw-img"); if (img) img.onerror = () => img.remove();
-  if ($("#nw-go")) $("#nw-go").onclick = () => D.openUrl(n.link);
-  $("#nw-ok").onclick = () => closeSheets();
+  // свои id: у «Что нового» тоже есть «Понятно» (#nw-ok) — если тот лист открывали, $("#nw-ok") находил его кнопку,
+  // и «Понятно» объявления не закрывало ничего (№245)
+  if ($("#an-go")) $("#an-go").onclick = () => D.openUrl(n.link);
+  $("#an-ok").onclick = () => closeSheets();
   S.annSeen = Math.max(+S.annSeen || 0, n.id); saveS();
   openSheet("#sh-ann");
 }

@@ -19,6 +19,15 @@ log = logging.getLogger("dewiar.settings")
 APP_DIR = Path(__file__).resolve().parent.parent            # /opt/dewiar или папка исходников
 DATA_DIR = APP_DIR / "data"                                  # то, что едет в пакете
 WIN = os.name == "nt"
+# HOME — буквально «~» или относительный путь (так бывает при запуске из некоторых ярлыков и служб): Path.home() тогда
+# «~», и всё пишется в папку «~» там, где запустили (выгрузка 25.10: «близкие: сохранить — Permission denied: '~/.local'»).
+# Берём настоящую домашнюю папку из учётной записи — один раз здесь, до всех Path.home() в ядре.
+if not WIN and not os.path.isabs(os.environ.get("HOME") or "/"):
+    try:
+        import pwd
+        os.environ["HOME"] = pwd.getpwuid(os.getuid()).pw_dir
+    except (ImportError, KeyError, OSError):
+        pass
 if WIN:     # Windows: настройки — %APPDATA%\Dewiar, модели и голоса — %LOCALAPPDATA%\Dewiar
     _cfg = Path(os.environ.get("APPDATA") or Path.home() / "AppData/Roaming") / "Dewiar"
     _state = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local") / "Dewiar"
@@ -151,6 +160,7 @@ DEFAULTS = {
            "intro": "",                     # знакомство голосом (engine_intro.py): "" — ещё не было, "done" — было
            "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
+           "pad_colors": None,              # цвета текста в блокноте: forest/sea/dusk/theme/plain (ui/pad.js colorScheme); пусто — «Чернила»
            "pad_side": "auto",              # блокнот у виджета: "auto" (к середине экрана), "left", "right" — кнопка ⇄ (pad.js)
            "home_apps": None,
            "nav_fold": None},               # студия: свёрнутые группы меню («Знания», «Настройка»…) — home.js              # студия → «Главная»: какие значки и в каком порядке (home.js); пусто — как задумано

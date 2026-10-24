@@ -451,7 +451,7 @@ body.typing #stage { bottom: calc(190px + var(--safe-b)); }
 /* ---------- светлые темы (body.light — skins.js light): тёмный текст, светлое стекло, кнопки — глубокий чернильный ----------
    --ink, --muted, --glass, --glass-shadow приходят из skins.css (класс .skin-<id> на body). Рамок нет — форма от тени. */
 body.light {
-  --dim: color-mix(in srgb, var(--ink) 48%, transparent);
+  --dim: color-mix(in srgb, var(--ink) 58%, transparent);      /* 25.10: было 48 % — бледно на сером (№242) */
   --brand: linear-gradient(135deg, #2b2540 0%, #3b3560 100%); --accent: #4b5bd6;
   --frost: var(--glass); --frost-hi: color-mix(in srgb, var(--ink) 9%, transparent);
   --field: rgba(255,255,255,.7); --glass-line: transparent;
@@ -668,7 +668,11 @@ body.neu .clsend textarea, body.neu #cl-name { background: var(--glass); box-sha
 }
 
 /* «Дела»: сделано сегодня, серия и значки (renderDay → doneHead), праздник (celebrate) */
-.donehd { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 20px; margin-bottom: 10px; background: var(--frost); }
+.donehd { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 20px; margin-bottom: 10px; background: var(--frost); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
+/* светлая тема (№244, владелец: «блок на телефоне рамкой не чёткий в разделе Дела»): карточка сливалась с листом — светлее,
+   с тонкой кромкой и мягкой тенью; поле «Что уже сделали?» — тоже с кромкой */
+body.light .donehd { background: rgba(255,255,255,.62); box-shadow: inset 0 0 0 1px rgba(36,50,74,.07), 0 12px 26px -18px rgba(20,30,60,.4); }
+body.light .doneadd input { background: rgba(255,255,255,.62); box-shadow: inset 0 0 0 1px rgba(36,50,74,.1); }
 .dtop { display: flex; gap: 14px; align-items: center; }
 .dnum { min-width: 72px; text-align: center; padding-right: 14px; border-right: 1px solid var(--line, rgba(127,127,127,.18)); }
 .dnum b { display: block; font: 600 40px/1.05 "Unbounded", sans-serif; color: var(--good); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -765,6 +769,7 @@ body.light .clrx, body.light .clrepick { background: #fff; box-shadow: 0 6px 18p
 .nwi p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .nwi small { display: block; margin-top: 8px; font-size: 13px; color: var(--ink); opacity: .85; }
 .nwtry { margin-top: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(139,140,247,.18); color: #D5D6FF; font-size: 13.5px; text-align: left; line-height: 1.35; }
+body.light .nwtry { background: rgba(79,108,240,.1); color: #2c44b0; }   /* светлая тема: был светлый текст на сиреневом (№243) */
 #nw-ok { margin-top: 10px; }
 
 /* картинка из ответа на весь экран (show_images) */
@@ -987,3 +992,5 @@ body.has-play #top { gap: 2px; } body.has-play #top .ib { width: 38px; height: 3
 .tkans { display: flex; gap: 8px; align-items: flex-end; margin: 10px 0 4px; } .tkans textarea { flex: 1; min-width: 0; padding: 10px 12px; border: 0; border-radius: 14px; background: var(--field); color: inherit; font: inherit; resize: none; }
 .tkdel { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 2px; padding: 8px 12px; border: 0; border-radius: 12px; background: transparent; color: var(--dim); font: inherit; font-size: 13px; }
 .tkdel svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .tkdel:active { color: #FF8FA8; background: rgba(255,107,138,.1); }
+/* начало заметки в списке — с разметкой, без значков Markdown (app.js mdPreview, №246) */
+.it.note .ntpv b { color: var(--ink); font-weight: 650; } .it.note .ntpv i { font-style: italic; }

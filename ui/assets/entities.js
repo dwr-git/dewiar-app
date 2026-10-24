@@ -1206,12 +1206,27 @@
       this.lookX = 0; this.lookY = 0; this._lx = 0; this._ly = 0; this._looking = false; this._la = 0;   // где зритель (look)
       this.lookGain = opts.lookGain || 1;   // сила эффекта: телефон — 1, виджет компьютера — 0.5 (крупный портрет, отзыв 14.10)
       this.configure(opts);
-      this._last = performance.now(); this._frame = 0;
-      const loop = (now) => { if (!this.dead) { this.draw(now); requestAnimationFrame(loop); } };
+      this._last = performance.now(); this._frame = 0; this._calm = performance.now();
+      /* Нагрузка в простое (отзыв 23.10: «в простое жрёт 20–40% процессора и 10–25% видеокарты»): кадр нужен не чаще,
+         чем позволяет draw (minDt). Ждать дольше ~50 мс — таймером, а не 60 пробуждениями в секунду; set/look/configure
+         будят сразу (_wake), так что на имя и голос облик откликается без задержки. */
+      const loop = (now) => {
+        if (this.dead) return;
+        let wait = this.draw(now);
+        if (wait === undefined) wait = this._mdt || 0;    // нарисовали — следующий кадр не раньше minDt
+        if (wait > 50) this._sleep = setTimeout(() => { this._sleep = 0; requestAnimationFrame(loop); }, wait - 8);
+        else requestAnimationFrame(loop);
+      };
+      this._loop = loop;
       requestAnimationFrame(loop);
     }
+    _wake() {                                   // что-то изменилось — снова живой темп и кадр сразу
+      this._calm = performance.now();
+      if (this._sleep) { clearTimeout(this._sleep); this._sleep = 0; requestAnimationFrame(this._loop); }
+    }
     configure({ style, color, image, live } = {}) {
-      this._stillAt = performance.now() + 1500;             // после смены облика — дорисовать (фото и лица грузятся не сразу)
+      this._stillAt = performance.now() + 1500;
+      if (this._loop) this._wake();             // после смены облика — дорисовать (фото и лица грузятся не сразу)
       if (live !== undefined) { this.live = live || ""; this._live = null; }   // живое лицо (слои из папки live)
       if (style) this.style = STYLES[style] ? style : "nexus";
       if (color) this.color = rgb(color);
@@ -1225,7 +1240,7 @@
        audible — телефон сообщает начало и конец каждой фразы; opts.voiceLevels — уровни голоса придут точно (виджет
        компьютера): до первого из них — тишина. Ничего этого нет (облик в студии) — звучит всё время «speaking». */
     set({ state, level, voice, audible } = {}) {
-      if (state && state !== this.state) this._stillAt = performance.now() + 1200;   // плавно вернуться в покой и замереть
+      if (state && state !== this.state) { this._stillAt = performance.now() + 1200; this._wake(); }   // плавно вернуться в покой и замереть
       if (state) this.state = state;
       if (level !== undefined) this.target = level;
       if (voice && level !== undefined) { this._voiceAt = performance.now(); if (level > 0.02) this._voiceSeen = true; }
@@ -1237,7 +1252,7 @@
     look(x, y) {
       if (x === null || x === undefined) { this._looking = false; this.lookX = this.lookY = 0; return; }
       const cl = (v) => Math.max(-1, Math.min(1, +v || 0));
-      this._looking = true; this.lookX = cl(x); this.lookY = cl(y);
+      this._looking = true; this.lookX = cl(x); this.lookY = cl(y); this._wake();
       this._stillAt = Math.max(this._stillAt || 0, performance.now() + 600);
     }
     sounding(now = performance.now()) {
@@ -1246,8 +1261,8 @@
       return !this.voiceLevels;
     }
     draw(now) {
-      if (this.paused) return;                               // окно спрятано — не рисуем
-      if (this.still && this.state === "idle" && now > this._stillAt) return;   // неподвижный кадр уже нарисован
+      if (this.paused) return 400;                           // окно спрятано — не рисуем (и проверяем редко)
+      if (this.still && this.state === "idle" && now > this._stillAt) return 400;   // неподвижный кадр уже нарисован
       const cv = this.canvas, dpr = window.devicePixelRatio || 1;
       const w = cv.clientWidth, h = cv.clientHeight;
       if (!w || !h) return;
@@ -1259,7 +1274,14 @@
       if (this._cost > 6) minDt = Math.max(minDt, Math.min(120, this._cost * 6));
       if (this.calm) minDt = Math.max(minDt, this.state === "idle" ? 160 : 60);   // созвон: облик почти неподвижен, не мешаем
       if (this.lite) minDt = Math.max(minDt, 50);         // лёгкий режим телефона: не чаще ~20 кадров/с и в разговоре
-      if (now - this._last < minDt) return;
+      // глубокий покой: 20 с ничего не происходит (ни голоса, ни взгляда, ни пластинки) — облик дышит ~6 кадров/с, как
+      // при созвоне (calm): движение медленное, глазу почти не заметно, а окну на рабочем столе — в 4 раза меньше работы
+      const spinning = this.vinyl && VINYL_STATES.has(this.state);
+      if ((this.state === "idle" || this.state === "muted" || this.state === "offline") && !spinning && !this._looking && this.target < 0.05 && now - this._calm > 20000)
+        minDt = Math.max(minDt, 160);
+      // допуск 8 мс: кадр экрана приходит не точно к сроку — без него лишнее пробуждение на каждый рисунок
+      this._mdt = minDt;
+      if (now - this._last < minDt - 8) return minDt - (now - this._last);
       const t0 = performance.now();
       const dt = Math.min(0.1, (now - this._last) / 1000); this._last = now;
       if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }

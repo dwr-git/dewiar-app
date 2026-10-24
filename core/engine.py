@@ -704,5 +704,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, Remote
             self._intro_level(v, src)                 # знакомство проверяет микрофон
         now = time.monotonic()
         if now - self._level_t >= 0.066:          # уровень звука в интерфейс — не чаще ~15 раз в секунду
-            self._level_t = now
+            # в тишине уровень почти не меняется — 15 сообщений в секунду всем окнам впустую (отзыв 23.10: «в простое
+            # жрёт процессор»): шлём, когда заметно изменился, и раз в секунду для порядка
+            last = getattr(self, "_level_v", (None, ""))
+            if last[1] == src and last[0] is not None and abs(v - last[0]) < 0.02 and v < 0.05 and now - self._level_t < 1.0:
+                return
+            self._level_t, self._level_v = now, (v, src)
             self.emit("level", v=round(v, 3), src=src)

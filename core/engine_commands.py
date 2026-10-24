@@ -134,7 +134,8 @@ class CommandsMixin:
                          "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»", "five": "«Пять в ряд»", "pairs": "«Найди пару»",
                          "farm": "«Хутор Одуванчик»", "dark": "«Кто боится темноты»", "post": "«Колючую почту»", "doodle": "«Каляку»", "hop": "«Выше облаков»"}
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
-                self._say_quick(say, text, then=lambda: self.emit("window", do="play", game=game))
+                self.emit("window", do="play", game=game)  # сразу: игра — это и есть ответ (экзамен 25.10 не видел, что она открылась)
+                self._say_quick(say, text)
         elif kind == "show":
             if ui:
                 self._say_quick("Я здесь.", text, then=lambda: self.emit("window", do="show"))

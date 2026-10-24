@@ -42,7 +42,7 @@ function md(src) {
       const ordered = /^\s*\d/.test(l), items = [];
       while (i < L.length && /^\s*([-*+]|\d+[.)])\s+/.test(L[i])) {
         let t = L[i++].replace(/^\s*([-*+]|\d+[.)])\s+/, "");
-        const task = t.match(/^\[([ xX])\]\s+(.*)/);
+        const task = t.match(/^\[([ xXхХ])\]\s+(.*)/);   // и русская «х»
         items.push(task ? `<li class="task"><input type="checkbox" disabled ${task[1] !== " " ? "checked" : ""}>${mdInline(task[2])}</li>` : `<li>${mdInline(t)}</li>`);
       }
       out.push(`<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`); continue; }

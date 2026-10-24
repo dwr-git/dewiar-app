@@ -34,8 +34,8 @@ with sync_playwright() as p:
     ok(pg.evaluate("asked[0]").endswith("cloud.php?p=/news") and pg.evaluate("$('#ann-body .nw-img').getAttribute('src')").endswith("cloud.php?p=/news/img&id=7"),
        "спрашивает ?p=/news без входа; фото — с того же облака")
     ok("Попробуйте!" in pg.inner_text("#ann-body .nw-t") and pg.evaluate("getComputedStyle($('#ann-body .nw-t')).whiteSpace") == "pre-wrap", "текст — с переносами строк")
-    pg.click("#nw-go"); ok(pg.evaluate("opened") == ["https://dewiar.pro/"], "кнопка ссылки открывает видео или страницу")
-    pg.click("#nw-ok"); pg.wait_for_timeout(300)
+    pg.click("#an-go"); ok(pg.evaluate("opened") == ["https://dewiar.pro/"], "кнопка ссылки открывает видео или страницу")
+    pg.click("#an-ok"); pg.wait_for_timeout(300)
     ok(not pg.evaluate("$('#sh-ann').classList.contains('on')") and pg.evaluate("S.annSeen") == 7, "«Понятно» — закрыто, номер запомнен")
     pg.evaluate("annAt = 0; annCheck(false)"); pg.wait_for_timeout(400)
     ok(not pg.evaluate("$('#sh-ann').classList.contains('on')"), "второй раз то же объявление не всплывает")
@@ -44,7 +44,11 @@ with sync_playwright() as p:
     ok(not pg.evaluate("$('#sh-ann').classList.contains('on')") and pg.evaluate("S.annSeen") == 7, "открыт другой лист — объявление подождёт")
     pg.evaluate("closeSheets(); handleIntent({ action: 'news' })"); pg.wait_for_timeout(500)
     ok(pg.evaluate("$('#sh-ann').classList.contains('on')") and pg.inner_text("#ann-body h2") == "Сервер на обслуживании" and pg.evaluate("$('#ann-body .nw-k').classList.contains('warn')")
-       and not pg.query_selector("#nw-go"), "уведомление открывает новое; предупреждение — своим цветом, без ссылки — без кнопки")
+       and not pg.query_selector("#an-go"), "уведомление открывает новое; предупреждение — своим цветом, без ссылки — без кнопки")
+    # №245: сначала «Что нового» (там своё «Понятно»), потом объявление — его «Понятно» закрывает именно его
+    pg.evaluate("closeSheets(); newsShow([{ phone: '0.6.98', items: [{ title: 'Новое', text: 'Текст' }] }]); closeSheets(); annShow(NEWS[0])"); pg.wait_for_timeout(400)
+    pg.click("#an-ok"); pg.wait_for_timeout(400)
+    ok(not pg.evaluate("$('#sh-ann').classList.contains('on')"), "«Понятно» объявления закрывает его, даже если раньше открывали «Что нового» (№245)")
     ok(not errs, f"без ошибок на странице: {errs[:2]}")
     b.close()
 import collections

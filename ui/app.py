@@ -2336,11 +2336,22 @@ class Api:
             return on
         try:
             if WIN:
-                win = getattr(self, "_pad", None)
-                if win is not None:
-                    win.toggle_fullscreen()
-                hw = winshell.hwnd(PAD_TITLE)
-                if on and hw:
+                # 25.10, владелец: «во весь экран — просто убирает скругления, и всё»: toggle_fullscreen у окна без рамки
+                # (WinForms) ничего не делает — растягиваем сами на весь монитор, где лист, и снимаем форму
+                win, hw = getattr(self, "_pad", None), winshell.hwnd(PAD_TITLE)
+                if on and win is not None and hw:
+                    mon = winshell.monitor_area(hw)
+                    if mon:
+                        l, t, r, b = mon
+                        try:
+                            form = win.native
+                            from System import Action
+                            from System.Drawing import Size
+                            form.Invoke(Action(lambda f=form: (setattr(f, "MinimumSize", Size(1, 1)), setattr(f, "MaximumSize", Size(0, 0)))))
+                        except Exception:  # noqa: BLE001
+                            pass
+                        win.resize(int(round(r - l)), int(round(b - t)))
+                        winshell.move(hw, l, t)
                     import threading
                     threading.Timer(0.35, lambda: winshell.shape_rects(hw, [(0, 0, 20000, 20000)])).start()
             else:
@@ -2418,7 +2429,7 @@ class Api:
     def _pad_follow_at(self, x, y):
         """Во время перетаскивания: карточка будет в (x, y) — блокнот рядом, той же стороной и тем же сдвигом."""
         g = getattr(self, "_pad_g", None)
-        if not g:
+        if not g or getattr(self, "_pad_full", False):        # игра на весь экран — лист не ездит за виджетом
             return
         try:
             px = x - g["gap"] - g["w"] if g["side"] == "left" else x + SIZES["card"][0]

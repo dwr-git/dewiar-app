@@ -199,21 +199,47 @@
   #ed pre code { background: none; padding: 0; white-space: pre; }
   #ed hr { border: 0; height: 1px; background: var(--line); margin: 1em 0; }
   #ed mark { background: rgba(255,214,102,.35); color: inherit; border-radius: 3px; padding: 0 2px; }
-  /* Цвет в тексте листа (24.10, владелец: «содержимое чуть ярче… осторожно добавить цветов»): два оттенка темы —
-     акцент (заголовки, маркеры, ссылки, цитаты) и тёплый (жирное, код); всё через color-mix от цветов темы, без кислотности */
-  #ed { --h1c: color-mix(in srgb, var(--acc) 72%, var(--ink)); --h2c: color-mix(in srgb, var(--acc) 50%, var(--ink));
-        --warm: #c4572e; --warm-soft: rgba(224,122,74,.12); }
-  body:not(.light) #ed { --h1c: color-mix(in srgb, var(--acc) 70%, #fff); --h2c: color-mix(in srgb, var(--acc) 45%, #fff); --warm: #ffb38a; --warm-soft: rgba(255,179,138,.12); }
+  /* Цвет в тексте листа (24.10, владелец: «содержимое чуть ярче… осторожно добавить цветов»), схемы «под настроение»
+     (25.10: «тёмно-синий заголовок ассоциируется со ссылками… разные схемы под настроение») — кнопка-палитра рядом с
+     размером текста, хранится в ui.pad_colors. Каждая схема — пять оттенков: --h1c, --h2c заголовки, --warm жирное и
+     код, --mk маркеры, цитаты и черта, --emc курсив. Ссылки всегда цвета темы (--acc), поэтому заголовок с ними не спутать. */
+  #ed, #cs button { --h1c: var(--ink); --h2c: #8a5a2b; --warm: #b9502a; --mk: #c4873c; --emc: color-mix(in srgb, var(--ink) 80%, #8a5a2b); }
+  body:not(.light) #ed, body:not(.light) #cs button { --h1c: var(--ink); --h2c: #e8bb8e; --warm: #ffb38a; --mk: #e0a66a; --emc: color-mix(in srgb, var(--ink) 80%, #e8bb8e); }
+  #ed[data-cs="theme"], #cs [data-cs="theme"] { --h1c: color-mix(in srgb, var(--acc) 72%, var(--ink)); --h2c: color-mix(in srgb, var(--acc) 50%, var(--ink)); --warm: #c4572e; --mk: var(--acc); --emc: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
+  body:not(.light) #ed[data-cs="theme"], body:not(.light) #cs [data-cs="theme"] { --h1c: color-mix(in srgb, var(--acc) 70%, #fff); --h2c: color-mix(in srgb, var(--acc) 45%, #fff); --warm: #ffb38a; --mk: var(--acc); --emc: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
+  #ed[data-cs="forest"], #cs [data-cs="forest"] { --h1c: #22553d; --h2c: #4c7a32; --warm: #b4561f; --mk: #3f8a5e; --emc: color-mix(in srgb, var(--ink) 80%, #3f8a5e); }
+  body:not(.light) #ed[data-cs="forest"], body:not(.light) #cs [data-cs="forest"] { --h1c: #a6dcb9; --h2c: #c5df92; --warm: #ffb07a; --mk: #84c99e; --emc: color-mix(in srgb, var(--ink) 80%, #84c99e); }
+  #ed[data-cs="sea"], #cs [data-cs="sea"] { --h1c: #145a68; --h2c: #23807f; --warm: #cc4f34; --mk: #2a8f99; --emc: color-mix(in srgb, var(--ink) 80%, #2a8f99); }
+  body:not(.light) #ed[data-cs="sea"], body:not(.light) #cs [data-cs="sea"] { --h1c: #93d7e2; --h2c: #a6e2d6; --warm: #ff9f86; --mk: #74c8d3; --emc: color-mix(in srgb, var(--ink) 80%, #74c8d3); }
+  #ed[data-cs="dusk"], #cs [data-cs="dusk"] { --h1c: #573487; --h2c: #8a3c7c; --warm: #c03d64; --mk: #8a5cc8; --emc: color-mix(in srgb, var(--ink) 80%, #8a5cc8); }
+  body:not(.light) #ed[data-cs="dusk"], body:not(.light) #cs [data-cs="dusk"] { --h1c: #cdb7f6; --h2c: #eeadd9; --warm: #ff9ab5; --mk: #b89cf0; --emc: color-mix(in srgb, var(--ink) 80%, #b89cf0); }
+  #ed[data-cs="plain"], #cs [data-cs="plain"], body:not(.light) #ed[data-cs="plain"], body:not(.light) #cs [data-cs="plain"] { --h1c: var(--ink); --h2c: var(--ink); --warm: var(--ink); --mk: var(--faint); --emc: var(--ink); }
   #ed h1 { color: var(--h1c); }
-  #ed h2 { color: var(--h2c); }
+  #ed h2, #ed h3 { color: var(--h2c); }
   #ed h1 + p, #ed h2 + p { margin-top: .35em; }
   #ed strong { color: var(--warm); font-weight: 700; }
-  #ed em { color: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
-  #ed li::marker { color: var(--acc); }
+  #ed em { color: var(--emc); }
+  #ed li::marker { color: var(--mk); }
   #ed ol > li::marker { font-weight: 700; }
-  #ed code { color: var(--warm); background: var(--warm-soft); }
-  #ed blockquote { box-shadow: inset 3px 0 0 var(--acc); background: linear-gradient(90deg, var(--acc-soft), transparent 70%); border-radius: 0 10px 10px 0; padding: 6px 12px 6px 14px; color: var(--ink); }
-  #ed hr { height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--acc-soft), var(--acc), var(--acc-soft)); opacity: .55; }
+  #ed code { color: var(--warm); background: color-mix(in srgb, var(--warm) 11%, transparent); }
+  #ed[data-cs="plain"] code { background: var(--code); }
+  #ed blockquote { box-shadow: inset 3px 0 0 var(--mk); background: linear-gradient(90deg, color-mix(in srgb, var(--mk) 12%, transparent), transparent 70%); border-radius: 0 10px 10px 0; padding: 6px 12px 6px 14px; color: var(--ink); }
+  #ed hr { height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--mk), transparent); opacity: .5; }
+  /* выбор схемы — палитра рядом с размером текста; в списке у каждой — образец: заголовок, жирное, маркер */
+  #b-cs { position: relative; }
+  #b-cs i { position: absolute; width: 5px; height: 5px; border-radius: 50%; }
+  #cs { position: fixed; z-index: 30; min-width: 214px; padding: 6px; border-radius: 14px; background: var(--paper); display: none;
+        box-shadow: 0 16px 40px -14px rgba(0,0,0,.5), inset 0 0 0 1px var(--line); }
+  body.light #cs { box-shadow: 0 18px 44px -16px rgba(20,32,60,.35), inset 0 0 0 1px var(--line); }
+  #cs.on { display: block; }
+  #cs button { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; width: 100%; padding: 7px 10px; border-radius: 10px; text-align: left; }
+  #cs button:hover, #cs button:focus-visible { background: var(--chip); outline: none; }
+  #cs button[aria-checked="true"] { background: var(--chip2); }
+  #cs b { font-size: 14px; font-weight: 800; color: var(--h1c); }
+  #cs small { grid-column: 1; font-size: 12px; color: var(--muted); } #cs small em { font-style: normal; font-weight: 700; color: var(--warm); }
+  #cs small u { text-decoration: none; color: var(--h2c); font-weight: 700; }
+  #cs .dots { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 3px; }
+  #cs .dots i { width: 9px; height: 9px; border-radius: 50%; }
   #ed img { max-width: 100%; border-radius: 12px; display: block; margin: 6px 0; min-height: 24px; background: var(--chip); }
   #ed img.sel { outline: 2px solid var(--acc); }
   #imgx { position: absolute; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center;
@@ -302,8 +328,9 @@
     <button class="tool" data-c="code" title="Код"><svg viewBox="0 0 24 24"><path d="m9 8-4 4 4 4M15 8l4 4-4 4"/></svg></button>
     <span class="sep"></span>
     <button class="tool" id="b-size" title="Размер текста (Ctrl + колёсико, Ctrl+= и Ctrl+−)" aria-label="Размер текста" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M3 18 8 6l5 12M4.7 14h6.6M15 18l3.2-7.5L21.4 18M15.9 16h4.6"/></svg></button>
-    <div id="sz" role="group" aria-label="Размер текста" title="Размер текста (Ctrl + колёсико, Ctrl+= и Ctrl+−)"><button class="ib" id="sz-m" aria-label="Мельче">A−</button><input type="range" id="sz-r" min="80" max="170" step="5" aria-label="Размер текста, %"><button class="ib" id="sz-p" aria-label="Крупнее">A+</button><b id="sz-v" title="Щелчок — как было">100 %</b></div>
+    <div id="sz" role="group" aria-label="Размер текста" title="Размер текста (Ctrl + колёсико, Ctrl+= и Ctrl+−)"><button class="ib" id="b-cs" title="Цвета текста — схема под настроение" aria-label="Цвета текста" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.3 0 2-.9 2-1.9 0-1.3-1-1.6-1-2.8 0-1 .8-1.8 1.8-1.8H17a3.5 3.5 0 0 0 3.5-3.5c0-3.9-3.8-7-8.5-7z"/><circle cx="7.6" cy="11" r="1.1"/><circle cx="10.4" cy="7.4" r="1.1"/><circle cx="14.8" cy="7.6" r="1.1"/></svg></button><button class="ib" id="sz-m" aria-label="Мельче">A−</button><input type="range" id="sz-r" min="80" max="170" step="5" aria-label="Размер текста, %"><button class="ib" id="sz-p" aria-label="Крупнее">A+</button><b id="sz-v" title="Щелчок — как было">100 %</b></div>
     <input type="file" id="file" accept="image/*" hidden multiple>
+    <div id="cs" role="menu" aria-label="Цвета текста"></div>
   </div>
   <div id="play"><div id="shelf" role="list" aria-label="Игры"></div><iframe id="game" title="Игра" allow="autoplay; gamepad"></iframe></div>
   <div id="sheet"><div id="ed" contenteditable="true" spellcheck="true" data-ph="Пишите прямо здесь — сохранится само.&#10;- пробел — список, [] пробел — задача, # пробел — заголовок.&#10;Ссылки, таблицы и картинки — просто вставьте (Ctrl+V)."></div><button id="imgx" hidden title="Убрать картинку (Delete)" aria-label="Убрать картинку"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>

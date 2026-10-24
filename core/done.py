@@ -223,8 +223,8 @@ def reminder_match(title, reminders, now=None, ahead=False):
         return None
     now = now or dt.datetime.now()
     ends = [max(now.replace(hour=23, minute=59, second=59), now + dt.timedelta(hours=3))]
-    if ahead:
-        ends.append(now + dt.timedelta(hours=36))
+    if ahead:                                     # и весь завтрашний день (экзамен 25.10: в 00:45 план «на завтра в 16 и 19» не находился)
+        ends.append(max(now + dt.timedelta(hours=36), (now + dt.timedelta(days=1)).replace(hour=23, minute=59, second=59)))
     for end in ends:
         best, bs = None, 0.0
         for x in reminders:

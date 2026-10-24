@@ -30,8 +30,10 @@ class MusicMixin:
         if bot is not None and not bot.paired():
             deliver, note = "voice", f" {bot.TITLE} пока не подключён — пока буду говорить голосом (подключить: студия → «Подключение»)."
         item = self.reminders.add(c["at"], c["task"], c["repeat"], "job", {"deliver": deliver, "brief": c["brief"]})
-        where = f"присылать в {bot.TITLE}" if bot is not None and deliver != "voice" else "говорить голосом и показывать в виджете"
-        msg = (f"Хорошо: {describe_repeat(c['repeat'])} буду {where} — «{item['text']}». "
+        # подтверждение — что это делает помощник сам, а не напоминание человеку (экзамен 25.10: «каждый час буду говорить
+        # голосом — „Проверяй почту…“» судья принял за напоминание «проверь почту» — так и человек мог понять)
+        tell = f"пришлю в {bot.TITLE}" if bot is not None and deliver != "voice" else "скажу голосом и покажу в виджете"
+        msg = (f"Хорошо, беру это на себя: {describe_repeat(c['repeat'])} — «{item['text']}». Что получится — {tell}. "
                f"Первый раз — {human(c['at'])}.{note} Отменить — в студии, «Напоминания».")
         self.emit("reminder_set", item=self._reminder_public(item))
         self._say_quick(msg, text, via)

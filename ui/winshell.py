@@ -129,6 +129,17 @@ user32.MonitorFromWindow.restype = wintypes.HMONITOR
 user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
 
 
+def monitor_area(h):
+    """Весь монитор, на котором окно h (с панелью задач), логические px: (лево, верх, право, низ). Нет — None."""
+    mon = user32.MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST)
+    mi = MONITORINFO()
+    mi.cbSize = ctypes.sizeof(MONITORINFO)
+    if not mon or not user32.GetMonitorInfoW(mon, ctypes.byref(mi)):
+        return None
+    k, m = scale(h), mi.rcMonitor
+    return m.left / k, m.top / k, m.right / k, m.bottom / k
+
+
 def work_area(h=None):
     """Рабочая область монитора, на котором окно h (без h — основного), логические px. 21.10, №161: блокнот считался по
     основному монитору — у виджета на втором мониторе он вставал за край экрана и не был виден."""

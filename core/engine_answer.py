@@ -84,6 +84,12 @@ def _thumb(data, side=320):
 
 
 # «об этом», «о ней», «о последней заметке», «это» — напоминание о сказанном раньше, а не текст напоминания
+# «запиши на послезавтра в 12 к Юле на массаж», «запиши меня на завтра в 15 к стоматологу» — дело со временем, а не заметка
+# (экзамен 25.10: «Записал: «На послезавтра в 12 к Юле на…»» — записалось заметкой, в «Делах» пусто)
+APPT_RX = re.compile(r"^(?:[\w-]+,\s*)?(?:запиши|запишите|записать|занеси|внеси|поставь|добавь)\s+(?:мне\s+|меня\s+)?"
+                     r"(?:в\s+(?:дела|планы|список\s+дел)\s+)?(?P<rest>(?:на\s+)?(?:сегодня|завтра|послезавтра|понедельник|вторник|сред[уа]|четверг|"
+                     r"пятниц[уа]|суббот[уа]|воскресенье|\d{1,2}(?:\s+[а-я]+|\.\d{1,2}))\b.*)$", re.I)
+APPT_TIME_RX = re.compile(r"\bв\s+\d{1,2}(?:[:.]\d\d)?\b|\b\d{1,2}:\d\d\b|\bутр|\bвечер|\bдн[её]м\b|\bв\s+обед", re.I)
 REF_RX = re.compile(r"^\s*(?:об?\s+)?(?:этом|это|этой|этого|ней|нем|нём|том|последн\w*\s+заметк\w*|заметк\w*|сказанном)\s*[.!]?\s*$", re.I)
 
 
@@ -195,6 +201,15 @@ class AnswerMixin:
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._draft_cmd(text, via):
             return                                       # «запиши в книгу: …» — дословно в черновик автора
         if not raw and not quiet and not images and "\n\nВложения:" not in text:
+            ma = APPT_RX.match(text.strip())
+            if ma and APPT_TIME_RX.search(ma.group("rest")):
+                from when import parse as parse_when
+                r = parse_when("напомни " + ma.group("rest"))
+                if r and r.get("text") and not r.get("repeat"):
+                    r["said"] = text
+                    self._set_reminder_fast(r, via)        # дело в «Делах» со временем (как «напомни …»)
+                    return
+        if not raw and not quiet and not images and "\n\nВложения:" not in text:
             from capture import parse as parse_capture
             c = parse_capture(text)
             if c and self._capture(c, text, via):
@@ -209,6 +224,8 @@ class AnswerMixin:
             return                                       # «позвони Людмиле по видео» — человеку из «Близких» сразу, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._plan_cmd(text, via):
             return                                       # «запланируй на сегодня: в 13 …, в 16 …» — дела дня, без модели
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._task_del_cmd(text, via):
+            return                                       # «удали задачу „Исследование“» — сразу, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._mark_cmd(text, via):
             return                                       # «я позвонил в банк», «готово, купил хлеб» — отметка, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._timer_cmd(text, via):
@@ -1293,9 +1310,11 @@ class AnswerMixin:
                 self.probe_tools_bg()                  # ещё не проверяли — проверим в фоне, этот ответ — в режиме по умолчанию
             system = self._system(bool(specs))
             import boundaries
-            from llm import POEM_ASK, POEM_NOTE
+            from llm import POEM_ASK, POEM_NOTE, RECO_ASK, RECO_NOTE
             if POEM_ASK.search(text.split("\n\nВложения:")[0]):
                 system += POEM_NOTE                     # стихи — рифмы по ударению подбираются заранее
+            elif RECO_ASK.search(text.split("\n\nВложения:")[0]):
+                system += RECO_NOTE                     # советы фильмов и песен — только существующее
             if boundaries.rude(text):                  # грубят самому помощнику — спокойная граница в этом ходе, счётчик в пульс
                 system += boundaries.NOTE
                 self.health_count("rude")
@@ -1345,6 +1364,14 @@ class AnswerMixin:
                 ctx.append(kb.strip())
             if images:
                 ctx.append(VISION_HINT)                      # фото: перевод, документ, еда (идеи пользователей 24.10)
+            elif len(text) < 400:
+                try:
+                    import guide
+                    gh = guide.hint(text, "pc")                  # «как защищены мои данные?» — раздел руководства сразу
+                    if gh:
+                        ctx.append(gh)
+                except Exception:  # noqa: BLE001
+                    pass
             msgs = _put_context(msgs, "\n\n".join(c for c in ctx if c))
             split, last, codef = SentenceSplitter(), 0.0, CodeFilter()
             # вслух — не больше ~900 символов (около минуты): длинный ответ дальше только на экране («Открыть целиком»);

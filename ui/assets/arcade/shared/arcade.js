@@ -39,6 +39,10 @@ if (params.get('light') === '1') document.documentElement.classList.add('light')
 A.phone = params.get('phone') === '1';
 if (A.phone) document.documentElement.classList.add('phone');   // светлая тема Dewiar — arcade.css :root.light
 A.framed = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+/* сбой игры — хозяину (телефон пишет его в свой журнал: так он попадёт в отчёт «Сообщить о проблеме») */
+A.report = (text) => { if (A.framed) { try { window.parent.postMessage({ arcade: 'log', text: String(text).slice(0, 300) }, '*'); } catch (e) { /* хозяина нет */ } } };
+addEventListener('error', (e) => A.report('ошибка: ' + (e.message || e) + (e.lineno ? ' (строка ' + e.lineno + ')' : '')));
+addEventListener('unhandledrejection', (e) => A.report('ошибка: ' + ((e.reason && e.reason.message) || e.reason)));
 A.home = (href) => { if (A.framed) { try { window.parent.postMessage({ arcade: 'home' }, '*'); } catch (e) { /* хозяина нет */ } } else location.href = href; };
 
 /* ---------- математика ---------- */
@@ -561,7 +565,7 @@ A.game = function (cfg) {
     const s = Math.max(.1, Math.min(aw / W, ah / H));
     const cw = Math.floor(W * s), ch = Math.floor(H * s);
     stage.style.width = cw + 'px'; stage.style.height = ch + 'px';
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5, g.dprCap || 9);
     canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
     g.scale = canvas.width / W;
     const portraitPhone = A.isTouch && innerHeight > innerWidth;
@@ -588,6 +592,7 @@ A.game = function (cfg) {
      блока») — пространство вокруг красится цветами краёв самого поля (раз в 1,5 с), рамка поля пропадает: игра словно
      разлита по всему окну, без «телефона посередине». */
   let tintAt = 0;
+  let tintCv = null, tintCx = null;
   function tint(now) {
     if (A.shot || now - tintAt < 1500) return;
     tintAt = now;
@@ -595,18 +600,36 @@ A.game = function (cfg) {
     wrap.classList.toggle('tinted', free);
     if (!free) return;
     try {
+      // края поля — через крошечный холст 2×6: getImageData прямо с поля (12 раз в 1,5 с) Chrome считал «частым чтением»
+      // и переводил поле игры на процессор — на телефоне «Каляка» с тысячами линий начинала моргать и вставать (25.10)
       const cw = canvas.width, ch = canvas.height, stops = [];
+      if (!tintCv) { tintCv = document.createElement('canvas'); tintCv.width = 2; tintCv.height = 6; tintCx = tintCv.getContext('2d', { willReadFrequently: true }); }
+      tintCx.clearRect(0, 0, 2, 6);
+      tintCx.drawImage(canvas, 0, 0, 4, ch, 0, 0, 1, 6); tintCx.drawImage(canvas, cw - 4, 0, 4, ch, 1, 0, 1, 6);
+      const d = tintCx.getImageData(0, 0, 2, 6).data;
       for (let i = 0; i < 6; i++) {
-        const y = Math.min(ch - 1, Math.round(ch * (i + .5) / 6)), a = ctx.getImageData(2, y, 1, 1).data, b = ctx.getImageData(cw - 3, y, 1, 1).data;
+        const a = d.subarray(i * 8, i * 8 + 4), b = d.subarray(i * 8 + 4, i * 8 + 8);
         stops.push('rgb(' + ((a[0] + b[0]) >> 1) + ',' + ((a[1] + b[1]) >> 1) + ',' + ((a[2] + b[2]) >> 1) + ')');
       }
       wrap.style.setProperty('--edge', 'linear-gradient(180deg,' + stops.join(',') + ')');
     } catch (e) { wrap.classList.remove('tinted'); }
   }
+  /* Слабый телефон (25.10, владелец: «Каляка на телефоне — быстро моргает экран и подвисает»): 1) за кадр — не больше
+     4 шагов игры: иначе медленный кадр копит шаги, следующий ещё медленнее, и игра «замерзает»; 2) кадры стабильно
+     реже ~25 в секунду — рисуем в меньшем разрешении (ступенями до 1×), картинка чуть мягче, зато игра идёт. */
+  let slowAt = performance.now(), slowN = 0, slowSum = 0;
   function frame(now) {
-    const dt = Math.min(.1, (now - last) / 1000); last = now;
+    const raw = now - last, dt = Math.min(.1, raw / 1000); last = now;
     acc += dt;
-    while (acc >= STEP) { step(); acc -= STEP; }
+    let n = 0;
+    while (acc >= STEP && n < 4) { step(); acc -= STEP; n++; }
+    if (n === 4) acc = 0;
+    if (A.isTouch && !document.hidden && raw < 1000) { slowN++; slowSum += raw; }
+    if (now - slowAt > 2500) {
+      const avg = slowN ? slowSum / slowN : 0, cur = Math.min(window.devicePixelRatio || 1, 2.5, g.dprCap || 9);
+      if (avg > 40 && cur > 1.01) { g.dprCap = Math.max(1, cur - .5); fit(); A.report && A.report('медленно: ' + Math.round(avg) + ' мс на кадр — разрешение ' + g.dprCap + '×'); }
+      slowAt = now; slowN = 0; slowSum = 0;
+    }
     ctx.setTransform(g.scale, 0, 0, g.scale, 0, 0);
     ctx.imageSmoothingEnabled = true;
     if (g.shakeT > 0 && !g.paused) ctx.translate(A.rand(-1, 1) * g.shakeA, A.rand(-1, 1) * g.shakeA);

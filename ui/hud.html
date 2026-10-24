@@ -495,7 +495,7 @@
     <button class="btn" id="b-lo" hidden title="Ничего не уходит в интернет: стоп-кран включён. Выключить — студия → «Безопасность»"><svg viewBox="0 0 24 24"><path d="M12 3.2 5 6v5.6c0 4.2 2.9 7.7 7 9.2 4.1-1.5 7-5 7-9.2V6z"/><path d="m9 12 2.2 2.2L15.3 10"/></svg></button>
     <button class="btn" id="b-bug" title="Сообщить о проблеме — сниму экран и открою форму жалобы"><svg viewBox="0 0 24 24"><rect x="6.5" y="7" width="11" height="14.5" rx="5.5"/><path d="M8.8 7.6a3.2 3.2 0 0 1 6.4 0M12 11.5v10M6.5 12.5H2.5M21.5 12.5h-4M6.8 17.5 3 19.8M17.2 17.5l3.8 2.3M7.5 9.2 4 6.5M16.5 9.2 20 6.5"/></svg></button>
     <!-- обновление одним нажатием (24.10, владелец: «возле жучка не хватает значка обновления») -->
-    <button class="btn" id="b-upd" title="Обновления — проверить и обновить одним нажатием" aria-label="Обновления"><svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 0 1-12.9 5.2M4.5 12a7.5 7.5 0 0 1 12.9-5.2"/><path d="M17.6 3v3.9h-3.9M6.4 21v-3.9h3.9"/></svg></button>
+    <button class="btn" id="b-upd" title="Обновления — проверить и обновить одним нажатием" aria-label="Обновления"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
   </div>
   <div id="corner">
     <!-- блокнот у виджета (20.10): вкладки, ссылки, картинки, таблицы, задачи — выезжает рядом, синхронизируется (ui/pad.html) -->
@@ -1320,7 +1320,7 @@ addEventListener("resize", orbScale); orbScale();
   });
 })();
 document.body.classList.toggle("mini", mode === "mini");
-window.hudActive = (on) => { entity.paused = !on; };     // зовёт app.py (_activate): спрятанное окно не анимирует облик
+window.hudActive = (on) => { entity.paused = !on; if (on && entity._wake) entity._wake(); };     // зовёт app.py (_activate): спрятанное окно не анимирует облик
 function setMode(m, auto = false) {
   const a = api(); if (!a || m === mode) return;
   a.set_mode(m, auto).then(p => { if (p && !auto) core.call("settings_save", { patch: { ui: { hud_mode: m, hud_x: p[0], hud_y: p[1] } } }).catch(() => {}); }).catch(() => {});

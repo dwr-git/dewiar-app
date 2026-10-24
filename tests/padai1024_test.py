@@ -192,15 +192,15 @@ with sync_playwright() as p:
     pg.click("#ed h1"); pg.keyboard.press("End")
     pg.click("#b-ai"); pg.wait_for_timeout(100); pg.click("#aim [data-act='diagram']"); answer()
     pg.wait_for_timeout(1500)
-    ok(pg.locator("#aip .aib .dw-diagram svg").count() == 1, "в карточке схема нарисована")
+    ok(pg.locator("#aip .aib .dw-diagram > svg").count() == 1, "в карточке схема нарисована")
     pg.click("#aip .aib2.p"); pg.wait_for_timeout(2500)
-    ok(pg.locator("#ed .dw-diagram svg").count() == 1 and pg.evaluate("document.querySelector('#ed .dw-diagram').contentEditable") == "false",
+    ok(pg.locator("#ed .dw-diagram > svg").count() == 1 and pg.evaluate("document.querySelector('#ed .dw-diagram').contentEditable") == "false",
        "в листе — схема картинкой (не правится случайно)")
     ok("```mermaid\nflowchart LR" in md(pg) and "Договор" in md(pg), "в файле схема — блоком ```mermaid")
     pg.dblclick("#ed .dw-diagram"); pg.wait_for_timeout(200)
     ok(pg.locator('#ed pre[data-lang="mermaid"]').count() == 1, "двойной щелчок по схеме — её текст для правки")
     pg.click("#ed h1"); pg.wait_for_timeout(1800)
-    ok(pg.locator("#ed .dw-diagram svg").count() == 1, "ушли из текста схемы — снова картинка")
+    ok(pg.locator("#ed .dw-diagram > svg").count() == 1, "ушли из текста схемы — снова картинка")
 
     # 5) ошибка модели — понятно и «Ещё раз»; Esc закрывает
     pg.evaluate("AI_REPLY.simplify = 'ERR'")

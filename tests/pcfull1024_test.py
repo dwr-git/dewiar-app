@@ -14,8 +14,11 @@ def ok(c, m):
 
 
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
-ok("def pad_full(self, on)" in app and "toggle_fullscreen()" in app and "gw.fullscreen()" in app and "gw.unfullscreen()" in app,
-   "Api.pad_full: Windows и Linux — на весь экран и обратно")
+pf = app[app.index("def pad_full"):app.index("def pad_hide")]
+ok("winshell.monitor_area(hw)" in pf and "win.resize(" in pf and "toggle_fullscreen()" not in pf and "gw.fullscreen()" in pf and "gw.unfullscreen()" in pf,
+   "Api.pad_full: Windows — растягиваем сами на весь монитор (toggle_fullscreen у окна без рамки не работал, 25.10), Linux — fullscreen")
+ok("def monitor_area(h)" in (ROOT / "ui/winshell.py").read_text(encoding="utf-8") and 'getattr(self, "_pad_full", False):        # игра на весь экран' in app,
+   "весь монитор — rcMonitor; на весь экран лист не ездит за виджетом")
 ok(re.search(r"def pad_hide\(self\):[\s\S]{0,300}self\.pad_full\(False\)", app), "лист спрятали из полного экрана — сначала обратно")
 ok("_pad_apply(g, True)" in app[app.index("def pad_full"):app.index("def pad_hide")], "обратно — лист у виджета с прежней формой")
 

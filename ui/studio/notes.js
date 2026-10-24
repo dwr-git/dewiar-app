@@ -27,20 +27,22 @@ function ntParse(path, text) {
 }
 const ntCompose = (d) => `# ${d.title}\n\n${d.date ? d.date + "\n\n" : ""}${d.body.trim()}\n${d.att.length ? "\n" + d.att.map(a => a.line).join("\n") + "\n" : ""}`;
 
-/* простая разметка для чтения: абзацы, списки, [ ] / [x], **жирный**, ## заголовки, ссылки */
-function ntRender(md) {
-  const inl = (t) => escH(t).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)»])/g, '<a href="#" data-ext="$1">$1</a>');
-  const out = []; let list = null;
-  for (const ln of String(md || "").split("\n")) {
-    const li = /^\s*[-*•]\s+(\[[ xх]\]\s*)?(.*)$/i.exec(ln);
-    if (li) { if (!list) { list = []; out.push(list); } list.push(li[1] ? `<li class="ck${/[xх]/i.test(li[1]) ? " on" : ""}">${inl(li[2])}</li>` : `<li>${inl(li[2])}</li>`); continue; }
-    list = null;
-    if (/^#{1,4}\s+/.test(ln)) out.push(`<h4>${inl(ln.replace(/^#+\s+/, ""))}</h4>`);
-    else if (ln.trim()) out.push(`<p>${inl(ln)}</p>`);
-    else out.push("");
-  }
-  return out.map(x => Array.isArray(x) ? `<ul>${x.join("")}</ul>` : x).join("");
+/* Заметка — как в блокноте (25.10, владелец: «в заметках диаграммы сырые и нет цветовых схем»): полный Markdown
+   (folder.js md: заголовки, цитаты, таблицы, код, задачи), схемы Mermaid картинкой (rich.js), ссылки — во внешнем браузере;
+   цвета — та же схема, что выбрана в блокноте (ui.pad_colors, классы .nt-body[data-cs] в studio.css). */
+function ntRender(text) {
+  if (!String(text || "").trim()) return "";
+  return md(String(text)).replace(/<a href="(https?:[^"]+)" target="_blank">/g, '<a href="#" data-ext="$1">')
+    .replace(/(^|[\s>(«])(https?:\/\/[^\s<"]+[^\s<".,;:!?)»])/g, '$1<a href="#" data-ext="$2">$2</a>');   // голые ссылки — тоже ссылками
 }
+/* Строка-превью в списке — без значков Markdown: «**НА ПОНЕДЕЛЬНИК**» → «НА ПОНЕДЕЛЬНИК» */
+function ntPlain(t) {
+  return String(t || "").replace(/```\s*mermaid[\s\S]*?(```|$)/g, " ◇ схема ").replace(/```[\s\S]*?(```|$)/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/(^|\s)#{1,6}\s+/g, "$1")
+    .replace(/(^|\s)>\s?/g, "$1").replace(/\[[ xXх]\]\s*/g, "").replace(/\*\*|__|`|==/g, "").replace(/(^|\s)[*_](\S[^*_]*?)[*_](?=\s|$|[.,!?:;])/g, "$1$2")
+    .replace(/\s{2,}/g, " ").trim();
+}
+const ntCs = () => { try { return ((S && S.ui) || {}).pad_colors || ""; } catch (e) { return ""; } };
 
 async function ntLoad() {
   const q = $("#nt-q").value.trim(); let l = [];
@@ -49,7 +51,7 @@ async function ntLoad() {
   $("#nt-count").textContent = q ? `Найдено: ${l.length}` : l.length ? `Всего: ${l.length}` : "";
   $("#nt-list").innerHTML = l.length ? l.map(n => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}">
       <span class="nt-rt"><b>${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? " · " + escH(n.folder) : ""}${n.att ? ` · 📎 ${n.att}` : ""}</small>
-      <em>${ntMark(n.snippet, q) || "без текста"}</em></span>${n.img ? `<i class="nt-th" data-img="${escH(n.img)}"></i>` : ""}</button>`).join("")
+      <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em></span>${n.img ? `<i class="nt-th" data-img="${escH(n.img)}"></i>` : ""}</button>`).join("")
     : `<div class="nt-none">${q ? "Ничего не нашлось — попробуйте другое слово." : "Заметок пока нет. Скажите помощнице: «запиши в заметки…» — или нажмите «Новая заметка»."}</div>`;
   $$("#nt-list .nt-row").forEach(b => b.onclick = () => ntOpen(b.dataset.p));
   $$("#nt-list .nt-th").forEach(ntThumb);
@@ -77,7 +79,8 @@ function ntShow() {
   if (!NT.edit) {
     v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? " · " + escH(ntDir(path).replace(/^Заметки\//, "")) : ""}</small></div>
         <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger" id="nt-del">Удалить</button></span></div>
-      <div class="nt-body">${ntRender(d.body) || `<p class="hint">Пустая заметка — нажмите «Изменить».</p>`}</div>${attHtml(false)}`;
+      <div class="nt-body"${ntCs() ? ` data-cs="${escH(ntCs())}"` : ""}>${ntRender(d.body) || `<p class="hint">Пустая заметка — нажмите «Изменить».</p>`}</div>${attHtml(false)}`;
+    if (window.DewiarRich) DewiarRich.diagrams($("#nt-view .nt-body")).catch(() => { });   // ```mermaid — схемой
     $("#nt-edit").onclick = () => { NT.edit = true; ntShow(); setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 50); };
     $("#nt-open").onclick = () => core.call("ws_open", { path }).catch(e => toast(e.message));
     $("#nt-del").onclick = ntDelete;
