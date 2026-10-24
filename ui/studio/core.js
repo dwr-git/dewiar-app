@@ -84,4 +84,5 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "look") loadLook();
   if (b.dataset.p === "close") loadClose(true);
   if (b.dataset.p === "chat") loadChat();
+  if (b.dataset.p === "home" && window.loadHome) loadHome();
 });

@@ -24,7 +24,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     mock: true, info: () => JSON.stringify({ version: "0.1.0-web", sdk: 0, recognizer: false, tts: false, crash: "" }),
     clearCrash() {}, takeIntent: () => "", pref: (k) => (k in store ? store[k] : (localStorage.getItem("p_" + k) || "")),
     setPref: (k, v) => { store[k] = v; try { localStorage.setItem("p_" + k, v); } catch (e) {} },
-    toast: (t) => console.log("toast", t), vibrate() {}, share() {}, keepScreen() {}, has: () => true, perm: (n) => ev({ type: "perm", name: n, granted: true }),
+    toast: (t) => console.log("toast", t), vibrate() {}, share() {}, keepScreen() {}, immersive() {}, has: () => true, perm: (n) => ev({ type: "perm", name: n, granted: true }),
     openSettings: () => false, notify() {}, setFace(id, name, color, png) { (window._faces = window._faces || {})[id] = { name, color, png: png.length }; },
     http(id, method, url, headers, body, stream) {
       fetch(url, { method, headers: JSON.parse(headers || "{}"), body: body || undefined }).then(async r => {
@@ -2697,7 +2697,7 @@ async function quick(text) {
     const PLAY_RX = new RegExp(`^(?:(?!не\\s)[а-я-]+[\\s,]+)?(?:(?:ну|а|давай|теперь|можешь)\\s+)*(?:(?:поиграем|сыграем|поиграть|поиграй со мной|сыграй со мной)(?:\\s+(?:во что-?\\s*нибудь|в игр[уы]|немного|чуть-?\\s*чуть|в ${G}))*|хочу (?:поиграть|играть|в игр[уы])(?: в ${G})?|(?:открой|запусти|включи|покажи) (?:игры|игру|досуг|аркаду|${G})(?: ${G})?|во что (?:бы )?(?:поиграть|поиграем|сыграть))(?: пожалуйста)?$`);
     if (PLAY_RX.test(t)) {
       const GM = [["snake", /змейк|змею/, "Змейку"], ["racer", /гонк/, "Гонку"], ["bricks", /кирпичик|арканоид/, "Кирпичики"], ["plane", /пилот|самолет/, "Небесного пилота"], ["bip", /(?:^|\s)(?:бип|бегалк)/, "Бипа"],
-        ["blocks", /блоки|тетрис/, "Блоки"], ["candy", /конфетк|три в ряд/, "Конфетки"], ["merge", /слияни|2048/, "Слияние"], ["sudoku", /судоку/, "Судоку"], ["fifteen", /пятнашк/, "Пятнашки"], ["reversi", /реверси|отелло/, "Реверси"],
+        ["blocks", /блоки|тетрис/, "Тетрис"], ["candy", /конфетк|три в ряд/, "Конфетки"], ["merge", /слияни|2048/, "Слияние"], ["sudoku", /судоку/, "Судоку"], ["fifteen", /пятнашк/, "Пятнашки"], ["reversi", /реверси|отелло/, "Реверси"],
         ["tictac", /крестик|нолик/, "Крестики-нолики"], ["crossword", /кроссворд/, "Кроссворд"], ["words", /пять букв|вордл/, "«Пять букв»"], ["glow", /ог[оа]н[её]к|огоньк|сказк/, "«Огонька»"], ["five", /пять в (?:ряд|линию)|гомоку/, "«Пять в ряд»"], ["pairs", /найди пару|(?:^|\s)пар[ыу](?:\s|$)|мемори/, "«Найди пару»"]];
       const g = GM.find(([, rx]) => rx.test(t));
       if (!feat("games")) return { say: "«Досуг» выключен. Включить — «Настройки» → «Ещё» → «Возможности»." };
@@ -4204,17 +4204,24 @@ $("#b-voice").onclick = () => {
 voiceBtn();
 const X_SVG = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 /* шапка «Дела»: сколько сделано сегодня, серия и значки (полученные — ярко, следующий в каждой группе — бледно, с прогрессом) */
+/* 24.10, владелец: «первый блок размытый и не понятный — чуть чётче и понятнее»: без размытого свечения; сверху — сколько
+   сделано и серия словами; ниже — ближайшие цели строками с полоской («Пятёрка — 5 дел за день · 3 из 5»); полученные
+   значки — отдельной строкой «Ваши значки». */
 function doneHead(s) {
-  const chips = [];
+  const goals = [], got = [];
   for (const g of ["day", "streak", "total"]) {
-    const all = ACHIEVE.filter(a => a.g === g), got = all.filter(a => achVal(a, s) >= a.n), next = all.find(a => achVal(a, s) < a.n);
-    got.forEach(a => chips.push(`<button class="ach on" data-tip="${esc(a.icon + " " + a.name + " — " + a.what + " · получено")}">${a.icon}<span>${esc(a.name)}</span></button>`));
-    if (next) chips.push(`<button class="ach" data-tip="${esc(next.icon + " " + next.name + " — " + next.what + " · сейчас " + achVal(next, s) + " из " + next.n)}">${next.icon}<span>${Math.min(achVal(next, s), next.n)}/${next.n}</span></button>`);
+    const all = ACHIEVE.filter(a => a.g === g), next = all.find(a => achVal(a, s) < a.n);
+    all.filter(a => achVal(a, s) >= a.n).forEach(a => got.push(`<button class="ach on" data-tip="${esc(a.icon + " " + a.name + " — " + a.what + " · получено")}">${a.icon}<span>${esc(a.name)}</span></button>`));
+    if (next) { const v = Math.min(achVal(next, s), next.n);
+      goals.push(`<button class="ach" data-tip="${esc(next.icon + " " + next.name + " — " + next.what + " · сейчас " + achVal(next, s) + " из " + next.n)}"><i>${next.icon}</i><span class="dg"><b>${esc(next.name)}</b><small>${esc(next.what)}</small><span class="dbar"><em style="width:${Math.round(v / next.n * 100)}%"></em></span></span><span class="dgn">${v}/${next.n}</span></button>`); }
   }
-  return `<div class="donehd"><div class="dnum"><b>${s.today}</b><small>${s.today ? delaRu(s.today) + " сегодня" : "дел сегодня"}</small></div><div class="dside">`
-    + `<span class="dstreak">${s.streak >= 2 ? `🔥 ${s.streak} ${dnRu(s.streak)} подряд` : s.today ? "Первый день серии" : s.total ? "Отметьте дело — серия продолжится" : "Сделали дело — отметьте его"}`
-    + `<button class="dwhy${doneWhy ? " on" : ""}" id="done-why" aria-label="Что это за награды" aria-expanded="${doneWhy}">?</button></span>`
-    + `<div class="achs">${chips.join("")}</div></div></div>`
+  const streak = s.streak >= 2 ? `🔥 Серия: ${s.streak} ${dnRu(s.streak)} подряд` : s.today ? "Первый день серии — завтра продолжим" : s.total ? "Отметьте сегодня дело — серия продолжится" : "Сделали дело — отметьте его";
+  const sub = s.today ? `лучший день — ${s.bestDay} ${delaRu(s.bestDay)}, всего ${s.total}` : "голосом («я позвонила маме, отметь»), ✓ у напоминания или строкой ниже";
+  return `<div class="donehd"><div class="dtop"><div class="dnum"><b>${s.today}</b><small>${s.today ? delaRu(s.today) + " сегодня" : "дел сегодня"}</small></div>`
+    + `<div class="dside"><span class="dstreak">${streak}</span><small class="dsub">${esc(sub)}</small></div>`
+    + `<button class="dwhy${doneWhy ? " on" : ""}" id="done-why" aria-label="Что это за награды" aria-expanded="${doneWhy}">?</button></div>`
+    + (goals.length ? `<div class="dgoals"><small class="dlab">Следующие значки</small>${goals.join("")}</div>` : "")
+    + (got.length ? `<div class="dgot"><small class="dlab">Ваши значки</small><div class="achs">${got.join("")}</div></div>` : "") + `</div>`
     + (doneWhy ? `<div class="donewhy" id="done-whybox"><b>Зачем это</b><p>Сделали дело — отметьте: скажите «я позвонила маме, отметь», нажмите ✓ у напоминания или впишите ниже. `
       + `Отмеченное попадает сюда, а за него — значки: за дела за день (3, 5, 7, 10), за дни подряд и за всё время. Яркие — уже ваши, бледные — следующие, `
       + `нажмите на значок — сколько осталось. Это просто чтобы видеть, сколько уже сделано, и радоваться: ничего не тратится, видите только вы.</p>`
@@ -4950,14 +4957,18 @@ function playOpen(game) {
 const gameOn = () => !$("#gameov").hidden;
 function gameOpen(id) {
   if (state !== "idle") interrupt();                        // игра на весь экран — голос и прослушивание замолкают
-  const f = $("#gamef"); f.src = DewiarArcade.url(ARC, id) + (document.body.classList.contains("light") ? "?light=1" : "");
+  const f = $("#gamef"); f.src = DewiarArcade.url(ARC, id) + "?phone=1" + (document.body.classList.contains("light") ? "&light=1" : "");   // phone — без скруглений, кнопка «во весь экран»
   $("#gameov").hidden = false; closeSheets();
 }
 function gameClose(toShelf = true) {
-  const f = $("#gamef"); f.src = "about:blank"; $("#gameov").hidden = true;
+  const f = $("#gamef"); f.src = "about:blank"; $("#gameov").hidden = true; gameFull(false);
   if (toShelf && feat("games")) { playShelf(); openSheet("#sh-play"); }
 }
-window.addEventListener("message", (e) => { if (e.data && e.data.arcade === "home" && e.source === $("#gamef").contentWindow) gameClose(); });
+let gameFullOn = false;
+function gameFull(on) { if (gameFullOn === !!on) return; gameFullOn = !!on; document.body.classList.toggle("gamefull", gameFullOn); try { D.immersive(gameFullOn); } catch (e) { } }
+window.addEventListener("message", (e) => { if (!e.data || e.source !== $("#gamef").contentWindow) return;
+  if (e.data.arcade === "home") gameClose();
+  else if (e.data.arcade === "full") gameFull(!!e.data.on); });
 $("#b-play").onclick = () => playOpen("");
 function featApply() { $("#b-play").hidden = !feat("games"); document.body.classList.toggle("has-play", feat("games")); if (!feat("games") && gameOn()) gameClose(false); }
 featApply();
@@ -5213,7 +5224,7 @@ function renderSettings() {
     const tiles = `<p class="hint" style="margin:4px 2px 10px">«Мозг» — это то, чем помощница думает. Проще всего — бесплатно через Dewiar; поменять можно в любой момент.</p><div class="tiles">
       ${loggedIn() || S.join ? "" : `<button class="tile easy" data-w="join">${ICON.dewiar}<b>Подключить бесплатно</b><small>Проще всего: имя и как с вами связаться — и всё. Без регистрации, с подарком на счёте</small></button>`}
       <button class="tile" data-w="dwkey">${ICON.key}<b>Код или ключ Dewiar</b><small>6 цифр с устройства, где Dewiar уже работает, или ключ dw-… от друга</small></button>
-      ${loggedIn() ? "" : `<button class="tile" data-w="account">${ICON.user}<b>Аккаунт dewiar.pro</b><small>Есть логин на сайте — всё настроится само</small></button>`}</div>
+      ${loggedIn() ? "" : `<button class="tile" data-w="account">${ICON.user}<b>Аккаунт dewiar.pro</b><small>Только если команда Dewiar выдала вам логин — регистрации на сайте нет</small></button>`}</div>
       <details class="more pro"><summary>Для опытных: своя модель или ключ сервиса</summary><div class="tiles">
       <button class="tile" data-w="server">${ICON.server}<b>Своя модель</b><small>Ollama, LM Studio, vLLM — на вашем компьютере или сервере дома</small></button>
       <button class="tile" data-w="cloud">${ICON.cloud}<b>Ключ любимого сервиса</b><small>OpenAI, Claude, OpenRouter, DeepSeek или любой сервис по адресу — своим ключом</small></button>

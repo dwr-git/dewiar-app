@@ -140,7 +140,7 @@ function finishClear(g) {
 function titleScreen(g) {
   fresh('title'); g.setPlaying(false);
   g.screen({
-    kicker: A.framed ? 'Досуг' : 'Аркада', title: 'Блоки',
+    kicker: A.framed ? 'Досуг' : 'Аркада', title: 'Тетрис',
     html: `<p>Складывайте фигурки в целые ряды — ряд лопается, а вы получаете очки. Каждые десять рядов — чуть быстрее.</p>${g.best ? `<p class="record">Рекорд: ${g.best.toLocaleString('ru-RU')}</p>` : ''}`,
     button: 'Играть', onGo: () => startGame(g)
   });
@@ -332,7 +332,7 @@ function draw(ctx, g) {
   ctx.restore();
   if (S.mode === 'title') {
     ctx.save(); ctx.translate(BX + COLS * CELL / 2, BY + ROWS * CELL * .38); ctx.rotate(Math.sin(t * 1.4) * .03);
-    A.text(ctx, 'Блоки', 0, 0, { size: 96, weight: 900, color: '#fff', stroke: INK, strokeW: 16 });
+    A.text(ctx, 'Тетрис', 0, 0, { size: 96, weight: 900, color: '#fff', stroke: INK, strokeW: 16 });
     ctx.restore();
   }
   if (S.banner) {
@@ -345,7 +345,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'blocks', tone: 'light', title: 'Блоки', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'candy',
+  id: 'blocks', tone: 'light', title: 'Тетрис', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'candy',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> — сдвиг · <kbd>↑</kbd> — поворот · <kbd>↓</kbd> — быстрее · <kbd>Пробел</kbd> — уронить · <kbd>X</kbd> — в запас · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> — двигать и крутить, <b>Пробел</b> — уронить',

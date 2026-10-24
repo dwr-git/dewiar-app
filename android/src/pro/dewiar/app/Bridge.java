@@ -267,6 +267,7 @@ public final class Bridge {
     }
 
     @JavascriptInterface public void keepScreen(boolean on) { a.keepScreen(on); }
+    @JavascriptInterface public void immersive(boolean on) { a.immersive(on); }
 
     @JavascriptInterface public boolean has(String perm) { return a.has(perm); }
 

@@ -268,6 +268,7 @@
       share(text) { if (navigator.share) navigator.share({ text }).catch(() => { }); },
       copy: (t) => { try { navigator.clipboard.writeText(t); return true; } catch (e) { return false; } },
       keepScreen() { }, setFace() { }, bars() { },
+      immersive(on) { try { if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => { }); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } },
       recognizer: () => !!SR,
       listen(g) { listenWeb(g, false); }, listenHold(g) { listenWeb(g, true); },
       listenServer(g, url, key, model) { listenServer(g, url, key, model, false); },

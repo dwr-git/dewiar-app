@@ -2327,8 +2327,59 @@ class Api:
         threading.Timer(4.0, reveal).start()
         return True
 
+    def pad_full(self, on):
+        """Игра в листе «Досуг» — на весь экран (кнопка в игре; 24.10, владелец: «в играх на компьютере открыть на весь экран»).
+        Выключили — лист снова у виджета, с формой, креплениями и прежним размером (_pad_apply)."""
+        on, prev = bool(on), bool(getattr(self, "_pad_full", False))
+        self._pad_full = on
+        if on == prev:
+            return on
+        try:
+            if WIN:
+                win = getattr(self, "_pad", None)
+                if win is not None:
+                    win.toggle_fullscreen()
+                hw = winshell.hwnd(PAD_TITLE)
+                if on and hw:
+                    import threading
+                    threading.Timer(0.35, lambda: winshell.shape_rects(hw, [(0, 0, 20000, 20000)])).start()
+            else:
+                from gi.repository import GLib
+
+                def run():
+                    from gi.repository import Gtk
+                    gw = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == PAD_TITLE), None)
+                    if gw is None:
+                        return False
+                    if on:
+                        gw.fullscreen()
+
+                        def flat():
+                            gdkw = gw.get_window()
+                            if gdkw is not None:
+                                k = gdkw.get_scale_factor()
+                                shape_window(gw, "rect", (gdkw.get_width() * k, gdkw.get_height() * k))
+                            return False
+                        GLib.timeout_add(350, flat)
+                    else:
+                        gw.unfullscreen()
+                    return True
+                self._gtk(run, timeout=5)
+            if on:
+                self._pad_js("window.padCfg && padCfg({side: 'left', gap: 0, clips: []})")
+            else:
+                import threading
+                g = self._pad_geom()
+                self._pad_g, self._pad_side = g, g["side"]
+                threading.Timer(0.35, lambda: self._pad_apply(g, True)).start()
+        except Exception as e:  # noqa: BLE001
+            print(f"Лист на весь экран: {e}", file=sys.stderr)
+        return on
+
     def pad_hide(self):
         """Страница доиграла «уезжание» — спрятать окно (не закрывать: следующее открытие мгновенное)."""
+        if getattr(self, "_pad_full", False):
+            self.pad_full(False)
         self._pad_on = False
         win = getattr(self, "_pad", None)
         if win is not None:

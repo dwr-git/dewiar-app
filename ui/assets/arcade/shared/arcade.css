@@ -289,3 +289,17 @@ body.game {
 .stagewrap.tinted { background: var(--edge); }
 .framed .stagewrap { margin: 2px 12px 10px; }   /* 24.10, владелец: «окошко игры примыкает к надписям и бортам» — в листе «Досуг» отступы со всех сторон (всегда, чтобы поле не прыгало) */
 .stagewrap.tinted .stage, :root.light .stagewrap.tinted .stage { box-shadow: none; border-radius: 6px; }
+
+/* ---------- телефон (приложение Dewiar, ?phone=1; 24.10) ----------
+   «На мобильном скругления в играх излишни, маленький экран»: поле от края до края, без скруглений и тени.
+   Тёмная игра (Бип) с кнопками под полем — кнопки тёмным стеклом, а не белыми пятнами. */
+html.phone .framed .stagewrap, html.phone .stagewrap { margin: 0; padding: 0; border-radius: 0; }
+html.phone .stage, html.phone .stagewrap.tinted .stage { border-radius: 0; box-shadow: none; }
+html.phone .touchpad.below { padding: 16px 14px max(14px, env(safe-area-inset-bottom, 0px)); }
+:root.tone-dark .touchpad.below .tp, :root.light.tone-dark .touchpad.below .tp {
+  background: rgba(255, 255, 255, .07); border: 1.5px solid rgba(255, 255, 255, .22); box-shadow: 0 10px 26px rgba(0, 0, 0, .35); color: rgba(255, 255, 255, .92);
+}
+:root.tone-dark .touchpad.below .tp.on { background: rgba(124, 140, 255, .45); border-color: rgba(255, 255, 255, .7); }
+html.phone .tp { width: 68px; height: 68px; background: rgba(0, 0, 0, .22); border-color: rgba(255, 255, 255, .28); font-size: 18px; }
+html.phone .tp.big { width: 82px; height: 82px; }
+html.phone .touchpad.below .tp { width: 84px; height: 84px; } html.phone .touchpad.below .tp.big { width: 96px; height: 96px; }

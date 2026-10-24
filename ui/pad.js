@@ -553,7 +553,12 @@ window.padMode = (m) => {
   else { gameStop(); setTimeout(() => ED.focus(), 120); }
   const a = window.pywebview && window.pywebview.api; if (a && a.pad_mode_mark) a.pad_mode_mark(play ? "play" : "notes");
 };
-window.addEventListener("message", (e) => { if (e.data && e.data.arcade === "home" && e.source === $("#game").contentWindow) { gameStop(); shelfDraw(); } });
+/* игра «во весь экран» (24.10, владелец: «можно ли в играх на компьютере открыть на весь экран?»): лист «Досуг» — на весь
+   экран без креплений и зазора, ещё раз (или Esc в игре) — обратно к виджету (Api.pad_full) */
+function padFull(on) { document.body.classList.toggle("full", !!on); const a = api(); if (a && a.pad_full) a.pad_full(!!on).catch(() => { }); }
+window.addEventListener("message", (e) => { if (!e.data || e.source !== $("#game").contentWindow) return;
+  if (e.data.arcade === "home") { if (document.body.classList.contains("full")) padFull(false); gameStop(); shelfDraw(); }
+  else if (e.data.arcade === "full") padFull(!!e.data.on); });
 $("#b-play").onclick = () => padMode("play");
 $("#b-notes").onclick = () => padMode("notes");
 window.padGame = (id) => { padMode("play"); if (id && window.DewiarArcade && DewiarArcade.find(id) && GAMES_ON) gameOpen(id); };

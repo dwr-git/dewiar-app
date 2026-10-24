@@ -60,10 +60,9 @@
 <nav>
   <div class="brand"><canvas id="brand"></canvas><div><b id="bname">Dewiar</b><span id="bsub">голосовой ассистент</span></div></div>
   <button class="cchip" id="nav-cloud" style="display:none" title="ИИ-баланс: на сколько хватит моделей Dewiar. Нажмите — подробности и пополнение"><span>ИИ-баланс</span><em></em><i><b></b></i></button>
-  <button data-p="personas" class="cur">Персонажи</button>
+  <button data-p="home" class="cur" title="Сегодня и все приложения Dewiar">Главная</button>
+  <div class="ng">Каждый день</div>
   <button data-p="chat" title="Вся переписка с персонажами — голосом и текстом">Чат</button>
-  <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу">Что я умею</button>
-  <div class="ng">Мой день</div>
   <button data-p="calendar">Календарь</button>
   <button data-p="reminders">Дела и напоминания</button>
   <button data-p="notes" title="Все заметки: поиск, фото и файлы">Заметки</button>
@@ -79,6 +78,8 @@
   <button data-p="me" class="sub">Обо мне</button>
   <button data-p="folder">Папка</button>
   <div class="ng">Настройка</div>
+  <button data-p="personas">Персонажи</button>
+  <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу">Что я умею</button>
   <button data-p="brain">Мозг</button>
   <button data-p="ears">Слух</button>
   <button data-p="voice">Голос</button>
@@ -99,7 +100,29 @@
 </nav>
 
 <main>
-  <section id="p-personas" class="cur wide">
+  <section id="p-home" class="cur wide">
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+      <linearGradient id="hg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b7bff"/><stop offset="1" stop-color="#4f6cf0"/></linearGradient>
+      <linearGradient id="hg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8fb8"/><stop offset="1" stop-color="#d45cff"/></linearGradient>
+      <linearGradient id="hg3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4fc3ff"/><stop offset="1" stop-color="#3a7bff"/></linearGradient>
+      <linearGradient id="hg4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc24b"/><stop offset="1" stop-color="#ff8a3d"/></linearGradient>
+      <linearGradient id="hg5" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd45c"/><stop offset="1" stop-color="#f2a73b"/></linearGradient>
+      <linearGradient id="hg6" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3fe0b5"/><stop offset="1" stop-color="#14a389"/></linearGradient>
+      <linearGradient id="hg7" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a6b"/><stop offset="1" stop-color="#ff5f8a"/></linearGradient>
+      <linearGradient id="hg8" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b8cff"/><stop offset="1" stop-color="#6a4cff"/></linearGradient>
+    </defs></svg>
+    <div id="hm-body">
+      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p></div></div>
+      <div class="hm-today" id="hm-today"></div>
+      <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть, перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
+      <div class="hm-apps" id="hm-apps"></div>
+      <div class="hm-more2"><div class="hm-card2" id="hm-chat"></div><div class="hm-card2" id="hm-pad"></div></div>
+      <div class="hm-h"><h2>Настройка</h2><span class="hint">раз настроили — и можно не возвращаться</span></div>
+      <div class="hm-set" id="hm-set"></div>
+    </div>
+  </section>
+
+  <section id="p-personas" class="wide">
     <h1>Персонажи</h1>
     <p class="lead">Команда помощников: у каждого своё дело, характер, голос и облик. Лира — главная и умеет всё, Патрик помогает обдумать решения, остальные из «Готовых» сильнее в своём. Позовите любого по имени («Лира, …», «Патрик, …») или нажмите на карточку.</p>
     <div class="team-sw">
@@ -478,7 +501,7 @@
 
   <section id="p-dw" class="wide">
     <h1>Dewiar.pro</h1>
-    <p class="lead">Войдите аккаунтом dewiar.pro — остальное включится само. Метка в углу карточки: зелёная — работает,
+    <p class="lead">Подключите Dewiar.pro — модели, Знания и голоса включатся сами. Метка в углу карточки: зелёная — работает,
       жёлтая — стоит взглянуть, красная — не работает. «Проверить всё» — проверит каждую.</p>
     <div class="dw-weak" id="dw-weak" style="display:none"></div>
     <div class="dw-top"><button class="btn primary" id="dw-check">Проверить всё</button><span class="dw-sum" id="dw-sum"></span></div>
@@ -486,8 +509,8 @@
       <div class="dwc hero" id="dwc-acc">
         <div class="dh"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg><h3>Аккаунт dewiar.pro</h3><span class="dws" id="dws-acc">—</span></div>
         <div id="dw-acc-out">
-          <p class="hint">Один вход — и всё настроится само: модели Dewiar с зарядом в талерах, Знания (ваши документы и публичная библиотека), распознавание речи на сервере для слабых компьютеров. Пароль не сохраняется.</p>
-          <ol class="dw-steps"><li>Аккаунта нет — он и не нужен: <a href="#" data-free>«Подключить бесплатно»</a> — без регистрации, на счёте сразу подарок.</li><li>Аккаунт dewiar.pro вам выдали — введите здесь его логин и пароль.</li></ol>
+          <p class="hint">Подключили — и всё настроится само: модели Dewiar с зарядом в талерах, Знания (ваши документы и публичная библиотека), распознавание речи на сервере для слабых компьютеров. Пароль не сохраняется.</p>
+          <ol class="dw-steps"><li>Аккаунта нет — он и не нужен: <a href="#" data-free>«Подключить бесплатно»</a> — без регистрации, на счёте сразу подарок.</li><li>Логин и пароль — только если команда Dewiar сама создала вам аккаунт (например, для организации). Регистрации на сайте нет, и ничего на почту не приходит — если вы не получали логин от нас, вход не нужен.</li></ol>
           <div class="actions" style="margin:0;flex-wrap:wrap">
             <input type="text" id="dw-login" placeholder="логин" autocomplete="username" style="flex:1;min-width:130px">
             <input type="password" id="dw-pass" placeholder="пароль" autocomplete="current-password" style="flex:1;min-width:130px">
@@ -1172,7 +1195,7 @@
     <h1>Возможности</h1>
     <p class="lead">Dewiar умеет много. Включите только то, чем пользуетесь, — остальное не будет попадаться на глаза.
       Выключенное ничего не теряет: включите — и всё на месте. Разговор, заметки, напоминания и блокнот есть всегда.</p>
-    <div class="switch"><div>Досуг — милые игры<span>Семнадцать игр на пару минут: атмосферная сказка «Огонёк», «Найди пару» на память, «Пять в ряд» против Лиры, головоломки (Блоки, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
+    <div class="switch"><div>Досуг — милые игры<span>Семнадцать игр на пару минут: атмосферная сказка «Огонёк», «Найди пару» на память, «Пять в ряд» против Лиры, головоломки (Тетрис, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
     <div class="switch"><div>Рядом<span>«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом.</span></div><label class="tg"><input type="checkbox" data-k="features.near"><i></i></label></div>
     <div class="switch"><div>Встречи<span>«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном.</span></div><label class="tg"><input type="checkbox" data-k="features.meet"><i></i></label></div>
     <div class="switch"><div>Суфлёр<span>Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить.</span></div><label class="tg"><input type="checkbox" data-k="features.prompter"><i></i></label></div>
@@ -1510,6 +1533,7 @@
 <script src="studio/plugins.js"></script>
 <script src="studio/dewiar.js"></script>
 <script src="studio/look.js"></script>
+<script src="studio/home.js"></script>
 <script src="studio/close.js"></script>
 <script src="studio/radar.js"></script>
 <script src="studio/meet.js"></script>

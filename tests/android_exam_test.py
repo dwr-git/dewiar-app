@@ -88,7 +88,7 @@ with sync_playwright() as p:
     ok("Сдано" in R["now"] and "кабинете" in R["now"], f"на экране — итог: {R['now']}")
     ok(sc.get("oven", {}).get("passed"), f"напоминание через быстрый ответ — засчитано: {sc.get('oven', {}).get('checks')}")
     ok(sc.get("newyear_timer", {}).get("checks", [{}])[-1].get("ok") is False, "таймер не на то число минут — не засчитан")
-    ok(sc.get("money", {}).get("passed") and sc.get("radio", {}).get("passed"), "расход и радио — по действиям модели")
+    ok(sc.get("money", {}).get("passed") and sc.get("radio", {}).get("passed"), f"расход и радио — по действиям модели: {[(k, sc.get(k, {}).get('checks'), [s.get('answer') for s in sc.get(k, {}).get('steps', [])]) for k in ('money', 'radio')]}")
     ok(sc.get("flashlight", {}).get("passed"), "фонарик через быстрый ответ — засчитан (в песочнице)")
     ok(all(s.get("judge", {}).get("score") == 8 for s in sc.values()), "судья оценил каждое испытание")
     # ошибки, найденные руками 11.10, — в экзамене: заметки и напоминания «есть, а говорит нет», фото к заметке, сканер

@@ -1511,3 +1511,39 @@ nav button[hidden], .cl-tabs button[hidden] { display: none !important; }
 .chip.shd.on { background: rgba(255,201,120,.18); color: #FFE2B0; }
 html.st-light .chip.shd.on { background: #ffe7bd; color: #6a4210; box-shadow: inset 0 0 0 1px rgba(196,132,40,.35); }
 html.st-light .chip.shd.on small { opacity: .8 !important; }
+
+/* ---------- «Главная» (home.js; 24.10) ---------- */
+#hm-body { display: flex; flex-direction: column; gap: 24px; max-width: 1180px; }
+.hm-hi h1 { font-size: 30px; margin: 0; } .hm-hi p { color: var(--muted); margin-top: 6px; font-size: 14.5px; }
+.hm-today { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.hm-card { display: flex; flex-direction: column; gap: 4px; min-height: 96px; padding: 16px 18px; border: 0; border-radius: 20px; text-align: left;
+  background: var(--glass); color: var(--ink); font: inherit; cursor: pointer; box-shadow: var(--raise-s, none); transition: transform .15s; }
+.hm-card:hover { transform: translateY(-2px); }
+.hm-card small { color: var(--dim); font-size: 12px; } .hm-card b { font-size: 15.5px; } .hm-card span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.hm-card.next { background: linear-gradient(135deg, #6a8dff, #4f6cf0); color: #fff; } .hm-card.next small, .hm-card.next span { color: rgba(255,255,255,.8); }
+.hm-h { display: flex; align-items: center; gap: 12px; } .hm-h h2 { margin: 0; font-size: 16px; } .hm-h .hint { margin: 0; flex: 1; } .hm-h .btn { margin-left: auto; }
+.hm-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 22px 14px; }
+.hm-app { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; border-radius: 22px; padding: 4px 0; }
+.hm-ic { width: 92px; height: 92px; border-radius: 28px; border: 0; display: grid; place-items: center; position: relative; cursor: pointer;
+  background: linear-gradient(145deg, rgba(255,255,255,.14), rgba(255,255,255,.04)); box-shadow: var(--raise, 0 10px 26px rgba(0,0,0,.25)); transition: transform .15s; }
+html.st-light .hm-ic { background: linear-gradient(145deg, #eef2f9, #d9e1ee); }
+.hm-ic:hover { transform: translateY(-3px); } .hm-ic:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hm-ic svg { width: 44px; height: 44px; }
+.hm-ic em { position: absolute; top: -6px; right: -6px; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; display: grid; place-items: center;
+  font: 700 12px/1 inherit; font-style: normal; color: #fff; background: #ff6f9c; box-shadow: 0 4px 10px rgba(255,111,156,.45); }
+.hm-app b { font-size: 13.5px; } .hm-app small { color: var(--dim); font-size: 11.5px; margin-top: -6px; line-height: 1.3; }
+.hm-apps.edit .hm-app { cursor: grab; } .hm-apps.edit .hm-ic { animation: hmWig 2.4s ease-in-out infinite; }
+.hm-app.off { opacity: .45; } .hm-app.off .hm-ic { animation: none; filter: grayscale(.7); }
+.hm-app.drag { opacity: .3; } .hm-app.over { box-shadow: inset 0 0 0 2px var(--accent); }
+.hm-tg { margin-top: 2px; }
+@keyframes hmWig { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
+@media (prefers-reduced-motion: reduce) { .hm-apps.edit .hm-ic { animation: none; } }
+.hm-more2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+.hm-card2 { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: 20px; background: var(--glass); box-shadow: var(--raise-s, none); min-height: 120px; }
+.hm-card2 small { color: var(--dim); font-size: 12px; } .hm-card2 p { margin: 0; font-size: 14px; line-height: 1.5; } .hm-card2 p.u { color: var(--muted); }
+.hm-card2 b { font-size: 14.5px; } .hm-card2 ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }
+.hm-more { margin-top: auto; align-self: flex-start; border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
+.hm-set { display: flex; flex-wrap: wrap; gap: 10px; }
+.hm-pill { padding: 9px 15px; border: 0; border-radius: 999px; background: var(--glass); box-shadow: var(--raise-s, none); color: var(--ink); font: inherit; font-size: 13.5px; cursor: pointer; }
+.hm-pill:hover { color: var(--accent); }
+@media (max-width: 860px) { .hm-more2 { grid-template-columns: 1fr; } }

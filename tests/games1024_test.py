@@ -63,7 +63,7 @@ with sync_playwright() as p:
     ok(pg.is_visible("#b-play"), "в блокноте — кнопка «Досуг»")
     pg.click("#b-play"); pg.wait_for_timeout(500)
     names = pg.evaluate("[...document.querySelectorAll('#shelf .ag b')].map(b => b.textContent)")
-    ok(names == ["Огонёк", "Найди пару", "Пять в ряд", "Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
+    ok(names == ["Огонёк", "Тетрис", "Конфетки", "Слияние", "Пятнашки", "Судоку", "Найди пару", "Кроссворд", "Пять букв", "Пять в ряд", "Крестики-нолики", "Реверси", "Бип", "Гонка", "Небесный пилот", "Кирпичики", "Змейка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
        f"«Досуг»: полка игр вместо вкладок и листа: {names}")
     ok(["pad_mode_mark", "play"] in pg.evaluate("apiCalls"), "виджет узнаёт, что открыт «Досуг» (подсветка кнопки)")
     pg.screenshot(path="/tmp/claude-0/games_shelf.png")
@@ -72,9 +72,9 @@ with sync_playwright() as p:
     ok(src.endswith("snake/index.html?light=1") and pg.is_visible("#game") and not pg.is_visible("#shelf") and pg.inner_text("#play-t") == "Досуг",
        f"игра во фрейме, в светлой теме: {src}")
     fr = pg.frame_locator("#game")
-    ok(fr.locator("#aBack .lbl").inner_text() == "Игры" and not fr.locator("#aFs").is_visible() and
+    ok(fr.locator("#aBack .lbl").inner_text() == "Игры" and fr.locator("#aFs").is_visible() and
        next(f for f in pg.frames if "snake" in f.url).evaluate("document.documentElement.classList.contains('light')"),
-       "внутри: «Игры» вместо «Аркада», без «на весь экран», светлая оболочка")
+       "внутри: «Игры» вместо «Аркада», «во весь экран» — лист на весь экран (24.10), светлая оболочка")
     pg.screenshot(path="/tmp/claude-0/games_snake.png")
     fr.locator("#aBack").click(); pg.wait_for_timeout(400)
     ok(pg.is_visible("#shelf") and pg.evaluate("document.querySelector('#game').getAttribute('src')") == "about:blank", "«Игры» в игре — снова полка, игра остановлена")
@@ -95,6 +95,18 @@ with sync_playwright() as p:
         gp.mouse.click(210, 430); gp.wait_for_timeout(300)
         ok(not ge and gp.evaluate("window.__game && window.__game.playing !== undefined"), f"«{gid}»: запускается и играет без ошибок {ge[:1]}")
         gp.close()
+    # 24.10, владелец: «змейка — сложно играть, есть задержка между нажатием на телефоне» — поворот, пока палец ещё ведёт
+    gp = b.new_page(viewport={"width": 420, "height": 860}); ge = []; gp.on("pageerror", lambda e, ge=ge: ge.append(str(e)))
+    gp.goto((ARC / "snake/index.html").as_uri()); gp.wait_for_timeout(600); gp.click("#aGo"); gp.wait_for_timeout(400)
+    d0 = gp.evaluate("__snake().snake.dir"); bx = gp.query_selector("canvas").bounding_box()
+    cx, cy = bx["x"] + bx["width"] / 2, bx["y"] + bx["height"] / 2
+    turn = "right" if d0 in ("up", "down") else "down"
+    gp.mouse.move(cx, cy); gp.mouse.down()
+    gp.mouse.move(cx + (60 if turn == "right" else 0), cy + (60 if turn == "down" else 0), steps=6); gp.wait_for_timeout(400)
+    st = gp.evaluate("(() => { const s = __snake().snake; return [s.dir, s.queue.slice()]; })()")
+    gp.mouse.up()
+    ok(st[0] == turn or turn in st[1], f"змейка поворачивает, пока палец ведёт (не дожидаясь отпускания): {d0} → {st}")
+    ok(not ge, f"без ошибок {ge[:1]}"); gp.close()
     # 24.10, владелец: «Блоки выглядят странновато» → «нравится, как сделал для тетриса, и для других так же» — в широком
     # окне (лист «Досуг» на компьютере) у каждой игры своя раскладка 1280×720; на телефоне (книжное окно) — прежняя 720×1280
     for gid in ("blocks", "candy", "merge", "fifteen", "sudoku", "reversi", "tictac", "crossword", "words", "snake", "plane", "bricks", "racer", "glow", "five", "pairs"):

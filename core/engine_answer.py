@@ -1312,7 +1312,7 @@ class AnswerMixin:
                 sentences.put(s_)
             blind_key = f"{prof.get('base_url')}|{prof.get('model')}"
             t_start = time.monotonic()
-            from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, diagram_missing, reminder_missing, remind_claim, saved_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge
+            from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -1455,7 +1455,7 @@ class AnswerMixin:
                         continue
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
                     fix = reminder_missing(text, turn.full, called) or saved_claim(text, step_text, called) \
-                        or action_claim(text, step_text, called)
+                        or action_claim(text, step_text, called) or bare_done(text, step_text, called)
                     if fix:
                         saved_checked = True
                         log.info("✋ Сказала «готово/записала» или не поставила просимое напоминание — прошу сделать")

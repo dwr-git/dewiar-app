@@ -32,8 +32,12 @@ A.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const params = new URLSearchParams(location.search);
 A.shot = params.has('shot');
 /* Внутри Dewiar (блокнот у виджета на компьютере, «Досуг» на телефоне) игра — во фрейме: «Назад» и «В аркаду» не
-   уходят со страницы, а просят хозяина показать полку игр (postMessage {arcade: 'home'}); «На весь экран» не нужен. */
-if (params.get('light') === '1') document.documentElement.classList.add('light');   // светлая тема Dewiar — arcade.css :root.light
+   уходят со страницы, а просят хозяина показать полку игр (postMessage {arcade: 'home'}); «во весь экран» — тоже просьба хозяину (лист «Досуг» на весь экран, pad.js padFull; 24.10). */
+if (params.get('light') === '1') document.documentElement.classList.add('light');
+/* в приложении на телефоне (app.js gameOpen: ?phone=1): поле без скруглений и полей — экран маленький; «во весь экран» —
+   просьба хозяину спрятать панели системы (24.10, владелец: «на телефоне скругления излишни», «не хватает „во весь экран“») */
+A.phone = params.get('phone') === '1';
+if (A.phone) document.documentElement.classList.add('phone');   // светлая тема Dewiar — arcade.css :root.light
 A.framed = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
 A.home = (href) => { if (A.framed) { try { window.parent.postMessage({ arcade: 'home' }, '*'); } catch (e) { /* хозяина нет */ } } else location.href = href; };
 
@@ -338,6 +342,8 @@ A.game = function (cfg) {
   // тон поля (24.10, владелец: «окна не подходят, белые размытые»): на тёмной игре экраны меню — тёмное стекло,
   // на светлой — светлое; не от темы Dewiar, а от самой игры (cfg.tone: 'dark' | 'light', по умолчанию — как тема)
   document.documentElement.classList.add('tone-' + (cfg.tone || (document.documentElement.classList.contains('light') ? 'light' : 'dark')));
+  // телефон: тёмная игра (Бип, Огонёк) — и панель сверху тёмная, во весь экран одним цветом (на компьютере панель — в тон листа)
+  if (A.phone && cfg.tone === 'dark') document.documentElement.classList.remove('light');
   if (A.framed) {
     body.classList.add('framed');
     $('aBack').addEventListener('click', (e) => { e.preventDefault(); A.home(cfg.home || '../index.html'); });
@@ -363,6 +369,7 @@ A.game = function (cfg) {
     Enter: 'start', NumpadEnter: 'start', KeyP: 'pause', Escape: 'pause', KeyM: 'mute'
   }, cfg.keys || {});
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.documentElement.classList.contains('full') && A.framed) { e.preventDefault(); btnFs.click(); return; }   // Esc — сначала из полного экрана
     const a = KEYS[e.code];
     if (!a || e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || '';
@@ -522,10 +529,16 @@ A.game = function (cfg) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
   /* --- полный экран --- */
-  const fsOk = !A.framed && !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+  const fsOk = A.framed || (!!(document.fullscreenEnabled && document.documentElement.requestFullscreen));
   if (!fsOk) btnFs.hidden = true;
+  let hostFull = false;
   btnFs.addEventListener('click', async () => {
     unlock();
+    if (A.framed) {                                // во фрейме: на весь экран — просьба хозяину (телефон прячет панели, компьютер разворачивает лист «Досуг»)
+      hostFull = !hostFull; btnFs.setAttribute('aria-pressed', String(hostFull)); document.documentElement.classList.toggle('full', hostFull);
+      try { window.parent.postMessage({ arcade: 'full', on: hostFull }, '*'); } catch (e) { /* хозяина нет */ }
+      setTimeout(fit, 250); canvas.focus(); return;
+    }
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
       else {

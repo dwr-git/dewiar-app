@@ -208,9 +208,23 @@ function queueTurn(d) {
   if (d === last || d === OPP[last] || sn.queue.length >= 2) return;
   sn.queue.push(d);
 }
+/* 24.10, владелец: «сложно играть, есть задержка между нажатием на телефоне»: смахивание засчитывалось, только когда палец
+   отпустили. Теперь змейка поворачивает, пока палец ещё ведёт: прошёл почти клетку — поворот, и можно вести дальше. */
+let drag = null;
 function readInput(g) {
-  const inp = g.input;
+  const inp = g.input, p = inp.pointer;
   for (const d of ['up', 'down', 'left', 'right']) if (inp.pressed(d)) queueTurn(d);
+  if (p.justDown) drag = { x: p.x, y: p.y, used: false };
+  if (p.down && drag) {
+    const dx = p.x - drag.x, dy = p.y - drag.y;
+    if (Math.hypot(dx, dy) > CELL * .7) {
+      queueTurn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+      Object.assign(drag, { x: p.x, y: p.y, used: true });
+    }
+  }
+  const dragged = drag && drag.used;
+  if (p.justUp) drag = null;
+  if (dragged) return;                                    // уже повернули по ходу пальца — отпускание не считаем
   if (inp.swipe) queueTurn(inp.swipe);
   if (inp.tap) {
     const hp = headPos();

@@ -37,7 +37,7 @@ try:
         ok(pg.is_visible("#b-play"), "значок «Досуг» вверху")
         pg.click("#b-play"); pg.wait_for_timeout(500)
         names = pg.evaluate("[...document.querySelectorAll('#play-body .ag b')].map(b => b.textContent)")
-        ok(pg.is_visible("#sh-play") and names == ["Огонёк", "Найди пару", "Пять в ряд", "Блоки", "Конфетки", "Слияние", "Крестики-нолики", "Кроссворд", "Пять букв", "Судоку", "Пятнашки", "Реверси", "Небесный пилот", "Бип", "Кирпичики", "Змейка", "Гонка"], f"лист «Досуг» — все игры по порядку: {names}")
+        ok(pg.is_visible("#sh-play") and names == ["Огонёк", "Тетрис", "Конфетки", "Слияние", "Пятнашки", "Судоку", "Найди пару", "Кроссворд", "Пять букв", "Пять в ряд", "Крестики-нолики", "Реверси", "Бип", "Гонка", "Небесный пилот", "Кирпичики", "Змейка"], f"лист «Досуг» — все игры по порядку: {names}")
         pg.screenshot(path="/tmp/claude-0/phone_shelf.png")
         pg.click("#play-body .ag[data-game='bricks']"); pg.wait_for_timeout(1500)
         st = pg.evaluate("() => ({ ov: !$('#gameov').hidden, src: $('#gamef').getAttribute('src'), sheet: $('#sh-play').classList.contains('on'), z: getComputedStyle($('#gameov')).zIndex })")
@@ -65,7 +65,7 @@ try:
         r = pg.evaluate("async () => { const r = await quick('давай сыграем в города'); return r && r.say; }")
         ok(not r, "«давай сыграем в города» — это разговор, его ведёт модель")
         r = pg.evaluate("async () => { const r = await quick('открой блокнот'); return r && r.say || ''; }")
-        ok("игр" not in r.lower() and "Открываю Блоки" not in r, f"«открой блокнот» — не игра «Блоки»: {r}")
+        ok("игр" not in r.lower() and "Открываю Тетрис" not in r, f"«открой блокнот» — не игра «Тетрис»: {r}")
         # «Возможности»: выключили «Досуг»
         pg.evaluate("() => { renderSettings && 0; S.features.games = false; saveS(); featApply(); }")
         ok(not pg.is_visible("#b-play"), "«Досуг» выключен — значка нет")

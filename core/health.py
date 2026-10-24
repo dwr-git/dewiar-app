@@ -499,6 +499,15 @@ class HealthMixin:
         for c in news:
             title, text = self.complaint_message(c)
             self.push(title, text, telegram=False)
+            # 24.10 (владелец: «присылал жалобы и ни разу не получил ответ»): всплывающее окно легко пропустить — ответ ещё и
+            # в «Чат» студии, с пометкой «ответ разработчика»; там он останется
+            try:
+                if getattr(self, "chatlog", None) is not None:
+                    item = self.chatlog.add("assistant", f"{title}. {text}", who=self.s.get("persona"), via="dev")
+                    if item:
+                        self.bridge.broadcast({"type": "chat", "item": item})
+            except Exception as e:  # noqa: BLE001
+                log.info("🐞 ответ на жалобу в чат: %s", e)
         if news:
             self.emit("complaints", **self.complaints_view())
         return news

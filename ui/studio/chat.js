@@ -26,7 +26,7 @@ function chatBubble(x, lastWho) {
   const att = (x.att || []).filter(a => !web.includes(a)).map(a => a.kind === "image" && a.thumb
     ? `<button class="ch-img" data-path="${escH(a.path || "")}" title="${escH(a.name)} — открыть"><img src="${escH(a.thumb)}" alt="${escH(a.name)}"></button>`
     : `<button class="cl-f" data-path="${escH(a.path || "")}" data-key="${escH(a.key || "")}" title="${escH(a.label || a.name)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${escH(a.name)}</span><small>${a.size ? chatSize(a.size) : ""}</small></button>`).join("");
-  return `${head}<div class="cl-m${out ? " out" : ""}${gal ? " wide" : ""}" data-id="${escH(x.id)}">${x.via ? `<small class="ch-via">из мессенджера</small>` : ""}${att ? `<div class="ch-att">${att}</div>` : ""}${body}${gal}<time>${hm}</time></div>`;
+  return `${head}<div class="cl-m${out ? " out" : ""}${gal ? " wide" : ""}" data-id="${escH(x.id)}">${x.via ? `<small class="ch-via">${x.via === "dev" ? "ответ разработчика" : "из мессенджера"}</small>` : ""}${att ? `<div class="ch-att">${att}</div>` : ""}${body}${gal}<time>${hm}</time></div>`;
 }
 function chatRender(keep) {
   const box = $("#ch-msgs"); if (!box) return;

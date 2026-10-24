@@ -47,6 +47,8 @@ VIAddVersionKey /LANG=1049 "LegalCopyright" "Dewiar"
 !define APPPY "$INSTDIR\app\ui\app.py"
 !define RUNKEY "Software\Microsoft\Windows\CurrentVersion\Run"
 !define UNKEY  "Software\Microsoft\Windows\CurrentVersion\Uninstall\Dewiar"
+; переустановка вручную — в ту же папку, что выбрали в прошлый раз (обновление из программы и так передаёт /D=)
+InstallDirRegKey HKCU "${UNKEY}" "InstallLocation"
 !define WV2    "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
 !define MUI_ICON "${STAGE}\dewiar.ico"
@@ -69,6 +71,10 @@ VIAddVersionKey /LANG=1049 "LegalCopyright" "Dewiar"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_COMPONENTS
+; выбор папки (24.10, совет пользователя: «чтоб был выбор диска куда ставить»); путь с русскими буквами — предупреждаем
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Куда установить Dewiar. Лучше папка, в пути к которой только латинские буквы и цифры — например, C:\Dewiar или D:\Dewiar: часть библиотек речи не открывает файлы по пути с русскими буквами."
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirLeave
+!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -241,6 +247,20 @@ Section "-Завершение"
 SectionEnd
 
 ; (после секций: здесь уже известны их номера)
+; есть ли в пути буквы не из ASCII (кириллица в имени пользователя): преобразование в US-ASCII заменило символ -> $R9 = 1
+!macro NONASCII PATH
+  StrCpy $R9 0
+  System::Call 'kernel32::WideCharToMultiByte(i 20127, i 0, w "${PATH}", i -1, p 0, i 0, p 0, *i 0 R9) i .R8'
+!macroend
+
+Function DirLeave
+  !insertmacro NONASCII "$INSTDIR"
+  ${If} $R9 <> 0
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "В пути к папке есть русские буквы:$\r$\n$INSTDIR$\r$\n$\r$\nЧасть библиотек речи такие пути не открывает — голоса и слух могут не заработать. Лучше выбрать папку латиницей, например C:\Dewiar.$\r$\n$\r$\nВсё равно ставить сюда?" /SD IDYES IDYES +2
+    Abort
+  ${EndIf}
+FunctionEnd
+
 Function .onInit
   System::Call 'kernel32::CreateMutexW(p 0, i 0, w "DewiarSetup") p .r1 ?e'
   Pop $0
@@ -255,6 +275,22 @@ Function .onInit
     StrCpy $IsUpdate "0"
   ${Else}
     StrCpy $IsUpdate "1"
+  ${EndIf}
+  ; новая установка, а папка по умолчанию — с русскими буквами (C:\Users\Иван\…): та же папка коротким именем 8.3
+  ; (C:\Users\B03C~1\…), а если коротких имён на диске нет — C:\Dewiar. Обновление ставится туда, где стоит (/D=)
+  ${If} $IsUpdate == "0"
+  ${AndIfNot} ${FileExists} "$INSTDIR\app\ui\app.py"
+    !insertmacro NONASCII "$INSTDIR"
+    ${If} $R9 <> 0
+      GetFullPathName /SHORT $R7 "$LOCALAPPDATA"
+      !insertmacro NONASCII "$R7"
+      ${If} $R7 != ""
+      ${AndIf} $R9 == 0
+        StrCpy $INSTDIR "$R7\Programs\Dewiar"
+      ${Else}
+        StrCpy $INSTDIR "C:\Dewiar"
+      ${EndIf}
+    ${EndIf}
   ${EndIf}
   ; обновление или переустановка — сохраняем прежний выбор автозапуска и ярлыка на рабочем столе
   ${If} ${FileExists} "$INSTDIR\app\ui\app.py"

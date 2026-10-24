@@ -125,7 +125,7 @@ class CommandsMixin:
             else:
                 game = play_game(text)
                 names = {"snake": "Змейку", "racer": "Гонку", "bricks": "Кирпичики", "plane": "Небесного пилота", "bip": "Бипа",
-                         "blocks": "Блоки", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
+                         "blocks": "Тетрис", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
                          "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»", "five": "«Пять в ряд»", "pairs": "«Найди пару»"}
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
                 self._say_quick(say, text, then=lambda: self.emit("window", do="play", game=game))

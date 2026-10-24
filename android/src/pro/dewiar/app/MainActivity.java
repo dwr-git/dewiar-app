@@ -304,6 +304,19 @@ public class MainActivity extends Activity implements Net.Sink {
         super.onDestroy();
     }
 
+    /** Игра «во весь экран» (24.10, владелец: «в каждой игре на телефоне не хватает кнопки „во весь экран“»): панели
+     *  системы прячутся (появляются смахиванием от края и прячутся снова), выключили или закрыли игру — возвращаются. */
+    @SuppressWarnings("deprecation")
+    void immersive(final boolean on) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                View d = getWindow().getDecorView();
+                d.setSystemUiVisibility(on ? (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN) : 0);
+            }
+        });
+    }
+
     void keepScreen(final boolean on) {
         runOnUiThread(new Runnable() {
             @Override public void run() {

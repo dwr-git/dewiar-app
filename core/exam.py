@@ -674,6 +674,10 @@ async def check_state(core, state, t_start):
     out = []
     if not state:
         return out
+    if "task_gone" in state:                          # «удали задачу …» — её правда нет в списке (24.10)
+        left = [x.get("title", "") for x in await core.call("tasks_list") or []]
+        hit = [t for t in left if state["task_gone"].lower() in t.lower()]
+        out.append({"name": f"задачи «{state['task_gone']}» больше нет", "ok": not hit, "detail": ", ".join(left) or "задач нет"})
     if "reminder" in state:
         want = state["reminder"]
         items = await core.call("reminders") or []
@@ -843,6 +847,10 @@ async def seed(core, sd):
         r = await core.call("reminder_add", phrase=ph)
         if isinstance(r, dict) and r.get("id"):
             made["reminders"].append(r["id"])
+    for tk in (sd or {}).get("tasks") or []:         # фоновая задача (не запущена) — «удали задачу …» (24.10)
+        r = await core.call("task_create", title=tk["title"], goal=tk.get("goal") or tk["title"], start=False)
+        if isinstance(r, dict) and r.get("id"):
+            made.setdefault("tasks", []).append(r["id"])
     for fd in (sd or {}).get("folders") or []:       # своя папка с документами (поиск в своих папках, 0.38.59)
         d = core.tmp / "docs" / fd["name"]
         for f in fd.get("files") or []:
@@ -868,6 +876,11 @@ async def unseed(core, made):
         try:
             await core.call("reminder_cancel", id=rid)
         except Exception:  # noqa: BLE001
+            pass
+    for tid in made.get("tasks") or []:
+        try:
+            await core.call("task_delete", id=tid)
+        except Exception:  # noqa: BLE001 — уже удалена (так и надо было)
             pass
     for d in made.get("folders") or []:
         try:
