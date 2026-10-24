@@ -532,7 +532,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'bricks', title: 'Кирпичики', width: W, height: H, orientation: 'portrait', music: 'candy',
+  id: 'bricks', tone: 'light', title: 'Кирпичики', width: W, height: H, orientation: 'portrait', music: 'candy',
   help: {
     desktop: 'Мышь или <kbd>←</kbd> <kbd>→</kbd> — ракетка · <kbd>Пробел</kbd> или клик — запуск · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Мышь</b> или <b>стрелки</b> — ракетка, <b>Пробел</b> — запуск',

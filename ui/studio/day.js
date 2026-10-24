@@ -360,8 +360,8 @@ function shFill(h) {
     if (h.error) { $("#sh-state").className = "res bad"; $("#sh-state").textContent = h.error; }
     else { $("#sh-state").className = "res ok"; $("#sh-state").textContent = `Подключён: устройств ${h.devices.length}, комнат ${h.rooms.length}, сценариев ${h.scenarios.length}`; }
     $("#sh-devs").innerHTML = (h.devices || []).map(d => { const k = Object.keys(SH_ICON).find(x => (d.type || "").includes(x));
-      return `<span class="chip" style="cursor:default${d.on ? ";background:rgba(255,201,120,.18);color:#FFE2B0" : ""}">${k ? SH_ICON[k] + " " : ""}${escH(d.name)}${d.room ? ` <small style="opacity:.6">· ${escH(d.room)}</small>` : ""}</span>`; }).join("") +
-      (h.scenarios || []).map(x => `<span class="chip" style="cursor:default;background:rgba(255,255,255,.08)">▶ ${escH(x)}</span>`).join("");
+      return `<span class="chip shd${d.on ? " on" : ""}" title="${d.on ? "включено" : "выключено"}">${k ? SH_ICON[k] + " " : ""}${escH(d.name)}${d.room ? ` <small style="opacity:.6">· ${escH(d.room)}</small>` : ""}</span>`; }).join("") +
+      (h.scenarios || []).map(x => `<span class="chip shd scn">▶ ${escH(x)}</span>`).join("");
   }
 }
 $("#sh-go").onclick = async (ev) => { const r = $("#sh-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "подключаю…";

@@ -226,7 +226,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'tictac', title: 'Крестики-нолики', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'tictac', tone: 'light', title: 'Крестики-нолики', width: W, height: H, orientation: 'portrait', music: 'garden',
   help: { desktop: 'Рисуйте мышью в клетке · стрелки и <kbd>Enter</kbd> — поставить знак', short: 'Нарисуйте знак в клетке', touch: 'Рисуйте пальцем крестик или нолик в клетке' },
   init(g) { titleScreen(g); window.__tictac = () => ({ S, T }); },
   update, draw

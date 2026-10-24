@@ -462,6 +462,10 @@ class CommandsMixin:
         if cmd == "skills_folder":
             self.skills.user_dir.mkdir(parents=True, exist_ok=True)
             return str(self.skills.user_dir)
+        if cmd == "js_errors":                        # ошибки страницы студии (core.js) — в журнал, а с ним и в отчёт
+            for e in (a.get("errors") or [])[:20]:
+                log.warning("студия: ошибка страницы: %s", str(e)[:300])
+            return {"ok": True}
         if cmd in ("ann", "ann_seen"):                # объявления для всех (кабинет → «Новости»; news.announcements)
             if cmd == "ann_seen":
                 seen = max(int(self.s.get("ui", "ann_seen") or 0), int(a.get("id") or 0))

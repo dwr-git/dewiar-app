@@ -263,3 +263,28 @@ body.game {
 :root.light .ghost { color: var(--ink); }
 /* внутри Dewiar «Игры» — рядом свои кнопки хозяина; полоса панели — чуть плотнее */
 .framed .topbar { padding-top: 8px; padding-bottom: 6px; }
+
+/* ---------- экраны меню в тон игры (cfg.tone; 24.10) ----------
+   Тёмная игра — тёмное матовое стекло поверх поля, мягкое затемнение по краям, светлые надписи (не белая пелена).
+   Светлая игра — светлое стекло и лёгкая дымка. Тема Dewiar красит только рамку вокруг поля. */
+:root.tone-dark .overlay { background: radial-gradient(ellipse at 50% 45%, rgba(8, 9, 22, .18), rgba(8, 9, 22, .62)); }
+:root.tone-dark .card {
+  --ink: #f2f3fa; --muted: rgba(226, 230, 255, .72); --glass: rgba(255, 255, 255, .08); --line: rgba(255, 255, 255, .14);
+  color: var(--ink); background: rgba(20, 22, 44, .62); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 24px 60px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+:root.tone-dark .card h2 { background: linear-gradient(90deg, #a9b8ff, #ffb3dc); -webkit-background-clip: text; background-clip: text; }
+:root.tone-dark .card .kicker { color: rgba(226, 230, 255, .6); }
+:root.tone-dark .card .record { color: #ffd08a; }
+:root.tone-dark .ghost { color: #f2f3fa; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .16); }
+:root.tone-light .overlay { background: radial-gradient(ellipse at 50% 45%, rgba(236, 241, 248, .12), rgba(214, 224, 238, .45)); }
+:root.tone-light .card { background: rgba(244, 247, 252, .82); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); }
+@media (max-height: 640px) {          /* низкое окно (лист «Досуг» на компьютере): карточка компактнее, кнопка всегда видна */
+  .card { padding: 16px 20px 14px; max-width: 460px; }
+  .card h2 { font-size: 28px; margin-bottom: 6px; }
+  .card p { font-size: 14.5px; margin-bottom: 6px; }
+  .card .row { margin-top: 10px; } .go, .ghost { min-height: 44px; } .card .keys { margin-top: 8px; }
+}
+.stagewrap { border-radius: 22px; transition: background .9s; }
+.stagewrap.tinted { background: var(--edge); }
+.stagewrap.tinted .stage, :root.light .stagewrap.tinted .stage { box-shadow: none; border-radius: 6px; }

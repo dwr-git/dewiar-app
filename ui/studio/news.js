@@ -34,5 +34,7 @@ function annCheck() { core.call("ann").then(r => annShow((r.items || []).find(i 
 $("#an-ok").onclick = () => { const d = $("#ann-dlg"); d.close(); core.call("ann_seen", { id: +d.dataset.id }).catch(() => {}); };
 core.on("ann", e => { if (e.item) annShow(e.item); });
 core.on("hello", () => setTimeout(annCheck, 1400));
+// ошибки загрузки страницы студии (core.js собирает) — в журнал ядра: попадут в отчёт «Здоровья»
+core.on("hello", () => setTimeout(() => { if ((window.__jsErr || []).length) core.call("js_errors", { errors: window.__jsErr.splice(0) }).catch(() => {}); }, 3000));
 window.addEventListener("focus", () => { if (!$("#ann-dlg").open) annCheck(); });
 $("#news-dlg").addEventListener("close", () => setTimeout(annCheck, 300));

@@ -209,7 +209,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'reversi', title: 'Реверси', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'reversi', tone: 'light', title: 'Реверси', width: W, height: H, orientation: 'portrait', music: 'garden',
   help: { desktop: 'Щелчок по клетке с точкой — поставить фишку · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: 'Щелчок по клетке с точкой', touch: 'Коснитесь клетки с точкой — там можно ходить' },
   init(g) { titleScreen(g); window.__reversi = () => S; },
   update, draw

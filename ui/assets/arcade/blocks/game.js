@@ -330,7 +330,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'blocks', title: 'Блоки', width: W, height: H, orientation: 'portrait', music: 'candy',
+  id: 'blocks', tone: 'light', title: 'Блоки', width: W, height: H, orientation: 'portrait', music: 'candy',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> — сдвиг · <kbd>↑</kbd> — поворот · <kbd>↓</kbd> — быстрее · <kbd>Пробел</kbd> — уронить · <kbd>X</kbd> — в запас · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> — двигать и крутить, <b>Пробел</b> — уронить',

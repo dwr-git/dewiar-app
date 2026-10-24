@@ -245,7 +245,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'crossword', title: 'Кроссворд', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'crossword', tone: 'light', title: 'Кроссворд', width: W, height: H, orientation: 'portrait', music: 'garden',
   keys: { Enter: 'none', Space: 'none', KeyA: 'none', KeyD: 'none', KeyW: 'none', KeyS: 'none', KeyZ: 'none', KeyX: 'none', KeyJ: 'none', KeyK: 'none', KeyL: 'none', KeyM: 'none', KeyP: 'none' },
   help: { desktop: 'Щёлкните клетку и печатайте (раскладка любая) · <kbd>Tab</kbd> — следующее слово · <kbd>Backspace</kbd> — стереть', short: 'Щёлкните клетку и печатайте ответ', touch: 'Коснитесь клетки и набирайте ответ на клавиатуре внизу' },
   init(g) { titleScreen(g); window.__cross = () => S; },

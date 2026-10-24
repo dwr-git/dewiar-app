@@ -166,7 +166,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'merge', title: 'Слияние', width: W, height: H, orientation: 'portrait', music: 'candy', keys: { KeyZ: 'undo', Backspace: 'undo' },
+  id: 'merge', tone: 'light', title: 'Слияние', width: W, height: H, orientation: 'portrait', music: 'candy', keys: { KeyZ: 'undo', Backspace: 'undo' },
   help: { desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> — сдвинуть · <kbd>Z</kbd> — назад · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: '<b>Стрелки</b> — сдвинуть плитки', touch: 'Смахивайте пальцем — плитки едут, одинаковые сливаются' },
   init(g) { titleScreen(g); window.__merge = () => S; },
   update, draw

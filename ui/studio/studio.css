@@ -1497,3 +1497,10 @@ html.st-light .dk-have { background: var(--soft2); }
 
 /* «Возможности» (24.10): выключенное прячется — у кнопок меню и вкладок свой display, поэтому явно */
 nav button[hidden], .cl-tabs button[hidden] { display: none !important; }
+
+/* умный дом: устройства и сценарии (day.js shFill). Включённое — тёплым; в светлых темах — тёмный текст на светло-янтарном
+   (24.10, Ubuntu: «текст не читается, слишком светлый») */
+.chip.shd { cursor: default; } .chip.shd.scn { background: rgba(255,255,255,.08); }
+.chip.shd.on { background: rgba(255,201,120,.18); color: #FFE2B0; }
+html.st-light .chip.shd.on { background: #ffe7bd; color: #6a4210; box-shadow: inset 0 0 0 1px rgba(196,132,40,.35); }
+html.st-light .chip.shd.on small { opacity: .8 !important; }

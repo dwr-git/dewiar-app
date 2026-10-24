@@ -448,11 +448,16 @@ $("#dk-go").onclick = async (ev) => {
   const key = $("#dk-key").value.trim(), r = $("#dk-res");
   if (!key) { r.className = "res bad"; r.textContent = "Вставьте ключ (начинается с dw-) или код из 6 цифр с другого устройства"; return; }
   ev.target.disabled = true; r.className = "res"; r.textContent = "проверяю ключ…";
-  try {
-    const c = await core.call("cloud_connect", { key, url: $("#dk-url").value.trim() });
-    $("#dk-key").value = ""; r.className = "res ok"; r.textContent = `Ключ подключён${c.label ? ": " + c.label : ""}. Заряд ${c.percent}%.`;
-    cloudFill(c); renderProfiles(); await wizardCheck(c.profile);
-  } catch (e) { r.className = "res bad"; r.textContent = "Не получилось: " + e.message; }
+  let c = null;
+  try { c = await core.call("cloud_connect", { key, url: $("#dk-url").value.trim() }); }
+  catch (e) { r.className = "res bad"; r.textContent = "Не получилось: " + e.message; }
+  if (c) {
+    $("#dk-key").value = ""; r.className = "res ok";
+    r.textContent = `Подключено${c.label ? ": " + c.label : ""}${c.tail ? " · ключ …" + c.tail : ""}. Заряд ${c.percent ?? "—"}%.`;
+    // подключение уже удалось — сбой перерисовки не выдаём за «не получилось» (24.10: так и было), а пишем в журнал
+    try { cloudFill(c); renderProfiles(); await wizardCheck(c.profile); }
+    catch (e) { console.error(e); window.__jsErr.push("после подключения: " + e.message); core.call("js_errors", { errors: window.__jsErr.splice(0) }).catch(() => {}); }
+  }
   ev.target.disabled = false;
 };
 $("#dk-key").onkeydown = (e) => { if (e.key === "Enter") $("#dk-go").click(); };

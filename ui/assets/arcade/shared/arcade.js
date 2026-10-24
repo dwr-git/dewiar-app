@@ -335,6 +335,9 @@ A.game = function (cfg) {
   const $ = (id) => document.getElementById(id);
   const wrap = $('aWrap'), stage = $('aStage'), canvas = $('aCanvas'), overlay = $('aOverlay'), padEl = $('aPad'), tip = $('aTip');
   const btnPause = $('aPause'), btnMusic = $('aMusic'), btnFs = $('aFs');
+  // тон поля (24.10, владелец: «окна не подходят, белые размытые»): на тёмной игре экраны меню — тёмное стекло,
+  // на светлой — светлое; не от темы Dewiar, а от самой игры (cfg.tone: 'dark' | 'light', по умолчанию — как тема)
+  document.documentElement.classList.add('tone-' + (cfg.tone || (document.documentElement.classList.contains('light') ? 'light' : 'dark')));
   if (A.framed) {
     body.classList.add('framed');
     $('aBack').addEventListener('click', (e) => { e.preventDefault(); A.home(cfg.home || '../index.html'); });
@@ -568,6 +571,25 @@ A.game = function (cfg) {
     }
     endFrame();
   }
+  /* Поле не во всю ширину (книжная игра в широком окне «Досуга» на компьютере, 24.10: «игра должна занимать ширину
+     блока») — пространство вокруг красится цветами краёв самого поля (раз в 1,5 с), рамка поля пропадает: игра словно
+     разлита по всему окну, без «телефона посередине». */
+  let tintAt = 0;
+  function tint(now) {
+    if (A.shot || now - tintAt < 1500) return;
+    tintAt = now;
+    const free = wrap.clientWidth - stage.offsetWidth > 60 || wrap.clientHeight - stage.offsetHeight > 60;
+    wrap.classList.toggle('tinted', free);
+    if (!free) return;
+    try {
+      const cw = canvas.width, ch = canvas.height, stops = [];
+      for (let i = 0; i < 6; i++) {
+        const y = Math.min(ch - 1, Math.round(ch * (i + .5) / 6)), a = ctx.getImageData(2, y, 1, 1).data, b = ctx.getImageData(cw - 3, y, 1, 1).data;
+        stops.push('rgb(' + ((a[0] + b[0]) >> 1) + ',' + ((a[1] + b[1]) >> 1) + ',' + ((a[2] + b[2]) >> 1) + ')');
+      }
+      wrap.style.setProperty('--edge', 'linear-gradient(180deg,' + stops.join(',') + ')');
+    } catch (e) { wrap.classList.remove('tinted'); }
+  }
   function frame(now) {
     const dt = Math.min(.1, (now - last) / 1000); last = now;
     acc += dt;
@@ -577,6 +599,7 @@ A.game = function (cfg) {
     if (g.shakeT > 0 && !g.paused) ctx.translate(A.rand(-1, 1) * g.shakeA, A.rand(-1, 1) * g.shakeA);
     cfg.draw(ctx, g);
     g.fx.draw(ctx);
+    tint(now);
     requestAnimationFrame(frame);
   }
 

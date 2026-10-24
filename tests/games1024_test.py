@@ -93,6 +93,16 @@ with sync_playwright() as p:
         gp.mouse.click(210, 430); gp.wait_for_timeout(300)
         ok(not ge and gp.evaluate("window.__game && window.__game.playing !== undefined"), f"«{gid}»: запускается и играет без ошибок {ge[:1]}")
         gp.close()
+    # 24.10, владелец: «игра должна занимать ширину блока», «окна белые размытые» — поле в широком окне «разлито» цветами
+    # своих краёв, экраны меню — в тон игры (тёмная Бип — тёмное стекло и в светлой теме Dewiar)
+    gp = b.new_page(viewport={"width": 727, "height": 560}); ge = []; gp.on("pageerror", lambda e, ge=ge: ge.append(str(e)))
+    gp.goto((ARC / "sudoku/index.html").as_uri() + "?light=1"); gp.wait_for_timeout(700); gp.click("#aGo"); gp.wait_for_timeout(2200)
+    ok(gp.evaluate("document.getElementById('aWrap').classList.contains('tinted')") and "gradient" in gp.evaluate("getComputedStyle(document.getElementById('aWrap')).backgroundImage")
+       and gp.evaluate("getComputedStyle(document.getElementById('aStage')).boxShadow") == "none", "книжная игра в широком окне — вокруг поля его же цвета, без рамки «телефона»")
+    gp.goto((ARC / "bip/index.html").as_uri() + "?light=1"); gp.wait_for_timeout(900)
+    bg = gp.evaluate("getComputedStyle(document.querySelector('.card')).backgroundColor")
+    ok(gp.evaluate("document.documentElement.classList.contains('tone-dark')") and bg.startswith("rgba(20, 22, 44"), f"Бип в светлой теме: меню — тёмное стекло ({bg})")
+    ok(not ge, f"без ошибок {ge[:1]}"); gp.close()
     # Крестики-нолики (24.10, владелец: «рисуешь крестик или нолик пальцами»): нарисованная петля — нолик, чужой знак стирается
     gp = b.new_page(viewport={"width": 420, "height": 860}); ge = []; gp.on("pageerror", lambda e: ge.append(str(e)))
     gp.goto((ARC / "tictac/index.html").as_uri()); gp.wait_for_timeout(700); gp.click("#aGo"); gp.wait_for_timeout(900)

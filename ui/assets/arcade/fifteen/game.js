@@ -160,7 +160,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'fifteen', title: 'Пятнашки', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'fifteen', tone: 'light', title: 'Пятнашки', width: W, height: H, orientation: 'portrait', music: 'garden',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> — двигать плитку в пустое место · или щелчок по плитке · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или щелчок по плитке',

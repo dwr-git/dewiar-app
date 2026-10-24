@@ -612,7 +612,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'racer', title: 'Гонка', width: W, height: H, orientation: 'portrait', music: 'road',
+  id: 'racer', tone: 'light', title: 'Гонка', width: W, height: H, orientation: 'portrait', music: 'road',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> или мышь — руль · <kbd>↑</kbd> газ · <kbd>↓</kbd> тормоз · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или <b>мышь</b> — руль, <b>↑ ↓</b> — газ и тормоз',

@@ -6,6 +6,12 @@
    поэтому всё, что он вызывает сразу при загрузке, объявлено здесь же или раньше (assets/*.js); функции других файлов
    вызываются только из обработчиков кликов, когда всё уже загружено. */
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+// экранирование для innerHTML — общее для всех файлов студии (здесь, в первом файле: 24.10 у человека «escH is not defined»
+// при подключении по коду — общий помощник жил в folder.js и пропал вместе с ним)
+function escH(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+// ошибки страницы — в журнал ядра (в отчёт): какой файл не загрузился и почему видно сразу, без догадок
+window.__jsErr = window.__jsErr || [];
+window.addEventListener("error", (e) => { window.__jsErr.push(`${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno || 0}`); });
 let S = null, personas = [], active = "lira", entities = [];
 const brand = new DewiarEntity($("#brand"), { style: "nexus", color: "#8A9BFF", ring: false });
 const COLORS = ["#FFB547", "#3DF5C8", "#4FC3FF", "#9BD4FF", "#B78CFF", "#FF7AB6", "#FF6B5A", "#9BE15D", "#F5E663", "#7C8CFF", "#E6EEFF"];

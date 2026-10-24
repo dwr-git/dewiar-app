@@ -222,7 +222,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'candy', title: 'Конфетки', width: W, height: H, orientation: 'portrait', music: 'candy',
+  id: 'candy', tone: 'light', title: 'Конфетки', width: W, height: H, orientation: 'portrait', music: 'candy',
   help: { desktop: 'Перетащите конфету к соседней · или <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> и <kbd>Пробел</kbd> · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: 'Перетащите конфету к соседней', touch: 'Потяните конфету к соседке — три одинаковых лопнут' },
   init(g) { titleScreen(g); window.__candy = () => S; },
   update, draw

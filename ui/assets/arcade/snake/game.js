@@ -511,7 +511,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'snake', title: 'Змейка', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'snake', tone: 'light', title: 'Змейка', width: W, height: H, orientation: 'portrait', music: 'garden',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> или <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> — поворот · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или <b>WASD</b> — поворот',

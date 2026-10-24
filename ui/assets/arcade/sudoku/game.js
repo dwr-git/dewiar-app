@@ -159,7 +159,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'sudoku', title: 'Судоку', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'sudoku', tone: 'light', title: 'Судоку', width: W, height: H, orientation: 'portrait', music: 'garden',
   help: { desktop: '<kbd>1</kbd>–<kbd>9</kbd> — цифра · <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> — клетка · <kbd>Delete</kbd> — стереть · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: 'Клетка — щелчком или стрелками, цифра — клавишами 1–9', touch: 'Коснитесь клетки, потом цифры внизу' },
   init(g) { titleScreen(g); window.__sudoku = () => S; },
   update, draw

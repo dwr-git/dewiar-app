@@ -554,7 +554,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'plane', title: 'Небесный пилот', width: W, height: H, orientation: 'portrait', music: 'sky',
+  id: 'plane', tone: 'light', title: 'Небесный пилот', width: W, height: H, orientation: 'portrait', music: 'sky',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> или мышь — полёт · стрельба автоматическая · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> или <b>мышь</b> — полёт, пушки стреляют сами',

@@ -138,7 +138,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'words', title: 'Пять букв', width: W, height: H, orientation: 'portrait', music: 'garden',
+  id: 'words', tone: 'light', title: 'Пять букв', width: W, height: H, orientation: 'portrait', music: 'garden',
   keys: { Enter: 'none', Space: 'none', KeyA: 'none', KeyD: 'none', KeyW: 'none', KeyS: 'none', KeyZ: 'none', KeyX: 'none', KeyJ: 'none', KeyK: 'none', KeyL: 'none', KeyM: 'none', KeyP: 'none', ArrowLeft: 'none', ArrowRight: 'none', ArrowUp: 'none', ArrowDown: 'none' },
   help: { desktop: 'Печатайте слово — раскладка любая · <kbd>Enter</kbd> — проверить · <kbd>Backspace</kbd> — стереть', short: 'Печатайте слово и нажмите <b>Enter</b>', touch: 'Набирайте слово на клавиатуре внизу и нажмите ✓' },
   init(g) { titleScreen(g); window.__words = () => S; },

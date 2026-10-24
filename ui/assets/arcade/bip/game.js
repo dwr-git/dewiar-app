@@ -650,7 +650,7 @@ function draw(ctx, g) {
 }
 
 A.game({
-  id: 'bip', title: 'Бип', width: W, height: H, orientation: 'landscape', music: 'neon',
+  id: 'bip', tone: 'dark', title: 'Бип', width: W, height: H, orientation: 'landscape', music: 'neon',
   help: {
     desktop: '<kbd>←</kbd> <kbd>→</kbd> бег · <kbd>Пробел</kbd> или <kbd>↑</kbd> прыжок · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка',
     short: '<b>Стрелки</b> — бег, <b>Пробел</b> — прыжок',

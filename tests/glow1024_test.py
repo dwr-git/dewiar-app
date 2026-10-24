@@ -52,6 +52,33 @@ with sync_playwright() as p:
     ok(st()["n"] == 9, f"одуванчик и мотылёк — все девять: {st()}")
     tap(300, 742, 12000)
     ok(st()["mode"] == "end" and pg.is_visible("#aOverlay") and "Огонёк дома" in pg.inner_text("#aOverlay"), "фонарь горит, Огонёк дома — конец сказки")
+    # широкое окно (лист «Досуг» на компьютере, 24.10: «игра должна занимать ширину блока») — сцены 1280×720, своя раскладка
+    pg = b.new_page(viewport={"width": 727, "height": 560}); pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto((ROOT / "ui/assets/arcade/glow/index.html").as_uri() + "?light=1"); pg.wait_for_timeout(900)
+    ok(pg.evaluate("__game.W") == 1280 and pg.evaluate("document.documentElement.classList.contains('tone-dark')"),
+       "широкое окно — широкие сцены; экраны меню — тёмное стекло (не белая пелена)")
+    st2 = (pg.query_selector("#aGo").bounding_box() or {}); vh = 560
+    ok(st2 and st2["y"] + st2["height"] <= vh, "кнопка «Начать» видна целиком и в низком окне")
+    pg.click("#aGo"); pg.wait_for_timeout(1500)
+    bx = pg.query_selector("canvas").bounding_box(); k = bx["width"] / 1280
+    def idle():
+        for _ in range(80):
+            if pg.evaluate("(() => { const {G} = __glow(); return !G.busy && !G.fadeThen && G.fade <= 0; })()"):
+                return
+            pg.wait_for_timeout(100)
+    def spot(i, ms=2500):
+        idle(); xy = pg.evaluate(f"(() => {{ const s = __glow().G.sc.spots().find(q => q.id === '{i}'); return s && [s.x, s.y]; }})()")
+        if xy:
+            pg.mouse.click(bx["x"] + xy[0] * k, bx["y"] + xy[1] * k)
+        pg.wait_for_timeout(ms)
+    pg.wait_for_timeout(2500)
+    ok("тучку" in (pg.evaluate("(__glow().G.cap || {}).text") or ""), "в начале — подсказка, что делать: «Нажмите на тучку»")
+    pg.mouse.click(bx["x"] + (1280 - 50) * k, bx["y"] + 52 * k); pg.wait_for_timeout(200)
+    ok("тучку" in (pg.evaluate("(__glow().G.cap || {}).text") or ""), "кнопка «?» — подсказка снова")
+    for i, ms in (("cloud", 2800), ("reeds", 2600), ("lily", 2600), ("bell", 4200), ("exit", 5200), ("owl", 2600), ("web", 3400), ("bucket", 2400), ("rock", 8000),
+                  ("dand", 4000), ("moth", 9800), ("lamp", 12500)):
+        spot(i, ms)
+    ok(st()["mode"] == "end" and pg.is_visible("#aOverlay"), f"и в широком окне сказка проходится до конца: {st()}")
     ok(not errs, f"без ошибок: {errs[:2]}")
     b.close()
 
