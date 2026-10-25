@@ -2372,6 +2372,17 @@ TOOLS = {
                  "Dewiar и его функции («как…», «где…», «что ты умеешь…»), — не выдумывай меню и кнопки. query — о чём спросили; "
                  "where — pc|phone, если ясно, про какое устройство.",
                  S({"query": {"type": "string"}, "where": {"type": "string", "enum": ["pc", "phone"]}}, ["query"]), "safe", t_app_help, "Руководство"),
+    "payments": ("«Платежи» — реестр обязательных оплат (коммунальные, связь, кредиты, страховка): у каждого счёта реквизиты "
+                 "«как платить», срок, история оплат с показаниями счётчика. action: open — что не оплачено в этом месяце; report — "
+                 "сводка (или bill — по одному счёту: как платить и последние оплаты); year — итоги года по счетам (year); "
+                 "add_payment — записать оплату (bill, amount, reading — показание, used — расход, date ГГГГ-ММ-ДД, status "
+                 "paid|unpaid); add_bill — новый вид платежа (bill — название, kind meter|fixed|loan|yearly|other, day — число "
+                 "срока, how — реквизиты). Это не «Деньги»: разовые покупки — туда, а счета и их оплаты — сюда.",
+                 S({"action": {"type": "string", "enum": ["open", "report", "year", "add_payment", "add_bill"]}, "bill": {"type": "string"},
+                    "amount": {"type": "number"}, "reading": {"type": "number"}, "used": {"type": "number"}, "date": {"type": "string"},
+                    "status": {"type": "string", "enum": ["paid", "unpaid"]}, "kind": {"type": "string"}, "day": {"type": "integer"},
+                    "month": {"type": "integer"}, "how": {"type": "string"}, "year": {"type": "integer"}, "note": {"type": "string"}},
+                   ["action"]), "safe", lambda a, ctx: __import__("engine_pay").t_payments(a, ctx), "Платежи"),
     "money_report": ("Итоги личного бюджета за период: доходы, расходы по категориям, остаток, последние операции. "
                      "from/to — ГГГГ-ММ-ДД (пусто — текущий месяц).",
                      S({"from": {"type": "string"}, "to": {"type": "string"}}), "safe", t_money_report, "Деньги: отчёт"),
@@ -2467,7 +2478,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
              "cancel_reminder", "mark_done", "done_report", "save_note", "find_notes", "read_file", "remember", "write_diary",
-             "money_add", "money_report", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
+             "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge"}
 
 

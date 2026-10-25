@@ -411,7 +411,12 @@ class CommandsMixin:
                 x = self.vault.get(a.get("id", ""))
                 return {"value": x["value"] if x else ""}
             if cmd == "vault_put":
-                x = self.vault.put(a.get("name", ""), a.get("value", ""), a.get("note", ""), a.get("id") or None)
+                val = a.get("value", "")
+                if a.get("id") and not val:             # правка без нового пароля — пароль прежний
+                    old = self.vault.get(a["id"])
+                    val = old["value"] if old else ""
+                x = self.vault.put(a.get("name", ""), val, a.get("note", ""), a.get("id") or None,
+                                   login=a.get("login"), url=a.get("url"))
                 return {"item": x, "items": self.vault.list()}
             if cmd == "vault_delete":
                 self.vault.delete(a.get("id", ""))
@@ -500,6 +505,11 @@ class CommandsMixin:
         if cmd in ("reminders", "reminder_add", "reminder_update", "reminder_cancel", "alarm_ack", "alarm_snooze",
                    "alarm_get", "alarm_test", "reminder_parse", "job_add", "job_run", "reminder_files", "capture_parse", "capture_save"):
             return self._reminder_cmd(cmd, a)
+        if cmd.startswith("pay_"):                                  # «Платежи» (engine_pay.py, payments.py)
+            try:
+                return self._pay_cmd(cmd, a)
+            except (TypeError, KeyError) as e:
+                raise ValueError(str(e)) from e
         if cmd.startswith("money_") or cmd == "calendar_month":      # деньги и календарь (студия → «Календарь»)
             m = self.money
             try:
@@ -1009,6 +1019,10 @@ class CommandsMixin:
                     return c.call(a.get("pid", ""), bool(a.get("video")))
                 if cmd == "close_name":
                     return c.set_name(a.get("name", ""))
+                if cmd == "close_card":             # карточка «Я»: имя, о себе, фото, фото во «Встречах»
+                    return c.set_card(**{k: a[k] for k in ("name", "about", "face", "face_meet") if k in a})
+                if cmd == "close_face":             # фото близкого (или во «Встречах»: meet) -> data URI
+                    return c.face(a.get("pid", ""), a.get("v", 0), meet=bool(a.get("meet")))
                 if cmd == "close_speak":
                     self.s.update({"close": {"speak": bool(a.get("on"))}})
                     return {"speak": bool(a.get("on"))}

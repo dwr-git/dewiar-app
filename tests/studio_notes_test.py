@@ -59,7 +59,8 @@ with sync_playwright() as p:
       $('nav button[data-p="notes"]').click(); }""", [NOTES, PIX, BUY])
     pg.wait_for_timeout(600)
     nav = pg.evaluate("() => [...document.querySelectorAll('nav button[data-p]')].map(b => b.dataset.p)")
-    ok(nav.index("notes") == nav.index("reminders") + 1 and nav.index("close") == nav.index("notes") + 1, "«Заметки» — в меню между «Напоминаниями» и «Близкими»")
+    ok(nav.index("notes") == nav.index("reminders") + 1 and nav.index("pay") == nav.index("notes") + 1 and nav.index("vault") == nav.index("pay") + 1 and nav.index("close") == nav.index("vault") + 1,
+       "«Заметки» — в меню после «Напоминаний», дальше «Платежи», «Сейф паролей» и «Близкие»")
     ok(not pg.evaluate("!!document.querySelector('#cal-tabs [data-ct=\"notes\"]')"), "в «Календаре» вкладки «Заметки» больше нет — всё в одном разделе")
     r = pg.evaluate("() => [[...document.querySelectorAll('#nt-list .nt-row b')].map(x => x.textContent), !!document.querySelector('#nt-list .nt-th'), !!document.querySelector('.nt-h')]")
     ok(r[0][:3] == ["Ёлка", "Покупки", "Умный дом"] or sorted(r[0]) == sorted([x["title"] for x in NOTES]), f"список заметок, новые сверху: {r}")

@@ -450,7 +450,8 @@ function textSize(v, quiet) {
 /* ---------- цвета текста (25.10, владелец: «выбор темы схемы цветовой… разные схемы под настроение»): палитра рядом с
    размером текста; схема — атрибут data-cs листа, оттенки — в pad.html; хранится в ui.pad_colors ---------- */
 const CS = [["ink", "Чернила", "спокойная, по умолчанию"], ["forest", "Лес", "зелёная"], ["sea", "Море", "бирюзовая"],
-            ["dusk", "Вечер", "сливовая"], ["theme", "Как тема", "цвет оформления"], ["plain", "Без цвета", "только чёрное"]];
+            ["dusk", "Вечер", "сливовая"], ["editor", "Редактор", "яркая, как в редакторе кода"], ["monokai", "Монокай", "сочная, как Monokai"],
+            ["carnival", "Карнавал", "разноцветная"], ["theme", "Как тема", "цвет оформления"], ["plain", "Без цвета", "только чёрное"]];
 let CSV = "ink";
 function colorScheme(id, quiet) {
   const v = CS.some(c => c[0] === id) ? id : "ink";
@@ -461,14 +462,14 @@ function colorScheme(id, quiet) {
 }
 $("#cs").innerHTML = CS.map(([id, name, note]) => `<button role="menuitemradio" aria-checked="${id === CSV}" data-cs="${id}">`
   + `<b>${name}</b><small><u>Заголовок</u> и <em>главное</em> · ${note}</small>`
-  + `<span class="dots"><i style="background:var(--h1c)"></i><i style="background:var(--h2c)"></i><i style="background:var(--warm)"></i></span></button>`).join("");
+  + `<span class="dots"><i style="background:var(--h1c)"></i><i style="background:var(--h2c)"></i><i style="background:var(--h3c, var(--warm))"></i><i style="background:var(--warm)"></i></span></button>`).join("");
 const csOpen = (on) => {
   const m = $("#cs"), b = $("#b-cs");
   m.classList.toggle("on", on); b.setAttribute("aria-expanded", String(on)); b.classList.toggle("on", on);
   if (!on) return;
   const r = b.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px";
-  m.style.top = (r.bottom + 6 + h < innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6)) + "px";
+  m.style.top = (r.bottom + 6 + h < innerHeight ? r.bottom + 6 : Math.max(8, Math.min(innerHeight - h - 8, r.top - h - 6))) + "px";
   (m.querySelector('[aria-checked="true"]') || m.querySelector("button")).focus();
 };
 $("#b-cs").onmousedown = (e) => e.preventDefault();

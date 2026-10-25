@@ -116,7 +116,7 @@ public final class Bridge {
 
     @JavascriptInterface public void setPref(String key, String value) {
         prefs.edit().putString(key, value).apply();
-        if ("look_body".equals(key)) CaptureWidget.refresh(a);      // сменили тему — значок «Записать» на экране тоже
+        if ("look_body".equals(key) || "widget_look".equals(key)) CaptureWidget.refresh(a);   // сменили тему или вид значка — значок «Записать» на экране тоже
     }
 
     @JavascriptInterface public void toast(final String t) {

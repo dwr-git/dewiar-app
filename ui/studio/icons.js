@@ -11,6 +11,8 @@ const ICONS = {
   tricks: '<path d="M12 3.5l1.9 4.6 4.9.4-3.7 3.2 1.1 4.8L12 14l-4.2 2.5 1.1-4.8-3.7-3.2 4.9-.4z"/><path d="M5 20.5h14"/>',
   close: '<path d="M12 20.5s-7-4.3-7-9.6A4 4 0 0 1 12 8.5a4 4 0 0 1 7 2.4c0 5.3-7 9.6-7 9.6z"/><path d="M4 4.5h4M6 2.5v4M17.5 3.5l1 1.8 2 .4-1.4 1.5.2 2-1.8-.9-1.8.9.3-2-1.5-1.5 2-.4z"/>',
   ref: '<path d="M9 3.5l1.4 4.1 4.1 1.4-4.1 1.4L9 14.5l-1.4-4.1L3.5 9l4.1-1.4z"/><circle cx="18.5" cy="6" r="1.6"/><circle cx="17.5" cy="18.5" r="1.6"/><circle cx="6.5" cy="19.5" r="1.2"/><path d="m13.6 7.8 3.4-1.1M12.6 12.6l3.8 4.6M8.2 15.9l-1.1 2.3"/>',
+  vault: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/><path d="M12 14.5v2.5"/>',
+  pay: '<path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>',
   notes: '<path d="M6.5 3.5h8l4 4v13h-12z"/><path d="M14.5 3.5v4h4M9 12h6M9 15.5h6M9 9h2.5"/>',
   personas: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.4 2.7-5.4 6-5.4s6 2 6 5.4"/><circle cx="17.2" cy="9" r="2.4"/><path d="M16 14.7c3 .2 5 1.8 5 5.3"/>',
   memory: '<circle cx="12" cy="12" r="2.6"/><circle cx="5" cy="6" r="1.8"/><circle cx="19" cy="6.5" r="1.8"/><circle cx="6" cy="18.5" r="1.8"/><circle cx="18.5" cy="18" r="1.8"/><path d="m6.5 7.2 3.6 3.2M17.5 7.6l-3.5 2.9M7.4 17.4l2.9-3.3M17 16.8l-2.9-3"/>',
@@ -43,7 +45,7 @@ $$("main section[id^='p-']").forEach(s => { const i = ICONS[s.id.slice(2)], h = 
 /* «?» у заголовка каждого раздела — как он работает, как настроить, что сказать голосом */
 // раздел студии → раздел руководства на сайте (server/dwrapp/guide.php, текст — data/guide.json)
 const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
-const GUIDE_OF = { personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", reminders: "reminders", tasks: "tasks",
+const GUIDE_OF = { personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", pay: "payments", vault: "vault", reminders: "reminders", tasks: "tasks",
   me: "notes-memory", folder: "folder-docs", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
   hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting" };
 function showHelp(k) {

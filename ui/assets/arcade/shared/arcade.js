@@ -565,7 +565,7 @@ A.game = function (cfg) {
     const s = Math.max(.1, Math.min(aw / W, ah / H));
     const cw = Math.floor(W * s), ch = Math.floor(H * s);
     stage.style.width = cw + 'px'; stage.style.height = ch + 'px';
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5, g.dprCap || 9);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5, g.dprCap || (A.isTouch && cfg.touchDpr) || 9);   // cfg.touchDpr — тяжёлая графика на телефоне
     canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
     g.scale = canvas.width / W;
     const portraitPhone = A.isTouch && innerHeight > innerWidth;
@@ -626,7 +626,7 @@ A.game = function (cfg) {
     if (n === 4) acc = 0;
     if (A.isTouch && !document.hidden && raw < 1000) { slowN++; slowSum += raw; }
     if (now - slowAt > 2500) {
-      const avg = slowN ? slowSum / slowN : 0, cur = Math.min(window.devicePixelRatio || 1, 2.5, g.dprCap || 9);
+      const avg = slowN ? slowSum / slowN : 0, cur = Math.min(window.devicePixelRatio || 1, 2.5, g.dprCap || (A.isTouch && cfg.touchDpr) || 9);
       if (avg > 40 && cur > 1.01) { g.dprCap = Math.max(1, cur - .5); fit(); A.report && A.report('медленно: ' + Math.round(avg) + ' мс на кадр — разрешение ' + g.dprCap + '×'); }
       slowAt = now; slowN = 0; slowSum = 0;
     }

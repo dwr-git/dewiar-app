@@ -115,7 +115,7 @@ def relaunch_script(installer_pid, wait_s=10):
 
 
 def _update_cmd(p, here=None):
-    """Командная строка тихого обновления Windows. №226 (24.10): «Обновить» ставил новую версию в
+    r"""Командная строка тихого обновления Windows. №226 (24.10): «Обновить» ставил новую версию в
     %LOCALAPPDATA%\Programs\Dewiar, даже если Dewiar стоит в другой папке, — передаём установщику ту папку, где
     работаем сейчас (/D=…: у NSIS это последний ключ и без кавычек, даже с пробелами; поэтому строка, а не список)."""
     try:
@@ -566,6 +566,61 @@ def shape_window(gw, kind, size=None, radius=None, rects=None):
     return True
 
 
+def _win_clip_set(text):
+    """Windows: текст в буфер + пометки для пароля (журнал Win+V и облачный буфер его не сохраняют)."""
+    import ctypes
+    from ctypes import wintypes
+    u32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
+    k32.GlobalAlloc.restype = wintypes.HGLOBAL
+    k32.GlobalLock.restype = ctypes.c_void_p
+    k32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    u32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+
+    def blob(data):
+        h = k32.GlobalAlloc(0x0002, len(data))              # GMEM_MOVEABLE
+        ctypes.memmove(k32.GlobalLock(h), data, len(data))
+        k32.GlobalUnlock(h)
+        return h
+    for _ in range(10):
+        if u32.OpenClipboard(0):
+            break
+        time.sleep(0.05)
+    else:
+        return False
+    try:
+        u32.EmptyClipboard()
+        u32.SetClipboardData(13, blob((text + "\0").encode("utf-16-le")))   # CF_UNICODETEXT
+        for fmt, data in (("ExcludeClipboardContentFromMonitorProcessing", b"\0"), ("CanIncludeInClipboardHistory", b"\0\0\0\0"),
+                          ("CanUploadToCloudClipboard", b"\0\0\0\0")):
+            f = u32.RegisterClipboardFormatW(fmt)
+            if f:
+                u32.SetClipboardData(f, blob(data))
+        return True
+    finally:
+        u32.CloseClipboard()
+
+
+def _win_clip_clear_if(text):
+    """Windows: в буфере всё ещё этот пароль — стереть; уже другое — не трогать."""
+    import ctypes
+    from ctypes import wintypes
+    u32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
+    u32.GetClipboardData.restype = wintypes.HANDLE
+    k32.GlobalLock.restype = ctypes.c_void_p
+    k32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    if not u32.OpenClipboard(0):
+        return
+    try:
+        h = u32.GetClipboardData(13)
+        if h:
+            cur = ctypes.wstring_at(k32.GlobalLock(h))
+            k32.GlobalUnlock(h)
+            if cur == text:
+                u32.EmptyClipboard()
+    finally:
+        u32.CloseClipboard()
+
+
 class Api:
     """Окна интерфейса и то, что страницам нужно от программы. Методы без «_» страницы вызывают как
     window.pywebview.api.<имя>(…) (hud.html, settings.html, alarm.html) — переименование ломает кнопки там.
@@ -611,6 +666,40 @@ class Api:
         GLib.idle_add(run, priority=GLib.PRIORITY_HIGH_IDLE)
         done.wait(timeout)
         return box.get("r")
+
+    def clip_secret(self, text, sec=30):
+        """«Сейф паролей» (0.45): скопировать пароль в буфер обмена и через sec секунд стереть — только если там всё ещё
+        он (успели скопировать другое — не трогаем). Windows: пометки «не в журнал буфера» (Win+V) и «не для облачного
+        буфера». -> True; не вышло — False (страница скопирует сама и честно скажет, что стирать придётся вручную)."""
+        import threading
+        text, sec = str(text or ""), max(5, min(300, int(sec or 30)))
+        if not text:
+            return False
+        try:
+            if WIN:
+                if not _win_clip_set(text):
+                    return False
+                threading.Timer(sec, lambda: _win_clip_clear_if(text)).start()
+                return True
+
+            def put():
+                from gi.repository import Gdk, Gtk
+                Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+                return True
+
+            def wipe():
+                from gi.repository import Gdk, Gtk
+                cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+                if cb.wait_for_text() == text:
+                    cb.set_text("", -1)
+                return True
+            if not self._gtk(put, timeout=3):
+                return False
+            threading.Timer(sec, lambda: self._gtk(wipe, timeout=3)).start()
+            return True
+        except Exception as e:  # noqa: BLE001
+            print(f"буфер обмена (сейф): {e}", file=sys.stderr)
+            return False
 
     def clipboard_image(self):
         """Картинка из буфера обмена (скопировали снимок экрана или фото) -> data:image/…;base64 или "" — нет картинки.

@@ -58,6 +58,8 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "const") loadConst();
   if (b.dataset.p === "ref") loadRefs();             // «Рефералы» — с облака, настройки не нужны
   if (b.dataset.p === "notes") loadNotesPage();      // «Заметки» — файлы папки ассистента
+  if (b.dataset.p === "pay" && window.loadPayPage) loadPayPage();      // «Платежи» (studio/pay.js)
+  if (b.dataset.p === "vault" && window.loadVaultPage) loadVaultPage();  // «Сейф паролей» (studio/vault.js)
   if (!S) return;                                    // данные подгрузятся после связи с ядром
   if (b.dataset.p === "sound") loadDevices();
   if (b.dataset.p === "about") core.call("status").then(renderStatus).catch(() => {});

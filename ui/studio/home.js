@@ -13,6 +13,8 @@ const HM_APPS = [
   { id: "calendar", name: "Календарь", sub: "события и дни", g: 3, d: `<rect class="sf" x="7" y="10" width="34" height="31" rx="7"/><rect class="ln" x="7" y="10" width="34" height="31" rx="7"/><path class="ln" d="M7 19h34M16 6v8M32 6v8"/><text class="tx" x="24" y="35.5" text-anchor="middle">${new Date().getDate()}</text><path class="th" d="M12 24h3M33 24h3"/>` },
   { id: "reminders", name: "Дела", sub: "и напоминания", g: 4, d: '<path class="sf" d="M13 32V22a11 11 0 0 1 22 0v10l3 4H10z"/><path class="ln" d="M13 32V22a11 11 0 0 1 22 0v10l3 4H10z"/><path class="ln" d="M20 40a4.2 4.2 0 0 0 8 0M24 8v3"/><path class="th" d="M6 18a17 17 0 0 1 5-8M42 18a17 17 0 0 0-5-8M3.5 21a21 21 0 0 1 3-10M44.5 21a21 21 0 0 0-3-10"/><circle class="bg" cx="36" cy="33.5" r="6.5"/><circle class="ln" cx="36" cy="33.5" r="6.5"/><path class="ln" d="M33.2 33.6l2 2 3.6-3.8"/>' },
   { id: "notes", name: "Заметки", sub: "поиск, фото, файлы", g: 5, d: '<rect class="sf" x="11" y="7" width="27" height="35" rx="4"/><rect class="ln" x="11" y="7" width="27" height="35" rx="4"/><path class="ln" d="M8 12h6M8 19h6M8 26h6M8 33h6"/><path class="th" d="M19 15h13M19 20h13M19 25h9"/><path class="bg" d="M27.5 37.5l13-13 3 3-13 13-4 1z"/><path class="ln" d="M27.5 37.5l13-13 3 3-13 13-4 1z"/><path class="th" d="M38 27l3 3"/>' },
+  { id: "pay", name: "Платежи", sub: "счета и сроки", g: 7, d: '<path class="sf" d="M10 7.5A2.5 2.5 0 0 1 12.5 5h19A2.5 2.5 0 0 1 34 7.5V41l-3.6-2.6-3.6 2.6-3.6-2.6-3.6 2.6-3.6-2.6L10 41z"/><path class="ln" d="M10 7.5A2.5 2.5 0 0 1 12.5 5h19A2.5 2.5 0 0 1 34 7.5V41l-3.6-2.6-3.6 2.6-3.6-2.6-3.6 2.6-3.6-2.6L10 41z"/><path class="th" d="M15 12.5h14M15 17.5h9M15 22.5h11"/><path class="ln" d="M15 29h6"/><circle class="bg" cx="35.5" cy="31.5" r="7.5"/><circle class="ln" cx="35.5" cy="31.5" r="7.5"/><path class="ln" d="M32.2 31.6l2.3 2.3 4.2-4.4"/>' },
+  { id: "vault", name: "Сейф", sub: "пароли и коды", g: 4, d: '<rect class="sf" x="9" y="20" width="30" height="22" rx="7"/><rect class="ln" x="9" y="20" width="30" height="22" rx="7"/><path class="ln" d="M16 20v-5.5a8 8 0 0 1 16 0V20"/><circle class="bg" cx="24" cy="30" r="3.4"/><circle class="ln" cx="24" cy="30" r="3.4"/><path class="ln" d="M24 33.4v3.6"/><path class="th" d="M14 26h3M31 26h3"/>' },
   { id: "tasks", name: "Задачи", sub: "большая работа", g: 6, d: '<rect class="sf" x="9" y="9" width="30" height="33" rx="5"/><rect class="ln" x="9" y="9" width="30" height="33" rx="5"/><path class="bg" d="M18 6.5h12a2 2 0 0 1 2 2V12H16V8.5a2 2 0 0 1 2-2z"/><path class="ln" d="M18 6.5h12a2 2 0 0 1 2 2V12H16V8.5a2 2 0 0 1 2-2z"/><path class="ln" d="M14.5 20l2 2 3.6-3.8M14.5 29l2 2 3.6-3.8"/><path class="th" d="M24 20.5h9M24 29.5h9"/><path class="ln" d="M15 37h18" opacity=".35"/><path class="ln" d="M15 37h11"/>' },
   { id: "play", name: "Досуг", sub: "игры на пару минут", g: 7, d: '<path class="sf" d="M15 15h18a10 10 0 0 1 9.6 12.8l-2.2 7.5a5 5 0 0 1-8.6 1.9L28 33h-8l-3.8 4.2a5 5 0 0 1-8.6-1.9l-2.2-7.5A10 10 0 0 1 15 15z"/><path class="ln" d="M15 15h18a10 10 0 0 1 9.6 12.8l-2.2 7.5a5 5 0 0 1-8.6 1.9L28 33h-8l-3.8 4.2a5 5 0 0 1-8.6-1.9l-2.2-7.5A10 10 0 0 1 15 15z"/><path class="ln" d="M15.5 21v7M12 24.5h7"/><circle class="dt" cx="31" cy="22.5" r="2"/><circle class="dt" cx="35" cy="26.5" r="2"/><path class="th" d="M24 6v4M18 8l2 3M30 8l-2 3"/>' },
   { id: "pad", name: "Блокнот", sub: "у виджета", g: 5, d: '<rect class="sf2" x="14" y="5" width="26" height="26" rx="4" transform="rotate(8 27 18)"/><path class="bg" d="M8 12h26v18L26 38H8z"/><path class="sf" d="M8 12h26v18L26 38H8z"/><path class="ln" d="M8 12h26v18L26 38H8z"/><path class="ln" d="M26 38v-8h8"/><path class="th" d="M13 19h16M13 24h11M13 29h7"/><circle class="dt" cx="21" cy="12" r="2.2"/>' },
@@ -22,9 +24,12 @@ const HM_APPS = [
   { id: "ref", name: "Рефералы", sub: "приглашённые", g: 2, d: '<circle class="sf" cx="24" cy="24" r="8"/><circle class="ln" cx="24" cy="21.5" r="3.2"/><path class="ln" d="M18.5 30a5.5 5.5 0 0 1 11 0"/><path class="th" d="M17 18L11 12M31 18l6-6M17 31l-6 5M31 31l6 5"/><circle class="ln" cx="9" cy="10" r="3"/><circle class="ln" cx="39" cy="10" r="3"/><circle class="ln" cx="9" cy="38" r="3"/><circle class="ln" cx="39" cy="38" r="3"/><path class="dt" d="M39 18.5l.8 1.7 1.8.3-1.3 1.3.3 1.8-1.6-.9-1.6.9.3-1.8-1.3-1.3 1.8-.3z"/>' }];
 // по умолчанию видно всё (у тех, кто ещё не настраивал, ничего не пропадает); скрытое с главной — скрыто и в меню слева
 // (24.10, владелец: «если с главной отключаю „Рефералы“ — то и слева должно исчезать… иначе не решили нахлобученность»)
-const HM_DEFAULT = ["chat", "close", "calendar", "reminders", "notes", "tasks", "play", "pad", "prompter", "memory", "folder", "ref"];
+const HM_DEFAULT = ["chat", "close", "calendar", "reminders", "notes", "pay", "vault", "tasks", "play", "pad", "prompter", "memory", "folder", "ref"];
+/* Новые приложения после выпуска (25.10: «Платежи», «Сейф») у тех, кто уже настраивал главную, — появляются сами, в конце:
+   ui.home_known — какие значки человек уже видел, когда настраивал; кого там нет — новый. */
+const HM_OLD = ["chat", "close", "calendar", "reminders", "notes", "tasks", "play", "pad", "prompter", "memory", "folder", "ref"];
 const HM_NAV = { chat: ["chat"], close: ["close"], calendar: ["calendar"], reminders: ["reminders"], notes: ["notes"], tasks: ["tasks"],
-  prompter: ["prompter"], memory: ["memory"], folder: ["folder"], ref: ["ref"] };
+  prompter: ["prompter"], memory: ["memory"], folder: ["folder"], ref: ["ref"], pay: ["pay"], vault: ["vault"] };
 /* Два разных переключателя (24.10, владелец: «включить или нет вообще — или показать или скрыть, это разное»):
    — здесь, на «Главной», — только ПОКАЗАТЬ / СКРЫТЬ: значок и раздел в меню; сама функция работает (Лира помнит,
      письма близких приходят, напоминания звенят);
@@ -81,7 +86,16 @@ const HM_SET = [["personas", "Персонажи"], ["brain", "Мозг"], ["ear
   ["hands", "Руки"], ["connect", "Подключение"], ["features", "Возможности"], ["dw", "Dewiar.pro"], ["safety", "Безопасность"], ["about", "О программе"]];
 const HM = { edit: false, data: {} };
 const hmEsc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-function hmApps() { const a = ((S && S.ui) || {}).home_apps; return Array.isArray(a) && a.length ? a.filter(id => HM_APPS.some(x => x.id === id)) : HM_DEFAULT.slice(); }
+/* Плагины на «Главной» (25.10, владелец: «может быть плагины также иметь возможность показывать на главной»): каждый
+   установленный плагин — свой значок (его эмодзи и цвет); нажать — «Плагины», открыта его карточка (что сказать,
+   настройки). Как и остальные значки, скрывается в «Настроить главную»; новый установленный — появляется сам. */
+const hmAll = () => HM_APPS.concat((HM.plg || []).map(p => ({ id: "plg:" + p.id, name: p.name, sub: p.tagline || "плагин", plg: p })));
+function hmApps() {
+  const u = (S && S.ui) || {}, a = u.home_apps, all = hmAll(), plg = all.filter(x => x.plg).map(x => x.id);
+  if (!Array.isArray(a) || !a.length) return HM_DEFAULT.filter(id => all.some(x => x.id === id)).concat(plg);
+  const known = Array.isArray(u.home_known) && u.home_known.length ? u.home_known : HM_OLD;
+  return a.filter(id => all.some(x => x.id === id)).concat(all.map(x => x.id).filter(id => !known.includes(id) && !a.includes(id)));
+}
 const hmWho = (id) => { const p = (Array.isArray(window.personas) ? personas : []).find(x => x.id === id); return (p && p.name) || "Лира"; };
 function hmGreet() {
   const h = new Date().getHours(), name = String(((S && S.user_name) || "")).trim().split(/\s+/)[0];
@@ -92,11 +106,13 @@ function hmDate() { const d = new Date(); const s = d.toLocaleDateString("ru-RU"
 async function loadHome() {
   hmRender();
   const now = new Date(), get = (c, a) => core.call(c, a).catch(() => null);
-  const [cal, cl, tk, dn, ch, pad] = await Promise.all([get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }), get("close_state"),
-    get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs")]);
+  const [cal, cl, tk, dn, ch, pad, py, pl] = await Promise.all([get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }), get("close_state"),
+    get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"), get("pay_overview"), get("plugins")]);
+  HM.plg = ((pl && pl.plugins) || []).filter(p => p.installed);
   let padText = null;
   if (pad && pad.active) { const r = await get("pad_read", { name: pad.active }); padText = r ? { name: pad.active, text: r.text || "" } : null; }
-  HM.data = { cal, cl, tk: Array.isArray(tk) ? tk : [], dn: dn && typeof dn === "object" ? dn : null, ch, pad: padText };   // старое ядро или заглушка — не массив
+  HM.data = { cal, cl, tk: Array.isArray(tk) ? tk : [], dn: dn && typeof dn === "object" ? dn : null, ch, pad: padText,
+              py: py && Array.isArray(py.bills) ? py : null };   // старое ядро или заглушка — не массив
   hmRender();
 }
 function hmToday() {
@@ -109,6 +125,10 @@ function hmToday() {
   const un = ((cl && cl.people) || []).filter(p => p.unread);
   if (un.length) { const p = un[0], l = p.last && !p.last.out ? (p.last.t || "📎 файл") : "новое сообщение";
     out.push({ cls: "msg", lab: "Близкие", b: `💌 ${p.name}`, s: `«${String(l).slice(0, 60)}»${un.length > 1 ? ` · и ещё от ${un.length - 1}` : ""}`, go: "close" }); }
+  const pyb = ((HM.data.py && HM.data.py.bills) || []).filter(b => !b.archived && ["overdue", "soon", "unpaid"].includes(b.now && b.now.s))
+    .sort((a, b) => (a.now.s === "overdue" ? 0 : 1) - (b.now.s === "overdue" ? 0 : 1));
+  if (pyb.length) { const b = pyb[0], late = b.now.s !== "soon";
+    out.push({ cls: late ? "pay late" : "pay", lab: late ? "Не оплачено" : "Скоро срок оплаты", b: `${b.icon || "🧾"} ${b.name}`, s: (late ? "срок был " : "до ") + new Date(b.now.due + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + (pyb.length > 1 ? ` · и ещё ${pyb.length - 1}` : ""), go: "pay" }); }
   const w = tk.find(t => t.status === "waiting");
   if (w) out.push({ cls: "task", lab: "Задача ждёт ответа", b: `⏳ ${w.title}`, s: w.question || "откройте и ответьте", go: "tasks" });
   if (dn) out.push({ cls: "done", lab: "Сделано сегодня", b: `${dn.today || 0} ${(dn.today || 0) % 10 === 1 && (dn.today || 0) % 100 !== 11 ? "дело" : [2, 3, 4].includes((dn.today || 0) % 10) && ![12, 13, 14].includes((dn.today || 0) % 100) ? "дела" : "дел"}`,
@@ -119,6 +139,7 @@ function hmBadge(id) {
   const { cl } = HM.data, tk = HM.data.tk || [];
   if (id === "close") return ((cl && cl.people) || []).reduce((a, p) => a + (p.unread || 0), 0);
   if (id === "tasks") return tk.filter(t => t.status === "waiting").length;
+  if (id === "pay") return ((HM.data.py && HM.data.py.bills) || []).filter(b => !b.archived && ["overdue", "soon", "unpaid"].includes(b.now && b.now.s)).length;
   return 0;
 }
 /* Начало листа блокнота на «Главной» — как в самом блокноте, а не сырой Markdown (25.10, владелец: «там сырой маркдаун
@@ -145,14 +166,14 @@ function hmPadLines(text, max = 5) {
 }
 function hmRender() {
   const box = $("#hm-body"); if (!box) return;
-  const shown = hmApps().filter(hmFeat), list = HM.edit ? shown.map(id => HM_APPS.find(x => x.id === id)).concat(HM_APPS.filter(x => !shown.includes(x.id) && hmFeat(x.id))) : shown.map(id => HM_APPS.find(x => x.id === id));
+  const all = hmAll(), shown = hmApps().filter(hmFeat), list = HM.edit ? shown.map(id => all.find(x => x.id === id)).concat(all.filter(x => !shown.includes(x.id) && hmFeat(x.id))) : shown.map(id => all.find(x => x.id === id));
   $("#hm-greet").textContent = hmGreet(); $("#hm-date").textContent = hmDate();
   const t = hmToday();
   $("#hm-today").innerHTML = t.map(c => `<button class="hm-card ${c.cls}" data-go="${c.go}"><small>${hmEsc(c.lab)}</small><b>${hmEsc(c.b)}</b><span>${hmEsc(c.s)}</span></button>`).join("");
   $("#hm-apps").classList.toggle("edit", HM.edit);
   $("#hm-apps").innerHTML = list.filter(Boolean).map(a => { const on = shown.includes(a.id), n = hmBadge(a.id);
-    return `<div class="hm-app${on ? "" : " off"}" data-app="${a.id}" ${HM.edit ? 'draggable="true"' : ""}><button class="hm-ic" data-open="${a.id}" title="${hmEsc(a.name)} — ${hmEsc(a.sub)}">${HM_SVG(a.g, a.d)}${n && !HM.edit ? `<em>${n}</em>` : ""}</button>`
-      + `<b>${hmEsc(a.name)}</b><small>${hmEsc(a.sub)}</small>${HM.edit ? `<label class="tg hm-tg" title="${on ? "Скрыть с главной и из меню (сама функция продолжит работать)" : "Показать на главной и в меню"}"><input type="checkbox" data-tg="${a.id}" ${on ? "checked" : ""}><i></i></label>` : ""}</div>`; }).join("");
+    return `<div class="hm-app${on ? "" : " off"}" data-app="${hmEsc(a.id)}" ${HM.edit ? 'draggable="true"' : ""}><button class="hm-ic${a.plg ? " hm-isplg" : ""}" data-open="${hmEsc(a.id)}" title="${hmEsc(a.name)} — ${hmEsc(a.sub)}"${a.plg ? ` style="--pc:${hmEsc(a.plg.color || "#7c8cff")}"` : ""}>${a.plg ? `<i class="hm-plg" aria-hidden="true">${hmEsc(a.plg.icon || "🧩")}</i>` : HM_SVG(a.g, a.d)}${n && !HM.edit ? `<em>${n}</em>` : ""}</button>`
+      + `<b>${hmEsc(a.name)}</b><small>${hmEsc(a.sub)}</small>${HM.edit ? `<label class="tg hm-tg" title="${on ? "Скрыть с главной и из меню (сама функция продолжит работать)" : "Показать на главной и в меню"}"><input type="checkbox" data-tg="${hmEsc(a.id)}" ${on ? "checked" : ""}><i></i></label>` : ""}</div>`; }).join("");
   $("#hm-edit").textContent = HM.edit ? "Готово" : "Настроить главную";
   $("#hm-edit-hint").hidden = !HM.edit;
   const ch = (HM.data.ch && HM.data.ch.items) || [], lastU = [...ch].reverse().find(x => x.role === "user"), lastA = [...ch].reverse().find(x => x.role === "assistant");
@@ -170,9 +191,14 @@ function hmOpen(id) {
   const a = window.pywebview && window.pywebview.api;
   if (id === "play") { if (a && a.play_open) a.play_open(""); else toast("Игры открываются у виджета: «Лира, давай поиграем»"); return; }
   if (id === "pad") { if (a && a.pad_toggle) a.pad_toggle("notes"); return; }
+  if (id.startsWith("plg:")) { plgOpen = id.slice(4); hmGo("skills"); if (PLG.length) plgDrawer(plgOpen); return; }   // карточка плагина — в «Плагинах»
   hmGo(id);
 }
-function hmSave(list) { core.call("settings_save", { patch: { ui: { home_apps: list } } }).then(() => { S.ui = Object.assign({}, S.ui, { home_apps: list }); hmNav(); }).catch(e => toast(e.message)); S.ui = Object.assign({}, S.ui, { home_apps: list }); hmNav(); }
+function hmSave(list) {
+  const known = hmAll().map(x => x.id);
+  core.call("settings_save", { patch: { ui: { home_apps: list, home_known: known } } }).then(() => { S.ui = Object.assign({}, S.ui, { home_apps: list, home_known: known }); hmNav(); }).catch(e => toast(e.message));
+  S.ui = Object.assign({}, S.ui, { home_apps: list, home_known: known }); hmNav();
+}
 function hmWire() {
   $$("#hm-body [data-go]").forEach(b => b.onclick = () => hmGo(b.dataset.go));
   $$("#hm-body [data-pad]").forEach(b => b.onclick = () => hmOpen("pad"));

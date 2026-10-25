@@ -23,16 +23,17 @@ async function loadClose(hello) {
 function clRender() {
   const st = CL.st || { people: [] }, people = st.people || [];
   clDot(st);
-  if (document.activeElement !== $("#cl-myname")) $("#cl-myname").value = (st.me && st.me.name && st.me.name !== "Без имени") ? st.me.name : "";
+  clMe(st.me || {});
   $("#cl-speak").checked = !(S && S.close && S.close.speak === false);
   const r = $("#cl-res");
   if (st.error) { r.className = "res bad"; r.textContent = st.error; } else if (r.classList.contains("bad")) { r.className = "res"; r.textContent = ""; }
   $("#cl-people").innerHTML = people.length ? people.map(p => `<button class="cl-p ${p.pid === CL.cur ? "cur" : ""}" data-pid="${clEsc(p.pid)}">
-      <i class="cl-ava" style="--c:${clColor(p.pid)}">${clEsc((p.name || "?").slice(0, 1).toUpperCase())}</i>
+      <i class="cl-ava" style="--c:${clColor(p.pid)}" data-face="${clEsc(p.pid)}" data-v="${+p.face || 0}">${clEsc((p.name || "?").slice(0, 1).toUpperCase())}</i>
       <span><b>${clEsc(p.name)}</b><small>${p.last && (p.last.t || (p.last.f || []).length) ? clEsc((p.last.out ? "Вы: " : "") + (p.last.t || "📎 " + ((p.last.f[0] || {}).name || "файл"))) : "пока без сообщений"}</small></span>
       ${p.unread ? `<em>${p.unread}</em>` : ""}</button>`).join("")
     : `<p class="hint" style="margin:6px 2px 12px">Пока никого. Пригласите тех, с кем хотите переписываться через помощников.</p>`;
   $$("#cl-people .cl-p").forEach(b => b.onclick = () => clOpen(b.dataset.pid));
+  clFaces($("#cl-people"));
   clOffers(st.offers || []);
   if (CL.cur && !people.some(p => p.pid === CL.cur)) CL.cur = "";
   if (!CL.cur && people.length && !$("#cl-invite").offsetParent) clOpen((people.find(p => p.unread) || people[0]).pid);   // пришли по строке «💌» виджета — сразу та переписка
@@ -54,15 +55,16 @@ function clHead() {
   const p = ((CL.st && CL.st.people) || []).find(x => x.pid === CL.cur);
   $("#cl-empty").style.display = p ? "none" : ""; $("#cl-head").style.display = p ? "" : "none"; $("#cl-send").style.display = p && !CL.pick ? "" : "none";
   if (!p) { $("#cl-msgs").innerHTML = ""; return; }
-  $("#cl-ava").textContent = (p.name || "?").slice(0, 1).toUpperCase(); $("#cl-ava").style.setProperty("--c", clColor(p.pid));
+  clAva($("#cl-ava"), p.pid, p.name, p.face);
   $("#cl-who").textContent = p.name;
-  $("#cl-devs").textContent = (p.devs || []).length ? "устройств: " + p.devs.length + " · сообщения шифруются" : "ещё не открывал Dewiar после приглашения";
+  $("#cl-devs").textContent = (p.about ? p.about + " · " : "") + ((p.devs || []).length ? "устройств: " + p.devs.length + " · сообщения шифруются" : "ещё не открывал Dewiar после приглашения");
+  $("#cl-devs").title = p.about || "";
   $("#cl-call").style.display = $("#cl-vcall").style.display = (p.devs || []).length ? "" : "none";
   $("#cl-pick").textContent = CL.pick ? "Готово" : "Удалить сообщения";
 }
 async function clOpen(pid) {
   if (CL.cur !== pid) clPickOff();
-  CL.cur = pid; $("#cl-invite").style.display = "none";
+  CL.cur = pid; $("#cl-invite").style.display = "none"; clCardShow(false);
   $$("#cl-people .cl-p").forEach(b => b.classList.toggle("cur", b.dataset.pid === pid));
   clHead();
   try { CL.hist = await core.call("close_history", { pid, read: !document.hidden }); } catch (e) { CL.hist = []; }
@@ -214,6 +216,7 @@ function clFiles() {
   $$("#cl-files button").forEach(x => x.onclick = () => { CL.files.splice(+x.dataset.i, 1); clFiles(); });
 }
 async function clInvite(renew) {
+  clCardShow(false);
   const r = $("#cl-res");
   try {
     const d = await core.call("close_invite", { renew: !!renew });
@@ -258,7 +261,92 @@ $("#cl-inv-go").onclick = () => clInvite(false);
 $("#cl-inv-new").onclick = async () => { if (await ask("Сделать новую ссылку? Старая перестанет действовать — те, кто уже добавился, останутся в близких.")) clInvite(true); };
 $("#cl-inv-x").onclick = () => { $("#cl-invite").style.display = "none"; clHead(); };
 $("#cl-link-go").onclick = clAccept;
-$("#cl-myname").onchange = () => core.call("close_name", { name: $("#cl-myname").value }).then(st => { CL.st = st; toast("Сохранено"); }).catch(e => toast(e.message));
+/* ---------- карточка «Я» (0.45, владелец: «возможность загрузить своё фото… которое увидят близкие и на встречах… фото, имя
+   и может ещё что»). Фото сжимается здесь до 256×256 JPEG; хранится на dewiar.pro как аватар — видят близкие и, если
+   включено, люди рядом во «Встречах». Фото других — core.call("close_face") с кэшем по номеру версии. ---------- */
+CL.faces = {};
+function clFaceGet(pid, v, meet) {
+  const k = (meet ? "m" : "p") + pid + ":" + v;
+  if (!CL.faces[k]) CL.faces[k] = core.call("close_face", { pid, v, meet: !!meet }).then(r => r.data || "").catch(() => "");
+  return CL.faces[k];
+}
+function clAva(el, pid, name, face, meet) {
+  if (!el) return;
+  el.style.setProperty("--c", clColor(pid)); el.dataset.face = pid; el.dataset.v = +face || 0;
+  if (!el.classList.contains("has-face") || !+face) { el.textContent = (name || "?").slice(0, 1).toUpperCase(); }
+  if (!+face) { el.classList.remove("has-face"); el.style.backgroundImage = ""; return; }
+  clFaceGet(pid, face, meet).then(d => { if (el.dataset.v !== String(+face)) return;
+    if (d) { el.classList.add("has-face"); el.style.backgroundImage = `url("${d}")`; el.textContent = ""; } });
+}
+function clFaces(root, meet) { $$("[data-face]", root).forEach(el => clAva(el, el.dataset.face, el.textContent, el.dataset.v, meet)); }
+function clMe(me) {
+  const nm = me.name && me.name !== "Без имени" ? me.name : "";
+  $("#cl-me-name").textContent = nm || "Ваше имя"; $("#cl-me-name").classList.toggle("ph", !nm);
+  $("#cl-me-about").textContent = me.about || (me.face ? "" : "добавьте фото и пару слов о себе");
+  clAva($("#cl-me-ava"), me.pid || "me", nm || "?", me.face);
+  if ($("#cl-card").hidden) return;
+  if (CL.cardFace === undefined) clAva($("#cl-card-ava"), me.pid || "me", nm || "?", me.face);
+}
+function clCardShow(on) {
+  const c = $("#cl-card"); if (c.hidden === !on) return;
+  c.hidden = !on; $("#cl-chat").style.display = on ? "none" : ""; $("#cl-me").setAttribute("aria-expanded", String(on));
+  if (!on) { CL.cardFace = undefined; return; }
+  $("#cl-invite").style.display = "none";
+  const me = (CL.st && CL.st.me) || {};
+  CL.cardFace = undefined;
+  $("#cl-myname").value = me.name && me.name !== "Без имени" ? me.name : ""; $("#cl-about").value = me.about || "";
+  $("#cl-about-n").textContent = $("#cl-about").value.length + " / 160";
+  $("#cl-face-meet").checked = !!me.face_meet; $("#cl-card-res").textContent = ""; $("#cl-card-res").className = "res";
+  $("#cl-card-ava").classList.remove("has-face"); $("#cl-card-ava").style.backgroundImage = "";
+  clAva($("#cl-card-ava"), me.pid || "me", $("#cl-myname").value || "?", me.face);
+  $("#cl-face-del").disabled = !me.face;
+  $("#cl-myname").focus();
+}
+/* фото -> квадрат 256×256 из середины, JPEG ~85 % (≈ 20–40 КБ) */
+async function clFacePrep(file) {
+  if (!file || !/^image\//.test(file.type)) throw new Error("Это не картинка — выберите фото (JPEG, PNG…)");
+  if (file.size > 20 * 1024 * 1024) throw new Error("Фото больше 20 МБ — выберите поменьше");
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("Фото не открылось — попробуйте другое")); i.src = url; });
+    const s = Math.min(img.naturalWidth, img.naturalHeight), cv = document.createElement("canvas"); cv.width = cv.height = 256;
+    const g = cv.getContext("2d"); g.imageSmoothingQuality = "high";
+    g.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, 256, 256);
+    return cv.toDataURL("image/jpeg", 0.85);
+  } finally { URL.revokeObjectURL(url); }
+}
+async function clFaceTake(file) {
+  try {
+    const d = await clFacePrep(file); CL.cardFace = d;
+    const a = $("#cl-card-ava"); a.classList.add("has-face"); a.style.backgroundImage = `url("${d}")`; a.textContent = ""; $("#cl-face-del").disabled = false;
+    $("#cl-card-res").className = "res"; $("#cl-card-res").textContent = "новое фото — нажмите «Сохранить»";
+  } catch (e) { $("#cl-card-res").className = "res bad"; $("#cl-card-res").textContent = e.message; }
+}
+$("#cl-me").onclick = () => clCardShow($("#cl-card").hidden);
+$("#cl-card-x").onclick = () => { clCardShow(false); clHead(); };
+$("#cl-face-drop").onclick = () => $("#cl-face-file").click();
+$("#cl-face-file").onchange = () => { const f = $("#cl-face-file").files[0]; $("#cl-face-file").value = ""; if (f) clFaceTake(f); };
+$("#cl-face-del").onclick = () => { CL.cardFace = ""; const a = $("#cl-card-ava"); a.classList.remove("has-face"); a.style.backgroundImage = "";
+  a.textContent = ($("#cl-myname").value || "?").slice(0, 1).toUpperCase(); $("#cl-face-del").disabled = true;
+  $("#cl-card-res").className = "res"; $("#cl-card-res").textContent = "фото уберётся после «Сохранить»"; };
+$("#cl-about").oninput = () => { $("#cl-about-n").textContent = $("#cl-about").value.length + " / 160"; };
+$("#cl-myname").oninput = () => { if (!$("#cl-card-ava").classList.contains("has-face")) $("#cl-card-ava").textContent = ($("#cl-myname").value || "?").slice(0, 1).toUpperCase(); };
+["dragenter", "dragover"].forEach(t => $("#cl-card").addEventListener(t, (e) => { if ([...(e.dataTransfer.items || [])].some(i => i.kind === "file")) { e.preventDefault(); $("#cl-card").classList.add("drop"); } }));
+["dragleave", "drop"].forEach(t => $("#cl-card").addEventListener(t, (e) => { if (t === "dragleave" && $("#cl-card").contains(e.relatedTarget)) return; $("#cl-card").classList.remove("drop"); }));
+$("#cl-card").addEventListener("drop", (e) => { const f = [...(e.dataTransfer.files || [])].find(x => /^image\//.test(x.type)); if (f) { e.preventDefault(); clFaceTake(f); } });
+document.addEventListener("paste", (e) => {
+  if ($("#cl-card").hidden || !$("#p-close").classList.contains("cur")) return;
+  const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(x => /^image\//.test(x.type));
+  if (f) { e.preventDefault(); clFaceTake(f); }
+});
+$("#cl-card-save").onclick = async () => {
+  const b = $("#cl-card-save"), r = $("#cl-card-res"), a = { name: $("#cl-myname").value.trim(), about: $("#cl-about").value.trim(), face_meet: $("#cl-face-meet").checked };
+  if (CL.cardFace !== undefined) a.face = CL.cardFace;
+  b.disabled = true; r.className = "res"; r.textContent = "сохраняю…";
+  try { CL.st = await core.call("close_card", a); CL.cardFace = undefined; r.className = "res ok"; r.textContent = "Сохранено"; clRender(); $("#cl-face-del").disabled = !(CL.st.me || {}).face; }
+  catch (e) { r.className = "res bad"; r.textContent = e.message; }
+  b.disabled = false;
+};
 $("#cl-speak").onchange = () => core.call("close_speak", { on: $("#cl-speak").checked }).catch(() => {});
 $("#cl-call").onclick = () => core.call("close_call", { pid: CL.cur, video: false }).then(r => toast("Звоню " + r.name + " — окно звонка открыто в браузере", 3000)).catch(e => toast(e.message, 4000));
 $("#cl-vcall").onclick = () => core.call("close_call", { pid: CL.cur, video: true }).then(r => toast("Видеозвонок " + r.name + " — окно открыто в браузере", 3000)).catch(e => toast(e.message, 4000));

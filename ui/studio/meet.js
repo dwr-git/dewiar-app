@@ -69,7 +69,7 @@ function mtRender() {
         : `<button class="btn sm" data-block="${clEsc(x.mid)}">Заблокировать</button><button class="btn sm" data-rep="${clEsc(x.mid)}">Пожаловаться</button>`}</div>` : "";
     return `<article class="mt-tag${cls}" data-mid="${clEsc(x.mid)}" style="--c:${clColor(x.mid)};--r:${mtTilt(x.mid)}deg">
       <header>${band}</header>
-      <div class="mt-body"><b class="mt-nm">${clEsc(x.name)}</b>${x.about ? `<p class="mt-ab">${clEsc(x.about)}</p>` : ""}
+      <div class="mt-body">${+x.face ? `<i class="mt-face cl-ava" data-face="${clEsc(x.mid)}" data-v="${+x.face}">${clEsc((x.name || "?").slice(0, 1).toUpperCase())}</i>` : ""}<b class="mt-nm">${clEsc(x.name)}</b>${x.about ? `<p class="mt-ab">${clEsc(x.about)}</p>` : ""}
         <small>${x.place ? clEsc(x.place) + " · " : ""}здесь ${mtAgo(x.since)}</small></div>
       <footer>${act}<button class="mt-more" data-m="${clEsc(x.mid)}" aria-label="Ещё: заблокировать, пожаловаться" aria-expanded="${MT.menu === x.mid}">⋯</button></footer>${menu}</article>`;
   }).join("");
@@ -80,6 +80,7 @@ function mtRender() {
     <div class="mt-board${ppl.length ? "" : " empty"}">${tags || `<article class="mt-tag ghost"><header>Привет, меня зовут</header><div class="mt-body"><b class="mt-nm">…</b>
       <p class="mt-ab">Здесь появится тот, кто отметится рядом с вами</p></div></article>`}</div>
     <p class="hint mt-foot">${ppl.length ? "Рядом — " + ppl.length + ". " : ""}Видно только тех, кто отметился в пределах ~${d.radius_m || 700} м. Ни точного места, ни расстояния не видит никто. Обновляется само.</p>`;
+  clFaces($("#cl-meet"), true);
   $("#mt-leave").onclick = (e) => mtDo("/meet/leave", {}, e.currentTarget).then(() => toast("Отметки больше нет — и всех «помахал» тоже")).catch(() => { });
   $("#mt-edit").onclick = () => { MT.edit = true; mtRender(); };
   if ($("#mt-more1")) $("#mt-more1").onclick = (e) => mtDo("/meet/here", { keep: true, name: h.name, about: h.about, place: h.place,
@@ -116,10 +117,10 @@ function mtForm(box, h) {
   }
   const st = CL.st || {}, nm = (h && h.name) || String((st.me && st.me.name !== "Без имени" && st.me.name) || "").split(/\s+/)[0];
   box.innerHTML = `<div class="mt-form"><article class="mt-tag preview" style="--c:${clColor("me")};--r:-1.2deg"><header>Привет, меня зовут</header>
-      <div class="mt-body"><b class="mt-nm" id="mt-pv-n">${clEsc(nm || "…")}</b><p class="mt-ab" id="mt-pv-a">${clEsc((h && h.about) || "пара слов о вас")}</p><small id="mt-pv-p">${clEsc((h && h.place) || "где вы")}</small></div></article>
+      <div class="mt-body"><b class="mt-nm" id="mt-pv-n">${clEsc(nm || "…")}</b><p class="mt-ab" id="mt-pv-a">${clEsc((h ? h.about : st.me && st.me.about) || "пара слов о вас")}</p><small id="mt-pv-p">${clEsc((h && h.place) || "где вы")}</small></div></article>
     <div class="mt-fields"><b class="mt-big">${h ? "Изменить отметку" : "Отметиться здесь"}</b>
       <label class="f"><span>Как вас называть</span><input type="text" id="mt-name" maxlength="24" placeholder="имя" value="${clEsc(nm)}"></label>
-      <label class="f"><span>Пара слов о себе</span><input type="text" id="mt-about" maxlength="120" placeholder="например: впервые здесь, люблю джаз" value="${clEsc((h && h.about) || "")}"></label>
+      <label class="f"><span>Пара слов о себе</span><input type="text" id="mt-about" maxlength="120" placeholder="например: впервые здесь, люблю джаз" value="${clEsc(((h ? h.about : st.me && st.me.about) || "").slice(0, 120))}"></label>
       <label class="f"><span>Где вы</span><input type="text" id="mt-place" maxlength="60" placeholder="концерт, выставка, кафе…" value="${clEsc((h && h.place) || "")}"></label>
       <div class="mt-hours" role="group" aria-label="Сколько видно">${[1, 2, 3].map(n => `<button class="${MT.hours === n ? "on" : ""}" data-h="${n}">${n} ч</button>`).join("")}</div>
       <div class="actions"><button class="btn primary" id="mt-go">${h ? "Сохранить" : "Отметиться"}</button>${h ? `<button class="btn" id="mt-cancel">Отмена</button>` : ""}</div>

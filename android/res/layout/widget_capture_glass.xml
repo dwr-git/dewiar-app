@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Значок «Записать» — «Стекло» (по умолчанию с 0.45): матовое стекло w_bg_glass на любых обоях; мозг и текст белые,
+     у текста мягкая тень — читается и на светлом. Вид выбирают в Настройках → «Значок «Записать»» (pref widget_look). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/w_bg_glass"
+    android:paddingLeft="16dp"
+    android:paddingRight="18dp"
+    android:paddingBottom="3dp">
+    <ImageView
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/w_brain"
+        android:contentDescription="Dewiar слушает"/>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="12dp"
+        android:orientation="vertical">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Записать"
+            android:textColor="#FFFFFF"
+            android:shadowColor="#73000000"
+            android:shadowDy="1"
+            android:shadowRadius="4"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:maxLines="1"/>
+        <TextView
+            android:id="@+id/w_sub"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="идея или напоминание"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="#D9FFFFFF"
+            android:shadowColor="#73000000"
+            android:shadowDy="1"
+            android:shadowRadius="4"
+            android:textSize="11.5sp"
+            android:maxLines="1"/>
+    </LinearLayout>
+</LinearLayout>

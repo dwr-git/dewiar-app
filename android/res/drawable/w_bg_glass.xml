@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фон значка «Записать» — «Стекло» (25.10, владелец: «светлая терпимо, но не круто… может стекло матовое… стильно и
+     красиво»). Размыть обои под значком Android не даёт (RemoteViews), поэтому стекло собрано слоями, как у виджетов
+     iOS: мягкая тень снизу, тёмная вуаль (белый текст читается и на светлых обоях), белый градиент сверху вниз — матовость,
+     и тонкая светлая кромка. Неоморфизм (w_bg_light) красив только на фоне своего же цвета — на фото-обоях он «наклейка». -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:left="1dp" android:right="1dp" android:top="3dp">
+        <shape android:shape="rectangle"><corners android:radius="22dp"/><solid android:color="#26000000"/></shape>
+    </item>
+    <item android:bottom="3dp">
+        <shape android:shape="rectangle"><corners android:radius="22dp"/><solid android:color="#38101820"/></shape>
+    </item>
+    <item android:bottom="3dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="22dp"/>
+            <gradient android:angle="270" android:startColor="#52FFFFFF" android:endColor="#1FFFFFFF"/>
+            <stroke android:width="1dp" android:color="#66FFFFFF"/>
+        </shape>
+    </item>
+</layer-list>

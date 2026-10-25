@@ -43,7 +43,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     alarmSet(j) { const x = JSON.parse(j); x.id = x.id || "a" + Date.now(); const i = alarms.findIndex(a => a.id === x.id); if (i >= 0) alarms[i] = x; else alarms.push(x); return JSON.stringify(x); },
     alarmCancel(id) { const i = alarms.findIndex(a => a.id === id); if (i >= 0) alarms.splice(i, 1); return i >= 0; },
     alarms: () => JSON.stringify(alarms), alarmHistory: () => "[]", exactAlarms: () => true,
-    _w: { on: true, placed: 0, pin: true }, widgetState() { return JSON.stringify(this._w); }, widgetSet(on) { this._w.on = !!on; },
+    _w: { on: true, placed: 0, pin: true, look: "glass" }, widgetState() { return JSON.stringify(this._w); }, widgetSet(on) { this._w.on = !!on; },
     widgetPin() { this._w.placed++; return true; }, home() { window._home = (window._home || 0) + 1; },
     _cal: [], calEvents(j) { const q = JSON.parse(j); return JSON.stringify({ events: this._cal.filter(e => e.end > q.from && e.begin < q.to).sort((a, b) => a.begin - b.begin) }); },
     calAdd(j) { const e = JSON.parse(j); e.id = this._cal.length + 1; e.calendar = "Мой календарь"; this._cal.push(e); return JSON.stringify({ id: e.id, calendar: e.calendar }); },
@@ -5593,6 +5593,7 @@ function wireSettings(info) {
       if (!confirm("Точно? Это нельзя отменить. Память сотрётся и на компьютере после синхронизации.")) return;
       history = []; saveH(); convReset(); S.memory = []; saveS(); syncSoon(); toast("Забыл"); };
     if (g("wg-on")) g("wg-on").onchange = () => { try { D.widgetSet(g("wg-on").checked); } catch (e) { } renderSettings(); };
+    $$("#wg-look button").forEach(b => b.onclick = () => { prefSet("widget_look", b.dataset.l); renderSettings(); toast("Значок на экране обновится сам"); });
     if (g("wg-pin")) g("wg-pin").onclick = () => { let ok = false; try { ok = D.widgetPin(); } catch (e) { }
       const r = g("wg-res"); r.className = "res" + (ok ? " ok" : ""); r.textContent = ok ? "Подтвердите на экране — и значок появится на рабочем столе" : "Добавьте вручную: долгое нажатие на рабочем столе → «Виджеты» → Dewiar"; };
     if (g("sy-now")) g("sy-now").onclick = async () => { const r = g("sy-res"); r.className = "res"; r.textContent = "синхронизирую…"; await syncRun(true); renderSettings(); };
@@ -5938,11 +5939,17 @@ async function syncRun(manual) {
 }
 function syncSoon() { if (SANDBOX) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncRun(false), 3000); }   // экзамен — без обмена   // несколько правок подряд — один обмен
 /* Значок «Записать» на рабочем столе (CaptureWidget.java): включён по умолчанию; «Добавить на экран» — Android 8+ */
+/* Вид значка (25.10, владелец: «может стекло матовое… стильно и красиво»): pref widget_look, значок перерисовывается сразу */
+const WG_LOOKS = [["glass", "Стекло", "матовое стекло — красиво на любых обоях"], ["light", "Светлый", "мягкий светлый, как тема «Небесный»"],
+  ["dark", "Тёмный", "матово-чёрный"], ["theme", "Как тема", "светлый или тёмный — вслед за оформлением"]];
+const wgLook = (w) => { const p = String(prefGet("widget_look") || ""); return WG_LOOKS.some(l => l[0] === p) ? p : "glass"; };
 function widgetCard() {
   let w = {}; try { w = JSON.parse(D.widgetState ? D.widgetState() : "{}") || {}; } catch (e) { }
   if (w.on === undefined) return `<p class="hint" style="margin:0">Обновите приложение — в этой версии значка ещё нет.</p>`;
   return `<div class="sw"><div>Значок на рабочем столе<small class="hint" style="display:block;margin:2px 0 0">одно нажатие — Dewiar слушает и записывает мысль в «Идеи» или ставит напоминание («напомни завтра в 10…»), потом сам уходит</small></div>
     <label class="tg"><input type="checkbox" id="wg-on" ${w.on ? "checked" : ""}><i></i></label></div>`
+    + (w.on && w.look ? `<div class="sw wglook"><div>Вид<small class="hint" style="display:block;margin:2px 0 0">${WG_LOOKS.find(l => l[0] === wgLook(w))[2]}</small></div>
+    <div class="seg" id="wg-look" role="radiogroup" aria-label="Вид значка">${WG_LOOKS.map(([id, t]) => `<button role="radio" data-l="${id}" class="${wgLook(w) === id ? "on" : ""}" aria-checked="${wgLook(w) === id}">${t}</button>`).join("")}</div></div>` : "")
     + (w.on ? (w.placed ? `<div class="res ok">На рабочем столе: ${w.placed}</div>`
       : w.pin ? `<button class="btn w" id="wg-pin" style="margin-top:8px">Добавить на рабочий стол</button><div class="res" id="wg-res"></div>`
       : `<p class="hint" style="margin:8px 0 0">Добавить: долгое нажатие на рабочем столе → «Виджеты» → Dewiar → «Записать».</p>`) : "");
@@ -7376,6 +7383,42 @@ function guideAnswer(query) {
 const clTime = (ts) => { const d = new Date(ts), now = new Date(), hm = pad(d.getHours()) + ":" + pad(d.getMinutes()); return d.toDateString() === now.toDateString() ? hm : d.getDate() + " " + MON[d.getMonth()].slice(0, 3) + ", " + hm; };
 const CL_COL = ["#9BD4FF", "#FFB547", "#3DF5C8", "#FF7AB6", "#B78CFF", "#9BE15D", "#7C8CFF", "#FF6B5A"];
 const clCol = (pid) => CL_COL[[...String(pid)].reduce((a, c) => a + c.charCodeAt(0), 0) % CL_COL.length];
+/* Карточка «Я» (0.45, владелец: «своё фото себе на аватарку, которое увидят близкие и на встречах»): фото близких —
+   /close/face (во «Встречах» — /meet/face по отметке), base64 через мост; кэш — в памяти и файлом face-<pid> по номеру версии. */
+const clAvaH = (id, name, face, extra) => `<i class="clava" style="--c:${clCol(id)}" data-face="${esc(id)}" data-v="${+face || 0}">${esc((name || "?")[0].toUpperCase())}${extra || ""}</i>`;
+const CL_FACES = {};
+function clFace(id, v, meet) {
+  const k = (meet ? "m-" : "p-") + String(id).replace(/[^a-z0-9]/g, ""), key = k + ":" + v;
+  if (CL_FACES[key]) return CL_FACES[key];
+  return CL_FACES[key] = (async () => {
+    try { const c = JSON.parse(fileGet("face-" + k) || "null"); if (c && c.v === +v && c.d) return c.d; } catch (e) { }
+    const d = await clReq("GET", meet ? "/meet/face" : "/close/face", null, "&b64=1&" + (meet ? "mid=" : "pid=") + encodeURIComponent(id));
+    const url = "data:" + (d.type || "image/jpeg") + ";base64," + d.b64;
+    fileSave("face-" + k, JSON.stringify({ v: +v, d: url })); return url;
+  })().catch(() => "");
+}
+function clFacesFill(root, meet) {
+  $$("[data-face]", root).forEach(el => { const v = +el.dataset.v; if (!v) return;
+    clFace(el.dataset.face, v, meet).then(u => { if (u && el.isConnected && +el.dataset.v === v) { el.style.backgroundImage = `url("${u}")`; el.classList.add("has-face"); } }); });
+}
+/* фото -> квадрат 256×256 из середины, JPEG ~85 % */
+async function clFacePrep(file) {
+  if (!file || !/^image\//.test(file.type || "")) throw new Error("Это не картинка — выберите фото");
+  if (file.size > 20 * 1024 * 1024) throw new Error("Фото больше 20 МБ — выберите поменьше");
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("Фото не открылось — попробуйте другое")); i.src = url; });
+    const sz = Math.min(img.naturalWidth, img.naturalHeight), cv = document.createElement("canvas"); cv.width = cv.height = 256;
+    const g = cv.getContext("2d"); g.imageSmoothingQuality = "high";
+    g.drawImage(img, (img.naturalWidth - sz) / 2, (img.naturalHeight - sz) / 2, sz, sz, 0, 0, 256, 256);
+    return cv.toDataURL("image/jpeg", 0.85);
+  } finally { URL.revokeObjectURL(url); }
+}
+async function clMeSave(patch, okMsg) {
+  try { clPeople(await clReq("POST", "/close/me", patch)); if (okMsg) toast(okMsg); }
+  catch (e) { toast(e.message, 4000); }
+  if (!clCur && clTab === "close" && $("#close-body")) clRender();
+}
 const clKb = (n) => n > 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " МБ" : Math.max(1, Math.round(n / 1024)) + " КБ";
 /* Вкладки листа «Близкие»: «Близкие» | «Рефералы». Зовут в «Близкие» из «Рефералов» (offers) — карточка с согласием. */
 let clTab = "close";
@@ -7400,8 +7443,8 @@ function clRender() {
   if (p) {
     delete st.unread[p.pid]; clSave(); clBadge(); clSeen(p.pid);
     const h = st.hist[p.pid] || [];
-    box.innerHTML = `<div class="clh"><button class="ib soft" id="cl-back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><i class="clava" style="--c:${clCol(p.pid)}">${esc((p.name || "?")[0].toUpperCase())}</i>
-        <div style="flex:1;min-width:0"><b>${esc(p.name)}</b><small>${(p.devs || []).length ? "сообщения шифруются" : "ещё не открывал Dewiar"}</small></div>
+    box.innerHTML = `<div class="clh"><button class="ib soft" id="cl-back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>${clAvaH(p.pid, p.name, p.face)}
+        <div style="flex:1;min-width:0"><b>${esc(p.name)}</b><small>${p.about ? esc(p.about) + " · " : ""}${(p.devs || []).length ? "сообщения шифруются" : "ещё не открывал Dewiar"}</small></div>
         ${(p.devs || []).length && window.DewiarCall ? `<button class="ib soft" id="cl-call" title="Позвонить"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></button>
           <button class="ib soft" id="cl-vcall" title="Видеозвонок"><svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg></button>` : ""}
         ${h.length ? `<button class="ib soft" id="cl-wipe" title="Очистить переписку" aria-label="Очистить переписку"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg></button>` : ""}</div>
@@ -7411,7 +7454,7 @@ function clRender() {
       <div class="clemo" id="cl-emo" hidden>${clEmoHtml()}</div>
       <div class="clsend"><button class="ib att" id="cl-emo-b" aria-label="Эмодзи" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4.2 4.2 0 0 0 7 0"/><path d="M9 9.6v.01M15 9.6v.01"/></svg></button><label class="ib att"><input type="file" id="cl-file" multiple hidden><svg viewBox="0 0 24 24"><path d="M20.5 11.5 12.6 19.4a5 5 0 0 1-7.1-7.1l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg></label>
         <textarea id="cl-text" rows="1" placeholder="Сообщение…"></textarea><button class="ib" id="cl-go"><svg viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-2.5-6.5z"/></svg></button></div>`;
-    const msgs = $("#cl-msgs"); msgs.scrollTop = msgs.scrollHeight;
+    const msgs = $("#cl-msgs"); msgs.scrollTop = msgs.scrollHeight; clFacesFill($(".clh"));
     $("#cl-back").onclick = () => { clCur = ""; clRender(); };
     if ($("#cl-wipe")) $("#cl-wipe").onclick = () => { if (!confirm(`Очистить переписку с «${p.name}» на этом телефоне? У ${p.name} и на ваших других устройствах она останется. Одно сообщение — долгое нажатие на него.`)) return;
       clForget(p.pid); clRender(); toast("Переписка очищена"); };
@@ -7439,19 +7482,25 @@ function clRender() {
   const last = (x) => { const l = (st.hist[x.pid] || []).slice(-1)[0]; return l ? esc((l.out ? "Вы: " : "") + (l.t || "📎 " + ((l.f || [])[0] || {}).name)) : "пока без сообщений"; };
   const PH = `<svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>`,
     VI = `<svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg>`;
+  const myName = st.me.name && st.me.name !== "Без имени" ? st.me.name : (S.close && S.close.name) || S.user_name || "";
   const rc = radCfg(), rseen = radOn() ? rc.to.map(pid => st.people.find(p => p.pid === pid)).filter(Boolean).map(p => esc(radFirst(p.name))) : [];
   box.innerHTML = tabs + clOffers(st)
     + (rseen.length && feat("near") ? `<button class="rad-mini" id="rad-mini"><i class="dot"></i><span>${rseen.length === 1 ? "Вас видит" : "Вас видят"} ${radList(rseen)} · ${radUntil(rc.until)}</span><b>Рядом</b></button>` : "")
-    + `<div class="clfaces">${st.people.map(x => `<button class="clface" data-pid="${esc(x.pid)}"><i class="clava" style="--c:${clCol(x.pid)}">${esc((x.name || "?")[0].toUpperCase())}${st.unread[x.pid] ? `<em>${st.unread[x.pid]}</em>` : ""}</i><span>${esc(String(x.name || "").split(/\s+/)[0])}</span></button>`).join("")}
+    + `<div class="clfaces">${st.people.map(x => `<button class="clface" data-pid="${esc(x.pid)}">${clAvaH(x.pid, x.name, x.face, st.unread[x.pid] ? `<em>${st.unread[x.pid]}</em>` : "")}<span>${esc(String(x.name || "").split(/\s+/)[0])}</span></button>`).join("")}
         <button class="clface add" id="cl-add"><i class="clava">+</i><span>Добавить</span></button></div>`
-    + (st.people.length ? st.people.map(x => `<div class="clp" data-pid="${esc(x.pid)}"><i class="clava" style="--c:${clCol(x.pid)}">${esc((x.name || "?")[0].toUpperCase())}</i>
+    + (st.people.length ? st.people.map(x => `<div class="clp" data-pid="${esc(x.pid)}">${clAvaH(x.pid, x.name, x.face)}
         <span><b>${esc(x.name)}</b><small>${last(x)}</small></span>${st.unread[x.pid] ? `<em>${st.unread[x.pid]}</em>` : ""}
         ${(x.devs || []).length && window.DewiarCall ? `<button class="ib soft" data-call="${esc(x.pid)}" title="Позвонить">${PH}</button><button class="ib soft" data-vcall="${esc(x.pid)}" title="Видеозвонок">${VI}</button>` : ""}</div>`).join("")
       : `<div class="card"><b>Пока никого</b><p class="hint" style="margin:4px 0 0">Нажмите «Пригласить» — покажите близкому печать Dewiar или отправьте ссылку. Потом говорите: «напиши маме, что я задержусь», «позвони маме по видео».</p></div>`)
     + `<div id="cl-invbox"></div>`
     + (inv && !clInvOpen ? `<button class="btn w clinvrow" id="cl-inv-show">Ссылка-приглашение действует до ${new Date(inv.expires * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} — показать печать</button>` : "")
     + clLiveCard()
-    + `<h3>Как вас видят близкие</h3><div class="card"><input id="cl-name" placeholder="ваше имя" maxlength="40" value="${esc(st.me.name && st.me.name !== "Без имени" ? st.me.name : (S.close && S.close.name) || S.user_name || "")}">
+    + `<h3>Моя карточка</h3><div class="card clme"><div class="clme-top"><label class="clme-face" aria-label="Выбрать фото">${clAvaH(st.me.pid || "me", myName || "?", st.me.face)}<input type="file" accept="image/*" id="cl-face" hidden><span>${st.me.face ? "Сменить" : "Фото"}</span></label>
+        <div style="flex:1;min-width:0"><input id="cl-name" placeholder="ваше имя" maxlength="40" value="${esc(myName)}"><small class="hint" style="display:block;margin:4px 2px 0">так вас видят близкие</small></div></div>
+      <textarea id="cl-about" maxlength="160" rows="2" placeholder="О себе: пара слов — чем живёте, что любите">${esc(st.me.about || "")}</textarea>
+      ${st.me.face ? `<button class="btn sm" id="cl-face-del" style="margin-top:8px">Убрать фото</button>` : ""}
+      <div class="sw" style="margin-top:10px"><div>Показывать фото во «Встречах»<small>люди рядом увидят его на вашей карточке</small></div><label class="tg"><input type="checkbox" id="cl-face-meet" ${st.me.face_meet ? "checked" : ""}><i></i></label></div>
+      <p class="hint" style="margin:8px 2px 0">Фото хранится на dewiar.pro, как аватар в мессенджере: его видят только ваши близкие (и люди рядом во «Встречах», если включено).</p>
       <div class="sw" style="margin-top:10px"><div>Читать сообщения вслух<small>«Мама пишет: …»</small></div><label class="tg"><input type="checkbox" id="cl-speak" ${S.close && S.close.speak === false ? "" : "checked"}><i></i></label></div></div>
     <p class="hint" style="margin:12px 4px">Переписка и звонки между помощниками, сообщения шифруются на устройствах. Голосом: «напиши Людмиле: привет», «позвони маме по видео».</p>
     <button class="btn w clscan" id="cl-scan"><svg viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M7 12h10"/></svg>Сканировать приглашение</button>
@@ -7466,6 +7515,12 @@ function clRender() {
   $("#cl-scan").onclick = () => scanCode();
   if (inv && clInvOpen) clInvShow(inv);
   $("#cl-name").onchange = () => { S.close = Object.assign({}, S.close, { name: $("#cl-name").value.trim() }); saveS(); clHello().then(() => toast("Сохранено")).catch(e => toast(e.message)); };
+  $("#cl-about").onchange = () => clMeSave({ about: $("#cl-about").value.trim() }, "Сохранено");
+  $("#cl-face").onchange = async () => { const f = $("#cl-face").files[0]; $("#cl-face").value = ""; if (!f) return;
+    try { const d = await clFacePrep(f); toast("Загружаю фото…"); await clMeSave({ face: d }, "Фото сохранено"); } catch (e) { toast(e.message, 4000); } };
+  if ($("#cl-face-del")) $("#cl-face-del").onclick = () => { if (confirm("Убрать фото? Близкие снова увидят букву.")) clMeSave({ face: "" }, "Фото убрано"); };
+  $("#cl-face-meet").onchange = () => clMeSave({ face_meet: $("#cl-face-meet").checked }, $("#cl-face-meet").checked ? "Фото видно во «Встречах»" : "Во «Встречах» фото не видно");
+  clFacesFill(box);
   $("#cl-speak").onchange = () => { S.close = Object.assign({}, S.close, { speak: $("#cl-speak").checked }); saveS(); };
   $("#cl-link-go").onclick = () => clAcceptLink($("#cl-link").value);
 }
@@ -7615,7 +7670,7 @@ function meetRender() {
     const nm = (h && h.name) || String((st.me && st.me.name !== "Без имени" && st.me.name) || (S.close && S.close.name) || S.user_name || "").split(/\s+/)[0];
     body.innerHTML = `<div class="card mt-form"><b class="mt-big">${h ? "Изменить отметку" : "Отметиться здесь"}</b>
       <label class="f"><span>Как вас называть</span><input id="mt-name" maxlength="24" placeholder="имя" value="${esc(nm)}"></label>
-      <label class="f"><span>Пара слов о себе</span><textarea id="mt-about" maxlength="120" rows="2" placeholder="например: впервые здесь, люблю джаз">${esc((h && h.about) || "")}</textarea></label>
+      <label class="f"><span>Пара слов о себе</span><textarea id="mt-about" maxlength="120" rows="2" placeholder="например: впервые здесь, люблю джаз">${esc(((h ? h.about : st.me && st.me.about) || "").slice(0, 120))}</textarea></label>
       <label class="f"><span>Где вы</span><input id="mt-place" maxlength="60" placeholder="концерт, выставка, кафе…" value="${esc((h && h.place) || "")}"></label>
       <div class="mt-row"><span>Видно</span><div class="seg" id="mt-hours">${[1, 2, 3].map(n => `<button data-h="${n}" class="${mtHours === n ? "on" : ""}">${n} ч</button>`).join("")}</div></div>
       <div class="row2"><button class="btn p" id="mt-go" style="flex:2">${h ? "Сохранить" : "Отметиться"}</button>${h ? `<button class="btn" id="mt-cancel" style="flex:1">Отмена</button>` : ""}</div>
@@ -7638,7 +7693,7 @@ function meetRender() {
       <button class="btn sm" id="mt-edit">Изменить</button><button class="btn sm" id="mt-leave">Уйти</button></div>
     <h3>${ppl.length ? "Рядом — " + ppl.length : "Рядом пока никого"}</h3>`
     + (ppl.length ? ppl.map(x => `<div class="card mtp${x.waves_me ? " in" : ""}${x.match ? " match" : ""}" data-mid="${esc(x.mid)}">
-        <div class="mtp-h"><i class="clava" style="--c:${clCol(x.mid)}">${esc((x.name || "?")[0].toUpperCase())}</i><div style="flex:1;min-width:0"><b>${esc(x.name)}</b>
+        <div class="mtp-h">${clAvaH(x.mid, x.name, x.face)}<div style="flex:1;min-width:0"><b>${esc(x.name)}</b>
           <small>${x.place ? esc(x.place) + " · " : ""}здесь ${mtAgo(x.since)}</small></div><button class="ib soft mt-more" data-m="${esc(x.mid)}" aria-label="Ещё: заблокировать, пожаловаться" aria-expanded="${mtMenu === x.mid}">⋯</button></div>
         ${x.about ? `<p class="mtp-a">${esc(x.about)}</p>` : ""}
         ${mtMenu === x.mid ? `<div class="row2 mt-menu"><button class="btn" data-block="${esc(x.mid)}" style="flex:1">Заблокировать</button><button class="btn" data-report="${esc(x.mid)}" style="flex:1">Пожаловаться</button></div>` : ""}
@@ -7648,6 +7703,7 @@ function meetRender() {
           : `<button class="btn sm" data-wave="${esc(x.mid)}">👋 Помахать</button>`}</div></div>`).join("")
       : `<p class="hint" style="margin:0 4px 12px">Отметка видна ещё ${mtLeft(h.until)}. Кто отметится рядом — появится здесь.</p>`)
     + `<p class="hint">Видно только тех, кто отметился в пределах ~${MT.radius_m || 700} м. Ни точного места, ни расстояния не видит никто.</p>`;
+  clFacesFill(body, true);
   $("#mt-edit").onclick = () => { mtEdit = true; meetRender(); };
   $("#mt-leave").onclick = () => mtCall("/meet/leave", {}, $("#mt-leave")).then(() => toast("Отметки больше нет")).catch(() => { });
   $$("[data-m]").forEach(b => b.onclick = () => { mtMenu = mtMenu === b.dataset.m ? "" : b.dataset.m; meetRender(); });

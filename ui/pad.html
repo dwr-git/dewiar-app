@@ -214,25 +214,35 @@
   #ed[data-cs="dusk"], #cs [data-cs="dusk"] { --h1c: #573487; --h2c: #8a3c7c; --warm: #c03d64; --mk: #8a5cc8; --emc: color-mix(in srgb, var(--ink) 80%, #8a5cc8); }
   body:not(.light) #ed[data-cs="dusk"], body:not(.light) #cs [data-cs="dusk"] { --h1c: #cdb7f6; --h2c: #eeadd9; --warm: #ff9ab5; --mk: #b89cf0; --emc: color-mix(in srgb, var(--ink) 80%, #b89cf0); }
   #ed[data-cs="plain"], #cs [data-cs="plain"], body:not(.light) #ed[data-cs="plain"], body:not(.light) #cs [data-cs="plain"] { --h1c: var(--ink); --h2c: var(--ink); --warm: var(--ink); --mk: var(--faint); --emc: var(--ink); }
+  /* яркие схемы «как в редакторах кода» (25.10, владелец: «разнообразнее, больше цветов, чтобы не скучно» — по его
+     образцу): у каждого уровня заголовка свой цвет, жирное в пунктах и в нумерации — свои, ссылки и код — свои */
+  #ed[data-cs="editor"], #cs [data-cs="editor"] { --h1c: #0070d2; --h2c: #e0094a; --h3c: #00876a; --h4c: #8a00d6; --warm: #1f8486; --sul: #138a0a; --sol: #e0115f; --emc: var(--ink); --lnk: #5a6ff0; --mk: #e0094a; --cdc: #8a00d6; }
+  body:not(.light) #ed[data-cs="editor"], body:not(.light) #cs [data-cs="editor"] { --h1c: #9ec8ff; --h2c: #ffd700; --h3c: #3ee07a; --h4c: #c77dff; --warm: #60d8da; --sul: #f9bd70; --sol: #ff4f8f; --emc: #ffffff; --lnk: #8fa0ff; --mk: #ffd700; --cdc: #f9bd70; }
+  #ed[data-cs="monokai"], #cs [data-cs="monokai"] { --h1c: #137fa3; --h2c: #5a7f00; --h3c: #b85f00; --h4c: #7146d1; --warm: #c8104f; --sul: #7a6b00; --sol: #7146d1; --emc: color-mix(in srgb, var(--ink) 80%, #b85f00); --lnk: #137fa3; --mk: #c8104f; --cdc: #7a6b00; }
+  body:not(.light) #ed[data-cs="monokai"], body:not(.light) #cs [data-cs="monokai"] { --h1c: #66d9ef; --h2c: #a6e22e; --h3c: #fd971f; --h4c: #ae81ff; --warm: #f92672; --sul: #e6db74; --sol: #ae81ff; --emc: #f8f8f2; --lnk: #66d9ef; --mk: #f92672; --cdc: #e6db74; }
+  #ed[data-cs="carnival"], #cs [data-cs="carnival"] { --h1c: #c2185b; --h2c: #a35c00; --h3c: #00797f; --h4c: #5e35b1; --warm: #2e7d32; --sul: #6a1b9a; --sol: #d84315; --emc: color-mix(in srgb, var(--ink) 80%, #c2185b); --lnk: #1565c0; --mk: #c2185b; --cdc: #6a1b9a; }
+  body:not(.light) #ed[data-cs="carnival"], body:not(.light) #cs [data-cs="carnival"] { --h1c: #ff8fb1; --h2c: #ffd166; --h3c: #7bdff2; --h4c: #c3a6ff; --warm: #b8f28b; --sul: #ffb3e6; --sol: #ffa36c; --emc: #fff3e0; --lnk: #8ecbff; --mk: #ffd166; --cdc: #ffb3e6; }
   #ed h1 { color: var(--h1c); }
-  #ed h2, #ed h3 { color: var(--h2c); }
+  #ed h2 { color: var(--h2c); } #ed h3 { color: var(--h3c, var(--h2c)); } #ed h4, #ed h5, #ed h6 { color: var(--h4c, var(--h2c)); }
+  #ed ul li strong { color: var(--sul, var(--warm)); } #ed ol li strong { color: var(--sol, var(--warm)); }
+  #ed[data-cs] a { color: var(--lnk, var(--acc)); }
   #ed h1 + p, #ed h2 + p { margin-top: .35em; }
   #ed strong { color: var(--warm); font-weight: 700; }
   #ed em { color: var(--emc); }
   #ed li::marker { color: var(--mk); }
   #ed ol > li::marker { font-weight: 700; }
-  #ed code { color: var(--warm); background: color-mix(in srgb, var(--warm) 11%, transparent); }
+  #ed code { color: var(--cdc, var(--warm)); background: color-mix(in srgb, var(--cdc, var(--warm)) 11%, transparent); }
   #ed[data-cs="plain"] code { background: var(--code); }
   #ed blockquote { box-shadow: inset 3px 0 0 var(--mk); background: linear-gradient(90deg, color-mix(in srgb, var(--mk) 12%, transparent), transparent 70%); border-radius: 0 10px 10px 0; padding: 6px 12px 6px 14px; color: var(--ink); }
   #ed hr { height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--mk), transparent); opacity: .5; }
   /* выбор схемы — палитра рядом с размером текста; в списке у каждой — образец: заголовок, жирное, маркер */
   #b-cs { position: relative; }
   #b-cs i { position: absolute; width: 5px; height: 5px; border-radius: 50%; }
-  #cs { position: fixed; z-index: 30; min-width: 214px; padding: 6px; border-radius: 14px; background: var(--paper); display: none;
+  #cs { position: fixed; z-index: 30; min-width: 214px; padding: 6px; max-height: calc(100vh - 16px); overflow-y: auto; scrollbar-width: thin; border-radius: 14px; background: var(--paper); display: none;
         box-shadow: 0 16px 40px -14px rgba(0,0,0,.5), inset 0 0 0 1px var(--line); }
   body.light #cs { box-shadow: 0 18px 44px -16px rgba(20,32,60,.35), inset 0 0 0 1px var(--line); }
   #cs.on { display: block; }
-  #cs button { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; width: 100%; padding: 7px 10px; border-radius: 10px; text-align: left; }
+  #cs button { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 10px; width: 100%; padding: 6px 10px; border-radius: 10px; text-align: left; }
   #cs button:hover, #cs button:focus-visible { background: var(--chip); outline: none; }
   #cs button[aria-checked="true"] { background: var(--chip2); }
   #cs b { font-size: 14px; font-weight: 800; color: var(--h1c); }

@@ -142,8 +142,9 @@ class Vault:
                     best, score = x, s
         return dict(best) if best else None
 
-    def put(self, name, value, note="", item_id=None):
-        """Новая запись или замена: по item_id, а без него — по совпадению названия. -> запись без значения."""
+    def put(self, name, value, note="", item_id=None, login=None, url=None):
+        """Новая запись или замена: по item_id, а без него — по совпадению названия. -> запись без значения.
+        login и url («Сейф паролей», 0.45) — не секрет: видны в списке, по ним ищут; None — оставить как было."""
         name, value = _clean(name)[:120], str(value)
         if not name or not value:
             raise ValueError("нужно название и значение")
@@ -156,6 +157,10 @@ class Vault:
             else:
                 x = {"id": uuid.uuid4().hex[:10], "name": name, "value": value, "note": note or "", "created": now, "updated": now}
                 items.append(x)
+            if login is not None:
+                x["login"] = str(login).strip()[:160]
+            if url is not None:
+                x["url"] = str(url).strip()[:300]
             self._save()
             return {k: v for k, v in x.items() if k != "value"}
 

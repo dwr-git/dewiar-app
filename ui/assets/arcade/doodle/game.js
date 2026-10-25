@@ -1130,7 +1130,7 @@ function coverSetup() {
 }
 
 A.game({
-  id: 'doodle', title: 'Каляка', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', tone: 'light', music: 'garden',
+  id: 'doodle', title: 'Каляка', width: W, height: H, touchDpr: 1.5,   // тысячи штрихов за кадр — на телефоне в 1,5× (25.10) orientation: LAND ? 'landscape' : 'portrait', tone: 'light', music: 'garden',
   keys: { KeyZ: 'undo', Backspace: 'undo', KeyR: 'restart', KeyE: 'erase', KeyH: 'hint', Slash: 'hint', KeyX: 'none', KeyJ: 'none', KeyK: 'none', KeyL: 'none', ShiftLeft: 'none', KeyA: 'none', KeyD: 'none', KeyW: 'none', KeyS: 'none' },
   help: { desktop: 'Рисуйте мышью · правая кнопка — стереть · <kbd>Пробел</kbd> — «Иди!» · <kbd>Z</kbd> — назад · <kbd>H</kbd> — подсказка', short: 'Мышь — рисовать · правая кнопка — стереть · пробел — «Иди!»', touch: 'Рисуйте пальцем · «ластик» — стереть · «Иди!» — в путь' },
   init(g) {

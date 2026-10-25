@@ -20,7 +20,9 @@ public class CaptureWidget extends AppWidgetProvider {
     }
 
     static RemoteViews views(Context c) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), light(c) ? R.layout.widget_capture_light : R.layout.widget_capture);
+        String look = look(c);
+        RemoteViews v = new RemoteViews(c.getPackageName(), "light".equals(look) ? R.layout.widget_capture_light
+                : "dark".equals(look) ? R.layout.widget_capture : R.layout.widget_capture_glass);
         v.setTextViewText(R.id.w_sub, nextLine(c));
         Intent i = new Intent(c, MainActivity.class).setAction("pro.dewiar.CAPTURE")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -29,6 +31,15 @@ public class CaptureWidget extends AppWidgetProvider {
     }
 
     static ComponentName cn(Context c) { return new ComponentName(c, CaptureWidget.class); }
+
+    /** Вид значка (25.10, владелец: «может стекло матовое… стильно и красиво»): «glass» — матовое стекло (по умолчанию, хорошо
+     *  на любых обоях), «light» — светлый неоморфизм, «dark» — матово-чёрный; «theme» — как тема приложения. pref widget_look. */
+    static String look(Context c) {
+        String w = "";
+        try { w = c.getSharedPreferences("dewiar", Context.MODE_PRIVATE).getString("widget_look", ""); } catch (Throwable e) { }
+        if ("theme".equals(w)) return light(c) ? "light" : "dark";
+        return "light".equals(w) || "dark".equals(w) ? w : "glass";
+    }
 
     /** Светлая тема приложения? (app.js applyLook пишет её в pref look_body: «neusky light neu») — значок светлый
      *  (24.10, владелец: «Лира оформлена красиво в белом — можно ли так же красиво эту кнопку?»). */
@@ -84,7 +95,7 @@ public class CaptureWidget extends AppWidgetProvider {
         try {
             int st = c.getPackageManager().getComponentEnabledSetting(cn(c));
             int placed = AppWidgetManager.getInstance(c).getAppWidgetIds(cn(c)).length;
-            o.put("on", st != PackageManager.COMPONENT_ENABLED_STATE_DISABLED).put("placed", placed).put("pin", pinSupported(c));
+            o.put("on", st != PackageManager.COMPONENT_ENABLED_STATE_DISABLED).put("placed", placed).put("pin", pinSupported(c)).put("look", look(c));
         } catch (Exception ignored) { }
         return o;
     }

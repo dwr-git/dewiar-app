@@ -79,6 +79,13 @@ with sync_playwright() as p:
     ok("Подтвердите" in pg.evaluate("document.querySelector('#wg-res').textContent"), "«Добавить» — система спросит подтверждение")
     pg.evaluate("() => renderSettings()"); pg.wait_for_timeout(100)
     ok("На рабочем столе: 1" in pg.evaluate("document.querySelector('#sh-set').textContent"), "значок уже на экране — так и написано")
+    L = pg.evaluate("() => [...document.querySelectorAll('#wg-look button')].map(b => b.dataset.l + (b.classList.contains('on') ? '*' : ''))")
+    ok(L == ["glass*", "light", "dark", "theme"], f"вид значка: «Стекло» по умолчанию, ещё «Светлый», «Тёмный», «Как тема» (25.10): {L}")
+    pg.click("#wg-look [data-l='light']"); pg.wait_for_timeout(100)
+    ok(pg.evaluate("D.pref('widget_look')") == "light" and pg.evaluate("document.querySelector('#wg-look .on').dataset.l") == "light",
+       "выбрали «Светлый» — запомнили, значок перерисуется")
+    sw = pg.evaluate("() => { const s = document.querySelector('#wg-look'); return [s.scrollWidth, s.clientWidth]; }")
+    ok(sw[0] <= sw[1] + 1, f"четыре варианта помещаются в ширину телефона: {sw}")
     pg.evaluate("() => { const c = document.querySelector('#wg-on'); c.checked = false; c.dispatchEvent(new Event('change')); }"); pg.wait_for_timeout(100)
     ok(pg.evaluate("JSON.parse(D.widgetState()).on") is False and not pg.evaluate("!!document.querySelector('#wg-pin')"), "выключили — значок убран из системы")
     b.close()

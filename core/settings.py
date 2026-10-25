@@ -162,8 +162,9 @@ DEFAULTS = {
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
            "pad_colors": None,              # цвета текста в блокноте: forest/sea/dusk/theme/plain (ui/pad.js colorScheme); пусто — «Чернила»
            "pad_side": "auto",              # блокнот у виджета: "auto" (к середине экрана), "left", "right" — кнопка ⇄ (pad.js)
-           "home_apps": None,
-           "nav_fold": None},               # студия: свёрнутые группы меню («Знания», «Настройка»…) — home.js              # студия → «Главная»: какие значки и в каком порядке (home.js); пусто — как задумано
+           "home_apps": None,               # студия → «Главная»: какие значки и в каком порядке (home.js); пусто — как задумано
+           "home_known": None,              # какие значки «Главной» человек уже видел, когда настраивал (новые после выпуска — сами в конце)
+           "nav_fold": None},               # студия: свёрнутые группы меню («Знания», «Настройка»…) — home.js
     "reminders": {"ring_minutes": 2,    # сколько звенит, если никто не ответил (потом — «пропущено» в окне)
                   "sound": "signature",  # signature («Струна») | chasha | kolodec | hor | glubina | motif | bells | soft | classic
                   "window": True,       # окно-будильник по центру экрана

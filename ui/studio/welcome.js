@@ -89,29 +89,12 @@ const I_RESTORE = '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4h
 const I_KEY = '<circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M16.5 6.5l2.5 2.5M14 9l2 2"/>';
 const I_LOCK = '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>';
 const I_BOX = '<path d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5z"/><path d="M4 7.5 12 11l8-3.5M12 11v9"/>';
-function renderVault(items) {
-  $("#v-list").innerHTML = items.length ? items.map(x => `<div class="ritem" data-id="${escH(x.id)}"><div class="ico">${SVG(I_KEY)}</div>
-    <div class="rbody"><div class="rtext">${escH(x.name)}</div><div class="rmeta"><span class="vval">${"•".repeat(Math.min(12, Math.max(6, x.length || 8)))}</span></div></div>
-    <div class="ract"><button data-v="show" title="Показать на 15 секунд">${SVG(I_EYE)}</button><button data-v="copy" title="Скопировать">${SVG(I_COPY)}</button><button data-v="del" title="Удалить из сейфа">${SVG(I_DEL)}</button></div></div>`).join("")
-    : `<p class="hint" style="margin:0 0 10px">Пока пусто.</p>`;
-  $$("#v-list [data-v]").forEach(b => b.onclick = async () => {
-    const row = b.closest(".ritem"), id = row.dataset.id, val = row.querySelector(".vval");
-    try {
-      if (b.dataset.v === "del") { if (!await ask("Удалить из сейфа «" + row.querySelector(".rtext").textContent + "»?")) return; renderVault((await core.call("vault_delete", { id })).items); return; }
-      const v = (await core.call("vault_reveal", { id })).value || "";
-      if (b.dataset.v === "copy") { await navigator.clipboard.writeText(v); toast("Скопировано"); return; }
-      const dots = val.textContent; val.textContent = v; val.classList.add("shown");
-      clearTimeout(val._t); val._t = setTimeout(() => { val.textContent = dots; val.classList.remove("shown"); }, 15000);
-    } catch (e) { toast(e.message); }
-  });
+/* «Безопасность» → карточка «Сейф»: сколько записей и кнопка в «Сейф паролей» (studio/vault.js, 0.45) */
+async function loadVault() {
+  try { const n = ((await core.call("vault_list")).items || []).length;
+    $("#v-count").textContent = n ? `в сейфе: ${n}` : "пока пусто"; } catch (e) { $("#v-count").textContent = e.message; }
 }
-async function loadVault() { try { renderVault((await core.call("vault_list")).items || []); } catch (e) { $("#v-res").className = "res bad"; $("#v-res").textContent = e.message; } }
-$("#v-add").onclick = async () => {
-  const name = $("#v-name").value.trim(), value = $("#v-value").value; const r = $("#v-res");
-  if (!name || !value) { r.className = "res bad"; r.textContent = "Нужно название и значение"; return; }
-  try { renderVault((await core.call("vault_put", { name, value })).items); $("#v-name").value = $("#v-value").value = ""; r.className = "res ok"; r.textContent = "В сейфе"; setTimeout(() => r.textContent = "", 2500); }
-  catch (e) { r.className = "res bad"; r.textContent = e.message; }
-};
+$("#v-open").onclick = () => { const b = $('nav button[data-p="vault"]'); if (b) b.click(); };
 let bkInfo = null;
 const bkDate = (iso) => { try { const d = new Date(iso); return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + ", " + d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return iso; } };
 function renderBackups(info) {

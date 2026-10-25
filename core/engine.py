@@ -15,9 +15,10 @@ from engine_remote import RemoteMixin  # noqa: E402
 from engine_commands import CommandsMixin  # noqa: E402
 from engine_intro import IntroMixin  # noqa: E402
 from health import HealthMixin  # noqa: E402
+from engine_pay import PayMixin  # noqa: E402
 
 
-class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin):
+class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin, PayMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
@@ -176,6 +177,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, Remote
         from close import Close
         self.close = Close(self)                       # «Близкие»: переписка с помощниками других людей (сквозное шифрование)
         self.money.on_change = self.sync.soon.set
+        from payments import Payments
+        self.payments = Payments(_CFG / "payments.json", self.workspace)   # «Платежи»: счета, оплаты, сроки (payments.py)
         from done import Done
         self.done = Done(_CFG / "done.json")             # «Дела»: сделанное и достижения (done.py), синхронизация — вид «done»
         self.done.on_change = self.sync.soon.set
@@ -264,6 +267,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, Remote
         threading.Thread(target=self._tg_sync_loop, name="tg-sync", daemon=True).start()
         threading.Thread(target=self._radio_check_loop, name="radio-check", daemon=True).start()
         threading.Thread(target=self._diary_loop, name="diary", daemon=True).start()
+        threading.Thread(target=self._pay_loop, name="payments", daemon=True).start()
         threading.Thread(target=self._welcome_loop, name="welcome", daemon=True).start()
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()

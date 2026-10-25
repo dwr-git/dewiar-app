@@ -66,6 +66,8 @@
   <button data-p="calendar">Календарь</button>
   <button data-p="reminders">Дела и напоминания</button>
   <button data-p="notes" title="Все заметки: поиск, фото и файлы">Заметки</button>
+  <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года">Платежи<i class="ndot" id="pay-dot"></i></button>
+  <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать">Сейф паролей</button>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
   <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
   <button data-p="tasks">Задачи</button>
@@ -197,6 +199,15 @@
       <button class="btn primary" id="nt-add">Новая заметка</button></div>
     <div class="nt-cols"><div id="nt-list" class="nt-list"></div><div id="nt-view" class="nt-view"></div></div>
   </section>
+  <section id="p-pay" class="wide">
+    <div class="py-title"><div><h1>Платежи</h1>
+      <p class="lead">Обязательные оплаты: что, когда и сколько — с реквизитами, показаниями и квитанциями. Голосом:
+        «Лира, оплатил газ 47,84, показания 28135», «что у меня не оплачено?»</p></div>
+      <div class="py-act"><button class="btn" id="py-imp">Перенести из органайзера</button><button class="btn primary" id="py-add">Новый платёж</button></div></div>
+    <div class="py-tabs" id="py-tabs" role="tablist"><button role="tab" data-t="month" class="on">Этот месяц</button><button role="tab" data-t="year">Год</button><button role="tab" data-t="stats">Аналитика</button></div>
+    <div id="py-body"></div>
+    <aside id="py-drawer" class="py-drawer glass" hidden aria-label="Платёж"></aside>
+  </section>
   <section id="p-ref" class="wide">
     <h1>Рефералы</h1>
     <p class="lead">Друзья, которых вы позвали в Dewiar. Каждый засчитанный — звезда в вашем созвездии и талеры на счёт.
@@ -252,7 +263,8 @@
     <div class="cl-meet" id="cl-meet" hidden></div>
     <div class="cl-box">
       <aside class="cl-side">
-        <div class="cl-me"><span class="hint" style="margin:0">Близкие видят вас как</span><input type="text" id="cl-myname" placeholder="ваше имя" maxlength="40"></div>
+        <button class="cl-me" id="cl-me" type="button" title="Моя карточка: фото, имя, о себе"><i class="cl-ava" id="cl-me-ava"></i>
+          <span><small>Близкие видят вас как</small><b id="cl-me-name">Ваше имя</b><small id="cl-me-about"></small></span><em>Изменить</em></button>
         <div id="cl-offers"></div>
         <div id="cl-people"></div>
         <button class="btn primary" id="cl-inv-go" style="width:100%">Пригласить близкого</button>
@@ -262,6 +274,21 @@
         <p class="res" id="cl-res"></p>
       </aside>
       <div class="cl-main">
+        <div class="cl-card" id="cl-card" hidden>
+          <div class="cl-card-face">
+            <button class="cl-face-drop" id="cl-face-drop" type="button" aria-label="Выбрать фото"><i class="cl-ava" id="cl-card-ava"></i><span>Сменить фото</span></button>
+            <div class="actions" style="margin:0;justify-content:center"><label class="btn small">Выбрать<input type="file" accept="image/*" id="cl-face-file" hidden></label><button class="btn small" id="cl-face-del" type="button">Убрать</button></div>
+            <small class="hint">или вставьте Ctrl+V,<br>или перетащите сюда</small>
+          </div>
+          <div class="cl-card-f">
+            <h3>Моя карточка</h3>
+            <label class="f"><span>Имя</span><input type="text" id="cl-myname" placeholder="как вас называть" maxlength="40"></label>
+            <label class="f"><span>О себе <i id="cl-about-n">0 / 160</i></span><textarea id="cl-about" maxlength="160" rows="2" placeholder="пара слов: чем живёте, что любите"></textarea></label>
+            <div class="switch slim"><div>Показывать фото во «Встречах»<span>Люди рядом увидят его на вашей карточке. Выключено — фото видят только близкие.</span></div><label class="tg"><input type="checkbox" id="cl-face-meet"><i></i></label></div>
+            <p class="hint" style="margin:0">Фото хранится на dewiar.pro, как аватар в мессенджере, — его видят только ваши близкие (и люди рядом во «Встречах», если включено). Переписка по-прежнему шифруется на устройствах.</p>
+            <div class="actions" style="margin:0"><button class="btn primary" id="cl-card-save" type="button">Сохранить</button><button class="btn" id="cl-card-x" type="button">Закрыть</button><span class="res" id="cl-card-res"></span></div>
+          </div>
+        </div>
         <div class="cl-invite" id="cl-invite" style="display:none">
           <div class="cl-qr" id="cl-qr"></div>
           <div class="cl-inv-t">
@@ -1281,6 +1308,36 @@
     <div class="actions" style="flex-wrap:wrap"><button class="btn" id="sv-key-copy">Скопировать ключ</button><button class="btn" id="sv-cmd-copy">Скопировать команду для терминала</button><button class="btn" id="sv-key-make">Создать ключ</button></div>
   </section>
 
+  <section id="p-vault">
+    <h1>Сейф паролей</h1>
+    <p class="lead">Пароли, пин-коды, коды от домофона. Зашифрованы ключом этого компьютера, в заметки, Obsidian и языковую модель
+      не попадают. Лира вслух их не читает никогда — только показывает на экране.</p>
+    <div class="vl-bar">
+      <label class="vl-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg>
+        <input type="search" id="vl-q" placeholder="Найти: почта, банк, вайфай…" autocomplete="off" spellcheck="false" aria-label="Поиск в сейфе"></label>
+      <button class="btn primary" id="vl-add">Добавить</button>
+    </div>
+    <form class="vl-form" id="vl-form" hidden autocomplete="off">
+      <h3 id="vl-form-h">Новая запись</h3>
+      <div class="vl-grid">
+        <label class="f"><span>Что это</span><input type="text" id="vl-name" maxlength="120" placeholder="Почта Яндекса, вайфай дома, домофон"></label>
+        <label class="f"><span>Логин <i>необязательно</i></span><input type="text" id="vl-login" maxlength="160" placeholder="имя, почта или телефон" autocomplete="off"></label>
+        <label class="f vl-pass"><span>Пароль или код</span>
+          <span class="vl-pw"><input type="password" id="vl-value" maxlength="500" autocomplete="new-password" spellcheck="false">
+            <button type="button" class="vl-ib" id="vl-eye" aria-label="Показать пароль" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></button>
+            <button type="button" class="btn small" id="vl-gen" title="Придумать надёжный пароль: 16 знаков">Придумать</button></span>
+          <i class="vl-str" id="vl-str" aria-live="polite"></i></label>
+        <label class="f"><span>Сайт <i>необязательно</i></span><input type="text" id="vl-url" maxlength="300" placeholder="mail.yandex.ru" autocomplete="off"></label>
+        <label class="f vl-wide"><span>Заметка <i>необязательно</i></span><input type="text" id="vl-note" maxlength="300" placeholder="секретный вопрос, номер договора…"></label>
+      </div>
+      <div class="actions" style="margin:0"><button class="btn primary" id="vl-save" type="submit">Сохранить</button><button class="btn" id="vl-cancel" type="button">Отмена</button>
+        <span style="flex:1"></span><button class="btn danger" id="vl-del" type="button" hidden>Удалить</button></div>
+      <p class="res" id="vl-res"></p>
+    </form>
+    <div class="vl-list" id="vl-list"></div>
+    <p class="hint vl-foot">Скопированный пароль сам стирается из буфера обмена через 30 секунд. Голосом: «запомни пароль от вайфая: …»,
+      «какой пароль от вайфая?» — ответ появится на экране. В резервную копию сейф попадает только с паролем копии.</p>
+  </section>
   <section id="p-safety">
     <h1>Безопасность</h1>
     <p class="lead">Что ассистент видит, что хранит и куда отправляет — на одной странице. Сверху стоп-кран: одно нажатие, и наружу не уходит ничего.</p>
@@ -1315,13 +1372,7 @@
       <h3 style="font-size:15px;margin-bottom:6px">Сейф</h3>
       <p class="hint" style="margin-bottom:12px">Пароли, пин-коды, коды от домофона, ключи. Зашифрованы ключом этого компьютера и лежат отдельно: не попадают
         в заметки, в Obsidian и в языковую модель. Голосом: «запомни пароль от вайфая: …», «какой пароль от вайфая?» — ответ появится на экране, вслух не читается.</p>
-      <div id="v-list"></div>
-      <div class="actions" style="margin:4px 0 0;flex-wrap:wrap">
-        <input type="text" id="v-name" placeholder="что это, например «Пароль от вайфая»" style="flex:1.3;min-width:200px" autocomplete="off">
-        <input type="password" id="v-value" placeholder="значение" style="flex:1;min-width:160px" autocomplete="new-password">
-        <button class="btn primary" id="v-add">В сейф</button>
-      </div>
-      <p class="res" id="v-res" style="margin-top:6px"></p>
+      <div class="actions" style="margin:4px 0 0"><button class="btn primary" id="v-open">Открыть «Сейф паролей»</button><span class="hint" id="v-count" style="margin:0"></span></div>
     </div>
     <div class="prof on" style="padding:16px 18px;margin-bottom:22px">
       <h3 style="font-size:15px;margin-bottom:6px">Резервная копия</h3>
@@ -1547,6 +1598,8 @@
 <script src="studio/meet.js"></script>
 <script src="studio/refs.js"></script>
 <script src="studio/notes.js"></script>
+<script src="studio/pay.js"></script>
+<script src="studio/vault.js"></script>
 <script src="studio/capture.js"></script>
 <script src="assets/rich.js"></script>
 <script src="studio/chat.js"></script>

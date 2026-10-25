@@ -56,7 +56,7 @@ try:
            "студия открывается «Главной»")
         ok(pg.evaluate("document.querySelector('nav button.cur') && document.querySelector('nav button.cur').dataset.p") == "home", "в меню выделена «Главная»")
         apps = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app')].map(a => a.dataset.app)")
-        ok(len(apps) == 12 and "chat" in apps and "play" in apps and "ref" in apps, f"значки приложений — по умолчанию все: {apps}")
+        ok(len(apps) == 14 and "chat" in apps and "play" in apps and "ref" in apps and "pay" in apps and "vault" in apps, f"значки приложений — по умолчанию все (с 0.45 — и «Платежи», «Сейф»): {apps}")
         ok(pg.is_visible("nav button[data-p='ref']") and pg.is_visible("nav button[data-p='memory']"), "по умолчанию в меню всё на месте")
         ok(pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-ic svg')].length") == len(apps), "у каждого значка — рисунок")
         today = pg.evaluate("document.querySelector('#hm-today').innerText")

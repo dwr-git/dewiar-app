@@ -994,3 +994,16 @@ body.has-play #top { gap: 2px; } body.has-play #top .ib { width: 38px; height: 3
 .tkdel svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .tkdel:active { color: #FF8FA8; background: rgba(255,107,138,.1); }
 /* начало заметки в списке — с разметкой, без значков Markdown (app.js mdPreview, №246) */
 .it.note .ntpv b { color: var(--ink); font-weight: 650; } .it.note .ntpv i { font-style: italic; }
+/* Вид значка «Записать» (25.10): четыре варианта — подпись сверху, переключатель на всю ширину (на узком телефоне не вылезает) */
+.sw.wglook { display: block; margin-top: 10px; }
+.sw.wglook .seg { display: flex; width: 100%; margin-top: 8px; }
+.sw.wglook .seg button { flex: 1; padding: 8px 4px; font-size: 13px; }
+
+/* Карточка «Я» (0.45): фото крупно слева (нажать — выбрать), имя, о себе; фото у близких и во «Встречах» */
+.clava.has-face { background-size: cover; background-position: center; color: transparent; }
+.clme-top { display: flex; align-items: center; gap: 14px; }
+.clme-face { position: relative; flex: none; cursor: pointer; }
+.clme-face .clava { width: 72px; height: 72px; font-size: 26px; }
+.clme-face span { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); padding: 2px 9px; border-radius: 10px; font: 700 11px Manrope, sans-serif;
+  background: var(--brand); color: #fff; white-space: nowrap; box-shadow: 0 4px 10px -4px rgba(0,0,0,.4); }
+.clme textarea { width: 100%; margin-top: 12px; padding: 11px 13px; border-radius: 14px; border: 0; background: var(--field); color: var(--ink); font: inherit; resize: vertical; min-height: 56px; }

@@ -188,6 +188,8 @@ class AnswerMixin:
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._home_cmd(text, via):
             return
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._pay_voice(text, via):
+            return                                       # «оплатил газ 47,84, показания 28135», «что не оплачено?» — «Платежи»
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._money_cmd(text, via):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._job_cmd(text, via):

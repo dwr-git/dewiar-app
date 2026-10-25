@@ -97,8 +97,8 @@ with sync_playwright() as p:
     pg.wait_for_timeout(3000)
     ok(pg.evaluate("document.querySelector('#ed').dataset.cs") == "sea", "схема цветов из настроек (ui.pad_colors) — применена")
     pg.click("#b-cs"); pg.wait_for_timeout(150)
-    ok(pg.locator("#cs.on button[data-cs]").count() == 6 and pg.evaluate("document.activeElement.dataset.cs") == "sea",
-       "палитра рядом с размером текста: шесть схем, выбранная — в фокусе")
+    ok(pg.locator("#cs.on button[data-cs]").count() == 9 and pg.evaluate("document.activeElement.dataset.cs") == "sea",
+       "палитра рядом с размером текста: девять схем (и яркие, «как в редакторе кода»), выбранная — в фокусе")
     pg.keyboard.press("ArrowDown"); pg.keyboard.press("Enter"); pg.wait_for_timeout(150)
     ok(pg.evaluate("document.querySelector('#ed').dataset.cs") == "dusk" and not pg.evaluate("document.querySelector('#cs').classList.contains('on')"),
        "стрелка и Enter — выбрали «Вечер», список закрылся")
@@ -108,10 +108,17 @@ with sync_playwright() as p:
     ok(not pg.evaluate("document.querySelector('#ed').hasAttribute('data-cs')") and h1 != a,
        f"«Чернила» (по умолчанию): заголовок не цвета ссылки ({h1} ≠ {a})")
     ok(["settings_save", {"patch": {"ui": {"pad_colors": None}}}] in pg.evaluate("calls"), "по умолчанию — в настройках пусто")
-    for cs in ("ink", "forest", "sea", "dusk", "theme", "plain"):
+    for cs in ("ink", "forest", "sea", "dusk", "editor", "monokai", "carnival", "theme", "plain"):
         pg.evaluate(f"colorScheme('{cs}', true)"); pg.wait_for_timeout(60)
         bad = contrast_lib.audit(pg, "#ed", 3.0)
         ok(not bad, f"схема «{cs}»: текст читается (контраст ≥ 3): {bad[:2]}")
+    pg.evaluate("skin('neudusk')"); pg.wait_for_timeout(150)
+    for cs in ("ink", "forest", "sea", "dusk", "editor", "monokai", "carnival", "theme", "plain"):
+        pg.evaluate(f"colorScheme('{cs}', true)"); pg.wait_for_timeout(60)
+        bad = contrast_lib.audit(pg, "#ed", 3.0)
+        h = pg.evaluate("[getComputedStyle(document.querySelector('#ed h1')).color, getComputedStyle(document.querySelector('#ed h2')).color]")
+        ok(not bad and (cs in ("ink", "plain") or h[0] != h[1]), f"тёмная тема, схема «{cs}»: читается, заголовки разного цвета {h} {bad[:2]}")
+    pg.evaluate("skin('neusky')"); pg.wait_for_timeout(150)
     figs = pg.locator("#ed .dw-diagram")
     ok(figs.count() == 2, "две схемы нарисованы")
     info = pg.evaluate("""[...document.querySelectorAll('#ed .dw-diagram')].map(f => { const s = f.querySelector(':scope > svg');

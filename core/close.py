@@ -341,6 +341,49 @@ class Close:
         self.host.s.update({"close": {"name": (name or "").strip()[:40]}})
         return self.hello()
 
+    # ---------- карточка «Я» (0.45): фото, имя, о себе — для «Близких» и (если разрешено) «Встреч» ----------
+    def set_card(self, name=None, about=None, face=None, face_meet=None):
+        """Сохранить карточку на сайте. face: base64 / data URI (студия сама сжимает до 256×256 JPEG), "" — убрать фото.
+        Фото хранится на dewiar.pro как аватар в мессенджере: видят близкие и — если face_meet — люди рядом во «Встречах»."""
+        body = {}
+        if name is not None:
+            name = str(name).strip()[:40]
+            self.host.s.update({"close": {"name": name}})
+            body["name"] = name
+        if about is not None:
+            body["about"] = str(about).strip()[:160]
+        if face is not None:
+            body["face"] = str(face)
+        if face_meet is not None:
+            body["face_meet"] = bool(face_meet)
+        self._people(self._req("POST", "/close/me", body).json())
+        return self.state()
+
+    FACE_DIR = STATE_DIR / "close_faces"
+
+    def face(self, pid, v, meet=False):
+        """Фото близкого (pid) или человека во «Встречах» (meet: pid = mid) -> data URI; кэш по номеру версии v."""
+        import base64
+        import re as _re
+        pid, v = _re.sub(r"[^a-z0-9]", "", str(pid or ""))[:40], int(v or 0)
+        if not pid or not v:
+            return {"data": ""}
+        f = self.FACE_DIR / f"{'m' if meet else 'p'}-{pid}-{v}"
+        try:
+            b = f.read_bytes()
+        except OSError:
+            r = self._req("GET", "/meet/face" if meet else "/close/face", params={"mid" if meet else "pid": pid})
+            b = r.content
+            try:
+                self.FACE_DIR.mkdir(parents=True, exist_ok=True)
+                for old in self.FACE_DIR.glob(f"{'m' if meet else 'p'}-{pid}-*"):   # прежние версии этого фото
+                    old.unlink(missing_ok=True)
+                f.write_bytes(b)
+            except OSError:
+                pass
+        t = "image/png" if b[:4] == b"\x89PNG" else "image/webp" if b[:4] == b"RIFF" else "image/jpeg"
+        return {"data": f"data:{t};base64," + base64.b64encode(b).decode()}
+
     def invite(self, renew=False):
         d = self._req("POST", "/close/invite", {"renew": bool(renew)}).json()
         self.st["invite"] = {"link": d["link"], "app": d.get("app", ""), "expires": d.get("expires", 0)}
