@@ -427,14 +427,24 @@ class CommandsMixin:
             try:
                 if cmd == "backup_info":
                     return {"dir": folder, "auto": self.s.get("backup", "auto") is not False, "items": self.backup.list(folder),
-                            "host": self.backup.host,
+                            "host": self.backup.host, "pw": bool(self.backup.pw_get()),
                             "vault": self.vault.count(), "mail": bool(self.mail.configured()) if getattr(self, "mail", None) else False}
-                if cmd == "backup_make":
-                    return self.backup.make(folder, password=a.get("password") or "")
+                if cmd == "backup_make":               # «Слепок знаний»: fmt dwr (закрытый) / zip (открытый); remember — запомнить пароль
+                    fmt = "zip" if a.get("fmt") == "zip" else "dwr"
+                    pw = "" if fmt == "zip" else (a.get("password") or (self.backup.pw_get() if a.get("saved") else ""))
+                    if fmt == "dwr" and a.get("password") and a.get("remember"):
+                        self.backup.pw_set(a["password"])
+                    return self.backup.make(folder, password=pw, fmt=fmt)
+                if cmd == "backup_forget_pw":          # забыть запомненный пароль слепка на этом компьютере
+                    self.backup.pw_set("")
+                    return {"pw": False}
                 if cmd == "backup_inspect":
                     return self.backup.describe(a.get("path", ""))
                 if cmd == "backup_restore":
-                    r = self.backup.restore(a.get("path", ""), a.get("password") or "")
+                    pw = a.get("password") or ""
+                    if not pw and a.get("saved"):           # закрытый слепок — запомненным паролем
+                        pw = self.backup.pw_get()
+                    r = self.backup.restore(a.get("path", ""), pw, mode="merge" if a.get("mode") == "merge" else "replace")
                     self.restart_core(2.0)                # восстановленные настройки читаются только при запуске
                     return r
                 if cmd == "backup_open":

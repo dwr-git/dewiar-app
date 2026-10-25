@@ -130,5 +130,5 @@ $("#bk-open").onclick = () => core.call("backup_open").catch(e => toast(e.messag
 $("#bk-dir").onclick = async () => { const a = api(); if (!a) return toast("Выбор папки доступен в окне студии"); const p = await a.pick_folder(); if (!p) return;
   await save({ backup: { dir: p } }, true); loadBackups(); };
 $("#bk-file").onclick = async () => { const a = api(); if (!a || !a.pick_file) return toast("Выбор файла доступен в окне студии");
-  const p = await a.pick_file("Резервная копия Dewiar (*.dwbak)"); if (!p) return;
+  const p = await a.pick_file("Слепок Dewiar (*.dwr;*.zip;*.dwbak)"); if (!p) return;
   try { const x = await core.call("backup_inspect", { path: p }); bkRestore(p, !!x.encrypted, x.time); } catch (e) { toast(e.message); } };

@@ -45,7 +45,7 @@ $$("main section[id^='p-']").forEach(s => { const i = ICONS[s.id.slice(2)], h = 
 /* «?» у заголовка каждого раздела — как он работает, как настроить, что сказать голосом */
 // раздел студии → раздел руководства на сайте (server/dwrapp/guide.php, текст — data/guide.json)
 const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
-const GUIDE_OF = { personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", pay: "payments", vault: "vault", reminders: "reminders", tasks: "tasks",
+const GUIDE_OF = { personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
   me: "notes-memory", folder: "folder-docs", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
   hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting" };
 function showHelp(k) {

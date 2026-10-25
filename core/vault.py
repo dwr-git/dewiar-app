@@ -180,9 +180,10 @@ class Vault:
         with self._lock:
             return json.dumps({"v": 1, "items": self._load(), "time": time.time()}, ensure_ascii=False).encode("utf-8")
 
-    def import_plain(self, data):
+    def import_plain(self, data, only_new=False):
         """Сливает записи из копии со здешними по названию: одноимённая запись получает значение и заметку из копии
         (id остаётся свой — на него могут ссылаться открытые окна студии), новые добавляются, свои остаются.
+        only_new — «Добавить недостающее» из слепка: одноимённые свои не трогаем вовсе.
         Заменять сейф целиком нельзя: записи, сделанные после копии, пропали бы без следа. -> сколько записей взято."""
         got = [x for x in json.loads(data.decode("utf-8")).get("items", []) if isinstance(x, dict) and x.get("name") and x.get("value")]
         if not got:
@@ -197,7 +198,8 @@ class Vault:
             for x in got:
                 cur = by_name.get(x["name"].lower())
                 if cur:
-                    cur.update({k: v for k, v in x.items() if k not in ("id", "created")})
+                    if not only_new:
+                        cur.update({k: v for k, v in x.items() if k not in ("id", "created")})
                     continue
                 x = dict(x)
                 if not x.get("id") or x["id"] in ids:          # id из копии занят другой записью — выдаём новый

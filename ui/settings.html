@@ -114,7 +114,7 @@
       <linearGradient id="hg8" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b8cff"/><stop offset="1" stop-color="#6a4cff"/></linearGradient>
     </defs></svg>
     <div id="hm-body">
-      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p></div></div>
+      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p></div><div class="sn-wrap" id="sn"></div></div>
       <div class="hm-today" id="hm-today"></div>
       <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
       <div class="hm-apps" id="hm-apps"></div>
@@ -1376,6 +1376,7 @@
     </div>
     <div class="prof on" style="padding:16px 18px;margin-bottom:22px">
       <h3 style="font-size:15px;margin-bottom:6px">Резервная копия</h3>
+      <p class="hint" style="margin-bottom:8px">Быстрее — на «Главной», кнопка «Слепок знаний»: закрытый или открытый слепок одним нажатием и бережное восстановление «Добавить недостающее».</p>
       <p class="hint" style="margin-bottom:12px">Одним файлом всё, что ассистент знает и умеет: персонажи, заметки, дневник, деньги, календарь, напоминания, навыки,
         настройки. Модели и голоса не входят — скачаются заново. Перенести на другой компьютер: сделайте копию, поставьте там Dewiar и нажмите «Восстановить».</p>
       <div class="actions" style="margin:0;flex-wrap:wrap">
@@ -1600,6 +1601,7 @@
 <script src="studio/notes.js"></script>
 <script src="studio/pay.js"></script>
 <script src="studio/vault.js"></script>
+<script src="studio/snapshot.js"></script>
 <script src="studio/capture.js"></script>
 <script src="assets/rich.js"></script>
 <script src="studio/chat.js"></script>

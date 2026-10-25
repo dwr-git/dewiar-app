@@ -1121,8 +1121,8 @@ class AudioMixin:
             self.stopping.wait(tick)
 
     def _auto_backup(self):
-        """Поток backup: раз в неделю — тихая резервная копия (без сейфа и паролей); хранятся 4 последние
-        (backup.py). Проверяем, не пора ли, раз в 6 часов."""
+        """Поток backup: раз в неделю — тихая резервная копия; хранятся 4 последние (backup.py). Пароль слепка
+        запомнен на этом компьютере — закрытая и полная (с сейфом), иначе — без сейфа и паролей. Проверяем раз в 6 часов."""
         from backup import default_dir, due
         self.stopping.wait(600)                          # не в момент запуска
         while not self.stopping.is_set():
@@ -1131,7 +1131,7 @@ class AudioMixin:
                     folder = self.s.get("backup", "dir") or str(default_dir())
                     if due(self.backup.last_auto(folder)):
                         low_priority()
-                        self.backup.make(folder, auto=True)
+                        self.backup.make(folder, password=self.backup.pw_get(), auto=True)
             except Exception as e:  # noqa: BLE001
                 log.warning("Автокопия не сделана: %s", e)
             self.stopping.wait(6 * 3600)

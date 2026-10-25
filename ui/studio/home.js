@@ -105,6 +105,7 @@ function hmGreet() {
 function hmDate() { const d = new Date(); const s = d.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" }); return s[0].toUpperCase() + s.slice(1); }
 async function loadHome() {
   hmRender();
+  if (window.snLoad) snLoad();                          // «Слепок знаний» справа от приветствия (studio/snapshot.js)
   const now = new Date(), get = (c, a) => core.call(c, a).catch(() => null);
   const [cal, cl, tk, dn, ch, pad, py, pl] = await Promise.all([get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }), get("close_state"),
     get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"), get("pay_overview"), get("plugins")]);
