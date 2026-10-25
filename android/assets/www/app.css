@@ -1007,3 +1007,9 @@ body.has-play #top { gap: 2px; } body.has-play #top .ib { width: 38px; height: 3
 .clme-face span { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); padding: 2px 9px; border-radius: 10px; font: 700 11px Manrope, sans-serif;
   background: var(--brand); color: #fff; white-space: nowrap; box-shadow: 0 4px 10px -4px rgba(0,0,0,.4); }
 .clme textarea { width: 100%; margin-top: 12px; padding: 11px 13px; border-radius: 14px; border: 0; background: var(--field); color: var(--ink); font: inherit; resize: vertical; min-height: 56px; }
+/* «Прежние мозги»: корзина рядом с «Вернуть» — первое нажатие раскрывает «Убрать» (№254, 25.10) */
+.brb .brdel { padding: 10px 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); background: none; box-shadow: inset 0 0 0 1px var(--frost-hi); transition: background .2s, color .2s; }
+.brb .brdel svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.brb .brdel span { display: none; }
+#br-back .brb .brdel.ask { color: #fff; background: #E8506F; box-shadow: 0 8px 20px -12px rgba(232,80,111,.9); }   /* с #id: темы задают кнопкам фон через :is(… #bot …) */
+.brb .brdel.ask span { display: inline; }

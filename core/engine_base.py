@@ -161,9 +161,29 @@ def fact_line(name, args, out):
     return redact(f"{name}({a}) → {res}")
 
 
+# Ключи и токены (отчёт 256, 25.10: токен умного дома, вставленный в команду, попал в журнал и в отчёт целиком).
+_TOKENS = [
+    (re.compile(r"\beyJ[\w-]{6,}\.[\w-]{6,}\.[\w-]{6,}"), "eyJ***"),                                    # JWT (Home Assistant и др.)
+    (re.compile(r"(Bearer\s+)[\w.~+/=-]{8,}", re.I), r"\1***"),
+    (re.compile(r"\b(sk-(?:ant-|proj-)?|ghp_|gho_|github_pat_|xox[abpr]-|glpat-|hf_|AIza)[\w-]{12,}"), r"\1***"),
+    (re.compile(r"\bbot\d{5,}:[\w-]{20,}"), "bot***"),
+    (re.compile(r"\b\d{6,12}:AA[\w-]{30,}"), "***:***"),                                                 # токен Telegram без «bot»
+    (re.compile(r"((?:токен\w*|token|api[_ -]?key|ключ\w*(?:\s+api)?|secret|секрет\w*)[\"']?\s*(?:api\s*)?[:=]?\s*[\"'«]?)"
+                r"(?=[\w.+/=-]*\d)(?=[\w.+/=-]*[A-Za-z])[\w.+/=-]{20,}", re.I), r"\1***"),
+]
+
+
+def mask_tokens(text):
+    """Ключи API, JWT, токены ботов и «токен: <длинная строка>» → ***. Для журнала и отчётов."""
+    t = str(text or "")
+    for rx, rep in _TOKENS:
+        t = rx.sub(rep, t)
+    return t
+
+
 def redact(text):
-    """Пароли — не в журнал: «echo 'пароль' | sudo -S», «пароль администратора 1234abcd» → ***."""
-    t = _PW_PIPE.sub(lambda m: m.group(1) + m.group(2) + "***" + m.group(2) + m.group(4), str(text or ""))
+    """Пароли и токены — не в журнал: «echo 'пароль' | sudo -S», «пароль администратора 1234abcd», JWT, ключи API → ***."""
+    t = _PW_PIPE.sub(lambda m: m.group(1) + m.group(2) + "***" + m.group(2) + m.group(4), mask_tokens(text))
     return _PW_WORD.sub(lambda m: m.group(1) + re.sub(r"(?<![\w/])(?=\S*\d)\S{4,}", "***", m.group(2)), t)
 
 

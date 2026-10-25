@@ -1734,7 +1734,7 @@ html.st-light .py-drawer { background: #f4f7fc; }
 .py-ra { text-align: right; white-space: nowrap; } .py-clip { font-size: 12px; color: var(--muted); margin-right: 6px; }
 .ib.sm { width: 28px; height: 28px; border-radius: 9px; border: 0; background: rgba(127,127,127,.12); color: var(--ink); cursor: pointer; }
 .py-f { display: flex; flex-direction: column; gap: 5px; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
-.py-f input, .py-f select, .py-f textarea, #pi-text { font: inherit; font-size: 14.5px; color: var(--ink); background: var(--field); border: 0; border-radius: 12px; padding: 10px 12px; outline: none; width: 100%; box-sizing: border-box; }
+.py-f input, .py-f select, .py-f textarea, #pi-text { font: inherit; font-size: 14.5px; color: var(--ink); background-color: var(--field); border: 0; border-radius: 12px; padding: 10px 12px; outline: none; width: 100%; box-sizing: border-box; }
 .py-f textarea, #pi-text { resize: vertical; line-height: 1.5; }
 .py-f input:focus-visible, .py-f select:focus-visible, .py-f textarea:focus-visible, #pi-text:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .py-icin { width: 70px !important; text-align: center; font-size: 20px !important; }
@@ -1765,7 +1765,7 @@ html.st-light .py-mbox { background: #f6f9fd; }
 .py-kind:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pi-list { display: flex; flex-direction: column; gap: 8px; }
 .pi-it { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto auto; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 14px; background: rgba(127,127,127,.07); }
-.pi-it .chk { margin: 0; } .pi-it input.pi-name, .pi-it select { font: inherit; font-size: 14px; color: var(--ink); background: var(--field); border: 0; border-radius: 10px; padding: 7px 10px; }
+.pi-it .chk { margin: 0; } .pi-it input.pi-name, .pi-it select { font: inherit; font-size: 14px; color: var(--ink); background-color: var(--field); border: 0; border-radius: 10px; padding: 7px 10px; }
 .pi-n { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .pi-it details { grid-column: 1 / -1; font-size: 12.5px; } .pi-it summary { color: var(--dim); cursor: pointer; }
 .pi-it pre { white-space: pre-wrap; font-size: 12px; color: var(--muted); margin: 6px 0; }
@@ -1945,3 +1945,10 @@ button.sn-file { cursor: pointer; transition: background .15s; } button.sn-file:
 .sn-more summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 4px 0; list-style-position: inside; }
 .sn-more ul { margin: 6px 0 2px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; }
 .sn-more b { color: var(--ink); }
+/* Платежи (владелец 25.10: «справа обрезается надпись»): в своей рамке окна правая панель платежа — под полосой заголовка,
+   а не под ней; в карточке сумма «за год» и «Записать оплату» не ломаются по словам — тесно, кнопка уходит строкой ниже. */
+html.framed .py-drawer { top: 38px; }
+.py-foot { flex-wrap: wrap; row-gap: 6px; } .py-foot > * { white-space: nowrap; } .py-foot .py-pay { margin-left: auto; }
+/* Платежи (владелец 25.10: «в полях какие-то зигзаги»): «background: var(--field)» сбрасывал no-repeat, а светлая тема
+   снова ставила стрелку — она повторялась на всё поле. Теперь только цвет; у списков место под стрелку справа. */
+.py-f select, .pi-it select { padding-right: 34px; background-repeat: no-repeat; background-position: right 12px center; }

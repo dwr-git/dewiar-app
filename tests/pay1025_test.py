@@ -190,6 +190,15 @@ try:
             pg.screenshot(path=os.path.join(SHOTS, "pay-month.png"))
         pg.click('#py-body .py-card[data-b] >> nth=0'); time.sleep(0.8)
         ok(pg.is_visible("#py-drawer.on") and "Записать оплату" in pg.inner_text("#py-drawer"), "карточка — панель с историей")
+        # владелец 25.10: «справа обрезается надпись» — в своей рамке окна (frame=1) заголовок панели прятался под полосой окна
+        top = pg.evaluate("(() => { document.documentElement.classList.add('framed'); const t = document.querySelector('#py-drawer').getBoundingClientRect().top; document.documentElement.classList.remove('framed'); return t; })()")
+        ok(top >= 38, f"в своей рамке окна панель платежа — под полосой заголовка: top={top}")
+        ok(pg.evaluate("[...document.querySelectorAll('.py-foot > *')].every(x => getComputedStyle(x).whiteSpace === 'nowrap')"), "сумма за год и «Записать оплату» не ломаются по словам")
+        # владелец 25.10: «в полях какие-то зигзаги» — стрелка списка повторялась на всё поле в светлой теме
+        pg.click('#py-drawer .py-dtabs button[data-k="set"]'); time.sleep(0.6)
+        rep = pg.evaluate("(() => { document.documentElement.classList.add('st-light'); const r = [...document.querySelectorAll('#py-drawer select')].map(x => getComputedStyle(x).backgroundRepeat); document.documentElement.classList.remove('st-light'); return r; })()")
+        ok(rep and all(r == "no-repeat" for r in rep), f"списки в настройках платежа — одна стрелка, без «зигзагов»: {rep}")
+        pg.click('#py-drawer .py-dtabs button[data-k="hist"]'); time.sleep(0.4)
         pg.click('#py-drawer .py-dtabs button[data-k="how"]'); time.sleep(0.8)
         ok("ЕРИП" in pg.input_value("#py-how") and pg.locator("#py-drawer .py-atts figure").count() == 1, "«Как платить»: реквизиты и картинка-памятка")
         if SHOTS:

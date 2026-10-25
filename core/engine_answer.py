@@ -775,7 +775,7 @@ class AnswerMixin:
         text = re.sub(r"\bdw-[a-z0-9]{4,}(?:-[a-z0-9]{2,})+", "dw-***", text, flags=re.I)
         text = re.sub(r"\bbot\d{5,}:[\w-]{20,}", "bot***", text)                     # токен Telegram в адресах API
         text = re.sub(r"(://[^/\s:@]+:)[^@\s/]+@", r"\1***@", text)                    # пароль в адресе (прокси и т. п.)
-        return text
+        return mask_tokens(text)                                                       # JWT, ключи API, «токен: …»
 
     @staticmethod
     def _log_tail(mark=None):

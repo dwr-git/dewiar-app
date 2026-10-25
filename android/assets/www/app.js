@@ -475,6 +475,16 @@ function netHealed(n) {
   for (let i = Math.max(0, l.length - n); i < l.length; i++) l[i].ok = true;
   prefSet("net_inc", JSON.stringify(l));
 }
+/* Совет к ошибке связи: Wi‑Fi подключён, а имя сайта то находится, то нет — сбоит DNS этой сети (пакет 25.10, №257:
+   «всё время теряет связь и долго думает» — «Unable to resolve host dewiar.pro (wifi)» вперемешку с обрывами). */
+function netHint() {
+  let l = []; try { l = JSON.parse(prefGet("net_inc") || "[]") || []; } catch (x) { }
+  const rec = l.filter(x => Date.now() - x.ts < 3 * 60e3 && x.online !== false);
+  if (!rec.some(x => /Unable to resolve host|No address associated|UnknownHost/i.test(x.err || "") && !HOME_URL.test("http://" + x.host))) return "";
+  return /wifi/i.test(rec.map(x => x.type).join(" "))
+    ? ". Wi‑Fi подключён, но телефон то находит сервер, то нет — так бывает, когда у сети сбоит DNS или провайдер мешает связи с dewiar.pro. Помогает: в настройках Android найдите поиском «Частный DNS» и впишите dns.google; не помогло — мобильный интернет или VPN"
+    : ". Телефон то находит сервер, то нет — похоже на сбой DNS или помехи у оператора. Помогает: в настройках Android найдите поиском «Частный DNS» и впишите dns.google; не помогло — другая сеть или VPN";
+}
 function netRecovered() {
   let l = []; try { l = JSON.parse(prefGet("net_inc") || "[]") || []; } catch (x) { }
   // прошло само при повторе, телефон был без сети или имя сайта не находилось (нет интернета) — это не сбой программы
@@ -527,7 +537,11 @@ async function reportSend(note, auto, summary, extra) {
     ...(info.crash ? ["== Последнее падение приложения", info.crash, ""] : []),
     ...(errs.length ? ["== Ошибки (последние)", ...errs.slice(-40), ""] : []),
     "== Журнал (последние строки)", ...PLOG.slice(auto ? -200 : -400)].join("\n");
-  text = text.replace(/(Bearer\s+)[\w.-]+/g, "$1***").replace(/\bdw-[a-z0-9]{4,}(?:-[a-z0-9]{2,})+/gi, "dw-***");
+  text = text.replace(/(Bearer\s+)[\w.-]+/g, "$1***").replace(/\bdw-[a-z0-9]{4,}(?:-[a-z0-9]{2,})+/gi, "dw-***")
+    // пакет 25.10, №256: токен умного дома целиком в журнале — JWT, ключи API, «токен: <длинное>» → ***
+    .replace(/\beyJ[\w-]{6,}\.[\w-]{6,}\.[\w-]{6,}/g, "eyJ***").replace(/\b(sk-(?:ant-|proj-)?|ghp_|github_pat_|glpat-|hf_|AIza)[\w-]{12,}/g, "$1***")
+    .replace(/\bbot\d{5,}:[\w-]{20,}/g, "bot***")
+    .replace(/((?:токен\S*|token|api[_ -]?key|ключ\S*|secret|секрет\S*)(?:\s+api)?["']?\s*[:=]?\s*["'«]?)(?=[\w.+\/=-]*\d)(?=[\w.+\/=-]*[A-Za-z])[\w.+\/=-]{20,}/gi, "$1***");
   // принимает облако (cloud.php ?p=/report): с аккаунтом или ключом — от их имени, без них — анонимно на общий адрес
   const c = syncCred(), base = (c ? c.base : CLOUD_URL).split("?")[0];
   const headers = { "Content-Type": "application/json" }; if (c) headers.Authorization = "Bearer " + c.token;
@@ -2403,7 +2417,7 @@ async function ask(text, opts = {}) {
     else { hCount("net_fail"); hWhy(e.message); }       // не сеть, а отказ (ключ, заряд, тариф, «много людей») — тоже не ответил
     if (e.human) { plog("warn", "облако: " + e.message); showBot(e.message, "err"); say(e.message); }       // облако Dewiar объясняет само: «заряд закончился…»
     else if (!D.mock && SELF_HOST_RX.test(llmBase() + "/")) { const m = "Не получилось связаться с мозгом: " + SELF_HOST_TEXT; console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом: адрес модели указывает на сам телефон. Как поправить — на экране."); }
-    else { const m = "Не получилось связаться с мозгом: " + e.message; console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом."); }
+    else { const m = "Не получилось связаться с мозгом: " + e.message + netHint(); console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом."); }
   } finally {
     if (turnAbort === ctl) { busy = false; turnAbort = null; }
   }
@@ -5309,8 +5323,10 @@ function renderSettings() {
       ${on && S.llm.title ? `<small class="hint" style="margin:2px 0 0;display:block">${esc(S.llm.title)}${S.llm.cloud ? " · " + esc(cloudWho()) : ""}</small>` : ""}</div>
       ${on || loggedIn() ? `<button class="btn" id="br-test">Проверить</button>` : ""}</div><div class="res" id="br-res"></div></div>`);
     const back = llmBack();
-    if (back.length) h.push(`<div class="card" id="br-back"><small class="hint" style="margin:0">Прежние мозги — вернуть одной кнопкой</small>${back.map((l, i) =>
-      `<div class="row2" style="margin-top:8px"><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(brainNameOf(l))}</div><button class="btn" data-back="${i}">Вернуть</button></div>`).join("")}<div class="res" id="br-back-res"></div></div>`);
+    // №254 (25.10): «как удалять однажды добавленные, но неработающие мозги? В списке только „Вернуть“» — рядом корзина:
+    // первое нажатие спрашивает («Убрать»), второе убирает из списка. Ключ слуха (restore: "key") не убираем — им слышит телефон.
+    if (back.length) h.push(`<div class="card" id="br-back"><small class="hint" style="margin:0">Прежние мозги — вернуть одной кнопкой или убрать из списка</small>${back.map((l, i) =>
+      `<div class="row2 brb" style="margin-top:8px"><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(brainNameOf(l))}</div><button class="btn" data-back="${i}">Вернуть</button>${l.restore ? "" : `<button class="btn brdel" data-forget="${i}" title="Убрать из списка" aria-label="Убрать «${esc(brainNameOf(l))}» из списка"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg><span>Убрать</span></button>`}</div>`).join("")}<div class="res" id="br-back-res"></div></div>`);
     if (on) h.push(`<div class="card"><div class="sw" style="margin:0"><div>Думать над сложными просьбами<small>Стихи, задачи, анализ, планы — сначала обдумывает: дольше, зато лучше. Простые вопросы — сразу.</small></div>
       <label class="tg"><input type="checkbox" id="br-think" ${S.llm.think !== "off" ? "checked" : ""}><i></i></label></div></div>`);
     if (S.llm.cloud) h.push(`<div class="card cloudc" id="cl-card"><div class="row2"><div style="flex:1"><b>Баланс</b><small class="hint" style="margin:2px 0 0;display:block" id="cl-sub">${esc(cloudWho())}</small></div><div class="cl-pct" id="cl-pct">…</div></div>
@@ -5489,6 +5505,12 @@ function wireSettings(info) {
   };
   if (g("br-think")) g("br-think").addEventListener("change", () => { if (g("br-think").checked) delete S.llm.think; else S.llm.think = "off"; saveS(); });
   if (setTab === "brain") {
+    $$("#br-back [data-forget]").forEach(b => b.onclick = () => {
+      if (!b.classList.contains("ask")) { $$("#br-back .brdel.ask").forEach(x => x.classList.remove("ask")); b.classList.add("ask"); clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove("ask"), 4000); return; }
+      const l = llmBack()[+b.dataset.forget]; if (!l) return;
+      const id = llmId(l); S.llmSaved = (S.llmSaved || []).filter(x => llmId(x) !== id); saveS();
+      toast(`«${brainNameOf(l)}» убран из списка`); renderSettings();
+    });
     $$("#br-back [data-back]").forEach(b => b.onclick = async () => {
       const r = g("br-back-res"); b.disabled = true; r.className = "res"; r.textContent = "подключаю…";
       try { await llmRestore(+b.dataset.back); toast("Мозг: " + brainName()); renderSettings(); }

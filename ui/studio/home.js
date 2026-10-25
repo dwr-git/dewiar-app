@@ -96,7 +96,12 @@ function hmApps() {
   const known = Array.isArray(u.home_known) && u.home_known.length ? u.home_known : HM_OLD;
   return a.filter(id => all.some(x => x.id === id)).concat(all.map(x => x.id).filter(id => !known.includes(id) && !a.includes(id)));
 }
-const hmWho = (id) => { const p = (Array.isArray(window.personas) ? personas : []).find(x => x.id === id); return (p && p.name) || "Лира"; };
+// personas — «let» из core.js, на window её нет: раньше здесь всегда выходила «Лира», даже у Патрика (отчёт 256).
+const hmWho = (id) => {
+  const all = (typeof personas !== "undefined" && Array.isArray(personas)) ? personas : [];
+  const p = all.find(x => x.id === id) || (!id && all.find(x => x.id === (typeof active !== "undefined" ? active : ""))) || null;
+  return (p && p.name) || (id ? id.charAt(0).toUpperCase() + id.slice(1) : "Ассистент");
+};
 function hmGreet() {
   const h = new Date().getHours(), name = String(((S && S.user_name) || "")).trim().split(/\s+/)[0];
   const w = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
