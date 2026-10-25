@@ -858,6 +858,27 @@ def _stream_retry(method, url, tries=2, **kw):
         return
 
 
+# Иероглифы посреди русского ответа (пакет 25.10, №251: qwen2.5:7b в Ollama — «…похвало тебя за работу 今天的任务已经完成了…»):
+# слабые модели соскальзывают в китайский. Если человек сам не писал иероглифами и не просил китайский, японский или
+# корейский — такие куски из ответа убираем (с их знаками препинания), чтобы на экране и в голосе не было каши.
+_CJK = re.compile(r"[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff00-\uff60]+")
+_CJK_ASK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]|китай|япон|корей|иероглиф|chinese|japanese|korean|mandarin|kanji|hanzi", re.I)
+
+
+def wants_cjk(messages):
+    """Последний вопрос человека — с иероглифами или про эти языки? (тогда иероглифы в ответе нужны)"""
+    for m in reversed(messages or []):
+        if m.get("role") == "user":
+            c = m.get("content")
+            t = c if isinstance(c, str) else " ".join(x.get("text", "") for x in c if isinstance(x, dict)) if isinstance(c, list) else ""
+            return bool(_CJK_ASK.search(t or ""))
+    return False
+
+
+def drop_cjk(t):
+    return _CJK.sub("", t) if t else t
+
+
 class _Collector:
     """Разбор ответа любого из форматов: поток OpenAI (SSE), один JSON целиком, поток Ollama (NDJSON),
     события Anthropic. Текст ответа отдельно от «размышлений» (их только считает — reasoning, в символах)
@@ -873,6 +894,7 @@ class _Collector:
         self.fmt = ""
         self.raw_head = ""
         self.pending = ""
+        self.no_cjk = False
 
     def _call(self, idx, cid="", name="", args=""):
         c = self.calls.setdefault(idx, {"id": "", "name": "", "args": ""})
@@ -926,14 +948,16 @@ class _Collector:
         d0 = self.strip.dropped
         piece = self.strip.feed(piece)
         self.reasoning += self.strip.dropped - d0
-        return self.tags.feed(piece)
+        out = self.tags.feed(piece)
+        return drop_cjk(out) if self.no_cjk else out
 
     def flush(self):
         """Конец потока: придержанное начало ответа."""
         d0 = self.strip.dropped
         piece = self.strip.finish()
         self.reasoning += self.strip.dropped - d0
-        return (self.tags.feed(piece) if piece else "") + self.tags.tail()
+        out = (self.tags.feed(piece) if piece else "") + self.tags.tail()
+        return drop_cjk(out) if self.no_cjk else out
 
     def feed_line(self, line):
         """Строка ответа сервера (SSE «data: …» или строка JSON) -> кусок текста ответа."""
@@ -1121,6 +1145,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 body["tool_choice"] = "auto"
         col = _Collector(anthropic=p.get("kind") == "anthropic")
         col.tags.known = {x["name"] for x in (tools_all or [])}   # голый JSON в тексте — вызов, только если такая функция есть
+        col.no_cjk = not wants_cjk(messages)
         bare = BareCallCatcher([x["name"] for x in (tools_all or [])] if prompt_tools_mode(p) or native else [])
         got_text = False
         with _stream_retry("POST", url, json=body, headers=_headers(p), timeout=timeout) as r:

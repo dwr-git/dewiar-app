@@ -125,7 +125,10 @@ with sync_playwright() as p:
     ok(pw.is_visible("#sz-r") and not pw.is_visible("#b-size") and sb and tb and sb["y"] >= tb["y"] and sb["y"] < tb["y"] + tb["height"]
        and sb["x"] > tb["x"] + tb["width"] * 0.6, f"широкий лист — ползунок на панели справа, сразу виден: {sb}")
     # потянуть за пустое место панели — едет весь Dewiar (карточка виджета; блокнот — за ней)
-    x0, y0 = tb["x"] + tb["width"] * 0.5, tb["y"] + tb["height"] / 2
+    # пустое место панели — точка, где под мышью сама панель, а не кнопка (с 0.45 слева ещё ↶ ↷ — середина могла быть кнопкой)
+    x0, y0 = pw.evaluate("""() => { const t = document.querySelector('#tools'), r = t.getBoundingClientRect(), y = r.top + r.height / 2;
+      for (let x = r.left + r.width * .5; x < r.right; x += 4) if (document.elementFromPoint(x, y) === t) return [x, y];
+      return [r.left + r.width * .5, y]; }""")
     pw.mouse.move(x0, y0); pw.mouse.down(); pw.mouse.move(x0 - 40, y0 + 30, steps=6); pw.wait_for_timeout(150); pw.mouse.up(); pw.wait_for_timeout(300)
     calls = pw.evaluate("apiCalls")
     mv = [c for c in calls if c[0] == "move_to"]

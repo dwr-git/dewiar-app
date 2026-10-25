@@ -167,9 +167,11 @@
   #tools { display: flex; align-items: center; gap: 1px; padding: 0 12px 6px; flex-wrap: wrap; }
   .tool { height: 28px; min-width: 28px; padding: 0 6px; display: grid; place-items: center; border-radius: 8px; color: var(--faint); font-weight: 700; font-size: 12.5px; }
   .tool:hover, .tool.on { color: var(--ink); background: var(--chip); }
+  .tool:disabled { opacity: .35; cursor: default; } .tool:disabled:hover { background: none; color: var(--faint); }
   .sep { width: 1px; height: 16px; background: var(--line); margin: 0 5px; }
-  @media (max-width: 560px) { .tool { min-width: 25px; padding: 0 4px; } .sep { margin: 0 3px; } }
-  @media (max-width: 470px) { .tool { min-width: 23px; padding: 0 3px; } .sep { margin: 0 2px; } }   /* узкий лист — панель в одну строку */
+  /* узкий лист — панель в одну строку (с 0.45 на ней ещё ↶ ↷ — кнопки чуть плотнее) */
+  @media (max-width: 560px) { .tool { min-width: 22px; padding: 0 3px; } .sep { margin: 0 2px; } }
+  @media (max-width: 470px) { .tool { min-width: 21px; padding: 0 2px; } .sep { margin: 0 1px; } #tools { padding: 0 10px 6px; } }
 
   /* лист */
   #sheet { flex: 1; overflow-y: auto; padding: 6px 22px 22px; scrollbar-width: thin; scrollbar-color: var(--chip2) transparent; }
@@ -205,12 +207,12 @@
      код, --mk маркеры, цитаты и черта, --emc курсив. Ссылки всегда цвета темы (--acc), поэтому заголовок с ними не спутать. */
   #ed, #cs button { --h1c: var(--ink); --h2c: #8a5a2b; --warm: #b9502a; --mk: #c4873c; --emc: color-mix(in srgb, var(--ink) 80%, #8a5a2b); }
   body:not(.light) #ed, body:not(.light) #cs button { --h1c: var(--ink); --h2c: #e8bb8e; --warm: #ffb38a; --mk: #e0a66a; --emc: color-mix(in srgb, var(--ink) 80%, #e8bb8e); }
-  #ed[data-cs="theme"], #cs [data-cs="theme"] { --h1c: color-mix(in srgb, var(--acc) 72%, var(--ink)); --h2c: color-mix(in srgb, var(--acc) 50%, var(--ink)); --warm: #c4572e; --mk: var(--acc); --emc: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
-  body:not(.light) #ed[data-cs="theme"], body:not(.light) #cs [data-cs="theme"] { --h1c: color-mix(in srgb, var(--acc) 70%, #fff); --h2c: color-mix(in srgb, var(--acc) 45%, #fff); --warm: #ffb38a; --mk: var(--acc); --emc: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
-  #ed[data-cs="forest"], #cs [data-cs="forest"] { --h1c: #22553d; --h2c: #4c7a32; --warm: #b4561f; --mk: #3f8a5e; --emc: color-mix(in srgb, var(--ink) 80%, #3f8a5e); }
-  body:not(.light) #ed[data-cs="forest"], body:not(.light) #cs [data-cs="forest"] { --h1c: #a6dcb9; --h2c: #c5df92; --warm: #ffb07a; --mk: #84c99e; --emc: color-mix(in srgb, var(--ink) 80%, #84c99e); }
-  #ed[data-cs="sea"], #cs [data-cs="sea"] { --h1c: #145a68; --h2c: #23807f; --warm: #cc4f34; --mk: #2a8f99; --emc: color-mix(in srgb, var(--ink) 80%, #2a8f99); }
-  body:not(.light) #ed[data-cs="sea"], body:not(.light) #cs [data-cs="sea"] { --h1c: #93d7e2; --h2c: #a6e2d6; --warm: #ff9f86; --mk: #74c8d3; --emc: color-mix(in srgb, var(--ink) 80%, #74c8d3); }
+  #ed[data-cs="theme"], #cs [data-cs="theme"] { --h1c: color-mix(in srgb, var(--acc) 72%, var(--ink)); --h2c: color-mix(in srgb, var(--acc) 50%, var(--ink)); --warm: color-mix(in srgb, var(--acc) 35%, #c2185b); --mk: var(--acc); --emc: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
+  body:not(.light) #ed[data-cs="theme"], body:not(.light) #cs [data-cs="theme"] { --h1c: color-mix(in srgb, var(--acc) 70%, #fff); --h2c: color-mix(in srgb, var(--acc) 45%, #fff); --warm: color-mix(in srgb, var(--acc) 35%, #ff8fb8); --mk: var(--acc); --emc: color-mix(in srgb, var(--ink) 78%, var(--acc)); }
+  #ed[data-cs="forest"], #cs [data-cs="forest"] { --h1c: #22553d; --h2c: #4c7a32; --warm: #b0284f; --mk: #3f8a5e; --emc: color-mix(in srgb, var(--ink) 80%, #3f8a5e); }
+  body:not(.light) #ed[data-cs="forest"], body:not(.light) #cs [data-cs="forest"] { --h1c: #a6dcb9; --h2c: #c5df92; --warm: #ff92ad; --mk: #84c99e; --emc: color-mix(in srgb, var(--ink) 80%, #84c99e); }
+  #ed[data-cs="sea"], #cs [data-cs="sea"] { --h1c: #145a68; --h2c: #23807f; --warm: #2b55c4; --mk: #2a8f99; --emc: color-mix(in srgb, var(--ink) 80%, #2a8f99); }
+  body:not(.light) #ed[data-cs="sea"], body:not(.light) #cs [data-cs="sea"] { --h1c: #93d7e2; --h2c: #a6e2d6; --warm: #9db8ff; --mk: #74c8d3; --emc: color-mix(in srgb, var(--ink) 80%, #74c8d3); }
   #ed[data-cs="dusk"], #cs [data-cs="dusk"] { --h1c: #573487; --h2c: #8a3c7c; --warm: #c03d64; --mk: #8a5cc8; --emc: color-mix(in srgb, var(--ink) 80%, #8a5cc8); }
   body:not(.light) #ed[data-cs="dusk"], body:not(.light) #cs [data-cs="dusk"] { --h1c: #cdb7f6; --h2c: #eeadd9; --warm: #ff9ab5; --mk: #b89cf0; --emc: color-mix(in srgb, var(--ink) 80%, #b89cf0); }
   #ed[data-cs="plain"], #cs [data-cs="plain"], body:not(.light) #ed[data-cs="plain"], body:not(.light) #cs [data-cs="plain"] { --h1c: var(--ink); --h2c: var(--ink); --warm: var(--ink); --mk: var(--faint); --emc: var(--ink); }
@@ -220,8 +222,8 @@
   body:not(.light) #ed[data-cs="editor"], body:not(.light) #cs [data-cs="editor"] { --h1c: #9ec8ff; --h2c: #ffd700; --h3c: #3ee07a; --h4c: #c77dff; --warm: #60d8da; --sul: #f9bd70; --sol: #ff4f8f; --emc: #ffffff; --lnk: #8fa0ff; --mk: #ffd700; --cdc: #f9bd70; }
   #ed[data-cs="monokai"], #cs [data-cs="monokai"] { --h1c: #137fa3; --h2c: #5a7f00; --h3c: #b85f00; --h4c: #7146d1; --warm: #c8104f; --sul: #7a6b00; --sol: #7146d1; --emc: color-mix(in srgb, var(--ink) 80%, #b85f00); --lnk: #137fa3; --mk: #c8104f; --cdc: #7a6b00; }
   body:not(.light) #ed[data-cs="monokai"], body:not(.light) #cs [data-cs="monokai"] { --h1c: #66d9ef; --h2c: #a6e22e; --h3c: #fd971f; --h4c: #ae81ff; --warm: #f92672; --sul: #e6db74; --sol: #ae81ff; --emc: #f8f8f2; --lnk: #66d9ef; --mk: #f92672; --cdc: #e6db74; }
-  #ed[data-cs="carnival"], #cs [data-cs="carnival"] { --h1c: #c2185b; --h2c: #a35c00; --h3c: #00797f; --h4c: #5e35b1; --warm: #2e7d32; --sul: #6a1b9a; --sol: #d84315; --emc: color-mix(in srgb, var(--ink) 80%, #c2185b); --lnk: #1565c0; --mk: #c2185b; --cdc: #6a1b9a; }
-  body:not(.light) #ed[data-cs="carnival"], body:not(.light) #cs [data-cs="carnival"] { --h1c: #ff8fb1; --h2c: #ffd166; --h3c: #7bdff2; --h4c: #c3a6ff; --warm: #b8f28b; --sul: #ffb3e6; --sol: #ffa36c; --emc: #fff3e0; --lnk: #8ecbff; --mk: #ffd166; --cdc: #ffb3e6; }
+  #ed[data-cs="carnival"], #cs [data-cs="carnival"] { --h1c: #c2185b; --h2c: #1565c0; --h3c: #00796b; --h4c: #6a1b9a; --warm: #2e7d32; --sul: #ad1457; --sol: #00838f; --emc: color-mix(in srgb, var(--ink) 80%, #c2185b); --lnk: #1565c0; --mk: #c2185b; --cdc: #6a1b9a; }
+  body:not(.light) #ed[data-cs="carnival"], body:not(.light) #cs [data-cs="carnival"] { --h1c: #ff8fb1; --h2c: #8ecbff; --h3c: #7be8d4; --h4c: #c3a6ff; --warm: #b8f28b; --sul: #ffb3e6; --sol: #7bdff2; --emc: #fff3e0; --lnk: #8ecbff; --mk: #ffd166; --cdc: #ffb3e6; }
   #ed h1 { color: var(--h1c); }
   #ed h2 { color: var(--h2c); } #ed h3 { color: var(--h3c, var(--h2c)); } #ed h4, #ed h5, #ed h6 { color: var(--h4c, var(--h2c)); }
   #ed ul li strong { color: var(--sul, var(--warm)); } #ed ol li strong { color: var(--sol, var(--warm)); }
@@ -276,6 +278,9 @@
     #sz .ib { width: 24px; height: 24px; font-size: 11.5px; color: var(--muted); }
     #sz #sz-p { font-size: 14px; }
     #sz b { min-width: 38px; font-size: 11.5px; }
+    /* не влезло в строку (25.10, владелец: «справа внизу размер шрифта и темы — смотрится странно, влево бы») — вторая
+       строка слева, ровно под ↶ ↷; признак .wrapped ставит pad.js toolsWrap() */
+    #tools.wrapped #sz { margin-left: 0; flex-basis: 100%; margin-top: 3px; }
   }
   /* потянуть за пустое место наверху — едет весь Dewiar: виджет и блокнот вместе (как за виджет) */
   #top, #tools { cursor: default; }
@@ -319,6 +324,9 @@
   </div>
   <div id="tl" role="menu" aria-label="Все вкладки"></div>
   <div id="tools" aria-label="Оформление">
+    <button class="tool" id="b-undo" title="Шаг назад (Ctrl+Z)" aria-label="Шаг назад" disabled><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+    <button class="tool" id="b-redo" title="Шаг вперёд (Ctrl+Y или Ctrl+Shift+Z)" aria-label="Шаг вперёд" disabled><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+    <span class="sep"></span>
     <button class="tool" id="b-ai" title="ИИ-правка: выделите текст — переформулировать, упростить, перевести; без выделения — вся вкладка (или правая кнопка в тексте)" aria-label="ИИ-правка" aria-haspopup="menu"><svg viewBox="0 0 24 24"><path d="M12 3.5l1.6 4.4 4.4 1.6-4.4 1.6L12 15.5l-1.6-4.4L6 9.5l4.4-1.6zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg></button>
     <button class="tool" data-c="h1" title="Заголовок (# пробел)">H1</button>
     <button class="tool" data-c="h2" title="Подзаголовок (## пробел)">H2</button>

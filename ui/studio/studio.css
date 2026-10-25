@@ -1592,12 +1592,12 @@ nav button.folded { display: none !important; }
    выбрана в блокноте (ui.pad_colors → .nt-body[data-cs]); оттенки — как в ui/pad.html */
 .nt-body { --h1c: var(--ink); --h2c: #e8bb8e; --warm: #ffb38a; --mk: #e0a66a; }
 html.st-light .nt-body { --h2c: #8a5a2b; --warm: #b9502a; --mk: #c4873c; }
-.nt-body[data-cs="theme"] { --h1c: color-mix(in srgb, var(--accent) 70%, #fff); --h2c: color-mix(in srgb, var(--accent) 45%, #fff); --mk: var(--accent); }
-html.st-light .nt-body[data-cs="theme"] { --h1c: color-mix(in srgb, var(--accent) 72%, var(--ink)); --h2c: color-mix(in srgb, var(--accent) 50%, var(--ink)); --warm: #c4572e; }
-.nt-body[data-cs="forest"] { --h1c: #a6dcb9; --h2c: #c5df92; --warm: #ffb07a; --mk: #84c99e; }
-html.st-light .nt-body[data-cs="forest"] { --h1c: #22553d; --h2c: #4c7a32; --warm: #b4561f; --mk: #3f8a5e; }
-.nt-body[data-cs="sea"] { --h1c: #93d7e2; --h2c: #a6e2d6; --warm: #ff9f86; --mk: #74c8d3; }
-html.st-light .nt-body[data-cs="sea"] { --h1c: #145a68; --h2c: #23807f; --warm: #cc4f34; --mk: #2a8f99; }
+.nt-body[data-cs="theme"] { --h1c: color-mix(in srgb, var(--accent) 70%, #fff); --h2c: color-mix(in srgb, var(--accent) 45%, #fff); --warm: color-mix(in srgb, var(--accent) 35%, #ff8fb8); --mk: var(--accent); }
+html.st-light .nt-body[data-cs="theme"] { --h1c: color-mix(in srgb, var(--accent) 72%, var(--ink)); --h2c: color-mix(in srgb, var(--accent) 50%, var(--ink)); --warm: color-mix(in srgb, var(--accent) 35%, #c2185b); }
+.nt-body[data-cs="forest"] { --h1c: #a6dcb9; --h2c: #c5df92; --warm: #ff92ad; --mk: #84c99e; }
+html.st-light .nt-body[data-cs="forest"] { --h1c: #22553d; --h2c: #4c7a32; --warm: #b0284f; --mk: #3f8a5e; }
+.nt-body[data-cs="sea"] { --h1c: #93d7e2; --h2c: #a6e2d6; --warm: #9db8ff; --mk: #74c8d3; }
+html.st-light .nt-body[data-cs="sea"] { --h1c: #145a68; --h2c: #23807f; --warm: #2b55c4; --mk: #2a8f99; }
 .nt-body[data-cs="dusk"] { --h1c: #cdb7f6; --h2c: #eeadd9; --warm: #ff9ab5; --mk: #b89cf0; }
 html.st-light .nt-body[data-cs="dusk"] { --h1c: #573487; --h2c: #8a3c7c; --warm: #c03d64; --mk: #8a5cc8; }
 .nt-body[data-cs="plain"], html.st-light .nt-body[data-cs="plain"] { --h1c: var(--ink); --h2c: var(--ink); --warm: var(--ink); --mk: var(--dim); }
@@ -1776,8 +1776,8 @@ html.st-light .nt-body[data-cs="editor"] { --h1c: #0070d2; --h2c: #e0094a; --h3c
   .nt-body[data-cs="editor"] { --h1c: #9ec8ff; --h2c: #ffd700; --h3c: #3ee07a; --h4c: #c77dff; --warm: #60d8da; --sul: #f9bd70; --sol: #ff4f8f; --emc: #ffffff; --lnk: #8fa0ff; --mk: #ffd700; --cdc: #f9bd70; }
   html.st-light .nt-body[data-cs="monokai"] { --h1c: #137fa3; --h2c: #5a7f00; --h3c: #b85f00; --h4c: #7146d1; --warm: #c8104f; --sul: #7a6b00; --sol: #7146d1; --emc: color-mix(in srgb, var(--ink) 80%, #b85f00); --lnk: #137fa3; --mk: #c8104f; --cdc: #7a6b00; }
   .nt-body[data-cs="monokai"] { --h1c: #66d9ef; --h2c: #a6e22e; --h3c: #fd971f; --h4c: #ae81ff; --warm: #f92672; --sul: #e6db74; --sol: #ae81ff; --emc: #f8f8f2; --lnk: #66d9ef; --mk: #f92672; --cdc: #e6db74; }
-  html.st-light .nt-body[data-cs="carnival"] { --h1c: #c2185b; --h2c: #a35c00; --h3c: #00797f; --h4c: #5e35b1; --warm: #2e7d32; --sul: #6a1b9a; --sol: #d84315; --emc: color-mix(in srgb, var(--ink) 80%, #c2185b); --lnk: #1565c0; --mk: #c2185b; --cdc: #6a1b9a; }
-  .nt-body[data-cs="carnival"] { --h1c: #ff8fb1; --h2c: #ffd166; --h3c: #7bdff2; --h4c: #c3a6ff; --warm: #b8f28b; --sul: #ffb3e6; --sol: #ffa36c; --emc: #fff3e0; --lnk: #8ecbff; --mk: #ffd166; --cdc: #ffb3e6; }
+  html.st-light .nt-body[data-cs="carnival"] { --h1c: #c2185b; --h2c: #1565c0; --h3c: #00796b; --h4c: #6a1b9a; --warm: #2e7d32; --sul: #ad1457; --sol: #00838f; --emc: color-mix(in srgb, var(--ink) 80%, #c2185b); --lnk: #1565c0; --mk: #c2185b; --cdc: #6a1b9a; }
+  .nt-body[data-cs="carnival"] { --h1c: #ff8fb1; --h2c: #8ecbff; --h3c: #7be8d4; --h4c: #c3a6ff; --warm: #b8f28b; --sul: #ffb3e6; --sol: #7bdff2; --emc: #fff3e0; --lnk: #8ecbff; --mk: #ffd166; --cdc: #ffb3e6; }
 .nt-body h3 { color: var(--h3c, var(--h2c)); } .nt-body h4 { color: var(--h4c, var(--h2c)); }
 .nt-body ul li strong, .nt-body ul li b { color: var(--sul, var(--warm)); } .nt-body ol li strong, .nt-body ol li b { color: var(--sol, var(--warm)); }
 .nt-body em { color: var(--emc, inherit); } .nt-body[data-cs] a { color: var(--lnk, var(--accent)); }

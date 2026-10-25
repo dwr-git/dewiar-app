@@ -23,7 +23,7 @@ kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)    # код ошибк
 GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_APPWINDOW = 0x00040000
-SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x0001, 0x0004, 0x0010
+SWP_NOSIZE, SWP_NOMOVE, SWP_NOZORDER, SWP_NOACTIVATE = 0x0001, 0x0002, 0x0004, 0x0010
 MONITOR_DEFAULTTONEAREST = 2
 NO_WINDOW = 0x08000000                       # CREATE_NO_WINDOW
 DETACHED = 0x00000008 | 0x00000200          # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: живёт без нас
@@ -103,6 +103,11 @@ def cursor(h=None):
     user32.GetCursorPos(ctypes.byref(pt))
     k = scale(h) if h else 1.0
     return [pt.x / k, pt.y / k]
+
+
+def raise_top(h):
+    """Окно — наверх среди окон «поверх всех», без кражи фокуса (окно напоминания над виджетом и блокнотом, 25.10)."""
+    user32.SetWindowPos(h, wintypes.HWND(-1), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)    # HWND_TOPMOST
 
 
 def move(h, x, y):

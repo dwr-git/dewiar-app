@@ -178,6 +178,10 @@ public final class Speech {
                     Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
                     i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
                     i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU");
+                    // и «только по-русски» — для распознавателей, что берут язык системы (отчёт №253: телефон без русской
+                    // прошивки слышал английский и китайский)
+                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ru-RU");
+                    i.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true);
                     i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
                     i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
                     // пожелание (не все распознаватели слушают): дать договорить — человек вспоминает имя или слово

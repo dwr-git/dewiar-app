@@ -13,7 +13,9 @@
     { id: "blocks", sec: "Головоломки", name: "Тетрис", genre: "Головоломка", text: "Складывайте желейные фигурки в целые ряды — ряд лопается конфетти." },
     { id: "candy", sec: "Головоломки", name: "Конфетки", genre: "Три в ряд", text: "Меняйте местами соседние конфеты — три одинаковых лопаются." },
     { id: "merge", sec: "Головоломки", name: "Слияние", genre: "Головоломка", text: "Смахивайте плитки: одинаковые сливаются. Дойдёте до 2048?" },
-    { id: "doodle", sec: "Головоломки", name: "Каляка", genre: "Рисовать", text: "Дорисуйте красной ручкой мостики и горки — и человечек дойдёт до звезды." },
+    // pc — только на компьютере (25.10, владелец: на телефоне «экран моргает вспышками»; тысячи штрихов за кадр не тянет
+    // графика телефона — до разбора по журналу телефона полка его не показывает)
+    { id: "doodle", sec: "Головоломки", name: "Каляка", genre: "Рисовать", text: "Дорисуйте красной ручкой мостики и горки — и человечек дойдёт до звезды.", pc: true },
     { id: "post", sec: "Головоломки", name: "Колючая почта", genre: "Внимание", text: "Ёжик-почтальон разносит письма: на марке нарисован, кому оно." },
     { id: "fifteen", sec: "Головоломки", name: "Пятнашки", genre: "Пазл", text: "Расставьте плитки по порядку — в мягком стиле Dewiar." },
     { id: "sudoku", sec: "Головоломки", name: "Судоку", genre: "Логика", text: "Цифры от 1 до 9 без повторов. Каждый раз — новая задача." },
@@ -34,9 +36,10 @@
   const best = (id) => { try { return +localStorage.getItem("arcade.best." + id) || 0; } catch (e) { return 0; } };
   /* base — путь к папке arcade от страницы-хозяина («assets/arcade/» на компьютере, «arcade/» на телефоне).
      -> разметка полки: кнопки .ag[data-game]; оформление — у хозяина. */
-  function html(base) {
-    return GAMES.map((g, i) => {
-      const b = best(g.id), head = g.sec !== (GAMES[i - 1] || {}).sec && i ? `<div class="ag-sec">${esc(g.sec)}</div>` : "";
+  function html(base, opts) {
+    const list = GAMES.filter((g) => !(opts && opts.phone && g.pc));
+    return list.map((g, i) => {
+      const b = best(g.id), head = g.sec !== (list[i - 1] || {}).sec && i ? `<div class="ag-sec">${esc(g.sec)}</div>` : "";
       return head + `<button type="button" class="ag" data-game="${g.id}" aria-label="${esc(g.name)} — играть">`
         + `<span class="ag-cover"><img src="${base}${g.id}/cover.jpg" alt="" loading="lazy"><i class="ag-play" aria-hidden="true">`
         + `<svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></i></span>`

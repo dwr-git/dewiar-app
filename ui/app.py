@@ -1840,6 +1840,7 @@ class Api:
                     hwnd = int(win.native.Handle.ToInt64())
                     winshell.shape(hwnd, "alarm", ALARM_RADIUS)
                     win.show()
+                    self._alarm_keep_top(win)
                     return
 
                 def run():
@@ -1857,6 +1858,7 @@ class Api:
                     return True
                 if not self._gtk(run, timeout=5):
                     win.show()
+                self._alarm_keep_top(win)
             except Exception as e:  # noqa: BLE001 — не удалось скруглить: покажем как есть
                 print(f"Окно напоминания: {e}", file=sys.stderr)
                 try:
@@ -1871,6 +1873,36 @@ class Api:
                 reveal()
         win.events.loaded += lambda *a: threading.Thread(target=reveal_once, daemon=True).start()
         threading.Timer(4.0, reveal_once).start()       # страница грузилась долго — всё равно показать
+
+    def _alarm_keep_top(self, win):
+        """Окно напоминания — всегда над своими окнами (25.10, владелец: при включении компьютера напоминание пряталось
+        под виджетом и блокнотом, звук играл, а окна не видно). Виджет, блокнот и «Досуг» тоже «поверх всех» и, появившись
+        позже, вставали выше; поэтому, пока напоминание открыто, раз в 1,5 с поднимаем его наверх — без фокуса, чтобы не
+        перебивать набор текста. Закрыли или заменили новым — перестаём."""
+        import threading
+
+        def lift():
+            if WIN:
+                winshell.raise_top(int(win.native.Handle.ToInt64()))
+                return
+
+            def run():
+                from gi.repository import Gtk
+                gw = next((g for g in Gtk.Window.list_toplevels() if g.get_title() == ALARM_TITLE and g.get_visible()), None)
+                if gw is not None and gw.get_window() is not None:
+                    gw.set_keep_above(True)
+                    gw.get_window().raise_()
+                return True
+            self._gtk(run, timeout=2)
+
+        def loop():
+            while getattr(self, "_alarm", None) is win:
+                try:
+                    lift()
+                except Exception:  # noqa: BLE001 — окно закрылось между проверкой и подъёмом
+                    pass
+                time.sleep(1.5)
+        threading.Thread(target=loop, daemon=True, name="alarm-top").start()
 
     def close_alarm(self, rid=""):
         win = getattr(self, "_alarm", None)

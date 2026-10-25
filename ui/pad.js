@@ -129,6 +129,7 @@ async function openTab(name, first) {
     const r = await core.call("pad_read", { name });
     P.active = r.name; P.base = r.mtime; P.dirty = false; P.loaded = true;
     ED.innerHTML = PadMD.md2html(r.text); paint(); drawTabs();
+    if (!H.tabs[r.name]) histReset(); else { H.kind = "ext"; histPush(); histBtns(); }   // с диска пришло другое — тоже шаг
     status(`${P.tabs.length > 1 ? `«${r.name}» · сохраняется` : "Сохраняется"} само · ${await syncLine()}`);
     if (!first) ED.focus();
   } catch (e) { status(e.message, "bad"); P.loaded = true; }
@@ -161,7 +162,65 @@ $("#ask-yes").onclick = () => askFn && askFn();
 $("#ask-no").onclick = () => $("#ask").classList.remove("on");
 
 /* ---------- сохранение ---------- */
-function changed() { P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700); status("Сохраняю…", "busy"); }
+function changed() { histPush(); P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700); status("Сохраняю…", "busy"); }
+
+/* ---------- шаг назад и шаг вперёд (25.10, владелец: «удалил часть текста, захватил лишнее, жал Ctrl+Z — не
+   возвращается… фактически потерял важную информацию»). Своя история листа: Markdown на лету, уборка tidy() и
+   ensureP() меняют страницу кодом — у WebKit от этого рвётся встроенная отмена. Здесь каждое изменение — снимок
+   (HTML без самих картинок — они берутся снова по data-src — и место курсора); набор подряд склеивается в один шаг до
+   паузы или пробела, удаление выделенного, вставка, оформление, ИИ-правка — всегда отдельный шаг. Ctrl+Z — назад,
+   Ctrl+Shift+Z и Ctrl+Y — вперёд, и кнопки ↶ ↷ на панели. У каждой вкладки — своя история (до 300 шагов). ---------- */
+const H = { tabs: {}, kind: "", restoring: false };
+const hist = () => (H.tabs[P.active] = H.tabs[P.active] || { s: [], i: -1, at: 0, kind: "" });
+function histSnap() {
+  const c = ED.cloneNode(true);
+  c.querySelectorAll("img[data-src]").forEach(i => i.removeAttribute("src"));
+  c.querySelectorAll("img.sel").forEach(i => i.classList.remove("sel"));
+  let caret = -1;
+  const sel = getSelection();
+  if (sel.rangeCount && ED.contains(sel.anchorNode)) { const r = sel.getRangeAt(0).cloneRange(); const pre = document.createRange(); pre.selectNodeContents(ED); pre.setEnd(r.endContainer, r.endOffset); caret = pre.toString().length; }
+  return { html: c.innerHTML, caret };
+}
+function histReset() { const h = H.tabs[P.active] = { s: [], i: -1, at: 0, kind: "" }; h.s.push(histSnap()); h.i = 0; histBtns(); }
+function histPush() {
+  if (H.restoring || !P.active) return;
+  const h = hist(), now = performance.now(), snap = histSnap(), kind = H.kind || "edit";
+  H.kind = "";
+  if (h.i >= 0 && h.s[h.i].html === snap.html) { h.s[h.i].caret = snap.caret; return; }
+  const glue = h.i > 0 && h.i === h.s.length - 1 && kind === h.kind && (kind === "type" || kind === "del1") && now - h.at < 1500;
+  if (glue) h.s[h.i] = snap;
+  else { h.s.length = h.i + 1; h.s.push(snap); if (h.s.length > 300) h.s.shift(); h.i = h.s.length - 1; }
+  h.at = now; h.kind = kind; histBtns();
+}
+function histGo(d) {
+  const h = hist(), j = h.i + d;
+  if (j < 0 || j >= h.s.length) { status(d < 0 ? "Назад больше некуда" : "Вперёд больше некуда", ""); return false; }
+  h.i = j; h.kind = ""; const s = h.s[j];
+  H.restoring = true;
+  try {
+    ED.innerHTML = s.html; paint(); imgSel(null);
+    if (s.caret >= 0) {                                   // курсор — туда, где он был
+      let left = s.caret, node = null, off = 0; const w = document.createTreeWalker(ED, NodeFilter.SHOW_TEXT);
+      while (w.nextNode()) { const n = w.currentNode; if (left <= n.nodeValue.length) { node = n; off = left; break; } left -= n.nodeValue.length; }
+      const r = document.createRange(); if (node) r.setStart(node, off); else { r.selectNodeContents(ED); r.collapse(false); }
+      r.collapse(true); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      const el = node && node.parentElement; if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    }
+  } finally { H.restoring = false; }
+  P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700);
+  status(d < 0 ? "Шаг назад" : "Шаг вперёд", ""); histBtns();
+  return true;
+}
+function histBtns() {
+  const h = H.tabs[P.active], u = $("#b-undo"), r = $("#b-redo"); if (!u || !r) return;
+  u.disabled = !h || h.i <= 0; r.disabled = !h || h.i >= h.s.length - 1;
+}
+ED.addEventListener("beforeinput", (e) => {
+  const t = e.inputType || "";
+  if (t === "historyUndo" || t === "historyRedo") { e.preventDefault(); histGo(t === "historyUndo" ? -1 : 1); return; }   // меню «Правка» и т. п.
+  const sel = getSelection(), one = sel && sel.isCollapsed;
+  H.kind = t === "insertText" && one && !/\s/.test(e.data || "") ? "type" : /^delete(Content)?(Backward|Forward)$/.test(t) && one ? "del1" : t || "edit";
+});
 async function saveNow() {
   clearTimeout(P.t);
   if (!P.dirty || !P.active || P.saving) return;
@@ -183,7 +242,7 @@ core.on("pad_changed", async (e) => {                 // правка с дру�
   if (e.deleted || e.name !== P.active) return refresh();
   if (P.dirty || document.activeElement === ED && Date.now() - lastKey < 4000) return;   // сейчас печатают — их вариант не перетирает
   const r = await core.call("pad_read", { name: P.active }).catch(() => null);
-  if (r && r.mtime !== P.base) { P.base = r.mtime; ED.innerHTML = PadMD.md2html(r.text); paint(); status("Обновлено с другого устройства"); }
+  if (r && r.mtime !== P.base) { P.base = r.mtime; ED.innerHTML = PadMD.md2html(r.text); paint(); H.kind = "ext"; histPush(); status("Обновлено с другого устройства"); }
 });
 core.on("hello", (d) => { try { const u = (d && d.settings && d.settings.ui) || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); colorScheme(u.pad_colors, true); gamesOn((d.settings || {}).features); } catch (e) { }
   if (P.loaded) { P.loaded = false; refresh(); } });
@@ -269,9 +328,8 @@ ED.addEventListener("keydown", (e) => {
   const k = e.key, mod = e.ctrlKey || e.metaKey;
   const si = selImg();
   if (si && (k === "Delete" || k === "Backspace")) { e.preventDefault(); imgRemove(si); return; }
-  if (mod && !e.shiftKey && (k === "z" || k === "я") && lastImg && ED.contains(lastImg.img) && !(P.lastInput > lastImg.t + 50)) {
-    e.preventDefault(); imgRemove(lastImg.img); return;             // отмена сразу после вставки картинки — убрать её
-  }
+  if (mod && (k === "z" || k === "я" || k === "Z" || k === "Я" || e.code === "KeyZ")) { e.preventDefault(); histGo(e.shiftKey ? 1 : -1); return; }   // своя история (см. histGo)
+  if (mod && (k === "y" || k === "н" || e.code === "KeyY")) { e.preventDefault(); histGo(1); return; }
   if (si && !mod && k.length === 1) imgSel(null);
   if (mod && (k === "b" || k === "и")) { e.preventDefault(); cmd("bold"); return; }
   if (mod && (k === "i" || k === "ш")) { e.preventDefault(); cmd("italic"); return; }
@@ -422,7 +480,8 @@ async function cmd(c) {
   else if (c === "code") { const s = getSelection(); const t = s ? s.toString() : ""; if (t && !t.includes("\n")) insertHtml(`<code>${t.replace(/</g, "&lt;")}</code>&nbsp;`); else document.execCommand("formatBlock", false, "pre"); }
   tidy(); changed();
 }
-$$("#tools .tool").forEach(b => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => cmd(b.dataset.c); });
+$$("#tools .tool[data-c]").forEach(b => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => cmd(b.dataset.c); });
+["#b-undo", "#b-redo"].forEach((id, i) => { const b = $(id); b.onmousedown = (e) => e.preventDefault(); b.onclick = () => { ED.focus(); histGo(i ? 1 : -1); }; });
 /* Chrome/WebKit при правке иногда оставляют <div> вместо <p> и <span style> — приводим к нашему виду */
 function tidy() {
   for (const d of ED.querySelectorAll(":scope > div:not(.dw-diagram)")) {   // схема (padai.js) — своя, не трогать
@@ -481,6 +540,14 @@ $("#cs").onkeydown = (e) => {
   else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); bs[(i + (e.key === "ArrowDown" ? 1 : bs.length - 1)) % bs.length].focus(); }
 };
 document.addEventListener("mousedown", (e) => { if ($("#cs").classList.contains("on") && !e.target.closest("#cs, #b-cs")) csOpen(false); });
+/* Панель не влезла в строку — размер и цвета второй строкой слева (а не прижатыми вправо): .wrapped */
+function toolsWrap() {
+  const t = $("#tools"), s = $("#sz"), f = t.querySelector(".tool"); if (!f) return;
+  t.classList.remove("wrapped");
+  if (getComputedStyle(s).position === "static" && s.offsetTop > f.offsetTop + 6) t.classList.add("wrapped");
+}
+if (window.ResizeObserver) new ResizeObserver(() => toolsWrap()).observe($("#tools"));
+addEventListener("resize", toolsWrap); toolsWrap();
 const szOpen = (on) => { $("#sz").classList.toggle("on", on); $("#b-size").classList.toggle("on", on); $("#b-size").setAttribute("aria-expanded", String(on)); };
 $("#b-size").onmousedown = (e) => e.preventDefault();
 $("#b-size").onclick = () => szOpen(!$("#sz").classList.contains("on"));

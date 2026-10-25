@@ -1350,12 +1350,38 @@ N.on("stt_result", e => {
   let t = (e.text || heardPartial || "").trim();
   plog("info", `📝 ${t ? clip(t) : "(пусто)"} (${sttVia === "server" ? "сервер" : "телефон"}, ${((Date.now() - sttT0) / 1000).toFixed(1)} с)`);
   vCount((t ? "stt_ok_" : "stt_none_") + (sttVia === "server" ? "srv" : "sys")); sttRetry = 0;
+  if (t && sttVia === "system" && sttForeign(t)) return;
+  if (t && S.stt.notRu && !sttNotRu(t)) { S.stt.notRu = 0; saveS(); }
   if (dictMore(t, !!e.cut)) return;
   t = dictTake(t);
   if (t && pausePrefix && Date.now() - pausePrefix.at < 30000) t = pausePrefix.text + " " + t;   // договорил после обрыва — один вопрос
   pausePrefix = null;
   if (t) { lastStt = { at: Date.now(), text: t, cut: false }; askHeard(t); } else { setState("idle"); showYou(""); }
 });
+/* Распознаватель телефона слышит не по-русски (№253: телефон без русской прошивки — «настойчиво пытается распознать
+   английский и китайский»): иероглифы или несколько латинских слов без единой русской буквы. Такое Лире не отдаём:
+   первый раз — переспрашиваем, и этот вопрос слушает сервер Dewiar; второй раз подряд — сервер слушает насовсем
+   (как при «распознаватель не отвечает»). Сервера нет — честно говорим, что делать. Русское слово — счётчик к нулю. */
+const STT_CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
+const sttNotRu = (t) => !/[а-яё]/i.test(t) && (STT_CJK.test(t) || (t.match(/[a-z]{2,}/gi) || []).length >= 2);
+function sttForeign(t) {
+  if (!sttNotRu(t) || holdTalk) return false;
+  S.stt.notRu = (S.stt.notRu || 0) + 1; saveS();
+  plog("warn", `распознавание телефона услышало не по-русски (${S.stt.notRu}-й раз): ${clip(t, 60)}`);
+  const c = Date.now() < sttSysUntil ? null : cloudEars();
+  if (!c) {
+    setState("idle"); showYou(t);
+    showBot("Распознавание этого телефона слышит не по-русски. Подключите Dewiar в «Мозге» (вход аккаунтом dewiar.pro или бесплатный мозг) — слушать будет сервер Dewiar. Или поставьте «Распознавание речи от Google» и выберите в нём русский.", "err");
+    return true;
+  }
+  if (S.stt.notRu >= 2) {
+    S.stt = { engine: "server", url: c.url, key: c.key, model: "gigaam", from_account: loggedIn(), auto: true, notRu: 0 }; saveS();
+    toast("Распознавание телефона слышит не по-русски — теперь слушает сервер Dewiar. Скажите ещё раз.", 6000);
+  } else { sttOnce = c; toast("Не разобрала по-русски — скажите ещё раз", 3500); }
+  setState("idle"); showYou("");
+  setTimeout(() => { if (state === "idle" && !busy) listen(); }, 500);
+  return true;
+}
 let sttRetry = 0;
 N.on("stt_error", e => {
   if (!sttMine(e)) return;
@@ -5022,13 +5048,15 @@ const ARC = "arcade/";
 function playShelf() {
   if (!window.DewiarArcade) return;
   $("#play-body").innerHTML = `<p class="hint" style="margin:0 2px 12px">Игры на пару минут — касаниями, свайпами или с геймпада. Скажите «Лира, давай поиграем» — откроется эта полка.</p>`
-    + `<div class="shelf">${DewiarArcade.html(ARC)}</div>`;
+    + `<div class="shelf">${DewiarArcade.html(ARC, { phone: true })}</div>`;
   $$("#play-body .ag").forEach(b => b.onclick = () => gameOpen(b.dataset.game));
 }
 function playOpen(game) {
   if (!feat("games")) { toast("«Досуг» выключен — включить: «Настройки» → «Ещё» → «Возможности»", 4000); return false; }
   playShelf(); openSheet("#sh-play");
-  if (game && window.DewiarArcade && DewiarArcade.find(game)) gameOpen(game);
+  const g = game && window.DewiarArcade && DewiarArcade.find(game);
+  if (g && g.pc) toast(`«${g.name}» — пока только на компьютере: телефону эта игра тяжела`, 4500);
+  else if (g) gameOpen(game);
   return true;
 }
 const gameOn = () => !$("#gameov").hidden;
