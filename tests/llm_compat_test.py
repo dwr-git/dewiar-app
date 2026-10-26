@@ -29,6 +29,12 @@ class H(BaseHTTPRequestHandler):
             return self._send(400, {"error": {"message": "model does not support chat"}})
         if self.path == "/v1/chat/completions" and m == "ollama_only":
             return self._send(404, {"error": "not found"})
+        if self.path == "/v1/messages":                      # Anthropic: кэш системного промпта/инструментов + обрезка истории
+            self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()
+            for w in ANSWER.split(" "):
+                self.wfile.write((f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': w + ' '}})}\n\n").encode())
+            self.wfile.write((f"data: {json.dumps({'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}})}\n\n").encode())
+            return
         if self.path == "/api/chat":
             think = body.get("think", True)
             self.send_response(200); self.send_header("Content-Type", "application/x-ndjson"); self.end_headers()
@@ -87,6 +93,24 @@ run("think_in_content", dict(P, max_tokens=600), "<think> прямо в текс
 run("json_only", P, "шлюз отдаёт JSON целиком вместо потока")
 run("ollama_only", P, "есть только API Ollama (/api/chat) → переход сам, размышления выключены")
 run("ollama_only", dict(P, kind="ollama", base_url="http://127.0.0.1:8161", max_tokens=100), "профиль Ollama с малым лимитом → повтор без размышлений")
+
+ANTH_P = {"name": "claude", "kind": "anthropic", "base_url": "http://127.0.0.1:8161/v1", "api_key": "test-key", "model": ""}
+run("anthropic", ANTH_P, "Anthropic: поток событий Claude разбирается")
+body = SEEN[-1][1]
+cached = isinstance(body.get("system"), list) and body["system"][0].get("cache_control") == {"type": "ephemeral"}
+print("✅" if cached else "❌", "Anthropic: cache_control на системном промпте")
+ok &= cached
+
+long_history = [{"role": "user", "content": "первая просьба"}]
+for i in range(60):
+    long_history += [{"role": "assistant", "content": f"шаг {i}"}, {"role": "user", "content": f"ответ {i}"}]
+trimmed = llm._anthropic_trim_history(long_history, keep=10)
+kept_first = trimmed[0] == long_history[0]
+short_enough = len(trimmed) <= 12          # первое сообщение + заглушка + keep
+print("✅" if kept_first and short_enough else "❌", "Anthropic: длинная история обрезается, начало задачи сохраняется",
+      f"({len(long_history)} → {len(trimmed)})")
+ok &= kept_first and short_enough
+
 MODE["m"] = "gate_strips_kwargs"; llm._model_cache.clear()
 t = llm.test_profile(dict(P))
 print(("✅" if t["ok"] and t["model"] == "chat" and t["reply"] else "❌"), "кнопка «Проверить»:", {k: t[k] for k in ("ok", "model", "reply", "api")})

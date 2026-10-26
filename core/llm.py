@@ -464,6 +464,24 @@ def _clean_messages(messages):
 # а аргументы инструментов (файл, страница) не помещаются целиком.
 DEFAULT_MAX_TOKENS = 2048
 
+# Anthropic (claude): без обрезки длинная фоновая задача (до 1200 шагов) каждый шаг пересылает ВСЮ историю
+# заново по полной цене — счёт растёт примерно квадратично числу шагов (на 1200 шагах — сотни мегатокенов
+# за одну задачу). Держим начало задачи (иначе модель забудет, что вообще делает) и последние ANTHROPIC_MAX_HISTORY
+# сообщений; резать можно только перед обычным «user», не перед tool_result — иначе разорвём пару tool_use/tool_result.
+ANTHROPIC_MAX_HISTORY = int(os.environ.get("DEWIAR_ANTHROPIC_MAX_HISTORY") or 40)
+
+
+def _anthropic_trim_history(messages, keep=None):
+    keep = ANTHROPIC_MAX_HISTORY if keep is None else keep
+    if len(messages) <= keep + 1:
+        return messages
+    cut = len(messages) - keep
+    while cut < len(messages) and not (messages[cut].get("role") == "user" and not messages[cut].get("tool_call_id")):
+        cut += 1
+    if cut >= len(messages):
+        return messages    # безопасную границу не нашли — лучше дорого, чем сломанный запрос (разрыв tool_use/tool_result)
+    return [messages[0], {"role": "assistant", "content": "… (часть истории пропущена, не отправляем её заново)"}] + messages[cut:]
+
 
 
 def stream_chat(p, system, messages, cancel=None):
@@ -1109,11 +1127,16 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         timeout = httpx.Timeout(5, read=float(p.get("timeout", 180)))
         if p.get("kind") == "anthropic":
             url = _anth_root(base) + "/v1/messages"
-            body = {"model": model, "system": system, "messages": messages, "stream": True,
+            # Кэш — префиксное совпадение: системный промпт и инструменты стабильны от шага к шагу (в отличие от
+            # messages), ставим ephemeral-брейкпоинт на оба — повторные шаги платят ~0.1x за эту часть вместо полной цены.
+            body = {"model": model,
+                    "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                    "messages": _anthropic_trim_history(messages), "stream": True,
                     "max_tokens": max_tokens, "temperature": float(p.get("temperature", 0.7))}
             if tools:
                 body["tools"] = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
                                  for t in tools]
+                body["tools"][-1]["cache_control"] = {"type": "ephemeral"}    # брейкпоинт на последнем — кэширует весь список
         elif native:
             url = _root(base) + "/api/chat"
             body = {"model": model, "stream": True, "messages": _to_ollama([{"role": "system", "content": system}] + messages),
