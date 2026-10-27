@@ -2266,7 +2266,8 @@ async function ask(text, opts = {}) {
   if (cap && (!fast || fast.switchTo)) fast = { say: ideaNote(text, att) };       // не напоминание и не заметка по форме — в «Идеи»
   if (cap) captureBack();
   if (fast && fast.switchTo) { setState("idle"); showYou(text); switchPersona(fast.switchTo, fast.question); return; }
-  if (fast) { fast.say = gfix(fast.say); history.push({ role: "user", content: text }, { role: "assistant", content: fast.say, who: persona().id, t: Date.now() }); saveH(); convAfter(); dayTurn(text, fast.say); answerLocal(fast); return; }
+  // пакет 27.10 (1437), №356: «звони Дмитрий Коновалов» отвечалось без модели, а в журнале ни слова — что сказали, не видно
+  if (fast) { fast.say = gfix(fast.say); plog("info", `⚡ без модели: ${clip(String(fast.say || "(тихо)"), 120)}`); history.push({ role: "user", content: text }, { role: "assistant", content: fast.say, who: persona().id, t: Date.now() }); saveH(); convAfter(); dayTurn(text, fast.say); answerLocal(fast); return; }
   if (!S.llm.base_url && loggedIn()) showBot("Подключаюсь к мозгу — секунду…", "wait");
   await ensureBrain();                             // вошли аккаунтом, а мозг не выбран — модели Dewiar по аккаунту сами
   if (!S.llm.base_url) {
