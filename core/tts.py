@@ -82,6 +82,46 @@ def split_en(text):
     return out or [("ru", text or "")]
 
 
+# немецкие обороты — немецким голосом Piper (№367, 28.10: «немецкий голосом — коряво»: русский голос читал по буквам)
+DE_VOICES = {"female": "de_DE-kerstin-low", "male": "de_DE-thorsten-medium"}
+LANG_VOICES = {"en": EN_VOICES, "de": DE_VOICES}
+_DE_CH = "A-Za-zÄÖÜäöüß"
+_LAT_RUN = re.compile(rf"[{_DE_CH}][{_DE_CH}'’]*(?:-[{_DE_CH}]+)*(?:[ \t]*[,;:]?[ \t]+[{_DE_CH}][{_DE_CH}'’]*(?:-[{_DE_CH}]+)*)+[.!?]?")
+_DE_WORDS = set("""ich du er sie es wir ihr und oder nicht ist sind bin bist war das der die den dem des ein eine einen einem
+mit auf für fur zu von aus bei nach über uber auch noch schon sehr gut guten tag morgen abend nacht danke bitte ja nein wie
+was wo warum wer heute mein meine dein deine kann können konnen möchte mochte haben habe hat geht gibt wie geht's
+entschuldigung tschüss tschuss hallo herr frau sprechen deutsch""".split())
+_EN_SMALL = set("the a an is are was i you he she it we they and or not of to in on with for this that what how my your".split())
+
+
+def _german(run):
+    """Оборот латиницей — немецкий: есть умлауты или ß, или немецких частых слов хотя бы два и больше, чем английских."""
+    if re.search("[äöüßÄÖÜ]", run):
+        return True
+    ws = [w.lower() for w in re.findall(f"[{_DE_CH}]+", run)]
+    de, en = sum(w in _DE_WORDS for w in ws), sum(w in _EN_SMALL for w in ws)
+    return de >= 2 and de > en
+
+
+def split_lang(text):
+    """Фраза → [(язык, кусок)]: немецкие обороты — "de", английские — "en" (split_en), остальное — "ru"."""
+    text = text or ""
+    out, pos = [], 0
+    junk = " ,;:—-«»\"().!?"
+    for m in _LAT_RUN.finditer(text):
+        if not _german(m.group(0)):
+            continue
+        if m.start() > pos and text[pos:m.start()].strip(junk):
+            out += [x for x in split_en(text[pos:m.start()]) if x[1].strip(junk)]
+        out.append(("de", m.group(0)))
+        pos = m.end()
+    if not out:
+        return split_en(text)
+    if text[pos:].strip(junk):
+        out += [x for x in split_en(text[pos:]) if x[1].strip(junk)]
+    return out
+
+
 class _Span:
     """Найденный кусок — как re.Match (start, end, group) для split_en."""
     __slots__ = ("a", "b", "t")

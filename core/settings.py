@@ -112,6 +112,7 @@ DEFAULTS = {
     },
     "stt": {
         "engine": "gigaam",         # gigaam | remote | vosk
+        "english": False,           # понимать и английскую речь (lang2.py: английская модель Vosk ~40 МБ, выбор по уверенности)
         "gigaam_model": "gigaam-v3-e2e-rnnt",
         "remote": {"base_url": "", "api_key": "", "model": "gigaam-v3", "language": "ru"},
     },

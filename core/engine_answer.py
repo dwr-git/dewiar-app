@@ -570,6 +570,10 @@ class AnswerMixin:
                 hint = ""
             if hint:
                 out += " " + hint
+        from lang2 import en_hint
+        en = en_hint(text)                                 # спросили по-английски — ответ по-английски (второй язык)
+        if en:
+            out += " " + en
         return out + (" " + note if note else "")
 
     # ---------- для фоновых задач (TaskManager.host) ----------

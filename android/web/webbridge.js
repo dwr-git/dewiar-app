@@ -33,12 +33,13 @@
   // ---------- голос: очередь фраз — голос сервера (fetch → <audio>) и голос браузера (speechSynthesis) строго по одной ----------
   const queue = []; let playing = null, gen = 0;
   function ruVoices() { return (synth ? synth.getVoices() : []).filter(v => /^ru/i.test(v.lang)); }
-  function sayLocal(id, text, rate, pitch, voice) {
+  function sayLocal(id, text, rate, pitch, voice, lang) {
     return new Promise(done => {
       if (!synth) { ev({ type: "tts_fail", id, code: -1 }); ev({ type: "tts_done", id }); done(); return; }
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = "ru-RU"; u.rate = Math.max(0.5, Math.min(2, +rate || 1)); u.pitch = Math.max(0.5, Math.min(2, +pitch || 1));
-      const v = ruVoices().find(x => x.name === voice) || ruVoices()[0]; if (v) u.voice = v;
+      u.lang = lang || "ru-RU"; u.rate = Math.max(0.5, Math.min(2, +rate || 1)); u.pitch = Math.max(0.5, Math.min(2, +pitch || 1));
+      const pre = (lang || "ru").slice(0, 2), own = (synth.getVoices() || []).filter(x => x.lang && x.lang.toLowerCase().startsWith(pre));   // английское — английским голосом
+      const v = own.find(x => x.name === voice) || own[0]; if (v) u.voice = v;
       let fin = false; const end = () => { if (fin) return; fin = true; clearTimeout(guard); ev({ type: "tts_done", id }); done(); };
       const guard = setTimeout(end, 12000 + String(text).length * 150);   // Chrome порой не присылает onend — очередь не встаёт
       u.onstart = () => ev({ type: "tts_start", id });
@@ -78,7 +79,7 @@
   let pumping = false;
   async function pump() {
     if (pumping) return; pumping = true;
-    while (queue.length) { const j = queue.shift(); if (j.remote) await sayRemote(j); else await sayLocal(j.id, j.text, j.rate, j.pitch, j.voice); }
+    while (queue.length) { const j = queue.shift(); if (j.remote) await sayRemote(j); else await sayLocal(j.id, j.text, j.rate, j.pitch, j.voice, j.lang); }
     pumping = false;
   }
   function pushRemote(id, url, key, body, fb) {
@@ -277,6 +278,8 @@
       stopListen() { if (rec) try { rec.stop(); } catch (e) { } if (srv) srv.finish = true; },
       cancelListen() { if (rec) try { rec.abort(); } catch (e) { } if (srv) srv.cancel = true; },
       speak(id, text, rate, pitch, voice) { queue.push({ id, text, rate, pitch, voice }); pump(); },
+      speakLang(id, text, rate, pitch, voice, add, lang) { queue.push({ id, text, rate, pitch, voice, lang }); pump(); },
+      sttLang2() { },
       speakRemote(id, url, key, body) { pushRemote(id, url, key, body, null); },
       speakRemoteFb(id, url, key, body, fb) { pushRemote(id, url, key, body, fb); },
       stopSpeak() { gen++; queue.length = 0; if (synth) synth.cancel(); if (playing) { try { playing.pause(); } catch (e) { } playing = null; } },

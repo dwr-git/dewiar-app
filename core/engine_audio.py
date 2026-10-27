@@ -181,6 +181,13 @@ class AudioMixin:
         items.append({"key": "gigaam", "group": "ears", "title": "GigaAM v3 — точное распознавание речи",
                       "about": "Лучшее качество для русского, на процессоре, без интернета.", "installed": gok,
                       "mb": self._dir_mb(g.local_dir, MODELS_DIR / "hf" / "hub") if gok else 250, "used": st.get("engine") == "gigaam"})
+        eng = getattr(self, "english", None)
+        if eng is not None and (st.get("english") or eng.installed()):
+            from lang2 import EN_MODEL
+            eok = eng.installed()
+            items.append({"key": "english", "group": "ears", "title": "Английская речь — Vosk, маленькая модель",
+                          "about": "Второй язык: понимать фразы по-английски («Слух» → «Понимать английскую речь»).", "installed": eok,
+                          "mb": self._dir_mb(MODELS_DIR / EN_MODEL) if eok else 40, "used": bool(st.get("english"))})
         vk = self.vosk_tts.installed()
         items.append({"key": "vosk_tts", "group": "voice", "title": "Vosk TTS — русские голоса",
                       "about": "Чистое произношение и ударения, несколько голосов, без интернета.", "installed": vk is not None,
@@ -204,7 +211,7 @@ class AudioMixin:
             self._model_busy = set()
         if key in self._model_busy:
             return {"started": False}
-        if key not in ("names", "gigaam", "vosk_tts") and not (key.startswith("piper:") and key[6:] in PIPER_VOICES):
+        if key not in ("names", "gigaam", "vosk_tts", "english") and not (key.startswith("piper:") and key[6:] in PIPER_VOICES):
             raise ValueError("нет такой модели")
         self._model_busy.add(key)
         prog = (lambda f: self._dl("m:" + key, f))
@@ -224,6 +231,12 @@ class AudioMixin:
                         raise RuntimeError(g.error or "не загрузился")
                     if self.s.get("stt", "engine") != "gigaam" and g is not self.gigaam:
                         g.model = None                    # скачали заранее — в памяти держать незачем
+                elif key == "english":
+                    from lang2 import EN_MODEL, EN_URLS
+                    from listen import ensure_model
+                    m = self._mirror("vosk_en") or {}
+                    ensure_model(EN_MODEL, EN_URLS, m.get("sha256"), DATA_DIR, MODELS_DIR, on_status=self.note, mirror=m.get("url"),
+                                 label="английской речи (40 МБ, один раз)")
                 elif key == "vosk_tts":
                     m = self._mirror("vosk_tts")
                     self.vosk_tts.mirror = self.s.get("tts", "vosk_url") or (m or {}).get("url") or self.updater.mirrors.get("vosk_tts") or ""
@@ -935,6 +948,7 @@ class AudioMixin:
                     else:
                         log.warning("%s не распознал: %s — пробую Vosk", stt.name, e)
                         text = self.vosk_stt.transcribe(pcm).strip()
+            text = self._lang2(pcm, text)
             from vault import mask as _mask                # продиктованный для сейфа секрет — не в журнал
             log.info("📝 %s (%s, %d мс)", _mask(text) or "—", stt.name, (time.monotonic() - t0) * 1000)
             if not held and stt is not self.vosk_stt:
@@ -947,6 +961,35 @@ class AudioMixin:
                 self.handle_held(text)
             else:
                 self.handle_text(text, by_wake, follow, forced, dur=len(pcm) / 2 / RATE)
+
+    def _lang2(self, pcm, text):
+        """Второй язык (lang2.py): «Понимать английскую речь» включено — английская ли это фраза? Решают две маленькие
+        модели Vosk по уверенности; английская — текст у неё, а имя в начале («Патрик, …») — из русского текста.
+        Модель ещё не скачана — запускаем скачивание и пока слышим только русский."""
+        eng = getattr(self, "english", None)
+        if eng is None or not self.s.get("stt", "english"):
+            return text
+        if not eng.ready:
+            if eng.can_start():
+                m = self._mirror("vosk_en") or {}
+                eng.ensure(on_status=self.note, mirror=m.get("url"), mirror_sha=m.get("sha256"))
+            return text
+        try:
+            lang, en_text, sc = eng.pick(pcm, self.vosk_model)
+        except Exception as e:  # noqa: BLE001
+            log.info("🌐 язык фразы не определился: %s", e)
+            return text
+        if sc:
+            log.info("🌐 язык фразы: %s (английская %.2f×%d, русская %.2f×%d)", lang, sc[0][0], sc[0][1], sc[1][0], sc[1][1])
+        if lang != "en" or not en_text.strip():
+            return text
+        from lang2 import strip_name
+        pid, end = find_name(text, self.aliases) if text else (None, 0)
+        if pid:
+            names = list(self.aliases.get(pid, [])) + [self.personas.get(pid).get("name", "")]
+            rest = strip_name(en_text, names)
+            return (text[:end].rstrip(" ,.!?:;—-") + ", " + rest).strip(" ,") if rest else text[:end]
+        return en_text
 
     def handle_held(self, text):
         """Текст диктовки удержанием: это точно вопрос ко мне — без проверки имени и «разговора не со мной». Ответ на

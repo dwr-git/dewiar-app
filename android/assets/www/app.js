@@ -365,6 +365,7 @@ const DEF = {
   tts: { engine: "system", url: "", key: "", model: "", voice: "", voice_m: "", rate: 1.0, sys_voice: "", sys_voice_m: "",
          el_key: "", el_model: "eleven_flash_v2_5", el_voice_f: "", el_voice_m: "" },
   home: { token: "", client_id: "", at: 0 },
+  ha: { url: "", token: "", at: 0 },                  // Home Assistant: адрес и долгосрочный токен (только в телефоне и своим устройствам)
   tries: null,                   // «Попробуйте сказать» на пустом экране у новичка: {n — сколько раз спросил сам, off — скрыл}
   memory: [], onboarded: false, textMode: false,   // textMode — отвечать только текстом (значок динамика вверху)
   relations: {},                 // кто есть кто в контактах: {жена: {name, number}} — «позвони жене» (doCall, REL)
@@ -921,6 +922,21 @@ function memPick(text, limit = 8) {
     return { f, sc, i };
   }).filter(x => x.sc >= 1).sort((a, b) => b.sc - a.sc || b.i - a.i).slice(0, limit).map(x => x.f);
 }
+/* Второй язык — английский (28.10, как core/lang2.py): фраза по-английски — модель отвечает по-английски, голос телефона
+   читает английским (D.speakLang), распознавание узнаёт язык само (Speech.java, lang2 = "en", Android 14+). */
+const EN_COMMON = new Set(`the a an is are was were be been am i you he she it we they me my your his her our their what what's whats
+how why when where who which can could would should will do does did don't dont not no yes please thanks thank hello hi hey
+tell me about this that these those there here and or but with for from to of in on at by it's its let's lets
+weather time today tomorrow good morning evening night play music turn set remind reminder call open stop`.split(/\s+/));
+const EN_HINT = "Собеседник говорит по-английски — ответь по-английски, простым разговорным языком (если он сам не просит по-русски).";
+function isEnglish(text) {
+  const t = String(text || "");
+  if (!t.trim() || /[А-Яа-яЁё]/.test(t)) return false;
+  const w = (t.match(/[A-Za-z][A-Za-z'’]*/g) || []).map(x => x.toLowerCase().replace("’", "'"));
+  const common = w.filter(x => EN_COMMON.has(x)).length;
+  return (common >= 1 && w.length >= 2) || w.length >= 3;
+}
+function lang2Apply() { try { if (D.sttLang2) D.sttLang2(S.lang2 || ""); } catch (e) { } }
 function turnContext(text) {
   const n = convNote();
   let rp = ""; try { rp = recentPrompt() || ""; } catch (e) { }
@@ -929,6 +945,7 @@ function turnContext(text) {
     const week = [1, 2, 3, 4, 5, 6, 7].map(i => { const d = new Date(Date.now() + i * 864e5); return `${WD[d.getDay()]} — ${d.getDate()} ${MON[d.getMonth()]}`; }).join("; ");
     t += ` Ближайшие дни: ${week}. Сколько дней до даты и какая дата ближе — считай calc days_until, не в уме.`;
   }
+  if (isEnglish(text)) t += " " + EN_HINT;          // спросили по-английски — ответ по-английски (второй язык)
   let mp = []; try { mp = memPick(text); } catch (e) { }
   return (rp ? rp.trim() + "\n\n" : "") + t + (n ? " " + n : "")
     + (mp.length ? "\n\nИз памяти о пользователе (подобрано к этому вопросу — используй, если к месту):\n- " + mp.join("\n- ") : "");
@@ -966,7 +983,7 @@ function myPersonasApply() {
 myPersonasApply();
 // с 0.4.27 встроенных двое — Лира и Патрик; выбранный прежде Агент, Джарвис, Эва или Кодер — теперь Лира
 if (!PERSONAS.some(p => p.id === S.persona)) { S.persona = PERSONAS[0].id; try { prefSet("settings", JSON.stringify(S)); } catch (e) { } }
-const persona = () => PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];
+const persona = () => (kidsOn() && window.DEWIAR_KIDS_PERSONA) || PERSONAS.find(p => p.id === S.persona) || PERSONAS[0];   // детский режим — Совёнок Уго
 const hex2rgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 let orb = null;
 function applyPersona() {
@@ -1608,7 +1625,7 @@ function say(text, retry = 0) {
     sayTexts.set(id, t);
     // голосу сервера — уже словами: «14:10» → «четырнадцать десять» (ui/assets/speechnorm.js, как core/speechnorm.py);
     // старая служба голосов читала цифры странно («ствисе», отзыв 16.10), а новая сделает это сама — дважды не мешает
-    const said = window.DewiarSpeech ? (DewiarSpeech.norm(t, false) || t) : t;
+    const said = window.DewiarSpeech && !isEnglish(t) ? (DewiarSpeech.norm(t, false) || t) : t;   // английское — как есть: сервер сам узнаёт язык
     const u = cv ? cv.url : S.tts.url, url = u.replace(/\/+$/, "") + (/speech$/.test(u) ? "" : "/audio/speech");
     const body = cv ? { model: "tts-1", input: said, voice: persona().voice_remote || (persona().gender === "female" ? "serena" : "aiden"), persona: persona().id || "", response_format: "wav", speed: +S.tts.rate || 1 }
       : { model: S.tts.model || "tts-1", input: said, voice: (fem ? S.tts.voice : (S.tts.voice_m || S.tts.voice)) || "alloy", persona: persona().id || "", response_format: "mp3" };
@@ -1628,7 +1645,8 @@ function say(text, retry = 0) {
       return;
     }
     const sv = sysVoiceFor(persona().gender);                 // героям — мужской голос устройства, героиням — женский
-    D.speak(id, t, S.tts.rate || 1.0, sv.pitch, sv.name, true);
+    if (isEnglish(t) && D.speakLang) D.speakLang(id, t, S.tts.rate || 1.0, sv.pitch, "", true, "en-US");   // по-английски — английским голосом
+    else D.speak(id, t, S.tts.rate || 1.0, sv.pitch, sv.name, true);
   }
   if (state !== "speaking" && state !== "listening") setState("speaking");
 }
@@ -1725,6 +1743,7 @@ function webTrimSettings() {
   hide($("#upd-check"));
 }
 function systemPrompt() {
+  if (kidsOn()) return kidsSystemPrompt();         // детский режим — своя короткая подсказка с правилами
   const p = persona(), others = PERSONAS.filter(x => x.id !== p.id).map(x => `${x.name} — ${(x.role || "").toLowerCase()}`).join("; ");
   const parts = [p.character, window.DEWIAR_TALK_RULES || "", (window.DEWIAR_GENDER_RULES || {})[p.gender] || "", p.focus, window.DEWIAR_VOICE_RULES || "Отвечай коротко, живой речью, по-русски.",
     `Ты — один из команды помощников: ${others}. Позвать коллегу — инструмент call_persona. Разговор пользователя с коллегой приходит тебе справкой «[До этого пользователь говорил не с тобой…]»: это их разговор — не продолжай его и не отвечай за коллегу, пока пользователь сам об этом не попросит; отвечай на то, что он говорит тебе.`,
@@ -1737,7 +1756,7 @@ function systemPrompt() {
     + (D.web ? "" : "календарь телефона — «что у меня завтра», «какие встречи на неделе» (calendar_list), «запиши в календарь», «назначь встречу» (calendar_add: сначала спроси «записать?», запиши после «да»), ")
     + (D.web ? "" : "приложения (open_app), ") + "сайты (open_url), поиск в интернете (web_search, read_webpage), погода (weather), " + (D.web ? "" : "фонарик, громкость, экраны настроек — Bluetooth, Wi‑Fi, режим полёта (phone_settings), ") + "заметки (save_note, find_notes), "
     + "память о пользователе (remember), деньги (money_add, money_report), " + (D.web ? "" : "сообщения в MAX, Telegram, WhatsApp (send_message), ")
-    + "мини-программы, страницы и презентации — калькулятор, игра, конвертер, таймер, слайды (make_app: сделай сам, она сразу откроется здесь; код программы не сохраняй заметкой; никогда не говори «готово», не вызвав make_app)" + (S.home.token && !D.web ? ", умный дом Яндекса (smart_home)" : "")
+    + "мини-программы, страницы и презентации — калькулятор, игра, конвертер, таймер, слайды (make_app: сделай сам, она сразу откроется здесь; код программы не сохраняй заметкой; никогда не говори «готово», не вызвав make_app)" + ((S.home.token || haOn()) && !D.web ? ", умный дом — включить, выключить, яркость, температура, показания датчиков, сценарии (smart_home)" : "")
     + (loggedIn() ? ", документы и базы пользователя на сайте Dewiar (ask_knowledge)" : "") + ". После действия скажи итог одной фразой.",
     "СЧЁТ: любые вычисления — проценты, суммы, скидки, даты, «сколько дней до…» — только инструментом calc, никогда в уме. Просят объяснить расчёт — покажи его с числами («2 350 × 17 / 100 = 399,5»), а не «использовал калькулятор». "
     + "Просьба с условием («если завтра дождь — напомни…») — сначала узнай нужное (погоду — weather или web_search), потом сделай только подходящее. "
@@ -2258,7 +2277,14 @@ async function ask(text, opts = {}) {
     if (!shot.ok) { answerLocal({ say: "Не получилось сфотографировать: " + shot.error }); return; }
     answerLocal({ say: "Кадр получился почти чёрным — камера ничего не видит. Уберите палец или чехол с камеры и попросите ещё раз." }); return;
   }
-  if (!opts.hidden) { showYou(text); courseHeard(text); }
+  if (!opts.hidden) {
+    showYou(text);
+    if (kidsOn()) {                                 // детский режим: время и «пора спать»; вопрос — в отчёт родителю
+      const [can, why] = kidsAllowed();
+      if (!can) { answerLocal({ say: why }); return; }
+      kidsTouch(text);
+    } else courseHeard(text);
+  }
   clearCard(); setState("thinking"); showBot("", "wait");
   photoTurn = false;
   convCheck();
@@ -2266,7 +2292,7 @@ async function ask(text, opts = {}) {
   if (pics.length) { showCard(`<div class="attshow">${pics.map(a => `<img src="${a.url}" alt="">`).join("")}</div>`); cardSticky = Date.now() + 60000; }
   turnAtt = att; turnAsk = opts.hidden ? "" : text;    // hidden — просьба приложения (сканер, сводка): без проверки
   const cap = !opts.hidden && captureAt && Date.now() - captureAt < 120000; captureAt = 0;     // сказано после «Записать»
-  let fast = opts.hidden ? null : att.length ? (remindAttQuick(text, att) || (() => { const say = noteQuick(text, att); return say ? { say } : null; })()) : await quick(text);
+  let fast = opts.hidden || kidsOn() ? null : att.length ? (remindAttQuick(text, att) || (() => { const say = noteQuick(text, att); return say ? { say } : null; })()) : await quick(text);
   if (cap && (!fast || fast.switchTo)) fast = { say: ideaNote(text, att) };       // не напоминание и не заметка по форме — в «Идеи»
   if (cap) captureBack();
   if (fast && fast.switchTo) { setState("idle"); showYou(text); switchPersona(fast.switchTo, fast.question); return; }
@@ -2960,7 +2986,7 @@ async function quick(text) {
   if ((m = t.match(/^(?:открой|запусти)\s+(.+)$/)) && !/сайт|страниц|ссылк/.test(m[1])) {
     const name = openAppSmart(m[1]); if (name) return { say: `Открываю ${name}.`, silent: true };
   }
-  if (S.home.token && !D.web) { const r = await homeQuick(t); if (r) return r; }
+  if ((S.home.token || haOn()) && !D.web) { const r = await homeQuick(t); if (r) return r; }
   return null;
 }
 
@@ -3427,8 +3453,9 @@ function toolSpecs() {
     { name: "answer_task", description: "Ответить на вопрос задачи, которая «ждёт ответа»: text — ответ пользователя; name — часть названия (пусто — единственная ждущая).", parameters: O({ name: STR, text: STR }, ["text"]) });
   if (S.sync.on && syncCred() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное».",
     parameters: O({ title: STR, goal: STR }, ["goal"]) });
-  if (S.home.token && !D.web) t.push({ name: "smart_home", description: "Умный дом Яндекса: action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
+  if ((S.home.token || haOn()) && !D.web) t.push({ name: "smart_home", description: "Умный дом (Яндекс и Home Assistant): action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
     parameters: O({ action: { type: "string", enum: ["list", "on", "off", "brightness", "brighter", "dimmer", "temperature", "scenario"] }, target: STR, value: NUM }, ["action"]) });
+  if (kidsOn()) { const k = kidsTools(); return t.filter(x => k.has(x.name)); }   // детский режим — только безопасное
   return D.web ? t.filter(x => !WEB_NO_TOOLS.has(x.name)) : t;
 }
 
@@ -3452,6 +3479,7 @@ function coerceArgs(name, a) {
 /* Выполнить инструмент модели. -> строка для модели (ошибка — «Ошибка: …» с подсказкой, что сказать человеку);
    take_photo -> {text, image}, call_persona -> {text, switchTo} — их разбирает ask(). */
 async function runTool(name, a) {
+  if (kidsOn() && !kidsTools().has(name)) return "Ошибка: в детском режиме этого нельзя. Скажи по-доброму, что это можно только вместе с мамой или папой.";
   if (HANDS_SET.has(name)) return handsTool(name, a || {});
   a = coerceArgs(name, a);
   switch (name) {
@@ -4427,11 +4455,21 @@ async function homeReq(method, path, body) {
   if (r.status === 403) throw new Error("у ключа нет прав iot:view и iot:control");
   const d = JSON.parse(r.body || "{}"); if (d.status && d.status !== "ok") throw new Error(d.message || "умный дом ответил ошибкой"); return d;
 }
-async function homeGet(force) {
-  if (!force && homeInfo && Date.now() - homeT < 120000) return homeInfo;
+async function homeYandex() {
   const d = await homeReq("GET", "/user/info"), rooms = {};
   (d.rooms || []).forEach(r => rooms[r.id] = r.name);
-  homeInfo = { rooms: d.rooms || [], scenarios: d.scenarios || [], devices: (d.devices || []).map(x => Object.assign(x, { room_name: rooms[x.room] || "" })) }; homeT = Date.now();
+  return { rooms: d.rooms || [], scenarios: d.scenarios || [], devices: (d.devices || []).map(x => Object.assign(x, { room_name: rooms[x.room] || "" })) };
+}
+/* Оба дома как один (Яндекс и Home Assistant): не ответил один — работаем с другим; не ответили оба — ошибка первого. */
+async function homeGet(force) {
+  if (!force && homeInfo && Date.now() - homeT < 120000) return homeInfo;
+  const out = { rooms: [], scenarios: [], devices: [] }; let err = null, got = 0;
+  const add = (h) => { out.rooms.push(...h.rooms); out.scenarios.push(...h.scenarios); out.devices.push(...h.devices); got++; };
+  if (S.home.token) { try { add(await homeYandex()); } catch (e) { err = e; } }
+  if (haOn()) { try { add(await haInfo()); } catch (e) { err = err || e; } }
+  if (!got && err) throw err;
+  if (err) plog("info", "умный дом: " + err.message);
+  homeInfo = out; homeT = Date.now();
   return homeInfo;
 }
 const HTYPES = { "свет": "devices.types.light", "ламп": "devices.types.light", "люстр": "devices.types.light", "торшер": "devices.types.light", "светильник": "devices.types.light",
@@ -4459,7 +4497,7 @@ function homeMatch(target, info) {
 async function homeAct(devs, op, value) {
   const cap = (d, t, inst) => (d.capabilities || []).find(c => c.type === t && (!inst || ((c.parameters || {}).instance === inst) || ((c.state || {}).instance === inst)));
   const acts = [];
-  devs.forEach(d => {
+  devs.filter(d => d.src !== "ha").forEach(d => {
     const a = [], ON = "devices.capabilities.on_off", RG = "devices.capabilities.range";
     if (op === "on" || op === "off") { if (cap(d, ON)) a.push({ type: ON, state: { instance: "on", value: op === "on" } }); }
     else if (["brightness", "brighter", "dimmer"].includes(op)) { const c = cap(d, RG, "brightness"); if (c) { const cur = (c.state || {}).value || 50;
@@ -4467,8 +4505,10 @@ async function homeAct(devs, op, value) {
     else if (op === "temperature") { if (cap(d, RG, "temperature")) { a.push({ type: RG, state: { instance: "temperature", value: Math.round(value) } }); if (cap(d, ON)) a.push({ type: ON, state: { instance: "on", value: true } }); } }
     if (a.length) acts.push({ id: d.id, actions: a });
   });
-  if (!acts.length) throw new Error("эти устройства так не умеют");
-  await homeReq("POST", "/devices/actions", { devices: acts }); homeT = 0; return acts.length;
+  const ha = devs.filter(d => d.src === "ha"), nha = ha.length ? await haAct(ha, op, value) : 0;   // Home Assistant — своими службами
+  if (!acts.length && !nha) throw new Error("эти устройства так не умеют");
+  if (acts.length) await homeReq("POST", "/devices/actions", { devices: acts });
+  homeT = 0; return acts.length + nha;
 }
 /* Датчики (отчёт №362, 27.10: «не может сказать температуру в спальне»): показания — в properties устройства. */
 const HPROPS = { temperature: ["температура", "°"], humidity: ["влажность", "%"], co2_level: ["углекислый газ", " ppm"], pressure: ["давление", " мм рт. ст."],
@@ -4476,7 +4516,9 @@ const HPROPS = { temperature: ["температура", "°"], humidity: ["вл
 const HUNITS = { "unit.pressure.pascal": " Па", "unit.pressure.atm": " атм", "unit.pressure.bar": " бар", "unit.temperature.kelvin": " K" };
 const hprops = (d) => (d.properties || []).filter(p => p.type === "devices.properties.float" && p.state && p.state.value != null)
   .map(p => ({ i: p.state.instance || (p.parameters || {}).instance, v: p.state.value, u: (p.parameters || {}).unit || "", t: p.last_updated }));
-function hval(p, named) { const [n, u] = HPROPS[p.i] || [p.i, ""]; const r = Math.round(Number(p.v) * 10) / 10; return (named ? n + " " : "") + String(r).replace(".", ",") + (HUNITS[p.u] || u); }
+function hval(p, named) { const [n, u] = HPROPS[p.i] || [p.i, ""]; const r = Math.round(Number(p.v) * 10) / 10;
+  const hu = p.u && !p.u.startsWith("unit.") ? (/^°[CС]$/.test(p.u) ? "°" : p.u === "%" ? "%" : " " + p.u) : "";   // единицы Home Assistant — как есть
+  return (named ? n + " " : "") + String(r).replace(".", ",") + (HUNITS[p.u] || hu || u); }
 /* Показания в комнате (или у устройства с таким названием): сначала датчики, по одному на вид. -> { found, vals } */
 function homeRead(target, what, info) {
   const words = hw(target).filter(w => !HSKIP.has(w));
@@ -4508,11 +4550,11 @@ async function homeQuick(t) {
   let info; try { info = await homeGet(); } catch (e) { return null; }
   try {
     if (c.op === "scenario") { const s = info.scenarios.find(s => hw(s.name).some(a => hw(c.target).some(b => hsim(a, b)))); if (!s) return null;
-      await homeReq("POST", `/scenarios/${s.id}/actions`, {}); return { say: `Запустил сценарий «${s.name}».` }; }
+      if (s.src === "ha") await haScenario(s); else await homeReq("POST", `/scenarios/${s.id}/actions`, {}); return { say: `Запустил сценарий «${s.name}».` }; }
     if (c.op === "read") {
       const r = homeRead(c.target, c.what, info); if (!r.found) return null;     // «температура в Москве» — это погода, не дом
       const place = c.target[0].toUpperCase() + c.target.slice(1);
-      if (!r.vals.length) return { say: `${place} нет датчика, который знает ${c.what === "temperature" ? "температуру" : (HPROPS[c.what] || ["это"])[0]}, — в умном доме Яндекса я его не вижу.` };
+      if (!r.vals.length) return { say: `${place} нет датчика, который знает ${c.what === "temperature" ? "температуру" : (HPROPS[c.what] || ["это"])[0]}, — в умном доме я его не вижу.` };
       const v = r.vals[0], old = v.t && Date.now() / 1000 - v.t > 3 * 3600;
       return { say: `${place} ${hval(v, c.what !== "temperature")}.` + (old ? ` Это данные от ${new Date(v.t * 1000).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — датчик давно не присылал новых.` : "") };
     }
@@ -4526,10 +4568,92 @@ async function homeQuick(t) {
 async function homeTool(a) {
   const info = await homeGet();
   if (a.action === "list") return info.devices.map(d => `${d.name}${d.room_name ? " (" + d.room_name + ")" : ""}${hprops(d).length ? " — " + hprops(d).map(p => hval(p, true)).join(", ") : ""}`).join("; ") + (info.scenarios.length ? ". Сценарии: " + info.scenarios.map(s => s.name).join(", ") : "");
-  if (a.action === "scenario") { const s = info.scenarios.find(s => hw(s.name).some(x => hw(a.target).some(y => hsim(x, y)))); if (!s) return "Нет такого сценария."; await homeReq("POST", `/scenarios/${s.id}/actions`, {}); return `Запущен «${s.name}».`; }
+  if (a.action === "scenario") { const s = info.scenarios.find(s => hw(s.name).some(x => hw(a.target).some(y => hsim(x, y)))); if (!s) return "Нет такого сценария."; if (s.src === "ha") await haScenario(s); else await homeReq("POST", `/scenarios/${s.id}/actions`, {}); return `Запущен «${s.name}».`; }
   const devs = homeMatch(a.target || "", info); if (!devs.length) return "Не нашёл такого устройства. Есть: " + info.devices.map(d => d.name).join(", ");
   const n = await homeAct(devs, a.action, a.value); return `Готово: ${devs.map(d => d.name).join(", ")} (${n}).`;
 }
+
+/* ---------- Home Assistant на телефоне (28.10, как core/homeassistant.py) ----------
+   Второй умный дом рядом с Яндексом: адрес HA и долгосрочный токен (S.ha {url, token, at}). Сущности HA приводятся к виду
+   устройств Яндекса (haInfo: type, capabilities on_off/range, properties — показания датчиков; id «ha:<entity_id>»,
+   src "ha"), комнаты — области HA (POST /api/template), сценарии — scene.* и script.*. Поэтому разбор фраз, поиск
+   устройств и показаний (homeParse, homeMatch, homeRead) — общие; homeGet сливает оба дома, homeAct и запуск сценария
+   отправляют каждое устройство в свой дом. Адрес в своей сети (192.168.…, *.local) — напрямую (D.http без прокси Dewiar).
+   Токен — только в телефоне и своим устройствам конвертом (ownShare, сквозное шифрование), в отчётах — «***». */
+const HA_TYPE = { light: "devices.types.light", switch: "devices.types.switch", input_boolean: "devices.types.switch", fan: "devices.types.fan",
+  climate: "devices.types.thermostat", cover: "devices.types.openable", media_player: "devices.types.media_device", vacuum: "devices.types.vacuum_cleaner",
+  humidifier: "devices.types.humidifier" };
+const HA_PROP = { temperature: "temperature", humidity: "humidity", carbon_dioxide: "co2_level", pressure: "pressure", atmospheric_pressure: "pressure",
+  illuminance: "illumination", battery: "battery_level", power: "power", pm25: "pm2.5_density" };
+const haOn = () => !!(S.ha && S.ha.url && S.ha.token);
+function haUrl(u) {                                 // «192.168.1.20» → «http://192.168.1.20:8123»; https и свой порт — как есть
+  u = String(u || "").trim().replace(/\/+$/, "").replace(/\/api$/, "");
+  if (!u) throw new Error("впишите адрес Home Assistant");
+  if (!/^https?:\/\//i.test(u)) u = "http://" + u;
+  const m = u.match(/^(https?:\/\/)([^/:]+)(:\d+)?(.*)$/i);
+  if (m && !m[3] && /^http:/i.test(m[1]) && (/^\d+\.\d+\.\d+\.\d+$/.test(m[2]) || /\.local$/i.test(m[2]) || !m[2].includes("."))) u = m[1] + m[2] + ":8123" + m[4];
+  return u;
+}
+async function haReq(method, path, body) {
+  const r = await http(method, S.ha.url + path, { headers: { Authorization: "Bearer " + S.ha.token, "Content-Type": "application/json" }, body, timeout: 12000 });
+  if (r.status === 401 || r.status === 403) throw new Error("Home Assistant не принял токен — создайте новый (профиль → «Безопасность» → «Долгосрочные токены доступа»)");
+  if (!r.status) throw new Error("до Home Assistant не достучаться — телефон в той же сети, что и дом?");
+  if (r.status >= 400) throw new Error("Home Assistant ответил ошибкой " + r.status);
+  return r.body;
+}
+async function haInfo() {
+  const states = JSON.parse(await haReq("GET", "/api/states") || "[]"), area = {}, rooms = [];
+  try {        // области: «id|название|сущность,сущность» по строке
+    const t = await haReq("POST", "/api/template", { template: "{% for a in areas() %}{{ a }}|{{ area_name(a) }}|{{ area_entities(a) | join(',') }}\n{% endfor %}" });
+    String(t || "").split("\n").forEach(l => { const [id, name, ents] = l.split("|"); if (!id || !name) return; rooms.push({ id: "ha:" + id, name: name.trim() }); (ents || "").split(",").filter(Boolean).forEach(e => area[e.trim()] = "ha:" + id); });
+  } catch (e) { plog("info", "Home Assistant: комнаты не прочитались — " + e.message); }
+  const rname = Object.fromEntries(rooms.map(r => [r.id, r.name])), devices = [], scenarios = [];
+  for (const s of states) {
+    const [dom] = String(s.entity_id || "").split("."), a = s.attributes || {}, name = a.friendly_name || s.entity_id, room = area[s.entity_id] || "";
+    if (dom === "scene" || dom === "script") { scenarios.push({ id: "ha:" + s.entity_id, name, src: "ha" }); continue; }
+    const base = { id: "ha:" + s.entity_id, src: "ha", ent: s.entity_id, dom, name, room, room_name: rname[room] || "", capabilities: [], properties: [] };
+    if (HA_TYPE[dom]) {
+      const d = Object.assign(base, { type: HA_TYPE[dom] + (dom === "climate" && /cool/.test((a.hvac_modes || []).join(" ")) ? ".ac" : "") });
+      d.capabilities.push({ type: "devices.capabilities.on_off", state: { instance: "on", value: !["off", "closed", "unavailable", "idle", "standby"].includes(s.state) } });
+      if (dom === "light" && (a.supported_color_modes || []).some(m => m !== "onoff"))
+        d.capabilities.push({ type: "devices.capabilities.range", parameters: { instance: "brightness" }, state: { instance: "brightness", value: a.brightness != null ? Math.round(a.brightness / 2.55) : null } });
+      if (dom === "climate") {
+        d.capabilities.push({ type: "devices.capabilities.range", parameters: { instance: "temperature" }, state: { instance: "temperature", value: a.temperature } });
+        if (a.current_temperature != null) d.properties.push({ type: "devices.properties.float", parameters: { instance: "temperature", unit: a.temperature_unit || "°C" }, state: { instance: "temperature", value: +a.current_temperature } });
+      }
+      devices.push(d);
+    } else if (dom === "sensor" && HA_PROP[a.device_class] && s.state !== "" && !isNaN(parseFloat(s.state))) {
+      devices.push(Object.assign(base, { type: "devices.types.sensor", properties: [{ type: "devices.properties.float", parameters: { instance: HA_PROP[a.device_class], unit: a.unit_of_measurement || "" },
+        state: { instance: HA_PROP[a.device_class], value: parseFloat(s.state) }, last_updated: s.last_updated ? Date.parse(s.last_updated) / 1000 : 0 }] }));
+    }
+  }
+  return { rooms, scenarios, devices };
+}
+async function haAct(devs, op, value) {
+  let n = 0;
+  for (const d of devs) {
+    let svc = null, data = { entity_id: d.ent };
+    if (op === "on" || op === "off") svc = d.dom === "cover" ? (op === "on" ? "cover/open_cover" : "cover/close_cover") : `${d.dom === "vacuum" ? "vacuum" : d.dom}/${op === "on" ? (d.dom === "vacuum" ? "start" : "turn_on") : (d.dom === "vacuum" ? "return_to_base" : "turn_off")}`;
+    else if (op === "brightness" && d.dom === "light") { svc = "light/turn_on"; data.brightness_pct = Math.max(1, Math.min(100, Math.round(value))); }
+    else if ((op === "brighter" || op === "dimmer") && d.dom === "light") { svc = "light/turn_on"; data.brightness_step_pct = op === "brighter" ? 25 : -25; }
+    else if (op === "temperature" && d.dom === "climate") { svc = "climate/set_temperature"; data.temperature = Math.round(value); }
+    if (!svc) continue;
+    await haReq("POST", "/api/services/" + svc, data); n++;
+  }
+  return n;
+}
+async function haScenario(s) { const [dom] = s.id.slice(3).split("."); await haReq("POST", `/api/services/${dom}/turn_on`, { entity_id: s.id.slice(3) }); }
+async function haConnect(url, token) {
+  const u = haUrl(url), t = String(token || "").trim();
+  if (!/^[\w.-]{20,}$/.test(t)) throw new Error("токен — длинная строка из «Долгосрочных токенов доступа»");
+  const r = await http("GET", u + "/api/", { headers: { Authorization: "Bearer " + t }, timeout: 10000 });
+  if (r.status === 401 || r.status === 403) throw new Error("Home Assistant не принял токен");
+  if (!r.status) throw new Error("до " + u + " не достучаться — телефон в той же сети, что и Home Assistant?");
+  if (r.status >= 400) throw new Error("по этому адресу Home Assistant не отвечает (" + r.status + ")");
+  S.ha = { url: u, token: t, at: Date.now() }; homeInfo = null; saveS();
+  ownShare().catch(e => plog("info", "Home Assistant на свои устройства: " + e.message));
+}
+function haForget() { S.ha = { url: "", token: "", at: Date.now() }; homeInfo = null; saveS(); ownShare().catch(() => { }); }
 
 /* ---------- листы снизу (.sheet): открыть, закрыть, смахнуть вниз; за ними — содержимое каждого листа ---------- */
 function openSheet(id) { closeSheets(true); $(id).classList.add("on"); $("#dim").classList.add("on"); if (typeof courseSeen === "function") courseSeen(id.replace("#sh-", "")); }
@@ -5539,7 +5663,7 @@ const ICON = {
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg>',
 };
 let setTab = "brain";
-function openSettings(tab) { if (!$("#sh-set").classList.contains("on")) bugSnapTake(); setTab = tab || setTab; renderSettings(); openSheet("#sh-set"); }
+function openSettings(tab) { if (kidsLocked()) { kidsPin(() => openSettings(tab)); return; } if (!$("#sh-set").classList.contains("on")) bugSnapTake(); setTab = tab || setTab; renderSettings(); openSheet("#sh-set"); }
 $("#b-set").onclick = () => openSettings();
 $("#r-pp").onclick = () => { D.vibrate(12); if (radio.state().state === "paused") radio.resume(); else radio.pause(); };
 $("#r-x").onclick = () => { D.vibrate(12); radio.stop(); };
@@ -5648,6 +5772,8 @@ function renderSettings() {
       <div class="row2"><label class="f" style="flex:1"><span>Ключ</span><input id="stt-key" type="password" value="${esc(S.stt.key)}"></label><label class="f" style="flex:1"><span>Модель</span><input id="stt-model" placeholder="whisper-1" value="${esc(S.stt.model)}"></label></div></div>
       <div class="sw"><div>Микрофон Bluetooth-наушников<small>Наушники с микрофоном подключены — слушаю ими, а не телефоном: можно отойти от телефона.${D.btMicAvailable && D.btMicAvailable() ? " Сейчас подключены." : ""}</small></div>
       <label class="tg"><input type="checkbox" id="bt-mic" ${S.btMic !== false ? "checked" : ""}><i></i></label></div>
+      ${D.web ? "" : `<div class="sw"><div>Понимать английскую речь<small>Скажите по-английски — отвечу по-английски и английским голосом. Распознавание телефона само узнаёт язык фразы (Android 14 и новее, распознавание Google).</small></div>
+      <label class="tg"><input type="checkbox" id="lang2-en" ${S.lang2 === "en" ? "checked" : ""}><i></i></label></div>`}
       <p class="hint">${S.stt.auto ? "Распознавание этого устройства не отвечало — слушает сервер Dewiar. " : ""}${info.recognizer ? (D.web ? "Распознаёт сам браузер (Chrome, Edge) — через интернет. В Safari и на iPhone слушает сервер Dewiar — войдите аккаунтом или кодом." : "Распознавание устройства работает и без интернета, если скачан русский язык (Google → Распознавание речи офлайн).") : D.web && cloudEars() ? "В этом браузере нет распознавания речи — слушает сервер Dewiar." : D.web ? "В этом браузере нет распознавания речи — войдите аккаунтом dewiar.pro (слушать будет сервер Dewiar) или откройте Dewiar в Chrome или Safari." : cloudEars() ? "В устройстве нет распознавания речи — слушает сервер Dewiar." : "В устройстве нет распознавания речи — войдите аккаунтом dewiar.pro (слушать будет сервер Dewiar) или укажите свой сервер."}</p></div>
       <h3>Голос</h3><div class="card">
       <label class="f"><span>Кто говорит</span><select id="tts-eng"><option value="system">${D.web ? "Голос браузера" : "Голос устройства"}</option>${cloudVoice() ? `<option value="cloud">Голос Dewiar — у каждого персонажа свой</option>` : ""}<option value="eleven">ElevenLabs — своим ключом</option><option value="server">Голос моего сервера</option></select></label>
@@ -5726,12 +5852,19 @@ function renderSettings() {
       <p class="hint"><b>1.</b> «Получить ключ» → войдите в Яндекс тем же аккаунтом, что в «Доме с Алисой» → «Разрешить».<br><b>2.</b> Скопируйте ключ, который покажет Яндекс (начинается с y0_), и вставьте сюда.</p>
       <button class="btn w" id="home-auth" style="margin-bottom:10px">Получить ключ</button>
       <label class="f"><span>Ключ от Яндекса</span><input id="home-tok" type="password" placeholder="y0_…"></label><button class="btn p w" id="home-go">Подключить</button>`}<div class="res" id="home-res"></div></div>
+      ${D.web ? "" : `<h3>Home Assistant</h3><div class="card">${haOn() ? `<div class="row2"><span class="res ok" style="flex:1" id="ha-st">Подключён: ${esc(S.ha.url)}</span><button class="btn" id="ha-off">Отключить</button></div>` :
+      `<p class="hint" style="margin-top:0">Свой умный дом на Home Assistant — рядом с Яндексом: «включи свет в спальне», «какая температура на кухне», «запусти сценарий спокойной ночи».</p>
+      <p class="hint">Токен: в Home Assistant — профиль (кружок с вашим именем внизу слева) → вкладка «Безопасность» → «Долгосрочные токены доступа» → «Создать токен». Подключён на компьютере — телефон получит его сам (конвертом, только своим устройствам).</p>
+      <label class="f"><span>Адрес Home Assistant</span><input id="ha-url" placeholder="http://192.168.1.20:8123" value="${esc((S.ha || {}).url || "")}"></label>
+      <label class="f"><span>Долгосрочный токен</span><input id="ha-tok" type="password" placeholder="eyJ…"></label><button class="btn p w" id="ha-go">Подключить</button>`}<div class="res" id="ha-res"></div></div>`}
       <h3>Значок «Записать»</h3><div class="card">${widgetCard()}</div>
       <h3>Синхронизация</h3><div class="card">${syncCard()}</div>
       <h3>Разрешения</h3><div class="card">${perms.map(([p, n]) => `<div class="sw"><div>${n}</div>${D.has(p) ? `<span class="res ok" style="margin:0">есть</span>` : `<button class="btn" data-perm="${p}">Разрешить</button>`}</div>`).join("")}
       <div class="sw"><div>Точные будильники</div>${D.exactAlarms() ? `<span class="res ok" style="margin:0">есть</span>` : `<button class="btn" onclick="Dewiar.openSettings('alarms')">Разрешить</button>`}</div></div>
       <h3>Что я умею</h3><div class="card"><p class="hint" style="margin:0 0 10px">Короткие фразы, которые я понимаю сразу: фонарик, радио, сканер кодов, таймер, план дня, «освободи место»… Нажмите любую — и я сделаю.</p>
         <button class="btn w p" id="tricks-open">Посмотреть</button></div>
+      <h3>Детский режим</h3><div class="card"><p class="hint" style="margin:0 0 10px">${kidsOn() ? `Включён: говорит Совёнок Уго, сегодня ${kidsReport().used} из ${kidsLimit()} мин.` : "Ребёнок говорит с Совёнком Уго: сказки, загадки, «почему?» — только безопасное, время за день и отчёт вам. Выключить — только с PIN."}</p>
+        <button class="btn w${kidsOn() ? "" : " p"}" id="kids-open">${kidsOn() ? "Отчёт и настройки" : "Настроить"}</button></div>
       <h3>Вопрос — ответ и курсы</h3><div class="card"><p class="hint" style="margin:0 0 10px">Ответы на «как…» — с примерами фраз, и короткие курсы: урок в день, пять минут. Или просто спросите Лиру: «как…»</p>
         <div class="row2"><button class="btn" id="qa-open" style="flex:1">Вопрос — ответ</button><button class="btn p" id="course-open" style="flex:1">Курсы</button></div></div>
       <h3>О приложении</h3><div class="card"><div>Dewiar ${esc(info.version || "")} · ${D.web ? "в браузере" : "Android " + esc(info.android || "")}</div><small class="hint" style="margin:2px 0 0;display:block">${esc(info.device || "")}</small>
@@ -5868,6 +6001,7 @@ function wireSettings(info) {
       S.user_name = g("u-name").value.trim(); S.follow = g("follow").value; saveS(); vis(); g("rate-v").textContent = (+S.tts.rate).toFixed(2); };
     $$("#set-body input, #set-body select").forEach(x => x.onchange = saveV);
     g("bt-mic").onchange = () => { S.btMic = g("bt-mic").checked; saveS(); btMicSync(); };
+    if (g("lang2-en")) g("lang2-en").onchange = () => { S.lang2 = g("lang2-en").checked ? "en" : ""; saveS(); lang2Apply(); };
     const rateFill = () => { const r = g("tts-rate"); r.style.setProperty("--p", ((r.value - r.min) / (r.max - r.min) * 100) + "%"); };
     rateFill();
     g("tts-rate").oninput = () => { g("rate-v").textContent = (+g("tts-rate").value).toFixed(2); rateFill(); };
@@ -5880,8 +6014,12 @@ function wireSettings(info) {
       if (/^[0-9a-f]{32}$/i.test(tok)) { r.className = "res bad"; r.textContent = "Это ClientID приложения, а не ключ. Нажмите «Получить ключ» → «Разрешить» — Яндекс покажет ключ (начинается с y0_)"; return; }
       if (tok.length < 20) { r.className = "res bad"; r.textContent = tok ? "Это не похоже на ключ — скопируйте его целиком (начинается с y0_)" : "Сначала «Получить ключ» — Яндекс покажет ключ, вставьте его сюда"; return; }
       const old = S.home.token; S.home.token = tok; r.className = "res"; r.textContent = "проверяю…";
-      try { const i = await homeGet(true); homeSet(tok); r.className = "res ok"; r.textContent = `Готово: устройств ${i.devices.length}, сценариев ${i.scenarios.length}. Скажите «включи свет».`; setTimeout(renderSettings, 1800); }
+      try { const i = await homeYandex(); homeSet(tok); r.className = "res ok"; r.textContent = `Готово: устройств ${i.devices.length}, сценариев ${i.scenarios.length}. Скажите «включи свет».`; setTimeout(renderSettings, 1800); }
       catch (e) { S.home.token = old; r.className = "res bad"; r.textContent = e.message; } };
+    if (g("ha-go")) g("ha-go").onclick = async () => { const r = g("ha-res"); r.className = "res"; r.textContent = "проверяю…";
+      try { await haConnect(g("ha-url").value, g("ha-tok").value); const i = await homeGet(true); r.className = "res ok"; r.textContent = `Готово: устройств ${i.devices.filter(d => d.src === "ha").length}`; setTimeout(renderSettings, 1500); }
+      catch (e) { r.className = "res bad"; r.textContent = e.message; } };
+    if (g("ha-off")) g("ha-off").onclick = () => { haForget(); renderSettings(); };
     if (g("home-auth")) g("home-auth").onclick = () => D.openUrl("https://oauth.yandex.ru/authorize?response_type=token&client_id=" + ((S.home.client_id || "").trim() || YANDEX_CID));
     if (g("home-off")) { homeGet().then(i => g("home-st") && (g("home-st").textContent = `Подключён: устройств ${i.devices.length}`)).catch(e => g("home-st") && (g("home-st").textContent = e.message));
       g("home-off").onclick = () => { homeSet(""); renderSettings(); }; }
@@ -5897,6 +6035,7 @@ function wireSettings(info) {
     g("upd-check").onclick = () => checkUpdate(true);
     if (g("news-open")) g("news-open").onclick = () => { closeSheets(); setTimeout(() => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")), 250); };
     if (g("qa-open")) g("qa-open").onclick = () => openLearn("qa");
+    if (g("kids-open")) g("kids-open").onclick = () => openKids();
     if (g("course-open")) g("course-open").onclick = () => openLearn("course");
     if (g("tricks-open")) g("tricks-open").onclick = () => openTricks();
     if (g("cr-send")) g("cr-send").onclick = () => reportSend("Падение приложения", false, String(info.crash).split("\n")[0]).then(d => toast(`Отчёт №${d.id} отправлен — спасибо!`))
@@ -7335,12 +7474,13 @@ async function ownShare(want) {
   const at = D.web ? 0 : +S.home.at || (S.home.token ? 1 : 0);      // подключили до 0.6.10 — «давно»: свежее с компьютера важнее
   const sk = syncKeyGet();                                          // ключ шифрования синхронизации — тоже только своим
   const wants = (Array.isArray(want) ? want : want ? ["home"] : []).filter(w => !(w === "home" && at) && !(w === "sync_key" && sk));
-  if (!syncCred() || !DC() || (!at && !sk && !wants.length)) return false;
+  if (!syncCred() || !DC() || (!at && !sk && !wants.length && !+(S.ha || {}).at)) return false;
   const k = clKeys(); if (!clLoad().me.pid || Date.now() - (CLS.hello || 0) > 600000) await clHello();
   const t = {}; ((CLS.me || {}).devs || []).forEach(d => { if (d.pub && d.dev && d.dev !== k.dev) t[d.dev] = DC().b64d(d.pub); });
   if (!Object.keys(t).length) return false;                         // других своих устройств пока нет
   t[k.dev] = DC().b64d(k.pub);
-  const body = Object.assign(at ? { home: { token: S.home.token || "", at } } : {}, sk ? { sync_key: { k: sk.k, at: sk.at } } : {}, wants.length ? { want: wants } : {}, { ts: Date.now() });
+  const hat = D.web ? 0 : +(S.ha || {}).at || 0;                  // Home Assistant — адрес и токен, тоже только своим
+  const body = Object.assign(at ? { home: { token: S.home.token || "", at } } : {}, hat ? { ha: { url: S.ha.url || "", token: S.ha.token || "", at: hat } } : {}, sk ? { sync_key: { k: sk.k, at: sk.at } } : {}, wants.length ? { want: wants } : {}, { ts: Date.now() });
   const env = DC().encryptFor(body, DC().b64d(k.priv), k.dev, t);
   await clReq("POST", "/close/self", { env }); return true;
 }
@@ -7386,6 +7526,11 @@ function ownApply(body) {
     const st = syncSt(); if (st && !st.e2eOffHere) { S.sync.e2e = true; saveS(); }
     if (st) { st.rev = 0; st.resealAll = true; st.locked = 0; prefSet("sync", JSON.stringify(st)); }
     syncSoon();
+  }
+  const ha = !D.web && body && body.ha;                              // Home Assistant с компьютера или другого телефона
+  if (ha && typeof ha === "object" && +ha.at > +((S.ha || {}).at || 0) && (!ha.token || /^[\w.-]{20,}$/.test(String(ha.token)))) {
+    S.ha = { url: String(ha.url || ""), token: String(ha.token || ""), at: +ha.at }; homeInfo = null; saveS();
+    plog("info", "🏠 Home Assistant " + (ha.token ? "подключён" : "отключён") + " с другого своего устройства");
   }
   const h = !D.web && body && body.home; if (!h || typeof h !== "object") return;   // браузеру ключ дома ни к чему: Яндекс не пускает запросы со страниц (CORS)
   const tok = String(h.token || ""), at = +h.at || 0;
@@ -7963,7 +8108,7 @@ function lnDo(s) {                               // нажали шаг: фра�
 }
 function lnOffer() {                             // раз в день: урок на пять минут — карточкой
   const st = lnSt(), L = lnOpenNow(), today = lnToday();
-  if (!L || st.offer === false || st.skip === today || st.offered === today || $("#card").innerHTML.trim()) return false;
+  if (kidsOn() || !L || st.offer === false || st.skip === today || st.offered === today || $("#card").innerHTML.trim()) return false;
   st.offered = today; saveS();
   const c = LN_BY[st.course];
   showCard(`<div class="ln-card"><i>${lnSvg(LN_ICON[L.icon] || LN_ICON.chat)}</i><div><small>${esc(c.title)} · урок ${L.day}</small><b>${esc(L.title)}</b>`
@@ -7971,6 +8116,180 @@ function lnOffer() {                             // раз в день: урок
   $("#ln-go").onclick = () => { showCard(""); openLearn("course"); };
   $("#ln-skip").onclick = () => { st.skip = today; saveS(); showCard(""); };
   return true;
+}
+/* ---------- Детский режим на телефоне (28.10, как core/kids.py на компьютере) ----------
+   Ребёнок говорит с Совёнком Уго (window.DEWIAR_KIDS_PERSONA из personas.js): своя короткая подсказка с правилами
+   (kidsSystemPrompt), только безопасные умения (KIDS_TOOLS; runTool не выполнит другое), быстрые команды выключены.
+   Время: минуты за день (будни и выходные свои; минута считается, если в ней был вопрос), «спать» после bedtime до
+   morning — тогда Уго говорит об этом и не отвечает. Отчёт родителю: о чём спрашивал и что было вне правил (KIDS_OFF_RX).
+   Настройки, смена персонажа, «Близкие» и «Душа» — только с PIN родителя (PBKDF2 с солью, pref kids_pin — не в S: S
+   уходит в отчёты); PIN открывает на 15 минут. Состояние дня — файл kids.json ({days: {день: {min, asked, off}}}, 30 дней).
+   S.kids: on, prev_persona, child {name, age}, allow [...], min_weekday, min_weekend, bedtime, morning. */
+const KIDS_ALLOW = { tales: "Сказки и истории", games: "Загадки и игры", homework: "Помощь с уроками", why: "Вопросы «почему?»",
+  music: "Детская музыка", draw: "Рисунки по описанию" };
+const KIDS_TOOLS_BASE = ["calc", "world_time", "weather", "set_reminder", "list_reminders", "cancel_reminder", "play_radio", "radio_control",
+  "set_volume", "save_note", "find_notes"];
+const KIDS_OFF_RX = /(?:^|[^а-яё])(купи|закажи|оплати|заплати|переведи\s+деньг|подписк|пополни|удали|сотри|выключи\s+(?:телефон|компьютер)|перезагрузи|позвони|набери|напиши\s+(?:сообщение|в\s+телеграм|в\s+вк|письмо)|отправь|пароль|номер\s+карты|адрес\s+(?:наш|мой|дома)|убить|убей|оружи|пистолет|кров[ьи]\s|страшн\S*\s+(?:видео|истори)|18\s*\+|секс|голы[ей]|наркот|сигарет|алкогол|пиво|водк)/i;
+function kidsOn() { return !!(typeof S !== "undefined" && S && S.kids && S.kids.on); }
+function kidsConf() {
+  return Object.assign({ allow: Object.keys(KIDS_ALLOW), min_weekday: 60, min_weekend: 120, bedtime: "20:30", morning: "07:00", child: {} }, S.kids || {});
+}
+function kidsTools() { const a = new Set(KIDS_TOOLS_BASE); if ((kidsConf().allow || []).includes("draw")) a.add("show_images"); return a; }
+let kidsUnlockUntil = 0, kidsTries = [];
+const kidsUnlocked = () => Date.now() < kidsUnlockUntil;
+const kidsLocked = () => kidsOn() && !kidsUnlocked();
+const kidsDayKey = (d) => { d = d || new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+function kidsData() { try { const d = JSON.parse(fileGet("kids.json") || "{}"); return d && d.days ? d : { days: {} }; } catch (e) { return { days: {} }; } }
+function kidsToday(data) {
+  const days = data.days, k = kidsDayKey(), old = kidsDayKey(new Date(Date.now() - 30 * 864e5));
+  Object.keys(days).filter(x => x < old).forEach(x => delete days[x]);
+  return days[k] = days[k] || { min: [], asked: [], off: [] };
+}
+function kidsLimit() { const c = kidsConf(), wd = new Date().getDay(); return +(wd === 0 || wd === 6 ? c.min_weekend : c.min_weekday) || 0; }
+function kidsUsed() { return new Set(kidsToday(kidsData()).min).size; }
+function kidsAllowed() {                               // -> [можно ли, фраза Уго, если нельзя]
+  if (!kidsOn()) return [true, ""];
+  const c = kidsConf(), d = new Date(), hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  if (c.bedtime && c.morning && (hm >= c.bedtime || hm < c.morning))
+    return [false, `Уже пора спать! Я тоже ложусь. Поговорим завтра утром — после ${c.morning}. Спокойной ночи!`];
+  if (kidsUsed() >= kidsLimit()) return [false, "На сегодня наше время закончилось. Давай отдохнём, поиграем без экрана — а завтра снова поболтаем!"];
+  return [true, ""];
+}
+function kidsTouch(text) {                             // вопрос: минута считается, первые слова — в отчёт; вне правил — отдельно
+  const data = kidsData(), d = kidsToday(data), now = new Date(), m = pad(now.getHours()) + ":" + pad(now.getMinutes());
+  const off = KIDS_OFF_RX.test(String(text || "").toLowerCase());
+  if (!d.min.includes(m)) d.min.push(m);
+  const q = String(text || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (q) { d.asked = d.asked.concat([{ t: m, q }]).slice(-200); if (off) d.off = d.off.concat([{ t: m, q }]).slice(-50); }
+  fileSave("kids.json", JSON.stringify(data));
+  if (off) plog("info", "🧒 детский режим: просьба вне правил — в отчёт родителю");
+  return off;
+}
+function kidsReport() {
+  const d = kidsData().days[kidsDayKey()] || { min: [], asked: [], off: [] };
+  return { used: new Set(d.min).size, limit: kidsLimit(), asked: (d.asked || []).slice(-50), off: d.off || [] };
+}
+function kidsSystemPrompt() {
+  const p = persona(), c = kidsConf(), ch = c.child || {};
+  const who = (ch.name || "ребёнок") + (ch.age ? `, ${ch.age} лет` : ""), allow = (c.allow || []).filter(k => KIDS_ALLOW[k]).map(k => KIDS_ALLOW[k]);
+  const hw = (c.allow || []).includes("homework");
+  return [p.character || "", window.DEWIAR_VOICE_RULES || "Отвечай коротко, живой речью, по-русски.", (window.DEWIAR_GENDER_RULES || {})[p.gender] || "",
+    "ДЕТСКИЙ РЕЖИМ. С тобой говорит ребёнок: " + who + ". Говори просто, тепло и коротко — две-четыре фразы, слова, понятные в этом "
+    + "возрасте; хвали за вопросы. Можно: " + (allow.join(", ") || "просто болтать") + ". "
+    + (hw ? "Уроки — не давай готовый ответ: подскажи шаг и спроси, как ребёнок думает, чтобы он решил сам. "
+      : "С уроками не помогаешь — скажи, что об этом лучше спросить маму или папу. ")
+    + "Нельзя: взрослые, страшные, жестокие темы, болезни и смерть в подробностях — мягко переведи разговор на другое интересное. "
+    + "Не покупаешь, не оплачиваешь, не звонишь и не пишешь незнакомым, ничего не делаешь в телефоне, не спрашиваешь и не запоминаешь "
+    + "адрес, телефон, пароли — на такую просьбу скажи по-доброму, что это можно только вместе с мамой или папой. Если ребёнок "
+    + "расстроен, боится или рассказывает, что его обижают, — поддержи и посоветуй сразу рассказать маме, папе или другому взрослому, "
+    + "которому он доверяет.",
+    "Умения: напоминания и таймеры (set_reminder), счёт (calc), погода (weather), который час в другом городе (world_time), радио (play_radio, radio_control), "
+    + "громкость (set_volume), заметки (save_note, find_notes)" + ((c.allow || []).includes("draw") ? ", картинки к рассказу (show_images)" : "") + ". Другого нет.",
+    "Текущие дата и время — в справке в начале последнего сообщения."].filter(Boolean).join("\n\n");
+}
+/* PIN родителя: PBKDF2-SHA256, 120 000 кругов, соль 16 байт; не больше 5 неверных за 5 минут */
+async function kidsHash(pin, salt) {
+  const enc = new TextEncoder(), sb = Uint8Array.from(salt.match(/../g).map(h => parseInt(h, 16)));
+  if (window.crypto && crypto.subtle) {
+    const key = await crypto.subtle.importKey("raw", enc.encode(String(pin)), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: sb, iterations: 120000, hash: "SHA-256" }, key, 256);
+    return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  throw new Error("в этом браузере нет шифрования — PIN не задать");
+}
+const kidsHasPin = () => /:/.test(prefGet("kids_pin") || "");
+async function kidsSetPin(pin) {
+  pin = String(pin || "").trim();
+  if (!/^\d{4,8}$/.test(pin)) throw new Error("PIN — от 4 до 8 цифр");
+  const salt = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, "0")).join("");
+  prefSet("kids_pin", salt + ":" + await kidsHash(pin, salt));
+}
+async function kidsCheckPin(pin) {
+  const st = prefGet("kids_pin") || "", now = Date.now();
+  kidsTries = kidsTries.filter(t => now - t < 300e3);
+  if (kidsTries.length >= 5) throw new Error("Слишком много попыток — подождите 5 минут");
+  if (!st.includes(":")) return false;
+  const [salt, h] = st.split(":");
+  const ok = (await kidsHash(String(pin || "").trim(), salt)) === h;
+  if (!ok) kidsTries.push(now);
+  return ok;
+}
+let kidsAfterPin = null;
+function kidsPin(then) {                               // родитель вводит PIN — открыто на 15 минут, затем then()
+  kidsAfterPin = then || null;
+  $("#kpin-body").innerHTML = `<p class="hint" style="margin:0 2px 12px">Детский режим включён. Настройки, персонажи и «Близкие» — только для взрослых.</p>
+    <label class="f"><span>PIN родителя</span><input id="kpin-in" type="password" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+    <button class="btn p w" id="kpin-go">Открыть</button><div class="res" id="kpin-res"></div>`;
+  const go = async () => {
+    const r = $("#kpin-res");
+    try {
+      if (!await kidsCheckPin($("#kpin-in").value)) { r.className = "res err"; r.textContent = "Неверный PIN"; $("#kpin-in").value = ""; return; }
+      kidsUnlockUntil = Date.now() + 15 * 60e3; closeSheets();
+      const f = kidsAfterPin; kidsAfterPin = null; if (f) setTimeout(f, 150);
+    } catch (e) { r.className = "res err"; r.textContent = e.message; }
+  };
+  $("#kpin-go").onclick = go; $("#kpin-in").onkeydown = (e) => { if (e.key === "Enter") go(); };
+  setTimeout(() => { openSheet("#sh-kpin"); setTimeout(() => $("#kpin-in") && $("#kpin-in").focus(), 250); }, 30);
+}
+// взрослые кнопки — через PIN (capture: раньше их собственных onclick)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("#b-set, #who, #b-close, #b-soul");
+  if (!b || !kidsLocked()) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  kidsPin(() => b.click());
+}, true);
+function kidsApply() {
+  document.body.classList.toggle("kids", kidsOn());
+  try { applyPersona(); } catch (e) { }
+}
+function kidsSetOn(on) {
+  if (on) { S.kids = Object.assign({}, S.kids || {}, { on: true, prev_persona: kidsOn() ? (S.kids.prev_persona || S.persona) : S.persona }); kidsUnlockUntil = 0; }
+  else { const prev = (S.kids || {}).prev_persona; S.kids = Object.assign({}, S.kids || {}, { on: false }); if (prev && PERSONAS.some(p => p.id === prev)) S.persona = prev; }
+  saveS(); kidsApply();
+  plog("info", on ? "🧒 детский режим включён" : "🧒 детский режим выключен");
+}
+/* лист «Детский режим»: настройки, PIN, включить/выключить, отчёт за сегодня */
+function openKids() { kidsRender(); setTimeout(() => openSheet("#sh-kids"), 30); }
+function kidsRender() {
+  const c = kidsConf(), ch = c.child || {}, on = kidsOn(), rep = kidsReport(), hasPin = kidsHasPin();
+  const chips = Object.entries(KIDS_ALLOW).map(([k, n]) => `<button class="kd-chip${(c.allow || []).includes(k) ? " on" : ""}" data-k="${k}" aria-pressed="${(c.allow || []).includes(k)}">${esc(n)}</button>`).join("");
+  const ugo = window.DEWIAR_KIDS_PERSONA || {};
+  $("#kids-body").innerHTML = (on ? `<div class="card kd-on"><div class="kd-st"><i style="${ugo.avatar ? `background-image:url('${ugo.avatar}')` : ""}"></i><div><b>Включён — говорит ${esc(ugo.name || "Совёнок Уго")}</b>`
+      + `<small>Сегодня ${rep.used} из ${rep.limit} мин${c.bedtime ? ` · спать в ${esc(c.bedtime)}` : ""}</small></div></div>`
+      + `<div class="ln-bar"><i style="width:${Math.min(100, Math.round(rep.used / Math.max(1, rep.limit) * 100))}%"></i></div></div>`
+      + `<h3>Сегодня спрашивал</h3><div class="card kd-rep">${rep.asked.length ? rep.asked.slice().reverse().map(a => `<div class="kd-q${rep.off.some(o => o.t === a.t && o.q === a.q) ? " off" : ""}"><span>${esc(a.t)}</span>${esc(a.q)}</div>`).join("")
+        : `<p class="hint" style="margin:0">Пока ни одного вопроса.</p>`}${rep.off.length ? `<p class="hint kd-offn">Вне правил: ${rep.off.length} — отмечены. Уго такие просьбы не выполняет и советует спросить вас.</p>` : ""}</div>`
+    : `<div class="card kd-intro"><div class="kd-st"><i style="${ugo.avatar ? `background-image:url('${ugo.avatar}')` : ""}"></i><div><b>${esc(ugo.name || "Совёнок Уго")} — друг ребёнка</b>`
+      + `<small>Сказки, загадки и «почему?» — только безопасное. Время за день, «пора спать» и отчёт вам. Выключить — только с PIN.</small></div></div></div>`)
+    + `<h3>Ребёнок</h3><div class="card"><div class="row2"><label class="f" style="flex:2"><span>Имя</span><input id="kd-name" value="${esc(ch.name || "")}" placeholder="Миша"></label>`
+    + `<label class="f" style="flex:1"><span>Возраст</span><input id="kd-age" type="number" min="3" max="17" value="${esc(ch.age || "")}" placeholder="7"></label></div></div>`
+    + `<h3>Можно</h3><div class="card"><div class="kd-chips">${chips}</div></div>`
+    + `<h3>Время</h3><div class="card"><div class="row2"><label class="f" style="flex:1"><span>В будни, минут</span><input id="kd-wd" type="number" min="5" max="600" value="${+c.min_weekday}"></label>`
+    + `<label class="f" style="flex:1"><span>В выходные</span><input id="kd-we" type="number" min="5" max="600" value="${+c.min_weekend}"></label></div>`
+    + `<div class="row2"><label class="f" style="flex:1"><span>Спать с</span><input id="kd-bed" type="time" value="${esc(c.bedtime || "")}"></label>`
+    + `<label class="f" style="flex:1"><span>До утра</span><input id="kd-morn" type="time" value="${esc(c.morning || "")}"></label></div></div>`
+    + `<h3>PIN родителя</h3><div class="card">${hasPin ? `<p class="hint" style="margin:0 0 8px">PIN задан. Сменить — введите новый дважды.</p>` : `<p class="hint" style="margin:0 0 8px">4–8 цифр. Без него режим не выключить — ребёнок не выйдет сам.</p>`}`
+    + `<div class="row2"><label class="f" style="flex:1"><span>${hasPin ? "Новый PIN" : "PIN"}</span><input id="kd-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>`
+    + `<label class="f" style="flex:1"><span>Ещё раз</span><input id="kd-pin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label></div></div>`
+    + `<div class="res" id="kd-res"></div>`
+    + (on ? `<button class="btn w" id="kd-save">Сохранить</button><button class="btn w ghost" id="kd-off" style="margin-top:8px">Выключить детский режим</button>`
+      : `<button class="btn p w" id="kd-on">Включить детский режим</button>`);
+  $$(".kd-chip").forEach(b => b.onclick = () => { b.classList.toggle("on"); b.setAttribute("aria-pressed", b.classList.contains("on")); });
+  const res = (t, bad) => { const r = $("#kd-res"); r.className = "res" + (bad ? " err" : " ok"); r.textContent = t; };
+  const save = async () => {
+    const p1 = $("#kd-pin").value.trim(), p2 = $("#kd-pin2").value.trim();
+    if (p1 || p2) { if (p1 !== p2) throw new Error("PIN не совпал — введите одинаково дважды"); await kidsSetPin(p1); }
+    const wd = Math.max(5, Math.min(600, +$("#kd-wd").value || 60)), we = Math.max(5, Math.min(600, +$("#kd-we").value || 120));
+    S.kids = Object.assign({}, S.kids || {}, { child: { name: $("#kd-name").value.trim(), age: +$("#kd-age").value || "" },
+      allow: $$(".kd-chip.on").map(b => b.dataset.k), min_weekday: wd, min_weekend: we, bedtime: $("#kd-bed").value, morning: $("#kd-morn").value });
+    saveS();
+  };
+  if ($("#kd-on")) $("#kd-on").onclick = async () => {
+    try { await save(); if (!kidsHasPin()) throw new Error("Сначала задайте PIN родителя"); kidsSetOn(true); closeSheets();
+      toast("Детский режим включён — говорит Совёнок Уго", 3500); } catch (e) { res(e.message, true); }
+  };
+  if ($("#kd-save")) $("#kd-save").onclick = async () => { try { await save(); res("Сохранено"); } catch (e) { res(e.message, true); } };
+  if ($("#kd-off")) $("#kd-off").onclick = () => { kidsSetOn(false); closeSheets(); toast("Детский режим выключен", 2500); };
 }
 /* лист «Близкие» */
 const clTime = (ts) => { const d = new Date(ts), now = new Date(), hm = pad(d.getHours()) + ":" + pad(d.getMinutes()); return d.toDateString() === now.toDateString() ? hm : d.getDate() + " " + MON[d.getMonth()].slice(0, 3) + ", " + hm; };
@@ -8937,6 +9256,8 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
   welcomeArm(!!it);                                // открыли кнопкой помощника — сразу слушаем, не здороваемся
   if (S.llm.base_url && !it) needPerm(MIC);
   setTimeout(hReady, 0);                           // экран и персонаж готовы — запуск записан для «Здоровья»
+  lang2Apply();                                    // второй язык — распознаванию телефона (Speech.java)
+  kidsApply();                                     // детский режим: Уго и взрослые кнопки — за PIN
   setTimeout(() => { try { doneInbox(); } catch (e) { } }, 300);   // «Сделано ✓» из уведомлений, пока приложение было закрыто
   setTimeout(() => { try { newsCheck(); } catch (e) { } }, 1200);  // обновились — «Что нового»
   setTimeout(() => { try { if (!document.querySelector(".sheet.on") && window.examCleanCheck) examCleanCheck(); } catch (e) { } }, 4000);   // следы старых экзаменов

@@ -382,27 +382,32 @@ class RemoteMixin:
         №194: «произношение фраз на английском — жесть»: русский голос читал их русскими звуками). Голос сервера и
         ElevenLabs многоязычные — им как раньше. Английского голоса ещё нет — один раз скачиваем в фоне, а пока читаем
         по-русски. Частота — как у первого куска (иначе плеер перезапускался бы между кусками)."""
-        from tts import EN_VOICES, resample, split_en
-        parts = split_en(text) if not isinstance(eng, RemoteTTS) and self.s.get("tts", "english") is not False else [("ru", text)]
-        en_id = EN_VOICES["male" if voice.get("_gender") == "male" else "female"]
-        if all(lang == "ru" for lang, _ in parts) or not self.piper.has(en_id):
-            if any(lang == "en" for lang, _ in parts):
-                self._en_voice_fetch(en_id)
+        from tts import LANG_VOICES, resample, split_lang
+        parts = split_lang(text) if not isinstance(eng, RemoteTTS) and self.s.get("tts", "english") is not False else [("ru", text)]
+        g = "male" if voice.get("_gender") == "male" else "female"
+        vid = {lang: LANG_VOICES[lang][g] for lang in LANG_VOICES}
+        missing = {lang for lang, _ in parts if lang != "ru" and not self.piper.has(vid[lang])}
+        for lang in missing:
+            self._en_voice_fetch(vid[lang])
+        if all(lang == "ru" or lang in missing for lang, _ in parts):
             yield from eng.synth(pronounce(text, remote=isinstance(eng, RemoteTTS)), voice, sp)
             return
         target = None
         for lang, seg in parts:
-            gen = (self.piper.synth(seg.strip(), dict(voice, piper=en_id, length_scale=1.0), sp, norm=False) if lang == "en"
-                   else eng.synth(pronounce(seg), voice, sp))
+            gen = (self.piper.synth(seg.strip(), dict(voice, piper=vid[lang], length_scale=1.0), sp, norm=False)
+                   if lang != "ru" and lang not in missing else eng.synth(pronounce(seg), voice, sp))
             for rate, pcm in gen:
                 target = target or rate
                 yield target, resample(pcm, rate, target)
 
     def _en_voice_fetch(self, en_id):
-        """Скачать английский голос Piper (~60 МБ) в фоне — один раз за запуск; стоп-кран «ничего в интернет» — не качаем."""
-        if getattr(self, "_en_fetching", None) == en_id:
+        """Скачать голос Piper второго языка (английский, немецкий; ~60 МБ) в фоне — один раз за запуск; стоп-кран «ничего
+        в интернет» — не качаем."""
+        if not isinstance(getattr(self, "_en_fetching", None), set):
+            self._en_fetching = set()
+        if en_id in self._en_fetching:
             return
-        self._en_fetching = en_id
+        self._en_fetching.add(en_id)
         import egress
 
         def run():

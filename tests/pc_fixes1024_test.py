@@ -33,7 +33,8 @@ eng = (ROOT / "core/engine.py").read_text(encoding="utf-8")
 ok('"engine": "piper" if self.s.get("device", "light") else "vosk", "v2": True' in eng, "лёгкий режим — Piper остаётся (Vosk TTS там 17–36 с на фразу)")
 
 # №218: модель имён Vosk на медленной связи — докачка с места обрыва, как у голосов
-ok("download(url, zip_path, sha256=VOSK_SHA256, tries=6)" in (ROOT / "core/listen.py").read_text(encoding="utf-8"), "модель имён докачивается (Range), а не с нуля")
+_li = (ROOT / "core/listen.py").read_text(encoding="utf-8")   # 0.53: скачивание — общее для моделей Vosk (ensure_model)
+ok("download(url, zip_path, sha256=sha256, tries=6)" in _li and "ensure_model(VOSK_NAME, VOSK_URLS, VOSK_SHA256" in _li, "модель имён докачивается (Range), а не с нуля")
 
 # пакет 24.10: «No module named 'sounddevice'» — человеку понятная записка, что делать
 ok('isinstance(e, ImportError) and "sounddevice" in str(e)' in ea and "pipewire-pulse" in ea, "нет звуковой прослойки — записка «что установить», а не трассировка")

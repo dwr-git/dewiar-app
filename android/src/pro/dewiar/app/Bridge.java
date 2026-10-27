@@ -414,6 +414,14 @@ public final class Bridge {
         a.tts.speak(id, text, rate, pitch, voice, add);
     }
 
+    /** Фраза на другом языке (en-US): голос телефона этого языка, если он есть; нет — обычный (Tts.speak). */
+    @JavascriptInterface public void speakLang(String id, String text, float rate, float pitch, String voice, boolean add, String lang) {
+        a.tts.speak(id, text, rate, pitch, voice, add, lang);
+    }
+
+    /** Второй язык распознавания: "en" — распознаватель сам узнаёт язык фразы (русский или английский), "" — только русский. */
+    @JavascriptInterface public void sttLang2(String l) { a.speech.lang2 = l == null ? "" : l; }
+
     @JavascriptInterface public void speakRemote(String id, String url, String key, String body) { a.tts.speakRemote(id, url, key, body); }
     /** То же, но с запасным голосом телефона внутри очереди (fb — {text, rate, pitch, voice}): без двух голосов разом. */
     @JavascriptInterface public void speakRemoteFb(String id, String url, String key, String body, String fb) { a.tts.speakRemote(id, url, key, body, fb); }

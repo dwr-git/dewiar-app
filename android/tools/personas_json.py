@@ -28,6 +28,18 @@ for pid, p in P.BUILTIN.items():
                 "focus": p.get("focus", ""), "aliases": p.get("aliases") or p.get("wake") or [p["name"].lower()],
                 "voice_remote": (p.get("voice") or {}).get("remote", ""), "avatar": av, "live": p.get("live", "")})
 print("window.DEWIAR_PERSONAS = " + json.dumps(out, ensure_ascii=False) + ";")
+# детский режим (телефон, 28.10): Совёнок Уго из галереи — друг ребёнка
+k = P.GALLERY["ugo"]
+kav = ""
+for ext, mime in ((".webp", "image/webp"), (".png", "image/png"), (".jpg", "image/jpeg")):
+    f = root / "data" / "avatars" / f"ugo{ext}"
+    if f.exists():
+        kav = f"data:{mime};base64," + base64.b64encode(f.read_bytes()).decode()
+        break
+print("window.DEWIAR_KIDS_PERSONA = " + json.dumps({"id": "ugo", "name": k["name"], "gender": k.get("gender", "male"), "style": k.get("style", "aura"),
+      "color": k.get("color", "#8A6BD8"), "role": k.get("role", ""), "tagline": k.get("tagline", ""), "skills": k.get("skills", []),
+      "character": k.get("character", ""), "focus": k.get("focus", ""), "aliases": k.get("aliases") or k.get("wake") or [],
+      "voice_remote": (k.get("voice") or {}).get("remote", ""), "avatar": kav, "kids": True}, ensure_ascii=False) + ";")
 print("window.DEWIAR_VOICE_RULES = " + json.dumps(P.VOICE_RULES, ensure_ascii=False) + ";")
 print("window.DEWIAR_TALK_RULES = " + json.dumps(P.TALK_RULES, ensure_ascii=False) + ";")
 import gender as G  # noqa: E402

@@ -19,7 +19,7 @@ const QA_OPEN = { reminders: "reminders", "notes-memory": "notes", "calendar-mon
   "close-invite": "close", "near-meet": "close", family: "family", team: "team", kids: "kids", music: "music", tasks: "tasks", prompter: "prompter",
   "folder-docs": "folder", personas: "personas", "brain-account": "brain", voices: "voice", look: "look", hands: "hands",
   "home-tv-mail-calendars": "connect", "home-assistant": "connect", "telegram-max": "connect", "skills-mcp-servers": "skills", sync: "dw",
-  privacy: "safety", "safety-backup": "safety", features: "features", tricks: "tricks", "soul-diary": "soul", talk: "ears", "chat-pc": "chat",
+  privacy: "safety", "safety-backup": "safety", english: "ears", features: "features", tricks: "tricks", "soul-diary": "soul", talk: "ears", "chat-pc": "chat",
   "invite-friend": "ref", snapshot: "home", play: "home", "report-problem": "about", troubleshooting: "about" };
 const QA_WHERE = { pc: "компьютер", phone: "телефон" };
 const qaWord = (n, a, b, c) => `${n} ${plural(n, a, b, c)}`;

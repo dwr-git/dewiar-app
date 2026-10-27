@@ -88,6 +88,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.vad = None
         self.vosk_dir = None                  # папка модели Vosk — когда слух поднялся (до того «сохранить персонажа» не падает, №58)
         self.vosk_stt = None
+        from lang2 import English
+        self.english = English(MODELS_DIR, DATA_DIR)  # второй язык: английская речь (stt.english)
         self.stt = None                  # распознаватель — появится, когда загрузится модель (до этого настройки сохраняются без него)
         self.decoys = []
         self.restart_audio = threading.Event()

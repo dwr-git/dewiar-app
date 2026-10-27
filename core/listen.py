@@ -65,23 +65,30 @@ def ensure_vosk(data_dir: Path, models_dir: Path, on_status=None, mirror=None) -
     -> папка модели; RuntimeError, если не скачалась ни с одного адреса."""
     if os.environ.get("DEWIAR_VOSK_OFF") == "1":   # проверки: как будто модель не скачалась (tests/hearing_nonames_test.py)
         raise RuntimeError("модель имён выключена для проверки (DEWIAR_VOSK_OFF)")
-    model_dir = models_dir / VOSK_NAME
+    return ensure_model(VOSK_NAME, VOSK_URLS, VOSK_SHA256, data_dir, models_dir, on_status, mirror)
+
+
+def ensure_model(name, urls, sha256, data_dir: Path, models_dir: Path, on_status=None, mirror=None,
+                 label="распознавания имён (45 МБ, один раз)") -> Path:
+    """Модель Vosk name: распакована → zip в data_dir → скачать (urls, свой сайт mirror — первым) и распаковать.
+    Общая для модели имён и английской (lang2.py)."""
+    model_dir = models_dir / name
     if vosk_complete(model_dir):
         return model_dir
-    zip_path = data_dir / f"{VOSK_NAME}.zip"
+    zip_path = data_dir / f"{name}.zip"
     if not zip_path.exists():
-        zip_path = models_dir / f"{VOSK_NAME}.zip"
+        zip_path = models_dir / f"{name}.zip"
         models_dir.mkdir(parents=True, exist_ok=True)
         last = None
-        urls = ([mirror] if mirror else []) + [u for u in VOSK_URLS if u != mirror]   # свой сайт — первым
+        urls = ([mirror] if mirror else []) + [u for u in urls if u != mirror]   # свой сайт — первым
         for url in urls:
             try:
                 if on_status:
-                    on_status("Скачиваю модель распознавания имён (45 МБ, один раз)…")
+                    on_status(f"Скачиваю модель {label}…")
                 # №218 (24.10): на медленной связи «The read operation timed out» — и каждый раз с нуля. Теперь как голоса:
                 # обрыв — докачиваем с того же места (updater.download, Range), до 6 попыток, сумма сверяется
                 from updater import download
-                download(url, zip_path, sha256=VOSK_SHA256, tries=6)
+                download(url, zip_path, sha256=sha256, tries=6)
                 break
             except Exception as e:  # noqa: BLE001
                 last = e

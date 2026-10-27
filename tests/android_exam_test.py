@@ -46,7 +46,8 @@ SETUP = """() => {
     const body = typeof o.body === "string" ? JSON.parse(o.body) : o.body; window._seen.push(body);
     const sys = body.messages[0].content || "", last = body.messages[body.messages.length - 1];
     const lastText = typeof last.content === "string" ? last.content : "";
-    const userText = [...body.messages].reverse().find(x => x.role === "user").content;
+    const userFull = [...body.messages].reverse().find(x => x.role === "user").content;   // справка к вопросу — до «(Сообщение пользователя)»:
+    const userText = String(userFull).split("(Сообщение пользователя)").pop();         // в ней «что было недавно» — прошлые просьбы
     let content = "", calls = [];
     if (sys.startsWith("Ты — строгий и справедливый экзаменатор")) content = JSON.stringify({ score: 8, why: "по делу" });
     else if (last.role === "tool") content = "Сделала.";

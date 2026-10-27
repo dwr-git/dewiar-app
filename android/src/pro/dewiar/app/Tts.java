@@ -94,6 +94,24 @@ public final class Tts {
         } catch (Throwable e) { ev("tts_done", id); }
     }
 
+    /** Фраза на другом языке (lang — «en-US»): язык движка — на эту фразу (он запоминается в самой просьбе), затем снова
+     *  русский. Голоса этого языка нет — обычная фраза. */
+    public void speak(String id, String text, float rate, float pitch, String voice, boolean add, String lang) {
+        if (lang == null || lang.isEmpty() || lang.startsWith("ru") || !ready) { speak(id, text, rate, pitch, voice, add); return; }
+        Locale l = Locale.forLanguageTag(lang);
+        try {
+            if (tts.isLanguageAvailable(l) < TextToSpeech.LANG_AVAILABLE) { speak(id, text, rate, pitch, voice, add); return; }
+            if (BtMic.isOn()) BtMic.offNow(ctx);
+            tts.setSpeechRate(rate <= 0 ? 1f : rate);
+            tts.setPitch(pitch <= 0 ? 1f : pitch);
+            tts.setLanguage(l);
+            Bundle p = new Bundle();
+            p.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, id);
+            tts.speak(text, add ? TextToSpeech.QUEUE_ADD : TextToSpeech.QUEUE_FLUSH, p, id);
+        } catch (Throwable e) { ev("tts_done", id); }
+        finally { try { tts.setLanguage(new Locale("ru", "RU")); } catch (Throwable ignored) { } }
+    }
+
     public void stop() {
         gen++;                                            // фразы, что ещё в очереди, — не играть
         for (java.util.concurrent.CountDownLatch l : waits.values()) l.countDown();   // запасная фраза в очереди — не ждать

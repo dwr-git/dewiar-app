@@ -52,6 +52,7 @@ public final class Speech {
     volatile int extraMs = 0;
     /** «Удерживайте и говорите»: распознаватель просят ждать паузу подольше (меньше перезапусков посреди речи). */
     volatile boolean longPause = false;
+    volatile String lang2 = "";                      // второй язык ("en"): распознаватель сам узнаёт язык фразы (Android 14+)
 
     // ---------- «Триньк» системного распознавателя (отзыв 13.10: «пока держу кнопку — тринькает на каждой паузе») ----------
     // Google-распознаватель сам играет звук в начале и в конце каждого сеанса, а при удержании сеансы идут один за другим.
@@ -181,7 +182,15 @@ public final class Speech {
                     // и «только по-русски» — для распознавателей, что берут язык системы (отчёт №253: телефон без русской
                     // прошивки слышал английский и китайский)
                     i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ru-RU");
-                    i.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true);
+                    if ("en".equals(lang2)) {
+                        // второй язык (28.10): русский или английский — распознаватель решает сам (Android 14+, у Google — да;
+                        // старые распознаватели эти пожелания пропускают и слушают по-русски, как раньше)
+                        ArrayList<String> langs = new ArrayList<>(java.util.Arrays.asList("ru-RU", "en-US"));
+                        i.putExtra("android.speech.extra.ENABLE_LANGUAGE_DETECTION", true);
+                        i.putStringArrayListExtra("android.speech.extra.LANGUAGE_DETECTION_ALLOWED_LANGUAGES", langs);
+                        i.putExtra("android.speech.extra.ENABLE_LANGUAGE_SWITCH", "balanced");
+                        i.putStringArrayListExtra("android.speech.extra.LANGUAGE_SWITCH_ALLOWED_LANGUAGES", langs);
+                    } else i.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true);
                     i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
                     i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
                     // пожелание (не все распознаватели слушают): дать договорить — человек вспоминает имя или слово

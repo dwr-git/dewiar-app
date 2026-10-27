@@ -26,7 +26,7 @@ ok(sp.count("btUp(g)") >= 3 and "VOICE_COMMUNICATION" in sp and sp.count("BtMic.
    "Speech: оба пути слушания включают микрофон наушников и выключают его после")
 ok("setCommunicationDevice" in bt and "startBluetoothSco" in bt and "TYPE_BLUETOOTH_SCO" in bt and "getMethod(" in bt,
    "BtMic: Android 12+ — setCommunicationDevice (отражением), раньше — startBluetoothSco")
-ok(tts.count("BtMic.offNow(ctx)") == 2, "Tts: перед ответом голосом — канал гарнитуры выключается (оба пути)")
+ok(tts.count("BtMic.offNow(ctx)") == 3, "Tts: перед ответом голосом — канал гарнитуры выключается (все пути: голос устройства, фраза на другом языке, голос сервера)")
 ok("public void btMic(boolean on)" in br and "btMicAvailable" in br, "Bridge: настройка и проверка наушников")
 ok('android.permission.BLUETOOTH" android:maxSdkVersion="30"' in (ROOT / "android/AndroidManifest.xml").read_text(), "манифест: BLUETOOTH для старых Android")
 
