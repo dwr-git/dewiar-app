@@ -3421,7 +3421,7 @@ function toolSpecs() {
     { name: "answer_task", description: "Ответить на вопрос задачи, которая «ждёт ответа»: text — ответ пользователя; name — часть названия (пусто — единственная ждущая).", parameters: O({ name: STR, text: STR }, ["text"]) });
   if (S.sync.on && syncCred() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное».",
     parameters: O({ title: STR, goal: STR }, ["goal"]) });
-  if (S.home.token && !D.web) t.push({ name: "smart_home", description: "Умный дом Яндекса: action list|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
+  if (S.home.token && !D.web) t.push({ name: "smart_home", description: "Умный дом Яндекса: action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
     parameters: O({ action: { type: "string", enum: ["list", "on", "off", "brightness", "brighter", "dimmer", "temperature", "scenario"] }, target: STR, value: NUM }, ["action"]) });
   return D.web ? t.filter(x => !WEB_NO_TOOLS.has(x.name)) : t;
 }
@@ -4463,8 +4463,31 @@ async function homeAct(devs, op, value) {
   if (!acts.length) throw new Error("эти устройства так не умеют");
   await homeReq("POST", "/devices/actions", { devices: acts }); homeT = 0; return acts.length;
 }
+/* Датчики (отчёт №362, 27.10: «не может сказать температуру в спальне»): показания — в properties устройства. */
+const HPROPS = { temperature: ["температура", "°"], humidity: ["влажность", "%"], co2_level: ["углекислый газ", " ppm"], pressure: ["давление", " мм рт. ст."],
+  illumination: ["освещённость", " лк"], "pm2.5_density": ["пыль PM2.5", " мкг/м³"], battery_level: ["заряд", "%"], power: ["мощность", " Вт"] };
+const HUNITS = { "unit.pressure.pascal": " Па", "unit.pressure.atm": " атм", "unit.pressure.bar": " бар", "unit.temperature.kelvin": " K" };
+const hprops = (d) => (d.properties || []).filter(p => p.type === "devices.properties.float" && p.state && p.state.value != null)
+  .map(p => ({ i: p.state.instance || (p.parameters || {}).instance, v: p.state.value, u: (p.parameters || {}).unit || "", t: p.last_updated }));
+function hval(p, named) { const [n, u] = HPROPS[p.i] || [p.i, ""]; const r = Math.round(Number(p.v) * 10) / 10; return (named ? n + " " : "") + String(r).replace(".", ",") + (HUNITS[p.u] || u); }
+/* Показания в комнате (или у устройства с таким названием): сначала датчики, по одному на вид. -> { found, vals } */
+function homeRead(target, what, info) {
+  const words = hw(target).filter(w => !HSKIP.has(w));
+  const rid = new Set(info.rooms.filter(r => hw(r.name).some(a => words.some(b => hsim(a, b)))).map(r => r.id));
+  const devs = info.devices.filter(d => hprops(d).length && (rid.size ? rid.has(d.room) : hw(d.name).some(a => words.some(b => hsim(a, b)))))
+    .sort((a, b) => (String(b.type).startsWith("devices.types.sensor") ? 1 : 0) - (String(a.type).startsWith("devices.types.sensor") ? 1 : 0));
+  const seen = new Set(), vals = [];
+  devs.forEach(d => hprops(d).forEach(p => { if ((!what || p.i === what) && !seen.has(p.i)) { seen.add(p.i); vals.push(p); } }));
+  return { found: rid.size > 0 || devs.length > 0, vals };
+}
+const HASK = "(температур[а-я]*|градус[а-я]*|влажност[а-я]*|углекисл[а-я]*(?: газ[а-я]*)?|co2|давлени[а-я]*)";
+const HQ = "(?:а )?(?:какая |какой |какое |сколько |скажи |подскажи |узнай |проверь )?(?:сейчас )?(?:уровень )?";
+function homeAsk(w) { return /^температур|^градус/.test(w) ? "temperature" : /^влажн/.test(w) ? "humidity" : /^углекисл|^co2/.test(w) ? "co2_level" : "pressure"; }
 function homeParse(t) {
   let m;
+  t = t.replace(/[?!.,]/g, " ").replace(/\s+/g, " ").trim();
+  if ((m = t.match(new RegExp("^" + HQ + HASK + " (?:сейчас )?(?:воздуха )?((?:в|во|на|у) .+?)(?: сейчас)?$")))) return { op: "read", target: m[2], what: homeAsk(m[1]) };
+  if ((m = t.match(new RegExp("^" + HQ + "((?:в|во|на|у) .+?) (?:сейчас )?(?:какая |какой |какое |сколько )?(?:уровень )?" + HASK + "(?: воздуха)?(?: сейчас)?$")))) return { op: "read", target: m[1], what: homeAsk(m[2]) };
   if ((m = t.match(/^(?:запусти|включи|активируй) сценари[йя] (.+)$/))) return { op: "scenario", target: m[1] };
   if ((m = t.match(/^(?:сделай )?(.+?) (?:на|в) (\d+|[а-я ]+?) ?(?:%|процент[а-яё]*)$/)) && wordsNum(m[2]) != null && !/громк|звук/.test(m[1])) return { op: "brightness", target: m[1], value: wordsNum(m[2]) };
   if ((m = t.match(/^(?:поставь )?(.*(?:кондиционер|обогреват|термостат)[а-яё]*.*?) (?:на )?(\d+|[а-я ]+?)(?: градус[а-яё]*)?$/)) && wordsNum(m[2]) >= 10 && wordsNum(m[2]) <= 35) return { op: "temperature", target: m[1], value: wordsNum(m[2]) };
@@ -4479,6 +4502,13 @@ async function homeQuick(t) {
   try {
     if (c.op === "scenario") { const s = info.scenarios.find(s => hw(s.name).some(a => hw(c.target).some(b => hsim(a, b)))); if (!s) return null;
       await homeReq("POST", `/scenarios/${s.id}/actions`, {}); return { say: `Запустил сценарий «${s.name}».` }; }
+    if (c.op === "read") {
+      const r = homeRead(c.target, c.what, info); if (!r.found) return null;     // «температура в Москве» — это погода, не дом
+      const place = c.target[0].toUpperCase() + c.target.slice(1);
+      if (!r.vals.length) return { say: `${place} нет датчика, который знает ${c.what === "temperature" ? "температуру" : (HPROPS[c.what] || ["это"])[0]}, — в умном доме Яндекса я его не вижу.` };
+      const v = r.vals[0], old = v.t && Date.now() / 1000 - v.t > 3 * 3600;
+      return { say: `${place} ${hval(v, c.what !== "temperature")}.` + (old ? ` Это данные от ${new Date(v.t * 1000).toLocaleString("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — датчик давно не присылал новых.` : "") };
+    }
     const devs = homeMatch(c.target, info); if (!devs.length) return null;
     await homeAct(devs, c.op, c.value);
     const what = devs.length === 1 ? devs[0].name : devs.every(d => String(d.type).startsWith("devices.types.light")) ? "свет" : `${devs.length} устройства`;
@@ -4488,7 +4518,7 @@ async function homeQuick(t) {
 }
 async function homeTool(a) {
   const info = await homeGet();
-  if (a.action === "list") return info.devices.map(d => `${d.name}${d.room_name ? " (" + d.room_name + ")" : ""}`).join("; ") + (info.scenarios.length ? ". Сценарии: " + info.scenarios.map(s => s.name).join(", ") : "");
+  if (a.action === "list") return info.devices.map(d => `${d.name}${d.room_name ? " (" + d.room_name + ")" : ""}${hprops(d).length ? " — " + hprops(d).map(p => hval(p, true)).join(", ") : ""}`).join("; ") + (info.scenarios.length ? ". Сценарии: " + info.scenarios.map(s => s.name).join(", ") : "");
   if (a.action === "scenario") { const s = info.scenarios.find(s => hw(s.name).some(x => hw(a.target).some(y => hsim(x, y)))); if (!s) return "Нет такого сценария."; await homeReq("POST", `/scenarios/${s.id}/actions`, {}); return `Запущен «${s.name}».`; }
   const devs = homeMatch(a.target || "", info); if (!devs.length) return "Не нашёл такого устройства. Есть: " + info.devices.map(d => d.name).join(", ");
   const n = await homeAct(devs, a.action, a.value); return `Готово: ${devs.map(d => d.name).join(", ")} (${n}).`;

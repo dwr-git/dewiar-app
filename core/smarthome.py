@@ -70,6 +70,36 @@ def _num(s):
 SKIP = {"в", "во", "на", "мне", "пожалуйста", "у", "с", "и", "весь", "все", "всё", "везде", "всюду", "всех", "сделай", "поставь"}
 GENERIC = {"свет", "света", "светом", "устройства", "устройство", "лампы", "лампочки"}
 
+# Датчики (отчёт №362, 27.10: «не может сказать температуру в спальне»): показания приходят в properties устройства
+# (devices.properties.float). instance → как назвать и единица; давление и кельвины — по unit из parameters.
+PROPS = {"temperature": ("температура", "°"), "humidity": ("влажность", "%"), "co2_level": ("углекислый газ", " ppm"),
+         "pressure": ("давление", " мм рт. ст."), "illumination": ("освещённость", " лк"), "pm2.5_density": ("пыль PM2.5", " мкг/м³"),
+         "tvoc": ("летучие вещества", " мкг/м³"), "battery_level": ("заряд", "%"), "water_level": ("вода", "%"),
+         "power": ("мощность", " Вт"), "voltage": ("напряжение", " В"), "amperage": ("ток", " А")}
+UNITS = {"unit.pressure.pascal": " Па", "unit.pressure.atm": " атм", "unit.pressure.bar": " бар", "unit.temperature.kelvin": " K"}
+# слово в вопросе → какой датчик спрашивают
+ASK = (("температур", "temperature"), ("градус", "temperature"), ("влажн", "humidity"), ("углекисл", "co2_level"),
+       ("co2", "co2_level"), ("давлен", "pressure"))
+_ASK_RX = r"(температур\w*|градус\w*|влажност\w*|углекисл\w*(?:\s+газ\w*)?|co2|давлени\w*)"
+_Q_RX = r"(?:а\s+)?(?:какая|какой|какое|каков\w*|сколько|скажи|подскажи|узнай|проверь|покажи|назови)?"
+
+
+def fmt_value(v, unit=""):
+    """22.46 → «22,5»: одна цифра после запятой, целое — без неё."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    r = round(f, 1)
+    return (str(int(r)) if r == int(r) else str(r).replace(".", ",")) + unit
+
+
+def prop_text(p, with_name=True):
+    """{'instance': 'humidity', 'value': 41} → «влажность 41%»."""
+    name, unit = PROPS.get(p.get("instance"), (p.get("instance") or "", ""))
+    unit = UNITS.get(p.get("unit") or "", unit)
+    return (name + " " if with_name else "") + fmt_value(p.get("value"), unit)
+
 
 def _sim(a, b):
     """Одно слово в разных падежах: «кухня»/«кухне», «люстра»/«люстру», «гостиная»/«гостиной».
@@ -109,6 +139,13 @@ def parse(text):
     m = re.fullmatch(r"(?:сделай\s+)?(.*?)\s*(теплее|холоднее|т[её]плый|холодный|дневной)(?:\s+свет)?\s*(.*)", t)
     if m and re.search(r"свет|ламп|люстр|торшер|светильник", t):
         return {"op": "warm", "target": (m.group(1) + " " + m.group(3)).strip() or "свет", "value": WARM[m.group(2).replace("ё", "е")] if m.group(2).replace("ё", "е") in WARM else 0}
+    # показания датчика: «какая температура в спальне», «сколько градусов в детской», «в спальне какая влажность»
+    m = re.fullmatch(rf"{_Q_RX}\s*(?:сейчас\s+)?(?:уровень\s+)?{_ASK_RX}\s+(?:сейчас\s+)?(?:воздуха\s+)?((?:в|во|на|у)\s+.+?)(?:\s+сейчас)?", t)
+    m2 = None if m else re.fullmatch(rf"{_Q_RX}\s*(?:сейчас\s+)?((?:в|во|на|у)\s+.+?)\s+(?:сейчас\s+)?(?:какая|какой|какое|сколько)?\s*(?:уровень\s+)?{_ASK_RX}(?:\s+воздуха)?(?:\s+сейчас)?", t)
+    if m or m2:
+        what_w, place = (m.group(1), m.group(2)) if m else (m2.group(2), m2.group(1))
+        what = next((v for k, v in ASK if what_w.startswith(k)), "temperature")
+        return {"op": "read", "target": place, "what": what}
     m = re.fullmatch(rf"{ON_RX}\s+(.+)", t)
     if m:
         return {"op": "on", "target": m.group(1)}
@@ -242,7 +279,12 @@ class Home:
         for x in d.get("devices", []):
             caps = {c.get("type"): c for c in x.get("capabilities", [])}
             on = (caps.get(ON_OFF) or {}).get("state", {}) or {}
-            devs.append(dict(x, room_name=rooms.get(x.get("room"), ""), on=on.get("value"), caps=list(caps)))
+            props = [{"instance": (p.get("state") or {}).get("instance") or (p.get("parameters") or {}).get("instance"),
+                      "value": (p.get("state") or {}).get("value"), "unit": (p.get("parameters") or {}).get("unit", ""),
+                      "updated": p.get("last_updated")}
+                     for p in x.get("properties", []) or []
+                     if p.get("type") == "devices.properties.float" and (p.get("state") or {}).get("value") is not None]
+            devs.append(dict(x, room_name=rooms.get(x.get("room"), ""), on=on.get("value"), caps=list(caps), props=props))
         info = {"rooms": d.get("rooms", []), "devices": devs, "groups": d.get("groups", []),
                 "scenarios": d.get("scenarios", [])}
         with self._lock:
@@ -278,6 +320,24 @@ class Home:
         if allw and room_ids:
             return [d for d in info["devices"] if d.get("room") in room_ids and self._cap(d, ON_OFF)]
         return []
+
+    def readings(self, target, what=None, info=None):
+        """Показания датчиков в комнате (или у устройства с таким названием) -> (комнаты нашлись?, [показания]).
+        Сначала датчики (devices.types.sensor…), потом прочие (кондиционер тоже знает температуру); по одному на instance."""
+        info = info or self.info()
+        words = [w for w in _words(target) if w not in SKIP]
+        rooms = {r["id"] for r in info["rooms"] if any(_sim(a, b) for a in _words(r.get("name")) for b in words)}
+        by_name = lambda d: any(_sim(a, b) for a in _words(d.get("name")) for b in words)  # noqa: E731
+        devs = [d for d in info["devices"] if d.get("props") and (d.get("room") in rooms if rooms else by_name(d))]
+        devs.sort(key=lambda d: not str(d.get("type", "")).startswith("devices.types.sensor"))
+        out, seen = [], set()
+        for d in devs:
+            for p in d["props"]:
+                if (what and p["instance"] != what) or p["instance"] in seen:
+                    continue
+                seen.add(p["instance"])
+                out.append(dict(p, device=d.get("name", ""), room=d.get("room_name", "")))
+        return bool(rooms) or bool(devs), out
 
     def scenario(self, name, info=None):
         """Сценарий с наибольшим числом совпавших слов названия -> сценарий или None."""
@@ -358,6 +418,8 @@ class Home:
         lines = []
         for d in info["devices"]:
             st = "" if d.get("on") is None else (" — вкл" if d["on"] else " — выкл")
+            if d.get("props"):
+                st += " — " + ", ".join(prop_text(p) for p in d["props"])
             lines.append(f"{d['name']}" + (f" ({d['room_name']})" if d.get("room_name") else "") + st)
         sc = [s["name"] for s in info["scenarios"] if s.get("is_active", True)]
         return ("Устройства: " + "; ".join(lines) if lines else "Устройств нет") + (". Сценарии: " + ", ".join(sc) if sc else "")

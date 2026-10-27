@@ -388,7 +388,23 @@ class MusicMixin:
             return False
         try:
             info = self.home.info()
-            if c["op"] == "scenario":
+            if c["op"] == "read":
+                # «какая температура в спальне» (отчёт №362): показание датчика, без модели. Ни комнаты, ни устройства
+                # с таким словом — это не про дом («температура в Москве» — погода), отдаём дальше.
+                from smarthome import PROPS, prop_text
+                found, vals = self.home.readings(c["target"], c["what"], info)
+                if not found:
+                    return False
+                place = c["target"][:1].upper() + c["target"][1:]
+                if vals:
+                    v = vals[0]
+                    msg = f"{place} {prop_text(v, with_name=c['what'] != 'temperature')}."
+                    if v.get("updated") and time.time() - float(v["updated"]) > 3 * 3600:
+                        msg += f" Это данные от {time.strftime('%d.%m %H:%M', time.localtime(float(v['updated'])))} — датчик давно не присылал новых."
+                else:
+                    msg = (f"{place} нет датчика, который знает {PROPS.get(c['what'], ('это',))[0]}"
+                           " — в умном доме Яндекса я его не вижу.").replace("знает температура", "знает температуру")
+            elif c["op"] == "scenario":
                 sc = self.home.scenario(c["target"], info)
                 if not sc:
                     return False

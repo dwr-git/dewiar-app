@@ -25,7 +25,12 @@ INFO = {"status": "ok", "rooms": [{"id": "r1", "name": "Спальня"}, {"id":
             {"id": "d4", "name": "Розетка чайника", "room": "r2", "type": "devices.types.socket", "capabilities": [ONOFF]},
             {"id": "d5", "name": "Кондиционер", "room": "r3", "type": "devices.types.thermostat.ac", "capabilities": [ONOFF, TEMP]},
             {"id": "d6", "name": "Торшер", "room": "r3", "type": "devices.types.light", "capabilities": [ONOFF, BR, CT]},
-            {"id": "d7", "name": "Яндекс Станция", "room": "r3", "type": "devices.types.media_device.smart_speaker", "capabilities": []}],
+            {"id": "d7", "name": "Яндекс Станция", "room": "r3", "type": "devices.types.media_device.smart_speaker", "capabilities": []},
+            {"id": "d8", "name": "Датчик климата", "room": "r1", "type": "devices.types.sensor.climate", "capabilities": [], "properties": [
+                {"type": "devices.properties.float", "parameters": {"instance": "temperature", "unit": "unit.temperature.celsius"},
+                 "state": {"instance": "temperature", "value": 22.46}, "last_updated": time.time() - 60},
+                {"type": "devices.properties.float", "parameters": {"instance": "humidity", "unit": "unit.percent"},
+                 "state": {"instance": "humidity", "value": 41}, "last_updated": time.time() - 60}]}],
         "groups": [], "scenarios": [{"id": "s1", "name": "Спокойной ночи", "is_active": True}]}
 POSTS = []
 
@@ -69,7 +74,7 @@ except HomeError as e:
     e1 = str(e)
 ok("iot:control" in e1 and not h.connected(), f"ключ без прав — понятная ошибка: {e1}")
 pub = h.connect("https://oauth.yandex.ru/verification_code#access_token=good_token_0123456789abcdef&token_type=bearer")
-ok(pub["connected"] and len(pub["devices"]) == 7 and "Спокойной ночи" in pub["scenarios"], "вставили всю ссылку после входа — ключ найден, устройства и сценарии видны")
+ok(pub["connected"] and len(pub["devices"]) == 8 and "Спокойной ночи" in pub["scenarios"], "вставили всю ссылку после входа — ключ найден, устройства и сценарии видны")
 m = lambda q: sorted(d["id"] for d in h.match(q))
 cases = {"свет в спальне": ["d1", "d2"], "весь свет": ["d1", "d2", "d3", "d6"], "торшер": ["d6"], "люстру": ["d1"],
          "кондиционер": ["d5"], "свет на кухне": ["d3"], "розетку чайника": ["d4"], "музыку": [], "компьютер": []}
@@ -135,6 +140,16 @@ async def run():
     await call("say", text="Запусти сценарий спокойной ночи")
     R["sc"] = await wait_for(lambda e: e["type"] == "answer" and "Спокойной ночи" in e.get("text", ""), 8)
     events.clear()
+    await call("say", text="Какая температура в спальне?")
+    R["temp"] = await wait_for(lambda e: e["type"] == "answer" and "22,5" in e.get("text", ""), 8)
+    events.clear()
+    await call("say", text="Сколько градусов на кухне")
+    R["notemp"] = await wait_for(lambda e: e["type"] == "answer" and "нет датчика" in e.get("text", ""), 8)
+    events.clear()
+    await call("say", text="Какая температура в Москве?")
+    await asyncio.sleep(3)
+    R["moscow"] = [e.get("text", "") for e in events if e["type"] == "answer"]
+    events.clear()
     await call("say", text="Выключи компьютер")
     R["pc"] = await wait_for(lambda e: e["type"] == "power", 6)
     await call("say", text="Отмени выключение")
@@ -154,6 +169,9 @@ finally:
 paths = [p for p, _ in POSTS]
 ok(R.get("conn", {}).get("connected") and R.get("on") and "/v1.0/devices/actions" in paths, f"«включи свет в спальне» — сразу, без модели: {R.get('on', {}).get('text')}")
 ok(R.get("br") and R.get("ac") and R.get("sc") and "/v1.0/scenarios/s1/actions" in paths, "яркость, кондиционер, сценарий — голосом")
+ok(R.get("temp") and R["temp"]["text"].startswith("В спальне 22,5°"), f"«какая температура в спальне» — датчик, без модели (№362): {(R.get('temp') or {}).get('text')}")
+ok(R.get("notemp") is not None, f"в комнате нет датчика — так и сказать: {(R.get('notemp') or {}).get('text')}")
+ok(not any("датчик" in x for x in R.get("moscow", [])), f"«температура в Москве» — не умный дом: {R.get('moscow')}")
 ok(R.get("pc") is not None, "«выключи компьютер» — это компьютер, а не умный дом")
 ok("smart_home" in (R.get("tools") or []), "у модели появился инструмент «Умный дом» (для сложных просьб)")
 import base64  # noqa: E402
