@@ -89,6 +89,14 @@ async def run():
     R["preset_tg"] = r
     r = await call("job_add", phrase="просто текст", task="x")
     R["preset_bad"] = r
+    # пакет 27.10: «если писем нет — она всё равно появляется: „Тихо. Новых писем нет.“» — нового нет: молчим совсем
+    for key, task in (("quiet", "Проверь почту MOCKSAY:Тихо. Новых писем нет."), ("loud", "Проверь почту MOCKSAY:Пришло письмо от Анны про ужин.")):
+        r = await call("job_add", phrase="каждый час проверяй почту", task=task, deliver="voice")
+        jid = (r.get("data") or {}).get("id") or next(x["id"] for x in (await call("reminders"))["data"] if task in x.get("text", ""))
+        events.clear()
+        await call("reminder_update", id=jid, patch={"at": (dt.datetime.now() + dt.timedelta(seconds=2)).isoformat(timespec="seconds")})
+        await asyncio.sleep(9)
+        R[key] = [e for e in events if e["type"] in ("heard", "answer")]
     rd.cancel()
 
 try:
@@ -98,6 +106,9 @@ finally:
         p.terminate()
     core.wait()
 log = (tmp / "core.log").read_text(encoding="utf-8")
+ok(R.get("quiet") == [] and "нового нет — не беспокою" in log, f"проверка почты: новых писем нет — не появляется и не говорит: {R.get('quiet')}")
+ok(any(e["type"] == "heard" and "🗓" in e.get("text", "") for e in R.get("loud", [])) and any("Пришло письмо от Анны" in (e.get("text") or "") for e in R.get("loud", [])),
+   "пришло письмо — показывает и говорит")
 ok(R.get("set") and R.get("job") and R["job"].get("deliver") == "voice", "дело поставлено; Telegram не подключён — честно сказал, что будет голосом")
 ok(R.get("ran") and R.get("answered") and R.get("no_alarm"), "в срок — без звонка: ассистент сам выполнил поручение и ответил")
 ok(R.get("next", "").endswith("09:00:00"), f"следующий раз — снова в 9:00 ({R.get('next')})")

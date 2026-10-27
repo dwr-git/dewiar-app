@@ -227,6 +227,9 @@ class Radio:
         self.on_change = None                                     # () -> None: виджету — играет/нет, какая станция
         self.got, self.last = 0, None                             # сколько звука пришло; последняя станция (для «другую»)
         self.last_at = 0.0                                        # когда пришёл последний кусок звука (sounding)
+        # студия «Музыка» (27.10, владелец: «громкости, статуса проигранного, анимацию под музыку»): с какой секунды
+        # играет файл (_ss — после перемотки и паузы), полосы спектра для анимации (bands, 0..1) — считает _pump
+        self._ss, self.bands = 0.0, [0.0] * 8
 
     @property
     def playing(self):
@@ -249,6 +252,47 @@ class Radio:
             time.sleep(0.2)
         return self.sounding
 
+    @property
+    def pos(self):
+        """Сколько секунд трека уже проиграно (своя музыка); на паузе — где остановились."""
+        if self.proc is not None:
+            return round(self._ss + self.got / (RATE * 2), 1)
+        return round(float((self.paused or {}).get("_pos") or 0), 1)
+
+    def vis(self):
+        """Для плеера студии: ход трека, громкость, полосы спектра."""
+        st = self.station or self.paused or {}
+        return {"playing": self.sounding, "pos": self.pos, "dur": float(st.get("dur") or 0), "volume": round(self.volume, 2),
+                "bands": [round(b, 3) for b in self.bands] if self.sounding else [0.0] * 8,
+                "local": bool(st.get("_mine") or str(st.get("url", "")).startswith("file:") or os.path.exists(str(st.get("url", ""))))}
+
+    def _probe_dur(self, station):
+        """Длина файла — из «Duration: 00:03:21.45» ffmpeg (быстро: файл не декодируется)."""
+        try:
+            r = subprocess.run([self._ff, "-hide_banner", "-i", station["url"]], capture_output=True, timeout=8,
+                               creationflags=0x08000000 if os.name == "nt" else 0)
+            m = _re.search(rb"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", r.stderr or b"")
+            if m:
+                station["dur"] = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+                self._changed()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def seek(self, t):
+        """Перемотать свой трек на t секунд (файл заново с -ss); на паузе — запомнить место."""
+        st = self.station or self.paused
+        if not st:
+            return False
+        t = max(0.0, float(t))
+        if st.get("dur"):
+            t = min(t, max(0.0, float(st["dur"]) - 1))
+        if self.proc is None:
+            st["_pos"] = t
+            self._changed()
+            return True
+        self.play(st, ss=t)
+        return True
+
     def status(self):
         art = (self.station or self.paused or {}).get("art") or ""
         return {"playing": self.playing, "station": (self.station or {}).get("name", ""),
@@ -263,8 +307,8 @@ class Radio:
             except Exception:  # noqa: BLE001
                 log.exception("радио: уведомление")
 
-    def play(self, station):
-        """Остановить текущее и запустить station ({"name", "url", …}); RadioError — нет ffmpeg."""
+    def play(self, station, ss=0.0):
+        """Остановить текущее и запустить station ({"name", "url", …}); ss — с какой секунды (файл); RadioError — нет ffmpeg."""
         ff = self.ffmpeg()
         if not ff:
             raise RadioError("для радио нужен ffmpeg, а он не запускается — переустановите ffmpeg (sudo apt install --reinstall ffmpeg) или Dewiar")
@@ -275,6 +319,7 @@ class Radio:
             gen = self._gen
             self.station, self.paused = station, None
             self.got, self.failed, self.last = 0, None, station
+            self.bands = [0.0] * 8
             # Локальному файлу переподключение не нужно. Опции собираем отдельным списком, а не вычищаем из общего:
             # фильтр по значениям «1»/«5» заодно выбрасывал бы «-ac 1» и любое другое совпавшее значение.
             local = station["url"].startswith("file:") or os.path.exists(station["url"])
@@ -282,14 +327,17 @@ class Radio:
             # user_agent not found») — так «своя музыка» не играла бы ни одного трека. Файл — в темпе звучания (-re).
             net = ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
                    "-user_agent", STREAM_UA, "-rw_timeout", "15000000"]
-            cmd = [ff, "-loglevel", "error", *(["-re"] if local else net), "-i", station["url"], "-vn", "-f", "s16le", "-ac", "1",
-                   "-ar", str(RATE), "-"]
+            self._ss = float(ss or 0) if local else 0.0
+            cmd = [ff, "-loglevel", "error", *(["-re"] if local else net), *(["-ss", f"{self._ss:.2f}"] if self._ss else []),
+                   "-i", station["url"], "-vn", "-f", "s16le", "-ac", "1", "-ar", str(RATE), "-"]
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
                                          creationflags=0x08000000 if os.name == "nt" else 0)
             self.player = self.make_player()
             self.player.start(RATE)
         threading.Thread(target=self._pump, args=(gen, self.proc, self.player), name="radio", daemon=True).start()
-        log.info("📻 %s — %s", station.get("name"), station.get("url"))
+        if local and not station.get("dur"):
+            threading.Thread(target=self._probe_dur, args=(station,), name="radio-dur", daemon=True).start()
+        log.info("📻 %s — %s%s", station.get("name"), station.get("url"), f" с {self._ss:.0f} с" if self._ss else "")
         self._changed()
 
     def _pump(self, gen, proc, player):
@@ -308,6 +356,10 @@ class Radio:
             got += len(chunk)
             self.got = got
             self.last_at = time.monotonic()
+            try:
+                self.bands = _bands(chunk, np)
+            except Exception:  # noqa: BLE001 — анимация необязательна
+                pass
             g = self.volume * self._duck
             if g != 1.0:
                 chunk = (np.frombuffer(chunk, dtype=np.int16).astype(np.float32) * g).clip(-32768, 32767).astype(np.int16).tobytes()
@@ -403,13 +455,18 @@ class Radio:
         return was
 
     def pause(self):
-        """Живое радио нельзя «приостановить» — останавливаем и запоминаем станцию для «продолжи»."""
-        return self.stop(keep_pause=True)
+        """Живое радио нельзя «приостановить» — останавливаем и запоминаем станцию для «продолжи». Свой трек —
+        с того же места: запоминаем, сколько проиграно (_pos), и продолжаем оттуда."""
+        pos = self.pos if self.proc is not None else 0.0
+        was = self.stop(keep_pause=True)
+        if was is not None and self.paused is was and (was.get("_mine") or os.path.exists(str(was.get("url", "")))):
+            was["_pos"] = pos
+        return was
 
     def resume(self):
         if self.paused:
             st = self.paused
-            self.play(st)
+            self.play(st, ss=float(st.pop("_pos", 0) or 0))
             return st
         return None
 
@@ -421,6 +478,22 @@ class Radio:
     def set_volume(self, v):
         self.volume = max(0.1, min(1.0, float(v)))      # не ниже 10%: тише на слух неотличимо от тишины
         return self.volume
+
+
+def _bands(chunk, np):
+    """Восемь полос спектра (≈60 Гц … 12 кГц, по логарифму) из 0,1 с моно s16le -> [0..1]."""
+    x = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
+    if x.size < 256:
+        return [0.0] * 8
+    x = x[: 4096] * np.hanning(min(4096, x.size))
+    sp = np.abs(np.fft.rfft(x))
+    f = np.fft.rfftfreq(x.size, 1.0 / RATE)
+    edges = [int(np.searchsorted(f, hz)) for hz in np.geomspace(60, 12000, 9)]
+    out = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        e = float(sp[a:max(b, a + 1)].mean()) if b > a else 0.0
+        out.append(float(max(0.0, min(1.0, (20 * np.log10(e + 1e-6) + 30) / 50))))   # −30 дБ … +20 дБ → 0 … 1
+    return out
 
 
 def pick(stations, query=""):

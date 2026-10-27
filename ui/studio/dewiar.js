@@ -463,7 +463,20 @@ $("#dk-go").onclick = async (ev) => {
   ev.target.disabled = true; r.className = "res"; r.textContent = "проверяю ключ…";
   let c = null;
   try { c = await core.call("cloud_connect", { key, url: $("#dk-url").value.trim() }); }
-  catch (e) { r.className = "res bad"; r.textContent = "Не получилось: " + e.message; }
+  catch (e) {
+    r.className = "res bad"; r.textContent = "Не получилось: " + e.message;
+    // №364 (27.10): «ввёл код — „не получилось, нет связи с ядром“». Связь со студией оборвалась посреди подключения —
+    // но само подключение могло пройти: ждём ядро и спрашиваем, чем кончилось, а не пугаем «не получилось».
+    if (/нет связи с ядром/.test(e.message)) {
+      r.className = "res"; r.textContent = "связь с ядром прервалась — проверяю, подключилось ли…";
+      for (let i = 0; i < 25 && !c; i++) {
+        await new Promise(ok => setTimeout(ok, 1000));
+        try { const s = await core.call("cloud_status"); if (s && s.connected) c = s; else if (s) break; } catch (x) { /* ядро ещё не вернулось */ }
+      }
+      if (!c) { r.className = "res bad"; r.textContent = "Связь с ядром прервалась, подключение не прошло. Нажмите «Подключить» ещё раз"
+        + (/^\d[\d\s-]{4,8}\d$/.test(key) ? " — а если код уже не подходит, возьмите новый на том устройстве («Мозг» → «Добавить устройство»)." : "."); }
+    }
+  }
   if (c) {
     $("#dk-key").value = ""; r.className = "res ok";
     r.textContent = `Подключено${c.label ? ": " + c.label : ""}${c.tail ? " · ключ …" + c.tail : ""}. Заряд ${c.percent ?? "—"}%.`;

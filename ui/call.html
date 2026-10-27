@@ -28,6 +28,8 @@ core.on("hello", async () => {
   document.title = (info.role === "caller" ? "Звонок: " : "Звонит: ") + info.peer.name + " — Dewiar";
   DewiarCall.start({ role: info.role, peer: info.peer, video: !!info.video, call: info.call, offer: info.offer || "",
     transport: {
+      face: async () => { const st = await core.call("close_state"), p = ((st || {}).people || []).find(x => x.pid === info.peer.pid);   // фото близкого на экране звонка
+        return p && p.face ? ((await core.call("close_face", { pid: p.pid, v: p.face })) || "") : ""; },
       send: (s) => core.call("call_sig", { call: CALL, s }),
       ice: () => core.call("call_ice", {}),
       fast: (on) => core.call("call_fast", { call: CALL, on: !!on }).catch(() => {}),

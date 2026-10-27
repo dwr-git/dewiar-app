@@ -1103,7 +1103,7 @@ def t_send_email(a, ctx):
     if isinstance(files, str):
         files = [x.strip() for x in files.split(",") if x.strip()]
     try:
-        r = _mail(ctx).send(a.get("to", ""), a.get("subject", ""), a.get("body", ""), files)
+        r = _mail(ctx).send(a.get("to", ""), a.get("subject", ""), a.get("body", ""), files, box=a.get("from") or None)
     except MailError as e:
         raise ToolError(str(e)) from e
     return f"Письмо «{r['subject']}» отправлено: {', '.join(r['to'])}" + (f"; вложения: {', '.join(r['attachments'])}" if r["attachments"] else "")
@@ -1146,12 +1146,14 @@ def t_read_emails(a, ctx):
     from mail import MailError
     try:
         items = _mail(ctx).inbox(limit=max(1, min(20, int(a.get("limit") or 8))), unread=bool(a.get("unread_only")),
-                                 query=a.get("query", ""))
+                                 query=a.get("query", ""), box=a.get("box") or None)
     except MailError as e:
         raise ToolError(str(e)) from e
     if not items:
         return "Писем не нашлось."
-    return "\n".join(f"[{x['uid']}] {'● ' if x['unread'] else ''}{x['date'][:22]} · {x['from']} · «{x['subject']}» — {x['snippet'][:160]}"
+    many = len({x.get("box") for x in items}) > 1                 # несколько ящиков — у письма видно, в каком оно
+    return "\n".join(f"[{x['uid']}] {'● ' if x['unread'] else ''}{x['date'][:22]} · " + (f"в {x['box']} · " if many else "")
+                     + f"{x['from']} · «{x['subject']}» — {x['snippet'][:160]}"
                      + (f" (вложения: {', '.join(x['files'])})" if x["files"] else "") for x in items) + \
         "\n\nЦеликом письмо — read_email с номером в скобках."
 
@@ -2329,7 +2331,8 @@ TOOLS = {
                    "организации / реквизиты Ивану» — найди заметку с реквизитами (find_notes: «реквизиты», «карточка») и приложи "
                    "её файл; адрес по имени — из памяти о пользователе, а если его там нет — спроси одной фразой.",
                    S({"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"},
-                      "attachments": {"type": "array", "items": {"type": "string"}}}, ["subject", "body"]),
+                      "attachments": {"type": "array", "items": {"type": "string"}},
+                      "from": {"type": "string", "description": "с какого ящика (адрес), если подключено несколько и назван; иначе — главный"}}, ["subject", "body"]),
                    "confirm", t_send_email, "Отправить письмо"),
     "send_telegram": ("Прислать пользователю в мессенджер (Telegram или MAX — куда подключён) сообщение (text) и/или файлы "
                       "из папки ассистента (files — пути: заметки, отчёты задач, «Входящие», снимки). «Пришли мне в "
@@ -2338,8 +2341,10 @@ TOOLS = {
                          "to": {"type": "string", "enum": ["telegram", "max"]}}),
                       "safe", t_send_telegram, "Прислать в Telegram или MAX"),
     "read_emails": ("Посмотреть почту пользователя: последние письма (кто, тема, начало). unread_only — только "
-                    "непрочитанные, query — слово для поиска (отправитель, тема, текст). Письма не помечаются прочитанными.",
-                    S({"limit": {"type": "integer"}, "unread_only": {"type": "boolean"}, "query": {"type": "string"}}),
+                    "непрочитанные, query — слово для поиска (отправитель, тема, текст). Письма не помечаются прочитанными. "
+                    "Ящиков несколько — смотрит все сразу; box — адрес одного ящика, если пользователь его назвал.",
+                    S({"limit": {"type": "integer"}, "unread_only": {"type": "boolean"}, "query": {"type": "string"},
+                       "box": {"type": "string"}}),
                     "safe", t_read_emails, "Проверить почту"),
     "read_email": ("Прочитать одно письмо целиком по номеру из read_emails.", S({"uid": {"type": "string"}}, ["uid"]),
                    "safe", t_read_email, "Прочитать письмо"),

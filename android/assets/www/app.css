@@ -1000,7 +1000,7 @@ body.has-play #top { gap: 2px; } body.has-play #top .ib { width: 38px; height: 3
 .sw.wglook .seg button { flex: 1; padding: 8px 4px; font-size: 13px; }
 
 /* Карточка «Я» (0.45): фото крупно слева (нажать — выбрать), имя, о себе; фото у близких и во «Встречах» */
-.clava.has-face { background-size: cover; background-position: center; color: transparent; }
+.clava.has-face, .rad-me.has-face { background-size: cover; background-position: center; color: transparent; }
 .clme-top { display: flex; align-items: center; gap: 14px; }
 .clme-face { position: relative; flex: none; cursor: pointer; }
 .clme-face .clava { width: 72px; height: 72px; font-size: 26px; }
@@ -1080,3 +1080,46 @@ body.neu .ntfolds.pick button:not(.on):not(.add), body.neu .ntmd button, body.ne
 .fsub > small { display: block; color: var(--dim); font-size: 12px; margin: 10px 4px 0; }
 .fsub.off { opacity: .45; pointer-events: none; }
 #b-close[hidden] { display: none; }
+
+/* ---------- «Близкие» → «Семья» (27.10): общий бюджет, по макету Budget ---------- */
+.tabs button.dot { position: relative; } .tabs button.dot::after { content: ""; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #ffc978; }
+.fmava { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #171a2e; font-weight: 800; font-size: 13px; box-shadow: 0 0 0 2px var(--bg); }
+.fmava.sm { width: 30px; height: 30px; font-size: 12px; box-shadow: none; }
+.fmhead { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 12px; }
+.fmhead small { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+#fam-body .fmhead h3 { margin: 2px 0 0; font: 600 22px "Unbounded", "Manrope", sans-serif; text-transform: none; letter-spacing: 0; color: var(--ink); }
+body.light .fmava:not(.sm) { box-shadow: 0 0 0 2px #fff; }
+.tabs:has(button:nth-child(5)) button { font-size: 12.5px; padding: 10px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fmstack { display: flex; } .fmstack .fmava + .fmava { margin-left: -8px; }
+.fmmonth { padding: 18px; border-radius: 22px; background: var(--frost); display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.fmtot { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fmtot b { font: 600 26px "Unbounded", "Manrope", sans-serif; } .fmtot b span { font-size: 15px; color: var(--muted); }
+.fmtot .lnk { font-size: 13px; color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; }
+.fmbar { display: flex; gap: 2px; height: 12px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.fmbar i { display: block; height: 100%; } .fmbar.over { box-shadow: 0 0 0 2px #ff6b8a; }
+.fmby { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 12.5px; }
+.fmby div { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .fmby span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .fmby b { font-size: 15px; }
+.fmh { margin: 4px 2px 8px; font-size: 14px; font-weight: 800; }
+.fmbills, .fmppl { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.fmbill { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--frost); }
+.fmbill > div, .fmppl > div > div, .fmfeed > div > div { flex: 1; min-width: 0; }
+.fmbill b, .fmppl b, .fmfeed b { font-size: 14px; } .fmbill > div b, .fmppl > div > div b, .fmfeed > div > div b { display: block; }
+.fmbill small, .fmppl small, .fmfeed small, .fmask small { display: block; font-size: 12.5px; color: var(--muted); }
+.fmbill.due, .fmbill.late { box-shadow: inset 0 0 0 1px rgba(255,201,120,.4); } .fmbill.due small, .fmbill.late small { color: #ffd89a; }
+.fmbill.late { box-shadow: inset 0 0 0 1px rgba(255,107,138,.55); }
+.fmic { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; background: rgba(126,232,200,.18); }
+.fmic svg { width: 16px; height: 16px; fill: none; stroke: #7ee8c8; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.fmbill.due .fmic, .fmbill.late .fmic { background: rgba(255,201,120,.18); } .fmbill.due .fmic svg, .fmbill.late .fmic svg { stroke: #ffc978; stroke-width: 2.4; }
+.fmbtn { height: 34px; padding: 0 12px; border-radius: 10px; background: var(--frost-hi); font: 700 12.5px "Manrope", sans-serif; flex: none; }
+.fmbill .fmbtn.rem { background: #ffc978; color: #2a1d00; }
+.fmadd { margin: -2px 2px 14px; } .fmadd summary { font-size: 13.5px; font-weight: 700; color: var(--accent); cursor: pointer; padding: 6px 0; }
+.fmform { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; } .fmform input, .fmform select { min-width: 0; }
+.fmform .btn { grid-column: 1 / -1; }
+.fmfeed { margin-bottom: 14px; } .fmfeed > div { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+.fmppl > div { display: flex; align-items: center; gap: 12px; }
+.fminv { display: flex; gap: 8px; } .fminv select { flex: 1; min-width: 0; }
+.fmshare { margin-top: 4px; }
+.fmask { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; box-shadow: inset 0 0 0 1px rgba(255,201,120,.4); }
+.fmask > div:not(.row2) { flex: 1; min-width: 0; } .fmask .row2 { flex-basis: 100%; } .fmask .row2 .btn { flex: 1; }
+body.light .fmbill.due small, body.light .fmbill.late small { color: #8a5a00; }
+body.light .fmic svg { stroke: #1d9a74; } body.light .fmbill.due .fmic svg, body.light .fmbill.late .fmic svg { stroke: #b07400; }

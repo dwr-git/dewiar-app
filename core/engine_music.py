@@ -6,6 +6,9 @@ True, если ответили сами; False — фразу получит м
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
 
 
+JOB_SILENT = "ТИШИНА"                   # итог дела «нового нет» — пользователя не беспокоим
+
+
 class MusicMixin:
     # ---------- дела по расписанию и утренняя сводка ----------
 
@@ -91,11 +94,24 @@ class MusicMixin:
                     "одна добрая фраза на день. 4–7 коротких предложений, без списков с символами, без вопросов. Если "
                     "есть навык morning-brief — следуй его указаниям (use_skill).")
         return (f"[Дело по расписанию] Поручение пользователя: «{item.get('text', '')}». Выполни его сам прямо сейчас — "
-                "используй инструменты (поиск в интернете, чтение страниц, заметки, календарь calendar_list, бюджет "
+                "используй инструменты (поиск в интернете, чтение страниц, почта, заметки, календарь calendar_list, бюджет "
                 "money_report). Ответь готовым коротким сообщением с результатом: без вопросов, без «я могу…», без "
-                f"пересказа поручения. Сейчас {datetime.now():%d.%m.%Y %H:%M}.")
+                f"пересказа поручения. Сейчас {datetime.now():%d.%m.%Y %H:%M}. Если поручение — проверка (почта, новые "
+                f"сообщения, цены, наличие, новости по теме) и нового или важного нет — ответь ровно одним словом: {JOB_SILENT}. "
+                "Тогда пользователя не беспокоим вовсе.")
 
     JOB_RETRY_MIN = (5, 15)            # дело не удалось (модель или сеть) — ещё попытки через столько минут
+
+    @staticmethod
+    def job_nothing(text):
+        """Итог дела — «нового нет»? Тогда молчим (пакет 27.10: «если писем нет — она всё равно появляется: „Тихо. Новых
+        писем нет.“ — хотелось бы, чтобы даже не вылезала»). Слово-знак ТИШИНА или короткое «новых писем нет»."""
+        t = re.sub(r"[\s.!…«»\"*_]+", " ", (text or "").lower().replace("ё", "е")).strip()
+        if not t or t in ("тишина", "тихо"):
+            return True
+        return len(t) < 90 and bool(re.fullmatch(r"(?:(?:тихо|пока|сегодня|сейчас|ничего)\W*)*(?:новых |непрочитанных )?(?:писем|сообщений|"
+                                                   r"новостей|изменений|ничего нового)(?: (?:нет|не пришло|не появилось|не было))?\W*"
+                                                   r"(?:нет|не пришло|не появилось|не было)?\W*", t)) and bool(re.search(r"нет|не (?:пришл|появ|был)|ничего", t))
 
     def _run_job(self, item, attempt=0):
         """Выполнить дело (в своём потоке): подождать до 3 минут, пока ассистент свободен (не перебивать разговор
@@ -115,15 +131,23 @@ class MusicMixin:
         def report(ok, text):
             res.update(ok=ok, text=text)
             ev.set()
-        if to_bot:
-            self.ask(prompt, via={"done": lambda _a: None, "speak": False}, raw=True, shown=f"🗓 {title}", report=report)
-        else:
-            self.ask(prompt, raw=True, shown=f"🗓 {title}", report=report)
+        if item.get("brief"):                            # утренняя сводка — всегда есть что сказать: голосом сразу
+            if to_bot:
+                self.ask(prompt, via={"done": lambda _a: None, "speak": False}, raw=True, shown=f"🗓 {title}", report=report)
+            else:
+                self.ask(prompt, raw=True, shown=f"🗓 {title}", report=report)
+        else:                                            # остальное — тихо; итог решаем ниже: «нового нет» — молчим
+            self.ask(prompt, via={"done": lambda _a: None, "speak": False, "job": True}, raw=True, shown=f"🗓 {title}", report=report)
         ev.wait(900)
         ok, text = res.get("ok"), res.get("text") or "нет ответа за 15 минут"
-        if ok and to_bot:
+        if ok and not item.get("brief") and self.job_nothing(text):
+            log.info("🗓 «%s»: нового нет — не беспокою", title)
+        elif ok and to_bot:
             bot.send(f"🗓 {title}\n\n{text}")
             self.emit("push", title=f"🗓 {title}", text=text[:300], critical=False)
+        elif ok and not item.get("brief"):
+            self.emit("heard", text=f"🗓 {title}")
+            self.announce(text)                          # в окно и голосом, с сигналом — как напоминание
         if ok is None and ev.is_set():
             return                                       # ход перебили (человек заговорил) — не сбой и не повтор
         try:
@@ -687,6 +711,12 @@ class MusicMixin:
                 ctx = self._brief_context()
             except Exception:  # noqa: BLE001
                 ctx = ""
+            try:                                         # курс «Неделя с Лирой»: раз в день — предложить урок
+                line = self.course.offer_line() if getattr(self, "course", None) else ""
+                if line:
+                    p["facts"].append(line)
+            except Exception:  # noqa: BLE001
+                log.debug("курс: предложение", exc_info=True)
         log.info("👋 вернулись через %s — %s", p["gone"], "сводка дня" if p["kind"] == "day" else "итог дня" if p["kind"] == "eve" else "; ".join(p["facts"]))
         self.ask(presence.prompt(p, ctx), raw=True, shown="👋 С возвращением")
         return True

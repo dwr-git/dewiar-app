@@ -1,0 +1,273 @@
+"""Курсы обучения (27.10, по макету «Dewiar — обучение и «Команда»», владелец: «обучающий курс — ОЧЕНЬ нравится»;
+«не забудь про радио, музыку и игры — в досуг; близкие, семья, детский режим; потом отдельно Лира для бизнеса»).
+
+Курсы: «Неделя с Лирой» (основы, семь дней), «Лира для семьи» (близкие, «Рядом», общий бюджет, детский режим) и
+«Лира для работы» (задачи, документы, почта и Telegram, суфлёр). Урок — три шага: фраза и зачем она. Шаг засчитывается
+сам, когда человек сказал похожее (heard: регулярное выражение шага) или открыл раздел студии (seen: open). Все шаги
+— урок пройден; следующий открывается на следующий день (или «Следующий урок сейчас»). Раз в день, при первом
+возвращении (engine_music._welcome_back, утренняя сводка), Лира предлагает урок одной фразой — если «Предлагать урок
+дня» включено. «Не сегодня» — до завтра. Состояние — STATE_DIR/course.json: {course, c: {курс: {done, steps, ahead}},
+offer, skip, offered}; старый файл (один курс) читается как «Неделя с Лирой»."""
+
+import json
+import logging
+import os
+import re
+import threading
+from datetime import date
+from pathlib import Path
+
+log = logging.getLogger("dewiar.course")
+
+
+def _L(day, title, icon, intro, steps):
+    return {"day": day, "title": title, "icon": icon, "intro": intro,
+            "steps": [dict(zip(("say", "why", "rx" if not s[2].startswith("open:") else "open"),
+                               (s[0], s[1], s[2][5:] if s[2].startswith("open:") else s[2]))) for s in steps]}
+
+
+COURSES = [
+    {"id": "week", "title": "Неделя с Лирой", "sub": "основы за семь дней", "lessons": [
+        _L(1, "Разговор и напоминания", "chat", "Лира слушает голос и понимает обычные слова. Сегодня — познакомиться и поставить первое напоминание.", [
+            ("«Лира, привет! Что ты умеешь?»", "Лира расскажет о себе коротко", r"что ты умеешь|что умеешь|расскажи о себе"),
+            ("«Напомни через 10 минут проверить чайник»", "напоминание появится в «Делах» и прозвенит", r"напомни"),
+            ("«Какие у меня дела?»", "Лира перечислит, что впереди", r"как\w* у меня дел|что у меня (?:сегодня|завтра|на сегодня)|мои дела")]),
+        _L(2, "Календарь и дела", "calendar", "Встречи — в календарь, дела — в список, сделанное — отметкой. Всё голосом.", [
+            ("«Запланируй на завтра в 15 встречу с Андреем»", "встреча появится в «Календаре»", r"запланируй|встреч\w* .*(?:завтра|в \d)|добавь в календарь"),
+            ("«Что у меня завтра?»", "день целиком — дела и встречи", r"что у меня завтра|планы на завтра|завтра у меня"),
+            ("Откройте «Календарь» в студии", "месяц целиком, щелчок по дню — крупно", "open:calendar")]),
+        _L(3, "Заметки и память", "notes", "Лира запоминает о вас то, что важно, и записывает мысли голосом.", [
+            ("«Запомни: у мамы день рождения 14 ноября»", "Лира заведёт страницу «Мама» в памяти", r"запомни"),
+            ("«Запиши в заметки: купить батарейки»", "заметка появится в «Заметках» и на телефоне", r"запиши|заметк"),
+            ("«Что ты знаешь про маму?»", "Лира ответит по памяти — проверьте, что запомнила", r"что ты знаешь|что ты помнишь|что знаешь (?:обо|про)")]),
+        _L(4, "Деньги и платежи", "pay", "Траты — одной фразой, итоги — по вопросу, обязательные платежи — со сроками.", [
+            ("«Продукты 46,20»", "расход запишется сам, без вопросов", r"^\D{0,30}\d+(?:[.,]\d+)?(?:\s*(?:руб\w*|р|byn|₽))?$|потратил|расход"),
+            ("«Сколько я потратил за неделю?»", "итог по категориям", r"сколько .*потратил|траты за|расходы за"),
+            ("Откройте «Платежи» в студии", "свет, газ, интернет — сроки и «оплачено»", "open:pay")]),
+        _L(5, "Досуг: радио, музыка, игры", "play", "Лира — ещё и радио, своя музыка с ведущим и игры на пару минут.", [
+            ("«Включи радио с джазом»", "радио играет внутри Лиры; «громче», «пауза», «стоп» — голосом", r"радио|джаз"),
+            ("«Поставь мою музыку»", "своя папка: подборки под настроение, «что играет?»", r"мо\w* музык|поставь музык|включи музык|что играет"),
+            ("«Давай поиграем»", "двадцать с лишним игр: сказки, головоломки, слова", r"поиграем|сыграем|игр")]),
+        _L(6, "Персонажи и голоса", "personas", "Лира — не одна: у каждого персонажа свой характер и голос. Позовите по имени — ответит он.", [
+            ("«Патрик, расскажи анекдот»", "ответит Патрик своим голосом", r"патрик|бип|нова|денис"),
+            ("Откройте «Персонажи» в студии", "выбрать главного, создать своего", "open:personas"),
+            ("«Говори помедленнее»", "скорость голоса — словами", r"медленн|быстрее|потише|погромче")]),
+        _L(7, "Руки: Лира делает сама", "hands", "Лира открывает программы, смотрит на экран и делает дела сама — спросит, если что-то важное.", [
+            ("«Открой калькулятор»", "программы — по названию", r"открой|запусти"),
+            ("«Что у меня на экране?»", "Лира посмотрит и объяснит", r"на экране|экран|скриншот"),
+            ("«Найди в интернете, какая погода в выходные»", "поиск и ответ коротко, с источником", r"найди|погод|поищи")]),
+    ]},
+    {"id": "family", "title": "Лира для семьи", "sub": "близкие, бюджет, дети", "lessons": [
+        _L(1, "Близкие: сообщения и звонки", "close", "Помощники близких людей передают друг другу сообщения и звонят — со сквозным шифрованием.", [
+            ("Откройте «Близкие» и нажмите «Пригласить»", "ссылка-приглашение для мамы или друга", "open:close"),
+            ("«Напиши маме, что я задержусь»", "у мамы её помощница прочитает вслух", r"напиши|отправь|передай"),
+            ("«Позвони маме»", "звонок с голосом и видео, напрямую", r"позвони|набери|видеозвон")]),
+        _L(2, "«Рядом»: где близкие", "near", "Радар показывает, кто из близких далеко, а кто рядом, — только если они сами показали себя.", [
+            ("Откройте «Возможности» и включите «Рядом»", "вкладка появится в «Близких»", "open:features"),
+            ("«Где мама?»", "расстояние и сторона, без адреса", r"где (?:мама|папа|\w+)\??$|где сейчас"),
+            ("«Помаши Андрею»", "он увидит и услышит, что вы машете", r"помаши|помахать")]),
+        _L(3, "Общий бюджет семьи", "family", "Траты за месяц у всей семьи, общий лимит и платежи «свет, газ, интернет» — кто платит и кто оплатил.", [
+            ("Откройте «Семья» в студии", "пригласите близкого в общий бюджет", "open:family"),
+            ("«Продукты 46,20»", "трата сразу видна семье", r"^\D{0,30}\d+(?:[.,]\d+)?(?:\s*(?:руб\w*|р|byn|₽))?$|потратил"),
+            ("«Сколько мы потратили в этом месяце?»", "итог за месяц", r"сколько .*потратил|траты за|расходы за")]),
+        _L(4, "Детский режим", "kids", "Ребёнок говорит с добрым другом — Совёнком Уго: только безопасное, время за день и отчёт вам.", [
+            ("Откройте «Дети» в студии", "имя и возраст ребёнка, PIN родителя", "open:kids"),
+            ("Задайте PIN и включите режим", "выключить можно только с PIN", "open:kids"),
+            ("«Уго, расскажи сказку»", "так ребёнок будет говорить с Уго", r"уго|сказк")]),
+    ]},
+    {"id": "work", "title": "Лира для работы", "sub": "задачи, документы, почта", "lessons": [
+        _L(1, "Задачи: большая работа сама", "tasks", "Задача — то, что делается долго: отчёт, сравнение, программа. Лира работает сама и пишет, когда готово.", [
+            ("«Сделай сравнение трёх тарифов интернета в Минске»", "задача появится в «Задачах» и будет идти сама", r"сделай|составь|подготовь|сравни"),
+            ("Откройте «Задачи» в студии", "ход работы, вопросы и итог", "open:tasks"),
+            ("«Как там задача?»", "Лира скажет, на каком она шаге", r"задач")]),
+        _L(2, "Документы и папка", "folder", "Папка ассистента — где Лира хранит итоги задач, заметки и файлы; документы из «Знаний» — для ответов по ним.", [
+            ("Откройте «Папка» в студии", "итоги задач, «Входящие», заметки", "open:folder"),
+            ("«Найди в документах, что в договоре про сроки»", "ответ по вашим файлам, с названием документа", r"в документ|в договор|найди в"),
+            ("Перетащите файл в «Чат» и спросите о нём", "разбор документа, таблицы, фото", "open:chat")]),
+        _L(3, "Почта и Telegram", "connect", "Лира присылает итоги на почту и в Telegram и читает входящие.", [
+            ("Откройте «Подключение» — почта и Telegram", "подключить ящик и бота", "open:connect"),
+            ("«Что нового в почте?»", "последние письма коротко", r"почт|письм"),
+            ("«Пришли мне в телеграм список дел»", "файл или текст — в мессенджер", r"телеграм|пришли мне")]),
+        _L(4, "Суфлёр на встречах", "prompter", "На встрече Лира молчит и подсказывает на экране — по вашим материалам.", [
+            ("Откройте «Суфлёр» в студии", "тема встречи, цель и материалы", "open:prompter"),
+            ("«Открой суфлёр»", "подсказки появятся у виджета", r"суфл"),
+            ("«Дела по расписанию: каждое утро присылай сводку»", "утренняя сводка сама — в Telegram или голосом", r"кажд\w* (?:утро|день|час)|по утрам")]),
+    ]},
+]
+BY_ID = {c["id"]: c for c in COURSES}
+LESSONS = COURSES[0]["lessons"]                          # прежнее имя — «Неделя с Лирой»
+
+
+class Course:
+    def __init__(self, path, emit=None):
+        self.path, self.emit = Path(path), emit or (lambda *a, **k: None)
+        self._lock = threading.Lock()
+        try:
+            self.st = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self.st = {}
+        if "c" not in self.st:                           # старый файл: один курс — «Неделя с Лирой»
+            old = {k: self.st.pop(k) for k in ("done", "steps", "ahead") if k in self.st}
+            self.st["c"] = {"week": old} if old else {}
+        self.st.setdefault("course", "week")
+        self.st.setdefault("offer", True)
+        if self.st["course"] not in BY_ID:
+            self.st["course"] = "week"
+
+    # ---------- хранение ----------
+
+    def _save(self):
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.st, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, self.path)
+        except OSError as e:
+            log.info("Курс: не записалось: %s", e)
+
+    def _today(self):
+        return date.today().isoformat()
+
+    def _cs(self, cid=None):
+        c = self.st["c"].setdefault(cid or self.st["course"], {})
+        c.setdefault("done", {})
+        c.setdefault("steps", {})
+        return c
+
+    @property
+    def lessons(self):
+        return BY_ID[self.st["course"]]["lessons"]
+
+    # ---------- ход ----------
+
+    def current(self, cid=None):
+        """Урок, который сейчас идёт в курсе: первый не пройденный; None — курс пройден."""
+        cs = self._cs(cid)
+        for L in BY_ID[cid or self.st["course"]]["lessons"]:
+            if str(L["day"]) not in cs["done"]:
+                return L
+        return None
+
+    def available(self, L, cid=None):
+        """Урок открыт: первый, или предыдущий пройден не сегодня, или открыли «следующий сейчас»."""
+        if L["day"] == 1:
+            return True
+        cs = self._cs(cid)
+        prev = cs["done"].get(str(L["day"] - 1))
+        return bool(prev) and (prev < self._today() or cs.get("ahead") == L["day"])
+
+    def _mark(self, day, i):
+        with self._lock:
+            cs = self._cs()
+            got = cs["steps"].setdefault(str(day), [])
+            if i in got:
+                return False
+            got.append(i)
+            self.st.setdefault("started", self._today())
+            L = self.lessons[day - 1]
+            if len(got) >= len(L["steps"]):
+                cs["done"][str(day)] = self._today()
+                log.info("🎓 Курс «%s»: урок %d «%s» пройден", BY_ID[self.st["course"]]["title"], day, L["title"])
+            self._save()
+        self.emit("course", **self.public())
+        return True
+
+    def _open_now(self):
+        L = self.current()
+        return L if L and self.available(L) else None
+
+    def heard(self, text):
+        """Человек что-то сказал — засчитать шаг текущего урока, если похоже. -> номер шага или None."""
+        L = self._open_now()
+        if not L or not text:
+            return None
+        t = " ".join(str(text).lower().replace("ё", "е").split()).strip(" .!?")
+        got = self._cs()["steps"].get(str(L["day"]), [])
+        for i, s in enumerate(L["steps"]):
+            if s.get("rx") and i not in got and re.search(s["rx"], t):
+                self._mark(L["day"], i)
+                return i
+        return None
+
+    def seen(self, section):
+        """Открыли раздел студии — шаг «Откройте …» текущего урока."""
+        L = self._open_now()
+        if not L:
+            return None
+        got = self._cs()["steps"].get(str(L["day"]), [])
+        for i, s in enumerate(L["steps"]):
+            if s.get("open") == section and i not in got:
+                self._mark(L["day"], i)
+                return i
+        return None
+
+    # ---------- команды ----------
+
+    def pick(self, cid):
+        if cid not in BY_ID:
+            raise ValueError("нет такого курса")
+        self.st["course"] = cid
+        self._save()
+        self.emit("course", **self.public())
+        return self.public()
+
+    def ahead(self):
+        L = self.current()
+        if L:
+            self._cs()["ahead"] = L["day"]
+            self._save()
+        self.emit("course", **self.public())
+        return self.public()
+
+    def set_offer(self, on):
+        self.st["offer"] = bool(on)
+        self._save()
+        return self.public()
+
+    def skip_today(self):
+        self.st["skip"] = self._today()
+        self._save()
+        return self.public()
+
+    def restart(self, day=None):
+        with self._lock:
+            cs = self._cs()
+            if day:
+                cs["steps"].pop(str(day), None)
+                cs["done"].pop(str(day), None)
+            else:
+                cs["steps"], cs["done"] = {}, {}
+                cs.pop("ahead", None)
+            self._save()
+        self.emit("course", **self.public())
+        return self.public()
+
+    def offer_line(self):
+        """Фраза для утренней сводки или "" (выключено, пройдено, «не сегодня», уже предлагали)."""
+        L = self._open_now()
+        if not L or not self.st.get("offer", True) or self.st.get("skip") == self._today() or self.st.get("offered") == self._today():
+            return ""
+        self.st["offered"] = self._today()
+        self._save()
+        c = BY_ID[self.st["course"]]
+        return (f"Есть урок курса «{c['title']}» на пять минут — день {L['day']}, «{L['title']}». Последней фразой (здесь вопрос "
+                f"можно) предложи его: «Есть урок на пять минут — начнём? Скажите: {L['steps'][0]['say']}». Не настаивай.")
+
+    def public(self):
+        cid, c = self.st["course"], BY_ID[self.st["course"]]
+        cs, L = self._cs(), self.current()
+        days = []
+        for x in c["lessons"]:
+            d = str(x["day"])
+            days.append({"day": x["day"], "title": x["title"],
+                         "state": "done" if d in cs["done"] else ("today" if L and x["day"] == L["day"] and self.available(x) else "next")})
+        lesson = None
+        if L:
+            got = cs["steps"].get(str(L["day"]), [])
+            nxt = [x for x in c["lessons"] if x["day"] == L["day"] + 1]
+            lesson = dict({k: L[k] for k in ("day", "title", "intro", "icon")}, open=self.available(L),
+                          steps=[dict(s, done=i in got) for i, s in enumerate(L["steps"])], tomorrow=nxt[0]["title"] if nxt else "")
+        courses = [{"id": k["id"], "title": k["title"], "sub": k["sub"], "total": len(k["lessons"]),
+                    "done": len(self._cs(k["id"])["done"])} for k in COURSES]
+        return {"course": cid, "title": c["title"], "courses": courses, "days": days, "lesson": lesson,
+                "done": len(cs["done"]), "total": len(c["lessons"]), "offer": self.st.get("offer", True), "finished": L is None}

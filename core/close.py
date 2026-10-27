@@ -777,6 +777,14 @@ class Close:
                 except Exception:  # noqa: BLE001
                     log.exception("свои устройства: не применилось")
             return 0, refreshed
+        if it.get("kind") == "fam":                     # семейный бюджет (family.py): траты, общие платежи, лимит
+            fam = getattr(self.host, "family", None)
+            if fam is not None:
+                try:
+                    fam.incoming(peer, it.get("name") or "", body, out=bool(it.get("out")))
+                except Exception:  # noqa: BLE001
+                    log.exception("семья: не применилось")
+            return 0, refreshed
         if body.get("re"):                              # реакция на сообщение — значком на нём, а не новым сообщением
             if self._react(peer, str(body["re"]), "me" if it.get("out") else "them", str(body.get("e") or "")[:8]) and not it.get("out"):
                 self.host.emit("close_react", pid=peer, mid=str(body["re"]), e=str(body.get("e") or "")[:8], name=it.get("name") or "")

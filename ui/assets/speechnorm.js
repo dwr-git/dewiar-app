@@ -81,7 +81,7 @@
     18: "восемнадцат", 19: "девятнадцат", 20: "двадцат", 30: "тридцат", 40: "сороков", 50: "пятидесят", 60: "шестидесят",
     70: "семидесят", 80: "восьмидесят", 90: "девяност", 100: "сот" };
   const ORD_END = { m_nom: ["ый", "ой", "ий"], n_nom: ["ое", "ое", "ье"], gen: ["ого", "ого", "ьего"], dat: ["ому", "ому", "ьему"],
-    prep: ["ом", "ом", "ьем"], ins: ["ым", "ым", "ьим"] };
+    prep: ["ом", "ом", "ьем"], ins: ["ым", "ым", "ьим"], f_nom: ["ая", "ая", "ья"], f_gen: ["ой", "ой", "ьей"], pl: ["ые", "ые", "ьи"] };
   function ordinalWords(n, form = "n_nom") {
     n = Math.trunc(+n);
     let last = n % 100 < 20 ? n % 100 : (n % 10 || n % 100);
@@ -109,8 +109,43 @@
     return ["до", "с", "со", "от", "после", "около", "начиная с", "кроме"].includes(p) ? "gen" : ["к", "ко", "по"].includes(p) ? "dat" : "n_nom"; };
   const PRE = "((?:(?<=\\s)|^)(?:до|с|со|от|после|около|к|ко|по|на|в)\\s+)?";
 
+  // Римские цифры (пакет 27.10) — как roman_norm в core/speechnorm.py: «XIX век», «Пётр I», «Ступень I», «Екатерины II»
+  const ROMAN = /^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/, RV = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+  const R_FEM = new Set(["часть", "ступень", "глава", "книга", "серия", "война", "олимпиада", "категория", "группа", "степень", "четверть",
+    "половина", "лига", "конференция", "дума", "республика", "симфония", "соната", "партия", "редакция", "мировая",
+    "екатерина", "елизавета", "анна", "мария", "империя", "династия", "эпоха", "фаза", "стадия", "очередь"]);
+  const R_FEM_GEN = new Set(["екатерины", "елизаветы", "анны", "марии", "части", "главы", "книги", "серии", "войны", "степени", "стадии", "фазы"]);
+  const R_NEUT = new Set(["издание", "тысячелетие", "собрание", "поколение", "царство", "отделение"]);
+  const R_SKIP = new Set(["размер", "размера", "размеры", "размеров", "витамин", "витамина", "группы", "класс"]);
+  function romanValue(s) {
+    if (!s || !ROMAN.test(s)) return 0;
+    const v = [...s].map(c => RV[c]);
+    return v.reduce((a, x, i) => a + (i + 1 < v.length && x < v[i + 1] ? -x : x), 0);
+  }
+  const romanOk = (r) => romanValue(r) && (r.length > 1 || "IVX".includes(r));
+  function romanNorm(t) {
+    t = t.replace(/((?:(?<=\s)|^)(?:в|во)\s+)?(?<![A-Za-z])([IVXLCDM]+)(?:\s*[-–—]\s*([IVXLCDM]+))?\s+(век(?:а|у|е|ом|ов|ах)?|вв?\.)(?![а-яё])/gi, (m, pre, a, b, w) => {
+      pre = pre || ""; let wl = w.toLowerCase().replace(/\.$/, "");
+      if (pre && wl === "в") { wl = "веке"; w = "веке"; } else if (pre && wl === "вв") { wl = "веках"; w = "веках"; }
+      let form = { "век": "m_nom", "века": "gen", "веку": "dat", "веке": "prep", "веком": "ins", "веков": "gen", "веках": "prep", "в": "m_nom", "вв": "pl" }[wl] || "m_nom";
+      if (b && form === "m_nom") form = "pl";
+      if (!romanOk(a) || (b && !romanOk(b))) return m;
+      let word = { "в": "век", "вв": "века" }[wl] || w;
+      if (form === "pl" && (wl === "век" || wl === "в")) word = "века";
+      let head = ordinalWords(romanValue(a), form);
+      if (b) head += " — " + ordinalWords(romanValue(b), form);
+      return `${pre}${head} ${word}`;
+    });
+    return t.replace(/(?<![A-Za-z])([А-ЯЁа-яё]+)\s+([IVXLCDM]+)(?![A-Za-z0-9])(?!\s+[A-Za-z])/g, (m, w, r) => {
+      const lw = w.toLowerCase(), up = w[0] !== w[0].toLowerCase();
+      if (!romanOk(r) || R_SKIP.has(lw)) return m;
+      const form = R_FEM.has(lw) ? "f_nom" : R_FEM_GEN.has(lw) ? "f_gen" : R_NEUT.has(lw) ? "n_nom" : up && /[ая]$/.test(lw) ? "gen"
+        : up && /[ую]$/.test(lw) ? "dat" : up && /(?:ом|ем|ём)$/.test(lw) ? "ins" : up && /е$/.test(lw) ? "prep" : "m_nom";
+      return `${w} ${ordinalWords(romanValue(r), form)}`;
+    });
+  }
   function norm(text, latin = true) {
-    let t = String(text == null ? "" : text);
+    let t = romanNorm(String(text == null ? "" : text));
     for (let i = 0; i < 3; i++) t = t.replace(/(?<![\d.,])(\d{1,3})[   ](?=\d{3}(?!\d))/g, "$1");
     t = t.replace(/(\d+)(?:[.,](\d{1,2}))?\s*(?:руб(?:л[а-яё]*)?\.?|₽|р\.|BYN|RUB)(?![а-яёА-ЯЁA-Za-z])/g, (m, n, k) => money(n, k, "rub"));
     t = t.replace(/\$\s*(\d+)(?:[.,](\d{1,2}))?|(\d+)(?:[.,](\d{1,2}))?\s*(?:\$|долл\.|USD)/g, (m, n, k, n2, k2) => money(n || n2, k || k2, "usd"));

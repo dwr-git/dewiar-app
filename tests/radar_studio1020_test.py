@@ -22,7 +22,7 @@ def dest(lat, lon, km, deg):
 
 H = [53.9006, 27.559]; now = int(time.time() * 1000)
 P = [("p1", "Мама", 1.2, 312, 1), ("p2", "Андрей", 0.18, 122, 2), ("p3", "Вика", None, 0, 0)]
-st = {"me": {"name": "Михаил"}, "people": [{"pid": p[0], "name": p[1], "devs": [{"dev": "d"}], "unread": 0, "last": {}} for p in P], "offers": [],
+st = {"me": {"name": "Михаил", "pid": "pme", "face": 3}, "people": [{"pid": p[0], "name": p[1], "devs": [{"dev": "d"}], "unread": 0, "last": {}, "face": 2 if p[0] == "p1" else 0} for p in P], "offers": [],
       "geo": {"me": {"lat": H[0], "lon": H[1], "acc": 10, "ts": now}, "people": {p[0]: dict(zip(("lat", "lon"), dest(*H, p[2], p[3])), acc=15, ts=now - p[4] * 60000, until=-1) for p in P if p[2]}}}
 from playwright.sync_api import sync_playwright  # noqa: E402
 FAKE = "window.pywebview = { api: new Proxy({}, { get: () => () => Promise.resolve(true) }) };"
@@ -31,10 +31,14 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 1280, "height": 860}); pg.on("pageerror", lambda e: errs.append(str(e))); pg.add_init_script(FAKE)
     pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1", wait_until="domcontentloaded"); pg.wait_for_timeout(1000)
     pg.evaluate("""(st) => { window.ST = st; window.calls = []; S = Object.assign(S || {}, { close: {} });
-      core.call = async (c, a) => { calls.push([c, a]); return c === 'close_state' ? ST : c === 'close_history' ? [] : {}; };
+      const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      core.call = async (c, a) => { calls.push([c, a]); return c === 'close_state' ? ST : c === 'close_history' ? [] : c === 'close_face' ? { data: PX } : {}; };
       document.querySelector('nav button[data-p="close"]').click(); }""", st)
     pg.wait_for_timeout(500); pg.click('#cl-tabs button[data-t="near"]'); pg.wait_for_timeout(500)
     ok(pg.locator("#nr-radar .rad-p").count() == 2 and pg.is_hidden(".cl-box"), "«Рядом»: на радаре двое, переписка спрятана")
+    pg.wait_for_timeout(300)
+    ok(pg.evaluate("document.querySelector('#nr-radar .rad-p[data-pid=\"p1\"] .cl-ava').classList.contains('has-face') && document.querySelector('#nr-radar .rad-me').classList.contains('has-face')"),
+       "на радаре — фото близкого и своё в середине, а не буквы (пакет 27.10)")
     card = pg.inner_text(".nr-card")
     ok("Андрей" in card and "180 м" in card and "на юго-восток" in card, f"ближайший — в карточке: {card!r}")
     ok("Вика" in pg.inner_text(".nr-rest") and "Центр — ваш телефон" in pg.inner_text("#cl-near"), "кто не показал себя — ниже; подпись про центр")

@@ -56,7 +56,7 @@ try:
            "студия открывается «Главной»")
         ok(pg.evaluate("document.querySelector('nav button.cur') && document.querySelector('nav button.cur').dataset.p") == "home", "в меню выделена «Главная»")
         apps = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app')].map(a => a.dataset.app)")
-        ok(len(apps) == 14 and "chat" in apps and "play" in apps and "ref" in apps and "pay" in apps and "vault" in apps, f"значки приложений — по умолчанию все (с 0.45 — и «Платежи», «Сейф»): {apps}")
+        ok(len(apps) == 15 and "pad" not in apps and "folder" not in apps and "qa" in apps and "music" in apps and "kids" in apps and "chat" in apps and "play" in apps and "ref" in apps and "pay" in apps and "vault" in apps, f"значки приложений — по умолчанию все (с 0.45 — и «Платежи», «Сейф»): {apps}")
         ok(pg.is_visible("nav button[data-p='ref']") and pg.is_visible("nav button[data-p='memory']"), "по умолчанию в меню всё на месте")
         ok(pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-ic svg')].length") == len(apps), "у каждого значка — рисунок")
         today = pg.evaluate("document.querySelector('#hm-today').innerText")
@@ -72,7 +72,7 @@ try:
         # настроить: скрыть «Блокнот», показать «Рефералы» (по умолчанию скрыт), переставить «Досуг» в начало
         pg.click("#hm-edit"); time.sleep(0.3)
         ok(pg.evaluate("document.querySelector('#hm-apps').classList.contains('edit')"), "«Настроить главную» — режим правки")
-        pg.click("#hm-apps .hm-app[data-app='pad'] .hm-tg"); time.sleep(0.3)
+        pg.click("#hm-apps .hm-app[data-app='memory'] .hm-tg"); time.sleep(0.3)
         pg.click("#hm-apps .hm-app[data-app='ref'] .hm-tg"); time.sleep(0.3)
         ok(not pg.evaluate("document.querySelector('[data-tg=ref]').checked") and pg.is_visible("#hm-apps .hm-app[data-app='ref']"),
            "в правке скрытый значок остаётся (выключенным) — можно вернуть")
@@ -80,10 +80,10 @@ try:
         pg.drag_and_drop("#hm-apps .hm-app[data-app='play']", "#hm-apps .hm-app[data-app='chat']"); time.sleep(0.3)
         pg.click("#hm-edit"); time.sleep(1.2)
         saved = json.loads((cfg / "settings.json").read_text(encoding="utf-8"))["ui"].get("home_apps")
-        ok(isinstance(saved, list) and "pad" not in saved and "ref" not in saved and saved.index("play") < saved.index("chat"),
+        ok(isinstance(saved, list) and "memory" not in saved and "ref" not in saved and saved.index("play") < saved.index("chat"),
            f"выбор сохранён в ui.home_apps: {saved}")
         shown = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app')].map(a => a.dataset.app)")
-        ok("pad" not in shown and "ref" not in shown and shown.index("play") < shown.index("chat"), f"после правки — «Блокнот» и «Рефералы» скрыты, «Досуг» перед «Чатом»: {shown}")
+        ok("memory" not in shown and "ref" not in shown and shown.index("play") < shown.index("chat"), f"после правки — «Память» и «Рефералы» скрыты, «Досуг» перед «Чатом»: {shown}")
         pg.reload(); time.sleep(3)
         again = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app')].map(a => a.dataset.app)")
         ok(again == shown, f"после перезагрузки — так же: {again}")

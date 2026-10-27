@@ -209,10 +209,11 @@ class MyMusicMixin:
                 "paused": bool((self.radio.paused or {}).get("_mine"))}
 
     def mine_command(self, cmd, a):
-        """Команды студии «Музыка»: mm_status, mm_list, mm_play, mm_ctl, mm_folder, mm_scan, mm_fav."""
+        """Команды студии «Музыка»: mm_status, mm_list, mm_play, mm_ctl {act: play|pause|next|prev|stop|vol {v}|seek {t}},
+        mm_vis, mm_folder, mm_scan, mm_fav."""
         lib, favs = self.mylib, set(self.s.get("music", "favs") or [])
         if cmd == "mm_status":
-            return dict(self.mine_status(), artists=lib.artists()[:12], dj_talk=self.s.get("music", "dj_talk") is not False)
+            return dict(self.mine_status(), artists=lib.artists()[:12], dj_talk=self.s.get("music", "dj_talk") is not False, vis=self._mm_vis())
         if cmd == "mm_list":
             tracks, _ = lib.match(str(a.get("what") or ""), list(favs))
             return [{k: t.get(k, "") for k in ("path", "title", "artist", "album", "year", "genre")} | {"fav": t["path"] in favs}
@@ -268,9 +269,21 @@ class MyMusicMixin:
                 self._mine_play(self.dj.prev())
             elif act == "stop":
                 self.radio.stop()
+            elif act == "vol":                           # ползунок громкости в плеере студии (27.10)
+                v = self.radio.set_volume(float(a.get("v") or 0.8))
+                self.s.update({"audio": {"radio_volume": v}})
+                return dict(self.mine_status(), vis=self._mm_vis())
+            elif act == "seek":                          # нажали на полосу хода трека — с этого места
+                self.radio.seek(float(a.get("t") or 0))
             self.emit("radio", **self.radio.status())
-            return self.mine_status()
+            return dict(self.mine_status(), vis=self._mm_vis())
+        if cmd == "mm_vis":                              # плеер студии: ход трека, громкость, спектр (раз в ~0,1 с)
+            return self._mm_vis()
         raise ValueError(f"неизвестная команда {cmd}")
+
+    def _mm_vis(self):
+        vis = getattr(self.radio, "vis", None)
+        return vis() if callable(vis) else None
 
     def _mine_rescan(self, force=False):
         self.emit("mymusic", **dict(self.mine_status(), busy=True))

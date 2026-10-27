@@ -96,16 +96,14 @@ def _text_of(msg, limit=20000):
     return body[:limit], files
 
 
-class Mail:
-    """Один ящик. Соединение открывается на каждую операцию и сразу закрывается — держать его незачем."""
+class Box:
+    """Один ящик. Соединение открывается на каждую операцию и сразу закрывается — держать его незачем.
+    data — его настройки; store() — записать все ящики (Mail._store)."""
 
-    def __init__(self, path=PATH, workspace=None):
-        self.path, self.ws = path, workspace
+    def __init__(self, data=None, workspace=None, store=None):
+        self.ws, self._store = workspace, store or (lambda: None)
         self._lock = threading.Lock()
-        try:
-            self.data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            self.data = {}
+        self.data = dict(data or {})
 
     # ---------- настройки ----------
 
@@ -136,26 +134,21 @@ class Mail:
                 "address", "name", "password", "login", "smtp_host", "smtp_port", "smtp_security", "imap_host",
                 "imap_port", "help", "provider")})
             self.data["address"] = addr
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
-            try:
-                os.chmod(tmp, 0o600)
-            except OSError:
-                pass
-            tmp.replace(self.path)
-        return self.public()
-
-    def forget(self):
-        with self._lock:
-            self.data = {}
-            try:
-                self.path.unlink()
-            except OSError:
-                pass
+        self._store()
         return self.public()
 
     # ---------- соединения ----------
+
+    def _auth_hint(self):
+        """Что ещё проверить у этой почты (пакет 27.10: Яндекс не принимал вход, хотя пароль «сохранён»)."""
+        p = self.data.get("provider") or guess(self.data.get("address", "")).get("provider", "")
+        return {"yandex": ". В Яндексе: id.yandex.ru → «Безопасность» → «Пароли приложений» → «Почта» — новый пароль (16 букв); "
+                          "и в настройках Яндекс Почты → «Почтовые программы» включите «С сервера imap.yandex.ru по протоколу IMAP» "
+                          "и «Пароли приложений и OAuth-токены»",
+                "mailru": ". В Mail.ru: «Безопасность» → «Пароли для внешних приложений» → новый пароль с доступом «Полный (IMAP, SMTP)»",
+                "gmail": ". В Google: включите двухэтапную проверку, затем «Пароли приложений» — 16 букв без пробелов",
+                "rambler": ". В Рамблере: настройки почты → «Почтовые программы» → включите доступ «С помощью почтовых клиентов»",
+                }.get(p, "")
 
     def _login(self):
         # Логин обычно совпадает с адресом; отдельное поле — для своих серверов, где это не так.
@@ -176,7 +169,7 @@ class Mail:
             s.login(self._login(), d.get("password", ""))
             return s
         except smtplib.SMTPAuthenticationError as e:
-            raise MailError("почта не приняла логин или пароль — нужен «пароль приложения», не обычный пароль") from e
+            raise MailError("почта не приняла логин или пароль — нужен «пароль приложения», не обычный пароль" + self._auth_hint()) from e
         except (OSError, smtplib.SMTPException) as e:
             raise MailError(f"не удалось подключиться к {host}:{port} — {e}") from e
 
@@ -198,7 +191,7 @@ class Mail:
             m.login(self._login(), d.get("password", ""))
             return m
         except imaplib.IMAP4.error as e:
-            raise MailError("почта не приняла логин или пароль (IMAP) — нужен «пароль приложения»") from e
+            raise MailError("почта не приняла логин или пароль (IMAP) — нужен «пароль приложения»" + self._auth_hint()) from e
         except OSError as e:
             raise MailError(f"не удалось подключиться к {host}:{port} — {e}") from e
 
@@ -317,3 +310,133 @@ class Mail:
                 m.logout()
             except Exception:  # noqa: BLE001
                 pass
+
+
+class Mail:
+    """Почта: несколько ящиков (27.10, пакет: «как настроить на несколько ящиков? а то только один»). Первый — главный:
+    с него письма уходят, если не сказано иначе. mail.json — {"boxes": [{…}, …]}; старый файл с одним ящиком
+    (просто его настройки) читается как список из одного. API прежний: без box — главный ящик; inbox() без box —
+    все ящики сразу (у писем не первого ящика uid «N:uid» и поле box — адрес)."""
+
+    def __init__(self, path=PATH, workspace=None):
+        self.path, self.ws = path, workspace
+        self._lock = threading.Lock()
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raw = {}
+        lst = raw.get("boxes") if isinstance(raw, dict) and isinstance(raw.get("boxes"), list) else ([raw] if raw else [])
+        self.boxes = [Box(d, workspace, self._store) for d in lst if isinstance(d, dict) and d]
+
+    @property
+    def data(self):                                  # прежнее поле: настройки главного ящика
+        return self.boxes[0].data if self.boxes else {}
+
+    def _store(self):
+        with self._lock:
+            live = [b.data for b in self.boxes if b.data.get("address")]
+            if not live:
+                try:
+                    self.path.unlink()
+                except OSError:
+                    pass
+                return
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"boxes": live}, ensure_ascii=False, indent=2), encoding="utf-8")
+            try:
+                os.chmod(tmp, 0o600)
+            except OSError:
+                pass
+            tmp.replace(self.path)
+
+    def box(self, which=None):
+        """Ящик по номеру или адресу (None — главный)."""
+        if which in (None, "", 0, "0"):
+            if not self.boxes:
+                raise MailError("почта не подключена (студия → «Подключение» → «Почта»)")
+            return self.boxes[0]
+        if isinstance(which, int) or str(which).isdigit():
+            i = int(which)
+            if 0 <= i < len(self.boxes):
+                return self.boxes[i]
+            raise MailError("нет такого ящика")
+        w = str(which).strip().lower()
+        b = next((b for b in self.boxes if (b.data.get("address") or "").lower() == w), None) \
+            or next((b for b in self.boxes if w and w in (b.data.get("address") or "").lower()), None)
+        if not b:
+            raise MailError(f"нет ящика «{which}» — подключены: " + ", ".join(x.data.get("address", "") for x in self.boxes))
+        return b
+
+    def configured(self):
+        return any(b.configured() for b in self.boxes)
+
+    def public(self):
+        d = self.boxes[0].public() if self.boxes else {"has_password": False, "configured": False}
+        d["boxes"] = [dict(b.public(), n=i) for i, b in enumerate(self.boxes)]
+        return d
+
+    def save(self, patch, box=0):
+        """Сохранить настройки ящика box (номер; = числу ящиков — новый ящик) -> public()."""
+        box = int(box or 0)
+        if box >= len(self.boxes):
+            addr = ((patch or {}).get("address") or "").strip().lower()
+            if addr and any((b.data.get("address") or "").lower() == addr for b in self.boxes):
+                raise MailError("этот ящик уже подключён")
+            self.boxes.append(Box({}, self.ws, self._store))
+            box = len(self.boxes) - 1
+            try:
+                self.boxes[box].save(patch)
+            except MailError:
+                self.boxes.pop()
+                raise
+            return self.public()
+        self.boxes[box].save(patch)
+        return self.public()
+
+    def forget(self, box=None):
+        """Убрать ящик (None — все)."""
+        if box is None:
+            self.boxes = []
+        elif 0 <= int(box) < len(self.boxes):
+            self.boxes.pop(int(box))
+        self._store()
+        return self.public()
+
+    def test(self, box=0):
+        return self.box(box).test()
+
+    def send(self, to="", subject="", body="", attachments=(), box=None):
+        return self.box(box).send(to, subject, body, attachments)
+
+    def inbox(self, limit=10, unread=False, query="", folder="INBOX", box=None):
+        if box not in (None, ""):
+            b = self.box(box)
+            i = self.boxes.index(b)
+            return [dict(x, uid=(f"{i}:{x['uid']}" if i else x["uid"]), box=b.data.get("address", "")) for x in b.inbox(limit, unread, query, folder)]
+        live = [(i, b) for i, b in enumerate(self.boxes) if b.configured() and b.data.get("imap_host")]
+        if not live:
+            raise MailError("почта не подключена (студия → «Подключение» → «Почта»)")
+        out, errs = [], []
+        for i, b in live:
+            try:
+                out += [dict(x, uid=(f"{i}:{x['uid']}" if i else x["uid"]), box=b.data.get("address", "")) for x in b.inbox(limit, unread, query, folder)]
+            except MailError as e:
+                errs.append(f"{b.data.get('address')}: {e}")
+        if errs and not out:
+            raise MailError("; ".join(errs))
+
+        def when(x):
+            try:
+                return email.utils.parsedate_to_datetime(x.get("date") or "").timestamp()
+            except (TypeError, ValueError, IndexError, OverflowError):
+                return 0
+        out.sort(key=when, reverse=True)
+        return out[: max(limit, limit * min(2, len(live)))] if len(live) > 1 else out[:limit]
+
+    def read(self, uid, folder="INBOX"):
+        """uid из inbox(): «N:uid» — письмо ящика N."""
+        u = str(uid)
+        i, u = (int(u.split(":", 1)[0]), u.split(":", 1)[1]) if re.fullmatch(r"\d+:\S+", u) else (0, u)
+        b = self.box(i)
+        return dict(b.read(u, folder), uid=str(uid), box=b.data.get("address", ""))

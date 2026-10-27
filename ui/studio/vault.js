@@ -22,6 +22,7 @@ async function loadVaultPage() {
   try { VL.items = (await core.call("vault_list")).items || []; VL.loaded = true; }
   catch (e) { $("#vl-list").innerHTML = `<p class="res bad">${escH(e.message)}</p>`; return; }
   vlRender();
+  vlKeep();
   if (!VL.edit) setTimeout(() => { if ($("#p-vault").classList.contains("cur")) $("#vl-q").focus(); }, 60);
 }
 function vlRender() {
@@ -56,7 +57,9 @@ async function vlCopy(text, what) {
   try { if (a && a.clip_secret) ok = !!(await a.clip_secret(text, VL_CLIP_S)); } catch (e) { ok = false; }
   if (!ok) {                                                  // окна нет (браузер) — копирует страница и стирает сама
     await navigator.clipboard.writeText(text);
-    setTimeout(async () => { try { if (await navigator.clipboard.readText() === text) await navigator.clipboard.writeText(""); } catch (e) { } }, VL_CLIP_S * 1000);
+    // в окне программы буфер не читаем — WebView2 спросил бы «разрешить читать буфер?» (пакет 27.10): просто стираем
+    if (a) setTimeout(() => navigator.clipboard.writeText("").catch(() => {}), VL_CLIP_S * 1000);
+    else setTimeout(async () => { try { if (await navigator.clipboard.readText() === text) await navigator.clipboard.writeText(""); } catch (e) { } }, VL_CLIP_S * 1000);
   }
   toast(`${what} скопирован — сотрётся из буфера через ${VL_CLIP_S} с`, 2600);
 }
@@ -136,3 +139,20 @@ document.addEventListener("keydown", (e) => {                 // «/» или Ct
   if ((e.key === "/" && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f")) { e.preventDefault(); $("#vl-q").focus(); $("#vl-q").select(); }
 });
 window.loadVaultPage = loadVaultPage;
+/* «Не потерять пароли» (27.10, владелец: «бывают случаи, когда нужно перенести их и не потерять вместе с устройством»):
+   сейф не синхронизируется — переносится закрытым «Слепком знаний» с паролем. Здесь — когда была последняя такая копия
+   и кнопка: «Главная» → слепок, формат «закрытый». */
+async function vlKeep() {
+  const el = $("#vl-keep-when"); if (!el) return;
+  let info = null; try { info = await core.call("backup_info"); } catch (e) { return; }
+  const last = ((info && info.items) || []).find(x => x.vault && x.label !== "до восстановления");
+  const old = !last || Date.now() - new Date(last.time).getTime() > 30 * 864e5;
+  el.textContent = !VL.items.length ? "" : last ? `Последняя копия с сейфом — ${typeof snWhen === "function" ? snWhen(last.time) : new Date(last.time).toLocaleDateString("ru-RU")}${old ? ". Пора обновить." : "."}`
+    : "Копии с сейфом ещё нет.";
+  el.style.color = VL.items.length && old ? "#b5651d" : "";
+}
+if ($("#vl-keep-go")) $("#vl-keep-go").onclick = () => {
+  if (typeof SN !== "undefined") { SN.fmt = "dwr"; try { localStorage.setItem("dw.snap.fmt", "dwr"); } catch (e) { } }
+  const h = $('nav button[data-p="home"]'); if (h) h.click();
+  setTimeout(() => { if (typeof snToggle === "function") snToggle(true); const pw = $("#sn-pw"); if (pw) pw.focus(); }, 250);
+};

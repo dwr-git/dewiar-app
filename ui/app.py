@@ -571,10 +571,16 @@ def _win_clip_set(text):
     import ctypes
     from ctypes import wintypes
     u32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
+    # 64-битные дескрипторы: без argtypes ctypes передаёт их как int — «int too long» (пакет 27.10: копирование в
+    # сейфе молча не удавалось, страница копировала сама и через 30 с спрашивала WebView2 «разрешить читать буфер?»)
     k32.GlobalAlloc.restype = wintypes.HGLOBAL
+    k32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
     k32.GlobalLock.restype = ctypes.c_void_p
     k32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    k32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    u32.SetClipboardData.restype = wintypes.HANDLE
     u32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    u32.OpenClipboard.argtypes = [wintypes.HWND]
 
     def blob(data):
         h = k32.GlobalAlloc(0x0002, len(data))              # GMEM_MOVEABLE
@@ -606,8 +612,11 @@ def _win_clip_clear_if(text):
     from ctypes import wintypes
     u32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
     u32.GetClipboardData.restype = wintypes.HANDLE
+    u32.GetClipboardData.argtypes = [wintypes.UINT]
     k32.GlobalLock.restype = ctypes.c_void_p
     k32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    k32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    u32.OpenClipboard.argtypes = [wintypes.HWND]
     if not u32.OpenClipboard(0):
         return
     try:

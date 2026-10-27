@@ -69,11 +69,16 @@
   <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года">Платежи<i class="ndot" id="pay-dot"></i></button>
   <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать">Сейф паролей</button>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
+  <button data-p="family" title="Семейный бюджет: общие траты и платежи с близкими">Семья<i class="ndot" id="fam-dot"></i></button>
   <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
   <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками">Музыка</button>
   <button data-p="kids" title="Детский режим: друг ребёнка, безопасные темы, время и отчёт вам">Дети</button>
   <button data-p="tasks">Задачи</button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
+  <div class="ng">Обучение</div>
+  <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
+  <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира">Вопрос — ответ</button>
+  <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу">Что я умею</button>
   <div class="ng">Знания</div>
   <button data-p="memory">Память</button>
   <button data-p="diary" title="Дневник, душа, конституция и что ассистент знает о вас">Душа</button>
@@ -83,7 +88,6 @@
   <button data-p="folder">Папка</button>
   <div class="ng">Настройка</div>
   <button data-p="personas">Персонажи</button>
-  <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу">Что я умею</button>
   <button data-p="brain">Мозг</button>
   <button data-p="ears">Слух</button>
   <button data-p="voice">Голос</button>
@@ -237,6 +241,30 @@
       <p class="hint" style="max-width:62ch;margin-top:12px">Переписываться и созваниваться можно с теми, кого пригласили вы, и с тем, кто пригласил вас, — когда оба согласны:
         «Позвать в Близкие» — друг увидит приглашение и примет его или откажется.</p>
     </div>
+  </section>
+  <section id="p-course" class="wide">
+    <div class="cs-top"><div><h1>Неделя с Лирой</h1>
+      <p class="lead">Короткие уроки по пять минут. Лира сама предложит урок дня — или откройте его здесь. Шаги засчитываются сами, когда вы их делаете.</p></div>
+      <div class="cs-prog"><span id="cs-pt"></span><i role="img" id="cs-bar"><u id="cs-fill"></u></i></div></div>
+    <div class="cs-courses" id="cs-courses" role="tablist" aria-label="Курсы"></div>
+    <ol class="cs-days" id="cs-days" aria-label="Уроки курса"></ol>
+    <div class="cs-grid"><article class="cs-lesson" id="cs-lesson" aria-live="polite"></article>
+      <aside class="cs-side">
+        <div class="cs-card"><h3>Как идёт курс</h3><p>Раз в день, когда вы впервые садитесь за компьютер, Лира говорит: «Есть урок на пять минут — начнём?». Не хочется — «не сегодня», и она не настаивает.</p>
+          <div class="switch slim"><div>Предлагать урок дня</div><label class="tg"><input type="checkbox" id="cs-offer"><i></i></label></div></div>
+        <div class="cs-card"><h3>Пройдено</h3><ul class="cs-done" id="cs-done"></ul></div>
+        <div class="cs-card cs-next"><h3>Другие курсы</h3><div id="cs-after"></div></div>
+      </aside></div>
+  </section>
+  <section id="p-qa" class="wide">
+    <h1>Вопрос — ответ</h1>
+    <p class="lead">Всё, что умеет Лира, — по разделам. Спросите своими словами или откройте плитку.</p>
+    <div class="qa-find">
+      <label class="qa-q"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input type="search" id="qa-q" placeholder="Например: как связать телефон и компьютер" aria-label="Поиск по ответам" autocomplete="off"></label>
+      <button class="btn primary" id="qa-ask">Спросить Лиру</button>
+    </div>
+    <div class="qa-grid"><div id="qa-left"></div><article class="qa-art" id="qa-art" aria-live="polite"></article></div>
   </section>
   <section id="p-tricks" class="wide">
     <h1>Что я умею</h1>
@@ -434,13 +462,18 @@
     <p class="lead">Своя папка с музыкой. Ассистент ставит из неё по просьбе и ведёт эфир, как диджей: подборки под настроение, пара слов перед треком, на «что играет?» — расскажет. Пока он говорит, музыка звучит тише — как у радио.</p>
     <div class="mm-top">
       <div class="mm-now idle" id="mm-now">
+        <canvas class="mm-vis" id="mm-vis" aria-hidden="true"></canvas>
         <div class="mm-cover" id="mm-cover">♪</div>
         <div class="mm-np"><div id="mm-np"></div>
+          <div class="mm-time" id="mm-time" hidden><span id="mm-t0">0:00</span>
+            <button class="mm-bar" id="mm-bar" aria-label="Перемотать"><i><u id="mm-fill"></u><b id="mm-knob"></b></i></button><span id="mm-t1">0:00</span></div>
           <div class="mm-ctl">
-            <button id="mm-prev" title="Предыдущий трек" aria-label="Предыдущий трек">⏮</button>
-            <button id="mm-pp" class="big" title="Играть" aria-label="Играть или пауза">▶</button>
-            <button id="mm-next" title="Следующий трек" aria-label="Следующий трек">⏭</button>
-            <button id="mm-heart" class="heart" title="В любимое" aria-label="В любимое" hidden>♥</button>
+            <button id="mm-prev" title="Предыдущий трек" aria-label="Предыдущий трек"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14"/><path d="M19 6.2v11.6a.8.8 0 0 1-1.2.7L9.6 12.7a.8.8 0 0 1 0-1.4l8.2-5.8a.8.8 0 0 1 1.2.7z"/></svg></button>
+            <button id="mm-pp" class="big" title="Играть" aria-label="Играть или пауза"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-play" d="M8 5.6v12.8a.9.9 0 0 0 1.4.8l10-6.4a.9.9 0 0 0 0-1.6l-10-6.4A.9.9 0 0 0 8 5.6z"/><path class="ic-pause" d="M8.5 5.5v13M15.5 5.5v13"/></svg></button>
+            <button id="mm-next" title="Следующий трек" aria-label="Следующий трек"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5v14"/><path d="M5 6.2v11.6a.8.8 0 0 0 1.2.7l8.2-5.8a.8.8 0 0 0 0-1.4L6.2 5.5A.8.8 0 0 0 5 6.2z"/></svg></button>
+            <button id="mm-heart" class="heart" title="В любимое" aria-label="В любимое" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg></button>
+            <label class="mm-vol" title="Громкость музыки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4 4 0 0 1 0 6"/><path class="w2" d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+              <input type="range" id="mm-vol" min="10" max="100" step="5" value="80" aria-label="Громкость музыки"><span id="mm-volv">80%</span></label>
           </div>
         </div>
       </div>
@@ -474,14 +507,41 @@
       <div class="mm-panel rc-panel">
       <div class="mm-ph"><h3>Свои радиостанции</h3><span class="hint" style="margin:0">Радио вашего города, любимый поток — по ссылке</span></div>
       <ul class="mm-list rc-list" id="rc-list"></ul>
-      <form class="rc-add" id="rc-add"><input id="rc-name" placeholder="Название: Железо-ФМ" maxlength="80" autocomplete="off">
-        <input id="rc-url" placeholder="Ссылка на поток: https://…  (из файла .m3u — строка с http)" required autocomplete="off">
+      <form class="rc-add" id="rc-add"><input type="text" id="rc-name" aria-label="Название станции" placeholder="Название: Железо-ФМ" maxlength="80" autocomplete="off">
+        <input type="url" id="rc-url" aria-label="Ссылка на поток" placeholder="Ссылка на поток: https://…  (из файла .m3u — строка с http)" required autocomplete="off">
         <button class="btn primary small">Добавить и включить</button></form>
       <p class="hint">Можно и голосом или в чате: «включи радио Железо-ФМ https://…» или пришлите файл .m3u со словами «включи» —
         станция запомнится. Дальше просто: «включи Железо-ФМ».</p>
     </div>
   </section>
 
+  <section id="p-family" class="wide">
+    <h1>Семья</h1>
+    <p class="lead">Общий бюджет с близкими: кто сколько потратил за месяц, общие платежи и кто их оплатил. Траты записываются как обычно — голосом («продукты 46,20») или в «Деньгах». Всё идёт между вашими устройствами со сквозным шифрованием.</p>
+    <div class="fm-grid">
+      <div class="fm-col">
+      <div class="fm-card fm-month" id="fm-month"></div>
+      <div class="fm-card fm-bills"><h3>Общие платежи</h3><ul id="fm-bills"></ul>
+        <form class="fm-add" id="fm-add">
+          <input type="text" id="fm-bname" placeholder="Платёж" aria-label="Платёж" maxlength="60">
+          <input type="number" id="fm-bamt" placeholder="Сумма" aria-label="Сумма" step="0.01" min="0">
+          <input type="date" id="fm-bdue" aria-label="Оплатить до">
+          <select id="fm-bpayer" aria-label="Кто платит"></select>
+          <button class="btn" type="submit">Добавить</button>
+        </form></div>
+      </div>
+      <div class="fm-col">
+      <div class="fm-card">
+        <h3>Кто в семье</h3>
+        <ul class="fm-people" id="fm-people"></ul>
+        <div class="fm-inv"><select id="fm-pick" aria-label="Кого пригласить"></select><button class="btn primary" id="fm-invite">Пригласить</button></div>
+        <small class="fm-note" id="fm-inv-note">Пригласить можно из «Близких». Когда человек примет — траты и платежи станут общими.</small>
+        <div class="switch slim"><div>Делиться моими тратами<span>Расходы из «Денег» сразу видны семье</span></div><label class="tg"><input type="checkbox" id="fm-share"><i></i></label></div>
+      </div>
+      <div class="fm-card fm-feed"><h3>Траты за месяц</h3><ul id="fm-feed"></ul></div>
+      </div>
+    </div>
+  </section>
   <section id="p-kids" class="wide">
     <h1>Дети</h1>
     <p class="lead">Детский режим: свой персонаж-друг, только безопасные темы, время за день и короткий отчёт вам. Выйти из режима и поменять настройки можно только с вашим PIN-кодом.</p>
@@ -790,6 +850,7 @@
     <div class="prof on" id="mail-box" style="padding:16px 18px;margin-bottom:22px">
       <h3 style="font-size:15px;margin-bottom:6px">Почта</h3>
       <p class="hint" style="margin-bottom:12px">Ассистент сможет прислать вам результат («пришли мне это на почту»), отправить письмо по вашей просьбе (всегда спросит «отправить?») и рассказать, что нового во входящих.</p>
+      <div class="ml-boxes" id="ml-boxes" role="tablist" aria-label="Ящики"></div>
       <div class="actions" style="margin:0;flex-wrap:wrap">
         <input type="email" id="ml-addr" placeholder="ваш адрес, например ivan@yandex.ru" autocomplete="email" style="flex:1;min-width:200px">
         <input type="password" id="ml-pass" placeholder="пароль приложения" autocomplete="off" style="flex:1;min-width:170px">
@@ -1360,9 +1421,10 @@
     <h1>Возможности</h1>
     <p class="lead">Dewiar умеет много. Включите только то, чем пользуетесь, — остальное не будет попадаться на глаза.
       Выключенное ничего не теряет: включите — и всё на месте. Разговор, заметки, напоминания и блокнот есть всегда.</p>
-    <div class="switch"><div>Досуг — милые игры<span>Двадцать две игры на пару минут: сказки «Огонёк», «Хутор Одуванчик» и «Кто боится темноты», «Каляка» — дорисуй мостик ручкой, «Колючая почта», «Выше облаков» — прыжки до луны, «Найди пару» на память, «Пять в ряд» против Лиры, головоломки (Тетрис, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
+    <div class="switch"><div>Досуг — милые игры<span>Двадцать три игры на пару минут: сказки «Огонёк», «Хутор Одуванчик» и «Кто боится темноты», «Каляка» — дорисуй мостик ручкой, «Колючая почта», «Выше облаков» — прыжки до луны, «Лукошко» — ловить яйца, как на карманной игре из детства, «Найди пару» на память, «Пять в ряд» против Лиры, головоломки (Тетрис, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
     <div class="switch"><div>Рядом<span>«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом.</span></div><label class="tg"><input type="checkbox" data-k="features.near"><i></i></label></div>
     <div class="switch"><div>Встречи<span>«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном.</span></div><label class="tg"><input type="checkbox" data-k="features.meet"><i></i></label></div>
+    <div class="switch"><div>Семья — общий бюджет<span>Траты за месяц у всей семьи, общий лимит и общие платежи (свет, газ, интернет) с близкими. Позовут в семью — включится само.</span></div><label class="tg"><input type="checkbox" data-k="features.family"><i></i></label></div>
     <div class="switch"><div>Суфлёр<span>Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить.</span></div><label class="tg"><input type="checkbox" data-k="features.prompter"><i></i></label></div>
     <p class="hint">На телефоне — свои переключатели: «Настройки» → «Ещё» → «Возможности».</p>
   </section>
@@ -1475,6 +1537,12 @@
     <div class="vl-list" id="vl-list"></div>
     <p class="hint vl-foot">Скопированный пароль сам стирается из буфера обмена через 30 секунд. Голосом: «запомни пароль от вайфая: …»,
       «какой пароль от вайфая?» — ответ появится на экране. В резервную копию сейф попадает только с паролем копии.</p>
+    <div class="vl-keep" id="vl-keep">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      <div><b>Чтобы не потерять пароли вместе с компьютером</b>
+        <span>Сейф живёт только на этом компьютере и никуда не синхронизируется. Сделайте закрытый «Слепок знаний» с паролем — в нём и сейф. Храните файл на флешке или в облаке: на новом компьютере «Восстановить» вернёт все пароли.<em id="vl-keep-when"></em></span></div>
+      <button class="btn" id="vl-keep-go">Сделать закрытую копию</button>
+    </div>
   </section>
   <section id="p-safety">
     <h1>Безопасность</h1>
@@ -1753,6 +1821,9 @@
 <script src="studio/pay.js"></script>
 <script src="studio/mymusic.js"></script>
 <script src="studio/kids.js"></script>
+<script src="studio/family.js"></script>
+<script src="studio/qa.js"></script>
+<script src="studio/course.js"></script>
 <script src="studio/vault.js"></script>
 <script src="studio/snapshot.js"></script>
 <script src="studio/capture.js"></script>

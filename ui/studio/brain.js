@@ -445,9 +445,10 @@ core.on("reminders", e => { if ($("#p-reminders").classList.contains("cur")) ren
 function featuresApply() {
   const f = get("features") || {}, on = (k) => f[k] !== false;
   const nb = $('nav button[data-p="prompter"]'); if (nb) nb.hidden = !on("prompter");
+  const fb0 = $('nav button[data-p="family"]'); if (fb0) fb0.hidden = f.family !== true;   // «Семья» — по желанию (27.10)
   for (const t of ["near", "meet"]) { const b = $(`#cl-tabs button[data-t="${t}"]`); if (b) b.hidden = !on(t); }
   const cur = $("#cl-tabs button.on");
   if (cur && cur.hidden && window.rdTab) rdTab("chat");
-  if (nb && nb.hidden && nb.classList.contains("cur")) { const fb = $('nav button[data-p="features"]'); if (fb) fb.click(); }
+  if ((nb && nb.hidden && nb.classList.contains("cur")) || (fb0 && fb0.hidden && fb0.classList.contains("cur"))) { const fb = $('nav button[data-p="features"]'); if (fb) fb.click(); }
   if (window.hmNav) hmNav();                                     // меню — ещё и по «Главной» (home.js): скрытое там скрыто и тут
 }

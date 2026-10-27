@@ -196,6 +196,8 @@ class H(BaseHTTPRequestHandler):
             ans = "По базе: " + " ".join(ctx.split("### Из", 1)[-1].split()[:24])
         elif "ничего не нашлось" in sys_prompt and "базе знаний" in sys_prompt:
             ans = "В моей базе об этом ничего нет, скажу от себя."
+        elif "MOCKSAY:" in str(user):                                    # проверки: готовый ответ в самой просьбе
+            ans = str(user).split("MOCKSAY:", 1)[1].split("»")[0].strip()
         elif "какая погода в минске" in str(user).lower():               # «ложный отказ», хотя поиск есть
             ans = "К сожалению, у меня нет доступа к интернету в реальном времени."
         elif not ("истори" in user.lower() or "сказк" in user.lower()):

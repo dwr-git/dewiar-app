@@ -14,7 +14,7 @@ _KIDS_LOCKED = ("account_", "backup_", "cal_add", "cal_remove", "cloud_connect",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install")
 
 
 def _kids_blocked(cmd, a):
@@ -123,6 +123,47 @@ class CommandsMixin:
                         "предложил спросить вас. Весь разговор — студия → «Дети».")
             except Exception:  # noqa: BLE001
                 log.debug("детский режим: Telegram", exc_info=True)
+
+    # ---------- семейный бюджет (family.py) ----------
+
+    def family_cmd(self, cmd, a):
+        """fam_get — всё для раздела «Семья» и кого можно позвать (из «Близких»); fam_invite/fam_accept/fam_leave {pid};
+        fam_bill {id?, name, amount, due, payer}; fam_paid {id, paid}; fam_bill_del {id}; fam_remind {id};
+        fam_limit {v}; fam_share {on}."""
+        from close import CloseError
+        from family import FamilyError
+        F = self.family
+        try:
+            if cmd == "fam_get":
+                people = []
+                try:
+                    people = [{"pid": p["pid"], "name": p["name"]} for p in (self.close.state().get("people") or [])]
+                except Exception:  # noqa: BLE001 — «Близкие» без входа или без связи: список пуст
+                    pass
+                return dict(F.public(a.get("month")), people=people)
+            if cmd == "fam_invite":
+                return F.invite(str(a.get("pid") or ""))
+            if cmd == "fam_accept":
+                return F.accept(str(a.get("pid") or ""))
+            if cmd == "fam_leave":
+                return F.leave(str(a.get("pid") or ""))
+            if cmd == "fam_bill":
+                F.bill_save(a)
+            elif cmd == "fam_paid":
+                F.bill_paid(str(a.get("id") or ""), a.get("paid", True) is not False)
+            elif cmd == "fam_bill_del":
+                F.bill_delete(str(a.get("id") or ""))
+            elif cmd == "fam_remind":
+                F.remind(str(a.get("id") or ""))
+            elif cmd == "fam_limit":
+                F.set_limit(a.get("v"))
+            elif cmd == "fam_share":
+                F.set_share(a.get("on"))
+            else:
+                raise ValueError(f"неизвестная команда {cmd}")
+        except (FamilyError, CloseError) as e:
+            raise ValueError(str(e)) from e
+        return F.public()
 
     # ---------- окно голосом: «спрячься», «покажись», «отключись» ----------
 
@@ -236,7 +277,7 @@ class CommandsMixin:
                 names = {"snake": "Змейку", "racer": "Гонку", "bricks": "Кирпичики", "plane": "Небесного пилота", "bip": "Бипа",
                          "blocks": "Тетрис", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
                          "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»", "five": "«Пять в ряд»", "pairs": "«Найди пару»",
-                         "farm": "«Хутор Одуванчик»", "dark": "«Кто боится темноты»", "post": "«Колючую почту»", "pinball": "«Звёздный пинбол»", "doodle": "«Каляку»", "hop": "«Выше облаков»"}
+                         "farm": "«Хутор Одуванчик»", "dark": "«Кто боится темноты»", "post": "«Колючую почту»", "pinball": "«Звёздный пинбол»", "doodle": "«Каляку»", "hop": "«Выше облаков»", "basket": "«Лукошко»"}
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
                 self.emit("window", do="play", game=game)  # сразу: игра — это и есть ответ (экзамен 25.10 не видел, что она открылась)
                 self._say_quick(say, text)
@@ -333,6 +374,8 @@ class CommandsMixin:
         """Выполнить команду окна cmd с аргументами a. -> данные для ответа; ValueError — понятная ошибка."""
         if cmd.startswith("kids_"):
             return self.kids_cmd(cmd, a)
+        if cmd.startswith("fam_") and not (getattr(self, "kids", None) and self.kids.locked()):
+            return self.family_cmd(cmd, a)
         kids = getattr(self, "kids", None)
         if kids and kids.locked() and _kids_blocked(cmd, a):
             raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
@@ -589,25 +632,47 @@ class CommandsMixin:
             from mail import MailError, guess
             try:
                 if cmd == "mail_save":
-                    r = self.mail.save(a.get("patch") or {})
+                    r = self.mail.save(a.get("patch") or {}, int(a.get("box") or 0))
                     self.emit("tools", tools=self.toolbox.catalog())
                     return r
                 if cmd == "mail_guess":
                     return guess(a.get("address", ""))
                 if cmd == "mail_test":
-                    return self.mail.test()
+                    return self.mail.test(int(a.get("box") or 0))
                 if cmd == "mail_send_test":
-                    return self.mail.send("", "Dewiar: проверка почты",
+                    return self.mail.box(int(a.get("box") or 0)).send("", "Dewiar: проверка почты",
                                           "Здравствуйте!\n\nЭто проверочное письмо от голосового ассистента Dewiar. "
                                           "Почта подключена: теперь можно сказать «пришли мне это на почту» или "
                                           "«что нового в почте?».\n\n— Dewiar")
                 if cmd == "mail_forget":
-                    r = self.mail.forget()
+                    r = self.mail.forget(int(a["box"]) if a.get("box") is not None else None)
                     self.emit("tools", tools=self.toolbox.catalog())
                     return r
                 return self.mail.public()
             except MailError as e:
                 raise ValueError(str(e)) from e
+        if cmd.startswith("course_"):           # курс «Неделя с Лирой» (core/course.py, studio/course.js)
+            c = self.course
+            if cmd == "course_seen":
+                c.seen(str(a.get("section") or ""))
+            elif cmd == "course_pick":
+                return c.pick(str(a.get("id") or ""))
+            elif cmd == "course_ahead":
+                return c.ahead()
+            elif cmd == "course_offer":
+                return c.set_offer(a.get("on", True))
+            elif cmd == "course_skip":
+                return c.skip_today()
+            elif cmd == "course_restart":
+                return c.restart(int(a["day"]) if a.get("day") else None)
+            return c.public()
+        if cmd == "guide":                      # «Вопрос — ответ» (studio/qa.js): всё руководство, статья {id} или поиск {q}
+            import guide as G
+            if a.get("id"):
+                return next((x for x in G.load() if x.get("id") == a["id"]), None)
+            if a.get("q"):
+                return [x["id"] for x in G.search(str(a["q"]), n=8)]
+            return G.load()
         if cmd == "recall":                     # поиск по записям (страница «Память»)
             return self.recall.search(a.get("query", ""), limit=int(a.get("limit") or 10))
         if cmd == "skills_folder":

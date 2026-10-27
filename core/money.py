@@ -7,6 +7,7 @@ Money хранит записи в money.json рядом с настройкам
 on_change будит синхронизацию — см. engine.py), поэтому id и поля записи менять согласованно с обеими сторонами."""
 import datetime as dt
 import json
+import logging
 import re
 import threading
 import time
@@ -262,6 +263,8 @@ class Money:
         self.currency_fn = currency_fn or (lambda: "BYN")
         self._lock = threading.RLock()                    # _save → _write_month → list() под тем же замком
         self.items = self._load()
+        self.on_add = None                                # новая запись -> (семейный бюджет, engine.py)
+        self.on_delete = None                             # запись удалена (в т. ч. «отмени последнюю трату») -> семье
 
     def _load(self):
         try:
@@ -305,6 +308,11 @@ class Money:
         with self._lock:
             self.items.append(it)
             self._save([day[:7]])
+        if self.on_add:                                    # семейный бюджет (family.py): расход — семье
+            try:
+                self.on_add(it)
+            except Exception:  # noqa: BLE001
+                logging.getLogger("dewiar.money").exception("семья: трата не ушла")
         return it
 
     def update(self, iid, patch):
@@ -343,7 +351,12 @@ class Money:
                 return None
             self.items.remove(it)
             self._save([it["date"][:7]])
-            return it
+        if self.on_delete:
+            try:
+                self.on_delete(iid)
+            except Exception:  # noqa: BLE001
+                logging.getLogger("dewiar.money").exception("семья: удаление не ушло")
+        return it
 
     def last(self):
         """Последняя добавленная запись (для «отмени последнюю трату»)."""

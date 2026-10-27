@@ -15,8 +15,10 @@ function mmNow(s) {
     ? `<small>${s.paused ? "На паузе" : "Сейчас играет"}${s.what ? " · подборка «" + escH(s.what) + "»" : ""}</small><h2>${escH(n.title)}</h2>` +
       `<div class="ar">${escH([n.artist, n.album && "«" + n.album + "»", n.year].filter(Boolean).join(" · "))}</div>`
     : `<small>Тишина</small><h2>Выберите подборку</h2><div class="ar">или скажите: «Лира, поставь мою музыку»</div>`;
-  $("#mm-pp").textContent = s && s.paused || !n ? "▶" : "⏸";
+  $("#mm-pp").classList.toggle("playing", !!(n && !(s && s.paused)));
   $("#mm-pp").title = s && s.paused || !n ? "Играть" : "Пауза";
+  if ($("#mm-time")) $("#mm-time").hidden = !n;
+  if (s && s.vis) mmVisTake(s.vis);
   const f = $("#mm-heart"); f.hidden = !n; if (n) { f.classList.toggle("on", !!n.fav); f.title = n.fav ? "Убрать из любимого" : "В любимое"; }
 }
 function mmStats(s) {
@@ -61,7 +63,59 @@ async function mmRefresh() {
   try { mmData = await core.call("mm_status"); } catch (e) { return; }
   mmNow(mmData); mmStats(mmData); mmChips();
 }
-function loadMyMusic() { mmRefresh().then(mmLoadList); if (typeof rcLoad === "function") rcLoad(); }
+/* Плеер (27.10, владелец: «не хватает громкости, статуса проигранного, а это окошко фиолетовое — красивую анимацию под
+   музыку; кнопочки симпатичнее»). mm_vis (~8 раз в секунду, пока играет и раздел открыт): ход трека, громкость и восемь
+   полос спектра — ими дышит фон: три мягких пятна света (басы, середина, верх) и тонкие столбики снизу. */
+const MMV = { pos: 0, dur: 0, at: 0, playing: false, bands: new Array(8).fill(0), sm: new Array(8).fill(0), vol: 0.8, local: false, drag: false, timer: 0, raf: 0, t0: performance.now() };
+const mmFmt = (t) => { t = Math.max(0, Math.floor(t || 0)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
+function mmVisTake(v) {
+  if (!v) return;
+  Object.assign(MMV, { pos: +v.pos || 0, dur: +v.dur || 0, at: performance.now(), playing: !!v.playing, bands: v.bands || MMV.bands, local: !!v.local });
+  if (!MMV.drag && typeof v.volume === "number" && $("#mm-vol")) { MMV.vol = v.volume; $("#mm-vol").value = Math.round(v.volume * 100); $("#mm-volv").textContent = Math.round(v.volume * 100) + "%"; }
+  mmTime();
+}
+function mmTime() {
+  if (!$("#mm-t0")) return;
+  const pos = MMV.playing ? MMV.pos + (performance.now() - MMV.at) / 1000 : MMV.pos, d = MMV.dur;
+  $("#mm-t0").textContent = mmFmt(d ? Math.min(pos, d) : pos);
+  $("#mm-t1").textContent = d ? mmFmt(d) : "—";
+  const f = d ? Math.min(100, pos / d * 100) : 0;
+  $("#mm-fill").style.width = f + "%"; $("#mm-knob").style.left = f + "%";
+  $("#mm-bar").disabled = !(d && MMV.local);
+}
+async function mmPoll() {
+  clearTimeout(MMV.timer);
+  const on = $("#p-music") && $("#p-music").classList.contains("cur") && !document.hidden;
+  if (on) { try { mmVisTake(await core.call("mm_vis")); } catch (e) { /* ядро занято — в следующий раз */ } }
+  MMV.timer = setTimeout(mmPoll, on && MMV.playing ? 120 : 1000);
+}
+function mmDraw(now) {
+  const cv = $("#mm-vis"); if (!cv || !cv.isConnected) { MMV.raf = 0; return; }
+  const box = cv.parentElement, dpr = Math.min(2, window.devicePixelRatio || 1), W = box.clientWidth, H = box.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  for (let i = 0; i < 8; i++) { const b = MMV.playing ? MMV.bands[i] || 0 : 0; MMV.sm[i] += (b - MMV.sm[i]) * (b > MMV.sm[i] ? .45 : .12); }
+  const still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches, t = still ? 0 : (now - MMV.t0) / 1000;
+  const low = (MMV.sm[0] + MMV.sm[1]) / 2, mid = (MMV.sm[2] + MMV.sm[3] + MMV.sm[4]) / 3, high = (MMV.sm[5] + MMV.sm[6] + MMV.sm[7]) / 3;
+  const blob = (x, y, r, c, a) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${c},${a})`); gr.addColorStop(1, `rgba(${c},0)`); g.fillStyle = gr; g.fillRect(0, 0, W, H); };
+  g.globalCompositeOperation = "lighter";
+  blob(W * (.30 + .06 * Math.sin(t * .35)), H * (.55 + .12 * Math.cos(t * .27)), H * (.85 + .55 * low), "255,170,90", .16 + .32 * low);
+  blob(W * (.62 + .08 * Math.cos(t * .22)), H * (.40 + .15 * Math.sin(t * .31)), H * (.95 + .45 * mid), "124,108,255", .18 + .30 * mid);
+  blob(W * (.86 + .05 * Math.sin(t * .41)), H * (.70 + .10 * Math.sin(t * .19)), H * (.65 + .40 * high), "255,127,168", .10 + .30 * high);
+  g.globalCompositeOperation = "source-over";
+  const n = 56, bw = W / n;                                            // тонкие столбики спектра по низу
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1) * 7, k = Math.floor(x), fr = x - k, v = (MMV.sm[k] || 0) * (1 - fr) + (MMV.sm[Math.min(7, k + 1)] || 0) * fr;
+    const h = 3 + v * H * .3 * (.75 + .25 * Math.sin(i * 1.7 + t * 2));
+    g.fillStyle = `rgba(255,255,255,${.05 + v * .12})`;
+    const r = Math.min(3, bw * .3), x0 = i * bw + bw * .22, w = bw * .56, y0 = H - h;
+    g.beginPath(); g.moveTo(x0, H); g.lineTo(x0, y0 + r); g.quadraticCurveTo(x0, y0, x0 + r, y0); g.lineTo(x0 + w - r, y0); g.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + r); g.lineTo(x0 + w, H); g.fill();
+  }
+  if (MMV.playing) mmTime();
+  MMV.raf = still ? 0 : requestAnimationFrame(mmDraw);
+}
+function mmVisStart() { if (!MMV.raf) MMV.raf = requestAnimationFrame(mmDraw); mmPoll(); }
+function loadMyMusic() { mmVisStart(); mmRefresh().then(mmLoadList); if (typeof rcLoad === "function") rcLoad(); }
 if ($("#p-music")) {
   core.on("mymusic", e => { if (!$("#p-music").classList.contains("cur")) return; mmData = Object.assign(mmData || {}, e); mmNow(mmData); mmStats(mmData); if (!e.busy) mmLoadList(); });
   core.on("radio", () => { if ($("#p-music").classList.contains("cur")) mmRefresh().then(mmRenderList); });
@@ -77,6 +131,18 @@ if ($("#p-music")) {
   $("#mm-pp").onclick = () => core.call("mm_ctl", { act: mmData && mmData.now && !mmData.paused ? "pause" : "play" }).then(mmRefresh).catch(e => toast(e.message, 4000));
   $("#mm-next").onclick = () => core.call("mm_ctl", { act: "next" }).then(mmRefresh).catch(e => toast(e.message));
   $("#mm-prev").onclick = () => core.call("mm_ctl", { act: "prev" }).then(mmRefresh).catch(e => toast(e.message));
+  if ($("#mm-vol")) {
+  $("#mm-vol").oninput = () => { MMV.drag = true; $("#mm-volv").textContent = $("#mm-vol").value + "%"; };
+  $("#mm-vol").onchange = () => core.call("mm_ctl", { act: "vol", v: +$("#mm-vol").value / 100 }).then(r => { MMV.drag = false; if (r && r.vis) mmVisTake(r.vis); })
+    .catch(e => { MMV.drag = false; toast(e.message); });
+  $("#mm-bar").onclick = (e) => { if (!MMV.dur || !MMV.local) return; const r = $("#mm-bar i").getBoundingClientRect();
+    const t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * MMV.dur;
+    Object.assign(MMV, { pos: t, at: performance.now() }); mmTime();
+    core.call("mm_ctl", { act: "seek", t }).then(r2 => { if (r2 && r2.vis) mmVisTake(r2.vis); }).catch(x => toast(x.message)); };
+  $("#mm-bar").onkeydown = (e) => { if (!MMV.dur || !MMV.local || !/^Arrow(Left|Right)$/.test(e.key)) return; e.preventDefault();
+    core.call("mm_ctl", { act: "seek", t: MMV.pos + (e.key === "ArrowRight" ? 10 : -10) }).then(r2 => { if (r2 && r2.vis) mmVisTake(r2.vis); }).catch(() => {}); };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && $("#p-music").classList.contains("cur")) mmVisStart(); });
+  }
   $("#mm-heart").onclick = () => { const n = mmData && mmData.now; if (n) core.call("mm_fav", { path: n.path, on: !n.fav }).then(() => mmRefresh().then(mmLoadList)).catch(e => toast(e.message)); };
 }
 

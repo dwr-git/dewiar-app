@@ -379,7 +379,8 @@ let S = (() => { try { return Object.assign({}, DEF, JSON.parse(prefGet("setting
 for (const k of ["llm", "stt", "tts", "home", "account", "net", "tg"]) S[k] = Object.assign({}, DEF[k], S[k] || {});
 { let raw = {}; try { raw = JSON.parse(prefGet("settings") || "{}") || {}; } catch (e) { }
   if (!raw.features || typeof raw.features !== "object") S.features = Object.keys(raw).length ? { games: true, near: true, meet: true } : Object.assign({}, DEF.features); }
-const feat = (k) => (S.features || {})[k] !== false;      // «Возможности»: включено ли (нет ключа — да)
+const FEAT_OPTIN = { family: 1 };                           // эти — по желанию: пока не включили, выключены
+const feat = (k) => { const v = (S.features || {})[k]; return v === undefined ? !FEAT_OPTIN[k] : v !== false; };   // «Возможности»: включено ли (нет ключа — да)
 // 22.10: облако отклоняло chat_template_kwargs, а телефон сразу переходил на функции текстом и запоминал это — один раз
 // проверим заново: теперь сначала пробуется запрос без chat_template_kwargs, с функциями полем (так они работают лучше)
 // 22.10, вечер: настоящая причина — сайт превращал пустой {} в схеме функции в [] (cloud.php chat_schema_fix): ещё раз
@@ -3632,6 +3633,7 @@ async function runTool(name, a) {
       const m = money(); const x = { id: "m" + Date.now(), date: isoLocal(new Date()).slice(0, 10), kind: a.kind === "income" ? "income" : "expense", amount: +a.amount || 0,
         currency: (a.currency || CUR).toUpperCase(), category: a.category || (a.kind === "income" ? "Доход" : "Разное"), note: a.note || "" };
       if (!x.amount) return "Ошибка: нет суммы."; m.push(x); saveMoney(m);
+      try { famShareSpend(x); } catch (e) { plog("warn", "семья: " + e.message); }   // общий бюджет: расход — семье
       return `Записано: ${x.kind === "income" ? "+" : "−"}${x.amount} ${x.currency}, ${x.category}.`;
     }
     case "money_report": return moneyReport(a.period || "month").text;
@@ -4668,7 +4670,7 @@ function renderDay() {
     box.innerHTML = `<div class="sum"><div><b style="color:var(--good)">${+c.inc.toFixed(2)}</b><small>доходы</small></div><div><b style="color:#FF8FA8">${+c.exp.toFixed(2)}</b><small>расходы</small></div><div><b>${+(c.inc - c.exp).toFixed(2)}</b><small>остаток, ${cur}</small></div></div>`
       + (items.length ? items.map(x => `<div class="it"><div class="tm" style="color:${x.kind === "income" ? "var(--good)" : "#FF8FA8"};font-size:15px">${x.kind === "income" ? "+" : "−"}${x.amount}</div><div class="bd"><b>${esc(x.note || x.category)}</b><small>${esc(x.category)} · ${esc(x.date)} · ${esc(x.currency)}</small></div><button class="x" data-id="${esc(x.id)}">${X_SVG}</button></div>`).join("")
       : `<div class="empty">Записей нет.<br>Скажите: «купил кофе за восемь пятьдесят».</div>`);
-    $$(".x", box).forEach(b => b.onclick = () => { saveMoney(money().filter(x => x.id !== b.dataset.id)); renderDay(); });
+    $$(".x", box).forEach(b => b.onclick = () => { saveMoney(money().filter(x => x.id !== b.dataset.id)); try { famDelSpend(b.dataset.id); } catch (e) { } renderDay(); });
   }
 }
 
@@ -5678,7 +5680,8 @@ function renderSettings() {
       ${fsw("ft-close", "close", "Близкие — сердечко вверху", "Переписка и звонки с родными и друзьями, их помощники. Выключите — сердечко пропадёт; переписка сохранится")}
       <div class="fsub${feat("close") ? "" : " off"}" id="ft-sub"><small>Вкладки внутри «Близких»</small>
       ${fsw("ft-near", "near", "Рядом", "Где близкие, если они сами делятся местом")}
-      ${fsw("ft-meet", "meet", "Встречи", "Знакомства с теми, кто рядом")}</div></div>`);
+      ${fsw("ft-meet", "meet", "Встречи", "Знакомства с теми, кто рядом")}
+      ${fsw("ft-fam", "family", "Семья — общий бюджет", "Траты за месяц у всей семьи, общий лимит и платежи. Позовут в семью — включится само")}</div></div>`);
     liteApply();
     h.push(`<h3>Лёгкий режим</h3><div class="card"><label class="f" style="margin-top:0"><span>Для слабых телефонов и экономии батареи</span><select id="ap-lite">${opt([["auto", "Сам, когда нужно"], ["on", "Всегда"], ["off", "Никогда"]], S.lite || "auto")}</select></label>
       <p class="hint" id="lite-now" style="margin:6px 2px 0">${liteOn() ? `Сейчас включён: ${esc(liteWhyNow)}.` : "Сейчас выключен."} Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут.</p></div>`);
@@ -7513,6 +7516,7 @@ async function clPoll() {
       if (it.kind === "sig") { try { clSig(it.peer, it.name, body.s || {}); } catch (e) { } continue; }
       if (it.kind === "geo") { if (!it.out) radTake(it.peer, it.name || "", body.g); continue; }   // место для радара «Рядом»
       if (it.kind === "own") { if (it.out && env.fd !== k.dev) ownApply(body); continue; }   // от своего же устройства
+      if (it.kind === "fam") { try { famIn(it.peer, it.name || "", body, !!it.out); } catch (e) { plog("warn", "семья: " + e.message); } continue; }   // общий бюджет
       if (body.re) {                                        // реакция на сообщение — значком на нём, не новым сообщением
         const e = CL_EMO.includes(body.e) ? body.e : String(body.e || "").slice(0, 8);
         if (clReAt(it.peer, String(body.re), it.out ? "me" : "them", e) && !it.out) {
@@ -7609,6 +7613,7 @@ async function clAcceptLink(link) {
 /* звонки (assets/call.js): сигналы — зашифрованные сообщения kind sig ({s: сигнал}); во время звонка опрос — раз в секунду */
 function clTransport(p) {
   return {
+    face: () => p.face ? clFace(p.pid, p.face) : "",             // фото близкого на экране звонка (пакет 27.10)
     send: (sig) => clSend(p.pid, "", [], "sig", { s: sig }),
     ice: async () => (await clReq("GET", "/close/ice")).iceServers || [],
     fast: (on) => { clFast = !!on; clSchedule(); try { D.keepScreen(!!on || state !== "idle"); } catch (e) { } },   // звонок — экран не гаснет
@@ -7766,6 +7771,181 @@ async function clMeSave(patch, okMsg) {
 }
 const clKb = (n) => n > 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " МБ" : Math.max(1, Math.round(n / 1024)) + " КБ";
 /* Вкладки листа «Близкие»: «Близкие» | «Рефералы». Зовут в «Близкие» из «Рефералов» (offers) — карточка с согласием. */
+/* «Семья» — общий бюджет с близкими (27.10, по макету «Dewiar — новые режимы», экран Budget). То же, что core/family.py
+   на компьютере, и тот же протокол: сообщения вида fam через «Близкие» со сквозным шифрованием — {fam: {op: invite |
+   join | leave | spend | del | bill | limit}}. Траты: money_add (голосом «продукты 46,20») уходит семье; удалили в
+   «Моём дне» — удаляется и у семьи. Платежи и лимит — «последнее изменение главнее». Хранится в family.json. */
+const FAM_COL = ["#8a9bff", "#ffc978", "#7ee8c8", "#ff9fb8", "#b7a0ff", "#9fd6ff"];
+const FAM_MON = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const FAM_MONTH = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+let FAM = null;
+function famLoad() {
+  if (FAM) return FAM;
+  let s; try { s = JSON.parse(fileGet("family.json") || "{}"); } catch (e) { s = {}; }
+  return FAM = Object.assign({ members: {}, ledger: [], bills: {}, limit: { v: 0, at: 0 }, share: true }, s || {});
+}
+function famSave() {
+  const cut = Date.now() - 400 * 86400000;
+  FAM.ledger = FAM.ledger.filter(x => (+x.ts || 0) > cut).slice(-5000);
+  fileSave("family.json", JSON.stringify(FAM));
+  if (clTab === "fam" && $("#fam-body") && $("#sh-close").classList.contains("on")) famRender();
+  famDot();
+}
+const famJoined = () => Object.keys(famLoad().members).filter(p => FAM.members[p].st === "joined");
+const famMe = () => { const st = clLoad(); return (st.me.name && st.me.name !== "Без имени" ? st.me.name : (S.close && S.close.name) || S.user_name) || "Я"; };
+const famNum = (n) => Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: Number(n) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+const famDay = (iso) => iso ? `${+iso.slice(8, 10)} ${FAM_MON[+iso.slice(5, 7) - 1]}` : "";
+const famToday = () => isoLocal(new Date()).slice(0, 10);
+function famDot() { const b = $('#cl-tabs [data-t="fam"]'); if (b) b.classList.toggle("dot", Object.values(famLoad().members).some(m => m.st === "asked")); }
+function famSend(pids, op, text) {
+  return Promise.all(pids.map(pid => clSend(pid, text || "", null, "fam", { fam: op })
+    .catch(e => plog("info", `семья: не дошло «${op.op}»: ${e.message}`))));
+}
+async function famInvite(pid) {
+  const p = clPerson(pid), m = famLoad().members[p.pid] || {};
+  if (m.st === "joined") return;
+  if (m.st === "asked") return famAccept(p.pid);
+  FAM.members[p.pid] = { name: p.name, st: "invited", at: Math.floor(Date.now() / 1000) }; famSave();
+  await clSend(p.pid, "Приглашаю вести общий семейный бюджет в Dewiar: траты и общие платежи у всех вместе. Принять — «Близкие» → «Семья» (нужна версия Dewiar 0.51 или новее).", null, "fam", { fam: { op: "invite" } });
+}
+async function famAccept(pid) {
+  const m = famLoad().members[pid];
+  if (!m) throw new Error("приглашения от этого человека нет");
+  m.st = "joined"; famSave();
+  await famSend([pid], { op: "join", limit: FAM.limit, bills: Object.values(FAM.bills) });
+}
+async function famLeave(pid) {
+  const m = famLoad().members[pid]; delete FAM.members[pid]; famSave();
+  if (m) await famSend([pid], { op: "leave" });
+}
+function famShareSpend(x) {                                // новая трата на телефоне (money_add) — семье
+  if (x.kind !== "expense" || famLoad().share === false) return;
+  const e = { id: x.id, who: "", name: famMe(), amount: +x.amount, cur: x.currency || "", cat: x.category || "", note: x.note || "", said: String(x.said || "").slice(0, 120), date: x.date, ts: Date.now() };
+  FAM.ledger.push(e); famSave();
+  const pids = famJoined(); if (pids.length) { const s = Object.assign({}, e); delete s.who; famSend(pids, { op: "spend", e: s }); }
+}
+function famDelSpend(id) {
+  const n = famLoad().ledger.length;
+  FAM.ledger = FAM.ledger.filter(x => !(x.id === id && !x.who));
+  if (FAM.ledger.length === n) return;
+  famSave(); if (famJoined().length) famSend(famJoined(), { op: "del", id });
+}
+function famBillSave(b) {
+  const name = String(b.name || "").trim().slice(0, 60);
+  if (!name) throw new Error("назовите платёж: свет, газ, интернет…");
+  const id = b.id || Math.random().toString(16).slice(2, 12), old = famLoad().bills[id] || {};
+  const bill = { id, name, amount: Math.round((+b.amount || 0) * 100) / 100, due: String(b.due || "").slice(0, 10), payer: String(b.payer || "").slice(0, 40),
+    paid_by: old.paid_by || "", paid_at: old.paid_at || 0, at: Date.now() };
+  FAM.bills[id] = bill; famSave(); famSend(famJoined(), { op: "bill", b: bill });
+  return bill;
+}
+function famBillPaid(id, paid) {
+  const b = famLoad().bills[id]; if (!b) throw new Error("нет такого платежа");
+  Object.assign(b, paid ? { paid_by: famMe(), paid_at: Date.now() } : { paid_by: "", paid_at: 0 }, { at: Date.now() });
+  famSave(); famSend(famJoined(), { op: "bill", b });
+}
+function famBillDel(id) {
+  const b = famLoad().bills[id]; if (!b) return;
+  delete FAM.bills[id]; famSave(); famSend(famJoined(), { op: "bill", b: Object.assign({}, b, { gone: 1, at: Date.now() }) });
+}
+async function famRemind(id) {
+  const b = famLoad().bills[id]; if (!b) throw new Error("нет такого платежа");
+  const who = famJoined().find(pid => FAM.members[pid].name === b.payer);
+  if (!who) throw new Error("напомнить можно тому, кто в семье, — выберите, кто платит");
+  await clSend(who, `Напоминаю: оплатить «${b.name}»${b.due ? ` до ${b.due.slice(8, 10)}.${b.due.slice(5, 7)}` : ""}${b.amount ? ` — ${b.amount}` : ""}.`);
+}
+function famLimit(v) { FAM.limit = { v: Math.max(0, Math.round((+v || 0) * 100) / 100), at: Date.now() }; famSave(); famSend(famJoined(), { op: "limit", l: FAM.limit }); }
+function famMergeBill(b) {
+  if (!b || !b.id) return;
+  const cur = FAM.bills[b.id];
+  if (cur && +cur.at > +(b.at || 0)) return;               // у нас новее
+  if (b.gone) delete FAM.bills[b.id];
+  else { const o = {}; ["id", "name", "amount", "due", "payer", "paid_by", "paid_at", "at"].forEach(k => o[k] = b[k]); FAM.bills[b.id] = o; }
+}
+function famMergeLimit(l) { if (l && typeof l === "object" && +l.at > +(FAM.limit.at || 0)) FAM.limit = { v: +l.v || 0, at: +l.at }; }
+function famIn(peer, name, body, out) {                    // входящее из «Близких» (clPoll): от семьи или от своего устройства
+  const op = (body || {}).fam || {}, k = op.op, F = famLoad(), m = F.members[peer], now = Math.floor(Date.now() / 1000);
+  if (k === "invite" && !out) {
+    if (!m || m.st !== "joined") { F.members[peer] = { name: name || "Близкий", st: "asked", at: now };
+      if (!feat("family")) { S.features = Object.assign({}, S.features, { family: true }); saveS(); }   // позвали в семью — вкладка появляется сама
+      if (!document.hidden) toast(`👪 ${name || "Близкий"} приглашает вести общий бюджет — «Близкие» → «Семья»`, 5000); }
+  } else if (k === "join" && !out) {
+    if (m && ["invited", "asked", "joined"].includes(m.st)) {
+      const was = m.st; m.st = "joined"; famMergeLimit(op.limit); (op.bills || []).forEach(famMergeBill);
+      if (was !== "joined") famSend([peer], { op: "join", limit: F.limit, bills: Object.values(F.bills) });
+    }
+  } else if (k === "leave" && !out) delete F.members[peer];
+  else if (["invite", "join", "leave"].includes(k) && out) {      // то же действие с другого своего устройства
+    if (k === "leave") delete F.members[peer];
+    else if (k === "invite" && !m) F.members[peer] = { name: name || "Близкий", st: "invited", at: now };
+    else if (k === "join") F.members[peer] = Object.assign({}, m || {}, { name: (m && m.name) || name || "Близкий", st: "joined" });
+  } else if (!(m && m.st === "joined") && !out) return;         // не из семьи — не принимаем
+  else if (k === "spend") {
+    const e = op.e || {}, who = out ? "" : peer;
+    if (e.id && !F.ledger.some(x => x.id === e.id && (x.who || "") === who)) F.ledger.push(Object.assign({}, e, { who, name: e.name || name }));
+  } else if (k === "del") F.ledger = F.ledger.filter(x => !(x.id === op.id && (x.who || "") === (out ? "" : peer)));
+  else if (k === "bill") famMergeBill(op.b);
+  else if (k === "limit") famMergeLimit(op.l);
+  famSave();
+}
+function famPublic() {
+  const F = famLoad(), month = famToday().slice(0, 7), today = famToday(), me = famMe();
+  const led = F.ledger.filter(x => String(x.date || "").slice(0, 7) === month), by = {};
+  const nameOf = (pid) => !pid ? "Я" : (F.members[pid] || {}).name || "";
+  led.forEach(x => { const k = x.who || ""; (by[k] = by[k] || { pid: k, name: nameOf(k) || x.name, sum: 0 }).sum = Math.round((by[k].sum + (+x.amount || 0)) * 100) / 100; });
+  ["", ...famJoined()].forEach(pid => by[pid] = by[pid] || { pid, name: nameOf(pid), sum: 0 });
+  const bills = Object.values(F.bills).sort((a, b) => (!!a.paid_by - !!b.paid_by) || String(a.due || "9999").localeCompare(String(b.due || "9999")));
+  return { me, month, total: Math.round(Object.values(by).reduce((s, v) => s + v.sum, 0) * 100) / 100, limit: +F.limit.v || 0,
+    by: Object.values(by).sort((a, b) => (a.pid !== "") - (b.pid !== "") || b.sum - a.sum), bills,
+    feed: led.filter(x => x.date === today).sort((a, b) => b.ts - a.ts).slice(0, 30), recent: led.sort((a, b) => b.ts - a.ts).slice(0, 60),
+    members: Object.entries(F.members).map(([pid, m]) => Object.assign({}, m, { pid })), share: F.share !== false };
+}
+function famColor(pid) { const o = ["", ...famJoined()], i = o.indexOf(pid); return FAM_COL[(i < 0 ? o.length : i) % FAM_COL.length]; }
+const famAva = (name, pid, cls) => `<span class="fmava${cls ? " " + cls : ""}" style="background:${famColor(pid)}" aria-hidden="true">${esc(String(name || "?").trim().slice(0, 1).toUpperCase() || "?")}</span>`;
+function famRender() {
+  const box = $("#fam-body"); if (!box) return;
+  const d = famPublic(), st = clLoad(), lim = d.limit, over = lim && d.total > lim, base = Math.max(lim, d.total) || 1;
+  const joinedNames = d.members.filter(m => m.st === "joined").map(m => m.name);
+  const by = d.by.filter(v => v.sum > 0 || v.pid === "" || joinedNames.includes(v.name));
+  const asked = d.members.filter(m => m.st === "asked"), others = d.members.filter(m => m.st !== "asked");
+  const free = st.people.filter(p => !d.members.some(m => m.pid === p.pid));
+  const CHK = `<svg viewBox="0 0 24 24"><path d="M5 12l5 5L19 7"/></svg>`, CLK = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2 2"/></svg>`;
+  const list = d.feed.length ? d.feed : d.recent.slice(0, 10);
+  box.innerHTML = asked.map(m => `<div class="card fmask">${famAva(m.name, m.pid)}<div><b>${esc(m.name)} приглашает вести общий бюджет</b><small>Траты и общие платежи будут видны вам обоим.</small></div>
+      <div class="row2"><button class="btn p" data-acc="${esc(m.pid)}">Принять</button><button class="btn" data-out="${esc(m.pid)}">Не сейчас</button></div></div>`).join("")
+    + `<div class="fmhead"><div><small>Семья</small><h3>${FAM_MONTH[+d.month.slice(5, 7) - 1]}</h3></div><div class="fmstack">${by.map(v => famAva(v.pid ? v.name : d.me, v.pid)).join("")}</div></div>`
+    + `<section class="fmmonth" aria-label="Потрачено за месяц"><div class="fmtot"><b>${famNum(d.total)} <span>${esc(CUR)}</span></b>`
+    + `<button class="lnk" id="fm-lim">${lim ? (over ? `больше лимита на ${famNum(d.total - lim)}` : `из ${famNum(lim)} на месяц`) : "задать лимит"}</button></div>`
+    + `<div class="fmbar${over ? " over" : ""}" role="img" aria-label="${esc(by.map(v => `${v.pid ? v.name : "Я"} ${famNum(v.sum)}`).join(", ") + (lim && !over ? `, остаток ${famNum(lim - d.total)}` : ""))}">${by.filter(v => v.sum > 0).map(v => `<i style="width:${(v.sum / base * 100).toFixed(2)}%;background:${famColor(v.pid)}"></i>`).join("")}</div>`
+    + `<div class="fmby">${by.map(v => `<div><span>${esc(v.pid ? v.name : "Я")}</span><b>${famNum(v.sum)}</b></div>`).join("")}</div></section>`
+    + `<h4 class="fmh">Общие платежи</h4><div class="fmbills">${d.bills.map(b => {
+      const paid = !!b.paid_by, late = !paid && b.due && b.due < famToday();
+      const sub = paid ? `оплатил(а) ${esc(b.paid_by)}, ${famDay(isoLocal(new Date(b.paid_at)).slice(0, 10))}` : [b.due ? `до ${famDay(b.due)}` : "", b.payer ? `платит ${esc(b.payer)}` : ""].filter(Boolean).join(", ") || "кто платит — не выбрано";
+      return `<div class="fmbill ${paid ? "paid" : late ? "late" : "due"}" data-id="${esc(b.id)}"><span class="fmic">${paid ? CHK : CLK}</span><div><b>${esc(b.name)}</b><small>${sub}</small></div>`
+        + (paid ? (b.amount ? `<b>${famNum(b.amount)}</b>` : "") : `${b.amount ? `<b>${famNum(b.amount)}</b>` : ""}<button class="fmbtn" data-paid="${esc(b.id)}">Оплачено</button>`
+          + (joinedNames.includes(b.payer) ? `<button class="fmbtn rem" data-rem="${esc(b.id)}">Напомнить</button>` : "")) + `</div>`;
+    }).join("") || `<p class="hint">Свет, газ, интернет — добавьте, кто и до какого числа платит. «Оплачено» увидят все.</p>`}</div>`
+    + `<details class="fmadd"><summary>Добавить платёж</summary><div class="fmform"><input id="fm-bn" placeholder="Платёж" maxlength="60" aria-label="Платёж"><input id="fm-ba" type="number" inputmode="decimal" placeholder="Сумма" aria-label="Сумма">
+       <input id="fm-bd" type="date" aria-label="Оплатить до"><select id="fm-bp" aria-label="Кто платит">${[d.me, ...joinedNames].map(n => `<option>${esc(n)}</option>`).join("")}</select><button class="btn p" id="fm-bgo">Добавить</button></div></details>`
+    + `<h4 class="fmh">${d.feed.length ? "Сегодня" : "Последние траты"}</h4><div class="fmfeed">${list.map(x => { const nm = x.who ? x.name : d.me, what = String(x.note || x.cat || "Расход");
+      return `<div>${famAva(nm, x.who || "", "sm")}<div><b>${esc(what.slice(0, 1).toUpperCase() + what.slice(1))}</b><small>${x.said ? `голосом: «${esc(x.said)}», ` : ""}${x.who ? esc(nm) + ", " : ""}${x.date === famToday() ? clTime(x.ts) : famDay(x.date)}</small></div><b>${famNum(x.amount)}</b></div>`; }).join("")
+      || `<p class="hint">Скажите «продукты 46,20» — трата запишется и появится у всей семьи.</p>`}</div>`
+    + `<h4 class="fmh">Кто в семье</h4><div class="fmppl">${others.map(m => `<div>${famAva(m.name, m.pid)}<div><b>${esc(m.name)}</b><small>${m.st === "joined" ? "в семье" : "ждём ответа"}</small></div><button class="fmbtn" data-out="${esc(m.pid)}">${m.st === "joined" ? "Убрать" : "Отменить"}</button></div>`).join("")}
+       ${free.length ? `<div class="fminv"><select id="fm-pick" aria-label="Кого пригласить">${free.map(p => `<option value="${esc(p.pid)}">${esc(p.name)}</option>`).join("")}</select><button class="btn p" id="fm-inv">Пригласить</button></div>`
+        : `<p class="hint">${st.people.length ? "Все близкие уже в списке." : "Пригласить можно тех, кто есть в «Близких»: сначала добавьте человека на вкладке «Близкие»."}</p>`}
+       <div class="sw fmshare"><div>Делиться моими тратами<small>Расходы, которые вы записываете, сразу видны семье</small></div><label class="tg"><input type="checkbox" id="fm-share"${d.share ? " checked" : ""}><i></i></label></div></div>`;
+  const run = (f, ok) => async () => { try { await f(); if (ok) toast(ok); } catch (e) { toast(e.message, 4000); } famRender(); };
+  $$("#fam-body [data-acc]").forEach(b => b.onclick = run(() => famAccept(b.dataset.acc), "Вы в общем бюджете"));
+  $$("#fam-body [data-out]").forEach(b => b.onclick = run(() => famLeave(b.dataset.out)));
+  $$("#fam-body [data-paid]").forEach(b => b.onclick = run(() => famBillPaid(b.dataset.paid, true), "Отмечено: оплачено"));
+  $$("#fam-body [data-rem]").forEach(b => b.onclick = run(() => famRemind(b.dataset.rem), "Напоминание отправлено"));
+  $$("#fam-body .fmbill.paid").forEach(el => el.oncontextmenu = (e) => { e.preventDefault();
+    if (confirm(`Удалить платёж «${(FAM.bills[el.dataset.id] || {}).name}» у всей семьи?`)) run(() => famBillDel(el.dataset.id), "Платёж удалён")(); });
+  if ($("#fm-inv")) $("#fm-inv").onclick = run(() => famInvite($("#fm-pick").value), "Приглашение отправлено");
+  $("#fm-share").onchange = () => { FAM.share = $("#fm-share").checked; famSave(); };
+  $("#fm-lim").onclick = () => { const v = prompt("Лимит на месяц для всей семьи (0 — без лимита)", lim || ""); if (v !== null) run(() => famLimit(String(v).replace(",", ".")), "Лимит сохранён — у всей семьи")(); };
+  $("#fm-bgo").onclick = run(() => famBillSave({ name: $("#fm-bn").value, amount: +String($("#fm-ba").value).replace(",", "."), due: $("#fm-bd").value, payer: $("#fm-bp").value }), "Платёж добавлен");
+}
 let clTab = "close";
 function clTabs() { $$("#cl-tabs button").forEach(b => b.onclick = () => { clTab = b.dataset.t; clRender(); }); }
 const clOffers = (st) => (st.offers || []).map(o => `<div class="card clof"><b>${esc(o.name)} зовёт вас в «Близкие»</b>
@@ -7817,7 +7997,9 @@ function clRender() {
     return;
   }
   if ((clTab === "near" || clTab === "meet") && !feat(clTab)) clTab = "close";      // «Возможности»: выключено — вкладки нет
-  const tabs = `<div class="tabs" id="cl-tabs"><button data-t="close" class="${clTab === "close" ? "on" : ""}">Близкие</button>${feat("near") ? `<button data-t="near" class="${clTab === "near" ? "on" : ""}">Рядом</button>` : ""}${feat("meet") ? `<button data-t="meet" class="${clTab === "meet" ? "on" : ""}">Встречи</button>` : ""}<button data-t="ref" class="${clTab === "ref" ? "on" : ""}">Рефералы</button></div>`;
+  if (clTab === "fam" && !feat("family")) clTab = "close";
+  const tabs = `<div class="tabs" id="cl-tabs"><button data-t="close" class="${clTab === "close" ? "on" : ""}">Близкие</button>${feat("family") ? `<button data-t="fam" class="${clTab === "fam" ? "on" : ""}">Семья</button>` : ""}${feat("near") ? `<button data-t="near" class="${clTab === "near" ? "on" : ""}">Рядом</button>` : ""}${feat("meet") ? `<button data-t="meet" class="${clTab === "meet" ? "on" : ""}">Встречи</button>` : ""}<button data-t="ref" class="${clTab === "ref" ? "on" : ""}">Рефералы</button></div>`;
+  if (clTab === "fam") { if (!$("#fam-body")) { box.innerHTML = tabs + `<div id="fam-body"></div>`; clTabs(); } famRender(); famDot(); return; }
   if (clTab === "ref") { if (!$("#rf-body")) { box.innerHTML = tabs + `<div id="rf-body"></div>`; clTabs(); } refTab(); return; }
   if (clTab === "meet") { if (!$("#meet-body")) { box.innerHTML = tabs + `<div id="meet-body"></div>`; clTabs(); } meetRender(); mtLoad(); return; }
   if (clTab === "near") { if (!$("#rad-body")) { box.innerHTML = tabs + `<div id="rad-body"></div>`; clTabs(); } radRender(); return; }
@@ -8253,7 +8435,7 @@ function radRender() {
     <div class="rad-wrap"><div class="radar${radMe ? "" : " nome"}" id="radar">
       <svg class="rad-rings" viewBox="0 0 360 360" aria-hidden="true">${rings}</svg>
       <div class="rad-sweep" id="rad-sweep"></div><div class="rad-n" id="rad-n" aria-hidden="true">С</div>
-      <div class="rad-me" aria-label="Вы">Я</div><div id="rad-ppl"></div></div>
+      <div class="rad-me" aria-label="Вы" data-face="${esc(st.me.pid || "me")}" data-v="${+st.me.face || 0}">Я</div><div id="rad-ppl"></div></div>
       <button class="ib soft rad-cmp${radCompass ? " on" : ""}" id="rad-cmp" aria-pressed="${radCompass}" aria-label="Повернуть радар по компасу" title="По компасу"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></button></div>
     <div id="rad-card"></div><div id="rad-rest"></div>
     <p class="hint rad-priv">Место шифруется на телефоне — сервер Dewiar его не видит. Близкие видят только расстояние и сторону, пока вы разрешили; ваш компьютер с Dewiar — тоже, чтобы радар был и там. Обновляется, когда Dewiar открыт.</p>`;
@@ -8266,7 +8448,7 @@ function radRender() {
   $("#rad-ppl").innerHTML = ppl.filter(o => o.km != null).map(o => {
     const stale = Date.now() - o.g.ts > RAD_STALE;
     return `<button class="rad-p${stale ? " stale" : ""}${o.p.pid === radSel ? " sel" : ""}" data-pid="${esc(o.p.pid)}" style="--c:${clCol(o.p.pid)}" aria-label="${esc(o.p.name)}: ${radKm(o.km)} ${radDir(o.deg)}">
-      <i class="clava">${esc((o.p.name || "?")[0].toUpperCase())}</i><span><b>${esc(radFirst(o.p.name))}</b>${radKm(o.km)}${stale ? " · " + radAgo(o.g.ts) : ""}</span></button>`;
+      ${clAvaH(o.p.pid, o.p.name, o.p.face)}<span><b>${esc(radFirst(o.p.name))}</b>${radKm(o.km)}${stale ? " · " + radAgo(o.g.ts) : ""}</span></button>`;
   }).join("");
   $$("#rad-ppl .rad-p").forEach(b => b.onclick = () => { radSel = b.dataset.pid; $$("#rad-ppl .rad-p").forEach(x => x.classList.toggle("sel", x === b)); radCard(); });
   radPlace(); radCard();
@@ -8275,7 +8457,7 @@ function radRender() {
   const asked = cfg.asked || {};
   $("#rad-rest").innerHTML = rest.length ? `<h3>Ещё не на радаре</h3>` + rest.map(p => {
     const was = Date.now() - (asked[p.pid] || 0) < 3600e3, can = (p.devs || []).length;
-    return `<div class="clp rad-rp"><i class="clava" style="--c:${clCol(p.pid)}">${esc((p.name || "?")[0].toUpperCase())}</i><span><b>${esc(p.name)}</b><small>${can ? "пока не показывает, где он" + (/а$|я$/i.test(radFirst(p.name)) ? "а" : "") : "ещё не открывал Dewiar"}</small></span>
+    return `<div class="clp rad-rp">${clAvaH(p.pid, p.name, p.face)}<span><b>${esc(p.name)}</b><small>${can ? "пока не показывает, где он" + (/а$|я$/i.test(radFirst(p.name)) ? "а" : "") : "ещё не открывал Dewiar"}</small></span>
       ${can ? `<button class="btn rad-ask" data-pid="${esc(p.pid)}" ${was ? "disabled" : ""}>${was ? "Позвали" : "Позвать"}</button>` : ""}</div>`;
   }).join("") : "";
   $$(".rad-ask").forEach(b => b.onclick = async () => {
@@ -8287,6 +8469,7 @@ function radRender() {
       b.textContent = "Позвали"; toast(`Позвали ${radFirst(p.name)} на радар`);
     } catch (e) { b.disabled = false; toast(e.message, 4000); }
   });
+  clFacesFill(body);                                        // фото близких (и своё — в середине), как в списке «Близких»
   radLoop();
 }
 function radPlace() {                                     // по местам: угол — с поправкой на компас, близко стоящих раздвигаем
@@ -8322,12 +8505,12 @@ function radCard() {
   const o = radPeople().find(x => x.p.pid === radSel && x.km != null);
   if (!o) { box.innerHTML = `<p class="hint rad-empty">Пока никто из близких не показал вам, где он. Покажите себя — и позовите их на радар.</p>`; return; }
   const p = o.p, stale = Date.now() - o.g.ts > RAD_STALE, call = (p.devs || []).length && window.DewiarCall;
-  box.innerHTML = `<div class="rad-sel" style="--c:${clCol(p.pid)}"><div class="h"><i class="clava">${esc((p.name || "?")[0].toUpperCase())}</i>
+  box.innerHTML = `<div class="rad-sel" style="--c:${clCol(p.pid)}"><div class="h">${clAvaH(p.pid, p.name, p.face)}
       <div><b>${esc(p.name)}</b><small>${stale ? "последний раз — " + radAgo(o.g.ts) : "обновлено " + radAgo(o.g.ts)}</small></div></div>
     <div class="rad-dist"><strong>${o.g.acc > 500 && o.km >= 0.05 ? "≈ " : ""}${radKm(o.km)}</strong><em>${o.km < 0.05 ? "совсем рядом" : radDir(o.deg)}</em>
       ${o.km >= 0.05 ? `<svg class="rad-arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 7 20l5-4 5 4z"/></svg>` : ""}</div>
     <div class="rad-acts"><button class="rad-wave" id="rad-wave">👋 Помахать</button><button id="rad-msg">Написать</button>${call ? `<button id="rad-call">Позвонить</button>` : ""}</div></div>`;
-  radPlace();
+  radPlace(); clFacesFill(box);
   $("#rad-wave").onclick = async () => { const b = $("#rad-wave"); b.disabled = true;
     try { const q = await radWave(p.pid); toast(`Помахали: ${radFirst(q.name)} увидит и услышит 👋`); } catch (e) { toast(e.message, 4000); }
     setTimeout(() => { if (b.isConnected) b.disabled = false; }, 1500); };

@@ -104,10 +104,25 @@ $("#kn-q").onkeydown = (e) => { if (e.key === "Enter") $("#kn-go").click(); };
 const HELP = { yandex: "Яндекс", mailru: "Mail.ru", gmail: "Google", outlook: "Microsoft", icloud: "Apple" };
 function mlHelp(g) {
   $("#ml-help").innerHTML = g && g.help ? `Обычный пароль почта сторонним программам не даёт — нужен <b>пароль приложения</b>: <a href="${g.help}" target="_blank">создать в ${HELP[g.provider] || "настройках почты"}</a> (тип «Почта»), затем вставьте его сюда.`
+      + (g.provider === "yandex" ? ` И в настройках Яндекс Почты → «Почтовые программы» включите «С сервера imap.yandex.ru по протоколу IMAP» — без этого Лира не прочтёт письма.` : "")
     : "Нужен пароль приложения (в настройках безопасности вашей почты) или обычный пароль, если почта его разрешает.";
 }
-function mlFill(m) {
-  if (!m) return;
+/* Несколько ящиков (27.10, пакет: «как настроить на несколько ящиков?»): сверху — ящики кнопками, форма правит выбранный;
+   «+ Ещё ящик» — пустая форма для нового. Первый — главный (с него письма уходят, если не сказано иначе); «что в почте?» —
+   все ящики сразу. Команды ядра — mail_save/test/send_test/forget с {box}. */
+let ML = null, mlBox = 0;
+function mlBoxes() {
+  const bx = (ML && ML.boxes) || [], el = $("#ml-boxes"); if (!el) return;
+  el.innerHTML = bx.length ? bx.map((b, i) => `<button class="chip${i === mlBox ? " on" : ""}" role="tab" aria-selected="${i === mlBox}" data-i="${i}">${escH(b.address)}${i === 0 && bx.length > 1 ? " · главный" : ""}</button>`).join("")
+    + (bx.some(b => b.configured) ? `<button class="chip${mlBox >= bx.length ? " on" : ""}" data-i="${bx.length}">+ Ещё ящик</button>` : "") : "";
+  $$("#ml-boxes .chip").forEach(c => c.onclick = () => { mlBox = +c.dataset.i; $("#ml-addr").value = ""; $("#ml-res").textContent = ""; mlFill(ML); });
+}
+function mlFill(m0) {
+  if (!m0) return;
+  ML = m0; const bx = m0.boxes || (m0.address ? [m0] : []);
+  if (mlBox > bx.length) mlBox = bx.length;
+  const m = bx[mlBox] || { configured: false, has_password: false };
+  mlBoxes();
   if (m.address && !$("#ml-addr").value) $("#ml-addr").value = m.address;
   $("#ml-name").value = m.name || ""; $("#ml-login").value = m.login || "";
   $("#ml-smtp").value = m.smtp_host || ""; $("#ml-sport").value = m.smtp_port || ""; $("#ml-sec").value = m.smtp_security || "ssl";
@@ -126,8 +141,8 @@ $("#ml-save").onclick = async (ev) => {
                   smtp_host: $("#ml-smtp").value.trim(), smtp_port: +$("#ml-sport").value || 465, smtp_security: $("#ml-sec").value,
                   imap_host: $("#ml-imap").value.trim(), imap_port: +$("#ml-iport").value || 993 };
   try {
-    const m = await core.call("mail_save", { patch }); $("#ml-pass").value = ""; mlFill(m);
-    const tr = await core.call("mail_test");
+    const m = await core.call("mail_save", { patch, box: mlBox }); $("#ml-pass").value = ""; mlFill(m);
+    const tr = await core.call("mail_test", { box: mlBox });
     const ok = tr.smtp === "ok" && (!patch.imap_host || tr.imap === "ok");
     r.className = ok ? "res ok" : "res bad";
     r.textContent = ok ? "Готово: отправка и чтение работают. Скажите: «пришли мне на почту список дел»." :
@@ -135,9 +150,10 @@ $("#ml-save").onclick = async (ev) => {
   } catch (e) { r.className = "res bad"; r.textContent = e.message; } finally { ev.target.disabled = false; }
 };
 $("#ml-test").onclick = async (ev) => { const r = $("#ml-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "отправляю…";
-  try { const x = await core.call("mail_send_test"); r.className = "res ok"; r.textContent = `Письмо отправлено на ${x.to.join(", ")} — проверьте ящик.`; }
+  try { const x = await core.call("mail_send_test", { box: mlBox }); r.className = "res ok"; r.textContent = `Письмо отправлено на ${x.to.join(", ")} — проверьте ящик.`; }
   catch (e) { r.className = "res bad"; r.textContent = e.message; } finally { ev.target.disabled = false; } };
-$("#ml-off").onclick = () => core.call("mail_forget").then(m => { $("#ml-addr").value = ""; mlFill(m); $("#ml-res").textContent = "Почта отключена."; }).catch(e => toast(e.message));
+$("#ml-off").onclick = () => core.call("mail_forget", { box: mlBox }).then(m => { const a = $("#ml-addr").value; mlBox = 0; $("#ml-addr").value = ""; mlFill(m);
+  $("#ml-res").textContent = (m.boxes || []).length ? `Ящик ${a} отключён.` : "Почта отключена."; }).catch(e => toast(e.message));
 
 /* ---------- Telegram ---------- */
 let tgTimer = null;

@@ -53,6 +53,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   }
   $$("nav button").forEach(x => x.classList.toggle("cur", x === b));
   $$("section").forEach(s => s.classList.toggle("cur", s.id === "p-" + b.dataset.p));
+  if (core.connected) core.call("course_seen", { section: b.dataset.p }).catch(() => {});   // курс: «откройте …» — шаг засчитан
   if (SOUL_TABS.some(t => t[0] === b.dataset.p)) { $('nav button[data-p="diary"]').classList.add("cur"); $$(".stabs button").forEach(x => x.classList.toggle("on", x.dataset.go === b.dataset.p)); try { LS.set("soul_tab", b.dataset.p); } catch (e) { } }
   if (b.dataset.p === "soul") loadSoul();
   if (b.dataset.p === "const") loadConst();
@@ -62,6 +63,9 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "vault" && window.loadVaultPage) loadVaultPage();  // «Сейф паролей» (studio/vault.js)
   if (b.dataset.p === "music" && window.loadMyMusic) loadMyMusic();     // «Музыка» — своя папка (studio/mymusic.js)
   if (b.dataset.p === "kids" && window.loadKids) loadKids();             // «Дети» — детский режим (studio/kids.js)
+  if (b.dataset.p === "family" && window.loadFamily) loadFamily();       // «Семья» — общий бюджет (studio/family.js)
+  if (b.dataset.p === "qa" && window.loadQA) loadQA();
+  if (b.dataset.p === "course" && window.loadCourse) loadCourse();       // «Неделя с Лирой» — курс (studio/course.js)                   // «Вопрос — ответ» — руководство (studio/qa.js)
   if (!S) return;                                    // данные подгрузятся после связи с ядром
   if (b.dataset.p === "sound") loadDevices();
   if (b.dataset.p === "about") core.call("status").then(renderStatus).catch(() => {});

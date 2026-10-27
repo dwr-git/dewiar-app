@@ -333,7 +333,14 @@ class Knowledge:
 
     def search(self, query, limit=5, within=None):
         """-> [{path, score, text}] — лучшие отрывки, не больше двух из файла. Путь файла тоже участвует в поиске.
-        within — только в этих своих папках (знания персонажа из папки на компьютере)."""
+        within — только в этих своих папках (знания персонажа из папки на компьютере). В журнал — что нашлось и с какой
+        оценкой (27.10: «ассистент не знает» — по отчёту видно, пустая выдача или нашлось не то; текст отрывков — нет)."""
+        out = self._search(query, limit, within)
+        log.info("📚 Знания: «%s» → %s (файлов в поиске: %d)", " ".join(str(query or "").split())[:60],
+                 ", ".join(f"{r['path']} {r['score']}" for r in out[:5]) or "ничего не нашлось", len(self.index))
+        return out
+
+    def _search(self, query, limit=5, within=None):
         self.refresh()
         q = [w for w in words(query) if len(w) > 2] or words(query)     # короткие основы — только если других нет
         if not q:

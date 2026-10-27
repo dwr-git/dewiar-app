@@ -54,6 +54,7 @@
   .dwc-ava::before,.dwc-ava::after{content:"";position:absolute;inset:-14px;border-radius:50%;background:color-mix(in srgb,var(--cc,#9BD4FF) 22%,transparent);
     animation:dwcp 2.4s ease-out infinite;z-index:-1}
   .dwc-ava::after{animation-delay:1.2s}
+  .dwc-ava.face{background-size:cover;background-position:center;color:transparent}
   .dwc-call.live .dwc-ava::before,.dwc-call.live .dwc-ava::after{animation:none;opacity:0}
   @keyframes dwcp{from{transform:scale(.9);opacity:.9}to{transform:scale(1.5);opacity:0}}
   .dwc-name{font:600 24px "Unbounded","Manrope",sans-serif;margin-top:14px}
@@ -86,6 +87,10 @@
         <div class="dwc-name">${esc((c.peer && c.peer.name) || "")}</div><div class="dwc-st"></div></div>
       <div class="dwc-bar"></div>`;
     document.body.appendChild(el);
+    // фото близкого вместо буквы (пакет 27.10: «загрузили фото в „Близких“, а в звонке — буква»): transport.face() -> URL
+    const setFace = (u) => { u = typeof u === "string" ? u : (u && u.data) || ""; if (!/^(data:image\/|https?:|blob:)/.test(u)) return;
+      const a = el.querySelector(".dwc-ava"); a.style.backgroundImage = `url("${u.replace(/"/g, "%22")}")`; a.classList.add("face"); };
+    try { if (c.transport && c.transport.face) Promise.resolve(c.transport.face()).then(setFace).catch(() => {}); } catch (e) { /* без фото — буква */ }
     return el;
   }
   function setStatus(t) { if (cur) cur.el.querySelector(".dwc-st").textContent = t; }

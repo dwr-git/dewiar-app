@@ -48,25 +48,26 @@ function nearRender() {
   const dots = ppl.filter(o => o.km != null).map(o => {
     const a = o.deg * Math.PI / 180, r = rdR(o.km), stale = Date.now() - o.g.ts > RD_STALE;
     return `<button class="rad-p${stale ? " stale" : ""}${o.p.pid === RD.sel ? " sel" : ""}" data-pid="${clEsc(o.p.pid)}" data-a="${o.deg}" style="--c:${clColor(o.p.pid)};left:${(180 + r * Math.sin(a)) / 3.6}%;top:${(180 - r * Math.cos(a)) / 3.6}%" aria-label="${clEsc(o.p.name)}: ${rdKm(o.km)} ${rdDir(o.deg)}">
-      <i class="cl-ava">${clEsc((o.p.name || "?")[0].toUpperCase())}</i><span><b>${clEsc(rdFirst(o.p.name))}</b>${rdKm(o.km)}${stale ? " · " + rdAgo(o.g.ts) : ""}</span></button>`;
+      <i class="cl-ava" data-face="${clEsc(o.p.pid)}" data-v="${+o.p.face || 0}">${clEsc((o.p.name || "?")[0].toUpperCase())}</i><span><b>${clEsc(rdFirst(o.p.name))}</b>${rdKm(o.km)}${stale ? " · " + rdAgo(o.g.ts) : ""}</span></button>`;
   }).join("");
   let card;
   if (!me) card = `<div class="nr-card nr-need"><b>Центр радара — ваш телефон</b><span>Компьютер сам не знает, где он. Откройте на телефоне «Близкие» → «Рядом» — его место появится здесь, и будет видно, кто далеко, а кто рядом.</span></div>`;
   else if (!sel) card = `<div class="nr-card nr-need"><b>Пока никто не показал вам, где он</b><span>Показать себя близким и позвать их на радар — на телефоне: «Близкие» → «Рядом».</span></div>`;
   else {
     const p = sel.p, stale = Date.now() - sel.g.ts > RD_STALE;
-    card = `<div class="nr-card" style="--c:${clColor(p.pid)}"><div class="h"><i class="cl-ava">${clEsc((p.name || "?")[0].toUpperCase())}</i><div><b>${clEsc(p.name)}</b><small>${stale ? "последний раз — " + rdAgo(sel.g.ts) : "обновлено " + rdAgo(sel.g.ts)}</small></div></div>
+    card = `<div class="nr-card" style="--c:${clColor(p.pid)}"><div class="h"><i class="cl-ava" data-face="${clEsc(p.pid)}" data-v="${+p.face || 0}">${clEsc((p.name || "?")[0].toUpperCase())}</i><div><b>${clEsc(p.name)}</b><small>${stale ? "последний раз — " + rdAgo(sel.g.ts) : "обновлено " + rdAgo(sel.g.ts)}</small></div></div>
       ${sel.km != null ? `<div class="nr-dist"><strong>${sel.g.acc > 500 && sel.km >= 0.05 ? "≈ " : ""}${rdKm(sel.km)}</strong><em>${sel.km < 0.05 ? "совсем рядом" : rdDir(sel.deg)}</em>${sel.km >= 0.05 ? `<svg class="rad-arr" viewBox="0 0 24 24" style="--deg:${sel.deg}deg" aria-hidden="true"><path d="M12 3 7 20l5-4 5 4z"/></svg>` : ""}</div>` : ""}
       <div class="nr-acts"><button class="btn primary nr-wave" id="nr-wave">👋 Помахать</button><button class="btn" id="nr-msg">Написать</button>${(p.devs || []).length ? `<button class="btn" id="nr-call">Позвонить</button>` : ""}</div></div>`;
   }
   const rest = (st.people || []).filter(p => !ppl.some(o => o.p.pid === p.pid));
   box.innerHTML = `<div class="nr-grid"><div class="nr-left"><div class="radar${me ? "" : " nome"}" id="nr-radar">
       <svg class="rad-rings" viewBox="0 0 360 360" aria-hidden="true">${rings}</svg><div class="rad-sweep" id="nr-sweep"></div>
-      <div class="rad-n" style="left:50%;top:.5%" aria-hidden="true">С</div><div class="rad-me" title="Ваш телефон">Я</div>${dots}</div>
+      <div class="rad-n" style="left:50%;top:.5%" aria-hidden="true">С</div><div class="rad-me" title="Ваш телефон" data-face="${clEsc((st.me || {}).pid || "me")}" data-v="${+((st.me || {}).face) || 0}">Я</div>${dots}</div>
       <p class="hint nr-note">${me ? `Центр — ваш телефон · место ${rdAgo(me.ts) === "сейчас" ? "обновлено сейчас" : "обновлено " + rdAgo(me.ts)}` : "Центр — ваш телефон: откройте на нём «Близкие» → «Рядом»"}</p></div>
     <div class="nr-right">${card}
-      ${rest.length ? `<h3>Ещё не на радаре</h3><div class="nr-rest">${rest.map(p => `<span><i class="cl-ava" style="--c:${clColor(p.pid)}">${clEsc((p.name || "?")[0].toUpperCase())}</i>${clEsc(p.name)}</span>`).join("")}</div><p class="hint">Позвать на радар и показать себя — на телефоне.</p>` : ""}
+      ${rest.length ? `<h3>Ещё не на радаре</h3><div class="nr-rest">${rest.map(p => `<span><i class="cl-ava" style="--c:${clColor(p.pid)}" data-face="${clEsc(p.pid)}" data-v="${+p.face || 0}">${clEsc((p.name || "?")[0].toUpperCase())}</i>${clEsc(p.name)}</span>`).join("")}</div><p class="hint">Позвать на радар и показать себя — на телефоне.</p>` : ""}
       <p class="hint nr-priv">Места шифруются на телефонах — сервер Dewiar их не видит. Видно только расстояние и сторону, пока близкий сам разрешил.</p></div></div>`;
+  clFaces(box);                                                  // фото близких (пакет 27.10: «на радаре — буквы»)
   $$("#nr-radar .rad-p").forEach(b => b.onclick = () => { RD.sel = b.dataset.pid; nearRender(); });
   if ($("#nr-wave")) $("#nr-wave").onclick = async (e) => { const b = e.currentTarget; b.disabled = true;
     try { await core.call("close_wave", { pid: RD.sel }); rdFly(RD.sel); toast(`Помахали: ${rdFirst(sel.p.name)} увидит и услышит 👋`); } catch (x) { toast(x.message, 4000); }

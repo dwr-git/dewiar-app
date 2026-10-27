@@ -134,7 +134,8 @@ _ORD = {1: "перв", 2: "втор", 3: "трет", 4: "четвёрт", 5: "п
         60: "шестидесят", 70: "семидесят", 80: "восьмидесят", 90: "девяност", 100: "сот"}
 # окончания: род/падеж -> (обычное, «ударное» -ой для втор/шест/седьм/восьм/сороков, «трет» — мягкое)
 _ORD_END = {"m_nom": ("ый", "ой", "ий"), "n_nom": ("ое", "ое", "ье"), "gen": ("ого", "ого", "ьего"), "dat": ("ому", "ому", "ьему"),
-            "prep": ("ом", "ом", "ьем"), "ins": ("ым", "ым", "ьим")}
+            "prep": ("ом", "ом", "ьем"), "ins": ("ым", "ым", "ьим"), "f_nom": ("ая", "ая", "ья"), "f_gen": ("ой", "ой", "ьей"),
+            "pl": ("ые", "ые", "ьи")}
 
 
 def ordinal_words(n, form="n_nom"):
@@ -216,9 +217,85 @@ def _ddate(m):
     return f"{pre}{ordinal_words(d, form) or number_words(d)} {_MONTH_LIST[mo - 1]} {ordinal_words(y, 'gen') or number_words(y)} года"
 
 
+# Римские цифры (пакет 27.10: «Лира не умеет читать римские цифры»): «XIX век» → «девятнадцатый век», «Пётр I» → «Пётр
+# первый», «Ступень I» → «Ступень первая», «Екатерины II» → «Екатерины второй». Одна буква — только I, V, X (C, D, L, M —
+# скорее витамин или размер); после латинского слова («Mac OS X», «I love») — не трогаем.
+_ROMAN = r"M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})"
+_RV = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+_R_FEM = {"часть", "ступень", "глава", "книга", "серия", "война", "олимпиада", "категория", "группа", "степень", "четверть",
+          "половина", "лига", "конференция", "дума", "республика", "симфония", "соната", "партия", "редакция", "мировая",
+          "екатерина", "елизавета", "анна", "мария", "империя", "династия", "эпоха", "фаза", "стадия", "очередь"}
+_R_FEM_GEN = {"екатерины", "елизаветы", "анны", "марии", "части", "главы", "книги", "серии", "войны", "степени", "стадии", "фазы"}
+_R_NEUT = {"издание", "тысячелетие", "собрание", "поколение", "царство", "отделение"}
+_R_SKIP = {"размер", "размера", "размеры", "размеров", "витамин", "витамина", "группы", "класс"}
+
+
+def roman_value(s):
+    """«XIX» → 19; не римское число (или пустое) — 0."""
+    if not s or not re.fullmatch(_ROMAN, s):
+        return 0
+    v = [_RV[c] for c in s]
+    return sum(-x if i + 1 < len(v) and x < v[i + 1] else x for i, x in enumerate(v))
+
+
+def _roman_ok(r):
+    return roman_value(r) and (len(r) > 1 or r in "IVX")
+
+
+def _century(m):
+    pre, a, b, w = m.group(1) or "", m.group(2), m.group(3), m.group(4)
+    wl = w.lower().rstrip(".")
+    if pre and wl == "в":                                       # «в XXI в.» — «в двадцать первом веке»
+        wl, w = "веке", "веке"
+    elif pre and wl == "вв":
+        wl, w = "веках", "веках"
+    form = {"век": "m_nom", "века": "gen", "веку": "dat", "веке": "prep", "веком": "ins", "веков": "gen", "веках": "prep",
+            "в": "m_nom", "вв": "pl"}.get(wl, "m_nom")
+    if b and form == "m_nom":
+        form = "pl"
+    if not _roman_ok(a) or (b and not _roman_ok(b)):
+        return m.group(0)
+    word = {"в": "век", "вв": "века"}.get(wl, w)
+    if form == "pl" and wl in ("век", "в"):
+        word = "века"
+    head = ordinal_words(roman_value(a), form)
+    if b:
+        head += " — " + ordinal_words(roman_value(b), form)
+    return f"{pre}{head} {word}"
+
+
+def _roman_after(m):
+    w, r = m.group(1), m.group(2)
+    lw = w.lower()
+    if not _roman_ok(r) or lw in _R_SKIP:
+        return m.group(0)
+    if lw in _R_FEM:
+        form = "f_nom"
+    elif lw in _R_FEM_GEN:
+        form = "f_gen"
+    elif lw in _R_NEUT:
+        form = "n_nom"
+    elif w[:1].isupper() and re.search(r"[ая]$", lw):          # «Петра I», «Николая II» — родительный
+        form = "gen"
+    elif w[:1].isupper() and re.search(r"[ую]$", lw):
+        form = "dat"
+    elif w[:1].isupper() and re.search(r"(?:ом|ем|ём)$", lw):
+        form = "ins"
+    elif w[:1].isupper() and re.search(r"е$", lw):              # «при Николае II»
+        form = "prep"
+    else:
+        form = "m_nom"
+    return f"{w} {ordinal_words(roman_value(r), form)}"
+
+
+def roman_norm(t):
+    t = re.sub(r"((?:(?<=\s)|^)(?:в|во)\s+)?(?<![A-Za-z])([IVXLCDM]+)(?:\s*[-–—]\s*([IVXLCDM]+))?\s+(век(?:а|у|е|ом|ов|ах)?|вв?\.)(?![а-яё])", _century, t, flags=re.I)
+    return re.sub(r"(?<![A-Za-z])([А-ЯЁа-яё]+)\s+([IVXLCDM]+)(?![A-Za-z0-9])(?!\s+[A-Za-z])", _roman_after, t)
+
+
 def speech_norm(text, latin=True):
     """latin=False — только числа, суммы, проценты, время (Piper, eSpeak, голос Windows: латиницу они читают сами)."""
-    t = str(text or "")
+    t = roman_norm(str(text or ""))
     for _ in range(3):                                             # «1 437 500» — одно число (разряды через пробел)
         t = re.sub(r"(?<![\d.,])(\d{1,3})[ \u00a0\u202f](?=\d{3}(?!\d))", r"\1", t)
     num = r"(?P<n>\d+)(?:[.,](?P<k>\d{1,2}))?"

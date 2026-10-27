@@ -183,7 +183,13 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.sync = Sync(self)                         # телефон ↔ компьютер через облако Dewiar
         from close import Close
         self.close = Close(self)                       # «Близкие»: переписка с помощниками других людей (сквозное шифрование)
+        from family import Family
+        self.family = Family(self, STATE_DIR / "family.json")   # семейный бюджет: траты и общие платежи с близкими
+        from course import Course
+        self.course = Course(STATE_DIR / "course.json", self.emit)   # курс «Неделя с Лирой»: шаги засчитываются сами
         self.money.on_change = self.sync.soon.set
+        self.money.on_add = self.family.share_spend    # расход — в общий семейный бюджет (если семья есть и делимся)
+        self.money.on_delete = self.family.delete_spend
         from payments import Payments
         self.payments = Payments(_CFG / "payments.json", self.workspace)   # «Платежи»: счета, оплаты, сроки (payments.py)
         self.payments.on_change = self.sync.soon.set     # и между компьютерами (виды bill, pay, payfile в sync.py; 27.10)

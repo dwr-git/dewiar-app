@@ -65,7 +65,7 @@ with sync_playwright() as p:
     pg.add_init_script(FAKE); pg.add_init_script(CORE)
     pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1"); pg.wait_for_timeout(1500)
     nav = pg.evaluate("[...document.querySelectorAll('nav button[data-p]')].map(b => b.dataset.p)")
-    ok("vault" in nav and nav.index("vault") == nav.index("pay") + 1, "«Сейф паролей» — в меню, после «Платежей»")
+    ok("vault" in nav and nav.index("vault") - nav.index("pay") in (1, 2), "«Сейф паролей» — в меню, после «Платежей» (между ними может быть «Семья»)")
     pg.evaluate("document.querySelector('nav button[data-p=\"vault\"]').click()"); pg.wait_for_timeout(500)
     ok(pg.evaluate("document.activeElement.id") == "vl-q", "открыли сейф — курсор сразу в поиске")
     rows = pg.evaluate("[...document.querySelectorAll('#vl-list .vl-item .vl-name')].map(e => e.textContent)")

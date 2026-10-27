@@ -136,6 +136,9 @@ VISION_HINT = ("К сообщению приложено фото. Если пр
 REPEAT_RX = re.compile(r"^\W*(?:\w+,\s*)?(?:ну\s+)?(?:а\s+)?(?:теперь|сейчас|ещё\s+раз|еще\s+раз|снова|опять|повтори|попробуй\s+(?:ещё|еще)\s+раз|"
                        r"проверь\s+(?:ещё|еще)\s+раз|(?:а\s+)?теперь\s+(?:как|что)|ну\s+что|и\s+как\s+теперь)\W*$", re.I)
 
+# «урок дня», «давай урок», «следующий урок» — курс «Неделя с Лирой» без модели (core/course.py)
+COURSE_RX = re.compile(r"^(?:лира[, ]+)?(?:давай |начн[её]м |покажи |какой |открой )?(?:урок(?: дня| курса)?|следующий урок|курс(?: неделя с лирой)?)$")
+
 class AnswerMixin:
     # ---------- ответ ----------
 
@@ -195,6 +198,13 @@ class AnswerMixin:
             return
         if not raw and not quiet and not via and not images and not K and self._window_cmd(text):
             return
+        if not raw and not quiet and not images and not K and getattr(self, "course", None) is not None:
+            try:                                         # курс «Неделя с Лирой»: сказали фразу урока — шаг засчитан
+                self.course.heard(text)
+            except Exception:  # noqa: BLE001
+                log.debug("курс", exc_info=True)
+            if not via and COURSE_RX.match(text.lower().strip(" .!?")) and self._course_say(text):
+                return
         if not raw and not quiet and not via and not images and not K and self._pc_cmd(text):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._vault_cmd(text, via):
@@ -292,7 +302,7 @@ class AnswerMixin:
             log.info("👥 %s передаёт вопрос: %s", self.personas.get(prev)["name"], self.personas.get(handoff)["name"])
             self.switch_persona(handoff)
         log.info("❓ %s", redact(text))
-        if not quiet:
+        if not quiet and not (via or {}).get("job"):   # дело по расписанию — показываем, только когда есть что сказать
             self.emit("heard", text=shown or (("✉ " + text.split("\n\nВложения:")[0]) if via else text))
         if handoff:
             self.emit("handoff", **{"from": prev, "to": handoff, "name": self.personas.get(handoff)["name"],
@@ -302,6 +312,7 @@ class AnswerMixin:
             self.turn_n += 1
             turn = Turn(self.turn_n)
             turn.via = via
+            turn.via_job = bool((via or {}).get("job"))  # дело по расписанию: в окна — только итог (_run_job решает, говорить ли)
             turn.asked = text                         # о чём просили (save_note без просьбы записать — не пишем)
             turn.report = report
             turn.back_to = prev if handoff and self.s.get("team", "back") is not False else None
@@ -401,6 +412,22 @@ class AnswerMixin:
         except Exception as e:  # noqa: BLE001
             full = f"(не собралась: {e})"
         return {"parts": parts, "turns": len(mine), "full": full[:60000], "full_chars": len(full)}
+
+    def _course_say(self, text):
+        """«Урок дня» — что за урок и первый несделанный шаг; курс пройден — так и сказать. -> True."""
+        c = self.course.public()
+        L = c.get("lesson")
+        if not L:
+            more = [x["title"] for x in c["courses"] if x["done"] < x["total"]]
+            msg = (f"Курс «{c['title']}» пройден. " + (f"Дальше можно «{more[0]}» — выберите в студии: «Неделя с Лирой»." if more
+                                                         else "Все курсы пройдены — повторить любой урок можно в студии."))
+        elif not L["open"]:
+            msg = f"Сегодняшний урок пройден. Завтра — «{L['title']}». Не терпится — в студии кнопка «Следующий урок сейчас»."
+        else:
+            nxt = next((s for s in L["steps"] if not s["done"]), L["steps"][0])
+            msg = f"Урок {L['day']} из {c['total']} — «{L['title']}». {L['intro']} Скажите: {nxt['say']}"
+        self._say_quick(msg, text)
+        return True
 
     def _system(self, with_tools=False):
         """Системная подсказка: персонаж, память о пользователе, душа, содержание разговора, выводы из дневника;
@@ -1397,7 +1424,7 @@ class AnswerMixin:
                                "«схема готова» или «на экране», не нарисовав её. Сначала блок, потом одна-две фразы о главном.")
             except Exception as e:  # noqa: BLE001
                 log.info("План на день: %s", e)
-            if turn.via:
+            if turn.via and not turn.via_job:
                 src = turn.via.get("from") or "Telegram"
                 system += (f"\n\nСейчас пользователь пишет тебе из {src} (не голосом): ответ уйдёт ему сообщением. Можно "
                            "чуть подробнее и со списками; файлы из папки ассистента — инструментом send_telegram"
@@ -1543,7 +1570,7 @@ class AnswerMixin:
                         self._slow_local(prof, time.monotonic() - t_start)
                     turn.full += val
                     step_text += val
-                    if time.monotonic() - last > 0.08:     # текст в виджет — не чаще ~12 раз в секунду
+                    if time.monotonic() - last > 0.08 and not turn.via_job:     # текст в виджет — не чаще ~12 раз в секунду
                         self.emit("answer", text=fem(turn.full), done=False, model=True)
                         last = time.monotonic()
                     for s_ in split.feed(codef.feed(val)):         # код и команды вслух не читаем
@@ -1710,7 +1737,8 @@ class AnswerMixin:
                 except Exception:  # noqa: BLE001
                     pass
                 turn.src_done = self._sources_done(turn, turn.full)
-                self.emit("answer", text=turn.full, done=True, model=True, sources=turn.src_done)
+                if not turn.via_job:
+                    self.emit("answer", text=turn.full, done=True, model=True, sources=turn.src_done)
                 self.health_count("turns")
                 self.health_count("net_ok")
                 self._maybe_learn(text, prof)
