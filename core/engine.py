@@ -16,9 +16,11 @@ from engine_commands import CommandsMixin  # noqa: E402
 from engine_intro import IntroMixin  # noqa: E402
 from health import HealthMixin  # noqa: E402
 from engine_pay import PayMixin  # noqa: E402
+from engine_mymusic import MyMusicMixin  # noqa: E402
 
 
-class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin, PayMixin):
+class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin,
+             PayMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
@@ -228,6 +230,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, BrainMixin, Remote
         self.toolbox.hooks["music_app"] = lambda name: setattr(self, "_music_app", (name, time.monotonic()))
         self.toolbox.hooks["music_pref"] = lambda: self._music_service() if self._music_service() == "yandex" else ""
         self._music_asked = 0.0
+        self._mine_init(STATE_DIR)                        # своя папка с музыкой и ведущий (engine_mymusic.py)
         self.radio.on_change = lambda: self.emit("radio", **self.radio.status())
         try:
             self.workspace.ensure()

@@ -69,6 +69,7 @@
   <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года">Платежи<i class="ndot" id="pay-dot"></i></button>
   <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать">Сейф паролей</button>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
+  <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками">Музыка</button>
   <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
   <button data-p="tasks">Задачи</button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
@@ -424,6 +425,50 @@
     </div>
   </section>
 
+  <section id="p-music" class="wide">
+    <h1>Музыка</h1>
+    <p class="lead">Своя папка с музыкой. Ассистент ставит из неё по просьбе и ведёт эфир, как диджей: подборки под настроение, пара слов перед треком, на «что играет?» — расскажет. Пока он говорит, музыка звучит тише — как у радио.</p>
+    <div class="mm-top">
+      <div class="mm-now idle" id="mm-now">
+        <div class="mm-cover" id="mm-cover">♪</div>
+        <div class="mm-np"><div id="mm-np"></div>
+          <div class="mm-ctl">
+            <button id="mm-prev" title="Предыдущий трек" aria-label="Предыдущий трек">⏮</button>
+            <button id="mm-pp" class="big" title="Играть" aria-label="Играть или пауза">▶</button>
+            <button id="mm-next" title="Следующий трек" aria-label="Следующий трек">⏭</button>
+            <button id="mm-heart" class="heart" title="В любимое" aria-label="В любимое" hidden>♥</button>
+          </div>
+        </div>
+      </div>
+      <div class="mm-side">
+        <h3>Папка с музыкой</h3>
+        <button class="mm-folder" id="mm-pick" title="Выбрать другую папку"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="mm-folder">Папка не выбрана</span></button>
+        <div class="mm-stats" id="mm-stats"></div>
+        <div class="switch slim"><div>Говорить между треками<span>Раз в несколько песен — пара слов о следующей, поверх её начала</span></div><label class="tg"><input type="checkbox" data-k="music.dj_talk" id="mm-talk"><i></i></label></div>
+        <button class="btn small" id="mm-rescan">Перечитать папку</button>
+      </div>
+    </div>
+    <div class="mm-row">
+      <div class="mm-panel">
+        <div class="mm-ph"><h3>Подборки</h3><button class="btn small primary" id="mm-play-all">Играть всё вперемешку</button></div>
+        <div class="chips" id="mm-chips"></div>
+        <ul class="mm-list" id="mm-list"></ul>
+      </div>
+      <div class="mm-panel">
+        <h3>Как попросить</h3>
+        <div class="mm-say">
+          <div><b>«Поставь мою музыку»</b><span>вся папка вперемешку</span></div>
+          <div><b>«Включи что-нибудь спокойное из моей музыки»</b><span>спокойное, для работы, бодрое, русское — по жанрам и папкам</span></div>
+          <div><b>«Поставь Кино»</b><span>исполнитель из папки; нет такого — включу радио</span></div>
+          <div><b>«Что сейчас играет?»</b><span>трек, альбом и год</span></div>
+          <div><b>«Эту — в любимое»</b><span>потом: «включи моё любимое»</span></div>
+          <div><b>«Дальше», «предыдущую», «пауза», «стоп»</b><span>как у радио; «громче» и «тише» — тоже</span></div>
+        </div>
+        <p class="hint">Подходят mp3, flac, ogg, opus, m4a. Названия и исполнители берутся из тегов файлов, а если их нет — из имён файлов и папок («Кино/1989 — Звезда/01 Песня.mp3»). Музыка остаётся на месте и никуда не отправляется.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="p-memory" class="wide">
     <h1>Память</h1>
     <p class="lead">Всё, что ассистент знает и делал с вами, — одной живой картой: факты о вас, заметки, дневник, документы, задачи и навыки. Связи появляются сами: ссылки [[между заметками]], #теги, люди и места, которые встречаются в разных записях.</p>
@@ -490,7 +535,7 @@
     <div class="switch"><div>Учитывать конституцию<span>Принципы идут в каждый разговор. Выключать стоит только для опытов.</span></div><label class="tg"><input type="checkbox" data-k="soul.constitution"><i></i></label></div>
   </section>
 
-  <section id="p-me">
+  <section id="p-me" class="wide">
     <h1>Обо мне</h1>
     <p class="lead">Что ассистент знает о вас и ваших делах. Всё хранится на этом компьютере, в папке ассистента.</p>
     <div class="row" style="margin-bottom:6px"><label class="f">Как вас зовут<input type="text" placeholder="необязательно" data-k="user_name"></label></div>
@@ -502,9 +547,17 @@
       <div class="actions" style="margin:12px 0 0"><button class="btn primary" id="me-exam-go">Убрать отмеченное</button><button class="btn" id="me-exam-keep">Оставить</button></div>
     </div>
     <h2>Что ассистент помнит</h2>
-    <p class="hint" style="margin-bottom:10px">Ассистент читает это перед каждым ответом и дописывает сам, когда узнаёт что-то важное надолго («запомни, что…»). Правьте и стирайте свободно.</p>
-    <textarea id="me-mem" rows="9" style="width:100%;resize:vertical" placeholder="- Работаю бухгалтером, начало дня в 9:00&#10;- Дочь Маша, 7 лет&#10;- Люблю короткие ответы"></textarea>
-    <div class="actions"><button class="btn primary" id="me-save">Сохранить</button><span class="res" id="me-res"></span></div>
+    <p class="hint" style="margin-bottom:10px">По людям и темам, с датами. Ассистент дописывает сам, когда узнаёт важное надолго («запомни, что…»); изменилось — заменит новым и запомнит, как было раньше. Лишнее — «×».</p>
+    <div class="mpx-strip" id="mpx-strip"></div>
+    <div class="mpx">
+      <div class="mpx-col"><input type="search" id="mpx-find" placeholder="Найти по смыслу: «что подарить маме»"><div id="mpx-pages"></div></div>
+      <div class="mpx-card" id="mpx-card"><div class="fempty">Загружаю…</div></div>
+    </div>
+    <div class="mpx-add"><input type="text" id="mpx-new" placeholder="Новый факт: «Сын Петя учится в третьем классе»"><button class="btn primary" id="mpx-addgo">Запомнить</button><button class="btn" id="mpx-raw">Править текстом</button></div>
+    <div id="me-raw" hidden style="margin-top:12px">
+      <textarea id="me-mem" rows="9" style="width:100%;resize:vertical" placeholder="- Работаю бухгалтером, начало дня в 9:00&#10;- Дочь Маша, 7 лет&#10;- Люблю короткие ответы"></textarea>
+      <div class="actions"><button class="btn primary" id="me-save">Сохранить</button><span class="res" id="me-res"></span></div>
+    </div>
 
     <h2>Мои документы — «Знания»</h2>
     <p class="hint" style="margin-bottom:12px">Положите сюда инструкции, договоры, регламенты, книги — и спрашивайте: «что в моих документах про отпуск?». Подходят PDF, Word, ODT, TXT, Markdown, HTML, CSV. Работает без интернета.</p>
@@ -1587,6 +1640,7 @@
 <script src="studio/icons.js"></script>
 <script src="studio/memory.js"></script>
 <script src="studio/links.js"></script>
+<script src="studio/mempages.js"></script>
 <script src="studio/safety.js"></script>
 <script src="studio/folder.js"></script>
 <script src="studio/soul.js"></script>
@@ -1603,6 +1657,7 @@
 <script src="studio/refs.js"></script>
 <script src="studio/notes.js"></script>
 <script src="studio/pay.js"></script>
+<script src="studio/mymusic.js"></script>
 <script src="studio/vault.js"></script>
 <script src="studio/snapshot.js"></script>
 <script src="studio/capture.js"></script>

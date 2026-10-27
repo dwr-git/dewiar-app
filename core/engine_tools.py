@@ -89,7 +89,22 @@ class ToolsMixin:
             need_confirm = False                       # команды «только посмотреть» (напр. на сервере) — без вопроса, если так настроено
         if need_confirm or force:
             question = warn_q or self.toolbox.describe(name, args)
-            ok = self._confirm(turn, question, sentences)
+            # №353 (пакет 27.10 12:22): разбор сервера — двадцать команд подряд, и каждая — «На сервере … выполнить?
+            # Подробности — на экране. Скажите «да» или «нет»» целиком, в ответе это читалось как «зациклился». Вторая и
+            # дальше за ход — коротко; команда «только посмотреть» — можно ответить «всегда»: такие на этом сервере
+            # дальше без вопроса (тот же выбор, что в студии → «Серверы» → «спрашивать только изменения»).
+            ro = name == "server_run" and not force and self.toolbox.server_readonly(args)
+            n_conf = getattr(turn, "confirms", 0)
+            turn.confirms = n_conf + 1
+            ok = self._confirm(turn, question, sentences, always=ro, again=n_conf)
+            if ok == "always":
+                try:
+                    srv = self.toolbox.hooks["servers"]
+                    s_ = srv.find(str(args.get("server") or ""))
+                    srv.update(s_["id"], {"ask": "changes"})
+                    log.info("🖥 «%s»: команды «только посмотреть» — дальше без вопроса", s_.get("name"))
+                except Exception as e:  # noqa: BLE001
+                    log.info("сервер: «всегда» не сохранилось: %s", e)
             if not ok:
                 self.emit("tool", name=name, title=title, status="declined")
                 return "Пользователь отказался. Ничего не делай и коротко подтверди отказ."
@@ -156,7 +171,7 @@ class ToolsMixin:
         log.info("📎 К напоминанию «%s» — вложения сообщения (%d)", item["text"], n)
         return res + f" Вложения из сообщения ({n}) приложены к напоминанию — в срок они будут прямо в окне напоминания; можно так и сказать."
 
-    def _confirm(self, turn, question, sentences, timeout=15):
+    def _confirm(self, turn, question, sentences, timeout=15, always=False, again=0):
         """Спросить голосом и кнопками, дождаться «да»/«нет». -> True, если согласились.
         Ответ приходит из другого потока через pending_confirm (_answer_confirm или кнопка). Голосом — сперва ждём,
         пока договорится уже начатый ответ, затем слушаем timeout секунд; молчание — это «нет»."""
@@ -170,23 +185,28 @@ class ToolsMixin:
             self.emit("confirm_done", ok=box["answer"])
             log.info("Подтверждение (Telegram): %s", "да" if box["answer"] else "нет")
             return box["answer"] and not turn.cancel.is_set()
-        sentences.put(_spoken_question(question) + " Скажите «да» или «нет».")
+        if again:                                            # не первый вопрос за ход — коротко (полный — на экране)
+            sentences.put("Ещё команда — выполнить?" if always or "сервер" in question else "Выполнить и это?")
+        else:
+            sentences.put(_spoken_question(question) + (" Скажите «да», «нет» или «всегда» — тогда команды, которые только "
+                                                        "смотрят, на этом сервере больше не буду спрашивать." if always
+                                                        else " Скажите «да» или «нет»."))
         drained = threading.Event()
         sentences.put(("sync", drained))
         drained.wait(30)
         if turn.cancel.is_set():
             return False
-        box = {"event": threading.Event(), "answer": False}
+        box = {"event": threading.Event(), "answer": False, "always": False}
         self.pending_confirm = box
-        self.emit("confirm", text=question)
+        self.emit("confirm", text=question, always=bool(always))
         self.follow_up_until = time.monotonic() + timeout
         self.set_state("listening")
         box["event"].wait(timeout)
         self.pending_confirm = None
         self.emit("confirm_done", ok=box["answer"])
-        log.info("Подтверждение: %s", "да" if box["answer"] else "нет")
+        log.info("Подтверждение: %s", ("всегда" if box.get("always") else "да") if box["answer"] else "нет")
         self.set_state("thinking")
-        return box["answer"]
+        return "always" if box["answer"] and box.get("always") and always else box["answer"]
 
     def _answer_confirm(self, text):
         """Разобрать услышанное как ответ на вопрос _confirm. -> True, если фраза была ответом и вопрос закрыт."""
@@ -194,7 +214,9 @@ class ToolsMixin:
         if not box:
             return False
         w = set(re.findall(r"[\wё]+", _norm(text)))
-        if w & {"да", "давай", "выполняй", "подтверждаю", "конечно", "ага", "угу", "можно", "делай", "yes", "ок", "окей"}:
+        if w & {"всегда"} or re.search(r"больше не спрашива|без вопрос|не спрашивай", _norm(text)):
+            box["answer"] = box["always"] = True
+        elif w & {"да", "давай", "выполняй", "подтверждаю", "конечно", "ага", "угу", "можно", "делай", "yes", "ок", "окей"}:
             box["answer"] = True
         elif not (w & {"нет", "не", "отмена", "отмени", "стоп", "no", "не надо"}):
             return False                       # непонятный ответ — ждём дальше
@@ -1267,7 +1289,7 @@ class ToolsMixin:
         months, lines = {}, []
         now_hm = datetime.now().strftime("%H:%M")
         try:                                             # память: «в среду в 15:00 встреча» записана с датой «(на 14.10.2026, среда)»
-            mem = [x.strip(" -*\t") for x in (self.workspace.memory_text() or "").splitlines() if x.strip()]
+            mem = [x.strip(" -*\t") for x in (self.workspace.memory_get() or "").splitlines() if x.strip()]
         except Exception:  # noqa: BLE001
             mem = []
         for d in days:

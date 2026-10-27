@@ -161,6 +161,7 @@
   @keyframes blink { 50% { opacity: .25; } }
   #yn { display: none; flex: none; width: 100%; gap: 8px; }
   #yn.on { display: flex; }
+  #yn button[hidden] { display: none; }
   #yn button { flex: 1; padding: 7px 0; border-radius: 12px; border: 0; background: rgba(255,255,255,.1); color: var(--ink); font: inherit; cursor: pointer; }
   #yn button.yes { background: var(--brand); color: #fff; font-weight: 600; }
   #note { text-align: center; font-size: 12.5px; line-height: 1.4; color: var(--muted); padding: 0 6px; cursor: default; }
@@ -460,7 +461,7 @@
   <div id="bubble"><span id="say">Подключаюсь…</span></div>
   <div id="mid">
     <div id="cap"><div class="you" id="you"></div><div id="act" title="Ход работы"></div><div class="bot" id="bot"></div><div id="media"></div><button id="more">Открыть целиком</button></div>
-    <div id="yn"><button class="yes" id="y">Да</button><button id="n">Нет</button></div>
+    <div id="yn"><button class="yes" id="y">Да</button><button id="ya" hidden title="Команды, которые только смотрят, на этом сервере — дальше без вопроса">Всегда</button><button id="n">Нет</button></div>
     <div id="note"></div><div id="ldbar"><i></i></div>
     <div id="health" title="Что сейчас с ассистентом"></div>
     <div id="tmr" aria-live="off"></div>
@@ -926,7 +927,7 @@ core.on("hello", d => {
   a.classList.toggle("fin", e.status === "done" || e.status === "declined");
   showCap(null, null);
 })
-.on("confirm", e => { showCap(null, e.text); $("yn").classList.add("on"); $("y").focus(); requestAnimationFrame(fitCap); })
+.on("confirm", e => { showCap(null, e.text); $("ya").hidden = !e.always; $("yn").classList.add("on"); $("y").focus(); requestAnimationFrame(fitCap); })
 .on("confirm_done", () => { $("yn").classList.remove("on"); requestAnimationFrame(fitCap); })
 .on("handoff", e => { $("act").className = "on"; $("act").textContent = `Отвечает ${e.name}${e.role ? " · " + e.role.toLowerCase() : ""}`; })
 .on("note_saved", e => {
@@ -1129,6 +1130,7 @@ card.addEventListener("pointercancel", () => { if (hold && hold.by === "mouse") 
 
 $("y").onclick = () => core.call("confirm_answer", { ok: true }).catch(showErr);
 $("n").onclick = () => core.call("confirm_answer", { ok: false }).catch(showErr);
+$("ya").onclick = () => core.call("confirm_answer", { ok: true, always: true }).catch(showErr);
 $("b-mic").onclick = guard($("b-mic"), () => core.call("mute", { on: !muted }).then(m => { muted = m; $("b-mic").classList.toggle("on", m); $("b-mic").title = m ? "Включить микрофон" : "Выключить микрофон"; }).catch(showErr));
 $("b-set").onclick = () => { const a = api(); if (a) a.open_settings(); };
 /* Dewiar Облако: заряд на исходе — мягкая строка в виджете (нажать — студия, «Мозг») */

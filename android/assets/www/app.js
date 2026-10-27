@@ -887,6 +887,33 @@ function convNote() {                           // сколько идёт ра�
 /* Ближайшая неделя и «считай calc» — только к вопросу про даты и сроки: раньше шли к каждому, и ассистенты сами заводили
    речь о днях рождения и подсчёте дней (письмо пользователя 23.10; то же — core/engine_answer DATE_ASK_RX). */
 const DATE_ASK = /дн(я|ей|и|ём)(?![а-яё])|недел|понедельник|вторник|сред[уыа]|четверг|пятниц|суббот|воскресен|завтра|послезавтра|числ[оа]|дат[аыуе]|когда|сколько.{0,20}(дн|недел|месяц|осталось)|через\s+\d|рождени|праздник|январ|феврал|март|апрел|ма[йя](?![а-яё])|июн|июл|август|сентябр|октябр|ноябр|декабр|\d{1,2}[./]\d{1,2}/i;
+/* Память 2.0 (27.10, как на компьютере — core/memory.py): в подсказке — последние MEM_CORE фактов (подсказка не меняется
+   от вопроса к вопросу), а более старые подбираются к вопросу по смыслу: общие основы слов, близкие слова («подарить» ↔
+   «день рождения», «любит») и родство («маме» — всё о маме). Раньше старше 40-го факта модель не видела вовсе. */
+const MEM_CORE = 30;
+const MEM_SYN = ["подар день рожд юбил празд любит нрави мечта хочет", "здоров болит болез врач табле лекар давле аллер самоч",
+  "работ должн профе начал колле офис зарпл", "машин авто водит права", "дом кварт живет живу адрес переех город",
+  "еда кушат готов блюдо любим вкусн кофе чай", "деньг бюдже потра купит стоит цена копит", "учеба учит школ униве экзам урок",
+  "отпус поезд путеш лете ехать отдых", "имя зовут звать", "возра лет год родил рожде", "собак пес кот кошк питом"].map(g => g.split(" "));
+const MEM_KIN = { мам: "мам", мат: "мам", пап: "пап", отец: "пап", отц: "пап", жен: "жен", муж: "муж", сын: "сын", доч: "доч",
+  брат: "брат", сест: "сест", бабу: "баб", деду: "дед", внук: "внук", внуч: "внук", друг: "друг", подру: "друг", колле: "колле",
+  начал: "колле", собак: "собак", пес: "собак", щен: "собак", кот: "кот", кошк: "кот" };
+const MEM_STOP = new Set("что как где когда кто мне меня мой моя мои это там тут для про она они его ее её был была было есть или если уже еще ещё".split(" "));
+function memStems(t) { return String(t || "").toLowerCase().replace(/ё/g, "е").match(/[а-яa-z0-9]+/g)?.filter(w => w.length > 2 && !MEM_STOP.has(w)).map(w => w.slice(0, 5)) || []; }
+function memKin(st) { const out = new Set(); st.forEach(w => { for (const k in MEM_KIN) if (w.startsWith(k)) out.add(MEM_KIN[k]); }); return out; }
+function memPick(text, limit = 8) {
+  const mem = S.memory || [];
+  if (mem.length <= MEM_CORE) return [];
+  const q = new Set(memStems(text)); if (!q.size) return [];
+  const qx = new Set(); MEM_SYN.forEach(g => { if (g.some(w => [...q].some(x => x.startsWith(w) || w.startsWith(x)))) g.forEach(w => qx.add(w)); });
+  const qk = memKin([...q]);
+  return mem.slice(0, -MEM_CORE).map((f, i) => {
+    const st = memStems(f); let sc = 0;
+    st.forEach(w => { if (q.has(w)) sc += 1.5; else if ([...qx].some(x => w.startsWith(x))) sc += 0.6; });
+    if (qk.size && [...memKin(st)].some(k => qk.has(k))) sc += 2;
+    return { f, sc, i };
+  }).filter(x => x.sc >= 1).sort((a, b) => b.sc - a.sc || b.i - a.i).slice(0, limit).map(x => x.f);
+}
 function turnContext(text) {
   const n = convNote();
   let rp = ""; try { rp = recentPrompt() || ""; } catch (e) { }
@@ -895,7 +922,9 @@ function turnContext(text) {
     const week = [1, 2, 3, 4, 5, 6, 7].map(i => { const d = new Date(Date.now() + i * 864e5); return `${WD[d.getDay()]} — ${d.getDate()} ${MON[d.getMonth()]}`; }).join("; ");
     t += ` Ближайшие дни: ${week}. Сколько дней до даты и какая дата ближе — считай calc days_until, не в уме.`;
   }
-  return (rp ? rp.trim() + "\n\n" : "") + t + (n ? " " + n : "");
+  let mp = []; try { mp = memPick(text); } catch (e) { }
+  return (rp ? rp.trim() + "\n\n" : "") + t + (n ? " " + n : "")
+    + (mp.length ? "\n\nИз памяти о пользователе (подобрано к этому вопросу — используй, если к месту):\n- " + mp.join("\n- ") : "");
 }
 function putContext(msgs, ctx) {
   const last = msgs[msgs.length - 1];
@@ -1730,7 +1759,8 @@ function systemPrompt() {
     : "Нажимать в других приложениях (написать в мессенджере конкретному человеку, найти что-то внутри приложения) ты сможешь, если пользователь включит «Управлять приложениями» "
       + "(Настройки Dewiar → Ещё). На такую просьбу вызови phone_screen — он объяснит, как включить; сам не притворяйся, что сделал.");
   if (S.user_name) parts.push(`Собеседника зовут ${S.user_name}.`);
-  if (S.memory.length) parts.push("Что ты знаешь о пользователе:\n- " + S.memory.slice(-40).join("\n- "));
+  if (S.memory.length) parts.push("Что ты знаешь о пользователе:\n- " + S.memory.slice(-MEM_CORE).join("\n- ")
+    + (S.memory.length > MEM_CORE ? `\n(И ещё ${S.memory.length - MEM_CORE} — нужное к вопросу придёт в справке «Из памяти».)` : ""));
   { const rl = Object.entries(S.relations || {}).filter(([, v]) => v && v.name); if (rl.length) parts.push("Кто есть кто в контактах (для звонков и сообщений): " + rl.map(([k, v]) => `${REL_RU[k] || k} — «${v.name}»`).join(", ") + "."); }
   const mp = mindPrompt(); if (mp) parts.push(mp.trim());
   // «что было недавно» растёт с каждой репликой — в справке к вопросу (turnContext), чтобы подсказка не менялась
@@ -3585,7 +3615,7 @@ async function runTool(name, a) {
     }
     case "remember": { const f = String(a.fact || a.text || a.content || "").trim();
       if (!f) return "Ошибка: не пришло, что запомнить — вызови remember ещё раз с fact (сам факт одной фразой).";
-      if (!S.memory.includes(f)) { S.memory.push(f); S.memory = S.memory.slice(-80); saveS(); syncSoon(); } return "Запомнил."; }
+      if (!S.memory.includes(f)) { S.memory.push(f); S.memory = S.memory.slice(-300); saveS(); syncSoon(); } return "Запомнил."; }
     case "money_add": {
       if (isPlanMoney(`${a.category || ""} ${a.note || ""}`)) return "Не записано: это план (бюджет, лимит), а не трата или доход. Запомни его как факт (remember), например «Бюджет на мебель — 65 тысяч рублей».";
       const m = money(); const x = { id: "m" + Date.now(), date: isoLocal(new Date()).slice(0, 10), kind: a.kind === "income" ? "income" : "expense", amount: +a.amount || 0,
@@ -3952,7 +3982,7 @@ function factQuick(text) {
   let day = null;
   if (DAY_WORD.test(body)) { const w = parseWhen(body); if (w && w.at && !w.rel) { day = new Date(w.at); day.setHours(0, 0, 0, 0); } }
   const fact = `Со слов пользователя: ${body}` + (day ? ` (на ${pad(day.getDate())}.${pad(day.getMonth() + 1)}.${day.getFullYear()}, ${WD[day.getDay()]})` : "") + ".";
-  if (!S.memory.includes(fact)) { S.memory.push(fact); S.memory = S.memory.slice(-80); saveS(); syncSoon(); }
+  if (!S.memory.includes(fact)) { S.memory.push(fact); S.memory = S.memory.slice(-300); saveS(); syncSoon(); }
   plog("info", "🧠 запомнила без модели" + (day ? ` (на ${day.getDate()} ${MON[day.getMonth()]})` : ""));
   if (SANDBOX) SANDBOX.dev.push({ name: "remember", args: fact, argsObj: { fact }, t: Date.now() });
   const she = persona().gender === "female" ? "Запомнила" : "Запомнил";
@@ -6070,7 +6100,7 @@ function syncApply(it) {
   } else if (it.kind === "memory") {
     S.memory = (S.memory || []).filter(f => factId(f) !== it.id);
     if (!del && d.text) S.memory.push(d.text);
-    S.memory = S.memory.slice(-120); prefSet("settings", JSON.stringify(S));
+    S.memory = S.memory.slice(-300); prefSet("settings", JSON.stringify(S));
   } else if (["soul", "mind", "diary", "task"].includes(it.kind)) {
     if (del && it.kind === "task") { const m = mind(); if (m.tasks[it.id]) { delete m.tasks[it.id]; saveMind(m); } return false; }   // компьютер удалил задачу
     if (it.kind === "task" && ((mind().hid || {})[it.id] || (it.data || {}).want)) return false;   // удалили здесь / наша же команда

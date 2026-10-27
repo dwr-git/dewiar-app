@@ -200,7 +200,10 @@ DEFAULTS = {
     "net": {"proxy": "", "dewiar": False, "web_via": True,   # прокси для серверов Dewiar, если провайдер блокирует dewiar.pro: свой (socks5://… или http://…) или «Использовать прокси Dewiar»
             "dewiar_secret": "", "dewiar_at": 0,                # прокси, выданный dewiar.pro, и когда получен (обновляется раз в 6 часов, engine_brain.py)
             "lan": {}},         # дома — напрямую: {"public", "base", "id"} — папка сайта по имени и в домашней сети (engine_brain._lan_fetch)
-    "music": {"service": "auto"},       # где включать музыку: auto (недавно открыта Яндекс Музыка — в ней, иначе радио) | radio | yandex | youtube
+    "music": {"service": "auto",        # где включать музыку: auto (недавно открыта Яндекс Музыка — в ней, иначе радио) | radio | yandex | youtube
+              # своя папка с музыкой (27.10, engine_mymusic.py): папка («» — не выбрана), «в любимое» — пути треков,
+              # ведущий говорит пару слов перед треком — раз в dj_every треков
+              "folder": "", "favs": [], "dj_talk": True, "dj_every": 3},
     "smarthome": {"client_id": ""},     # ID приложения Яндекс OAuth (iot:view, iot:control) для кнопки «Получить ключ»
     "backup": {"dir": "", "auto": True},  # резервные копии: папка (пусто — «Документы/Dewiar — копии»), раз в неделю сама
     "updates": {"url": "", "auto_check": True},       # пусто = https://dewiar.pro/dwrapp/latest.json

@@ -696,6 +696,17 @@ class CommandsMixin:
             return self.workspace.memory_get()
         if cmd == "memory_set":
             return self.workspace.memory_set(a.get("text", ""))
+        if cmd in ("memory_view", "memory_find", "memory_add", "memory_forget"):   # Память 2.0: страницы, поиск по смыслу
+            import memory as MEM
+            if cmd == "memory_view":
+                return dict(MEM.view(self.workspace.memory_get()), last=getattr(self, "_mem_last", None))
+            if cmd == "memory_find":
+                return MEM.find(str(a.get("q") or ""), self.workspace.memory_get())
+            if cmd == "memory_add":
+                return self.workspace.remember(str(a.get("text") or ""))
+            return self.workspace.memory_set(MEM.forget(self.workspace.memory_get(), int(a.get("i", -1))))
+        if cmd.startswith("mm_"):                  # «Музыка»: своя папка (engine_mymusic.py)
+            return self.mine_command(cmd, a)
         if cmd.startswith("account_"):           # аккаунт сайта: вход, выход, проверка
             from account import AccountError
             try:
@@ -1341,6 +1352,7 @@ class CommandsMixin:
             box = self.pending_confirm
             if box:
                 box["answer"] = bool(a.get("ok"))
+                box["always"] = bool(a.get("always"))         # кнопка «Всегда» (команды «только посмотреть» на сервере)
                 box["event"].set()
             return True
         if cmd == "phone_home":                   # только умный дом — на телефон (QR в студии; ключ не уходит на сервер)

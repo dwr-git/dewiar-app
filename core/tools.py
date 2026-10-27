@@ -2709,6 +2709,15 @@ class Toolbox:
         v = remote_check(str((args or {}).get("command") or ""))
         return v["level"] == "ok" and v["readonly"]
 
+    def server_readonly(self, args):
+        """Команда на сервере только смотрит (servers.check: ok и readonly) — её можно разрешить «всегда»."""
+        try:
+            from servers import check as remote_check
+            v = remote_check(str((args or {}).get("command") or ""))
+            return v["level"] == "ok" and bool(v["readonly"])
+        except Exception:  # noqa: BLE001
+            return False
+
     def describe(self, name, args):
         """Как спросить подтверждение по-человечески."""
         if name == "power":

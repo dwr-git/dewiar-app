@@ -204,6 +204,11 @@ class MusicMixin:
         """«Включи музыку» → спросим жанр; «поставь джаз», «что-нибудь спокойное», «дальше», «выключи музыку».
         «Играй», «пауза», «следующий трек» — кнопки открытого плеера; «… в Яндекс Музыке» — там."""
         from music import control, genre_tag, parse
+        try:
+            if self._mine_cmd(text):                       # своя папка с музыкой: «поставь мою музыку», «что играет»
+                return True
+        except Exception as e:  # noqa: BLE001
+            log.info("Моя музыка: %s", e)
         act = control(text)
         if act == "play" and self.radio.playing and not self.radio.sounding and time.monotonic() - self.radio.last_at > 8:
             last = self.radio.station or self.radio.last         # «играет», а звука нет — станция зависла: включаем заново

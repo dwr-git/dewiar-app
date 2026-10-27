@@ -366,7 +366,7 @@ class AnswerMixin:
             text = (text or "").strip()
             parts.append({"key": key, "title": title, "text": text[:6000], "chars": len(text), "go": go, "note": note})
         add("persona", "Персонаж", self.personas.system_prompt(self.s.get("persona"), self.s.get("user_name") or "", ""), "personas")
-        add("memory", "Что знает о вас («Обо мне»)", self.workspace.memory_text(), "me")
+        add("memory", "Что знает о вас («Обо мне»)", self.memory_core(), "me")
         try:
             import quality as Q
             add("lessons", "Уроки из ваших поправок", Q.talk_lessons_block(self.workspace.root / Q.TALK_LESSONS_FILE), "memory",
@@ -398,7 +398,7 @@ class AnswerMixin:
         base = self.personas.system_prompt(self.s.get("persona"), self.s.get("user_name") or "", "")
         base += ("\n\nТекущие дата и время — в справке в начале последнего сообщения пользователя; они верные, а время и даты "
                  "из прошлых реплик разговора устарели — не повторяй их.")
-        mem = self.workspace.memory_text()
+        mem = self.memory_core()
         if mem:
             base += ("\n\nЧто ты знаешь о пользователе (твоя память, файл «Память/Обо мне.md»; «вспомни, что я говорил…» — "
                      "отвечай отсюда, даже если в заметках и календаре пусто):\n" + mem)
@@ -538,7 +538,28 @@ class AnswerMixin:
         return (self.personas.get(self.s.get("persona")) or {}).get("gender", "")
 
     def memory(self):
-        return self.workspace.memory_text()
+        return self.memory_core()
+
+    def memory_core(self, limit=2500):
+        """«Обо мне» для подсказки (Память 2.0, memory.core_text): целиком, если влезает, иначе главное — о самом
+        человеке, кто есть кто и новое. Не зависит от вопроса — подсказка остаётся прежней (кэш модели)."""
+        try:
+            import memory as MEM
+            return MEM.core_text(self.workspace.memory_get(), limit)
+        except Exception:  # noqa: BLE001
+            log.debug("память: главное", exc_info=True)
+            return self.workspace.memory_text(limit)
+
+    def memory_for(self, question):
+        """К вопросу — факты, что не вошли в главное, по смыслу вопроса (memory.relevant). -> (строки, страницы)."""
+        try:
+            import memory as MEM
+            lines, pages = MEM.relevant(question, self.workspace.memory_get())
+        except Exception:  # noqa: BLE001
+            log.debug("память: к вопросу", exc_info=True)
+            return "", []
+        self._mem_last = {"pages": pages, "ts": time.time()}
+        return lines, pages
 
     def skills_prompt(self):
         return self.skills.prompt()
@@ -1339,6 +1360,11 @@ class AnswerMixin:
             except Exception as e:  # noqa: BLE001
                 log.info("Поиск по записям: %s", e)
             ctx = [self._turn_context(text)]           # меняющееся — в справку к вопросу, подсказка остаётся прежней
+            mlines, mpages = self.memory_for(text.split("\n\nВложения:")[0])
+            if mlines:                                 # Память 2.0: старое о человеке не теряется — приходит к вопросу
+                log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))
+                ctx.append("Из памяти о пользователе (подобрано к этому вопросу из «Обо мне» — используй, если к месту, "
+                           "не пересказывай всё):\n" + mlines)
             if recalled:
                 log.info("📎 Вспомнил из записей: %s", ", ".join(re.findall(r"^\[([^\]]+)\]", recalled, re.M)))
                 ctx.append("Из записей пользователя в твоей папке (нашлось по словам вопроса). Если это отвечает на "

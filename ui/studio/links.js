@@ -69,13 +69,14 @@ async function meExam() {
 }
 function loadMe() {
   core.call("memory_get").then(t => { $("#me-mem").value = t.trim(); }).catch(() => {});
+  if (window.mpxLoad) mpxLoad();                     // страницы памяти по людям и темам (studio/mempages.js)
   meExam();
   core.call("knowledge_list").then(r => renderKn(r.files)).catch(e => ($("#kn-res").textContent = e.message));
   core.call("knowledge_folders").then(renderKnFolders).catch(() => {});
   const a = S && lastAccount; $("#kn-site").textContent = a && a.logged_in ? `Знания с сайта тоже подключены: аккаунт ${a.user && a.user.login || a.login} (раздел «Подключение»).` : "";
 }
 let lastAccount = null;
-$("#me-save").onclick = () => core.call("memory_set", { text: $("#me-mem").value }).then(() => { $("#me-res").className = "res ok"; $("#me-res").textContent = "Сохранено"; setTimeout(() => ($("#me-res").textContent = ""), 2500); }).catch(e => toast(e.message));
+$("#me-save").onclick = () => core.call("memory_set", { text: $("#me-mem").value }).then(() => { if (window.mpxLoad) mpxLoad(); $("#me-res").className = "res ok"; $("#me-res").textContent = "Сохранено"; setTimeout(() => ($("#me-res").textContent = ""), 2500); }).catch(e => toast(e.message));
 $("#kn-open").onclick = () => core.call("knowledge_open").catch(e => toast(e.message));
 $("#kn-file").onchange = async (ev) => {
   const files = [...ev.target.files]; ev.target.value = ""; const r = $("#kn-res"); let n = 0;

@@ -216,6 +216,7 @@ class Radio:
 
     def __init__(self, make_player, ffmpeg):
         self.make_player, self.ffmpeg = make_player, ffmpeg      # make_player() -> Player; ffmpeg() -> путь
+        self.on_end = None                                       # трек из своей папки доиграл сам -> on_end(станция)
         self.station, self.proc, self.player = None, None, None
         self.volume, self._duck = 0.8, 1.0             # _duck — множитель громкости на время разговора
         self._gen = 0
@@ -274,9 +275,11 @@ class Radio:
             # Локальному файлу переподключение не нужно. Опции собираем отдельным списком, а не вычищаем из общего:
             # фильтр по значениям «1»/«5» заодно выбрасывал бы «-ac 1» и любое другое совпавшее значение.
             local = station["url"].startswith("file:") or os.path.exists(station["url"])
-            reconnect = [] if local else ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"]
-            cmd = [ff, "-loglevel", "error", *reconnect,
-                   "-user_agent", STREAM_UA, "-rw_timeout", "15000000", "-i", station["url"], "-vn", "-f", "s16le", "-ac", "1",
+            # Сетевые опции (user_agent, rw_timeout) файлу тоже нельзя: ffmpeg с ними файл не открывает вовсе («Option
+            # user_agent not found») — так «своя музыка» не играла бы ни одного трека. Файл — в темпе звучания (-re).
+            net = ["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+                   "-user_agent", STREAM_UA, "-rw_timeout", "15000000"]
+            cmd = [ff, "-loglevel", "error", *(["-re"] if local else net), "-i", station["url"], "-vn", "-f", "s16le", "-ac", "1",
                    "-ar", str(RATE), "-"]
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
                                          creationflags=0x08000000 if os.name == "nt" else 0)
@@ -360,11 +363,16 @@ class Radio:
                     ("станция не отвечает" if rc in (0, None) else f"ffmpeg завершился с кодом {rc}")
             elif got < RATE * 2 * 3:                               # меньше 3 секунд звука — не заиграла
                 self.failed = "поток оборвался через секунду" + (f": {err.strip().splitlines()[-1][:150]}" if err.strip() else "")
+            ended = None
             with self._lock:
                 if gen == self._gen:
+                    ended = self.station
                     self._close()
                     self.station = None
             self._changed()
+            # своя музыка: трек доиграл до конца (а не сломался в первые секунды) — дальше решает очередь (engine_mymusic)
+            if ended and ended.get("_mine") and self.on_end and eof and not self.failed and got >= RATE * 2 * 3:
+                threading.Thread(target=self.on_end, args=(ended,), name="radio-next", daemon=True).start()
 
     def _close(self):
         """Убить ffmpeg и закрыть проигрыватель. Звать под self._lock."""

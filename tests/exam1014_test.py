@@ -34,6 +34,7 @@ wd_names = ["понедельник", "вторник", "среду", "четв�
 class WS:
     def __init__(self, text): self.t = text
     def memory_text(self): return self.t
+    def memory_get(self): return self.t          # 0.47: даты ищутся по всей «Обо мне», а не по последним 2500 знакам
 
 
 class Eng(engine_tools.ToolsMixin):
