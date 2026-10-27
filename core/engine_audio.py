@@ -23,6 +23,9 @@ class AudioMixin:
         мгновенно; остальные (self.asr_names, например «Девиар») — только точной моделью в каждой фразе
         (_check_worker) или по отпечатку голоса. Обновляет и self.aliases — имена для find_name."""
         only = None if self.s.get("all_names") else self.s.get("persona")
+        kids = getattr(self, "kids", None)
+        if kids and kids.on():
+            only = kids.conf().get("persona") or only        # детский режим: откликается только друг ребёнка
         if self.vosk_model is None:
             if not self.names_off:            # слух ещё запускается — соберём, когда будет модель
                 return

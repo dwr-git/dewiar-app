@@ -1,11 +1,11 @@
 /* Студия Dewiar: раздел «Календарь» (месяц, деньги, лента), окно установки обновления, «Dewiar на телефоне» (QR-коды),
-   умный дом Яндекса и подключённые календари Google/Яндекс (ссылки iCal).
+   умный дом Яндекса, Home Assistant и подключённые календари Google/Яндекс (ссылки iCal).
    Команды ядра: calendar_month, money_summary/list/add/delete, reminder_add/cancel, phone_config,
-   home_connect/refresh/forget, cal_add/remove/toggle; события money_saved, reminders, note_saved (перерисовка
-   календаря) и calendars. Ход установки обновления спрашиваем у окна (api().update_progress), а не у ядра: установку
+   home_connect/refresh/forget, ha_get/connect/refresh/forget, cal_add/remove/toggle; события money_saved, reminders,
+   note_saved (перерисовка календаря), calendars и ha. Ход установки обновления спрашиваем у окна (api().update_progress), а не у ядра: установку
    ведёт ui/app.py, ядро на это время останавливается или перезапускается.
    Файлы студии подключаются по порядку из ui/settings.html и делят одну глобальную область: qrPretty отсюда нужен
-   links.js и dewiar.js, phFill/shFill/csFill зовёт dewiar.js после связи с ядром; escH, SVG, I_DEL — из файлов ниже,
+   links.js и dewiar.js, phFill/shFill/haFill/csFill зовёт dewiar.js после связи с ядром; escH, SVG, I_DEL — из файлов ниже,
    но нужны только при отрисовке. */
 /* ---------- календарь, деньги, список ---------- */
 const CT = { event: ["Встречи", "#4FC3FF"], reminder: ["Напоминания", "#FFC978"], money: ["Деньги", "#4BE3A1"], note: ["Заметки", "#8B8CF7"],
@@ -389,6 +389,31 @@ $("#sh-refresh").onclick = () => core.call("home_refresh").then(shFill).catch(e 
 $("#sh-phone").onclick = async () => { const box = $("#sh-qrbox"); if (box.style.display !== "none") { box.style.display = "none"; $("#sh-qr").innerHTML = ""; return; }
   try { const d = await core.call("phone_home"); $("#sh-qr").innerHTML = qrSvg(d.url); box.style.display = ""; } catch (e) { toast(e.message); } };
 $("#sh-off").onclick = async () => { if (await ask("Отключить умный дом?")) core.call("home_forget").then(shFill).catch(e => toast(e.message)); };
+
+/* ---------- Home Assistant: адрес и долгосрочный токен (токен в студию не возвращается — только «подключён») ---------- */
+const HA_MAX = 40;                            // в HA бывают сотни сущностей — показываем первые, остальное числом
+function haFill(h) {
+  if (!h) return;
+  $("#ha-setup").style.display = h.connected ? "none" : ""; $("#ha-on").style.display = h.connected ? "" : "none";
+  if (!h.connected) { $("#ha-devs").innerHTML = ""; return; }
+  const n = (k) => (h[k] || []).length, st = $("#ha-state");
+  if (h.error) { st.className = "res bad"; st.textContent = h.error; }
+  else { st.className = "res ok"; st.textContent = `Подключён${h.url ? " (" + h.url + ")" : ""}: устройств ${n("devices")}, комнат ${n("rooms")}, ` +
+    `сценариев ${n("scenarios")}` + (n("sensors") ? `, датчиков ${n("sensors")}` : ""); }
+  const chips = (h.devices || []).map(d => { const k = Object.keys(SH_ICON).find(x => (d.type || "").includes(x));
+      return `<span class="chip shd${d.on ? " on" : ""}" title="${d.on ? "включено" : "выключено"}">${k ? SH_ICON[k] + " " : ""}${escH(d.name)}${d.room ? ` <small style="opacity:.6">· ${escH(d.room)}</small>` : ""}</span>`; })
+    .concat((h.sensors || []).map(d => `<span class="chip shd" title="датчик">🌡 ${escH(d.name)} <small style="opacity:.6">· ${escH(d.value)}</small></span>`))
+    .concat((h.scenarios || []).map(x => `<span class="chip shd scn">▶ ${escH(x)}</span>`));
+  $("#ha-devs").innerHTML = chips.slice(0, HA_MAX).join("") + (chips.length > HA_MAX ? `<span class="chip shd scn">и ещё ${chips.length - HA_MAX}</span>` : "");
+}
+$("#ha-go").onclick = async (ev) => { const r = $("#ha-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "подключаю…";
+  try { const h = await core.call("ha_connect", { url: $("#ha-url").value, token: $("#ha-token").value }); $("#ha-token").value = "";
+    haFill(h); r.className = "res ok"; r.textContent = "Готово! Скажите: «включи свет»."; }
+  catch (e) { r.className = "res bad"; r.textContent = e.message; } finally { ev.target.disabled = false; } };
+$("#ha-token").onkeydown = $("#ha-url").onkeydown = (e) => { if (e.key === "Enter") $("#ha-go").click(); };
+$("#ha-refresh").onclick = () => { $("#ha-res").textContent = ""; core.call("ha_refresh").then(haFill).catch(e => { $("#ha-res").className = "res bad"; $("#ha-res").textContent = e.message; }); };
+$("#ha-off").onclick = async () => { if (await ask("Отключить Home Assistant?")) core.call("ha_forget").then(h => { haFill(h); $("#ha-res").textContent = ""; }).catch(e => toast(e.message)); };
+core.on("ha", e => haFill(e.data));
 
 /* ---------- календари Google/Яндекс ---------- */
 const I_CAL = '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>';

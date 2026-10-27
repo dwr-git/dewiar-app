@@ -1108,8 +1108,43 @@
     portraitRim(g, e, R);
   }
 
+  // Обложка своей музыки (№361, 27.10: «вместо крутящейся пластинки брать картинку из файла или каталога; пластинку
+  // оставить как заглушку»): .cover — адрес картинки; пока не загрузилась или битая — пластинка. Обложка неподвижна
+  // (на ней текст), живость — мягкий блик, который медленно обходит круг, и тень «над» карточкой.
+  function coverImg(e) {
+    if (!e.cover) return null;
+    if (!e._cov || e._cov.url !== e.cover) {
+      const img = new Image(), st = { url: e.cover, img, ok: false };
+      img.onload = () => { st.ok = img.naturalWidth > 0; }; img.onerror = () => { st.ok = false; };
+      img.src = e.cover; e._cov = st;
+    }
+    return e._cov.ok ? e._cov.img : null;
+  }
+  function coverArt(g, e, img) {
+    const { ctx, r } = g;
+    const R = r * 1.08, now = performance.now() / 1000;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 22; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.clip();
+    const w = img.naturalWidth, h = img.naturalHeight, k = (2 * R) / Math.min(w, h);   // «cover»: заполнить круг, лишнее — за краем
+    ctx.drawImage(img, -w * k / 2, -h * k / 2, w * k, h * k);
+    const vg = ctx.createRadialGradient(0, 0, R * 0.62, 0, 0, R);                       // лёгкая виньетка к краю
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.28)");
+    ctx.fillStyle = vg; ctx.fillRect(-R, -R, 2 * R, 2 * R);
+    const a = now * 0.35, gx = Math.cos(a) * R * 0.55, gy = Math.sin(a) * R * 0.55 - R * 0.2;
+    const gl = ctx.createRadialGradient(gx, gy, 0, gx, gy, R * 0.9);
+    gl.addColorStop(0, "rgba(255,255,255,.13)"); gl.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gl; ctx.fillRect(-R, -R, 2 * R, 2 * R);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,.28)"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(0, 0, R - 0.6, 0, TAU); ctx.stroke();
+  }
+
   // Пластинка: пока играет радио и ассистент молчит — вращается винил, на «яблоке» — цвет персонажа и название станции.
   function vinyl(g, e) {
+    const cimg = coverImg(e);
+    if (cimg) return coverArt(g, e, cimg);
     const { ctx, r, c } = g;
     const R = r * 1.08, now = performance.now() / 1000;
     const ang = (e._vang = ((e._vang || 0) + (e._dt || 0.016) * 1.9) % TAU);           // ≈ 18 об/мин — видно, что крутится

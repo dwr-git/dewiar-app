@@ -2000,9 +2000,9 @@ def t_delete_files(a, ctx):
 
 
 def t_smart_home(a, ctx):
-    h = ctx.get("home")
+    h = ctx.get("home")                          # homeassistant.Homes: Яндекс и Home Assistant как один дом
     if h is None or not h.connected():
-        raise ToolError("умный дом Яндекса не подключён — студия → «Подключение» → «Умный дом»")
+        raise ToolError("умный дом не подключён — студия → «Подключение» → «Умный дом» или «Home Assistant»")
     from smarthome import HomeError
     act, target = a.get("action") or "list", (a.get("target") or "").strip()
     try:
@@ -2471,7 +2471,7 @@ TOOLS = {
                      "команды терминала. Если просят «удали всё» — сначала уточни, что именно.",
                      S({"paths": {"type": "array", "items": {"type": "string"}}}, ["paths"]), "confirm", t_delete_files,
                      "Удаление в корзину"),
-    "smart_home": ("Умный дом Яндекса (устройства, что у Алисы): action — list (какие есть устройства, сценарии и показания датчиков: температура, влажность в комнатах), on, off, "
+    "smart_home": ("Умный дом (Яндекс — устройства, что у Алисы, и Home Assistant): action — list (какие есть устройства, сценарии и показания датчиков: температура, влажность в комнатах), on, off, "
                    "brightness (value 1–100), brighter, dimmer, temperature (value, °C), warm (value −1 теплее, 1 холоднее), "
                    "scenario (target — название сценария). target — устройство и/или комната словами: «свет в спальне», "
                    "«весь свет», «кондиционер», «розетка на кухне».",
@@ -2527,6 +2527,9 @@ class Toolbox:
 
     def policy(self, name):
         """-> (включён, нужно подтверждение). Инструменты неподключённых служб выключены — модель о них и не узнает."""
+        kids = self.hooks.get("kids")
+        if kids is not None and kids.on() and name not in kids.tools():
+            return False, False                 # детский режим (kids.py): только безопасные умения
         if name in SKILL_TOOLS:
             return bool(self.skills and self.skills.enabled()), False
         if self.mcp and self.mcp.has(name):
@@ -2540,7 +2543,7 @@ class Toolbox:
                 return False, False
         if name in SERVER_OFF and self.hooks.get("server"):   # сервер без экрана и звука: «открыла сайт» было бы неправдой
             return False, False
-        if name == "smart_home":                # только когда подключён умный дом Яндекса
+        if name == "smart_home":                # только когда подключён умный дом (Яндекс или Home Assistant)
             h = self.hooks.get("home")
             if not (h and h.connected()):
                 return False, False
@@ -2573,6 +2576,9 @@ class Toolbox:
         """Описания включённых инструментов для модели: [{name, description, parameters}]."""
         out = [{"name": n, "description": d, "parameters": p} for n, (d, p, *_rest) in TOOLS.items()
                if self.policy(n)[0]]
+        kids = self.hooks.get("kids")
+        if kids is not None and kids.on():
+            return out                          # детский режим: ни навыков, ни подключённых MCP — только KIDS_TOOLS
         if self.skills and self.skills.enabled():
             out += [{"name": n, "description": d, "parameters": p} for n, (d, p) in SKILL_TOOLS.items()]
         if self.mcp:
@@ -2617,7 +2623,7 @@ class Toolbox:
         if name == "send_telegram" and not (h.get("telegram") and h["telegram"].paired()):
             return "Сначала подключите Telegram или MAX — «Подключение»", "connect"
         if name == "smart_home" and not (h.get("home") and h["home"].connected()):
-            return "Сначала подключите умный дом Яндекса — «Подключение»", "connect"
+            return "Сначала подключите умный дом (Яндекс или Home Assistant) — «Подключение»", "connect"
         if name == "server_run" and not (h.get("servers") and h["servers"].items):
             return "Сначала добавьте сервер — «Серверы»", "servers"
         if name == "search_documents" and not (h.get("knowledge") and h["knowledge"].has_files()):

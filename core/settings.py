@@ -197,8 +197,10 @@ DEFAULTS = {
     "calendars": {"items": [], "remind_minutes": 10},   # календари по ссылке iCal (Google, Яндекс…), напомнить за N минут
     "cloud": {"key": "", "url": "", "account": False, "stt_ok": False, "tts_ok": False,
               "join": {}},      # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
+    "kids": {"on": False},   # детский режим (kids.py): ребёнок, время, что можно; PIN — в STATE_DIR/kids.json
     "net": {"proxy": "", "dewiar": False, "web_via": True,   # прокси для серверов Dewiar, если провайдер блокирует dewiar.pro: свой (socks5://… или http://…) или «Использовать прокси Dewiar»
             "dewiar_secret": "", "dewiar_at": 0,                # прокси, выданный dewiar.pro, и когда получен (обновляется раз в 6 часов, engine_brain.py)
+            "reserve": True, "dewiar_try": 0,                   # запасной путь: напрямую не открылось — тем же прокси Dewiar (net._DirectFirst)
             "lan": {}},         # дома — напрямую: {"public", "base", "id"} — папка сайта по имени и в домашней сети (engine_brain._lan_fetch)
     "music": {"service": "auto",        # где включать музыку: auto (недавно открыта Яндекс Музыка — в ней, иначе радио) | radio | yandex | youtube
               # своя папка с музыкой (27.10, engine_mymusic.py): папка («» — не выбрана), «в любимое» — пути треков,

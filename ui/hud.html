@@ -74,9 +74,14 @@
   body.light #tmr .tr.end { background: linear-gradient(135deg, rgba(255,181,71,.28), rgba(255,106,136,.18)); }
   body.light #tmr .tt b { color: var(--ink); }
   body.light #tmr .tt span { color: var(--muted); }
-  body.light #tmr svg.pg .bg { stroke: rgba(20,20,40,.10); }
-  body.light #tmr svg.pg .fg { stroke: #2aa7c9; }
-  body.light #tmr .tr.end svg.pg .fg { stroke: #e08a00; }
+  body.light #tmr svg.pg .well { fill: rgba(255,255,255,.55); }
+  body.light #tmr svg.pg .bg { stroke: rgba(30,50,90,.09); }
+  body.light #tmr svg.pg .tick { stroke: rgba(30,50,90,.22); }
+  body.light #tmr svg.pg .s1 { stop-color: #1fb4d8; }
+  body.light #tmr svg.pg .s2 { stop-color: #6a78f0; }
+  body.light #tmr .tr.end svg.pg .s1 { stop-color: #f2a219; }
+  body.light #tmr .tr.end svg.pg .s2 { stop-color: #ee5a78; }
+  body.light #tmr svg.pg .bead { fill: #fff; filter: drop-shadow(0 1px 2px rgba(40,60,120,.35)); }
   /* неоморфизм: портрет — выпуклая «таблетка» из того же материала (две тени вокруг круга под обликом) */
   body.neu #orb::before { content: ""; position: absolute; left: 50%; top: 50%; width: 63%; height: 63%; transform: translate(-50%, -50%);
                          border-radius: 50%; background: var(--glass); box-shadow: 9px 9px 18px var(--neu-dark), -9px -9px 18px var(--neu-light); }
@@ -205,11 +210,23 @@
              background: linear-gradient(135deg, rgba(126,232,250,.13), rgba(138,155,255,.12)); box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
              animation: remin .35s ease-out; }
   #tmr .tr.end { background: linear-gradient(135deg, rgba(255,181,71,.22), rgba(255,106,136,.18)); }
-  #tmr svg.pg { width: 34px; height: 34px; flex: none; transform: rotate(-90deg); }
-  #tmr svg.pg circle { fill: none; stroke-width: 3.2; }
-  #tmr svg.pg .bg { stroke: rgba(255,255,255,.12); }
-  #tmr svg.pg .fg { stroke: #7EE8FA; stroke-linecap: round; transition: stroke-dashoffset .9s linear; }
-  #tmr .tr.end svg.pg .fg { stroke: #FFC978; }
+  /* Круг-циферблат (27.10, «бирюзовый кружок смотрится не очень»): мягкая лунка, по краю — дорожка и дуга остатка
+     градиентом (бирюзовый → сиреневый, к концу — янтарный → коралловый), на кончике дуги — бусина, внутри — 12 рисок. */
+  #tmr svg.pg { width: 40px; height: 40px; flex: none; overflow: visible; }
+  #tmr svg.pg .well { fill: rgba(255,255,255,.05); }
+  #tmr svg.pg .bg, #tmr svg.pg .fg { fill: none; stroke-width: 3.4; }
+  #tmr svg.pg .bg { stroke: rgba(255,255,255,.10); }
+  #tmr svg.pg .tick { stroke: rgba(255,255,255,.28); stroke-width: 1.1; stroke-linecap: round; }
+  #tmr svg.pg .fg { stroke-linecap: round; transition: stroke-dashoffset .9s linear; filter: drop-shadow(0 0 3px rgba(126,200,250,.35)); }
+  #tmr svg.pg .s1 { stop-color: #7EE8FA; }
+  #tmr svg.pg .s2 { stop-color: #8A9BFF; }
+  #tmr .tr.end svg.pg .s1 { stop-color: #FFC978; }
+  #tmr .tr.end svg.pg .s2 { stop-color: #FF7A93; }
+  #tmr .tr.end svg.pg .fg { filter: drop-shadow(0 0 3px rgba(255,150,120,.45)); }
+  #tmr svg.pg .bead { fill: #fff; transition: cx .9s linear, cy .9s linear; filter: drop-shadow(0 0 2px rgba(126,232,250,.7)); }
+  #tmr .tr.end svg.pg .bead { animation: tmrbeat 1s ease-in-out infinite; }
+  @keyframes tmrbeat { 50% { r: 3.4; } }
+  @media (prefers-reduced-motion: reduce) { #tmr svg.pg .fg, #tmr svg.pg .bead { transition: none; } #tmr .tr.end svg.pg .bead { animation: none; } }
   #tmr .tt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.1; }
   #tmr .tt b { font: 600 25px/1.05 "Unbounded", "Manrope", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .01em; color: #fff; }
   #tmr .tt span { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -217,10 +234,41 @@
                 display: grid; place-items: center; }
   #tmr button:hover { background: rgba(255,255,255,.18); }
   #tmr button svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; fill: none; }
-  #tarc { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); pointer-events: none; transform: rotate(-90deg); display: none; }
-  #tarc.on { display: block; }
-  #tarc circle { fill: none; stroke: #7EE8FA; stroke-width: 2.2; stroke-linecap: round; opacity: .85; transition: stroke-dashoffset .9s linear;
-                 filter: drop-shadow(0 0 5px rgba(126,232,250,.55)); }
+  /* Дуга таймера вокруг облика (27.10, «кружок вокруг Лиры смотрится не очень»): тонкое кольцо-дорожка по всему кругу,
+     по нему — остаток времени градиентом (бирюзовый → сиреневый, последние 10 с — янтарный → коралловый) с мягким
+     свечением и светлой бусиной на кончике; та же палитра, что у кружка в строке таймера. */
+  /* Детский режим (kids.py): над кнопками — сколько осталось сегодня, три большие кнопки — сказка, загадка, «почему?» */
+  #kids { display: none; flex-direction: column; gap: 8px; }
+  body.kids #kids { display: flex; }
+  #kids .kt { align-self: center; padding: 5px 12px; border-radius: 999px; font: 700 12.5px/1.3 Manrope, sans-serif; color: #fff;
+              background: rgba(138,107,216,.55); }
+  #kids .kt.over { background: rgba(255,150,120,.5); }
+  #kids .kb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  #kids .kb button { border: 0; border-radius: 16px; min-height: 58px; padding: 8px 4px; cursor: pointer; display: flex; flex-direction: column;
+                     align-items: center; justify-content: center; gap: 4px; font: 800 13px/1.1 Manrope, sans-serif; color: #2a1d00; background: #ffe4b8; }
+  #kids .kb button:nth-child(2) { background: #d8f3e4; color: #11613a; }
+  #kids .kb button:nth-child(3) { background: #dfe3ff; color: #2f2690; }
+  #kids .kb button:hover { filter: brightness(1.04); } #kids .kb button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  #kids .kb svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  body.mini #kids { display: none; }
+  #tarc { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); pointer-events: none; display: none; overflow: visible; }
+  #tarc.on { display: block; animation: tarcin .6s ease-out; }
+  @keyframes tarcin { from { opacity: 0; transform: scale(.97); } }
+  #tarc .tk { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 1.4; }
+  #tarc .fg { fill: none; stroke-width: 2.4; stroke-linecap: round; transition: stroke-dashoffset .9s linear;
+              filter: drop-shadow(0 0 4px rgba(126,200,250,.5)); }
+  #tarc .s1 { stop-color: #7EE8FA; } #tarc .s2 { stop-color: #8A9BFF; }
+  #tarc.end .s1 { stop-color: #FFC978; } #tarc.end .s2 { stop-color: #FF7A93; }
+  #tarc.end .fg { filter: drop-shadow(0 0 5px rgba(255,150,120,.55)); }
+  #tarc .bead { fill: #fff; transition: cx .9s linear, cy .9s linear; filter: drop-shadow(0 0 3px rgba(126,232,250,.85)); }
+  #tarc.end .bead { animation: tarcbeat 1s ease-in-out infinite; filter: drop-shadow(0 0 3px rgba(255,170,120,.9)); }
+  @keyframes tarcbeat { 50% { r: 2.0; } }
+  body.light #tarc .tk { stroke: rgba(30,50,90,.08); }
+  body.light #tarc .s1 { stop-color: #1fb4d8; } body.light #tarc .s2 { stop-color: #6a78f0; }
+  body.light #tarc.end .s1 { stop-color: #f2a219; } body.light #tarc.end .s2 { stop-color: #ee5a78; }
+  body.light #tarc .fg { filter: drop-shadow(0 1px 3px rgba(60,110,200,.28)); }
+  body.light #tarc .bead { filter: drop-shadow(0 1px 2px rgba(40,60,120,.4)); }
+  @media (prefers-reduced-motion: reduce) { #tarc .fg, #tarc .bead { transition: none; } #tarc.on, #tarc.end .bead { animation: none; } }
   #tmini { display: none; position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%); padding: 1px 7px; border-radius: 999px;
            background: rgba(10,12,20,.78); color: #fff; font: 700 12px/1.35 "Manrope", sans-serif; font-variant-numeric: tabular-nums; pointer-events: none; }
   body.mini #tmini.on { display: block; }
@@ -457,7 +505,7 @@
 <div id="reader"><div class="rh"><b id="rd-title">Ответ целиком</b><button class="btn" id="rd-x" title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div id="rd-body"></div></div>
 <div id="card">
   <div id="orb" title="Нажмите — говорить. Удерживайте (или пробел) — диктовка любой длины, отпустите — отправлю"><canvas id="cv"></canvas>
-    <svg id="tarc" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/></svg><span id="tmini"></span></div>
+    <svg id="tarc" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="tarcg" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="90" y2="100"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient></defs><circle class="tk" cx="50" cy="50" r="48.5"/><circle class="fg" cx="50" cy="50" r="48.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" stroke="url(#tarcg)" transform="rotate(-90 50 50)"/><circle class="bead" cx="50" cy="1.5" r="1.45"/></svg><span id="tmini"></span></div>
   <div id="bubble"><span id="say">Подключаюсь…</span></div>
   <div id="mid">
     <div id="cap"><div class="you" id="you"></div><div id="act" title="Ход работы"></div><div class="bot" id="bot"></div><div id="media"></div><button id="more">Открыть целиком</button></div>
@@ -465,6 +513,10 @@
     <div id="note"></div><div id="ldbar"><i></i></div>
     <div id="health" title="Что сейчас с ассистентом"></div>
     <div id="tmr" aria-live="off"></div>
+    <div id="kids" aria-label="Детский режим"><div class="kt" id="kids-t"></div>
+      <div class="kb"><button data-say="Уго, расскажи сказку"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6"/></svg>Сказка</button>
+        <button data-say="Уго, загадай мне загадку"><svg viewBox="0 0 24 24"><path d="M9 9a3 3 0 1 1 4 2.8c-.6.3-1 .9-1 1.6V15"/><circle cx="12" cy="19" r=".6"/></svg>Загадка</button>
+        <button data-say="Уго, расскажи что-нибудь интересное: почему так бывает?"><svg viewBox="0 0 24 24"><path d="M12 3v3M5 7l2 2M19 7l-2 2"/><circle cx="12" cy="15" r="5"/></svg>Почему?</button></div></div>
     <div id="rem"><span class="ri" id="rem-ico">⏰</span><span class="rt"><b id="rem-when"></b><span id="rem-text"></span></span><button id="rem-undo" title="Отменить напоминание">Отменить</button></div>
     <div id="task"></div>
     <div id="upd"></div>
@@ -651,9 +703,23 @@ function setState(s) {
 function setRadio(r) {
   radioNow = r && r.playing ? (r.station || "Радио") : "";
   entity.vinyl = radioNow || null;
+  entity.cover = radioNow && r.art ? r.art : null;       // своя музыка с обложкой — обложка вместо пластинки (№361)
   setState(state);
 }
 core.on("radio", setRadio);
+/* Детский режим: снимок при подключении и событие «kids» — класс body.kids, сколько минут осталось, кнопки */
+let KIDS = null;
+function setKids(k) {
+  KIDS = k && k.on ? k : null;
+  document.body.classList.toggle("kids", !!KIDS);
+  if (!KIDS) return;
+  const t = $("kids-t");
+  t.textContent = KIDS.can_talk ? `Ещё ${KIDS.left} ${KIDS.left % 10 === 1 && KIDS.left % 100 !== 11 ? "минута" : KIDS.left % 10 >= 2 && KIDS.left % 10 <= 4 && (KIDS.left % 100 < 10 || KIDS.left % 100 >= 20) ? "минуты" : "минут"}` : "На сегодня всё";
+  t.classList.toggle("over", !KIDS.can_talk);
+}
+core.on("hello", d => setKids(d.kids));
+core.on("kids", setKids);
+document.querySelectorAll("#kids [data-say]").forEach(b => b.onclick = (ev) => { ev.stopPropagation(); core.call("say", { text: b.dataset.say }).catch(showErr); });
 const WAIT = {};   // метка для showCap: ответ готовится — вместо текста мигающие точки
 document.getElementById("rem-undo").onclick = async () => {
   const el = document.getElementById("rem"); const id = el.dataset.id;
@@ -811,7 +877,13 @@ function tmrSet(items) {
   TMR = (items || []).filter(x => x.kind === "timer" && !x.paused && tmrAt(x) > Date.now() - 1500 && tmrAt(x) - Date.now() < 24 * 3600e3)
     .sort((a, b) => tmrAt(a) - tmrAt(b)).slice(0, 3);
   const box = $("tmr");
-  box.innerHTML = TMR.map(x => `<div class="tr" data-id="${x.id}"><svg class="pg" viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15.5"/><circle class="fg" cx="18" cy="18" r="15.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/></svg>`
+  const ticks = Array.from({ length: 12 }, (_, k) => { const a = k * Math.PI / 6, s = Math.sin(a), c = Math.cos(a);
+    return `<line class="tick" x1="${(22 + 11.6 * s).toFixed(2)}" y1="${(22 - 11.6 * c).toFixed(2)}" x2="${(22 + (k % 3 ? 12.9 : 13.6) * s).toFixed(2)}" y2="${(22 - (k % 3 ? 12.9 : 13.6) * c).toFixed(2)}"/>`; }).join("");
+  box.innerHTML = TMR.map((x, i) => `<div class="tr" data-id="${x.id}"><svg class="pg" viewBox="0 0 44 44" aria-hidden="true">`
+    + `<defs><linearGradient id="tmrg${i}" gradientUnits="userSpaceOnUse" x1="6" y1="4" x2="38" y2="40"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient></defs>`
+    + `<circle class="well" cx="22" cy="22" r="16.2"/>${ticks}<circle class="bg" cx="22" cy="22" r="18.3"/>`
+    + `<circle class="fg" cx="22" cy="22" r="18.3" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" stroke="url(#tmrg${i})" transform="rotate(-90 22 22)"/>`
+    + `<circle class="bead" cx="22" cy="3.7" r="2.4"/></svg>`
     + `<div class="tt"><b></b><span></span></div><button title="Отменить таймер" aria-label="Отменить таймер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join("");
   TMR.forEach((x, i) => { const r = box.children[i];
     const mins = Math.round((tmrAt(x) - tmrFrom(x)) / 60000);
@@ -828,9 +900,13 @@ function tmrDraw() {
   TMR.forEach(x => { const r = box.querySelector(`.tr[data-id="${x.id}"]`); if (!r) return;
     const left = tmrAt(x) - now, all = Math.max(1000, tmrAt(x) - tmrFrom(x)), done = Math.min(100, Math.max(0, 100 - left / all * 100));
     r.querySelector(".tt b").textContent = tmrFmt(left); r.classList.toggle("end", left <= 10000);
-    r.querySelector(".fg").style.strokeDashoffset = String(done); });
+    r.querySelector(".fg").style.strokeDashoffset = String(done);
+    const a = (100 - done) / 100 * 2 * Math.PI, bd = r.querySelector(".bead");   // бусина — на кончике дуги остатка
+    bd.setAttribute("cx", (22 + 18.3 * Math.sin(a)).toFixed(2)); bd.setAttribute("cy", (22 - 18.3 * Math.cos(a)).toFixed(2)); });
   const n = TMR[0], left = tmrAt(n) - now, all = Math.max(1000, tmrAt(n) - tmrFrom(n));
-  $("tarc").querySelector("circle").style.strokeDashoffset = String(Math.min(100, Math.max(0, 100 - left / all * 100)));
+  const ta = $("tarc"), td = Math.min(100, Math.max(0, 100 - left / all * 100)), tw = (100 - td) / 100 * 2 * Math.PI, tb = ta.querySelector(".bead");
+  ta.querySelector(".fg").style.strokeDashoffset = String(td); ta.classList.toggle("end", left <= 10000);
+  tb.setAttribute("cx", (50 + 48.5 * Math.sin(tw)).toFixed(2)); tb.setAttribute("cy", (50 - 48.5 * Math.cos(tw)).toFixed(2));
   $("tmini").textContent = tmrFmt(left);
 }
 

@@ -61,6 +61,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "pay" && window.loadPayPage) loadPayPage();      // «Платежи» (studio/pay.js)
   if (b.dataset.p === "vault" && window.loadVaultPage) loadVaultPage();  // «Сейф паролей» (studio/vault.js)
   if (b.dataset.p === "music" && window.loadMyMusic) loadMyMusic();     // «Музыка» — своя папка (studio/mymusic.js)
+  if (b.dataset.p === "kids" && window.loadKids) loadKids();             // «Дети» — детский режим (studio/kids.js)
   if (!S) return;                                    // данные подгрузятся после связи с ядром
   if (b.dataset.p === "sound") loadDevices();
   if (b.dataset.p === "about") core.call("status").then(renderStatus).catch(() => {});

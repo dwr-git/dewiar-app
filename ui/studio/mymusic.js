@@ -7,7 +7,10 @@ function mmNow(s) {
   const n = s && s.now, box = $("#mm-now");
   if (!box) return;
   box.classList.toggle("idle", !n);
-  $("#mm-cover").textContent = n ? (n.artist || n.title || "♪").slice(0, 18) : "♪";
+  const cv = $("#mm-cover"), art = n && n.art ? n.art : "";
+  cv.classList.toggle("art", !!art);                     // обложка из файла или папки альбома (№361); нет — как раньше
+  cv.style.backgroundImage = art ? `url("${art.replace(/"/g, "%22")}")` : "";
+  cv.textContent = art ? "" : n ? (n.artist || n.title || "♪").slice(0, 18) : "♪";
   $("#mm-np").innerHTML = n
     ? `<small>${s.paused ? "На паузе" : "Сейчас играет"}${s.what ? " · подборка «" + escH(s.what) + "»" : ""}</small><h2>${escH(n.title)}</h2>` +
       `<div class="ar">${escH([n.artist, n.album && "«" + n.album + "»", n.year].filter(Boolean).join(" · "))}</div>`
@@ -22,7 +25,12 @@ function mmStats(s) {
   $("#mm-folder").textContent = !s.folder ? "Папка не выбрана" : (parts.length > 2 ? "…/" : "") + parts.slice(-2).join("/");
   $("#mm-pick").title = s.folder ? s.folder + " — нажмите, чтобы выбрать другую" : "Выбрать папку с музыкой";
   $("#mm-folder").classList.toggle("empty", !s.folder);
-  $("#mm-stats").innerHTML = s.busy ? `<div class="wide">Читаю папку…</div>` :
+  const pr = s.progress || {}, fmtN = (x) => Number(x || 0).toLocaleString("ru");
+  // ход чтения (№361: «при сканировании сетевой папки было бы хорошо видеть прогресс»): ищем файлы — бегущая полоска
+  // и сколько нашлось; читаем теги — настоящая полоска «340 из 1 240»
+  $("#mm-stats").innerHTML = s.busy ? `<div class="wide mm-prog">${pr.phase === "tags" && pr.total
+      ? `<span>Читаю треки: <b>${fmtN(pr.done)}</b> из ${fmtN(pr.total)}</span><i><u style="width:${Math.min(100, Math.round(pr.done / pr.total * 100))}%"></u></i>`
+      : `<span>Ищу музыку в папке${pr.found ? `: нашлось <b>${fmtN(pr.found)}</b>` : "…"}</span><i class="run"><u></u></i>`}</div>` :
     [[st.tracks || 0, plural(st.tracks || 0, "трек", "трека", "треков")], [st.artists || 0, plural(st.artists || 0, "исполнитель", "исполнителя", "исполнителей")],
      [st.genres || 0, plural(st.genres || 0, "жанр", "жанра", "жанров")]].map(([n, l]) => `<div><b>${n}</b><small>${l}</small></div>`).join("");
 }

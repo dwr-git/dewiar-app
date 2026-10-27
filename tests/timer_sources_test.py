@@ -201,6 +201,10 @@ try:
         ok(len(r) == 1 and r[0].startswith(("4:5", "5:00")) and r[0].endswith("|таймер на 5 мин"), f"виджет: обратный отсчёт: {r}")
         ok(pg.evaluate("document.getElementById('tarc').classList.contains('on')") and not pg.evaluate("document.getElementById('rem').classList.contains('show')"),
            "дуга вокруг облика; карточки «напоминание» для таймера нет")
+        g = pg.evaluate("() => { const r = document.querySelector('#tmr .tr'); const b = r.querySelector('.bead'); return { grad: !!r.querySelector('linearGradient'), "
+                        "ticks: r.querySelectorAll('.tick').length, bead: [+b.getAttribute('cx'), +b.getAttribute('cy')] }; }")
+        ok(g["grad"] and g["ticks"] == 12 and g["bead"][0] < 22 and g["bead"][1] < 10,
+           f"круг-циферблат (27.10): дуга градиентом, 12 рисок, бусина на кончике остатка (почти полный круг — у верха слева): {g}")
         if SHOT:
             pg.screenshot(path=str(Path(SHOT) / "timer.png"))
         m = len(c.ev); c.call("say", {"text": "Сколько осталось?"})

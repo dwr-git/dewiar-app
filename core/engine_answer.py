@@ -173,26 +173,39 @@ class AnswerMixin:
             text = lq[0]
         if not raw and not quiet and not images and self.alarm and not via and self._alarm_voice(text):
             return
+        # Детский режим (kids.py): время и «спать» — до всего; вопрос — в отчёт родителю; вне правил — ещё и сигнал.
+        # K — режим включён: опасные быстрые пути (компьютер, сейф, деньги, платежи, дом, звонки, YouTube, выход,
+        # обновление, передача другому персонажу) не работают — отвечает модель по детским правилам.
+        kids = getattr(self, "kids", None)
+        K = bool(kids and kids.on() and not raw and not quiet)
+        if K:
+            ok_k, why_k = kids.allowed_now()
+            if not ok_k:
+                self._say_quick(why_k, text, via)
+                return
+            if kids.touch(text.split("\n\nВложения:")[0]):
+                self._kids_alert(text)
+            self.emit("kids", **self.kids_public(light=True))   # виджет: сколько минут осталось
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._bug_cmd(text, via):
             return                                       # «сообщи об ошибке: …» — жалоба разработчику (core/health.py)
-        if not raw and not quiet and not via and not images and re.match(
+        if not raw and not quiet and not via and not images and not K and re.match(
                 r"^(?:\w+,\s*)?(?:включи|запусти|открой|начни|позови)\s+(?:режим\s+)?суфл[её]р\w*|^(?:\w+,\s*)?режим\s+суфл[её]ра", text.strip(), re.I):
             self.emit("prompter", kind="open")             # суфлёр — окно ui/prompter.html (core/prompter.py)
             self._say_quick("Открываю суфлёр. На встрече я молчу и подсказываю на экране.", text)
             return
-        if not raw and not quiet and not via and not images and self._window_cmd(text):
+        if not raw and not quiet and not via and not images and not K and self._window_cmd(text):
             return
-        if not raw and not quiet and not via and not images and self._pc_cmd(text):
+        if not raw and not quiet and not via and not images and not K and self._pc_cmd(text):
             return
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._vault_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._vault_cmd(text, via):
             return
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._home_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._home_cmd(text, via):
             return
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._pay_voice(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._pay_voice(text, via):
             return                                       # «оплатил газ 47,84, показания 28135», «что не оплачено?» — «Платежи»
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._money_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._money_cmd(text, via):
             return
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._job_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._job_cmd(text, via):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text:
             from quickmath import parse as parse_math      # «сколько будет 17% от 2350» — точно и сразу (tools.calc_eval)
@@ -200,7 +213,7 @@ class AnswerMixin:
             if qm:
                 self._say_quick(qm["say"], text, via, note=qm.get("how"))
                 return
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._draft_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._draft_cmd(text, via):
             return                                       # «запиши в книгу: …» — дословно в черновик автора
         if not raw and not quiet and not images and "\n\nВложения:" not in text:
             ma = APPT_RX.match(text.strip())
@@ -218,17 +231,17 @@ class AnswerMixin:
                 return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._clock_cmd(text, via):
             return                                       # «сколько времени?», «какое сегодня число?» — по часам, без модели
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._youtube_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._youtube_cmd(text, via):
             return                                       # «включи смешное видео на YouTube» — сразу, без модели
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._send_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._send_cmd(text, via):
             return                                       # «напиши Андрею: привет» — человеку из «Близких» сразу, без модели
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._call_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._call_cmd(text, via):
             return                                       # «позвони Людмиле по видео» — человеку из «Близких» сразу, без модели
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._plan_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._plan_cmd(text, via):
             return                                       # «запланируй на сегодня: в 13 …, в 16 …» — дела дня, без модели
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._task_del_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._task_del_cmd(text, via):
             return                                       # «удали задачу „Исследование“» — сразу, без модели
-        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._mark_cmd(text, via):
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._mark_cmd(text, via):
             return                                       # «я позвонил в банк», «готово, купил хлеб» — отметка, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._timer_cmd(text, via):
             return                                       # «сколько осталось?», «добавь минуту», «отмени таймер»
@@ -257,9 +270,9 @@ class AnswerMixin:
                 self.new_conversation()
                 self._say_quick("Хорошо, начинаем с чистого листа.", text, via)
                 return
-        if not raw and not quiet and not via and not images and self._direct_call(text):
+        if not raw and not quiet and not via and not images and not K and self._direct_call(text):
             return
-        if not raw and not quiet and not images and self._direct_update(text, via):
+        if not raw and not quiet and not images and not K and self._direct_update(text, via):
             return
         if not raw and not quiet and not via and not images and self.radio.paused and \
                 re.sub(r"[^\w ]", "", text.lower()).strip() in {"продолжи", "продолжай", "включи обратно", "верни радио",
@@ -269,11 +282,11 @@ class AnswerMixin:
             self.emit("answer", text=f"Снова играет «{st['name']}».", done=True)
             self.set_state("idle")
             return
-        if not raw and not quiet and not via and not images and self._music_cmd(text):
+        if not raw and not quiet and not via and not images and (not K or "music" in (kids.conf().get("allow") or [])) and self._music_cmd(text):
             return
         with self._turn_lock:
             self._cancel_locked()      # прежний ход — до выбора специалиста: перебитый специалист возвращает слово главному, и вопрос распределяет уже он
-        handoff = None if quiet or images or raw else self._route(text)
+        handoff = None if quiet or images or raw or K else self._route(text)
         if handoff:
             prev = self.s.get("persona")
             log.info("👥 %s передаёт вопрос: %s", self.personas.get(prev)["name"], self.personas.get(handoff)["name"])
@@ -414,7 +427,10 @@ class AnswerMixin:
         base += self.conv.prompt()                     # долгий разговор: что было раньше, был ли перерыв
         base += self.diary.prompt()                    # выводы, которые ассистент записал ночью в дневник
         from boundaries import RULE
-        base += "\n\n" + RULE                          # границы: достоинство без обидчивости (boundaries.py)
+        base += "\n\n" + RULE
+        kids = getattr(self, "kids", None)
+        if kids and kids.on():
+            base += kids.prompt()                      # детский режим: правила разговора с ребёнком (kids.py)                          # границы: достоинство без обидчивости (boundaries.py)
         try:                                           # «Ваши данные»: что хранится и куда уходит (privacy.py)
             import privacy
             base += "\n\n" + privacy.rule((self.s.active_llm() or {}).get("base_url", ""),

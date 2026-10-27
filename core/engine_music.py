@@ -378,21 +378,22 @@ class MusicMixin:
         return True
 
     def _home_cmd(self, text, via=None):
-        """Умный дом Яндекса без модели: «включи свет в спальне», «весь свет на 30 процентов», «кондиционер на 22»,
-        «запусти сценарий Спокойной ночи». Только если такое устройство (или сценарий) правда есть."""
-        if not self.home.connected():
+        """Умный дом без модели: «включи свет в спальне», «весь свет на 30 процентов», «кондиционер на 22»,
+        «запусти сценарий Спокойной ночи». Только если такое устройство (или сценарий) правда есть. Дома — Яндекс
+        и Home Assistant (self.homes): команда идёт туда, где устройство нашлось точнее."""
+        if not self.homes.connected():
             return False
         from smarthome import HomeError, parse
         c = parse(text)
         if not c:
             return False
         try:
-            info = self.home.info()
+            info = self.homes.info()
             if c["op"] == "read":
                 # «какая температура в спальне» (отчёт №362): показание датчика, без модели. Ни комнаты, ни устройства
                 # с таким словом — это не про дом («температура в Москве» — погода), отдаём дальше.
                 from smarthome import PROPS, prop_text
-                found, vals = self.home.readings(c["target"], c["what"], info)
+                found, vals = self.homes.readings(c["target"], c["what"], info)
                 if not found:
                     return False
                 place = c["target"][:1].upper() + c["target"][1:]
@@ -403,18 +404,18 @@ class MusicMixin:
                         msg += f" Это данные от {time.strftime('%d.%m %H:%M', time.localtime(float(v['updated'])))} — датчик давно не присылал новых."
                 else:
                     msg = (f"{place} нет датчика, который знает {PROPS.get(c['what'], ('это',))[0]}"
-                           " — в умном доме Яндекса я его не вижу.").replace("знает температура", "знает температуру")
+                           " — в умном доме я его не вижу.").replace("знает температура", "знает температуру")
             elif c["op"] == "scenario":
-                sc = self.home.scenario(c["target"], info)
+                sc = self.homes.scenario(c["target"], info)
                 if not sc:
                     return False
-                self.home.run_scenario(sc)
+                self.homes.run_scenario(sc)
                 msg = f"Запустил сценарий «{sc['name']}»."
             else:
-                devs = self.home.match(c["target"], info)
+                devs = self.homes.match(c["target"], info)
                 if not devs:
                     return False
-                n = self.home.act(devs, c["op"], c.get("value"))
+                n = self.homes.act(devs, c["op"], c.get("value"))
                 rooms = sorted({d.get("room_name") for d in devs if d.get("room_name")})
                 what = (devs[0]["name"] if len(devs) == 1 else
                         ("свет" if all(str(d.get("type", "")).startswith("devices.types.light") for d in devs) else f"{len(devs)} устройства"))

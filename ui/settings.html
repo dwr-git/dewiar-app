@@ -71,6 +71,7 @@
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
   <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
   <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками">Музыка</button>
+  <button data-p="kids" title="Детский режим: друг ребёнка, безопасные темы, время и отчёт вам">Дети</button>
   <button data-p="tasks">Задачи</button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
   <div class="ng">Знания</div>
@@ -481,6 +482,49 @@
     </div>
   </section>
 
+  <section id="p-kids" class="wide">
+    <h1>Дети</h1>
+    <p class="lead">Детский режим: свой персонаж-друг, только безопасные темы, время за день и короткий отчёт вам. Выйти из режима и поменять настройки можно только с вашим PIN-кодом.</p>
+    <div class="kd-bar" id="kd-bar"></div>
+    <div class="kd-grid">
+      <div class="kd-card">
+        <div class="kd-who"><div class="kd-ava" id="kd-ava" aria-hidden="true">?</div>
+          <div class="kd-fields"><label>Имя ребёнка<input type="text" id="kd-name" maxlength="40" placeholder="Маша"></label>
+            <label>Возраст<input type="number" id="kd-age" min="3" max="17" placeholder="7"></label></div></div>
+        <div class="kd-sub">Персонаж-друг</div>
+        <div class="kd-friend"><img id="kd-fava" alt="" width="44" height="44"><div><b>Совёнок Уго</b><small>Говорит проще и медленнее, откликается на «Совёнок» и «Уго»</small></div></div>
+        <div class="kd-pin">
+          <b>PIN-код родителя</b>
+          <div class="kd-pinrow" id="kd-pinrow"></div>
+          <small>Без PIN нельзя выйти из режима, поменять настройки и персонажа. Хранится только на этом компьютере.</small>
+        </div>
+      </div>
+      <div class="kd-col">
+        <div class="kd-card"><h3>Что можно</h3><div class="chips" id="kd-allow"></div>
+          <small class="kd-note">Уроки — с подсказками, а не готовым ответом: «давай подумаем вместе».</small></div>
+        <div class="kd-card"><h3>Что нельзя</h3>
+          <ul class="kd-no">
+            <li>Управлять компьютером: файлы, программы, команды, выход из Dewiar</li>
+            <li>Покупки, платежи, деньги и сейф паролей</li>
+            <li>Звонки и сообщения — только «Близким» из вашего списка</li>
+            <li>YouTube, сайты и поиск в интернете</li>
+            <li>Взрослые и страшные темы — Уго мягко переводит разговор</li>
+          </ul></div>
+      </div>
+      <div class="kd-col">
+        <div class="kd-card"><h3>Время</h3>
+          <div class="kd-time"><svg viewBox="0 0 44 44" id="kd-ring" role="img" aria-label="Время за сегодня"><circle cx="22" cy="22" r="18" class="tk"/><circle cx="22" cy="22" r="18" class="fg" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90 22 22)"/></svg>
+            <div><b id="kd-used">0 мин</b><small id="kd-of">сегодня из 60</small></div></div>
+          <div class="kd-limits">
+            <label>Будни, мин<input type="number" id="kd-wd" min="0" max="600" step="5"></label>
+            <label>Выходные, мин<input type="number" id="kd-we" min="0" max="600" step="5"></label>
+            <label>Спать после<input type="time" id="kd-bed"></label>
+            <label>Утро с<input type="time" id="kd-morn"></label>
+          </div></div>
+        <div class="kd-card kd-report"><h3>Отчёт за сегодня</h3><div id="kd-report"></div></div>
+      </div>
+    </div>
+  </section>
   <section id="p-memory" class="wide">
     <h1>Память</h1>
     <p class="lead">Всё, что ассистент знает и делал с вами, — одной живой картой: факты о вас, заметки, дневник, документы, задачи и навыки. Связи появляются сами: ссылки [[между заметками]], #теги, люди и места, которые встречаются в разных записях.</p>
@@ -696,6 +740,8 @@
           <div class="actions" style="margin:0;flex-wrap:wrap"><input type="text" id="dw-px" placeholder="socks5://адрес:порт или http://адрес:порт" spellcheck="false" style="flex:1;min-width:200px"><button class="btn primary" id="dw-px-save" style="flex:none;white-space:nowrap">Сохранить</button></div>
           <div class="switch" style="border:0;padding:10px 0 0"><div>Использовать прокси Dewiar<span>Свой прокси не нужен: его выдаёт dewiar.pro тем, кто вошёл аккаунтом или подключил ключ. Только для серверов Dewiar — Telegram и остальной интернет идут напрямую. Свой прокси, если указан, главнее.</span></div>
             <label class="tg"><input type="checkbox" id="dw-px-dw"><i></i></label></div>
+          <div class="switch" style="border:0;padding:10px 0 0"><div>Запасной путь, если dewiar.pro не открывается<span id="dw-rv-hint">Сначала — напрямую. Если провайдер или сеть не пускают к dewiar.pro, программа сама идёт через прокси Dewiar, полученный заранее, и скажет об этом. Ничего настраивать не нужно.</span></div>
+            <label class="tg"><input type="checkbox" id="dw-rv"><i></i></label></div>
           <div class="switch" style="border:0;padding:10px 0 0"><div>Поиск и страницы через сервер Dewiar<span>Если провайдер режет поисковик или сайт, ассистент ищет и читает через сервер Dewiar (нужен вход или ключ). Выключите — тогда только напрямую.</span></div>
             <label class="tg"><input type="checkbox" id="dw-web"><i></i></label></div>
           <p class="res" id="dw-net-res"></p>
@@ -926,6 +972,33 @@
           и подключит этот же умный дом. Мозг и голос телефона не меняются. В коде — ключ от вашего дома: не показывайте его чужим.</p></div></div>
       </div>
       <p class="res" id="sh-res" style="margin-top:6px"></p>
+    </div>
+    <div class="prof on" id="ha-box" style="padding:16px 18px;margin-bottom:22px">
+      <h3 style="font-size:15px;margin-bottom:6px">Home Assistant</h3>
+      <p class="hint" style="margin-bottom:12px">Свой умный дом на Home Assistant — те же фразы, что и для Яндекса: «включи свет в спальне»,
+        «свет на кухне на 30 процентов», «кондиционер на 22», «закрой шторы», «запусти сценарий спокойной ночи», «какая температура в спальне».
+        Подключены оба дома — команда уйдёт туда, где есть такое устройство или комната.</p>
+      <div id="ha-setup">
+        <ol class="shsteps">
+          <li><div><b>Адрес Home Assistant</b><span>Тот, что открываете в браузере: <code>http://homeassistant.local:8123</code> или по IP,
+            например <code>http://192.168.1.20:8123</code>. IP есть в HA: «Настройки» → «Система» → «Сеть».</span></div></li>
+          <li><div><b>Долгосрочный токен</b><span>В Home Assistant: профиль (кружок с вашим именем внизу слева) → вкладка «Безопасность» →
+            «Долгосрочные токены доступа» → «Создать токен», имя — «Dewiar». HA покажет токен один раз — скопируйте его целиком.</span></div></li>
+        </ol>
+        <div class="actions" style="margin:0;flex-wrap:wrap">
+          <input type="text" id="ha-url" placeholder="http://homeassistant.local:8123" style="flex:1;min-width:220px" autocomplete="off" spellcheck="false">
+          <input type="password" id="ha-token" placeholder="токен: eyJ…" style="flex:1;min-width:220px" autocomplete="off" spellcheck="false">
+          <button class="btn primary" id="ha-go">Подключить</button>
+        </div>
+      </div>
+      <div id="ha-on" style="display:none">
+        <div id="ha-devs" class="chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+        <div class="actions" style="margin:0"><span class="res ok" id="ha-state" style="flex:1"></span>
+          <button class="btn" id="ha-refresh">Обновить</button><button class="btn" id="ha-off">Отключить</button></div>
+        <p class="hint" style="margin:8px 0 0">Токен хранится только на этом компьютере (и на ваших связанных компьютерах — передаётся зашифрованным,
+          сервер Dewiar его не видит). Запросы к адресу в домашней сети идут напрямую, мимо прокси.</p>
+      </div>
+      <p class="res" id="ha-res" style="margin-top:6px"></p>
     </div>
     <div class="prof on" id="cal-box" style="padding:16px 18px;margin-bottom:22px">
       <h3 style="font-size:15px;margin-bottom:6px">Календари Google и Яндекс</h3>
@@ -1634,6 +1707,14 @@
   </div>
   <p class="res" id="skd-res" style="margin-top:10px"></p>
 </div>
+<div class="kd-lock" id="kd-lock" hidden><form class="kd-lockbox" id="kd-lockf">
+  <img id="kd-lava" alt="" width="96" height="96">
+  <h2>Детский режим</h2>
+  <p>Настройки — только для взрослых. Введите PIN родителя: студия откроется на 15 минут.</p>
+  <label class="kd-pinin"><span>PIN родителя</span><input type="password" id="kd-lpin" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+  <button class="btn primary" type="submit">Открыть</button>
+  <p class="kd-lerr" id="kd-lerr" role="alert"></p>
+</form></div>
 <div class="toast" id="toast"></div>
 
 <script src="assets/entities.js"></script>
@@ -1671,6 +1752,7 @@
 <script src="studio/notes.js"></script>
 <script src="studio/pay.js"></script>
 <script src="studio/mymusic.js"></script>
+<script src="studio/kids.js"></script>
 <script src="studio/vault.js"></script>
 <script src="studio/snapshot.js"></script>
 <script src="studio/capture.js"></script>

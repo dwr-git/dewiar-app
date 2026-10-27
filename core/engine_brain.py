@@ -36,7 +36,9 @@ class BrainMixin:
                  (self.s.get("provision") or {}).get("url", "") or "", self._net_try]
         own = self.s.get("net", "proxy") or ""
         dw = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "dewiar") else ""
-        return own or dw, extra
+        # запасной путь: прокси Dewiar, полученный заранее, — только если напрямую dewiar.pro не открылся (net._DirectFirst)
+        rv = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "reserve") is not False else ""
+        return own or dw, extra, rv
 
     def _lan_fetch(self):
         """Дома — напрямую: спросить у сайта его адрес в домашней сети (cloud.php ?p=/lan, со входом или ключом) и
@@ -64,28 +66,33 @@ class BrainMixin:
         """«Использовать прокси Dewiar»: прокси выдаёт cloud.php (/netcfg) тем, у кого есть ключ или вход аккаунтом.
         Получаем и сохраняем заранее, пока сайт открывается: если провайдер потом закроет сайт, прокси уже будет.
         Обновляем не чаще раза в 6 часов (force — сейчас). -> текст ошибки или ""."""
-        if not self.s.get("net", "dewiar"):
+        auto = not self.s.get("net", "dewiar") and self.s.get("net", "reserve") is not False   # запасной путь — заранее, тихо
+        if not self.s.get("net", "dewiar") and not auto:
             return ""
         if not force and time.time() - float(self.s.get("net", "dewiar_at") or 0) < 6 * 3600 and self.s.get("net", "dewiar_secret"):
             return ""
+        if auto and not force and time.time() - float(self.s.get("net", "dewiar_try") or 0) < 6 * 3600:
+            return ""                                    # запасной не выдали (раздача выключена, нет ключа) — не спрашиваем чаще
         from cloud import CloudError, fetch
         key = (self.s.get("cloud", "key") or "").strip() or (self.account.token() if self.account.logged_in() else "")
         if not key:
-            return "прокси Dewiar выдаётся тем, кто вошёл аккаунтом dewiar.pro или подключил ключ Dewiar"
+            return "" if auto else "прокси Dewiar выдаётся тем, кто вошёл аккаунтом dewiar.pro или подключил ключ Dewiar"
         server = (self.account.data.get("server") or "").rstrip("/")
         url = self.s.get("cloud", "url") or self.account.service_url("cloud") or (server + "/dwrapp/cloud.php" if server else "")
+        if auto:
+            self.s.update({"net": {"dewiar_try": time.time()}})
         try:
             d = fetch(url, key, "/netcfg", timeout=15)
         except CloudError as e:
-            log.info("🌐 Прокси Dewiar не получен: %s", e)
-            return str(e)
+            (log.debug if auto else log.info)("🌐 Прокси Dewiar не получен: %s", e)
+            return "" if auto else str(e)
         import net
         try:
             px = net.normalize_proxy(d.get("proxy") or "")
         except net.NetError as e:
             return str(e)
         self.s.update({"net": {"dewiar_secret": px, "dewiar_at": time.time()}})
-        log.info("🌐 Прокси Dewiar получен: %s", net.hide(px))
+        log.info("🌐 Прокси Dewiar получен%s: %s", " (запасной путь, если dewiar.pro не откроется)" if auto else "", net.hide(px) or "раздача выключена")
         return ""
 
     def net_cmd(self, cmd, a):
@@ -117,11 +124,18 @@ class BrainMixin:
             err = self._dewiar_proxy_fetch(force=True) if on else ""
             log.info("🌐 Прокси Dewiar: %s", ("включён" if not err else f"включён, но не получен: {err}") if on else "выключен")
             self.emit("settings", settings=self.s.snapshot())
+        if cmd == "net_reserve":                                 # «Запасной путь, если dewiar.pro не открывается»
+            on = bool(a.get("on"))
+            self.s.update({"net": {"reserve": on}})
+            err = self._dewiar_proxy_fetch(force=True) if on and not self.s.get("net", "dewiar") else ""
+            self.emit("settings", settings=self.s.snapshot())
         eff = self._net_conf()[0]
         r = {"proxy": net.hide(cur), "on": bool(eff), "hosts": list(net.current()[1]), "check_url": url,
+             "reserve": self.s.get("net", "reserve") is not False, "reserve_ready": bool(net.reserve()),
+             "reserve_used": bool(net._reserve_bad),
              "dewiar": bool(self.s.get("net", "dewiar")), "dewiar_ready": bool(self.s.get("net", "dewiar_secret")), "dewiar_error": err,
              "via": "own" if cur else ("dewiar" if eff else "")}
-        if cmd not in ("net", "net_dewiar") or (cmd == "net_dewiar" and a.get("on")):
+        if cmd not in ("net", "net_dewiar", "net_reserve") or (cmd == "net_dewiar" and a.get("on")):
             r["check"] = net.check(url, eff)
         return r
 

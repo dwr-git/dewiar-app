@@ -12,8 +12,11 @@ gh_error() {   # в GitHub Actions — ещё и пометка с причин�
   local m=${2:-без подробностей — см. журнал шага} t=$1; m=${m//'%'/'%25'}; m=${m//$'\n'/'%0A'}; t=${t//'%'/'%25'}; t=${t//':'/'%3A'}; t=${t//','/'%2C'}; echo "::error title=$t::$m"
   local s="$1 — $(head -c 300 <<<"$2" | tr '\n' ' ')"; s=${s//'%'/'%25'}; echo "::error::$s"   # и простая пометка без заголовка — на случай, если заголовок не принят
   printf '### ❌ %s\n```\n%s\n```\n' "$1" "$2" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"; }
-run() { local name=$1; shift; local out; local ws; ws=$(mktemp -d)
-  out=$(DEWIAR_WORKSPACE_DIR=$ws timeout 300 "$@" 2>&1 | tr -d "\r"; echo "RC=${PIPESTATUS[0]}"); local rc=${out##*RC=}; out=${out%RC=*}
+# у каждой проверки — своя папка: и рабочая (DEWIAR_WORKSPACE_DIR), и временная (TMPDIR — tempfile.mkdtemp и mktemp
+# внутри проверки); после — удаляется: раньше временные папки копились по сотне за прогон, и диск кончался (27.10)
+run() { local name=$1; shift; local out; local ws; ws=$(mktemp -d); mkdir -p "$ws/tmp"
+  out=$(DEWIAR_WORKSPACE_DIR=$ws TMPDIR=$ws/tmp timeout 300 "$@" 2>&1 | tr -d "\r"; echo "RC=${PIPESTATUS[0]}"); local rc=${out##*RC=}; out=${out%RC=*}
+  rm -rf "$ws"
   local ok=$(grep -c "✅" <<<"$out"); local bad=$(grep "❌" <<<"$out")
   if [ -z "$bad" ] && [ "$rc" = 0 ] && { [ "$ok" -gt 0 ] || grep -qE "ALL OK|^OK$" <<<"$out"; }; then printf "✅ %-34s %s\n" "$name" "$ok"
   else printf "❌ %-34s (код %s)\n%s\n" "$name" "$rc" "$bad$(tail -5 <<<"$out")"; FAIL=1; gh_error "$name" "$bad
@@ -163,6 +166,8 @@ run "Свой мозг у персонажа: выбор в редакторе, 
 run "Память 2.0: страницы по людям и темам, к вопросу — по смыслу (компьютер и телефон)" $PY "$T/memory2_1027_test.py"
 run "Моя музыка: теги, подборки, фразы, очередь и ведущий" $PY "$T/mymusic1027_test.py"
 run "студия: «Обо мне» по страницам и раздел «Музыка»" $PY "$T/studio_mem_music1027_test.py"
+run "№361: обложки своей музыки вместо пластинки, ход чтения папки" $PY "$T/covers1027_test.py"
+run "Детский режим: друг ребёнка, безопасное, время, отчёт, PIN родителя" $PY "$T/kids1027_test.py"
 run "№353: «Ещё команда — выполнить?», «всегда» для команд «только посмотреть» на сервере" $PY "$T/confirm_always1027_test.py"
 run "«Звёздный пинбол»: пружина, флипперы, планеты, «Чёрная дыра», страховка" $PY "$T/pinball1027_test.py"
 run "YouTube 27.10: голоса Денис, Руслан, Дмитрий — выбор Piper в карточке персонажа звучит" $PY "$T/voices1027_test.py"
@@ -172,7 +177,9 @@ run "YouTube 26.10: текстовый режим — без микрофона 
 run "YouTube 27.10: «Забыть ключ» на телефоне — вернуть одной кнопкой" $PY "$T/forgetkey1027_test.py"
 run "YouTube 27.10: свой сервер с самоподписанным сертификатом на телефоне" $PY "$T/android_tls1027_test.py"
 run "Отчёт №362: температура и влажность с датчиков умного дома — сразу, без модели" $PY "$T/sensors1027_test.py"
+run "Home Assistant — второй умный дом: адрес и токен, команды без модели, оба дома сразу, студия" $PY "$T/homeassistant1027_test.py"
 run "№358: прокси системы — своя модель на компьютере и в сети напрямую" $PY "$T/net_local1027_test.py"
+run "№362: запасной путь — dewiar.pro не открывается напрямую, идём прокси Dewiar" $PY "$T/reserve1027_test.py"
 run "№359: свои радиостанции — по ссылке и файлу .m3u, студия «Свои радиостанции», каталог без случайных" $PY "$T/radio_own1027_test.py"
 run "№348 DSML DeepSeek v4.1 не читается вслух; №347 «перезапустила» без запуска" $PY "$T/pack1027b_test.py"
 run "разговор: «а теперь?» после быстрой команды, контекст, выводы ночи убираются" $PY "$T/followup1024_test.py"

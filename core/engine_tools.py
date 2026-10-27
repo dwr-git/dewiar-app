@@ -743,6 +743,9 @@ class ToolsMixin:
         h = self.home.share()
         if h:
             out["home"] = h
+        ha = self.ha.share() if getattr(self, "ha", None) else None
+        if ha:
+            out["ha"] = ha                         # Home Assistant: адрес и токен — тоже только конвертом своим устройствам
         k = self.sync_key.share() if getattr(self, "sync_key", None) else None
         if k:
             out["sync_key"] = k                    # ключ шифрования синхронизации — только своим устройствам, конвертом
@@ -752,6 +755,10 @@ class ToolsMixin:
         h = (body or {}).get("home")
         if isinstance(h, dict) and self.home.adopt(h.get("token"), h.get("at")):
             self.emit("tools", tools=self.toolbox.catalog())
+        ha = (body or {}).get("ha")
+        if isinstance(ha, dict) and getattr(self, "ha", None) and self.ha.adopt(ha.get("url"), ha.get("token"), ha.get("at")):
+            self.emit("tools", tools=self.toolbox.catalog())
+            self.emit("ha", data=self.ha.public())
         k = (body or {}).get("sync_key")
         if isinstance(k, dict) and getattr(self, "sync_key", None) and self.sync_key.adopt(k.get("k"), k.get("at")):
             log.info("🔐 Ключ шифрования синхронизации получен со своего устройства")
@@ -775,7 +782,7 @@ class ToolsMixin:
         return None
 
     def own_share(self):
-        """Умный дом поменяли здесь — отправить своим устройствам (в фоне; нет связи — дойдёт со следующим изменением)."""
+        """Умный дом (Яндекс или Home Assistant) поменяли здесь — отправить своим устройствам (в фоне; нет связи — дойдёт со следующим изменением)."""
         snap = self.own_snapshot()
         if snap and self.credentials()[0]:
             import threading

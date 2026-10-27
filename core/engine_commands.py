@@ -7,18 +7,122 @@ command(cmd, a) — единый разбор: bridge.py вызывает его
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
 
 
+# Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
+_KIDS_LOCKED = ("account_", "backup_", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
+                "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
+                "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
+                "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
+                "security_set", "server_", "skill_", "soul_save", "soul_update", "sync_set", "sync_e2e", "tg_", "tools",
+                "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
+                "report_auto", "power_cancel", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install")
+
+
+def _kids_blocked(cmd, a):
+    """Можно ли это окнам в детском режиме без PIN: настройки — только положение и вид окон (ui) и «отвечать текстом»."""
+    if cmd == "settings_save":
+        patch = (a or {}).get("patch") or {}
+        return not all(k == "ui" or (k == "tts" and set(v or {}) <= {"text_only"}) for k, v in patch.items())
+    return cmd.startswith(_KIDS_LOCKED)
+
+
 class CommandsMixin:
     # ---------- команды из интерфейса ----------
 
     def switch_persona(self, pid):
         if pid not in {p["id"] for p in self.personas.all()}:
             raise ValueError("нет такого персонажа")
+        kids = getattr(self, "kids", None)
+        if kids and kids.on() and pid != kids.conf().get("persona"):
+            log.info("Детский режим: переход к «%s» не делаю — отвечает только друг ребёнка", pid)
+            return
         self.s.update({"persona": pid})               # разговор общий: новый персонаж знает, что было
         if not self.s.get("all_names"):
             self.build_spotter()
         self.emit("persona", persona=pid)
         self.set_state(self.state)                    # событие «state» несёт и персонажа — окна обновятся
         threading.Thread(target=self.ensure_voice, args=(pid,), daemon=True).start()
+
+    # ---------- детский режим (kids.py) ----------
+
+    def kids_public(self, light=False):
+        """Состояние для окон; light — без портрета друга (событие после каждого вопроса)."""
+        k = self.kids
+        c = k.conf()
+        ok, why = k.allowed_now()
+        from kids import ALLOW
+        from personas import GALLERY
+        return {"on": k.on(), "has_pin": k.has_pin(), "locked": k.locked(), "unlocked": k.unlocked(),
+                "child": c.get("child") or {}, "persona": c.get("persona"), "allow": c.get("allow"), "allow_names": ALLOW,
+                "min_weekday": c.get("min_weekday"), "min_weekend": c.get("min_weekend"), "bedtime": c.get("bedtime"),
+                "morning": c.get("morning"), "used": k.used_today(), "limit": k.limit_today(), "left": k.left_today(),
+                "can_talk": ok, "why": why} | ({} if light else {"friend": self.personas.avatar_data_url({"id": c.get("persona") or "ugo"}),
+                "friend_name": (self.personas.items.get(c.get("persona")) or GALLERY.get(c.get("persona") or "") or {}).get("name") or "Совёнок Уго"})
+
+    def kids_cmd(self, cmd, a):
+        """kids_get — состояние и отчёт; kids_pin {pin, old}; kids_unlock {pin}; kids_lock; kids_on {on, pin};
+        kids_set {child, allow, min_weekday, min_weekend, bedtime, morning} — настройки (режим выключен или открыт PIN)."""
+        k = self.kids
+        if cmd == "kids_get":
+            return dict(self.kids_public(), report=k.report() if (not k.on() or k.unlocked()) else None)
+        if cmd == "kids_unlock":
+            k.unlock(a.get("pin"))
+        elif cmd == "kids_lock":
+            k.lock()
+        elif cmd == "kids_pin":
+            k.set_pin(a.get("pin"), a.get("old", ""))
+        elif cmd == "kids_on":
+            if a.get("on"):
+                pid = k.conf().get("persona") or "ugo"
+                if pid not in {p["id"] for p in self.personas.all()}:
+                    self.personas.gallery_add(pid)          # друг ребёнка ставится сам, в общей галерее его нет
+                    self.emit("personas", personas=self.personas.public())
+                k.set_on(True)
+                self.switch_persona(pid)
+                self.build_spotter()                        # слушаем только его имя
+                log.info("🧸 Детский режим включён")
+            else:
+                prev = k.set_on(False, a.get("pin", ""))
+                if prev and prev in {p["id"] for p in self.personas.all()}:
+                    self.switch_persona(prev)
+                self.build_spotter()
+                log.info("🧸 Детский режим выключен")
+        elif cmd == "kids_set":
+            if k.locked():
+                raise ValueError("Детский режим: сначала PIN родителя")
+            from kids import ALLOW
+            patch = {}
+            if "child" in a:
+                ch = a.get("child") or {}
+                patch["child"] = {"name": str(ch.get("name") or "")[:40], "age": int(ch.get("age") or 0) or None}
+            if "allow" in a:
+                patch["allow"] = [x for x in (a.get("allow") or []) if x in ALLOW]
+            for f, lo, hi in (("min_weekday", 0, 600), ("min_weekend", 0, 600)):
+                if f in a:
+                    patch[f] = max(lo, min(hi, int(a.get(f) or 0)))
+            for f in ("bedtime", "morning"):
+                if f in a:
+                    v = str(a.get(f) or "")
+                    if v and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v):
+                        raise ValueError("время — в виде 20:30")
+                    patch[f] = v
+            self.s.update({"kids": patch})
+        else:
+            raise ValueError(f"неизвестная команда {cmd}")
+        st = self.kids_public()
+        self.emit("kids", **st)
+        return st
+
+    def _kids_alert(self, text):
+        """Просьба вне правил в детском режиме — родителю в Telegram (если бот подключён); в отчёте она уже есть."""
+        tg = getattr(self, "telegram", None)
+        name = ((self.kids.conf().get("child") or {}).get("name") or "Ребёнок")
+        log.info("🧸 Вне правил: %s", redact(text[:80]))
+        if tg is not None and getattr(tg, "paired", lambda: False)():
+            try:
+                tg.send(f"🧸 Детский режим: {name} попросил(а) то, что нельзя: «{text[:120]}». Совёнок отказал и "
+                        "предложил спросить вас. Весь разговор — студия → «Дети».")
+            except Exception:  # noqa: BLE001
+                log.debug("детский режим: Telegram", exc_info=True)
 
     # ---------- окно голосом: «спрячься», «покажись», «отключись» ----------
 
@@ -222,11 +326,16 @@ class CommandsMixin:
                 "version": VERSION, "update": self.updater.public(), "tasks": self.tasks.list(),
                 "skills": self.skills.catalog(), "mcp": self.mcp.status(), "account": self.account.status(), "mail": self.mail.public(), "telegram": self.telegram.public(), "max": self.max.public(), "obsidian": self.obsidian.public(),
                 "reminders": self.reminders_list(), "alarm": self._alarm_public(),
-                "radio": self.radio.status(),
+                "radio": self.radio.status(), "kids": self.kids_public(),
                 "pending_import": provision.preview(self.pending_import, self.s.snapshot()) if self.pending_import else None}
 
     def command(self, cmd, a):
         """Выполнить команду окна cmd с аргументами a. -> данные для ответа; ValueError — понятная ошибка."""
+        if cmd.startswith("kids_"):
+            return self.kids_cmd(cmd, a)
+        kids = getattr(self, "kids", None)
+        if kids and kids.locked() and _kids_blocked(cmd, a):
+            raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
         if cmd == "hello":
             return self.snapshot()
         if cmd == "sync_status":
@@ -376,6 +485,26 @@ class CommandsMixin:
                 elif cmd == "home_refresh":
                     self.home.info(force=True)
                     r = self.home.public()
+                else:
+                    raise ValueError("неизвестная команда")
+                self.emit("tools", tools=self.toolbox.catalog())
+                return r
+            except HomeError as e:
+                raise ValueError(str(e)) from e
+        if cmd.startswith("ha_"):                # Home Assistant: адрес и долгосрочный токен (токен в студию не отдаётся)
+            from smarthome import HomeError
+            try:
+                if cmd == "ha_get":
+                    return self.ha.public()
+                if cmd == "ha_connect":
+                    r = self.ha.connect(a.get("url") or "", a.get("token") or "")
+                    self.own_share()                # своим устройствам — конвертом, сервер токена не видит
+                elif cmd == "ha_forget":
+                    r = self.ha.forget()
+                    self.own_share()
+                elif cmd == "ha_refresh":
+                    self.ha.info(force=True)
+                    r = self.ha.public()
                 else:
                     raise ValueError("неизвестная команда")
                 self.emit("tools", tools=self.toolbox.catalog())
@@ -1143,7 +1272,7 @@ class CommandsMixin:
                 return self.cloud.status(refresh=bool(a.get("refresh")))
             except CloudError as e:
                 raise ValueError(str(e)) from e
-        if cmd in ("net", "net_proxy", "net_check", "net_dewiar"):   # dewiar.pro заблокирован провайдером — прокси
+        if cmd in ("net", "net_proxy", "net_check", "net_dewiar", "net_reserve"):   # dewiar.pro заблокирован провайдером — прокси
             return self.net_cmd(cmd, a)
         if cmd == "device":
             if a.get("fresh"):                         # раздел «Голос» открыт — что умеет облако сейчас (озвучку могли включить)

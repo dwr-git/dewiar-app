@@ -104,6 +104,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.skills.reload()
         self.mcp = MCPManager(settings, on_change=lambda: self.emit("mcp", status=self.mcp.status()))
         self.toolbox = Toolbox(settings, self.reminders, self.skills, self.mcp)
+        from kids import Kids
+        self.kids = Kids(settings, STATE_DIR / "kids.json")          # детский режим: время, отчёт, PIN родителя
+        self.toolbox.hooks["kids"] = self.kids
         if self.s.get("tts", "engine") == "piper" and not self.s.get("tts", "v2"):
             # разовый перенос старых настроек: русские голоса Vosk TTS заметно лучше Piper (Piper остаётся запасным);
             # метка v2 — чтобы не перебить выбор Piper, сделанный позже вручную. №226 (24.10): на слабом компьютере
@@ -201,7 +204,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.sync_key = SyncKey(_CFG / "sync.key", _CFG / "vault.key")     # сквозное шифрование синхронизации (sync.e2e)
         from smarthome import CLIENT_ID as _YCID, Home
         self.home = Home(_CFG / "smarthome.json", lambda: (self.s.get("smarthome", "client_id") or _YCID).strip())
-        self.toolbox.hooks["home"] = self.home
+        from homeassistant import HAHome, Homes
+        self.ha = HAHome(_CFG / "homeassistant.json")          # Home Assistant — второй дом (адрес и токен, файл 0600)
+        self.homes = Homes(self.ha, self.home)                 # оба как один: быстрые команды и инструмент smart_home
+        self.toolbox.hooks["home"] = self.homes
         from calsync import Calendars
         self.calendars = Calendars(self.s, STATE_DIR / "calendars")
         from cloud import Cloud
@@ -211,6 +217,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self._key_gone_lock = threading.Lock()     # ключ dw- удалён — на аккаунт переходим один раз
         import net
         net.bind(self._net_conf)
+        # запасной путь сработал (dewiar.pro напрямую не открылся) — сказать один раз, в чат: что случилось и что делать
+        net.on_reserve = lambda h: self.chat.notify(
+            f"{h} сейчас не открывается напрямую — похоже, его не пускает провайдер или сеть. Я перешёл на запасной путь "
+            "(прокси Dewiar): облако, вход и обновления работают как обычно. Выключить: студия → «Dewiar.pro» → «Сеть».")
         lan = self.s.get("net", "lan") or {}
         net.set_lan(lan.get("public", ""), lan.get("base", ""), lan.get("id", ""))   # дома — напрямую с первого запроса
         self.cloud.on_low = lambda c: self.chat.notify(

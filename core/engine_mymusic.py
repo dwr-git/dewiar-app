@@ -29,9 +29,12 @@ PREV_RX = re.compile(r"^\W*(?:\w+\W+)?(?:предыдущ\w*|назад|прош
 
 class MyMusicMixin:
     def _mine_init(self, state_dir):
-        from mymusic import Dj, Library
+        from mymusic import Covers, Dj, Library
         self.mylib = Library(lambda: self.s.get("music", "folder") or "", Path(state_dir) / "mymusic.json")
         self.dj = Dj(self.mylib, lambda: self.s.get("music", "favs") or [])
+        self.dj.covers = Covers(Path(state_dir) / "covers")
+        # ход чтения папки — в студию полоской (№361); событие то же, что «папка прочитана»
+        self.mylib.on_progress = lambda p: self.emit("mymusic", **dict(self.mine_status(), busy=True, progress=p))
         self._dj_track_n = 0
         self.radio.on_end = self._mine_ended
         if self.s.get("music", "folder"):
@@ -199,8 +202,10 @@ class MyMusicMixin:
     def mine_status(self):
         t = self.dj.current() if self._mine_playing() else None
         favs = set(self.s.get("music", "favs") or [])
+        art = (self.radio.station or self.radio.paused or {}).get("art") if t else None
         return {"stats": self.mylib.stats(), "busy": self.mylib.busy, "folder": self.s.get("music", "folder") or "",
-                "now": dict(t, fav=t["path"] in favs) if t else None, "what": self.dj.what if t else "",
+                "progress": dict(self.mylib.progress or {}),
+                "now": dict(t, fav=t["path"] in favs, art=Path(art).as_uri() if art else "") if t else None, "what": self.dj.what if t else "",
                 "paused": bool((self.radio.paused or {}).get("_mine"))}
 
     def mine_command(self, cmd, a):

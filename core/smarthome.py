@@ -76,7 +76,11 @@ PROPS = {"temperature": ("температура", "°"), "humidity": ("влаж
          "pressure": ("давление", " мм рт. ст."), "illumination": ("освещённость", " лк"), "pm2.5_density": ("пыль PM2.5", " мкг/м³"),
          "tvoc": ("летучие вещества", " мкг/м³"), "battery_level": ("заряд", "%"), "water_level": ("вода", "%"),
          "power": ("мощность", " Вт"), "voltage": ("напряжение", " В"), "amperage": ("ток", " А")}
-UNITS = {"unit.pressure.pascal": " Па", "unit.pressure.atm": " атм", "unit.pressure.bar": " бар", "unit.temperature.kelvin": " K"}
+UNITS = {"unit.pressure.pascal": " Па", "unit.pressure.atm": " атм", "unit.pressure.bar": " бар", "unit.temperature.kelvin": " K",
+         # единицы Home Assistant (unit_of_measurement датчика) — homeassistant.py
+         "°C": "°", "°F": " °F", "K": " K", "hPa": " гПа", "kPa": " кПа", "Pa": " Па", "mbar": " мбар", "bar": " бар",
+         "mmHg": " мм рт. ст.", "inHg": " дюйм рт. ст.", "W": " Вт", "kW": " кВт", "V": " В", "A": " А", "lx": " лк",
+         "µg/m³": " мкг/м³", "μg/m³": " мкг/м³", "ppm": " ppm", "ppb": " ppb"}
 # слово в вопросе → какой датчик спрашивают
 ASK = (("температур", "temperature"), ("градус", "temperature"), ("влажн", "humidity"), ("углекисл", "co2_level"),
        ("co2", "co2_level"), ("давлен", "pressure"))
@@ -158,6 +162,8 @@ def parse(text):
 class Home:
     """Подключённый умный дом. client_id — функция: адрес входа в Яндекс строится из актуального значения."""
 
+    NAME = "Умный дом Яндекса"                # как назвать дом, если подключены два (homeassistant.Homes)
+
     def __init__(self, path, client_id=None):
         self.path = Path(path)
         self.client_id = client_id or (lambda: CLIENT_ID)
@@ -189,6 +195,8 @@ class Home:
             token = m.group(1)
         if not token:
             raise HomeError("сначала нажмите «Получить ключ» — Яндекс покажет ключ, вставьте его сюда")
+        if re.fullmatch(r"eyJ[\w-]+\.[\w-]+\.[\w-]+", token):
+            raise HomeError("это токен Home Assistant, а не ключ Яндекса — его вставляют ниже, в блок «Home Assistant», вместе с адресом")
         if CLIENT_ID_RX.fullmatch(token.lower()):
             raise HomeError("это ClientID приложения, а не ключ. Нажмите «Получить ключ» → «Разрешить» — "
                             "Яндекс покажет ключ: длинную строку, которая начинается с y0_")
@@ -295,6 +303,12 @@ class Home:
 
     def match(self, target, info=None):
         """«свет в спальне», «весь свет», «люстру», «кондиционер», «торшер в гостиной» -> [устройства] (может быть пусто)."""
+        return self.match_rank(target, info)[1]
+
+    def match_rank(self, target, info=None):
+        """match() и насколько точно нашлось: 3 — по названию устройства, 2 — по типу в названной комнате («свет в
+        спальне», «всё в спальне»), 1 — по типу во всём доме, 0 — ничего. Если подключены два дома (homeassistant.Homes),
+        команда идёт туда, где нашлось точнее."""
         info = info or self.info()
         words = [w for w in _words(target) if w not in SKIP]
         allw = any(w in ("весь", "все", "всё", "везде", "всюду", "всех") for w in _words(target))
@@ -311,15 +325,17 @@ class Home:
                 scored.append((sc, d))
         if scored:
             top = max(x for x, _ in scored)
-            return [d for x, d in scored if x == top]
+            return 3, [d for x, d in scored if x == top]
         # 2) по типу («свет», «кондиционер», «розетки») — все такие (в комнате, если названа)
         wtype = next((tp for k, tp in TYPES.items() if any(w.startswith(k) for w in rest)), None)
         if wtype:
-            return [d for d in info["devices"] if str(d.get("type", "")).startswith(wtype) and in_room(d)]
+            found = [d for d in info["devices"] if str(d.get("type", "")).startswith(wtype) and in_room(d)]
+            return (2 if room_ids else 1) if found else 0, found
         # 3) «выключи всё в спальне»
         if allw and room_ids:
-            return [d for d in info["devices"] if d.get("room") in room_ids and self._cap(d, ON_OFF)]
-        return []
+            found = [d for d in info["devices"] if d.get("room") in room_ids and self._cap(d, ON_OFF)]
+            return 2 if found else 0, found
+        return 0, []
 
     def readings(self, target, what=None, info=None):
         """Показания датчиков в комнате (или у устройства с таким названием) -> (комнаты нашлись?, [показания]).
@@ -341,6 +357,10 @@ class Home:
 
     def scenario(self, name, info=None):
         """Сценарий с наибольшим числом совпавших слов названия -> сценарий или None."""
+        return self.scenario_score(name, info)[0]
+
+    def scenario_score(self, name, info=None):
+        """-> (сценарий или None, сколько слов названия совпало)."""
         info = info or self.info()
         want = _words(name)
         best, score = None, 0
@@ -348,7 +368,7 @@ class Home:
             sc = sum(1 for a in _words(s.get("name")) for b in want if _sim(a, b))
             if sc > score:
                 best, score = s, sc
-        return best
+        return best, score
 
     # ---------- действия ----------
 

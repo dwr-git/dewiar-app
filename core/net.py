@@ -27,7 +27,10 @@ BASE_HOSTS = ("dewiar.pro",)
 RETRIES = 3                            # прокси нередко пускает «не с первого раза» — сколько раз повторить
 BACKOFF = (0.4, 1.2, 2.5)              # паузы между повторами, секунды
 DIRECT_SEC = 900                       # прокси подвёл, а напрямую работает — столько секунд ходим напрямую
-_state = {"proxy": "", "hosts": BASE_HOSTS, "provider": None}
+RESERVE_SEC = 900                      # напрямую dewiar.pro не открылся, а запасным путём — да: столько секунд сразу запасным
+_state = {"proxy": "", "hosts": BASE_HOSTS, "provider": None, "reserve": ""}
+_reserve_bad = {}                      # хост -> до какого времени напрямую не пробуем (запасной путь, _DirectFirst)
+on_reserve = None                      # engine: «перешёл на запасной путь» — сказать человеку один раз
 _direct_ok = {}                        # адрес -> до какого времени ходить к нему напрямую
 _tl = threading.local()                # _tl.off = True — клиенты этого потока без прокси (на время check())
 _orig_init = httpx.Client.__init__
@@ -121,10 +124,13 @@ class _LanFirst(httpx.BaseTransport):
 
 
 def _private_host(host):
-    """Этот компьютер или своя сеть: localhost, *.local/*.lan, 127.*, 10.*, 192.168.*, 172.16–31.*, 169.254.*, ::1, fc00::/7."""
+    """Этот компьютер или своя сеть: localhost, *.local/*.lan, имя без точки («homeassistant», «nas» — как «не использовать
+    прокси для локальных адресов» в Windows), 127.*, 10.*, 192.168.*, 172.16–31.*, 169.254.*, ::1, fc00::/7."""
     import ipaddress
     h = (host or "").strip("[]").lower()
     if h in ("localhost",) or h.endswith((".local", ".lan", ".localdomain", ".home.arpa")):
+        return True
+    if h and "." not in h and ":" not in h:
         return True
     try:
         ip = ipaddress.ip_address(h)
@@ -268,16 +274,30 @@ def bind(provider):
     _state["provider"] = provider
 
 
-def current():
-    """-> (прокси, адреса Dewiar). Если provider упал — последние значения из configure()."""
+def _conf():
+    """-> (прокси, адреса, запасной прокси). provider может вернуть (прокси, адреса) или (прокси, адреса, запасной)."""
     f = _state.get("provider")
     if f:
         try:
-            px, extra = f()
-            return px or "", _hosts(extra)
+            r = f()
+            px, extra = r[0], r[1]
+            return px or "", _hosts(extra), (r[2] if len(r) > 2 else "") or ""
         except Exception:  # noqa: BLE001
             log.debug("net: настройки не прочитались", exc_info=True)
-    return _state["proxy"], _state["hosts"]
+    return _state["proxy"], _state["hosts"], _state.get("reserve") or ""
+
+
+def current():
+    """-> (прокси, адреса Dewiar). Если provider упал — последние значения из configure()."""
+    px, hosts, _ = _conf()
+    return px, hosts
+
+
+def reserve():
+    """Запасной путь к серверам Dewiar — прокси Dewiar, полученный заранее, пока сайт открывался; действует, только
+    когда свой прокси не задан и галочка «Использовать прокси Dewiar» не стоит (тогда и так всё через прокси)."""
+    px, _, rv = _conf()
+    return "" if px else rv
 
 
 def uses_proxy(url):
@@ -345,14 +365,51 @@ class _Lazy(httpx.BaseTransport):
                 x.close()
 
 
+class _DirectFirst(httpx.BaseTransport):
+    """Запасной путь (27.10, отчёт №362: «облако Dewiar не ответило» весь вечер — провайдер не пускал к dewiar.pro, а
+    прокси человек не включал). Сначала напрямую; не соединилось (нет ответа, отказ, имя не находится) — тот же запрос
+    через прокси Dewiar, полученный заранее, и RESERVE_SEC сразу через него. До сервера ничего не дошло — повтор безопасен."""
+
+    def __init__(self, proxy, verify, cert):
+        self.lazy = _Lazy(proxy, verify, cert)
+
+    def handle_request(self, request):
+        h = request.url.host
+        if time.time() < _reserve_bad.get(h, 0):
+            try:
+                return self.lazy._via_proxy(request)
+            except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout):
+                _reserve_bad.pop(h, None)                    # запасной тоже не пускает — снова напрямую
+                return self.lazy._direct(request)
+        try:
+            return self.lazy._direct(request)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            try:
+                r = self.lazy._via_proxy(request)
+            except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout):
+                raise e from None
+            first = h not in _reserve_bad
+            _reserve_bad[h] = time.time() + RESERVE_SEC
+            log.info("🌐 %s напрямую не открывается (%s) — запасной путь: прокси Dewiar", h, e or type(e).__name__)
+            if first and on_reserve:
+                try:
+                    on_reserve(h)
+                except Exception:  # noqa: BLE001
+                    log.debug("net: on_reserve", exc_info=True)
+            return r
+
+    def close(self):
+        self.lazy.close()
+
+
 def _patched_init(self, *a, **kw):
     """Замена httpx.Client.__init__: адреса Dewiar (и их поддомены) — через прокси.
     mounts, переданные вызывающим явно, важнее наших."""
     off = getattr(_tl, "off", False)
-    px, hosts = current() if not off else ("", ())
+    px, hosts, rv = _conf() if not off else ("", (), "")
     m = {}
-    if px:
-        t = _Lazy(px, kw.get("verify", True), kw.get("cert"))
+    if px or rv:
+        t = _Lazy(px, kw.get("verify", True), kw.get("cert")) if px else _DirectFirst(rv, kw.get("verify", True), kw.get("cert"))
         for h in hosts:
             m[f"all://{h}"] = t
             m[f"all://*.{h}"] = t

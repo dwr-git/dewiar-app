@@ -122,6 +122,13 @@ function dwRender() {
     const px = $("#dw-px");
     if (document.activeElement !== px && !px.dataset.dirty) px.value = n.proxy || "";
     $("#dw-px-dw").checked = !!n.dewiar;
+    $("#dw-rv").checked = n.reserve !== false;
+    $("#dw-rv").disabled = !!(n.proxy || n.dewiar);        // свой прокси или прокси Dewiar включены — и так всё через прокси
+    $("#dw-rv-hint").dataset.state = n.reserve_used ? "used" : n.reserve_ready ? "ready" : "";
+    $("#dw-rv-hint").textContent = n.proxy || n.dewiar ? "Не нужен: запросы к Dewiar уже идут через прокси."
+      : n.reserve_used ? "Сейчас работает: dewiar.pro напрямую не открывался — программа ходит через прокси Dewiar."
+      : n.reserve_ready ? "Готов: если провайдер или сеть не пустят к dewiar.pro, программа сама пойдёт через прокси Dewiar и скажет об этом."
+      : "Сначала — напрямую. Если провайдер или сеть не пускают к dewiar.pro, программа сама идёт через прокси Dewiar, полученный заранее (нужен вход аккаунтом или ключ Dewiar).";
     $("#dw-web").checked = !(S.net && S.net.web_via === false);
     const ck = n.check, viaOk = ck && ck.proxy && ck.proxy[0], dirOk = ck && ck.direct[0];
     if (ck) { $("#dw-net-res").className = "res " + (dirOk || viaOk ? "ok" : "bad"); $("#dw-net-res").textContent = ck.advice; }
@@ -187,6 +194,12 @@ $("#dw-px-dw").onchange = async (ev) => {
   ev.target.disabled = false;
 };
 $("#dw-web").onchange = (ev) => save({ net: { web_via: ev.target.checked } });
+$("#dw-rv").onchange = async (ev) => {
+  const on = ev.target.checked; ev.target.disabled = true;
+  try { DW.net = Object.assign(DW.net || {}, await core.call("net_reserve", { on })); dwRender(); }
+  catch (e) { $("#dw-net-res").className = "res bad"; $("#dw-net-res").textContent = e.message; }
+  ev.target.disabled = false;
+};
 core.on("account", e => { DW.acc = e.account; DW.kb = null; if ($("#p-dw").classList.contains("cur")) dwLoad(); });
 core.on("cloud", e => { DW.cloud = e; if ($("#p-dw").classList.contains("cur")) dwRender(); });
 core.on("telegram", e => { DW.tg = e; dwRender(); });
@@ -506,6 +519,7 @@ core.on("hello", d => {
   obFill(d.obsidian);
   core.call("cal_list").then(csFill).catch(() => {});
   core.call("home_get").then(shFill).catch(() => {});
+  core.call("ha_get").then(haFill).catch(() => {});
   phFill();
   core.call("cloud_status").then(cloudFill).catch(() => {});
   if (d.account && d.account.logged_in) core.call("account_check").then(renderAccount).catch(() => {});

@@ -13,6 +13,7 @@ import random
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 import httpx
 
@@ -249,9 +250,11 @@ class Radio:
         return self.sounding
 
     def status(self):
+        art = (self.station or self.paused or {}).get("art") or ""
         return {"playing": self.playing, "station": (self.station or {}).get("name", ""),
                 "paused": (self.paused or {}).get("name", ""), "volume": round(self.volume, 2),
-                "tags": (self.station or self.paused or {}).get("tags", "")}
+                "tags": (self.station or self.paused or {}).get("tags", ""),
+                "art": Path(art).as_uri() if art else ""}     # обложка своей музыки (№361) — вместо пластинки
 
     def _changed(self):
         if self.on_change:
