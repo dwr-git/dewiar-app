@@ -36,5 +36,7 @@ ok(not Q.task_claim("Я запустила задачу 10 минут назад
    and not Q.task_claim("Не перезапустила — жду ваш ответ."), "рассказ о прошлом запуске, вопрос и «не перезапустила» — не трогаем")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 ok("task_claim(step_text, called)" in src, "ответ проверяется на «перезапустила» без запуска")
+app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
+ok("/^Script error\\.?$/i.test(e.message) && !e.filename" in app, "веб-версия: «Script error. (:0)» чужих скриптов (расширения браузера) — не сбой Dewiar, не шлётся")
 print("ИТОГ:", "все проверки пройдены" if not fails else f"не пройдено {len(fails)}")
 sys.exit(1 if fails else 0)

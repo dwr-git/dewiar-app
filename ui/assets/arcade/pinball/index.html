@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0726">
+<title>Звёздный пинбол</title>
+<link rel="stylesheet" href="../shared/fonts.css">
+<link rel="stylesheet" href="../shared/arcade.css">
+<style>
+.pb-stars { list-style: none; margin: 0 auto 12px; padding: 0; display: grid; gap: 4px; text-align: left; width: max-content; max-width: 100%; font-size: 15px; color: var(--muted); }
+.pb-stars li::before { content: "✦"; color: #8fe6ff; margin-right: 8px; }
+.pb-stars b { color: var(--ink); font-weight: 600; }
+canvas { touch-action: none; }
+</style>
+</head>
+<body>
+<script src="../shared/arcade.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

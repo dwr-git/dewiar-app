@@ -133,7 +133,11 @@ try:
         ok(chips[:2] == ["Все треки", "Любимое"] and "Кино" in chips, f"подборки и исполнители: {chips}")
         pg.click('#mm-chips .chip:has-text("Спокойное")'); time.sleep(0.8)
         ok(pg.evaluate("[...document.querySelectorAll('#mm-list .tt b')].map(x => x.textContent)") == ["Clair de lune"], "«Спокойное» — Дебюсси")
-        pg.click("#mm-play-all"); time.sleep(1.5)
+        pg.click("#mm-play-all")
+        for _ in range(40):                          # под нагрузкой прогона проигрыватель стартует не сразу
+            time.sleep(0.25)
+            if "Сейчас играет" in pg.inner_text("#mm-np"):
+                break
         ok("Clair de lune" in pg.inner_text("#mm-np") and "Сейчас играет" in pg.inner_text("#mm-np"), "«Играть» — сейчас играет, сверху")
         pg.click("#mm-heart"); time.sleep(0.8)
         ok(pg.evaluate("document.querySelector('#mm-heart').classList.contains('on')"), "♥ — в любимом")

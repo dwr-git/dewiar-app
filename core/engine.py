@@ -181,6 +181,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.money.on_change = self.sync.soon.set
         from payments import Payments
         self.payments = Payments(_CFG / "payments.json", self.workspace)   # «Платежи»: счета, оплаты, сроки (payments.py)
+        self.payments.on_change = self.sync.soon.set     # и между компьютерами (виды bill, pay, payfile в sync.py; 27.10)
         from done import Done
         self.done = Done(_CFG / "done.json")             # «Дела»: сделанное и достижения (done.py), синхронизация — вид «done»
         self.done.on_change = self.sync.soon.set

@@ -199,6 +199,51 @@ class Payments:
             self._save()
             return {"ok": True}
 
+    # ---------- синхронизация между компьютерами (core/sync.py, виды bill, pay, payfile; 27.10) ----------
+    def sync_put(self, what, iid, data):
+        """Счёт (what="bill") или оплата ("pay") с другого компьютера — как есть, под своим id. Чужое не доверяем: только
+        известные поля, вложения — только из «Платежи/Вложения/». -> запись или None (не похожа на счёт/оплату)."""
+        rec = _clean_rec(what, iid, data)
+        if rec is None:
+            return None
+        with self._lock:
+            lst = self.bills if what == "bill" else self.pays
+            cur = next((x for x in lst if x["id"] == iid), None)
+            old_name = cur.get("name") if cur and what == "bill" else None
+            if cur is None:
+                lst.append(rec)
+            else:
+                cur.clear()
+                cur.update(rec)
+            bid = iid if what == "bill" else rec["bill"]
+            if old_name and old_name != rec["name"] and self.ws is not None:   # переименовали там — старая история здесь лишняя
+                try:
+                    (Path(self.ws.ensure()) / "Платежи" / f"{_safe(old_name)}.md").unlink(missing_ok=True)
+                except OSError:
+                    pass
+            self._save([bid])
+            return rec
+
+    def sync_drop(self, what, iid):
+        """Удаление с другого компьютера: только сама запись (оплаты удалённого там счёта придут своими удалениями)."""
+        with self._lock:
+            lst = self.bills if what == "bill" else self.pays
+            cur = next((x for x in lst if x["id"] == iid), None)
+            if cur is None:
+                return
+            lst.remove(cur)
+            if what == "bill" and self.ws is not None:
+                try:
+                    (Path(self.ws.ensure()) / "Платежи" / f"{_safe(cur['name'])}.md").unlink(missing_ok=True)
+                except OSError:
+                    pass
+            self._save([] if what == "bill" else [cur["bill"]])
+
+    def att_paths(self):
+        """Пути всех вложений (относительно папки ассистента) — что синхронизировать файлами."""
+        with self._lock:
+            return [a["path"] for x in self.bills + self.pays for a in (x.get("att") or []) if a.get("path")]
+
     # ---------- оплаты ----------
     def period_of(self, b, day):
         """Период оплаты по дате: годовой — «ГГГГ», остальные — «ГГГГ-ММ»."""
@@ -545,6 +590,54 @@ class Payments:
                              f"{fmt_money(p.get('amount'))} | {(p.get('note') or '') + (' · не погашено' if p.get('status') == 'unpaid' else '')} |")
             lines.append("")
         (base / f"{_safe(b['name'])}.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+ATT_DIR = "Платежи/Вложения/"
+_BILL_STR = {"name": 60, "kind": 20, "group": 60, "icon": 16, "unit": 30, "how": 4000, "phones": 400, "note": 4000, "created": 40}
+_PAY_STR = {"bill": 40, "date": 10, "period": 7, "note": 300, "status": 10, "created": 40}
+
+
+def att_ok(path):
+    """Путь вложения с другого устройства — только внутри «Платежи/Вложения/», без «..» и абсолютных путей."""
+    p = str(path or "")
+    return p.startswith(ATT_DIR) and ".." not in Path(p).parts and "\\" not in p and len(p) < 400 and not p.endswith("/")
+
+
+def _clean_rec(what, iid, d):
+    """Запись счёта/оплаты из облака -> только известные поля нужных типов, или None."""
+    if not isinstance(d, dict) or not re.fullmatch(r"[\w-]{1,40}", str(iid or "")):
+        return None
+    out = {"id": str(iid)}
+    for k, n in (_BILL_STR if what == "bill" else _PAY_STR).items():
+        v = d.get(k)
+        out[k] = str(v)[:n] if v is not None else ""
+    nums = ("amount", "total") if what == "bill" else ("amount", "reading", "used")
+    for k in nums:
+        out[k] = _num(d.get(k))
+    att = []
+    for a in d.get("att") or []:
+        if isinstance(a, dict) and att_ok(a.get("path")):
+            att.append({"id": str(a.get("id") or "")[:12], "name": Path(a["path"]).name[:120], "path": a["path"], "img": bool(a.get("img"))})
+    out["att"] = att[:50]
+    if what == "bill":
+        if not out["name"].strip():
+            return None
+        if out["kind"] not in KINDS:
+            out["kind"] = "other"
+        for k, hi in (("day", 31), ("month", 12)):
+            v = d.get(k)
+            out[k] = int(v) if isinstance(v, int) and 1 <= v <= hi else None
+        for k in ("autopay", "remind", "archived"):
+            out[k] = bool(d.get(k))
+        out["order"] = d.get("order") if isinstance(d.get("order"), int) else 0
+    else:
+        if not out["bill"] or not _date(out["date"]):
+            return None
+        if not re.fullmatch(r"\d{4}(-\d{2})?", out["period"]):
+            out["period"] = out["date"][:7]
+        if out["status"] not in ("paid", "unpaid"):
+            out["status"] = "paid"
+    return out
 
 
 def fmt_num(v):

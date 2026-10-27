@@ -5,7 +5,8 @@
 «Обо мне». Дополнительные виды (EXTRA_KINDS) идут, только если их знает сервер: soul/mind — душа персонажей,
 конституция и выводы на завтра; diary — последние дни дневника (пишет компьютер, телефон читает); dayturn — разговор
 с телефона в дневник дня и taskreq — задача с телефона (компьютер забирает их и тем самым удаляет из облака); task —
-ход задач для показа на телефоне; vault — всё хранилище Obsidian между компьютерами (если включено).
+ход задач для показа на телефоне; vault — всё хранилище Obsidian между компьютерами (если включено); bill, pay, payfile —
+«Платежи» между компьютерами: счета, оплаты и вложения кусками (_apply_pay).
 
 Как: каждое устройство раз в минуту (и сразу после своих изменений, событие soon) сравнивает свои данные с тем, что
 уже отправляло (отпечатки в STATE_DIR/sync.json), шлёт изменения и удаления и забирает чужие, начиная с номера
@@ -38,7 +39,7 @@ from settings import STATE_DIR
 log = logging.getLogger("dewiar.sync")
 
 BASE_KINDS = ("reminder", "note", "money", "memory")          # знает любой сервер
-EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona")   # тот же список $extra в cloud.php
+EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile")   # тот же список $extra в cloud.php
 VAULT_MAX = 300_000                               # сервер не принимает запись больше 300 КБ — такие заметки не шлём
 VAULT_FILES = 15000
 CHUNK = 400                                       # изменений за один запрос (сервер берёт до 2000; первая отправка большого хранилища — частями)
@@ -57,7 +58,12 @@ _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200f\u202a-\u202e\u
 CONST_PREV = "Память/Конституция — прежняя.md"
 # Сквозное шифрование (sync.e2e, core/synckey.py): что шифруется на устройстве — всё личное. Открытыми остаются только
 # метка «шифрование включено» (mind:e2e), задачи для облака (taskreq с cloud — их выполняет сервер) и удаления (пустые).
-E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq")
+E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq",
+             "bill", "pay", "payfile")
+# «Платежи» между компьютерами (27.10, владелец: «платежи дома заполнил… а на работе их нет»): bill — счёт, pay — оплата,
+# payfile — вложение (платёжка, скриншот) кусками: облако берёт запись до 300 КБ, а зашифрованная на треть длиннее
+PF_CHUNK = 150_000
+PF_MAX = 6_000_000                                # больше — файл не синхронизируем (запись счёта его всё равно помнит)
 E2E_MARK = "mind:e2e"
 SEALED_MAX = 290_000                              # сервер не берёт запись больше 300 КБ — зашифрованная на треть длиннее
 
@@ -340,6 +346,15 @@ class Sync:
         ob = getattr(h, "obsidian", None)
         if ob is not None and "vault" in ok and ob.sync_all():
             self._snap_vault(out, ob)
+        pm = getattr(h, "payments", None)
+        if pm is not None and "bill" in ok:
+            with pm._lock:
+                for b in pm.bills:
+                    out["bill:" + b["id"]] = dict(b)
+                for x in pm.pays:
+                    out["pay:" + x["id"]] = dict(x)
+        if pm is not None and "payfile" in ok:
+            self._snap_payfiles(out, pm)
         dn = getattr(h, "done", None)
         if dn is not None and "done" in ok:            # сделанные дела (done.py) — как doneList() на телефоне
             with dn._lock:
@@ -476,8 +491,12 @@ class Sync:
                 return False
             rel = self.state.get("vmap", {}).get(iid)
             return not (rel and (v / rel).exists())
-        if kind in ("soul", "mind", "diary", "task", "done", "persona") and self.state.get("_extra_failed"):
+        if kind in ("soul", "mind", "diary", "task", "done", "persona", "bill", "pay", "payfile") and self.state.get("_extra_failed"):
             return False
+        if kind == "payfile":                     # файл ещё не пришёл целиком или не читается — не удаление; удаление — когда
+            pm = getattr(self.host, "payments", None)        # ни один счёт и ни одна оплата его больше не помнят
+            rel = (self.state.get("pfmap") or {}).get(iid.split(".")[0])
+            return pm is None or not rel or rel not in pm.att_paths()
         return True
 
     def _vault_read(self, vid):
@@ -599,6 +618,8 @@ class Sync:
         h = self.host
         if kind == "persona":
             return self._apply_persona(iid, d, deleted)
+        if kind in ("bill", "pay", "payfile"):
+            return self._apply_pay(kind, iid, d, deleted)
         if kind == "mind" and iid == "e2e":
             return self._apply_mark(d, deleted)
         if kind in ("soul", "mind", "diary", "task") and deleted:
@@ -692,6 +713,118 @@ class Sync:
                     emit("done", **dn.public())
                 except Exception:  # noqa: BLE001
                     log.debug("дела: emit", exc_info=True)
+        return None
+
+    # ---------- «Платежи»: счета, оплаты и вложения между компьютерами ----------
+    def _pf_dir(self):
+        return self.path.parent / "payparts"
+
+    def _snap_payfiles(self, out, pm):
+        """Вложения «Платежей» -> записи payfile:<id пути>.<номер куска> (данные None + отпечаток; читаем, только когда
+        отправлять — _payfile_read). Отпечаток — по содержимому: кэш pf {путь: [размер:время, sha1, кусков]}."""
+        root = Path(self.host.workspace.ensure())
+        cache = self.state.setdefault("pf", {})
+        pfmap = self.state.setdefault("pfmap", {})
+        seen = set()
+        for rel in pm.att_paths():
+            p = root / rel
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            if not p.is_file() or st.st_size > PF_MAX or st.st_size == 0:
+                continue
+            sig = f"{st.st_size}:{st.st_mtime_ns}"
+            c = cache.get(rel)
+            if not c or c[0] != sig:
+                try:
+                    c = [sig, hashlib.sha1(p.read_bytes()).hexdigest(), -(-st.st_size // PF_CHUNK)]
+                except OSError:
+                    continue
+                cache[rel] = c
+            fid = hashlib.sha1(rel.encode("utf-8")).hexdigest()[:12]
+            pfmap[fid] = rel
+            seen.add(rel)
+            for i in range(c[2]):
+                out[f"payfile:{fid}.{i}"] = None
+                out[f"payfile:{fid}.{i}#h"] = f"{c[1]}:{i}:{c[2]}"
+        for rel in [r for r in cache if r not in seen]:
+            cache.pop(rel, None)
+
+    def _payfile_read(self, iid):
+        fid, _, i = iid.partition(".")
+        rel = (self.state.get("pfmap") or {}).get(fid)
+        c = (self.state.get("pf") or {}).get(rel or "")
+        if not rel or not c or not i.isdigit():
+            return None
+        try:
+            with open(Path(self.host.workspace.ensure()) / rel, "rb") as f:
+                f.seek(int(i) * PF_CHUNK)
+                part = f.read(PF_CHUNK)
+        except OSError:
+            return None
+        import base64
+        return {"path": rel, "i": int(i), "n": c[2], "sha": c[1], "b64": base64.b64encode(part).decode("ascii")}
+
+    def _apply_pay(self, kind, iid, d, deleted):
+        """Счёт, оплата или кусок вложения с другого компьютера. Вложение собирается, когда пришли все куски и сошёлся
+        отпечаток; пишется только в «Платежи/Вложения/» (payments.att_ok)."""
+        import base64
+        from payments import att_ok
+        h = self.host
+        pm = getattr(h, "payments", None)
+        if pm is None:
+            return False
+        if kind in ("bill", "pay"):
+            if deleted:
+                pm.sync_drop(kind, iid)
+            elif pm.sync_put(kind, iid, d) is None:
+                return False
+            emit = getattr(h, "emit", None)
+            if emit is not None:
+                try:
+                    emit("pay_saved", what="sync")
+                except Exception:  # noqa: BLE001
+                    log.debug("платежи: emit", exc_info=True)
+            return None
+        fid, _, i = iid.partition(".")
+        if not re.fullmatch(r"[0-9a-f]{12}", fid) or not i.isdigit():
+            return False
+        root = Path(h.workspace.ensure())
+        if deleted:
+            rel = (self.state.get("pfmap") or {}).get(fid)
+            if rel and att_ok(rel) and rel not in pm.att_paths():
+                try:
+                    (root / rel).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            shutil.rmtree(self._pf_dir() / fid, ignore_errors=True)
+            return None
+        rel, n, sha = str(d.get("path") or ""), d.get("n"), str(d.get("sha") or "")
+        if not att_ok(rel) or hashlib.sha1(rel.encode("utf-8")).hexdigest()[:12] != fid or not isinstance(n, int) \
+                or not 0 <= int(i) < n <= -(-PF_MAX // PF_CHUNK) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            return False
+        self.state.setdefault("pfmap", {})[fid] = rel
+        dst = root / rel
+        try:
+            if dst.is_file() and hashlib.sha1(dst.read_bytes()).hexdigest() == sha:
+                return None                                   # уже на месте
+            part = base64.b64decode(str(d.get("b64") or ""), validate=True)
+        except (OSError, ValueError):
+            return False
+        tmp = self._pf_dir() / fid
+        tmp.mkdir(parents=True, exist_ok=True)
+        (tmp / f"{sha}.{i}").write_bytes(part)
+        parts = [tmp / f"{sha}.{k}" for k in range(n)]
+        if all(x.is_file() for x in parts):
+            blob = b"".join(x.read_bytes() for x in parts)
+            if hashlib.sha1(blob).hexdigest() == sha:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                tmpf = dst.with_name(dst.name + ".part")
+                tmpf.write_bytes(blob)
+                tmpf.replace(dst)
+                log.info("🔄 Платежи: вложение «%s» — с другого компьютера", dst.name)
+            shutil.rmtree(tmp, ignore_errors=True)
         return None
 
     def _task_want(self, iid, d):
@@ -925,6 +1058,10 @@ class Sync:
                 data = snap[key]
                 if data is None and key.startswith("vault:"):
                     data = self._vault_read(key.split(":", 1)[1])
+                    if data is None:
+                        continue
+                elif data is None and key.startswith("payfile:"):
+                    data = self._payfile_read(key.split(":", 1)[1])
                     if data is None:
                         continue
                 elif data is None:                        # файл не менялся (отпечаток из кэша), а отправить надо — читаем
