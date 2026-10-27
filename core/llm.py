@@ -57,7 +57,8 @@ def _base(p):
 # Денег на ключе нет, а сервис отвечает 429 (Z.ai: «Insufficient balance or no resource package») — ждать и повторять
 # бессмысленно: пакет 22.10 — по 3 повтора с ожиданием до минуты на каждый вопрос, человек минутами ждал тишину.
 NO_MONEY_RX = re.compile(r"insufficient (balance|quota|funds)|no resource package|exceeded your current quota|"
-                         r"credit balance is too low|payment required|недостаточно средств", re.I)
+                         r"credit balance is too low|payment required|недостаточно средств|"
+                         r"no credits remaining|insufficient credits|can only afford|add (more )?credits|out of credits", re.I)   # №324, OpenRouter
 LOCATION_RX = re.compile(r"location is not supported|unsupported_country|not available in your (country|region)", re.I)
 
 
@@ -103,7 +104,7 @@ def connect_hint(base_url):
         if port == 11434 and ollama_installed():
             return ("Ollama установлена, но не запущена — откройте её (меню приложений; в Windows — значок у часов) и "
                     "нажмите «Проверить» ещё раз")
-        if port == 1234 and lmstudio_installed():
+        if port in (1234, 1235) and lmstudio_installed():
             return LMSTUDIO_HOW.rstrip(".").replace("«Найти»", "«Проверить»")
         return ("на этом компьютере не запущена программа с моделью (Ollama или LM Studio). Если модель на другом компьютере "
                 "или сервере — впишите в «Мозге» его адрес (например 192.168.1.5:11434): 127.0.0.1 — это сам этот компьютер")
@@ -131,6 +132,10 @@ def _humanize(e, base_url, model=""):
         except Exception:  # noqa: BLE001 — подсказка не главное: без неё — как раньше
             hint = ""
         return f"не могу подключиться к {base_url}: {hint}" if hint else f"не могу подключиться к {base_url} — сервер запущен и адрес верный?"
+    if isinstance(e, (httpx.RemoteProtocolError, httpx.ReadError)):
+        # пакет 27.10: «Server disconnected without sending a response» показывали по-английски (перегрузка сервера)
+        host = (re.match(r"^\w+://([^/:?#]+)", str(base_url or "")) or [None, "сервер модели"])[1]
+        return f"{host} оборвал связь, не ответив, — он перегружен или перезапускается. Повторите через минуту"
     if isinstance(e, httpx.TimeoutException):
         return "сервер модели не ответил вовремя"
     if isinstance(e, httpx.HTTPStatusError):
@@ -160,8 +165,14 @@ def _humanize(e, base_url, model=""):
             return "на ключе закончились средства — пополните баланс"
         if code == 400 and re.search(r"does not support (chat|completion|generate)", body + " " + msg, re.I):
             # пакет 23.10: в Ollama выбрали x/flux2-klein — модель для картинок
-            return ((f"«{model}»" if model else "эта модель") + " не умеет разговаривать — это модель для картинок или поиска. "
-                    "В «Мозге» нажмите «Список моделей» и выберите модель для разговора")
+            t = ((f"«{model}»" if model else "эта модель") + " не умеет разговаривать — это модель для картинок или поиска. ")
+            try:
+                ms = list_models({"base_url": base_url}, timeout=3) if base_url else None
+            except Exception:  # noqa: BLE001 — список не получили (нужен ключ и т. п.) — обычный совет
+                ms = None
+            if ms is not None and not chat_models(ms):   # №258: выбрать было не из чего — говорим, где взять модель
+                return t + no_chat_help(base_url, ms)
+            return t + "В «Мозге» нажмите «Список моделей» и выберите модель для разговора"
         if code in (400, 404) and NO_MODEL_RX.search(body + " " + msg):
             name = f"«{model}»" if model else "с таким именем"
             if ":11434" in str(base_url or "") or "pulling" in body + msg:
@@ -179,6 +190,10 @@ def _humanize(e, base_url, model=""):
             return "не найдено: проверьте адрес (обычно оканчивается на /v1) и имя модели"
         if CTX_RX.search(body) or CTX_RX.search(msg):
             return CTX_TEXT
+        if re.search(r"jinja|No user query found|prompt template|chat template", body + " " + msg, re.I):
+            # №281 (пакет 27.10): LM Studio «Error rendering prompt with jinja template: No user query found in messages»
+            return ("у модели неисправный шаблон разговора (Prompt Template) — так бывает у некоторых сборок в LM Studio. "
+                    "Возьмите ту же модель от lmstudio-community или в LM Studio → модель → «Prompt Template» верните шаблон по умолчанию")
         return f"сервер ответил ошибкой {code}: {body}"
     return str(e)
 
@@ -323,6 +338,40 @@ def pick_model(models):
         if hit:
             return hit[0]
     return ok[0]
+
+
+def chat_models(models):
+    """Из списка — только модели для разговора (без эмбеддингов, реранкеров, речи)."""
+    return [m for m in (models or []) if m and not _NOT_CHAT.search(m)]
+
+
+def no_chat_help(base_url, models=None):
+    """Пакет 25.10, №258: «загрузил qwen3:4b и qwen3:8b, а в списке только модель, которая не умеет разговаривать».
+    В Ollama была скачана лишь nomic-embed-text (для поиска по смыслу), а qwen3 — в LM Studio. Объясняем, где модели
+    и что сделать; если LM Studio на этом компьютере отвечает и в ней есть модели для разговора — называем их."""
+    base = str(base_url or "")
+    side = [m for m in (models or []) if m and _NOT_CHAT.search(m)]
+    what = (f"есть только {', '.join('«' + m + '»' for m in side[:2])} — это модель для поиска по смыслу, разговаривать она не умеет"
+            if side else "нет ни одной модели")
+    ollama = ":11434" in base or base in _native
+    lms = []
+    if ":1234" not in base:
+        try:
+            r = httpx.get("http://127.0.0.1:1234/v1/models", timeout=1.0)
+            if r.status_code == 200:
+                lms = chat_models([m.get("id") for m in r.json().get("data", []) if isinstance(m, dict)])
+        except Exception:  # noqa: BLE001 — LM Studio нет или выключена
+            lms = []
+    if ollama:
+        t = (f"В Ollama {what}. Скачайте модель для разговора: «Пуск» → «Командная строка» → ollama pull qwen3:4b "
+             "(≈2,5 ГБ; для мощного компьютера — qwen3:8b), затем снова «Список моделей»")
+    else:
+        t = f"На этом сервере {what}. Загрузите в нём модель для разговора (например, Qwen3) и нажмите «Список моделей» снова"
+    if lms:
+        names = ", ".join("«" + m + "»" for m in lms[:3])
+        t += (f". А в LM Studio на этом компьютере модели для разговора уже есть: {names} — в «Мозге» нажмите «Добавить» → "
+              "«LM Studio», и Dewiar будет думать ими")
+    return t
 
 
 def _root(base):
@@ -501,6 +550,87 @@ _BARE_CALL = re.compile(r'\{\s*"(?:name|tool_name|function_name|tool)"\s*:\s*"[A
                         r'"(?:arguments|args|parameters|params|input)"\s*:')
 
 
+# DeepSeek (V3.2+) пишет вызовы своим языком DSML, а не <tool_call> (пакет 27.10, №301: в ответе было видно
+# «<｜DSML｜invoke name="weather">…», вызов не выполнялся, а температура дальше была выдуманной):
+#   <｜DSML｜function_calls><｜DSML｜invoke name="weather"><｜DSML｜parameter name="city" string="true">Москва</｜DSML｜parameter>
+#   </｜DSML｜invoke></｜DSML｜function_calls>
+# Переводим в привычный <tool_call>{json}</tool_call> ещё в потоке — дальше всё как у Qwen.
+# №348 (пакет 27.10, DeepSeek v4.1 через polza.ai): «<DSML calls><DSML invoke name="lab_write"><DSML parameter name="arguments"
+# string="false">{json}» — без «｜», «calls» вместо «function_calls», все аргументы одним JSON — модель читала это вслух.
+_DO = r"<\s*[｜|]?\s*DSML\s*[｜|]?\s*"
+_DC = r"</\s*[｜|]?\s*DSML\s*[｜|]?\s*"
+_DSML_OPEN = re.compile(_DO + r"(?:function_calls|tool_calls|calls|invoke)\b")
+_DSML_END = re.compile(_DC + r"(?:function_calls|tool_calls|calls)\s*>|" + _DC + r"invoke\s*>(?![\s\S]*" + _DO + r"invoke)")
+_DSML_INVOKE = re.compile(_DO + r"invoke\s+name=\"([^\"]+)\"\s*>([\s\S]*?)(?:" + _DC + r"invoke\s*>|$)")
+_DSML_STRAY = re.compile(_DC + r"(?:function_calls|tool_calls|calls)\s*>")     # внешний «</DSML calls>» после invoke
+_DSML_PARAM = re.compile(_DO + r"parameter\s+name=\"([^\"]+)\"(?:\s+string=\"(true|false)\")?\s*>([\s\S]*?)" + _DC + r"parameter\s*>")
+_DSML_HEAD = "<｜DSML｜function_calls>"
+
+
+def dsml_calls(text):
+    """Текст с DSML -> строка из <tool_call>{json}</tool_call> (пустая — вызовов нет)."""
+    out = []
+    for name, body in _DSML_INVOKE.findall(text or ""):
+        args = {}
+        for k, is_str, v in _DSML_PARAM.findall(body):
+            v = v.strip()
+            if is_str == "false":
+                try:
+                    v = json.loads(v)
+                except ValueError:
+                    pass
+            args[k] = v
+        if list(args) == ["arguments"] and isinstance(args["arguments"], dict):    # все аргументы одним JSON (№348)
+            args = args["arguments"]
+        out.append("<tool_call>" + json.dumps({"name": name, "arguments": args}, ensure_ascii=False) + "</tool_call>")
+    return "".join(out)
+
+
+class DSMLFilter:
+    """Поток текста -> тот же поток, где блоки DSML заменены на <tool_call>. Начало «<｜DSML…», разрезанное между
+    кусками, придерживается."""
+
+    def __init__(self):
+        self.buf, self.inside = "", False
+
+    def feed(self, s):
+        self.buf += s
+        out = ""
+        while True:
+            if self.inside:
+                m = _DSML_END.search(self.buf)
+                if not m:
+                    return out
+                out += dsml_calls(self.buf[:m.end()])
+                self.buf, self.inside = self.buf[m.end():], False
+                continue
+            m = _DSML_OPEN.search(self.buf)
+            st = _DSML_STRAY.search(self.buf)
+            if st and (not m or st.start() < m.start()):          # хвост «</DSML calls>» — убрать
+                out += self.buf[:st.start()]
+                self.buf = self.buf[st.end():]
+                continue
+            if m:
+                out += self.buf[:m.start()]
+                self.buf, self.inside = self.buf[m.start():], True
+                continue
+            keep = 0
+            for tag in (_DSML_HEAD, "<｜DSML｜invoke", "<|DSML|invoke", "<|DSML|function_calls", "<DSML calls", "<DSML invoke", "</DSML calls>", "</DSML function_calls>", "</｜DSML｜function_calls>", "</|DSML|function_calls>"):
+                for k in range(1, len(tag)):
+                    if self.buf.endswith(tag[:k]):
+                        keep = max(keep, k)
+            out += self.buf[:len(self.buf) - keep]
+            self.buf = self.buf[len(self.buf) - keep:]
+            return out
+
+    def tail(self):
+        t, self.buf = self.buf, ""
+        if self.inside:
+            self.inside = False
+            return dsml_calls(t) or t
+        return t
+
+
 class ToolTagStripper:
     """Вызовы функций прямо в тексте ответа — <tool_call>{json}</tool_call> (родной формат Qwen/Hermes).
     Нужен, когда сервер сам их не разбирает (vLLM без --tool-call-parser) или функции описаны в тексте
@@ -514,6 +644,7 @@ class ToolTagStripper:
     def __init__(self):
         self.buf, self.inside, self.found, self.after, self.dropped = "", False, [], False, ""
         self.known = set()          # имена функций этого запроса: голый JSON с другим именем (или без функций) — текст
+        self.dsml = DSMLFilter()    # вызовы DeepSeek (DSML) — сначала в <tool_call>
 
     def _bare_end(self):
         """inside == "bare": конец JSON вызова в buf -> индекс после него или -1 (ещё не пришёл целиком)."""
@@ -524,7 +655,7 @@ class ToolTagStripper:
             return -1
 
     def feed(self, s):
-        self.buf += s
+        self.buf += self.dsml.feed(s)
         out = ""
         while True:
             if self.inside == "bare":
@@ -598,6 +729,13 @@ class ToolTagStripper:
 
     def tail(self):
         """Конец потока: придержанное на случай разрезанного «<tool_call>» — оказалось обычным текстом."""
+        rest = self.dsml.tail()
+        if rest:
+            out = self.feed("")
+            self.buf += rest
+            out2 = self.feed("")
+            if out + out2:
+                return out + out2 + (self.tail() or "")
         if self.inside:
             return ""
         t, self.buf = self.buf, ""
@@ -832,6 +970,28 @@ def probe_tools(p):
     return "native"
 
 
+_LMS_WOKE = [0.0]
+
+
+def _lmstudio_wake(url):
+    """№344 (пакет 27.10): сервер LM Studio выключен (по умолчанию он выключен), а Dewiar включал его только кнопкой
+    «Найти». Своя модель на этом компьютере не на порту Ollama и LM Studio установлена — `lms server start` (не чаще
+    раза в 10 минут)."""
+    try:
+        from urllib.parse import urlparse
+        u = urlparse(str(url))
+        if not LOCAL_HOST_RX.match(u.hostname or "") or u.port == 11434 or time.time() - _LMS_WOKE[0] < 600:
+            return
+        if not lmstudio_installed():
+            return
+        _LMS_WOKE[0] = time.time()
+        got, started = lmstudio_start()
+        if started:
+            log.info("LM Studio: сервер был выключен — включил (%s)", got)
+    except Exception as e:  # noqa: BLE001
+        log.info("LM Studio: включить сервер не вышло: %s", e)
+
+
 @contextlib.contextmanager
 def _stream_retry(method, url, tries=2, **kw):
     """httpx.stream, но соединение не установилось (сеть моргнула, сервер не принял подключение) — ещё раз: запрос
@@ -845,6 +1005,7 @@ def _stream_retry(method, url, tries=2, **kw):
             if i == tries - 1:
                 raise
             log.info("Сервер модели: соединение не установилось (%s) — пробую ещё раз", type(e).__name__)
+            _lmstudio_wake(url)
             time.sleep(0.8)
             continue
         exc = (None, None, None)
@@ -1071,9 +1232,12 @@ POEM_NOTE = ("\n\nСейчас просят стихи. Ремесло: снач
 
 
 def creative_temp(text, temp=None):
-    """Температура для этой просьбы: творческая — не ниже CREATIVE_TEMP, иначе — как в профиле."""
-    t = float(temp if temp is not None else 0.7)
-    return max(t, CREATIVE_TEMP) if CREATIVE_ASK.search(str(text or "")) else t
+    """Температура для этой просьбы: творческая — не ниже CREATIVE_TEMP, иначе — как в профиле. Температуру вписали
+    в профиль сами (не пусто и не 0,7 по умолчанию) — она главнее (пакет 27.10, №311: «задал 0,3, а на просьбу о стихе
+    стало 0,95»). Так же на телефоне (app.js llmTemp)."""
+    if temp not in (None, "") and float(temp) != 0.7:
+        return float(temp)
+    return CREATIVE_TEMP if CREATIVE_ASK.search(str(text or "")) else 0.7
 
 
 def wants_think(text, mode=None):
@@ -1177,7 +1341,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                     yield from stream_events(dict(p, _rl=n + 1), system, messages, cancel, tools, _retry)
                     return
                 if r.status_code == 400 and not p.get("_mct") and ("max_completion_tokens" in err or
-                                                                 ("temperature" in err and "unsupported" in err)):
+                                                                 ("temperature" in err and re.search(r"unsupported|only 1 is allowed|invalid temperature|does not support", err))):
                     log.info("Сервер %s просит max_completion_tokens и температуру по умолчанию — повторяю так", base)
                     yield from stream_events(dict(p, _mct=True), system, messages, cancel, tools, _retry)
                     return
@@ -1389,6 +1553,8 @@ def test_profile(p):
     except LLMError as e:
         if not p.get("model"):
             return {"ok": False, "error": str(e)}
+    if models and not chat_models(models) and (not p.get("model") or _NOT_CHAT.search(p.get("model") or "")):
+        return {"ok": False, "models": models, "error": no_chat_help(p.get("base_url"), models)}      # №258
     model = p.get("model") or pick_model(models)
     first, text = None, ""
     for piece in stream_chat(dict(p, model=model), "Ты помощник. Отвечай очень коротко, по-русски.",

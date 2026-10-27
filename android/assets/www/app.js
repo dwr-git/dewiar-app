@@ -102,7 +102,10 @@ const N = window.N = {
   handlers: {},
   on(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); },
   ev(raw) { let e; try { e = typeof raw === "string" ? JSON.parse(raw) : raw; } catch (x) { return; } (this.handlers[e.type] || []).forEach(f => { try { f(e); } catch (x) { console.error(x); } }); },
-  back() { if (gameOn()) { gameClose(); return true; } const s = $(".sheet.on"); if (s) { closeSheets(); return true; } if (state !== "idle") { interrupt(); return true; } return false; },
+  back() { if (gameOn()) { gameClose(); return true; } if (imgViewClose()) return true;
+    const pv = $("#picview"); if (pv && pv.classList.contains("on")) { pv.classList.remove("on"); return true; }
+    const sn = $("#sh-note.on.nte"); if (sn && noteCur) { noteMode = "view"; notePend = []; renderNote(); return true; }   // правка → назад к чтению
+    const s = $(".sheet.on"); if (s) { closeSheets(); return true; } if (state !== "idle") { interrupt(); return true; } return false; },
 };
 
 /* ---------- радио: играет внутри приложения (как на компьютере), а не на сайтах и в чужих приложениях ----------
@@ -660,7 +663,7 @@ async function complaintSend(note, who, withShot, via) {
   const shot = snap && bugPick ? await stitchShots([bugPick, snap]) : (bugPick || snap);    // снимок один — оба рядом
   const d = await reportSend(note, false, `жалоба (${via || "кнопкой"})`, { shot, who });
   S.complaints = (S.complaints || []).filter(c => Date.now() / 1000 - c.ts < 180 * 86400).slice(-49)
-    .concat([{ id: d.id, s: d.secret || "", base: d.base, note: note.slice(0, 200), ts: Math.round(Date.now() / 1000), status: "new", reply: "", fixed: "", shot: !!shot }]);
+    .concat([{ id: d.id, s: d.secret || "", base: d.base, note: note.slice(0, 2000), ts: Math.round(Date.now() / 1000), status: "new", reply: "", fixed: "", shot: !!shot }]);
   saveS(); if (shot) { bugSnap = null; bugPick = ""; }
   console.log(`🐞 Жалоба №${d.id} отправлена (${via || "кнопкой"})${shot ? " со снимком" : ""}`);
   return { id: d.id, shot: !!shot };
@@ -1144,7 +1147,7 @@ function mdAnswer(t) {         // ответ модели → HTML: экрани
     table = [];
   };
   let code = null;                                   // внутри ``` … ``` — код или схема (```mermaid — рисует rich.js)
-  for (const raw of lines) {
+  for (const [ri, raw] of lines.entries()) {
     const l = raw.trim(); let m;
     if (/^```/.test(l)) {
       if (code === null) { flushList(); flushTable(); code = { lang: l.slice(3).trim(), rows: [] }; }
@@ -1156,8 +1159,10 @@ function mdAnswer(t) {         // ответ модели → HTML: экрани
     flushTable();
     if ((m = l.match(/^#{1,4}\s+(.*)$/))) { flushList(); out.push(`<h4>${inl(m[1])}</h4>`); }
     else if ((m = l.match(/^(?:[-*•])\s+(.*)$/))) { if (list !== "ul") { flushList(); out.push("<ul>"); list = "ul"; } out.push(`<li>${inl(m[1])}</li>`); }
-    else if ((m = l.match(/^\d+[.)]\s+(.*)$/))) { if (list !== "ol") { flushList(); out.push("<ol>"); list = "ol"; } out.push(`<li>${inl(m[1])}</li>`); }
-    else if (!l) flushList();
+    // №275 (пакет 27.10): пункты через пустую строку шли каждый своим <ol> — «1, 1, 1»; теперь список продолжается,
+    // а начатый не с единицы — с нужного номера
+    else if ((m = l.match(/^(\d+)[.)]\s+(.*)$/))) { if (list !== "ol") { flushList(); out.push(+m[1] > 1 ? `<ol start="${+m[1]}">` : "<ol>"); list = "ol"; } out.push(`<li>${inl(m[2])}</li>`); }
+    else if (!l) { const nx = lines.slice(ri + 1).find(x => x.trim()); if (!(list && nx && /^\s*(?:[-*•]|\d+[.)])\s/.test(nx))) flushList(); }
     else { flushList(); out.push(`<p>${inl(l)}</p>`); }
   }
   if (code !== null) out.push(`<pre><code>${code.rows.join("\n")}</code></pre>`);   // ответ оборвался внутри блока
@@ -1838,7 +1843,8 @@ const RECO_NOTE = "\n\nСейчас просят посоветовать фил
 const POEM_ASK = /стих|стишок|поэм|сонет|рифм|частушк|четверостиш|в стихах|текст песни|(?:напиши|придумай|сочини) песн/i;
 const POEM_NOTE = "\n\nСейчас просят стихи. Ремесло: сначала про себя выбери размер (например, хорей или ямб) и подбери пары рифм по ударному слогу — совпадают ударная гласная и всё после неё (осень — просинь, листва — синева, дождя — шутя); глагольные рифмы («шла — пришла») и «рифмы» без совпадения ударения не годятся. Образы — простые, точные и живые, без нелепых сравнений. Количество строк — ровно как просили. Перед ответом проверь каждую пару рифм.";
 let creativeTurn = false;
-const llmTemp = () => { const t = +S.llm.temperature || 0.7; return creativeTurn ? Math.max(t, 0.95) : t; };
+// своя температура (не 0,7 по умолчанию) главнее творческой (№311, пакет 27.10: «задал 0,3, а стало 0,95»)
+const llmTemp = () => { const t = +S.llm.temperature || 0.7; return creativeTurn && t === 0.7 ? 0.95 : t; };
 function wantsThink(text) {
   if (S.llm.think === "on" || S.llm.think === "off") return S.llm.think === "on";
   const t = String(text || ""); return HARD_ASK.test(t) || t.length > 280;
@@ -1886,6 +1892,37 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     if (REASON_START.test(gbuf) && gbuf.length > 400 && (latin > 0.5 || /пользовател[ьяю](?![а-яё])/i.test(gbuf.slice(0, 300)))) return;   // одно рассуждение без ответа
     feedInner(gbuf);
   };
+  /* DeepSeek пишет вызовы функций своим языком DSML (№301, пакет 27.10: в ответе было видно «<｜DSML｜invoke
+     name="weather">…», погода не запрашивалась, а температура была выдуманной) — переводим в <tool_call>{json}, как
+     DSMLFilter в core/llm.py; начало тега, разрезанное между кусками, придерживаем. */
+  const CJK_RX = /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff00-\uff60]+/g;
+  const lastUser = [...(messages || [])].reverse().find(m => m && m.role === "user");
+  const lastTxt = lastUser ? (typeof lastUser.content === "string" ? lastUser.content : JSON.stringify(lastUser.content || "")) : "";
+  const noCjk = !/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]|китай|япон|корей|иероглиф|chinese|japanese|korean|mandarin|kanji|hanzi/i.test(lastTxt);
+  let dsBuf = "", dsIn = false;
+  // №348: и «<DSML calls>», «<DSML invoke …>» без «｜», все аргументы — одним JSON в parameter name="arguments"
+  const DO = "<\\s*[｜|]?\\s*DSML\\s*[｜|]?\\s*", DC = "<\\/\\s*[｜|]?\\s*DSML\\s*[｜|]?\\s*";
+  const DS_OPEN = new RegExp(DO + "(?:function_calls|tool_calls|calls|invoke)\\b"),
+    DS_STRAY = new RegExp(DC + "(?:function_calls|tool_calls|calls)\\s*>"),
+    DS_END = new RegExp(DC + "(?:function_calls|tool_calls|calls)\\s*>|" + DC + "invoke\\s*>(?![\\s\\S]*" + DO + "invoke)");
+  const dsmlCalls = (t) => [...t.matchAll(new RegExp(DO + 'invoke\\s+name="([^"]+)"\\s*>([\\s\\S]*?)(?:' + DC + "invoke\\s*>|$)", "g"))].map(([, name, body]) => {
+    const args = {}; for (const [, k, str, v] of body.matchAll(new RegExp(DO + 'parameter\\s+name="([^"]+)"(?:\\s+string="(true|false)")?\\s*>([\\s\\S]*?)' + DC + "parameter\\s*>", "g"))) {
+      let x = v.trim(); if (str === "false") { try { x = JSON.parse(x); } catch (e) { } } args[k] = x; }
+    const a2 = Object.keys(args).length === 1 && args.arguments && typeof args.arguments === "object" ? args.arguments : args;
+    return "<tool_call>" + JSON.stringify({ name, arguments: a2 }) + "</tool_call>"; }).join("");
+  const dsmlFeed = (t, last) => {
+    dsBuf += t; let o = "";
+    for (;;) {
+      if (dsIn) { const m = dsBuf.match(DS_END); if (!m) { if (last) { o += dsmlCalls(dsBuf) || dsBuf; dsBuf = ""; dsIn = false; } break; }
+        const e = m.index + m[0].length; o += dsmlCalls(dsBuf.slice(0, e)); dsBuf = dsBuf.slice(e); dsIn = false; continue; }
+      const sx = dsBuf.match(DS_STRAY), m = dsBuf.match(DS_OPEN);
+      if (sx && (!m || sx.index < m.index)) { o += dsBuf.slice(0, sx.index); dsBuf = dsBuf.slice(sx.index + sx[0].length); continue; }
+      if (m) { o += dsBuf.slice(0, m.index); dsBuf = dsBuf.slice(m.index); dsIn = true; continue; }
+      let keep = 0; if (!last) for (const tag of ["<｜DSML｜invoke", "<｜DSML｜function_calls", "<|DSML|invoke", "<|DSML|function_calls", "<DSML calls", "<DSML invoke", "</DSML calls>", "</DSML function_calls>", "</｜DSML｜function_calls>", "</|DSML|function_calls>"]) for (let k = 1; k < tag.length; k++) if (dsBuf.endsWith(tag.slice(0, k))) keep = Math.max(keep, k);
+      o += dsBuf.slice(0, dsBuf.length - keep); dsBuf = dsBuf.slice(dsBuf.length - keep); break;
+    }
+    return o;
+  };
   let thBuf = "";
   const feedInner = (piece, last) => {    // вырезаем <think>…</think> «думающих» моделей (тег может прийти по кусочкам)
     thBuf += piece;
@@ -1903,7 +1940,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     out = out.replace(/<\/think>/g, "").replace(/<\|[a-z_]+\|>/g, "");
     // вызов функции текстом (<tool_call>…</tool_call> — Qwen, GLM): не озвучиваем, разберём в конце
     // и голым JSON {"name": …, "arguments": …} посреди текста, часто с одиноким «</tool_call>» после — как ToolTagStripper в llm.py
-    tcBuf += out; out = "";
+    tcBuf += dsmlFeed(out, last); out = "";
     const emit = (t) => { if (afterCall) dropped += t; else out += t; };
     for (;;) {
       if (inTool) { const i = tcBuf.indexOf("</tool_call>"); if (i < 0) break; tcRaw.push(tcBuf.slice(0, i)); tcBuf = tcBuf.slice(i + 12); inTool = false; afterCall = true; continue; }
@@ -1930,6 +1967,9 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
       else if (!last && rest && "</tool_call>".startsWith(rest)) { tcBuf = rest; break; }
       tcBuf = rest;
     }
+    // №337 (пакет 27.10): «читает вперемешку на разных языках» — иероглифы посреди русского ответа (Gemma, Qwen) — прочь,
+    // как drop_cjk на компьютере; если человек сам спросил про китайский/японский или писал иероглифами — оставляем
+    if (out && noCjk) out = out.replace(CJK_RX, "");
     if (out) {
       text += out;
       // ответ начинается с «{» или «`» при включённых функциях — возможно, вызов голым JSON: не озвучиваем до конца
@@ -2585,7 +2625,14 @@ function remEdit(id) {
   if ($("#rm-note")) $("#rm-note").onclick = () => openNoteSoon(x.note);
   openSheet("#sh-rem");
 }
-window.cancelAlarm = (id, btn) => { D.alarmCancel(id); syncSoon(); tmrShow(); if (btn) btn.closest(".pill").innerHTML = "<span>Отменено</span>"; };
+/* Отменить — и все его отложенные копии (№339, пакет 27.10: «нажал „отложить на 10 минут“, потом „Отменить“ — стало
+   „Отменено“, а через 3 минуты всё равно сработало»: «Отложить» заводит новое напоминание <id>-s<время>). */
+function alarmCancelAll(id) {
+  let list = []; try { list = JSON.parse(D.alarms() || "[]"); } catch (e) { }
+  const base = String(id).replace(/-s\d+$/, "");
+  [id, ...list.map(x => x.id).filter(x => x !== id && (x === base || String(x).startsWith(base + "-s")))].forEach(x => D.alarmCancel(x));
+}
+window.cancelAlarm = (id, btn) => { alarmCancelAll(id); syncSoon(); tmrShow(); if (btn) btn.closest(".pill").innerHTML = "<span>Отменено</span>"; };
 /* ---------- таймер с обратным отсчётом (как у Алисы): на главном экране, а в шторке — тикающий отсчёт (TimerNote.java) ----------
    Таймеры — будильники вида timer (D.alarms); строки рисуются раз в секунду, список перечитывается раз в 2 с. */
 let TMRS = [], tmrIv = 0, tmrRead = 0;
@@ -2776,7 +2823,7 @@ async function quick(text) {
     } }
   // фонарик — сразу, без модели. №227 (24.10): «Лера выключи фонарик», «выключи фонарик на телефоне», «фонарик включён,
   // выключи его» уходили модели, та отвечала «Фонарик выключен.», не выключив. Имя (и ослышка имени) в начале не мешает.
-  if ((m = t.match(/^(?:(?!не[\s,])[а-яё-]+[\s,]+)?(?:(?:а\s+)?(?:фонарик|фонарь)\s+(?:(?:всё\s+|все\s+|ещё\s+|еще\s+)?(?:включ[её]н|горит|не\s+выключ[а-яё]*|светит)[\s,]+))?(?:(включи|зажги|выключи|отключи|погаси|убери)\s+(?:мне\s+)?(фонарик|фонарь|вспышку|его)|(посвети)(?:\s+мне)?(?:\s+фонариком)?|(?:фонарик|фонарь)\s+(включи|выключи|отключи|погаси))(?:\s+на\s+телефоне)?(?:,?\s+пожалуйста)?$/))
+  if ((m = t.match(/^(?:(?!не[\s,])[а-яё-]+[\s,]+)?(?:(?:а\s+)?(?:фонарик|фонарь)\s+(?:(?:всё\s+|все\s+|ещё\s+|еще\s+)?(?:включ[её]н|горит|не\s+выключ[а-яё]*|светит)[\s,]+))?(?:(включи|зажги|выключи|отключи|погаси|убери)[\s,]+(?:(?:мне|пожалуйста|быстро|скорее)[\s,]+)*(фонарик|фонарь|вспышку|его)|(посвети)(?:\s+мне)?(?:\s+фонариком)?|(?:фонарик|фонарь)\s+(включи|выключи|отключи|погаси))(?:\s+на\s+телефоне)?(?:,?\s+пожалуйста)?$/))
       && (m[2] !== "его" || /фонар/.test(t))) {
     const on = !/выключи|отключи|погаси|убери/.test(m[1] || m[4] || ""); return { say: devTorch(on) ? (on ? "Фонарик включён." : "Фонарик выключен.") : "Фонарик не нашёлся." };
   }
@@ -3370,7 +3417,11 @@ async function runTool(name, a) {
       // из разговора (16.10: «сколько времени» — «14:17» в 15:57)
       { const said = String(turnAsk || "").split("\n\nВложения:")[0];
         if (!a.repeat && /(^|[^а-яё])через\s+(?:\S+\s+){0,3}?(?:секунд|минут|час|полчаса|полтора)/i.test(said) && !/кажд/i.test(said)) {
-          const w = parseWhen(said); if (w && w.rel && (!at || isNaN(at) || Math.abs(w.at - at) > 90000)) at = w.at; } }
+          const w = parseWhen(said); if (w && w.rel && (!at || isNaN(at) || Math.abs(w.at - at) > 90000)) at = w.at; }
+        // №338 (пакет 27.10): «напоминание 7:40» в 7:16 — модель дала in_minutes=7 («7 мин 40 с»), и зазвенело в 7:23.
+        // Человек назвал часы и минуты — верим его словам, а не модели
+        else if (!a.repeat && /(^|[^\d:])([01]?\d|2[0-3])[:.][0-5]\d(?!\d)/.test(said) && !/кажд|по будн|по выходн/i.test(said)) {
+          const w = parseWhen(said); if (w && !w.rel && !w.repeat && (!at || isNaN(at) || Math.abs(w.at - at) > 90000)) at = w.at; } }
       if (!at || isNaN(at)) return "Ошибка: не понял время — спроси у пользователя, когда напомнить.";
       let moved = "";                                    // «на 17:00», а уже 17:26 — на завтра в 17:00, а не в прошлое
       if (at < new Date(Date.now() - 60000) && !a.repeat) { while (at < new Date()) at = new Date(at.getTime() + 864e5); moved = " Это время сегодня уже прошло — поэтому на завтра; так и скажи."; }
@@ -3400,7 +3451,7 @@ async function runTool(name, a) {
       // пустой запрос совпал бы с первым же напоминанием — ищем по словам, только если они есть
       const x = l.find(i => i.id === a.id) || (q.trim() ? l.find(i => i.title.toLowerCase().includes(q.trim())) : null);
       if (!x) return "Такого напоминания нет.";
-      D.alarmCancel(x.id); syncSoon(); return `Отменено: ${x.title}.`;
+      alarmCancelAll(x.id); syncSoon(); return `Отменено: ${x.title}.`;
     }
     case "mark_done": {
       const items = (Array.isArray(a.items) ? a.items : String(a.items || a.text || "").split(/\s*[;\n]\s*/)).map(x => String(x || "").trim()).filter(Boolean).slice(0, 12);
@@ -3852,12 +3903,25 @@ async function worldTime(city, prep, now) {
   const nm = String(prep ? city : z.name).replace(/(^|[ -])([а-яё])/g, (x, a, b) => a + b.toUpperCase());
   return prep ? `${prep[0].toUpperCase() + prep.slice(1)} ${nm} сейчас ${hm}${day} — ${rel}.` : `${nm}: сейчас ${hm}${day} — ${rel}.`;
 }
+/* Погода: open-meteo напрямую, а не открылся (№301, №304, пакет 27.10: «сервер долго не отвечает» три раза подряд —
+   у провайдера или в слабой сети) — тем же адресом через сервер Dewiar, как поиск. */
+async function meteoGet(url) {
+  try {
+    const r = await http("GET", url, { timeout: 9000 });
+    if (r.status === 200) return JSON.parse(r.body || "{}");
+    throw new Error("open-meteo ответил " + r.status);
+  } catch (e) {
+    let d; try { d = await dewiarWeb("fetch", url); } catch (x) { throw e; }
+    plog("info", "погода — через сервер Dewiar: " + (e.message || e));
+    return JSON.parse(d.text || "{}");
+  }
+}
 async function weather(city, days) {
   if (!city) return "Ошибка: спроси, в каком городе.";
-  const g = JSON.parse((await http("GET", "https://geocoding-api.open-meteo.com/v1/search?count=1&language=ru&name=" + encodeURIComponent(city), { timeout: 12000 })).body || "{}");
+  const g = await meteoGet("https://geocoding-api.open-meteo.com/v1/search?count=1&language=ru&name=" + encodeURIComponent(city));
   const p = (g.results || [])[0]; if (!p) return `Город «${city}» не нашёлся.`;
   const u = `https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=${Math.min(7, Math.max(1, days))}`;
-  const w = JSON.parse((await http("GET", u, { timeout: 12000 })).body || "{}"), c = w.current || {}, d = w.daily || {};
+  const w = await meteoGet(u), c = w.current || {}, d = w.daily || {};
   const lines = [`${p.name}: сейчас ${Math.round(c.temperature_2m)}°, ощущается как ${Math.round(c.apparent_temperature)}°, ${WMO[c.weather_code] || ""}, ветер ${Math.round(c.wind_speed_10m)} км/ч.`];
   const dayName = (t) => { const k = Math.round((new Date(t + "T12:00") - new Date(isoLocal(new Date()).slice(0, 10) + "T12:00")) / 864e5); return k === 0 ? " (сегодня)" : k === 1 ? " (завтра)" : k === 2 ? " (послезавтра)" : ""; };
   (d.time || []).forEach((t, i) => lines.push(`${t}${dayName(t)}: ${Math.round(d.temperature_2m_min[i])}…${Math.round(d.temperature_2m_max[i])}°, ${WMO[d.weather_code[i]] || ""}, осадки ${d.precipitation_probability_max[i] != null ? d.precipitation_probability_max[i] : 0}%.`));
@@ -4055,7 +4119,7 @@ function noteDelete(id, ask) {
   if (ask && !confirm(`Удалить заметку «${n.title}»${(n.att || []).length ? " вместе с вложениями" : ""}?`)) return;
   const keep = (n.att || []).map(a => [a.id, noteAttGet(a.id)]);
   (n.att || []).forEach(a => fileSave("natt-" + a.id, ""));
-  saveNotes(notes().filter(x => x.id !== id)); if (noteCur === id) closeSheets(); renderDay();
+  saveNotes(notes().filter(x => x.id !== id)); if (noteCur === id) { closeSheets(); renderDay(); openSheet("#sh-day"); } else renderDay();   // №342: не на главный экран
   if (ask) undoBar("Заметка удалена", () => {
     keep.forEach(([aid, data]) => fileSave("natt-" + aid, data));
     const all = notes(); if (!all.some(x => x.id === n.id)) { all.push(n); saveNotes(all); }
@@ -4074,19 +4138,142 @@ async function openNoteSoon(id) {
   if (!notes().some(x => x.id === id)) { toast("Получаю заметку с вложениями…", 2500); try { await syncRun(true); } catch (e) { } }
   if (notes().some(x => x.id === id)) openNote(id); else toast("Заметка с вложениями ещё не пришла — проверьте, что компьютер включён", 4000);
 }
-function openNote(id) { noteCur = id || ""; notePend = []; renderNote(); openSheet("#sh-note"); if (!id) setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 300); }
+/* Заметка на телефоне (владелец 27.10: «заметки — одна из важнейших частей Лиры… открывается только для правки в
+   сыром Markdown — неудобно и некрасиво; при выборе папки — странные серые блоки»; №321, №342). Открытая заметка —
+   сначала ЧТЕНИЕ: заголовок, папка и дата, текст оформлен (заголовки, жирный, списки, дела — галочкой можно отметить
+   прямо здесь, цитаты, ссылки, таблицы, схемы), фото крупными плитками. «Править» — тот же лист в правке: заголовок,
+   текст с мини-панелью (заголовок, жирный, пункт, дело), папка — чипами (свой выпадающий список WebView рисовал серые
+   плашки), вложения с «×». Новая заметка — сразу правка. */
+let noteMode = "view";
+function openNote(id) { noteCur = id || ""; notePend = []; noteMode = id ? "view" : "edit"; renderNote(); openSheet("#sh-note"); if (!id) setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 300); }
+const NT_IC = {
+  edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>',
+  share: '<svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
+  del: '<svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>',
+  fold: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>',
+  photo: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4.5 17 5-4.5 4 3.5 2.5-2 3.5 3"/></svg>',
+  file: '<svg viewBox="0 0 24 24"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+};
+/* Текст заметки → HTML для чтения. Дела «- [ ]» — кнопками с номером строки (data-ln): нажали — галочка в тексте. */
+function noteHtml(t) {
+  const lines = String(t || "").split("\n"), out = [];
+  let list = "", table = [], code = null, quote = [];
+  const inl = (x) => esc(x).replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, a, u) => `<a href="${u.replace(/"/g, "%22")}" data-url="${u.replace(/"/g, "%22")}">${a}</a>`)
+    .replace(/(^|[\s(«])(https?:\/\/[^\s<»)]+)/g, (m, a, u) => `${a}<a href="${u}" data-url="${u}">${u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}</a>`)
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/__([^_]+)__/g, "<b>$1</b>").replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<i>$2</i>")
+    .replace(/~~([^~]+)~~/g, "<s>$1</s>").replace(/==([^=]+)==/g, "<mark>$1</mark>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  const flushList = () => { if (list) { out.push(`</${list}>`); list = ""; } };
+  const flushQuote = () => { if (quote.length) { out.push(`<blockquote>${quote.map(inl).join("<br>")}</blockquote>`); quote = []; } };
+  const flushTable = () => {
+    if (!table.length) return;
+    const rows = table.filter(r => !/^\|?\s*:?-{2,}/.test(r)).map(r => r.replace(/^\||\|$/g, "").split("|").map(c => inl(c.trim())));
+    out.push(`<div class="tbl"><table>${rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join("")}</tr>`).join("")}</table></div>`);
+    table = [];
+  };
+  lines.forEach((raw, ln) => {
+    const l = raw.trim(); let m;
+    if (/^```/.test(l)) {
+      if (code === null) { flushList(); flushTable(); flushQuote(); code = { lang: l.slice(3).trim(), rows: [] }; }
+      else { out.push(`<pre><code class="language-${code.lang.replace(/[^\w-]/g, "")}">${esc(code.rows.join("\n"))}</code></pre>`); code = null; }
+      return;
+    }
+    if (code !== null) { code.rows.push(raw); return; }
+    if (/^\|.*\|$/.test(l)) { flushList(); flushQuote(); table.push(l); return; }
+    flushTable();
+    if ((m = l.match(/^>\s?(.*)$/))) { flushList(); quote.push(m[1]); return; }
+    flushQuote();
+    if ((m = l.match(/^(#{1,6})\s+(.*)$/))) { flushList(); const h = Math.min(4, m[1].length + 1); out.push(`<h${h}>${inl(m[2])}</h${h}>`); }
+    else if (/^(-{3,}|\*{3,}|_{3,})$/.test(l)) { flushList(); out.push("<hr>"); }
+    else if ((m = l.match(/^[-*+]\s+\[([ xX])\]\s*(.*)$/))) {
+      if (list !== "ul class=\"tasks\"") { flushList(); out.push('<ul class="tasks">'); list = "ul class=\"tasks\""; }
+      const done = m[1] !== " ";
+      out.push(`<li class="${done ? "done" : ""}"><button class="tk" data-ln="${ln}" aria-pressed="${done}" aria-label="${done ? "Сделано" : "Отметить"}"></button><span>${inl(m[2])}</span></li>`);
+    }
+    else if ((m = l.match(/^[-*+•]\s+(.*)$/))) { if (list !== "ul") { flushList(); out.push("<ul>"); list = "ul"; } out.push(`<li>${inl(m[1])}</li>`); }
+    else if ((m = l.match(/^(\d+)[.)]\s+(.*)$/))) { if (list !== "ol") { flushList(); out.push(+m[1] > 1 ? `<ol start="${+m[1]}">` : "<ol>"); list = "ol"; } out.push(`<li>${inl(m[2])}</li>`); }
+    else if (!l) { if (list && lines.slice(ln + 1).find(x => x.trim()) && /^\s*(?:[-*+•]|\d+[.)])\s/.test(lines.slice(ln + 1).find(x => x.trim()))) return; flushList(); }
+    else { flushList(); out.push(`<p>${inl(l)}</p>`); }
+  });
+  if (code !== null) out.push(`<pre><code>${esc(code.rows.join("\n"))}</code></pre>`);
+  flushList(); flushTable(); flushQuote();
+  return out.join("") || '<p class="ntempty">Пустая заметка — нажмите «Править», чтобы написать.</p>';
+}
+const ntDate = (ms) => { const d = new Date(+ms || Date.now()), now = new Date(), t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (d.toDateString() === now.toDateString()) return "сегодня в " + t;
+  const y = new Date(now); y.setDate(now.getDate() - 1); if (d.toDateString() === y.toDateString()) return "вчера в " + t;
+  return `${d.getDate()} ${MON[d.getMonth()]}${d.getFullYear() !== now.getFullYear() ? " " + d.getFullYear() : ""}, ${t}`; };
 function renderNote() {
   const n = noteCur ? notes().find(x => x.id === noteCur) : null, att = (n ? n.att || [] : []).concat(notePend);
-  $("#nt-h").textContent = n ? "Заметка" : "Новая заметка";
-  $("#note-body").innerHTML = `<input id="nt-title" placeholder="Заголовок" maxlength="120" value="${esc(n ? n.title : "")}">
-    <textarea id="nt-text" placeholder="Текст заметки…">${esc(n ? noteShown(n.text) : "")}</textarea>
-    <label class="ntfold"><span>Папка</span><input id="nt-folder" list="nt-folders" placeholder="без папки" maxlength="40" value="${esc(n ? n.folder || "" : ntFolder)}"><datalist id="nt-folders">${noteFolders().map(f => `<option value="${esc(f)}">`).join("")}</datalist></label>
-    <div class="ntatt">${att.map(a => a.type === "image" ? `<button class="ntimg" data-id="${esc(a.id)}"><img src="${a.data || noteAttGet(a.id)}" alt="${esc(a.name)}"></button>`
-      : `<button class="ntf" data-id="${esc(a.id)}">📎 ${esc(a.name)}<small>${fsize(a.size)}</small></button>`).join("")}</div>
-    <div class="ntadd"><label class="btn"><input type="file" id="nt-photo" accept="image/*" multiple hidden>Добавить фото</label><label class="btn"><input type="file" id="nt-file" multiple hidden>Добавить файл</label></div>
-    <div class="row2"><button class="btn p" id="nt-save" style="flex:1">Сохранить</button>${n ? `<button class="btn" id="nt-share">Поделиться</button><button class="btn" id="nt-del">Удалить</button>` : ""}</div>`;
+  if (!n) noteMode = "edit";
+  const sh = $("#sh-note"); sh.classList.toggle("ntv", noteMode === "view"); sh.classList.toggle("nte", noteMode === "edit");
+  const attHtml = (edit) => att.map(a => a.type === "image"
+      ? `<div class="ntimg"><button class="ntopen" data-id="${esc(a.id)}" aria-label="Открыть фото ${esc(a.name)}"><img src="${a.data || noteAttGet(a.id)}" alt=""></button>${edit ? `<button class="ntrm" data-rm="${esc(a.id)}" aria-label="Убрать фото">${NT_IC.x}</button>` : ""}</div>`
+      : `<div class="ntfile"><button class="ntopen" data-id="${esc(a.id)}">${NT_IC.file}<span>${esc(a.name)}</span><small>${fsize(a.size)}</small></button>${edit ? `<button class="ntrm" data-rm="${esc(a.id)}" aria-label="Убрать файл">${NT_IC.x}</button>` : ""}</div>`).join("");
   const view = (a) => a.type === "image" ? imgView(a.data || noteAttGet(a.id)) : noteFileSave(a);
-  $$("#note-body .ntimg, #note-body .ntf").forEach(b => b.onclick = () => { const a = att.find(x => x.id === b.dataset.id); if (a) view(a); });
+  if (noteMode === "view") {
+    $("#nt-h").textContent = n.title || "Заметка";
+    $("#note-body").innerHTML = `<div class="ntmeta">${n.folder ? `<button class="ntchip" id="nt-gofold">${NT_IC.fold}${esc(n.folder)}</button>` : ""}<span>${esc(ntDate(n.time))}</span></div>
+      <article class="ntread" id="nt-read">${noteHtml(noteShown(n.text))}</article>
+      ${att.length ? `<div class="ntatt big">${attHtml(false)}</div>` : ""}
+      <div class="ntbar"><button class="btn p" id="nt-edit">${NT_IC.edit}Править</button><button class="btn ic" id="nt-share" aria-label="Поделиться" title="Поделиться">${NT_IC.share}</button><button class="btn ic dl" id="nt-del" aria-label="Удалить" title="Удалить">${NT_IC.del}</button></div>`;
+    if (window.DewiarRich) DewiarRich.diagrams($("#nt-read"));
+    $$("#nt-read a[data-url]").forEach(a => a.onclick = (e) => { e.preventDefault(); D.openUrl(a.dataset.url); });
+    $$("#nt-read .tk").forEach(b => b.onclick = () => {                       // дело отметили прямо в чтении
+      const all = notes(), x = all.find(y => y.id === n.id); if (!x) return;
+      const shown = noteShown(x.text).split("\n"), i = +b.dataset.ln, line = shown[i] || "";
+      shown[i] = /\[[ ]\]/.test(line) ? line.replace("[ ]", "[x]") : line.replace(/\[[xX]\]/, "[ ]");
+      const head = String(x.text || "").match(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/), ln = noteLinks(x.text);
+      x.text = (head ? head[0] : "") + shown.join("\n") + (ln.length ? "\n\n" + ln.join("\n") : ""); x.time = Date.now(); saveNotes(all);
+      const li = b.closest("li"), on = !li.classList.contains("done"); li.classList.toggle("done", on); b.setAttribute("aria-pressed", on);
+    });
+    $$("#note-body .ntopen").forEach(b => b.onclick = () => { const a = att.find(x => x.id === b.dataset.id); if (a) view(a); });
+    $("#nt-edit").onclick = () => { noteMode = "edit"; renderNote(); setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 200); };
+    $("#nt-del").onclick = () => noteDelete(n.id, true);
+    $("#nt-share").onclick = () => D.share((n.title ? n.title + "\n\n" : "") + noteShown(n.text));
+    if ($("#nt-gofold")) $("#nt-gofold").onclick = () => { ntFolder = n.folder; closeSheets(); renderDay(); openSheet("#sh-day"); };
+    return;
+  }
+  $("#nt-h").textContent = n ? "Правка" : "Новая заметка";
+  const folds = noteFolders(), cur = n ? folderName(n.folder || "") : folderName(ntFolder || "");
+  $("#note-body").innerHTML = `<input id="nt-title" placeholder="Заголовок" maxlength="120" value="${esc(n ? n.title : "")}" aria-label="Заголовок">
+    <div class="ntmd" role="toolbar" aria-label="Оформление"><button data-md="h">Заголовок</button><button data-md="b"><b>Ж</b></button><button data-md="li">• Пункт</button><button data-md="task">☐ Дело</button></div>
+    <textarea id="nt-text" placeholder="Текст заметки…" aria-label="Текст заметки">${esc(n ? noteShown(n.text) : "")}</textarea>
+    <div class="ntlbl">${NT_IC.fold}Папка</div>
+    <div class="ntfolds pick" id="nt-folds" role="radiogroup" aria-label="Папка">${["", ...folds.filter(f => f !== cur), ...(cur ? [cur] : [])].sort((a, b) => a === "" ? -1 : b === "" ? 1 : 0)
+      .map(f => `<button role="radio" data-f="${esc(f)}" class="${f === cur ? "on" : ""}" aria-checked="${f === cur}">${f ? esc(f) : "Без папки"}</button>`).join("")}<button class="add" id="nt-newf">${NT_IC.plus}Новая</button></div>
+    <input id="nt-folder" type="hidden" value="${esc(cur)}">
+    <div class="ntatt">${attHtml(true)}</div>
+    <div class="ntadd"><label class="btn">${NT_IC.photo}<input type="file" id="nt-photo" accept="image/*" multiple hidden>Фото</label><label class="btn">${NT_IC.file}<input type="file" id="nt-file" multiple hidden>Файл</label></div>
+    <div class="ntbar">${n ? `<button class="btn" id="nt-cancel">Отмена</button>` : ""}<button class="btn p" id="nt-save">Сохранить</button></div>`;
+  const ta = $("#nt-text"), grow = () => { ta.style.height = "auto"; ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, 180), innerHeight * 0.55) + "px"; };
+  ta.addEventListener("input", grow); setTimeout(grow, 0);
+  $$("#nt-folds [data-f]").forEach(b => b.onclick = () => { $$("#nt-folds [data-f]").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); $("#nt-folder").value = b.dataset.f; });
+  $("#nt-newf").onclick = () => {
+    const box = $("#nt-folds"); if ($("#nt-fname")) { $("#nt-fname").focus(); return; }
+    const i = document.createElement("input"); i.id = "nt-fname"; i.placeholder = "Название папки"; i.maxLength = 40; box.insertBefore(i, $("#nt-newf")); i.focus();
+    let took = false;
+    const take = () => { if (took || !i.isConnected) return; took = true; const v = folderName(i.value); if (!v) { i.remove(); return; }
+      $$("#nt-folds [data-f]").forEach(x => { x.classList.remove("on"); x.setAttribute("aria-checked", false); });
+      const b = document.createElement("button"); b.setAttribute("role", "radio"); b.dataset.f = v; b.textContent = v; b.className = "on"; b.setAttribute("aria-checked", true);
+      b.onclick = () => { $$("#nt-folds [data-f]").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); $("#nt-folder").value = v; };
+      i.replaceWith(b); $("#nt-folder").value = v; };
+    i.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); take(); } }; i.onblur = take;
+  };
+  $$(".ntmd button").forEach(b => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => {
+    const v = ta.value, a = ta.selectionStart, z = ta.selectionEnd, k = b.dataset.md;
+    if (k === "b") { const sel = v.slice(a, z) || "жирный"; ta.setRangeText(`**${sel}**`, a, z, "end"); }
+    else { const ls = v.lastIndexOf("\n", a - 1) + 1, pre = { h: "## ", li: "- ", task: "- [ ] " }[k], line = v.slice(ls);
+      if (line.startsWith(pre)) ta.setRangeText("", ls, ls + pre.length, "end"); else ta.setRangeText(pre, ls, ls, "end"); }
+    ta.focus(); grow(); }; });
+  $$("#note-body .ntopen").forEach(b => b.onclick = () => { const a = att.find(x => x.id === b.dataset.id); if (a) view(a); });
+  $$("#note-body .ntrm").forEach(b => b.onclick = () => {
+    const id = b.dataset.rm; keepTyped();
+    if (notePend.some(x => x.id === id)) notePend = notePend.filter(x => x.id !== id);
+    else if (n) { const all = notes(), x = all.find(y => y.id === n.id); if (x) { x.att = (x.att || []).filter(a => a.id !== id); x.time = Date.now(); saveNotes(all); fileSave("natt-" + id, ""); } }
+    renderNote(); restoreTyped();
+  });
   const add = async (files, photo) => {
     for (const f of Array.from(files || [])) {
       if (f.size > 10 * 1024 * 1024) { toast(`«${f.name}» больше 10 МБ`); continue; }
@@ -4100,21 +4287,20 @@ function renderNote() {
     keepTyped(); renderNote(); restoreTyped();
   };
   let typed = null; const keepTyped = () => { typed = { t: $("#nt-title").value, x: $("#nt-text").value, f: $("#nt-folder").value }; };
-  const restoreTyped = () => { if (typed) { $("#nt-title").value = typed.t; $("#nt-text").value = typed.x; $("#nt-folder").value = typed.f; } };
+  const restoreTyped = () => { if (typed) { $("#nt-title").value = typed.t; $("#nt-text").value = typed.x; $("#nt-folder").value = typed.f;
+    $$("#nt-folds [data-f]").forEach(x => { x.classList.toggle("on", x.dataset.f === typed.f); x.setAttribute("aria-checked", x.dataset.f === typed.f); }); grow(); } };
   $("#nt-photo").onchange = (e) => add(e.target.files, true);
   $("#nt-file").onchange = (e) => add(e.target.files, false);
+  if ($("#nt-cancel")) $("#nt-cancel").onclick = () => { noteMode = "view"; notePend = []; renderNote(); };
   $("#nt-save").onclick = () => {
+    if ($("#nt-fname")) $("#nt-fname").blur();
     const title = $("#nt-title").value.trim(), text = $("#nt-text").value.trim();
     if (!title && !text && !notePend.length) { toast("Пустая заметка"); return; }
-    const all = notes(), t0 = title || text.split(/\n/)[0].slice(0, 60) || "Фото", fold = folderName($("#nt-folder").value);
+    const all = notes(), t0 = title || text.split(/\n/)[0].replace(/^#+\s*|^[-*]\s+(\[[ xX]\]\s*)?/, "").slice(0, 60) || "Фото", fold = folderName($("#nt-folder").value);
     if (n) { const x = all.find(y => y.id === n.id), ln = noteLinks(x && x.text); if (x) { x.title = t0; x.text = text + (ln.length ? "\n\n" + ln.join("\n") : ""); x.time = Date.now(); x.folder = fold; } }
-    else all.push(Object.assign({ id: "n" + Date.now(), title: t0, text, time: Date.now() }, notePend.length ? { att: noteAttSave(notePend.map(p => p.src)) } : {}, fold ? { folder: fold } : {}));
-    notePend = []; saveNotes(all); closeSheets(); renderDay(); openSheet("#sh-day"); toast("Заметка сохранена");
+    else { const id = "n" + Date.now(); all.push(Object.assign({ id, title: t0, text, time: Date.now() }, notePend.length ? { att: noteAttSave(notePend.map(p => p.src)) } : {}, fold ? { folder: fold } : {})); noteCur = id; }
+    notePend = []; saveNotes(all); renderDay(); noteMode = "view"; renderNote(); toast("Заметка сохранена");
   };
-  if (n) {
-    $("#nt-del").onclick = () => noteDelete(n.id, true);
-    $("#nt-share").onclick = () => D.share((n.title ? n.title + "\n\n" : "") + noteShown(n.text));
-  }
 }
 function noteFileSave(a) {
   const d = noteAttGet(a.id), m = /^data:([^;,]*)(?:;[^;,=]+=[^;,]*)*(;base64)?,(.*)$/s.exec(d);
@@ -4123,7 +4309,14 @@ function noteFileSave(a) {
   const where = D.saveDownloadB64 ? D.saveDownloadB64(a.name, m[1] || "application/octet-stream", b64) : "";
   toast(where ? "Сохранено: " + where : "Не получилось сохранить", 3500);
 }
-function imgView(src) { const v = $("#imgview"); $("img", v).src = src; v.classList.add("on"); v.onclick = () => { v.classList.remove("on"); $("img", v).src = ""; }; }
+/* Фото на весь экран (владелец 27.10: «нажал на фото — открылось на весь экран, и назад вернуться никак»): «×» в углу,
+   нажатие по фото и кнопка «Назад» телефона закрывают просмотр (N.back), а лист заметки остаётся открытым. */
+function imgView(src) {
+  const v = $("#imgview"); $("img", v).src = src; v.classList.add("on");
+  if (!$(".ivx", v)) { const x = document.createElement("button"); x.className = "ivx"; x.setAttribute("aria-label", "Закрыть фото"); x.innerHTML = NT_IC.x; v.appendChild(x); }
+  v.onclick = () => imgViewClose();
+}
+function imgViewClose() { const v = $("#imgview"); if (!v.classList.contains("on")) return false; v.classList.remove("on"); $("img", v).src = ""; return true; }
 const saveNotes = (n) => { fileSave("notes.json", JSON.stringify(n)); syncSoon(); if (n.some(x => (x.att || []).some(a => !a.pc))) noteAttSoon(); };
 /* Фото и файлы заметок — на свои компьютеры (отзыв 11.10). Тем же зашифрованным каналом, что ключ умного дома: файл
    шифруется своим ключом и кладётся в облако (/close/file себе), ключ к нему — в конверте /close/self {natt}, который
@@ -5090,7 +5283,11 @@ window.addEventListener("message", (e) => { if (!e.data || e.source !== $("#game
   else if (e.data.arcade === "full") gameFull(!!e.data.on);
   else if (e.data.arcade === "log") plog("warn", "🎮 игра: " + String(e.data.text || "").slice(0, 300)); });   // сбой или медленно — в журнал
 $("#b-play").onclick = () => playOpen("");
-function featApply() { $("#b-play").hidden = !feat("games"); document.body.classList.toggle("has-play", feat("games")); if (!feat("games") && gameOn()) gameClose(false); }
+/* «Возможности» (владелец 27.10: «выключил „Рядом“ и „Встречи“, а сердечко осталось — логика запутанная»): сердечко —
+   это «Близкие» целиком (переписка и звонки), «Рядом» и «Встречи» — лишь вкладки внутри. Теперь у «Близких» свой
+   переключатель (прячет сердечко), а вкладки — под ним, отступом. */
+function featApply() { $("#b-close").hidden = !feat("close"); if (!feat("close") && $("#sh-close.on")) closeSheets();
+  $("#b-play").hidden = !feat("games"); document.body.classList.toggle("has-play", feat("games")); if (!feat("games") && gameOn()) gameClose(false); }
 featApply();
 /* Объявления для всех (24.10, владелец: «чтобы я для всех мог опубликовать, а у всех это на экранах всплыло»): кабинет →
    «Новости», здесь — ?p=/news без ключа раз в полчаса, при запуске и из уведомления службы «Близких» (CloseLive). Новое
@@ -5407,8 +5604,10 @@ function renderSettings() {
     const fsw = (id, k, t, x) => `<div class="sw" style="margin-top:8px"><div>${t}<small>${x}</small></div><label class="tg"><input type="checkbox" id="${id}" data-feat="${k}" ${feat(k) ? "checked" : ""}><i></i></label></div>`;
     h.push(`<h3>Возможности</h3><div class="card"><p class="hint" style="margin:0 0 4px">Включите только то, чем пользуетесь, — остальное не будет мешать. Выключенное ничего не теряет.</p>
       ${fsw("ft-games", "games", "Досуг — милые игры", "Сказки, головоломки, «Каляка», реверси против Лиры, аркады и «Выше облаков» с управлением наклоном; значок с джойстиком вверху или «Лира, давай поиграем»")}
-      ${fsw("ft-near", "near", "Рядом", "«Близкие» → «Рядом»: где близкие, если они сами делятся местом")}
-      ${fsw("ft-meet", "meet", "Встречи", "«Близкие» → «Встречи»: знакомства с теми, кто рядом")}</div>`);
+      ${fsw("ft-close", "close", "Близкие — сердечко вверху", "Переписка и звонки с родными и друзьями, их помощники. Выключите — сердечко пропадёт; переписка сохранится")}
+      <div class="fsub${feat("close") ? "" : " off"}" id="ft-sub"><small>Вкладки внутри «Близких»</small>
+      ${fsw("ft-near", "near", "Рядом", "Где близкие, если они сами делятся местом")}
+      ${fsw("ft-meet", "meet", "Встречи", "Знакомства с теми, кто рядом")}</div></div>`);
     liteApply();
     h.push(`<h3>Лёгкий режим</h3><div class="card"><label class="f" style="margin-top:0"><span>Для слабых телефонов и экономии батареи</span><select id="ap-lite">${opt([["auto", "Сам, когда нужно"], ["on", "Всегда"], ["off", "Никогда"]], S.lite || "auto")}</select></label>
       <p class="hint" id="lite-now" style="margin:6px 2px 0">${liteOn() ? `Сейчас включён: ${esc(liteWhyNow)}.` : "Сейчас выключен."} Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут.</p></div>`);
@@ -5477,6 +5676,7 @@ function wireSettings(info) {
   if (g("ap-fx")) g("ap-fx").onchange = () => { S.voice_fx = g("ap-fx").value; saveS(); applyLook(); };
   if (g("ap-tilt")) g("ap-tilt").onchange = () => { S.tilt = g("ap-tilt").checked; saveS(); tiltSync(); };
   $$("[data-feat]").forEach(x => x.onchange = () => { S.features = Object.assign({}, S.features || {}, { [x.dataset.feat]: x.checked }); saveS(); featApply();
+    if (x.dataset.feat === "close" && g("ft-sub")) g("ft-sub").classList.toggle("off", !x.checked);
     toast(x.checked ? "Включено" : "Выключено — включить можно здесь же", 2200); });
   if (g("ap-lite")) g("ap-lite").onchange = () => { S.lite = g("ap-lite").value; saveS(); liteApply();
     g("lite-now").textContent = (liteOn() ? `Сейчас включён: ${liteWhyNow}.` : "Сейчас выключен.") + " Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут."; };
@@ -5646,6 +5846,7 @@ function wireSettings(info) {
     $$("#wg-look button").forEach(b => b.onclick = () => { prefSet("widget_look", b.dataset.l); renderSettings(); toast("Значок на экране обновится сам"); });
     if (g("wg-pin")) g("wg-pin").onclick = () => { let ok = false; try { ok = D.widgetPin(); } catch (e) { }
       const r = g("wg-res"); r.className = "res" + (ok ? " ok" : ""); r.textContent = ok ? "Подтвердите на экране — и значок появится на рабочем столе" : "Добавьте вручную: долгое нажатие на рабочем столе → «Виджеты» → Dewiar"; };
+    if (g("sy-pair")) g("sy-pair").onclick = () => syncPair(g("sy-pair-res"));
     if (g("sy-now")) g("sy-now").onclick = async () => { const r = g("sy-res"); r.className = "res"; r.textContent = "синхронизирую…"; await syncRun(true); renderSettings(); };
     if (g("sy-on")) g("sy-on").onchange = () => { S.sync.on = g("sy-on").checked; saveS(); if (S.sync.on) syncSoon(); renderSettings(); };
     if (g("sy-e2e")) g("sy-e2e").onchange = () => {
@@ -6013,7 +6214,22 @@ function syncCard() {
     <div class="res ${s.ok === false ? "bad" : s.ok ? "ok" : ""}" id="sy-res">${s.ok === false ? esc(s.error) : t ? `Синхронизировано в ${pad(t.getHours())}:${pad(t.getMinutes())}` + (devs.length ? ` · ещё устройства: ${devs.join(", ")}` : "") : S.sync.on ? "первая синхронизация — в течение минуты" : "выключено"}</div>
     <div class="sw" style="margin-top:8px"><div>Шифровать на устройстве<small class="hint" style="display:block;margin:2px 0 0">${S.sync.e2e && syncKeyGet() ? "Включено: в облаке — только шифротекст, ключ — у ваших устройств." : e2eWaiting() ? "Ваши данные зашифрованы на другом устройстве — жду ключ от него (оно должно быть на связи)." : "Заметки, дела, деньги и память уходят в облако зашифрованными — сервер их не прочитает. Включите на одном устройстве — остальные получат ключ сами."}</small></div>
     <label class="tg"><input type="checkbox" id="sy-e2e" ${S.sync.e2e && syncKeyGet() ? "checked" : ""} ${S.sync.on ? "" : "disabled"}><i></i></label></div>
-    <button class="btn w" id="sy-now" style="margin-top:6px">Синхронизировать сейчас</button>`;
+    <button class="btn w" id="sy-now" style="margin-top:6px">Синхронизировать сейчас</button>
+    ${loggedIn() ? `<p class="hint" style="margin:10px 2px 0">Другое устройство: войдите на нём тем же аккаунтом dewiar.pro — данные станут общими сами.</p>`
+      : `<button class="btn w" id="sy-pair" style="margin-top:8px">Добавить устройство — код для компьютера или другого телефона</button><div class="res" id="sy-pair-res"></div>`}`;
+}
+/* №329 (пакет 27.10): «невозможно найти, где создаётся код синхронизации» — кнопка была только в карточке баланса и
+   пропадала, когда мозг свой. Теперь — и здесь, в «Синхронизации», с тем ключом, которым идёт синхронизация. */
+async function syncPair(r) {
+  const c = syncCred(); if (!c) return;
+  r.className = "res"; r.textContent = "получаю код…";
+  try {
+    const x = await http("POST", c.base + "?p=/pair/new", { headers: { Authorization: "Bearer " + c.token, "Content-Type": "application/json" }, body: {}, timeout: 40000 });
+    let d = {}; try { d = JSON.parse(x.body || "{}"); } catch (e) { }
+    if (x.status >= 400) throw new Error((d.error && d.error.message) || ("облако ответило " + x.status));
+    if (!d.code) { r.textContent = d.text || "Код не выдан."; return; }
+    r.className = "res ok"; r.innerHTML = `Код: <b style="font-size:22px;letter-spacing:3px">${esc(d.code.slice(0, 3) + " " + d.code.slice(3))}</b><br>На компьютере: студия → «Мозг» → «Код или ключ Dewiar»; на телефоне: «Мозг» → «Код или ключ Dewiar». Действует 10 минут.`;
+  } catch (e) { r.className = "res bad"; r.textContent = netErr(e.message || e); }
 }
 let syncTick = 0;
 setInterval(() => { if (!document.hidden && (!liteOn() || ++syncTick % 3 === 0)) syncRun(false); }, 60000);   // лёгкий режим — раз в 3 минуты

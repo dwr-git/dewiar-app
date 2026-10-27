@@ -69,6 +69,11 @@ async def run():
     R["next"] = await say("Следующий трек")
     R["further2"] = await say("дальше")
     R["explicit"] = await say("Поставь джаз в Яндекс Музыке")
+    # №341 (пакет 27.10): пока открыта Яндекс Музыка, «давай / хочу / можно …» без музыки — не поиск в ней
+    R["plan"] = await say("Лира, давай заполним расписание преподавателя")
+    R["want"] = await say("хочу узнать курс доллара")
+    R["radio"] = await say("включи радио")
+    R["wantjazz"] = await say("давай джаз")
     await call("settings_save", patch={"music": {"service": "youtube"}})
     R["yt"] = await say("Включи спокойную музыку")
     rd.cancel()
@@ -79,6 +84,10 @@ finally:
     core.terminate(); core.wait()
 
 urls = lambda d: " ".join(" ".join(map(str, x)) for x in d)
+ok("yandexmusic://" not in urls(R["plan"][1]) and "yandexmusic://" not in urls(R["want"][1]),
+   f"«давай заполним расписание», «хочу узнать курс» — не в Яндекс Музыку: {urls(R['plan'][1])[:80]} {urls(R['want'][1])[:80]}")
+ok("yandexmusic://" not in urls(R["radio"][1]), f"«включи радио» — своё радио, а не Яндекс Музыка: {R['radio'][0][:80]}")
+ok("yandexmusic://search?text=" in urls(R["wantjazz"][1]), "«давай джаз» — музыка, как раньше")
 ok(not any(x[0] == "media" for x in R["further"][1]), f"«дальше» в разговоре — не кнопка плеера ({R['further'][1]})")
 ok("yandexmusic://" in urls(R["open"][1]) and "Яндекс Музык" in R["open"][0], f"«открой Яндекс Музыку» — приложение: {R['open'][0]}")
 ok("yandexmusic://search?text=" in urls(R["genre"][1]) and "youtube" not in urls(R["genre"][1]), f"следом «включи электронную музыку» — в Яндекс Музыке, не в YouTube: {R['genre'][0]}")

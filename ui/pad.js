@@ -175,7 +175,7 @@ const hist = () => (H.tabs[P.active] = H.tabs[P.active] || { s: [], i: -1, at: 0
 function histSnap() {
   const c = ED.cloneNode(true);
   c.querySelectorAll("img[data-src]").forEach(i => i.removeAttribute("src"));
-  c.querySelectorAll("img.sel").forEach(i => i.classList.remove("sel"));
+  c.querySelectorAll("img.sel, .dw-diagram.sel").forEach(i => i.classList.remove("sel"));
   let caret = -1;
   const sel = getSelection();
   if (sel.rangeCount && ED.contains(sel.anchorNode)) { const r = sel.getRangeAt(0).cloneRange(); const pre = document.createRange(); pre.selectNodeContents(ED); pre.setEnd(r.endContainer, r.endOffset); caret = pre.toString().length; }
@@ -407,15 +407,17 @@ ED.addEventListener("mousedown", (e) => {
 ED.addEventListener("click", (e) => {
   const a = e.target.closest && e.target.closest("a[href]");
   if (a && (e.ctrlKey || e.metaKey)) { e.preventDefault(); const x = api(); const u = a.getAttribute("href"); if (/^https?:/i.test(u)) { if (x && x.open_url) x.open_url(u); else window.open(u, "_blank"); } }
-  imgSel(e.target.tagName === "IMG" ? e.target : null);
+  imgSel(e.target.tagName === "IMG" ? e.target : (e.target.closest && e.target.closest(".dw-diagram")) || null);
 });
 /* Картинка: щелчок — рамка и «×»; Delete, Backspace или «×» — убрать; Ctrl+Z сразу после вставки — тоже. 24.10, владелец:
    «вставил скриншот из буфера, пробовал убрать Ctrl+Z, пробовал Delete — не получается»: рамка была только видом, а
    клавиши работали с курсором; отмену WebKit теряет, потому что картинка встаёт после загрузки файла. */
 let lastImg = null;
-const selImg = () => ED.querySelector("img.sel");
+/* Схема Mermaid — так же (владелец 27.10: «диаграмму удалить не получается, с трудом каким-то чудом удалил — может,
+   как у фото, крестик?»): щелчок — рамка и «×», Delete или Backspace — убрать; двойной щелчок — править, как раньше. */
+const selImg = () => ED.querySelector("img.sel, .dw-diagram.sel");
 function imgSel(img) {
-  ED.querySelectorAll("img.sel").forEach(i => { if (i !== img) i.classList.remove("sel"); });
+  ED.querySelectorAll("img.sel, .dw-diagram.sel").forEach(i => { if (i !== img) i.classList.remove("sel"); });
   if (img) img.classList.add("sel");
   imgBtn();
 }
@@ -423,18 +425,21 @@ function imgBtn() {
   const b = $("#imgx"), img = selImg();
   if (!img) { b.hidden = true; return; }
   const sh = $("#sheet"), r = img.getBoundingClientRect(), s = sh.getBoundingClientRect();
-  b.style.top = (r.top - s.top + sh.scrollTop + 8) + "px"; b.style.left = (Math.max(r.left + 8, r.right - 38) - s.left + sh.scrollLeft) + "px"; b.hidden = false;
+  const off = img.classList.contains("dw-diagram") ? 76 : 38;          // у схемы справа — своя кнопка «крупно»
+  b.style.top = (r.top - s.top + sh.scrollTop + 8) + "px"; b.style.left = (Math.max(r.left + 8, r.right - off) - s.left + sh.scrollLeft) + "px"; b.hidden = false;
+  b.title = img.classList.contains("dw-diagram") ? "Убрать схему" : "Убрать картинку";
 }
 function imgRemove(img) {
   if (!img || !ED.contains(img)) return false;
   const p = img.closest("p, div:not(#ed), li, td, th");
+  const dg = img.classList.contains("dw-diagram");
   img.remove(); if (lastImg && lastImg.img === img) lastImg = null;
   if (p && ED.contains(p) && p.tagName === "P" && !p.textContent.trim() && !p.querySelector("img")) {
     const nx = p.nextElementSibling;
     if (nx && nx.tagName === "P" && !nx.textContent.trim() && !nx.querySelector("img")) { p.remove(); caretIn(nx); }
     else { p.innerHTML = "<br>"; caretIn(p); }
   }
-  ensureP(); blank(); imgBtn(); changed(); status("Картинка убрана", "");
+  ensureP(); blank(); imgBtn(); changed(); status(dg ? "Схема убрана — Ctrl+Z вернёт" : "Картинка убрана", "");
   return true;
 }
 $("#imgx").addEventListener("mousedown", (e) => e.preventDefault());

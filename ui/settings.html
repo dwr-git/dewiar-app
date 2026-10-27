@@ -817,7 +817,7 @@
       </div>
       <div id="ob-on" style="display:none">
         <div class="actions" style="margin:0 0 10px"><span class="res ok" id="ob-state"></span></div>
-        <div class="switch"><div>Искать ответы во всём хранилище<span>Выключено — ассистент видит только свою папку Dewiar.</span></div><label class="tg"><input type="checkbox" id="ob-search"><i></i></label></div>
+        <div class="switch"><div>Искать ответы во всём хранилище<span id="ob-search-st">Выключено — ассистент видит только свою папку Dewiar.</span></div><label class="tg"><input type="checkbox" id="ob-search"><i></i></label></div>
         <div class="switch"><div>Всё хранилище — одинаковое на всех компьютерах<span>Работа и дом: заметки Obsidian (тексты .md) синхронизируются через облако Dewiar — где правили позже, та версия и остаётся; правили в двух местах сразу — рядом сохранится копия «(конфликт…)», удалённое уходит в корзину Obsidian. Включите на каждом компьютере (нужен тот же вход или ключ Dewiar). Картинки и вложения пока не переносятся. Папка DEWIAR синхронизируется всегда.</span></div><label class="tg"><input type="checkbox" id="ob-all"><i></i></label></div>
         <div class="actions" style="margin:10px 0 0">
           <span style="flex:1"></span>
@@ -1516,6 +1516,9 @@
   <h2>Знания</h2>
   <p class="hint" style="margin:-4px 0 10px">Базы с сайта Dewiar, по которым персонаж отвечает: ваши папки и разделы публичной библиотеки. Перед каждым ответом он ищет в них нужное и опирается на найденное — с цитатами и источниками, а картинки из книги показывает в виджете.</p>
   <div id="e-kb"></div>
+  <h2>Мозг</h2>
+  <p class="hint" style="margin:-4px 0 10px">Кем думает этот персонаж. «Как у всех» — общий мозг из раздела «Мозг». Можно дать каждому свою модель: Лире — модели Dewiar, Кодеру — модель для кода, Патрику — Claude или GPT по вашему ключу. Переключать вручную больше не нужно.</p>
+  <div class="brainpick" id="e-brain" role="radiogroup" aria-label="Мозг персонажа"></div>
   <h2>Облик</h2>
   <div class="styles" id="e-styles"></div>
   <div class="actions" style="margin-top:10px"><label class="btn small">Загрузить своё фото<input type="file" id="e-photo" accept="image/*" hidden></label><button class="btn small" id="e-nophoto">Убрать фото</button></div>

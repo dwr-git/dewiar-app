@@ -125,7 +125,13 @@ class Workspace:
     def root(self) -> Path:
         # DEWIAR_WORKSPACE важнее настройки: так проверки не трогают настоящую папку
         p = os.environ.get("DEWIAR_WORKSPACE") or ((self.s.get("workspace", "path") or "").strip() if self.s else "")
-        return Path(os.path.expanduser(p)) if p else default_dir()
+        r = Path(os.path.expanduser(p)) if p else default_dir()
+        # №309 (пакет 27.10): папка на сетевом диске Z: — safe() отдаёт путь после resolve() (\\сервер\…), а relative_to
+        # сравнивал его с «Z:\» — «is not in the subpath», дневник и заметки падали часами. Корень — тоже раскрытый
+        try:
+            return r.resolve()
+        except (OSError, RuntimeError):
+            return r
 
     def ensure(self):
         """Создаёт главные папки, README и «Обо мне», если их нет. -> корень."""

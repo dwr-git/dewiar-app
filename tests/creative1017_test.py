@@ -23,6 +23,8 @@ CASES = {"Напиши четверостишие про осень с наст�
 got = {t: (llm.creative_temp(t, 0.7), bool(llm.POEM_ASK.search(t))) for t in CASES}
 ok(got == CASES, f"компьютер: творческое — 0.95, стихи — с ремеслом рифмы, дела и музыка — как было: {[t for t in CASES if got[t] != CASES[t]]}")
 ok(llm.creative_temp("Напиши стих", 1.1) == 1.1, "температуру выше заданной человеком не снижаем")
+ok(llm.creative_temp("Напиши стих", 0.3) == 0.3 and llm.creative_temp("Напиши стих", None) == 0.95 and llm.creative_temp("Который час?", None) == 0.7,
+   "№311: свою температуру в профиле (0,3) творческая просьба не поднимает; без неё — 0,95")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 ok("prof = dict(prof, temperature=temp)" in src and "system += POEM_NOTE" in src, "компьютер: ответ берёт эту температуру и ремесло рифмы")
 
@@ -40,8 +42,8 @@ with sync_playwright() as p:
     pg.goto((www / "index.html").as_uri()); pg.wait_for_timeout(800)
     r = pg.evaluate("""(cases) => Object.keys(cases).map(t => [CREATIVE_ASK.test(t) ? 0.95 : 0.7, POEM_ASK.test(t)])""", CASES)
     ok([tuple(x) for x in r] == list(CASES.values()), f"телефон: те же правила, что на компьютере: {r}")
-    t = pg.evaluate("() => { S.llm.temperature = 0.7; creativeTurn = true; const a = llmTemp(); creativeTurn = false; return [a, llmTemp()]; }")
-    ok(t == [0.95, 0.7], f"телефон: творческий ход — 0.95, обычный — 0.7: {t}")
+    t = pg.evaluate("() => { S.llm.temperature = 0.7; creativeTurn = true; const a = llmTemp(); S.llm.temperature = 0.3; const b = llmTemp(); creativeTurn = false; return [a, b, llmTemp()]; }")
+    ok(t == [0.95, 0.3, 0.3], f"телефон: творческий ход — 0.95, своя 0,3 главнее (№311): {t}")
     ok(not errs, f"без ошибок на странице: {errs[:2]}")
     b.close()
 app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")

@@ -114,6 +114,7 @@ class ToolsMixin:
             log.info("   ↳ %s", (res["text"] if isinstance(res, dict) else res)[:160].replace("\n", " "))
             return res
         except (ToolError, SkillError, MCPError) as e:
+            log.info("   ↳ Ошибка: %s", redact(str(e))[:200].replace("\n", " "))    # №316 (пакет 27.10): в журнале не было видно, чем кончилось
             self.emit("tool", name=name, title=title, status="error", error=str(e))
             return f"Ошибка: {e}"
         except Exception as e:  # noqa: BLE001
@@ -830,6 +831,9 @@ class ToolsMixin:
                   (item["text"] if item["text"] not in ("Будильник", "Таймер", "Напоминание") else "")).strip()
         if item.get("late"):
             phrase = "Пропущенное напоминание: " + item["text"]
+            # №327 (пакет 27.10): включили компьютер — пропущенные звенели и проговаривались по 2 минуты каждое, «выключить
+            # нельзя». Опоздавшее — один звонок и одна фраза; окно с ним остаётся, пока его не закроют
+            limit = min(limit, 12)
         if item.get("note") or item.get("note_id"):
             att = self.workspace.note_atts(self._reminder_note(item))
             if att:
@@ -850,6 +854,9 @@ class ToolsMixin:
                 self._say_now(phrase, a)
                 self.follow_up_until = time.monotonic() + 7    # «отложи на 10 минут» — можно без имени
                 self.set_state("listening")
+            if item.get("late"):                      # дальше — тихо: окно ждёт ответа до 10 минут (и откроется у виджета,
+                a["done"].wait(600)                       # который подключился позже, — «hello» берёт его из self.alarm)
+                break
             a["done"].wait(1.2 if n < 3 else 3.0)
             n += 1
         with self._alarm_lock:

@@ -39,13 +39,16 @@ function md(src) {
     if (/^>\s?/.test(l)) { const buf = []; while (i < L.length && /^>\s?/.test(L[i])) buf.push(L[i++].replace(/^>\s?/, ""));
       out.push(`<blockquote>${md(buf.join("\n"))}</blockquote>`); continue; }
     if (/^\s*([-*+]|\d+[.)])\s+/.test(l)) {
-      const ordered = /^\s*\d/.test(l), items = [];
-      while (i < L.length && /^\s*([-*+]|\d+[.)])\s+/.test(L[i])) {
+      const ordered = /^\s*\d/.test(l), items = [], first = ordered ? parseInt(l.trim(), 10) : 1;
+      // №275 (пакет 27.10): пункты, разделённые пустой строкой, — один список («1, 1, 1» было из-за нового <ol> на каждый)
+      const next = () => { let j = i; while (j < L.length && !L[j].trim()) j++; return j < L.length && /^\s*([-*+]|\d+[.)])\s+/.test(L[j]) && (/^\s*\d/.test(L[j]) === ordered) ? j : -1; };
+      while (i < L.length && (/^\s*([-*+]|\d+[.)])\s+/.test(L[i]) || (!L[i].trim() && next() > 0))) {
+        if (!L[i].trim()) { i = next(); continue; }
         let t = L[i++].replace(/^\s*([-*+]|\d+[.)])\s+/, "");
         const task = t.match(/^\[([ xXхХ])\]\s+(.*)/);   // и русская «х»
         items.push(task ? `<li class="task"><input type="checkbox" disabled ${task[1] !== " " ? "checked" : ""}>${mdInline(task[2])}</li>` : `<li>${mdInline(t)}</li>`);
       }
-      out.push(`<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`); continue; }
+      out.push(`<${ordered ? (first > 1 ? `ol start="${first}"` : "ol") : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`); continue; }
     if (!l.trim()) { i++; continue; }
     const buf = [];
     while (i < L.length && L[i].trim() && !/^(#{1,6}\s|```|>|\s*([-*+]|\d+[.)])\s+|\|)/.test(L[i])) buf.push(L[i++]);

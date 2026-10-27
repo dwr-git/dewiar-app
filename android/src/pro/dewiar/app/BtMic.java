@@ -107,7 +107,9 @@ final class BtMic {
                 am.setBluetoothScoOn(false);
                 am.stopBluetoothSco();
             }
-            if (on) am.setMode(AudioManager.MODE_NORMAL);
+            // №284 (пакет 27.10): «голосом отвечает один раз, потом только после перезапуска» — если гарнитура так и не
+            // подключилась (on = false), режим связи оставался включённым, и голос уходил «в трубку». Возвращаем всегда
+            if (on || am.getMode() == AudioManager.MODE_IN_COMMUNICATION) am.setMode(AudioManager.MODE_NORMAL);
         } catch (Throwable ignored) { }
         on = false;
     }

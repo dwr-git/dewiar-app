@@ -34,6 +34,25 @@ NICE = {"zoom": "Zoom", "teams": "Teams", "telegram": "Telegram", "skype": "Skyp
 WIN_IGNORE = re.compile(r"immersivecontrolpanel|systemsettings|soundrecorder|voicerecorder", re.I)
 # держат микрофон для голосовой активации («Слушай, Алиса»): дольше LONG_HOLD секунд подряд — фон, а не созвон
 BACKGROUND_MIC = re.compile(r"yandex", re.I)
+# Голосовые команды, диктовка и обработка микрофона — держат микрофон всё время, это не созвон (пакет 25.10, №261:
+# «пишет, что идёт созвон VoiceAttack», а VoiceAttack и диктовка Handy просто ждут команд)
+VOICE_TOOLS = re.compile(r"voiceattack|^handy(?:\.exe)?$|voicemeeter|nvidia ?broadcast|krisp|steelseries ?sonar|"
+                         r"sonar|equalizerapo|wo ?mic|vb-?audio|talon|dragon|natspeak", re.I)
+
+
+def _running(exe):
+    """Запущена ли сейчас программа exe (Windows). Реестр «кто держит микрофон» иногда не сбрасывается после
+    падения программы — тогда она «держит» его вечно (№261: VoiceAttack не запущен, а Dewiar видел созвон).
+    Не узнали (нет psutil) — считаем, что запущена."""
+    try:
+        import psutil
+    except ImportError:
+        return True
+    want = exe.lower()
+    try:
+        return any((p.info.get("name") or "").lower() == want for p in psutil.process_iter(["name"]))
+    except Exception:  # noqa: BLE001
+        return True
 LONG_HOLD = 15 * 60
 _told = set()
 
@@ -111,6 +130,8 @@ def _windows():
                 exe = app.rsplit("\\", 1)[-1].split("_")[0]
                 if RECORDERS.search(exe) or RECORDERS.search(app):   # OBS и другие программы записи — не созвон
                     continue
+                if VOICE_TOOLS.search(exe):                           # голосовые команды и диктовка — не созвон (№261)
+                    continue
                 # «Параметры» Windows (страница микрофона) — не созвон (пакет 22.10, №165)
                 if WIN_IGNORE.search(app):
                     continue
@@ -122,6 +143,8 @@ def _windows():
                         _told.add(app)
                         log.info("Микрофон держит %s уже %d мин — похоже на голосовую активацию (Алиса), не созвон", exe, age // 60)
                     continue
+                if not packaged and exe.lower().endswith(".exe") and not _running(exe):   # запись в реестре осталась
+                    continue                                                     # от закрытой программы (№261)
                 out.append(_nice(app.rsplit("\\", 1)[-1].split("_")[0]))
         winreg.CloseKey(k)
     scan(base, True)

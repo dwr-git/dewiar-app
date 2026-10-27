@@ -942,6 +942,9 @@ class CommandsMixin:
             return r
         if cmd == "llm_models":
             return list_models(a.get("profile") or {})
+        if cmd == "llm_no_chat":                          # №258: в списке нет ни одной модели для разговора — что делать
+            from llm import no_chat_help
+            return no_chat_help((a.get("profile") or {}).get("base_url", ""), a.get("models") or [])
         if cmd in ("cloud_usage", "cloud_topup", "cloud_topup_send", "cloud_models", "cloud_model", "cloud_stt", "cloud_tts", "cloud_fallback"):
             from cloud import CloudError
             try:

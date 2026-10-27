@@ -114,6 +114,10 @@ wr.EnumKey = lambda k, i: list(k.keys())[i] if i < len(k) else (_ for _ in ()).t
 wr.QueryValueEx = lambda sk, n: ((sk["vals"][0] if n == "LastUsedTimeStart" else sk["vals"][1]), 0)
 wr.CloseKey = lambda k: None
 sys.modules["winreg"] = wr
+# запущенные программы (№261, 27.10: запись в реестре от закрытой программы — не созвон): Zoom и браузеры запущены
+ps = _t.ModuleType("psutil")
+ps.process_iter = lambda attrs=None: [_t.SimpleNamespace(info={"name": n}) for n in ("Zoom.exe", "browser.exe", "chrome.exe")]
+sys.modules["psutil"] = ps
 import meeting  # noqa: E402
 users = meeting._windows()
 ok(users == ["Zoom"], f"Windows: созвон — Zoom; Яндекс Браузер с «Алисой» 3 часа и «Параметры» — не созвон; Chrome закрыл микрофон: {users}")

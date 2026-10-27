@@ -442,7 +442,7 @@ class HealthMixin:
         jpeg = b["jpeg"] if shot and b and time.time() - b["ts"] < 1800 else None
         r = self.report_send(note, shot=jpeg, who=who, summary=f"жалоба ({via})")
         self._bug = None
-        self._complaints_add({"id": r["id"], "s": r.get("secret", ""), "note": note[:200], "ts": int(time.time()), "status": "new",
+        self._complaints_add({"id": r["id"], "s": r.get("secret", ""), "note": note[:2000], "ts": int(time.time()), "status": "new",
                               "reply": "", "fixed": "", "shot": bool(jpeg)})
         log.info("🐞 Жалоба №%s отправлена (%s)%s", r["id"], via, " со снимком" if jpeg else "")
         return {"id": r["id"], "shot": bool(jpeg)}

@@ -334,6 +334,9 @@ function obFill(o) {
   $("#ob-state").textContent = o.connected ? `Хранилище «${o.name}» · папка ${o.folder} · ${o.synced} файлов` +
     (o.last ? ` · сверено в ${new Date(o.last * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}` : "") : "";
   $("#ob-search").checked = o.search !== false;
+  // №277 (пакет 27.10): «как включить?» — переключатель включён, а подпись под ним всегда говорила «Выключено — …»
+  $("#ob-search-st").textContent = o.search !== false ? "Включено — ассистент ищет ответы во всех заметках хранилища."
+    : "Выключено — ассистент видит только свою папку Dewiar.";
   $("#ob-all").checked = !!o.sync_all;
   const r = $("#ob-res");
   if (o.missing) { r.className = "res bad"; r.textContent = `Папка хранилища не найдена: ${o.vault}. Подключите заново.`;
@@ -500,9 +503,12 @@ function bugRender(v) {
   if (v.who !== undefined && !$("#bug-who").value) $("#bug-who").value = v.who || "";
   const mine = (v.mine || []).slice(0, 8);
   $("#bug-mine").innerHTML = mine.length ? '<div class="bugh">Мои жалобы</div>' + mine.map(c =>
-    `<div class="bugc"><span class="n">№${c.id}</span><span class="t">${escH(c.note || "")}</span><span class="st"><span class="chip ${c.status}">${BUG_ST[c.status] || c.status}`
+    `<div class="bugc"><span class="n">№${c.id}</span><span class="t${(c.note || "").length > 180 ? " long" : ""}" title="${(c.note || "").length > 180 ? "Нажмите — показать целиком" : ""}">${escH(c.note || "")}</span><span class="st"><span class="chip ${c.status}">${BUG_ST[c.status] || c.status}`
     + `${c.status === "fixed" && c.fixed ? " в " + escH(c.fixed) : ""}</span>${new Date(c.ts * 1000).toLocaleDateString("ru")}${c.shot ? " · со снимком" : ""}`
     + `${c.reward ? ` · спасибо ${c.reward} тал.` : ""}</span>${c.reply ? `<span class="reply">${escH(c.reply)}</span>` : ""}</div>`).join("") : "";
+  // №263 (25.10): «сообщения отображаются только частично — сделайте, чтобы при нажатии раскрывались»: длинная — три
+  // строки и «…ещё», нажали — целиком
+  $$("#bug-mine .t.long").forEach(t => t.onclick = () => { t.classList.toggle("open"); t.title = t.classList.contains("open") ? "" : "Нажмите — показать целиком"; });
   const th = v.thanks || [];
   $("#bug-thanks").innerHTML = th.length ? '<div class="bugh">Помощники проекта — их жалобы сделали Dewiar лучше</div><div class="thx">'
     + th.map(p => `<span title="подтверждено: ${p.n}, исправлено: ${p.fixed}">${escH(p.name)}<b>${p.n}</b></span>`).join("") + "</div>" : "";

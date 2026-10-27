@@ -17,6 +17,9 @@ function renderPersonas() {
     c.className = "card" + (p.id === active ? " cur" : ""); c.style.setProperty("--c", p.color); c.tabIndex = 0;
     c.innerHTML = `${p.id === active ? '<span class="tag">активен</span>' : ""}<button class="btn small edit">Изменить</button><div class="disc"><canvas></canvas></div><h3></h3>${p.role ? '<span class="role"></span>' : ""}<p></p><ul class="sk"></ul>`;
     $("h3", c).textContent = p.name; $("p", c).textContent = p.tagline || ""; if (p.role) $(".role", c).textContent = p.role;
+    const own = typeof brainOf === "function" ? brainOf(p.id) : "";
+    if (own) { const m = document.createElement("span"); m.className = "pbrain"; m.title = "Свой мозг персонажа";
+      m.textContent = "🧠 " + brainName(((S.llm || {}).profiles || {})[own], own); $("h3", c).after(m); }
     (p.skills || []).slice(0, 4).forEach(t => { const li = document.createElement("li"); li.textContent = t; $("ul.sk", c).appendChild(li); });
     const e = new DewiarEntity($("canvas", c), { style: p.avatar_url && p.style !== "aura" ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true });
     e.calm = !!stTight; e.set({ state: "idle", level: 0 }); entities.push(e);   // оживает при наведении — иначе десяток анимаций грузит компьютер
@@ -76,9 +79,36 @@ function openEditor(p) {
   $("#e-vosk").value = ed.voice.prefer === "piper" ? "piper" : (Number.isInteger(ed.voice.vosk) ? String(ed.voice.vosk) : "auto");
   $("#e-del").textContent = p && p.builtin ? "Сбросить к заводскому" : "Удалить"; $("#e-del").style.display = p ? "" : "none";
   $("#e-res").textContent = "";
-  ed.knowledge = ed.knowledge || []; renderKb(false);
+  ed.knowledge = ed.knowledge || []; renderKb(false); renderBrain();
   renderStyles(); renderColors(); updatePreview();
   $("#drawer").classList.add("open"); $("#drawer").scrollTop = 0; $("#e-name").focus({ preventScroll: true });
+}
+/* Свой мозг у персонажа (27.10, №346 и YouTube: «разным персонажам — разных ИИ: один на GPT, второй на Gemini, третий
+   на Claude»): чипы — «Как у всех» и все модели из «Мозга»; выбор сохраняется сразу (llm.persona[id]). */
+function brainName(prof, id) {
+  if (!prof) return "";
+  if (prof.cloud) return prof.title || "Модели Dewiar";
+  return prof.name || prof.model || id;
+}
+function brainOf(pid) {
+  const own = ((S.llm || {}).persona || {})[pid] || "", profs = (S.llm || {}).profiles || {};
+  return own && profs[own] ? own : "";
+}
+function renderBrain() {
+  const box = $("#e-brain"); if (!box) return;
+  const profs = (S.llm || {}).profiles || {}, act = (S.llm || {}).active || "", cur = ed && ed.id ? brainOf(ed.id) : "";
+  if (!ed || !ed.id) { box.innerHTML = `<p class="hint" style="margin:0">Сначала сохраните персонажа — потом можно выбрать ему модель.</p>`; return; }
+  const ids = Object.keys(profs);
+  box.innerHTML = `<button role="radio" data-b="" class="bp${cur ? "" : " on"}" aria-checked="${!cur}"><b>Как у всех</b><small>${escH(brainName(profs[act], act) || "общий мозг не выбран")}</small></button>`
+    + ids.map(id => `<button role="radio" data-b="${escH(id)}" class="bp${cur === id ? " on" : ""}" aria-checked="${cur === id}"><b>${escH(brainName(profs[id], id))}</b><small>${escH(profs[id].cloud ? "облако Dewiar" : (profs[id].model || "") + (profs[id].base_url ? " · " + profs[id].base_url.replace(/^https?:\/\//, "").split("/")[0] : ""))}</small></button>`).join("")
+    + `<button class="bp add" id="e-brain-add"><b>＋ Другая модель</b><small>добавить в «Мозге»: GPT, Claude, Gemini, своя</small></button>`;
+  $$("#e-brain [data-b]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.b;
+    await save({ llm: { persona: { [ed.id]: id } } }, true);
+    S.llm.persona = Object.assign({}, S.llm.persona || {}, { [ed.id]: id }); renderBrain(); renderPersonas();
+    toast(id ? `${ed.name} думает моделью «${brainName(profs[id], id)}»` : `${ed.name} думает общим мозгом`);
+  });
+  $("#e-brain-add").onclick = () => { closeEditor(); const b = $('nav button[data-p="brain"]'); if (b) b.click(); };
 }
 function closeEditor() { $("#drawer").classList.remove("open"); styleEnts.forEach(e => e.destroy()); styleEnts = []; ed = null; }
 function updatePreview() {

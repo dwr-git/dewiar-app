@@ -294,7 +294,7 @@
       pre.dataset.was = pre.textContent;
     }
     DewiarRich.diagrams(ED).then(() => {
-      ED.querySelectorAll(".dw-diagram").forEach(d => { d.contentEditable = "false"; d.title = "Схема — двойной щелчок, чтобы править"; });
+      ED.querySelectorAll(".dw-diagram").forEach(d => { d.contentEditable = "false"; d.title = "Схема — щелчок: выделить (× — убрать), двойной щелчок — править"; });
     }).catch(() => { });
   };
   ED.addEventListener("dblclick", (e) => {

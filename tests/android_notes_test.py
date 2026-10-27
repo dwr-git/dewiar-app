@@ -78,6 +78,7 @@ with sync_playwright() as p:
     ok(r[0][0].startswith("Доска") and r[1], f"новые сверху, у заметки с фото — миниатюра: {r}")
     pg.click("#day-body .it.note"); pg.wait_for_timeout(300)
     ok(pg.evaluate("document.querySelector('#sh-note').classList.contains('on') && !!document.querySelector('#note-body .ntimg img')"), "заметка открывается целиком, с фото")
+    pg.click("#nt-edit"); pg.wait_for_timeout(200)                     # 27.10: открытая заметка — сначала чтение, «Править» — правка
     pg.set_input_files("#nt-file", str(doc)); pg.wait_for_timeout(400)
     pg.fill("#nt-text", "схема на доске — переделать"); pg.click("#nt-save"); pg.wait_for_timeout(200)
     r = pg.evaluate("() => { const x = notes().find(n => n.title === 'Доска'); return [x.text, x.att.map(a => [a.name, a.type])]; }")

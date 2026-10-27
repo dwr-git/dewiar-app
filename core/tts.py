@@ -488,35 +488,60 @@ class EspeakTTS:
         yield rate, data[idx + 8:] if idx >= 0 else data
 
 
+# Голос Windows (SAPI) — в своём процессе. №323 (пакет 27.10): ядро молча падало на первом же ответе голосом — пока
+# Piper и Vosk TTS ещё качались, говорил SAPI через comtypes прямо в процессе ядра, и сбой COM ронял всё (как с
+# громкостью раньше — WIN_MUTE_PY в engine_remote). Теперь сбой — только у маленького процесса, ядро живо.
+SAPI_PY = r"""
+import base64, json, sys
+import comtypes, comtypes.client
+comtypes.CoInitialize()
+a = json.loads(sys.stdin.read() or "{}")
+ONECORE = r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech_OneCore\Voices"
+sp = comtypes.client.CreateObject("SAPI.SpVoice")
+out = []
+try:
+    cat = comtypes.client.CreateObject("SAPI.SpObjectTokenCategory"); cat.SetId(ONECORE, False)
+    t = cat.EnumerateTokens(); out += [t.Item(i) for i in range(t.Count)]
+except Exception:
+    pass
+t = sp.GetVoices(); out += [t.Item(i) for i in range(t.Count)]
+ru = []
+for tk in out:
+    try:
+        if "419" in str(tk.GetAttribute("Language") or "").lower().split(";"):
+            ru.append((tk, str(tk.GetAttribute("Gender") or "").lower()))
+    except Exception:
+        continue
+if a.get("check"):
+    print("ok" if ru else "none"); sys.exit(0)
+if not ru:
+    print("none"); sys.exit(3)
+want = "female" if a.get("gender") == "female" else "male"
+sp.Voice = next((v for v in ru if v[1] == want), ru[0])[0]
+sp.Rate = int(a.get("rate") or 0)
+fmt = comtypes.client.CreateObject("SAPI.SpAudioFormat"); fmt.Type = 22
+ms = comtypes.client.CreateObject("SAPI.SpMemoryStream"); ms.Format = fmt
+sp.AudioOutputStream = ms
+sp.Speak(a.get("text") or "", 0)
+sys.stdout.write(base64.b64encode(bytes(bytearray(ms.GetData()))).decode())
+"""
+
+
+def _sapi_run(args, timeout):
+    import subprocess
+    import sys
+    exe = sys.executable.replace("pythonw.exe", "python.exe")
+    return subprocess.run([exe, "-c", SAPI_PY], input=json.dumps(args, ensure_ascii=False), capture_output=True, text=True,
+                          timeout=timeout, encoding="utf-8", errors="replace",
+                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
+
+
 class SapiTTS:
     """Windows: встроенные голоса системы (SAPI 5 и голоса OneCore — «Ирина», «Павел» в русской Windows).
-    Аварийный вариант, как eSpeak в Linux: без скачивания. Берём только русские голоса (язык 0x419)."""
+    Аварийный вариант, как eSpeak в Linux: без скачивания. Берём только русские голоса (язык 0x419). Всё общение
+    с COM — в отдельном процессе (SAPI_PY)."""
     name = "Голос Windows"
-    ONECORE = r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech_OneCore\Voices"
     _ok = None
-
-    def _voices(self, sp):
-        """[(описание, токен)] русских голосов: сначала OneCore (звучат лучше), потом классические SAPI."""
-        import comtypes.client
-        out = []
-        try:
-            cat = comtypes.client.CreateObject("SAPI.SpObjectTokenCategory")
-            cat.SetId(self.ONECORE, False)
-            toks = cat.EnumerateTokens()
-            out += [toks.Item(i) for i in range(toks.Count)]
-        except Exception:  # noqa: BLE001 — старая Windows без OneCore
-            pass
-        toks = sp.GetVoices()
-        out += [toks.Item(i) for i in range(toks.Count)]
-        ru = []
-        for tk in out:
-            try:
-                langs = str(tk.GetAttribute("Language") or "").lower().split(";")
-                if "419" in langs:
-                    ru.append((tk.GetDescription(0), tk, str(tk.GetAttribute("Gender") or "")))
-            except Exception:  # noqa: BLE001
-                continue
-        return ru
 
     def available(self):
         import os
@@ -524,38 +549,25 @@ class SapiTTS:
             return False
         if SapiTTS._ok is None:
             try:
-                import comtypes
-                import comtypes.client
-                comtypes.CoInitialize()
-                SapiTTS._ok = bool(self._voices(comtypes.client.CreateObject("SAPI.SpVoice")))
+                r = _sapi_run({"check": True}, 20)
+                SapiTTS._ok = (r.stdout or "").strip() == "ok"
                 if not SapiTTS._ok:
-                    log.warning("В Windows нет русского голоса: «Параметры» → «Время и язык» → «Речь» → «Добавить голоса»")
+                    log.warning("В Windows нет русского голоса: «Параметры» → «Время и язык» → «Речь» → «Добавить голоса»"
+                                + (f" ({(r.stderr or '').strip()[-160:]})" if r.returncode not in (0, 3) else ""))
             except Exception as e:  # noqa: BLE001
                 log.info("Голоса Windows недоступны: %s", e)
                 SapiTTS._ok = False
         return SapiTTS._ok
 
     def synth(self, text, voice_cfg, speed=1.0):
-        import comtypes
-        import comtypes.client
-        comtypes.CoInitialize()                         # у каждого потока свой COM
-        sp = comtypes.client.CreateObject("SAPI.SpVoice")
-        voices = self._voices(sp)
-        if not voices:
-            raise RuntimeError("в Windows нет русского голоса")
-        want = "female" if voice_cfg.get("_gender") == "female" else "male"
-        pick = next((v for v in voices if v[2].lower() == want), voices[0])
-        sp.Voice = pick[1]
-        sp.Rate = max(-10, min(10, round((float(speed) - 1.0) * 10)))
-        fmt = comtypes.client.CreateObject("SAPI.SpAudioFormat")
-        fmt.Type = 22                                   # SAFT22kHz16BitMono
-        ms = comtypes.client.CreateObject("SAPI.SpMemoryStream")
-        ms.Format = fmt
-        sp.AudioOutputStream = ms
+        import base64
         from speechnorm import speech_norm
-        sp.Speak(speech_norm(text, latin=False) or text, 0)
-        data = bytes(bytearray(ms.GetData()))
-        yield 22050, data
+        args = {"text": speech_norm(text, latin=False) or text, "gender": voice_cfg.get("_gender") or "",
+                "rate": max(-10, min(10, round((float(speed) - 1.0) * 10)))}
+        r = _sapi_run(args, 60)
+        if r.returncode != 0 or not (r.stdout or "").strip():
+            raise RuntimeError("голос Windows не сработал" + (f": {(r.stderr or '').strip()[-200:]}" if r.stderr else ""))
+        yield 22050, base64.b64decode(r.stdout.strip())
 
 
 class RemoteTTS:

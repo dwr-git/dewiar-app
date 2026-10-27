@@ -543,6 +543,17 @@ class AnswerMixin:
     def skills_prompt(self):
         return self.skills.prompt()
 
+    def persona_llm(self, pid=None):
+        """Модель, которой думает персонаж: своя (llm.persona = {pid: id профиля} — студия → «Персонажи» → «Мозг»),
+        иначе общая (llm.active). Пакет 27.10, №346 и отзывы с YouTube: «разным персонажам — разных ИИ: один на GPT,
+        второй на Gemini, третий на Claude» — раньше мозг был один на всех и его надо было переключать вручную."""
+        pid = pid or self.s.get("persona")
+        own = ((self.s.get("llm", "persona") or {}).get(pid) or "") if pid else ""
+        profs = self.s.get("llm", "profiles") or {}
+        if own and own in profs:
+            return dict(profs[own])
+        return self.s.active_llm()
+
     def llm_profile(self):
         """Модель для фоновых задач: своя из настроек задач, иначе активная."""
         pid = self.s.get("tasks", "llm") or ""
@@ -709,7 +720,8 @@ class AnswerMixin:
         давно исправленная ошибка тянется из отчёта в отчёт и мешает увидеть новую. Отметка — report_mark.json."""
         import platform
         # в настройках скрываем всё, чьё имя похоже на секрет (ключи, заголовки и переменные окружения MCP-программ)
-        secret = re.compile(r"(api_key|token|password|key|secret|headers|auth|cookie|env)", re.I)
+        # №311 (пакет 27.10): «max_tokens» в отчёте был «***» — числа и флаги вида *_tokens, keys_* не секрет
+        secret = re.compile(r"^(?!max_tokens$|.*_tokens$|tokens$|token_count$)(?:.*(api_key|token|password|key|secret|headers|auth|cookie|env))", re.I)
 
         def clean(x):
             if isinstance(x, dict):
@@ -1274,7 +1286,7 @@ class AnswerMixin:
         модель не справилась с инструментами — без них; не приняла картинку — без неё (модель запоминается в _blind).
         В конце: ответ в мессенджер (turn.via["done"]), история, «продолжение разговора», возврат к главному
         персонажу после специалиста и передача слова, если её попросил инструмент. Отменённый ход в историю не идёт."""
-        prof = self.s.active_llm()
+        prof = self.persona_llm()
         self._turn_text = text                       # read_webpage: длинная страница — куски по словам вопроса
         sentences = queue.Queue()
         silent = bool(turn.via) and not turn.via.get("speak")
@@ -1286,7 +1298,7 @@ class AnswerMixin:
             if not prof and (self.account.logged_in() or self.s.get("cloud", "key")):
                 try:                                   # модели нет, а вход dewiar.pro (или ключ) есть — подключаем модели Dewiar сами
                     self._cloud_use()
-                    prof = self.s.active_llm()
+                    prof = self.persona_llm()
                 except Exception as e:  # noqa: BLE001
                     log.info("🧠 Модели Dewiar сами не подключились: %s", e)
             if not prof:
@@ -1300,8 +1312,8 @@ class AnswerMixin:
                 log.info("🧠 Сложная просьба — модель подумает перед ответом")
             from llm import creative_temp
             ask0 = text.split("\n\nВложения:")[0]
-            temp = creative_temp(ask0, prof.get("temperature", 0.7))
-            if temp != float(prof.get("temperature", 0.7)):
+            temp = creative_temp(ask0, prof.get("temperature"))
+            if temp != float(prof.get("temperature") or 0.7):
                 prof = dict(prof, temperature=temp)       # творческая просьба — смелее (отзыв 17.10 про креатив)
                 log.info("🎨 Творческая просьба — температура %.2f", temp)
             specs = self.toolbox.specs() if self.s.get("tools", "enabled_all") is not False else []
@@ -1398,7 +1410,7 @@ class AnswerMixin:
                 sentences.put(s_)
             blind_key = f"{prof.get('base_url')}|{prof.get('model')}"
             t_start = time.monotonic()
-            from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge
+            from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -1541,7 +1553,8 @@ class AnswerMixin:
                         continue
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
                     fix = reminder_missing(text, turn.full, called) or saved_claim(text, step_text, called) \
-                        or action_claim(text, step_text, called) or bare_done(text, step_text, called)
+                        or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
+                        or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")
                     if fix:
                         saved_checked = True
                         log.info("✋ Сказала «готово/записала» или не поставила просимое напоминание — прошу сделать")

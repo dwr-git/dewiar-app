@@ -138,6 +138,20 @@ with sync_playwright() as p:
     ok(pg.evaluate("document.querySelector('.dw-view svg').style.transform") != k0, "колёсико — масштаб")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(100)
     ok(pg.locator(".dw-view").count() == 0, "Esc — закрыть")
+    # владелец 27.10: «схему удалить не получается… может, как у фото — крестик?»
+    figs.nth(0).scroll_into_view_if_needed(); box = figs.nth(0).bounding_box()
+    pg.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] - 12); pg.wait_for_timeout(200)
+    ok(pg.evaluate("document.querySelector('#ed .dw-diagram').classList.contains('sel')") and pg.is_visible("#imgx"),
+       "щелчок по схеме — рамка и «×»")
+    xb, zb = pg.locator("#imgx").bounding_box(), figs.nth(0).locator(".dw-zoom").bounding_box()
+    ok(xb["x"] + xb["width"] <= zb["x"] or xb["y"] >= zb["y"] + zb["height"], "«×» не закрывает кнопку «смотреть крупно»")
+    pg.click("#imgx"); pg.wait_for_timeout(250)
+    ok(pg.locator("#ed .dw-diagram").count() == 1 and pg.locator('#ed pre[data-lang="mermaid"]').count() == 0, "«×» — схема убрана целиком")
+    pg.keyboard.press("Control+z"); pg.wait_for_timeout(1200)
+    ok(pg.locator("#ed .dw-diagram, #ed pre[data-lang='mermaid']").count() == 2, "Ctrl+Z — вернулась")
+    f0 = pg.locator("#ed .dw-diagram").first; f0.scroll_into_view_if_needed(); bx = f0.bounding_box()
+    pg.mouse.click(bx["x"] + 20, bx["y"] + bx["height"] - 12); pg.keyboard.press("Delete"); pg.wait_for_timeout(250)
+    ok(pg.locator("#ed .dw-diagram, #ed pre[data-lang='mermaid']").count() == 1, "выделили и Delete — тоже убрана")
     pg.close()
 
     # ---------- 1) облик в простое

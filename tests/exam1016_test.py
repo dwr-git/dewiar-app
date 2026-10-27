@@ -28,6 +28,7 @@ import tools as T  # noqa: E402
 class R:
     def __init__(self, d): self.d = d
     def json(self): return self.d
+    def raise_for_status(self): return None
 
 
 seen = []

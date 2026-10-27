@@ -1013,3 +1013,70 @@ body.has-play #top { gap: 2px; } body.has-play #top .ib { width: 38px; height: 3
 .brb .brdel span { display: none; }
 #br-back .brb .brdel.ask { color: #fff; background: #E8506F; box-shadow: 0 8px 20px -12px rgba(232,80,111,.9); }   /* с #id: темы задают кнопкам фон через :is(… #bot …) */
 .brb .brdel.ask span { display: inline; }
+/* ---------- Заметка: чтение и правка (владелец 27.10, №321) ---------- */
+#sh-note.ntv #nt-h { font-size: 24px; line-height: 1.22; margin-bottom: 6px; overflow-wrap: anywhere; }
+.ntmeta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 0 0 14px; color: var(--dim); font-size: 13px; }
+.ntchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 9px; border-radius: 999px; background: var(--frost-hi); color: var(--ink); font-size: 13px; font-weight: 600; }
+.ntchip svg { width: 15px; height: 15px; }
+.ntread { -webkit-user-select: text; user-select: text; font-size: 16px; line-height: 1.6; color: var(--ink); padding: 16px 18px; border-radius: 20px;
+  background: var(--frost); box-shadow: inset 0 0 0 1px var(--glass-line); overflow-wrap: anywhere; }
+.ntread > :first-child { margin-top: 0; } .ntread > :last-child { margin-bottom: 0; }
+.ntread p { margin: 0 0 10px; }
+.ntread h2, .ntread h3, .ntread h4 { font-family: "Manrope", sans-serif; font-weight: 800; line-height: 1.3; margin: 18px 0 8px; }
+.ntread h2 { font-size: 19px; } .ntread h3 { font-size: 17px; } .ntread h4 { font-size: 15.5px; color: var(--muted); }
+.ntread ul, .ntread ol { margin: 0 0 10px; padding-left: 22px; } .ntread li { margin: 3px 0; } .ntread li::marker { color: var(--accent); }
+.ntread ul.tasks { list-style: none; padding-left: 0; }
+.ntread ul.tasks li { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0; }
+.ntread ul.tasks li.done span { color: var(--dim); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--dim) 70%, transparent); }
+.ntread .tk { flex: none; width: 22px; height: 22px; margin-top: 2px; border-radius: 7px; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent);
+  display: grid; place-items: center; transition: background .15s; }
+.ntread li.done .tk { background: var(--accent); box-shadow: none; }
+.ntread li.done .tk::after { content: ""; width: 10px; height: 5px; border: solid #fff; border-width: 0 0 2.4px 2.4px; transform: translateY(-1px) rotate(-45deg); }
+.ntread blockquote { margin: 0 0 10px; padding: 8px 14px; border-left: 3px solid var(--accent); border-radius: 4px 12px 12px 4px; background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--muted); }
+.ntread a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.ntread code { font-family: ui-monospace, "Ubuntu Mono", monospace; font-size: .9em; padding: 1px 6px; border-radius: 6px; background: var(--field); }
+.ntread pre { margin: 0 0 10px; padding: 12px 14px; border-radius: 14px; background: var(--field); overflow-x: auto; } .ntread pre code { padding: 0; background: none; }
+.ntread hr { border: 0; height: 1px; background: var(--glass-line); margin: 16px 0; }
+.ntread mark { background: color-mix(in srgb, #FFD36B 45%, transparent); color: inherit; border-radius: 4px; padding: 0 2px; }
+.ntread .tbl { overflow-x: auto; margin: 0 0 10px; } .ntread table { border-collapse: collapse; font-size: 14px; }
+.ntread th, .ntread td { padding: 6px 10px; border-bottom: 1px solid var(--glass-line); text-align: left; } .ntread th { color: var(--muted); font-weight: 700; }
+.ntread .ntempty { color: var(--dim); font-style: italic; }
+.ntatt.big { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+.ntatt.big .ntimg { width: auto; height: auto; aspect-ratio: 1; }
+.ntimg { position: relative; } .ntimg .ntopen { width: 100%; height: 100%; padding: 0; display: block; } .ntimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ntfile { position: relative; display: inline-flex; } .ntfile .ntopen { display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 14px; background: var(--frost-hi); text-align: left; max-width: 100%; }
+.ntfile svg { width: 18px; height: 18px; flex: none; } .ntfile small { color: var(--muted); }
+.ntrm { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border-radius: 50%; background: rgba(10,10,20,.62); color: #fff; display: grid; place-items: center; }
+.ntrm svg { width: 14px; height: 14px; stroke-width: 2.4; }
+.ntfile .ntrm { position: static; margin-left: 4px; align-self: center; background: var(--frost-hi); color: var(--ink); }
+.ntbar { position: sticky; bottom: calc(-24px - var(--safe-b)); display: flex; gap: 10px; margin: 18px -18px calc(-24px - var(--safe-b)); padding: 12px 18px calc(16px + var(--safe-b));
+  background: linear-gradient(to bottom, transparent, var(--sheet-bg, var(--bg)) 26%); }
+.ntbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.ntbar .btn.p { flex: 1; } .ntbar .btn svg { width: 19px; height: 19px; }
+.ntbar .btn.ic { flex: none; width: 50px; padding: 12px 0; } .ntbar .btn.dl:active { color: var(--bad); }
+#sh-note.nte .ntbar .btn { flex: 1; }
+.ntmd { display: flex; gap: 8px; margin: -4px -6px 2px; padding: 6px 6px 10px; overflow-x: auto; scrollbar-width: none; } .ntmd::-webkit-scrollbar { display: none; }
+.ntmd button { flex: none; padding: 7px 12px; border-radius: 10px; background: var(--frost); color: var(--muted); font-size: 13.5px; font-weight: 600; }
+.ntmd button:active { background: var(--frost-hi); color: var(--ink); }
+#note-body textarea { min-height: 180px; resize: none; }
+.ntlbl { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 600; margin: 12px 2px 6px; } .ntlbl svg { width: 15px; height: 15px; }
+.ntfolds.pick { flex-wrap: wrap; overflow: visible; margin: 0 0 12px; }
+.ntfolds.pick button { display: inline-flex; align-items: center; gap: 5px; }
+.ntfolds.pick button.on { background: var(--accent); color: #fff; }
+.ntfolds.pick button.add { background: none; box-shadow: inset 0 0 0 1.5px var(--frost-hi); color: var(--muted); } .ntfolds.pick button.add svg { width: 14px; height: 14px; }
+#note-body #nt-fname { width: 150px; flex: none; margin: 0; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.ntadd .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; } .ntadd .btn svg { width: 18px; height: 18px; }
+#imgview .ivx { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; display: grid; place-items: center; }
+#imgview .ivx svg { width: 20px; height: 20px; stroke-width: 2.2; }
+/* светлые темы и неоморфизм: поля и карточка заметки видны (раньше поле сливалось с листом — «всё в кучу») */
+body.light .ntread { background: rgba(255,255,255,.62); box-shadow: inset 0 0 0 1px rgba(20,32,60,.07); }
+body.light .ntrm { background: rgba(20,24,40,.55); }
+body.neu .ntread { background: var(--glass); box-shadow: var(--raise-s); }
+body.neu :is(#note-body input, #note-body textarea) { background: var(--glass); box-shadow: var(--press); }
+body.neu .ntfolds.pick button:not(.on):not(.add), body.neu .ntmd button, body.neu .ntchip { background: var(--glass); box-shadow: var(--raise-s); }
+#sh-note { --sheet-bg: #15151b; } body.light #sh-note { --sheet-bg: #fbfcfe; } body.neu #sh-note { --sheet-bg: var(--glass); }
+/* «Возможности»: вкладки «Близких» — под ними, отступом; выключили «Близкие» — вкладки притушены */
+.fsub { margin: 2px 0 0 14px; padding-left: 14px; border-left: 2px solid var(--frost-hi); }
+.fsub > small { display: block; color: var(--dim); font-size: 12px; margin: 10px 4px 0; }
+.fsub.off { opacity: .45; pointer-events: none; }
+#b-close[hidden] { display: none; }

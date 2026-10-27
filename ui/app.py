@@ -869,6 +869,7 @@ class Api:
                 if h:
                     try:
                         winshell.tool_window(h)
+                        winshell.set_icon(h, ROOT / "icons" / "dewiar.ico")      # №260: и в Alt+Tab, если покажется
                         winshell.shape(h, m, card_r())
                     except Exception as e:  # noqa: BLE001
                         print(f"Форма окна не задана: {e}", file=sys.stderr)
@@ -953,6 +954,9 @@ class Api:
         """Студия: 1120×760 × масштаб интерфейса, но не больше экрана (ноутбук 1366×768 — с запасом под панель)."""
         z = zoom_of(ui_settings().get("zoom"))
         w, h = int(1120 * z), int(760 * z)
+        saved = ui_settings().get("studio_size")             # №262 (25.10): «открывается во весь экран — запоминайте размер»
+        if isinstance(saved, list) and len(saved) == 2 and all(isinstance(v, (int, float)) for v in saved):
+            w, h = int(saved[0]), int(saved[1])
         try:
             import webview
             scr = webview.screens[0]
@@ -1591,6 +1595,15 @@ class Api:
                 if hasattr(win.events, ev):
                     getattr(win.events, ev).__iadd__(lambda *a, m=m: __import__("threading").Thread(target=remember, args=(m,), daemon=True).start())
 
+            def icon():                                 # №260: на панели задач — знак Dewiar, а не значок Python
+                try:
+                    winshell.set_icon(int(win.native.Handle.ToInt64()), ROOT / "icons" / "dewiar.ico")
+                except Exception as e:  # noqa: BLE001
+                    print(f"Значок окна: {e}", file=sys.stderr)
+            win.events.shown += lambda *a: __import__("threading").Thread(target=icon, daemon=True).start()
+        if hasattr(win.events, "resized"):              # №262: размер, который человек оставил, — и в следующий раз
+            win.events.resized += lambda *a: self._studio_resized(win, *a[:2])
+
     # ---------- перетаскивание окна без рамки (Linux) ----------
 
     @staticmethod
@@ -1758,6 +1771,36 @@ class Api:
             self._gtk(run)
         except Exception as e:  # noqa: BLE001
             print(f"Студия наверх: {e}", file=sys.stderr)
+
+    def _studio_resized(self, win, w=None, h=None):
+        """Студию потянули за край (№262, 25.10: «открывается всегда во весь экран — неудобно, запоминайте размер»):
+        через секунду после последнего изменения — если окно не развёрнуто, запомнить ui.studio_size и studio_max=False."""
+        import threading
+        self._st_rs = getattr(self, "_st_rs", 0) + 1
+        n = self._st_rs
+
+        def later():
+            if n != self._st_rs or self._studio is not win:
+                return
+            try:
+                if WIN:
+                    if "Maximized" in str(win.native.WindowState) or "Minimized" in str(win.native.WindowState):
+                        return
+                else:
+                    gw = self._studio_gw()
+                    if gw is None or self._gtk(lambda: gw.is_maximized() or not gw.is_visible()):
+                        return
+                ww, hh = int(w or win.width), int(h or win.height)
+                if ww < 400 or hh < 300:
+                    return
+                patch = {"studio_size": [ww, hh], "studio_max": False}
+                if WIN:
+                    winshell.core_call(WS_PORT, self.token, "settings_save", {"patch": {"ui": patch}})
+                else:
+                    _core_save_ui(self.token, patch)
+            except Exception as e:  # noqa: BLE001
+                print(f"Размер студии не запомнил: {e}", file=sys.stderr)
+        t = threading.Timer(1.0, later); t.daemon = True; t.start()
 
     def studio_min(self):
         if self._studio is not None:
@@ -3102,6 +3145,7 @@ def main_win(args, extra):
     fresh = not SETTINGS_PATH.exists() or ui_settings().get("welcome") == ""   # первый запуск — откроем «Первые шаги»
     uis = ui_settings()
     icon = ROOT / "icons" / "dewiar.ico"
+    winshell.app_id()                                      # №260: окна на панели задач — под знаком Dewiar, а не Python
 
     def studio_in_browser():
         os.startfile(api._url("settings.html"))  # noqa: S606 — адрес http://127.0.0.1:… открывает браузер по умолчанию

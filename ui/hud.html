@@ -833,8 +833,18 @@ function tmrDraw() {
   $("tmini").textContent = tmrFmt(left);
 }
 
+/* Окно напоминания открывает только окно карточки — иначе их было бы два. №327 (пакет 27.10, Ubuntu): после включения
+   компьютера пропущенные напоминания зазвенели раньше, чем виджет подключился к ядру, — окна не было, звон и голос шли
+   минуты, выключить было нечем. Теперь звенящее приходит и в «hello», а мост pywebview, если ещё не готов, ждём. */
+function alarmWin(e, n = 0) {
+  if (mode !== "card" || !e || !e.id) return;
+  const a = api();
+  if (a && a.show_alarm) { a.show_alarm(e); return; }
+  if (n < 20) setTimeout(() => alarmWin(e, n + 1), 500);
+}
 core.on("hello", d => {
   tmrSet(d.reminders);
+  if (d.alarm) alarmWin(d.alarm);
   applyLook(d.settings.ui);
   featuresSet(d.settings.features);
   setLocal(d.settings.privacy && d.settings.privacy.local_only);
@@ -953,7 +963,7 @@ core.on("hello", d => {
   clearTimeout($("rem")._t); $("rem")._t = setTimeout(() => $("rem").classList.remove("show"), 14000);
 })
 // окно напоминания открывает только окно карточки — иначе их было бы два
-.on("alarm", e => { const a = api(); if (e.window !== false && a && a.show_alarm && mode === "card") a.show_alarm(e); })
+.on("alarm", e => { if (e.window !== false) alarmWin(e); })
 .on("reminder", e => { $("act").className = "on"; $("act").textContent = "Напоминание"; showCap("", e.text); hideCapLater(15000); })
 .on("heard", () => { $("act").className = ""; });
 
@@ -1445,9 +1455,20 @@ function sendAsk() {
   $("askin").value = ""; atts = []; renderAtts(); fitAsk(); $("b-type").click();
 }
 /* поле растёт под текст (до ~7 строк, дальше прокрутка); длинный текст — сфера уменьшается, внизу счётчик */
+/* Сколько места под полем ввода занимают строка «Отправить» и нижняя панель (их высота + отступы). */
+function askTail() {
+  const t = $("askin"), box = $("askbox"), card = $("card");
+  const rb = box.getBoundingClientRect(), rt = t.getBoundingClientRect(), rc = card.getBoundingClientRect();
+  const insideBox = Math.max(0, rb.bottom - rt.bottom);               // под полем внутри рамки (счётчик, кнопки)
+  const bar = $("bar") ? $("bar").getBoundingClientRect().height : 48;
+  return insideBox + bar + Math.max(14, innerHeight - rc.bottom + 10);
+}
 function fitAsk() {
   const t = $("askin"); t.style.height = "24px";
-  const lim = $("card").classList.contains("long") || t.value.length > 60 ? 210 : 120;
+  // №313 (пакет 27.10): в низком виджете поле росло до 210 px, и строка с «Отправить» уходила под нижнюю панель —
+  // поле не выше того, что остаётся над кнопками и панелью
+  const room = Math.max(48, innerHeight - t.getBoundingClientRect().top - askTail());
+  const lim = Math.min($("card").classList.contains("long") || t.value.length > 60 ? 210 : 120, room);
   const h = Math.min(t.scrollHeight, lim); t.style.height = Math.max(24, h) + "px";
   $("askbox").classList.toggle("has", !!t.value.trim() || atts.length > 0);
   t.classList.toggle("scroll", t.scrollHeight > lim);

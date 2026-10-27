@@ -293,7 +293,13 @@ class Capture:
             try:
                 self.stream = mk(_sd_index(self.device, "source"))
             except sd.PortAudioError as e:     # номер устарел (микрофон отключили, переподключили) — перечитать список
-                log.warning("Микрофон не открылся (%s) — перечитываю список устройств", e)
+                # пакет 27.10 (№293, №307): без микрофона эта строка шла каждые 5 с — 1400 строк вытесняли весь журнал.
+                # Одна и та же ошибка — раз в 10 минут
+                global _MIC_WARN
+                key, now = str(e), time.monotonic()
+                if _MIC_WARN[0] != key or now - _MIC_WARN[1] > 600:
+                    log.warning("Микрофон не открылся (%s) — перечитываю список устройств", e)
+                    _MIC_WARN = (key, now)
                 sd_refresh(force=True)
                 idx = _sd_index(self.device, "source")
                 try:
@@ -420,6 +426,9 @@ class AudioOutError(Exception):
     """Вывод звука не открылся: нет устройства, занято, выключено."""
 
 
+_MIC_WARN = ("", -1e9)
+
+
 class Player:
     """Воспроизведение PCM s16le mono с мгновенной остановкой: start(rate) → write()… → finish(); stop() — из
     другого потока. Пишем с опережением не больше AHEAD — поэтому «стоп» срабатывает сразу, а уровень громкости
@@ -498,7 +507,12 @@ class Player:
                     self.proc.stdin.write(chunk)
                     self.proc.stdin.flush()
                 else:
-                    self.proc.write(chunk)
+                    # №311, №315 (пакет 27.10): «access violation» в sounddevice.close — stop() из другого потока закрывал
+                    # поток PortAudio посреди write. Запись и закрытие — под одним замком (кусок ≤ 40 мс)
+                    with self._lock:
+                        if self._stopped or self.proc is None:
+                            return False
+                        self.proc.write(chunk)
             except (BrokenPipeError, OSError, AttributeError):   # AttributeError: stop() обнулил self.proc на ходу
                 return False
             self._written += len(chunk) // 2

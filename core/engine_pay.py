@@ -176,7 +176,15 @@ def t_payments(a, ctx):
             x for x in [fmt_money(p.get("amount")) if p.get("amount") is not None else "", f"показание {fmt_num(p['reading'])}" if p.get("reading") is not None else "",
                         f"расход {fmt_num(p['used'])}" if p.get("used") is not None else ""] if x) + "."
     if act == "add_bill":
-        b = pm.bill_save({"name": a.get("bill") or a.get("name") or "", "kind": a.get("kind"), "day": a.get("day"),
+        name = str(a.get("bill") or a.get("name") or "").strip()
+        same = next((x for x in pm.bills if x["name"].lower() == name.lower() and not x.get("archived")), None) if name else None
+        if same:                                     # №266 (пакет 27.10): модель добавила «Ипотеку» второй раз — была трассировка
+            upd = {k: a[k] for k in ("day", "month", "autopay", "how", "amount") if a.get(k) not in (None, "")}
+            if upd:
+                pm.bill_save(dict(upd, id=same["id"]))
+                eng.emit("pay_saved", what="pay_bill_save")
+            return f"Платёж «{same['name']}» уже есть" + (" — названное обновлено." if upd else " — второй такой не нужен.") + " Он в студии, «Платежи»."
+        b = pm.bill_save({"name": name, "kind": a.get("kind"), "day": a.get("day"),
                           "month": a.get("month"), "autopay": a.get("autopay"), "how": a.get("how") or "", "amount": a.get("amount")})
         eng.emit("pay_saved", what="pay_bill_save")
         return f"Платёж «{b['name']}» добавлен" + (f", срок — {b['day']}-е число" if b.get("day") else "") + ". Он в студии, «Платежи»."

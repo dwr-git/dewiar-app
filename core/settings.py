@@ -45,6 +45,9 @@ def _os_name():
         except ValueError:
             build = 0
         return "Windows 11" if build >= 22000 else "Windows 10" if build else "Windows"
+    import sys
+    if sys.platform == "darwin":                          # №332 (пакет 27.10): на Mac модель думала, что она в Linux
+        return ("macOS " + (platform.mac_ver()[0] or "")).strip()
     try:
         info = dict(line.split("=", 1) for line in Path("/etc/os-release").read_text().splitlines() if "=" in line)
         return "Linux, " + info.get("PRETTY_NAME", "").strip('"')
@@ -98,6 +101,7 @@ DEFAULTS = {
     "llm": {
         "active": "",
         "profiles": {},             # id -> {name, kind, base_url, api_key, model, disable_thinking, temperature, max_tokens}
+        "persona": {},              # id персонажа -> id профиля: свой мозг у персонажа («» — общий, active). 27.10
         "history_turns": 8,
         "lean_prompt": False,       # проба: короткая инструкция — навыки только именами, описания — к подходящему вопросу
         "think_auto": True,         # сложная просьба (стих, расчёт, анализ, план, код) — модель думает перед ответом (llm.wants_think)
@@ -225,6 +229,29 @@ def _merge(base, over):
     return out
 
 
+def system_dark():
+    """Тёмная ли тема у системы: Windows — «AppsUseLightTheme» = 0; Linux — GNOME color-scheme «prefer-dark» или тема
+    GTK с «dark» в имени. Не узнали — False (светлая тема по умолчанию)."""
+    import os
+    import subprocess
+    import sys
+    if os.environ.get("DEWIAR_SYSTEM_DARK") in ("0", "1"):                 # для проверок
+        return os.environ["DEWIAR_SYSTEM_DARK"] == "1"
+    try:
+        if sys.platform == "win32":
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as k:
+                return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+        if sys.platform.startswith("linux"):
+            for key in ("color-scheme", "gtk-theme"):
+                r = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", key], capture_output=True, text=True, timeout=2)
+                if r.returncode == 0 and "dark" in r.stdout.lower():
+                    return True
+    except Exception:  # noqa: BLE001 — нет реестра, нет gsettings — значит, светлая по умолчанию
+        pass
+    return False
+
+
 class Settings:
     def __init__(self, path: Path = SETTINGS_PATH):
         self.path = path
@@ -254,6 +281,8 @@ class Settings:
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
             except FileNotFoundError:
                 self.data = copy.deepcopy(DEFAULTS)
+                if system_dark():                                         # №259 (25.10): тёмная система — с первого запуска
+                    self.data["ui"]["skin"] = "neudark"                   # «Графитовый», а не светлый «Небесный» «режет глаз»
             except (OSError, json.JSONDecodeError) as e:
                 log.error("Настройки повреждены (%s) — беру значения по умолчанию, старый файл сохраню как .bak", e)
                 try:
@@ -269,7 +298,17 @@ class Settings:
             tmp = self.path.with_name("settings.json.tmp")
             tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
             os.chmod(tmp, 0o600)
-            tmp.replace(self.path)
+            # №269 (пакет 27.10): антивирус (Касперский) на миг держит файл — WinError 5, и настройки не сохранялись.
+            # Пять попыток с растущей паузой; не вышло — исключение, как раньше
+            import time as _t
+            for i in range(5):
+                try:
+                    tmp.replace(self.path)
+                    break
+                except PermissionError:
+                    if i == 4:
+                        raise
+                    _t.sleep(0.1 * (i + 1))
 
     def get(self, *keys, default=None):
         """get("llm", "active") — копия значения по пути ключей; нет такого — default."""

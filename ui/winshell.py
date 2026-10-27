@@ -218,6 +218,27 @@ def dark_title(h):
     dwm.DwmSetWindowAttribute(h, 35, ctypes.byref(black), ctypes.sizeof(black))     # DWMWA_CAPTION_COLOR, Windows 11
 
 
+def set_icon(h, ico):
+    """Знак Dewiar в заголовке окна и на панели задач (№260, 25.10: там был значок Python — окна pywebview берут его
+    у pythonw.exe). Большой и маленький значки — из одного .ico."""
+    path = str(ico)
+    user32.LoadImageW.restype = wintypes.HANDLE
+    user32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    for which, size in ((1, 32), (0, 16)):               # ICON_BIG, ICON_SMALL
+        hicon = user32.LoadImageW(None, path, 1, size, size, 0x10)          # IMAGE_ICON, LR_LOADFROMFILE
+        if hicon:
+            user32.PostMessageW(h, 0x80, which, hicon)                         # WM_SETICON (из любого потока, без ожидания)
+
+
+def app_id(name="Dewiar.Assistant"):
+    """Свой AppUserModelID процесса: Windows группирует окна на панели задач под Dewiar, а не под Python."""
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(name)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def tool_window(h):
     """Виджет не показывается кнопкой на панели задач и в Alt+Tab (для этого есть значок в трее)."""
     ex = user32.GetWindowLongPtrW(h, GWL_EXSTYLE)

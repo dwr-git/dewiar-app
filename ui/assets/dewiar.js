@@ -15,6 +15,7 @@
       this.connect();
     }
     on(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); return this; }
+    off(type, fn) { this.handlers[type] = (this.handlers[type] || []).filter(f => f !== fn); return this; }
     emit(type, e) { (this.handlers[type] || []).forEach(fn => { try { fn(e); } catch (err) { console.error(err); } }); }
     connect() {
       let ws;
@@ -52,9 +53,17 @@
         : x.reject(Object.assign(new Error("не отправлено: ядро долго не отвечало"), { stale: true })));
     }
     get waiting() { return this.later.length; }
+    /* Нет связи — подождать её до 6 с, а не отказать сразу (владелец 27.10 и №308: «с виджета в заметки — первый раз
+       пустая страница и „нет связи с ядром“, второй раз всё открывается»: студия звала ядро раньше, чем успела
+       подключиться). Ядро так и не ответило — тогда «нет связи с ядром». */
     call(cmd, args = {}) {
+      if (!this.connected) return new Promise((resolve, reject) => {
+        let done = false;
+        const go = () => { if (done) return; done = true; clearTimeout(t); this.off("hello", go); this.call(cmd, args).then(resolve, reject); };
+        const t = setTimeout(() => { if (done) return; done = true; this.off("hello", go); reject(new Error("нет связи с ядром")); }, window.DEWIAR_CALL_WAIT || 6000);
+        this.on("hello", go);
+      });
       return new Promise((resolve, reject) => {
-        if (!this.connected) return reject(new Error("нет связи с ядром"));
         const id = ++this.n; this.pending[id] = { resolve, reject };
         this.ws.send(JSON.stringify({ id, cmd, args }));
       });

@@ -48,6 +48,15 @@ CASES = {
     "stray": nd(by_char('{"name": "x", "arguments": {"a": 1}}</tool_call>Сегодня потратили 500 рублей.')),
     "mid": nd(['Сейчас посмотрю. {"name": "x", "argu', 'ments": {}}</tool', '_call> Итог: ноль.']),
     "json_text": nd(by_char('Вот: {"name": "Иван", "age": 30} — пример.')),
+    # №337 (пакет 27.10): иероглифы посреди русского ответа — прочь
+    "cjk": nd(by_char("Сегодня тепло, 你好 около пятнадцати градусов.")),
+    # №301 (пакет 27.10): DeepSeek пишет вызовы языком DSML — было видно в ответе, а погоду выдумывал
+    "dsml": nd(by_char('Узнаю погоду.<｜DSML｜function_calls>\n<｜DSML｜invoke name="weather">\n<｜DSML｜parameter name="city" string="true">Москва'
+                       '</｜DSML｜parameter>\n<｜DSML｜parameter name="days" string="false">1</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls>'
+                       ' Сейчас +13.')),
+    # №348 (пакет 27.10, 11:31): DeepSeek v4.1 — «<DSML calls>» без «｜», все аргументы одним JSON; читалось вслух
+    "dsml2": nd(by_char('Пишу.\n<DSML calls>\n<DSML invoke name="lab_write">\n<DSML parameter name="arguments" string="false">'
+                        '{"name": "a.py", "content": "print(1)"}</DSML parameter>\n</DSML invoke>\n</DSML calls>\n')),
 }
 
 R = {}
@@ -92,4 +101,11 @@ ok(st["calls"] == [["x", {"a": 1}]] and st["shown"] == "" and not st["text"].str
 md = R["mid"]
 ok(md["calls"] == [["x", {}]] and md["shown"].strip() == "Сейчас посмотрю." and "{" not in md["shown"], f"вызов голым JSON посреди текста вырезан: {md}")
 ok(R["json_text"]["text"] == 'Вот: {"name": "Иван", "age": 30} — пример.' and not R["json_text"]["calls"], f"обычный JSON в ответе — текстом: {R['json_text']}")
+ok(R["cjk"]["text"].replace("  ", " ") == "Сегодня тепло, около пятнадцати градусов.", f"иероглифы в русском ответе убраны: {R['cjk']['text']!r}")
+ds = R["dsml"]
+ok(ds["calls"] == [["weather", {"city": "Москва", "days": 1}]] and "DSML" not in ds["shown"] and "+13" not in ds["shown"],
+   f"вызов DeepSeek (DSML) — выполняется, разметка и выдумка не видны: {ds}")
+d2 = R["dsml2"]
+ok(d2["calls"] == [["lab_write", {"name": "a.py", "content": "print(1)"}]] and "DSML" not in d2["shown"] and "print" not in d2["shown"],
+   f"№348: «<DSML calls>» и аргументы одним JSON — вызов, вслух не читается: {d2}")
 ok(not errors,"без ошибок JavaScript" + (f": {errors}" if errors else ""))

@@ -349,17 +349,29 @@ def t_weather(a, ctx):
     days = max(1, min(7, int(float(a.get("days") or 3))))
     if not city:
         raise ToolError("спроси, в каком городе")
+    def get(url, params):
+        """open-meteo напрямую; не открылся — тем же адресом через сервер Dewiar (пакет 27.10: у части людей провайдер или
+        слабая сеть — «прогноз не получить»)."""
+        try:
+            r = httpx.get(url, params=params, headers=UA, timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except httpx.HTTPError as e:
+            via = (ctx or {}).get("dewiar_web") if isinstance(ctx, dict) else None
+            if not via:
+                raise
+            log.info("Погода через сервер Dewiar (напрямую: %s)", e)
+            return json.loads(via("fetch", str(httpx.URL(url, params=params))))
     try:
-        g = httpx.get("https://geocoding-api.open-meteo.com/v1/search", params={"name": city, "count": 1, "language": "ru"},
-                      headers=UA, timeout=12).json()
+        g = get("https://geocoding-api.open-meteo.com/v1/search", {"name": city, "count": 1, "language": "ru"})
         p = (g.get("results") or [None])[0]
         if not p:
             return f"Город «{city}» не нашёлся — уточни название."
-        w = httpx.get("https://api.open-meteo.com/v1/forecast", headers=UA, timeout=12, params={
+        w = get("https://api.open-meteo.com/v1/forecast", {
             "latitude": p["latitude"], "longitude": p["longitude"], "timezone": "auto", "forecast_days": days,
             "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation",
-            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"}).json()
-    except (httpx.HTTPError, ValueError) as e:
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"})
+    except (httpx.HTTPError, ValueError, Exception) as e:  # noqa: BLE001 — и запасной путь не вышел
         raise ToolError(f"прогноз сейчас не получить ({e}) — так и скажи, цифры не придумывай")
     c, d = w.get("current") or {}, w.get("daily") or {}
     out = [f"{p.get('name', city)}: сейчас {round(c.get('temperature_2m', 0))}°, ощущается как {round(c.get('apparent_temperature', 0))}°, "
@@ -1000,8 +1012,12 @@ def t_run_command(a, ctx):
         launch(["bash", "-lc", cmd])
         return "выполнено (тест)"
     if WIN:
-        r = winsys.shell(cmd, timeout=30, cwd=str(Path.home()))
-        out = (r.stdout + ("\n" + r.stderr if r.stderr else "")).strip()
+        try:
+            r = winsys.shell(cmd, timeout=30, cwd=str(Path.home()))
+        except subprocess.TimeoutExpired:                  # №267, №302 (пакет 27.10): было необработанное исключение и автоотчёт
+            return ("команда не закончилась за 30 с — остановил. Если она долгая (обход сетевого диска, поиск по всему "
+                    "диску), сузь её или запусти в фоне: Start-Job { … }")
+        out = ((r.stdout or "") + ("\n" + r.stderr if r.stderr else "")).strip()
         return f"код выхода {r.returncode}\n{out[-3000:]}"
     env, timeout = desktop_env(), 30
     if SUDO_AT.search(cmd):                                # пароль — в окне системы, не через ассистента
@@ -2239,7 +2255,8 @@ TOOLS = {
     "open_path": ("Открыть файл или папку (можно «загрузки», «документы», «рабочий стол» или путь).", S({"path": {"type": "string"}}, ["path"]), "safe", t_open_path, "Открытие файлов и папок"),
     "play_music": ("Включить музыку: открывает поиск в YouTube Music.", S({"query": {"type": "string", "description": "исполнитель, песня или настроение"}}), "safe", t_play_music, "Музыка в YouTube Music"),
     "play_radio": ("Включить радио онлайн внутри ассистента: по названию станции («Европа Плюс», «Радио Маяк»), жанру "
-                   "(«джаз», «рок», «классика», «релакс») или пусто — популярное русское. Останавливается голосом: «стоп», «пауза».",
+                   "(«джаз», «рок», «классика», «релакс») или пусто — популярное русское. Только чтобы ВКЛЮЧИТЬ: «выключи радио», «хватит» — "
+                   "это media_control с action stop, а не play_radio. Не говори «выключила», не вызвав media_control.",
                    S({"query": {"type": "string"}}), "safe", t_play_radio, "Радио"),
     "play_youtube": ("Найти и показать ролик на YouTube (откроется в браузере и сразу заиграет): клип, видео, лекция, "
                      "обзор. query — что искать.", S({"query": {"type": "string"}}, ["query"]), "safe", t_play_youtube,
@@ -2582,6 +2599,28 @@ class Toolbox:
             return self.mcp.title(name)
         return name
 
+    def _needs(self, name):
+        """Чего не хватает инструменту (№264, 25.10: «включаю — пишет „Сохранено“, а переключатель не включается»: почта,
+        Telegram, «Знания», аккаунт не подключены). -> (что сделать, раздел студии) или None."""
+        h = self.hooks
+        if name in ("send_email", "read_emails", "read_email") and not (h.get("mail") and h["mail"].configured()):
+            return "Сначала подключите почту — «Подключение» → «Почта»", "connect"
+        if name == "send_telegram" and not (h.get("telegram") and h["telegram"].paired()):
+            return "Сначала подключите Telegram или MAX — «Подключение»", "connect"
+        if name == "smart_home" and not (h.get("home") and h["home"].connected()):
+            return "Сначала подключите умный дом Яндекса — «Подключение»", "connect"
+        if name == "server_run" and not (h.get("servers") and h["servers"].items):
+            return "Сначала добавьте сервер — «Серверы»", "servers"
+        if name == "search_documents" and not (h.get("knowledge") and h["knowledge"].has_files()):
+            return "Сначала добавьте документы в «Знания» — «Обо мне» → «Мои документы»", "me"
+        if name == "ask_knowledge" and not (h.get("account") and h["account"].logged_in()):
+            return "Нужен вход аккаунтом dewiar.pro — «Dewiar.pro»", "dw"
+        if name in NET_TOOLS and (self.s.get("privacy") or {}).get("local_only"):
+            return "Включён стоп-кран «Ничего не уходит в интернет» — «Безопасность»", "safety"
+        if name == "run_command" and (self.s.get("privacy") or {}).get("files") == "folder":
+            return "Стоит замок «Файлы: только папка Dewiar» — «Безопасность»", "safety"
+        return None
+
     def catalog(self):
         """Список инструментов для студии (включён, нужно ли подтверждение)."""
         en = ((self.s.get("tools") or {}).get("enabled") or {}) if getattr(self, "s", None) is not None else {}
@@ -2591,8 +2630,11 @@ class Toolbox:
             want = en.get(n, n not in DEFAULT_OFF)
             # почему выключено: user — сами в студии; service — служба не подключена или замок/стоп-кран
             off_by = "" if on else ("user" if not want else "service")
+            need = self._needs(n) if not on else None
+            if need and off_by == "user":                  # выключили сами, а служба и так не подключена — скажем и это
+                off_by = "service"
             out.append({"name": n, "title": v[4], "description": v[0], "risk": v[2], "enabled": on, "confirm": conf,
-                        "off_by": off_by, "core": n in SAFE_CORE})
+                        "off_by": off_by, "core": n in SAFE_CORE, "needs": need[0] if need else "", "page": need[1] if need else ""})
         return out
 
     def guard(self, name, args):

@@ -28,6 +28,9 @@ public final class Phone {
 
     static int score(String want, String have) { return Names.score(want, have); }
 
+    /** Для названий приложений: «Яндекс.Музыка», «Яндекс-Музыка», «яндекс музыка» — одно и то же. */
+    static String flat(String s) { return norm(s).replaceAll("[.\\-_·:/]+", " ").replaceAll("\\s+", " ").trim(); }
+
     /** Контакт по имени -> {name, number, alts: [{name, number}]} или null. alts — другие люди с почти таким же совпадением:
      *  тогда лучше спросить, кому звонить, чем звонить не тому. Нужно разрешение READ_CONTACTS. */
     public static JSONObject contact(Context c, String who) {
@@ -102,14 +105,21 @@ public final class Phone {
         PackageManager pm = c.getPackageManager();
         ResolveInfo best = null;
         int bs = 0;
-        String w = norm(name);
+        String w = flat(name);
         if (w.isEmpty()) return "";
         for (ResolveInfo r : launchers(c)) {
             String label = String.valueOf(r.loadLabel(pm));
-            String l = norm(label);
+            String l = flat(label);
             int s = l.equals(w) ? 100 : score(w, label);
             if (s < 100 && w.length() >= 3) {
-                if (l.startsWith(w) || (l.length() >= 3 && w.startsWith(l))) s = Math.max(s, 70);   // короткая метка («X») — не начало любого слова
+                if (l.startsWith(w)) s = Math.max(s, 70);
+                else if (l.length() >= 3 && w.startsWith(l)) {
+                    // №290 (пакет 27.10): «открой Яндекс Музыку» открыло «Яндекс» (браузер): метка короче запроса подходит,
+                    // только если остаток — общие слова («приложение»), а не другое название
+                    String rest = w.substring(l.length()).trim();
+                    boolean generic = rest.isEmpty() || rest.matches("(?:приложени\\S*|app|прилож\\S*|на телефоне|пожалуйста|\\s)+");
+                    s = generic ? Math.max(s, 70) : Math.min(s, 40);
+                }
                 else if (l.contains(w)) s = Math.max(s, 55);
             }
             if (s > bs) { bs = s; best = r; }

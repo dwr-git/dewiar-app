@@ -309,15 +309,40 @@ class BrainMixin:
         """Слабый компьютер распознаёт речь лёгким Vosk, а появился вход или ключ Dewiar — отдаём речь серверу."""
         if not self.s.get("device", "light") or self.s.get("stt", "engine") != "vosk":
             return
+        if time.time() - float(self.s.get("device", "stt_slow_at") or 0) < 86400:
+            return                                        # сервер недавно был медленным — сутки не переключаем (№331)
         how = "cloud" if self._cloud_stt_ok() else "account" if self.account.service_url("stt") else ""
         if not how:
             return
         self._apply_light_stt(how)
         self.apply_engines()
-        self.s.update({"device": {"notice": ""}})
+        self.s.update({"device": {"notice": "", "stt_auto": True}})
         self.emit("settings", settings=self.s.snapshot())
         self.emit("device", **self.device_status())
         self.push("Речь распознаёт сервер Dewiar", "Компьютер слабый — теперь распознаёт сервер: быстрее и точнее.", telegram=False)
+
+    def _stt_timing(self, stt, ms):
+        """№331 (пакет 27.10): слабый компьютер сам отдал речь серверу («быстрее и точнее»), а сервер распознавал по
+        21–25 с на фразу (вечер, нагрузка, VPN). Три медленные фразы подряд (> 8 с) — возвращаем свой Vosk и сутки
+        не переключаем. Только если на сервер переключили мы сами, а не человек."""
+        if not self.s.get("device", "stt_auto"):
+            return
+        slow = getattr(self, "_stt_slow_n", 0)
+        self._stt_slow_n = slow + 1 if ms > 8000 else 0
+        if self._stt_slow_n < 3:
+            return
+        self._stt_slow_n = 0
+        log.info("Речь на сервере распознаётся медленно (%d мс) — возвращаю распознавание на этот компьютер (Vosk)", ms)
+        if self.s.get("cloud", "stt"):
+            try:
+                self.cloud.set_stt(False)
+            except Exception:  # noqa: BLE001
+                pass
+        self._apply_light_stt("vosk")
+        self.s.update({"device": {"stt_auto": False, "stt_slow_at": time.time()}})
+        self.apply_engines()
+        self.emit("settings", settings=self.s.snapshot())
+        self.push("Речь снова распознаёт этот компьютер", "Сервер Dewiar сейчас распознаёт медленно — вернул распознавание сюда, так быстрее.", telegram=False)
 
     def _cloud_key_gone(self):
         """Ключ dw- удалили или перевыпустили на сайте. Вошли аккаунтом — переходим на облако по аккаунту (один раз,

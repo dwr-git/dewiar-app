@@ -169,6 +169,21 @@ class MusicMixin:
         self.set_state("idle")
         return True
 
+    def _musical(self, query):
+        """Похож ли запрос на музыку: жанр или настроение (music.SYN, GENRE_EN), станция из списка, слова «песня, трек,
+        альбом, группа…»."""
+        from music import GENRE_EN, SYN
+        q = query.lower().replace("ё", "е")
+        if re.search(r"\b(?:песн|трек|альбом|групп|исполнител|плейлист|музык|радио|станци|волн|саундтрек|хит)", q):
+            return True
+        words = re.findall(r"[а-яa-z0-9]+", q)
+        if any(w.startswith(k) for w in words for k in list(SYN) + list(GENRE_EN)):
+            return True
+        try:
+            return bool(self.music.match(query))
+        except Exception:  # noqa: BLE001
+            return False
+
     def _yandex_cmd(self, query, text):
         """Открыть поиск в Яндекс Музыке (приложение или сайт) и ответить без модели. Пустой query — просто открыть.
         Из запроса убираются лишние слова, а «электронную музыку» превращаем в «электронная музыка» — как жанр."""
@@ -231,9 +246,15 @@ class MusicMixin:
         op = c["op"]
         if op == "app":
             return self._yandex_cmd("", text)
+        if op == "play" and c.get("strict") and not c.get("service") and re.match(r"^\W*(?:\w+\W+)?(?:давай|хочу|можно)\b", text.lower()) \
+                and not self._musical(c.get("query") or ""):
+            # №341 (пакет 27.10): «Лира, давай заполним расписание преподавателя» ушло поиском в Яндекс Музыку, «можно
+            # вопрос» и «хочу узнать курс доллара» — тоже «играть». «Давай / хочу / можно» без музыки в запросе — не про
+            # музыку: решит модель
+            return False
         if op == "play" and not self.radio.playing and (c.get("service") or self._music_service()) in ("yandex", "youtube"):
             sv = c.get("service") or self._music_service()
-            if sv == "yandex":
+            if sv == "yandex" and (c.get("service") or not re.search(r"радио|станци|волн", text.lower())):   # №341: «включи радио» — радио
                 return self._yandex_cmd(c["query"], text)
             if not c["strict"] and not re.search(r"радио|станц|волн", text.lower()):
                 import tools as _tools
@@ -241,7 +262,7 @@ class MusicMixin:
                 _tools.t_play_music({"query": q}, self.toolbox.hooks)
                 self._say_quick(f"Открываю YouTube Music{': «' + q + '»' if q else ''}.", text)
                 return True
-        if op == "ask" and self._music_service() == "yandex":
+        if op == "ask" and self._music_service() == "yandex" and not re.search(r"радио|станци|волн", text.lower()):
             return self._yandex_cmd("", text)
         if op == "stop":
             if not (self.radio.playing or self.radio.paused):
@@ -471,7 +492,11 @@ class MusicMixin:
             self.diary.log.prune()
         except Exception:  # noqa: BLE001
             pass
+        # №289, №309 (пакет 27.10): проверка шла раз в 90 с (min(600, first)), а неудачная запись (нет заряда, сетевая папка)
+        # тут же повторялась — модель звали каждые полторы минуты часами. Теперь раз в 10 минут, после сбоя — через 30
+        step = float(os.environ.get("DEWIAR_DIARY_WAIT") or 600)
         while not self.stopping.is_set():
+            failed = False
             try:
                 on = self.s.get("diary", "night")
                 quiet = self.turn is None and (not self.last_turn_time or time.monotonic() - self.last_turn_time > 600)
@@ -485,6 +510,7 @@ class MusicMixin:
                         if self.soul.due(name) and self.soul.update(name):     # раз в неделю — и душа по дневнику
                             self.emit("soul", name=name)
             except Exception as e:  # noqa: BLE001
+                failed = True
                 log.warning("🌙 дневник: ночная запись не получилась: %s", e)
             try:                                         # ночной обход — в то же тихое время (night.py)
                 hour = self.s.get("diary", "hour")
@@ -492,8 +518,9 @@ class MusicMixin:
                     got = self.night.run()
                     self.emit("night", **{k: got[k] for k in ("day", "note", "path", "repaired", "left")})
             except Exception as e:  # noqa: BLE001
+                failed = True
                 log.warning("🌙 ночной обход не получился: %s", e)
-            if self.stopping.wait(min(600, first)):
+            if self.stopping.wait(step * 3 if failed and not os.environ.get("DEWIAR_DIARY_WAIT") else step):
                 return
 
     # ---------- «сам замечает и сам начинает»: вернулись к компьютеру — коротко о главном ----------

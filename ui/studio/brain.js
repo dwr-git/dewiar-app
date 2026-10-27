@@ -54,7 +54,12 @@ function renderProfiles() {
             box.innerHTML = `<b>Модели на сервере · ${ms.length}</b>` + ms.map(m => `<button class="chip${m === cur ? " on" : ""}${/embed|rerank/i.test(m) ? " side" : ""}" data-m="${escH(m)}"${/embed|rerank/i.test(m) ? ' title="Для поиска по смыслу — разговаривать не умеет"' : ""}>${escH(m)}</button>`).join("");
             box.hidden = !ms.length; if (openProf !== id) { openProf = id; el.classList.add("open"); }
             $$("button", box).forEach(b => b.onclick = () => { S.llm.profiles[id].model = b.dataset.m; save({ llm: { profiles: S.llm.profiles } }, true).then(renderProfiles); toast("Модель: " + b.dataset.m); });
-            res.className = "res ok"; res.textContent = ms.length ? `моделей: ${ms.length} — нажмите нужную` : "сервер не вернул ни одной модели"; }
+            res.className = "res ok"; res.textContent = ms.length ? `моделей: ${ms.length} — нажмите нужную` : "сервер не вернул ни одной модели";
+            // №258 (25.10): в Ollama только nomic-embed-text, а qwen3 скачан в LM Studio — «выбора нет»; объясняем, где взять
+            if (!ms.some(m => !/embed|rerank|ocr|whisper|tts|asr|speech|stt|clip|bge|e5-|guard|moderat/i.test(m))) {
+              res.className = "res bad"; res.textContent = "Модели для разговора здесь нет…";
+              core.call("llm_no_chat", { profile: S.llm.profiles[id], models: ms }).then(t => { res.textContent = t; }).catch(() => {});
+            } }
       catch (e) { res.className = "res bad"; res.textContent = e.message; }
     };
     $('[data-a="del"]', el).onclick = () => { delete S.llm.profiles[id]; const patch = { llm: { profiles: S.llm.profiles } }; if (S.llm.active === id) patch.llm.active = Object.keys(S.llm.profiles)[0] || ""; save(patch).then(renderProfiles); };
@@ -246,10 +251,18 @@ function renderTools(list) {
     const el = document.createElement("div"); el.className = "tool";
     el.innerHTML = `<div><b></b>${t.risk === "confirm" ? '<span class="risk">опасное</span>' : ""}<div class="d"></div></div>
       <label class="tg" title="Включено"><input type="checkbox" ${t.enabled ? "checked" : ""}><i></i></label>
-      <label class="ask"><input type="checkbox" ${t.confirm ? "checked" : ""}> спрашивать разрешение</label>`;
+      <label class="ask"><input type="checkbox" ${t.confirm ? "checked" : ""}> спрашивать разрешение</label>
+      ${t.needs ? `<div class="need"><span></span><button class="btn small" data-go="${escH(t.page || "")}">Открыть</button></div>` : ""}`;
     $("b", el).textContent = t.title; $(".d", el).textContent = t.description;
+    if (t.needs) { $(".need span", el).textContent = t.needs; $(".need button", el).onclick = () => { const b = $(`nav button[data-p="${t.page}"]`); if (b) b.click(); }; }
     const [on, ask] = $$("input", el);
-    on.onchange = () => save({ tools: { enabled: { [t.name]: on.checked } } }).then(() => core.call("tools").then(renderTools));
+    // №264 (25.10): «включаю — „Сохранено“, а переключатель не включается» — служба не подключена: не делаем вид, что
+    // сохранили, а показываем, чего не хватает, и подсвечиваем подсказку
+    on.onchange = () => {
+      if (on.checked && t.needs) { on.checked = false; save({ tools: { enabled: { [t.name]: true } } }, true);
+        const n = $(".need", el); n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash"); return; }
+      save({ tools: { enabled: { [t.name]: on.checked } } }).then(() => core.call("tools").then(renderTools));
+    };
     ask.onchange = () => save({ tools: { confirm: { [t.name]: ask.checked } } });
     box.appendChild(el);
   });

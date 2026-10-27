@@ -934,6 +934,11 @@ class AudioMixin:
                         text = self.vosk_stt.transcribe(pcm).strip()
             from vault import mask as _mask                # продиктованный для сейфа секрет — не в журнал
             log.info("📝 %s (%s, %d мс)", _mask(text) or "—", stt.name, (time.monotonic() - t0) * 1000)
+            if not held and stt is not self.vosk_stt:
+                try:
+                    self._stt_timing(stt, (time.monotonic() - t0) * 1000)
+                except Exception as e:  # noqa: BLE001
+                    log.debug("скорость распознавания: %s", e)
             self.emit("hearing", text=text, by=stt.name, name="", ms=int((time.monotonic() - t0) * 1000), full=True)
             if held:
                 self.handle_held(text)
