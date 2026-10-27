@@ -157,6 +157,17 @@ class Soul:
         p.write_text((text or "").strip() + "\n", encoding="utf-8")
         return self.soul(name)
 
+    def delete_soul(self, name):
+        """Стереть душу (28.10): файл и отметку обновления; вырастет заново из дневника — сама или по кнопке."""
+        p = self.soul_path(name)
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
+        (self.data.get("updated") or {}).pop(name, None)
+        self._save()
+        return ""
+
     def souls(self):
         d = self.root / SOUL_DIR
         return sorted(p.stem for p in d.glob("*.md")) if d.is_dir() else []

@@ -643,7 +643,11 @@ def signature_tone(rate=22050):
     return (out * 32767).astype(np.int16).tobytes()
 
 
-BRAND_SOUNDS = ("struna", "chasha", "kolodec", "hor", "glubina")     # data/sounds/alarm_*.wav (tools/brand_sounds.py)
+# Звонки (28.10, владелец выбрал пять из двенадцати): data/sounds/alarm_<id>.wav — моно 32 кГц; источник — звуки Android
+# Open Source Project (Apache License 2.0, см. NOTICE): signature «Пульс» (Machina), noon «Полдень» (Solarium), night
+# «Ночной город» (Sceptrum, первые 15 с), wave «Волна» (Zeta), sparks «Искры» (Perseus); громкость выровнена (loudnorm).
+BRAND_SOUNDS = ("signature", "noon", "night", "wave", "sparks")
+ALARM_RATE = 32000
 
 
 def _wav_tone(name, rate):
@@ -665,16 +669,14 @@ def _wav_tone(name, rate):
     return np.clip(a, -32768, 32767).astype(np.int16).tobytes()
 
 
-def alarm_tone(style="bells", rate=22050) -> bytes:
-    """Звонок будильника: signature — фирменный «Струна» (24.10, data/sounds/alarm_struna.wav); chasha, kolodec, hor,
-    glubina — коллекция; motif — прежний фирменный мотив (signature_tone); bells/soft/classic — синтез ниже."""
-    if style == "signature" or style in BRAND_SOUNDS:
-        pcm = _wav_tone("struna" if style == "signature" else style, rate)
-        if pcm:
-            return pcm
-        return signature_tone(rate)
-    if style == "motif":
-        return signature_tone(rate)
+def alarm_tone(style="signature", rate=ALARM_RATE) -> bytes:
+    """Звонок будильника — один из BRAND_SOUNDS (data/sounds). Прежние звуки (chasha, kolodec, hor, glubina, motif,
+    bells, soft, classic — до 0.52) владелец убрал: у тех, кто их выбирал, звенит фирменный «Пульс». Нет файла — старый
+    синтезированный мотив (signature_tone), чтобы будильник не молчал; synth:<bells|soft|classic> — синтез ниже (проверки)."""
+    if not str(style or "").startswith("synth:"):
+        pcm = _wav_tone(style if style in BRAND_SOUNDS else "signature", rate)
+        return pcm or signature_tone(rate)
+    style = style[6:]
     pats = {"bells": [(1046.5, 0.0), (1318.5, 0.18), (1568.0, 0.36), (2093.0, 0.54), (1568.0, 1.2), (2093.0, 1.38)],
             "soft": [(659.3, 0.0), (783.99, 0.3), (987.8, 0.6), (783.99, 1.2), (987.8, 1.5)],
             "classic": [(1760.0, x * 0.12) for x in range(8)] + [(1760.0, 1.2 + x * 0.12) for x in range(8)]}

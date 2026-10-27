@@ -39,6 +39,8 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     ok(pg.evaluate("document.querySelector('#nr-radar .rad-p[data-pid=\"p1\"] .cl-ava').classList.contains('has-face') && document.querySelector('#nr-radar .rad-me').classList.contains('has-face')"),
        "на радаре — фото близкого и своё в середине, а не буквы (пакет 27.10)")
+    bs = pg.evaluate("[getComputedStyle(document.querySelector('#nr-radar .rad-me')).backgroundSize, getComputedStyle(document.querySelector('#nr-radar .rad-p .cl-ava.has-face')).backgroundSize]")
+    ok(bs == ["cover", "cover"], f"фото в середине не растянуто — вписано в кружок (28.10, владелец: «растянулось»): {bs}")
     card = pg.inner_text(".nr-card")
     ok("Андрей" in card and "180 м" in card and "на юго-восток" in card, f"ближайший — в карточке: {card!r}")
     ok("Вика" in pg.inner_text(".nr-rest") and "Центр — ваш телефон" in pg.inner_text("#cl-near"), "кто не показал себя — ниже; подпись про центр")

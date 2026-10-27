@@ -77,6 +77,9 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 <section class="sheet tall" id="sh-set"><div class="grab"></div><h2>Настройки</h2><div id="set-body"></div></section>
 <section class="sheet" id="sh-ann" aria-labelledby="an-h"><div class="grab"></div><div id="ann-body"></div></section>
 <section class="sheet tall" id="sh-play" aria-labelledby="pl-h"><div class="grab"></div><h2 id="pl-h">Досуг</h2><div id="play-body"></div></section>
+<section class="sheet tall" id="sh-learn" aria-label="Вопрос — ответ и курсы"><div class="grab"></div>
+  <div class="tabs" id="ln-tabs"><button data-t="qa" class="on">Вопрос — ответ</button><button data-t="course">Курсы</button></div>
+  <div id="ln-body"></div></section>
 <section class="sheet tall" id="sh-tricks"><div class="grab"></div><h2>Что я умею</h2><div id="tricks-body"></div></section>
 
 <div id="gameov" hidden><iframe id="gamef" title="Игра" allow="autoplay; gamepad"></iframe></div>

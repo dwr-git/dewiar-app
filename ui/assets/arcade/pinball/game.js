@@ -3,7 +3,12 @@
    дыра», три верхние дорожки и созвездие Лиры посередине — пять его звёзд зажигаются заданиями; все пять — звездопад
    (ещё два мячика). Физика своя: 10 подшагов на кадр, шарик — круг, стенки — отрезки, флипперы — вращающиеся
    «капсулы» (скорость поверхности передаётся шарику). Широкое окно (лист «Досуг» на компьютере) — стол посередине,
-   слева правила и рекорд, справа табло и задания; узкое (телефон) — стол во весь экран, табло сверху. */
+   слева правила и рекорд, справа табло и задания; узкое (телефон) — стол во весь экран, табло сверху.
+   28.10, владелец: «слишком сложная… мячику почти не от чего отпрыгивать… хочется разных цветов… справа непонятно зачем
+   штука, куда шарик попадает и мы проигрываем… разнообразнее, ярче и чуть легче». Теперь: шарик медленнее, флипперы
+   длиннее, страховка 15 секунд; в обеих боковых дорожках — «пружины-спасатели» (горят в начале шарика, снова — за мишени
+   слева и кометы справа); три луны кружат по орбите созвездия и меняют цвет от удара; резиновые «астероиды» наверху;
+   у каждой планеты своя раскраска, удар окрашивает стол её светом, след шарика — радужный. */
 (() => {
 'use strict';
 const A = Arcade;
@@ -11,7 +16,7 @@ const LAND = (() => { try { return innerWidth > (innerHeight - 110) * 1.15; } ca
 const W = 720, H = 1280;                                  // стол — всегда книжный
 const SW = LAND ? 1280 : 720, SH = LAND ? 720 : 1400;     // холст
 const TS = LAND ? SH / H : 1, TX = LAND ? (SW - W * TS) / 2 : 0, TY = LAND ? 0 : 120;
-const R = 14, G = 2050, VMAX = 3200, SUB = 10;
+const R = 14, G = 1720, VMAX = 2900, SUB = 10;
 const C = { ink: '#f4efff', dim: '#9d93c9', mute: '#6c6396', gold: '#ffd166', pink: '#ff6fd0', cyan: '#6fe6ff', mint: '#63f2c4', violet: '#a98bff', deep: '#0c0726' };
 const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
 
@@ -48,9 +53,15 @@ LANE_X.forEach((x) => seg(x, 222, x, 290, { rad: 4, e: .3, lanePost: 1 }));
 const BUMPERS = [{ x: 268, y: 440, r: 34, c: ['#ffb3ea', '#ff5cc8', '#6e1a63'] }, { x: 412, y: 440, r: 34, c: ['#b5f7ff', '#3fd2f2', '#0f4a6b'] },
   { x: 340, y: 556, r: 34, c: ['#ffe9a8', '#ffbf3c', '#7a4710'] }];
 const HOLE = { x: 128, y: 452 };
+// луны — кружат по орбите вокруг созвездия (эллипс), от каждого удара меняют цвет; астероиды — резиновые столбики наверху
+const ORBIT = { x: 330, y: 780, rx: 162, ry: 128 };
+const MOON_COL = [['#c9fff0', '#3fe0b5', '#0d5a48'], ['#ffe0c2', '#ff9a4d', '#7a3a10'], ['#e8dcff', '#a98bff', '#3b2580'], ['#ffd6ec', '#ff6fb8', '#6e1a4a'], ['#d6f4ff', '#4fc3ff', '#0f3f6b']];
+const MOONS = [0, 1, 2].map((i) => ({ r: 20, ph: i * Math.PI * 2 / 3, ci: [0, 2, 3][i], x: 0, y: 0, vx: 0, vy: 0 }));
+const PEGS = [{ x: 205, y: 345, r: 11 }, { x: 470, y: 345, r: 11 }, { x: 340, y: 345, r: 9 }];
+const KICK = [{ x: 65, side: 'L' }, { x: 605, side: 'R' }];      // пружины-спасатели в боковых дорожках
 const FLIP = [
-  { px: 222, py: 1098, len: 100, r0: 17, r1: 9, side: 1, rest: .52, up: -.46, a: .52, w: 0 },
-  { px: 448, py: 1098, len: 100, r0: 17, r1: 9, side: -1, rest: .52, up: -.46, a: .52, w: 0 }
+  { px: 222, py: 1098, len: 104, r0: 17, r1: 9, side: 1, rest: .52, up: -.46, a: .52, w: 0 },
+  { px: 448, py: 1098, len: 104, r0: 17, r1: 9, side: -1, rest: .52, up: -.46, a: .52, w: 0 }
 ];
 // созвездие Лиры: Вега, ε (только рисунок), ζ, δ, γ (Сулафат), β (Шелиак)
 const LYRA = { vega: [300, 690], eps: [348, 668], zeta: [318, 760], delta: [372, 784], gamma: [356, 876], beta: [300, 852] };
@@ -60,18 +71,20 @@ const STARS = [
   { k: 'zeta', name: 'Дзета', task: 'четыре звезды-мишени слева' },
   { k: 'delta', name: 'Дельта', task: 'три кометы справа' },
   { k: 'gamma', name: 'Сулафат', task: '«Чёрная дыра»' },
-  { k: 'beta', name: 'Шелиак', task: '25 ударов по планетам' }
+  { k: 'beta', name: 'Шелиак', task: '25 ударов по планетам и лунам' }
 ];
 
 /* ---------------- состояние ---------------- */
 let S = null, g0 = null;
 function fresh() {
   return { mode: 'title', t: 0, score: 0, ball: 1, extra: 0, balls: [], lanes: [0, 0, 0], X: 1, drops: [0, 0, 0, 0], dropT: 0, stands: [0, 0, 0], standT: 0,
-    bumps: 0, stars: [0, 0, 0, 0, 0], level: 1, kick: false, save: 0, saveArm: true, charge: 0, bonus: 0, msg: null, skill: -1, skillT: 0,
-    fl: { b: [0, 0, 0], s: [0, 0], d: [0, 0, 0, 0], st: [0, 0, 0], lane: [0, 0, 0], hole: 0, kick: 0, star: [0, 0, 0, 0, 0] },
+    bumps: 0, stars: [0, 0, 0, 0, 0], level: 1, kick: [true, true], save: 0, saveArm: true, charge: 0, bonus: 0, msg: null, skill: -1, skillT: 0,
+    fl: { b: [0, 0, 0], s: [0, 0], d: [0, 0, 0, 0], st: [0, 0, 0], lane: [0, 0, 0], hole: 0, kick: [0, 0], star: [0, 0, 0, 0, 0], m: [0, 0, 0], peg: [0, 0, 0] },
+    tint: null, orbit: 0,
     waitT: 0, firstConst: true, nudgeT: 0, wasL: false, wasR: false, plungeHeld: false };
 }
 const newBall = () => ({ x: 665, y: 1238 - R, vx: 0, vy: 0, ready: true, lock: 0, noHole: 0, still: 0, trail: [] });
+const SAVE_S = 15;                                        // страховка после запуска: столько секунд упавший шарик возвращается
 
 /* ---------------- ввод: клавиши, мышь, касания (оба флиппера сразу) ---------------- */
 const touch = new Map();          // pointerId -> 'L' | 'R'
@@ -172,7 +185,7 @@ function dropHit(g, i, b) {
   if (S.drops[i]) return;
   S.drops[i] = 1; S.fl.d[i] = .4; add(g, 750, 92, (DROPS[i][0] + DROPS[i][1]) / 2, C.gold); S.bonus += 200; g.sfx('coin', { pitch: .9 + i * .08 });
   if (S.drops.every(Boolean)) {
-    add(g, 5000); S.kick = true; S.fl.kick = 1; S.dropT = 1.4;
+    add(g, 5000); S.kick[0] = true; S.fl.kick[0] = 1; S.dropT = 1.4;
     say('Все звёзды-мишени!', 'Слева включилась пружина — спасёт шарик');
     star(g, 1);
   }
@@ -181,20 +194,28 @@ function standHit(g, i) {
   S.fl.st[i] = .45;
   if (S.stands[i]) { add(g, 250); g.sfx('hit', { pitch: 1.4 }); return; }
   S.stands[i] = 1; add(g, 1000, 576, (STANDS[i][0] + STANDS[i][1]) / 2, C.cyan); S.bonus += 200; g.sfx('pling', { pitch: 1.3 + i * .1 });
-  if (S.stands.every(Boolean)) { add(g, 5000); S.standT = 1.2; say('Три кометы!', 'Звезда Дельта зажглась'); star(g, 2); }
+  if (S.stands.every(Boolean)) { add(g, 5000); S.standT = 1.2; S.kick[1] = true; S.fl.kick[1] = 1; say('Три кометы!', 'Справа включилась пружина, зажглась Дельта'); star(g, 2); }
 }
+function tint(col, k) { S.tint = { col, k: Math.max(k, S.tint ? S.tint.k : 0) }; }
 function bumperHit(g, i) {
   S.fl.b[i] = .18; add(g, 100); S.bumps++; S.bonus += 20;
-  g.sfx('bounce', { pitch: [1, 1.18, .86][i], gap: .02 });
+  g.sfx('bounce', { pitch: [1, 1.18, .86][i], gap: .02 }); tint(BUMPERS[i].c[1], .5);
   if (S.bumps === 25 && !S.stars[4]) star(g, 4);
   else if (!S.stars[4] && S.bumps % 5 === 0) say('Планеты: ' + S.bumps + ' из 25', 'Ещё — и зажжётся Шелиак');
+}
+function moonHit(g, i) {
+  const m = MOONS[i];
+  S.fl.m[i] = .25; m.ci = (m.ci + 1) % MOON_COL.length; add(g, 250, m.x, m.y - 34, MOON_COL[m.ci][1]); S.bumps++; S.bonus += 30;
+  g.sfx('pling', { pitch: 1.5 + i * .2, gap: .03 }); tint(MOON_COL[m.ci][1], .4);
+  g.fx.burst(m.x, m.y, { n: 10, colors: ['#fff', MOON_COL[m.ci][0], MOON_COL[m.ci][1]], speed: 260, size: 5, life: .5 });
+  if (S.bumps === 25 && !S.stars[4]) star(g, 4);
 }
 
 function endBall(g) {
   const bonus = S.bonus * S.X + S.stars.filter(Boolean).length * 1000;
   if (bonus) S.score += bonus;
   S.ball++;
-  S.X = 1; S.bonus = 0; S.kick = S.kick && false; S.saveArm = true;
+  S.X = 1; S.bonus = 0; S.kick = [true, true]; S.saveArm = true;
   if (S.ball > 3 + S.extra) { gameOver(g); return; }
   S.mode = 'wait'; S.waitT = 1.6;
   say('Шарик ' + S.ball, bonus ? 'Бонус +' + fmt(bonus) : 'Ещё попытка');
@@ -280,13 +301,36 @@ function stepBall(g, b, h) {
     if (vn < 0) { b.vx -= 1.5 * vn * nx; b.vy -= 1.5 * vn * ny; }
     if (S.fl.b[i] <= .1) { b.vx += nx * 640; b.vy += ny * 640; bumperHit(g, i); g.fx.ring(p.x, p.y, { r0: p.r, r1: p.r + 34, color: p.c[1], width: 6, life: .3 }); }
   });
+  MOONS.forEach((m, i) => {                                 // луна движется: отскок — от её скорости
+    const dx = b.x - m.x, dy = b.y - m.y, rr = m.r + R, d2 = dx * dx + dy * dy;
+    if (d2 >= rr * rr) return;
+    const d = Math.sqrt(d2) || 1, nx = dx / d, ny = dy / d;
+    b.x = m.x + nx * rr; b.y = m.y + ny * rr;
+    const vn = (b.vx - m.vx) * nx + (b.vy - m.vy) * ny;
+    if (vn < 0) { b.vx -= 1.6 * vn * nx; b.vy -= 1.6 * vn * ny; }
+    if (S.fl.m[i] <= .12) { b.vx += nx * 420; b.vy += ny * 420; moonHit(g, i); }
+  });
+  PEGS.forEach((p, i) => {                                  // астероиды: упругая резина, без толчка
+    const dx = b.x - p.x, dy = b.y - p.y, rr = p.r + R, d2 = dx * dx + dy * dy;
+    if (d2 >= rr * rr) return;
+    const d = Math.sqrt(d2) || 1, nx = dx / d, ny = dy / d;
+    b.x = p.x + nx * rr; b.y = p.y + ny * rr;
+    const vn = b.vx * nx + b.vy * ny;
+    if (vn < 0) {
+      b.vx -= 1.8 * vn * nx; b.vy -= 1.8 * vn * ny;
+      if (-vn > 120 && S.fl.peg[i] <= 0) { S.fl.peg[i] = .2; add(g, 50); g.sfx('hit', { pitch: 1.6 + i * .15, vol: .6 }); }
+    }
+  });
   for (const f of FLIP) flipHit(b, f);
   // верхние дорожки: шарик прошёл линию сверху вниз
   if (py < LANE_Y && b.y >= LANE_Y) for (let i = 0; i < 3; i++) if (b.x > LANE_X[i] && b.x < LANE_X[i + 1]) laneHit(g, i);
-  // пружина в левой отводящей дорожке
-  if (S.kick && b.x < 100 && b.y > 1150 && b.vy > 0) {
-    S.kick = false; S.fl.kick = .8; b.vy = -2150; b.vx = 30; b.y = 1150;
-    say('Пружина!', 'Шарик спасён'); g.sfx('jump', { pitch: .7 }); g.shake(6, .2);
+  // пружины-спасатели в боковых дорожках: левая (за звёзды-мишени) и правая (за кометы); в начале шарика — обе
+  for (let k = 0; k < 2; k++) {
+    const inLane = k ? b.x > 570 && b.x < 640 : b.x < 100;
+    if (S.kick[k] && inLane && b.y > 1150 && b.vy > 0) {
+      S.kick[k] = false; S.fl.kick[k] = .8; b.vy = -2050; b.vx = k ? -40 : 30; b.y = 1150;
+      say('Пружина!', 'Шарик спасён'); g.sfx('jump', { pitch: .7 }); g.shake(6, .2); tint('#ff6fd0', .35);
+    }
   }
   if (b.y > H + 30) b.gone = true;
 }
@@ -294,8 +338,17 @@ function stepBall(g, b, h) {
 function update(g, dt) {
   if (!S) return;
   S.t += dt;
-  for (const k of ['b', 's', 'd', 'st', 'lane', 'star']) S.fl[k] = S.fl[k].map((v) => Math.max(0, v - dt));
-  S.fl.hole = Math.max(0, S.fl.hole - dt); S.fl.kick = Math.max(0, S.fl.kick - dt);
+  for (const k of ['b', 's', 'd', 'st', 'lane', 'star', 'kick', 'm', 'peg']) S.fl[k] = S.fl[k].map((v) => Math.max(0, v - dt));
+  S.fl.hole = Math.max(0, S.fl.hole - dt);
+  if (S.tint && (S.tint.k -= dt * 1.4) <= 0) S.tint = null;
+  // луны: медленно по орбите (и на заставке тоже — стол живой)
+  S.orbit += dt * .32;
+  MOONS.forEach((m, i) => {
+    const a = S.orbit + m.ph, nx = ORBIT.x + Math.cos(a) * ORBIT.rx, ny = ORBIT.y + Math.sin(a) * ORBIT.ry;
+    m.vx = dt ? (nx - m.x) / dt : 0; m.vy = dt ? (ny - m.y) / dt : 0;
+    if (!m.x && !m.y) m.vx = m.vy = 0;
+    m.x = nx; m.y = ny;
+  });
   if (S.msg && (S.msg.life -= dt) <= 0) S.msg = null;
   if (A.shot) return;
   const play = S.mode === 'play' && !g.screenOn;
@@ -321,7 +374,7 @@ function update(g, dt) {
   if (ready && !hold && S.plungeHeld && S.charge > .04) {
     ready.ready = false; ready.vy = -(1500 + 1500 * S.charge); ready.vx = 0;
     g.sfx('whoosh'); g.sound.tone(90 + S.charge * 60, g.sound.now(), .18, .14, 'sine', null, 40);
-    if (S.saveArm) { S.save = 8; S.saveArm = false; }
+    if (S.saveArm) { S.save = SAVE_S; S.saveArm = false; }
     S.skill = A.randInt(0, 2); S.skillT = 4.5;
     S.charge = 0;
   }
@@ -364,7 +417,7 @@ function update(g, dt) {
     const cradle = b.y > 1000 && (leftHeld(g) || rightHeld(g));          // шарик держат на поднятом флиппере — это нарочно
     b.still = sp < 18 && !cradle ? b.still + dt : 0;
     if (b.still > 2.2) { b.vy = b.y > 1000 ? -260 : -520; b.vx = A.rand(-200, 200); b.still = 0; }   // застрял — сам «встряхиваем» стол
-    b.trail.push(b.x, b.y); if (b.trail.length > 16) b.trail.splice(0, 2);
+    b.trail.push(b.x, b.y); if (b.trail.length > 20) b.trail.splice(0, 2);
   }
   const before = S.balls.length;
   S.balls = S.balls.filter((b) => !b.gone);
@@ -424,6 +477,10 @@ function buildBg(scale) {
   c.fillText('чёрная дыра', HOLE.x + 6, HOLE.y + 58);
   c.fillText('страховка', 335, 1222);
   c.save(); c.translate(64, 1110); c.rotate(-Math.PI / 2); c.fillText('пружина', 0, 0); c.restore();
+  c.save(); c.translate(606, 1110); c.rotate(Math.PI / 2); c.fillText('пружина', 0, 0); c.restore();
+  // орбита лун — пунктир вокруг созвездия
+  c.setLineDash([3, 10]); c.strokeStyle = 'rgba(99,242,196,.18)'; c.lineWidth = 2;
+  c.beginPath(); c.ellipse(ORBIT.x, ORBIT.y, ORBIT.rx, ORBIT.ry, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
   // фартук внизу
   c.fillStyle = '#120b30';
   c.beginPath(); c.moveTo(100, 1020); c.lineTo(218, 1079); c.lineTo(218, 1280); c.lineTo(100, 1280); c.closePath(); c.fill();
@@ -459,8 +516,10 @@ function drawFlipper(c, f) {
   c.beginPath();
   c.moveTo(0, -f.r0); c.lineTo(L, -f.r1); c.arc(L, 0, f.r1, -Math.PI / 2, Math.PI / 2); c.lineTo(0, f.r0); c.arc(0, 0, f.r0, Math.PI / 2, Math.PI * 1.5);
   c.closePath();
-  const gr = c.createLinearGradient(0, -f.r0, 0, f.r0); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#c4b2ff');
-  c.fillStyle = gr; c.fill(); c.lineWidth = 5; c.strokeStyle = '#ff5cc8'; c.stroke();
+  const col = f.side > 0 ? '#ff5cc8' : '#3fd2f2', up = f.a < f.rest - .2;
+  const gr = c.createLinearGradient(0, -f.r0, 0, f.r0); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, f.side > 0 ? '#ffc4ec' : '#bff2ff');
+  c.shadowColor = col; c.shadowBlur = up ? 22 : 10;
+  c.fillStyle = gr; c.fill(); c.lineWidth = 5; c.strokeStyle = col; c.stroke(); c.shadowBlur = 0;
   c.beginPath(); c.arc(0, 0, 6, 0, Math.PI * 2); c.fillStyle = '#7a62d6'; c.fill();
   c.restore();
 }
@@ -481,11 +540,40 @@ function drawBumper(c, p, i, t) {
   gr.addColorStop(0, f > .2 ? '#fff' : p.c[0]); gr.addColorStop(.55, p.c[1]); gr.addColorStop(1, p.c[2]);
   c.beginPath(); c.arc(0, 0, p.r, 0, Math.PI * 2); c.fillStyle = gr; c.fill();
   c.save(); c.beginPath(); c.arc(0, 0, p.r, 0, Math.PI * 2); c.clip();
-  c.globalAlpha = .25; c.fillStyle = '#fff'; for (let k = -2; k <= 2; k++) c.fillRect(-p.r, k * 11 - 3 + Math.sin(t + i) * 2, p.r * 2, 3); c.restore();
+  if (i === 0) {                                              // розовая — полосатая, как газовый гигант
+    c.globalAlpha = .28; c.fillStyle = '#fff'; for (let k = -2; k <= 2; k++) c.fillRect(-p.r, k * 11 - 3 + Math.sin(t + i) * 2, p.r * 2, 3 + (k & 1) * 2);
+    c.globalAlpha = .5; c.beginPath(); c.ellipse(p.r * .3, p.r * .25, 8, 5, 0, 0, Math.PI * 2); c.fillStyle = '#ffe1f6'; c.fill();
+  } else if (i === 1) {                                       // голубая — ледяная, с бликами и облаками
+    c.globalAlpha = .35; c.fillStyle = '#fff';
+    for (let k = 0; k < 3; k++) { c.beginPath(); c.ellipse(-p.r + ((t * 9 + k * 26) % (p.r * 2.6)), -10 + k * 10, 12, 3.5, 0, 0, Math.PI * 2); c.fill(); }
+  } else {                                                    // золотая — с кратерами
+    c.globalAlpha = .4; c.fillStyle = p.c[2];
+    for (const [cx, cy, cr] of [[-12, -6, 6], [9, 8, 7], [4, -16, 4], [-6, 15, 4]]) { c.beginPath(); c.arc(cx, cy, cr, 0, Math.PI * 2); c.fill(); }
+  }
+  c.restore();
   c.globalAlpha = 1;
   // кольцо — передняя половина
   c.save(); c.rotate(-.35); c.beginPath(); c.ellipse(0, 0, p.r * 1.55, p.r * .42, 0, 0, Math.PI);
   c.lineWidth = 5; c.strokeStyle = f > .2 ? '#fff' : 'rgba(255,255,255,.85)'; c.stroke(); c.restore();
+  c.restore();
+}
+function drawMoon(c, m, i) {
+  const f = S.fl.m[i] / .25, col = MOON_COL[m.ci], r = m.r * (1 + f * .18);
+  glow(c, m.x, m.y, r * 2.6, col[1], .3 + f * .7);
+  const gr = c.createRadialGradient(m.x - r * .35, m.y - r * .4, 1, m.x, m.y, r);
+  gr.addColorStop(0, f > .3 ? '#fff' : col[0]); gr.addColorStop(.6, col[1]); gr.addColorStop(1, col[2]);
+  c.beginPath(); c.arc(m.x, m.y, r, 0, Math.PI * 2); c.fillStyle = gr; c.fill();
+  c.globalAlpha = .35; c.fillStyle = col[2];
+  for (const [dx, dy, cr] of [[-6, 4, 4], [6, -5, 3], [3, 8, 2.5]]) { c.beginPath(); c.arc(m.x + dx, m.y + dy, cr, 0, Math.PI * 2); c.fill(); }
+  c.globalAlpha = 1; c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(m.x, m.y, r, 0, Math.PI * 2); c.stroke();
+}
+function drawPeg(c, p, i, t) {
+  const f = S.fl.peg[i] / .2;
+  glow(c, p.x, p.y, 30, 'rgba(255,209,102,.9)', .25 + f * .75);
+  c.save(); c.translate(p.x, p.y); c.rotate(t * .6 + i);
+  c.beginPath();
+  for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2, rr = p.r * (k % 2 ? .82 : 1.08); k ? c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : c.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+  c.closePath(); c.fillStyle = f > .3 ? '#fff' : '#ffc94d'; c.fill(); c.lineWidth = 2.5; c.strokeStyle = '#ff8a3d'; c.stroke();
   c.restore();
 }
 function drawHole(c, t) {
@@ -504,7 +592,10 @@ function drawHole(c, t) {
 function drawBall(c, b) {
   if (b.trail.length > 4 && !b.ready) {
     c.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < b.trail.length; i += 2) { const k = i / b.trail.length; c.globalAlpha = k * .22; c.beginPath(); c.arc(b.trail[i], b.trail[i + 1], R * (.4 + k * .6), 0, Math.PI * 2); c.fillStyle = '#7fd9ff'; c.fill(); }
+    for (let i = 0; i < b.trail.length; i += 2) {                // радужный след
+      const k = i / b.trail.length; c.globalAlpha = k * .26; c.beginPath(); c.arc(b.trail[i], b.trail[i + 1], R * (.4 + k * .6), 0, Math.PI * 2);
+      c.fillStyle = `hsl(${(S.t * 120 + i * 14) % 360}, 95%, 66%)`; c.fill();
+    }
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
   }
   if (b.lock) { c.globalAlpha = .4 + Math.sin(S.t * 20) * .2; }
@@ -554,10 +645,15 @@ function drawWorld(c, g) {
     if (f > 0) glow(c, (s.a[0] + s.c[0]) / 2, (s.a[1] + s.c[1]) / 2, 70, 'rgba(255,111,208,.8)', f);
   });
   drawHole(c, t);
+  PEGS.forEach((p, i) => drawPeg(c, p, i, t));
   BUMPERS.forEach((p, i) => drawBumper(c, p, i, t));
-  // пружина слева и страховка
-  { const on = S.kick, f = S.fl.kick; if (on || f) glow(c, 65, 1180, 36, 'rgba(255,111,208,.9)', on ? .6 + Math.sin(t * 6) * .3 : f);
-    c.beginPath(); c.moveTo(65, 1166); c.lineTo(76, 1184); c.lineTo(54, 1184); c.closePath(); c.fillStyle = on ? '#fff' : 'rgba(255,111,208,.35)'; c.fill(); }
+  MOONS.forEach((m, i) => { if (m.x || m.y) drawMoon(c, m, i); });
+  // пружины-спасатели в боковых дорожках и страховка
+  KICK.forEach((k, i) => {
+    const on = S.kick[i], f = S.fl.kick[i];
+    if (on || f) glow(c, k.x, 1180, 36, 'rgba(255,111,208,.9)', on ? .6 + Math.sin(t * 6) * .3 : f);
+    c.beginPath(); c.moveTo(k.x, 1166); c.lineTo(k.x + 11, 1184); c.lineTo(k.x - 11, 1184); c.closePath(); c.fillStyle = on ? '#fff' : 'rgba(255,111,208,.35)'; c.fill();
+  });
   { const on = S.save > 0 && (S.save > 2 || Math.floor(t * 6) % 2); if (on) { glow(c, 335, 1216, 60, 'rgba(99,242,196,.8)', .7); c.font = `700 15px ${A.FONT}`; c.textAlign = 'center'; c.fillStyle = '#c9ffee'; c.fillText('страховка', 335, 1222); } }
   // канал запуска: пружина
   const ch = S.charge, top = 1238 + ch * 34;
@@ -569,6 +665,10 @@ function drawWorld(c, g) {
   // флипперы и шарики
   for (const f of FLIP) drawFlipper(c, f);
   for (const b of S.balls) drawBall(c, b);
+  if (S.tint) {                                              // удар окрашивает стол светом планеты
+    c.save(); tablePath(c); c.clip(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(.22, S.tint.k * .4);
+    c.fillStyle = S.tint.col; c.fillRect(0, 0, W, H); c.restore();
+  }
 }
 
 function drawLed(c, x, y, w, h, text, sub) {
@@ -641,7 +741,7 @@ function draw(ctx, g) {
 /* ---------------- обложка (?shot) ---------------- */
 function shotScene() {
   S = fresh(); S.mode = 'play'; S.score = 48250; S.stars = [1, 1, 0, 1, 0]; S.lanes = [1, 0, 1]; S.drops = [0, 1, 0, 0]; S.stands = [1, 0, 0]; S.X = 3;
-  S.bumps = 14; S.kick = true; S.save = 5; S.msg = { t: 'Звезда Сулафат!', s: 'Созвездие Лиры: 3 из 5', life: 99 };
+  S.bumps = 14; S.kick = [true, true]; S.save = 5; S.tint = { col: '#3fd2f2', k: .3 }; S.msg = { t: 'Звезда Сулафат!', s: 'Созвездие Лиры: 3 из 5', life: 99 };
   S.fl.b[1] = .16;
   const b = newBall(); Object.assign(b, { x: 380, y: 610, vx: 300, vy: -900, ready: false });
   for (let i = 6; i > 0; i--) b.trail.push(b.x - 300 * i * .01, b.y + 900 * i * .01);
@@ -662,7 +762,7 @@ A.game({
     const fxDraw = g.fx.draw.bind(g.fx);                 // эффекты — в координатах стола
     g.fx.draw = () => {}; g.fxWorld = fxDraw;
     bindPointers(g);
-    window.__pinball = { state: () => S, FLIP, HOLE };   // для проверок (tests/pinball1027_test.py)
+    window.__pinball = { state: () => S, FLIP, HOLE, MOONS, SAVE_S };   // для проверок (tests/pinball1027_test.py)
     if (A.shot) { shotScene(); return; }
     titleScreen(g);
   },

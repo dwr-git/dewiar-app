@@ -100,6 +100,9 @@ ok('id="b-pad"' in hud and 'a.pad_toggle("notes")' in hud, "кнопка бло�
 bar = re.search(r'<div id="bar">(.*?)</div>', hud, re.S).group(1)
 ids = re.findall(r'id="(b-[a-z]+)"', bar)
 ok(ids[-2:] == ["b-chat", "b-set"], f"чат — рядом с настройками: {ids}")
+_hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
+ok('id="b-set" title="Студия' in _hud and 'width="6.5" height="6.5"' in _hud.split('id="b-set"', 1)[1].split("</button>", 1)[0],
+   "кнопка студии — значок «Главной» (четыре квадрата), не шестерёнка (28.10)")
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 FAKE = """window.pywebview = { api: new Proxy({}, { get: (_, k) => (...a) => { (window.apiCalls = window.apiCalls || []).push(k); return Promise.resolve(true); } }) };"""

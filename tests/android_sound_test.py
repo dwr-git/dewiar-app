@@ -16,17 +16,22 @@ def ok(c, m):
 
 SRC = ROOT / "android/src/pro/dewiar/app"
 raw = ROOT / "android/res/raw"
-names = ["signature", "chasha", "kolodec", "hor", "glubina", "motif", "drops", "orbit", "chime", "marimba", "harp", "dawn"]
-ok(all((raw / f"alarm_{n}.ogg").stat().st_size > 10000 for n in names), "двенадцать своих мелодий в res/raw (фирменный «Струна» — первый, прежний мотив — motif)")
+# 28.10: пять звонков, выбрал владелец (звуки Android Open Source Project, Apache 2.0 — NOTICE); фирменный — «Пульс»
+names = ["signature", "noon", "night", "wave", "sparks"]
+ok(all((raw / f"alarm_{n}.ogg").stat().st_size > 10000 for n in names) and sorted(x.name for x in raw.glob("alarm_*.ogg")) == sorted(f"alarm_{n}.ogg" for n in names),
+   "пять звонков в res/raw, прежних нет (фирменный «Пульс» — первый)")
+ok("Android Open Source Project" in (ROOT / "NOTICE").read_text(encoding="utf-8") and "Apache" in (ROOT / "NOTICE").read_text(encoding="utf-8"),
+   "откуда звуки и лицензия — в NOTICE")
 if shutil.which("ffprobe"):
     durs = [float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(raw / f"alarm_{n}.ogg")],
                                  capture_output=True, text=True).stdout or 0) for n in names]
-    ok(all(3 <= d <= 7 for d in durs), f"каждая — короткая фраза в 4–7 секунд (повторяется по кругу): {durs}")
+    ok(all(4 <= d <= 15.5 for d in durs), f"каждая — от 4 до 15 секунд (повторяется по кругу): {durs}")
 snd = (SRC / "Sounds.java").read_text(encoding="utf-8")
 ok(all(f"R.raw.alarm_{n}" in snd for n in names) and '"system"' in snd and '"custom"' in snd, "Sounds: свои мелодии, системный звук и свой файл")
 ok('"alarm_" + sound' in snd and "deleteNotificationChannel" in snd and "USAGE_ALARM" in snd, "у каждого звука свой канал уведомлений, прежний убирается")
-ok('"/raw/" + c.getResources().getResourceEntryName(res(id))' in snd and ': "_2")' in snd,
-   "звук канала — по имени ресурса (числа R.raw меняются при новых звуках), каналы пересоздаются под «Струну»")
+ok('"/raw/" + c.getResources().getResourceEntryName(res(id))' in snd and ': "_3")' in snd,
+   "звук канала — по имени ресурса (числа R.raw меняются при новых звуках), каналы пересоздаются под новые звонки")
+ok('case "chasha"' not in snd and "res(s) != 0" in snd, "прежний выбор (chasha, kolodec…) — снова фирменный")
 act = (SRC / "AlarmActivity.java").read_text(encoding="utf-8")
 ok("Sounds.play(this, Sounds.current(this), true, vol)" in act and "vol + 0.0375f" in act and "AlarmReceiver.quiet(" in act,
    "окно будильника: выбранный звук по кругу, громкость нарастает, уведомление смолкает")
@@ -43,7 +48,6 @@ ok('android:name=".SoundProvider"' in man and '"/custom".equals(uri.getPath())' 
 br = (SRC / "Bridge.java").read_text(encoding="utf-8")
 ok(all(f"public String {m}(" in br or f"boolean {m}(" in br for m in ("alarmSound", "alarmSoundSet", "alarmSoundTry", "alarmSoundCustom")),
    "мост: выбор, проба и свой файл")
-ok((ROOT / "tools/alarm_sounds.py").exists(), "мелодии пересобираются tools/alarm_sounds.py")
 
 www = Path(tempfile.mkdtemp()) / "www"
 shutil.copytree(ROOT / "android/assets/www", www)
@@ -55,7 +59,7 @@ shutil.copytree(ROOT / "ui/assets/live", www / "live", dirs_exist_ok=True)
 (www / "personas.js").write_text(subprocess.run([sys.executable, str(ROOT / "android/tools/personas_json.py"), str(ROOT)],
                                                 capture_output=True, text=True, check=True).stdout, encoding="utf-8")
 audio = Path(tempfile.mkdtemp()) / "моя мелодия.ogg"
-shutil.copy(raw / "alarm_harp.ogg", audio)
+shutil.copy(raw / "alarm_wave.ogg", audio)
 with sync_playwright() as p:
     b = p.chromium.launch(); errs = []
     pg = b.new_page(viewport={"width": 393, "height": 820}); pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -64,11 +68,11 @@ with sync_playwright() as p:
     pg.evaluate("openSettings('more')"); pg.wait_for_timeout(400)
     rows = pg.evaluate("() => [$$('.snd').map(x => x.dataset.snd), $('.snd.on').dataset.snd, $('.snd[data-snd=custom]').classList.contains('nofile')]")
     ok(rows[0] == names + ["system", "custom"] and rows[1] == "signature" and rows[2],
-       f"«Звук напоминаний»: все звуки и свой, по умолчанию — фирменный «Струна»: {rows}")
-    pg.click('.snd[data-snd="harp"]'); pg.wait_for_timeout(150)
+       f"«Звук напоминаний»: все звуки и свой, по умолчанию — фирменный «Пульс»: {rows}")
+    pg.click('.snd[data-snd="night"]'); pg.wait_for_timeout(150)
     st = pg.evaluate("() => [$('.snd.on').dataset.snd, $('.snd.play') && $('.snd.play').dataset.snd, JSON.parse(D.alarmSound()).id]")
-    ok(st == ["harp", "harp", "harp"], f"нажатие — выбрано и звучит проба: {st}")
-    pg.click('.snd[data-snd="harp"]'); pg.wait_for_timeout(150)
+    ok(st == ["night", "night", "night"], f"нажатие — выбрано и звучит проба: {st}")
+    pg.click('.snd[data-snd="night"]'); pg.wait_for_timeout(150)
     ok(not pg.evaluate("!!$('.snd.play')"), "ещё раз — проба смолкла")
     pg.set_input_files("#snd-file", str(audio)); pg.wait_for_timeout(500)
     cu = pg.evaluate("() => [$('.snd.on').dataset.snd, $('#snd-name').textContent, $('#snd-res').textContent, JSON.parse(D.alarmSound())]")

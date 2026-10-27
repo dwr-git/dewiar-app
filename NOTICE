@@ -1,0 +1,8 @@
+Dewiar — сторонние материалы
+
+Звонки будильника и напоминаний (data/sounds/alarm_*.wav, android/res/raw/alarm_*.ogg)
+  Источник: Android Open Source Project, frameworks/base/data/sounds/ringtones
+  (Machina, Solarium, Sceptrum, Zeta, Perseus). Изменения: выровнена громкость, «Ночной город» (Sceptrum)
+  укорочен до 15 секунд с затуханием, перекодировано.
+  Copyright (C) The Android Open Source Project.
+  Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0

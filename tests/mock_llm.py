@@ -94,6 +94,12 @@ class H(BaseHTTPRequestHandler):
             plan = None
             if any(t["function"]["name"] == "get_time" for t in body["tools"]):      # проверка: умеет ли инструменты
                 plan = ("get_time", {}, "")
+            elif "поручи" in u and any(t["function"]["name"] == "team_assign" for t in body["tools"]):   # «Команда» (28.10)
+                import re as _re
+                mm = _re.search(r"поручи\s+(\S+)\s+(.+?)(\s+до\s+.+)?[.!]?$", msgs[-1]["content"].strip().split("\n")[-1], _re.I)
+                plan = ("team_assign", {"who": mm.group(1), "task": mm.group(2).strip(), "due": (mm.group(3) or "").strip()}, "") if mm else None
+            elif "поручени" in u and any(t["function"]["name"] == "team_status" for t in body["tools"]):
+                plan = ("team_status", {}, "")
             elif "встреча с ирой переносится" in u:                  # 19.10: «напомню тебе…» словами, без set_reminder
                 txt = "Понял. Исправляю: встреча с Ирой — послезавтра в 12:00. Напомню тебе завтра утром в 9:00."
                 self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.end_headers()

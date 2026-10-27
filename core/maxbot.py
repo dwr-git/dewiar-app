@@ -162,7 +162,17 @@ class Max(Telegram):
             body = {"text": params.get("text", "")[:LIMIT]}
             if params.get("reply_markup"):
                 body["attachments"] = [keyboard(params["reply_markup"])]
-            return self._send(params.get("chat_id"), body, timeout)
+            r = self._send(params.get("chat_id"), body, timeout)
+            mid = (((r or {}).get("message") or {}).get("body") or {}).get("mid") if isinstance(r, dict) else None
+            return dict(r, message_id=mid) if isinstance(r, dict) and mid else r     # как у Telegram: номер сообщения
+        if method == "editMessageReplyMarkup":
+            # кнопки под сообщением (поручения, 28.10): у своего бота — PUT /messages с новым набором вложений;
+            # у бота Dewiar на сайте такого метода нет — общий код это переживает (кнопки останутся прежними)
+            if self.shared():
+                raise TelegramError("MAX: правка кнопок через сайт не поддерживается")
+            rm = params.get("reply_markup") or {}
+            return self._max("PUT", "/messages", params={"message_id": params.get("message_id")},
+                             body={"attachments": [keyboard(rm)] if rm.get("inline_keyboard") else []}, timeout=timeout)
         if method == "sendChatAction":
             if self.shared():
                 return self._max("POST", "action", body={"action": "typing_on"}, timeout=timeout)

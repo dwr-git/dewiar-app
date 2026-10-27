@@ -48,10 +48,17 @@ async function ntLoad() {
   const q = $("#nt-q").value.trim(); let l = [];
   try { l = await core.call("notes_list", { q }); } catch (e) { $("#nt-list").innerHTML = `<p class="hint">${escH(e.message)}</p>`; return; }
   NT.list = l;
-  $("#nt-count").textContent = q ? `Найдено: ${l.length}` : l.length ? `Всего: ${l.length}` : "";
-  $("#nt-list").innerHTML = l.length ? l.map(n => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}">
-      <span class="nt-rt"><b>${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? " · " + escH(n.folder) : ""}${n.att ? ` · 📎 ${n.att}` : ""}</small>
-      <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em></span>${n.img ? `<i class="nt-th" data-img="${escH(n.img)}"></i>` : ""}</button>`).join("")
+  const nw = (k) => `${k} ${typeof plural === "function" ? plural(k, "заметка", "заметки", "заметок") : "заметок"}`;
+  $("#nt-count").textContent = q ? `Найдено: ${l.length}` : l.length ? nw(l.length) : "";
+  // 28.10, владелец: «важнейший раздел… дизайн лучше»: список по дням («Сегодня», «Вчера», «На этой неделе», «Раньше»)
+  const row = (n) => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}">
+      <span class="nt-rt"><b>${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? `<i class="nt-chip">${escH(n.folder)}</i>` : ""}${n.att ? `<i class="nt-chip">📎 ${n.att}</i>` : ""}</small>
+      <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em></span>${n.img ? `<i class="nt-th" data-img="${escH(n.img)}"></i>` : ""}</button>`;
+  const day0 = new Date(); day0.setHours(0, 0, 0, 0); const t0 = day0.getTime() / 1000;
+  const bucket = (m) => m >= t0 ? "Сегодня" : m >= t0 - 86400 ? "Вчера" : m >= t0 - 6 * 86400 ? "На этой неделе" : "Раньше";
+  let html = "", last = "";
+  l.forEach(n => { const b = q ? "" : bucket(n.mtime || 0); if (b && b !== last) { html += `<div class="nt-gh">${b}</div>`; last = b; } html += row(n); });
+  $("#nt-list").innerHTML = l.length ? html
     : `<div class="nt-none">${q ? "Ничего не нашлось — попробуйте другое слово." : "Заметок пока нет. Скажите помощнице: «запиши в заметки…» — или нажмите «Новая заметка»."}</div>`;
   $$("#nt-list .nt-row").forEach(b => b.onclick = () => ntOpen(b.dataset.p));
   $$("#nt-list .nt-th").forEach(ntThumb);
@@ -77,7 +84,7 @@ function ntShow() {
   const attHtml = (edit) => `${pics.length ? `<div class="nt-pics">${pics.map(a => `<figure data-i="${d.att.indexOf(a)}"><i data-img="${escH(ntAbs(path, a.link))}"></i>${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</figure>`).join("")}</div>` : ""}
     ${files.length ? `<div class="nt-files">${files.map(a => `<span class="nt-f" data-i="${d.att.indexOf(a)}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg>${escH(a.name)}${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</span>`).join("")}</div>` : ""}`;
   if (!NT.edit) {
-    v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? " · " + escH(ntDir(path).replace(/^Заметки\//, "")) : ""}</small></div>
+    v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? `<i class="nt-chip">${escH(ntDir(path).replace(/^Заметки\//, ""))}</i>` : ""}</small></div>
         <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger" id="nt-del">Удалить</button></span></div>
       <div class="nt-body"${ntCs() ? ` data-cs="${escH(ntCs())}"` : ""}>${ntRender(d.body) || `<p class="hint">Пустая заметка — нажмите «Изменить».</p>`}</div>${attHtml(false)}`;
     if (window.DewiarRich) DewiarRich.diagrams($("#nt-view .nt-body")).catch(() => { });   // ```mermaid — схемой

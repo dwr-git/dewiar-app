@@ -12,7 +12,9 @@ function accent(color) { document.documentElement.style.setProperty("--persona",
 function renderPersonas() {
   entities.forEach(e => e.destroy()); entities = [];
   const g = $("#pgrid"); g.innerHTML = "";
-  personas.forEach(p => {
+  // №369 (28.10, Windows 10: «нет кнопки Добавить и Создать»): одна сломавшаяся карточка (облик не нарисовался) больше
+  // не обрывает отрисовку — «Создать своего» и «Готовые персонажи» появляются всегда; плюс кнопки вверху раздела
+  personas.forEach(p => { try {
     const c = document.createElement("div");
     c.className = "card" + (p.id === active ? " cur" : ""); c.style.setProperty("--c", p.color); c.tabIndex = 0;
     c.innerHTML = `${p.id === active ? '<span class="tag">активен</span>' : ""}<button class="btn small edit">Изменить</button><div class="disc"><canvas></canvas></div><h3></h3>${p.role ? '<span class="role"></span>' : ""}<p></p><ul class="sk"></ul>`;
@@ -27,7 +29,7 @@ function renderPersonas() {
     c.onkeydown = (ev) => { if (ev.key === "Enter") c.click(); };
     c.onmouseenter = () => e.set({ state: "speaking", level: 0.35 }); c.onmouseleave = () => e.set({ state: "idle", level: 0 });
     g.appendChild(c);
-  });
+  } catch (err) { console.warn("персонаж", p && p.id, err); } });
   const n = document.createElement("div"); n.className = "card new"; n.tabIndex = 0;
   n.innerHTML = "<div><b>+</b>Создать своего<br><span class='hint'>имя, характер, голос, фото</span></div>";
   n.onclick = () => openEditor(null); g.appendChild(n);
@@ -46,10 +48,15 @@ function studioTight(on) {
 /* готовые персонажи: шаблоны (Агент, Джарвис, Эва, Кодер) и специалисты */
 let galEnts = [];
 async function loadGallery() {
-  let items = []; try { items = await core.call("gallery"); } catch (e) { return; }
+  let items = [];
+  const g = $("#ggrid");
+  try { items = await core.call("gallery"); } catch (e) {
+    g.innerHTML = `<p class="hint">Готовые персонажи не загрузились: ${escH(e.message)}. <button class="btn small" id="gal-retry">Ещё раз</button></p>`;
+    $("#gal-retry").onclick = loadGallery; return;
+  }
   galEnts.forEach(e => e.destroy()); galEnts = [];
-  const g = $("#ggrid"); g.innerHTML = "";
-  items.forEach(p => {
+  g.innerHTML = "";
+  items.forEach(p => { try {
     const c = document.createElement("div"); c.className = "card gal" + (p.installed ? " have" : ""); c.style.setProperty("--c", p.color);
     c.innerHTML = `<div class="disc"><canvas></canvas></div><h3></h3><span class="role"></span><p></p><ul class="sk"></ul><button class="btn gbtn"></button>`;
     $("h3", c).textContent = p.name; $(".role", c).textContent = p.role; $("p", c).textContent = p.tagline;
@@ -60,7 +67,11 @@ async function loadGallery() {
     const e = new DewiarEntity($("canvas", c), { style: p.avatar_url ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true }); e.calm = !!stTight; e.set({ state: "idle", level: 0 }); galEnts.push(e);
     c.onmouseenter = () => e.set({ state: "speaking", level: 0.35 }); c.onmouseleave = () => e.set({ state: "idle", level: 0 });
     g.appendChild(c);
-  });
+  } catch (err) { console.warn("готовый персонаж", p && p.id, err); } });
+}
+if ($("#pr-new")) {
+  $("#pr-new").onclick = () => openEditor(null);
+  $("#pr-gal").onclick = () => { const h = $("#ggrid"); if (h) h.previousElementSibling.previousElementSibling.scrollIntoView({ behavior: "smooth", block: "start" }); };
 }
 
 /* редактор */

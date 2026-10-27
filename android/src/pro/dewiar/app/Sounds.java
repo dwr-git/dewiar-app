@@ -14,8 +14,8 @@ import java.util.List;
 
 /** Звук напоминаний и будильников. Выбор — в настройках интерфейса («Ещё» → «Звук напоминаний», Bridge.alarmSound*),
  *  хранится в SharedPreferences "dewiar" под ключом alarm_sound:
- *    signature (фирменный: «Струна», 24.10) | chasha | kolodec | hor | glubina (tools/brand_sounds.py) | motif (прежний мотив Dewiar) |
- *    drops | orbit | chime | marimba | harp | dawn — свои мелодии (res/raw/alarm_*.ogg, синтез — tools/alarm_sounds.py);
+ *    signature («Пульс», фирменный) | noon | night | wave | sparks — res/raw/alarm_*.ogg (28.10: пять звонков, выбрал владелец;
+ *    звуки Android Open Source Project, Apache 2.0 — см. NOTICE); прежние id (chasha, kolodec… до 0.7.9) — снова signature;
  *    system — системный звук будильника; custom — свой файл (files/alarm_custom, отдаёт SoundProvider).
  *  Канал уведомлений Android запоминает звук при создании, поэтому у каждого звука свой канал alarm_<звук> (у своего
  *  файла — ещё и с отметкой времени файла); при смене прежний канал удаляется. Уведомление играет мелодию один раз,
@@ -44,35 +44,21 @@ final class Sounds {
     static int res(String id) {
         switch (id == null ? "" : id) {
             case "signature": return R.raw.alarm_signature;
-            case "chasha": return R.raw.alarm_chasha;
-            case "kolodec": return R.raw.alarm_kolodec;
-            case "hor": return R.raw.alarm_hor;
-            case "glubina": return R.raw.alarm_glubina;
-            case "motif": return R.raw.alarm_motif;
-            case "drops": return R.raw.alarm_drops;
-            case "orbit": return R.raw.alarm_orbit;
-            case "chime": return R.raw.alarm_chime;
-            case "marimba": return R.raw.alarm_marimba;
-            case "harp": return R.raw.alarm_harp;
-            case "dawn": return R.raw.alarm_dawn;
+            case "noon": return R.raw.alarm_noon;
+            case "night": return R.raw.alarm_night;
+            case "wave": return R.raw.alarm_wave;
+            case "sparks": return R.raw.alarm_sparks;
             default: return 0;
         }
     }
 
     static String label(String id) {
         switch (id) {
-            case "signature": return "Струна";
-            case "chasha": return "Чаша";
-            case "kolodec": return "Колодец";
-            case "hor": return "Хор";
-            case "glubina": return "Глубина";
-            case "motif": return "Прежний мотив";
-            case "drops": return "Капли";
-            case "orbit": return "Орбита";
-            case "chime": return "Колокольчики";
-            case "marimba": return "Маримба";
-            case "harp": return "Арфа";
-            case "dawn": return "Рассвет";
+            case "signature": return "Пульс";
+            case "noon": return "Полдень";
+            case "night": return "Ночной город";
+            case "wave": return "Волна";
+            case "sparks": return "Искры";
             case "system": return "Системный";
             default: return "Свой звук";
         }
@@ -96,7 +82,7 @@ final class Sounds {
     static String channel(Context c) {
         String sound = current(c);
         // «_2» (24.10): прежние каналы помнили звук по числу ресурса и фирменный стал «Струной» — каналы пересоздаются
-        String id = "alarm_" + sound + ("custom".equals(sound) ? "_" + customFile(c).lastModified() : "_2");
+        String id = "alarm_" + sound + ("custom".equals(sound) ? "_" + customFile(c).lastModified() : "_3");   // _3 — 0.7.9: новые звонки (канал помнит звук — пусть создастся заново)
         if (Build.VERSION.SDK_INT < 26) return id;
         try {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);

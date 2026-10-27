@@ -70,7 +70,9 @@ with sync_playwright() as p:
         ok(s["balls"] and s["balls"][0]["lock"] > 0 and s["stars"][3] == 1, f"«Чёрная дыра» затянула шарик и зажгла Сулафат: {s['stars']}")
         pg.wait_for_timeout(1700)
         s = pg.evaluate(ST)
-        ok(s["balls"] and s["balls"][0]["lock"] == 0 and s["balls"][0]["y"] > 470, "и выбросила его обратно на стол")
+        hx, hy = pg.evaluate("[__pinball.HOLE.x, __pinball.HOLE.y]")
+        ok(s["balls"] and s["balls"][0]["lock"] == 0 and ((s["balls"][0]["x"] - hx) ** 2 + (s["balls"][0]["y"] - hy) ** 2) ** .5 > 40,
+           f"и выбросила его обратно на стол: {s['balls']}")
         # страховка: шарик ушёл между флипперами
         pg.evaluate("() => { const S = __pinball.state(); S.save = 5; S.balls = [{ x: 335, y: 1200, vx: 0, vy: 600, trail: [], still: 0, noHole: 0, lock: 0 }]; }")
         pg.wait_for_timeout(600)
@@ -80,6 +82,19 @@ with sync_playwright() as p:
         pg.wait_for_timeout(2600)
         s = pg.evaluate(ST)
         ok(s["ball"] == 2 and s["balls"] and s["balls"][0]["ready"], f"без страховки — следующий шарик: {s['ball']}")
+        # 28.10, владелец: «слишком сложная… мячику не от чего отпрыгивать… справа штука, куда шарик попадает и проигрываем»
+        k = pg.evaluate("() => __pinball.state().kick.slice()")
+        ok(k == [True, True], f"новый шарик: обе пружины-спасатели в боковых дорожках горят: {k}")
+        pg.evaluate("() => { const S = __pinball.state(); S.save = 0; S.mode = 'play'; S.balls = [{ x: 605, y: 1100, vx: 0, vy: 500, trail: [], still: 0, noHole: 0, lock: 0 }]; }")
+        pg.wait_for_timeout(500)
+        s = pg.evaluate(ST)
+        ok(s["ball"] == 2 and s["balls"] and s["balls"][0]["y"] < 1150 and not pg.evaluate("__pinball.state().kick[1]"),
+           f"шарик в правой боковой дорожке — пружина вернула его на стол: {s['balls']}")
+        m = pg.evaluate("() => { const S = __pinball.state(), m = __pinball.MOONS[0]; S.balls = [{ x: m.x, y: m.y - 60, vx: 0, vy: 900, trail: [], still: 0, noHole: 0, lock: 0 }]; return [S.score, m.ci]; }")
+        pg.wait_for_timeout(250)
+        s2 = pg.evaluate("() => [__pinball.state().score, __pinball.MOONS[0].ci]")
+        ok(s2[0] >= m[0] + 250 and s2[1] != m[1], f"луна: очки и новый цвет от удара: {m} → {s2}")
+        ok(pg.evaluate("__pinball.SAVE_S") >= 15, "страховка после запуска — 15 секунд")
         ok(not errs, f"{name}: без ошибок {errs[:2]}")
     b.close()
 

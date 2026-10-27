@@ -1095,12 +1095,11 @@ function miniOrb(p) {          // значок персонажа без фот�
 const PHONE_SKINS = (window.DEWIAR_SKINS || []).slice();
 const SKINS = PHONE_SKINS.length ? PHONE_SKINS.map(x => x.id) : ["brand"];
 const lookSkin = () => (SKINS.includes(S.skin) ? S.skin : SKINS.includes("neusky") ? "neusky" : SKINS[0]);   // 20.10: по умолчанию — «Небесный»
-// 24.10: фирменный звонок — «Струна» (владелец выбрал из пяти); остальные новые и прежний мотив — в коллекции
-const ALARM_SOUNDS = [["signature", "Струна · фирменный", "Низкая струна и звонкий флажолет"], ["chasha", "Чаша", "Две поющие чаши, долгий звук"],
-  ["kolodec", "Колодец", "Капли в каменном гроте"], ["hor", "Хор", "Тёплое «м-м-м» на три голоса"], ["glubina", "Глубина", "Аккорд снизу и мотив Dewiar сверху"],
-  ["motif", "Прежний мотив", "Фирменный мотив Dewiar до 0.6.92"], ["drops", "Капли", "Мелодия из капель воды"],
-  ["orbit", "Орбита", "Мягкий взлёт и пузырьки с эхом"], ["chime", "Колокольчики", "Стеклянные, вверх и обратно"], ["marimba", "Маримба", "Тёплое дерево, напев"],
-  ["harp", "Арфа", "Перебор струн"], ["dawn", "Рассвет", "Аккорд нарастает, сверху — искры"], ["system", "Системный", "Звук будильника телефона"]];
+// 28.10: звонки — пять, выбрал владелец (звуки Android Open Source Project, Apache 2.0); фирменный — «Пульс».
+// Прежние (Струна, Чаша, Колодец…) убраны: у кого были выбраны — звенит «Пульс» (Sounds.current).
+const ALARM_SOUNDS = [["signature", "Пульс · фирменный", "Ритм с басом — бодро и собранно"], ["noon", "Полдень", "Светлый грув с ударными"],
+  ["night", "Ночной город", "Глубокий бас и мерный ритм"], ["wave", "Волна", "Басовая, спокойная"], ["sparks", "Искры", "Яркая и бодрая"],
+  ["system", "Системный", "Звук будильника телефона"]];
 const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></svg>';
 const LOOK_BAR = { glass: "#FCD6E3", snow: "#F8F9FB" };      // верх фона светлых тем без сплошного цвета
 let lookBar = "";
@@ -2259,7 +2258,7 @@ async function ask(text, opts = {}) {
     if (!shot.ok) { answerLocal({ say: "Не получилось сфотографировать: " + shot.error }); return; }
     answerLocal({ say: "Кадр получился почти чёрным — камера ничего не видит. Уберите палец или чехол с камеры и попросите ещё раз." }); return;
   }
-  if (!opts.hidden) showYou(text);
+  if (!opts.hidden) { showYou(text); courseHeard(text); }
   clearCard(); setState("thinking"); showBot("", "wait");
   photoTurn = false;
   convCheck();
@@ -2843,6 +2842,12 @@ async function quick(text) {
   { const w = t.match(/^(?:сколько (?:сейчас )?(?:времени|время)|который (?:сейчас )?час|какое (?:сейчас )?время)(?: сейчас)? (в|во) ([а-яё][а-яё -]{1,30}?)(?: сейчас)?$/);
     if (w) { const said = await worldTime(w[2], w[1]); if (said) return { say: said }; } }
   if (/^(какое (сегодня )?число|какой сегодня день)$/.test(t)) { const d = new Date(); return { say: `Сегодня ${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}.` }; }
+  // курсы и «Вопрос — ответ» (28.10): «открой курсы», «урок дня», «вопрос ответ», «руководство»
+  if (/^(?:(?:открой|покажи|начн[её]м|давай|запусти|продолжи(?:м)?)\s+)*(?:курс(?:ы|ов)?|обучение|урок(?: дня)?|следующий урок)(?: пожалуйста)?$/.test(t)) {
+    setTimeout(() => openLearn("course"), 400); const L = lnOpenNow();
+    return { say: L ? `Урок ${L.day} — «${L.title}». Нажмите первый шаг или просто скажите его.` : lnCurrent() ? "Сегодняшний урок пройден — следующий завтра. Открываю курсы." : "Открываю курсы." };
+  }
+  if (/^(?:(?:открой|покажи)\s+)?(?:вопрос[ -—]+ответ|вопросы и ответы|руководство|справк[ау])(?: пожалуйста)?$/.test(t)) { setTimeout(() => openLearn("qa"), 400); return { say: "Открываю «Вопрос — ответ»: разделы, поиск и примеры фраз." }; }
   let m;
   // «Досуг» (24.10): «Лира, давай поиграем», «хочу поиграть», «поиграем в змейку» — полка игр без модели.
   // «давай сыграем в города» — разговорная игра, её ведёт модель (сюда не попадает: только свои игры)
@@ -4527,7 +4532,7 @@ async function homeTool(a) {
 }
 
 /* ---------- листы снизу (.sheet): открыть, закрыть, смахнуть вниз; за ними — содержимое каждого листа ---------- */
-function openSheet(id) { closeSheets(true); $(id).classList.add("on"); $("#dim").classList.add("on"); }
+function openSheet(id) { closeSheets(true); $(id).classList.add("on"); $("#dim").classList.add("on"); if (typeof courseSeen === "function") courseSeen(id.replace("#sh-", "")); }
 function closeSheets(keepDim) {
   $$(".sheet.on").forEach(s => s.classList.remove("on")); if (!keepDim) $("#dim").classList.remove("on");
   if ($(".snd.play") && D.alarmSoundTry) { D.alarmSoundTry(""); $$(".snd.play").forEach(x => x.classList.remove("play")); }   // проба звука — смолкает с листом
@@ -4570,6 +4575,7 @@ $("#h-clear").onclick = () => { history = []; saveH(); convReset(); $("#b-hist")
 
 /* мой день */
 let dayTab = "rem";
+$$("#ln-tabs button").forEach(b => b.onclick = () => { LN.tab = b.dataset.t; lnRender(); $("#sh-learn").scrollTop = 0; });
 $$("#day-tabs button").forEach(b => b.onclick = () => { dayTab = b.dataset.t; $$("#day-tabs button").forEach(x => x.classList.toggle("on", x === b)); renderDay(); });
 $("#b-day").onclick = () => { renderDay(); openSheet("#sh-day"); };
 /* Голосом / текстом: в дороге, на встрече, в транспорте ответ удобнее читать. Микрофон работает как прежде —
@@ -5726,8 +5732,8 @@ function renderSettings() {
       <div class="sw"><div>Точные будильники</div>${D.exactAlarms() ? `<span class="res ok" style="margin:0">есть</span>` : `<button class="btn" onclick="Dewiar.openSettings('alarms')">Разрешить</button>`}</div></div>
       <h3>Что я умею</h3><div class="card"><p class="hint" style="margin:0 0 10px">Короткие фразы, которые я понимаю сразу: фонарик, радио, сканер кодов, таймер, план дня, «освободи место»… Нажмите любую — и я сделаю.</p>
         <button class="btn w p" id="tricks-open">Посмотреть</button></div>
-      <h3>Руководство</h3><div class="card"><p class="hint" style="margin:0 0 10px">Всё, что умеет Dewiar на телефоне и компьютере: примеры фраз, настройки, «Близкие», сканер, стили. Или просто спросите Лиру: «как…»</p>
-        <button class="btn w" id="guide-open">Открыть руководство</button></div>
+      <h3>Вопрос — ответ и курсы</h3><div class="card"><p class="hint" style="margin:0 0 10px">Ответы на «как…» — с примерами фраз, и короткие курсы: урок в день, пять минут. Или просто спросите Лиру: «как…»</p>
+        <div class="row2"><button class="btn" id="qa-open" style="flex:1">Вопрос — ответ</button><button class="btn p" id="course-open" style="flex:1">Курсы</button></div></div>
       <h3>О приложении</h3><div class="card"><div>Dewiar ${esc(info.version || "")} · ${D.web ? "в браузере" : "Android " + esc(info.android || "")}</div><small class="hint" style="margin:2px 0 0;display:block">${esc(info.device || "")}</small>
       <div class="res" id="upd-res"></div><button class="btn w" id="upd-check" style="margin-top:6px">Проверить обновление</button>
       <button class="btn w" id="news-open" style="margin-top:8px">Что нового</button></div>
@@ -5890,7 +5896,8 @@ function wireSettings(info) {
     if (tgOn() && g("tg-card")) tgStatus().then(t => { if (!!t.linked !== !!$("#tg-off") && setTab === "more") renderSettings(); }).catch(() => {});
     g("upd-check").onclick = () => checkUpdate(true);
     if (g("news-open")) g("news-open").onclick = () => { closeSheets(); setTimeout(() => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")), 250); };
-    if (g("guide-open")) g("guide-open").onclick = () => D.openUrl(GUIDE_URL);
+    if (g("qa-open")) g("qa-open").onclick = () => openLearn("qa");
+    if (g("course-open")) g("course-open").onclick = () => openLearn("course");
     if (g("tricks-open")) g("tricks-open").onclick = () => openTricks();
     if (g("cr-send")) g("cr-send").onclick = () => reportSend("Падение приложения", false, String(info.crash).split("\n")[0]).then(d => toast(`Отчёт №${d.id} отправлен — спасибо!`))
       .catch(e => { toast(e.message); D.share("Dewiar — ошибка:\n" + info.crash); });
@@ -7729,6 +7736,242 @@ function guideAnswer(query) {
     (s.say || []).length ? "Фразы: " + s.say.slice(0, 6).map(x => `«${x}»`).join("; ") : "", ...(s.tips || []).slice(0, 3).map(t => "Совет: " + t),
     `Подробнее: ${GUIDE_URL}#${s.id}`].filter(Boolean).join("\n")).join("\n\n") + "\n\nОтветь своими словами, коротко, с точными названиями разделов и кнопок; на телефоне — как это сделать на телефоне.";
 }
+/* ---------- «Вопрос — ответ» и курсы на телефоне (28.10, как в студии компьютера: ui/studio/qa.js, core/course.py) ----------
+   Лист #sh-learn, две вкладки. «Вопрос — ответ» — то же руководство (window.DEWIAR_GUIDE): плитки разделов, поиск
+   guideFind, статья с «Попробуйте сказать» (нажатие — фраза уходит Лире). Курсы — свои, телефонные (шаги — то, что есть на
+   телефоне): урок — три шага; шаг засчитывается сам, когда человек сказал похожее (rx) или открыл лист (open: day, play,
+   close, persona, soul, set). Урок пройден — следующий завтра (или «Следующий урок сейчас»). Раз в день при первом
+   открытии — карточка «Урок на пять минут» (если «Предлагать урок дня» не выключено). Состояние — S.course:
+   {course, c: {курс: {done: {день: дата}, steps: {день: [i]}, ahead}}, offer, skip, offered}. */
+const LN_L = (day, title, icon, intro, steps) => ({ day, title, icon, intro,
+  steps: steps.map(([say, why, how]) => how.startsWith("open:") ? { say, why, open: how.slice(5) } : { say, why, rx: new RegExp(how) }) });
+const LN_COURSES = [
+  { id: "week", title: "Неделя с Лирой", sub: "основы за семь дней", lessons: [
+    LN_L(1, "Разговор и напоминания", "chat", "Лира слушает голос и понимает обычные слова. Сегодня — познакомиться и поставить первое напоминание.", [
+      ["Привет! Что ты умеешь?", "Лира расскажет о себе коротко", "что ты умеешь|что умеешь|расскажи о себе"],
+      ["Напомни через 10 минут проверить чайник", "напоминание прозвенит, даже если телефон убран", "напомни"],
+      ["Какие у меня дела?", "Лира перечислит, что впереди", "как\\S* у меня дел|что у меня (?:сегодня|завтра|на сегодня)|мои дела|покажи напоминания"]]),
+    LN_L(2, "Мой день", "day", "Дела, заметки, деньги и сделанное — в одном листе. Планировать можно сразу несколько дел одной фразой.", [
+      ["Запланируй на завтра в 10 забрать посылку", "каждое дело — своим напоминанием", "запланируй|добавь в календарь"],
+      ["Что у меня завтра?", "дела и встречи на завтра", "что у меня завтра|планы на завтра|завтра у меня"],
+      ["Нажмите календарик вверху — «Мой день»", "дела, заметки, деньги и сделанное", "open:day"]]),
+    LN_L(3, "Заметки и память", "notes", "Лира записывает мысли слово в слово и запоминает о вас то, что важно.", [
+      ["Запиши в заметки: купить батарейки", "заметка появится в «Моём дне» и на компьютере", "запиши|заметк"],
+      ["Запомни: у мамы день рождения 14 ноября", "Лира запомнит и напомнит, когда нужно", "запомни"],
+      ["Что ты знаешь про маму?", "проверьте, что запомнила", "что ты знаешь|что ты помнишь|что знаешь (?:обо|про)"]]),
+    LN_L(4, "Телефон под рукой", "phone", "Фонарик, таймер и сканер кодов — голосом, без поиска по меню.", [
+      ["Включи фонарик", "и «выключи фонарик»", "фонарик|посвети"],
+      ["Таймер на 5 минут", "отсчёт прямо на экране; «добавь минуту»", "таймер|засеки"],
+      ["Открой сканер", "QR, штрихкоды, «Честный знак»", "сканер|отсканируй|штрихкод|qr"]]),
+    LN_L(5, "Радио и игры", "play", "Живое радио внутри Лиры и игры на пару минут — в очереди к врачу или в дороге.", [
+      ["Включи радио с джазом", "«дальше», «тише», «пауза» — голосом", "радио|джаз"],
+      ["Чуть тише", "громкость шагом или числом", "тише|громче|громкость"],
+      ["Давай поиграем", "«Досуг» — милые игры", "поиграем|сыграем|поиграть|игр"]]),
+    LN_L(6, "Персонажи и душа", "persona", "Лира — не одна: у каждого персонажа свой характер и голос. А в «Душе» — дневник и то, какой персонаж есть.", [
+      ["Нажмите имя персонажа вверху", "выбрать, кто отвечает, или создать своего", "open:persona"],
+      ["Позови Патрика", "ответит Патрик своим голосом", "патрик|позови|бип|нова"],
+      ["Нажмите звёздочку вверху — «Душа»", "дневник и характер персонажа", "open:soul"]]),
+    LN_L(7, "Деньги и итоги дня", "money", "Траты — одной фразой, итоги — по вопросу. Вечером — что сделано за день.", [
+      ["Потратил 25 рублей на кофе", "расход запишется сам, по категории", "потратил|расход|купил"],
+      ["Сколько я потратил за неделю?", "итог по категориям", "сколько .*потратил|траты за|расходы за"],
+      ["Что я сегодня сделал?", "итог дня, серия и значки", "что я (?:сегодня )?сделал|итог дня"]]),
+  ] },
+  { id: "close", title: "Лира и близкие", sub: "сообщения, звонки, семья", lessons: [
+    LN_L(1, "Пригласить близкого", "close", "Помощники близких людей передают друг другу сообщения и звонят — со сквозным шифрованием.", [
+      ["Нажмите сердечко вверху — «Близкие»", "там «Пригласить» — ссылка для мамы или друга", "open:close"],
+      ["Напиши маме, что я задержусь", "у мамы помощница прочитает вслух", "напиши|отправь|передай"],
+      ["Позвони маме", "звонок с голосом и видео, без номера", "позвони|набери|видеозвон"]]),
+    LN_L(2, "Где близкие", "near", "Радар показывает, кто из близких далеко, а кто рядом, — только если они сами показали себя.", [
+      ["Где мама?", "расстояние и сторона, без адреса", "где (?:мама|папа|сейчас|\\S+)\\??$"],
+      ["Помаши Андрею", "он увидит и услышит, что вы машете", "помаши|помахать"],
+      ["Перезвони", "тому же, кому звонили", "перезвони"]]),
+    LN_L(3, "Общий бюджет семьи", "family", "Траты за месяц у всей семьи, общий лимит и платежи — кто платит и кто оплатил.", [
+      ["Откройте настройки → «Ещё» → «Возможности» → «Семья»", "пригласите близкого в общий бюджет", "open:set"],
+      ["Продукты 46,20", "трата сразу видна семье", "^\\D{0,30}\\d+(?:[.,]\\d+)?(?:\\s*(?:руб\\S*|р|byn|₽))?$|потратил"],
+      ["Сколько мы потратили в этом месяце?", "итог за месяц", "сколько .*потратил|траты за|расходы за"]]),
+  ] },
+];
+const LN_BY = Object.fromEntries(LN_COURSES.map(c => [c.id, c]));
+const LN_ICON = {                       // рисунки уроков и разделов (24×24, штрих)
+  chat: "M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z", day: "M3.5 5h17v15.5h-17z M3.5 10h17 M8 3v4 M16 3v4",
+  notes: "M6 3h9l4 4v14H6z M14 3v5h5 M9 13h7 M9 17h5", phone: "M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z M11 18h2",
+  play: "M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z",
+  persona: "M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8 M4.5 20.5a7.5 7.5 0 0 1 15 0", money: "M3 7h18v12H3z M3 11h18 M16 15h2",
+  close: "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z", near: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8 M12 12l5-5",
+  family: "M8 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5 M16 5.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5 M3 20v-2a4 4 0 0 1 4-4h2 M21 20v-2a4 4 0 0 0-4-4h-2 M10 20v-1a2 2 0 0 1 4 0v1",
+};
+const LN_GROUP = {                      // плитки разделов руководства: оттенок и рисунок (как в студии)
+  "Начало": ["#8B8CF7", "M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5 M12 12v9 M12 12L4 7.5"], "Каждый день": ["#4BE3A1", "M5 5h14v14H5z M5 10h14 M10 5v14"],
+  "Телефон": ["#FFC978", LN_ICON.phone], "Близкие": ["#FF8FA8", LN_ICON.close], "Семья и дети": ["#B78CFF", LN_ICON.family],
+  "Работа": ["#7FD4FF", "M4 8h16v11H4z M9 8V5h6v3 M4 13h16"], "Оформление и голос": ["#4BE3A1", "M12 3a9 9 0 1 0 9 9c0-1.5-1-2-2-2h-2a2 2 0 0 1-2-2V6c0-1.5-1.5-3-3-3z"],
+  "Данные и аккаунт": ["#FFC978", "M6 10V7a6 6 0 0 1 12 0v3 M5 10h14v10H5z"], "Если что-то не так": ["#FF8FA8", "M12 4l9 16H3z M12 10v4 M12 17v.5"],
+};
+const lnSvg = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+const lnWord = (n, a, b, c) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c}`;
+const lnToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+function lnSt() {                               // один и тот же объект: изменения — на месте
+  const st = S.course && typeof S.course === "object" ? S.course : (S.course = {});
+  if (!LN_BY[st.course]) st.course = "week";
+  if (!st.c || typeof st.c !== "object") st.c = {};
+  if (st.offer === undefined) st.offer = true;
+  return st;
+}
+function lnCs(cid) {
+  const st = lnSt(), k = cid || st.course, c = st.c[k] && typeof st.c[k] === "object" ? st.c[k] : (st.c[k] = {});
+  if (!c.done) c.done = {}; if (!c.steps) c.steps = {};
+  return c;
+}
+function lnCurrent(cid) { const cs = lnCs(cid); return LN_BY[cid || lnSt().course].lessons.find(L => !cs.done[L.day]) || null; }
+function lnAvailable(L, cid) {
+  if (L.day === 1) return true;
+  const cs = lnCs(cid), prev = cs.done[L.day - 1];
+  return !!prev && (prev < lnToday() || cs.ahead === L.day);
+}
+function lnOpenNow() { const L = lnCurrent(); return L && lnAvailable(L) ? L : null; }
+function lnMark(L, i) {
+  const st = lnSt(), cs = lnCs(), got = cs.steps[L.day] = cs.steps[L.day] || [];
+  if (got.includes(i)) return;
+  got.push(i);
+  const fin = got.length >= L.steps.length;
+  if (fin) cs.done[L.day] = lnToday();
+  saveS();
+  plog("info", `🎓 курс «${LN_BY[st.course].title}»: урок ${L.day}, шаг ${i + 1}${fin ? " — урок пройден" : ""}`);
+  setTimeout(() => {
+    toast(fin ? `🎓 Урок «${L.title}» пройден!` : `✓ Шаг урока: ${L.steps[i].say.replace(/[«»]/g, "")}`, 2600);
+    if (fin) { try { D.vibrate(40); } catch (e) { } confetti(); }
+    if ($("#sh-learn.on") && LN.tab === "course") lnRender();
+  }, 900);
+}
+function courseHeard(text) {                     // сказали похожее — шаг урока засчитан
+  try {
+    const L = lnOpenNow(); if (!L || !text) return;
+    const t = String(text).toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim().replace(/[ .!?]+$/, ""), got = lnCs().steps[L.day] || [];
+    const i = L.steps.findIndex((s, k) => s.rx && !got.includes(k) && s.rx.test(t));
+    if (i >= 0) lnMark(L, i);
+  } catch (e) { }
+}
+function courseSeen(sheet) {                     // открыли лист — шаг «Нажмите…»
+  try {
+    const L = lnOpenNow(); if (!L) return;
+    const got = lnCs().steps[L.day] || [], i = L.steps.findIndex((s, k) => s.open === sheet && !got.includes(k));
+    if (i >= 0) lnMark(L, i);
+  } catch (e) { }
+}
+/* лист */
+const LN = { tab: "qa", group: "", hits: null, art: "", t: 0 };
+function openLearn(tab, art) {
+  LN.tab = tab || LN.tab; if (art) { LN.art = art; LN.tab = "qa"; }
+  lnRender(); setTimeout(() => openSheet("#sh-learn"), 30);
+}
+function lnRender() {
+  $$("#ln-tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === LN.tab));
+  if (LN.tab === "course") lnCourse(); else lnQA();
+}
+function lnQA() {
+  const box = $("#ln-body"), all = window.DEWIAR_GUIDE || [];
+  const byId = Object.fromEntries(all.map(s => [s.id, s])), groups = {};
+  all.forEach(s => (groups[s.group || "Ещё"] = groups[s.group || "Ещё"] || []).push(s));
+  const top = `<div class="ln-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13 M20 20l-4.8-4.8"/></svg>`
+    + `<input id="ln-q" type="search" placeholder="Как поставить будильник?" aria-label="Поиск по вопросам" value="${esc(LN.q || "")}"></div>`;
+  const row = (s) => `<button class="ln-row" data-id="${esc(s.id)}"><b>${esc(s.title)}</b><small>${esc(s.lead || "")}</small></button>`;
+  const back = (label) => `<div class="ln-back"><button class="lnk" id="ln-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>${esc(label)}</button></div>`;
+  let h;
+  if (LN.art && byId[LN.art]) {
+    const s = byId[LN.art], li = (a) => (a || []).map(x => `<li>${esc(x)}</li>`).join(""), here = (s.where || []).includes("phone");
+    h = back(LN.hits ? "К найденному" : LN.group || "Все разделы")
+      + `<article class="ln-art"><small class="ln-meta">${esc(s.group || "")} · ${(s.where || []).map(w => w === "pc" ? "компьютер" : "телефон").join(" и ")}</small>`
+      + `<h3>${esc(s.title)}</h3><p class="ln-lead">${esc(s.lead || "")}</p>`
+      + (!here ? `<p class="ln-pc">Это — на компьютере, в студии Dewiar. На телефоне можно спросить Лиру голосом.</p>` : "")
+      + ((s.how || []).length ? `<h4>Как сделать</h4><ul class="ln-how">${li(s.how)}</ul>` : "")
+      + ((s.say || []).length ? `<h4>Попробуйте сказать</h4><div class="ln-says">${s.say.slice(0, 6).map((x, i) => `<button class="ln-try" data-i="${i}"><span>«${esc(x)}»</span>`
+          + `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg></button>`).join("")}</div>` : "")
+      + ((s.tips || []).length ? `<h4>Советы</h4><ul class="ln-tips">${li(s.tips)}</ul>` : "")
+      + `<div class="ln-acts"><button class="btn w" id="ln-lira">Не получилось — спросить Лиру</button><button class="lnk" id="ln-site">На сайте, со снимками</button></div></article>`;
+  } else if (LN.hits) {
+    h = top + back("Все разделы") + `<p class="ln-cnt">${LN.hits.length ? "Нашлось: " + lnWord(LN.hits.length, "ответ", "ответа", "ответов") : "Ничего не нашлось — спросите Лиру своими словами: она ответит по этому же руководству."}</p>`
+      + `<div class="card ln-rows">${LN.hits.map(row).join("")}</div>` + (LN.hits.length ? "" : `<button class="btn p w" id="ln-ask">Спросить Лиру</button>`);
+  } else if (LN.group && groups[LN.group]) {
+    h = top + back("Все разделы") + `<h3 class="ln-gh">${esc(LN.group)}</h3><div class="card ln-rows">${groups[LN.group].map(row).join("")}</div>`;
+  } else {
+    h = top + `<div class="ln-tiles">${Object.keys(groups).map(g => { const [c, d] = LN_GROUP[g] || ["#8B8CF7", "M12 4v16M4 12h16"];
+      return `<button class="ln-tile" data-g="${esc(g)}" style="--c:${c}"><i>${lnSvg(d)}</i><b>${esc(g)}</b><small>${lnWord(groups[g].length, "статья", "статьи", "статей")}</small></button>`; }).join("")}</div>`;
+  }
+  box.innerHTML = h;
+  const q = $("#ln-q");
+  if (q) {
+    q.oninput = () => { clearTimeout(LN.t); LN.t = setTimeout(() => { LN.q = q.value; lnSearch(true); }, 250); };
+    q.onkeydown = (e) => { if (e.key === "Enter") { clearTimeout(LN.t); LN.q = q.value; lnSearch(false); } };
+  }
+  if ($("#ln-back")) $("#ln-back").onclick = () => { if (LN.art) LN.art = ""; else { LN.group = ""; LN.hits = null; LN.q = ""; } lnQA(); $("#sh-learn").scrollTop = 0; };
+  $$(".ln-tile", box).forEach(b => b.onclick = () => { LN.group = b.dataset.g; lnQA(); });
+  $$(".ln-row", box).forEach(b => b.onclick = () => { LN.art = b.dataset.id; lnQA(); $("#sh-learn").scrollTop = 0; });
+  if (LN.art && byId[LN.art]) {
+    const s = byId[LN.art];
+    $$(".ln-try", box).forEach(b => b.onclick = () => { closeSheets(); setTimeout(() => ask(s.say[+b.dataset.i]), 200); });
+    $("#ln-lira").onclick = () => { closeSheets(); setTimeout(() => ask(`Помоги: ${s.title.replace(/[«»]/g, "")}. Как это сделать на телефоне?`), 200); };
+    $("#ln-site").onclick = () => D.openUrl(GUIDE_URL + "#" + s.id);
+  }
+  if ($("#ln-ask")) $("#ln-ask").onclick = () => { const t = (LN.q || "").trim(); closeSheets(); if (t) setTimeout(() => ask(t), 200); };
+}
+function lnSearch(typing) {                      // печатают — поле остаётся в фокусе; Enter — клавиатура уходит
+  const t = (LN.q || "").trim();
+  LN.art = ""; LN.group = "";
+  LN.hits = t ? guideFind(t, 8) : null;
+  lnQA();
+  const q = $("#ln-q"); if (q && typing) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+}
+function lnCourse() {
+  const st = lnSt(), c = LN_BY[st.course], cs = lnCs(), L = lnCurrent();
+  const ndone = Object.keys(cs.done).length, pct = Math.round(ndone / c.lessons.length * 100);
+  const days = c.lessons.map(x => { const s = cs.done[x.day] ? "done" : L && x.day === L.day && lnAvailable(x) ? "today" : "next";
+    return `<i class="ln-d ${s}" title="${esc(x.title)}">${s === "done" ? `<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : x.day}</i>`; }).join("");
+  let h = `<div class="card ln-hero"><div class="ln-ht"><div><b>${esc(c.title)}</b><small>${esc(c.sub)} · ${ndone} из ${c.lessons.length}</small></div><em>${pct}%</em></div>`
+    + `<div class="ln-bar"><i style="width:${pct}%"></i></div><div class="ln-days">${days}</div></div>`;
+  if (!L) {
+    h += `<div class="card ln-fin"><b>🎓 Курс пройден!</b><p class="hint">Всё, что было в уроках, теперь под рукой. Выберите другой курс ниже — или пройдите этот заново.</p>`
+      + `<button class="btn w" id="ln-again">Пройти заново</button></div>`;
+  } else {
+    const got = cs.steps[L.day] || [], open = lnAvailable(L), next = c.lessons.find(x => x.day === L.day + 1);
+    h += `<div class="card ln-lesson${open ? "" : " wait"}"><div class="ln-lh"><i>${lnSvg(LN_ICON[L.icon] || LN_ICON.chat)}</i><div><small>Урок ${L.day} · пять минут</small><b>${esc(L.title)}</b></div></div>`
+      + `<p class="ln-intro">${esc(L.intro)}</p>`
+      + (open ? `<ol class="ln-steps">${L.steps.map((s, i) => { const ok = got.includes(i);
+          return `<li class="${ok ? "ok" : ""}"><button class="ln-step" data-i="${i}" ${ok ? "disabled" : ""}><i>${ok ? `<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : i + 1}</i>`
+            + `<span><b>${s.open ? esc(s.say) : "«" + esc(s.say) + "»"}</b><small>${esc(s.why)}</small></span>${ok ? "" : `<svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="${s.open ? "M9 5l7 7-7 7" : "M8 5.5v13l10.5-6.5z"}"/></svg>`}</button></li>`; }).join("")}</ol>`
+          + `<p class="hint">Шаг засчитывается сам, когда вы это скажете или откроете. Нажмите шаг — и я сделаю.</p>`
+        : `<p class="hint">Урок откроется завтра — по уроку в день запоминается лучше.</p><button class="btn w" id="ln-ahead">Следующий урок сейчас</button>`)
+      + (open && next ? `<small class="ln-next">Завтра: «${esc(next.title)}»</small>` : "") + `</div>`;
+  }
+  const others = LN_COURSES.filter(k => k.id !== st.course);
+  if (others.length) h += `<h3 class="ln-gh">Другие курсы</h3>` + others.map(k => { const d = Object.keys(lnCs(k.id).done).length, p = Math.round(d / k.lessons.length * 100);
+    return `<button class="card ln-oc" data-c="${k.id}"><i>${lnSvg(LN_ICON[k.lessons[0].icon] || LN_ICON.chat)}</i><span><b>${esc(k.title)}</b><small>${esc(k.sub)} · ${lnWord(k.lessons.length, "урок", "урока", "уроков")}</small>`
+      + `<em class="ln-bar"><i style="width:${p}%"></i></em></span><svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>`; }).join("");
+  h += `<div class="card"><div class="sw" style="padding:4px"><div>Предлагать урок дня<small>раз в день, при первом открытии</small></div>`
+    + `<label class="tg"><input type="checkbox" id="ln-offer" ${st.offer !== false ? "checked" : ""}><i></i></label></div></div>`;
+  $("#ln-body").innerHTML = h;
+  $$(".ln-step").forEach(b => b.onclick = () => lnDo(L.steps[+b.dataset.i]));
+  if ($("#ln-ahead")) $("#ln-ahead").onclick = () => { cs.ahead = L.day; saveS(); lnCourse(); };
+  if ($("#ln-again")) $("#ln-again").onclick = () => { cs.done = {}; cs.steps = {}; delete cs.ahead; saveS(); lnCourse(); };
+  $$(".ln-oc").forEach(b => b.onclick = () => { st.course = b.dataset.c; saveS(); lnCourse(); $("#sh-learn").scrollTop = 0; });
+  $("#ln-offer").onchange = (e) => { st.offer = e.target.checked; saveS(); };
+}
+function lnDo(s) {                               // нажали шаг: фразу — Лире, «Нажмите…» — открыть тот лист
+  if (!s) return;
+  if (s.rx) { closeSheets(); setTimeout(() => ask(s.say), 200); return; }
+  const go = { day: () => { openSheet("#sh-day"); dayTab = "rem"; $$("#day-tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === "rem")); renderDay(); }, play: () => playOpen(""), close: () => $("#b-close").click(),
+    persona: () => $("#who").click(), soul: () => $("#b-soul").click(), set: () => openSettings("more") }[s.open];
+  closeSheets(); if (go) setTimeout(go, 150);
+}
+function lnOffer() {                             // раз в день: урок на пять минут — карточкой
+  const st = lnSt(), L = lnOpenNow(), today = lnToday();
+  if (!L || st.offer === false || st.skip === today || st.offered === today || $("#card").innerHTML.trim()) return false;
+  st.offered = today; saveS();
+  const c = LN_BY[st.course];
+  showCard(`<div class="ln-card"><i>${lnSvg(LN_ICON[L.icon] || LN_ICON.chat)}</i><div><small>${esc(c.title)} · урок ${L.day}</small><b>${esc(L.title)}</b>`
+    + `<span>Пять минут — начнём?</span></div><div class="ln-cb"><button class="btn p" id="ln-go">Начать</button><button class="btn ghost" id="ln-skip">Не сегодня</button></div></div>`);
+  $("#ln-go").onclick = () => { showCard(""); openLearn("course"); };
+  $("#ln-skip").onclick = () => { st.skip = today; saveS(); showCard(""); };
+  return true;
+}
 /* лист «Близкие» */
 const clTime = (ts) => { const d = new Date(ts), now = new Date(), hm = pad(d.getHours()) + ":" + pad(d.getMinutes()); return d.toDateString() === now.toDateString() ? hm : d.getDate() + " " + MON[d.getMonth()].slice(0, 3) + ", " + hm; };
 const CL_COL = ["#9BD4FF", "#FFB547", "#3DF5C8", "#FF7AB6", "#B78CFF", "#9BE15D", "#7C8CFF", "#FF6B5A"];
@@ -8697,6 +8940,10 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
   setTimeout(() => { try { doneInbox(); } catch (e) { } }, 300);   // «Сделано ✓» из уведомлений, пока приложение было закрыто
   setTimeout(() => { try { newsCheck(); } catch (e) { } }, 1200);  // обновились — «Что нового»
   setTimeout(() => { try { if (!document.querySelector(".sheet.on") && window.examCleanCheck) examCleanCheck(); } catch (e) { } }, 4000);   // следы старых экзаменов
+  // урок дня (курсы, 28.10): раз в день при первом открытии — карточкой, если ничего другого на экране нет
+  const lnTry = () => { try { if ((S.llm.base_url || loggedIn()) && !document.querySelector(".sheet.on") && state === "idle") lnOffer(); } catch (e) { } };
+  setTimeout(lnTry, 6000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(lnTry, 2500); });
   if (!D.web) setTimeout(() => checkUpdate(false), 8000);   // веб-версия всегда свежая: её отдаёт сайт
   setTimeout(() => accountCheck().then(ensureBrain).then(cloudCaps).then(tgSync), 3000);
   setTimeout(() => syncRun(false), 4000);

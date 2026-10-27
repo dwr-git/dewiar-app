@@ -16,7 +16,7 @@ const QA_GROUPS = {          // вид плиток: подложка, цвет 
 };
 // статья руководства → раздел студии («Открыть раздел»)
 const QA_OPEN = { reminders: "reminders", "notes-memory": "notes", "calendar-money": "calendar", payments: "pay", vault: "vault", close: "close",
-  "close-invite": "close", "near-meet": "close", family: "family", kids: "kids", music: "music", tasks: "tasks", prompter: "prompter",
+  "close-invite": "close", "near-meet": "close", family: "family", team: "team", kids: "kids", music: "music", tasks: "tasks", prompter: "prompter",
   "folder-docs": "folder", personas: "personas", "brain-account": "brain", voices: "voice", look: "look", hands: "hands",
   "home-tv-mail-calendars": "connect", "home-assistant": "connect", "telegram-max": "connect", "skills-mcp-servers": "skills", sync: "dw",
   privacy: "safety", "safety-backup": "safety", features: "features", tricks: "tricks", "soul-diary": "soul", talk: "ears", "chat-pc": "chat",

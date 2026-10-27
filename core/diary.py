@@ -291,6 +291,80 @@ class Diary:
         finally:
             self._busy.release()
 
+    # ---------- правка и удаление записей (28.10, владелец: «дневник и душа — возможность править или удалять») ----------
+    @staticmethod
+    def sections(text):
+        """Файл дня -> (шапка «# …», [(сырой кусок, заголовок, тело)]). Те же правила, что diarySections в studio/soul.js:
+        кусок без заголовка и без текста не считается — номера записей у студии и здесь совпадают."""
+        head, body = "", text
+        if text.startswith("# "):
+            head, _, body = text.partition("\n")
+        out = []
+        for chunk in re.split(r"\n(?=### |## )", body):
+            m = re.match(r"^(#{2,3}) (.*)\n?([\s\S]*)$", chunk)
+            if m:
+                out.append((chunk, m.group(2), m.group(3)))
+            elif chunk.strip():
+                out.append((chunk, "", chunk))
+        return head, out
+
+    def _day_path(self, day):
+        return self.host.workspace.safe(f"Дневник/{_date(day).isoformat()}.md")
+
+    def entry_save(self, day, i, text, title=None):
+        """Поправить запись дня номер i: тело — text; у ночной можно сменить и название («title»)."""
+        p = self._day_path(day)
+        if not p.exists():
+            raise ValueError("такой записи нет")
+        head, secs = self.sections(p.read_text(encoding="utf-8"))
+        i = int(i)
+        if not 0 <= i < len(secs):
+            raise ValueError("такой записи нет")
+        chunk, h, _ = secs[i]
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("пустую запись лучше удалить")
+        if h.startswith("🌙") and title is not None:
+            t = re.sub(r"[«»\n]", "", str(title)).strip()[:80]
+            mood = (re.search(r"»\s*(.*)$", h) or [None, ""])[1]
+            h = h.split(" · «")[0] + (f" · «{t}»" if t else "") + (f" {mood}" if mood else "")
+            tt = self.data.setdefault("titles", {}).setdefault(_date(day).isoformat(), {})
+            tt["title"] = t
+            self._save()
+        new = (f"{'##' if h.startswith('🌙') else '###'} {h}\n\n{text}\n" if h else text + "\n")
+        parts = [c for c, _, _ in secs]
+        parts[i] = new
+        p.write_text(self._join(head, parts), encoding="utf-8")
+        return self.entries()
+
+    def entry_delete(self, day, i):
+        """Удалить запись дня номер i. Последняя — удаляется и файл дня; ночная — и её выводы «на завтра» из разговора."""
+        p = self._day_path(day)
+        if not p.exists():
+            raise ValueError("такой записи нет")
+        head, secs = self.sections(p.read_text(encoding="utf-8"))
+        i = int(i)
+        if not 0 <= i < len(secs):
+            raise ValueError("такой записи нет")
+        night = secs[i][1].startswith("🌙")
+        parts = [c for k, (c, _, _) in enumerate(secs) if k != i]
+        iso = _date(day).isoformat()
+        if night:
+            (self.data.get("titles") or {}).pop(iso, None)
+            if (self.data.get("insights") or {}).get("day") == iso:
+                self.data["insights"] = {}
+            self._save()
+        if parts:
+            p.write_text(self._join(head, parts), encoding="utf-8")
+        else:
+            p.unlink()
+        return self.entries()
+
+    @staticmethod
+    def _join(head, parts):
+        body = "\n\n".join(c.strip("\n") for c in parts)
+        return (head + "\n\n" if head else "") + body.strip("\n") + "\n"
+
     # ---------- для студии ----------
     def entries(self):
         titles = self.data.get("titles") or {}

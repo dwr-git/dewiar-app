@@ -12,9 +12,9 @@ _KIDS_LOCKED = ("account_", "backup_", "cal_add", "cal_remove", "cloud_connect",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
-                "security_set", "server_", "skill_", "soul_save", "soul_update", "sync_set", "sync_e2e", "tg_", "tools",
+                "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_")
 
 
 def _kids_blocked(cmd, a):
@@ -164,6 +164,52 @@ class CommandsMixin:
         except (FamilyError, CloseError) as e:
             raise ValueError(str(e)) from e
         return F.public()
+
+    # ---------- «Команда»: поручения сотрудникам в Telegram (team.py) ----------
+
+    def team_cmd(self, cmd, a):
+        """team_get; team_connect {token}; team_forget; team_set {company?, boss?, speak?}; team_member_add {name, role};
+        team_member_del {id}; team_member_code {id}; team_assign {who, title, due, note}; team_accept {id};
+        team_back {id, remark}; team_cancel {id}; team_remind {id}; team_photo {name} -> data:-ссылка."""
+        from team import TeamError
+        T = self.team
+        try:
+            if cmd == "team_get":
+                if (self.s.get("features") or {}).get("team") and T.connected():
+                    T.start()
+                return T.public()
+            if cmd == "team_connect":
+                return T.connect(str(a.get("token") or ""), str(a.get("ch") or "tg"))
+            if cmd == "team_forget":
+                return T.forget(str(a.get("ch") or "tg"))
+            if cmd == "team_set":
+                return T.set(a or {})
+            if cmd == "team_member_add":
+                return T.member_add(a.get("name"), a.get("role") or "")
+            if cmd == "team_member_del":
+                return T.member_del(str(a.get("id") or ""))
+            if cmd == "team_member_code":
+                return T.member_code(str(a.get("id") or ""))
+            if cmd == "team_assign":
+                T.assign(str(a.get("who") or ""), a.get("title"), a.get("due") or "", a.get("note") or "")
+                return T.public()
+            if cmd == "team_accept":
+                return T.accept(str(a.get("id") or ""))
+            if cmd == "team_back":
+                return T.back(str(a.get("id") or ""), a.get("remark"))
+            if cmd == "team_cancel":
+                return T.cancel(str(a.get("id") or ""))
+            if cmd == "team_remind":
+                return T.remind(str(a.get("id") or ""))
+            if cmd == "team_photo":
+                import base64
+                p = T.photo_path(str(a.get("name") or ""))
+                if not p:
+                    raise TeamError("фото не найдено")
+                return {"url": "data:image/jpeg;base64," + base64.b64encode(p.read_bytes()).decode()}
+            raise ValueError(f"неизвестная команда {cmd}")
+        except TeamError as e:
+            raise ValueError(str(e)) from e
 
     # ---------- окно голосом: «спрячься», «покажись», «отключись» ----------
 
@@ -379,6 +425,8 @@ class CommandsMixin:
         kids = getattr(self, "kids", None)
         if kids and kids.locked() and _kids_blocked(cmd, a):
             raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
+        if cmd.startswith("team_"):
+            return self.team_cmd(cmd, a)
         if cmd == "hello":
             return self.snapshot()
         if cmd == "sync_status":
@@ -1417,9 +1465,11 @@ class CommandsMixin:
             p = self.workspace.safe(a.get("path", "")) if a.get("path") else self.workspace.ensure()
             launch(["xdg-open", str(p)])
             return str(p)
-        if cmd in ("soul_get", "soul_save", "soul_update", "const_get", "const_save", "const_reset"):
+        if cmd in ("soul_get", "soul_save", "soul_update", "soul_delete", "const_get", "const_save", "const_reset"):
             name = (a.get("persona") or "").strip() or self.persona_name()
-            if cmd == "soul_save":
+            if cmd == "soul_delete":
+                self.soul.delete_soul(name)
+            elif cmd == "soul_save":
                 self.soul.save_soul(name, a.get("text", ""))
             elif cmd == "soul_update":
                 if not self.s.active_llm():
@@ -1438,6 +1488,10 @@ class CommandsMixin:
             return self.diary.entries()
         if cmd == "ctx_view":                                   # «О программе» → «Для отладки: что Лира сейчас учитывает»
             return self.ctx_view()
+        if cmd in ("diary_entry_save", "diary_entry_delete"):     # «Дневник»: поправить или удалить запись (28.10)
+            if cmd == "diary_entry_save":
+                return self.diary.entry_save(a.get("day"), a.get("i", -1), a.get("text", ""), a.get("title"))
+            return self.diary.entry_delete(a.get("day"), a.get("i", -1))
         if cmd == "diary_insight_drop":                         # «Дневник»: вывод ночи — не учитывать в разговоре
             return self.diary.drop_insight(a.get("i"))
         if cmd == "diary_write_now":                           # «Записать сейчас»: запись о сегодняшнем (или указанном) дне

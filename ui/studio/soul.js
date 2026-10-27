@@ -27,22 +27,50 @@ function diarySections(text) {
   });
   return out;
 }
+/* 28.10, владелец: «дневник и душа — возможность править или удалять»: у каждой записи — «Поправить» и «Удалить»
+   (ядро: diary_entry_save {day, i, text, title}, diary_entry_delete {day, i}; i — номер в diarySections) */
+let dEdit = null;
+const D_ED = '<path d="M4 20h4L19 9l-4-4L4 16z"/>', D_DEL = '<path d="M5 7h14M10 11v6M14 11v6M7 7l1 13h8l1-13M9 7V4h6v3"/>';
 function renderDiaryDay(day) {
   dCur = day.day; $$("#d-days .dday").forEach(x => x.classList.toggle("cur", x.dataset.d === day.day));
-  const d = dDate(day.day), page = $("#d-page");
-  const parts = diarySections(day.text).map(s => {
+  const d = dDate(day.day), page = $("#d-page"), secs = diarySections(day.text);
+  const acts = (k) => `<div class="dent-act"><button class="dent-b" data-ed="${k}" title="Поправить" aria-label="Поправить запись">${SVG(D_ED)}</button>`
+    + `<button class="dent-b" data-del="${k}" title="Удалить" aria-label="Удалить запись">${SVG(D_DEL)}</button></div>`;
+  const parts = secs.map((s, k) => {
+    if (dEdit && dEdit.day === day.day && dEdit.k === k) {
+      const t = s.night ? (s.head.match(/«(.+?)»/) || [])[1] || "" : null;
+      return `<div class="dentry edit${s.night ? " night" : ""}"><div class="dt">${s.night ? "🌙 Ночная запись" : escH(s.head || "Запись")} — правка</div>`
+        + (t !== null ? `<input type="text" id="dent-title" maxlength="80" placeholder="Название" value="${escH(t)}">` : "")
+        + `<textarea id="dent-text">${escH(s.body.trim())}</textarea><div class="actions"><button class="btn primary" id="dent-save">Сохранить</button>`
+        + `<button class="btn" id="dent-cancel">Отмена</button>${s.night ? `<small class="hint">«**На завтра:**» и строки «- …» под ним — выводы, которые Лира держит в голове.</small>` : ""}</div></div>`;
+    }
     if (s.night) {
       const t = s.head.match(/«(.+?)»\s*(.*)$/), [main, tom] = s.body.split(/\n\*\*На завтра:\*\*\n/);
-      return `<div class="dentry night"><div class="dt">🌙 Ночью — о прожитом дне${day.who ? " · пишет " + escH(day.who) : ""}</div>${t ? `<h3>${escH(t[1])}<span class="mood">${escH(t[2] || "")}</span></h3>` : ""}
+      return `<div class="dentry night">${acts(k)}<div class="dt">🌙 Ночью — о прожитом дне${day.who ? " · пишет " + escH(day.who) : ""}</div>${t ? `<h3>${escH(t[1])}<span class="mood">${escH(t[2] || "")}</span></h3>` : ""}
         ${md(main.trim())}${tom ? `<div class="tom"><b>На завтра</b>${md(tom.trim())}</div>` : ""}</div>`;
     }
-    return `<div class="dentry">${s.head ? `<div class="dt">${escH(s.head)}</div>` : ""}${md(s.body.trim())}</div>`;
+    return `<div class="dentry">${acts(k)}${s.head ? `<div class="dt">${escH(s.head)}</div>` : ""}${md(s.body.trim())}</div>`;
   }).join("");
   const i = dDays.findIndex(x => x.day === day.day), older = dDays[i + 1], newer = dDays[i - 1];
   page.innerHTML = `<div class="dhead"><div class="wd">${WD[d.getDay()]}</div><h2>${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}</h2><div class="orn">✦ ✦ ✦</div></div>${parts}
     <div class="dnav">${older ? `<button class="btn small" data-go="${older.day}">← ${dDate(older.day).getDate()} ${MON[dDate(older.day).getMonth()]}</button>` : "<span></span>"}
     ${newer ? `<button class="btn small" data-go="${newer.day}">${dDate(newer.day).getDate()} ${MON[dDate(newer.day).getMonth()]} →</button>` : ""}</div>`;
-  $$("#d-page [data-go]").forEach(b => b.onclick = () => { renderDiaryDay(dDays.find(x => x.day === b.dataset.go)); $("main").scrollTo({ top: 0, behavior: "smooth" }); });
+  $$("#d-page [data-go]").forEach(b => b.onclick = () => { dEdit = null; renderDiaryDay(dDays.find(x => x.day === b.dataset.go)); $("main").scrollTo({ top: 0, behavior: "smooth" }); });
+  $$("#d-page [data-ed]").forEach(b => b.onclick = () => { dEdit = { day: day.day, k: +b.dataset.ed }; renderDiaryDay(day); const t = $("#dent-text"); if (t) { t.style.height = t.scrollHeight + 8 + "px"; t.focus(); } });
+  $$("#d-page [data-del]").forEach(b => b.onclick = async () => {
+    const s = secs[+b.dataset.del];
+    if (!await ask(s.night ? "Удалить ночную запись? Её выводы «на завтра» тоже перестанут учитываться в разговоре." : "Удалить эту запись дневника?", { ok: "Удалить", danger: true })) return;
+    try { await core.call("diary_entry_delete", { day: day.day, i: +b.dataset.del }); toast("Запись удалена"); dEdit = null; loadDiary(day.day); } catch (e) { toast(e.message); }
+  });
+  if ($("#dent-save")) {
+    $("#dent-cancel").onclick = () => { dEdit = null; renderDiaryDay(day); };
+    $("#dent-text").oninput = (e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + 8 + "px"; };
+    $("#dent-save").onclick = async () => {
+      const a = { day: day.day, i: dEdit.k, text: $("#dent-text").value };
+      if ($("#dent-title")) a.title = $("#dent-title").value;
+      try { await core.call("diary_entry_save", a); toast("Сохранено"); dEdit = null; loadDiary(day.day); } catch (e) { toast(e.message, 4000); }
+    };
+  }
 }
 async function loadDiary(focus) {
   const name = curName();
@@ -93,7 +121,12 @@ function soulRender(r) {
   $$("#s-who .chip").forEach(c => c.onclick = () => { sWho = c.dataset.n; sEditing = false; loadSoul(); });
   const page = $("#s-page");
   if (sEditing) {
-    page.innerHTML = `<textarea id="s-text"></textarea><div class="actions" style="margin-top:12px"><button class="btn primary" id="s-save">Сохранить</button><button class="btn" id="s-cancel">Отмена</button></div>`;
+    page.innerHTML = `<textarea id="s-text"></textarea><div class="actions" style="margin-top:12px"><button class="btn primary" id="s-save">Сохранить</button><button class="btn" id="s-cancel">Отмена</button>`
+      + `${r.text ? `<button class="btn danger" id="s-del" style="margin-left:auto">Стереть душу</button>` : ""}</div>`;
+    if ($("#s-del")) $("#s-del").onclick = async () => {
+      if (!await ask(`Стереть душу ${name}? Она вырастет заново из дневника — сама раз в неделю или по кнопке «Обновить по дневнику».`, { ok: "Стереть", danger: true })) return;
+      try { await core.call("soul_delete", { persona: name }); sEditing = false; loadSoul(); toast("Душа стёрта"); } catch (e) { toast(e.message); }
+    };
     $("#s-text").value = r.text || `# Душа — ${name}\n\n## Кто я\n\n## Что для меня важно\n\n## Что я понял${a} о нас\n\n## Как я меняюсь\n`;
     $("#s-save").onclick = async () => { try { soulRender(await core.call("soul_save", { persona: name, text: $("#s-text").value })); sEditing = false; loadSoul(); toast("Сохранено"); } catch (e) { toast(e.message, 5000); } };
     $("#s-cancel").onclick = () => { sEditing = false; loadSoul(); };

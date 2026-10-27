@@ -67,6 +67,15 @@ try:
         pg.on("pageerror", lambda e: errs.append("pageerror: " + str(e)))
         pg.goto((ROOT / "ui/settings.html").as_uri() + f"?token={tok}&port={PORT}"); time.sleep(3)
         pg.click('nav button[data-p="personas"]'); time.sleep(0.8)
+        # №369 (28.10, Windows 10: «нет кнопки Добавить и Создать»): кнопки — сразу под описанием, «Создать своего» есть
+        # даже если облик одной карточки не нарисовался
+        ok(pg.is_visible("#pr-new") and pg.is_visible("#pr-gal") and pg.locator("#pgrid .card.new").count() == 1, "«Персонажи»: «Создать своего» и «Готовые персонажи» — на виду")
+        pg.evaluate("() => { const D = window.DewiarEntity; window.DewiarEntity = function () { throw new Error('нет облика'); }; renderPersonas(); window.DewiarEntity = D; }")
+        ok(pg.locator("#pgrid .card.new").count() == 1, "облик не нарисовался — «Создать своего» всё равно на месте")
+        pg.evaluate("renderPersonas()"); time.sleep(0.3)
+        pg.click("#pr-new"); time.sleep(0.4)
+        ok(pg.evaluate("document.querySelector('#drawer').classList.contains('open')"), "«+ Создать своего персонажа» открывает редактор")
+        pg.evaluate("document.querySelector('#drawer').classList.remove('open')"); time.sleep(0.3)
         card = pg.locator("#pgrid .card", has_text="Патрик").first
         card.locator(".edit").click(); time.sleep(0.6)
         chips = pg.evaluate("[...document.querySelectorAll('#e-brain .bp')].map(b => b.innerText.split('\\n')[0])")

@@ -8,7 +8,7 @@ const CS_ICON = {
   kids: "M7 10a5 5 0 0 1 10 0v4a5 5 0 0 1-10 0z M9.5 11v.1 M14.5 11v.1 M7.5 6 6 3.5 9.5 5 M16.5 6 18 3.5 14.5 5", tasks: "M6 5h12v15H6z M9 10l1.5 1.5L13 9 M9 15h6",
   folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", connect: "M9 15l6-6 M7 11l-2 2a3 3 0 0 0 4 4l2-2 M17 13l2-2a3 3 0 0 0-4-4l-2 2",
   prompter: "M4 5h16v10H4z M8 9h8 M8 12h5 M12 15v4 M8 19h8", calendar: "M5 6h14v13H5z M5 10h14 M9 4v4 M15 4v4", notes: "M6 4h9l3 3v13H6z M9 11h6 M9 15h4",
-  pay: "M6 4h12v16l-2.5-1.5L13 20l-2.5-1.5L8 20l-2-1.5z M9 9h6 M9 13h4", close: "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z",
+  pay: "M6 4h12v16l-2.5-1.5L13 20l-2.5-1.5L8 20l-2-1.5z M9 9h6 M9 13h4", team: "M4 8h16v11H4z M9 8V5.5h6V8 M9 13.5l2 2 4-4", close: "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z",
   personas: "M9 9a3 3 0 1 0 0-.1 M3.5 19a5.5 5.5 0 0 1 11 0 M16 8a2.5 2.5 0 1 0 0-.1 M15.5 13.5a4.5 4.5 0 0 1 5 4.5", hands: "M8 13V6a1.5 1.5 0 0 1 3 0v5 M11 11V5a1.5 1.5 0 0 1 3 0v6 M14 11V7a1.5 1.5 0 0 1 3 0v7a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L3.5 14a1.5 1.5 0 0 1 2.4-1.8L8 14.5" };
 function csRender() {
   const d = CS; if (!d || !Array.isArray(d.days) || !$("#p-course")) return;
@@ -25,8 +25,14 @@ function csRender() {
   $("#cs-courses").innerHTML = (d.courses || []).map(c => `<button class="chip${c.id === d.course ? " on" : ""}" role="tab" aria-selected="${c.id === d.course}" data-c="${escH(c.id)}">${escH(c.title)} <small>${c.done}/${c.total}</small></button>`).join("");
   $$("#cs-courses [data-c]").forEach(b => b.onclick = () => csCall("course_pick", { id: b.dataset.c }));
   const other = (d.courses || []).filter(c => c.id !== d.course);
-  $("#cs-after").innerHTML = other.map(c => `<button class="cs-oc" data-c="${escH(c.id)}"><b>${escH(c.title)}</b><small>${escH(c.sub)} · ${c.done ? `пройдено ${c.done} из ${c.total}` : `${c.total} ${plural(c.total, "урок", "урока", "уроков")}`}</small></button>`).join("")
-    + `<small class="cs-soon">Скоро — «Лира для бизнеса»: команда, поручения сотрудникам в Telegram.</small>`;
+  // 28.10, владелец: «блоки слишком близко… должно быть красиво, выверенно» — карточки списком с отступами: значок курса,
+  // название и что внутри, ход (если начат) и стрелка
+  const CS_COURSE_ICON = { week: "chat", family: "family", work: "tasks", biz: "team" };
+  $("#cs-after").innerHTML = other.map(c => `<button class="cs-oc" data-c="${escH(c.id)}">`
+    + `<i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${CS_ICON[CS_COURSE_ICON[c.id]] || CS_ICON.chat}"/></svg></i>`
+    + `<span><b>${escH(c.title)}</b><small>${escH(c.sub)} · ${c.done ? `пройдено ${c.done} из ${c.total}` : `${c.total} ${plural(c.total, "урок", "урока", "уроков")}`}</small>`
+    + (c.done ? `<em class="cs-ocbar"><s style="width:${Math.round(c.done / c.total * 100)}%"></s></em>` : "") + `</span>`
+    + `<svg class="cs-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`).join("");
   $$("#cs-after [data-c]").forEach(b => b.onclick = () => csCall("course_pick", { id: b.dataset.c }));
   const box = $("#cs-lesson");
   if (!L) {

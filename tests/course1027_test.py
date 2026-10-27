@@ -47,8 +47,8 @@ ok(c2.offer_line() == "", "«не сегодня» — не предлагать
 c2.restart(1)
 ok(c2.public()["days"][0]["state"] != "done", "урок можно повторить")
 pf = c2.pick("family")
-ok(pf["title"] == "Лира для семьи" and pf["lesson"]["day"] == 1 and [x["id"] for x in pf["courses"]] == ["week", "family", "work"],
-   "курсы: «Неделя с Лирой», «Лира для семьи», «Лира для работы» — у каждого свой ход")
+ok(pf["title"] == "Лира для семьи" and pf["lesson"]["day"] == 1 and [x["id"] for x in pf["courses"]] == ["week", "family", "work", "biz"],
+   "курсы: «Неделя с Лирой», «Лира для семьи», «Лира для работы», «Лира для бизнеса» — у каждого свой ход")
 ok(c2.seen("close") == 0 and c2.public()["lesson"]["steps"][0]["done"] and C.Course(tmp / "c.json").public()["course"] == "family", "«Лира для семьи»: шаг «Откройте «Близкие»»")
 c2.pick("week")
 ok(c2.public()["done"] == 1, "вернулись к «Неделе» — её ход на месте")

@@ -453,7 +453,8 @@ class TaskManager:
         t.save()
         if not (t.thread and t.thread.is_alive()):
             if t.status == "done":
-                t.data.update(finished=False, finish_checked=False, force_finish=False, verified=False, critic_done=False, refusal_nudged=False, tests_gate=0)
+                t.data.update(finished=False, finish_checked=False, force_finish=False, verified=False, critic_done=False, refusal_nudged=False, tests_gate=0,
+                              gate_rejects=0, unfinished="")
                 t.journal("↺ Новое сообщение после итога — продолжаю работу.")
             self.start(t.id)
         self._emit(t)
@@ -672,22 +673,104 @@ class TaskManager:
     def _web_available(self, t):
         return any(x["name"] == "web_search" for x in self._specs(t))
 
+    def _lab_files(self, t):
+        """Файлы «Лаборатории» (lab_write, lab_run), созданные или изменённые во время задачи: она пишет туда, а не в
+        папку задачи (№368: «list_files и самопроверка должны видеть ту же папку, куда пишет lab_write»)."""
+        lab = self.host.workspace.root / "Лаборатория"
+        try:
+            since = dt.datetime.fromisoformat(str(t.data.get("created") or "")).timestamp() - 5
+        except ValueError:
+            since = 0
+        out = []
+        if lab.is_dir():
+            for p in sorted(lab.rglob("*")):
+                try:
+                    if p.is_file() and p.stat().st_mtime >= since:
+                        out.append(p)
+                except OSError:
+                    continue
+        return out[:200]
+
+    PROMISE_RX = re.compile(r"([\wА-Яа-яЁё][\wА-Яа-яЁё .()\-]{0,80}\.(?:html?|xlsx|xls|csv|pdf|docx|pptx|png|jpe?g|webp|gif|svg|mp3|wav|ogg|mp4|webm|zip|md|py|js))\b", re.I)
+
+    def _promised_missing(self, t, summary):
+        """Файлы, названные в итоге, которых нет ни в папке задачи, ни в «Лаборатории», ни в папке ассистента.
+        Названный, но не созданный результат — не результат (№368)."""
+        names, text = [], summary or ""
+        for m in self.PROMISE_RX.finditer(text):
+            before = text[max(0, m.start() - 120):m.start()].split()
+            if before and ("://" in before[-1] or before[-1].startswith("www.")) and not text[m.start() - 1:m.start()].isspace():
+                continue                                   # часть ссылки на сайт — не наш файл
+            n = Path(m.group(1).strip().split("/")[-1].split("\\")[-1]).name.strip(" .«»\"'")
+            words = n.split()
+            cands = [" ".join(words[-k:]) for k in range(1, min(len(words), 5) + 1)]   # «в файле продажи.csv» → «продажи.csv», …
+            if cands and cands not in names:
+                names.append(cands)
+        if not names:
+            return []
+        have = {p.name.lower() for p in t.dir.rglob("*") if p.is_file()} | {p.name.lower() for p in self._lab_files(t)}
+        code = t.code()
+        if code is not None:                               # задача по коду: файлы проекта (рабочая копия и сам проект)
+            for root in (getattr(code, "work", None), getattr(code, "project", None)):
+                try:
+                    if root and Path(root).is_dir():
+                        for i, p in enumerate(Path(root).rglob("*")):
+                            if i > 20000:
+                                break
+                            have.add(p.name.lower())
+                except OSError:
+                    pass
+        miss = []
+        for cands in names[:20]:
+            if any(c.lower() in have for c in cands):
+                continue
+            try:
+                if any(any(True for _ in self.host.workspace.root.rglob(c)) for c in cands):
+                    continue
+            except (OSError, ValueError):
+                pass
+            miss.append(cands[0])
+        return miss
+
+    GATE_MAX = 3                     # итог отклонён столько раз — задача честно останавливается «не выполнено»
+
     def _finish_gates(self, t, summary):
-        """Проверки перед итогом: ложный отказ -> машинная проверка файлов (и что они показаны) -> самопроверка моделью.
-        Каждая — один раз за задачу (флаги в data сбрасывает новое сообщение пользователя, см. tell), чтобы спор
-        с проверкой не стал бесконечным. force_finish (завершаем сами) — без проверок.
-        -> текст для модели (итог не принят) или None (принимаем)."""
+        """Проверки перед итогом: ложный отказ -> машинная проверка файлов (и что они показаны), названные в итоге файлы
+        существуют -> самопроверка моделью. №368 (28.10): проверки идут при КАЖДОМ finish — отклонённый итог не
+        «запоминается проверенным»; спор не бесконечен: после GATE_MAX отказов задача останавливается «не выполнено»
+        (t.data["unfinished"]), а не «готово». force_finish (завершаем сами из-за повтора) — тоже «не выполнено».
+        -> текст для модели (итог не принят) или None (принимаем — или останавливаем, если стоит unfinished)."""
         q = self._q(t)
         if t.data.get("force_finish"):
+            t.data["unfinished"] = t.data.get("unfinished") or ("работа остановлена: задача повторяла одно и то же или "
+                                                               "перестала действовать — цель не подтверждена")
             return None
+        note = self._gates(t, summary, q)
+        if note is None:
+            return None
+        t.data["gate_rejects"] = int(t.data.get("gate_rejects") or 0) + 1
+        if t.data["gate_rejects"] > self.GATE_MAX:
+            why = re.sub(r"^САМОПРОВЕРКА отклонила итог:\s*|^МАШИННАЯ ПРОВЕРКА ФАЙЛОВ НАШЛА БРАК:\s*", "", note).split("\nИсправь")[0].split("\nЭто ОБЪЕКТИВНЫЕ")[0]
+            t.data["unfinished"] = f"проверка итога не согласилась {self.GATE_MAX} раза — {why.strip()[:240]}"
+            t.journal("⛔ Итог отклонён много раз — останавливаю задачу как «не выполнено».")
+            return None
+        return note
+
+    def _gates(self, t, summary, q):
         if not t.data.get("refusal_nudged") and Q.looks_like_refusal(summary) and self._web_available(t) and not self._web_used(t):
             t.data["refusal_nudged"] = True
             q["refusal"] += 1
             t.journal("✋ Проверка перед итогом: отказ «нет доступа», а поиском не пользовался — напоминаю про web_search.")
             return Q.REFUSAL_NUDGE
         shown = [o.get("path") for o in t.data.get("outputs") or []]
-        if not t.data.get("verified"):
-            t.data["verified"] = True
+        miss = self._promised_missing(t, summary)
+        if miss:
+            q["verify_fail"] += 1
+            t.journal("🔎 В итоге названы файлы, которых нет: " + ", ".join(miss[:8]))
+            return ("В итоге назван результат, которого нет на диске: " + ", ".join(miss[:8]) + ". Названный файл — не "
+                    "доказательство. Создай его (write_file или run_python в папке задачи, outputs/), проверь (read_file) и "
+                    "покажи (show) — или честно напиши в итоге, что сделать не удалось, и снова вызови finish.")
+        if True:
             probs = Q.verify_outputs(t.dir, shown)
             if probs:
                 q["verify_fail"] += 1
@@ -718,13 +801,14 @@ class TaskManager:
                             "с задачей и было до тебя — объясни это в итоге и снова вызови finish.")
                 t.data["tests_gate"] = 9                  # прошли — больше не проверяем
                 t.journal(f"🧪 Проверка перед итогом: тесты проходят ({cmd}).")
-        if not t.data.get("critic_done") and self._opt("self_check") is not False:
-            t.data["critic_done"] = True
+        if self._opt("self_check") is not False:
             files = []
             for p in sorted(t.dir.rglob("*")):
                 rel = p.relative_to(t.dir)
                 if p.is_file() and rel.parts[0] not in Q.SERVICE and not rel.parts[0].startswith("рабочая копия"):
                     files.append(f"{rel.as_posix()} — {p.stat().st_size} байт")
+            files += [f"Лаборатория/{p.relative_to(self.host.workspace.root / 'Лаборатория').as_posix()} — {p.stat().st_size} байт"
+                      for p in self._lab_files(t)]
             facts = (f"Шагов: {t.data.get('steps', 0)}. Инструменты: " +
                      ", ".join(f"{k}×{v}" for k, v in sorted(q["tools"].items(), key=lambda x: -x[1])[:12]) +
                      (f". Показано пользователю: {', '.join(shown)}" if shown else "") +
@@ -932,9 +1016,11 @@ class TaskManager:
             if note:
                 return note
             summary = self._russian((args.get("summary") or "").strip()) or "Готово."
+            if t.data.get("unfinished"):                 # №368: честное «не выполнено» — остановка, а не успех
+                summary = f"**Не выполнено:** {t.data['unfinished']}.\n\nЧто успела:\n\n{summary}"
             (t.dir / "итог.md").write_text(f"# Итог: {t.title}\n\n{summary}\n", encoding="utf-8")
             t.data.update(result=summary, finished=True)
-            return "Задача завершена."
+            return "Задача завершена." if not t.data.get("unfinished") else "Задача остановлена: не выполнено."
         if name in WORK_TOOLS:
             try:
                 return self._work(t, name, args)
@@ -1053,6 +1139,11 @@ class TaskManager:
                 rel = p.relative_to(t.dir)
                 if p.is_file() and not rel.parts[0].startswith(("рабочая копия", "_run")) and p.name not in ("задача.json", "история.json", "история.json.tmp", "журнал.md"):
                     out.append(f"{rel.as_posix()} — {p.stat().st_size} байт")
+            lab = self._lab_files(t)
+            if lab:                                    # №368: что задача положила в «Лабораторию» (lab_write, lab_run)
+                root = self.host.workspace.root / "Лаборатория"
+                out += ["", "В «Лаборатории» (lab_write/lab_run) за время задачи:"] + \
+                       [f"Лаборатория/{p.relative_to(root).as_posix()} — {p.stat().st_size} байт" for p in lab]
             return "\n".join(out[:300]) or "Папка пуста."
         if name == "run_python":
             if not self.host.code_auto_run() and not t.data.get("py_ok"):    # разрешение спрашиваем раз на задачу
@@ -1615,7 +1706,15 @@ class TaskManager:
                 if t.data.pop("looped", False):
                     raise LLMError("застрял: много раз повторил одно и то же действие с тем же результатом. Что уже удалось — "
                                    "в папке задачи; уточните задачу и запустите снова")
-            if t.data.get("finished"):
+            if t.data.get("finished") and t.data.get("unfinished"):
+                why = t.data["unfinished"]
+                t.data.update(status="failed", activity="", error="не выполнено: " + why, fail_kind="unfinished", failed_at=_now())
+                t.journal(f"⛔ Не выполнено: {why}")
+                self._trace(t, "unfinished")
+                if not t.data.get("parent"):
+                    self.host.announce(f"Задача «{t.title}» не выполнена: {why[:160]}. Что успела — в папке задачи.")
+                    self._push(f"⛔ Не выполнено: {t.title}", why[:200], critical=True)
+            elif t.data.get("finished"):
                 t.data.update(status="done", activity="")
                 t.journal("🏁 Готово.")
                 # первая фраза итога без Markdown — для голосового объявления и уведомления
@@ -1660,7 +1759,8 @@ class TaskManager:
                     log.debug("фоновые процессы задачи", exc_info=True)
             if t.data.get("inbox") and not t.cancel.is_set() and t.status != "failed":
                 # пользователь написал, пока задача заканчивала круг, — не теряем: проснётся сразу
-                t.data.update(finished=False, finish_checked=False, force_finish=False, verified=False, critic_done=False, status="sleeping", wake_at=_now(),
+                t.data.update(finished=False, finish_checked=False, force_finish=False, verified=False, critic_done=False, gate_rejects=0, unfinished="",
+                              status="sleeping", wake_at=_now(),
                               wait_reason="пришло сообщение пользователя")
             try:                                              # история — раньше состояния: увидевший «готово» читает её целой
                 _write_hist(hist, msgs)

@@ -1822,6 +1822,32 @@ def t_close_read(a, ctx):
         raise ToolError(str(e)) from e
 
 
+def _team(ctx):
+    t = ctx.get("team")
+    if t is None or not t.connected():
+        raise ToolError("«Поручения» не подключены — студия → «Поручения»")
+    return t
+
+
+def t_team_assign(a, ctx):
+    from team import TeamError, due_text
+    try:
+        r = _team(ctx).assign(a.get("who") or "", a.get("task") or "", a.get("due") or "", a.get("note") or "", via="voice")
+    except TeamError as e:
+        raise ToolError(str(e)) from e
+    due = due_text(r.get("due"))
+    where = "отправила в Telegram" if r.get("sent") else "записала — уйдёт в Telegram, как только сотрудник откроет приглашение"
+    return f"Поручила {r['name']}: «{r['title']}»" + (f", срок {due}" if due else "") + f"; {where}. Скажи это одной фразой."
+
+
+def t_team_status(a, ctx):
+    from team import TeamError
+    try:
+        return _team(ctx).summary(a.get("who") or "")
+    except TeamError as e:
+        raise ToolError(str(e)) from e
+
+
 def t_app_help(a, ctx):
     import guide
     return guide.answer(a.get("query") or "", a.get("where") or "")
@@ -2396,6 +2422,14 @@ TOOLS = {
     "close_call": ("Позвонить человеку из «Близких» через Dewiar — откроется окно звонка (video true — видеозвонок). Только когда "
                    "пользователь прямо просит позвонить кому-то из близких.",
                    S({"to": {"type": "string"}, "video": {"type": "boolean"}}, ["to"]), "safe", t_close_call, "Близкие: позвонить"),
+    "team_assign": ("Поручить задачу сотруднику (раздел «Поручения») — уйдёт ему в Telegram с кнопками «Беру», «Сделано», «Перенести». "
+                    "Только когда пользователь прямо поручает что-то сотруднику («поручи Анне…», «пусть Иван подготовит…»). "
+                    "who — имя как сказал пользователь; task — что сделать, коротко, повелительно или как дело («Подготовить договор "
+                    "поставки»); due — срок словами как сказал («до четверга 15:00», «завтра к 12») или пусто; note — подробности.",
+                    S({"who": {"type": "string"}, "task": {"type": "string"}, "due": {"type": "string"}, "note": {"type": "string"}},
+                      ["who", "task"]), "safe", t_team_assign, "Поручения: поручить"),
+    "team_status": ("Что с поручениями сотрудникам: кто взял, кто сделал (с отчётом), что перенесено и почему, что просрочено. "
+                    "who — имя или пусто — все.", S({"who": {"type": "string"}}), "safe", t_team_status, "Поручения: что с ними"),
     "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей». who — имя или пусто — все.",
                    S({"who": {"type": "string"}}), "safe", t_close_read, "Близкие: прочитать"),
     "app_help": ("Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить "
@@ -2502,7 +2536,7 @@ TOOLS = {
 # Этим умениям нужен интернет из самого Dewiar — при стоп-кране (студия → «Безопасность») модель о них не узнаёт.
 # Открыть сайт, музыку или карту в браузере человека — можно: это его браузер и его просьба.
 NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "read_emails", "read_email", "send_telegram", "close_send",
-             "close_call", "close_read", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update"}
+             "close_call", "close_read", "team_assign", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update"}
 DEFAULT_OFF = set()          # команды терминала включены, но каждая — только после «Выполнить?»
 # «Только безопасное» (студия → «Безопасность», отзыв 18.10: «лучше чтоб пользователь мог выбрать, что можно делать, а не
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
@@ -2555,6 +2589,10 @@ class Toolbox:
         if name == "send_telegram":             # только когда бот подключён к владельцу
             tg = self.hooks.get("telegram")
             if not (tg and tg.paired()):
+                return False, False
+        if name in ("team_assign", "team_status"):   # «Поручения»: раздел включён и бот компании подключён
+            tm = self.hooks.get("team")
+            if not (tm and tm.connected() and (self.s.get("features") or {}).get("team")):
                 return False, False
         if name == "server_run":                # только когда добавлен хотя бы один сервер
             sv = self.hooks.get("servers")

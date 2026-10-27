@@ -854,7 +854,7 @@ class ToolsMixin:
         item = a["item"]
         kind = item.get("kind") or "reminder"
         limit = max(0.25, float(self.s.get("reminders", "ring_minutes") or 2)) * 60
-        pcm = alarm_tone(self.s.get("reminders", "sound") or "bells")
+        pcm = alarm_tone(self.s.get("reminders", "sound") or "signature")
         say = self.s.get("reminders", "speak") is not False
         phrase = ({"alarm": "Пора вставать! ", "timer": "Время вышло! "}.get(kind, "Напоминание: ") +
                   (item["text"] if item["text"] not in ("Будильник", "Таймер", "Напоминание") else "")).strip()
@@ -899,14 +899,15 @@ class ToolsMixin:
                 self.set_state("idle")
 
     def _ring(self, pcm, a):
-        """Проиграть звонок один раз отдельным плеером (PCM 16 бит, 22050 Гц) — чтобы не мешать очереди речи."""
+        """Проиграть звонок один раз отдельным плеером (PCM 16 бит, audio_io.ALARM_RATE) — чтобы не мешать очереди речи."""
+        from audio_io import ALARM_RATE
         if self.player is None:
             time.sleep(2.4)
             return
         pl = Player(device=self.player.device, null=self.null_player)
         try:
-            pl.start(22050)
-            step = 22050 * 2 // 10                               # по 0,1 с — чтобы «Готово» обрывало звонок сразу
+            pl.start(ALARM_RATE)
+            step = ALARM_RATE * 2 // 10                          # по 0,1 с — чтобы «Готово» обрывало звонок сразу
             for i in range(0, len(pcm), step):
                 if a["done"].is_set():
                     break
@@ -1074,7 +1075,7 @@ class ToolsMixin:
         if cmd == "alarm_test":                       # «Послушать звонок» в студии
             from audio_io import alarm_tone
             box = {"done": threading.Event()}
-            pcm = alarm_tone(a.get("sound") or self.s.get("reminders", "sound") or "bells")
+            pcm = alarm_tone(a.get("sound") or self.s.get("reminders", "sound") or "signature")
             threading.Thread(target=self._ring, args=(pcm, box), daemon=True).start()
             return True
         if cmd == "reminder_parse":                   # подсказка под полем ввода: как поняли фразу
@@ -1395,6 +1396,12 @@ class ToolsMixin:
                         break
         except Exception as e:  # noqa: BLE001
             log.debug("календари: %s", e)
+        try:                                                   # «Команда»: сроки поручений, сделанное — с «✓»
+            if (self.s.get("features") or {}).get("team"):
+                for d, it in self.team.calendar(first, last):
+                    put(d, it)
+        except Exception:  # noqa: BLE001
+            log.debug("календарь: команда", exc_info=True)
         try:                                                   # планы из памяти с датой: «встреча в среду» (capture.plan_day)
             from capture import PLAN_DAY
             for line in self.workspace.memory_get().splitlines():

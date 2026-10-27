@@ -185,6 +185,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.close = Close(self)                       # «Близкие»: переписка с помощниками других людей (сквозное шифрование)
         from family import Family
         self.family = Family(self, STATE_DIR / "family.json")   # семейный бюджет: траты и общие платежи с близкими
+        from team import Team
+        self.team = Team(self, STATE_DIR / "team.json", _CFG / "team_bot.json", personal=self.telegram, personal_max=self.max)   # «Поручения» сотрудникам в Telegram
+        self.toolbox.hooks["team"] = self.team
         from course import Course
         self.course = Course(STATE_DIR / "course.json", self.emit)   # курс «Неделя с Лирой»: шаги засчитываются сами
         self.money.on_change = self.sync.soon.set
@@ -286,6 +289,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self._start_hearing, name="hearing-init", daemon=True).start()
         threading.Timer(4.0, self.probe_tools_bg).start()     # умеет ли модель действия — узнаём заранее
         self.telegram.start()
+        if (self.s.get("features") or {}).get("team") and self.team.connected():
+            self.team.start()                                  # «Команда»: бот компании — только если раздел включён
         self.reminders.skip_late = self._tg_fired_elsewhere            # не повторять напоминание, пришедшее с сервера
         threading.Thread(target=self._tg_sync_loop, name="tg-sync", daemon=True).start()
         threading.Thread(target=self._radio_check_loop, name="radio-check", daemon=True).start()
@@ -413,6 +418,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
     def shutdown(self):
         self.stopping.set()
         self.telegram.stop()
+        self.team.stop()
         self.max.stop()
         self.mcp.close()
         self.cancel_turn()

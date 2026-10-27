@@ -49,6 +49,8 @@ try:
             ok(pg.is_visible("#qa-art h2"), f"{w}: справа сразу статья — «{pg.inner_text('#qa-art h2')}»")
             sw = pg.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
             ok(sw <= 0, f"{w}: без горизонтальной прокрутки ({sw})")
+            fs = pg.evaluate("(() => { const i = getComputedStyle(document.querySelector('#qa-q')); return [i.boxShadow, i.backgroundColor]; })()")
+            ok(fs[0] == "none" and fs[1] in ("rgba(0, 0, 0, 0)", "transparent"), f"{w}: поле поиска не вдавлено второй раз внутри полосы (28.10): {fs}")
             if SHOTS:
                 pg.screenshot(path=os.path.join(SHOTS, f"qa-{w}.png"))
             if w != 1400:

@@ -168,6 +168,8 @@ me = types.SimpleNamespace(turn=None, state="idle", alarm=None, ask=fake_ask, _j
                            reminders=types.SimpleNamespace(update=lambda rid, p: upd.append(p)), stopping=threading.Event(),
                            health_problem=lambda t, kind="error": probs.append((kind, t)), emit=lambda *a, **k: pushes.append(k),
                            JOB_RETRY_MIN=EM.MusicMixin.JOB_RETRY_MIN if hasattr(EM, "MusicMixin") else (5, 15))
+_mm = next(c for c in vars(EM).values() if isinstance(c, type) and "_run_job" in vars(c))
+me.job_nothing = lambda text: _mm.job_nothing(text) if "job_nothing" in vars(_mm) else False   # 0.51: «ничего нового» — молчать
 me._run_job = lambda item, attempt=0: run(item, attempt)
 
 

@@ -61,19 +61,22 @@
   <div class="brand"><canvas id="brand"></canvas><div><b id="bname">Dewiar</b><span id="bsub">голосовой ассистент</span></div></div>
   <button class="cchip" id="nav-cloud" style="display:none" title="ИИ-баланс: на сколько хватит моделей Dewiar. Нажмите — подробности и пополнение"><span>ИИ-баланс</span><em></em><i><b></b></i></button>
   <button data-p="home" class="cur" title="Сегодня и все приложения Dewiar">Главная</button>
-  <div class="ng">Каждый день</div>
+  <div class="ng">Для себя</div>
   <button data-p="chat" title="Вся переписка с персонажами — голосом и текстом">Чат</button>
   <button data-p="calendar">Календарь</button>
   <button data-p="reminders">Дела и напоминания</button>
   <button data-p="notes" title="Все заметки: поиск, фото и файлы">Заметки</button>
   <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года">Платежи<i class="ndot" id="pay-dot"></i></button>
   <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать">Сейф паролей</button>
+  <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками">Музыка</button>
+  <div class="ng">Семья и близкие</div>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
   <button data-p="family" title="Семейный бюджет: общие траты и платежи с близкими">Семья<i class="ndot" id="fam-dot"></i></button>
-  <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
-  <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками">Музыка</button>
   <button data-p="kids" title="Детский режим: друг ребёнка, безопасные темы, время и отчёт вам">Дети</button>
+  <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
+  <div class="ng">Работа</div>
   <button data-p="tasks">Задачи</button>
+  <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden>Поручения<i class="ndot" id="team-dot"></i></button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
   <div class="ng">Обучение</div>
   <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
@@ -133,15 +136,18 @@
   <section id="p-personas" class="wide">
     <h1>Персонажи</h1>
     <p class="lead">Команда помощников: у каждого своё дело, характер, голос и облик. Лира — главная и умеет всё, Патрик помогает обдумать решения, остальные из «Готовых» сильнее в своём. Позовите любого по имени («Лира, …», «Патрик, …») или нажмите на карточку.</p>
+    <div class="pr-acts"><button class="btn primary" id="pr-new">+ Создать своего персонажа</button><button class="btn" id="pr-gal">Готовые персонажи ↓</button></div>
+    <div class="grid" id="pgrid"></div>
+    <h2 style="margin-top:28px">Готовые персонажи</h2>
+    <p class="hint" style="margin-bottom:14px">В команде с самого начала двое — Лира и Патрик. Остальных добавьте, если нужны: каждый со своим характером, знаниями и голосом. Зовите по имени — или Лира передаст вопрос сама. Убрать — «Изменить» → «Удалить». Своего — «Создать».</p>
+    <div class="grid" id="ggrid"></div>
+    <h2 style="margin-top:28px">Как работают вместе</h2>
     <div class="team-sw">
       <div class="switch"><div>Главный сам передаёт вопрос специалисту<span>Лира сама передаёт вопрос тому, кто в команде сильнее: обсудить идею или решение — Патрику; добавленным из «Готовых» — их темы (код — Кодеру, «включи/открой» — Джарвису, «объясни» — Эве, рецепт — Гастону). Специалист отвечает своим голосом.</span></div><label class="tg"><input type="checkbox" data-k="team.route"><i></i></label></div>
       <div class="switch"><div>После ответа — снова главный<span>Выключено — разговор продолжает тот, кому передали.</span></div><label class="tg"><input type="checkbox" data-k="team.back"><i></i></label></div>
       <div class="switch"><div>Сам замечает, что вы вернулись<span>Отошли от компьютера на 20 минут и дольше — по возвращении коротко скажет главное: что готово, что ждёт ответа, что скоро. Утром — сводка дня. Сказать нечего — промолчит; ночью, на созвоне и когда виджет спрятан — тоже.</span></div><label class="tg"><input type="checkbox" data-k="welcome.on"><i></i></label></div>
     </div>
-    <div class="grid" id="pgrid"></div>
-    <h2 style="margin-top:28px">Готовые персонажи</h2>
-    <p class="hint" style="margin-bottom:14px">В команде с самого начала двое — Лира и Патрик. Остальных добавьте, если нужны: каждый со своим характером, знаниями и голосом. Зовите по имени — или Лира передаст вопрос сама. Убрать — «Изменить» → «Удалить». Своего — «Создать».</p>
-    <div class="grid" id="ggrid"></div>
+
   </section>
 
   <section id="p-calendar" class="wide">
@@ -379,7 +385,7 @@
     <div class="jpre" id="j-pre"></div>
     <h2>Будильник</h2>
     <div class="row">
-      <label class="f">Звонок<span style="display:flex;gap:8px"><select data-k="reminders.sound" id="r-sound"><option value="signature">Струна — фирменный Dewiar</option><option value="chasha">Чаша</option><option value="kolodec">Колодец</option><option value="hor">Хор</option><option value="glubina">Глубина</option><option value="motif">Прежний мотив Dewiar</option><option value="bells">Колокольчики</option><option value="soft">Мягкий</option><option value="classic">Классический будильник</option></select><button class="btn" id="r-listen">Послушать</button></span></label>
+      <label class="f">Звонок<span style="display:flex;gap:8px"><select data-k="reminders.sound" id="r-sound"><option value="signature">Пульс — фирменный Dewiar</option><option value="noon">Полдень</option><option value="night">Ночной город</option><option value="wave">Волна</option><option value="sparks">Искры</option></select><button class="btn" id="r-listen">Послушать</button></span></label>
       <label class="f">Звенит, пока не ответите<select data-k="reminders.ring_minutes"><option value="1">1 минуту</option><option value="2">2 минуты</option><option value="5">5 минут</option><option value="10">10 минут</option></select></label>
     </div>
     <div class="switch"><div>Окно по центру экрана<span>Большая карточка поверх всех окон с кнопками «Готово» и «Отложить». Выключено — только звонок, голос и уведомление.</span></div><label class="tg"><input type="checkbox" data-k="reminders.window"><i></i></label></div>
@@ -541,6 +547,84 @@
       <div class="fm-card fm-feed"><h3>Траты за месяц</h3><ul id="fm-feed"></ul></div>
       </div>
     </div>
+  </section>
+  <section id="p-team" class="wide">
+    <div class="tm-top">
+      <div><h1 id="tm-h">Поручения</h1><p class="lead" id="tm-sub">Поручения сотрудникам в Telegram: берут, делают с фото, переносят с причиной.</p></div>
+      <button class="btn primary" id="tm-new" hidden>Поручить</button>
+    </div>
+    <div class="stabs" id="tm-tabs" hidden>
+      <button data-t="board" class="on">Доска</button>
+      <button data-t="people">Сотрудники</button>
+      <button data-t="how">Как это работает</button>
+    </div>
+    <div id="tm-setup" class="tm-setup" hidden>
+      <div class="tm-scard">
+        <h2>Бот вашей компании</h2>
+        <p>Сотрудники получают поручения от бота с названием вашей компании — в том мессенджере, где им удобно. У каждого — свой вход по ссылке.</p>
+        <div class="stabs tm-chs" id="tm-chs" role="tablist"><button data-ch="tg" class="on" role="tab">Telegram</button><button data-ch="max" role="tab">MAX</button></div>
+        <ol class="tm-steps" id="tm-steps-tg">
+          <li><b>Создайте бота.</b> Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> → «/newbot», имя — название компании, например «Ромашка».</li>
+          <li><b>Скопируйте токен</b> из ответа BotFather — он выглядит так: 123456789:AAH… — и вставьте сюда.</li>
+          <li><b>Добавьте сотрудников</b> и отправьте каждому его ссылку-приглашение.</li>
+        </ol>
+        <ol class="tm-steps" id="tm-steps-max" hidden>
+          <li><b>Создайте бота.</b> Откройте <a href="https://business.max.ru" target="_blank" rel="noopener">business.max.ru</a> → «Чат-боты» → «Создать». В MAX ботов создают организации и ИП.</li>
+          <li><b>Скопируйте токен:</b> бот → «Интеграция» → «Получить токен» — и вставьте сюда.</li>
+          <li><b>Добавьте сотрудников</b> и отправьте каждому его ссылку-приглашение.</li>
+        </ol>
+        <div class="tm-conn"><input type="password" id="tm-token" placeholder="Токен бота компании" aria-label="Токен бота компании" autocomplete="off"><button class="btn primary" id="tm-connect">Подключить</button></div>
+        <small class="tm-note">Нужен отдельный бот — не тот, через который вы сами пишете Лире. Можно подключить оба мессенджера: каждый сотрудник выберет свой. Поручения ходят, пока Dewiar запущен на этом компьютере; что пришло без него, мессенджер хранит сутки.</small>
+      </div>
+    </div>
+    <div id="tm-boardwrap" hidden>
+      <form class="tm-form" id="tm-form" hidden>
+        <label>Кому<select id="tm-who"></select></label>
+        <label class="grow">Что сделать<input type="text" id="tm-title" maxlength="300" placeholder="Подготовить договор поставки"></label>
+        <label>Срок<input type="text" id="tm-due" maxlength="60" placeholder="до пятницы, завтра к 12"></label>
+        <label class="wide">Подробности<input type="text" id="tm-note" maxlength="500" placeholder="Необязательно"></label>
+        <div class="tm-facts"><button class="btn" type="button" id="tm-fcancel">Отмена</button><button class="btn primary" type="submit" id="tm-send">Поручить</button></div>
+      </form>
+      <div class="tm-main">
+        <div class="tm-board" id="tm-board"></div>
+        <aside class="tm-detail" id="tm-detail" aria-live="polite"></aside>
+      </div>
+    </div>
+    <div id="tm-peoplewrap" hidden>
+      <div class="tm-pgrid">
+        <ul class="tm-people" id="tm-people"></ul>
+        <form class="tm-scard tm-padd" id="tm-pform">
+          <h3>Добавить сотрудника</h3>
+          <label>Имя<input type="text" id="tm-pname" maxlength="60" placeholder="Ольга Петровна"></label>
+          <label>Чем занимается<input type="text" id="tm-prole" maxlength="60" placeholder="бухгалтерия"></label>
+          <button class="btn primary" type="submit" id="tm-padd">Добавить и получить ссылку</button>
+          <small class="tm-note">Ссылку отправьте сотруднику сами — в Telegram, почтой или в чате. Откроет и нажмёт «Запустить» — бот его узнает. Ссылка одноразовая, работает 14 дней.</small>
+        </form>
+      </div>
+    </div>
+    <div id="tm-howwrap" hidden>
+      <div class="tm-pgrid">
+        <div class="tm-scard">
+          <h3>Как это работает</h3>
+          <ol class="tm-steps">
+            <li><b>Поручите</b> — голосом («Лира, поручи Анне обновить прайс до пятницы») или кнопкой «Поручить».</li>
+            <li><b>Сотрудник нажимает «Беру»</b> — поручение переходит «В работу».</li>
+            <li><b>«Сделано»</b> — пара слов и фото, если нужно подтверждение. Вы услышите и увидите это здесь и в календаре.</li>
+            <li><b>«Перенести…»</b> — новый срок и причина одной фразой: «на понедельник, клиент заболел».</li>
+            <li><b>Вы принимаете</b> работу или возвращаете с замечанием.</li>
+          </ol>
+          <p class="tm-note">За час до срока бот сам напомнит сотруднику. Спросите Лиру: «что с поручениями?» — она расскажет, кто что сделал.</p>
+        </div>
+        <div class="tm-scard">
+          <h3>Настройки</h3>
+          <label>Название компании<input type="text" id="tm-company" maxlength="60"></label>
+          <label>Как подписывать поручения<input type="text" id="tm-boss" maxlength="60" placeholder="Ваше имя"></label>
+          <div class="switch slim"><div>Говорить вслух<span>Когда сотрудник сделал поручение, переносит его или пишет вам</span></div><label class="tg"><input type="checkbox" id="tm-speak"><i></i></label></div>
+          <div class="tm-bots" id="tm-bots"></div>
+        </div>
+      </div>
+    </div>
+    <dialog class="nwdlg tm-photo" id="tm-photo"><img alt="Фото от сотрудника"><button class="btn" type="button" id="tm-photo-x">Закрыть</button></dialog>
   </section>
   <section id="p-kids" class="wide">
     <h1>Дети</h1>
@@ -1425,6 +1509,7 @@
     <div class="switch"><div>Рядом<span>«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом.</span></div><label class="tg"><input type="checkbox" data-k="features.near"><i></i></label></div>
     <div class="switch"><div>Встречи<span>«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном.</span></div><label class="tg"><input type="checkbox" data-k="features.meet"><i></i></label></div>
     <div class="switch"><div>Семья — общий бюджет<span>Траты за месяц у всей семьи, общий лимит и общие платежи (свет, газ, интернет) с близкими. Позовут в семью — включится само.</span></div><label class="tg"><input type="checkbox" data-k="features.family"><i></i></label></div>
+    <div class="switch"><div>Поручения сотрудникам<span>Для работы: поручения в Telegram с кнопками «Беру», «Сделано» с фото, «Перенести» с причиной; отметки в календаре.</span></div><label class="tg"><input type="checkbox" data-k="features.team"><i></i></label></div>
     <div class="switch"><div>Суфлёр<span>Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить.</span></div><label class="tg"><input type="checkbox" data-k="features.prompter"><i></i></label></div>
     <p class="hint">На телефоне — свои переключатели: «Настройки» → «Ещё» → «Возможности».</p>
   </section>
@@ -1822,6 +1907,7 @@
 <script src="studio/mymusic.js"></script>
 <script src="studio/kids.js"></script>
 <script src="studio/family.js"></script>
+<script src="studio/team.js"></script>
 <script src="studio/qa.js"></script>
 <script src="studio/course.js"></script>
 <script src="studio/vault.js"></script>
