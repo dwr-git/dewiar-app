@@ -1154,6 +1154,25 @@ dialog.anndlg { width: min(560px, calc(100% - 32px)); }
 
 /* «Чат» — переписка с персонажами (studio/chat.js); пузыри — те же .cl-m, что в «Близких» */
 .ch-chat { position: relative; height: max(480px, calc(100vh - 230px)); }
+/* текстовый режим и шаги хода (27.10): что сделано — под ответом, «Выполнить?» — над полем ввода */
+.ch-tm { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.ch-tm input { position: absolute; opacity: 0; pointer-events: none; }
+.ch-tm i { width: 32px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.14); position: relative; transition: background .2s; flex: none; }
+.ch-tm i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.ch-tm input:checked + i { background: var(--accent, #667EEA); } .ch-tm input:checked + i::after { transform: translateX(14px); }
+.ch-tm input:focus-visible + i { outline: 2px solid var(--accent, #667EEA); outline-offset: 2px; }
+.ch-tm:has(input:checked) { color: var(--ink, inherit); font-weight: 600; }
+.ch-steps { display: flex; flex-direction: column; gap: 3px; margin: 0 0 8px; padding: 0 0 8px; border-bottom: 1px solid rgba(255,255,255,.08); font-size: 13px; }
+.ch-steps:only-child { margin: 0; padding: 0; border: 0; }
+.ch-st { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: start; color: var(--muted); line-height: 1.4; }
+.ch-st b { width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #fff; }
+.ch-st.done b, .ch-st.yes b { background: #2fb37a; } .ch-st.error b, .ch-st.no b { background: #e5566e; } .ch-st.ask b, .ch-st.run b { background: #e9a23b; }
+.ch-st em { grid-column: 2; font-style: normal; color: #ff9fb0; font-size: 12.5px; }
+.ch-st.run b { animation: chdot 1.2s infinite; }
+.ch-more { align-self: flex-start; border: 0; background: none; color: var(--accent, #8A9BFF); font: inherit; font-size: 12.5px; padding: 0; cursor: pointer; }
+.ch-ask { margin: 0 14px 8px; padding: 14px 16px; border-radius: 16px; background: rgba(233,162,59,.12); border: 1px solid rgba(233,162,59,.35); }
+.ch-ask .q { font-size: 15px; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; }
+.ch-ask .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .ch-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px 0; }
 .ch-chat .cl-empty { position: absolute; inset: 60px 20px 90px; display: grid; place-content: center; text-align: center; gap: 6px; pointer-events: none; }
 .ch-chat .cl-empty b { font-size: 16px; } .ch-chat .cl-empty span { color: var(--muted); font-size: 13.5px; max-width: 380px; }
@@ -2062,3 +2081,11 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 .mpx-add { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 0; }
 .mpx-add input { flex: 1; min-width: 220px; }
 @media (max-width: 760px) { .mpx { grid-template-columns: 1fr; } }
+
+/* Свои радиостанции (№359, 27.10) */
+.rc-panel { margin-top: 16px; }
+.rc-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+.rc-list li small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52ch; }
+.rc-add { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 6px; }
+.rc-add input { flex: 1 1 180px; min-width: 0; }
+.rc-add input#rc-url { flex: 3 1 260px; }

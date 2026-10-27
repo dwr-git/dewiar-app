@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Свой сервер с сертификатом собственного выпуска (YouTube 27.10: «Trust anchor for certification path not found»):
+     кроме системных центров сертификации — и те, что человек сам поставил в телефон (Настройки → Безопасность →
+     Шифрование и учётные данные → Установить сертификат → «Сертификат ЦС»). Обычный HTTP — как было (свои серверы в сети). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

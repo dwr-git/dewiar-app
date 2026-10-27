@@ -693,8 +693,16 @@ def t_play_radio(a, ctx):
     if not r:
         raise ToolError("радио недоступно")
     q = (a.get("query") or "").strip()
-    mine = ctx.get("music").match(q or "*") if ctx.get("music") else []     # сначала свой список станций (с сайта Dewiar)
-    if mine:
+    url = (a.get("url") or "").strip()
+    eng = ctx.get("engine")
+    if url.startswith(("http://", "https://")):          # №359: ссылка на поток — играем её и запоминаем своей станцией
+        st = eng.radio_custom_save(q, url) if eng is not None and hasattr(eng, "radio_custom_save") else {"name": q or "Своя станция", "url": url}
+        found, mine = [dict(st, tags="своя", own=True)], True
+    else:
+        mine = ctx.get("music").match(q or "*") if ctx.get("music") else []     # сначала свой список станций (с сайта Dewiar)
+    if url.startswith(("http://", "https://")):
+        st = found[0]
+    elif mine:
         found = mine[:6]
         st = found[0]
     else:
@@ -2257,7 +2265,8 @@ TOOLS = {
     "play_radio": ("Включить радио онлайн внутри ассистента: по названию станции («Европа Плюс», «Радио Маяк»), жанру "
                    "(«джаз», «рок», «классика», «релакс») или пусто — популярное русское. Только чтобы ВКЛЮЧИТЬ: «выключи радио», «хватит» — "
                    "это media_control с action stop, а не play_radio. Не говори «выключила», не вызвав media_control.",
-                   S({"query": {"type": "string"}}), "safe", t_play_radio, "Радио"),
+                   S({"query": {"type": "string"}, "url": {"type": "string", "description": "прямая ссылка на поток, если человек её дал (http…)"}}),
+                   "safe", t_play_radio, "Радио"),
     "play_youtube": ("Найти и показать ролик на YouTube (откроется в браузере и сразу заиграет): клип, видео, лекция, "
                      "обзор. query — что искать.", S({"query": {"type": "string"}}, ["query"]), "safe", t_play_youtube,
                      "Ролик YouTube"),

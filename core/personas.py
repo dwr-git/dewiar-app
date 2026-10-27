@@ -599,8 +599,11 @@ class Personas:
             if pid in TEMPLATES and pid in self.items:
                 keep["template"] = True                # свой из шаблона: живое лицо и роль — из шаблона (reload)
             if "knowledge" in keep:                    # базы сайта Dewiar, по которым персонаж отвечает
-                keep["knowledge"] = [{k: str(b[k]) for k in ("kind", "id", "label", "lib") if b.get(k)}
-                                     for b in keep["knowledge"] or [] if isinstance(b, dict) and b.get("kind") and b.get("id")][:6]
+                # и папки на этом компьютере (YouTube 27.10: «знания только с сервера, а если работаю локально?») —
+                # kind "folder", path; ищутся локально (knowledge.py), без входа в аккаунт
+                keep["knowledge"] = [{k: str(b[k]) for k in ("kind", "id", "label", "lib", "path") if b.get(k)}
+                                     for b in keep["knowledge"] or [] if isinstance(b, dict) and b.get("kind")
+                                     and (b.get("id") or (b.get("kind") == "folder" and b.get("path")))][:6]
             elif pid in self.items and self.items[pid].get("knowledge"):
                 keep["knowledge"] = self.items[pid]["knowledge"]
             keep["wake"] = [w.strip().lower() for w in keep.get("wake") or [name] if w.strip()]

@@ -868,7 +868,7 @@ core.on("hello", d => {
   clearTimeout(window._turnT);                    // полоса дотаяла — надпись обычная, даже если ядро ещё не сказало «покой»
   window._turnT = setTimeout(() => { if (Date.now() >= turnUntil - 50) setState(state); }, (e.seconds || 0) * 1000 + 100);
 })
-.on("settings", e => { applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
+.on("settings", e => { TEXT_MODE = !!((e.settings || {}).ui || {}).text_mode; applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
 .on("persona", e => applyPersona(e.persona))
 .on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); })
 .on("level", e => entity.set({ level: e.v, voice: e.src === "voice" }))
@@ -1223,7 +1223,7 @@ function renderTask_() {
     : `<div class="tl"><span class="spin"></span><b>${esc(t.title)}</b><em>${t.progress && t.progress[1] ? `${t.progress[0]}/${t.progress[1]}` : `шаг ${t.steps}`}</em></div>` +
       (t.activity ? `<div class="tsub">${esc(t.activity)}</div>` : "") + `<i class="tp"><b style="width:${Math.max(4, pr * 100)}%"></b></i>`;
 }
-core.on("hello", d => { (d.tasks || []).forEach(t => tasks[t.id] = t); renderTask(); if (d.update && (d.update.available || d.update.failed)) showUpd(d.update); })
+core.on("hello", d => { (d.tasks || []).forEach(t => tasks[t.id] = t); renderTask(); CUR_VER = d.version || (d.update || {}).current || CUR_VER; updTitle(); if (d.update && (d.update.available || d.update.failed)) showUpd(d.update); })
     .on("task", e => {
       const prev = tasks[e.task.id];
       if (e.task.status === "done" && (!prev || prev.status !== "done")) doneAt[e.task.id] = Date.now();
@@ -1248,7 +1248,14 @@ $("b-upd").onclick = async () => {
   if (u && u.available) { showUpd(u); if ($("upd").onclick) $("upd").onclick(); return; }
   updMsg(u && u.error ? `Не получилось проверить: ${String(u.error).slice(0, 120)}` : `У вас последняя версия${u && u.current ? " — " + u.current : ""}`, 5000);
 };
+/* подсказка у кнопки обновлений — с нынешней версией (27.10, владелец: «было бы удобно, если бы была указана текущая версия») */
+var CUR_VER = "";
+function updTitle() {
+  const a = UPD.avail, cur = CUR_VER ? `Сейчас версия ${CUR_VER}` : "";
+  $("b-upd").title = a ? `${cur ? cur + " · " : ""}доступна ${a.version} — нажмите, чтобы обновить` : `${cur ? cur + ". " : ""}Обновления — проверить и обновить одним нажатием`;
+}
 function showUpd(u) {
+  if (u && u.current) CUR_VER = u.current;
   const f = u && u.failed && u.failed.path ? u.failed : null;
   if (f) {           // нажимали «обновить», а запустилась прежняя версия — открыть установщик обычным окном: в нём видно, что мешает
     $("upd").classList.add("on");
@@ -1263,7 +1270,7 @@ function showUpd(u) {
   }
   const a = u && u.available; $("upd").classList.toggle("on", !!a);
   UPD.avail = a || null; $("b-upd").classList.toggle("has", !!a); $("corner-l").classList.toggle("upd", !!a);
-  $("b-upd").title = a ? `Доступна версия ${a.version} — нажмите, чтобы обновить` : "Обновления — проверить и обновить одним нажатием";
+  updTitle();
   if (a) $("upd").textContent = `Доступна версия ${a.version} — нажмите, чтобы обновить`;
   $("upd").onclick = async () => {
     const x = api(); if (!x || !a) return;
@@ -1340,7 +1347,10 @@ function setMode(m, auto = false) {
 $("b-team").onclick = (e) => { e.stopPropagation(); $("team").classList.toggle("show"); };
 document.addEventListener("click", (e) => { if (!e.target.closest("#team")) $("team").classList.remove("show"); });
 $("grow").onclick = () => setMode("card");
-core.on("confirm", () => { const a = api(); if (mode === "mini") setMode("card", true); else if (a && a.cancel_back) a.cancel_back(); })   // «Да/Нет» нужно видеть
+/* текстовый режим (студия → «Чат», 27.10): «Выполнить?» — в «Чате» студии, а не выскакивающим виджетом с мелким текстом */
+var TEXT_MODE = false;
+const askInChat = () => { const a = api(); if (!TEXT_MODE || !a || !a.open_settings) return false; a.open_settings("chat"); return true; };
+core.on("confirm", () => { if (askInChat()) return; const a = api(); if (mode === "mini") setMode("card", true); else if (a && a.cancel_back) a.cancel_back(); })   // «Да/Нет» нужно видеть
     .on("confirm_done", () => { const a = api(); if (a && mode === "card") a.auto_back(); })
     .on("wake", () => popUp());                                                                      // спрятанный виджет возвращается на имя
 
@@ -1369,7 +1379,7 @@ window.trayLeft = () => { if (mode === "card") core.call("settings_save", { patc
 core.on("state", e => { if (e.state === "listening") popUp(); if (e.state === "idle") backLater(9000); else clearTimeout(backT); })
     .on("push", () => { popUp(); backLater(12000); })
     .on("reminder", () => { popUp(); backLater(20000); })
-    .on("confirm", () => popUp());
+    .on("confirm", () => { if (!TEXT_MODE) popUp(); });
 $("b-type").onclick = () => {
   const box = $("ask"); const open = box.style.display !== "block";
   box.style.display = open ? "block" : "none"; $("bar").classList.toggle("pinned", open);

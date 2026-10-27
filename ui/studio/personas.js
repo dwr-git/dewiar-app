@@ -77,6 +77,7 @@ function openEditor(p) {
   $("#e-fx").innerHTML = S_fx.map(f => `<option value="${f.id}">${f.name} — ${f.description}</option>`).join(""); $("#e-fx").value = ed.voice.fx || "clear";
   $("#e-vosk").innerHTML = `<option value="auto">Автоматически по полу</option>` + vkSpeakers.map(v => `<option value="${v.id}">Голос ${v.id + 1} — ${v.gender === "male" ? "мужской" : "женский"}</option>`).join("") + `<option value="piper">Всегда Piper (как раньше)</option>`;
   $("#e-vosk").value = ed.voice.prefer === "piper" ? "piper" : (Number.isInteger(ed.voice.vosk) ? String(ed.voice.vosk) : "auto");
+  voiceHint();
   $("#e-del").textContent = p && p.builtin ? "Сбросить к заводскому" : "Удалить"; $("#e-del").style.display = p ? "" : "none";
   $("#e-res").textContent = "";
   ed.knowledge = ed.knowledge || []; renderKb(false); renderBrain();
@@ -163,16 +164,29 @@ $("#e-nophoto").onclick = () => { ed.avatar_data = null; ed.avatar = ""; ed.avat
    Папки пользователя и публичная библиотека на dewiar.pro (нужен вход в аккаунт); ed.knowledge — [{kind, id, label, lib?}],
    не больше шести — столько же оставляет ядро (core/personas.py). Список баз запрашивается один раз за сеанс (kbBases). */
 let kbBases = null;
-function kbKey(b) { return `${b.kind}:${b.id}`; }
+function kbKey(b) { return b.kind === "folder" ? `folder:${b.path}` : `${b.kind}:${b.id}`; }
 function renderKb(open) {
   const box = $("#e-kb"); if (!box || !ed) return;
   const sel = ed.knowledge || [];
-  box.innerHTML = `<div class="kbsel"></div><div class="actions" style="margin:0"><button class="btn small" id="kb-pick">${open ? "Свернуть" : sel.length ? "Изменить базы" : "Подключить базы…"}</button></div>`;
+  box.innerHTML = `<div class="kbsel"></div><div class="actions" style="margin:0"><button class="btn small" id="kb-folder">Папка на компьютере…</button>`
+    + `<button class="btn small" id="kb-pick">${open ? "Свернуть" : sel.some(b => b.kind !== "folder") ? "Изменить базы сайта" : "Базы с сайта…"}</button></div>`;
   const chips = $(".kbsel", box);
   if (!sel.length) chips.innerHTML = '<span class="hint" style="background:none;padding:0">Не подключено — персонаж отвечает по своим знаниям.</span>';
-  sel.forEach((b, i) => { const c = document.createElement("span"); c.textContent = b.label; const x = document.createElement("button"); x.textContent = "×"; x.title = "Отключить";
+  sel.forEach((b, i) => { const c = document.createElement("span"); c.textContent = (b.kind === "folder" ? "📁 " : "") + b.label; if (b.path) c.title = b.path;
+    const x = document.createElement("button"); x.textContent = "×"; x.title = "Отключить";
     x.onclick = () => { ed.knowledge.splice(i, 1); renderKb(open); }; c.appendChild(x); chips.appendChild(c); });
   $("#kb-pick").onclick = () => renderKb(!open);
+  // YouTube 27.10: «нет возможности добавить знания из локальной папки, только с сервера»
+  $("#kb-folder").onclick = async () => {
+    const a = window.api && window.api(); let p = "";
+    if (a && a.pick_folder) p = await a.pick_folder(); else p = await askText("Полный путь к папке с документами:") || "";
+    if (!p) return;
+    ed.knowledge = ed.knowledge || [];
+    if (ed.knowledge.some(x => x.kind === "folder" && x.path === p)) return toast("Эта папка уже подключена");
+    if (ed.knowledge.length >= 6) return toast("Не больше шести баз у одного персонажа");
+    ed.knowledge.push({ kind: "folder", path: p, label: p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || p });
+    renderKb(open); toast("Сохраните персонажа — папка прочитается в фоне, и он начнёт отвечать по ней", 4000);
+  };
   if (!open) return;
   const list = document.createElement("div"); list.className = "kblist"; list.innerHTML = '<p class="hint" style="padding:8px">Загружаю базы с сайта…</p>'; box.appendChild(list);
   (kbBases ? Promise.resolve(kbBases) : core.call("rag_scope", { force: true })).then(r => {
@@ -194,6 +208,23 @@ function renderKb(open) {
   }).catch(e => { list.innerHTML = ""; const p = document.createElement("p"); p.className = "hint"; p.style.padding = "8px";
     p.textContent = /вход|аккаунт/i.test(e.message) ? "Нужен вход в аккаунт Dewiar: «Dewiar.pro» → «Аккаунт dewiar.pro». После входа здесь появятся ваши папки и публичная библиотека." : e.message; list.appendChild(p); });
 }
+/* Какой голос на самом деле звучит (YouTube 27.10: «ставил голоса Денис, Руслан и Дмитрий — они одинаковые»): при
+   голосах Vosk TTS выбор Piper ничего не менял — Piper звучал, только если Vosk недоступен. Теперь выбрали голос Piper —
+   этот персонаж говорит им (Vosk для него — «Всегда Piper»), а строка под полями говорит, что слышно сейчас. */
+function voiceHint() {
+  const el = $("#e-vhint"); if (!el) return;
+  const eng = (S.tts || {}).engine, pv = $("#e-piper").selectedOptions[0], pn = pv ? pv.textContent.replace(/\s*\(.*\)$/, "") : "Piper";
+  el.textContent = eng === "remote" ? "Сейчас звучит голос сервера (поле «Голос на сервере»); Piper — запасной, если сервер молчит."
+    : eng === "elevenlabs" ? "Сейчас звучит ElevenLabs; Piper — запасной."
+    : eng === "off" ? "Голос выключен — студия → «Голос»."
+    : eng === "vosk" && $("#e-vosk").value !== "piper" ? `Сейчас звучит Vosk TTS (${$("#e-vosk").selectedOptions[0] ? $("#e-vosk").selectedOptions[0].textContent.toLowerCase() : "по полу"}). Выберите голос Piper — персонаж заговорит им.`
+    : `Сейчас звучит Piper — «${pn}».`;
+}
+$("#e-piper").onchange = () => {
+  if ((S.tts || {}).engine === "vosk" && $("#e-vosk").value !== "piper") $("#e-vosk").value = "piper";
+  voiceHint();
+};
+$("#e-vosk").onchange = voiceHint;
 $("#e-cancel").onclick = closeEditor;
 $("#e-save").onclick = async () => {
   const name = $("#e-name").value.trim(); if (!name) { $("#e-res").className = "res bad"; $("#e-res").textContent = "Введите имя"; return; }
@@ -215,7 +246,8 @@ $("#e-save").onclick = async () => {
 $("#e-teach").onclick = () => { if (ed && ed.id) { const id = ed.id; closeEditor(); startCalib(id); } else toast("Сначала сохраните персонажа"); };
 $("#e-listen").onclick = () => {
   if (!(ed && ed.id)) return toast("Сначала сохраните персонажа");
-  const v = $("#e-vosk").value, voice = v === "piper" ? { prefer: "piper" } : /^\d+$/.test(v) ? { vosk: +v, prefer: "" } : { prefer: "" };
+  const v = $("#e-vosk").value, voice = Object.assign(v === "piper" ? { prefer: "piper" } : /^\d+$/.test(v) ? { vosk: +v, prefer: "" } : { prefer: "" },
+    { piper: $("#e-piper").value, length_scale: +(2 - $("#e-len").value).toFixed(2) });   // слушаем выбранное, а не сохранённое
   core.call("voice_test", { persona: ed.id, fx: $("#e-fx").value, voice }).catch(e => toast(e.message));
 };
 $("#e-del").onclick = async () => {

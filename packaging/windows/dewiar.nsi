@@ -194,8 +194,12 @@ Section "Dewiar" SecMain
 
   ; меню «Пуск»
   CreateShortcut "$SMPROGRAMS\Dewiar.lnk" "${PYW}" '-X utf8 "${APPPY}"' "$INSTDIR\dewiar.ico" 0 SW_SHOWNORMAL "" "Голосовой ассистент"
-  CreateShortcut "$SMPROGRAMS\Dewiar — студия.lnk" "${PYW}" '-X utf8 "${APPPY}" --settings' "$INSTDIR\dewiar.ico" 0 SW_SHOWNORMAL "" "Настройки Dewiar"
-  CreateShortcut "$SMPROGRAMS\Dewiar — диагностика.lnk" "${PYW}" '-X utf8 "$INSTDIR\app\ui\doctor.py"' "$INSTDIR\dewiar.ico" 0 SW_SHOWNORMAL "" "Если Dewiar не запускается: отчёт на рабочий стол"
+  ; 27.10: «у меня три такие иконки висят, зачем и в чём разница» — в «Пуске» один Dewiar, студия и диагностика — в папке
+  Delete "$SMPROGRAMS\Dewiar — студия.lnk"
+  Delete "$SMPROGRAMS\Dewiar — диагностика.lnk"
+  CreateDirectory "$SMPROGRAMS\Dewiar — инструменты"
+  CreateShortcut "$SMPROGRAMS\Dewiar — инструменты\Студия — настройки Dewiar.lnk" "${PYW}" '-X utf8 "${APPPY}" --settings' "$INSTDIR\dewiar.ico" 0 SW_SHOWNORMAL "" "Настройки Dewiar: персонажи, голос, мозг"
+  CreateShortcut "$SMPROGRAMS\Dewiar — инструменты\Диагностика — если Dewiar не запускается.lnk" "${PYW}" '-X utf8 "$INSTDIR\app\ui\doctor.py"' "$INSTDIR\dewiar.ico" 0 SW_SHOWNORMAL "" "Если Dewiar не запускается: отчёт на рабочий стол"
 
   ; ссылки dewiar:// и файлы .dewiar открываются в Dewiar
   WriteRegStr HKCU "Software\Classes\dewiar" "" "URL:Dewiar"
@@ -334,6 +338,7 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Dewiar.lnk"
   Delete "$SMPROGRAMS\Dewiar — студия.lnk"
   Delete "$SMPROGRAMS\Dewiar — диагностика.lnk"
+  RMDir /r "$SMPROGRAMS\Dewiar — инструменты"
   Delete "$DESKTOP\Dewiar.lnk"
   DeleteRegValue HKCU "${RUNKEY}" "Dewiar"
   DeleteRegKey HKCU "Software\Classes\dewiar"

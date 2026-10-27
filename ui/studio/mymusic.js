@@ -53,7 +53,7 @@ async function mmRefresh() {
   try { mmData = await core.call("mm_status"); } catch (e) { return; }
   mmNow(mmData); mmStats(mmData); mmChips();
 }
-function loadMyMusic() { mmRefresh().then(mmLoadList); }
+function loadMyMusic() { mmRefresh().then(mmLoadList); if (typeof rcLoad === "function") rcLoad(); }
 if ($("#p-music")) {
   core.on("mymusic", e => { if (!$("#p-music").classList.contains("cur")) return; mmData = Object.assign(mmData || {}, e); mmNow(mmData); mmStats(mmData); if (!e.busy) mmLoadList(); });
   core.on("radio", () => { if ($("#p-music").classList.contains("cur")) mmRefresh().then(mmRenderList); });
@@ -70,4 +70,32 @@ if ($("#p-music")) {
   $("#mm-next").onclick = () => core.call("mm_ctl", { act: "next" }).then(mmRefresh).catch(e => toast(e.message));
   $("#mm-prev").onclick = () => core.call("mm_ctl", { act: "prev" }).then(mmRefresh).catch(e => toast(e.message));
   $("#mm-heart").onclick = () => { const n = mmData && mmData.now; if (n) core.call("mm_fav", { path: n.path, on: !n.fav }).then(() => mmRefresh().then(mmLoadList)).catch(e => toast(e.message)); };
+}
+
+/* Свои радиостанции (№359, 27.10: «Где можно добавлять потоки радио? В моём случае — радио нашего города»): список,
+   «Включить», «×» (второе нажатие — убрать), добавить по названию и ссылке. Ядро: radio_custom_list/add/del/play. */
+let rcAsk = "";
+async function rcLoad() {
+  if (!$("#rc-list")) return;
+  let l = [];
+  try { l = await core.call("radio_custom_list"); } catch (e) { $("#rc-list").innerHTML = `<li class="hint">${escH(e.message)}</li>`; return; }
+  $("#rc-list").innerHTML = (l || []).length ? l.map(x => `<li><span><b>${escH(x.name)}</b><small>${escH(x.url)}</small></span>`
+    + `<button class="btn small" data-rcp="${escH(x.url)}">Включить</button><button class="btn small${rcAsk === x.url ? " danger" : ""}" data-rcd="${escH(x.url)}" title="Убрать">${rcAsk === x.url ? "Убрать?" : "×"}</button></li>`).join("")
+    : `<li class="hint" style="display:block">Своих станций пока нет — добавьте ниже или пришлите ссылку в чат.</li>`;
+  $$("#rc-list [data-rcp]").forEach(b => b.onclick = () => core.call("radio_custom_play", { url: b.dataset.rcp }).then(() => toast("Включаю", 2000)).catch(e => toast(e.message, 4000)));
+  $$("#rc-list [data-rcd]").forEach(b => b.onclick = async () => {
+    if (rcAsk !== b.dataset.rcd) { rcAsk = b.dataset.rcd; rcLoad(); return; }
+    rcAsk = ""; await core.call("radio_custom_del", { url: b.dataset.rcd }).catch(e => toast(e.message)); rcLoad();
+  });
+}
+if ($("#rc-add")) {
+  $("#rc-add").onsubmit = async (e) => {
+    e.preventDefault();
+    try { const st = await core.call("radio_custom_add", { name: $("#rc-name").value, url: $("#rc-url").value, play: true });
+          toast(`«${st.name}» добавлена — включаю`, 3000); $("#rc-name").value = ""; $("#rc-url").value = ""; }
+    catch (x) { toast(x.message, 4000); }
+    rcLoad();
+  };
+  core.on("hello", () => { if ($("#p-music").classList.contains("cur")) rcLoad(); });
+  core.on("radio", () => { if ($("#p-music").classList.contains("cur")) rcLoad(); });
 }

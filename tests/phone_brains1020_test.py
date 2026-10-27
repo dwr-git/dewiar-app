@@ -122,9 +122,9 @@ with sync_playwright() as p:
     r = pg.evaluate("""() => { S.llmSaved = []; S.llm = Object.assign({}, DEF.llm, { name: "OpenAI", base_url: "https://groq.test/openai/v1", model: "x" });
         llmSeen = JSON.parse(JSON.stringify(S.llm)); saveS(); return llmBack().map(brainNameOf); }""")
     ok(r == ["Dewiar Облако"], f"старые настройки: Dewiar Облако — по ключу, что у слуха: {r}")
-    # «Забыть ключ» — облачные из прежних уходят
-    r = pg.evaluate("""async () => { await llmRestore(0); S.llm.account = false; saveS(); await forgetKey(); return [S.llm.base_url, (S.llmSaved || []).filter(x => x.cloud).length]; }""")
-    ok(r == ["", 0], f"«Забыть ключ» — прежних облачных не осталось: {r}")
+    # «Забыть ключ» — прежние облачные уходят, а сам забытый ключ остаётся, чтобы вернуть (YouTube 27.10: «случайно нажал»)
+    r = pg.evaluate("""async () => { await llmRestore(0); S.llm.account = false; saveS(); await forgetKey(); return [S.llm.base_url, (S.llmSaved || []).filter(x => x.cloud).map(x => !!x.forgot)]; }""")
+    ok(r == ["", [True]], f"«Забыть ключ» — из облачных остался только забытый ключ (его можно вернуть): {r}")
     # звук на нуле: кнопка «включить и прочитать» вместо незаметного тоста
     r = pg.evaluate("""() => { const mock = D.mock; window.VOL = 0; D.mock = false; const vol = D.volume;
         D.volume = (op, v) => op === "get" ? VOL : (VOL = v); S.textMode = false;

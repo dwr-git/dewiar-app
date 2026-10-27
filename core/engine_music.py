@@ -200,10 +200,67 @@ class MusicMixin:
         self._say_quick(msg, text)
         return True
 
+    # ---------- свои радиостанции (№359, 27.10: «Где можно добавлять потоки радио? В моём случае — радио нашего города»;
+    # «включи радио Железо-ФМ https://…» и файл fefm.m3u играли не то) ----------
+    _URL_RX = re.compile(r"https?://[^\s<>\"'«»]+")
+    _NAME_DROP = re.compile(r"(?<![\w-])(?:включи(?:те)?|поставь(?:те)?|запусти(?:те)?|играй|сыграй|послушаем|послушать|давай|"
+                            r"добавь|запомни|сохрани|пожалуйста|радио|радиостанци\w*|станци\w*|поток\w*|эфир|с|из|по|файла|файл|"
+                            r"ссылк\w*|эту|это|этот|мне|лира|вот|как|под\s+названием|называется|назови|её|ее|его)(?![\w-])", re.I)
+
+    def radio_custom_save(self, name, url):
+        """Своя станция: та же ссылка или то же название — заменить, новые — сверху (до 30). -> станция."""
+        name = re.sub(r"\s+", " ", str(name or "")).strip(" .,:;—–-")[:80]
+        url = str(url or "").strip()
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("нужна ссылка на поток: http://… или https://…")
+        if not name:
+            name = re.sub(r"^www\.|^online\.|^stream\.|^radio\.", "", re.sub(r"^https?://", "", url).split("/")[0].split(":")[0]).split(".")[0] or "Своя станция"
+        cur = [x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict)
+               and x.get("url") != url and str(x.get("name", "")).lower() != name.lower()]
+        st = {"name": name, "url": url}
+        self.s.update({"radio_custom": [st] + cur[:29]})
+        return st
+
+    def _radio_url_cmd(self, text):
+        """Ссылка на поток или плейлист .m3u/.pls во вложении + «включи / запомни» -> играет и запоминает своей станцией."""
+        body, _, att = (text or "").partition("\n\nВложения:")
+        low = body.lower()
+        title, urls = "", []
+        if att and re.search(r"#EXTM3U|\[playlist\]|#EXTINF|^File1=", att, re.I | re.M):
+            m = re.search(r"#EXTINF:[^,\n]*,([^\n]+)", att) or re.search(r"^Title1=(.+)$", att, re.M)
+            title = m.group(1).strip() if m else ""
+            urls = [u for u in self._URL_RX.findall(att) if not re.search(r"\.(?:png|jpe?g|gif|webp)$", u, re.I)]
+        else:
+            urls = self._URL_RX.findall(body)
+        if not urls:
+            return False
+        play = re.search(r"включи|поставь|запусти|играй|сыграй|послуша|давай", low)
+        keep = re.search(r"добав|запомни|сохрани", low)
+        if not (play or keep) or (not att and not re.search(r"радио|станц|поток|эфир|fm|фм", low + " " + urls[0].lower())):
+            return False                                   # просто ссылка в разговоре — решит модель
+        url = urls[0].rstrip(".,;)»")
+        name = title or " ".join(self._NAME_DROP.sub(" ", self._URL_RX.sub(" ", body)).split()).strip(" .,:;—–-«»\"")
+        st = self.radio_custom_save(name, url)
+        log.info("📻 Своя станция «%s» — %s", st["name"], url)
+        self.emit("radio", **self.radio.status())
+        if not play:
+            self._say_quick(f"Запомнил станцию «{st['name']}». Включить — «включи {st['name']}».", text)
+            return True
+        st = dict(st, tags="своя", own=True)
+        n = st["name"].replace("{", "(").replace("}", ")")
+        self._play_station([st], text, "Включаю «{}». Запомнил — дальше просто скажите «включи " + n + "».")
+        return True
+
     def _music_cmd(self, text):
         """«Включи музыку» → спросим жанр; «поставь джаз», «что-нибудь спокойное», «дальше», «выключи музыку».
         «Играй», «пауза», «следующий трек» — кнопки открытого плеера; «… в Яндекс Музыке» — там."""
         from music import control, genre_tag, parse
+        try:
+            if self._radio_url_cmd(text):                  # своя станция по ссылке или файлу .m3u (№359)
+                return True
+        except ValueError as e:
+            self._say_quick(str(e)[:1].upper() + str(e)[1:] + ".", text)
+            return True
         try:
             if self._mine_cmd(text):                       # своя папка с музыкой: «поставь мою музыку», «что играет»
                 return True
@@ -302,13 +359,19 @@ class MusicMixin:
                 return False
             try:                                          # «включи радио Европа плюс», «включи электронную музыку» — каталог
                 from radio import pick, search
-                found = search(tag, as_tag=True) if tag and not re.search(r"радио|станц|волн|\bфм\b|\bfm\b", text.lower()) else search(q)
-                best = pick(found, q)
+                by_tag = bool(tag and not re.search(r"радио|станц|волн|\bфм\b|\bfm\b", text.lower()))
+                found = search(tag, as_tag=True) if by_tag else search(q)
+                best = found[0] if by_tag and found else pick(found, q)
                 found = [best] + [x for x in found if x is not best] if best else []
             except Exception as e:  # noqa: BLE001
                 log.info("Радио: каталог недоступен: %s", e)
                 found = []
             if not found:
+                if re.search(r"радио|станц|волн|\bфм\b|\bfm\b", text.lower()) and q.strip():
+                    # №359: не нашли — так и сказать и подсказать, как добавить свою, а не включать что попало
+                    self._say_quick(f"Не нашёл станцию «{q.strip()}». Пришлите ссылку на поток или файл .m3u — включу и "
+                                    "запомню. Свои станции — ещё в студии: «Музыка» → «Свои радиостанции».", text)
+                    return True
                 return False
         self._music_asked = 0.0
         self._play_station(found[:4], text, "Включаю «{}».")
@@ -678,7 +741,7 @@ class MusicMixin:
                     self.radio_health.mark(s["url"], False, self.radio.failed or "нет звука")
                 if self.radio.playing:
                     self.radio.stop()
-                if not alts and not s.get("_cat"):                 # свой список молчит — открытый каталог radio-browser
+                if not alts and not s.get("_cat") and not s.get("own"):   # свой список молчит — каталог (своя станция по ссылке — без подмены)
                     try:
                         from radio import search
                         q = (first.get("tags") or "").split()[0:1] or [first.get("name", "")]
@@ -689,6 +752,10 @@ class MusicMixin:
                     except Exception as e:  # noqa: BLE001
                         log.info("Радио: каталог недоступен: %s", e)
             self._music_failed = time.monotonic()
+            if first.get("own") and len(tried) == 1:      # своя станция по ссылке молчит — не подменяем её чужой
+                self.note(f"«{first['name']}» не играет" + (f" ({why})" if why else "") + ". Проверьте ссылку на поток — "
+                          "она открывается в браузере? Поправить или убрать — студия → «Музыка» → «Свои радиостанции».")
+                return
             if len(tried) >= 2:                               # молчат все — дело не в станциях: где поломка?
                 from eyes import ffmpeg_path
                 from radio import diagnose

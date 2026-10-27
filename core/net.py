@@ -120,6 +120,64 @@ class _LanFirst(httpx.BaseTransport):
                 x.close()
 
 
+def _private_host(host):
+    """Этот компьютер или своя сеть: localhost, *.local/*.lan, 127.*, 10.*, 192.168.*, 172.16–31.*, 169.254.*, ::1, fc00::/7."""
+    import ipaddress
+    h = (host or "").strip("[]").lower()
+    if h in ("localhost",) or h.endswith((".local", ".lan", ".localdomain", ".home.arpa")):
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local
+
+
+class _SysProxy(httpx.BaseTransport):
+    """Прокси системы (Windows: «Параметры → Сеть → Прокси», переменные HTTP(S)_PROXY) — для интернета, а к своей модели
+    на этом компьютере и в своей сети — напрямую (№358, 27.10: «пока включено прокси на компьютере, локальная модель не
+    подключается»: httpx слал запрос к localhost:11434 на прокси, а у прокси свой localhost). Как «Не использовать
+    прокси для локальных адресов» в Windows."""
+
+    def __init__(self, env_mounts, verify, cert):
+        from httpx._utils import URLPattern
+        self.pats = sorted(((URLPattern(k), v) for k, v in env_mounts.items()), key=lambda kv: kv[0])   # как у httpx: точнее — раньше
+        self.verify, self.cert, self.t, self.d = verify, cert, {}, None
+
+    def _direct(self):
+        if self.d is None:
+            self.d = httpx.HTTPTransport(verify=self.verify, cert=self.cert, trust_env=False)
+        return self.d
+
+    def handle_request(self, request):
+        host = request.url.host
+        px = None
+        if not _private_host(host):
+            for pat, val in self.pats:
+                if pat.matches(request.url):
+                    px = val
+                    break
+        if not px:
+            return self._direct().handle_request(request)
+        if px not in self.t:
+            self.t[px] = httpx.HTTPTransport(proxy=px, verify=self.verify, cert=self.cert, trust_env=False)
+        return self.t[px].handle_request(request)
+
+    def close(self):
+        for x in list(self.t.values()) + [self.d]:
+            if x is not None:
+                x.close()
+
+
+def _env_proxies():
+    """Прокси из окружения и системы, как их видит httpx: {шаблон: прокси | None (без прокси)}."""
+    try:
+        from httpx._utils import get_environment_proxies
+        return get_environment_proxies()
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 class _Plain(httpx.BaseTransport):
     """Обычный путь (без прокси) — создаётся при первом запросе, как у httpx по умолчанию."""
 
@@ -302,6 +360,12 @@ def _patched_init(self, *a, **kw):
     if lh:                                            # дома — к папке сайта напрямую (остальное — как выше)
         inner = m.get(f"all://{lh}") or _Plain(kw.get("verify", True), kw.get("cert"), kw.get("trust_env", True))
         m[f"all://{lh}"] = _LanFirst(inner, kw.get("verify", True), kw.get("cert"))
+    if kw.get("trust_env", True) and not kw.get("proxy") and "transport" not in kw:
+        env = _env_proxies()
+        if any(v for v in env.values()):              # прокси системы есть — свои адреса мимо него
+            sp = _SysProxy(env, kw.get("verify", True), kw.get("cert"))
+            m.setdefault("http://", sp)
+            m.setdefault("https://", sp)
     if m:
         kw["mounts"] = {**m, **dict(kw.get("mounts") or {})}
     _orig_init(self, *a, **kw)

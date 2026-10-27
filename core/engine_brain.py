@@ -630,6 +630,14 @@ class BrainMixin:
             self.push("Модели Dewiar подключены", f"По вашему аккаунту: заряд {r.get('percent', '?')}%"
                       + ("" if not mine else " — выбрать их можно в «Мозге»"), telegram=False)
 
+    def _persona_folders(self):
+        """Папки на этом компьютере, подключённые к персонажам как знания (YouTube 27.10) — для индекса knowledge.py."""
+        try:
+            return list(dict.fromkeys(b["path"] for p in self.personas.all() for b in (p.get("knowledge") or [])
+                                      if b.get("kind") == "folder" and b.get("path")))
+        except Exception:  # noqa: BLE001
+            return []
+
     def _persona_knowledge(self, text, turn):
         """У персонажа подключены базы сайта Dewiar (например, «Библия» из публичной библиотеки): перед ответом
         ищем во всех параллельно по вопросу и даём модели найденное — персонаж отвечает по источнику, своим голосом.
@@ -639,10 +647,14 @@ class BrainMixin:
             p = self.personas.get(self.s.get("persona")) or {}
         except Exception:  # noqa: BLE001
             return ""
-        bases = p.get("knowledge") or []
+        allb = p.get("knowledge") or []
         q = (text or "").split("\n\nВложения:")[0].strip()
-        if not bases or len(q) < 3 or not self.account.logged_in():
+        if not allb or len(q) < 3:
             return ""
+        local = self._persona_local_knowledge(q, [b for b in allb if b.get("kind") == "folder"])
+        bases = [b for b in allb if b.get("kind") != "folder"]
+        if not bases or not self.account.logged_in():
+            return local
         from concurrent.futures import ThreadPoolExecutor
         from account import AccountError
         labels = ", ".join(f"«{b.get('label')}»" for b in bases)
@@ -690,7 +702,30 @@ class BrainMixin:
                    "от себя — так и скажи одной фразой.")
         if errs and not parts:
             out += f"\n\nБаза знаний сейчас недоступна ({errs[0]}). Ответь от себя и коротко скажи, что база не ответила."
-        return out
+        return local + out
+
+    def _persona_local_knowledge(self, q, folders):
+        """Знания персонажа из папок на этом компьютере (YouTube 27.10: «при создании персонажа нет возможности добавить
+        знания из локальной папки, только с сервера»): поиск по отрывкам (knowledge.py, BM25) только в его папках, без
+        интернета и входа. -> добавка к подсказке ("" — папок нет)."""
+        kn = getattr(self, "knowledge", None)
+        if not folders or kn is None:
+            return ""
+        labels = ", ".join(f"«{b.get('label') or Path(b['path']).name}»" for b in folders)
+        try:
+            res = kn.search(q, limit=6, within=[b["path"] for b in folders])
+        except Exception as e:  # noqa: BLE001
+            log.warning("Знания персонажа (папки): %s", e)
+            return ""
+        log.info("📚 Папки персонажа (%s): найдено отрывков %d", labels, len(res))
+        if not res:
+            busy = any(st.get("busy") for st in getattr(kn, "fstate", {}).values())
+            return (f"\n\nВ твоих папках со знаниями ({labels}) по этому вопросу ничего не нашлось"
+                    + (" — они ещё читаются" if busy else "") + ". Если отвечаешь от себя — так и скажи одной фразой.")
+        self.emit("tool", name="knowledge", title=f"Найдено в {labels}", status="done")
+        return ("\n\nТВОЯ БАЗА ЗНАНИЙ (папки на компьютере пользователя) — найдено по вопросу. Отвечай, опираясь на это, "
+                "называй файл, откуда взято; чего в найденном нет — не выдумывай.\n\n"
+                + "\n\n".join(f"### Файл «{Path(r['path']).name}»\n{r['text'][:1500]}" for r in res)[:7000])
 
     def _show_rag_images(self, images):
         """Картинки к найденному (гравюры, схемы) — в виджет: скачиваем с сайта с токеном входа (до трёх, каждая

@@ -867,6 +867,27 @@ class CommandsMixin:
             return True
         if cmd == "mute":
             return self.set_mute(bool(a.get("on")))
+        if cmd == "text_mode":
+            # YouTube 26.10: «выключил микрофон и синтез речи… для чисто текстового режима не очень удобно — добавить
+            # переключение в текстовый режим (без распознавания, без синтеза, с инструментами в чате)». Включили —
+            # микрофон и голос выключены (прежний голос запомнен), вопросы «выполнить?» и шаги — в «Чате» студии.
+            on = bool(a.get("on"))
+            ui = self.s.get("ui") or {}
+            if on:
+                prev = self.s.get("tts", "engine")
+                self.s.update({"ui": {"text_mode": True, "text_prev": prev if prev and prev != "off" else (ui.get("text_prev") or "")},
+                               "tts": {"engine": "off"}})
+                self.set_mute(True)
+            else:
+                self.s.update({"ui": {"text_mode": False}, "tts": {"engine": ui.get("text_prev") or self._tts_local()}})
+                if self.s.get("privacy", "mic") != "button":
+                    self.set_mute(False)
+            try:
+                self.apply_engines()
+            except Exception as e:  # noqa: BLE001
+                log.info("Движки после текстового режима: %s", e)
+            self.emit("settings", settings=self.s.snapshot())
+            return {"on": on, "tts": self.s.get("tts", "engine")}
         if cmd == "security_state":                       # студия → «Безопасность»: стоп-кран, схема, замки, журнал (security.py)
             import security
             return security.state(self)
@@ -886,6 +907,8 @@ class CommandsMixin:
             miss = missing_words(self.vosk_dir, p.get("wake", [])) if self.vosk_dir else []   # слух ещё не готов — проверим потом
             self.build_spotter()
             self.emit("personas", personas=self.personas.public())
+            if any(b.get("kind") == "folder" for b in p.get("knowledge") or []) and getattr(self, "knowledge", None) is not None:
+                self.knowledge.kick.set()                  # папку со знаниями персонажа — прочитать сразу
             return {"id": pid, "missing": miss}
         if cmd == "gallery":
             return self.personas.gallery()
@@ -1322,6 +1345,15 @@ class CommandsMixin:
 
             def run():
                 self.ensure_voice(pid)                 # скачать голос — уже не в обработчике нажатия
+                vid = (a.get("voice") or {}).get("piper")
+                if vid in PIPER_VOICES and not self.piper.has(vid):   # «Послушать» до сохранения: выбранный, а не прежний
+                    try:
+                        self.note(f"Скачиваю голос {PIPER_VOICES[vid]}…")
+                        self.piper.mirror = self._mirror("piper")
+                        self.piper.ensure(vid)
+                        self.note("")
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("Голос не скачался: %s", e)
                 self._speak_worker(turn, q, fx_override=a.get("fx"), voice_override=a.get("voice"))
                 with self._turn_lock:
                     if self.turn is turn:
@@ -1337,6 +1369,25 @@ class CommandsMixin:
             return self.radio.status()
         if cmd == "radio_list":                   # свой список станций (с сайта или встроенный)
             return {"stations": self.music.stations(), "genres": self.music.genres(), "url": self.music.url()}
+        if cmd == "radio_custom_list":                # свои радиостанции (№359): студия → «Музыка»
+            return [x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict)]
+        if cmd == "radio_custom_add":
+            try:
+                st = self.radio_custom_save(a.get("name"), a.get("url"))
+            except ValueError as e:
+                raise ValueError(str(e)) from e
+            if a.get("play"):
+                self._play_station([dict(st, tags="своя", own=True)], "", "Включаю «{}».")
+            return st
+        if cmd == "radio_custom_del":
+            self.s.update({"radio_custom": [x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict) and x.get("url") != a.get("url")]})
+            return True
+        if cmd == "radio_custom_play":
+            st = next((x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict) and x.get("url") == a.get("url")), None)
+            if not st:
+                raise ValueError("такой станции нет в списке")
+            self._play_station([dict(st, tags="своя", own=True)], "", "Включаю «{}».")
+            return True
         if cmd == "radio_stop":
             self.radio.stop()
             return self.radio.status()

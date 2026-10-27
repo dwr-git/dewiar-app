@@ -339,6 +339,10 @@ function netErr(e, url) {
   // №229 (24.10): «Failed to connect to /127.0.0.1:1234» — 127.0.0.1 на телефоне — это сам телефон, а LM Studio — на компьютере
   if (/^https?:\/\/(?:127\.|localhost\b)/i.test(url || "") && /refused|failed to connect|timeout|timed out/i.test(e))
     return "адрес 127.0.0.1 — это сам телефон, а модель работает на компьютере. В «Мозге» впишите адрес компьютера в домашней сети (например, 192.168.1.5:1234 — он есть в LM Studio или Ollama)";
+  // YouTube 27.10: свой сервер с самоподписанным сертификатом — «Trust anchor for certification path not found»
+  if (/Trust anchor|CertPathValidator|certification path|SSLHandshake|self.signed|CERT_/i.test(e))
+    return "сертификат сервера не подписан известным центром (свой или самоподписанный). Поставьте его в телефон: Настройки → Безопасность → "
+      + "Шифрование и учётные данные → Установить сертификат → «Сертификат ЦС» — и Dewiar будет ему доверять. Или откройте сервер по http в домашней сети";
   if (/Unable to resolve|UnknownHost|No address/i.test(e)) return home ? "домашний сервер не найден (возможно, вы не дома)" : "нет интернета или слабая связь";
   if (/timeout|timed out|after \d+\s*ms/i.test(e)) return home ? "домашний сервер долго не отвечает (возможно, вы не дома)" : (/dewiar\.pro/i.test(url || "") ? "сервер Dewiar долго не отвечает — слабая связь или сейчас много людей сразу" : "сервер долго не отвечает — похоже, слабая связь");
   if (/ECONNREFUSED|Connection refused|failed to connect|reset|closed|EOF|connection abort/i.test(e)) return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась";
@@ -392,19 +396,19 @@ function llmRemember() {
   let list = Array.isArray(S.llmSaved) ? S.llmSaved : [];
   if (a !== b && a) {
     if (b || !llmSeen.cloud) list = [llmSeen].concat(list.filter(x => llmId(x) !== a));
-    else list = list.filter(x => !x.cloud);                 // облако «забыли» (ключ, выход) — не держим и прежние облачные
+    else list = list.filter(x => !x.cloud || x.forgot);     // облако «забыли» (ключ, выход) — не держим и прежние облачные (кроме забытого кнопкой: его можно вернуть)
   }
   S.llmSaved = list.filter(x => llmId(x) && llmId(x) !== b).slice(0, 5);
   llmSeen = JSON.parse(JSON.stringify(S.llm || {}));
 }
 /* Что можно вернуть: прежние мозги, а для тех, кто подключался до этого списка, — Dewiar Облако по ключу, что остался у слуха. */
 function llmBack() {
-  const out = (S.llmSaved || []).filter(x => !(x.cloud && x.account && !loggedIn()));
+  const out = (S.llmSaved || []).filter(x => !(x.cloud && x.account && !loggedIn()) && !(x.forgot && Date.now() - x.forgot > 30 * 864e5));
   if (!S.llm.cloud && !out.some(x => x.cloud) && /^dw-/.test(S.stt.key || "") && /cloud\.php/.test(S.stt.url || ""))
     out.push({ cloud: true, base_url: S.stt.url, api_key: S.stt.key, name: "Dewiar Облако", restore: "key" });
   return out;
 }
-function brainNameOf(l) { return l.cloud ? "Dewiar Облако" + (l.account ? " · по аккаунту" : "") : `${l.name || l.base_url.replace(/^https?:\/\//, "")}${l.model ? " · " + l.model : ""}`; }
+function brainNameOf(l) { return l.cloud ? "Dewiar Облако" + (l.account ? " · по аккаунту" : l.forgot ? ` · забытый ключ …${String(l.api_key || "").slice(-4)}` : "") : `${l.name || l.base_url.replace(/^https?:\/\//, "")}${l.model ? " · " + l.model : ""}`; }
 async function llmRestore(i) {
   const l = llmBack()[i]; if (!l) return;
   if (l.cloud) await cloudConnect(l.account ? S.account.token : l.api_key, l.base_url.split("?")[0], { account: !!l.account });
@@ -3096,6 +3100,9 @@ const CLAIMS = [
   { rx: /(?:^|[.!—–-]\s*|,\s*)(?:хорошо,?\s*|секунду,?\s*|сейчас\s+)?(?:звоню|набираю|перезваниваю|позвоню|вызываю)(?:\s|[.!:,]|$)/i, tool: "call", what: "звонишь" },
   { rx: /(?:^|[.!]\s*)(?:хорошо,?\s*)?(?:включаю|ставлю|переключаю(?:сь)?(?:\s+на)?|запускаю)\s+(?:радио|станци|«|"|волну|[А-ЯЁA-Z])/, tool: "play_radio (или radio_control с action next, если просят другую станцию)", what: "включаешь радио" },
   { rx: /(?:^|[.!]\s*)(?:сейчас\s+)?(?:фотографирую|делаю (?:снимок|фото)|смотрю через камеру|открываю камеру)/i, tool: "take_photo", what: "фотографируешь" },
+  // YouTube 27.10: «попросил открыть сайт… „сейчас открою“, но ничего не произошло» — и в будущем времени тоже
+  { rx: /(?:^|[.!—–-]\s*|,\s*)(?:хорошо,?\s*|секунду,?\s*|сейчас\s+)?(?:открываю|открою|открыла?|запускаю|запущу)(?:\s|[.!:,]|$)/i,
+    tool: "open_url|open_app (сайт или ссылка — open_url, приложение — open_app)", what: "открываешь", user: /откр|запуст/i, noOffer: true },
   // №227 (24.10): «выключи фонарик» — «Фонарик выключен.», а flashlight не вызван: фонарь горит, человек просит снова
   { rx: /фонар(?:ик|ь)[^.!?]{0,20}(?:выключ|включ|погас|зажж|гор(?:ит|ю))|(?:выключил[аи]?|включил[аи]?|погасил[аи]?|выключаю|включаю|гашу)\s+(?:тебе\s+|вам\s+)?(?:фонар|вспышк|св?ет)/i,
     tool: "flashlight", what: "включил(а) или выключил(а) фонарик", user: /фонар|вспышк|посвети/i },
@@ -3215,7 +3222,7 @@ function claimedAction(text, called, asked) {
   // работал(а) пальцами в другом приложении — «открылось на экране», «включаю» там правда: не путаем с make_app и радио
   if (called && [...called].some(n => HANDS_SET.has(n))) return null;
   if (called && (called.has("take_photo") || called.has("show_photo")) && t.length < 400) return null;
-  return CLAIMS.find(c => c.rx.test(t) && (!c.user || c.user.test(String(asked || ""))) && !(called && c.tool.split(" ")[0].split("|").some(n => called.has(n)))) || null;
+  return CLAIMS.find(c => c.rx.test(t) && (!c.user || c.user.test(String(asked || ""))) && !(c.noOffer && /(?:^|[^а-яё])(?:если|хотите|могу|можно|скажите)(?![а-яё])/i.test(t)) && !(called && c.tool.split(" ")[0].split("|").some(n => called.has(n)))) || null;
 }
 const REFUSAL_RX = /нет доступа к интернет|не имею доступа|нет прямого доступа|в реальном времени|как языковая модель|я языковая модель|не могу получить актуальн|не могу искать в интернет|нет возможности выйти в интернет|моя база знаний ограничена|у меня нет доступа|cannot access|don't have access|as an ai/i;
 const CAM_REFUSAL_RX = /нет доступа к камер|не могу (?:сфотограф|сделать (?:фото|снимок)|включить камер|видеть тебя|увидеть тебя|посмотреть на тебя)|не вижу тебя|у меня нет камер|не имею камер/i;
@@ -5785,8 +5792,10 @@ function wireSettings(info) {
           r.className = "res ok"; r.innerHTML = `Код: <b style="font-size:22px;letter-spacing:3px">${esc(d.code.slice(0, 3) + " " + d.code.slice(3))}</b><br>На другом устройстве: «Мозг» → «Код или ключ Dewiar» → введите код. Действует 10 минут.`; }
         catch (e) { r.className = "res bad"; r.textContent = e.message; } };
       if (g("cl-forget")) g("cl-forget").onclick = async () => {
-        if (!confirm(loggedIn() ? "Забыть ключ Dewiar? Думать буду по аккаунту " + (S.account.login || "") + "." : "Забыть ключ Dewiar? Мозг нужно будет подключить заново.")) return;
-        await forgetKey(); toast("Ключ забыт"); renderSettings(); };
+        const k4 = String(S.llm.api_key || "").slice(-4);
+        if (!confirm((loggedIn() ? `Забыть ключ Dewiar …${k4}? Думать буду по аккаунту ${S.account.login || ""}.` : `Забыть ключ Dewiar …${k4}? Пока не подключите мозг снова, я не смогу отвечать.`)
+          + "\n\nПередумаете — ключ можно будет вернуть одной кнопкой: «Мозг» → «Прежние мозги» → «Вернуть».")) return;
+        await forgetKey(); toast("Ключ забыт. Вернуть — «Прежние мозги» → «Вернуть»", 6000); renderSettings(); };
       // «Обновить» — заметно: что сейчас на счёте (раньше нажатие выглядело так, будто ничего не произошло)
       g("cl-ref").onclick = () => cloudBalance(true).then(c => { cloudFill(c); cloudUsage && cloudUsage();
         toast("Обновлено: " + (c.site ? (c.balance_text || c.balance + " тал.") + " на счёте dewiar.pro" : "заряд " + (c.percent ?? 0) + "%")); }).catch(e => toast(e.message));
@@ -6366,6 +6375,12 @@ async function fixDeadKey(msg) {
   return true;
 }
 function forgetKey() {                          // «Забыть ключ»: есть аккаунт — думаем по нему, нет — мозг не подключён
+  /* YouTube 27.10: «случайно нажал „Забыть ключ“ — не получается войти». Забытый ключ остаётся в «Прежних мозгах» (30 дней):
+     вернуть — одной кнопкой «Вернуть»; убрать насовсем — корзиной там же. */
+  if (S.llm.cloud && !S.llm.account && S.llm.api_key) {
+    const keep = Object.assign({}, S.llm, { forgot: Date.now() });
+    S.llmSaved = [keep].concat((S.llmSaved || []).filter(x => llmId(x) !== llmId(keep))).slice(0, 5);
+  }
   if (loggedIn()) return fixDeadKey();
   S.llm = Object.assign({}, DEF.llm); cloudInfo = null; S.accCloud = null;
   if (S.stt.engine === "server" && /cloud\.php/.test(S.stt.url || "") && !S.stt.from_account) S.stt = Object.assign({}, DEF.stt);

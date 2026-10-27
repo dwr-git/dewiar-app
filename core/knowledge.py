@@ -115,9 +115,10 @@ FOLDER_FILES, EXTRA_MAX, EXTRA_CHUNKS = 4000, 30 * 1024 * 1024, 80000
 
 
 class Knowledge:
-    def __init__(self, workspace, index_path, folders=None):
+    def __init__(self, workspace, index_path, folders=None, extra=None):
         self.ws, self.index_path = workspace, Path(index_path)
         self.folders = folders or (lambda: [])   # -> [полный путь своей папки, …] (настройка knowledge.folders)
+        self.extra = extra or (lambda: [])       # -> папки знаний персонажей (27.10): индексируются, но в общий поиск не идут
         self._lock = threading.Lock()
         self.index = self._load()          # rel | «@полный путь» -> {"mtime", "size", "chunks": [..], "error"}
         self._tok = {}                     # ключ -> [основы слов каждого отрывка]: не считать их заново на каждый поиск
@@ -225,7 +226,7 @@ class Knowledge:
         """Своя папка: новые и изменившиеся файлы — в индекс, пропавшие и убранные папки — из индекса. Долго (PDF,
         тысячи файлов) — поэтому из фонового потока (watch); поиск в это время работает по тому, что уже есть."""
         folders = []
-        for f in self.folders() or []:
+        for f in list(self.folders() or []) + list(self.extra() or []):
             p = Path(os.path.expanduser(str(f))).resolve()
             if p.is_dir() and p not in folders:
                 folders.append(p)
@@ -314,7 +315,7 @@ class Knowledge:
         if not key.startswith("@"):
             return key
         p = Path(key[1:])
-        for f in self.folders() or []:
+        for f in list(self.folders() or []) + list(self.extra() or []):
             base = Path(os.path.expanduser(str(f))).resolve()
             try:
                 return (Path(base.name) / p.relative_to(base)).as_posix()
@@ -330,14 +331,22 @@ class Knowledge:
         p = Path(key[1:]) if key.startswith("@") else self.root / key
         return p if p.is_file() else None
 
-    def search(self, query, limit=5):
-        """-> [{path, score, text}] — лучшие отрывки, не больше двух из файла. Путь файла тоже участвует в поиске."""
+    def search(self, query, limit=5, within=None):
+        """-> [{path, score, text}] — лучшие отрывки, не больше двух из файла. Путь файла тоже участвует в поиске.
+        within — только в этих своих папках (знания персонажа из папки на компьютере)."""
         self.refresh()
         q = [w for w in words(query) if len(w) > 2] or words(query)     # короткие основы — только если других нет
         if not q:
             return []
         with self._lock:
             items = list(self.index.items())
+        def pre(fs):
+            return tuple("@" + Path(os.path.expanduser(str(f))).resolve().as_posix().rstrip("/") + "/" for f in fs)
+        if within is not None:
+            items = [x for x in items if x[0].startswith(pre(within))]
+        else:                                    # общий поиск: «Знания» и свои папки, а папки персонажей — только их
+            mine, only = pre(self.folders() or []), pre(self.extra() or [])
+            items = [x for x in items if not (x[0].startswith(only) and not x[0].startswith(mine))] if only else items
         docs = []
         for rel, e in items:
             tok = self._tok.get(rel)

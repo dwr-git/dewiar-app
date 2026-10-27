@@ -70,6 +70,15 @@ NO_MODEL_RX = re.compile(r"not a valid model|model\b[^\n]{0,80}?\b(not found|doe
                          r"no such model|model_not_found", re.I)
 
 
+_LOCAL_HOST = re.compile(r"^(?:localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1)|\.local$|\.lan$")
+
+
+def _local_base(base):
+    """Адрес модели — этот компьютер или своя сеть (Ollama, LM Studio, llama.cpp, свой vLLM)."""
+    host = (re.match(r"^\w+://\[?([^/:?#\]]+)", str(base or "")) or [None, ""])[1]
+    return bool(host) and bool(_LOCAL_HOST.search(host))
+
+
 def _port_open(host, port, timeout=0.35):
     import socket
     try:
@@ -1274,7 +1283,9 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     try:
         model = resolve_model(p)
         native = p.get("kind") == "ollama" or base in _native    # ещё раз: resolve_model мог узнать, что тут только Ollama
-        timeout = httpx.Timeout(5, read=float(p.get("timeout", 180)))
+        # своя модель на этом компьютере или в сети (YouTube 26.10: llama.cpp, 27B на встроенной графике — «долгий префил,
+        # Dewiar прерывал генерацию и не отвечал на часть вопросов»): первое слово ждём до 10 минут, облако — 3
+        timeout = httpx.Timeout(5, read=float(p.get("timeout") or (600 if _local_base(base) else 180)))
         if p.get("kind") == "anthropic":
             url = _anth_root(base) + "/v1/messages"
             body = {"model": model, "system": system, "messages": messages, "stream": True,

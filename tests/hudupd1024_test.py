@@ -23,7 +23,7 @@ CORE = r"""
     core.call = async (c, a) => { calls.push([c, a]);
       if (c === "update_check") { await new Promise(r => setTimeout(r, 300)); return JSON.parse(JSON.stringify(UPD_NEXT)); }
       return {}; };
-    setTimeout(() => core.emit("hello", {}), 200); };
+    setTimeout(() => core.emit("hello", { version: "0.43.1" }), 200); };
   ready(); })();
 """
 with sync_playwright() as p:
@@ -34,6 +34,7 @@ with sync_playwright() as p:
     pg.goto((ROOT / "ui/hud.html").as_uri()); pg.wait_for_timeout(1500)
     ok(pg.locator("#corner-l #b-upd").count() == 1 and pg.evaluate("document.querySelector('#b-bug').nextElementSibling.id") == "b-upd",
        "значок обновления — рядом с жучком")
+    ok(pg.get_attribute("#b-upd", "title").startswith("Сейчас версия 0.43.1. Обновления"), f"подсказка — с нынешней версией: {pg.get_attribute('#b-upd', 'title')!r}")
     pg.hover("#card"); pg.wait_for_timeout(300)
     pg.click("#b-upd"); pg.wait_for_timeout(100)
     ok("Проверяю обновления" in pg.inner_text("#upd") and pg.evaluate("document.querySelector('#b-upd').classList.contains('busy')"), "нажали — «Проверяю обновления…», значок крутится")
@@ -54,6 +55,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("getComputedStyle(document.querySelector('#corner-l')).opacity") == "1" and pg.evaluate("document.querySelector('#b-upd').classList.contains('has')"),
        "есть обновление — значок виден всегда, с точкой")
     ok("0.44.1" in pg.get_attribute("#b-upd", "title"), "в подсказке — какая версия")
+    ok("Сейчас версия 0.43.1" in pg.get_attribute("#b-upd", "title"), f"и какая стоит сейчас (27.10): {pg.get_attribute('#b-upd', 'title')!r}")
     pg.click("#b-upd"); pg.wait_for_timeout(500)
     inst = [c for c in pg.evaluate("apiCalls") if c[0] == "install_update"]
     ok(inst and inst[-1][1] == "/tmp/y.deb" and not any(c[0] == "update_check" for c in pg.evaluate("calls")), "нажали — ставится сразу, без лишней проверки")

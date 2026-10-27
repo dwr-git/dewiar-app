@@ -39,8 +39,9 @@ class ChatLog:
         tmp.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in self.items), encoding="utf-8")
         tmp.replace(self.path)
 
-    def add(self, role, text, who=None, via=None, att=None):
-        """-> запись (новая или обновлённая) или None, если писать нечего. att — вложения: [{kind, name, path, thumb?}]."""
+    def add(self, role, text, who=None, via=None, att=None, steps=None):
+        """-> запись (новая или обновлённая) или None, если писать нечего. att — вложения: [{kind, name, path, thumb?}];
+        steps — что сделано за ход: [{t: что, s: done|error|yes|no|ask, e?: ошибка}] (показ в «Чате» студии)."""
         text = (text or "").strip()
         if (not text and not att) or role not in ("user", "assistant"):
             return None
@@ -56,6 +57,8 @@ class ChatLog:
             if not att and last and last["role"] == role and now - last["ts"] < 180 and last.get("who") == who and \
                     (text == last["text"] or (role == "assistant" and text.startswith(last["text"]))):
                 last["text"], last["ts"] = text, now
+                if steps:
+                    last["steps"] = steps[:12]
                 self.path.parent.mkdir(parents=True, exist_ok=True)
                 self._write_all()
                 return dict(last, updated=True)
@@ -66,6 +69,8 @@ class ChatLog:
                 item["via"] = via
             if att:
                 item["att"] = att[:10]
+            if steps:
+                item["steps"] = steps[:12]
             self.items.append(item)
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if len(self.items) > KEEP + 500:

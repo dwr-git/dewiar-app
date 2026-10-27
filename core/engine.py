@@ -29,7 +29,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.wav_input, self.null_player = wav_input, null_player
         self.server = server              # режим сервера (main.py --server): без микрофона и звука, ответы — текстом
         self.state = "idle"
-        self.muted = (settings.get("privacy", "mic") == "button")   # замок «Микрофон: только кнопка» (студия → «Безопасность»)
+        self.muted = (settings.get("privacy", "mic") == "button"   # замок «Микрофон: только кнопка» (студия → «Безопасность»)
+                      or bool(settings.get("ui", "text_mode")))      # текстовый режим (студия → «Чат», 27.10)
         self._mute_pass = False                          # микрофон выключен, но нажали «говорить» — слушаем одну фразу
         self.stopping = threading.Event()
         self.aec = EchoCancel()
@@ -133,7 +134,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.account = Account()
         self.toolbox.hooks["account"] = self.account
         from knowledge import Knowledge
-        self.knowledge = Knowledge(self.workspace, STATE_DIR / "knowledge.json", folders=lambda: self.s.get("knowledge", "folders") or [])
+        self.knowledge = Knowledge(self.workspace, STATE_DIR / "knowledge.json", folders=lambda: self.s.get("knowledge", "folders") or [],
+                                   extra=self._persona_folders)
         self.toolbox.hooks["knowledge"] = self.knowledge
         self.toolbox.hooks["sources"] = self._turn_sources          # найденные документы — источниками под ответом
         threading.Thread(target=self.knowledge.watch, name="knowledge-folders", daemon=True).start()
@@ -222,7 +224,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from version import VERSION as _V
         self.backup = Backup(_CFG, STATE_DIR, self.workspace.root, self.vault, _V)
         from music import Catalog
-        self.music = Catalog(lambda: self.s.get("radio_url") or "", STATE_DIR / "radio.json", DATA_DIR / "radio.json")
+        self.music = Catalog(lambda: self.s.get("radio_url") or "", STATE_DIR / "radio.json", DATA_DIR / "radio.json",
+                             custom_fn=lambda: self.s.get("radio_custom") or [])
         from radio import StationHealth
         self.radio_health = StationHealth(STATE_DIR / "radio_health.json")      # какие станции у вас реально играют
         self.toolbox.hooks["music"] = self.music
@@ -637,8 +640,32 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         if type_ == "answer" and not kw.pop("model", False) and kw.get("text"):
             kw["text"] = self._g(kw["text"])               # быстрые ответы без модели — в роде персонажа
         self.bridge.broadcast(dict(kw, type=type_))
+        self._turn_step(type_, kw)
         if (type_ == "heard" or (type_ == "answer" and kw.get("done"))) and kw.get("text") and getattr(self, "chatlog", None) is not None:
             self._chat_add(type_, kw)
+
+    def _turn_step(self, type_, kw):
+        """Что сделано за ход — к ответу в ленту «Чата» (YouTube 26.10: «в чате не было информации о выполнении команды»):
+        готовые и неудачные действия (событие tool) и вопросы «выполнить?» с ответом. Новый вопрос человека — с чистого листа."""
+        try:
+            if type_ == "heard":
+                self._turn_tools = []
+                return
+            tl = getattr(self, "_turn_tools", None)
+            if tl is None:
+                tl = self._turn_tools = []
+            if type_ == "tool" and kw.get("status") in ("done", "error") and kw.get("title"):
+                st = {"t": str(kw["title"])[:140], "s": kw["status"]}
+                if kw.get("error"):
+                    st["e"] = str(kw["error"])[:200]
+                tl.append(st)
+            elif type_ == "confirm":
+                tl.append({"t": "Разрешение на «" + str(kw.get("text") or "действие").strip().rstrip("?")[:160] + "»", "s": "ask"})
+            elif type_ == "confirm_done" and tl and tl[-1].get("s") == "ask":
+                tl[-1]["s"] = "yes" if kw.get("ok") else "no"
+            del tl[:-12]
+        except Exception:  # noqa: BLE001
+            pass
 
     def show_media(self, items, caption=""):
         """Картинки к рассказу (show_images): сразу в виджет и окно чата (событие media), а к готовому ответу — в ленту
@@ -671,8 +698,11 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
                                               "full": m.get("full", ""), "author": m.get("author", ""), "license": m.get("license", ""),
                                               "site": m.get("site", ""), "source": m.get("source", "")}
                                              for m in media], None
+            steps = None
+            if type_ == "answer":
+                steps, self._turn_tools = list(getattr(self, "_turn_tools", None) or []), []
             item = self.chatlog.add("user" if type_ == "heard" else "assistant", text,
-                                    who=None if type_ == "heard" else self.s.get("persona"), via=via, att=att)
+                                    who=None if type_ == "heard" else self.s.get("persona"), via=via, att=att, steps=steps)
             if item:
                 self.bridge.broadcast({"type": "chat", "item": item})
         except Exception as e:  # noqa: BLE001

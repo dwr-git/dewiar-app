@@ -59,8 +59,8 @@ def search(query, limit=8, as_tag=False):
             out = [{"name": (x.get("name") or "").strip(), "url": x.get("url_resolved") or x.get("url"),
                     "country": x.get("countrycode", ""), "tags": x.get("tags", ""), "bitrate": x.get("bitrate", 0)}
                    for x in r.json() if (x.get("url_resolved") or x.get("url"))]
-            if not out and params.get("name"):                  # «Европа плюс» vs «Европа Плюс Москва» — ищем шире
-                params2 = dict(params, name=q.split()[0])
+            if not out and params.get("name") and len(q.split()[0]) >= 4:   # «Европа плюс» vs «Европа Плюс Москва» — ищем шире
+                params2 = dict(params, name=q.split()[0])                   # (по слову от 4 букв: «с файла» искало «с» — №359)
                 r = httpx.get(base + "/json/stations/search", params=params2, headers=UA, timeout=8)
                 out = [{"name": (x.get("name") or "").strip(), "url": x.get("url_resolved") or x.get("url"),
                         "country": x.get("countrycode", ""), "tags": x.get("tags", ""), "bitrate": x.get("bitrate", 0)}
@@ -432,4 +432,14 @@ def pick(stations, query=""):
     near = [s for s in stations if q and q in s["name"].lower()]
     if near:
         return near[0]
-    return random.choice(stations[:3]) if len(stations) > 1 and not q else stations[0]
+    qg = " ".join(w for w in q.replace("радиостанция", " ").replace("радио", " ").split() if w not in ("включи", "поставь", "онлайн"))
+    if q and (GENRES.get(qg) or GENRES.get(qg.rstrip("аяуюые")) or qg in GENRES.values()):
+        return stations[0]                               # жанр («джаз», «рок») — искали по тегу: самая популярная
+    if q:
+        # №359 (27.10): «включи радио железо фм» играло Groove Salad, «включи радио с файла» — Radio Swiss Pop: по
+        # названию без общего слова — не та станция. Берём только ту, где есть слово запроса (от 4 букв, по основе)
+        import re as _re
+        ws = [w[:5] for w in _re.findall(r"\w+", q) if len(w) >= 4 and w not in ("радио", "radio", "станция", "онлайн")]
+        hit = [s for s in stations if any(w in s["name"].lower() for w in ws)]
+        return hit[0] if hit else None
+    return random.choice(stations[:3]) if len(stations) > 1 else stations[0]

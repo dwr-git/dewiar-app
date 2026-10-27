@@ -107,8 +107,9 @@ class Catalog:
     """Список станций Dewiar: url_fn() — адрес из настроек (пусто — DEFAULT_URL), cache_path — копия с сайта,
     bundled_path — встроенный список. Потокобезопасен; обновление с сайта — в фоновом потоке."""
 
-    def __init__(self, url_fn, cache_path, bundled_path):
+    def __init__(self, url_fn, cache_path, bundled_path, custom_fn=None):
         self.url_fn = url_fn
+        self.custom_fn = custom_fn or (lambda: [])     # свои станции (настройка radio_custom): ищутся первыми, №359
         self.cache = Path(cache_path)
         self.bundled = Path(bundled_path)
         self._data, self._loaded_at, self._fetching = None, 0.0, False
@@ -177,8 +178,19 @@ class Catalog:
             with self._lock:
                 self._loaded_at, self._fetching = time.time(), False
 
+    def custom(self):
+        """Свои станции человека: [{"name", "url", "tags": "своя", "aliases", "own": True}]."""
+        out = []
+        for s in self.custom_fn() or []:
+            if isinstance(s, dict) and s.get("name") and str(s.get("url") or "").startswith(("http://", "https://")):
+                out.append({"name": str(s["name"]).strip()[:80], "url": str(s["url"]).strip(), "tags": "своя",
+                            "aliases": [str(a).lower() for a in s.get("aliases") or []][:6], "own": True})
+        return out
+
     def stations(self):
-        return self.data()["stations"]
+        own = self.custom()
+        urls = {s["url"] for s in own}
+        return own + [s for s in self.data()["stations"] if s["url"] not in urls]
 
     def genres(self):
         """Жанры для вопроса «что включить?»: из списка, иначе первые 8 тегов станций."""
@@ -202,9 +214,10 @@ class Catalog:
         q = " ".join(_words(query))
         if not q:
             return []
+        hy = lambda x: " ".join(x.replace("-", " ").split())   # «Железо-ФМ» = «железо фм» (№359)  # noqa: E731
         for s in stations:                               # точное название — сразу
-            names = [s["name"].lower().replace("ё", "е")] + s["aliases"]
-            if q in names or q.replace("радио ", "") in names:
+            names = [hy(n) for n in [s["name"].lower().replace("ё", "е")] + s["aliases"]]
+            if hy(q) in names or hy(q.replace("радио ", "")) in names:
                 return [s] + [x for x in stations if x is not s and set(x["tags"].split()) & set(s["tags"].split())]
         words = [w for w in _words(query) if w not in FILLER]
         if not words:
