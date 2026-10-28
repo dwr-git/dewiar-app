@@ -14,7 +14,7 @@ _KIDS_LOCKED = ("account_", "backup_", "cal_add", "cal_remove", "cloud_connect",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull")
 
 
 def _kids_blocked(cmd, a):
@@ -476,6 +476,34 @@ class CommandsMixin:
             return self.snapshot()
         if cmd == "sync_status":
             return self.sync_public()
+        if cmd == "devices_get":                  # «Устройства» (0.56): все мои устройства и синхронизация
+            return self.devices_public(fresh=a.get("fresh", True) is not False)
+        if cmd == "device_rename":                # своё имя этого компьютера: «Рабочий», «Домашний»
+            self.s.update({"sync": {"name": str(a.get("name") or "").strip()[:40]}})
+            self.sync.soon.set()
+            return self.devices_public(fresh=False)
+        if cmd == "device_forget":                # убрать из списка (снова выйдет на связь — появится)
+            import httpx
+            tok, link, url = self.credentials()
+            if not tok:
+                raise ValueError("здесь нет входа в Dewiar")
+            h = {"Authorization": "Bearer " + tok}
+            if link and link != tok:
+                h["X-Sync-Link"] = link
+            r = httpx.post(url, params={"p": "/sync/forget", "device": self.sync.state.get("device", "")}, json={"id": str(a.get("id") or "")}, headers=h, timeout=15)
+            if r.status_code != 200:
+                raise ValueError(((r.json() if r.headers.get("content-type", "").startswith("application/json") else {}).get("error") or {}).get("message") or f"сайт ответил {r.status_code}")
+            return self.devices_public(fresh=True)
+        if cmd == "brains_pull":                  # «Взять мозги с другого устройства» (конвертом своим устройствам)
+            return self.brains_pull()
+        if cmd == "brains_status":
+            return self.brains_status()
+        if cmd == "pair_claim":                   # «Ввести код»: это устройство — та же Лира
+            from cloud import CloudError
+            try:
+                return self.pair_claim(str(a.get("code") or ""), a.get("url", ""))
+            except CloudError as e:
+                raise ValueError(str(e)) from e
         if cmd == "sync_now":
             from sync import SyncError
             try:
@@ -979,19 +1007,24 @@ class CommandsMixin:
             n = examtrace.remove(self.workspace, self.money, self.done, list(a.get("items") or []))
             log.info("🧹 записи экзамена убраны: %s", n)     # удаление уйдёт ближайшей синхронизацией — и с телефона тоже
             return {"removed": n}
+        if cmd == "persona_memory":               # своя память у персонажа (0.56): {name, own}
+            return self.persona_memory_set(str(a.get("name") or ""), bool(a.get("own")))
+        who = str(a.get("who") or "") if cmd.startswith("memory_") else ""      # студия: «Общая» или своя память персонажа
+        if who and who not in self.own_memory():
+            who = ""
         if cmd == "memory_get":
-            return self.workspace.memory_get()
+            return self.workspace.memory_get(who=who)
         if cmd == "memory_set":
-            return self.workspace.memory_set(a.get("text", ""))
+            return self.workspace.memory_set(a.get("text", ""), who=who)
         if cmd in ("memory_view", "memory_find", "memory_add", "memory_forget"):   # Память 2.0: страницы, поиск по смыслу
             import memory as MEM
             if cmd == "memory_view":
-                return dict(MEM.view(self.workspace.memory_get()), last=getattr(self, "_mem_last", None))
+                return dict(MEM.view(self.workspace.memory_get(who=who)), last=getattr(self, "_mem_last", None), who=who, own=self.own_memory())
             if cmd == "memory_find":
-                return MEM.find(str(a.get("q") or ""), self.workspace.memory_get())
+                return MEM.find(str(a.get("q") or ""), self.workspace.memory_get(who=who))
             if cmd == "memory_add":
-                return self.workspace.remember(str(a.get("text") or ""))
-            return self.workspace.memory_set(MEM.forget(self.workspace.memory_get(), int(a.get("i", -1))))
+                return self.workspace.remember(str(a.get("text") or ""), who=who)
+            return self.workspace.memory_set(MEM.forget(self.workspace.memory_get(who=who), int(a.get("i", -1))), who=who)
         if cmd.startswith("mm_"):                  # «Музыка»: своя папка (engine_mymusic.py)
             return self.mine_command(cmd, a)
         if cmd.startswith("account_"):           # аккаунт сайта: вход, выход, проверка

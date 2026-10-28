@@ -180,6 +180,24 @@ class Account:
         log.info("Вход в аккаунт %s на %s", login, server)
         return self.status()
 
+    def adopt(self, server, token):
+        """Вход тем же аккаунтом, что на другом устройстве, — по коду «Подключить устройство» (0.56), без пароля: токен
+        пришёл с сайта по одноразовому коду. Проверяем его тем же запросом, что check(). -> status()"""
+        server = _check_server(server)
+        if not token:
+            raise AccountError("код не подошёл")
+        with self._lock:
+            self.data = {"server": server, "login": "", "token": token, "user": {}, "rag_url": "/synapbase/api_rag",
+                         "since": int(time.time()), "services": {}}
+        st = self.check()
+        if not self.logged_in():
+            raise AccountError(self.data.get("problem") or "вход по коду не удался")
+        with self._lock:
+            self.data["login"] = (self.data.get("user") or {}).get("login") or self.data.get("login") or ""
+            self._save()
+        log.info("Вход в аккаунт по коду с другого устройства (%s)", server)
+        return self.status()
+
     def logout(self):
         """Выйти: стираем токен, адрес сайта оставляем — для следующего входа."""
         with self._lock:

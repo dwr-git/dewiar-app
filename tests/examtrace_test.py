@@ -35,8 +35,8 @@ class WS:
         self.mem = "\n".join("- " + x for x in EXAM[:2] + MINE[:2])
         self.gone = []
 
-    def memory_get(self): return self.mem
-    def memory_set(self, body): self.mem = body; return True
+    def memory_get(self, who=None): return self.mem
+    def memory_set(self, body, who=None): self.mem = body; return True
     def notes(self, limit=400):
         return [{"path": "Заметки/Список покупок.md", "title": "Список покупок", "snippet": "молоко, хлеб, яйца"},
                 {"path": "Заметки/Рецепт борща.md", "title": "Рецепт борща", "snippet": "свёкла, капуста, говядина"}]

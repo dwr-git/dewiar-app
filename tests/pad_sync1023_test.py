@@ -22,7 +22,7 @@ STUB = """st => { window._st = st; core.call = (cmd, a) => {
   if (cmd === 'pad_read') return Promise.resolve({ name: 'Главное', text: 'Купить хлеб', mtime: 1 });
   if (cmd === 'pad_write') return Promise.resolve({ mtime: 2 });
   return Promise.resolve(null); }; P.loaded = false; syncAt = 0; refresh(); }"""
-cases = (({"available": True, "on": True, "devices": []}, "других устройств пока нет", "«Добавить устройство»"),
+cases = (({"available": True, "on": True, "devices": []}, "других устройств пока нет", "«Устройства»"),
          ({"available": True, "on": True, "devices": [{"name": "Pixel 8", "pc": False}]}, "на телефоне", "«Блокнот»"),
          ({"available": True, "on": True, "devices": [{"name": "Ноутбук", "pc": True}]}, "синхронизируется с вашими устройствами", ""),
          ({"available": True, "on": False, "devices": []}, "только на этом компьютере", "выключена"))

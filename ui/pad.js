@@ -110,9 +110,9 @@ async function syncLine() {
   if (Date.now() - syncAt > 60000) { try { syncSt = await core.call("sync_status"); syncAt = Date.now(); } catch (e) { syncSt = null; } }
   const st = syncSt;
   if (!st) return "синхронизируется с вашими устройствами";
-  if (!st.available || !st.on) return "только на этом компьютере — синхронизация выключена (студия → «Dewiar.pro»)";
+  if (!st.available || !st.on) return "только на этом компьютере — синхронизация выключена (студия → «Устройства»)";
   const devs = st.devices || [], phone = devs.some(d => !d.pc);
-  if (!devs.length) return "других устройств пока нет — телефон добавляется кодом: студия → «Мозг» → «Добавить устройство»";
+  if (!devs.length) return "других устройств пока нет — телефон подключается кодом: студия → «Устройства»";
   return phone ? "на телефоне — «Мой день» → «Заметки», с пометкой «Блокнот»" : "синхронизируется с вашими устройствами";
 }
 async function refresh() {

@@ -58,11 +58,11 @@ with sync_playwright() as p:
     # №329: «Добавить устройство» — в «Синхронизации», и когда мозг свой
     pg.evaluate("""() => { S.llm = Object.assign({}, DEF.llm, { kind: 'openai', base_url: 'https://routerai.ru/v1', model: 'm', api_key: 'k' }); S.sync = Object.assign({}, S.sync, { on: true, key: 'dw-abcd-1234' });
       saveS(); window._pairReq = []; const h = window.http; window.http = async (m, u, o) => { if (/pair\/new/.test(u)) { _pairReq.push([u, o.headers.Authorization]); return { status: 200, body: '{"code":"123456"}' }; } return h(m, u, o); };
-      setTab = 'more'; openSettings('more'); }""")
+      setTab = 'devices'; openSettings('devices'); }""")
     pg.wait_for_timeout(400)
-    ok(pg.locator("#sy-pair").count() == 1, "в «Синхронизации» есть «Добавить устройство» при своём мозге")
-    pg.evaluate("document.querySelector('#sy-pair').scrollIntoView()"); pg.click("#sy-pair"); pg.wait_for_timeout(300)
-    ok("123 456" in pg.inner_text("#sy-pair-res") and pg.evaluate("_pairReq[0][1]") == "Bearer dw-abcd-1234", "код выдан по ключу синхронизации")
+    ok(pg.locator("#dv-give-go").count() == 1, "в «Устройствах» есть «Показать код» при своём мозге (0.56: раньше — «Синхронизация»)")
+    pg.evaluate("document.querySelector('#dv-give-go').scrollIntoView()"); pg.click("#dv-give-go"); pg.wait_for_timeout(300)
+    ok("123 456" in pg.inner_text("#dv-dig") and pg.evaluate("_pairReq[0][1]") == "Bearer dw-abcd-1234", "код выдан по ключу синхронизации")
     b.close()
 ok(not errs, f"без ошибок страницы: {errs[:2]}")
 print("ИТОГ:", "OK" if not fails else f"{len(fails)} ошибок")

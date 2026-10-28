@@ -567,21 +567,46 @@ class BrainMixin:
                 return
 
     def pair_new(self):
-        """«Добавить устройство»: код из 6 цифр на 10 минут для этого ключа dw-."""
+        """«Подключить ещё устройство» (0.56): код из 6 цифр на 10 минут — и для ключа dw-, и для входа аккаунтом
+        (новое устройство войдёт тем же аккаунтом без пароля). -> {code, expires, link (QR), app, account}"""
         import cloud as C
-        key = self.cloud.key
-        if not key:
-            raise C.CloudError("ключа Dewiar здесь нет — на другом устройстве войдите тем же аккаунтом dewiar.pro")
-        return C.fetch(self.cloud.url, key, "/pair/new", body={})
+        tok, _, url = self.credentials()
+        if not tok:
+            raise C.CloudError("здесь ещё нет входа в Dewiar — подключите Dewiar или введите код с другого устройства")
+        return C.fetch(url or self.cloud.url, tok, "/pair/new", body={})
+
+    def _has_own_brain(self):
+        """Работает своя модель (не облако Dewiar)? Тогда код с другого устройства её не трогает."""
+        act = self.s.get("llm", "active") or ""
+        prof = (self.s.get("llm", "profiles") or {}).get(act) or {}
+        return bool(act and prof.get("base_url") and not prof.get("cloud"))
 
     def pair_claim(self, code, url=""):
-        """Код с другого устройства -> тот же ключ на этом компьютере."""
+        """Код с другого устройства -> это устройство — та же Лира: тот же ключ dw- или вход тем же аккаунтом.
+        Своя модель остаётся главной (раньше код её заменял на облако — письмо пользователя 28.10); облако — запасом.
+        После — синхронизация сразу. -> {account, login, brain_kept, ...}"""
         import cloud as C
-        u = (url or "").strip() or self.cloud.url
-        key = C.pair_claim(u, code)
-        if not key:
+        u = (url or "").strip() or self.s.get("cloud", "url") or C.DEFAULT_URL
+        d = C.public(u, "/pair/claim", {"code": re.sub(r"\D", "", str(code))})
+        cred = d.get("key") or ""
+        if not cred:
             raise C.CloudError("код не подошёл")
-        r = self.cloud.connect(key, u)
+        keep = self._has_own_brain()
+        if d.get("account"):
+            from account import AccountError
+            try:
+                st = self.account.adopt(re.sub(r"/(?:dwrapp/)?cloud\.php.*$|/dwrapp/?$", "", C.base_of(u)) or "https://dewiar.pro", cred)
+            except AccountError as e:
+                raise C.CloudError(str(e)) from e
+            r = dict(self.cloud.connect(cred, u, account=True, activate=not keep), account=True, login=st.get("login", ""))
+        else:
+            r = dict(self.cloud.connect(cred, u, activate=not keep), account=False)
+        r["brain_kept"] = keep
+        sy = getattr(self, "sync", None)
+        if sy is not None:
+            sy.state["rev"] = 0                      # всё с начала: память, заметки, дела другого устройства — сюда
+            sy.soon.set()
+        log.info("🔗 Подключено к своему Dewiar кодом с другого устройства (%s)", "аккаунт" if d.get("account") else "ключ")
         return self._cloud_connected(r, "код другого устройства")
 
     def _cloud_use(self):

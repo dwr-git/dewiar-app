@@ -41,7 +41,7 @@ with sync_playwright() as p:
     pg.evaluate("MODE = 'no'; statusN = 0; document.querySelector('#dk-key').value = '123 456'; document.querySelector('#dk-go').click()")
     pg.wait_for_function("() => /Подключено|прервалась, подключение/.test(document.querySelector('#dk-res').textContent) && !document.querySelector('#dk-go').disabled", timeout=15000)
     t = pg.inner_text("#dk-res")
-    ok("ещё раз" in t and "Добавить устройство" in t, f"не прошло — понятно, что делать: {t!r}")
+    ok("ещё раз" in t and "Подключить ещё устройство" in t, f"не прошло — понятно, что делать (новый путь — «Устройства», 0.56): {t!r}")
     ok(not errs, f"без ошибок: {errs[:2]}")
     b.close()
 print("ИТОГ:", "все проверки пройдены" if not fails else f"не пройдено {len(fails)}")

@@ -921,8 +921,20 @@ const MEM_KIN = { мам: "мам", мат: "мам", пап: "пап", отец
 const MEM_STOP = new Set("что как где когда кто мне меня мой моя мои это там тут для про она они его ее её был была было есть или если уже еще ещё".split(" "));
 function memStems(t) { return String(t || "").toLowerCase().replace(/ё/g, "е").match(/[а-яa-z0-9]+/g)?.filter(w => w.length > 2 && !MEM_STOP.has(w)).map(w => w.slice(0, 5)) || []; }
 function memKin(st) { const out = new Set(); st.forEach(w => { for (const k in MEM_KIN) if (w.startsWith(k)) out.add(MEM_KIN[k]); }); return out; }
+/* своя память у персонажа (0.56; письмо 28.10: «разные персонажи со своей памятью… пока это разные морды лица у одного»):
+   S.pmem = {own: [имена], at, facts: {имя: [факты]}} — синхронизируется видом pmemory (как core/sync.py). memArr() — память
+   того, кто отвечает сейчас: своя, если включена, иначе общая S.memory. */
+const pmemOwn = (name) => ((S.pmem || {}).own || []).includes(name);
+function memArr() {
+  const n = persona().name;
+  if (!pmemOwn(n)) return S.memory || (S.memory = []);
+  S.pmem = Object.assign({ own: [], at: 0, facts: {} }, S.pmem || {}); S.pmem.facts = S.pmem.facts || {};
+  return S.pmem.facts[n] || (S.pmem.facts[n] = []);
+}
+function memAdd(f) { const m = memArr(); if (m.includes(f)) return false; m.push(f); if (m.length > 300) m.splice(0, m.length - 300); saveS(); syncSoon(); return true; }
+const pmemId = (name, t) => "m" + sha1hex(String(name).trim().toLowerCase()).slice(0, 8) + "-" + (t ? factId(t) : "");
 function memPick(text, limit = 8) {
-  const mem = S.memory || [];
+  const mem = memArr();
   if (mem.length <= MEM_CORE) return [];
   const q = new Set(memStems(text)); if (!q.size) return [];
   const qx = new Set(); MEM_SYN.forEach(g => { if (g.some(w => [...q].some(x => x.startsWith(w) || w.startsWith(x)))) g.forEach(w => qx.add(w)); });
@@ -1796,8 +1808,8 @@ function systemPrompt() {
     : "Нажимать в других приложениях (написать в мессенджере конкретному человеку, найти что-то внутри приложения) ты сможешь, если пользователь включит «Управлять приложениями» "
       + "(Настройки Dewiar → Ещё). На такую просьбу вызови phone_screen — он объяснит, как включить; сам не притворяйся, что сделал.");
   if (S.user_name) parts.push(`Собеседника зовут ${S.user_name}.`);
-  if (S.memory.length) parts.push("Что ты знаешь о пользователе:\n- " + S.memory.slice(-MEM_CORE).join("\n- ")
-    + (S.memory.length > MEM_CORE ? `\n(И ещё ${S.memory.length - MEM_CORE} — нужное к вопросу придёт в справке «Из памяти».)` : ""));
+  { const mem = memArr(); if (mem.length) parts.push((pmemOwn(persona().name) ? "Что ты знаешь о пользователе (твоя собственная память — другие персонажи её не видят):\n- " : "Что ты знаешь о пользователе:\n- ") + mem.slice(-MEM_CORE).join("\n- ")
+    + (mem.length > MEM_CORE ? `\n(И ещё ${mem.length - MEM_CORE} — нужное к вопросу придёт в справке «Из памяти».)` : "")); }
   { const rl = Object.entries(S.relations || {}).filter(([, v]) => v && v.name); if (rl.length) parts.push("Кто есть кто в контактах (для звонков и сообщений): " + rl.map(([k, v]) => `${REL_RU[k] || k} — «${v.name}»`).join(", ") + "."); }
   const mp = mindPrompt(); if (mp) parts.push(mp.trim());
   // «что было недавно» растёт с каждой репликой — в справке к вопросу (turnContext), чтобы подсказка не менялась
@@ -3464,8 +3476,9 @@ function toolSpecs() {
     parameters: O({ question: STR, base: STR }, ["question"]) });
   if (Object.keys(mind().tasks || {}).length) t.push({ name: "remove_task", description: "Удалить большую задачу из «Мой день» → «Сделанное» (и на компьютере): «удали задачу …», «хватит напоминать про задачу». name — часть названия.", parameters: O({ name: STR }, ["name"]) },
     { name: "answer_task", description: "Ответить на вопрос задачи, которая «ждёт ответа»: text — ответ пользователя; name — часть названия (пусто — единственная ждущая).", parameters: O({ name: STR, text: STR }, ["text"]) });
-  if (S.sync.on && syncCred() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное».",
-    parameters: O({ title: STR, goal: STR }, ["goal"]) });
+  if (S.sync.on && syncCred() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное»."
+      + devComputersText() + " on — на каком компьютере, если назвали («на рабочем»); пусто — любой свободный. Тот не на связи — спроси пользователя и вызови снова с if_off: wait (сделать, когда включится) или cloud (сейчас в облаке).",
+    parameters: O({ title: STR, goal: STR, on: STR, if_off: { type: "string", enum: ["", "wait", "cloud"] } }, ["goal"]) });
   if ((S.home.token || haOn()) && !D.web) t.push({ name: "smart_home", description: "Умный дом (Яндекс и Home Assistant): action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
     parameters: O({ action: { type: "string", enum: ["list", "on", "off", "brightness", "brighter", "dimmer", "temperature", "scenario"] }, target: STR, value: NUM }, ["action"]) });
   t.push(...wkTools());                                  // «Работа»: поручения руководителя (work.js), если есть работа
@@ -3674,7 +3687,7 @@ async function runTool(name, a) {
     }
     case "remember": { const f = String(a.fact || a.text || a.content || "").trim();
       if (!f) return "Ошибка: не пришло, что запомнить — вызови remember ещё раз с fact (сам факт одной фразой).";
-      if (!S.memory.includes(f)) { S.memory.push(f); S.memory = S.memory.slice(-300); saveS(); syncSoon(); } return "Запомнил."; }
+      memAdd(f); return "Запомнил."; }
     case "money_add": {
       if (isPlanMoney(`${a.category || ""} ${a.note || ""}`)) return "Не записано: это план (бюджет, лимит), а не трата или доход. Запомни его как факт (remember), например «Бюджет на мебель — 65 тысяч рублей».";
       const m = money(); const x = { id: "m" + Date.now(), date: isoLocal(new Date()).slice(0, 10), kind: a.kind === "income" ? "income" : "expense", amount: +a.amount || 0,
@@ -3708,6 +3721,7 @@ async function runTool(name, a) {
       return `Сделано: «${ap.title}» — на экране телефона, сохранено в «Мой день» → «Сделанное» (снова открыть — open_made). Скажи об этом одной фразой и где её найти, код не пересказывай.`;
     }
     case "start_task": {
+      if (a.on) { try { const r = devTaskOn(a); if (r) return r; } catch (e) { return "Ошибка: " + e.message; } }   // «на рабочем компьютере…» (devices.js)
       try { taskToPc(a.title || String(a.goal || "").slice(0, 60), a.goal || a.title || ""); } catch (e) { return "Не получилось: " + e.message; }
       return (pcOnline() ? "Задача передана компьютеру — он уже берётся." : "Компьютер сейчас не на связи — задачу делает облако Dewiar.")
         + " Ход и итог — в «Мой день» → «Сделанное»; когда будет готово, пришлю уведомление, а файлы можно будет открыть и сохранить прямо здесь."
@@ -4043,7 +4057,7 @@ function factQuick(text) {
   let day = null;
   if (DAY_WORD.test(body)) { const w = parseWhen(body); if (w && w.at && !w.rel) { day = new Date(w.at); day.setHours(0, 0, 0, 0); } }
   const fact = `Со слов пользователя: ${body}` + (day ? ` (на ${pad(day.getDate())}.${pad(day.getMonth() + 1)}.${day.getFullYear()}, ${WD[day.getDay()]})` : "") + ".";
-  if (!S.memory.includes(fact)) { S.memory.push(fact); S.memory = S.memory.slice(-300); saveS(); syncSoon(); }
+  memAdd(fact);
   plog("info", "🧠 запомнила без модели" + (day ? ` (на ${day.getDate()} ${MON[day.getMonth()]})` : ""));
   if (SANDBOX) SANDBOX.dev.push({ name: "remember", args: fact, argsObj: { fact }, t: Date.now() });
   const she = persona().gender === "female" ? "Запомнила" : "Запомнил";
@@ -4696,9 +4710,23 @@ $("#who").onclick = () => {
     e.set({ state: "idle" }); pEnts.push(e);
     b.onclick = () => { S.persona = p.id; saveS(); applyPersona(); closeSheets(); showYou(""); showBot(`Теперь отвечает ${p.name}.`); say(`Привет! Это ${p.name}.`); };
   });
-  renderKbPanel();
+  renderKbPanel(); renderMemPanel();
   openSheet("#sh-persona");
 };
+/* своя память у персонажа (0.56): «Общая» — одна на всех, «Своя» — помнит только то, что рассказали ему (синхронизируется) */
+function renderMemPanel() {
+  const box = $("#pmem"); if (!box) return;
+  const p = persona(), own = pmemOwn(p.name), n = memArr().length;
+  box.innerHTML = `<div class="card pmemc"><div class="row2"><div style="flex:1;min-width:0"><b>Что помнит ${esc(p.name)}</b><small class="hint" style="display:block;margin:2px 0 0">${own ? `своя — другие персонажи её не видят · ${n} ${n % 10 === 1 && n % 100 !== 11 ? "запись" : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? "записи" : "записей"}` : "общая на всех персонажей"}</small></div></div>
+    <div class="seg" id="pmem-seg" role="radiogroup" style="display:flex;margin-top:10px"><button role="radio" data-o="" class="${own ? "" : "on"}" aria-checked="${!own}" style="flex:1">Общая</button><button role="radio" data-o="1" class="${own ? "on" : ""}" aria-checked="${own}" style="flex:1">Своя</button></div></div>`;
+  $$("#pmem-seg button").forEach(b => b.onclick = () => {
+    const on = !!b.dataset.o; if (on === own) return;
+    S.pmem = Object.assign({ own: [], at: 0, facts: {} }, S.pmem || {});
+    S.pmem.own = (S.pmem.own || []).filter(x => x !== p.name).concat(on ? [p.name] : []); S.pmem.at = Date.now();
+    saveS(); syncSoon(); renderMemPanel();
+    toast(on ? `${p.name} теперь помнит своё: что расскажете ему, другие не узнают` : `${p.name} снова помнит общее`, 3500);
+  });
+}
 
 /* разговор */
 $("#b-hist").onclick = () => {
@@ -5186,7 +5214,7 @@ async function calEvents(from, to) {
    и напоминания. Экзамен 0.6.42: «запомни: в среду встреча» запомнено, а на «что у меня в среду?» модель посмотрела только
    календарь — «пусто». -> текст для модели или "". */
 function dayPlans(from, to) {
-  const facts = (S.memory || []).filter(f => { const m = /\(на (\d\d)\.(\d\d)\.(\d{4})/.exec(f); if (!m) return false;
+  const facts = memArr().filter(f => { const m = /\(на (\d\d)\.(\d\d)\.(\d{4})/.exec(f); if (!m) return false;
     const t = new Date(+m[3], +m[2] - 1, +m[1]).getTime(); return t >= from && t < to; });
   let rem = []; try { rem = alarmsNow().filter(x => x.at >= from && x.at < to).sort((x, y) => x.at - y.at); } catch (e) { }
   if (!facts.length && !rem.length) return "";
@@ -5721,9 +5749,10 @@ function openBrain(w) { openSettings("brain"); if (w) setTimeout(() => { const t
 function startLogin() { openSettings("brain"); setTimeout(() => { const t = $('.tile[data-w="account"]'); if (t) t.click(); }, 250); }
 function brainName() { if (S.llm.cloud) return "Dewiar Облако"; return S.llm.base_url ? `${S.llm.name || S.llm.base_url.replace(/^https?:\/\//, "")}${S.llm.model ? " · " + S.llm.model : ""}` : "не подключён"; }
 function renderSettings() {
+  if (!["brain", "devices", "voice", "more"].includes(setTab)) setTab = "more";   // «about», «alarms»… — раньше это и было «Ещё»
   const info = JSON.parse(D.info() || "{}");
   const h = [];
-  h.push(`<div class="tabs">${[["brain", "Мозг"], ["voice", "Слух и голос"], ["more", "Ещё"]].map(([k, n]) => `<button data-st="${k}" class="${setTab === k ? "on" : ""}">${n}</button>`).join("")}</div>`);
+  h.push(`<div class="tabs">${[["brain", "Мозг"], ["devices", "Устройства"], ["voice", "Слух"], ["more", "Ещё"]].map(([k, n]) => `<button data-st="${k}" class="${setTab === k ? "on" : ""}">${n}</button>`).join("")}</div>`);
   if (setTab === "brain") {
     if (loggedIn()) h.push(`<div class="card acc" id="acc-card"><div class="row2"><div class="acc-ava">${esc((S.account.login || "?").slice(0, 1).toUpperCase())}</div><div style="flex:1;min-width:0"><b>${esc(S.account.login)}</b>
       <small class="hint" style="margin:2px 0 0;display:block">Аккаунт ${esc(siteHost())}${S.account.problem ? " · " + esc(S.account.problem) : ""}</small></div><button class="btn" id="acc-out">Выйти</button></div>
@@ -5748,7 +5777,7 @@ function renderSettings() {
       <div class="cl-bar"><i id="cl-fill"></i></div><div class="hint" id="cl-turns" style="margin:0"></div>
       <div class="cl-use" id="cl-use"></div>
       <div class="row2" style="margin-top:10px"><button class="btn" id="cl-ref" style="flex:1">Обновить</button><button class="btn p" id="cl-how" style="flex:1">Пополнить</button></div>
-      ${S.llm.account ? "" : `<button class="btn w" id="cl-pair" style="margin-top:8px">Добавить устройство — компьютер или другой телефон</button><div class="res" id="cl-pair-res"></div>
+      <button class="btn w" id="cl-pair" style="margin-top:8px">Подключить ещё устройство</button>${S.llm.account ? "" : `
       <div class="row2" style="margin-top:8px">${loggedIn() ? `<button class="btn" id="cl-acc" style="flex:1">Думать по аккаунту</button>` : ""}<button class="btn" id="cl-forget" style="flex:1;color:#FFB3C3">Забыть ключ</button></div>`}
       <div id="cl-pay" style="display:none;margin-top:12px"><div class="hint" id="cl-top" style="margin:0 0 8px;white-space:pre-line;line-height:1.5"></div>
         <div class="row2"><label class="f" style="flex:1"><span>Талеров</span><input id="cl-amt" inputmode="decimal" placeholder="5"></label>
@@ -5812,7 +5841,7 @@ function renderSettings() {
       <label class="f"><span>Слушать после ответа</span><select id="follow"><option value="ask">Только если ассистент спросил</option><option value="always">Всегда</option><option value="never">Нет</option></select></label>
       <div class="sw" style="margin-top:8px"><div>Сам замечает, что вы вернулись<small>Открыли приложение после перерыва — коротко скажет главное: что готово, что скоро; утром — сводка дня. Сказать нечего — промолчит.</small></div>
       <label class="tg"><input type="checkbox" id="wl-on" ${(S.welcome || {}).on !== false ? "checked" : ""}><i></i></label></div></div>`);
-  } else {
+  } else if (setTab === "more") {
     const opt = (list, cur) => list.map(([v, n]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${n}</option>`).join("");
     // фон — плитками с живым образцом (тот же класс темы, что у экрана; кружок — материал её карточек), по группам
     h.push(`<h3>Оформление</h3><div class="card"><div class="skins" role="radiogroup" aria-label="Тема">${
@@ -5891,7 +5920,9 @@ function renderSettings() {
       <button class="btn w" id="reset">Забыть разговор и память</button></details>
       ${info.crash ? `<h3>Последняя ошибка</h3><div class="card"><div class="crash">${esc(info.crash)}</div><div class="row2" style="margin-top:8px"><button class="btn" id="cr-send" style="flex:1">Отправить</button><button class="btn" id="cr-clear" style="flex:1">Очистить</button></div></div>` : ""}`);
   }
+  if (setTab === "devices") h.push(devHtml());       // «Устройства» (devices.js, 0.56)
   $("#set-body").innerHTML = h.join("");
+  if (setTab === "devices") devBind();
   if (D.web) webTrimSettings();
   $$("[data-st]").forEach(b => b.onclick = () => { setTab = b.dataset.st; renderSettings(); });
   wireSettings(info);
@@ -5975,11 +6006,7 @@ function wireSettings(info) {
         if (await fixDeadKey(e.message)) { renderSettings(); return; }            // ключ удалён, а аккаунт есть — переключились сами
         g("cl-turns").textContent = e.message + (keyGone(e.message) ? " Нажмите «Забыть ключ»" + (loggedIn() ? " или «Думать по аккаунту»." : " и подключите мозг заново.") : ""); g("cl-pct").textContent = "—"; });
       if (g("cl-acc")) g("cl-acc").onclick = async () => { g("cl-acc").disabled = true; if (await fixDeadKey()) renderSettings(); else { g("cl-acc").disabled = false; toast("Не получилось подключиться по аккаунту — проверьте интернет"); } };
-      if (g("cl-pair")) g("cl-pair").onclick = async () => { const r = g("cl-pair-res"); r.className = "res"; r.textContent = "получаю код…";
-        try { const d = await cloudPost("/pair/new", {});
-          if (!d.code) { r.textContent = d.text || "Код не выдан."; return; }
-          r.className = "res ok"; r.innerHTML = `Код: <b style="font-size:22px;letter-spacing:3px">${esc(d.code.slice(0, 3) + " " + d.code.slice(3))}</b><br>На другом устройстве: «Мозг» → «Код или ключ Dewiar» → введите код. Действует 10 минут.`; }
-        catch (e) { r.className = "res bad"; r.textContent = e.message; } };
+      if (g("cl-pair")) g("cl-pair").onclick = () => { setTab = "devices"; renderSettings(); setTimeout(devGive, 50); };   // 0.56: код — в «Устройствах»
       if (g("cl-forget")) g("cl-forget").onclick = async () => {
         const k4 = String(S.llm.api_key || "").slice(-4);
         if (!confirm((loggedIn() ? `Забыть ключ Dewiar …${k4}? Думать буду по аккаунту ${S.account.login || ""}.` : `Забыть ключ Dewiar …${k4}? Пока не подключите мозг снова, я не смогу отвечать.`)
@@ -6024,7 +6051,7 @@ function wireSettings(info) {
     g("tts-rate").oninput = () => { g("rate-v").textContent = (+g("tts-rate").value).toFixed(2); rateFill(); };
     g("tts-try").onclick = () => { saveV(); say(`Привет! Это ${persona().name}. Так звучит мой голос.`); };
     if (g("tts-get")) g("tts-get").onclick = (e) => { e.preventDefault(); D.openSettings("tts") || D.openUrl("https://play.google.com/store/apps/details?id=com.google.android.tts"); };
-  } else {
+  } else if (setTab === "more") {
     g("assist").onclick = () => { if (!D.openSettings("assistant")) toast("Откройте: Настройки → Приложения → По умолчанию → Цифровой помощник"); };
     $$("[data-perm]").forEach(b => b.onclick = async () => { await needPerm(b.dataset.perm); renderSettings(); });
     if (g("home-go")) g("home-go").onclick = async () => { const r = g("home-res"); let tok = g("home-tok").value.trim(); const m = tok.match(/access_token=([^&\s]+)/); if (m) tok = m[1];
@@ -6079,14 +6106,14 @@ function wireSettings(info) {
     if (g("bug-mine") && (S.complaints || []).length) complaintsCheck().then(n => { if (n.length && g("bug-mine")) g("bug-mine").innerHTML = complaintsHtml(); }).catch(() => {});
     if (g("cr-clear")) g("cr-clear").onclick = () => { D.clearCrash(); renderSettings(); };
     g("reset").onclick = () => {                       // два вопроса подряд: случайным нажатием отношения с ассистентом не стереть
-      if (!confirm(`Забыть разговор и всё, что ${persona().name} помнит о вас (${(S.memory || []).length} записей)?`)) return;
+      if (!confirm(`Забыть разговор и всё, что ${persona().name} помнит о вас (${memArr().length} записей)?`)) return;
       if (!confirm("Точно? Это нельзя отменить. Память сотрётся и на компьютере после синхронизации.")) return;
-      history = []; saveH(); convReset(); S.memory = []; saveS(); syncSoon(); toast("Забыл"); };
+      history = []; saveH(); convReset(); memArr().splice(0); saveS(); syncSoon(); toast("Забыл"); };
     if (g("wg-on")) g("wg-on").onchange = () => { try { D.widgetSet(g("wg-on").checked); } catch (e) { } renderSettings(); };
     $$("#wg-look button").forEach(b => b.onclick = () => { prefSet("widget_look", b.dataset.l); renderSettings(); toast("Значок на экране обновится сам"); });
     if (g("wg-pin")) g("wg-pin").onclick = () => { let ok = false; try { ok = D.widgetPin(); } catch (e) { }
       const r = g("wg-res"); r.className = "res" + (ok ? " ok" : ""); r.textContent = ok ? "Подтвердите на экране — и значок появится на рабочем столе" : "Добавьте вручную: долгое нажатие на рабочем столе → «Виджеты» → Dewiar"; };
-    if (g("sy-pair")) g("sy-pair").onclick = () => syncPair(g("sy-pair-res"));
+    if (g("sy-open")) g("sy-open").onclick = () => { setTab = "devices"; renderSettings(); };
     if (g("sy-now")) g("sy-now").onclick = async () => { const r = g("sy-res"); r.className = "res"; r.textContent = "синхронизирую…"; await syncRun(true); renderSettings(); };
     if (g("sy-on")) g("sy-on").onchange = () => { S.sync.on = g("sy-on").checked; saveS(); if (S.sync.on) syncSoon(); renderSettings(); };
     if (g("sy-e2e")) g("sy-e2e").onchange = () => {
@@ -6105,11 +6132,11 @@ function wireSettings(info) {
    меняешь здесь — меняй и там. Дополнительные виды (soul, mind, diary, dayturn, taskreq, task, done) шлём, только если их знает сервер. */
 const MIND_MAX = 8000, MIND_CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g;
 const mindText = (d) => (d && typeof d.text === "string" && d.text.trim() && d.text.length <= MIND_MAX) ? d.text.replace(MIND_CTRL, "") : "";
-const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona"];
+const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory"];
 /* Сквозное шифрование синхронизации (S.sync.e2e, как core/sync.py и core/synckey.py): ключ 32 байта знают только свои
    устройства (pref sync_key; другим своим — конвертом ownShare), личные записи уходят {e2e: 1, c: seal(K, JSON)}.
    Открытыми — метка mind:e2e, задачи для облака (taskreq с cloud) и удаления. */
-const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq"];
+const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory"];
 function syncKeyGet() { try { const d = JSON.parse(prefGet("sync_key") || "null"); return d && d.k && DC() && DC().b64d(d.k).length === 32 ? d : null; } catch (e) { return null; } }
 function syncKeyAdopt(kb64, at) {
   let k; try { k = DC().b64d(String(kb64 || "")); } catch (e) { return false; }
@@ -6230,10 +6257,11 @@ function dayTurn(you, bot) {
   const q = qGet("dayq"); q.push({ id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), ts: Date.now(), who: persona().name, you: String(you).slice(0, 1500), bot: String(bot || "").slice(0, 2500) });
   qSet("dayq", q); syncSoon();
 }
-function taskToPc(title, goal) {
+function taskToPc(title, goal, to) {
   if (!syncCred() || !S.sync.on) throw new Error("передать задачу компьютеру можно, когда включена синхронизация (Настройки → Ещё)");
   // cloud — компьютера нет на связи: задачу сделает облако Dewiar (исполнитель на сервере, см. core/cloudrunner.py)
-  const q = qGet("taskq"); q.push({ id: "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: String(title || goal).slice(0, 80), goal: String(goal || title).slice(0, 4000), ts: Date.now(), cloud: true });
+  const q = qGet("taskq"); q.push(Object.assign({ id: "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: String(title || goal).slice(0, 80), goal: String(goal || title).slice(0, 4000), ts: Date.now() },
+    to ? { to, from: devMyName() } : { cloud: true }));       // to — названный компьютер (0.56): облако и другие компьютеры её не берут
   qSet("taskq", q); syncSoon();
 }
 const pcOnline = () => (syncStatus.devices || []).some(x => x.pc && x.name !== "Облако Dewiar" && Date.now() / 1000 - (x.seen || 0) < 180);
@@ -6261,13 +6289,17 @@ function syncSnapshot() {
   money().forEach(x => { out["money:" + x.id] = { date: x.date, kind: x.kind, amount: +x.amount, currency: x.currency, category: x.category || "", note: x.note || "" }; });
   (S.memory || []).forEach(f => { out["memory:" + factId(f)] = { text: f }; });
   const ks = (syncSt() || {}).kinds || [];
+  if (ks.includes("pmemory") && S.pmem) {                 // своя память персонажей и у кого она своя
+    Object.entries(S.pmem.facts || {}).forEach(([n, fs]) => (fs || []).forEach(f => { out["pmemory:" + pmemId(n, f)] = { who: n, text: f }; }));
+    if (+S.pmem.at > 0) out["pmemory:own"] = { names: S.pmem.own || [], at: +S.pmem.at };   // меняли хоть раз — иначе не перебивать чужое
+  }
   if (ks.includes("soul") || ks.includes("mind")) {
     const m = mind();
     if (ks.includes("soul")) for (const n in m.souls) if ((m.souls[n].text || "").trim()) out["soul:" + n] = { text: m.souls[n].text };
     if (ks.includes("mind") && m.constitution.trim()) out["mind:constitution"] = { text: m.constitution };
   }
   if (ks.includes("dayturn")) qGet("dayq").forEach(x => { out["dayturn:" + x.id] = { ts: x.ts, who: x.who, you: x.you, bot: x.bot }; });
-  if (ks.includes("taskreq")) qGet("taskq").forEach(x => { out["taskreq:" + x.id] = { title: x.title, goal: x.goal, ts: x.ts, cloud: !!x.cloud }; });
+  if (ks.includes("taskreq")) qGet("taskq").forEach(x => { out["taskreq:" + x.id] = Object.assign({ title: x.title, goal: x.goal, ts: x.ts, cloud: !!x.cloud }, x.to ? { to: x.to, from: x.from || "" } : {}); });
   if (ks.includes("task")) qGet("taskcmd").forEach(x => { out["task:" + x.id] = Object.assign({}, x.data, { want: x.want, text: x.text, at: x.ts }); });   // «удалить», «ответ» — компьютеру
   if (ks.includes("done")) doneList().forEach(x => { out["done:" + x.id] = { title: x.title, at: +x.at, src: x.src || "", rid: x.rid || "" }; });   // сделанные дела (core/done.py)
   if (ks.includes("persona")) myPersonas().forEach(x => { out["persona:" + x.id] = { name: x.name, gender: x.gender || "female", role: x.role || "", about: x.about || "", color: x.color || "", avatar: x.avatar || "" }; });   // свои персонажи — и на компьютер
@@ -6307,6 +6339,14 @@ function syncApply(it) {
     let m = money().filter(x => x.id !== it.id);
     if (!del && +d.amount > 0) m.push({ id: it.id, date: d.date, kind: d.kind, amount: +d.amount, currency: d.currency, category: d.category || "", note: d.note || "" });
     fileSave("money.json", JSON.stringify(m));
+  } else if (it.kind === "pmemory") {
+    S.pmem = Object.assign({ own: [], at: 0, facts: {} }, S.pmem || {});
+    if (it.id === "own") { if (!del && Array.isArray(d.names) && +d.at > (+S.pmem.at || 0)) { S.pmem.own = d.names.map(String).slice(0, 40); S.pmem.at = +d.at; } }
+    else if (del) { const pre = it.id.split("-")[0], fid = it.id.slice(pre.length + 1);
+      Object.keys(S.pmem.facts).forEach(n => { if (pmemId(n, "").split("-")[0] === pre) S.pmem.facts[n] = S.pmem.facts[n].filter(f => factId(f) !== fid); }); }
+    else if (d.who && d.text) { const n = String(d.who).slice(0, 40), fs = S.pmem.facts[n] || (S.pmem.facts[n] = []);
+      if (!fs.some(f => factId(f) === factId(d.text))) fs.push(String(d.text)); if (fs.length > 300) fs.splice(0, fs.length - 300); }
+    prefSet("settings", JSON.stringify(S));
   } else if (it.kind === "memory") {
     S.memory = (S.memory || []).filter(f => factId(f) !== it.id);
     if (!del && d.text) S.memory.push(d.text);
@@ -6373,7 +6413,7 @@ async function syncRun(manual) {
     for (const k in st.idx) { const e = st.idx[k];
       if (!(k in snap) && !e.del && !e.skip) changes.push({ kind: k.slice(0, k.indexOf(":")), id: k.slice(k.indexOf(":") + 1), data: {}, updated: now, deleted: true, _h: null }); }
     const info = JSON.parse(D.info() || "{}");
-    let body = { since: st.rev || 0, device: st.device, name: info.device || "Телефон", kinds: SYNC_KINDS, changes: changes.map(({ _h, ...x }) => x) }, got = 0, d = {};
+    let body = { since: st.rev || 0, device: st.device, name: devMyName(), app: D.web ? "web" : "phone", ver: info.version || "", kinds: SYNC_KINDS, changes: changes.map(({ _h, ...x }) => x) }, got = 0, d = {};
     const hdr = { Authorization: "Bearer " + c.token, "Content-Type": "application/json" };
     if (c.link && c.link !== c.token) hdr["X-Sync-Link"] = c.link;
     for (let round = 0; round < 20; round++) {
@@ -6419,7 +6459,9 @@ async function syncRun(manual) {
     if (ek) { delete st.resealAll; changes.forEach(x => { const e = st.idx[x.kind + ":" + x.id]; if (e) delete e.reseal; }); }
     prefSet("sync", JSON.stringify(st));
     if (st.e2eRemote && !syncKeyGet() && Date.now() - (window._keyAsk || 0) > 600000) { window._keyAsk = Date.now(); ownShare(["sync_key"]).catch(() => { }); }   // в облаке зашифрованное, а ключа нет — просим у своих (раз в 10 мин)
-    syncStatus = { ok: true, at: Date.now(), error: "", devices: d.devices || [], counts: { sent: changes.length, got }, via: c.via };
+    syncStatus = { ok: true, at: Date.now(), error: "", devices: d.devices || [], all: d.all || null, counts: { sent: changes.length, got }, via: c.via };
+    if (d.all) { DEVS = d.all; try { devFresh(); } catch (e) { } }
+    if (+d.box > (+clLoad().cursor || 0)) setTimeout(() => clPoll().catch(() => { }), 0);   // в ящике своих устройств новое — сразу
     if (got && qGet("natt_in").length) setTimeout(() => nattIn().catch(() => { }), 0);    // пришла заметка, которую ждали фото с компьютера
     if (got && $("#sh-day") && $("#sh-day").classList.contains("on") && document.activeElement !== $("#tk-goal")) renderDay();
     if (got && $("#sh-soul") && $("#sh-soul").classList.contains("on") && soulTab === "diary") renderSoul();
@@ -6445,32 +6487,14 @@ function widgetCard() {
       : w.pin ? `<button class="btn w" id="wg-pin" style="margin-top:8px">Добавить на рабочий стол</button><div class="res" id="wg-res"></div>`
       : `<p class="hint" style="margin:8px 0 0">Добавить: долгое нажатие на рабочем столе → «Виджеты» → Dewiar → «Записать».</p>`) : "");
 }
-function syncCard() {
-  const c = syncCred(), s = syncStatus, t = s.at ? new Date(s.at) : null;
-  if (!c) return `<p class="hint" style="margin-top:0">Напоминания, заметки, расходы и память — одинаковые на телефоне и компьютере. Нужен ключ Dewiar или вход аккаунтом dewiar.pro (Настройки → Мозг) — тот же, что на компьютере.</p>`;
-  const devs = (s.devices || []).filter(x => x.name).map(x => esc(x.name));
-  return `<div class="sw"><div>Телефон и компьютер — одно и то же<small class="hint" style="display:block;margin:2px 0 0">напоминания, заметки, расходы, память · ${esc(c.via)}</small></div>
-    <label class="tg"><input type="checkbox" id="sy-on" ${S.sync.on ? "checked" : ""}><i></i></label></div>
-    <div class="res ${s.ok === false ? "bad" : s.ok ? "ok" : ""}" id="sy-res">${s.ok === false ? esc(s.error) : t ? `Синхронизировано в ${pad(t.getHours())}:${pad(t.getMinutes())}` + (devs.length ? ` · ещё устройства: ${devs.join(", ")}` : "") : S.sync.on ? "первая синхронизация — в течение минуты" : "выключено"}</div>
-    <div class="sw" style="margin-top:8px"><div>Шифровать на устройстве<small class="hint" style="display:block;margin:2px 0 0">${S.sync.e2e && syncKeyGet() ? "Включено: в облаке — только шифротекст, ключ — у ваших устройств." : e2eWaiting() ? "Ваши данные зашифрованы на другом устройстве — жду ключ от него (оно должно быть на связи)." : "Заметки, дела, деньги и память уходят в облако зашифрованными — сервер их не прочитает. Включите на одном устройстве — остальные получат ключ сами."}</small></div>
-    <label class="tg"><input type="checkbox" id="sy-e2e" ${S.sync.e2e && syncKeyGet() ? "checked" : ""} ${S.sync.on ? "" : "disabled"}><i></i></label></div>
-    <button class="btn w" id="sy-now" style="margin-top:6px">Синхронизировать сейчас</button>
-    ${loggedIn() ? `<p class="hint" style="margin:10px 2px 0">Другое устройство: войдите на нём тем же аккаунтом dewiar.pro — данные станут общими сами.</p>`
-      : `<button class="btn w" id="sy-pair" style="margin-top:8px">Добавить устройство — код для компьютера или другого телефона</button><div class="res" id="sy-pair-res"></div>`}`;
+function syncCard() {                             // 0.56: синхронизация и подключение устройств — во вкладке «Устройства» (devices.js)
+  const c = syncCred(), st = syncStatus, t = st.at ? new Date(st.at) : null;
+  return `<p class="hint" style="margin-top:0">${!c ? "Телефон и компьютер — одна Лира: напоминания, заметки, расходы и память общие. Подключается кодом из 6 цифр."
+    : !S.sync.on ? "Синхронизация выключена." : st.ok === false ? "Не синхронизировалось: " + esc(st.error) : t ? `Синхронизировано в ${pad(t.getHours())}:${pad(t.getMinutes())}.` : "Синхронизация включена."}</p>
+    <button class="btn w p" id="sy-open">Устройства и синхронизация</button>`;
 }
 /* №329 (пакет 27.10): «невозможно найти, где создаётся код синхронизации» — кнопка была только в карточке баланса и
    пропадала, когда мозг свой. Теперь — и здесь, в «Синхронизации», с тем ключом, которым идёт синхронизация. */
-async function syncPair(r) {
-  const c = syncCred(); if (!c) return;
-  r.className = "res"; r.textContent = "получаю код…";
-  try {
-    const x = await http("POST", c.base + "?p=/pair/new", { headers: { Authorization: "Bearer " + c.token, "Content-Type": "application/json" }, body: {}, timeout: 40000 });
-    let d = {}; try { d = JSON.parse(x.body || "{}"); } catch (e) { }
-    if (x.status >= 400) throw new Error((d.error && d.error.message) || ("облако ответило " + x.status));
-    if (!d.code) { r.textContent = d.text || "Код не выдан."; return; }
-    r.className = "res ok"; r.innerHTML = `Код: <b style="font-size:22px;letter-spacing:3px">${esc(d.code.slice(0, 3) + " " + d.code.slice(3))}</b><br>На компьютере: студия → «Мозг» → «Код или ключ Dewiar»; на телефоне: «Мозг» → «Код или ключ Dewiar». Действует 10 минут.`;
-  } catch (e) { r.className = "res bad"; r.textContent = netErr(e.message || e); }
-}
 let syncTick = 0;
 setInterval(() => { if (!document.hidden && (!liteOn() || ++syncTick % 3 === 0)) syncRun(false); }, 60000);   // лёгкий режим — раз в 3 минуты
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { syncSoon(); doneInbox(); } });
@@ -6610,6 +6634,7 @@ async function cloudConnect(key, base, opts = {}) {
   S.llm = Object.assign({}, DEF.llm, { kind: "openai", name: "Dewiar Облако", base_url: base + "?p=", api_key: key, model: m.id, cloud: true, title: m.title || m.id,
     disable_thinking: false, account: !!opts.account, stt: !!md.stt, tts: !!md.tts });
   if (md.stt && !D.recognizer()) S.stt = { engine: "server", url: base + "?p=", key, model: "gigaam" };      // в телефоне нет своего распознавания
+  if (!opts.account) S.sync = Object.assign({}, S.sync, { key });              // ключ — и для синхронизации: сменят мозг — синхронизация не пропадёт
   saveS(); cloudInfo = info; cloudAt = Date.now();
   if (S.refPending) setTimeout(refPendingUse, 500);            // пришли по приглашению — код введётся сам
   return info;
@@ -7123,10 +7148,10 @@ function wizard(kind) {
   } else if (kind === "dwkey") {
     w.innerHTML = `<div class="card"><label class="f"><span>Ключ Dewiar или код с другого устройства</span><input id="w-key" placeholder="dw-xxxxxx-… или 6 цифр" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
       <button class="btn p w" id="w-go">Подключить</button><div class="res" id="w-res"></div>
-      <p class="hint">Код из 6 цифр покажет ваше другое устройство, где Dewiar уже подключён: на компьютере — студия → «Мозг» → карточка «ИИ-баланс» → «Добавить устройство»; на телефоне — Настройки → «Мозг» → «Добавить устройство». Код живёт 10 минут. Данные и заряд будут общими. Думает сервер Dewiar — телефону не нужно ничего мощного.</p></div>`;
+      <p class="hint">Код из 6 цифр покажет ваше другое устройство, где Dewiar уже работает: «Устройства» → «Подключить ещё устройство» (на компьютере — в студии, на телефоне — в настройках). Удобнее — вкладка «Устройства» здесь: там и сканер.</p></div>`;
     $("#w-go").onclick = async () => { const r = $("#w-res"); r.className = "res"; r.textContent = "проверяю…";
       try { let k = $("#w-key").value.trim();
-        if (/^\d[\d\s-]{4,8}\d$/.test(k)) { k = await pairClaim(k); }
+        if (/^\d[\d\s-]{4,8}\d$/.test(k)) { const d = await devClaim(k); r.className = "res ok"; r.textContent = devClaimText(d); setTimeout(renderSettings, 1800); return; }
         const c = await cloudConnect(k); r.className = "res ok"; r.textContent = `Подключено${c.label ? ": " + c.label : ""}. Заряд ${c.percent}%.`; toast("Мозг подключён"); setTimeout(renderSettings, 1400); }
       catch (e) { r.className = "res bad"; r.textContent = e.message; } };
   } else if (kind === "server") {
@@ -7432,6 +7457,7 @@ function handleIntent(e) {
   }
   else if (e.action === "close") openClose("");                                     // нажали уведомление «Близких»
   else if (e.action === "work") openWork("");                                       // уведомление «Работы» (CloseWatch)
+  else if (e.action === "link" && /^dewiar:\/\/pair/.test(e.url || "")) devClaimFlow(e.url);      // код устройства (download.php?pair=)
   else if (e.action === "link" && /^dewiar:\/\/work/.test(e.url || "")) wkLink(e.url);         // приглашение на работу (download.php?work=)
   else if (e.action === "news") { closeSheets(); annCheck(true); }                   // уведомление объявления (CloseLive)
   else if (e.action === "close_call") {                                             // уведомление звонка близкого (CloseLive)
@@ -7539,6 +7565,7 @@ async function nattIn() {
 }
 function ownApply(body) {
   if (body && body.natt) nattTake(body.natt);
+  try { devBrainsOwn(body); } catch (e) { plog("warn", "мозги со своего устройства: " + e.message); }   // «Устройства» (devices.js)
   if (body && body.want && (S.home.at || S.home.token || syncKeyGet())) setTimeout(() => ownShare().catch(() => { }), 0);   // другое моё устройство просит
   const skb = body && body.sync_key;
   if (skb && typeof skb === "object" && syncKeyAdopt(skb.k, skb.at)) {
@@ -7737,7 +7764,7 @@ function clWatch() {
   const live = !!j && clLiveOn();                         // «на связи» — служба CloseLive: сообщения и звонки сразу
   if (D.closeLive && live !== clWatch.live) { clWatch.live = live; D.closeLive(live); }
 }
-const clActive = () => { const st = clLoad(); return st.people.length > 0 || wkJobs().length > 0 || (st.invite && Date.now() / 1000 < (st.invite.expires || 0)); };
+const clActive = () => { const st = clLoad(); return st.people.length > 0 || wkJobs().length > 0 || Date.now() < devBrainsUntil || (st.invite && Date.now() / 1000 < (st.invite.expires || 0)); };
 function clSchedule() {
   clearTimeout(clTimer);
   clTimer = setTimeout(async () => { if (!document.hidden || clFast) await clPoll(); clSchedule(); }, clFast ? 1200 : clActive() ? 6000 : 600000);   // во время звонка — и в фоне: отбой и «ответили» не должны теряться
@@ -7859,6 +7886,7 @@ function scanResult(txt, format) {
   const t = String(txt || "").trim();
   plog("info", "📷 код (" + (format || "?") + "): " + clip(t, 80));
   if (wkIsLink(t)) return wkLink(t);                      // печать «Работы» от руководителя (work.js)
+  if (/^dewiar:\/\/pair|download\.php\?(?:.*&)?pair=\d{6}/.test(t)) return devClaimFlow(t);   // «Подключить ещё устройство» (devices.js)
   if (/^dewiar:\/\/close|[?&]close=/.test(t)) return clAcceptLink(t);
   if (/^dewiar:\/\/ref|download\.php\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }
   if (/^dewiar:/.test(t)) return handleIntent({ action: "link", url: t });
@@ -9281,7 +9309,7 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
     if (S.join) { showBot(gfix(`Привет! Я ${persona().name}. Заявка отправлена — как только её одобрят, я подключусь сама и скажу. Обычно это быстро.`)); setTimeout(() => joinPoll(false).catch(() => {}), 2500); }
     else showBot(gfix(`Привет! Я ${persona().name}. Чтобы мы могли поговорить, меня нужно один раз подключить — это бесплатно и займёт минуту.`));
     showCard(S.join ? `<div class="row2"><button class="btn p" onclick="joinPoll(true).then(d => d && !d.key && toast((d && d.text) || 'Пока ждёт проверки')).catch(e => toast(e.message))" style="flex:1">Проверить</button><button class="btn" onclick="openBrain()" style="flex:1">Другие способы</button></div>`
-      : `<div class="start"><button class="btn p w" onclick="openBrain('join')">Подключить бесплатно</button><button class="btn w" onclick="openBrain('dwkey')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button></div>`); }
+      : `<div class="start"><button class="btn p w" onclick="openBrain('join')">Подключить бесплатно</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button></div>`); }
   // последний ответ — только свежий (до 20 минут): старый («С возвращением. В 15:00 встреча…» с утра) после каждого
   // запуска и обновления выглядел как новое сообщение (отчёты №52, №53). Он в истории разговора — там его и видно.
   else if (last && last.t && Date.now() - last.t < 20 * 60e3) showBot(last.content.slice(0, 400));

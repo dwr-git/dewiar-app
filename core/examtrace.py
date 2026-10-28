@@ -68,7 +68,7 @@ def like(text, sets=None):
 def find(ws, money=None, done=None):
     """-> [{kind: memory|note|money|done, id, text}] — похожее на записи экзамена."""
     sets, out = _phrases(), []
-    for line in (ws.memory_get() or "").splitlines():
+    for line in (ws.memory_get(who="") or "").splitlines():
         if line.startswith("- ") and like(line[2:], sets):
             out.append({"kind": "memory", "id": line, "text": re.sub(r"\s*_\(\d.*?\)_\s*$", "", line[2:]).strip()})
     for n in ws.notes(limit=2000):
@@ -89,10 +89,10 @@ def remove(ws, money, done, items):
     n = 0
     mem = {x["id"] for x in items if x.get("kind") == "memory"}
     if mem:
-        lines = (ws.memory_get() or "").splitlines()
+        lines = (ws.memory_get(who="") or "").splitlines()
         keep = [ln for ln in lines if ln not in mem]
         n += len(lines) - len(keep)
-        ws.memory_set("\n".join(keep))
+        ws.memory_set("\n".join(keep), who="")
     for x in items:
         try:
             if x.get("kind") == "note":

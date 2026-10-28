@@ -22,6 +22,7 @@ function renderPersonas() {
     const own = typeof brainOf === "function" ? brainOf(p.id) : "";
     if (own) { const m = document.createElement("span"); m.className = "pbrain"; m.title = "Свой мозг персонажа";
       m.textContent = "🧠 " + brainName(((S.llm || {}).profiles || {})[own], own); $("h3", c).after(m); }
+    if (ownMem().includes(p.name)) { const m = document.createElement("span"); m.className = "pbrain"; m.title = "Своя память персонажа"; m.textContent = "🗂 своя память"; $("h3", c).after(m); }
     (p.skills || []).slice(0, 4).forEach(t => { const li = document.createElement("li"); li.textContent = t; $("ul.sk", c).appendChild(li); });
     const e = new DewiarEntity($("canvas", c), { style: p.avatar_url && p.style !== "aura" ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true });
     e.calm = !!stTight; e.set({ state: "idle", level: 0 }); entities.push(e);   // оживает при наведении — иначе десяток анимаций грузит компьютер
@@ -91,7 +92,7 @@ function openEditor(p) {
   voiceHint();
   $("#e-del").textContent = p && p.builtin ? "Сбросить к заводскому" : "Удалить"; $("#e-del").style.display = p ? "" : "none";
   $("#e-res").textContent = "";
-  ed.knowledge = ed.knowledge || []; renderKb(false); renderBrain();
+  ed.knowledge = ed.knowledge || []; renderKb(false); renderBrain(); renderMem();
   renderStyles(); renderColors(); updatePreview();
   $("#drawer").classList.add("open"); $("#drawer").scrollTop = 0; $("#e-name").focus({ preventScroll: true });
 }
@@ -121,6 +122,23 @@ function renderBrain() {
     toast(id ? `${ed.name} думает моделью «${brainName(profs[id], id)}»` : `${ed.name} думает общим мозгом`);
   });
   $("#e-brain-add").onclick = () => { closeEditor(); const b = $('nav button[data-p="brain"]'); if (b) b.click(); };
+}
+/* Своя память у персонажа (0.56; письмо 28.10: «разные персонажи со своей памятью… пока это разные морды лица у одного»):
+   «Общая» — одна «Обо мне» на всех; «Своя» — факты только его («Память/Персонажи/<имя>.md»), синхронизируется. */
+const ownMem = () => ((S && S.persona_memory) || {}).own || [];
+function renderMem() {
+  const box = $("#e-mem"); if (!box) return;
+  if (!ed || !ed.id) { box.innerHTML = `<p class="hint" style="margin:0">Сначала сохраните персонажа — потом можно дать ему свою память.</p>`; return; }
+  const own = ownMem().includes(ed.name);
+  box.innerHTML = `<button role="radio" data-m="" class="bp${own ? "" : " on"}" aria-checked="${!own}"><b>Общая</b><small>помнит то же, что и другие персонажи</small></button>`
+    + `<button role="radio" data-m="1" class="bp${own ? " on" : ""}" aria-checked="${own}"><b>Своя</b><small>помнит только то, что рассказали ему</small></button>`;
+  $$("#e-mem [data-m]").forEach(b => b.onclick = async () => {
+    const on = !!b.dataset.m;
+    try { const r = await core.call("persona_memory", { name: ed.name, own: on }); S.persona_memory = Object.assign({}, S.persona_memory || {}, { own: r.own }); }
+    catch (e) { toast(e.message); return; }
+    renderMem(); renderPersonas();
+    toast(on ? `${ed.name} теперь помнит своё — смотреть: «Обо мне» → вкладка «${ed.name}»` : `${ed.name} снова помнит общее`);
+  });
 }
 function closeEditor() { $("#drawer").classList.remove("open"); styleEnts.forEach(e => e.destroy()); styleEnts = []; ed = null; }
 function updatePreview() {

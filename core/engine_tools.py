@@ -751,7 +751,74 @@ class ToolsMixin:
             out["sync_key"] = k                    # ключ шифрования синхронизации — только своим устройствам, конвертом
         return out or None
 
+    # ---------- «Взять мозги с другого устройства» (0.56; письмо 28.10: «на компе настроил — другие компы надо легко
+    # подключить (свои мозги-модели и прочие настройки)»): по просьбе своего устройства — профили моделей с ключами,
+    # только конвертом своим устройствам (сквозное шифрование), сайт их не видит. Модели «на этом компьютере»
+    # (localhost) не отдаём — на другом они не откроются; облако Dewiar не отдаём — оно подключается кодом.
+    def brains_share(self):
+        out = []
+        for pid, pr in (self.s.get("llm", "profiles") or {}).items():
+            base = str(pr.get("base_url") or "")
+            if not base or pr.get("cloud") or re.search(r"//(?:localhost|127\.|0\.0\.0\.0|\[::1\])", base):
+                continue
+            out.append({k: pr.get(k) for k in ("name", "kind", "base_url", "api_key", "model", "title") if pr.get(k) not in (None, "")})
+        return {"from": self.device_name(), "at": int(time.time() * 1000), "profiles": out[:12]} if out else None
+
+    def brains_pull(self):
+        """Попросить свои устройства прислать мозги; ответ примется 10 минут (own_apply). -> {sent}"""
+        self._brains_until, self._brains_got = time.time() + 600, []
+        try:
+            sent = self.close.own_send({"want": ["brains"], "from": self.device_name()})
+        except Exception as e:  # noqa: BLE001
+            raise ValueError(f"не отправилось: {e}") from e
+        return {"sent": bool(sent), "until": int(self._brains_until)}
+
+    def brains_status(self):
+        return {"waiting": time.time() < getattr(self, "_brains_until", 0), "got": list(getattr(self, "_brains_got", []))}
+
+    def _brains_take(self, b):
+        """Пришли мозги со своего устройства: добавить в профили те, которых нет (тот же адрес и модель — уже есть).
+        Работающую модель не меняем; мозга не было — главной становится первая пришедшая."""
+        import hashlib
+        profiles = dict(self.s.get("llm", "profiles") or {})
+        have = {(str(x.get("base_url") or "").rstrip("/"), str(x.get("model") or "")) for x in profiles.values()}
+        added = []
+        for pr in (b.get("profiles") or [])[:12]:
+            if not isinstance(pr, dict) or not str(pr.get("base_url") or "").startswith(("http://", "https://")):
+                continue
+            key = (str(pr["base_url"]).rstrip("/"), str(pr.get("model") or ""))
+            if key in have:
+                continue
+            pid = "dev-" + hashlib.sha1("|".join(key).encode()).hexdigest()[:8]
+            profiles[pid] = {k: str(pr.get(k) or "") for k in ("name", "kind", "base_url", "api_key", "model", "title")}
+            profiles[pid]["name"] = profiles[pid]["name"] or key[1] or "Модель"
+            have.add(key); added.append(profiles[pid]["name"])
+        if not added:
+            return []
+        patch = {"profiles": profiles}
+        if not self._has_own_brain() and not (self.s.get("llm", "active") or ""):
+            patch["active"] = next(pid for pid in profiles if profiles[pid]["name"] == added[0])
+        self.s.update({"llm": patch})
+        self.emit("settings", settings=self.s.snapshot())
+        log.info("🧠 Мозги со своего устройства «%s»: %s", b.get("from") or "?", ", ".join(added))
+        try:
+            self.push("Мозги с другого устройства", f"С «{b.get('from') or 'другого устройства'}» добавлено: {', '.join(added)}. Выбрать — «Мозг».", telegram=False)
+        except Exception:  # noqa: BLE001
+            pass
+        return added
+
     def own_apply(self, body):
+        if "brains" in ((body or {}).get("want") or ()):     # своё устройство просит мозги — отдаём, что есть
+            share = self.brains_share()
+            if share and getattr(self, "close", None):
+                import threading
+                threading.Thread(target=self.close._own_quiet, args=({"brains": share},), daemon=True).start()
+        b = (body or {}).get("brains")
+        if isinstance(b, dict) and time.time() < getattr(self, "_brains_until", 0):
+            got = self._brains_take(b)
+            if got:
+                self._brains_got = list(getattr(self, "_brains_got", [])) + [{"from": b.get("from") or "", "names": got}]
+                self.emit("brains", data=self.brains_status())
         h = (body or {}).get("home")
         if isinstance(h, dict) and self.home.adopt(h.get("token"), h.get("at")):
             self.emit("tools", tools=self.toolbox.catalog())
@@ -789,8 +856,112 @@ class ToolsMixin:
             threading.Thread(target=self.close._own_quiet, args=(snap,), daemon=True).start()
 
     def device_name(self):
+        """Имя этого компьютера в «Устройствах»: своё («Рабочий», «Домашний») или имя компьютера в системе."""
         from sync import default_device_name
-        return default_device_name()
+        return (self.s.get("sync", "name") or "").strip()[:40] or default_device_name()
+
+    # ---------- своя память у персонажа (0.56; письмо 28.10: «разные персонажи со своей памятью… пока это разные морды
+    # лица у одного персонажа»). persona_memory.own — имена персонажей со своей памятью; синхронизируется (pmemory). ----------
+    def own_memory(self):
+        return [str(x) for x in (self.s.get("persona_memory", "own") or []) if x]
+
+    def mem_owner(self):
+        """Чья память сейчас: имя отвечающего персонажа, если у него своя, иначе "" (общая «Обо мне»)."""
+        try:
+            name = self.personas.get(self.s.get("persona"))["name"]
+        except Exception:  # noqa: BLE001
+            return ""
+        return name if name in self.own_memory() else ""
+
+    def persona_memory_set(self, name, own):
+        name = (name or "").strip()[:40]
+        if not name:
+            raise ValueError("какой персонаж?")
+        cur = [x for x in self.own_memory() if x != name] + ([name] if own else [])
+        self.s.update({"persona_memory": {"own": cur, "at": int(time.time() * 1000)}})
+        self.sync.soon.set()
+        self.emit("settings", settings=self.s.snapshot())
+        return {"own": cur}
+
+    def computers(self):
+        """Мои компьютеры из последней синхронизации (без облака): [{id, name, me, on, seen}] — для «сделай на рабочем…»."""
+        out = []
+        for d in self.sync.status.get("all") or []:
+            if d.get("app") != "pc":
+                continue
+            me = bool(d.get("me"))
+            out.append({"id": d.get("id", ""), "name": self.device_name() if me else (d.get("name") or "Компьютер"), "me": me,
+                        "on": me or time.time() - float(d.get("seen") or 0) < 180, "seen": int(d.get("seen") or 0)})
+        return out
+
+    def find_computer(self, name):
+        """«рабочий», «на рабочем компе», «Ноутбук» -> компьютер или None. Сначала точное имя, потом по началу слов."""
+        q = [w[:5] for w in re.findall(r"[а-яёa-z0-9]+", (name or "").lower().replace("ё", "е"))
+             if w not in ("на", "в", "мой", "моем", "моём", "моем", "компьютер", "компьютере", "комп", "компе", "пк", "ноуте")]
+        comps = self.computers()
+        for c in comps:
+            if (c["name"] or "").lower().strip() == (name or "").lower().strip():
+                return c
+        best, score = None, 0
+        for c in comps:
+            ws = [w[:5] for w in re.findall(r"[а-яёa-z0-9]+", (c["name"] or "").lower().replace("ё", "е"))]
+            sc = sum(1 for w in q if any(x.startswith(w[:4]) or w.startswith(x[:4]) for x in ws))
+            if sc > score:
+                best, score = c, sc
+        return best
+
+    def remote_task(self, on, title, goal, if_off=""):
+        """Задача на названный компьютер. -> None (это он и есть — делать здесь) или текст для модели."""
+        from sync import SyncError
+        c = self.find_computer(on)
+        names = ", ".join(f"«{x['name']}»" + (" (этот)" if x["me"] else " (на связи)" if x["on"] else " (не на связи)") for x in self.computers())
+        if not c:
+            raise ValueError(f"не нашла компьютер «{on}» среди ваших: {names or 'других компьютеров пока нет — подключите их в «Устройствах»'}")
+        if c["me"]:
+            return None
+        if not c["on"] and if_off not in ("wait", "cloud"):
+            ago = int((time.time() - c["seen"]) // 3600) if c["seen"] else 0
+            return (f"Компьютер «{c['name']}» сейчас не на связи" + (f" (был {ago} ч назад)" if ago else "") + ". Спроси коротко: сделать, когда он "
+                    "включится, или сейчас в облаке Dewiar? Ответ — снова start_task с тем же on и if_off: wait (когда включится) или cloud.")
+        data = {"title": (title or goal[:50])[:80], "goal": goal[:4000]}
+        if if_off == "cloud" and not c["on"]:
+            data["cloud"] = True
+        else:
+            data["to"] = c["id"]
+        try:
+            self.sync.send_taskreq(data)
+        except SyncError as e:
+            raise ValueError(str(e)) from e
+        if data.get("cloud"):
+            return f"Задача «{data['title']}» ушла в облако Dewiar — «{c['name']}» не на связи. Результат появится в «Задачах». Скажи коротко, что взялась."
+        return (f"Задача «{data['title']}» передана компьютеру «{c['name']}»" + (" — он возьмётся, как только включится." if not c["on"] else " — он уже берётся.")
+                + " Ход и результат — на нём, в «Задачах». Результата ЕЩЁ НЕТ — скажи одной фразой, что передала.")
+
+    def devices_public(self, fresh=True):
+        """«Устройства» (0.56): это устройство, все мои устройства (с сайта, иначе — из последней синхронизации), синхронизация,
+        как вошли (аккаунт или ключ) и можно ли выдать код. -> dict"""
+        import httpx
+        st = self.sync_public()
+        tok, link, url = self.credentials()
+        me = {"id": self.sync.state.get("device", ""), "name": self.device_name(), "app": "pc", "custom": bool(self.s.get("sync", "name"))}
+        devs, err = list(st.get("all") or []), ""
+        if tok and fresh:
+            try:
+                h = {"Authorization": "Bearer " + tok}
+                if link and link != tok:
+                    h["X-Sync-Link"] = link
+                r = httpx.get(url, params={"p": "/sync/devices", "device": me["id"]}, headers=h, timeout=10)   # params заменяют ?p= в адресе — всё в params
+                if r.status_code == 200:
+                    devs = r.json().get("devices") or devs
+            except Exception as e:  # noqa: BLE001
+                err = str(e)
+        if not any(d.get("me") for d in devs):
+            devs.insert(0, {"id": me["id"], "name": me["name"], "app": "pc", "seen": st.get("at") or 0, "me": True})
+        for d in devs:
+            if d.get("me"):
+                d["name"] = me["name"]
+        return {"me": me, "devices": devs, "sync": st, "mode": "account" if self.account.logged_in() else ("key" if tok else ""),
+                "login": (self.account.data.get("login") or "") if self.account.logged_in() else "", "can_pair": bool(tok), "error": err}
 
     def sync_public(self):
         st = dict(self.sync.status)

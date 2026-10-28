@@ -121,6 +121,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.workspace = Workspace(settings)
         self.pad = Pad(self.workspace, settings, emit=self.emit, share=lambda rel, paths: self.note_files_out(rel, paths))   # блокнот у виджета
         self.toolbox.hooks["workspace"] = self.workspace
+        self.workspace.mem_owner = self.mem_owner          # своя память у персонажа (0.56): чья память сейчас
         self.toolbox.hooks["server"] = bool(server)         # сервер: без экрана и звука — экранные инструменты выключены
         self.skills.set_folder(self.workspace.root / "Навыки")    # свои навыки — видны в папке ассистента
         self.toolbox.hooks["persona_name"] = lambda: self.personas.get(self.s.get("persona"))["name"]
@@ -135,6 +136,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.task_answer_until = 0.0
         self.tasks = TaskManager(self)
         self.toolbox.hooks["tasks"] = self.tasks
+        self.toolbox.hooks["remote_task"] = lambda on, title, goal, if_off="": self.remote_task(on, title, goal, if_off)   # «на рабочем компьютере…»
         from account import Account
         self.account = Account()
         self.toolbox.hooks["account"] = self.account

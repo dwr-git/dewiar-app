@@ -2242,6 +2242,14 @@ def t_start_task(a, ctx):
     goal = (a.get("goal") or "").strip()
     if not goal:
         raise ToolError("опиши цель задачи")
+    on = (a.get("on") or "").strip()
+    if on and ctx.get("remote_task"):                  # «на рабочем компьютере…» (0.56): задача названному своему компьютеру
+        try:
+            r = ctx["remote_task"](on, a.get("title") or "", goal, (a.get("if_off") or "").strip())
+        except ValueError as e:
+            raise ToolError(str(e)) from e
+        if r is not None:
+            return r
     try:
         t = _tm(ctx).create(a.get("title") or goal[:50], goal, a.get("project") or "")
     except ValueError as e:
@@ -2559,7 +2567,10 @@ TOOLS = {
                    "ведёт блокнот фактов, ждёт и возвращается к делу, сообщает новости и скажет, когда готово. project — путь к папке проекта для работы с "
                    "кодом (необязательно).",
                    S({"title": {"type": "string"}, "goal": {"type": "string", "description": "подробная цель"},
-                      "project": {"type": "string"}}, ["goal"]), "safe", t_start_task, "Фоновая задача"),
+                      "project": {"type": "string"},
+                      "on": {"type": "string", "description": "на каком своём компьютере («на рабочем», «Ноутбук») — имя из списка компьютеров; пусто — здесь"},
+                      "if_off": {"type": "string", "enum": ["", "wait", "cloud"], "description": "тот компьютер не на связи: wait — сделать, когда включится; cloud — сейчас в облаке Dewiar (только если пользователь так ответил)"}},
+                     ["goal"]), "safe", t_start_task, "Фоновая задача"),
     "task_status": ("Как идут фоновые задачи: статус, прогресс, вопросы, итог.", S({}), "safe", t_task_status,
                     "Задачи: статус"),
     "stop_task": ("Остановить фоновую задачу (name — часть названия; пусто — текущую).",

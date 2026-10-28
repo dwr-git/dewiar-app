@@ -892,6 +892,7 @@ class Close:
     def active(self):
         w = self.st.get("work") or {}
         return bool(self.st["people"] or w.get("staff") or w.get("bosses") or time.time() < _int(self.st.get("work_wait"))
+                    or time.time() < float(getattr(self.host, "_brains_until", 0) or 0)      # ждём мозги со своего устройства
                     or (self.st.get("invite") and time.time() < _int(self.st["invite"].get("expires"))))
 
     # ---------- «Работа»: руководитель — сотрудник (режим «Сотрудник», 0.55) ----------

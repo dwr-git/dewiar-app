@@ -34,6 +34,7 @@ const ICONS = {
   const: '<path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15 3.5V7h4"/><path d="M9 11h7M9 14h7M9 17h4.5"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   dw: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v5M12 15.5v5M3.5 12h5M15.5 12h5"/>',
+  devices: '<rect x="2.5" y="5" width="13" height="9.5" rx="1.8"/><path d="M1.5 17.5h11"/><rect x="16" y="8" width="5.5" height="11" rx="1.5"/><path d="M18.4 16.5h.7"/>',
   connect: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.4 1.4"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.4-1.4"/>',
   brain: '<path d="M12 3.5 13.9 8l4.6 1.9-4.6 1.9L12 16.4l-1.9-4.6-4.6-1.9L10.1 8z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
   ears: '<path d="M4 12v0M8 8.5v7M12 5v14M16 8v8M20 11v2"/>',
@@ -53,7 +54,7 @@ $$("main section[id^='p-']").forEach(s => { const i = ICONS[s.id.slice(2)], h = 
 /* «?» у заголовка каждого раздела — как он работает, как настроить, что сказать голосом */
 // раздел студии → раздел руководства на сайте (server/dwrapp/guide.php, текст — data/guide.json)
 const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
-const GUIDE_OF = { personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", music: "music", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
+const GUIDE_OF = { devices: "sync", personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", music: "music", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
   me: "notes-memory", folder: "folder-docs", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
   hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting" };
 function showHelp(k) {

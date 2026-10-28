@@ -39,7 +39,7 @@ from settings import STATE_DIR
 log = logging.getLogger("dewiar.sync")
 
 BASE_KINDS = ("reminder", "note", "money", "memory")          # знает любой сервер
-EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile")   # тот же список $extra в cloud.php
+EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory")   # тот же список $extra в cloud.php
 VAULT_MAX = 300_000                               # сервер не принимает запись больше 300 КБ — такие заметки не шлём
 VAULT_FILES = 15000
 CHUNK = 400                                       # изменений за один запрос (сервер берёт до 2000; первая отправка большого хранилища — частями)
@@ -58,7 +58,7 @@ _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200f\u202a-\u202e\u
 CONST_PREV = "Память/Конституция — прежняя.md"
 # Сквозное шифрование (sync.e2e, core/synckey.py): что шифруется на устройстве — всё личное. Открытыми остаются только
 # метка «шифрование включено» (mind:e2e), задачи для облака (taskreq с cloud — их выполняет сервер) и удаления (пустые).
-E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq",
+E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory",
              "bill", "pay", "payfile")
 # «Платежи» между компьютерами (27.10, владелец: «платежи дома заполнил… а на работе их нет»): bill — счёт, pay — оплата,
 # payfile — вложение (платёжка, скриншот) кусками: облако берёт запись до 300 КБ, а зашифрованная на треть длиннее
@@ -99,6 +99,12 @@ def _now_ms():
 def _h(data):
     """Отпечаток записи «как она лежит у нас». Только локальный: телефон считает свой иначе, сравнивать их нельзя."""
     return hashlib.sha1(json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _pmem_id(name, text):
+    """id факта своей памяти персонажа: «m<отпечаток имени>-<id факта>» — удаление (без текста) найдёт и файл, и строку.
+    Так же считает pmemId() в app.js."""
+    return "m" + hashlib.sha1(str(name).strip().lower().encode("utf-8")).hexdigest()[:8] + "-" + (_fact_id(text) if text else "")
 
 
 def _fact_id(text):
@@ -290,6 +296,13 @@ class Sync:
     def _snap_extra(self, out):
         h = self.host
         ok = set(self.state.get("kinds") or ())
+        if "pmemory" in ok:                         # своя память персонажей (0.56): факты по файлам «Память/Персонажи» и кто со своей
+            for name, facts in self._pfacts().items():
+                for fact in facts:
+                    out["pmemory:" + _pmem_id(name, fact)] = {"who": name, "text": fact}
+            own = h.s.get("persona_memory", "own") if getattr(h, "s", None) is not None else None
+            if own is not None and int(h.s.get("persona_memory", "at") or 0) > 0:     # меняли хоть раз — иначе не перебивать чужое
+                out["pmemory:own"] = {"names": list(own), "at": int(h.s.get("persona_memory", "at") or 0)}
         pers = getattr(h, "personas", None)
         if pers is not None and "persona" in ok and hasattr(pers, "own_ids"):
             # свои персонажи (19.10: создали на телефоне — пусть будет и на компьютере, и наоборот); облик — до 250 КБ
@@ -383,6 +396,58 @@ class Sync:
                 out.append(m.group(1).strip())
         return out
 
+    def _pfacts(self):
+        """Своя память персонажей: {имя: [факты]} — по файлам «Память/Персонажи/<имя>.md»."""
+        out = {}
+        try:
+            folder = self.host.workspace.ensure() / "Память" / "Персонажи"
+            files = sorted(folder.glob("*.md")) if folder.is_dir() else []
+        except OSError:
+            return out
+        for f in files[:40]:
+            try:
+                lines = f.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                continue
+            facts = [m.group(1).strip() for ln in lines if (m := _FACT.match(ln.strip()))]
+            if facts:
+                out[f.stem] = facts[-300:]
+        return out
+
+    def _apply_pmemory(self, iid, d, deleted):
+        h = self.host
+        if iid == "own":                                  # у кого своя память — с другого устройства, если новее
+            if deleted or not isinstance(d.get("names"), list):
+                return None
+            if int(d.get("at") or 0) > int(h.s.get("persona_memory", "at") or 0):
+                h.s.update({"persona_memory": {"own": [str(x)[:40] for x in d["names"] if x][:40], "at": int(d.get("at") or 0)}})
+                try:
+                    h.emit("settings", settings=h.s.snapshot())
+                except Exception:  # noqa: BLE001
+                    pass
+            return None
+        ws = h.workspace
+        if not deleted:
+            who, fact = str(d.get("who") or "").strip()[:40], re.sub(r"\s+", " ", str(d.get("text") or "").strip())
+            if who and fact and _fact_id(fact) not in {_fact_id(x) for x in self._pfacts().get(who, [])}:
+                ws.remember(fact, who=who)
+            return None
+        pre = iid.split("-", 1)[0]                        # удаление — без текста: файл по отпечатку имени, строку по id факта
+        fid = iid.split("-", 1)[1] if "-" in iid else ""
+        for name in self._pfacts():
+            if _pmem_id(name, "").split("-", 1)[0] != pre:
+                continue
+            from workspace import persona_mem_rel
+            p = ws.ensure() / persona_mem_rel(name)
+            try:
+                lines = p.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                continue
+            keep = [ln for ln in lines if not ((m := _FACT.match(ln.strip())) and _fact_id(m.group(1)) == fid)]
+            if len(keep) != len(lines):
+                p.write_text("\n".join(keep) + "\n", encoding="utf-8")
+        return None
+
     def _hash_of(self, snap, key):
         if key + "#h" in snap:
             return snap[key + "#h"]
@@ -415,6 +480,8 @@ class Sync:
             self._apply_note(iid, d, deleted)
         elif kind == "memory":
             self._apply_fact(iid, d.get("text") or "", deleted)
+        elif kind == "pmemory":
+            return self._apply_pmemory(iid, d, deleted)
         elif kind == "vault":
             return self._apply_vault(iid, d, deleted, it)
         elif kind in EXTRA_KINDS:
@@ -692,6 +759,8 @@ class Sync:
                 return None
             if d.get("taken_by") and d.get("taken_by") != self.state.get("device"):
                 return False
+            if d.get("to") and d.get("to") != self.state.get("device"):     # задача другому компьютеру («на рабочем…», 0.56)
+                return False
             if str(d.get("goal") or d.get("title") or "").strip() and not d.get("taken_by"):
                 self._claims[iid] = (dict(d), int(it_updated or 0))
         elif kind == "task" and isinstance(d, dict) and d.get("want") in ("delete", "stop", "answer"):
@@ -919,15 +988,43 @@ class Sync:
             idx[key] = {"h": None, "u": now}
             goal = str(d.get("goal") or d.get("title") or "").strip()
             try:
-                t = h.tasks.create(str(d.get("title") or goal[:50]), goal + "\n\n(Задачу поставили с телефона — результат он увидит.)")
+                who = str(d.get("from") or "").strip()[:40]
+                t = h.tasks.create(str(d.get("title") or goal[:50]), goal + (f"\n\n(Задачу поставили с устройства «{who}».)" if who else "\n\n(Задачу поставили с телефона — результат он увидит.)"))
             except (OSError, ValueError) as e:            # не роняем весь обмен из-за одной задачи
                 log.warning("Задача с телефона не создалась: %s", e)
                 continue
             log.info("🔄 Задача с телефона: «%s»", t.title)
             try:
-                h.push("Задача с телефона", f"Взялся: «{t.title}». Ход — в «Задачах», на телефоне тоже.", telegram=False)
+                h.push("Задача с " + (f"«{who}»" if who else "телефона"), f"Взялся: «{t.title}». Ход — в «Задачах», на телефоне тоже.", telegram=False)
             except Exception:  # noqa: BLE001
                 pass
+
+    def send_taskreq(self, data):
+        """Задача другому своему устройству («сделай на рабочем компьютере…», 0.56): запись taskreq сразу в облако.
+        data — {title, goal, to (id компьютера) или cloud}; от кого — имя этого. Шифрование включено — запечатана
+        (кроме задачи для облака: её читает сервер). -> id"""
+        token, link, url = self.host.credentials()
+        if not token:
+            raise SyncError("нет входа в Dewiar — задачу другому устройству не передать")
+        iid = "p" + uuid.uuid4().hex[:12]
+        d = dict(data, ts=_now_ms(), **{"from": self.host.device_name()})
+        ek = self.e2e_key()
+        body_data = _seal(ek, d) if ek and self._sealable("taskreq", iid, d) else d
+        headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+        if link and link != token:
+            headers["X-Sync-Link"] = link
+        body = {"since": int(self.state.get("rev") or 0), "device": self.state["device"], "name": self.host.device_name(), "app": "pc", "ver": _version(),
+                "kinds": ["taskreq"], "changes": [{"kind": "taskreq", "id": iid, "data": body_data, "updated": _now_ms()}]}
+        try:
+            r = httpx.post(url + "?p=/sync", json=body, headers=headers, timeout=30)
+        except httpx.HTTPError as e:
+            raise SyncError(f"облако не ответило: {e}") from e
+        if r.status_code >= 400:
+            raise SyncError(f"облако ответило {r.status_code}")
+        with self._lock:                                # своё не забирать обратно как чужую задачу
+            self.state.setdefault("idx", {})["taskreq:" + iid] = {"h": None, "u": body["changes"][0]["updated"], "skip": True}
+            self._save()
+        return iid
 
     def _apply_note(self, sid, d, deleted):
         """Удаление — в корзину Dewiar (workspace.remove). Новая заметка получает свободное имя по заголовку в своей
@@ -1010,7 +1107,7 @@ class Sync:
             if not fact:
                 return
             if _fact_id(fact) not in {_fact_id(x) for x in self._facts()}:
-                ws.remember(fact)
+                ws.remember(fact, who="")                 # общая «Обо мне», а не своя память того, кто сейчас отвечает
             return
         p = ws.ensure() / MEMORY
         try:
@@ -1100,7 +1197,7 @@ class Sync:
             elif not vault_on and "vault" in (self.state.get("kinds") or ()):
                 self.state["vault_paused"] = True
             body = {"since": int(self.state.get("rev") or 0), "device": self.state["device"], "name": self.host.device_name(),
-                    "kinds": kinds,
+                    "app": "pc", "ver": _version(), "kinds": kinds,
                     "changes": []}
             rest = [{k: v for k, v in c.items() if k != "_h"} for c in changes]
             body["changes"], rest = rest[:CHUNK], rest[CHUNK:]
@@ -1192,7 +1289,13 @@ class Sync:
                     if st.get("h") is None and not st.get("del") and key in snap2:
                         st["h"] = self._hash_of(snap2, key)
             self._save()
-            self.status.update(ok=True, at=int(time.time()), error="", devices=d.get("devices") or [], space=d.get("space", ""),
+            cl = getattr(self.host, "close", None)           # в ящике своих устройств новое — забрать сразу (просьба «пришли мозги»)
+            if cl is not None and int(d.get("box") or 0) > int((getattr(cl, "st", None) or {}).get("cursor") or 0):
+                try:
+                    cl.soon.set()
+                except Exception:  # noqa: BLE001
+                    pass
+            self.status.update(ok=True, at=int(time.time()), error="", devices=d.get("devices") or [], space=d.get("space", ""), all=d.get("all") or [],
                                counts={"sent": len(changes), "got": got}, e2e=self.e2e_status())
             if changes or got:
                 log.info("🔄 Синхронизация: отправлено %d, получено %d", len(changes), got)
@@ -1226,6 +1329,14 @@ class Sync:
             self.soon.wait(interval)
             self.soon.clear()
             time.sleep(2)                                # несколько правок подряд — одним обменом
+
+
+def _version():
+    try:
+        from version import VERSION
+        return VERSION
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def default_device_name():

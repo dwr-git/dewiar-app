@@ -76,7 +76,7 @@ function loadMe() {
   const a = S && lastAccount; $("#kn-site").textContent = a && a.logged_in ? `Знания с сайта тоже подключены: аккаунт ${a.user && a.user.login || a.login} (раздел «Подключение»).` : "";
 }
 let lastAccount = null;
-$("#me-save").onclick = () => core.call("memory_set", { text: $("#me-mem").value }).then(() => { if (window.mpxLoad) mpxLoad(); $("#me-res").className = "res ok"; $("#me-res").textContent = "Сохранено"; setTimeout(() => ($("#me-res").textContent = ""), 2500); }).catch(e => toast(e.message));
+$("#me-save").onclick = () => core.call("memory_set", { text: $("#me-mem").value, who: typeof mpxWho === "string" ? mpxWho : "" }).then(() => { if (window.mpxLoad) mpxLoad(); $("#me-res").className = "res ok"; $("#me-res").textContent = "Сохранено"; setTimeout(() => ($("#me-res").textContent = ""), 2500); }).catch(e => toast(e.message));
 $("#kn-open").onclick = () => core.call("knowledge_open").catch(e => toast(e.message));
 $("#kn-file").onchange = async (ev) => {
   const files = [...ev.target.files]; ev.target.value = ""; const r = $("#kn-res"); let n = 0;

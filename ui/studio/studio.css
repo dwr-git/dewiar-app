@@ -2105,6 +2105,7 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 
 /* ---------- «Обо мне» → «Что ассистент помнит»: страницы по людям и темам (Память 2.0, 27.10) ---------- */
 .mpx-strip { display: block; padding: 12px 16px; border-radius: 16px; background: rgba(127,127,127,.08); font-size: 13px; color: var(--muted); margin: 0 0 14px; line-height: 1.5; }
+.mpx-who { margin: 0 0 12px; } .mpx-who[hidden] { display: none; }
 .mpx-strip b { color: var(--ink); }
 .mpx-strip .pill { display: inline-block; margin-right: 10px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 700; font-size: 12px; white-space: nowrap; }
 .mpx { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -2580,3 +2581,54 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .tm-rep b { font-size: 13px; } .tm-rep small { font-size: 11.5px; color: var(--muted); }
 .tm-rep button { border: 0; background: none; color: var(--muted); font-size: 17px; line-height: 1; padding: 2px 6px; border-radius: 8px; cursor: pointer; }
 .tm-rep button:hover { background: rgba(127,127,140,.14); color: var(--ink); }
+
+/* «Устройства» (0.56): карта — Лира в середине и все ваши устройства вокруг; это устройство; код и QR; список с состоянием */
+#p-devices [hidden] { display: none !important; }
+.dv-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; align-items: stretch; margin-bottom: 18px; }
+.dv-map, .dv-me, .dv-card { border-radius: 24px; background: var(--glass); box-shadow: var(--raise-s, none); min-width: 0; }
+.dv-map { display: grid; place-items: center; padding: 10px; min-height: 250px; }
+.dv-map > svg { width: 100%; max-width: 440px; height: auto; overflow: visible; }
+.dv-ln { stroke: var(--dim); stroke-width: 1.4; stroke-dasharray: 3 5; opacity: .6; }
+.dv-ln.on { stroke: var(--good); stroke-dasharray: none; opacity: .9; stroke-width: 2; }
+.dv-node circle { fill: var(--panel2); stroke: var(--line); stroke-width: 1; }
+.dv-node svg { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.dv-node.on circle { fill: rgba(75,227,161,.16); stroke: rgba(75,227,161,.6); } .dv-node.on svg { stroke: var(--good); }
+.dv-node.me circle { stroke: var(--accent); stroke-width: 2; }
+.dv-lbl { font-size: 10.5px; fill: var(--muted); text-anchor: middle; font-family: inherit; }
+.dv-orb { filter: drop-shadow(0 8px 18px rgba(122,108,240,.55)); }
+.dv-orbt { font-size: 11px; font-weight: 700; fill: #fff; text-anchor: middle; font-family: "Unbounded", "Ubuntu", sans-serif; }
+.dv-me { padding: 22px 24px; display: flex; flex-direction: column; gap: 10px; }
+.dv-k { font-size: 12.5px; color: var(--muted); }
+.dv-name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dv-name b { font-family: "Unbounded", "Ubuntu", sans-serif; font-size: 22px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.dv-st { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+.dv-st.ok { color: var(--good); } .dv-st.bad { color: var(--bad); }
+.dv-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.dv-pair { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; margin-bottom: 26px; }
+.dv-card { padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+.dv-card h2 { font-size: 17px; margin: 0; }
+.dv-card .hint { margin: 0; }
+.dv-code { display: flex; gap: 20px; align-items: center; }
+.dv-qr { width: 150px; height: 150px; flex: none; border-radius: 16px; background: #fff; padding: 8px; box-sizing: border-box; }
+.dv-qr.seal { padding: 0; background: none; border-radius: 7%; box-shadow: 0 14px 30px -16px rgba(0,0,0,.6); }
+.dv-qr svg { width: 100%; height: 100%; display: block; }
+.dv-digits { display: block; font-family: "Unbounded", "Ubuntu", sans-serif; font-size: 40px; font-weight: 600; letter-spacing: .08em; font-variant-numeric: tabular-nums; line-height: 1.1; margin-bottom: 6px; }
+.dv-in { display: flex; gap: 8px; }
+.dv-in input { flex: 1; min-width: 0; font-size: 22px; letter-spacing: .12em; font-variant-numeric: tabular-nums; text-align: center; padding: 10px 12px; }
+.dv-brains { margin-bottom: 26px; flex-direction: row; align-items: center; gap: 20px; flex-wrap: wrap; } .dv-brains > div:first-child { flex: 1 1 360px; } .dv-brains .res { flex-basis: 100%; margin: 0; }
+.dv-listh { display: flex; align-items: baseline; gap: 12px; margin: 0 4px 10px; }
+.dv-listh h2 { font-size: 17px; margin: 0; }
+.dv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dv-list li { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 18px; background: var(--glass); }
+.dv-list li.dv-empty { color: var(--muted); font-size: 13.5px; }
+.dv-ic { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--panel); }
+.dv-ic svg { width: 22px; height: 22px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.dv-list li.on .dv-ic svg { stroke: var(--good); }
+.dv-row { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dv-row b { font-size: 14.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dv-row small { color: var(--muted); font-size: 12.5px; }
+.dv-chip { font-style: normal; font-size: 11.5px; font-weight: 700; padding: 1px 9px; border-radius: 99px; background: rgba(139,140,247,.18); color: var(--accent); }
+.dv-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); margin: 0 5px 1px 0; vertical-align: middle; }
+.dv-list li.on .dv-dot { background: var(--good); box-shadow: 0 0 6px var(--good); }
+.dv-foot { margin-top: 16px; max-width: 80ch; }
+@media (max-width: 1040px) { .dv-hero, .dv-pair { grid-template-columns: 1fr; } }

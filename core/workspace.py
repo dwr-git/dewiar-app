@@ -32,6 +32,20 @@ if os.environ.get("DEWIAR_WORKSPACE_DIR"):     # проверки и перен�
 FALLBACK_DIR = Path(os.environ.get("DEWIAR_WORKSPACE_FALLBACK") or (Path.home() / "Dewiar"))
 FOLDERS = ("Заметки", "Знания", "Навыки", "Лаборатория", "Дневник", "Память")
 MEMORY = Path("Память") / "Обо мне.md"
+PERSONA_MEM = Path("Память") / "Персонажи"   # своя память персонажа (0.56, по желанию): «Память/Персонажи/Патрик.md»
+
+
+def persona_mem_rel(who):
+    """Файл своей памяти персонажа по имени (имя — как в «Персонажах»; лишние знаки — прочь). -> Path"""
+    name = re.sub(r"[\\/:*?\"<>|\x00-\x1f]+", "", str(who or "")).strip(" .")[:40] or "Персонаж"
+    return PERSONA_MEM / f"{name}.md"
+
+
+def persona_mem_head(who):
+    return (f"# Обо мне — память {who}\n\nЧто {who} знает о вас — только для этого персонажа (своя память, студия → «Персонажи»). "
+            "Другие персонажи этого не видят. Можно править и стирать — это ваш файл.\n\n")
+
+
 TEXT_EXT = {".md", ".txt", ".py", ".sh", ".log", ".json", ".csv", ".yaml", ".yml", ".html", ".js", ".toml", ".ini", ".htm", ".svg",
             ".tsv", ".css", ".xml", ".srt", ".vtt", ".ts", ".bat", ".ps1"}
 MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября",
@@ -475,14 +489,30 @@ class Workspace:
         found.sort(key=lambda x: -x[0])
         return [{"path": f, "snippet": s} for _, f, s in found[:limit]]
 
-    def remember(self, fact):
-        """Дописывает строку в «Обо мне» в формате «- факт _(дд.мм.гггг)_» (его разбирает _FACT в sync.py).
-        Уже известное (текст есть в файле) не повторяет. -> фраза для ответа."""
+    # Своя память персонажа (0.56, «Персонажи» → «Своя память»): mem_owner() — имя персонажа, у которого своя память и
+    # который сейчас отвечает (ядро ставит), иначе "" — общая «Обо мне». who=None — по mem_owner(), "" — общая, имя — его.
+    mem_owner = None
+
+    def _mem(self, who=None):
+        if who is None:
+            try:
+                who = self.mem_owner() if callable(self.mem_owner) else ""
+            except Exception:  # noqa: BLE001
+                who = ""
+        if not who:
+            return MEMORY, MEMORY_HEAD
+        return persona_mem_rel(who), persona_mem_head(who)
+
+    def remember(self, fact, who=None):
+        """Дописывает строку в «Обо мне» (или в свою память персонажа) в формате «- факт _(дд.мм.гггг)_» (его разбирает
+        _FACT в sync.py). Уже известное (текст есть в файле) не повторяет. -> фраза для ответа."""
         fact = re.sub(r"\s+", " ", (fact or "").strip())
         if not fact:
             raise WorkspaceError("пустой факт")
-        p = self.safe(str(MEMORY))
-        old = p.read_text(encoding="utf-8") if p.exists() else MEMORY_HEAD
+        rel, head = self._mem(who)
+        p = self.safe(str(rel))
+        p.parent.mkdir(parents=True, exist_ok=True)
+        old = p.read_text(encoding="utf-8") if p.exists() else head
         if fact.lower().rstrip(".") in old.lower():
             return "Это я уже знаю."
         subj, val = fact_parts(fact)
@@ -507,25 +537,31 @@ class Workspace:
                 lines[i] = f"- {body} (раньше: {prev}; менялось {n} {word}). _({dt.date.today():%d.%m.%Y})_"
                 p.write_text("\n".join(lines), encoding="utf-8")
                 return f"Обновил (раньше: {prev})."
+        if not p.exists():
+            p.write_text(head, encoding="utf-8")
         with open(p, "a", encoding="utf-8") as f:
             f.write(f"- {fact} _({dt.date.today():%d.%m.%Y})_\n")
         return "Запомнил."
 
-    def memory_get(self):
-        p = self.safe(str(MEMORY))
-        text = p.read_text(encoding="utf-8") if p.exists() else MEMORY_HEAD
-        return text[len(MEMORY_HEAD):] if text.startswith(MEMORY_HEAD) else text
+    def memory_get(self, who=None):
+        rel, head = self._mem(who)
+        p = self.safe(str(rel))
+        text = p.read_text(encoding="utf-8") if p.exists() else head
+        return text[len(head):] if text.startswith(head) else text
 
-    def memory_set(self, body):
+    def memory_set(self, body, who=None):
         body = (body or "").strip()
-        p = self.safe(str(MEMORY))
-        p.write_text(MEMORY_HEAD + (body + "\n" if body else ""), encoding="utf-8")
+        rel, head = self._mem(who)
+        p = self.safe(str(rel))
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(head + (body + "\n" if body else ""), encoding="utf-8")
         return True
 
-    def memory_text(self, limit=2500):
+    def memory_text(self, limit=2500, who=None):
         """«Обо мне» без шапки — для подсказки модели; при переполнении остаются последние limit знаков (новое важнее)."""
+        rel, _ = self._mem(who)
         try:
-            text = (self.root / MEMORY).read_text(encoding="utf-8")
+            text = (self.root / rel).read_text(encoding="utf-8")
         except OSError:
             return ""
         body = text.split("\n\n", 2)[-1] if text.startswith("# Обо мне") else text

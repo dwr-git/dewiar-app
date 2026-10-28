@@ -101,6 +101,7 @@
   <button data-p="skills">Плагины</button>
   <button data-p="features" title="Что показывать: игры, встречи, радар, суфлёр — включайте только нужное">Возможности</button>
   <div class="ng">Связи и данные</div>
+  <button data-p="devices" title="Все ваши компьютеры и телефоны — одна Лира: подключить, состояние, синхронизация">Устройства</button>
   <button data-p="dw" id="nav-dw">Dewiar.pro<i class="ndot" id="dw-dot"></i></button>
   <button data-p="connect">Подключение</button>
   <button data-p="servers">Серверы</button>
@@ -776,6 +777,7 @@
     </div>
     <h2>Что ассистент помнит</h2>
     <p class="hint" style="margin-bottom:10px">По людям и темам, с датами. Ассистент дописывает сам, когда узнаёт важное надолго («запомни, что…»); изменилось — заменит новым и запомнит, как было раньше. Лишнее — «×».</p>
+    <div class="mpx-who stabs" id="mpx-who" role="tablist" aria-label="Чья память" hidden></div>
     <div class="mpx-strip" id="mpx-strip"></div>
     <div class="mpx">
       <div class="mpx-col"><input type="search" id="mpx-find" placeholder="Найти по смыслу: «что подарить маме»"><div id="mpx-pages"></div></div>
@@ -807,6 +809,54 @@
     <p class="hint" id="kn-site" style="margin-top:14px"></p>
   </section>
 
+  <section id="p-devices" class="wide">
+    <div class="dv-top">
+      <div><h1>Устройства</h1><p class="lead">Одна Лира на всех ваших компьютерах и телефонах: память, заметки, дела, платежи и свои персонажи — общие.
+        Новое устройство подключается кодом из 6 цифр — без ключей и паролей.</p></div>
+    </div>
+    <div class="dv-hero">
+      <div class="dv-map" id="dv-map" aria-hidden="true"></div>
+      <div class="dv-me">
+        <span class="dv-k">Это устройство</span>
+        <div class="dv-name"><b id="dv-myname">—</b><button class="btn small" id="dv-rename" type="button" title="Своё имя — его увидят другие устройства">Переименовать</button></div>
+        <p class="dv-st" id="dv-sync-st">—</p>
+        <div class="dv-acts"><button class="btn primary" id="dv-now" type="button">Синхронизировать сейчас</button></div>
+        <div class="switch slim"><div>Синхронизировать<span id="dv-via">—</span></div><label class="tg"><input type="checkbox" id="dv-sync-on"><i></i></label></div>
+        <div class="switch slim"><div>Шифровать на устройстве<span>Облако видит только шифротекст; ключ знают ваши устройства.</span></div><label class="tg"><input type="checkbox" id="dv-e2e"><i></i></label></div>
+      </div>
+    </div>
+    <div class="dv-pair">
+      <div class="dv-card" id="dv-give">
+        <h2>Подключить ещё устройство</h2>
+        <p class="hint" id="dv-give-hint">Покажите код другому компьютеру или телефону — он станет той же Лирой.</p>
+        <div class="dv-code" id="dv-code" hidden>
+          <div class="dv-qr" id="dv-qr"></div>
+          <div><b class="dv-digits" id="dv-digits">— — —</b><p class="hint" id="dv-left">Действует 10 минут.</p>
+            <p class="hint">На том устройстве: «Устройства» → «Ввести код». Телефон может просто навести сканер на квадрат.</p></div>
+        </div>
+        <div class="dv-acts"><button class="btn primary" id="dv-give-go" type="button">Показать код</button></div>
+        <p class="res" id="dv-give-res"></p>
+      </div>
+      <div class="dv-card" id="dv-take">
+        <h2>Ввести код</h2>
+        <p class="hint">Dewiar уже работает на другом устройстве? Там: «Устройства» → «Подключить ещё устройство», а сюда — 6 цифр.
+          Своя модель здесь останется главной.</p>
+        <div class="dv-in"><input type="text" id="dv-codein" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" aria-label="Код из 6 цифр"><button class="btn primary" id="dv-take-go" type="button">Подключить</button></div>
+        <p class="res" id="dv-take-res"></p>
+      </div>
+    </div>
+    <div class="dv-card dv-brains" id="dv-brains">
+      <div><h2>Мозги с другого устройства</h2>
+        <p class="hint">Настроили модель на другом компьютере или телефоне — возьмите её сюда одной кнопкой: адрес, модель и ключ придут
+          зашифрованными, только вашим устройствам. Ваша модель здесь останется главной; выбрать новую — в «Мозге».</p></div>
+      <div class="dv-acts"><button class="btn" id="dv-brains-go" type="button">Взять мозги</button></div>
+      <p class="res" id="dv-brains-res"></p>
+    </div>
+    <div class="dv-listh"><h2>Все устройства</h2><span class="hint" id="dv-count"></span></div>
+    <ul class="dv-list" id="dv-list" aria-label="Ваши устройства"></ul>
+    <p class="hint dv-foot">Синхронизация идёт сама — раз в минуту и сразу после правок. Что синхронизируется: напоминания, заметки и блокнот,
+      расходы, память «Обо мне», душа и свои персонажи, дневник, задачи; между компьютерами — ещё «Платежи».</p>
+  </section>
   <section id="p-dw" class="wide">
     <h1>Dewiar.pro</h1>
     <p class="lead">Подключите Dewiar.pro — модели, Знания и голоса включатся сами. Метка в углу карточки: зелёная — работает,
@@ -859,7 +909,7 @@
         <p class="hint">Телефон и компьютеры — одно и то же: напоминания и будильники, заметки и списки, расходы, память «Обо мне»; между компьютерами — ещё и «Платежи» с платёжками. Через сервер Dewiar, по вашему аккаунту или ключу — на всех устройствах тот же вход.</p>
         <div class="switch"><div>Синхронизировать<span id="dw-sync-via">—</span></div><label class="tg"><input type="checkbox" id="dw-sync-on"><i></i></label></div>
         <div class="switch"><div>Шифровать на устройстве<span id="dw-e2e-why">Заметки, дела, деньги и память уходят в облако уже зашифрованными — ключ знают только ваши устройства, сервер dewiar.pro их не прочитает. Включите на одном — остальные получат ключ сами.</span></div><label class="tg"><input type="checkbox" id="dw-e2e"><i></i></label></div>
-        <div class="actions" style="margin:0"><span class="hint" id="dw-sync-st" style="flex:1;margin:0"></span><button class="btn" id="dw-sync-now">Синхронизировать сейчас</button></div>
+        <div class="actions" style="margin:0"><span class="hint" id="dw-sync-st" style="flex:1;margin:0"></span><button class="btn" id="dw-devs" type="button">Все устройства</button><button class="btn" id="dw-sync-now">Синхронизировать сейчас</button></div>
       </div>
       <div class="dwc" id="dwc-kb">
         <div class="dh"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg><h3>Знания</h3><span class="dws" id="dws-kb">—</span></div>
@@ -1224,7 +1274,7 @@
       <div class="cc-h"><div><b>ИИ-баланс · модели Dewiar</b><span id="cc-sub"></span></div><div class="cc-pct" id="cc-pct"></div></div>
       <div class="cc-bar"><i id="cc-fill"></i></div>
       <div class="cc-f"><span id="cc-turns"></span><span class="cc-act"><button class="btn small primary" id="cc-top">Пополнить</button>
-        <button class="btn small" id="cc-use">Отвечать моделями Dewiar</button><button class="btn small" id="cc-ref">Обновить</button><button class="btn small" id="cc-pair" title="Код из 6 цифр — тот же ключ на другом компьютере или телефоне">Добавить устройство</button><button class="btn small danger" id="cc-off">Убрать ключ</button></span></div>
+        <button class="btn small" id="cc-use">Отвечать моделями Dewiar</button><button class="btn small" id="cc-ref">Обновить</button><button class="btn small" id="cc-pair" title="Код из 6 цифр и QR — в «Устройствах»">Подключить ещё устройство</button><button class="btn small danger" id="cc-off">Убрать ключ</button></span></div>
       <p class="res" id="cc-pair-res" style="margin:6px 0 0"></p>
       <div class="cc-pay" id="cc-pay" style="display:none">
         <p class="hint" id="cc-topup" style="margin:0 0 10px;white-space:pre-line;line-height:1.55"></p>
@@ -1841,6 +1891,9 @@
   <h2>Мозг</h2>
   <p class="hint" style="margin:-4px 0 10px">Кем думает этот персонаж. «Как у всех» — общий мозг из раздела «Мозг». Можно дать каждому свою модель: Лире — модели Dewiar, Кодеру — модель для кода, Патрику — Claude или GPT по вашему ключу. Переключать вручную больше не нужно.</p>
   <div class="brainpick" id="e-brain" role="radiogroup" aria-label="Мозг персонажа"></div>
+  <h2>Память</h2>
+  <p class="hint" style="margin:-4px 0 10px">Что этот персонаж помнит о вас. «Общая» — одна память на всех персонажей. «Своя» — он помнит только то, что рассказали ему, а другие этого не знают.</p>
+  <div class="brainpick" id="e-mem" role="radiogroup" aria-label="Память персонажа"></div>
   <h2>Облик</h2>
   <div class="styles" id="e-styles"></div>
   <div class="actions" style="margin-top:10px"><label class="btn small">Загрузить своё фото<input type="file" id="e-photo" accept="image/*" hidden></label><button class="btn small" id="e-nophoto">Убрать фото</button></div>
@@ -1940,6 +1993,7 @@
 <script src="studio/family.js"></script>
 <script src="studio/team.js"></script>
 <script src="studio/clients.js"></script>
+<script src="studio/devices.js"></script>
 <script src="studio/qa.js"></script>
 <script src="studio/course.js"></script>
 <script src="studio/vault.js"></script>

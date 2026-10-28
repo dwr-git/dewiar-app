@@ -61,8 +61,8 @@ with sync_playwright() as p:
     pg.click('nav button[data-p="dw"]'); pg.wait_for_timeout(500)
     if pg.locator("#dw-login").count() and pg.is_visible("#dw-login"):
         pg.fill("#dw-login", "482 913"); pg.fill("#dw-pass", "x"); pg.click("#dw-go"); pg.wait_for_timeout(500)
-        c = pg.evaluate("calls.filter(c => c[0] === 'cloud_connect' || c[0] === 'account_login')")
-        ok(c and c[0][0] == "cloud_connect" and c[0][1]["key"] == "482913", f"6 цифр в поле логина — подключение по коду: {c}")
+        c = pg.evaluate("calls.filter(c => c[0] === 'pair_claim' || c[0] === 'cloud_connect' || c[0] === 'account_login')")
+        ok(c and c[0][0] == "pair_claim" and c[0][1]["code"] == "482913", f"6 цифр в поле логина — подключение по коду (pair_claim, 0.56): {c}")
         pg.evaluate("calls.length = 0"); pg.fill("#dw-login", "masha"); pg.fill("#dw-pass", "123 456"); pg.click("#dw-go"); pg.wait_for_timeout(600)
         c = [x[0] for x in pg.evaluate("calls") if x[0] in ("cloud_connect", "account_login")]
         ok(c == ["account_login", "cloud_connect"], f"6 цифр в пароле: сначала вход, не вышло — пробуем как код: {c}")

@@ -228,8 +228,8 @@ $("#dw-go").onclick = async () => {
   const code = /^\d{6}$/.test(login.replace(/[\s-]/g, "")) ? login.replace(/[\s-]/g, "") : "";   // в поле логина — 6 цифр: это код
   if (code) {
     $("#dw-go").disabled = true; r.className = "res"; r.textContent = "Это код с другого устройства — подключаю по нему…";
-    try { await core.call("cloud_connect", { key: code }); $("#dw-pass").value = ""; r.className = "res ok"; r.textContent = "Подключено по коду — как на том устройстве."; setTimeout(() => dwLoad(), 1500); }
-    catch (e) { r.className = "res bad"; r.textContent = e.message + " (код живёт 10 минут: возьмите новый — «Добавить устройство» на том устройстве)"; }
+    try { await core.call("pair_claim", { code }); $("#dw-pass").value = ""; r.className = "res ok"; r.textContent = "Подключено по коду — как на том устройстве."; setTimeout(() => dwLoad(), 1500); }
+    catch (e) { r.className = "res bad"; r.textContent = e.message + " (код живёт 10 минут: возьмите новый — «Устройства» → «Подключить ещё устройство» на том устройстве)"; }
     finally { $("#dw-go").disabled = false; }
     return;
   }
@@ -413,12 +413,10 @@ $("#cc-off").onclick = async () => { if (await ask("Убрать ключ Dewiar
 // своим ключом dw-… или входом аккаунтом — ядро знает, чем (cloud_connect use); профиль облака снова активный
 async function cloudUse() { const r = await core.call("cloud_connect", { use: true }); DW.cloud = r; cloudFill(r); renderProfiles(); if ($("#p-dw").classList.contains("cur")) dwRender(); return r; }
 $("#cc-use").onclick = async () => { try { await cloudUse(); toast("Отвечают модели Dewiar"); } catch (e) { toast(e.message); } };
-/* «Добавить устройство»: код из 6 цифр на 10 минут — тот же ключ на другом компьютере или телефоне */
-$("#cc-pair").onclick = async (ev) => { const r = $("#cc-pair-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "получаю код…";
-  try { const d = await core.call("pair_new");
-    if (!d.code) { r.textContent = d.text || "Код не выдан."; return; }
-    r.className = "res ok"; r.innerHTML = `Код: <b style="font-size:20px;letter-spacing:3px">${escH(d.code.slice(0, 3) + " " + d.code.slice(3))}</b> — на другом устройстве: «Мозг» → «Подключить бесплатно» (на телефоне — «Код или ключ Dewiar») → введите код. Действует 10 минут.`; }
-  catch (e) { r.className = "res bad"; r.textContent = e.message; } finally { ev.target.disabled = false; } };
+/* «Подключить ещё устройство» (0.56): всё про устройства — в разделе «Устройства» (код и QR там же) */
+const dvGo = (code) => { const b = document.querySelector('nav button[data-p="devices"]'); if (b) b.click(); if (code) setTimeout(() => { const g = $("#dv-give-go"); if (g && !g.disabled) g.click(); }, 600); };
+$("#cc-pair").onclick = () => dvGo(true);
+$("#dw-devs").onclick = () => dvGo(false);
 /* «Попробовать без регистрации»: заявка — ключ придёт сам (ядро спрашивает раз в минуту, _join_loop) */
 function joinFill() {
   const j = (S && S.cloud && S.cloud.join) || {}, a = DW.acc || {}, box = $("#dk-join"); if (!box) return;
@@ -474,7 +472,7 @@ $("#dk-go").onclick = async (ev) => {
         try { const s = await core.call("cloud_status"); if (s && s.connected) c = s; else if (s) break; } catch (x) { /* ядро ещё не вернулось */ }
       }
       if (!c) { r.className = "res bad"; r.textContent = "Связь с ядром прервалась, подключение не прошло. Нажмите «Подключить» ещё раз"
-        + (/^\d[\d\s-]{4,8}\d$/.test(key) ? " — а если код уже не подходит, возьмите новый на том устройстве («Мозг» → «Добавить устройство»)." : "."); }
+        + (/^\d[\d\s-]{4,8}\d$/.test(key) ? " — а если код уже не подходит, возьмите новый на том устройстве («Устройства» → «Подключить ещё устройство»)." : "."); }
     }
   }
   if (c) {

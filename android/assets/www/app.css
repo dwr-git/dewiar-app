@@ -1292,3 +1292,27 @@ body.kids #b-close, body.kids #b-soul, body.kids #b-work { display: none !import
   #top:has(#b-work:not([hidden])):has(#b-play:not([hidden])) { gap: 1px; padding-left: 8px; padding-right: 8px; }
   #top:has(#b-work:not([hidden])):has(#b-play:not([hidden])) .ib { width: 34px; height: 34px; }
 }
+/* «Устройства» (devices.js, 0.56): это устройство, код и QR, ввести код, все устройства с состоянием */
+.dvme .row2 { margin-top: 4px; }
+.dvname { flex: 1; min-width: 0; font-family: "Unbounded", "Manrope", sans-serif; font-size: 19px; font-weight: 600; overflow-wrap: anywhere; }
+.dvcode { text-align: center; margin: 0 0 12px; }
+.dvcode[hidden] { display: none; }
+.dvqr { width: 200px; height: 200px; margin: 0 auto 10px; border-radius: 16px; background: #fff; padding: 10px; box-sizing: border-box; }
+.dvqr.seal { padding: 0; background: none; border-radius: 7%; box-shadow: 0 14px 30px -16px rgba(0,0,0,.6); }
+.dvqr svg { width: 100%; height: 100%; display: block; stroke: none; }       /* общее «svg» рисует контуры — печати и QR они ни к чему */
+.dvdig { display: block; font-family: "Unbounded", "Manrope", sans-serif; font-size: 34px; font-weight: 600; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.dvlist { padding: 6px 12px; }
+.dvr { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--glass-line); }
+.dvr:last-child { border-bottom: 0; }
+.dvi { width: 38px; height: 38px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--field); }
+.dvi svg { width: 21px; height: 21px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.dvr.on .dvi svg { stroke: var(--good); }
+.dvt { flex: 1; min-width: 0; }
+.dvt b { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 15px; }
+.dvt b em { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--ink); }
+.dvt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.dvt small i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); margin: 0 5px 1px 0; vertical-align: middle; }
+.dvr.on .dvt small i { background: var(--good); box-shadow: 0 0 6px var(--good); }
+.dvr .lnk { color: var(--muted); font-size: 13px; padding: 6px 4px; }
+.dvin { background: var(--field); border: 0; border-radius: 14px; padding: 10px 12px; color: var(--ink); font: inherit; outline: none; box-shadow: inset 0 0 0 1px var(--frost-hi); }
+.dvin:focus { box-shadow: inset 0 0 0 2px var(--accent); }

@@ -59,7 +59,7 @@ try:
             rows = pg.evaluate("[...document.querySelectorAll('#qa-left .qa-row b')].map(x => x.textContent)")
             ok(any("Детский режим" in r for r in rows) and any("Семья" in r for r in rows), f"плитка «Семья и дети» — её статьи: {rows}")
             pg.fill("#qa-q", "как связать телефон и компьютер"); time.sleep(1.0)
-            ok("Синхронизация компьютера и телефона" in pg.inner_text("#qa-art h2") and "Добавить устройство" in pg.inner_text("#qa-art"),
+            ok("Устройства" in pg.inner_text("#qa-art h2") and "Подключить ещё устройство" in pg.inner_text("#qa-art"),
                f"поиск своими словами — нужная статья справа: {pg.inner_text('#qa-art h2')}")
             if SHOTS:
                 pg.screenshot(path=os.path.join(SHOTS, "qa-search.png"))
