@@ -313,6 +313,9 @@ class Team:
         self._save()
         try:
             self.host.emit("team", **self.public())
+            cb = getattr(self.host, "team_changed", None)     # свой телефон руководителя — свежую доску (engine_tools)
+            if callable(cb):
+                cb()
         except Exception:  # noqa: BLE001
             log.debug("Команда: событие", exc_info=True)
 
@@ -569,7 +572,7 @@ class Team:
             tid = secrets.token_hex(4)
             t = {"id": tid, "who": mid, "title": title, "note": str(note or "").strip()[:500],
                  "due": at.strftime("%Y-%m-%dT%H:%M") if at else "", "state": "new", "created": time.time(), "log": []}
-            self._ev(t, "assign", "голосом" if via == "voice" else "по расписанию" if via == "repeat" else "")
+            self._ev(t, "assign", "голосом" if via == "voice" else "по расписанию" if via == "repeat" else "с телефона" if via == "phone" else "")
             self.st["tasks"][tid] = t
         chat = (m.get("tg") or {}).get("chat")
         if chat:
@@ -656,6 +659,26 @@ class Team:
             raise TeamError("сотрудник ещё не открыл приглашение")
         with self._lock:
             self._ev(t, "nudge")
+        self._changed()
+        return self.public()
+
+    def message(self, who, text):
+        """Написать сотруднику не по поручению — ответить на его сообщение или сказать что-то (0.56; владелец: «сотрудник может
+        написать руководителю, а ответить ему из студии нельзя»). who — id или имя. Уходит туда же, где он получает поручения:
+        в Telegram, MAX или приложение Dewiar. В «Сообщения» — со стрелкой «вы → он». -> public()"""
+        text = str(text or "").strip()[:1000]
+        if not text:
+            raise TeamError("что написать?")
+        mid = who if who in self.st["members"] else self.find(who)
+        m = self.st["members"][mid]
+        chat = (m.get("tg") or {}).get("chat")
+        if not chat:
+            raise TeamError(f"{m['name']} ещё не {verb(m['name'], 'вошёл')} — сообщение не дойдёт; отправьте приглашение")
+        if self._send(chat, f"{self.boss()}: {text}", ch=self._mch(m)) is None:
+            raise TeamError("не отправилось — проверьте связь и попробуйте ещё раз")
+        with self._lock:
+            self.st.setdefault("inbox", []).append({"ts": time.time(), "who": mid, "t": text, "out": True})
+            self.st["inbox"] = self.st["inbox"][-200:]
         self._changed()
         return self.public()
 
@@ -1167,6 +1190,25 @@ class Team:
                                  next_text=due_text(r["next"], now)) for r in sorted(self.st.get("repeats", {}).values(), key=lambda x: x["next"])],
                 "inbox": [dict(x, name=(self.st["members"].get(x["who"]) or {}).get("name", "—")) for x in self.st.get("inbox", [])[-20:]],
                 "counts": {s: sum(1 for x in tasks if x["state"] == s) for s in STATES}}
+
+    def boss_snap(self):
+        """Доска для своего телефона руководителя («Поручения» на телефоне, 0.56): кто, что, сроки, отчёты и переписка —
+        без ссылок-приглашений, кодов и путей к фото. Уходит только своим устройствам, зашифрованным (конверт own)."""
+        p = self.public()
+
+        def remark(t):
+            back = [e for e in t.get("log") or [] if e.get("ev") == "back"]
+            return back[-1].get("t", "") if back and t["state"] in OPEN else ""
+        tasks = [{"id": t["id"], "title": t["title"], "note": t.get("note") or "", "state": t["state"], "who": t["who"], "name": t["name"],
+                  "due": t.get("due") or "", "due_text": t["due_text"], "late": t["late"], "reason": t.get("reason") or "",
+                  "report": (t.get("report") or {}).get("t", "") if isinstance(t.get("report"), dict) else "",
+                  "photo": bool((t.get("report") or {}).get("photo")) if isinstance(t.get("report"), dict) else False,
+                  "remark": remark(t), "ts": (t.get("log") or [{}])[-1].get("ts") or t.get("created") or 0} for t in p["tasks"]]
+        return {"company": p["company"], "boss": p["boss"], "at": int(time.time() * 1000),
+                "members": [{k: m[k] for k in ("id", "name", "role", "color", "joined", "open", "left")} for m in p["members"]],
+                "tasks": tasks[:150], "repeats": [{"title": r["title"], "name": r["name"], "rule": r["rule"]} for r in p["repeats"]][:30],
+                "inbox": [{"ts": x["ts"], "who": x["who"], "name": x["name"], "t": x.get("t") or "", "out": bool(x.get("out")),
+                           "photo": bool(x.get("photo"))} for x in p["inbox"]]}
 
     def summary(self, who=""):
         """Для модели и «что с поручениями?»: коротко по открытым и сделанным за неделю."""

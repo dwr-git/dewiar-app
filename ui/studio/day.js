@@ -72,13 +72,21 @@ function renderCal() {
 }
 function itemRow(it, withDate) {
   const el = document.createElement("div"); el.className = "cit";
-  const sub = it.type === "money" ? it.category : it.type === "reminder" ? (it.done ? "прозвенело" : (it.repeat ? "повторяется" : "напоминание")) + (it.time ? " · " + it.time : "")
+  const job = it.kind === "job";
+  const fired = it.fired ? (it.fired.slice(0, 10) === isoD(new Date()) ? it.fired.slice(11, 16) : parseD(it.fired.slice(0, 10)).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) + ", " + it.fired.slice(11, 16)) : "";
+  const sub = it.type === "money" ? it.category : it.type === "reminder"
+    ? (it.skipped ? "пропущено — компьютер был выключен" : it.done ? (job ? "выполнено" : "прозвенело") + (fired ? " позже — в " + fired : "")
+      : (job ? "дело по расписанию" : it.repeat ? "повторяется" : "напоминание") + (it.repeat_text ? " · " + it.repeat_text : it.time ? " · " + it.time : "") + (it.paused ? " · на паузе" : ""))
     : it.type === "event" ? (it.time ? `${it.time}–${it.end}` : "весь день") + " · " + (it.cal || "календарь") + (it.place ? " · " + it.place : "")
     : it.type === "note" ? "заметка" : it.type === "diary" ? "дневник ассистента" : "задача" + (it.status ? " · " + it.status.toLowerCase() : "");
   el.innerHTML = `<i style="background:${itemColor(it)}"></i><div class="t"><span></span><small></small></div>`;
   $(".t span", el).textContent = it.type === "money" ? (it.title || it.category) : it.title || "";
   $(".t small", el).textContent = (withDate ? parseD(withDate).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) + " · " : "") + sub;
   if (it.type === "money") el.insertAdjacentHTML("beforeend", `<span class="amt ${it.kind === "income" ? "inc" : "exp"}">${it.kind === "income" ? "+" : "−"}${escH(fmtMoney(it.amount, it.currency))}</span>`);
+  if (it.type === "reminder" && !it.done && it.id) {             // 28.10: из календаря — сменить время, текст, выключить
+    el.classList.add("rem"); el.title = "Изменить";
+    el.onclick = (ev) => { if (ev.target.closest(".remed, .x")) return; remEdit(el, it); };
+  }
   if ((it.type === "money" || (it.type === "reminder" && !it.done && !it.repeat)) && it.id) {
     const x = document.createElement("button"); x.className = "x"; x.title = "Удалить"; x.textContent = "✕";
     x.onclick = async (ev) => { ev.stopPropagation();
@@ -88,6 +96,40 @@ function itemRow(it, withDate) {
   if (it.path) { el.classList.add("link"); el.onclick = () => { $('nav button[data-p="folder"]').click(); setTimeout(() => openFile(it.path), 250); }; }
   if (it.type === "task" && it.id) { el.classList.add("link"); el.onclick = () => { $('nav button[data-p="tasks"]').click(); setTimeout(() => openTask(it.id), 300); }; }
   return el;
+}
+/* Правка напоминания или дела по расписанию прямо в календаре (28.10, владелец: «в 8:56 утренняя сводка — не понимаю,
+   где я её включал, пытался изменить время — не понимаю как»). Время, текст; у повторяющегося — новое время для всех
+   повторов; у дела — что это за дело, «Выполнить сейчас», «Выключить» и путь к остальным делам. */
+function remEdit(el, it) {
+  const open = el.nextElementSibling && el.nextElementSibling.classList.contains("remed");
+  $$(".remed").forEach(x => x.remove()); $$(".cit.rem.on").forEach(x => x.classList.remove("on"));
+  if (open) return;
+  const job = it.kind === "job", box = document.createElement("div"); box.className = "remed";
+  box.innerHTML = (job ? `<p class="remed-k">Дело по расписанию${it.repeat_text ? " · " + escH(it.repeat_text) : ""} · ${it.deliver === "telegram" ? "в Telegram" : it.deliver === "max" ? "в MAX" : "голосом"}</p>`
+      + (it.text && it.text !== it.title ? `<p class="remed-task">${escH(it.text)}</p>` : "") : "")
+    + `<div class="row2">${job ? "" : `<input type="text" class="grow" id="re-text" maxlength="300" value="${escH(it.title || "")}" aria-label="Текст">`}`
+    + `<input type="time" id="re-time" value="${escH(it.time || "")}" aria-label="Время"><button class="btn small primary" id="re-save">Сохранить</button></div>`
+    + `<div class="remed-acts">${job ? `<button class="btn small" id="re-run">Выполнить сейчас</button>` : ""}`
+    + `<button class="btn small ghost danger" id="re-del">${job ? "Выключить" : it.repeat ? "Удалить все повторы" : "Удалить"}</button>`
+    + (job ? `<button class="linkb" id="re-all">Все дела по расписанию</button>` : "") + `</div>`;
+  el.after(box); el.classList.add("on");
+  const day = calSel;
+  $("#re-save", box).onclick = async () => {
+    const tm = $("#re-time", box).value, text = job ? null : $("#re-text", box).value.trim();
+    if (!tm) return $("#re-time", box).focus();
+    const patch = { at: `${it.repeat ? isoD(new Date()) : day}T${tm}:00` };   // повтор — с ближайшего раза, не с выбранного дня
+    if (text && text !== it.title) patch.text = text;
+    try { const r = await core.call("reminder_update", { id: it.id, patch }); toast(it.repeat ? `Теперь ${r.repeat_text || "в " + tm}` : `Перенесено: ${r.when || tm}`); loadCalendar(); }
+    catch (e) { toast(e.message, 3500); }
+  };
+  $("#re-del", box).onclick = async () => {
+    if (it.repeat && !await ask(job ? `Выключить «${it.title}»? Оно перестанет выполняться.` : `Удалить «${it.title}» со всеми повторами?`, { ok: job ? "Выключить" : "Удалить", danger: true })) return;
+    try { await core.call("reminder_cancel", { id: it.id }); toast(job ? `«${it.title}» выключено` : "Удалено"); loadCalendar(); } catch (e) { toast(e.message); }
+  };
+  const run = $("#re-run", box); if (run) run.onclick = () => core.call("job_run", { task: it.text || it.title, brief: /сводк/i.test(it.title), deliver: it.deliver || "voice" })
+    .then(() => toast("Выполняю — скажу голосом")).catch(e => toast(e.message));
+  const all = $("#re-all", box); if (all) all.onclick = () => { if ($("#day-dlg").open) $("#day-dlg").close(); $('nav button[data-p="reminders"]').click(); setTimeout(() => { const j = $("#j-pre"); if (j) j.scrollIntoView({ behavior: "smooth", block: "start" }); }, 350); };
+  const t = $(job ? "#re-time" : "#re-text", box); if (t) t.focus();
 }
 function renderSide() {
   const side = $("#cal-side"), d = calSel; if (!d) { side.innerHTML = ""; return; }

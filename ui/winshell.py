@@ -182,6 +182,21 @@ def shape(h, kind, radius=28):
     user32.SetWindowRgn(h, rgn, True)           # регион теперь принадлежит окну — не освобождаем
 
 
+def visible(h):
+    return bool(user32.IsWindowVisible(h))
+
+
+def has_shape(h):
+    """Есть ли у окна своя форма (регион). Нет — Windows рисует его прямоугольником (28.10: «на Windows виджет с прямыми
+    углами»)."""
+    tmp = gdi32.CreateRectRgn(0, 0, 0, 0)
+    try:
+        user32.GetWindowRgn.argtypes = [wintypes.HWND, wintypes.HRGN]
+        return user32.GetWindowRgn(h, tmp) not in (0, 1)      # ERROR, NULLREGION — формы нет
+    finally:
+        gdi32.DeleteObject(tmp)
+
+
 def shape_rects(h, rects):
     """Форма окна из прямоугольников [(x, y, ш, в)] в физических px (блокнот: лист + «крепления», app.pad_rects)."""
     rgn = None

@@ -1281,6 +1281,8 @@ class Reminders:
         self.on_change = None
         self.on_fire = on_fire
         self.skip_late = None          # ("id@время") -> True, если опоздавшее напоминание уже пришло в Telegram с сервера
+        self.on_wake = None            # компьютер проснулся или Dewiar запустился — сверить с телефоном (sync), прежде чем звенеть
+        self.hold_until = 0.0          # до этого времени опоздавшие ждут: телефон мог уже прозвенеть и удалить их (28.10)
         self._lock = threading.Lock()
         try:
             self.items = json.loads(self.path.read_text(encoding="utf-8"))
@@ -1400,11 +1402,33 @@ class Reminders:
             self._save()
             return True
 
+    LATE_HOLD = 90                     # с — сколько опоздавшие ждут сверки с телефоном после пробуждения (не дольше)
+    hold_from = 0.0
+
+    def release_hold(self, since=None):
+        """Сверка прошла (обмен, начатый после пробуждения) или её не будет (синхронизации нет) — опоздавшие звенят сразу."""
+        if since is None or since >= self.hold_from:
+            self.hold_until = 0.0
+
     def _loop(self):
-        """Раз в секунду: наступившие — разовые удалить, повторяющиеся перенести; on_fire вызывается уже вне _lock."""
+        """Раз в секунду: наступившие — разовые удалить, повторяющиеся перенести; on_fire вызывается уже вне _lock.
+        28.10 (владелец): компьютер спал всю ночь — утром разом прозвенело вчерашнее «Зарядить часы» (на телефоне оно уже
+        прозвенело) и выполнился вчерашний «Итог дня». Теперь после пробуждения (или запуска) опоздавшие ждут LATE_HOLD с:
+        on_wake сверяет с телефоном — удалённое там здесь уже не прозвенит; что звенеть — решает ядро (дела с большим
+        опозданием пропускаются: _on_reminder)."""
         from when import next_time
+        last = 0.0
         while True:
             time.sleep(1)
+            mono = time.monotonic()
+            if not last or mono - last > 60 or abs(time.time() - getattr(self, "_wall", time.time()) - (mono - last)) > 60:
+                self.hold_until, self.hold_from = mono + self.LATE_HOLD, mono   # запустились или проснулись: сначала сверка
+                if self.on_wake:
+                    try:
+                        threading.Thread(target=self.on_wake, daemon=True).start()
+                    except Exception:  # noqa: BLE001
+                        pass
+            last, self._wall = mono, time.time()
             now = datetime.now().replace(microsecond=0)
             due = []
             with self._lock:
@@ -1413,7 +1437,10 @@ class Reminders:
                         continue
                     at = datetime.fromisoformat(x["at"])
                     if at <= now:
-                        fired = dict(x, late=(now - at).total_seconds() > 300)   # опоздало (компьютер спал или был выключен)
+                        late_s = (now - at).total_seconds()
+                        if late_s > 300 and mono < self.hold_until:
+                            continue                                  # опоздавшее — после сверки с телефоном
+                        fired = dict(x, late=late_s > 300, late_s=int(late_s))   # опоздало (компьютер спал или был выключен)
                         due.append(fired)
                         if x.get("repeat"):
                             nxt = next_time(x["repeat"], at)
@@ -1843,6 +1870,16 @@ def t_team_assign(a, ctx):
     return f"Поручила {r['name']}: «{r['title']}»" + (f", срок {due}" if due else "") + f"; {where}. Скажи это одной фразой."
 
 
+def t_team_message(a, ctx):
+    from team import TeamError
+    try:
+        T = _team(ctx)
+        T.message(a.get("who") or "", a.get("text") or "")
+    except TeamError as e:
+        raise ToolError(str(e)) from e
+    return "Отправила сотруднику. Скажи коротко."
+
+
 def t_team_status(a, ctx):
     from team import TeamError
     try:
@@ -1910,6 +1947,46 @@ def t_client_next(a, ctx):
 
 def t_client_list(a, ctx):
     return _clients(ctx).summary(a.get("query") or "")
+
+
+def t_client_deal(a, ctx):
+    """Сделка: новая или движение по этапам. «Ромашке выставили счёт на 1200 за коробки, оплатить до пятницы» — счёт;
+    «Ромашка оплатила» — оплачено (и в доходы, если не выключено); «Иванов отказался» — отказ."""
+    from clients import ClientError
+    from deals import STAGES, DealError, fmt_amount, human_date, stage_of, to_money
+    C = _clients(ctx)
+    stage = stage_of(a.get("stage") or "") or ""
+    try:
+        cid = C.find(a.get("who") or "", create=True)
+        did = ""
+        if not a.get("new"):
+            try:
+                did = C.deal_find(cid, a.get("title") or "", strict=bool(a.get("title")) and not stage_of(a.get("title") or ""))
+            except DealError:
+                did = ""
+        if did:
+            f = {k: a[k] for k in ("amount", "due") if a.get(k)}
+            d = C.deal_set(cid, did, stage=stage or None, **f) if (stage or f) else next(x for x in C.deals(cid=cid) if x["id"] == did)
+            made = False
+        else:
+            d = C.deal_add(cid, a.get("title") or "", a.get("amount") or 0, "", stage or "lead", a.get("due") or "")
+            made = True
+    except (ClientError, DealError) as e:
+        raise ToolError(str(e)) from e
+    income = ""
+    s = ctx.get("settings")
+    if d["stage"] == "paid" and ((s.get("clients") or {}).get("deal_income", True) if s else True) is not False:
+        income = to_money(ctx.get("money"), d)
+        if income:
+            C.deal_set(d["cid"], d["id"], income=income)
+    amt = f", {fmt_amount(d['amount'], d['cur'])}" if d.get("amount") else ""
+    due = f", оплатить до {human_date(d['due'])}" if d["stage"] == "invoice" and d.get("due") else ""
+    return (f"{'Новая сделка' if made else 'Сделка'} с {d['client']}: «{d['title']}» — {STAGES[d['stage']].lower()}{amt}{due}."
+            + (" Записала в доходы." if income else "") + " Скажи это одной фразой.")
+
+
+def t_client_deals(a, ctx):
+    return _clients(ctx).deals_summary(a.get("what") or "")
 
 
 def t_app_help(a, ctx):
@@ -2501,6 +2578,10 @@ TOOLS = {
                     "срок с «каждый»/«по будням» как сказал («каждый понедельник к 18», «по будням к 10»); note — подробности.",
                     S({"who": {"type": "string"}, "task": {"type": "string"}, "due": {"type": "string"}, "note": {"type": "string"}},
                       ["who", "task"]), "safe", t_team_assign, "Поручения: поручить"),
+    "team_message": ("Написать сотруднику из «Поручений» не по поручению — ответить на его сообщение или сказать что-то («напиши Анне, "
+                     "что отчёт жду к обеду», «ответь Ивану: хорошо»). Дойдёт туда, где он получает поручения. who — имя, text — само "
+                     "сообщение от лица пользователя.", S({"who": {"type": "string"}, "text": {"type": "string"}}, ["who", "text"]),
+                     "safe", t_team_message, "Поручения: написать сотруднику"),
     "team_status": ("Что с поручениями сотрудникам: кто взял, кто сделал (с отчётом), что перенесено и почему, что просрочено. "
                     "who — имя или пусто — все.", S({"who": {"type": "string"}}), "safe", t_team_status, "Поручения: что с ними"),
     "client_note": ("«Клиенты» (личная CRM): записать в карточку клиента, о чём договорились, что хочет, звонок, сделку. "
@@ -2522,6 +2603,17 @@ TOOLS = {
     "client_list": ("«Клиенты»: кто ждёт ответа (просроченные шаги), ближайшие шаги, клиенты без следующего шага. «Кому из клиентов "
                     "надо перезвонить?», «что по клиентам на этой неделе?». query — поиск по имени, компании или записям, или пусто.",
                     S({"query": {"type": "string"}}), "safe", t_client_list, "Клиенты: кто ждёт"),
+    "client_deal": ("«Клиенты» → сделки: новая сделка или её этап. Этапы: lead — заявка, offer — предложение (КП, смета), invoice — "
+                    "счёт выставлен (нам должны), paid — оплачено, lost — отказ. «Ромашке выставили счёт на 1200 за коробки, оплатить "
+                    "до пятницы» → who «Ромашка», title «Коробки», amount 1200, stage invoice, due «до пятницы»; «Ромашка оплатила "
+                    "счёт» → stage paid (оплата сама запишется в доходы); «Иванов отказался» → lost. Есть открытая сделка — двигает "
+                    "её; new true — точно новая. title — коротко, что продаём; due — срок оплаты словами.",
+                    S({"who": {"type": "string"}, "title": {"type": "string"}, "amount": {"type": "number"},
+                       "stage": {"type": "string", "enum": ["lead", "offer", "invoice", "paid", "lost"]}, "due": {"type": "string"},
+                       "new": {"type": "boolean"}}, ["who"]), "safe", t_client_deal, "Клиенты: сделка"),
+    "client_deals": ("«Клиенты» → сделки: «кто нам должен?» (what owed — выставленные неоплаченные счета, итог, просроченные), "
+                     "«какие сделки зависли?» (stuck — без движения неделю, просроченная оплата), или все открытые (пусто).",
+                     S({"what": {"type": "string", "enum": ["owed", "stuck", ""]}}), "safe", t_client_deals, "Клиенты: кто должен"),
     "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей». who — имя или пусто — все.",
                    S({"who": {"type": "string"}}), "safe", t_close_read, "Близкие: прочитать"),
     "app_help": ("Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить "
@@ -2640,7 +2732,7 @@ SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "sho
              "cancel_reminder", "mark_done", "done_report", "save_note", "find_notes", "read_file", "remember", "write_diary",
              "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
-             "client_list"}
+             "client_list", "client_deal", "client_deals"}
 
 
 # инструменты навыков (skills.py): есть, только когда навыки включены; выполняет Toolbox.run
@@ -2689,7 +2781,7 @@ class Toolbox:
         if name.startswith("client_"):          # «Клиенты»: включены в «Возможностях»
             if not (self.hooks.get("clients") is not None and (self.s.get("features") or {}).get("clients")):
                 return False, False
-        if name in ("team_assign", "team_status"):   # «Поручения»: раздел включён и бот компании подключён
+        if name in ("team_assign", "team_status", "team_message"):   # «Поручения»: раздел включён и бот компании подключён
             tm = self.hooks.get("team")
             if not (tm and tm.connected() and (self.s.get("features") or {}).get("team")):
                 return False, False

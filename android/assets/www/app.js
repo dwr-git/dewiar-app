@@ -1817,6 +1817,7 @@ function systemPrompt() {
   if (S.sync.on && syncCred() && pcSeen()) parts.push("Большую задачу (исследование с отчётом, документ, презентация, работа с файлами или кодом) не делай в разговоре — передай компьютеру пользователя (start_task) и скажи, что взялся: ход и итог появятся здесь, в «Мой день» → «Сделанное».");
   try { parts.push(clPrompt()); } catch (e) { }
   try { parts.push(wkPrompt()); } catch (e) { }
+  try { parts.push(bsPrompt()); } catch (e) { }
   parts.push(convPrompt());
   return parts.filter(Boolean).join("\n\n");
 }
@@ -3482,6 +3483,7 @@ function toolSpecs() {
   if ((S.home.token || haOn()) && !D.web) t.push({ name: "smart_home", description: "Умный дом (Яндекс и Home Assistant): action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
     parameters: O({ action: { type: "string", enum: ["list", "on", "off", "brightness", "brighter", "dimmer", "temperature", "scenario"] }, target: STR, value: NUM }, ["action"]) });
   t.push(...wkTools());                                  // «Работа»: поручения руководителя (work.js), если есть работа
+  t.push(...bsTools());                                  // «Сотрудники»: вы — руководитель, доска с компьютера (boss.js)
   if (kidsOn()) { const k = kidsTools(); return t.filter(x => k.has(x.name)); }   // детский режим — только безопасное
   return D.web ? t.filter(x => !WEB_NO_TOOLS.has(x.name)) : t;
 }
@@ -3700,6 +3702,7 @@ async function runTool(name, a) {
     case "close_send": { const it = await clSend(a.to || "", a.text || ""); return `Отправлено ${it.to}. Скажи коротко, что отправила.`; }
     case "close_read": return clRecent(a.who || "");
     case "work_tasks": case "work_act": return await wkTool(name, a || {});
+    case "team_status": case "team_assign": case "team_message": return await bsTool(name, a || {});
     case "close_where": return await radWhereText(a.who || "");
     case "close_wave": { const p = await radWave(a.to || ""); return `Помахала: ${p.name} увидит и услышит «машет вам». Скажи коротко.`; }
     case "scan_code": scanCode(); return "Сканер открыт. Скажи коротко: «Наведите камеру на код».";
@@ -6460,7 +6463,7 @@ async function syncRun(manual) {
     prefSet("sync", JSON.stringify(st));
     if (st.e2eRemote && !syncKeyGet() && Date.now() - (window._keyAsk || 0) > 600000) { window._keyAsk = Date.now(); ownShare(["sync_key"]).catch(() => { }); }   // в облаке зашифрованное, а ключа нет — просим у своих (раз в 10 мин)
     syncStatus = { ok: true, at: Date.now(), error: "", devices: d.devices || [], all: d.all || null, counts: { sent: changes.length, got }, via: c.via };
-    if (d.all) { DEVS = d.all; try { devFresh(); } catch (e) { } }
+    if (d.all) { DEVS = d.all; try { devFresh(); bsBoot(); } catch (e) { } }
     if (+d.box > (+clLoad().cursor || 0)) setTimeout(() => clPoll().catch(() => { }), 0);   // в ящике своих устройств новое — сразу
     if (got && qGet("natt_in").length) setTimeout(() => nattIn().catch(() => { }), 0);    // пришла заметка, которую ждали фото с компьютера
     if (got && $("#sh-day") && $("#sh-day").classList.contains("on") && document.activeElement !== $("#tk-goal")) renderDay();
@@ -7566,7 +7569,9 @@ async function nattIn() {
 function ownApply(body) {
   if (body && body.natt) nattTake(body.natt);
   try { devBrainsOwn(body); } catch (e) { plog("warn", "мозги со своего устройства: " + e.message); }   // «Устройства» (devices.js)
-  if (body && body.want && (S.home.at || S.home.token || syncKeyGet())) setTimeout(() => ownShare().catch(() => { }), 0);   // другое моё устройство просит
+  try { bsTake(body); } catch (e) { plog("warn", "сотрудники: " + e.message); }   // доска «Поручений» с компьютера (boss.js)
+  if (body && body.morning && typeof body.morning === "object") mornTake(body.morning);   // «Утро с Лирой» с компьютера
+  if (body && Array.isArray(body.want) && body.want.some(w => w !== "team") && (S.home.at || S.home.token || syncKeyGet())) setTimeout(() => ownShare().catch(() => { }), 0);   // другое моё устройство просит
   const skb = body && body.sync_key;
   if (skb && typeof skb === "object" && syncKeyAdopt(skb.k, skb.at)) {
     plog("info", "🔐 ключ шифрования синхронизации получен со своего устройства");
@@ -7764,7 +7769,7 @@ function clWatch() {
   const live = !!j && clLiveOn();                         // «на связи» — служба CloseLive: сообщения и звонки сразу
   if (D.closeLive && live !== clWatch.live) { clWatch.live = live; D.closeLive(live); }
 }
-const clActive = () => { const st = clLoad(); return st.people.length > 0 || wkJobs().length > 0 || Date.now() < devBrainsUntil || (st.invite && Date.now() / 1000 < (st.invite.expires || 0)); };
+const clActive = () => { const st = clLoad(); return st.people.length > 0 || wkJobs().length > 0 || Date.now() < devBrainsUntil || bsActive() || (st.invite && Date.now() / 1000 < (st.invite.expires || 0)); };
 function clSchedule() {
   clearTimeout(clTimer);
   clTimer = setTimeout(async () => { if (!document.hidden || clFast) await clPoll(); clSchedule(); }, clFast ? 1200 : clActive() ? 6000 : 600000);   // во время звонка — и в фоне: отбой и «ответили» не должны теряться
@@ -9226,7 +9231,16 @@ async function clSaveFile(p, m, j) {
 $("#b-close").onclick = () => openClose("");
 $("#cl-inv").onclick = () => { if (clTab === "ref") return refShare().catch(e => toast(e.message, 4000)); clInviteOpen(); };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && syncCred()) { clPoll(); noteAttSoon(6000); } });
-setTimeout(() => { clLoad(); clBadge(); wkBadge(); if (S.closePending && syncCred()) clAcceptLink(S.closePending); if (S.workPending && syncCred()) wkLink(S.workPending); clPoll(); clSchedule(); noteAttSoon(9000); }, 4000);
+/* ссылка-приглашение на работу в адресе (веб-версия: dwrapp/web/?work=… — «Работа без установки», 0.58) */
+(() => { try { const m = /[?&#]work=([A-Za-z0-9_-]{8,64})/.exec(location.search + location.hash);
+  if (m) {
+    try { window.history.replaceState(null, "", location.pathname); } catch (e) { }   // history здесь — переписка; адресная строка — window.history
+    S.workPending = m[1]; S.webWork = true; saveS();
+  } } catch (e) { plog("warn", "работа по ссылке: " + e.message); } })();
+setTimeout(() => { clLoad(); clBadge(); wkBadge(); if (S.closePending && syncCred()) clAcceptLink(S.closePending);
+  if (S.workPending && (syncCred() || S.webWork)) wkLink("?work=" + S.workPending);
+  else if (S.webWork && wkHas()) openWork("");                   // пришли ради работы — сразу «Работа»
+  bsBoot(); clPoll(); clSchedule(); noteAttSoon(9000); }, 4000);
 setTimeout(tmrShow, 700);                                       // идущие таймеры — сразу после запуска
 N.on("alarms", () => { tmrShow(); syncSoon(); });               // отменили таймер в шторке (AlarmReceiver)
 N.on("resume", () => tmrShow());
@@ -9268,14 +9282,46 @@ function welcomePrompt(p) {
   const d = new Date(), wd = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"][d.getDay()];
   if (p.kind === "eve") return p.facts.join("\n") + `\n\n[Вечер, пользователь вернулся в приложение, не было ${p.gone}] Подведи итог дня: скажи, сколько дел он сегодня сделал, похвали тепло и конкретно (назови одно-два дела своими словами); если есть другие новости отсюда — одной фразой. 2–3 коротких предложения, без списков, без вопросов в конце, без инструментов.`;
   if (p.kind === "day") return `Сегодня ${d.toLocaleDateString("ru-RU")}, ${wd}, сейчас ${pad(d.getHours())}:${pad(d.getMinutes())}.\n` + p.facts.join("\n")
-    + `\n\n[Пользователь открыл приложение — первый раз за день, не было ${p.gone}] Поздоровайся первым (в своём роде), по имени, если знаешь, и коротко скажи главное на сегодня из этих данных. 2–3 коротких предложения, живо и тепло, без списков, без вопросов в конце, без инструментов.`;
+    + `\n\n[Пользователь открыл приложение — первый раз за день, не было ${p.gone}] Поздоровайся первым (в своём роде), по имени, если знаешь, и коротко скажи главное на сегодня из этих данных: погода (если есть), напоминания, что ждёт от сотрудников и клиентов, важные письма от людей. Не всё подряд — самое нужное. 2–4 коротких предложения, живо и тепло, без списков, без вопросов в конце, без инструментов.`;
   return p.facts.join("\n") + `\n\n[Пользователь вернулся в приложение, не было ${p.gone}] Коротко поприветствуй и скажи главное из этого — 1–2 коротких предложения, живо, без списков и без вопросов в конце, без инструментов.`;
+}
+/* «Утро с Лирой» (0.57, core/morning.py): компьютер присылает своё утро (конверт own {morning}) — погода по городу из
+   его настроек, сотрудники, клиенты, почта. Сводка дня здесь берёт из него то, чего на телефоне нет; доска сотрудников —
+   свежее из boss.js; погоду, если утра с компьютера нет, — сама по тому же городу (не дольше 5 секунд). */
+function mornTake(m) {
+  let cur = null; try { cur = JSON.parse(fileGet("morning.json") || "null"); } catch (e) { }
+  if (cur && +cur.at >= +m.at) return;
+  fileSave("morning.json", JSON.stringify({ at: +m.at || Date.now(), date: String(m.date || ""), city: String(m.city || "").slice(0, 60), dev: String(m.dev || ""),
+    weather: m.weather || null, team: m.team || null, clients: m.clients || null, mail: m.mail || null }));
+}
+async function mornFacts() {
+  let m = null; try { m = JSON.parse(fileGet("morning.json") || "null"); } catch (e) { }
+  const out = [], fresh = m && m.date === isoLocal(new Date()).slice(0, 10), from = m && m.dev ? ` (с компьютера «${m.dev}»)` : "";
+  if (fresh && m.weather && m.weather.line) out.push(`Погода (уже узнана): ${m.weather.line}.`);
+  else if (m && m.city) {
+    try { const t = await Promise.race([weather(m.city, 1), sleep(5000).then(() => "")]); if (t && !/^Ошибка|не нашёлся/.test(t)) out.push("Погода (уже узнана): " + t.split("\n").slice(0, 2).join(" ")); } catch (e) { }
+  }
+  const tm = typeof bsHas === "function" && bsHas() ? (() => { const s = bsLoad().snap, since = Date.now() / 1000 - 16 * 3600;
+    return { late: s.tasks.filter(t => t.late && ["new", "work", "moved"].includes(t.state)), check: s.tasks.filter(t => t.state === "done"), msgs: s.inbox.filter(x => !x.out && +x.ts > since) }; })()
+    : fresh ? m.team : null;
+  if (tm && (tm.late.length || tm.check.length || tm.msgs.length)) out.push("Сотрудники: " + [tm.late.length ? "просрочено — " + tm.late.slice(0, 4).map(x => `${x.name}: «${x.title}»`).join("; ") : "",
+    tm.check.length ? "ждут вашей проверки — " + tm.check.slice(0, 4).map(x => `${x.name}: «${x.title}»`).join("; ") : "",
+    tm.msgs.length ? "написали — " + tm.msgs.slice(-3).map(x => `${x.name}: ${x.t || "фото"}`).join("; ") : ""].filter(Boolean).join(". ") + ".");
+  if (fresh && m.clients) {
+    if ((m.clients.over || []).length) out.push(`Клиенты ждут${from}: ` + m.clients.over.map(x => `${x.name} — ${x.what}`).join("; ") + ".");
+    if ((m.clients.today || []).length) out.push(`Клиенты сегодня${from}: ` + m.clients.today.map(x => `${x.time} ${x.name} — ${x.what}`.trim()).join("; ") + ".");
+    if ((m.clients.owed || []).length) out.push(`Должны, срок оплаты прошёл${from}: ` + m.clients.owed.map(x => `${x.name} — ${x.what}`).join("; ") + ".");
+  }
+  if (fresh && m.mail && m.mail.unread) out.push(`Почта${from}: непрочитанных ${m.mail.unread}` + ((m.mail.people || []).length ? ". От людей: " + m.mail.people.map(x => `${x.from} — «${x.subject}»`).join("; ") : ", всё — рассылки") + ".");
+  return out;
 }
 async function welcomeCheck(shownAt) {
   const w = S.welcome || {};
   if (w.on === false || busy || state !== "idle" || lastUserAct > shownAt || document.hidden) return false;
   const p = welcomePlan(Date.now(), w.seen, w.at, Object.values(mind().tasks || {}), JSON.parse(D.alarms() || "[]"), doneStats(), w.eve);
   if (!p) return false;
+  if (p.kind === "day" && !kidsOn()) { try { p.facts.unshift(...await mornFacts()); } catch (e) { plog("info", "утро: " + e.message); } }
+  if (busy || lastUserAct > shownAt || document.hidden) return false;
   await ensureBrain();
   if (!S.llm.base_url || busy || lastUserAct > shownAt) return false;
   S.welcome = Object.assign({}, w, { at: Date.now() }, p.kind === "eve" ? { eve: dayKey(Date.now()) } : {}); saveS();

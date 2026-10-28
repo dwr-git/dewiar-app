@@ -75,19 +75,28 @@ function tmBoard() {
   $$("#tm-board .tm-card").forEach(b => b.onclick = () => { TM_SEL = TM_SEL === b.dataset.id ? "" : b.dataset.id; tmBoard(); tmDetail(); });
 }
 
+// Ответить сотруднику: сообщение уходит в его мессенджер или в приложение — от имени руководителя
+async function tmWrite(who, name, about) {
+  const r = await askText(`Сообщение для ${name}` + (about ? ` (про «${about}»)` : "") + " — придёт в мессенджер или приложение", "", { ok: "Отправить" });
+  if (r && r.trim()) tmCall("team_message", { id: who, text: r.trim() }, `Отправлено: ${name}`);
+}
+
 function tmDetail() {
   const box = $("#tm-detail"), t = TM.tasks.find(x => x.id === TM_SEL);
   if (!t) {                                         // ничего не выбрано — сообщения от сотрудников
     const inbox = (TM.inbox || []).slice().reverse();
-    box.innerHTML = `<h3>Сообщения от сотрудников</h3>` + (inbox.length
-      ? `<ul class="tm-inbox">${inbox.map(x => `<li><b>${escH(x.name)}</b><small>${tmDay(x.ts)}${tmHM(x.ts)}</small><p>${escH(x.t || "фото")}</p>`
-        + (x.photo ? `<button class="tm-thumb" data-photo="${escH(x.photo)}">Фото</button>` : "") + `</li>`).join("")}</ul>`
+    box.innerHTML = `<h3>Переписка с сотрудниками</h3>` + (inbox.length
+      ? `<ul class="tm-inbox">${inbox.map(x => `<li${x.out ? ` class="out"` : ""}><b>${x.out ? "Вы → " + escH(x.name) : escH(x.name)}</b><small>${tmDay(x.ts)}${tmHM(x.ts)}</small><p>${escH(x.t || "фото")}</p>`
+        + (x.photo ? `<button class="tm-thumb" data-photo="${escH(x.photo)}">Фото</button>` : "")
+        + (!x.out && TM.members.some(m => m.id === x.who) ? `<button class="tm-reply" data-who="${escH(x.who)}" data-name="${escH(x.name)}">Ответить</button>` : "") + `</li>`).join("")}</ul>`
       : `<p class="tm-empty">Выберите поручение — здесь будет вся история: кто взял, отчёт и фото, переносы. А если сотрудник напишет боту не по кнопке — сообщение появится тут.</p>`);
-    tmPhotos(box); return;
+    tmPhotos(box);
+    $$("#tm-detail .tm-reply").forEach(b => b.onclick = () => tmWrite(b.dataset.who, b.dataset.name));
+    return;
   }
   const m = TM.members.find(x => x.id === t.who) || {};
   const fem = tmFem(t.name);
-  const evText = (e) => e.ev === "take" ? (fem ? "Взяла в работу" : "Взял в работу") : e.ev === "assign" && e.t === "голосом" ? "Поручено голосом" : TM_EV[e.ev] || e.ev;
+  const evText = (e) => e.ev === "take" ? (fem ? "Взяла в работу" : "Взял в работу") : e.ev === "assign" && (e.t === "голосом" || e.t === "с телефона") ? "Поручено " + e.t : TM_EV[e.ev] || e.ev;
   const log = (t.log || []).map(e => `<li class="ev-${escH(e.ev)}"><time>${tmDay(e.ts)}${tmHM(e.ts)}</time><div><b>${escH(evText(e))}</b>`
     + (e.t && e.ev !== "assign" ? `<p>${e.ev === "done" ? "«" + escH(e.t) + "»" : escH(e.t)}</p>` : "")
     + (e.ev === "done" && t.report && t.report.photo && t.state !== "work" ? `<button class="tm-thumb" data-photo="${escH(t.report.photo)}">Фото от сотрудника</button>` : "")
@@ -96,6 +105,7 @@ function tmDetail() {
   let acts = "";
   if (t.state === "done") acts = `<button class="btn primary" data-a="accept">Принять</button><button class="btn" data-a="back">Вернуть с замечанием</button>`;
   else if (t.state !== "ok") acts = `<button class="btn" data-a="remind">Напомнить</button><button class="btn danger" data-a="cancel">Снять поручение</button>`;
+  if (t.joined) acts += `<button class="btn" data-a="write">Написать</button>`;
   box.innerHTML = `<small class="tm-state ${escH(t.state)}${t.late ? " late" : ""}">${t.late ? "Просрочено · " : ""}${head}</small>`
     + `<h3>${escH(t.title)}</h3>`
     + `<p class="tm-meta">${escH(t.name)}${m.role ? " · " + escH(m.role) : ""}${t.due_text ? ` · срок — ${escH(t.due_text)}` : ""}</p>`
@@ -108,6 +118,7 @@ function tmDetail() {
   $$("#tm-detail [data-a]").forEach(b => b.onclick = async () => {
     const a = b.dataset.a;
     if (a === "accept") return tmCall("team_accept", { id: t.id }, "Принято — сотруднику ушло «спасибо»");
+    if (a === "write") return tmWrite(t.who, t.name, t.title);
     if (a === "remind") return tmCall("team_remind", { id: t.id }, "Напомнила сотруднику");
     if (a === "cancel") { if (await ask(`Снять поручение «${t.title}»? Сотруднику придёт, что делать не нужно.`)) { TM_SEL = ""; tmCall("team_cancel", { id: t.id }, "Поручение снято"); } return; }
     if (a === "back") { const r = await askText("Что поправить? Сотрудник получит это в мессенджере", "", { ok: "Вернуть" }); if (r && r.trim()) tmCall("team_back", { id: t.id, remark: r.trim() }, "Вернула с замечанием"); }

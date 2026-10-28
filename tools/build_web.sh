@@ -46,7 +46,9 @@ BOOT = r"""<script>(function () {
   window.addEventListener("error", function (e) {
     var m = String(e.message || "ошибка"); if (/^Script error|ResizeObserver/.test(m)) return;
     m += " @" + String(e.filename || "").split("/").pop().split("?")[0] + ":" + (e.lineno || 0);
-    errs.push(m); send(window.DEWIAR_STARTED ? "error" : "start", m);
+    errs.push(m);
+    if (!window.DEWIAR_STARTED && errs.length > 1) return;   // до запуска — только первая: остальные из-за неё («$ is not defined» в work.js)
+    send(window.DEWIAR_STARTED ? "error" : "start", m);
   });
   window.addEventListener("load", function () { setTimeout(function () {
     if (window.DEWIAR_STARTED) return;

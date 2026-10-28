@@ -193,7 +193,7 @@ from radio import Radio  # noqa: E402
 class P:
     device = ""
 
-    def start(self, rate):
+    def start(self, rate, channels=1):
         pass
 
     def write(self, b):

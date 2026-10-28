@@ -10,8 +10,8 @@
 /* ---------- обо мне: память и «Знания» ---------- */
 function fmtSize(b) { return b > 1e6 ? (b / 1e6).toFixed(1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1e3)) + " КБ"; }
 function renderKn(files) {
-  const box = $("#kn-list"); box.innerHTML = "";
-  if (!files.length) { box.innerHTML = '<p class="hint">Пока пусто. Добавьте файлы — и ассистент сможет по ним отвечать.</p>'; return; }
+  const box = $("#kn-list"); box.innerHTML = ""; DC.files = files; dcStat();
+  if (!files.length) { box.innerHTML = '<p class="hint">Отдельных файлов нет.</p>'; return; }
   files.forEach(f => {
     const row = document.createElement("div"); row.className = "kn-row";
     row.innerHTML = `<b></b><span class="${f.error ? "bad" : ""}"></span><span>${fmtSize(f.size)}</span><button class="btn small" title="Убрать из «Знаний»">Убрать</button>`;
@@ -23,8 +23,8 @@ function renderKn(files) {
 /* свои папки для поиска (core/knowledge.py: индексируются в фоне; пока идёт — «читаю: 120 из 400») */
 let knFT = 0;
 function renderKnFolders(list) {
-  const box = $("#kn-folders"); box.innerHTML = ""; clearTimeout(knFT);
-  if (!list.length) { box.innerHTML = '<p class="hint">Своих папок пока нет.</p>'; return; }
+  const box = $("#kn-folders"); box.innerHTML = ""; clearTimeout(knFT); DC.folders = list; dcStat();
+  if (!list.length) { box.innerHTML = '<p class="hint">Папок пока нет — «Добавить папку…» вверху.</p>'; return; }
   list.forEach(f => {
     const row = document.createElement("div"); row.className = "kn-row";
     row.innerHTML = `<b></b><span></span><span></span><button class="btn small" title="Больше не искать в этой папке (файлы остаются)">Убрать</button>`;
@@ -71,10 +71,35 @@ function loadMe() {
   core.call("memory_get").then(t => { $("#me-mem").value = t.trim(); }).catch(() => {});
   if (window.mpxLoad) mpxLoad();                     // страницы памяти по людям и темам (studio/mempages.js)
   meExam();
-  core.call("knowledge_list").then(r => renderKn(r.files)).catch(e => ($("#kn-res").textContent = e.message));
-  core.call("knowledge_folders").then(renderKnFolders).catch(() => {});
-  const a = S && lastAccount; $("#kn-site").textContent = a && a.logged_in ? `Знания с сайта тоже подключены: аккаунт ${a.user && a.user.login || a.login} (раздел «Подключение»).` : "";
 }
+/* «Документы» (28.10, владелец: «важно людям рассказать про локальную память… папки, по которым Лира ищет, читает и
+   отвечает… вывести красивой кнопкой на главной… локальный RAG — сильное преимущество»). Раньше это было в самом низу
+   «Обо мне» — о нём не знали. Теперь — свой раздел и значок на «Главной»: зачем, как выглядит ответ, папки, файлы,
+   фразы-примеры (нажать — вопрос в «Чате») и проверка поиска. Сводка сверху — DC.files / DC.folders. */
+const DC = { files: [], folders: [] };
+const dcPl = (n, a, b, c) => `${n.toLocaleString("ru-RU")} ${n % 10 === 1 && n % 100 !== 11 ? a : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? b : c}`;
+function dcStat() {
+  const el = $("#dc-stat"); if (!el) return;
+  const fo = DC.folders.filter(f => f.exists !== false), files = fo.reduce((n, f) => n + (f.files || 0), 0) + DC.files.length;
+  const busy = fo.some(f => f.busy || f.files == null);
+  el.classList.toggle("on", !!(fo.length || DC.files.length));
+  el.textContent = !fo.length && !DC.files.length ? "Пока пусто — начните с папки, где лежат договоры, инструкции или конспекты."
+    : [fo.length ? dcPl(fo.length, "папка", "папки", "папок") : "", files ? dcPl(files, "файл", "файла", "файлов") : ""].filter(Boolean).join(", ")
+      + (busy ? " — читаю, можно уже спрашивать" : " — Лира готова отвечать");
+}
+function loadDocs() {
+  core.call("knowledge_list").then(r => { DC.files = r.files || []; renderKn(DC.files); dcStat(); }).catch(e => ($("#kn-res").textContent = e.message));
+  core.call("knowledge_folders").then(renderKnFolders).catch(() => {});
+  const a = S && lastAccount; $("#kn-site").textContent = a && a.logged_in ? `Знания с сайта тоже подключены: аккаунт ${a.user && a.user.login || a.login} — Лира ищет и там.` : "";
+}
+$$("#dc-try button").forEach(b => b.onclick = () => {             // пример — вопросом в «Чат»: остаётся нажать «Отправить»
+  const nb = $('nav button[data-p="chat"]'); if (nb) nb.click();
+  const t = $("#ch-text"); if (t) { t.value = b.textContent; t.dispatchEvent(new Event("input")); t.focus(); }
+});
+document.addEventListener("click", (e) => {                          // «Обо мне» → «Документы»
+  const g = e.target.closest && e.target.closest("[data-goto]"); if (!g) return;
+  const nb = $(`nav button[data-p="${g.dataset.goto}"]`); if (nb) nb.click();
+});
 let lastAccount = null;
 $("#me-save").onclick = () => core.call("memory_set", { text: $("#me-mem").value, who: typeof mpxWho === "string" ? mpxWho : "" }).then(() => { if (window.mpxLoad) mpxLoad(); $("#me-res").className = "res ok"; $("#me-res").textContent = "Сохранено"; setTimeout(() => ($("#me-res").textContent = ""), 2500); }).catch(e => toast(e.message));
 $("#kn-open").onclick = () => core.call("knowledge_open").catch(e => toast(e.message));

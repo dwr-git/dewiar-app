@@ -33,6 +33,7 @@ const ICONS = {
   soul: '<path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/><path d="M18.5 2.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"/>',
   const: '<path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15 3.5V7h4"/><path d="M9 11h7M9 14h7M9 17h4.5"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  docs: '<path d="M6 3.5h8l4 4V13"/><path d="M14 3.5v4h4"/><path d="M6 3.5v17h6"/><path d="M9 9h4M9 12.5h5"/><circle cx="16" cy="16.5" r="3"/><path d="m18.2 18.7 2.3 2.3"/>',
   dw: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v5M12 15.5v5M3.5 12h5M15.5 12h5"/>',
   devices: '<rect x="2.5" y="5" width="13" height="9.5" rx="1.8"/><path d="M1.5 17.5h11"/><rect x="16" y="8" width="5.5" height="11" rx="1.5"/><path d="M18.4 16.5h.7"/>',
   connect: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.4 1.4"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.4-1.4"/>',
@@ -55,7 +56,7 @@ $$("main section[id^='p-']").forEach(s => { const i = ICONS[s.id.slice(2)], h = 
 // раздел студии → раздел руководства на сайте (server/dwrapp/guide.php, текст — data/guide.json)
 const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
 const GUIDE_OF = { devices: "sync", personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", music: "music", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
-  me: "notes-memory", folder: "folder-docs", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
+  me: "notes-memory", folder: "folder-docs", docs: "my-docs", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
   hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting" };
 function showHelp(k) {
   const H = (window.DEWIAR_HELP || {})[k]; if (!H) return;

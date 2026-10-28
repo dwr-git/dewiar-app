@@ -889,10 +889,17 @@ class Close:
         self.host.emit("close", state=self.state())
 
     # ---------- фон ----------
+    def _team_on(self):
+        try:
+            return bool(getattr(self.host, "_team_on", lambda: False)())
+        except Exception:  # noqa: BLE001
+            return False
+
     def active(self):
         w = self.st.get("work") or {}
         return bool(self.st["people"] or w.get("staff") or w.get("bosses") or time.time() < _int(self.st.get("work_wait"))
                     or time.time() < float(getattr(self.host, "_brains_until", 0) or 0)      # ждём мозги со своего устройства
+                    or self._team_on()                                                       # «Поручения»: команды с телефона руководителя
                     or (self.st.get("invite") and time.time() < _int(self.st["invite"].get("expires"))))
 
     # ---------- «Работа»: руководитель — сотрудник (режим «Сотрудник», 0.55) ----------

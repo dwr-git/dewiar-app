@@ -70,12 +70,12 @@ class SimpleStream:
     """Один поток PCM s16le mono. record=True — запись с источника, иначе воспроизведение. device "" — по умолчанию.
     Вызовы блокирующие: read() ждёт, пока наберётся n байт, write() — пока есть место в буфере."""
 
-    def __init__(self, rate, record, device="", name="Dewiar", latency_ms=40):
+    def __init__(self, rate, record, device="", name="Dewiar", latency_ms=40, channels=1):
         lib = _simple()
-        spec = _Spec(PA_SAMPLE_S16LE, rate, 1)
-        bytes_ = int(rate * 2 * latency_ms / 1000)
+        spec = _Spec(PA_SAMPLE_S16LE, rate, channels)     # 2 — стерео: музыка и радио (№374), голос — моно
+        bytes_ = int(rate * 2 * channels * latency_ms / 1000)
         # запись: отдаём кусками по latency; вывод: буфер 2×latency, старт через 20 мс (короткие сигналы не ждут)
-        attr = _Attr(_NO, _NO, _NO, _NO, bytes_) if record else _Attr(_NO, bytes_ * 2, int(rate * 2 * 0.02), _NO, _NO)
+        attr = _Attr(_NO, _NO, _NO, _NO, bytes_) if record else _Attr(_NO, bytes_ * 2, int(rate * 2 * channels * 0.02), _NO, _NO)
         err = ctypes.c_int(0)
         self.s = lib.pa_simple_new(None, b"Dewiar", PA_STREAM_RECORD if record else PA_STREAM_PLAYBACK,
                                    device.encode() if device else None, name.encode(), ctypes.byref(spec), None,

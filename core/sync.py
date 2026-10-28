@@ -125,6 +125,7 @@ class Sync:
         self.path = STATE_DIR / "sync.json"
         self._lock = threading.Lock()
         self.soon = threading.Event()
+        self.on_pass = None                          # (monotonic начала обмена) -> после каждого обмена (engine: напоминания)
         self.state = self._load()
         self.status = {"enabled": False, "ok": None, "at": 0, "error": "", "devices": [], "space": "", "counts": {}}
         self._claims = {}            # задачи с телефона, которые надо занять в облаке, прежде чем браться (см. _claim_tasks)
@@ -1312,6 +1313,7 @@ class Sync:
                 self.soon.wait(interval)
                 self.soon.clear()
                 continue
+            t0 = time.monotonic()
             try:
                 self.run_once()
                 last = ""
@@ -1326,6 +1328,11 @@ class Sync:
                 else:
                     log.exception("Синхронизация")
                 last = f"{type(e).__name__}: {e}"
+            if self.on_pass:                             # обмен (или попытка) прошёл — напоминаниям можно звенеть (28.10)
+                try:
+                    self.on_pass(t0)
+                except Exception:  # noqa: BLE001
+                    pass
             self.soon.wait(interval)
             self.soon.clear()
             time.sleep(2)                                # несколько правок подряд — одним обменом

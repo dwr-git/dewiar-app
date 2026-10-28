@@ -14,7 +14,7 @@
    работа со всем рабочим уходит с телефона, личное остаётся. «Уйти с этой работы» — ?p=/work/leave {pid}.
    Детский режим прячет всё рабочее. Ядро app.js зовёт отсюда: wkPub, wkKind, wkHas, wkPrompt, wkTools, wkTool, wkLink. */
 "use strict";
-let WKS = null, wkCur = "", wkForm = null, wkJoinT = null, wkShowFeed = false, wkAdd = false;
+let WKS = null, wkCur = "", wkForm = null, wkJoinT = null, wkShowFeed = false, wkAdd = false, wkGuest = null;
 const WK_ST = { new: "Новые", work: "В работе", moved: "Перенесено", done: "Сделано", ok: "Принято" };
 const WK_ORDER = ["new", "moved", "work", "done", "ok"];
 const WK_ONE = { new: "новое", work: "в работе", moved: "перенесено", done: "сделано", ok: "принято" };
@@ -94,8 +94,9 @@ function wkTell(j, text) {
 }
 function wkBadge() {
   const b = $("#b-work"); if (!b) return;
-  b.hidden = !wkHas();
-  b.classList.toggle("has", wkJobs().some(j => j.unread > 0));
+  const boss = typeof bsHas === "function" && bsHas();          // «Сотрудники» — руководителю (boss.js)
+  b.hidden = !(wkHas() || boss);
+  b.classList.toggle("has", wkJobs().some(j => j.unread > 0) || (boss && bsUnread()));
 }
 
 /* ---------- действия: конверт руководителю (и копия своим устройствам) ---------- */
@@ -143,7 +144,7 @@ function wkDue(iso) {
 async function wkLink(link) {
   const t = wkToken(link); if (!t) { showBot("Это не приглашение в «Работу» — попросите у руководителя новый код.", "err"); return; }
   if (kidsOn()) { showBot("В детском режиме рабочие приглашения не принимаю.", "err"); return; }
-  if (!syncCred()) { S.workPending = t; saveS(); showBot("Приглашение на работу сохранено. Войдите в Dewiar (Настройки → Мозг → «Подключить бесплатно») — и я его приму."); return; }
+  if (!syncCred()) { S.workPending = t; saveS(); wkGuest = { t }; wkJoinT = null; wkCur = ""; openWork("", true); return; }   // без входа — «Работа без установки» (0.58)
   try {
     const p = await clReq("GET", "/work/peek", null, "&t=" + encodeURIComponent(t));
     if (p.own) { showBot("Это ваше же приглашение — его открывает сотрудник на своём телефоне."); return; }
@@ -171,27 +172,71 @@ async function wkLeave(pid) {
   catch (e) { toast("Не получилось: " + e.message, 3500); }
 }
 
+/* ---------- «Работа без установки» (0.58; владелец 28.10): сотрудник без Dewiar открыл ссылку-приглашение — в браузере
+   (веб-версия, dwrapp/web/?work=…) или в приложении без входа. Имя — и всё: сайт выдаёт ключ по приглашению (?p=/work/guest,
+   без заявки и пароля), им же входим, принимаем приглашение — и сразу «Работа». Своя модель, если была, остаётся. ---------- */
+function wkGuestHtml() {
+  return `<div class="wk-hero join">${WK_IC}<small>Приглашение на работу</small><b>Поручения — прямо здесь</b>`
+    + `<p>Ничего устанавливать и регистрировать не нужно: напишите, как вас зовут, — и поручения руководителя будут приходить сюда.</p></div>`
+    + `<div class="card wk-terms"><p>✓ Руководитель видит только поручения: что вы взяли, сделали или перенесли, и что вы ему написали.</p>`
+    + `<p>✓ Всё рабочее шифруется на ваших устройствах.</p><p>✓ Уйти можно в любой момент — рабочее исчезнет.</p></div>`
+    + `<div class="card"><label class="f"><span>Как вас зовут</span><input id="wk-gname" maxlength="60" autocomplete="name" placeholder="Анна Ким" value="${esc(S.user_name || "")}"></label>`
+    + `<button class="btn p w" id="wk-gok" style="margin-top:10px">Начать работу</button><div class="res" id="wk-gres"></div></div>`
+    + `<p class="hint wk-foot">${D.web ? "Добавьте эту страницу на главный экран — так поручения будут под рукой. Уведомления приходят, пока страница открыта; приложение Dewiar присылает их всегда." : "Уже есть вход в Dewiar? Войдите в «Настройках» — и откройте ссылку снова."}</p>`;
+}
+function wkBindGuest() {
+  const ok = $("#wk-gok"); if (!ok) return;
+  const go = async () => {
+    const name = $("#wk-gname").value.trim(), r = $("#wk-gres");
+    if (!name) { r.className = "res err"; r.textContent = "Напишите имя — руководитель увидит, кто взял поручение"; $("#wk-gname").focus(); return; }
+    ok.disabled = true; r.className = "res"; r.textContent = "Подключаю…";
+    try {
+      const base = CLOUD_URL.split("?")[0];
+      const x = await http("POST", base + "?p=/work/guest", { headers: { "Content-Type": "application/json" }, body: { t: wkGuest.t, name }, timeout: 20000 });
+      let d = {}; try { d = JSON.parse(x.body || "{}"); } catch (e) { }
+      if (x.status >= 400 || !d.key) throw new Error((d.error && d.error.message) || ("сайт ответил " + x.status));
+      if (!S.user_name) S.user_name = name;
+      if (S.llm && S.llm.base_url && !S.llm.cloud) { S.sync = Object.assign({}, S.sync, { key: d.key }); saveS(); }   // своя модель остаётся
+      else await cloudConnect(d.key, base);
+      S.webWork = true; saveS();
+      const t = wkGuest.t; wkGuest = null;
+      const p = await clReq("GET", "/work/peek", null, "&t=" + encodeURIComponent(t));
+      wkJoinT = Object.assign({ t }, p);
+      await wkAccept();                                          // условия уже показаны — второй раз «Присоединиться» не спрашиваем
+    } catch (e) { ok.disabled = false; r.className = "res err"; r.textContent = "Не получилось: " + e.message; }
+  };
+  ok.onclick = go; $("#wk-gname").onkeydown = (e) => { if (e.key === "Enter") go(); };
+}
+
 /* ---------- лист «Работа» ---------- */
 function openWork(pid, join) {
   if (kidsOn()) return;
-  if (!join) wkJoinT = null;
+  if (!join) { wkJoinT = null; wkGuest = null; }
   wkAdd = false;
-  const jobs = wkJobs();
-  wkCur = pid && wkLoad().jobs[pid] ? pid : (wkCur && wkLoad().jobs[wkCur] ? wkCur : (jobs[0] || {}).pid || "");
-  wkForm = null; wkShowFeed = false;
+  const jobs = wkJobs(), boss = bsHas(), ok = (x) => x && (wkLoad().jobs[x] || (x === BS_TAB && boss));
+  const first = boss && (bsUnread() || !jobs.some(j => j.unread)) ? BS_TAB : (jobs.find(j => j.unread) || jobs[0] || {}).pid || (boss ? BS_TAB : "");
+  wkCur = ok(pid) ? pid : ok(wkCur) ? wkCur : first;
+  wkForm = null; wkShowFeed = false; bsForm = null;
   wkRender(); openSheet("#sh-work");
+  if (wkCur === BS_TAB && !join) { if (Date.now() - (bsLoad().snap || {}).at > 60000) bsAsk(); clSchedule(); }
   const j = wkLoad().jobs[wkCur];
   if (j && !join && Date.now() - (j.hi || 0) > 120000) { j.hi = Date.now(); wkSave(); wkSend(j.pid, { act: "hello" }).catch(() => { }); }   // свежий снимок
 }
 function wkRender() {
   const box = $("#work-body"); if (!box) return;
-  const st = wkLoad(), jobs = wkJobs(), j = st.jobs[wkCur];
-  $("#wk-join").style.display = jobs.length && !wkJoinT && !wkAdd ? "" : "none";
+  const st = wkLoad(), jobs = wkJobs(), boss = bsHas();
+  if (wkCur === BS_TAB && !boss) wkCur = (jobs[0] || {}).pid || "";
+  const j = st.jobs[wkCur];
+  $("#wk-join").style.display = jobs.length && !wkJoinT && !wkAdd && wkCur !== BS_TAB ? "" : "none";
+  if (wkGuest) { $("#wk-join").style.display = "none"; box.innerHTML = wkGuestHtml(); wkBindGuest(); return; }
   if (wkJoinT) { box.innerHTML = wkJoinHtml(wkJoinT); wkBindJoin(); return; }
+  /* вкладки: «Сотрудники» (вы — руководитель, boss.js) и по одной на каждую работу, где вы — сотрудник */
+  const all = (boss ? [{ pid: BS_TAB, team: "Сотрудники", unread: bsUnread() }] : []).concat(jobs);
+  const tabs = all.length > 1 ? `<div class="seg wk-tabs" role="tablist">${all.map(x => `<button role="tab" data-j="${esc(x.pid)}" class="${x.pid === wkCur ? "on" : ""}" aria-selected="${x.pid === wkCur}">${esc(x.team)}${x.unread ? " •" : ""}</button>`).join("")}</div>` : "";
+  if (wkCur === BS_TAB && !wkAdd) { box.innerHTML = tabs + bsHtml(); wkTabsBind(); bsBind(); return; }
   if (!j || wkAdd) { box.innerHTML = wkEmptyHtml(); wkBindJoin(); return; }
   if (j.unread) { j.unread = 0; wkSave(); wkBadge(); }
   const tasks = (j.snap || {}).tasks || [], reps = (j.snap || {}).repeats || [];
-  const tabs = jobs.length > 1 ? `<div class="seg wk-tabs" role="tablist">${jobs.map(x => `<button role="tab" data-j="${esc(x.pid)}" class="${x.pid === wkCur ? "on" : ""}" aria-selected="${x.pid === wkCur}">${esc(x.team)}${x.unread ? " •" : ""}</button>`).join("")}</div>` : "";
   const since = j.since ? new Date(j.since * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
   const last = (j.feed || []).filter(x => !x.out).slice(-1)[0];
   const feed = wkShowFeed ? (j.feed || []).slice(-30) : last ? [last] : [];
@@ -240,8 +285,14 @@ function wkLocal(iso, dayAhead) {               // значение для datet
   const p = (x) => String(x).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+function wkTabsBind() {
+  $$("#work-body .wk-tabs [data-j]").forEach(b => b.onclick = () => {
+    wkCur = b.dataset.j; wkForm = null; wkShowFeed = false; bsForm = null; wkRender();
+    if (wkCur === BS_TAB && Date.now() - (bsLoad().snap || {}).at > 60000) bsAsk();
+  });
+}
 function wkBind(j) {
-  $$("#work-body .wk-tabs [data-j]").forEach(b => b.onclick = () => { wkCur = b.dataset.j; wkForm = null; wkShowFeed = false; wkRender(); });
+  wkTabsBind();
   const fa = $("#wk-feedall"); if (fa) fa.onclick = () => { wkShowFeed = !wkShowFeed; wkRender(); };
   $$("#work-body .wk-task [data-a]").forEach(b => b.onclick = async () => {
     const tid = b.closest(".wk-task").dataset.t, a = b.dataset.a;
@@ -307,7 +358,7 @@ function wkJoinHtml(p) {
 }
 function wkBindJoin() {
   const ok = $("#wk-jok"); if (ok) ok.onclick = () => { ok.disabled = true; wkAccept().finally(() => { if ($("#wk-jok")) $("#wk-jok").disabled = false; }); };
-  const no = $("#wk-jno"); if (no) no.onclick = () => { wkJoinT = null; if (wkHas()) wkRender(); else closeSheets(); };
+  const no = $("#wk-jno"); if (no) no.onclick = () => { wkJoinT = null; if (wkHas() || bsHas()) wkRender(); else closeSheets(); };
   const bk = $("#wk-back"); if (bk) bk.onclick = () => { wkAdd = false; wkRender(); };
   const sc = $("#wk-scan"); if (sc) sc.onclick = () => scanCode();
   const pg = $("#wk-pgo"); if (pg) pg.onclick = () => {

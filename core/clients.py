@@ -77,7 +77,10 @@ def split_who(who):
     return s.strip(" ,—-" + QUOTES), company.strip(" ,—-" + QUOTES)
 
 
-class Clients:
+from deals import DealError, DealsMixin  # noqa: E402 — сделки и «кто нам должен» (deals.py)
+
+
+class Clients(DealsMixin):
     """path — clients.json; reminders — общие напоминания ядра (следующий шаг); now — время (проверки)."""
 
     def __init__(self, path, reminders=None, emit=None, now=None):
@@ -310,6 +313,9 @@ class Clients:
         rest = [x for x in items if not x["next"]][:10]
         if rest:
             out.append("Без следующего шага: " + "; ".join(_t(x) + (f" — последнее: {x['last'][:80]}" if x["last"] else "") for x in rest))
+        owed = [d for d in self.deals() if d["owed"]]
+        if owed and not q:
+            out.append(self.deals_summary("owed"))           # «кто ждёт?» — и кто нам должен (deals.py)
         return f"Клиентов: {len(items)}. " + " ".join(out)
 
 

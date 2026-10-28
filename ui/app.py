@@ -857,6 +857,26 @@ class Api:
                         print(f"Форма окна не задана: {e}", file=sys.stderr)
         threading.Thread(target=run, daemon=True).start()
 
+    def _win_shape_keeper(self):
+        """Windows: раз в 3 с проверить, что у видимого виджета есть форма, — слетела (тема, масштаб, пересоздание окна
+        мимо событий) — поставить заново. 28.10, владелец: «на Windows виджет с прямыми углами, нет скруглений»."""
+        import threading
+
+        def run():
+            said = False
+            while True:
+                time.sleep(3)
+                try:
+                    h = self._hwnd(self.mode) if self.mode in SIZES else None
+                    if h and winshell.visible(h) and not winshell.has_shape(h):
+                        winshell.shape(h, self.mode, card_r())
+                        if not said:
+                            said = True
+                            _ui_log(f"виджет: форма окна слетела ({self.mode}) — поставлена заново")
+                except Exception:  # noqa: BLE001
+                    pass
+        threading.Thread(target=run, name="win-shape", daemon=True).start()
+
     def _win_shape_events(self, mode):
         """Подписка на события формы WinForms: показали, поменяли размер, пересоздали — форма заново."""
         try:
@@ -886,6 +906,7 @@ class Api:
             self.mode = mode
             self._place(mode, cx, cy)
             self._activate()
+            self._win_shape_keeper()
             return
 
         # pywebview создаёт окна по очереди, а on_start может прийти раньше, чем готово второе окно: тогда у него нет
@@ -1548,6 +1569,13 @@ class Api:
         _ui_log(f"студия: открыть {page or ''}{' (с параметрами)' if query else ''}")
         if self._studio is not None and not WIN and self._gtk(lambda: self._studio_gw() is not None) is False:
             self._studio = None                         # окна уже нет (закрыто мимо нас) — откроем новое
+        if self._studio is not None and not query and not self._studio.events.loaded.is_set() and time.monotonic() - getattr(self, "_studio_born", 0) > 15:
+            _ui_log("студия: страница не поднялась — окно заново")      # №375: WebView2 не создал страницу — пустое окно
+            try:
+                self._studio.destroy()
+            except Exception:  # noqa: BLE001
+                pass
+            self._studio = None
         if self._studio is not None and not query:
             try:
                 self._studio.show()
@@ -1578,7 +1606,7 @@ class Api:
                                             frameless=own, easy_drag=False,
                                             text_select=True,    # текст студии можно выделять и копировать (pywebview по умолчанию запрещает; пакет 23.10, №202)
                                             js_api=self)     # без этого в студии нет «Обновить», выбора папки, сохранения
-        win = self._studio
+        win, self._studio_born = self._studio, time.monotonic()
         win.events.closed += lambda *a: self._studio_closed(win)
         if not WIN:
             win.events.shown += lambda *a: __import__("threading").Thread(target=self._raise_studio, daemon=True).start()
@@ -2351,7 +2379,11 @@ class Api:
         """Кнопка блокнота (или «Досуга», mode="play") в углу виджета: открыть / закрыть (страница сама «въезжает» и
         «уезжает»). Лист открыт в другом режиме — не закрываем, а переключаем: блокнот ↔ игры."""
         mode = "play" if mode == "play" else "notes"
+        if getattr(self, "_pad_on", False) and self._pad_dead():    # №375: окно есть, а страницы в нём нет — заново
+            self._pad_reset("нажали кнопку")
         if getattr(self, "_pad_on", False):
+            if not self._pad_ready():                              # ещё грузится — второй клик не закрывает пустое окно
+                return True
             if getattr(self, "_pad_mode", "notes") != mode:
                 self._pad_mode = mode
                 self._pad_js(f"window.padMode && padMode('{mode}')")
@@ -2372,6 +2404,47 @@ class Api:
             return True
         self._pad_game = game
         return self.pad_open("play")
+
+    # №375 (28.10, Windows): WebView2 не создал страницу («Класс не зарегистрирован») — окно блокнота пустое, а кнопка
+    # больше ничего не делает: «закрыть» уходило странице, которой нет. Страница поднялась — events.loaded; нет её
+    # через PAD_WAIT с — окно убираем и создаём заново (один раз), не вышло — говорим у виджета, кнопка снова работает.
+    PAD_WAIT = 12.0
+
+    def _pad_ready(self):
+        win = getattr(self, "_pad", None)
+        try:
+            return win is not None and win.events.loaded.is_set()
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _pad_dead(self):
+        return getattr(self, "_pad", None) is not None and not self._pad_ready() and \
+            time.monotonic() - getattr(self, "_pad_born", 0) > self.PAD_WAIT
+
+    def _pad_reset(self, why=""):
+        win, self._pad, self._pad_on = getattr(self, "_pad", None), None, False
+        print(f"Окно блокнота: страница не поднялась ({why}) — убираю окно", file=sys.stderr)
+        _ui_log(f"блокнот: страница не поднялась ({why})")
+        if win is not None:
+            try:
+                win.destroy()
+            except Exception:  # noqa: BLE001
+                pass
+        self._js("window.padMark && padMark(false)")
+
+    def _pad_watch(self, win, mode):
+        """Через PAD_WAIT с после создания: страница не поднялась — убрать окно; первый раз — создать заново."""
+        if getattr(self, "_pad", None) is not win or self._pad_ready():
+            return
+        self._pad_reset(f"ждал {self.PAD_WAIT:g} с")
+        tries = getattr(self, "_pad_tries", 0)
+        if tries < 1 and self.mode == "card":
+            self._pad_tries = tries + 1
+            self.pad_open(mode)
+        else:
+            self._pad_tries = 0
+            self._js("window.padFail && padFail('Блокнот не открылся: окно Windows не создало страницу. Нажмите ещё раз; "
+                     "не поможет — перезапустите Dewiar из трея')")
 
     def pad_mode_mark(self, mode):
         """Страница блокнота сама сменила режим (кнопки 🎮 и «к блокноту» на листе) — отметить у виджета."""
@@ -2418,6 +2491,9 @@ class Api:
         self._pad_g, self._pad_side, self._pad_on = g, g["side"], True
         W = g["w"] + g["gap"]
         win = getattr(self, "_pad", None)
+        if win is not None and self._pad_dead():
+            self._pad_reset("открыть снова")
+            win = None
         if win is not None:
             try:
                 if WIN:
@@ -2457,8 +2533,10 @@ class Api:
         win = webview.create_window(PAD_TITLE, self._url("pad.html", q), width=W, height=g["h"], x=g["x"], y=g["y"],
                                     resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
                                     background_color="#dbe5f1" if light else "#12131b", js_api=self, **_no_shadow())
-        self._pad = win
-        win.events.closed += lambda *a: (setattr(self, "_pad", None), setattr(self, "_pad_on", False))
+        self._pad, self._pad_born = win, time.monotonic()
+        win.events.closed += lambda *a: (setattr(self, "_pad", None), setattr(self, "_pad_on", False)) if getattr(self, "_pad", None) is win else None
+        win.events.loaded += lambda *a: setattr(self, "_pad_tries", 0)
+        threading.Timer(self.PAD_WAIT, self._pad_watch, args=(win, mode)).start()
         done, lock = [], threading.Lock()
 
         def reveal():
@@ -2614,7 +2692,12 @@ class Api:
         import threading
         win = getattr(self, "_pad", None)
         if win is not None:
-            threading.Thread(target=lambda: win.evaluate_js(code), daemon=True).start()
+            def run():
+                try:
+                    win.evaluate_js(code)
+                except Exception as e:  # noqa: BLE001 — страницы нет (№375): не висим, следующий клик создаст окно заново
+                    print(f"Окно блокнота: {e}", file=sys.stderr)
+            threading.Thread(target=run, daemon=True).start()
 
     def close_prompter(self):
         win = getattr(self, "_prompter", None)

@@ -14,7 +14,7 @@ _KIDS_LOCKED = ("account_", "backup_", "cal_add", "cal_remove", "cloud_connect",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_")
 
 
 def _kids_blocked(cmd, a):
@@ -26,6 +26,8 @@ def _kids_blocked(cmd, a):
 
 
 class CommandsMixin:
+    PTT_CALM = 2.5                     # с: нажатие на лицо сразу после «стоп» — тоже «стоп» (судорожные нажатия, 28.10)
+
     # ---------- команды из интерфейса ----------
 
     def switch_persona(self, pid):
@@ -172,6 +174,7 @@ class CommandsMixin:
         client_note {id, text, kind}; client_note_del {id, nid}; client_next {id, what, at (ГГГГ-ММ-ДДTЧЧ:ММ) | when (словами)};
         client_next_done {id}; client_del {id}."""
         from clients import ClientError
+        from deals import DealError
         C = self.clients
         cid = str(a.get("id") or "")
         try:
@@ -202,9 +205,37 @@ class CommandsMixin:
                 return C.next_done(cid)
             if cmd == "client_del":
                 return C.delete(cid)
+            # сделки (deals.py): clients_deals — доска; client_deal_add {id, title, amount, stage, due}; client_deal_set
+            # {id, did, title?, amount?, stage?, due?, note?}; client_deal_del {id, did}; clients_deal_income {on}
+            if cmd == "clients_deals":
+                return dict(C.deals_board(), income=(self.s.get("clients") or {}).get("deal_income", True) is not False)
+            if cmd == "clients_deal_income":
+                self.s.update({"clients": {"deal_income": bool(a.get("on"))}})
+                return dict(C.deals_board(), income=bool(a.get("on")))
+            if cmd == "client_deal_add":
+                d = C.deal_add(cid, a.get("title") or "", a.get("amount") or 0, a.get("cur") or "", a.get("stage") or "lead", a.get("due") or "")
+                self._deal_income(d)
+                return C.get(cid)
+            if cmd == "client_deal_set":
+                d = C.deal_set(cid, str(a.get("did") or ""), **{k: a[k] for k in ("title", "amount", "cur", "stage", "due", "note") if k in a})
+                self._deal_income(d)
+                return C.get(cid)
+            if cmd == "client_deal_del":
+                C.deal_del(cid, str(a.get("did") or ""))
+                return C.get(cid)
             raise ValueError(f"неизвестная команда {cmd}")
-        except ClientError as e:
+        except (ClientError, DealError) as e:
             raise ValueError(str(e)) from e
+
+    def _deal_income(self, d):
+        """Сделка оплачена — в доходы «Денег» (если не выключено: «Клиенты» → «Сделки» → «Оплаченное — в доходы»)."""
+        from deals import to_money
+        if (self.s.get("clients") or {}).get("deal_income", True) is False:
+            return ""
+        iid = to_money(getattr(self, "money", None), d)
+        if iid:
+            self.clients.deal_set(d["cid"], d["id"], income=iid)
+        return iid
 
     def team_cmd(self, cmd, a):
         """team_get; team_connect {token}; team_forget; team_set {company?, boss?, speak?}; team_member_add {name, role};
@@ -232,6 +263,8 @@ class CommandsMixin:
             if cmd == "team_assign":
                 r = T.assign(str(a.get("who") or ""), a.get("title"), a.get("due") or "", a.get("note") or "")
                 return dict(T.public(), made=({"repeat": True, "rule": r["rule"], "name": r["name_dat"]} if r.get("repeat") else {}))
+            if cmd == "team_message":                   # написать сотруднику: ответ на сообщение или просто слово
+                return T.message(str(a.get("id") or a.get("who") or ""), str(a.get("text") or ""))
             if cmd == "team_app_invite":                # приложение Dewiar: печать и ссылка сотруднику (renew — новые)
                 return T.app_invite(str(a.get("id") or ""), bool(a.get("renew")))
             if cmd == "team_repeat_del":
@@ -830,6 +863,21 @@ class CommandsMixin:
         if cmd in ("reminders", "reminder_add", "reminder_update", "reminder_cancel", "alarm_ack", "alarm_snooze",
                    "alarm_get", "alarm_test", "reminder_parse", "job_add", "job_run", "reminder_files", "capture_parse", "capture_save"):
             return self._reminder_cmd(cmd, a)
+        if cmd in ("morning_get", "morning_set"):                   # «Утро с Лирой» (morning.py): карточка на главной студии
+            import morning
+            if cmd == "morning_set":
+                patch = {}
+                if "city" in a:
+                    patch["city"] = re.sub(r"\s+", " ", str(a.get("city") or "")).strip()[:60]
+                if "mail" in a:
+                    patch["mail"] = bool(a.get("mail"))
+                if "hide" in a:
+                    patch["hide"] = str(a.get("hide") or "")[:10]
+                self.s.update({"morning": patch})
+            d = morning.public(morning.gather(self, net=True, fresh=bool(a.get("fresh")) or cmd == "morning_set"))
+            job = next((x for x in self.reminders.items if x.get("kind") == "job" and (x.get("preset") == "brief" or x.get("brief"))), None)
+            return dict(d, settings=dict(self.s.get("morning") or {}), daily=self._reminder_public(job) if job else None,
+                        mail_on=bool(getattr(self, "mail", None) and self.mail.configured()))
         if cmd.startswith("pay_"):                                  # «Платежи» (engine_pay.py, payments.py)
             try:
                 return self._pay_cmd(cmd, a)
@@ -1148,18 +1196,31 @@ class CommandsMixin:
             from eyes import list_cameras
             return list_cameras()
         if cmd == "ptt":
+            # 28.10 (владелец, Ubuntu): «сработала сама, я быстро жму на аватарку, а она ещё 1–2 раза пытается слушать».
+            # Судорожные нажатия: первое останавливало, а следующее попадало в «тишину» и снова включало слушание; голос из
+            # того же разговора будил её опять. Теперь: нажатие в течение PTT_CALM с после остановки — тоже «стоп»; слушание
+            # или ответ, начатые голосом, остановили кнопкой — минуту не откликаемся на голос (кнопка работает всегда).
+            now = time.monotonic()
+            if now - getattr(self, "_ptt_stop_at", 0.0) < self.PTT_CALM and self.state not in ("speaking", "thinking", "listening"):
+                self._ptt_stop_at = now
+                return "sleep"
             if self.muted and self.state not in ("speaking", "thinking"):
                 self._mute_pass = True                      # нажали «говорить» при выключенном микрофоне — одна фраза, и снова тихо
-            if self.state in ("speaking", "thinking"):
-                self.interrupt("кнопка", follow=False)       # быстро нажал — замолчал и уснул
-                self.follow_up_until = 0.0
-                self.play_tone("sleep")
-                # ответ начался по голосу и его оборвали в первые секунды — почти наверняка ложное срабатывание (фон, видео):
-                # минуту не просыпаемся от голоса, иначе тут же «опять начинает» (отзыв 14.10). Кнопка — работает.
-                if time.monotonic() - (getattr(self, "wake_time", 0.0) or 0.0) < 25:
-                    self._quiet_until = time.monotonic() + 60
+            if self.state in ("speaking", "thinking", "listening"):
+                self._ptt_stop_at = now
+                by_voice = now - (getattr(self, "wake_time", 0.0) or 0.0) < 25   # начато голосом, а не кнопкой
+                if self.state == "listening":
+                    self.go_sleep("кнопка", media=False)     # второе нажатие — перестать слушать
+                else:
+                    self.interrupt("кнопка", follow=False)   # быстро нажал — замолчал и уснул
+                    self.follow_up_until = 0.0
+                    self.play_tone("sleep")
+                if by_voice:
+                    # почти наверняка ложное срабатывание (фон, разговор рядом, видео): минуту не просыпаемся от голоса,
+                    # иначе тут же «опять начинает» (отзывы 14.10 и 28.10). Кнопка — работает.
+                    self._quiet_until = now + 60
                     self.wake_time = 0.0
-                    log.info("🤫 Остановили ответ, начатый по голосу, — минуту не откликаюсь на голос")
+                    log.info("🤫 Остановили кнопкой то, что началось по голосу, — минуту не откликаюсь на голос")
                     quiet = "Минуту не откликаюсь на голос — позвать можно нажатием на лицо."
                     self.note(quiet)
 
@@ -1167,9 +1228,6 @@ class CommandsMixin:
                         if self.status.get("note") == self._g(quiet):
                             self.note("")
                     threading.Timer(60, unquiet).start()
-                return "sleep"
-            if self.state == "listening":
-                self.go_sleep("кнопка", media=False)         # второе нажатие — перестать слушать
                 return "sleep"
             self.listen_for_command(8)
             return "listening"

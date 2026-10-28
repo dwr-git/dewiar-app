@@ -116,6 +116,42 @@ class WorkspaceError(Exception):
 NOTE_ATT_MAX = 20 * 1048576
 NOTE_IMG = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
 NOTE_LINK_RX = re.compile(r"(?:📎\s*)?(!?)\[[^\]\n]*\]\((Вложения/[^)\s]+)\)")    # ссылки на вложения в тексте заметки
+# Шапка заметки (Obsidian, перенос из Google Keep и других программ): в начале файла строки «ключ: значение» между
+# «---» (или «--»). 28.10, пользователь: «source: Google Keep, id: … — это не то» — шапка показывалась текстом, а в
+# списке — «-- source: Google Keep id: …». Теперь она не показывается и не попадает в отрывок; из неё берутся метки
+# (tags), цвет (color / «цвет: BROWN») и «закреплено» (pinned) — и при правке в студии сохраняется как была.
+FRONT_RX = re.compile(r"\A\ufeff?(-{2,3})[ \t]*\n((?:[ \t]*(?:[\w\-а-яёА-ЯЁ]+[ \t]*:.*|-[ \t].*|)\n)*?)\1[ \t]*(?:\n|\Z)")
+
+
+def note_front(text):
+    """-> (шапка как словарь, текст без шапки). Без шапки — ({}, text). Значения — строки; список меток — tags."""
+    m = FRONT_RX.match(str(text or ""))
+    if not m or not m.group(2).strip():
+        return {}, str(text or "")
+    meta, key = {}, ""
+    for line in m.group(2).splitlines():
+        li = re.match(r"\s*-\s+(.*)", line)
+        if li and key:                                       # список под ключом: tags:\n  - a\n  - b
+            meta.setdefault(key + "[]", []).append(li.group(1).strip().strip("\"'"))
+            continue
+        kv = re.match(r"\s*([\w\-а-яёА-ЯЁ]+)\s*:\s*(.*)", line)
+        if kv:
+            key = kv.group(1).lower()
+            meta[key] = kv.group(2).strip()
+    tags = []
+    for k in ("tags", "tag", "labels", "метки"):
+        raw = meta.get(k + "[]") or [x for x in re.split(r"[,;]", (meta.get(k) or "").strip("[] ")) if x.strip()]
+        tags += [str(x).strip().strip("\"'").lstrip("#") for x in raw if str(x).strip()]
+    meta = {k: v for k, v in meta.items() if not k.endswith("[]")}
+    if tags:
+        meta["tags"] = list(dict.fromkeys(tags))
+    else:
+        meta.pop("tags", None)
+    col = re.search(r"(?:^|\b)(?:colou?r|цвет)\s*:?\s*([A-Za-zА-Яа-яЁё_]+)", " ".join(f"{k}: {v}" for k, v in meta.items() if isinstance(v, str)))
+    if col and col.group(1).upper() not in ("DEFAULT", "NONE", "WHITE"):
+        meta["color"] = col.group(1).upper()
+    return meta, str(text)[m.end():]
+
 
 
 def _clean_name(name, default="заметка"):
@@ -289,7 +325,8 @@ class Workspace:
                 text = f.read_text(encoding="utf-8", errors="replace")[:200_000]
             except OSError:
                 continue
-            body = re.sub(r"^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?", "", text).strip()     # без заголовка и даты
+            meta, text = note_front(text)                  # шапка «---» (Obsidian, Google Keep) — не в отрывок
+            body = re.sub(r"^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?", "", text.lstrip()).strip()     # без заголовка и даты
             folder = "/".join(f.relative_to(base).parts[:-1])
             hay = norm(f.stem + "\n" + body + "\n" + folder)
             if words and not all(w in hay for w in words):
@@ -303,7 +340,8 @@ class Workspace:
                 import urllib.parse
                 img = (f.parent / urllib.parse.unquote(img)).relative_to(self.root).as_posix()
             out.append({"path": f.relative_to(self.root).as_posix(), "title": f.stem, "mtime": st.st_mtime, "size": st.st_size,
-                        "folder": folder, "snippet": re.sub(r"\s+", " ", snip).strip(), "att": len(atts), "img": img})
+                        "folder": folder, "snippet": re.sub(r"\s+", " ", snip).strip(), "att": len(atts), "img": img,
+                        "tags": meta.get("tags") or [], "color": meta.get("color", ""), "source": meta.get("source", "")})
         out.sort(key=lambda x: -x["mtime"])
         return out[:limit]
 

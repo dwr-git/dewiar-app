@@ -51,6 +51,7 @@ class E(EC.CommandsMixin):
     def note(self, t): self.status["note"] = t
     def _g(self, t): return t
     def listen_for_command(self, s=8): self.calls.append(("listen", s)); self.state = "listening"
+    def go_sleep(self, word="", media=True): self.calls.append(("sleep", word)); self.state = "idle"
 
 
 e = E(); e.wake_time = time.monotonic() - 6                      # имя услышано 6 с назад, отвечает
@@ -58,8 +59,18 @@ r = e.command("ptt", {})
 ok(r == "sleep" and ("interrupt", "кнопка", False) in e.calls and e._quiet_until - time.monotonic() > 55,
    f"остановили ответ по голосу в первые секунды — минуту не откликаемся на голос: {e._quiet_until - time.monotonic():.0f} с")
 ok("нажатием на лицо" in e.status["note"], f"и об этом сказано в виджете: {e.status['note']}")
+r1 = e.command("ptt", {})
+ok(r1 == "sleep" and ("listen", 8) not in e.calls, "28.10: судорожное второе нажатие сразу после «стоп» — тоже «стоп», а не «слушай»")
+e._ptt_stop_at -= 3
 r2 = e.command("ptt", {})
-ok(r2 == "listening" and ("listen", 8) in e.calls, "нажатие на лицо в эту минуту — слушает как обычно")
+ok(r2 == "listening" and ("listen", 8) in e.calls, "нажатие на лицо в эту минуту (не сразу) — слушает как обычно")
+e4 = E(); e4.state = "listening"; e4.wake_time = time.monotonic() - 2      # 28.10: сработала сама по голосу и слушает разговор
+r4 = e4.command("ptt", {})
+ok(r4 == "sleep" and ("sleep", "кнопка") in e4.calls and e4._quiet_until - time.monotonic() > 55,
+   "сработала сама и слушает — нажатие: перестала слушать и минуту не откликается на голос (разговор рядом её не будит)")
+e5 = E(); e5.state = "listening"; e5.wake_time = 0.0                       # слушает, потому что нажали
+e5.command("ptt", {})
+ok(e5._quiet_until == 0.0 and ("sleep", "кнопка") in e5.calls, "слушала по нажатию — второе нажатие просто «стоп», голос не глушим")
 e2 = E(); e2.wake_time = 0.0                                      # ответ начат кнопкой (имени не было)
 e2.command("ptt", {})
 ok(e2._quiet_until == 0.0 and not e2.status["note"], "ответ, начатый кнопкой, остановили — голос не глушим")

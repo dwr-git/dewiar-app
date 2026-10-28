@@ -68,6 +68,7 @@ function crCard() {
         + `<div class="cr-nxa"><button class="btn small primary" id="cr-ndone">Сделано</button><button class="btn small" id="cr-nedit">Изменить</button></div></div>` : "")
     + `<form class="cr-nform" id="cr-nform"${nx ? " hidden" : ""}><input id="cr-nwhat" maxlength="300" placeholder="Что сделать: перезвонить, отправить счёт…" value="${escH(nx ? nx.what : "")}">`
     + `<input id="cr-nwhen" type="datetime-local" value="${escH(nx && nx.at ? nx.at.slice(0, 16) : "")}" aria-label="Когда"><button class="btn small primary" type="submit">Поставить</button></form></div>`
+    + (typeof dlClientHtml === "function" ? dlClientHtml(c) : "")
     + `<div class="cr-add"><div class="cr-kinds" role="radiogroup" aria-label="Что записать">${["note", "call", "deal"].map(k => `<button type="button" role="radio" data-k="${k}" aria-checked="${CR.kind === k}" class="${CR.kind === k ? "on" : ""}">${crSvg(CR_KIND[k][1])}${CR_KIND[k][0]}</button>`).join("")}</div>`
     + `<form class="cr-aform" id="cr-aform"><textarea id="cr-atext" rows="2" maxlength="1000" placeholder="О чём договорились, что хочет, что обещали"></textarea><button class="btn primary" type="submit">Записать</button></form></div>`
     + `<div class="cr-hist"><h3>История</h3>${groups.length ? groups.map(([g, xs]) => `<div class="cr-hday"><small>${escH(g)}</small>${xs.map(x => `<div class="cr-h ${escH(x.kind)}">`
@@ -86,6 +87,7 @@ function crCard() {
     const at = $("#cr-nwhen").value; const d = await crCall("client_next", { id: c.id, what: w, at: at || "" }, at ? "Напоминание поставлено" : ""); if (d) { CR.card = d; crOpen(c.id); crLoadList(); } };
   if ($("#cr-ndone")) $("#cr-ndone").onclick = async () => { const d = await crCall("client_next_done", { id: c.id }, "Отмечено"); if (d) { crOpen(c.id); crLoadList(); } };
   if ($("#cr-nedit")) $("#cr-nedit").onclick = () => { $("#cr-nform").hidden = false; $(".cr-nx").hidden = true; $("#cr-nwhat").focus(); };
+  if (typeof dlClientBind === "function") dlClientBind(c);
   $$(".cr-hx").forEach(b => b.onclick = async () => { const d = await crCall("client_note_del", { id: c.id, nid: b.dataset.n }); if (d) { CR.card = d; crCard(); } });
 }
 async function crLoadList() { const l = await crCall("clients_list", { q: CR.q }); if (Array.isArray(l)) { CR.list = l; crLeft(); } }

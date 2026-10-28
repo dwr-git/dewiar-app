@@ -194,6 +194,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.toolbox.hooks["team"] = self.team
         from clients import Clients
         self.clients = Clients(STATE_DIR / "clients.json", self.reminders, emit=lambda *a, **k: self.emit("clients"))   # «Клиенты» — личная CRM
+        self.clients.currency = self._default_currency           # сделки — в валюте «Денег»
         self.toolbox.hooks["clients"] = self.clients
         from course import Course
         self.course = Course(STATE_DIR / "course.json", self.emit)   # курс «Неделя с Лирой»: шаги засчитываются сами
@@ -298,8 +299,12 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.telegram.start()
         if (self.s.get("features") or {}).get("team") and self.team.connected():
             self.team.start()                                  # «Команда»: бот компании — только если раздел включён
+            threading.Timer(30.0, self.team_changed).start()   # свежая доска своему телефону руководителя
         self.reminders.skip_late = self._tg_fired_elsewhere            # не повторять напоминание, пришедшее с сервера
+        self.reminders.on_wake = self._reminders_wake                  # проснулись — сначала сверка с телефоном (28.10)
+        self.sync.on_pass = self.reminders.release_hold                 # сверка прошла — опоздавшие звенят сразу, не через 90 с
         threading.Thread(target=self._tg_sync_loop, name="tg-sync", daemon=True).start()
+        threading.Thread(target=self._morning_loop, name="morning", daemon=True).start()   # «Утро с Лирой» — своему телефону
         threading.Thread(target=self._radio_check_loop, name="radio-check", daemon=True).start()
         threading.Thread(target=self._diary_loop, name="diary", daemon=True).start()
         threading.Thread(target=self._pay_loop, name="payments", daemon=True).start()

@@ -42,27 +42,74 @@ class MusicMixin:
         self._say_quick(msg, text, via)
         return True
 
+    def _weather_cmd(self, text, via=None):
+        """«Какая погода?», «погода в Минске завтра», «сколько градусов на улице» — сразу настоящие числа, без модели
+        (№373: маленькая модель погоду не искала и выдумывала). Город: названный → «Утро» (morning.city) → память;
+        нет нигде — спросим. Названный город, если своего нет, запоминаем в «Утро»."""
+        import weatherq as W
+        c = W.parse(text)
+        if not c:
+            return False
+        web = (getattr(getattr(self, "toolbox", None), "hooks", None) or {}).get("dewiar_web")   # запасной путь через сервер Dewiar
+        mine = str((self.s.get("morning") or {}).get("city") or "").strip()
+        phrase, pre = c["city"], c.get("pre", False)
+        if not phrase:
+            phrase, pre = mine, False
+        if not phrase:
+            try:
+                phrase, pre = W.memory_place(self.workspace.memory_get())
+            except Exception:  # noqa: BLE001
+                phrase = ""
+        if not phrase:
+            self._say_quick("В каком вы городе? Скажите, например: «погода в Минске» — я запомню и дальше буду говорить сразу.", text, via)
+            return True
+        try:
+            place = W.geocode(phrase, web)
+            if place is None:
+                if c["city"]:
+                    return False                          # «погода в доме…» — не город: пусть ответит модель
+                self._say_quick(f"Не нашла город «{phrase}». Скажите: «погода в …» — с названием города.", text, via)
+                return True
+            f = W.forecast(place, web)
+        except W.WeatherError as e:
+            log.info("🌦 погода: %s", e)
+            self._say_quick("Прогноз сейчас не получить — сервис погоды не отвечает. Попробуйте через минуту.", text, via)
+            return True
+        if c["city"] and not mine:
+            self.s.update({"morning": {"city": W.stored(place)}})
+            log.info("🌦 город для погоды и «Утра»: %s", W.stored(place))
+        where = ("в " + phrase if pre else place["name"]) if not phrase.lower().startswith(("в ", "во ")) else phrase
+        msg = W.say(where, f, c["day"])
+        self.emit("tool", name="weather", title="Погода", status="done", args={"city": W.stored(place), "days": 3}, detail=msg,
+                  result=msg + f" Ветер {f['wind']} км/ч, ощущается как {W.deg(f['feels'])}.")   # число ветра — и для «а ветер?» следом
+        self._say_quick(msg, text, via, note=f"Прогноз Open-Meteo для {W.stored(place)}: ветер {f['wind']} км/ч, ощущается как {W.deg(f['feels'])}°; "
+                        + "; ".join(f"день {i}: {W.deg(x['min'])}…{W.deg(x['max'])}°, {x['sky']}, осадки {x['rain']}%" for i, x in enumerate(f["days"])))
+        return True
+
     def _bot_for(self, deliver):
         """Куда присылать дело: telegram / max → бот; голосом — None."""
         return {"telegram": self.telegram, "max": self.max}.get(deliver or "")
 
-    def _brief_context(self):
-        """Данные для утренней сводки текстом: дата, дела и события на сегодня, деньги, фоновые задачи.
-        Погоду здесь не берём — её ищет модель по городу из памяти (см. _job_prompt)."""
+    def _brief_context(self, net=True):
+        """Данные для утренней сводки текстом — «Утро с Лирой» (morning.py): дата, погода (числами, если в «Утре» задан
+        город), встречи и дела на сегодня, сотрудники, клиенты, почта, деньги, фоновые задачи, ночной обход.
+        Заодно — свежее утро своему телефону (конверт own {morning}): там сводка дня дополнится клиентами и почтой."""
+        import morning
         from money import fmt
         now = datetime.now()
-        today = now.date().isoformat()
-        cal = self.calendar_month(now.year, now.month)
-        items = cal["days"].get(today, [])
-        todo = [f"{x.get('time', '')} {x['title']}".strip() for x in items if x["type"] == "reminder" and not x.get("done")]
-        meet = [f"{x.get('time') or 'весь день'} {x['title']}" + (f" ({x['place']})" if x.get("place") else "") for x in items if x["type"] == "event"]
-        lines = [f"Сегодня {now:%d.%m.%Y}, {['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье'][now.weekday()]}, сейчас {now:%H:%M}."]
-        lines.append("Дела и напоминания на сегодня: " + ("; ".join(todo) if todo else "нет") + ".")
-        if meet:
-            lines.append("Встречи и события из календаря: " + "; ".join(meet) + ".")
+        d = morning.gather(self, net=net)
+        self._morning_last = d
+        lines = [f"Сегодня {now:%d.%m.%Y}, {morning.WD[now.weekday()]}, сейчас {now:%H:%M}."]
+        t = d.get("today") or {}
+        lines.append("Дела и напоминания на сегодня: " + ("; ".join(f"{x['time']} {x['title']}".strip() for x in t.get("todo") or []) or "нет") + ".")
+        if t.get("meet"):
+            lines.append("Встречи и события из календаря: " + "; ".join(f"{x['time'] or 'весь день'} {x['title']}" + (f" ({x['place']})" if x["place"] else "") for x in t["meet"]) + ".")
+        rest = morning.context(dict(d, today=None, tasks=dict(d["tasks"], wait=[]) if d.get("tasks") else None))
+        if rest:
+            lines.append(rest)
         y = (now.date() - timedelta(days=1)).isoformat()
         sy = self.money.summary(y, y)
-        sm = self.money.summary(now.date().replace(day=1).isoformat(), today)
+        sm = self.money.summary(now.date().replace(day=1).isoformat(), now.date().isoformat())
         for c in sm["by_currency"][:1]:
             cy = next((x for x in sy["by_currency"] if x["currency"] == c["currency"]), None)
             lines.append(f"Деньги: вчера потрачено {fmt(cy['expense'] if cy else 0, c['currency'])}; с начала месяца доходы "
@@ -82,17 +129,49 @@ class MusicMixin:
                 lines.append("Ночной обход (скажи одной спокойной фразой, без технических слов): " + night)
         except Exception:  # noqa: BLE001
             pass
+        self.morning_share(d)
         return "\n".join(lines)
+
+    def _morning_loop(self):
+        """Утром (с 6 до 12), раз в день — своё утро телефону заранее: откроете приложение — сводка уже с погодой, клиентами
+        и почтой с компьютера. Нет своих устройств — own_send просто ничего не отправит."""
+        if self.stopping.wait(90):
+            return
+        while not self.stopping.is_set():
+            now = datetime.now()
+            if 6 <= now.hour < 12 and getattr(self, "_morning_day", None) != now.date() and getattr(self, "close", None):
+                try:
+                    if self.credentials()[0]:
+                        import morning
+                        self._morning_day = now.date()
+                        self.morning_share(morning.gather(self, net=True))
+                except Exception:  # noqa: BLE001
+                    log.debug("утро: своим устройствам", exc_info=True)
+            if self.stopping.wait(900):
+                return
+
+    def morning_share(self, d=None):
+        """Утро — своим устройствам (телефон дополнит им свою сводку дня). Раз в полчаса, не чаще; шифр на устройствах."""
+        close = getattr(self, "close", None)
+        if close is None or time.time() - getattr(self, "_morning_sent", 0) < 1800:
+            return
+        import morning
+        d = d or getattr(self, "_morning_last", None) or morning.gather(self, net=False)
+        self._morning_sent = time.time()
+        body = {k: d.get(k) for k in ("date", "city", "weather", "team", "clients", "mail")}
+        threading.Thread(target=close._own_quiet, args=({"morning": dict(morning.public(body), dev=self.device_name())},), daemon=True).start()
 
     def _job_prompt(self, item):
         """Поручение модели для дела по расписанию (или утренней сводки) — модель выполняет его сама, без вопросов."""
         if item.get("brief"):
             return (self._brief_context() + "\n\n"
-                    "[Утренняя сводка] Составь по этим данным короткую утреннюю сводку для пользователя: поздоровайся по "
-                    "имени, если знаешь; погода на сегодня в его городе (город — из памяти о нём; узнай инструментом "
-                    "поиска; не знаешь города — пропусти погоду); дела и напоминания на сегодня; коротко про деньги; "
-                    "одна добрая фраза на день. 4–7 коротких предложений, без списков с символами, без вопросов. Если "
-                    "есть навык morning-brief — следуй его указаниям (use_skill).")
+                    "[Утро с Лирой] Составь по этим данным короткую утреннюю сводку для пользователя: поздоровайся по "
+                    "имени, если знаешь; погода — если она есть в данных, бери оттуда; нет — узнай инструментом weather по "
+                    "городу из памяти о нём (не знаешь города — пропусти погоду); встречи, дела и напоминания на сегодня; "
+                    "если есть — сотрудники (что просрочено, что ждёт проверки), клиенты, которые ждут, важные письма от "
+                    "людей (рассылки не перечисляй) — по одной фразе; коротко про деньги; одна добрая фраза на день. "
+                    "4–8 коротких предложений, без списков с символами, без вопросов. Если есть навык morning-brief — "
+                    "следуй его указаниям (use_skill).")
         return (f"[Дело по расписанию] Поручение пользователя: «{item.get('text', '')}». Выполни его сам прямо сейчас — "
                 "используй инструменты (поиск в интернете, чтение страниц, почта, заметки, календарь calendar_list, бюджет "
                 "money_report). Ответь готовым коротким сообщением с результатом: без вопросов, без «я могу…», без "
@@ -765,15 +844,15 @@ class MusicMixin:
                     self.note(f"Радио: {e}")
                     return
                 gen = self.radio._gen
-                from radio import RATE as _R
+                from radio import BPS as _B
                 end = time.monotonic() + 11.0             # успех — 2 секунды звука подряд (https-поток стартует не сразу)
-                while time.monotonic() < end and self.radio.playing and self.radio.got < _R * 2 * 2:
+                while time.monotonic() < end and self.radio.playing and self.radio.got < _B * 2:
                     if self.radio._gen != gen:
                         return
                     time.sleep(0.25)
                 if self.radio._gen != gen or self.radio.paused:   # пользователь сказал «стоп»/«пауза» или включил другое
                     return
-                if self.radio.playing and self.radio.got >= _R * 2 * 2:
+                if self.radio.playing and self.radio.got >= _B * 2:
                     self.radio_health.mark(s["url"], True)
                     v = round(self.radio.volume * 100)
                     quiet = f" Громкость радио всего {v}% — скажите «громче»." if v <= 20 else ""

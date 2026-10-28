@@ -442,7 +442,7 @@ class Player:
     def __init__(self, device="", on_level=None, null=False):
         self.device, self.on_level, self.null = device, on_level, null
         self.proc = None
-        self.rate = 22050
+        self.rate, self.ch = 22050, 1
         self._lock = threading.Lock()
         self._stopped = False
         self._t0 = 0.0
@@ -450,23 +450,24 @@ class Player:
         self.captured = []           # для тестов (null=True)
         self.gain = 1.0              # приглушить, пока пользователь начинает говорить поверх ответа
 
-    def start(self, rate):
+    def start(self, rate, channels=1):
+        """channels=2 — стерео (радио и своя музыка, №374: «звук моно везде»); голос — моно."""
         with self._lock:
             self._kill()
-            self.rate, self._stopped, self.gain = rate, False, 1.0
+            self.rate, self.ch, self._stopped, self.gain = rate, max(1, int(channels)), False, 1.0
             self._t0, self._written = time.monotonic(), 0
-            self._lead = 0 if self.null else int(rate * self.LEAD) * 2
+            self._lead = 0 if self.null else int(rate * self.LEAD) * 2 * self.ch
             if self.null:
                 return
             backend = _backend()
             if backend == "libpulse":
                 try:
-                    self.proc = _PulseOut(rate, self.device)
+                    self.proc = _PulseOut(rate, self.device, self.ch)
                     return
                 except (OSError, pulse.PulseError) as e:
                     log.warning("libpulse: вывод звука не открылся (%s), пробую запасные способы", e)
             if backend in ("libpulse", "cli") and shutil.which("pacat"):
-                cmd = ["pacat", "--playback", "--raw", "--format=s16le", f"--rate={rate}", "--channels=1",
+                cmd = ["pacat", "--playback", "--raw", "--format=s16le", f"--rate={rate}", f"--channels={self.ch}",
                        "--latency-msec=80", "--client-name=Dewiar"]
                 if self.device:
                     cmd.append(f"--device={self.device}")
@@ -475,7 +476,7 @@ class Player:
                 try:
                     import sounddevice as sd
                     with _SD_LOCK:
-                        self.proc = sd.RawOutputStream(samplerate=rate, channels=1, dtype="int16",
+                        self.proc = sd.RawOutputStream(samplerate=rate, channels=self.ch, dtype="int16",
                                                        device=_sd_index(self.device, "sink"))
                         self.proc.start()
                         _sd_open(1)
@@ -485,7 +486,8 @@ class Player:
 
     def write(self, pcm: bytes) -> bool:
         """Пишет кусками по 40 мс, выдерживая опережение AHEAD. -> False — остановлено (перебили) или вывод упал."""
-        step = int(self.rate * 0.04) * 2
+        ch = getattr(self, "ch", 1)
+        step = int(self.rate * 0.04) * 2 * ch
         if getattr(self, "_lead", 0):
             pcm, self._lead = b"\x00" * self._lead + pcm, 0
         for i in range(0, len(pcm), step):
@@ -515,7 +517,7 @@ class Player:
                         self.proc.write(chunk)
             except (BrokenPipeError, OSError, AttributeError):   # AttributeError: stop() обнулил self.proc на ходу
                 return False
-            self._written += len(chunk) // 2
+            self._written += len(chunk) // (2 * ch)            # кадры (на канал), не отсчёты
             if self.on_level:
                 a = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)
                 self.on_level(min(1.0, float(np.sqrt(np.mean(a * a))) / 6000.0) if a.size else 0.0)
@@ -575,10 +577,11 @@ class _PulseOut:
     """Выход через libpulse. Запись и закрытие — под одним замком: libpulse-simple не потокобезопасен,
     а «стоп» приходит из другого потока."""
 
-    def __init__(self, rate, device):
+    def __init__(self, rate, device, channels=1):
         # Буфер сервера (2×200 мс) больше, чем Player пишет наперёд (0.25 с), — запись никогда не
         # блокируется, поэтому «стоп» из другого потока не ждёт; незвучавший хвост сбрасывается при закрытии.
-        self.s = pulse.SimpleStream(rate, False, device=device, name="Dewiar: голос", latency_ms=200)
+        self.s = pulse.SimpleStream(rate, False, device=device, name="Dewiar: музыка" if channels > 1 else "Dewiar: голос",
+                                    latency_ms=200, channels=channels)
         self.lock = threading.Lock()
 
     def write(self, data):

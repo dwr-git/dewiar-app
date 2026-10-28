@@ -14,13 +14,33 @@ gh_error() {   # в GitHub Actions — ещё и пометка с причин�
   printf '### ❌ %s\n```\n%s\n```\n' "$1" "$2" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"; }
 # у каждой проверки — своя папка: и рабочая (DEWIAR_WORKSPACE_DIR), и временная (TMPDIR — tempfile.mkdtemp и mktemp
 # внутри проверки); после — удаляется: раньше временные папки копились по сотне за прогон, и диск кончался (27.10)
-run() { local name=$1; shift; local out; local ws; ws=$(mktemp -d); mkdir -p "$ws/tmp"
-  out=$(DEWIAR_WORKSPACE_DIR=$ws TMPDIR=$ws/tmp timeout 300 "$@" 2>&1 | tr -d "\r"; echo "RC=${PIPESTATUS[0]}"); local rc=${out##*RC=}; out=${out%RC=*}
-  rm -rf "$ws"
+# Оценка вывода одной проверки: пройдена, только если нет ❌, код 0 и есть хоть одна ✅ (или «ALL OK»).
+passes() { [ "$1" = 0 ] && ! grep -q "❌" <<<"$2" && { grep -q "✅" <<<"$2" || grep -qE "ALL OK|^OK$" <<<"$2"; }; }
+judge() { local name=$1 rc=$2 out=$3 note=$4
   local ok=$(grep -c "✅" <<<"$out"); local bad=$(grep "❌" <<<"$out")
-  if [ -z "$bad" ] && [ "$rc" = 0 ] && { [ "$ok" -gt 0 ] || grep -qE "ALL OK|^OK$" <<<"$out"; }; then printf "✅ %-34s %s\n" "$name" "$ok"
-  else printf "❌ %-34s (код %s)\n%s\n" "$name" "$rc" "$bad$(tail -5 <<<"$out")"; FAIL=1; gh_error "$name" "$bad
-$(tail -15 <<<"$out")"; fi; }
+  if passes "$rc" "$out"; then printf "✅ %-34s %s%s\n" "$name" "$ok" "$note"; return 0; fi
+  printf "❌ %-34s (код %s)%s\n%s\n" "$name" "$rc" "$note" "$bad$(tail -5 <<<"$out")"; FAIL=1; gh_error "$name" "$bad
+$(tail -15 <<<"$out")"; return 1; }
+one() {   # выполнить проверку в своей папке -> вывод и в конце «RC=код»
+  local ws; ws=$(mktemp -d); mkdir -p "$ws/tmp"
+  DEWIAR_WORKSPACE_DIR=$ws TMPDIR=$ws/tmp timeout 300 "$@" 2>&1 | tr -d "\r"; echo "RC=${PIPESTATUS[0]}"; rm -rf "$ws"; }
+# Несколько проверок сразу (28.10, владелец: «жаль, что так долго»): DEWIAR_JOBS=3 tests/run_quick.sh — проверки идут
+# по три, итоги печатаются по порядку в конце. Упавшая в толпе перепроверяется одна — прошла одна, значит, мешала
+# нагрузка (тайминги игр, анимации), в строке так и сказано: «со второго раза, одна». По умолчанию — по одной, как раньше.
+JOBS=${DEWIAR_JOBS:-1}; Q="$TMPROOT/q"; mkdir -p "$Q"; N=0
+sec() { if [ "$JOBS" -le 1 ]; then echo "$1"; else N=$((N+1)); printf '%s' "$1" > "$Q/$(printf %04d $N).sec"; fi; }
+run() { local name=$1; shift
+  if [ "$JOBS" -le 1 ]; then local out; out=$(one "$@"); local rc=${out##*RC=}; judge "$name" "$rc" "${out%RC=*}"; return; fi
+  N=$((N+1)); local id; id=$(printf %04d $N); printf '%s' "$name" > "$Q/$id.name"; printf '%q ' "$@" > "$Q/$id.cmd"
+  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null || true; done
+  ( one "$@" > "$Q/$id.out" ) & }
+finish() { [ "$JOBS" -le 1 ] && return; wait
+  for f in $(ls "$Q" | grep -E '\.(sec|name)$' | sort); do local id=${f%%.*}
+    if [ "${f##*.}" = sec ]; then cat "$Q/$f"; echo; continue; fi
+    local name; name=$(cat "$Q/$f"); local out; out=$(cat "$Q/$id.out"); local rc=${out##*RC=}; out=${out%RC=*}
+    if passes "$rc" "$out"; then judge "$name" "$rc" "$out"; continue; fi
+    out=$(eval "one $(cat "$Q/$id.cmd")"); rc=${out##*RC=}; judge "$name" "$rc" "${out%RC=*}" " · со второго раза, одна"
+  done; }
 
 echo "== Синтаксис"
 if cout=$($PY -m compileall -q -x '/(vendor|node_modules)/' "$ROOT/core" "$ROOT/ui" "$ROOT/tools" "$ROOT/server" "$ROOT/tests" "$ROOT/packaging/dewiar-server" 2>&1); then
@@ -30,7 +50,7 @@ if command -v node >/dev/null; then
   [ -z "$bad" ] && echo "✅ JavaScript" || { echo "❌ JavaScript: $bad"; FAIL=1; gh_error JavaScript "$bad"; }
 fi
 
-echo "== Ядро"
+sec "== Ядро"
 run "текст, имена"                  $PY "$T/unit_test.py"
 run "версия: окно читает верно"     $PY "$T/version_read_test.py"
 run "мозг: форматы серверов"        $PY "$T/llm_compat_test.py"
@@ -181,6 +201,17 @@ run "Поручения через MAX: бот организации, вход,
 run "«Клиенты» — личная CRM: карточка из фразы, падежи, следующий шаг с напоминанием, кто ждёт, студия" $PY "$T/clients1028_test.py"
 run "«Поручения»: повторяющиеся (каждый понедельник, по будням) и итог дня руководителю" $PY "$T/team_repeat1028_test.py"
 run "«Поручения» → «Приложение Dewiar» в студии: включить без бота, печать сотруднику, «Новый код»" $PY "$T/team_app_studio1028_test.py"
+run "«Поручения»: ответить сотруднику из студии и голосом (team_message)" $PY "$T/team_message1028_test.py"
+run "«Утро с Лирой»: погода, день, сотрудники, клиенты, почта — компьютер, студия, телефон" $PY "$T/morning1028_test.py"
+run "№375: окно блокнота без страницы (WebView2) — пересоздаётся, кнопка не немеет" $PY "$T/pad_dead1028_test.py"
+run "№373: погода без модели — город названный, из «Утра» и памяти, падежи и область" $PY "$T/weather_quick1028_test.py"
+run "№374: радио и своя музыка — стерео" $PY "$T/radio_stereo1028_test.py"
+run "календарь после выключенного компьютера: сверка с телефоном, пропущенные дела, правка из календаря" $PY "$T/calendar_late1028_test.py"
+run "сделки и «кто нам должен»: этапы, должники, зависшие, доходы, голосом, утро, студия" $PY "$T/deals1028_test.py"
+run "№377: читать ответ вслух целиком; Windows: скругление виджета не слетает" $PY "$T/report1028b_test.py"
+run "меню: выключенные разделы «по желанию» — строкой «+ …», нажали — включено" $PY "$T/nav_optin1028_test.py"
+run "«Документы»: Лира читает ваши папки — раздел, значок на «Главной», урок, справка" $PY "$T/docs1028_test.py"
+run "заметки: шапка Keep и Obsidian не видна, метки и цвет; список не уезжает" $PY "$T/notes_front1028_test.py"
 run "«Устройства» в студии: карта, код и QR с отсчётом, «Подключилось», ввести код, переименовать" $PY "$T/devices_studio1028_test.py"
 run "своя память у персонажа в студии: «Память» в редакторе, вкладки в «Обо мне»" $PY "$T/persona_memory_studio1028_test.py"
 run "№370: микрофон через эхоподавление молчит — напрямую; модель для кода в роли мозга — подсказка" $PY "$T/report370_test.py"
@@ -276,8 +307,9 @@ run "персонажи: переименование"     $PY "$T/personas_rena
 run "род речи"                      $PY "$T/gender_test.py"
 run "экспорт настроек"              $PY "$T/export_test.py"
 run "отчёт: только новое с прошлого"   $PY "$T/report_fresh_test.py"
-echo "== Сайт и телефон"
+sec "== Сайт и телефон"
 run "сервер речи"                   $PY "$T/speech_server_test.py"
 run "телефон: руки"                 $PY "$T/android_hands_test.py"
 run "телефон: журнал разговора"     $PY "$T/android_log_test.py"
+finish
 exit $FAIL

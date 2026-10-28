@@ -231,6 +231,8 @@ class AnswerMixin:
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._home_cmd(text, via):
             return
+        if not raw and not quiet and not images and "\n\nВложения:" not in text and self._weather_cmd(text, via):
+            return                                       # «какая погода?» — настоящие числа сразу (weatherq.py, №373)
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._pay_voice(text, via):
             return                                       # «оплатил газ 47,84, показания 28135», «что не оплачено?» — «Платежи»
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._money_cmd(text, via):
@@ -1492,7 +1494,8 @@ class AnswerMixin:
             split, last, codef = SentenceSplitter(), 0.0, CodeFilter()
             # вслух — не больше ~900 символов (около минуты): длинный ответ дальше только на экране («Открыть целиком»);
             # сказки, истории и чтение вслух — целиком
-            voice_cap = 10 ** 9 if re.search(r"сказк|истори|расскаж|прочитай|прочти|читай|стих|подробно", text.lower()) else 900
+            # №377: «хотелось бы прослушивать всё до конца» — студия → «Голос» → «Читать длинные ответы вслух целиком»
+            voice_cap = 10 ** 9 if (self.s.get("tts", "read_all") or re.search(r"сказк|истори|расскаж|прочитай|прочти|читай|стих|подробно|целиком|полностью|до конца", text.lower())) else 900
             spoken = [0, False]                         # сколько символов отдано в озвучку; предел уже достигнут
 
             from gender import for_persona
@@ -1505,7 +1508,8 @@ class AnswerMixin:
                     return
                 if spoken[0] + len(s_) > voice_cap and spoken[0] > 0:
                     spoken[1] = True
-                    sentences.put("Дальше не читаю вслух — всё на экране.")
+                    sentences.put("Дальше не читаю вслух — всё на экране." + ("" if getattr(self, "_cap_said", False) else " Читать целиком — студия, «Голос»."))
+                    self._cap_said = True
                     log.info("🔇 Ответ длинный — вслух прочитано %d симв., остальное на экране", spoken[0])
                     return
                 spoken[0] += len(s_)

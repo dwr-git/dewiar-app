@@ -704,6 +704,21 @@ class ToolsMixin:
 
     # ---------- синхронизация устройств (core/sync.py) ----------
 
+    def _reminders_wake(self):
+        """Компьютер проснулся или Dewiar запустился: синхронизация есть — обменяться сейчас (опоздавшие ждут её, см.
+        Reminders._loop); синхронизации нет или облако выключено стоп-краном — ждать нечего, звенеть сразу (late_alarm1027:
+        без синхронизации пропущенное при запуске звенело только через 90 с)."""
+        try:
+            import egress
+            on = (self.s.get("sync", "enabled") is not False and not getattr(self, "wav_input", None)
+                  and not egress.local_only() and bool(self.credentials()[0]))
+        except Exception:  # noqa: BLE001
+            on = False
+        if on:
+            self.sync.soon.set()
+        else:
+            self.reminders.release_hold()
+
     def credentials(self):
         """Чем входить в облако. -> (токен, ключ_для_связки, базовый адрес cloud.php).
         Токен — вход в аккаунт dewiar.pro, иначе ключ Dewiar. Если есть и то и другое, ключ отдаётся вторым, чтобы
@@ -807,7 +822,80 @@ class ToolsMixin:
             pass
         return added
 
+    # ---------- «Поручения» с телефона руководителя (0.56) ----------
+    # Компьютер, где работают «Поручения», шлёт своим устройствам доску {team: boss_snap} (конверт own, шифр на устройствах):
+    # после каждого изменения (пачкой, через 4 с) и по просьбе {want: ["team"]}. Телефон руководителя присылает команду
+    # {team_cmd: {id, cmd, a}} — assign / accept / back / cancel / remind / message; ответ — {team_res: {id, ok, err}, team}.
+    TEAM_CMDS = ("assign", "accept", "back", "cancel", "remind", "message")
+
+    def _team_on(self):
+        T = getattr(self, "team", None)
+        return bool(T and (self.s.get("features") or {}).get("team") and T.connected() and getattr(self, "close", None))
+
+    def team_changed(self):
+        if not self._team_on() or getattr(self, "_team_pub_wait", False):
+            return
+        import threading
+        self._team_pub_wait, t0 = True, time.time()
+
+        def later():
+            time.sleep(4)
+            self._team_pub_wait = False
+            if getattr(self, "_team_pub_at", 0) < t0:      # после изменения уже ушла доска с ответом на команду — хватит
+                self._team_publish()
+        threading.Thread(target=later, daemon=True).start()
+
+    def _team_publish(self, res=None):
+        if not self._team_on():
+            return
+        self._team_pub_at = time.time()
+        body = {"team": dict(self.team.boss_snap(), dev=self.device_name())}
+        if res:
+            body["team_res"] = res
+        self.close._own_quiet(body)
+
+    def team_phone_cmd(self, c):
+        """Команда с телефона руководителя -> выполнить здесь и ответить доской. Одна и та же (id) — один раз."""
+        from team import TeamError
+        cid, cmd, a = str(c.get("id") or "")[:40], str(c.get("cmd") or ""), c.get("a") if isinstance(c.get("a"), dict) else {}
+        done = self.__dict__.setdefault("_team_cmds", [])
+        if not cid or cid in done:
+            return
+        done.append(cid)
+        del done[:-200]
+        res = {"id": cid, "cmd": cmd, "ok": True}
+        try:
+            if cmd not in self.TEAM_CMDS:
+                raise TeamError("этого с телефона не сделать")
+            if time.time() * 1000 - float(c.get("ts") or 0) > 3 * 86400 * 1000:
+                raise TeamError("команда пролежала больше трёх дней — повторите, если ещё нужно")
+            T = self.team
+            if cmd == "assign":
+                r = T.assign(a.get("who") or "", a.get("title") or "", a.get("due") or "", a.get("note") or "", via="phone")
+                res["name"] = r.get("name", "")
+                res["sent"] = bool(r.get("sent") or r.get("repeat"))
+            elif cmd == "back":
+                T.back(a.get("id") or "", a.get("remark") or "")
+            elif cmd == "message":
+                T.message(a.get("who") or "", a.get("text") or "")
+            else:
+                getattr(T, cmd)(a.get("id") or "")
+        except TeamError as e:
+            res.update(ok=False, err=str(e))
+        except Exception as e:  # noqa: BLE001
+            log.warning("Поручения с телефона: %s", e, exc_info=True)
+            res.update(ok=False, err="не получилось на компьютере")
+        log.info("💼 Поручения с телефона: %s — %s", cmd, "готово" if res["ok"] else res.get("err"))
+        self._team_publish(res)
+
     def own_apply(self, body):
+        if "team" in ((body or {}).get("want") or ()) and self._team_on():   # телефон руководителя открыл «Поручения»
+            import threading
+            threading.Thread(target=self._team_publish, daemon=True).start()
+        tc = (body or {}).get("team_cmd")
+        if isinstance(tc, dict) and self._team_on():
+            import threading
+            threading.Thread(target=self.team_phone_cmd, args=(dict(tc, ts=tc.get("ts") or (body or {}).get("ts") or 0),), daemon=True).start()
         if "brains" in ((body or {}).get("want") or ()):     # своё устройство просит мозги — отдаём, что есть
             share = self.brains_share()
             if share and getattr(self, "close", None):
@@ -986,6 +1074,12 @@ class ToolsMixin:
     def _on_reminder(self, item):
         """Сработало: окно-будильник по центру, звонок до «Готово»/«Отложить», голос, уведомление, Telegram."""
         text = item["text"]
+        if item.get("kind") == "job" and int(item.get("late_s") or 0) > self.JOB_LATE_MAX:
+            # 28.10 (владелец): компьютер был выключен — утром выполнился вчерашний «Итог дня» в 8:56. Дело, опоздавшее больше
+            # чем на JOB_LATE_MAX, не выполняем: в календаре оно на своём месте с пометкой «пропущено»
+            log.info("🗓 Пропущено (компьютер был выключен, опоздание %d мин): %s", int(item["late_s"]) // 60, text)
+            self._log_reminder(item, skipped=True)
+            return
         log.info("⏰ %s", text)
         self._log_reminder(item)
         fired = getattr(self, "_fired", None) or {}           # сработавшие (разовые уже убраны из списка) — окну за вложениями
@@ -1313,9 +1407,27 @@ class ToolsMixin:
                 if not r:
                     raise ValueError("не понял время")
                 patch.update(at=r["at"].isoformat(timespec="seconds"), repeat=r["repeat"])
+            if patch.get("at") and "when" not in (a.get("patch") or {}):   # календарь: новое время из поля «чч:мм»
+                from when import next_time
+                cur = next((x for x in self.reminders.items if x["id"] == a.get("id")), None)
+                try:
+                    at = datetime.fromisoformat(str(patch["at"]))
+                except ValueError as e:
+                    raise ValueError("не понял время") from e
+                rep = (patch.get("repeat") if "repeat" in patch else (cur or {}).get("repeat"))
+                if rep:                                  # повтор: новое время — для всех повторов, ближайший — в будущем
+                    if isinstance(rep, dict) and rep.get("kind") != "interval":
+                        rep = dict(rep, time=at.strftime("%H:%M"))
+                        patch["repeat"] = rep
+                    if at <= datetime.now():
+                        at = next_time(rep, datetime.now())
+                elif at <= datetime.now():
+                    raise ValueError("это время уже прошло — выберите позже")
+                patch["at"] = at.replace(microsecond=0).isoformat(timespec="seconds")
             r = self.reminders.update(a.get("id"), patch)
             if not r:
                 raise ValueError("нет такого напоминания")
+            self.emit("reminder_set", item=self._reminder_public(r), text="")
             return self._reminder_public(r)
         if cmd == "reminder_cancel":
             return self.reminders.cancel(a.get("id", ""))
@@ -1513,26 +1625,32 @@ class ToolsMixin:
 
         def put(day, item):
             days.setdefault(day, []).append(item)
+        from when import describe_repeat
         for r in self.reminders.items:                          # будущие (с повторами — все случаи в месяце)
             try:
                 at = datetime.fromisoformat(r["at"])
             except (KeyError, ValueError):
                 continue
             n = 0
+            job = r.get("kind") == "job"
             while at <= last and n < 400:                        # предел — чтобы частый повтор не раздул месяц и не зациклил
                 if at >= first:
                     put(at.date().isoformat(), {"type": "reminder", "id": r["id"], "time": at.strftime("%H:%M"),
-                                                "title": r["text"], "kind": r.get("kind") or "reminder",
-                                                "repeat": bool(r.get("repeat")), "paused": bool(r.get("paused"))})
+                                                "title": self.job_title(r) if job else r["text"], "text": r["text"],
+                                                "kind": r.get("kind") or "reminder", "repeat": bool(r.get("repeat")),
+                                                "repeat_text": describe_repeat(r.get("repeat")) if r.get("repeat") else "",
+                                                "paused": bool(r.get("paused")), "deliver": r.get("deliver") or ""})
                 if not r.get("repeat"):
                     break
                 at = next_time(r["repeat"], at)
                 n += 1
-        for h in self._reminder_log():                          # что уже звенело
-            d = h.get("at", "")[:10]
+        for h in self._reminder_log():                          # что уже звенело — в назначенное время (опоздавшее тоже)
+            when = h.get("due") or h.get("at", "")
+            d = when[:10]
             if first.date().isoformat() <= d <= last.date().isoformat():
-                put(d, {"type": "reminder", "time": h["at"][11:16], "title": h.get("text", ""), "done": True,
-                        "kind": h.get("kind") or "reminder"})
+                put(d, {"type": "reminder", "time": when[11:16], "title": h.get("title") or h.get("text", ""), "done": True,
+                        "kind": h.get("kind") or "reminder", "skipped": bool(h.get("skipped")),
+                        "fired": h["at"][:16] if h.get("due") and not h.get("skipped") else ""})
         for m in self.money.list(first.date().isoformat(), last.date().isoformat()):
             put(m["date"], {"type": "money", "id": m["id"], "kind": m["kind"], "amount": m["amount"],
                             "currency": m["currency"], "title": m["note"] or m["category"], "category": m["category"]})
@@ -1607,10 +1725,27 @@ class ToolsMixin:
         except (OSError, ValueError):
             return []
 
-    def _log_reminder(self, item):
+    JOB_LATE_MAX = 2 * 3600            # с: дело по расписанию, опоздавшее больше, — пропускаем (вчерашний итог дня утром не нужен)
+    JOB_TITLES = {"brief": "Утренняя сводка", "fx": "Курс валют", "evening": "Итог дня", "week": "Итоги недели",
+                  "news": "Главные новости", "weather": "Погода и что надеть"}
+
+    def job_title(self, item):
+        """Короткое имя дела для календаря: готовое — по названию карточки («Итог дня»), своё — его текст."""
+        return self.JOB_TITLES.get(item.get("preset") or "") or ("Утренняя сводка" if item.get("brief") else item.get("text", ""))
+
+    def _log_reminder(self, item, skipped=False):
+        """Что сработало — в журнал (календарь: «прозвенело»). Опоздавшее — с назначенным временем (due): в календаре оно
+        на своём месте, «прозвенело позже, в 08:56»; пропущенное дело — skipped."""
         log_ = self._reminder_log()[-1999:]
-        log_.append({"at": datetime.now().isoformat(timespec="seconds"), "text": item.get("text", ""),
-                     "kind": item.get("kind") or "reminder", "id": item.get("id")})
+        e = {"at": datetime.now().isoformat(timespec="seconds"), "text": item.get("text", ""),
+             "kind": item.get("kind") or "reminder", "id": item.get("id")}
+        if item.get("kind") == "job":
+            e["title"] = self.job_title(item)
+        if item.get("late") and item.get("at"):
+            e["due"] = str(item["at"])[:19]
+        if skipped:
+            e["skipped"] = True
+        log_.append(e)
         try:
             p = STATE_DIR / "reminders-log.json"
             p.parent.mkdir(parents=True, exist_ok=True)

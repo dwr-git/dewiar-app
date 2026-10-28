@@ -84,6 +84,7 @@
   <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира">Вопрос — ответ</button>
   <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу">Что я умею</button>
   <div class="ng">Знания</div>
+  <button data-p="docs" title="Лира читает ваши папки и отвечает по ним">Документы</button>
   <button data-p="memory">Память</button>
   <button data-p="diary" title="Дневник, душа, конституция и что ассистент знает о вас">Душа</button>
   <button data-p="soul" class="sub">Душа</button>
@@ -123,9 +124,11 @@
       <linearGradient id="hg6" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3fe0b5"/><stop offset="1" stop-color="#14a389"/></linearGradient>
       <linearGradient id="hg7" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a6b"/><stop offset="1" stop-color="#ff5f8a"/></linearGradient>
       <linearGradient id="hg8" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b8cff"/><stop offset="1" stop-color="#6a4cff"/></linearGradient>
+      <linearGradient id="hg9" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fe07a"/><stop offset="1" stop-color="#23a06e"/></linearGradient>
     </defs></svg>
     <div id="hm-body">
       <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p></div><div class="sn-wrap" id="sn"></div></div>
+      <div class="hm-morning" id="hm-morning" hidden></div>
       <div class="hm-today" id="hm-today"></div>
       <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
       <div class="hm-apps" id="hm-apps"></div>
@@ -555,6 +558,8 @@
       <div><h1>Клиенты</h1><p class="lead" id="cr-sub">Кто это, как связаться, о чём договорились и что дальше — голосом или здесь.</p></div>
       <button class="btn primary" id="cr-new">+ Клиент</button>
     </div>
+    <div class="stabs" id="cr-tabs" role="tablist"><button data-t="list" class="on" role="tab">Клиенты</button><button data-t="deals" role="tab">Сделки и кто должен</button></div>
+    <div class="dl-wrap" id="dl-wrap" hidden></div>
     <div class="cr-main">
       <div class="cr-left">
         <label class="cr-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>
@@ -789,21 +794,57 @@
       <div class="actions"><button class="btn primary" id="me-save">Сохранить</button><span class="res" id="me-res"></span></div>
     </div>
 
-    <h2>Мои документы — «Знания»</h2>
-    <p class="hint" style="margin-bottom:12px">Положите сюда инструкции, договоры, регламенты, книги — и спрашивайте: «что в моих документах про отпуск?». Подходят PDF, Word, ODT, TXT, Markdown, HTML, CSV. Работает без интернета.</p>
-    <div class="actions" style="margin:0 0 12px">
-      <label class="btn primary">Добавить файлы…<input type="file" id="kn-file" multiple accept=".pdf,.docx,.odt,.txt,.md,.html,.htm,.csv" hidden></label>
-      <button class="btn" id="kn-open">Открыть папку</button>
-      <span class="res" id="kn-res"></span>
+    <h2>Мои документы</h2>
+    <p class="hint">Папки и файлы, по которым Лира ищет и отвечает, — теперь в своём разделе: <button class="linkbtn" type="button" data-goto="docs">«Документы»</button>.</p>
+  </section>
+
+  <section id="p-docs" class="wide">
+    <div class="dc-hero">
+      <div class="dc-say">
+        <h1>Документы</h1>
+        <p class="dc-big">Спросите свои документы — Лира прочитает и ответит</p>
+        <p class="lead">Покажите ей папку с договорами, инструкциями, конспектами или книгами. Спросите голосом или текстом — она найдёт
+          нужное место, ответит своими словами и покажет, из какого файла это взято.</p>
+        <div class="dc-acts">
+          <button class="btn primary" id="kn-fadd" type="button">Добавить папку…</button>
+          <label class="btn">Добавить файлы…<input type="file" id="kn-file" multiple accept=".pdf,.docx,.odt,.txt,.md,.html,.htm,.csv" hidden></label>
+        </div>
+        <p class="dc-stat" id="dc-stat"></p>
+        <p class="dc-safe">Поиск идёт на этом компьютере, без интернета; файлы остаются на месте и никуда не копируются. Для ответа модель
+          получает только найденные отрывки.</p>
+      </div>
+      <figure class="dc-demo" aria-label="Пример: вопрос, ответ и файл, из которого он взят">
+        <figcaption>Так выглядит ответ</figcaption>
+        <p class="dc-q">Сколько дней на возврат товара по договору?</p>
+        <p class="dc-a">Четырнадцать календарных дней с момента получения — это пункт 6.2. Возврат оформляется актом.</p>
+        <p class="dc-src"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span><b>Договор поставки.pdf</b><small>Работа / Договоры · нажать — открыть</small></span></p>
+      </figure>
     </div>
-    <div id="kn-list" class="kn-list"></div>
-    <h3 style="margin:18px 0 6px">Искать и в своих папках</h3>
-    <p class="hint" style="margin-bottom:10px">Документы, рабочая папка, папка с договорами — ассистент найдёт ответ и там, файлы остаются на месте. Читаются PDF, Word, ODT, текст, Markdown, HTML, CSV; служебные и скрытые папки пропускаются. Под ответом — какой файл, нажать — открыть.</p>
+
+    <h2>Папки, по которым Лира ищет</h2>
+    <p class="hint" style="margin-bottom:10px">Рабочая папка, «Документы», папка с договорами — Лира прочитает их в фоне и будет следить за новыми
+      файлами. Читаются PDF, Word, ODT, текст, Markdown, HTML, CSV; служебные и скрытые папки пропускаются.</p>
     <div id="kn-folders" class="kn-list"></div>
-    <div class="actions" style="margin:8px 0 0"><button class="btn" id="kn-fadd">Добавить папку…</button><span class="res" id="kn-fres"></span></div>
-    <div class="actions" style="margin-top:14px">
-      <input type="text" id="kn-q" placeholder="проверить поиск: например, «отпуск»" style="flex:1;min-width:220px">
-      <button class="btn" id="kn-go">Найти</button>
+    <div class="actions" style="margin:8px 0 0"><span class="res" id="kn-fres"></span></div>
+
+    <h2>Отдельные файлы</h2>
+    <p class="hint" style="margin-bottom:10px">Добавленные кнопкой «Добавить файлы…» лежат в папке «Знания» внутри папки ассистента.</p>
+    <div id="kn-list" class="kn-list"></div>
+    <div class="actions" style="margin:8px 0 0"><button class="btn" id="kn-open" type="button">Открыть папку «Знания»</button><span class="res" id="kn-res"></span></div>
+
+    <h2>Попробуйте спросить</h2>
+    <div class="dc-try" id="dc-try">
+      <button type="button">Что в моих документах про отпуск?</button>
+      <button type="button">Найди в договоре, когда срок оплаты</button>
+      <button type="button">Перескажи коротко инструкцию к котлу</button>
+      <button type="button">Сравни, что в двух договорах про штрафы</button>
+    </div>
+
+    <h2>Проверить поиск</h2>
+    <p class="hint" style="margin-bottom:10px">Покажет отрывки, которые Лира возьмёт к такому вопросу.</p>
+    <div class="actions" style="margin:0">
+      <input type="text" id="kn-q" placeholder="например, «отпуск»" style="flex:1;min-width:220px">
+      <button class="btn" id="kn-go" type="button">Найти</button>
     </div>
     <div id="kn-found"></div>
     <p class="hint" id="kn-site" style="margin-top:14px"></p>
@@ -1480,6 +1521,7 @@
     <div class="mdl" id="mdl-voice"><p class="hint">Смотрю…</p></div>
     <h2>Темп речи</h2>
     <label class="f"><input type="range" min="0.7" max="1.4" step="0.05" data-k="tts.speed"><span class="hint" id="speedv"></span></label>
+    <div class="switch"><div>Читать длинные ответы вслух целиком<span>Обычно длинный ответ звучит около минуты, а дальше — «всё на экране». Включите — персонажи дочитают до конца. Сказки, истории и «прочитай…» и так читаются целиком.</span></div><label class="tg"><input type="checkbox" data-k="tts.read_all"><i></i></label></div>
     <h2>Обработка голоса</h2>
     <p class="hint" style="margin-bottom:12px">Ниже, глубже, с пространством — как у ИИ в кино. Работает с любым синтезатором и почти не нагружает компьютер.
       «Как у персонажа» — у каждого своя обработка (выбирается в карточке персонажа). Нажмите на вариант — он выберется и сразу прозвучит голосом текущего персонажа (▶).</p>
@@ -1982,6 +2024,7 @@
 <script src="studio/dewiar.js"></script>
 <script src="studio/look.js"></script>
 <script src="studio/home.js"></script>
+<script src="studio/morning.js"></script>
 <script src="studio/close.js"></script>
 <script src="studio/radar.js"></script>
 <script src="studio/meet.js"></script>
@@ -1993,6 +2036,7 @@
 <script src="studio/family.js"></script>
 <script src="studio/team.js"></script>
 <script src="studio/clients.js"></script>
+<script src="studio/deals.js"></script>
 <script src="studio/devices.js"></script>
 <script src="studio/qa.js"></script>
 <script src="studio/course.js"></script>

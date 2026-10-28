@@ -1094,7 +1094,7 @@ setInterval(() => {
     const think = (state === "thinking") ? Math.round((Date.now() - stateSince) / 1000) : 0;
     if (think > 40) health(`Модель отвечает долго — ${think} с. «Стоп» — прервать`);
     else if (r && r.oldest > 25) health(`Занят: ${CMD_RU[r.cmd] || r.cmd} — ${Math.round(r.oldest)} с`);
-    else health("");
+    else if (Date.now() > padFailUntil) health("");
   }).catch(() => { pingAt = 0; });
 }, 5000);
 function note(st) {
@@ -1441,6 +1441,9 @@ let gamesFeature = true;                                  // «Возможно�
 const padCheck = () => { const a = api(); $("b-pad").hidden = !(a && a.pad_toggle); $("b-play").hidden = !(a && a.play_open) || !gamesFeature; };   // окно без блокнота (старая оболочка) — кнопки нет
 window.addEventListener("pywebviewready", padCheck); setTimeout(padCheck, 1500);
 const featuresSet = (f) => { gamesFeature = !(f && f.games === false); padCheck(); };
+/* окно блокнота не поднялось (Windows: WebView2 не создал страницу, №375) — сказать здесь, кнопка снова работает */
+let padFailUntil = 0;
+window.padFail = (t) => { padFailUntil = Date.now() + 12000; health(t, true); };
 window.padMark = (on, m) => { const play = !!on && m === "play"; $("b-pad").classList.toggle("on", !!on && !play); $("b-play").classList.toggle("on", play);
   $("corner").classList.toggle("pinned", !!on); };
 $("b-tray").onclick = () => { const a = api(); if (!a || !a.to_tray) return; a.to_tray();

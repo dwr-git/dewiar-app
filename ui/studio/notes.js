@@ -15,17 +15,38 @@ function ntMark(t, q) {                                    // подсветит
 const ntDir = (path) => path.split("/").slice(0, -1).join("/");
 const ntAbs = (path, link) => ntDir(path) + "/" + decodeURIComponent(link);   // ссылка вложения → путь в папке ассистента
 
-/* текст заметки → {title, date, body, att: [{img, name, link, line}]}; обратно — ntCompose */
+/* Шапка заметки «---» / «--» со строками «ключ: значение» (Obsidian, перенос из Google Keep) — как core/workspace.py
+   note_front: не показывается, при правке сохраняется как была; метки (tags) и цвет — чипами (28.10, пользователь:
+   «source: Google Keep, id: … — это не то»). */
+const NT_FRONT = /^\ufeff?(-{2,3})[ \t]*\n((?:[ \t]*(?:[\w\-а-яёА-ЯЁ]+[ \t]*:.*|-[ \t].*|)\n)*?)\1[ \t]*(?:\n|$)/;
+const NT_COLORS = { RED: "#e8505b", ORANGE: "#f2994a", YELLOW: "#e2b93b", GREEN: "#3fb27f", TEAL: "#2bb3a8", BLUE: "#4f8cf0", CERULEAN: "#3a7bd5",
+  DARK_BLUE: "#3557a8", PURPLE: "#9b6bf2", PINK: "#ee6fae", BROWN: "#a77b5a", GRAY: "#8a93a6", GREY: "#8a93a6" };
+function ntFront(text) {
+  const m = NT_FRONT.exec(String(text || "")); if (!m || !m[2].trim()) return { raw: "", meta: {}, rest: String(text || "") };
+  const meta = {}; let key = "";
+  m[2].split("\n").forEach(l => { const li = /^\s*-\s+(.*)/.exec(l); if (li && key) { (meta[key + "[]"] = meta[key + "[]"] || []).push(li[1].trim()); return; }
+    const kv = /^\s*([\w\-а-яёА-ЯЁ]+)\s*:\s*(.*)/.exec(l); if (kv) { key = kv[1].toLowerCase(); meta[key] = kv[2].trim(); } });
+  let tags = [];
+  ["tags", "tag", "labels", "метки"].forEach(k => { tags = tags.concat(meta[k + "[]"] || String(meta[k] || "").replace(/^\[|\]$/g, "").split(/[,;]/)); });
+  tags = [...new Set(tags.map(x => String(x).trim().replace(/^["'#]+|["']+$/g, "")).filter(Boolean))];
+  const col = /(?:^|\b)(?:colou?r|цвет)\s*:?\s*([A-Za-zА-Яа-яЁё_]+)/i.exec(Object.entries(meta).filter(([, v]) => typeof v === "string").map(([k, v]) => k + ": " + v).join(" "));
+  return { raw: m[0].replace(/\n?$/, "\n"), meta: { tags, color: col ? col[1].toUpperCase() : "", source: meta.source || "" }, rest: String(text).slice(m[0].length) };
+}
+const ntColor = (c) => NT_COLORS[String(c || "").toUpperCase()] || "";
+const ntChips = (tags, source) => (source ? `<i class="nt-chip">${escH(source)}</i>` : "") + (tags || []).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("");
+
+/* текст заметки → {title, date, body, att: [{img, name, link, line}], fm}; обратно — ntCompose */
 function ntParse(path, text) {
-  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n"), att = [], body = [];
+  const F = ntFront(String(text || "").replace(/\r\n/g, "\n"));
+  const lines = F.rest.replace(/^\n+/, "").split("\n"), att = [], body = [];
   let i = 0, title = path.split("/").pop().replace(/\.md$/, ""), date = "";
   if (/^#\s+/.test(lines[0] || "")) { title = lines[0].replace(/^#\s+/, "").trim() || title; i = 1; }
   while (i < lines.length && !lines[i].trim()) i++;
   if (/^\*[^*\n]+\*$/.test((lines[i] || "").trim())) { date = lines[i].trim(); i++; }
   for (; i < lines.length; i++) { const m = NT_LINK.exec(lines[i]); if (m) att.push({ img: !!m[1], name: m[2], link: m[3], line: lines[i].trim() }); else body.push(lines[i]); }
-  return { title, date, body: body.join("\n").trim(), att };
+  return { title, date, body: body.join("\n").trim(), att, fm: F.raw, meta: F.meta };
 }
-const ntCompose = (d) => `# ${d.title}\n\n${d.date ? d.date + "\n\n" : ""}${d.body.trim()}\n${d.att.length ? "\n" + d.att.map(a => a.line).join("\n") + "\n" : ""}`;
+const ntCompose = (d) => `${d.fm ? d.fm + "\n" : ""}# ${d.title}\n\n${d.date ? d.date + "\n\n" : ""}${d.body.trim()}\n${d.att.length ? "\n" + d.att.map(a => a.line).join("\n") + "\n" : ""}`;
 
 /* Заметка — как в блокноте (25.10, владелец: «в заметках диаграммы сырые и нет цветовых схем»): полный Markdown
    (folder.js md: заголовки, цитаты, таблицы, код, задачи), схемы Mermaid картинкой (rich.js), ссылки — во внешнем браузере;
@@ -51,8 +72,8 @@ async function ntLoad() {
   const nw = (k) => `${k} ${typeof plural === "function" ? plural(k, "заметка", "заметки", "заметок") : "заметок"}`;
   $("#nt-count").textContent = q ? `Найдено: ${l.length}` : l.length ? nw(l.length) : "";
   // 28.10, владелец: «важнейший раздел… дизайн лучше»: список по дням («Сегодня», «Вчера», «На этой неделе», «Раньше»)
-  const row = (n) => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}">
-      <span class="nt-rt"><b>${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? `<i class="nt-chip">${escH(n.folder)}</i>` : ""}${n.att ? `<i class="nt-chip">📎 ${n.att}</i>` : ""}</small>
+  const row = (n) => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}"${ntColor(n.color) ? ` style="--nc:${ntColor(n.color)}"` : ""}>
+      <span class="nt-rt"><b>${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? `<i class="nt-chip">${escH(n.folder)}</i>` : ""}${(n.tags || []).slice(0, 3).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("")}${n.att ? `<i class="nt-chip">📎 ${n.att}</i>` : ""}</small>
       <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em></span>${n.img ? `<i class="nt-th" data-img="${escH(n.img)}"></i>` : ""}</button>`;
   const day0 = new Date(); day0.setHours(0, 0, 0, 0); const t0 = day0.getTime() / 1000;
   const bucket = (m) => m >= t0 ? "Сегодня" : m >= t0 - 86400 ? "Вчера" : m >= t0 - 6 * 86400 ? "На этой неделе" : "Раньше";
@@ -84,7 +105,7 @@ function ntShow() {
   const attHtml = (edit) => `${pics.length ? `<div class="nt-pics">${pics.map(a => `<figure data-i="${d.att.indexOf(a)}"><i data-img="${escH(ntAbs(path, a.link))}"></i>${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</figure>`).join("")}</div>` : ""}
     ${files.length ? `<div class="nt-files">${files.map(a => `<span class="nt-f" data-i="${d.att.indexOf(a)}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg>${escH(a.name)}${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</span>`).join("")}</div>` : ""}`;
   if (!NT.edit) {
-    v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? `<i class="nt-chip">${escH(ntDir(path).replace(/^Заметки\//, ""))}</i>` : ""}</small></div>
+    v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? `<i class="nt-chip">${escH(ntDir(path).replace(/^Заметки\//, ""))}</i>` : ""}${ntChips((d.meta || {}).tags, (d.meta || {}).source && (d.meta || {}).source !== ntDir(path).replace(/^Заметки\//, "") ? d.meta.source : "")}</small></div>
         <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger" id="nt-del">Удалить</button></span></div>
       <div class="nt-body"${ntCs() ? ` data-cs="${escH(ntCs())}"` : ""}>${ntRender(d.body) || `<p class="hint">Пустая заметка — нажмите «Изменить».</p>`}</div>${attHtml(false)}`;
     if (window.DewiarRich) DewiarRich.diagrams($("#nt-view .nt-body")).catch(() => { });   // ```mermaid — схемой

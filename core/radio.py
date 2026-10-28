@@ -24,7 +24,9 @@ API = [s for s in [os.environ.get("DEWIAR_RADIO_API", "")] if s] or [
 UA = {"User-Agent": "Dewiar/0.17 (voice assistant)"}           # каталог radio-browser просит честно называть программу
 # Потоки: многие станции (101.ru, hostingradio…) не отдают звук «непонятным» программам — представляемся браузером
 STREAM_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-RATE = 44100                                                    # Гц; звук моно s16le — 2 байта на отсчёт
+RATE = 44100                                                    # Гц; звук s16le — 2 байта на отсчёт
+CH = 2                                                          # стерео (№374, 28.10: «звук моно везде — и в радио, и в плеере»)
+BPS = RATE * 2 * CH                                             # байт в секунду звучания
 # «джаз», «рок» — это жанры (теги), а не названия станций
 GENRES = {"джаз": "jazz", "рок": "rock", "классика": "classical", "классическая": "classical", "поп": "pop",
           "шансон": "chanson", "лаунж": "lounge", "релакс": "relax", "чилаут": "chillout", "электронная": "electronic",
@@ -256,7 +258,7 @@ class Radio:
     def pos(self):
         """Сколько секунд трека уже проиграно (своя музыка); на паузе — где остановились."""
         if self.proc is not None:
-            return round(self._ss + self.got / (RATE * 2), 1)
+            return round(self._ss + self.got / BPS, 1)
         return round(float((self.paused or {}).get("_pos") or 0), 1)
 
     def vis(self):
@@ -329,11 +331,11 @@ class Radio:
                    "-user_agent", STREAM_UA, "-rw_timeout", "15000000"]
             self._ss = float(ss or 0) if local else 0.0
             cmd = [ff, "-loglevel", "error", *(["-re"] if local else net), *(["-ss", f"{self._ss:.2f}"] if self._ss else []),
-                   "-i", station["url"], "-vn", "-f", "s16le", "-ac", "1", "-ar", str(RATE), "-"]
+                   "-i", station["url"], "-vn", "-f", "s16le", "-ac", str(CH), "-ar", str(RATE), "-"]
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
                                          creationflags=0x08000000 if os.name == "nt" else 0)
             self.player = self.make_player()
-            self.player.start(RATE)
+            self.player.start(RATE, CH)
         threading.Thread(target=self._pump, args=(gen, self.proc, self.player), name="radio", daemon=True).start()
         if local and not station.get("dur"):
             threading.Thread(target=self._probe_dur, args=(station,), name="radio-dur", daemon=True).start()
@@ -349,7 +351,7 @@ class Radio:
         out_fail = False
         eof = False
         while gen == self._gen:
-            chunk = proc.stdout.read(RATE // 10 * 2)             # 0,1 с
+            chunk = proc.stdout.read(BPS // 10)                   # 0,1 с
             if not chunk:
                 eof = True
                 break
@@ -375,7 +377,7 @@ class Radio:
                         player.stop()
                         player = self.make_player()
                         player.device = ""                        # на устройство по умолчанию
-                        player.start(RATE)
+                        player.start(RATE, CH)
                         with self._lock:
                             if gen == self._gen:
                                 self.player = player
@@ -416,7 +418,7 @@ class Radio:
             if got == 0 and time.monotonic() - t0 < 30:          # ни байта и быстро — станция не ответила
                 self.failed = err.strip().splitlines()[-1][:200] if err.strip() else \
                     ("станция не отвечает" if rc in (0, None) else f"ffmpeg завершился с кодом {rc}")
-            elif got < RATE * 2 * 3:                               # меньше 3 секунд звука — не заиграла
+            elif got < BPS * 3:                                    # меньше 3 секунд звука — не заиграла
                 self.failed = "поток оборвался через секунду" + (f": {err.strip().splitlines()[-1][:150]}" if err.strip() else "")
             ended = None
             with self._lock:
@@ -426,7 +428,7 @@ class Radio:
                     self.station = None
             self._changed()
             # своя музыка: трек доиграл до конца (а не сломался в первые секунды) — дальше решает очередь (engine_mymusic)
-            if ended and ended.get("_mine") and self.on_end and eof and not self.failed and got >= RATE * 2 * 3:
+            if ended and ended.get("_mine") and self.on_end and eof and not self.failed and got >= BPS * 3:
                 threading.Thread(target=self.on_end, args=(ended,), name="radio-next", daemon=True).start()
 
     def _close(self):
@@ -481,8 +483,10 @@ class Radio:
 
 
 def _bands(chunk, np):
-    """Восемь полос спектра (≈60 Гц … 12 кГц, по логарифму) из 0,1 с моно s16le -> [0..1]."""
-    x = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
+    """Восемь полос спектра (≈60 Гц … 12 кГц, по логарифму) из 0,1 с s16le (стерео — по сумме каналов) -> [0..1]."""
+    x = np.frombuffer(chunk[: len(chunk) // (2 * CH) * 2 * CH], dtype=np.int16).astype(np.float32) / 32768.0
+    if CH > 1:
+        x = x.reshape(-1, CH).mean(axis=1)
     if x.size < 256:
         return [0.0] * 8
     x = x[: 4096] * np.hanning(min(4096, x.size))
