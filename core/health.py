@@ -414,9 +414,9 @@ class HealthMixin:
         buf = io.BytesIO()
         im.save(buf, "JPEG", quality=80, optimize=True)
         small = im.copy()
-        small.thumbnail((520, 520))
+        small.thumbnail((960, 960))                  # №387 (28.10): «сильно сжимаются скриншоты» — превью чётче; уходит полный (1600)
         sb = io.BytesIO()
-        small.save(sb, "JPEG", quality=75)
+        small.save(sb, "JPEG", quality=84)
         prev = "data:image/jpeg;base64," + base64.b64encode(sb.getvalue()).decode()
         self._bug = {"ts": time.time(), "jpeg": buf.getvalue(), "preview": prev, "seen": False}
         self.emit("bug_shot", preview=prev)

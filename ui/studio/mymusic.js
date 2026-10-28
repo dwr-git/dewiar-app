@@ -154,7 +154,7 @@ async function rcLoad() {
   let l = [];
   try { l = await core.call("radio_custom_list"); } catch (e) { $("#rc-list").innerHTML = `<li class="hint">${escH(e.message)}</li>`; return; }
   $("#rc-list").innerHTML = (l || []).length ? l.map(x => `<li><span><b>${escH(x.name)}</b><small>${escH(x.url)}</small></span>`
-    + `<button class="btn small" data-rcp="${escH(x.url)}">Включить</button><button class="btn small${rcAsk === x.url ? " danger" : ""}" data-rcd="${escH(x.url)}" title="Убрать">${rcAsk === x.url ? "Убрать?" : "×"}</button></li>`).join("")
+    + `<button class="btn small" data-rcp="${escH(x.url)}">Включить</button><button class="btn small${rcAsk === x.url ? " danger" : ""}" data-rcd="${escH(x.url)}" title="Убрать станцию из списка">${rcAsk === x.url ? "Точно убрать?" : "Убрать"}</button></li>`).join("")
     : `<li class="hint" style="display:block">Своих станций пока нет — добавьте ниже или пришлите ссылку в чат.</li>`;
   $$("#rc-list [data-rcp]").forEach(b => b.onclick = () => core.call("radio_custom_play", { url: b.dataset.rcp }).then(() => toast("Включаю", 2000)).catch(e => toast(e.message, 4000)));
   $$("#rc-list [data-rcd]").forEach(b => b.onclick = async () => {

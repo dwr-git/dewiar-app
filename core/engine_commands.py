@@ -223,6 +223,37 @@ class CommandsMixin:
             if cmd == "client_deal_del":
                 C.deal_del(cid, str(a.get("did") or ""))
                 return C.get(cid)
+            # «Напомнить об оплате» (0.62): черновик письма — потом отправить почтой или скопировать в мессенджер
+            if cmd == "client_deal_remind":
+                me = (self.s.get("close") or {}).get("name") or self.s.get("user_name") or ""
+                m = getattr(self, "mail", None)
+                return dict(C.deal_remind_text(cid, str(a.get("did") or ""), me), mail=bool(m and m.configured()))
+            if cmd == "client_deal_remind_send":
+                did = str(a.get("did") or "")
+                if a.get("how") == "copy":            # скопировали текст — отметить в истории, что напомнили
+                    C.deal_reminded(cid, did, "сообщением")
+                    return C.get(cid)
+                m = getattr(self, "mail", None)
+                if not (m and m.configured()):
+                    raise ValueError("почта не подключена — студия → «Подключение» → «Почта»; или скопируйте текст")
+                to = str(a.get("to") or "").strip()
+                if not re.match(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$", to):
+                    raise ValueError("укажите почту клиента — например client@mail.ru")
+                from mail import MailError
+                try:
+                    m.send(to, str(a.get("subject") or "Напоминание об оплате"), str(a.get("body") or ""))
+                except MailError as e:
+                    raise ValueError(str(e)) from e
+                if not (C.get(cid) or {}).get("email"):
+                    C.save(cid, {"email": to})
+                C.deal_reminded(cid, did, "письмом")
+                return C.get(cid)
+            if cmd == "clients_deals_export":         # выгрузка сделок таблицей: «Клиенты/Сделки ГГГГ-ММ-ДД.csv» в папке ассистента
+                rel = f"Клиенты/Сделки {time.strftime('%Y-%m-%d')}.csv"
+                p = Path(self.workspace.ensure()) / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(C.deals_csv(), encoding="utf-8")
+                return {"path": rel, "n": len(C.deals())}
             raise ValueError(f"неизвестная команда {cmd}")
         except (ClientError, DealError) as e:
             raise ValueError(str(e)) from e
@@ -397,7 +428,7 @@ class CommandsMixin:
             else:
                 game = play_game(text)
                 names = {"snake": "Змейку", "racer": "Гонку", "bricks": "Кирпичики", "plane": "Небесного пилота", "bip": "Бипа",
-                         "blocks": "Тетрис", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси",
+                         "blocks": "Тетрис", "candy": "Конфетки", "merge": "Слияние", "sudoku": "Судоку", "fifteen": "Пятнашки", "reversi": "Реверси", "sea": "«Морской бой»",
                          "tictac": "Крестики-нолики", "crossword": "Кроссворд", "words": "«Пять букв»", "glow": "«Огонька»", "five": "«Пять в ряд»", "pairs": "«Найди пару»",
                          "farm": "«Хутор Одуванчик»", "dark": "«Кто боится темноты»", "post": "«Колючую почту»", "pinball": "«Звёздный пинбол»", "doodle": "«Каляку»", "hop": "«Выше облаков»", "basket": "«Лукошко»"}
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."

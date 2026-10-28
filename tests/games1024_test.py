@@ -63,7 +63,7 @@ with sync_playwright() as p:
     ok(pg.is_visible("#b-play"), "в блокноте — кнопка «Досуг»")
     pg.click("#b-play"); pg.wait_for_timeout(500)
     names = pg.evaluate("[...document.querySelectorAll('#shelf .ag b')].map(b => b.textContent)")
-    ok(names == ["Огонёк", "Хутор Одуванчик", "Кто боится темноты", "Тетрис", "Конфетки", "Слияние", "Каляка", "Колючая почта", "Пятнашки", "Судоку", "Найди пару", "Кроссворд", "Пять букв", "Пять в ряд", "Крестики-нолики", "Реверси", "Звёздный пинбол", "Лукошко", "Выше облаков", "Бип", "Гонка", "Небесный пилот", "Кирпичики", "Змейка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
+    ok(names == ["Огонёк", "Хутор Одуванчик", "Кто боится темноты", "Тетрис", "Конфетки", "Слияние", "Каляка", "Колючая почта", "Пятнашки", "Судоку", "Найди пару", "Кроссворд", "Пять букв", "Пять в ряд", "Крестики-нолики", "Реверси", "Морской бой", "Звёздный пинбол", "Лукошко", "Выше облаков", "Бип", "Гонка", "Небесный пилот", "Кирпичики", "Змейка"] and not pg.is_visible("#tabs") and not pg.is_visible("#ed") and pg.is_visible("#b-notes"),
        f"«Досуг»: полка игр вместо вкладок и листа: {names}")
     ok(["pad_mode_mark", "play"] in pg.evaluate("apiCalls"), "виджет узнаёт, что открыт «Досуг» (подсветка кнопки)")
     pg.screenshot(path="/tmp/claude-0/games_shelf.png")
@@ -85,7 +85,7 @@ with sync_playwright() as p:
     pg.evaluate("padGame('racer')"); pg.wait_for_timeout(800)
     ok(pg.evaluate("document.querySelector('#game').getAttribute('src')").startswith("assets/arcade/racer/"), "«поиграем в гонку» — сразу игра")
     # каждая игра запускается и играет без ошибок (светлая и тёмная оболочка); «Играть» — первая кнопка на заставке
-    for gid in ("glow", "pairs", "five", "blocks", "candy", "merge", "tictac", "crossword", "words", "sudoku", "fifteen", "reversi", "plane", "bip", "bricks", "snake", "racer", "farm", "dark", "post", "doodle", "hop"):
+    for gid in ("glow", "pairs", "five", "blocks", "candy", "merge", "tictac", "crossword", "words", "sudoku", "fifteen", "reversi", "sea", "plane", "bip", "bricks", "snake", "racer", "farm", "dark", "post", "doodle", "hop"):
         gp = b.new_page(viewport={"width": 420, "height": 860}); ge = []; gp.on("pageerror", lambda e, ge=ge: ge.append(str(e)))
         gp.route(re.compile(r"^https?://"), lambda r: r.abort())
         gp.goto((ARC / gid / "index.html").as_uri() + ("?light=1" if gid in ("sudoku", "fifteen") else "")); gp.wait_for_timeout(700)
@@ -109,7 +109,7 @@ with sync_playwright() as p:
     ok(not ge, f"без ошибок {ge[:1]}"); gp.close()
     # 24.10, владелец: «Блоки выглядят странновато» → «нравится, как сделал для тетриса, и для других так же» — в широком
     # окне (лист «Досуг» на компьютере) у каждой игры своя раскладка 1280×720; на телефоне (книжное окно) — прежняя 720×1280
-    for gid in ("blocks", "candy", "merge", "fifteen", "sudoku", "reversi", "tictac", "crossword", "words", "snake", "plane", "bricks", "racer", "glow", "five", "pairs", "farm", "dark", "post", "doodle", "hop"):
+    for gid in ("blocks", "candy", "merge", "fifteen", "sudoku", "reversi", "sea", "tictac", "crossword", "words", "snake", "plane", "bricks", "racer", "glow", "five", "pairs", "farm", "dark", "post", "doodle", "hop"):
         gp = b.new_page(viewport={"width": 772, "height": 560}); ge = []; gp.on("pageerror", lambda e, ge=ge: ge.append(str(e)))
         gp.route(re.compile(r"^https?://"), lambda r: r.abort())
         gp.goto((ARC / gid / "index.html").as_uri() + "?light=1"); gp.wait_for_timeout(600)

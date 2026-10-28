@@ -84,7 +84,10 @@ public class AlarmActivity extends Activity {
         text.setPadding(0, dp(18), 0, dp(40));
         // напоминание о деле — главная кнопка «Сделано ✓» (дело уходит в журнал «Дела»), «Понял» — просто закрыть
         boolean task = !"alarm".equals(kind) && !"timer".equals(kind);
-        Button made = task ? button("Сделано ✓", 0xFF2FB67E, 0xFF1F8F86) : null;
+        // лекарство («Для старших», 0.62: «Выпить: …», таблетки, капли) — «Выпил(а) ✓»: телефон отметит и не скажет близким
+        boolean med = task && title != null && java.util.regex.Pattern.compile("^Выпить:|таблет|лекарств|капл[иею]|капсул|укол|инсулин|давлени|сироп|витамин",
+                java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE).matcher(title).find();
+        Button made = task ? button(med ? "Выпил(а) ✓" : "Сделано ✓", 0xFF2FB67E, 0xFF1F8F86) : null;
         Button ok = task ? button("Понял", 0x22FFFFFF, 0x22FFFFFF) : button("Понял", 0xFF667EEA, 0xFF764BA2);
         Button snooze = button("Отложить на 10 минут", 0x22FFFFFF, 0x22FFFFFF);
         final String note = AlarmReceiver.noteFor(this, id);

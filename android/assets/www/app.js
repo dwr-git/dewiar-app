@@ -422,11 +422,11 @@ function llmBack() {
     out.push({ cloud: true, base_url: S.stt.url, api_key: S.stt.key, name: "Dewiar Облако", restore: "key" });
   return out;
 }
-function brainNameOf(l) { return l.cloud ? "Dewiar Облако" + (l.account ? " · по аккаунту" : l.forgot ? ` · забытый ключ …${String(l.api_key || "").slice(-4)}` : "") : `${l.name || l.base_url.replace(/^https?:\/\//, "")}${l.model ? " · " + l.model : ""}`; }
+function brainNameOf(l) { return l.cloud ? "Dewiar Облако" + (l.account ? " · по аккаунту" : l.forgot ? ` · забытый ключ …${String(l.api_key || "").slice(-4)}` : "") : `${l.name || l.base_url.replace(/^https?:\/\//, "")}${l.model ? " · " + l.model : ""}${l.got ? ` · с «${l.got}»` : ""}`; }
 async function llmRestore(i) {
   const l = llmBack()[i]; if (!l) return;
   if (l.cloud) await cloudConnect(l.account ? S.account.token : l.api_key, l.base_url.split("?")[0], { account: !!l.account });
-  else { S.llm = Object.assign({}, DEF.llm, l); delete S.llm.restore; saveS(); }
+  else { S.llm = Object.assign({}, DEF.llm, l); delete S.llm.restore; delete S.llm.got; saveS(); }
   cloudInfo = l.cloud ? cloudInfo : null;
 }
 /* Первый запуск показывает «Подключить бесплатно» / «У меня есть код». Подключились любым путём (вход аккаунтом, ключ,
@@ -1819,6 +1819,7 @@ function systemPrompt() {
   try { parts.push(donePrompt()); } catch (e) { }
   if (S.sync.on && syncChan() && pcSeen()) parts.push("Большую задачу (исследование с отчётом, документ, презентация, работа с файлами или кодом) не делай в разговоре — передай компьютеру пользователя (start_task) и скажи, что взялся: ход и итог появятся здесь, в «Мой день» → «Сделанное».");
   try { parts.push(clPrompt()); } catch (e) { }
+  try { parts.push(srPrompt()); } catch (e) { }             // «Для старших» (senior.js)
   try { parts.push(wkPrompt()); } catch (e) { }
   try { parts.push(bsPrompt()); } catch (e) { }
   parts.push(convPrompt());
@@ -2340,7 +2341,11 @@ async function ask(text, opts = {}) {
       const [can, why] = kidsAllowed();
       if (!can) { answerLocal({ say: why }); return; }
       kidsTouch(text);
-    } else courseHeard(text);
+    } else {
+      courseHeard(text);
+      const sr = typeof srHeard === "function" ? srHeard(text) : "";   // «Для старших» (senior.js): мошенники, «выпила»
+      if (sr) { answerLocal({ say: sr }); return; }
+    }
   }
   clearCard(); setState("thinking"); showBot("", "wait");
   photoTurn = false;
@@ -2948,11 +2953,11 @@ async function quick(text) {
   let m;
   // «Досуг» (24.10): «Лира, давай поиграем», «хочу поиграть», «поиграем в змейку» — полка игр без модели.
   // «давай сыграем в города» — разговорная игра, её ведёт модель (сюда не попадает: только свои игры)
-  { const G = "(?:змейк\\S*|змею|гонк\\S*|кирпичик\\S*|арканоид\\S*|пилот\\S*|самолет\\S*|самолетик\\S*|бип\\S*|бегалк\\S*|блоки|тетрис\\S*|конфетк\\S*|три в ряд|слияни\\S*|2048|судоку|пятнашк\\S*|реверси|отелло|крестик\\S*(?:[\\s-]+нолик\\S*)?|нолик\\S*|кроссворд\\S*|пять букв|вордл\\S*|ог[оа]н[её]к\\S*|огоньк\\S*|сказк\\S*|пять в ряд|пять в линию|гомоку|найди пару|пар[ыу]|мемори|хутор\\S*|ферм\\S*|кто боится темноты|темнот\\S*|колюч\\S+ почт\\S*|почтальон\\S*|[её]жик\\S*|каляк\\S*|выше облаков|прыгалк\\S*|попрыгунчик\\S*|тимош\\S*|(?:звездн\\S+ )?пинбол\\S*|флиппер\\S*)";
+  { const G = "(?:змейк\\S*|змею|гонк\\S*|кирпичик\\S*|арканоид\\S*|пилот\\S*|самолет\\S*|самолетик\\S*|бип\\S*|бегалк\\S*|блоки|тетрис\\S*|конфетк\\S*|три в ряд|слияни\\S*|2048|судоку|пятнашк\\S*|реверси|отелло|морск\\S+ бо\\S*|кораблик\\S*|крестик\\S*(?:[\\s-]+нолик\\S*)?|нолик\\S*|кроссворд\\S*|пять букв|вордл\\S*|ог[оа]н[её]к\\S*|огоньк\\S*|сказк\\S*|пять в ряд|пять в линию|гомоку|найди пару|пар[ыу]|мемори|хутор\\S*|ферм\\S*|кто боится темноты|темнот\\S*|колюч\\S+ почт\\S*|почтальон\\S*|[её]жик\\S*|каляк\\S*|выше облаков|прыгалк\\S*|попрыгунчик\\S*|тимош\\S*|(?:звездн\\S+ )?пинбол\\S*|флиппер\\S*)";
     const PLAY_RX = new RegExp(`^(?:(?!не\\s)[а-я-]+[\\s,]+)?(?:(?:ну|а|давай|теперь|можешь)\\s+)*(?:(?:поиграем|сыграем|поиграть|поиграй со мной|сыграй со мной)(?:\\s+(?:во что-?\\s*нибудь|в игр[уы]|немного|чуть-?\\s*чуть|в ${G}))*|хочу (?:поиграть|играть|в игр[уы])(?: в ${G})?|(?:открой|запусти|включи|покажи) (?:игры|игру|досуг|аркаду|${G})(?: ${G})?|во что (?:бы )?(?:поиграть|поиграем|сыграть))(?: пожалуйста)?$`);
     if (PLAY_RX.test(t)) {
       const GM = [["snake", /змейк|змею/, "Змейку"], ["racer", /гонк/, "Гонку"], ["bricks", /кирпичик|арканоид/, "Кирпичики"], ["plane", /пилот|самолет/, "Небесного пилота"], ["bip", /(?:^|\s)(?:бип|бегалк)/, "Бипа"],
-        ["blocks", /блоки|тетрис/, "Тетрис"], ["candy", /конфетк|три в ряд/, "Конфетки"], ["merge", /слияни|2048/, "Слияние"], ["sudoku", /судоку/, "Судоку"], ["fifteen", /пятнашк/, "Пятнашки"], ["reversi", /реверси|отелло/, "Реверси"],
+        ["blocks", /блоки|тетрис/, "Тетрис"], ["candy", /конфетк|три в ряд/, "Конфетки"], ["merge", /слияни|2048/, "Слияние"], ["sudoku", /судоку/, "Судоку"], ["fifteen", /пятнашк/, "Пятнашки"], ["reversi", /реверси|отелло/, "Реверси"], ["sea", /морск\S+ бо|кораблик/, "«Морской бой»"],
         ["tictac", /крестик|нолик/, "Крестики-нолики"], ["crossword", /кроссворд/, "Кроссворд"], ["words", /пять букв|вордл/, "«Пять букв»"], ["glow", /ог[оа]н[её]к|огоньк|сказк/, "«Огонька»"], ["five", /пять в (?:ряд|линию)|гомоку/, "«Пять в ряд»"], ["pairs", /найди пару|(?:^|\s)пар[ыу](?:\s|$)|мемори/, "«Найди пару»"],
         ["farm", /хутор|ферм/, "«Хутор Одуванчик»"], ["dark", /боится темноты|темнот/, "«Кто боится темноты»"], ["post", /колюч\S+ почт|почтальон|[её]жик/, "«Колючую почту»"],
         ["doodle", /каляк/, "«Каляку»"], ["hop", /выше облаков|прыгалк|попрыгунчик|тимош/, "«Выше облаков»"],
@@ -3508,12 +3513,12 @@ function toolSpecs() {
     { name: "call_persona", description: "Позвать другого персонажа команды по имени (он ответит своим голосом).", parameters: O({ name: STR }, ["name"]) },
     { name: "make_app", description: "Сделать мини-программу или страницу прямо на телефоне: калькулятор, игра, таймер, конвертер, викторина, шпаргалка, открытка, презентация (слайды листаются кнопками и свайпом). html — ОДИН самодостаточный HTML-файл: CSS и JS внутри, без внешних файлов и библиотек, компактный код; под экран телефона (крупные кнопки), тёмная тема, по-русски. title — короткое название. Программа сразу откроется на экране и сохранится в «Мой день» → «Сделанное».",
       parameters: O({ title: STR, html: STR }, ["title", "html"]) },
-    ...(clLoad().people.length ? [{ name: "close_send", description: "Написать человеку из «Близких» (переписка между помощниками Dewiar: дойдёт в его приложение, его помощник скажет вслух). Только когда пользователь прямо просит написать, передать или сказать кому-то из близких. to — имя, как сказал пользователь («Андрею», «маме»); text — само сообщение от лица пользователя («Задержусь на полчаса»), без «передай».",
-      parameters: O({ to: STR, text: STR }, ["to", "text"]) },
+    ...(clLoad().people.length ? [{ name: "close_send", description: "Написать человеку из «Близких» (переписка между помощниками Dewiar: дойдёт в его приложение, его помощник скажет вслух). Только когда пользователь прямо просит написать, передать или сказать кому-то из близких. to — имя, как сказал пользователь («Андрею», «маме»); text — само сообщение от лица пользователя («Задержусь на полчаса»), без «передай». «Напомни всем в группе Семья в субботу в 10 про дачу» — to: группа, text: о чём («Едем на дачу»), remind_when: когда («в субботу в 10») — напоминание встанет у всех.",
+      parameters: O({ to: STR, text: STR, remind_when: STR }, ["to", "text"]) },
       { name: "close_call", description: "Позвонить человеку из «Близких» через Dewiar (аудио или видео — video true). Только когда пользователь прямо просит позвонить кому-то из близких.", parameters: O({ to: STR, video: { type: "boolean" } }, ["to"]) },
       { name: "close_where", description: "Где сейчас близкий — по радару «Рядом» (только если он сам показывает вам своё место): сколько до него, в какую сторону, когда обновлено. «где мама?», «далеко ли Андрей?». who — имя.", parameters: O({ who: STR }, ["who"]) },
       { name: "close_wave", description: "Помахать близкому 👋 — у него на экране волны и голос «… машет вам». «помаши маме», «помаши Андрею рукой». to — имя.", parameters: O({ to: STR }, ["to"]) },
-      { name: "close_read", description: "Последние сообщения от близких (и мои им): «что мне писали», «что ответила мама». who — имя или пусто — все.", parameters: O({ who: STR }) }] : []),
+      { name: "close_read", description: "Последние сообщения от близких (и мои им): «что мне писали», «что ответила мама»; группа — «что ответили в группе Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.", parameters: O({ who: STR }) }] : []),
     { name: "app_help", description: "Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить близкого или друга, сканер, стили, напоминания на часах, синхронизация, данные. Вызывай, когда спрашивают про Dewiar и его функции («как…», «где…», «что ты умеешь…»), — не выдумывай меню. query — о чём спросили.", parameters: O({ query: STR }, ["query"]) },
     { name: "scan_code", description: "Открыть сканер кодов камерой: QR, Aztec, печать Dewiar, штрихкоды и Data Matrix товаров. «Отсканируй код», «прочитай QR», «проверь честный знак». Результат обработается сам.", parameters: O({}) },
     { name: "send_message", description: "Отправить текст через мессенджер: app — max (по умолчанию), telegram, whatsapp, viber, vk; text — готовый текст сообщения. Откроется приложение, получателя выберет пользователь.",
@@ -3524,6 +3529,8 @@ function toolSpecs() {
     parameters: O({ question: STR, base: STR }, ["question"]) });
   if (Object.keys(mind().tasks || {}).length) t.push({ name: "remove_task", description: "Удалить большую задачу из «Мой день» → «Сделанное» (и на компьютере): «удали задачу …», «хватит напоминать про задачу». name — часть названия.", parameters: O({ name: STR }, ["name"]) },
     { name: "answer_task", description: "Ответить на вопрос задачи, которая «ждёт ответа»: text — ответ пользователя; name — часть названия (пусто — единственная ждущая).", parameters: O({ name: STR, text: STR }, ["text"]) });
+  // «Документы» с телефона (0.62): вопрос — компьютеру, он ищет в своих папках (search_documents), ответ — в «Сделанное»
+  if (S.sync.on && syncChan() && pcSeen() && !kidsOn()) t.push({ name: "pc_documents", description: "Спросить компьютер пользователя о его документах в папках на компьютере: «что в договоре про сроки», «найди счёт от Ромашки», «какой номер полиса в моих файлах». question — вопрос словами пользователя. Ответ придёт через минуту в «Мой день» → «Сделанное».", parameters: O({ question: STR }, ["question"]) });
   if (S.sync.on && syncChan() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное»."
       + devComputersText() + " on — на каком компьютере, если назвали («на рабочем»); пусто — любой свободный. Тот не на связи — спроси пользователя и вызови снова с if_off: wait (сделать, когда включится) или cloud (сейчас в облаке).",
     parameters: O({ title: STR, goal: STR, on: STR, if_off: { type: "string", enum: ["", "wait", "cloud"] } }, ["goal"]) });
@@ -3748,7 +3755,14 @@ async function runTool(name, a) {
     }
     case "money_report": return moneyReport(a.period || "month").text;
     case "month_summary": return monthSummary(a.month);                // «Мой месяц с Лирой» (0.61)
-    case "close_send": { const it = await clSend(a.to || "", a.text || ""); return `Отправлено ${it.to}. Скажи коротко, что отправила.`; }
+    case "close_send": {
+      if (a.remind_when) {                                   // «Лира в группе»: напоминание у всех участников (groups.js)
+        const g = grOf(a.to) || grMatch(a.to); if (!g) return "Ошибка: напомнить всем можно только в группе своих — назови группу («в группу Семья»).";
+        const w = parseWhen(String(a.remind_when)); if (!w || !w.at || isNaN(w.at)) return `Ошибка: не понял, когда напомнить («${a.remind_when}») — спроси день и время.`;
+        await grSend(g.gid, a.text || "", [], { rem: { at: w.at.getTime(), t: String(a.text || "").slice(0, 300) } });
+        return `Отправлено в группу «${g.name}»: у каждого участника (и у тебя) встанет напоминание ${whenText(w.at)}. Скажи коротко, что напомнишь всем.`;
+      }
+      const it = await clSend(a.to || "", a.text || ""); return `Отправлено ${it.to}. Скажи коротко, что отправила.`; }
     case "close_read": return clRecent(a.who || "");
     case "work_tasks": case "work_act": return await wkTool(name, a || {});
     case "team_status": case "team_assign": case "team_message": return await bsTool(name, a || {});
@@ -3771,6 +3785,15 @@ async function runTool(name, a) {
       setTimeout(() => { showCard(appCard(ap)); openApp(ap.id); }, 50);
       lastDone = `Сделано: «${ap.title}» — уже на экране. Потом найдёте в «Мой день» → «Сделанное» или скажите «покажи ${ap.title.toLowerCase()}».`;
       return `Сделано: «${ap.title}» — на экране телефона, сохранено в «Мой день» → «Сделанное» (снова открыть — open_made). Скажи об этом одной фразой и где её найти, код не пересказывай.`;
+    }
+    case "pc_documents": {
+      const q = String(a.question || "").trim(); if (q.length < 3) return "Ошибка: скажи, что найти в документах.";
+      const pcs = (syncStatus.devices || []).filter(x => x.pc && x.name !== "Облако Dewiar").sort((x, y) => (y.seen || 0) - (x.seen || 0));
+      if (!pcs.length) return "Ошибка: компьютер с Dewiar не найден — документы ищет программа на компьютере.";
+      try { taskToPc("Документы: " + q.slice(0, 50), "Ответь на вопрос по моим документам на этом компьютере: найди нужное в моих папках (search_documents), "
+        + "ответь коротко, процитируй главное место и назови файл. Не нашёл — так и скажи. Вопрос: " + q, pcs[0].name); } catch (e) { return "Не получилось: " + e.message; }
+      return (pcOnline() ? `Спросила компьютер «${pcs[0].name}» — он ищет в своих папках; ответ придёт через минуту в «Мой день» → «Сделанное», пришлю уведомление.`
+        : `Компьютер «${pcs[0].name}» сейчас не на связи — вопрос дождётся, когда он включится; ответ придёт в «Сделанное».`) + " Ответа ЕЩЁ НЕТ — скажи об этом одной фразой.";
     }
     case "start_task": {
       if (a.on) { try { const r = devTaskOn(a); if (r) return r; } catch (e) { return "Ошибка: " + e.message; } }   // «на рабочем компьютере…» (devices.js)
@@ -4521,24 +4544,60 @@ function periodStart(p) { const d = new Date(); d.setHours(0, 0, 0, 0);
   return isoLocal(d).slice(0, 10); }
 /* «Мой месяц с Лирой» (0.61, как core/month.py): «как прошёл мой месяц?», «итоги октября» — дела и деньги месяца, модель рассказывает тепло */
 const MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+/* данные месяца: ym — «2026-10» -> { y, mo, ym, title, done: {n, days, streak, best, by: [по дням], top}, money: {cur, exp, inc, cats: [[имя, сумма]]}, empty } */
+function monthData(y, mo) {
+  const a = new Date(y, mo, 1).getTime(), b = new Date(y, mo + 1, 1).getTime(), ym = `${y}-${pad(mo + 1)}`, nd = new Date(y, mo + 1, 0).getDate();
+  const done = doneList().filter(x => x.at >= a && x.at < b).sort((p, q) => p.at - q.at), by = Array(nd).fill(0);
+  done.forEach(x => { by[new Date(x.at).getDate() - 1]++; });
+  let streak = 0, run = 0; by.forEach(n => { run = n ? run + 1 : 0; streak = Math.max(streak, run); });
+  const bi = by.indexOf(Math.max(...by));
+  const mm = money().filter(x => String(x.date || "").slice(0, 7) === ym), cur = {};
+  mm.forEach(x => { const c = cur[x.currency] = cur[x.currency] || { inc: 0, exp: 0, cats: {} }; if (x.kind === "income") c.inc += x.amount; else { c.exp += x.amount; c.cats[x.category || "без категории"] = (c.cats[x.category || "без категории"] || 0) + x.amount; } });
+  const main = Object.entries(cur).sort((p, q) => q[1].exp - p[1].exp)[0];
+  return { y, mo, ym, title: MONTHS_NOM[mo], done: { n: done.length, days: by.filter(Boolean).length, streak, best: done.length ? [bi + 1, by[bi]] : null, by, top: done.slice(-5).map(x => x.title) },
+    money: main ? { cur: main[0], exp: main[1].exp, inc: main[1].inc, cats: Object.entries(main[1].cats).sort((p, q) => q[1] - p[1]).slice(0, 3) } : null, all: cur,
+    empty: !done.length && !mm.length };
+}
 function monthSummary(m) {
   const now = new Date(); let y = now.getFullYear(), mo = now.getMonth();
   m = String(m || "").trim();
   if (/^(prev|last|прошлый)$/i.test(m)) { mo--; if (mo < 0) { mo = 11; y--; } }
   else if (/^\d{4}-\d{2}$/.test(m)) { y = +m.slice(0, 4); mo = +m.slice(5) - 1; }
   else if (m && !/^(this|текущий|этот)$/i.test(m)) return "Ошибка: месяц — в виде 2026-10, или prev — прошлый.";
-  const a = new Date(y, mo, 1).getTime(), b = new Date(y, mo + 1, 1).getTime(), ym = `${y}-${pad(mo + 1)}`;
-  const done = doneList().filter(x => x.at >= a && x.at < b), by = {};
-  done.forEach(x => { const k = new Date(x.at).getDate(); by[k] = (by[k] || 0) + 1; });
-  let streak = 0, run = 0; for (let d = 1; d <= 31; d++) { run = by[d] ? run + 1 : 0; streak = Math.max(streak, run); }
-  const best = Object.entries(by).sort((p, q) => q[1] - p[1])[0];
-  const mm = money().filter(x => String(x.date || "").slice(0, 7) === ym), cur = {};
-  mm.forEach(x => { const c = cur[x.currency] = cur[x.currency] || { inc: 0, exp: 0, cats: {} }; if (x.kind === "income") c.inc += x.amount; else { c.exp += x.amount; c.cats[x.category || "без категории"] = (c.cats[x.category || "без категории"] || 0) + x.amount; } });
-  const L = [`[Мой месяц с Лирой — ${MONTHS_NOM[mo]} ${y}]`];
-  if (done.length) L.push(`Сделано дел: ${done.length} (дней с делами — ${Object.keys(by).length}, лучшая серия — ${streak} дн. подряд, лучший день — ${best[0]}-е: ${best[1]}). Последние: ` + done.slice(-5).map(x => `«${x.title}»`).join("; ") + ".");
-  Object.entries(cur).forEach(([c, v]) => L.push(`Деньги (${c}): расходы ${+v.exp.toFixed(2)}, доходы ${+v.inc.toFixed(2)}; больше всего — ` + Object.entries(v.cats).sort((p, q) => q[1] - p[1]).slice(0, 3).map(([k, s]) => `${k} ${+s.toFixed(2)}`).join(", ") + "."));
+  const d = monthData(y, mo), dn = d.done;
+  const L = [`[Мой месяц с Лирой — ${d.title} ${y}]`];
+  if (dn.n) L.push(`Сделано дел: ${dn.n} (дней с делами — ${dn.days}, лучшая серия — ${dn.streak} дн. подряд, лучший день — ${dn.best[0]}-е: ${dn.best[1]}). Последние: ` + dn.top.map(t => `«${t}»`).join("; ") + ".");
+  Object.entries(d.all).forEach(([c, v]) => L.push(`Деньги (${c}): расходы ${+v.exp.toFixed(2)}, доходы ${+v.inc.toFixed(2)}; больше всего — ` + Object.entries(v.cats).sort((p, q) => q[1] - p[1]).slice(0, 3).map(([k, s]) => `${k} ${+s.toFixed(2)}`).join(", ") + "."));
   if (L.length === 1) return L[0] + " Записей за этот месяц почти нет: дел и трат не было. Скажи об этом мягко и предложи отмечать сделанное («я позвонил в банк»).";
   return L.join("\n") + "\n\nРасскажи пользователю его месяц тепло и живо, своими словами, 4–6 предложений: главное число дел и чем он может гордиться (назови одно-два дела), куда ушли деньги (одной фразой, без нравоучений). В конце — одно доброе пожелание на следующий месяц. Без списков и без цифр подряд.";
+}
+/* «Мой месяц» карточкой (0.61): «Всё» → «Мой месяц» — числа, календарь (гуще — больше дел), чем гордиться, куда ушли деньги */
+let MON_AT = null;
+const MON_N = (n, a, b, c) => { const x = n % 10, y = n % 100; return x === 1 && y !== 11 ? a : x >= 2 && x <= 4 && (y < 12 || y > 14) ? b : c; };
+function monthHtml(d) {
+  const dn = d.done, m = d.money, max = Math.max(1, ...dn.by), first = (new Date(d.y, d.mo, 1).getDay() + 6) % 7;
+  const st = [];
+  st.push([dn.n, MON_N(dn.n, "дело сделано", "дела сделано", "дел сделано"), dn.streak > 1 ? `серия — ${dn.streak} ${MON_N(dn.streak, "день", "дня", "дней")} подряд` : ""]);
+  if (m && m.exp) st.push([Math.round(m.exp).toLocaleString("ru-RU"), `${esc(m.cur)} потрачено`, m.inc ? `пришло ${Math.round(m.inc).toLocaleString("ru-RU")}` : ""]);
+  const tot = m ? m.cats.reduce((a, c) => a + c[1], 0) || 1 : 1, now = new Date(), isNow = d.y === now.getFullYear() && d.mo === now.getMonth();
+  return `<div class="mon-nav"><button class="ib soft" id="mon-prev" aria-label="Прошлый месяц"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+      <b>${d.title[0].toUpperCase() + d.title.slice(1)} ${d.y}</b><button class="ib soft" id="mon-next" aria-label="Следующий месяц" ${isNow ? "disabled" : ""}><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button></div>
+    ${d.empty ? `<div class="card"><p class="hint" style="margin:0">За ${d.title} записей нет. Говорите Лире «я позвонил в банк», «потратил 300 на продукты» — и здесь соберётся ваш месяц.</p></div>` : `
+    <div class="mon-sts">${st.map(([v, l, s]) => `<div><b>${v}</b><span>${l}</span>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("")}</div>
+    <h3>Дела по дням</h3><div class="mon-cal" role="img" aria-label="Дела по дням: дней с делами — ${dn.days}">${["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map(w => `<u>${w}</u>`).join("")}${"<b></b>".repeat(first)}${dn.by.map((n, i) => `<i class="lv${n ? Math.min(4, 1 + Math.floor(n / max * 3.999)) : 0}">${i + 1}</i>`).join("")}</div>
+    ${dn.top.length ? `<h3>Чем можно гордиться</h3><ul class="mon-top">${dn.top.slice(-3).reverse().map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+    ${m && m.cats.length ? `<h3>Куда ушли деньги</h3><div class="mon-bar">${m.cats.map((c, i) => `<i class="c${i}" style="flex:${c[1] / tot}"></i>`).join("")}</div><ul class="mon-cats">${m.cats.map((c, i) => `<li><i class="c${i}"></i>${esc(c[0])}<b>${Math.round(c[1]).toLocaleString("ru-RU")}</b></li>`).join("")}</ul>` : ""}
+    <button class="btn p w" id="mon-say">Рассказать голосом</button>`}`;
+}
+function openMonth(ym) {
+  if (!$("#sh-month")) { const s = document.createElement("section"); s.className = "sheet tall"; s.id = "sh-month"; s.setAttribute("aria-labelledby", "mon-h");
+    s.innerHTML = `<div class="grab"></div><h2 id="mon-h">Мой месяц с Лирой</h2><div id="mon-body"></div>`; document.body.appendChild(s); }
+  const now = new Date(); MON_AT = MON_AT && ym !== "now" ? MON_AT : [now.getFullYear(), now.getMonth()];
+  const d = monthData(MON_AT[0], MON_AT[1]);
+  $("#mon-body").innerHTML = monthHtml(d); openSheet("#sh-month");
+  const go = (k) => { let [y, mo] = MON_AT; mo += k; if (mo < 0) { mo = 11; y--; } if (mo > 11) { mo = 0; y++; } MON_AT = [y, mo]; openMonth(); };
+  $("#mon-prev").onclick = () => go(-1); $("#mon-next").onclick = () => go(1);
+  if ($("#mon-say")) $("#mon-say").onclick = () => { closeSheets(); ask(`Как прошёл мой ${d.title} ${d.y}?`); };
 }
 function moneyReport(p) {
   const from = periodStart(p), items = money().filter(x => x.date >= from), by = {};
@@ -5801,23 +5860,30 @@ const APPS_IC = {
   course: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11"/>',
   qa: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 16.8v.01"/>',
   kids: '<circle cx="12" cy="13" r="7.5"/><circle cx="9.3" cy="12" r="1.6"/><circle cx="14.7" cy="12" r="1.6"/><path d="M7 6.5 5.5 3.5M17 6.5l1.5-3M10.8 15.5h2.4"/>',
-  news: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>' };
+  news: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+  month: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
+  senior: '<path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/><path d="M8.5 12.5h2l1-2 1.5 4 1-2h1.5"/>' };
 function appsHtml() {
   const t = [];
   if (feat("games")) t.push(["play", "Досуг", "милые игры"]);
   if (kidsOn()) return `<div class="apps">${t.concat([["tricks", "Что я умею", "фразы-примеры"], ["kids", "Детский режим", "для взрослых"]]).map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
+  if (typeof srOn === "function" && srOn()) {        // «Для старших»: только нужное, крупно
+    t.push(["month", "Мой месяц", "дела и траты"], ["senior", "Для старших", "лекарства и присмотр"], ["tricks", "Что я умею", "фразы-примеры"], ["qa", "Вопрос — ответ", "как сделать…"], ["news", "Что нового", "в этой версии"]);
+    return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
+  }
   t.push(["soul", "Душа", "дневник и характер"]);
   if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "по коду"]);
   if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
+  if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
   t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["qa", "Вопрос — ответ", "как сделать…"]);
-  t.push(["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
+  t.push(["senior", "Для старших", "для мамы и папы"], ["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
   return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
 }
 function openApps() {
   $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
   $$("#apps-body [data-app]").forEach(b => b.onclick = () => { const k = b.dataset.app; closeSheets();
     setTimeout(() => ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
-      ideas: () => openIdeas(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(),
+      ideas: () => openIdeas(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(),
       news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")) }[k] || (() => { }))(), 60); });
 }
 $("#b-apps").onclick = () => openApps();
@@ -5936,11 +6002,16 @@ function renderSettings() {
       <div style="font-weight:600">${esc(on ? brainName() : loggedIn() ? "подключаю модели Dewiar…" : "не подключён")}</div>
       ${on && S.llm.title ? `<small class="hint" style="margin:2px 0 0;display:block">${esc(S.llm.title)}${S.llm.cloud ? " · " + esc(cloudWho()) : ""}</small>` : ""}</div>
       ${on || loggedIn() ? `<button class="btn" id="br-test">Проверить</button>` : ""}</div><div class="res" id="br-res"></div></div>`);
+    // №388/389 (28.10): «нет выбора мозга — только Dewiar, а на компьютере выбран ключ другого сервера» — взять мозги с
+    // компьютера прямо здесь (раньше — только «Устройства» → «Мозги с другого устройства»); пришедшие — ниже, «Включить»
+    if (syncCred() && !S.llm.trial) h.push(`<div class="card" id="br-pc"><div class="row2"><div style="flex:1;min-width:0"><b>Как на компьютере</b>
+      <small class="hint" style="margin:2px 0 0;display:block">На компьютере своя модель или ключ сервиса? Возьмите их сюда — придут зашифрованными, включить можно ниже.</small></div>
+      <button class="btn" id="br-pull">Взять</button></div><div class="res ${devBrainsGot.length ? "ok" : ""}" id="br-pull-res">${esc(devBrainsGot.map(x => `С «${x.from}»: ${x.names.join(", ")}`).join(" · "))}</div></div>`);
     const back = llmBack();
     // №254 (25.10): «как удалять однажды добавленные, но неработающие мозги? В списке только „Вернуть“» — рядом корзина:
     // первое нажатие спрашивает («Убрать»), второе убирает из списка. Ключ слуха (restore: "key") не убираем — им слышит телефон.
-    if (back.length) h.push(`<div class="card" id="br-back"><small class="hint" style="margin:0">Прежние мозги — вернуть одной кнопкой или убрать из списка</small>${back.map((l, i) =>
-      `<div class="row2 brb" style="margin-top:8px"><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(brainNameOf(l))}</div><button class="btn" data-back="${i}">Вернуть</button>${l.restore ? "" : `<button class="btn brdel" data-forget="${i}" title="Убрать из списка" aria-label="Убрать «${esc(brainNameOf(l))}» из списка"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg><span>Убрать</span></button>`}</div>`).join("")}<div class="res" id="br-back-res"></div></div>`);
+    if (back.length) h.push(`<div class="card" id="br-back"><small class="hint" style="margin:0">${back.some(l => l.got) ? "Другие мозги — включить одной кнопкой или убрать из списка" : "Прежние мозги — вернуть одной кнопкой или убрать из списка"}</small>${back.map((l, i) =>
+      `<div class="row2 brb" style="margin-top:8px"><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(brainNameOf(l))}</div><button class="btn" data-back="${i}">${l.got ? "Включить" : "Вернуть"}</button>${l.restore ? "" : `<button class="btn brdel" data-forget="${i}" title="Убрать из списка" aria-label="Убрать «${esc(brainNameOf(l))}» из списка"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg><span>Убрать</span></button>`}</div>`).join("")}<div class="res" id="br-back-res"></div></div>`);
     if (on) h.push(`<div class="card"><div class="sw" style="margin:0"><div>Думать над сложными просьбами<small>Стихи, задачи, анализ, планы — сначала обдумывает: дольше, зато лучше. Простые вопросы — сразу.</small></div>
       <label class="tg"><input type="checkbox" id="br-think" ${S.llm.think !== "off" ? "checked" : ""}><i></i></label></div></div>`);
     if (S.llm.cloud) h.push(`<div class="card cloudc" id="cl-card"><div class="row2"><div style="flex:1"><b>Баланс</b><small class="hint" style="margin:2px 0 0;display:block" id="cl-sub">${esc(cloudWho())}</small></div><div class="cl-pct" id="cl-pct">…</div></div>
@@ -6170,6 +6241,12 @@ function wireSettings(info) {
       const id = llmId(l); S.llmSaved = (S.llmSaved || []).filter(x => llmId(x) !== id); saveS();
       toast(`«${brainNameOf(l)}» убран из списка`); renderSettings();
     });
+    if (g("br-pull")) g("br-pull").onclick = async () => {
+      const r = g("br-pull-res"); g("br-pull").disabled = true; r.className = "res"; r.textContent = "Спрашиваю ваши устройства…";
+      try { const ok = await devBrainsPull(); r.textContent = ok ? "Жду ответа — компьютер должен быть включён и Dewiar запущен (до 10 минут)." : "Других ваших устройств пока не видно — на компьютере: студия → «Устройства» → «Подключить ещё устройство», здесь — «Устройства» → «Ввести код»."; }
+      catch (e) { r.className = "res bad"; r.textContent = netErr(e.message || e); } finally { g("br-pull").disabled = false; }
+      setTimeout(() => clPoll().catch(() => { }), 4000);
+    };
     $$("#br-back [data-back]").forEach(b => b.onclick = async () => {
       const r = g("br-back-res"); b.disabled = true; r.className = "res"; r.textContent = "подключаю…";
       try { await llmRestore(+b.dataset.back); toast("Мозг: " + brainName()); renderSettings(); }
@@ -8057,6 +8134,12 @@ function clSeen(pid) {
   clReq("POST", "/close/seen", { peer: pid, upto: top }).then(() => { const s = clLoad(); s.readUp = Object.assign({}, s.readUp, { [pid]: top }); clSave(); }).catch(() => { });
 }
 function clRecent(who, n = 8) {
+  const g = who && typeof grMatch === "function" ? (grOf(who) || (!clMatch(who, clLoad().people) && grMatch(who))) : null;
+  if (g) {                                   // «что ответили в группе Семья?» — «кто что берёт?»: Лира собирает ответы
+    const st = clLoad(), h = (st.hist[g.gid] || []).slice(-20); delete st.unread[g.gid]; clSave(); clBadge();
+    return h.length ? `Группа «${g.name}» (участники: ${(g.members || []).map(m => m.name).join(", ")}):\n` + h.map(m => `${new Date(m.ts).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} ${m.out ? "вы" : m.who || "кто-то"}: ${m.t || ""}${(m.f || []).length ? " [файлы: " + m.f.map(x => x.name).join(", ") + "]" : ""}`).join("\n")
+      : `В группе «${g.name}» сообщений пока нет.`;
+  }
   const st = clLoad(), ps = who ? [clPerson(who)] : st.people, out = [];
   for (const p of ps) { (st.hist[p.pid] || []).slice(-n).forEach(m => out.push([m.ts, `${new Date(m.ts).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} ${m.out ? "вы → " + p.name : p.name}: ${m.t || ""}${(m.f || []).length ? " [файлы: " + m.f.map(x => x.name).join(", ") + "]" : ""}${m.rx && (m.rx.me || m.rx.them) ? ` [реакции: ${[m.rx.them && p.name + " " + m.rx.them, m.rx.me && "вы " + m.rx.me].filter(Boolean).join(", ")}]` : ""}${(st.marks || {})[p.pid] ? CL_MARK_RU[clMark(m, p.pid)] || "" : ""}`])); delete st.unread[p.pid]; clSeen(p.pid); }
   clSave(); clBadge(); out.sort((a, b) => a[0] - b[0]);
@@ -8848,7 +8931,7 @@ function clOfferBind() {
     catch (e) { b.disabled = false; toast(e.message, 4000); } });
 }
 function openRefs() { clTab = "ref"; openClose(""); }
-function openClose(pid) { clCur = pid || ""; openSheet("#sh-close"); clRender(); if (syncCred()) clHello().then(() => clRender()).catch(() => { }); }
+function openClose(pid) { clCur = pid || ""; try { grInfo = ""; grNew = null; } catch (e) { } openSheet("#sh-close"); clRender(); if (syncCred()) clHello().then(() => clRender()).catch(() => { }); }
 function clRender() {
   const st = clLoad(), box = $("#close-body"), p = clCur && st.people.find(x => x.pid === clCur);
   if (syncCred() && typeof grRender === "function" && (grNew || (clCur && clCur[0] === "g"))) {   // «Группы своих»: мастер или переписка группы

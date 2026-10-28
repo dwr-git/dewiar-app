@@ -1875,6 +1875,19 @@ def t_show_page(a, ctx):
             "открыла. HTML в ответе не повторяй.")
 
 
+def t_debate(a, ctx):
+    """«Пусть модели поспорят: …» (0.62, debate.py): две модели отвечают и возражают друг другу — итог подводит Лира."""
+    import debate as DB
+    s = ctx.get("settings")
+    if s is None:
+        raise ToolError("спор моделей — в программе Dewiar")
+    try:
+        a_, b_ = DB.pick_pair(s)
+        return DB.context(DB.run(a.get("question") or "", a_, b_))
+    except DB.DebateError as e:
+        raise ToolError(str(e)) from e
+
+
 def t_month_summary(a, ctx):
     """«Как прошёл мой месяц?», «итоги октября» (0.61, month.py): данные месяца — модели, рассказать тепло."""
     eng = ctx.get("engine")
@@ -1943,12 +1956,24 @@ def t_close_send(a, ctx):
     if c is None:
         raise ToolError("«Близкие» недоступны")
     from close import CloseError
+    rw = str(a.get("remind_when") or "").strip()
     try:
         files = [str(Path(x).expanduser()) for x in (a.get("files") or []) if x]
+        if rw:                                       # «Лира в группе»: «напомни всем в группе Семья в субботу в 10 про дачу»
+            g = c.group_of(a.get("to") or "") or c.group_match(a.get("to") or "")
+            if not g:
+                raise ToolError("напомнить всем можно только в группе своих — назови группу («в группу Семья»)")
+            import when as W
+            w = W.parse("напомни " + rw + " " + (a.get("text") or "дело"))
+            if not w or not w.get("at"):
+                raise ToolError(f"не понял, когда напомнить: «{rw}» — спроси у пользователя день и время")
+            it = c.gsend(g["gid"], a.get("text") or "", files, remind_at=w["at"])
+            return (f"Отправлено {it['to']}: у каждого участника (и у тебя) встанет напоминание на {w['at'].strftime('%d.%m %H:%M')}."
+                    " Скажи коротко, что напомнишь всем.")
         it = c.send(a.get("to") or "", a.get("text") or "", files)
     except (CloseError, OSError) as e:
         raise ToolError(str(e)) from e
-    to = it.get("to") or c.person(a.get("to") or "")["name"]          # группа («Группы своих») — «группу «Семья»»
+    to = it.get("to") or c.person(a.get("to") or "")["name"]          # группа («Группы своих») — «в группу «Семья»»
     return f"Отправлено {to}" + (f" (файлов: {len(it.get('f') or [])})" if it.get("f") else "") + ". Скажи коротко, что отправила."
 
 
@@ -2109,6 +2134,39 @@ def t_client_deal(a, ctx):
     due = f", оплатить до {human_date(d['due'])}" if d["stage"] == "invoice" and d.get("due") else ""
     return (f"{'Новая сделка' if made else 'Сделка'} с {d['client']}: «{d['title']}» — {STAGES[d['stage']].lower()}{amt}{due}."
             + (" Записала в доходы." if income else "") + " Скажи это одной фразой.")
+
+
+def t_deal_remind(a, ctx):
+    """«Напомни Ромашке об оплате» — вежливое письмо клиенту о счёте (почта) или текст, чтобы отправить самому."""
+    from clients import ClientError
+    from deals import DealError
+    C = _clients(ctx)
+    try:
+        cid = C.find(a.get("who") or "")
+        ds = [d for d in C.deals(stage="invoice", cid=cid)]
+        if not ds:
+            raise ToolError("у этого клиента нет выставленных неоплаченных счетов")
+        if a.get("title"):
+            did = C.deal_find(cid, a.get("title") or "")
+            ds = [d for d in ds if d["id"] == did] or ds
+        d = ds[0]
+        s = ctx.get("settings")
+        me = ((s.get("close") or {}).get("name") or s.get("user_name") or "") if s else ""
+        r = C.deal_remind_text(cid, d["id"], me)
+    except (ClientError, DealError) as e:
+        raise ToolError(str(e)) from e
+    m = ctx.get("mail")
+    if r["to"] and m and m.configured() and a.get("send", True) is not False:
+        from mail import MailError
+        try:
+            m.send(r["to"], r["subject"], r["body"])
+        except MailError as e:
+            raise ToolError(str(e)) from e
+        C.deal_reminded(cid, d["id"], "письмом")
+        return f"Письмо-напоминание об оплате «{d['title']}» отправлено {r['name']} ({r['to']}). Скажи коротко."
+    why = "у клиента не записана почта" if not r["to"] else "почта не подключена (студия → «Подключение» → «Почта»)"
+    return (f"Отправить письмом не получилось: {why}. Вот текст — предложи отправить его в мессенджер или записать почту "
+            f"клиента, и покажи текст:\n\n{r['body']}")
 
 
 def t_client_deals(a, ctx):
@@ -2680,6 +2738,9 @@ TOOLS = {
                  "what": {"type": "string"}, "every_minutes": {"type": "number"}, "hours": {"type": "number"},
                  "folder": {"type": "string"}, "pattern": {"type": "string"}, "url": {"type": "string"}, "id": {"type": "string"}}, []),
               "safe", t_watch, "Дозор"),
+    "debate": ("Спор моделей: две разные модели ИИ отвечают на трудный вопрос и возражают друг другу, потом ты подводишь итог — "
+               "когда просят «пусть модели поспорят», «устрой спор моделей», «что скажут разные ИИ о …». question — вопрос целиком.",
+               S({"question": {"type": "string"}}, ["question"]), "safe", t_debate, "Спор моделей"),
     "month_summary": ("Итоги месяца пользователя («Мой месяц с Лирой»): сделанные дела, напоминания, траты по категориям, заметки, "
                       "дневник — когда спрашивают «как прошёл мой месяц», «итоги октября», «что я сделал за месяц». month — 2026-10, "
                       "prev — прошлый месяц, пусто — текущий.", S({"month": {"type": "string"}}, []), "safe", t_month_summary, "Мой месяц"),
@@ -2720,8 +2781,10 @@ TOOLS = {
     "close_send": ("Написать человеку из «Близких» (переписка между помощниками Dewiar: дойдёт в его приложение, его помощник "
                    "скажет вслух). Только когда пользователь прямо просит написать, передать или сказать кому-то из близких. "
                    "to — имя как сказал пользователь («Андрею», «маме») или группа своих («в группу Семья» — письмо всем в ней); text — само сообщение от лица пользователя, как он сказал бы сам "
-                   "(«Задержусь на полчаса»), без «передай»; files — пути файлов (необязательно).",
-                   S({"to": {"type": "string"}, "text": {"type": "string"}, "files": {"type": "array", "items": {"type": "string"}}}, ["to", "text"]),
+                   "(«Задержусь на полчаса»), без «передай»; files — пути файлов (необязательно). «Напомни всем в группе Семья в субботу "
+                   "в 10 про дачу» — to: группа, text: о чём («Едем на дачу»), remind_when: когда («в субботу в 10») — напоминание встанет у всех.",
+                   S({"to": {"type": "string"}, "text": {"type": "string"}, "files": {"type": "array", "items": {"type": "string"}},
+                      "remind_when": {"type": "string"}}, ["to", "text"]),
                    "safe", t_close_send, "Близкие: написать"),
     "close_call": ("Позвонить человеку из «Близких» через Dewiar — откроется окно звонка (video true — видеозвонок). Только когда "
                    "пользователь прямо просит позвонить кому-то из близких.",
@@ -2766,10 +2829,14 @@ TOOLS = {
                     S({"who": {"type": "string"}, "title": {"type": "string"}, "amount": {"type": "number"},
                        "stage": {"type": "string", "enum": ["lead", "offer", "invoice", "paid", "lost"]}, "due": {"type": "string"},
                        "new": {"type": "boolean"}}, ["who"]), "safe", t_client_deal, "Клиенты: сделка"),
+    "deal_remind": ("Напомнить клиенту об оплате выставленного счёта — вежливое письмо с его почты пользователя («напомни Ромашке об "
+                    "оплате», «напиши Иванову, что ждём оплату»). who — клиент, title — какая сделка (если счетов несколько).",
+                    S({"who": {"type": "string"}, "title": {"type": "string"}}, ["who"]), "confirm", t_deal_remind, "Клиенты: напомнить об оплате"),
     "client_deals": ("«Клиенты» → сделки: «кто нам должен?» (what owed — выставленные неоплаченные счета, итог, просроченные), "
                      "«какие сделки зависли?» (stuck — без движения неделю, просроченная оплата), или все открытые (пусто).",
                      S({"what": {"type": "string", "enum": ["owed", "stuck", ""]}}), "safe", t_client_deals, "Клиенты: кто должен"),
-    "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей». who — имя или пусто — все.",
+    "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей»; группа — «что ответили в группе "
+                   "Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.",
                    S({"who": {"type": "string"}}), "safe", t_close_read, "Близкие: прочитать"),
     "app_help": ("Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить "
                  "близкого или друга, сканер, стили, напоминания на часах, синхронизация, данные и т. п. Вызывай, когда спрашивают про "
@@ -2878,7 +2945,7 @@ TOOLS = {
 # Этим умениям нужен интернет из самого Dewiar — при стоп-кране (студия → «Безопасность») модель о них не узнаёт.
 # Открыть сайт, музыку или карту в браузере человека — можно: это его браузер и его просьба.
 NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "read_emails", "read_email", "send_telegram", "close_send",
-             "close_call", "close_read", "team_assign", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update"}
+             "close_call", "close_read", "team_assign", "deal_remind", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update"}
 DEFAULT_OFF = set()          # команды терминала включены, но каждая — только после «Выполнить?»
 # «Только безопасное» (студия → «Безопасность», отзыв 18.10: «лучше чтоб пользователь мог выбрать, что можно делать, а не
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
@@ -2933,7 +3000,7 @@ class Toolbox:
             tg = self.hooks.get("telegram")
             if not (tg and tg.paired()):
                 return False, False
-        if name.startswith("client_"):          # «Клиенты»: включены в «Возможностях»
+        if name.startswith("client_") or name == "deal_remind":   # «Клиенты»: включены в «Возможностях»
             if not (self.hooks.get("clients") is not None and (self.s.get("features") or {}).get("clients")):
                 return False, False
         if name in ("team_assign", "team_status", "team_message"):   # «Поручения»: раздел включён и бот компании подключён

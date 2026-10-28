@@ -297,7 +297,7 @@ function devBrainsTake(b) {
   for (const pr of b.profiles.slice(0, 12)) {
     if (!pr || !/^https?:\/\//.test(pr.base_url || "")) continue;
     const id = String(pr.base_url).replace(/\/+$/, "") + "|" + (pr.model || ""); if (have.has(id)) continue; have.add(id);
-    const l = Object.assign({}, DEF.llm, { kind: pr.kind || "openai", name: pr.name || pr.model || "Модель", base_url: pr.base_url, api_key: pr.api_key || "", model: pr.model || "", title: pr.title || "" });
+    const l = Object.assign({}, DEF.llm, { kind: pr.kind || "openai", name: pr.name || pr.model || "Модель", base_url: pr.base_url, api_key: pr.api_key || "", model: pr.model || "", title: pr.title || "", got: String(b.from || "другого устройства").slice(0, 40) });
     if (!S.llm.base_url || S.llm.trial) S.llm = l;                    // мозга не было — сразу думает пришедшим
     else S.llmSaved = [l].concat(S.llmSaved || []).slice(0, 8);
     added.push(l.name);
@@ -306,7 +306,7 @@ function devBrainsTake(b) {
   saveS(); applyPersona(); devBrainsGot.push({ from: b.from || "", names: added });
   plog("info", "🧠 мозги со своего устройства «" + (b.from || "?") + "»: " + added.join(", "));
   toast(`С «${b.from || "другого устройства"}»: ${added.join(", ")}`, 4000);
-  if (setTab === "devices" && $("#sh-set").classList.contains("on")) renderSettings();
+  if ((setTab === "devices" || setTab === "brain") && $("#sh-set").classList.contains("on")) renderSettings();
 }
 function devBrainsOwn(body) {                                        // зовёт ownApply (app.js)
   if (body && Array.isArray(body.want) && body.want.includes("brains")) { const sh = devBrainsShare(); if (sh) devOwnSend({ brains: sh }).catch(() => { }); }

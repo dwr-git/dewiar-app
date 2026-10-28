@@ -198,6 +198,45 @@ class DealsMixin:
         return {"cols": cols, "owed": _sums(owed), "overdue": _sums([d for d in owed if d["overdue"]]), "n_overdue": sum(1 for d in owed if d["overdue"]),
                 "stuck": sum(1 for d in ds if d["stuck"]), "paid30": _sums([d for d in ds if d["stage"] == "paid" and (d.get("paid") or 0) > cut])}
 
+    # ---------- «Напомнить об оплате» и выгрузка (0.62; план «Идей Лиры»: «Лира сама напишет вежливое напоминание,
+    # выгрузка сделок в таблицу») ----------
+    def deal_remind_text(self, cid, did, me=""):
+        """Вежливое напоминание об оплате по счёту -> {to, name, subject, body, overdue}."""
+        with self._lock:
+            c = self._get(cid)
+            d = self._deal(c, did)
+        if d["stage"] != "invoice":
+            raise DealError("напомнить об оплате можно по выставленному счёту — эта сделка не на этапе «Счёт»")
+        today = self.now().date().isoformat()
+        over = bool(d.get("due")) and d["due"] < today
+        who = (c.get("name") or "").split()[0] if c.get("name") and not c.get("company") else (c.get("name") or c.get("company") or "")
+        amt = f" на {fmt_amount(d['amount'], d['cur'])}" if d.get("amount") else ""
+        due = (f" Срок оплаты был {human_date(d['due'])}." if over else f" Срок оплаты — {human_date(d['due'])}.") if d.get("due") else ""
+        body = (f"Здравствуйте{', ' + who if who else ''}!\n\n"
+                f"Напоминаю об оплате счёта «{d['title']}»{amt}{'' if amt.endswith('.') else '.'}{due} Если оплата уже ушла — спасибо, просто дайте знать, "
+                f"и я отмечу у себя.\n\nЕсли нужен счёт повторно или есть вопросы — напишите, всё пришлю.\n\n"
+                f"С уважением{',' if me else ''}\n{me}".rstrip())
+        return {"to": c.get("email") or "", "name": self.title(c), "subject": f"Напоминание об оплате: {d['title']}", "body": body, "overdue": over}
+
+    def deal_reminded(self, cid, did, how="письмом"):
+        """Отметка в истории клиента: напомнили об оплате (и дата — в сделке, reminded)."""
+        with self._lock:
+            c = self._get(cid)
+            d = self._deal(c, did)
+            d["reminded"] = time.time()
+        self.note(cid, f"Напомнили об оплате {how}: «{d['title']}»", kind="deal")
+
+    def deals_csv(self):
+        """Все сделки таблицей (CSV для Excel: «;», UTF-8 с BOM) -> текст."""
+        rows = [["Клиент", "Сделка", "Сумма", "Валюта", "Этап", "Оплатить до", "Срок прошёл", "Создана", "Изменена", "Оплачена", "Заметка"]]
+        day = lambda t: time.strftime("%Y-%m-%d", time.localtime(t)) if t else ""   # noqa: E731
+        for d in sorted(self.deals(), key=lambda x: (x["client"].lower(), x.get("created") or 0)):
+            rows.append([d["client"], d["title"], (f"{d['amount']:.2f}".rstrip("0").rstrip(".").replace(".", ",") if d.get("amount") else ""),
+                         d.get("cur") or "", STAGES[d["stage"]], d.get("due") or "", "да" if d["overdue"] else "", day(d.get("created")),
+                         day(d.get("moved")), day(d.get("paid")), (d.get("note") or "").replace("\n", " ")])
+        esc = lambda v: '"' + str(v).replace('"', '""') + '"' if any(ch in str(v) for ch in ';"\n') else str(v)   # noqa: E731
+        return "\ufeff" + "\r\n".join(";".join(esc(v) for v in r) for r in rows) + "\r\n"
+
     def deals_summary(self, what=""):
         """Для модели: «кто нам должен?» (owed), «что зависло?» (stuck) или всё открытое."""
         ds = [d for d in self.deals() if d["stage"] in OPEN]

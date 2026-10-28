@@ -2158,6 +2158,10 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 /* Свои радиостанции (№359, 27.10) */
 .rc-panel { margin-top: 16px; }
 .rc-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+/* №387 (28.10): «кнопки напротив названий стоят с наложением, не видно, что за кнопки» — у «Своих станций» обычные кнопки
+   с подписью, а не круглые 30 px от списка песен */
+.mm-list.rc-list li > button.btn { width: auto; height: auto; min-height: 32px; padding: 6px 14px; border-radius: 12px; font-size: 13px; color: var(--ink); background: rgba(127,127,140,.12); }
+.mm-list.rc-list li > button.btn.danger { color: var(--bad); }
 .rc-list li small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52ch; }
 .rc-add { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 6px; }
 .rc-add input { flex: 1 1 180px; min-width: 0; }
@@ -3117,3 +3121,12 @@ html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92)
 .cl-ph { display: block; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: rgba(127,127,140,.15); cursor: zoom-in; max-width: 320px; min-width: 120px; min-height: 80px; }
 .cl-ph img { display: block; width: 100%; max-height: 320px; object-fit: cover; }
 .cl-ph.bad { display: none; }
+.cl-grem { align-self: flex-start; font-size: 12.5px; font-weight: 600; padding: 4px 9px; border-radius: 9px; background: rgba(127,127,140,.16); }
+/* «Напомнить об оплате» и выгрузка (studio/deals.js, 0.62) */
+.dl-tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; } .dl-tools .dl-new { margin-bottom: 0; }
+.dl-rem { margin-bottom: 16px; padding: 18px 20px; border-radius: 22px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.dl-rem h3 { margin: 0 0 4px; font-size: 16px; }
+.dl-rem textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 13.5px; line-height: 1.5; resize: vertical; }
+.dl-card em.rem { color: var(--muted); font-style: normal; font-size: 12px; }
+.bugnote { display: block; color: var(--muted); font-size: 11.5px; margin: 4px 2px 0; }
+.bugnote[hidden] { display: none; }

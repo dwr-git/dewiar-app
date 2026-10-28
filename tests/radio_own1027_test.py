@@ -103,9 +103,12 @@ try:
         ok("Радио Город" in pg.inner_text("#rc-list"), "добавить по названию и ссылке")
         pg.fill("#rc-name", "Плохая"); pg.fill("#rc-url", "ftp://x"); pg.click("#rc-add button"); time.sleep(0.8)
         ok("Плохая" not in pg.inner_text("#rc-list"), "не ссылка на поток — не добавляется")
+        bx = pg.evaluate("[...document.querySelectorAll('#rc-list li')[0].querySelectorAll('button')].map(b => { const r = b.getBoundingClientRect(); return [r.left, r.right, b.textContent]; })")
+        ok(len(bx) == 2 and bx[0][1] <= bx[1][0] and bx[0][2] == "Включить" and bx[1][2] == "Убрать" and bx[1][1] - bx[1][0] > 50,
+           f"№387: «Включить» и «Убрать» — подписаны и не наезжают друг на друга: {bx}")
         pg.click("#rc-list [data-rcd='http://127.0.0.1:9/city']"); time.sleep(0.4)
         pg.click("#rc-list [data-rcd='http://127.0.0.1:9/city']"); time.sleep(0.8)
-        ok("Радио Город" not in pg.inner_text("#rc-list"), "«×» дважды — убрана")
+        ok("Радио Город" not in pg.inner_text("#rc-list"), "«Убрать» дважды — убрана")
         st = json.loads((cfg / "settings.json").read_text())
         ok([x["name"] for x in st.get("radio_custom", [])] == ["Железо-ФМ"], f"в настройках: {st.get('radio_custom')}")
         ok(not errs, f"без ошибок на странице: {errs[:2]}")

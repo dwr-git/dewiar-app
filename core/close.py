@@ -19,6 +19,7 @@ import re
 import threading
 import time
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -644,8 +645,9 @@ class Close:
         self.host.emit("close", state=out)
         return out
 
-    def gsend(self, gid, text="", files=None):
-        """Письмо в группу: один конверт на все устройства участников (и мои)."""
+    def gsend(self, gid, text="", files=None, remind_at=None):
+        """Письмо в группу: один конверт на все устройства участников (и мои). remind_at (datetime) — «Лира в группе»:
+        напоминание у каждого участника (и у меня) в этот срок."""
         if not self.st.get("me") or time.time() - float(self.st.get("hello_at") or 0) > 600:
             self.hello()
         g = self.group_of(gid)
@@ -657,6 +659,8 @@ class Close:
         fl = [self._upload(None, Path(p), gid=gid) for p in files or []]
         body = {"t": (text or "").strip(), "ts": int(time.time() * 1000), "mid": uuid.uuid4().hex[:16],
                 "name": (self.st.get("me") or {}).get("name", ""), "g": gid}
+        if remind_at is not None:
+            body["rem"] = {"at": int(remind_at.timestamp() * 1000), "t": body["t"][:300]}
         if fl:
             body["f"] = fl
         if not body["t"] and not fl:
@@ -667,9 +671,28 @@ class Close:
         targets.update(self._targets({}))
         self._req("POST", "/close/gsend", {"gid": gid, "env": CC.encrypt_for(body, priv, self.st["dev"], targets)})
         item = {"mid": body["mid"], "ts": body["ts"], "out": True, "t": body["t"], "f": [dict(x, path=str(Path(f).resolve())) for x, f in zip(fl, files or [])]}
+        if remind_at is not None:
+            item["rem"] = {"at": body["rem"]["at"], "rid": self._remind(g, body["rem"])}
         self._add(gid, item)
         log.info("💌 В группу «%s» ← %s", g["name"], f"текст, {len(body['t'])} зн." if body["t"] else "файл")
         return dict(item, to=f"в группу «{g['name']}»")
+
+    def _remind(self, g, rem, who=""):
+        """«Напомни всем в группе …»: напоминание здесь (reminders ядра). -> id или ""."""
+        rs = getattr(self.host, "reminders", None)
+        try:
+            at = datetime.fromtimestamp(int(rem.get("at")) / 1000)
+        except (TypeError, ValueError, OverflowError, OSError):
+            return ""
+        if rs is None or not timedelta(minutes=-1) < at - datetime.now() < timedelta(days=366):
+            return ""
+        text = f"«{g.get('name') or 'Группа'}»: {str(rem.get('t') or 'напоминание')[:300]}" + (f" (просит {who.split()[0]})" if who else "")
+        try:
+            it = rs.add(at, text)
+            return str((it or {}).get("id") or "") if isinstance(it, dict) else str(getattr(it, "id", "") or "")
+        except Exception:  # noqa: BLE001
+            log.exception("группа: напоминание не встало")
+            return ""
 
     @staticmethod
     def _targets_of(devs):
@@ -919,6 +942,9 @@ class Close:
         item = {"mid": body.get("mid") or str(it.get("id")), "ts": _int(body.get("ts")) or _int(it.get("ts")) * 1000, "out": bool(it.get("out")),
                 "t": str(body.get("t") or "")[:20000], "f": [x for x in body.get("f") or [] if isinstance(x, dict)][:10],
                 "from": it.get("peer", ""), "who": str(it.get("name") or body.get("name") or "")[:40]}
+        rem = body.get("rem") if isinstance(body.get("rem"), dict) else None
+        if rem and not item["out"] and not any(x.get("mid") == item["mid"] for x in self.st["hist"].get(gid) or []):
+            item["rem"] = {"at": _int(rem.get("at")), "rid": self._remind(g, rem, item["who"])}   # «Лира в группе»: напомнит и здесь
         if not self._add(gid, item) or item["out"]:
             return 0
         name = f"{(item['who'] or 'Кто-то').split()[0]} в «{g.get('name') or 'группе'}»"
@@ -1197,6 +1223,17 @@ class Close:
     def recent(self, who="", n=8):
         with self._lock:
             people = list(self.st["people"])
+        g = who and (self.group_of(who) or (None if match_name(who, people) else self.group_match(who)))
+        if g:                                           # «что ответили в группе Семья?» — «кто что берёт?» Лира собирает ответы
+            n = max(n, 20)
+            lines = [f"{time.strftime('%d.%m %H:%M', time.localtime(m.get('ts', 0) / 1000))} {'вы' if m.get('out') else (m.get('who') or 'кто-то')}: "
+                     f"{m.get('t') or ''}" + (f" [файлы: {', '.join(x.get('name', '') for x in m.get('f') or [])}]" if m.get("f") else "")
+                     for m in (self.st["hist"].get(g["gid"]) or [])[-n:]]
+            with self._lock:
+                self.st["unread"].pop(g["gid"], None)
+                self._save()
+            return (f"Группа «{g['name']}» (участники: {', '.join(m.get('name', '') for m in g.get('members') or [])}):\n" + "\n".join(lines)) if lines \
+                else f"В группе «{g['name']}» сообщений пока нет."
         ps = [self.person(who)] if who else people
         out = []
         for p in ps:

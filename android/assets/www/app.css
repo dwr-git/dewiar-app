@@ -1502,3 +1502,43 @@ body.light .clfwd-card, body.neu.light .clfwd-card { background: #f4f6fb; }
 .clfwd-card .ib.soft { flex: none; }
 .clh > div[style*="flex:1"] b, .clh > div[style*="flex:1"] small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 body .clview .cla-wipe { margin-top: 22px; background: rgba(255,255,255,.08); color: #ff9a9a; box-shadow: none; }
+.grrem { align-self: flex-start; font-size: 12.5px; font-weight: 600; padding: 4px 9px; border-radius: 9px; background: rgba(255,255,255,.14); }
+.clm:not(.out) .grrem { background: rgba(127,127,140,.16); }
+
+/* «Мой месяц» на телефоне (0.61): «Всё» → «Мой месяц» */
+.a-month .ai { background: linear-gradient(140deg, #8fe0c4, #2fb7a0); box-shadow: 0 8px 18px -10px rgba(47,183,160,.9); }
+.mon-nav { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.mon-nav b { flex: 1; text-align: center; font-size: 17px; }
+.mon-nav .ib[disabled] { opacity: .35; }
+.mon-sts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+.mon-sts > div { display: flex; flex-direction: column; padding: 14px 16px; border-radius: 18px; background: var(--frost); }
+.mon-sts b { font-size: 34px; font-weight: 300; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.mon-sts span { font-size: 13.5px; font-weight: 600; } .mon-sts small { color: var(--muted); font-size: 12px; }
+#sh-month h3 { margin: 16px 2px 8px; }
+.mon-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.mon-cal u { text-decoration: none; text-align: center; color: var(--muted); font-size: 11.5px; }
+.mon-cal i { aspect-ratio: 1; border-radius: 9px; display: grid; place-items: center; font-style: normal; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mon-cal .lv0 { background: rgba(127,127,140,.12); }
+.mon-cal .lv1 { background: color-mix(in srgb, var(--accent, #7c84f0) 30%, transparent); color: var(--ink); }
+.mon-cal .lv2 { background: color-mix(in srgb, var(--accent, #7c84f0) 55%, transparent); color: #fff; }
+.mon-cal .lv3 { background: color-mix(in srgb, var(--accent, #7c84f0) 78%, transparent); color: #fff; font-weight: 700; }
+.mon-cal .lv4 { background: var(--accent, #7c84f0); color: #fff; font-weight: 700; }
+.mon-top { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mon-top li { position: relative; padding-left: 26px; font-size: 15px; }
+.mon-top li::before { content: ""; position: absolute; left: 4px; top: 5px; width: 11px; height: 6px; border: solid #3fc48a; border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.mon-bar { display: flex; gap: 2px; height: 10px; border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+.mon-cats { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.mon-cats li { display: flex; align-items: center; gap: 8px; } .mon-cats b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.mon-cats li > i { width: 10px; height: 10px; border-radius: 3px; }
+#sh-month .c0 { background: #6a6cf0; } #sh-month .c1 { background: #f2a93b; } #sh-month .c2 { background: #2fb7a0; }
+
+/* «Для старших» на телефоне (senior.js, 0.62): крупнее и проще */
+body.senior { zoom: 1.12; }
+.a-senior .ai { background: linear-gradient(140deg, #ffb3c7, #ff6f91); box-shadow: 0 8px 18px -10px rgba(255,111,145,.9); }
+.srmed { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--frost-hi); }
+.srmed span { flex: 1; min-width: 0; } .srmed b { display: block; font-size: 15px; } .srmed small { color: var(--muted); font-size: 12.5px; }
+.srck { width: 58px; padding: 3px 6px; border-radius: 8px; border: 0; background: var(--frost); color: var(--ink); font: inherit; font-size: 13px; text-align: center; }
+#sh-senior h3 { margin: 18px 2px 8px; }
+.row2 .grname { min-width: 0; }
+.srmed em { display: block; font-style: normal; font-size: 12.5px; color: #e5a43a; margin-top: 2px; } .srmed em.ok { color: #2fb67e; }
+body.senior .sheet { max-height: 73vh; } body.senior .sheet.tall { height: 78.5vh; max-height: 78.5vh; }   /* zoom 1.12 умножает и vh — лист не выше прежнего */

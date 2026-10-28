@@ -4,7 +4,7 @@
    «без движения N дн.»; нажали — этапы одной кнопкой, «Открыть клиента», «Удалить». В карточке клиента — его сделки и
    «+ Сделка». Оплачено — в доходы «Денег» (переключатель «Оплаченное — в доходы»). Ядро: clients_deals,
    clients_deal_income {on}, client_deal_add / client_deal_set / client_deal_del. */
-let DL = { board: null, open: "", adding: false };
+let DL = { board: null, open: "", adding: false, rem: null };      // rem — черновик «Напомнить об оплате» {did, cid, to, subject, body, mail}
 const DL_ST = { lead: "Заявка", offer: "Предложение", invoice: "Счёт", paid: "Оплачено", lost: "Отказ" };
 const DL_NEXT = { lead: "offer", offer: "invoice", invoice: "paid" };
 const DL_NEXT_TXT = { lead: "Отправили предложение", offer: "Выставили счёт", invoice: "Оплачено" };
@@ -28,7 +28,8 @@ function dlRender() {
     + `<div class="dl-stat${b.n_overdue ? " late" : ""}"><small>Нам должны</small><b>${escH(dlSums(b.owed))}</b><span>${owedN ? `${owedN} ${plural(owedN, "счёт", "счёта", "счетов")}` : "выставленных счетов нет"}${b.n_overdue ? ` · срок прошёл: ${escH(dlSums(b.overdue))}` : ""}</span></div>`
     + `<div class="dl-stat${b.stuck ? " warn" : ""}"><small>Зависли</small><b>${b.stuck}</b><span>${b.stuck ? "без движения неделю и дольше" : "всё движется"}</span></div>`
     + `<div class="dl-stat ok"><small>Оплачено за 30 дней</small><b>${escH(dlSums(b.paid30))}</b><span><label class="dl-inc"><span class="tg"><input type="checkbox" id="dl-inc"${b.income ? " checked" : ""}><i></i></span>и в доходы «Денег»</label></span></div></div>`
-    + (DL.adding ? dlAddHtml() : `<button class="btn primary dl-new" id="dl-new">+ Сделка</button>`)
+    + (DL.adding ? dlAddHtml() : `<div class="dl-tools"><button class="btn primary dl-new" id="dl-new">+ Сделка</button><button class="btn" id="dl-csv" title="Все сделки — таблицей для Excel (Клиенты/Сделки ….csv)">Выгрузить в таблицу</button></div>`)
+    + (DL.rem ? dlRemHtml(DL.rem) : "")
     + `<div class="dl-board">${b.cols.filter(c => c.stage !== "lost").map(c => `<div class="dl-col s-${c.stage}" role="group" aria-label="${escH(c.name)}">`
       + `<header><b>${escH(c.name)}${c.stage === "paid" ? " · 30 дней" : ""}</b><span>${c.items.length}</span></header><p class="dl-csum">${Object.keys(c.sum).length ? escH(dlSums(c.sum)) : "&nbsp;"}</p>`
       + (c.items.length ? c.items.map(dlCard).join("") : `<p class="dl-empty">${{ lead: "Новые заявки — голосом: «Ромашка хочет 200 коробок»", offer: "Отправили КП — здесь", invoice: "Счёт выставлен — ждём оплату", paid: "Оплаченное за месяц" }[c.stage]}</p>`)
@@ -43,9 +44,19 @@ function dlCard(d) {
     : d.stage === "invoice" && d.due ? `<em>до ${escH(dlDate(d.due))}</em>` : "";
   const acts = !open ? "" : `<div class="dl-acts">${DL_NEXT[d.stage] ? `<button class="btn small primary" data-st="${DL_NEXT[d.stage]}">${DL_NEXT_TXT[d.stage]}</button>` : ""}`
     + Object.keys(DL_ST).filter(s => s !== d.stage && s !== DL_NEXT[d.stage]).map(s => `<button class="btn small" data-st="${s}">${DL_ST[s]}</button>`).join("")
+    + (d.stage === "invoice" ? `<button class="btn small${d.overdue ? " primary" : ""}" data-rem>Напомнить об оплате</button>` : "")
     + `<button class="btn small ghost" data-edit>Сумма и срок</button><button class="btn small ghost" data-cl>Клиент</button><button class="btn small ghost danger" data-del>Удалить</button></div>`;
+  const rem = d.reminded ? `<em class="rem">напомнили ${escH(new Date(d.reminded * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }))}</em>` : "";
   return `<div class="dl-card${open ? " open" : ""}${d.overdue ? " late" : ""}" data-id="${escH(d.id)}" data-cid="${escH(d.cid)}"><button class="dl-tap" aria-expanded="${open}">`
-    + `<b>${escH(d.title)}</b><span>${escH(d.client)}</span><span class="dl-amt">${d.amount ? escH(dlMoney(d.amount, d.cur)) : "сумма не указана"}</span>${flag}</button>${acts}</div>`;
+    + `<b>${escH(d.title)}</b><span>${escH(d.client)}</span><span class="dl-amt">${d.amount ? escH(dlMoney(d.amount, d.cur)) : "сумма не указана"}</span>${flag}${rem}</button>${acts}</div>`;
+}
+/* «Напомнить об оплате»: черновик письма — правится здесь; «Отправить письмом» (почта подключена) или «Скопировать» */
+function dlRemHtml(r) {
+  return `<div class="dl-rem" id="dl-rem"><h3>Напомнить об оплате — ${escH(r.name || "")}</h3><label class="f"><span>Кому</span><input id="dl-rto" type="email" placeholder="почта клиента" value="${escH(r.to)}"></label>`
+    + `<label class="f"><span>Тема</span><input id="dl-rsub" type="text" value="${escH(r.subject)}"></label>`
+    + `<label class="f"><span>Письмо</span><textarea id="dl-rbody" rows="10">${escH(r.body)}</textarea></label>`
+    + `<div class="actions" style="margin:6px 0 0">${r.mail ? `<button class="btn primary small" id="dl-rsend">Отправить письмом</button>` : ""}<button class="btn small${r.mail ? "" : " primary"}" id="dl-rcopy">Скопировать</button><button class="btn small ghost" id="dl-rx">Отмена</button></div>`
+    + (r.mail ? "" : `<p class="hint" style="margin:6px 0 0">Почта не подключена — скопируйте текст в мессенджер клиента. Подключить: «Подключение» → «Почта».</p>`) + `</div>`;
 }
 function dlAddHtml() {
   const opts = (CR.list || []).map(c => `<option value="${escH(c.id)}">${escH(c.name)}${c.company && c.company !== c.name ? " («" + escH(c.company) + "»)" : ""}</option>`).join("");
@@ -75,6 +86,23 @@ function dlBind() {
     const due = await askText("Оплатить до (например: 2026-11-05, «до пятницы»; пусто — без срока)", d.due || "", { ok: "Сохранить" }); if (due === null || due === undefined) return;
     try { await core.call("client_deal_set", { id: c.dataset.cid, did: c.dataset.id, amount: amt, due }); dlLoad(); } catch (e) { toast(e.message, 3500); }
   });
+  $$("#dl-wrap .dl-card [data-rem]").forEach(b => b.onclick = async () => {
+    const c = b.closest(".dl-card");
+    try { DL.rem = Object.assign(await core.call("client_deal_remind", { id: c.dataset.cid, did: c.dataset.id }), { did: c.dataset.id, cid: c.dataset.cid }); dlRender(); const t = $("#dl-rbody"); if (t) t.focus(); }
+    catch (e) { toast(e.message, 3500); }
+  });
+  const rx = $("#dl-rx"); if (rx) rx.onclick = () => { DL.rem = null; dlRender(); };
+  const rs = $("#dl-rsend"); if (rs) rs.onclick = async () => { rs.disabled = true;
+    try { await core.call("client_deal_remind_send", { id: DL.rem.cid, did: DL.rem.did, to: $("#dl-rto").value.trim(), subject: $("#dl-rsub").value, body: $("#dl-rbody").value });
+      toast("Напоминание отправлено — отметила в истории клиента", 3500); DL.rem = null; DL.open = ""; dlLoad(); }
+    catch (e) { toast(e.message, 4500); rs.disabled = false; } };
+  const rc = $("#dl-rcopy"); if (rc) rc.onclick = async () => {
+    try { await navigator.clipboard.writeText($("#dl-rbody").value); } catch (e) { }
+    await core.call("client_deal_remind_send", { id: DL.rem.cid, did: DL.rem.did, how: "copy" }).catch(() => { });
+    toast("Текст скопирован — вставьте в мессенджер клиента", 3500); DL.rem = null; DL.open = ""; dlLoad(); };
+  const cv = $("#dl-csv"); if (cv) cv.onclick = async () => {
+    try { const r = await core.call("clients_deals_export"); toast(`Сделок: ${r.n} — «${r.path}»`, 4000); core.call("ws_open", { path: r.path }).catch(() => { }); }
+    catch (e) { toast(e.message, 3500); } };
   $$("#dl-wrap .dl-card [data-cl]").forEach(b => b.onclick = () => { CR.cur = b.closest(".dl-card").dataset.cid; dlTab("list"); });
   $$("#dl-wrap .dl-card [data-del]").forEach(b => b.onclick = async () => {
     const c = b.closest(".dl-card"); if (!await ask("Удалить сделку? В истории клиента записи останутся.", { ok: "Удалить", danger: true })) return;

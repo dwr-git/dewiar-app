@@ -542,6 +542,7 @@ let bugPreview = "";
 function bugShow(preview) {
   bugPreview = preview || "";
   const img = $("#bug-img"); img.hidden = !bugPreview; if (bugPreview) img.src = bugPreview;
+  if ($("#bug-note")) $("#bug-note").hidden = !bugPreview;      // №387: видно превью — это не то, что уйдёт
   $("#bug-empty").hidden = !!bugPreview; $("#bug-use").checked = !!bugPreview; $("#bug-use").disabled = !bugPreview;
   $("#bug-shot").classList.remove("off");
 }
