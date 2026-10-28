@@ -63,7 +63,7 @@ with sync_playwright() as p:
     ok(r["weakOff"][0] is False and r["saver"][0] is True and "экономия батареи" in r["saver"][6] and r["manual"][0] is True
        and "вручную" in r["manual"][6] and r["back"][0] is False,
        f"«никогда» — выключен даже на слабом; экономия батареи — включён; «всегда» — включён: {r['weakOff'][0]}, {r['saver']}, {r['manual']}")
-    r = pg.evaluate("""() => { window._dev = { ram_mb: 2048 }; S.lite = "auto"; openSettings("more"); const sel = document.getElementById("ap-lite");
+    r = pg.evaluate("""() => { window._dev = { ram_mb: 2048 }; S.lite = "auto"; openSettings("lite"); const sel = document.getElementById("ap-lite");
       const out = [sel && sel.value, (document.getElementById("lite-now") || {}).textContent || ""];
       sel.value = "off"; sel.onchange(); out.push(S.lite, liteOn(), document.getElementById("lite-now").textContent); closeSheets(true); return out; }""")
     ok(r[0] == "auto" and "Сейчас включён: памяти 2 ГБ" in r[1] and r[2:4] == ["off", False] and "Сейчас выключен" in r[4],

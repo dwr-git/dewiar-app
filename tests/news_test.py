@@ -119,7 +119,7 @@ with sync_playwright() as pw:
     pg.click(".nwtry"); pg.wait_for_timeout(300)
     ok(pg.evaluate("_asked.length") == 1 and not pg.evaluate("document.getElementById('sh-news').classList.contains('on')"), f"«Попробовать» — Лира слышит фразу: {pg.evaluate('_asked')}")
     ok(pg.evaluate("newsCheck()") is False, "второй раз — не показывает")
-    pg.evaluate("() => openSettings('more')"); pg.wait_for_timeout(400)
+    pg.evaluate("() => openSettings('about')"); pg.wait_for_timeout(400)
     pg.click("#news-open"); pg.wait_for_timeout(500)
     ok(pg.evaluate("document.getElementById('sh-news').classList.contains('on') && document.querySelectorAll('#news-body .nwi').length === newsList('', JSON.parse(D.info()).version).reduce((a, r) => a + r.items.length, 0) && document.querySelectorAll('#news-body .nwi').length >= 3"), "«Ещё» → «Что нового» — открывает с прошлыми выпусками")
     ok(not errs, f"телефон без ошибок: {errs[:2]}")

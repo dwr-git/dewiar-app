@@ -72,7 +72,7 @@ with sync_playwright() as p:
     pg.evaluate("() => listen()"); pg.wait_for_timeout(300)
     ok(pg.evaluate("sttSysUntil") == 0 and "Не получилось услышать" in pg.evaluate("document.querySelector('#bot').textContent"), "ошибка 500 — не про талеры: как раньше")
     # настройки: значок
-    pg.evaluate("() => openSettings('more')"); pg.wait_for_timeout(300)
+    pg.evaluate("() => openSettings('widget')"); pg.wait_for_timeout(300)
     W = pg.evaluate("() => [!!document.querySelector('#wg-on'), document.querySelector('#wg-on').checked, !!document.querySelector('#wg-pin')]")
     ok(W == [True, True, True], f"настройки: значок «Записать» включён по умолчанию, кнопка «Добавить на рабочий стол»: {W}")
     pg.click("#wg-pin"); pg.wait_for_timeout(100)

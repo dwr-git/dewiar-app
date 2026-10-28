@@ -474,7 +474,8 @@ const NETLIKE = /network|timeout|timed out|сеть|интернет|облак�
 window.addEventListener("error", (e) => { if (e.message && !(/^Script error\.?$/i.test(e.message) && !e.filename)) problem("js:" + e.message, `${e.message} (${String(e.filename || "").split("/").pop()}:${e.lineno || 0})`, e.error); });
 window.addEventListener("unhandledrejection", (e) => {
   const m = String((e.reason && e.reason.message) || e.reason || "");
-  if (m && !NETLIKE.test(m)) problem("promise:" + m.slice(0, 80), "Promise: " + m, e.reason);
+  // «No Listener: tabs:outgoing.message.ready», «Extension context invalidated» — сообщения расширений браузера, не наши (пакет 28.10)
+  if (m && !NETLIKE.test(m) && !/No Listener: tabs:|Extension context|chrome-extension:|moz-extension:|runtime\.lastError/i.test(m)) problem("promise:" + m.slice(0, 80), "Promise: " + m, e.reason);
 });
 /* Сбои связи с мозгом: копятся (pref net_inc) и, как только связь вернулась, уходят разработчику одним отчётом —
    если отчёты разрешены (S.report.auto), не чаще раза в 6 часов. Так видно, что это было: слабая связь или сервер. */
@@ -766,7 +767,7 @@ async function bugQuick(text) {
     note = n;
   }
   try { const r = await complaintSend(note, S.who, false, "голосом"); return { say: gfix(`Передал разработчику — жалоба №${r.id}. Когда ответят или исправят, скажу. Спасибо, что помогаете!`) }; }
-  catch (e) { return { say: `Не получилось отправить: ${e.message}. Можно в настройках: «Ещё» → «Сообщить о проблеме».` }; }
+  catch (e) { return { say: `Не получилось отправить: ${e.message}. Можно в настройках: «Настройки» → «Сообщить о проблеме».` }; }
 }
 setTimeout(async function pulseTick() {
   try { if (Date.now() - (+prefGet("pulse_at") || 0) > 6 * 36e5 - 6e4 || (hLoad().starts || []).length) await pulseSend(); } catch (e) { }
@@ -1017,7 +1018,7 @@ function applyPersona() {
   $("#who-name").textContent = p.name;
   $("#who-img").src = p.avatar || miniOrb(p);
   const style = p.avatar && p.style !== "aura" ? "photo" : p.style;
-  // портрет сдержанно (белый край вместо цветного кольца), голос — лучами, как на компьютере; тема — «Ещё» → «Оформление»
+  // портрет сдержанно (белый край вместо цветного кольца), голос — лучами, как на компьютере; тема — «Настройки» → «Оформление»
   if (!orb) { orb = new DewiarEntity($("#orb"), { style, color: p.color, image: p.avatar || null, plate: true, live: p.live || "" }); orb.set({ audible: false }); applyLook(true); liteApply(); tiltSync(); }
   else orb.configure({ style, color: p.color, image: p.avatar || null, live: p.live || "" });
   orb.set({ state: state === "idle" ? "idle" : state });
@@ -1743,7 +1744,7 @@ function privacyRule() {
   const P = window.DEWIAR_PRIVACY; if (!P) return "";
   return "ДАННЫЕ И КОНФИДЕНЦИАЛЬНОСТЬ. Спросят, где хранятся данные, кто видит разговоры, как защищены персональные данные, — ответь спокойно и по сути, своими словами, в 2–4 предложениях, из этих фактов: "
     + P.items.map(([t, x]) => `${t}: ${x}`).join(" ") + ` Сейчас у этого пользователя ты думаешь ${privacyWhere()}; синхронизация ${S.sync.on && syncChan() ? "включена" : "выключена"}.`
-    + " Подробно — в настройках («Ещё» → «Ваши данные»). Не выдумывай того, чего здесь нет: сертификатов, законов, сроков хранения.";
+    + " Подробно — в настройках («Настройки» → «Ваши данные»). Не выдумывай того, чего здесь нет: сертификатов, законов, сроков хранения.";
 }
 /* Веб-версия (браузер на iPhone, Mac, любом компьютере): чего браузер не умеет — инструментов у модели нет (WEB_NO_TOOLS),
    и она честно говорит, где это есть, а не «звоню» в пустоту. */
@@ -1828,6 +1829,8 @@ const isOllama = () => S.llm.kind === "ollama";
 const ollamaRoot = () => llmBase().replace(/\/v1$/, "");
 function llmHeaders() { const h = { "Content-Type": "application/json" }; if (S.llm.api_key) h.Authorization = "Bearer " + S.llm.api_key; if (/openrouter/.test(llmBase())) { h["HTTP-Referer"] = "https://dewiar.pro"; h["X-Title"] = "Dewiar"; } return h; }
 var lastPics = null;                               // последние присланные фото: {urls, at} — только в памяти
+let lastDocs = null;                               // текстовые вложения прошлого хода (№386): спросят о файле — приложим снова
+const DOC_REF_RX = /(прикреп|вложени|файл|документ|json|csv|таблиц|в нём|в нем|в ней|из него|прочита|разбер)/i;
 const PIC_KEEP_MS = 20 * 60e3, PIC_REF_RX = /(картинк|скрин|фото|снимк|снимок|изображени|рисун|прикреп|вложени|на нём|на нем|на ней|на экране|файл)/i;
 let modelOnce = "";                               // модель на один запрос (снимок — модели со зрением)
 async function resolveModel() {
@@ -2356,6 +2359,15 @@ async function ask(text, opts = {}) {
     last.content = pics.length ? [{ type: "text", text: body + (pics.length > 1 ? `\n(фото: ${pics.length})` : "") }, ...pics.map(a => ({ type: "image_url", image_url: { url: a.url } }))] : body;
     if (pics.length) { modelOnce = await visionModel(); lastPics = { urls: pics.map(a => a.url), at: Date.now() }; }
     plog("info", `📎 вложения: ${att.map(a => a.kind === "image" ? "фото" : a.name).join(", ")}`);
+    if (docs.length) lastDocs = { docs, at: Date.now() };
+  } else if (!opts.hidden && lastDocs && Date.now() - lastDocs.at < PIC_KEEP_MS && DOC_REF_RX.test(text)) {
+    // №386 (28.10): прислал JSON-файл, потом «а почему ты не можешь прочитать вложение?» — а в истории файла нет (только
+    // слова), и модель отвечала «вижу только ссылку». Говорят о присланном файле — прикладываем его текст снова
+    const last = msgs[msgs.length - 1];
+    last.content = String(last.content) + "\n\n(Файлы из прошлого сообщения пользователя — прикладываю снова; они у тебя есть, читай их.)"
+      + lastDocs.docs.map(d => `\n\n[Файл «${d.name}»${d.cut ? ", начало" : ""}]\n${d.text}`).join("");
+    lastDocs.at = Date.now();
+    plog("info", "📎 говорят о присланном файле — прикладываю его снова");
   } else if (!opts.hidden && lastPics && Date.now() - lastPics.at < PIC_KEEP_MS && PIC_REF_RX.test(text)) {
     // отчёт №110 (19.10): прислал скриншот, спросил — потом «посмотри внимательно, я прикрепил» — а в истории картинки
     // нет (там только текст), и модель честно её не видела. Говорят о присланном фото — прикладываем его снова
@@ -2914,7 +2926,7 @@ async function quick(text) {
         ["doodle", /каляк/, "«Каляку»"], ["hop", /выше облаков|прыгалк|попрыгунчик|тимош/, "«Выше облаков»"],
         ["pinball", /пинбол|флиппер/, "«Звёздный пинбол»"]];
       const g = GM.find(([, rx]) => rx.test(t));
-      if (!feat("games")) return { say: "«Досуг» выключен. Включить — «Настройки» → «Ещё» → «Возможности»." };
+      if (!feat("games")) return { say: "«Досуг» выключен. Включить — «Настройки» → «Возможности»." };
       setTimeout(() => playOpen(g ? g[0] : ""), 400);
       return { say: g ? `Открываю ${g[2]}.` : "Давайте! Выбирайте игру." };
     } }
@@ -3223,7 +3235,7 @@ function notCloseNote(ask) {
   if (!m) return "";
   let people = []; try { people = clLoad().people || []; } catch (e) { }
   if (people.length && clMatch(m[1], people)) return "";
-  return ` Человека «${m[1]}» нет в «Близких» Dewiar — скажи об этом одной фразой: сообщение открыто в приложении, получателя он выберет сам; пригласить в «Близкие» можно в «Ещё» → «Близкие».`;
+  return ` Человека «${m[1]}» нет в «Близких» Dewiar — скажи об этом одной фразой: сообщение открыто в приложении, получателя он выберет сам; пригласить в «Близкие» можно в «Настройки» → «Близкие».`;
 }
 /* Мини-программа — только когда просили программу, страницу, игру… Экзамены: «нарисуй схему» — HTML-программа вместо схемы;
    «составь список из пяти идей подарка» — программа «на экране» вместо списка в ответе. -> отказ для модели или "" */
@@ -5516,7 +5528,7 @@ function playShelf() {
   $$("#play-body .ag").forEach(b => b.onclick = () => gameOpen(b.dataset.game));
 }
 function playOpen(game) {
-  if (!feat("games")) { toast("«Досуг» выключен — включить: «Настройки» → «Ещё» → «Возможности»", 4000); return false; }
+  if (!feat("games")) { toast("«Досуг» выключен — включить: «Настройки» → «Возможности»", 4000); return false; }
   playShelf(); openSheet("#sh-play");
   const g = game && window.DewiarArcade && DewiarArcade.find(game);
   if (g && g.pc) toast(`«${g.name}» — пока только на компьютере: телефону эта игра тяжела`, 4500);
@@ -5544,7 +5556,7 @@ $("#b-play").onclick = () => playOpen("");
    это «Близкие» целиком (переписка и звонки), «Рядом» и «Встречи» — лишь вкладки внутри. Теперь у «Близких» свой
    переключатель (прячет сердечко), а вкладки — под ним, отступом. */
 function featApply() { $("#b-close").hidden = !feat("close"); if (!feat("close") && $("#sh-close.on")) closeSheets();
-  $("#b-play").hidden = !feat("games"); document.body.classList.toggle("has-play", feat("games")); if (!feat("games") && gameOn()) gameClose(false); }
+  $("#b-play").hidden = true; /* 0.60: «Досуг» — в «Всё» */ document.body.classList.remove("has-play"); if (!feat("games") && gameOn()) gameClose(false); }
 featApply();
 /* Объявления для всех (24.10, владелец: «чтобы я для всех мог опубликовать, а у всех это на экранах всплыло»): кабинет →
    «Новости», здесь — ?p=/news без ключа раз в полчаса, при запуске и из уведомления службы «Близких» (CloseLive). Новое
@@ -5718,7 +5730,38 @@ const ICON = {
 };
 let setTab = "brain";
 function openSettings(tab) { if (kidsLocked()) { kidsPin(() => openSettings(tab)); return; } if (!$("#sh-set").classList.contains("on")) bugSnapTake(); setTab = tab || setTab; renderSettings(); openSheet("#sh-set"); }
-$("#b-set").onclick = () => openSettings();
+$("#b-set").onclick = () => openSettings("menu");
+/* «Всё» (0.60; владелец 28.10: «сверху иконок многовато»): Досуг, Душа, Работа, Идеи, обучение — плитками в одном листе,
+   как «Главная» на компьютере; на панели остались звук, «Близкие», день, «Всё» и настройки. */
+const APPS_IC = {
+  play: '<path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/>',
+  soul: '<path d="M10.5 2.8l1.9 5.5 5.6 1.9-5.6 1.9-1.9 5.6-1.9-5.6L3 10.2l5.6-1.9z"/><path d="M18.5 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/>',
+  work: '<rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5M3 12.5h18"/>',
+  ideas: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2V16h5v-.1c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  tricks: '<path d="M12 3.5l2.4 5.2 5.6.6-4.2 3.8 1.2 5.5L12 15.8l-5 2.8 1.2-5.5L4 9.3l5.6-.6z"/>',
+  course: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11"/>',
+  qa: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 16.8v.01"/>',
+  kids: '<circle cx="12" cy="13" r="7.5"/><circle cx="9.3" cy="12" r="1.6"/><circle cx="14.7" cy="12" r="1.6"/><path d="M7 6.5 5.5 3.5M17 6.5l1.5-3M10.8 15.5h2.4"/>',
+  news: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>' };
+function appsHtml() {
+  const t = [];
+  if (feat("games")) t.push(["play", "Досуг", "милые игры"]);
+  if (kidsOn()) return `<div class="apps">${t.concat([["tricks", "Что я умею", "фразы-примеры"], ["kids", "Детский режим", "для взрослых"]]).map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
+  t.push(["soul", "Душа", "дневник и характер"]);
+  if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "по коду"]);
+  if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
+  t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["qa", "Вопрос — ответ", "как сделать…"]);
+  t.push(["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
+  return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
+}
+function openApps() {
+  $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
+  $$("#apps-body [data-app]").forEach(b => b.onclick = () => { const k = b.dataset.app; closeSheets();
+    setTimeout(() => ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
+      ideas: () => openIdeas(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(),
+      news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")) }[k] || (() => { }))(), 60); });
+}
+$("#b-apps").onclick = () => openApps();
 $("#r-pp").onclick = () => { D.vibrate(12); if (radio.state().state === "paused") radio.resume(); else radio.pause(); };
 $("#r-x").onclick = () => { D.vibrate(12); radio.stop(); };
 
@@ -5759,11 +5802,68 @@ function ensureBrain() {
 function openBrain(w) { openSettings("brain"); if (w) setTimeout(() => { const t = $(`.tile[data-w="${w}"]`); if (t) t.click(); }, 250); }
 function startLogin() { openSettings("brain"); setTimeout(() => { const t = $('.tile[data-w="account"]'); if (t) t.click(); }, 250); }
 function brainName() { if (S.llm.cloud) return "Dewiar Облако"; return S.llm.base_url ? `${S.llm.name || S.llm.base_url.replace(/^https?:\/\//, "")}${S.llm.model ? " · " + S.llm.model : ""}` : "не подключён"; }
+/* Настройки (0.60; владелец 28.10: «сверху иконок многовато, а внутренние разделы перегружены — захожу в „Ещё“ и скроллю,
+   скроллю»): меню по группам — строка с иконкой и тем, что сейчас выбрано; нажали — одна страница со стрелкой «назад».
+   setTab — страница: menu | brain | voice | devices | look | sound | widget | lite | features | smart | telegram | assist |
+   hands | bug | perms | privacy | about. Старые имена («more», «about», «alarms») ведут в меню или на свою страницу. */
+const MORE_SECS = ["look", "sound", "widget", "lite", "features", "smart", "telegram", "assist", "hands", "bug", "perms", "privacy", "about"];
+const SET_PAGES = ["menu", "brain", "voice", "devices", ...MORE_SECS];
+const SET_ALIAS = { more: "menu", alarms: "sound", report: "bug", home: "smart", ha: "smart", tg: "telegram", sync: "devices" };
+const SET_IC = {
+  brain: '<path d="M9 4.5a3 3 0 0 0-3 3v.3A3 3 0 0 0 4 10.5a3 3 0 0 0 1 2.2A3 3 0 0 0 6.5 18 3 3 0 0 0 12 19V5.6A3 3 0 0 0 9 4.5zM15 4.5a3 3 0 0 1 3 3v.3a3 3 0 0 1 2 2.7 3 3 0 0 1-1 2.2A3 3 0 0 1 17.5 18 3 3 0 0 1 12 19"/>',
+  voice: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  devices: '<rect x="2.5" y="5" width="13" height="10" rx="1.8"/><path d="M6 19h6"/><rect x="15.5" y="9" width="6" height="11" rx="1.6"/>',
+  look: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 1.8-1 1.3-2-.6-1.3.3-2.5 1.7-2.5h1.5a4 4 0 0 0 4-4"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7.5" r="1"/>',
+  sound: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 20a1.9 1.9 0 0 0 3.4 0"/>',
+  widget: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><circle cx="12" cy="12" r="3.2"/>',
+  lite: '<path d="M13 2.5 5 13.5h6l-1 8 8-11h-6z"/>',
+  features: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><path d="M17 13.5v7M13.5 17h7"/>',
+  smart: '<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/>',
+  telegram: '<path d="M21 4.5 2.8 11.4l5.6 2 2.2 6.6 3.3-4.1 4.9 3.6z"/><path d="m8.4 13.4 8.9-6.3-6.7 8.3"/>',
+  assist: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5 11 15l4.5-5"/>',
+  hands: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5V4a1.5 1.5 0 0 1 3 0v8M14 12V6a1.5 1.5 0 0 1 3 0v8.5a6 6 0 0 1-6 6h-.5a6 6 0 0 1-4.9-2.6L3.8 14a1.5 1.5 0 0 1 2.4-1.8L8 14.5"/>',
+  bug: '<rect x="6.5" y="7" width="11" height="14.5" rx="5.5"/><path d="M8.8 7.6a3.2 3.2 0 0 1 6.4 0M12 11.5v10M6.5 12.5H2.5M21.5 12.5h-4M6.8 17.5 3 19.8M17.2 17.5l3.8 2.3"/>',
+  ideas: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2V16h5v-.1c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  perms: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>',
+  privacy: '<path d="M12 3.2 5 6v5.6c0 4.2 2.9 7.7 7 9.2 4.1-1.5 7-5 7-9.2V6z"/>',
+  about: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.01"/>',
+};
+const SET_NAMES = { menu: "Настройки", brain: "Мозг", voice: "Слух и голос", devices: "Устройства", look: "Оформление", sound: "Звук напоминаний",
+  widget: "Значок «Записать»", lite: "Лёгкий режим", features: "Возможности", smart: "Умный дом", telegram: "Telegram", assist: "Кнопка помощника",
+  hands: "Управлять приложениями", bug: "Сообщить о проблеме", perms: "Разрешения", privacy: "Ваши данные", about: "О приложении" };
+const setTitle = (k) => k === "privacy" && window.DEWIAR_PRIVACY ? DEWIAR_PRIVACY.title : SET_NAMES[k] || "Настройки";
+function setMenuHtml(info) {
+  const on = !!S.llm.base_url && !S.llm.trial, c = syncChan(), st = syncStatus;
+  const skin = (PHONE_SKINS.find(x => x.id === lookSkin()) || {}).name || "";
+  let snd = {}; try { snd = JSON.parse(D.alarmSound ? D.alarmSound() : "{}"); } catch (e) { }
+  const sndName = snd.id === "custom" ? (snd.custom || "свой звук") : ((ALARM_SOUNDS.find(x => x[0] === (snd.id || "signature")) || [])[1] || "");
+  const permsMissing = [MIC, NOTIF].filter(p => !D.has(p)).length + (D.exactAlarms && !D.exactAlarms() ? 1 : 0);
+  let wg = {}; try { wg = JSON.parse(D.widgetState ? D.widgetState() : "{}") || {}; } catch (e) { }
+  const sync = !c ? "не подключены" : !S.sync.on ? "синхронизация выключена" : st.ok === false ? "не синхронизировалось" : st.at ? "синхронизировано в " + pad(new Date(st.at).getHours()) + ":" + pad(new Date(st.at).getMinutes()) : c.home ? "по Wi-Fi" : "через dewiar.pro";
+  const fOn = ["games", "close"].filter(k => feat(k)).length;
+  const rows = [
+    ["Главное", [["brain", on ? "думает: " + brainName() : S.llm.trial ? "пробный разговор" : "не подключён", !on && !S.llm.trial],
+      ["voice", (S.tts.engine === "cloud" ? "голос Dewiar" : S.tts.engine === "eleven" ? "ElevenLabs" : S.tts.engine === "server" ? "свой сервер голоса" : "голос телефона") + " · скорость " + (+S.tts.rate || 1).toFixed(2)],
+      ["devices", sync, st.ok === false]]],
+    ["Вид и звук", [["look", skin], ...(D.web ? [] : [["sound", sndName], ["widget", wg.on === undefined ? "" : wg.on ? (wg.placed ? "на рабочем столе" : "включён") : "выключен"]]),
+      ["lite", liteOn() ? "включён" : S.lite === "off" ? "выключен" : "сам, по телефону"]]],
+    ["Подключения", [["features", fOn ? "включено " + fOn + " из 2" : "всё выключено"], ...(D.web ? [] : [["smart", S.home.token ? "Яндекс подключён" : haOn() ? "Home Assistant" : "не подключён"]]),
+      ["telegram", (S.tg || {}).linked ? "подключён" : "не подключён"], ...(D.web ? [] : [["assist", "долгое нажатие кнопки питания"], ["hands", ""]])]],
+    ["Помощь и связь", [["bug", (S.complaints || []).length ? "ваших жалоб: " + S.complaints.length : "снимок экрана и пара слов"], ...(kidsOn() ? [] : [["ideas", "предложить и проголосовать"]]),
+      ...(D.web ? [] : [["perms", permsMissing ? "нужно разрешить: " + permsMissing : "всё разрешено", permsMissing > 0]]), ["privacy", "что где хранится"],
+      ["about", "Dewiar " + (info.version || "") + (info.crash ? " · была ошибка" : ""), !!info.crash]]]];
+  return rows.map(([g, list]) => `<h3>${g}</h3><div class="card setmenu">${list.map(([k, sub, warn]) =>
+    `<button class="setrow" ${k === "ideas" ? 'id="ideas-open"' : `data-st="${k}"`}><span class="si s-${k}"><svg viewBox="0 0 24 24">${SET_IC[k] || ""}</svg></span>`
+    + `<span class="st"><b>${esc(k === "ideas" ? "Идеи Лиры" : setTitle(k))}</b>${sub ? `<small class="${warn ? "warn" : ""}">${esc(sub)}</small>` : ""}</span><svg class="chev" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></svg></button>`).join("")}</div>`).join("");
+}
 function renderSettings() {
-  if (!["brain", "devices", "voice", "more"].includes(setTab)) setTab = "more";   // «about», «alarms»… — раньше это и было «Ещё»
+  setTab = SET_ALIAS[setTab] || setTab;
+  if (!SET_PAGES.includes(setTab)) setTab = "menu";   // «more», «alarms»… — меню (0.60: вместо длинной ленты «Ещё»)
   const info = JSON.parse(D.info() || "{}");
   const h = [];
-  h.push(`<div class="tabs">${[["brain", "Мозг"], ["devices", "Устройства"], ["voice", "Слух"], ["more", "Ещё"]].map(([k, n]) => `<button data-st="${k}" class="${setTab === k ? "on" : ""}">${n}</button>`).join("")}</div>`);
+  if (setTab === "menu") h.push(setMenuHtml(info));
+  else h.push(`<div class="sethd"><button class="setback" data-st="menu" aria-label="Назад, ко всем настройкам"><svg viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></svg></button><h2>${esc(setTitle(setTab))}</h2></div>`);
+  $("#sh-set").classList.toggle("sub", setTab !== "menu");
   if (setTab === "brain") {
     if (loggedIn()) h.push(`<div class="card acc" id="acc-card"><div class="row2"><div class="acc-ava">${esc((S.account.login || "?").slice(0, 1).toUpperCase())}</div><div style="flex:1;min-width:0"><b>${esc(S.account.login)}</b>
       <small class="hint" style="margin:2px 0 0;display:block">Аккаунт ${esc(siteHost())}${S.account.problem ? " · " + esc(S.account.problem) : ""}</small></div><button class="btn" id="acc-out">Выйти</button></div>
@@ -5852,40 +5952,41 @@ function renderSettings() {
       <label class="f"><span>Слушать после ответа</span><select id="follow"><option value="ask">Только если ассистент спросил</option><option value="always">Всегда</option><option value="never">Нет</option></select></label>
       <div class="sw" style="margin-top:8px"><div>Сам замечает, что вы вернулись<small>Открыли приложение после перерыва — коротко скажет главное: что готово, что скоро; утром — сводка дня. Сказать нечего — промолчит.</small></div>
       <label class="tg"><input type="checkbox" id="wl-on" ${(S.welcome || {}).on !== false ? "checked" : ""}><i></i></label></div></div>`);
-  } else if (setTab === "more") {
+  } else if (MORE_SECS.includes(setTab)) {
+    const cab = [];                                   // «Этот телефон в кабинете» — в «О приложении», после версии
     const opt = (list, cur) => list.map(([v, n]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${n}</option>`).join("");
     // фон — плитками с живым образцом (тот же класс темы, что у экрана; кружок — материал её карточек), по группам
-    h.push(`<h3>Оформление</h3><div class="card"><div class="skins" role="radiogroup" aria-label="Тема">${
+    if (setTab === "look") h.push(`<div class="card"><div class="skins" role="radiogroup" aria-label="Тема">${
         PHONE_SKINS.map(x => `<button class="skm ${x.id === lookSkin() ? "on" : ""}" data-skin="${x.id}" role="radio" aria-checked="${x.id === lookSkin()}" title="${esc(x.group)} · ${esc(x.name)}"><i class="lk-prev skin-${x.id}"><b></b></i><span>${esc(x.name)}</span></button>`).join("")}</div>
       <label class="f" style="margin-top:6px"><span>Когда говорит</span><select id="ap-fx">${opt([["bars", "Лучи"], ["pulse", "Пульс"], ["wave", "Волна"]], lookFx())}</select></label>
       <div class="sw" style="margin-top:10px"><div>Портрет следит за наклоном<small class="hint" style="display:block;margin:2px 0 0">Наклоните телефон — персонаж чуть повернётся и посмотрит на вас. Камера не нужна.</small></div>
         <label class="tg"><input type="checkbox" id="ap-tilt" ${S.tilt === true ? "checked" : ""}><i></i></label></div></div>`);
     // «Возможности» (24.10): необязательное — по желанию; выключенное прячется, ничего не теряя
     const fsw = (id, k, t, x) => `<div class="sw" style="margin-top:8px"><div>${t}<small>${x}</small></div><label class="tg"><input type="checkbox" id="${id}" data-feat="${k}" ${feat(k) ? "checked" : ""}><i></i></label></div>`;
-    h.push(`<h3>Возможности</h3><div class="card"><p class="hint" style="margin:0 0 4px">Включите только то, чем пользуетесь, — остальное не будет мешать. Выключенное ничего не теряет.</p>
-      ${fsw("ft-games", "games", "Досуг — милые игры", "Сказки, головоломки, «Каляка», реверси против Лиры, аркады и «Выше облаков» с управлением наклоном; значок с джойстиком вверху или «Лира, давай поиграем»")}
+    if (setTab === "features") h.push(`<div class="card"><p class="hint" style="margin:0 0 4px">Включите только то, чем пользуетесь, — остальное не будет мешать. Выключенное ничего не теряет.</p>
+      ${fsw("ft-games", "games", "Досуг — милые игры", "Сказки, головоломки, «Каляка», реверси против Лиры, аркады и «Выше облаков» с управлением наклоном; «Всё» (значок вверху) → «Досуг» или «Лира, давай поиграем»")}
       ${fsw("ft-close", "close", "Близкие — сердечко вверху", "Переписка и звонки с родными и друзьями, их помощники. Выключите — сердечко пропадёт; переписка сохранится")}
       <div class="fsub${feat("close") ? "" : " off"}" id="ft-sub"><small>Вкладки внутри «Близких»</small>
       ${fsw("ft-near", "near", "Рядом", "Где близкие, если они сами делятся местом")}
       ${fsw("ft-meet", "meet", "Встречи", "Знакомства с теми, кто рядом")}
       ${fsw("ft-fam", "family", "Семья — общий бюджет", "Траты за месяц у всей семьи, общий лимит и платежи. Позовут в семью — включится само")}</div></div>`);
     liteApply();
-    h.push(`<h3>Лёгкий режим</h3><div class="card"><label class="f" style="margin-top:0"><span>Для слабых телефонов и экономии батареи</span><select id="ap-lite">${opt([["auto", "Сам, когда нужно"], ["on", "Всегда"], ["off", "Никогда"]], S.lite || "auto")}</select></label>
+    if (setTab === "lite") h.push(`<div class="card"><label class="f" style="margin-top:0"><span>Для слабых телефонов и экономии батареи</span><select id="ap-lite">${opt([["auto", "Сам, когда нужно"], ["on", "Всегда"], ["off", "Никогда"]], S.lite || "auto")}</select></label>
       <p class="hint" id="lite-now" style="margin:6px 2px 0">${liteOn() ? `Сейчас включён: ${esc(liteWhyNow)}.` : "Сейчас выключен."} Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут.</p></div>`);
     // звук напоминаний: свои мягкие мелодии (Sounds.java, res/raw), системный или свой файл; ▶ — послушать
     const snd = (() => { try { return JSON.parse(D.alarmSound ? D.alarmSound() : "{}"); } catch (e) { return {}; } })();
-    h.push(`<h3>Звук напоминаний</h3><div class="card"><p class="hint" style="margin-top:0">Мягко и сначала тихо — громкость прибавляется за 20 секунд.</p>
+    if (setTab === "sound") h.push(`<div class="card"><p class="hint" style="margin-top:0">Мягко и сначала тихо — громкость прибавляется за 20 секунд.</p>
       <div class="snds">${ALARM_SOUNDS.map(([id, n, sub]) => `<button class="snd ${id === (snd.id || "signature") ? "on" : ""}" data-snd="${id}"><i>${PLAY_SVG}</i><span><b>${n}</b><small>${sub}</small></span></button>`).join("")}
         <button class="snd ${snd.id === "custom" ? "on" : ""} ${snd.custom ? "" : "nofile"}" data-snd="custom"><i>${PLAY_SVG}</i><span><b>Свой звук</b><small id="snd-name">${snd.custom ? esc(snd.custom) : "Любая мелодия с телефона"}</small></span></button></div>
       <label class="btn w" id="snd-pick"><input type="file" id="snd-file" accept="audio/*" hidden>${snd.custom ? "Выбрать другой файл" : "Выбрать файл…"}</label><div class="res" id="snd-res"></div></div>`);
-    if (window.DEWIAR_PRIVACY) h.push(`<h3>${esc(DEWIAR_PRIVACY.title)}</h3><div class="card priv">${DEWIAR_PRIVACY.items.map(([t, x]) => `<p><b>${esc(t)}.</b> ${esc(x)}</p>`).join("")}</div>`);
-    h.push(`<h3>${D.web ? "Этот браузер" : "Этот телефон"} в кабинете</h3><div class="card"><p class="hint" style="margin-top:0">В кабинете облака (экзамен, здоровье) ${D.web ? "этот браузер" : "этот телефон"} —
+    if (setTab === "privacy" && window.DEWIAR_PRIVACY) h.push(`<div class="card priv">${DEWIAR_PRIVACY.items.map(([t, x]) => `<p><b>${esc(t)}.</b> ${esc(x)}</p>`).join("")}</div>`);
+    if (setTab === "about") cab.push(`<h3>${D.web ? "Этот браузер" : "Этот телефон"} в кабинете</h3><div class="card"><p class="hint" style="margin-top:0">В кабинете облака (экзамен, здоровье) ${D.web ? "этот браузер" : "этот телефон"} —
       <b>${esc((info.device || "Телефон") + " · " + (info.version || "") + " · №" + devId().slice(-4))}</b>. Нет в списке — нажмите «Отметиться в кабинете»: появится через минуту.</p>
       <button class="btn w" id="dev-ping">Отметиться в кабинете</button><div class="res" id="dev-res"></div></div>`);
     const perms = [[MIC, "Микрофон"], [NOTIF, "Уведомления (напоминания)"], [CONTACTS, "Контакты (звонки по имени)"], [CALLP, "Звонки без лишнего нажатия"]];
-    if (!kidsOn()) h.push(`<h3>Идеи Лиры</h3><div class="card idcard"><div class="row2"><span class="idbulb" aria-hidden="true">${IDEA_SVG}</span><p class="hint" style="margin:0;flex:1">Что Лире уметь дальше — решаем вместе: поддержите голосом нужное или предложите своё.</p></div>
+    if (false) h.push(`<h3>Идеи Лиры</h3><div class="card idcard"><div class="row2"><span class="idbulb" aria-hidden="true">${IDEA_SVG}</span><p class="hint" style="margin:0;flex:1">Что Лире уметь дальше — решаем вместе: поддержите голосом нужное или предложите своё.</p></div>
       <button class="btn w" id="ideas-open" style="margin-top:10px">Открыть идеи</button></div>`);
-    h.push(`<h3>Сообщить о проблеме</h3><div class="card" id="bug-card"><p class="hint" style="margin-top:0">Напишите пару слов — разработчик увидит их вместе со снимком экрана и журналом работы (без ключей и паролей), ответит сюда, а когда исправит — я скажу. Голосом тоже можно: «сообщи об ошибке: …».</p>
+    if (setTab === "bug") h.push(`<div class="card" id="bug-card"><p class="hint" style="margin-top:0">Напишите пару слов — разработчик увидит их вместе со снимком экрана и журналом работы (без ключей и паролей), ответит сюда, а когда исправит — я скажу. Голосом тоже можно: «сообщи об ошибке: …».</p>
       ${bugSnap && Date.now() - bugSnap.ts < 30 * 6e4 ? `<div class="bugsnap"><img src="data:image/jpeg;base64,${bugSnap.b64}" alt="Снимок экрана" id="bug-img"><label class="chk"><input type="checkbox" id="bug-use" checked><span>Приложить снимок экрана — каким он был до настроек</span></label></div>` : ""}
       <div class="bugpick" id="bug-pickbox">${bugPickHtml()}</div>
       <label class="f"><span>Что случилось</span><textarea id="rep-note" rows="3" maxlength="2000" placeholder="Например: «прошу другое радио — играет старое»"></textarea></label>
@@ -5896,13 +5997,21 @@ function renderSettings() {
       <label class="tg"><input type="checkbox" id="rep-auto" ${(S.report || {}).auto ? "checked" : ""}><i></i></label></div>
       <div class="sw"><div>Анонимный пульс для разработчика<small>Раз в несколько часов: версия, телефон, скорость запуска, сколько было сбоев — без разговоров, файлов и ключей</small></div>
       <label class="tg"><input type="checkbox" id="pulse-on" ${S.pulse !== false ? "checked" : ""}><i></i></label></div></div>
-      <h3>Кнопка помощника</h3><div class="card"><p class="hint" style="margin-top:0">Назначьте Dewiar помощником телефона — тогда долгое нажатие кнопки питания (или «Домой») сразу его слушает.
+      `);
+    if (setTab === "assist") h.push(`
+      <div class="card"><p class="hint" style="margin-top:0">Назначьте Dewiar помощником телефона — тогда долгое нажатие кнопки питания (или «Домой») сразу его слушает.
       Настройки → Приложения → По умолчанию → <b>Цифровой помощник</b> → Dewiar.</p><button class="btn w" id="assist">Открыть настройки помощника</button></div>
-      <h3>Управлять приложениями</h3><div class="card" id="hands-card">${handsCard()}</div>
-      <h3>Telegram</h3><div class="card" id="tg-card">${!tgOn() ? `<p class="hint" style="margin:0 0 10px">Бот Dewiar в Telegram подключается на компьютере: студия → «Подключение» → Telegram. Бот один для всех ваших устройств: пишите или присылайте голосовые — ответит компьютер, а когда он выключен — сервер Dewiar. На телефоне ничего настраивать не нужно.</p><button class="btn w" id="tg-bot" disabled>Открыть бота в Telegram</button>`
+      `);
+    if (setTab === "hands") h.push(`
+      <div class="card" id="hands-card">${handsCard()}</div>
+      `);
+    if (setTab === "telegram") h.push(`
+      <div class="card" id="tg-card">${!tgOn() ? `<p class="hint" style="margin:0 0 10px">Бот Dewiar в Telegram подключается на компьютере: студия → «Подключение» → Telegram. Бот один для всех ваших устройств: пишите или присылайте голосовые — ответит компьютер, а когда он выключен — сервер Dewiar. На телефоне ничего настраивать не нужно.</p><button class="btn w" id="tg-bot" disabled>Открыть бота в Telegram</button>`
         : (S.tg || {}).linked ? `<div class="row2"><span class="res ok" style="flex:1;margin:0">Подключён${S.tg.name ? ": " + esc(S.tg.name) : ""}${S.tg.bot ? " · @" + esc(S.tg.bot) : ""}</span><button class="btn" id="tg-off">Отключить</button></div>
           <p class="hint" style="margin:8px 0 0">Пишите боту или присылайте голосовые — ответит ${esc(persona().name)}. Заметки, списки и напоминания из Telegram появятся здесь, в «Мой день». Компьютер с Dewiar включён — отвечает он.</p>${S.tg.bot ? `<button class="btn w" id="tg-open" style="margin-top:8px">Открыть бота</button>` : ""}`
         : `<p class="hint" style="margin:0 0 10px">Пишите и присылайте голосовые боту Dewiar в Telegram — ассистент ответит, даже когда телефон убран: поставит напоминание, запишет заметку, ответит голосом.</p><button class="btn p w" id="tg-go">Подключить Telegram</button>`}<div class="res" id="tg-res"></div></div>
+      `);
+    if (setTab === "smart") h.push(`
       <h3>Умный дом Яндекса</h3><div class="card">${S.home.token ? `<div class="row2"><span class="res ok" style="flex:1" id="home-st">Подключён</span><button class="btn" id="home-off">Отключить</button></div>` :
       `<p class="hint" style="margin-top:0">Тот же дом, что у Алисы: «включи свет в спальне», «кондиционер на 22».</p>
       <p class="hint">Уже подключён на компьютере? Если телефон с ним связан (один аккаунт или «Добавить устройство»), дом появится здесь сам в течение нескольких минут. Иначе: студия → «Подключение» → «Умный дом Яндекса» → «На телефон» — и скажите здесь «отсканируй код».</p>
@@ -5914,24 +6023,41 @@ function renderSettings() {
       <p class="hint">Токен: в Home Assistant — профиль (кружок с вашим именем внизу слева) → вкладка «Безопасность» → «Долгосрочные токены доступа» → «Создать токен». Подключён на компьютере — телефон получит его сам (конвертом, только своим устройствам).</p>
       <label class="f"><span>Адрес Home Assistant</span><input id="ha-url" placeholder="http://192.168.1.20:8123" value="${esc((S.ha || {}).url || "")}"></label>
       <label class="f"><span>Долгосрочный токен</span><input id="ha-tok" type="password" placeholder="eyJ…"></label><button class="btn p w" id="ha-go">Подключить</button>`}<div class="res" id="ha-res"></div></div>`}
-      <h3>Значок «Записать»</h3><div class="card">${widgetCard()}</div>
-      <h3>Синхронизация</h3><div class="card">${syncCard()}</div>
-      <h3>Разрешения</h3><div class="card">${perms.map(([p, n]) => `<div class="sw"><div>${n}</div>${D.has(p) ? `<span class="res ok" style="margin:0">есть</span>` : `<button class="btn" data-perm="${p}">Разрешить</button>`}</div>`).join("")}
+      `);
+    if (setTab === "widget") h.push(`
+      <div class="card">${widgetCard()}</div>
+      `);
+    if (setTab === "__none") h.push(`
+      <div class="card">${syncCard()}</div>
+      `);
+    if (setTab === "perms") h.push(`
+      <div class="card">${perms.map(([p, n]) => `<div class="sw"><div>${n}</div>${D.has(p) ? `<span class="res ok" style="margin:0">есть</span>` : `<button class="btn" data-perm="${p}">Разрешить</button>`}</div>`).join("")}
       <div class="sw"><div>Точные будильники</div>${D.exactAlarms() ? `<span class="res ok" style="margin:0">есть</span>` : `<button class="btn" onclick="Dewiar.openSettings('alarms')">Разрешить</button>`}</div></div>
-      <h3>Что я умею</h3><div class="card"><p class="hint" style="margin:0 0 10px">Короткие фразы, которые я понимаю сразу: фонарик, радио, сканер кодов, таймер, план дня, «освободи место»… Нажмите любую — и я сделаю.</p>
+      `);
+    if (setTab === "__none") h.push(`
+      <div class="card"><p class="hint" style="margin:0 0 10px">Короткие фразы, которые я понимаю сразу: фонарик, радио, сканер кодов, таймер, план дня, «освободи место»… Нажмите любую — и я сделаю.</p>
         <button class="btn w p" id="tricks-open">Посмотреть</button></div>
+      `);
+    if (false) h.push(`
       ${kidsOn() ? "" : `<h3>Работа</h3><div class="card"><p class="hint" style="margin:0 0 10px">${wkJobs().length ? "Поручения: " + wkJobs().map(j => "«" + esc(j.team) + "»").join(", ") + ". Отдельно от личного; уйти можно в любой момент." : "Поручения с работы — отдельно от личного. Руководитель покажет печать Dewiar: наведите сканер, и поручения будут приходить сюда."}</p>
         <button class="btn w${wkJobs().length ? "" : " p"}" id="work-open">${wkJobs().length ? "Открыть «Работу»" : "Присоединиться по коду"}</button></div>`}
-      <h3>Детский режим</h3><div class="card"><p class="hint" style="margin:0 0 10px">${kidsOn() ? `Включён: говорит Совёнок Уго, сегодня ${kidsReport().used} из ${kidsLimit()} мин.` : "Ребёнок говорит с Совёнком Уго: сказки, загадки, «почему?» — только безопасное, время за день и отчёт вам. Выключить — только с PIN."}</p>
+      `);
+    if (setTab === "__none") h.push(`
+      <div class="card"><p class="hint" style="margin:0 0 10px">${kidsOn() ? `Включён: говорит Совёнок Уго, сегодня ${kidsReport().used} из ${kidsLimit()} мин.` : "Ребёнок говорит с Совёнком Уго: сказки, загадки, «почему?» — только безопасное, время за день и отчёт вам. Выключить — только с PIN."}</p>
         <button class="btn w${kidsOn() ? "" : " p"}" id="kids-open">${kidsOn() ? "Отчёт и настройки" : "Настроить"}</button></div>
-      <h3>Вопрос — ответ и курсы</h3><div class="card"><p class="hint" style="margin:0 0 10px">Ответы на «как…» — с примерами фраз, и короткие курсы: урок в день, пять минут. Или просто спросите Лиру: «как…»</p>
+      `);
+    if (setTab === "__none") h.push(`
+      <div class="card"><p class="hint" style="margin:0 0 10px">Ответы на «как…» — с примерами фраз, и короткие курсы: урок в день, пять минут. Или просто спросите Лиру: «как…»</p>
         <div class="row2"><button class="btn" id="qa-open" style="flex:1">Вопрос — ответ</button><button class="btn p" id="course-open" style="flex:1">Курсы</button></div></div>
-      <h3>О приложении</h3><div class="card"><div>Dewiar ${esc(info.version || "")} · ${D.web ? "в браузере" : "Android " + esc(info.android || "")}</div><small class="hint" style="margin:2px 0 0;display:block">${esc(info.device || "")}</small>
+      `);
+    if (setTab === "about") h.push(`
+      <div class="card"><div>Dewiar ${esc(info.version || "")} · ${D.web ? "в браузере" : "Android " + esc(info.android || "")}</div><small class="hint" style="margin:2px 0 0;display:block">${esc(info.device || "")}</small>
       <div class="res" id="upd-res"></div><button class="btn w" id="upd-check" style="margin-top:6px">Проверить обновление</button>
       <button class="btn w" id="news-open" style="margin-top:8px">Что нового</button></div>
       <details class="danger"><summary>Начать с чистого листа</summary><p class="hint">Ассистент забудет разговор и всё, что запомнил о вас: имя, привычки, просьбы. Дневник, душа персонажей, напоминания и заметки останутся. Отменить нельзя.</p>
       <button class="btn w" id="reset">Забыть разговор и память</button></details>
       ${info.crash ? `<h3>Последняя ошибка</h3><div class="card"><div class="crash">${esc(info.crash)}</div><div class="row2" style="margin-top:8px"><button class="btn" id="cr-send" style="flex:1">Отправить</button><button class="btn" id="cr-clear" style="flex:1">Очистить</button></div></div>` : ""}`);
+    h.push(...cab);
   }
   if (setTab === "devices") h.push(devHtml());       // «Устройства» (devices.js, 0.56)
   $("#set-body").innerHTML = h.join("");
@@ -6064,8 +6190,8 @@ function wireSettings(info) {
     g("tts-rate").oninput = () => { g("rate-v").textContent = (+g("tts-rate").value).toFixed(2); rateFill(); };
     g("tts-try").onclick = () => { saveV(); say(`Привет! Это ${persona().name}. Так звучит мой голос.`); };
     if (g("tts-get")) g("tts-get").onclick = (e) => { e.preventDefault(); D.openSettings("tts") || D.openUrl("https://play.google.com/store/apps/details?id=com.google.android.tts"); };
-  } else if (setTab === "more") {
-    g("assist").onclick = () => { if (!D.openSettings("assistant")) toast("Откройте: Настройки → Приложения → По умолчанию → Цифровой помощник"); };
+  } else if (MORE_SECS.includes(setTab)) {
+    if (g("assist")) g("assist").onclick = () => { if (!D.openSettings("assistant")) toast("Откройте: Настройки → Приложения → По умолчанию → Цифровой помощник"); };
     $$("[data-perm]").forEach(b => b.onclick = async () => { await needPerm(b.dataset.perm); renderSettings(); });
     if (g("home-go")) g("home-go").onclick = async () => { const r = g("home-res"); let tok = g("home-tok").value.trim(); const m = tok.match(/access_token=([^&\s]+)/); if (m) tok = m[1];
       if (/^[0-9a-f]{32}$/i.test(tok)) { r.className = "res bad"; r.textContent = "Это ClientID приложения, а не ключ. Нажмите «Получить ключ» → «Разрешить» — Яндекс покажет ключ (начинается с y0_)"; return; }
@@ -6088,8 +6214,8 @@ function wireSettings(info) {
     if (g("tg-open")) g("tg-open").onclick = () => D.openUrl("https://t.me/" + S.tg.bot);
     if (g("tg-bot")) tgBotName().then(n => { const b = g("tg-bot"); if (!b) return; if (!n) { b.remove(); return; }
       b.disabled = false; b.textContent = "Открыть @" + n; b.onclick = () => D.openUrl("https://t.me/" + n); }).catch(() => { if (g("tg-bot")) g("tg-bot").remove(); });
-    if (tgOn() && g("tg-card")) tgStatus().then(t => { if (!!t.linked !== !!$("#tg-off") && setTab === "more") renderSettings(); }).catch(() => {});
-    g("upd-check").onclick = () => checkUpdate(true);
+    if (tgOn() && g("tg-card")) tgStatus().then(t => { if (!!t.linked !== !!$("#tg-off") && setTab === "telegram") renderSettings(); }).catch(() => {});
+    if (g("upd-check")) g("upd-check").onclick = () => checkUpdate(true);
     if (g("news-open")) g("news-open").onclick = () => { closeSheets(); setTimeout(() => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")), 250); };
     if (g("qa-open")) g("qa-open").onclick = () => openLearn("qa");
     if (g("kids-open")) g("kids-open").onclick = () => openKids();
@@ -6118,7 +6244,7 @@ function wireSettings(info) {
       + th.slice(0, 30).map(p => `<span>${esc(p.name)}<b>${+p.n || 0}</b></span>`).join("") + "</div>"; }).catch(() => {});
     if (g("bug-mine") && (S.complaints || []).length) complaintsCheck().then(n => { if (n.length && g("bug-mine")) g("bug-mine").innerHTML = complaintsHtml(); }).catch(() => {});
     if (g("cr-clear")) g("cr-clear").onclick = () => { D.clearCrash(); renderSettings(); };
-    g("reset").onclick = () => {                       // два вопроса подряд: случайным нажатием отношения с ассистентом не стереть
+    if (g("reset")) g("reset").onclick = () => {                       // два вопроса подряд: случайным нажатием отношения с ассистентом не стереть
       if (!confirm(`Забыть разговор и всё, что ${persona().name} помнит о вас (${memArr().length} записей)?`)) return;
       if (!confirm("Точно? Это нельзя отменить. Память сотрётся и на компьютере после синхронизации.")) return;
       history = []; saveH(); convReset(); memArr().splice(0); saveS(); syncSoon(); toast("Забыл"); };
@@ -8044,7 +8170,7 @@ const LN_COURSES = [
     LN_L(6, "Персонажи и душа", "persona", "Лира — не одна: у каждого персонажа свой характер и голос. А в «Душе» — дневник и то, какой персонаж есть.", [
       ["Нажмите имя персонажа вверху", "выбрать, кто отвечает, или создать своего", "open:persona"],
       ["Позови Патрика", "ответит Патрик своим голосом", "патрик|позови|бип|нова"],
-      ["Нажмите звёздочку вверху — «Душа»", "дневник и характер персонажа", "open:soul"]]),
+      ["Нажмите «Всё» вверху → «Душа»", "дневник и характер персонажа", "open:soul"]]),
     LN_L(7, "Деньги и итоги дня", "money", "Траты — одной фразой, итоги — по вопросу. Вечером — что сделано за день.", [
       ["Потратил 25 рублей на кофе", "расход запишется сам, по категории", "потратил|расход|купил"],
       ["Сколько я потратил за неделю?", "итог по категориям", "сколько .*потратил|траты за|расходы за"],
@@ -8060,7 +8186,7 @@ const LN_COURSES = [
       ["Помаши Андрею", "он увидит и услышит, что вы машете", "помаши|помахать"],
       ["Перезвони", "тому же, кому звонили", "перезвони"]]),
     LN_L(3, "Общий бюджет семьи", "family", "Траты за месяц у всей семьи, общий лимит и платежи — кто платит и кто оплатил.", [
-      ["Откройте настройки → «Ещё» → «Возможности» → «Семья»", "пригласите близкого в общий бюджет", "open:set"],
+      ["Откройте настройки → «Настройки» → «Возможности» → «Семья»", "пригласите близкого в общий бюджет", "open:set"],
       ["Продукты 46,20", "трата сразу видна семье", "^\\D{0,30}\\d+(?:[.,]\\d+)?(?:\\s*(?:руб\\S*|р|byn|₽))?$|потратил"],
       ["Сколько мы потратили в этом месяце?", "итог за месяц", "сколько .*потратил|траты за|расходы за"]]),
   ] },
@@ -8889,7 +9015,7 @@ function meetRender() {
     $("#mt-start").onclick = () => mtCall("/meet/rules", { adult: true }, $("#mt-start")).catch(() => { });
     return;
   }
-  if (me.ban_until) { body.innerHTML = `<div class="card"><b>Встречи закрыты до ${new Date(me.ban_until * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</b><p class="hint" style="margin:6px 0 0">На вас пожаловались несколько человек. Если это ошибка — напишите в поддержку из «Ещё» → «Сообщить о проблеме».</p></div>`; return; }
+  if (me.ban_until) { body.innerHTML = `<div class="card"><b>Встречи закрыты до ${new Date(me.ban_until * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</b><p class="hint" style="margin:6px 0 0">На вас пожаловались несколько человек. Если это ошибка — напишите в поддержку из «Настройки» → «Сообщить о проблеме».</p></div>`; return; }
   const h = me.here, st = clLoad();
   if (!h || mtEdit) {
     if ($("#mt-go") && !$("#mt-go").disabled) return;      // анкета уже на экране — не стираем то, что человек вписывает (опрос раз в 20 с)

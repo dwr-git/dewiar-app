@@ -34,8 +34,9 @@ try:
         pg = page(None)
         f = pg.evaluate("() => S.features")
         ok(f == {"games": True, "near": False, "meet": False}, f"новый: «Рядом» и «Встречи» выключены, «Досуг» включён: {f}")
-        ok(pg.is_visible("#b-play"), "значок «Досуг» вверху")
-        pg.click("#b-play"); pg.wait_for_timeout(500)
+        pg.click("#b-apps"); pg.wait_for_timeout(400)                    # 0.60: «Досуг» — плиткой во «Всё» (панель разгружена)
+        ok(pg.is_visible("[data-app=play]"), "«Всё» → плитка «Досуг»")
+        pg.click("[data-app=play]"); pg.wait_for_timeout(600)
         names = pg.evaluate("[...document.querySelectorAll('#play-body .ag b')].map(b => b.textContent)")
         ok(pg.is_visible("#sh-play") and names == ["Огонёк", "Хутор Одуванчик", "Кто боится темноты", "Тетрис", "Конфетки", "Слияние", "Колючая почта", "Пятнашки", "Судоку", "Найди пару", "Кроссворд", "Пять букв", "Пять в ряд", "Крестики-нолики", "Реверси", "Звёздный пинбол", "Лукошко", "Выше облаков", "Бип", "Гонка", "Небесный пилот", "Кирпичики", "Змейка"], f"лист «Досуг» — все игры по порядку (кроме «Каляки» — с 0.45.1 только на компьютере): {names}")
         pg.screenshot(path="/tmp/claude-0/phone_shelf.png")
@@ -68,7 +69,7 @@ try:
         ok("игр" not in r.lower() and "Открываю Тетрис" not in r, f"«открой блокнот» — не игра «Тетрис»: {r}")
         # «Возможности»: выключили «Досуг»
         pg.evaluate("() => { renderSettings && 0; S.features.games = false; saveS(); featApply(); }")
-        ok(not pg.is_visible("#b-play"), "«Досуг» выключен — значка нет")
+        ok(pg.evaluate("() => !appsHtml().includes('data-app=\"play\"')"), "«Досуг» выключен — плитки нет")
         r = pg.evaluate("async () => { const r = await quick('давай поиграем'); return r && r.say; }")
         ok(r and "Возможности" in r, f"и голосом — подсказка, где включить: {r}")
         # вкладки «Близких»

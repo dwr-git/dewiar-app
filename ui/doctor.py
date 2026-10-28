@@ -195,10 +195,49 @@ def main():
     text = SECRET.sub(lambda m: m.group(1) + "***", "\n".join(L))
     out = desktop() / f"Dewiar — диагностика {dt.datetime.now():%Y-%m-%d %H-%M}.txt"
     out.write_text(text, encoding="utf-8-sig")                 # с BOM: старый Блокнот иначе читает как ANSI
+    sent = offer_send(text, ver, bad)
+    if sent:
+        with open(out, "a", encoding="utf-8") as f:
+            f.write(f"\n\n== Отправлено разработчику: {sent}\n")
     if os.name == "nt":
         os.startfile(str(out))                             # noqa: S606 — открыть в Блокноте
     else:
         print(out)
+
+
+def send_report(text, ver, note, url="https://dewiar.pro/dwrapp/cloud.php"):
+    """Отчёт — разработчику, как кнопка «Сообщить о проблеме» в самой программе (?p=/report). -> «жалоба №…» или ошибка."""
+    import json
+    import urllib.request
+    body = json.dumps({"kind": "manual", "app": "pc", "version": ver, "os": platform.platform()[:80],
+                       "summary": "Диагностика: Dewiar не запускается", "note": note, "text": text[-900_000:]}, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url + "?p=/report", data=body, method="POST", headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        d = json.loads(r.read().decode("utf-8") or "{}")
+    return f"№{d.get('id')}" if d.get("id") else "отправлено"
+
+
+def offer_send(text, ver, bad):
+    """Спросить: отправить отчёт разработчику? (отзыв 28.10, №384: «так и не запускается на ноуте» — человек прислал
+    фото экрана с телефона; диагностика сама отправит журналы — ключи и токены в них уже скрыты). -> номер или ""."""
+    if os.name != "nt":
+        return ""
+    try:
+        MB_YESNO, MB_ICONQ, IDYES = 0x4, 0x20, 6
+        ask = ("Отчёт сохранён на рабочем столе.\n\nОтправить его разработчику Dewiar? Он увидит систему, видеокарту и журналы "
+               "(ключи и пароли в них скрыты) и ответит в программе, когда починит.")
+        if ctypes.windll.user32.MessageBoxW(0, ask, "Dewiar — диагностика", MB_YESNO | MB_ICONQ) != IDYES:
+            return ""
+        n = send_report(text, ver, "Dewiar не запускается (диагностика)" + (": не загружаются " + ", ".join(bad) if bad else ""))
+        ctypes.windll.user32.MessageBoxW(0, f"Отправлено разработчику — отчёт {n}. Спасибо!", "Dewiar — диагностика", 0x40)
+        return n
+    except Exception as e:  # noqa: BLE001 — нет сети и т. п.: отчёт остаётся на рабочем столе
+        try:
+            ctypes.windll.user32.MessageBoxW(0, f"Не отправилось: {e}\n\nПришлите файл с рабочего стола разработчику любым способом.",
+                                             "Dewiar — диагностика", 0x30)
+        except Exception:  # noqa: BLE001
+            pass
+        return ""
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("() => JSON.parse(D.alarms()).length") == 0, "«Удалить» — напоминания нет")
 
     # ---------- фото к жалобе ----------
-    pg.evaluate("() => { bugSnap = null; openSettings('about'); }"); pg.wait_for_timeout(400)
+    pg.evaluate("() => { bugSnap = null; openSettings('bug'); }"); pg.wait_for_timeout(400)
     has = pg.evaluate("() => !!document.querySelector('#bug-file') && document.querySelector('#bug-pickbox').textContent.includes('Добавить фото или скриншот')")
     ok(has, "в «Сообщить о проблеме» — понятная кнопка «Добавить фото или скриншот»")
     pg.set_input_files("#bug-file", str(tmp / "shot.png")); pg.wait_for_timeout(600)

@@ -1393,3 +1393,42 @@ body.neu :is(.idfind, #idbody, .idq) { background: var(--glass); box-shadow: var
 .idcs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; } .idcs:empty { display: none; }
 .idc { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: rgba(127,127,140,.18); color: var(--muted, #9aa0b4); }
 .idc.ok { background: rgba(75,227,161,.16); color: #4be3a1; } .idc.new { background: rgba(242,169,59,.2); color: #f2a93b; } .idc.me { background: rgba(139,140,247,.2); color: #a9a9ff; }
+/* Настройки — меню (0.60): строки с иконкой и тем, что выбрано; страница раздела — со стрелкой «назад» */
+.setmenu { padding: 4px 6px; }
+.setrow { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; border-radius: 14px; }
+.setrow + .setrow { border-top: 1px solid var(--glass-line, rgba(127,127,140,.14)); border-radius: 0; }
+.setrow:active { background: var(--field); }
+.setrow .si { width: 36px; height: 36px; flex: none; border-radius: 11px; display: grid; place-items: center; background: var(--field); color: #8b8cf7; }
+.setrow .si svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.setrow .s-brain, .setrow .s-voice, .setrow .s-devices { color: #8b8cf7; }
+.setrow .s-look, .setrow .s-sound, .setrow .s-widget, .setrow .s-lite { color: #e98ab8; }
+.setrow .s-features, .setrow .s-smart, .setrow .s-telegram, .setrow .s-assist, .setrow .s-hands { color: #4fb8e8; }
+.setrow .s-bug, .setrow .s-perms, .setrow .s-privacy, .setrow .s-about { color: #4be3a1; }
+.setrow .s-ideas { color: #f2a93b; }
+.setrow .st { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.setrow .st b { font-size: 15px; font-weight: 600; }
+.setrow .st small { font-size: 12.5px; color: var(--muted, #9aa0b4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setrow .st small.warn { color: #ffb86b; }
+.setrow .chev { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted, #9aa0b4); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+#sh-set.sub > h2 { display: none; }
+.sethd { display: flex; align-items: center; gap: 12px; margin: 2px 0 14px; min-height: 44px; }
+.sethd h2 { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.setback { display: grid; place-items: center; width: 40px; height: 40px; border: 0; background: var(--field); color: inherit; border-radius: 13px; flex: none; padding: 0; }
+.setback svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* «Всё» (0.60): плитки в листе — как «Главная» на компьютере */
+#b-play.moved, #b-soul.moved { display: none !important; }
+.apps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-bottom: 6px; }
+.app { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 6px 12px; border: 0; border-radius: 20px; background: var(--glass, rgba(255,255,255,.06)); color: inherit; font: inherit; text-align: center; min-width: 0; }
+.app:active { transform: scale(.97); }
+.app .ai { width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; margin-bottom: 4px; color: #fff; background: linear-gradient(140deg, #8b8cf7, #6d5ce8); box-shadow: 0 8px 18px -10px rgba(109,92,232,.9); }
+.app .ai svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.app b { font-size: 13.5px; font-weight: 600; line-height: 1.2; }
+.app small { font-size: 11.5px; color: var(--muted, #9aa0b4); line-height: 1.25; }
+.a-play .ai { background: linear-gradient(140deg, #ff9fb6, #e8678f); box-shadow: 0 8px 18px -10px rgba(232,103,143,.9); }
+.a-soul .ai { background: linear-gradient(140deg, #b9a6ff, #8b6cf0); }
+.a-work .ai { background: linear-gradient(140deg, #7fc8f8, #3d8fd6); box-shadow: 0 8px 18px -10px rgba(61,143,214,.9); }
+.a-ideas .ai { background: linear-gradient(140deg, #ffcf6e, #f2a93b); box-shadow: 0 8px 18px -10px rgba(242,169,59,.9); }
+.a-tricks .ai { background: linear-gradient(140deg, #ffd27a, #ff9f5a); }
+.a-course .ai, .a-qa .ai { background: linear-gradient(140deg, #7ee2c0, #2fb488); box-shadow: 0 8px 18px -10px rgba(47,180,136,.9); }
+.a-kids .ai { background: linear-gradient(140deg, #ffc2a3, #f08a5d); }
+.a-news .ai { background: linear-gradient(140deg, #a8e1ff, #6aa8ff); }

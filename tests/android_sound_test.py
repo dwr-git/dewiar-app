@@ -65,7 +65,7 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 393, "height": 820}); pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.route("https://**", lambda r: r.abort())
     pg.goto((www / "index.html").as_uri()); pg.wait_for_timeout(900)
-    pg.evaluate("openSettings('more')"); pg.wait_for_timeout(400)
+    pg.evaluate("openSettings('sound')"); pg.wait_for_timeout(400)
     rows = pg.evaluate("() => [$$('.snd').map(x => x.dataset.snd), $('.snd.on').dataset.snd, $('.snd[data-snd=custom]').classList.contains('nofile')]")
     ok(rows[0] == names + ["system", "custom"] and rows[1] == "signature" and rows[2],
        f"«Звук напоминаний»: все звуки и свой, по умолчанию — фирменный «Пульс»: {rows}")

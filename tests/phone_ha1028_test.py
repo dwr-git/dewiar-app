@@ -55,7 +55,7 @@ with sync_playwright() as p:
     r = pg.evaluate("() => [haUrl('192.168.1.20'), haUrl('http://homeassistant.local'), haUrl('https://ha.example.com'), haUrl('http://10.0.0.5:8124/api/')]")
     ok(r == ["http://192.168.1.20:8123", "http://homeassistant.local:8123", "https://ha.example.com", "http://10.0.0.5:8124"], f"адрес: порт 8123 сам, https и свой порт — как есть: {r}")
     # подключение в «Ещё»
-    pg.evaluate("() => openSettings('more')"); pg.wait_for_timeout(500)
+    pg.evaluate("() => openSettings('smart')"); pg.wait_for_timeout(500)
     ok(pg.evaluate("() => !!document.querySelector('#ha-url') && !!document.querySelector('#ha-tok')"), "«Ещё» → «Home Assistant»: адрес и токен")
     pg.fill("#ha-url", "192.168.1.20"); pg.fill("#ha-tok", "wrong-token-but-long-enough-xx"); pg.click("#ha-go"); pg.wait_for_timeout(600)
     ok("не принял токен" in pg.evaluate("() => document.querySelector('#ha-res').textContent") and not pg.evaluate("() => haOn()"), "неверный токен — понятная ошибка, не подключён")

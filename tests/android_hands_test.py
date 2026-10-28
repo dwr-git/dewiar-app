@@ -79,7 +79,7 @@ with sync_playwright() as p:
     ok(any("Управление другими приложениями выключено" in m and "Управлять приложениями" in m for m in R["toolMsgs"]), "служба выключена — модель узнаёт, как включить")
     ok(not any(a.startswith("type:") or a.startswith("tap") for a in R["acts"]), "выключено — ничего не нажато")
     ok("сможешь, если пользователь включит" in R["sys"], "подсказка модели при выключенной службе")
-    pg.evaluate("() => { openSettings(); setTab = 'more'; renderSettings(); }")
+    pg.evaluate("() => { openSettings('hands'); }")
     pg.wait_for_timeout(300)
     card = pg.evaluate("() => { const c = document.querySelector('#hands-card'); return c ? c.innerText : ''; }")
     if not card:

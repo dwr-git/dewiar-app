@@ -1,5 +1,5 @@
 """«Что я умею» (18.10: «у нас есть функции, про которые никто не знает… включить радио, фонарик, сканер кодов,
-очистку мусора — нигде у нас не проговаривается»). Один список — data/tricks.json — на телефоне («Ещё» → «Что я
+очистку мусора — нигде у нас не проговаривается»). Один список — data/tricks.json — на телефоне («Всё» → «Что я
 умею», нажатие — сказать фразу), в студии («Что я умею») и в руководстве. Главное — список честный: каждая фраза,
 помеченная quick, правда понимается сразу, без модели, — на телефоне (quick()) и на компьютере (настоящее ядро:
 ответ без «думаю»)."""
@@ -49,14 +49,14 @@ with sync_playwright() as p:
     # экран «Что я умею»: группы, фразы; нажатие — спросить, «…» — в поле ввода
     pg.wait_for_timeout(3000)                    # отложенное от фраз выше (сканер, «Хранилище», листы) — отработало
     pg.evaluate("() => { closeSheets(); try { scanClose && scanClose(); } catch (e) {} }")
-    s = pg.evaluate("""async () => { openSettings("more"); const btn = document.getElementById("tricks-open"); if (!btn) return null; btn.click();
+    s = pg.evaluate("""async () => { openApps(); await new Promise(r => setTimeout(r, 100)); const btn = document.querySelector("[data-app=tricks]"); if (!btn) return null; btn.click();
       await new Promise(r => setTimeout(r, 300));
       const sh = document.getElementById("sh-tricks"), out = { on: sh && sh.classList.contains("on"), groups: sh ? sh.querySelectorAll(".trg").length : 0,
         chips: sh ? sh.querySelectorAll("[data-say]").length : 0 };
       window._asked = []; const _ask = ask; ask = (t) => { window._asked.push(t); };                       // eslint-disable-line
       sh.querySelector('[data-say="Включи фонарик"]').click(); await new Promise(r => setTimeout(r, 200));
       out.asked = window._asked.slice(); out.closed = !sh.classList.contains("on");
-      document.getElementById("tricks-open") || openSettings("more"); document.getElementById("tricks-open").click(); await new Promise(r => setTimeout(r, 300));
+      openApps(); await new Promise(r => setTimeout(r, 100)); document.querySelector("[data-app=tricks]").click(); await new Promise(r => setTimeout(r, 400));
       sh.querySelector('[data-fill="1"]').click(); await new Promise(r => setTimeout(r, 300));
       out.fill = (document.querySelector("#typed") || {}).value || ""; ask = _ask;                  // eslint-disable-line
       return out; }""")

@@ -37,10 +37,10 @@ with sync_playwright() as p:
     pg.reload(); pg.wait_for_timeout(1200)
     pg.evaluate("() => { window._asked = []; ask = (t) => { _asked.push(t); return Promise.resolve(); }; }")
     # вход — «Ещё»
-    pg.evaluate("() => openSettings('more')"); pg.wait_for_timeout(500)
-    ok(pg.evaluate("() => !!document.querySelector('#qa-open') && !!document.querySelector('#course-open') && !document.querySelector('#guide-open')"),
-       "«Ещё» → «Вопрос — ответ и курсы»: две кнопки вместо ссылки на сайт")
-    pg.click("#qa-open"); pg.wait_for_timeout(500)
+    pg.evaluate("() => openApps()"); pg.wait_for_timeout(500)            # 0.60: «Всё» — плитки «Вопрос — ответ» и «Курсы»
+    ok(pg.evaluate("() => !!document.querySelector('[data-app=qa]') && !!document.querySelector('[data-app=course]')"),
+       "«Всё»: «Вопрос — ответ» и «Курсы»")
+    pg.click("[data-app=qa]"); pg.wait_for_timeout(600)
     r = pg.evaluate("() => [document.querySelector('#sh-learn').classList.contains('on'), [...document.querySelectorAll('.ln-tile b')].map(x => x.textContent), !!document.querySelector('#ln-q')]")
     ok(r[0] and r[1] == GROUPS and r[2], f"лист открыт: плитки всех разделов и поиск: {r[1]}")
     if shots: pg.screenshot(path=str(Path(shots) / "phone-qa.png"))

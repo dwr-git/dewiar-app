@@ -73,7 +73,7 @@ with sync_playwright() as p:
     pg.click("#nt-del"); pg.wait_for_timeout(400)
     ok(pg.is_visible("#sh-day.on") and not pg.evaluate("notes().some(x => x.id === 'n2')"), "удалили — открыт «Мой день», а не главный экран (№342)")
     # «Возможности» (владелец 27.10: «выключил „Рядом“ и „Встречи“ — сердечко осталось, логика запутанная»)
-    pg.evaluate("closeSheets(); setTab = 'more'; openSettings('more')"); pg.wait_for_timeout(500)
+    pg.evaluate("closeSheets(); openSettings('features')"); pg.wait_for_timeout(500)
     ok(pg.locator("#ft-sub #ft-near").count() == 1 and pg.locator("#ft-sub #ft-meet").count() == 1, "«Рядом» и «Встречи» — внутри «Близких», отступом")
     pg.evaluate("document.querySelector('#ft-close').scrollIntoView({block: 'center'})"); pg.click("label:has(#ft-close)"); pg.wait_for_timeout(200)
     ok(not pg.is_visible("#b-close") and pg.evaluate("S.features.close") is False and pg.evaluate("document.querySelector('#ft-sub').classList.contains('off')"),

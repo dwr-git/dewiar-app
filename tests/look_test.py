@@ -124,9 +124,10 @@ for (const fx of ["bars", "pulse", "wave"]) for (const tone of ["mono", "color"]
     ok(th[0] and th[1] and th[0]["say"].startswith(("Пожалуйста", "Обращайтесь")) and not th[2], f"телефон: «спасибо» — вежливый ответ без модели: {th}")
     ph0 = pg.evaluate("() => [document.body.className, orb.tone, orb.fx]")
     ok("skin-neusky" in ph0[0] and ph0[1] == "neu" and ph0[2] == "bars", f"телефон по умолчанию — «Небесный»: {ph0}")
-    pg.evaluate("openSettings('more')"); pg.wait_for_timeout(400)
+    pg.evaluate("openSettings('about')"); pg.wait_for_timeout(400)
     card = pg.evaluate("() => [document.querySelector('#set-body').textContent.includes('№' + devId().slice(-4)), !!document.querySelector('#dev-ping')]")
     ok(card == [True, True], "«Этот телефон в кабинете»: №… как в списке экзамена и кнопка «Отметиться в кабинете»")
+    pg.evaluate("openSettings('look')"); pg.wait_for_timeout(400)
     ok(pg.evaluate("$$('.skm').length") >= 20 and pg.evaluate("$$('.skm[data-skin=snow]').length") == 1
        and pg.evaluate("$('.skm.on').dataset.skin") == "neusky", "телефон: все темы — круглыми образцами (группы — в подсказке), и светлые тоже; выбранная отмечена")
     pg.click('.skm[data-skin="neon"]'); pg.select_option("#ap-fx", "pulse"); pg.wait_for_timeout(300)

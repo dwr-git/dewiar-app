@@ -34,8 +34,8 @@ with sync_playwright() as p:
     pg.reload(); pg.wait_for_timeout(1000)
     ok(pg.evaluate("() => !!window.DEWIAR_KIDS_PERSONA && DEWIAR_KIDS_PERSONA.id === 'ugo' && DEWIAR_KIDS_PERSONA.avatar.startsWith('data:image')"),
        "Совёнок Уго — в personas.js телефона, с обликом")
-    pg.evaluate("() => openSettings('more')"); pg.wait_for_timeout(500)
-    pg.evaluate("() => document.querySelector('#kids-open').click()"); pg.wait_for_timeout(500)
+    pg.evaluate("() => openApps()"); pg.wait_for_timeout(400)            # 0.60: «Всё» → «Детский режим»
+    pg.evaluate("() => document.querySelector('[data-app=kids]').click()"); pg.wait_for_timeout(600)
     ok(pg.evaluate("() => document.querySelector('#sh-kids').classList.contains('on') && !!document.querySelector('#kd-on')"), "«Ещё» → «Детский режим» → лист настройки")
     if shots: pg.screenshot(path=str(Path(shots) / "phone-kids-setup.png"), full_page=True)
     pg.fill("#kd-name", "Миша"); pg.fill("#kd-age", "7")

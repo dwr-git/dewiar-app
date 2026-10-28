@@ -191,6 +191,13 @@ def _humanize(e, base_url, model=""):
                 return (f"в Ollama нет модели {name} — её нужно сначала скачать: откройте приложение Ollama, выберите модель "
                         "внизу окна и напишите ей что-нибудь — она скачается. Уже скачанные — в «Мозге» → «Список моделей»")
             return f"у сервиса нет модели {name} — в «Мозге» нажмите «Список моделей» и выберите из списка"
+        if code == 413 or re.search(r"request too large|tokens per minute|\bTPM\b", body + " " + msg, re.I):
+            # пакет 28.10: «[groq/openai/gpt-oss-120b] [413]: Request too large… tokens per minute (TPM): Limit 8000» — у
+            # бесплатного тарифа сервиса предел запроса меньше, чем нужно задаче или длинному разговору
+            lim = re.search(r"Limit\s+(\d+)", body + " " + msg)
+            return ("запрос не помещается в лимит этого сервиса" + (f" ({lim.group(1)} токенов в минуту)" if lim else "")
+                    + " — у бесплатных тарифов он маленький. Для задач и длинных разговоров выберите в «Мозге» другую модель "
+                    "или сервис с бо́льшим лимитом")
         if code in (503, 529) or (code >= 500 and BUSY_RX.search(body + " " + msg)):
             # пакет 24.10: «503 … This model is currently experiencing high demand» (Gemini) — 7 раз сырым JSON
             return ("сервис модели сейчас перегружен — это у него, не у вас. Повторите через минуту или выберите в «Мозге» "

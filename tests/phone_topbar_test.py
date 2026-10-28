@@ -38,10 +38,10 @@ with sync_playwright() as p:
             ok(r["name"][0] <= r["name"][1] + 1, f"{w} px: имя «Лира» целиком: {r['name']}")
         # «Работа» (0.55): портфель — седьмой значок вместе с «Досугом»; всё на экране, значки круглые, имя прячется, лицо остаётся
         pg.evaluate("() => { document.getElementById('b-work').hidden = false; document.getElementById('b-play').hidden = false; }")
-        r = pg.evaluate("""() => ({ ib: [...document.querySelectorAll('#top .ib')].filter(e => !e.hidden).map(e => { const b = e.getBoundingClientRect(); return [b.width, b.height, b.right]; }),
+        r = pg.evaluate("""() => ({ ib: [...document.querySelectorAll('#top .ib')].filter(e => !e.hidden && e.offsetWidth).map(e => { const b = e.getBoundingClientRect(); return [b.width, b.height, b.right]; }),
             sw: document.documentElement.scrollWidth, who: document.getElementById('who').getBoundingClientRect().width })""")
-        ok(len(r["ib"]) == 7 and all(abs(a - h) < 0.5 and a >= 34 for a, h, _ in r["ib"]) and max(x for _, _, x in r["ib"]) <= w and r["sw"] <= w and r["who"] >= 40,
-           f"{w} px, семь значков (с «Работой»): круглые, на экране, лицо персонажа видно: {[(round(a), round(h)) for a, h, _ in r['ib']]} who={round(r['who'])}")
+        ok(len(r["ib"]) == 6 and all(abs(a - h) < 0.5 and a >= 34 for a, h, _ in r["ib"]) and max(x for _, _, x in r["ib"]) <= w and r["sw"] <= w and r["who"] >= 40,
+           f"{w} px, шесть значков (с «Работой»; «Досуг» с 0.60 — во «Всё»): круглые, на экране, лицо персонажа видно: {[(round(a), round(h)) for a, h, _ in r['ib']]} who={round(r['who'])}")
         pg.close()
     b.close()
 ok(not errs, "без ошибок JavaScript" + (f": {errs}" if errs else ""))

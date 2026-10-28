@@ -49,7 +49,7 @@ with sync_playwright() as p:
        "свежий ответ (5 минут) — на месте, как раньше")
     ok(pg.evaluate("() => history.some(m => m.content === 'Всё хорошо, спасибо!')"), "история разговора не тронута")
     # темы
-    pg.evaluate("() => openSettings('more')"); pg.wait_for_timeout(700)
+    pg.evaluate("() => openSettings('look')"); pg.wait_for_timeout(700)
     T = pg.evaluate("""() => { const box = document.querySelector('#sh-set .skins'), items = [...box.querySelectorAll('.skm')];
         const i0 = items[0].querySelector('i').getBoundingClientRect();
         return { n: items.length, h: box.getBoundingClientRect().height, w: i0.width, round: getComputedStyle(items[0].querySelector('i')).borderRadius,
