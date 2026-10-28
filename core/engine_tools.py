@@ -563,8 +563,12 @@ class ToolsMixin:
         try:
             p = self.close.person(who)
         except CloseError:
-            return False
-        if any(match_name(w, [p]) is not p for w in who.split()):
+            g = self.close.group_match(who) if re.match(r"(?:в\s+)?(?:групп|чат)", who, re.I) else None   # «напиши в группу Семья: …»
+            if not g:
+                return False
+            p = {"pid": g["gid"], "name": f"группу «{g['name']}»"}
+            who = "в " + p["name"]
+        if not p["pid"].startswith("g") and any(match_name(w, [p]) is not p for w in who.split()):
             return False
         msg = (m.group("msg") if hasattr(m, "group") else m["msg"]).strip().strip("«»\"„“ ").strip()
         msg = re.sub(r"[»\"“]\s*\.?$", "", msg).strip()
@@ -1572,6 +1576,32 @@ class ToolsMixin:
                           r"|(?:что|какие\s+планы|как\w*\s+дела)\s+(?:у\s+(?:нас|меня)\s+)?(?:на\s+|в\s+|во\s+)"
                           r"(?:понедельник|вторник|сред\w|четверг|пятниц\w|суббот\w|воскресень\w)", re.I)
     WEEKDAY_Q = (("понедельник", 0), ("вторник", 1), ("сред", 2), ("четверг", 3), ("пятниц", 4), ("суббот", 5), ("воскресен", 6))
+
+    def care_on(self):
+        """«Заботливая память» (care.py) включена? (настройка care.on, по умолчанию — да; в детском режиме — нет)"""
+        kids = getattr(self, "kids", None)
+        return (self.s.get("care") or {}).get("on", True) is not False and not (kids and kids.on())
+
+    def care_context(self, text, turn=None):
+        """Сказанное — событие на будущее? Запомнить. Прошло важное — строка для модели «спроси, как прошло» (один раз)."""
+        care = getattr(self, "care", None)
+        if care is None or not self.care_on():
+            return ""
+        q = (text or "").split("\n\nВложения:")[0]
+        try:
+            it = care.note(q)
+            if it:
+                log.info("💛 Заботливая память: «%s» (%s) — спрошу потом, как прошло", it["what"][:60], it["day"])
+            if turn is not None and getattr(turn, "via_job", False):
+                return ""
+            line, ids = care.context()
+            if line:
+                care.mark(ids)
+                log.info("💛 Заботливая память: спрошу, как прошло")
+            return line
+        except Exception:  # noqa: BLE001
+            log.debug("заботливая память", exc_info=True)
+            return ""
 
     def agenda_context(self, text):
         """Вопрос о планах («что у нас по плану», «какие дела на завтра», «расписание на неделю») — дела, напоминания и

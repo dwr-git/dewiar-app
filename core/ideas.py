@@ -30,6 +30,27 @@ def call(url, dev, path, params=None, body=None, timeout=15):
     return d
 
 
+def suggest(eng, title, text=""):
+    """«Предложи идею: …» (голосом, 0.61): похожая уже есть — голос за неё; нет — новая, «на рассмотрении». -> фраза для модели."""
+    url = eng.s.get("cloud", "url") or ""
+    dev = eng.sync.state.get("device", "") if getattr(eng, "sync", None) else ""
+    title = " ".join(str(title or "").split())[:120]
+    if len(title) < 4:
+        raise IdeasError("скажите идею хотя бы в несколько слов")
+    sim = [x for x in (call(url, dev, "/ideas/similar", {"q": title}).get("items") or []) if x.get("status") in ("plan", "doing", "new", "done")]
+    if sim:
+        x = sim[0]
+        if x["status"] == "done":
+            return f"Это уже сделано в версии {x.get('ver') or 'новее вашей'}: «{x['title']}». Скажи об этом и предложи обновиться."
+        if not x.get("voted"):
+            x = dict(x, **call(url, dev, "/ideas/vote", body={"id": x["id"], "on": True}))
+        return (f"Похожая идея уже есть: «{x['title']}» — голос за неё отдан (теперь голосов: {x.get('votes')}). Скажи коротко: "
+                "такую уже предлагали, проголосовала — чем больше голосов, тем раньше её сделают; все идеи — в «Идеях Лиры».")
+    d = call(url, dev, "/ideas/new", body={"title": title, "text": str(text or "")[:2000], "who": eng.s.get("user_name") or "", "app": "pc"})
+    return (f"Идея «{d['item']['title']}» отправлена разработчику — она на рассмотрении. Скажи коротко, что предложила; когда её "
+            "возьмут в план, за неё смогут голосовать все — видно в «Идеях Лиры».")
+
+
 def command(eng, cmd, a):
     url = eng.s.get("cloud", "url") or ""
     dev = eng.sync.state.get("device", "") if getattr(eng, "sync", None) else ""

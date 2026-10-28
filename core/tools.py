@@ -1875,6 +1875,34 @@ def t_show_page(a, ctx):
             "открыла. HTML в ответе не повторяй.")
 
 
+def t_month_summary(a, ctx):
+    """«Как прошёл мой месяц?», «итоги октября» (0.61, month.py): данные месяца — модели, рассказать тепло."""
+    eng = ctx.get("engine")
+    if eng is None:
+        raise ToolError("итоги месяца — в программе Dewiar")
+    import month as M
+    ym = str(a.get("month") or "").strip()
+    if ym in ("", "this", "текущий", "этот"):
+        ym = None
+    elif ym in ("prev", "last", "прошлый"):
+        ym = M.prev_ym()
+    elif not re.match(r"^\d{4}-\d{2}$", ym):
+        raise ToolError("месяц — в виде 2026-10, или prev — прошлый")
+    return M.context(M.gather(eng, ym)) + "\n\n" + M.PROMPT
+
+
+def t_suggest_idea(a, ctx):
+    """«Предложи идею разработчику» (0.61): через ядро (ideas.suggest) — похожая есть: голос за неё; нет — новая."""
+    eng = ctx.get("engine")
+    if eng is None:
+        raise ToolError("идеи — только в программе Dewiar")
+    import ideas
+    try:
+        return ideas.suggest(eng, a.get("title") or "", a.get("text") or "")
+    except ideas.IdeasError as e:
+        raise ToolError(str(e)) from e
+
+
 def t_save_note(a, ctx):
     rel = _ws_call(lambda: _ws(ctx).save_note(a.get("title", ""), a.get("text", ""), a.get("folder", ""),
                                               bool(a.get("append"))))
@@ -1920,8 +1948,8 @@ def t_close_send(a, ctx):
         it = c.send(a.get("to") or "", a.get("text") or "", files)
     except (CloseError, OSError) as e:
         raise ToolError(str(e)) from e
-    p = c.person(a.get("to") or "")
-    return f"Отправлено {p['name']}" + (f" (файлов: {len(it.get('f') or [])})" if it.get("f") else "") + ". Скажи коротко, что отправила."
+    to = it.get("to") or c.person(a.get("to") or "")["name"]          # группа («Группы своих») — «группу «Семья»»
+    return f"Отправлено {to}" + (f" (файлов: {len(it.get('f') or [])})" if it.get("f") else "") + ". Скажи коротко, что отправила."
 
 
 def t_close_call(a, ctx):
@@ -2652,6 +2680,13 @@ TOOLS = {
                  "what": {"type": "string"}, "every_minutes": {"type": "number"}, "hours": {"type": "number"},
                  "folder": {"type": "string"}, "pattern": {"type": "string"}, "url": {"type": "string"}, "id": {"type": "string"}}, []),
               "safe", t_watch, "Дозор"),
+    "month_summary": ("Итоги месяца пользователя («Мой месяц с Лирой»): сделанные дела, напоминания, траты по категориям, заметки, "
+                      "дневник — когда спрашивают «как прошёл мой месяц», «итоги октября», «что я сделал за месяц». month — 2026-10, "
+                      "prev — прошлый месяц, пусто — текущий.", S({"month": {"type": "string"}}, []), "safe", t_month_summary, "Мой месяц"),
+    "suggest_idea": ("Предложить идею разработчику Dewiar («Идеи Лиры»): когда пользователь просит «предложи идею…» или согласился "
+                     "предложить то, чего ты не умеешь. title — суть одной фразой («Будильник с плавным рассветом»), text — подробнее, "
+                     "если человек объяснил. Похожая уже есть — голос уйдёт за неё. Без согласия пользователя не вызывай.",
+                     S({"title": {"type": "string"}, "text": {"type": "string"}}, ["title"]), "safe", t_suggest_idea, "Идеи Лиры"),
     "show_page": ("Показать в браузере красиво оформленную страницу — когда просят «покажи в браузере», «оформи красиво», "
                   "«сделай страницу / подборку / таблицу»: рецепты, список, сравнение, отчёт. Сначала собери данные "
                   "(find_notes, read_file, web_search), потом одним вызовом передай html — разметку содержимого: <section> с "
@@ -2684,7 +2719,7 @@ TOOLS = {
                      "date": {"type": "string"}}, ["kind", "amount"]), "safe", t_money_add, "Деньги: записать"),
     "close_send": ("Написать человеку из «Близких» (переписка между помощниками Dewiar: дойдёт в его приложение, его помощник "
                    "скажет вслух). Только когда пользователь прямо просит написать, передать или сказать кому-то из близких. "
-                   "to — имя как сказал пользователь («Андрею», «маме»); text — само сообщение от лица пользователя, как он сказал бы сам "
+                   "to — имя как сказал пользователь («Андрею», «маме») или группа своих («в группу Семья» — письмо всем в ней); text — само сообщение от лица пользователя, как он сказал бы сам "
                    "(«Задержусь на полчаса»), без «передай»; files — пути файлов (необязательно).",
                    S({"to": {"type": "string"}, "text": {"type": "string"}, "files": {"type": "array", "items": {"type": "string"}}}, ["to", "text"]),
                    "safe", t_close_send, "Близкие: написать"),
@@ -2849,7 +2884,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
-             "cancel_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "watch", "find_notes", "read_file", "remember", "write_diary",
+             "cancel_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "watch", "find_notes", "read_file", "remember", "write_diary",
              "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
              "client_list", "client_deal", "client_deals"}

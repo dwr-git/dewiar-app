@@ -2722,6 +2722,38 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .mn-foot .mn-mail { margin-left: auto; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
 @media (max-width: 760px) { .mn-grid { grid-template-columns: 1fr; } .mn-w { min-height: 130px; } }
 
+/* «Мой месяц с Лирой» (studio/month.js): числа крупно в ряд; ниже — календарь месяца (чем больше дел, тем гуще день)
+   и рядом — чем гордиться и куда ушли деньги (одна полоса) */
+.hm-month { --mo-c: var(--accent); }
+.mo-head { display: flex; align-items: flex-start; justify-content: space-between; margin: 0 2px 16px; }
+.mo-head h2 { margin: 0; font-size: 18px; } .mo-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.mo-sts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 22px; margin: 0 2px 22px; }
+.mo-st { display: flex; flex-direction: column; min-width: 0; }
+.mo-st b { font-size: 38px; font-weight: 300; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.mo-st span { font-size: 13.5px; font-weight: 600; } .mo-st small { color: var(--muted); font-size: 12.5px; }
+.mo-grid { display: grid; grid-template-columns: auto 1fr; gap: 22px 40px; align-items: start; margin: 0 2px; }
+.hm-month h3 { margin: 0 0 10px; font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.mo-rib { display: grid; grid-template-columns: repeat(7, 28px); grid-auto-rows: 28px; gap: 4px; }
+.mo-rib u { text-decoration: none; color: var(--muted); font-size: 11px; display: grid; place-items: end center; padding-bottom: 3px; }
+.mo-rib i { position: relative; border-radius: 8px; }
+.mo-rib i::after { content: attr(data-d); position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-style: normal; font-variant-numeric: tabular-nums; color: var(--muted); }
+.mo-rib .lv0 { background: rgba(127,127,140,.1); }
+.mo-rib .lv1 { background: color-mix(in srgb, var(--mo-c) 28%, transparent); }
+.mo-rib .lv2 { background: color-mix(in srgb, var(--mo-c) 50%, transparent); }
+.mo-rib .lv3 { background: color-mix(in srgb, var(--mo-c) 74%, transparent); }
+.mo-rib .lv4 { background: var(--mo-c); }
+.mo-rib .lv1::after { color: var(--ink); } .mo-rib .lv2::after, .mo-rib .lv3::after, .mo-rib .lv4::after { color: #fff; font-weight: 600; text-shadow: 0 0 3px rgba(0,0,0,.55), 0 1px 1px rgba(0,0,0,.35); }
+.mo-right { min-width: 0; } .mo-right h3 + * { margin-bottom: 20px; }
+.mo-top { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.mo-top li { position: relative; padding-left: 24px; font-size: 14.5px; overflow-wrap: anywhere; }
+.mo-top li::before { content: ""; position: absolute; left: 3px; top: 4px; width: 11px; height: 6px; border: solid var(--good, #3fc48a); border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+.mo-bar { display: flex; gap: 2px; height: 10px; border-radius: 6px; overflow: hidden; margin-bottom: 10px !important; max-width: 420px; }
+.mo-cats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; max-width: 420px; }
+.mo-cats li { display: flex; align-items: center; gap: 8px; } .mo-cats li b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mo-cats li > i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.hm-month .c0 { background: #6a6cf0; } .hm-month .c1 { background: #f2a93b; } .hm-month .c2 { background: #2fb7a0; }
+@media (max-width: 760px) { .mo-grid { grid-template-columns: 1fr; } }
+
 /* «Клиенты» → «Сделки и кто должен» (studio/deals.js): итог сверху — сколько нам должны; доска по этапам */
 .cr-main[hidden], .dl-wrap[hidden] { display: none !important; }
 .dl-wrap { --dl-lead: #8B8CF7; --dl-offer: #4FA3F7; --dl-invoice: #F2A93B; --dl-paid: #3FC48A; }
@@ -3039,3 +3071,49 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .id-pager button[aria-current="page"] { background: linear-gradient(160deg, var(--idA2), var(--idA)); color: #3a2405; font-weight: 700; }
 @media (max-width: 720px) { .id-hero { flex-direction: column; align-items: flex-start; } .id-find { min-width: 0; flex: 1 1 100%; } }
 @media (prefers-reduced-motion: reduce) { .id-vote { transition: none; } .id-it.pop .id-vote { transform: none; } }
+
+/* «Что нового» → «Идеи Лиры» (0.61): строка внизу окна — что дальше решаем вместе */
+.nw-ideas { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px; border-radius: 16px; background: rgba(242,169,59,.12); }
+.nw-ideas > span { font-size: 20px; flex: none; } .nw-ideas p { margin: 0; flex: 1; font-size: 13.5px; line-height: 1.45; }
+.nw-ideas .btn { flex: none; }
+
+/* «Лира спросит потом» (0.61, «Обо мне») — тёплая карточка заботливой памяти */
+.care-box { margin: 6px 0 22px; padding: 18px 20px; border-radius: 22px; background: linear-gradient(135deg, rgba(255,184,107,.14), rgba(233,138,184,.10)); box-shadow: var(--raise-s, none); max-width: 960px; }
+.care-h { display: flex; gap: 16px; align-items: flex-start; } .care-h > div { flex: 1; min-width: 0; } .care-h h2 { margin: 0 0 4px; } .care-h .hint { margin: 0; max-width: 72ch; }
+.care-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.care-list li { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 14px; background: var(--glass); }
+.care-d { flex: none; min-width: 84px; font-size: 12.5px; font-weight: 700; color: #e08a3c; }
+.care-w { flex: 1; min-width: 0; font-size: 14px; } .care-list li.care-empty { color: var(--muted); font-size: 13.5px; background: none; padding: 4px 0 0; }
+
+/* «Группы своих» (studio/groups.js, 0.61): слева под близкими — группы стопкой лиц; панель «Новая группа» / «Участники» */
+.cl-gh { display: flex; align-items: center; justify-content: space-between; margin: 6px 2px 0; }
+.cl-gh[hidden] { display: none; }
+.cl-gh b { font-size: 13px; color: var(--muted); font-weight: 600; }
+#cl-groups { display: flex; flex-direction: column; gap: 4px; }
+.cl-gnone { margin: 0 2px 4px; }
+.cl-gstack { flex: none; display: flex; align-items: center; font-style: normal; }
+.cl-gstack .cl-ava { width: 30px; height: 30px; font-size: 12px; box-shadow: 0 0 0 2px var(--ring, rgba(24,25,36,.95)); }
+.cl-gstack .cl-ava + .cl-ava { margin-left: -10px; }
+.cl-gstack .cl-ava.more { background: rgba(127,127,140,.25); color: var(--ink); font: 700 10.5px Manrope, sans-serif; }
+html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92); }
+.cl-g .cl-gstack { width: 50px; }
+.cl-ava.cl-gava { background: none; box-shadow: none; width: auto; }
+.cl-gwho { font-size: 12.5px; font-weight: 700; margin-bottom: 2px; display: block; }
+.cl-gp { background: var(--glass); border-radius: 22px; padding: 22px 24px; }
+.cl-gp[hidden] { display: none; }
+.cl-gp h3 { font-size: 17px; margin: 0 0 4px; }
+.cl-gpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin-bottom: 12px; }
+.cl-gpk { position: relative; display: flex; align-items: center; gap: 11px; padding: 8px 12px; border-radius: 14px; background: rgba(127,127,140,.1); cursor: pointer; }
+.cl-gpk input { position: absolute; opacity: 0; pointer-events: none; }
+.cl-gpk span { flex: 1; min-width: 0; font-size: 14px; }
+.cl-gpk:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cl-gck { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(127,127,140,.45); flex: none; position: relative; }
+.cl-gpk.on .cl-gck { background: var(--accent); box-shadow: none; }
+.cl-gpk.on .cl-gck::after { content: ""; position: absolute; left: 7px; top: 4px; width: 6px; height: 11px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.cl-gmem { display: flex; flex-direction: column; gap: 4px; }
+.cl-gm { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 14px; background: rgba(127,127,140,.07); }
+.cl-gm span { flex: 1; min-width: 0; } .cl-gm b { display: block; font-size: 14px; } .cl-gm small { color: var(--muted); font-size: 12px; }
+/* фото в переписке студии — картинкой (0.61) */
+.cl-ph { display: block; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: rgba(127,127,140,.15); cursor: zoom-in; max-width: 320px; min-width: 120px; min-height: 80px; }
+.cl-ph img { display: block; width: 100%; max-height: 320px; object-fit: cover; }
+.cl-ph.bad { display: none; }

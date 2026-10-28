@@ -67,7 +67,18 @@ async function meExam() {
     meExam();
   };
 }
+/* «Лира спросит потом» (0.61, core/care.py): события, о которых Лира спросит, как прошло; переключатель — care.on */
+async function careLoad() {
+  let d; try { d = await core.call("care_get"); } catch (e) { return; }
+  $("#care-on").checked = !!d.on;
+  $("#care-list").innerHTML = (d.items || []).length ? d.items.map(x => `<li><span class="care-d">${escH(x.ago || new Date(x.day).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }))}</span>`
+    + `<span class="care-w">${escH(x.what)}</span><button class="btn small" type="button" data-cdel="${escH(x.id)}">Не спрашивать</button></li>`).join("")
+    : `<li class="care-empty">Пока ничего. Скажите между делом «в пятницу у меня собеседование» — Лира запомнит и потом спросит, как прошло.</li>`;
+  $$("#care-list [data-cdel]").forEach(b => b.onclick = async () => { try { await core.call("care_remove", { id: b.dataset.cdel }); careLoad(); } catch (e) { toast(e.message); } });
+}
+$("#care-on").onchange = async (e) => { try { await core.call("care_set", { on: e.target.checked }); toast(e.target.checked ? "Лира будет спрашивать, как прошло" : "Больше не спрашивает"); } catch (x) { toast(x.message); } };
 function loadMe() {
+  careLoad();
   core.call("memory_get").then(t => { $("#me-mem").value = t.trim(); }).catch(() => {});
   if (window.mpxLoad) mpxLoad();                     // страницы памяти по людям и темам (studio/mempages.js)
   meExam();

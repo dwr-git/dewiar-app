@@ -86,5 +86,19 @@ function ideasBind() {
     catch (e) { r.className = "res bad"; r.textContent = e.message; $("#idgo").disabled = false; }
   };
 }
+/* голосом (0.61): «предложи идею: …» или «да, предложи» после «этого я пока не умею» — похожая есть: голос за неё; нет — новая */
+async function ideaSuggest(title, text) {
+  title = String(title || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (title.length < 4) return "Ошибка: скажи идею хотя бы в несколько слов.";
+  try {
+    const sim = ((await ideaCall("/ideas/similar", { q: title })).items || []).filter(x => ["plan", "doing", "new", "done"].includes(x.status));
+    if (sim.length) { let x = sim[0];
+      if (x.status === "done") return `Это уже сделано в версии ${x.ver || "новее"}: «${x.title}». Скажи об этом и предложи обновиться.`;
+      if (!x.voted) x = Object.assign({}, x, await ideaCall("/ideas/vote", {}, { id: x.id, on: true }));
+      return `Похожая идея уже есть: «${x.title}» — голос за неё отдан (голосов: ${x.votes}). Скажи коротко: такую уже предлагали, проголосовала; все идеи — «Всё» → «Идеи Лиры».`; }
+    const d = await ideaCall("/ideas/new", {}, { title, text: String(text || "").slice(0, 2000), who: S.who || S.user_name || "", app: D.web ? "web" : "phone" });
+    return `Идея «${d.item.title}» отправлена разработчику — на рассмотрении. Скажи коротко, что предложила; посмотреть — «Всё» → «Идеи Лиры».`;
+  } catch (e) { return "Ошибка: идея не отправилась — " + (e.message || e) + ". Скажи об этом коротко."; }
+}
 function openIdeas() { openSheet("#sh-ideas"); IDV.d = null; ideasRender(); ideasLoad(); }
 document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#ideas-open")) openIdeas(); });

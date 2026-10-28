@@ -225,6 +225,8 @@ class Close:
             self.st["me"] = d.get("me") or {}
             self.st["people"] = d.get("people") or []
             self.st["offers"] = d.get("offers") or []   # «… зовёт вас в «Близкие»» (из «Рефералов») — ждут ответа
+            if "groups" in d:                           # «Группы своих» (0.61): gid, name, mine, owner, members (как близкие)
+                self.st["groups"] = d.get("groups") or []
             mine = sorted({x.get("dev") for x in (self.st["me"].get("devs") or []) if x.get("dev") and x.get("dev") != self.st.get("dev")})
             new = set(mine) - set(self.st.get("own_devs") or [])
             self.st["own_devs"] = mine
@@ -247,7 +249,9 @@ class Close:
         with self._lock:
             people = [dict(p, unread=int(self.st["unread"].get(p["pid"], 0)), marks=list((self.st.get("marks") or {}).get(p["pid"]) or [0, 0]),
                            last=(self.st["hist"].get(p["pid"]) or [{}])[-1]) for p in self.st["people"]]
-            out = {"me": self.st.get("me") or {}, "people": people, "offers": list(self.st.get("offers") or []),
+            groups = [dict(g, unread=int(self.st["unread"].get(g["gid"], 0)), last=(self.st["hist"].get(g["gid"]) or [{}])[-1])
+                      for g in self.st.get("groups") or []]
+            out = {"me": self.st.get("me") or {}, "people": people, "offers": list(self.st.get("offers") or []), "groups": groups,
                    "error": self.error, "invite": self.st.get("invite") or None,
                    "ready": bool(self.st.get("pub"))}
         out["geo"] = self.geo_state()
@@ -323,6 +327,8 @@ class Close:
     def _mark_read(self, pid, h=None):
         """Переписку открыли (или помощница прочитала её вслух) — близкому «прочитано»: его письма до последнего номера
         (24.10, владелец: «не понятно, прочитал ли человек сообщение, дошло ли оно»). Сервер видит только номер."""
+        if self.group_of(pid):                          # в группах «прочитано» не отмечаем
+            return
         h = h if h is not None else list(self.st["hist"].get(pid) or [])
         top = max([int(m.get("sid") or 0) for m in h if not m.get("out")] or [0])
         if top <= int(self.st.setdefault("read_up", {}).get(pid) or 0):
@@ -614,6 +620,61 @@ class Close:
             raise CloseError(f"Не нашла «{who}» среди близких (сейчас: {names}). Добавить — студия → «Близкие» → «Пригласить».")
         return p
 
+    # ---------- «Группы своих» (0.61; сервер — /close/group, /close/gsend) ----------
+    def group_of(self, gid):
+        return next((g for g in self.st.get("groups") or [] if g.get("gid") == gid), None) if str(gid or "").startswith("g") else None
+
+    def group_match(self, who):
+        """«группу Семья», «в группу семья», «Семья» -> группа или None."""
+        w = re.sub(r"^(?:в\s+)?(?:групп[аеуы]|чат[еу]?)\s+", "", str(who or "").lower().replace("ё", "е")).strip(" «»\"")
+        if not w:
+            return None
+        gs = list(self.st.get("groups") or [])
+        n = lambda g: str(g.get("name") or "").lower().replace("ё", "е")   # noqa: E731
+        return next((g for g in gs if n(g) == w), None) or next((g for g in gs if len(w) >= 3 and (n(g).startswith(w) or w.startswith(n(g)))), None)
+
+    def group(self, op, **kw):
+        """Создать {name, pids} / rename {gid, name} / add {gid, pids} / drop {gid, pid} / leave {gid} / delete {gid}. -> состояние."""
+        d = self._req("POST", "/close/group", dict(kw, op=op)).json()
+        with self._lock:
+            self.st["groups"] = d.get("groups") or []
+            self._save()
+        out = self.state()
+        out["gid"] = d.get("gid", "")
+        self.host.emit("close", state=out)
+        return out
+
+    def gsend(self, gid, text="", files=None):
+        """Письмо в группу: один конверт на все устройства участников (и мои)."""
+        if not self.st.get("me") or time.time() - float(self.st.get("hello_at") or 0) > 600:
+            self.hello()
+        g = self.group_of(gid)
+        if not g:
+            raise CloseError("Такой группы больше нет.")
+        if not any(m.get("devs") for m in g.get("members") or []):
+            raise CloseError(f"В «{g['name']}» ещё никто не открывал Dewiar — сообщение не дойдёт.")
+        priv, _ = self._keys()
+        fl = [self._upload(None, Path(p), gid=gid) for p in files or []]
+        body = {"t": (text or "").strip(), "ts": int(time.time() * 1000), "mid": uuid.uuid4().hex[:16],
+                "name": (self.st.get("me") or {}).get("name", ""), "g": gid}
+        if fl:
+            body["f"] = fl
+        if not body["t"] and not fl:
+            raise CloseError("пустое сообщение")
+        targets = {}
+        for m in g.get("members") or []:
+            targets.update(self._targets_of(m.get("devs")))
+        targets.update(self._targets({}))
+        self._req("POST", "/close/gsend", {"gid": gid, "env": CC.encrypt_for(body, priv, self.st["dev"], targets)})
+        item = {"mid": body["mid"], "ts": body["ts"], "out": True, "t": body["t"], "f": [dict(x, path=str(Path(f).resolve())) for x, f in zip(fl, files or [])]}
+        self._add(gid, item)
+        log.info("💌 В группу «%s» ← %s", g["name"], f"текст, {len(body['t'])} зн." if body["t"] else "файл")
+        return dict(item, to=f"в группу «{g['name']}»")
+
+    @staticmethod
+    def _targets_of(devs):
+        return {d["dev"]: CC.b64d(d["pub"]) for d in devs or [] if d.get("pub")}
+
     # ---------- отправка ----------
     def _targets(self, p):
         devs = {d["dev"]: CC.b64d(d["pub"]) for d in p.get("devs") or [] if d.get("pub")}
@@ -622,7 +683,13 @@ class Close:
         return devs
 
     def send(self, who, text="", files=None, kind="msg", payload=None):
-        """Сообщение близкому (text и/или файлы — список путей). -> запись истории."""
+        """Сообщение близкому (text и/или файлы — список путей). -> запись истории. Группа (gid или «в группу Семья») — всем в ней."""
+        if kind == "msg" and payload is None:
+            with self._lock:
+                people = list(self.st["people"])
+            g = self.group_of(who) or (None if any(x["pid"] == who for x in people) or match_name(who, people) else self.group_match(who))
+            if g:
+                return self.gsend(g["gid"], text, files)
         p = self.person(who)
         priv, _ = self._keys()
         if not self.st.get("me") or time.time() - float(self.st.get("hello_at") or 0) > 600:
@@ -685,12 +752,12 @@ class Close:
         self.host.emit("close", state=self.state())
         return True
 
-    def _upload(self, p, path):
+    def _upload(self, p, path, gid=""):
         data = path.read_bytes()
         if len(data) > FILE_MAX:
             raise CloseError(f"«{path.name}» больше 10 МБ — такие пока не отправить.")
         fk = os.urandom(32)
-        d = self._req("POST", "/close/file", raw=CC.seal(fk, data), params={"to": p["pid"]}).json()
+        d = self._req("POST", "/close/file", raw=CC.seal(fk, data), params={"g": gid} if gid else {"to": p["pid"]}).json()
         return {"id": d["id"], "name": path.name, "size": len(data), "type": mimetypes.guess_type(path.name)[0] or "", "key": CC.b64e(fk)}
 
     def _add(self, pid, item):
@@ -756,14 +823,23 @@ class Close:
             except CloseError:
                 pass
         env, peer = it.get("env") or {}, it.get("peer", "")
-        pub = self._pub_of(peer, env.get("fd", ""), it.get("out"))
+        gid = str(env.get("g") or "") if it.get("kind") == "grp" else ""
+
+        def pub_of():
+            if gid and not it.get("out"):                # участник группы — не обязательно близкий: ключ из группы
+                m = next((x for x in (self.group_of(gid) or {}).get("members") or [] if x.get("pid") == peer), None)
+                d = next((x for x in (m or {}).get("devs") or [] if x.get("dev") == env.get("fd")), None)
+                if d:
+                    return CC.b64d(d["pub"])
+            return self._pub_of(peer, env.get("fd", ""), it.get("out"))
+        pub = pub_of()
         if pub is None and not refreshed:
             refreshed = True
             try:
                 self.hello()
             except CloseError:
                 pass
-            pub = self._pub_of(peer, env.get("fd", ""), it.get("out"))
+            pub = pub_of()
         if pub is None:
             log.info("близкие: неизвестное устройство %s — пропускаю", env.get("fd"))
             return 0, refreshed
@@ -811,6 +887,8 @@ class Close:
                 except Exception:  # noqa: BLE001
                     log.exception("семья: не применилось")
             return 0, refreshed
+        if it.get("kind") == "grp":                     # «Группы своих»: в историю группы, с именем написавшего
+            return self._take_group(it, gid, body), refreshed
         if body.get("re"):                              # реакция на сообщение — значком на нём, а не новым сообщением
             if self._react(peer, str(body["re"]), "me" if it.get("out") else "them", str(body.get("e") or "")[:8]) and not it.get("out"):
                 self.host.emit("close_react", pid=peer, mid=str(body["re"]), e=str(body.get("e") or "")[:8], name=it.get("name") or "")
@@ -833,6 +911,25 @@ class Close:
             threading.Thread(target=self._fetch_files, args=(peer, name, item), daemon=True).start()
         self._tell(name, item)
         return 1, refreshed
+
+    def _take_group(self, it, gid, body):
+        if not gid:
+            return 0
+        g = self.group_of(gid) or {}
+        item = {"mid": body.get("mid") or str(it.get("id")), "ts": _int(body.get("ts")) or _int(it.get("ts")) * 1000, "out": bool(it.get("out")),
+                "t": str(body.get("t") or "")[:20000], "f": [x for x in body.get("f") or [] if isinstance(x, dict)][:10],
+                "from": it.get("peer", ""), "who": str(it.get("name") or body.get("name") or "")[:40]}
+        if not self._add(gid, item) or item["out"]:
+            return 0
+        name = f"{(item['who'] or 'Кто-то').split()[0]} в «{g.get('name') or 'группе'}»"
+        with self._lock:
+            self.st["unread"][gid] = int(self.st["unread"].get(gid, 0)) + 1
+            self._save()
+        self.host.emit("close_msg", pid=gid, name=name, text=item["t"], files=[x.get("name") for x in item["f"]])
+        if item["f"]:
+            threading.Thread(target=self._fetch_files, args=(gid, g.get("name") or "Группа", item), daemon=True).start()
+        self._tell(name, item)
+        return 1
 
     def _pub_of(self, peer, dev, out):
         who = self.st.get("me") if out else (next((p for p in self.st["people"] if p["pid"] == peer), None) or self._work_peer(peer))

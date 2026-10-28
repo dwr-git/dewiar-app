@@ -139,6 +139,11 @@ REPEAT_RX = re.compile(r"^\W*(?:\w+,\s*)?(?:ну\s+)?(?:а\s+)?(?:теперь|�
 # «урок дня», «давай урок», «следующий урок» — курс «Неделя с Лирой» без модели (core/course.py)
 COURSE_RX = re.compile(r"^(?:лира[, ]+)?(?:давай |начн[её]м |покажи |какой |открой )?(?:урок(?: дня| курса)?|следующий урок|курс(?: неделя с лирой)?)$")
 
+IDEA_RULE = ("\n\nЧего-то не умеешь и инструмента для этого нет — честно скажи и предложи одной фразой: «Хотите, предложу это "
+             "разработчику как идею?». Согласятся или сами скажут «предложи идею: …» — suggest_idea (там же найдётся похожая: тогда "
+             "голос за неё). Без согласия не вызывай.")
+
+
 class AnswerMixin:
     # ---------- ответ ----------
 
@@ -502,6 +507,7 @@ class AnswerMixin:
         if with_tools:
             base += self.skills.prompt_lean() if self.s.get("llm", "lean_prompt") else self.skills.prompt()
             base += self.toolbox.off_note()            # выключенные человеком умения — «выключено», а не «не умею»
+            base += IDEA_RULE                          # «Идеи Лиры» (0.61): чего не умеешь — предложить разработчику
             try:
                 import done as _done
                 base += _done.prompt(self.done)        # «Дела»: отметить сделанное, сколько сегодня (done.py)
@@ -1461,6 +1467,9 @@ class AnswerMixin:
                 ag = self.agenda_context(text)             # «что у нас по плану» — дела и календарь сразу перед моделью
                 if ag.strip():
                     ctx.append(ag.strip())
+                cr = self.care_context(text, turn)         # «Заботливая память»: прошло важное — спросить, как прошло
+                if cr:
+                    ctx.append(cr)
                 from quality import DIAGRAM_ASK, PAGE_ASK
                 if PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
                     system += ("\n\nСЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "

@@ -77,7 +77,7 @@ with sync_playwright() as p:
       for (let i = 0; i < 40 && seen.length < n0 + 2; i++) await new Promise(r => setTimeout(r, 100));
       await new Promise(r => setTimeout(r, 400));
       R.retried = seen.length - n0; R.bot3 = document.querySelector("#bot").textContent;
-      R.inc = JSON.parse(D.pref("net_inc") || "[]");
+      R.inc = JSON.parse(prefGet("net_inc") || "[]");
       // файлы задач: текст и картинки открываются в приложении
       R.viewPy = fileViewHtml("main.py", btoa("print(1) <b>"));
       R.viewPng = fileViewHtml("chart.png", "iVBORw0KGgo=");
@@ -91,9 +91,10 @@ with sync_playwright() as p:
 
 ok("Калькулятор" in R["bot1"] and "Сделанное" in R["bot1"] and "Готово." != R["bot1"].strip(), f"сделала и промолчала — говорит, что сделано и где найти: {R['bot1']}")
 ok(R["hist1"]["role"] == "assistant" and "Калькулятор" in R["hist1"]["content"], "в историю — не пустой ответ")
-ok(R["lastUser"].strip() == "Какая погода сегодня?", f"следующий вопрос не склеивается с прошлой просьбой: {R['lastUser'][:120]}")
+ok(R["lastUser"].split("(Сообщение пользователя)\n")[-1].strip() == "Какая погода сегодня?", f"следующий вопрос не склеивается с прошлой просьбой: {R['lastUser'][:120]}")
 ok(R["bot2"].startswith("Солнечно"), "на новый вопрос — новый ответ, а не «Готово»")
-ok("ЧТО БЫЛО НЕДАВНО" in R["sys"] and "«Калькулятор»" in R["sys"] and "сделай калькулятор" in R["sys"].lower(), "в подсказке — что было за неделю и что сделано")
+ctx_ = R["sys"] + R["lastUser"]   # с 0.5x справка к ходу — в реплике человека (putContext), не в системной подсказке
+ok("ЧТО БЫЛО НЕДАВНО" in ctx_ and "«Калькулятор»" in ctx_ and "сделай калькулятор" in ctx_.lower(), "в подсказке — что было за неделю и что сделано")
 ok("калькулятор" in R["recall"].lower() and "Вы:" in R["recall"], f"recall вспоминает разговор: {R['recall'][:160]}")
 ok("на экране" in R["openMade"] and R["viewOpen"], "open_made открывает сделанное на экране")
 ok({"recall", "open_made", "show_photo"} <= set(R["toolNames"]), "новые инструменты у модели")
@@ -103,7 +104,8 @@ ok("домашней" not in R["errCity"] and "дома" not in R["errCity"] and
 ok("дома" in R["errHome"], f"домашний сервер — «вы не дома»: {R['errHome']}")
 ok("домашней" not in R["errRefused"], "отказ облака — не «домашняя сеть»")
 ok(R["retried"] >= 2 and R["bot3"].startswith("Солнечно"), f"сбой связи — повторная попытка, ответ пришёл ({R['retried']}): {R['bot3']}")
-ok(len(R["inc"]) == 1 and R["inc"][0]["host"] == "dewiar.pro" and "15000ms" in R["inc"][0]["err"], f"сбой записан для отчёта: {R['inc']}")
+# пакеты 22.10 №189 и 23.10 №208: повтор помог — сбой «прошёл сам», в отчёт разработчику не идёт (журнал очищен)
+ok(all(x.get("ok") for x in R["inc"]), f"повтор помог — сбой не считается для отчёта: {R['inc']}")
 ok("<pre" in R["viewPy"] and "&lt;b&gt;" in R["viewPy"] and "data:image/png;base64,iVBOR" in R["viewPng"] and R["viewable"], "файлы задач: код и текст — текстом, картинки — картинкой, pptx — в «Загрузки»")
 ok(R["call"].strip() == "Кому позвонить?", f"«Позвони» без имени — переспрашивает: {R['call']}")
 ok(not errors, f"без ошибок JavaScript: {errors}")

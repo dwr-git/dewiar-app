@@ -11,6 +11,7 @@ function newsShow(r) {
   const d = $("#news-dlg"); if (!d.open) d.showModal(); d.scrollTop = 0; $("#nw-title").focus();
   return true;
 }
+$("#nw-ideas-go").onclick = () => { $("#news-dlg").close(); core.call("news_seen").catch(() => {}); const b = $('nav button[data-p="ideas"]'); if (b) b.click(); };   // 0.61: «Что нового» → «Идеи Лиры»
 $("#nw-ok").onclick = () => { $("#news-dlg").close(); core.call("news_seen").catch(() => {}); };
 $("#news-dlg").addEventListener("cancel", () => core.call("news_seen").catch(() => {}));
 $("#ab-news").onclick = () => core.call("news", { all: true }).then(r => { if (!newsShow(r)) toast("Новостей пока нет"); }).catch(e => toast(e.message));

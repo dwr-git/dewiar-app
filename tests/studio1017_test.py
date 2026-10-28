@@ -191,9 +191,9 @@ try:
         r = ph.evaluate("() => [(clLoad().hist.p1 || []).map(m => m.t), document.querySelectorAll('#cl-msgs .clm').length]")
         ok(r[0] == ["Привет", "Привет", "Ку-ку ку-ку", "Михалыч, я доехал, всё ок", "Отлично!"] and r[1] == 5,
            f"телефон: долгое нажатие → «Удалить у меня» — ушло одно это сообщение: {r[0]}")
-        ph.click("#cl-wipe"); ph.wait_for_timeout(300)
+        ph.click("#cl-album"); ph.wait_for_timeout(300); ph.click("#cl-wipe"); ph.wait_for_timeout(300)   # 0.61: корзина — в «Фото и файлы»
         r = ph.evaluate("() => [clLoad().hist.p1 === undefined, clLoad().people.length, !!document.querySelector('#cl-wipe')]")
-        ok(r == [True, 1, False], f"телефон: корзина в шапке — переписка очищена, человек остался: {r}")
+        ok(r == [True, 1, False], f"телефон: «Фото и файлы» → «Очистить переписку» — очищена, человек остался: {r}")
         ok(not perr, f"телефон без ошибок: {perr[:3]}")
         b.close()
 finally:

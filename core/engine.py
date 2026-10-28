@@ -194,6 +194,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from settings import CONFIG_DIR as _CFG
         self.money = Money(_CFG / "money.json", self.workspace, self._default_currency)
         self.toolbox.hooks["money"] = self.money
+        from care import Care
+        self.care = Care(STATE_DIR / "care.json")        # «Заботливая память»: прошло важное — спросить, как прошло (care.py)
         from sync import Sync
         self.sync = Sync(self)                         # телефон ↔ компьютер через облако Dewiar
         from close import Close

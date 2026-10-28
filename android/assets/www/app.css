@@ -1432,3 +1432,73 @@ body.neu :is(.idfind, #idbody, .idq) { background: var(--glass); box-shadow: var
 .a-course .ai, .a-qa .ai { background: linear-gradient(140deg, #7ee2c0, #2fb488); box-shadow: 0 8px 18px -10px rgba(47,180,136,.9); }
 .a-kids .ai { background: linear-gradient(140deg, #ffc2a3, #f08a5d); }
 .a-news .ai { background: linear-gradient(140deg, #a8e1ff, #6aa8ff); }
+.nwidea { display: flex; align-items: center; gap: 10px; margin: 12px 0; padding: 10px 12px; border-radius: 16px; background: rgba(242,169,59,.14); }
+.nwidea > span { font-size: 18px; flex: none; } .nwidea p { margin: 0; flex: 1; font-size: 13px; line-height: 1.4; } .nwidea .btn { flex: none; }
+
+/* «Группы своих» в «Близких» (groups.js, 0.61): строка группы — стопка лиц; мастер «Новая группа» — выбор близких */
+.grhead { display: flex; align-items: center; justify-content: space-between; margin: 18px 2px 8px; }
+.grhead h3 { margin: 0; }
+.grhead .btn { display: inline-flex; align-items: center; gap: 6px; }
+.grhead .btn svg, .clh .ib svg.gric { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.grnone { margin: 0 4px 6px; }
+.grstack { flex: none; display: flex; align-items: center; }
+.grstack { --ring: rgba(22,23,34,.95); }
+body.light .grstack, body.neu .grstack { --ring: rgba(255,255,255,.92); }
+.grstack .clava { width: 36px; height: 36px; font-size: 14px; box-shadow: 0 0 0 2px var(--ring); }
+.grstack .clava + .clava { margin-left: -12px; }
+.grstack .clava.more { background: var(--frost-hi); color: var(--ink); font: 700 11px Manrope, sans-serif; }
+.clp.grp .grstack { width: 60px; }
+.clh .grstack .clava { width: 30px; height: 30px; font-size: 12px; }
+.grtitle { flex: 1; min-width: 0; text-align: left; background: none; padding: 0; color: inherit; }
+.grtitle small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grwho { font-size: 12.5px; font-weight: 700; margin-bottom: -2px; }
+.grname { width: 100%; box-sizing: border-box; padding: 13px 15px; border-radius: 14px; border: 0; background: var(--frost); box-shadow: inset 0 0 0 1.5px var(--frost-hi); color: var(--ink); font: inherit; font-size: 16px; }
+.grname:focus { outline: none; box-shadow: inset 0 0 0 2px var(--brand); }
+.row2 .grname { flex: 1; width: auto; }
+.grpick { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.grpk { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 16px; background: var(--frost); cursor: pointer; }
+.grpk input { position: absolute; opacity: 0; pointer-events: none; }
+.grpk span { flex: 1; min-width: 0; font-size: 15px; }
+.grck { width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--frost-hi); flex: none; position: relative; }
+.grpk.on .grck { background: var(--brand); box-shadow: none; }
+.grpk.on .grck::after { content: ""; position: absolute; left: 8px; top: 5px; width: 6px; height: 11px; border: solid #fff; border-width: 0 2.2px 2.2px 0; transform: rotate(45deg); }
+.grpk input:focus-visible + .clava { outline: 2px solid var(--brand); outline-offset: 2px; }
+.clp.me { background: none; box-shadow: inset 0 0 0 1px var(--frost-hi); }
+body #sh-close .btn#gr-leave { color: #d93d42; } body:not(.light):not(.neu) #sh-close .btn#gr-leave { color: #ff8a8a; }
+
+/* Фото в «Близких» (album.js, 0.61): картинкой в переписке, на весь экран, альбом, «Переслать» */
+.clph { display: block; padding: 0; border-radius: 13px; overflow: hidden; background: rgba(127,127,140,.18); min-width: 120px; min-height: 90px; max-width: 240px; }
+.clph img { display: block; width: 100%; max-height: 300px; object-fit: cover; }
+.clph.wait { width: 200px; height: 150px; background: linear-gradient(100deg, rgba(127,127,140,.14) 30%, rgba(127,127,140,.28) 50%, rgba(127,127,140,.14) 70%) 0 0 / 300% 100%; animation: clph-w 1.4s linear infinite; }
+@keyframes clph-w { to { background-position: -300% 0; } }
+@media (prefers-reduced-motion: reduce) { .clph.wait { animation: none; } }
+.clph.bad { display: flex; align-items: center; gap: 8px; padding: 10px; min-height: 0; font-size: 13px; } .clph.bad svg { width: 18px; height: 18px; flex: none; }
+.clview, .clfwd { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; background: #0c0d13; color: #fff; padding: calc(10px + var(--safe-t, 0px)) 14px calc(14px + var(--safe-b, 0px)); }
+.clv-top { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.clv-top span { flex: 1; min-width: 0; } .clv-top b { display: block; font-size: 16px; } .clv-top small { display: block; font-size: 12.5px; opacity: .7; }
+body .clview .ib.soft, body .clview .cla-f .ib { color: #fff; background: rgba(255,255,255,.12); box-shadow: none; }
+.clview .ib svg, .clfwd .ib svg, .clv-acts svg, .cla-f svg, .clph svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.clv-img { flex: 1; min-height: 0; display: grid; place-items: center; }
+.clv-img img { max-width: 100%; max-height: 100%; border-radius: 10px; object-fit: contain; }
+.clv-acts { display: flex; gap: 10px; padding-top: 12px; }
+.clv-acts .btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; } .clv-acts svg { width: 19px; height: 19px; }
+body .clview .clv-acts .btn:not(.p) { background: rgba(255,255,255,.12); color: #fff; box-shadow: none; }
+.cla-body { flex: 1; overflow-y: auto; margin: 6px -4px 0; padding: 0 4px; }
+.cla-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; border-radius: 12px; overflow: hidden; }
+.cla-grid .clph { max-width: none; min-width: 0; min-height: 0; width: auto; height: auto; aspect-ratio: 1; border-radius: 0; }
+.cla-grid .clph img { width: 100%; height: 100%; max-height: none; }
+.clalbum h3 { color: rgba(255,255,255,.7); margin: 18px 2px 8px; }
+.cla-f { display: flex; align-items: center; gap: 10px; padding: 10px 6px 10px 12px; border-radius: 14px; background: rgba(255,255,255,.08); margin-bottom: 6px; }
+.cla-f > svg { width: 22px; height: 22px; flex: none; opacity: .8; } .cla-f span { flex: 1; min-width: 0; }
+.cla-f b { display: block; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cla-f small { opacity: .65; font-size: 12px; }
+.cla-f .ib { width: 38px; height: 38px; flex: none; color: #fff; background: rgba(255,255,255,.1); } .cla-f .ib svg { width: 18px; height: 18px; }
+.clfwd { justify-content: flex-end; background: rgba(8,9,14,.6); padding: 0; }
+.clfwd-card { background: linear-gradient(#1e1e26, #15151b); color: var(--ink); border-radius: 26px 26px 0 0; padding: 14px 16px calc(18px + var(--safe-b, 0px)); max-height: 75vh; display: flex; flex-direction: column; }
+body.light .clfwd-card, body.neu.light .clfwd-card { background: #f4f6fb; }
+.clfwd-card .clv-top small { color: var(--muted); opacity: 1; }
+.clfwd-list { overflow-y: auto; margin-top: 8px; }
+.clfwd-list .clp { width: 100%; } .clfwd-list .clp.busy { opacity: .6; }
+.clrepick .fw svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.clfwd-card .ib.soft { flex: none; }
+.clh > div[style*="flex:1"] b, .clh > div[style*="flex:1"] small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body .clview .cla-wipe { margin-top: 22px; background: rgba(255,255,255,.08); color: #ff9a9a; box-shadow: none; }

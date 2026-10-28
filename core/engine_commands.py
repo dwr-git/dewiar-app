@@ -14,7 +14,7 @@ _KIDS_LOCKED = ("account_", "backup_", "mode_set", "senior_", "notes_import", "w
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_", "month_")
 
 
 def _kids_blocked(cmd, a):
@@ -501,6 +501,23 @@ class CommandsMixin:
         kids = getattr(self, "kids", None)
         if kids and kids.locked() and _kids_blocked(cmd, a):
             raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
+        if cmd in ("month_get", "month_say", "month_hide"):   # «Мой месяц с Лирой» (month.py)
+            import month as M
+            ym = str(a.get("ym") or "") or M.prev_ym()
+            if cmd == "month_hide":
+                self.s.update({"ui": {"month_hide": ym}})
+                return {"ok": True}
+            d = M.gather(self, ym)
+            if cmd == "month_say":
+                threading.Thread(target=self.ask, args=(M.context(d) + "\n\n" + M.PROMPT,), kwargs={"raw": True, "shown": f"📅 Мой {d['title']} с Лирой"},
+                                 daemon=True).start()
+            return dict(d, hidden=(self.s.get("ui") or {}).get("month_hide") == ym)
+        if cmd in ("care_get", "care_remove", "care_set"):   # «Лира спросит потом» (care.py)
+            if cmd == "care_remove":
+                self.care.remove(str(a.get("id") or ""))
+            if cmd == "care_set":
+                self.s.update({"care": {"on": bool(a.get("on"))}})
+            return {"on": (self.s.get("care") or {}).get("on", True) is not False, "items": self.care.public()}
         if cmd.startswith("ideas_"):             # «Идеи Лиры»: список, голос, своя идея (ideas.py → сайт)
             import ideas
             return ideas.command(self, cmd, a)
@@ -1465,6 +1482,17 @@ class CommandsMixin:
                     return c.send(a.get("pid", ""), a.get("text", ""), files)
                 if cmd == "close_meet":             # «Встречи» в студии (studio/meet.js) — через то же пространство, что телефон
                     return c.meet(a.get("path", ""), a.get("body") or {})
+                if cmd == "close_group":            # «Группы своих»: create / rename / add / drop / leave / delete
+                    return c.group(str(a.get("op") or ""), **{k: a[k] for k in ("gid", "name", "pids", "pid") if k in a})
+                if cmd == "close_thumb":            # фото из переписки — картинкой в студии (0.61): только скачанное в «Близкие», до 6 МБ
+                    import base64 as _b64
+                    import mimetypes as _mt
+                    base = (Path(self.workspace.root) / "Близкие").resolve()
+                    p = Path(str(a.get("path") or "")).resolve()
+                    t = _mt.guess_type(p.name)[0] or ""
+                    if base not in p.parents or not t.startswith("image/") or not p.is_file() or p.stat().st_size > 6 * 1024 * 1024:
+                        return {"data": ""}
+                    return {"data": f"data:{t};base64," + _b64.b64encode(p.read_bytes()).decode()}
                 if cmd == "close_wave":             # 👋 с радара «Рядом»
                     return c.wave(a.get("pid", ""))
                 if cmd == "close_react":            # реакция на сообщение (👍 ❤️ …)

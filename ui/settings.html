@@ -134,6 +134,7 @@
     <div id="hm-body">
       <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p><button class="hm-mode" type="button" id="hm-mode" aria-haspopup="dialog"><i aria-hidden="true"></i><span>Лира — для меня</span></button></div><div class="sn-wrap" id="sn"></div></div>
       <div class="hm-morning" id="hm-morning" hidden></div>
+      <div class="hm-morning hm-month" id="hm-month" hidden></div>
       <div class="hm-today" id="hm-today"></div>
       <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
       <div class="hm-apps" id="hm-apps"></div>
@@ -363,6 +364,8 @@
           <span><small>Близкие видят вас как</small><b id="cl-me-name">Ваше имя</b><small id="cl-me-about"></small></span><em>Изменить</em></button>
         <div id="cl-offers"></div>
         <div id="cl-people"></div>
+        <div class="cl-gh" id="cl-gh"><b>Группы</b><button class="btn small" id="cl-gnew" type="button">Новая группа</button></div>
+        <div id="cl-groups"></div>
         <button class="btn primary" id="cl-inv-go" style="width:100%">Пригласить близкого</button>
         <details class="cl-add"><summary class="hint">Пришла ссылка-приглашение?</summary>
           <div class="actions" style="margin:8px 0 0"><input type="text" id="cl-link" placeholder="вставьте ссылку" style="flex:1;min-width:0"><button class="btn" id="cl-link-go">Принять</button></div></details>
@@ -396,6 +399,7 @@
             <p class="hint" style="margin:8px 0 0">Печать Dewiar читают сам Dewiar и Google Lens. Камера не узнаёт? <a href="#" id="cl-inv-qr">Показать обычный QR</a></p>
           </div>
         </div>
+        <div class="cl-gp" id="cl-gp" hidden></div>
         <div class="cl-chat" id="cl-chat">
           <div class="cl-empty" id="cl-empty"><b>Здесь будет переписка</b><span>Пригласите близкого — когда он примет приглашение, можно писать прямо отсюда или голосом.</span></div>
           <div class="cl-head" id="cl-head" style="display:none"><i class="cl-ava" id="cl-ava"></i><div><b id="cl-who"></b><span id="cl-devs"></span></div><span style="flex:1"></span><button class="btn small" id="cl-call" title="Позвонить — окно звонка откроется в браузере">Позвонить</button><button class="btn small" id="cl-vcall" title="Видеозвонок">Видео</button><button class="btn small" id="cl-pick" title="Отметить сообщения и удалить их у себя (одно — правой кнопкой по нему)">Удалить сообщения</button><button class="btn small danger" id="cl-del">Убрать из близких</button></div>
@@ -876,6 +880,13 @@
       <p>Это проверочные фразы экзамена способностей — писали их не вы. Отметьте, что убрать; остальное останется как есть.</p>
       <div id="me-exam-list"></div>
       <div class="actions" style="margin:12px 0 0"><button class="btn primary" id="me-exam-go">Убрать отмеченное</button><button class="btn" id="me-exam-keep">Оставить</button></div>
+    </div>
+    <div class="care-box" id="care-box">
+      <div class="care-h"><div><h2>Лира спросит потом</h2>
+        <p class="hint">Вы говорили о важном впереди — врач, экзамен, поездка, приезд близких. Когда это пройдёт, Лира один раз тепло
+          спросит, как всё прошло. Ничего не уходит в интернет; лишнее — уберите.</p></div>
+        <label class="tg" title="Заботливая память"><input type="checkbox" id="care-on" aria-label="Заботливая память"><i></i></label></div>
+      <ul class="care-list" id="care-list"></ul>
     </div>
     <h2>Что ассистент помнит</h2>
     <p class="hint" style="margin-bottom:10px">По людям и темам, с датами. Ассистент дописывает сам, когда узнаёт важное надолго («запомни, что…»); изменилось — заменит новым и запомнит, как было раньше. Лишнее — «×».</p>
@@ -1975,6 +1986,7 @@
   </dialog>
   <dialog class="nwdlg" id="news-dlg" aria-labelledby="nw-title">
     <h2 id="nw-title" tabindex="-1" autofocus>Что нового</h2><p class="nwsub" id="nw-sub"></p><div id="nw-list"></div>
+    <div class="nw-ideas" id="nw-ideas"><span aria-hidden="true">💡</span><p>Что Лире уметь дальше? Поддержите голосом нужное или предложите своё.</p><button class="btn" id="nw-ideas-go" type="button">Идеи Лиры</button></div>
     <div class="actions" style="margin:16px 0 0;justify-content:flex-end"><button class="btn primary" id="nw-ok">Понятно</button></div>
   </dialog>
   <section id="p-ideas" class="wide">
@@ -2186,7 +2198,9 @@
 <script src="studio/look.js"></script>
 <script src="studio/home.js"></script>
 <script src="studio/morning.js"></script>
+<script src="studio/month.js"></script>
 <script src="studio/close.js"></script>
+<script src="studio/groups.js"></script>
 <script src="studio/radar.js"></script>
 <script src="studio/meet.js"></script>
 <script src="studio/refs.js"></script>

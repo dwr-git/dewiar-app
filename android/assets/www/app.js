@@ -1793,6 +1793,7 @@ function systemPrompt() {
     + "не говори «сохранила», «записала», «теперь она в заметках», если в этом ходе не вызвала save_note. Не нашла заметку — так и скажи и покажи содержимое в ответе.",
     BOUNDARY_RULE, privacyRule(),
     "Никогда не говори, что у тебя нет доступа к интернету или свежим данным: погода, новости, курсы — ищи (web_search) и отвечай по найденному. "
+    + "ЧЕГО НЕ УМЕЕШЬ: честно скажи и предложи одной фразой: «Хотите, предложу это разработчику как идею?» — согласятся или сами скажут «предложи идею: …» — suggest_idea (похожая найдётся сама — голос за неё). Без согласия не вызывай. "
     + "КАРТИНКИ И СХЕМЫ: рассказываешь о том, что лучше увидеть (руны и орнаменты, животные, растения, картины, здания, места), или просят «покажи» — покажи картинки (show_images) и говори о них как о показанных; не пиши «вот изображение», не вызвав его. Процесс, связи, устройство, план понятнее схемой — нарисуй её блоком ```mermaid (flowchart, mindmap, timeline): схема появится на экране, вслух её не читают — словами скажи главное. Нет блока ```mermaid — нет и схемы: не говори «схема на экране», не нарисовав её; схему не делай через make_app. "
     + "У тебя есть камера телефона (take_photo): «сфотографируй меня», «посмотри, что это», «прочитай надпись» — снимай и описывай. "
     + "«Посмотри, как я выгляжу», «покажи мне моё лицо» — take_photo с camera: front (камера на человека); «где я», «что вокруг», «другой камерой» — camera: back. "
@@ -1829,6 +1830,32 @@ const isOllama = () => S.llm.kind === "ollama";
 const ollamaRoot = () => llmBase().replace(/\/v1$/, "");
 function llmHeaders() { const h = { "Content-Type": "application/json" }; if (S.llm.api_key) h.Authorization = "Bearer " + S.llm.api_key; if (/openrouter/.test(llmBase())) { h["HTTP-Referer"] = "https://dewiar.pro"; h["X-Title"] = "Dewiar"; } return h; }
 var lastPics = null;                               // последние присланные фото: {urls, at} — только в памяти
+/* «Заботливая память» (0.61, как core/care.py): «завтра иду к врачу», «в пятницу собеседование» — запомнить (pref care);
+   событие прошло (вчера и раньше, или сегодня с 18:00) — один раз к ближайшему ответу: «спроси, как прошло». S.care === false — выкл. */
+const CARE_EV = /(?:^|[^а-яё])(?:врач\S*|доктор\S*|стоматолог\S*|зубн\S+|терапевт\S*|больниц\S*|поликлиник\S*|анализ\S*|обследовани\S*|операци\S*|узи|мрт|при[её]м\S*|собеседовани\S*|интервью|экзамен\S*|зач[её]т\S*|защит\S*|выступлени\S*|доклад\S*|презентаци\S*|концерт\S*|соревновани\S*|турнир\S*|матч\S*|переезд\S*|свадьб\S*|день рождени\S*|юбиле\S*|поездк\S*|отпуск\S*|командировк\S*|лечу|улетаю|уезжаю|еду|поеду|поезд\S*|самол[её]т\S*|рейс\S*|приезжа\S*|прилета\S*|в гости|свидани\S*|сдаю|суд\S*|нотариус\S*)(?![а-яё])/i;
+const CARE_ME = /(?:^|[^а-яё])(?:я|у меня|у нас|мне|нам|мы|мой|моя|мои|наш\S*|мам\S*|пап\S*|сын\S*|доч\S*|муж\S*|жен\S*|бабушк\S*|дедушк\S*|брат\S*|сестр\S*|иду|пойду|еду|поеду|лечу|улетаю|уезжаю|сдаю|выступаю|записал\S*)(?![а-яё])/i;
+const careList = () => { try { return JSON.parse(prefGet("care") || "[]") || []; } catch (e) { return []; } };
+function careNote(text) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (S.care === false || kidsOn() || t.length < 8 || t.length > 400 || /\?$/.test(t) || /напомни|поставь|будильник|таймер|погод/i.test(t) || !CARE_EV.test(t) || !CARE_ME.test(t)) return null;
+  const d = dayOf(t); if (!d) return null;
+  const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, list = careList();
+  if (list.some(x => x.day === day && x.what.toLowerCase() === t.toLowerCase())) return null;
+  const it = { id: Date.now().toString(36), what: t.slice(0, 160), day, asked: 0 };
+  prefSet("care", JSON.stringify(list.concat([it]).slice(-40))); plog("info", `💛 заботливая память: «${clip(t, 60)}» (${day})`);
+  return it;
+}
+function careDue() {
+  if (S.care === false || kidsOn()) return null;
+  const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return careList().find(x => { if (x.asked) return false; const d = new Date(x.day + "T00:00:00"), ago = Math.round((today - d) / 864e5);
+    return ago <= 5 && (ago > 0 || (ago === 0 && now.getHours() >= 18)); }) || null;
+}
+function careLine(x) {
+  const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate()), ago = Math.round((today - new Date(x.day + "T00:00:00")) / 864e5);
+  return `[Заботливая память] Пользователь заранее говорил: «${x.what}» — это было ${ago === 0 ? "сегодня" : ago === 1 ? "вчера" : ago === 2 ? "позавчера" : ago + " дня назад"}. Если к месту, в конце ответа одной тёплой фразой спроси, как прошло (без нравоучений). Если он сам уже рассказал — не спрашивай.`;
+}
+function careMark(id) { prefSet("care", JSON.stringify(careList().map(x => x.id === id ? Object.assign({}, x, { asked: Date.now() }) : x))); }
 let lastDocs = null;                               // текстовые вложения прошлого хода (№386): спросят о файле — приложим снова
 const DOC_REF_RX = /(прикреп|вложени|файл|документ|json|csv|таблиц|в нём|в нем|в ней|из него|прочита|разбер)/i;
 const PIC_KEEP_MS = 20 * 60e3, PIC_REF_RX = /(картинк|скрин|фото|снимк|снимок|изображени|рисун|прикреп|вложени|на нём|на нем|на ней|на экране|файл)/i;
@@ -2360,7 +2387,12 @@ async function ask(text, opts = {}) {
     if (pics.length) { modelOnce = await visionModel(); lastPics = { urls: pics.map(a => a.url), at: Date.now() }; }
     plog("info", `📎 вложения: ${att.map(a => a.kind === "image" ? "фото" : a.name).join(", ")}`);
     if (docs.length) lastDocs = { docs, at: Date.now() };
-  } else if (!opts.hidden && lastDocs && Date.now() - lastDocs.at < PIC_KEEP_MS && DOC_REF_RX.test(text)) {
+  }
+  if (!opts.hidden) {                              // «Заботливая память»: сказанное — запомнить; прошло важное — спросить, как прошло
+    try { careNote(text); const cx = careDue(); if (cx) { const last = msgs[msgs.length - 1];
+      if (typeof last.content === "string") { last.content += "\n\n" + careLine(cx); careMark(cx.id); plog("info", "💛 спрошу, как прошло: " + clip(cx.what, 50)); } } } catch (e) { }
+  }
+  if (att.length) { /* уже приложено выше */ } else if (!opts.hidden && lastDocs && Date.now() - lastDocs.at < PIC_KEEP_MS && DOC_REF_RX.test(text)) {
     // №386 (28.10): прислал JSON-файл, потом «а почему ты не можешь прочитать вложение?» — а в истории файла нет (только
     // слова), и модель отвечала «вижу только ссылку». Говорят о присланном файле — прикладываем его текст снова
     const last = msgs[msgs.length - 1];
@@ -3464,12 +3496,14 @@ function toolSpecs() {
     { name: "battery", description: "Заряд батареи телефона.", parameters: O({}) },
     { name: "save_note", description: "Записать заметку или список (title — коротко, text — содержимое). folder — папка, только если её назвали («в папку Работа»).", parameters: O({ title: STR, text: STR, folder: STR }, ["title", "text"]) },
     { name: "find_notes", description: "Найти в заметках по словам.", parameters: O({ query: STR }, ["query"]) },
+    ...(kidsOn() ? [] : [{ name: "suggest_idea", description: "Предложить идею разработчику Dewiar («Идеи Лиры»): когда просят «предложи идею…» или согласились предложить то, чего ты не умеешь. title — суть одной фразой, text — подробнее. Похожая уже есть — голос уйдёт за неё. Без согласия не вызывай.", parameters: O({ title: STR, text: STR }, ["title"]) }]),
     { name: "recall", description: "Вспомнить, о чём говорили и что делали за последние дни (журнал разговоров на телефоне и сделанное): «что мы делали на этой неделе», «о чём я спрашивал вчера». days — за сколько дней (1–14), query — слова для поиска (можно пусто).", parameters: O({ days: NUM, query: STR }) },
     { name: "open_made", description: "Открыть на экране то, что ты уже сделал на телефоне (make_app: калькулятор, игра, страница): «покажи калькулятор», «где программа, которую ты сделал». title — часть названия; пусто — последнее.", parameters: O({ title: STR }) },
     { name: "show_photo", description: "Снова показать на экране последний снимок с камеры (take_photo), с кнопкой «Сохранить».", parameters: O({}) },
     { name: "remember", description: "Запомнить надолго факт о пользователе одной фразой в третьем лице.", parameters: O({ fact: STR }, ["fact"]) },
     { name: "money_add", description: `Записать уже сделанный расход или полученный доход. Бюджет, лимит, план («бюджет на мебель — 50 тысяч», «заложим 70») — не расход: это remember. kind expense|income, amount — число, currency (по умолчанию ${CUR}), category по-русски, note.`,
       parameters: O({ kind: { type: "string", enum: ["expense", "income"] }, amount: NUM, currency: STR, category: STR, note: STR }, ["kind", "amount"]) },
+    { name: "month_summary", description: "Итоги месяца пользователя («Мой месяц с Лирой»): сделанные дела и траты — когда спрашивают «как прошёл мой месяц», «итоги октября», «что я сделал за месяц». month — 2026-10, prev — прошлый, пусто — текущий.", parameters: O({ month: STR }) },
     { name: "money_report", description: "Итоги по деньгам: period today|week|month|year.", parameters: O({ period: { type: "string", enum: ["today", "week", "month", "year"] } }) },
     { name: "call_persona", description: "Позвать другого персонажа команды по имени (он ответит своим голосом).", parameters: O({ name: STR }, ["name"]) },
     { name: "make_app", description: "Сделать мини-программу или страницу прямо на телефоне: калькулятор, игра, таймер, конвертер, викторина, шпаргалка, открытка, презентация (слайды листаются кнопками и свайпом). html — ОДИН самодостаточный HTML-файл: CSS и JS внутри, без внешних файлов и библиотек, компактный код; под экран телефона (крупные кнопки), тёмная тема, по-русски. title — короткое название. Программа сразу откроется на экране и сохранится в «Мой день» → «Сделанное».",
@@ -3525,6 +3559,7 @@ async function runTool(name, a) {
   if (HANDS_SET.has(name)) return handsTool(name, a || {});
   a = coerceArgs(name, a);
   switch (name) {
+    case "suggest_idea": return ideaSuggest(a.title, a.text);     // «Идеи Лиры» голосом (ideas.js, 0.61)
     case "set_reminder": {
       let at = null;
       if (a.in_minutes) at = new Date(Date.now() + a.in_minutes * 60000);
@@ -3712,6 +3747,7 @@ async function runTool(name, a) {
       return `Записано: ${x.kind === "income" ? "+" : "−"}${x.amount} ${x.currency}, ${x.category}.`;
     }
     case "money_report": return moneyReport(a.period || "month").text;
+    case "month_summary": return monthSummary(a.month);                // «Мой месяц с Лирой» (0.61)
     case "close_send": { const it = await clSend(a.to || "", a.text || ""); return `Отправлено ${it.to}. Скажи коротко, что отправила.`; }
     case "close_read": return clRecent(a.who || "");
     case "work_tasks": case "work_act": return await wkTool(name, a || {});
@@ -4483,6 +4519,27 @@ const saveMoney = (m) => { fileSave("money.json", JSON.stringify(m)); syncSoon()
 function periodStart(p) { const d = new Date(); d.setHours(0, 0, 0, 0);
   if (p === "week") d.setDate(d.getDate() - (d.getDay() + 6) % 7); else if (p === "month") d.setDate(1); else if (p === "year") { d.setMonth(0, 1); }
   return isoLocal(d).slice(0, 10); }
+/* «Мой месяц с Лирой» (0.61, как core/month.py): «как прошёл мой месяц?», «итоги октября» — дела и деньги месяца, модель рассказывает тепло */
+const MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+function monthSummary(m) {
+  const now = new Date(); let y = now.getFullYear(), mo = now.getMonth();
+  m = String(m || "").trim();
+  if (/^(prev|last|прошлый)$/i.test(m)) { mo--; if (mo < 0) { mo = 11; y--; } }
+  else if (/^\d{4}-\d{2}$/.test(m)) { y = +m.slice(0, 4); mo = +m.slice(5) - 1; }
+  else if (m && !/^(this|текущий|этот)$/i.test(m)) return "Ошибка: месяц — в виде 2026-10, или prev — прошлый.";
+  const a = new Date(y, mo, 1).getTime(), b = new Date(y, mo + 1, 1).getTime(), ym = `${y}-${pad(mo + 1)}`;
+  const done = doneList().filter(x => x.at >= a && x.at < b), by = {};
+  done.forEach(x => { const k = new Date(x.at).getDate(); by[k] = (by[k] || 0) + 1; });
+  let streak = 0, run = 0; for (let d = 1; d <= 31; d++) { run = by[d] ? run + 1 : 0; streak = Math.max(streak, run); }
+  const best = Object.entries(by).sort((p, q) => q[1] - p[1])[0];
+  const mm = money().filter(x => String(x.date || "").slice(0, 7) === ym), cur = {};
+  mm.forEach(x => { const c = cur[x.currency] = cur[x.currency] || { inc: 0, exp: 0, cats: {} }; if (x.kind === "income") c.inc += x.amount; else { c.exp += x.amount; c.cats[x.category || "без категории"] = (c.cats[x.category || "без категории"] || 0) + x.amount; } });
+  const L = [`[Мой месяц с Лирой — ${MONTHS_NOM[mo]} ${y}]`];
+  if (done.length) L.push(`Сделано дел: ${done.length} (дней с делами — ${Object.keys(by).length}, лучшая серия — ${streak} дн. подряд, лучший день — ${best[0]}-е: ${best[1]}). Последние: ` + done.slice(-5).map(x => `«${x.title}»`).join("; ") + ".");
+  Object.entries(cur).forEach(([c, v]) => L.push(`Деньги (${c}): расходы ${+v.exp.toFixed(2)}, доходы ${+v.inc.toFixed(2)}; больше всего — ` + Object.entries(v.cats).sort((p, q) => q[1] - p[1]).slice(0, 3).map(([k, s]) => `${k} ${+s.toFixed(2)}`).join(", ") + "."));
+  if (L.length === 1) return L[0] + " Записей за этот месяц почти нет: дел и трат не было. Скажи об этом мягко и предложи отмечать сделанное («я позвонил в банк»).";
+  return L.join("\n") + "\n\nРасскажи пользователю его месяц тепло и живо, своими словами, 4–6 предложений: главное число дел и чем он может гордиться (назови одно-два дела), куда ушли деньги (одной фразой, без нравоучений). В конце — одно доброе пожелание на следующий месяц. Без списков и без цифр подряд.";
+}
 function moneyReport(p) {
   const from = periodStart(p), items = money().filter(x => x.date >= from), by = {};
   items.forEach(x => { const c = by[x.currency] = by[x.currency] || { inc: 0, exp: 0, cats: {} }; if (x.kind === "income") c.inc += x.amount; else { c.exp += x.amount; c.cats[x.category] = (c.cats[x.category] || 0) + x.amount; } });
@@ -5393,8 +5450,10 @@ function newsShow(list) {
     const ph = /^«(.+)»$/.exec(String(i.try || "").trim());
     return `<div class="nwi"><i aria-hidden="true">${esc(i.icon || "✨")}</i><div><b>${esc(i.title)}</b><p>${esc(i.text)}</p>`
       + (ph ? `<button class="nwtry" data-say="${esc(ph[1])}">Попробовать: «${esc(ph[1])}»</button>` : i.try ? `<small>${esc(i.try)}</small>` : "") + `</div></div>`; }).join("")).join("")
+    + (kidsOn() ? "" : `<div class="nwidea"><span aria-hidden="true">💡</span><p>Что Лире уметь дальше? Поддержите голосом нужное или предложите своё.</p><button class="btn" id="nw-ideas">Идеи</button></div>`)
     + `<button class="btn p w" id="nw-ok">Понятно</button>`;
   $("#nw-ok").onclick = () => closeSheets();
+  if ($("#nw-ideas")) $("#nw-ideas").onclick = () => { closeSheets(); setTimeout(() => openIdeas(), 200); };   // 0.61: «Что нового» → «Идеи Лиры»
   $$(".nwtry", $("#news-body")).forEach(b => b.onclick = () => { closeSheets(); if (state !== "idle") interrupt(true); ask(b.dataset.say); });
   openSheet("#sh-news");
   return true;
@@ -7677,7 +7736,7 @@ const DC = () => window.DewiarCrypto;
 function clLoad() {
   if (CLS) return CLS;
   try { CLS = JSON.parse(fileGet("close.json") || "{}") || {}; } catch (e) { CLS = {}; }
-  CLS = Object.assign({ me: {}, people: [], cursor: 0, hist: {}, unread: {}, invite: null, hello: 0, marks: {}, readUp: {} }, CLS);
+  CLS = Object.assign({ me: {}, people: [], groups: [], cursor: 0, hist: {}, unread: {}, invite: null, hello: 0, marks: {}, readUp: {} }, CLS);
   return CLS;
 }
 const clSave = () => fileSave("close.json", JSON.stringify(CLS));
@@ -7698,7 +7757,7 @@ async function clReq(method, path, body, query) {
   return d;
 }
 function clPeople(d) {
-  const st = clLoad(); st.me = d.me || {}; st.people = d.people || []; st.offers = d.offers || [];
+  const st = clLoad(); st.me = d.me || {}; st.people = d.people || []; st.offers = d.offers || []; st.groups = d.groups || [];   // «Группы своих» (groups.js)
   const k = clKeys(), mine = (st.me.devs || []).map(x => x.dev).filter(x => x && x !== k.dev).sort(), fresh = mine.some(x => !(st.ownDevs || []).includes(x));
   st.ownDevs = mine;
   const ids = new Set(st.people.map(p => p.pid));                   // убрали из близких — с радара тоже, в обе стороны
@@ -7831,6 +7890,8 @@ function clTargets(p) {
 const clStdB64 = (u8) => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
 async function clSend(who, text, files, kind, extra) {
   clLoad(); if (!CLS.me.pid || Date.now() - (CLS.hello || 0) > 600000) await clHello();
+  if ((kind || "msg") === "msg" && !extra && typeof grMatch === "function") { const g = String(who || "")[0] === "g" && grOf(who) || (!clMatch(who, CLS.people) && grMatch(who));
+    if (g) return grSend(g.gid, text, files); }   // «напиши в группу Семья: …»
   const p = clPerson(who), k = clKeys();
   if (!(p.devs || []).length) throw new Error(`У ${p.name} Dewiar ещё не открывался после приглашения — сообщение дойдёт, когда откроет.`);
   const fl = [];
@@ -7839,6 +7900,7 @@ async function clSend(who, text, files, kind, extra) {
     const fk = DC().randomBytes(32), blob = DC().seal(fk, f.bytes);
     const d = await clReq("POST", "/close/file", clStdB64(blob), "&b64=1&to=" + encodeURIComponent(p.pid));
     fl.push({ id: d.id, name: f.name, size: f.bytes.length, type: f.type || "", key: DC().b64e(fk) });
+    if (typeof clIsImg === "function" && clIsImg(f)) await clImgPut(d.id, f.bytes, f.type);   // своё фото — сразу превью
   }
   const body = Object.assign({}, extra || {}, { t: String(text || "").trim(), ts: Date.now(), mid: Math.random().toString(36).slice(2, 12) + Date.now().toString(36), name: CLS.me.name || "" });
   if (fl.length) body.f = fl;
@@ -7911,12 +7973,14 @@ async function clPoll() {
       if (it.kind === "ring") continue;                    // признак звонка — для службы CloseLive; сам звонок — в «sig»
       if (it.kind === "workin" || it.kind === "workx") { wkKind(it); continue; }   // «Работа» (work.js): знаки сайта без шифра
       const env = it.env || {};
-      const pubOf = () => clPubOf(it.peer, env.fd, it.out) || (it.kind === "work" && !it.out ? wkPub(it.peer, env.fd) : null);
+      const pubOf = () => clPubOf(it.peer, env.fd, it.out) || (it.kind === "work" && !it.out ? wkPub(it.peer, env.fd) : null)
+        || (it.kind === "grp" && !it.out && typeof grPubOf === "function" ? grPubOf(String(env.g || ""), it.peer, env.fd) : null);   // участник группы — не обязательно близкий
       let pub = pubOf();
       if (!pub && !refreshed) { refreshed = true; try { await clHello(); if (it.kind === "work") await wkRefresh(); } catch (e) { } pub = pubOf(); }
       if (!pub) continue;
       let body; try { body = DC().decryptFrom(env, DC().b64d(k.priv), k.dev, pub); } catch (e) { plog("warn", "близкие: не открылось — " + e.message); continue; }
       if (it.kind === "sig") { try { clSig(it.peer, it.name, body.s || {}); } catch (e) { } continue; }
+      if (it.kind === "grp") { try { if (grIn(it, body)) got++; } catch (e) { plog("warn", "группа: " + e.message); } continue; }   // «Группы своих» (groups.js)
       if (it.kind === "work") { try { wkKind(it, body); } catch (e) { plog("warn", "работа: " + e.message); } continue; }   // поручения руководителя
       if (it.kind === "geo") { if (!it.out) radTake(it.peer, it.name || "", body.g); continue; }   // место для радара «Рядом»
       if (it.kind === "own") { if (it.out && env.fd !== k.dev) ownApply(body); continue; }   // от своего же устройства
@@ -7973,7 +8037,8 @@ function clSchedule() {
 function clPrompt() {
   const st = clLoad(); if (!st.people.length) return "";
   return "БЛИЗКИЕ (переписка с их помощниками Dewiar, сообщения шифруются): " + st.people.map(p => p.name).join(", ")
-    + ". Кто-то из них (в любой форме имени: «Люде» = Людмила, «Исаевой Людмиле» = Людмила Исаева) — СНАЧАЛА через Dewiar: «напиши/передай/скажи» — close_send (дойдёт в его Dewiar, он услышит вслух), «позвони» — close_call (video true — «по видео»); «что мне писали», «что ответила мама» — close_read; «где мама?», «далеко ли Андрей?» — close_where (по радару «Рядом»; адресов не называй); «помаши маме» — close_wave. Только людям НЕ из этого списка — телефон (call) и мессенджеры.";
+    + ". Кто-то из них (в любой форме имени: «Люде» = Людмила, «Исаевой Людмиле» = Людмила Исаева) — СНАЧАЛА через Dewiar: «напиши/передай/скажи» — close_send (дойдёт в его Dewiar, он услышит вслух), «позвони» — close_call (video true — «по видео»); «что мне писали», «что ответила мама» — close_read; «где мама?», «далеко ли Андрей?» — close_where (по радару «Рядом»; адресов не называй); «помаши маме» — close_wave. Только людям НЕ из этого списка — телефон (call) и мессенджеры."
+    + ((st.groups || []).length ? " ГРУППЫ: " + st.groups.map(g => `«${g.name}»`).join(", ") + " — «напиши в группу …» / «напиши семье» (если так называется группа): close_send, to — название группы, письмо получат все." : "");
 }
 /* «Отправлено» ✓, «Доставлено» ✓✓, «Прочитано» ✓✓ мятным (24.10, владелец: «не понятно, прочитал ли человек сообщение,
    дошло ли оно»). sid — номер письма в ящике близкого (/close/send), marks[pid] = [забрал до, прочитал до] (/close/inbox). */
@@ -8786,6 +8851,9 @@ function openRefs() { clTab = "ref"; openClose(""); }
 function openClose(pid) { clCur = pid || ""; openSheet("#sh-close"); clRender(); if (syncCred()) clHello().then(() => clRender()).catch(() => { }); }
 function clRender() {
   const st = clLoad(), box = $("#close-body"), p = clCur && st.people.find(x => x.pid === clCur);
+  if (syncCred() && typeof grRender === "function" && (grNew || (clCur && clCur[0] === "g"))) {   // «Группы своих»: мастер или переписка группы
+    $("#cl-h").firstChild.textContent = ""; $("#cl-inv").style.display = "none"; if (grRender(box)) return; clCur = "";
+  }
   $("#cl-h").firstChild.textContent = p ? "" : clTab === "ref" ? "Рефералы" : "Близкие";
   $("#cl-inv").style.display = p ? "none" : "";
   if (!syncCred()) { box.innerHTML = `<div class="card"><b>Нужен Dewiar</b><p class="hint" style="margin:6px 0 10px">«Близкие» работают через облако Dewiar: подключите мозг бесплатно или войдите аккаунтом dewiar.pro.</p><button class="btn p w" id="cl-brain">Подключить</button></div>`;
@@ -8797,16 +8865,19 @@ function clRender() {
         <div style="flex:1;min-width:0"><b>${esc(p.name)}</b><small>${p.about ? esc(p.about) + " · " : ""}${(p.devs || []).length ? "сообщения шифруются" : "ещё не открывал Dewiar"}</small></div>
         ${(p.devs || []).length && window.DewiarCall ? `<button class="ib soft" id="cl-call" title="Позвонить"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></button>
           <button class="ib soft" id="cl-vcall" title="Видеозвонок"><svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg></button>` : ""}
-        ${h.length ? `<button class="ib soft" id="cl-wipe" title="Очистить переписку" aria-label="Очистить переписку"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg></button>` : ""}</div>
-      <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${m.rx && (m.rx.me || m.rx.them) ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => `<button class="clf" data-i="${i}" data-j="${j}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${esc(f.name)}</span><small>${f.saved ? "сохранён" : clKb(f.size || 0)}</small></button>`).join("")}<time>${clTime(m.ts)}${clTick(m, p.pid)}</time>${m.rx && (m.rx.me || m.rx.them) ? `<span class="clrx">${esc([m.rx.them, m.rx.me].filter(Boolean).join(""))}</span>` : ""}</div>`).join("")
+        <button class="ib soft" id="cl-album" title="Фото и файлы" aria-label="Фото и файлы">${AL_IC.album}</button>
+</div>
+      <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${m.rx && (m.rx.me || m.rx.them) ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}<time>${clTime(m.ts)}${clTick(m, p.pid)}</time>${m.rx && (m.rx.me || m.rx.them) ? `<span class="clrx">${esc([m.rx.them, m.rx.me].filter(Boolean).join(""))}</span>` : ""}</div>`).join("")
         || `<p class="hint" style="text-align:center;margin:24px 8px">Напишите первое сообщение — или скажите: «Напиши ${esc(p.name)}, …»</p>`}</div>
       <div class="clatts" id="cl-atts">${clFiles.map((f, i) => `<span>${esc(f.name)} <button data-i="${i}">✕</button></span>`).join("")}</div>
       <div class="clemo" id="cl-emo" hidden>${clEmoHtml()}</div>
       <div class="clsend"><button class="ib att" id="cl-emo-b" aria-label="Эмодзи" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4.2 4.2 0 0 0 7 0"/><path d="M9 9.6v.01M15 9.6v.01"/></svg></button><label class="ib att"><input type="file" id="cl-file" multiple hidden><svg viewBox="0 0 24 24"><path d="M20.5 11.5 12.6 19.4a5 5 0 0 1-7.1-7.1l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg></label>
         <textarea id="cl-text" rows="1" placeholder="Сообщение…"></textarea><button class="ib" id="cl-go"><svg viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-2.5-6.5z"/></svg></button></div>`;
     const msgs = $("#cl-msgs"); msgs.scrollTop = msgs.scrollHeight; clFacesFill($(".clh"));
+    clImgFill(msgs, h, { pid: p.pid });                     // фото — картинкой (album.js)
+    $("#cl-album").onclick = () => clAlbum({ pid: p.pid });
     $("#cl-back").onclick = () => { clCur = ""; clRender(); };
-    if ($("#cl-wipe")) $("#cl-wipe").onclick = () => { if (!confirm(`Очистить переписку с «${p.name}» на этом телефоне? У ${p.name} и на ваших других устройствах она останется. Одно сообщение — долгое нажатие на него.`)) return;
+    clWipe = () => { if (!confirm(`Очистить переписку с «${p.name}» на этом телефоне? У ${p.name} и на ваших других устройствах она останется. Одно сообщение — долгое нажатие на него.`)) return;
       clForget(p.pid); clRender(); toast("Переписка очищена"); };
     if ($("#cl-call")) { $("#cl-call").onclick = () => clCall(p.pid, false).catch(e => toast(e.message, 4000)); $("#cl-vcall").onclick = () => clCall(p.pid, true).catch(e => toast(e.message, 4000)); }
     $$("#cl-atts button").forEach(b => b.onclick = () => { clFiles.splice(+b.dataset.i, 1); clRender(); });
@@ -8844,6 +8915,7 @@ function clRender() {
         <span><b>${esc(x.name)}</b><small>${last(x)}</small></span>${st.unread[x.pid] ? `<em>${st.unread[x.pid]}</em>` : ""}
         ${(x.devs || []).length && window.DewiarCall ? `<button class="ib soft" data-call="${esc(x.pid)}" title="Позвонить">${PH}</button><button class="ib soft" data-vcall="${esc(x.pid)}" title="Видеозвонок">${VI}</button>` : ""}</div>`).join("")
       : `<div class="card"><b>Пока никого</b><p class="hint" style="margin:4px 0 0">Нажмите «Пригласить» — покажите близкому печать Dewiar или отправьте ссылку. Потом говорите: «напиши маме, что я задержусь», «позвони маме по видео».</p></div>`)
+    + (typeof grListHtml === "function" ? grListHtml(st) : "")
     + `<div id="cl-invbox"></div>`
     + (inv && !clInvOpen ? `<button class="btn w clinvrow" id="cl-inv-show">Ссылка-приглашение действует до ${new Date(inv.expires * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} — показать печать</button>` : "")
     + clLiveCard()
@@ -8862,7 +8934,7 @@ function clRender() {
   $$("[data-vcall]").forEach(b => b.onclick = () => clCall(b.dataset.vcall, true).catch(e => toast(e.message, 4000)));
   $("#cl-add").onclick = () => clInviteOpen();
   if ($("#cl-inv-show")) $("#cl-inv-show").onclick = () => clInviteOpen();
-  clTabs(); clOfferBind(); clLiveBind();
+  clTabs(); clOfferBind(); clLiveBind(); if (typeof grBind === "function") grBind();
   if ($("#rad-mini")) $("#rad-mini").onclick = () => { clTab = "near"; clRender(); };
   $("#cl-scan").onclick = () => scanCode();
   if (inv && clInvOpen) clInvShow(inv);
@@ -8896,12 +8968,14 @@ function clReBind(p, h) {
     // долгое нажатие: реакции, ниже — «Копировать» и «Удалить у меня» (отзыв 17.10: «выборочно поудалять лишнее»)
     pop.innerHTML = `<div class="emos">${CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" aria-label="Реакция ${e}">${e}</button>`).join("")}</div>
       <div class="acts">${m.t ? `<button role="menuitem" class="cp"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>Копировать</button>` : ""}
+        <button role="menuitem" class="fw">${AL_IC.fwd}Переслать</button>
         <button role="menuitem" class="dl"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Удалить у меня</button></div>`;
     document.body.appendChild(pop);
     const r = el.getBoundingClientRect(), w = pop.offsetWidth;
     pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, m.out ? r.right - w : r.left)) + "px";
     pop.style.top = Math.max(8, r.top - pop.offsetHeight - 8) + "px";
     const cp = $(".cp", pop); if (cp) cp.onclick = () => { clReClose(); copyText(m.t).then(okc => toast(okc ? "Скопировано" : "Не скопировалось")); };
+    $(".fw", pop).onclick = () => { clReClose(); clFwdPick({ t: m.t || "", f: m.f || [] }); };   // переслать другому близкому или в группу (album.js)
     $(".dl", pop).onclick = () => { clReClose(); clForget(p.pid, [m.mid]); clRender(); toast("Удалено на этом телефоне — у " + p.name + " сообщение осталось", 3000); };
     $$("button[data-e]", pop).forEach(b => b.onclick = async () => {
       const e = (m.rx || {}).me === b.dataset.e ? "" : b.dataset.e; clReClose();

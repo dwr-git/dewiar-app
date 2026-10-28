@@ -774,12 +774,20 @@ class MusicMixin:
                 news_fact = _news.say_fact(_news.releases(ui.get("news_seen") or ui.get("news_said") or "", VERSION, "pc", 3))
         except Exception:  # noqa: BLE001
             news_fact = ""
+        care_line, care_ids = "", []
+        try:                                             # «Заботливая память»: прошло важное событие — спросить, как прошло
+            if getattr(self, "care", None) is not None and self.care_on():
+                care_line, care_ids = self.care.context()
+        except Exception:  # noqa: BLE001
+            care_line, care_ids = "", []
         p = presence.plan(gone, datetime.now() - timedelta(seconds=gone), tasks, upcoming, last, dstat=done,
-                          eve_said=getattr(self, "_eve_said", None), news=news_fact)
+                          eve_said=getattr(self, "_eve_said", None), news=news_fact, care=care_line)
         if not p:
             log.info("👋 вернулись через %s — сказать нечего, молчим", presence._hm(gone))
             return False
         self._welcome_at = datetime.now()
+        if care_ids and care_line in p["facts"]:
+            self.care.mark(care_ids)
         if news_fact and news_fact in p["facts"]:
             self.s.update({"ui": {"news_said": VERSION}})
         if p["kind"] == "eve":

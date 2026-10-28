@@ -121,7 +121,7 @@ def _hm(sec):
     return f"{h} ч" + (f" {m} мин" if m else "")
 
 
-def plan(gone, since, tasks, upcoming, last_greet, now=None, night=(23, 7), day_brief=True, dstat=None, eve_said=None, news=""):
+def plan(gone, since, tasks, upcoming, last_greet, now=None, night=(23, 7), day_brief=True, dstat=None, eve_said=None, news="", care=""):
     """Что сказать вернувшемуся. gone — секунд отлучки, since — datetime ухода; tasks — список задач (public());
     upcoming — [(время «HH:MM», что)] на ближайшие 2 часа; last_greet — datetime прошлого приветствия или None.
     dstat — done.stats() (сделанные дела), eve_said — дата прошлого итога дня: вечером (с 19:00), если сегодня есть сделанное,
@@ -144,6 +144,8 @@ def plan(gone, since, tasks, upcoming, last_greet, now=None, night=(23, 7), day_
         facts.append("Скоро: " + "; ".join(f"в {a} — {b}" for a, b in upcoming[:3]) + ".")
     if news:                                             # обновились — сказать, что нового (news.say_fact), один раз
         facts.append(news)
+    if care:                                             # «Заботливая память» (0.61): событие прошло — спросить, как прошло
+        facts.append(care)
     if dstat and dstat.get("today") and now.hour >= 19 and eve_said != now.date():
         from done import dela, dney
         f = (f"Сегодня пользователь отметил сделанными {dstat['today']} {dela(dstat['today'])}: "
@@ -160,7 +162,14 @@ def plan(gone, since, tasks, upcoming, last_greet, now=None, night=(23, 7), day_
 
 
 def prompt(p, brief_context=""):
-    """Поручение модели для приветствия (её голосом и характером)."""
+    """Поручение модели для приветствия (её голосом и характером). Есть «Заботливая память» — в конце можно один тёплый вопрос."""
+    t = _prompt(p, brief_context)
+    if any(str(f).startswith("[Заботливая память]") for f in p.get("facts") or []):
+        t = t.replace("без вопросов в конце", "в конце — один тёплый вопрос, как прошло (из «Заботливой памяти»)")
+    return t
+
+
+def _prompt(p, brief_context=""):
     if p["kind"] == "day":
         return ((brief_context + "\n\n" if brief_context else "") + "\n".join(p["facts"]) +
                 f"\n\n[Пользователь вернулся к компьютеру — первый раз за день, не было {p['gone']}] Поздоровайся первым (в своём роде), "
