@@ -43,7 +43,8 @@ with sync_playwright() as p:
     pg.evaluate(f"ask('Какой дизайн тебе больше нравится и почему?', {{ attach: [{{ kind: 'image', name: 'скрин.png', url: '{PIX}' }}] }})")
     pg.wait_for_function("!busy", timeout=15000); pg.wait_for_timeout(200)
     pg.evaluate("ask('Слушай, я прикрепил тебе файл, посмотри внимательно — там скриншот')"); pg.wait_for_function("!busy", timeout=15000)
-    pg.evaluate("ask('а какая завтра погода в Минске')"); pg.wait_for_function("!busy", timeout=15000)
+    # 0.64: погода на телефоне отвечается без модели — посторонний вопрос другой
+    pg.evaluate("ask('расскажи анекдот про кота')"); pg.wait_for_function("!busy", timeout=15000)
     pg.evaluate("convReset(); ask('посмотри ещё раз на картинку')"); pg.wait_for_function("!busy", timeout=15000)
     calls = [n for n in seen]
     ok(len(calls) >= 4 and calls[0] == 1, f"первый вопрос — с фото: {calls}")

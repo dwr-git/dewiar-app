@@ -89,8 +89,9 @@ class Sett:
 
 
 class Close:
-    def __init__(self): self.sent = []
+    def __init__(self): self.sent = []; self.st = {"me": {"pid": "pme"}}; self.up = []
     def _own_quiet(self, body): self.sent.append(body)
+    def _upload(self, p, path): self.up.append((p["pid"], path.name, path.stat().st_size)); return {"id": "f1", "key": "k", "name": path.name, "size": path.stat().st_size, "type": "image/jpeg"}
 
 
 class Chat:
@@ -141,6 +142,35 @@ ok(len(asked) == 1 and x2["note"] == "экран не изменился", "эк
 (tmp / "screen.png").write_bytes(B)
 e2._watch_check(x2); time.sleep(0.3)
 ok(len(asked) == 2 and x2["status"] == "done" and "Claude написал ответ" in e2.said[0], f"экран изменился — спросили, «да» — позвала: {e2.said[:1]}")
+# 28.10 (владелец): дозор начали в студии — на экране сама страница «Дозор» с текстом условия, и модель с первого
+# взгляда сказала «да». Первое «да» сразу после начала — не «готово»: перепроверим, когда экран сменится
+asked.clear(); (tmp / "screen.png").write_bytes(A)
+llm.stream_events = lambda prof, system, msgs, cancel=None, tools=None: (asked.append(msgs) or iter([("text", "ДА — в правой панели «Дозор» виден текст условия")]))
+e4 = E()
+s4 = e4.watch_add({"kind": "screen", "what": "Claude ответил и дал файлы", "every_minutes": 2}); time.sleep(0.5)
+x4 = e4.watches.get(s4["id"])
+ok(len(asked) == 1 and x4["status"] == "active" and "окно Dewiar" in x4["note"] and not e4.said, f"«да» по панели «Дозор» самой Dewiar — не готово: {x4['note']!r}")
+x5 = e4.watches.get(e4.watch_add({"kind": "screen", "what": "загрузка закончилась", "every_minutes": 2})["id"])
+llm.stream_events = lambda prof, system, msgs, cancel=None, tools=None: (asked.append(msgs) or iter([("text", "ДА — в окне загрузок 100%")]))
+e4._watch_check(x5); time.sleep(0.3)
+ok(x5["status"] == "active" and "проверю ещё раз" in x5["note"], f"первое «да» сразу после начала — перепроверю: {x5['note']!r}")
+e4.watches.stop(x5["id"]); asked.clear()
+llm.stream_events = lambda prof, system, msgs, cancel=None, tools=None: (asked.append(msgs) or iter([("text", "ДА — в правой панели «Дозор» виден текст условия")]))
+ok("Окна самой Dewiar" in W.VERDICT_SYSTEM, "модели сказано: окна Dewiar (студия, «Дозор») с текстом условия — не результат")
+(tmp / "screen.png").write_bytes(B); e4._watch_check(x4); time.sleep(0.3)
+ok(len(asked) == 1 and x4["status"] == "active" and "окно Dewiar" in x4["note"], f"«да» по панели «Дозор» самой Dewiar (три экрана) — не результат: {x4['note']!r}")
+llm.stream_events = lambda prof, system, msgs, cancel=None, tools=None: (asked.append(msgs) or iter([("text", "ДА — в браузере Claude: ответ и кнопки скачать ARK и ZIP")]))
+(tmp / "screen.png").write_bytes(A); e4._watch_check(x4); time.sleep(0.3)
+ok(len(asked) == 2 and x4["status"] == "done", "в окне Claude появились файлы — готово")
+time.sleep(0.5)
+pg_ = [b["ping"] for b in e4.close.sent if "ping" in b]
+ok(pg_ and pg_[-1].get("shot", {}).get("id") == "f1" and pg_[-1]["wid"] == x4["id"] and e4.close.up and e4.close.up[-1][0] == "pme",
+   f"телефону — «готово» со снимком экрана (файл себе, шифрованный) и что увидела: {pg_[-1:] if pg_ else None}")
+ok(e4.watch_more(x4["id"]) and x4["status"] == "active" and x4.get("wrong"), "с телефона «Не то — ждать дальше» — дозор снова на посту, ошибка запомнена")
+llm.stream_events = lambda prof, system, msgs, cancel=None, tools=None: (asked.append(msgs) or iter([("text", "НЕТ — Claude ещё пишет")]))
+(tmp / "screen.png").write_bytes(B); e4._watch_check(x4); time.sleep(0.3)
+qtxt = str(asked[-1][-1]["content"])
+ok("ошибочно приняла" in qtxt and "ARK и ZIP" in qtxt, "в следующем вопросе модели — «это НЕ оно»")
 e3 = E(); e3.s.d["tools"] = {"enabled": {"look_at_screen": False}}
 try:
     e3.watch_add({"kind": "screen", "what": "готово"}); locked = False
@@ -213,6 +243,25 @@ with sync_playwright() as p:
     ok(["open_settings", "watch"] in h.evaluate("window.apiCalls || []"), "нажали на глаз — «Дозор» в студии")
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
+
+# --- телефон: «готово» карточкой со снимком, «Не то — ждать дальше» ---
+import subprocess  # noqa: E402
+www = tmp / "www"
+subprocess.run(["bash", str(ROOT / "android/tools/www_assemble.sh"), str(www)], check=True, capture_output=True)
+with sync_playwright() as p:
+    b = p.chromium.launch(); perr = []
+    pg = b.new_page(viewport={"width": 393, "height": 852}); pg.on("pageerror", lambda e: perr.append(str(e)))
+    pg.goto((www / "index.html").as_uri()); pg.wait_for_timeout(800)
+    r = pg.evaluate("""async () => { window.sentOwn = []; devOwnSend = async (b) => { sentOwn.push(b); return true; };
+      clFileBytes = async () => Uint8Array.from(atob('/9j/4AAQSkZJRgABAQ=='), c => c.charCodeAt(0));
+      ownApply({ ts: Date.now(), ping: { title: '👁 Дозор: готово', text: 'Claude — файлы', wid: 'w1', what: 'Claude даст файлы ARK и ZIP', note: 'в окне Claude: кнопки скачать ARK и ZIP', dev: 'Рабочий', shot: { id: 'f1', key: 'k' } } });
+      await new Promise(r => setTimeout(r, 300));
+      const c = document.querySelector('.wcard'); return [c ? c.innerText : '', !!document.querySelector('#wshot img')]; }""")
+    ok("Лира увидела: в окне Claude" in r[0] and "Не то — ждать дальше" in r[0] and r[1], f"телефон: карточка «Дозор» — что ждали, что увидела, снимок: {r[0][:80]!r}")
+    pg.click("#w-more"); pg.wait_for_timeout(200)
+    ok(pg.evaluate("sentOwn") == [{"watch_more": {"id": "w1", "why": "в окне Claude: кнопки скачать ARK и ZIP"}}], "«Не то — ждать дальше» — компьютеру")
+    b.close()
+ok(not perr, f"телефон без ошибок: {perr[:2]}")
 
 # --- описано везде ---
 import course  # noqa: E402

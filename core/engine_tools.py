@@ -893,6 +893,12 @@ class ToolsMixin:
         self._team_publish(res)
 
     def own_apply(self, body):
+        wm = (body or {}).get("watch_more")                  # «Дозор»: с телефона «Не то — ждать дальше»
+        if isinstance(wm, dict) and hasattr(self, "watch_more"):
+            try:
+                self.watch_more(wm.get("id"), wm.get("why") or "")
+            except Exception as e:  # noqa: BLE001
+                log.info("👁 Дозор: «ждать дальше» не применилось: %s", e)
         if "team" in ((body or {}).get("want") or ()) and self._team_on():   # телефон руководителя открыл «Поручения»
             import threading
             threading.Thread(target=self._team_publish, daemon=True).start()

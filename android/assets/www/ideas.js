@@ -25,14 +25,14 @@ function ideaItem(x) {
 }
 function ideasHtml() {
   const d = IDV.d || { counts: {} }, c = d.counts || {};
-  const tab = (k, t) => `<button role="tab" data-itab="${k}" class="${IDV.tab === k ? "on" : ""}" aria-selected="${IDV.tab === k}">${t}${c[k] ? ` <b>${c[k]}</b>` : ""}</button>`;
+  const tab = (k, t) => `<button role="tab" data-itab="${k}" class="${IDV.tab === k ? "on" : ""}" aria-selected="${IDV.tab === k}"><span>${t}</span>${c[k] ? `<b>${c[k]}</b>` : ""}</button>`;
   const empty = IDV.q ? `По «${esc(IDV.q)}» ничего — предложите это сверху.` : IDV.tab === "mine" ? "Вы ещё не предлагали идей — напишите сверху, что Лире уметь."
     : IDV.tab === "done" ? "Здесь появятся сделанные идеи — с версией." : "Пока пусто — станьте первым.";
   return `<p class="hint" style="margin-top:0">Что Лире уметь дальше — решаем вместе. Поддержите голосом нужное: чем больше голосов, тем раньше возьмёмся.</p>
-    <div class="card idnew"><div class="idq">${IDEA_SVG}<input id="idq" maxlength="120" placeholder="Опишите идею — поищу похожие" value="${esc(IDV.draft || "")}"></div>
+    <div class="idnew"><div class="idq">${IDEA_SVG}<input id="idq" maxlength="120" placeholder="Опишите идею — поищу похожие" value="${esc(IDV.draft || "")}"></div>
       <div id="idsim"></div><div id="idsend" ${((IDV.draft || "").length >= 4) ? "" : "hidden"}><textarea id="idbody" rows="2" maxlength="2000" placeholder="Подробнее (необязательно)"></textarea>
       <button class="btn p w" id="idgo">Предложить идею</button></div><div class="res" id="idres"></div></div>
-    <div class="idtabs" role="tablist">${tab("plan", "Будем делать")}${tab("done", "Сделано")}${tab("mine", "Мои")}</div>
+    <div class="idtabs" role="tablist">${tab("plan", "В планах")}${tab("done", "Сделано")}${tab("mine", "Мои")}</div>
     <input id="idfind" class="idfind" placeholder="Поиск по идеям" value="${esc(IDV.q)}" aria-label="Поиск по идеям">
     <div id="idlist">${IDV.err ? `<div class="card"><p class="hint" style="margin:0">Идеи не загрузились: ${esc(IDV.err)}. Нужен интернет.</p></div>`
       : !IDV.d ? `<p class="hint">Загружаю…</p>` : IDV.items.length ? IDV.items.map(ideaItem).join("") : `<div class="card"><p class="hint" style="margin:0">${empty}</p></div>`}</div>

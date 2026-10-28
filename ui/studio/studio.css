@@ -1137,6 +1137,16 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .cl-m.rx { margin-bottom: 12px; }
 .cl-m.emo { background: none !important; padding: 0 2px; }
 .cl-m.emo .tx { font-size: 40px; line-height: 1.15; }
+/* смайлы без пузыря (28.10, владелец): время — цветом страницы, а не белым, как у своего пузыря */
+.cl-m.emo.out, html.st-light .cl-m.emo.out, html.st-neu .cl-m.emo.out { color: var(--ink); }
+html .cl-m.emo time, html.st-light .cl-m.emo.out time, html.st-neu .cl-m.emo.out time { color: var(--muted); }
+/* группа в списке (28.10, владелец: «группа с длинным названием»): два лица мозаикой в круге 40 px — как у людей, «+N» в
+   списке не нужен; название — в одну строку, полное — подсказкой */
+.cl-g .cl-gstack { position: relative; width: 40px; height: 40px; }
+.cl-g .cl-gstack .cl-ava { position: absolute; width: 27px; height: 27px; font-size: 11.5px; margin: 0; }
+.cl-g .cl-gstack .cl-ava:first-child { left: 0; top: 0; } .cl-g .cl-gstack .cl-ava:nth-child(2) { right: 0; bottom: 0; margin: 0; }
+.cl-g .cl-gstack .cl-ava.more { display: none; }
+.cl-g b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cl-rx { position: absolute; bottom: -13px; right: 10px; padding: 2px 7px; border-radius: 999px; font-size: 14px; line-height: 1.35; background: #2a2a40; box-shadow: 0 4px 10px -4px rgba(0,0,0,.55); }
 .cl-m:not(.out) .cl-rx { right: auto; left: 10px; }
 .cl-m.emo.rx { margin-bottom: 0; } .cl-m.emo .cl-rx { position: static; align-self: flex-end; } .cl-m.emo:not(.out) .cl-rx { align-self: flex-start; }
@@ -3116,7 +3126,7 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .cl-gstack .cl-ava + .cl-ava { margin-left: -10px; }
 .cl-gstack .cl-ava.more { background: rgba(127,127,140,.25); color: var(--ink); font: 700 10.5px Manrope, sans-serif; }
 html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92); }
-.cl-g .cl-gstack { width: 50px; }
+.cl-g .cl-gstack { flex: none; }
 .cl-ava.cl-gava { background: none; box-shadow: none; width: auto; }
 .cl-gwho { font-size: 12.5px; font-weight: 700; margin-bottom: 2px; display: block; }
 .cl-gp { background: var(--glass); border-radius: 22px; padding: 22px 24px; }
@@ -3160,3 +3170,37 @@ html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92)
 .prof .econ-row .btn { flex: none; }
 .econ-tag { font-style: normal; font-size: 11px; font-weight: 600; color: #3fbf8f; background: rgba(63,191,143,.12); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: 2px; }
 .mpick[hidden] { display: none; }
+.rf-wait .btn { margin-top: 12px; }
+.cl-ck.pend { opacity: .6; } .cl-ck.fail { color: #ff8a8a; opacity: 1; }
+
+/* группы в меню слева под «Близкими» (groups.js grNav): отступ ступенькой, мини-мозаика лиц, название в строку */
+.nav-groups { display: flex; flex-direction: column; gap: 2px; margin: -2px 0 4px 22px; padding-left: 10px; box-shadow: inset 2px 0 0 color-mix(in srgb, var(--muted) 22%, transparent); }
+.nav-groups[hidden] { display: none; }
+nav .nav-g { padding: 6px 10px; gap: 9px; font-size: 13px; border-radius: 10px; min-width: 0; }
+nav .nav-g span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+nav .nav-g .cl-gstack { position: relative; width: 24px; height: 24px; flex: none; }
+nav .nav-g .cl-gstack .cl-ava { position: absolute; width: 16px; height: 16px; font-size: 8.5px; margin: 0; box-shadow: 0 0 0 1.5px var(--ring, rgba(24,25,36,.95)); }
+nav .nav-g .cl-gstack .cl-ava:first-child { left: 0; top: 0; } nav .nav-g .cl-gstack .cl-ava:nth-child(2) { right: 0; bottom: 0; }
+nav .nav-g .cl-gstack .cl-ava.more { display: none; }
+nav .nav-g em { font-style: normal; font-size: 10.5px; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; background: var(--brand); color: #fff; }
+nav .nav-g.cur { color: var(--ink); background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: none; font-weight: 600; }
+html.st-light nav .nav-g .cl-gstack, html.st-neu nav .nav-g .cl-gstack { --ring: rgba(255,255,255,.92); }
+
+/* Смайлы картинками (ui/assets/emoji/emoji.js, Fluent Emoji): в тексте — размером с букву, «только смайлы» — крупно */
+img.emj { width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 .03em; object-fit: contain; }
+.cl-m.emo .tx img.emj { width: 1.15em; height: 1.15em; vertical-align: -0.15em; }
+.cl-rx img.emj { width: 18px; height: 18px; vertical-align: -4px; }
+.cl-repick img.emj { width: 26px; height: 26px; vertical-align: middle; }
+/* выбор смайла: поиск, разделы значками, сетка картинок */
+.emo-pick { display: flex; flex-direction: column; gap: 6px; }
+.emo-top .emo-q { width: 100%; height: 34px; border: 0; border-radius: 999px; padding: 0 14px; font: inherit; font-size: 13px; background: rgba(127,127,127,.12); color: var(--ink); outline: none; }
+.emo-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.emo-tabs button { flex: none; width: 38px; height: 34px; border-radius: 10px; display: grid; place-items: center; opacity: .55; }
+.emo-tabs button[aria-selected="true"] { opacity: 1; background: rgba(127,127,127,.2); }
+.emo-tabs img.emj { width: 22px; height: 22px; vertical-align: 0; margin: 0; }
+.emo-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); max-height: 220px; overflow-y: auto; scrollbar-width: thin; }
+.emo-g button { height: 44px; border-radius: 12px; display: grid; place-items: center; transition: transform .12s, background .12s; }
+.emo-g button:hover { background: rgba(127,127,127,.18); transform: scale(1.12); }
+.emo-g img.emj { width: 32px; height: 32px; vertical-align: 0; margin: 0; }
+.emo-none { grid-column: 1 / -1; margin: 10px 4px; font-size: 13px; color: var(--muted); }
+.cl-emo .emo-pick button { border: 0; padding: 0; background: transparent; cursor: pointer; }

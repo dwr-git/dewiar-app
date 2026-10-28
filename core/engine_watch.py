@@ -7,8 +7,12 @@
 подключены. Студии — событие «watch» (то же, что watch_get); виджету — сколько дозоров идёт (значок-глаз)."""
 import threading
 import time
+from pathlib import Path
 
-from engine_base import log
+from engine_base import log, re
+
+# «да», объяснённое окном самой Dewiar (студия, «Дозор», виджет) — модель прочла там текст условия, а не результат
+OWN_UI_RX = re.compile(r"дозор|dewiar|студи[ия]|виджет|недавно|правой панели|текст(?:ом)? услови", re.I)
 
 
 class WatchMixin:
@@ -118,7 +122,10 @@ class WatchMixin:
         b64, _, _ = prepare(raw)
         from llm import LLMError, stream_events, user_message
         q = f"Условие: {x['what']}. Выполнено ли оно на этом снимке экрана?"
+        if x.get("wrong"):                               # «Не то — ждать дальше» с телефона: прошлые ошибки — не результат
+            q += " Раньше ты ошибочно приняла за результат: " + "; ".join(f"«{w}»" for w in x["wrong"][-3:]) + " — это НЕ оно."
         x["asked"] = int(time.time())
+        x["looks"] = int(x.get("looks") or 0) + 1
         try:
             out = "".join(v for k, v in stream_events(dict(prof, temperature=0.1, max_tokens=300), W.VERDICT_SYSTEM,
                                                       [user_message(prof, q, [b64])], tools=None) if k == "text")
@@ -128,9 +135,59 @@ class WatchMixin:
                 return None, "у этой модели нет зрения — выберите модель со зрением в «Мозге»"
             return False, f"модель не ответила: {msg[:120]}"
         done, why = W.parse_verdict(out)
+        # 28.10 (владелец: «хотел, чтобы Лира сказала, когда будет результат, — а она сразу: всё готово»): дозор начали в
+        # студии — на экране сама страница «Дозор» с текстом условия, и модель приняла его за результат. Первое «да» сразу
+        # после начала не считаем: проверим ещё раз, когда экран сменится (или через ASK_ANYWAY).
+        # 28.10, второй раз (у владельца три экрана: Claude, виджет и студия с «Дозором» — она видна всегда): «да», которое
+        # модель объясняет панелью самой Dewiar («в блоке „Сейчас в дозоре“…», «в правой панели…»), — не результат
+        if done and OWN_UI_RX.search(why or ""):
+            log.info("👁 Дозор «%s»: «да» по окну самой Dewiar (%s) — не считаю", x.get("title"), why[:80])
+            return False, "вижу только окно Dewiar с текстом дозора — жду настоящего результата"
+        if done and x["looks"] == 1:
+            x["first_yes"] = why[:160]
+            log.info("👁 Дозор «%s»: с первого взгляда «да» (%s) — перепроверю позже", x.get("title"), why[:80])
+            return False, "похоже, уже так — проверю ещё раз, чтобы не ошибиться"
+        if done:
+            self._watch_raw = (x["id"], raw)            # снимок, по которому решили, — телефону вместе с «готово»
         return done, why or ("да" if done else "пока нет")
 
     # ---------- готово ----------
+
+    def _watch_ping(self, close, x, note, raw=None):
+        """«Готово» своим телефонам (28.10, владелец: «на телефоне показать то, что увидел ИИ, — убедиться, что сработка не
+        ложная»): к уведомлению — уменьшенный снимок экрана (1600 px, JPEG) файлом «себе» в «Близких»: шифруется на
+        устройстве, сайт видит только шифротекст; на телефоне — «Верно» или «Не то — ждать дальше» (own watch_more)."""
+        ping = {"title": "👁 Дозор: готово", "text": f"{x['title']} — {note}"[:300], "dev": self.device_name(), "wid": x["id"],
+                "what": x.get("what", "")[:200], "note": note[:300]}
+        if raw:
+            try:
+                import io
+                import tempfile
+                from PIL import Image
+                im = Image.open(io.BytesIO(raw)).convert("RGB")
+                im.thumbnail((1600, 1600))
+                me = ((close.st.get("me") or {}).get("pid")) if hasattr(close, "st") else ""
+                if me:
+                    with tempfile.TemporaryDirectory() as d:
+                        path = Path(d) / "dozor.jpg"
+                        im.save(path, "JPEG", quality=72)
+                        ping["shot"] = close._upload({"pid": me}, path)
+            except Exception as e:  # noqa: BLE001 — снимок не ушёл: «готово» всё равно дойдёт
+                log.info("👁 Дозор: снимок телефону не ушёл: %s", e)
+        close._own_quiet({"ping": ping})
+
+    def watch_more(self, wid, why=""):
+        """С телефона: «Не то — ждать дальше» — дозор снова на посту, а ошибка запоминается (модель её больше не примет)."""
+        x = self.watches.get(str(wid or ""))
+        if not x or x.get("kind") != "screen":
+            return False
+        wrong = (list(x.get("wrong") or []) + [str(x.get("note") or why or "")[:120]])[-5:]
+        x.update(status="active", wrong=wrong, looks=1, sig=None, note="ошиблась — жду дальше")
+        x["until"] = max(int(x.get("until") or 0), int(time.time()) + 3600)
+        self.watches._save()
+        log.info("👁 Дозор «%s»: с телефона — «не то», жду дальше", x.get("title"))
+        self._watch_emit()
+        return True
 
     def _watch_done(self, x, note):
         text = f"Дозор: {x['title']} — готово. {note[:1].upper() + note[1:] if note else ''}".strip()
@@ -144,8 +201,11 @@ class WatchMixin:
         threading.Thread(target=self.announce, args=(f"Готово: {x['title']}. {note}",), name="watch-say", daemon=True).start()
         close = getattr(self, "close", None)                 # свои телефоны — уведомлением (конверт своим устройствам)
         if close is not None:
-            threading.Thread(target=close._own_quiet, args=({"ping": {"title": "👁 Дозор: готово", "text": f"{x['title']} — {note}"[:300],
-                                                                      "dev": self.device_name()}},), daemon=True).start()
+            raw = None
+            wr = getattr(self, "_watch_raw", None)
+            if x.get("kind") == "screen" and wr and wr[0] == x["id"]:
+                raw, self._watch_raw = wr[1], None
+            threading.Thread(target=self._watch_ping, args=(close, x, note, raw), daemon=True).start()
         chat = getattr(self, "chat", None)
         try:
             if chat is not None and chat.notify_on():

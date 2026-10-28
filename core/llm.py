@@ -864,6 +864,21 @@ class BareCallCatcher:
         return out
 
 
+def _loads_loose(s):
+    """json.loads, а не вышло — мягче (№390, 28.10: «Вызов функции в тексте не разобран» — run_python с кодом, где модель
+    написала настоящие переводы строк внутри строки и «\\'» — JSON их не принимает, задача «застряла»): переводы строк и
+    табы внутри строк (strict=False), «\\'» → «'», чужие экранирования «\\в» → «\\\\в». -> объект или None."""
+    try:
+        return json.loads(s)
+    except ValueError:
+        pass
+    t = re.sub(r"\\(.)", lambda m: m.group(0) if m.group(1) in '"\\/bfnrtu' else ("'" if m.group(1) == "'" else "\\\\" + m.group(1)), s, flags=re.S)
+    try:
+        return json.loads(t, strict=False)
+    except ValueError:
+        return None
+
+
 def parse_tool_call(raw):
     """Вызов функции из текста ответа → {"name", "args"} или None. Модели пишут его по-разному:
       Qwen/Hermes:   {"name": "f", "arguments": {...}}
@@ -915,12 +930,7 @@ def parse_tool_call(raw):
         except ValueError:
             pass
     j = re.search(r"\{.*\}", raw, re.S)
-    obj = None
-    if j:
-        try:
-            obj = json.loads(j.group(0))
-        except ValueError:
-            obj = None
+    obj = _loads_loose(j.group(0)) if j else None
     if isinstance(obj, dict):
         if m and j.start() > 0 and re.fullmatch(r"[A-Za-z_][\w.\-]*\s*", raw[:j.start()]):
             return {"name": m.group(1), "args": obj}       # f {"k": "v"} — имя впереди важнее ключей внутри

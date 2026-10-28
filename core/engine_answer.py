@@ -11,6 +11,8 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 DATE_ASK_RX = re.compile(r"дн(я|ей|и|ём)\b|недел|понедельник|вторник|сред[уыа]|четверг|пятниц|суббот|воскресен|завтра|послезавтра|"
                          r"числ[оа]|дат[аыуе]|когда|сколько.{0,20}(дн|недел|месяц|осталось)|через\s+\d|рождени|праздник|"
                          r"январ|феврал|март|апрел|ма[йя]\b|июн|июл|август|сентябр|октябр|ноябр|декабр|\d{1,2}[./]\d{1,2}", re.I)
+# №390: вопрос про фоновые задачи («задача работает?», «почему не запущена», «что с заданием») — к нему их настоящее состояние
+TASK_ASK_RX = re.compile(r"задач|задани|фонов|застрял|выполня(?:ется|ешь|ет)|запущ|работает ли|что с (?:ней|ним)", re.I)
 INFO_TOOLS = {"web_search", "weather", "read_webpage", "find_notes", "read_file", "calc", "list_reminders", "calendar_list", "money_report",
               "read_emails", "read_email", "search_documents", "ask_knowledge", "system_status", "task_status", "look_at_screen",
               "look_through_camera", "app_update"}
@@ -618,11 +620,30 @@ class AnswerMixin:
                 hint = ""
             if hint:
                 out += " " + hint
+        if TASK_ASK_RX.search(text or ""):              # №390: «задача работает?» — ответ по настоящему состоянию, не по памяти
+            out += " " + self._tasks_now()
         from lang2 import en_hint
         en = en_hint(text)                                 # спросили по-английски — ответ по-английски (второй язык)
         if en:
             out += " " + en
         return out + (" " + note if note else "")
+
+    def _tasks_now(self):
+        """№390 (28.10, Витаха): задача «застряла» через 2 минуты, а Лира на «проверь» отвечала «задача работает» — по
+        памяти разговора. К вопросу про задачи — их настоящее состояние: что идёт, что остановилось и почему."""
+        try:
+            items = self.tasks.list()[:4]
+        except Exception:  # noqa: BLE001
+            return ""
+        if not items:
+            return "Фоновых задач сейчас нет (проверено) — не говори, что задача выполняется."
+        parts = []
+        for x in items:
+            st = x.get("status_ru") or x.get("status") or ""
+            why = (x.get("error") or x.get("activity") or "") if x.get("status") in ("failed", "stopped", "paused") else (x.get("activity") or "")
+            parts.append(f"«{x.get('title', '')}» — {st}" + (f" ({str(why)[:140]})" if why else ""))
+        return ("Фоновые задачи сейчас (проверено только что, говори по этому, не по памяти разговора): " + "; ".join(parts)
+                + ". Остановилась — так и скажи и предложи перезапустить (start_task заново или resume_task).")
 
     # ---------- для фоновых задач (TaskManager.host) ----------
 

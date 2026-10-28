@@ -75,7 +75,7 @@ function grReBind(g, h) {
     clReClose(); const m = h[+el.dataset.i]; if (!m || !m.mid) return;
     D.vibrate(15);
     const pop = document.createElement("div"); pop.className = "clrepick"; pop.setAttribute("role", "menu");
-    pop.innerHTML = `<div class="emos">${CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" aria-label="Реакция ${e}">${e}</button>`).join("")}</div>
+    pop.innerHTML = `<div class="emos">${CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" aria-label="Реакция ${e}">${clEmo(e)}</button>`).join("")}</div>
       <div class="acts"><button role="menuitem" class="fw">${AL_IC.fwd}Переслать</button><button role="menuitem" class="dl">Удалить у меня</button></div>`;
     document.body.appendChild(pop);
     const r = el.getBoundingClientRect(), w = pop.offsetWidth;
@@ -170,7 +170,7 @@ function grThreadHtml(st, g) {
   return `<div class="clh"><button class="ib soft" id="cl-back" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>${grStack(g, 2)}
       <button class="grtitle" id="gr-info"><b>${esc(g.name)}</b><small>${esc(["вы"].concat(grNames(g)).join(", "))}</small></button>
       <button class="ib soft" id="cl-album" title="Фото и файлы" aria-label="Фото и файлы">${AL_IC.album}</button><button class="ib soft" id="gr-info2" aria-label="Участники">${GR_IC}</button></div>
-    <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${grRx(m).length ? " rx" : ""}" data-i="${i}">${who(m)}${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}${m.rem ? `<span class="grrem">⏰ напомню всем ${esc(whenText(new Date(m.rem.at)))}</span>` : ""}<time>${clTime(m.ts)}${grReaders(g, m) ? ` · ${esc(grReaders(g, m))}` : ""}</time>${grRx(m).length ? `<span class="clrx">${esc(grRx(m).join(""))}</span>` : ""}</div>`).join("")
+    <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${grRx(m).length ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${who(m)}${m.t ? `<div>${clEmo(esc(m.t))}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}${m.rem ? `<span class="grrem">⏰ напомню всем ${esc(whenText(new Date(m.rem.at)))}</span>` : ""}<time>${clTime(m.ts)}${m.pend ? clTick(m, g.gid) : grReaders(g, m) ? ` · ${esc(grReaders(g, m))}` : ""}</time>${grRx(m).length ? `<span class="clrx">${clEmo(esc(grRx(m).join("")))}</span>` : ""}</div>`).join("")
       || `<p class="hint" style="text-align:center;margin:24px 8px">Напишите первое сообщение всем — или скажите: «Напиши в группу ${esc(g.name)}: …»</p>`}</div>
     <div class="clatts" id="cl-atts">${clFiles.map((f, i) => `<span>${esc(f.name)} <button data-i="${i}">✕</button></span>`).join("")}</div>
     <div class="clemo" id="cl-emo" hidden>${clEmoHtml()}</div>
@@ -220,7 +220,9 @@ function grRender(box) {
   $$(".clf").forEach(b => b.onclick = () => clSaveFile(g, h[+b.dataset.i], +b.dataset.j));
   $("#cl-file").onchange = () => { [...$("#cl-file").files].forEach(f => { if (f.size > 10 * 1024 * 1024) { toast(`«${f.name}» больше 10 МБ`); return; }
     const fr = new FileReader(); fr.onload = () => { clFiles.push({ name: f.name, type: f.type, bytes: new Uint8Array(fr.result) }); clRender(); }; fr.readAsArrayBuffer(f); }); };
-  $("#cl-go").onclick = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return; const b = $("#cl-go"); b.disabled = true;
+  $("#cl-go").onclick = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return; const b = $("#cl-go");
+    if (!clFiles.length) return clSendSoon(g.gid, t, () => grSend(g.gid, t, []));
+    b.disabled = true;
     try { await grSend(g.gid, t, clFiles); clFiles = []; clRender(); } catch (e) { toast(e.message, 4000); b.disabled = false; } };
   $("#cl-emo-b").onclick = () => { const e = $("#cl-emo"); e.hidden = !e.hidden; $("#cl-emo-b").setAttribute("aria-expanded", String(!e.hidden)); };
   clEmoBind();

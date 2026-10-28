@@ -2929,6 +2929,7 @@ async function quick(text) {
   { const ap = apptQuick(t); if (ap) return ap; }
   { const n = noteQuick(text); if (n) return { say: n }; }
   { const f = factQuick(text); if (f) return { say: f }; }
+  { const wq = await weatherQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (wq) return wq; }   // погода — сразу числами (0.63)
   // «покажи напоминания», «какие у меня напоминания» — открыть и сказать, сколько (модель иногда отвечала «чистый лист»,
   // не посмотрев, — отзыв 11.10)
   { const tq = t.replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m);
@@ -3412,9 +3413,12 @@ function handsCard() {
   const back = handsAsked && Date.now() - handsAsked < 10 * 60000;
   return `<p class="hint" style="margin:0 0 10px">Ассистент сможет сам нажимать кнопки, вводить текст и листать в других приложениях — по вашей просьбе голосом: «напиши маме в Telegram…», «найди в YouTube…». Включается один раз:</p>
     ${back ? `<p class="res bad" style="margin:0 0 10px">Не включилось? Если Dewiar в списке серый — это защита Android 13+ для приложений не из магазина: сделайте шаг 2.</p>` : ""}
-    <ol class="steps hsteps"><li><b>«Специальные возможности»</b> → Dewiar → включить.</li>
-      ${androidSdk() >= 33 ? `<li><b>Dewiar серый</b> или Android пишет «Ограниченная настройка»? Нажмите на него один раз, затем «Страница Dewiar» → ⋮ (вверху справа) → «Разрешить ограниченные настройки» — и снова шаг 1.</li>` : ""}</ol>
-    <div class="row2"><button class="btn p" id="hands-go" style="flex:1">Включить</button>${androidSdk() >= 33 ? `<button class="btn" id="hands-app" style="flex:1">Страница Dewiar</button>` : ""}</div>`;
+    ${androidSdk() >= 33 ? `<ol class="steps hsteps">
+      <li><b>Разрешите Dewiar на его странице</b>: «Страница Dewiar» → ⋮ (вверху справа) → «Разрешить ограниченные настройки». Android 13+ так защищает приложения не из Google Play — без этого Dewiar в «Специальных возможностях» серый. Пункта ⋮ нет? Сначала нажмите на серый Dewiar в «Специальных возможностях» и вернитесь.</li>
+      <li><b>«Специальные возможности»</b> → Dewiar → включить.</li></ol>
+    <div class="row2"><button class="btn p" id="hands-app" style="flex:1">1. Страница Dewiar</button><button class="btn" id="hands-go" style="flex:1">2. Включить</button></div>`
+    : `<ol class="steps hsteps"><li><b>«Специальные возможности»</b> → Dewiar → включить.</li></ol>
+    <div class="row2"><button class="btn p" id="hands-go" style="flex:1">Включить</button></div>`}`;
 }
 function androidSdk() { try { return +JSON.parse(D.info() || "{}").sdk || 0; } catch (e) { return 0; } }
 function wireHands() {
@@ -4136,6 +4140,110 @@ async function weather(city, days) {
   const dayName = (t) => { const k = Math.round((new Date(t + "T12:00") - new Date(isoLocal(new Date()).slice(0, 10) + "T12:00")) / 864e5); return k === 0 ? " (сегодня)" : k === 1 ? " (завтра)" : k === 2 ? " (послезавтра)" : ""; };
   (d.time || []).forEach((t, i) => lines.push(`${t}${dayName(t)}: ${Math.round(d.temperature_2m_min[i])}…${Math.round(d.temperature_2m_max[i])}°, ${WMO[d.weather_code[i]] || ""}, осадки ${d.precipitation_probability_max[i] != null ? d.precipitation_probability_max[i] : 0}%.`));
   return lines.join("\n");
+}
+
+/* Погода без модели (0.63; на компьютере — core/weatherq.py, №373: маленькая модель погоду не искала и выдумывала):
+   «какая погода?», «погода в Минске завтра», «сколько градусов на улице?» — сразу числа Open-Meteo. Город: названный →
+   запомненный здесь (S.weatherCity) → «Утро» с компьютера (morning.json) → память («живу в …», «мой город — …»); нет нигде —
+   спросить. Названный, если своего нет, запоминаем. «Погода в доме» — не город: отвечает модель. JS без \w для кириллицы. */
+const WQ_ASK = /^(?:какая|какой|что|как|скажи|подскажи|узнай|глянь|посмотри|покажи)?\s*(?:там\s+|у\s+нас\s+|у\s+меня\s+)?(?:сейчас\s+|сегодня\s+|завтра\s+|послезавтра\s+)?(?:с\s+|про\s+)?погод[аеуыой]+/i;
+const WQ_TEMP = /^(?:а\s+)?(?:сколько\s+(?:сейчас\s+)?градусов|какая\s+(?:сейчас\s+)?температура|температура)(?:\s+(?:сейчас|сегодня))?(?:\s+(?:на\s+улице|за\s+окном|снаружи))(?:\s+(?:сейчас|сегодня))?$|^(?:а\s+)?(?:холодно|тепло|жарко)\s+(?:ли\s+)?(?:сейчас\s+)?(?:на\s+улице|за\s+окном)$/i;
+const WQ_NOT = /включи|поставь|песн|музык|трек|напомн|кажд[а-яё]+\s+(?:утро|день|час)|по\s+утрам|пришли|телеграм|(?:^|[^a-z])max(?![a-z])|недел|выходн|месяц|вчера|прошл|прогноз\s+на\s+\d|почему|зачем|влияет|климат|запиши|заметк|календар/i;
+const WQ_TIME = new Set("сейчас сегодня завтра послезавтра на будет там у нас меня за окном улице днём днем утром вечером какая какой какие какая-то пожалуйста подскажи скажи".split(" "));
+const WQ_PLACE = "([А-ЯЁA-Z][А-Яа-яЁёA-Za-z-]+(?:,?\\s+[А-ЯЁа-яё-]+(?:ой|ей|ого)\\s+(?:области|края)|[\\s-][А-ЯЁA-Z][А-Яа-яЁёA-Za-z-]+)?)";
+const WQ_MEM = new RegExp("(?:[Жж]иву|[Жж]ив[её]т|[Пп]роживаю|[Пп]роживает|[Нн]ахожусь|[Нн]аходится)\\s+(?:[Вв]о?)\\s+(?:[Гг]ороде\\s+)?" + WQ_PLACE
+  + "|(?:[Мм]ой\\s+город|[Гг]ород\\s+проживания|[Рр]одной\\s+город|[Гг]ород)\\s*(?:—|-|:|это)?\\s*" + WQ_PLACE);
+function wqParse(text) {
+  const t = String(text || "").replace(/\s+/g, " ").trim().replace(/^[\s.!?…]+|[\s.!?…]+$/g, "");
+  let low = t.toLowerCase().replace(/ё/g, "е");
+  low = low.replace(/^(?:(?:а|и|ну|так|слушай|лира|скажи|подскажи)[, ]+)+/, "");
+  low = low.replace(/^(?:найди|поищи|посмотри|узнай)(?:\s+(?:в\s+интернете|в\s+сети))?\s+(?:информацию\s+|данные\s+)?(?:о|про|по)\s+погод[а-я]*/, "погода");
+  low = low.replace(/\s*(?:у\s+(?:меня|нас)\s+)?(?:в\s+(?:моем|нашем|своем)\s+городе|в\s+городе|у\s+(?:меня|нас))(?=\s|$)/, "").trim();
+  if (low.length > 80 || WQ_NOT.test(low)) return null;
+  const day = low.includes("послезавтра") ? 2 : low.includes("завтра") ? 1 : 0;
+  if (WQ_TEMP.test(low)) return { city: "", day, pre: false };
+  const m = low.match(WQ_ASK);
+  if (!m || !/погод/.test(low)) return null;
+  let rest = low.slice(m[0].length).replace(/^[ ,]+|[ ,]+$/g, "");
+  rest = rest.replace(/^(?:сейчас|сегодня|завтра|послезавтра|на\s+завтра|на\s+сегодня|будет|там|за\s+окном|на\s+улице)(?![а-я])\s*/, "").replace(/^[ ,]+|[ ,]+$/g, "");
+  let city = "", pre = false;
+  const mc = rest.match(/^(?:в|во)\s+(.+)$/);
+  const cut = (ws) => { while (ws.length && WQ_TIME.has(ws[ws.length - 1].replace(/,/g, ""))) ws.pop(); return ws.join(" ").replace(/^[ ,]+|[ ,]+$/g, ""); };
+  if (mc) { city = cut(mc[1].split(/\s+/).filter(Boolean)); if (!city || city.length > 60) return null; pre = true; }
+  else if (rest && !rest.replace(/,/g, " ").split(/\s+/).filter(Boolean).every(w => WQ_TIME.has(w))) {
+    if (rest.split(/\s+/).length > 4 || /[^а-яa-z\s,-]/.test(rest)) return null;
+    city = cut(rest.split(/\s+/).filter(Boolean));
+  }
+  if (city) {                                         // как сказали — с заглавной: «в минске» → «Минске»
+    const first = city.split(" ")[0], i = t.toLowerCase().replace(/ё/g, "е").indexOf(first);
+    if (i >= 0) city = t.slice(i).split(/\s+/).slice(0, city.split(" ").length).join(" ").replace(/^[ ,]+|[ ,]+$/g, "");
+    city = city.split(" ").map(w => /^(?:области|края|района|республики)$/i.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  }
+  return { city, day, pre: pre && !!city };
+}
+function wqStems(word) {
+  const w = word.trim(), low = w.toLowerCase(), out = [w];
+  for (const [end, rep] of [["ском", "ск"], ["ске", "ск"], ["ем", "ий"], ["ом", ""], ["е", "а"], ["е", ""], ["и", "ь"], ["и", "а"], ["у", "а"], ["ой", "ая"], ["ей", "ь"]])
+    if (low.endsWith(end) && low.length - end.length >= 3) out.push(w.slice(0, w.length - end.length) + rep);
+  if (w.length > 4) out.push(w.slice(0, -1));
+  const seen = new Set(); return out.filter(x => !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
+}
+async function wqGeocode(phrase) {
+  const m = phrase.trim().match(/^(.*?)[\s,]+([А-ЯЁа-яё-]+?)(?:ой|ей|ая|ий|ый|ом|ем)?\s+(?:област[ьи]|кра[йя]|республик[аи]|район[ае]?)$/i);
+  const name = m ? m[1].replace(/^[ ,]+|[ ,]+$/g, "") : phrase.trim(), region = m ? m[2].toLowerCase().slice(0, 5) : "";
+  const words = name.split(/\s+/);
+  const tries = words.length === 1 ? wqStems(words[0])
+    : wqStems(words[0]).slice(0, 3).flatMap(f => wqStems(words[words.length - 1]).slice(0, 3).map(l => [f, ...words.slice(1, -1), l].join(" "))).slice(0, 6).concat([name]);
+  const lo = (x) => String(x || "").toLowerCase().replace(/ё/g, "е");
+  for (const q of tries) {
+    const g = await meteoGet("https://geocoding-api.open-meteo.com/v1/search?count=10&language=ru&name=" + encodeURIComponent(q));
+    let res = g.results || [];
+    if (region) res = res.filter(r => lo(r.admin1).includes(region));
+    if (!res.length) continue;
+    const ql = lo(q);
+    res.sort((a, b) => (lo(a.name) !== ql) - (lo(b.name) !== ql) || (!lo(a.name).startsWith(ql.slice(0, 4))) - (!lo(b.name).startsWith(ql.slice(0, 4))) || (b.population || 0) - (a.population || 0));
+    const r = res[0];
+    if (!lo(r.name).startsWith(ql.slice(0, 3))) continue;
+    return { name: r.name, lat: r.latitude, lon: r.longitude, admin1: r.admin1 || "" };
+  }
+  return null;
+}
+const wqStored = (p) => p.name + (p.admin1 && p.admin1 !== p.name ? ", " + p.admin1 : "");
+const wqDeg = (t) => { t = Math.round(t); return t < 0 ? `минус ${-t}` : t > 0 ? `плюс ${t}` : "ноль"; };
+function wqSay(where, f, day) {
+  const pre = /^во?\s/i.test(where);
+  if (day && f.days.length > day) {
+    const x = f.days[day], word = day === 1 ? "Завтра" : "Послезавтра";
+    return `${pre ? `${word} ${where}` : `${where}, ${word.toLowerCase()}:`} от ${wqDeg(x.min)} до ${wqDeg(x.max)}°, ${x.sky}` + (x.rain != null ? `, вероятность осадков ${x.rain}%` : "") + ".";
+  }
+  let out = `${pre ? `Сейчас ${where}` : `${where}, сейчас`} ${wqDeg(f.now)}°, ${f.sky}` + (Math.abs(f.feels - f.now) >= 3 ? `, ощущается как ${wqDeg(f.feels)}` : "") + `, ветер ${f.wind} км/ч.`;
+  if (f.days.length) { const x = f.days[0]; out += ` Днём от ${wqDeg(x.min)} до ${wqDeg(x.max)}°, ${x.sky}` + (x.rain != null && x.rain >= 20 ? `, осадки ${x.rain}%` : "") + "."; }
+  return out;
+}
+function wqHome() {
+  if (S.weatherCity) return S.weatherCity;
+  try { const m = JSON.parse(fileGet("morning.json") || "null"); if (m && m.city) return m.city; } catch (e) { }
+  for (const f of S.memory || []) { const m = String(f || "").match(WQ_MEM); if (m) return (m[1] ? "в " + m[1] : m[2] || "").trim(); }   // «живу в Минске» — «в Минске»
+  return "";
+}
+async function weatherQuick(text) {
+  const c = wqParse(text); if (!c) return null;
+  let phrase = c.city, pre = c.pre;
+  if (!phrase) { const h = wqHome(); pre = /^в\s/.test(h); phrase = h.replace(/^в\s+/, ""); }
+  if (!phrase) return { say: "В каком вы городе? Скажите, например: «погода в Минске» — я запомню и дальше буду говорить сразу." };
+  let place, f;
+  try {
+    place = await wqGeocode(phrase);
+    if (!place) return c.city ? null : { say: `Не нашла город «${phrase}». Скажите: «погода в …» — с названием города.` };
+    const w = await meteoGet(`https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&timezone=auto&forecast_days=3&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max`);
+    const cu = w.current || {}, d = w.daily || {};
+    f = { now: Math.round(cu.temperature_2m || 0), feels: Math.round(cu.apparent_temperature || 0), sky: WMO[cu.weather_code] || "", wind: Math.round(cu.wind_speed_10m || 0),
+      days: (d.time || []).map((_, i) => ({ min: Math.round(d.temperature_2m_min[i]), max: Math.round(d.temperature_2m_max[i]), sky: WMO[d.weather_code[i]] || "", rain: (d.precipitation_probability_max || [])[i] })) };
+  } catch (e) { plog("info", "🌦 погода: " + (e.message || e)); return { say: "Прогноз сейчас не получить — сервис погоды не отвечает. Попробуйте через минуту." }; }
+  if (c.city && !S.weatherCity) { S.weatherCity = wqStored(place); saveS(); plog("info", "🌦 город для погоды: " + S.weatherCity); }
+  const where = /^во?\s/i.test(phrase) ? phrase : pre ? "в " + phrase : place.name;
+  plog("info", `🌦 погода без модели: ${wqStored(place)}`);
+  return { say: wqSay(where, f, c.day) };
 }
 
 /* ---------- заметки и деньги — файлы notes.json и money.json в памяти приложения (Dewiar.files/saveFile);
@@ -5911,7 +6019,7 @@ function appsHtml() {
     return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   }
   t.push(["soul", "Душа", "дневник и характер"]);
-  if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "по коду"]);
+  if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "для сотрудников"]);   // 28.10, владелец: «при чём здесь „по коду“»
   if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
   if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
   t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["qa", "Вопрос — ответ", "как сделать…"]);
@@ -7952,6 +8060,28 @@ async function nattIn() {
     }
   } finally { nattInBusy = false; }
 }
+/* «Дозор» сработал на компьютере (28.10, владелец: «показать на телефоне то, что увидел ИИ, — убедиться, что сработка
+   не ложная»): карточка — что ждали, что Лира увидела, снимок экрана (файлом «себе», шифрованным) и две кнопки: «Верно» и
+   «Не то — ждать дальше» (конверт своим устройствам watch_more: дозор снова на посту, ошибку Лира запомнит). */
+function watchCard(p) {
+  const esc2 = (t) => esc(String(t || ""));
+  showCard(`<div class="card wcard"><small class="hint" style="margin:0">👁 Дозор на компьютере${p.dev ? " «" + esc2(p.dev) + "»" : ""}</small>
+    <b>${esc2(p.what || p.text)}</b><p class="hint" style="margin:4px 0 8px">Лира увидела: ${esc2(p.note || "готово")}</p>
+    ${p.shot ? `<div class="wshot" id="wshot"><span class="hint">Загружаю снимок экрана…</span></div>` : ""}
+    <div class="row2" style="margin-top:10px"><button class="btn p" id="w-ok" style="flex:1">Верно</button><button class="btn" id="w-more" style="flex:1">Не то — ждать дальше</button></div></div>`);
+  cardSticky = Date.now() + 10 * 60000;
+  $("#w-ok").onclick = () => { cardSticky = 0; showCard(""); };
+  $("#w-more").onclick = async () => {
+    try { await devOwnSend({ watch_more: { id: p.wid, why: p.note || "" } }); toast("Дозор снова смотрит — эту ошибку Лира запомнила", 4000); }
+    catch (e) { toast(netErr(e.message || e), 4000); }
+    cardSticky = 0; showCard("");
+  };
+  if (p.shot && typeof clFileBytes === "function") clFileBytes(p.shot).then(b => {
+    const box = $("#wshot"); if (!box) return;
+    const u = clDataUrl(b, "image/jpeg"); box.innerHTML = `<img src="${u}" alt="Снимок экрана компьютера">`;
+    box.onclick = () => imgView(u);                       // на весь экран — разглядеть
+  }).catch(() => { const box = $("#wshot"); if (box) box.innerHTML = `<span class="hint">Снимок не загрузился</span>`; });
+}
 function ownApply(body) {
   if (body && body.natt) nattTake(body.natt);
   try { devBrainsOwn(body); } catch (e) { plog("warn", "мозги со своего устройства: " + e.message); }   // «Устройства» (devices.js)
@@ -7960,6 +8090,7 @@ function ownApply(body) {
   if (body && body.ping && typeof body.ping === "object" && Date.now() - (+body.ts || Date.now()) < 6 * 3600e3) {   // «Дозор» с компьютера: готово
     const t = String(body.ping.title || "Dewiar").slice(0, 80), x = String(body.ping.text || "").slice(0, 300);
     try { D.notify(t, x); } catch (e) { } toast(`${t}: ${x}`, 6000); plog("info", "👁 с компьютера: " + x.slice(0, 80));
+    if (body.ping.wid) watchCard(body.ping);
   }
   if (body && Array.isArray(body.want) && body.want.some(w => w !== "team") && (S.home.at || S.home.token || syncKeyGet())) setTimeout(() => ownShare().catch(() => { }), 0);   // другое моё устройство просит
   const skb = body && body.sync_key;
@@ -8046,6 +8177,17 @@ async function clSend(who, text, files, kind, extra) {
   const it = { mid: body.mid, ts: body.ts, out: true, t: body.t, f: fl, sid: +d.id || 0 };   // sid — номер письма у близкого: «доставлено», «прочитано»
   clAdd(p.pid, it); plog("info", `💌 близким: ${p.name} ← ${clip(body.t || "файл")}`); return Object.assign({ to: p.name }, it);
 }
+/* Отправка — сразу на экране (28.10, владелец: «в группу отправляет с ощутимой задержкой»): сообщение появляется мгновенно
+   с часиками, поле пустеет; письмо (шифрование, сайт) уходит в фоне, потом на месте — настоящее, с галочкой. Не ушло —
+   убираем и возвращаем текст в поле. Только текст: файлы ждут, как раньше. */
+async function clSendSoon(pid, t, fn) {
+  const tmp = { mid: "tmp" + Date.now().toString(36), ts: Date.now(), out: true, t, pend: true };
+  clAdd(pid, tmp); $("#cl-text").value = ""; clRender();
+  const drop = () => { const st = clLoad(); st.hist[pid] = (st.hist[pid] || []).filter(x => x.mid !== tmp.mid); clSave(); };
+  try { await fn(); drop(); }
+  catch (e) { drop(); toast(e.message, 4000); if ($("#cl-text") && !$("#cl-text").value) { clRender(); $("#cl-text").value = t; return; } }
+  clRender();
+}
 function clAdd(pid, it) {
   const st = clLoad(), h = st.hist[pid] = st.hist[pid] || [];
   if (h.some(x => x.mid === it.mid)) return false;
@@ -8065,9 +8207,17 @@ const CL_EMO_SETS = [["Частые", CL_EMO],
   ["Еда", ["☕", "🍵", "🍰", "🎂", "🍫", "🍪", "🍎", "🍓", "🍉", "🍌", "🍕", "🍔", "🍟", "🍝", "🥗", "🍲", "🥞", "🍷", "🍺", "🥤"]],
   ["Дела", ["🏠", "🚗", "🚕", "✈️", "🚆", "🏖️", "⚽", "🏃", "🎵", "🎮", "🎁", "📞", "📷", "💻", "📚", "📌", "💡", "⏰", "💤", "✅", "❌", "❓", "⚠️", "💰"]]];
 let clEmoTab = 0;
-const clEmoHtml = () => `<div class="clemo-tabs">${CL_EMO_SETS.map(([n, l], i) => `<button data-t="${i}" class="${i === clEmoTab ? "on" : ""}" aria-label="${n}">${l[0]}</button>`).join("")}</div>`
+/* смайлы картинками Fluent (0.63, ui/assets/emoji/emoji.js): выбор — «Недавние», разделы, поиск; в тексте — картинки */
+const clEmo = (escaped) => window.DewiarEmoji ? DewiarEmoji.html(escaped) : escaped;
+const clEmoNew = () => !!(window.DewiarEmoji && DewiarEmoji.ready);
+const clEmoHtml = () => clEmoNew() ? "" : `<div class="clemo-tabs">${CL_EMO_SETS.map(([n, l], i) => `<button data-t="${i}" class="${i === clEmoTab ? "on" : ""}" aria-label="${n}">${l[0]}</button>`).join("")}</div>`
   + `<div class="clemo-g">${CL_EMO_SETS[clEmoTab][1].map(e => `<button data-e="${e}" aria-label="Вставить ${e}">${e}</button>`).join("")}</div>`;
+function clEmoInsert(e) {
+  const ta = $("#cl-text"), a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? a;
+  ta.value = ta.value.slice(0, a) + e + ta.value.slice(z); ta.selectionStart = ta.selectionEnd = a + e.length;
+}
 function clEmoBind() {
+  if (clEmoNew() && $("#cl-emo")) return DewiarEmoji.picker($("#cl-emo"), { onPick: clEmoInsert });
   $$("#cl-emo [data-t]").forEach(b => b.onclick = () => { clEmoTab = +b.dataset.t; $("#cl-emo").innerHTML = clEmoHtml(); clEmoBind(); });
   $$("#cl-emo button[data-e]").forEach(b => b.onclick = () => {           // вставить в текст там, где курсор
     const ta = $("#cl-text"), a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? a;
@@ -8179,11 +8329,12 @@ function clPrompt() {
 /* «Отправлено» ✓, «Доставлено» ✓✓, «Прочитано» ✓✓ мятным (24.10, владелец: «не понятно, прочитал ли человек сообщение,
    дошло ли оно»). sid — номер письма в ящике близкого (/close/send), marks[pid] = [забрал до, прочитал до] (/close/inbox). */
 function clMark(m, pid) {
+  if (m.out && m.pend) return "pend";
   if (!m.out || !m.sid) return "";
   const mk = (clLoad().marks || {})[pid] || [0, 0];
   return mk[1] >= m.sid ? "read" : mk[0] >= m.sid ? "dlv" : "sent";
 }
-const CL_TICK = { sent: ["Отправлено", "M5 12.5l4 4 9-9"], dlv: ["Доставлено", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"], read: ["Прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"] };
+const CL_TICK = { pend: ["Отправляю…", "M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"], sent: ["Отправлено", "M5 12.5l4 4 9-9"], dlv: ["Доставлено", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"], read: ["Прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"] };
 const clTick = (m, pid) => { const k = clMark(m, pid); return k ? `<i class="clck ${k}" aria-label="${CL_TICK[k][0]}"><svg viewBox="0 0 24 24"><path d="${CL_TICK[k][1]}"/></svg></i>` : ""; };
 const CL_MARK_RU = { read: " [прочитано]", dlv: " [доставлено, ещё не прочитано]", sent: " [ещё не доставлено — его Dewiar не забирал почту]" };
 /* переписку открыли (или помощница прочитала её вслух) — близкому «прочитано»: его письма до последнего номера */
@@ -8838,7 +8989,7 @@ async function famInvite(pid) {
   if (m.st === "joined") return;
   if (m.st === "asked") return famAccept(p.pid);
   FAM.members[p.pid] = { name: p.name, st: "invited", at: Math.floor(Date.now() / 1000) }; famSave();
-  await clSend(p.pid, "Приглашаю вести общий семейный бюджет в Dewiar: траты и общие платежи у всех вместе. Принять — «Близкие» → «Семья» (нужна версия Dewiar 0.51 или новее).", null, "fam", { fam: { op: "invite" } });
+  await clSend(p.pid, "Приглашаю вести общий семейный бюджет в Dewiar: траты и общие платежи у всех вместе. Принять: на телефоне — «Близкие» → вкладка «Семья» (обновите приложение Dewiar, если её нет), на компьютере — студия → «Семья».", null, "fam", { fam: { op: "invite" } });
 }
 async function famAccept(pid) {
   const m = famLoad().members[pid];
@@ -9008,8 +9159,9 @@ function clRender() {
         ${(p.devs || []).length && window.DewiarCall ? `<button class="ib soft" id="cl-call" title="Позвонить"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></button>
           <button class="ib soft" id="cl-vcall" title="Видеозвонок"><svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg></button>` : ""}
         <button class="ib soft" id="cl-album" title="Фото и файлы" aria-label="Фото и файлы">${AL_IC.album}</button>
-</div>
-      <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${m.rx && (m.rx.me || m.rx.them) ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}<time>${clTime(m.ts)}${clTick(m, p.pid)}</time>${m.rx && (m.rx.me || m.rx.them) ? `<span class="clrx">${esc([m.rx.them, m.rx.me].filter(Boolean).join(""))}</span>` : ""}</div>`).join("")
+</div>${((famLoad().members || {})[p.pid] || {}).st === "asked" ? `<div class="card famask"><b>👪 ${esc(p.name)} зовёт вести общий бюджет</b><small>Траты и общие платежи — у вас обоих, в «Близкие» → «Семья».</small>
+        <div class="row2"><button class="btn p" id="fam-yes">Принять</button><button class="btn" id="fam-open">Посмотреть</button></div></div>` : ""}
+      <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${m.rx && (m.rx.me || m.rx.them) ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.t ? `<div>${clEmo(esc(m.t))}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}<time>${clTime(m.ts)}${clTick(m, p.pid)}</time>${m.rx && (m.rx.me || m.rx.them) ? `<span class="clrx">${clEmo(esc([m.rx.them, m.rx.me].filter(Boolean).join("")))}</span>` : ""}</div>`).join("")
         || `<p class="hint" style="text-align:center;margin:24px 8px">Напишите первое сообщение — или скажите: «Напиши ${esc(p.name)}, …»</p>`}</div>
       <div class="clatts" id="cl-atts">${clFiles.map((f, i) => `<span>${esc(f.name)} <button data-i="${i}">✕</button></span>`).join("")}</div>
       <div class="clemo" id="cl-emo" hidden>${clEmoHtml()}</div>
@@ -9019,6 +9171,8 @@ function clRender() {
     clImgFill(msgs, h, { pid: p.pid });                     // фото — картинкой (album.js)
     $("#cl-album").onclick = () => clAlbum({ pid: p.pid });
     $("#cl-back").onclick = () => { clCur = ""; clRender(); };
+    if ($("#fam-yes")) $("#fam-yes").onclick = async () => { try { await famAccept(p.pid); toast("Вы в общем бюджете — «Близкие» → «Семья»", 4000); } catch (e) { toast(e.message, 4000); } clRender(); };   // 28.10: приглашение в семью — прямо в переписке
+    if ($("#fam-open")) $("#fam-open").onclick = () => { clCur = ""; clTab = "fam"; clRender(); };
     clWipe = () => { if (!confirm(`Очистить переписку с «${p.name}» на этом телефоне? У ${p.name} и на ваших других устройствах она останется. Одно сообщение — долгое нажатие на него.`)) return;
       clForget(p.pid); clRender(); toast("Переписка очищена"); };
     if ($("#cl-call")) { $("#cl-call").onclick = () => clCall(p.pid, false).catch(e => toast(e.message, 4000)); $("#cl-vcall").onclick = () => clCall(p.pid, true).catch(e => toast(e.message, 4000)); }
@@ -9026,7 +9180,9 @@ function clRender() {
     $$(".clf").forEach(b => b.onclick = () => clSaveFile(p, h[+b.dataset.i], +b.dataset.j));
     $("#cl-file").onchange = () => { [...$("#cl-file").files].forEach(f => { if (f.size > 10 * 1024 * 1024) { toast(`«${f.name}» больше 10 МБ`); return; }
       const fr = new FileReader(); fr.onload = () => { clFiles.push({ name: f.name, type: f.type, bytes: new Uint8Array(fr.result) }); clRender(); }; fr.readAsArrayBuffer(f); }); };
-    const go = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return; const b = $("#cl-go"); b.disabled = true;
+    const go = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return; const b = $("#cl-go");
+      if (!clFiles.length) return clSendSoon(p.pid, t, () => clSend(p.pid, t, []));
+      b.disabled = true;
       try { await clSend(p.pid, t, clFiles); clFiles = []; clRender(); } catch (e) { toast(e.message, 4000); b.disabled = false; } };
     $("#cl-go").onclick = go;
     $("#cl-emo-b").onclick = () => { const e = $("#cl-emo"); e.hidden = !e.hidden; $("#cl-emo-b").setAttribute("aria-expanded", String(!e.hidden)); };
@@ -9044,7 +9200,7 @@ function clRender() {
   // сверху — сами близкие (лица крупно: нажал — переписка), «+» — пригласить; печать с приглашением — только когда
   // её позвали («Пригласить» или «+»), а не на пол-экрана каждый раз (отзыв 11.10)
   const inv = st.invite && Date.now() / 1000 < (st.invite.expires || 0) ? st.invite : null;
-  const last = (x) => { const l = (st.hist[x.pid] || []).slice(-1)[0]; return l ? esc((l.out ? "Вы: " : "") + (l.t || "📎 " + ((l.f || [])[0] || {}).name)) : "пока без сообщений"; };
+  const last = (x) => { const l = (st.hist[x.pid] || []).slice(-1)[0]; return l ? clEmo(esc((l.out ? "Вы: " : "") + (l.t || "📎 " + ((l.f || [])[0] || {}).name))) : "пока без сообщений"; };
   const PH = `<svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>`,
     VI = `<svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5"/></svg>`;
   const myName = st.me.name && st.me.name !== "Без имени" ? st.me.name : (S.close && S.close.name) || S.user_name || "";
@@ -9108,7 +9264,7 @@ function clReBind(p, h) {
     D.vibrate(15);
     const pop = document.createElement("div"); pop.className = "clrepick"; pop.setAttribute("role", "menu");
     // долгое нажатие: реакции, ниже — «Копировать» и «Удалить у меня» (отзыв 17.10: «выборочно поудалять лишнее»)
-    pop.innerHTML = `<div class="emos">${CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" aria-label="Реакция ${e}">${e}</button>`).join("")}</div>
+    pop.innerHTML = `<div class="emos">${CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" aria-label="Реакция ${e}">${clEmo(e)}</button>`).join("")}</div>
       <div class="acts">${m.t ? `<button role="menuitem" class="cp"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>Копировать</button>` : ""}
         <button role="menuitem" class="fw">${AL_IC.fwd}Переслать</button>
         <button role="menuitem" class="dl"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg>Удалить у меня</button></div>`;

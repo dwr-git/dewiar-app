@@ -11,12 +11,26 @@ const grOf = (gid) => (((CL.st || {}).groups) || []).find(g => g.gid === gid) ||
 function grSide(st) {
   const gs = st.groups || [];
   $("#cl-gh").hidden = !(st.people || []).length && !gs.length;
-  $("#cl-groups").innerHTML = gs.length ? gs.map(g => `<button class="cl-p cl-g ${g.gid === CL.cur ? "cur" : ""}" data-gid="${grEsc(g.gid)}">${grStack(g, 2)}
-      <span><b>${grEsc(g.name)}</b><small>${g.last && (g.last.t || (g.last.f || []).length) ? grEsc((g.last.out ? "Вы: " : grFirst(g.last.who || "Кто-то") + ": ") + (g.last.t || "📎 " + ((g.last.f[0] || {}).name || "файл"))) : grEsc((g.members || []).map(m => grFirst(m.name)).join(", "))}</small></span>
+  $("#cl-groups").innerHTML = gs.length ? gs.map(g => `<button class="cl-p cl-g ${g.gid === CL.cur ? "cur" : ""}" data-gid="${grEsc(g.gid)}" title="${grEsc(g.name)}">${grStack(g, 2)}
+      <span><b>${grEsc(g.name)}</b><small>${g.last && (g.last.t || (g.last.f || []).length) ? clEmo(grEsc((g.last.out ? "Вы: " : grFirst(g.last.who || "Кто-то") + ": ") + (g.last.t || "📎 " + ((g.last.f[0] || {}).name || "файл")))) : grEsc((g.members || []).map(m => grFirst(m.name)).join(", "))}</small></span>
       ${g.unread ? `<em>${g.unread}</em>` : ""}</button>`).join("")
     : `<p class="hint cl-gnone">Семья, друзья — пишите всем сразу. Соберите группу из своих близких.</p>`;
   $$("#cl-groups .cl-g").forEach(b => b.onclick = () => clOpen(b.dataset.gid));
   clFaces($("#cl-groups"));
+  grNav(gs);
+}
+/* Группы — и в меню слева, под «Близкими» (28.10, владелец: «созданные группы должны появляться и слева под Близкими,
+   красиво»): мозаика из двух лиц, название в строку, непрочитанные — числом; нажали — «Близкие» с этой группой. */
+function grNav(gs) {
+  const box = $("#nav-groups"); if (!box) return;
+  box.hidden = !gs.length;
+  box.innerHTML = gs.map(g => `<button class="nav-g${g.gid === CL.cur && $("#p-close.cur") ? " cur" : ""}" data-gid="${grEsc(g.gid)}" title="${grEsc(g.name)}">${grStack(g, 2)}<span>${grEsc(g.name)}</span>${g.unread ? `<em>${g.unread}</em>` : ""}</button>`).join("");
+  $$("#nav-groups .nav-g").forEach(b => b.onclick = () => {
+    const nb = $('nav button[data-p="close"]'); if (!$("#p-close.cur")) nb.click();
+    $$("#nav-groups .nav-g").forEach(x => x.classList.toggle("cur", x === b));
+    setTimeout(() => clOpen(b.dataset.gid), $("#p-close.cur") ? 0 : 60);
+  });
+  clFaces(box);
 }
 /* шапка переписки группы; true — это группа */
 function grHead() {

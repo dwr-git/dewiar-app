@@ -1807,7 +1807,10 @@ class CommandsMixin:
         if cmd == "tasks_list":
             return self.tasks.list()
         if cmd == "task_get":
-            return self.tasks.detail(a.get("id"))
+            try:
+                return self.tasks.detail(a.get("id"))
+            except KeyError as e:                       # пакет 28.10: задачу уже удалили, а студия просит её — не сбой программы
+                raise ValueError(str(e).strip("'\"")) from None
         if cmd == "task_create":
             t = self.tasks.create(a.get("title", ""), a.get("goal", ""), a.get("project", ""), start=a.get("start", True))
             return t.public()

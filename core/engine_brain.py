@@ -38,7 +38,7 @@ class BrainMixin:
         dw = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "dewiar") else ""
         # запасной путь: прокси Dewiar, полученный заранее, — только если напрямую dewiar.pro не открылся (net._DirectFirst)
         rv = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "reserve") is not False else ""
-        return own or dw, extra, rv
+        return own or dw, extra, rv, bool(dw and not own)       # 4-е — прокси выдан Dewiar: в подсказках его адрес не показываем
 
     def _lan_fetch(self):
         """Дома — напрямую: спросить у сайта его адрес в домашней сети (cloud.php ?p=/lan, со входом или ключом) и

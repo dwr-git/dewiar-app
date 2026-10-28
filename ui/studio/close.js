@@ -12,6 +12,7 @@ const clSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") +
 function clDot(st) {
   const n = ((st && st.people) || []).concat((st && st.groups) || []).reduce((a, p) => a + (p.unread || 0), 0) + ((st && st.offers) || []).length;   // и «зовут в Близкие», и группы
   $("#close-dot").classList.toggle("on", n > 0);
+  if (typeof grNav === "function") grNav((st && st.groups) || []);       // группы — и в меню слева (studio/groups.js)
 }
 async function loadClose(hello) {
   try { CL.st = await core.call("close_state", { hello: !!hello }); }
@@ -29,7 +30,7 @@ function clRender() {
   if (st.error) { r.className = "res bad"; r.textContent = st.error; } else if (r.classList.contains("bad")) { r.className = "res"; r.textContent = ""; }
   $("#cl-people").innerHTML = people.length ? people.map(p => `<button class="cl-p ${p.pid === CL.cur ? "cur" : ""}" data-pid="${clEsc(p.pid)}">
       <i class="cl-ava" style="--c:${clColor(p.pid)}" data-face="${clEsc(p.pid)}" data-v="${+p.face || 0}">${clEsc((p.name || "?").slice(0, 1).toUpperCase())}</i>
-      <span><b>${clEsc(p.name)}</b><small>${p.last && (p.last.t || (p.last.f || []).length) ? clEsc((p.last.out ? "Вы: " : "") + (p.last.t || "📎 " + ((p.last.f[0] || {}).name || "файл"))) : "пока без сообщений"}</small></span>
+      <span><b>${clEsc(p.name)}</b><small>${p.last && (p.last.t || (p.last.f || []).length) ? clEmo(clEsc((p.last.out ? "Вы: " : "") + (p.last.t || "📎 " + ((p.last.f[0] || {}).name || "файл")))) : "пока без сообщений"}</small></span>
       ${p.unread ? `<em>${p.unread}</em>` : ""}</button>`).join("")
     : `<p class="hint" style="margin:6px 2px 12px">Пока никого. Пригласите тех, с кем хотите переписываться через помощников.</p>`;
   $$("#cl-people .cl-p").forEach(b => b.onclick = () => clOpen(b.dataset.pid));
@@ -70,15 +71,19 @@ async function clOpen(pid) {
   CL.cur = pid; $("#cl-invite").style.display = "none"; clCardShow(false); if (typeof grPanel === "function") grPanel("");
   $$("#cl-people .cl-p, #cl-groups .cl-p").forEach(b => b.classList.toggle("cur", (b.dataset.pid || b.dataset.gid) === pid));
   clHead();
-  try { CL.hist = await core.call("close_history", { pid, read: !document.hidden }); } catch (e) { CL.hist = []; }
+  const pend = CL.cur === pid ? (CL.hist || []).filter(m => m.pend === true) : [];   // ещё уходит — не терять с экрана
+  try { const h = await core.call("close_history", { pid, read: !document.hidden });
+        CL.hist = h.concat(pend.filter(p => !h.some(x => x.out && x.t === p.t && Math.abs((x.ts || 0) - p.ts) < 120000))); } catch (e) { CL.hist = pend; }
   clMsgs();
 }
 /* «Отправлено» ✓, «Доставлено» ✓✓, «Прочитано» ✓✓ цветом (24.10, владелец: «не понятно, прочитал ли человек сообщение,
    дошло ли оно»). sid — номер письма в ящике близкого; marks — до какого номера его Dewiar забрал и открыл переписку. */
-const CL_TICK = { sent: ["Отправлено — его Dewiar ещё не забирал почту", "M5 12.5l4 4 9-9"],
+const CL_TICK = { pend: ["Отправляю…", "M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"], fail: ["Не ушло — нажмите «Отправить» ещё раз", "M12 8v5M12 16.5v.5M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"],
+  sent: ["Отправлено — его Dewiar ещё не забирал почту", "M5 12.5l4 4 9-9"],
   dlv: ["Доставлено — ещё не прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"],
   read: ["Прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"] };
 function clMark(m) {
+  if (m.out && m.pend) return m.pend === "fail" ? "fail" : "pend";
   if (!m.out || !m.sid) return "";
   const p = ((CL.st && CL.st.people) || []).find(x => x.pid === CL.cur) || {}, mk = p.marks || [0, 0];
   return mk[1] >= m.sid ? "read" : mk[0] >= m.sid ? "dlv" : "sent";
@@ -100,16 +105,22 @@ const CL_EMO_SETS = [["Частые", CL_EMO],
   ["Природа", ["☀️", "🌤️", "🌧️", "⛈️", "❄️", "🌈", "🌙", "🌸", "🌹", "🌷", "🌻", "🌿", "🍀", "🍁", "🐱", "🐶", "🐻", "🐰", "🦊", "🐼", "🐸", "🐝", "🦋", "🐟"]],
   ["Еда", ["☕", "🍵", "🍰", "🎂", "🍫", "🍪", "🍎", "🍓", "🍉", "🍌", "🍕", "🍔", "🍟", "🍝", "🥗", "🍲", "🥞", "🍷", "🍺", "🥤"]],
   ["Дела", ["🏠", "🚗", "🚕", "✈️", "🚆", "🏖️", "⚽", "🏃", "🎵", "🎮", "🎁", "📞", "📷", "💻", "📚", "📌", "💡", "⏰", "💤", "✅", "❌", "❓", "⚠️", "💰"]]];
+/* Выбор смайла (0.63, владелец 28.10: «смайлов мало и не особо симпатичные»): все смайлы Fluent картинками — «Недавние»,
+   разделы, поиск по-русски (ui/assets/emoji/emoji.js); нет модуля — прежние вкладки CL_EMO_SETS. */
 let clEmoTab = 0;
+function clEmoInsert(e) {                                               // вставить в текст там, где курсор
+  const ta = $("#cl-text"), x = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? x;
+  ta.value = ta.value.slice(0, x) + e + ta.value.slice(z); ta.selectionStart = ta.selectionEnd = x + e.length; ta.focus();
+}
 function clEmoDraw() {
   const r = $("#cl-emo");
+  if (window.DewiarEmoji && DewiarEmoji.ready) return DewiarEmoji.picker(r, { onPick: clEmoInsert });
   r.innerHTML = `<div class="cl-emo-tabs" role="tablist">${CL_EMO_SETS.map(([n, l], i) => `<button role="tab" data-t="${i}" aria-selected="${i === clEmoTab}" title="${n}">${l[0]}<span>${n}</span></button>`).join("")}</div>`
     + `<div class="cl-emo-g" role="tabpanel">${CL_EMO_SETS[clEmoTab][1].map(e => `<button data-e="${e}" title="Вставить ${e}">${e}</button>`).join("")}</div>`;
   $$("#cl-emo [data-t]").forEach(b => b.onclick = () => { clEmoTab = +b.dataset.t; clEmoDraw(); });
-  $$("#cl-emo button[data-e]").forEach(b => b.onclick = () => {            // вставить в текст там, где курсор
-    const ta = $("#cl-text"), x = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? x;
-    ta.value = ta.value.slice(0, x) + b.dataset.e + ta.value.slice(z); ta.selectionStart = ta.selectionEnd = x + b.dataset.e.length; ta.focus(); });
+  $$("#cl-emo button[data-e]").forEach(b => b.onclick = () => clEmoInsert(b.dataset.e));
 }
+const clEmo = (escaped) => window.DewiarEmoji ? DewiarEmoji.html(escaped) : escaped;     // смайлы в тексте — картинками
 const clRxList = (m) => Object.values(m.rx || {}).filter(Boolean);   // у человека — them и me, в группе — по участникам
 const clEmoOnly = (t) => !!t && t.length <= 12 && /^(?:\p{Extended_Pictographic}|\u200d|\ufe0f|\s)+$/u.test(t);
 function clReClose() { $$(".cl-repick").forEach(x => x.remove()); }
@@ -117,7 +128,7 @@ function clRePick(el, m) {
   clReClose();
   const pop = document.createElement("div"); pop.className = "cl-repick"; pop.setAttribute("role", "menu");
   // реакции и «Удалить у меня» (отзыв 17.10: «в близких не вижу удаления сообщений») — как долгое нажатие на телефоне
-  pop.innerHTML = (CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" title="Реакция ${e}">${e}</button>`).join(""))
+  pop.innerHTML = (CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" title="Реакция ${e}">${clEmo(e)}</button>`).join(""))
     + `<i class="cl-resep" aria-hidden="true"></i><button role="menuitem" class="cl-refw" title="Переслать близкому или в группу" aria-label="Переслать"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 5.5 20 12l-6.5 6.5M20 12H9.5A5.5 5.5 0 0 0 4 17.5V19"/></svg></button><button role="menuitem" class="cl-redel" title="Удалить у меня — у близкого сообщение останется" aria-label="Удалить у меня"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg></button>`;
   document.body.appendChild(pop);
   const r = el.getBoundingClientRect(), w = pop.offsetWidth;
@@ -139,11 +150,11 @@ function clRePick(el, m) {
 }
 function clMsgs() {
   const box = $("#cl-msgs");
-  box.innerHTML = CL.hist.map((m, i) => `<div class="cl-m ${m.out ? "out" : ""}${clRxList(m).length ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.who && !m.out ? `<b class="cl-gwho" style="color:${clColor(m.from || m.who)}">${clEsc(String(m.who).split(/\s+/)[0])}</b>` : ""}${m.t ? `<div class="tx">${clEsc(m.t)}</div>` : ""}
+  box.innerHTML = CL.hist.map((m, i) => `<div class="cl-m ${m.out ? "out" : ""}${clRxList(m).length ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.who && !m.out ? `<b class="cl-gwho" style="color:${clColor(m.from || m.who)}">${clEsc(String(m.who).split(/\s+/)[0])}</b>` : ""}${m.t ? `<div class="tx">${clEmo(clEsc(m.t))}</div>` : ""}
       ${(m.f || []).map(f => /\.(jpe?g|png|webp|gif)$/i.test(f.name || "") && f.path ? `<button class="cl-ph" data-path="${clEsc(f.path)}" title="${clEsc(f.name)} — открыть"><img data-thumb="${clEsc(f.path)}" alt="${clEsc(f.name)}"></button>`
         : `<button class="cl-f" data-path="${clEsc(f.path || "")}" ${f.path ? "" : "disabled"}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${clEsc(f.name)}</span><small>${f.error ? "не скачался" : clSize(f.size || 0)}</small></button>`).join("")}
       ${m.rem && m.rem.at ? `<span class="cl-grem">⏰ напомню всем: ${clEsc(new Date(m.rem.at).toLocaleString("ru-RU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>` : ""}
-      <time>${clTime(m.ts)}${clTick(m)}${typeof grReadersPc === "function" ? grReadersPc(m) : ""}</time>${clRxList(m).length ? `<span class="cl-rx">${clEsc(clRxList(m).join(""))}</span>` : ""}
+      <time>${clTime(m.ts)}${clTick(m)}${typeof grReadersPc === "function" ? grReadersPc(m) : ""}</time>${clRxList(m).length ? `<span class="cl-rx">${clEmo(clEsc(clRxList(m).join("")))}</span>` : ""}
       ${m.mid ? `<button class="cl-reb" title="Реакция" aria-label="Реакция"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4.2 4.2 0 0 0 7 0M9 9.6v.01M15 9.6v.01"/></svg></button>` : ""}</div>`).join("") || `<p class="hint" style="text-align:center;margin:30px 0">Напишите первое сообщение — или скажите помощнице: «Напиши ${clEsc((((CL.st || {}).people || []).find(x => x.pid === CL.cur) || {}).name || "")}, …»</p>`;
   $$("#cl-msgs img[data-thumb]").forEach(im => { const k = im.dataset.thumb;   // фото — картинкой (core close_thumb, кэш по пути)
     (CL.thumbs[k] = CL.thumbs[k] || core.call("close_thumb", { path: k }).then(r => r.data || "").catch(() => "")).then(d => { if (d) im.src = d; else im.closest(".cl-ph").classList.add("bad"); }); });
@@ -210,16 +221,28 @@ $("#cl-seldel").onclick = clPickDel;
 $("#cl-selall").onclick = () => { const ids = CL.hist.filter(m => m.mid).map(m => m.mid);
   CL.pick = new Set(CL.pick && CL.pick.size === ids.length ? [] : ids); clPickWire(); clPickCount(); };
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && CL.pick && $("#p-close").classList.contains("cur")) clPickOff(); });
+/* Отправка — сразу на экране (28.10, владелец: «в группу отправляет с ощутимой задержкой»): сообщение появляется мгновенно
+   с часиками, поле очищается; письмо уходит в фоне (шифрование и сайт — через прокси бывает 2–3 с), потом — галочка.
+   Не ушло — «!» у сообщения, текст возвращается в поле. Файлы — как раньше: ждём, пока уйдут. */
 async function clSend() {
   const text = $("#cl-text").value.trim(), pid = CL.cur;
   if (!pid || (!text && !CL.files.length)) return;
-  const b = $("#cl-go"); b.disabled = true;
+  const b = $("#cl-go"), files = CL.files;
+  let tmp = null;
+  if (!files.length) {
+    tmp = { mid: "tmp" + Date.now(), ts: Date.now(), out: true, t: text, pend: true };
+    CL.hist = (CL.hist || []).concat([tmp]); clMsgs();
+    $("#cl-text").value = ""; $("#cl-text").focus();
+  } else b.disabled = true;
   try {
-    await core.call("close_send", { pid, text, files_b64: CL.files });
-    $("#cl-text").value = ""; CL.files = []; clFiles();
-    CL.hist = await core.call("close_history", { pid }); clMsgs();
-  } catch (e) { toast(e.message, 4000); }
-  b.disabled = false; $("#cl-text").focus();
+    await core.call("close_send", { pid, text, files_b64: files });
+    if (files.length) { $("#cl-text").value = ""; CL.files = []; clFiles(); }
+    if (CL.cur === pid) { CL.hist = await core.call("close_history", { pid }); clMsgs(); }
+  } catch (e) {
+    toast(e.message, 4000);
+    if (tmp) { tmp.pend = "fail"; if (CL.cur === pid) { clMsgs(); if (!$("#cl-text").value) $("#cl-text").value = text; } }
+  }
+  b.disabled = false; if (files.length) $("#cl-text").focus();
 }
 function clFiles() {
   $("#cl-files").innerHTML = CL.files.map((f, i) => `<span>${clEsc(f.name)} <button data-i="${i}" title="Убрать">✕</button></span>`).join("");

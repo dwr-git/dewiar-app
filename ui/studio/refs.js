@@ -4,11 +4,20 @@
    ?p=/close/ref): друг увидит «… зовёт вас в «Близкие»» и согласится или откажется. rid — знак связи от сервера.
    RF.map — rid → {pid} (уже близкий) | {offered} (позвали, ждём ответа). */
 const RF = { d: null, map: {}, sel: null };
-async function loadRefs() {
+/* 28.10 (владелец, Ubuntu): первый раз облако не ответило вовремя (первое соединение через прокси) — а на экране «Нужен
+   вход в Dewiar», хотя вход есть. Теперь: сбой сети — ещё раз сам, тихо; не вышло — «Облако не ответило» и «Повторить»;
+   «Нужен вход» — только когда входа и правда нет. */
+async function loadRefs(again) {
   const res = $("#rf-res");
+  if (!RF.d && !again) $("#rf-net").innerHTML = `<div class="rf-wait"><b>Открываю созвездие…</b><span>Спрашиваю облако Dewiar, кого вы пригласили.</span></div>`;
   try { RF.d = await core.call("ref_info"); }
   catch (e) {
-    $("#rf-net").innerHTML = `<div class="rf-wait"><b>Нужен вход в Dewiar</b><span>Приглашения работают через облако Dewiar: войдите аккаунтом dewiar.pro или подключите ключ — раздел «Dewiar.pro».</span></div>`;
+    const login = /сначала подключите Dewiar|вход|ключ/i.test(e.message || "") && !/не ответил|timed? ?out|время|связ|прокси/i.test(e.message || "");
+    if (!login && !again) { setTimeout(() => loadRefs(true), 1500); return; }
+    $("#rf-net").innerHTML = login
+      ? `<div class="rf-wait"><b>Нужен вход в Dewiar</b><span>Приглашения работают через облако Dewiar: войдите аккаунтом dewiar.pro или подключите ключ — раздел «Dewiar.pro».</span></div>`
+      : `<div class="rf-wait"><b>Облако Dewiar не ответило</b><span>Так бывает при медленной сети. Попробуйте ещё раз.</span><button class="btn" id="rf-again">Повторить</button></div>`;
+    if ($("#rf-again")) $("#rf-again").onclick = () => loadRefs();
     res.className = "res bad"; res.textContent = e.message; return;
   }
   res.className = "res"; res.textContent = "";

@@ -1,0 +1,2 @@
+Картинки смайлов — Fluent Emoji, © Microsoft Corporation, лицензия MIT (https://github.com/microsoft/fluentui-emoji),
+пакет @lobehub/fluent-emoji-3d (MIT). Названия и группы — emojibase-data (MIT, https://emojibase.dev).

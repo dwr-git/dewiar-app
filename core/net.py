@@ -281,6 +281,7 @@ def _conf():
         try:
             r = f()
             px, extra = r[0], r[1]
+            _state["px_dewiar"] = bool(len(r) > 3 and r[3])
             return px or "", _hosts(extra), (r[2] if len(r) > 2 else "") or ""
         except Exception:  # noqa: BLE001
             log.debug("net: настройки не прочитались", exc_info=True)
@@ -521,8 +522,12 @@ def check(url, proxy="", timeout=8.0):
 def blocked_hint():
     """Добавка к сообщению «нет связи с сервером Dewiar»: что делать, если сайт блокирует провайдер."""
     px, _ = current()
+    if px and _state.get("px_dewiar"):
+        # прокси, выданный Dewiar (28.10, снимок владельца: в «Рефералах» был виден его адрес с логином) — без адреса
+        return " Сейчас Dewiar ходит туда через прокси Dewiar — попробуйте ещё раз через минуту; не выйдет — выключите «Использовать прокси Dewiar» (студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»)."
     if px:
-        return f" Сейчас Dewiar ходит туда через прокси {hide(px)} — проверьте, что он работает (студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»)."
+        where = host_of(px) + (f":{urlparse(px).port}" if urlparse(px).port else "")   # свой прокси — только адрес и порт, без логина
+        return f" Сейчас Dewiar ходит туда через ваш прокси {where} — проверьте, что он работает (студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»)."
     return " Если dewiar.pro у вас блокирует провайдер — укажите прокси: студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»."
 
 

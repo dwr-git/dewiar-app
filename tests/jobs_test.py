@@ -71,7 +71,8 @@ async def run():
     job = next((x for x in items if x.get("kind") == "job"), None)
     R["job"] = job
     events.clear()
-    await call("reminder_update", id=job["id"], patch={"at": (dt.datetime.now() + dt.timedelta(seconds=2)).isoformat(timespec="seconds")})
+    R["moved"] = dt.datetime.now() + dt.timedelta(seconds=2)
+    await call("reminder_update", id=job["id"], patch={"at": R["moved"].isoformat(timespec="seconds")})
     R["ran"] = await wait_for(lambda e: e["type"] == "heard" and "🗓" in e.get("text", ""), 15)
     R["answered"] = await wait_for(lambda e: e["type"] == "answer" and e.get("done") and e.get("text"), 20)
     R["no_alarm"] = not any(e["type"] == "alarm" for e in events)
@@ -111,7 +112,10 @@ ok(any(e["type"] == "heard" and "🗓" in e.get("text", "") for e in R.get("loud
    "пришло письмо — показывает и говорит")
 ok(R.get("set") and R.get("job") and R["job"].get("deliver") == "voice", "дело поставлено; Telegram не подключён — честно сказал, что будет голосом")
 ok(R.get("ran") and R.get("answered") and R.get("no_alarm"), "в срок — без звонка: ассистент сам выполнил поручение и ответил")
-ok(R.get("next", "").endswith("09:00:00"), f"следующий раз — снова в 9:00 ({R.get('next')})")
+# перенос времени дела (календарь, поле «чч:мм») переносит и повтор — с 28.10 следующий раз в новое время, а не в 9:00
+mv = R.get("moved")
+ok(mv and R.get("next", "").startswith((mv + dt.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")),
+   f"следующий раз — завтра в новое время ({R.get('next')})")
 ok(R.get("brief") and R.get("brief_ans") and "Утренняя сводка" in log, "«утренняя сводка» — сразу, с делами и деньгами")
 p = R.get("preset") or {}
 ok(p.get("kind") == "job" and p.get("preset") == "fx" and p.get("repeat") == {"kind": "weekly", "days": [0, 1, 2, 3, 4], "time": "09:15"}

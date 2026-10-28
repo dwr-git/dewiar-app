@@ -615,6 +615,7 @@ body.neu .snd.on i, body.neu .snd.play i { background: var(--brand); }
 .clm time { align-self: flex-end; font-size: 11px; color: var(--dim); display: inline-flex; align-items: center; gap: 4px; }
 .clck { display: inline-grid; } .clck svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .clck.sent, .clck.dlv { opacity: .8; } .clck.read { color: #5ff0c4; }   /* ✓ отправлено, ✓✓ доставлено, ✓✓ мятный — прочитано */
+.clck.pend { opacity: .6; }
 .clf { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(0,0,0,.2); text-align: left; font-size: 13.5px; }
 .clf svg { width: 18px; height: 18px; flex: none; } .clf span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clf small { color: var(--muted); font-size: 11.5px; }
@@ -729,6 +730,8 @@ body.light .doneadd input { background: rgba(255,255,255,.62); box-shadow: inset
 .clm.rx { margin-bottom: 12px; }
 .clm.emo { background: none !important; box-shadow: none !important; padding: 0 2px; }
 .clm.emo > div:first-child { font-size: 40px; line-height: 1.15; }
+/* смайлы без пузыря (28.10, владелец: «смайлы с белым текстом на светлом фоне») — время и подписи цветом страницы, не белым */
+.clm.emo.out, body.light .clm.emo.out, body.neu .clm.emo.out { color: inherit; } .clm.emo time, .clm.emo.out time { color: var(--dim) !important; }
 .clrx { position: absolute; bottom: -13px; right: 10px; padding: 2px 7px; border-radius: 999px; font-size: 14px; line-height: 1.35; background: #26263a; box-shadow: 0 4px 10px -4px rgba(0,0,0,.6); }
 .clm:not(.out) .clrx { right: auto; left: 10px; }
 .clm.emo.rx { margin-bottom: 0; } .clm.emo .clrx { position: static; align-self: flex-end; } .clm.emo:not(.out) .clrx { align-self: flex-start; }
@@ -1378,8 +1381,18 @@ body.neu :is(.idfind, #idbody, .idq) { background: var(--glass); box-shadow: var
 .idnew #idsend[hidden] { display: none; }
 .idtabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: var(--field); margin: 14px 0 8px; }
 .idtabs button { border: 0; background: none; color: var(--muted, #9aa0b4); font: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 4px; border-radius: 12px; }
-.idtabs button b { color: inherit; font-size: 12px; }
-.idtabs button.on { background: var(--glass, rgba(255,255,255,.08)); color: var(--ink, #fff); } .idtabs button.on b { color: #f2a93b; }
+.idtabs button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; min-width: 0; }
+.idtabs button span { overflow: hidden; text-overflow: ellipsis; }
+.idtabs button b { color: inherit; font-size: 11px; font-weight: 800; min-width: 18px; padding: 1px 6px; border-radius: 99px; background: rgba(127,127,140,.16); }
+.idtabs button.on { background: var(--glass, rgba(255,255,255,.08)); color: var(--ink, #fff); } .idtabs button.on b { color: #3a2405; background: linear-gradient(160deg, #ffcf6e, #f2a93b); }
+/* 28.10 (владелец: «идеи на телефоне некрасиво»): поле идеи — без карточки вокруг (было поле в поле), вкладки в одну
+   строку с числом-пилюлей, идеи — карточками с выпуклой кнопкой голоса (в неоморфизме кнопка была невидимой) */
+.idnew { margin: 4px 0 6px; }
+body.neu .idtabs { background: var(--glass); box-shadow: var(--press); }
+body.neu .idtabs button.on { box-shadow: var(--raise-s); }
+body.neu .idi { background: var(--glass); box-shadow: var(--raise-s); margin-bottom: 12px; }
+body.neu .idv { background: var(--glass); box-shadow: var(--raise-s); }
+body.neu .idv[aria-pressed="true"] { background: linear-gradient(160deg, #ffcf6e, #f2a93b); box-shadow: var(--raise-s); }
 .idfind { margin: 0 0 10px; }
 .idi { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 18px; background: var(--glass, rgba(255,255,255,.06)); margin: 0 0 8px; }
 .idv { width: 50px; flex: none; display: flex; flex-direction: column; align-items: center; padding: 7px 0 6px; border: 0; border-radius: 14px; background: var(--field); color: var(--muted, #9aa0b4); font: inherit; }
@@ -1500,7 +1513,10 @@ body.light .clfwd-card, body.neu.light .clfwd-card { background: #f4f6fb; }
 .clfwd-list .clp { width: 100%; } .clfwd-list .clp.busy { opacity: .6; }
 .clrepick .fw svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .clfwd-card .ib.soft { flex: none; }
-.clh > div[style*="flex:1"] b, .clh > div[style*="flex:1"] small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clh > div[style*="flex:1"] b, .clh > div[style*="flex:1"] small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 28.10 (владелец: «Миша — надписи не помещаются»): подпись под именем — строкой с многоточием, а не под кнопками;
+   кнопки звонка, видео и альбома — плотнее */
+.clh { gap: 8px; } .clh > .ib.soft:not(#cl-back) { width: 40px; height: 40px; flex: none; } .clh > .ib.soft:not(#cl-back) svg { width: 19px; height: 19px; }
 body .clview .cla-wipe { margin-top: 22px; background: rgba(255,255,255,.08); color: #ff9a9a; box-shadow: none; }
 .grrem { align-self: flex-start; font-size: 12.5px; font-weight: 600; padding: 4px 9px; border-radius: 9px; background: rgba(255,255,255,.14); }
 .clm:not(.out) .grrem { background: rgba(127,127,140,.16); }
@@ -1542,3 +1558,34 @@ body.senior { zoom: 1.12; }
 .row2 .grname { min-width: 0; }
 .srmed em { display: block; font-style: normal; font-size: 12.5px; color: #e5a43a; margin-top: 2px; } .srmed em.ok { color: #2fb67e; }
 body.senior .sheet { max-height: 73vh; } body.senior .sheet.tall { height: 78.5vh; max-height: 78.5vh; }   /* zoom 1.12 умножает и vh — лист не выше прежнего */
+
+/* Смайлы картинками (emoji/emoji.js, Fluent Emoji): в тексте — размером с букву, «только смайлы» — крупно */
+img.emj { width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 .03em; object-fit: contain; }
+.clm.emo > div:first-child img.emj { width: 1.15em; height: 1.15em; vertical-align: -0.15em; }
+.clrx img.emj { width: 18px; height: 18px; vertical-align: -4px; }
+.clrepick .emos img.emj { width: 28px; height: 28px; vertical-align: middle; }
+/* выбор смайла: поиск, разделы значками, сетка картинок */
+.clemo.emo-pick { display: flex; flex-direction: column; gap: 6px; }
+.clemo.emo-pick[hidden] { display: none; }
+.emo-pick button { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; }
+.emo-q { width: 100%; height: 38px; border: 0; border-radius: 999px; padding: 0 16px; font: inherit; font-size: 15px; background: var(--field); color: var(--ink); outline: none; -webkit-appearance: none; appearance: none; }
+body.neu .emo-q { box-shadow: var(--press); }
+.emo-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.emo-tabs::-webkit-scrollbar { display: none; }
+.emo-tabs button { flex: none; width: 40px; height: 36px; border-radius: 12px; display: grid; place-items: center; opacity: .5; }
+.emo-tabs button[aria-selected="true"] { opacity: 1; background: rgba(127,127,140,.18); }
+.emo-tabs img.emj { width: 24px; height: 24px; vertical-align: 0; margin: 0; }
+.emo-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.emo-g button { height: 46px; border-radius: 12px; display: grid; place-items: center; }
+.emo-g button:active { background: rgba(127,127,140,.2); transform: scale(1.1); }
+.emo-g img.emj { width: 34px; height: 34px; vertical-align: 0; margin: 0; }
+.emo-none { grid-column: 1 / -1; margin: 10px 4px; font-size: 14px; color: var(--muted, #9aa0b4); }
+
+/* приглашение в общий бюджет — карточкой в переписке (28.10, владелец: «на телефоне не найти, как принять») */
+.famask { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; padding: 12px 14px; }
+.famask small { color: var(--muted); font-size: 13px; line-height: 1.4; } .famask .row2 { margin-top: 8px; gap: 8px; } .famask .row2 .btn { flex: 1; }
+
+/* «Дозор» сработал — карточка со снимком экрана компьютера */
+.wcard { display: flex; flex-direction: column; gap: 2px; }
+.wshot { border-radius: 14px; overflow: hidden; background: rgba(127,127,140,.12); min-height: 60px; display: grid; place-items: center; }
+.wshot img { display: block; width: 100%; height: auto; cursor: zoom-in; }

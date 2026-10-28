@@ -91,6 +91,7 @@ function ntFilters(all) {
 async function ntLoad() {
   const q = $("#nt-q").value.trim(); let all = [];
   try { all = await core.call("notes_list", { q }); } catch (e) { $("#nt-list").innerHTML = `<p class="hint">${escH(e.message)}</p>`; return; }
+  if (!Array.isArray(all)) all = [];
   NT.all = all; ntFilters(all);
   const f = NT.f, l = all.filter(n => f === "@arch" ? n.archived : !n.archived && (!f || (f === "@pin" ? n.pinned : (n.tags || []).includes(f.slice(1)))));
   NT.list = l;
