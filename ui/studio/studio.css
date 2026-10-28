@@ -2381,7 +2381,7 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .tm-steps li::before { content: counter(tm); position: absolute; left: 0; top: -1px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
   font: 700 12.5px Manrope, sans-serif; color: #fff; background: var(--brand); }
 .tm-steps a { color: var(--accent); }
-.tm-conn { display: flex; gap: 8px; } .tm-conn input { flex: 1; }
+.tm-conn { display: flex; gap: 8px; } .tm-conn input { flex: 1; } #p-team [hidden] { display: none !important; }
 .tm-note { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 0; }
 .tm-warn { margin: 0; padding: 9px 12px; border-radius: 12px; font-size: 12.5px; background: rgba(255,201,120,.16); color: var(--ink); }
 
@@ -2449,7 +2449,7 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .tm-chip { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 99px; }
 .tm-chip.ok { background: rgba(63,199,154,.16); color: #1f9c74; } .tm-chip.wait { background: rgba(255,181,71,.18); color: #a8680c; }
 .tm-link { display: flex; gap: 6px; width: 100%; margin-top: 4px; } .tm-link input { flex: 1; font-size: 12.5px; padding: 6px 10px; }
-.tm-pacts { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.tm-pacts { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: none; }
 .tm-padd .btn { align-self: flex-start; }
 .tm-bots { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
 .tm-botline { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); padding: 8px 10px; border-radius: 12px; background: rgba(127,127,160,.08); }
@@ -2457,6 +2457,18 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .tm-chs { margin: 4px 0 2px; align-self: flex-start; }
 .tm-link em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--muted); align-self: center; min-width: 64px; }
 .tm-photo { padding: 14px; max-width: min(92vw, 900px); }
+/* приложение Dewiar (0.55): печать сотруднику — маленькая в карточке, крупная в окне, чтобы навести камеру с телефона */
+.tm-applink { align-items: center; }
+.tm-seal { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 9px; background: #fff; cursor: zoom-in; overflow: hidden; box-shadow: 0 4px 12px -6px rgba(0,0,0,.45); }
+.tm-seal svg { width: 100%; height: 100%; display: block; }
+.tm-seal:focus-visible { outline: 2px solid var(--accent, #7a6cff); outline-offset: 2px; }
+.tm-sealdlg { width: min(92vw, 420px); padding: 26px 26px 20px; text-align: center; }
+.tm-sealdlg h3 { margin: 0 0 16px; font-size: 18px; }
+.tm-sealbox { width: 264px; height: 264px; margin: 0 auto; border-radius: 18px; background: #fff; padding: 12px; box-sizing: border-box; }
+.tm-sealbox.seal { padding: 0; background: none; border-radius: 7%; box-shadow: 0 18px 40px -18px rgba(0,0,0,.6); }
+.tm-sealbox svg { width: 100%; height: 100%; display: block; }
+.tm-sealnote { margin: 16px 4px 14px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.tm-sealacts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .tm-photo img { display: block; max-width: 100%; max-height: 74vh; border-radius: 14px; margin-bottom: 10px; }
 @media (max-width: 1280px) { .tm-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 1040px) { .tm-main, .tm-pgrid { grid-template-columns: 1fr; } .tm-detail { position: static; } .tm-form { grid-template-columns: 1fr; } .tm-form label.wide { grid-column: auto; } }

@@ -24,6 +24,7 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
   <button class="ib" id="b-voice" title="Отвечать текстом, без голоса" aria-pressed="false"><svg class="i-on" viewBox="0 0 24 24"><path d="M2.5 9h4.2L12 4.5v15L6.7 15H2.5z"/><path d="M15.8 8.3a5.2 5.2 0 0 1 0 7.4M18.9 5.2a9.6 9.6 0 0 1 0 13.6"/></svg><svg class="i-off" viewBox="0 0 24 24"><path d="M2.5 9h4.2L12 4.5v15L6.7 15H2.5z"/><path d="m15.5 9 6 6M21.5 9l-6 6"/></svg></button>
   <button class="ib" id="b-play" title="Досуг — милые игры" hidden><svg viewBox="0 0 24 24"><path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg></button>
   <button class="ib" id="b-soul" title="Душа: дневник, душа, конституция"><svg viewBox="0 0 24 24"><path d="M10.5 2.8l1.9 5.5 5.6 1.9-5.6 1.9-1.9 5.6-1.9-5.6L3 10.2l5.6-1.9z"/><path d="M18.5 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/></svg></button>
+  <button class="ib" id="b-work" title="Работа: поручения руководителя" aria-label="Работа" hidden><svg viewBox="0 0 24 24"><rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5M3 12.5h18M11 12.5v1.6h2v-1.6"/></svg><i class="dot"></i></button>
   <button class="ib" id="b-close" title="Близкие: переписка помощников"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.6c0 5.5-7.5 10.1-7.5 10.1z"/></svg><i class="dot"></i></button>
   <button class="ib" id="b-day" title="Напоминания и заметки"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
   <button class="ib" id="b-set" title="Настройки"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -77,6 +78,7 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 <section class="sheet tall" id="sh-set"><div class="grab"></div><h2>Настройки</h2><div id="set-body"></div></section>
 <section class="sheet" id="sh-ann" aria-labelledby="an-h"><div class="grab"></div><div id="ann-body"></div></section>
 <section class="sheet tall" id="sh-play" aria-labelledby="pl-h"><div class="grab"></div><h2 id="pl-h">Досуг</h2><div id="play-body"></div></section>
+<section class="sheet tall" id="sh-work" aria-labelledby="wk-h"><div class="grab"></div><h2 id="wk-h">Работа<button class="lnk" id="wk-join">По коду</button></h2><div id="work-body"></div></section>
 <section class="sheet tall" id="sh-kids" aria-labelledby="kd-h"><div class="grab"></div><h2 id="kd-h">Детский режим</h2><div id="kids-body"></div></section>
 <section class="sheet" id="sh-kpin" aria-labelledby="kp-h"><div class="grab"></div><h2 id="kp-h">Для взрослых</h2><div id="kpin-body"></div></section>
 <section class="sheet tall" id="sh-learn" aria-label="Вопрос — ответ и курсы"><div class="grab"></div>
@@ -106,6 +108,7 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 <script src="arcade/shelf.js"></script>
 <script src="radio.js"></script>
 <script src="app.js"></script>
+<script src="work.js"></script>
 <script src="exam.js"></script>
 </body>
 </html>

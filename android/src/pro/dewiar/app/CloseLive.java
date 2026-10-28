@@ -109,6 +109,7 @@ public class CloseLive extends Service {
             if (it.optBoolean("out") || visible) continue;
             String kind = it.optString("kind"), name = it.optString("name", "Близкий");
             if ("msg".equals(kind)) message(name);
+            else if ("work".equals(kind)) work(name);           // «Работа» (0.55): от руководителя
             else if ("ring".equals(kind) && System.currentTimeMillis() / 1000 - it.optLong("ts") < 60) {
                 JSONObject env = it.optJSONObject("env");
                 ring(name, it.optString("peer"), env != null && env.optBoolean("video"));
@@ -140,6 +141,14 @@ public class CloseLive extends Service {
         Notification.Builder b = Compat.builder(this, Compat.CH_INFO);
         b.setSmallIcon(R.drawable.ic_stat).setContentTitle("💌 " + name).setContentText("новое сообщение").setAutoCancel(true).setContentIntent(pi);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(("close:" + name).hashCode(), b.build());
+    }
+
+    private void work(String name) {
+        PendingIntent pi = PendingIntent.getActivity(this, 7, new Intent(this, MainActivity.class).setAction("pro.dewiar.WORK"),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        Notification.Builder b = Compat.builder(this, Compat.CH_INFO);
+        b.setSmallIcon(R.drawable.ic_stat).setContentTitle("💼 Работа · " + name).setContentText("новое по поручениям — откройте «Работу»").setAutoCancel(true).setContentIntent(pi);
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(("work:" + name).hashCode(), b.build());
     }
 
     /** Звонок: на весь экран (на заблокированном тоже), звонок телефона, «Ответить» — открыть Dewiar и сразу ответить. */

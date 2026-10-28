@@ -232,6 +232,8 @@ class CommandsMixin:
             if cmd == "team_assign":
                 r = T.assign(str(a.get("who") or ""), a.get("title"), a.get("due") or "", a.get("note") or "")
                 return dict(T.public(), made=({"repeat": True, "rule": r["rule"], "name": r["name_dat"]} if r.get("repeat") else {}))
+            if cmd == "team_app_invite":                # приложение Dewiar: печать и ссылка сотруднику (renew — новые)
+                return T.app_invite(str(a.get("id") or ""), bool(a.get("renew")))
             if cmd == "team_repeat_del":
                 return T.repeat_del(str(a.get("id") or ""))
             if cmd == "team_accept":

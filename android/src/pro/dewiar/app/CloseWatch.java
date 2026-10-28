@@ -58,20 +58,37 @@ public class CloseWatch extends JobService {
         if (h.getResponseCode() != 200) return;
         JSONObject d = new JSONObject(Net.readAll(h.getInputStream()));
         JSONArray items = d.optJSONArray("items");
-        Map<String, Integer> who = new LinkedHashMap<>();
+        Map<String, Integer> who = new LinkedHashMap<>(), work = new LinkedHashMap<>();
         long last = seen;
         for (int i = 0; items != null && i < items.length(); i++) {
             JSONObject it = items.getJSONObject(i);
             last = Math.max(last, it.optLong("id"));
-            if (it.optBoolean("out") || !"msg".equals(it.optString("kind"))) continue;
+            if (it.optBoolean("out")) continue;
+            String k = it.optString("kind");
+            if ("work".equals(k)) {                     // «Работа» (0.55): от руководителя — поручение, ответ или напоминание
+                String n = it.optString("name", "Руководитель");
+                work.put(n, (work.containsKey(n) ? work.get(n) : 0) + 1);
+                continue;
+            }
+            if (!"msg".equals(k)) continue;
             String n = it.optString("name", "Близкий");
             who.put(n, (who.containsKey(n) ? who.get(n) : 0) + 1);
         }
         pr.edit().putLong("close_notified", last).apply();
+        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (!work.isEmpty()) {
+            PendingIntent wi = PendingIntent.getActivity(c, 7, new Intent(c, MainActivity.class).setAction("pro.dewiar.WORK"),
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            for (Map.Entry<String, Integer> e : work.entrySet()) {
+                Notification.Builder b = Compat.builder(c, Compat.CH_INFO);
+                b.setSmallIcon(R.drawable.ic_stat).setContentTitle("💼 Работа · " + e.getKey()).setContentText("новое по поручениям — откройте «Работу»")
+                        .setAutoCancel(true).setContentIntent(wi);
+                nm.notify(("work:" + e.getKey()).hashCode(), b.build());
+            }
+        }
         if (who.isEmpty()) return;
         PendingIntent pi = PendingIntent.getActivity(c, 5, new Intent(c, MainActivity.class).setAction("pro.dewiar.CLOSE"),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         for (Map.Entry<String, Integer> e : who.entrySet()) {
             String text = e.getValue() == 1 ? "новое сообщение" : "новых сообщений: " + e.getValue();
             Notification.Builder b = Compat.builder(c, Compat.CH_INFO);

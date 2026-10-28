@@ -163,6 +163,7 @@ class Close:
         d.setdefault("seen_mid", [])
         d.setdefault("marks", {})                # pid -> [доставлено до, прочитано до] — номера моих писем в его ящике (sid)
         d.setdefault("read_up", {})              # pid -> до какого номера его письма уже отмечены прочитанными на сервере
+        d.setdefault("work", {"staff": [], "bosses": []})   # «Работа» (режим «Сотрудник», 0.55): связи с устройствами — /work/peers
         return d
 
     def _save(self):
@@ -737,6 +738,23 @@ class Close:
         """Одно входящее из ящика. -> (1, если новое сообщение — для счёта, обновлён ли список устройств)."""
         if it.get("kind") == "ring":                    # признак звонка — для телефона в фоне; сам звонок — в «sig»
             return 0, refreshed
+        if it.get("kind") in ("workin", "workx"):        # «Работа»: сотрудник вошёл по коду / связь кончилась (знак сервера)
+            try:
+                self.work_peers()
+            except CloseError:
+                pass
+            team = getattr(self.host, "team", None)
+            if team is not None and hasattr(team, "app_event"):
+                try:
+                    team.app_event(it["kind"], it.get("peer", ""), it.get("env") or {}, it.get("name") or "")
+                except Exception:  # noqa: BLE001
+                    log.exception("работа: знак не применился")
+            return 0, True
+        if it.get("kind") == "work" and not self._work_peer(it.get("peer", "")) and not it.get("out"):
+            try:
+                self.work_peers()                       # новый сотрудник — его устройства ещё не знаем
+            except CloseError:
+                pass
         env, peer = it.get("env") or {}, it.get("peer", "")
         pub = self._pub_of(peer, env.get("fd", ""), it.get("out"))
         if pub is None and not refreshed:
@@ -777,6 +795,14 @@ class Close:
                 except Exception:  # noqa: BLE001
                     log.exception("свои устройства: не применилось")
             return 0, refreshed
+        if it.get("kind") == "work":                    # «Работа»: поручения и ответы (team.py — app_incoming)
+            team = getattr(self.host, "team", None)
+            if team is not None and hasattr(team, "app_incoming") and not it.get("out"):
+                try:
+                    team.app_incoming(peer, body, it.get("name") or "")
+                except Exception:  # noqa: BLE001
+                    log.exception("работа: не применилось")
+            return 0, refreshed
         if it.get("kind") == "fam":                     # семейный бюджет (family.py): траты, общие платежи, лимит
             fam = getattr(self.host, "family", None)
             if fam is not None:
@@ -809,7 +835,7 @@ class Close:
         return 1, refreshed
 
     def _pub_of(self, peer, dev, out):
-        who = self.st.get("me") if out else next((p for p in self.st["people"] if p["pid"] == peer), None)
+        who = self.st.get("me") if out else (next((p for p in self.st["people"] if p["pid"] == peer), None) or self._work_peer(peer))
         for d in (who or {}).get("devs") or []:
             if d.get("dev") == dev:
                 return CC.b64d(d["pub"])
@@ -864,7 +890,65 @@ class Close:
 
     # ---------- фон ----------
     def active(self):
-        return bool(self.st["people"] or (self.st.get("invite") and time.time() < _int(self.st["invite"].get("expires"))))
+        w = self.st.get("work") or {}
+        return bool(self.st["people"] or w.get("staff") or w.get("bosses") or time.time() < _int(self.st.get("work_wait"))
+                    or (self.st.get("invite") and time.time() < _int(self.st["invite"].get("expires"))))
+
+    # ---------- «Работа»: руководитель — сотрудник (режим «Сотрудник», 0.55) ----------
+    # Не «Близкие»: своя связь на сервере (work_links), свои конверты kind «work» — их разбирает «Поручения» (team.py,
+    # host.team.app_*). Знаки «workin» (сотрудник вошёл по коду) и «workx» (связь кончилась) — без содержимого.
+
+    def work_peers(self):
+        d = self._req("GET", "/work/peers").json()
+        with self._lock:
+            self.st["work"] = {"staff": d.get("staff") or [], "bosses": d.get("bosses") or []}
+            self._save()
+        return self.st["work"]
+
+    def work_invite(self, mid, team="", who="", boss="", renew=False):
+        """Код и ссылка для сотрудника mid (печать Dewiar — та же ссылка). -> {token, link, app, expires}."""
+        self._keys()
+        if not self.st.get("me") or time.time() - float(self.st.get("hello_at") or 0) > 600:
+            self.hello()                                 # ключ этого устройства — на сервере до того, как сотрудник войдёт
+        d = self._req("POST", "/work/invite", {"mid": mid, "team": team, "who": who, "boss": boss, "renew": bool(renew)}).json()
+        with self._lock:
+            self.st["work_wait"] = max(_int(self.st.get("work_wait")), _int(d.get("expires")))   # ждём входа — опрос чаще
+            self._save()
+        self.soon.set()
+        return d
+
+    def work_leave(self, mid="", pid=""):
+        d = self._req("POST", "/work/leave", {"mid": mid} if mid else {"pid": pid}).json()
+        with self._lock:
+            self.st["work"] = {"staff": d.get("staff") or [], "bosses": d.get("bosses") or []}
+            self._save()
+        return True
+
+    def _work_peer(self, pid):
+        w = self.st.get("work") or {}
+        return next((x for x in (w.get("staff") or []) + (w.get("bosses") or []) if x.get("pid") == pid), None)
+
+    def work_send(self, pid, body):
+        """Конверт «work» руководителю или сотруднику pid (шифруется для его устройств и моих)."""
+        priv, _ = self._keys()
+        p = self._work_peer(pid)
+        if not p or not p.get("devs"):
+            self.work_peers()
+            p = self._work_peer(pid)
+        if not p:
+            raise CloseError("связь по работе кончилась")
+        if not p.get("devs"):
+            raise CloseError("сотрудник ещё не открывал Dewiar после входа — поручение дойдёт позже")
+        if not self.st.get("me") or time.time() - float(self.st.get("hello_at") or 0) > 600:
+            self.hello()
+        body = dict(body, ts=int(time.time() * 1000), mid=uuid.uuid4().hex[:16])
+        env = CC.encrypt_for(body, priv, self.st["dev"], self._targets(p))
+        return self._req("POST", "/close/send", {"to": pid, "env": env, "kind": "work"}).json()
+
+    def work_file(self, fid, key):
+        """Фото к «Сделано» от сотрудника: скачать и открыть. -> байты."""
+        r = self._req("GET", "/close/file", params={"id": fid})
+        return CC.unseal(CC.b64d(key), r.content)
 
     def loop(self, stopping):
         time.sleep(8)

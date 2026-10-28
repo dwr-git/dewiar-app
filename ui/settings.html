@@ -566,7 +566,7 @@
 
   <section id="p-team" class="wide">
     <div class="tm-top">
-      <div><h1 id="tm-h">Поручения</h1><p class="lead" id="tm-sub">Поручения сотрудникам в Telegram: берут, делают с фото, переносят с причиной.</p></div>
+      <div><h1 id="tm-h">Поручения</h1><p class="lead" id="tm-sub">Поручения сотрудникам: берут, делают с фото, переносят с причиной.</p></div>
       <button class="btn primary" id="tm-new" hidden>Поручить</button>
     </div>
     <div class="stabs" id="tm-tabs" hidden>
@@ -576,10 +576,15 @@
     </div>
     <div id="tm-setup" class="tm-setup" hidden>
       <div class="tm-scard">
-        <h2>Бот вашей компании</h2>
-        <p>Сотрудники получают поручения от бота с названием вашей компании — в том мессенджере, где им удобно. У каждого — свой вход по ссылке.</p>
-        <div class="stabs tm-chs" id="tm-chs" role="tablist"><button data-ch="tg" class="on" role="tab">Telegram</button><button data-ch="max" role="tab">MAX</button></div>
-        <ol class="tm-steps" id="tm-steps-tg">
+        <h2>Как сотрудники получат поручения</h2>
+        <p>В приложении Dewiar на своём телефоне — или от бота вашей компании в Telegram или MAX. Можно включить все способы: каждый сотрудник выберет свой.</p>
+        <div class="stabs tm-chs" id="tm-chs" role="tablist"><button data-ch="app" class="on" role="tab">Приложение Dewiar</button><button data-ch="tg" role="tab">Telegram</button><button data-ch="max" role="tab">MAX</button></div>
+        <ol class="tm-steps" id="tm-steps-app">
+          <li><b>Включите способ</b> — бот не нужен, нужен только вход в Dewiar на этом компьютере.</li>
+          <li><b>Добавьте сотрудника</b> и покажите ему печать Dewiar: он наведёт камеру телефона — или откроет ссылку.</li>
+          <li><b>Поручения придут в раздел «Работа»</b> — отдельно от его личного. Уйдёт с работы — уйдёт и всё рабочее, личное останется с ним.</li>
+        </ol>
+        <ol class="tm-steps" id="tm-steps-tg" hidden>
           <li><b>Создайте бота.</b> Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> → «/newbot», имя — название компании, например «Ромашка».</li>
           <li><b>Скопируйте токен</b> из ответа BotFather — он выглядит так: 123456789:AAH… — и вставьте сюда.</li>
           <li><b>Добавьте сотрудников</b> и отправьте каждому его ссылку-приглашение.</li>
@@ -589,8 +594,10 @@
           <li><b>Скопируйте токен:</b> бот → «Интеграция» → «Получить токен» — и вставьте сюда.</li>
           <li><b>Добавьте сотрудников</b> и отправьте каждому его ссылку-приглашение.</li>
         </ol>
-        <div class="tm-conn"><input type="password" id="tm-token" placeholder="Токен бота компании" aria-label="Токен бота компании" autocomplete="off"><button class="btn primary" id="tm-connect">Подключить</button></div>
-        <small class="tm-note">Нужен отдельный бот — не тот, через который вы сами пишете Лире. Можно подключить оба мессенджера: каждый сотрудник выберет свой. Поручения ходят, пока Dewiar запущен на этом компьютере; что пришло без него, мессенджер хранит сутки.</small>
+        <div class="tm-conn" id="tm-conn-app"><button class="btn primary" id="tm-app-on" type="button">Включить</button></div>
+        <div class="tm-conn" id="tm-conn-bot" hidden><input type="password" id="tm-token" placeholder="Токен бота компании" aria-label="Токен бота компании" autocomplete="off"><button class="btn primary" id="tm-connect">Подключить</button></div>
+        <small class="tm-note" id="tm-note-app">Поручения, ответы и фото шифруются на устройствах — сайт Dewiar их не видит. Приходят, пока Dewiar запущен на этом компьютере; что отправлено без него, дождётся.</small>
+        <small class="tm-note" id="tm-note-bot" hidden>Нужен отдельный бот — не тот, через который вы сами пишете Лире. Можно подключить оба мессенджера: каждый сотрудник выберет свой. Поручения ходят, пока Dewiar запущен на этом компьютере; что пришло без него, мессенджер хранит сутки.</small>
       </div>
     </div>
     <div id="tm-boardwrap" hidden>
@@ -615,7 +622,7 @@
           <label>Имя<input type="text" id="tm-pname" maxlength="60" placeholder="Ольга Петровна"></label>
           <label>Чем занимается<input type="text" id="tm-prole" maxlength="60" placeholder="бухгалтерия"></label>
           <button class="btn primary" type="submit" id="tm-padd">Добавить и получить ссылку</button>
-          <small class="tm-note">Ссылку отправьте сотруднику сами — в Telegram, почтой или в чате. Откроет и нажмёт «Запустить» — бот его узнает. Ссылка одноразовая, работает 14 дней.</small>
+          <small class="tm-note">Ссылку отправьте сотруднику сами — в Telegram, почтой или в чате, или покажите печать Dewiar. Ссылка одноразовая, работает 14 дней.</small>
         </form>
       </div>
     </div>
@@ -630,8 +637,9 @@
             <li><b>«Перенести…»</b> — новый срок и причина одной фразой: «на понедельник, клиент заболел».</li>
             <li><b>Вы принимаете</b> работу или возвращаете с замечанием.</li>
           </ol>
+          <p class="tm-note">В приложении Dewiar рабочее живёт отдельно: раздел «Работа» на телефоне сотрудника. Сменил телефон — «Новый код» на его карточке; уволился — «Убрать», и рабочее у него исчезнет.</p>
           <p class="tm-note">Повторяющееся — сроком словами: «каждый понедельник к 18», «по будням к 10». Поручение уйдёт само утром в день срока.</p>
-          <p class="tm-note">За час до срока бот сам напомнит сотруднику. Спросите Лиру: «что с поручениями?» — она расскажет, кто что сделал.</p>
+          <p class="tm-note">За час до срока Лира сама напомнит сотруднику. Спросите Лиру: «что с поручениями?» — она расскажет, кто что сделал.</p>
         </div>
         <div class="tm-scard">
           <h3>Настройки</h3>
@@ -643,6 +651,7 @@
         </div>
       </div>
     </div>
+    <dialog class="nwdlg tm-sealdlg" id="tm-sealdlg" aria-label="Печать Dewiar для сотрудника"><h3>Сотрудник</h3><div class="tm-sealbox"></div><p class="tm-sealnote"></p><div class="tm-sealacts"><button class="btn primary" type="button" data-copy>Скопировать ссылку</button><button class="btn" type="button" data-qr>Показать обычный QR</button><button class="btn" type="button" data-x>Готово</button></div></dialog>
     <dialog class="nwdlg tm-photo" id="tm-photo"><img alt="Фото от сотрудника"><button class="btn" type="button" id="tm-photo-x">Закрыть</button></dialog>
   </section>
   <section id="p-kids" class="wide">

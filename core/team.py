@@ -168,6 +168,10 @@ def verb(name, male):
     """«сделал» -> «сделала» для женского имени; «подключился» -> «подключилась»."""
     if not is_fem(name):
         return male
+    if male.endswith("ел") and male in ("вышел", "ушёл", "ушел", "пришёл", "пришел", "зашёл", "зашел", "нашёл", "нашел"):
+        return male[:-2] + "ла"                         # «вышел» -> «вышла», «ушёл» -> «ушла»
+    if male.endswith("ёл"):
+        return male[:-2] + "ла"
     return male[:-2] + "ась" if male.endswith("ся") else male + "а"
 
 
@@ -233,6 +237,41 @@ class TeamMaxBot(Max):
         self.team.on_update(u, self.CH)
 
 
+class TeamApp:
+    """Канал «Приложение Dewiar» (режим «Сотрудник», 0.55; владелец: «рассчитывать только на мессенджеры не стоит»).
+    Сотрудник получает поручения в своей Лире (раздел «Работа» на телефоне), бота нет. Транспорт — close.py ядра:
+    связь «работа» на сайте (work_links), конверты kind «work» со сквозным шифрованием. Сотруднику уходит «снимок» —
+    его поручения целиком (новые, в работе, перенесённые, недавно сделанные) и текст для уведомления; от него —
+    действия {act: take|done|move|msg}. «Подключён» — когда руководитель включил этот способ и на компьютере есть вход
+    в Dewiar (аккаунт или ключ)."""
+    CH, NAME, LINK = "app", "Приложение Dewiar", ""
+
+    def __init__(self, team):
+        self.team, self.data, self.problem, self._thread = team, {"bot": {}}, "", None
+
+    def close(self):
+        return getattr(self.team.host, "close", None)
+
+    def ready(self):
+        """Есть чем ходить на сайт: вход в Dewiar на этом компьютере."""
+        try:
+            return self.close() is not None and bool(self.team.host.credentials()[0])
+        except Exception:  # noqa: BLE001
+            return False
+
+    def connected(self):
+        return bool(self.team.st.get("app_on")) and self.ready()
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def forget(self):
+        self.team.st["app_on"] = False
+
+
 class Team:
     """host — ядро (emit, push, announce, s); path — team.json; bot_path — team_bot.json с токеном."""
 
@@ -252,7 +291,7 @@ class Team:
         self.st.setdefault("repeats", {})               # повторяющиеся: {id: {id, who, title, note, rep, next, created}}
         self.st.setdefault("digest", "18:30")           # итог дня руководителю в это время ("" — не присылать)
         self.bot = TeamBot(self, bot_path)              # Telegram (прежнее имя — для совместимости)
-        self.bots = {"tg": self.bot, "max": TeamMaxBot(self, max_path or Path(bot_path).with_name("team_max.json"))}
+        self.bots = {"tg": self.bot, "max": TeamMaxBot(self, max_path or Path(bot_path).with_name("team_max.json")), "app": TeamApp(self)}
         self._tl = threading.local()                    # канал события, которое сейчас разбирается (у каждого бота свой поток)
         self._waiting = {}                              # (канал, id) -> {"tid", "step": done|move|why} — ждём отчёт или новый срок
         self._strangers = set()
@@ -324,9 +363,17 @@ class Team:
         self._tick_stop.set()
 
     def connect(self, token, ch="tg"):
-        """Подключить бота компании в канале ch (tg | max)."""
+        """Подключить бота компании в канале ch (tg | max) или способ «Приложение Dewiar» (app — без токена)."""
         if ch not in self.bots:
             raise TeamError("такого мессенджера нет")
+        if ch == "app":
+            if not self.bots["app"].ready():
+                raise TeamError("для приложения Dewiar нужен вход в аккаунт dewiar.pro или ключ Dewiar на этом компьютере — студия → «Мозг»")
+            with self._lock:
+                self.st["app_on"] = True
+            self.start()
+            self._changed()
+            return self.public()
         token = (token or "").strip()
         mine = self.personal if ch == "tg" else self.personal_max
         own = (getattr(mine, "data", None) or {}).get("token") if mine else None
@@ -375,6 +422,8 @@ class Team:
         bot = self.bots.get(self._ch(ch))
         if bot is None or not bot.connected():
             return None
+        if bot.CH == "app":                              # приложение Dewiar: снимок поручений сотрудника и текст уведомления
+            return self._app_push(self._mid_by_tg(chat, "app"), text)
         params = {"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}
         if buttons:
             params["reply_markup"] = {"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row] for row in buttons]}
@@ -391,6 +440,9 @@ class Team:
         не умеет править сообщение) — не страшно: нажатие на старую кнопку бот разберёт по состоянию поручения."""
         m = self.st["members"].get(t.get("who")) or {}
         chat = (m.get("tg") or {}).get("chat")
+        if chat and self._mch(m) == "app":               # в приложении кнопки — по состоянию поручения: просто новый снимок
+            self._app_push(t.get("who"), "", quiet=True)
+            return
         if not (chat and t.get("msg") and t.get("msg") != "sent"):
             return
         kb = {"inline_keyboard": [[{"text": x, "callback_data": d} for x, d in row] for row in buttons]} if buttons else {"inline_keyboard": []}
@@ -440,7 +492,9 @@ class Team:
                 if t.get("who") == mid and t["state"] in OPEN:
                     t["state"], t["gone"] = "ok", True
         chat = (m.get("tg") or {}).get("chat")
-        if chat:
+        if chat and self._mch(m) == "app" or m.get("app_inv"):    # приложение: связь на сайте — убрать (у сотрудника пропадёт «Работа»)
+            self._app_leave(mid)
+        elif chat:
             self._send(chat, f"Вы больше не в команде «{self.company()}». Поручения сюда приходить не будут.", ch=self._mch(m))
         self._changed()
         return self.public()
@@ -615,6 +669,184 @@ class Team:
         m = self.st["members"].get(t.get("who")) or {}
         chat = (m.get("tg") or {}).get("chat")
         return bool(chat) and self._send(chat, text, buttons, ch=self._mch(m)) is not None
+
+    # ---------- приложение Dewiar (режим «Сотрудник») ----------
+
+    def _app_close(self):
+        c = self.bots["app"].close()
+        if c is None:
+            raise TeamError("на этом компьютере нет связи с Dewiar")
+        return c
+
+    def app_invite(self, mid, renew=False):
+        """Код для входа сотрудника в приложении: печать Dewiar (ссылка) — 14 дней. Новый телефон или другой аккаунт —
+        «Новая ссылка» (renew) тому же сотруднику: история и поручения на месте, прежняя связь заменится."""
+        m = self.st["members"].get(mid)
+        if not m:
+            raise TeamError("нет такого сотрудника")
+        if not self.bots["app"].connected():
+            raise TeamError("включите способ «Приложение Dewiar» — «Поручения» → «Как это работает»")
+        from close import CloseError
+        try:
+            d = self._app_close().work_invite(mid, team=self.company(), who=m["name"], boss=self.boss(), renew=renew)
+        except CloseError as e:
+            raise TeamError(str(e)) from e
+        with self._lock:
+            m["app_inv"] = {"link": d.get("link", ""), "token": d.get("token", ""), "expires": int(d.get("expires") or 0)}
+        self._changed()
+        return self.public()
+
+    def _app_leave(self, mid):
+        from close import CloseError
+        try:
+            self._app_close().work_leave(mid=mid)
+        except (CloseError, TeamError) as e:
+            log.info("Поручения: связь с сотрудником в приложении не снялась: %s", e)
+
+    def _app_snapshot(self, mid):
+        m = self.st["members"].get(mid) or {}
+        now = datetime.now()
+        cut = time.time() - 7 * 86400
+        tasks = []
+        for t in sorted(self.st["tasks"].values(), key=lambda x: (x.get("due") or "9999", x.get("created", 0))):
+            if t.get("who") != mid or t.get("gone"):
+                continue
+            last = (t.get("log") or [{}])[-1].get("ts", t.get("created", 0))
+            if t["state"] in ("done", "ok") and last < cut:
+                continue
+            tasks.append({"id": t["id"], "title": t["title"], "note": t.get("note", ""), "due": t.get("due", ""),
+                          "due_text": due_text(t.get("due"), now), "state": t["state"], "reason": t.get("reason", ""),
+                          "report": (t.get("report") or {}).get("t", ""), "remark": next((e.get("t", "") for e in reversed(t.get("log") or []) if e.get("ev") == "back"), "") if t["state"] == "work" else "",
+                          "late": bool(t["state"] in OPEN and t.get("due") and t["due"] <= now.strftime("%Y-%m-%dT%H:%M"))})
+        reps = [{"title": r["title"], "rule": repeat_text(r["rep"])} for r in self.st.get("repeats", {}).values() if r.get("who") == mid]
+        return {"team": self.company(), "boss": self.boss(), "who": m.get("name", ""), "tasks": tasks, "repeats": reps}
+
+    def _app_push(self, mid, text="", quiet=False):
+        """Снимок поручений сотруднику mid в приложение (и текст для уведомления). -> "app" или None."""
+        m = self.st["members"].get(mid) if mid else None
+        pid = ((m or {}).get("tg") or {}).get("id") if m and self._mch(m) == "app" else None
+        if not pid:
+            return None
+        from close import CloseError
+        try:
+            self._app_close().work_send(pid, dict(self._app_snapshot(mid), t="snap", text=str(text or "")[:1000], quiet=bool(quiet)))
+            return "app"
+        except (CloseError, TeamError) as e:
+            log.info("Поручения: в приложение не ушло: %s", e)
+            self.bots["app"].problem = str(e)
+            return None
+
+    def _mid_by_pid(self, pid):
+        for mid, m in self.st["members"].items():
+            if pid and (m.get("tg") or {}).get("id") == pid and self._mch(m) == "app":
+                return mid
+        return None
+
+    def app_event(self, kind, pid, env, name=""):
+        """Знак сайта: workin — сотрудник вошёл по коду (env.mid), workx — связь кончилась (ушёл сам или заменили)."""
+        if kind == "workin":
+            mid = str((env or {}).get("mid") or "")
+            m = self.st["members"].get(mid)
+            if not m:
+                return
+            with self._lock:
+                was = (m.get("tg") or {}).get("id") if self._mch(m) == "app" else None
+                m["tg"] = {"id": pid, "chat": pid, "ch": "app", "name": name or "", "username": ""}
+                m["code"], m["joined"] = "", time.time()
+                m.pop("app_inv", None)
+                m.pop("left", None)
+            again = was and was != pid
+            self._tell("👥 Поручения", f"{m['name']} {verb(m['name'], 'подключился')} к поручениям в приложении Dewiar"
+                       + (" (новый телефон или аккаунт)" if again else "") + ".", speak=False)
+            self._app_push(mid, f"Здравствуйте, {m['name']}! Поручения «{self.company()}» теперь приходят сюда, в «Работу».")
+            self._changed()
+        elif kind == "workx":
+            mid = self._mid_by_pid(pid)
+            if not mid:
+                return
+            m = self.st["members"][mid]
+            with self._lock:
+                m["tg"], m["left"] = None, time.time()
+            if (env or {}).get("by") == "emp":
+                self._tell("👥 Поручения", f"{m['name']} {verb(m['name'], 'вышел')} из «Поручений» в приложении — новые поручения ему не придут. "
+                           "Вернуть — «Новая ссылка» у сотрудника.", speak=False)
+            self._changed()
+
+    def app_incoming(self, pid, body, name=""):
+        """Действие сотрудника из приложения: take | done (текст и фото) | move (срок и причина) | msg | hello."""
+        mid = self._mid_by_pid(pid)
+        if not mid or not isinstance(body, dict) or body.get("t") != "act":
+            return
+        m = self.st["members"][mid]
+        act, nm = str(body.get("act") or ""), m["name"]
+        if act == "hello":                                 # открыл «Работу» — прислать свежий снимок
+            self._app_push(mid, "", quiet=True)
+            return
+        if act == "msg":
+            text = str(body.get("text") or "").strip()[:1000]
+            photo = self._app_photo(body.get("photo"), f"msg-{mid}")
+            if not text and not photo:
+                return
+            with self._lock:
+                self.st.setdefault("inbox", []).append({"ts": time.time(), "who": mid, "t": text, "photo": photo})
+                self.st["inbox"] = self.st["inbox"][-200:]
+            self._tell(f"👥 {nm}", text or f"{verb(nm, 'прислал')} фото", speak=True)
+            self._changed()
+            return
+        t = self.st["tasks"].get(str(body.get("tid") or ""))
+        if not t or t.get("who") != mid or t["state"] in ("done", "ok") and act != "done":
+            self._app_push(mid, "", quiet=True)
+            return
+        if act == "take" and t["state"] in OPEN:
+            with self._lock:
+                t["state"] = "work"
+                self._ev(t, "take")
+            self._tell("👥 Поручения", f"{nm} {verb(nm, 'взял')} в работу: «{t['title']}».", speak=False)
+        elif act == "done" and t["state"] in OPEN:
+            word = str(body.get("text") or "").strip()[:1000]
+            photo = self._app_photo(body.get("photo"), t["id"])
+            with self._lock:
+                t["state"] = "done"
+                t["report"] = {"t": word, "photo": photo, "ts": time.time()}
+                self._ev(t, "done", word)
+            self._tell("✅ Поручения", f"{nm} {verb(nm, 'сделал')}: «{t['title']}»" + (f" — {word}" if word else "") + (". Есть фото." if photo else "."))
+        elif act == "move" and t["state"] in OPEN:
+            at = None
+            try:
+                at = datetime.fromisoformat(str(body.get("due") or ""))
+            except ValueError:
+                at, _ = due_parse(str(body.get("when") or ""))
+            why = str(body.get("why") or "").strip()[:300]
+            if at is None or not why:
+                self._app_push(mid, "Перенос не записан: нужны новый срок и причина.", quiet=False)
+                return
+            with self._lock:
+                t["state"], t["due"], t["reason"] = "moved", at.strftime("%Y-%m-%dT%H:%M"), why
+                t.pop("nudged", None)
+                t.pop("late", None)
+                self._ev(t, "move", f"на {due_text(t['due'])}: {why}")
+            self._tell("↪ Поручения", f"{nm} переносит «{t['title']}» на {due_text(t['due'])}: {why}.")
+        else:
+            self._app_push(mid, "", quiet=True)
+            return
+        self._app_push(mid, "", quiet=True)               # снимок — на все устройства сотрудника
+        self._changed()
+
+    def _app_photo(self, ph, base):
+        """Фото от сотрудника ({id, key} — зашифрованный файл на сайте) -> имя файла в STATE_DIR/team или ""."""
+        if not isinstance(ph, dict) or not ph.get("id") or not ph.get("key"):
+            return ""
+        try:
+            data = self._app_close().work_file(str(ph["id"]), str(ph["key"]))
+        except Exception as e:  # noqa: BLE001
+            log.info("Поручения: фото из приложения не скачалось: %s", e)
+            return ""
+        if not data or len(data) > 12 * 1024 * 1024:
+            return ""
+        self.files.mkdir(parents=True, exist_ok=True)
+        name = f"{base}-{int(time.time())}.jpg"
+        (self.files / name).write_bytes(data)
+        return name
 
     # ---------- сообщения от сотрудников ----------
 
@@ -910,6 +1142,10 @@ class Team:
             members.append({"id": mid, "name": m["name"], "role": m.get("role", ""), "color": m.get("color", COLORS[0]),
                             "joined": bool(m.get("tg")), "tg": ((m.get("tg") or {}).get("username") or ""), "link": self._link(m),
                             "links": self._links(m), "ch": self.bots[self._mch(m)].NAME if m.get("tg") else "",
+                            "chk": self._mch(m) if m.get("tg") else "",
+                            "app": ({"link": (m.get("app_inv") or {}).get("link", ""), "expires": (m.get("app_inv") or {}).get("expires", 0)}
+                                    if m.get("app_inv") and (m["app_inv"].get("expires") or 0) > time.time() else None),
+                            "left": bool(m.get("left") and not m.get("tg")),
                             "expired": not m.get("tg") and bool(m.get("code_at")) and time.time() - m["code_at"] > CODE_DAYS * 86400,
                             "open": sum(1 for t in mine if t["state"] in OPEN)})
         tasks = []

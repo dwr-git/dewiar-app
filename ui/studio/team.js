@@ -4,9 +4,10 @@
    поручения: кто, срок, история (поручено, взял, сделано с фото, перенос с причиной), «Принять» и «Вернуть с замечанием».
    Без бота — три шага подключения. Ядро: team_get/connect/forget/set, team_member_add/del/code, team_assign {who, title,
    due, note}, team_accept/back/cancel/remind {id}, team_photo {name}; событие «team». */
-let TM = null, TM_SEL = "", TM_TAB = "board", TM_CH = "tg";
-const TM_CHN = { tg: "Telegram", max: "MAX" };
-const tmChats = () => { const on = ((TM && TM.bots) || []).filter(b => b.connected).map(b => b.name); return on.length ? on.join(" и ") : "мессенджер"; };
+let TM = null, TM_SEL = "", TM_TAB = "board", TM_CH = "app";
+const TM_CHN = { app: "приложении Dewiar", tg: "Telegram", max: "MAX" };
+const tmChats = () => { const on = ((TM && TM.bots) || []).filter(b => b.connected).map(b => b.ch === "app" ? "приложении Dewiar" : b.name); return on.length ? on.join(" и ") : "мессенджер"; };
+const tmAppOn = () => ((TM && TM.bots) || []).some(b => b.ch === "app" && b.connected);
 const TM_COLS = [["new", "Новые"], ["work", "В работе"], ["done", "Сделано"], ["moved", "Перенесено"]];
 const TM_EV = { assign: "Поручено", sent: "Ушло сотруднику", take: "Взял в работу", done: "Сделано", move: "Перенос", ok: "Принято",
   back: "Возвращено с замечанием", nudge: "Напоминание отправлено" };
@@ -36,10 +37,11 @@ function tmRender() {
     ? (d.members.length ? `${tmWord(joined, "сотрудник", "сотрудника", "сотрудников")} на связи${d.members.length > joined ? ` · ещё ${d.members.length - joined} ждём` : ""} · сегодня ${TM_WD[now.getDay()]}, ${now.getDate()} ${TM_MON[now.getMonth()]}`
       : "Добавьте сотрудников — и поручайте голосом или кнопкой «Поручить».")
       + (d.problem ? ` · ⚠ ${d.problem}` : "")
-    : "Поручения сотрудникам в Telegram или MAX: берут, делают с фото, переносят с причиной.";
+    : "Поручения сотрудникам — в приложении Dewiar, Telegram или MAX: берут, делают с фото, переносят с причиной.";
   const dot = $("#team-dot"); if (dot) dot.classList.toggle("on", d.tasks.some(t => t.state === "done" || t.state === "moved"));
   if (!on) return;
   tmBoard(); tmDetail(); tmPeople(); tmHow();
+  $("#tm-padd").textContent = tmAppOn() && !(d.bots || []).some(b => b.ch !== "app" && b.connected) ? "Добавить и показать печать" : "Добавить и получить ссылку";
   $("#tm-who").innerHTML = d.members.map(m => `<option value="${escH(m.id)}">${escH(m.name)}${m.joined ? "" : " (ещё не вошёл)"}</option>`).join("");
 }
 
@@ -120,25 +122,66 @@ function tmPhotos(root) {
 }
 
 function tmPeople() {
-  const d = TM;
+  const d = TM, app = tmAppOn(), msgr = (d.bots || []).some(b => b.ch !== "app" && b.connected);
   $("#tm-people").innerHTML = d.members.length ? d.members.map(m => {
-    const st = m.joined ? `<span class="tm-chip ok">в ${escH(m.ch || "Telegram")}${m.tg ? " · @" + escH(m.tg) : ""}</span>`
-      : m.link ? `<span class="tm-chip wait">ждём входа</span>` : `<span class="tm-chip wait">ссылка устарела</span>`;
+    const inApp = m.joined && m.chk === "app";
+    const st = m.joined ? `<span class="tm-chip ok">${inApp ? "в приложении Dewiar" : `в ${escH(m.ch || "Telegram")}${m.tg ? " · @" + escH(m.tg) : ""}`}</span>`
+      : m.left ? `<span class="tm-chip wait">${tmFem(m.name) ? "ушла" : "ушёл"} из приложения</span>`
+      : m.link || m.app ? `<span class="tm-chip wait">ждём входа</span>` : `<span class="tm-chip wait">${app && !msgr ? "ещё не приглашён" : "ссылка устарела"}</span>`;
     const ls = Object.entries(m.links || (m.link ? { tg: m.link } : {}));
-    const link = !m.joined ? ls.map(([ch, url]) => `<div class="tm-link">${ls.length > 1 ? `<em>${TM_CHN[ch] || ch}</em>` : ""}<input type="text" readonly value="${escH(url)}" aria-label="Ссылка-приглашение ${TM_CHN[ch] || ch}"><button class="btn small" data-copy="${escH(url)}">Копировать</button></div>`).join("") : "";
+    const multi = ls.length + (app ? 1 : 0) > 1;
+    let link = !m.joined ? ls.map(([ch, url]) => `<div class="tm-link">${multi ? `<em>${TM_CHN[ch] || ch}</em>` : ""}<input type="text" readonly value="${escH(url)}" aria-label="Ссылка-приглашение ${TM_CHN[ch] || ch}"><button class="btn small" data-copy="${escH(url)}">Копировать</button></div>`).join("") : "";
+    // приложение Dewiar: печать (наводит камеру) и та же ссылка; вошедшему — «Новый код» (сменил телефон или аккаунт)
+    if (app && m.app && m.app.link) link += `<div class="tm-link tm-applink">${multi ? "<em>Dewiar</em>" : ""}<button class="tm-seal" data-seal="${escH(m.id)}" type="button" title="Показать печать крупно" aria-label="Печать Dewiar для ${escH(m.name)} — показать крупно">${tmSeal(m.app.link, true)}</button><input type="text" readonly value="${escH(m.app.link)}" aria-label="Ссылка для приложения Dewiar"><button class="btn small" data-copy="${escH(m.app.link)}">Копировать</button></div>`;
+    const acts = [];
+    if (app && !m.joined && !(m.app && m.app.link)) acts.push(`<button class="btn small" data-app="${escH(m.id)}">Печать для приложения</button>`);
+    if (app && inApp) acts.push(`<button class="btn small" data-app="${escH(m.id)}" data-renew="1" title="Сменил телефон или аккаунт — новый код, поручения останутся">Новый код</button>`);
+    if (!m.joined && msgr) acts.push(`<button class="btn small" data-code="${escH(m.id)}">${app ? "Новая ссылка в мессенджер" : "Новая ссылка"}</button>`);
+    acts.push(`<button class="btn small danger" data-del="${escH(m.id)}" title="Убрать из команды">Убрать</button>`);
     return `<li><span class="tm-ava" style="background:${escH(m.color)}" aria-hidden="true">${escH(tmIni(m.name))}</span>`
       + `<div class="tm-pbody"><b>${escH(m.name)}</b><small>${escH(m.role || "")}${m.role ? " · " : ""}${m.open ? tmWord(m.open, "открытое поручение", "открытых поручения", "открытых поручений") : "открытых поручений нет"}</small>${st}${link}</div>`
-      + `<div class="tm-pacts">${!m.joined ? `<button class="btn small" data-code="${escH(m.id)}">Новая ссылка</button>` : ""}<button class="btn small danger" data-del="${escH(m.id)}" title="Убрать из команды">Убрать</button></div></li>`;
-  }).join("") : `<li class="tm-empty">Пока никого. Добавьте первого сотрудника справа — и отправьте ему ссылку.</li>`;
+      + `<div class="tm-pacts">${acts.join("")}</div></li>`;
+  }).join("") : `<li class="tm-empty">Пока никого. Добавьте первого сотрудника справа — и отправьте ему ссылку${app ? " или покажите печать" : ""}.</li>`;
   $$("#tm-people [data-copy]").forEach(b => b.onclick = async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); toast("Ссылка скопирована — отправьте её сотруднику"); }
     catch (e) { const i = b.parentNode.querySelector("input"); i.select(); toast("Выделила ссылку — нажмите Ctrl+C"); }
   });
   $$("#tm-people [data-code]").forEach(b => b.onclick = () => tmCall("team_member_code", { id: b.dataset.code }, "Новая ссылка готова, старая больше не работает"));
+  $$("#tm-people [data-app]").forEach(b => b.onclick = async () => {
+    const m = d.members.find(x => x.id === b.dataset.app), renew = !!b.dataset.renew;
+    if (renew && !(await ask(`Новый код для ${m ? m.name : "сотрудника"}? Пригодится, если он сменил телефон или аккаунт: войдёт заново — поручения и история останутся, прежний телефон отключится.`, { ok: "Новый код" }))) return;
+    b.disabled = true;
+    const r = await tmCall("team_app_invite", { id: b.dataset.app, renew });
+    b.disabled = false;
+    if (r) tmSealShow(b.dataset.app);
+  });
+  $$("#tm-people [data-seal]").forEach(b => b.onclick = () => tmSealShow(b.dataset.seal));
   $$("#tm-people [data-del]").forEach(b => b.onclick = async () => {
     const m = d.members.find(x => x.id === b.dataset.del);
-    if (await ask(`Убрать ${m ? m.name : "сотрудника"} из команды? Открытые поручения закроются, бот перестанет ему отвечать.`)) tmCall("team_member_del", { id: b.dataset.del }, "Убрано");
+    const how = m && m.chk === "app" ? "из его приложения уйдёт всё рабочее" : "бот перестанет ему отвечать";
+    if (await ask(`Убрать ${m ? m.name : "сотрудника"} из команды? Открытые поручения закроются, ${how}.`)) tmCall("team_member_del", { id: b.dataset.del }, "Убрано");
   });
+}
+
+// печать Dewiar (Aztec в фирменной рамке) — как в «Близких»; без codes.js — обычный QR
+function tmSeal(link, small) {
+  const seal = window.DewiarCodes ? DewiarCodes.seal(link) : "";
+  return seal || (typeof qrSvg === "function" ? qrSvg(link) : "");
+}
+function tmSealShow(mid) {
+  const m = TM && TM.members.find(x => x.id === mid); if (!m || !m.app || !m.app.link) return;
+  const dlg = $("#tm-sealdlg"), link = m.app.link, seal = window.DewiarCodes ? DewiarCodes.seal(link) : "";
+  const box = dlg.querySelector(".tm-sealbox");
+  box.innerHTML = seal || qrSvg(link); box.classList.toggle("seal", !!seal);
+  dlg.querySelector("h3").textContent = m.name;
+  const days = Math.max(1, Math.round((m.app.expires * 1000 - Date.now()) / 864e5));
+  dlg.querySelector(".tm-sealnote").textContent = `Пусть откроет Dewiar на телефоне и наведёт камеру на печать (кнопка сканера наверху) — или откроет ссылку. Код одноразовый, действует ${tmWord(days, "день", "дня", "дней")}.`;
+  const q = dlg.querySelector("[data-qr]");
+  q.hidden = !seal; q.textContent = "Показать обычный QR";
+  q.onclick = () => { const isSeal = box.classList.contains("seal"); box.innerHTML = isSeal ? qrSvg(link) : seal; box.classList.toggle("seal", !isSeal); q.textContent = isSeal ? "Показать печать Dewiar" : "Показать обычный QR"; };
+  dlg.querySelector("[data-copy]").onclick = () => navigator.clipboard.writeText(`${m.name}, вот вход в рабочий раздел Dewiar${TM.company ? ` — «${TM.company}»` : ""}: ${link}`)
+    .then(() => toast("Ссылка скопирована — отправьте её сотруднику"), () => toast(link, 5000));
+  dlg.showModal();
 }
 
 function tmHow() {
@@ -148,15 +191,23 @@ function tmHow() {
   $("#tm-speak").checked = !!d.speak;
   if (document.activeElement !== $("#tm-digest")) $("#tm-digest").value = d.digest || "";
   // боты компании: подключённые — с «Отключить»; второй мессенджер — подключить здесь же
-  $("#tm-bots").innerHTML = (d.bots || []).map(b => b.connected
+  $("#tm-bots").innerHTML = (d.bots || []).map(b => b.ch === "app"
+    ? (b.connected ? `<div class="tm-botline"><span><b>Приложение Dewiar</b> · включено, без бота</span><button class="btn small danger" data-off="app" type="button">Выключить</button></div>`
+      : `<div class="tm-botline"><span><b>Приложение Dewiar</b> · выключено</span><button class="btn small" data-on="app" type="button">Включить</button></div>`)
+    : b.connected
       ? `<div class="tm-botline"><span><b>${escH(b.name)}</b> · @${escH(b.bot)}${b.running ? "" : " · не слушает"}${b.problem ? ` · ⚠ ${escH(b.problem)}` : ""}</span><button class="btn small danger" data-off="${b.ch}" type="button">Отключить</button></div>`
       : `<div class="tm-botline"><span><b>${escH(b.name)}</b> · не подключён</span><button class="btn small" data-on="${b.ch}" type="button">Подключить</button></div>`).join("");
   $$("#tm-bots [data-off]").forEach(x => x.onclick = async () => {
+    if (x.dataset.off === "app") {
+      if (await ask("Выключить приложение Dewiar для поручений? Новые поручения туда не пойдут; сотрудники и история останутся — включить можно здесь же.", { ok: "Выключить" })) tmCall("team_forget", { ch: "app" }, "Приложение Dewiar выключено");
+      return;
+    }
     if (await ask(`Отключить бота компании в ${TM_CHN[x.dataset.off]}? Сотрудники и поручения останутся; чтобы бот снова заработал, вставьте его токен.`)) tmCall("team_forget", { ch: x.dataset.off }, "Бот отключён");
   });
   $$("#tm-bots [data-on]").forEach(x => x.onclick = async () => {
+    if (x.dataset.on === "app") { tmCall("team_connect", { token: "", ch: "app" }, "Приложение Dewiar включено — покажите сотрудникам печать"); return; }
     const tok = await askText(x.dataset.on === "max" ? "Токен бота MAX (business.max.ru → Чат-боты → Интеграция)" : "Токен бота Telegram (@BotFather → /newbot)", "", { ok: "Подключить" });
-    if (tok && tok.trim()) tmCall("team_connect", { token: tok.trim(), ch: x.dataset.on }, `Бот подключён — теперь у сотрудников две ссылки на выбор`);
+    if (tok && tok.trim()) tmCall("team_connect", { token: tok.trim(), ch: x.dataset.on }, `Бот подключён — теперь у сотрудников есть выбор`);
   });
 }
 
@@ -171,8 +222,15 @@ if ($("#p-team")) {
   $$("#tm-tabs button").forEach(b => b.onclick = () => { TM_TAB = b.dataset.t; tmRender(); });
   $$("#tm-chs button").forEach(b => b.onclick = () => {
     TM_CH = b.dataset.ch; $$("#tm-chs button").forEach(x => x.classList.toggle("on", x === b));
-    $("#tm-steps-tg").hidden = TM_CH !== "tg"; $("#tm-steps-max").hidden = TM_CH !== "max";
+    ["app", "tg", "max"].forEach(c => { $("#tm-steps-" + c).hidden = TM_CH !== c; });
+    const bot = TM_CH !== "app";
+    $("#tm-conn-bot").hidden = $("#tm-note-bot").hidden = !bot; $("#tm-conn-app").hidden = $("#tm-note-app").hidden = bot;
   });
+  $("#tm-app-on").onclick = async () => {
+    const d = await tmCall("team_connect", { token: "", ch: "app" }, "Включено — добавьте сотрудников и покажите им печать");
+    if (d) { TM_TAB = "people"; tmRender(); }
+  };
+  $("#tm-sealdlg [data-x]").onclick = () => $("#tm-sealdlg").close();
   $("#tm-connect").onclick = async () => {
     const tok = $("#tm-token").value.trim(); if (!tok) { $("#tm-token").focus(); return; }
     const d = await tmCall("team_connect", { token: tok, ch: TM_CH }, "Бот подключён — добавьте сотрудников");
@@ -191,8 +249,14 @@ if ($("#p-team")) {
   $("#tm-pform").onsubmit = async (e) => {
     e.preventDefault();
     const name = $("#tm-pname").value.trim(); if (!name) { $("#tm-pname").focus(); return; }
-    const d = await tmCall("team_member_add", { name, role: $("#tm-prole").value.trim() }, "Добавлено — скопируйте ссылку и отправьте сотруднику");
-    if (d) { $("#tm-pname").value = ""; $("#tm-prole").value = ""; }
+    const before = new Set((TM.members || []).map(m => m.id));
+    const appOnly = tmAppOn() && !(TM.bots || []).some(b => b.ch !== "app" && b.connected);
+    const d = await tmCall("team_member_add", { name, role: $("#tm-prole").value.trim() }, appOnly ? "" : "Добавлено — скопируйте ссылку и отправьте сотруднику");
+    if (!d) return;
+    $("#tm-pname").value = ""; $("#tm-prole").value = "";
+    const fresh = (d.members || []).find(m => !before.has(m.id));
+    // только приложение — ссылки в мессенджер нет, сразу печать для приложения
+    if (appOnly && fresh && await tmCall("team_app_invite", { id: fresh.id, renew: false })) tmSealShow(fresh.id);
   };
   const save = (k) => () => tmCall("team_set", { [k]: $(`#tm-${k}`).value.trim() }, "Сохранено");
   $("#tm-company").onchange = save("company");

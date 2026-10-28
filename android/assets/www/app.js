@@ -1792,6 +1792,7 @@ function systemPrompt() {
   try { parts.push(donePrompt()); } catch (e) { }
   if (S.sync.on && syncCred() && pcSeen()) parts.push("Большую задачу (исследование с отчётом, документ, презентация, работа с файлами или кодом) не делай в разговоре — передай компьютеру пользователя (start_task) и скажи, что взялся: ход и итог появятся здесь, в «Мой день» → «Сделанное».");
   try { parts.push(clPrompt()); } catch (e) { }
+  try { parts.push(wkPrompt()); } catch (e) { }
   parts.push(convPrompt());
   return parts.filter(Boolean).join("\n\n");
 }
@@ -3455,6 +3456,7 @@ function toolSpecs() {
     parameters: O({ title: STR, goal: STR }, ["goal"]) });
   if ((S.home.token || haOn()) && !D.web) t.push({ name: "smart_home", description: "Умный дом (Яндекс и Home Assistant): action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
     parameters: O({ action: { type: "string", enum: ["list", "on", "off", "brightness", "brighter", "dimmer", "temperature", "scenario"] }, target: STR, value: NUM }, ["action"]) });
+  t.push(...wkTools());                                  // «Работа»: поручения руководителя (work.js), если есть работа
   if (kidsOn()) { const k = kidsTools(); return t.filter(x => k.has(x.name)); }   // детский режим — только безопасное
   return D.web ? t.filter(x => !WEB_NO_TOOLS.has(x.name)) : t;
 }
@@ -3672,6 +3674,7 @@ async function runTool(name, a) {
     case "money_report": return moneyReport(a.period || "month").text;
     case "close_send": { const it = await clSend(a.to || "", a.text || ""); return `Отправлено ${it.to}. Скажи коротко, что отправила.`; }
     case "close_read": return clRecent(a.who || "");
+    case "work_tasks": case "work_act": return await wkTool(name, a || {});
     case "close_where": return await radWhereText(a.who || "");
     case "close_wave": { const p = await radWave(a.to || ""); return `Помахала: ${p.name} увидит и услышит «машет вам». Скажи коротко.`; }
     case "scan_code": scanCode(); return "Сканер открыт. Скажи коротко: «Наведите камеру на код».";
@@ -5863,6 +5866,8 @@ function renderSettings() {
       <div class="sw"><div>Точные будильники</div>${D.exactAlarms() ? `<span class="res ok" style="margin:0">есть</span>` : `<button class="btn" onclick="Dewiar.openSettings('alarms')">Разрешить</button>`}</div></div>
       <h3>Что я умею</h3><div class="card"><p class="hint" style="margin:0 0 10px">Короткие фразы, которые я понимаю сразу: фонарик, радио, сканер кодов, таймер, план дня, «освободи место»… Нажмите любую — и я сделаю.</p>
         <button class="btn w p" id="tricks-open">Посмотреть</button></div>
+      ${kidsOn() ? "" : `<h3>Работа</h3><div class="card"><p class="hint" style="margin:0 0 10px">${wkJobs().length ? "Поручения: " + wkJobs().map(j => "«" + esc(j.team) + "»").join(", ") + ". Отдельно от личного; уйти можно в любой момент." : "Поручения с работы — отдельно от личного. Руководитель покажет печать Dewiar: наведите сканер, и поручения будут приходить сюда."}</p>
+        <button class="btn w${wkJobs().length ? "" : " p"}" id="work-open">${wkJobs().length ? "Открыть «Работу»" : "Присоединиться по коду"}</button></div>`}
       <h3>Детский режим</h3><div class="card"><p class="hint" style="margin:0 0 10px">${kidsOn() ? `Включён: говорит Совёнок Уго, сегодня ${kidsReport().used} из ${kidsLimit()} мин.` : "Ребёнок говорит с Совёнком Уго: сказки, загадки, «почему?» — только безопасное, время за день и отчёт вам. Выключить — только с PIN."}</p>
         <button class="btn w${kidsOn() ? "" : " p"}" id="kids-open">${kidsOn() ? "Отчёт и настройки" : "Настроить"}</button></div>
       <h3>Вопрос — ответ и курсы</h3><div class="card"><p class="hint" style="margin:0 0 10px">Ответы на «как…» — с примерами фраз, и короткие курсы: урок в день, пять минут. Или просто спросите Лиру: «как…»</p>
@@ -6036,6 +6041,7 @@ function wireSettings(info) {
     if (g("news-open")) g("news-open").onclick = () => { closeSheets(); setTimeout(() => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")), 250); };
     if (g("qa-open")) g("qa-open").onclick = () => openLearn("qa");
     if (g("kids-open")) g("kids-open").onclick = () => openKids();
+    if (g("work-open")) g("work-open").onclick = () => openWork("");
     if (g("course-open")) g("course-open").onclick = () => openLearn("course");
     if (g("tricks-open")) g("tricks-open").onclick = () => openTricks();
     if (g("cr-send")) g("cr-send").onclick = () => reportSend("Падение приложения", false, String(info.crash).split("\n")[0]).then(d => toast(`Отчёт №${d.id} отправлен — спасибо!`))
@@ -7413,6 +7419,8 @@ function handleIntent(e) {
     } catch (x) { showBot("Код с настройками не подошёл: " + x.message, "err"); }
   }
   else if (e.action === "close") openClose("");                                     // нажали уведомление «Близких»
+  else if (e.action === "work") openWork("");                                       // уведомление «Работы» (CloseWatch)
+  else if (e.action === "link" && /^dewiar:\/\/work/.test(e.url || "")) wkLink(e.url);         // приглашение на работу (download.php?work=)
   else if (e.action === "news") { closeSheets(); annCheck(true); }                   // уведомление объявления (CloseLive)
   else if (e.action === "close_call") {                                             // уведомление звонка близкого (CloseLive)
     clAutoAnswer = e.answer ? { pid: e.pid, until: Date.now() + 40000 } : null; clPoll(); }
@@ -7656,16 +7664,20 @@ async function clPoll() {
   try {
     const st = clLoad(), k = clKeys();
     if (!st.me.pid || Date.now() - (st.hello || 0) > 3600000) await clHello();   // раз в час: новые близкие и «зовут в Близкие»
+    if (wkJobs().length && Date.now() - (wkLoad().at || 0) > 3600000) await wkRefresh().catch(() => { });   // и работы: устройства руководителей
     const d = await clReq("GET", "/close/inbox", null, "&after=" + (+st.cursor || 0) + "&geo=1");
     let got = 0, refreshed = false;
     for (const it of d.items || []) {
       if (it.kind === "ring") continue;                    // признак звонка — для службы CloseLive; сам звонок — в «sig»
+      if (it.kind === "workin" || it.kind === "workx") { wkKind(it); continue; }   // «Работа» (work.js): знаки сайта без шифра
       const env = it.env || {};
-      let pub = clPubOf(it.peer, env.fd, it.out);
-      if (!pub && !refreshed) { refreshed = true; try { await clHello(); } catch (e) { } pub = clPubOf(it.peer, env.fd, it.out); }
+      const pubOf = () => clPubOf(it.peer, env.fd, it.out) || (it.kind === "work" && !it.out ? wkPub(it.peer, env.fd) : null);
+      let pub = pubOf();
+      if (!pub && !refreshed) { refreshed = true; try { await clHello(); if (it.kind === "work") await wkRefresh(); } catch (e) { } pub = pubOf(); }
       if (!pub) continue;
       let body; try { body = DC().decryptFrom(env, DC().b64d(k.priv), k.dev, pub); } catch (e) { plog("warn", "близкие: не открылось — " + e.message); continue; }
       if (it.kind === "sig") { try { clSig(it.peer, it.name, body.s || {}); } catch (e) { } continue; }
+      if (it.kind === "work") { try { wkKind(it, body); } catch (e) { plog("warn", "работа: " + e.message); } continue; }   // поручения руководителя
       if (it.kind === "geo") { if (!it.out) radTake(it.peer, it.name || "", body.g); continue; }   // место для радара «Рядом»
       if (it.kind === "own") { if (it.out && env.fd !== k.dev) ownApply(body); continue; }   // от своего же устройства
       if (it.kind === "fam") { try { famIn(it.peer, it.name || "", body, !!it.out); } catch (e) { plog("warn", "семья: " + e.message); } continue; }   // общий бюджет
@@ -7708,12 +7720,12 @@ function clBadge() {
    напоминать о том, что уже показано здесь */
 function clWatch() {
   if (!D.closeWatch) return;
-  const c = syncCred(), st = clLoad(), j = c && st.people.length ? JSON.stringify({ base: c.base, token: c.token, link: c.link && c.link !== c.token ? c.link : "", cursor: +st.cursor || 0 }) : "";
+  const c = syncCred(), st = clLoad(), j = c && (st.people.length || wkJobs().length) ? JSON.stringify({ base: c.base, token: c.token, link: c.link && c.link !== c.token ? c.link : "", cursor: +st.cursor || 0 }) : "";
   if (j !== clWatch.last) { clWatch.last = j; D.closeWatch(j); }
   const live = !!j && clLiveOn();                         // «на связи» — служба CloseLive: сообщения и звонки сразу
   if (D.closeLive && live !== clWatch.live) { clWatch.live = live; D.closeLive(live); }
 }
-const clActive = () => { const st = clLoad(); return st.people.length > 0 || (st.invite && Date.now() / 1000 < (st.invite.expires || 0)); };
+const clActive = () => { const st = clLoad(); return st.people.length > 0 || wkJobs().length > 0 || (st.invite && Date.now() / 1000 < (st.invite.expires || 0)); };
 function clSchedule() {
   clearTimeout(clTimer);
   clTimer = setTimeout(async () => { if (!document.hidden || clFast) await clPoll(); clSchedule(); }, clFast ? 1200 : clActive() ? 6000 : 600000);   // во время звонка — и в фоне: отбой и «ответили» не должны теряться
@@ -7834,6 +7846,7 @@ async function scanCode() {
 function scanResult(txt, format) {
   const t = String(txt || "").trim();
   plog("info", "📷 код (" + (format || "?") + "): " + clip(t, 80));
+  if (wkIsLink(t)) return wkLink(t);                      // печать «Работы» от руководителя (work.js)
   if (/^dewiar:\/\/close|[?&]close=/.test(t)) return clAcceptLink(t);
   if (/^dewiar:\/\/ref|download\.php\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }
   if (/^dewiar:/.test(t)) return handleIntent({ action: "link", url: t });
@@ -9173,7 +9186,7 @@ async function clSaveFile(p, m, j) {
 $("#b-close").onclick = () => openClose("");
 $("#cl-inv").onclick = () => { if (clTab === "ref") return refShare().catch(e => toast(e.message, 4000)); clInviteOpen(); };
 document.addEventListener("visibilitychange", () => { if (!document.hidden && syncCred()) { clPoll(); noteAttSoon(6000); } });
-setTimeout(() => { clLoad(); clBadge(); if (S.closePending && syncCred()) clAcceptLink(S.closePending); clPoll(); clSchedule(); noteAttSoon(9000); }, 4000);
+setTimeout(() => { clLoad(); clBadge(); wkBadge(); if (S.closePending && syncCred()) clAcceptLink(S.closePending); if (S.workPending && syncCred()) wkLink(S.workPending); clPoll(); clSchedule(); noteAttSoon(9000); }, 4000);
 setTimeout(tmrShow, 700);                                       // идущие таймеры — сразу после запуска
 N.on("alarms", () => { tmrShow(); syncSoon(); });               // отменили таймер в шторке (AlarmReceiver)
 N.on("resume", () => tmrShow());

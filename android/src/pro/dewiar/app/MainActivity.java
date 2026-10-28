@@ -162,6 +162,8 @@ public class MainActivity extends Activity implements Net.Sink {
                 pending = new JSONObject().put("action", "note").put("id", i.getStringExtra("note"));
             } else if ("pro.dewiar.CLOSE".equals(a)) {              // уведомление «Близких» (CloseWatch) — открыть переписку
                 pending = new JSONObject().put("action", "close");
+            } else if ("pro.dewiar.WORK".equals(a)) {               // уведомление «Работы» (CloseWatch) — открыть поручения
+                pending = new JSONObject().put("action", "work");
             } else if ("pro.dewiar.NEWS".equals(a)) {               // уведомление объявления для всех (CloseLive)
                 pending = new JSONObject().put("action", "news");
             } else if ("pro.dewiar.CLOSE_CALL".equals(a)) {         // звонок близкого из уведомления (CloseLive): открыть, ответить
