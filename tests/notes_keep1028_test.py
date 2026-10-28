@@ -123,14 +123,30 @@ with sync_playwright() as p:
     ok(["note_meta", {"path": "Заметки/Linux.md", "patch": {"pinned": True}}] in pg.evaluate("_calls"), "«Закрепить»")
     pg.click("#nt-colb"); pg.wait_for_timeout(150); pg.click('#nt-pal [data-c="PINK"]'); pg.wait_for_timeout(400)
     ok(["note_meta", {"path": "Заметки/Linux.md", "patch": {"color": "PINK"}}] in pg.evaluate("_calls"), "«Цвет» — палитра как в Keep")
-    pg.fill("#nt-tadd", "проекты"); pg.press("#nt-tadd", "Enter"); pg.wait_for_timeout(400)
+    pg.click("#nt-tbtn"); pg.fill("#nt-tadd", "проекты"); pg.press("#nt-tadd", "Enter"); pg.wait_for_timeout(400)
     ok(["note_meta", {"path": "Заметки/Linux.md", "patch": {"tags": ["linux", "проекты"]}}] in pg.evaluate("_calls"), "своя метка — Enter")
     pg.click('#nt-filt [data-f=""]'); pg.wait_for_timeout(300)
     pg.click('#nt-vw [data-v="grid"]'); pg.wait_for_timeout(500)
     r = pg.evaluate("""() => [document.querySelector('.nt-cols').classList.contains('grid'), document.querySelectorAll('#nt-list .nt-tile').length,
       getComputedStyle(document.querySelector('#nt-list .nt-tile[data-p="Заметки/Google Keep/Эйнштейн.md"]')).backgroundColor, getComputedStyle(document.querySelector('#nt-view')).display]""")
     ok(r[0] and r[1] == 3 and r[2] != "rgba(0, 0, 0, 0)" and r[3] == "none", f"плитками: цвет заметки фоном, открытой заметки сбоку нет: {r}")
+    # 28.10 (снимок владельца, Ubuntu): CSS-колонки в WebKitGTK резали плитки на границе колонок — теперь колонки из
+    # блоков, каждая плитка целиком в самой короткой
+    pg.set_viewport_size({"width": 1600, "height": 1000})
+    pg.evaluate("""async () => { for (let i = 0; i < 13; i++) _notes.push({ path: `Заметки/Тест ${i}.md`, title: `Заметка ${i}`, mtime: Date.now() / 1000 - 20 - i,
+        folder: '', snippet: 'слово '.repeat(8 + (i * 37) % 70), att: 0, img: i % 5 === 2 ? 'Вложения/x.png' : '', tags: [], color: i % 4 === 1 ? 'TEAL' : '', pinned: false, archived: false });
+      await ntLoad(); }""")
+    pg.wait_for_timeout(500)
+    r = pg.evaluate("""() => { const boxes = [...document.querySelectorAll('#nt-list .nt-masonry')], big = boxes.sort((a, b) => b.querySelectorAll('.nt-tile').length - a.querySelectorAll('.nt-tile').length)[0];
+      const cols = [...big.querySelectorAll(':scope > .nt-mcol')], hs = cols.map(c => c.offsetHeight), tiles = [...big.querySelectorAll('.nt-tile')];
+      const inCols = tiles.every(t => t.parentElement.classList.contains('nt-mcol'));
+      const tall = Math.max(...tiles.map(t => t.offsetHeight));
+      return [cols.length, inCols, Math.max(...hs) - Math.min(...hs) <= tall + 14, getComputedStyle(big).columnCount]; }""")
+    ok(r[0] >= 3 and r[1] and r[2] and r[3] == "auto", f"плитки — колонками-блоками (не CSS-колонки), каждая целиком, колонки ровные: {r}")
     if SHOTS: pg.screenshot(path=str(Path(SHOTS) / "studio-notes-keep-grid.png"))
+    pg.set_viewport_size({"width": 1000, "height": 1000}); pg.wait_for_timeout(500)
+    n2 = pg.evaluate("Math.max(...[...document.querySelectorAll('#nt-list .nt-masonry')].map(b => b.querySelectorAll(':scope > .nt-mcol').length))")
+    ok(n2 < r[0], f"окно уже — колонок меньше: {r[0]} → {n2}")
     pg.click('#nt-list .nt-tile[data-p="Заметки/Покупки.md"]'); pg.wait_for_timeout(600)
     ok(pg.evaluate("getComputedStyle(document.querySelector('#nt-view')).position") == "fixed" and pg.evaluate("!!document.querySelector('#nt-close')"),
        "плитка → заметка поверх, с «×»")

@@ -118,10 +118,26 @@ async function ntLoad() {
     : `<div class="nt-none">${q || f ? "Ничего не нашлось — попробуйте другое слово или «Все»." : "Заметок пока нет. Скажите помощнице: «запиши в заметки…» — или нажмите «Новая заметка». Есть заметки в Google Keep — «Перенести из Keep»."}</div>`;
   $$("#nt-list .nt-row, #nt-list .nt-tile").forEach(b => b.onclick = () => ntOpen(b.dataset.p));
   $$("#nt-list .nt-th, #nt-list .nt-ti").forEach(ntThumb);
-  if (NT.grid) return;
+  if (NT.grid) { ntMasonry(); return; }
   if (!NT.cur && l.length) ntOpen(l[0].path);
   else if (!l.length && !NT.cur) $("#nt-view").innerHTML = "";
 }
+/* Плитки по колонкам: столько колонок, сколько влезает по 250 px; каждая плитка — в самую короткую колонку (по
+   настоящей высоте), порядок чтения — слева направо, сверху вниз, как в Keep. Ширина окна изменилась — заново. */
+function ntMasonry() {
+  $$("#nt-list .nt-masonry").forEach(box => {
+    const tiles = [...box.querySelectorAll(".nt-tile")].sort((a, b) => (+a.dataset.i || 0) - (+b.dataset.i || 0));
+    tiles.forEach((t, i) => { if (t.dataset.i == null) t.dataset.i = i; });
+    const w = box.clientWidth || Math.max(280, innerWidth - 640);          // раздел ещё скрыт — по ширине окна
+    const n = Math.max(1, Math.floor((w + 14) / (250 + 14)));             // столько же колонок и в маленькой группе — плитки одной ширины
+    if (box.dataset.n === String(n) && box.querySelector(".nt-mcol")) return;
+    box.dataset.n = n; box.innerHTML = "";
+    const cols = Array.from({ length: n }, () => box.appendChild(Object.assign(document.createElement("div"), { className: "nt-mcol" })));
+    tiles.forEach(t => cols.reduce((a, c) => (c.offsetHeight < a.offsetHeight ? c : a)).appendChild(t));
+  });
+}
+let ntRz = 0;
+window.addEventListener("resize", () => { clearTimeout(ntRz); ntRz = setTimeout(() => { if (NT.grid && $("#nt-list")) ntMasonry(); }, 120); });
 /* Под названием — «закрепить», цвет, метки и «в архив» (как в Keep); всё — в шапку заметки (note_meta) */
 const NT_CNAMES = { RED: "Красный", ORANGE: "Оранжевый", YELLOW: "Жёлтый", GREEN: "Зелёный", TEAL: "Бирюзовый", BLUE: "Синий", DARK_BLUE: "Тёмно-синий",
   PURPLE: "Фиолетовый", PINK: "Розовый", BROWN: "Коричневый", GRAY: "Серый" };
@@ -134,7 +150,8 @@ function ntMetaHtml(d) {
     <span class="nt-colw"><button type="button" class="nt-mb" id="nt-colb" aria-haspopup="true" aria-expanded="false" title="Цвет заметки"><i class="nt-dot"${ntColor(m.color) ? ` style="background:${ntColor(m.color)}"` : ""}></i>Цвет</button>
       <span class="nt-pal" id="nt-pal" hidden><button type="button" data-c="" title="Без цвета" class="none${!m.color ? " on" : ""}"></button>${Object.keys(NT_CNAMES).map(c => `<button type="button" data-c="${c}" title="${NT_CNAMES[c]}" style="background:${NT_COLORS[c]}"${m.color === c ? ' class="on"' : ""}></button>`).join("")}</span></span>
     <span class="nt-tags">${[...own].map(t => `<span class="nt-chip nt-tag">#${escH(t)}<button type="button" data-rt="${escH(t)}" aria-label="Убрать метку ${escH(t)}">×</button></span>`).join("")}${inline.map(t => `<span class="nt-chip nt-tag" title="метка в тексте">#${escH(t)}</span>`).join("")}
-      <input id="nt-tadd" list="nt-tlist" placeholder="+ метка" maxlength="40" aria-label="Добавить метку"><datalist id="nt-tlist">${known.map(t => `<option value="${escH(t)}">`).join("")}</datalist></span>
+      <button type="button" class="nt-mb nt-tbtn" id="nt-tbtn" title="Добавить метку — по ней заметка найдётся в фильтре над списком"><i class="nt-hash">#</i>Метка</button>
+      <input id="nt-tadd" class="nt-tin" list="nt-tlist" placeholder="название метки" maxlength="40" aria-label="Добавить метку" hidden><datalist id="nt-tlist">${known.map(t => `<option value="${escH(t)}">`).join("")}</datalist></span>
     <button type="button" class="nt-mb" id="nt-archb" title="${m.archived ? "Вернуть из архива" : "Убрать в архив — с глаз долой, поиск находит"}">${m.archived ? "Из архива" : "В архив"}</button></div>`;
 }
 async function ntMetaSet(patch, msg) {
@@ -153,7 +170,12 @@ function ntMetaBind(d) {
   const ti = $("#nt-tadd");
   const add = () => { const t = ti.value.trim().replace(/^#+/, "").replace(/[,;\[\]]/g, " ").trim(); if (!t) return; if ((m.tags || []).includes(t)) { ti.value = ""; return; }
     ntMetaSet({ tags: (m.tags || []).concat([t]) }); };
-  ti.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } };
+  /* «Метка» — кнопкой, как «Закрепить» и «Цвет» (28.10, владелец: «„метка“ выглядит грубо»): нажали — на её месте
+     поле-пилюля, Enter — добавить, Esc или ушли пустым — снова кнопка */
+  const tb = $("#nt-tbtn"), tOff = () => { ti.value = ""; ti.hidden = true; tb.hidden = false; };
+  tb.onclick = () => { tb.hidden = true; ti.hidden = false; ti.focus(); };
+  ti.onblur = () => setTimeout(() => { if (document.activeElement !== ti && !ti.value.trim()) tOff(); }, 150);
+  ti.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } else if (e.key === "Escape") { e.preventDefault(); tOff(); tb.focus(); } };
   ti.onchange = () => { if ([...$("#nt-tlist").options].some(o => o.value === ti.value)) add(); };
 }
 document.addEventListener("click", (e) => { const p = $("#nt-pal"); if (p && !p.hidden && !e.target.closest(".nt-colw")) p.hidden = true; });

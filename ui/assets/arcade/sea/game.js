@@ -2,7 +2,10 @@
    (в широком окне — справа) море Лиры, по нему стреляете вы; ниже — ваш флот, по нему стреляет Лира. Флот — классика:
    четырёхпалубный, два трёхпалубных, три двухпалубных, четыре однопалубных; корабли не касаются друг друга, расставляются
    сами («Перемешать» — заново). Попал — стреляешь ещё; потопил — вокруг корабля открывается вода. Лира ищет «шахматкой»,
-   а раненый корабль добивает по линии; на «полегче» стреляет наугад. Очки: меньше выстрелов — больше; в полную силу ×2. */
+   а раненый корабль добивает по линии; на «полегче» стреляет наугад. Очки: меньше выстрелов — больше; в полную силу ×2.
+   Голосом (0.63; план «Идей Лиры»: «„Б пять!“ — Лира ставит выстрел сама и отвечает голосом»): хозяин (телефон — app.js,
+   компьютер — pad.js) присылает {arcade: 'heard', text}; разобрали клетку — выстрел, а итог хода (и выстрел Лиры) —
+   одной фразой {arcade: 'say', text}. Кнопка микрофона вверху — {arcade: 'listen'}. Касаниями — молча, как раньше. */
 (() => {
 'use strict';
 const A = Arcade;
@@ -16,7 +19,7 @@ const LET = 'АБВГДЕЖЗИК';
 const L = LAND
   ? { T: { x: 700, y: 100, s: 540 }, M: { x: 90, y: 330, s: 300 }, title: [270, 96], say: { x: 60, y: 160, w: 420, h: 90 } }
   : { T: { x: 80, y: 280, s: 560 }, M: { x: 230, y: 950, s: 260 }, title: [W / 2, 96], say: { x: 70, y: 140, w: 580, h: 80 } };
-let S = null, SC = 1;
+let S = null, SC = 1, G = null;
 
 /* флот: корабли не касаются (и углами) */
 function place() {
@@ -95,6 +98,58 @@ const SAY = {
   think: ['Так-так…', 'Куда бы…', 'Хм…']
 };
 const say = (k) => { S.say = A.pick(SAY[k]); S.sayT = 2; };
+/* ---------------- голос ---------------- */
+const NAME = ['А', 'Бэ', 'Вэ', 'Гэ', 'Дэ', 'Е', 'Жэ', 'Зэ', 'И', 'Ка'];
+const NUM = ['один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять', 'десять'];
+const spoken = (x, y) => `${NAME[x]} ${NUM[y]}`;
+const LETW = { 'а': 0, 'б': 1, 'бэ': 1, 'бе': 1, 'в': 2, 'вэ': 2, 'ве': 2, 'г': 3, 'гэ': 3, 'ге': 3, 'д': 4, 'дэ': 4, 'де': 4, 'е': 5, 'ж': 6, 'жэ': 6, 'же': 6,
+  'з': 7, 'зэ': 7, 'зе': 7, 'и': 8, 'к': 9, 'ка': 9, 'й': 9 };
+const NUMW = { 'один': 1, 'одна': 1, 'раз': 1, 'два': 2, 'две': 2, 'три': 3, 'четыре': 4, 'пять': 5, 'шесть': 6, 'семь': 7, 'восемь': 8, 'девять': 9, 'десять': 10 };
+/* «Б5», «бэ пять», «стреляю в дэ семь», «К-10» -> [x, y] или null; берём последнюю пару «буква, число» */
+function cellOf(text) {
+  const t = String(text || '').toLowerCase().replace(/ё/g, 'е').replace(/([а-я])(\d)/g, '$1 $2').replace(/[^а-я0-9]+/g, ' ').trim().split(' ');
+  let out = null;
+  for (let i = 0; i + 1 < t.length; i++) {
+    const x = LETW[t[i]], n = /^\d+$/.test(t[i + 1]) ? +t[i + 1] : NUMW[t[i + 1]];
+    if (x !== undefined && n >= 1 && n <= 10) out = [x, n - 1];
+  }
+  return out;
+}
+const vq = [];
+function speak(text) { if (!S.voice || !A.framed) return; try { window.parent.postMessage({ arcade: 'say', text }, '*'); } catch (e) { /* хозяина нет */ } }
+const flush = () => { if (vq.length) speak(vq.splice(0).join(' ')); };
+const bubble = (t, s = 2.4) => { S.say = t; S.sayT = s; };
+function heard(text) {
+  if (!S || !G) return;
+  S.voice = true;
+  const t = String(text || '').toLowerCase();
+  if (!t.trim()) { bubble('Не расслышала'); return speak('Не расслышала. Скажите клетку, например: «Бэ пять».'); }
+  if (S.mode !== 'play') {
+    if (/сыгра|игра|начн|давай|ещ[её]|партию|поехали|да\b/.test(t)) { if (G.screenOn) G.hideScreen(); start(G, /полегче|легк|спокой/.test(t) ? true : /полн|сильн/.test(t) ? false : !!S.easy); return speak('Ваш выстрел! Называйте клетку: буква и число.'); }
+    return speak('Скажите «играем» — и начнём.');
+  }
+  if (/сда[юе]/.test(t)) { vq.length = 0; S.end = .4; return speak('Принято. Мои корабли теперь видны.'); }
+  if (/сколько|остал/.test(t)) return speak(`У меня кораблей: ${S.ai.left}, у вас: ${S.me.left}.`);
+  if (S.end) return;
+  if (S.turn !== 'me') return speak('Подождите, я целюсь.');
+  const c = cellOf(t);
+  if (!c) { bubble('Какая клетка?'); return speak('Не поняла клетку. Скажите букву и число: например, «Дэ семь».'); }
+  if (S.ai.shot[c[1]][c[0]]) { bubble(`${LET[c[0]]}${c[1] + 1}: уже стреляли`); return speak(`В ${spoken(c[0], c[1])} уже стреляли — выберите другую клетку.`); }
+  shoot(G, c[0], c[1]);
+}
+addEventListener('message', (e) => { if (e.source === window.parent && e.data && e.data.arcade === 'heard') heard(e.data.text); });
+/* выстрел игрока (касанием или голосом) -> итог; голосом — фраза: попали — «стреляйте ещё», мимо — ждём выстрела Лиры */
+function shoot(g, x, y) {
+  const res = fire(S.ai, x, y); if (!res) { g.sfx('click', { vol: .4 }); return null; }
+  S.shots++; S.last = { who: 'me', x, y };
+  boom(g, L.T, x, y, res);
+  if (res === 'miss') { say('miss'); S.turn = 'ai'; S.think = 0; vq.push(`${spoken(x, y)} — мимо.`); }
+  else {
+    say(res === 'sunk' ? 'sunk' : 'hit'); if (res === 'sunk') g.sfx('coin'); if (S.ai.left === 0) S.end = 1.1;
+    vq.push(S.ai.left === 0 ? 'Потопили мой последний корабль — вы победили!' : res === 'sunk' ? 'Потопили! Стреляйте ещё.' : 'Ранили! Стреляйте ещё.'); flush();
+  }
+  return res;
+}
 const cellAt = (r, px, py) => { const c = r.s / N, x = Math.floor((px - r.x) / c), y = Math.floor((py - r.y) / c); return x >= 0 && y >= 0 && x < N && y < N ? [x, y] : null; };
 function boom(g, r, x, y, res) {
   const c = r.s / N, cx = r.x + (x + .5) * c, cy = r.y + (y + .5) * c;
@@ -111,7 +166,7 @@ function titleScreen(g) {
     button: 'Играть', onGo: () => start(g, false), alt: { label: 'Полегче', onGo: () => start(g, true) }
   });
 }
-function start(g, easy) { fresh('play', easy); g.fx.clear(); g.setPlaying(true); g.playMusic(); S.say = easy ? 'Сыграем спокойно. Стреляйте первым!' : 'Ваш выстрел! Я спрятала флот.'; S.sayT = 2.6; }
+function start(g, easy) { const v = !!(S && S.voice); vq.length = 0; fresh('play', easy); S.voice = v; g.fx.clear(); g.setPlaying(true); g.playMusic(); S.say = easy ? 'Сыграем спокойно. Стреляйте первым!' : 'Ваш выстрел! Я спрятала флот.'; S.sayT = 2.6; }
 function finish(g, win) {
   S.mode = 'over'; S.reveal = true; g.setPlaying(false); g.stopMusic();
   g.sfx(win ? 'win' : 'lose');
@@ -140,18 +195,17 @@ function update(g, dt) {
     if (S.think > .8) {
       S.think = 0; const [x, y] = aiPick(), res = fire(S.me, x, y); S.last = { who: 'ai', x, y };
       boom(g, L.M, x, y, res);
-      if (res === 'miss') { say('mymiss'); S.turn = 'me'; } else { say(res === 'sunk' ? 'mysunk' : 'myhit'); if (S.me.left === 0) S.end = 1.1; }
+      const at = `Стреляю: ${spoken(x, y)} —`;
+      if (res === 'miss') { say('mymiss'); S.turn = 'me'; vq.push(`${at} мимо. Ваш ход.`); flush(); }
+      else { say(res === 'sunk' ? 'mysunk' : 'myhit'); if (S.me.left === 0) S.end = 1.1;
+        vq.push(S.me.left === 0 ? `${at} потопила ваш последний корабль. Я победила!` : `${at} ${res === 'sunk' ? 'ваш корабль потоплен' : 'попала'}.`); if (S.me.left === 0) flush(); }
     }
     return;
   }
   const inp = g.input;
   if (inp.tap) {
     const c = cellAt(L.T, inp.tap.x, inp.tap.y); if (!c) return;
-    const res = fire(S.ai, c[0], c[1]); if (!res) { g.sfx('click', { vol: .4 }); return; }
-    S.shots++; S.last = { who: 'me', x: c[0], y: c[1] };
-    boom(g, L.T, c[0], c[1], res);
-    if (res === 'miss') { say('miss'); S.turn = 'ai'; S.think = 0; }
-    else { say(res === 'sunk' ? 'sunk' : 'hit'); if (res === 'sunk') g.sfx('coin'); if (S.ai.left === 0) S.end = 1.1; }
+    shoot(g, c[0], c[1]);
   }
 }
 
@@ -218,13 +272,22 @@ function draw(ctx, g) {
     const a = Math.min(1, S.sayT / .3, (2.2 - S.sayT) / .2);
     ctx.save(); ctx.globalAlpha = Math.max(0, a); soft(ctx, sb.x, sb.y, sb.w, sb.h, 30, 6, false);
     A.text(ctx, S.say, bx, sb.y + sb.h / 2 + 9, { size: 26, weight: 600, color: INK }); ctx.restore();
-  } else if (on) A.text(ctx, S.turn === 'me' ? 'Ваш выстрел — коснитесь клетки в море Лиры' : 'Лира целится…', bx, sb.y + sb.h / 2 + 9, { size: 22, weight: 600, color: MUTED });
+  } else if (on) A.text(ctx, S.turn === 'me' ? (S.voice ? 'Ваш выстрел — назовите клетку: «Бэ пять»' : 'Ваш выстрел — коснитесь клетки в море Лиры') : 'Лира целится…', bx, sb.y + sb.h / 2 + 9, { size: 22, weight: 600, color: MUTED });
 }
 
 A.game({
   id: 'sea', tone: 'light', title: 'Морской бой', width: W, height: H, orientation: LAND ? 'landscape' : 'portrait', music: 'garden',
   help: { desktop: 'Щелчок по клетке в море Лиры — выстрел · <kbd>P</kbd> пауза · <kbd>M</kbd> музыка', short: 'Щелчок по клетке — выстрел', touch: 'Коснитесь клетки в море Лиры — выстрел' },
-  init(g) { titleScreen(g); window.__sea = () => S; window.__seaPick = () => aiPick(); },
+  init(g) {
+    G = g; titleScreen(g); window.__sea = () => S; window.__seaPick = () => aiPick(); window.__seaCell = cellOf;
+    if (A.framed) {                                   // микрофон: хозяин слушает один раз и присылает {arcade: 'heard'}
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn icon'; b.id = 'seaMic';
+      b.setAttribute('aria-label', 'Сказать ход голосом'); b.title = 'Сказать ход голосом: «Бэ пять»';
+      b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
+      const m = document.getElementById('aMusic'); m.parentNode.insertBefore(b, m);
+      b.addEventListener('click', () => { if (!S) return; S.voice = true; bubble('Слушаю…', 4); try { window.parent.postMessage({ arcade: 'listen' }, '*'); } catch (e) { /* хозяина нет */ } });
+    }
+  },
   update, draw
 });
 })();

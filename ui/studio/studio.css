@@ -1061,13 +1061,20 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .nt-cols > .nt-list { position: sticky; top: 12px; max-height: calc(100vh - 36px); }
 .nt-row { position: relative; } .nt-row[style*="--nc"]::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 4px 4px 0; background: var(--nc); }
 .nt-chip.nt-tag { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.nt-list { display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 250px); overflow: auto; padding: 4px 8px 12px 4px; scrollbar-width: thin; }
+/* список: карточки не прижаты к полосе прокрутки и тени не обрезаны (28.10, владелец: «левые блоки касаются скролла») */
+.nt-list { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 250px); overflow: auto; padding: 6px 18px 18px 8px; scrollbar-width: thin;
+  scrollbar-gutter: stable; scrollbar-color: color-mix(in srgb, var(--muted) 35%, transparent) transparent; }
+.nt-list::-webkit-scrollbar { width: 6px; } .nt-list::-webkit-scrollbar-track { background: transparent; }
+.nt-list::-webkit-scrollbar-thumb { border-radius: 6px; background: color-mix(in srgb, var(--muted) 35%, transparent); }
 .nt-gh { font: 700 12px "Manrope", sans-serif; color: var(--muted); margin: 10px 6px 0; } .nt-gh:first-child { margin-top: 0; }
 .nt-row { display: flex; gap: 14px; align-items: center; border: 0; text-align: left; padding: 14px 16px; border-radius: 18px; background: var(--glass);
   box-shadow: var(--raise-s, 0 6px 18px -12px rgba(0,0,0,.5)); color: inherit; cursor: pointer; font: inherit; transition: transform .15s, box-shadow .15s; }
 .nt-row:hover { transform: translateY(-1px); }
 .nt-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.nt-row.cur { background: color-mix(in srgb, var(--accent) 14%, var(--glass2, transparent)); box-shadow: 0 0 0 2px var(--accent); }
+/* выбранная — без обводки (28.10, владелец: «обводки не очень люблю»): мягкий тон акцента, тень и полоска слева */
+.nt-row.cur { background: color-mix(in srgb, var(--accent) 11%, var(--glass2, var(--glass))); box-shadow: 0 14px 30px -18px color-mix(in srgb, var(--accent) 75%, transparent); }
+.nt-row.cur:not([style*="--nc"])::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 4px; border-radius: 0 4px 4px 0; background: var(--accent); }
+.nt-row.cur b { color: color-mix(in srgb, var(--accent) 70%, var(--ink)); }
 .nt-rt { flex: 1; min-width: 0; }
 .nt-row b { display: block; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nt-row small, .nt-top small { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--muted); font-size: 12px; margin: 3px 0 6px; }
@@ -2920,7 +2927,7 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .nt-fc:hover { background: var(--soft2); } .nt-fc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .nt-fc.tag { color: var(--accent); }
 .nt-fc.on { background: var(--accent); color: #fff; } .nt-fc.on small { color: rgba(255,255,255,.8); }
-.nt-fc.more, .nt-fc.arch { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.nt-fc.more, .nt-fc.arch { background: color-mix(in srgb, var(--soft) 55%, transparent); color: var(--muted); }   /* без обводок (28.10) */
 .nt-pin { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; flex: none;
   background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M15 3l6 6-3 1-4 4 .5 4.5L13 20l-4-4-5 5-1-1 5-5-4-4 1.5-1.5L10 10l4-4z'/%3E%3C/svg%3E") center/contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M15 3l6 6-3 1-4 4 .5 4.5L13 20l-4-4-5 5-1-1 5-5-4-4 1.5-1.5L10 10l4-4z'/%3E%3C/svg%3E") center/contain no-repeat; }
@@ -2933,7 +2940,7 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .nt-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; box-shadow: inset 0 0 0 1.5px var(--line); background: transparent; }
 .nt-colw { position: relative; }
 .nt-pal { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; display: grid; grid-template-columns: repeat(6, 26px); gap: 8px; padding: 12px; border-radius: 16px;
-  background: var(--panel2, #fff); box-shadow: 0 16px 40px -16px rgba(0,0,0,.45), 0 0 0 1px var(--line); }
+  background: var(--panel2, #fff); box-shadow: 0 16px 40px -16px rgba(0,0,0,.45); }
 .nt-pal[hidden] { display: none; }
 .nt-pal button { width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
 .nt-pal button.none { background: linear-gradient(135deg, transparent 45%, var(--bad) 46%, var(--bad) 54%, transparent 55%), var(--soft); }
@@ -2942,9 +2949,15 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .nt-tags .nt-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; padding: 3px 10px; }
 .nt-tags .nt-chip button { border: 0; background: none; cursor: pointer; color: inherit; font-size: 15px; line-height: 1; padding: 0 0 0 4px; opacity: .65; }
 .nt-tags .nt-chip button:hover { opacity: 1; }
-.nt-tags input { width: 110px; height: 30px; padding: 0 12px; border-radius: 999px; font-size: 13px; }
+.nt-hash { font-style: normal; font-weight: 800; margin-right: 5px; color: var(--accent); }
+#p-notes .nt-tags input.nt-tin { width: 160px; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--ink); background: var(--soft); box-shadow: none; outline: none; transition: background .2s, box-shadow .2s; }
+#p-notes .nt-tags input.nt-tin:focus { background: color-mix(in srgb, var(--accent) 10%, var(--soft)); box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 70%, transparent); }
+#p-notes .nt-tags input.nt-tin::placeholder { color: var(--muted); font-weight: 500; }
+#p-notes .nt-tags input.nt-tin[hidden], .nt-tbtn[hidden] { display: none; }
+#p-notes .nt-tags input.nt-tin::-webkit-calendar-picker-indicator { display: none !important; opacity: 0; }
 .nt-card { display: flex; align-items: stretch; gap: 0; margin: 12px 0; max-width: 560px; border-radius: 16px; overflow: hidden; text-decoration: none; color: var(--ink);
-  background: var(--glass2); box-shadow: 0 0 0 1px var(--line); transition: transform .15s; }
+  background: var(--glass2); box-shadow: 0 14px 30px -20px rgba(20,30,60,.45); transition: transform .15s, box-shadow .15s; }
 .nt-card:hover { transform: translateY(-2px); }
 .nt-cimg { flex: none; width: 0; background: center/cover no-repeat; }
 .nt-cimg.on { width: 168px; min-height: 96px; }
@@ -2957,11 +2970,14 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 /* плитками: колонки как в Keep, цвет заметки — мягким фоном; заметка открывается справа поверх */
 .nt-cols.grid { display: block; }
 .nt-cols.grid > .nt-list { position: static; max-height: none; overflow: visible; padding: 0; display: block; }
-.nt-masonry { column-width: 250px; column-gap: 14px; margin: 8px 0 18px; }
-.nt-tile { break-inside: avoid; width: 100%; display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 14px 16px 16px; border: 0; border-radius: 18px;
+/* плитки — колонками (ntMasonry в notes.js раскладывает в самую короткую), а не CSS-колонками: в окне Ubuntu (WebKitGTK)
+   плитки резались на границе колонок и оставляли пустые обрывки (28.10, снимок владельца) */
+.nt-masonry { display: flex; align-items: flex-start; gap: 14px; margin: 8px 0 22px; }
+.nt-mcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.nt-tile { width: 100%; display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 14px 16px 16px; border: 0; border-radius: 18px;
   text-align: left; cursor: pointer; font: inherit; color: var(--ink); background: var(--glass); box-shadow: var(--raise-s, 0 6px 18px -12px rgba(0,0,0,.5)); transition: transform .15s; }
 .nt-tile[style*="--nc"] { background: color-mix(in srgb, var(--nc) 22%, var(--glass2, #fff)); }
-.nt-tile:hover { transform: translateY(-2px); } .nt-tile.cur { box-shadow: 0 0 0 2px var(--accent); }
+.nt-tile:hover { transform: translateY(-2px); } .nt-tile.cur { box-shadow: 0 16px 34px -18px color-mix(in srgb, var(--accent) 80%, transparent); }
 .nt-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .nt-tile b { font-size: 15px; line-height: 1.3; }
 .nt-tile em { font-style: normal; font-size: 13.5px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
@@ -2969,7 +2985,7 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .nt-ti { display: block; height: 130px; margin: -14px -16px 2px; border-radius: 18px 18px 0 0; background: rgba(127,127,160,.12) center/cover no-repeat; }
 .nt-cols.grid > .nt-view { display: none; }
 .nt-cols.grid.open > .nt-view { display: block; position: fixed; z-index: 40; top: 12px; right: 12px; bottom: 12px; width: min(760px, calc(100vw - 24px)); overflow: auto;
-  box-shadow: 0 30px 80px -20px rgba(0,0,0,.55), 0 0 0 1px var(--line); animation: nt-in .22s cubic-bezier(.2,.8,.2,1); }
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,.55); animation: nt-in .22s cubic-bezier(.2,.8,.2,1); }
 @keyframes nt-in { from { opacity: 0; transform: translateX(24px); } }
 .nt-close { width: 38px; height: 38px; border: 0; border-radius: 50%; cursor: pointer; font-size: 22px; line-height: 1; color: var(--muted); background: var(--soft); }
 .nt-close:hover { color: var(--ink); background: var(--soft2); }
@@ -3128,5 +3144,19 @@ html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92)
 .dl-rem h3 { margin: 0 0 4px; font-size: 16px; }
 .dl-rem textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 13.5px; line-height: 1.5; resize: vertical; }
 .dl-card em.rem { color: var(--muted); font-style: normal; font-size: 12px; }
+/* «Фото и файлы» и «Переслать» в студии (studio/groups.js, 0.62) */
+.cl-agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 8px 0 14px; }
+.cl-agrid figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.cl-agrid .cl-ph { max-width: none; aspect-ratio: 1; min-height: 0; } .cl-agrid .cl-ph img { height: 100%; max-height: none; }
+.cl-afiles { display: flex; flex-direction: column; gap: 4px; }
+#cl-gp .cl-gmem .cl-p { width: 100%; }
+.cl-refw { display: grid; place-items: center; }
 .bugnote { display: block; color: var(--muted); font-size: 11.5px; margin: 4px 2px 0; }
 .bugnote[hidden] { display: none; }
+/* Экономный режим (economy.py, 0.63): поле модели для простого рядом с «Подобрать», метка «экономно» у названия профиля */
+.prof .econ { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.prof .econ-row { display: flex; gap: 8px; align-items: center; }
+.prof .econ-row input { flex: 1; min-width: 0; }
+.prof .econ-row .btn { flex: none; }
+.econ-tag { font-style: normal; font-size: 11px; font-weight: 600; color: #3fbf8f; background: rgba(63,191,143,.12); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: 2px; }
+.mpick[hidden] { display: none; }

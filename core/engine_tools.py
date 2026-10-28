@@ -780,7 +780,7 @@ class ToolsMixin:
             base = str(pr.get("base_url") or "")
             if not base or pr.get("cloud") or re.search(r"//(?:localhost|127\.|0\.0\.0\.0|\[::1\])", base):
                 continue
-            out.append({k: pr.get(k) for k in ("name", "kind", "base_url", "api_key", "model", "title") if pr.get(k) not in (None, "")})
+            out.append({k: pr.get(k) for k in ("name", "kind", "base_url", "api_key", "model", "economy", "title") if pr.get(k) not in (None, "")})
         return {"from": self.device_name(), "at": int(time.time() * 1000), "profiles": out[:12]} if out else None
 
     def brains_pull(self):
@@ -809,7 +809,7 @@ class ToolsMixin:
             if key in have:
                 continue
             pid = "dev-" + hashlib.sha1("|".join(key).encode()).hexdigest()[:8]
-            profiles[pid] = {k: str(pr.get(k) or "") for k in ("name", "kind", "base_url", "api_key", "model", "title")}
+            profiles[pid] = {k: str(pr.get(k) or "") for k in ("name", "kind", "base_url", "api_key", "model", "economy", "title")}
             profiles[pid]["name"] = profiles[pid]["name"] or key[1] or "Модель"
             have.add(key); added.append(profiles[pid]["name"])
         if not added:
@@ -1482,7 +1482,7 @@ class ToolsMixin:
         self._say_quick(msg, said, via)
         return True
 
-    def _say_quick(self, msg, said, via=None, then=None, note=None, acts=None):
+    def _say_quick(self, msg, said, via=None, then=None, note=None, acts=None, keep=True):
         """Ответить одной фразой без модели (поставил напоминание, записал заметку) и запомнить в разговоре.
         then() — когда фраза сказана (и если её не перебили): «спрячься» прячет виджет уже после «Прячусь».
         note — как получен ответ (расчёт с числами): только в историю, чтобы на «как ты посчитал?» модель знала."""
@@ -1508,9 +1508,10 @@ class ToolsMixin:
 
         def run():
             self._speak_worker(turn, q)
-            self.history += [{"role": "user", "content": said}, {"role": "assistant", "content": msg + (f" (Расчёт: {note}.)" if note else ""),
+            if keep:                                     # keep=False — ход игры («Морской бой»): в разговор не пишем
+                self.history += [{"role": "user", "content": said}, {"role": "assistant", "content": msg + (f" (Расчёт: {note}.)" if note else ""),
                                                                  "who": self.s.get("persona"), **({"acts": list(acts)} if acts else {})}]
-            self._conv_after()
+                self._conv_after()
             with self._turn_lock:
                 if self.turn is turn:
                     self.turn = None

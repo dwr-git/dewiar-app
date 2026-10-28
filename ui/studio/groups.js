@@ -72,6 +72,8 @@ function grPanel(kind) {
       catch (e) { $("#gr-res").className = "res bad"; $("#gr-res").textContent = e.message; upd(); } };
     clFaces(box); return;
   }
+  if (kind === "album") return grAlbum(box);
+  if (kind === "fwd") return grFwdHtml(box);
   const g = grOf(CL.cur); if (!g) return grPanel("");
   const add = g.mine ? people.filter(p => !(g.members || []).some(m => m.pid === p.pid)) : [];
   GR.pick = new Set();
@@ -95,6 +97,49 @@ function grPanel(kind) {
     op({ op: g.mine ? "delete" : "leave" }, g.mine ? "Группа удалена" : "Вы вышли из группы").then(() => { grPanel(""); CL.cur = ""; clRender(); });
   };
 }
+/* «прочитали» у своих писем в группе: участники, у кого отметка >= номер письма */
+function grReadersPc(m) {
+  const g = grOf(CL.cur); if (!g || !m.out || !m.sid) return "";
+  const mk = g.marks || {}, who = (g.members || []).filter(p => (mk[p.pid] || 0) >= m.sid);
+  if (!who.length) return "";
+  return ` · <span class="cl-gread">${who.length === (g.members || []).length ? "прочитали все" : "прочитал" + (who.length > 1 ? "и" : "") + ": " + grEsc(who.map(p => grFirst(p.name)).join(", "))}</span>`;
+}
+/* «Фото и файлы» (0.62): альбом переписки — фото сеткой (скачанные — картинкой), файлы списком; «Переслать» у каждого */
+const grIsImg = (f) => /\.(jpe?g|png|webp|gif)$/i.test((f && f.name) || "");
+function grAlbum(box) {
+  const h = CL.hist || [], ph = [], fl = [];
+  h.forEach((m, i) => (m.f || []).forEach((f, j) => (grIsImg(f) && f.path ? ph : fl).push([m, i, j, f])));
+  const nm = (grOf(CL.cur) || ((CL.st || {}).people || []).find(p => p.pid === CL.cur) || {}).name || "";
+  box.innerHTML = `<h3>Фото и файлы — ${grEsc(nm)}</h3><p class="hint">${ph.length} фото, ${fl.length} ${plural(fl.length, "файл", "файла", "файлов")}. Скачанное лежит в папке ассистента «Близкие».</p>`
+    + (ph.length ? `<div class="cl-agrid">${ph.slice().reverse().map(([m, i, j, f]) => `<figure><button class="cl-ph" data-path="${grEsc(f.path)}" title="${grEsc(f.name)} — открыть"><img data-thumb="${grEsc(f.path)}" alt="${grEsc(f.name)}"></button><button class="btn small ghost" data-fw="${i}">Переслать</button></figure>`).join("")}</div>` : "")
+    + (fl.length ? `<div class="cl-afiles">${fl.slice().reverse().map(([m, i, j, f]) => `<div class="cl-gm"><span><b>${grEsc(f.name)}</b><small>${m.out ? "вы" : grEsc(grFirst(m.who || nm))} · ${clTime(m.ts)} · ${clSize(f.size || 0)}${f.path ? "" : " · ещё не скачан"}</small></span>${f.path ? `<button class="btn small" data-open="${grEsc(f.path)}">Открыть</button>` : ""}<button class="btn small ghost" data-fw="${i}">Переслать</button></div>`).join("")}</div>` : "")
+    + (!ph.length && !fl.length ? `<p class="hint">Здесь соберутся фото и файлы этой переписки.</p>` : "")
+    + `<div class="actions" style="margin-top:14px"><button class="btn" id="gr-ax">К переписке</button></div>`;
+  $$("#cl-gp img[data-thumb]").forEach(im => { const k = im.dataset.thumb;
+    (CL.thumbs[k] = CL.thumbs[k] || core.call("close_thumb", { path: k }).then(r => r.data || "").catch(() => "")).then(d => { if (d) im.src = d; }); });
+  const open = (path) => { const i = path.lastIndexOf("Близкие/"); if (i >= 0) core.call("ws_open", { path: path.slice(i) }).catch(e => toast(e.message)); };
+  $$("#cl-gp [data-path]").forEach(b => b.onclick = () => open(b.dataset.path));
+  $$("#cl-gp [data-open]").forEach(b => b.onclick = () => open(b.dataset.open));
+  $$("#cl-gp [data-fw]").forEach(b => b.onclick = () => clFwd(h[+b.dataset.fw]));
+  $("#gr-ax").onclick = () => { grPanel(""); clHead(); };
+}
+/* «Переслать»: кому — близкие и группы (кроме этой переписки) */
+function clFwd(m) { GR.fwd = m; grPanel("fwd"); }
+function grFwdHtml(box) {
+  const st = CL.st || {}, m = GR.fwd || {}, files = (m.f || []).map(f => f.name);
+  const to = [...(st.groups || []).map(g => ({ id: g.gid, name: g.name, sub: "группа", g })), ...(st.people || []).map(p => ({ id: p.pid, name: p.name, sub: "", p }))].filter(x => x.id !== CL.cur);
+  box.innerHTML = `<h3>Переслать</h3><p class="hint">${m.t ? "«" + grEsc(String(m.t).slice(0, 120)) + "»" : ""}${files.length ? (m.t ? " и " : "") + grEsc(files.join(", ")) : ""}</p>`
+    + `<div class="cl-gmem">${to.map(x => `<button class="cl-p" data-to="${grEsc(x.id)}">${x.g ? grStack(x.g, 2) : `<i class="cl-ava" style="--c:${clColor(x.id)}" data-face="${grEsc(x.id)}" data-v="${+x.p.face || 0}">${grEsc((x.name || "?").slice(0, 1).toUpperCase())}</i>`}<span><b>${grEsc(x.name)}</b>${x.sub ? `<small>${x.sub}</small>` : ""}</span></button>`).join("") || `<p class="hint">Некому — пригласите ещё близких.</p>`}</div>`
+    + `<div class="actions" style="margin-top:14px"><button class="btn" id="gr-fx">Отмена</button></div>`;
+  clFaces(box);
+  $("#gr-fx").onclick = () => { grPanel(""); clHead(); };
+  $$("#cl-gp [data-to]").forEach(b => b.onclick = async () => {
+    $$("#cl-gp [data-to]").forEach(x => x.disabled = true);
+    try { const r = await core.call("close_forward", { pid: CL.cur, mid: m.mid, to: b.dataset.to }); toast(`Переслано ${r.to || b.querySelector("b").textContent}`, 3000); grPanel(""); clHead(); }
+    catch (e) { toast(e.message, 4000); $$("#cl-gp [data-to]").forEach(x => x.disabled = false); }
+  });
+}
+$("#cl-album").onclick = () => grPanel("album");
 $("#cl-gnew").onclick = () => { if (!((CL.st || {}).people || []).length) return toast("Сначала пригласите близких — группа собирается из них", 4000); grPanel("new"); };
 /* шапка: у человека — «Убрать из близких», у группы — «Участники» */
 const grHeadWas = clHead;

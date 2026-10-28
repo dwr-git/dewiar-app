@@ -40,11 +40,58 @@ async function grSend(gid, text, files, extra) {
   const body = Object.assign({}, extra || {}, { t: String(text || "").trim(), ts: Date.now(), mid: Math.random().toString(36).slice(2, 12) + Date.now().toString(36), name: CLS.me.name || "", g: gid });
   if (fl.length) body.f = fl;
   if (!body.t && !fl.length) throw new Error("пустое сообщение");
-  await clReq("POST", "/close/gsend", { gid, env: DC().encryptFor(body, DC().b64d(k.priv), k.dev, grTargets(g)) });
-  const it = { mid: body.mid, ts: body.ts, out: true, t: body.t, f: fl };
+  const d = await clReq("POST", "/close/gsend", { gid, env: DC().encryptFor(body, DC().b64d(k.priv), k.dev, grTargets(g)) });
+  const it = { mid: body.mid, ts: body.ts, out: true, t: body.t, f: fl, sid: +d.id || 0 };   // sid — номер письма: «прочитали»
   if (body.rem) it.rem = { at: body.rem.at, id: grRemind(g, body.rem, "") };      // «напомни всем» — и мне
   clAdd(gid, it); plog("info", `💌 в группу «${g.name}» ← ${clip(body.t || "файл")}`);
   return Object.assign({ to: `в группу «${g.name}»` }, it);
+}
+/* реакция в группе: всем участникам, у себя — сразу */
+async function grReact(gid, mid, e) {
+  const g = grOf(gid); if (!g) throw new Error("Такой группы больше нет.");
+  const was = (((clLoad().hist[gid] || []).find(x => x.mid === mid) || {}).rx || {}).me || "";
+  clReAt(gid, mid, "me", e);
+  try { const k = clKeys(), body = { re: mid, e, t: e, ts: Date.now(), mid: Math.random().toString(36).slice(2, 12) + Date.now().toString(36), name: CLS.me.name || "", g: gid };
+    await clReq("POST", "/close/gsend", { gid, env: DC().encryptFor(body, DC().b64d(k.priv), k.dev, grTargets(g)) }); }
+  catch (x) { clReAt(gid, mid, "me", was); throw x; }
+}
+const grRx = (m) => Object.values(m.rx || {}).filter(Boolean);
+/* «прочитано» в группе: открыли переписку — сайту номер последнего входящего; у своих писем — кто уже прочитал */
+function grSeen(gid) {
+  const st = clLoad(), top = Math.max(0, ...(st.hist[gid] || []).filter(m => !m.out).map(m => +m.sid || 0));
+  if (!top || top <= (+(st.readUp || {})[gid] || 0) || document.hidden) return;
+  clReq("POST", "/close/gseen", { gid, upto: top }).then(() => { const s = clLoad(); s.readUp = Object.assign({}, s.readUp, { [gid]: top }); clSave(); }).catch(() => { });
+}
+function grReaders(g, m) {
+  if (!m.out || !m.sid) return "";
+  const mk = (clLoad().gmarks || {})[g.gid] || {}, who = (g.members || []).filter(p => (mk[p.pid] || 0) >= m.sid);
+  if (!who.length) return "";
+  return who.length === (g.members || []).length ? "прочитали все" : "прочитал" + (who.length > 1 ? "и" : "") + ": " + who.map(p => String(p.name || "").split(/\s+/)[0]).join(", ");
+}
+/* долгое нажатие в группе: реакции, «Переслать», «Удалить у меня» */
+function grReBind(g, h) {
+  let t = 0;
+  const open = (el) => {
+    clReClose(); const m = h[+el.dataset.i]; if (!m || !m.mid) return;
+    D.vibrate(15);
+    const pop = document.createElement("div"); pop.className = "clrepick"; pop.setAttribute("role", "menu");
+    pop.innerHTML = `<div class="emos">${CL_EMO.map(e => `<button role="menuitem" data-e="${e}" class="${(m.rx || {}).me === e ? "on" : ""}" aria-label="Реакция ${e}">${e}</button>`).join("")}</div>
+      <div class="acts"><button role="menuitem" class="fw">${AL_IC.fwd}Переслать</button><button role="menuitem" class="dl">Удалить у меня</button></div>`;
+    document.body.appendChild(pop);
+    const r = el.getBoundingClientRect(), w = pop.offsetWidth;
+    pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, m.out ? r.right - w : r.left)) + "px";
+    pop.style.top = Math.max(8, r.top - pop.offsetHeight - 8) + "px";
+    $(".fw", pop).onclick = () => { clReClose(); clFwdPick({ t: m.t || "", f: m.f || [] }); };
+    $(".dl", pop).onclick = () => { clReClose(); clForget(g.gid, [m.mid]); clRender(); toast("Удалено на этом телефоне — у остальных осталось", 3000); };
+    $$("button[data-e]", pop).forEach(b => b.onclick = async () => { const e = (m.rx || {}).me === b.dataset.e ? "" : b.dataset.e; clReClose();
+      try { await grReact(g.gid, m.mid, e); } catch (x) { toast(x.message, 4000); } clRender(); });
+    setTimeout(() => document.addEventListener("pointerdown", clReOut, true), 0);
+  };
+  $$("#cl-msgs .clm").forEach(el => {
+    el.addEventListener("pointerdown", (e) => { if (e.target.closest(".clph, .clf")) return; clearTimeout(t); t = setTimeout(() => open(el), 450); });
+    ["pointerup", "pointerleave", "pointercancel", "pointermove"].forEach(k => el.addEventListener(k, (e) => { if (k !== "pointermove" || Math.abs(e.movementY) + Math.abs(e.movementX) > 6) clearTimeout(t); }));
+    el.addEventListener("contextmenu", (e) => { e.preventDefault(); open(el); });
+  });
 }
 /* «Лира в группе»: напоминание у каждого участника. -> id будильника или "" */
 function grRemind(g, rem, who) {
@@ -57,8 +104,16 @@ function grRemind(g, rem, who) {
 function grIn(it, body) {
   const gid = String((it.env || {}).g || body.g || ""), g = grOf(gid);
   if (!gid) return false;
+  if (body.re) {                                     // реакция в группе — значком у сообщения (rx[кто])
+    const e = String(body.e || "").slice(0, 8);
+    if (clReAt(gid, String(body.re), it.out ? "me" : it.peer, e) && !it.out) {
+      if (clCur === gid && $("#sh-close").classList.contains("on")) clRender();
+      else if (!document.hidden && e) toast(`${String(it.name || "Кто-то").split(/\s+/)[0]}: ${e} в «${g ? g.name : "группе"}»`, 2600);
+    }
+    return false;
+  }
   const m = { mid: body.mid || String(it.id), ts: +body.ts || it.ts * 1000, out: !!it.out, t: String(body.t || "").slice(0, 20000),
-    f: (body.f || []).filter(x => x && typeof x === "object").slice(0, 10), from: it.peer, who: it.name || body.name || "" };
+    f: (body.f || []).filter(x => x && typeof x === "object").slice(0, 10), from: it.peer, who: it.name || body.name || "", sid: +it.id || 0 };
   const known = (clLoad().hist[gid] || []).some(x => x.mid === m.mid);
   if (body.rem && !m.out && !known) m.rem = { at: +body.rem.at, id: grRemind(g, body.rem, m.who) };   // «напомни всем» — встаёт само
   if (!clAdd(gid, m) || m.out) return false;
@@ -115,7 +170,7 @@ function grThreadHtml(st, g) {
   return `<div class="clh"><button class="ib soft" id="cl-back" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>${grStack(g, 2)}
       <button class="grtitle" id="gr-info"><b>${esc(g.name)}</b><small>${esc(["вы"].concat(grNames(g)).join(", "))}</small></button>
       <button class="ib soft" id="cl-album" title="Фото и файлы" aria-label="Фото и файлы">${AL_IC.album}</button><button class="ib soft" id="gr-info2" aria-label="Участники">${GR_IC}</button></div>
-    <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}" data-i="${i}">${who(m)}${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}${m.rem ? `<span class="grrem">⏰ напомню всем ${esc(whenText(new Date(m.rem.at)))}</span>` : ""}<time>${clTime(m.ts)}</time></div>`).join("")
+    <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${grRx(m).length ? " rx" : ""}" data-i="${i}">${who(m)}${m.t ? `<div>${esc(m.t)}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}${m.rem ? `<span class="grrem">⏰ напомню всем ${esc(whenText(new Date(m.rem.at)))}</span>` : ""}<time>${clTime(m.ts)}${grReaders(g, m) ? ` · ${esc(grReaders(g, m))}` : ""}</time>${grRx(m).length ? `<span class="clrx">${esc(grRx(m).join(""))}</span>` : ""}</div>`).join("")
       || `<p class="hint" style="text-align:center;margin:24px 8px">Напишите первое сообщение всем — или скажите: «Напиши в группу ${esc(g.name)}: …»</p>`}</div>
     <div class="clatts" id="cl-atts">${clFiles.map((f, i) => `<span>${esc(f.name)} <button data-i="${i}">✕</button></span>`).join("")}</div>
     <div class="clemo" id="cl-emo" hidden>${clEmoHtml()}</div>
@@ -154,7 +209,7 @@ function grRender(box) {
     };
     return true;
   }
-  delete st.unread[g.gid]; clSave(); clBadge();
+  delete st.unread[g.gid]; clSave(); clBadge(); grSeen(g.gid);
   box.innerHTML = grThreadHtml(st, g);
   const msgs = $("#cl-msgs"); msgs.scrollTop = msgs.scrollHeight; clFacesFill($(".clh"));
   const h = st.hist[g.gid] || [];
@@ -169,6 +224,7 @@ function grRender(box) {
     try { await grSend(g.gid, t, clFiles); clFiles = []; clRender(); } catch (e) { toast(e.message, 4000); b.disabled = false; } };
   $("#cl-emo-b").onclick = () => { const e = $("#cl-emo"); e.hidden = !e.hidden; $("#cl-emo-b").setAttribute("aria-expanded", String(!e.hidden)); };
   clEmoBind();
+  grReBind(g, h);
   return true;
 }
 function grBind() {

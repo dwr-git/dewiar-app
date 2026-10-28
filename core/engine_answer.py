@@ -228,6 +228,8 @@ class AnswerMixin:
             self.emit("prompter", kind="open")             # суфлёр — окно ui/prompter.html (core/prompter.py)
             self._say_quick("Открываю суфлёр. На встрече я молчу и подсказываю на экране.", text)
             return
+        if not raw and not quiet and not via and not images and self._game_voice(text):
+            return                                       # «Морской бой» открыт: «бэ пять» — ход в игре (engine_commands)
         if not raw and not quiet and not via and not images and not K and self._window_cmd(text):
             return
         if not raw and not quiet and not images and not K and getattr(self, "course", None) is not None:
@@ -1424,6 +1426,17 @@ class AnswerMixin:
                 # сложная просьба — модель думает (дольше, но стих с рифмой, а расчёт со смыслом); лимит — с запасом на размышления
                 prof = dict(prof, think="on", max_tokens=max(6144, int(prof.get("max_tokens") or 0)))
                 log.info("🧠 Сложная просьба — модель подумает перед ответом")
+            econ_main = None                            # экономный режим (economy.py): простое — дешёвой модели, основная — запасом
+            try:
+                import economy
+                cheap = economy.model_for(prof, text, self.history, bool(images), think=prof.get("think") == "on")
+            except Exception:  # noqa: BLE001
+                cheap = ""
+            if cheap:
+                econ_main = prof
+                prof = dict(prof, model=cheap)
+                self.health_count("econ")
+                log.info("💸 Простой вопрос — отвечает недорогая модель «%s»", cheap)
             from llm import creative_temp
             ask0 = text.split("\n\nВложения:")[0]
             temp = creative_temp(ask0, prof.get("temperature"))
@@ -1569,12 +1582,23 @@ class AnswerMixin:
                 hold[0] = step == 0 and any(x.get("name") == "web_search" for x in specs or [])
                 if blind_key in self._blind and _has_images(msgs):
                     msgs = _drop_images(msgs)
+                if step and econ_main is not None:       # после действий продолжает основная модель
+                    prof = dict(econ_main, temperature=prof.get("temperature"), think=prof.get("think")) if prof.get("temperature") is not None else econ_main
+                    econ_main = None
                 try:
                     # с картинкой ответ сначала собираем целиком: если модель её не примет — повторим без неё;
                     # без картинки ждём только первое событие — ошибка сервера всплывёт здесь, до первого слова
-                    events = list(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
-                        if _has_images(msgs) else _first_then_stream(
-                            stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
+                    try:
+                        events = list(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)) \
+                            if _has_images(msgs) else _first_then_stream(
+                                stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
+                    except LLMError as e0:
+                        if econ_main is None or step or turn.full or turn.cancel.is_set():
+                            raise
+                        log.warning("💸 Недорогая модель «%s» не ответила (%s) — отвечает основная", prof.get("model"), e0)
+                        prof = dict(econ_main, temperature=prof.get("temperature")) if prof.get("temperature") is not None else econ_main
+                        econ_main = None
+                        events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
                 except LLMError as e:
                     fb = self._cloud_fallback(prof, e) if step == 0 and not turn.full and not turn.cancel.is_set() else None
                     if fb:                                  # облако не ответило / заряд кончился — отвечает запасной мозг

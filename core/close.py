@@ -250,7 +250,8 @@ class Close:
         with self._lock:
             people = [dict(p, unread=int(self.st["unread"].get(p["pid"], 0)), marks=list((self.st.get("marks") or {}).get(p["pid"]) or [0, 0]),
                            last=(self.st["hist"].get(p["pid"]) or [{}])[-1]) for p in self.st["people"]]
-            groups = [dict(g, unread=int(self.st["unread"].get(g["gid"], 0)), last=(self.st["hist"].get(g["gid"]) or [{}])[-1])
+            groups = [dict(g, unread=int(self.st["unread"].get(g["gid"], 0)), last=(self.st["hist"].get(g["gid"]) or [{}])[-1],
+                           marks=dict((self.st.get("gmarks") or {}).get(g["gid"]) or {}))
                       for g in self.st.get("groups") or []]
             out = {"me": self.st.get("me") or {}, "people": people, "offers": list(self.st.get("offers") or []), "groups": groups,
                    "error": self.error, "invite": self.st.get("invite") or None,
@@ -328,7 +329,19 @@ class Close:
     def _mark_read(self, pid, h=None):
         """Переписку открыли (или помощница прочитала её вслух) — близкому «прочитано»: его письма до последнего номера
         (24.10, владелец: «не понятно, прочитал ли человек сообщение, дошло ли оно»). Сервер видит только номер."""
-        if self.group_of(pid):                          # в группах «прочитано» не отмечаем
+        if self.group_of(pid):                          # группа: сайту — до какой строки ящика открыли (/close/gseen)
+            h = h if h is not None else list(self.st["hist"].get(pid) or [])
+            top = max([int(m.get("sid") or 0) for m in h if not m.get("out")] or [0])
+            if top > int(self.st.setdefault("read_up", {}).get(pid) or 0):
+                def gs():
+                    try:
+                        self._req("POST", "/close/gseen", {"gid": pid, "upto": top})
+                        with self._lock:
+                            self.st["read_up"][pid] = top
+                            self._save()
+                    except Exception as e:  # noqa: BLE001
+                        log.debug("группа: «прочитано» не ушло: %s", e)
+                threading.Thread(target=gs, daemon=True).start()
             return
         h = h if h is not None else list(self.st["hist"].get(pid) or [])
         top = max([int(m.get("sid") or 0) for m in h if not m.get("out")] or [0])
@@ -669,8 +682,9 @@ class Close:
         for m in g.get("members") or []:
             targets.update(self._targets_of(m.get("devs")))
         targets.update(self._targets({}))
-        self._req("POST", "/close/gsend", {"gid": gid, "env": CC.encrypt_for(body, priv, self.st["dev"], targets)})
-        item = {"mid": body["mid"], "ts": body["ts"], "out": True, "t": body["t"], "f": [dict(x, path=str(Path(f).resolve())) for x, f in zip(fl, files or [])]}
+        d = self._req("POST", "/close/gsend", {"gid": gid, "env": CC.encrypt_for(body, priv, self.st["dev"], targets)}).json()
+        item = {"mid": body["mid"], "ts": body["ts"], "out": True, "t": body["t"], "f": [dict(x, path=str(Path(f).resolve())) for x, f in zip(fl, files or [])],
+                "sid": _int(d.get("id"))}            # номер письма — по нему «прочитали» участники
         if remind_at is not None:
             item["rem"] = {"at": body["rem"]["at"], "rid": self._remind(g, body["rem"])}
         self._add(gid, item)
@@ -693,6 +707,18 @@ class Close:
         except Exception:  # noqa: BLE001
             log.exception("группа: напоминание не встало")
             return ""
+
+    def forward(self, src, mid, to):
+        """«Переслать» (0.62): сообщение из переписки src (человек или группа) — другому близкому или в группу. Файлы —
+        скачанные на этот компьютер (path); ещё не скачанные — не пересылаются. -> запись истории."""
+        with self._lock:
+            m = next((x for x in self.st["hist"].get(src) or [] if x.get("mid") == mid), None)
+        if not m:
+            raise CloseError("такого сообщения нет")
+        paths = [f["path"] for f in m.get("f") or [] if f.get("path") and Path(f["path"]).is_file()]
+        if (m.get("f") or []) and not paths and not m.get("t"):
+            raise CloseError("файл ещё не скачался на этот компьютер — подождите минуту")
+        return self.send(to, m.get("t") or "", paths)
 
     @staticmethod
     def _targets_of(devs):
@@ -743,6 +769,24 @@ class Close:
     # Реакция — обычное сообщение {re: mid, e, t: e}: новые программы (здесь и app.js на телефоне) ставят её значком на
     # сообщение mid, а старые покажут просто «👍». В истории: item["rx"] = {"me": …, "them": …}.
     def react(self, who, mid, e):
+        g = self.group_of(who)
+        if g:                                          # в группе (0.62): реакция — всем участникам, у сообщения — rx[кто]
+            e = str(e or "")[:8]
+            was = ((next((x for x in self.st["hist"].get(g["gid"]) or [] if x.get("mid") == mid), None) or {}).get("rx") or {}).get("me", "")
+            if not self._react(g["gid"], mid, "me", e):
+                raise CloseError("такого сообщения нет")
+            try:
+                priv, _ = self._keys()
+                body = {"re": mid, "e": e, "t": e, "ts": int(time.time() * 1000), "mid": uuid.uuid4().hex[:16], "name": (self.st.get("me") or {}).get("name", ""), "g": g["gid"]}
+                targets = {}
+                for m in g.get("members") or []:
+                    targets.update(self._targets_of(m.get("devs")))
+                targets.update(self._targets({}))
+                self._req("POST", "/close/gsend", {"gid": g["gid"], "env": CC.encrypt_for(body, priv, self.st["dev"], targets)})
+            except Exception:
+                self._react(g["gid"], mid, "me", was)
+                raise
+            return {"ok": True}
         p = self.person(who)
         e = str(e or "")[:8]
         priv, _ = self._keys()
@@ -812,6 +856,12 @@ class Close:
             self._save()
         if self.st.get("natt"):
             self._natt_kick()
+        gm = d.get("gmarks")
+        if isinstance(gm, dict) and gm != self.st.get("gmarks"):   # «прочитали» в группах: gid -> {pid: до какой строки}
+            with self._lock:
+                self.st["gmarks"] = {str(k): {str(p): _int(v) for p, v in (x or {}).items()} for k, x in gm.items() if isinstance(x, dict)}
+                self._save()
+            got = got or -1
         marks = d.get("marks")
         if isinstance(marks, dict):                  # мои письма у близких: доставлено / прочитано до номера
             mk = {str(k): [_int(v[0]), _int(v[1])] for k, v in marks.items() if isinstance(v, list) and len(v) == 2}
@@ -939,9 +989,14 @@ class Close:
         if not gid:
             return 0
         g = self.group_of(gid) or {}
+        if body.get("re"):                              # реакция в группе — значком у сообщения: rx[pid] (или «me»)
+            who = "me" if it.get("out") else it.get("peer", "")
+            if self._react(gid, str(body["re"]), who, str(body.get("e") or "")[:8]) and not it.get("out"):
+                self.host.emit("close_react", pid=gid, mid=str(body["re"]), e=str(body.get("e") or "")[:8], name=it.get("name") or "")
+            return 0
         item = {"mid": body.get("mid") or str(it.get("id")), "ts": _int(body.get("ts")) or _int(it.get("ts")) * 1000, "out": bool(it.get("out")),
                 "t": str(body.get("t") or "")[:20000], "f": [x for x in body.get("f") or [] if isinstance(x, dict)][:10],
-                "from": it.get("peer", ""), "who": str(it.get("name") or body.get("name") or "")[:40]}
+                "from": it.get("peer", ""), "who": str(it.get("name") or body.get("name") or "")[:40], "sid": _int(it.get("id"))}
         rem = body.get("rem") if isinstance(body.get("rem"), dict) else None
         if rem and not item["out"] and not any(x.get("mid") == item["mid"] for x in self.st["hist"].get(gid) or []):
             item["rem"] = {"at": _int(rem.get("at")), "rid": self._remind(g, rem, item["who"])}   # «Лира в группе»: напомнит и здесь

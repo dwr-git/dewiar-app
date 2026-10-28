@@ -1403,7 +1403,7 @@ function dictMore(t, cut) {
 }
 /* Сказанное голосом — с тем, что прикреплено в поле ввода (фото, файл): прикрепили скриншот и сказали «сохрани в
    заметки …» — он уходит вместе с фразой и попадает в заметку (отзыв 11.10: фото так и висело над полем). */
-function askHeard(t) { const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : {}); }
+function askHeard(t) { if (gameVoice()) return gameHeard(t); const att = attached; attached = []; renderAtts(); return ask(t, att.length ? { attach: att } : {}); }
 const dictTake = (t) => { const all = ((dict ? dict + " " : "") + (t || "")).trim(); dict = ""; return all; };
 function sttStall(why) {
   if (!sttActive) return;
@@ -1452,7 +1452,7 @@ N.on("stt_result", e => {
   t = dictTake(t);
   if (t && pausePrefix && Date.now() - pausePrefix.at < 30000) t = pausePrefix.text + " " + t;   // договорил после обрыва — один вопрос
   pausePrefix = null;
-  if (t) { lastStt = { at: Date.now(), text: t, cut: false }; askHeard(t); } else { setState("idle"); showYou(""); }
+  if (t) { lastStt = { at: Date.now(), text: t, cut: false }; askHeard(t); } else { setState("idle"); showYou(""); if (gameVoice()) gameHeard(""); }
 });
 /* Распознаватель телефона слышит не по-русски (№253: телефон без русской прошивки — «настойчиво пытается распознать
    английский и китайский»): иероглифы или несколько латинских слов без единой русской буквы. Такое Лире не отдаём:
@@ -1962,6 +1962,29 @@ function wantsThink(text) {
   if (S.llm.think === "on" || S.llm.think === "off") return S.llm.think === "on";
   const t = String(text || ""); return HARD_ASK.test(t) || t.length > 280;
 }
+/* Экономный режим (0.63, как core/economy.py): свой ключ сервиса и S.llm.economy — недорогая модель того же сервиса для
+   простого (короткая разговорная реплика без поручений, вложений, сложной просьбы, не после действий); остальное — основной;
+   дешёвая не ответила — тот же вопрос основной. Облако Dewiar делит вопросы само — ему не нужно. */
+const ECON_HARD = new RegExp("(?:включи|выключи|поставь|напомни|напоминай|открой|запусти|закрой|позвони|набери|отправь|пошли|напиши|найди|поищи|ищи|покажи|"
+  + "сделай|создай|удали|запиши|запомни|добавь|перенеси|скачай|сохрани|распечатай|переведи|перевод|сочини|составь|придумай|нарисуй|схем|"
+  + "посчитай|рассчитай|вычисли|реши|задач|код|программ|скрипт|сайт|приложен|таблиц|документ|файл|папк|письм|отчёт|отчет|презентац|"
+  + "резюме|стать|эсс|стих|рассказ|сказк|объясни|почему|зачем|сравни|анализ|разбер|план|подробн|детальн|по шагам|пошагов|исследу|"
+  + "интернет|новост|погод|курс|цен|сколько стоит|фото|камер|экран|скриншот|музык|песн|радио|видео|ютуб|youtube|почт|календар|"
+  + "задани|сводк|купи|закаж|заказ|оплат|счёт|счет|баланс|умн[а-яё]* дом|свет|розетк|термостат|https?:|www\\.|\\.ru|\\.com)", "i");
+function econModel(text, hasAtt) {
+  const cheap = String(S.llm.economy || "").trim(), t = String(text || "").trim();
+  if (!cheap || S.llm.cloud || S.llm.trial || cheap === S.llm.model || hasAtt || wantsThink(t)) return "";
+  if (liveHistory().slice(-4).some(m => m.role === "tool" || (m.acts && m.acts.length) || m.tool_calls)) return "";
+  return t && t.length <= 160 && t.split(/\s+/).length <= 25 && !ECON_HARD.test(t) ? cheap : "";
+}
+const ECON_CHEAP = ["gpt-4.1-nano", "gpt-4o-mini", "gpt-4.1-mini", "gpt-5-nano", "gpt-5-mini", "claude-haiku", "claude-3-5-haiku", "claude-3-haiku",
+  "gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "deepseek-chat",
+  "mistral-small", "ministral", "llama-3.1-8b", "qwen3-8b", "qwen3-4b", "qwen2.5-7b", "qwen-turbo", "yandexgpt-lite", "gigachat-lite"];   // как economy.CHEAP
+function econSuggest(models) {                       // как economy.suggest: известные недорогие, иначе — по примете в имени
+  const ms = (models || []).filter(m => m && m !== S.llm.model && !/embed|rerank|vision|whisper|tts|audio|image|guard|moderat/i.test(m));
+  for (const c of ECON_CHEAP) { const m = ms.find(x => x.toLowerCase().includes(c)); if (m) return m; }
+  return ms.find(m => /(?:^|[-_/:.])(?:mini|nano|haiku|flash|lite|small|turbo|[789]b)(?:$|[-_/:.])/i.test(m)) || "";
+}
 /* Ответ модели потоком (OpenAI-совместимый /chat/completions или Ollama /api/chat). onText(кусок) — текст по мере прихода,
    уже без размышлений и вызовов функций текстом; -> {text, calls:[{id,name,args}]} */
 async function llmStream(messages, tools, onText, signal, opt = {}) {
@@ -2415,6 +2438,8 @@ async function ask(text, opts = {}) {
     plog("info", "📎 говорят о присланном фото — прикладываю его снова");
   }
   const deep = !opts.hidden && wantsThink(text);
+  let econ = !opts.hidden && !modelOnce ? econModel(text, att.length > 0) : "";
+  if (econ) { modelOnce = econ; hCount("econ"); plog("info", "💸 простой вопрос — недорогая модель " + econ); }
   creativeTurn = !opts.hidden && CREATIVE_ASK.test(text);
   if (creativeTurn) plog("info", "🎨 творческая просьба — смелее (температура " + llmTemp() + ")");
   if (deep) { plog("info", "🧠 сложная просьба — модель подумает перед ответом"); showBot("Подумаю как следует — минутку", "wait"); }
@@ -2464,7 +2489,12 @@ async function ask(text, opts = {}) {
     for (let round = 0; round < maxRounds; round++) {
       let r;
       try {
-        r = await round1(round < maxRounds - 1 ? toolSpecs() : null);
+        try { r = await round1(round < maxRounds - 1 ? toolSpecs() : null); }
+        catch (e0) {                                  // недорогая модель не ответила — тот же вопрос основной
+          if (!econ || round || sink.text().trim() || turnAbort !== ctl || ctl.signal.aborted) throw e0;
+          plog("warn", `💸 недорогая модель ${econ} не ответила (${clip(e0.message || e0, 80)}) — отвечает основная`);
+          econ = ""; modelOnce = ""; r = await round1(round < maxRounds - 1 ? toolSpecs() : null);
+        }
         const lm = msgs[msgs.length - 1];
         if (lm && Array.isArray(lm.content) && !String(r.text || "").trim() && !r.calls.length) throw new Error("пустой ответ на снимок");
       } catch (e) {
@@ -5654,12 +5684,19 @@ function playOpen(game) {
   return true;
 }
 const gameOn = () => !$("#gameov").hidden;
+/* «Морской бой» голосом (0.63): игра просит слушать ({arcade: 'listen'}) — слушаем один раз; пока она открыта, всё
+   услышанное — ей ({arcade: 'heard'}, askHeard), а не модели; итог хода игра присылает ({arcade: 'say'}) — говорим. */
+let gameCur = "";
+const gameVoice = () => gameOn() && gameCur === "sea";
+function gameHeard(t) { const f = $("#gamef"); setState("idle"); showYou(""); if (f.contentWindow) f.contentWindow.postMessage({ arcade: "heard", text: t || "" }, "*"); }
 function gameOpen(id) {
+  gameCur = id;
   if (state !== "idle") interrupt();                        // игра на весь экран — голос и прослушивание замолкают
   const f = $("#gamef"); f.src = DewiarArcade.url(ARC, id) + "?phone=1" + (document.body.classList.contains("light") ? "&light=1" : "");   // phone — без скруглений, кнопка «во весь экран»
   $("#gameov").hidden = false; closeSheets();
 }
 function gameClose(toShelf = true) {
+  gameCur = "";
   const f = $("#gamef"); f.src = "about:blank"; $("#gameov").hidden = true; gameFull(false);
   if (toShelf && feat("games")) { playShelf(); openSheet("#sh-play"); }
 }
@@ -5668,7 +5705,9 @@ function gameFull(on) { if (gameFullOn === !!on) return; gameFullOn = !!on; docu
 window.addEventListener("message", (e) => { if (!e.data || e.source !== $("#gamef").contentWindow) return;
   if (e.data.arcade === "home") gameClose();
   else if (e.data.arcade === "full") gameFull(!!e.data.on);
-  else if (e.data.arcade === "log") plog("warn", "🎮 игра: " + String(e.data.text || "").slice(0, 300)); });   // сбой или медленно — в журнал
+  else if (e.data.arcade === "log") plog("warn", "🎮 игра: " + String(e.data.text || "").slice(0, 300));
+  else if (e.data.arcade === "listen" && gameVoice()) { if (state !== "idle") interrupt(); listen(); }
+  else if (e.data.arcade === "say" && gameVoice() && e.data.text) say(String(e.data.text).slice(0, 400)); });   // сбой или медленно — в журнал
 $("#b-play").onclick = () => playOpen("");
 /* «Возможности» (владелец 27.10: «выключил „Рядом“ и „Встречи“, а сердечко осталось — логика запутанная»): сердечко —
    это «Близкие» целиком (переписка и звонки), «Рядом» и «Встречи» — лишь вкладки внутри. Теперь у «Близких» свой
@@ -6012,6 +6051,11 @@ function renderSettings() {
     // первое нажатие спрашивает («Убрать»), второе убирает из списка. Ключ слуха (restore: "key") не убираем — им слышит телефон.
     if (back.length) h.push(`<div class="card" id="br-back"><small class="hint" style="margin:0">${back.some(l => l.got) ? "Другие мозги — включить одной кнопкой или убрать из списка" : "Прежние мозги — вернуть одной кнопкой или убрать из списка"}</small>${back.map((l, i) =>
       `<div class="row2 brb" style="margin-top:8px"><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(brainNameOf(l))}</div><button class="btn" data-back="${i}">${l.got ? "Включить" : "Вернуть"}</button>${l.restore ? "" : `<button class="btn brdel" data-forget="${i}" title="Убрать из списка" aria-label="Убрать «${esc(brainNameOf(l))}» из списка"><svg viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/></svg><span>Убрать</span></button>`}</div>`).join("")}<div class="res" id="br-back-res"></div></div>`);
+    // экономный режим (0.63): свой ключ сервиса — простое отвечает недорогая модель того же сервиса (econModel)
+    if (on && !S.llm.cloud) h.push(`<div class="card" id="br-econ"><div class="sw" style="margin:0"><div>Экономный режим<small>${S.llm.economy
+      ? `Простые вопросы — ${esc(S.llm.economy)}, поручения и сложное — ${esc(S.llm.model || "основной модели")}.`
+      : "Простые вопросы — недорогой модели того же сервиса, поручения и сложное — основной. Ответы те же, дешевле."}</small></div>
+      <label class="tg"><input type="checkbox" id="br-econ-on" ${S.llm.economy ? "checked" : ""}><i></i></label></div><div class="res" id="br-econ-res"></div></div>`);
     if (on) h.push(`<div class="card"><div class="sw" style="margin:0"><div>Думать над сложными просьбами<small>Стихи, задачи, анализ, планы — сначала обдумывает: дольше, зато лучше. Простые вопросы — сразу.</small></div>
       <label class="tg"><input type="checkbox" id="br-think" ${S.llm.think !== "off" ? "checked" : ""}><i></i></label></div></div>`);
     if (S.llm.cloud) h.push(`<div class="card cloudc" id="cl-card"><div class="row2"><div style="flex:1"><b>Баланс</b><small class="hint" style="margin:2px 0 0;display:block" id="cl-sub">${esc(cloudWho())}</small></div><div class="cl-pct" id="cl-pct">…</div></div>
@@ -6241,6 +6285,20 @@ function wireSettings(info) {
       const id = llmId(l); S.llmSaved = (S.llmSaved || []).filter(x => llmId(x) !== id); saveS();
       toast(`«${brainNameOf(l)}» убран из списка`); renderSettings();
     });
+    if (g("br-econ-on")) g("br-econ-on").onchange = async (ev) => {
+      const r = g("br-econ-res"), cb = ev.target;
+      if (!cb.checked) { S.llm.economy = ""; saveS(); toast("Экономный режим выключен"); renderSettings(); return; }
+      cb.disabled = true; r.className = "res"; r.textContent = "ищу недорогую модель у сервиса…";
+      try {
+        let ms = [];
+        if (isOllama()) { const x = await http("GET", ollamaRoot() + "/api/tags", { timeout: 10000 }); ms = (JSON.parse(x.body).models || []).map(m => m.name); }
+        else { const x = await http("GET", llmBase() + "/models", { headers: llmHeaders(), timeout: 15000 }); ms = (JSON.parse(x.body).data || []).map(m => m.id); }
+        const m = econSuggest(ms);
+        if (!m) { cb.checked = false; r.className = "res bad"; r.textContent = "У этого сервиса не нашлось недорогой модели — экономить не на чем."; return; }
+        S.llm.economy = m; saveS(); toast("Экономный режим: простое — " + m, 4000); renderSettings();
+      } catch (e) { cb.checked = false; r.className = "res bad"; r.textContent = "Список моделей не пришёл: " + netErr(e.message || e); }
+      finally { cb.disabled = false; }
+    };
     if (g("br-pull")) g("br-pull").onclick = async () => {
       const r = g("br-pull-res"); g("br-pull").disabled = true; r.className = "res"; r.textContent = "Спрашиваю ваши устройства…";
       try { const ok = await devBrainsPull(); r.textContent = ok ? "Жду ответа — компьютер должен быть включён и Dewiar запущен (до 10 минут)." : "Других ваших устройств пока не видно — на компьютере: студия → «Устройства» → «Подключить ещё устройство», здесь — «Устройства» → «Ввести код»."; }
@@ -7573,7 +7631,7 @@ function applyConfig(m, key) {
   if (!prof) throw new Error("в файле нет настроек модели");       // проверяем до правок: иначе слух и персонаж менялись бы, а мозг — нет
   if (prof) S.llm = Object.assign({}, DEF.llm, { kind: prof.kind === "ollama" ? "ollama" : "openai", name: fill(prof.name) || m.name || "", base_url: fill(prof.base_url), api_key: fill(prof.api_key || ""),
     model: fill(prof.model || ""), disable_thinking: prof.cloud ? false : prof.disable_thinking !== false, temperature: prof.temperature || 0.7,
-    cloud: !!prof.cloud || /cloud\.php\?p=/.test(prof.base_url || ""), title: prof.title || "" });
+    cloud: !!prof.cloud || /cloud\.php\?p=/.test(prof.base_url || ""), title: prof.title || "", economy: prof.cloud ? "" : fill(prof.economy || "") });
   if (m.stt && m.stt.engine === "remote" && m.stt.remote && m.stt.remote.base_url) S.stt = { engine: "server", url: fill(m.stt.remote.base_url), key: fill(m.stt.remote.api_key || ""), model: fill(m.stt.remote.model || "") };
   if (m.tts && m.tts.engine === "remote" && m.tts.remote && m.tts.remote.base_url) Object.assign(S.tts, { engine: "server", url: fill(m.tts.remote.base_url), key: fill(m.tts.remote.api_key || ""), model: fill(m.tts.remote.model || ""), voice: fill(m.tts.remote.voice || "") });
   if (m.persona && PERSONAS.some(p => p.id === m.persona)) S.persona = m.persona;
@@ -8080,6 +8138,7 @@ async function clPoll() {
     st.cursor = Math.max(+st.cursor || 0, +d.last || 0);
     let mk = false;                                       // мои письма у близких: доставлено / прочитано до номера
     if (d.marks && typeof d.marks === "object" && JSON.stringify(d.marks) !== JSON.stringify(st.marks || {})) { st.marks = d.marks; mk = true; }
+    if (d.gmarks && typeof d.gmarks === "object" && !Array.isArray(d.gmarks) && JSON.stringify(d.gmarks) !== JSON.stringify(st.gmarks || {})) { st.gmarks = d.gmarks; mk = true; }   // «прочитали» в группах
     clSave(); clBadge(); clWatch();
     if ((got || (mk && clCur)) && $("#sh-close").classList.contains("on")) clRender();
     return got;

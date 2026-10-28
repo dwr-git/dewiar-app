@@ -286,7 +286,7 @@ function devBrainsShare() {
   const all = [S.llm].concat(Array.isArray(S.llmSaved) ? S.llmSaved : []).filter(l => l && l.base_url && !l.cloud && !l.trial && !l.forgot && !local(l.base_url));
   const seen = new Set(), out = [];
   for (const l of all) { const id = l.base_url.replace(/\/+$/, "") + "|" + (l.model || ""); if (seen.has(id)) continue; seen.add(id);
-    out.push({ name: l.name || "", kind: l.kind || "openai", base_url: l.base_url, api_key: l.api_key || "", model: l.model || "", title: l.title || "" }); }
+    out.push({ name: l.name || "", kind: l.kind || "openai", base_url: l.base_url, api_key: l.api_key || "", model: l.model || "", economy: l.economy || "", title: l.title || "" }); }
   return out.length ? { from: devMyName(), at: Date.now(), profiles: out.slice(0, 12) } : null;
 }
 async function devBrainsPull() { devBrainsUntil = Date.now() + 600000; devBrainsGot = []; return devOwnSend({ want: ["brains"], from: devMyName() }); }
@@ -297,7 +297,7 @@ function devBrainsTake(b) {
   for (const pr of b.profiles.slice(0, 12)) {
     if (!pr || !/^https?:\/\//.test(pr.base_url || "")) continue;
     const id = String(pr.base_url).replace(/\/+$/, "") + "|" + (pr.model || ""); if (have.has(id)) continue; have.add(id);
-    const l = Object.assign({}, DEF.llm, { kind: pr.kind || "openai", name: pr.name || pr.model || "Модель", base_url: pr.base_url, api_key: pr.api_key || "", model: pr.model || "", title: pr.title || "", got: String(b.from || "другого устройства").slice(0, 40) });
+    const l = Object.assign({}, DEF.llm, { kind: pr.kind || "openai", name: pr.name || pr.model || "Модель", base_url: pr.base_url, api_key: pr.api_key || "", model: pr.model || "", economy: pr.economy || "", title: pr.title || "", got: String(b.from || "другого устройства").slice(0, 40) });
     if (!S.llm.base_url || S.llm.trial) S.llm = l;                    // мозга не было — сразу думает пришедшим
     else S.llmSaved = [l].concat(S.llmSaved || []).slice(0, 8);
     added.push(l.name);

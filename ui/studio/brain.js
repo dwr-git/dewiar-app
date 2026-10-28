@@ -25,11 +25,14 @@ function renderProfiles() {
       <label class="f">API-ключ<input type="password" data-f="api_key" placeholder="для локальных не нужен"></label>
       <label class="f">Модель<input type="text" data-f="model" list="ml-${id}" placeholder="пусто — первая с сервера"><datalist id="ml-${id}"></datalist><span class="hint">Весь список — кнопка «Список моделей».</span></label>
       <div class="mpick" id="mp-${id}" hidden></div>
+      ${p.cloud ? "" : `<div class="f econ"><span>Экономный режим</span><div class="econ-row"><input type="text" data-f="economy" list="ml-${id}" placeholder="выключен">
+        <button class="btn small" data-a="econ">Подобрать</button></div><span class="hint">Недорогая модель того же сервиса для простых вопросов — «привет», «что такое…». Поручения, длинное и сложное — основной модели; не ответит — ответит основная.</span></div>`}
       <label class="f">Максимум токенов в ответе<input type="number" data-f="max_tokens" placeholder="600"></label>
       <label class="f">Температура<input type="number" step="0.1" min="0" max="2" data-f="temperature" placeholder="0.7"></label>
       <label class="f" style="justify-content:end"><span><input type="checkbox" data-f="disable_thinking"> отключать «размышления» (Qwen3 и подобные в vLLM)</span></label>
     </div><div class="actions"><button class="btn primary" data-a="test">Проверить</button><button class="btn" data-a="models">Список моделей</button><span style="flex:1"></span><button class="btn danger" data-a="del">Удалить</button></div></div>`;
     $("b", el).textContent = p.name || "Без названия";
+    if (p.economy && !p.cloud) $("b", el).insertAdjacentHTML("afterend", `<em class="econ-tag" title="Простые вопросы — ${escH(p.economy)}">экономно</em>`);
     $("small", el).textContent = p.cloud ? `${S.cloud && S.cloud.account ? "по аккаунту dewiar.pro" : "по ключу …" + (p.api_key || "").slice(-4)} · ${p.title || p.model || ""}` : `${p.base_url || ""}${p.model ? " · " + p.model : ""}`;
     $$("[data-f]", el).forEach(inp => {
       const k = inp.dataset.f; if (inp.type === "checkbox") inp.checked = !!p[k]; else inp.value = p[k] ?? "";
@@ -43,6 +46,14 @@ function renderProfiles() {
       try { const r = await core.call("llm_test", { profile: S.llm.profiles[id] });
             if (r.ok) { res.className = "res ok"; res.textContent = `работает · модель «${r.model}»${r.api === "ollama" ? " (API Ollama)" : ""} · ответ за ${(r.total_ms / 1000).toFixed(1)} с: «${r.reply}»`; }
             else { res.className = "res bad"; res.textContent = r.error || "модель не ответила"; } }
+      catch (e) { res.className = "res bad"; res.textContent = e.message; }
+      ev.target.disabled = false;
+    };
+    if ($('[data-a="econ"]', el)) $('[data-a="econ"]', el).onclick = async (ev) => {
+      ev.target.disabled = true; res.className = "res"; res.textContent = "ищу недорогую модель…";
+      try { const r = await core.call("llm_economy_suggest", { profile: S.llm.profiles[id] });
+            if (r.model) { S.llm.profiles[id].economy = r.model; await save({ llm: { profiles: S.llm.profiles } }, true); renderProfiles(); toast("Экономный режим: простое — " + r.model); }
+            else { res.className = "res bad"; res.textContent = r.error ? "список моделей не пришёл: " + r.error : "недорогой модели в списке не нашлось — впишите её сами"; } }
       catch (e) { res.className = "res bad"; res.textContent = e.message; }
       ev.target.disabled = false;
     };

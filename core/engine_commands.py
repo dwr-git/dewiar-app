@@ -406,6 +406,26 @@ class CommandsMixin:
             raise ValueError(str(e)) from e
         raise ValueError(f"неизвестная команда {cmd}")
 
+    # «Морской бой» голосом (0.63; план «Идей Лиры»: «„Б пять!“ — Лира ставит выстрел сама и отвечает голосом»): пока игра
+    # открыта в «Досуге» (pad.js шлёт game_mark), короткая фраза с клеткой («бэ пять», «Д7», «стреляю в ка десять») или
+    # словом игры («сдаюсь», «ещё партию») — не вопрос модели, а ход: событие game -> игра; итог она скажет через game_say.
+    SEA_CELL_RX = re.compile(r"(?:^|[^а-я])(?:а|бэ?|бе|вэ?|ве|гэ?|ге|дэ?|де|е|жэ?|же|зэ?|зе|и|ка?|й)\s*-?\s*(?:10|[1-9]|один|одна|раз|два|две|три|"
+                             r"четыре|пять|шесть|семь|восемь|девять|десять)(?![а-я0-9])")
+    SEA_CMD_RX = re.compile(r"^(?:\w+,\s*)?(?:сдаюсь|сколько(?:\s+у\s+(?:тебя|нас|меня))?\s+(?:кораблей|осталось)|играем|давай\s+ещ[её]|ещ[её]\s+(?:партию|раз(?:ок)?)|"
+                            r"новая\s+(?:партия|игра)|сыграем\s+ещ[её]|начинаем|поехали|(?:давай\s+)?полегче|в\s+полную\s+силу)$")
+
+    def _game_voice(self, text):
+        g = getattr(self, "_game_on", None)
+        if not g or g[0] != "sea" or time.monotonic() - g[1] > 3 * 3600:
+            return False
+        t = text.lower().replace("ё", "е").strip(" .!?…")
+        if len(t.split()) > 7 or not (self.SEA_CELL_RX.search(t) or self.SEA_CMD_RX.match(t)):
+            return False
+        log.info("🎮 «Морской бой»: %s", text)
+        self._game_said = text
+        self.emit("game", game="sea", text=text)
+        return True
+
     def _window_cmd(self, text):
         """Фраза про само окно (window_phrase) -> True, если это она. Прячет и показывает виджет интерфейс
         (событие «window» ловит ui/hud.html); «отключись» — интерфейс завершает и себя, и ядро (Api.quit_all в
@@ -1272,6 +1292,15 @@ class CommandsMixin:
         if cmd == "cameras":
             from eyes import list_cameras
             return list_cameras()
+        if cmd == "game_mark":                          # «Досуг» открыл игру (pad.js gameOpen) или закрыл её (game: "")
+            gm = str(a.get("game") or "")[:20]
+            self._game_on = (gm, time.monotonic()) if gm else None
+            return {"game": gm}
+        if cmd == "game_say":                           # игра сказала итог хода («Бэ пять — мимо. Стреляю: …») — вслух, без модели
+            said = getattr(self, "_game_said", "") or "«Морской бой»"
+            self._game_said = ""
+            self._say_quick(str(a.get("text") or "")[:400], said, keep=False)
+            return True
         if cmd == "ptt":
             # 28.10 (владелец, Ubuntu): «сработала сама, я быстро жму на аватарку, а она ещё 1–2 раза пытается слушать».
             # Судорожные нажатия: первое останавливало, а следующее попадало в «тишину» и снова включало слушание; голос из
@@ -1431,6 +1460,14 @@ class CommandsMixin:
             return r
         if cmd == "llm_models":
             return list_models(a.get("profile") or {})
+        if cmd == "llm_economy_suggest":                  # экономный режим: недорогая модель того же сервиса (economy.py)
+            import economy
+            pr = a.get("profile") or {}
+            try:
+                ms = list_models(pr)
+            except Exception as e:  # noqa: BLE001
+                return {"model": "", "error": str(e)[:200]}
+            return {"model": economy.suggest(ms, pr.get("model") or ""), "count": len(ms)}
         if cmd == "llm_no_chat":                          # №258: в списке нет ни одной модели для разговора — что делать
             from llm import no_chat_help
             return no_chat_help((a.get("profile") or {}).get("base_url", ""), a.get("models") or [])
@@ -1513,6 +1550,8 @@ class CommandsMixin:
                     return c.send(a.get("pid", ""), a.get("text", ""), files)
                 if cmd == "close_meet":             # «Встречи» в студии (studio/meet.js) — через то же пространство, что телефон
                     return c.meet(a.get("path", ""), a.get("body") or {})
+                if cmd == "close_forward":          # «Переслать» (0.62): {pid — откуда, mid, to — кому: pid или gid}
+                    return c.forward(a.get("pid", ""), a.get("mid", ""), a.get("to", ""))
                 if cmd == "close_group":            # «Группы своих»: create / rename / add / drop / leave / delete
                     return c.group(str(a.get("op") or ""), **{k: a[k] for k in ("gid", "name", "pids", "pid") if k in a})
                 if cmd == "close_thumb":            # фото из переписки — картинкой в студии (0.61): только скачанное в «Близкие», до 6 МБ
@@ -1908,7 +1947,7 @@ class CommandsMixin:
             snap = self.s.snapshot()
             llm = snap.get("llm") or {}
             prof = (llm.get("profiles") or {}).get(llm.get("active")) or {}
-            keep = {k: prof[k] for k in ("name", "kind", "base_url", "api_key", "model", "disable_thinking", "temperature", "cloud", "title") if prof.get(k) not in (None, "")}
+            keep = {k: prof[k] for k in ("name", "kind", "base_url", "api_key", "model", "economy", "disable_thinking", "temperature", "cloud", "title") if prof.get(k) not in (None, "")}
             import net as _net
             keep["base_url"], was_local = _net.lan_url(keep.get("base_url", ""))   # 127.0.0.1 на телефоне — сам телефон (19.10)
             local_note = ""

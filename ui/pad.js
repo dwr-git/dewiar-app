@@ -646,13 +646,19 @@ function shelfDraw() {
   $("#shelf").innerHTML = DewiarArcade.html(ARC) + '<p class="tip">Стрелки или WASD — движение, пробел — действие, P — пауза, M — музыка. Геймпад подключается сам.</p>';
   $$("#shelf .ag").forEach(b => { b.onclick = () => gameOpen(b.dataset.game); });
 }
+/* «Морской бой» голосом (0.63): открыта игра — ядро знает (game_mark): «бэ пять» станет ходом (событие game -> игре
+   {arcade: 'heard'}); игра просит слушать ({arcade: 'listen'} -> ptt) и говорит итог хода ({arcade: 'say'} -> game_say). */
+let GAME_CUR = "";
+function gameMark(id) { if (GAME_CUR === id) return; GAME_CUR = id; core.call("game_mark", { game: id }).catch(() => { }); }
+core.on("game", (e) => { const f = $("#game"); if (e.game && e.game === GAME_CUR && f.contentWindow) f.contentWindow.postMessage({ arcade: "heard", text: e.text || "" }, "*"); });
 function gameOpen(id) {
+  gameMark(id);
   const f = $("#game"), light = document.body.classList.contains("light");
   f.src = DewiarArcade.url(ARC, id) + (light ? "?light=1" : "");
   $("#play").classList.add("in");
   f.onload = () => { try { f.focus(); f.contentWindow.focus(); const c = f.contentDocument && f.contentDocument.querySelector("canvas"); if (c) c.focus(); } catch (e) { } };
 }
-function gameStop() { const f = $("#game"); if (f.getAttribute("src") && f.getAttribute("src") !== "about:blank") f.src = "about:blank"; $("#play").classList.remove("in"); }
+function gameStop() { gameMark(""); const f = $("#game"); if (f.getAttribute("src") && f.getAttribute("src") !== "about:blank") f.src = "about:blank"; $("#play").classList.remove("in"); }
 window.padMode = (m) => {
   const play = m === "play" && GAMES_ON;
   if (play === document.body.classList.contains("play")) { if (play && $("#play").classList.contains("in")) { gameStop(); shelfDraw(); } return; }
@@ -667,7 +673,9 @@ window.padMode = (m) => {
 function padFull(on) { document.body.classList.toggle("full", !!on); const a = api(); if (a && a.pad_full) a.pad_full(!!on).catch(() => { }); }
 window.addEventListener("message", (e) => { if (!e.data || e.source !== $("#game").contentWindow) return;
   if (e.data.arcade === "home") { if (document.body.classList.contains("full")) padFull(false); gameStop(); shelfDraw(); }
-  else if (e.data.arcade === "full") padFull(!!e.data.on); });
+  else if (e.data.arcade === "full") padFull(!!e.data.on);
+  else if (e.data.arcade === "listen") core.call("ptt").catch(() => { });
+  else if (e.data.arcade === "say" && e.data.text) core.call("game_say", { text: String(e.data.text).slice(0, 400) }).catch(() => { }); });
 $("#b-play").onclick = () => padMode("play");
 $("#b-notes").onclick = () => padMode("notes");
 window.padGame = (id) => { padMode("play"); if (id && window.DewiarArcade && DewiarArcade.find(id) && GAMES_ON) gameOpen(id); };
