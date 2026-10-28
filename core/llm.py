@@ -94,8 +94,10 @@ def ollama_installed():
     from pathlib import Path
     if shutil.which("ollama"):
         return True
-    la = os.environ.get("LOCALAPPDATA")
-    return bool(la) and (Path(la) / "Programs" / "Ollama").is_dir()
+    # №380 (28.10): Ollama 0.4 стояла не в %LOCALAPPDATA%\Programs — «Ollama не найдена, хотя установлена»
+    cands = [Path(os.environ[v]) / sub for v, sub in (("LOCALAPPDATA", "Programs/Ollama"), ("LOCALAPPDATA", "Ollama"),
+             ("ProgramFiles", "Ollama"), ("USERPROFILE", "scoop/apps/ollama")) if os.environ.get(v)]
+    return any(c.is_dir() for c in cands)
 
 
 def connect_hint(base_url):
@@ -1775,11 +1777,16 @@ class CodeFilter:
 
     NOTE = "Команды и код — на экране. "
     _CMD = re.compile(r"^\s*(\$ |sudo |>>> |#!/)")
+    # строка разметки: <div…, </p>, <!DOCTYPE — не вслух; строчные теги в начале фразы (<b>, <i>, <a>) — текст, теги снимет speakable
+    _TAG = re.compile(r"^\s*<(?:[!?]|/?(?!(?:b|i|u|s|em|strong|a|span|br|mark|small|sup|sub|code)\b)[A-Za-z])")
+    _HTML_ON = re.compile(r"^\s*<(?:!doctype|html|style|script|head|body)\b", re.I)
+    _HTML_OFF = re.compile(r"</(?:html|style|script|head|body)\s*>\s*$", re.I)
     _ACTS = ("[в этом ответе выполнено", "[узнано инструментами")   # пометки истории (engine_answer.team_window)
 
     def __init__(self):
         self.pend, self.code, self.told, self.skip, self.start = "", False, False, False, True
         self.want, self.lang = False, ""                 # открыли ```: язык ещё читается; схема (mermaid) — молча
+        self.html = False                                # внутри HTML-документа или <style>/<script> — молчим до закрытия
 
     def _note(self):
         if self.told:
@@ -1817,11 +1824,23 @@ class CodeFilter:
                     out += self._note()
                     self.start, self.skip, self.pend = False, True, ""
                     continue
+                if re.match(r"<[!/?]?[A-Za-z]{0,10}$", lead):
+                    continue                              # «<», «<di», «</bo» — тег это или «< 5»: ждём конца имени
+                if self.html or self._TAG.match(self.pend):   # разметка — вся строка мимо голоса
+                    out += self._note()
+                    self.line, self.start, self.skip, self.pend = self.pend, False, True, ""
+                    continue
                 if lead:
                     out += self.pend
                     self.pend, self.start = "", False
                 continue
             if ch == "\n":
+                ln = getattr(self, "line", "")
+                if self._HTML_ON.match(ln):
+                    self.html = True                      # <!DOCTYPE, <html, <style, <script — молчим до закрытия
+                if self.html and self._HTML_OFF.search(ln):
+                    self.html = False                     # </html>, </style>, </script> — дальше снова обычный текст
+                self.line = ""
                 if self.want:
                     out += self._lang_note()
                 if not self.skip and not self.code:
@@ -1832,6 +1851,8 @@ class CodeFilter:
                 out += ch
             elif self.want:
                 self.lang += ch
+            elif self.skip:
+                self.line = getattr(self, "line", "") + ch
         return out
 
     def _lang_note(self):
@@ -1857,6 +1878,8 @@ _SPEAK = [(r"(?:https?://|www\.)\S+", ""),
           (r"\s+(?:и|или|в|на|по|из)\s*(?=[.,;:!?]|$)", ""),                # «… в report и .»
           (r"\s+([:,;—–-])\s*(?=[:,;.!?—–]|$)", ""), (r"\(\s*\)", "")]
 _MD = [(re.compile(r"```.*?```", re.S), " "), (re.compile(r"`([^`]*)`"), r"\1"),
+       (re.compile(r"<(script|style)\b.*?</\1\s*>", re.S | re.I), " "),          # HTML вслух не читаем (28.10: «зачитывала
+       (re.compile(r"<!--.*?-->|<!doctype[^>]*>|</?[A-Za-z][\w:-]*(?:\s[^<>]*)?/?>", re.S | re.I), " "),   # все теги»)
        (re.compile(r"!?\[([^\]]*)\]\([^)]*\)"), r"\1"), *[(re.compile(a, re.I), b) for a, b in _SPEAK],
        (re.compile(r"[*_#>|~]+"), ""), (re.compile(r"^\s*[-•]\s+", re.M), ""),
        (re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]"), ""), (re.compile(r"\s+"), " ")]

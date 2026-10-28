@@ -8,7 +8,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("account_", "backup_", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
@@ -489,7 +489,7 @@ class CommandsMixin:
                 "version": VERSION, "update": self.updater.public(), "tasks": self.tasks.list(),
                 "skills": self.skills.catalog(), "mcp": self.mcp.status(), "account": self.account.status(), "mail": self.mail.public(), "telegram": self.telegram.public(), "max": self.max.public(), "obsidian": self.obsidian.public(),
                 "reminders": self.reminders_list(), "alarm": self._alarm_public(),
-                "radio": self.radio.status(), "kids": self.kids_public(),
+                "radio": self.radio.status(), "kids": self.kids_public(), "watch": self.watch_public(),
                 "pending_import": provision.preview(self.pending_import, self.s.snapshot()) if self.pending_import else None}
 
     def command(self, cmd, a):
@@ -501,6 +501,28 @@ class CommandsMixin:
         kids = getattr(self, "kids", None)
         if kids and kids.locked() and _kids_blocked(cmd, a):
             raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
+        if cmd == "watch_get":                   # «Дозор» (engine_watch.py)
+            return self.watch_public()
+        if cmd == "watch_add":
+            self.watch_add(a)
+            return self.watch_public()
+        if cmd == "watch_stop":
+            self.watch_stop(str(a.get("id") or ""))
+            return self.watch_public()
+        if cmd == "mode_get":                    # режим Лиры: для меня, ребёнка, старших (engine_senior.py)
+            return self.mode_public()
+        if cmd == "mode_set":
+            return self.mode_set(str(a.get("mode") or ""))
+        if cmd == "senior_set":
+            return self.senior_set(a)
+        if cmd == "senior_med_add":
+            return {"added": self.senior_med_add(a.get("text"), a.get("times") or []), **self.mode_public()}
+        if cmd == "senior_test":                 # «Проверить» — присматривающим приходит пробное сообщение
+            n = self._senior_send(f"Это Лира, помощница. {self.senior.who()} включила режим «Для старших» — сюда я буду "
+                                  "писать, если что-то не так, и вечером — как прошёл день.")
+            if not n:
+                raise ValueError("не отправилось — у выбранных близких Dewiar ещё не открывался после приглашения")
+            return {"sent": n}
         if cmd.startswith("team_"):
             return self.team_cmd(cmd, a)
         if cmd.startswith("client"):
@@ -1562,6 +1584,23 @@ class CommandsMixin:
             return self._pad_cmd(cmd, a)
         if cmd == "notes_list":                                 # «Заметки»: все заметки и поиск
             return self.workspace.notes(a.get("q", ""))
+        if cmd == "note_meta":                                  # метки, цвет, «закрепить», «в архив» — в шапку заметки (0.58)
+            return self.workspace.note_meta(a.get("path", ""), a.get("patch") or {})
+        if cmd == "notes_import_keep":                          # перенос из Google Keep (архив Takeout или папка)
+            import keep_import
+            path = str(a.get("path") or "").strip()
+            if not path or not Path(os.path.expanduser(path)).exists():
+                raise ValueError("выберите архив Google Takeout (.zip) или распакованную папку")
+            r = keep_import.import_keep(self.workspace, os.path.expanduser(path),
+                                        progress=lambda i, n: self.emit("keep_import", i=i, n=n) if i % 20 == 0 else None)
+            self.emit("notes_changed")
+            return r
+        if cmd == "link_meta":                                  # ссылка в заметке — карточкой: название, картинка, сайт
+            lm = getattr(self, "_linkmeta", None)
+            if lm is None:
+                from linkmeta import LinkMeta
+                lm = self._linkmeta = LinkMeta(STATE_DIR / "links.json")
+            return lm.get(a.get("url", ""))
         if cmd in ("note_attach", "note_file"):                 # «Заметки»: фото и файлы к заметке, картинка для показа
             import base64
             try:

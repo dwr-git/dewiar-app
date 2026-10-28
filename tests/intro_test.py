@@ -120,6 +120,40 @@ bt = next(k for ev, k in e.events if ev == "intro" and k.get("step") == "buttons
 ok(bt["buttons"] == ["b-mic", "b-voice", "b-type"], "рассказ о кнопках — с подсветкой микрофона, динамика и клавиатуры")
 ok(e.s.d["ui"]["intro"] == "done" and not e._intro_running and e._intro_ear is None, "знакомство закончено и запомнено")
 
+# 1б. «первые пять минут» (0.58): имя — заодно проверка микрофона, город для погоды, утро по расписанию
+from engine_intro import intro_name, intro_city  # noqa: E402
+ok([intro_name(t) for t in ("Меня зовут Михаил", "миша", "я Ольга", "Привет, Лира!", "Галина Петровна", "раз два три")]
+   == ["Михаил", "Миша", "Ольга", "", "Галина Петровна", ""], "имя из ответа: «меня зовут…», «я…», просто имя; «привет, Лира» — не имя")
+ok(intro_city("В Минске") == ("Минске", "в Минске") and intro_city("гродно") == ("Гродно", "Гродно") and intro_city("нет") == ("", ""),
+   "город из ответа; «нет» — пропустить")
+import weatherq  # noqa: E402
+weatherq.geocode = lambda phrase, via=None: {"name": "Минск"} if "минск" in phrase.lower() else None
+
+
+class R:
+    def __init__(self): self.items = []
+    def add(self, at, text, rep=None, kind="reminder", extra=None):
+        it = dict({"at": str(at), "text": text, "repeat": rep, "kind": kind}, **(extra or {})); self.items.append(it); return it
+
+
+e = make(); e.reminders = R()
+e.s.update = lambda patch: [e.s.d.__setitem__(k, v) if not isinstance(v, dict) else e.s.d.setdefault(k, {}).update(v) for k, v in patch.items()]
+answers = ["Меня зовут Михаил", "В Минске", "Да, давай"]
+e.intro_start()
+end = time.time() + 25
+while time.time() < end and e._intro_running:
+    if answers and e._intro_ear is not None:
+        time.sleep(0.2); e.handle_text(answers.pop(0), False, True)
+    time.sleep(0.05)
+st = steps(e)
+ok(["mic", "mic_ok", "city", "city_ok", "morning", "morning_ok"] == [x for x in st if x in ("mic", "mic_ok", "city", "city_ok", "morning", "morning_ok")],
+   f"знакомство: имя → город → утро: {st}")
+ok(e.s.d.get("user_name") == "Михаил" and any("Очень приятно, Михаил!" in t for t in e.said), "имя запомнено, «Очень приятно, Михаил!»")
+ok(e.s.d["morning"]["city"] == "Минск" and any("Запомнила: в Минске." in t for t in e.said), "город — «Минск» для погоды, ответ — «в Минске»")
+ok(any(x["kind"] == "job" and x.get("preset") == "brief" for x in e.reminders.items) and any("завтра в восемь" in t for t in e.said),
+   "«да» — каждое утро в 8:00 голосом (то же дело, что «Утро с Лирой»)")
+ok(st[-1] == "done" and "try" in st, "и дальше — как раньше: кнопки, что попробовать")
+
 # 2. голос есть, слов нет
 e = make()
 run(e, ("peak", 0.3), wait=30)

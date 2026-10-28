@@ -1890,6 +1890,8 @@ class Api:
             except Exception:  # noqa: BLE001
                 pass
         w, h = 520, (556 if int(p.get("att") or 0) else 440)       # с картинками напоминания — выше, под их ряд
+        if len(str(p.get("text") or "")) > 30:                     # №383: длинный текст — две-три строки, окну выше
+            h += 36 if len(str(p.get("text") or "")) <= 60 else 68
         try:
             if WIN:
                 l, t_, r, b = winshell.work_area()

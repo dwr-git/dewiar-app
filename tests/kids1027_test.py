@@ -162,7 +162,7 @@ with sync_playwright() as p:
     ok(not pg.is_visible("#kd-lock"), "верный PIN — студия открылась")
     pg.click('nav button[data-p="kids"]'); time.sleep(1.2)
     t = pg.inner_text("#p-kids")
-    ok("Включён: Маша" in t and "Купи мне игру" in t and "Совёнок Уго" in t, f"раздел «Дети»: состояние, отчёт, друг: {t[:200]!r}")
+    ok("включён — Маша" in t and "Купи мне игру" in t and "Совёнок Уго" in t, f"раздел «Дети»: состояние, отчёт, друг: {t[:200]!r}")
     if os.environ.get("DEWIAR_SHOTS"):
         pg.screenshot(path=os.environ["DEWIAR_SHOTS"] + "/kids-studio.png", full_page=True)
     hud = b.new_page(viewport={"width": 360, "height": 600})

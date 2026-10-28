@@ -1160,6 +1160,7 @@ class ToolsMixin:
             a["result"] = "missed"
             log.info("⏰ Никто не ответил — «%s» отмечено пропущенным", item["text"])
             self.emit("alarm_done", id=item["id"], result="missed")
+            self._care_after(item, "missed")
             if self.state == "listening" and self.turn is None:
                 self.set_state("idle")
 
@@ -1217,18 +1218,20 @@ class ToolsMixin:
             minutes = max(1, int(minutes or 10))
             when = datetime.now() + timedelta(minutes=minutes)
             new = self.reminders.add(when, item["text"], None, item.get("kind") or "reminder",
-                                     extra={k: item.get(k) for k in ("note", "note_id")})     # картинки — и при отложенном
+                                     extra={k: item.get(k) for k in ("note", "note_id", "care", "care_n", "care_of", "care_root", "care_at")})   # картинки и «лекарство» — и при отложенном
             out.update(snooze_id=new["id"], when=human(when))
             log.info("⏰ Отложено на %d мин: %s", minutes, item["text"])
         else:
             log.info("⏰ Готово: %s", item["text"])
+        self._care_after(item, result)                     # лекарство в режиме «Для старших» (engine_senior.py)
         self.emit("alarm_done", **out)
         if self.state == "listening" and self.turn is None:
             self.set_state("idle")
         return out
 
     SNOOZE_RX = re.compile(r"\b(отлож\w*|позже|потом|ещ[её]\s+\d+|через\s+\d+|через\s+(?:минуту|полчаса|час)|дай\s+поспать|не\s+сейчас)\b")
-    ACK_WORDS = {"понял", "поняла", "понятно", "хорошо", "ок", "окей", "ладно", "готово", "сделал", "сделала", "выключи",
+    ACK_WORDS = {"выпил", "выпила", "выпью", "принял", "приняла", "пью",          # лекарство (режим «Для старших»)
+                 "понял", "поняла", "понятно", "хорошо", "ок", "окей", "ладно", "готово", "сделал", "сделала", "выключи",
                  "выключай", "отключи", "спасибо", "да", "встаю", "встал", "встала", "иду", "всё", "все"}
 
     def _alarm_voice(self, text):
@@ -1252,12 +1255,21 @@ class ToolsMixin:
                 self.announce(f"Хорошо, напомню {r['when']}.")
             return True
         words = set(re.findall(r"[\wё]+", low))
+        med = self._care_item(self.alarm["item"]) if self.alarm else False
         if is_sleep_phrase(text) or words & self.ACK_WORDS:
+            if med and re.search(r"\b(?:нет|не\s+(?:пила|пил|выпила|выпил|приняла|принял)|забыла?|потом)\b", low):
+                self.alarm_finish("seen")                  # «нет, не пила» — не отмечаем выпитым: спросим ещё раз
+                self.emit("heard", text=text)
+                self.announce("Хорошо, напомню ещё раз через пятнадцать минут.")
+                return True
             if self.alarm_finish("ack"):
                 self.emit("heard", text=text)
                 self.play_tone("done")
+                if med:
+                    self.announce("Отлично, отметила.")
             return True
-        self.alarm_finish("ack")                       # заговорили о другом — значит, увидели; продолжаем разговор
+        # заговорили о другом — значит, увидели; продолжаем разговор (лекарство — не «выпито»: спросим ещё раз)
+        self.alarm_finish("seen" if med else "ack")
         return False
 
     def _route(self, text):

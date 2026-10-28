@@ -99,6 +99,7 @@ $$("#dc-try button").forEach(b => b.onclick = () => {             // приме�
 document.addEventListener("click", (e) => {                          // «Обо мне» → «Документы»
   const g = e.target.closest && e.target.closest("[data-goto]"); if (!g) return;
   const nb = $(`nav button[data-p="${g.dataset.goto}"]`); if (nb) nb.click();
+  if (g.dataset.ct) setTimeout(() => { const t = $(`#cal-tabs [data-ct="${g.dataset.ct}"]`); if (t) t.click(); }, 60);   // «Платежи» → «Календарь» → «Деньги»
 });
 let lastAccount = null;
 $("#me-save").onclick = () => core.call("memory_set", { text: $("#me-mem").value, who: typeof mpxWho === "string" ? mpxWho : "" }).then(() => { if (window.mpxLoad) mpxLoad(); $("#me-res").className = "res ok"; $("#me-res").textContent = "Сохранено"; setTimeout(() => ($("#me-res").textContent = ""), 2500); }).catch(e => toast(e.message));

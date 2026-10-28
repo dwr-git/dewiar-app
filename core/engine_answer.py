@@ -209,6 +209,13 @@ class AnswerMixin:
             if kids.touch(text.split("\n\nВложения:")[0]):
                 self._kids_alert(text)
             self.emit("kids", **self.kids_public(light=True))   # виджет: сколько минут осталось
+        sen = getattr(self, "senior", None)              # «Для старших» (senior.py): говорила сегодня; мошенники — сразу «стоп»
+        if sen is not None and not K and not raw and not quiet and sen.on():
+            body_s = text.split("\n\nВложения:")[0]
+            sen.touch()
+            if not images and sen.scam(body_s):
+                self._senior_scam(body_s, text, via)
+                return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._bug_cmd(text, via):
             return                                       # «сообщи об ошибке: …» — жалоба разработчику (core/health.py)
         if not raw and not quiet and not via and not images and not K and re.match(
@@ -479,7 +486,9 @@ class AnswerMixin:
         base += "\n\n" + RULE
         kids = getattr(self, "kids", None)
         if kids and kids.on():
-            base += kids.prompt()                      # детский режим: правила разговора с ребёнком (kids.py)                          # границы: достоинство без обидчивости (boundaries.py)
+            base += kids.prompt()                      # детский режим: правила разговора с ребёнком (kids.py)
+        elif getattr(self, "senior", None) is not None and self.senior.on():
+            base += self.senior.prompt()               # «Для старших»: просто, тепло, неторопливо; осторожно с деньгами                          # границы: достоинство без обидчивости (boundaries.py)
         try:                                           # «Ваши данные»: что хранится и куда уходит (privacy.py)
             import privacy
             base += "\n\n" + privacy.rule((self.s.active_llm() or {}).get("base_url", ""),
@@ -1452,7 +1461,12 @@ class AnswerMixin:
                 ag = self.agenda_context(text)             # «что у нас по плану» — дела и календарь сразу перед моделью
                 if ag.strip():
                     ctx.append(ag.strip())
-                from quality import DIAGRAM_ASK
+                from quality import DIAGRAM_ASK, PAGE_ASK
+                if PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
+                    system += ("\n\nСЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "
+                               "вызовом show_page передай html содержимого — разделы <section> с <h2>, списки, таблицы; оформление "
+                               "добавится само, страница откроется в браузере. HTML в ответе не пиши, скрипты для этого не пиши; "
+                               "после — одна фраза, что открыла.")
                 if DIAGRAM_ASK.search(text):                  # экзамен 15.10: «Схема готова и уже на экране» — а схемы нет
                     system += ("\n\nСЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи "
                                "узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши "
@@ -1684,6 +1698,20 @@ class AnswerMixin:
                         turn.full += " "
                     self.set_state("thinking")
                     continue
+                if not calls and "show_page" not in called and not turn.cancel.is_set():
+                    from quality import page_html_in
+                    doc = page_html_in(step_text)
+                    if doc and len(doc) > 200:                # страницу написали в ответе — откроем её сами, вслух не читаем
+                        try:
+                            m_ = re.search(r"<title>(.*?)</title>|<h1[^>]*>(.*?)</h1>", doc, re.S | re.I)
+                            ttl = re.sub(r"<[^>]+>", "", (m_.group(1) or m_.group(2)) if m_ else "").strip()[:60] or "Страница"
+                            self.toolbox.run("show_page", {"title": ttl, "html": doc})
+                            called.add("show_page")
+                            log.info("🌐 HTML в ответе — сохранила страницей «%s» и открыла", ttl)
+                            note = f" Страница «{ttl}» открыта в браузере."
+                            turn.full += note
+                        except Exception as e:  # noqa: BLE001
+                            log.info("Страница из ответа не открылась: %s", e)
                 if not calls and not turn.cancel.is_set() and step < 6 and drew < 2:
                     fix = diagram_missing(text, turn.full + step_text, called)
                     if fix and drew:                 # экзамен 17.10: и после просьбы — «Схема готова.»; второй раз — жёстче

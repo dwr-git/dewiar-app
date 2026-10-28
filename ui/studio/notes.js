@@ -29,8 +29,10 @@ function ntFront(text) {
   let tags = [];
   ["tags", "tag", "labels", "метки"].forEach(k => { tags = tags.concat(meta[k + "[]"] || String(meta[k] || "").replace(/^\[|\]$/g, "").split(/[,;]/)); });
   tags = [...new Set(tags.map(x => String(x).trim().replace(/^["'#]+|["']+$/g, "")).filter(Boolean))];
-  const col = /(?:^|\b)(?:colou?r|цвет)\s*:?\s*([A-Za-zА-Яа-яЁё_]+)/i.exec(Object.entries(meta).filter(([, v]) => typeof v === "string").map(([k, v]) => k + ": " + v).join(" "));
-  return { raw: m[0].replace(/\n?$/, "\n"), meta: { tags, color: col ? col[1].toUpperCase() : "", source: meta.source || "" }, rest: String(text).slice(m[0].length) };
+  const col = /^([A-Za-z_]+)$/.exec(String(meta.color || "").trim()) || /(?:^|\b)(?:colou?r|цвет)\s*:?\s*([A-Za-zА-Яа-яЁё_]+)/i.exec(Object.entries(meta).filter(([, v]) => typeof v === "string").map(([k, v]) => k + ": " + v).join(" "));
+  const yes = (v) => /^(true|yes|1|да)$/i.test(String(v || "").trim());
+  return { raw: m[0].replace(/\n?$/, "\n"), meta: { tags, color: col && !/^(DEFAULT|NONE|WHITE)$/i.test(col[1]) ? col[1].toUpperCase() : "", source: meta.source || "",
+    pinned: yes(meta.pinned), archived: yes(meta.archived) }, rest: String(text).slice(m[0].length) };
 }
 const ntColor = (c) => NT_COLORS[String(c || "").toUpperCase()] || "";
 const ntChips = (tags, source) => (source ? `<i class="nt-chip">${escH(source)}</i>` : "") + (tags || []).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("");
@@ -65,27 +67,117 @@ function ntPlain(t) {
 }
 const ntCs = () => { try { return ((S && S.ui) || {}).pad_colors || ""; } catch (e) { return ""; } };
 
+/* «Заметки как Keep, только умнее» (0.58; 28.10, пользователь: «теги слева, цвет, закреплять вверху, поиск — визуально
+   легко ориентироваться»; владелец: «полностью поддерживаю»). Над списком — фильтр: «Все», «Закреплённые», метки по
+   числу заметок, «Архив». Закреплённые — сверху; архив — только в «Архиве». Вид — списком (с заметкой справа) или
+   плитками (как Keep, цвет — фоном; заметка открывается поверх). Метки, цвет, «закрепить», «в архив» — в шапку заметки
+   (core/workspace.py note_meta), так что их видит и Obsidian. */
+NT.f = ""; NT.grid = (() => { try { return localStorage.getItem("nt_grid") === "1"; } catch (e) { return false; } })(); NT.allTags = false;
+function ntFilters(all) {
+  const box = $("#nt-filt"); if (!box) return;
+  const live = all.filter(n => !n.archived), cnt = {};
+  live.forEach(n => (n.tags || []).forEach(t => { cnt[t] = (cnt[t] || 0) + 1; }));
+  const tags = Object.keys(cnt).sort((x, y) => cnt[y] - cnt[x] || x.localeCompare(y, "ru"));
+  const pins = live.filter(n => n.pinned).length, arch = all.length - live.length, shown = NT.allTags ? tags : tags.slice(0, 14);
+  const chip = (f, label, n, cls = "") => `<button type="button" class="nt-fc ${cls}${NT.f === f ? " on" : ""}" data-f="${escH(f)}">${label}${n != null ? `<small>${n}</small>` : ""}</button>`;
+  box.innerHTML = chip("", "Все", live.length) + (pins ? chip("@pin", "Закреплённые", pins, "pin") : "")
+    + shown.map(t => chip("#" + t, "#" + escH(t), cnt[t], "tag")).join("")
+    + (tags.length > 14 ? `<button type="button" class="nt-fc more" data-more>${NT.allTags ? "свернуть" : "ещё " + (tags.length - 14)}</button>` : "")
+    + (arch ? chip("@arch", "Архив", arch, "arch") : "");
+  box.hidden = !all.length;
+  $$("#nt-filt [data-f]").forEach(b => b.onclick = () => { NT.f = NT.f === b.dataset.f ? "" : b.dataset.f; ntLoad(); });
+  const m = $("#nt-filt [data-more]"); if (m) m.onclick = () => { NT.allTags = !NT.allTags; ntFilters(all); };
+}
 async function ntLoad() {
-  const q = $("#nt-q").value.trim(); let l = [];
-  try { l = await core.call("notes_list", { q }); } catch (e) { $("#nt-list").innerHTML = `<p class="hint">${escH(e.message)}</p>`; return; }
+  const q = $("#nt-q").value.trim(); let all = [];
+  try { all = await core.call("notes_list", { q }); } catch (e) { $("#nt-list").innerHTML = `<p class="hint">${escH(e.message)}</p>`; return; }
+  NT.all = all; ntFilters(all);
+  const f = NT.f, l = all.filter(n => f === "@arch" ? n.archived : !n.archived && (!f || (f === "@pin" ? n.pinned : (n.tags || []).includes(f.slice(1)))));
   NT.list = l;
   const nw = (k) => `${k} ${typeof plural === "function" ? plural(k, "заметка", "заметки", "заметок") : "заметок"}`;
-  $("#nt-count").textContent = q ? `Найдено: ${l.length}` : l.length ? nw(l.length) : "";
+  $("#nt-count").textContent = q || f ? `Найдено: ${l.length}` : l.length ? nw(l.length) : "";
+  $(".nt-cols").classList.toggle("grid", NT.grid);
+  $$("#nt-vw [data-v]").forEach(b => { const on = (b.dataset.v === "grid") === NT.grid; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+  const tg = (n, k) => (n.tags || []).slice(0, k).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("");
+  const col = (n) => ntColor(n.color) ? ` style="--nc:${ntColor(n.color)}"` : "";
   // 28.10, владелец: «важнейший раздел… дизайн лучше»: список по дням («Сегодня», «Вчера», «На этой неделе», «Раньше»)
-  const row = (n) => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}"${ntColor(n.color) ? ` style="--nc:${ntColor(n.color)}"` : ""}>
-      <span class="nt-rt"><b>${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? `<i class="nt-chip">${escH(n.folder)}</i>` : ""}${(n.tags || []).slice(0, 3).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("")}${n.att ? `<i class="nt-chip">📎 ${n.att}</i>` : ""}</small>
+  const row = (n) => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}"${col(n)}>
+      <span class="nt-rt"><b>${n.pinned ? '<i class="nt-pin" title="Закреплено"></i>' : ""}${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? `<i class="nt-chip">${escH(n.folder)}</i>` : ""}${tg(n, 3)}${n.att ? `<i class="nt-chip">📎 ${n.att}</i>` : ""}</small>
       <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em></span>${n.img ? `<i class="nt-th" data-img="${escH(n.img)}"></i>` : ""}</button>`;
+  const tile = (n) => `<button class="nt-tile ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}"${col(n)}>
+      ${n.img ? `<i class="nt-ti" data-img="${escH(n.img)}"></i>` : ""}<b>${n.pinned ? '<i class="nt-pin" title="Закреплено"></i>' : ""}${ntMark(n.title, q)}</b>
+      <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em>${(n.tags || []).length ? `<small>${tg(n, 4)}</small>` : ""}</button>`;
   const day0 = new Date(); day0.setHours(0, 0, 0, 0); const t0 = day0.getTime() / 1000;
-  const bucket = (m) => m >= t0 ? "Сегодня" : m >= t0 - 86400 ? "Вчера" : m >= t0 - 6 * 86400 ? "На этой неделе" : "Раньше";
+  const bucket = (n) => n.pinned && f !== "@pin" ? "Закреплённые" : (m => m >= t0 ? "Сегодня" : m >= t0 - 86400 ? "Вчера" : m >= t0 - 6 * 86400 ? "На этой неделе" : "Раньше")(n.mtime || 0);
   let html = "", last = "";
-  l.forEach(n => { const b = q ? "" : bucket(n.mtime || 0); if (b && b !== last) { html += `<div class="nt-gh">${b}</div>`; last = b; } html += row(n); });
+  l.forEach(n => { const b = q ? "" : bucket(n); if (b && b !== last) { html += `<div class="nt-gh">${b}</div>`; last = b; } html += NT.grid ? tile(n) : row(n); });
+  if (NT.grid) {                                   // плитки — колонками по группам: «Закреплённые» отдельно от остальных
+    html = html.split(/(?=<div class="nt-gh">)/).map(g => g.replace(/^(<div class="nt-gh">[^<]*<\/div>)?([\s\S]*)$/, (m0, h, rest) => (h || "") + `<div class="nt-masonry">${rest}</div>`)).join("");
+  }
   $("#nt-list").innerHTML = l.length ? html
-    : `<div class="nt-none">${q ? "Ничего не нашлось — попробуйте другое слово." : "Заметок пока нет. Скажите помощнице: «запиши в заметки…» — или нажмите «Новая заметка»."}</div>`;
-  $$("#nt-list .nt-row").forEach(b => b.onclick = () => ntOpen(b.dataset.p));
-  $$("#nt-list .nt-th").forEach(ntThumb);
+    : `<div class="nt-none">${q || f ? "Ничего не нашлось — попробуйте другое слово или «Все»." : "Заметок пока нет. Скажите помощнице: «запиши в заметки…» — или нажмите «Новая заметка». Есть заметки в Google Keep — «Перенести из Keep»."}</div>`;
+  $$("#nt-list .nt-row, #nt-list .nt-tile").forEach(b => b.onclick = () => ntOpen(b.dataset.p));
+  $$("#nt-list .nt-th, #nt-list .nt-ti").forEach(ntThumb);
+  if (NT.grid) return;
   if (!NT.cur && l.length) ntOpen(l[0].path);
   else if (!l.length && !NT.cur) $("#nt-view").innerHTML = "";
 }
+/* Под названием — «закрепить», цвет, метки и «в архив» (как в Keep); всё — в шапку заметки (note_meta) */
+const NT_CNAMES = { RED: "Красный", ORANGE: "Оранжевый", YELLOW: "Жёлтый", GREEN: "Зелёный", TEAL: "Бирюзовый", BLUE: "Синий", DARK_BLUE: "Тёмно-синий",
+  PURPLE: "Фиолетовый", PINK: "Розовый", BROWN: "Коричневый", GRAY: "Серый" };
+function ntMetaHtml(d) {
+  const m = d.meta || {}, own = new Set(m.tags || []);
+  const inline = [...new Set([...(d.body || "").replace(/```[\s\S]*?```|https?:\/\/\S+/g, " ").matchAll(/(?:^|[^\w\/#&=-])#([A-Za-zА-Яа-яЁё][\wА-Яа-яЁё\-\/]{1,40})/g)].map(x => x[1]))].filter(t => !own.has(t));
+  const known = [...new Set((NT.all || []).flatMap(n => n.tags || []))].sort((x, y) => x.localeCompare(y, "ru"));
+  return `<div class="nt-meta">
+    <button type="button" class="nt-mb${m.pinned ? " on" : ""}" id="nt-pinb" aria-pressed="${!!m.pinned}" title="${m.pinned ? "Открепить" : "Закрепить сверху"}"><i class="nt-pin"></i>${m.pinned ? "Закреплено" : "Закрепить"}</button>
+    <span class="nt-colw"><button type="button" class="nt-mb" id="nt-colb" aria-haspopup="true" aria-expanded="false" title="Цвет заметки"><i class="nt-dot"${ntColor(m.color) ? ` style="background:${ntColor(m.color)}"` : ""}></i>Цвет</button>
+      <span class="nt-pal" id="nt-pal" hidden><button type="button" data-c="" title="Без цвета" class="none${!m.color ? " on" : ""}"></button>${Object.keys(NT_CNAMES).map(c => `<button type="button" data-c="${c}" title="${NT_CNAMES[c]}" style="background:${NT_COLORS[c]}"${m.color === c ? ' class="on"' : ""}></button>`).join("")}</span></span>
+    <span class="nt-tags">${[...own].map(t => `<span class="nt-chip nt-tag">#${escH(t)}<button type="button" data-rt="${escH(t)}" aria-label="Убрать метку ${escH(t)}">×</button></span>`).join("")}${inline.map(t => `<span class="nt-chip nt-tag" title="метка в тексте">#${escH(t)}</span>`).join("")}
+      <input id="nt-tadd" list="nt-tlist" placeholder="+ метка" maxlength="40" aria-label="Добавить метку"><datalist id="nt-tlist">${known.map(t => `<option value="${escH(t)}">`).join("")}</datalist></span>
+    <button type="button" class="nt-mb" id="nt-archb" title="${m.archived ? "Вернуть из архива" : "Убрать в архив — с глаз долой, поиск находит"}">${m.archived ? "Из архива" : "В архив"}</button></div>`;
+}
+async function ntMetaSet(patch, msg) {
+  try { await core.call("note_meta", { path: NT.cur, patch }); } catch (e) { toast(e.message); return; }
+  if (msg) toast(msg, 2200);
+  const keep = NT.cur; await ntOpen(keep); ntLoad();
+}
+function ntMetaBind(d) {
+  const m = d.meta || {};
+  $("#nt-pinb").onclick = () => ntMetaSet({ pinned: !m.pinned }, m.pinned ? "Откреплено" : "Закреплено — теперь сверху");
+  $("#nt-archb").onclick = () => ntMetaSet({ archived: !m.archived, pinned: false }, m.archived ? "Вернула из архива" : "В архиве — найти можно в «Архиве» над списком");
+  const pal = $("#nt-pal"), cb = $("#nt-colb");
+  cb.onclick = (e) => { e.stopPropagation(); pal.hidden = !pal.hidden; cb.setAttribute("aria-expanded", !pal.hidden); };
+  $$("#nt-pal [data-c]").forEach(b => b.onclick = () => { pal.hidden = true; ntMetaSet({ color: b.dataset.c }); });
+  $$("#nt-view [data-rt]").forEach(b => b.onclick = () => ntMetaSet({ tags: (m.tags || []).filter(t => t !== b.dataset.rt) }));
+  const ti = $("#nt-tadd");
+  const add = () => { const t = ti.value.trim().replace(/^#+/, "").replace(/[,;\[\]]/g, " ").trim(); if (!t) return; if ((m.tags || []).includes(t)) { ti.value = ""; return; }
+    ntMetaSet({ tags: (m.tags || []).concat([t]) }); };
+  ti.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } };
+  ti.onchange = () => { if ([...$("#nt-tlist").options].some(o => o.value === ti.value)) add(); };
+}
+document.addEventListener("click", (e) => { const p = $("#nt-pal"); if (p && !p.hidden && !e.target.closest(".nt-colw")) p.hidden = true; });
+
+/* Ссылка отдельной строкой — карточкой: картинка, название, сайт (ядро: link_meta, с кэшем). YouTube — с обложкой. */
+function ntCards() {
+  $$("#nt-view .nt-body p").forEach(pp => {
+    const a = pp.querySelector("a[data-ext]");
+    if (!a || pp.children.length !== 1 || pp.textContent.trim() !== a.textContent.trim()) return;
+    const url = a.dataset.ext, host = (() => { try { return new URL(url).host.replace(/^www\./, ""); } catch (e) { return url; } })();
+    const card = document.createElement("a"); card.href = "#"; card.className = "nt-card"; card.dataset.ext = url;
+    card.innerHTML = `<i class="nt-cimg"></i><span><b>${escH(a.textContent.trim() === url ? host : a.textContent.trim())}</b><small>${escH(host)}</small></span>`;
+    card.onclick = (e) => { e.preventDefault(); openExt(url); };
+    pp.replaceWith(card);
+    core.call("link_meta", { url }).then(r => {
+      if (!r) return;
+      if (r.title) { $("b", card).textContent = r.title; $("small", card).textContent = (r.site || host) + (r.desc && r.video ? " · " + r.desc : ""); }
+      if (r.image) { const i = $(".nt-cimg", card); i.style.backgroundImage = `url("${r.image.replace(/"/g, "%22")}")`; i.classList.add("on"); card.classList.toggle("vid", !!r.video); }
+    }).catch(() => { });
+  });
+}
+function ntCloseTile() { $(".nt-cols").classList.remove("open"); NT.cur = ""; NT.doc = null; $("#nt-view").innerHTML = ""; $$("#nt-list .cur").forEach(x => x.classList.remove("cur")); }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && NT.grid && $(".nt-cols.open") && !NT.edit && !document.querySelector("dialog[open]")) ntCloseTile(); });
+
 async function ntImg(path) {
   if (!NT.imgs[path]) NT.imgs[path] = core.call("note_file", { path }).then(r => r.url).catch(() => "");
   return NT.imgs[path];
@@ -96,7 +188,8 @@ async function ntOpen(path, edit) {
   await ntFlush();
   let d; try { d = await core.call("ws_read", { path }); } catch (e) { toast(e.message); return; }
   NT.cur = path; NT.edit = !!edit; NT.doc = Object.assign(ntParse(path, d.text), { mtime: d.mtime });
-  $$("#nt-list .nt-row").forEach(b => b.classList.toggle("cur", b.dataset.p === path));
+  $$("#nt-list .nt-row, #nt-list .nt-tile").forEach(b => b.classList.toggle("cur", b.dataset.p === path));
+  $(".nt-cols").classList.toggle("open", NT.grid);                       // плитками — заметка открывается поверх
   ntShow();
 }
 function ntShow() {
@@ -106,10 +199,13 @@ function ntShow() {
     ${files.length ? `<div class="nt-files">${files.map(a => `<span class="nt-f" data-i="${d.att.indexOf(a)}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg>${escH(a.name)}${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</span>`).join("")}</div>` : ""}`;
   if (!NT.edit) {
     v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? `<i class="nt-chip">${escH(ntDir(path).replace(/^Заметки\//, ""))}</i>` : ""}${ntChips((d.meta || {}).tags, (d.meta || {}).source && (d.meta || {}).source !== ntDir(path).replace(/^Заметки\//, "") ? d.meta.source : "")}</small></div>
-        <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger" id="nt-del">Удалить</button></span></div>
+        <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger" id="nt-del">Удалить</button>${NT.grid ? '<button class="nt-close" type="button" id="nt-close" aria-label="Закрыть">×</button>' : ""}</span></div>
+      ${ntMetaHtml(d)}
       <div class="nt-body"${ntCs() ? ` data-cs="${escH(ntCs())}"` : ""}>${ntRender(d.body) || `<p class="hint">Пустая заметка — нажмите «Изменить».</p>`}</div>${attHtml(false)}`;
     if (window.DewiarRich) DewiarRich.diagrams($("#nt-view .nt-body")).catch(() => { });   // ```mermaid — схемой
     $("#nt-edit").onclick = () => { NT.edit = true; ntShow(); setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 50); };
+    ntMetaBind(d); ntCards();
+    if ($("#nt-close")) $("#nt-close").onclick = ntCloseTile;
     $("#nt-open").onclick = () => core.call("ws_open", { path }).catch(e => toast(e.message));
     $("#nt-del").onclick = ntDelete;
     $$("#nt-view a[data-ext]").forEach(a => a.onclick = (e) => { e.preventDefault(); openExt(a.dataset.ext); });
@@ -179,6 +275,20 @@ async function ntGoto(path) {
 window.ntGoto = ntGoto;
 $("#nt-q").oninput = () => { clearTimeout(NT.t); NT.t = setTimeout(ntLoad, 180); };
 $("#nt-add").onclick = ntNew;
+$$("#nt-vw [data-v]").forEach(b => b.onclick = () => { NT.grid = b.dataset.v === "grid"; try { localStorage.setItem("nt_grid", NT.grid ? "1" : "0"); } catch (e) { }
+  if (!NT.grid) $(".nt-cols").classList.remove("open"); else ntCloseTile(); ntLoad(); });
+/* Перенос из Google Keep: архив Google Takeout (zip) или распакованная папка — core/keep_import.py */
+$("#nt-keep").onclick = async () => {
+  const a = window.pywebview && window.pywebview.api; let path = "";
+  if (a && a.pick_file) path = await a.pick_file("Архив Google Takeout (*.zip)");
+  if (!path && !(a && a.pick_file)) path = await askText("Путь к архиву Google Takeout (.zip) или к распакованной папке:") || "";
+  if (!path) return;
+  toast("Переношу заметки из Keep…", 4000);
+  try { const r = await core.call("notes_import_keep", { path }); NT.f = ""; await ntLoad();
+    toast(r.added ? `Перенесено заметок: ${r.added}${r.skipped ? `, уже были: ${r.skipped}` : ""} — с метками, цветом и закреплёнными` : r.skipped ? `Все заметки уже перенесены (${r.skipped})` : "Заметок в архиве не нашлось", 6000); }
+  catch (e) { toast(e.message, 6000); }
+};
+core.on("keep_import", (e) => toast(`Переношу из Keep: ${e.i} из ${e.n}…`, 2500));
 document.addEventListener("paste", (e) => {                 // снимок из буфера — к открытой на правку заметке
   if (!NT.edit || !$("#p-notes").classList.contains("cur")) return;
   const fs = [...(e.clipboardData && e.clipboardData.files || [])].filter(f => /^image\//.test(f.type));

@@ -10,6 +10,37 @@ import threading
 import time
 
 from engine_base import Turn, log
+import re
+
+YES_RX = re.compile(r"\b(да|давай|хочу|конечно|можно|ага|угу|хорошо|ладно|окей|ок)\b", re.I)
+NO_RX = re.compile(r"\b(нет|не\s+надо|не\s+нужно|не\s+хочу|потом|не\s+сейчас)\b", re.I)
+_NOT_NAME = {"привет", "здравствуй", "здравствуйте", "алло", "да", "нет", "лира", "патрик", "ок", "хорошо", "слышишь", "спасибо",
+             "меня", "зовут", "я", "это", "микрофон", "проверка", "раз", "два", "три"}
+
+
+def intro_name(text):
+    """«Меня зовут Михаил», «Миша», «я Ольга», «зови меня Саша» -> «Михаил»; не похоже на имя — ""."""
+    t = re.sub(r"[^\w\s-]", " ", str(text or "")).strip()
+    m = re.search(r"(?:меня\s+зовут|зови(?:те)?\s+меня|можно\s+просто|я\s*[-—]?\s*это|^я)\s+([А-Яа-яЁё][А-Яа-яЁё-]{1,20})(?:\s+([А-Яа-яЁё][А-Яа-яЁё-]{2,20}))?", t, re.I)
+    if m:
+        w = [m.group(1)] + ([m.group(2)] if m.group(2) and not re.match(r"(?i)и|а|да|вот|ну", m.group(2)) else [])
+    else:
+        words = t.split()
+        w = words if 1 <= len(words) <= 2 and all(re.match(r"[А-Яа-яЁё-]{2,20}$", x) for x in words) else []
+    w = [x for x in w if x.lower() not in _NOT_NAME]
+    return " ".join(x[:1].upper() + x[1:].lower() for x in w)[:40] if w else ""
+
+
+def intro_city(text):
+    """«В Минске», «Минск», «живу в Гродно» -> (город, как сказать в ответ: «в Минске» / «Минск»); не похоже — ("", "")."""
+    t = re.sub(r"[^\w\s-]", " ", str(text or "")).strip()
+    m = re.match(r"(?i)^(?:я\s+)?(?:живу\s+|сейчас\s+)?(в|во)\s+", t)
+    t = re.sub(r"(?i)^(?:я\s+)?(?:живу\s+|сейчас\s+)?(?:в|во|из)\s+", "", t).strip()
+    t = re.sub(r"(?i)^(?:город|г)\s+", "", t).strip()
+    if not t or len(t) > 40 or len(t.split()) > 3 or NO_RX.search(t) or t.lower() in _NOT_NAME:
+        return "", ""
+    city = " ".join(x[:1].upper() + x[1:].lower() if i == 0 else x.lower() for i, x in enumerate(t.split()))
+    return city, (f"{m.group(1).lower()} {city}" if m else city)
 
 
 class IntroMixin:
@@ -154,6 +185,48 @@ class IntroMixin:
                 self.s.update({"ui": {"intro": "done"}})
             self.emit("intro", step="done")
 
+    def _intro_more(self, hearing):
+        """Город (для погоды и «Утра с Лирой») и утро по расписанию. -> False, если знакомство прервали."""
+        if (self.s.get("morning") or {}).get("city"):
+            city = (self.s.get("morning") or {}).get("city")
+        else:
+            if not self._intro_say("В каком ты городе? Утром буду рассказывать погоду.", "city", phrase="В Минске"):
+                return False
+            text, _ = self._intro_listen()
+            if getattr(self, "_intro_stop", False):
+                return False
+            city, said = intro_city(text)
+            if city:
+                try:                                   # «в Минске» → «Минск»: так город и покажется в «Утре с Лирой»
+                    import weatherq
+                    g = weatherq.geocode(city, via=(getattr(getattr(self, "toolbox", None), "hooks", None) or {}).get("dewiar_web"))
+                    if g and g.get("name"):
+                        city = g["name"]
+                except Exception:  # noqa: BLE001
+                    pass
+                self.s.update({"morning": {"city": city}})
+                if not self._intro_say(f"Запомнила: {said}.", "city_ok", city=city):
+                    return False
+        rem = getattr(self, "reminders", None)
+        has_job = rem is None or any(x.get("kind") == "job" and (x.get("preset") == "brief" or x.get("brief")) for x in rem.items)
+        if not has_job:
+            if not self._intro_say("Хочешь, каждое утро в восемь я буду коротко рассказывать погоду и дела на день? Скажи «да» или «нет».",
+                                   "morning", phrases=["Да", "Нет"]):
+                return False
+            text, _ = self._intro_listen()
+            if getattr(self, "_intro_stop", False):
+                return False
+            if YES_RX.search(text or "") and not NO_RX.search(text or ""):
+                try:
+                    from jobs import parse as parse_job
+                    c = parse_job("каждый день в 08:00 делай утренняя сводка")
+                    self.reminders.add(c["at"], "Утренняя сводка", c["repeat"], "job", {"deliver": "voice", "brief": True, "preset": "brief"})
+                    if not self._intro_say("Договорились: завтра в восемь расскажу утро — погоду и дела.", "morning_ok"):
+                        return False
+                except Exception as e:  # noqa: BLE001
+                    log.info("знакомство: утро не добавилось: %s", e)
+        return True
+
     def _intro_script(self):
         pid = self.s.get("persona")
         p = self.personas.get(pid)
@@ -178,14 +251,25 @@ class IntroMixin:
                                    "mic_none", buttons=["b-type"]):
                 return
         elif hearing:
-            if not self._intro_say(f"Давай проверим микрофон. Скажи что-нибудь — например: «Привет, {name}!»", "mic",
-                                   phrase=f"Привет, {name}!"):
+            # 0.58, «первые пять минут»: знакомимся по-настоящему — имя (заодно проверка микрофона), город для погоды,
+            # утро по расписанию. Каждый вопрос можно пропустить: молчание — идём дальше.
+            if not self._intro_say("Давай познакомимся — заодно проверю микрофон. Как тебя зовут?", "mic",
+                                   phrase="Меня зовут …"):
                 return
             text, peak = self._intro_listen()
             if getattr(self, "_intro_stop", False):
                 return
-            if text:
+            who = intro_name(text)
+            if who:
+                self.s.update({"user_name": who})
+                log.info("👋 Знакомство: имя записано")
+                ok = self._intro_say(f"Очень приятно, {who}! Слышу тебя отлично.", "mic_ok", heard=text, name_set=who)
+                if ok:
+                    ok = self._intro_more(hearing=True)
+            elif text:
                 ok = self._intro_say(f"Слышу тебя отлично: «{text.rstrip('.!?')}». Микрофон в порядке.", "mic_ok", heard=text)
+                if ok:
+                    ok = self._intro_more(hearing=True)
             elif peak > 0.04:
                 ok = self._intro_say("Голос слышу, но слов не разобрать. Говори чуть ближе к микрофону или громче — "
                                      "настроить можно в студии, в разделе «Слух».", "mic_weak")

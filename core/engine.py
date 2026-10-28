@@ -16,11 +16,13 @@ from engine_commands import CommandsMixin  # noqa: E402
 from engine_intro import IntroMixin  # noqa: E402
 from health import HealthMixin  # noqa: E402
 from engine_pay import PayMixin  # noqa: E402
+from engine_senior import SeniorMixin  # noqa: E402  режимы Лиры и «Для старших» (senior.py)
+from engine_watch import WatchMixin  # noqa: E402  «Дозор»: присмотреть и сказать, когда готово (watch.py)
 from engine_mymusic import MyMusicMixin  # noqa: E402
 
 
 class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin,
-             PayMixin):
+             PayMixin, SeniorMixin, WatchMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
@@ -109,6 +111,14 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from kids import Kids
         self.kids = Kids(settings, STATE_DIR / "kids.json")          # детский режим: время, отчёт, PIN родителя
         self.toolbox.hooks["kids"] = self.kids
+        from linkmeta import LinkMeta
+        self._linkmeta = LinkMeta(STATE_DIR / "links.json")         # ссылки в заметках — карточками (save_link, link_meta)
+        self.toolbox.hooks["linkmeta"] = self._linkmeta
+        from senior import Senior
+        self.senior = Senior(settings, STATE_DIR / "senior.json")    # режим «Для старших»: лекарства, «всё хорошо», мошенники
+        from watch import Watches
+        self.watches = Watches(STATE_DIR / "watch.json")             # «Дозор»: экран, папка, страница — сказать, когда готово
+        self.toolbox.hooks["watch"] = self
         if self.s.get("tts", "engine") == "piper" and not self.s.get("tts", "v2"):
             # разовый перенос старых настроек: русские голоса Vosk TTS заметно лучше Piper (Piper остаётся запасным);
             # метка v2 — чтобы не перебить выбор Piper, сделанный позже вручную. №226 (24.10): на слабом компьютере
@@ -304,7 +314,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.reminders.on_wake = self._reminders_wake                  # проснулись — сначала сверка с телефоном (28.10)
         self.sync.on_pass = self.reminders.release_hold                 # сверка прошла — опоздавшие звенят сразу, не через 90 с
         threading.Thread(target=self._tg_sync_loop, name="tg-sync", daemon=True).start()
-        threading.Thread(target=self._morning_loop, name="morning", daemon=True).start()   # «Утро с Лирой» — своему телефону
+        threading.Thread(target=self._morning_loop, name="morning", daemon=True).start()
+        threading.Thread(target=self._senior_loop, name="senior", daemon=True).start()   # «Для старших»: сводка близким
+        threading.Thread(target=self._watch_loop, name="watch", daemon=True).start()     # «Дозор»   # «Утро с Лирой» — своему телефону
         threading.Thread(target=self._radio_check_loop, name="radio-check", daemon=True).start()
         threading.Thread(target=self._diary_loop, name="diary", daemon=True).start()
         threading.Thread(target=self._pay_loop, name="payments", daemon=True).start()

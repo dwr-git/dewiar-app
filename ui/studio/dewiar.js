@@ -129,7 +129,7 @@ function dwRender() {
       : n.reserve_used ? "Сейчас работает: dewiar.pro напрямую не открывался — программа ходит через прокси Dewiar."
       : n.reserve_ready ? "Готов: если провайдер или сеть не пустят к dewiar.pro, программа сама пойдёт через прокси Dewiar и скажет об этом."
       : "Сначала — напрямую. Если провайдер или сеть не пускают к dewiar.pro, программа сама идёт через прокси Dewiar, полученный заранее (нужен вход аккаунтом или ключ Dewiar).";
-    $("#dw-web").checked = !(S.net && S.net.web_via === false);
+    $("#dw-web").checked = !(S && S.net && S.net.web_via === false);   // S ещё не пришло — без падения (studio1022 моргал)
     const ck = n.check, viaOk = ck && ck.proxy && ck.proxy[0], dirOk = ck && ck.direct[0];
     if (ck) { $("#dw-net-res").className = "res " + (dirOk || viaOk ? "ok" : "bad"); $("#dw-net-res").textContent = ck.advice; }
     if (ck) dwSet("net", ck.proxy ? (viaOk ? "ok" : "bad") : (dirOk ? "ok" : "bad"), ck.proxy ? (viaOk ? "через прокси" : "прокси не работает") : (dirOk ? "напрямую" : "сайт не открывается"));

@@ -21,7 +21,7 @@ def ok(c, m):
 
 F = workspace.note_front
 KEEP = "--\nsource: Google Keep\nid: Эйнштейн\nstatus: цвет: BROWN\n--\n\n# Эйнштейн\n\nА что, собственно, представляет собой теория?\n"
-ok(F(KEEP)[0] == {"source": "Google Keep", "id": "Эйнштейн", "status": "цвет: BROWN", "color": "BROWN"} and F(KEEP)[1].strip().startswith("# Эйнштейн"),
+ok(F(KEEP)[0] == {"source": "Google Keep", "id": "Эйнштейн", "status": "цвет: BROWN", "color": "BROWN", "pinned": False, "archived": False} and F(KEEP)[1].strip().startswith("# Эйнштейн"),
    "шапка Google Keep разобрана: источник, цвет; текст — без неё")
 ok(F("---\ntags: [linux, golang]\npinned: true\n---\nтекст")[0]["tags"] == ["linux", "golang"]
    and F("---\ntags:\n  - c#\n  - cursor\n---\nx")[0]["tags"] == ["c#", "cursor"], "метки Obsidian — строкой и списком")
@@ -63,7 +63,7 @@ with sync_playwright() as p:
        f"заметка из Keep: название один раз, шапки не видно: {r[1][:60]!r}")
     ok(r[2] == "rgb(167, 123, 90)", f"цвет из Keep — полоской у заметки в списке: {r[2]}")
     pg.click('#nt-list .nt-row[data-p="Заметки/Linux.md"]'); pg.wait_for_timeout(400)
-    ok(pg.evaluate("[...document.querySelectorAll('#nt-view .nt-tag')].map(x => x.textContent)") == ["#linux", "#hardware"]
+    ok(pg.evaluate("[...document.querySelectorAll('#nt-view .nt-top .nt-tag')].map(x => x.textContent)") == ["#linux", "#hardware"]
        and pg.evaluate("[...document.querySelectorAll('#nt-list .nt-row[data-p=\"Заметки/Linux.md\"] .nt-tag')].length") == 2, "метки — чипами и в списке, и в заметке")
     pg.click('#nt-list .nt-row[data-p="Заметки/Google Keep/Эйнштейн.md"]'); pg.wait_for_timeout(400)
     pg.click("#nt-edit"); pg.wait_for_timeout(300)

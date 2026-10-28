@@ -107,10 +107,10 @@ with sync_playwright() as p:
       $('nav button[data-p="ref"]').click(); }""", [D, MAP, PEOPLE])
     pg.wait_for_timeout(1500)
     nav = pg.evaluate("() => [...document.querySelectorAll('nav button[data-p]')].map(b => b.dataset.p)")
-    ok(nav[nav.index("close"):nav.index("ref") + 1] == ["close", "family", "kids", "ref"],
-       "группа «Семья и близкие» (28.10): «Близкие», «Семья», «Дети», «Рефералы»")
+    ok(nav[nav.index("close"):nav.index("ref") + 1] == ["close", "family", "ref"] and nav[nav.index("ref") + 1:nav.index("ref") + 3] == ["kids", "senior"],
+       "группа «Семья и близкие»: «Близкие», «Семья», «Рефералы»; за ней «Режимы Лиры» — «Для ребёнка», «Для старших» (0.58)")
     groups = pg.evaluate("() => [...document.querySelectorAll('nav .ng')].map(g => g.textContent.trim())")
-    ok(groups[:3] == ["Для себя", "Семья и близкие", "Работа"], f"меню студии — по смыслу: {groups[:3]}")
+    ok(groups[:5] == ["Для себя", "Лира делает сама", "Семья и близкие", "Режимы Лиры", "Работа"], f"меню студии — по смыслу: {groups[:5]}")
     r = pg.evaluate("""() => [!!$('#rf-net .rn.big'), $('#rf-code').textContent, !!$('#rf-qr svg'), $('#rf-rules').textContent.includes('+1'), $('#rf-use').style.display,
       [...document.querySelectorAll('#rf-list .rf-p b')].map(b => b.textContent), $('#rf-by').textContent.includes('Анна'),
       [...document.querySelectorAll('#rf-list .rf-p')].map(r => [...r.querySelectorAll('button')].map(b => b.textContent).join('+'))]""")

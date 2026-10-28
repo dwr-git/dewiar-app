@@ -122,6 +122,9 @@ function bindFields() {
     if (dwVoiceOn()) return dwVoice(false, o.dataset.tts);           // уходим с голоса Dewiar — сразу на выбранный
     save({ tts: { engine: o.dataset.tts } });
   });
+  // «Язык Лиры» (28.10, владелец: «думал, будет выбор языка в настройках, русский по умолчанию, английский — в списке»):
+  // список вместо переключателя «Понимать английскую речь»; English целиком (с меню) — когда переведём программу
+  if ($("#lang-sel")) $("#lang-sel").onchange = () => save({ stt: { english: $("#lang-sel").value === "ru_en" } });
   // extra — тоже заменяется целиком (settings._merge), так что лишние ключи из поля убираются
   $("#ttsextra").onchange = () => { try { save({ tts: { remote: { extra: JSON.parse($("#ttsextra").value || "{}") } } }); } catch (e) { toast("Это не JSON"); } };
 }
@@ -134,6 +137,7 @@ function refreshStatic() {
     if (document.activeElement === inp) return;           // не перетираем поле, которое сейчас правят
     const v = get(inp.dataset.k); if (inp.type === "checkbox") inp.checked = !!v; else if (v !== undefined && v !== null) inp.value = v;
   });
+  const ls = $("#lang-sel"); if (ls && document.activeElement !== ls) ls.value = get("stt.english") ? "ru_en" : "ru";
   $("#speedv").textContent = `×${S.tts.speed}`;
   const pl = $("#pause-learn"), px = +get("audio.end_silence_extra") || 0;          // подстройка паузы: сколько уже добавлено
   if (pl) {

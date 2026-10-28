@@ -1561,7 +1561,8 @@ const SPEAK_RULES = [[/(?:https?:\/\/|www\.)\S+/gi, ""],
   [/(^|\s)и т\.\s?п\./gi, "$1и тому подобное"], [/(^|\s)т\.\s?к\./gi, "$1так как"], [/(^|\s)напр\./gi, "$1например"],
   [/:\s*[—–-]\s+/g, ": "], [/\s+(?:и|или|в|на|по|из)\s*(?=[.,;:!?]|$)/g, ""], [/\s+([:,;—–-])\s*(?=[:,;.!?—–]|$)/g, ""], [/\(\s*\)/g, ""]];
 function speechText(t) {
-  t = t.replace(/```[\s\S]*?```/g, " ");
+  t = t.replace(/```[\s\S]*?```/g, " ")
+    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, " ").replace(/<!--[\s\S]*?-->|<!doctype[^>]*>|<\/?[A-Za-z][\w:-]*(?:\s[^<>]*)?\/?>/gi, " ");   // теги вслух не читаем (28.10)
   for (const [rx, to] of SPEAK_RULES) t = t.replace(rx, to);
   return t.replace(/[*_#>`|~]+/g, " ").replace(EMOJI, "").replace(/\s+/g, " ").trim();
 }
@@ -4177,7 +4178,10 @@ function remindAttQuick(text, att) {
    Вложения — файлы natt-<id> во внутренней памяти (data: URL; фото сжаты shrinkImage), в заметке — только их список att.
    Синхронизация уносит на компьютер текст заметки; вложения — зашифрованным каналом своих устройств (noteAttShare). */
 let turnAtt = [], turnAsk = "", noteCur = "", notePend = [];
-const noteBody = (t) => String(t || "").replace(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/, "");   // заметка с компьютера: без заголовка и даты
+// шапка заметки «---» (Obsidian, перенос из Google Keep; core/workspace.py note_front) — не показываем, при правке сохраняем
+const NOTE_FRONT = /^\ufeff?(-{2,3})[ \t]*\n((?:[ \t]*(?:[\w\-а-яёА-ЯЁ]+[ \t]*:.*|-[ \t].*|)\n)*?)\1[ \t]*(?:\n|$)/;
+const noteFront = (t) => { const m = NOTE_FRONT.exec(String(t || "")); return m && m[2].trim() ? m[0].replace(/\n?$/, "\n") : ""; };
+const noteBody = (t) => String(t || "").slice(noteFront(t).length).replace(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/, "");   // заметка с компьютера: без шапки, заголовка и даты
 // строки-ссылки на вложения компьютера («![фото.jpg](Вложения/…)», «📎 [план.pdf](Вложения/…)», core/workspace.py NOTE_LINK_RX):
 // в тексте на телефоне их не показываем, а при сохранении возвращаем в конец — иначе ссылки потерялись бы на компьютере
 const NOTE_LINK_LINE = /^[ \t]*(?:📎\s*)?!?\[[^\]\n]*\]\(Вложения\/[^)\s]+\)[ \t]*$/gm;
@@ -4332,8 +4336,8 @@ function renderNote() {
       const all = notes(), x = all.find(y => y.id === n.id); if (!x) return;
       const shown = noteShown(x.text).split("\n"), i = +b.dataset.ln, line = shown[i] || "";
       shown[i] = /\[[ ]\]/.test(line) ? line.replace("[ ]", "[x]") : line.replace(/\[[xX]\]/, "[ ]");
-      const head = String(x.text || "").match(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/), ln = noteLinks(x.text);
-      x.text = (head ? head[0] : "") + shown.join("\n") + (ln.length ? "\n\n" + ln.join("\n") : ""); x.time = Date.now(); saveNotes(all);
+      const fr = noteFront(x.text), head = String(x.text || "").slice(fr.length).match(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/), ln = noteLinks(x.text);
+      x.text = fr + (head ? head[0] : "") + shown.join("\n") + (ln.length ? "\n\n" + ln.join("\n") : ""); x.time = Date.now(); saveNotes(all);
       const li = b.closest("li"), on = !li.classList.contains("done"); li.classList.toggle("done", on); b.setAttribute("aria-pressed", on);
     });
     $$("#note-body .ntopen").forEach(b => b.onclick = () => { const a = att.find(x => x.id === b.dataset.id); if (a) view(a); });
@@ -4405,7 +4409,7 @@ function renderNote() {
     const title = $("#nt-title").value.trim(), text = $("#nt-text").value.trim();
     if (!title && !text && !notePend.length) { toast("Пустая заметка"); return; }
     const all = notes(), t0 = title || text.split(/\n/)[0].replace(/^#+\s*|^[-*]\s+(\[[ xX]\]\s*)?/, "").slice(0, 60) || "Фото", fold = folderName($("#nt-folder").value);
-    if (n) { const x = all.find(y => y.id === n.id), ln = noteLinks(x && x.text); if (x) { x.title = t0; x.text = text + (ln.length ? "\n\n" + ln.join("\n") : ""); x.time = Date.now(); x.folder = fold; } }
+    if (n) { const x = all.find(y => y.id === n.id), ln = noteLinks(x && x.text); if (x) { x.title = t0; x.text = noteFront(x.text) + text + (ln.length ? "\n\n" + ln.join("\n") : ""); x.time = Date.now(); x.folder = fold; } }
     else { const id = "n" + Date.now(); all.push(Object.assign({ id, title: t0, text, time: Date.now() }, notePend.length ? { att: noteAttSave(notePend.map(p => p.src)) } : {}, fold ? { folder: fold } : {})); noteCur = id; }
     notePend = []; saveNotes(all); renderDay(); noteMode = "view"; renderNote(); toast("Заметка сохранена");
   };
@@ -5232,7 +5236,11 @@ function agendaPlans(text) {
   let d = dayOf(t);
   if (!d && /(?:по\s+плану|какие\s+(?:у\s+(?:меня|нас)\s+)?(?:планы|дела)|что\s+у\s+(?:меня|нас)\s+(?:сегодня|на\s+сегодня)?\s*$)/i.test(t.replace(/[?!.]+$/, ""))) { d = new Date(); d.setHours(0, 0, 0, 0); }   // «что у нас по плану?» — сегодня
   if (!d) return "";
-  return dayPlans(d.getTime(), d.getTime() + 864e5);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // «в среду» в среду: и сегодня, и через неделю — «в среду в 15:00» после 15:00 запомнилось на следующую (тестер 28.10)
+  const wk = d.getTime() === today.getTime() && /(?:в|во|на)\s+(?:воскресенье|понедельник|вторник|среду|четверг|пятницу|субботу)/i.test(t)
+    ? dayPlans(d.getTime() + 7 * 864e5, d.getTime() + 8 * 864e5) : "";
+  return (dayPlans(d.getTime(), d.getTime() + 864e5) + wk).replace(/(Назови и это — это тоже планы пользователя\.)([\s\S]*)\1/, "$2$1");
 }
 // «сегодня», «завтра», «послезавтра», «в/на среду» (ближайшая, сегодня — сегодня), «21 октября», «21.10» -> полночь дня или null
 function dayOf(text) {
@@ -7571,6 +7579,10 @@ function ownApply(body) {
   try { devBrainsOwn(body); } catch (e) { plog("warn", "мозги со своего устройства: " + e.message); }   // «Устройства» (devices.js)
   try { bsTake(body); } catch (e) { plog("warn", "сотрудники: " + e.message); }   // доска «Поручений» с компьютера (boss.js)
   if (body && body.morning && typeof body.morning === "object") mornTake(body.morning);   // «Утро с Лирой» с компьютера
+  if (body && body.ping && typeof body.ping === "object" && Date.now() - (+body.ts || Date.now()) < 6 * 3600e3) {   // «Дозор» с компьютера: готово
+    const t = String(body.ping.title || "Dewiar").slice(0, 80), x = String(body.ping.text || "").slice(0, 300);
+    try { D.notify(t, x); } catch (e) { } toast(`${t}: ${x}`, 6000); plog("info", "👁 с компьютера: " + x.slice(0, 80));
+  }
   if (body && Array.isArray(body.want) && body.want.some(w => w !== "team") && (S.home.at || S.home.token || syncKeyGet())) setTimeout(() => ownShare().catch(() => { }), 0);   // другое моё устройство просит
   const skb = body && body.sync_key;
   if (skb && typeof skb === "object" && syncKeyAdopt(skb.k, skb.at)) {

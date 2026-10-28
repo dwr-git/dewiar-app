@@ -14,7 +14,9 @@ function fmColor(pid) {                                   // цвет челов
   const order = [""].concat((FM.members || []).filter(m => m.st === "joined").map(m => m.pid));
   const i = order.indexOf(pid); return FM_COL[(i < 0 ? order.length : i) % FM_COL.length];
 }
-const fmAva = (name, pid, size) => `<span class="fm-ava${size ? " " + size : ""}" style="background:${fmColor(pid)}" aria-hidden="true">${escH((name || "?").trim()[0] || "?").toUpperCase()}</span>`;
+/* Аватар человека (28.10, владелец: «аватарки грубовато смотрятся… поприятнее и попонятнее»): мягкий градиент его
+   цвета, белая буква, светлая кромка вместо тёмной обводки; кто ещё не принял — пунктиром и бледнее. */
+const fmAva = (name, pid, size) => `<span class="fm-ava${size ? " " + size : ""}" style="--c:${fmColor(pid)}" aria-hidden="true">${escH((name || "?").trim()[0] || "?").toUpperCase()}</span>`;
 
 function fmRender() {
   const d = FM;
@@ -25,7 +27,7 @@ function fmRender() {
   const by = d.by.filter(v => v.sum > 0 || v.pid === "" || (d.members || []).some(m => m.pid === v.pid && m.st === "joined"));
   const over = lim && d.total > lim;
   $("#fm-month").innerHTML = `<div class="fm-mh"><div><small>Семья</small><h2>${FM_MONTH[mi]}</h2></div>`
-    + `<div class="fm-stack">${by.map(v => fmAva(v.pid ? v.name : d.me, v.pid)).join("")}</div></div>`
+    + (by.length > 1 ? `<div class="fm-stack" title="${escH(by.map(v => v.pid ? v.name : d.me).join(", "))}">${by.map(v => fmAva(v.pid ? v.name : d.me, v.pid)).join("")}</div>` : "") + `</div>`
     + `<div class="fm-total"><b>${fmNum(d.total)} <span>${escH(fmCur())}</span></b>`
     + `<label class="fm-lim">${lim ? (over ? `больше лимита на ${fmNum(d.total - lim)}` : `из ${fmNum(lim)} на месяц`) : "лимит на месяц"}`
     + `<input type="number" id="fm-limit" min="0" step="10" value="${lim || ""}" placeholder="не задан" aria-label="Лимит на месяц"></label></div>`

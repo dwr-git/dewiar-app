@@ -19,9 +19,9 @@ function kdRender() {
   // полоса состояния: выключен — что нужно, чтобы включить; включён — кто, сколько осталось, «Выключить»
   $("#kd-bar").className = "kd-bar" + (d.on ? " on" : "");
   $("#kd-bar").innerHTML = d.on
-    ? `<div><b>Включён${name ? ": " + escH(name) : ""}</b><span>${d.can_talk ? `Осталось сегодня: ${kdMin(d.left)}` : escH(d.why)}. Отвечает ${escH(d.friend_name)}.</span></div>`
+    ? `<div><b>Режим «Для ребёнка» включён${name ? " — " + escH(name) : ""}</b><span>${d.can_talk ? `Осталось сегодня: ${kdMin(d.left)}` : escH(d.why)}. Отвечает ${escH(d.friend_name)}.</span></div>`
       + `<button class="btn" id="kd-off">Выключить</button>`
-    : `<div><b>Выключен</b><span>${d.has_pin ? "Всё готово — можно включать." : "Сначала задайте PIN родителя — ниже, в карточке ребёнка."}</span></div>`
+    : `<div><b>Режим выключен — Лира как обычно</b><span>${d.has_pin ? "Всё готово: включите, когда за компьютер сядет ребёнок." : "Чтобы включить: имя ребёнка и PIN родителя — ниже, в карточке слева."}</span></div>`
       + `<button class="btn primary" id="kd-onb">Включить детский режим</button>`;
   if ($("#kd-onb")) $("#kd-onb").onclick = () => d.has_pin ? kdCall("kids_on", { on: true }, `Детский режим включён. Отвечает ${d.friend_name}.`)
     : (toast("Сначала задайте PIN родителя — в карточке ребёнка", 3500), $("#kd-pnew") && $("#kd-pnew").focus());

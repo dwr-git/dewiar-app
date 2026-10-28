@@ -69,13 +69,17 @@
   <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года">Платежи<i class="ndot" id="pay-dot"></i></button>
   <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать">Сейф паролей</button>
   <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками">Музыка</button>
+  <div class="ng">Лира делает сама</div>
+  <button data-p="tasks" title="Большая работа, которую Лира делает сама: отчёт, сравнение, программа — пишет, когда готово">Задачи</button>
+  <button data-p="watch" title="«Дозор»: Лира присмотрит за экраном, папкой или страницей и скажет, когда готово">Дозор<i class="ndot" id="wt-dot"></i></button>
   <div class="ng">Семья и близкие</div>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
   <button data-p="family" title="Семейный бюджет: общие траты и платежи с близкими">Семья<i class="ndot" id="fam-dot"></i></button>
-  <button data-p="kids" title="Детский режим: друг ребёнка, безопасные темы, время и отчёт вам">Дети</button>
   <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
+  <div class="ng">Режимы Лиры</div>
+  <button data-p="kids" title="Режим «Для ребёнка»: Лира на этом компьютере становится другом ребёнка — безопасные темы, время и отчёт вам">Для ребёнка</button>
+  <button data-p="senior" title="Режим «Для старших»: крупно и просто, лекарства, «всё хорошо» близким, защита от мошенников">Для старших</button>
   <div class="ng">Работа</div>
-  <button data-p="tasks">Задачи</button>
   <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden>Поручения<i class="ndot" id="team-dot"></i></button>
   <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden>Клиенты<i class="ndot" id="cr-dot"></i></button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
@@ -127,7 +131,7 @@
       <linearGradient id="hg9" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fe07a"/><stop offset="1" stop-color="#23a06e"/></linearGradient>
     </defs></svg>
     <div id="hm-body">
-      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p></div><div class="sn-wrap" id="sn"></div></div>
+      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p><button class="hm-mode" type="button" id="hm-mode" aria-haspopup="dialog"><i aria-hidden="true"></i><span>Лира — для меня</span></button></div><div class="sn-wrap" id="sn"></div></div>
       <div class="hm-morning" id="hm-morning" hidden></div>
       <div class="hm-today" id="hm-today"></div>
       <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
@@ -213,13 +217,60 @@
       «что я записывал про ремонт?»</p>
     <div class="nt-bar"><label class="nt-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
       <input id="nt-q" type="search" placeholder="Найти: слово или несколько слов" autocomplete="off"></label><span class="nt-count" id="nt-count"></span>
+      <span class="nt-vw" id="nt-vw" role="group" aria-label="Вид"><button type="button" data-v="list" title="Списком, заметка справа"><svg viewBox="0 0 24 24"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg></button><button type="button" data-v="grid" title="Плитками, как в Keep"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="9" rx="2"/><rect x="13" y="4" width="7" height="5" rx="2"/><rect x="4" y="15" width="7" height="5" rx="2"/><rect x="13" y="11" width="7" height="9" rx="2"/></svg></button></span>
+      <button class="btn" id="nt-keep" title="Перенести заметки из Google Keep — архив Google Takeout">Перенести из Keep</button>
       <button class="btn primary" id="nt-add">Новая заметка</button></div>
+    <div class="nt-filt" id="nt-filt" hidden></div>
     <div class="nt-cols"><div id="nt-list" class="nt-list"></div><div id="nt-view" class="nt-view"></div></div>
+  </section>
+  <section id="p-watch" class="wide">
+    <div class="wt-hero">
+      <div class="wt-eye" aria-hidden="true"><svg viewBox="0 0 120 72"><path class="wt-lid" d="M6 36S28 6 60 6s54 30 54 30-22 30-54 30S6 36 6 36z"/><circle class="wt-iris" cx="60" cy="36" r="20"/><circle class="wt-pupil" cx="60" cy="36" r="8"/><circle class="wt-glint" cx="66" cy="29" r="3.2"/></svg></div>
+      <div>
+        <h1>Дозор</h1>
+        <p class="lead">Лира присмотрит и скажет, когда готово. Занимайтесь своими делами — она поглядывает на экран, в папку или на
+          страницу и зовёт, как только дождалась: голосом здесь, уведомлением на телефоне и в Telegram.</p>
+        <div class="wt-try" id="wt-try">
+          <button type="button" data-k="screen" data-w="Claude закончил и написал ответ">«Скажи, когда Claude ответит»</button>
+          <button type="button" data-k="screen" data-w="загрузка или экспорт закончились — полоса прогресса исчезла или написано «Готово»">«Скажи, когда закончится экспорт»</button>
+          <button type="button" data-k="file" data-f="Загрузки">«Скажи, когда в Загрузках появится файл»</button>
+          <button type="button" data-k="page" data-w="Одобрено">«Скажи, когда на странице заявки будет „Одобрено“»</button>
+        </div>
+      </div>
+    </div>
+    <div class="wt-grid">
+      <div class="wt-card wt-new">
+        <h2>Новый дозор</h2>
+        <div class="wt-kind" role="radiogroup" aria-label="За чем присматривать">
+          <button type="button" data-kind="screen" role="radio" class="on" aria-checked="true"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/></svg>Экран</button>
+          <button type="button" data-kind="file" role="radio" aria-checked="false"><svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>Папка</button>
+          <button type="button" data-kind="page" role="radio" aria-checked="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.5 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.5-3.6-8.5S9.5 6.1 12 3.5z"/></svg>Страница</button>
+        </div>
+        <label class="wt-f" data-for="screen page" id="wt-what-l"><span id="wt-what-t">Чего ждать на экране</span><input type="text" id="wt-what" maxlength="200" placeholder="Claude закончил и написал ответ"></label>
+        <label class="wt-f" data-for="file" hidden>Папка<input type="text" id="wt-folder" placeholder="Загрузки" value="Загрузки"></label>
+        <label class="wt-f" data-for="file" hidden>Какие файлы<input type="text" id="wt-pattern" placeholder="все — или *.mp4, *.pdf"></label>
+        <label class="wt-f" data-for="page" hidden>Адрес страницы<input type="url" id="wt-url" placeholder="https://…"></label>
+        <div class="wt-row">
+          <label class="wt-f" data-for="screen page">Смотреть<select id="wt-every"><option value="2">раз в 2 минуты</option><option value="5" selected>раз в 5 минут</option><option value="10">раз в 10 минут</option><option value="30">раз в 30 минут</option></select></label>
+          <label class="wt-f">Ждать<select id="wt-hours"><option value="1">до часа</option><option value="3" selected>до 3 часов</option><option value="8">до 8 часов</option><option value="24">до суток</option></select></label>
+        </div>
+        <div class="actions" style="margin:0"><button class="btn primary" type="button" id="wt-go">Начать дозор</button><span class="res" id="wt-res"></span></div>
+        <p class="wt-safe" id="wt-safe">Снимки экрана никуда не сохраняются. Сначала Лира сравнивает экран сама, на этом компьютере, — модель
+          спрашивает, только если на экране что-то изменилось.</p>
+      </div>
+      <div class="wt-card">
+        <h2>Сейчас в дозоре</h2>
+        <div id="wt-act" class="wt-list"></div>
+        <h3 class="wt-h3">Недавно</h3>
+        <div id="wt-old" class="wt-list"></div>
+      </div>
+    </div>
   </section>
   <section id="p-pay" class="wide">
     <div class="py-title"><div><h1>Платежи</h1>
       <p class="lead">Обязательные оплаты: что, когда и сколько — с реквизитами, показаниями и квитанциями. Голосом:
-        «Лира, оплатил газ 47,84, показания 28135», «что у меня не оплачено?»</p></div>
+        «Лира, оплатил газ 47,84, показания 28135», «что у меня не оплачено?» Траты на каждый день («купил кофе за 8») —
+        в <button class="linkbtn" type="button" data-goto="calendar" data-ct="money">«Календарь» → «Деньги»</button>.</p></div>
       <div class="py-act"><button class="btn" id="py-imp">Перенести из органайзера</button><button class="btn primary" id="py-add">Новый платёж</button></div></div>
     <div class="py-tabs" id="py-tabs" role="tablist"><button role="tab" data-t="month" class="on">Этот месяц</button><button role="tab" data-t="year">Год</button><button role="tab" data-t="stats">Аналитика</button></div>
     <div id="py-body"></div>
@@ -660,9 +711,54 @@
     <dialog class="nwdlg tm-sealdlg" id="tm-sealdlg" aria-label="Печать Dewiar для сотрудника"><h3>Сотрудник</h3><div class="tm-sealbox"></div><p class="tm-sealnote"></p><div class="tm-sealacts"><button class="btn primary" type="button" data-copy>Скопировать ссылку</button><button class="btn" type="button" data-qr>Показать обычный QR</button><button class="btn" type="button" data-x>Готово</button></div></dialog>
     <dialog class="nwdlg tm-photo" id="tm-photo"><img alt="Фото от сотрудника"><button class="btn" type="button" id="tm-photo-x">Закрыть</button></dialog>
   </section>
+  <section id="p-senior" class="wide">
+    <h1>Для старших</h1>
+    <p class="lead">Лира для мамы, папы, бабушки или дедушки: крупно и просто, всё голосом. Напомнит про лекарства и спросит
+      «выпили?», позвонит близким одним словом, остановит мошенников — а вам вечером напишет, что всё хорошо.</p>
+    <div class="sr-bar" id="sr-bar"></div>
+    <div class="kd-grid sr-grid">
+      <div class="kd-col">
+        <div class="kd-card"><h3>Кто будет говорить с Лирой</h3>
+          <label class="sr-f">Как обращаться<input type="text" id="sr-name" maxlength="60" placeholder="Галина Петровна"></label>
+          <div class="sr-seg" role="radiogroup" aria-label="Она или он"><button type="button" data-g="f" role="radio">Она</button><button type="button" data-g="m" role="radio">Он</button></div>
+          <small class="kd-note">Так Лира будет обращаться и так напишет вам: «Галина Петровна сегодня говорила со мной».</small></div>
+        <div class="kd-card"><h3>Что меняется</h3>
+          <ul class="sr-yes">
+            <li>Крупнее текст и кнопки, голос чуть медленнее</li>
+            <li>Лира говорит просто и терпеливо, переспрашивает перед делом</li>
+            <li>На «Главной» — только нужное: близкие, дела, заметки, музыка</li>
+            <li>Работа, клиенты и поручения убраны</li>
+            <li>Вернуть, как было, — одной кнопкой</li>
+          </ul></div>
+      </div>
+      <div class="kd-col">
+        <div class="kd-card"><h3>Лекарства</h3>
+          <div class="sr-meds" id="sr-meds"></div>
+          <div class="sr-madd">
+            <label class="sr-f">Что принять<input type="text" id="sr-mtext" maxlength="120" placeholder="Таблетка от давления"></label>
+            <label class="sr-f">Во сколько<input type="text" id="sr-mtimes" placeholder="09:00, 21:00"></label>
+            <button class="btn primary" type="button" id="sr-madd">Добавить</button>
+          </div>
+          <small class="kd-note">Каждый день в это время — звонок и вопрос «выпили?». Не ответили — Лира спросит ещё раз через
+            15 минут; снова тишина — напишет вам.</small></div>
+        <div class="kd-card"><h3>Сегодня</h3><div class="sr-today" id="sr-today"></div></div>
+      </div>
+      <div class="kd-col">
+        <div class="kd-card"><h3>Кто присматривает</h3>
+          <div class="sr-who" id="sr-who"></div>
+          <div class="switch slim"><div>Вечером — «всё хорошо»<span>Как прошёл день: говорила ли с Лирой, что с лекарствами</span></div><input type="time" id="sr-eve"></div>
+          <div class="switch slim"><div>Днём — если ни слова<span>К полудню ни разговора, ни ответа про лекарства — «может, позвоните?»</span></div><label class="tg"><input type="checkbox" id="sr-noon"><i></i></label></div>
+          <div class="switch slim"><div>Защита от мошенников<span>«Звонили из банка, просят код» — Лира скажет «стоп» и сразу напишет вам</span></div><label class="tg"><input type="checkbox" id="sr-scam"><i></i></label></div>
+          <div class="actions" style="margin:0"><button class="btn" type="button" id="sr-test">Проверить — написать пробное</button><span class="res" id="sr-tres"></span></div></div>
+      </div>
+    </div>
+  </section>
+
   <section id="p-kids" class="wide">
-    <h1>Дети</h1>
-    <p class="lead">Детский режим: свой персонаж-друг, только безопасные темы, время за день и короткий отчёт вам. Выйти из режима и поменять настройки можно только с вашим PIN-кодом.</p>
+    <h1>Для ребёнка</h1>
+    <p class="lead">Это режим Лиры на этом компьютере — для компьютера, за которым сидит ребёнок. Пока режим выключен, ничего не
+      меняется, что бы вы здесь ни заполнили. Включили — с ребёнком говорит Совёнок Уго: только безопасные темы, время за день
+      и короткий отчёт вам, а всё взрослое (дела, деньги, работа, компьютер) прячется. Выключить — только с вашим PIN.</p>
     <div class="kd-bar" id="kd-bar"></div>
     <div class="kd-grid">
       <div class="kd-card">
@@ -1473,8 +1569,11 @@
     </div>
     <label class="opt" data-eng="vosk"><input type="radio" name="stt"><div><b>Vosk</b><span>Маленькая модель из комплекта. Работает сразу, но ошибается заметно чаще.</span></div></label>
     <p class="hint" id="sttstat"></p>
-    <h2>Второй язык</h2>
-    <div class="switch slim" id="stt-en"><div>Понимать английскую речь<span>Скажите по-английски — ассистент поймёт, ответит по-английски и английским голосом. Для этого один раз скачивается маленькая модель английской речи (около 40 МБ); русскую речь он слышит как обычно. Немецкие фразы в ответах читает немецкий голос.</span></div><label class="tg"><input type="checkbox" data-k="stt.english"><i></i></label></div>
+    <h2>Язык Лиры</h2>
+    <label class="f" id="stt-en">Язык разговора<select id="lang-sel">
+      <option value="ru">Русский</option>
+      <option value="ru_en">Русский и английский — отвечать на языке вопроса</option></select></label>
+    <p class="hint" id="lang-hint" style="margin-top:6px">Скажите по-английски — Лира поймёт и ответит по-английски английским голосом; по-русски — как обычно. Для этого один раз скачивается маленькая модель английской речи (около 40 МБ). Немецкие фразы в ответах читает немецкий голос.</p>
     <h2>Скачано на этом компьютере</h2>
     <p class="hint" style="margin-bottom:8px">Модели слуха: что уже есть и сколько занимает. «Скачать» — заранее, ничего не переключая.</p>
     <div class="mdl" id="mdl-ears"><p class="hint">Смотрю…</p></div>
@@ -2047,5 +2146,7 @@
 <script src="studio/chat.js"></script>
 <script src="studio/tricks.js"></script>
 <script src="studio/news.js"></script>
+<script src="studio/modes.js"></script>
+<script src="studio/watch.js"></script>
 </body>
 </html>

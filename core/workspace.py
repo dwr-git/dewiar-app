@@ -147,10 +147,62 @@ def note_front(text):
         meta["tags"] = list(dict.fromkeys(tags))
     else:
         meta.pop("tags", None)
-    col = re.search(r"(?:^|\b)(?:colou?r|цвет)\s*:?\s*([A-Za-zА-Яа-яЁё_]+)", " ".join(f"{k}: {v}" for k, v in meta.items() if isinstance(v, str)))
+    own = str(meta.get("color") or "").strip()            # своя метка цвета (из студии) — важнее «status: цвет: BROWN» из Keep
+    col = re.match(r"([A-Za-z_]+)$", own) or re.search(r"(?:^|\b)(?:colou?r|цвет)\s*:?\s*([A-Za-zА-Яа-яЁё_]+)",
+                                                        " ".join(f"{k}: {v}" for k, v in meta.items() if isinstance(v, str)))
     if col and col.group(1).upper() not in ("DEFAULT", "NONE", "WHITE"):
         meta["color"] = col.group(1).upper()
+    else:
+        meta.pop("color", None)
+    for k in ("pinned", "archived"):
+        meta[k] = str(meta.get(k) or "").strip().lower() in ("true", "yes", "1", "да")
     return meta, str(text)[m.end():]
+
+
+INLINE_TAG_RX = re.compile(r"(?<![\w/#&=\-])#([A-Za-zА-Яа-яЁё][\wА-Яа-яЁё\-/]{1,40})")
+
+
+def note_tags(meta, body):
+    """Метки заметки: из шапки (tags) и #хэштеги в тексте (как в Obsidian); без повторов, в порядке появления."""
+    inline = [t for t in INLINE_TAG_RX.findall(re.sub(r"```[\s\S]*?```|`[^`\n]*`|\]\([^)]*\)|https?://\S+", " ", body or ""))]
+    return list(dict.fromkeys(list(meta.get("tags") or []) + inline))
+
+
+_FRONT_KEYS = {"tags": ("tags", "tag", "labels", "метки"), "color": ("color", "цвет"), "pinned": ("pinned",), "archived": ("archived",)}
+
+
+def note_front_set(text, patch):
+    """Поменять в шапке заметки метки, цвет, «закреплено», «в архиве» (patch: tags [..], color «TEAL»|«», pinned, archived) —
+    остальное в шапке (source, id, свои поля Obsidian) остаётся как было. Пустая шапка — убирается."""
+    text = str(text or "")
+    m = FRONT_RX.match(text)
+    delim, lines, rest = (m.group(1), m.group(2).splitlines(), text[m.end():]) if m and m.group(2).strip() else ("---", [], text)
+    drop = {k for name, keys in _FRONT_KEYS.items() if name in patch for k in keys}
+    out, skip = [], False
+    for line in lines:
+        kv = re.match(r"\s*([\w\-а-яёА-ЯЁ]+)\s*:", line)
+        if kv:
+            skip = kv.group(1).lower() in drop
+        elif not re.match(r"\s*-\s", line):
+            skip = False
+        if not skip and "color" in patch:
+            line = re.sub(r"(?:colou?r|цвет)\s*:\s*[A-Za-zА-Яа-яЁё_]+", "", line).rstrip()   # «status: цвет: BROWN» (Keep) — цвет теперь свой
+            if re.match(r"\s*[\w\-а-яёА-ЯЁ]+\s*:\s*$", line):
+                line = ""
+        if not skip and line.strip():
+            out.append(line)
+    if "tags" in patch and patch["tags"]:
+        tags = [str(t).strip().lstrip("#") for t in patch["tags"] if str(t).strip().lstrip("#")]
+        if tags:
+            out.append("tags: [" + ", ".join(tags) + "]")
+    if patch.get("color"):
+        out.append("color: " + re.sub(r"[^A-Za-z_]", "", str(patch["color"])).upper())
+    for k in ("pinned", "archived"):
+        if patch.get(k):
+            out.append(f"{k}: true")
+    if not out:
+        return rest.lstrip("\n")
+    return f"{delim}\n" + "\n".join(out) + f"\n{delim}\n" + (rest if rest.startswith("\n") else "\n" + rest)
 
 
 
@@ -341,9 +393,29 @@ class Workspace:
                 img = (f.parent / urllib.parse.unquote(img)).relative_to(self.root).as_posix()
             out.append({"path": f.relative_to(self.root).as_posix(), "title": f.stem, "mtime": st.st_mtime, "size": st.st_size,
                         "folder": folder, "snippet": re.sub(r"\s+", " ", snip).strip(), "att": len(atts), "img": img,
-                        "tags": meta.get("tags") or [], "color": meta.get("color", ""), "source": meta.get("source", "")})
-        out.sort(key=lambda x: -x["mtime"])
+                        "tags": note_tags(meta, body), "color": meta.get("color", ""), "source": meta.get("source", ""),
+                        "pinned": bool(meta.get("pinned")), "archived": bool(meta.get("archived"))})
+        out.sort(key=lambda x: (not x["pinned"], -x["mtime"]))          # закреплённые — сверху
         return out[:limit]
+
+    def note_meta(self, rel, patch):
+        """Метки, цвет, «закрепить», «в архив» — в шапку заметки (note_front_set). -> заметка для списка."""
+        if not str(rel).startswith("Заметки/") or not str(rel).endswith(".md"):
+            raise WorkspaceError("это не заметка")
+        p = self.safe(rel)
+        if not p.is_file():
+            raise WorkspaceError("заметки нет")
+        meta, _ = note_front(p.read_text(encoding="utf-8", errors="replace"))
+        full = {"tags": meta.get("tags") or [], "color": meta.get("color", ""), "pinned": meta.get("pinned"), "archived": meta.get("archived")}
+        full.update({k: v for k, v in (patch or {}).items() if k in full})
+        text = note_front_set(p.read_text(encoding="utf-8", errors="replace"), full)
+        st = p.stat()
+        tmp = p.with_name(p.name + ".tmp")
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, p)
+        if "tags" not in (patch or {}):                 # закрепить, цвет — не «правка текста»: место в списке по времени не меняем
+            os.utime(p, (st.st_atime, st.st_mtime))
+        return next((n for n in self.notes(limit=100000) if n["path"] == rel), None)
 
     # ---------- вложения заметок: фото и файлы рядом с заметкой ----------
     # <папка заметки>/Вложения/<имя заметки>/<файл>; в тексте — строка-ссылка в конце: «![имя](Вложения/…)» для фото,

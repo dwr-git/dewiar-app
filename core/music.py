@@ -80,7 +80,9 @@ def genre_tag(query):
     """«электронную музыку» → «electronic» (или пусто)."""
     for w in _words(query):
         for k, v in GENRE_EN.items():
-            if w.startswith(k):
+            # №380 (28.10): «можно это как-то поправить» включило Radio Swiss Pop — «поправить» начинается на «поп».
+            # Основа жанра и окончание не длиннее 4 букв: «попсу», «джазовую», «роковое» — да; «поправить» — нет
+            if w.startswith(k) and len(w) - len(k) <= 4:
                 return v
     return ""
 
@@ -278,6 +280,11 @@ def parse(text, active=False, asked=False):
     m = PLAY_RX.match(t)
     if m:
         rest = (m.group(1) or m.group(2) or "").strip()
+        # «можно / давай / хочу» — не только про музыку («можно это как-то поправить?», «давай проверим»): командой
+        # считаем, только если дальше видно музыку — слово про музыку, жанр или короткое название
+        if re.match(r"^(?:можно|давай|хочу)\s", t) and not (re.search(r"\b(?:музык\w*|музычк\w*|радио\w*|песн\w*|станци\w*|трек\w*|плейлист\w*|волн\w*)\b", t)
+                                                            or (genre_tag(rest) and len(rest.split()) <= 4)):
+            return None
         if re.match(r"^(?:музыку|радио|музычку|песни|что-нибудь|что-то|станцию)\b", rest) or \
                 re.search(r"\b(?:музыку|музычку|радио)\b", t):
             return {"op": "play", "query": rest, "strict": False}

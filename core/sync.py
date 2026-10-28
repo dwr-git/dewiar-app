@@ -1057,8 +1057,11 @@ class Sync:
         p.parent.mkdir(parents=True, exist_ok=True)
         text = str(d.get("text") or "")
         pad = rel.startswith(PAD_DIR + "/") and rel.count("/") == 1
-        if not text.lstrip().startswith("#") and not pad:  # заметка с телефона: заголовок — как у заметок компьютера
-            text = f"# {d.get('title') or p.stem}\n\n{text}\n"   # (вкладки блокнота — как есть: заголовок не их)
+        from workspace import FRONT_RX
+        fm = FRONT_RX.match(text)                         # шапка «---» (Obsidian, Keep) — первой, заголовок — после неё
+        front, rest = (text[:fm.end()], text[fm.end():]) if fm and fm.group(2).strip() else ("", text)
+        if not rest.lstrip().startswith("#") and not pad:  # заметка с телефона: заголовок — как у заметок компьютера
+            text = front + ("\n" if front else "") + f"# {d.get('title') or p.stem}\n\n{rest.lstrip(chr(10))}\n"   # (вкладки блокнота — как есть)
         p.write_text(text, encoding="utf-8")
         self._pad_event(rel, False)
 

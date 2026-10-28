@@ -1332,7 +1332,8 @@ class Reminders:
             item = {"id": uuid.uuid4().hex[:6], "at": when.replace(microsecond=0).isoformat(timespec="seconds"),
                     "text": (text or "Напоминание").strip(), "repeat": repeat or None, "kind": kind,
                     "created": datetime.now().isoformat(timespec="seconds")}
-            item.update({k: v for k, v in (extra or {}).items() if k in ("deliver", "brief", "preset", "note", "note_id") and v not in (None, "")})
+            item.update({k: v for k, v in (extra or {}).items() if k in ("deliver", "brief", "preset", "note", "note_id",
+                         "care", "care_n", "care_of", "care_root", "care_at") and v not in (None, "")})   # care — лекарство (senior.py)
             self.items.append(item)
             self._save()
             return dict(item)
@@ -1780,6 +1781,100 @@ def _ws_call(fn):
         raise ToolError(str(e)) from e
 
 
+def t_watch(a, ctx):
+    """«Дозор» (engine_watch.py): присмотреть за экраном, папкой или страницей и сказать, когда готово."""
+    eng = ctx.get("watch")
+    if eng is None:
+        raise ToolError("«Дозор» здесь недоступен")
+    act = str(a.get("action") or "add")
+    if act == "list":
+        pub = eng.watch_public()
+        act_ = [x for x in pub["items"] if x["status"] == "active"]
+        if not act_:
+            return "Дозоров сейчас нет."
+        return "Идут дозоры: " + "; ".join(f"{x['title']} (id {x['id']}, последний раз: {x.get('note') or 'ещё не смотрела'})" for x in act_)
+    if act == "stop":
+        n = eng.watch_stop(str(a.get("id") or ""))
+        return f"Остановлено дозоров: {n}." if n else "Нечего останавливать — дозоров нет."
+    try:
+        it = eng.watch_add(a)
+    except ValueError as e:
+        raise ToolError(str(e)) from e
+    mins = max(1, round(it["every"] / 60)) if it["every"] >= 60 else 0
+    how = {"screen": f"буду смотреть на экран раз в {mins} мин", "file": "слежу за папкой",
+           "page": f"проверяю страницу раз в {mins} мин"}[it["kind"]]
+    hrs = round((it["until"] - it["created"]) / 3600, 1)
+    return (f"Дозор начат: «{it['title']}» — {how}, до {hrs:g} ч. Как только будет готово — скажу здесь и пришлю на телефон. "
+            "Скажи об этом одной-двумя фразами; если смотришь на экран — что снимки никуда не сохраняются.")
+
+
+def t_save_link(a, ctx):
+    """«Сохрани это видео / статью / ссылку» (0.58, «Заметки как Keep, только умнее»): заметка с ссылкой — в студии она
+    карточкой с обложкой и названием; метка «интересное» (и свои), пересказ — если модель его дала."""
+    url = str(a.get("url") or "").strip()
+    if not re.match(r"https?://\S+$", url):
+        raise ToolError("нужна ссылка целиком, с https://")
+    lm = ctx.get("linkmeta")
+    meta = {}
+    if lm is not None:
+        try:
+            meta = lm.get(url)
+        except Exception:  # noqa: BLE001
+            meta = {}
+    title = (str(a.get("title") or "").strip() or meta.get("title") or meta.get("site") or "Ссылка")[:80]
+    summary = str(a.get("summary") or "").strip()
+    tags = ["интересное"] + [str(t).strip().lstrip("#") for t in (a.get("tags") or []) if str(t).strip().lstrip("#")]
+    body = url + ("\n\n" + summary if summary else "")
+    w = _ws(ctx)
+    rel = _ws_call(lambda: w.save_note(title, body))
+    import workspace as _W
+    f = w.safe(rel)
+    f.write_text(_W.note_front_set(f.read_text(encoding="utf-8"), {"tags": list(dict.fromkeys(tags))}), encoding="utf-8")
+    kind = "видео" if meta.get("video") else "ссылку"
+    return (f"Сохранила {kind} в «Заметки» с меткой «интересное»: «{title}»" + (" — с пересказом." if summary else ".")
+            + " Скажи коротко, что сохранила.")
+
+
+PAGE_CSS = """:root{color-scheme:light dark;--bg:#f6f4fb;--card:#fff;--ink:#1d1b26;--mut:#6b6880;--acc:#6d5ce8;--line:#e6e2f2}
+@media (prefers-color-scheme:dark){:root{--bg:#14131b;--card:#1e1c28;--ink:#eeeaf8;--mut:#9d98b4;--acc:#a99cff;--line:#2e2b3d}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 "Manrope","Segoe UI",Ubuntu,system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:48px 20px 80px}h1{font-size:34px;line-height:1.15;margin:0 0 8px;letter-spacing:-.01em}
+h2{font-size:22px;margin:0 0 10px;color:var(--acc)}h3{font-size:18px;margin:18px 0 6px}p,li{max-width:70ch}
+.lead{color:var(--mut);margin:0 0 30px}section,article{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px 26px;margin:0 0 18px}
+ul,ol{padding-left:22px}li{margin:3px 0}table{border-collapse:collapse;width:100%}td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+img{max-width:100%;border-radius:14px}a{color:var(--acc)}footer{color:var(--mut);font-size:13px;margin-top:30px}"""
+
+
+def page_html(title, html):
+    """Готовая страница: полный HTML — как есть; кусок (секции, списки) — в оформление Dewiar с заголовком."""
+    import html as _h
+    body = str(html or "").strip()
+    body = re.sub(r"^```(?:html)?\s*|\s*```$", "", body)
+    if re.search(r"<html[\s>]|<!doctype", body, re.I):
+        return body
+    t = _h.escape(title)
+    return (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            f"<title>{t}</title><style>{PAGE_CSS}</style></head><body><main><h1>{t}</h1>{body}"
+            f"<footer>Собрала Лира · Dewiar · {datetime.now().strftime('%d.%m.%Y')}</footer></main></body></html>")
+
+
+def t_show_page(a, ctx):
+    """«Покажи в браузере красиво» (28.10, пользователь: «нашла рецепты, но создала кучу питоновских скриптов, а HTML — не в
+    файле, а в чате, и начала зачитывать его со всеми тегами»): страница — файлом в «Страницы», сразу в браузере."""
+    title = re.sub(r"[\\/:*?\"<>|\n\r\t]+", " ", str(a.get("title") or "").strip())[:80].strip() or "Страница"
+    html = str(a.get("html") or "")
+    if len(html.strip()) < 20:
+        raise ToolError("нужно содержимое страницы — html с разделами, списками или таблицей")
+    w = _ws(ctx)
+    root = _ws_call(lambda: w.ensure()) / "Страницы"
+    root.mkdir(parents=True, exist_ok=True)
+    f = root / f"{title}.html"
+    f.write_text(page_html(title, html), encoding="utf-8")
+    launch(["xdg-open", str(f)])
+    return (f"Страница «{title}» открыта в браузере (файл — «Страницы/{f.name}» в папке Dewiar). Скажи одной фразой, что "
+            "открыла. HTML в ответе не повторяй.")
+
+
 def t_save_note(a, ctx):
     rel = _ws_call(lambda: _ws(ctx).save_note(a.get("title", ""), a.get("text", ""), a.get("folder", ""),
                                               bool(a.get("append"))))
@@ -1809,7 +1904,10 @@ def t_money_add(a, ctx):
                    a.get("note") or "", a.get("date") or None)
     except (TypeError, ValueError) as e:
         raise ToolError(str(e)) from e
-    return f"Записано: {'доход' if it['kind'] == 'income' else 'расход'} {fmt(it['amount'], it['currency'])}, {it['category']}, {it['date']}."
+    # №382 (28.10): «бот куда-то записал расходы, такого раздела нет, в „Платежах“ нет» — говорим, где их видно
+    return (f"Записано: {'доход' if it['kind'] == 'income' else 'расход'} {fmt(it['amount'], it['currency'])}, {it['category']}, {it['date']}. "
+            "Если человек спросит, где это смотреть или впервые записывает траты: студия → «Календарь» → вкладка «Деньги» "
+            "(«Платежи» — это обязательные счета: свет, газ, интернет). В ответе — коротко.")
 
 
 def t_close_send(a, ctx):
@@ -2409,7 +2507,7 @@ def t_call_persona(a, ctx):
 # ---------- реестр ----------
 
 # На сервере (main.py --server) нет экрана, звука, камеры и окна — эти инструменты там выключены.
-SERVER_OFF = {"open_url", "open_app", "open_path", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
+SERVER_OFF = {"open_url", "open_app", "open_path", "show_page", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
               "set_volume", "look_at_screen", "save_screenshot", "look_through_camera", "widget", "power"}
 
 
@@ -2544,6 +2642,28 @@ TOOLS = {
                      "instructions — пошаговые инструкции для тебя самого.",
                      S({"name": {"type": "string"}, "description": {"type": "string"}, "instructions": {"type": "string"}},
                        ["name", "description", "instructions"]), "confirm", t_create_skill, "Создание навыка"),
+    "watch": ("«Дозор»: присмотреть и сказать, когда готово — «скажи, когда Claude ответит», «присмотри за экраном, пока "
+              "идёт экспорт», «скажи, когда в Загрузках появится файл», «скажи, когда на странице появится „Одобрено“». "
+              "action: add (по умолчанию) | list (что сейчас под присмотром) | stop (id или пусто — все). kind: screen — "
+              "экран (what — что должно появиться, своими словами, конкретно), file — папка (folder: «Загрузки» или путь; "
+              "pattern: «*.mp4»), page — страница (url; what — слово, которое должно появиться, или пусто — любое изменение). "
+              "every_minutes — как часто смотреть (экран — по умолчанию 5), hours — сколько ждать (по умолчанию 3).",
+              S({"action": {"type": "string", "enum": ["add", "list", "stop"]}, "kind": {"type": "string", "enum": ["screen", "file", "page"]},
+                 "what": {"type": "string"}, "every_minutes": {"type": "number"}, "hours": {"type": "number"},
+                 "folder": {"type": "string"}, "pattern": {"type": "string"}, "url": {"type": "string"}, "id": {"type": "string"}}, []),
+              "safe", t_watch, "Дозор"),
+    "show_page": ("Показать в браузере красиво оформленную страницу — когда просят «покажи в браузере», «оформи красиво», "
+                  "«сделай страницу / подборку / таблицу»: рецепты, список, сравнение, отчёт. Сначала собери данные "
+                  "(find_notes, read_file, web_search), потом одним вызовом передай html — разметку содержимого: <section> с "
+                  "<h2>, списки, таблицы (оформление и заголовок добавятся сами) или полный документ. Сохранится в «Страницы» и "
+                  "откроется. НЕ пиши HTML в ответе, НЕ пиши скрипты ради этого.",
+                  S({"title": {"type": "string"}, "html": {"type": "string"}}, ["title", "html"]), "safe", t_show_page, "Страницы"),
+    "save_link": ("Сохранить ссылку — видео, статью, сайт — в «Заметки» (там она карточкой с обложкой, с меткой «интересное»): "
+                  "когда просят «сохрани это видео / ссылку / статью», «отложи почитать», «запомни этот ролик». url — адрес "
+                  "целиком; summary — короткий пересказ своими словами, если просили пересказать (сначала прочитай страницу "
+                  "read_webpage); tags — свои метки (необязательно); title — если пользователь назвал сам.",
+                  S({"url": {"type": "string"}, "summary": {"type": "string"}, "title": {"type": "string"},
+                     "tags": {"type": "array", "items": {"type": "string"}}}, ["url"]), "safe", t_save_link, "Заметки"),
     "save_note": ("Сохранить заметку в папку ассистента (Markdown): когда просят записать, запомнить текст, составить "
                   "список, план, конспект. title — короткое название; text — содержимое в Markdown; folder — подпапка "
                   "(необязательно); append=true — дописать в существующую заметку.",
@@ -2729,7 +2849,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
-             "cancel_reminder", "mark_done", "done_report", "save_note", "find_notes", "read_file", "remember", "write_diary",
+             "cancel_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "watch", "find_notes", "read_file", "remember", "write_diary",
              "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
              "client_list", "client_deal", "client_deals"}

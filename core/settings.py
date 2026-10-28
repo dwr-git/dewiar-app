@@ -164,6 +164,7 @@ DEFAULTS = {
            "memory_motion": "auto",         # «Память»: анимация карты — auto (на слабом компьютере выкл) | on | off
            "welcome": "",                   # «Первые шаги»: "" — показать, "later" — кнопкой в меню, "done" — всё
            "intro": "",                     # знакомство голосом (engine_intro.py): "" — ещё не было, "done" — было
+           "mode_seen": 0,                  # первый экран «Для кого эта Лира?» показан (studio/modes.js, 0.58)
            "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
            "pad_colors": None,              # цвета текста в блокноте: forest/sea/dusk/theme/plain (ui/pad.js colorScheme); пусто — «Чернила»

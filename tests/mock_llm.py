@@ -32,11 +32,13 @@ class H(BaseHTTPRequestHandler):
         # справка к вопросу (время, найденное — engine_answer._put_context, app.js putContext) — модель её читает, а не
         # отвечает на неё: заглушка, как и модель, реагирует на сам вопрос после «(Сообщение пользователя)»
         MARK = "(Сообщение пользователя)\n"
+        heads = []                                       # сама справка — для ответов «по найденному» (база персонажа)
         for m in body.get("messages") or []:
             if m.get("role") != "user":
                 continue
             c = m.get("content")
             if isinstance(c, str) and MARK in c:
+                heads.append(c.split(MARK, 1)[0])
                 m["content"] = c.split(MARK, 1)[1]
             elif isinstance(c, list):
                 for x in c:
@@ -197,10 +199,10 @@ class H(BaseHTTPRequestHandler):
                    "Однажды к нему приплыл кит и спросил, зачем он светит. Маяк долго молчал. ") * 3
         if "Из записей пользователя" in sys_prompt and "записям" not in user:
             pass
-        elif "ТВОЯ БАЗА ЗНАНИЙ" in sys_prompt:                 # персонаж с базой сайта: отвечает по найденному
-            ctx = sys_prompt.split("ТВОЯ БАЗА ЗНАНИЙ", 1)[1]
+        elif "ТВОЯ БАЗА ЗНАНИЙ" in sys_prompt + "".join(heads[-1:]):   # персонаж с базой сайта: отвечает по найденному
+            ctx = (sys_prompt + "\n" + "".join(heads[-1:])).split("ТВОЯ БАЗА ЗНАНИЙ", 1)[1]   # справка — в сообщении (с 0.38.87, _put_context)
             ans = "По базе: " + " ".join(ctx.split("### Из", 1)[-1].split()[:24])
-        elif "ничего не нашлось" in sys_prompt and "базе знаний" in sys_prompt:
+        elif "ничего не нашлось" in sys_prompt + "".join(heads[-1:]) and "базе знаний" in sys_prompt + "".join(heads[-1:]):
             ans = "В моей базе об этом ничего нет, скажу от себя."
         elif "MOCKSAY:" in str(user):                                    # проверки: готовый ответ в самой просьбе
             ans = str(user).split("MOCKSAY:", 1)[1].split("»")[0].strip()
