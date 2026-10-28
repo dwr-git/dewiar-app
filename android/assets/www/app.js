@@ -8162,7 +8162,15 @@ function kidsTouch(text) {                             // вопрос: мину
   const q = String(text || "").replace(/\s+/g, " ").trim().slice(0, 80);
   if (q) { d.asked = d.asked.concat([{ t: m, q }]).slice(-200); if (off) d.off = d.off.concat([{ t: m, q }]).slice(-50); }
   fileSave("kids.json", JSON.stringify(data));
-  if (off) plog("info", "🧒 детский режим: просьба вне правил — в отчёт родителю");
+  if (off) {
+    plog("info", "🧒 детский режим: просьба вне правил — в отчёт родителю");
+    // и сразу родителю в Telegram — если бот Dewiar привязан (как на компьютере); отправить можно только себе
+    if (typeof tgOn === "function" && tgOn() && (S.tg || {}).linked) {
+      const who = (kidsConf().child || {}).name || "Ребёнок";
+      tgCall("sendMessage", { text: `🦉 Детский режим: ${who} попросил(а) то, что вне правил, — «${q}» (в ${m}). Уго не выполнил и посоветовал спросить вас.` })
+        .catch(e => plog("info", "детский режим → Telegram: " + e.message));
+    }
+  }
   return off;
 }
 function kidsReport() {

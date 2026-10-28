@@ -53,7 +53,16 @@ function tmCard(t) {
     + `<span class="tm-cbody"><small>${escH(t.name)}</small><b>${escH(t.title)}</b><em>${t.late ? "просрочено · " : ""}${escH(due)}</em></span></button>`;
 }
 
+function tmReps() {                                    // повторяющиеся поручения — полоской над доской, ✕ — больше не поручать
+  const box = $("#tm-reps"), r = (TM && TM.repeats) || []; if (!box) return;
+  box.hidden = !r.length;
+  box.innerHTML = r.length ? `<b class="tm-rh">Повторяются</b>` + r.map(x => `<span class="tm-rep" title="Следующее — ${escH(x.next_text)}">`
+    + `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.7M20 4v4.7h-4.7M20 12a8 8 0 0 1-13.7 5.6L4 15.3M4 20v-4.7h4.7"/></svg>`
+    + `<span><b>${escH(x.title)}</b><small>${escH(x.name)} · ${escH(x.rule)}</small></span><button type="button" data-rx="${escH(x.id)}" aria-label="Больше не поручать: ${escH(x.title)}">×</button></span>`).join("") : "";
+  $$("#tm-reps [data-rx]").forEach(b => b.onclick = async () => { if (await ask("Больше не поручать это по расписанию? Уже отправленные поручения останутся.")) tmCall("team_repeat_del", { id: b.dataset.rx }, "Повтор убран"); });
+}
 function tmBoard() {
+  tmReps();
   const by = (s) => TM.tasks.filter(t => s === "done" ? (t.state === "done" || t.state === "ok") : t.state === s);
   $("#tm-board").innerHTML = TM_COLS.map(([s, name]) => {
     const list = by(s);
@@ -137,6 +146,7 @@ function tmHow() {
   if (document.activeElement !== $("#tm-company")) $("#tm-company").value = d.company || "";
   if (document.activeElement !== $("#tm-boss")) $("#tm-boss").value = d.boss || "";
   $("#tm-speak").checked = !!d.speak;
+  if (document.activeElement !== $("#tm-digest")) $("#tm-digest").value = d.digest || "";
   // боты компании: подключённые — с «Отключить»; второй мессенджер — подключить здесь же
   $("#tm-bots").innerHTML = (d.bots || []).map(b => b.connected
       ? `<div class="tm-botline"><span><b>${escH(b.name)}</b> · @${escH(b.bot)}${b.running ? "" : " · не слушает"}${b.problem ? ` · ⚠ ${escH(b.problem)}` : ""}</span><button class="btn small danger" data-off="${b.ch}" type="button">Отключить</button></div>`
@@ -174,8 +184,8 @@ if ($("#p-team")) {
     e.preventDefault();
     const title = $("#tm-title").value.trim(); if (!title) { $("#tm-title").focus(); return; }
     const who = $("#tm-who").value, m = TM.members.find(x => x.id === who);
-    const d = await tmCall("team_assign", { who, title, due: $("#tm-due").value.trim(), note: $("#tm-note").value.trim() },
-      m && m.joined ? `Поручено — ${m.name} получит в ${m.ch || "мессенджере"}` : "Поручено — уйдёт, как только сотрудник откроет приглашение");
+    const d = await tmCall("team_assign", { who, title, due: $("#tm-due").value.trim(), note: $("#tm-note").value.trim() });
+    if (d) toast(d.made && d.made.repeat ? `Буду поручать ${d.made.name} — ${d.made.rule}` : m && m.joined ? `Поручено — ${m.name} получит в ${m.ch || "мессенджере"}` : "Поручено — уйдёт, как только сотрудник откроет приглашение");
     if (d) { $("#tm-title").value = ""; $("#tm-due").value = ""; $("#tm-note").value = ""; $("#tm-form").hidden = true; }
   };
   $("#tm-pform").onsubmit = async (e) => {
@@ -188,6 +198,7 @@ if ($("#p-team")) {
   $("#tm-company").onchange = save("company");
   $("#tm-boss").onchange = save("boss");
   $("#tm-speak").onchange = () => tmCall("team_set", { speak: $("#tm-speak").checked });
+  $("#tm-digest").onchange = () => tmCall("team_set", { digest: $("#tm-digest").value }, $("#tm-digest").value ? `Итог дня — в ${$("#tm-digest").value}` : "Итог дня не присылаю");
   $("#tm-photo-x").onclick = () => $("#tm-photo").close();
   core.on("team", (e) => { TM = e; tmRender(); });
   core.on("hello", () => { if ($("#p-team").classList.contains("cur")) tmLoad(); });

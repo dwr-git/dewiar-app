@@ -371,7 +371,9 @@ class AudioMixin:
         if self.wav_input:
             use_aec = os.environ.get("DEWIAR_ASSUME_AEC") == "1"      # тесты: в файле нет эха
         else:
-            use_aec = a["echo_cancel"] and self.aec.setup(a["input"], a["output"])
+            # №370 (28.10, Linux Mint, веб-камера C920): эхоподавление отдавало одни нули и после переоткрытия — тогда до
+            # перезапуска программы слушаем микрофон напрямую (_aec_bypass ставит _mic_zero_step)
+            use_aec = a["echo_cancel"] and not getattr(self, "_aec_bypass", False) and self.aec.setup(a["input"], a["output"])
         headphones = bool(a.get("headphones")) and not use_aec
         self.status["aec"] = bool(use_aec) or headphones        # «можно слушать во время ответа»: в наушниках эха нет
         self.status["headphones"] = headphones
@@ -519,8 +521,17 @@ class AudioMixin:
         # только в покое: во время ответа переоткрытие сняло бы эхоподавление вместе с её голосом, а в разговоре — оборвало бы его
         if st["all"] and not st["told"] and now - st["since"] > 5 and now - getattr(self, "_zero_heal_at", -1e9) > 120 \
                 and getattr(self, "state", "idle") == "idle" and getattr(self, "hold", None) is None:
-            self._zero_heal_at = now
-            log.warning("🎤 Из микрофона идут одни нули — переоткрываю микрофон и эхоподавление")
+            healed = getattr(self, "_zero_heals", 0)
+            self._zero_heal_at, self._zero_heals = now, healed + 1
+            stt_ = getattr(self, "status", None) or {}
+            if healed and stt_.get("aec") and not stt_.get("headphones") and not getattr(self, "_aec_bypass", False):
+                # переоткрывали, а нули снова — виновато эхоподавление (№370): дальше слушаем микрофон напрямую
+                self._aec_bypass = True
+                log.warning("🎤 Нули и после переоткрытия — слушаю микрофон напрямую, без эхоподавления")
+                self.note("Эхоподавление отдавало тишину — слушаю микрофон напрямую. Пока я говорю, лучше подождать конца "
+                          "ответа (или наденьте наушники).")
+            else:
+                log.warning("🎤 Из микрофона идут одни нули — переоткрываю микрофон и эхоподавление")
             self.restart_audio.set()
             return "heal"
         if not st["told"] and now - st["since"] > (15 if st["all"] else 60):   # почти тишина — минута, а не 15 с (№136)

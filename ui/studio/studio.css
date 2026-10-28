@@ -2479,3 +2479,92 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 
 /* «Персонажи» (№369, 28.10): кнопки «Создать своего» и «Готовые персонажи» — сразу под описанием */
 .pr-acts { display: flex; gap: 10px; flex-wrap: wrap; margin: -6px 0 20px; }
+
+/* «Клиенты» (#p-clients, 28.10; включается в «Возможностях»): список слева, карточка справа — тихо и по делу */
+#p-clients .cr-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+#p-clients .cr-top .lead { margin-bottom: 16px; }
+.cr-main { display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.cr-left { display: flex; flex-direction: column; gap: 12px; min-width: 0; position: sticky; top: 0; }
+.cr-search { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 16px; border-radius: 16px; background: var(--field);
+  box-shadow: var(--press, inset 0 1px 2px rgba(20,30,60,.08)); cursor: text; }
+.cr-search svg { width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; flex: none; }
+#p-clients .cr-search input[type=search], #p-clients .cr-search input[type=search]:focus { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0;
+  border-radius: 0; background: transparent; box-shadow: none; outline: none; font-size: 14.5px; }
+.cr-search:focus-within { box-shadow: var(--press, inset 0 1px 2px rgba(20,30,60,.08)), 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+.cr-list { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px; border-radius: 20px; background: var(--glass);
+  box-shadow: var(--raise-s, none); max-height: calc(100vh - 260px); overflow-y: auto; }
+.cr-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 14px; background: none;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background .15s; }
+.cr-row:hover { background: rgba(127,127,140,.08); }
+.cr-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.cr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cr-row span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cr-row b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-row small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-row em { font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.cr-none { padding: 18px 12px; color: var(--muted); font-size: 13.5px; text-align: center; }
+.cr-ava { width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 12.5px;
+  letter-spacing: .02em; color: #15182a; background: var(--c); }
+.cr-ava.big { width: 56px; height: 56px; font-size: 18px; }
+.cr-card { min-height: 460px; border-radius: 26px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); padding: 26px 30px 28px;
+  display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.cr-card h3 { margin: 0 0 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.cr-head { display: flex; align-items: center; gap: 16px; }
+.cr-names { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#p-clients .cr-names input, #p-clients .cr-names input:focus { background: transparent; box-shadow: none; padding: 2px 6px; margin-left: -6px; border-radius: 8px; }
+#p-clients .cr-names input:hover, #p-clients .cr-names input:focus { background: var(--field); }
+#p-clients .cr-name { font: 600 22px/1.25 Unbounded, Manrope, sans-serif; }
+#p-clients .cr-comp { font-size: 14.5px; color: var(--muted); }
+.cr-contacts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cr-contacts label { display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 14px; background: var(--field); }
+.cr-contacts svg, .cr-kinds svg, .cr-h i svg { width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+#p-clients .cr-contacts input, #p-clients .cr-contacts input:focus { background: transparent; box-shadow: none; padding: 11px 0; }
+.cr-next { padding: 16px 18px; border-radius: 20px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.cr-next.late { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.cr-next.late h3, .cr-next.late .cr-nx span { color: var(--bad); }
+.cr-nx { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+.cr-nx b { font-size: 15.5px; } .cr-nx span { font-size: 13px; color: var(--muted); }
+.cr-nxa { margin-left: auto; display: flex; gap: 8px; }
+.cr-nform { display: grid; grid-template-columns: minmax(0, 1fr) 210px auto; gap: 8px; }
+.cr-nform[hidden], .cr-nx[hidden] { display: none; }
+.cr-kinds { display: flex; gap: 6px; margin-bottom: 10px; }
+.cr-kinds button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 0; border-radius: 99px; background: none; color: var(--muted);
+  font: inherit; font-size: 13px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--line, rgba(127,127,140,.2)); }
+.cr-kinds button.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--ink); box-shadow: none; }
+.cr-kinds button.on svg { stroke: var(--accent); }
+.cr-aform { display: flex; gap: 10px; align-items: flex-end; }
+.cr-aform textarea { flex: 1; resize: vertical; min-height: 48px; line-height: 1.5; }
+.cr-hday { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.cr-hday > small { font-size: 12px; color: var(--muted); padding: 4px 0; }
+.cr-h { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 22px; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,140,.12)); }
+.cr-hday > small + .cr-h { border-top: 0; }
+.cr-h i { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: rgba(127,127,140,.12); }
+.cr-h.call i svg { stroke: #4BE3A1; } .cr-h.deal i svg { stroke: #FFB547; } .cr-h.done i svg { stroke: var(--accent); }
+.cr-h p { margin: 4px 0 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.cr-h time { font-size: 12px; color: var(--muted); padding-top: 5px; }
+.cr-hx { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; padding: 4px; cursor: pointer; opacity: 0; transition: opacity .15s; border-radius: 6px; }
+.cr-h:hover .cr-hx, .cr-hx:focus-visible { opacity: 1; }
+.cr-hnone { margin: 0; color: var(--muted); font-size: 13.5px; }
+.cr-about { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.cr-about textarea { resize: vertical; line-height: 1.5; }
+.cr-empty { margin: auto; max-width: 460px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 0; }
+.cr-empty h2 { margin: 6px 0 0; font: 600 19px Unbounded, Manrope, sans-serif; }
+.cr-empty p { margin: 0; color: var(--muted); }
+.cr-empty ul { list-style: none; margin: 6px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cr-empty li { padding: 9px 14px; border-radius: 12px; background: var(--field); font-size: 13.5px; }
+.cr-eico { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.cr-eico svg { width: 30px; height: 30px; fill: none; stroke: var(--accent); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 980px) { .cr-main { grid-template-columns: 1fr; } .cr-left { position: static; } .cr-list { max-height: 260px; } .cr-nform { grid-template-columns: 1fr; } .cr-contacts { grid-template-columns: 1fr; } }
+/* поля, что выглядят как текст (имя, компания, контакты): у тем свои рамки и тени у input — здесь их нет */
+#p-clients .cr-names input, #p-clients .cr-contacts input { border: 0 !important; box-shadow: none !important; }
+#p-clients .cr-names input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent) !important; }
+/* повторяющиеся поручения — полоска над доской */
+.tm-reps { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.tm-reps[hidden] { display: none; }
+.tm-rh { font-size: 12.5px; color: var(--muted); font-weight: 600; margin-right: 4px; }
+.tm-rep { display: inline-flex; align-items: center; gap: 10px; padding: 7px 8px 7px 12px; border-radius: 16px; background: var(--glass); box-shadow: var(--raise-s, none); }
+.tm-rep svg { width: 16px; height: 16px; fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.tm-rep > span { display: flex; flex-direction: column; line-height: 1.25; }
+.tm-rep b { font-size: 13px; } .tm-rep small { font-size: 11.5px; color: var(--muted); }
+.tm-rep button { border: 0; background: none; color: var(--muted); font-size: 17px; line-height: 1; padding: 2px 6px; border-radius: 8px; cursor: pointer; }
+.tm-rep button:hover { background: rgba(127,127,140,.14); color: var(--ink); }

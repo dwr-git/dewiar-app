@@ -1835,6 +1835,9 @@ def t_team_assign(a, ctx):
         r = _team(ctx).assign(a.get("who") or "", a.get("task") or "", a.get("due") or "", a.get("note") or "", via="voice")
     except TeamError as e:
         raise ToolError(str(e)) from e
+    if r.get("repeat"):                                # «каждый понедельник к 18» — повторяющееся поручение
+        return (f"Буду поручать {r['name_dat']} «{r['title']}» {r['rule']}; первое уйдёт само в день срока ({due_text(r['first'])}). "
+                "Скажи это одной фразой.")
     due = due_text(r.get("due"))
     where = "отправила в Telegram" if r.get("sent") else "записала — уйдёт в Telegram, как только сотрудник откроет приглашение"
     return f"Поручила {r['name']}: «{r['title']}»" + (f", срок {due}" if due else "") + f"; {where}. Скажи это одной фразой."
@@ -1846,6 +1849,67 @@ def t_team_status(a, ctx):
         return _team(ctx).summary(a.get("who") or "")
     except TeamError as e:
         raise ToolError(str(e)) from e
+
+
+def _clients(ctx):
+    c = ctx.get("clients")
+    if c is None:
+        raise ToolError("«Клиенты» выключены — студия → «Возможности» → «Клиенты»")
+    return c
+
+
+def t_client_note(a, ctx):
+    """«Запиши: Иванов из „Ромашки“ хочет 200 коробок до пятницы» — в историю клиента (нет — карточка заводится)."""
+    from clients import ClientError
+    C = _clients(ctx)
+    who = " ".join(x for x in (a.get("who") or "", f"«{a['company']}»" if a.get("company") else "") if x)
+    try:
+        before = set(C.st["clients"])
+        cid = C.find(who, create=True)
+        c = C.note(cid, a.get("text") or "", a.get("kind") or "note", a.get("phone") or "", a.get("email") or "")
+    except ClientError as e:
+        raise ToolError(str(e)) from e
+    made = cid not in before
+    return (f"Записала в карточку {C.title(c)}" + (" (новый клиент — карточка заведена)" if made else "") + f": «{c['log'][-1]['t']}». "
+            "Скажи это одной фразой. Если в записи есть срок или «перезвонить» — предложи поставить следующий шаг (client_next).")
+
+
+def t_client_info(a, ctx):
+    from clients import ClientError
+    C = _clients(ctx)
+    try:
+        return C.card_text(C.find(a.get("who") or ""))
+    except ClientError as e:
+        raise ToolError(str(e)) from e
+
+
+def t_client_next(a, ctx):
+    """Следующий шаг с клиентом: что и когда; когда — напоминание в «Делах»."""
+    from clients import ClientError
+    from when import parse
+    C = _clients(ctx)
+    at = None
+    w = (a.get("when") or "").strip()
+    if w:
+        r = parse("напомни " + w)
+        if not r:
+            raise ToolError(f"не поняла, когда: «{w}» — уточни день и время")
+        at = r["at"]
+    try:
+        cid = C.find(a.get("who") or "", create=True)
+        if a.get("done"):
+            c = C.next_done(cid)
+            return f"Отметила: следующий шаг с {C.title(c)} сделан, записано в историю."
+        c = C.set_next(cid, a.get("what") or "связаться", at)
+    except ClientError as e:
+        raise ToolError(str(e)) from e
+    from clients import _when
+    return (f"Следующий шаг с {C.title(c)}: {c['next']['what']}" + (f" — {_when(c['next']['at'])}, напоминание поставлено" if at else "")
+            + ". Скажи это одной фразой.")
+
+
+def t_client_list(a, ctx):
+    return _clients(ctx).summary(a.get("query") or "")
 
 
 def t_app_help(a, ctx):
@@ -2425,11 +2489,31 @@ TOOLS = {
     "team_assign": ("Поручить задачу сотруднику (раздел «Поручения») — уйдёт ему в Telegram с кнопками «Беру», «Сделано», «Перенести». "
                     "Только когда пользователь прямо поручает что-то сотруднику («поручи Анне…», «пусть Иван подготовит…»). "
                     "who — имя как сказал пользователь; task — что сделать, коротко, повелительно или как дело («Подготовить договор "
-                    "поставки»); due — срок словами как сказал («до четверга 15:00», «завтра к 12») или пусто; note — подробности.",
+                    "поставки»); due — срок словами как сказал («до четверга 15:00», «завтра к 12») или пусто; повторяющееся поручение — "
+                    "срок с «каждый»/«по будням» как сказал («каждый понедельник к 18», «по будням к 10»); note — подробности.",
                     S({"who": {"type": "string"}, "task": {"type": "string"}, "due": {"type": "string"}, "note": {"type": "string"}},
                       ["who", "task"]), "safe", t_team_assign, "Поручения: поручить"),
     "team_status": ("Что с поручениями сотрудникам: кто взял, кто сделал (с отчётом), что перенесено и почему, что просрочено. "
                     "who — имя или пусто — все.", S({"who": {"type": "string"}}), "safe", t_team_status, "Поручения: что с ними"),
+    "client_note": ("«Клиенты» (личная CRM): записать в карточку клиента, о чём договорились, что хочет, звонок, сделку. "
+                    "«Запиши: Иванов из „Ромашки“ хочет 200 коробок до пятницы», «клиент Петров звонил, просит скидку». Нет такого "
+                    "клиента — карточка заведётся сама. who — имя клиента как сказал (или название компании); company — компания в "
+                    "именительном падеже («Ромашка»), если названа; text — суть, коротко, своими словами в прошедшем или настоящем "
+                    "(«Хочет 200 коробок до пятницы»); kind — note|call|deal; phone, email — если продиктовали.",
+                    S({"who": {"type": "string"}, "company": {"type": "string"}, "text": {"type": "string"},
+                       "kind": {"type": "string", "enum": ["note", "call", "deal"]}, "phone": {"type": "string"}, "email": {"type": "string"}},
+                      ["who", "text"]), "safe", t_client_note, "Клиенты: записать"),
+    "client_info": ("«Клиенты»: карточка клиента — контакты, о чём договаривались (последние записи), следующий шаг. «Что у нас с "
+                    "Ивановым?», «напомни, о чём договорились с „Ромашкой“». who — имя или компания.",
+                    S({"who": {"type": "string"}}, ["who"]), "safe", t_client_info, "Клиенты: карточка"),
+    "client_next": ("«Клиенты»: следующий шаг с клиентом — что сделать и когда («перезвонить Иванову в четверг в 11», «отправить "
+                    "«Ромашке» счёт завтра»); когда — словами, как сказал пользователь; будет напоминание в «Делах». done true — "
+                    "следующий шаг сделан («я перезвонил Иванову»).",
+                    S({"who": {"type": "string"}, "what": {"type": "string"}, "when": {"type": "string"}, "done": {"type": "boolean"}},
+                      ["who"]), "safe", t_client_next, "Клиенты: следующий шаг"),
+    "client_list": ("«Клиенты»: кто ждёт ответа (просроченные шаги), ближайшие шаги, клиенты без следующего шага. «Кому из клиентов "
+                    "надо перезвонить?», «что по клиентам на этой неделе?». query — поиск по имени, компании или записям, или пусто.",
+                    S({"query": {"type": "string"}}), "safe", t_client_list, "Клиенты: кто ждёт"),
     "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей». who — имя или пусто — все.",
                    S({"who": {"type": "string"}}), "safe", t_close_read, "Близкие: прочитать"),
     "app_help": ("Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить "
@@ -2544,7 +2628,8 @@ DEFAULT_OFF = set()          # команды терминала включен�
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
              "cancel_reminder", "mark_done", "done_report", "save_note", "find_notes", "read_file", "remember", "write_diary",
              "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
-             "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge"}
+             "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
+             "client_list"}
 
 
 # инструменты навыков (skills.py): есть, только когда навыки включены; выполняет Toolbox.run
@@ -2589,6 +2674,9 @@ class Toolbox:
         if name == "send_telegram":             # только когда бот подключён к владельцу
             tg = self.hooks.get("telegram")
             if not (tg and tg.paired()):
+                return False, False
+        if name.startswith("client_"):          # «Клиенты»: включены в «Возможностях»
+            if not (self.hooks.get("clients") is not None and (self.s.get("features") or {}).get("clients")):
                 return False, False
         if name in ("team_assign", "team_status"):   # «Поручения»: раздел включён и бот компании подключён
             tm = self.hooks.get("team")

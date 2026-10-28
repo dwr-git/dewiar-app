@@ -447,6 +447,7 @@ function featuresApply() {
   const nb = $('nav button[data-p="prompter"]'); if (nb) nb.hidden = !on("prompter");
   const fb0 = $('nav button[data-p="family"]'); if (fb0) fb0.hidden = f.family !== true;   // «Семья» — по желанию (27.10)
   const tb0 = $('nav button[data-p="team"]'); if (tb0) tb0.hidden = f.team !== true;       // «Поручения» — по желанию (28.10)
+  const cb0 = $('nav button[data-p="clients"]'); if (cb0) cb0.hidden = f.clients !== true;   // «Клиенты» — по желанию (28.10)
   for (const t of ["near", "meet"]) { const b = $(`#cl-tabs button[data-t="${t}"]`); if (b) b.hidden = !on(t); }
   const cur = $("#cl-tabs button.on");
   if (cur && cur.hidden && window.rdTab) rdTab("chat");

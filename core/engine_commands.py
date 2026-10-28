@@ -14,7 +14,7 @@ _KIDS_LOCKED = ("account_", "backup_", "cal_add", "cal_remove", "cloud_connect",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client")
 
 
 def _kids_blocked(cmd, a):
@@ -167,6 +167,45 @@ class CommandsMixin:
 
     # ---------- «Команда»: поручения сотрудникам в Telegram (team.py) ----------
 
+    def clients_cmd(self, cmd, a):
+        """«Клиенты» (clients.py): clients_list {q}; client_get {id}; client_add {name, company, phone, email}; client_save {id, …};
+        client_note {id, text, kind}; client_note_del {id, nid}; client_next {id, what, at (ГГГГ-ММ-ДДTЧЧ:ММ) | when (словами)};
+        client_next_done {id}; client_del {id}."""
+        from clients import ClientError
+        C = self.clients
+        cid = str(a.get("id") or "")
+        try:
+            if cmd == "clients_list":
+                return C.list(str(a.get("q") or ""))
+            if cmd == "client_get":
+                return C.get(cid)
+            if cmd == "client_add":
+                return C.add(a.get("name") or "", a.get("company") or "", a.get("phone") or "", a.get("email") or "", a.get("note") or "")
+            if cmd == "client_save":
+                return C.save(cid, {k: a[k] for k in ("name", "company", "phone", "email", "note", "tags") if k in a})
+            if cmd == "client_note":
+                return C.note(cid, a.get("text") or "", a.get("kind") or "note")
+            if cmd == "client_note_del":
+                return C.note_del(cid, str(a.get("nid") or ""))
+            if cmd == "client_next":
+                at = None
+                if a.get("at"):
+                    at = datetime.fromisoformat(str(a["at"]))
+                elif a.get("when"):
+                    from when import parse
+                    r = parse("напомни " + str(a["when"]))
+                    if not r:
+                        raise ClientError("не понял, когда — например: «завтра в 11», «в четверг»")
+                    at = r["at"]
+                return C.set_next(cid, a.get("what") or "", at)
+            if cmd == "client_next_done":
+                return C.next_done(cid)
+            if cmd == "client_del":
+                return C.delete(cid)
+            raise ValueError(f"неизвестная команда {cmd}")
+        except ClientError as e:
+            raise ValueError(str(e)) from e
+
     def team_cmd(self, cmd, a):
         """team_get; team_connect {token}; team_forget; team_set {company?, boss?, speak?}; team_member_add {name, role};
         team_member_del {id}; team_member_code {id}; team_assign {who, title, due, note}; team_accept {id};
@@ -191,8 +230,10 @@ class CommandsMixin:
             if cmd == "team_member_code":
                 return T.member_code(str(a.get("id") or ""))
             if cmd == "team_assign":
-                T.assign(str(a.get("who") or ""), a.get("title"), a.get("due") or "", a.get("note") or "")
-                return T.public()
+                r = T.assign(str(a.get("who") or ""), a.get("title"), a.get("due") or "", a.get("note") or "")
+                return dict(T.public(), made=({"repeat": True, "rule": r["rule"], "name": r["name_dat"]} if r.get("repeat") else {}))
+            if cmd == "team_repeat_del":
+                return T.repeat_del(str(a.get("id") or ""))
             if cmd == "team_accept":
                 return T.accept(str(a.get("id") or ""))
             if cmd == "team_back":
@@ -427,6 +468,8 @@ class CommandsMixin:
             raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
         if cmd.startswith("team_"):
             return self.team_cmd(cmd, a)
+        if cmd.startswith("client"):
+            return self.clients_cmd(cmd, a)
         if cmd == "hello":
             return self.snapshot()
         if cmd == "sync_status":

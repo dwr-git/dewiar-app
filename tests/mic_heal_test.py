@@ -51,6 +51,19 @@ ok("«Звук и поведение» → «Микрофон»" in told[-1] and
 ok(pushed[-1][0] == "Микрофон молчит" and not pushed[-1][1].startswith("Микрофон молчит"), f"в уведомлении заголовок не повторяется: {pushed[-1]}")
 E._mic_zero_step(stub, st, voice, 30)
 ok(told[-1] == "" and st["since"] is None, "голос появился — подсказка убрана")
+# №370 (28.10, Linux Mint, веб-камера C920): эхоподавление отдаёт нули и после переоткрытия — второй раз слушаем
+# микрофон напрямую, без эхоподавления (до перезапуска программы), и говорим об этом
+s5 = types.SimpleNamespace(**vars(stub)); s5._zero_heal_at, s5._zero_heals = -1e9, 0; s5.status = {"aec": True, "headphones": False}
+s5.restart_audio = threading.Event(); s5._mic_silent = lambda exact=True: None
+n0 = len(told)
+st5 = {"since": None, "told": False, "all": True}
+a5 = [E._mic_zero_step(s5, st5, zero, t / 10) for t in range(0, 70)]
+ok("heal" in a5 and not getattr(s5, "_aec_bypass", False) and len(told) == n0, "первые нули — просто переоткрываем, эхоподавление остаётся")
+st5 = {"since": None, "told": False, "all": True}
+a5 = [E._mic_zero_step(s5, st5, zero, 200 + t / 10) for t in range(0, 70)]
+ok("heal" in a5 and getattr(s5, "_aec_bypass", False) and "напрямую" in told[-1], f"нули снова — микрофон напрямую, без эхоподавления: {told[-1][:70]}")
+ok('not getattr(self, "_aec_bypass", False) and self.aec.setup' in (ROOT / "core/engine_audio.py").read_text(encoding="utf-8"),
+   "при переоткрытии эхоподавление пропускается")
 src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
 ok('self._mic_zero_step(zst, frame, now) == "heal"' in src, "главный цикл слуха проверяет каждый кадр этим шагом")
 # «почти тишина» (пик ≤ 3, не нули) — массив микрофонов AMD с шумоподавлением в тихой комнате (№136, 20.10): тревога

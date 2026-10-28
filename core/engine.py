@@ -190,6 +190,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from team import Team
         self.team = Team(self, STATE_DIR / "team.json", _CFG / "team_bot.json", personal=self.telegram, personal_max=self.max)   # «Поручения» сотрудникам в Telegram
         self.toolbox.hooks["team"] = self.team
+        from clients import Clients
+        self.clients = Clients(STATE_DIR / "clients.json", self.reminders, emit=lambda *a, **k: self.emit("clients"))   # «Клиенты» — личная CRM
+        self.toolbox.hooks["clients"] = self.clients
         from course import Course
         self.course = Course(STATE_DIR / "course.json", self.emit)   # курс «Неделя с Лирой»: шаги засчитываются сами
         self.money.on_change = self.sync.soon.set

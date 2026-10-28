@@ -80,6 +80,54 @@ def due_parse(phrase, now=None):
     return at, ("" if rest == "Напоминание" else rest)          # «Напоминание» — текст по умолчанию у when.parse
 
 
+# Повторяющиеся поручения (28.10, «Поручения дальше»: «каждый понедельник — отчёт»): срок словами с «каждый», «по будням»,
+# «ежедневно» — не одно поручение, а правило; в день срока утром (в 9:00, ранний срок — за час) поручение уходит само.
+REPEAT_RX = re.compile(r"(?i)(?:^|\s)(кажд\w*|ежедневн\w*|еженедельн\w*|ежемесячн\w*|по\s+(?:будн\w*|выходн\w*|понедельник\w*|вторник\w*|"
+                       r"сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*))(?=\s|$)")
+WD_EACH = ["понедельник", "вторник", "среду", "четверг", "пятницу", "субботу", "воскресенье"]
+
+
+def repeat_parse(phrase):
+    """«каждый понедельник к 18», «по будням до 10», «каждое 1 число» -> правило повтора when.py ({kind, days|day, time})
+    или None (не повтор). Без часа — срок к 18:00, как у обычных поручений."""
+    p = re.sub(r"\s+", " ", (phrase or "").strip())
+    if not p or not REPEAT_RX.search(p):
+        return None
+    from when import parse
+    q = re.sub(r"(?i)\b(?:к|до)\s+(\d{1,2}(?:[:.]\d\d)?)\b", r"в \1", p)
+    q = re.sub(r"(?i)(?<!в )\b(\d{1,2}:\d\d)\b", r"в \1", q)
+    r = parse("напомни " + q)
+    rep_ = (r or {}).get("repeat")
+    if not rep_ or rep_.get("kind") not in ("daily", "weekly", "monthly"):
+        return None
+    rep_ = dict(rep_)
+    if not re.search(r"\d{1,2}[:.]\d\d|\b(?:в|к|до)\s+\d{1,2}\b|утр|вечер|дн[её]м|обед", q, re.I):
+        rep_["time"] = "18:00"
+    return rep_
+
+
+def repeat_text(rep_):
+    """Правило словами: «каждый понедельник к 18:00», «по будням к 10:00», «каждый день к 18:00», «каждое 1-е число к 12:00»."""
+    t = rep_.get("time") or "18:00"
+    k = rep_.get("kind")
+    if k == "daily":
+        return f"каждый день к {t}"
+    if k == "monthly":
+        return f"каждое {rep_.get('day')}-е число к {t}"
+    days = sorted(rep_.get("days") or [])
+    if days == [0, 1, 2, 3, 4]:
+        return f"по будням к {t}"
+    if days == [5, 6]:
+        return f"по выходным к {t}"
+    names = [("каждое " if d == 6 else "каждую " if d in (2, 4, 5) else "каждый ") + WD_EACH[d] for d in days]
+    return (", ".join(names[:-1]) + " и " + names[-1] if len(names) > 1 else names[0]) + f" к {t}"
+
+
+def post_at(due):
+    """Когда отправить повторяющееся поручение: в день срока в 9:00; срок раньше 10:00 — за час."""
+    return due.replace(hour=9, minute=0) if due.hour >= 10 else due - timedelta(hours=1)
+
+
 MALE_A = {"никита", "илья", "кузьма", "фома", "лука", "савва", "данила", "гаврила", "миша", "саша", "женя", "дима", "вова",
           "коля", "петя", "ваня", "лёша", "леша", "серёжа", "сережа", "паша", "гоша", "слава", "валера", "юра", "толя", "витя"}
 
@@ -201,6 +249,8 @@ class Team:
         self.st.setdefault("company", "")
         self.st.setdefault("members", {})
         self.st.setdefault("tasks", {})
+        self.st.setdefault("repeats", {})               # повторяющиеся: {id: {id, who, title, note, rep, next, created}}
+        self.st.setdefault("digest", "18:30")           # итог дня руководителю в это время ("" — не присылать)
         self.bot = TeamBot(self, bot_path)              # Telegram (прежнее имя — для совместимости)
         self.bots = {"tg": self.bot, "max": TeamMaxBot(self, max_path or Path(bot_path).with_name("team_max.json"))}
         self._tl = threading.local()                    # канал события, которое сейчас разбирается (у каждого бота свой поток)
@@ -313,6 +363,9 @@ class Team:
                 self.st["boss"] = str(a.get("boss") or "").strip()[:60]
             if "speak" in a:
                 self.st["speak"] = bool(a.get("speak"))
+            if "digest" in a:                          # «18:30» или "" — итог дня не присылать
+                d = str(a.get("digest") or "").strip()
+                self.st["digest"] = d if re.fullmatch(r"\d{1,2}:\d\d", d) else ""
         self._changed()
         return self.public()
 
@@ -438,7 +491,10 @@ class Team:
                 + (f"\n\nСрок — {due}" if due else ""))
 
     def assign(self, who, title, due="", note="", via="studio"):
-        """Поручить -> задача. who — mid или имя; due — ISO или фраза («до пятницы», «завтра к 12»)."""
+        """Поручить -> задача. who — mid или имя; due — ISO или фраза («до пятницы», «завтра к 12»). Фраза с «каждый»,
+        «по будням» — повторяющееся поручение (repeat_add) -> {repeat: True, …}."""
+        if due and REPEAT_RX.search(str(due)):
+            return self.repeat_add(who, title, str(due), note)
         title = re.sub(r"\s+", " ", str(title or "")).strip()[:300]
         if not title:
             raise TeamError("что поручить?")
@@ -459,7 +515,7 @@ class Team:
             tid = secrets.token_hex(4)
             t = {"id": tid, "who": mid, "title": title, "note": str(note or "").strip()[:500],
                  "due": at.strftime("%Y-%m-%dT%H:%M") if at else "", "state": "new", "created": time.time(), "log": []}
-            self._ev(t, "assign", "голосом" if via == "voice" else "")
+            self._ev(t, "assign", "голосом" if via == "voice" else "по расписанию" if via == "repeat" else "")
             self.st["tasks"][tid] = t
         chat = (m.get("tg") or {}).get("chat")
         if chat:
@@ -468,6 +524,37 @@ class Team:
                 self._ev(t, "sent")
         self._changed()
         return dict(t, name=m["name"], joined=bool(chat), sent=bool(t.get("msg")))
+
+    def repeat_add(self, who, title, every, note=""):
+        """Повторяющееся поручение: правило из фразы every; первое уйдёт само в день ближайшего срока."""
+        from when import next_time
+        title = re.sub(r"\s+", " ", str(title or "")).strip()[:300]
+        if not title:
+            raise TeamError("что поручать?")
+        title = title[:1].upper() + title[1:]
+        if not self.connected():
+            raise TeamError("сначала подключите бота компании — студия → «Поручения»")
+        rule = repeat_parse(every)
+        if not rule:
+            raise TeamError(f"не поняла, как часто: «{every}» — скажите, например: «каждый понедельник к 18» или «по будням к 10»")
+        mid = who if who in self.st["members"] else self.find(who)
+        first = next_time(rule, datetime.now())
+        with self._lock:
+            rid = "r" + secrets.token_hex(3)
+            self.st["repeats"][rid] = {"id": rid, "who": mid, "title": title, "note": str(note or "").strip()[:500], "rep": rule,
+                                       "next": first.strftime("%Y-%m-%dT%H:%M"), "created": time.time()}
+        self._changed()
+        self.tick()                                    # срок сегодня, а утро уже прошло — первое уходит сразу
+        r = self.st["repeats"][rid]
+        nm = self.st["members"][mid]["name"]
+        return dict(r, repeat=True, name=nm, name_dat=name_case(nm, "dat"), rule=repeat_text(rule), first=first.strftime("%Y-%m-%dT%H:%M"))
+
+    def repeat_del(self, rid):
+        with self._lock:
+            if not self.st["repeats"].pop(str(rid), None):
+                raise TeamError("такого повтора нет")
+        self._changed()
+        return self.public()
 
     def accept(self, tid):
         with self._lock:
@@ -748,8 +835,62 @@ class Team:
             if not t.get("late") and d <= now:
                 t["late"] = True
                 changed = True
+        # повторяющиеся: пришло время — поручение уходит само, следующий срок — по правилу
+        from when import next_time
+        for r in list(self.st.get("repeats", {}).values()):
+            try:
+                due = datetime.fromisoformat(r["next"])
+            except (KeyError, ValueError):
+                continue
+            if now < post_at(due) or r["who"] not in self.st["members"]:
+                continue
+            nxt = next_time(r["rep"], due)
+            r["next"] = nxt.strftime("%Y-%m-%dT%H:%M")
+            changed = True
+            if due > now - timedelta(hours=12):        # компьютер был выключен давно — старое не шлём, ждём следующего
+                try:
+                    self.assign(r["who"], r["title"], due.strftime("%Y-%m-%dT%H:%M"), r.get("note", ""), via="repeat")
+                except TeamError as e:
+                    log.info("Команда: повтор «%s» не ушёл: %s", r["title"], e)
+        # итог дня руководителю (раз в день, если за день что-то было)
+        dg = self.st.get("digest") or ""
+        if re.fullmatch(r"\d{1,2}:\d\d", dg) and now.strftime("%H:%M") >= dg.zfill(5) and self.st.get("digest_day") != now.date().isoformat():
+            self.st["digest_day"] = now.date().isoformat()
+            changed = True
+            text = self.digest(now)
+            if text:
+                self._tell("Поручения — итог дня", text)
         if changed:
             self._changed()
+
+    def digest(self, now=None):
+        """Итог дня: что сделано, что перенесено и почему, что просрочено, на завтра. Ничего не было — ""."""
+        now = now or datetime.now()
+        day0 = datetime(now.year, now.month, now.day).timestamp()
+        name = lambda t: ((self.st["members"].get(t["who"]) or {}).get("name") or "—").split()[0]
+        done, moved, late = [], [], []
+        for t in self.st["tasks"].values():
+            evs = [e["ev"] for e in t.get("log", []) if e.get("ts", 0) >= day0]
+            if "done" in evs or ("ok" in evs and t["state"] == "ok"):
+                done.append(f"{name(t)} — «{t['title']}»")
+            elif "move" in evs and t["state"] == "moved":
+                moved.append(f"{name(t)} — «{t['title']}»" + (f" на {due_text(t.get('due'), now)}" if t.get("due") else "") + (f", причина: {t['reason']}" if t.get("reason") else ""))
+            if t["state"] in OPEN and t.get("due") and t["due"] <= now.strftime("%Y-%m-%dT%H:%M"):
+                late.append(f"{name(t)} — «{t['title']}»")
+        tmr = (now + timedelta(days=1)).date().isoformat()
+        tomorrow = sum(1 for t in self.st["tasks"].values() if t["state"] in OPEN and (t.get("due") or "").startswith(tmr))
+        if not (done or moved or late):
+            return ""
+        parts = []
+        if done:
+            parts.append(f"Сделано {len(done)}: " + "; ".join(done[:8]) + ".")
+        if moved:
+            parts.append(f"Перенесено {len(moved)}: " + "; ".join(moved[:6]) + ".")
+        if late:
+            parts.append(f"Просрочено {len(late)}: " + "; ".join(late[:6]) + ".")
+        if tomorrow:
+            parts.append(f"На завтра — {tomorrow} {'поручение' if tomorrow % 10 == 1 and tomorrow % 100 != 11 else 'поручения' if tomorrow % 10 in (2, 3, 4) and tomorrow % 100 not in (12, 13, 14) else 'поручений'}.")
+        return "Итог дня по поручениям. " + " ".join(parts)
 
     # ---------- для студии и модели ----------
 
@@ -785,13 +926,15 @@ class Team:
                 "problem": "; ".join(f"{b['name']}: {b['problem']}" for b in bots if b["connected"] and b["problem"]),
                 "running": any(b["running"] for b in bots),
                 "company": self.company() if self.connected() or self.st.get("company") else "", "boss": self.boss(),
-                "speak": self.st.get("speak", True) is not False, "members": members, "tasks": tasks,
+                "speak": self.st.get("speak", True) is not False, "members": members, "tasks": tasks, "digest": self.st.get("digest", "18:30"),
+                "repeats": [dict(r, name=(self.st["members"].get(r["who"]) or {}).get("name", "—"), rule=repeat_text(r["rep"]),
+                                 next_text=due_text(r["next"], now)) for r in sorted(self.st.get("repeats", {}).values(), key=lambda x: x["next"])],
                 "inbox": [dict(x, name=(self.st["members"].get(x["who"]) or {}).get("name", "—")) for x in self.st.get("inbox", [])[-20:]],
                 "counts": {s: sum(1 for x in tasks if x["state"] == s) for s in STATES}}
 
     def summary(self, who=""):
         """Для модели и «что с поручениями?»: коротко по открытым и сделанным за неделю."""
-        if not self.st["tasks"]:
+        if not self.st["tasks"] and not self.st.get("repeats"):
             return "Поручений пока нет."
         mid = self.find(who) if who else None
         rows = []
@@ -808,6 +951,9 @@ class Team:
                     (f", отчёт: {t['report']['t']}" if t["state"] == "done" and (t.get("report") or {}).get("t") else "")
             rows.append(f"- {m}: «{t['title']}» — {STATES[t['state']].lower()}" + (f", срок {due}" if due else "")
                         + (" (просрочено)" if late else "") + extra)
+        for r in self.st.get("repeats", {}).values():
+            if not mid or r["who"] == mid:
+                rows.append(f"- {(self.st['members'].get(r['who']) or {}).get('name', '—')}: «{r['title']}» — повторяется {repeat_text(r['rep'])}")
         return "\n".join(rows[:40]) or "По этому человеку поручений нет."
 
     def calendar(self, first, last):

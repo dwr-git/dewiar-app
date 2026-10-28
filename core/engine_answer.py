@@ -154,6 +154,26 @@ class AnswerMixin:
                   "видеокарта или модель полегче). Возьмите лёгкую (в Ollama: qwen3:1.7b или qwen2.5:3b) или подключите облако "
                   "Dewiar — студия → «Мозг».")
 
+    CODER_RX = re.compile(r"coder|codellama|codegemma|starcoder|codestral|devstral|sqlcoder|code-?llama|wizardcoder", re.I)
+
+    def _coder_brain(self, prof):
+        """№370 (28.10): «мозг» — модель для программирования (qwen2.5-coder:7b): по-русски отвечает плохо, сбивается на
+        английский и печатает JSON вместо ответа. Один раз за запуск сказать, какую взять для разговора."""
+        name = str((prof or {}).get("model") or "")
+        if getattr(self, "_coder_said", False) or not self.CODER_RX.search(name):
+            return False
+        try:
+            if self.s.get("persona") == "agent":           # Кодер со своей моделью для кода — так и задумано
+                return False
+        except Exception:  # noqa: BLE001
+            pass
+        self._coder_said = True
+        log.warning("Мозг — модель для кода (%s): для разговора не годится", name)
+        self.note(f"Сейчас «мозг» — модель для программирования ({name}): по-русски она говорит плохо и сбивается на английский. "
+                  "Для разговора возьмите обычную — в Ollama qwen2.5:7b или qwen3:8b — или облако Dewiar: студия → «Мозг». "
+                  "Модель для кода пригодится Кодеру.")
+        return True
+
     def ask(self, text, images=None, quiet=False, via=None, raw=False, shown=None, report=None):
         """Вопрос → ответ. Сначала быстрые пути без модели (будильник, «спрячься»/«отключись», команды компьютера, сейф, умный дом, деньги,
         дела, заметки, напоминания, «замолчи», новый разговор, позвать персонажа, радио, музыка), затем, возможно,
@@ -1572,6 +1592,7 @@ class AnswerMixin:
                     if not turn.full:
                         log.info("⏱ первые слова модели через %.1f с", time.monotonic() - t_start)
                         self._slow_local(prof, time.monotonic() - t_start)
+                        self._coder_brain(prof)
                     turn.full += val
                     step_text += val
                     if time.monotonic() - last > 0.08 and not turn.via_job:     # текст в виджет — не чаще ~12 раз в секунду

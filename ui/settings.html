@@ -77,6 +77,7 @@
   <div class="ng">Работа</div>
   <button data-p="tasks">Задачи</button>
   <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden>Поручения<i class="ndot" id="team-dot"></i></button>
+  <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden>Клиенты<i class="ndot" id="cr-dot"></i></button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
   <div class="ng">Обучение</div>
   <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
@@ -548,6 +549,21 @@
       </div>
     </div>
   </section>
+  <section id="p-clients" class="wide">
+    <div class="cr-top">
+      <div><h1>Клиенты</h1><p class="lead" id="cr-sub">Кто это, как связаться, о чём договорились и что дальше — голосом или здесь.</p></div>
+      <button class="btn primary" id="cr-new">+ Клиент</button>
+    </div>
+    <div class="cr-main">
+      <div class="cr-left">
+        <label class="cr-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>
+          <input type="search" id="cr-q" placeholder="Имя, компания, о чём говорили" aria-label="Поиск клиентов"></label>
+        <ul class="cr-list" id="cr-list" aria-label="Клиенты"></ul>
+      </div>
+      <article class="cr-card" id="cr-card" aria-live="polite"></article>
+    </div>
+  </section>
+
   <section id="p-team" class="wide">
     <div class="tm-top">
       <div><h1 id="tm-h">Поручения</h1><p class="lead" id="tm-sub">Поручения сотрудникам в Telegram: берут, делают с фото, переносят с причиной.</p></div>
@@ -581,10 +597,11 @@
       <form class="tm-form" id="tm-form" hidden>
         <label>Кому<select id="tm-who"></select></label>
         <label class="grow">Что сделать<input type="text" id="tm-title" maxlength="300" placeholder="Подготовить договор поставки"></label>
-        <label>Срок<input type="text" id="tm-due" maxlength="60" placeholder="до пятницы, завтра к 12"></label>
+        <label>Срок<input type="text" id="tm-due" maxlength="60" placeholder="до пятницы, завтра к 12, каждый понедельник"></label>
         <label class="wide">Подробности<input type="text" id="tm-note" maxlength="500" placeholder="Необязательно"></label>
         <div class="tm-facts"><button class="btn" type="button" id="tm-fcancel">Отмена</button><button class="btn primary" type="submit" id="tm-send">Поручить</button></div>
       </form>
+      <div class="tm-reps" id="tm-reps" hidden></div>
       <div class="tm-main">
         <div class="tm-board" id="tm-board"></div>
         <aside class="tm-detail" id="tm-detail" aria-live="polite"></aside>
@@ -613,6 +630,7 @@
             <li><b>«Перенести…»</b> — новый срок и причина одной фразой: «на понедельник, клиент заболел».</li>
             <li><b>Вы принимаете</b> работу или возвращаете с замечанием.</li>
           </ol>
+          <p class="tm-note">Повторяющееся — сроком словами: «каждый понедельник к 18», «по будням к 10». Поручение уйдёт само утром в день срока.</p>
           <p class="tm-note">За час до срока бот сам напомнит сотруднику. Спросите Лиру: «что с поручениями?» — она расскажет, кто что сделал.</p>
         </div>
         <div class="tm-scard">
@@ -620,6 +638,7 @@
           <label>Название компании<input type="text" id="tm-company" maxlength="60"></label>
           <label>Как подписывать поручения<input type="text" id="tm-boss" maxlength="60" placeholder="Ваше имя"></label>
           <div class="switch slim"><div>Говорить вслух<span>Когда сотрудник сделал поручение, переносит его или пишет вам</span></div><label class="tg"><input type="checkbox" id="tm-speak"><i></i></label></div>
+          <label>Итог дня<select id="tm-digest"><option value="">Не присылать</option><option>17:00</option><option>18:00</option><option>18:30</option><option>19:00</option><option>20:00</option></select><span class="tm-note">Что сделано, что перенесено и почему, что просрочено — коротко, если за день что-то было.</span></label>
           <div class="tm-bots" id="tm-bots"></div>
         </div>
       </div>
@@ -1511,6 +1530,7 @@
     <div class="switch"><div>Рядом<span>«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом.</span></div><label class="tg"><input type="checkbox" data-k="features.near"><i></i></label></div>
     <div class="switch"><div>Встречи<span>«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном.</span></div><label class="tg"><input type="checkbox" data-k="features.meet"><i></i></label></div>
     <div class="switch"><div>Семья — общий бюджет<span>Траты за месяц у всей семьи, общий лимит и общие платежи (свет, газ, интернет) с близкими. Позовут в семью — включится само.</span></div><label class="tg"><input type="checkbox" data-k="features.family"><i></i></label></div>
+    <div class="switch"><div>Клиенты — личная CRM<span>Карточки клиентов: контакты, о чём договорились, следующий шаг с напоминанием. Голосом: «запиши: Иванов из „Ромашки“ хочет 200 коробок», «что у нас с Ивановым?».</span></div><label class="tg"><input type="checkbox" data-k="features.clients"><i></i></label></div>
     <div class="switch"><div>Поручения сотрудникам<span>Для работы: поручения в Telegram с кнопками «Беру», «Сделано» с фото, «Перенести» с причиной; отметки в календаре.</span></div><label class="tg"><input type="checkbox" data-k="features.team"><i></i></label></div>
     <div class="switch"><div>Суфлёр<span>Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить.</span></div><label class="tg"><input type="checkbox" data-k="features.prompter"><i></i></label></div>
     <p class="hint">На телефоне — свои переключатели: «Настройки» → «Ещё» → «Возможности».</p>
@@ -1910,6 +1930,7 @@
 <script src="studio/kids.js"></script>
 <script src="studio/family.js"></script>
 <script src="studio/team.js"></script>
+<script src="studio/clients.js"></script>
 <script src="studio/qa.js"></script>
 <script src="studio/course.js"></script>
 <script src="studio/vault.js"></script>

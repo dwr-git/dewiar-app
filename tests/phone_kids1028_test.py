@@ -74,8 +74,12 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     ok("время закончилось" in pg.evaluate("() => document.querySelector('#bot').textContent"), "минуты на сегодня кончились — «наше время закончилось»")
     pg.evaluate("() => { S.kids.min_weekday = S.kids.min_weekend = 60; saveS(); }")
+    pg.evaluate("() => { window._tg = []; S.account = Object.assign({}, S.account, { token: 'acc-test', services: { tg: 'dwrapp/tg.php' } }); S.tg = { linked: true }; tgCall = (m, b) => { _tg.push([m, b]); return Promise.resolve(true); }; }")
     r = pg.evaluate("() => [kidsTouch('Купи мне новую игру'), kidsTouch('Почему небо голубое?'), kidsReport()]")
     ok(r[0] is True and r[1] is False and len(r[2]["off"]) == 1 and r[2]["asked"][-1]["q"] == "Почему небо голубое?", f"вопросы — в отчёт, «купи» — вне правил: {r[2]['off']}")
+    tg = pg.evaluate("_tg")
+    ok(len(tg) == 1 and tg[0][0] == "sendMessage" and "Миша" in tg[0][1]["text"] and "Купи мне новую игру" in tg[0][1]["text"],
+       f"вне правил — сразу родителю в Telegram (бот Dewiar привязан), обычные вопросы — нет: {tg}")
     # отчёт родителю и выключение
     pg.evaluate("() => kidsUnlockUntil = Date.now() + 60e3"); pg.evaluate("() => openKids()"); pg.wait_for_timeout(500)
     r = pg.evaluate("() => [document.querySelectorAll('.kd-q').length, document.querySelectorAll('.kd-q.off').length, !!document.querySelector('#kd-off')]")
