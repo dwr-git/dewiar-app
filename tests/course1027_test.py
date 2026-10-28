@@ -47,8 +47,8 @@ ok(c2.offer_line() == "", "«не сегодня» — не предлагать
 c2.restart(1)
 ok(c2.public()["days"][0]["state"] != "done", "урок можно повторить")
 pf = c2.pick("family")
-ok(pf["title"] == "Лира для семьи" and pf["lesson"]["day"] == 1 and [x["id"] for x in pf["courses"]] == ["week", "family", "work", "biz"],
-   "курсы: «Неделя с Лирой», «Лира для семьи», «Лира для работы», «Лира для бизнеса» — у каждого свой ход")
+ok(pf["title"] == "Лира для семьи" and pf["lesson"]["day"] == 1 and [x["id"] for x in pf["courses"]] == ["week", "family", "work", "biz", "team_ai"],
+   "курсы: «Неделя с Лирой», «Лира для семьи», «Лира для работы», «Лира для бизнеса», «Команда Лиры» — у каждого свой ход")
 ok(c2.seen("close") == 0 and c2.public()["lesson"]["steps"][0]["done"] and C.Course(tmp / "c.json").public()["course"] == "family", "«Лира для семьи»: шаг «Откройте «Близкие»»")
 c2.pick("week")
 ok(c2.public()["done"] == 1, "вернулись к «Неделе» — её ход на месте")
@@ -59,6 +59,19 @@ old = tmp / "old.json"; old.write_text('{"done": {"1": "2026-10-01"}, "steps": {
 ok(C.Course(old).public()["done"] == 1, "старый файл курса читается как «Неделя с Лирой»")
 
 # ---------- часть 2: ядро и студия ----------
+# 0.67: «Команда Лиры» — два персонажа на разных моделях, Совет ИИ, знания для персонажа (владелец 28.10)
+import re as _re
+tm = C.BY_ID["team_ai"]
+ok([L["title"] for L in tm["lessons"]] == ["Два персонажа — две модели", "Совет ИИ", "Знания для персонажа", "Бот персонажа в Telegram"], "«Команда Лиры»: четыре урока")
+ids = set(_re.findall(r'data-p="([a-z_]+)"', (ROOT / "ui/settings.html").read_text(encoding="utf-8")))
+bad = [s["open"] for c in C.COURSES for L in c["lessons"] for s in L["steps"] if s.get("open") and s["open"] not in ids]
+ok(not bad, f"каждый «Откройте…» ведёт в существующий раздел студии: {bad}")
+L4 = tm["lessons"][3]
+ok([x.get("open") or x.get("did") for x in L4["steps"]] == ["pbot", "pbot_connect", "pbot_try"],
+   "урок «Бот персонажа»: открыть раздел, подключить бота, проверить ответ — засчитываются сами")
+cmds = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+ok('self._course_did("pbot_connect")' in cmds and 'self._course_did("pbot_try")' in cmds, "ядро отмечает шаги «подключил» и «проверил»")
+
 from playwright.sync_api import sync_playwright  # noqa: E402
 import websockets  # noqa: E402
 
@@ -155,3 +168,4 @@ finally:
     core.terminate(); mock.terminate()
 print("ИТОГ:", "все проверки пройдены" if not fails else f"не пройдено {len(fails)}")
 sys.exit(1 if fails else 0)
+

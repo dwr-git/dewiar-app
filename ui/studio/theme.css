@@ -15,7 +15,12 @@ html.st-skin:not(.st-light):not([data-skin="neon"]) :is(nav button.cur, .stabs b
 html.st-skin:not(.st-light):not([data-skin="neon"]) :is(#help .tplay, #wlc .tplay) {
   box-shadow: 0 10px 26px -14px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.16);
 }
-html.st-skin:not(.st-light) .tg input:checked + i { background: rgba(255,255,255,.34); }
+/* переключатели на обоях (YouTube 27.10: «вкл и выкл чуть подсветили — слегка сливаются»): «вкл» — мягкий зелёный с белой
+   ручкой справа, «выкл» — тёмная дорожка и приглушённая ручка слева: видно с одного взгляда, не только по положению */
+html.st-skin:not(.st-light) .tg i { background: rgba(0,0,0,.28); }
+html.st-skin:not(.st-light) .tg i::after { background: rgba(255,255,255,.55); }
+html.st-skin:not(.st-light) .tg input:checked + i { background: linear-gradient(135deg, #46d39a, #2fb383); }
+html.st-skin:not(.st-light) .tg input:checked + i::after { background: #fff; }
 html.st-skin :is(.dw-bar i, .cc-bar i, .tbar b, .tprog .bar b) { background: linear-gradient(90deg, rgba(255,255,255,.55), rgba(255,255,255,.85)); box-shadow: none; }
 html.st-skin :is(#upd-bar b) { background: linear-gradient(90deg, rgba(255,255,255,.55), rgba(255,255,255,.85)); box-shadow: none; }
 html.st-skin .cc-use .ub i.on { background: rgba(255,255,255,.6); }

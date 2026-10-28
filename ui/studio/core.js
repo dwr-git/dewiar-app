@@ -67,6 +67,8 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "clients" && window.loadClients) loadClients();     // «Клиенты» — личная CRM (studio/clients.js)
   if (b.dataset.p === "team" && window.loadTeam) loadTeam();             // «Поручения» — сотрудникам (studio/team.js)
   if (b.dataset.p === "devices" && window.loadMyDevices) loadMyDevices();   // «Устройства» — все мои устройства (studio/devices.js)
+  if (b.dataset.p === "council" && window.loadCouncil) loadCouncil();       // «Совет ИИ» (studio/council.js)
+  if (b.dataset.p === "pbot" && window.loadPbot) loadPbot();                // «Бот персонажа» (studio/pbot.js)
   if (b.dataset.p === "qa" && window.loadQA) loadQA();
   if (b.dataset.p === "course" && window.loadCourse) loadCourse();       // «Неделя с Лирой» — курс (studio/course.js)                   // «Вопрос — ответ» — руководство (studio/qa.js)
   if (!S) return;                                    // данные подгрузятся после связи с ядром

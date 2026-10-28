@@ -1973,6 +1973,31 @@ def t_debate(a, ctx):
         raise ToolError(str(e)) from e
 
 
+def t_council(a, ctx):
+    """«Собери совет: …», «посоветуйся с командой» (0.67, council.py): персонажи обсуждают вопрос в студии («Совет ИИ» —
+    открывается сама). Ждать минуту-две молча нельзя: отвечаем сразу, итог Лира скажет сама, когда совет закончит."""
+    eng = ctx.get("engine")
+    if eng is None or not hasattr(eng, "council"):
+        raise ToolError("«Совет ИИ» — в программе Dewiar на компьютере")
+    from council import CouncilError
+    try:
+        r = eng.council.start(a.get("question") or "", None, announce=True)
+    except CouncilError as e:
+        raise ToolError(str(e)) from e
+    eng.emit("council", sid=r["sid"], open=True)
+    names = ", ".join(m["name"] for m in r["members"])
+    return (f"Совет собран: {names}. Они обсуждают вопрос в студии «Совет ИИ» (открылась) — мнения, спор и итог; итог прозвучит "
+            "сам, когда совет закончит. Скажи об этом одной фразой, без своего ответа на вопрос.")
+
+
+def t_writing_today(a, ctx):
+    """«Сколько я написал сегодня?» (0.68, writing.py): прирост слов в своих текстах из папок «Документов»."""
+    w = ctx.get("writing")
+    if w is None:
+        raise ToolError("«Пишу» — в программе Dewiar на компьютере")
+    return w.text()
+
+
 def t_month_summary(a, ctx):
     """«Как прошёл мой месяц?», «итоги октября» (0.61, month.py): данные месяца — модели, рассказать тепло."""
     eng = ctx.get("engine")
@@ -2678,7 +2703,7 @@ def t_call_persona(a, ctx):
 # ---------- реестр ----------
 
 # На сервере (main.py --server) нет экрана, звука, камеры и окна — эти инструменты там выключены.
-SERVER_OFF = {"open_url", "open_app", "open_path", "show_page", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
+SERVER_OFF = {"council", "open_url", "open_app", "open_path", "show_page", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
               "set_volume", "look_at_screen", "save_screenshot", "look_through_camera", "widget", "power"}
 
 
@@ -2826,6 +2851,14 @@ TOOLS = {
     "debate": ("Спор моделей: две разные модели ИИ отвечают на трудный вопрос и возражают друг другу, потом ты подводишь итог — "
                "когда просят «пусть модели поспорят», «устрой спор моделей», «что скажут разные ИИ о …». question — вопрос целиком.",
                S({"question": {"type": "string"}}, ["question"]), "safe", t_debate, "Спор моделей"),
+    "council": ("«Совет ИИ»: персонажи (у каждого свой характер и своя модель) вместе обсуждают вопрос, спорят и подводят итог — "
+                "когда просят «собери совет», «посоветуйся с командой», «что скажет совет ИИ о …», «обсудите вместе». "
+                "Обсуждение идёт в студии (откроется само) минуту-две; итог прозвучит сам, когда совет закончит — сейчас скажи одной "
+                "фразой, что совет собран, и не отвечай на вопрос сам. question — вопрос целиком.",
+                S({"question": {"type": "string"}}, ["question"]), "safe", t_council, "Совет ИИ"),
+    "writing_today": ("Сколько пользователь написал сегодня в своих текстах (рукопись, статьи, конспекты в папках «Документов»): "
+                      "слова за день, цель, за неделю, дни подряд, в каких файлах. Когда спрашивают «сколько я написал сегодня», "
+                      "«много ли я написал», «как идёт книга», «сколько слов в моей рукописи».", S({}, []), "safe", t_writing_today, "Пишу"),
     "month_summary": ("Итоги месяца пользователя («Мой месяц с Лирой»): сделанные дела, напоминания, траты по категориям, заметки, "
                       "дневник — когда спрашивают «как прошёл мой месяц», «итоги октября», «что я сделал за месяц». month — 2026-10, "
                       "prev — прошлый месяц, пусто — текущий.", S({"month": {"type": "string"}}, []), "safe", t_month_summary, "Мой месяц"),
@@ -3038,7 +3071,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
-             "cancel_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "watch", "find_notes", "read_file", "remember", "write_diary",
+             "cancel_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "remember", "write_diary",
              "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
              "client_list", "client_deal", "client_deals"}

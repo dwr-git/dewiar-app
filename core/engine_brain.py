@@ -677,29 +677,33 @@ class BrainMixin:
         except Exception:  # noqa: BLE001
             return []
 
-    def _persona_knowledge(self, text, turn):
+    def _persona_knowledge(self, text, turn, p=None, quiet=False, hist=None):
         """У персонажа подключены базы сайта Dewiar (например, «Библия» из публичной библиотеки): перед ответом
         ищем во всех параллельно по вопросу и даём модели найденное — персонаж отвечает по источнику, своим голосом.
         Нужен вход аккаунтом. -> добавка к системной подсказке ("" — баз нет или ход отменён); картинки к найденному
-        показываются в фоне."""
-        try:
-            p = self.personas.get(self.s.get("persona")) or {}
-        except Exception:  # noqa: BLE001
-            return ""
+        показываются в фоне. p, quiet, hist — для «Бота персонажа» (pbot.py): чужой персонаж, без событий в окна и
+        без картинок, своя переписка вместо истории разговора."""
+        if p is None:
+            try:
+                p = self.personas.get(self.s.get("persona")) or {}
+            except Exception:  # noqa: BLE001
+                return ""
+        emit = (lambda *a, **k: None) if quiet else self.emit
         allb = p.get("knowledge") or []
         q = (text or "").split("\n\nВложения:")[0].strip()
         if not allb or len(q) < 3:
             return ""
-        local = self._persona_local_knowledge(q, [b for b in allb if b.get("kind") == "folder"])
+        local = self._persona_local_knowledge(q, [b for b in allb if b.get("kind") == "folder"], quiet=quiet)
         bases = [b for b in allb if b.get("kind") != "folder"]
         if not bases or not self.account.logged_in():
             return local
         from concurrent.futures import ThreadPoolExecutor
         from account import AccountError
         labels = ", ".join(f"«{b.get('label')}»" for b in bases)
-        self.emit("tool", name="knowledge", title=f"Ищу в {labels}", status="run")
-        hist = [{"role": m["role"], "content": m["content"]} for m in self.history[-4:]
-                if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str)]
+        emit("tool", name="knowledge", title=f"Ищу в {labels}", status="run")
+        if hist is None:
+            hist = [{"role": m["role"], "content": m["content"]} for m in self.history[-4:]
+                    if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str)]
 
         def one(b):
             try:
@@ -709,7 +713,7 @@ class BrainMixin:
         t0 = time.monotonic()
         with ThreadPoolExecutor(max_workers=min(4, len(bases))) as ex:
             got = list(ex.map(one, bases))
-        if turn.cancel.is_set():
+        if turn is not None and turn.cancel.is_set():
             return ""
         parts, empty, errs, images, srcs = [], [], [], [], []
         per = max(1500, 7000 // max(1, len(bases)))           # ~7000 знаков на все базы, но не меньше 1500 на каждую
@@ -724,9 +728,9 @@ class BrainMixin:
                 empty.append(f"«{b.get('label')}»")
         log.info("📚 Базы персонажа (%s): найдено в %d из %d за %.1f с%s", labels, len(parts), len(bases),
                  time.monotonic() - t0, ("; ошибки: " + "; ".join(errs)) if errs else "")
-        self.emit("tool", name="knowledge", title=f"Ищу в {labels}", status="error" if errs and not parts else "done",
+        emit("tool", name="knowledge", title=f"Ищу в {labels}", status="error" if errs and not parts else "done",
                   **({"error": errs[0]} if errs and not parts else {}))
-        if images:
+        if images and not quiet:
             threading.Thread(target=self._show_rag_images, args=(images,), daemon=True).start()
         out = ""
         if parts:
@@ -743,7 +747,7 @@ class BrainMixin:
             out += f"\n\nБаза знаний сейчас недоступна ({errs[0]}). Ответь от себя и коротко скажи, что база не ответила."
         return local + out
 
-    def _persona_local_knowledge(self, q, folders):
+    def _persona_local_knowledge(self, q, folders, quiet=False):
         """Знания персонажа из папок на этом компьютере (YouTube 27.10: «при создании персонажа нет возможности добавить
         знания из локальной папки, только с сервера»): поиск по отрывкам (knowledge.py, BM25) только в его папках, без
         интернета и входа. -> добавка к подсказке ("" — папок нет)."""
@@ -761,7 +765,8 @@ class BrainMixin:
             busy = any(st.get("busy") for st in getattr(kn, "fstate", {}).values())
             return (f"\n\nВ твоих папках со знаниями ({labels}) по этому вопросу ничего не нашлось"
                     + (" — они ещё читаются" if busy else "") + ". Если отвечаешь от себя — так и скажи одной фразой.")
-        self.emit("tool", name="knowledge", title=f"Найдено в {labels}", status="done")
+        if not quiet:
+            self.emit("tool", name="knowledge", title=f"Найдено в {labels}", status="done")
         return ("\n\nТВОЯ БАЗА ЗНАНИЙ (папки на компьютере пользователя) — найдено по вопросу. Отвечай, опираясь на это, "
                 "называй файл, откуда взято; чего в найденном нет — не выдумывай.\n\n"
                 + "\n\n".join(f"### Файл «{Path(r['path']).name}»\n{r['text'][:1500]}" for r in res)[:7000])

@@ -748,6 +748,7 @@ function setKids(k) {
 }
 core.on("hello", d => setKids(d.kids));
 core.on("kids", setKids);
+core.on("council", e => { if (e && e.open) { const a = api(); if (a && a.open_settings) a.open_settings("council"); } });   // «собери совет» голосом — обсуждение в студии
 document.querySelectorAll("#kids [data-say]").forEach(b => b.onclick = (ev) => { ev.stopPropagation(); core.call("say", { text: b.dataset.say }).catch(showErr); });
 const WAIT = {};   // метка для showCap: ответ готовится — вместо текста мигающие точки
 document.getElementById("rem-undo").onclick = async () => {

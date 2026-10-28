@@ -53,5 +53,10 @@ for f in [*sorted((ROOT / "android/assets/www").glob("*.js")), *(ROOT / "ui/asse
         seen.setdefault(m.group(1), []).append(f.name)
 twice = {k: v for k, v in seen.items() if len(v) > 1}
 ok(not twice, f"телефон: глобальные функции не повторяются ({len(seen)}): {twice}")
+# студия: id в settings.html не повторяются (0.67: «Бот персонажа» взял #pb-name, а он уже был у «Платежей» — поле
+# нового платежа стало невидимым)
+import collections as _co  # noqa: E402
+_ids = _co.Counter(re.findall(r'\sid="([^"]+)"', (ROOT / "ui/settings.html").read_text(encoding="utf-8")))
+ok(not {k: v for k, v in _ids.items() if v > 1}, f"студия: id не повторяются ({len(_ids)}): {[k for k, v in _ids.items() if v > 1][:5]}")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -72,6 +72,7 @@
   <div class="ng">Лира делает сама</div>
   <button data-p="tasks" title="Большая работа, которую Лира делает сама: отчёт, сравнение, программа — пишет, когда готово">Задачи</button>
   <button data-p="watch" title="«Дозор»: Лира присмотрит за экраном, папкой или страницей и скажет, когда готово">Дозор<i class="ndot" id="wt-dot"></i></button>
+  <button data-p="council" title="«Совет ИИ»: персонажи на разных моделях вместе обсуждают ваш вопрос, спорят и подводят итог">Совет ИИ</button>
   <div class="ng">Семья и близкие</div>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
   <div class="nav-groups" id="nav-groups" hidden></div>
@@ -84,6 +85,7 @@
   <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden>Поручения<i class="ndot" id="team-dot"></i></button>
   <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden>Клиенты<i class="ndot" id="cr-dot"></i></button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
+  <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям">Бот в Telegram</button>
   <div class="ng">Обучение</div>
   <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
   <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира">Вопрос — ответ</button>
@@ -137,6 +139,9 @@
       <div class="hm-morning" id="hm-morning" hidden></div>
       <div class="hm-morning hm-month" id="hm-month" hidden></div>
       <div class="hm-today" id="hm-today"></div>
+      <button class="hm-council" type="button" id="hm-council" data-go="council"><span class="hmc-faces" id="hmc-faces" aria-hidden="true"></span>
+        <span class="hmc-t"><b>Совет ИИ</b><span>Задайте вопрос — персонажи на разных моделях обсудят его, поспорят и подведут итог</span></span>
+        <span class="hmc-go">Собрать совет</span></button>
       <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
       <div class="hm-apps" id="hm-apps"></div>
       <div class="hm-more2"><div class="hm-card2" id="hm-chat"></div><div class="hm-card2" id="hm-pad"></div></div>
@@ -226,6 +231,106 @@
     <div class="nt-filt" id="nt-filt" hidden></div>
     <div class="nt-cols"><div id="nt-list" class="nt-list"></div><div id="nt-view" class="nt-view"></div></div>
   </section>
+  <section id="p-council" class="wide">
+    <h1>Совет ИИ</h1>
+    <p class="lead">Вынесите идею или трудный вопрос — персонажи ответят каждый со своей позиции (у каждого свой характер, а с
+      «своим мозгом» — и своя модель), поспорят друг с другом и подведут итог: где сошлись, где разошлись и что советуют.</p>
+    <div class="co-grid">
+      <div class="co-side">
+        <div class="co-card co-ask" id="co-ask">
+          <h3>О чём посоветоваться?</h3>
+          <textarea id="co-q" rows="3" maxlength="600" placeholder="Например: стоит ли мне переходить на удалённую работу?"></textarea>
+          <div class="chips co-ex" id="co-ex"></div>
+          <div class="co-h">За столом <span id="co-n"></span></div>
+          <div class="co-ms" id="co-ms" role="group" aria-label="Участники совета"></div>
+          <p class="co-tip" id="co-tip"></p>
+          <button class="btn primary co-go" id="co-go">Собрать совет</button>
+        </div>
+        <div class="co-card co-hist"><h3>Прошлые советы</h3><ul id="co-hist"></ul></div>
+      </div>
+      <div class="co-main">
+        <div class="co-stage" id="co-stage">
+          <div class="co-qline" id="co-qline">Задайте вопрос — и совет соберётся здесь</div>
+          <div class="co-seats" id="co-seats"></div>
+          <ol class="co-steps" id="co-steps"><li data-ph="r1">Мнения</li><li data-ph="r2">Спор</li><li data-ph="sum">Итог</li></ol>
+          <button class="btn small co-stop" id="co-stop" hidden>Остановить</button>
+        </div>
+        <div class="co-feed" id="co-feed" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="p-pbot" class="wide">
+    <h1>Бот персонажа</h1>
+    <p class="lead">Персонаж отвечает людям в Telegram — в личных сообщениях и в группах — своим характером и по своим знаниям.
+      Например, консультант магазина, знаток книги или помощник учебной группы. Вашего личного он не видит.</p>
+    <div class="bp-flow" id="bp-flow" aria-label="Как работает бот персонажа">
+      <svg class="bp-wires" id="bp-wires" aria-hidden="true"></svg>
+      <div class="bp-col bp-in">
+        <div class="bp-node" id="bp-n-dm"><i class="bp-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></i><span><b>Лично</b><small>пишут или присылают голосовые</small></span></div>
+        <div class="bp-node" id="bp-n-gr"><i class="bp-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M2.5 19.5a5.5 5.5 0 0 1 11 0M13.5 18.5a4.5 4.5 0 0 1 8 0"/></svg></i><span><b>В группе</b><small id="bp-gr-sub">когда упомянут или ответят ему</small></span></div>
+      </div>
+      <div class="bp-core">
+        <div class="bp-orb"><canvas id="bp-ent" aria-hidden="true"></canvas></div>
+        <b id="bp-who">Персонаж</b>
+        <small id="bp-at">бот ещё не подключён</small>
+      </div>
+      <div class="bp-col bp-out">
+        <div class="bp-node bp-kb" id="bp-n-kb"><i class="bp-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 2-2h11v15H7a2 2 0 0 0-2 2z"/><path d="M5 20a2 2 0 0 0 2 2h11v-4M9 7h6M9 10h4"/></svg></i><span><b>Знания</b><small id="bp-kb">не подключены</small></span></div>
+        <div class="bp-node bp-md" id="bp-n-md"><i class="bp-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3v.5A3 3 0 0 0 4 13a3 3 0 0 0 2 4.5A3 3 0 0 0 12 19V5a3 3 0 0 0-3-1zM15 4a3 3 0 0 1 3 3v.5A3 3 0 0 1 20 13a3 3 0 0 1-2 4.5A3 3 0 0 1 12 19"/></svg></i><span><b>Мозг</b><small id="bp-model">общий</small></span></div>
+      </div>
+      <div class="bp-wall" aria-label="Чего бот не видит">
+        <span class="bp-lock" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="3"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+        <span>Не видит и не трогает:</span><em>память</em><em>заметки и файлы</em><em>дела и календарь</em><em>вашу переписку</em><em>компьютер</em>
+      </div>
+    </div>
+    <div class="bp-grid">
+      <div class="bp-side">
+        <div class="co-card bp-setup" id="bp-setup">
+          <h3>Подключить бота</h3>
+          <ol class="bp-steps">
+            <li>Откройте в Telegram <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> и отправьте <code>/newbot</code></li>
+            <li>Придумайте имя и адрес бота — например, <i>Lira_shop_bot</i></li>
+            <li>Скопируйте токен, который пришлёт BotFather, и вставьте сюда</li>
+          </ol>
+          <div class="bp-tok"><input type="password" id="bp-token" autocomplete="off" spellcheck="false" placeholder="123456789:AAH…" aria-label="Токен бота"><button class="btn primary" id="bp-connect">Подключить</button></div>
+          <p class="co-tip">Нужен отдельный бот — не тот, через который вы сами пишете Лире.</p>
+        </div>
+        <div class="co-card bp-bot" id="bp-bot" hidden>
+          <div class="bp-bh"><div><b id="bp-name">@bot</b><small id="bp-state"></small></div><label class="tg" title="Бот отвечает"><input type="checkbox" id="bp-on"><i></i></label></div>
+          <div class="actions bp-links"><a class="btn small" id="bp-open" target="_blank" rel="noopener">Открыть в Telegram</a><a class="btn small" id="bp-addgr" target="_blank" rel="noopener">Добавить в группу</a><button class="btn small" id="bp-forget">Отключить</button></div>
+          <p class="co-tip" id="bp-problem" hidden></p>
+        </div>
+        <div class="co-card">
+          <h3>Кто отвечает</h3>
+          <div class="co-ms" id="bp-ps" role="radiogroup" aria-label="Персонаж бота"></div>
+          <p class="co-tip" id="bp-kbtip"></p>
+        </div>
+        <div class="co-card">
+          <h3>О чём бот</h3>
+          <textarea id="bp-brief" rows="4" maxlength="1500" placeholder="Например: ты консультант магазина «Чайный двор»: помогаешь выбрать чай, рассказываешь о доставке и скидках. Цены — только из базы знаний."></textarea>
+          <label class="bp-lb" for="bp-welcome">Приветствие на /start <small>необязательно</small></label>
+          <input type="text" id="bp-welcome" maxlength="500" placeholder="Здравствуйте! Я — Лира, помогу выбрать чай.">
+          <label class="bp-row"><span>Отвечать в группах<small>когда упомянут или ответят на его сообщение</small></span><span class="tg"><input type="checkbox" id="bp-groups"><i></i></span></label>
+          <div class="bp-lims"><label>Одному человеку в день<input type="number" id="bp-pu" min="1" max="5000"></label><label>Всем в день<input type="number" id="bp-pd" min="1" max="5000"></label></div>
+        </div>
+      </div>
+      <div class="bp-main">
+        <div class="co-card bp-try">
+          <h3>Проверить ответ</h3>
+          <p class="co-tip">Так бот ответит незнакомому человеку: характер, «О чём бот» и знания — без вашей памяти.</p>
+          <div class="bp-chat" id="bp-chat"><div class="bp-empty">Спросите, как спросил бы посетитель.</div></div>
+          <div class="bp-ask"><input type="text" id="bp-q" maxlength="500" placeholder="Например: какие у вас есть зелёные чаи?"><button class="btn primary" id="bp-send">Спросить</button></div>
+        </div>
+        <div class="co-card bp-log">
+          <div class="bp-lh"><h3>Что спрашивали</h3><span class="bp-stat" id="bp-stat"></span></div>
+          <div class="bp-chats" id="bp-chats"></div>
+          <ul id="bp-log"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="p-watch" class="wide">
     <div class="wt-hero">
       <div class="wt-eye" aria-hidden="true"><svg viewBox="0 0 120 72"><path class="wt-lid" d="M6 36S28 6 60 6s54 30 54 30-22 30-54 30S6 36 6 36z"/><circle class="wt-iris" cx="60" cy="36" r="20"/><circle class="wt-pupil" cx="60" cy="36" r="8"/><circle class="wt-glint" cx="66" cy="29" r="3.2"/></svg></div>
@@ -951,6 +1056,22 @@
         <p class="dc-a">Четырнадцать календарных дней с момента получения — это пункт 6.2. Возврат оформляется актом.</p>
         <p class="dc-src"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span><b>Договор поставки.pdf</b><small>Работа / Договоры · нажать — открыть</small></span></p>
       </figure>
+    </div>
+
+    <div class="wr-card" id="wr-card" aria-label="Пишу: сколько написано">
+      <div class="wr-now">
+        <span class="wr-k">Сегодня написано</span>
+        <b id="wr-today">0</b><span class="wr-u" id="wr-u">слов</span>
+        <div class="wr-goal" id="wr-goal"><i id="wr-fill"></i></div>
+        <label class="wr-gl">Цель на день <input type="number" id="wr-goal-n" min="0" max="100000" step="50" placeholder="—"> слов</label>
+      </div>
+      <figure class="wr-chart" aria-label="Слов в день за две недели">
+        <svg id="wr-bars" role="img" aria-label="Слов в день за две недели"></svg>
+        <figcaption id="wr-tip">Две недели</figcaption>
+      </figure>
+      <ul class="wr-facts" id="wr-facts"></ul>
+      <p class="wr-empty" id="wr-empty" hidden>Пишете книгу, диплом или статьи? Добавьте папку со своими текстами (.md, .txt, .docx, .odt) —
+        Лира будет считать, сколько вы написали за день, и подбодрит. Спросите: «Сколько я написал сегодня?»</p>
     </div>
 
     <h2>Папки, по которым Лира ищет</h2>
@@ -2206,6 +2327,9 @@
 <script src="assets/help.js"></script>
 <script src="studio/core.js"></script>
 <script src="studio/tasks.js"></script>
+<script src="studio/council.js"></script>
+<script src="studio/pbot.js"></script>
+<script src="studio/writing.js"></script>
 <script src="studio/day.js"></script>
 <script src="studio/welcome.js"></script>
 <script src="studio/icons.js"></script>

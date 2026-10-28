@@ -3,6 +3,8 @@
    course_offer {on}, course_skip, course_restart {day}; событие «course» — шаг засчитан, урок пройден. */
 let CS = null;
 const CS_ICON = {
+  pbot: "M21 4 3 11l6 2.4M21 4l-3 15.5-6.6-5M21 4 9 13.4v5.6l2.4-4.5",
+  council: "M12 4a3 3 0 1 0 0 .1 M4.5 13a2.5 2.5 0 1 0 0 .1 M19.5 13a2.5 2.5 0 1 0 0 .1 M8 20a4 4 0 0 1 8 0 M7 9.5l2 1.5 M17 9.5l-2 1.5", knowledge: "M5 5a2 2 0 0 1 2-2h11v15H7a2 2 0 0 0-2 2z M5 20a2 2 0 0 0 2 2h11v-4 M9 7h6 M9 10h4",
   watch: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
   chat: "M5 6h14v9H9l-4 3.5z", play: "M7 9h10a4 4 0 0 1 3.8 5.2l-.8 2.6a2 2 0 0 1-3.4.7L14.5 15h-5l-2.1 2.5a2 2 0 0 1-3.4-.7l-.8-2.6A4 4 0 0 1 7 9z",
   near: "M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M12 12m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0", family: "M8 8a2.5 2.5 0 1 0 0-.1 M16 8a2.5 2.5 0 1 0 0-.1 M3 20v-2a4 4 0 0 1 4-4h2 M21 20v-2a4 4 0 0 0-4-4h-2",
@@ -28,7 +30,7 @@ function csRender() {
   const other = (d.courses || []).filter(c => c.id !== d.course);
   // 28.10, владелец: «блоки слишком близко… должно быть красиво, выверенно» — карточки списком с отступами: значок курса,
   // название и что внутри, ход (если начат) и стрелка
-  const CS_COURSE_ICON = { week: "chat", family: "family", work: "tasks", biz: "team" };
+  const CS_COURSE_ICON = { week: "chat", family: "family", work: "tasks", biz: "team", team_ai: "council" };
   $("#cs-after").innerHTML = other.map(c => `<button class="cs-oc" data-c="${escH(c.id)}">`
     + `<i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="${CS_ICON[CS_COURSE_ICON[c.id]] || CS_ICON.chat}"/></svg></i>`
     + `<span><b>${escH(c.title)}</b><small>${escH(c.sub)} · ${c.done ? `пройдено ${c.done} из ${c.total}` : `${c.total} ${plural(c.total, "урок", "урока", "уроков")}`}</small>`
@@ -47,7 +49,7 @@ function csRender() {
       + (L.open ? "" : `<p class="cs-wait">Сегодняшний урок пройден — этот откроется завтра. Не терпится? <button class="btn small" id="cs-ahead">Следующий урок сейчас</button></p>`)
       + `<ol class="cs-steps">${L.steps.map((s, i) => `<li class="${s.done ? "done" : i === L.steps.findIndex(x => !x.done) ? "now" : ""}"><span class="n">${s.done ? '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : i + 1}</span>`
         + `<div><b>${escH(s.say)}</b><small>${escH(s.why)}</small></div><em>${s.done ? "Сделано" : i === L.steps.findIndex(x => !x.done) ? "Ждём" : "Потом"}</em>`
-        + (!s.done && s.open ? `<button class="btn small" data-open="${escH(s.open)}">Открыть</button>` : !s.done && L.open ? `<button class="cs-play" data-say="${i}" title="Отправить Лире" aria-label="Отправить Лире"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg></button>` : "")
+        + (!s.done && (s.open || s.did) ? `<button class="btn small" data-open="${escH(s.open || s.did.split("_")[0])}">Открыть</button>` : !s.done && L.open ? `<button class="cs-play" data-say="${i}" title="Отправить Лире" aria-label="Отправить Лире"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg></button>` : "")
         + `</li>`).join("")}</ol>`
       + `<div class="cs-acts">${all ? `<b class="cs-ok">Урок пройден — молодец!</b>` : `<button class="btn primary" id="cs-mic">Сказать Лире</button>`}`
       + `<span class="cs-tom">${L.tomorrow ? `Завтра: «${escH(L.tomorrow)}»` : "Это последний урок"}</span></div>`;

@@ -157,6 +157,12 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.toolbox.hooks["knowledge"] = self.knowledge
         self.toolbox.hooks["sources"] = self._turn_sources          # найденные документы — источниками под ответом
         threading.Thread(target=self.knowledge.watch, name="knowledge-folders", daemon=True).start()
+        from writing import Writing
+        import knowledge as _kn
+        self.writing = Writing(lambda: self.s.get("knowledge", "folders") or [], STATE_DIR / "writing.json",
+                               extract=_kn.extract, walk=self.knowledge._walk)   # «Пишу»: сколько написано за день (0.68)
+        self.toolbox.hooks["writing"] = self.writing
+        threading.Thread(target=self._writing_loop, name="writing", daemon=True).start()
         from prompter import Prompter
         self.mic_voice_t = 0.0                             # когда микрофон последний раз слышал речь (monotonic)
         self.prompter = Prompter(self)                     # суфлёр на встречах (core/prompter.py, окно ui/prompter.html)
@@ -177,6 +183,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.max = Max(on_message=lambda k, d: self._on_messenger(self.max, k, d))
         self.chat = Messengers(self.telegram, self.max)        # Telegram и MAX вместе: уведомления — во все подключённые
         self.toolbox.hooks["telegram"] = self.chat
+        from pbot import PersonaBot
+        self.pbot = PersonaBot(self)                            # «Бот персонажа»: публичный бот, отвечает всем (0.67)
         from servers import Servers
         self.servers = Servers()
         self.toolbox.hooks["servers"] = self.servers
@@ -271,6 +279,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.radio_logos = Logos(STATE_DIR / "radio_logos.json")              # значки станций для вкладки «Радио»
         from latency import Latency
         self.lat = Latency()                                                  # «Голос без пауз»: от конца фразы до звука
+        from council import Council
+        self.council = Council(self)                                          # «Совет ИИ»: персонажи обсуждают вопрос
         self.toolbox.hooks["music"] = self.music
         self.music.data()                                 # свежий список станций с сайта — в фоне, сразу при запуске
         self._music_app = ("", 0.0)                       # какое музыкальное приложение открывали последним и когда
@@ -334,6 +344,18 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         if not self.wav_input:
             threading.Thread(target=self._ann_loop, name="announcements", daemon=True).start()
         self.max.start()
+        self.pbot.start()
+
+    def _writing_loop(self):
+        """«Пишу»: раз в 10 минут пересчитать прирост слов в своих текстах (дёшево: только изменившиеся файлы)."""
+        time.sleep(40)
+        while True:
+            try:
+                if self.s.get("knowledge", "folders"):
+                    self.writing.scan()
+            except Exception:  # noqa: BLE001
+                log.exception("«Пишу»: подсчёт")
+            time.sleep(600)
 
     def _ann_fetch(self):
         """Объявления для всех с облака (news.announcements); новое (номер больше ui.ann_seen и ещё не объявленное) —

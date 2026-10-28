@@ -8,7 +8,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("council_", "pbot_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
@@ -26,6 +26,15 @@ def _kids_blocked(cmd, a):
 
 
 class CommandsMixin:
+    def _course_did(self, key):
+        """Шаг урока «сделайте в студии…» (course.did) — без ошибок, если курса нет."""
+        try:
+            c = getattr(self, "course", None)
+            if c is not None:
+                c.did(key)
+        except Exception:  # noqa: BLE001
+            log.debug("курс: шаг %s", key, exc_info=True)
+
     PTT_CALM = 2.5                     # с: нажатие на лицо сразу после «стоп» — тоже «стоп» (судорожные нажатия, 28.10)
 
     # ---------- команды из интерфейса ----------
@@ -1085,6 +1094,38 @@ class CommandsMixin:
             if cmd in ("max_connect", "max_connect_shared", "max_forget", "max_new_code"):
                 self.emit("tools", tools=self.toolbox.catalog())
             return r
+        if cmd in ("writing_get", "writing_goal"):   # «Пишу» в «Документах»: написано за день, цель, 14 дней
+            if cmd == "writing_goal":
+                return self.writing.set_goal(a.get("goal") or 0)
+            return self.writing.scan() if a.get("fresh") else self.writing.maybe_scan(20)
+        if cmd.startswith("pbot_"):              # «Бот персонажа» (pbot.py): публичный бот в Telegram от имени персонажа
+            from telegram import TelegramError
+            pb = self.pbot
+            try:
+                if cmd == "pbot_connect":
+                    r = pb.connect(a.get("token", ""), a.get("api", ""))
+                    self._course_did("pbot_connect")
+                elif cmd == "pbot_set":
+                    r = pb.set(a.get("patch") or {})
+                elif cmd == "pbot_forget":
+                    r = pb.forget()
+                elif cmd == "pbot_try":                     # как персонаж ответит незнакомцу — без Telegram
+                    q = str(a.get("text") or "").strip()
+                    if len(q) < 2:
+                        raise ValueError("напишите вопрос, как его задал бы посетитель")
+                    try:
+                        r = {"answer": pb.test_answer(q)}
+                        self._course_did("pbot_try")
+                    except Exception as e:  # noqa: BLE001
+                        raise ValueError(f"модель не ответила: {e}") from e
+                else:
+                    r = pb.public()
+                    r["personas"] = [{"id": x["id"], "name": x.get("name", ""), "color": x.get("color", ""), "style": x.get("style", ""),
+                                      "avatar_url": x.get("avatar_url") or "", "kb": len(x.get("knowledge") or [])}
+                                     for x in self.personas.public() if not x.get("kids")]
+            except TelegramError as e:
+                raise ValueError(str(e)) from e
+            return r
         if cmd.startswith("tg_"):                # Telegram: подключить бота, код владельца, проверка, отключить
             from telegram import TelegramError
             tg = self.telegram
@@ -1914,6 +1955,22 @@ class CommandsMixin:
             if a.get("play"):
                 self._play_station([dict(st, tags="своя", own=True)], "", "Включаю «{}».")
             return st
+        if cmd.startswith("council_"):               # «Совет ИИ» (0.67, council.py)
+            from council import CouncilError
+            try:
+                if cmd == "council_members":
+                    return {"members": self.council.members(), "pick": self.council.default_pick(), "state": self.council.state(),
+                            "history": self.council.history()}
+                if cmd == "council_start":
+                    return self.council.start(a.get("q"), a.get("pids"))
+                if cmd == "council_stop":
+                    return self.council.stop()
+                if cmd == "council_state":
+                    return self.council.state()
+                if cmd == "council_history":
+                    return self.council.history()
+            except CouncilError as e:
+                raise ValueError(str(e)) from e
         if cmd == "radio_home":                       # вкладка «Радио» в студии (0.64)
             return self.radio_home()
         if cmd == "radio_search":

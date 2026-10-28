@@ -101,6 +101,7 @@ function dcStat() {
 function loadDocs() {
   core.call("knowledge_list").then(r => { DC.files = r.files || []; renderKn(DC.files); dcStat(); }).catch(e => ($("#kn-res").textContent = e.message));
   core.call("knowledge_folders").then(renderKnFolders).catch(() => {});
+  if (window.loadWriting) loadWriting();                          // «Пишу» — сколько написано за день (studio/writing.js)
   const a = S && lastAccount; $("#kn-site").textContent = a && a.logged_in ? `Знания с сайта тоже подключены: аккаунт ${a.user && a.user.login || a.login} — Лира ищет и там.` : "";
 }
 $$("#dc-try button").forEach(b => b.onclick = () => {             // пример — вопросом в «Чат»: остаётся нажать «Отправить»
