@@ -527,7 +527,11 @@
 
   <section id="p-music" class="wide">
     <h1>Музыка</h1>
-    <p class="lead">Своя папка с музыкой. Ассистент ставит из неё по просьбе и ведёт эфир, как диджей: подборки под настроение, пара слов перед треком, на «что играет?» — расскажет. Пока он говорит, музыка звучит тише — как у радио.</p>
+    <p class="lead">Своя папка с музыкой и радио со всего мира. Ассистент ставит музыку по просьбе и ведёт эфир, как диджей: подборки под настроение, пара слов перед треком, на «что играет?» — расскажет. Пока он говорит, музыка звучит тише.</p>
+    <div class="mm-tabs" role="tablist" id="mm-tabs" aria-label="Музыка или радио">
+      <button role="tab" id="mmt-mine" data-mt="mine" aria-selected="true" aria-controls="mm-mine"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Моя музыка</button>
+      <button role="tab" id="mmt-radio" data-mt="radio" aria-selected="false" aria-controls="rd-tab"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="9" width="18" height="11" rx="3"/><path d="M7 9l9-5"/><circle cx="15.5" cy="14.5" r="2.5"/><path d="M6.5 13h3M6.5 16h3"/></svg>Радио</button>
+    </div>
     <div class="mm-top">
       <div class="mm-now idle" id="mm-now">
         <canvas class="mm-vis" id="mm-vis" aria-hidden="true"></canvas>
@@ -545,15 +549,24 @@
           </div>
         </div>
       </div>
-      <div class="mm-side">
+      <div class="mm-side" data-for="mine">
         <h3>Папка с музыкой</h3>
         <button class="mm-folder" id="mm-pick" title="Выбрать другую папку"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="mm-folder">Папка не выбрана</span></button>
         <div class="mm-stats" id="mm-stats"></div>
         <div class="switch slim"><div>Говорить между треками<span>Раз в несколько песен — пара слов о следующей, поверх её начала</span></div><label class="tg"><input type="checkbox" data-k="music.dj_talk" id="mm-talk"><i></i></label></div>
         <button class="btn small" id="mm-rescan">Перечитать папку</button>
       </div>
+      <div class="mm-side rd-side" data-for="radio" hidden>
+        <h3>Как попросить</h3>
+        <div class="mm-say">
+          <div><b>«Включи радио»</b><span>любимая станция или популярная</span></div>
+          <div><b>«Включи джаз»</b><span>по жанру: рок, новости, классика, что-нибудь спокойное</span></div>
+          <div><b>«Включи Ретро ФМ»</b><span>по названию — из ваших станций или каталога</span></div>
+          <div><b>«Выключи радио»</b><span>«громче», «тише», «пауза» — тоже</span></div>
+        </div>
+      </div>
     </div>
-    <div class="mm-row">
+    <div class="mm-row" id="mm-mine" data-for="mine" role="tabpanel" aria-labelledby="mmt-mine">
       <div class="mm-panel">
         <div class="mm-ph"><h3>Подборки</h3><button class="btn small primary" id="mm-play-all">Играть всё вперемешку</button></div>
         <div class="chips" id="mm-chips"></div>
@@ -572,14 +585,24 @@
         <p class="hint">Подходят mp3, flac, ogg, opus, m4a. Названия и исполнители берутся из тегов файлов, а если их нет — из имён файлов и папок («Кино/1989 — Звезда/01 Песня.mp3»). Музыка остаётся на месте и никуда не отправляется.</p>
       </div>
     </div>
-      <div class="mm-panel rc-panel">
-      <div class="mm-ph"><h3>Свои радиостанции</h3><span class="hint" style="margin:0">Радио вашего города, любимый поток — по ссылке</span></div>
+    <div class="rd-tab" id="rd-tab" data-for="radio" role="tabpanel" aria-labelledby="mmt-radio" hidden>
+      <form class="rd-find" id="rd-find" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <input type="search" id="rd-q" placeholder="Найти станцию: название, жанр или город" aria-label="Найти радиостанцию" autocomplete="off" maxlength="80">
+        <button class="btn small primary" id="rd-go">Найти</button></form>
+      <div class="chips rd-genres" id="rd-genres"></div>
+      <div class="rd-sec" id="rd-mine-sec"><div class="rd-h"><h3>Мои станции</h3><span id="rd-mine-hint">♥ — станция здесь, и голосом её можно включить по названию</span></div>
+        <div class="rd-grid" id="rd-mine"></div></div>
+      <div class="rd-sec"><div class="rd-h"><h3 id="rd-top-h">Популярные</h3><span id="rd-top-hint"></span></div>
+        <div class="rd-grid" id="rd-top"></div></div>
+      <details class="mm-panel rc-panel" id="rc-panel">
+      <summary><h3>Своя станция по ссылке</h3><span class="hint" style="margin:0">Радио вашего города, любимый поток — если его нет в каталоге</span></summary>
       <ul class="mm-list rc-list" id="rc-list"></ul>
       <form class="rc-add" id="rc-add"><input type="text" id="rc-name" aria-label="Название станции" placeholder="Название: Железо-ФМ" maxlength="80" autocomplete="off">
         <input type="url" id="rc-url" aria-label="Ссылка на поток" placeholder="Ссылка на поток: https://…  (из файла .m3u — строка с http)" required autocomplete="off">
         <button class="btn primary small">Добавить и включить</button></form>
       <p class="hint">Можно и голосом или в чате: «включи радио Железо-ФМ https://…» или пришлите файл .m3u со словами «включи» —
         станция запомнится. Дальше просто: «включи Железо-ФМ».</p>
+      </details>
     </div>
   </section>
 

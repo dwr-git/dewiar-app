@@ -206,7 +206,18 @@ class MyMusicMixin:
         return {"stats": self.mylib.stats(), "busy": self.mylib.busy, "folder": self.s.get("music", "folder") or "",
                 "progress": dict(self.mylib.progress or {}),
                 "now": dict(t, fav=t["path"] in favs, art=Path(art).as_uri() if art else "") if t else None, "what": self.dj.what if t else "",
-                "paused": bool((self.radio.paused or {}).get("_mine"))}
+                "paused": bool((self.radio.paused or {}).get("_mine")), "live": self._live_now()}
+
+    def _live_now(self):
+        """Играет (или на паузе) радиостанция, а не своя музыка -> {name, url, tags, logo, fav, paused} для общего плеера."""
+        st = self.radio.station or self.radio.paused
+        if not st or st.get("_mine") or not st.get("url"):
+            return None
+        mine = {x.get("url") for x in (self.s.get("radio_custom") or []) if isinstance(x, dict)}
+        logos = getattr(self, "radio_logos", None)
+        return {"name": st.get("name", ""), "url": st["url"], "tags": " ".join(str(st.get("tags") or "").replace(",", " ").split()[:4]),
+                "logo": st.get("logo") or (logos.get(st.get("name", "")) if logos else ""), "fav": st["url"] in mine,
+                "paused": not self.radio.station}
 
     def mine_command(self, cmd, a):
         """Команды студии «Музыка»: mm_status, mm_list, mm_play, mm_ctl {act: play|pause|next|prev|stop|vol {v}|seek {t}},
@@ -257,7 +268,7 @@ class MyMusicMixin:
             if act == "pause":
                 self.radio.pause()
             elif act == "play":
-                if (self.radio.paused or {}).get("_mine"):
+                if self.radio.paused:                    # своя музыка или станция на паузе — продолжить
                     self.radio.resume()
                 elif self.dj.current():
                     self._mine_play(self.dj.current())

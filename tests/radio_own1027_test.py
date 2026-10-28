@@ -97,6 +97,8 @@ try:
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.goto((ROOT / "ui/settings.html").as_uri() + f"?token={tok}&port={PORT}"); time.sleep(3)
         pg.click('nav button[data-p="music"]'); time.sleep(1.2)
+        pg.click("#mmt-radio"); time.sleep(0.6)                 # 0.64: свои станции — на вкладке «Радио», под «Своя станция по ссылке»
+        pg.click("#rc-panel summary"); time.sleep(0.4)
         ok("Железо-ФМ" in pg.inner_text("#rc-list"), f"«Свои радиостанции» — список: {pg.inner_text('#rc-list')[:80]!r}")
         pg.evaluate("() => { const c0 = core.call.bind(core); core.call = (c, a) => c === 'radio_custom_add' ? c0(c, Object.assign({}, a, { play: false })) : c0(c, a); }")
         pg.fill("#rc-name", "Радио Город"); pg.fill("#rc-url", "http://127.0.0.1:9/city"); pg.click("#rc-add button"); time.sleep(1.0)

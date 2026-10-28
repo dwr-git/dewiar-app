@@ -266,8 +266,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from music import Catalog
         self.music = Catalog(lambda: self.s.get("radio_url") or "", STATE_DIR / "radio.json", DATA_DIR / "radio.json",
                              custom_fn=lambda: self.s.get("radio_custom") or [])
-        from radio import StationHealth
+        from radio import Logos, StationHealth
         self.radio_health = StationHealth(STATE_DIR / "radio_health.json")      # какие станции у вас реально играют
+        self.radio_logos = Logos(STATE_DIR / "radio_logos.json")              # значки станций для вкладки «Радио»
         self.toolbox.hooks["music"] = self.music
         self.music.data()                                 # свежий список станций с сайта — в фоне, сразу при запуске
         self._music_app = ("", 0.0)                       # какое музыкальное приложение открывали последним и когда

@@ -6,7 +6,11 @@ const MM_CHIPS = [["", "Все треки"], ["любимое", "Любимое"
 function mmNow(s) {
   const n = s && s.now, box = $("#mm-now");
   if (!box) return;
+  const L = !n && s && s.live;
+  box.classList.toggle("live", !!L);
+  if (L) { rsNowCard(s, L); return; }
   box.classList.toggle("idle", !n);
+  $("#mm-prev").title = $("#mm-prev").ariaLabel = "Предыдущий трек"; $("#mm-next").title = $("#mm-next").ariaLabel = "Следующий трек";
   const cv = $("#mm-cover"), art = n && n.art ? n.art : "";
   cv.classList.toggle("art", !!art);                     // обложка из файла или папки альбома (№361); нет — как раньше
   cv.style.backgroundImage = art ? `url("${art.replace(/"/g, "%22")}")` : "";
@@ -115,10 +119,11 @@ function mmDraw(now) {
   MMV.raf = still ? 0 : requestAnimationFrame(mmDraw);
 }
 function mmVisStart() { if (!MMV.raf) MMV.raf = requestAnimationFrame(mmDraw); mmPoll(); }
-function loadMyMusic() { mmVisStart(); mmRefresh().then(mmLoadList); if (typeof rcLoad === "function") rcLoad(); }
+function loadMyMusic() { mmVisStart(); rsTab(); mmRefresh().then(mmLoadList); if (typeof rcLoad === "function") rcLoad(); }
 if ($("#p-music")) {
   core.on("mymusic", e => { if (!$("#p-music").classList.contains("cur")) return; mmData = Object.assign(mmData || {}, e); mmNow(mmData); mmStats(mmData); if (!e.busy) mmLoadList(); });
-  core.on("radio", () => { if ($("#p-music").classList.contains("cur")) mmRefresh().then(mmRenderList); });
+  core.on("radio", () => { if ($("#p-music").classList.contains("cur")) mmRefresh().then(() => { mmRenderList(); rsMark(); }); });
+  core.on("radio_logos", () => { if ($("#p-music").classList.contains("cur") && RS.tab === "radio") rsLoad(); });
   $("#mm-pick").onclick = async () => {
     const a = window.api && window.api(); let p = "";
     if (a && a.pick_folder) p = await a.pick_folder(); else p = await askText("Полный путь к папке с музыкой:") || "";
@@ -128,9 +133,9 @@ if ($("#p-music")) {
   };
   $("#mm-rescan").onclick = () => core.call("mm_scan").then(() => { toast("Перечитываю папку", 2000); mmRefresh(); }).catch(e => toast(e.message));
   $("#mm-play-all").onclick = () => core.call("mm_play", { what: mmWhat }).then(mmRefresh).catch(e => toast(e.message, 4000));
-  $("#mm-pp").onclick = () => core.call("mm_ctl", { act: mmData && mmData.now && !mmData.paused ? "pause" : "play" }).then(mmRefresh).catch(e => toast(e.message, 4000));
-  $("#mm-next").onclick = () => core.call("mm_ctl", { act: "next" }).then(mmRefresh).catch(e => toast(e.message));
-  $("#mm-prev").onclick = () => core.call("mm_ctl", { act: "prev" }).then(mmRefresh).catch(e => toast(e.message));
+  $("#mm-pp").onclick = () => core.call("mm_ctl", { act: mmData && (mmData.now && !mmData.paused || mmData.live && !mmData.live.paused) ? "pause" : "play" }).then(mmRefresh).catch(e => toast(e.message, 4000));
+  $("#mm-next").onclick = () => mmData && mmData.live && !mmData.now ? rsStep(1) : core.call("mm_ctl", { act: "next" }).then(mmRefresh).catch(e => toast(e.message));
+  $("#mm-prev").onclick = () => mmData && mmData.live && !mmData.now ? rsStep(-1) : core.call("mm_ctl", { act: "prev" }).then(mmRefresh).catch(e => toast(e.message));
   if ($("#mm-vol")) {
   $("#mm-vol").oninput = () => { MMV.drag = true; $("#mm-volv").textContent = $("#mm-vol").value + "%"; };
   $("#mm-vol").onchange = () => core.call("mm_ctl", { act: "vol", v: +$("#mm-vol").value / 100 }).then(r => { MMV.drag = false; if (r && r.vis) mmVisTake(r.vis); })
@@ -143,7 +148,9 @@ if ($("#p-music")) {
     core.call("mm_ctl", { act: "seek", t: MMV.pos + (e.key === "ArrowRight" ? 10 : -10) }).then(r2 => { if (r2 && r2.vis) mmVisTake(r2.vis); }).catch(() => {}); };
   document.addEventListener("visibilitychange", () => { if (!document.hidden && $("#p-music").classList.contains("cur")) mmVisStart(); });
   }
-  $("#mm-heart").onclick = () => { const n = mmData && mmData.now; if (n) core.call("mm_fav", { path: n.path, on: !n.fav }).then(() => mmRefresh().then(mmLoadList)).catch(e => toast(e.message)); };
+  $("#mm-heart").onclick = () => { const n = mmData && mmData.now, L = mmData && mmData.live;
+    if (!n && L) { rsFav(L, !L.fav); return; }
+    if (n) core.call("mm_fav", { path: n.path, on: !n.fav }).then(() => mmRefresh().then(mmLoadList)).catch(e => toast(e.message)); };
 }
 
 /* Свои радиостанции (№359, 27.10: «Где можно добавлять потоки радио? В моём случае — радио нашего города»): список,
@@ -172,4 +179,132 @@ if ($("#rc-add")) {
   };
   core.on("hello", () => { if ($("#p-music").classList.contains("cur")) rcLoad(); });
   core.on("radio", () => { if ($("#p-music").classList.contains("cur")) rcLoad(); });
+}
+
+/* Вкладка «Радио» (0.64; владелец 28.10: «у нас есть раздел МУЗЫКА, может ещё радио добавить или как-то совместить»).
+   Одна страница, две вкладки и общий плеер: играет станция — в плеере её значок и название, ◀ ▶ листают станции,
+   ♥ — в «Мои станции». Плитки: «Мои станции» (♥ и свои по ссылке), «Популярные» (наш список), жанры и поиск по
+   каталогу radio-browser. Значки — favicon из каталога (у нашего списка ядро ищет их в фоне), нет или не загрузился —
+   буквы на цветной плашке. Ядро: radio_home, radio_search {q}, radio_play {url,name,logo,tags}, radio_fav {…, on}. */
+const RS = { tab: "mine", home: null, res: null, q: "", busy: false, err: "", seq: 0 };
+const RS_TAB = "dewiar_music_tab";
+function rsTab(t) {
+  if (!$("#mm-tabs")) return;
+  if (!t) { try { t = localStorage.getItem(RS_TAB) || ""; } catch (e) { t = ""; } }
+  RS.tab = t === "radio" ? "radio" : "mine";
+  try { localStorage.setItem(RS_TAB, RS.tab); } catch (e) { }
+  $$("#mm-tabs [data-mt]").forEach(b => { const on = b.dataset.mt === RS.tab; b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; });
+  $$("#p-music [data-for]").forEach(el => { el.hidden = el.dataset.for !== RS.tab; });
+  if (RS.tab === "radio") rsLoad();
+}
+const rsHue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
+function rsMono(name) {
+  const w = String(name || "").replace(/[«»"'()]/g, " ").split(/[\s\-–—.]+/).filter(x => x && !/^(радио|radio|фм|fm|ру|ru)$/i.test(x));
+  return ((w[0] || name || "?")[0] + (w[1] && /^[\p{L}\d]/u.test(w[1]) ? w[1][0] : "")).toUpperCase();
+}
+function rsLogo(st, cls) {
+  const img = st.logo ? `<img src="${escH(st.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" draggable="false">` : "";
+  return `<span class="${cls || "rd-logo"}" style="--h:${rsHue(st.name)}"><i>${escH(rsMono(st.name))}</i>${img}</span>`;
+}
+function rsLogoFix(root) {   // значок не загрузился или пустышка 1×1 — остаются буквы
+  root.querySelectorAll(".rd-logo img, .mm-cover img").forEach(im => {
+    const bad = () => im.remove(), ok = () => { if (im.naturalWidth < 8) bad(); else im.parentElement.classList.add("pic"); };
+    if (im.complete) { if (im.naturalWidth) ok(); else bad(); } else { im.onload = ok; im.onerror = bad; }
+  });
+}
+const RS_HEART = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>`;
+function rsTiles(list, box, empty) {
+  box.innerHTML = list.length ? list.map((st, i) => `<div class="rd-t${st.dead ? " dead" : ""}" data-u="${escH(st.url)}">`
+    + `<button class="rd-play" data-i="${i}" title="${escH(st.name)}${st.dead ? " — недавно не отвечала" : ""}">${rsLogo(st)}`
+    + `<span class="rd-name">${escH(st.name)}</span><span class="rd-tags">${escH(st.dead ? "не отвечала" : st.tags || st.country || "")}</span>`
+    + `<span class="rd-eq" aria-hidden="true"><i></i><i></i><i></i></span></button>`
+    + `<button class="rd-fav${st.fav ? " on" : ""}" data-i="${i}" aria-pressed="${!!st.fav}" title="${st.fav ? "Убрать из моих станций" : "В мои станции"}" aria-label="${st.fav ? "Убрать из моих станций" : "В мои станции"}: ${escH(st.name)}">${RS_HEART}</button></div>`).join("")
+    : `<p class="rd-empty">${empty}</p>`;
+  box.querySelectorAll(".rd-play").forEach(b => b.onclick = () => rsPlay(list[+b.dataset.i]));
+  box.querySelectorAll(".rd-fav").forEach(b => b.onclick = () => rsFav(list[+b.dataset.i], !list[+b.dataset.i].fav));
+  rsLogoFix(box);
+}
+function rsGenres() {
+  const g = (RS.home && RS.home.genres || []).slice(0, 12);
+  $("#rd-genres").innerHTML = [["", "Популярные"]].concat(g.map(x => [x, x[0].toUpperCase() + x.slice(1)]))
+    .map(([k, l]) => `<button class="chip${(RS.res ? RS.q.toLowerCase() === k : !k) ? " on" : ""}" data-g="${escH(k)}">${escH(l)}</button>`).join("");
+  $$("#rd-genres .chip").forEach(b => b.onclick = () => { $("#rd-q").value = b.dataset.g; rsSearch(b.dataset.g); });
+}
+function rsDraw() {
+  const h = RS.home || { mine: [], top: [] };
+  rsTiles(h.mine, $("#rd-mine"), "Пока пусто. Нажмите ♥ на станции — и она будет здесь, а голосом её можно включить по названию.");
+  $("#rd-mine-hint").hidden = !h.mine.length;
+  if (RS.busy) {
+    $("#rd-top-h").textContent = `Ищу «${RS.q}»…`; $("#rd-top-hint").textContent = "";
+    $("#rd-top").innerHTML = Array.from({ length: 6 }, () => `<div class="rd-t sk"><span class="rd-logo"></span><span class="rd-name"></span></div>`).join("");
+  } else if (RS.res) {
+    $("#rd-top-h").textContent = `«${RS.q[0].toUpperCase() + RS.q.slice(1)}»`;
+    $("#rd-top-hint").textContent = RS.err ? "" : RS.res.length ? "из нашего списка и каталога radio-browser" : "";
+    rsTiles(RS.res, $("#rd-top"), RS.err ? escH(RS.err[0].toUpperCase() + RS.err.slice(1)) + "." : "Не нашлось — попробуйте по-другому: «Европа», «jazz», «Минск».");
+  } else {
+    $("#rd-top-h").textContent = "Популярные"; $("#rd-top-hint").textContent = "";
+    rsTiles(h.top, $("#rd-top"), "Список станций ещё не загрузился.");
+  }
+  rsGenres(); rsMark();
+}
+function rsMark() {
+  const L = mmData && !mmData.now && mmData.live, u = L ? L.url : "";
+  $$("#rd-tab .rd-t[data-u]").forEach(t => { const on = !!u && t.dataset.u === u; t.classList.toggle("on", on); t.classList.toggle("paused", on && !!L.paused);
+    const b = t.querySelector(".rd-play"); if (b) b.setAttribute("aria-current", on ? "true" : "false"); });
+}
+async function rsLoad() {
+  try { RS.home = await core.call("radio_home"); } catch (e) { RS.home = RS.home || { mine: [], top: [], genres: [] }; }
+  if (RS.res) {          // ♥ поменялось — отметить и в найденном
+    const fav = new Set(RS.home.mine.map(x => x.url)); RS.res.forEach(x => { x.fav = fav.has(x.url); });
+  }
+  rsDraw();
+}
+async function rsSearch(q) {
+  q = String(q || "").trim();
+  if (!q) { RS.res = null; RS.q = ""; RS.err = ""; rsDraw(); return; }
+  const my = ++RS.seq, low = q.toLowerCase();
+  RS.q = q; RS.busy = true; RS.err = ""; rsDraw();
+  const h = RS.home || { mine: [], top: [] };
+  const local = h.mine.concat(h.top).filter(x => (x.name + " " + x.tags).toLowerCase().includes(low));
+  let found = [];
+  try { found = await core.call("radio_search", { q }); } catch (e) { RS.err = local.length ? "" : e.message; }
+  if (my !== RS.seq) return;
+  const urls = new Set(local.map(x => x.url));
+  RS.res = local.concat((found || []).filter(x => !urls.has(x.url))); RS.busy = false; rsDraw();
+}
+function rsPlay(st) {
+  const L = mmData && !mmData.now && mmData.live;
+  if (L && L.url === st.url && !L.paused) { core.call("mm_ctl", { act: "pause" }).then(mmRefresh).then(rsMark).catch(e => toast(e.message)); return; }
+  if (mmData) { mmData.now = null; mmData.live = Object.assign({}, st, { paused: false }); mmNow(mmData); rsMark(); }   // сразу видно, что нажали
+  core.call("radio_play", { url: st.url, name: st.name, logo: st.logo || "", tags: st.tags || "" }).then(() => setTimeout(mmRefresh, 800)).catch(e => { toast(e.message, 4000); mmRefresh(); });
+}
+function rsFav(st, on) {
+  core.call("radio_fav", { name: st.name, url: st.url, logo: st.logo || "", tags: st.tags || "", on })
+    .then(() => { toast(on ? `«${st.name}» — в моих станциях` : `«${st.name}» убрана из моих станций`, 2200); return Promise.all([rsLoad(), mmRefresh(), typeof rcLoad === "function" ? rcLoad() : 0]); })
+    .catch(e => toast(e.message, 4000));
+}
+function rsStep(d) {
+  const h = RS.home || { mine: [], top: [] }, list = h.mine.concat(RS.res || h.top).filter((x, i, a) => a.findIndex(y => y.url === x.url) === i);
+  if (!list.length) return;
+  const L = mmData && mmData.live, i = L ? list.findIndex(x => x.url === L.url) : -1;
+  rsPlay(list[(i + d + list.length) % list.length]);
+}
+function rsNowCard(s, L) {
+  const box = $("#mm-now"), cv = $("#mm-cover");
+  box.classList.remove("idle");
+  cv.classList.remove("art"); cv.style.backgroundImage = "";
+  cv.innerHTML = rsLogo(L, "rd-logo big"); rsLogoFix(cv);
+  $("#mm-np").innerHTML = `<small>${L.paused ? "Радио на паузе" : "<span class=\"rd-live\"></span>В эфире"}</small><h2>${escH(L.name)}</h2><div class="ar">${escH(L.tags || "радио")}</div>`;
+  $("#mm-pp").classList.toggle("playing", !L.paused); $("#mm-pp").title = L.paused ? "Играть" : "Пауза";
+  if ($("#mm-time")) $("#mm-time").hidden = true;
+  $("#mm-prev").title = $("#mm-prev").ariaLabel = "Предыдущая станция"; $("#mm-next").title = $("#mm-next").ariaLabel = "Следующая станция";
+  const f = $("#mm-heart"); f.hidden = false; f.classList.toggle("on", !!L.fav); f.title = L.fav ? "Убрать из моих станций" : "В мои станции";
+  if (s.vis) mmVisTake(s.vis);
+}
+if ($("#mm-tabs")) {
+  $$("#mm-tabs [data-mt]").forEach(b => b.onclick = () => rsTab(b.dataset.mt));
+  $("#mm-tabs").onkeydown = (e) => { if (!/^Arrow(Left|Right)$/.test(e.key)) return; e.preventDefault();
+    rsTab(RS.tab === "mine" ? "radio" : "mine"); const b = $(`#mm-tabs [data-mt="${RS.tab}"]`); if (b) b.focus(); };
+  $("#rd-find").onsubmit = (e) => { e.preventDefault(); rsSearch($("#rd-q").value); };
+  $("#rd-q").oninput = () => { if (!$("#rd-q").value.trim() && RS.res) rsSearch(""); };
 }

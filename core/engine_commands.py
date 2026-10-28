@@ -1910,6 +1910,17 @@ class CommandsMixin:
             if a.get("play"):
                 self._play_station([dict(st, tags="своя", own=True)], "", "Включаю «{}».")
             return st
+        if cmd == "radio_home":                       # вкладка «Радио» в студии (0.64)
+            return self.radio_home()
+        if cmd == "radio_search":
+            return self.radio_find(a.get("q"))
+        if cmd == "radio_play":
+            return self.radio_play_one(a)
+        if cmd == "radio_fav":                        # ♥ на станции: в «Мои станции» (и голосом — «включи …»)
+            if a.get("on", True):
+                return self.radio_custom_save(a.get("name"), a.get("url"), a.get("logo"), a.get("tags"))
+            self.s.update({"radio_custom": [x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict) and x.get("url") != a.get("url")]})
+            return True
         if cmd == "radio_custom_del":
             self.s.update({"radio_custom": [x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict) and x.get("url") != a.get("url")]})
             return True

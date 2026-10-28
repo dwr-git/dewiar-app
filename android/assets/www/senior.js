@@ -4,7 +4,8 @@
    • Лекарства: «Добавить лекарство» — ежедневные напоминания; в окне напоминания кнопка «Выпил(а) ✓» (AlarmActivity) или
      голосом «выпила» — отмечено. Через 40 минут не отмечено — присматривающим сообщение через «Близкие».
    • «Всё хорошо» вечером (по умолчанию в 20:00) — сводка дня присматривающим; днём (с 12:00), если с утра тишина, — «может,
-     позвоните?». Проверки идут, пока приложение живо (с «Сообщения и звонки — сразу» — почти всегда).
+     позвоните?». С 0.65 «не отметила лекарство» и «с утра тишина» уходят и при закрытом приложении (srArm, ниже);
+     вечерняя сводка — пока приложение живо (с «Сообщения и звонки — сразу» — почти всегда).
    • Мошенники: «звонят из банка, просят код из СМС», «внук попал в аварию» — сразу, без модели, твёрдое «стоп» и сообщение
      присматривающим.
    Настройки — S.senior: {on, name, gender f|m, watchers [pid], checkin "20:00", noon, scam, meds [{id, text, times, ids}]};
@@ -33,7 +34,7 @@ function srDay() {
   return d;
 }
 const srDaySave = (d) => prefSet("senior_day", JSON.stringify(d));
-function srSave(patch) { S.senior = Object.assign(srConf(), patch || {}); saveS(); srApply(); syncSoon(); }
+function srSave(patch) { S.senior = Object.assign(srConf(), patch || {}); saveS(); srApply(); syncSoon(); setTimeout(() => srArm().catch(() => { }), 0); }
 function srApply() { document.body.classList.toggle("senior", srOn()); }
 function srWatchers() { const st = clLoad(), w = srConf().watchers || []; return st.people.filter(p => w.includes(p.pid)); }
 async function srSend(text) {
@@ -123,7 +124,54 @@ async function srTick() {
   const ck = srTodayAt(c.checkin || "20:00");
   if (ck && now >= ck && !d.sent.includes("eve")) { d.sent.push("eve"); srDaySave(d); await srSend(srSummary(d)); }
 }
-setInterval(() => { srTick().catch(e => plog("warn", "для старших: " + e.message)); }, 60000);
+/* ---------- присмотр, даже когда приложение закрыто (0.65; было: «проверки идут, пока приложение живо») ----------
+   Телефон мамы Android может усыпить, приложение — выгрузить, и тогда «не отметила лекарство» не уходило. Теперь
+   заранее, пока приложение живо, готовим эти сообщения — уже зашифрованные для устройств присматривающих (тем же
+   encryptFor, что clSend) — и отдаём плану телефона (D.srPlan → SeniorGuard.java): он сам проснётся в нужное время,
+   проверит, нужно ли ещё (лекарство отмечено «Выпил(а) ✓» — очередь done_inbox; уже отправлено, человек говорил с
+   Лирой — senior_day), и отправит в облако ?p=/close/send. Тексты телефону не видны: они зашифрованы.
+   Пункты: «late» — лекарство не отмечено (сегодня и завтра), «noon» — с утра тишина. Вечернее «всё хорошо» зависит от
+   дня — его по-прежнему собирает приложение (откроют позже — уйдёт тогда). План пересобирается, только когда меняется. */
+let srPlanSig = "";
+function srPlanItems() {
+  const c = srConf(), d = srDay(), now = Date.now(), out = [];
+  const dk = (t) => { const x = new Date(t); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
+  const taken = srMedsToday().filter(x => x.taken).map(x => x.rid + ":" + x.time);
+  for (let day = 0; day < 2; day++) {
+    c.meds.forEach(m => (m.times || []).forEach((t, i) => {
+      const at = srTodayAt(t); if (!at) return; at.setDate(at.getDate() + day);
+      const rid = (m.ids || [])[i] || "", key = "late:" + rid + ":" + t, fire = at.getTime() + SR_LATE * 6e4;
+      if (fire < now - 60e3 || (day === 0 && (d.sent.includes(key) || taken.includes(rid + ":" + t)))) return;
+      out.push({ at: fire, med: at.getTime(), day: dk(at), key, rid, kind: "late",
+        text: `Это Лира, помощница: ${srWho()} не ${srG("отметила", "отметил")} «${m.text}» в ${t} — я напомнила. Может, позвоните?` });
+    }));
+    if (c.noon) {
+      const at = new Date(); at.setHours(12, 0, 0, 0); at.setDate(at.getDate() + day);
+      if (at.getTime() >= now - 60e3 && !(day === 0 && d.sent.includes("noon")))
+        out.push({ at: at.getTime(), med: 0, day: dk(at), key: "noon", rid: "", kind: "noon",
+          text: `Это Лира, помощница: ${srWho()} сегодня ещё не ${srG("говорила", "говорил")} со мной. Может, позвоните?` });
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+async function srArm() {
+  if (!D.srPlan) return;
+  const cr = syncCred(), st = clLoad(), ws = srWatchers();
+  if (!srOn() || !ws.length || !cr || !st.me || !st.me.pid) { if (srPlanSig !== "off") { srPlanSig = "off"; D.srPlan(""); } return; }
+  const items = srPlanItems();
+  const sig = JSON.stringify([cr.base, cr.token, items.map(x => [x.at, x.key, x.day, x.text]), ws.map(p => [p.pid, (p.devs || []).map(d => d.dev)]), (st.me.devs || []).map(d => d.dev)]);
+  if (sig === srPlanSig) return;
+  const k = clKeys(), plan = { base: cr.base, token: cr.token, link: cr.link && cr.link !== cr.token ? cr.link : "", items: [] };
+  for (const it of items) {
+    const payloads = ws.filter(p => (p.devs || []).length).map(p => {
+      const body = { t: it.text, ts: it.at, mid: "sr" + it.key.replace(/\W/g, "").slice(-12) + it.day.replace(/-/g, "") + p.pid.slice(-4), name: st.me.name || "" };
+      return { to: p.pid, env: DC().encryptFor(body, DC().b64d(k.priv), k.dev, clTargets(p)), kind: "msg" };
+    });
+    if (payloads.length) plan.items.push({ at: it.at, med: it.med, day: it.day, key: it.key, rid: it.rid, kind: it.kind, payloads });
+  }
+  D.srPlan(JSON.stringify(plan)); srPlanSig = sig;
+}
+setInterval(() => { srTick().catch(e => plog("warn", "для старших: " + e.message)).then(() => srArm()).catch(e => plog("warn", "для старших (план): " + e.message)); }, 60000);
 /* ---------- лист «Для старших» («Всё» → «Для старших») ---------- */
 function srHtml() {
   const c = srConf(), st = clLoad(), today = srMedsToday();
@@ -143,7 +191,8 @@ function srHtml() {
       <div class="sw"><div>Вечером — «всё хорошо»<small>сводка дня присматривающим в <input id="sr-ck" class="srck" value="${esc(c.checkin)}" maxlength="5" inputmode="numeric" aria-label="Время сводки"></small></div><label class="tg"><input type="checkbox" checked disabled><i></i></label></div>
       <div class="sw"><div>Если с утра тишина<small>в 12:00 — «может, позвоните?»</small></div><label class="tg"><input type="checkbox" id="sr-noon" ${c.noon ? "checked" : ""}><i></i></label></div>
       <div class="sw"><div>Защита от мошенников<small>«звонят из банка», «код из СМС» — сразу «стоп» и сообщение вам</small></div><label class="tg"><input type="checkbox" id="sr-scam" ${c.scam ? "checked" : ""}><i></i></label></div></div>
-    <p class="hint" style="margin:12px 4px">Проверки идут, пока приложение работает. Чтобы и в фоне — «Близкие» → «Сообщения и звонки — сразу».</p>`;
+    <p class="hint" style="margin:12px 4px">${D.srPlan ? "Не отмечено лекарство или с утра тишина — близкие узнают, даже когда приложение закрыто. Вечернее «всё хорошо» уходит, пока приложение работает: чтобы всегда — «Близкие» → «Сообщения и звонки — сразу»."
+      : "Проверки идут, пока приложение работает. Чтобы и в фоне — «Близкие» → «Сообщения и звонки — сразу»."}</p>`;
 }
 function openSenior() {
   if (!$("#sh-senior")) { const s = document.createElement("section"); s.className = "sheet tall"; s.id = "sh-senior"; s.setAttribute("aria-labelledby", "sr-h");

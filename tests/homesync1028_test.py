@@ -183,6 +183,30 @@ try:
         R5 = pg.evaluate("""async () => { while (syncBusy) await new Promise(r => setTimeout(r, 100)); await syncRun(true); return syncStatus; }""")
         A.home.run_once()
         ok(R5["ok"] and A.note("Без сети.md").exists(), "сеть вернулась — правка дошла")
+
+        # роутер дал компьютеру другой адрес (0.65): прежний молчит — телефон находит узел в своей сети Wi-Fi по /hello
+        dead = free()
+        R6 = pg.evaluate("""async ([U, dead]) => {
+            const real = http; window._seen = [];
+            http = (m, url, o) => { _seen.push(url); return real(m, url.replace("http://127.0.0.42:8766/", U), o); };
+            D.lanIps = () => JSON.stringify([{ ip: "127.0.0.9", wifi: true }, { ip: "10.20.30.40", wifi: false }]);
+            S.sync.home.u = ["http://127.0.0.1:" + dead + "/"]; saveS(); homeSeekAt = 0;
+            await runTool("save_note", { title: "Новый адрес", text: "нашёлся" });
+            while (syncBusy) await new Promise(r => setTimeout(r, 100));
+            await syncRun(true);
+            const st = JSON.parse(JSON.stringify(syncStatus)), u = S.sync.home.u.slice(), hello = _seen.filter(x => /hello$/.test(x));
+            S.sync.home.u = ["http://127.0.0.1:" + dead + "/"]; saveS(); _seen = [];
+            await syncRun(true);
+            const st2 = JSON.parse(JSON.stringify(syncStatus)), again = _seen.filter(x => /hello$/.test(x)).length;
+            http = real;
+            return { st, u, n: hello.length, other: hello.filter(x => !/^http:\/\/127\.0\.0\./.test(x)).length, st2, again };
+        }""", [U, dead])
+        A.home.run_once()
+        ok(R6["st"]["ok"] and R6["u"][0] == "http://127.0.0.42:8766/" and A.note("Новый адрес.md").exists(),
+           f"компьютер сменил адрес — телефон нашёл его сам, правка дошла: {R6['st'].get('error')} {R6['u'][:2]}")
+        ok(R6["n"] > 0 and R6["other"] == 0, f"ищем только в своей сети Wi-Fi (мобильную не трогаем): {R6['n']} запросов, чужих {R6['other']}")
+        ok(R6["st2"]["ok"] is False and R6["again"] == 0, "не нашёлся — не ищем снова каждую минуту (раз в 10 минут)")
+        pg.evaluate("() => { S.sync.home.u = [arguments[0]]; saveS(); }".replace("arguments[0]", json.dumps(U)))
         ok(errs == [], f"без ошибок на странице: {errs[:3]}")
         b.close()
     # ---- ядро: команды студии (engine_home.py) ----

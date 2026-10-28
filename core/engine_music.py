@@ -332,8 +332,8 @@ class MusicMixin:
                             r"добавь|запомни|сохрани|пожалуйста|радио|радиостанци\w*|станци\w*|поток\w*|эфир|с|из|по|файла|файл|"
                             r"ссылк\w*|эту|это|этот|мне|лира|вот|как|под\s+названием|называется|назови|её|ее|его)(?![\w-])", re.I)
 
-    def radio_custom_save(self, name, url):
-        """Своя станция: та же ссылка или то же название — заменить, новые — сверху (до 30). -> станция."""
+    def radio_custom_save(self, name, url, logo="", tags=""):
+        """Своя станция (и ♥ на вкладке «Радио»): та же ссылка или то же название — заменить, новые — сверху (до 30)."""
         name = re.sub(r"\s+", " ", str(name or "")).strip(" .,:;—–-")[:80]
         url = str(url or "").strip()
         if not url.startswith(("http://", "https://")):
@@ -343,8 +343,66 @@ class MusicMixin:
         cur = [x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict)
                and x.get("url") != url and str(x.get("name", "")).lower() != name.lower()]
         st = {"name": name, "url": url}
+        logo, tags = str(logo or "").strip(), re.sub(r"\s+", " ", str(tags or "")).strip()[:80]
+        if logo.startswith(("http://", "https://")):
+            st["logo"] = logo[:400]
+        if tags:
+            st["tags"] = tags
         self.s.update({"radio_custom": [st] + cur[:29]})
         return st
+
+    # ---------- вкладка «Радио» в студии (0.64; владелец 28.10: «может ещё радио добавить или как-то совместить»):
+    # мои станции (♥ и свои по ссылке), популярные из нашего списка, жанры и поиск по каталогу radio-browser ----------
+    def _rd_row(self, s, mine):
+        url = s.get("url", "")
+        return {"name": s.get("name", ""), "url": url, "tags": " ".join(str(s.get("tags") or "").replace(",", " ").split()[:4]),
+                "logo": s.get("logo") or self.radio_logos.get(s.get("name", "")), "fav": url in mine,
+                "dead": self.radio_health.dead(url), "country": s.get("country", "")}
+
+    def _rd_now(self):
+        st = self.radio.station or self.radio.paused or {}
+        return "" if st.get("_mine") else st.get("url", "")
+
+    def radio_home(self):
+        own = [x for x in (self.s.get("radio_custom") or []) if isinstance(x, dict) and x.get("url")]
+        mine = {x["url"] for x in own}
+        base = self.music.data()["stations"]
+        self.radio_logos.fill_async([x["name"] for x in base], lambda: self.emit("radio_logos"))
+        return {"mine": [self._rd_row(x, mine) for x in own], "top": [self._rd_row(x, mine) for x in base if x["url"] not in mine],
+                "genres": self.music.genres(), "now": self._rd_now(), "paused": bool(self.radio.paused and not self.radio.playing)}
+
+    def radio_find(self, q, limit=30):
+        """Поиск по каталогу: без повторов (одна станция в каталоге бывает много раз), рабочие ссылки."""
+        from radio import RadioError, search
+        q = str(q or "").strip()[:80]
+        if not q:
+            return []
+        try:
+            rows = search(q, limit=limit + 20)
+        except RadioError as e:
+            raise ValueError("каталог радиостанций сейчас не отвечает — проверьте интернет") from e
+        mine = {x.get("url") for x in (self.s.get("radio_custom") or []) if isinstance(x, dict)}
+        seen, out = set(), []
+        for x in rows:
+            k = re.sub(r"\W+", "", x["name"].lower())
+            if not x["name"] or k in seen or not str(x["url"]).startswith(("http://", "https://")):
+                continue
+            seen.add(k)
+            out.append(self._rd_row(x, mine))
+        return out[:limit]
+
+    def radio_play_one(self, a):
+        """Плитка на вкладке «Радио»: станция из нашего списка или своя — как голосом (молчит — подскажем); из каталога —
+        именно она, без подмены другой."""
+        url = str(a.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("нужна ссылка на поток")
+        known = next((x for x in self.music.stations() if x["url"] == url), None)
+        st = dict(known) if known else {"name": str(a.get("name") or "Радио")[:80], "url": url,
+                                         "tags": str(a.get("tags") or "")[:80], "_cat": True}
+        st["logo"] = st.get("logo") or str(a.get("logo") or "") or self.radio_logos.get(st["name"])
+        self._play_station([st], "", "Включаю «{}».")
+        return True
 
     def _radio_url_cmd(self, text):
         """Ссылка на поток или плейлист .m3u/.pls во вложении + «включи / запомни» -> играет и запоминает своей станцией."""

@@ -1589,3 +1589,57 @@ body.neu .emo-q { box-shadow: var(--press); }
 .wcard { display: flex; flex-direction: column; gap: 2px; }
 .wshot { border-radius: 14px; overflow: hidden; background: rgba(127,127,140,.12); min-height: 60px; display: grid; place-items: center; }
 .wshot img { display: block; width: 100%; height: auto; cursor: zoom-in; }
+
+/* ---------- «Радио» (radiopage.js, 0.65): что играет, поиск, жанры, плитки станций ---------- */
+.a-radio .ai { background: linear-gradient(140deg, #ff9ab8, #e8507f); box-shadow: 0 8px 18px -10px rgba(232,80,127,.9); }
+#rchip > b { cursor: pointer; }
+#radio-body { display: flex; flex-direction: column; gap: 12px; padding-bottom: 18px; }
+.rp-now { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 22px; color: #EEF0FF;
+  background: linear-gradient(135deg, #2b2540, #3b3560 60%, #4a3f7a); box-shadow: 0 16px 30px -22px rgba(40,30,80,.9); }
+.rp-np { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rp-np small { color: #B9BDF0; font-size: 12px; font-weight: 700; }
+.rp-np b { font-size: 16px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #FF6B8A; margin-right: 6px; vertical-align: 1px; animation: rplive 1.8s ease-out infinite; }
+@keyframes rplive { 0% { box-shadow: 0 0 0 0 rgba(255,107,138,.6); } 70%, 100% { box-shadow: 0 0 0 7px rgba(255,107,138,0); } }
+.rp-ctl { display: flex; gap: 6px; flex: none; }
+.rp-ctl button { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(255,255,255,.12); }
+.rp-ctl button:active { transform: scale(.94); }
+.rp-ctl svg { width: 17px; height: 17px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.rp-ctl svg.st, .rp-ctl svg .st { fill: none; stroke-width: 3; }
+#rp-pp { width: 46px; height: 46px; background: linear-gradient(160deg, #fff, #e6e3ff); color: #2b2540; }
+#rp-heart svg { fill: none; stroke-width: 1.9; } #rp-heart.on { color: #FF7FA8; } #rp-heart.on svg { fill: currentColor; }
+.rp-find { display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 16px; background: var(--field); box-shadow: var(--press, none); }
+.rp-find svg { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.rp-find input, .rp-find input:focus { flex: 1; min-width: 0; height: 46px; border: 0; padding: 0; background: transparent; box-shadow: none; outline: none; color: var(--ink); font: inherit; font-size: 16px; }
+.rp-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 4px; }
+.rp-chips::-webkit-scrollbar { display: none; }
+.rp-chip { flex: none; padding: 8px 14px; border-radius: 999px; background: var(--frost); color: var(--ink); font-size: 14px; box-shadow: var(--raise-s, none); }
+.rp-chip.on { background: var(--brand); color: #fff; }
+#radio-body .rp-h { margin: 6px 2px 0; font-size: 15px; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.rp-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.rp-t { position: relative; min-width: 0; }
+.rp-play { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px 10px; border-radius: 18px;
+  background: var(--frost); box-shadow: var(--raise-s, none); color: var(--ink); text-align: center; }
+.rp-play:active .rp-logo { transform: scale(.95); }
+.rp-play b { width: 100%; font-size: 13px; font-weight: 650; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.rp-play small { width: 100%; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-logo { position: relative; width: 56px; height: 56px; flex: none; margin-bottom: 6px; border-radius: 16px; overflow: hidden; display: grid; place-items: center;
+  background: linear-gradient(145deg, hsl(var(--h) 72% 64%), hsl(calc(var(--h) + 38) 62% 44%)); transition: transform .15s; }
+.rp-logo i { font-style: normal; font-weight: 800; font-size: 20px; color: rgba(255,255,255,.95); letter-spacing: -.02em; }
+.rp-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 6px; background: #fff; opacity: 0; transition: opacity .25s; }
+.rp-logo.pic img { opacity: 1; } .rp-logo.pic i { visibility: hidden; }
+.rp-logo.big { width: 54px; height: 54px; margin: 0; border-radius: 15px; }
+.rp-fav { position: absolute; top: 4px; right: 4px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--dim, var(--muted)); }
+.rp-fav svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
+.rp-fav.on { color: #FF7FA8; } .rp-fav.on svg { fill: currentColor; }
+.rp-eq { position: absolute; top: 52px; left: calc(50% + 14px); display: none; align-items: flex-end; gap: 2px; height: 18px; padding: 3px 4px; border-radius: 7px; background: var(--accent); }
+.rp-eq i { width: 3px; height: 100%; border-radius: 2px; background: #fff; transform-origin: bottom; animation: rpeq 1s ease-in-out infinite; }
+.rp-eq i:nth-child(2) { animation-delay: -.35s; } .rp-eq i:nth-child(3) { animation-delay: -.7s; }
+@keyframes rpeq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+.rp-t.on .rp-play { box-shadow: inset 0 0 0 2px var(--accent); } .rp-t.on .rp-eq { display: flex; }
+.rp-t.on.paused .rp-eq i { animation: none; transform: scaleY(.35); }
+@media (prefers-reduced-motion: reduce) { .rp-eq i, .rp-live { animation: none; } }
+.rp-t.sk { height: 120px; border-radius: 18px; background: var(--frost); opacity: .7; }
+.rp-empty, .rp-hint { margin: 0; padding: 14px 16px; border-radius: 16px; background: var(--frost); color: var(--muted); font-size: 14px; line-height: 1.45; }
+.rp-hint { background: none; padding: 4px 2px; font-size: 13px; }
+body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

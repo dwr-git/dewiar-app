@@ -185,7 +185,8 @@ class Catalog:
         out = []
         for s in self.custom_fn() or []:
             if isinstance(s, dict) and s.get("name") and str(s.get("url") or "").startswith(("http://", "https://")):
-                out.append({"name": str(s["name"]).strip()[:80], "url": str(s["url"]).strip(), "tags": "своя",
+                out.append({"name": str(s["name"]).strip()[:80], "url": str(s["url"]).strip(), "tags": str(s.get("tags") or "своя")[:80],
+                            "logo": str(s.get("logo") or "") if str(s.get("logo") or "").startswith(("http://", "https://")) else "",
                             "aliases": [str(a).lower() for a in s.get("aliases") or []][:6], "own": True})
         return out
 

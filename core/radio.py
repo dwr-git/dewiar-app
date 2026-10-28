@@ -32,11 +32,25 @@ GENRES = {"джаз": "jazz", "рок": "rock", "классика": "classical",
           "шансон": "chanson", "лаунж": "lounge", "релакс": "relax", "чилаут": "chillout", "электронная": "electronic",
           "танцевальная": "dance", "хип-хоп": "hip-hop", "рэп": "rap", "блюз": "blues", "кантри": "country",
           "новости": "news", "детское": "children", "эмбиент": "ambient", "метал": "metal", "диско": "disco",
-          "ретро": "retro", "80-е": "80s", "90-е": "90s", "фолк": "folk", "регги": "reggae", "соул": "soul"}
+          "ретро": "retro", "дип хаус": "deep house", "хаус": "house", "рок-н-ролл": "rock'n'roll", "80-е": "80s", "90-е": "90s", "фолк": "folk", "регги": "reggae", "соул": "soul"}
 
 
 class RadioError(Exception):
     pass
+
+
+def _rows(js):
+    """Ответ каталога -> станции; logo — значок станции (favicon), только http(s)."""
+    out = []
+    for x in js if isinstance(js, list) else []:
+        url = x.get("url_resolved") or x.get("url")
+        if not url:
+            continue
+        logo = str(x.get("favicon") or "").strip()
+        out.append({"name": (x.get("name") or "").strip(), "url": url, "country": x.get("countrycode", ""),
+                    "tags": x.get("tags", ""), "bitrate": x.get("bitrate", 0),
+                    "logo": logo if logo.startswith(("https://", "http://")) else ""})
+    return out
 
 
 def search(query, limit=8, as_tag=False):
@@ -59,15 +73,11 @@ def search(query, limit=8, as_tag=False):
         try:
             r = httpx.get(base + "/json/stations/search", params=params, headers=UA, timeout=8)
             r.raise_for_status()
-            out = [{"name": (x.get("name") or "").strip(), "url": x.get("url_resolved") or x.get("url"),
-                    "country": x.get("countrycode", ""), "tags": x.get("tags", ""), "bitrate": x.get("bitrate", 0)}
-                   for x in r.json() if (x.get("url_resolved") or x.get("url"))]
+            out = _rows(r.json())
             if not out and params.get("name") and len(q.split()[0]) >= 4:   # «Европа плюс» vs «Европа Плюс Москва» — ищем шире
                 params2 = dict(params, name=q.split()[0])                   # (по слову от 4 букв: «с файла» искало «с» — №359)
                 r = httpx.get(base + "/json/stations/search", params=params2, headers=UA, timeout=8)
-                out = [{"name": (x.get("name") or "").strip(), "url": x.get("url_resolved") or x.get("url"),
-                        "country": x.get("countrycode", ""), "tags": x.get("tags", ""), "bitrate": x.get("bitrate", 0)}
-                       for x in r.json() if (x.get("url_resolved") or x.get("url"))]
+                out = _rows(r.json())
             return out
         except (httpx.HTTPError, ValueError) as e:
             last = e
@@ -157,6 +167,73 @@ def probe(url, timeout=8.0):
         return False, "не отвечает"
     except httpx.HTTPError as e:
         return False, str(e)[:100] or "нет соединения"
+
+
+def _key(name):
+    return _re.sub(r"[^0-9a-zа-яё]+", "", str(name or "").lower().replace("радио", "").replace("radio", ""))
+
+
+class Logos:
+    """Значки станций нашего списка (вкладка «Радио» в студии, 0.64): в radio.json их нет, поэтому в фоне ищем станцию
+    по названию в каталоге radio-browser и берём её favicon. Хранится в path: название -> {logo, at}; не нашлось —
+    пробуем снова через месяц. Сеть недоступна — тихо выходим, плитки остаются с буквами."""
+
+    TTL = 30 * 86400
+
+    def __init__(self, path):
+        self.path = path
+        self.busy = False
+        try:
+            self.data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self.data = {}
+
+    def get(self, name):
+        return (self.data.get(_key(name)) or {}).get("logo", "")
+
+    def stale(self, names):
+        now = time.time()
+        return [n for n in names if now - (self.data.get(_key(n)) or {}).get("at", 0) > self.TTL]
+
+    def fill(self, names, find=None):
+        """Найти значки для names (только устаревшие) -> сколько нашлось. find(name) -> [станции] (по умолчанию каталог)."""
+        find = find or (lambda n: search(n, limit=6))
+        got = 0
+        for n in self.stale(names):
+            try:
+                rows = find(n) or []
+            except RadioError:
+                break                                         # каталог недоступен — в другой раз
+            k = _key(n)
+            best = next((x for x in rows if x.get("logo") and _key(x["name"]) == k), None) \
+                or next((x for x in rows if x.get("logo") and k and (_key(x["name"]).startswith(k) or k.startswith(_key(x["name"]) or "-"))), None)
+            self.data[k] = {"logo": best["logo"] if best else "", "at": int(time.time())}
+            got += bool(best)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.data, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(self.path)
+        except OSError:
+            pass
+        return got
+
+    def fill_async(self, names, done=None):
+        if self.busy or not self.stale(names):
+            return False
+        self.busy = True
+
+        def run():
+            try:
+                n = self.fill(names)
+                if n and done:
+                    done()
+            except Exception:  # noqa: BLE001
+                log.exception("значки станций")
+            finally:
+                self.busy = False
+        threading.Thread(target=run, name="radio-logos", daemon=True).start()
+        return True
 
 
 class StationHealth:
@@ -300,6 +377,7 @@ class Radio:
         return {"playing": self.playing, "station": (self.station or {}).get("name", ""),
                 "paused": (self.paused or {}).get("name", ""), "volume": round(self.volume, 2),
                 "tags": (self.station or self.paused or {}).get("tags", ""),
+                "logo": (self.station or self.paused or {}).get("logo", ""), "url": (self.station or self.paused or {}).get("url", ""),
                 "art": Path(art).as_uri() if art else ""}     # обложка своей музыки (№361) — вместо пластинки
 
     def _changed(self):

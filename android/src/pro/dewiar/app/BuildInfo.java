@@ -4,6 +4,6 @@ package pro.dewiar.app;
  *  versionCode = мажор·10000 + минор·100 + патч — каждая часть меньше 100); её же видят отчёт о падении (App.java),
  *  User-Agent запросов (Net.java) и интерфейс через Dewiar.info() (Bridge.java). */
 public final class BuildInfo {
-    public static final String VERSION = "0.9.8";
+    public static final String VERSION = "0.9.9";
     private BuildInfo() { }
 }

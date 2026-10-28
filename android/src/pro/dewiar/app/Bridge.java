@@ -111,6 +111,31 @@ public final class Bridge {
     /** Что пришло до загрузки страницы (кнопка помощника, ярлык, ссылка dewiar://, «Поделиться») — забрать один раз. */
     @JavascriptInterface public String takeIntent() { return a.takePending(); }
 
+    /* «Для старших» при закрытом приложении (0.65): план заранее зашифрованных сообщений присматривающим (senior.js srArm). */
+    @JavascriptInterface public void srPlan(String json) { SeniorGuard.plan(a, json); }
+
+    /* «Дома по Wi-Fi» (0.65): свои адреса в домашней сети [{ip, wifi}] — найти компьютер, если роутер дал ему другой адрес.
+       Разрешений не нужно: только адреса своих сетевых интерфейсов. */
+    @JavascriptInterface public String lanIps() {
+        JSONArray out = new JSONArray();
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> it = java.net.NetworkInterface.getNetworkInterfaces();
+            while (it != null && it.hasMoreElements()) {
+                java.net.NetworkInterface ni = it.nextElement();
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                String nm = String.valueOf(ni.getName());
+                boolean wifi = nm.startsWith("wlan") || nm.startsWith("eth") || nm.startsWith("ap") || nm.startsWith("swlan");
+                for (java.net.InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    java.net.InetAddress ad = ia.getAddress();
+                    if (ad instanceof java.net.Inet4Address && ad.isSiteLocalAddress()) {
+                        JSONObject o = new JSONObject(); o.put("ip", ad.getHostAddress()); o.put("wifi", wifi); out.put(o);
+                    }
+                }
+            }
+        } catch (Exception e) { /* нет сети — пусто */ }
+        return out.toString();
+    }
+
     // настройки и состояние интерфейса: ключ → строка в SharedPreferences "dewiar" (в браузерной заглушке app.js — localStorage)
     @JavascriptInterface public String pref(String key) { return prefs.getString(key, ""); }
 

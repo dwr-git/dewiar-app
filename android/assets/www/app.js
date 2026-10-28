@@ -69,7 +69,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     closeWatch: (j) => { window._closeWatch = j; },
     locate: (age) => { window._locAsked = (window._locAsked || 0) + 1; const l = window._loc === undefined ? { lat: 53.9006, lon: 27.559, acc: 20, ts: Date.now() } : window._loc;
       ev(Object.assign({ type: "loc" }, l || { error: "местоположение выключено в телефоне" })); }, locSettings: () => { window._locSet = 1; return true; },
-    closeLive: (on) => { window._closeLive = on; }, batteryOk: () => true, askBattery() {},
+    closeLive: (on) => { window._closeLive = on; }, batteryOk: () => true, askBattery() {}, srPlan: (j) => { window._srPlan = j; window._srPlans = (window._srPlans || 0) + 1; },
     deviceClass: () => JSON.stringify(window._dev || { ram_mb: 8192, low_ram: false, cores: 8, power_save: false }),
     updateGet(url, sha) { window._upd = [url, sha]; setTimeout(() => { ev({ type: "upd_progress", pct: 50 }); ev({ type: "upd_ready", size: 1 }); }, 50); },
     updateInstall: () => (window._updPerm ? "perm" : (window._updInst = (window._updInst || 0) + 1, "ok")), updateCanInstall: () => !window._updPerm,
@@ -156,7 +156,9 @@ const radio = (() => {
   }
   function list() {
     let l = []; try { l = norm(JSON.parse(prefGet("radio_list") || "null")); } catch (e) { l = []; }
-    return l.length ? l : norm(window.RADIO_LIST);
+    if (!l.length) l = norm(window.RADIO_LIST);
+    const fav = norm((typeof S !== "undefined" && S.radio_fav) || []), fu = new Set(fav.map(x => x.url));   // «Мои станции» (radiopage.js) — и голосом по названию
+    return fav.concat(l.filter(x => !fu.has(x.url)));
   }
   async function refresh() {                    // свежий список с сайта (его правит администратор) — раз в 6 часов
     if (Date.now() - (+prefGet("radio_at") || 0) < 6 * 3600e3) return;
@@ -182,17 +184,18 @@ const radio = (() => {
       return { s, sc: want.filter(w => nw.includes(w)).length * 3 + want.filter(w => tw.includes(w)).length * 2, r: Math.random() };
     }).filter(x => x.sc).sort((a, b) => b.sc - a.sc || a.r - b.r).map(x => x.s);
   }
-  async function search(query) {                // каталог radio-browser: ~50 000 станций, популярные сверху, нерабочие скрыты
+  async function search(query, limit) {         // каталог radio-browser: ~50 000 станций, популярные сверху, нерабочие скрыты
     const ws = words(query).filter(w => !FILLER.has(w));
     let tag = ""; for (const w of ws) for (const k in GENRE_EN) if (!tag && w.startsWith(k)) tag = GENRE_EN[k];
-    const p = new URLSearchParams({ limit: "8", hidebroken: "true", order: "clickcount", reverse: "true" });
+    const p = new URLSearchParams({ limit: String(limit || 8), hidebroken: "true", order: "clickcount", reverse: "true" });
     if (tag) p.set("tag", tag); else if (ws.length) p.set("name", ws.join(" ")); else p.set("countrycode", "RU");
     let last = "";
     for (const base of API) {
       try {
         const r = await http("GET", base + "/json/stations/search?" + p, { headers: { "User-Agent": "Dewiar-Android (voice assistant)" }, timeout: 10000 });
         if (r.status !== 200) { last = "ответ " + r.status; continue; }
-        return JSON.parse(r.body).filter(x => x.url_resolved || x.url).map(x => ({ name: String(x.name || "").trim(), url: x.url_resolved || x.url, tags: String(x.tags || ""), aliases: [] }));
+        return JSON.parse(r.body).filter(x => x.url_resolved || x.url).map(x => ({ name: String(x.name || "").trim(), url: x.url_resolved || x.url, tags: String(x.tags || ""), aliases: [],
+          country: String(x.countrycode || ""), logo: /^https?:\/\//.test(String(x.favicon || "")) ? String(x.favicon) : "" }));
       } catch (e) { last = e.message; }
     }
     throw new Error("каталог радиостанций недоступен" + (last ? ": " + last : ""));
@@ -274,6 +277,14 @@ const radio = (() => {
     return { ok: false, text: `Ошибка: радио не заиграло: ${errs.join("; ")}. Похоже на сеть телефона — перескажи это простыми словами.` };
   }
   function remember(s) { played = [s.url, ...played.filter(u => u !== s.url)].slice(0, 8); }
+  async function playOne(s) {                     // «Радио» (radiopage.js): нажали плитку — именно эта станция, без подмены
+    const op = ++opSeq; usedAt = Date.now();
+    const r = await start(s);
+    if (r.state === "superseded" || op !== opSeq) return { ok: false, superseded: true, text: "" };
+    if (r.state === "playing") { cur = s; remember(s); delete bad[s.url]; found = []; return { ok: true, station: s }; }
+    bad[s.url] = Date.now(); D.radioStop();
+    return { ok: false, text: `«${s.name}» не играет: ${r.error || "не отвечает"}. Попробуйте другую станцию.` };
+  }
   async function next() {
     if (!cur && st.name) cur = list().find(x => x.name === st.name) || null;      // после перезапуска экрана — знаем, что играет
     if (!cur) return play("*");
@@ -310,7 +321,7 @@ const radio = (() => {
     el.classList.toggle("paused", st.state === "paused"); el.classList.toggle("wait", st.state === "preparing");
     const n = el.querySelector("b"); if (n) n.textContent = st.name || "Радио";
   }
-  return { play, next, pause, resume, stop, on, playing, recent, render, refresh, match, list, resumeAfterTalk, state: () => st, current: () => cur };
+  return { play, playOne, search, next, pause, resume, stop, on, playing, recent, render, refresh, match, list, resumeAfterTalk, state: () => st, current: () => cur };
 })();
 
 /* HTTP через Java (Dewiar.http → Net.java): без ограничений CORS, адреса Dewiar — через прокси (NetProxy.java).
@@ -6009,19 +6020,21 @@ const APPS_IC = {
   kids: '<circle cx="12" cy="13" r="7.5"/><circle cx="9.3" cy="12" r="1.6"/><circle cx="14.7" cy="12" r="1.6"/><path d="M7 6.5 5.5 3.5M17 6.5l1.5-3M10.8 15.5h2.4"/>',
   news: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
   month: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
-  senior: '<path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/><path d="M8.5 12.5h2l1-2 1.5 4 1-2h1.5"/>' };
+  senior: '<path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/><path d="M8.5 12.5h2l1-2 1.5 4 1-2h1.5"/>',
+  radio: '<rect x="3" y="9" width="18" height="11" rx="3"/><path d="M7 9l9-5"/><circle cx="15.5" cy="14.5" r="2.5"/><path d="M6.5 13h3M6.5 16h3"/>' };
 function appsHtml() {
   const t = [];
   if (feat("games")) t.push(["play", "Досуг", "милые игры"]);
   if (kidsOn()) return `<div class="apps">${t.concat([["tricks", "Что я умею", "фразы-примеры"], ["kids", "Детский режим", "для взрослых"]]).map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   if (typeof srOn === "function" && srOn()) {        // «Для старших»: только нужное, крупно
-    t.push(["month", "Мой месяц", "дела и траты"], ["senior", "Для старших", "лекарства и присмотр"], ["tricks", "Что я умею", "фразы-примеры"], ["qa", "Вопрос — ответ", "как сделать…"], ["news", "Что нового", "в этой версии"]);
+    t.push(["month", "Мой месяц", "дела и траты"], ["radio", "Радио", "станции и жанры"], ["senior", "Для старших", "лекарства и присмотр"], ["tricks", "Что я умею", "фразы-примеры"], ["qa", "Вопрос — ответ", "как сделать…"], ["news", "Что нового", "в этой версии"]);
     return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   }
   t.push(["soul", "Душа", "дневник и характер"]);
   if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "для сотрудников"]);   // 28.10, владелец: «при чём здесь „по коду“»
   if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
   if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
+  t.push(["radio", "Радио", "станции и жанры"]);
   t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["qa", "Вопрос — ответ", "как сделать…"]);
   t.push(["senior", "Для старших", "для мамы и папы"], ["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
   return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
@@ -6030,7 +6043,7 @@ function openApps() {
   $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
   $$("#apps-body [data-app]").forEach(b => b.onclick = () => { const k = b.dataset.app; closeSheets();
     setTimeout(() => ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
-      ideas: () => openIdeas(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(),
+      ideas: () => openIdeas(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(),
       news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")) }[k] || (() => { }))(), 60); });
 }
 $("#b-apps").onclick = () => openApps();
@@ -6628,7 +6641,30 @@ function homeLinkParse(link) {
   try { if (DC().b64d(q.k).length !== 32) return null; } catch (e) { return null; }
   return { u, t: q.t, k: q.k, h: String(q.h || "").replace(/[^0-9a-f]/g, "").slice(0, 20), n: String(q.n || "Компьютер").slice(0, 40) };
 }
-async function homePost(c, body) {
+/* Роутер выдал компьютеру другой адрес (0.65; «Дома по Wi-Fi» дальше по списку): прежние адреса молчат — ищем узел в
+   своей сети Wi-Fi. Только сеть телефона (/24 его адреса в Wi-Fi; на мобильной связи не ищем), порты — прежние и 8766;
+   узнаём по /hello: {dewiar: "home", id} — id узла из кода. Не чаще раза в 10 минут, по 32 запроса разом. -> адрес или "". */
+let homeSeekAt = 0;
+async function homeSeek() {
+  const h = S.sync && S.sync.home;
+  if (!h || !h.h || Date.now() - homeSeekAt < 600e3) return "";
+  let own = []; try { own = JSON.parse(D.lanIps ? D.lanIps() || "[]" : "[]"); } catch (e) { own = []; }
+  const nets = [...new Set(own.filter(x => x && x.wifi).map(x => (/^(\d+\.\d+\.\d+)\.\d+$/.exec(x.ip) || [])[1]).filter(Boolean))].slice(0, 2);
+  if (!nets.length) return "";
+  homeSeekAt = Date.now();
+  const ports = [...new Set((h.u || []).map(u => +((/:(\d+)\/$/.exec(u) || [])[1] || 0)).filter(Boolean).concat([8766]))].slice(0, 3);
+  const cands = [];
+  nets.forEach(n => { for (let i = 1; i < 255; i++) ports.forEach(pt => { const u = `http://${n}.${i}:${pt}/`; if (!(h.u || []).includes(u)) cands.push(u); }); });
+  for (let i = 0; i < cands.length; i += 32) {
+    const hit = await Promise.all(cands.slice(i, i + 32).map(async (u) => {
+      try { const r = await http("GET", u + "hello", { timeout: 1500 }); const d = JSON.parse(r.body || "{}"); return r.status === 200 && d.dewiar === "home" && d.id === h.h ? u : ""; }
+      catch (e) { return ""; } }));
+    const f = hit.find(Boolean);
+    if (f) { plog("info", "🏠 компьютер нашёлся по новому адресу в сети Wi-Fi"); return f; }
+  }
+  return "";
+}
+async function homePost(c, body, again) {
   const h = S.sync.home, k = DC().b64d(h.k), urls = [c.base].concat((h.u || []).filter(x => x !== c.base));
   let last = null;
   for (const u of urls) {
@@ -6642,6 +6678,10 @@ async function homePost(c, body) {
     if (d.hub && Array.isArray(d.hub.urls) && d.hub.urls.length) { const nu = [h.u[0]].concat(d.hub.urls).filter((x, i, a) => a.indexOf(x) === i).slice(0, 6);
       if (nu.join() !== h.u.join()) { h.u = nu; saveS(); } if (d.hub.name && d.hub.name !== h.n) { h.n = d.hub.name; saveS(); } }
     return { status: 200, d };
+  }
+  if (!again) {                                                  // прежние адреса молчат — может, у компьютера новый
+    const f = await homeSeek();
+    if (f) { h.u = [f].concat((h.u || []).filter(x => x !== f)).slice(0, 6); saveS(); return homePost(Object.assign({}, c, { base: f }), body, true); }
   }
   throw Object.assign(new Error(`компьютер «${h.n || "дома"}» не в этой сети — синхронизируется, когда телефон и компьютер будут в одном Wi-Fi`), { home: true, net: true, cause: last });
 }

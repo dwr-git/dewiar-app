@@ -12,6 +12,7 @@ public class BootReceiver extends BroadcastReceiver {
         if (Intent.ACTION_BOOT_COMPLETED.equals(a) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
             Alarms.rescheduleAll(c);
             CloseLive.apply(c);                              // «Близкие» на связи — и после перезагрузки
+            SeniorGuard.arm(c);                              // «Для старших»: присмотр при закрытом приложении
         }
     }
 }

@@ -2136,6 +2136,77 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 .mm-say b { color: var(--accent); font-weight: 700; } .mm-say span { color: var(--muted); font-size: 12.5px; }
 @media (max-width: 980px) { .mm-top, .mm-row { grid-template-columns: 1fr; } }
 
+/* ---------- «Музыка»: вкладки «Моя музыка» / «Радио» и плитки станций (0.64) ---------- */
+.mm-tabs { display: inline-flex; gap: 4px; padding: 4px; margin: 2px 0 16px; border-radius: 16px; background: var(--glass); box-shadow: var(--raise-s, none); }
+.mm-tabs button { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600;
+  padding: 8px 16px 8px 13px; border-radius: 12px; cursor: pointer; transition: background .2s, color .2s; }
+.mm-tabs button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mm-tabs button:hover { color: var(--ink); }
+.mm-tabs button[aria-selected="true"] { background: var(--brand); color: #fff; box-shadow: 0 8px 18px -10px rgba(102,126,234,.9); }
+.mm-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#p-music [data-for][hidden] { display: none; }
+.rd-side .mm-say div { padding: 9px 13px; }
+.mm-now.live .mm-cover { padding: 0; background: none; box-shadow: 0 14px 28px -12px rgba(0,0,0,.55); }
+.rd-live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #FF6B8A; margin-right: 7px; vertical-align: 1px; box-shadow: 0 0 0 0 rgba(255,107,138,.6); animation: rdpulse 1.8s ease-out infinite; }
+@keyframes rdpulse { 70% { box-shadow: 0 0 0 7px rgba(255,107,138,0); } 100% { box-shadow: 0 0 0 0 rgba(255,107,138,0); } }
+
+.rd-tab { display: flex; flex-direction: column; gap: 18px; }
+.rd-find { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 16px; background: var(--field, rgba(127,127,127,.1)); box-shadow: inset 0 1px 2px rgba(20,30,60,.08); transition: box-shadow .2s; }
+.rd-find svg { width: 19px; height: 19px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+#rd-q, #rd-q:focus { flex: 1; min-width: 0; width: auto; border: 0; background: transparent; box-shadow: none; padding: 8px 0; border-radius: 0; font: inherit; font-size: 15px; color: var(--ink); outline: none; }
+#rd-q::placeholder { color: var(--muted); opacity: .85; }
+.mm-time[hidden] { display: none; }
+.rd-find:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+.rd-genres { margin-top: -6px; }
+.rd-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 2px 10px; }
+.rd-h h3 { margin: 0; font-size: 15px; }
+.rd-h span { color: var(--dim, var(--muted)); font-size: 12.5px; }
+.rd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 12px; }
+.rd-empty { grid-column: 1 / -1; margin: 0; padding: 18px 20px; border-radius: 18px; background: rgba(127,127,127,.07); color: var(--muted); font-size: 13.5px; }
+.rd-t { position: relative; min-width: 0; }
+.rd-play { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px 14px 13px; border: 0; border-radius: 20px;
+  background: var(--glass); box-shadow: var(--raise-s, none); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background .2s, box-shadow .2s; }
+.rd-play:hover { background: linear-gradient(rgba(255,255,255,.06), rgba(255,255,255,.06)), var(--glass); }
+.rd-play:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rd-play:active .rd-logo { transform: scale(.96); }
+.rd-logo { position: relative; width: 58px; height: 58px; flex: none; margin-bottom: 9px; border-radius: 17px; overflow: hidden; display: grid; place-items: center;
+  background: linear-gradient(145deg, hsl(var(--h) 72% 64%), hsl(calc(var(--h) + 38) 62% 44%)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); transition: transform .15s; }
+.rd-logo i { font: 600 21px/1 Unbounded, Manrope, sans-serif; font-style: normal; color: rgba(255,255,255,.95); letter-spacing: -.02em; text-shadow: 0 1px 6px rgba(0,0,0,.18); }
+.rd-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 7px; background: #fff; opacity: 0; transition: opacity .25s; }
+.rd-logo.pic img { opacity: 1; } .rd-logo.pic i { visibility: hidden; }
+.rd-logo.big { width: 124px; height: 124px; margin: 0; border-radius: 22px; }
+.rd-logo.big i { font-size: 42px; }
+.rd-logo.big img { padding: 14px; }
+.rd-name { width: 100%; font-weight: 650; font-size: 13.5px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.rd-tags { width: 100%; color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-fav { position: absolute; top: 9px; right: 9px; width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: none; color: var(--muted); opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+.rd-fav svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
+.rd-t:hover .rd-fav, .rd-fav:focus-visible, .rd-fav.on { opacity: 1; }
+.rd-fav:hover { background: rgba(127,127,127,.16); color: var(--ink); }
+.rd-fav.on { color: #FF7FA8; } .rd-fav.on svg { fill: currentColor; }
+.rd-fav:focus-visible { outline: 2px solid var(--accent); }
+@media (hover: none) { .rd-fav { opacity: 1; } }
+.rd-eq { position: absolute; top: 52px; left: 54px; display: none; align-items: flex-end; gap: 2px; height: 18px; padding: 3px 4px; border-radius: 7px; background: var(--accent); }
+.rd-eq i { width: 3px; height: 100%; border-radius: 2px; background: #fff; transform-origin: bottom; animation: rdeq 1s ease-in-out infinite; }
+.rd-eq i:nth-child(2) { animation-delay: -.35s; } .rd-eq i:nth-child(3) { animation-delay: -.7s; }
+@keyframes rdeq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+.rd-t.on .rd-play { box-shadow: inset 0 0 0 2px var(--accent), var(--raise-s, 0 0 0 transparent); }
+.rd-t.on .rd-eq { display: flex; }
+.rd-t.on.paused .rd-eq i { animation: none; transform: scaleY(.35); }
+@media (prefers-reduced-motion: reduce) { .rd-eq i, .rd-live { animation: none; } }
+.rd-t.dead .rd-play { opacity: .55; }
+.rd-t.sk { height: 138px; border-radius: 20px; background: var(--glass); overflow: hidden; }
+.rd-t.sk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.07) 50%, transparent 70%); background-size: 200% 100%; animation: rdsk 1.2s linear infinite; }
+.rd-t.sk .rd-logo { position: absolute; left: 14px; top: 14px; background: rgba(127,127,127,.14); box-shadow: none; }
+@keyframes rdsk { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.rc-panel > summary { list-style: none; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; cursor: pointer; padding-right: 26px; position: relative; }
+.rc-panel > summary::-webkit-details-marker { display: none; }
+.rc-panel > summary::after { content: ""; position: absolute; right: 4px; top: 4px; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .2s; }
+.rc-panel[open] > summary::after { transform: rotate(225deg); top: 8px; }
+.rc-panel:not([open]) { gap: 0; }
+@media (max-width: 640px) { .rd-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); } .mm-tabs { display: flex; } .mm-tabs button { flex: 1; justify-content: center; } }
+
 /* ---------- «Обо мне» → «Что ассистент помнит»: страницы по людям и темам (Память 2.0, 27.10) ---------- */
 .mpx-strip { display: block; padding: 12px 16px; border-radius: 16px; background: rgba(127,127,127,.08); font-size: 13px; color: var(--muted); margin: 0 0 14px; line-height: 1.5; }
 .mpx-who { margin: 0 0 12px; } .mpx-who[hidden] { display: none; }
