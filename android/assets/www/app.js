@@ -1030,8 +1030,8 @@ function applyPersona() {
   $("#who-img").src = p.avatar || miniOrb(p);
   const style = p.avatar && p.style !== "aura" ? "photo" : p.style;
   // портрет сдержанно (белый край вместо цветного кольца), голос — лучами, как на компьютере; тема — «Настройки» → «Оформление»
-  if (!orb) { orb = new DewiarEntity($("#orb"), { style, color: p.color, image: p.avatar || null, plate: true, live: p.live || "" }); orb.set({ audible: false }); applyLook(true); liteApply(); tiltSync(); }
-  else orb.configure({ style, color: p.color, image: p.avatar || null, live: p.live || "" });
+  if (!orb) { orb = new DewiarEntity($("#orb"), { style, color: p.color, image: p.avatar || null, plate: true, live: p.live || "", soft: !!p.kids }); orb.set({ audible: false }); applyLook(true); liteApply(); tiltSync(); }
+  else orb.configure({ style, color: p.color, image: p.avatar || null, live: p.live || "", soft: !!p.kids });
   orb.set({ state: state === "idle" ? "idle" : state });
   faceFor(p);
 }
@@ -1795,6 +1795,7 @@ function systemPrompt() {
     + "память о пользователе (remember), деньги (money_add, money_report), " + (D.web ? "" : "сообщения в MAX, Telegram, WhatsApp (send_message), ")
     + "мини-программы, страницы и презентации — калькулятор, игра, конвертер, таймер, слайды (make_app: сделай сам, она сразу откроется здесь; код программы не сохраняй заметкой; никогда не говори «готово», не вызвав make_app)" + ((S.home.token || haOn()) && !D.web ? ", умный дом — включить, выключить, яркость, температура, показания датчиков, сценарии (smart_home)" : "")
     + (loggedIn() ? ", документы и базы пользователя на сайте Dewiar (ask_knowledge)" : "") + ". После действия скажи итог одной фразой.",
+    "МАТЕРИАЛ ПОЛЬЗОВАТЕЛЯ. Его заметки, документы и сохранённые тексты — его материал (книга, исследование, шутка). Просят найти, прочитать или показать СВОЁ — делай целиком и как есть: не отказывайся, не сокращай, не заменяй «правильной версией» и не читай нотаций; мнение и проверку фактов — только если спросят.",
     "СЧЁТ: любые вычисления — проценты, суммы, скидки, даты, «сколько дней до…» — только инструментом calc, никогда в уме. Просят объяснить расчёт — покажи его с числами («2 350 × 17 / 100 = 399,5»), а не «использовал калькулятор». "
     + "Просьба с условием («если завтра дождь — напомни…») — сначала узнай нужное (погоду — weather или web_search), потом сделай только подходящее. "
     + "Узнать, ответил ли человек на звонок, ты не можешь: на «позвони, а если не ответит — напиши» позвони один раз и честно скажи, что ждать ответа не умеешь, — предложи отправить сообщение сразу. "

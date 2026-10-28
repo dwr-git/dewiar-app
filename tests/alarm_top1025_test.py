@@ -41,5 +41,27 @@ time.sleep(0.3)
 a._alarm = object()                                       # пришло новое напоминание — у старого цикла свой конец
 m = len(calls); time.sleep(1.8)
 ok(len(calls) - m <= 1, "новое напоминание заменило старое — старый цикл остановился")
+# №391 (28.10): «при включении компьютера пришло напоминание — не закрывается, висит, ни подвинуть, ни закрыть»
+class FW:
+    def __init__(self, bad=False): self.bad, self.gone, self.hidden = bad, False, False
+    def destroy(self):
+        if self.bad:
+            raise RuntimeError("окно ещё создаётся")
+        self.gone = True
+    def hide(self): self.hidden = True
+
+
+b = app.Api.__new__(app.Api)
+w1, w2, w3 = FW(), FW(bad=True), FW()
+b._alarms, b._alarm, b._alarm_id = {"r1": w1, "r2": w2, "r3": w3}, w3, "r3"
+app.Api.close_alarm(b, "r1")
+ok(w1.gone and "r1" not in b._alarms and b._alarm is w3, "крестик старого окна закрывает именно его, даже если сейчас открыто другое")
+app.Api.close_alarm(b, "r2")
+ok(w2.hidden and "r2" not in b._alarms, "окно не закрылось (ещё создавалось) — хотя бы спрятано, а не висит")
+app.Api.close_alarm(b, "")
+ok(w3.gone and not b._alarms and b._alarm is None, "без id — закрыть все")
+ok("for oid in list(self._alarm_wins()):" in src.split("def show_alarm")[1].split("def _alarm_keep_top")[0], "новое напоминание закрывает все прежние окна")
+al = (ROOT / "ui/alarm.html").read_text(encoding="utf-8")
+ok("close(250, n + 1)" in al, "окно ждёт мост к программе (при запуске он появляется позже) и закрывается, а не молчит")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

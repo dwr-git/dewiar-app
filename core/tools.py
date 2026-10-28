@@ -1858,12 +1858,97 @@ def page_html(title, html):
             f"<footer>Собрала Лира · Dewiar · {datetime.now().strftime('%d.%m.%Y')}</footer></main></body></html>")
 
 
+def md_html(text):
+    """Заметка Markdown -> HTML для страницы (show_page с file): заголовки, списки, задачи, цитаты, код, ссылки, жирный и
+    курсив. Всё экранируется — HTML внутри заметки показывается текстом, а не выполняется."""
+    import html as _h
+
+    def inline(t):
+        t = _h.escape(t, quote=False)
+        t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+        t = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", t)
+        t = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", lambda m: f'<a href="{_h.escape(m.group(2))}">{m.group(1)}</a>', t)
+        t = re.sub(r"(?<![\"'>=])(https?://[^\s<]+)", lambda m: f'<a href="{m.group(1)}">{m.group(1)}</a>', t)
+        return t
+    out, para, lst, code = [], [], None, None
+
+    def flush():
+        nonlocal para, lst
+        if para:
+            out.append("<p>" + "<br>".join(inline(x) for x in para) + "</p>")
+            para = []
+        if lst:
+            out.append(f"<{lst[0]}>" + "".join(f"<li>{x}</li>" for x in lst[1]) + f"</{lst[0]}>")
+            lst = None
+    for line in str(text or "").replace("\r\n", "\n").split("\n"):
+        if code is not None:
+            if line.strip().startswith("```"):
+                out.append("<pre><code>" + _h.escape("\n".join(code)) + "</code></pre>")
+                code = None
+            else:
+                code.append(line)
+            continue
+        st = line.strip()
+        if st.startswith("```"):
+            flush()
+            code = []
+            continue
+        m = re.match(r"(#{1,6})\s+(.*)", st)
+        if m:
+            flush()
+            n = min(6, len(m.group(1)) + 1)
+            out.append(f"<h{n}>{inline(m.group(2))}</h{n}>")
+            continue
+        m = re.match(r"[-*+]\s+(?:\[([ xX])\]\s+)?(.*)", st) or re.match(r"(\d+)[.)]\s+(.*)", st)
+        if m:
+            kind = "ol" if st[:1].isdigit() else "ul"
+            if para:
+                flush()
+            if lst and lst[0] != kind:
+                flush()
+            item = inline(m.group(2))
+            if kind == "ul" and m.group(1):
+                item = ("☑ " if m.group(1).lower() == "x" else "☐ ") + item
+            lst = lst or (kind, [])
+            lst[1].append(item)
+            continue
+        if st.startswith(">"):
+            flush()
+            out.append("<blockquote>" + inline(st.lstrip("> ")) + "</blockquote>")
+            continue
+        if not st:
+            flush()
+            continue
+        if lst:
+            flush()
+        para.append(st)
+    if code is not None:
+        out.append("<pre><code>" + _h.escape("\n".join(code)) + "</code></pre>")
+    flush()
+    return "\n".join(out)
+
+
 def t_show_page(a, ctx):
     """«Покажи в браузере красиво» (28.10, пользователь: «нашла рецепты, но создала кучу питоновских скриптов, а HTML — не в
     файле, а в чате, и начала зачитывать его со всеми тегами»): страница — файлом в «Страницы», сразу в браузере."""
     title = re.sub(r"[\\/:*?\"<>|\n\r\t]+", " ", str(a.get("title") or "").strip())[:80].strip() or "Страница"
     html = str(a.get("html") or "")
-    if len(html.strip()) < 20:
+    src = str(a.get("file") or "").strip()
+    if src:
+        # своя заметка или файл — показываем как есть, без пересказа моделью (28.10, отзыв: «попросил вывести мою заметку
+        # в браузере — она отказалась перепечатывать текст и показала кусочек»): текст берём с диска сами
+        r = _ws_call(lambda: _ws(ctx).read(src, limit=400000))
+        if r.get("binary"):
+            raise ToolError(f"«{r['path']}» — не текстовый файл, его так не показать")
+        body = r["text"]
+        if not a.get("title"):
+            title = re.sub(r"[\\/:*?\"<>|\n\r\t]+", " ", Path(str(r.get("path") or src)).stem)[:80].strip() or title
+        html = (body if str(r.get("path") or src).lower().endswith((".html", ".htm")) else md_html(body)) + (
+            "\n<p><i>…(дальше обрезано)</i></p>" if r.get("truncated") else "")
+        if not html.strip():
+            raise ToolError("файл пустой")
+    if len(html.strip()) < 20 and not src:
         raise ToolError("нужно содержимое страницы — html с разделами, списками или таблицей")
     w = _ws(ctx)
     root = _ws_call(lambda: w.ensure()) / "Страницы"
@@ -2752,8 +2837,10 @@ TOOLS = {
                   "«сделай страницу / подборку / таблицу»: рецепты, список, сравнение, отчёт. Сначала собери данные "
                   "(find_notes, read_file, web_search), потом одним вызовом передай html — разметку содержимого: <section> с "
                   "<h2>, списки, таблицы (оформление и заголовок добавятся сами) или полный документ. Сохранится в «Страницы» и "
-                  "откроется. НЕ пиши HTML в ответе, НЕ пиши скрипты ради этого.",
-                  S({"title": {"type": "string"}, "html": {"type": "string"}}, ["title", "html"]), "safe", t_show_page, "Страницы"),
+                  "откроется. НЕ пиши HTML в ответе, НЕ пиши скрипты ради этого. Показать СВОЮ заметку или файл пользователя "
+                  "(«выведи мою заметку про … в браузере») — передай file: путь из find_notes, без html: текст покажется "
+                  "целиком, как есть.",
+                  S({"title": {"type": "string"}, "html": {"type": "string"}, "file": {"type": "string"}}, []), "safe", t_show_page, "Страницы"),
     "save_link": ("Сохранить ссылку — видео, статью, сайт — в «Заметки» (там она карточкой с обложкой, с меткой «интересное»): "
                   "когда просят «сохрани это видео / ссылку / статью», «отложи почитать», «запомни этот ролик». url — адрес "
                   "целиком; summary — короткий пересказ своими словами, если просили пересказать (сначала прочитай страницу "

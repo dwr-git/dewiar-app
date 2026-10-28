@@ -635,6 +635,12 @@ class RemoteMixin:
                             said_mark = True
                         play_rate = int(round(rate * pitch))
                         if not started:
+                            lat = getattr(self, "lat", None)
+                            if lat is not None:                  # «Голос без пауз»: первый звук ответа
+                                lat.mark("say")
+                                rec = lat.done(self._lat_how() if hasattr(self, "_lat_how") else "")
+                                if rec:
+                                    log.info(lat.line(rec))
                             self.player.start(play_rate)
                             fx = voicefx.VoiceFX(fx_name, rate)
                             started = True

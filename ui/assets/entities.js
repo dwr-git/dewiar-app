@@ -484,7 +484,7 @@
       const pg = ctx.createLinearGradient(0, -b, 0, b);
       pg.addColorStop(0, rgba([255, 255, 255], 0.5)); pg.addColorStop(0.5, rgba(mix(i % 2 ? c1 : c2, [255, 255, 255], 0.55), 0.12));
       pg.addColorStop(1, rgba([255, 255, 255], 0.35));
-      ctx.fillStyle = pg; ctx.strokeStyle = rgba([255, 255, 255], 0.55); ctx.lineWidth = Math.max(0.8, R * 0.008);
+      ctx.fillStyle = pg; ctx.strokeStyle = rgba([255, 255, 255], e.soft ? 0.28 : 0.55); ctx.lineWidth = Math.max(0.8, R * 0.008);
       ctx.beginPath(); ctx.ellipse(0, 0, a, b, 0, 0, TAU); ctx.fill(); ctx.stroke();
       ctx.restore();
     }
@@ -507,6 +507,24 @@
       ctx.beginPath(); ctx.arc(0, 0, R * 0.99, 0, 0.9); ctx.stroke();
     }
     ctx.restore();
+    // детский друг (Совёнок Уго, 0.66; владелец: «шарик, в котором сова сидит, грубовато смотрится»): вместо тёмного
+    // круга — светлая «луна» с мягким свечением, совёнок крупнее и чуть выглядывает за край, тихонько покачивается
+    if (e.soft && e.img && e.img.complete && e.img.naturalWidth) {
+      const CR = R * 0.52;
+      const halo = ctx.createRadialGradient(0, CR * 0.1, CR * 0.6, 0, CR * 0.1, CR * 1.45);
+      halo.addColorStop(0, rgba(c1, 0.28 * sat)); halo.addColorStop(1, rgba(c1, 0));
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, CR * 0.1, CR * 1.45, 0, TAU); ctx.fill();
+      const moon = ctx.createRadialGradient(-CR * 0.35, -CR * 0.4, CR * 0.1, 0, 0, CR * 1.02);
+      moon.addColorStop(0, "rgba(255,255,255,0.98)"); moon.addColorStop(0.75, rgba(mix(c2, [255, 255, 255], 0.82), 0.96));
+      moon.addColorStop(1, rgba(mix(c1, [255, 255, 255], 0.62), 0.95));
+      ctx.fillStyle = moon; ctx.beginPath(); ctx.arc(0, 0, CR, 0, TAU); ctx.fill();
+      const bob = Math.sin(t * 1.5) * CR * 0.035, pulse = 1 + (e.state === "speaking" ? lv * 0.07 : 0);
+      const iw = e.img.naturalWidth, ih = e.img.naturalHeight, sz = CR * 2.3 * pulse, sc = sz / Math.max(iw, ih);
+      ctx.save(); ctx.shadowColor = rgba(mix(c1, [40, 20, 80], 0.5), 0.35); ctx.shadowBlur = CR * 0.18; ctx.shadowOffsetY = CR * 0.06;
+      ctx.drawImage(e.img, -iw * sc / 2, -ih * sc / 2 - CR * 0.04 + bob, iw * sc, ih * sc);
+      ctx.restore();
+      return;
+    }
     // центр: тёмный круг и иконка (или фото персонажа)
     const CR = R * (icon ? 0.52 : 0.4);
     const sh = ctx.createRadialGradient(0, 0, CR * 0.9, 0, 0, CR * 1.35);
@@ -1259,7 +1277,8 @@
       this._calm = performance.now();
       if (this._sleep) { clearTimeout(this._sleep); this._sleep = 0; requestAnimationFrame(this._loop); }
     }
-    configure({ style, color, image, live } = {}) {
+    configure({ style, color, image, live, soft } = {}) {
+      if (soft !== undefined) this.soft = !!soft;   // детский друг: светлая «луна» вместо тёмного круга (aura)
       this._stillAt = performance.now() + 1500;
       if (this._loop) this._wake();             // после смены облика — дорисовать (фото и лица грузятся не сразу)
       if (live !== undefined) { this.live = live || ""; this._live = null; }   // живое лицо (слои из папки live)

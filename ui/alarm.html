@@ -164,7 +164,9 @@ async function openAtt(f) {
 }
 $("all").onclick = () => openAtt(null);
 // окно без рамки закрывает программа; в браузере (нет pywebview) — window.close
-function close(after = 0) { setTimeout(() => { const a = api(); if (a && a.close_alarm) a.close_alarm(A.id); else window.close(); }, after); }
+// №391: при запуске компьютера мост к программе может появиться позже страницы — ждём его до 10 с, а не молчим
+function close(after = 0, n = 0) { setTimeout(() => { const a = api(); if (a && a.close_alarm) a.close_alarm(A.id);
+  else if (n < 40) close(250, n + 1); else window.close(); }, after); }
 function showDone(msg) {
   finished = true; $("wrap").classList.remove("missed"); $("wrap").classList.add("done");
   $("kind").textContent = "Готово"; $("sub").textContent = msg || ""; $("snooze").style.visibility = "hidden";

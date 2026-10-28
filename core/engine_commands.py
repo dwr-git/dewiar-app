@@ -1248,6 +1248,8 @@ class CommandsMixin:
                 threading.Timer(0.2, self.on_quit).start()
             return True
         if cmd == "say":
+            if getattr(self, "lat", None) is not None:
+                self.lat.drop()                  # набранный вопрос — не голосовой: задержку голоса не меряем
             # картинки (вставленные, снимок экрана) — как файлы: сохраняются во «Входящие» и видны в ленте «Чата»
             images = []
             files = list(a.get("files") or [])
@@ -1541,7 +1543,9 @@ class CommandsMixin:
                     if a.get("files_b64"):                # студия: файл, выбранный в окне, — во временную папку и отправить
                         import base64 as _b64
                         import re as _re
-                        out = STATE_DIR / "close_out" / str(int(time.time() * 1000))
+                        # 28.10 (владелец: «отправил фото в группу — не отображается»): файл лежал во временной папке
+                        # программы, а студия показывает фото только из «Близких» — теперь отправленное хранится там же
+                        out = Path(self.workspace.ensure()) / "Близкие" / "Отправленные" / time.strftime("%Y-%m-%d %H-%M-%S")
                         out.mkdir(parents=True, exist_ok=True)
                         for f in a["files_b64"][:5]:
                             name = _re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", str(f.get("name") or "файл"))[:120] or "файл"
@@ -1557,10 +1561,10 @@ class CommandsMixin:
                 if cmd == "close_thumb":            # фото из переписки — картинкой в студии (0.61): только скачанное в «Близкие», до 6 МБ
                     import base64 as _b64
                     import mimetypes as _mt
-                    base = (Path(self.workspace.root) / "Близкие").resolve()
+                    bases = ((Path(self.workspace.root) / "Близкие").resolve(), (STATE_DIR / "close_out").resolve())   # и отправленное до 0.66
                     p = Path(str(a.get("path") or "")).resolve()
                     t = _mt.guess_type(p.name)[0] or ""
-                    if base not in p.parents or not t.startswith("image/") or not p.is_file() or p.stat().st_size > 6 * 1024 * 1024:
+                    if not any(b in p.parents for b in bases) or not t.startswith("image/") or not p.is_file() or p.stat().st_size > 6 * 1024 * 1024:
                         return {"data": ""}
                     return {"data": f"data:{t};base64," + _b64.b64encode(p.read_bytes()).decode()}
                 if cmd == "close_wave":             # 👋 с радара «Рядом»

@@ -238,18 +238,32 @@
      по нему — остаток времени градиентом (бирюзовый → сиреневый, последние 10 с — янтарный → коралловый) с мягким
      свечением и светлой бусиной на кончике; та же палитра, что у кружка в строке таймера. */
   /* Детский режим (kids.py): над кнопками — сколько осталось сегодня, три большие кнопки — сказка, загадка, «почему?» */
-  #kids { display: none; flex-direction: column; gap: 8px; }
+  /* 0.66 (владелец 28.10: «Совёнок Уго нравится — может, чуть красивее детскую страничку; и нужно ли там переключение на
+     Лиру?»): плитки — мягкие градиенты с объёмными картинками (Fluent, те же, что смайлы), «осталось» — спокойной
+     плашкой, а «на сегодня всё» — сиреневой «до завтра», не красной. Взрослые кнопки (персонажи, календарь, заметки,
+     переписка, студия, жалоба, идеи, блокнот) в детском режиме спрятаны: переключать на Лиру ребёнку не нужно — ядро
+     и так не даст (switch_persona), выход — в студии по PIN. */
+  #kids { display: none; flex-direction: column; gap: 10px; }
   body.kids #kids { display: flex; }
-  #kids .kt { align-self: center; padding: 5px 12px; border-radius: 999px; font: 700 12.5px/1.3 Manrope, sans-serif; color: #fff;
-              background: rgba(138,107,216,.55); }
-  #kids .kt.over { background: rgba(255,150,120,.5); }
-  #kids .kb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  #kids .kb button { border: 0; border-radius: 16px; min-height: 58px; padding: 8px 4px; cursor: pointer; display: flex; flex-direction: column;
-                     align-items: center; justify-content: center; gap: 4px; font: 800 13px/1.1 Manrope, sans-serif; color: #2a1d00; background: #ffe4b8; }
-  #kids .kb button:nth-child(2) { background: #d8f3e4; color: #11613a; }
-  #kids .kb button:nth-child(3) { background: #dfe3ff; color: #2f2690; }
-  #kids .kb button:hover { filter: brightness(1.04); } #kids .kb button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  #kids .kb svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #kids .kt { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 5px 13px 5px 8px; border-radius: 999px;
+              font: 700 12.5px/1.3 Manrope, sans-serif; color: #3b2f86; background: #ece9ff; box-shadow: 0 6px 14px -10px rgba(80,60,180,.6); }
+  #kids .kt img { width: 18px; height: 18px; }
+  #kids .kt.over { color: #4b3fa0; background: linear-gradient(135deg, #efeaff, #e2f0ff); }
+  #kids .kb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+  #kids .kb button { position: relative; border: 0; border-radius: 20px; min-height: 76px; padding: 10px 4px 9px; cursor: pointer; display: flex;
+                     flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; font: 800 13.5px/1.1 Manrope, sans-serif;
+                     color: #6a3b00; background: linear-gradient(160deg, #fff1d6, #ffd49a); overflow: hidden;
+                     box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 10px 18px -14px rgba(160,90,0,.9); transition: transform .15s; }
+  #kids .kb button:nth-child(2) { color: #0f5c38; background: linear-gradient(160deg, #e2fbef, #a8ecc9); box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 10px 18px -14px rgba(0,120,70,.9); }
+  #kids .kb button:nth-child(3) { color: #31278f; background: linear-gradient(160deg, #eceaff, #c6c0ff); box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 10px 18px -14px rgba(70,50,200,.9); }
+  #kids .kb button::before { content: ""; position: absolute; width: 70px; height: 70px; border-radius: 50%; top: -34px; right: -24px; background: rgba(255,255,255,.35); }
+  #kids .kb button img { width: 36px; height: 36px; filter: drop-shadow(0 4px 5px rgba(0,0,0,.18)); transition: transform .2s; }
+  #kids .kb button:hover img { transform: translateY(-2px) rotate(-4deg); }
+  #kids .kb button:active { transform: scale(.96); }
+  #kids .kb button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  #kids.over .kb button { filter: saturate(.55); opacity: .75; }
+  @media (prefers-reduced-motion: reduce) { #kids .kb button img { transition: none; } }
+  body.kids :is(#b-team, #team, #b-cal, #b-notes, #b-chat, #b-set, #b-bug, #b-idea, #b-upd, #b-pad, #b-watch, #bar .sep) { display: none !important; }
   body.mini #kids { display: none; }
   #tarc { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); pointer-events: none; display: none; overflow: visible; }
   #tarc.on { display: block; animation: tarcin .6s ease-out; }
@@ -523,9 +537,9 @@
     <div id="health" title="Что сейчас с ассистентом"></div>
     <div id="tmr" aria-live="off"></div>
     <div id="kids" aria-label="Детский режим"><div class="kt" id="kids-t"></div>
-      <div class="kb"><button data-say="Уго, расскажи сказку"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6"/></svg>Сказка</button>
-        <button data-say="Уго, загадай мне загадку"><svg viewBox="0 0 24 24"><path d="M9 9a3 3 0 1 1 4 2.8c-.6.3-1 .9-1 1.6V15"/><circle cx="12" cy="19" r=".6"/></svg>Загадка</button>
-        <button data-say="Уго, расскажи что-нибудь интересное: почему так бывает?"><svg viewBox="0 0 24 24"><path d="M12 3v3M5 7l2 2M19 7l-2 2"/><circle cx="12" cy="15" r="5"/></svg>Почему?</button></div></div>
+      <div class="kb"><button data-say="Уго, расскажи сказку"><img src="assets/emoji/img/1f4d6.webp" alt="" draggable="false">Сказка</button>
+        <button data-say="Уго, загадай мне загадку"><img src="assets/emoji/img/1f9e9.webp" alt="" draggable="false">Загадка</button>
+        <button data-say="Уго, расскажи что-нибудь интересное: почему так бывает?"><img src="assets/emoji/img/1f52d.webp" alt="" draggable="false">Почему?</button></div></div>
     <div id="rem"><span class="ri" id="rem-ico">⏰</span><span class="rt"><b id="rem-when"></b><span id="rem-text"></span></span><button id="rem-undo" title="Отменить напоминание">Отменить</button></div>
     <div id="task"></div>
     <div id="upd"></div>
@@ -652,7 +666,7 @@ function applyPersona(pid) {
   const p = personas.find(x => x.id === pid) || personas[0]; if (!p) return;
   current = p;
   document.documentElement.style.setProperty("--persona", p.color);
-    entity.configure({ style: p.avatar_url && p.style !== "aura" ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "" });
+    entity.configure({ style: p.avatar_url && p.style !== "aura" ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", soft: !!p.kids });
   renderDots(); setState(state);
 }
 // силуэт по плечи: у героини — длинные волосы до плеч, у героя (и если пол не указан) — простой силуэт
@@ -726,8 +740,11 @@ function setKids(k) {
   document.body.classList.toggle("kids", !!KIDS);
   if (!KIDS) return;
   const t = $("kids-t");
-  t.textContent = KIDS.can_talk ? `Ещё ${KIDS.left} ${KIDS.left % 10 === 1 && KIDS.left % 100 !== 11 ? "минута" : KIDS.left % 10 >= 2 && KIDS.left % 10 <= 4 && (KIDS.left % 100 < 10 || KIDS.left % 100 >= 20) ? "минуты" : "минут"}` : "На сегодня всё";
+  const txt = KIDS.can_talk ? `Ещё ${KIDS.left} ${KIDS.left % 10 === 1 && KIDS.left % 100 !== 11 ? "минута" : KIDS.left % 10 >= 2 && KIDS.left % 10 <= 4 && (KIDS.left % 100 < 10 || KIDS.left % 100 >= 20) ? "минуты" : "минут"}` : "На сегодня всё — до завтра!";
+  t.innerHTML = `<img src="assets/emoji/img/${KIDS.can_talk ? "23f3" : "1f319"}.webp" alt="" draggable="false">`;
+  t.appendChild(document.createTextNode(txt));
   t.classList.toggle("over", !KIDS.can_talk);
+  $("kids").classList.toggle("over", !KIDS.can_talk);
 }
 core.on("hello", d => setKids(d.kids));
 core.on("kids", setKids);

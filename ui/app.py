@@ -1877,18 +1877,19 @@ class Api:
         p = payload if isinstance(payload, dict) else {}
         rid = str(p.get("id") or "")
         old = getattr(self, "_alarm", None)
-        if old is not None:
-            if getattr(self, "_alarm_id", "") == rid:
-                try:
-                    old.show()
-                    old.restore()
-                except Exception:  # noqa: BLE001
-                    pass
-                return
+        if old is not None and getattr(self, "_alarm_id", "") == rid:
             try:
-                old.destroy()
+                old.show()
+                old.restore()
             except Exception:  # noqa: BLE001
                 pass
+            return
+        # №391 (28.10): «при включении компьютера пришло напоминание — не закрывается, висит, ни подвинуть, ни закрыть»:
+        # при запуске пропущенные приходят одно за другим, прежнее окно ещё создавалось и не закрылось — осталось без
+        # хозяина, а его крестик просил закрыть «чужое» (id другого) и ничего не происходило. Теперь все окна — в списке
+        # по id: новое закрывает все прежние, крестик закрывает своё, что бы ни было открыто сейчас.
+        for oid in list(self._alarm_wins()):
+            self._alarm_drop(oid)
         w, h = 520, (556 if int(p.get("att") or 0) else 440)       # с картинками напоминания — выше, под их ряд
         if len(str(p.get("text") or "")) > 30:                     # №383: длинный текст — две-три строки, окну выше
             h += 36 if len(str(p.get("text") or "")) <= 60 else 68
@@ -1905,7 +1906,7 @@ class Api:
         q = "&" + urlencode({"id": rid, "text": p.get("text", ""), "title": p.get("title", ""), "rep": p.get("repeat_text", ""),
                              "late": "1" if p.get("late") else "", "at": p.get("at", ""), "att": int(p.get("att") or 0)})
         self._alarm_id = rid
-        win = webview.create_window(ALARM_TITLE, self._url("alarm.html", q), width=w, height=h, x=x, y=y,
+        win = self._alarm_wins()[rid] = webview.create_window(ALARM_TITLE, self._url("alarm.html", q), width=w, height=h, x=x, y=y,
                                     resizable=False, frameless=True, easy_drag=True, on_top=True, focus=True, hidden=True,
                                     background_color="#0c0a12", js_api=self, **_no_shadow())
         self._alarm = win
@@ -1986,10 +1987,36 @@ class Api:
                 time.sleep(1.5)
         threading.Thread(target=loop, daemon=True, name="alarm-top").start()
 
-    def close_alarm(self, rid=""):
-        win = getattr(self, "_alarm", None)
-        if win is not None and (not rid or rid == getattr(self, "_alarm_id", "")):
+    def _alarm_wins(self):
+        if not isinstance(getattr(self, "_alarms", None), dict):
+            self._alarms = {}
+        return self._alarms
+
+    def _alarm_drop(self, rid):
+        """Закрыть окно напоминания rid; не закрылось — хотя бы спрятать (иначе висит поверх всех без хозяина)."""
+        win = self._alarm_wins().pop(rid, None)
+        if win is None:
+            return
+        if getattr(self, "_alarm", None) is win:
             self._alarm = None
+        try:
+            win.destroy()
+        except Exception:  # noqa: BLE001
+            try:
+                win.hide()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def close_alarm(self, rid=""):
+        if not rid:                                       # без id — закрыть все
+            for oid in list(self._alarm_wins()):
+                self._alarm_drop(oid)
+            self._alarm = None
+            return
+        if rid in self._alarm_wins():
+            self._alarm_drop(rid)
+        elif rid == getattr(self, "_alarm_id", "") and getattr(self, "_alarm", None) is not None:
+            win, self._alarm = self._alarm, None
             try:
                 win.destroy()
             except Exception:  # noqa: BLE001

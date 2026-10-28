@@ -491,8 +491,8 @@ class AnswerMixin:
             log.debug("душа: подсказка", exc_info=True)
         base += self.conv.prompt()                     # долгий разговор: что было раньше, был ли перерыв
         base += self.diary.prompt()                    # выводы, которые ассистент записал ночью в дневник
-        from boundaries import RULE
-        base += "\n\n" + RULE
+        from boundaries import RULE, OWN_MATERIAL
+        base += "\n\n" + RULE + "\n\n" + OWN_MATERIAL
         kids = getattr(self, "kids", None)
         if kids and kids.on():
             base += kids.prompt()                      # детский режим: правила разговора с ребёнком (kids.py)
@@ -1570,9 +1570,13 @@ class AnswerMixin:
                     log.info("🔇 Ответ длинный — вслух прочитано %d симв., остальное на экране", spoken[0])
                     return
                 spoken[0] += len(s_)
+                if getattr(self, "lat", None) is not None:
+                    self.lat.mark("say")
                 sentences.put(s_)
             blind_key = f"{prof.get('base_url')}|{prof.get('model')}"
             t_start = time.monotonic()
+            if getattr(self, "lat", None) is not None:
+                self.lat.mark("req", t_start)
             from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
@@ -1672,6 +1676,8 @@ class AnswerMixin:
                         continue
                     if not turn.full:
                         log.info("⏱ первые слова модели через %.1f с", time.monotonic() - t_start)
+                        if getattr(self, "lat", None) is not None:
+                            self.lat.mark("tok")
                         self._slow_local(prof, time.monotonic() - t_start)
                         self._coder_brain(prof)
                     turn.full += val

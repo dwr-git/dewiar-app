@@ -76,8 +76,13 @@ nav .ndot.on { display: inline-block; }
 .dw-weak b { font-size: 15.5px; display: block; margin-bottom: 6px; }
 .dw-weak p { font-size: 13.5px; color: rgba(255,255,255,.82); line-height: 1.55; }
 .dw-weak ol { margin: 10px 0 0 20px; font-size: 13.5px; line-height: 1.7; color: rgba(255,255,255,.88); }
-.dw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; align-items: start; }
-.dwc { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 20px; padding: 18px 20px; }
+/* карточки ряда — одной высоты (владелец 28.10: «блоки разной высоты — страница смотрится не идеально»); кнопки
+   действий последней строкой карточки — прижаты к её низу, в ряду на одной линии */
+.dw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; align-items: stretch; }
+.dwc { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 20px; padding: 18px 20px;
+       display: flex; flex-direction: column; }
+.dwc > .actions:last-child, .dwc > div:last-child > .actions:last-child { margin-top: auto !important; padding-top: 6px; }
+.dwc > div:last-child:has(> .actions:last-child) { flex: 1; display: flex; flex-direction: column; }
 .dwc.hero { background: linear-gradient(135deg, rgba(102,126,234,.22), rgba(118,75,162,.22)); }
 .dwc .dh { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .dwc .dh svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
@@ -1135,7 +1140,7 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 /* «Близкие»: эмодзи и реакции (close.js → clRePick) */
 .cl-m { position: relative; }
 .cl-m.rx { margin-bottom: 12px; }
-.cl-m.emo { background: none !important; padding: 0 2px; }
+.cl-m.emo { background: var(--glass) !important; padding: 10px 14px 6px; }   /* смайлы одни — своей плашкой с воздухом (владелец 28.10: «слишком малые внутренние отступы») */
 .cl-m.emo .tx { font-size: 40px; line-height: 1.15; }
 /* смайлы без пузыря (28.10, владелец): время — цветом страницы, а не белым, как у своего пузыря */
 .cl-m.emo.out, html.st-light .cl-m.emo.out, html.st-neu .cl-m.emo.out { color: var(--ink); }
@@ -2703,16 +2708,25 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .dv-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; align-items: stretch; margin-bottom: 18px; }
 .dv-map, .dv-me, .dv-card { border-radius: 24px; background: var(--glass); box-shadow: var(--raise-s, none); min-width: 0; }
 .dv-map { display: grid; place-items: center; padding: 10px; min-height: 250px; }
-.dv-map > svg { width: 100%; max-width: 440px; height: auto; overflow: visible; }
-.dv-ln { stroke: var(--dim); stroke-width: 1.4; stroke-dasharray: 3 5; opacity: .6; }
-.dv-ln.on { stroke: var(--good); stroke-dasharray: none; opacity: .9; stroke-width: 2; }
-.dv-node circle { fill: var(--panel2); stroke: var(--line); stroke-width: 1; }
-.dv-node svg { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.dv-node.on circle { fill: rgba(75,227,161,.16); stroke: rgba(75,227,161,.6); } .dv-node.on svg { stroke: var(--good); }
-.dv-node.me circle { stroke: var(--accent); stroke-width: 2; }
-.dv-lbl { font-size: 10.5px; fill: var(--muted); text-anchor: middle; font-family: inherit; }
-.dv-orb { filter: drop-shadow(0 8px 18px rgba(122,108,240,.55)); }
-.dv-orbt { font-size: 11px; font-weight: 700; fill: #fff; text-anchor: middle; font-family: "Unbounded", "Ubuntu", sans-serif; }
+.dv-mapin { position: relative; width: 100%; max-width: 560px; }
+.dv-mapin > svg { display: block; width: 100%; height: auto; overflow: visible; }
+.dv-ent { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); pointer-events: none; }
+.dv-orbp { fill: var(--glass2, rgba(255,255,255,.5)); filter: drop-shadow(0 4px 10px rgba(40,30,110,.18)); }
+.dv-ring { fill: none; stroke: #8b7cff; stroke-opacity: .14; stroke-width: 1; }
+.dv-ln { fill: none; stroke: var(--dim); stroke-width: 1.4; stroke-dasharray: 2 6; stroke-linecap: round; opacity: .45; }
+.dv-ln.on { stroke-dasharray: none; opacity: .75; stroke-width: 2.2; }
+.dv-spark { fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 2 26; opacity: .85; animation: dvflow 2.4s linear infinite; }
+@keyframes dvflow { to { stroke-dashoffset: -56; } }
+.dv-tile { filter: drop-shadow(0 8px 14px rgba(40,30,110,.28)); }
+.dv-node:not(.on) .dv-tile { filter: grayscale(.75) drop-shadow(0 6px 10px rgba(40,30,110,.12)); opacity: .55; }
+.dv-halo { opacity: .45; }
+.dv-node svg { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.dv-live { fill: #3fd98f; } .dv-live-h { fill: #3fd98f; opacity: .28; }
+.dv-lbl { font-size: 12.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; font-family: inherit; }
+.dv-sub { font-size: 10.5px; fill: var(--muted); text-anchor: middle; font-family: inherit; } .dv-sub.on { fill: var(--good); }
+.dv-orb { filter: drop-shadow(0 10px 22px rgba(122,108,240,.55)); }
+.dv-orbt { font-size: 11.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; font-family: "Unbounded", "Ubuntu", sans-serif; }
+@media (prefers-reduced-motion: reduce) { .dv-spark { animation: none; display: none; } }
 .dv-me { padding: 22px 24px; display: flex; flex-direction: column; gap: 10px; }
 .dv-k { font-size: 12.5px; color: var(--muted); }
 .dv-name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -2932,13 +2946,16 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .md-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .md-card { --sky: linear-gradient(155deg, #7d93ff 0%, #9a7bff 100%); --tone: #5b6cff;
   display: flex; flex-direction: column; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: var(--ink);
-  border-radius: 26px; overflow: hidden; background: var(--glass, #fff); box-shadow: 0 18px 40px -26px rgba(20,24,60,.6), 0 0 0 1px var(--line);
+  border-radius: 26px; overflow: hidden; background: var(--glass, #fff); box-shadow: 0 18px 40px -26px rgba(20,24,60,.6);
   transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s; }
 .md-card[data-m="kid"] { --sky: linear-gradient(155deg, #7fd6ff 0%, #b49bff 100%); --tone: #7a5ce0; }
 .md-card[data-m="senior"] { --sky: linear-gradient(155deg, #ffc58f 0%, #ff8a78 100%); --tone: #e0644f; }
-.md-card:hover { transform: translateY(-5px); box-shadow: 0 30px 60px -28px rgba(20,24,60,.7), 0 0 0 1px var(--line); }
-.md-card:focus-visible { outline: 3px solid var(--tone); outline-offset: 4px; }
-.md-card[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--tone), 0 18px 40px -26px rgba(20,24,60,.6); }
+/* без обводок (владелец 28.10: «двойная обводка — грубо; красивый дизайн не должен иметь обводки»): выбранная — цветным
+   свечением своего тона и меткой «сейчас», фокус с клавиатуры — так же, только сильнее */
+.md-card:hover { transform: translateY(-5px); box-shadow: 0 30px 60px -28px rgba(20,24,60,.7); }
+.md-card:focus { outline: none; }
+.md-card:focus-visible { transform: translateY(-5px); box-shadow: 0 0 0 6px color-mix(in srgb, var(--tone) 22%, transparent), 0 30px 60px -26px color-mix(in srgb, var(--tone) 75%, transparent); }
+.md-card[aria-pressed="true"] { box-shadow: 0 26px 56px -24px color-mix(in srgb, var(--tone) 85%, transparent); }
 .md-art { position: relative; display: block; height: 176px; background: var(--sky); }
 .md-art::after { content: ""; position: absolute; inset: auto 0 0; height: 40%; background: linear-gradient(transparent, rgba(255,255,255,.08)); }
 .md-art svg { position: absolute; inset: 14px 10px 8px; width: calc(100% - 20px); height: calc(100% - 22px); fill: none; stroke: #fff;
@@ -2955,7 +2972,7 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .md-txt li::before { content: ""; position: absolute; left: 2px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); opacity: .8; }
 .md-go { margin-top: auto; align-self: flex-start; font-size: 14px; font-weight: 700; color: #fff; padding: 9px 18px; border-radius: 999px; background: var(--tone);
   box-shadow: 0 8px 18px -10px var(--tone); }
-.md-card[aria-pressed="true"] .md-go { background: transparent; color: var(--tone); box-shadow: inset 0 0 0 2px var(--tone); }
+.md-card[aria-pressed="true"] .md-go { background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--tone); box-shadow: none; }
 .md-x { position: absolute; top: 18px; right: 20px; width: 40px; height: 40px; border: 0; border-radius: 50%; cursor: pointer; font-size: 24px; line-height: 1;
   color: var(--muted); background: var(--soft); }
 .md-x:hover { background: var(--soft2); color: var(--ink); }
@@ -3193,7 +3210,9 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 #cl-groups { display: flex; flex-direction: column; gap: 4px; }
 .cl-gnone { margin: 0 2px 4px; }
 .cl-gstack { flex: none; display: flex; align-items: center; font-style: normal; }
-.cl-gstack .cl-ava { width: 30px; height: 30px; font-size: 12px; box-shadow: 0 0 0 2px var(--ring, rgba(24,25,36,.95)); }
+/* лица группы внахлёст — без белых колец (владелец 28.10: обводки не любит): верхнее отделено мягкой тенью */
+.cl-gstack .cl-ava { width: 30px; height: 30px; font-size: 12px; box-shadow: -3px 2px 8px -2px rgba(20,24,60,.35); }
+.cl-gstack .cl-ava:first-child { box-shadow: none; }
 .cl-gstack .cl-ava + .cl-ava { margin-left: -10px; }
 .cl-gstack .cl-ava.more { background: rgba(127,127,140,.25); color: var(--ink); font: 700 10.5px Manrope, sans-serif; }
 html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92); }
@@ -3249,8 +3268,11 @@ html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92)
 .nav-groups[hidden] { display: none; }
 nav .nav-g { padding: 6px 10px; gap: 9px; font-size: 13px; border-radius: 10px; min-width: 0; }
 nav .nav-g span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+nav .nav-g .nav-gi { width: 22px; height: 22px; flex: none; border-radius: 8px; display: grid; place-items: center; font-style: normal;
+  font: 700 11px/1 "Unbounded", "Manrope", sans-serif; color: #fff; background: linear-gradient(145deg, color-mix(in srgb, var(--c, #8b7cff) 78%, #fff), var(--c, #8b7cff));
+  box-shadow: 0 4px 10px -6px var(--c, #8b7cff); }
 nav .nav-g .cl-gstack { position: relative; width: 24px; height: 24px; flex: none; }
-nav .nav-g .cl-gstack .cl-ava { position: absolute; width: 16px; height: 16px; font-size: 8.5px; margin: 0; box-shadow: 0 0 0 1.5px var(--ring, rgba(24,25,36,.95)); }
+nav .nav-g .cl-gstack .cl-ava { position: absolute; width: 16px; height: 16px; font-size: 8.5px; margin: 0; }
 nav .nav-g .cl-gstack .cl-ava:first-child { left: 0; top: 0; } nav .nav-g .cl-gstack .cl-ava:nth-child(2) { right: 0; bottom: 0; }
 nav .nav-g .cl-gstack .cl-ava.more { display: none; }
 nav .nav-g em { font-style: normal; font-size: 10.5px; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; background: var(--brand); color: #fff; }

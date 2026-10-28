@@ -57,6 +57,27 @@ try:
 except T.ToolError:
     ok(True, "пустая страница — понятная ошибка, а не пустой файл")
 
+# 28.10 (отзыв писателя): «выведи мою заметку в браузере» — модель отказалась перепечатывать «неудобный» текст. Теперь
+# show_page с file показывает заметку целиком сама, без пересказа моделью; правило «материал пользователя» — в подсказке
+note = ws.ensure() / "Заметки" / "Эйнштейн и Марич.md"
+note.parent.mkdir(parents=True, exist_ok=True)
+note.write_text("# Тёмное дело\n\nРоль **Милевы Марич** замалчивается.\n\n- статьи 1905 года\n- E = mc²\n\n> версия для романа\n\n<script>alert(1)</script>\n", encoding="utf-8")
+r = T.t_show_page({"file": "Заметки/Эйнштейн и Марич.md"}, {"workspace": ws})
+f2 = ws.ensure() / "Страницы" / "Эйнштейн и Марич.html"
+pg2 = f2.read_text(encoding="utf-8") if f2.exists() else ""
+ok(f2.exists() and "<h2>Тёмное дело</h2>" in pg2 and "<b>Милевы Марич</b> замалчивается" in pg2 and "<li>E = mc²</li>" in pg2
+   and "<blockquote>версия для романа</blockquote>" in pg2, "своя заметка — целиком, оформленной страницей, название — по файлу")
+ok("<script>alert" not in pg2 and "&lt;script&gt;" in pg2, "HTML внутри заметки — текстом, не выполняется")
+ok("file" in T.TOOLS["show_page"][1]["properties"] and "как есть" in T.TOOLS["show_page"][0], "модели — как показать свою заметку (file)")
+import boundaries as B  # noqa: E402
+ok("не отказывайся" in B.OWN_MATERIAL and "OWN_MATERIAL" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+   and "МАТЕРИАЛ ПОЛЬЗОВАТЕЛЯ" in (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8"),
+   "в подсказке компьютера и телефона: свой материал — показывать как есть, без нотаций")
+try:
+    T.t_show_page({"file": "../../etc/passwd"}, {"workspace": ws}); ok(False, "файл вне папки — отказ")
+except Exception:  # noqa: BLE001
+    ok(True, "файл вне папки ассистента — отказ")
+
 # HTML в ответе — найти его
 ans = "Нашла три рецепта. Вот страница:\n<!DOCTYPE html>\n<html lang=\"ru\"><head><title>Рецепты</title>\n<style>body{font:16px sans-serif}</style></head>\n<body><h1>Рецепты</h1><p>Борщ</p></body>\n</html>\nОткрой её."
 doc = Q.page_html_in(ans)

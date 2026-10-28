@@ -20,11 +20,12 @@ function grSide(st) {
   grNav(gs);
 }
 /* Группы — и в меню слева, под «Близкими» (28.10, владелец: «созданные группы должны появляться и слева под Близкими,
-   красиво»): мозаика из двух лиц, название в строку, непрочитанные — числом; нажали — «Близкие» с этой группой. */
+   красиво»): плашка с буквой названия (цвет группы; без обводок — владелец 28.10: «мелкие кружочки с толстой белой
+   обводкой выбиваются из стиля»), название в строку, непрочитанные — числом; нажали — «Близкие» с этой группой. */
 function grNav(gs) {
   const box = $("#nav-groups"); if (!box) return;
   box.hidden = !gs.length;
-  box.innerHTML = gs.map(g => `<button class="nav-g${g.gid === CL.cur && $("#p-close.cur") ? " cur" : ""}" data-gid="${grEsc(g.gid)}" title="${grEsc(g.name)}">${grStack(g, 2)}<span>${grEsc(g.name)}</span>${g.unread ? `<em>${g.unread}</em>` : ""}</button>`).join("");
+  box.innerHTML = gs.map(g => `<button class="nav-g${g.gid === CL.cur && $("#p-close.cur") ? " cur" : ""}" data-gid="${grEsc(g.gid)}" title="${grEsc(g.name)}"><i class="nav-gi" style="--c:${clColor(g.gid)}" aria-hidden="true">${grEsc((String(g.name || "Г").replace(/^(группа|group)\s+/i, "").trim()[0] || "Г").toUpperCase())}</i><span>${grEsc(g.name)}</span>${g.unread ? `<em>${g.unread}</em>` : ""}</button>`).join("");
   $$("#nav-groups .nav-g").forEach(b => b.onclick = () => {
     const nb = $('nav button[data-p="close"]'); if (!$("#p-close.cur")) nb.click();
     $$("#nav-groups .nav-g").forEach(x => x.classList.toggle("cur", x === b));

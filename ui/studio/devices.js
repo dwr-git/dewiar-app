@@ -87,22 +87,53 @@ function dvRender() {
   }
 }
 
-/* карта: Лира в середине, устройства по кругу; на связи — яркая линия и точка, давно не было — пунктир */
+/* карта: Лира в середине, устройства по кругу (0.66, владелец: «схему — немножко красивее и аккуратнее»; обводки он не
+   любит): устройства — плитки с цветом своего вида (компьютер, телефон, браузер, облако) и белым значком, без рамок;
+   на связи — точка-огонёк и плавная линия к Лире, по которой бегут искры; давно не было — бледная плитка и пунктир.
+   Под плиткой — имя и состояние. Лира — светящийся шар с мягкими кругами вокруг. */
+const DV_TONE = { pc: ["#9a8cff", "#6a55e6"], phone: ["#5fdcb6", "#1fa585"], web: ["#7fc8ff", "#4a86ee"], cloud: ["#a8c0ff", "#7b8ff5"] };
 function dvMap(devs) {
-  const W = 300, H = 230, cx = W / 2, cy = H / 2, R = 88, n = Math.max(devs.length, 1);
+  const W = 560, H = 390, cx = W / 2, cy = H / 2 + 2, n = Math.max(devs.length, 1), RX = 210, RY = 128, T = 50;
   const all = typeof personas !== "undefined" && Array.isArray(personas) ? personas : [];
   const who = all.find(p => p.id === (typeof active !== "undefined" && active ? active : S && S.persona)) || null;
   const nm = ((who && who.name) || "Лира").slice(0, 9);
-  let g = "";
+  let lines = "", nodes = "", defs = "";
   devs.forEach((d, i) => {
-    const a = -Math.PI / 2 + (2 * Math.PI * i) / n, x = cx + R * Math.cos(a) * 1.25, y = cy + R * Math.sin(a) * .9, on = dvOn(d), app = d.app || "pc";
-    g += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" class="dv-ln${on ? " on" : ""}"/>`;
-    g += `<g class="dv-node${on ? " on" : ""}${d.me ? " me" : ""}" transform="translate(${x - 19} ${y - 19})"><circle cx="19" cy="19" r="19"/><svg x="8" y="8" width="22" height="22" viewBox="0 0 24 24">${DV_IC[app] || DV_IC.pc}</svg></g>`;
-    g += `<text x="${x}" y="${y < cy - 10 ? y - 26 : y + 33}" class="dv-lbl">${escH((d.name || DV_APP[app]).slice(0, 16))}</text>`;
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n + (n === 2 ? Math.PI / 2 : 0);
+    const x = cx + RX * Math.cos(a), y = cy + RY * Math.sin(a), on = dvOn(d), app = d.app || "pc", tone = DV_TONE[app] || DV_TONE.pc;
+    // линия — мягкой дугой от края облика Лиры: середина чуть отведена в сторону, к Лире подходит не по прямой
+    const L = Math.hypot(x - cx, y - cy) || 1, sx = cx + (x - cx) / L * 58, sy = cy + (y - cy) / L * 58;
+    const mx = (sx + x) / 2 + (y - cy) * 0.1, my = (sy + y) / 2 - (x - cx) * 0.1;
+    defs += `<linearGradient id="dvg${i}" gradientUnits="userSpaceOnUse" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"><stop offset="0" stop-color="#8b7cff"/><stop offset="1" stop-color="${tone[0]}"/></linearGradient>`
+      + `<linearGradient id="dvt${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${tone[0]}"/><stop offset="1" stop-color="${tone[1]}"/></linearGradient>`;
+    const path = `M${sx.toFixed(1)} ${sy.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    lines += `<path d="${path}" class="dv-ln${on ? " on" : ""}" ${on ? `style="stroke:url(#dvg${i})"` : ""}/>` + (on ? `<path d="${path}" class="dv-spark" style="animation-delay:${(-i * 0.7).toFixed(1)}s"/>` : "");
+    const label = (d.name || DV_APP[app]).slice(0, 18), sub = d.me ? "это устройство" : on ? "на связи" : dvAgo(d.seen);
+    const below = y >= cy - 4, ly = below ? y + T / 2 + 18 : y - T / 2 - 22;
+    nodes += `<g class="dv-node${on ? " on" : ""}${d.me ? " me" : ""}" transform="translate(${(x - T / 2).toFixed(1)} ${(y - T / 2).toFixed(1)})">`
+      + (d.me ? `<circle cx="${T / 2}" cy="${T / 2 + 4}" r="${T * 0.62}" class="dv-halo" fill="${tone[0]}" filter="url(#dvblur)"/>` : "")
+      + `<rect width="${T}" height="${T}" rx="16" fill="url(#dvt${i})" class="dv-tile"/>`
+      + `<svg x="${(T - 24) / 2}" y="${(T - 24) / 2}" width="24" height="24" viewBox="0 0 24 24">${DV_IC[app] || DV_IC.pc}</svg>`
+      + (on ? `<circle cx="${T - 4}" cy="4" r="7" class="dv-live-h"/><circle cx="${T - 4}" cy="4" r="4.2" class="dv-live"/>` : "") + `</g>`
+      + `<text x="${x.toFixed(1)}" y="${ly.toFixed(1)}" class="dv-lbl">${escH(label)}</text>`
+      + `<text x="${x.toFixed(1)}" y="${(ly + 14).toFixed(1)}" class="dv-sub${on ? " on" : ""}">${escH(sub)}</text>`;
   });
-  $("#dv-map").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img"><defs><radialGradient id="dvorb" cx="40%" cy="35%"><stop offset="0" stop-color="#b9b2ff"/><stop offset=".6" stop-color="#7a6cf0"/><stop offset="1" stop-color="#4f3fc7"/></radialGradient></defs>`
-    + g + `<circle cx="${cx}" cy="${cy}" r="30" fill="url(#dvorb)" class="dv-orb"/><text x="${cx}" y="${cy + 5}" class="dv-orbt">${escH(nm)}</text></svg>`;
+  $("#dv-map").innerHTML = `<div class="dv-mapin"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ваши устройства вокруг ${escH(nm)}"><defs>`
+    + `<radialGradient id="dvorb" cx="38%" cy="32%"><stop offset="0" stop-color="#c9c2ff"/><stop offset=".55" stop-color="#7d6df2"/><stop offset="1" stop-color="#4a3bc4"/></radialGradient>`
+    + `<filter id="dvblur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter><radialGradient id="dvhalo"><stop offset=".55" stop-color="#8b7cff" stop-opacity=".18"/><stop offset="1" stop-color="#8b7cff" stop-opacity="0"/></radialGradient>${defs}</defs>`
+    + `<circle cx="${cx}" cy="${cy}" r="100" fill="url(#dvhalo)"/><circle cx="${cx}" cy="${cy}" r="66" class="dv-ring"/>`
+    + lines + `<rect x="${cx - 32}" y="${cy + 52}" width="64" height="21" rx="10.5" class="dv-orbp"/><text x="${cx}" y="${cy + 66.5}" class="dv-orbt">${escH(nm)}</text>`
+    + nodes + `</svg><canvas class="dv-ent" style="left:${(cx / W * 100).toFixed(2)}%;top:${(cy / H * 100).toFixed(2)}%;width:${(112 / W * 100).toFixed(2)}%" aria-hidden="true"></canvas></div>`;
+  // в середине — сам облик персонажа (тот же, что в виджете: стиль, цвет, своё фото), а не шар с надписью (владелец 28.10)
+  if (DV_ENT) { try { DV_ENT.destroy(); } catch (e) { } DV_ENT = null; }
+  const cv = $("#dv-map .dv-ent");
+  if (cv && typeof DewiarEntity === "function") {
+    const p = who || {};
+    try { DV_ENT = new DewiarEntity(cv, { style: p.avatar_url && p.style !== "aura" ? "photo" : (p.style || "nexus"), color: p.color || "#8B7CFF",
+      image: p.avatar_url || null, live: p.live || "", ring: false, soft: !!p.kids }); DV_ENT.set({ state: "idle", level: 0 }); } catch (e) { DV_ENT = null; }
+  }
 }
+let DV_ENT = null;
 
 /* «Подключить ещё устройство»: код, QR (печать Dewiar или обычный), обратный отсчёт; подключилось — сразу видно */
 function dvCodeHide() { clearInterval(DV_TICK); DV_CODE = null; $("#dv-code").hidden = true; $("#dv-give-go").textContent = "Показать код"; loadMyDevices(false); }

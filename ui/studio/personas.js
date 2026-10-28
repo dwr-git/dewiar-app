@@ -36,7 +36,7 @@ function renderPersonas() {
   n.onclick = () => openEditor(null); g.appendChild(n);
   loadGallery();
   const cur = personas.find(p => p.id === active);
-  if (cur) { accent(cur.color); brand.configure({ style: cur.avatar_url && cur.style !== "aura" ? "photo" : cur.style, color: cur.color, image: cur.avatar_url || null }); $("#bsub").textContent = `сейчас говорит ${cur.name}`; }
+  if (cur) { accent(cur.color); brand.configure({ style: cur.avatar_url && cur.style !== "aura" ? "photo" : cur.style, color: cur.color, image: cur.avatar_url || null, soft: !!cur.kids }); $("#bsub").textContent = `сейчас говорит ${cur.name}`; }
 }
 
 /* Компьютеру не хватает памяти (status.tight от ядра) — все облики студии почти неподвижны */

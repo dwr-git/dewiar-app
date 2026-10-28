@@ -269,6 +269,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from radio import Logos, StationHealth
         self.radio_health = StationHealth(STATE_DIR / "radio_health.json")      # какие станции у вас реально играют
         self.radio_logos = Logos(STATE_DIR / "radio_logos.json")              # значки станций для вкладки «Радио»
+        from latency import Latency
+        self.lat = Latency()                                                  # «Голос без пауз»: от конца фразы до звука
         self.toolbox.hooks["music"] = self.music
         self.music.data()                                 # свежий список станций с сайта — в фоне, сразу при запуске
         self._music_app = ("", 0.0)                       # какое музыкальное приложение открывали последним и когда

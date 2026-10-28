@@ -816,9 +816,13 @@ class AudioMixin:
                     self.check_q.put(("utt", pcm, uid))
             return
         if by_wake:
+            # где в фразе прозвучало имя (с начала фразы, с): точная модель может его ослышать — тогда решаем по месту
+            self._wake_off = (self.wake_time - t0) if self.wake_time else None
             self.wake_time = 0.0
         log.info("Фраза %.1f с → распознаю (%s)", dur, "по имени" if by_wake else "продолжение разговора")
         self._last_final = {"t": now, "uid": uid, "pcm": pcm, "by_wake": by_wake, "follow": follow}
+        if getattr(self, "lat", None) is not None:
+            self.lat.start(now)                            # «Голос без пауз»: отсюда меряем до первого звука
         self.stt_q.put((pcm, by_wake, follow))
         self.set_state("thinking")
 
@@ -960,6 +964,8 @@ class AudioMixin:
                         log.warning("%s не распознал: %s — пробую Vosk", stt.name, e)
                         text = self.vosk_stt.transcribe(pcm).strip()
             text = self._lang2(pcm, text)
+            if getattr(self, "lat", None) is not None:
+                self.lat.mark("stt")
             from vault import mask as _mask                # продиктованный для сейфа секрет — не в журнал
             log.info("📝 %s (%s, %d мс)", _mask(text) or "—", stt.name, (time.monotonic() - t0) * 1000)
             if not held and stt is not self.vosk_stt:
@@ -1340,6 +1346,8 @@ class AudioMixin:
                     self.switch_persona(spotted)
                 self.listen_for_command()
                 return
+        if not pid and by_wake and text and dur is not None and dur > 1.6:
+            pid, end = self._wake_misheard(text, dur)
         if pid:
             if pid != self.s.get("persona"):
                 self.switch_persona(pid)
@@ -1387,6 +1395,8 @@ class AudioMixin:
                          "вопрос после имени" if invited else "просьба ко мне")
             self.ask(text)
         else:
+            if getattr(self, "lat", None) is not None:
+                self.lat.drop()
             if by_wake:
                 log.info("Ложное срабатывание: имени во фразе нет (%d слов)", len(text.split()))
                 log.debug("Ложное срабатывание — фраза: «%s»", text)
@@ -1394,6 +1404,27 @@ class AudioMixin:
             self.set_state(back)
             if back == "idle" and time.monotonic() - getattr(self, "_wake_tone_at", 0.0) < 15:
                 self.play_tone("sleep")                    # звучало «слушаю», а вопроса не было — так же ясно «не слушаю»
+
+    def _wake_misheard(self, text, dur):
+        """Быстрый слух услышал имя В НАЧАЛЕ фразы, а точная модель его ослышала или потеряла: «Мира, включи музыку»,
+        «Нина, какая погода», «включи музыку» (имя срезано). Отзыв 28.10: «зову „Лира“, начинаю говорить — а она через
+        пару секунд молча отключается, примерно в 30 % случаев»: фраза считалась ложным срабатыванием. Теперь: имя в
+        первых 2 с фразы и первое слово похоже на имя — это обращение; имени в тексте нет вовсе, но имя было в первые
+        1,2 с, фраза до 8 с и это просьба («включи», «какая…») — тоже. Вокруг разговор (_noisy) — не гадаем: там имя
+        и так проверяет точная модель. -> (pid, конец имени в тексте) или (None, 0)."""
+        off = getattr(self, "_wake_off", None)
+        self._wake_off = None
+        spotted = self.personas.wake_map().get(getattr(self, "_wake_phrase", ""))
+        if not spotted or off is None or off > 2.0 or getattr(self, "_noisy", lambda: False)():
+            return None, 0
+        m = re.match(r"\s*([\w-]+)", text)
+        if m and len(text.split()) >= 2 and self._name_like(m.group(1)):
+            log.info("🎤 Имя «%s» слышно в начале, распознано как «%s» — это обращение", self._wake_phrase, m.group(1))
+            return spotted, m.end()
+        if off <= 1.2 and dur <= 8 and to_me(text):
+            log.info("🎤 Имя «%s» слышно в начале, в распознанном его нет — просьба, это обращение", self._wake_phrase)
+            return spotted, 0
+        return None, 0
 
     def _name_like(self, text):
         """Похоже ли короткое распознанное на ослышанное имя («Игрова», «Элла» вместо «Эва»), а не на ответ человека.

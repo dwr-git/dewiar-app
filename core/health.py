@@ -288,7 +288,30 @@ class HealthMixin:
                 "uptime_h": round((time.time() - self._h_t0) / 3600, 1), "starts": h.get("starts") or [],
                 "turns": h.get("turns", 0), "net_ok": h.get("net_ok", 0), "net_fail": h.get("net_fail", 0), "errors": h.get("errors", 0),
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
-                "problems": [{"sig": k, "text": v["text"], "n": v["n"]} for k, v in (h.get("problems") or {}).items()]}
+                "problems": [{"sig": k, "text": v["text"], "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
+                "lat": self._lat_summary()}
+
+    def _lat_how(self):
+        """Чем думает ассистент — для разбивки задержки голоса (dewiar, local, cloud…)."""
+        try:
+            return brain_kind(self.s.active_llm())
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _lat_summary(self):
+        """«Голос без пауз»: медианы задержек с прошлого пульса (latency.py) и итог по «где думает»."""
+        lat = getattr(self, "lat", None)
+        if lat is None or not lat.samples:
+            return {}
+        from latency import Latency
+        xs = list(lat.samples)
+        out = Latency.summary(xs)
+        by = {}
+        for x in xs:
+            by.setdefault(x.get("how") or "?", []).append(x["total"])
+        out["by"] = {k: [len(v), Latency.summary([{"total": t} for t in v])["total"][0]] for k, v in list(by.items())[:6]}
+        out["_n"] = len(xs)
+        return out
 
     def pulse_send(self):
         """Отправить пульс; ушёл — счётчики с нуля. -> True, если сервер принял."""
@@ -323,6 +346,10 @@ class HealthMixin:
                         del pr[sig]
             self._h["starts"] = (self._h.get("starts") or [])[len(body["starts"]):]
             self._health_save()
+        lat = getattr(self, "lat", None)
+        if lat is not None and (body.get("lat") or {}).get("_n"):
+            with lat._lock:                              # отправленные ходы — забыть
+                lat.samples = lat.samples[int(body["lat"]["_n"]):]
         log.info("💓 Пульс отправлен: запусков %d, ответов %d, сбоев %d", len(body["starts"]), body["turns"], len(body["problems"]))
         return True
 
