@@ -3,6 +3,24 @@
    голосов (отзыв 16.10: «спросил время — написала 14:10, а произнесла „ствисе“»). Меняешь здесь — меняй и там:
    tests/speechnorm_js_test.py сверяет оба на одних фразах. window.DewiarSpeech.norm(text, latin = true). */
 (function () {
+  /* Старый Safari (iPhone и Mac до 16.4) не знает «взгляда назад» (?<= ?<!) в регулярных выражениях — литерал с ним
+     ронял весь файл, а с ним и веб-версию (жалоба 28.10: «не работает совсем, не отвечает»). Здесь его нет: символ перед
+     совпадением проверяет lbReplace — ровно как движок (не подошло — ищем со следующей позиции; alt — другая ветка
+     выражения на том же месте). Результат тот же, что у core/speechnorm.py (tests/speechnorm_js_test.py). */
+  function lbReplace(t, re, ok, fn, alt) {
+    let out = "", last = 0, m; re.lastIndex = 0;
+    while ((m = re.exec(t)) !== null) {
+      const i = m.index;
+      if (!ok(i ? t[i - 1] : "", m)) {
+        if (alt) { alt.lastIndex = i; const a = alt.exec(t); if (a) { out += t.slice(last, i) + fn(...a); last = re.lastIndex = i + a[0].length; continue; } }
+        re.lastIndex = i + 1; continue;
+      }
+      out += t.slice(last, i) + fn(...m); last = i + m[0].length;
+      re.lastIndex = m[0].length ? last : i + 1;
+    }
+    return out + t.slice(last);
+  }
+  const isSp = (c) => c === "" || /\s/.test(c), isLat = (c) => /[A-Za-z]/.test(c), isNum = (c) => /[\d.,:]/.test(c), isDig = (c) => /\d/.test(c);
   const ONES = ["ноль", "один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять", "десять", "одиннадцать",
     "двенадцать", "тринадцать", "четырнадцать", "пятнадцать", "шестнадцать", "семнадцать", "восемнадцать", "девятнадцать"];
   const ONES_F = { 1: "одна", 2: "две" };
@@ -11,6 +29,7 @@
   const SCALES = [[1e12, ["триллион", "триллиона", "триллионов"], false], [1e9, ["миллиард", "миллиарда", "миллиардов"], false],
     [1e6, ["миллион", "миллиона", "миллионов"], false], [1000, ["тысяча", "тысячи", "тысяч"], true]];
   const W = "0-9A-Za-z_А-Яа-яЁё";                       // \w Python (с кириллицей): в JS \w — только латиница
+  const inW = (c) => c !== "" && new RegExp(`[${W}]`).test(c);
 
   function plural(n, f) { n = Math.abs(n) % 100; if (n >= 11 && n <= 14) return f[2]; return n % 10 === 1 ? f[0] : n % 10 >= 2 && n % 10 <= 4 ? f[1] : f[2]; }
   function under1000(n, fem) {
@@ -107,7 +126,7 @@
   }
   const caseOf = (pre) => { const p = (pre || "").trim().toLowerCase();
     return ["до", "с", "со", "от", "после", "около", "начиная с", "кроме"].includes(p) ? "gen" : ["к", "ко", "по"].includes(p) ? "dat" : "n_nom"; };
-  const PRE = "((?:(?<=\\s)|^)(?:до|с|со|от|после|около|к|ко|по|на|в)\\s+)?";
+  const PRE = "((?:до|с|со|от|после|около|к|ко|по|на|в)\\s+)?", preOk = (c, m) => m[1] ? isSp(c) : !isNum(c);   // перед предлогом — пробел или начало
 
   // Римские цифры (пакет 27.10) — как roman_norm в core/speechnorm.py: «XIX век», «Пётр I», «Ступень I», «Екатерины II»
   const ROMAN = /^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/, RV = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
@@ -124,7 +143,7 @@
   }
   const romanOk = (r) => romanValue(r) && (r.length > 1 || "IVX".includes(r));
   function romanNorm(t) {
-    t = t.replace(/((?:(?<=\s)|^)(?:в|во)\s+)?(?<![A-Za-z])([IVXLCDM]+)(?:\s*[-–—]\s*([IVXLCDM]+))?\s+(век(?:а|у|е|ом|ов|ах)?|вв?\.)(?![а-яё])/gi, (m, pre, a, b, w) => {
+    t = lbReplace(t, /((?:в|во)\s+)?([IVXLCDM]+)(?:\s*[-–—]\s*([IVXLCDM]+))?\s+(век(?:а|у|е|ом|ов|ах)?|вв?\.)(?![а-яё])/gi, (c, m) => m[1] ? isSp(c) : !isLat(c), (m, pre, a, b, w) => {
       pre = pre || ""; let wl = w.toLowerCase().replace(/\.$/, "");
       if (pre && wl === "в") { wl = "веке"; w = "веке"; } else if (pre && wl === "вв") { wl = "веках"; w = "веках"; }
       let form = { "век": "m_nom", "века": "gen", "веку": "dat", "веке": "prep", "веком": "ins", "веков": "gen", "веках": "prep", "в": "m_nom", "вв": "pl" }[wl] || "m_nom";
@@ -136,7 +155,7 @@
       if (b) head += " — " + ordinalWords(romanValue(b), form);
       return `${pre}${head} ${word}`;
     });
-    return t.replace(/(?<![A-Za-z])([А-ЯЁа-яё]+)\s+([IVXLCDM]+)(?![A-Za-z0-9])(?!\s+[A-Za-z])/g, (m, w, r) => {
+    return lbReplace(t, /([А-ЯЁа-яё]+)\s+([IVXLCDM]+)(?![A-Za-z0-9])(?!\s+[A-Za-z])/g, (c) => !isLat(c), (m, w, r) => {
       const lw = w.toLowerCase(), up = w[0] !== w[0].toLowerCase();
       if (!romanOk(r) || R_SKIP.has(lw)) return m;
       const form = R_FEM.has(lw) ? "f_nom" : R_FEM_GEN.has(lw) ? "f_gen" : R_NEUT.has(lw) ? "n_nom" : up && /[ая]$/.test(lw) ? "gen"
@@ -146,30 +165,30 @@
   }
   function norm(text, latin = true) {
     let t = romanNorm(String(text == null ? "" : text));
-    for (let i = 0; i < 3; i++) t = t.replace(/(?<![\d.,])(\d{1,3})[   ](?=\d{3}(?!\d))/g, "$1");
+    for (let i = 0; i < 3; i++) t = lbReplace(t, /(\d{1,3})[   ](?=\d{3}(?!\d))/g, (c) => !/[\d.,]/.test(c), (m, a) => a);
     t = t.replace(/(\d+)(?:[.,](\d{1,2}))?\s*(?:руб(?:л[а-яё]*)?\.?|₽|р\.|BYN|RUB)(?![а-яёА-ЯЁA-Za-z])/g, (m, n, k) => money(n, k, "rub"));
     t = t.replace(/\$\s*(\d+)(?:[.,](\d{1,2}))?|(\d+)(?:[.,](\d{1,2}))?\s*(?:\$|долл\.|USD)/g, (m, n, k, n2, k2) => money(n || n2, k || k2, "usd"));
     t = t.replace(/(\d+)(?:[.,](\d{1,2}))?\s*(?:€|EUR)/g, (m, n, k) => money(n, k, "eur"));
-    t = t.replace(/(?<![\d.,:])(\d{1,9}),(\d{1,2})(?!\d|[.,]\d)/g, (m, a, b) => `${numberWords(+a, true)} и ${numberWords(+b, true)} ${plural(+b, FRAC[b.length])}`);
-    t = t.replace(/(?<=\d)\s*=\s*(?=[-−]?\d)/g, " равно ").replace(/(?<=\d)\s+[-−–]\s+(?=\d)/g, " минус ").replace(/(?<=\d)\s*\+\s*(?=\d)/g, " плюс ")
-      .replace(/(?<=\d)\s*[×*]\s*(?=\d)/g, " умножить на ").replace(/(?<=\d)\s*÷\s*(?=\d)/g, " разделить на ");   // «12 - 10 = 2» — словами
+    t = lbReplace(t, /(\d{1,9}),(\d{1,2})(?!\d|[.,]\d)/g, (c) => !isNum(c), (m, a, b) => `${numberWords(+a, true)} и ${numberWords(+b, true)} ${plural(+b, FRAC[b.length])}`);
+    for (const [re, w] of [[/\s*=\s*(?=[-−]?\d)/g, " равно "], [/\s+[-−–]\s+(?=\d)/g, " минус "], [/\s*\+\s*(?=\d)/g, " плюс "],
+      [/\s*[×*]\s*(?=\d)/g, " умножить на "], [/\s*÷\s*(?=\d)/g, " разделить на "]]) t = lbReplace(t, re, isDig, () => w);   // «12 - 10 = 2» — словами
     t = t.replace(/https?:\/\/\S+/g, "ссылка");
-    if (latin) t = t.replace(new RegExp(`(?<![${W}])(?=[${W}]*\\d)(?=[${W}]*[A-Za-z])[A-Za-z0-9_]{4,}(?![${W}])`, "g"), " ");
-    t = t.replace(/(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])/g, " ");
-    t = t.replace(new RegExp(`(?<![${W}-])\\+(?=\\d)`, "g"), "плюс ");
-    t = t.replace(new RegExp(`(?<![${W}-])[-−](?=\\d)`, "g"), "минус ");
+    if (latin) t = lbReplace(t, new RegExp(`(?=[${W}]*\\d)(?=[${W}]*[A-Za-z])[A-Za-z0-9_]{4,}(?![${W}])`, "g"), (c) => !inW(c), () => " ");
+    t = lbReplace(t, /(?=(\d))|(?=([A-Za-z]))/g, (c, m) => m[1] !== undefined ? isLat(c) : isDig(c), () => " ");
+    t = lbReplace(t, /\+(?=\d)/g, (c) => !inW(c) && c !== "-", () => "плюс ");
+    t = lbReplace(t, /[-−](?=\d)/g, (c) => !inW(c) && c !== "-", () => "минус ");
     t = t.replace(/(\d+)\s*%/g, (m, n) => `${numberWords(+n)} ${plural(+n, ["процент", "процента", "процентов"])}`);
     t = t.replace(/(\d+)\s*°\s*[CС]?(?![A-Za-zА-Яа-яЁё])/g, (m, n) => `${numberWords(+n)} ${plural(+n, ["градус", "градуса", "градусов"])}`);
-    t = t.replace(new RegExp("((?:(?<=\\s)|^)(?:до|с|со|от|после|около|к|ко|по)\\s+)?(?<![\\d.,:])(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})(?![\\d.,]\\d)", "gi"),
+    t = lbReplace(t, /((?:до|с|со|от|после|около|к|ко|по)\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4})(?![\d.,]\d)/gi, preOk,
       (m, pre, d, mo, y) => { d = +d; mo = +mo; if (!(d >= 1 && d <= 31 && mo >= 1 && mo <= 12)) return m; const f = caseOf(pre);
         return `${pre || ""}${ordinalWords(d, f) || numberWords(d)} ${MONTH_LIST[mo - 1]} ${ordinalWords(+y, "gen") || numberWords(+y)} года`; });
-    t = t.replace(/(?<![\d.,:])(\d{3,4})\s+(год|года|году|годом|годе)(?![а-яё])/g, (m, n, g) => {
+    t = lbReplace(t, /(\d{3,4})\s+(год|года|году|годом|годе)(?![а-яё])/g, (c) => !isNum(c), (m, n, g) => {
       const form = { "год": "m_nom", "года": "gen", "году": "prep", "годом": "ins", "годе": "prep" }[g.toLowerCase()] || "m_nom";
       return `${ordinalWords(+n, form) || numberWords(+n)} ${g}`; });
-    t = t.replace(new RegExp(PRE + "(?<![\\d.,:])(\\d{1,2})\\s+(" + MONTHS + ")(?![а-яё])", "gi"), (m, pre, n, mon) => {
+    t = lbReplace(t, new RegExp(PRE + "(\\d{1,2})\\s+(" + MONTHS + ")(?![а-яё])", "gi"), preOk, (m, pre, n, mon) => {
       n = +n; const w = n >= 1 && n <= 31 ? ordinalWords(n, caseOf(pre)) : null; return `${pre || ""}${w || numberWords(n)} ${mon}`; });
-    t = t.replace(/(?<![\d.,:])(\d{1,15})(?![\d.,:])(\s+)([А-Яа-яЁё]+)/g, (m, n, sp, w) => agree(+n, w) + sp + w);
-    t = t.replace(new RegExp(`(?<![${W}])([01]?\\d|2[0-3]):[0-5]\\d(?![${W}])|\\d+(?:[.,]\\d+)*`, "g"), (m) => num(m));
+    t = lbReplace(t, /(\d{1,15})(?![\d.,:])(\s+)([А-Яа-яЁё]+)/g, (c) => !isNum(c), (m, n, sp, w) => agree(+n, w) + sp + w);
+    t = lbReplace(t, new RegExp(`([01]?\\d|2[0-3]):[0-5]\\d(?![${W}])|\\d+(?:[.,]\\d+)*`, "g"), (c, m) => m[1] === undefined || !inW(c), (m) => num(m), /\d+(?:[.,]\d+)*/y);
     if (!latin) return end(t.replace(/№/g, "номер ").replace(/[ \t]+/g, " ").trim());
     t = t.replace(/[A-Za-z]+(?:-[A-Za-z]+)?/g, (m) => latinWord(m));
     t = t.replace(/&/g, " и ").replace(/\+/g, " плюс ").replace(/=/g, " равно ").replace(/№/g, "номер ");

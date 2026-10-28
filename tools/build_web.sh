@@ -33,6 +33,31 @@ for n in (180, 192, 512):
     "background_color": "#0a0a0f", "theme_color": "#0a0a0f",
     "icons": [{"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
               {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]}, ensure_ascii=False, indent=1), encoding="utf-8")
+# Не запустилась или ошибка (жалоба 28.10: «веб-версия не работает совсем, не отвечает»): человеку — понятные слова,
+# сайту — короткий отчёт (браузер и текст ошибки, без переписки) → кабинет → «Здоровье» → «Веб-версия». Только ES5:
+# этот кусок должен работать и там, где сам app.js не разберётся.
+BOOT = r"""<script>(function () {
+  var sent = 0, ver = "{web}", errs = window.__dwrErrs = [];
+  function send(kind, msg) {
+    if (sent >= 3) return; sent++;
+    try { var b = JSON.stringify({ kind: kind, msg: String(msg).slice(0, 500), ver: ver }), u = "../cloud.php?p=/webfail";
+      if (navigator.sendBeacon) navigator.sendBeacon(u, new Blob([b], { type: "text/plain" })); else { var x = new XMLHttpRequest(); x.open("POST", u); x.send(b); } } catch (e) { }
+  }
+  window.addEventListener("error", function (e) {
+    var m = String(e.message || "ошибка"); if (/^Script error|ResizeObserver/.test(m)) return;
+    m += " @" + String(e.filename || "").split("/").pop().split("?")[0] + ":" + (e.lineno || 0);
+    errs.push(m); send(window.DEWIAR_STARTED ? "error" : "start", m);
+  });
+  window.addEventListener("load", function () { setTimeout(function () {
+    if (window.DEWIAR_STARTED) return;
+    if (!errs.length) send("start", "не запустилась, без ошибки");
+    var d = document.createElement("div"); d.id = "dwr-boot";
+    d.setAttribute("style", "position:fixed;left:16px;right:16px;bottom:24px;z-index:99;padding:16px 18px;border-radius:16px;background:#1d1b2e;color:#fff;font:15px/1.45 -apple-system,system-ui,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.4)");
+    d.innerHTML = "<b>Dewiar не запустился в этом браузере.</b><br>Обновите iOS или Safari до свежей версии — или откройте страницу в Chrome. Отчёт об ошибке уже ушёл нам.";
+    document.body.appendChild(d);
+  }, 5000); });
+})();</script>
+"""
 # страница: мост браузера — до app.js; версия у файлов — чтобы после обновления сайта браузер не взял старые из кэша
 html = (out / "index.html").read_text(encoding="utf-8")
 html = re.sub(r'(<(?:script src|link rel="stylesheet" href)=")([^"?]+\.(?:js|css))(")', lambda m: f'{m.group(1)}{m.group(2)}?v={web}{m.group(3)}', html)
@@ -42,7 +67,7 @@ head = ('<meta name="theme-color" content="#0a0a0f">\n<meta name="apple-mobile-w
         '<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
         '<meta name="apple-mobile-web-app-title" content="Dewiar">\n<meta name="description" content="Dewiar — голосовой ассистент с персонажами, в браузере без установки">\n'
         '<link rel="manifest" href="manifest.json">\n<link rel="icon" href="icon-192.png">\n<link rel="apple-touch-icon" href="icon-180.png">\n'
-        '<script>if ("serviceWorker" in navigator && location.protocol === "https:") addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>\n')
+        '<script>if ("serviceWorker" in navigator && location.protocol === "https:") addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>\n' + BOOT.replace("{web}", web))
 html = html.replace("</head>", head + "</head>", 1)
 html = html.replace('<html lang="ru">', '<html lang="ru" class="web">', 1)
 (out / "index.html").write_text(html, encoding="utf-8")

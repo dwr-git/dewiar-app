@@ -27,8 +27,8 @@ ok(B.refused("Нет, в этом я не помогу. Могу подсказ�
 ok("достоинство" in B.RULE and "не повод для отказа" in B.RULE, "правило: достоинство, но обычное — не повод отказывать")
 
 js = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
-m = re.search(r'const RUDE_RX = new RegExp\((.*), "i"\);', js)
-r = re.search(r'const REFUSED_RX = new RegExp\((.*), "i"\);', js)
+m = re.search(r'const RUDE_RX = (?:new RegExp|LBRX)\((.*), "i"\);', js)
+r = re.search(r'const REFUSED_RX = (?:new RegExp|LBRX)\((.*), "i"\);', js)
 ok(m and json.loads(m.group(1)) == B.DIRECT_RX.pattern and r and json.loads(r.group(1)) == B.REFUSED_RX.pattern,
    "на телефоне — те же выражения, что на компьютере")
 ok(json.dumps(B.RULE, ensure_ascii=False) in js and json.dumps(B.NOTE, ensure_ascii=False) in js, "и тот же текст правила")

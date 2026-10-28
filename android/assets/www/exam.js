@@ -375,7 +375,7 @@ function examChecks(sc, last, toolsAll, t0) {
     if (k.startsWith("any")) out.push({ name: "в ответе есть: " + v.join(" / "), ok: v.some(x => low.includes(x.toLowerCase())) });
     else if (k === "none") out.push({ name: "в ответе нет: " + v.join(" / "), ok: !v.some(x => low.includes(x.toLowerCase())) });
     else if (k === "regex") out.push({ name: "в ответе есть нужное число", ok: new RegExp(v, "i").test(last) });
-    else if (k === "num") { const n = examNum(v); out.push({ name: `в ответе есть число ${n}`, ok: new RegExp(`(?<!\\d)${n}(?!\\d)`).test(last) }); }
+    else if (k === "num") { const n = examNum(v); out.push({ name: `в ответе есть число ${n}`, ok: LBRX(`(?<!\\d)${n}(?!\\d)`).test(last) }); }
   }
   if (sc.alarm) {
     const w = sc.alarm, now = Date.now();
