@@ -112,6 +112,7 @@
   <button data-p="servers">Серверы</button>
   <button data-p="safety">Безопасность</button>
   <div class="grow"></div>
+  <button data-p="ideas" title="Что сделать дальше — предложите идею и голосуйте за чужие">Идеи Лиры<i class="ndot" id="id-dot"></i></button>
   <button data-p="about">О программе</button>
   <button class="chip" id="wlc-chip" title="Первые шаги">✨ Первые шаги</button>
   <div class="conn" id="conn"><i></i><span>нет связи с ядром</span></div>
@@ -949,7 +950,7 @@
   <section id="p-devices" class="wide">
     <div class="dv-top">
       <div><h1>Устройства</h1><p class="lead">Одна Лира на всех ваших компьютерах и телефонах: память, заметки, дела, платежи и свои персонажи — общие.
-        Новое устройство подключается кодом из 6 цифр — без ключей и паролей.</p></div>
+        Связать их можно двумя способами: через dewiar.pro — работает везде, или дома по Wi-Fi — без интернета. Без ключей и паролей: код на экране.</p></div>
     </div>
     <div class="dv-hero">
       <div class="dv-map" id="dv-map" aria-hidden="true"></div>
@@ -962,7 +963,18 @@
         <div class="switch slim"><div>Шифровать на устройстве<span>Облако видит только шифротекст; ключ знают ваши устройства.</span></div><label class="tg"><input type="checkbox" id="dv-e2e"><i></i></label></div>
       </div>
     </div>
-    <div class="dv-pair">
+    <div class="dv-ways" id="dv-ways">
+      <div class="dv-ways-h"><h2>Как связать устройства</h2>
+        <div class="dv-seg" role="tablist" aria-label="Способ синхронизации">
+          <button role="tab" type="button" data-way="cloud" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 18.5h9a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.4A3.3 3.3 0 0 0 7.5 18.5z"/></svg><span><b>Через dewiar.pro</b><small>везде, где есть интернет</small></span></button>
+          <button role="tab" type="button" data-way="home" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.2 14.6a4 4 0 0 1 5.6 0M10.8 16.6a1.6 1.6 0 0 1 2.4 0"/></svg><span><b>Дома по Wi-Fi</b><small>без интернета и dewiar.pro</small></span></button>
+        </div></div>
+      <p class="dv-way-note" data-for="cloud">Телефоны и компьютеры связываются через ваш вход в Dewiar — синхронизация идёт в дороге, на работе и дома.
+        Включите «Шифровать на устройстве» — и сайт видит только шифротекст.</p>
+      <p class="dv-way-note" data-for="home" hidden>Телефон связывается прямо с этим компьютером, когда вы дома в одной сети. В интернет ничего не уходит,
+        обмен зашифрован ключом из кода. Если у компьютера есть и dewiar.pro — он передаст правки телефона остальным вашим устройствам.</p>
+      <div class="dv-way" data-for="cloud">
+        <div class="dv-pair">
       <div class="dv-card" id="dv-give">
         <h2>Подключить ещё устройство</h2>
         <p class="hint" id="dv-give-hint">Покажите код другому компьютеру или телефону — он станет той же Лирой.</p>
@@ -980,6 +992,28 @@
           Своя модель здесь останется главной.</p>
         <div class="dv-in"><input type="text" id="dv-codein" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" aria-label="Код из 6 цифр"><button class="btn primary" id="dv-take-go" type="button">Подключить</button></div>
         <p class="res" id="dv-take-res"></p>
+      </div>
+    </div>
+      </div>
+      <div class="dv-way" data-for="home" hidden>
+    <div class="dv-card dv-home" id="dv-home">
+      <div class="dv-home-h">
+        <span class="dv-home-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.2 14.6a4 4 0 0 1 5.6 0M10.8 16.6a1.6 1.6 0 0 1 2.4 0"/></svg></span>
+        <div><h2>Телефон дома по Wi-Fi</h2>
+          <p class="hint">Включите — и покажите телефону код. Пока вы дома в одной сети, телефон и компьютер обмениваются сами;
+            вне дома правки копятся на телефоне и уходят, когда вернётесь.</p></div>
+        <label class="tg" title="Слушать домашнюю сеть"><input type="checkbox" id="dv-home-on" aria-label="Синхронизация с телефоном по Wi-Fi"><i></i></label>
+      </div>
+      <div class="dv-code" id="dv-home-code" hidden>
+        <div class="dv-qr" id="dv-home-qr"></div>
+        <div><b class="dv-home-t">Наведите на код камеру телефона</b>
+          <p class="hint">В приложении Dewiar: «Настройки» → «Устройства» → «Сканировать код компьютера». Телефон должен быть в том же Wi-Fi.</p>
+          <p class="hint" id="dv-home-left"></p></div>
+      </div>
+      <div class="dv-acts"><button class="btn primary" id="dv-home-go" type="button">Показать код для телефона</button></div>
+      <ul class="dv-hlist" id="dv-home-list" aria-label="Телефоны по Wi-Fi"></ul>
+      <p class="res" id="dv-home-res"></p>
+    </div>
       </div>
     </div>
     <div class="dv-card dv-brains" id="dv-brains">
@@ -1943,6 +1977,34 @@
     <h2 id="nw-title" tabindex="-1" autofocus>Что нового</h2><p class="nwsub" id="nw-sub"></p><div id="nw-list"></div>
     <div class="actions" style="margin:16px 0 0;justify-content:flex-end"><button class="btn primary" id="nw-ok">Понятно</button></div>
   </dialog>
+  <section id="p-ideas" class="wide">
+    <div class="id-hero">
+      <div class="id-bulb" aria-hidden="true"><svg viewBox="0 0 48 48"><defs><radialGradient id="idglow" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".55" stop-color="#ffc35c"/><stop offset="1" stop-color="#ff9a3d" stop-opacity="0"/></radialGradient></defs><circle cx="24" cy="20" r="19" fill="url(#idglow)" opacity=".55"/><path d="M24 7.5a11 11 0 0 0-6.6 19.8c1.3 1 2.1 2.4 2.1 4V33h9v-1.7c0-1.6.8-3 2.1-4A11 11 0 0 0 24 7.5z" fill="#fff6dc" stroke="#e8a13a" stroke-width="1.6"/><path d="M19.5 37h9M20.5 40.5h7" stroke="#b9852e" stroke-width="2" stroke-linecap="round"/><path d="M21 22.5l3 3 3-3M24 25.5V32" stroke="#e8a13a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><h1>Идеи Лиры</h1>
+        <p class="lead">Что Лире уметь дальше — решаем вместе. Поддержите голосом то, что нужно вам: чем больше голосов, тем раньше
+          возьмёмся. Нет вашей идеи — предложите, её увидит разработчик.</p></div>
+    </div>
+    <div class="id-compose">
+      <label class="id-q"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2V16h5v-.1c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>
+        <input id="id-q" maxlength="120" placeholder="Опишите идею — я сразу поищу похожие" aria-label="Ваша идея или поиск"></label>
+      <div class="id-sim" id="id-sim" hidden></div>
+      <div class="id-new" id="id-new" hidden>
+        <textarea id="id-body" rows="2" maxlength="2000" placeholder="Подробнее — зачем и как бы вы пользовались (необязательно)"></textarea>
+        <div class="id-acts"><button class="btn primary" id="id-send" type="button">Предложить идею</button><span class="hint" id="id-send-h"></span></div>
+      </div>
+      <p class="res" id="id-res"></p>
+    </div>
+    <div class="id-bar">
+      <div class="id-tabs" role="tablist" aria-label="Идеи">
+        <button role="tab" data-tab="plan" aria-selected="true">Будем делать <b id="id-n-plan"></b></button>
+        <button role="tab" data-tab="done" aria-selected="false">Сделано <b id="id-n-done"></b></button>
+        <button role="tab" data-tab="mine" aria-selected="false">Мои <b id="id-n-mine"></b></button>
+      </div>
+      <label class="id-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="id-find" placeholder="Поиск по идеям" aria-label="Поиск по идеям"></label>
+    </div>
+    <ul class="id-list" id="id-list" aria-live="polite"></ul>
+    <div class="id-pager" id="id-pager" role="navigation" aria-label="Страницы"></div>
+  </section>
   <section id="p-about">
     <h1 id="ab-title">Dewiar</h1>
     <p class="lead">Ядро работает в фоне, виджет и эта студия подключаются к нему.</p>
@@ -2148,5 +2210,6 @@
 <script src="studio/news.js"></script>
 <script src="studio/modes.js"></script>
 <script src="studio/watch.js"></script>
+<script src="studio/ideas.js"></script>
 </body>
 </html>

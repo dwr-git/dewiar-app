@@ -82,6 +82,9 @@ with sync_playwright() as p:
     ok("С «Рабочий»: Qwen домашний, Claude" in pg.inner_text("#dv-brains-res"), f"пришли мозги — видно, с какого устройства и какие: {pg.inner_text('#dv-brains-res')}")
     # без входа
     pg.evaluate("() => { _st = _nolog; return loadMyDevices(true); }"); pg.wait_for_timeout(400)
+    ok(pg.get_attribute("#dv-ways [data-way=home]", "aria-selected") == "true" and pg.is_visible("#dv-home"),
+       "без входа в Dewiar сразу открыт способ, который работает без него, — «Дома по Wi-Fi» (0.59)")
+    pg.click("#dv-ways [data-way=cloud]"); pg.wait_for_timeout(200)
     r = pg.evaluate("() => [document.querySelector('#dv-give-go').classList.contains('ghost'), document.querySelector('#dv-give-hint').textContent, document.querySelector('#dv-sync-st').textContent]")
     n = len(pg.evaluate("_calls"))
     pg.click("#dv-give-go"); pg.wait_for_timeout(200)

@@ -34,6 +34,7 @@ const ICONS = {
   const: '<path d="M6 3.5h9.5L19 7v13.5H6z"/><path d="M15 3.5V7h4"/><path d="M9 11h7M9 14h7M9 17h4.5"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   senior: '<path d="M12 20.5s-7.5-4.5-7.5-10a4.2 4.2 0 0 1 7.5-2.6 4.2 4.2 0 0 1 7.5 2.6c0 5.5-7.5 10-7.5 10z"/><path d="M8.5 12h2l1-2 1.6 4 1-2h1.4"/>',
+  ideas: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2V16h5v-.1c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/>',
   watch: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
   docs: '<path d="M6 3.5h8l4 4V13"/><path d="M14 3.5v4h4"/><path d="M6 3.5v17h6"/><path d="M9 9h4M9 12.5h5"/><circle cx="16" cy="16.5" r="3"/><path d="m18.2 18.7 2.3 2.3"/>',
   dw: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/><path d="M12 3.5v5M12 15.5v5M3.5 12h5M15.5 12h5"/>',
@@ -57,7 +58,7 @@ $$("main section[id^='p-']").forEach(s => { const i = ICONS[s.id.slice(2)], h = 
 /* «?» у заголовка каждого раздела — как он работает, как настроить, что сказать голосом */
 // раздел студии → раздел руководства на сайте (server/dwrapp/guide.php, текст — data/guide.json)
 const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
-const GUIDE_OF = { devices: "sync", personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", music: "music", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
+const GUIDE_OF = { ideas: "ideas", devices: "sync", personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", music: "music", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
   me: "notes-memory", folder: "folder-docs", docs: "my-docs", senior: "senior", watch: "watch", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
   hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting" };
 function showHelp(k) {

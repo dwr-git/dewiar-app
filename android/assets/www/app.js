@@ -1742,7 +1742,7 @@ function privacyWhere() {
 function privacyRule() {
   const P = window.DEWIAR_PRIVACY; if (!P) return "";
   return "ДАННЫЕ И КОНФИДЕНЦИАЛЬНОСТЬ. Спросят, где хранятся данные, кто видит разговоры, как защищены персональные данные, — ответь спокойно и по сути, своими словами, в 2–4 предложениях, из этих фактов: "
-    + P.items.map(([t, x]) => `${t}: ${x}`).join(" ") + ` Сейчас у этого пользователя ты думаешь ${privacyWhere()}; синхронизация ${S.sync.on && syncCred() ? "включена" : "выключена"}.`
+    + P.items.map(([t, x]) => `${t}: ${x}`).join(" ") + ` Сейчас у этого пользователя ты думаешь ${privacyWhere()}; синхронизация ${S.sync.on && syncChan() ? "включена" : "выключена"}.`
     + " Подробно — в настройках («Ещё» → «Ваши данные»). Не выдумывай того, чего здесь нет: сертификатов, законов, сроков хранения.";
 }
 /* Веб-версия (браузер на iPhone, Mac, любом компьютере): чего браузер не умеет — инструментов у модели нет (WEB_NO_TOOLS),
@@ -1815,7 +1815,7 @@ function systemPrompt() {
   const mp = mindPrompt(); if (mp) parts.push(mp.trim());
   // «что было недавно» растёт с каждой репликой — в справке к вопросу (turnContext), чтобы подсказка не менялась
   try { parts.push(donePrompt()); } catch (e) { }
-  if (S.sync.on && syncCred() && pcSeen()) parts.push("Большую задачу (исследование с отчётом, документ, презентация, работа с файлами или кодом) не делай в разговоре — передай компьютеру пользователя (start_task) и скажи, что взялся: ход и итог появятся здесь, в «Мой день» → «Сделанное».");
+  if (S.sync.on && syncChan() && pcSeen()) parts.push("Большую задачу (исследование с отчётом, документ, презентация, работа с файлами или кодом) не делай в разговоре — передай компьютеру пользователя (start_task) и скажи, что взялся: ход и итог появятся здесь, в «Мой день» → «Сделанное».");
   try { parts.push(clPrompt()); } catch (e) { }
   try { parts.push(wkPrompt()); } catch (e) { }
   try { parts.push(bsPrompt()); } catch (e) { }
@@ -3478,7 +3478,7 @@ function toolSpecs() {
     parameters: O({ question: STR, base: STR }, ["question"]) });
   if (Object.keys(mind().tasks || {}).length) t.push({ name: "remove_task", description: "Удалить большую задачу из «Мой день» → «Сделанное» (и на компьютере): «удали задачу …», «хватит напоминать про задачу». name — часть названия.", parameters: O({ name: STR }, ["name"]) },
     { name: "answer_task", description: "Ответить на вопрос задачи, которая «ждёт ответа»: text — ответ пользователя; name — часть названия (пусто — единственная ждущая).", parameters: O({ name: STR, text: STR }, ["text"]) });
-  if (S.sync.on && syncCred() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное»."
+  if (S.sync.on && syncChan() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное»."
       + devComputersText() + " on — на каком компьютере, если назвали («на рабочем»); пусто — любой свободный. Тот не на связи — спроси пользователя и вызови снова с if_off: wait (сделать, когда включится) или cloud (сейчас в облаке).",
     parameters: O({ title: STR, goal: STR, on: STR, if_off: { type: "string", enum: ["", "wait", "cloud"] } }, ["goal"]) });
   if ((S.home.token || haOn()) && !D.web) t.push({ name: "smart_home", description: "Умный дом (Яндекс и Home Assistant): action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
@@ -3620,7 +3620,7 @@ async function runTool(name, a) {
       if (/^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?|shorts\/|live\/)|youtu\.be\/|rutube\.ru\/(?:video|shorts)\/|vk\.com\/video|vkvideo\.ru\/video)/i.test(url)) {
         const desc = await readPage(url, a.find || "");
         return desc + "\n\n(Это только страница видео — описание, без текста ролика. Скажи об этом честно и не выдумывай содержание. "
-          + (S.sync.on && syncCred() && pcSeen() ? "Конспект по самому ролику сделает компьютер: предложи передать ему задачу (start_task: конспект видео по ссылке, сохранить заметкой со ссылкой)." : "Конспект по самому ролику умеет Dewiar на компьютере.") + ")";
+          + (S.sync.on && syncChan() && pcSeen() ? "Конспект по самому ролику сделает компьютер: предложи передать ему задачу (start_task: конспект видео по ссылке, сохранить заметкой со ссылкой)." : "Конспект по самому ролику умеет Dewiar на компьютере.") + ")";
       }
       return await readPage(url, a.find || "");
     }
@@ -5590,7 +5590,7 @@ function mdLite(t) {          // Markdown дневника → HTML: снача�
 /* Задачи (большая работа на компьютере или в облаке) — в «Мой день» → «Сделанное»: там их и ищут, рядом со сделанным
    на телефоне. Поручить — taskToPc; ход и итог приходят синхронизацией (mind().tasks). */
 function tasksHtml() {
-  const m = mind(), on = !!(S.sync.on && syncCred());
+  const m = mind(), on = !!(S.sync.on && syncChan());
   const ts = Object.entries(m.tasks).sort((a, b) => String(b[1].updated).localeCompare(String(a[1].updated))), q = qGet("taskq");
   if (!on) return `<div class="card"><b>Большие задачи</b><p class="hint">Презентации, отчёты, исследования делает компьютер с Dewiar или облако Dewiar — нужна синхронизация: тот же ключ Dewiar или вход аккаунтом, что на компьютере.</p><button class="btn p" id="so-sync">Открыть настройки</button></div>`;
   return `<div class="card"><label class="f"><span>Поручить большую задачу</span><textarea id="tk-goal" rows="2" placeholder="Например: «сделай презентацию о погоде на завтра» или «сравни 5 ноутбуков до 1500 рублей»"></textarea></label>
@@ -5632,7 +5632,7 @@ function wireTasks(box, again) {
 }
 function renderSoul() {
   if (!["diary", "soul", "const"].includes(soulTab)) soulTab = "diary";      // «Задачи» переехали в «Мой день» → «Сделанное»
-  const box = $("#soul-body"), m = mind(), on = !!(S.sync.on && syncCred());
+  const box = $("#soul-body"), m = mind(), on = !!(S.sync.on && syncChan());
   $$("#soul-tabs button").forEach(x => x.classList.toggle("on", x.dataset.t === soulTab));
   const off = on ? "" : `<div class="card"><b>Нужна синхронизация</b><p class="hint">Дневник и душу персонажей ведёт компьютер с Dewiar — они приходят сюда через синхронизацию. Нужен тот же ключ Dewiar или вход аккаунтом, что на компьютере.</p><button class="btn p" id="so-sync">Открыть настройки</button></div>`;
   if (soulTab === "diary") {
@@ -5883,6 +5883,8 @@ function renderSettings() {
       <b>${esc((info.device || "Телефон") + " · " + (info.version || "") + " · №" + devId().slice(-4))}</b>. Нет в списке — нажмите «Отметиться в кабинете»: появится через минуту.</p>
       <button class="btn w" id="dev-ping">Отметиться в кабинете</button><div class="res" id="dev-res"></div></div>`);
     const perms = [[MIC, "Микрофон"], [NOTIF, "Уведомления (напоминания)"], [CONTACTS, "Контакты (звонки по имени)"], [CALLP, "Звонки без лишнего нажатия"]];
+    if (!kidsOn()) h.push(`<h3>Идеи Лиры</h3><div class="card idcard"><div class="row2"><span class="idbulb" aria-hidden="true">${IDEA_SVG}</span><p class="hint" style="margin:0;flex:1">Что Лире уметь дальше — решаем вместе: поддержите голосом нужное или предложите своё.</p></div>
+      <button class="btn w" id="ideas-open" style="margin-top:10px">Открыть идеи</button></div>`);
     h.push(`<h3>Сообщить о проблеме</h3><div class="card" id="bug-card"><p class="hint" style="margin-top:0">Напишите пару слов — разработчик увидит их вместе со снимком экрана и журналом работы (без ключей и паролей), ответит сюда, а когда исправит — я скажу. Голосом тоже можно: «сообщи об ошибке: …».</p>
       ${bugSnap && Date.now() - bugSnap.ts < 30 * 6e4 ? `<div class="bugsnap"><img src="data:image/jpeg;base64,${bugSnap.b64}" alt="Снимок экрана" id="bug-img"><label class="chk"><input type="checkbox" id="bug-use" checked><span>Приложить снимок экрана — каким он был до настроек</span></label></div>` : ""}
       <div class="bugpick" id="bug-pickbox">${bugPickHtml()}</div>
@@ -6155,7 +6157,7 @@ function syncKeyAdopt(kb64, at) {
   const cur = syncKeyGet(); if (cur && (cur.k === kb64 || (+at || 0) <= cur.at)) return false;
   prefSet("sync_key", JSON.stringify({ k: DC().b64e(k), at: +at || Date.now() })); return true;
 }
-const e2eKey = () => { const c = S.sync && S.sync.e2e ? syncKeyGet() : null; return c ? DC().b64d(c.k) : null; };
+const e2eKey = () => { const c = S.sync && S.sync.e2e && !homeOn() ? syncKeyGet() : null; return c ? DC().b64d(c.k) : null; };   // по Wi-Fi весь обмен и так зашифрован
 const anyKey = () => { const c = syncKeyGet(); return c ? DC().b64d(c.k) : null; };
 const e2eWaiting = () => { const st = syncSt(); return !!(st && st.e2eRemote) && !syncKeyGet(); };
 const e2eSealable = (kind, id, data) => kind + ":" + id !== "mind:e2e" && E2E_KINDS.includes(kind) && data && typeof data === "object" && Object.keys(data).length > 0 && !(kind === "taskreq" && data.cloud);
@@ -6179,6 +6181,60 @@ function syncCred() {
   return null;
 }
 const syncSt = () => { try { return JSON.parse(prefGet("sync") || "") || null; } catch (e) { return null; } };
+/* «Дома по Wi-Fi» (0.59, core/homehub.py): синхронизация напрямую с компьютером дома, без dewiar.pro. Подключение — код с
+   экрана компьютера («Устройства» → «Дома по Wi-Fi»): dewiar://home?u=адреса&t=номер ключа&k=ключ&h=узел&n=имя.
+   S.sync.home {u: [адреса], t, k, h, n}. Каждый запрос — seal(K, {ts, n, body}) с заголовком X-Home, ответ — seal(K, …):
+   соседи по Wi-Fi не прочтут и не подделают. Компьютер не в той же сети — обмен ждёт; правки копятся и уйдут потом. */
+/* Чем синхронизироваться: компьютер по Wi-Fi (если подключён) или облако (syncCred). Облачное — «Близкие», почта своих
+   устройств, сотрудники, отчёты — по-прежнему только через syncCred(). */
+function syncChan() {
+  if (homeOn()) { const h = S.sync.home; return { home: true, token: "home:" + h.h + ":" + h.t, link: "", base: (h.u || [])[0] || "", via: `напрямую по Wi-Fi с «${h.n || "компьютер"}»` }; }
+  return syncCred();
+}
+const homeOn = () => !!(S.sync && S.sync.home && S.sync.home.t && S.sync.home.k);
+function homeLinkParse(link) {
+  const m = /^dewiar:\/\/home\?(.+)$/.exec(String(link || "").trim()); if (!m) return null;
+  const q = {}; m[1].split("&").forEach(p => { const i = p.indexOf("="); if (i > 0) q[p.slice(0, i)] = decodeURIComponent(p.slice(i + 1)); });
+  const u = String(q.u || "").split(",").filter(x => /^http:\/\/[\d.]+:\d+\/$/.test(x));
+  if (!u.length || !/^[0-9a-f]{6,20}$/.test(q.t || "") || !q.k) return null;
+  try { if (DC().b64d(q.k).length !== 32) return null; } catch (e) { return null; }
+  return { u, t: q.t, k: q.k, h: String(q.h || "").replace(/[^0-9a-f]/g, "").slice(0, 20), n: String(q.n || "Компьютер").slice(0, 40) };
+}
+async function homePost(c, body) {
+  const h = S.sync.home, k = DC().b64d(h.k), urls = [c.base].concat((h.u || []).filter(x => x !== c.base));
+  let last = null;
+  for (const u of urls) {
+    const env = { ts: Date.now(), n: DC().b64e(DC().randomBytes(12)), body };
+    let r; try { r = await http("POST", u + "sync", { headers: { "X-Home": h.t, "Content-Type": "text/plain" }, body: DC().b64e(DC().seal(k, DC().utf8(JSON.stringify(env)))), timeout: 30000 }); }
+    catch (e) { last = e; continue; }
+    if (r.status >= 400) { let d = {}; try { d = JSON.parse(r.body || "{}"); } catch (e) { } return { status: r.status, d }; }
+    let d; try { d = JSON.parse(DC().fromUtf8(DC().unseal(k, DC().b64d(String(r.body || "").trim())))); }
+    catch (e) { return { status: 502, d: { error: { message: "ответ компьютера не расшифровался — подключите телефон заново" } } }; }
+    if (u !== h.u[0]) { h.u = [u].concat(h.u.filter(x => x !== u)); saveS(); }      // этот адрес ответил — он первый
+    if (d.hub && Array.isArray(d.hub.urls) && d.hub.urls.length) { const nu = [h.u[0]].concat(d.hub.urls).filter((x, i, a) => a.indexOf(x) === i).slice(0, 6);
+      if (nu.join() !== h.u.join()) { h.u = nu; saveS(); } if (d.hub.name && d.hub.name !== h.n) { h.n = d.hub.name; saveS(); } }
+    return { status: 200, d };
+  }
+  throw Object.assign(new Error(`компьютер «${h.n || "дома"}» не в этой сети — синхронизируется, когда телефон и компьютер будут в одном Wi-Fi`), { home: true, net: true, cause: last });
+}
+async function homeClaim(link) {
+  const p = homeLinkParse(link); if (!p) throw new Error("это не код компьютера для синхронизации по Wi-Fi");
+  const was = S.sync && S.sync.home;
+  S.sync = Object.assign({}, S.sync, { home: p, on: true }); saveS();
+  try { await syncRun(true); if (syncStatus.ok !== true) throw new Error(syncStatus.error || "компьютер не ответил"); }
+  catch (e) { S.sync = Object.assign({}, S.sync, { home: was || null }); saveS(); throw e; }
+  plog("info", "🏠 подключено к компьютеру по Wi-Fi: " + p.n);
+  return p;
+}
+function homeForget() { S.sync = Object.assign({}, S.sync, { home: null }); saveS(); syncStatus = { ok: null, at: 0, error: "", devices: [], counts: {} }; DEVS = null; syncSoon(); }
+async function homeClaimFlow(link) {
+  if (kidsOn()) { showBot("В детском режиме устройства подключает взрослый.", "err"); return; }
+  const p = homeLinkParse(link); if (!p) { showBot("Это не код компьютера для синхронизации по Wi-Fi.", "err"); return; }
+  if (!confirm(`Синхронизировать этот телефон с компьютером «${p.n}» напрямую по Wi-Fi? Память, заметки и дела станут общими — без интернета и dewiar.pro.`)) return;
+  showBot("Подключаюсь к компьютеру…");
+  try { await homeClaim(link); showBot(`Готово — телефон и «${p.n}» теперь одна Лира. Синхронизация идёт сама, когда вы дома в одном Wi-Fi.`); say("Готово!"); }
+  catch (e) { showBot("Не подключилось: " + (e.message || e) + ". Телефон и компьютер должны быть в одном Wi-Fi.", "err"); }
+}
 function syncHash(o) {                         // FNV-1a по каноническому JSON — отпечаток «как запись лежит у нас»
   const canon = (x) => Array.isArray(x) ? "[" + x.map(canon).join(",") + "]" : x && typeof x === "object"
     ? "{" + Object.keys(x).sort().map(k => JSON.stringify(k) + ":" + canon(x[k])).join(",") + "}" : JSON.stringify(x === undefined ? null : x);
@@ -6264,12 +6320,12 @@ function recall(days, query) {
   return (l.length ? "Разговоры:\n" + l.join("\n") : "Разговоров за это время не нашлось.") + (made.length ? "\n\nСделано на телефоне: " + made.join(", ") : "");
 }
 function dayTurn(you, bot) {
-  if (!syncCred() || !S.sync.on || !String(you || "").trim()) return;
+  if (!syncChan() || !S.sync.on || !String(you || "").trim()) return;
   const q = qGet("dayq"); q.push({ id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), ts: Date.now(), who: persona().name, you: String(you).slice(0, 1500), bot: String(bot || "").slice(0, 2500) });
   qSet("dayq", q); syncSoon();
 }
 function taskToPc(title, goal, to) {
-  if (!syncCred() || !S.sync.on) throw new Error("передать задачу компьютеру можно, когда включена синхронизация (Настройки → Ещё)");
+  if (!syncChan() || !S.sync.on) throw new Error("передать задачу компьютеру можно, когда включена синхронизация (Настройки → Ещё)");
   // cloud — компьютера нет на связи: задачу сделает облако Dewiar (исполнитель на сервере, см. core/cloudrunner.py)
   const q = qGet("taskq"); q.push(Object.assign({ id: "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: String(title || goal).slice(0, 80), goal: String(goal || title).slice(0, 4000), ts: Date.now() },
     to ? { to, from: devMyName() } : { cloud: true }));       // to — названный компьютер (0.56): облако и другие компьютеры её не берут
@@ -6406,7 +6462,7 @@ async function syncRun(manual) {
   // возвращалось людям как своё (отчёт №52, 14.10). Следы прошлых экзаменов убирает examCleanCheck (exam.js).
   if (SANDBOX) return;
   if ((S.tg || {}).linked && Date.now() - (S.tg.at || 0) > 600000) tgSync();      // ключ и персонаж для бота — раз в 10 минут
-  if (syncBusy) return; const c = syncCred();
+  if (syncBusy) return; const c = syncChan();
   if (!c || !S.sync.on) { syncStatus = Object.assign(syncStatus, { ok: null, error: "" }); return; }
   syncBusy = true;
   try {
@@ -6428,9 +6484,10 @@ async function syncRun(manual) {
     const hdr = { Authorization: "Bearer " + c.token, "Content-Type": "application/json" };
     if (c.link && c.link !== c.token) hdr["X-Sync-Link"] = c.link;
     for (let round = 0; round < 20; round++) {
-      const r = await http("POST", c.base + "?p=/sync", { headers: hdr, body, timeout: 30000 });
-      try { d = JSON.parse(r.body || "{}"); } catch (e) { d = {}; }
-      if (r.status >= 400) throw new Error((d.error && d.error.message) || "облако ответило " + r.status);
+      let status;
+      if (c.home) ({ status, d } = await homePost(c, body));
+      else { const r = await http("POST", c.base + "?p=/sync", { headers: hdr, body, timeout: 30000 }); status = r.status; try { d = JSON.parse(r.body || "{}"); } catch (e) { d = {}; } }
+      if (status >= 400) throw new Error((d.error && d.error.message) || (c.home ? "компьютер ответил " : "облако ответило ") + status);
       const srv = d.kinds || ["reminder", "note", "money", "memory"];
       const qdone = { dayturn: [], taskreq: [], task: [] };
       body.changes.forEach(x => { if (!srv.includes(x.kind)) return;
@@ -6469,16 +6526,16 @@ async function syncRun(manual) {
     if (got) { const s2 = syncSnapshot(); for (const k in st.idx) { const e = st.idx[k]; if (e.h === null && !e.del && !e.skip && k in s2) e.h = syncHash(s2[k]); } }
     if (ek) { delete st.resealAll; changes.forEach(x => { const e = st.idx[x.kind + ":" + x.id]; if (e) delete e.reseal; }); }
     prefSet("sync", JSON.stringify(st));
-    if (st.e2eRemote && !syncKeyGet() && Date.now() - (window._keyAsk || 0) > 600000) { window._keyAsk = Date.now(); ownShare(["sync_key"]).catch(() => { }); }   // в облаке зашифрованное, а ключа нет — просим у своих (раз в 10 мин)
+    if (!c.home && st.e2eRemote && !syncKeyGet() && Date.now() - (window._keyAsk || 0) > 600000) { window._keyAsk = Date.now(); ownShare(["sync_key"]).catch(() => { }); }   // в облаке зашифрованное, а ключа нет — просим у своих (раз в 10 мин)
     syncStatus = { ok: true, at: Date.now(), error: "", devices: d.devices || [], all: d.all || null, counts: { sent: changes.length, got }, via: c.via };
     if (d.all) { DEVS = d.all; try { devFresh(); bsBoot(); } catch (e) { } }
-    if (+d.box > (+clLoad().cursor || 0)) setTimeout(() => clPoll().catch(() => { }), 0);   // в ящике своих устройств новое — сразу
+    if (!c.home && +d.box > (+clLoad().cursor || 0)) setTimeout(() => clPoll().catch(() => { }), 0);   // в ящике своих устройств новое — сразу
     if (got && qGet("natt_in").length) setTimeout(() => nattIn().catch(() => { }), 0);    // пришла заметка, которую ждали фото с компьютера
     if (got && $("#sh-day") && $("#sh-day").classList.contains("on") && document.activeElement !== $("#tk-goal")) renderDay();
     if (got && $("#sh-soul") && $("#sh-soul").classList.contains("on") && soulTab === "diary") renderSoul();
   } catch (e) {
     syncStatus = Object.assign(syncStatus, { ok: false, at: Date.now(), error: e.message, via: c.via });
-    if (manual) toast("Синхронизация: " + e.message);
+    if (manual && !e.home) toast("Синхронизация: " + e.message);
   } finally { syncBusy = false; }
 }
 function syncSoon() { if (SANDBOX) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncRun(false), 3000); }   // экзамен — без обмена   // несколько правок подряд — один обмен
@@ -6499,7 +6556,7 @@ function widgetCard() {
       : `<p class="hint" style="margin:8px 0 0">Добавить: долгое нажатие на рабочем столе → «Виджеты» → Dewiar → «Записать».</p>`) : "");
 }
 function syncCard() {                             // 0.56: синхронизация и подключение устройств — во вкладке «Устройства» (devices.js)
-  const c = syncCred(), st = syncStatus, t = st.at ? new Date(st.at) : null;
+  const c = syncChan(), st = syncStatus, t = st.at ? new Date(st.at) : null;
   return `<p class="hint" style="margin-top:0">${!c ? "Телефон и компьютер — одна Лира: напоминания, заметки, расходы и память общие. Подключается кодом из 6 цифр."
     : !S.sync.on ? "Синхронизация выключена." : st.ok === false ? "Не синхронизировалось: " + esc(st.error) : t ? `Синхронизировано в ${pad(t.getHours())}:${pad(t.getMinutes())}.` : "Синхронизация включена."}</p>
     <button class="btn w p" id="sy-open">Устройства и синхронизация</button>`;
@@ -7468,6 +7525,7 @@ function handleIntent(e) {
   }
   else if (e.action === "close") openClose("");                                     // нажали уведомление «Близких»
   else if (e.action === "work") openWork("");                                       // уведомление «Работы» (CloseWatch)
+  else if (e.action === "link" && /^dewiar:\/\/home\?/.test(e.url || "")) homeClaimFlow(e.url);   // синхронизация по Wi-Fi (0.59)
   else if (e.action === "link" && /^dewiar:\/\/pair/.test(e.url || "")) devClaimFlow(e.url);      // код устройства (download.php?pair=)
   else if (e.action === "link" && /^dewiar:\/\/work/.test(e.url || "")) wkLink(e.url);         // приглашение на работу (download.php?work=)
   else if (e.action === "news") { closeSheets(); annCheck(true); }                   // уведомление объявления (CloseLive)
@@ -7903,6 +7961,7 @@ function scanResult(txt, format) {
   const t = String(txt || "").trim();
   plog("info", "📷 код (" + (format || "?") + "): " + clip(t, 80));
   if (wkIsLink(t)) return wkLink(t);                      // печать «Работы» от руководителя (work.js)
+  if (/^dewiar:\/\/home\?/.test(t)) return homeClaimFlow(t);     // «Дома по Wi-Fi» с экрана компьютера
   if (/^dewiar:\/\/pair|download\.php\?(?:.*&)?pair=\d{6}/.test(t)) return devClaimFlow(t);   // «Подключить ещё устройство» (devices.js)
   if (/^dewiar:\/\/close|[?&]close=/.test(t)) return clAcceptLink(t);
   if (/^dewiar:\/\/ref|download\.php\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }

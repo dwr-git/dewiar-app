@@ -67,8 +67,8 @@ function dvRender() {
     const live = dvOn(x), app = x.app || "pc";
     return `<li class="${live ? "on" : ""}${x.me ? " me" : ""}"><span class="dv-ic ${escH(app)}"><svg viewBox="0 0 24 24">${DV_IC[app] || DV_IC.pc}</svg></span>`
       + `<div class="dv-row"><b>${escH(x.name || DV_APP[app])}${x.me ? '<em class="dv-chip">это устройство</em>' : ""}</b>`
-      + `<small>${DV_APP[app] || "Устройство"}${x.ver ? " · Dewiar " + escH(x.ver) : ""} · <span class="dv-dot"></span>${x.me ? "здесь" : dvAgo(x.seen)}</small></div>`
-      + (x.me || app === "cloud" ? "" : `<button class="btn small" data-forget="${escH(x.id)}" type="button" title="Убрать из списка — выйдет на связь снова, появится снова">Убрать</button>`) + `</li>`;
+      + `<small>${DV_APP[app] || "Устройство"}${x.home ? " · по Wi-Fi" : ""}${x.ver ? " · Dewiar " + escH(x.ver) : ""} · <span class="dv-dot"></span>${x.me ? "здесь" : dvAgo(x.seen)}</small></div>`
+      + (x.me || app === "cloud" || x.home ? "" : `<button class="btn small" data-forget="${escH(x.id)}" type="button" title="Убрать из списка — выйдет на связь снова, появится снова">Убрать</button>`) + `</li>`;
   }).join("") || `<li class="dv-empty">Пока только это устройство. Подключите ещё одно кодом — и оно появится здесь.</li>`;
   $$("#dv-list [data-forget]").forEach(b => b.onclick = async () => {
     const x = devs.find(y => y.id === b.dataset.forget);
@@ -76,6 +76,15 @@ function dvRender() {
     try { DV = await core.call("device_forget", { id: b.dataset.forget }); dvRender(); toast("Убрано из списка"); } catch (e) { toast(e.message, 3500); }
   });
   dvMap(devs);
+  if (d.home) dvHome(d.home);
+  dvWay(DV_WAY || ((d.home && d.home.on) || !d.can_pair ? "home" : "cloud"));
+  const h = d.home || {};
+  if (!st.available && h.on) {                             // входа в Dewiar нет, но телефон по Wi-Fi — синхронизация идёт
+    const ht = h.at ? new Date(h.at * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
+    $("#dv-sync-st").className = "dv-st " + (h.ok === false ? "bad" : h.ok ? "ok" : "");
+    $("#dv-sync-st").textContent = h.ok === false ? "По Wi-Fi не синхронизировалось: " + h.error : (h.phones || []).length ? `Телефон по Wi-Fi${ht ? " · обмен в " + ht : ""}` : "Дома по Wi-Fi: включено — покажите телефону код ниже.";
+    $("#dv-via").textContent = "через dewiar.pro — нужен вход; по Wi-Fi — включено ниже";
+  }
 }
 
 /* карта: Лира в середине, устройства по кругу; на связи — яркая линия и точка, давно не было — пунктир */
@@ -146,6 +155,66 @@ $("#dv-e2e").onchange = async (ev) => {
   const on = ev.target.checked;
   if (!on && !await ask("Выключить шифрование на этом компьютере? Свои изменения он снова будет отправлять открытыми. На других устройствах выключите отдельно.")) { ev.target.checked = true; return; }
   try { await core.call("sync_e2e", { on }); } catch (x) { toast(x.message); } loadMyDevices(false);
+};
+
+/* «Телефон по Wi-Fi — без dewiar.pro» (0.59, core/homehub.py): переключатель — компьютер слушает домашнюю сеть; «Показать
+   код» — QR со ссылкой dewiar://home (адреса, номер ключа, ключ) на 10 минут; подключился — телефон в списке («Отключить»
+   — ключ удалён). Ядро: home_get, home_set {on}, home_pair, home_forget {tid}. */
+let DV_HOME = null, DV_HTICK = 0, DV_HPOLL = 0;
+function dvHome(h) {
+  if (!h || !$("#dv-home")) return;
+  DV_HOME = h;
+  $("#dv-home-on").checked = !!h.on; $("#dv-home").classList.toggle("on", !!h.on);
+  const t = h.at ? new Date(h.at * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
+  const r = $("#dv-home-res");
+  if (!r.dataset.keep) { r.className = "res" + (h.on && h.ok === false ? " bad" : "");
+    r.textContent = !h.on ? "" : !h.running ? "Не получилось слушать сеть — " + (h.error || "порт занят") : !h.ips.length ? "Этот компьютер сейчас не в домашней сети."
+      : h.ok === false ? "Не синхронизировалось: " + h.error
+      : `Включено${t ? " · обмен в " + t : ""} · адрес компьютера в сети: ${h.ips[0]}${h.win && !(h.phones || []).length ? ". Если Windows спросит про доступ к сети — разрешите для частной сети." : ""}`; }
+  $("#dv-home-list").innerHTML = (h.phones || []).map(p => { const on = Date.now() / 1000 - (p.seen || 0) < DV_ONLINE;
+    return `<li class="${on ? "on" : ""}"><span class="dv-ic phone"><svg viewBox="0 0 24 24">${DV_IC.phone}</svg></span><div class="dv-row"><b>${escH(p.name || "Телефон")}</b>`
+      + `<small><span class="dv-dot"></span>${on ? "на связи сейчас" : dvAgo(p.seen)}</small></div><button class="btn small" type="button" data-hforget="${escH(p.tid)}">Отключить</button></li>`; }).join("");
+  $$("#dv-home-list [data-hforget]").forEach(b => b.onclick = async () => {
+    const p = (h.phones || []).find(x => x.tid === b.dataset.hforget);
+    if (!await ask(`Отключить «${p ? p.name : "телефон"}»? Он больше не сможет синхронизироваться с этим компьютером, пока не отсканирует код заново. Его данные останутся у него.`, { ok: "Отключить" })) return;
+    try { dvHome(await core.call("home_forget", { tid: b.dataset.hforget })); toast("Телефон отключён"); } catch (e) { toast(e.message); }
+  });
+}
+/* способ связи: вкладки «Через dewiar.pro» / «Дома по Wi-Fi»; по умолчанию — включённый (Wi-Fi включён или входа в Dewiar нет) */
+let DV_WAY = null;
+try { DV_WAY = localStorage.getItem("dv-way"); } catch (e) { }
+function dvWay(w, user) {
+  if (!w) return;
+  if (user) { DV_WAY = w; try { localStorage.setItem("dv-way", w); } catch (e) { } }
+  $$("#dv-ways [data-way]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.way === w)));
+  $$("#dv-ways [data-for]").forEach(el => { el.hidden = el.dataset.for !== w; });
+}
+$$("#dv-ways [data-way]").forEach(b => b.onclick = () => dvWay(b.dataset.way, true));
+function dvHomeCodeHide() { clearInterval(DV_HTICK); clearInterval(DV_HPOLL); $("#dv-home-code").hidden = true; $("#dv-home-go").textContent = "Показать код для телефона"; }
+$("#dv-home-on").onchange = async (e) => {
+  const on = e.target.checked;
+  if (!on && !await ask("Выключить синхронизацию с телефоном по Wi-Fi? Телефоны перестанут получать изменения с этого компьютера. Данные останутся и там, и здесь.", { ok: "Выключить" })) { e.target.checked = true; return; }
+  try { dvHome(await core.call("home_set", { on })); if (!on) dvHomeCodeHide(); } catch (x) { toast(x.message, 4000); e.target.checked = !on; }
+};
+$("#dv-home-go").onclick = async (ev) => {
+  const r = $("#dv-home-res"); ev.target.disabled = true;
+  try {
+    const h = await core.call("home_pair"); dvHome(h);
+    const p = h.pair, until = p.until * 1000, known = new Set((h.phones || []).map(x => x.tid + ":" + x.seen));
+    $("#dv-home-qr").innerHTML = typeof qrSvg === "function" ? qrSvg(p.link) : "";
+    $("#dv-home-code").hidden = false; ev.target.textContent = "Новый код";
+    const tick = () => { const s = Math.round((until - Date.now()) / 1000); if (s <= 0) { dvHomeCodeHide(); r.textContent = "Код устарел — покажите новый."; return; }
+      $("#dv-home-left").textContent = `Код действует ещё ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}.`; };
+    clearInterval(DV_HTICK); DV_HTICK = setInterval(tick, 1000); tick();
+    clearInterval(DV_HPOLL);
+    DV_HPOLL = setInterval(async () => {                 // подключился — видно сразу
+      if (!$("#p-devices").classList.contains("cur")) { clearInterval(DV_HPOLL); return; }
+      let x; try { x = await core.call("home_get"); } catch (e) { return; }
+      const fresh = (x.phones || []).find(q => q.tid === p.tid);
+      dvHome(x);
+      if (fresh) { dvHomeCodeHide(); toast(`Подключился «${fresh.name || "телефон"}» — теперь это одна Лира`, 4000); loadMyDevices(false); }
+    }, 3000);
+  } catch (e) { r.className = "res bad"; r.textContent = e.message; } finally { ev.target.disabled = false; }
 };
 
 /* «Мозги с другого устройства»: просьба своим устройствам (конвертом, сквозное шифрование); кто на связи — пришлёт свои

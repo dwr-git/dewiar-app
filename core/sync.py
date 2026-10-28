@@ -117,14 +117,31 @@ class SyncError(Exception):
     pass
 
 
+class FanEvent(threading.Event):
+    """«Есть свои правки — обменяться скорее»: будит и облачную синхронизацию, и домашнюю (HomeSync), если она есть."""
+    def __init__(self):
+        super().__init__()
+        self.also = []
+
+    def set(self):
+        super().set()
+        for e in self.also:
+            e.set()
+
+
 class Sync:
+    HOME = False
+
+    def _creds(self):
+        return self.host.credentials()
+
     def __init__(self, host):
         """host: reminders, money, workspace, credentials() -> (token, link_token, cloud_url), device_name(), push();
         по желанию soul, diary, tasks, obsidian — без них соответствующие виды просто не собираются."""
         self.host = host
         self.path = STATE_DIR / "sync.json"
         self._lock = threading.Lock()
-        self.soon = threading.Event()
+        self.soon = FanEvent()
         self.on_pass = None                          # (monotonic начала обмена) -> после каждого обмена (engine: напоминания)
         self.state = self._load()
         self.status = {"enabled": False, "ok": None, "at": 0, "error": "", "devices": [], "space": "", "counts": {}}
@@ -1128,7 +1145,7 @@ class Sync:
         """Один обмен с облаком: отправить свои изменения и удаления, применить чужие, сохранить sync.json.
         -> True после обмена, False — синхронизация выключена (нет ключа). Ошибки облака — SyncError.
         Под self._lock: обмен из цикла и по кнопке не идут одновременно. Порядок тот же, что у syncRun() в app.js."""
-        token, link, url = self.host.credentials()
+        token, link, url = self._creds()
         if not token:
             self.status.update(enabled=False, ok=None, error="")
             return False
@@ -1140,7 +1157,8 @@ class Sync:
                 self.state.update(rev=0, idx={})
             self.state["who"] = who
             self.status["enabled"] = True
-            self._upload_outputs(url, token)
+            if not self.HOME:
+                self._upload_outputs(url, token)
             snap = self.snapshot()
             ek = self.e2e_key()
             if ek is not None:
@@ -1213,7 +1231,7 @@ class Sync:
                 try:
                     r = httpx.post(url + "?p=/sync", json=body, headers=headers, timeout=30)
                 except httpx.HTTPError as e:
-                    raise SyncError(f"облако Dewiar не ответило: {e}") from e
+                    raise SyncError(("узел синхронизации по Wi-Fi не ответил: " if self.HOME else "облако Dewiar не ответило: ") + str(e)) from e
                 if r.status_code >= 400:
                     try:
                         msg = r.json()["error"]["message"]
@@ -1286,7 +1304,8 @@ class Sync:
                 for key in sent:
                     if key in idx:
                         idx[key].pop("reseal", None)
-            self._claim_tasks(url, headers, idx)
+            if not self.HOME:
+                self._claim_tasks(url, headers, idx)
             if got:                                       # отпечатки принятого — по тому, как оно легло у нас, иначе ушло бы обратно
                 snap2 = self.snapshot()
                 for key, st in idx.items():
@@ -1339,6 +1358,45 @@ class Sync:
             self.soon.wait(interval)
             self.soon.clear()
             time.sleep(2)                                # несколько правок подряд — одним обменом
+
+
+class HomeSync(Sync):
+    """Тот же обмен — со своим узлом «Дома по Wi-Fi» (core/homehub.py) по 127.0.0.1: телефоны без dewiar.pro.
+    Своё состояние (sync-home.json), тот же номер устройства, что у облачной; облачная и домашняя не идут одновременно
+    (общий замок) — что пришло с телефона, следующим обменом уходит в облако, и наоборот: компьютер — мост.
+    Шифрование записей на устройстве здесь не нужно: весь обмен телефона с узлом зашифрован его ключом."""
+    HOME = True
+
+    def __init__(self, host, cloud_sync):
+        super().__init__(host)
+        self.path = STATE_DIR / "sync-home.json"
+        self.state = self._load()
+        if cloud_sync is not None:
+            self.state["device"] = cloud_sync.state.get("device") or self.state["device"]
+            self._lock = cloud_sync._lock
+            cloud_sync.soon.also.append(self.soon)
+
+    def _creds(self):
+        return self.host.home_credentials()
+
+    def e2e_key(self):
+        return None
+
+    def loop(self, stopping, interval=60):
+        """Свой цикл (без стоп-крана «Ничего не уходит в интернет»: обмен — в домашней сети)."""
+        time.sleep(3)
+        last = ""
+        while not stopping.is_set() and not getattr(self, "stopped", False):
+            try:
+                self.run_once()
+                last = ""
+            except Exception as e:  # noqa: BLE001
+                self.status.update(ok=False, error=str(e), at=int(time.time()))
+                (log.debug if str(e) == last else log.info)("Синхронизация по Wi-Fi: %s", e)
+                last = str(e)
+            self.soon.wait(interval)
+            self.soon.clear()
+            time.sleep(1)
 
 
 def _version():

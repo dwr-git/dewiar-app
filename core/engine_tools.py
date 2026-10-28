@@ -1045,10 +1045,16 @@ class ToolsMixin:
                 err = str(e)
         if not any(d.get("me") for d in devs):
             devs.insert(0, {"id": me["id"], "name": me["name"], "app": "pc", "seen": st.get("at") or 0, "me": True})
+        hs = getattr(self, "home_sync", None)              # телефоны по Wi-Fi (0.59) — в том же списке, с пометкой
+        if hs is not None:
+            known = {d.get("id") for d in devs}
+            for d in hs.status.get("all") or []:
+                if not d.get("me") and d.get("id") not in known:
+                    devs.append(dict(d, home=True))
         for d in devs:
             if d.get("me"):
                 d["name"] = me["name"]
-        return {"me": me, "devices": devs, "sync": st, "mode": "account" if self.account.logged_in() else ("key" if tok else ""),
+        return {"me": me, "devices": devs, "sync": st, "home": self.home_public() if hasattr(self, "home_public") else None, "mode": "account" if self.account.logged_in() else ("key" if tok else ""),
                 "login": (self.account.data.get("login") or "") if self.account.logged_in() else "", "can_pair": bool(tok), "error": err}
 
     def sync_public(self):

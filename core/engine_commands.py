@@ -8,7 +8,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
@@ -501,6 +501,11 @@ class CommandsMixin:
         kids = getattr(self, "kids", None)
         if kids and kids.locked() and _kids_blocked(cmd, a):
             raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
+        if cmd.startswith("ideas_"):             # «Идеи Лиры»: список, голос, своя идея (ideas.py → сайт)
+            import ideas
+            return ideas.command(self, cmd, a)
+        if cmd.startswith("home_"):              # «Дома по Wi-Fi» (engine_home.py)
+            return self.home_cmd(cmd, a)
         if cmd == "watch_get":                   # «Дозор» (engine_watch.py)
             return self.watch_public()
         if cmd == "watch_add":
@@ -565,6 +570,8 @@ class CommandsMixin:
                 self.sync.run_once()
             except SyncError as e:
                 self.sync.status.update(ok=False, error=str(e), at=int(time.time()))
+            if getattr(self, "home_sync", None) is not None and self.homehub and self.homehub.running():
+                self.home_sync.soon.set()                # и телефонам по Wi-Fi (engine_home.py)
             return self.sync_public()
         if cmd == "sync_set":
             on = bool(a.get("on"))

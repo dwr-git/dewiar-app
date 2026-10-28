@@ -417,13 +417,13 @@
   #corner-l #b-watch i { position: absolute; top: -2px; right: -3px; min-width: 13px; height: 13px; border-radius: 99px; font: 700 9px/13px Manrope, sans-serif;
     font-style: normal; color: #fff; background: #5b74ff; padding: 0 3px; }
   #corner-l #b-watch i:empty { display: none; }
-  #corner-l.watch:not(:hover):not(:focus-within) #b-bug { opacity: 0; }
+  #corner-l.watch:not(:hover):not(:focus-within) #b-bug, #corner-l.watch:not(:hover):not(:focus-within) #b-idea { opacity: 0; }
   @keyframes wt-breath { 50% { opacity: .55; } }
   @media (prefers-reduced-motion: reduce) { #corner-l #b-watch { animation: none; } }
   #corner-l #b-lo, body.light #corner-l #b-lo { color: #2fbf83; }
-  #corner-l.lo:not(:hover):not(:focus-within) #b-bug { opacity: 0; }
+  #corner-l.lo:not(:hover):not(:focus-within) #b-bug, #corner-l.lo:not(:hover):not(:focus-within) #b-idea { opacity: 0; }
   /* есть обновление — значок виден всегда, с точкой; без него — как жучок, по наведению */
-  #corner-l.upd { opacity: 1; } #corner-l.upd:not(:hover):not(:focus-within) #b-bug { opacity: 0; }
+  #corner-l.upd { opacity: 1; } #corner-l.upd:not(:hover):not(:focus-within) #b-bug, #corner-l.upd:not(:hover):not(:focus-within) #b-idea { opacity: 0; }
   #b-upd { position: relative; } #b-upd.has, body.light #b-upd.has { color: var(--accent, #8B8CF7); }
   #b-upd.has::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #ff6f9c; box-shadow: 0 0 0 2px rgba(0,0,0,.15); }
   #b-upd.busy svg { animation: updSpin 1.1s linear infinite; } @keyframes updSpin { to { transform: rotate(360deg); } }
@@ -559,6 +559,8 @@
     <button class="btn" id="b-bug" title="Сообщить о проблеме — сниму экран и открою форму жалобы"><svg viewBox="0 0 24 24"><rect x="6.5" y="7" width="11" height="14.5" rx="5.5"/><path d="M8.8 7.6a3.2 3.2 0 0 1 6.4 0M12 11.5v10M6.5 12.5H2.5M21.5 12.5h-4M6.8 17.5 3 19.8M17.2 17.5l3.8 2.3M7.5 9.2 4 6.5M16.5 9.2 20 6.5"/></svg></button>
     <!-- обновление одним нажатием (24.10, владелец: «возле жучка не хватает значка обновления») -->
     <button class="btn" id="b-upd" title="Обновления — проверить и обновить одним нажатием" aria-label="Обновления"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+    <!-- «Идеи Лиры» (0.59, владелец 28.10: «возле жучка — прислать идею и проголосовать») -->
+    <button class="btn" id="b-idea" title="Идеи Лиры — предложить свою и поддержать чужие"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2V16h5v-.1c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg></button>
   </div>
   <div id="corner">
     <!-- блокнот у виджета (20.10): вкладки, ссылки, картинки, таблицы, задачи — выезжает рядом, синхронизируется (ui/pad.html) -->
@@ -1276,6 +1278,7 @@ $("b-bug").onclick = guard($("b-bug"), async () => {
   note({ note: "" });
   const a = api(); if (a) a.open_settings("about");
 });
+$("b-idea").onclick = () => { const a = api(); if (a) a.open_settings("ideas"); };
 $("b-chat").onclick = () => { const a = api(); if (a) a.open_settings("chat"); };   // «Память» — в студии; здесь — переписка
 $("b-notes").onclick = () => { const a = api(); if (a) a.open_settings("notes"); };
 /* фоновые задачи и обновления — строкой в карточке */

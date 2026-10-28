@@ -1332,6 +1332,17 @@ body.kids #b-close, body.kids #b-soul, body.kids #b-work { display: none !import
 }
 /* «Устройства» (devices.js, 0.56): это устройство, код и QR, ввести код, все устройства с состоянием */
 .dvme .row2 { margin-top: 4px; }
+.dvways { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 5px; border-radius: 20px; background: var(--field); margin: 0 0 8px; }
+.dvways button { display: flex; align-items: center; gap: 9px; border: 0; background: none; color: var(--muted, #9aa0b4); padding: 9px 10px; border-radius: 15px; font: inherit; text-align: left; min-width: 0; }
+.dvways button svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.dvways button span { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.dvways button b { font-size: 14px; font-weight: 600; color: var(--ink, #fff); } .dvways button small { font-size: 11.5px; }
+.dvways button.on { background: var(--glass, rgba(255,255,255,.08)); color: #8b8cf7; box-shadow: 0 6px 16px -10px rgba(0,0,0,.5); }
+.dvways button[data-way="home"].on { color: #4be3a1; }
+.dvwnote { margin: 0 4px 10px; }
+.dvhome.on { box-shadow: inset 0 0 0 1px rgba(75,227,161,.35); }
+.dvhome.on b { font-size: 16px; }
+.dvhome .row2 > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .dvname { flex: 1; min-width: 0; font-family: "Unbounded", "Manrope", sans-serif; font-size: 19px; font-weight: 600; overflow-wrap: anywhere; }
 .dvcode { text-align: center; margin: 0 0 12px; }
 .dvcode[hidden] { display: none; }
@@ -1354,3 +1365,31 @@ body.kids #b-close, body.kids #b-soul, body.kids #b-work { display: none !import
 .dvr .lnk { color: var(--muted); font-size: 13px; padding: 6px 4px; }
 .dvin { background: var(--field); border: 0; border-radius: 14px; padding: 10px 12px; color: var(--ink); font: inherit; outline: none; box-shadow: inset 0 0 0 1px var(--frost-hi); }
 .dvin:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+/* «Идеи Лиры» (ideas.js, 0.59): тёплая лампочка; голос — янтарная плашка слева */
+.idcard .row2 { align-items: center; gap: 12px; }
+.idbulb { width: 40px; height: 40px; flex: none; border-radius: 14px; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, rgba(255,207,110,.32), rgba(255,207,110,.06)); }
+.idbulb svg, .idq svg { width: 22px; height: 22px; fill: none; stroke: #f2a93b; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.idq { display: flex; align-items: center; gap: 10px; padding: 2px 4px 2px 12px; border-radius: 16px; background: var(--field); }
+.idq input { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; padding: 12px 4px; font-size: 16px; outline: none; -webkit-appearance: none; appearance: none; }
+.idfind, #idbody { width: 100%; padding: 12px 14px; border-radius: 14px; border: 0; background: var(--field); outline: none; -webkit-appearance: none; appearance: none; box-sizing: border-box; }
+#idbody { resize: vertical; }
+body.neu :is(.idfind, #idbody, .idq) { background: var(--glass); box-shadow: var(--press); }
+.idnew #idsend { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.idnew #idsend[hidden] { display: none; }
+.idtabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 16px; background: var(--field); margin: 14px 0 8px; }
+.idtabs button { border: 0; background: none; color: var(--muted, #9aa0b4); font: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 4px; border-radius: 12px; }
+.idtabs button b { color: inherit; font-size: 12px; }
+.idtabs button.on { background: var(--glass, rgba(255,255,255,.08)); color: var(--ink, #fff); } .idtabs button.on b { color: #f2a93b; }
+.idfind { margin: 0 0 10px; }
+.idi { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 18px; background: var(--glass, rgba(255,255,255,.06)); margin: 0 0 8px; }
+.idv { width: 50px; flex: none; display: flex; flex-direction: column; align-items: center; padding: 7px 0 6px; border: 0; border-radius: 14px; background: var(--field); color: var(--muted, #9aa0b4); font: inherit; }
+.idv svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.idv b { font-size: 15px; color: var(--ink, #fff); font-variant-numeric: tabular-nums; }
+.idv[aria-pressed="true"] { background: linear-gradient(160deg, #ffcf6e, #f2a93b); color: #3a2405; } .idv[aria-pressed="true"] b { color: #3a2405; } .idv[aria-pressed="true"] svg { fill: #3a2405; }
+.idv:disabled { opacity: .7; }
+.idt { flex: 1; min-width: 0; } .idt > b { font-size: 15px; line-height: 1.35; display: block; overflow-wrap: anywhere; }
+.idt p { margin: 5px 0 0; font-size: 13.5px; color: var(--muted, #9aa0b4); line-height: 1.45; }
+.idt p.idr { color: var(--ink, #fff); background: var(--field); padding: 7px 10px; border-radius: 10px; }
+.idcs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; } .idcs:empty { display: none; }
+.idc { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: rgba(127,127,140,.18); color: var(--muted, #9aa0b4); }
+.idc.ok { background: rgba(75,227,161,.16); color: #4be3a1; } .idc.new { background: rgba(242,169,59,.2); color: #f2a93b; } .idc.me { background: rgba(139,140,247,.2); color: #a9a9ff; }

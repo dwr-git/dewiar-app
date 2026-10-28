@@ -12,6 +12,7 @@ let DEVS = null, devCode = null, devTick = 0, devPoll = 0;
 const DEV_ONLINE = 180;
 const DEV_APP = { pc: "Компьютер", phone: "Телефон", web: "В браузере", cloud: "Облако Dewiar" };
 const DEV_IC = {
+  home: '<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.2 14.6a4 4 0 0 1 5.6 0M10.8 16.6a1.6 1.6 0 0 1 2.4 0"/>',
   pc: '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>',
   phone: '<rect x="7" y="2.8" width="10" height="18.4" rx="2.4"/><path d="M11 18h2"/>',
   web: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17"/>',
@@ -42,12 +43,13 @@ async function devCall(method, path, body) {
   return d;
 }
 async function devLoad() {
-  if (!syncCred()) { DEVS = null; return; }
+  if (!syncChan()) { DEVS = null; return; }
+  if (syncChan().home) { DEVS = syncStatus.all || DEVS || []; return; }      // по Wi-Fi: список — из последнего обмена с компьютером
   try { DEVS = (await devCall("GET", "/sync/devices")).devices || []; } catch (e) { DEVS = DEVS || (syncStatus.all || null); }
 }
 
 function devHtml() {
-  const c = syncCred(), s = syncStatus, t = s.at ? new Date(s.at) : null, list = DEVS || syncStatus.all || [];
+  const c = syncChan(), s = syncStatus, t = s.at ? new Date(s.at) : null, list = DEVS || syncStatus.all || [];
   const me = { name: devMyName(), app: D.web ? "web" : "phone" };
   const others = list.filter(d => !d.me), on = others.filter(devOn).length;
   const stTxt = !c ? "Синхронизации нет: здесь ещё нет входа в Dewiar — введите код с другого устройства."
@@ -56,32 +58,72 @@ function devHtml() {
     const app = d.app || "phone", live = devOn(d);
     return `<div class="dvr${live ? " on" : ""}"><span class="dvi"><svg viewBox="0 0 24 24">${DEV_IC[app] || DEV_IC.phone}</svg></span><div class="dvt"><b>${esc(d.me ? me.name : (d.name || DEV_APP[app]))}${d.me ? '<em>это устройство</em>' : ""}</b>`
       + `<small>${DEV_APP[app] || "Устройство"}${d.ver ? " · Dewiar " + esc(d.ver) : ""} · <i></i>${d.me ? "здесь" : devAgo(d.seen)}</small></div>`
-      + (d.me || app === "cloud" ? "" : `<button class="lnk" data-dforget="${esc(d.id)}">Убрать</button>`) + `</div>`;
+      + (d.me || app === "cloud" || (c && c.home) ? "" : `<button class="lnk" data-dforget="${esc(d.id)}">Убрать</button>`) + `</div>`;
   }).join("");
   return `<div class="card dvme"><small class="hint" style="margin:0">Это устройство</small>
       <div class="row2"><b class="dvname" id="dv-name">${esc(me.name)}</b><button class="btn" id="dv-ren">Имя</button></div>
       <div class="res ${!c || !S.sync.on ? "" : s.ok === false ? "bad" : s.ok ? "ok" : ""}" id="dv-st" style="margin:6px 0 0">${esc(stTxt)}</div>
       ${c ? `<button class="btn p w" id="dv-now" style="margin-top:10px" ${S.sync.on ? "" : "disabled"}>Синхронизировать сейчас</button>
       <div class="sw" style="margin-top:10px"><div>Синхронизировать<small class="hint" style="display:block;margin:2px 0 0">${esc(c.via)}</small></div><label class="tg"><input type="checkbox" id="sy-on" ${S.sync.on ? "checked" : ""}><i></i></label></div>
-      <div class="sw" style="margin-top:6px"><div>Шифровать на устройстве<small class="hint" style="display:block;margin:2px 0 0">облако видит только шифротекст</small></div><label class="tg"><input type="checkbox" id="sy-e2e" ${S.sync.e2e && syncKeyGet() ? "checked" : ""} ${S.sync.on ? "" : "disabled"}><i></i></label></div>` : ""}</div>
-    <h3>Подключить ещё устройство</h3><div class="card" id="dv-give">
-      ${c ? `<p class="hint" style="margin:0 0 10px">Компьютер или другой телефон станет той же Лирой: общая память, заметки, дела.</p>
-        <div class="dvcode" id="dv-code" hidden><div class="dvqr" id="dv-qr"></div><b class="dvdig" id="dv-dig"></b><p class="hint" id="dv-left" style="margin:4px 0 0"></p>
-        <p class="hint" style="margin:6px 0 0">На том устройстве: «Устройства» → «Ввести код». Телефон может навести сканер на квадрат.</p></div>
-        <button class="btn p w" id="dv-give-go">Показать код</button><div class="res" id="dv-give-res"></div>`
-      : `<p class="hint" style="margin:0">Здесь ещё нет входа в Dewiar. Если Dewiar уже работает на компьютере или другом телефоне — введите его код ниже. Если это первое устройство — подключите мозг во вкладке «Мозг».</p>`}</div>
-    <h3>Ввести код</h3><div class="card" id="dv-take"><p class="hint" style="margin:0 0 10px">Dewiar уже есть на другом устройстве? Там: «Устройства» → «Подключить ещё устройство». ${devOwnBrain() ? "Ваша модель здесь останется главной." : ""}</p>
-      <div class="row2"><input id="dv-in" class="dvin" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" aria-label="Код из 6 цифр" style="flex:1;min-width:0;font-size:20px;letter-spacing:.12em;text-align:center"><button class="btn p" id="dv-take-go">Подключить</button></div>
-      ${window.DewiarCodes && window.ZXing ? `<button class="btn w" id="dv-scan" style="margin-top:8px">Сканировать код с экрана</button>` : ""}<div class="res" id="dv-take-res"></div></div>
-    <h3>Мозги с другого устройства</h3><div class="card"><p class="hint" style="margin:0 0 10px">Настроили модель на компьютере — возьмите её сюда: адрес, модель и ключ придут зашифрованными, только вашим устройствам. Своя модель останется; новые — в «Мозг» → «Прежние мозги».</p>
-      <button class="btn w" id="dv-brains" ${c ? "" : "disabled"}>Взять мозги</button><div class="res ${devBrainsGot.length ? "ok" : ""}" id="dv-brains-res">${esc(devBrainsGot.map(g => `С «${g.from}»: ${g.names.join(", ")}`).join(" · "))}</div></div>
+      ${c.home ? `<p class="hint" style="margin:8px 0 0">Обмен идёт только по домашней сети и зашифрован ключом с экрана компьютера.</p>`
+        : `<div class="sw" style="margin-top:6px"><div>Шифровать на устройстве<small class="hint" style="display:block;margin:2px 0 0">облако видит только шифротекст</small></div><label class="tg"><input type="checkbox" id="sy-e2e" ${S.sync.e2e && syncKeyGet() ? "checked" : ""} ${S.sync.on ? "" : "disabled"}><i></i></label></div>`}` : ""}</div>
+    ${devWays(c)}
     <h3>Все устройства${others.length ? ` · на связи: ${on + 1} из ${others.length + 1}` : ""}</h3><div class="card dvlist" id="dv-list">${rows}</div>
     <p class="hint">Синхронизация идёт сама — раз в минуту и сразу после правок: напоминания, заметки и блокнот, расходы, память «Обо мне», душа, свои персонажи, дневник и задачи.</p>`;
 }
 
+/* «Как связать устройства» (0.59, владелец 28.10: «всё в одном месте… чётко, просто и понятно»): два способа —
+   через dewiar.pro (везде) или дома по Wi-Fi (без интернета). Вкладка по умолчанию — «Дома по Wi-Fi», если
+   телефон уже так связан, иначе dewiar.pro. Браузер (https) к компьютеру по http не ходит — там только dewiar.pro. */
+let devWay = "";
+function devGiveHtml(c) {
+  return `<h3>Подключить ещё устройство</h3><div class="card" id="dv-give">
+      ${c && c.home ? `<p class="hint" style="margin:0">Ещё один телефон — отсканируйте им код с компьютера: «Устройства» → «Дома по Wi-Fi».</p>`
+      : c ? `<p class="hint" style="margin:0 0 10px">Компьютер или другой телефон станет той же Лирой: общая память, заметки, дела.</p>
+        <div class="dvcode" id="dv-code" hidden><div class="dvqr" id="dv-qr"></div><b class="dvdig" id="dv-dig"></b><p class="hint" id="dv-left" style="margin:4px 0 0"></p>
+        <p class="hint" style="margin:6px 0 0">На том устройстве: «Устройства» → «Ввести код». Телефон может навести сканер на квадрат.</p></div>
+        <button class="btn p w" id="dv-give-go">Показать код</button><div class="res" id="dv-give-res"></div>`
+      : `<p class="hint" style="margin:0">Здесь ещё нет входа в Dewiar. Если Dewiar уже работает на компьютере или другом телефоне — введите его код ниже. Если это первое устройство — подключите мозг во вкладке «Мозг».</p>`}</div>`;
+}
+function devWays(c) {
+  if (D.web) return devGiveHtml(c) + devCloudMore(c);
+  const way = devWay || (homeOn() ? "home" : "cloud");
+  const tab = (id, ic, t, sub) => `<button role="tab" data-way="${id}" class="${way === id ? "on" : ""}" aria-selected="${way === id}"><svg viewBox="0 0 24 24">${ic}</svg><span><b>${t}</b><small>${sub}</small></span></button>`;
+  return `<h3>Как связать устройства</h3><div class="dvways" role="tablist" aria-label="Способ синхронизации">
+      ${tab("cloud", DEV_IC.cloud, "Через dewiar.pro", "везде, где есть интернет")}${tab("home", DEV_IC.home, "Дома по Wi-Fi", "без интернета")}</div>
+    <p class="hint dvwnote">${way === "home" ? "Телефон связывается прямо с компьютером, когда вы дома в одной сети. В интернет ничего не уходит, обмен зашифрован ключом из кода. Вне дома правки копятся здесь и уходят, когда вернётесь."
+      : "Телефоны и компьютеры связываются через ваш вход в Dewiar — синхронизация идёт в дороге, на работе и дома."}</p>`
+    + (way === "home" ? devHomeHtml(c) : c && c.home ? `<div class="card"><p class="hint" style="margin:0">Сейчас телефон связан с «${esc((S.sync.home || {}).n || "компьютером")}» по Wi-Fi. Перейти на dewiar.pro — во вкладке «Дома по Wi-Fi»: «Отключить», потом подключитесь кодом здесь.</p></div>`
+      : devGiveHtml(c) + devCloudMore(c));
+}
+function devCloudMore(c) {                          // «Ввести код» и «Мозги» — облачное; по Wi-Fi не нужны
+  return `<h3>Ввести код</h3><div class="card" id="dv-take"><p class="hint" style="margin:0 0 10px">Dewiar уже есть на другом устройстве? Там: «Устройства» → «Подключить ещё устройство». ${devOwnBrain() ? "Ваша модель здесь останется главной." : ""}</p>
+      <div class="row2"><input id="dv-in" class="dvin" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" aria-label="Код из 6 цифр" style="flex:1;min-width:0;font-size:20px;letter-spacing:.12em;text-align:center"><button class="btn p" id="dv-take-go">Подключить</button></div>
+      ${window.DewiarCodes && window.ZXing ? `<button class="btn w" id="dv-scan" style="margin-top:8px">Сканировать код с экрана</button>` : ""}<div class="res" id="dv-take-res"></div></div>
+    <h3>Мозги с другого устройства</h3><div class="card"><p class="hint" style="margin:0 0 10px">Настроили модель на компьютере — возьмите её сюда: адрес, модель и ключ придут зашифрованными, только вашим устройствам. Своя модель останется; новые — в «Мозг» → «Прежние мозги».</p>
+      <button class="btn w" id="dv-brains" ${c && !c.home ? "" : "disabled"}>Взять мозги</button><div class="res ${devBrainsGot.length ? "ok" : ""}" id="dv-brains-res">${esc(devBrainsGot.map(g => `С «${g.from}»: ${g.names.join(", ")}`).join(" · "))}</div></div>`;
+}
+/* «Компьютер дома — по Wi-Fi» (0.59): подключён — имя компьютера и «Отключить»; нет — «Сканировать код компьютера» */
+function devHomeHtml(c) {
+  const h = S.sync && S.sync.home;
+  if (D.web) return "";                                   // браузер (https) не может ходить на компьютер по http — только приложение
+  if (c && c.home) return `<div class="card dvhome on"><small class="hint" style="margin:0">Компьютер дома</small><div class="row2"><div><b>${esc(h.n || "Компьютер")}</b>
+      <small class="hint" style="display:block;margin:2px 0 0">напрямую по Wi-Fi, без dewiar.pro</small></div>
+      <button class="btn" id="dv-home-off">Отключить</button></div></div>`;
+  return `<div class="card dvhome"><p class="hint" style="margin:0 0 10px">На компьютере: студия → «Устройства» → «Дома по Wi-Fi» → «Показать код для телефона».
+      Телефон и компьютер — в одном Wi-Fi.</p>
+      ${window.DewiarCodes && window.ZXing ? `<button class="btn w" id="dv-home-scan">Сканировать код компьютера</button>` : ""}</div>`;
+}
+
 function devBind() {
   const g = (id) => document.getElementById(id);
-  if (!DEVS && syncCred() && !devBind.loading) { devBind.loading = true; devLoad().finally(() => { devBind.loading = false; if (setTab === "devices" && $("#sh-set").classList.contains("on")) renderSettings(); }); }
+  if (g("dv-home-scan")) g("dv-home-scan").onclick = () => scanCode();
+  $$(".dvways [data-way]").forEach(b => b.onclick = () => { devWay = b.dataset.way; renderSettings(); });
+  if (g("dv-home-off")) g("dv-home-off").onclick = () => {
+    if (!confirm(`Отключить синхронизацию с «${(S.sync.home || {}).n || "компьютером"}»? Всё, что уже здесь, останется на телефоне.`)) return;
+    homeForget(); renderSettings(); toast("Отключено — данные остались на телефоне");
+  };
+  if (!DEVS && syncChan() && !devBind.loading) { devBind.loading = true; devLoad().finally(() => { devBind.loading = false; if (setTab === "devices" && $("#sh-set").classList.contains("on")) renderSettings(); }); }
   if (g("dv-ren")) g("dv-ren").onclick = () => {
     const n = prompt("Имя этого устройства — его увидят другие («Мой телефон», «Планшет»). Пусто — имя телефона.", (S.sync && S.sync.name) || "");
     if (n == null) return;
