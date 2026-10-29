@@ -1712,6 +1712,7 @@ N.on("tts_done", e => {
   if (e && e.id) sayTexts.delete(e.id);
   playingIds.delete((e && e.id) || "?"); soundOn();
   sayLeft = Math.max(0, sayLeft - 1);
+  if (sayLeft === 0) listenReset();                          // «Прослушать» дочитал — кнопка снова «Прослушать»
   if (sayLeft === 0 && state === "speaking" && !busy) finishTurn();
 });
 N.on("tts_error", e => {
@@ -1726,7 +1727,26 @@ N.on("tts_error", e => {
     if (Date.now() - srvVoiceWarnAt > 600e3) { srvVoiceWarnAt = Date.now(); toast("Голос сервера сейчас недоступен — говорю голосом телефона", 5000); }
   } else if (t) toast("Голос сервера: " + e.error);      // своего голоса нет — честно говорим, почему тихо
 });
-function stopVoice() { sayLeft = 0; D.stopSpeak(); playingIds.clear(); soundOn(); }
+function stopVoice() { sayLeft = 0; D.stopSpeak(); playingIds.clear(); soundOn(); listenReset(); }
+/* «Прослушать» (идея №58, 29.10: «на прогулке без очков не прочитать — переслушать ответ проще; паузу/стоп»): кнопка под
+   ответами в «Разговоре» и под последним ответом на главном экране. Читает и в текстовом режиме (человек сам попросил);
+   нажали ещё раз — «Стоп». */
+const LISTEN_IC = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>';
+const STOP_IC = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>';
+let listenBtn = null;
+function listenReset() {
+  if (!listenBtn) return;
+  const b = listenBtn; listenBtn = null;
+  b.classList.remove("on"); b.innerHTML = LISTEN_IC + "<span>Прослушать</span>"; b.setAttribute("aria-label", "Прослушать ответ");
+}
+function listenToggle(b, text) {
+  if (listenBtn === b) { stopVoice(); return; }
+  if (playingIds.size || sayLeft) stopVoice();
+  const tm = S.textMode; S.textMode = false;
+  try { say(text); } finally { S.textMode = tm; }
+  if (!sayLeft && !playingIds.size) { toast("Голоса нет — в телефоне не установлен синтез речи (Настройки → «Голос»)", 4000); return; }
+  listenBtn = b; b.classList.add("on"); b.innerHTML = STOP_IC + "<span>Стоп</span>"; b.setAttribute("aria-label", "Остановить");
+}
 function finishTurn() {
   setState("idle");
   const f = afterSpeak; afterSpeak = null;
@@ -4475,6 +4495,8 @@ function noteAttSave(list) {
    случайное нажатие — и заметки нет). Удалить — только из открытой заметки, крестика в списке нет. */
 function noteDelete(id, ask) {
   const n = notes().find(x => x.id === id); if (!n) return;
+  if (/^\s*locked\s*:\s*(true|yes|1|да)\s*$/mi.test(noteFront(n.text))) {      // замок с компьютера (29.10): не удаляется и здесь
+    toast("Заметка защищена от удаления — защиту снимают в студии на компьютере"); return; }
   if (ask && !confirm(`Удалить заметку «${n.title}»${(n.att || []).length ? " вместе с вложениями" : ""}?`)) return;
   const keep = (n.att || []).map(a => [a.id, noteAttGet(a.id)]);
   (n.att || []).forEach(a => fileSave("natt-" + a.id, ""));
@@ -5000,6 +5022,7 @@ function openSheet(id) { closeSheets(true); $(id).classList.add("on"); $("#dim")
 function closeSheets(keepDim) {
   $$(".sheet.on").forEach(s => s.classList.remove("on")); if (!keepDim) $("#dim").classList.remove("on");
   if ($(".snd.play") && D.alarmSoundTry) { D.alarmSoundTry(""); $$(".snd.play").forEach(x => x.classList.remove("play")); }   // проба звука — смолкает с листом
+  const lv = $("#lsn-v"); if (lv && !lv.paused) lv.pause();                                                                  // видеоурок — тоже
 }
 $("#dim").onclick = () => closeSheets();
 let touchY = null;
@@ -5042,11 +5065,12 @@ function renderMemPanel() {
 /* разговор */
 $("#b-hist").onclick = () => {
   const h = history.slice(-40);
-  $("#hlist").innerHTML = h.length ? h.map(m => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? `<div>${esc(m.content)}</div>`
-      : `<div class="ans">${mdAnswer(m.content)}${m.img && window.DewiarRich ? DewiarRich.gallery(m.img) : ""}</div>`}${m.role !== "user" && m.who ? `<small>${esc((PERSONAS.find(p => p.id === m.who) || {}).name || "")}</small>` : ""}</div>`).join("")
+  $("#hlist").innerHTML = h.length ? h.map((m, i) => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? `<div>${esc(m.content)}</div>`
+      : `<div class="ans">${mdAnswer(m.content)}${m.img && window.DewiarRich ? DewiarRich.gallery(m.img) : ""}</div>`}${m.role !== "user" ? `<small class="mrow">${m.who ? esc((PERSONAS.find(p => p.id === m.who) || {}).name || "") : ""}${speechText(String(m.content || "")) ? `<button class="mlisten" data-li="${i}" aria-label="Прослушать ответ">${LISTEN_IC}<span>Прослушать</span></button>` : ""}</small>` : ""}</div>`).join("")
     : `<div class="empty">Разговор пуст. Нажмите микрофон и спросите что-нибудь.</div>`;
   if (window.DewiarRich) DewiarRich.diagrams($("#hlist"));
   wirePics($("#hlist"));
+  $$("#hlist .mlisten").forEach(b => b.onclick = () => listenToggle(b, String((h[+b.dataset.li] || {}).content || "")));
   openSheet("#sh-hist"); setTimeout(() => $("#sh-hist").scrollTop = 1e6, 50);
 };
 $("#h-clear").onclick = () => { history = []; saveH(); convReset(); $("#b-hist").onclick(); toast("Начинаем заново"); };
@@ -5673,15 +5697,16 @@ function earlyDone(t) {
    сборка кладёт его в whatsnew.js). Уже виденное — pref news_seen; новая установка листа не показывает. ---------- */
 const verCmp = (a, b) => { const x = String(a || "").split(".").map(Number), y = String(b || "").split(".").map(Number);
   for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
-function newsList(from, to) {
+function newsList(from, to, all) {
   return (window.DEWIAR_NEWS || []).filter(r => (!from || verCmp(r.phone, from) > 0) && verCmp(r.phone, to) <= 0)
-    .map(r => Object.assign({}, r, { items: (r.items || []).filter(i => (i.where || ["phone"]).includes("phone")) })).filter(r => r.items.length).slice(0, 3);
+    .map(r => Object.assign({}, r, { items: (r.items || []).filter(i => (i.where || ["phone"]).includes("phone")) })).filter(r => r.items.length).slice(0, all ? 500 : 3);
 }
-function newsShow(list) {
+function newsShow(list, all) {
   if (!list.length) return false;
   let v = list[0].phone;                                   // версия — та, что стоит (в её выпуске новое могло быть только у компьютера)
   try { const cur = JSON.parse(D.info() || "{}").version; if (cur && verCmp(cur, v) > 0 && /^\d+\.\d+\.\d+$/.test(cur)) v = cur; } catch (e) { }
-  $("#news-body").innerHTML = `<p class="nwsub">Dewiar ${esc(v)} — вот что появилось</p>` + list.map(r => r.items.map(i => {
+  // идея №57 (29.10): «Что нового» по всем выпускам — с заголовком версии над пунктами
+  $("#news-body").innerHTML = `<p class="nwsub">${all ? `Все выпуски — ${list.length}, новые сверху` : `Dewiar ${esc(v)} — вот что появилось`}</p>` + list.map(r => (all ? `<h3 class="nwv">${esc(r.phone)}${r.date ? ` <small>${esc(new Date(r.date + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }))}</small>` : ""}</h3>` : "") + r.items.map(i => {
     const ph = /^«(.+)»$/.exec(String(i.try || "").trim());
     return `<div class="nwi"><i aria-hidden="true">${esc(i.icon || "✨")}</i><div><b>${esc(i.title)}</b><p>${esc(i.text)}</p>`
       + (ph ? `<button class="nwtry" data-say="${esc(ph[1])}">Попробовать: «${esc(ph[1])}»</button>` : i.try ? `<small>${esc(i.try)}</small>` : "") + `</div></div>`; }).join("")).join("")
@@ -6048,13 +6073,14 @@ const APPS_IC = {
   news: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
   month: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
   senior: '<path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/><path d="M8.5 12.5h2l1-2 1.5 4 1-2h1.5"/>',
-  radio: '<rect x="3" y="9" width="18" height="11" rx="3"/><path d="M7 9l9-5"/><circle cx="15.5" cy="14.5" r="2.5"/><path d="M6.5 13h3M6.5 16h3"/>' };
+  radio: '<rect x="3" y="9" width="18" height="11" rx="3"/><path d="M7 9l9-5"/><circle cx="15.5" cy="14.5" r="2.5"/><path d="M6.5 13h3M6.5 16h3"/>',
+  lessons: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.2v5.6l4.8-2.8z"/>' };
 function appsHtml() {
   const t = [];
   if (feat("games")) t.push(["play", "Досуг", "милые игры"]);
   if (kidsOn()) return `<div class="apps">${t.concat([["tricks", "Что я умею", "фразы-примеры"], ["kids", "Детский режим", "для взрослых"]]).map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   if (typeof srOn === "function" && srOn()) {        // «Для старших»: только нужное, крупно
-    t.push(["month", "Мой месяц", "дела и траты"], ["radio", "Радио", "станции и жанры"], ["senior", "Для старших", "лекарства и присмотр"], ["tricks", "Что я умею", "фразы-примеры"], ["qa", "Вопрос — ответ", "как сделать…"], ["news", "Что нового", "в этой версии"]);
+    t.push(["month", "Мой месяц", "дела и траты"], ["radio", "Радио", "станции и жанры"], ["senior", "Для старших", "лекарства и присмотр"], ["tricks", "Что я умею", "фразы-примеры"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"], ["news", "Что нового", "в этой версии"]);
     return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   }
   t.push(["soul", "Душа", "дневник и характер"]);
@@ -6062,7 +6088,7 @@ function appsHtml() {
   if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
   if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
   t.push(["radio", "Радио", "станции и жанры"]);
-  t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["qa", "Вопрос — ответ", "как сделать…"]);
+  t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"]);
   t.push(["senior", "Для старших", "для мамы и папы"], ["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
   return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
 }
@@ -6070,10 +6096,30 @@ function openApps() {
   $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
   $$("#apps-body [data-app]").forEach(b => b.onclick = () => { const k = b.dataset.app; closeSheets();
     setTimeout(() => ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
-      ideas: () => openIdeas(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(),
-      news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")) }[k] || (() => { }))(), 60); });
+      ideas: () => openIdeas(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(), lessons: () => openLessons(),
+      news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9", true), true) }[k] || (() => { }))(), 60); });
 }
 $("#b-apps").onclick = () => openApps();
+/* «Видеоуроки» (0.69; владелец 29.10: «показывать их в приложении»): мультфильмы ИИ Академии — с сайта (?p=/academy:
+   только уроки, чьё видео уже загружено); плеер — прямо в листе, YouTube — в браузере. */
+async function openLessons() {
+  const box = $("#lessons-body"); box.innerHTML = `<p class="lsn-empty">Загружаю уроки…</p>`; openSheet("#sh-lessons");
+  let items = [];
+  try { const r = await http("GET", annBase() + "?p=/academy", { timeout: 15000 }); items = (JSON.parse(r.body || "{}").items || []); }
+  catch (e) { box.innerHTML = `<p class="lsn-empty">Нет связи с dewiar.pro — попробуйте позже.</p>`; return; }
+  const m = (x) => x ? `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}` : "";
+  box.innerHTML = `<div class="lsn-player" id="lsn-player" hidden><video id="lsn-v" controls playsinline preload="metadata"></video><b id="lsn-t"></b></div>`
+    + (items.length ? items.map(l => `<button class="lsn" data-id="${esc(l.id)}"><span class="lsn-pic"${l.poster ? ` style="background-image:url('${esc(l.poster)}')"` : ""}><i aria-hidden="true">▶</i>${l.sec ? `<em>${m(l.sec)}</em>` : ""}</span>`
+      + `<span class="lsn-x"><small>Урок ${l.n}</small><b>${esc(l.title)}</b><span>${esc(l.about)}</span></span></button>`).join("")
+      : `<p class="lsn-empty">Уроки скоро появятся здесь.</p>`);
+  $$("#lessons-body .lsn").forEach(b => b.onclick = () => {
+    const l = items.find(x => x.id === b.dataset.id); if (!l) return;
+    if (!l.video && l.youtube) return D.openUrl(l.youtube);
+    const v = $("#lsn-v"); v.poster = l.poster || ""; v.src = l.video; $("#lsn-t").textContent = `Урок ${l.n} · ${l.title}`;
+    $("#lsn-player").hidden = false; $("#lessons-body").scrollTop = 0; v.play().catch(() => { });
+  });
+}
+
 $("#r-pp").onclick = () => { D.vibrate(12); if (radio.state().state === "paused") radio.resume(); else radio.pause(); };
 $("#r-x").onclick = () => { D.vibrate(12); radio.stop(); };
 
@@ -6566,7 +6612,7 @@ function wireSettings(info) {
       b.disabled = false; b.textContent = "Открыть @" + n; b.onclick = () => D.openUrl("https://t.me/" + n); }).catch(() => { if (g("tg-bot")) g("tg-bot").remove(); });
     if (tgOn() && g("tg-card")) tgStatus().then(t => { if (!!t.linked !== !!$("#tg-off") && setTab === "telegram") renderSettings(); }).catch(() => {});
     if (g("upd-check")) g("upd-check").onclick = () => checkUpdate(true);
-    if (g("news-open")) g("news-open").onclick = () => { closeSheets(); setTimeout(() => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9")), 250); };
+    if (g("news-open")) g("news-open").onclick = () => { closeSheets(); setTimeout(() => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9", true), true), 250); };
     if (g("qa-open")) g("qa-open").onclick = () => openLearn("qa");
     if (g("kids-open")) g("kids-open").onclick = () => openKids();
     if (g("work-open")) g("work-open").onclick = () => openWork("");

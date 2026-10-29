@@ -232,4 +232,8 @@ if __name__ == "__main__":
     else:
         mix(tl, out)
         render(lesson, out, tl)
-        print("готово:", out / "lesson.mp4")
+        # обложка для «Видеоуроков» (server/dwrapp/academy/<урок>.jpg): заставка до первого титра, 960×540
+        at = max(0.6, les["lead"].get(tl["scenes"][0]["id"], 1.4) - 0.25)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{at:.2f}", "-i", str(out / "lesson.mp4"), "-frames:v", "1",
+                        "-vf", "scale=960:-2", "-q:v", "4", str(out / "poster.jpg")], check=True)
+        print("готово:", out / "lesson.mp4", "и обложка", out / "poster.jpg")

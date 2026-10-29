@@ -9,6 +9,7 @@ const pbEsc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":
 async function loadPbot() {
   try { PB.d = await core.call("pbot_get"); } catch (e) { toast(e.message, 4000); return; }
   pbRender();
+  if (window.ppLoad) ppLoad();                    // «Посты» и «Рубрики» (studio/pbot_posts.js)
 }
 
 function pbPersona() { const d = PB.d || {}; return (d.personas || []).find(p => p.id === d.persona) || (d.personas || [])[0] || { name: "Персонаж", color: "#8B7CFF" }; }

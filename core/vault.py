@@ -28,6 +28,7 @@ SAVE_LOOSE = re.compile(rf"^(?:запомни|запиши|сохрани|пол
                         rf"(?P<value>\S*\d\S*|[A-Za-z0-9_@.!#$%^&*+-]{{4,}}|(?:{DW}\s?){{3,}})$", re.I)
 GET_RX = re.compile(rf"^(?:а\s+)?(?:какой|какая|какое|скажи|подскажи|покажи|напомни|дай|назови|выведи)\s+(?:мне\s+)?(?:у\s+меня\s+)?(?:мой\s+|моя\s+)?"
                     rf"(?P<name>(?:{KEY})(?:\s+.+?)?)$", re.I)
+PAGE_MAX = 50000          # секретная страница: десятки паролей, ключей и адресов — с запасом
 DIGITS = {"ноль": "0", "один": "1", "одна": "1", "два": "2", "две": "2", "три": "3", "четыре": "4", "пять": "5", "шесть": "6",
           "семь": "7", "восемь": "8", "девять": "9"}
 
@@ -119,9 +120,10 @@ class Vault:
                 return 0
 
     def list(self):
-        """Без значений — только названия и длина значения (для студии и модели)."""
+        """Без значений — только названия и длина значения (для студии и модели); у страницы — ещё число строк."""
         with self._lock:
             return [{k: v for k, v in x.items() if k != "value"} | {"length": len(x.get("value", ""))}
+                    | ({"lines": sum(1 for ln in x.get("value", "").splitlines() if ln.strip())} if x.get("kind") == "page" else {})
                     for x in sorted(self._load(), key=lambda i: i.get("name", "").lower())]
 
     def get(self, item_id):
@@ -142,20 +144,28 @@ class Vault:
                     best, score = x, s
         return dict(best) if best else None
 
-    def put(self, name, value, note="", item_id=None, login=None, url=None):
-        """Новая запись или замена: по item_id, а без него — по совпадению названия. -> запись без значения.
-        login и url («Сейф паролей», 0.45) — не секрет: видны в списке, по ним ищут; None — оставить как было."""
+    def put(self, name, value, note="", item_id=None, login=None, url=None, kind=None):
+        """Новая запись или замена: по item_id, а без него — по совпадению названия (того же вида). -> запись без значения.
+        login и url («Сейф паролей», 0.45) — не секрет: видны в списке, по ним ищут; None — оставить как было.
+        kind="page" — секретная страница (29.10, владелец: «много паролей или секретов в кучу, как на обычной странице,
+        но чтобы тоже безопасно лежало и шифровалось»): то же шифрование, значение — текст до PAGE_MAX знаков."""
         name, value = _clean(name)[:120], str(value)
-        if not name or not value:
-            raise ValueError("нужно название и значение")
+        page = kind == "page"
+        if not name or not value.strip():
+            raise ValueError("страница пустая — впишите текст или удалите её" if page and name else "нужно название и значение")
+        if len(value) > (PAGE_MAX if page else 5000):
+            raise ValueError(f"слишком длинно: до {PAGE_MAX if page else 5000} знаков" + ("" if page else " — для длинного есть «Страница»"))
         now = datetime.now().isoformat(timespec="seconds")
         with self._lock:
             items = self._load()
-            x = next((i for i in items if (item_id and i["id"] == item_id) or (not item_id and i["name"].lower() == name.lower())), None)
+            x = next((i for i in items if (item_id and i["id"] == item_id)
+                      or (not item_id and i["name"].lower() == name.lower() and (i.get("kind") == "page") == page)), None)
             if x:
                 x.update(name=name, value=value, note=note if note is not None else x.get("note", ""), updated=now)
             else:
                 x = {"id": uuid.uuid4().hex[:10], "name": name, "value": value, "note": note or "", "created": now, "updated": now}
+                if page:
+                    x["kind"] = "page"
                 items.append(x)
             if login is not None:
                 x["login"] = str(login).strip()[:160]

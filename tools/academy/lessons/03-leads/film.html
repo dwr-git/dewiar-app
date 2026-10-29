@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 3 · Заявки с сайта. Тот же неоморфизм, что в уроках 1–2, но с одной сменой света: ночь (сайт открыт, отвечать
+   некому — отвечает Лира) → утро (заявка уже в «Клиентах» и в CRM). Главная вещь урока — этот рассвет. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --sky: #2fc6f6;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -3; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+#night { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 70% 0%, #2a3560 0%, #141a33 55%, #0d1226 100%); opacity: 0; }
+#night i { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; }
+#moon { position: absolute; left: 1800px; top: 70px; width: 110px; height: 110px; border-radius: 50%; box-shadow: -26px 10px 0 0 #ffe6a8; transform: rotate(-20deg); }
+#sun { position: absolute; left: 1600px; top: 120px; width: 150px; height: 150px; border-radius: 50%; z-index: -1; background: radial-gradient(circle, #ffe7a8 0%, #ffc56b 55%, rgba(255,197,107,0) 72%); opacity: 0; }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(106,141,255,.28), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.25), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; transition: color .3s; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; opacity: .7; margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+body.dark .orb { box-shadow: 0 24px 50px -20px rgba(0,0,0,.7); background: #222a4a; } body.dark .seat b, body.dark #brand { color: #eef1ff; }
+
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 124px/1 Unbounded, sans-serif; letter-spacing: -.02em; }
+#t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#bubble { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#bubble svg { width: 110px; height: 110px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* сайт магазина в окне браузера */
+#site { position: absolute; left: 660px; top: 140px; width: 1140px; height: 730px; border-radius: 24px; overflow: hidden; background: #fbf8f3; color: #2b2a28;
+  box-shadow: 0 40px 90px -30px rgba(0,0,0,.6); }
+#site .bar { height: 54px; background: #ece7df; display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+#site .bar i { width: 13px; height: 13px; border-radius: 50%; background: #d8cfc2; } #site .bar span { margin-left: 18px; padding: 8px 22px; border-radius: 99px; background: #fff; font-size: 18px; color: #8a8378; }
+#site .hero { padding: 46px 56px 0; } #site h2 { font: 700 54px/1.1 Unbounded, sans-serif; color: #3a5a3a; } #site .hero p { font-size: 24px; margin-top: 14px; color: #6b665e; }
+#site .goods { display: flex; gap: 24px; padding: 34px 56px; }
+#site .good { flex: 1; height: 220px; border-radius: 20px; background: linear-gradient(160deg, #e5efe0, #c9dcc1); display: flex; align-items: flex-end; padding: 18px; font-size: 22px; font-weight: 700; color: #3a5a3a; }
+#site .good:nth-child(2) { background: linear-gradient(160deg, #f3e3cf, #e3c49e); color: #7a4e1e; } #site .good:nth-child(3) { background: linear-gradient(160deg, #e9dfee, #cdb9d8); color: #5b3c6b; }
+#clock { position: absolute; left: 680px; top: 76px; font: 700 40px Unbounded, sans-serif; color: #c9d2ff; }
+#cbtn { position: absolute; right: 26px; bottom: 22px; width: 74px; height: 74px; border-radius: 50%; background: #3f77a3; display: grid; place-items: center; box-shadow: 0 14px 30px -10px rgba(0,0,0,.5); }
+#cbtn svg { width: 34px; height: 34px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#chat { position: absolute; right: 26px; bottom: 112px; width: 560px; height: 590px; border-radius: 22px; background: #fff; box-shadow: 0 30px 70px -24px rgba(0,0,0,.55); overflow: hidden; display: flex; flex-direction: column; transform-origin: 100% 100%; }
+#chat header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #eaf3fb; }
+#chat header i { width: 44px; height: 44px; border-radius: 50%; background: url(../../../../data/avatars/lira.webp) center / cover; }
+#chat header b { display: block; font-size: 22px; } #chat header small { font-size: 17px; color: #6b7180; }
+#msgs { flex: 1; min-height: 0; overflow: hidden; padding: 16px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; }
+.m { max-width: 86%; padding: 12px 16px; border-radius: 18px; font-size: 22px; line-height: 1.4; flex: none; }
+.m.a { align-self: flex-start; background: #eceef4; border-bottom-left-radius: 5px; } .m.u { align-self: flex-end; background: #3f77a3; color: #fff; border-bottom-right-radius: 5px; }
+#form { margin: 0 14px 14px; padding: 14px; border-radius: 16px; background: #eceef4; display: flex; flex-direction: column; gap: 8px; }
+#form span { padding: 10px 14px; border-radius: 12px; background: #fff; font-size: 22px; min-height: 48px; }
+#form b { align-self: flex-start; padding: 10px 20px; border-radius: 12px; background: #3f77a3; color: #fff; font-size: 20px; }
+
+/* утро: «Клиенты» и CRM */
+.card { position: absolute; padding: 30px 34px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#client { left: 640px; top: 210px; width: 600px; }
+#client header { display: flex; align-items: center; gap: 16px; } #client header i { width: 64px; height: 64px; border-radius: 50%; background: #f2a96b; color: #fff; display: grid; place-items: center; font: 700 26px Unbounded; font-style: normal; }
+#client header b { display: block; font: 600 30px Unbounded, sans-serif; } #client header small { font-size: 22px; color: var(--mut); font-weight: 700; }
+#client h4 { margin: 22px 0 10px; font-size: 19px; color: var(--mut); font-weight: 800; }
+#client p { font-size: 22px; line-height: 1.45; font-weight: 600; } #client p em { font-style: normal; color: var(--mut); }
+#arrow { position: absolute; left: 1262px; top: 400px; width: 120px; height: 40px; }
+#crm { left: 1400px; top: 260px; width: 400px; }
+#crm .tag { display: inline-block; padding: 6px 14px; border-radius: 99px; background: var(--sky); color: #fff; font-size: 18px; font-weight: 800; }
+#crm b { display: block; font: 600 32px Unbounded, sans-serif; margin: 16px 0 6px; } #crm small { display: block; font-size: 21px; color: var(--mut); font-weight: 700; line-height: 1.5; }
+#step { position: absolute; left: 640px; top: 640px; display: flex; align-items: center; gap: 20px; padding: 22px 34px 22px 22px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+#step i { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: var(--brand); flex: none; }
+#step i svg { width: 32px; height: 32px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#step b { display: block; font: 600 30px Unbounded, sans-serif; } #step small { display: block; font-size: 22px; color: var(--mut); font-weight: 700; margin-top: 4px; }
+
+#studio { position: absolute; left: 700px; top: 220px; width: 1060px; height: 500px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); display: grid; grid-template-columns: 280px 1fr; overflow: hidden; }
+#studio nav { padding: 28px 20px; display: flex; flex-direction: column; gap: 8px; font-size: 22px; font-weight: 600; color: var(--mut); box-shadow: 8px 0 18px -10px var(--nd); }
+#studio nav h5 { font-size: 15px; letter-spacing: .02em; margin: 10px 16px 2px; color: var(--mut); }
+#studio nav span { padding: 10px 16px; border-radius: 14px; } #studio nav span.on { color: var(--accent); box-shadow: var(--raise-s); }
+#studio main { padding: 30px 34px; min-width: 0; } #studio main h3 { font: 700 32px Unbounded; margin-bottom: 18px; }
+.code { display: flex; gap: 12px; align-items: center; margin-top: 10px; }
+.code code { flex: 1; min-width: 0; padding: 16px 20px; border-radius: 16px; box-shadow: var(--press); font: 500 19px ui-monospace, monospace; color: #3b4660; white-space: nowrap; overflow: hidden; }
+.code b { padding: 14px 22px; border-radius: 16px; box-shadow: var(--raise-s); font-size: 20px; }
+.code b.ok { color: #fff; background: var(--ok); box-shadow: none; }
+#studio .hint { margin-top: 18px; font-size: 21px; color: var(--mut); font-weight: 600; line-height: 1.45; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div id="night"><div id="moon"></div></div><div id="sun"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 3 · Заявки с сайта</span></div></div>
+
+  <div class="layer" id="L-title"><div id="bubble"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/></svg></div>
+    <div id="t-title"><h1>Заявки с сайта</h1><p>Консультант на сайте ночью — заявка у вас утром</p></div></div>
+
+  <div class="layer" id="L-site">
+    <div id="clock">23:40</div>
+    <div id="site"><div class="bar"><i></i><i></i><i></i><span>chaidvor.by</span></div>
+      <div class="hero"><h2>Чайный двор</h2><p>Улуны, пуэры и зелёные чаи с доставкой</p></div>
+      <div class="goods"><div class="good">Зелёные</div><div class="good">Улуны</div><div class="good">Пуэры</div></div>
+      <div id="chat"><header><i></i><div><b>Лира</b><small>Чайный двор · ИИ-помощник</small></div></header>
+        <div id="msgs">
+          <div class="m a" id="m0">Здравствуйте! Помогу выбрать чай.</div>
+          <div class="m u" id="m1">Сколько стоит доставка?</div>
+          <div class="m a" id="m2">300 ₽, при заказе от 3000 ₽ — бесплатно.</div>
+          <div class="m u" id="m3">А есть пуэр 2010 года?</div>
+          <div class="m a" id="m4">Такого в знаниях нет — оставьте телефон, вам ответят утром.</div>
+          <div class="m a" id="m5">Спасибо! Мы свяжемся с вами.</div>
+        </div>
+        <div id="form"><span id="f1"></span><span id="f2"></span><b>Отправить</b></div></div>
+      <div id="cbtn"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div></div>
+  </div>
+
+  <div class="layer" id="L-crm">
+    <div class="card" id="client"><header><i>А</i><div><b>Анна</b><small>+375 29 111-22-33 · с сайта</small></div></header>
+      <h4>Заявка с сайта · 23:41</h4>
+      <p><em>Посетитель:</em> Сколько стоит доставка?<br><em>Консультант:</em> 300 ₽, от 3000 ₽ — бесплатно.<br><em>Посетитель:</em> А есть пуэр 2010 года?</p></div>
+    <svg id="arrow" viewBox="0 0 120 40"><path d="M4 20h100M90 8l14 12-14 12" fill="none" stroke="#2fc6f6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="card" id="crm"><span class="tag">Битрикс24</span><b>Лид №42</b><small>Анна · +375 29 111-22-33<br>Источник: Dewiar<br>Разговор — в комментарии</small></div>
+    <div id="step"><i><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></i><div><b>Перезвонить Анне</b><small>сегодня в 10:00 · напоминание в «Делах»</small></div></div>
+  </div>
+
+  <div class="layer" id="L-how">
+    <div id="studio"><nav><h5>Работа</h5><span>Поручения</span><span>Клиенты</span><span>Рассылка</span><span class="on">Чат для сайта</span></nav>
+      <main><h3>Чат для сайта</h3><div class="code"><code>&lt;script src="https://dewiar.pro/dwrapp/sitechat.js" data-id="…"&gt;</code><b id="cp">Копировать</b></div>
+        <p class="hint">Вставьте на свой сайт — в углу появится кнопка чата. Или отправьте ссылку: в соцсети, на визитку.</p></main></div>
+  </div>
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Поручения сотрудникам»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  night: { lira: [330, 470, 300, 0], patrik: [330, 470, 300, 1] },
+  chat:  { lira: [330, 470, 300, 1], patrik: [330, 470, 300, 0] },
+  lead:  { lira: [330, 470, 300, 1], patrik: [330, 470, 300, 0] },
+  crm:   { lira: [330, 330, 250, 1], patrik: [330, 780, 200, 0] },
+  next:  { lira: [330, 330, 250, 1], patrik: [330, 740, 220, 1] },
+  how:   { lira: [380, 470, 320, 1], patrik: [330, 740, 220, 0] },
+  end:   { lira: [960, 330, 300, 1], patrik: [330, 740, 220, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  const p = cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+  if (ORDER[i] === "night") {                       // ночью сначала Патрик, на «Есть кому» — Лира на его месте
+    const sw = out((T - at("s2b") + 0.4) / 0.5);
+    p[3] = who === "patrik" ? 1 - sw : sw;
+  }
+  return p;
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave" });
+  ENT[who].set({ state: "idle" });
+}
+// звёзды ночи
+for (let i = 0; i < 70; i++) { const s = document.createElement("i"); s.style.left = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) % 1 * 1920 + "px"; s.style.top = ((Math.sin(i * 78.233) * 12345.678 % 1 + 1) % 1) * 600 + "px"; s.dataset.k = i; $("#night").appendChild(s); }
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+function typeIn(el, text, k) { el.textContent = text.slice(0, Math.round(text.length * clamp(k))); }
+
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  // ночь — от «Ночь…» до утра (сцена crm): рассвет за 2,5 с
+  const dark = out((T - s("night").start) / 0.9) * (1 - ease((T - s("crm").start + 0.4) / 2.5));
+  $("#night").style.opacity = dark; document.body.classList.toggle("dark", dark > 0.5);
+  [...$("#night").children].forEach((st, i) => { if (st.dataset.k) st.style.opacity = 0.35 + 0.65 * Math.abs(Math.sin(T * 0.8 + i)); });
+  const rise = ease((T - s("crm").start - 0.2) / 2.6);
+  $("#sun").style.opacity = rise * (1 - out((T - s("how").start) / 0.6)); $("#sun").style.transform = `translateY(${(1 - rise) * 180}px)`;
+  layer("L-title", T, 0.2, s("night").start);
+  vis($("#bubble"), out((T - 0.8) / 0.6), 0, .8);
+  // сайт: ночь, часы, кнопка чата пульсирует; на «Есть кому» — чат открывается
+  layer("L-site", T, s("night").start + 0.3, s("crm").start);
+  const open = out((T - at("s2b") - 0.4) / 0.5);
+  $("#chat").style.opacity = open; $("#chat").style.transform = `scale(${lerp(0.6, 1, open)})`; $("#chat").style.visibility = open > 0.01 ? "visible" : "hidden";
+  $("#cbtn").style.transform = `scale(${1 + (open < 0.5 ? 0.08 * Math.max(0, Math.sin(T * 5)) : 0)})`;
+  $("#clock").textContent = T < s("lead").start ? "23:40" : "23:41";
+  const mt = [at("s2b") + 1.0, at("s3a") + 0.2, at("s3a") + 1.4, at("s3b") + 0.1, at("s3b") + 1.2, end("s4a") + 0.3];
+  mt.forEach((t, i) => { const el = $("#m" + i); el.style.display = T >= t ? "" : "none"; el.style.opacity = out((T - t) / 0.3); });
+  const ff = $("#form"); ff.style.display = T >= s("lead").start && T < end("s4a") + 0.3 ? "" : "none";
+  typeIn($("#f1"), "Анна", (T - at("s4a") + 0.2) / 0.6); typeIn($("#f2"), "+375 29 111-22-33", (T - at("s4a") - 0.5) / 1.3);
+  // утро: клиент, стрелка в CRM, следующий шаг
+  layer("L-crm", T, s("crm").start + 0.6, s("how").start);
+  vis($("#client"), out((T - at("s5a") - 0.4) / 0.6), 40, .97);
+  const ar = out((T - at("s5b") + 0.1) / 0.6); $("#arrow").style.opacity = ar; $("#arrow").style.transform = `translateX(${(ar - 1) * 40}px)`;
+  vis($("#crm"), out((T - at("s5b") - 0.3) / 0.5), 0, .9);
+  vis($("#step"), out((T - at("s6b") + 0.1) / 0.5), 30, .95);
+  // как включить
+  layer("L-how", T, s("how").start + 0.2, s("end").start);
+  vis($("#studio"), out((T - at("s7a") + 0.1) / 0.6), 40, .97);
+  const cp = T > at("s7b") + 0.5 && T < at("s7b") + 2.6; $("#cp").classList.toggle("ok", cp); $("#cp").textContent = cp ? "Скопировано" : "Копировать";
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

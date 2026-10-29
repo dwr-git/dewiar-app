@@ -688,7 +688,10 @@ class AnswerMixin:
         own = ((self.s.get("llm", "persona") or {}).get(pid) or "") if pid else ""
         profs = self.s.get("llm", "profiles") or {}
         if own and own in profs:
-            return dict(profs[own])
+            # №403 (29.10): у одного сервера (Ollama) много моделей — персонажу своя модель того же профиля
+            # (llm.persona_model[id]); раньше выбор модели менял профиль у всех, «слетало к последнему»
+            m = ((self.s.get("llm", "persona_model") or {}).get(pid) or "").strip()
+            return dict(profs[own], model=m) if m and not profs[own].get("cloud") else dict(profs[own])
         return self.s.active_llm()
 
     def _contact_maybe(self):

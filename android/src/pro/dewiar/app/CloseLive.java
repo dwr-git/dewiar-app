@@ -56,6 +56,8 @@ public class CloseLive extends Service {
         Notification.Builder b = Compat.builder(this, CH_LIVE);
         PendingIntent open = PendingIntent.getActivity(this, 6, new Intent(this, MainActivity.class).setAction("pro.dewiar.CLOSE"),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        android.graphics.Bitmap lg = Compat.logo(this);           // знак Dewiar крупно — значок слева система красит в свой цвет
+        if (lg != null) b.setLargeIcon(lg);
         b.setSmallIcon(R.drawable.ic_stat).setContentTitle("Dewiar на связи").setContentText("Сообщения и звонки близких дойдут, даже когда приложение закрыто")
                 .setOngoing(true).setContentIntent(open);
         try { startForeground(NOTE, b.build()); } catch (Throwable e) { stopSelf(); return START_NOT_STICKY; }
@@ -130,6 +132,8 @@ public class CloseLive extends Service {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         String title = nw.optString("title"), text = nw.optString("text");
         Notification.Builder b = Compat.builder(this, Compat.CH_INFO);
+        android.graphics.Bitmap lg = Compat.logo(this);
+        if (lg != null) b.setLargeIcon(lg);
         b.setSmallIcon(R.drawable.ic_stat).setContentTitle(("warn".equals(nw.optString("level")) ? "⚠️ " : "📣 ") + (title.isEmpty() ? "Dewiar" : title))
                 .setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setAutoCancel(true).setContentIntent(pi);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(NEWS_NOTE, b.build());

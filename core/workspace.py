@@ -154,9 +154,22 @@ def note_front(text):
         meta["color"] = col.group(1).upper()
     else:
         meta.pop("color", None)
-    for k in ("pinned", "archived"):
+    for k in ("pinned", "archived", "locked"):
         meta[k] = str(meta.get(k) or "").strip().lower() in ("true", "yes", "1", "да")
     return meta, str(text)[m.end():]
+
+
+LOCKED_MSG = "заметка защищена от удаления — сначала снимите замок"
+
+
+def _locked(p):
+    """Заметка с замком (locked: true в шапке) — не удаляется ни из студии, ни голосом, пока замок не снят."""
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            head = f.read(4096)
+    except OSError:
+        return False
+    return bool(note_front(head)[0].get("locked"))
 
 
 INLINE_TAG_RX = re.compile(r"(?<![\w/#&=\-])#([A-Za-zА-Яа-яЁё][\wА-Яа-яЁё\-/]{1,40})")
@@ -168,7 +181,8 @@ def note_tags(meta, body):
     return list(dict.fromkeys(list(meta.get("tags") or []) + inline))
 
 
-_FRONT_KEYS = {"tags": ("tags", "tag", "labels", "метки"), "color": ("color", "цвет"), "pinned": ("pinned",), "archived": ("archived",)}
+_FRONT_KEYS = {"tags": ("tags", "tag", "labels", "метки"), "color": ("color", "цвет"), "pinned": ("pinned",), "archived": ("archived",),
+               "locked": ("locked",)}
 
 
 def note_front_set(text, patch):
@@ -197,7 +211,7 @@ def note_front_set(text, patch):
             out.append("tags: [" + ", ".join(tags) + "]")
     if patch.get("color"):
         out.append("color: " + re.sub(r"[^A-Za-z_]", "", str(patch["color"])).upper())
-    for k in ("pinned", "archived"):
+    for k in ("pinned", "archived", "locked"):
         if patch.get(k):
             out.append(f"{k}: true")
     if not out:
@@ -283,6 +297,8 @@ class Workspace:
         if parts[0] == "Задачи":
             raise WorkspaceError("папку задачи удаляйте в разделе «Задачи» — там же её план и журнал")
         files = [x for x in p.rglob("*") if x.is_file()]
+        if any(x.suffix.lower() == ".md" and _locked(x) for x in files):
+            raise WorkspaceError("в папке есть защищённые заметки — сначала снимите с них замок")
         import guard
         guard.trash([{"path": str(p), "dir": True, "files": len(files), "size": sum(x.stat().st_size for x in files)}])
         return True
@@ -394,7 +410,8 @@ class Workspace:
             out.append({"path": f.relative_to(self.root).as_posix(), "title": f.stem, "mtime": st.st_mtime, "size": st.st_size,
                         "folder": folder, "snippet": re.sub(r"\s+", " ", snip).strip(), "att": len(atts), "img": img,
                         "tags": note_tags(meta, body), "color": meta.get("color", ""), "source": meta.get("source", ""),
-                        "pinned": bool(meta.get("pinned")), "archived": bool(meta.get("archived"))})
+                        "pinned": bool(meta.get("pinned")), "archived": bool(meta.get("archived")),
+                        "locked": bool(meta.get("locked"))})
         out.sort(key=lambda x: (not x["pinned"], -x["mtime"]))          # закреплённые — сверху
         return out[:limit]
 
@@ -406,7 +423,8 @@ class Workspace:
         if not p.is_file():
             raise WorkspaceError("заметки нет")
         meta, _ = note_front(p.read_text(encoding="utf-8", errors="replace"))
-        full = {"tags": meta.get("tags") or [], "color": meta.get("color", ""), "pinned": meta.get("pinned"), "archived": meta.get("archived")}
+        full = {"tags": meta.get("tags") or [], "color": meta.get("color", ""), "pinned": meta.get("pinned"), "archived": meta.get("archived"),
+                "locked": meta.get("locked")}
         full.update({k: v for k, v in (patch or {}).items() if k in full})
         text = note_front_set(p.read_text(encoding="utf-8", errors="replace"), full)
         st = p.stat()
@@ -523,6 +541,8 @@ class Workspace:
             raise WorkspaceError("файла нет")
         if rel in (MEMORY.as_posix(), "README.md"):
             raise WorkspaceError("этот файл удалять нельзя — его можно только очистить")
+        if _locked(p):
+            raise WorkspaceError(LOCKED_MSG)
         import guard
         items = [{"path": str(p), "dir": False, "files": 1, "size": p.stat().st_size}]
         att = p.parent / "Вложения" / _clean_name(p.stem)        # вложения заметки — в корзину вместе с ней

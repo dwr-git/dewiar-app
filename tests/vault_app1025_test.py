@@ -29,7 +29,7 @@ ok(lst[0]["login"] == "misha@ya.ru" and "value" not in lst[0] and lst[0]["length
 v.put("Почта Яндекса", "Новый-456", item_id=x["id"])
 ok(v.get(x["id"])["value"] == "Новый-456" and v.get(x["id"])["login"] == "misha@ya.ru", "правка без логина — логин прежний")
 src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
-ok('if a.get("id") and not val:' in src, "правка в студии без нового пароля — пароль прежний (vault_put)")
+ok('if a.get("id") and not val and a.get("kind") != "page":' in src, "правка в студии без нового пароля — пароль прежний (vault_put)")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok("def clip_secret(self, text, sec=30):" in app and "CanIncludeInClipboardHistory" in app and "cb.wait_for_text() == text" in app,
    "окно: пароль в буфер и стирание через 30 с, только если там всё ещё он; Windows — не в журнал буфера")
@@ -116,7 +116,7 @@ with sync_playwright() as p:
         pg.click(".vl-item[data-id='a3'] [data-v='show']"); pg.fill("#vl-q", ""); pg.dispatch_event("#vl-q", "input")
         pg.click(".vl-item[data-id='a3'] [data-v='show']"); pg.wait_for_timeout(100)
         pg.screenshot(path=f"{SHOT}/vault.png")
-        pg.click("#vl-add"); pg.fill("#vl-name", "Банк"); pg.click("#vl-gen"); pg.wait_for_timeout(100); pg.screenshot(path=f"{SHOT}/vault_form.png"); pg.click("#vl-cancel")
+        pg.click("#vl-add"); pg.fill("#vl-name", "Банк"); pg.click("#vl-gen"); pg.wait_for_timeout(100); pg.screenshot(path=f"{SHOT}/vault_form.png"); pg.click("#vl-cancel"); pg.wait_for_timeout(150); pg.click(".dwq button.yes"); pg.wait_for_timeout(150)
     # удалить
     pg.click(".vl-item[data-id='a3'] [data-v='edit']"); pg.wait_for_timeout(100)
     pg.click("#vl-del"); pg.wait_for_timeout(200)

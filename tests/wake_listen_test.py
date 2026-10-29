@@ -216,3 +216,10 @@ played.clear(); e3.radio.last = None
 ok(E.Engine._music_cmd(e3, "Играй") is True and "Что включить" in played[0], "ничего ещё не играло — спрашиваю, что включить")
 played.clear(); e3.radio = SimpleNamespace(playing=True, paused=None, last=None, volume=0.1, station={"name": "Медляк FM"}, sounding=True, last_at=0.0)
 ok(E.Engine._music_cmd(e3, "Играй") is True and "тихо" in played[0] and "10%" in played[0], f"радио играет на 10% — так и говорю: {played[0]}")
+# жалоба №404 (29.10: «засыпает, прерывая разговор»): посреди длинной фразы быстрый слух принял «схватит» за «хватит» —
+# слово-стоп посреди речи не усыпляет (решает точное распознавание в конце фразы); «схватит» и родня — в «приманках»
+import engine_audio as EA  # noqa: E402
+ok(EA.stop_mid_phrase(True, 4.0) and not EA.stop_mid_phrase(True, 0.8) and not EA.stop_mid_phrase(False, 6.0),
+   "№404: «хватит» посреди длинной фразы — не сон; одно короткое «хватит» — сон")
+_dec = set((ROOT / "data/decoys.txt").read_text(encoding="utf-8").split())
+ok({"схватит", "захватит", "подхватит", "хватает"} <= _dec and "хватит" not in _dec, "№404: «схватит», «захватит», «хватает» — приманки быстрого слуха, «хватит» — нет")

@@ -114,13 +114,31 @@ function renderBrain() {
   const ids = Object.keys(profs);
   box.innerHTML = `<button role="radio" data-b="" class="bp${cur ? "" : " on"}" aria-checked="${!cur}"><b>Как у всех</b><small>${escH(brainName(profs[act], act) || "общий мозг не выбран")}</small></button>`
     + ids.map(id => `<button role="radio" data-b="${escH(id)}" class="bp${cur === id ? " on" : ""}" aria-checked="${cur === id}"><b>${escH(brainName(profs[id], id))}</b><small>${escH(profs[id].cloud ? "облако Dewiar" : (profs[id].model || "") + (profs[id].base_url ? " · " + profs[id].base_url.replace(/^https?:\/\//, "").split("/")[0] : ""))}</small></button>`).join("")
-    + `<button class="bp add" id="e-brain-add"><b>＋ Другая модель</b><small>добавить в «Мозге»: GPT, Claude, Gemini, своя</small></button>`;
+    + `<button class="bp add" id="e-brain-add"><b>＋ Другая модель</b><small>добавить в «Мозге»: GPT, Claude, Gemini, своя</small></button>`
+    // №403 (29.10: «не получается установить персонажам разные модели — слетает к последнему»): у сервера вроде Ollama много
+    // моделей — персонажу своя модель того же сервера (llm.persona_model[id]), профиль у остальных не меняется
+    + (cur && !profs[cur].cloud ? `<label class="bp-m"><span>Модель ${escH(ed.name)}</span><select id="e-brain-m"><option value="">как в профиле — ${escH(profs[cur].model || "")}</option></select></label>` : "");
   $$("#e-brain [data-b]").forEach(b => b.onclick = async () => {
     const id = b.dataset.b;
-    await save({ llm: { persona: { [ed.id]: id } } }, true);
-    S.llm.persona = Object.assign({}, S.llm.persona || {}, { [ed.id]: id }); renderBrain(); renderPersonas();
+    await save({ llm: { persona: { [ed.id]: id }, persona_model: { [ed.id]: "" } } }, true);
+    S.llm.persona = Object.assign({}, S.llm.persona || {}, { [ed.id]: id });
+    S.llm.persona_model = Object.assign({}, S.llm.persona_model || {}, { [ed.id]: "" }); renderBrain(); renderPersonas();
     toast(id ? `${ed.name} думает моделью «${brainName(profs[id], id)}»` : `${ed.name} думает общим мозгом`);
   });
+  const sel = $("#e-brain-m");
+  if (sel) {
+    const mine = ((S.llm || {}).persona_model || {})[ed.id] || "", pid = ed.id;
+    if (mine) sel.insertAdjacentHTML("beforeend", `<option value="${escH(mine)}" selected>${escH(mine)}</option>`);
+    core.call("llm_models", { profile: profs[cur] }).then(ms => {
+      if (!ed || ed.id !== pid || !$("#e-brain-m")) return;
+      (ms || []).filter(m => m !== mine).forEach(m => sel.insertAdjacentHTML("beforeend", `<option value="${escH(m)}">${escH(m)}</option>`));
+    }).catch(() => {});
+    sel.onchange = async () => {
+      await save({ llm: { persona_model: { [pid]: sel.value } } }, true);
+      S.llm.persona_model = Object.assign({}, S.llm.persona_model || {}, { [pid]: sel.value }); renderPersonas();
+      toast(sel.value ? `${ed.name} думает моделью «${sel.value}» — у остальных всё как было` : `${ed.name} думает моделью профиля`);
+    };
+  }
   $("#e-brain-add").onclick = () => { closeEditor(); const b = $('nav button[data-p="brain"]'); if (b) b.click(); };
 }
 /* Своя память у персонажа (0.56; письмо 28.10: «разные персонажи со своей памятью… пока это разные морды лица у одного»):

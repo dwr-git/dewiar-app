@@ -83,6 +83,13 @@ try:
         ok(pg.evaluate("document.querySelector('#e-brain .bp.on').dataset.b") == "", "по умолчанию — «Как у всех»")
         pg.click("#e-brain [data-b='c']"); time.sleep(0.6)
         ok(json.loads((cfg / "settings.json").read_text())["llm"]["persona"].get("patrik") == "c", "выбор сохранён в настройках сразу")
+        # №403 (29.10): у сервера много моделей — Патрику своя модель того же профиля, у остальных профиль не меняется
+        pg.wait_for_function("document.querySelectorAll('#e-brain-m option').length > 1", timeout=10000)
+        c_model0 = json.loads((cfg / "settings.json").read_text())["llm"]["profiles"]["c"].get("model")
+        pg.select_option("#e-brain-m", "mock-qwen"); time.sleep(0.6)
+        L = json.loads((cfg / "settings.json").read_text())["llm"]
+        ok(L.get("persona_model", {}).get("patrik") == "mock-qwen" and L["profiles"]["c"].get("model") == c_model0,
+           f"№403: своя модель Патрика того же сервера — профиль у остальных не тронут ({L.get('persona_model')})")
         if SHOTS:
             pg.locator("#drawer").screenshot(path=f"{SHOTS}/persona_brain.png")
         pg.click("#e-x"); time.sleep(0.5)

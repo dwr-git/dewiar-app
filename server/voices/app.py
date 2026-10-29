@@ -244,6 +244,37 @@ def plain(text: str) -> str:
     return re.sub(r"\+(?=[%s])" % VOWELS, "", text.replace("\u0301", ""))
 
 
+# Ударения, в которых RUAccent ошибается (владелец 29.10, урок «Совет ИИ»: «Па́трик, а не Патри́к; пото́м, а не по́том»).
+# Слово с любым окончанием (Патрика, Патрику…) — ударение на месте основы; регистр первой буквы сохраняется. Свои слова —
+# файлом stress.json рядом со службой (или TTS_STRESS_FILE): {"слово": "сл+ово"} — без перезапуска кода, после «Обновить службу».
+STRESS_FIX = [("патрик", "п+атрик", r"(?:а|у|ом|е|и|ов|ам|ами|ах)?"), ("потом", "пот+ом", ""), ("девиар", "деви+ар", ""),
+              ("дэвиар", "дэви+ар", ""), ("dewiar", "деви+ар", "")]
+
+
+def _stress_rules():
+    rules = list(STRESS_FIX)
+    f = os.getenv("TTS_STRESS_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "stress.json")
+    try:
+        with open(f, encoding="utf-8") as fh:
+            for w, to in (json.load(fh) or {}).items():
+                if isinstance(w, str) and isinstance(to, str) and "+" in to and to.replace("+", "").lower() == w.lower():
+                    rules.append((w.lower(), to.lower(), ""))
+    except (OSError, ValueError):
+        pass
+    return rules
+
+
+def stress_fix(text: str) -> str:
+    """Свои ударения (STRESS_FIX и stress.json) — до RUAccent: слово уже с «+» RUAccent не трогает."""
+    for stem, to, ends in _stress_rules():
+        def rep(m, to=to):
+            w = m.group(0)
+            out = to + w[len(to.replace("+", "")):]
+            return out[0].upper() + out[1:] if w[:1].isupper() else out
+        text = re.sub(r"(?i)(?<![\w+])" + re.escape(stem) + ends + r"(?![\w+])", rep, text)
+    return text
+
+
 def stress_marks(text: str) -> str:
     """Знак ударения после гласной (Дэвиа́р — так пишет Dewiar для серверных голосов) → «+» перед ней, как у ESpeech."""
     return re.sub(r"([%s])\u0301" % VOWELS, r"+\1", text)
@@ -534,7 +565,7 @@ class Engine:
 
     def accentize(self, e, text):
         """Ударения для ESpeech: свои («+» или а́) — как есть, остальные слова — RUAccent."""
-        text = stress_marks(text)
+        text = stress_fix(stress_marks(text))
         if e.accent is None:
             return text
         try:

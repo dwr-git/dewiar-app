@@ -147,7 +147,8 @@ function seatPos(who, T) {
 }
 const ENT = {};
 function makeEnt(who, color, live) {
-  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live, ring: false, voiceLevels: true, fx: "wave" });
+  // как в светлом виджете (владелец 29.10: «Лира и Патрик в чёрных кружках — в виджете без чёрного лучше»): без тёмного диска, тон «neu»
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave" });
   ENT[who].set({ state: "idle" });
 }
 makeEnt("lira", "#9BD4FF", "lira"); makeEnt("patrik", "#FFB547", "patrik");

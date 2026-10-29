@@ -396,6 +396,8 @@ class Telegram:
             t.join(timeout=3)
         self._thread = None
 
+    ALLOWED = ["message", "callback_query"]          # какие события просить у Telegram (бот персонажа — ещё my_chat_member)
+
     def _poll(self):
         """Поток приёма. Ошибки сети — повтор с паузой 3→60 с; негодный токен — пауза 5 минут (сам он не исправится).
         Смещение сохраняется до обработки: сообщение, на котором обработка падает, не придёт повторно по кругу."""
@@ -437,7 +439,7 @@ class Telegram:
         url = self._url("getUpdates")
         try:
             r = self._http("POST", url, json={"offset": self.data.get("offset", 0), "timeout": 0 if self._php() else 25,
-                                              "allowed_updates": ["message", "callback_query"]}, timeout=40, headers=self._hdr())
+                                              "allowed_updates": self.ALLOWED}, timeout=40, headers=self._hdr())
         except httpx.HTTPError as e:
             raise TelegramError(f"Telegram не отвечает: {e}") from e
         try:

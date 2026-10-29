@@ -50,7 +50,10 @@ def _same(a, b):
     if min(len(a), len(b)) < 4:                    # «до», «на», «200» — только целиком: иначе «договор» = «до»
         return False
     sa, sb = _stem(a), _stem(b)
-    return sa == sb or a.startswith(sb) or b.startswith(sa)
+    if sa == sb:
+        return True
+    # «Пётр» — не «Петрова» (29.10): по началу слова — только у слов от пяти букв («Иванов» / «Ивановым»)
+    return min(len(a), len(b)) >= 5 and (a.startswith(sb) or b.startswith(sa))
 
 
 QUOTES = "«»\"'„“”"
@@ -88,6 +91,7 @@ class Clients(DealsMixin):
         self.emit = emit or (lambda *a, **k: None)
         self.now = now or datetime.now
         self._lock = threading.Lock()
+        self.on_add = None                                   # crm.py: «новых клиентов — сразу в CRM»
         try:
             self.st = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -161,7 +165,19 @@ class Clients(DealsMixin):
             self.st["clients"][cid] = c
             self._save()
         log.info("👤 Клиент заведён: %s", self.title(c))
+        if self.on_add:
+            try:
+                self.on_add(cid)
+            except Exception as e:  # noqa: BLE001
+                log.info("Клиенты: CRM — %s", e)
         return dict(c)
+
+    def set_crm(self, cid, info):
+        """crm.py: куда и когда ушёл в CRM ({id, kind, host, at}) — дальше туда уходят только новые записи."""
+        with self._lock:
+            c = self._get(cid)
+            c["crm"] = dict(info)
+            self._save()
 
     def save(self, cid, fields):
         """Правка карточки из студии: name, company, phone, email, note, tags."""

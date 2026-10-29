@@ -84,10 +84,13 @@
   <div class="ng">Работа</div>
   <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden>Поручения<i class="ndot" id="team-dot"></i></button>
   <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden>Клиенты<i class="ndot" id="cr-dot"></i></button>
+  <button data-p="mailing" title="Рассылка: каждому своё письмо с вашей почты — клиентам, сотрудникам или по списку" hidden>Рассылка</button>
+  <button data-p="sitechat" title="Чат для сайта: консультант отвечает посетителям вашего сайта, заявки — в «Клиенты»" hidden>Чат для сайта</button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
   <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям">Бот в Telegram</button>
   <div class="ng">Обучение</div>
   <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
+  <button data-p="lessons" title="ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок">Видеоуроки</button>
   <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира">Вопрос — ответ</button>
   <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу">Что я умею</button>
   <div class="ng">Знания</div>
@@ -225,6 +228,7 @@
       «что я записывал про ремонт?»</p>
     <div class="nt-bar"><label class="nt-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
       <input id="nt-q" type="search" placeholder="Найти: слово или несколько слов" autocomplete="off"></label><span class="nt-count" id="nt-count"></span>
+      <span class="nt-vw nt-sort" id="nt-sort" role="group" aria-label="Порядок"><button type="button" data-s="new" title="Сначала новые — по дням">Новые</button><button type="button" data-s="az" title="По названию, от А до Я">А–Я</button><button type="button" data-s="color" title="По цвету — заметки одного цвета вместе">По цвету</button></span>
       <span class="nt-vw" id="nt-vw" role="group" aria-label="Вид"><button type="button" data-v="list" title="Списком, заметка справа"><svg viewBox="0 0 24 24"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg></button><button type="button" data-v="grid" title="Плитками, как в Keep"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="9" rx="2"/><rect x="13" y="4" width="7" height="5" rx="2"/><rect x="4" y="15" width="7" height="5" rx="2"/><rect x="13" y="11" width="7" height="9" rx="2"/></svg></button></span>
       <button class="btn" id="nt-keep" title="Перенести заметки из Google Keep — архив Google Takeout">Перенести из Keep</button>
       <button class="btn primary" id="nt-add">Новая заметка</button></div>
@@ -313,6 +317,8 @@
           <input type="text" id="bp-welcome" maxlength="500" placeholder="Здравствуйте! Я — Лира, помогу выбрать чай.">
           <label class="bp-row"><span>Отвечать в группах<small>когда упомянут или ответят на его сообщение</small></span><span class="tg"><input type="checkbox" id="bp-groups"><i></i></span></label>
           <div class="bp-lims"><label>Одному человеку в день<input type="number" id="bp-pu" min="1" max="5000"></label><label>Всем в день<input type="number" id="bp-pd" min="1" max="5000"></label></div>
+          <label class="bp-row"><span>Приветствовать новичков в группах<small>одно сообщение на всех, кто пришёл за несколько секунд</small></span><span class="tg"><input type="checkbox" id="pp-greet"><i></i></span></label>
+          <input type="text" id="pp-greet-t" maxlength="600" hidden aria-label="Текст приветствия" placeholder="{имя}, добро пожаловать! Я — {бот}. Спрашивайте — отвечу.">
         </div>
       </div>
       <div class="bp-main">
@@ -321,6 +327,18 @@
           <p class="co-tip">Так бот ответит незнакомому человеку: характер, «О чём бот» и знания — без вашей памяти.</p>
           <div class="bp-chat" id="bp-chat"><div class="bp-empty">Спросите, как спросил бы посетитель.</div></div>
           <div class="bp-ask"><input type="text" id="bp-q" maxlength="500" placeholder="Например: какие у вас есть зелёные чаи?"><button class="btn primary" id="bp-send">Спросить</button></div>
+        </div>
+        <div class="co-card bp-posts" id="bp-posts" hidden>
+          <div class="bp-lh"><h3>Посты в каналы и группы</h3><span class="bp-stat" id="pp-stat"></span></div>
+          <p class="co-tip">Пишет сам канал или бот — от своего имени. Без выдуманных собеседников и отзывов: подписчики это чувствуют.</p>
+          <div class="pp-where" id="pp-where"></div>
+          <div class="pp-comp" id="pp-comp"></div>
+          <div class="pp-list" id="pp-list" aria-live="polite"></div>
+        </div>
+        <div class="co-card bp-rub" id="bp-rub" hidden>
+          <h3>Рубрики</h3>
+          <p class="co-tip">По расписанию персонаж сам пишет пост на тему — своим характером, по «О чём бот» и знаниям. С одобрением пост ждёт вас здесь, придёт уведомление.</p>
+          <div id="pp-rubs"></div>
         </div>
         <div class="co-card bp-log">
           <div class="bp-lh"><h3>Что спрашивали</h3><span class="bp-stat" id="bp-stat"></span></div>
@@ -412,6 +430,14 @@
         «Позвать в Близкие» — друг увидит приглашение и примет его или откажется.</p>
     </div>
   </section>
+  <section id="p-lessons" class="wide">
+    <h1>Видеоуроки</h1>
+    <p class="lead">ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок. Посмотрите и попробуйте сразу.</p>
+    <div class="ls-grid" id="ls-grid" aria-live="polite"></div>
+    <dialog class="ls-dlg" id="ls-dlg" aria-labelledby="ls-dt"><div class="ls-dh"><b id="ls-dt"></b><button class="btn small" type="button" id="ls-x">Закрыть</button></div>
+      <video id="ls-v" controls playsinline preload="metadata"></video></dialog>
+  </section>
+
   <section id="p-course" class="wide">
     <div class="cs-top"><div><h1>Неделя с Лирой</h1>
       <p class="lead">Короткие уроки по пять минут. Лира сама предложит урок дня — или откройте его здесь. Шаги засчитываются сами, когда вы их делаете.</p></div>
@@ -741,10 +767,11 @@
   <section id="p-clients" class="wide">
     <div class="cr-top">
       <div><h1>Клиенты</h1><p class="lead" id="cr-sub">Кто это, как связаться, о чём договорились и что дальше — голосом или здесь.</p></div>
-      <button class="btn primary" id="cr-new">+ Клиент</button>
+      <div class="cr-tacts"><button class="btn" id="cr-mail" type="button" title="Письмо всем клиентам с почтой — каждому своё">Рассылка</button><button class="btn primary" id="cr-new">+ Клиент</button></div>
     </div>
-    <div class="stabs" id="cr-tabs" role="tablist"><button data-t="list" class="on" role="tab">Клиенты</button><button data-t="deals" role="tab">Сделки и кто должен</button></div>
+    <div class="stabs" id="cr-tabs" role="tablist"><button data-t="list" class="on" role="tab">Клиенты</button><button data-t="deals" role="tab">Сделки и кто должен</button><button data-t="crm" role="tab">CRM</button></div>
     <div class="dl-wrap" id="dl-wrap" hidden></div>
+    <div class="crm-wrap" id="crm-wrap" hidden></div>
     <div class="cr-main">
       <div class="cr-left">
         <label class="cr-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>
@@ -752,6 +779,99 @@
         <ul class="cr-list" id="cr-list" aria-label="Клиенты"></ul>
       </div>
       <article class="cr-card" id="cr-card" aria-live="polite"></article>
+    </div>
+  </section>
+
+  <section id="p-mailing" class="wide">
+    <div class="mg-top">
+      <div><h1>Рассылка</h1><p class="lead">Каждому — своё письмо с вашей почты, с его именем. Уходят по одному, адресов друг друга никто не видит.</p></div>
+    </div>
+    <div class="mg-nomail" id="mg-nomail" hidden>
+      <p><b>Сначала подключите почту</b> — письма уйдут с вашего адреса, ответы придут вам же.</p>
+      <button class="btn primary" type="button" id="mg-tomail">Подключить почту</button>
+    </div>
+    <div class="mg-main">
+      <form class="mg-form" id="mg-form" autocomplete="off">
+        <div class="mg-step">
+          <h3 id="mg-h-to">Кому</h3>
+          <div class="stabs mg-seg" id="mg-src" role="radiogroup" aria-labelledby="mg-h-to">
+            <button type="button" role="radio" data-s="clients">Клиентам<small id="mg-n-clients"></small></button>
+            <button type="button" role="radio" data-s="team">Сотрудникам<small id="mg-n-team"></small></button>
+            <button type="button" role="radio" data-s="list">По списку</button>
+          </div>
+          <label class="f" id="mg-tagw" hidden>Только с меткой<select id="mg-tag"><option value="">все клиенты с почтой</option></select></label>
+          <label class="f" id="mg-listw" hidden>Адреса — по одному в строке, можно с именем
+            <textarea id="mg-list" rows="5" spellcheck="false" placeholder="Анна Петрова &lt;anna@mail.ru&gt;&#10;ivan@yandex.ru, Иван&#10;office@firma.ru"></textarea></label>
+          <p class="mg-who" id="mg-who" aria-live="polite"></p>
+        </div>
+        <div class="mg-step">
+          <h3 id="mg-h-kind">Что за письмо</h3>
+          <div class="stabs mg-seg" id="mg-kind" role="radiogroup" aria-labelledby="mg-h-kind">
+            <button type="button" role="radio" data-k="work" class="on" aria-checked="true">Деловое</button>
+            <button type="button" role="radio" data-k="ads" aria-checked="false">Новости и реклама</button>
+          </div>
+          <p class="mg-hint" id="mg-kindhint">Сотрудникам, партнёрам, клиентам по делу — без строки об отписке.</p>
+          <label class="f" id="mg-boxw" hidden>С какого ящика<select id="mg-box"></select></label>
+          <label class="f">Тема<input type="text" id="mg-subj" maxlength="200" placeholder="{имя}, новое расписание на ноябрь"></label>
+          <label class="f">Текст<textarea id="mg-body" rows="10" placeholder="Здравствуйте, {имя}!&#10;&#10;…"></textarea></label>
+          <p class="mg-hint"><button type="button" class="mg-ins" id="mg-ins">Вставить {имя}</button> — подставлю имя каждого. Нет имени — напишу просто «Здравствуйте!».</p>
+        </div>
+      </form>
+      <aside class="mg-prev" aria-labelledby="mg-h-prev">
+        <h3 id="mg-h-prev">Так получит первый</h3>
+        <div class="mg-letter" id="mg-letter"></div>
+        <button class="btn primary mg-send" type="button" id="mg-send" disabled>Отправить</button>
+        <p class="mg-hint" id="mg-pace"></p>
+      </aside>
+    </div>
+    <div class="mg-histw" id="mg-histw" hidden>
+      <h2>Рассылки</h2>
+      <ul class="mg-hist" id="mg-hist"></ul>
+    </div>
+    <details class="mg-stop" id="mg-stopw">
+      <summary>Отписавшиеся <span id="mg-stopn"></span></summary>
+      <p class="mg-hint">Им не пишу. Ответы «Отписаться» на рекламные письма попадают сюда сами — перед каждой рассылкой проверяю «Входящие».</p>
+      <textarea id="mg-stoplist" rows="4" spellcheck="false" aria-label="Отписавшиеся адреса" placeholder="адреса через строку"></textarea>
+      <button class="btn small" type="button" id="mg-stopsave">Сохранить</button>
+    </details>
+  </section>
+
+  <section id="p-sitechat" class="wide">
+    <div class="sc-top"><div><h1>Чат для сайта</h1><p class="lead">Консультант отвечает посетителям вашего сайта — круглой кнопкой в углу или по ссылке.
+      Отвечает сервер Dewiar, даже когда компьютер выключен; расход — с вашего счёта. Оставили контакт — заявка придёт в «Клиенты».</p></div></div>
+    <div class="sc-main">
+      <form class="sc-form" id="sc-form" autocomplete="off">
+        <div class="sc-card"><h3 id="sc-h-who">Кто отвечает</h3><div class="co-ms" id="sc-ps" role="radiogroup" aria-labelledby="sc-h-who"></div></div>
+        <div class="sc-card">
+          <h3>Что видит посетитель</h3>
+          <label class="f">Название сайта или компании<input type="text" id="sc-title" maxlength="60" placeholder="Чайный двор"></label>
+          <label class="f">Первое сообщение<input type="text" id="sc-greet" maxlength="300" placeholder="Здравствуйте! Помогу выбрать чай и расскажу о доставке."></label>
+          <label class="sc-tgl"><span><b>Предлагать оставить контакт</b><small>когда ответа нет в знаниях или человек хочет купить — заявка придёт вам</small></span><span class="tg"><input type="checkbox" id="sc-ask"><i></i></span></label>
+        </div>
+        <div class="sc-card">
+          <h3>Что знает консультант</h3>
+          <label class="f">О чём он<textarea id="sc-brief" rows="3" maxlength="1500" placeholder="Ты консультант магазина чая: помогаешь выбрать, рассказываешь о доставке и скидках."></textarea></label>
+          <label class="f"><span class="sc-lbl">Знания: цены, адрес, часы работы, доставка <small id="sc-kbn"></small></span>
+            <textarea id="sc-kb" rows="9" placeholder="Вставьте прайс, ответы на частые вопросы, условия доставки… Чего здесь нет — консультант не придумает."></textarea></label>
+          <label class="sc-tgl"><span><b>Добавить документы из папок персонажа</b><small id="sc-foldtip">текст файлов уйдёт на сервер Dewiar вместе со знаниями</small></span><span class="tg"><input type="checkbox" id="sc-fold"><i></i></span></label>
+          <div class="sc-lims"><label class="f">Одному посетителю в день<input type="number" id="sc-pi" min="1" max="500"></label><label class="f">Всем в день<input type="number" id="sc-pd" min="1" max="5000"></label></div>
+        </div>
+      </form>
+      <aside class="sc-side">
+        <div class="sc-prev" id="sc-prev" aria-label="Так увидит посетитель"></div>
+        <button class="btn primary sc-pub" type="button" id="sc-pub">Опубликовать</button>
+        <p class="sc-err" id="sc-err" hidden></p>
+        <div class="sc-card" id="sc-live" hidden>
+          <h3>Ссылка и код для сайта</h3>
+          <div class="sc-copy"><input type="text" readonly id="sc-link" aria-label="Ссылка на чат"><button class="btn small" type="button" data-cp="sc-link">Копировать</button><a class="btn small" id="sc-open" target="_blank" rel="noopener">Открыть</a></div>
+          <p class="sc-hint">Ссылку — в соцсети, на визитку, в подпись письма.</p>
+          <div class="sc-copy"><input type="text" readonly id="sc-code" aria-label="Код для сайта"><button class="btn small" type="button" data-cp="sc-code">Копировать</button></div>
+          <p class="sc-hint">Код — на сайт перед &lt;/body&gt; (в Тильде — блок T123 «HTML-код»; в WordPress — в подвал темы или плагином для вставки кода). В углу появится кнопка чата.</p>
+          <div class="sc-stats" id="sc-stats"></div>
+          <ul class="sc-leads" id="sc-leads"></ul>
+          <button class="btn small danger" type="button" id="sc-off">Отключить чат</button>
+        </div>
+      </aside>
     </div>
   </section>
 
@@ -812,6 +932,7 @@
           <h3>Добавить сотрудника</h3>
           <label>Имя<input type="text" id="tm-pname" maxlength="60" placeholder="Ольга Петровна"></label>
           <label>Чем занимается<input type="text" id="tm-prole" maxlength="60" placeholder="бухгалтерия"></label>
+          <label>Почта — если будете писать рассылки<input type="email" id="tm-pmail" maxlength="120" placeholder="необязательно" autocomplete="off"></label>
           <button class="btn primary" type="submit" id="tm-padd">Добавить и получить ссылку</button>
           <small class="tm-note">Ссылку отправьте сотруднику сами — в Telegram, почтой или в чате, или покажите печать Dewiar. Ссылка одноразовая, работает 14 дней.</small>
         </form>
@@ -1305,6 +1426,18 @@
           <div class="switch" style="border:0;padding:10px 0 0"><div>Поиск и страницы через сервер Dewiar<span>Если провайдер режет поисковик или сайт, ассистент ищет и читает через сервер Dewiar (нужен вход или ключ). Выключите — тогда только напрямую.</span></div>
             <label class="tg"><input type="checkbox" id="dw-web"><i></i></label></div>
           <p class="res" id="dw-net-res"></p>
+          <div class="ssh" id="dw-ssh" hidden>
+            <div class="switch" style="border:0;padding:12px 0 0"><div>Запасной вход через SSH<span>Для владельца сервера Dewiar. Домен dewiar.pro не отвечает — программа сама откроет туннель к серверу Лиры вашим SSH-ключом (как вы заходите из терминала), и Лира продолжит работать. Домен вернулся — туннель закроется. Пароль не нужен и не хранится.</span></div>
+              <label class="tg"><input type="checkbox" id="ssh-on"><i></i></label></div>
+            <div class="ssh-grid">
+              <label class="f"><span>Сервер Лиры</span><input type="text" id="ssh-host" placeholder="адрес или имя, как в ssh" spellcheck="false" autocomplete="off"></label>
+              <label class="f"><span>Пользователь</span><input type="text" id="ssh-user" placeholder="имя на сервере" spellcheck="false" autocomplete="off"></label>
+              <label class="f"><span>Порт SSH</span><input type="text" id="ssh-port" placeholder="22" inputmode="numeric" spellcheck="false"></label>
+              <label class="f"><span>Сайт на сервере</span><input type="text" id="ssh-target" placeholder="127.0.0.1:9099" spellcheck="false"></label>
+              <label class="f ssh-wide"><span>Ключ <i>необязательно — если в терминале заходите без -i</i></span><input type="text" id="ssh-key" placeholder="~/.ssh/id_ed25519" spellcheck="false" autocomplete="off"></label>
+            </div>
+            <div class="actions" style="margin:6px 0 0;flex-wrap:wrap"><button class="btn" id="ssh-test">Проверить</button><span class="res" id="ssh-res" aria-live="polite"></span></div>
+          </div>
         </div>
         <div class="dwc" id="dwc-upd">
           <div class="dh"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5"/></svg><h3>Обновления</h3><span class="dws" id="dws-upd">—</span></div>
@@ -2019,16 +2152,21 @@
 
   <section id="p-vault">
     <h1>Сейф паролей</h1>
-    <p class="lead">Пароли, пин-коды, коды от домофона. Зашифрованы ключом этого компьютера, в заметки, Obsidian и языковую модель
-      не попадают. Лира вслух их не читает никогда — только показывает на экране.</p>
+    <p class="lead">Пароли, пин-коды, коды от домофона — и целые страницы секретов. Всё зашифровано ключом этого компьютера, в заметки,
+      Obsidian и языковую модель не попадает. Лира вслух не читает никогда — только показывает на экране.</p>
     <div class="vl-bar">
       <label class="vl-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg>
         <input type="search" id="vl-q" placeholder="Найти: почта, банк, вайфай…" autocomplete="off" spellcheck="false" aria-label="Поиск в сейфе"></label>
       <button class="btn primary" id="vl-add">Добавить</button>
     </div>
     <form class="vl-form" id="vl-form" hidden autocomplete="off">
-      <h3 id="vl-form-h">Новая запись</h3>
-      <div class="vl-grid">
+      <div class="vl-fhead"><h3 id="vl-form-h">Новая запись</h3>
+        <span class="vl-kind" id="vl-kind" role="group" aria-label="Что добавить"><button type="button" data-k="" aria-pressed="true">Пароль</button><button type="button" data-k="page" aria-pressed="false" title="Много паролей, ключей и адресов одним текстом — как на обычной странице, но зашифровано">Страница</button></span></div>
+      <div class="vl-pg" id="vl-pg" hidden>
+        <label class="f"><span>Название</span><input type="text" id="vl-pname" maxlength="120" placeholder="Серверы, ключи API, коды от подъездов"></label>
+        <label class="f"><span>Текст — хранится зашифрованным, как пароли</span><textarea id="vl-ptext" spellcheck="false" autocomplete="off" placeholder="Пишите как на обычной странице: по строке на сервис, адреса, ключи, ответы на секретные вопросы…"></textarea></label>
+      </div>
+      <div class="vl-grid" id="vl-grid">
         <label class="f"><span>Что это</span><input type="text" id="vl-name" maxlength="120" placeholder="Почта Яндекса, вайфай дома, домофон"></label>
         <label class="f"><span>Логин <i>необязательно</i></span><input type="text" id="vl-login" maxlength="160" placeholder="имя, почта или телефон" autocomplete="off"></label>
         <label class="f vl-pass"><span>Пароль или код</span>
@@ -2039,7 +2177,7 @@
         <label class="f"><span>Сайт <i>необязательно</i></span><input type="text" id="vl-url" maxlength="300" placeholder="mail.yandex.ru" autocomplete="off"></label>
         <label class="f vl-wide"><span>Заметка <i>необязательно</i></span><input type="text" id="vl-note" maxlength="300" placeholder="секретный вопрос, номер договора…"></label>
       </div>
-      <div class="actions" style="margin:0"><button class="btn primary" id="vl-save" type="submit">Сохранить</button><button class="btn" id="vl-cancel" type="button">Отмена</button>
+      <div class="actions" style="margin:0"><button class="btn primary" id="vl-save" type="submit">Сохранить</button><button class="btn" id="vl-pcopy" type="button" hidden>Скопировать всё</button><button class="btn" id="vl-cancel" type="button">Отмена</button>
         <span style="flex:1"></span><button class="btn danger" id="vl-del" type="button" hidden>Удалить</button></div>
       <p class="res" id="vl-res"></p>
     </form>
@@ -2355,6 +2493,7 @@
 <script src="studio/brain.js"></script>
 <script src="studio/connect.js"></script>
 <script src="studio/plugins.js"></script>
+<script src="studio/sshlink.js"></script>
 <script src="studio/dewiar.js"></script>
 <script src="studio/look.js"></script>
 <script src="studio/home.js"></script>
@@ -2374,6 +2513,11 @@
 <script src="studio/family.js"></script>
 <script src="studio/team.js"></script>
 <script src="studio/clients.js"></script>
+<script src="studio/mailing.js"></script>
+<script src="studio/crm.js"></script>
+<script src="studio/pbot_posts.js"></script>
+<script src="studio/sitechat.js"></script>
+<script src="studio/lessons.js"></script>
 <script src="studio/deals.js"></script>
 <script src="studio/devices.js"></script>
 <script src="studio/qa.js"></script>

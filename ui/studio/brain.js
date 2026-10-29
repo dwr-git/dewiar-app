@@ -463,9 +463,11 @@ function featuresApply() {
   const fb0 = $('nav button[data-p="family"]'); if (fb0) fb0.hidden = f.family !== true;   // «Семья» — по желанию (27.10)
   const tb0 = $('nav button[data-p="team"]'); if (tb0) tb0.hidden = f.team !== true;       // «Поручения» — по желанию (28.10)
   const cb0 = $('nav button[data-p="clients"]'); if (cb0) cb0.hidden = f.clients !== true;   // «Клиенты» — по желанию (28.10)
+  const mb0 = $('nav button[data-p="mailing"]'); if (mb0) mb0.hidden = f.clients !== true && f.team !== true;   // «Рассылка» — рядом с ними (0.69)
+  const sb0 = $('nav button[data-p="sitechat"]'); if (sb0) sb0.hidden = mb0 ? mb0.hidden : true;                // «Чат для сайта» — тоже
   for (const t of ["near", "meet"]) { const b = $(`#cl-tabs button[data-t="${t}"]`); if (b) b.hidden = !on(t); }
   const cur = $("#cl-tabs button.on");
   if (cur && cur.hidden && window.rdTab) rdTab("chat");
-  if ((nb && nb.hidden && nb.classList.contains("cur")) || (fb0 && fb0.hidden && fb0.classList.contains("cur")) || (tb0 && tb0.hidden && tb0.classList.contains("cur"))) { const fb = $('nav button[data-p="features"]'); if (fb) fb.click(); }
+  if ((nb && nb.hidden && nb.classList.contains("cur")) || (fb0 && fb0.hidden && fb0.classList.contains("cur")) || (tb0 && tb0.hidden && tb0.classList.contains("cur")) || (mb0 && mb0.hidden && mb0.classList.contains("cur"))) { const fb = $('nav button[data-p="features"]'); if (fb) fb.click(); }
   if (window.hmNav) hmNav();                                     // меню — ещё и по «Главной» (home.js): скрытое там скрыто и тут
 }

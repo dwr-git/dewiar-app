@@ -21,7 +21,7 @@ def ok(c, m):
 
 F = workspace.note_front
 KEEP = "--\nsource: Google Keep\nid: Эйнштейн\nstatus: цвет: BROWN\n--\n\n# Эйнштейн\n\nА что, собственно, представляет собой теория?\n"
-ok(F(KEEP)[0] == {"source": "Google Keep", "id": "Эйнштейн", "status": "цвет: BROWN", "color": "BROWN", "pinned": False, "archived": False} and F(KEEP)[1].strip().startswith("# Эйнштейн"),
+ok(F(KEEP)[0] == {"source": "Google Keep", "id": "Эйнштейн", "status": "цвет: BROWN", "color": "BROWN", "pinned": False, "archived": False, "locked": False} and F(KEEP)[1].strip().startswith("# Эйнштейн"),
    "шапка Google Keep разобрана: источник, цвет; текст — без неё")
 ok(F("---\ntags: [linux, golang]\npinned: true\n---\nтекст")[0]["tags"] == ["linux", "golang"]
    and F("---\ntags:\n  - c#\n  - cursor\n---\nx")[0]["tags"] == ["c#", "cursor"], "метки Obsidian — строкой и списком")

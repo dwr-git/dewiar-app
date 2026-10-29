@@ -32,7 +32,7 @@ function ntFront(text) {
   const col = /^([A-Za-z_]+)$/.exec(String(meta.color || "").trim()) || /(?:^|\b)(?:colou?r|цвет)\s*:?\s*([A-Za-zА-Яа-яЁё_]+)/i.exec(Object.entries(meta).filter(([, v]) => typeof v === "string").map(([k, v]) => k + ": " + v).join(" "));
   const yes = (v) => /^(true|yes|1|да)$/i.test(String(v || "").trim());
   return { raw: m[0].replace(/\n?$/, "\n"), meta: { tags, color: col && !/^(DEFAULT|NONE|WHITE)$/i.test(col[1]) ? col[1].toUpperCase() : "", source: meta.source || "",
-    pinned: yes(meta.pinned), archived: yes(meta.archived) }, rest: String(text).slice(m[0].length) };
+    pinned: yes(meta.pinned), archived: yes(meta.archived), locked: yes(meta.locked) }, rest: String(text).slice(m[0].length) };
 }
 const ntColor = (c) => NT_COLORS[String(c || "").toUpperCase()] || "";
 const ntChips = (tags, source) => (source ? `<i class="nt-chip">${escH(source)}</i>` : "") + (tags || []).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("");
@@ -72,7 +72,8 @@ const ntCs = () => { try { return ((S && S.ui) || {}).pad_colors || ""; } catch 
    числу заметок, «Архив». Закреплённые — сверху; архив — только в «Архиве». Вид — списком (с заметкой справа) или
    плитками (как Keep, цвет — фоном; заметка открывается поверх). Метки, цвет, «закрепить», «в архив» — в шапку заметки
    (core/workspace.py note_meta), так что их видит и Obsidian. */
-NT.f = ""; NT.grid = (() => { try { return localStorage.getItem("nt_grid") === "1"; } catch (e) { return false; } })(); NT.allTags = false;
+NT.f = ""; NT.sort = (() => { try { return ["az", "color"].includes(localStorage.getItem("nt_sort")) ? localStorage.getItem("nt_sort") : "new"; } catch (e) { return "new"; } })();
+NT.grid = (() => { try { return localStorage.getItem("nt_grid") === "1"; } catch (e) { return false; } })(); NT.allTags = false;
 function ntFilters(all) {
   const box = $("#nt-filt"); if (!box) return;
   const live = all.filter(n => !n.archived), cnt = {};
@@ -98,22 +99,34 @@ async function ntLoad() {
   const nw = (k) => `${k} ${typeof plural === "function" ? plural(k, "заметка", "заметки", "заметок") : "заметок"}`;
   $("#nt-count").textContent = q || f ? `Найдено: ${l.length}` : l.length ? nw(l.length) : "";
   $(".nt-cols").classList.toggle("grid", NT.grid);
+  $$("#nt-sort [data-s]").forEach(b => { const on = b.dataset.s === NT.sort; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
   $$("#nt-vw [data-v]").forEach(b => { const on = (b.dataset.v === "grid") === NT.grid; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
   const tg = (n, k) => (n.tags || []).slice(0, k).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("");
+  const lk = (n) => n.locked ? '<i class="nt-lock" title="Защищено от удаления"></i>' : "";
   const col = (n) => ntColor(n.color) ? ` style="--nc:${ntColor(n.color)}"` : "";
   // 28.10, владелец: «важнейший раздел… дизайн лучше»: список по дням («Сегодня», «Вчера», «На этой неделе», «Раньше»)
   const row = (n) => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}"${col(n)}>
-      <span class="nt-rt"><b>${n.pinned ? '<i class="nt-pin" title="Закреплено"></i>' : ""}${ntMark(n.title, q)}</b><small>${ntDate(n.mtime)}${n.folder ? `<i class="nt-chip">${escH(n.folder)}</i>` : ""}${tg(n, 3)}${n.att ? `<i class="nt-chip">📎 ${n.att}</i>` : ""}</small>
+      <span class="nt-rt"><b>${n.pinned ? '<i class="nt-pin" title="Закреплено"></i>' : ""}${ntMark(n.title, q)}${lk(n)}</b><small>${ntDate(n.mtime)}${n.folder ? `<i class="nt-chip">${escH(n.folder)}</i>` : ""}${tg(n, 3)}${n.att ? `<i class="nt-chip">📎 ${n.att}</i>` : ""}</small>
       <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em></span>${n.img ? `<i class="nt-th" data-img="${escH(n.img)}"></i>` : ""}</button>`;
   const tile = (n) => `<button class="nt-tile ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}"${col(n)}>
-      ${n.img ? `<i class="nt-ti" data-img="${escH(n.img)}"></i>` : ""}<b>${n.pinned ? '<i class="nt-pin" title="Закреплено"></i>' : ""}${ntMark(n.title, q)}</b>
+      ${n.img ? `<i class="nt-ti" data-img="${escH(n.img)}"></i>` : ""}<b>${n.pinned ? '<i class="nt-pin" title="Закреплено"></i>' : ""}${ntMark(n.title, q)}${lk(n)}</b>
       <em>${ntMark(ntPlain(n.snippet), q) || "без текста"}</em>${(n.tags || []).length ? `<small>${tg(n, 4)}</small>` : ""}</button>`;
   const day0 = new Date(); day0.setHours(0, 0, 0, 0); const t0 = day0.getTime() / 1000;
-  const bucket = (n) => n.pinned && f !== "@pin" ? "Закреплённые" : (m => m >= t0 ? "Сегодня" : m >= t0 - 86400 ? "Вчера" : m >= t0 - 6 * 86400 ? "На этой неделе" : "Раньше")(n.mtime || 0);
+  /* Порядок (29.10, владелец: «сортировка заметок или раскидывание по разделам»): «Новые» — по дням, «А–Я» — по названию,
+     «По цвету» — цвет становится разделом. Закреплённые — всегда сверху; разделы по смыслу — метки в фильтре над списком. */
+  const ci = (n) => { const i = NT_CORDER.indexOf(ntCkey(n.color)); return i < 0 ? 99 : i; };
+  if (NT.sort === "az") l.sort((a, b) => (b.pinned - a.pinned) || a.title.localeCompare(b.title, "ru", { numeric: true, sensitivity: "base" }));
+  else if (NT.sort === "color") l.sort((a, b) => (b.pinned - a.pinned) || ci(a) - ci(b) || (b.mtime || 0) - (a.mtime || 0));
+  else l.sort((a, b) => (b.pinned - a.pinned) || (b.mtime || 0) - (a.mtime || 0));
+  const pinH = (n) => n.pinned && f !== "@pin" ? "Закреплённые" : "";
+  const bucket = NT.sort === "az" ? (n) => pinH(n) || (l.some(x => x.pinned) && f !== "@pin" ? "Остальные" : "")
+    : NT.sort === "color" ? (n) => pinH(n) || (ntCkey(n.color) ? NT_CNAME2[ntCkey(n.color)] : "Без цвета")
+    : (n) => pinH(n) || (m => m >= t0 ? "Сегодня" : m >= t0 - 86400 ? "Вчера" : m >= t0 - 6 * 86400 ? "На этой неделе" : "Раньше")(n.mtime || 0);
+  const gh = (b, n) => `<div class="nt-gh"${NT.sort === "color" && !n.pinned && ntColor(n.color) ? ` style="--gc:${ntColor(n.color)}" data-c="1"` : ""}>${b}</div>`;
   let html = "", last = "";
-  l.forEach(n => { const b = q ? "" : bucket(n); if (b && b !== last) { html += `<div class="nt-gh">${b}</div>`; last = b; } html += NT.grid ? tile(n) : row(n); });
+  l.forEach(n => { const b = q ? "" : bucket(n); if (b && b !== last) { html += gh(b, n); last = b; } html += NT.grid ? tile(n) : row(n); });
   if (NT.grid) {                                   // плитки — колонками по группам: «Закреплённые» отдельно от остальных
-    html = html.split(/(?=<div class="nt-gh">)/).map(g => g.replace(/^(<div class="nt-gh">[^<]*<\/div>)?([\s\S]*)$/, (m0, h, rest) => (h || "") + `<div class="nt-masonry">${rest}</div>`)).join("");
+    html = html.split(/(?=<div class="nt-gh")/).map(g => g.replace(/^(<div class="nt-gh"[^>]*>[^<]*<\/div>)?([\s\S]*)$/, (m0, h, rest) => (h || "") + `<div class="nt-masonry">${rest}</div>`)).join("");
   }
   $("#nt-list").innerHTML = l.length ? html
     : `<div class="nt-none">${q || f ? "Ничего не нашлось — попробуйте другое слово или «Все»." : "Заметок пока нет. Скажите помощнице: «запиши в заметки…» — или нажмите «Новая заметка». Есть заметки в Google Keep — «Перенести из Keep»."}</div>`;
@@ -125,13 +138,13 @@ async function ntLoad() {
 }
 /* Плитки по колонкам: столько колонок, сколько влезает по 250 px; каждая плитка — в самую короткую колонку (по
    настоящей высоте), порядок чтения — слева направо, сверху вниз, как в Keep. Ширина окна изменилась — заново. */
-function ntMasonry() {
+function ntMasonry(force) {
   $$("#nt-list .nt-masonry").forEach(box => {
     const tiles = [...box.querySelectorAll(".nt-tile")].sort((a, b) => (+a.dataset.i || 0) - (+b.dataset.i || 0));
     tiles.forEach((t, i) => { if (t.dataset.i == null) t.dataset.i = i; });
     const w = box.clientWidth || Math.max(280, innerWidth - 640);          // раздел ещё скрыт — по ширине окна
     const n = Math.max(1, Math.floor((w + 14) / (250 + 14)));             // столько же колонок и в маленькой группе — плитки одной ширины
-    if (box.dataset.n === String(n) && box.querySelector(".nt-mcol")) return;
+    if (!force && box.dataset.n === String(n) && box.querySelector(".nt-mcol")) return;
     box.dataset.n = n; box.innerHTML = "";
     const cols = Array.from({ length: n }, () => box.appendChild(Object.assign(document.createElement("div"), { className: "nt-mcol" })));
     tiles.forEach(t => cols.reduce((a, c) => (c.offsetHeight < a.offsetHeight ? c : a)).appendChild(t));
@@ -142,6 +155,9 @@ window.addEventListener("resize", () => { clearTimeout(ntRz); ntRz = setTimeout(
 /* Под названием — «закрепить», цвет, метки и «в архив» (как в Keep); всё — в шапку заметки (note_meta) */
 const NT_CNAMES = { RED: "Красный", ORANGE: "Оранжевый", YELLOW: "Жёлтый", GREEN: "Зелёный", TEAL: "Бирюзовый", BLUE: "Синий", DARK_BLUE: "Тёмно-синий",
   PURPLE: "Фиолетовый", PINK: "Розовый", BROWN: "Коричневый", GRAY: "Серый" };
+const NT_CORDER = ["RED", "ORANGE", "YELLOW", "GREEN", "TEAL", "BLUE", "CERULEAN", "DARK_BLUE", "PURPLE", "PINK", "BROWN", "GRAY"];
+const NT_CNAME2 = Object.assign({ CERULEAN: "Голубой" }, NT_CNAMES);
+const ntCkey = (c) => { c = String(c || "").toUpperCase(); c = c === "GREY" ? "GRAY" : c; return NT_COLORS[c] ? c : ""; };
 function ntMetaHtml(d) {
   const m = d.meta || {}, own = new Set(m.tags || []);
   const inline = [...new Set([...(d.body || "").replace(/```[\s\S]*?```|https?:\/\/\S+/g, " ").matchAll(/(?:^|[^\w\/#&=-])#([A-Za-zА-Яа-яЁё][\wА-Яа-яЁё\-\/]{1,40})/g)].map(x => x[1]))].filter(t => !own.has(t));
@@ -153,16 +169,21 @@ function ntMetaHtml(d) {
     <span class="nt-tags">${[...own].map(t => `<span class="nt-chip nt-tag">#${escH(t)}<button type="button" data-rt="${escH(t)}" aria-label="Убрать метку ${escH(t)}">×</button></span>`).join("")}${inline.map(t => `<span class="nt-chip nt-tag" title="метка в тексте">#${escH(t)}</span>`).join("")}
       <button type="button" class="nt-mb nt-tbtn" id="nt-tbtn" title="Добавить метку — по ней заметка найдётся в фильтре над списком"><i class="nt-hash">#</i>Метка</button>
       <input id="nt-tadd" class="nt-tin" list="nt-tlist" placeholder="название метки" maxlength="40" aria-label="Добавить метку" hidden><datalist id="nt-tlist">${known.map(t => `<option value="${escH(t)}">`).join("")}</datalist></span>
+    <span class="nt-msp"></span>
+    <button type="button" class="nt-mb${m.locked ? " on" : ""}" id="nt-lockb" aria-pressed="${!!m.locked}" title="${m.locked ? "Снять защиту — заметку снова можно удалить" : "Защитить от случайного удаления — ни из студии, ни голосом, ни с телефона"}"><i class="nt-lock"></i>${m.locked ? "Защищено" : "Защитить"}</button>
     <button type="button" class="nt-mb" id="nt-archb" title="${m.archived ? "Вернуть из архива" : "Убрать в архив — с глаз долой, поиск находит"}">${m.archived ? "Из архива" : "В архив"}</button></div>`;
 }
 async function ntMetaSet(patch, msg) {
+  if (NT.ren) await NT.ren;
+  await ntFlush();                                   // сначала набранный текст: иначе он лёг бы поверх со старой шапкой
   try { await core.call("note_meta", { path: NT.cur, patch }); } catch (e) { toast(e.message); return; }
   if (msg) toast(msg, 2200);
-  const keep = NT.cur; await ntOpen(keep); ntLoad();
+  const keep = NT.cur, ed = NT.edit; await ntOpen(keep, ed); ntLoad();        // в правке — остаёмся в правке
 }
 function ntMetaBind(d) {
   const m = d.meta || {};
   $("#nt-pinb").onclick = () => ntMetaSet({ pinned: !m.pinned }, m.pinned ? "Откреплено" : "Закреплено — теперь сверху");
+  $("#nt-lockb").onclick = () => ntMetaSet({ locked: !m.locked }, m.locked ? "Защита снята — заметку можно удалить" : "Защищено — случайно не удалится");
   $("#nt-archb").onclick = () => ntMetaSet({ archived: !m.archived, pinned: false }, m.archived ? "Вернула из архива" : "В архиве — найти можно в «Архиве» над списком");
   const pal = $("#nt-pal"), cb = $("#nt-colb");
   cb.onclick = (e) => { e.stopPropagation(); pal.hidden = !pal.hidden; cb.setAttribute("aria-expanded", !pal.hidden); };
@@ -205,7 +226,21 @@ async function ntImg(path) {
   if (!NT.imgs[path]) NT.imgs[path] = core.call("note_file", { path }).then(r => r.url).catch(() => "");
   return NT.imgs[path];
 }
-async function ntThumb(el) { const u = await ntImg(el.dataset.img); if (u) el.style.backgroundImage = `url("${u}")`; }
+/* Картинка заметки (29.10, владелец: «если прикреплена картинка — красиво в плитке или списком»): в плитке — во всю
+   ширину в своих пропорциях (от 4:5 до 2:1, как в Keep), в списке — крупной миниатюрой. Картинки подгрузились —
+   колонки плиток раскладываются заново по настоящей высоте. */
+let ntReflow = 0;
+async function ntThumb(el) {
+  const tile = el.classList.contains("nt-ti"), done = (cls) => { el.classList.add(cls);
+    if (tile) { clearTimeout(ntReflow); ntReflow = setTimeout(() => { if (NT.grid) ntMasonry(true); }, 60); } };
+  const u = await ntImg(el.dataset.img); if (!u) { done("none"); return; }
+  el.style.backgroundImage = `url("${u}")`;
+  if (!tile) return;
+  const im = new Image();
+  im.onload = () => { if (im.naturalWidth) el.style.aspectRatio = String(Math.min(2, Math.max(0.8, im.naturalWidth / im.naturalHeight))); done("on"); };
+  im.onerror = () => done("none");
+  im.src = u;
+}
 
 async function ntOpen(path, edit) {
   await ntFlush();
@@ -222,7 +257,7 @@ function ntShow() {
     ${files.length ? `<div class="nt-files">${files.map(a => `<span class="nt-f" data-i="${d.att.indexOf(a)}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg>${escH(a.name)}${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</span>`).join("")}</div>` : ""}`;
   if (!NT.edit) {
     v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? `<i class="nt-chip">${escH(ntDir(path).replace(/^Заметки\//, ""))}</i>` : ""}${ntChips((d.meta || {}).tags, (d.meta || {}).source && (d.meta || {}).source !== ntDir(path).replace(/^Заметки\//, "") ? d.meta.source : "")}</small></div>
-        <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger" id="nt-del">Удалить</button>${NT.grid ? '<button class="nt-close" type="button" id="nt-close" aria-label="Закрыть">×</button>' : ""}</span></div>
+        <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger${(d.meta || {}).locked ? " nt-locked" : ""}" id="nt-del"${(d.meta || {}).locked ? ' title="Заметка защищена — сначала снимите защиту"' : ""}>${(d.meta || {}).locked ? '<i class="nt-lock"></i>' : ""}Удалить</button>${NT.grid ? '<button class="nt-close" type="button" id="nt-close" aria-label="Закрыть">×</button>' : ""}</span></div>
       ${ntMetaHtml(d)}
       <div class="nt-body"${ntCs() ? ` data-cs="${escH(ntCs())}"` : ""}>${ntRender(d.body) || `<p class="hint">Пустая заметка — нажмите «Изменить».</p>`}</div>${attHtml(false)}`;
     if (window.DewiarRich) DewiarRich.diagrams($("#nt-view .nt-body")).catch(() => { });   // ```mermaid — схемой
@@ -233,8 +268,10 @@ function ntShow() {
     $("#nt-del").onclick = ntDelete;
     $$("#nt-view a[data-ext]").forEach(a => a.onclick = (e) => { e.preventDefault(); openExt(a.dataset.ext); });
   } else {
-    v.innerHTML = `<div class="nt-top"><input id="nt-title" class="nt-ti" value="${escH(d.title)}" maxlength="80" placeholder="Название">
+    /* цвет, метку, «закрепить» и замок — сразу, и у новой заметки (29.10, владелец: «сразу присвоить цвет или тип») */
+    v.innerHTML = `<div class="nt-top"><input id="nt-title" class="nt-tedit" value="${escH(d.title)}" maxlength="80" placeholder="Название" aria-label="Название заметки">
         <span class="nt-act"><span class="res" id="nt-res"></span><button class="btn primary" id="nt-done">Готово</button></span></div>
+      ${ntMetaHtml(d)}
       <textarea id="nt-text" spellcheck="true" placeholder="Текст заметки. Списки — с «- », дела — «- [ ] »">${escH(d.body)}</textarea>
       ${attHtml(true)}
       <label class="nt-drop" id="nt-drop"><input type="file" id="nt-file" multiple hidden>
@@ -243,6 +280,8 @@ function ntShow() {
     const t = $("#nt-text"), grow = () => { t.style.height = "auto"; t.style.height = Math.max(260, t.scrollHeight + 4) + "px"; };
     grow(); t.oninput = () => { grow(); d.body = t.value; ntDirty(); };
     $("#nt-title").onchange = ntRename;
+    $("#nt-title").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); t.focus(); } };      // Enter — к тексту
+    ntMetaBind(d);
     $("#nt-done").onclick = async () => { await ntFlush(); NT.edit = false; ntShow(); ntLoad(); };
     $("#nt-file").onchange = () => { ntAdd([...$("#nt-file").files]); $("#nt-file").value = ""; };
     const drop = $("#nt-drop");
@@ -262,7 +301,8 @@ async function ntFlush() {                                   // сохранит
     const r = $("#nt-res"); if (r) { r.className = "res ok"; r.textContent = "Сохранено"; } }
   catch (e) { const r = $("#nt-res"); if (r) { r.className = "res bad"; r.textContent = e.message; } }
 }
-async function ntRename() {
+function ntRename() { NT.ren = ntRename0().finally(() => { NT.ren = null; }); return NT.ren; }   // «Цвет» сразу после названия — дождётся
+async function ntRename0() {
   const t = $("#nt-title").value.trim(); if (!t || t === NT.doc.title) return;
   await ntFlush();
   try { const r = await core.call("ws_rename", { path: NT.cur, title: t }); NT.cur = r.path; NT.doc.title = r.path.split("/").pop().replace(/\.md$/, "");
@@ -280,12 +320,20 @@ async function ntAdd(files) {
   NT.saveT = 1; await ntFlush(); ntShow();
 }
 async function ntDelete() {
-  const d = NT.doc; if (!d || !await ask(`Удалить заметку «${d.title}»${d.att.length ? " вместе с вложениями" : ""}? Она уйдёт в корзину — оттуда её можно вернуть.`)) return;
+  const d = NT.doc;
+  if (d && (d.meta || {}).locked) {                  // замок: не спрашиваем «удалить?» — подсказываем, где снять
+    toast("Заметка защищена от удаления — снимите защиту кнопкой «Защищено»", 3600);
+    const b = $("#nt-lockb"); if (b) { b.classList.remove("nt-nudge"); void b.offsetWidth; b.classList.add("nt-nudge"); b.focus(); }
+    return;
+  }
+  if (!d || !await ask(`Удалить заметку «${d.title}»${d.att.length ? " вместе с вложениями" : ""}? Она уйдёт в корзину — оттуда её можно вернуть.`)) return;
   try { await core.call("ws_delete", { path: NT.cur }); NT.cur = ""; NT.doc = null; $("#nt-view").innerHTML = ""; ntLoad(); } catch (e) { toast(e.message); }
 }
 async function ntNew() {
   await ntFlush();
-  try { const r = await core.call("ws_new_note", { title: "Новая заметка", folder: "Заметки", text: "" }); $("#nt-q").value = ""; await ntOpen(r.path, true); ntLoad();
+  try { const r = await core.call("ws_new_note", { title: "Новая заметка", folder: "Заметки", text: "" }); $("#nt-q").value = "";
+    if (NT.f.startsWith("#")) await core.call("note_meta", { path: r.path, patch: { tags: [NT.f.slice(1)] } }).catch(() => { });   // открыта метка — новая заметка сразу с ней
+    await ntOpen(r.path, true); ntLoad();
     setTimeout(() => { const t = $("#nt-title"); if (t) { t.focus(); t.select(); } }, 80); } catch (e) { toast(e.message); }
 }
 function loadNotesPage() { ntLoad(); setTimeout(() => $("#nt-q").focus(), 60); }
@@ -298,6 +346,7 @@ async function ntGoto(path) {
 window.ntGoto = ntGoto;
 $("#nt-q").oninput = () => { clearTimeout(NT.t); NT.t = setTimeout(ntLoad, 180); };
 $("#nt-add").onclick = ntNew;
+$$("#nt-sort [data-s]").forEach(b => b.onclick = () => { NT.sort = b.dataset.s; try { localStorage.setItem("nt_sort", NT.sort); } catch (e) { } ntLoad(); });
 $$("#nt-vw [data-v]").forEach(b => b.onclick = () => { NT.grid = b.dataset.v === "grid"; try { localStorage.setItem("nt_grid", NT.grid ? "1" : "0"); } catch (e) { }
   if (!NT.grid) $(".nt-cols").classList.remove("open"); else ntCloseTile(); ntLoad(); });
 /* Перенос из Google Keep: архив Google Takeout (zip) или распакованная папка — core/keep_import.py */

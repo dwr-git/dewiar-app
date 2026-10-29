@@ -79,6 +79,9 @@ class Council:
         profs = llm.get("profiles") or {}
         own = (llm.get("persona") or {}).get(pid) or ""
         p = dict(profs.get(own) or profs.get(llm.get("active")) or {})
+        m = ((llm.get("persona_model") or {}).get(pid) or "").strip() if own in profs else ""
+        if m and not p.get("cloud"):                       # своя модель того же сервера (№403)
+            p["model"] = m
         label = "Dewiar" if p.get("cloud") else (str(p.get("model") or "").split("/")[-1] or p.get("name") or "")
         return p, label
 

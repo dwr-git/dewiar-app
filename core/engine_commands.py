@@ -8,10 +8,10 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("council_", "pbot_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
-                "net_dewiar", "net_proxy", "net_reserve", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
+                "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
                 "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_", "month_")
@@ -278,7 +278,7 @@ class CommandsMixin:
         return iid
 
     def team_cmd(self, cmd, a):
-        """team_get; team_connect {token}; team_forget; team_set {company?, boss?, speak?}; team_member_add {name, role};
+        """team_get; team_connect {token}; team_forget; team_set {company?, boss?, speak?}; team_member_add {name, role, email}; team_member_set {id, email?, role?};
         team_member_del {id}; team_member_code {id}; team_assign {who, title, due, note}; team_accept {id};
         team_back {id, remark}; team_cancel {id}; team_remind {id}; team_photo {name} -> data:-ссылка."""
         from team import TeamError
@@ -295,7 +295,9 @@ class CommandsMixin:
             if cmd == "team_set":
                 return T.set(a or {})
             if cmd == "team_member_add":
-                return T.member_add(a.get("name"), a.get("role") or "")
+                return T.member_add(a.get("name"), a.get("role") or "", a.get("email") or "")
+            if cmd == "team_member_set":
+                return T.member_set(str(a.get("id") or ""), a.get("email"), a.get("role"))
             if cmd == "team_member_del":
                 return T.member_del(str(a.get("id") or ""))
             if cmd == "team_member_code":
@@ -609,6 +611,76 @@ class CommandsMixin:
             return self.team_cmd(cmd, a)
         if cmd.startswith("client"):
             return self.clients_cmd(cmd, a)
+        if cmd == "academy_list":                 # «Видеоуроки» (0.69): уроки ИИ Академии с сайта (cloud.php ?p=/academy)
+            from cloud import CloudError, public
+            try:
+                return public(self.cloud.url, "/academy", timeout=12)
+            except CloudError as e:
+                raise ValueError(str(e)) from e
+        if cmd.startswith("sitechat_"):           # «Чат для сайта» (0.69, sitechat.py): опубликовать, отключить, заявки
+            from sitechat import SiteChatError
+            W = self.sitechat
+            try:
+                if cmd == "sitechat_get":
+                    return W.public(fresh=bool(a.get("fresh")))
+                if cmd == "sitechat_publish":
+                    return W.publish(a.get("patch") or {})
+                if cmd == "sitechat_save":             # только настройки, без отправки (черновик)
+                    self.s.update({"sitechat": {k: v for k, v in (a.get("patch") or {}).items() if k in __import__("sitechat").DEF and k != "on"}})
+                    return W.public()
+                if cmd == "sitechat_forget":
+                    return W.forget()
+                if cmd == "sitechat_poll":
+                    n = W.poll()
+                    return dict(W.public(), took=n)
+            except SiteChatError as e:
+                raise ValueError(str(e)) from e
+            raise ValueError("неизвестная команда чата для сайта")
+        if cmd.startswith("crm_"):                # «CRM» (0.69, crm.py): Битрикс24 или свой вебхук; клиент — лидом
+            from crm import CrmError
+            R = self.crm
+            try:
+                if cmd == "crm_get":
+                    return R.public()
+                if cmd == "crm_connect":
+                    return R.connect(str(a.get("kind") or ""), str(a.get("url") or ""))
+                if cmd == "crm_forget":
+                    return R.forget()
+                if cmd == "crm_auto":
+                    return R.set_auto(bool(a.get("on")))
+                if cmd == "crm_test":
+                    return {"ok": R.test()}
+                if cmd == "crm_send":
+                    r = R.send(str(a.get("id") or ""))
+                    return dict(r, client=self.clients.get(str(a.get("id") or "")))
+            except CrmError as e:
+                raise ValueError(str(e)) from e
+            raise ValueError("неизвестная команда CRM")
+        if cmd.startswith("mailing_"):            # «Рассылка» (0.69, mailing.py): черновик, пример, отправка, стоп, отписки
+            from mailing import MailingError
+            M = self.mailing
+            try:
+                if cmd == "mailing_get":
+                    return {"sources": M.sources(), "list": M.list(), "stop": M.stop_list()}
+                if cmd == "mailing_preview":            # сколько получателей и кто — до черновика (студия, на лету)
+                    return M.preview(a.get("subject") or "", a.get("body") or "", a.get("source") or "list", a.get("text") or "",
+                                     a.get("tag") or "", a.get("kind") or "work", a.get("box"))
+                if cmd == "mailing_draft":
+                    return M.draft(a.get("subject", ""), a.get("body", ""), a.get("source") or "list", a.get("text") or "",
+                                   a.get("tag") or "", a.get("kind") or "work", a.get("box"))
+                if cmd == "mailing_start":
+                    return M.start(a.get("id", ""))
+                if cmd == "mailing_stop":
+                    return M.stop(a.get("id", ""))
+                if cmd == "mailing_forget":
+                    return M.forget(a.get("id", ""))
+                if cmd == "mailing_one":
+                    return M.get(a.get("id", ""))
+                if cmd == "mailing_stopset":
+                    return M.stop_set(a.get("emails") or [])
+            except MailingError as e:
+                raise ValueError(str(e)) from e
+            raise ValueError("неизвестная команда рассылки")
         if cmd == "hello":
             return self.snapshot()
         if cmd == "sync_status":
@@ -846,11 +918,11 @@ class CommandsMixin:
                 return {"value": x["value"] if x else ""}
             if cmd == "vault_put":
                 val = a.get("value", "")
-                if a.get("id") and not val:             # правка без нового пароля — пароль прежний
+                if a.get("id") and not val and a.get("kind") != "page":   # правка без нового пароля — пароль прежний
                     old = self.vault.get(a["id"])
                     val = old["value"] if old else ""
                 x = self.vault.put(a.get("name", ""), val, a.get("note", ""), a.get("id") or None,
-                                   login=a.get("login"), url=a.get("url"))
+                                   login=a.get("login"), url=a.get("url"), kind=a.get("kind"))
                 return {"item": x, "items": self.vault.list()}
             if cmd == "vault_delete":
                 self.vault.delete(a.get("id", ""))
@@ -959,8 +1031,8 @@ class CommandsMixin:
             if cmd == "news_seen":
                 self.s.update({"ui": {"news_seen": VERSION}})
                 return {"ok": True}
-            if a.get("all"):
-                return {"version": VERSION, "releases": news.releases("", VERSION)}
+            if a.get("all"):                          # «О программе» → «Что нового» — все выпуски (идея №57, 29.10)
+                return {"version": VERSION, "releases": news.releases("", VERSION, limit=500), "all": True}
             if not seen:                              # первый раз с этой функцией: новая установка — молчим, обновились — показываем
                 if (self.s.get("ui", "welcome") or "") != "done":
                     self.s.update({"ui": {"news_seen": VERSION}})
@@ -1100,6 +1172,45 @@ class CommandsMixin:
             if cmd == "writing_goal":
                 return self.writing.set_goal(a.get("goal") or 0)
             return self.writing.scan() if a.get("fresh") else self.writing.maybe_scan(20)
+        if cmd.startswith("pbot_post") or cmd in ("pbot_chat_add", "pbot_chat_del", "pbot_rubric_set", "pbot_rubric_del", "pbot_greet"):
+            # «Посты» бота персонажа (pbot_posts.py): в каналы и группы — сейчас, ко времени, с одобрением; рубрики; новички
+            from pbot_posts import PostError
+            P = self.pbot_posts
+            try:
+                if cmd == "pbot_posts":
+                    return P.public()
+                if cmd == "pbot_post_add":
+                    P.add(a.get("text") or "", a.get("chats"), a.get("at") or None, a.get("poll"), bool(a.get("approve")), "studio", a.get("topic") or "")
+                elif cmd == "pbot_post_edit":
+                    P.edit(str(a.get("id") or ""), a.get("text"), a.get("at"), a.get("chats"))
+                elif cmd == "pbot_post_ok":
+                    P.approve(str(a.get("id") or ""))
+                elif cmd == "pbot_post_del":
+                    P.delete(str(a.get("id") or ""))
+                elif cmd == "pbot_post_retry":              # не ушёл (бот не админ, сеть) — ещё раз
+                    P.publish(str(a.get("id") or ""))
+                elif cmd == "pbot_post_write":
+                    try:
+                        return {"text": P.write(str(a.get("topic") or "").strip(), str(a.get("chat_title") or ""))}
+                    except PostError:
+                        raise
+                    except Exception as e:  # noqa: BLE001
+                        raise PostError(f"модель не ответила: {e}") from e
+                elif cmd == "pbot_chat_add":
+                    P.add_chat(str(a.get("ref") or ""))
+                elif cmd == "pbot_chat_del":
+                    P.forget_chat(str(a.get("id") or ""))
+                elif cmd == "pbot_rubric_set":
+                    P.rubric_set(a)
+                elif cmd == "pbot_rubric_del":
+                    P.rubric_del(str(a.get("id") or ""))
+                elif cmd == "pbot_greet":
+                    P.greet_set(a.get("on"), a.get("text"))
+                else:
+                    raise ValueError("неизвестная команда постов")
+            except (PostError, ValueError) as e:
+                raise ValueError(str(e)) from e
+            return P.public()
         if cmd.startswith("pbot_"):              # «Бот персонажа» (pbot.py): публичный бот в Telegram от имени персонажа
             from telegram import TelegramError
             pb = self.pbot
@@ -1704,6 +1815,12 @@ class CommandsMixin:
                 raise ValueError(str(e)) from e
         if cmd in ("net", "net_proxy", "net_check", "net_dewiar", "net_reserve"):   # dewiar.pro заблокирован провайдером — прокси
             return self.net_cmd(cmd, a)
+        if cmd in ("sshlink", "sshlink_save", "sshlink_test"):     # запасной вход через SSH (владелец сервера, 29.10)
+            if cmd == "sshlink_save":
+                return self.sshlink.save(a)
+            if cmd == "sshlink_test":
+                return dict(self.sshlink.test(a), **self.sshlink.public())
+            return self.sshlink.public()
         if cmd == "device":
             if a.get("fresh"):                         # раздел «Голос» открыт — что умеет облако сейчас (озвучку могли включить)
                 self._cloud_caps()
@@ -1915,10 +2032,16 @@ class CommandsMixin:
             return self.intro_stop()
         if cmd == "voice_test":
             pid = a.get("persona") or self.s.get("persona")
-            if pid != self.s.get("persona"):
+            listen = bool(a.get("listen"))             # «Прослушать» ответ (идея №58): голосом того, кто отвечал, без смены персонажа
+            if pid != self.s.get("persona") and not listen:
                 self.switch_persona(pid)
+            if listen and pid != self.s.get("persona") and self.personas.get(pid):
+                a = dict(a, voice=dict(self._voice_cfg(pid), **(a.get("voice") or {})))
             p = self.personas.get(pid)
             text = a.get("text") or f"Привет! Я {p['name']}. {p.get('tagline', '')}."
+            if listen:                                 # ответ из «Чата» — с разметкой Markdown: вслух — без звёздочек и решёток
+                from llm import speakable
+                text = speakable(text) or text
             with self._turn_lock:
                 self._cancel_locked()
                 self.turn_n += 1
@@ -1939,7 +2062,7 @@ class CommandsMixin:
                         self.note("")
                     except Exception as e:  # noqa: BLE001
                         log.warning("Голос не скачался: %s", e)
-                self._speak_worker(turn, q, fx_override=a.get("fx"), voice_override=a.get("voice"))
+                self._speak_worker(turn, q, fx_override=a.get("fx"), voice_override=a.get("voice"), force=listen)
                 with self._turn_lock:
                     if self.turn is turn:
                         self.turn = None

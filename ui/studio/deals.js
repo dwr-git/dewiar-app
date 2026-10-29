@@ -19,7 +19,8 @@ async function dlLoad() {
 function dlTab(t) {
   $$("#cr-tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
   $(".cr-main").hidden = t !== "list"; $("#dl-wrap").hidden = t !== "deals";
-  if (t === "deals") dlLoad(); else crLoad();
+  if ($("#crm-wrap")) $("#crm-wrap").hidden = t !== "crm";
+  if (t === "deals") dlLoad(); else if (t === "crm") { if (window.crmLoad) crmLoad(); } else crLoad();
 }
 function dlRender() {
   const b = DL.board, box = $("#dl-wrap"); if (!b || !box) return;

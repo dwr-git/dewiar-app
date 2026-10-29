@@ -78,6 +78,13 @@ nav .ndot.on { display: inline-block; }
 .dw-weak ol { margin: 10px 0 0 20px; font-size: 13.5px; line-height: 1.7; color: rgba(255,255,255,.88); }
 /* карточки ряда — одной высоты (владелец 28.10: «блоки разной высоты — страница смотрится не идеально»); кнопки
    действий последней строкой карточки — прижаты к её низу, в ряду на одной линии */
+/* «Запасной вход через SSH» (29.10) — в карточке «Сеть», только у владельца сервера */
+.ssh[hidden] { display: none; }
+.ssh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 8px; }
+.ssh-grid .f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ssh-grid .f > span { font-size: 12.5px; color: var(--muted); } .ssh-grid .f i { font-style: normal; opacity: .75; }
+.ssh-grid .ssh-wide { grid-column: 1 / -1; }
+@media (max-width: 760px) { .ssh-grid { grid-template-columns: 1fr; } }
 .dw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; align-items: stretch; }
 .dwc { background: var(--glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-radius: 20px; padding: 18px 20px;
        display: flex; flex-direction: column; }
@@ -1004,7 +1011,11 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .cl-chat { background: var(--glass); border-radius: 22px; display: flex; flex-direction: column; height: max(460px, calc(100vh - 260px)); overflow: hidden; }
 .cl-empty { margin: auto; text-align: center; max-width: 360px; display: flex; flex-direction: column; gap: 6px; padding: 30px; }
 .cl-empty b { font: 600 16px "Unbounded", sans-serif; } .cl-empty span { color: var(--muted); font-size: 13.5px; line-height: 1.5; }
-.cl-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; box-shadow: 0 10px 20px -18px rgba(0,0,0,.8); }
+.cl-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; box-shadow: 0 10px 20px -18px rgba(0,0,0,.8); flex-wrap: wrap; row-gap: 8px; }
+.cl-head > div { min-width: 0; }
+.cl-ghead > .cl-ava, .cl-ghead > div[role="button"] { cursor: pointer; border-radius: 12px; }
+.cl-ghead > div[role="button"]:hover b { color: var(--accent); }
+.cl-ghead > div[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .cl-head b { display: block; font-size: 15px; } .cl-head span { font-size: 12px; color: var(--muted); }
 .cl-msgs { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; }
 .cl-m { align-self: flex-start; max-width: min(74%, 560px); padding: 9px 13px 6px; border-radius: 18px 18px 18px 6px; background: rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 6px; }
@@ -1054,8 +1065,8 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
    для чтения: крупное название, текст удобной ширины, фото плиткой и файлы; «Изменить» — правка на месте */
 /* «Заметки» (28.10, владелец: «важнейший раздел… форма поиска не очень красивая и сами блоки»): одна вдавленная строка
    поиска (поле внутри — прозрачное), список карточками по дням, заметка — на своей «бумаге» */
-.nt-bar { display: flex; gap: 14px; align-items: center; margin: 4px 0 20px; max-width: 1500px; }
-.nt-search { flex: 1; display: flex; align-items: center; gap: 14px; height: 54px; padding: 0 20px; border-radius: 20px; background: var(--field);
+.nt-bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 4px 0 20px; max-width: 1500px; }
+.nt-search { flex: 1 1 340px; min-width: 260px; display: flex; align-items: center; gap: 14px; height: 54px; padding: 0 20px; border-radius: 20px; background: var(--field);
   box-shadow: var(--press, inset 0 1px 2px rgba(20,30,60,.08)); cursor: text; }
 .nt-search:focus-within { box-shadow: var(--press, inset 0 1px 2px rgba(20,30,60,.08)), 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
 .nt-search svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
@@ -1088,7 +1099,8 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .nt-row small, .nt-top small { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--muted); font-size: 12px; margin: 3px 0 6px; }
 .nt-chip { font-style: normal; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: rgba(127,127,160,.14); color: var(--muted); }
 .nt-row em { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-style: normal; font-size: 13px; color: var(--muted); line-height: 1.5; }
-.nt-th { flex: none; width: 56px; height: 56px; border-radius: 14px; background: rgba(127,127,160,.12) center/cover no-repeat; box-shadow: 0 0 0 1px rgba(127,127,160,.15); }
+.nt-th { flex: none; width: 76px; height: 76px; border-radius: 16px; align-self: center; background: rgba(127,127,160,.12) center/cover no-repeat; }
+.nt-th.none { display: none; }
 .nt-row mark, .nt-view mark { background: rgba(255,200,90,.38); color: inherit; border-radius: 3px; padding: 0 1px; }
 .nt-none { padding: 18px; border-radius: 18px; background: var(--glass); color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 .nt-view { min-height: 420px; border-radius: 26px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); padding: 30px 36px 34px; }
@@ -1109,7 +1121,13 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .nt-f svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; }
 .nt-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; }
 .nt-f .nt-x { position: static; margin-left: 2px; background: rgba(255,255,255,.12); }
-.nt-ti { flex: 1; min-width: 220px; font: 600 20px "Unbounded", sans-serif; padding: 10px 14px; border-radius: 14px; }
+/* название в правке — одной строкой, тем же шрифтом, что и при чтении (29.10, владелец: «поле для заголовка очень большое»:
+   класс совпадал с картинкой плитки .nt-ti — 130 px высоты). Поле проступает только под курсором и при вводе. */
+#p-notes input.nt-tedit { flex: 1; min-width: 220px; width: auto; height: 46px; margin: -6px 0 0 -12px; padding: 0 12px; border-radius: 14px;
+  font: 600 24px/1.25 "Unbounded", sans-serif; color: var(--ink); background: transparent; text-overflow: ellipsis; }
+#p-notes input.nt-tedit:hover { background: var(--soft); }
+#p-notes input.nt-tedit:focus { background: var(--field); }
+#p-notes input.nt-tedit::placeholder { color: var(--muted); }
 .nt-view textarea { width: 100%; min-height: 260px; resize: none; line-height: 1.65; font-size: 15px; padding: 14px 16px; border-radius: 16px; overflow: hidden; }
 .nt-drop { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.04); color: var(--muted); font-size: 13.5px; cursor: pointer; transition: background-color .12s; }
 .nt-drop:hover, .nt-drop.over { background: rgba(139,140,247,.16); color: var(--ink); }
@@ -1912,6 +1930,22 @@ html.st-light .cl-me:hover, html.st-light .cl-me[aria-expanded="true"] { backgro
 .vl-form { max-width: 900px; background: var(--glass); border-radius: 22px; padding: 18px 20px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 12px; }
 .vl-form[hidden] { display: none; }
 .vl-form h3 { font: 600 16px "Unbounded", sans-serif; margin: 0; }
+.vl-fhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* «Пароль» / «Страница» — тем же переключателем, что вид в заметках */
+.vl-kind { display: inline-flex; gap: 2px; padding: 4px; border-radius: 14px; background: var(--soft); }
+.vl-kind[hidden] { display: none; }
+.vl-kind button { border: 0; cursor: pointer; padding: 7px 14px; border-radius: 10px; background: none; font: 600 13px "Manrope", sans-serif; color: var(--muted); }
+.vl-kind button[aria-pressed="true"] { background: var(--panel2, #fff); color: var(--ink); box-shadow: 0 2px 8px -4px rgba(0,0,0,.35); }
+.vl-kind button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.vl-pg { display: flex; flex-direction: column; gap: 12px; }
+.vl-pg[hidden], .vl-grid[hidden] { display: none; }
+.vl-pg .f { display: flex; flex-direction: column; gap: 5px; }
+.vl-pg .f > span:first-child { font-size: 12.5px; color: var(--muted); }
+#p-vault .vl-pg textarea { min-height: 280px; resize: none; font: 14px/1.7 "JetBrains Mono", ui-monospace, monospace; padding: 14px 16px; border-radius: 16px; overflow: auto; }
+.vl-item.cur { background: color-mix(in srgb, var(--brand) 10%, var(--frost-hi, transparent)); }
+.vl-page { cursor: pointer; }
+.vl-page .vl-mono svg { width: 21px; height: 21px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.vl-lines { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .vl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
 .vl-grid .f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .vl-grid .f > span:first-child { font-size: 12.5px; color: var(--muted); } .vl-grid .f i { font-style: normal; opacity: .7; }
@@ -1953,7 +1987,7 @@ html.st-light .cl-me:hover, html.st-light .cl-me[aria-expanded="true"] { backgro
 html.st-light .vl-find { box-shadow: inset 0 0 0 1px rgba(36,50,74,.1); }
 html.st-light .vl-ib:hover { background: rgba(36,50,74,.07); }
 html.st-light .vl-val.shown { background: rgba(36,50,74,.06); }
-@media (max-width: 760px) { .vl-grid { grid-template-columns: 1fr; } .vl-item { grid-template-columns: auto minmax(0, 1fr) auto; } .vl-val { display: none; } }
+@media (max-width: 760px) { .vl-grid { grid-template-columns: 1fr; } .vl-item { grid-template-columns: auto minmax(0, 1fr) auto; } .vl-val, .vl-lines { display: none; } }
 /* плагин на «Главной»: его эмодзи на подложке его цвета */
 .hm-ic.hm-isplg { background: linear-gradient(150deg, color-mix(in srgb, var(--pc) 34%, transparent), color-mix(in srgb, var(--pc) 14%, transparent)); }
 html.st-light .hm-ic.hm-isplg { background: linear-gradient(150deg, color-mix(in srgb, var(--pc) 26%, #fff), color-mix(in srgb, var(--pc) 12%, #eef2f9)); }
@@ -3034,6 +3068,20 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
   background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M15 3l6 6-3 1-4 4 .5 4.5L13 20l-4-4-5 5-1-1 5-5-4-4 1.5-1.5L10 10l4-4z'/%3E%3C/svg%3E") center/contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M15 3l6 6-3 1-4 4 .5 4.5L13 20l-4-4-5 5-1-1 5-5-4-4 1.5-1.5L10 10l4-4z'/%3E%3C/svg%3E") center/contain no-repeat; }
 .nt-row b .nt-pin, .nt-tile b .nt-pin { color: var(--accent); }
+/* замок (29.10): заметка не удаляется, пока его не снять — core/workspace.py _locked */
+.nt-lock { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; flex: none; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5a5 5 0 0 0-5 5V10h-.5A2.5 2.5 0 0 0 4 12.5v7A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5v-7a2.5 2.5 0 0 0-2.5-2.5H17V7.5a5 5 0 0 0-5-5zm-3 5a3 3 0 0 1 6 0V10H9zm3 6.5a1.6 1.6 0 0 1 .8 3v1.5h-1.6V17a1.6 1.6 0 0 1 .8-3z'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5a5 5 0 0 0-5 5V10h-.5A2.5 2.5 0 0 0 4 12.5v7A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5v-7a2.5 2.5 0 0 0-2.5-2.5H17V7.5a5 5 0 0 0-5-5zm-3 5a3 3 0 0 1 6 0V10H9zm3 6.5a1.6 1.6 0 0 1 .8 3v1.5h-1.6V17a1.6 1.6 0 0 1 .8-3z'/%3E%3C/svg%3E") center/contain no-repeat; }
+.nt-row b .nt-lock, .nt-tile b .nt-lock { margin: 0 0 0 7px; color: var(--muted); }
+.nt-msp { flex: 1; min-width: 0; }
+.btn.danger.nt-locked { background: var(--soft); color: var(--muted); }
+.btn.danger.nt-locked .nt-lock { margin-right: 7px; }
+.nt-mb.nt-nudge { animation: ntNudge .5s ease 2; }
+@keyframes ntNudge { 0%, 100% { transform: none; } 30% { transform: translateX(-3px); } 70% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) { .nt-mb.nt-nudge { animation: none; } }
+/* порядок списка: «Новые», «А–Я», «По цвету» — словами, тем же переключателем, что и вид */
+.nt-sort button { width: auto; padding: 0 13px; font: 600 13px "Manrope", sans-serif; }
+.nt-gh[data-c] { display: flex; align-items: center; gap: 7px; }
+.nt-gh[data-c]::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--gc); }
 .nt-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 20px; }
 .nt-mb { border: 0; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); padding: 7px 13px; border-radius: 999px; background: var(--soft);
   display: inline-flex; align-items: center; gap: 2px; }
@@ -3084,7 +3132,8 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .nt-tile b { font-size: 15px; line-height: 1.3; }
 .nt-tile em { font-style: normal; font-size: 13.5px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
 .nt-tile small { display: flex; flex-wrap: wrap; gap: 5px; }
-.nt-ti { display: block; height: 130px; margin: -14px -16px 2px; border-radius: 18px 18px 0 0; background: rgba(127,127,160,.12) center/cover no-repeat; }
+.nt-ti { display: block; flex: none; aspect-ratio: 16 / 10; margin: -14px -16px 2px; border-radius: 18px 18px 0 0; background: rgba(127,127,160,.12) center/cover no-repeat; }
+.nt-ti.none { display: none; }
 .nt-cols.grid > .nt-view { display: none; }
 .nt-cols.grid.open > .nt-view { display: block; position: fixed; z-index: 40; top: 12px; right: 12px; bottom: 12px; width: min(760px, calc(100vw - 24px)); overflow: auto;
   box-shadow: 0 30px 80px -20px rgba(0,0,0,.55); animation: nt-in .22s cubic-bezier(.2,.8,.2,1); }
@@ -3536,3 +3585,187 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
 .co-docs { margin: 4px 0 10px; padding: 10px 14px; border-radius: 14px; font-size: 13px; color: var(--muted);
   background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .co-docs p { margin: 2px 0; } .co-docs b { color: var(--ink); font-weight: 600; }
+/* «Прослушать» под ответом в «Чате» (идея №58) — тихо рядом со временем, без рамки */
+.ch-listen { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; padding: 2px 9px 2px 7px; border: 0; border-radius: 99px;
+  background: transparent; color: var(--muted); font: 600 11.5px Manrope, sans-serif; cursor: pointer; vertical-align: middle; }
+.ch-listen:hover, .ch-listen.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
+.ch-listen svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* «Что нового» — все выпуски (идея №57): заголовок версии над её пунктами */
+.nwv { margin: 18px 0 6px; font-size: 14px; } .nwv:first-child { margin-top: 4px; } .nwv small { color: var(--muted); font-weight: 500; margin-left: 6px; }
+/* Своя модель персонажа на том же сервере (№403) */
+#e-brain .bp-m { flex-basis: 100%; display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+#e-brain .bp-m select { flex: 1; min-width: 0; width: auto; }
+
+/* «Рассылка» (0.69, studio/mailing.js): слева — кому и что, справа — письмо первому получателю на «бумаге» (одна яркая вещь
+   на странице — само письмо), ниже — рассылки с ходом. Рамок нет: карточки — стекло, ход — заливка дорожки. */
+#p-mailing [hidden] { display: none !important; }
+#p-mailing .mg-top .lead { margin-bottom: 16px; max-width: 70ch; }
+.mg-nomail { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 20px; margin-bottom: 18px; border-radius: 20px;
+  background: color-mix(in srgb, #FFB547 16%, transparent); }
+.mg-nomail p { margin: 0; flex: 1; min-width: 220px; }
+.mg-main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); gap: 18px; align-items: start; }
+.mg-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.mg-step { display: flex; flex-direction: column; gap: 12px; padding: 22px 24px; border-radius: 24px; background: var(--glass); box-shadow: var(--raise-s, none); }
+.mg-step h3, .mg-prev h3 { margin: 0; font: 600 15px Manrope, sans-serif; }
+.mg-seg { margin: 0; align-self: flex-start; }
+.mg-seg button small { font-size: 12px; font-weight: 700; opacity: .7; }
+.mg-seg button small:empty { display: none; }
+.mg-who { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); min-height: 20px; }
+.mg-who span, .mg-hint { color: var(--muted); }
+.mg-hint { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.mg-ins { border: 0; padding: 3px 10px; border-radius: 99px; font: 600 12.5px Manrope, sans-serif; color: var(--ink); cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.mg-ins:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.mg-ins:focus-visible, .mg-c :is(button, summary):focus-visible, .mg-stop summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mg-step textarea#mg-body { min-height: 200px; line-height: 1.55; }
+.mg-prev { position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; padding: 22px 24px 24px; border-radius: 24px;
+  background: var(--glass); box-shadow: var(--raise-s, none); min-width: 0; }
+/* письмо — светлая бумага в любой теме: так его и увидят в почте */
+.mg-letter { border-radius: 16px; background: #FBFAF6; color: #23242C; padding: 18px 20px 22px; box-shadow: 0 18px 40px -26px rgba(10,10,30,.6);
+  max-height: 460px; overflow: auto; }
+.mg-lh { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; font-size: 13px; padding: 2px 0; }
+.mg-lh span { color: #7A7C88; }
+.mg-lh b { font-weight: 600; overflow-wrap: anywhere; }
+.mg-lh + .mg-lb { margin-top: 12px; padding-top: 14px; box-shadow: inset 0 1px 0 rgba(35,36,44,.08); }
+.mg-lb { white-space: pre-wrap; overflow-wrap: anywhere; font: 400 14.5px/1.6 Manrope, sans-serif; }
+.mg-lempty { margin: 0; color: #7A7C88; font-size: 13.5px; line-height: 1.55; }
+.mg-send { align-self: stretch; justify-content: center; }
+.mg-send:disabled { opacity: 1; cursor: default; background: rgba(127,127,140,.16); color: var(--ink); box-shadow: none; }
+.mg-histw { margin-top: 28px; }
+.mg-histw h2 { margin: 0 0 12px; font: 600 18px Unbounded, Manrope, sans-serif; }
+.mg-hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mg-c { display: flex; gap: 16px; align-items: flex-start; padding: 16px 20px; border-radius: 20px; background: var(--glass); box-shadow: var(--raise-s, none); }
+.mg-cmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.mg-cmain > b { overflow-wrap: anywhere; }
+.mg-cmain small { color: var(--muted); font-size: 12.5px; }
+.mg-c.st-sending .mg-st, .mg-c.st-waiting .mg-st { color: var(--ink); font-weight: 700; }
+.mg-bar { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; max-width: 420px; }
+.mg-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #46d39a, #2fb383); transition: width .4s ease; }
+.mg-c.st-stopped .mg-bar i, .mg-c.st-paused .mg-bar i { background: color-mix(in srgb, var(--ink) 35%, transparent); }
+.mg-cacts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.mg-err summary { cursor: pointer; font-size: 12.5px; color: var(--bad, #FF6B8A); }
+.mg-err ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); }
+.mg-stop { margin-top: 18px; padding: 14px 20px; border-radius: 20px; background: var(--glass); box-shadow: var(--raise-s, none); }
+.mg-stop[open] { display: flex; flex-direction: column; gap: 10px; }
+.mg-stop summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.mg-stop .btn { align-self: flex-start; }
+.cr-tacts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 980px) { .mg-main { grid-template-columns: minmax(0, 1fr); } .mg-prev { position: static; } }
+@media (max-width: 560px) { .mg-c { flex-direction: column; } .mg-cacts { justify-content: flex-start; } .mg-step, .mg-prev { padding: 18px; } }
+@media (prefers-reduced-motion: reduce) { .mg-bar i { transition: none; } }
+
+/* «Клиенты» → «CRM» (0.69, studio/crm.js): два пути подключения рядом; подключено — одна карточка с зелёной точкой */
+.crm-wrap[hidden] { display: none; }
+.crm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+.crm-card { display: flex; flex-direction: column; gap: 12px; padding: 22px 24px; border-radius: 24px; background: var(--glass); box-shadow: var(--raise-s, none); min-width: 0; }
+.crm-card h3 { margin: 0; font: 600 17px Manrope, sans-serif; }
+.crm-card p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.crm-card .btn { align-self: flex-start; }
+.crm-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.5; }
+.crm-note { margin: 14px 2px 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; max-width: 72ch; }
+.crm-card .crm-note { margin: 0; }
+.crm-on { max-width: 640px; }
+.crm-head { display: flex; align-items: center; gap: 14px; }
+.crm-head small { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.crm-dot { width: 12px; height: 12px; border-radius: 50%; background: #3FC48A; box-shadow: 0 0 0 6px rgba(63,196,138,.16); flex: none; }
+.crm-tg { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
+.crm-tg > span:first-child { display: flex; flex-direction: column; gap: 3px; }
+.crm-tg small { color: var(--muted); font-size: 12.5px; }
+.crm-bad { color: var(--bad, #FF6B8A); }
+
+/* «Бот в Telegram» → «Посты» и «Рубрики» (0.69, studio/pbot_posts.js): где — плитки каналов и групп (выбранные — залиты),
+   пост — карточка с текстом как в Telegram, ожидающие одобрения — первыми и с акцентом. Рамок нет. */
+.bp-posts[hidden], .bp-rub[hidden] { display: none; }
+.pp-chats { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pp-chat { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border: 0; border-radius: 16px; background: rgba(127,127,140,.08); color: var(--ink); cursor: pointer; text-align: left; font: inherit; }
+.pp-chat:hover { background: rgba(127,127,140,.14); }
+.pp-chat.on { background: color-mix(in srgb, #2AABEE 20%, transparent); }
+.pp-chat.no { opacity: .5; cursor: default; }
+.pp-chat:focus-visible, .pp-days button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pp-chat i { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(145deg, #5cc6f5, #2AABEE); flex: none; }
+.pp-chat i svg { width: 17px; height: 17px; fill: none; stroke: #fff; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.pp-chat span { display: flex; flex-direction: column; min-width: 0; } .pp-chat b { font-size: 13px; font-weight: 650; } .pp-chat small { font-size: 11.5px; color: var(--muted); }
+.pp-add { display: flex; gap: 6px; } .pp-add input { width: 170px; }
+.pp-comp { display: flex; flex-direction: column; gap: 8px; }
+.pp-topic { display: flex; gap: 8px; } .pp-topic input { flex: 1; min-width: 0; }
+.pp-comp textarea { min-height: 110px; line-height: 1.5; }
+.pp-pollf { display: flex; flex-direction: column; gap: 8px; } .pp-pollf[hidden] { display: none; }
+.pp-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pp-ck { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.pp-list { display: flex; flex-direction: column; gap: 8px; }
+.pp-list h4 { margin: 8px 2px 0; font-size: 12.5px; font-weight: 650; color: var(--muted); }
+.pp-post { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 16px; background: rgba(127,127,140,.07); }
+.pp-post.st-wait { background: color-mix(in srgb, #FFB547 14%, transparent); }
+.pp-post.st-failed { background: color-mix(in srgb, #FF6B8A 12%, transparent); }
+.pp-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pp-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.5; max-height: 9em; overflow: hidden; }
+.pp-body small { font-size: 11.5px; color: var(--muted); } .pp-poll { font-size: 13.5px; }
+.pp-err { color: var(--bad, #FF6B8A) !important; }
+.pp-acts { display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex: none; }
+.pp-rub { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: rgba(127,127,140,.07); margin-bottom: 6px; }
+.pp-rub span { flex: 1; min-width: 0; display: flex; flex-direction: column; } .pp-rub b { font-size: 13.5px; } .pp-rub small { font-size: 11.5px; color: var(--muted); }
+.pp-rubf { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.pp-days { display: flex; gap: 4px; flex-wrap: wrap; }
+.pp-days button { border: 0; border-radius: 10px; padding: 6px 10px; font: 600 12.5px Manrope, sans-serif; color: var(--muted); background: rgba(127,127,140,.08); cursor: pointer; }
+.pp-days button.on { color: #fff; background: var(--brand); }
+#pp-greet-t[hidden] { display: none; }
+@media (max-width: 700px) { .pp-post { flex-direction: column; } .pp-acts { flex-direction: row; flex-wrap: wrap; } }
+
+/* «Чат для сайта» (0.69, studio/sitechat.js): слева — настройка карточками, справа — окно чата, каким его увидит посетитель,
+   с цветом персонажа (единственный яркий акцент страницы), ниже — ссылка и код. Рамок нет. */
+#p-sitechat [hidden] { display: none !important; }
+#p-sitechat .sc-top .lead { margin-bottom: 16px; max-width: 76ch; }
+.sc-main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; align-items: start; }
+.sc-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sc-card { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px; border-radius: 22px; background: var(--glass); box-shadow: var(--raise-s, none); min-width: 0; }
+.sc-card h3 { margin: 0; font: 600 15px Manrope, sans-serif; }
+.sc-card .co-ms { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.sc-tgl { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
+.sc-tgl > span:first-child { display: flex; flex-direction: column; gap: 2px; } .sc-tgl b { font-size: 13.5px; font-weight: 650; } .sc-tgl small { font-size: 12px; color: var(--muted); }
+.sc-lbl small { color: var(--dim, var(--muted)); } .sc-lbl small.over { color: var(--bad, #FF6B8A); }
+#sc-kb { min-height: 190px; line-height: 1.5; }
+.sc-lims { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sc-side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sc-prev { --sc: #6a5cf0; position: relative; padding: 18px 18px 74px; border-radius: 26px; background: color-mix(in srgb, var(--sc) 10%, var(--glass, transparent)); }
+.scp-win { border-radius: 20px; overflow: hidden; background: #fff; color: #1d2230; box-shadow: 0 22px 50px -26px rgba(20,24,40,.6); }
+.scp-win header { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--sc) 12%, #fff); }
+.scp-ava { width: 38px; height: 38px; border-radius: 50%; background: var(--sc) center / cover no-repeat; color: #fff; display: grid; place-items: center; font-style: normal; font-weight: 700; flex: none; }
+.scp-win header b { display: block; font-size: 14.5px; } .scp-win header small { font-size: 12px; color: #6b7180; }
+.scp-msgs { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.scp-msgs p { margin: 0; max-width: 86%; padding: 8px 12px; border-radius: 16px; font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.scp-a { align-self: flex-start; background: #eceef4; border-bottom-left-radius: 5px; } .scp-u { align-self: flex-end; background: var(--sc); color: #fff; border-bottom-right-radius: 5px; }
+.scp-dim { opacity: .7; font-style: italic; }
+.scp-in { margin: 0 12px 12px; display: flex; align-items: center; gap: 8px; padding: 9px 9px 9px 14px; border-radius: 14px; background: #eceef4; color: #6b7180; font-size: 13.5px; }
+.scp-in span { flex: 1; } .scp-in i { width: 30px; height: 30px; border-radius: 10px; background: var(--sc); color: #fff; display: grid; place-items: center; font-style: normal; font-weight: 700; }
+.scp-lead { display: block; padding: 0 14px 12px; color: var(--sc); font-weight: 650; font-size: 12.5px; }
+.scp-btn { position: absolute; right: 18px; bottom: 14px; width: 48px; height: 48px; border-radius: 50%; background: var(--sc); display: grid; place-items: center; box-shadow: 0 10px 24px -8px rgba(0,0,0,.45); }
+.scp-btn svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sc-pub { align-self: stretch; justify-content: center; }
+.sc-err { margin: 0; font-size: 13px; line-height: 1.5; color: var(--bad, #FF6B8A); }
+.sc-copy { display: flex; gap: 6px; } .sc-copy input { flex: 1; min-width: 0; font-size: 12.5px; }
+.sc-hint { margin: -4px 2px 2px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.sc-stats { display: flex; gap: 8px; } .sc-stats span { flex: 1; display: flex; flex-direction: column; padding: 10px 12px; border-radius: 14px; background: rgba(127,127,140,.08); font-size: 11.5px; color: var(--muted); }
+.sc-stats b { font: 700 20px Manrope, sans-serif; color: var(--ink); }
+.sc-leads { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sc-leads li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(127,127,140,.07); }
+.sc-leads li b { font-size: 13px; } .sc-leads li small { flex: 1; font-size: 11.5px; color: var(--muted); }
+#sc-off { align-self: flex-start; }
+@media (max-width: 1000px) { .sc-main { grid-template-columns: minmax(0, 1fr); } .sc-side { position: static; } }
+
+/* «Видеоуроки» (0.69, studio/lessons.js): обложки 16:9 с кнопкой «смотреть», плеер — поверх, на тёмной подложке */
+.ls-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+.ls-card { display: flex; flex-direction: column; gap: 0; padding: 0; border: 0; border-radius: 22px; overflow: hidden; text-align: left; cursor: pointer;
+  background: var(--glass); box-shadow: var(--raise-s, none); color: var(--ink); font: inherit; transition: transform .2s; }
+.ls-card:hover { transform: translateY(-2px); } .ls-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.ls-pic { position: relative; aspect-ratio: 16 / 9; background: color-mix(in srgb, var(--accent) 14%, transparent) center / cover no-repeat; display: grid; place-items: center; }
+.ls-play { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: rgba(20,24,40,.62); }
+.ls-play svg { width: 26px; height: 26px; fill: #fff; margin-left: 3px; }
+.ls-pic em { position: absolute; right: 10px; bottom: 10px; padding: 3px 9px; border-radius: 8px; background: rgba(20,24,40,.66); color: #fff; font: 700 12px Manrope, sans-serif; font-style: normal; }
+.ls-txt { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px 16px; }
+.ls-txt small { font-size: 12px; color: var(--muted); font-weight: 650; } .ls-txt b { font-size: 16px; } .ls-txt span { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.ls-empty { color: var(--muted); }
+.ls-dlg { width: min(1100px, 94vw); padding: 0; border: 0; border-radius: 20px; background: #10131c; color: #fff; overflow: hidden; }
+.ls-dlg::backdrop { background: rgba(10,12,20,.7); }
+.ls-dh { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.ls-dlg video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+@media (prefers-reduced-motion: reduce) { .ls-card { transition: none; } }

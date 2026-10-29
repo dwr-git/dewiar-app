@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 2 · Дозор. Тот же светлый неоморфизм, что в уроке 1 (небесный фон, мягкие тени вместо рамок); главная вещь урока —
+   глаз дозора из студии (ui/settings.html, «Дозор»): он открывается, поглядывает и моргает зелёным, когда дождался. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(106,141,255,.28), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(120,220,180,.24), transparent 65%); }
+#b3 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(140,210,255,.3), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; letter-spacing: .01em; color: var(--ink); }
+#brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+#steps { position: absolute; top: 54px; right: 64px; display: flex; gap: 14px; }
+#steps li { list-style: none; display: inline-flex; align-items: center; gap: 10px; padding: 10px 22px 10px 10px; border-radius: 99px; font-size: 20px; font-weight: 700;
+  color: var(--mut); background: var(--bg); box-shadow: var(--raise-s); }
+#steps li i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 15px; color: var(--mut); box-shadow: var(--press); }
+#steps li.on { color: #fff; background: var(--brand); box-shadow: 8px 10px 22px -6px rgba(79,108,240,.55); } #steps li.on i { background: rgba(255,255,255,.25); color: #fff; box-shadow: none; }
+#steps li.past { color: var(--ink); } #steps li.past i { background: var(--ok); color: #fff; box-shadow: none; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; color: var(--ink); white-space: nowrap; }
+
+/* глаз дозора — как в студии: веко, радужка, зрачок, блик */
+.eye { position: absolute; }
+.eye svg { width: 100%; height: 100%; overflow: visible; }
+.eye .lid { fill: var(--bg); filter: drop-shadow(10px 12px 18px var(--nd)) drop-shadow(-8px -8px 14px var(--nl)); }
+.eye .iris { fill: url(#irisg); } .eye .pupil { fill: #1e2a44; } .eye .glint { fill: #fff; }
+.eye.ok .iris { fill: url(#irisok); }
+
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 128px/1 Unbounded, sans-serif; letter-spacing: -.02em; color: var(--ink); }
+#t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#e-title { left: 1080px; top: 230px; width: 300px; height: 180px; }
+
+/* ожидание: загрузка тянется, рядом — то, чего ещё ждут */
+.dl { position: absolute; left: 820px; top: 250px; width: 900px; padding: 38px 46px 40px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.dl header { display: flex; align-items: center; gap: 20px; }
+.dl header i { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; box-shadow: var(--raise-s); flex: none; }
+.dl header i svg { width: 34px; height: 34px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dl header b { display: block; font: 600 34px/1.2 Unbounded, sans-serif; }
+.dl header small { display: block; font-size: 24px; color: var(--mut); font-weight: 700; margin-top: 6px; }
+.bar { height: 22px; border-radius: 99px; margin-top: 30px; box-shadow: var(--press); padding: 4px; }
+.bar i { display: block; height: 100%; border-radius: 99px; background: var(--brand); }
+.bar.ok i { background: linear-gradient(90deg, #46d39a, #2fb383); }
+.pct { margin-top: 14px; display: flex; justify-content: space-between; font-size: 24px; font-weight: 700; color: var(--mut); }
+.chip { position: absolute; display: inline-flex; align-items: center; gap: 14px; padding: 18px 30px 18px 22px; border-radius: 99px; background: var(--bg);
+  box-shadow: var(--raise-s); font-size: 28px; font-weight: 700; white-space: nowrap; }
+.chip i { width: 14px; height: 14px; border-radius: 50%; background: #f2a93b; }
+#clock { position: absolute; left: 1300px; top: 630px; width: 150px; height: 150px; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+#clock svg { width: 100%; height: 100%; }
+
+#voice { position: absolute; left: 700px; top: 300px; max-width: 1120px; display: flex; align-items: center; gap: 24px; padding: 26px 44px 26px 26px; border-radius: 40px;
+  background: var(--bg); color: var(--ink); box-shadow: var(--raise); }
+#voice i, #voice2 i { width: 78px; height: 78px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); flex: none; box-shadow: 8px 10px 20px -6px rgba(79,108,240,.55); }
+#voice i svg, #voice2 i svg { width: 38px; height: 38px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; }
+#voice span, #voice2 span { font: 600 38px/1.25 Unbounded, sans-serif; }
+#badge { position: absolute; left: 700px; top: 520px; display: flex; align-items: center; gap: 22px; padding: 22px 36px 22px 24px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+#badge .eye { position: relative; width: 110px; height: 66px; }
+#badge b { display: block; font: 600 30px Unbounded, sans-serif; } #badge small { display: block; font-size: 24px; color: var(--mut); font-weight: 700; margin-top: 6px; }
+
+.kind { position: absolute; top: 400px; width: 500px; padding: 40px 40px 44px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.kind i { width: 92px; height: 92px; border-radius: 28px; display: grid; place-items: center; box-shadow: var(--press); }
+.kind i svg { width: 48px; height: 48px; fill: none; stroke: var(--ink); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.kind.on i { background: var(--brand); box-shadow: 8px 10px 22px -6px rgba(79,108,240,.55); } .kind.on i svg { stroke: #fff; }
+.kind b { display: block; font: 600 40px/1.2 Unbounded, sans-serif; margin-top: 28px; }
+.kind p { font-size: 28px; line-height: 1.4; font-weight: 600; color: var(--mut); margin-top: 14px; min-height: 118px; }
+.kind p em { font-style: normal; color: var(--ink); }
+
+#phone { position: absolute; left: 1260px; top: 170px; width: 420px; height: 720px; border-radius: 60px; background: var(--bg); box-shadow: var(--raise); padding: 22px; }
+#phone .scr { width: 100%; height: 100%; border-radius: 44px; box-shadow: var(--press); padding: 250px 20px 22px; position: relative; overflow: hidden;
+  background: linear-gradient(180deg, rgba(106,141,255,.08), transparent 50%); }
+#phone .time { position: absolute; left: 0; right: 0; top: 70px; text-align: center; font: 600 92px/1 Unbounded, sans-serif; color: var(--ink); letter-spacing: -.02em; }
+#phone .date { position: absolute; left: 0; right: 0; top: 182px; text-align: center; font-size: 24px; font-weight: 700; color: var(--mut); }
+.note { display: flex; gap: 16px; align-items: flex-start; padding: 20px 22px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise-s); }
+.note .eye { position: relative; width: 64px; height: 40px; flex: none; margin-top: 4px; }
+.note b { display: block; font-size: 22px; font-weight: 800; } .note span { display: block; font-size: 24px; font-weight: 600; margin-top: 4px; line-height: 1.3; }
+.note small { display: block; font-size: 18px; color: var(--mut); font-weight: 700; margin-top: 6px; }
+#cup { position: absolute; left: 930px; top: 250px; width: 130px; height: 130px; }
+#cup svg { width: 100%; height: 100%; fill: none; stroke: var(--patrik); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+
+#studio { position: absolute; left: 760px; top: 220px; width: 1000px; height: 470px; border-radius: 32px; overflow: hidden; display: grid; grid-template-columns: 280px 1fr;
+  background: var(--bg); color: var(--ink); box-shadow: var(--raise); }
+#studio nav { padding: 28px 20px; display: flex; flex-direction: column; gap: 10px; font-size: 22px; font-weight: 600; color: var(--mut); box-shadow: 8px 0 18px -10px var(--nd); }
+#studio nav span { padding: 10px 16px; border-radius: 14px; } #studio nav span.on { color: var(--accent); box-shadow: var(--raise-s); }
+#studio main { padding: 30px 34px; }
+#studio main h3 { font: 700 30px Unbounded; margin-bottom: 8px; } #studio main h4 { font-size: 20px; color: var(--mut); font-weight: 700; margin: 18px 0 12px; }
+.wrow { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: 20px; box-shadow: var(--raise-s); margin-bottom: 14px; }
+.wrow .eye { position: relative; width: 56px; height: 34px; flex: none; }
+.wrow div { flex: 1; } .wrow b { display: block; font-size: 23px; font-weight: 700; } .wrow small { display: block; font-size: 18px; color: var(--mut); font-weight: 700; margin-top: 3px; }
+.wrow em { font-style: normal; font-size: 18px; font-weight: 800; padding: 8px 16px; border-radius: 99px; color: var(--mut); box-shadow: var(--raise-s); }
+.wrow em.ok { color: #fff; background: var(--ok); box-shadow: none; }
+#voice2 { position: absolute; left: 760px; top: 740px; display: flex; align-items: center; gap: 22px; padding: 18px 36px 18px 18px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#voice2 i { width: 64px; height: 64px; } #voice2 span { font-size: 32px; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; color: var(--ink); letter-spacing: -.02em; }
+#end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; color: var(--ink); }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <radialGradient id="irisg" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#a9c8ff"/><stop offset=".6" stop-color="#5b7cf3"/><stop offset="1" stop-color="#3f57d6"/></radialGradient>
+    <radialGradient id="irisok" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#9ff0cf"/><stop offset=".6" stop-color="#3fc48a"/><stop offset="1" stop-color="#23996a"/></radialGradient>
+  </defs></svg>
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div><div class="blob" id="b3"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 2 · Дозор</span></div></div>
+  <ol id="steps"><li><i>1</i>Сказали</li><li><i>2</i>Присматриваю</li><li><i>3</i>Готово</li></ol>
+
+  <div class="layer" id="L-title"><div class="eye" id="e-title" data-eye></div><div id="t-title"><h1>Дозор</h1><p>Лира присмотрит и скажет, когда готово</p></div></div>
+
+  <div class="layer" id="L-wait">
+    <div class="dl" id="dl"><header><i><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></i><div><b>Фильм.mp4</b><small id="dl-st">скачивается…</small></div></header>
+      <div class="bar" id="dl-bar"><i></i></div><div class="pct"><span id="dl-p">12%</span><span id="dl-left">осталось 47 мин</span></div></div>
+    <div class="chip" id="ch1" style="left:820px;top:640px"><i></i>Нейросеть думает…</div>
+    <div class="chip" id="ch2" style="left:820px;top:760px"><i></i>Заявка на рассмотрении</div>
+    <div id="clock"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="3.5" fill="#24324a"/><path id="hh" d="M50 50V30" stroke="#24324a" stroke-width="4" stroke-linecap="round"/><path id="mh" d="M50 50V18" stroke="#4f6cf0" stroke-width="3" stroke-linecap="round"/></svg></div>
+  </div>
+
+  <div class="layer" id="L-ask">
+    <div id="voice"><i><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i><span>«Лира, скажи, когда скачается фильм»</span></div>
+    <div id="badge"><div class="eye" data-eye id="e-badge"></div><div><b>В дозоре</b><small>Фильм.mp4 · смотрю раз в 5 минут</small></div></div>
+  </div>
+
+  <div class="layer" id="L-kinds">
+    <div class="kind" id="k1" style="left:180px"><i><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></i><b>Экран</b><p>«Скажи, когда <em>Claude ответит</em>»</p></div>
+    <div class="kind" id="k2" style="left:710px"><i><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></i><b>Папка</b><p>«Скажи, когда в <em>Загрузках</em> появится файл»</p></div>
+    <div class="kind" id="k3" style="left:1240px"><i><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></i><b>Страница</b><p>«Скажи, когда на странице будет <em>„Одобрено“</em>»</p></div>
+  </div>
+
+  <div class="layer" id="L-done">
+    <div class="dl" id="dl2" style="left:200px;top:560px;width:880px"><header><i><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></i><div><b>Фильм.mp4</b><small id="dl2-st">скачивается…</small></div></header>
+      <div class="bar" id="dl2-bar"><i></i></div></div>
+    <div id="cup"><svg viewBox="0 0 64 64"><path d="M12 26h32v12a14 14 0 0 1-14 14h-4a14 14 0 0 1-14-14z"/><path d="M44 30h4a6 6 0 0 1 0 12h-5"/><path id="st1" d="M22 18c-2-3 2-5 0-9"/><path id="st2" d="M32 18c-2-3 2-5 0-9"/></svg></div>
+    <div id="phone"><div class="scr"><div class="time">19:42</div><div class="date">пятница, 30 октября</div>
+      <div class="note" id="note"><div class="eye ok" data-eye id="e-note"></div><div><b>Дозор · Лира</b><span>Готово: фильм скачался</span><small>только что</small></div></div></div></div>
+  </div>
+
+  <div class="layer" id="L-how">
+    <div id="studio"><nav><span>Задачи</span><span class="on">Дозор</span><span>Совет ИИ</span><span>Близкие</span></nav>
+      <main><h3>Дозор</h3><h4>Сейчас в дозоре</h4>
+        <div class="wrow"><div class="eye" data-eye id="e-r1"></div><div><b>Экран · Claude закончил ответ</b><small>смотрю раз в 5 мин · ещё 2 ч 40 мин</small></div><em>Снять</em></div>
+        <div class="wrow"><div class="eye" data-eye id="e-r2"></div><div><b>Страница · «Одобрено»</b><small>смотрю раз в 15 мин · ещё 2 ч</small></div><em>Снять</em></div>
+        <h4>Недавно</h4>
+        <div class="wrow"><div class="eye ok" data-eye id="e-r3"></div><div><b>Папка · Загрузки · Фильм.mp4</b><small>дождалась в 19:42</small></div><em class="ok">Готово</em></div></main></div>
+    <div id="voice2"><i><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i><span>«Лира, сними дозор»</span></div>
+  </div>
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Для старших»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+// где облики: [x центра, y центра, размер, видимость]
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  wait:  { lira: [380, 470, 320, 1], patrik: [1660, 760, 200, 0] },
+  ask:   { lira: [380, 470, 340, 1], patrik: [1700, 800, 200, 0] },
+  kinds: { lira: [960, 210, 190, 1], patrik: [1700, 800, 200, 0] },
+  done:  { lira: [380, 300, 230, 1], patrik: [800, 300, 210, 0] },
+  how:   { lira: [380, 470, 330, 1], patrik: [1700, 800, 200, 0] },
+  end:   { lira: [960, 330, 300, 1], patrik: [1700, 800, 200, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  const p = cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+  // Патрик заглядывает на свою реплику: в «ожидании» — снизу справа, в «готово» — с чашкой
+  if (ORDER[i] === "wait" && who === "patrik") p[3] = out((T - at("s2b") + 0.6) / 0.6) * (1 - out((T - SC.ask.start + 0.2) / 0.5));
+  if (ORDER[i] === "done" && who === "patrik") { const k = out((T - at("s5a") + 0.6) / 0.6) * (1 - out((T - at("s5b") + 0.2) / 0.5)); p[3] = k; }
+  return p;
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave" });
+  ENT[who].set({ state: "idle" });
+}
+// глаза: веко открывается (open 0..1), зрачок смотрит (look -1..1)
+const EYE = '<svg viewBox="0 0 120 72"><path class="lid" d="M6 36S28 6 60 6s54 30 54 30-22 30-54 30S6 36 6 36z"/><g class="ball"><circle class="iris" cx="60" cy="36" r="20"/><circle class="pupil" cx="60" cy="36" r="8"/><circle class="glint" cx="66" cy="29" r="3.2"/></g></svg>';
+document.querySelectorAll("[data-eye]").forEach(e => { e.innerHTML = EYE; });
+function eye(id, open, look, ok) {
+  const e = $("#" + id), g = e.querySelector(".ball");
+  g.style.transform = `translate(${look * 16}px, 0) scale(1, ${Math.max(0.04, open)})`; g.style.transformOrigin = "60px 36px"; g.style.transformBox = "view-box";
+  if (ok !== undefined) e.classList.toggle("ok", ok);
+}
+const blink = (T, seed) => { const p = (T + seed) % 4.2; return p < 0.16 ? Math.abs(Math.cos(p / 0.16 * Math.PI)) : 1; };
+const glance = (T, seed) => Math.sin(T * 0.9 + seed) * 0.8;
+
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+
+window.render = function (T, f) {
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  $("#b3").style.transform = `translate(${700 + 200 * Math.sin(T / 13)}px, ${600 + 60 * Math.cos(T / 7)}px)`;
+  const s = (id) => SC[id];
+  // заставка: глаз открывается
+  layer("L-title", T, 0.2, s("wait").start);
+  eye("e-title", out((T - 0.9) / 0.7) * blink(T, 1.3), glance(T, 0));
+  // ожидание: полоса еле ползёт, часы бегут
+  layer("L-wait", T, s("wait").start + 0.3, s("ask").start);
+  const w = clamp((T - s("wait").start) / (s("ask").start - s("wait").start));
+  $("#dl-bar i").style.width = (12 + 9 * w).toFixed(1) + "%"; $("#dl-p").textContent = Math.round(12 + 9 * w) + "%";
+  $("#dl-left").textContent = "осталось " + Math.round(47 - 4 * w) + " мин";
+  vis($("#ch1"), out((T - at("s2a") - 2.3) / 0.5), 24); vis($("#ch2"), out((T - at("s2a") - 3.6) / 0.5), 24);
+  const turns = (T - s("wait").start) * 1.6;
+  $("#mh").setAttribute("transform", `rotate(${turns * 360 % 360} 50 50)`); $("#hh").setAttribute("transform", `rotate(${turns * 30 % 360} 50 50)`);
+  vis($("#clock"), out((T - at("s2b") + 0.2) / 0.5), 0, .8);
+  // просьба: голос → значок «В дозоре»
+  layer("L-ask", T, s("ask").start + 0.2, s("kinds").start);
+  vis($("#voice"), out((T - at("s3a") - 1.1) / 0.6), 30, .95);
+  vis($("#badge"), out((T - at("s3b") + 0.1) / 0.6), 30, .95);
+  eye("e-badge", out((T - at("s3b") - 0.3) / 0.5) * blink(T, 0.4), glance(T, 1));
+  // три вида дозора — загораются на словах
+  layer("L-kinds", T, s("kinds").start + 0.2, s("done").start);
+  [["k1", "s4a"], ["k2", "s4b"], ["k3", "s4c"]].forEach(([k, l], i) => {
+    vis($("#" + k), out((T - s("kinds").start - 0.4 - i * 0.18) / 0.6), 40, .96);
+    $("#" + k).classList.toggle("on", T >= at(l) - 0.1 && (i === 2 ? T < s("done").start : T < at([["s4b"], ["s4c"]][i][0]) - 0.1));
+  });
+  // готово: полоса добегает, глаз зеленеет, на телефоне — уведомление
+  layer("L-done", T, s("done").start + 0.2, s("how").start);
+  const fin = at("s5b") - 0.25, pd = T < fin ? lerp(62, 97, clamp((T - s("done").start) / (fin - s("done").start))) : 100;
+  $("#dl2-bar i").style.width = pd.toFixed(1) + "%"; $("#dl2-bar").classList.toggle("ok", T >= fin); $("#dl2-st").textContent = T >= fin ? "готово" : "скачивается…";
+  vis($("#cup"), out((T - at("s5a") + 0.1) / 0.5) * (1 - out((T - at("s5b") + 0.2) / 0.5)), 20, .9);
+  $("#st1").style.opacity = 0.4 + 0.4 * Math.sin(T * 3); $("#st2").style.opacity = 0.4 + 0.4 * Math.cos(T * 3);
+  vis($("#phone"), out((T - s("done").start - 0.3) / 0.6), 50, .97);
+  vis($("#note"), out((T - fin - 0.15) / 0.5), -30, .9);
+  eye("e-note", out((T - fin - 0.4) / 0.4) * blink(T, 2.2), 0);
+  // студия: список дозоров; голосом — «сними дозор»
+  layer("L-how", T, s("how").start + 0.2, s("end").start);
+  vis($("#studio"), out((T - at("s6a") + 0.2) / 0.6), 40, .97);
+  eye("e-r1", blink(T, 0.7), glance(T, 2)); eye("e-r2", blink(T, 2.9), glance(T, 4)); eye("e-r3", 1, 0);
+  vis($("#voice2"), out((T - at("s6b") - 1.4) / 0.6), 30, .95);
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  // шаги
+  vis($("#steps"), out((T - s("ask").start) / 0.5) * (1 - out((T - s("how").start) / 0.5)), -20);
+  const ph = T < s("kinds").start ? 0 : T < fin ? 1 : 2, done = T > end("s5b");
+  [...$("#steps").children].forEach((li, i) => { li.className = done || i < ph ? "past" : i === ph ? "on" : ""; li.querySelector("i").textContent = done || i < ph ? "✓" : i + 1; });
+  // облики
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

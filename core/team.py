@@ -463,10 +463,18 @@ class Team:
                 return mid
         return None
 
-    def member_add(self, name, role=""):
+    @staticmethod
+    def _email(v):
+        v = str(v or "").strip()[:120]
+        if v and not re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]{2,}", v):
+            raise TeamError(f"не похоже на почту: {v}")
+        return v
+
+    def member_add(self, name, role="", email=""):
         name = re.sub(r"\s+", " ", str(name or "")).strip()[:60]
         if not name:
             raise TeamError("впишите имя сотрудника")
+        email = self._email(email)
         with self._lock:
             if any(m["name"].lower() == name.lower() for m in self.st["members"].values()):
                 raise TeamError(f"{name} уже в команде")
@@ -474,6 +482,25 @@ class Team:
             self.st["members"][mid] = {"name": name, "role": str(role or "").strip()[:60], "code": secrets.token_hex(5),
                                        "code_at": time.time(), "tg": None, "added": time.time(),
                                        "color": COLORS[len(self.st["members"]) % len(COLORS)]}
+            if email:
+                self.st["members"][mid]["email"] = email
+        self._changed()
+        return self.public()
+
+    def member_set(self, mid, email=None, role=None):
+        """Почта (для рассылок «Сотрудникам») и чем занимается — можно дописать позже."""
+        with self._lock:
+            m = self.st["members"].get(mid)
+            if not m:
+                raise TeamError("нет такого сотрудника")
+            if email is not None:
+                e = self._email(email)
+                if e:
+                    m["email"] = e
+                else:
+                    m.pop("email", None)
+            if role is not None:
+                m["role"] = str(role or "").strip()[:60]
         self._changed()
         return self.public()
 
@@ -1162,7 +1189,7 @@ class Team:
         members = []
         for mid, m in self.st["members"].items():
             mine = [t for t in self.st["tasks"].values() if t["who"] == mid]
-            members.append({"id": mid, "name": m["name"], "role": m.get("role", ""), "color": m.get("color", COLORS[0]),
+            members.append({"id": mid, "name": m["name"], "role": m.get("role", ""), "email": m.get("email", ""), "color": m.get("color", COLORS[0]),
                             "joined": bool(m.get("tg")), "tg": ((m.get("tg") or {}).get("username") or ""), "link": self._link(m),
                             "links": self._links(m), "ch": self.bots[self._mch(m)].NAME if m.get("tg") else "",
                             "chk": self._mch(m) if m.get("tg") else "",

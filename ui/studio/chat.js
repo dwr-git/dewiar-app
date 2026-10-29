@@ -26,7 +26,7 @@ function chatBubble(x, lastWho) {
   const att = (x.att || []).filter(a => !web.includes(a)).map(a => a.kind === "image" && a.thumb
     ? `<button class="ch-img" data-path="${escH(a.path || "")}" title="${escH(a.name)} — открыть"><img src="${escH(a.thumb)}" alt="${escH(a.name)}"></button>`
     : `<button class="cl-f" data-path="${escH(a.path || "")}" data-key="${escH(a.key || "")}" title="${escH(a.label || a.name)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${escH(a.name)}</span><small>${a.size ? chatSize(a.size) : ""}</small></button>`).join("");
-  return `${head}<div class="cl-m${out ? " out" : ""}${gal ? " wide" : ""}" data-id="${escH(x.id)}">${x.via ? `<small class="ch-via">${x.via === "dev" ? "ответ разработчика" : "из мессенджера"}</small>` : ""}${att ? `<div class="ch-att">${att}</div>` : ""}${body}${gal}<time>${hm}</time></div>`;
+  return `${head}<div class="cl-m${out ? " out" : ""}${gal ? " wide" : ""}" data-id="${escH(x.id)}">${x.via ? `<small class="ch-via">${x.via === "dev" ? "ответ разработчика" : "из мессенджера"}</small>` : ""}${att ? `<div class="ch-att">${att}</div>` : ""}${body}${gal}<time>${hm}${!out && x.text ? `<button class="ch-listen" data-listen="${escH(x.id)}" title="Прослушать ответ" aria-label="Прослушать ответ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>Прослушать</button>` : ""}</time></div>`;
 }
 /* Что сделано за ход (YouTube 26.10: «в чате не было информации о выполнении команды»): ✓ готово, ✕ не вышло (с причиной),
    «Разрешение: … — разрешено / отказано». Больше трёх — «ещё N» (раскрыть). */
@@ -209,3 +209,15 @@ $("#ch-clear").onclick = async () => {
   await core.call("chat_clear").catch(() => {}); CH.items = []; CH.more = false; chatRender();
 };
 core.on("hello", () => { if ($("#p-chat").classList.contains("cur")) loadChat(); });
+/* «Прослушать» под ответом (идея №58, 29.10: «без очков не прочитать — переслушать проще»): голосом персонажа, который
+   отвечал (voice_test с текстом), даже в режиме «только текстом»; нажали снова — «Стоп» (stop). */
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest && ev.target.closest(".ch-listen"); if (!b) return;
+  ev.stopPropagation();
+  if (b.classList.contains("on")) { core.call("stop").catch(() => {}); b.classList.remove("on"); b.lastChild.textContent = "Прослушать"; return; }
+  const x = (CH.items || []).find(i => String(i.id) === b.dataset.listen); if (!x) return;
+  $$(".ch-listen.on").forEach(o => { o.classList.remove("on"); o.lastChild.textContent = "Прослушать"; });
+  b.classList.add("on"); b.lastChild.textContent = "Стоп";
+  core.call("voice_test", { text: x.text, persona: x.who || undefined, listen: true }).catch(e => toast(e.message));
+  clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove("on"); b.lastChild.textContent = "Прослушать"; }, Math.min(180000, 1500 + x.text.length * 75));
+});

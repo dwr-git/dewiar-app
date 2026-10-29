@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 7 · Посты в Telegram. Светлый неоморфизм серии. Главная вещь урока — лента канала на телефоне: посты появляются
+   один за другим (пост, по расписанию, рубрика, опрос), у каждого растут просмотры — канал оживает. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+/* телефон с каналом — общий для сцен */
+#phone { position: absolute; left: 1360px; top: 120px; width: 440px; height: 730px; border-radius: 60px; background: var(--bg); box-shadow: var(--raise); padding: 22px; }
+#phone .scr { width: 100%; height: 100%; border-radius: 44px; background: #e9eef5; overflow: hidden; display: flex; flex-direction: column; }
+#phone header { display: flex; align-items: center; gap: 12px; padding: 18px 18px 14px; background: #fff; }
+#phone header i { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(140deg, #8fd18a, #3d8f4f); color: #fff; display: grid; place-items: center; font: 700 20px Unbounded; font-style: normal; }
+#phone header b { display: block; font-size: 20px; } #phone header small { font-size: 15px; color: #7a7f8c; font-weight: 700; }
+#feed { flex: 1; min-height: 0; padding: 14px; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; overflow: hidden; }
+.post { background: #fff; border-radius: 18px 18px 18px 6px; padding: 14px 16px 10px; font-size: 17px; line-height: 1.4; box-shadow: 0 6px 14px -10px rgba(36,50,74,.4); flex: none; }
+.post b { display: block; font-size: 17px; margin-bottom: 4px; } .post .meta { display: flex; justify-content: flex-end; gap: 10px; font-size: 13px; color: #8a8f9c; margin-top: 6px; font-weight: 700; }
+.post .opt { margin-top: 8px; padding: 8px 12px; border-radius: 10px; background: #eef4fb; font-size: 15px; font-weight: 700; position: relative; overflow: hidden; }
+.post .opt i { position: absolute; inset: 0 auto 0 0; background: rgba(42,171,238,.2); }
+.post .opt span { position: relative; } .post .opt em { position: relative; float: right; font-style: normal; color: var(--tg); }
+.post.old { opacity: .55; }
+
+#mess { position: absolute; left: 620px; top: 260px; width: 640px; padding: 34px 40px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#mess small { font-size: 20px; color: var(--mut); font-weight: 800; } #mess b { display: block; font: 600 40px/1.3 Unbounded, sans-serif; margin-top: 10px; }
+.steps { position: absolute; left: 620px; top: 200px; display: flex; flex-direction: column; gap: 16px; width: 680px; }
+.st { display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+.st i { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: var(--brand); color: #fff; font-style: normal; font: 700 24px Unbounded; flex: none; }
+.st.tg i { background: linear-gradient(140deg, #5cc6f5, #2AABEE); }
+#write { position: absolute; left: 620px; top: 470px; width: 680px; padding: 26px 30px; border-radius: 26px; background: #fff; box-shadow: 0 24px 50px -24px rgba(36,50,74,.45); font-size: 22px; line-height: 1.5; }
+#write small { display: block; font-size: 16px; color: #7a7f8c; font-weight: 800; margin-bottom: 6px; }
+#cal { position: absolute; left: 620px; top: 230px; width: 700px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#cal h4 { font: 600 26px Unbounded; margin-bottom: 20px; } #days { display: flex; gap: 12px; }
+#days span { flex: 1; text-align: center; padding: 18px 0 14px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 800; }
+#days span small { display: block; font-size: 16px; color: var(--mut); margin-top: 6px; }
+#days span.on { color: #fff; background: var(--brand); box-shadow: none; } #days span.on small { color: rgba(255,255,255,.85); }
+#days span.done { color: #fff; background: linear-gradient(135deg, #46d39a, #2fb383); box-shadow: none; } #days span.done small { color: rgba(255,255,255,.85); }
+#appr { position: absolute; left: 620px; top: 520px; width: 700px; display: flex; align-items: center; gap: 18px; padding: 22px 26px; border-radius: 26px; background: rgba(255,181,71,.18); }
+#appr div { flex: 1; font-size: 22px; font-weight: 700; } #appr small { display: block; font-size: 17px; color: var(--mut); }
+#appr b { padding: 14px 22px; border-radius: 16px; color: #fff; background: var(--brand); font-size: 20px; }
+#pollc { position: absolute; left: 620px; top: 250px; width: 700px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#pollc small { font-size: 16px; font-weight: 700; color: var(--mut); letter-spacing: .04em; }
+#pollc h4 { font: 600 26px Unbounded; margin: 8px 0 18px; }
+#pollc i { display: block; font-style: normal; font-size: 22px; padding: 14px 20px; margin-top: 10px; border-radius: 16px; background: rgba(107,124,255,.08); }
+#pollc b { display: inline-block; margin-top: 20px; padding: 14px 24px; border-radius: 16px; color: #fff; background: var(--brand); font-size: 20px; }
+#pollc b.ok { background: linear-gradient(135deg, #46d39a, #2fb383); }
+#appr b.ok { background: linear-gradient(135deg, #46d39a, #2fb383); }
+#hello { position: absolute; left: 620px; top: 260px; width: 680px; padding: 28px 32px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+#hello small { font-size: 19px; color: var(--mut); font-weight: 800; } #hello p { font-size: 26px; font-weight: 700; line-height: 1.45; margin-top: 10px; }
+#honest { position: absolute; left: 620px; top: 540px; display: flex; gap: 14px; flex-wrap: wrap; width: 700px; }
+#honest span { padding: 14px 22px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 22px; font-weight: 800; }
+#honest span.no { color: #b04a5c; text-decoration: line-through; }
+#studio { position: absolute; left: 620px; top: 200px; width: 700px; height: 520px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px 34px; }
+#studio h3 { font: 700 30px Unbounded; margin-bottom: 18px; }
+#studio .chs { display: flex; gap: 10px; margin-bottom: 18px; } #studio .chs span { padding: 12px 18px; border-radius: 16px; background: rgba(42,171,238,.18); font-size: 20px; font-weight: 800; }
+#studio .box { padding: 18px; border-radius: 18px; box-shadow: var(--press); font-size: 20px; color: var(--mut); height: 140px; }
+#studio .row { display: flex; gap: 12px; margin-top: 18px; } #studio .row span { padding: 14px 22px; border-radius: 16px; box-shadow: var(--raise-s); font-size: 20px; font-weight: 800; }
+#studio .row span.p { color: #fff; background: var(--brand); box-shadow: none; }
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 7 · Посты в Telegram</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M21 4L3 11l6 2.2L18 7l-7 7.6.4 5.4 3-3.6L19 20z"/></svg></div>
+    <div id="t-title"><h1>Посты в Telegram</h1><p>Канал живёт сам — вы только одобряете</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div id="mess"><small>КАНАЛ «ЧАЙНЫЙ ДВОР»</small><b>Последний пост —<br>27 сентября</b></div>
+    <div class="steps" id="steps"><div class="st tg"><i>1</i>Канал → «Администраторы» → бот</div><div class="st"><i>2</i>«Придумай пост про новый улун»</div></div>
+    <div id="write"><small>ЛИРА ПИШЕТ</small>Привезли новый улун «Молочный» 🍵 Мягкий, сливочный, раскрывается на третьей заварке. Пробовали такие? Расскажите в комментариях!</div>
+    <div id="cal"><h4>Рубрика «Совет дня»</h4><div id="days"><span id="d0">Пн<small>10:00</small></span><span id="d1">Вт<small>10:00</small></span><span id="d2">Ср<small>10:00</small></span><span id="d3">Чт<small>10:00</small></span><span id="d4">Пт<small>10:00</small></span></div></div>
+    <div id="appr"><div>Пост ждёт одобрения<small>«Совет дня: воду для улуна — 90°»</small></div><b id="ap">Опубликовать</b></div>
+    <div id="pollc"><small>ОПРОС В КАНАЛ</small><h4>Какой чай привезти в следующий раз?</h4><i>Да Хун Пао</i><i>Габа</i><i>Белый пион</i><b id="pb">Отправить</b></div>
+    <div id="hello"><small>ГРУППА «ЛЮБИТЕЛИ ЧАЯ»</small><p>Анна, Сергей и Мария, добро пожаловать! Я — Лира. Спрашивайте — отвечу.</p></div>
+    <div id="honest"><span>✓ от имени канала</span><span class="no">выдуманные отзывы</span><span class="no">фальшивые собеседники</span></div>
+    <div id="studio"><h3>Бот в Telegram → Посты</h3><div class="chs"><span>Чайный двор · канал</span><span>Любители чая · группа</span></div>
+      <div class="box">О чём пост — например: как заваривать улун</div><div class="row"><span>Придумать</span><span class="p">Опубликовать</span><span>Опрос</span></div></div>
+  </div>
+
+  <div class="layer" id="L-phone">
+    <div id="phone"><div class="scr"><header><i>Ч</i><div><b>Чайный двор</b><small>1 248 подписчиков</small></div></header>
+      <div id="feed">
+        <div class="post old" id="p0"><b>Скидки сентября</b>До конца месяца −10% на пуэры.<div class="meta"><span>👁 312</span><span>27 сент.</span></div></div>
+        <div class="post" id="p1"><b>Новый улун «Молочный» 🍵</b>Мягкий, сливочный, раскрывается на третьей заварке.<div class="meta"><span id="v1">👁 0</span><span>сейчас</span></div></div>
+        <div class="post" id="p2"><b>Совет дня</b>Воду для улуна — 90°, не кипяток.<div class="meta"><span id="v2">👁 0</span><span>пт, 10:00</span></div></div>
+        <div class="post" id="p3"><b>Какой чай привезти в следующий раз?</b>
+          <div class="opt"><i id="o1"></i><span>Да Хун Пао</span><em id="e1"></em></div><div class="opt"><i id="o2"></i><span>Габа</span><em id="e2"></em></div><div class="opt"><i id="o3"></i><span>Белый пион</span><em id="e3"></em></div>
+          <div class="meta"><span id="v3">👁 0</span><span>опрос</span></div></div>
+      </div></div></div>
+  </div>
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Документы»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title:   { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 0], patrik: [330, 470, 300, 1] },
+  write:   { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  when:    { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  rubric:  { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  poll:    { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  group:   { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how:     { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end:     { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave" });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  layer("L-phone", T, s("problem").start + 0.5, s("end").start);
+  scene($("#mess"), T, at("s2a") + 0.6, s("write").start);
+  scene($("#steps"), T, at("s3a") + 0.2, s("when").start); [...$("#steps").children].forEach((c, i) => vis(c, out((T - (i ? at("s3b") : at("s3a")) - 0.3) / 0.4), 20));
+  scene($("#write"), T, at("s3b") + 1.6, s("when").start);
+  scene($("#cal"), T, s("when").start + 0.2, s("poll").start);
+  const d = sceneAt(T) >= ORDER.indexOf("rubric") ? Math.min(4, Math.floor((T - at("s5a")) / 0.9)) : -1;
+  [...$("#days").children].forEach((c, i) => { c.className = i < d ? "done" : i === d || (d < 0 && i === 4 && T > at("s4a") + 2.4) ? "on" : ""; });
+  scene($("#appr"), T, at("s5a") + 2.6, s("poll").start);
+  $("#ap").classList.toggle("ok", T > at("s5a") + 4.6); $("#ap").textContent = T > at("s5a") + 4.6 ? "Опубликовано ✓" : "Опубликовать";
+  scene($("#pollc"), T, s("poll").start + 0.2, s("group").start);
+  [...$("#pollc").querySelectorAll("i")].forEach((c, i) => vis(c, out((T - s("poll").start - 0.5 - i * 0.35) / 0.4), 14));
+  $("#pb").classList.toggle("ok", T > at("s6a") + 2.2); $("#pb").textContent = T > at("s6a") + 2.2 ? "В канале ✓" : "Отправить";
+  scene($("#hello"), T, at("s7a") + 0.2, s("how").start);
+  scene($("#honest"), T, at("s7b") + 0.3, s("how").start, 20);
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  // лента канала
+  $("#p0").style.display = "";
+  post($("#p1"), T, at("s3b") + 3.2); post($("#p2"), T, at("s5a") + 4.7); post($("#p3"), T, at("s6a") + 2.3);
+  const views = (t0, max) => Math.round(max * (1 - Math.exp(-Math.max(0, T - t0) / 4)));
+  $("#v1").textContent = "👁 " + views(at("s3b") + 3.4, 486); $("#v2").textContent = "👁 " + views(at("s5a") + 4.9, 350); $("#v3").textContent = "👁 " + views(at("s6a") + 2.5, 290);
+  const vote = clamp((T - at("s6a") - 2.8) / 3.5);
+  [[1, 46], [2, 31], [3, 23]].forEach(([i, p]) => { $("#o" + i).style.width = (p * vote) + "%"; $("#e" + i).textContent = vote > 0 ? Math.round(p * vote) + "%" : ""; });
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

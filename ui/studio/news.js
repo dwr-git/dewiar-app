@@ -5,8 +5,10 @@ const nwEsc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": 
 function newsShow(r) {
   const rels = (r && r.releases) || [];
   if (!rels.length) return false;
-  $("#nw-sub").textContent = `Dewiar ${rels[0].version} — вот что появилось`;
-  $("#nw-list").innerHTML = rels.map(x => x.items.map(i => `<div class="nwi"><i aria-hidden="true">${nwEsc(i.icon || "✨")}</i><div><b>${nwEsc(i.title)}</b>
+  $("#nw-sub").textContent = r.all ? `Все выпуски — ${rels.length}, новые сверху` : `Dewiar ${rels[0].version} — вот что появилось`;
+  // идея №57 (29.10: «всего не запомнил — „Что нового“ по всем версиям перед глазами»): все выпуски — с заголовком версии
+  const vh = (x) => r.all ? `<h3 class="nwv">${nwEsc(x.version)}${x.date ? ` <small>${nwEsc(new Date(x.date + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }))}</small>` : ""}</h3>` : "";
+  $("#nw-list").innerHTML = rels.map(x => vh(x) + x.items.map(i => `<div class="nwi"><i aria-hidden="true">${nwEsc(i.icon || "✨")}</i><div><b>${nwEsc(i.title)}</b>
     <p>${nwEsc(i.text)}</p>${i.try ? `<small>${/^«/.test(i.try) ? "Скажите: " : ""}${nwEsc(i.try)}</small>` : ""}</div></div>`).join("")).join("");
   const d = $("#news-dlg"); if (!d.open) d.showModal(); d.scrollTop = 0; $("#nw-title").focus();
   return true;

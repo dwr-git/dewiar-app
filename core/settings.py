@@ -102,6 +102,7 @@ DEFAULTS = {
         "active": "",
         "profiles": {},             # id -> {name, kind, base_url, api_key, model, disable_thinking, temperature, max_tokens}
         "persona": {},              # id персонажа -> id профиля: свой мозг у персонажа («» — общий, active). 27.10
+        "persona_model": {},        # id персонажа -> своя модель того же профиля (№403, 29.10: у Ollama много моделей)
         "history_turns": 8,
         "lean_prompt": False,       # проба: короткая инструкция — навыки только именами, описания — к подходящему вопросу
         "think_auto": True,         # сложная просьба (стих, расчёт, анализ, план, код) — модель думает перед ответом (llm.wants_think)

@@ -22,6 +22,7 @@ async function crCall(cmd, args, ok) {
   try { const d = await core.call(cmd, args || {}); if (ok) toast(ok); return d; } catch (e) { toast(e.message, 3500); return null; }
 }
 async function crLoad() {
+  if (window.crmState) crmState();
   const l = await crCall("clients_list", { q: CR.q }); if (!Array.isArray(l)) return;
   CR.list = l; crLeft();
   if (CR.cur && !l.some(x => x.id === CR.cur) && !CR.q) CR.cur = "";
@@ -60,6 +61,7 @@ function crCard() {
   box.innerHTML = `<header class="cr-head"><i class="cr-ava big" style="--c:${crCol(c.id)}">${escH(crIni(c.name))}</i><div class="cr-names">`
     + `<input class="cr-name" id="cr-name" value="${escH(c.name)}" maxlength="120" aria-label="Имя клиента">`
     + `<input class="cr-comp" id="cr-comp" value="${escH(c.company || "")}" maxlength="120" placeholder="Компания" aria-label="Компания"></div>`
+    + (window.crmCardBtn ? crmCardBtn(c) : "")
     + `<button class="btn small ghost" id="cr-del" title="Удалить клиента">Удалить</button></header>`
     + `<div class="cr-contacts"><label>${crSvg(CR_KIND.call[1])}<input id="cr-phone" value="${escH(c.phone || "")}" maxlength="60" placeholder="Телефон" aria-label="Телефон"></label>`
     + `<label>${crSvg("M3 6h18v12H3z M3 7l9 6 9-6")}<input id="cr-email" type="email" value="${escH(c.email || "")}" maxlength="120" placeholder="Почта" aria-label="Почта"></label></div>`
@@ -88,6 +90,7 @@ function crCard() {
   if ($("#cr-ndone")) $("#cr-ndone").onclick = async () => { const d = await crCall("client_next_done", { id: c.id }, "Отмечено"); if (d) { crOpen(c.id); crLoadList(); } };
   if ($("#cr-nedit")) $("#cr-nedit").onclick = () => { $("#cr-nform").hidden = false; $(".cr-nx").hidden = true; $("#cr-nwhat").focus(); };
   if (typeof dlClientBind === "function") dlClientBind(c);
+  if (window.crmCardBind) crmCardBind(c);
   $$(".cr-hx").forEach(b => b.onclick = async () => { const d = await crCall("client_note_del", { id: c.id, nid: b.dataset.n }); if (d) { CR.card = d; crCard(); } });
 }
 async function crLoadList() { const l = await crCall("clients_list", { q: CR.q }); if (Array.isArray(l)) { CR.list = l; crLeft(); } }
@@ -101,5 +104,6 @@ window.loadClients = crLoad;
 if ($("#p-clients")) {
   $("#cr-new").onclick = crNew;
   $("#cr-q").oninput = () => { clearTimeout(CR.t); CR.t = setTimeout(() => { CR.q = $("#cr-q").value.trim(); crLoad(); }, 220); };
+  $("#cr-mail").onclick = () => window.mgOpen && mgOpen("clients");
   core.on("clients", () => { if ($("#p-clients").classList.contains("cur")) { crLoadList(); if (CR.cur) crOpen(CR.cur); } });
 }

@@ -2117,6 +2117,41 @@ def _team(ctx):
     return t
 
 
+def _mailing(ctx):
+    m = ctx.get("mailing")
+    if m is None:
+        raise ToolError("рассылка недоступна")
+    return m
+
+
+def t_mailing(a, ctx):
+    """«Разошли всем клиентам…», «напиши всем сотрудникам письмо…» — каждому своё письмо (mailing.py)."""
+    from mailing import MailingError
+    m = _mailing(ctx)
+    try:
+        d = m.draft(a.get("subject") or "", a.get("body") or "", a.get("recipients") or "list", a.get("list") or "",
+                    a.get("tag") or "", a.get("kind") or "work")
+        m.start(d["id"])
+    except MailingError as e:
+        raise ToolError(str(e)) from e
+    sk = d.get("skipped") or {}
+    extra = (f"; отписавшихся пропускаю: {sk['stop']}" if sk.get("stop") else "") + (f"; повторы убрала: {sk['dup']}" if sk.get("dup") else "")
+    from mailing import plain
+    return (f"Рассылка «{plain(d['subject'])}» пошла: {d['total']} писем, каждому своё, по одному с паузой{extra}. Итог пришлю, "
+            "ход — в студии → «Рассылка». Скажи это одной фразой.")
+
+
+def t_mailing_status(a, ctx):
+    ls = _mailing(ctx).list()
+    if not ls:
+        return "Рассылок ещё не было."
+    st = {"draft": "черновик", "sending": "идёт", "waiting": "ждёт завтра (дневной предел почты)", "done": "закончена",
+          "stopped": "остановлена", "paused": "на паузе"}
+    from mailing import plain
+    return "\n".join(f"«{plain(c['subject'])}»: {st.get(c['status'], c['status'])}, ушло {c['sent']} из {c['total']}"
+                     + (f", не дошло {c['failed']}" if c["failed"] else "") for c in ls[:5])
+
+
 def t_team_assign(a, ctx):
     from team import TeamError, due_text
     try:
@@ -2179,6 +2214,65 @@ def t_client_info(a, ctx):
         return C.card_text(C.find(a.get("who") or ""))
     except ClientError as e:
         raise ToolError(str(e)) from e
+
+
+def t_client_crm(a, ctx):
+    """«Передай Иванова в Битрикс» — клиент лидом в CRM (crm.py); уже там — новые записи комментарием."""
+    from clients import ClientError
+    from crm import CrmError
+    C, R = _clients(ctx), ctx.get("crm")
+    if not (R and R.connected()):
+        raise ToolError("CRM не подключена — студия → «Клиенты» → «CRM»")
+    try:
+        cid = C.find(a.get("who") or "")
+        r = R.send(cid)
+    except (ClientError, CrmError) as e:
+        raise ToolError(str(e)) from e
+    where = R.public()["name"]
+    if r["new"]:
+        return f"Передала {C.title(C.get(cid))} в {where} новым лидом (№{r['id']}). Скажи это одной фразой."
+    return (f"В {where} у этого клиента уже есть лид №{r['id']}: " + (f"добавила новых записей — {r['n']}." if r["n"] else "новых записей нет — всё уже там.")
+            + " Скажи это одной фразой.")
+
+
+def _post_target(P, name):
+    """«в канал Чайный двор» -> id чата бота; пусто — первый, где можно публиковать."""
+    cs = [c for c in P.chats() if c["can"]]
+    n = (name or "").strip().lower().lstrip("@")
+    if not n:
+        return [cs[0]["id"]] if cs else []
+    hit = [c["id"] for c in cs if n in c["title"].lower() or (c["username"] and n == c["username"].lower())]
+    if not hit:
+        raise ToolError("бот не состоит в «" + name + "». Есть: " + (", ".join(c["title"] for c in cs) or "ничего — добавьте бота в канал"))
+    return hit[:1]
+
+
+def t_channel_post(a, ctx):
+    """«Опубликуй в канале…», «запланируй пост на завтра в 10», «сделай опрос в группе» — от имени бота персонажа."""
+    from pbot_posts import PostError
+    from when import parse
+    P = ctx.get("pbot_posts")
+    if P is None or not P.bot.connected():
+        raise ToolError("бот персонажа не подключён — студия → «Бот в Telegram»")
+    at = None
+    w = (a.get("when") or "").strip()
+    if w and not re.search(r"^(сейчас|сразу)$", w, re.I):
+        r = parse("напомни " + w)
+        if not r:
+            raise ToolError(f"не поняла, когда: «{w}» — уточни день и время")
+        at = r["at"]
+    poll = {"question": a.get("poll_question"), "options": a.get("poll_options") or []} if a.get("poll_question") else None
+    try:
+        p = P.add(a.get("text") or "", _post_target(P, a.get("chat") or ""), at, poll, source="voice")
+    except PostError as e:
+        raise ToolError(str(e)) from e
+    where = ", ".join(c["title"] for c in P.chats() if c["id"] in p["chats"])
+    if p["status"] == "sent":
+        return f"Опубликовала в «{where}»." + (" Ссылка: " + p["sent"][0]["link"] if p["sent"] and p["sent"][0]["link"] else "") + " Скажи коротко."
+    if p["status"] == "failed":
+        raise ToolError("Telegram не принял пост: " + p["err"])
+    from clients import _when
+    return f"Запланировала пост в «{where}» — {_when(p['at'])}. Скажи это одной фразой."
 
 
 def t_client_next(a, ctx):
@@ -2803,6 +2897,18 @@ TOOLS = {
                       "attachments": {"type": "array", "items": {"type": "string"}},
                       "from": {"type": "string", "description": "с какого ящика (адрес), если подключено несколько и назван; иначе — главный"}}, ["subject", "body"]),
                    "confirm", t_send_email, "Отправить письмо"),
+    "mailing": ("Рассылка писем многим со своей почты пользователя: КАЖДОМУ своё письмо (адресов друг друга не видят) — "
+                "«разошли всем клиентам…», «напиши всем сотрудникам письмо…», «отправь этим 20 адресам…». recipients: clients — "
+                "«Клиенты» (у кого есть почта; tag — только с этой меткой), team — сотрудники, list — свой список в list (строки "
+                "«Имя адрес»). В теме и тексте {имя} — обращение по имени: «Здравствуйте, {имя}!». kind: work — деловое письмо "
+                "(сотрудникам, клиентам по делу), ads — реклама и новости (только тем, кто согласился; строка «отписаться» "
+                "добавится сама). Одному-трём адресатам — send_email, не рассылка. Пиши письмо полностью, вежливо.",
+                S({"subject": {"type": "string"}, "body": {"type": "string"}, "recipients": {"type": "string", "enum": ["clients", "team", "list"]},
+                   "list": {"type": "string"}, "tag": {"type": "string"}, "kind": {"type": "string", "enum": ["work", "ads"]}},
+                  ["subject", "body", "recipients"]),
+                "confirm", t_mailing, "Рассылка писем"),
+    "mailing_status": ("Как идёт рассылка писем: сколько ушло, ошибки, ждёт ли следующего дня.", S({}), "safe", t_mailing_status,
+                       "Как идёт рассылка"),
     "send_telegram": ("Прислать пользователю в мессенджер (Telegram или MAX — куда подключён) сообщение (text) и/или файлы "
                       "из папки ассистента (files — пути: заметки, отчёты задач, «Входящие», снимки). «Пришли мне в "
                       "телеграм…», «скинь в макс…», «скинь на телефон…». to — telegram или max, если назван мессенджер.",
@@ -2933,6 +3039,17 @@ TOOLS = {
     "client_info": ("«Клиенты»: карточка клиента — контакты, о чём договаривались (последние записи), следующий шаг. «Что у нас с "
                     "Ивановым?», «напомни, о чём договорились с „Ромашкой“». who — имя или компания.",
                     S({"who": {"type": "string"}}, ["who"]), "safe", t_client_info, "Клиенты: карточка"),
+    "client_crm": ("«Клиенты»: передать клиента в CRM пользователя (Битрикс24 или свой вебхук) — «передай Иванова в Битрикс», "
+                   "«заведи лид на „Ромашку“», «отправь в CRM, о чём договорились с Петровым». Первый раз — новым лидом, дальше — "
+                   "новые записи комментарием. who — имя или компания.",
+                   S({"who": {"type": "string"}}, ["who"]), "safe", t_client_crm, "Клиенты: в CRM"),
+    "channel_post": ("Опубликовать пост от имени бота персонажа в Telegram-канале или группе, где он состоит: «опубликуй в канале…», "
+                     "«запланируй пост на пятницу в 10», «сделай опрос в группе». text — пост целиком (напиши его сам, по делу, "
+                     "без выдуманных отзывов, цифр и собеседников — только факты пользователя), when — когда словами (пусто — сейчас), "
+                     "chat — название канала или группы, если назван; опрос — poll_question и 2–10 poll_options.",
+                     S({"text": {"type": "string"}, "when": {"type": "string"}, "chat": {"type": "string"},
+                        "poll_question": {"type": "string"}, "poll_options": {"type": "array", "items": {"type": "string"}}}),
+                     "confirm", t_channel_post, "Пост в канал"),
     "client_next": ("«Клиенты»: следующий шаг с клиентом — что сделать и когда («перезвонить Иванову в четверг в 11», «отправить "
                     "«Ромашке» счёт завтра»); когда — словами, как сказал пользователь; будет напоминание в «Делах». done true — "
                     "следующий шаг сделан («я перезвонил Иванову»).",
@@ -3064,7 +3181,7 @@ TOOLS = {
 }
 # Этим умениям нужен интернет из самого Dewiar — при стоп-кране (студия → «Безопасность») модель о них не узнаёт.
 # Открыть сайт, музыку или карту в браузере человека — можно: это его браузер и его просьба.
-NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "read_emails", "read_email", "send_telegram", "close_send",
+NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "mailing", "client_crm", "channel_post", "read_emails", "read_email", "send_telegram", "close_send",
              "close_call", "close_read", "team_assign", "deal_remind", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update"}
 DEFAULT_OFF = set()          # команды терминала включены, но каждая — только после «Выполнить?»
 # «Только безопасное» (студия → «Безопасность», отзыв 18.10: «лучше чтоб пользователь мог выбрать, что можно делать, а не
@@ -3106,7 +3223,7 @@ class Toolbox:
             return True, self.mcp.needs_confirm(name) if conf is None else bool(conf)
         if name not in TOOLS:
             return False, False
-        if name in ("send_email", "read_emails", "read_email"):     # только когда почта подключена
+        if name in ("send_email", "read_emails", "read_email", "mailing", "mailing_status"):     # только когда почта подключена
             m = self.hooks.get("mail")
             if not (m and m.configured()):
                 return False, False
@@ -3120,8 +3237,14 @@ class Toolbox:
             tg = self.hooks.get("telegram")
             if not (tg and tg.paired()):
                 return False, False
+        if name == "channel_post":               # посты — когда бот персонажа подключён и состоит в канале или группе
+            P = self.hooks.get("pbot_posts")
+            if not (P is not None and P.bot.connected() and any(c["can"] for c in P.chats())):
+                return False, False
         if name.startswith("client_") or name == "deal_remind":   # «Клиенты»: включены в «Возможностях»
             if not (self.hooks.get("clients") is not None and (self.s.get("features") or {}).get("clients")):
+                return False, False
+            if name == "client_crm" and not (self.hooks.get("crm") and self.hooks["crm"].connected()):   # и CRM подключена
                 return False, False
         if name in ("team_assign", "team_status", "team_message"):   # «Поручения»: раздел включён и бот компании подключён
             tm = self.hooks.get("team")
@@ -3194,7 +3317,7 @@ class Toolbox:
         """Чего не хватает инструменту (№264, 25.10: «включаю — пишет „Сохранено“, а переключатель не включается»: почта,
         Telegram, «Знания», аккаунт не подключены). -> (что сделать, раздел студии) или None."""
         h = self.hooks
-        if name in ("send_email", "read_emails", "read_email") and not (h.get("mail") and h["mail"].configured()):
+        if name in ("send_email", "read_emails", "read_email", "mailing", "mailing_status") and not (h.get("mail") and h["mail"].configured()):
             return "Сначала подключите почту — «Подключение» → «Почта»", "connect"
         if name == "send_telegram" and not (h.get("telegram") and h["telegram"].paired()):
             return "Сначала подключите Telegram или MAX — «Подключение»", "connect"
@@ -3325,6 +3448,23 @@ class Toolbox:
             return f"Создать навык «{args.get('name', '')}»: {args.get('description', '')}?"
         if name == "lab_run":
             return f"Запустить в лаборатории {args.get('name', '')}?"
+        if name == "channel_post":
+            P = self.hooks.get("pbot_posts")
+            try:
+                where = ", ".join(c["title"] for c in P.chats() if c["id"] in _post_target(P, args.get("chat") or ""))
+            except Exception:  # noqa: BLE001
+                where = args.get("chat") or "канал"
+            what = (f"опрос «{args.get('poll_question')}»" if args.get("poll_question") else f"«{(args.get('text') or '')[:160]}" + ("…»" if len(args.get("text") or "") > 160 else "»"))
+            return f"Опубликовать в «{where}» {('— ' + args['when']) if args.get('when') else 'сейчас'}: {what}?"
+        if name == "mailing":
+            try:
+                rs, _ = self.hooks["mailing"].recipients(args.get("recipients") or "list", args.get("list") or "", args.get("tag") or "")
+                n = len(rs)
+            except Exception:  # noqa: BLE001
+                n = 0
+            who = {"clients": "клиентам", "team": "сотрудникам"}.get(args.get("recipients") or "", "по списку")
+            return (f"Разослать письмо «{args.get('subject', '')}» — {n} {who}, каждому своё" +
+                    (" (реклама: со строкой «отписаться»)" if args.get("kind") == "ads" else "") + "?")
         if name == "send_email":
             to = args.get("to") or "вам самим"
             att = args.get("attachments") or []

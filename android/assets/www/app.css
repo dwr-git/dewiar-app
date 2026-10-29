@@ -1654,3 +1654,26 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   font: 400 21px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; background: var(--frost); transition: transform .15s, background .15s; }
 .grem.on { background: rgba(106,108,240,.22); transform: translateY(-2px); box-shadow: 0 6px 16px -8px #6a6cf0; }
 .grem0 { font: 600 13px/1 Manrope, sans-serif; color: var(--muted, #9aa); }
+
+/* «Прослушать» под ответом (идея №58): тихая кнопка в строке подписи — без рамки, крупная мишень для пальца */
+.msg small.mrow { display: flex; align-items: center; gap: 10px; }
+.mlisten { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px 4px 9px; border: 0; border-radius: 99px;
+  background: var(--frost); color: var(--ink); font: 600 12.5px Manrope, sans-serif; }
+.mlisten svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mlisten.on { background: rgba(106,108,240,.22); }
+.mlisten.on svg { fill: currentColor; stroke: none; }
+.nwv { margin: 16px 2px 6px; font-size: 14px; } .nwv small { color: var(--dim); font-weight: 500; margin-left: 6px; }
+
+/* «Видеоуроки» (0.69): плитка и лист — обложки 16:9, плеер сверху */
+.a-lessons .ai { background: linear-gradient(140deg, #8fb2ff, #4f6cf0); box-shadow: 0 8px 18px -10px rgba(79,108,240,.9); }
+#lessons-body { display: flex; flex-direction: column; gap: 14px; }
+.lsn-player { display: flex; flex-direction: column; gap: 8px; } .lsn-player[hidden] { display: none; }
+.lsn-player video { width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; background: #000; }
+.lsn-player b { font-size: 15px; }
+.lsn { display: flex; flex-direction: column; padding: 0; border: 0; border-radius: 20px; overflow: hidden; text-align: left; background: var(--glass, rgba(255,255,255,.06)); color: inherit; font: inherit; }
+.lsn-pic { position: relative; aspect-ratio: 16 / 9; background: rgba(106,141,255,.16) center / cover no-repeat; display: grid; place-items: center; }
+.lsn-pic i { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: rgba(20,24,40,.6); color: #fff; font-style: normal; font-size: 20px; }
+.lsn-pic em { position: absolute; right: 10px; bottom: 10px; padding: 2px 8px; border-radius: 8px; background: rgba(20,24,40,.66); color: #fff; font-style: normal; font-size: 12px; font-weight: 700; }
+.lsn-x { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px 14px; }
+.lsn-x small { font-size: 12px; opacity: .7; } .lsn-x b { font-size: 16px; } .lsn-x span { font-size: 13px; opacity: .75; }
+.lsn-empty { opacity: .75; }

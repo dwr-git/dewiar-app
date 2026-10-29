@@ -148,9 +148,10 @@ function tmPeople() {
     if (app && !m.joined && !(m.app && m.app.link)) acts.push(`<button class="btn small" data-app="${escH(m.id)}">Печать для приложения</button>`);
     if (app && inApp) acts.push(`<button class="btn small" data-app="${escH(m.id)}" data-renew="1" title="Сменил телефон или аккаунт — новый код, поручения останутся">Новый код</button>`);
     if (!m.joined && msgr) acts.push(`<button class="btn small" data-code="${escH(m.id)}">${app ? "Новая ссылка в мессенджер" : "Новая ссылка"}</button>`);
+    acts.push(`<button class="btn small" data-mail="${escH(m.id)}" title="Почта сотрудника — для рассылок «Сотрудникам»">${m.email ? "Почта" : "+ Почта"}</button>`);
     acts.push(`<button class="btn small danger" data-del="${escH(m.id)}" title="Убрать из команды">Убрать</button>`);
     return `<li><span class="tm-ava" style="background:${escH(m.color)}" aria-hidden="true">${escH(tmIni(m.name))}</span>`
-      + `<div class="tm-pbody"><b>${escH(m.name)}</b><small>${escH(m.role || "")}${m.role ? " · " : ""}${m.open ? tmWord(m.open, "открытое поручение", "открытых поручения", "открытых поручений") : "открытых поручений нет"}</small>${st}${link}</div>`
+      + `<div class="tm-pbody"><b>${escH(m.name)}</b><small>${escH(m.role || "")}${m.role ? " · " : ""}${m.email ? escH(m.email) + " · " : ""}${m.open ? tmWord(m.open, "открытое поручение", "открытых поручения", "открытых поручений") : "открытых поручений нет"}</small>${st}${link}</div>`
       + `<div class="tm-pacts">${acts.join("")}</div></li>`;
   }).join("") : `<li class="tm-empty">Пока никого. Добавьте первого сотрудника справа — и отправьте ему ссылку${app ? " или покажите печать" : ""}.</li>`;
   $$("#tm-people [data-copy]").forEach(b => b.onclick = async () => {
@@ -165,6 +166,11 @@ function tmPeople() {
     const r = await tmCall("team_app_invite", { id: b.dataset.app, renew });
     b.disabled = false;
     if (r) tmSealShow(b.dataset.app);
+  });
+  $$("#tm-people [data-mail]").forEach(b => b.onclick = async () => {
+    const m = d.members.find(x => x.id === b.dataset.mail); if (!m) return;
+    const v = await askText(`Почта ${m.name} — для рассылок сотрудникам. Пусто — убрать`, m.email || "", { ok: "Сохранить" });
+    if (v !== null && v !== undefined && v.trim() !== (m.email || "")) tmCall("team_member_set", { id: m.id, email: v.trim() }, v.trim() ? "Почта сохранена" : "Почта убрана");
   });
   $$("#tm-people [data-seal]").forEach(b => b.onclick = () => tmSealShow(b.dataset.seal));
   $$("#tm-people [data-del]").forEach(b => b.onclick = async () => {
@@ -262,9 +268,9 @@ if ($("#p-team")) {
     const name = $("#tm-pname").value.trim(); if (!name) { $("#tm-pname").focus(); return; }
     const before = new Set((TM.members || []).map(m => m.id));
     const appOnly = tmAppOn() && !(TM.bots || []).some(b => b.ch !== "app" && b.connected);
-    const d = await tmCall("team_member_add", { name, role: $("#tm-prole").value.trim() }, appOnly ? "" : "Добавлено — скопируйте ссылку и отправьте сотруднику");
+    const d = await tmCall("team_member_add", { name, role: $("#tm-prole").value.trim(), email: $("#tm-pmail").value.trim() }, appOnly ? "" : "Добавлено — скопируйте ссылку и отправьте сотруднику");
     if (!d) return;
-    $("#tm-pname").value = ""; $("#tm-prole").value = "";
+    $("#tm-pname").value = ""; $("#tm-prole").value = ""; $("#tm-pmail").value = "";
     const fresh = (d.members || []).find(m => !before.has(m.id));
     // только приложение — ссылки в мессенджер нет, сразу печать для приложения
     if (appOnly && fresh && await tmCall("team_app_invite", { id: fresh.id, renew: false })) tmSealShow(fresh.id);

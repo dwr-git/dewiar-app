@@ -301,9 +301,9 @@ class RemoteMixin:
                     self.set_state("listening")
         threading.Thread(target=run, daemon=True).start()
 
-    def _voice_cfg(self):
-        """Голос текущего персонажа + служебные _gender, _pid и _slot (номер среди персонажей того же пола)."""
-        p = self.personas.get(self.s.get("persona"))
+    def _voice_cfg(self, pid=None):
+        """Голос текущего персонажа (или pid) + служебные _gender, _pid и _slot (номер среди персонажей того же пола)."""
+        p = self.personas.get(pid or self.s.get("persona"))
         same = [x["id"] for x in self.personas.all() if x.get("gender") == p.get("gender")
                 and (x.get("voice") or {}).get("prefer") != "piper"]
         slot = same.index(p["id"]) if p.get("id") in same else 0      # по порядку — разным персонажам разные голоса
@@ -481,14 +481,14 @@ class RemoteMixin:
             threading.Thread(target=check, name="mute-check", daemon=True).start()
         return val
 
-    def _speak_worker(self, turn, sentences, fx_override=None, voice_override=None):
+    def _speak_worker(self, turn, sentences, fx_override=None, voice_override=None, force=False):
         """Озвучить фразы из очереди sentences до None или отмены хода (блокирует, зовётся из потока ответа).
         Синтез и звук — в два потока: пока звучит фраза, следующая уже синтезируется (поток speak-synth, опережение —
         до двух фраз). Раньше следующую фразу начинали синтезировать, только когда прошлая доиграла, — на медленном
         компьютере между фразами были паузы в несколько секунд. Весь ответ — одним движком (первым, что справился);
         сказанное копится в turn.spoken — по нему _cancel_locked запоминает, на чём перебили. Ставит состояние «speaking».
         «Отвечать текстом» (tts.text_only, кнопка-динамик в виджете) — молчим: очередь только вычитывается."""
-        if self.s.get("tts", "text_only"):
+        if self.s.get("tts", "text_only") and not force:     # force — «Прослушать» под ответом: человек сам попросил вслух
             return self._drain_worker(turn, sentences)
         if self._output_muted():                        # звук компьютера выключен — голос не услышат: не синтезируем
             log.info("🔇 Звук компьютера выключен (или на нуле) — отвечаю текстом, голос не синтезирую")

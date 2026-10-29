@@ -54,9 +54,18 @@ function grHead() {
   $("#cl-devs").title = "";
   $("#cl-call").style.display = $("#cl-vcall").style.display = "none";
   $("#cl-del").style.display = "";
-  $("#cl-del").textContent = "Участники";
+  $("#cl-del").textContent = g.mine ? "Значок и участники" : "Участники";
+  $("#cl-del").title = g.mine ? "Значок группы, название, участники" : "Кто в группе";
   $("#cl-del").classList.remove("danger");
   $("#cl-del").onclick = () => grPanel("info");
+  /* 29.10, владелец: «не понимаю, как изменить иконку группы — искал внутри, нигде не вижу»: кнопка «Участники» уезжала
+     за край узкой шапки. Теперь сама шапка группы (значок и название) — кнопка: нажали — значок, название, участники. */
+  const hd = $("#cl-head");
+  hd.classList.add("cl-ghead");
+  hd.querySelector("div").setAttribute("role", "button"); hd.querySelector("div").tabIndex = 0;
+  hd.querySelector("div").title = ava.title = g.mine ? "Изменить значок, название, участников" : "Кто в группе";
+  ava.onclick = hd.querySelector("div").onclick = () => grPanel("info");
+  hd.querySelector("div").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); grPanel("info"); } };
   $("#cl-pick").textContent = CL.pick ? "Готово" : "Удалить сообщения";
   return true;
 }
@@ -171,4 +180,5 @@ $("#cl-album").onclick = () => grPanel("album");
 $("#cl-gnew").onclick = () => { if (!((CL.st || {}).people || []).length) return toast("Сначала пригласите близких — группа собирается из них", 4000); grPanel("new"); };
 /* шапка: у человека — «Убрать из близких», у группы — «Участники» */
 const grHeadWas = clHead;
-clHead = function () { if (!grOf(CL.cur)) { grDelReset(); const a = $("#cl-ava"); a.classList.remove("cl-gava"); if (a.querySelector(".cl-gstack")) a.innerHTML = ""; } return grHeadWas(); };
+clHead = function () { if (!grOf(CL.cur)) { grDelReset(); const a = $("#cl-ava"); a.classList.remove("cl-gava"); if (a.querySelector(".cl-gstack")) a.innerHTML = "";
+  const hd = $("#cl-head"), w = hd.querySelector("div"); hd.classList.remove("cl-ghead"); a.onclick = w.onclick = w.onkeydown = null; a.title = w.title = ""; w.removeAttribute("role"); w.removeAttribute("tabindex"); $("#cl-del").title = ""; } return grHeadWas(); };

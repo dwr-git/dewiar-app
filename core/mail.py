@@ -216,8 +216,9 @@ class Box:
 
     # ---------- письма ----------
 
-    def send(self, to="", subject="", body="", attachments=()):
-        """Отправить письмо -> {to, subject, attachments}. Без получателя — себе на свой адрес.
+    def send(self, to="", subject="", body="", attachments=(), headers=None):
+        """Отправить письмо -> {to, subject, attachments}. Без получателя — себе на свой адрес. headers — свои заголовки
+        (рассылка: List-Unsubscribe).
         Вложения — пути в папке ассистента: ws.safe() не даёт выйти за её пределы. Предел 20 МБ на файл — столько
         принимают почтовые службы с запасом на кодирование вложения."""
         if not self.configured():
@@ -233,6 +234,8 @@ class Box:
         msg["Subject"] = (subject or "Сообщение от Dewiar").strip()[:200]
         msg["Date"] = email.utils.formatdate(localtime=True)
         msg["Message-ID"] = email.utils.make_msgid(domain=me.split("@")[-1])
+        for k, v in (headers or {}).items():
+            msg[k] = v
         msg.set_content((body or "").strip() + "\n")
         names = []
         for rel in attachments or []:
@@ -406,8 +409,8 @@ class Mail:
     def test(self, box=0):
         return self.box(box).test()
 
-    def send(self, to="", subject="", body="", attachments=(), box=None):
-        return self.box(box).send(to, subject, body, attachments)
+    def send(self, to="", subject="", body="", attachments=(), box=None, headers=None):
+        return self.box(box).send(to, subject, body, attachments, headers=headers)
 
     def inbox(self, limit=10, unread=False, query="", folder="INBOX", box=None):
         if box not in (None, ""):

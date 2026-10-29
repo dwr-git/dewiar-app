@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 4 · Поручения сотрудникам. Светлый неоморфизм серии. Главная вещь урока — карточка поручения, которая летит от
+   руководителя на телефон Ольги и возвращается «Сделано ✓» с фото — видно, что поручение не теряется. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --late: #e0566e; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(106,141,255,.28), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(120,220,180,.24), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#tick { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#tick svg { width: 110px; height: 110px; fill: none; stroke: var(--ok); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* проблема: чат, где поручение утонуло */
+#mess { position: absolute; left: 760px; top: 200px; width: 760px; height: 600px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px; overflow: hidden; }
+#mess .r { display: flex; gap: 12px; margin-bottom: 14px; } #mess .r i { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+#mess .r span { padding: 12px 16px; border-radius: 16px; background: rgba(127,127,140,.1); font-size: 21px; } #mess .r.me span { background: rgba(106,141,255,.18); font-weight: 700; }
+#lost { position: absolute; left: 1560px; top: 330px; width: 150px; height: 150px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; font: 700 80px Unbounded; color: var(--late); }
+
+/* поручение: голос → карточка летит на телефон */
+#voice { position: absolute; left: 600px; top: 200px; max-width: 760px; display: flex; align-items: center; gap: 22px; padding: 20px 36px 20px 20px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#voice i { width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); flex: none; }
+#voice i svg { width: 34px; height: 34px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; }
+#voice span { font: 600 32px/1.3 Unbounded, sans-serif; }
+#chans { position: absolute; left: 600px; top: 410px; display: flex; gap: 12px; }
+#chans span { padding: 12px 22px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 700; }
+#phone { position: absolute; left: 1430px; top: 140px; width: 420px; height: 690px; border-radius: 60px; background: var(--bg); box-shadow: var(--raise); padding: 22px; }
+#phone .scr { width: 100%; height: 100%; border-radius: 44px; box-shadow: var(--press); padding: 26px 20px; position: relative; overflow: hidden; }
+#phone .who { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; font-size: 22px; font-weight: 800; }
+#phone .who i { width: 46px; height: 46px; border-radius: 50%; background: #f2a96b; color: #fff; display: grid; place-items: center; font: 700 20px Unbounded; font-style: normal; }
+#phone .who small { display: block; font-size: 16px; color: var(--mut); font-weight: 700; }
+.task { padding: 20px; border-radius: 24px; background: var(--bg); box-shadow: var(--raise-s); }
+.task small { font-size: 16px; color: var(--mut); font-weight: 800; } .task b { display: block; font: 600 26px/1.25 Unbounded, sans-serif; margin: 8px 0 6px; }
+.task .due { font-size: 19px; font-weight: 700; color: var(--mut); }
+.btns { display: flex; gap: 10px; margin-top: 16px; } .btns span { flex: 1; text-align: center; padding: 14px 6px; border-radius: 16px; box-shadow: var(--raise-s); font-size: 20px; font-weight: 800; }
+.btns span.on { color: #fff; background: var(--brand); box-shadow: none; } .btns span.ok { color: #fff; background: var(--ok); box-shadow: none; }
+.photo { margin-top: 14px; height: 150px; border-radius: 18px; background: linear-gradient(150deg, #cfe0f5, #a8c3e6); display: grid; place-items: center; font-size: 22px; font-weight: 800; color: #3d5a80; }
+.reason { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: rgba(242,169,107,.2); font-size: 20px; font-weight: 700; }
+#fly { position: absolute; left: 0; top: 0; width: 280px; padding: 16px 18px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise); font-size: 20px; font-weight: 800; z-index: 5; }
+#fly small { display: block; font-size: 15px; color: var(--mut); }
+
+/* доска руководителя */
+#board { position: absolute; left: 640px; top: 190px; width: 1180px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.col { padding: 20px; border-radius: 28px; background: var(--bg); box-shadow: var(--raise); min-height: 420px; display: flex; flex-direction: column; gap: 14px; }
+.col h4 { font: 600 24px Unbounded, sans-serif; display: flex; justify-content: space-between; } .col h4 small { font: 700 20px Manrope; color: var(--mut); }
+.tc { padding: 16px 18px; border-radius: 20px; box-shadow: var(--raise-s); }
+.tc b { display: block; font-size: 25px; } .tc small { display: block; font-size: 20px; color: var(--mut); font-weight: 700; margin-top: 4px; }
+.tc.late { background: rgba(224,86,110,.12); } .tc.late small { color: var(--late); }
+.tc .acts { display: flex; gap: 8px; margin-top: 12px; } .tc .acts span { padding: 10px 16px; border-radius: 12px; box-shadow: var(--raise-s); font-size: 19px; font-weight: 800; }
+.tc .acts span.on { background: var(--ok); color: #fff; box-shadow: none; }
+.tc .note { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(242,169,107,.2); font-size: 19px; font-weight: 700; }
+
+#rep { position: absolute; left: 640px; top: 230px; width: 620px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#rep small { font-size: 20px; color: var(--mut); font-weight: 800; } #rep b { display: block; font: 600 30px/1.3 Unbounded, sans-serif; margin-top: 10px; }
+#digest { position: absolute; left: 1320px; top: 230px; width: 460px; padding: 28px 30px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#digest h4 { font: 600 24px Unbounded; margin-bottom: 14px; } #digest p { font-size: 21px; font-weight: 700; line-height: 1.6; } #digest em { font-style: normal; color: var(--late); }
+#studio { position: absolute; left: 700px; top: 220px; width: 1060px; height: 480px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); display: grid; grid-template-columns: 280px 1fr; overflow: hidden; }
+#studio nav { padding: 28px 20px; display: flex; flex-direction: column; gap: 8px; font-size: 22px; font-weight: 600; color: var(--mut); box-shadow: 8px 0 18px -10px var(--nd); }
+#studio nav h5 { font-size: 15px; margin: 10px 16px 2px; } #studio nav span { padding: 10px 16px; border-radius: 14px; } #studio nav span.on { color: var(--accent); box-shadow: var(--raise-s); }
+#studio main { padding: 30px 34px; } #studio main h3 { font: 700 32px Unbounded; margin-bottom: 18px; }
+#studio .ways { display: flex; gap: 14px; } #studio .ways span { flex: 1; padding: 20px; border-radius: 20px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; }
+#studio .ways small { display: block; font-size: 17px; color: var(--mut); font-weight: 600; margin-top: 6px; }
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 4 · Поручения сотрудникам</span></div></div>
+
+  <div class="layer" id="L-title"><div id="tick"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></div>
+    <div id="t-title"><h1>Поручения</h1><p>Поставить задачу — и видеть, что сделано</p></div></div>
+
+  <div class="layer" id="L-problem">
+    <div id="mess">
+      <div class="r"><i style="background:#8b8cf7"></i><span>Кто заберёт посылку?</span></div>
+      <div class="r"><i style="background:#4be3a1"></i><span>Я после обеда</span></div>
+      <div class="r me"><i style="background:#e59a1f"></i><span>Ольга, обнови прайс до пятницы</span></div>
+      <div class="r"><i style="background:#ff8fa8"></i><span>👍</span></div>
+      <div class="r"><i style="background:#7fd4ff"></i><span>А пицца будет?</span></div>
+      <div class="r"><i style="background:#8b8cf7"></i><span>Фото с выставки 📷</span></div>
+      <div class="r"><i style="background:#4be3a1"></i><span>Скиньте договор ещё раз</span></div>
+    </div>
+    <div id="lost">?</div>
+  </div>
+
+  <div class="layer" id="L-flow">
+    <div id="voice"><i><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i><span>«Поручи Ольге обновить прайс до пятницы»</span></div>
+    <div id="chans"><span>Telegram</span><span>MAX</span><span>Приложение Dewiar</span></div>
+    <div id="phone"><div class="scr"><div class="who"><i>О</i><div>Ольга<small>бот компании</small></div></div>
+      <div class="task" id="task"><small>ПОРУЧЕНИЕ</small><b>Обновить прайс</b><div class="due" id="due">срок — пятница, 18:00</div>
+        <div class="btns" id="btns"><span id="b1x">Беру</span></div>
+        <div class="photo" id="photo">📷 прайс.jpg</div><div class="reason" id="reason">«Перенести на понедельник — поставщик не прислал цены»</div></div></div></div>
+    <div id="fly"><small>поручение</small>Обновить прайс</div>
+  </div>
+
+  <div class="layer" id="L-board">
+    <div id="board">
+      <div class="col"><h4>Новые <small>1</small></h4><div class="tc"><b>Позвонить поставщику</b><small>Пётр · завтра</small></div></div>
+      <div class="col"><h4>В работе <small>2</small></h4><div class="tc"><b>Отчёт по продажам</b><small>Иван · сегодня 18:00</small></div>
+        <div class="tc late"><b>Забрать посылку</b><small>Анна · срок прошёл вчера</small></div></div>
+      <div class="col"><h4>Сделано <small>1</small></h4><div class="tc" id="done"><b>Обновить прайс</b><small>Ольга · сделано, с фото 📷</small>
+        <div class="acts"><span id="acc">Принять</span><span>Вернуть</span></div><div class="note" id="note">«Добавь новые улуны»</div></div></div>
+    </div>
+  </div>
+
+  <div class="layer" id="L-repeat">
+    <div id="rep"><small>ПОВТОРЯЮЩЕЕСЯ</small><b>Иван — отчёт по продажам<br>каждый понедельник к 12:00</b></div>
+    <div id="digest"><h4>Итог дня · 18:30</h4><p>Сделано: 4 ✓<br>В работе: 3<br><em>Срок прошёл: 1 — Анна</em></p></div>
+  </div>
+
+  <div class="layer" id="L-how">
+    <div id="studio"><nav><h5>Работа</h5><span class="on">Поручения</span><span>Клиенты</span><span>Рассылка</span><span>Чат для сайта</span></nav>
+      <main><h3>Как сотрудники получат поручения</h3><div class="ways"><span>Telegram<small>бот компании</small></span><span>MAX<small>бот компании</small></span><span>Приложение Dewiar<small>по печати</small></span></div></main></div>
+  </div>
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Работа с клиентами»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const POS = {
+  title:   { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [380, 470, 300, 0], patrik: [380, 470, 320, 1] },
+  assign:  { lira: [330, 470, 300, 1], patrik: [380, 470, 320, 0] },
+  work:    { lira: [330, 470, 300, 1], patrik: [380, 470, 320, 0] },
+  board:   { lira: [330, 330, 240, 1], patrik: [330, 760, 220, 1] },
+  repeat:  { lira: [330, 470, 300, 1], patrik: [330, 760, 220, 0] },
+  how:     { lira: [380, 470, 320, 1], patrik: [330, 760, 220, 0] },
+  end:     { lira: [960, 330, 300, 1], patrik: [330, 760, 220, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  const p = cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+  if (ORDER[i] === "board" && who === "patrik") p[3] = out((T - at("s5b") + 0.6) / 0.5);
+  return p;
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave" });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка летит по дуге: от голосовой просьбы к телефону (и обратно — на доску)
+function flyAt(k, x0, y0, x1, y1, h) { const x = lerp(x0, x1, k), y = lerp(y0, y1, k) - Math.sin(k * Math.PI) * h; return [x, y]; }
+
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#tick"), out((T - 0.8) / 0.6), 0, .8);
+  // проблема: поручение тонет в общем чате
+  layer("L-problem", T, s("problem").start + 0.3, s("assign").start);
+  const sink = ease((T - at("s2a") - 1.0) / 2.6);
+  $("#mess").scrollTop = 0; [...$("#mess").children].forEach((r, i) => { r.style.transform = `translateY(${-sink * 260}px)`; r.style.opacity = i === 2 ? 1 - sink * 0.7 : 1; });
+  vis($("#lost"), out((T - at("s2a") - 2.2) / 0.5), 0, .7);
+  // поручение: голос → каналы → карточка летит на телефон → «Беру» → «Сделано» с фото → «Перенести»
+  const kF = layer("L-flow", T, s("assign").start + 0.2, s("board").start);
+  vis($("#voice"), out((T - at("s3a") - 0.5) / 0.6), 30, .95);
+  vis($("#chans"), out((T - at("s3b") - 0.3) / 0.5), 20);
+  vis($("#phone"), out((T - at("s3b") - 0.6) / 0.6), 50, .97);
+  const kf = clamp((T - at("s3b") - 1.4) / 1.3), fl = $("#fly");
+  const [fx, fy] = flyAt(ease(kf), 700, 330, 1480, 300, 160);
+  fl.style.transform = `translate(${fx}px, ${fy}px) scale(${lerp(1, .8, kf)})`; fl.style.opacity = kf > 0 && kf < 1 ? kF : 0;
+  vis($("#task"), out((T - at("s3b") - 2.6) / 0.4), 20, .95);
+  const tw = at("s4a"), took = T > tw + 0.9, done = T > tw + 2.5;
+  $("#btns").innerHTML = done ? '<span class="ok">Сделано ✓</span>' : took ? '<span class="on">Сделано</span><span>Перенести…</span>' : '<span class="on">Беру</span>';
+  $("#photo").style.display = done && T < at("s4b") ? "" : "none";
+  $("#reason").style.display = T >= at("s4b") + 0.6 ? "" : "none";
+  if (T >= at("s4b") + 0.6) $("#btns").innerHTML = '<span>Перенести…</span>';
+  $("#due").textContent = T >= at("s4b") + 0.6 ? "новый срок — понедельник" : "срок — пятница, 18:00";
+  // доска: «Принять» или «Вернуть с замечанием»
+  layer("L-board", T, s("board").start + 0.2, s("repeat").start);
+  [...$("#board").children].forEach((c, i) => vis(c, out((T - s("board").start - 0.4 - i * 0.15) / 0.6), 40, .97));
+  $("#acc").classList.toggle("on", T > at("s5b") + 0.2 && T < at("s5c"));
+  $("#acc").textContent = T > at("s5b") + 0.2 && T < at("s5c") ? "Принято ✓" : "Принять";
+  vis($("#note"), out((T - at("s5c") - 0.6) / 0.4), 10);
+  // повторяющиеся и итог дня
+  layer("L-repeat", T, s("repeat").start + 0.2, s("how").start);
+  vis($("#rep"), out((T - at("s6a") + 0.1) / 0.5), 30, .97); vis($("#digest"), out((T - at("s6a") - 2.6) / 0.5), 30, .97);
+  layer("L-how", T, s("how").start + 0.2, s("end").start);
+  vis($("#studio"), out((T - at("s7a") + 0.1) / 0.6), 40, .97);
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

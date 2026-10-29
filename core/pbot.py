@@ -54,6 +54,8 @@ def plain(t):
 
 class PersonaBot(Telegram):
     TITLE = "Бот персонажа"
+    ALLOWED = ["message", "my_chat_member"]              # my_chat_member — бота назначили в канале (pbot_posts.py)
+    posts = None
 
     def __init__(self, host, path=PATH):
         super().__init__(on_message=None, path=path)
@@ -164,6 +166,10 @@ class PersonaBot(Telegram):
 
     # ---------- приём ----------
     def _handle(self, u):
+        if u.get("my_chat_member"):                       # бота добавили в канал или группу (или убрали) — для «Постов»
+            if self.posts is not None:
+                self.posts.on_member(u["my_chat_member"])
+            return
         m = u.get("message")
         if not m or (m.get("from") or {}).get("is_bot"):
             return
@@ -175,6 +181,10 @@ class PersonaBot(Telegram):
             self._remember_chat(chat)
             if self.opt("groups"):
                 self._send(chat["id"], self._hello(group=True))
+            return
+        if group and m.get("new_chat_members"):               # новички в группе — приветствие («Посты» → «Новички»)
+            if self.posts is not None:
+                self.posts.newcomers(chat, m["new_chat_members"])
             return
         text = (m.get("text") or m.get("caption") or "").strip()
         cmd = text.split()[0].split("@")[0].lower() if text.startswith("/") else ""
@@ -240,11 +250,19 @@ class PersonaBot(Telegram):
         return ""
 
     def _remember_chat(self, chat):
+        self.remember_chat(chat)
+
+    def remember_chat(self, chat, can=None):
+        """Группа или канал, где есть бот: название, вид, @адрес (для ссылок на посты), можно ли публиковать."""
         if chat.get("type") == "private":
             return
         with self._lock:
             chats = self.data.setdefault("chats", {})
-            chats[str(chat["id"])] = {"title": chat.get("title") or "группа", "t": int(time.time())}
+            old = chats.get(str(chat["id"])) or {}
+            chats[str(chat["id"])] = {"title": chat.get("title") or old.get("title") or "группа", "t": int(time.time()),
+                                      "type": chat.get("type") or old.get("type") or "group",
+                                      "username": chat.get("username") or old.get("username") or "",
+                                      "can": old.get("can", True) if can is None else bool(can)}
             if len(chats) > 50:
                 for k in sorted(chats, key=lambda k: chats[k]["t"])[:-50]:
                     chats.pop(k)

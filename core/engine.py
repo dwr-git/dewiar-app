@@ -185,6 +185,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.toolbox.hooks["telegram"] = self.chat
         from pbot import PersonaBot
         self.pbot = PersonaBot(self)                            # «Бот персонажа»: публичный бот, отвечает всем (0.67)
+        from pbot_posts import Posts
+        self.pbot_posts = Posts(self, self.pbot)                 # его «Посты»: в каналы и группы, рубрики, новички (0.69)
+        self.toolbox.hooks["pbot_posts"] = self.pbot_posts
         from servers import Servers
         self.servers = Servers()
         self.toolbox.hooks["servers"] = self.servers
@@ -217,6 +220,16 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.clients = Clients(STATE_DIR / "clients.json", self.reminders, emit=lambda *a, **k: self.emit("clients"))   # «Клиенты» — личная CRM
         self.clients.currency = self._default_currency           # сделки — в валюте «Денег»
         self.toolbox.hooks["clients"] = self.clients
+        from crm import Crm
+        self.crm = Crm(STATE_DIR / "crm.json", self.clients)        # «CRM» (0.69): клиенты — лидами в Битрикс24 или свой вебхук
+        self.toolbox.hooks["crm"] = self.crm
+        from sitechat import SiteChat
+        self.sitechat = SiteChat(self)                              # «Чат для сайта» (0.69): настройка и заявки; отвечает dewiar.pro
+        from sshlink import SshLink
+        self.sshlink = SshLink(self)                                # запасной вход через SSH — только у владельца сервера (29.10)
+        from mailing import Mailing
+        self.mailing = Mailing(self, STATE_DIR / "mailing.json")   # «Рассылка» (0.69): каждому своё письмо, по одному, с пределом в день
+        self.toolbox.hooks["mailing"] = self.mailing
         from course import Course
         self.course = Course(STATE_DIR / "course.json", self.emit)   # курс «Неделя с Лирой»: шаги засчитываются сами
         self.money.on_change = self.sync.soon.set
@@ -261,6 +274,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             "(прокси Dewiar): облако, вход и обновления работают как обычно. Выключить: студия → «Dewiar.pro» → «Сеть».")
         lan = self.s.get("net", "lan") or {}
         net.set_lan(lan.get("public", ""), lan.get("base", ""), lan.get("id", ""))   # дома — напрямую с первого запроса
+        # сайт хоть раз ответил напрямую — этот компьютер бывает рядом с сервером: в «Сети» показываем «Запасной вход через SSH»
+        net.on_lan_ok = lambda: None if self.s.get("net", "lan_seen") else self.s.update({"net": {"lan_seen": True}})
         self.cloud.on_low = lambda c: self.chat.notify(
             ("Заряд Dewiar Облака закончился — ассистент не сможет отвечать, пока вы не пополните. " if c.get("empty") else
              f"Заряд Dewiar Облака: {c.get('percent')}% — хватит примерно на {c.get('turns')} ответов. ")
@@ -340,12 +355,18 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self._welcome_loop, name="welcome", daemon=True).start()
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()
+        threading.Thread(target=lambda: self.stopping.wait(20) or self.mailing.resume(), name="mailing-resume", daemon=True).start()
         threading.Thread(target=lambda: self.stopping.wait(2) or self.auto_join(), name="auto-join", daemon=True).start()
         threading.Thread(target=self._brain_watch, name="brain", daemon=True).start()
         if not self.wav_input:
             threading.Thread(target=self._ann_loop, name="announcements", daemon=True).start()
         self.max.start()
         self.pbot.start()
+        self.pbot_posts.start()
+        if (self.s.get("sitechat") or {}).get("on"):
+            self.sitechat.start()                                   # заявки с сайта — раз в 2 минуты
+        if (self.s.get("sshlink") or {}).get("on"):
+            self.sshlink.start()                                    # домен не отвечает — к сайту через SSH-туннель
 
     def _writing_loop(self):
         """«Пишу»: раз в 10 минут пересчитать прирост слов в своих текстах (дёшево: только изменившиеся файлы)."""
@@ -471,6 +492,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
 
     def shutdown(self):
         self.stopping.set()
+        try:
+            self.sshlink.stop()                                     # туннель ssh не оставляем висеть после выхода
+        except Exception:  # noqa: BLE001
+            pass
         self.telegram.stop()
         self.team.stop()
         self.max.stop()

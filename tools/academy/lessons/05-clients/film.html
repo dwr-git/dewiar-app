@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 5 · Работа с клиентами. Светлый неоморфизм серии. Главная вещь урока — карточка клиента собирается из сказанной фразы:
+   слова «Иванов», «Ромашка», «200 коробок до пятницы» перелетают из голоса в поля карточки. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --late: #e0566e;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(106,141,255,.28), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.24), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#ppl { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#ppl svg { width: 110px; height: 110px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* проблема: стикеры-напоминалки разлетаются */
+.st { position: absolute; padding: 22px 26px; border-radius: 18px; font: 600 28px/1.3 Manrope; box-shadow: 0 16px 30px -18px rgba(36,50,74,.5); width: 330px; }
+.st.y { background: #fff3c4; } .st.p { background: #ffd9e2; } .st.g { background: #d7f2e3; }
+
+/* карточка из голоса */
+#voice { position: absolute; left: 620px; top: 170px; max-width: 1200px; display: flex; align-items: center; gap: 22px; padding: 20px 36px 20px 20px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#voice i { width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); flex: none; }
+#voice i svg { width: 34px; height: 34px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; }
+#voice span { font: 600 32px/1.3 Unbounded, sans-serif; } #voice span em { font-style: normal; border-radius: 10px; padding: 0 6px; transition: background .3s; } #voice span em.hl { background: rgba(106,141,255,.22); }
+#card { position: absolute; left: 620px; top: 380px; width: 820px; padding: 32px 38px 34px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#card header { display: flex; align-items: center; gap: 18px; } #card header i { width: 72px; height: 72px; border-radius: 50%; background: #8b8cf7; color: #fff; display: grid; place-items: center; font: 700 30px Unbounded; font-style: normal; }
+.f { min-height: 40px; } #card .nm { font: 600 38px Unbounded, sans-serif; } #card .co { font-size: 24px; color: var(--mut); font-weight: 700; margin-top: 4px; }
+#card h4 { margin: 24px 0 8px; font-size: 19px; color: var(--mut); font-weight: 800; }
+#card .deal { font-size: 28px; font-weight: 700; padding: 14px 18px; border-radius: 16px; box-shadow: var(--press); }
+#card .next { margin-top: 14px; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 16px; background: rgba(106,141,255,.14); font-size: 26px; font-weight: 700; }
+#card .next svg { width: 30px; height: 30px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.flyw { position: absolute; font: 700 30px Unbounded, sans-serif; color: var(--accent); z-index: 6; white-space: nowrap; }
+
+/* вопрос «что у нас с Ивановым?» */
+#ans { position: absolute; left: 640px; top: 300px; width: 860px; padding: 34px 40px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#ans small { font-size: 20px; color: var(--mut); font-weight: 800; } #ans p { font: 600 36px/1.35 Unbounded, sans-serif; margin-top: 10px; }
+
+/* сделки */
+#kan { position: absolute; left: 620px; top: 180px; width: 1220px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.col { padding: 18px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); min-height: 560px; display: flex; flex-direction: column; gap: 12px; position: relative; }
+.col h4 { font: 600 24px Unbounded, sans-serif; display: flex; justify-content: space-between; align-items: baseline; } .col h4 small { font: 800 19px Manrope; color: var(--mut); }
+.dc { padding: 16px; border-radius: 18px; box-shadow: var(--raise-s); background: var(--bg); }
+.dc b { display: block; font-size: 25px; } .dc small { display: block; font-size: 20px; color: var(--mut); font-weight: 700; margin-top: 4px; }
+.dc.late { background: rgba(224,86,110,.12); } .dc.late small { color: var(--late); }
+.dc .rem { margin-top: 10px; display: inline-block; padding: 8px 14px; border-radius: 12px; font-size: 18px; font-weight: 800; box-shadow: var(--raise-s); }
+.dc .rem.on { background: var(--brand); color: #fff; box-shadow: none; }
+#move { position: absolute; z-index: 7; width: 270px; }
+#owe { position: absolute; left: 620px; top: 790px; display: flex; gap: 18px; }
+#owe span { padding: 14px 24px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; }
+#owe span.r { color: var(--late); }
+#money { position: absolute; left: 1360px; top: 790px; padding: 14px 26px; border-radius: 99px; color: #fff; background: linear-gradient(135deg, #46d39a, #2fb383); font: 700 28px Unbounded, sans-serif; box-shadow: 0 14px 30px -12px rgba(47,179,131,.6); }
+
+#studio { position: absolute; left: 700px; top: 220px; width: 1060px; height: 480px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 34px 40px; }
+#studio h3 { font: 700 32px Unbounded; margin-bottom: 22px; }
+.opt { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-radius: 20px; box-shadow: var(--raise-s); margin-bottom: 14px; font-size: 24px; font-weight: 700; }
+.opt small { display: block; font-size: 18px; color: var(--mut); font-weight: 600; margin-top: 4px; }
+.tg { width: 76px; height: 40px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; } .tg i { position: absolute; top: 5px; left: 6px; width: 30px; height: 30px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); transition: left .3s; }
+.tg.on { background: linear-gradient(135deg, #46d39a, #2fb383); box-shadow: none; } .tg.on i { left: 40px; }
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 5 · Работа с клиентами</span></div></div>
+
+  <div class="layer" id="L-title"><div id="ppl"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/></svg></div>
+    <div id="t-title"><h1>Клиенты</h1><p>Договорённости, звонки и деньги — ничего не забыто</p></div></div>
+
+  <div class="layer" id="L-problem">
+    <div class="st y" id="st1" style="left:760px;top:220px;transform:rotate(-4deg)">Перезвонить… кому?</div>
+    <div class="st p" id="st2" style="left:1180px;top:300px;transform:rotate(3deg)">Ромашка — счёт оплатили?</div>
+    <div class="st g" id="st3" style="left:860px;top:520px;transform:rotate(2deg)">200 коробок до… когда?</div>
+    <div class="st y" id="st4" style="left:1300px;top:600px;transform:rotate(-3deg)">Кто должен денег?</div>
+  </div>
+
+  <div class="layer" id="L-card">
+    <div id="voice"><i><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i>
+      <span>«Запиши: <em id="w1">Иванов</em> из „<em id="w2">Ромашки</em>“ хочет <em id="w3">200 коробок до пятницы</em>»</span></div>
+    <div id="card"><header><i>И</i><div><div class="f nm" id="c1"></div><div class="f co" id="c2"></div></div></header>
+      <h4>Договорились</h4><div class="f deal" id="c3"></div>
+      <div class="next" id="nx"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>Перезвонить — четверг, 11:00</div></div>
+    <div class="flyw" id="fw1">Иванов</div><div class="flyw" id="fw2">Ромашка</div><div class="flyw" id="fw3">200 коробок до пятницы</div>
+  </div>
+
+  <div class="layer" id="L-ask"><div id="ans"><small>ИВАНОВ · «РОМАШКА»</small><p>Хочет 200 коробок к пятнице.<br>Звонок — в четверг, 11:00.</p></div></div>
+
+  <div class="layer" id="L-deals">
+    <div id="kan">
+      <div class="col"><h4>Заявка <small>2</small></h4><div class="dc" id="rom0"><b>Ромашка</b><small>200 коробок · 1 200 ₽</small></div><div class="dc"><b>Лютик</b><small>упаковка · 400 ₽</small></div></div>
+      <div class="col"><h4>Предложение <small>1</small></h4><div class="dc"><b>Василёк</b><small>этикетки · 650 ₽</small></div></div>
+      <div class="col" id="c-inv"><h4>Счёт <small>2</small></h4><div class="dc late"><b>Клевер</b><small>2 400 ₽ · срок прошёл 3 дня</small><span class="rem" id="rem">Напомнить об оплате</span></div></div>
+      <div class="col" id="c-paid"><h4>Оплачено <small id="paidn">1</small></h4><div class="dc"><b>Пион</b><small>800 ₽ · 27 октября</small></div></div>
+    </div>
+    <div class="dc" id="move"><b>Ромашка</b><small>200 коробок · 1 200 ₽</small></div>
+    <div id="owe"><span>Вам должны: 3 600 ₽</span><span class="r">Срок прошёл: 1</span></div>
+    <div id="money">+1 200 ₽ в доходы</div>
+  </div>
+
+  <div class="layer" id="L-how">
+    <div id="studio"><h3>Возможности</h3>
+      <div class="opt"><div>Клиенты — личная CRM<small>карточки, следующий шаг, сделки и кто должен</small></div><span class="tg" id="tg"><i></i></span></div>
+      <div class="opt"><div>Поручения сотрудникам<small>урок 4</small></div><span class="tg on"><i></i></span></div></div>
+  </div>
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Рассылка»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const POS = {
+  title:   { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [380, 470, 300, 0], patrik: [380, 470, 320, 1] },
+  card:    { lira: [330, 470, 300, 1], patrik: [380, 470, 320, 0] },
+  ask:     { lira: [330, 330, 240, 1], patrik: [330, 760, 220, 1] },
+  deals:   { lira: [330, 470, 280, 1], patrik: [330, 760, 220, 0] },
+  paid:    { lira: [330, 330, 240, 1], patrik: [330, 760, 220, 1] },
+  how:     { lira: [380, 470, 320, 1], patrik: [330, 760, 220, 0] },
+  end:     { lira: [960, 330, 300, 1], patrik: [330, 760, 220, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave" });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// слово перелетает из фразы в поле карточки (координаты — от слоя)
+function flyWord(n, T, t0, from, to, text) {
+  const el = $("#fw" + n), k = clamp((T - t0) / 0.9);
+  const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+  const x = lerp(a.left, b.left, ease(k)), y = lerp(a.top, b.top, ease(k)) - Math.sin(k * Math.PI) * 70;
+  el.style.left = x + "px"; el.style.top = y + "px"; el.style.opacity = k > 0 && k < 1 ? 1 : 0;
+  to.textContent = k >= 1 ? text : "";
+}
+
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#ppl"), out((T - 0.8) / 0.6), 0, .8);
+  layer("L-problem", T, s("problem").start + 0.3, s("card").start);
+  ["st1", "st2", "st3", "st4"].forEach((id, i) => { const e = $("#" + id), k = out((T - at("s2a") - 0.3 - i * 0.9) / 0.4);
+    e.style.opacity = k; e.style.translate = `0 ${(1 - k) * -30}px`; e.style.scale = String(lerp(1.15, 1, k)); });
+  // карточка собирается из фразы
+  const kC = layer("L-card", T, s("card").start + 0.2, s("ask").start);
+  vis($("#voice"), out((T - at("s3a") - 0.6) / 0.5), 30, .96);
+  vis($("#card"), out((T - at("s3b") - 0.1) / 0.5), 40, .97);
+  const fw = [["w1", "c1", "Иванов", at("s3b") + 0.4], ["w2", "c2", "«Ромашка»", at("s3b") + 0.8], ["w3", "c3", "200 коробок до пятницы", at("s3b") + 1.3]];
+  fw.forEach(([w, c, t, t0], i) => { $("#" + w).classList.toggle("hl", T > at("s3a") + 1.2 && T < t0 + 0.9); if (kC > 0.01) flyWord(i + 1, T, t0, $("#" + w), $("#" + c), t); else $("#fw" + (i + 1)).style.opacity = 0; });
+  vis($("#nx"), out((T - at("s4a") - 1.2) / 0.5), 20);
+  // вопрос и ответ
+  layer("L-ask", T, s("ask").start + 0.2, s("deals").start);
+  vis($("#ans"), out((T - at("s5b") + 0.1) / 0.5), 30, .97);
+  // сделки: доска; «Ромашка» из «Заявки» едет в «Счёт», потом в «Оплачено»
+  layer("L-deals", T, s("deals").start + 0.2, s("how").start);
+  [...$("#kan").children].forEach((c, i) => vis(c, out((T - at("s6a") - 0.6 - i * 0.5) / 0.5), 40, .97));
+  const mv = $("#move"), r0 = $("#rom0").getBoundingClientRect(), ri = $("#c-inv").getBoundingClientRect(), rp = $("#c-paid").getBoundingClientRect();
+  const kI = ease((T - at("s6a") - 2.9) / 1.0), kP = ease((T - at("s7b") - 0.2) / 1.0);
+  const kv = $("#c-inv .dc.late").getBoundingClientRect(), xi = ri.left + 18, yi = kv.bottom + 12, xp = rp.left + 18, yp = rp.top + 150;
+  mv.style.width = r0.width + "px";
+  const x = T < at("s7b") ? lerp(r0.left, xi, kI) : lerp(xi, xp, kP), y = T < at("s7b") ? lerp(r0.top, yi, kI) : lerp(yi, yp, kP);
+  mv.style.left = x + "px"; mv.style.top = y + "px"; mv.style.opacity = T > at("s6a") + 2.9 ? 1 : 0;
+  $("#rom0").style.visibility = T > at("s6a") + 2.9 ? "hidden" : "visible";
+  $("#paidn").textContent = kP >= 1 ? "2" : "1";
+  $("#rem").classList.toggle("on", T > at("s6b") + 3.0);
+  vis($("#owe"), out((T - at("s6b") + 0.2) / 0.5), 20);
+  vis($("#money"), out((T - at("s7b") - 1.1) / 0.4), 0, .7);
+  // как включить
+  layer("L-how", T, s("how").start + 0.2, s("end").start);
+  vis($("#studio"), out((T - at("s8a") + 0.1) / 0.6), 40, .97);
+  $("#tg").classList.toggle("on", T > at("s8a") + 2.0);
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

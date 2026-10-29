@@ -37,6 +37,10 @@ _orig_init = httpx.Client.__init__
 _installed = False
 LAN_OK_SEC, LAN_BAD_SEC, LAN_TIMEOUT = 300, 180, 1.5
 _lan = {"public": "", "base": "", "id": "", "ok_until": 0.0, "bad_until": 0.0, "lock": threading.Lock()}
+# Запасной вход через SSH (sshlink.py, только у владельца сервера): та же папка сайта через туннель на этом компьютере
+# (http://127.0.0.1:порт/dwrapp/) — когда домен не отвечает. Проверка — той же подписью метки, что и «дома».
+_ssh = {"public": "", "base": "", "id": "", "ok_until": 0.0, "bad_until": 0.0, "lock": threading.Lock()}
+on_lan_ok = None                       # engine: «сайт ответил напрямую» — запомнить, что этот компьютер бывает рядом с сервером
 
 
 def set_lan(public="", base="", lid=""):
@@ -53,24 +57,40 @@ def set_lan(public="", base="", lid=""):
             log.info("Дома — напрямую: %s → %s (если отвечает)", public, base)
 
 
+def set_ssh(public="", base="", lid=""):
+    """Туннель SSH поднят — папка сайта по имени и её адрес через туннель; пусто — туннеля нет."""
+    public, base = (public or "").strip(), (base or "").strip()
+    public += "" if not public or public.endswith("/") else "/"
+    base += "" if not base or base.endswith("/") else "/"
+    ok = bool(public and base and lid)
+    if (public, base, lid or "") != (_ssh["public"], _ssh["base"], _ssh["id"]):
+        _ssh.update(public=public if ok else "", base=base if ok else "", id=lid if ok else "", ok_until=0.0, bad_until=0.0)
+        log.info("Запасной вход через SSH: %s", f"{public} → {base}" if ok else "выключен")
+
+
+def ssh_status():
+    return {"base": _ssh["base"], "ok": bool(_ssh["base"]) and time.time() < _ssh["ok_until"]}
+
+
 def lan_status():
     """Для студии и проверок: {"base", "ok"} — ok: последняя проверка прошла (дома, ходим напрямую)."""
     return {"base": _lan["base"], "ok": bool(_lan["base"]) and time.time() < _lan["ok_until"]}
 
 
-def _lan_ok():
-    """Отвечает ли внутренний адрес и наш ли это сайт. Кэш: да — LAN_OK_SEC, нет — LAN_BAD_SEC."""
-    if not _lan["base"]:
+def _lan_ok(st=None):
+    """Отвечает ли внутренний адрес (или туннель SSH — st=_ssh) и наш ли это сайт. Кэш: да — LAN_OK_SEC, нет — LAN_BAD_SEC."""
+    st = _lan if st is None else st
+    if not st["base"]:
         return False
     now = time.time()
-    if now < _lan["ok_until"]:
+    if now < st["ok_until"]:
         return True
-    if now < _lan["bad_until"]:
+    if now < st["bad_until"]:
         return False
-    with _lan["lock"]:
-        if time.time() < _lan["ok_until"]:
+    with st["lock"]:
+        if time.time() < st["ok_until"]:
             return True
-        if time.time() < _lan["bad_until"]:
+        if time.time() < st["bad_until"]:
             return False
         import hashlib
         import hmac
@@ -79,19 +99,25 @@ def _lan_ok():
         ok = False
         try:
             with httpx.HTTPTransport(retries=0) as t:
-                r = t.handle_request(httpx.Request("GET", _lan["base"] + f"cloud.php?p=/lan&n={n}",
-                                                   extensions={"timeout": {"connect": LAN_TIMEOUT, "read": 4, "write": 4, "pool": 4}}))
+                r = t.handle_request(httpx.Request("GET", st["base"] + f"cloud.php?p=/lan&n={n}",
+                                                   extensions={"timeout": {"connect": LAN_TIMEOUT, "read": 4 if st is _lan else 12, "write": 4, "pool": 4}}))
                 r.read()
-            want = hmac.new(_lan["id"].encode(), n.encode(), hashlib.sha256).hexdigest()
+            want = hmac.new(st["id"].encode(), n.encode(), hashlib.sha256).hexdigest()
             ok = r.status_code == 200 and hmac.compare_digest(str((r.json() or {}).get("h") or ""), want)
         except Exception:  # noqa: BLE001 — не дома, адрес не отвечает, ответил не наш сервер
             ok = False
         if ok:
-            if time.time() >= _lan["ok_until"] and _lan["ok_until"] == 0:
-                log.info("Дома: сайт отвечает напрямую (%s) — хожу к нему без прокси", _lan["base"])
-            _lan["ok_until"], _lan["bad_until"] = time.time() + LAN_OK_SEC, 0.0
+            if st["ok_until"] == 0:
+                log.info("%s (%s)", "Дома: сайт отвечает напрямую — хожу к нему без прокси" if st is _lan else
+                         "Через SSH: сайт отвечает по туннелю — хожу к нему так, пока домен не вернётся", st["base"])
+                if st is _lan and on_lan_ok:
+                    try:
+                        on_lan_ok()
+                    except Exception:  # noqa: BLE001
+                        pass
+            st["ok_until"], st["bad_until"] = time.time() + LAN_OK_SEC, 0.0
         else:
-            _lan["ok_until"], _lan["bad_until"] = 0.0, time.time() + LAN_BAD_SEC
+            st["ok_until"], st["bad_until"] = 0.0, time.time() + (LAN_BAD_SEC if st is _lan else 20)
         return ok
 
 
@@ -103,9 +129,10 @@ class _LanFirst(httpx.BaseTransport):
 
     def handle_request(self, request):
         url = str(request.url)
-        pub = _lan["public"]
-        if pub and url.startswith(pub) and _lan_ok():
-            new = _lan["base"] + url[len(pub):]
+        st = next((x for x in (_lan, _ssh) if x["public"] and url.startswith(x["public"]) and _lan_ok(x)), None)   # дома, иначе туннель
+        if st is not None:
+            pub = st["public"]
+            new = st["base"] + url[len(pub):]
             nu = httpx.URL(new)
             headers = [(b"Host", nu.netloc)] + [(k, v) for k, v in request.headers.raw if k.lower() != b"host"]
             req = httpx.Request(request.method, nu, headers=headers, stream=request.stream, extensions=request.extensions)
@@ -114,7 +141,7 @@ class _LanFirst(httpx.BaseTransport):
             try:
                 return self.t.handle_request(req)
             except (httpx.ConnectError, httpx.ConnectTimeout):
-                _lan["ok_until"], _lan["bad_until"] = 0.0, time.time() + LAN_BAD_SEC    # ушли из дома — как обычно
+                st["ok_until"], st["bad_until"] = 0.0, time.time() + (LAN_BAD_SEC if st is _lan else 20)   # ушли из дома — как обычно
         return self.inner.handle_request(request)
 
     def close(self):
@@ -414,7 +441,7 @@ def _patched_init(self, *a, **kw):
         for h in hosts:
             m[f"all://{h}"] = t
             m[f"all://*.{h}"] = t
-    lh = host_of(_lan["public"]) if _lan["base"] and not off else ""
+    lh = host_of(_lan["public"] if _lan["base"] else _ssh["public"]) if (_lan["base"] or _ssh["base"]) and not off else ""
     if lh:                                            # дома — к папке сайта напрямую (остальное — как выше)
         inner = m.get(f"all://{lh}") or _Plain(kw.get("verify", True), kw.get("cert"), kw.get("trust_env", True))
         m[f"all://{lh}"] = _LanFirst(inner, kw.get("verify", True), kw.get("cert"))

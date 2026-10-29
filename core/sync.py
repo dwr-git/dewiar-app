@@ -495,7 +495,7 @@ class Sync:
             elif float(d.get("amount") or 0) > 0:
                 self.host.money.upsert(dict(d, id=iid))
         elif kind == "note":
-            self._apply_note(iid, d, deleted)
+            return self._apply_note(iid, d, deleted)
         elif kind == "memory":
             self._apply_fact(iid, d.get("text") or "", deleted)
         elif kind == "pmemory":
@@ -1053,6 +1053,10 @@ class Sync:
         rel = self.state["map"].get(sid)
         if deleted:
             if rel and (root / rel).exists():
+                from workspace import _locked
+                if _locked(root / rel):                 # заметка с замком: удаление с другого устройства не принимаем —
+                    os.utime(root / rel, None)          # она новее удаления и вернётся туда со следующей отправкой
+                    return False
                 ws.remove(f"{NOTES}/{rel}")
             self.state["map"].pop(sid, None)
             self._pad_event(rel, True)

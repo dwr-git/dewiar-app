@@ -16,7 +16,9 @@ public final class Compat {
     // каналы: будильники и напоминания — alarm_<звук> (важный, звук — выбранный, см. Sounds; прежний общий «alarms»
     // удаляется), info — сообщения ассистента (обычный). Звук и важность канала Android запоминает при создании:
     // поменять их можно только новым id
-    public static final String CH_ALARM = "alarms", CH_INFO = "info";
+    // 0.9.12 (владелец 29.10: «у Viber свой звук — сделаем свой»): сообщения ассистента, новости и сообщения близких —
+    // канал «dw_note» с фирменным звуком res/raw/dewiar_note.ogg (tools/sounds/notify_sound.py); прежний «info» удаляется
+    public static final String CH_ALARM = "alarms", CH_INFO = "dw_note", CH_OLD_INFO = "info";
     private Compat() { }
 
     public static void channels(Context c) {
@@ -27,8 +29,13 @@ public final class Compat {
             Constructor<?> k = chc.getConstructor(String.class, CharSequence.class, int.class);
             Method create = NotificationManager.class.getMethod("createNotificationChannel", chc);
             Sounds.channel(c);                              // будильники — канал под выбранный звук (Sounds)
-            Object b = k.newInstance(CH_INFO, "Сообщения ассистента", 3 /* IMPORTANCE_DEFAULT */);
+            Object b = k.newInstance(CH_INFO, "Сообщения, новости и близкие", 3 /* IMPORTANCE_DEFAULT */);
+            AudioAttributes aa = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+            chc.getMethod("setSound", Uri.class, AudioAttributes.class).invoke(b, note(c), aa);
             create.invoke(nm, b);
+            try { NotificationManager.class.getMethod("deleteNotificationChannel", String.class).invoke(nm, CH_OLD_INFO); }
+            catch (Throwable ignored) { }
         } catch (Throwable ignored) { }
     }
 
@@ -43,7 +50,21 @@ public final class Compat {
         if (b == null) b = new Notification.Builder(c);
         // знак Dewiar в уведомлениях — чёрно-белый, как логотип (без цвета система красила его в синий акцент темы)
         b.setColor(BRAND);
+        if (Build.VERSION.SDK_INT < 26 && CH_INFO.equals(channel)) b.setSound(note(c));   // до Android 8 звук — у уведомления
         return b;
+    }
+
+    /** Фирменный звук уведомлений (по имени ресурса: канал хранит адрес навсегда, а числа R.raw меняются). */
+    public static Uri note(Context c) {
+        return Uri.parse("android.resource://" + c.getPackageName() + "/raw/dewiar_note");
+    }
+
+    /** Знак Dewiar крупно — справа в уведомлении (новости, сообщения ассистента): маленький значок система красит в свой
+     *  цвет (на части телефонов — в синий, что бы мы ни просили), а крупная картинка остаётся как есть. */
+    public static android.graphics.Bitmap logo(Context c) {
+        try {
+            return android.graphics.BitmapFactory.decodeResource(c.getResources(), R.mipmap.ic_launcher);
+        } catch (Throwable e) { return null; }
     }
 
     /** Цвет знака в уведомлениях: почти чёрный (белый знак на нём — как оригинальный логотип). */

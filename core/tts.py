@@ -153,6 +153,9 @@ def _download(url, path, on_progress=None):
     download(url, path, None, on_progress)
 
 
+_PIPER_LOCK = threading.Lock()          # eSpeak (фонемы Piper) — один на процесс и не любит параллельных вызовов
+
+
 class PiperTTS:
     name = "Piper"
 
@@ -207,8 +210,12 @@ class PiperTTS:
         if norm:                                                # английскому голосу числа по-русски не нужны (norm=False)
             from speechnorm import speech_norm
             text = speech_norm(text, latin=False) or text      # 1437,50 руб. → «тысяча … рублей пятьдесят копеек»
-        for chunk in v.synthesize(text, syn_config=cfg):
-            yield chunk.sample_rate, chunk.audio_int16_bytes
+        # 29.10, отчёт №400 (Windows, 0.45.3): «Windows fatal exception: access violation» в piper/phonemize_espeak — eSpeak
+        # не переносит двух фраз сразу (ответ, заготовка следующей фразы, напоминание, «послушать» — из разных потоков), и
+        # ядро падало целиком. Синтез — по очереди; фраза короткая, ждать соседу — доли секунды.
+        with _PIPER_LOCK:
+            chunks = [(c.sample_rate, c.audio_int16_bytes) for c in v.synthesize(text, syn_config=cfg)]
+        yield from chunks
 
 
 VOSK_TTS_LIST = "https://alphacephei.com/vosk/models/model-list.json"
