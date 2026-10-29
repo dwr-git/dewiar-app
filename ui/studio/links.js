@@ -559,7 +559,7 @@ function bugRender(v) {
   if (v.who !== undefined && !$("#bug-who").value) $("#bug-who").value = v.who || "";
   const mine = (v.mine || []).slice(0, 8);
   $("#bug-mine").innerHTML = mine.length ? '<div class="bugh">Мои жалобы</div>' + mine.map(c =>
-    `<div class="bugc"><span class="n">№${c.id}</span><span class="t${(c.note || "").length > 180 ? " long" : ""}" title="${(c.note || "").length > 180 ? "Нажмите — показать целиком" : ""}">${escH(c.note || "")}</span><span class="st"><span class="chip ${c.status}">${BUG_ST[c.status] || c.status}`
+    `<div class="bugc${c.unread ? " new" : ""}"><span class="n">№${c.id}${c.unread ? ' <i class="bugnew">новый ответ</i>' : ""}</span><span class="t${(c.note || "").length > 180 ? " long" : ""}" title="${(c.note || "").length > 180 ? "Нажмите — показать целиком" : ""}">${escH(c.note || "")}</span><span class="st"><span class="chip ${c.status}">${BUG_ST[c.status] || c.status}`
     + `${c.status === "fixed" && c.fixed ? " в " + escH(c.fixed) : ""}</span>${new Date(c.ts * 1000).toLocaleDateString("ru")}${c.shot ? " · со снимком" : ""}`
     + `${c.reward ? ` · спасибо ${c.reward} тал.` : ""}</span>${c.reply ? `<span class="reply">${escH(c.reply)}</span>` : ""}</div>`).join("") : "";
   // №263 (25.10): «сообщения отображаются только частично — сделайте, чтобы при нажатии раскрывались»: длинная — три
@@ -604,7 +604,8 @@ $("#bug-send").onclick = guardBtn(async () => {
 function guardBtn(fn) { return async (ev) => { const b = ev.currentTarget; if (b.disabled) return; b.disabled = true; try { await fn(ev); } finally { b.disabled = false; } }; }
 core.on("bug_shot", e => bugFocus(e.preview));
 core.on("complaints", bugRender);
-$('nav button[data-p="about"]') && $('nav button[data-p="about"]').addEventListener("click", () => core.call("complaints").then(bugRender).catch(() => {}));
+$('nav button[data-p="about"]') && $('nav button[data-p="about"]').addEventListener("click", () => core.call("complaints").then(v => {
+  bugRender(v); if (v && v.unread) setTimeout(() => core.call("complaints_seen").catch(() => {}), 1500); }).catch(() => {}));   // открыли — прочитано
 core.on("hello", () => core.call("bug_state").then(x => { if (x && x.preview) bugFocus(x.preview); }).catch(() => {}));
 core.on("report_offer", e => { $("#rep-offer-t").textContent = e.summary ? `(${e.summary.slice(0, 160)})` : ""; $("#rep-offer").hidden = false; });
 const repAuto = (on) => core.call("report_auto", { on }).then(() => { $("#rep-offer").hidden = true; const cb = document.querySelector('[data-k="report.auto"]'); if (cb) cb.checked = on; toast(on ? "При сбое отчёт уйдёт сам" : "Хорошо, не отправляю"); });

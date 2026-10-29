@@ -4,6 +4,7 @@ TMPROOT=$(mktemp -d); export TMPDIR="$TMPROOT"; trap 'rm -rf "$TMPROOT"' EXIT   
 PY=${1:-python3}; T="$(cd "$(dirname "$0")" && pwd)"; A=${DEWIAR_TEST_AUDIO:-/tmp/dewiar-test-audio}
 $PY "$T/make_audio.py" >/dev/null
 export DEWIAR_PY=${DEWIAR_PY:-$PY}
+source "$T/pg_temp.sh"; trap 'type _pg_stop >/dev/null 2>&1 && _pg_stop; rm -rf "$TMPROOT"' EXIT   # база для проверок PostgreSQL
 # проверочная машина может быть слабой (2 ядра) — ядро включило бы лёгкий режим; его проверяет device_test отдельно
 export DEWIAR_FAKE_RAM_GB=${DEWIAR_FAKE_RAM_GB:-16} DEWIAR_FAKE_CORES=${DEWIAR_FAKE_CORES:-8}
 MOCK=$($PY - <<'P'

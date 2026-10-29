@@ -50,6 +50,8 @@ SCRIPTS = {
                                ("finish", {"summary": "Статус проверен после перезапуска."})],
 }
 pos, reqs, consolidations, fail_left, checks = {}, [], [], [0], []
+think_left = [0]
+plain = []                        # запросы, где действия описаны текстом (tools_mode prompt)                  # «Задачи на часы»: модель уходит в размышления и не отвечает (пакет 29.10)
 lock = threading.Lock()
 
 
@@ -68,10 +70,21 @@ class H(BaseHTTPRequestHandler):
                 out = '{"verdict": "ok"}' if sysm.startswith("Ты — строгий") else '{"lessons": []}'
                 chunks = [{"choices": [{"delta": {"content": out}}]}]
                 tc = None
+            elif "ЗАДАЧА: Без действий" in sysm:            # модель не понимает инструменты полем — только текстом
+                if body.get("tools"):
+                    chunks = [{"choices": [{"delta": {"content": "Хорошо, подумаю, как это сделать."}}]}]
+                else:
+                    plain.append(sysm)
+                    chunks = [{"choices": [{"delta": {"content": '<tool_call>\n{"name": "finish", "arguments": {"summary": "Сделано через описание действий текстом."}}\n</tool_call>'}}]}]
+                tc = None
             elif not body.get("tools"):                                    # блокнот переписывается моделью
                 consolidations.append(body)
                 out = "# Блокнот задачи\n\n## Что известно\n- секретный код 4242\n- консолидировано: 10 шагов исследования\n\n## Что дальше\n- итог"
                 chunks = [{"choices": [{"delta": {"content": out}}]}]
+                tc = None
+            elif think_left[0] > 0 and "Долго думает" in sysm:
+                think_left[0] -= 1
+                chunks = [{"choices": [{"delta": {"reasoning_content": "Хм, надо подумать... " * 40}}]}, {"choices": [{"delta": {}, "finish_reason": "stop"}]}]
                 tc = None
             else:
                 title = re.search(r"ЗАДАЧА: (.+)", sysm).group(1).strip()
@@ -195,6 +208,20 @@ ok(wait_for(lambda: d2.status == "done" and e2.status == "done", 25), f"обе �
 ok(any(r["title"] == D and r["i"] == 1 for r in reqs), "ждущая проснулась в новой копии программы")
 ok("продолжаю, где остановился" in (e2.dir / "журнал.md").read_text(encoding="utf-8"), "прерванная — «продолжаю, где остановился»")
 
+# ---------- 6. «Задачи на часы»: модель ушла в размышления и не ответила — шаг повторяется, задача не падает ----------
+think_left[0] = 2                 # ядро само повторяет один раз (без размышлений) — значит, один шаг задачи «не ответил»
+tf = tm2.create("Долго думает", "Проверка: долгие размышления не роняют задачу")
+ok(wait_for(lambda: tf.status == "done", 25), f"модель «думала и не ответила» — задача продолжилась и закончена ({tf.status} {tf.error})")
+jf = (tf.dir / "журнал.md").read_text(encoding="utf-8")
+ok("долгие размышления" in jf and not tf.error, "в журнале — «ушла в долгие размышления… прошу короче», ошибки нет")
+ok(any("слишком долго размышлял" in json.dumps(r["messages"], ensure_ascii=False) for r in reqs if r["title"] == "Долго думает"),
+   "модель получила просьбу действовать короче")
+
+# ---------- 7. своя модель не понимает действия полем запроса — описываем их текстом, а не «не взялась за дело» ----------
+tg = tm2.create("Без действий", "Проверка: модель без родных функций")
+ok(wait_for(lambda: tg.status == "done", 25), f"модель без родных функций — задача сделана через текст ({tg.status} {tg.error})")
+ok(plain and "↻ Модель не вызывает действия — описываю их ей текстом" in (tg.dir / "журнал.md").read_text(encoding="utf-8"),
+   "в журнале — перешли на описание действий текстом")
 # ---------- 5. сообщение готовой задаче — дополнение, работа продолжается ----------
 tm2.tell(d2.id, "Ещё проверь, пришло ли письмо")
 ok(wait_for(lambda: d2.status == "done" and d2.steps >= 3, 15), f"готовая задача приняла дополнение и снова закрылась ({d2.status}, шагов {d2.steps})")

@@ -176,7 +176,31 @@ async function dwLoad(full) {
   if (DW.acc && DW.acc.logged_in && (full || !DW.kb)) DW.kb = await core.call("rag_scope", { force: !!full }).catch(e => ({ error: e.message, bases: [] }));
   if (full) DW.checked.at = Date.now();
   dwRender();
+  dwMeLoad();
 }
+/* «Как к вам обращаться» (0.69): автоподключение без анкеты — имя и контакт оставляют здесь, когда захотят (core contact_get/set
+   → cloud.php /me/contact). Карточка — только у подключённых сами; у вошедших аккаунтом и по заявке её нет. */
+async function dwMeLoad() {
+  const box = $("#dw-me"); if (!box) return;
+  const c = (S && S.cloud) || {};
+  if (!c.auto || !c.key) { box.hidden = true; return; }
+  box.hidden = false;
+  try {
+    const d = await core.call("contact_get");
+    if (!$("#dw-me-name").dataset.dirty) $("#dw-me-name").value = d.name && d.name !== "Без имени" ? d.name : "";
+    if (!$("#dw-me-contact").dataset.dirty) $("#dw-me-contact").value = d.contact || "";
+  } catch (e) { }
+}
+["#dw-me-name", "#dw-me-contact"].forEach(id => { const i = $(id); if (i) { i.oninput = () => { i.dataset.dirty = "1"; }; i.onkeydown = (e) => { if (e.key === "Enter") $("#dw-me-go").click(); }; } });
+if ($("#dw-me-go")) $("#dw-me-go").onclick = async (ev) => {
+  const b = ev.target, res = $("#dw-me-res"), name = $("#dw-me-name").value.trim(), contact = $("#dw-me-contact").value.trim();
+  if (!name && !contact) { res.className = "res bad"; res.textContent = "Напишите имя или контакт"; return; }
+  b.disabled = true; res.className = "res"; res.textContent = "сохраняю…";
+  try { await core.call("contact_set", { name, contact }); res.className = "res ok"; res.textContent = "Сохранено — спасибо!";
+    $("#dw-me-name").dataset.dirty = $("#dw-me-contact").dataset.dirty = ""; }
+  catch (e) { res.className = "res bad"; res.textContent = e.message; }
+  b.disabled = false;
+};
 $("#dw-px").oninput = () => { $("#dw-px").dataset.dirty = "1"; };
 $("#dw-px").onkeydown = (e) => { if (e.key === "Enter") $("#dw-px-save").click(); };
 $("#dw-px-save").onclick = async (ev) => {

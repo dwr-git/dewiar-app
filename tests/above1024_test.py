@@ -38,13 +38,19 @@ rep.Gdk = types.SimpleNamespace(WindowState=types.SimpleNamespace(ABOVE=4))
 rep.Gtk = types.SimpleNamespace(Window=types.SimpleNamespace(list_toplevels=lambda: wins))
 rep.GdkX11 = types.SimpleNamespace(X11Window=X11Window)
 gi.repository = rep; sys.modules["gi"] = gi; sys.modules["gi.repository"] = rep
-ns = {"TITLES": {"card": "Dewiar", "mini": "Dewiar — значок"}, "PAD_TITLE": "Dewiar — блокнот", "ABOVE_TITLES": None, "sys": sys}
+ns = {"TITLES": {"card": "Dewiar", "mini": "Dewiar — значок"}, "PAD_TITLE": "Dewiar — блокнот", "ABOVE_TITLES": None, "sys": sys,
+      "ON_TOP": [True]}                                          # 0.68: «Виджет поверх всех окон» можно выключить (№48)
 exec(ast.get_source_segment(src, fn), ns)
 r = ns["keep_above_guard"]()
 ok(r is True and wins[0].calls == [False, True], f"виджет потерял «поверх» — поставлен снова: {wins[0].calls}")
 ok(wins[1].calls == [] and wins[2].calls == [] and wins[3].calls == [], "блокнот и так поверх, спрятанный значок и чужие окна — не трогаем")
 ns["keep_above_guard"]()
 ok(wins[0].calls == [False, True], "второй круг — всё уже поверх, ничего не делаем")
+# выключили «поверх» (идея №48) — виджет не поднимаем, блокнот — по-прежнему
+ns["ON_TOP"][0] = False
+wins[0].gdw.above = False; wins[0].calls = []; wins[1].gdw.above = False; wins[1].calls = []
+ns["keep_above_guard"]()
+ok(wins[0].calls == [] and wins[1].calls == [False, True], f"«поверх» выключен — виджет не поднимаем, блокнот поднимаем: {wins[0].calls} {wins[1].calls}")
 ok("GLib.timeout_add_seconds(3, keep_above_guard)" in src, "сторож запускается с интерфейсом (Linux)")
 
 if fails:

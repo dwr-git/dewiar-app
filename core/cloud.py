@@ -91,9 +91,13 @@ def public(url, path, body=None, timeout=20):
     return d
 
 
-def join_send(url, name, contact, note="", device="компьютер"):
-    """Заявка на модели Dewiar без регистрации (cloud.php ?p=/join) -> {id, secret, status: new|ok, key?, text}."""
-    return public(url, "/join", {"name": name, "contact": contact, "note": note, "device": device})
+def join_send(url, name, contact, note="", device="компьютер", auto=False):
+    """Заявка на модели Dewiar без регистрации (cloud.php ?p=/join) -> {id, secret, status: new|ok, key?, text}.
+    auto — автоподключение при первом запуске (0.69): без контакта, сайт одобряет сам."""
+    body = {"name": name, "contact": contact, "note": note, "device": device}
+    if auto:
+        body["auto"] = 1
+    return public(url, "/join", body)
 
 
 def join_status(url, jid, secret):

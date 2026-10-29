@@ -1,8 +1,8 @@
 #!/bin/bash
-# Быстрые проверки (~3 минуты): без звука, моделей распознавания и PostgreSQL — то, что гоняет GitHub на каждую запись.
+# Быстрые проверки (~3 минуты): без звука и моделей распознавания; PostgreSQL — временный, если есть initdb — то, что гоняет GitHub на каждую запись.
 # Полный набор — tests/run_all.sh. Использование: tests/run_quick.sh [python]
 # Те же правила, что в run_all.sh: проверка пройдена, только если нет ❌ И код выхода 0.
-TMPROOT=$(mktemp -d); export TMPDIR="$TMPROOT"; trap 'rm -rf "$TMPROOT"' EXIT
+TMPROOT=$(mktemp -d); export TMPDIR="$TMPROOT"; trap 'type _pg_stop >/dev/null 2>&1 && _pg_stop; rm -rf "$TMPROOT"' EXIT
 PY=${1:-python3}; T="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$T")"
 export PYTHONUNBUFFERED=1 DEWIAR_PY=${DEWIAR_PY:-$PY} DEWIAR_FAKE_RAM_GB=${DEWIAR_FAKE_RAM_GB:-16} DEWIAR_FAKE_CORES=${DEWIAR_FAKE_CORES:-8}
 FAIL=0
@@ -23,7 +23,7 @@ judge() { local name=$1 rc=$2 out=$3 note=$4
 $(tail -15 <<<"$out")"; return 1; }
 one() {   # выполнить проверку в своей папке -> вывод и в конце «RC=код»
   local ws; ws=$(mktemp -d); mkdir -p "$ws/tmp"
-  DEWIAR_WORKSPACE_DIR=$ws TMPDIR=$ws/tmp timeout 300 "$@" 2>&1 | tr -d "\r"; echo "RC=${PIPESTATUS[0]}"; rm -rf "$ws"; }
+  DEWIAR_WORKSPACE_DIR=$ws TMPDIR=$ws/tmp timeout "${T_OUT:-300}" "$@" 2>&1 | tr -d "\r"; echo "RC=${PIPESTATUS[0]}"; rm -rf "$ws"; }
 # Несколько проверок сразу (28.10, владелец: «жаль, что так долго»): DEWIAR_JOBS=3 tests/run_quick.sh — проверки идут
 # по три, итоги печатаются по порядку в конце. Упавшая в толпе перепроверяется одна — прошла одна, значит, мешала
 # нагрузка (тайминги игр, анимации), в строке так и сказано: «со второго раза, одна». По умолчанию — по одной, как раньше.
@@ -31,7 +31,9 @@ JOBS=${DEWIAR_JOBS:-1}; Q="$TMPROOT/q"; mkdir -p "$Q"; N=0
 sec() { if [ "$JOBS" -le 1 ]; then echo "$1"; else N=$((N+1)); printf '%s' "$1" > "$Q/$(printf %04d $N).sec"; fi; }
 run() { local name=$1; shift
   if [ "$JOBS" -le 1 ]; then local out; out=$(one "$@"); local rc=${out##*RC=}; judge "$name" "$rc" "${out%RC=*}"; return; fi
-  N=$((N+1)); local id; id=$(printf %04d $N); printf '%s' "$name" > "$Q/$id.name"; printf '%q ' "$@" > "$Q/$id.cmd"
+  N=$((N+1)); local id; id=$(printf %04d $N); printf '%s' "$name" > "$Q/$id.name"
+  # перепроверка в конце — с теми же T_OUT / JOIN_DB / RUNNER_DB, что у первого раза (их ставят перед run)
+  { printf 'T_OUT=%q JOIN_DB=%q RUNNER_DB=%q one ' "${T_OUT:-300}" "${JOIN_DB:-}" "${RUNNER_DB:-}"; printf '%q ' "$@"; } > "$Q/$id.cmd"
   while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null || true; done
   ( one "$@" > "$Q/$id.out" ) & }
 finish() { [ "$JOBS" -le 1 ] && return; wait
@@ -39,7 +41,7 @@ finish() { [ "$JOBS" -le 1 ] && return; wait
     if [ "${f##*.}" = sec ]; then cat "$Q/$f"; echo; continue; fi
     local name; name=$(cat "$Q/$f"); local out; out=$(cat "$Q/$id.out"); local rc=${out##*RC=}; out=${out%RC=*}
     if passes "$rc" "$out"; then judge "$name" "$rc" "$out"; continue; fi
-    out=$(eval "one $(cat "$Q/$id.cmd")"); rc=${out##*RC=}; judge "$name" "$rc" "${out%RC=*}" " · со второго раза, одна"
+    out=$(eval "$(cat "$Q/$id.cmd")"); rc=${out##*RC=}; judge "$name" "$rc" "${out%RC=*}" " · со второго раза, одна"
   done; }
 
 echo "== Синтаксис"
@@ -262,6 +264,11 @@ run "«Радио» на телефоне: плитки, жанры, поиск,
 run "«Совет ИИ»: разные модели спорят, итог, протокол, остановка" $PY "$T/council1029_test.py"
 run "«Бот персонажа» в Telegram: лично и в группе, знания, ограничения, без личного" $PY "$T/pbot1029_test.py"
 run "«Пишу»: сколько написано сегодня — прирост по файлам, цель, дни подряд, карточка" $PY "$T/writing1029_test.py"
+run "Диск заполнен (№395): не «микрофон недоступен», а прямо про место; предупреждение заранее" $PY "$T/disk1029_test.py"
+run "Виджет поверх всех окон — выключатель (идея №48)" $PY "$T/ontop1029_test.py"
+run "«Задачи на часы»: сколько идёт и сколько осталось в карточке задачи" $PY "$T/tasketa1029_test.py"
+run "Ответ разработчика на жалобу: быстро, строкой в виджете, голосом и уведомлением" $PY "$T/devreply1029_test.py"
+run "«Совет ИИ» видит «Документы» и знания персонажей" $PY "$T/council_docs1029_test.py"
 run "№348 DSML DeepSeek v4.1 не читается вслух; №347 «перезапустила» без запуска" $PY "$T/pack1027b_test.py"
 run "разговор: «а теперь?» после быстрой команды, контекст, выводы ночи убираются" $PY "$T/followup1024_test.py"
 run "черновики голосом: «запиши в книгу: …» — дословно (компьютер и телефон)" $PY "$T/drafts1024_test.py"
@@ -310,7 +317,7 @@ run "съёмка 17.10: ответ слово в слово как недавн
 run "телефон: «сфотографируй чек и скажи…» — снимает сам и спрашивает со снимком" $PY "$T/phone_photo_test.py"
 run "план дня: «запланируй на сегодня: в 13…, в 16…» — дела в «Делах», не календарь; «я позвонил в банк» — отметка и значок" $PY "$T/dayplan1017_test.py"
 run "светлый неоморфизм: облик без серой тени и рамки, Патрик без чёрного квадрата" $PY "$T/neu1018_test.py"
-run "читаемость светлых тем: виджет (таймер, карточки), студия (все разделы), телефон" $PY "$T/contrast1018_test.py"
+T_OUT=600 run "читаемость светлых тем: виджет (таймер, карточки), студия (все разделы), телефон" $PY "$T/contrast1018_test.py"   # 29.10: одна — 5 мин 17 с
 run "телефон: лёгкий режим, обновление без мусора в «Загрузках», «освободи место»" $PY "$T/android1018_test.py"
 run "экзамен «как в жизни»: повтор просьб, речь без знаков; звонок снова и сообщения без двоеточий" $PY "$T/life1018_test.py"
 run "«Что я умею»: список честный — каждая быстрая фраза понимается сразу (телефон и компьютер), экран и студия" $PY "$T/tricks1018_test.py"
@@ -338,5 +345,12 @@ sec "== Сайт и телефон"
 run "сервер речи"                   $PY "$T/speech_server_test.py"
 run "телефон: руки"                 $PY "$T/android_hands_test.py"
 run "телефон: журнал разговора"     $PY "$T/android_log_test.py"
+# База (PostgreSQL), как на dewiar.pro: своей нет — временная (tests/pg_temp.sh), нет и её (GitHub) — раздел пропускается.
+# 29.10: без базы эти проверки «пропускались» молча — и не заметили, что счёт сайта в программах показывался «заряд %»
+source "$T/pg_temp.sh"
+if [ -n "$DEWIAR_TEST_PG" ] && psql "$(_pg_url "$DEWIAR_TEST_PG")" -c 'select 1' >/dev/null 2>&1; then
+  sec "== База (PostgreSQL)"
+fi
 finish
+
 exit $FAIL

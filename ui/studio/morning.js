@@ -44,9 +44,11 @@ function mnRows(d) {
   const rows = [], t = d.today || {};
   const meet = t.meet || [], todo = t.todo || [];
   if (meet.length || todo.length) {
-    const first = meet[0] || todo[0];
+    // 29.10 (владелец: главная «неаккуратная»): не только первое — до трёх ближайших строкой каждое, остальное — «и ещё N»
+    const all = meet.concat(todo), lines = all.slice(0, 3).map(x => `${x.time ? x.time + " — " : ""}${x.title}`);
+    if (all.length > 3) lines.push(`и ещё ${all.length - 3}`);
     rows.push(["today", meet.length ? mnN(meet.length, "встреча", "встречи", "встреч") + (todo.length ? ", " + mnN(todo.length, "дело", "дела", "дел") : "") : mnN(todo.length, "дело", "дела", "дел"),
-      `${first.time ? first.time + " — " : ""}${first.title}`]);
+      lines]);
   } else rows.push(["today", "День свободен", "встреч и дел на сегодня нет"]);
   const tm = d.team;
   if (tm && (tm.late.length || tm.check.length || tm.msgs.length)) {
@@ -68,7 +70,7 @@ function mnRows(d) {
 function mnWeather(d) {
   const w = d.weather;
   if (!d.city) return `<div class="mn-w mn-city"><b>Погода</b><p>Скажите, где вы, — и утром я буду говорить погоду.</p>`
-    + `<div class="mn-cin"><input id="mn-city" placeholder="Город, например Минск" maxlength="60" aria-label="Город для погоды"><button class="btn small primary" id="mn-cgo">Готово</button></div></div>`;
+    + `<div class="mn-cin"><input id="mn-city" type="text" placeholder="Ваш город" maxlength="60" aria-label="Город для погоды"><button class="btn small primary" id="mn-cgo">Готово</button></div></div>`;
   if (!w) return `<div class="mn-w"><b class="mn-t">—</b><p>${mnE(d.city)}: прогноз сейчас не получить</p><button class="lnk" id="mn-cedit">Другой город</button></div>`;
   const sky = (MN_SKY.find(([rx]) => rx.test(w.sky_day || w.sky)) || [0, "cloud"])[1];
   return `<div class="mn-w sky-${sky}"><svg class="mn-sky" viewBox="0 0 24 24" aria-hidden="true">${MN_ICON[sky]}</svg>`
@@ -84,9 +86,9 @@ function mnRender() {
   const daily = d.daily;
   box.hidden = false;
   box.innerHTML = `<div class="mn-head"><h2>Утро с ${mnE(who)}</h2><button class="mn-x" id="mn-hide" title="Скрыть до завтра" aria-label="Скрыть до завтра">×</button></div>`
-    + `<div class="mn-grid">${mnWeather(d)}<ul class="mn-rows">${mnRows(d).map(([k, b, s]) => `<li><button data-mgo="${MN_ROW[k][1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${MN_ROW[k][0]}</svg><span><b>${mnE(b)}</b><small>${mnE(s)}</small></span></button></li>`).join("")}</ul></div>`
+    + `<div class="mn-grid">${mnWeather(d)}<ul class="mn-rows">${mnRows(d).map(([k, b, s]) => `<li><button data-mgo="${MN_ROW[k][1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${MN_ROW[k][0]}</svg><span><b>${mnE(b)}</b>${(Array.isArray(s) ? s : [s]).map(x => `<small>${mnE(x)}</small>`).join("")}</span></button></li>`).join("")}</ul></div>`
     + `<div class="mn-foot"><button class="btn primary" id="mn-say">Расскажи утро</button>`
-    + `<label class="mn-daily"><span class="tg"><input type="checkbox" id="mn-dly"${daily ? " checked" : ""}><i></i></span>Каждое утро в <input id="mn-at" value="${mnE(daily ? daily.at_hm : "08:00")}" maxlength="5" inputmode="numeric" aria-label="Время сводки"> голосом</label>`
+    + `<label class="mn-daily"><span class="tg"><input type="checkbox" id="mn-dly"${daily ? " checked" : ""}><i></i></span>Каждое утро в <input type="text" id="mn-at" value="${mnE(daily ? daily.at_hm : "08:00")}" maxlength="5" inputmode="numeric" aria-label="Время сводки"> голосом</label>`
     + (!d.mail_on ? `<button class="lnk mn-mail" data-mgo="connect">Подключить почту — скажу о важных письмах</button>` : "") + `</div>`;
   $$("#hm-morning [data-mgo]").forEach(b => b.onclick = () => (typeof hmGo === "function" ? hmGo(b.dataset.mgo) : $(`nav button[data-p="${b.dataset.mgo}"]`).click()));
   $("#mn-hide").onclick = () => core.call("morning_set", { hide: mnDay() }).then(r => { MN = r; mnRender(); toast("Утро скрыто до завтра"); }).catch(e => toast(e.message));

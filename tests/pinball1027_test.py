@@ -68,10 +68,15 @@ with sync_playwright() as p:
         pg.wait_for_timeout(500)
         s = pg.evaluate(ST)
         ok(s["balls"] and s["balls"][0]["lock"] > 0 and s["stars"][3] == 1, f"«Чёрная дыра» затянула шарик и зажгла Сулафат: {s['stars']}")
-        pg.wait_for_timeout(1700)
-        s = pg.evaluate(ST)
+        # выброс: шарик отпущен и улетел от дыры — ждём, пока улетит (под нагрузкой кадров меньше: до 4 с), а не один снимок
         hx, hy = pg.evaluate("[__pinball.HOLE.x, __pinball.HOLE.y]")
-        ok(s["balls"] and s["balls"][0]["lock"] == 0 and ((s["balls"][0]["x"] - hx) ** 2 + (s["balls"][0]["y"] - hy) ** 2) ** .5 > 40,
+        far = lambda s: s["balls"] and s["balls"][0]["lock"] == 0 and ((s["balls"][0]["x"] - hx) ** 2 + (s["balls"][0]["y"] - hy) ** 2) ** .5 > 40  # noqa: E731
+        for _ in range(20):
+            pg.wait_for_timeout(200)
+            s = pg.evaluate(ST)
+            if far(s):
+                break
+        ok(far(s),
            f"и выбросила его обратно на стол: {s['balls']}")
         # страховка: шарик ушёл между флипперами
         pg.evaluate("() => { const S = __pinball.state(); S.save = 5; S.balls = [{ x: 335, y: 1200, vx: 0, vy: 600, trail: [], still: 0, noHole: 0, lock: 0 }]; }")

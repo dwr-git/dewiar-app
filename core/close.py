@@ -648,7 +648,7 @@ class Close:
         return next((g for g in gs if n(g) == w), None) or next((g for g in gs if len(w) >= 3 and (n(g).startswith(w) or w.startswith(n(g)))), None)
 
     def group(self, op, **kw):
-        """Создать {name, pids} / rename {gid, name} / add {gid, pids} / drop {gid, pid} / leave {gid} / delete {gid}. -> состояние."""
+        """Создать {name, pids, icon} / rename {gid, name} / icon {gid, icon — эмодзи или ""} / add {gid, pids} / drop {gid, pid} / leave {gid} / delete {gid}. -> состояние."""
         d = self._req("POST", "/close/group", dict(kw, op=op)).json()
         with self._lock:
             self.st["groups"] = d.get("groups") or []

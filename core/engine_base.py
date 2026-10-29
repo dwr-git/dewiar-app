@@ -441,4 +441,26 @@ def _drop_images(x):
 
 
 # всё, что ниже, видят части движка (engine_*.py): from engine_base import *
+def disk_full(e):
+    """Ошибка — от заполненного диска: «No space left on device» (ENOSPC) или «No usable temporary directory» (Python не
+    смог создать временный файл ни в одной папке — так бывает, когда места нет совсем; отчёт №395)."""
+    t = str(e)
+    return getattr(e, "errno", None) == 28 or "No space left" in t or "No usable temporary directory" in t or "[Errno 28]" in t
+
+
+def disk_free_mb(path=None):
+    import shutil as _sh
+    try:
+        return _sh.disk_usage(str(path or STATE_DIR)).free / 2 ** 20
+    except OSError:
+        return None
+
+
+def disk_full_note():
+    free = disk_free_mb()
+    left = f" (свободно {free:.0f} МБ)" if free is not None else ""
+    return (f"Диск заполнен{left} — без места не работают микрофон, голос и настройки. Освободите хотя бы 1 ГБ "
+            "(корзина, загрузки, кэш) — Dewiar продолжит сам.")
+
+
 __all__ = [n for n in dict(globals()) if not n.startswith("__")]

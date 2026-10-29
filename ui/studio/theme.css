@@ -90,7 +90,8 @@ html.st-light :is(#upd-bar b) { background: linear-gradient(90deg, #4b5bd6, #8a7
 html.st-light .cc-use .ub i.on { background: #4b5bd6; }
 
 /* поля, галочки, переключатели */
-html.st-light :is(input[type=text], input[type=password], input[type=number], input[type=url], input[type=email], input[type=search], input[type=time], input[type=date], input[type=datetime-local], select, textarea, .soulpage textarea, .constpage textarea) {
+html.st-light :is(input[type=text], input[type=password], input[type=number], input[type=url], input[type=email], input[type=search], input[type=time], input[type=date], input[type=datetime-local], select, textarea, .soulpage textarea, .constpage textarea),
+:where(html.st-light) input:where(:not([type])) {
   background-color: var(--field); box-shadow: inset 0 1px 2px rgba(20,30,60,.08);
 }
 
@@ -195,7 +196,8 @@ html.st-neu :is(nav button.cur, .stabs button.on, .fbtns .seg button.on, .me-too
 html.st-neu nav button:hover { background: transparent; color: var(--accent); }
 html.st-neu :is(.stabs, .fbtns .seg, .me-tools .seg, .mpanes) { background: var(--sk-glass); box-shadow: var(--press); }
 /* поля — вдавлены в материал */
-html.st-neu :is(input[type=text], input[type=password], input[type=number], input[type=url], input[type=email], input[type=search], input[type=time], input[type=date], input[type=datetime-local], select, textarea, .soulpage textarea, .constpage textarea, .dw-path, .diff, .md pre, pre.code, .opane, .cp-shot, .bugshot, .bugc, .tg-code span) {
+html.st-neu :is(input[type=text], input[type=password], input[type=number], input[type=url], input[type=email], input[type=search], input[type=time], input[type=date], input[type=datetime-local], select, textarea, .soulpage textarea, .constpage textarea, .dw-path, .diff, .md pre, pre.code, .opane, .cp-shot, .bugshot, .bugc, .tg-code span),
+:where(html.st-neu) input:where(:not([type])) {
   background-color: var(--sk-glass); box-shadow: var(--press);
 }
 

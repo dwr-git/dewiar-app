@@ -1190,6 +1190,17 @@
       жёлтая — стоит взглянуть, красная — не работает. «Проверить всё» — проверит каждую.</p>
     <div class="dw-weak" id="dw-weak" style="display:none"></div>
     <div class="dw-top"><button class="btn primary" id="dw-check">Проверить всё</button><span class="dw-sum" id="dw-sum"></span></div>
+    <div class="dwc dw-me" id="dw-me" hidden>
+      <div class="dh"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2a3.4 3.4 0 0 1 6.4 0M14 10h4M14 13.5h3"/></svg><h3>Как к вам обращаться</h3></div>
+      <p class="hint">Бесплатный мозг Dewiar подключился сам, без анкеты. Оставьте имя и контакт — почту, Telegram или телефон, —
+        если что-то сломается, разработчик сможет вам ответить. По желанию; поменять можно в любой момент.</p>
+      <div class="actions" style="margin:0;flex-wrap:wrap">
+        <input type="text" id="dw-me-name" maxlength="80" placeholder="Имя" style="flex:1;min-width:140px">
+        <input type="text" id="dw-me-contact" maxlength="120" placeholder="Почта, Telegram или телефон" style="flex:2;min-width:200px">
+        <button class="btn primary" id="dw-me-go">Сохранить</button>
+      </div>
+      <p class="res" id="dw-me-res"></p>
+    </div>
     <div class="dw-grid">
       <div class="dwc hero" id="dwc-acc">
         <div class="dh"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg><h3>Аккаунт dewiar.pro</h3><span class="dws" id="dws-acc">—</span></div>
@@ -1908,6 +1919,7 @@
     <h2>Когда помощница говорит</h2>
     <div class="lk-grid" id="lk-fx"></div>
     <div class="switch"><div>Портрет смотрит на курсор<span>Курсор над виджетом — персонаж переводит на него взгляд, лицо чуть смещается. По умолчанию выключено. На телефоне — по наклону, там свой переключатель.</span></div><label class="tg"><input type="checkbox" data-k="ui.cursor_look"><i></i></label></div>
+    <div class="switch"><div>Виджет поверх всех окон<span>Окно Лиры всегда видно над другими программами. Выключите — и оно будет обычным окном: его можно перекрыть, а вызвать — по имени или из значка в трее.</span></div><label class="tg"><input type="checkbox" data-k="ui.on_top"><i></i></label></div>
     <div class="switch" id="lk-smooth"><div>Прозрачное окно виджета<span>Гладкие скруглённые края виджета (Linux с композитором). Если виджет мигает, а его фон и кнопки пропадают, — выключите и перезапустите Dewiar. С видеокартой NVIDIA окно и так сплошное: там прозрачное мигало.</span></div><label class="tg"><input type="checkbox" data-k="ui.hud_smooth"><i></i></label></div>
     <p class="hint">На телефоне тема и анимация выбираются отдельно: «Настройки» → «Ещё» → «Оформление».</p>
   </section>

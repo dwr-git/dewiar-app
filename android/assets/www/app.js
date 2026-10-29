@@ -717,7 +717,9 @@ function complaintMessage(c) {
   return [`Ответ на жалобу №${c.id}`, `${what}.${reply}`];
 }
 async function complaintsCheck() {
-  const ask = (S.complaints || []).filter(c => c.s && (!["fixed", "no"].includes(c.status) || Date.now() / 1000 - c.ts < 30 * 86400));
+  const now = Date.now() / 1000;          // старше 60 дней — не спрашиваем; ответили по существу — ещё неделю, потом нет
+  const ask = (S.complaints || []).filter(c => c.s && now - (c.ts || 0) < 60 * 86400
+    && (!(["fixed", "no"].includes(c.status) || (c.status === "seen" && c.reply)) || now - (c.ts || 0) < 7 * 86400));
   if (!ask.length) return [];
   const news = [];
   for (const base of [...new Set(ask.map(c => c.base || healthBase()))]) {
@@ -733,7 +735,7 @@ async function complaintsCheck() {
   }
   saveS();
   if (news.length) thanksCache = null;                       // подтвердили — в «Помощниках» мог появиться и он сам
-  for (const c of news) { const [t, x] = complaintMessage(c); D.notify(t, x); toast(t, 4000); }
+  for (const c of news) { const [t, x] = complaintMessage(c); D.notify(t, x); toast(`💬 ${t}${c.reply ? " — " + c.reply.slice(0, 90) : ""}`, 8000); }
   return news;
 }
 async function thanksGet() {
@@ -785,6 +787,19 @@ setTimeout(async function pulseTick() {
   try { if (Date.now() - (+prefGet("cmp_at") || 0) > 6 * 36e5 - 6e4) { prefSet("cmp_at", String(Date.now())); await complaintsCheck(); } } catch (e) { }
   setTimeout(pulseTick, window.DEWIAR_PULSE_EVERY || 6 * 36e5);
 }, window.DEWIAR_PULSE_WAIT || 60000);
+/* Ответы на жалобы — раз в 15 минут, пока есть жалобы без ответа (29.10, владелец: «чтобы видел, что ему ответили»;
+   раньше — раз в 6 часов вместе с пульсом). Открыли приложение — тоже проверка (не чаще раза в 2 минуты). */
+// без ответа и моложе 2 дней — раз в 15 минут, моложе 14 — раз в час; старше — только с пульсом (раз в 6 часов); как на компьютере
+const cmpWait = () => { const now = Date.now() / 1000, w = (S.complaints || []).filter(c => c.s && now - (c.ts || 0) < 14 * 86400
+  && !["fixed", "no"].includes(c.status) && !c.reply).map(c => now - (c.ts || 0));
+  return !w.length ? 0 : Math.min(...w) < 2 * 86400 ? 15 * 6e4 - 3e4 : 36e5 - 3e4; };
+async function cmpTick(min) {
+  const every = cmpWait(); if (!every || Date.now() - (+prefGet("cmp_at") || 0) < Math.max(min, every === 15 * 6e4 - 3e4 ? min : every)) return;
+  prefSet("cmp_at", String(Date.now()));
+  try { await complaintsCheck(); } catch (e) { }
+}
+setInterval(() => cmpTick(15 * 6e4 - 3e4), window.DEWIAR_CMP_EVERY || 15 * 6e4);   // сама решает, пора ли (cmpWait)
+document.addEventListener("visibilitychange", () => { if (!document.hidden) cmpTick(2 * 6e4); });
 /* Прокси только для серверов Dewiar: dewiar.pro, поддомены, свой сайт аккаунта и облака (Java: NetProxy). */
 function proxyHosts(extra) {
   return [S.account.server, S.accCloud && S.accCloud.base, S.llm.cloud && S.llm.base_url, S.stt.from_account && S.stt.url].concat(extra || [])
@@ -2537,6 +2552,11 @@ async function ask(text, opts = {}) {
         else if (claim.tool.startsWith("take_photo")) sink.push(" Секунду — включаю камеру. ");
         continue;
       }
+      if (!claim && nudged && !r.calls.length && !called.has("make_app")) {
+        // попросили сделать по-настоящему — а она снова только сказала «готово»: честно, а не пустое «готово» (идея №42)
+        const again = claimedAction(r.text || "", called, text);
+        if (again && again.tool === "make_app") { plog("warn", "✋ make_app так и не вызван после просьбы — честно говорим"); sink.push(" Но программа так и не собралась — скажите «попробуй ещё раз»."); }
+      }
       const fix = !r.calls.length && !numChecked ? numberMismatch(r.text || "", doneCalls) : "";
       if (fix) { numChecked = true; msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: fix }); sink.push(" "); continue; }   // «на 79 минут», а поставлено 59
       const rfix = !r.calls.length && !remindAsked && round < maxRounds - 1 ? remindClaim(r.text || "", called) : "";
@@ -2618,7 +2638,7 @@ async function ask(text, opts = {}) {
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }
     if (turnAbort === ctl) frameAnswer(sink.text() || final);
-    netRecovered(); hCount("turns"); hCount("net_ok"); pauseOk();
+    netRecovered(); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe();
     if (isRefused(sink.text() || final)) hCount("refused");
     if (S.llm.cloud) setTimeout(() => cloudBalance(false).catch(() => {}), 1500);
   } catch (e) {
@@ -3247,6 +3267,8 @@ const REFUSED_RX = LBRX("(?<![а-яё])(?:не\\s+(?:буду|стану)\\s+(?:
 const isRude = (t) => RUDE_RX.test(String(t || "").toLowerCase().replace(/ё/g, "е"));
 const isRefused = (t) => REFUSED_RX.test(String(t || "").toLowerCase().replace(/ё/g, "е"));
 /* модель «сделала» действие словами, а инструмент не вызвала — частая беда второго раза: в истории уже есть «Звоню: Мама» */
+// просьба сделать вещь на экране — мини-программу, страницу, презентацию (make_app)
+const MAKE_ASK_RX = /(?:сделай|создай|напиши|собери|подготовь|нарисуй|сверстай|покажи|открой|запусти|хочу|построй|сгенерируй)[а-яё]*\s+(?:мне\s+|нам\s+|ей\s+|ему\s+)?(?:[а-яё0-9-]+\s+){0,2}?(?:калькулятор|игр[уаыое]|программ|приложени|таймер|конвертер|викторин|презентаци|слайд|страниц|сайт|открытк|шпаргалк|3d|3д|трёхмерн|трехмерн|визуализаци|анимаци)|на\s+экран/i;
 const CLAIMS = [
   { rx: /(?:^|[.!—–-]\s*|,\s*)(?:хорошо,?\s*|секунду,?\s*|сейчас\s+)?(?:звоню|набираю|перезваниваю|позвоню|вызываю)(?:\s|[.!:,]|$)/i, tool: "call", what: "звонишь" },
   { rx: /(?:^|[.!]\s*)(?:хорошо,?\s*)?(?:включаю|ставлю|переключаю(?:сь)?(?:\s+на)?|запускаю)\s+(?:радио|станци|«|"|волну|[А-ЯЁA-Z])/, tool: "play_radio (или radio_control с action next, если просят другую станцию)", what: "включаешь радио" },
@@ -3272,7 +3294,11 @@ const CLAIMS = [
     // только когда такую вещь и просили: «вот вариант поздравления — можно написать на открытке» — не обещание программы
     // (экзамен 0.6.42: Лира дописала к готовому поздравлению «Секунду — собираю. Ничего не вышло…»)
     // и не на «дочка нарисовала мне открытку» — нужна именно просьба сделать (экзамен 0.6.43)
-    user: /(?:сделай|создай|напиши|собери|подготовь|нарисуй|сверстай|покажи|открой|запусти|хочу)[а-яё]*\s+(?:мне\s+|нам\s+|ей\s+|ему\s+)?(?:[а-яё-]+\s+){0,2}?(?:калькулятор|игр[уаыое]|программ|приложени|таймер|конвертер|викторин|презентаци|слайд|страниц|сайт|открытк|шпаргалк)|на\s+экран/i },
+    user: MAKE_ASK_RX },
+  // идея №42 (29.10, «Будда Кузя»): «сделай программу: 3D-модель и дерево размышлений» — «Собираю…», «Готово», «Теперь дерево»,
+  // а make_app ни разу. Короткое «делаю / собираю / готово» на просьбу сделать программу — тоже обещание без дела
+  { rx: /^[\s\W]*(?:(?:хорошо|отлично|окей|ок|конечно|сейчас|секунду|итак|теперь|так)[,.!—–\s-]*)*(?:собираю|делаю|создаю|строю|рисую|генерирую|пишу\s+код|начинаю|приступаю|готово|сделано|готов[ао]?)(?![а-яё])/i,
+    tool: "make_app", what: "делаешь или уже сделал программу", short: 300, user: MAKE_ASK_RX },
   // «Открыла сканер», «Наведите камеру на код» — без scan_code сканер не открылся (отзыв 11.10)
   { rx: /(?:открыл[аи]?|открываю|запускаю|запустил[аи]?|включил[аи]?|включаю)\s+(?:тебе\s+|вам\s+)?сканер|наведите\s+(?:камеру|телефон)\s+на\s+(?:код|qr|штрих)/i,
     tool: "scan_code", what: "открыл(а) сканер" },
@@ -3373,7 +3399,7 @@ function claimedAction(text, called, asked) {
   // работал(а) пальцами в другом приложении — «открылось на экране», «включаю» там правда: не путаем с make_app и радио
   if (called && [...called].some(n => HANDS_SET.has(n))) return null;
   if (called && (called.has("take_photo") || called.has("show_photo")) && t.length < 400) return null;
-  return CLAIMS.find(c => c.rx.test(t) && (!c.user || c.user.test(String(asked || ""))) && !(c.noOffer && /(?:^|[^а-яё])(?:если|хотите|могу|можно|скажите)(?![а-яё])/i.test(t)) && !(called && c.tool.split(" ")[0].split("|").some(n => called.has(n)))) || null;
+  return CLAIMS.find(c => c.rx.test(t) && (!c.short || t.length <= c.short) && (!c.user || c.user.test(String(asked || ""))) && !(c.noOffer && /(?:^|[^а-яё])(?:если|хотите|могу|можно|скажите)(?![а-яё])/i.test(t)) && !(called && c.tool.split(" ")[0].split("|").some(n => called.has(n)))) || null;
 }
 const REFUSAL_RX = /нет доступа к интернет|не имею доступа|нет прямого доступа|в реальном времени|как языковая модель|я языковая модель|не могу получить актуальн|не могу искать в интернет|нет возможности выйти в интернет|моя база знаний ограничена|у меня нет доступа|cannot access|don't have access|as an ai/i;
 const CAM_REFUSAL_RX = /нет доступа к камер|не могу (?:сфотограф|сделать (?:фото|снимок)|включить камер|видеть тебя|увидеть тебя|посмотреть на тебя)|не вижу тебя|у меня нет камер|не имею камер/i;
@@ -6068,7 +6094,9 @@ let brainBusy = null;
 /* Пробный разговор (0.38.99): веб-версия без входа и без ключа сразу говорит через ?p=/trial сайта — без действий, с
    пределом в час (cloud.php trial_handler). Вошли аккаунтом или подключили мозг — проба уходит сама (trialOff, cloudConnect). */
 function trialOn() {
-  if (!D.web || loggedIn() || S.llm.base_url || S.join) return false;
+  // 0.69: и на телефоне — пока бесплатный мозг подключается сам (автоподключение), первый ответ — пробным разговором
+  if (S.llm.trial) return true;
+  if (loggedIn() || S.llm.base_url || (S.join && !S.join.auto) || !D.web && !autoOk()) return false;
   S.llm = Object.assign({}, S.llm, { kind: "openai", base_url: CLOUD_URL + "?p=/trial", api_key: "", model: "trial", name: "Пробный разговор", trial: true });
   saveS(); return true;
 }
@@ -6078,8 +6106,13 @@ function trialOff() {
 }
 function ensureBrain() {
   if (S.llm.trial && loggedIn()) trialOff();       // вошли аккаунтом — проба больше не нужна, думают модели Dewiar по аккаунту
+  if (S.llm.trial && !loggedIn()) autoJoin("вопрос в пробном разговоре").catch(() => {});   // полный мозг — подключится сам
   if (S.llm.base_url) return Promise.resolve(true);
-  if (!loggedIn()) return Promise.resolve(false);
+  if (!loggedIn()) {        // 0.69: мозга нет — подключаемся сами, а не ждём анкеты; не успели за 6 с — этот ответ пробным разговором
+    if (!autoOk()) return Promise.resolve(false);
+    return Promise.race([autoJoin("вопрос без мозга").catch(() => false), new Promise(r => setTimeout(r, 6000))])
+      .then(() => !!S.llm.base_url || trialOn());
+  }
   if (!brainBusy) brainBusy = cloudConnect(S.account.token, (S.accCloud && S.accCloud.base) || siteUrl((S.account.services || {}).cloud || "dwrapp/cloud.php"), { account: true })
     .then(() => { plog("info", "мозг: модели Dewiar по аккаунту"); return true; }).catch(e => { plog("warn", "мозг по аккаунту: " + e.message); return false; })
     .finally(() => { brainBusy = null; });
@@ -6163,6 +6196,7 @@ function renderSettings() {
       <div style="font-weight:600">${esc(on ? brainName() : loggedIn() ? "подключаю модели Dewiar…" : "не подключён")}</div>
       ${on && S.llm.title ? `<small class="hint" style="margin:2px 0 0;display:block">${esc(S.llm.title)}${S.llm.cloud ? " · " + esc(cloudWho()) : ""}</small>` : ""}</div>
       ${on || loggedIn() ? `<button class="btn" id="br-test">Проверить</button>` : ""}</div><div class="res" id="br-res"></div></div>`);
+    if (S.autoJoined && S.llm.cloud && !S.llm.account) { h.push(contactCardHtml(false)); setTimeout(contactWire, 0); }   // 0.69: имя и контакт — по желанию
     // №388/389 (28.10): «нет выбора мозга — только Dewiar, а на компьютере выбран ключ другого сервера» — взять мозги с
     // компьютера прямо здесь (раньше — только «Устройства» → «Мозги с другого устройства»); пришедшие — ниже, «Включить»
     if (syncCred() && !S.llm.trial) h.push(`<div class="card" id="br-pc"><div class="row2"><div style="flex:1;min-width:0"><b>Как на компьютере</b>
@@ -7046,12 +7080,14 @@ const cloudBase = () => (S.llm.base_url || "").split("?")[0] || CLOUD_URL;
    joinSend — заявка без ключа (cloud.php ?p=/join); S.join {id, secret, base} хранит, чью заявку ждём; joinPoll — раз в
    минуту, пока приложение открыто, и при каждом открытии: одобрили — cloudConnect(ключ) и «Dewiar подключён».
    pairClaim — код из 6 цифр с другого устройства → тот же ключ (одни данные и заряд). */
-async function joinSend(name, contact, note) {
+async function joinSend(name, contact, note, opts = {}) {
   const base = CLOUD_URL.split("?")[0];
-  const r = await http("POST", base + "?p=/join", { headers: { "Content-Type": "application/json" }, body: { name: String(name || "").trim(), contact: String(contact || "").trim(), note: String(note || "").trim(), device: "телефон" }, timeout: 20000 });
+  const body = { name: String(name || "").trim(), contact: String(contact || "").trim(), note: String(note || "").trim(), device: opts.device || (D.web ? "веб-версия" : "телефон") };
+  if (opts.auto) body.auto = 1;
+  const r = await http("POST", base + "?p=/join", { headers: { "Content-Type": "application/json" }, body, timeout: opts.auto ? 15000 : 20000 });
   let d = {}; try { d = JSON.parse(r.body || "{}"); } catch (e) { }
   if (r.status >= 400) throw new Error((d.error && d.error.message) || ("сервер ответил " + r.status));
-  S.join = { id: d.id, secret: d.secret, base, at: Date.now() }; saveS();
+  S.join = { id: d.id, secret: d.secret, base, at: Date.now(), auto: !!opts.auto }; saveS();
   if (d.key) await joinDone(d.key, d);
   return d;
 }
@@ -7066,10 +7102,68 @@ async function joinPoll(force) {
   return d;
 }
 async function joinDone(key, d) {
+  const auto = !!(S.join && S.join.auto);
   await cloudConnect(key, S.join && S.join.base);
-  S.join = null; saveS();
+  S.join = null; if (auto) S.autoJoined = true; saveS();
+  if (auto) {                      // автоподключение — тихо: человек, может, уже разговаривает; голосом — только если ждёт
+    plog("info", "☁ автоподключение: бесплатный мозг Dewiar подключён");
+    toast("Подключён бесплатный мозг Dewiar — теперь умею всё", 3500);
+    if (!busy && state === "idle") showBot(gfix(`Я подключена к бесплатному мозгу Dewiar и готова. Спросите меня что-нибудь!`));
+    startCardCheck(); return;
+  }
   const msg = gfix("Готово — Dewiar подключён" + (d && d.reply ? ` («${d.reply}»)` : "") + ". Спросите меня что-нибудь!");
   showBot(msg); toast("Мозг подключён: модели Dewiar", 3500); say(msg);
+}
+/* Автоподключение (0.69; владелец 29.10: «за наш счёт по умолчанию — важно, чтобы у пользователя всё работало сразу;
+   взять хотя бы что-то для узнавания, контакт попросить позже»). Мозга нет, входа и заявки нет — заявка auto: модель
+   телефона (или «веб-версия»), без контакта; сайт одобряет сам — ключ подключается сразу. Не чаще раза в час; нет сети —
+   при следующем вопросе. S.autoJoin === false — выключено. Контакт — позже, по желанию (contactAsk, «Мозг» → «Как к вам обращаться»). */
+/* После пяти удачных ответов на автоподключении — один раз (и ещё раз через 3 дня, если отложили) попросить контакт —
+   по желанию: «если что-то сломается — разработчик сможет ответить». Оставили — больше не спрашиваем. */
+function contactMaybe() {
+  if (!S.autoJoined || S.contactDone || !S.llm.cloud) return;
+  S.autoTurns = (S.autoTurns || 0) + 1;
+  if (S.autoTurns >= 5 && (S.contactAsks || 0) < 2 && Date.now() - (S.contactAsked || 0) > 3 * 864e5) {
+    S.contactAsked = Date.now(); S.contactAsks = (S.contactAsks || 0) + 1;
+    setTimeout(() => { if (!busy) showCard(contactCardHtml(true)); contactWire(); }, 6000);
+  }
+  saveS();
+}
+function contactCardHtml(ask) {
+  return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Бесплатный мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
+    <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">
+    <div class="row2" style="margin-top:10px"><button class="btn p" id="ct-go" style="flex:1">Сохранить</button>${ask ? `<button class="btn" id="ct-x">Не сейчас</button>` : ""}</div></div>`;
+}
+function contactWire() {
+  const go = $("#ct-go"); if (!go) return;
+  cloudGet(cloudBase(), S.llm.api_key, "/me/contact").then(d => { const n = $("#ct-name"), c = $("#ct-contact");
+    if (n && !n.value && d.name && d.name !== "Без имени" && !/^(телефон|веб)/i.test(d.name)) n.value = d.name; if (c && !c.value) c.value = d.contact || ""; }).catch(() => {});
+  if ($("#ct-x")) $("#ct-x").onclick = () => showCard("");
+  go.onclick = async () => {
+    const name = $("#ct-name").value.trim(), contact = $("#ct-contact").value.trim();
+    if (!name && !contact) return toast("Напишите имя или контакт");
+    go.disabled = true;
+    try { await cloudPost("/me/contact", { name, contact }); S.contactDone = true; saveS(); toast("Сохранено — спасибо!", 3000); if ($("#ct-x")) showCard(""); }
+    catch (e) { toast(e.message, 4000); }
+    go.disabled = false;
+  };
+}
+let autoJoinBusy = null;
+/* Автоподключение — в приложении (не в веб-версии: там и так сразу пробный разговор без входа, а ключ на каждый браузер —
+   лишнее) и не в проверках в браузере без своего флага (window.DEWIAR_AUTOJOIN); S.autoJoin === false — выключено. */
+const autoOk = () => S.autoJoin !== false && !D.web && (!D.mock || !!window.DEWIAR_AUTOJOIN);
+function autoJoin(why) {
+  if (!autoOk() || loggedIn() || (S.llm.base_url && !S.llm.trial) || (S.join && S.join.id)) return Promise.resolve(false);
+  if (Date.now() - (S.autoTried || 0) < 3600e3) return Promise.resolve(false);
+  if (autoJoinBusy) return autoJoinBusy;
+  S.autoTried = Date.now(); saveS();
+  let info = {}; try { info = JSON.parse(D.info() || "{}"); } catch (e) { }
+  const dev = D.web ? "веб-версия" + (navigator.userAgent.match(/iPhone|iPad|Macintosh|Android|Windows/) || [""])[0].replace(/^/, " ") : "телефон " + (info.device || "Android");
+  autoJoinBusy = joinSend(D.web ? "Гость веб-версии" : (info.device || "Без имени"), "", "", { auto: true, device: dev.trim() })
+    .then(d => { plog("info", `☁ автоподключение (${why}): заявка №${d.id} — ${d.key ? "ключ сразу" : "ждёт одобрения"}`); return !!d.key; })
+    .catch(e => { plog("warn", "☁ автоподключение не вышло: " + e.message); return false; })
+    .finally(() => { autoJoinBusy = null; });
+  return autoJoinBusy;
 }
 async function pairClaim(code) {
   const r = await http("POST", CLOUD_URL.split("?")[0] + "?p=/pair/claim", { headers: { "Content-Type": "application/json" }, body: { code: String(code).replace(/\D/g, "") }, timeout: 15000 });
@@ -7827,7 +7921,17 @@ async function checkUpdate(manual) {
       if (r) {
         if (D.updateGet) updRender(`Есть Dewiar ${esc(a.version)}.<button class="btn w p" id="upd-go" style="margin-top:8px">Обновить</button>`);
         else { r.className = "res ok"; r.innerHTML = `Есть Dewiar ${esc(a.version)}. <a href="${esc(url)}">Скачать</a> — откройте файл и нажмите «Обновить».`; }
-      } else D.notify("Новая версия Dewiar " + a.version, "Ещё → О приложении → Обновить");
+      } else {
+        D.notify("Новая версия Dewiar " + a.version, "Ещё → О приложении → Обновить");
+        // 29.10 (255 телефонов на 0.7.1: уведомление без разрешения пропадает молча) — и карточкой на главном экране, одной кнопкой
+        if (!busy && state === "idle" && !($("#card") && $("#card").textContent.trim()) && S.updCardFor !== a.version) {
+          S.updCardFor = a.version; saveS();
+          showCard(`<div class="card upd"><b>Есть новая версия Dewiar ${esc(a.version)}</b><p class="hint" style="margin:4px 0 10px">Быстрее, с исправлениями. Всё ваше сохранится.</p>
+            <div class="row2"><button class="btn p" id="updc-go" style="flex:1">Обновить</button><button class="btn" id="updc-x">Позже</button></div></div>`);
+          $("#updc-go").onclick = () => { showCard(""); openSettings("about"); setTimeout(() => { checkUpdate(true).then(() => { const g = $("#upd-go"); if (g) g.click(); }); }, 400); };
+          $("#updc-x").onclick = () => showCard("");
+        }
+      }
     } else if (manual && r) updRender("У вас последняя версия." + (D.openDownloads ? UPD_OLD : ""));
   } catch (e) { if (manual && r) { r.className = "res bad"; r.textContent = "Не проверилось: " + e.message; } }
 }
@@ -9959,6 +10063,11 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
     // веб-версия без входа: говорим сразу (пробный разговор); войти — без ограничений и с действиями
     showBot(gfix(`Привет! Я ${persona().name}. Давайте поговорим прямо сейчас — без входа и установки. Нажмите на меня и говорите или напишите.`));
     showCard(`<div class="start"><button class="btn w" onclick="startLogin()">Войти — без ограничений и с делами</button></div>`);
+  } else if (!S.llm.base_url && !loggedIn() && autoOk() && !(S.join && !S.join.auto) && trialOn()) {
+    // 0.69, первый запуск: говорим сразу (пробный разговор), бесплатный мозг Dewiar подключается сам — без анкеты
+    showBot(gfix(`Привет! Я ${persona().name}. Говорите сразу — нажмите на меня или удерживайте и говорите. Бесплатный мозг Dewiar подключается сам.`));
+    showCard(`<div class="start"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button></div>`);
+    setTimeout(() => autoJoin("первый запуск").then(ok => { if (ok) showCard(""); }), 1200);
   } else if (!S.llm.base_url && !loggedIn()) {
     // первый запуск: одна понятная кнопка (отзыв: «не понимаю, как ей мозг включить») — бесплатная проба Dewiar;
     // своя модель, ключ сервиса и код с другого устройства — второй кнопкой
@@ -9983,6 +10092,9 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
   setTimeout(lnTry, 6000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(lnTry, 2500); });
   if (!D.web) setTimeout(() => checkUpdate(false), 8000);   // веб-версия всегда свежая: её отдаёт сайт
+  // приложение живёт неделями, не закрываясь: проверяем и при возвращении в него, но не чаще раза в 6 часов (29.10)
+  let updAt = Date.now();
+  if (!D.web) document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - updAt > 6 * 3600e3) { updAt = Date.now(); setTimeout(() => checkUpdate(false), 3000); } });
   setTimeout(() => accountCheck().then(ensureBrain).then(cloudCaps).then(tgSync), 3000);
   setTimeout(() => syncRun(false), 4000);
   setTimeout(() => radio.refresh(), 10000);

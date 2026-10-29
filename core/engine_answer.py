@@ -691,6 +691,38 @@ class AnswerMixin:
             return dict(profs[own])
         return self.s.active_llm()
 
+    def _contact_maybe(self):
+        """Автоподключение (0.69): после пяти удачных ответов — один раз (и ещё раз через три дня, если отложили) попросить
+        контакт: «если что-то сломается — разработчик сможет ответить». Только по желанию; оставили — больше не спрашиваем."""
+        c = self.s.get("cloud") or {}
+        if not c.get("auto") or c.get("contact_done") or not c.get("key"):
+            return
+        n = int(c.get("auto_turns") or 0) + 1
+        upd = {"auto_turns": n}
+        asks = int(c.get("contact_asks") or 0)
+        if n >= 5 and asks < 2 and time.time() - float(c.get("contact_asked") or 0) > 3 * 86400:
+            upd.update(contact_asked=time.time(), contact_asks=asks + 1)
+            self.s.update({"cloud": upd})
+            threading.Timer(6, lambda: self.emit("contact_ask")).start()     # после ответа, не поверх него
+            return
+        self.s.update({"cloud": upd})
+
+    def _trial_llm(self):
+        """Пробный разговор сайта (cloud.php ?p=/trial/chat/completions) — мозг на первые минуты, пока свой не подключён:
+        без ключа и настройки, без действий (напоминания, поиск — после «Подключить бесплатно»), с пределами сайта (12 ответов
+        в час с адреса). Выключатель — llm.trial: false. При вводе из wav (проверки) — только с DEWIAR_TRIAL. -> профиль или None."""
+        if self.s.get("llm", "trial") is False or (self.wav_input and not os.environ.get("DEWIAR_TRIAL")):
+            return None
+        import cloud as C
+        url = self.s.get("cloud", "url") or C.DEFAULT_URL
+        if not getattr(self, "_trial_said", False):
+            self._trial_said = True
+            log.info("🧠 Мозг не подключён — отвечаю пробным разговором Dewiar (без действий)")
+            self.emit("trial", on=True)
+        self.health_use("trial")
+        return {"name": "Пробный разговор Dewiar", "kind": "openai", "base_url": C.api_base(url) + "/trial", "api_key": "",
+                "model": "trial", "trial": True, "max_tokens": 450}
+
     def llm_profile(self):
         """Модель для фоновых задач: своя из настроек задач, иначе активная."""
         pid = self.s.get("tasks", "llm") or ""
@@ -1438,6 +1470,9 @@ class AnswerMixin:
                     prof = self.persona_llm()
                 except Exception as e:  # noqa: BLE001
                     log.info("🧠 Модели Dewiar сами не подключились: %s", e)
+            if not prof:                               # 29.10 (пакет: 28% компьютеров так и не подключили мозг и молчат)
+                threading.Thread(target=self.auto_join, args=("вопрос без мозга",), daemon=True).start()   # подключится — дальше полный
+                prof = self._trial_llm()               # а этот ответ — сразу, пробным разговором сайта, без настройки
             if not prof:
                 raise LLMError("я пока не подключён к языковой модели — откройте настройки, раздел «Мозг»"
                                + (": войдите в аккаунт dewiar.pro — модели Dewiar подключатся сами" if not self.account.logged_in() else ""))
@@ -1867,6 +1902,7 @@ class AnswerMixin:
                     self.emit("answer", text=turn.full, done=True, model=True, sources=turn.src_done)
                 self.health_count("turns")
                 self.health_count("net_ok")
+                self._contact_maybe()
                 self._maybe_learn(text, prof)
         except LLMError as e:
             log.warning("Модель: %s", e)

@@ -53,6 +53,7 @@ TRANSPARENT = [False]                   # Linux с композитором: о�
 
 
 ABOVE_TITLES = None          # заголовки окон, которые должны быть «поверх всех» (виджет, значок, блокнот) — см. keep_above_guard
+ON_TOP = [True]              # виджет поверх всех окон (ui.on_top; идея №48 — можно выключить в «Оформлении»)
 
 
 def keep_above_guard():
@@ -71,6 +72,8 @@ def keep_above_guard():
             ABOVE_TITLES = {TITLES["card"], TITLES["mini"], PAD_TITLE}
         for gw in Gtk.Window.list_toplevels():
             if gw.get_title() not in ABOVE_TITLES or not gw.get_visible():
+                continue
+            if not ON_TOP[0] and gw.get_title() != PAD_TITLE:   # виджет «не поверх» — не поднимаем
                 continue
             gdw = gw.get_window()
             if gdw is None or not gw.get_mapped() or not isinstance(gdw, GdkX11.X11Window):
@@ -1263,6 +1266,16 @@ class Api:
         else:
             subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
+
+    def set_on_top(self, on):
+        """Идея №48: окно Лиры поверх всех окон — или как обычное окно (студия → «Оформление»; виджет зовёт при смене)."""
+        ON_TOP[0] = bool(on)
+        for w in list(getattr(self, "wins", {}).values()):
+            try:
+                w.on_top = ON_TOP[0]
+            except Exception as e:  # noqa: BLE001
+                _ui_log(f"поверх окон: {e}")
+        return ON_TOP[0]
 
     def pick_folder(self):
         """Выбор папки проекта (для задач по коду). -> путь или "" (отказались)."""
@@ -3100,6 +3113,7 @@ def main():
         extra = ("&address=" + quote(t, safe="")) if t.startswith("dewiar:") else ("&import=" + quote(str(Path(t).resolve()), safe=""))
         args.settings = True
 
+    ON_TOP[0] = ui_settings().get("on_top", True) is not False
     if WIN:
         return main_win(args, extra)
     if args.capture:                           # сочетание клавиш: программа работает — сразу сигнал, без коробки systemd
@@ -3164,7 +3178,7 @@ def main():
         w, h = SIZES[m]
         api.wins[m] = webview.create_window(TITLES[m], api._url("hud.html", "&mode=" + m + ("&tw=1" if TRANSPARENT[0] else "")),
                                             width=w, height=h, resizable=False, min_size=(w, h), frameless=True, easy_drag=False,
-                                            on_top=True, hidden=True, background_color="#0b0b0e", js_api=api,
+                                            on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=api,
                                             transparent=TRANSPARENT[0])
     api._hud = api.wins["card"]
 
@@ -3326,7 +3340,7 @@ def main_win(args, extra):
         # значок — квадратным.
         api.wins[m] = webview.create_window(TITLES[m], api._url("hud.html", "&mode=" + m), width=w, height=h,
                                             resizable=False, min_size=(w, h), frameless=True, easy_drag=False,
-                                            on_top=True, hidden=True, background_color="#0b0b0e", js_api=api, **_no_shadow())
+                                            on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=api, **_no_shadow())
     api._hud = api.wins["card"]
 
     def on_start():

@@ -761,6 +761,8 @@ class CommandsMixin:
                 self.emit("prompter", kind="open")
                 return True
             raise ValueError("неизвестная команда суфлёра")
+        if cmd == "complaints_seen":
+            return self.complaints_seen()
         if cmd == "complaints":
             if a.get("check"):
                 try:
@@ -1597,8 +1599,8 @@ class CommandsMixin:
                     return c.meet(a.get("path", ""), a.get("body") or {})
                 if cmd == "close_forward":          # «Переслать» (0.62): {pid — откуда, mid, to — кому: pid или gid}
                     return c.forward(a.get("pid", ""), a.get("mid", ""), a.get("to", ""))
-                if cmd == "close_group":            # «Группы своих»: create / rename / add / drop / leave / delete
-                    return c.group(str(a.get("op") or ""), **{k: a[k] for k in ("gid", "name", "pids", "pid") if k in a})
+                if cmd == "close_group":            # «Группы своих»: create / rename / icon / add / drop / leave / delete
+                    return c.group(str(a.get("op") or ""), **{k: a[k] for k in ("gid", "name", "pids", "pid", "icon") if k in a})
                 if cmd == "close_thumb":            # фото из переписки — картинкой в студии (0.61): только скачанное в «Близкие», до 6 МБ
                     import base64 as _b64
                     import mimetypes as _mt
@@ -1648,9 +1650,16 @@ class CommandsMixin:
                 return r
             except CloudError as e:
                 raise ValueError(str(e)) from e
-        if cmd in ("join_send", "join_check", "join_forget", "pair_new"):   # Dewiar по заявке и перенос кодом
+        if cmd in ("join_send", "join_check", "join_forget", "pair_new", "contact_get", "contact_set", "auto_join"):   # Dewiar по заявке и перенос кодом
             from cloud import CloudError
             try:
+                if cmd == "contact_get":            # автоподключение (0.69): как к вам обращаться и как связаться — дополнить позже
+                    return self.contact_get()
+                if cmd == "contact_set":
+                    return self.contact_set(a.get("name", ""), a.get("contact", ""))
+                if cmd == "auto_join":
+                    self.s.update({"cloud": {"auto_tried": 0}})
+                    return {"ok": self.auto_join("кнопкой"), "llm": bool(self.s.get("llm", "active"))}
                 if cmd == "join_send":
                     return self.join_send(a.get("name", ""), a.get("contact", ""), a.get("note", ""))
                 if cmd == "join_check":

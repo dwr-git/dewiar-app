@@ -1643,3 +1643,14 @@ body.neu .emo-q { box-shadow: var(--press); }
 .rp-empty, .rp-hint { margin: 0; padding: 14px 16px; border-radius: 16px; background: var(--frost); color: var(--muted); font-size: 14px; line-height: 1.45; }
 .rp-hint { background: none; padding: 4px 2px; font-size: 13px; }
 body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Значок группы (0.68, groups.js): эмодзи на мягкой плашке цвета группы; выбор — без обводок: выбранный приподнят и подсвечен */
+.grico { flex: none; width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; font-style: normal;
+  font: 400 22px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; background: color-mix(in srgb, var(--c, #8b7cff) 22%, transparent); }
+.clp.grp .grico { margin-right: 16px; }
+.clh .grico { width: 36px; height: 36px; border-radius: 12px; font-size: 18px; }
+.gremos { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 2px 6px; }
+.grem { width: 42px; height: 42px; border: 0; border-radius: 13px; display: grid; place-items: center; padding: 0; color: var(--ink);
+  font: 400 21px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; background: var(--frost); transition: transform .15s, background .15s; }
+.grem.on { background: rgba(106,108,240,.22); transform: translateY(-2px); box-shadow: 0 6px 16px -8px #6a6cf0; }
+.grem0 { font: 600 13px/1 Manrope, sans-serif; color: var(--muted, #9aa); }

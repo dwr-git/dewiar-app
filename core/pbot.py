@@ -304,6 +304,9 @@ class PersonaBot(Telegram):
             return
         self.problem = ""
         self._send(cid, out, reply_to)
+        use = getattr(self.host, "health_use", None)
+        if callable(use):
+            use("pbot_group" if group else "pbot")
         h = self.hist.setdefault(cid, deque(maxlen=HIST))
         h.append((time.time(), "user", f"{who}: {text}" if group else text))
         h.append((time.time(), "assistant", out))

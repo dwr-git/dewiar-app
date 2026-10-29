@@ -25,6 +25,10 @@ MAX_MEMBERS = 5
 R1 = ("Ты — {name}, участник «Совета ИИ»: несколько помощников с разными характерами и моделями вместе обсуждают вопрос "
       "человека. Твой характер: {char} Ответь на вопрос по существу и со своей позицией — 4–6 предложений, главные доводы, "
       "живо и в своём стиле, без воды, без списков и заголовков. Не пиши, что ты модель ИИ, не здоровайся.")
+# 29.10 (человек: «подключил папку с документами — Лира их видит, а Совет ИИ — нет»): совету — отрывки из «Документов»
+# человека по вопросу (общие для всех) и знания каждого персонажа (его базы и папки) — как в разговоре с Лирой
+DOCS = ("\n\nНиже — отрывки из документов человека и знаний, найденные по вопросу. Если они относятся к делу — опирайся на "
+        "них и называй документ (по имени файла); не выдумывай того, чего в них нет. Не относятся — отвечай по общим знаниям.")
 R2 = ("Ты — {name}, участник «Совета ИИ». Твой характер: {char} Ниже вопрос и ответы всех участников. Ответь коллегам — 2–4 "
       "предложения, обращаясь по имени: с кем и в чём согласен, с чем не согласен и почему; можешь уточнить свою позицию. "
       "Спорь по делу, уважительно, без повторов своего ответа и без списков.")
@@ -123,8 +127,11 @@ class Council:
             sid = uuid.uuid4().hex[:10]
             chair = self.host.s.get("persona") if self.host.s.get("persona") in pids else pids[0]
             self.cur = {"sid": sid, "q": q, "pids": pids, "chair": chair, "t": time.time(), "done": False, "cancel": threading.Event(),
-                        "said": {p: {} for p in pids}, "summary": "", "file": "", "announce": bool(announce)}
+                        "said": {p: {} for p in pids}, "summary": "", "file": "", "announce": bool(announce), "docs": []}
         threading.Thread(target=self._run, args=(self.cur,), name="council", daemon=True).start()
+        use = getattr(self.host, "health_use", None)
+        if callable(use):
+            use("council_voice" if announce else "council")
         return {"sid": sid, "pids": pids, "chair": chair, "members": [known[p] for p in pids]}
 
     def stop(self):
@@ -138,7 +145,7 @@ class Council:
         c = self.cur
         if not c:
             return None
-        return {k: c[k] for k in ("sid", "q", "pids", "chair", "done", "summary", "file")} | {"said": c["said"]}
+        return {k: c[k] for k in ("sid", "q", "pids", "chair", "done", "summary", "file")} | {"said": c["said"], "docs": c.get("docs") or []}
 
     def _emit(self, c, **kw):
         try:
@@ -191,13 +198,42 @@ class Council:
         for t in ths:
             t.join()
 
+    def _docs(self, q):
+        """Отрывки из «Документов» человека по вопросу (core/knowledge.py, без интернета). -> (текст, [имена файлов])."""
+        kb = getattr(self.host, "knowledge", None)
+        try:
+            found = kb.search(q, limit=6) if kb is not None and kb.has_files() else []
+        except Exception:  # noqa: BLE001
+            log.debug("совет: поиск в документах", exc_info=True)
+            found = []
+        if not found:
+            return "", []
+        text = "\n\n".join(f"[{r['path']}]\n{str(r['text'])[:900]}" for r in found)
+        return "Из документов человека:\n\n" + text, list(dict.fromkeys(r["path"] for r in found))
+
+    def _persona_kb(self, pid, q, persona):
+        """Знания персонажа (базы сайта и папки на компьютере) — как в разговоре, тихо. -> добавка к подсказке или ""."""
+        f = getattr(self.host, "_persona_knowledge", None)
+        if not callable(f) or not (persona or {}).get("knowledge"):
+            return ""
+        try:
+            return f(q, None, p=persona, quiet=True, hist=[]) or ""
+        except Exception:  # noqa: BLE001
+            log.debug("совет: знания персонажа", exc_info=True)
+            return ""
+
     def _run(self, c):
         names = {p["id"]: p for p in self.host.personas.all()}
         nm = lambda pid: (names.get(pid) or {}).get("name", pid)  # noqa: E731
         ch = lambda pid: re.sub(r"\s+", " ", str((names.get(pid) or {}).get("character") or "")).strip()[:600]  # noqa: E731
         try:
+            docs, c["docs"] = self._docs(c["q"])
+            kb = {pid: self._persona_kb(pid, c["q"], names.get(pid)) for pid in c["pids"]}
+            if docs or any(kb.values()):
+                self._emit(c, phase="docs", files=c["docs"], members=[p for p in c["pids"] if kb[p]])
+            q1 = "Вопрос: " + c["q"] + (f"\n\n{docs}" if docs else "")
             self._emit(c, phase="r1", begin=True)
-            self._round(c, "r1", lambda pid: (R1.format(name=nm(pid), char=ch(pid)), "Вопрос: " + c["q"], 600))
+            self._round(c, "r1", lambda pid: (R1.format(name=nm(pid), char=ch(pid)) + (DOCS + kb[pid] if docs or kb[pid] else ""), q1, 600))
             ok = [p for p in c["pids"] if c["said"][p].get("r1")]
             if c["cancel"].is_set():
                 return self._finish(c, stopped=True)
@@ -213,7 +249,8 @@ class Council:
             talk = first + "\n\n" + "\n\n".join(f"{nm(p)} (ответ коллегам): {c['said'][p]['r2']}" for p in ok if c["said"][p].get("r2"))
             self._emit(c, phase="sum", begin=True)
             chair = c["chair"] if c["said"][c["chair"]].get("r1") else ok[0]
-            c["summary"] = self._say(c, chair, "sum", R3.format(name=nm(chair)), f"Вопрос: {c['q']}\n\nОбсуждение:\n\n{talk}", 700)
+            c["summary"] = self._say(c, chair, "sum", R3.format(name=nm(chair)) + (DOCS if docs else ""),
+                                     f"Вопрос: {c['q']}" + (f"\n\n{docs}" if docs else "") + f"\n\nОбсуждение:\n\n{talk}", 700)
             self._finish(c)
         except Exception as e:  # noqa: BLE001
             log.exception("совет")
@@ -244,6 +281,8 @@ class Council:
         title = re.sub(r'[\\/:*?"<>|\n\r\t]+', " ", c["q"])[:60].strip(" .") or "Совет"
         f = root / f"{datetime.fromtimestamp(c['t']).strftime('%Y-%m-%d %H-%M')} {title}.md"
         lines = [f"# Совет ИИ: {c['q']}", "", "Участники: " + ", ".join(f"{nm(p)} ({self.profile_for(p)[1] or 'модель'})" for p in c["pids"]), ""]
+        if c.get("docs"):
+            lines += ["Документы: " + ", ".join(c["docs"]), ""]
         for ph, head in (("r1", "Мнения"), ("r2", "Спор")):
             items = [(p, c["said"][p].get(ph)) for p in c["pids"] if c["said"][p].get(ph)]
             if items:

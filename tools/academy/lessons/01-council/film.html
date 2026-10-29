@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* светлый неоморфизм — как Лира по умолчанию и кабинет: небесный фон, мягкие тени вместо рамок */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(106,141,255,.28), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,170,200,.25), transparent 65%); }
+#b3 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(140,210,255,.3), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; letter-spacing: .01em; color: var(--ink); }
+#brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+#steps { position: absolute; top: 54px; right: 64px; display: flex; gap: 14px; }
+#steps li { list-style: none; display: inline-flex; align-items: center; gap: 10px; padding: 10px 22px 10px 10px; border-radius: 99px; font-size: 20px; font-weight: 700;
+  color: var(--mut); background: var(--bg); box-shadow: var(--raise-s); }
+#steps li i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 15px; color: var(--mut);
+  box-shadow: inset 3px 3px 6px var(--nd), inset -3px -3px 6px var(--nl); }
+#steps li.on { color: #fff; background: var(--brand); box-shadow: 8px 10px 22px -6px rgba(79,108,240,.55); } #steps li.on i { background: rgba(255,255,255,.25); color: #fff; box-shadow: none; }
+#steps li.past { color: var(--ink); } #steps li.past i { background: #2fb383; color: #fff; box-shadow: none; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; color: var(--ink); white-space: nowrap; }
+.seat small { margin-top: 12px; font-size: 22px; font-weight: 700; color: var(--ink); background: var(--bg); box-shadow: var(--raise-s); padding: 7px 20px; border-radius: 99px; white-space: nowrap; }
+.seat small::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 10px; vertical-align: 2px; }
+#t-title { position: absolute; left: 0; right: 0; top: 730px; text-align: center; }
+#t-title h1 { font: 700 128px/1 Unbounded, sans-serif; letter-spacing: -.02em; color: var(--ink); }
+#t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+.qcard { position: absolute; left: 860px; width: 900px; padding: 36px 46px; border-radius: 36px; background: var(--bg); color: var(--ink);
+  font: 600 46px/1.25 Unbounded, sans-serif; box-shadow: var(--raise); }
+.qcard::before { content: "?"; position: absolute; left: -24px; top: -24px; width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--brand); color: #fff; font: 700 36px/1 Unbounded; box-shadow: 8px 10px 20px -6px rgba(79,108,240,.55); }
+#one { position: absolute; left: 860px; top: 770px; font-size: 30px; color: var(--mut); font-weight: 700; }
+.stitle { position: absolute; left: 0; right: 0; top: 150px; text-align: center; font: 600 30px Manrope; color: var(--mut); }
+.card { position: absolute; width: 760px; padding: 30px 36px 32px 44px; border-radius: 30px; background: var(--bg); color: var(--ink); box-shadow: var(--raise); }
+.card::before { content: ""; position: absolute; left: 18px; top: 28px; bottom: 28px; width: 6px; border-radius: 6px; background: var(--c); }
+.card header { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.card header i { width: 42px; height: 42px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: var(--raise-s); }
+.card header b { font: 700 26px Manrope; } .card header small { font-size: 20px; color: var(--mut); font-weight: 700; }
+.card p { font-size: 34px; line-height: 1.38; font-weight: 600; min-height: 94px; }
+.card p .caret { display: inline-block; width: 4px; height: 1em; margin-left: 4px; vertical-align: -0.12em; background: var(--c); }
+#arc { position: absolute; inset: 0; }
+#sum { position: absolute; left: 460px; top: 200px; width: 1000px; padding: 44px 56px 48px; border-radius: 40px; color: #fff;
+  background: radial-gradient(80% 120% at 0% 0%, rgba(255,255,255,.22), transparent 55%), linear-gradient(135deg, #6a8dff, #4f6cf0 55%, #7a5cf0);
+  box-shadow: 24px 30px 60px -20px rgba(79,108,240,.55), -14px -14px 32px var(--nl); }
+#sum h2 { font: 600 30px Unbounded; margin-bottom: 26px; opacity: .95; }
+#sum .row { display: grid; grid-template-columns: 250px 1fr; gap: 24px; align-items: baseline; padding: 16px 0; }
+#sum .row + .row { background: linear-gradient(90deg, rgba(255,255,255,.3), transparent) top / 100% 1px no-repeat; }
+#sum .row b { font: 700 24px Manrope; opacity: .88; } #sum .row span { font: 600 38px/1.25 Manrope; }
+#voice { position: absolute; left: 820px; top: 240px; display: flex; align-items: center; gap: 24px; padding: 26px 40px 26px 26px; border-radius: 40px;
+  background: var(--bg); color: var(--ink); box-shadow: var(--raise); }
+#voice i { width: 78px; height: 78px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); flex: none; box-shadow: 8px 10px 20px -6px rgba(79,108,240,.55); }
+#voice i svg { width: 38px; height: 38px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; }
+#voice span { font: 600 42px/1.25 Unbounded, sans-serif; }
+#studio { position: absolute; left: 820px; top: 450px; width: 920px; height: 340px; border-radius: 32px; overflow: hidden; display: grid; grid-template-columns: 300px 1fr;
+  background: var(--bg); color: var(--ink); box-shadow: var(--raise); }
+#studio nav { padding: 26px 20px; display: flex; flex-direction: column; gap: 10px; font-size: 22px; font-weight: 600; color: var(--mut); box-shadow: 8px 0 18px -10px var(--nd); }
+#studio nav span { padding: 10px 16px; border-radius: 14px; } #studio nav span.on { color: var(--accent); box-shadow: var(--raise-s); }
+#studio main { padding: 30px 34px; } #studio main h3 { font: 700 30px Unbounded; margin-bottom: 18px; }
+#studio .file { display: inline-flex; align-items: center; gap: 14px; padding: 16px 22px; border-radius: 18px; background: var(--bg); box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; margin-top: 14px; }
+#studio .file em { font-style: normal; font-size: 30px; }
+#studio .row2 { display: flex; gap: 12px; margin-top: 4px; } #studio .row2 i { width: 56px; height: 56px; border-radius: 50%; background-size: cover; box-shadow: var(--raise-s); }
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; color: var(--ink); letter-spacing: -.02em; }
+#end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; color: var(--ink); }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div><div class="blob" id="b3"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 1 · Совет ИИ</span></div></div>
+  <ol id="steps"><li><i>1</i>Мнения</li><li><i>2</i>Спор</li><li><i>3</i>Итог</li></ol>
+  <svg id="arc" viewBox="0 0 1920 1080"></svg>
+
+  <div class="layer" id="L-title"><div id="t-title"><h1>Совет ИИ</h1><p>Несколько ИИ спорят — вы получаете лучший совет</p></div></div>
+  <div class="layer" id="L-ask">
+    <div class="qcard" id="q1" style="top:290px">Переходить ли на удалённую работу?</div>
+    <div class="qcard" id="q2" style="top:520px">Купить квартиру — или копить?</div>
+    <div id="one">Одного мнения мало</div>
+  </div>
+  <div class="layer" id="L-council">
+    <div class="stitle" id="st-t">Совет ИИ · «Стоит ли мне переходить на удалённую работу?»</div>
+    <div class="card lira" id="c1" style="--c:var(--lira)"><header><i style="background-image:url(../../../../data/avatars/lira.webp)"></i><b>Лира</b><small>ChatGPT</small></header><p></p></div>
+    <div class="card patrik" id="c2" style="--c:var(--patrik)"><header><i style="background-image:url(../../../../data/avatars/patrik.webp)"></i><b>Патрик</b><small>Claude</small></header><p></p></div>
+  </div>
+  <div class="layer" id="L-sum"><div id="sum"><h2>Итог совета</h2>
+    <div class="row"><b>Сошлись</b><span>Удалёнка — да</span></div>
+    <div class="row"><b>Разошлись</b><span>Сколько дней работать из дома</span></div>
+    <div class="row"><b>Совет</b><span>Начать с двух дней в неделю</span></div>
+    <div class="row"><b>Первый шаг</b><span>Сегодня поговорить с руководителем</span></div></div></div>
+  <div class="layer" id="L-how">
+    <div id="voice"><i><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i><span>«Лира, собери совет: …»</span></div>
+    <div id="studio"><nav><span>Задачи</span><span>Дозор</span><span class="on">Совет ИИ</span><span>Близкие</span></nav>
+      <main><h3>Прошлые советы</h3><div class="row2"><i style="background-image:url(../../../../data/avatars/lira.webp)"></i><i style="background-image:url(../../../../data/avatars/patrik.webp)"></i></div>
+        <div class="file"><em>📄</em>Совет / Удалённая работа.md</div></main></div>
+  </div>
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Дозор»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b><small id="m-lira">ChatGPT</small></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b><small id="m-patrik">Claude</small></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const prog = (T, id, lead = 0) => clamp((T - at(id) + lead) / LN[id].dur);
+// где облики в каждой сцене: [x центра, y центра, размер, видимость, подпись модели]
+const POS = {
+  title:  { lira: [960, 380, 380, 1, 0], patrik: [1500, 400, 260, 0, 0] },
+  ask:    { lira: [470, 520, 330, 1, 0], patrik: [1500, 520, 260, 0, 0] },
+  table:  { lira: [700, 470, 300, 1, 1], patrik: [1220, 470, 300, 1, 1] },
+  r1:     { lira: [540, 330, 210, 1, 1], patrik: [1380, 330, 210, 1, 1] },
+  r2:     { lira: [540, 330, 210, 1, 1], patrik: [1380, 330, 210, 1, 1] },
+  sum:    { lira: [250, 520, 200, 1, 0], patrik: [1670, 520, 200, 1, 0] },
+  how:    { lira: [430, 560, 340, 1, 0], patrik: [1670, 520, 200, 0, 0] },
+  end:    { lira: [960, 330, 300, 1, 0], patrik: [1670, 520, 200, 0, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  const k = ease((T - SC[ORDER[i]].start) / 1.1);
+  let p = cur.map((v, j) => lerp(prev[j], v, k));
+  if (ORDER[i] === "table" && who === "patrik") p[3] = out((T - at("s3b") + 0.6) / 0.8);      // Патрик садится за стол на «а Патрик…»
+  if (ORDER[i] === "table") p[4] = out((T - at("s3b") - (who === "lira" ? 0.8 : 2.4)) / 0.6);  // подписи моделей — на словах
+  return p;
+}
+const ENT = {};
+function makeEnt(who, color, live) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live, ring: false, voiceLevels: true, fx: "wave" });
+  ENT[who].set({ state: "idle" });
+}
+makeEnt("lira", "#9BD4FF", "lira"); makeEnt("patrik", "#FFB547", "patrik");
+
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+function typed(el, text, k) { const n = Math.round(text.length * clamp(k)); const p = el.querySelector("p");
+  p.innerHTML = text.slice(0, n).replace(/&/g, "&amp;").replace(/</g, "&lt;") + (k > 0 && k < 1 ? '<span class="caret"></span>' : ""); }
+
+window.render = function (T, f) {
+  // фон дышит
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  $("#b3").style.transform = `translate(${700 + 200 * Math.sin(T / 13)}px, ${600 + 60 * Math.cos(T / 7)}px)`;
+  const s = (id) => SC[id];
+  layer("L-title", T, 0.2, s("ask").start);
+  const kA = layer("L-ask", T, s("ask").start + 0.3, s("table").start);
+  vis($("#q1"), out((T - at("s2b") + 0.2) / 0.6), 40, .96); vis($("#q2"), out((T - at("s2b") - 2.4) / 0.6), 40, .96);
+  vis($("#one"), out((T - at("s2a") - 0.6) / 0.6) * (1 - out((T - at("s2b")) / 0.6)), 20);
+  // совет: стол, карточки, спор
+  const kC = layer("L-council", T, s("r1").start + 0.2, s("sum").start);
+  const r1 = T < s("r2").start;
+  $("#c1").style.left = "120px"; $("#c2").style.left = "1040px";
+  $("#c1").style.top = $("#c2").style.top = "570px";
+  if (r1) {
+    vis($("#c1"), out((T - at("s4a") + 0.1) / 0.5), 30); typed($("#c1"), "Да! Свобода и время на семью. Нужен только свой уголок для работы.", prog(T, "s4a", 0.1) * 1.05);
+    vis($("#c2"), out((T - at("s4b") + 0.3) / 0.5), 30); typed($("#c2"), "Удалёнка — да. Но сначала договоритесь о графике.", prog(T, "s4b", 0.2) * 1.05);
+  } else {
+    const sw = out((T - s("r2").start) / 0.5);
+    vis($("#c1"), out((T - at("s5c") + 0.3) / 0.5), 30); typed($("#c1"), "Патрик прав. Значит, начнём с двух дней дома в неделю.", prog(T, "s5c", 0.2) * 1.05);
+    vis($("#c2"), out((T - at("s5b") + 0.3) / 0.5), 30); typed($("#c2"), "Лира, про свободу согласен. Но дома легко выгореть.", prog(T, "s5b", 0.2) * 1.05);
+  }
+  vis($("#st-t"), out((T - s("table").start - 0.5) / 0.6) * (1 - out((T - s("sum").start) / 0.5)));
+  // шаги «Мнения → Спор → Итог»
+  const stepK = out((T - s("r1").start) / 0.5) * (1 - out((T - s("how").start) / 0.5));
+  vis($("#steps"), stepK, -20);
+  const ph = T < s("r2").start ? 0 : T < s("sum").start ? 1 : 2, done = T > end("s6b") - 0.3;
+  [...$("#steps").children].forEach((li, i) => { li.className = done || i < ph ? "past" : i === ph ? "on" : ""; li.querySelector("i").textContent = done || i < ph ? "✓" : i + 1; });
+  // дуги спора между обликами
+  const kArc = clamp(out((T - s("r2").start - 0.3) / 0.6) * (1 - out((T - s("sum").start) / 0.4)));
+  if (kArc > 0) {
+    let h = "";
+    for (let j = 0; j < 7; j++) {
+      const u = ((T * 0.55 + j / 7) % 1), dir = Math.floor(T / 2.2) % 2 ? u : 1 - u;
+      const x = lerp(660, 1260, dir), y = 330 - Math.sin(dir * Math.PI) * 120;
+      h += `<circle cx="${x}" cy="${y}" r="${5 + 3 * Math.sin(u * Math.PI)}" fill="${dir > .5 ? "#e59a1f" : "#5aa9e6"}" opacity="${kArc * Math.sin(u * Math.PI)}"/>`;
+    }
+    $("#arc").innerHTML = `<path d="M660 330 Q960 90 1260 330" fill="none" stroke="rgba(36,50,74,${0.22 * kArc})" stroke-width="3" stroke-dasharray="6 12"/>` + h;
+  } else $("#arc").innerHTML = "";
+  // итог: строки появляются по словам
+  layer("L-sum", T, s("sum").start + 0.2, s("how").start);
+  const rows = [...document.querySelectorAll("#sum .row")];
+  const rowT = [at("s6a") + 0.9, at("s6a") + 2.6, at("s6b") - 0.1, at("s6b") + 1.2];
+  rows.forEach((r, i) => vis(r, out((T - rowT[i]) / 0.5), 24));
+  // как позвать
+  layer("L-how", T, s("how").start + 0.2, s("end").start);
+  vis($("#voice"), out((T - at("s7a") + 0.2) / 0.6), 30, .95); vis($("#studio"), out((T - at("s7b") + 0.1) / 0.6), 40, .97);
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  // облики: место, размер, голос
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o, m] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    el.querySelector("small").style.opacity = m; el.querySelector("small").style.fontSize = Math.round(Math.max(18, size / 12)) + "px";
+    const lv = TL.env[who][f] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  // титры
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; 
+    sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

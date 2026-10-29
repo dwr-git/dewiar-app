@@ -340,6 +340,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=self._welcome_loop, name="welcome", daemon=True).start()
         threading.Thread(target=self.intro_auto, name="intro-wait", daemon=True).start()
         threading.Thread(target=self._join_loop, name="join", daemon=True).start()
+        threading.Thread(target=lambda: self.stopping.wait(2) or self.auto_join(), name="auto-join", daemon=True).start()
         threading.Thread(target=self._brain_watch, name="brain", daemon=True).start()
         if not self.wav_input:
             threading.Thread(target=self._ann_loop, name="announcements", daemon=True).start()

@@ -493,9 +493,26 @@ class BrainMixin:
                 self._dewiar_proxy_fetch()                     # прокси Dewiar (если включён) — свежий, пока сайт открывается
             except Exception:  # noqa: BLE001
                 log.exception("прокси Dewiar")
+            self._disk_check()
 
             if self.stopping.wait(float(os.environ.get("DEWIAR_BRAIN_EVERY") or 600)):
                 return
+
+    def _disk_check(self):
+        """Отчёт №395 (29.10): диск заполнился — звук, настройки и временные файлы перестали работать, а человек видел
+        только «Микрофон недоступен». Места меньше 300 МБ — говорим прямо (в виджете и уведомлением, не чаще раза в 6 ч)."""
+        free = disk_free_mb()
+        if free is None or free >= float(os.environ.get("DEWIAR_DISK_MIN_MB") or 300):
+            return False
+        if time.monotonic() - getattr(self, "_disk_warned", -1e9) > 6 * 3600:
+            self._disk_warned = time.monotonic()
+            log.warning("💾 Мало места на диске: %.0f МБ", free)
+            self.note(disk_full_note())
+            try:
+                self.push("Dewiar: диск заполнен", disk_full_note(), telegram=False)
+            except Exception:  # noqa: BLE001
+                pass
+        return True
 
     # ---------- заявка на Dewiar из программы и перенос кодом ----------
 
@@ -540,17 +557,69 @@ class BrainMixin:
 
     def _join_done(self, key, d):
         j = self.s.get("cloud", "join") or {}
+        auto = bool(j.get("auto"))
         r = self.cloud.connect(key, j.get("url", ""))
-        self.s.update({"cloud": {"join": {"id": 0, "secret": "", "url": ""}}})
-        self._cloud_connected(r, "заявка одобрена")
-        text = "Готово — Dewiar подключён" + (f" («{d.get('reply')}»)" if d.get("reply") else "") + ". Спроси меня что-нибудь!"
-        log.info("☁ Заявка на Dewiar одобрена — ключ подключён")
+        self.s.update({"cloud": {"join": {"id": 0, "secret": "", "url": "", "auto": False}}})
+        self._cloud_connected(r, "автоподключение" if auto else "заявка одобрена")
+        text = ("Я подключена к бесплатному мозгу Dewiar и готова. Спросите меня что-нибудь!" if auto else
+                "Готово — Dewiar подключён" + (f" («{d.get('reply')}»)" if d.get("reply") else "") + ". Спроси меня что-нибудь!")
+        log.info("☁ %s — ключ подключён", "Автоподключение к Dewiar" if auto else "Заявка на Dewiar одобрена")
         self.emit("cloud", **self.cloud.status())
-        self.push("Dewiar подключён", "Заявку одобрили — модели Dewiar работают.", telegram=False)
+        self.push("Dewiar подключён", "Бесплатный мозг Dewiar подключён — можно разговаривать." if auto else
+                  "Заявку одобрили — модели Dewiar работают.", telegram=False)
         try:
             self.announce(text)
         except Exception:  # noqa: BLE001
             pass
+
+    def auto_join(self, why="первый запуск"):
+        """Автоподключение (0.69; владелец 29.10: «за наш счёт по умолчанию — важно, чтобы у пользователя всё работало сразу;
+        взять хотя бы что-то для узнавания, контакт попросить позже»). Мозга нет, ключа и входа нет, заявки нет — заявка
+        auto: имя из системы и устройство, без контакта; сайт одобряет сам, ключ подключается сразу. Не чаще раза в час
+        (нет сети — попробуем при следующем вопросе). Выключатель — cloud.auto_join: false. -> True, если ключ уже здесь."""
+        import cloud as C
+        if self.s.get("cloud", "auto_join") is False or self.s.get("llm", "active") or self.s.get("cloud", "key"):
+            return False
+        if self.account.logged_in() or (self.s.get("cloud", "join") or {}).get("id"):
+            return False
+        if self.wav_input and not os.environ.get("DEWIAR_AUTOJOIN"):
+            return False
+        if time.time() - float(self.s.get("cloud", "auto_tried") or 0) < 3600:
+            return False
+        if not getattr(self, "_auto_lock", None):
+            self._auto_lock = threading.Lock()
+        if not self._auto_lock.acquire(blocking=False):
+            return False
+        try:
+            self.s.update({"cloud": {"auto_tried": time.time()}})
+            url = self.s.get("cloud", "url") or C.DEFAULT_URL
+            d = C.join_send(url, _who_am_i(), "", "", device=f"компьютер {OS_NAME}", auto=True)
+            self.s.update({"cloud": {"join": {"id": d.get("id"), "secret": d.get("secret"), "url": url, "auto": True}, "auto": True}})
+            log.info("☁ Автоподключение (%s): заявка №%s — %s", why, d.get("id"), "ключ сразу" if d.get("key") else "ждёт одобрения")
+            if d.get("key"):
+                self._join_done(d["key"], d)
+                return True
+        except Exception as e:  # noqa: BLE001 — нет сети или сайт не ответил: пробный разговор, попробуем позже
+            log.info("☁ Автоподключение не вышло (%s): %s", why, e)
+        finally:
+            self._auto_lock.release()
+        return False
+
+    def contact_set(self, name, contact):
+        """«Как к вам обращаться и как связаться» — дополнить автоподключение (cloud.php /me/contact). -> ответ сайта."""
+        import cloud as C
+        if not self.s.get("cloud", "key"):
+            raise C.CloudError("сначала подключите Dewiar")
+        d = C.fetch(self.cloud.url, self.cloud.key, "/me/contact", body={"name": (name or "").strip(), "contact": (contact or "").strip()})
+        self.s.update({"cloud": {"contact_done": True}})
+        return d
+
+    def contact_get(self):
+        import cloud as C
+        if not self.s.get("cloud", "key"):
+            return {"auto": False}
+        d = C.fetch(self.cloud.url, self.cloud.key, "/me/contact")
+        return dict(d, asked=bool(self.s.get("cloud", "contact_done")))
 
     def _join_loop(self):
         """Фоновый поток: пока ждём заявку — раз в минуту спрашиваем, не одобрили ли (при вводе из wav — не работает)."""
@@ -946,3 +1015,28 @@ class BrainMixin:
                     return
             except Exception as e:  # noqa: BLE001
                 log.info("Голосовой ответ в Telegram (%s): %s", type(eng).__name__, e)
+
+
+def _who_am_i():
+    """Имя для автоподключения — как человек назван в системе (полное имя, иначе логин); не вышло — «Без имени»."""
+    import getpass
+    try:
+        user = getpass.getuser()
+    except Exception:  # noqa: BLE001
+        return "Без имени"
+    full = ""
+    try:
+        if os.name == "nt":
+            import ctypes
+            n = ctypes.c_ulong(0)
+            ctypes.windll.secur32.GetUserNameExW(3, None, ctypes.byref(n))     # NameDisplay: «Михаил Исаев»
+            if n.value:
+                buf = ctypes.create_unicode_buffer(n.value)
+                if ctypes.windll.secur32.GetUserNameExW(3, buf, ctypes.byref(n)):
+                    full = buf.value
+        else:
+            import pwd
+            full = (pwd.getpwnam(user).pw_gecos or "").split(",")[0]
+    except Exception:  # noqa: BLE001
+        full = ""
+    return (full or user or "Без имени").strip()[:80]

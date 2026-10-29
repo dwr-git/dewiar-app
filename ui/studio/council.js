@@ -148,6 +148,13 @@ core.on("council", (e) => {
     coSetup(); core.call("council_history").then(coHist).catch(() => { });
     return;
   }
+  if (e.phase === "docs") {           // 29.10: совет видит «Документы» человека и знания персонажей — видно, что нашлось
+    const d = document.createElement("div"); d.className = "co-docs";
+    const nm = (pid) => (CO.ms.find(m => m.id === pid) || {}).name || pid;
+    d.innerHTML = (e.files && e.files.length ? `<p>Совет смотрит ваши документы: ${e.files.map(f => `<b>${coEsc(f)}</b>`).join(", ")}</p>` : "")
+      + (e.members && e.members.length ? `<p>Со своими знаниями: ${e.members.map(p => coEsc(nm(p))).join(", ")}</p>` : "");
+    $("#co-feed").appendChild(d); return;
+  }
   const c = coCard(e.who, e.phase);
   if (e.start) { coSeat(e.who, "think"); return; }
   if (e.delta) {

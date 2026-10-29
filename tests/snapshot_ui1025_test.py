@@ -84,7 +84,8 @@ with sync_playwright() as p:
         pg.click("#sn-pop [data-f=dwr]"); pg.wait_for_timeout(100)
         pg.click("#sn-forget"); pg.wait_for_timeout(400)
         ok(any(c[0] == "backup_forget_pw" for c in pg.evaluate("calls")) and pg.is_visible("#sn-pw"), "«Забыть» пароль — снова поле пароля")
-        pg.mouse.click(400, 600); pg.wait_for_timeout(150)
+        bx = pg.locator("#hm-greet").bounding_box()        # мимо — по заголовку: в (400, 600) с 0.67 плашка «Совет ИИ», она уводит со страницы
+        pg.mouse.click(bx["x"] + 5, bx["y"] + 5); pg.wait_for_timeout(150)
         ok(not pg.is_visible("#sn-pop"), "щелчок мимо — меню закрылось")
         # восстановление
         pg.click("#sn-chip"); pg.click("#sn-rest"); pg.wait_for_timeout(400)

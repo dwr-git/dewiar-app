@@ -320,6 +320,12 @@
   #clb em { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.28); }
   #clb button { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: 12px; padding: 0 2px; } #clb button:hover { opacity: 1; }
   body.light #clb { color: var(--ink); } body.light #clb em { background: rgba(255,255,255,.7); }
+  /* ответ разработчика на жалобу (29.10, владелец: «чтобы видел, что ему ответили»): держится, пока не посмотрели */
+  #drb { display: none; align-items: center; gap: 6px; font-size: 12.5px; line-height: 1.35; padding: 7px 8px 7px 11px; border-radius: 12px; cursor: pointer;
+         color: #fff; background: linear-gradient(135deg, rgba(91,108,255,.42), rgba(75,227,161,.28)); animation: clbIn .35s ease-out; }
+  #drb.on { display: flex; } #drb span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #drb button { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; font-size: 12px; padding: 0 2px; } #drb button:hover { opacity: 1; }
+  body.light #drb { color: var(--ink); }
   @keyframes clbIn { from { opacity: 0; transform: translateY(4px); } }
   @media (prefers-reduced-motion: reduce) { #clb { animation: none; } }
   .srcs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -545,6 +551,7 @@
     <div id="upd"></div>
     <div id="cloudlow"></div>
     <div id="annb" role="button" tabindex="0"><span id="annb-t"></span><button id="annb-x" title="Скрыть" aria-label="Скрыть">✕</button></div>
+    <div id="drb" role="button" tabindex="0" title="Открыть ответ"><span id="drb-t"></span><button id="drb-x" title="Скрыть" aria-label="Скрыть">✕</button></div>
     <div id="clb" role="button" tabindex="0" title="Открыть переписку"><span id="clb-t"></span><em id="clb-n" hidden></em><button id="clb-x" title="Скрыть" aria-label="Скрыть">✕</button></div>
     <div id="ask">
       <div class="askbox" id="askbox">
@@ -612,6 +619,8 @@ const entity = new DewiarEntity($("cv"), { style: "nexus", color: "#8A9BFF", pla
 const VOICE_FX = ["bars", "pulse", "wave"];
 function applyLook(ui) {                      // тема карточки и облика (assets/skins.*) + чем голос отзывается вокруг портрета
   ui = ui || {};
+  const top = ui.on_top !== false;             // идея №48: «окошко Лиры поверх всех окон» — выключатель в «Оформлении»
+  if (window.__onTop !== top) { window.__onTop = top; try { const a = api(); if (a && a.set_on_top) a.set_on_top(top); } catch (e) { } }
   const sk = window.dewiarSkin ? dewiarSkin(ui.skin) : { id: "brand" };
   (window.DEWIAR_SKIN_IDS || ["brand"]).forEach(k => document.body.classList.toggle("skin-" + k, k === sk.id));
   document.body.classList.toggle("light", !!sk.light);
@@ -861,6 +870,19 @@ function reportOffer(e) {
   row.append(yes, no); $("bot").appendChild(row); hideCapLater(45000);
 }
 
+// автоподключение (0.69): после нескольких разговоров — один раз попросить контакт, по желанию (core _contact_maybe)
+function contactAsk() {
+  if (mode !== "card" || state !== "idle" && state !== "listening") return;
+  showCap(null, "Мы подключили вас к бесплатному мозгу Dewiar без анкеты. Оставите контакт? Если что-то сломается — разработчик сможет вам ответить. Это по желанию.", false);
+  const row = document.createElement("div"); row.className = "repask";
+  const yes = document.createElement("button"); yes.className = "rep"; yes.textContent = "Оставить контакт";
+  const no = document.createElement("button"); no.className = "rep"; no.textContent = "Не сейчас";
+  yes.onclick = (ev) => { ev.stopPropagation(); const a = api(); if (a && a.open_settings) a.open_settings("dw"); hideCapLater(300); };
+  no.onclick = (ev) => { ev.stopPropagation(); hideCapLater(300); };
+  row.append(yes, no); $("bot").appendChild(row); hideCapLater(40000);
+}
+core.on("contact_ask", contactAsk);
+
 // созвон начался (core/engine_audio._meeting_watch) — предложить суфлёр: молча слушает и подсказывает на экране
 function prompterOffer(e) {
   if (mode !== "card") return;
@@ -957,7 +979,8 @@ core.on("hello", d => {
   setLocal(d.settings.privacy && d.settings.privacy.local_only);
   personas = d.personas; muted = d.muted; $("b-mic").classList.toggle("on", muted); setTextOnly(d.settings.tts && d.settings.tts.text_only);
   applyPersona(d.persona); setRadio(d.radio); setState(d.state); note(d.status);
-  if (!d.settings.llm.active && (d.settings.ui || {}).intro !== "") { showCap("", "Чтобы я могла отвечать, меня нужно один раз подключить — бесплатно: студия → «Мозг» → «Подключить бесплатно».", true); }
+  if (!d.settings.llm.active && (d.settings.ui || {}).intro !== "") { showCap("", d.settings.llm.trial === false ? "Чтобы я могла отвечать, меня нужно один раз подключить — бесплатно: студия → «Мозг» → «Подключить бесплатно»."
+    : "Спросите меня что-нибудь — отвечу и без настройки, пока коротко. Напоминания, поиск и дела — после бесплатного подключения: студия → «Мозг» → «Подключить бесплатно».", true); }
 })
 .on("offline", () => { setState("offline"); })
 .on("reminders", e => tmrSet(e.items))
@@ -1189,7 +1212,7 @@ card.addEventListener("pointerdown", async (ev) => {
   // большая картинка (#lightbox) — тоже: захват указателя уводил щелчок «закрыть» на карточку, и картинка закрывала
   // виджет намертво (отчёт 70: «при картинке виснет виджет — нужно перезапускать»)
   // строки «ИИ-баланс…» и объявления — тоже кнопки (24.10: щелчок по #cloudlow уходил в перетаскивание и студия не открывалась)
-  if (ev.button !== 0 || ev.target.closest("button, input, #cap, #note, #upd, #task, #yn, #lightbox, #cloudlow, #annb, #clb")) return;
+  if (ev.button !== 0 || ev.target.closest("button, input, #cap, #note, #upd, #task, #yn, #lightbox, #cloudlow, #annb, #clb, #drb")) return;
   card.setPointerCapture(ev.pointerId);
   drag = { sx: ev.screenX, sy: ev.screenY, moved: false, pos: null, orb: !!ev.target.closest("#orb") };
   if (drag.orb) holdBegin("mouse");
@@ -1275,6 +1298,16 @@ core.on("close_msg", e => { CLB.hid = 0; core.call("close_state").then(st => clb
   .on("close", e => { if ($("clb").classList.contains("on") || CLB.hid) clbSet(e.state); })
   .on("hello", () => setTimeout(() => core.call("close_state").then(st => clbSet(st)).catch(() => {}), 2000));
 $("clb").onclick = () => { const a = api(); if (a) a.open_settings("close"); };
+function drbSet(e) {                              // «💬 Разработчик ответил на жалобу №…» — пока не посмотрели
+  const el = $("drb");
+  if (!e || !e.unread) { el.className = ""; return; }
+  el.className = "on";
+  $("drb-t").textContent = "💬 " + (e.title ? e.title + (e.text ? " — " + e.text : "") : `Разработчик ответил на жалобы: ${e.unread}`);
+}
+core.on("dev_reply", drbSet)
+  .on("hello", () => setTimeout(() => core.call("complaints").then(v => { if (v && v.unread) drbSet({ unread: v.unread, ...(() => { const c = (v.mine || []).find(x => x.unread); return c ? { title: `Ответ на жалобу №${c.id}`, text: c.reply || "" } : {}; })() }); }).catch(() => {}), 2500));
+$("drb").onclick = () => { const a = api(); if (a) a.open_settings("about"); core.call("complaints_seen").catch(() => {}); $("drb").className = ""; };
+$("drb-x").onclick = (e) => { e.stopPropagation(); core.call("complaints_seen").catch(() => {}); $("drb").className = ""; };
 $("clb-x").onclick = (e) => { e.stopPropagation(); CLB.hid = +($("clb-n").textContent || 1) || 1; $("clb").className = ""; };
 $("b-cal").onclick = () => { const a = api(); if (a) a.open_settings("calendar"); };
 function setLocal(on) { $("b-lo").hidden = !on; $("corner-l").classList.toggle("lo", !!on); }
@@ -1351,6 +1384,23 @@ $("task").onclick = () => { const a = api(); if (a) a.open_settings("tasks"); };
 /* значок обновления у жучка: есть обновление — ставит сразу (как строка «Доступна версия…»); нет — проверяет (и скачивает
    найденное) и тоже ставит; новее нет — так и говорит строкой на 5 секунд */
 const UPD = { avail: null };
+/* 29.10 (236 компьютеров на 0.45.3: строку «Доступна версия…» легко не заметить) — раз в сутки, когда я свободна,
+   спрашиваю прямо: «Вышла новая версия — обновить сейчас?» с одной кнопкой (она жмёт ту же строку). «Позже» — завтра. */
+function updAsk(a) {
+  let last = 0; try { last = +localStorage.getItem("upd_ask") || 0; } catch (e) { }
+  if (Date.now() - last < 20 * 3600e3 || mode !== "card") return;
+  setTimeout(() => {
+    if (!UPD.avail || (state !== "idle" && state !== "listening") || $("cap").classList.contains("show")) return;
+    try { localStorage.setItem("upd_ask", String(Date.now())); } catch (e) { }
+    showCap(null, `Вышла новая версия Dewiar ${a.version} — быстрее и с исправлениями. Обновить сейчас? Это минута, всё ваше сохранится.`, false);
+    const row = document.createElement("div"); row.className = "repask";
+    const yes = document.createElement("button"); yes.className = "rep"; yes.textContent = "Обновить";
+    const no = document.createElement("button"); no.className = "rep"; no.textContent = "Позже";
+    yes.onclick = (ev) => { ev.stopPropagation(); hideCapLater(300); $("upd").click(); };
+    no.onclick = (ev) => { ev.stopPropagation(); hideCapLater(300); };
+    row.append(yes, no); $("bot").appendChild(row); hideCapLater(60000);
+  }, 20000);
+}
 function updMsg(t, ms) {
   const u = $("upd"); u.classList.add("on"); u.textContent = t; u.onclick = null; clearTimeout(window._updMsgT);
   if (ms) window._updMsgT = setTimeout(() => { if (!UPD.avail) u.classList.remove("on"); }, ms);
@@ -1389,6 +1439,7 @@ function showUpd(u) {
   UPD.avail = a || null; $("b-upd").classList.toggle("has", !!a); $("corner-l").classList.toggle("upd", !!a);
   updTitle();
   if (a) $("upd").textContent = `Доступна версия ${a.version} — нажмите, чтобы обновить`;
+  if (a) updAsk(a);
   $("upd").onclick = async () => {
     const x = api(); if (!x || !a) return;
     // страница новее запущенной программы (обновились, а интерфейс не перезапускали) — кнопки установки в ней нет

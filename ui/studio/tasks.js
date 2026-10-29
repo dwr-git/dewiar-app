@@ -46,6 +46,14 @@ function renderDiff(d) {
   return `<div class="diff">${d.split("\n").map(l => { const c = l.startsWith("diff --git") ? "file" : l.startsWith("@@") ? "hunk" : l.startsWith("+") && !l.startsWith("+++") ? "add" : l.startsWith("-") && !l.startsWith("---") ? "del" : "";
     return c === "file" ? `<div class="file">${escH(l.replace(/^diff --git a\/(.*) b\/.*/, "$1"))}</div>` : (l.startsWith("index ") || l.startsWith("+++") || l.startsWith("---")) ? "" : `<div class="${c}">${escH(l) || " "}</div>`; }).join("")}</div>`;
 }
+/* «Задачи на часы»: сколько идёт и сколько примерно осталось — по среднему времени на пункт плана (после двух пунктов) */
+function tDur(m) { m = Math.max(0, Math.round(m)); return m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч${m % 60 ? " " + (m % 60) + " мин" : ""}`; }
+function tEta(t, mins) {
+  const p = t.progress || [0, 0];
+  if (!p[1] || p[0] < 2 || p[0] >= p[1] || mins < 3) return "";
+  const left = mins / p[0] * (p[1] - p[0]);
+  return ` · осталось ≈ ${tDur(left < 60 ? Math.ceil(left / 5) * 5 : Math.ceil(left / 15) * 15)}`;
+}
 let tOpenedFor = "", tOutSel = "";   // для какой задачи уже выбрана вкладка по умолчанию; выбранный файл результата
 /* план — живым чек-листом: сделано ✓, текущий пункт крутится, остальные ждут */
 function renderPlan(text, live, activity) {
@@ -147,7 +155,7 @@ async function openTask(id) {
     const live = ["running", "waiting"].includes(t.status);
     $("#t-view").innerHTML = `<div class="fhead"><div class="t"><b></b><span><i class="badge ${t.status}">${t.status_ru}</i>шагов ${t.steps}${prog}${t.project ? " · " + escH(t.project) : ""}</span></div></div>
       <div class="tprog${live ? " live" : ""}"><div class="bar"><b style="width:${Math.max(2, pr * 100)}%"></b></div>
-        <div class="tline">${live ? `<i class="tspin"></i>` : ""}<span>${t.status === "done" ? "готово" : live ? (escH(t.activity) || "думает…") : t.status_ru}</span><em>${t.progress && t.progress[1] ? `${t.progress[0]} из ${t.progress[1]} пунктов плана · ` : ""}${live ? `идёт ${mins} мин` : ""}</em></div></div>
+        <div class="tline">${live ? `<i class="tspin"></i>` : ""}<span>${t.status === "done" ? "готово" : live ? (escH(t.activity) || "думает…") : t.status_ru}</span><em>${t.progress && t.progress[1] ? `${t.progress[0]} из ${t.progress[1]} пунктов плана · ` : ""}${live ? `идёт ${tDur(mins)}` + tEta(t, mins) : ""}</em></div></div>
       ${t.error ? `<p class="res bad" style="margin-bottom:10px">${escH(t.error)}</p>` : ""}
       ${t.status === "sleeping" ? `<div class="twait">⏳ <b>${escH(t.status_ru)}</b>${t.wait_reason ? " — " + escH(t.wait_reason) : ""}. Напишите задаче ниже — продолжит сразу.</div>` : ""}
       ${t.status === "waiting" ? `<div class="tq"><b>Вопрос:</b> ${escH(t.question)}<div class="actions" style="margin-top:8px"><input type="text" id="t-ans" placeholder="Ваш ответ" style="flex:1"><button class="btn primary" id="t-ansgo">Ответить</button></div></div>` : ""}

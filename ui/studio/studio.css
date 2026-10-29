@@ -503,7 +503,10 @@ h1 svg.hi { width: 26px; height: 26px; margin: 0 10px -4px 0; fill: none; stroke
 .row.one { grid-template-columns: 1fr; }
 .row.three { grid-template-columns: 1fr 1fr 1fr; }
 label.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
-input[type=text], input[type=password], input[type=number], input[type=url], input[type=email], input[type=search], input[type=time], input[type=date], input[type=datetime-local], select, textarea { width: 100%; padding: 9px 12px; border-radius: 12px; border: 0; background-color: var(--field); color: var(--ink); outline: none; transition: background .2s, box-shadow .2s; }
+/* 29.10 (владелец: «0.67 — главная неаккуратная, грубая»): поле без type (город в «Утре», время сводки, клиенты, сделки,
+   платежи) рисовалось системным — с чёрной рамкой; :where — классы самих полей важнее */
+input[type=text], input[type=password], input[type=number], input[type=url], input[type=email], input[type=search], input[type=time], input[type=date], input[type=datetime-local], select, textarea,
+input:where(:not([type])) { width: 100%; padding: 9px 12px; border-radius: 12px; border: 0; background-color: var(--field); color: var(--ink); outline: none; transition: background .2s, box-shadow .2s; }
 :root { color-scheme: dark; }
 /* Свой вид выпадающих списков: системный рисовался белым с белым текстом */
 select { -webkit-appearance: none; appearance: none; padding-right: 36px; cursor: pointer;
@@ -2793,7 +2796,8 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 @media (max-width: 1040px) { .dv-hero, .dv-pair { grid-template-columns: 1fr; } }
 
 /* «Утро с Лирой» на главной (studio/morning.js): погода крупно слева — небо задаёт цвет панели; справа — что ждёт */
-.hm-morning { margin: 22px 0 18px; padding: 18px 20px 16px; border-radius: 26px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); }
+.hm-morning { margin: 0;   /* отступы задаёт #hm-body (gap 24) — свои 22 сверху давали дыру под приветствием */
+  padding: 18px 20px 16px; border-radius: 26px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); }
 .hm-morning[hidden] { display: none; }
 .mn-head { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 12px; }
 .mn-head h2 { margin: 0; font-size: 18px; }
@@ -2816,12 +2820,12 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .mn-w.mn-city b { font-size: 16px; } .mn-w.mn-city p { color: var(--muted); opacity: 1; }
 .mn-cin { display: flex; gap: 6px; margin-top: 10px; } .mn-cin input { flex: 1; min-width: 0; }
 .mn-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.mn-rows button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 14px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mn-rows button { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 14px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .mn-rows button:hover { background: rgba(127,127,140,.1); }
 .mn-rows svg { flex: none; width: 34px; height: 34px; padding: 7px; border-radius: 11px; box-sizing: border-box; fill: none; stroke: var(--accent); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
   background: color-mix(in srgb, var(--accent) 13%, transparent); }
 .mn-rows span { display: flex; flex-direction: column; min-width: 0; }
-.mn-rows b { font-size: 14.5px; } .mn-rows small { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mn-rows b { font-size: 14.5px; margin: 1px 0 2px; } .mn-rows small { line-height: 1.55; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mn-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; }
 .mn-daily { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; }
 .mn-daily #mn-at { width: 56px; padding: 5px 8px; border-radius: 9px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -3271,6 +3275,8 @@ nav .nav-g span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; 
 nav .nav-g .nav-gi { width: 22px; height: 22px; flex: none; border-radius: 8px; display: grid; place-items: center; font-style: normal;
   font: 700 11px/1 "Unbounded", "Manrope", sans-serif; color: #fff; background: linear-gradient(145deg, color-mix(in srgb, var(--c, #8b7cff) 78%, #fff), var(--c, #8b7cff));
   box-shadow: 0 4px 10px -6px var(--c, #8b7cff); }
+nav .nav-g .nav-gi.emo { font: 400 13px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  background: color-mix(in srgb, var(--c, #8b7cff) 20%, transparent); box-shadow: none; }
 nav .nav-g .cl-gstack { position: relative; width: 24px; height: 24px; flex: none; }
 nav .nav-g .cl-gstack .cl-ava { position: absolute; width: 16px; height: 16px; font-size: 8.5px; margin: 0; }
 nav .nav-g .cl-gstack .cl-ava:first-child { left: 0; top: 0; } nav .nav-g .cl-gstack .cl-ava:nth-child(2) { right: 0; bottom: 0; }
@@ -3377,22 +3383,26 @@ img.emj { width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 .03em; 
 .co-end p { margin: 0 auto 0 0; font-size: 13.5px; color: var(--muted); } .co-end p.bad { color: var(--bad, #e0566f); }
 @media (max-width: 980px) { .co-grid { grid-template-columns: 1fr; } .co-side { position: static; } }
 @media (prefers-reduced-motion: reduce) { .co-msg, .co-dots i, .co-msg.typing .co-tx p:last-child::after { animation: none; } .co-orb { transition: none; } }
-/* «Совет ИИ» на «Главной» — тёмная плашка, как «стол» совета: лица персонажей внахлёст, без колец */
-.hm-council { display: flex; align-items: center; gap: 18px; width: 100%; margin: 14px 0 4px; padding: 16px 20px; border: 0; border-radius: 22px; cursor: pointer;
-  text-align: left; font: inherit; color: #EEF0FF; position: relative; overflow: hidden;
-  background: radial-gradient(60% 120% at 15% 0%, rgba(139,124,255,.45), transparent 60%), radial-gradient(40% 90% at 100% 100%, rgba(255,127,168,.22), transparent 70%),
-              linear-gradient(160deg, #1b1730, #2a2350 60%, #372d66); box-shadow: 0 20px 40px -28px rgba(30,20,80,.8); transition: transform .2s; }
+/* «Совет ИИ» на «Главной». 29.10 (владелец: «0.67 — главная грубая; цвета органичные, без обводок, всё в одном стиле»):
+   не тёмная плашка, а тот же материал, что карточки «Сегодня» и «Утро», — лица персонажей внахлёст, мягкий отсвет
+   цвета акцента слева, кнопка — как «Расскажи утро» */
+.hm-council { display: flex; align-items: center; gap: 18px; width: 100%; margin: 0; padding: 14px 18px; border: 0; border-radius: 22px; cursor: pointer;
+  text-align: left; font: inherit; color: var(--ink); position: relative; overflow: hidden; isolation: isolate;
+  background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); transition: transform .2s; }
+.hm-council::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(38% 160% at 0% 50%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%); }
 .hm-council[hidden] { display: none; }
-.hm-council:hover { transform: translateY(-2px); } .hm-council:focus-visible { outline: 2px solid #b9b2ff; outline-offset: 3px; }
+.hm-council:hover { transform: translateY(-2px); } .hm-council:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .hmc-faces { display: flex; flex: none; }
 .hmc-faces i { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font: 700 15px/1 "Unbounded", Manrope, sans-serif; color: #fff;
   background: linear-gradient(145deg, color-mix(in srgb, var(--c) 70%, #fff), var(--c)); background-size: cover; background-position: center;
-  box-shadow: -6px 4px 14px -4px rgba(0,0,0,.55); position: relative; transition: transform .25s; }
+  box-shadow: -4px 3px 10px -4px rgba(20,30,60,.35); position: relative; transition: transform .25s; }
 .hmc-faces i + i { margin-left: -12px; }
 .hm-council:hover .hmc-faces i:nth-child(2) { transform: translateY(-3px); } .hm-council:hover .hmc-faces i:nth-child(3) { transform: translateY(2px); }
 .hmc-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.hmc-t b { font: 600 17px/1.2 "Unbounded", Manrope, sans-serif; color: #fff; } .hmc-t span { font-size: 13px; color: #c9c6ee; line-height: 1.4; }
-.hmc-go { flex: none; padding: 9px 16px; border-radius: 99px; background: #fff; color: #2b2540; font-weight: 700; font-size: 13.5px; }
+.hmc-t b { font-size: 15.5px; color: var(--ink); } .hmc-t span { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.hmc-go { flex: none; padding: 9px 16px; border-radius: 12px; background: var(--brand); color: #fff; font-weight: 700; font-size: 13.5px;
+  box-shadow: 0 6px 22px -8px rgba(118,75,162,.85); }
 @media (max-width: 700px) { .hm-council { flex-wrap: wrap; } .hmc-go { width: 100%; text-align: center; } }
 /* ---------- «Бот персонажа» (0.67, studio/pbot.js): схема «люди → персонаж → знания и мозг» со стеной «не видит»;
    без рамок: узлы — мягкие плашки, провода — тонкие кривые, по которым бежит огонёк, когда бот ответил. ---------- */
@@ -3502,3 +3512,27 @@ img.emj { width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 .03em; 
 .wr-facts .wr-all span { font-size: 11.5px; }
 @media (max-width: 1100px) { .wr-card { grid-template-columns: 1fr 1fr; } .wr-facts { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 8px 22px; } }
 @media (max-width: 640px) { .wr-card { grid-template-columns: 1fr; } }
+.bugc.new { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 14px; }
+.bugnew { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 8px; margin-left: 6px; border-radius: 99px; color: #fff; background: var(--brand); }
+
+/* Значок группы (0.68, studio/groups.js): эмодзи на мягкой плашке цвета группы — в списке, шапке переписки и выборе;
+   без обводок: выбранный — приподнят и подсвечен цветом акцента */
+.cl-gico { flex: none; width: 40px; height: 40px; border-radius: 14px; display: grid; place-items: center; font-style: normal;
+  font: 400 21px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  background: color-mix(in srgb, var(--c, #8b7cff) 20%, transparent); }
+.cl-gava .cl-gico { width: 100%; height: 100%; border-radius: inherit; }
+.gr-icons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.gr-ic { width: 40px; height: 40px; border: 0; border-radius: 12px; display: grid; place-items: center; cursor: pointer; padding: 0;
+  font: 400 20px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; background: rgba(127,127,140,.08); color: var(--ink);
+  transition: transform .15s, background .15s, box-shadow .15s; }
+.gr-ic:hover { transform: translateY(-2px); background: rgba(127,127,140,.16); }
+.gr-ic.on { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: 0 6px 16px -8px var(--accent); transform: translateY(-2px); }
+.gr-ic:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gr-ic0 { font: 600 13px/1 Manrope, sans-serif; color: var(--muted); }
+html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } html.st-neu .gr-ic.on { box-shadow: var(--press); background: var(--sk-glass); color: var(--accent); }
+/* «Как к вам обращаться» (0.69, studio/dewiar.js): автоподключение без анкеты — имя и контакт по желанию */
+.dw-me { margin: 0 0 16px; } .dw-me[hidden] { display: none; }
+/* «Совет ИИ»: что нашлось в «Документах» и у кого свои знания (29.10) — тихой строкой в ленте, без рамок */
+.co-docs { margin: 4px 0 10px; padding: 10px 14px; border-radius: 14px; font-size: 13px; color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.co-docs p { margin: 2px 0; } .co-docs b { color: var(--ink); font-weight: 600; }

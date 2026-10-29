@@ -135,19 +135,28 @@ function grStack(g, n = 3) {
   const ms = (g.members || []).slice(0, n);
   return `<div class="grstack">${ms.map(m => clAvaH(m.pid, m.name, m.face)).join("")}${(g.members || []).length > n ? `<i class="clava more">+${g.members.length - n}</i>` : ""}</div>`;
 }
+/* Значок группы (0.68, владелец: «можно ли задавать иконку к самой группе»): эмодзи на мягкой плашке цвета группы;
+   нет значка — лица участников, как раньше. Ставит создатель — в «Новой группе» и в «Участниках». */
+const GR_ICONS = ["👨‍👩‍👧", "🏠", "❤️", "💼", "🎉", "⚽", "🎓", "🌿", "🐾", "✈️", "🍳", "🎵", "💡", "🛠️", "🎮", "☀️"];
+const grAva = (g, n = 3) => g && g.icon ? `<i class="grico" style="--c:${clCol(g.gid || "g")}" aria-hidden="true">${esc(g.icon)}</i>` : grStack(g, n);
+const grIconPick = (cur) => `<div class="gremos" role="radiogroup" aria-label="Значок группы"><button type="button" class="grem grem0${cur ? "" : " on"}" data-ic="" role="radio" aria-checked="${!cur}">Аа</button>${GR_ICONS.map(e => `<button type="button" class="grem${e === cur ? " on" : ""}" data-ic="${e}" role="radio" aria-checked="${e === cur}">${e}</button>`).join("")}</div>`;
+function grIconWire(box, onPick) {
+  $$(".grem", box).forEach(b => b.onclick = () => { $$(".grem", box).forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); onPick(b.dataset.ic); });
+}
 function grListHtml(st) {
   const gs = st.groups || [];
   if (!st.people.length && !gs.length) return "";
   const last = (g) => { const l = (st.hist[g.gid] || []).slice(-1)[0]; return l ? esc((l.out ? "Вы: " : (String(l.who || "").split(/\s+/)[0] || "Кто-то") + ": ") + (l.t || "📎 " + ((l.f || [])[0] || {}).name))
     : esc(grNames(g).join(", ") || "пока только вы"); };
   return `<div class="grhead"><h3>Группы</h3><button class="btn sm" id="gr-new">${GR_IC}Новая группа</button></div>`
-    + (gs.length ? gs.map(g => `<div class="clp grp" data-gid="${esc(g.gid)}">${grStack(g)}<span><b>${esc(g.name)}</b><small>${last(g)}</small></span>${st.unread[g.gid] ? `<em>${st.unread[g.gid]}</em>` : ""}</div>`).join("")
+    + (gs.length ? gs.map(g => `<div class="clp grp" data-gid="${esc(g.gid)}">${grAva(g)}<span><b>${esc(g.name)}</b><small>${last(g)}</small></span>${st.unread[g.gid] ? `<em>${st.unread[g.gid]}</em>` : ""}</div>`).join("")
       : `<p class="hint grnone">Семья, друзья, соседи — пишите всем сразу. Создайте группу из своих близких.</p>`);
 }
 function grNewHtml(st) {
   const sel = grNew.pids;
   return `<div class="clh"><button class="ib soft" id="gr-x" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><div style="flex:1"><b>Новая группа</b><small>до ${GR_MAX} человек вместе с вами</small></div></div>
     <input id="gr-name" class="grname" maxlength="40" placeholder="Название — например, Семья" value="${esc(grNew.name || "")}">
+    <p class="hint" style="margin:14px 4px 8px">Значок</p>${grIconPick(grNew.icon || "")}
     <p class="hint" style="margin:14px 4px 8px">Кого позвать — из ваших близких${sel.size ? ` · выбрано ${sel.size}` : ""}</p>
     <div class="grpick">${st.people.map(p => `<label class="grpk${sel.has(p.pid) ? " on" : ""}"><input type="checkbox" data-pid="${esc(p.pid)}" ${sel.has(p.pid) ? "checked" : ""}>${clAvaH(p.pid, p.name, p.face)}<span>${esc(p.name)}</span><i class="grck"></i></label>`).join("")}</div>
     <button class="btn p w" id="gr-make" ${sel.size && (grNew.name || "").trim() ? "" : "disabled"}>Создать группу</button>
@@ -157,7 +166,8 @@ function grInfoHtml(st, g) {
   const add = g.mine ? st.people.filter(p => !(g.members || []).some(m => m.pid === p.pid)) : [];
   const ownerName = g.mine ? "вы" : ((g.members || []).find(m => m.pid === g.owner) || {}).name || "участник";
   return `<div class="clh"><button class="ib soft" id="gr-ix" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><div style="flex:1;min-width:0"><b>${esc(g.name)}</b><small>${(g.members || []).length + 1} в группе · создал${g.mine ? "и вы" : "(а) " + esc(ownerName)}</small></div></div>
-    ${g.mine ? `<div class="row2"><input id="gr-rn" class="grname" maxlength="40" value="${esc(g.name)}" aria-label="Название группы"><button class="btn sm" id="gr-rn-go">Переименовать</button></div>` : ""}
+    ${g.mine ? `<div class="row2"><input id="gr-rn" class="grname" maxlength="40" value="${esc(g.name)}" aria-label="Название группы"><button class="btn sm" id="gr-rn-go">Переименовать</button></div>
+      <p class="hint" style="margin:12px 4px 8px">Значок — увидят все в группе</p>${grIconPick(g.icon || "")}` : ""}
     <h3>Участники</h3>
     <div class="clp me">${clAvaH(st.me.pid || "me", st.me.name || "Я", st.me.face)}<span><b>Вы</b><small>${g.mine ? "создали группу" : "участник"}</small></span></div>
     ${(g.members || []).map(m => `<div class="clp">${clAvaH(m.pid, m.name, m.face)}<span><b>${esc(m.name)}</b><small>${m.pid === g.owner ? "создал(а) группу" : st.people.some(p => p.pid === m.pid) ? "ваш близкий" : "не в ваших близких — только в группе"}</small></span>${g.mine ? `<button class="btn sm ghost" data-drop="${esc(m.pid)}">Убрать</button>` : ""}</div>`).join("")}
@@ -167,7 +177,7 @@ function grInfoHtml(st, g) {
 function grThreadHtml(st, g) {
   const h = st.hist[g.gid] || [];
   const who = (m) => m.out ? "" : `<b class="grwho" style="color:${clCol(m.from || m.who)}">${esc(String(m.who || "Кто-то").split(/\s+/)[0])}</b>`;
-  return `<div class="clh"><button class="ib soft" id="cl-back" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>${grStack(g, 2)}
+  return `<div class="clh"><button class="ib soft" id="cl-back" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>${grAva(g, 2)}
       <button class="grtitle" id="gr-info"><b>${esc(g.name)}</b><small>${esc(["вы"].concat(grNames(g)).join(", "))}</small></button>
       <button class="ib soft" id="cl-album" title="Фото и файлы" aria-label="Фото и файлы">${AL_IC.album}</button><button class="ib soft" id="gr-info2" aria-label="Участники">${GR_IC}</button></div>
     <div class="clmsgs" id="cl-msgs">${h.map((m, i) => `<div class="clm ${m.out ? "out" : ""}${grRx(m).length ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${who(m)}${m.t ? `<div>${clEmo(esc(m.t))}</div>` : ""}${(m.f || []).map((f, j) => clFileHtml(f, i, j)).join("")}${m.rem ? `<span class="grrem">⏰ напомню всем ${esc(whenText(new Date(m.rem.at)))}</span>` : ""}<time>${clTime(m.ts)}${m.pend ? clTick(m, g.gid) : grReaders(g, m) ? ` · ${esc(grReaders(g, m))}` : ""}</time>${grRx(m).length ? `<span class="clrx">${clEmo(esc(grRx(m).join("")))}</span>` : ""}</div>`).join("")
@@ -184,11 +194,12 @@ function grRender(box) {
     box.innerHTML = grNewHtml(st);
     $("#gr-x").onclick = () => { grNew = null; clRender(); };
     $("#gr-name").oninput = () => { grNew.name = $("#gr-name").value; $("#gr-make").disabled = !(grNew.pids.size && grNew.name.trim()); };
+    grIconWire(box, (ic) => { grNew.icon = ic; });
     $$(".grpick input[data-pid]").forEach(c => c.onchange = () => {
       if (c.checked && grNew.pids.size + 2 > GR_MAX) { c.checked = false; return toast(`В группе — до ${GR_MAX} человек`); }
       c.checked ? grNew.pids.add(c.dataset.pid) : grNew.pids.delete(c.dataset.pid); grRender(box); });
     $("#gr-make").onclick = async () => { $("#gr-make").disabled = true;
-      try { const d = await grOp({ op: "create", name: grNew.name.trim(), pids: [...grNew.pids] }, `Группа «${grNew.name.trim()}» создана`); grNew = null; clCur = d.gid; clRender(); }
+      try { const d = await grOp({ op: "create", name: grNew.name.trim(), pids: [...grNew.pids], icon: grNew.icon || "" }, `Группа «${grNew.name.trim()}» создана`); grNew = null; clCur = d.gid; clRender(); }
       catch (e) { toast(e.message, 4000); $("#gr-make").disabled = false; } };
     clFacesFill(box); return true;
   }
@@ -197,6 +208,7 @@ function grRender(box) {
   if (grInfo === g.gid) {
     box.innerHTML = grInfoHtml(st, g); clFacesFill(box);
     $("#gr-ix").onclick = () => { grInfo = ""; clRender(); };
+    if (g.mine) grIconWire(box, (ic) => grOp({ op: "icon", gid: g.gid, icon: ic }, ic ? "Значок группы поставлен" : "Значок убран").then(() => clRender()).catch(e => toast(e.message, 4000)));
     if ($("#gr-rn-go")) $("#gr-rn-go").onclick = () => { const n = $("#gr-rn").value.trim(); if (n) grOp({ op: "rename", gid: g.gid, name: n }, "Переименовано").then(() => clRender()).catch(e => toast(e.message, 4000)); };
     $$("[data-drop]").forEach(b => b.onclick = () => { const m = g.members.find(x => x.pid === b.dataset.drop);
       if (confirm(`Убрать ${m ? m.name : "участника"} из «${g.name}»?`)) grOp({ op: "drop", gid: g.gid, pid: b.dataset.drop }, "Убран(а) из группы").then(() => clRender()).catch(e => toast(e.message, 4000)); });

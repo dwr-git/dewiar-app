@@ -123,6 +123,30 @@ def clean_text(s, n=300):
     return s.strip()[:n]
 
 
+def complaint_watch(c, now=None):
+    """Спрашивать ли сайт об этой жалобе (29.10, владелец: «не будет ли так, что мы забыли ответить, а вопрос висит вечно и
+    лишние запросы?»): без секрета или старше 60 дней — нет; ответили по существу («исправлено», «не ошибка» или «прочитана»
+    со словами ответа) — ещё неделю (вдруг допишем), потом нет; остальное — да."""
+    if not c.get("s"):
+        return False
+    age = (now or time.time()) - c.get("ts", 0)
+    if age > 60 * 86400:
+        return False
+    answered = c.get("status") in ("fixed", "no") or (c.get("status") == "seen" and c.get("reply"))
+    return not answered or age < 7 * 86400
+
+
+def complaints_every(lst, base=600.0, now=None):
+    """Как часто спрашивать об ответах -> секунды или 0 (быстро не спрашиваем — хватит пульса раз в 6 часов): есть жалоба без
+    ответа моложе 2 дней — раз в base (10 мин), моложе 14 дней — раз в час; старше — только с пульсом; старше 60 — никогда."""
+    now = now or time.time()
+    waiting = [now - c.get("ts", 0) for c in lst if complaint_watch(c, now) and not (c.get("status") in ("fixed", "no") or c.get("reply"))]
+    if not waiting:
+        return 0
+    young = min(waiting)
+    return base if young < 2 * 86400 else 3600.0 if young < 14 * 86400 else 0
+
+
 class HealthMixin:
     _health_lock = None
 
@@ -150,6 +174,7 @@ class HealthMixin:
             return                                       # прогон по wav-файлу — не пульс человека
         threading.Thread(target=self._cpu_watch, name="health-cpu", daemon=True).start()
         threading.Thread(target=self._pulse_loop, name="pulse", daemon=True).start()
+        threading.Thread(target=self._complaints_loop, name="complaints", daemon=True).start()
 
     def health_mark(self, stage):
         """Этап запуска: «ready» — слух работает (можно звать по имени), «full» — загрузилось всё (GigaAM, голос)."""
@@ -190,6 +215,33 @@ class HealthMixin:
             return
         with self._health_lock:
             self._h[what] = int(self._h.get(what, 0)) + n
+
+    def health_use(self, what, n=1):
+        """«Чем пользуются» (0.67): сколько раз за день собирали «Совет ИИ», отвечал «Бот персонажа»… — только числа, чтобы
+        решать, что развивать дальше (владелец 29.10: «бот на сервере — когда будут цифры»)."""
+        if self._health_lock is None:
+            return
+        with self._health_lock:
+            u = self._h.setdefault("uses", {})
+            u[what] = int(u.get(what, 0)) + n
+
+    def _uses(self):
+        """Счётчики с прошлого пульса и состояние: бот подключён и включён, есть ли свои тексты в «Пишу»."""
+        with self._health_lock:
+            u = dict(self._h.get("uses") or {})
+        try:
+            pb = getattr(self, "pbot", None)
+            if pb is not None and pb.connected():
+                u["pbot_on"] = 1 if pb.opt("on") else 0
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            w = getattr(self, "writing", None)
+            if w is not None and w.d.get("files"):
+                u["writing"] = 1
+        except Exception:  # noqa: BLE001
+            pass
+        return u
 
     def health_why(self, prof, err):
         """Сбой ответа модели — в разбивку «где думает : почему» (dewiar:timeout, local:connect…), только числа."""
@@ -289,7 +341,7 @@ class HealthMixin:
                 "turns": h.get("turns", 0), "net_ok": h.get("net_ok", 0), "net_fail": h.get("net_fail", 0), "errors": h.get("errors", 0),
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
                 "problems": [{"sig": k, "text": v["text"], "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
-                "lat": self._lat_summary()}
+                "lat": self._lat_summary(), "uses": self._uses()}
 
     def _lat_how(self):
         """Чем думает ассистент — для разбивки задержки голоса (dewiar, local, cloud…)."""
@@ -345,6 +397,12 @@ class HealthMixin:
                     if pr[sig]["n"] <= 0:
                         del pr[sig]
             self._h["starts"] = (self._h.get("starts") or [])[len(body["starts"]):]
+            u = self._h.get("uses") or {}
+            for k, n in (body.get("uses") or {}).items():
+                if k in u and k not in ("pbot_on", "writing"):
+                    u[k] = int(u[k]) - int(n)
+                    if u[k] <= 0:
+                        del u[k]
             self._health_save()
         lat = getattr(self, "lat", None)
         if lat is not None and (body.get("lat") or {}).get("_n"):
@@ -501,13 +559,15 @@ class HealthMixin:
                 self._thanks_list = th = (time.time(), (r.json() or {}).get("people") or [])
             except Exception:  # noqa: BLE001
                 th = th or (0, [])
-        return {"mine": [{k: v for k, v in c.items() if k != "s"} for c in reversed(self._complaints())], "thanks": th[1],
+        mine = self._complaints()
+        return {"mine": [{k: v for k, v in c.items() if k != "s"} for c in reversed(mine)], "thanks": th[1],
+                "unread": sum(1 for c in mine if c.get("unread")),
                 "who": self.s.get("report", "who") or "", "pulse": self.s.get("report", "pulse") is not False}
 
     def complaints_check(self):
         """Спросить, что с жалобами (ещё не закрытыми или за последний месяц); ответили — сказать спасибо уведомлением."""
         lst = self._complaints()
-        ask = [c for c in lst if c.get("s") and (c.get("status") not in ("fixed", "no") or time.time() - c.get("ts", 0) < 30 * 86400)]
+        ask = [c for c in lst if complaint_watch(c)]
         if not ask:
             return []
         import httpx
@@ -521,11 +581,15 @@ class HealthMixin:
             changed = x["status"] != c.get("status") or x.get("reply", "") != c.get("reply", "")
             c.update(status=x["status"], reply=x.get("reply", ""), fixed=x.get("fixed", ""), reward=x.get("reward", 0))
             if changed and x["status"] in ("work", "fixed", "no") or (changed and x.get("reply")):
+                c["unread"] = True                       # строка «Ответ разработчика» в виджете — пока не посмотрели
                 news.append(c)
         self._complaints_save(lst)
         for c in news:
             title, text = self.complaint_message(c)
-            self.push(title, text, telegram=False)
+            # 29.10, владелец: «чтобы тот, кому пришёл ответ, получал пуш и чувствовал, что ему ответили»: уведомление
+            # системы и Telegram, строка в виджете (держится, пока не посмотрели) и голосом — коротко
+            self.push(title, text)
+            self.emit("dev_reply", id=c["id"], title=title, text=text, unread=sum(1 for x in lst if x.get("unread")))
             # 24.10 (владелец: «присылал жалобы и ни разу не получил ответ»): всплывающее окно легко пропустить — ответ ещё и
             # в «Чат» студии, с пометкой «ответ разработчика»; там он останется
             try:
@@ -537,7 +601,37 @@ class HealthMixin:
                 log.info("🐞 ответ на жалобу в чат: %s", e)
         if news:
             self.emit("complaints", **self.complaints_view())
+            c = news[-1]
+            try:
+                self.announce(f"Вам ответил разработчик Dewiar — на жалобу номер {c['id']}." + (" " + c["reply"].strip()[:240] if c.get("reply") else "")
+                              + (" Подробности — в студии, «О программе»." if len(news) == 1 else f" И ещё ответов: {len(news) - 1}. Всё — в студии, «О программе»."))
+            except Exception as e:  # noqa: BLE001
+                log.info("🐞 ответ вслух: %s", e)
         return news
+
+    def complaints_seen(self):
+        """Посмотрели ответы (студия «О программе» или нажали строку в виджете) — строка уходит."""
+        lst = self._complaints()
+        if any(c.get("unread") for c in lst):
+            for c in lst:
+                c.pop("unread", None)
+            self._complaints_save(lst)
+            self.emit("dev_reply", unread=0)
+        return True
+
+    def _complaints_loop(self):
+        """Ответы на жалобы — раз в 10 минут, пока есть жалобы без ответа (раньше — только с пульсом, раз в 6 часов: ответ
+        приходил, когда человек уже забыл). Нет открытых жалоб — проверять нечего, сервер не дёргаем."""
+        base = float(os.environ.get("DEWIAR_COMPLAINTS_EVERY") or 600)
+        last = 0.0
+        while not self.stopping.wait(base):
+            try:
+                every = complaints_every(self._complaints(), base)
+                if every and time.monotonic() - last >= every - 5:
+                    last = time.monotonic()
+                    self.complaints_check()
+            except Exception as e:  # noqa: BLE001
+                log.info("🐞 ответы на жалобы: %s", e)
 
     @staticmethod
     def complaint_message(c):
