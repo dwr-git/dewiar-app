@@ -117,6 +117,8 @@ class Box:
         d["configured"] = self.configured()
         if d.get("address") and not d.get("help"):
             d["help"] = guess(d["address"]).get("help", "")
+        if d.get("address") and not d.get("provider"):
+            d["provider"] = guess(d["address"]).get("provider", "")
         return d
 
     def save(self, patch):
@@ -125,6 +127,10 @@ class Box:
             patch = dict(patch or {})
             if not patch.get("password"):
                 patch.pop("password", None)                     # пустое поле — пароль не меняем
+            elif (guess(patch.get("address") or self.data.get("address") or "").get("provider")
+                  and re.fullmatch(r"[A-Za-z]{4}( [A-Za-z]{4}){3}", patch["password"].strip())):
+                # пароль приложения Google показывает «abcd efgh ijkl mnop» — копируют с пробелами (30.10, владелец)
+                patch["password"] = patch["password"].replace(" ", "")
             addr = (patch.get("address") or self.data.get("address") or "").strip()
             if addr and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr):
                 raise MailError("это не похоже на адрес почты")
@@ -134,6 +140,8 @@ class Box:
                 "address", "name", "password", "login", "smtp_host", "smtp_port", "smtp_security", "imap_host",
                 "imap_port", "help", "provider")})
             self.data["address"] = addr
+            if patch.get("password") or "smtp_host" in patch:
+                self.data.pop("check", None)                     # новый пароль — прежняя проверка не в счёт
         self._store()
         return self.public()
 
@@ -171,7 +179,23 @@ class Box:
         except smtplib.SMTPAuthenticationError as e:
             raise MailError("почта не приняла логин или пароль — нужен «пароль приложения», не обычный пароль" + self._auth_hint()) from e
         except (OSError, smtplib.SMTPException) as e:
-            raise MailError(f"не удалось подключиться к {host}:{port} — {e}") from e
+            # 30.10 (владелец, Gmail): «smtp.gmail.com:465 — Connection unexpectedly closed» — порт 465 рвёт антивирус
+            # или провайдер. Тот же сервер умеет 587 со STARTTLS: пробуем его и, если вошли, запоминаем.
+            if sec == "ssl" and port == 465:
+                try:
+                    s = smtplib.SMTP(host, 587, timeout=25)
+                    s.ehlo(); s.starttls(context=ssl.create_default_context()); s.ehlo()
+                    s.login(self._login(), d.get("password", ""))
+                    log.info("mail: %s:465 закрыт (%s) — работает 587/STARTTLS, запоминаю", host, e)
+                    d["smtp_port"], d["smtp_security"] = 587, "starttls"
+                    self._store()
+                    return s
+                except smtplib.SMTPAuthenticationError as e2:
+                    raise MailError("почта не приняла логин или пароль — нужен «пароль приложения», не обычный пароль" + self._auth_hint()) from e2
+                except (OSError, smtplib.SMTPException):
+                    pass
+            raise MailError(f"не удалось подключиться к {host}:{port} — {e}. Похоже, порт закрыт антивирусом или сетью: "
+                            "в антивирусе отключите «проверку почты» или добавьте Dewiar в исключения") from e
 
     def _imap(self):
         """Вход в IMAP. Порт 993 — TLS сразу; другой порт — STARTTLS, и без него не входим: пароль открытым текстом
@@ -212,6 +236,12 @@ class Box:
                 out["imap"] = "ok"
             except MailError as e:
                 out["imap"] = str(e)
+        ok = out["smtp"] == "ok" and out["imap"] in ("ok", "")
+        # итог проверки помнится: студия не пишет «Подключена», если вход не прошёл (30.10, владелец — было зелёным при двух ошибках)
+        import time
+        self.data["check"] = {"ok": ok, "at": int(time.time()), "auth": not ok and any("не приняла логин" in v for v in out.values())}
+        self._store()
+        out["check"] = self.data["check"]
         return out
 
     # ---------- письма ----------

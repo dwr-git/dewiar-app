@@ -35,6 +35,26 @@ MONTHS = {"январ": 1, "феврал": 2, "март": 3, "апрел": 4, "�
           "октябр": 10, "ноябр": 11, "декабр": 12}
 WEEKDAYS = [("понедельник", 0), ("вторник", 1), ("сред", 2), ("четверг", 3), ("пятниц", 4), ("суббот", 5),
             ("воскресень", 6)]
+# дни недели: полное слово (любой падеж) или сокращение «пн, вт, ср, чт, пт, сб, вс» (30.10: «по будням, кроме пятницы»,
+# «с понедельника по четверг», «пн-чт»)
+DAY_RX = r"(?:понедельник\w*|вторник\w*|сред[аеуы]\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*|пн|вт|ср|чт|пт|сб|вс)"
+DAY_SHORT = {"пн": 0, "вт": 1, "ср": 2, "чт": 3, "пт": 4, "сб": 5, "вс": 6}
+
+
+def _day_of(w):
+    w = w.strip().lower()
+    return DAY_SHORT.get(w, next((i for p, i in WEEKDAYS if w.startswith(p)), None))
+
+
+def _except_days(t):
+    """«кроме пятницы», «кроме пт и сб», «за исключением субботы», «но не в пятницу» -> (дни, (начало, конец)) или None."""
+    m = re.search(r"(?:,\s*)?\b(?:кроме|за\s+исключением|но\s+не\s+(?:в|по))\s+(" + DAY_RX + r"(?:\s*(?:,|и)\s*" + DAY_RX + r")*)\b", t)
+    if not m:
+        return None
+    days = {d for d in (_day_of(w) for w in re.findall(DAY_RX, m.group(1))) if d is not None}
+    return (days, (m.start(), m.end())) if days else None
+
+
 TRIGGER = re.compile(
     r"^(?:(?:а|и|ну|пожалуйста|слушай)\s+)*"
     r"(?P<trig>напомни(?:те)?|напоминай(?:те)?|(?:поставь|сделай|создай|заведи)(?:те)?\s+(?:мне\s+)?(?:напоминание|будильник|таймер)"
@@ -224,6 +244,13 @@ def _repeat(t):
     m = re.search(r"\b(?:по\s+выходным|в\s+выходные|каждые\s+выходные)\b", t)
     if m:
         return {"kind": "weekly", "days": [5, 6]}, (m.start(), m.end())
+    # диапазон: «с понедельника по четверг», «пн-чт», «понедельник–четверг» (30.10)
+    m = re.search(r"\b(?:(?:каждую\s+неделю\s+)?с\s+(" + DAY_RX + r")\s+по\s+(" + DAY_RX + r")|(" + DAY_RX + r")\s*[-–—]\s*(" + DAY_RX + r"))\b", t)
+    if m:
+        a, b = _day_of(m.group(1) or m.group(3)), _day_of(m.group(2) or m.group(4))
+        if a is not None and b is not None and a != b:
+            days = list(range(a, b + 1)) if a < b else list(range(a, 7)) + list(range(0, b + 1))
+            return {"kind": "weekly", "days": sorted(days)}, (m.start(), m.end())
     m = re.search(r"\b(?:кажд(?:ый|ую|ое)\s+|по\s+)((?:(?:понедельник|вторник|сред|четверг|пятниц|суббот|воскресень)\w*(?:\s*(?:,|и)\s*)?)+)", t)
     if m:
         days = sorted({i for p, i in WEEKDAYS for w in re.findall(r"\w+", m.group(1)) if w.startswith(p)})
@@ -397,6 +424,14 @@ def parse(text, now=None):
     if rep:
         rep, sp = rep
         spans.append(sp)
+        ex = _except_days(rest)                  # «по будням, кроме пятницы» (30.10: ставилось и на пятницу)
+        if ex and rep["kind"] in ("daily", "weekly"):
+            left = [d for d in (rep.get("days") or range(7)) if d not in ex[0]]
+            if left:
+                rep = dict({k: v for k, v in rep.items() if k != "kind"}, kind="weekly", days=left)
+                # «кроме / но не в среду» стираем пробелами: иначе «в среду» дальше примут за день срабатывания
+                a0, b0 = ex[1]
+                rest = rest[:a0] + " " * (b0 - a0) + rest[b0:]
     rel = _relative(rest) if not rep or rep["kind"] != "interval" else None
     clock = _clock(rest)
     day = _day(rest, now)

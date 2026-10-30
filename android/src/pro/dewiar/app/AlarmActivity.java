@@ -144,7 +144,8 @@ public class AlarmActivity extends Activity {
     private void startSound() {
         AlarmReceiver.quiet(this, id, title == null ? "" : title, kind == null ? "reminder" : kind,
                 getIntent().getStringExtra("who") == null ? "" : getIntent().getStringExtra("who"));
-        player = Sounds.play(this, Sounds.current(this), true, vol);
+        boolean soft = Sounds.soft(this, kind);                             // №72: громкостью уведомлений, не будильника
+        player = Sounds.play(this, Sounds.current(this), true, vol, soft);
         if (player != null) {
             h.postDelayed(new Runnable() { @Override public void run() {       // мягко нарастает: не вскакивать от звонка
                 if (player == null) return;
@@ -156,8 +157,7 @@ public class AlarmActivity extends Activity {
             android.net.Uri u = Sounds.uri(this, "system");
             ring = RingtoneManager.getRingtone(this, u);
             if (ring != null) {
-                ring.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+                ring.setAudioAttributes(Sounds.attrs(soft));
                 if (Build.VERSION.SDK_INT >= 28) {         // повтор мелодии — с Android 9, отражением (собираем против API 23)
                     try { Ringtone.class.getMethod("setLooping", boolean.class).invoke(ring, true); } catch (Throwable ignored) { }
                 }

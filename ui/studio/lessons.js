@@ -29,19 +29,46 @@ function lsPlay(l) {
   const d = $("#ls-dlg"), v = $("#ls-v"), fail = $("#ls-fail");
   $("#ls-dt").textContent = `Урок ${l.n} · ${l.title}`;
   fail.hidden = true; v.hidden = false; LSN.cur = l;
-  v.poster = l.poster || ""; v.src = l.video;
+  // 30.10: WebM (VP9) окно в Ubuntu играет без gstreamer1.0-libav — берём его, если сервер уже сделал копию и окно умеет
+  const webm = !!(l.webm && v.canPlayType('video/webm; codecs="vp9, opus"'));
+  v.poster = l.poster || ""; v.src = webm ? l.webm : l.video;
   d.showModal(); v.play().catch(() => {});
   // окно программы не смогло: ошибка видео или за 8 секунд ни кадра (Ubuntu без gstreamer1.0-libav — чёрный экран)
   clearTimeout(LSN.t);
-  const bad = (why) => { if (LSN.cur !== l || !d.open) return; clearTimeout(LSN.t); fail.hidden = false;
-    $("#ls-fail-why").textContent = why || "Откройте его в браузере — там оно играет всегда."; };
-  v.onerror = () => bad(/Linux/i.test(navigator.userAgent) ? "Окну программы в Linux не хватает видеокодека. Откройте урок в браузере — или поставьте пакет gstreamer1.0-libav." : "");
+  const linux = /Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
+  const bad = (why) => { if (LSN.cur !== l || !d.open) return; clearTimeout(LSN.t); fail.hidden = false; v.pause();
+    lsCodecBtn(linux);
+    $("#ls-fail-why").textContent = why || (linux ? LS_CODEC_WHY : "Откройте его в браузере — там оно играет всегда."); };
+  v.onerror = () => bad("");
+  // 30.10: кодека нет — окно знает это сразу (canPlayType пустой), не ждём 8 секунд чёрного экрана
+  if (linux && !webm && !v.canPlayType('video/mp4; codecs="avc1.42E01E"')) return bad("");
   LSN.t = setTimeout(() => { if (v.readyState < 2) bad(""); }, 8000);
   v.onloadeddata = () => clearTimeout(LSN.t);
+}
+/* Кнопка «Установить видеокодек» (30.10, владелец, Ubuntu: «не открывается видео, только в браузере»): система спросит пароль,
+   поставит gstreamer1.0-libav — и «Перезапустить Dewiar», чтобы окно его увидело. */
+const LS_CODEC_WHY = "Окну программы в Linux не хватает видеокодека — его можно поставить одной кнопкой (система спросит пароль от компьютера). Или смотрите в браузере.";
+function lsCodecBtn(linux) {
+  const b = $("#ls-codec"), a = window.api && window.api();
+  if (!b) return;
+  b.hidden = !(linux && a && a.install_codec);
+  if (LSN.codec === "done") { b.textContent = "Перезапустить Dewiar"; return; }
+  b.textContent = "Установить видеокодек"; b.disabled = false;
+}
+async function lsCodec() {
+  const b = $("#ls-codec"), why = $("#ls-fail-why"), a = window.api && window.api();
+  if (!a) return;
+  if (LSN.codec === "done") { if (a.restart) a.restart("Видеокодек установлен — уроки откроются в окне программы."); return; }
+  b.disabled = true; b.textContent = "Ставлю… введите пароль в окне системы";
+  let r; try { r = await a.install_codec(); } catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+  b.disabled = false;
+  if (r && r.ok) { LSN.codec = "done"; b.textContent = "Перезапустить Dewiar"; why.textContent = "Видеокодек установлен. Перезапустите Dewiar — и уроки будут играть прямо здесь."; return; }
+  b.textContent = "Установить видеокодек"; why.textContent = "Не получилось: " + ((r && r.error) || "неизвестная ошибка") + ". Пока можно смотреть в браузере.";
 }
 
 (function lsInit() {
   if (!$("#p-lessons")) return;
+  if ($("#ls-codec")) $("#ls-codec").onclick = lsCodec;
   const close = () => { clearTimeout(LSN.t); const v = $("#ls-v"); v.pause(); v.removeAttribute("src"); v.load(); $("#ls-dlg").close(); };
   $("#ls-x").onclick = close;
   $("#ls-ext").onclick = () => { const l = LSN.cur; if (!l) return; close(); if (typeof openExt === "function") openExt(l.video || l.youtube); else window.open(l.video, "_blank", "noopener"); };

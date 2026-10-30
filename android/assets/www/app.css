@@ -1713,3 +1713,7 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .lsn-x { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px 14px; }
 .lsn-x small { font-size: 12px; opacity: .7; } .lsn-x b { font-size: 16px; } .lsn-x span { font-size: 13px; opacity: .75; }
 .lsn-empty { opacity: .75; }
+
+/* «Сотрудники» на телефоне руководителя: фото-отчёт прямо в карточке (30.10) */
+.bs-photo { display: block; width: 100%; max-height: 240px; object-fit: cover; border-radius: 14px; margin: 8px 0 2px; }
+.grold { font-style: normal; color: #c9822b; font-weight: 600; }

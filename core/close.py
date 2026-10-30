@@ -69,6 +69,31 @@ def safe_name(s, fallback="без имени", limit=120):
     return s
 
 
+
+def _ver():
+    try:
+        from version import VERSION
+        return VERSION
+    except Exception:  # noqa: BLE001
+        return "0"
+
+
+IMG_SIG = ((b"\x89PNG\r\n\x1a\n", ".png"), (b"\xff\xd8\xff", ".jpg"), (b"GIF8", ".gif"))
+
+
+def _with_ext(name, data, typ=""):
+    """Имя файла с расширением картинки, если его нет (30.10: «PNG непонятно, загрузились или нет» — файл без «.png»
+    студия показывала строкой, а Windows не открывал): по типу из письма или по началу файла."""
+    if re.search(r"\.[A-Za-z0-9]{2,5}$", name or ""):
+        return name
+    ext = {"image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/webp": ".webp", "image/gif": ".gif"}.get(str(typ or "").lower(), "")
+    if not ext:
+        head = bytes(data[:16])
+        ext = next((e for sig, e in IMG_SIG if head.startswith(sig)), "")
+        if not ext and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+            ext = ".webp"
+    return (name or "файл") + ext
+
 class CloseError(Exception):
     """Ошибка с понятным человеку текстом."""
 
@@ -199,7 +224,7 @@ class Close:
         token, link, url = self.host.credentials()
         if not token:
             raise CloseError("«Близкие» работают через Dewiar: войдите аккаунтом dewiar.pro или подключите ключ Dewiar.")
-        h = {"Authorization": "Bearer " + token}
+        h = {"Authorization": "Bearer " + token, "User-Agent": "Dewiar-PC/" + _ver()}
         params = dict(params or {}, p=path)              # httpx заменяет запрос в адресе целиком — p кладём сюда же
         if link and link != token:
             h["X-Sync-Link"] = link
@@ -217,7 +242,8 @@ class Close:
             try:
                 msg = r.json()["error"]["message"]
             except (ValueError, KeyError, TypeError):
-                msg = f"облако ответило {r.status_code}"
+                msg = ("файл слишком большой — до 10 МБ" if r.status_code == 413      # nginx/PHP отказали до cloud.php (30.10)
+                       else f"облако ответило {r.status_code}")
             raise CloseError(msg)
         return r
 
@@ -241,7 +267,8 @@ class Close:
         """Представиться серверу: открытый ключ этого устройства и имя для близких. -> состояние."""
         _, pub = self._keys()
         name = (self.host.s.get("close", "name") or self.host.s.get("user_name") or "").strip()
-        d = self._req("POST", "/close/hello", {"dev": self.st["dev"], "pub": pub, "devname": self.host.device_name(), "name": name}).json()
+        d = self._req("POST", "/close/hello", {"dev": self.st["dev"], "pub": pub, "devname": self.host.device_name(), "name": name,
+                                               "ver": "pc " + _ver()}).json()
         self.st["hello_at"] = time.time()
         self._people(d)
         return self.state()
@@ -843,7 +870,7 @@ class Close:
     def poll(self):
         """Забрать новое. -> сколько новых входящих сообщений."""
         priv, _ = self._keys()
-        d = self._req("GET", "/close/inbox", params={"after": int(self.st["cursor"]), "geo": 1}).json()   # и места для радара
+        d = self._req("GET", "/close/inbox", params={"after": int(self.st["cursor"]), "geo": 1, "gup": 1}).json()   # и места для радара, и «группы изменились»
         got, refreshed = 0, False
         for it in d.get("items") or []:
             try:                                   # одно кривое сообщение не должно стопорить весь ящик
@@ -878,6 +905,13 @@ class Close:
         """Одно входящее из ящика. -> (1, если новое сообщение — для счёта, обновлён ли список устройств)."""
         if it.get("kind") == "ring":                    # признак звонка — для телефона в фоне; сам звонок — в «sig»
             return 0, refreshed
+        if it.get("kind") == "gup":                     # группы изменились (создали, позвали, переименовали) — список сразу (30.10)
+            if not refreshed:
+                try:
+                    self.hello()
+                except CloseError:
+                    pass
+            return 0, True
         if it.get("kind") in ("workin", "workx"):        # «Работа»: сотрудник вошёл по коду / связь кончилась (знак сервера)
             try:
                 self.work_peers()
@@ -961,6 +995,12 @@ class Close:
                     log.exception("семья: не применилось")
             return 0, refreshed
         if it.get("kind") == "grp":                     # «Группы своих»: в историю группы, с именем написавшего
+            if gid and not self.group_of(gid) and not refreshed:   # письмо пришло раньше, чем мы узнали о группе (30.10)
+                refreshed = True
+                try:
+                    self.hello()
+                except CloseError:
+                    pass
             return self._take_group(it, gid, body), refreshed
         if body.get("re"):                              # реакция на сообщение — значком на нём, а не новым сообщением
             if self._react(peer, str(body["re"]), "me" if it.get("out") else "them", str(body.get("e") or "")[:8]) and not it.get("out"):
@@ -1048,7 +1088,7 @@ class Close:
                 r = self._req("GET", "/close/file", params={"id": f["id"]}, timeout=120)
                 data = CC.unseal(CC.b64d(f["key"]), r.content)
                 root.mkdir(parents=True, exist_ok=True)
-                safe = safe_name(f.get("name"), "файл")
+                safe = _with_ext(safe_name(f.get("name"), "файл"), data, f.get("type"))   # картинка без «.png» — с ним (30.10)
                 out = root / safe
                 n = 1
                 while out.exists() and hashlib.sha1(out.read_bytes()).hexdigest() != hashlib.sha1(data).hexdigest():
@@ -1065,6 +1105,7 @@ class Close:
                     x["f"] = item["f"]
             self._save()
         self.host.emit("close", state=self.state())
+        self.host.emit("close_files", pid=pid, mid=item["mid"])      # студия: перечитать переписку — фото сразу видно (30.10)
 
     # ---------- фон ----------
     def _team_on(self):
@@ -1150,15 +1191,20 @@ class Close:
                         self.hello()
                     self.poll()
                     self.error = ""
+                    self._fail_n = 0
             except CloseError as e:
-                self.error = str(e)
-                log.info("Близкие: %s", e)
+                # 30.10 (владелец: «сейчас вообще пишет, что нет связи», хотя сообщения ходят): один сорвавшийся опрос —
+                # не «нет связи»: через 3 с ещё раз, и только второй подряд сбой показываем человеку
+                self._fail_n = getattr(self, "_fail_n", 0) + 1
+                if self._fail_n >= 2 or "нет связи" not in str(e):
+                    self.error = str(e)
+                log.info("Близкие: %s (подряд %s)", e, self._fail_n)
             except ValueError as e:      # ответ сайта оборвался или пришла страница ошибки вместо JSON — повторим (пакет 23.10, №209)
                 log.info("Близкие: сайт ответил не так, как ждали (%s) — повторю", e)
             except Exception:  # noqa: BLE001
                 log.exception("Близкие")
             try:
-                wait = 1 if self._fast() else 6 if self.active() else 600
+                wait = 1 if self._fast() else 3 if getattr(self, "_fail_n", 0) == 1 else 6 if self.active() else 600
             except Exception:  # noqa: BLE001 — поток опроса не должен умирать
                 log.exception("Близкие: пауза")
                 wait = 60

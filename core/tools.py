@@ -1579,7 +1579,9 @@ def _fix_days(a, rep, text):
     (или только выходные), а «В будни -» из текста убираем. -> (повтор, текст)."""
     said = f"{a.get('when') or ''} {text}"
     days = [0, 1, 2, 3, 4] if _WEEKDAYS_RX.search(said) else [5, 6] if _WEEKENDS_RX.search(said) else None
-    if days and rep and rep.get("kind") in ("daily", "weekly") and rep.get("days") != days:
+    # уже точнее, чем «будни» («по будням, кроме пятницы» -> пн–чт; 30.10: тут пятница возвращалась) — не трогаем
+    narrower = rep and rep.get("kind") == "weekly" and rep.get("days") and set(rep["days"]) < set(days or [])
+    if days and rep and rep.get("kind") in ("daily", "weekly") and rep.get("days") != days and not narrower:
         rep = dict(rep, kind="weekly", days=days)
     if days:
         text = _WEEKENDS_RX.sub(" ", _WEEKDAYS_RX.sub(" ", text)).strip(" -—–:,.") or text
@@ -1691,6 +1693,34 @@ def t_calc(a, ctx):
     r = calc_eval(a.get("expression", ""))
     shown = str(r).replace(".", ",") if isinstance(r, float) else str(r)
     return f"{a.get('expression', '').strip()} = {shown}"
+
+
+def t_change_reminder(a, ctx):
+    """Изменить напоминание (30.10, владелец: «попросил Лиру — сказала „сейчас внесу“, а ничего не изменилось»: инструмента
+    правки не было). id или text — какое; when — новое время и повтор словами; new_text — новый текст."""
+    from when import describe_repeat, human, next_time, parse
+    rs = ctx["reminders"]
+    hit = rs.find(a.get("id") or a.get("text") or "")
+    if not hit:
+        return "Не нашёл такого напоминания — посмотри list_reminders и возьми id."
+    if len(hit) > 1:
+        return "Подходит несколько: " + "; ".join(f"{x['id']}: {x['text']}" for x in hit[:6]) + ". Укажи id."
+    x, patch = hit[0], {}
+    if str(a.get("new_text") or "").strip():
+        patch["text"] = str(a["new_text"]).strip()[:300]
+    if str(a.get("when") or "").strip():
+        r = parse("напомни " + str(a["when"]).strip() + " " + (patch.get("text") or x.get("text") or ""))
+        if not r:
+            raise ToolError("не понял время — скажи, например: «по будням, кроме пятницы, в 17:50»")
+        when, rep = r["at"], r["repeat"]
+        if rep and when < datetime.now() - timedelta(minutes=1):
+            when = next_time(rep, datetime.now())
+        patch.update(at=when.replace(microsecond=0).isoformat(timespec="seconds"), repeat=rep)
+    if not patch:
+        return "Что изменить? Нужен when (время и повтор) или new_text."
+    y = rs.update(x["id"], patch)
+    return (f"Изменено: «{y['text']}» — {human(datetime.fromisoformat(y['at']))}" + (f", {describe_repeat(y['repeat'])}" if y.get("repeat") else "")
+            + f" (id {y['id']}). Подтверди коротко.")
 
 
 def t_list_reminders(a, ctx):
@@ -2861,7 +2891,7 @@ TOOLS = {
                       "(run_command, pkill по имени программы — только после согласия человека).", S({}), "safe", t_system, "Состояние компьютера"),
     "set_reminder": ("Поставить напоминание, будильник или таймер, в том числе повторяющееся. when — когда, обычными "
                      "словами по-русски: «через 10 минут», «завтра в 9», «в пятницу в 18:30», «каждый день в 8», «по "
-                     "будням в 9:15», «каждые 2 часа». Будни, выходные, дни недели — только в when, не в text. text — о чём напомнить, коротко. "
+                     "будням в 9:15», «по будням, кроме пятницы, в 17:50», «каждые 2 часа». Будни, выходные, дни недели — только в when, не в text. text — о чём напомнить, коротко. "
                      "Напоминание — ЧЕЛОВЕКУ: в срок он сам что-то сделает. Если делать должен ТЫ («проверяй почту», «присылай "
                      "курс», «сообщай о важном», «следи за…») — это schedule_job, а не напоминание.",
                      S({"text": {"type": "string"}, "when": {"type": "string"}, "in_minutes": {"type": "number"},
@@ -2880,6 +2910,13 @@ TOOLS = {
                    "и калькулятором — только этим. city — город.", S({"city": {"type": "string"}}, ["city"]), "safe", t_world_time,
                    "Время в городе"),
     "list_reminders": ("Список активных напоминаний.", S({}), "safe", t_list_reminders, "Напоминания: список"),
+    "change_reminder": ("Изменить напоминание: время, дни повтора или текст. id (из list_reminders) или text — какое; when — "
+                        "новое время и повтор обычными словами: «по будням, кроме пятницы, в 17:50», «с понедельника по четверг "
+                        "в 17:50», «каждый день в 8»; new_text — новый текст. В один день недели нужно другое время (по пятницам "
+                        "раньше) — change_reminder без этого дня («с понедельника по четверг в 17:50») и set_reminder на этот день "
+                        "(«по пятницам в 16:40»). Не говори «изменила», не вызвав инструмент.",
+                        S({"id": {"type": "string"}, "text": {"type": "string"}, "when": {"type": "string"}, "new_text": {"type": "string"}}),
+                        "safe", t_change_reminder, "Напоминания: изменить"),
     "calc": ("Посчитать точно: любые вычисления (проценты, суммы, скидки, деление, курсы) и даты. Считай ВСЕГДА этим "
              "инструментом, не в уме. Выражение как в Python: 2350 * 17 / 100, (1200 - 15%) * 3; даты в виде ГГГГ-ММ-ДД: "
              "days_until(\"2027-01-01\") — сколько дней осталось до даты, days_between(\"2026-10-01\", \"2026-12-31\"), "
@@ -3203,7 +3240,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
-             "cancel_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "remember", "write_diary",
+             "cancel_reminder", "change_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "remember", "write_diary",
              "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
              "client_list", "client_deal", "client_deals"}

@@ -21,6 +21,14 @@ IMG_MAX = 12 * 1048576
 FIRST = "Главное"
 
 
+
+def _same_file(a, b):
+    """Один и тот же файл (в Windows «Заметки.md» и «заметки.md» — один)."""
+    try:
+        return a.samefile(b)
+    except OSError:
+        return False
+
 class PadError(Exception):
     pass
 
@@ -100,7 +108,9 @@ class Pad:
             raise PadError("вкладка слишком большая (до 300 КБ текста) — перенесите часть в новую вкладку")
         p = self._path(name)
         out = {}
-        if base is not None and p.is_file() and p.stat().st_mtime > float(base) + 0.5:
+        # GitHub №26 (29.10): было «+ 0.5» — правка с другого устройства в пределах полсекунды молча затиралась; страница
+        # хранит mtime, который сама получила от save/open, — сравниваем точно (с запасом на округление float)
+        if base is not None and p.is_file() and p.stat().st_mtime > float(base) + 0.001:
             theirs = p.read_text(encoding="utf-8", errors="replace")
             if theirs.strip() and theirs != text:
                 q = self._free(f"{p.stem} (с другого устройства)")
@@ -134,9 +144,11 @@ class Pad:
             raise PadError("такой вкладки нет")
         to = _name(to)
         q = self.root() / f"{to}.md"
-        if q == p:
+        # GitHub №28 (29.10): в Windows пути без учёта регистра — «заметки» → «Заметки» считалось «то же имя», и
+        # переименование молча не делалось. Сравниваем строки имён; тот же файл в другом регистре — переименовываем
+        if q.name == p.name:
             return self.tabs()
-        if q.exists():
+        if q.exists() and not _same_file(q, p):
             raise PadError("вкладка с таким названием уже есть")
         p.rename(q)
         ui = self._ui()

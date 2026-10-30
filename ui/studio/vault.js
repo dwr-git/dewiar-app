@@ -3,7 +3,13 @@
    список приходит БЕЗ значений, пароль — только по vault_reveal, на 15 секунд на экране или в буфер обмена.
    Копирование — через окно (api.clip_secret): в буфер с пометкой «не в журнал буфера» (Windows) и стирание через 30 с, если
    там всё ещё этот пароль. Поиск — по названию, логину, сайту и заметке; Enter — скопировать первый найденный. */
-const VL = { items: [], edit: null, loaded: false, kind: "", snap: "", idle: 0 };
+const VL = { items: [], edit: null, loaded: false, kind: "", snap: "", idle: 0, pg: 0 };
+/* Страницы списка (30.10, владелец: «в Сейф паролей пагинацию страниц? Уже много и не очень симпатично — приходится
+   скроллить»): на странице столько записей, сколько входит в окно без прокрутки (6–12); поиск начинает с первой страницы;
+   PageUp/PageDown в поиске листают; новая запись — на её странице; окно растянули — первая запись страницы остаётся видна. */
+const VL_ROW = 72, VL_HEAD = 300;
+const vlPer = () => Math.min(12, Math.max(6, Math.floor((innerHeight - VL_HEAD) / VL_ROW)));
+VL.per = vlPer();
 const VL_PAGE_IDLE = 3 * 60000;                 // открытая страница без правок прячется сама через 3 минуты
 const I_PAGE = '<path d="M6.5 3.5h8l4 4v13h-12z"/><path d="M14.5 3.5v4h4M9.5 12h5M9.5 15.5h5"/>';
 const VL_SHOW_MS = 15000, VL_CLIP_S = 30;
@@ -36,7 +42,10 @@ function vlRender() {
     $("#vl-empty-back").onclick = (e) => { e.preventDefault(); vlRestore(); };
     return;
   }
-  box.innerHTML = (list.length ? list.map(x => {
+  const pages = Math.max(1, Math.ceil(list.length / VL.per));
+  VL.pg = Math.min(Math.max(0, VL.pg | 0), pages - 1);
+  const from = VL.pg * VL.per, shown = list.slice(from, from + VL.per);
+  box.innerHTML = (list.length ? shown.map(x => {
     const host = vlHost(x.url);
     if (x.kind === "page") return `<article class="vl-item vl-page" data-id="${escH(x.id)}">
       <i class="vl-mono" style="--c:${vlCol(x.name)}" aria-hidden="true">${SVG(I_PAGE)}</i>
@@ -52,7 +61,9 @@ function vlRender() {
         <button class="vl-ib vl-copy" data-v="copy" title="Скопировать пароль — сотрётся из буфера через ${VL_CLIP_S} с" aria-label="Скопировать пароль «${escH(x.name)}»">${SVG(I_COPY)}</button>
         <button class="vl-ib" data-v="edit" title="Изменить" aria-label="Изменить «${escH(x.name)}»">${SVG('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>')}</button></div></article>`;
   }).join("") : `<p class="hint vl-none">Ничего не нашлось по «${escH($("#vl-q").value.trim())}». <a href="#" id="vl-add-q">Добавить такую запись</a></p>`)
-    + `<p class="hint vl-count">${q ? `Найдено: ${list.length} из ${VL.items.length}${list.length ? " · Enter — скопировать первый" : ""}` : `Записей: ${VL.items.length}`}</p>`;
+    + (pages > 1 ? vlPager(list.length, pages, q)
+      : `<p class="hint vl-count">${q ? `Найдено: ${list.length} из ${VL.items.length}${list.length ? " · Enter — скопировать первый" : ""}` : `Записей: ${VL.items.length}`}</p>`);
+  $$("#vl-list .vl-pager [data-pg]").forEach(b => b.onclick = () => vlGo(b.dataset.pg));
   $$("#vl-list .vl-item").forEach(row => {
     const x = VL.items.find(i => i.id === row.dataset.id);
     $$("[data-v]", row).forEach(b => b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); vlAct(b.dataset.v, x, row); });
@@ -61,6 +72,33 @@ function vlRender() {
   });
   if ($("#vl-add-q")) $("#vl-add-q").onclick = async (e) => { e.preventDefault(); if (await vlLeave()) vlForm(null, $("#vl-q").value.trim()); };
   const open = VL.edit && VL.edit !== "new" && $(`#vl-list .vl-item[data-id="${CSS.escape(VL.edit)}"]`); if (open) open.classList.add("cur");
+}
+/* 1 2 3 … 9 — первая, последняя и соседние с текущей; «…» вместо пропусков */
+function vlPager(n, pages, q) {
+  const cur = VL.pg, nums = [];
+  for (let i = 0; i < pages; i++) if (i === 0 || i === pages - 1 || Math.abs(i - cur) <= 1 || (cur <= 2 && i <= 3) || (cur >= pages - 3 && i >= pages - 4)) nums.push(i);
+  const btns = nums.map((i, k) => (k && i - nums[k - 1] > 1 ? `<span class="vl-gap" aria-hidden="true">…</span>` : "")
+    + `<button class="vl-pn${i === cur ? " cur" : ""}" data-pg="${i}"${i === cur ? ' aria-current="page"' : ""} aria-label="Страница ${i + 1}">${i + 1}</button>`).join("");
+  const a = cur * VL.per + 1, b = Math.min(n, a + VL.per - 1);
+  return `<div class="vl-pager" role="navigation" aria-label="Страницы сейфа">
+    <span class="vl-range">${a}–${b} из ${n}${q ? ` · найдено в ${VL.items.length}` : ""}</span>
+    <span class="vl-pns"><button class="vl-pn vl-step" data-pg="prev" aria-label="Предыдущая страница"${cur ? "" : " disabled"}>${SVG('<path d="m14.5 6-6 6 6 6"/>')}</button>${btns}<button class="vl-pn vl-step" data-pg="next" aria-label="Следующая страница"${cur < pages - 1 ? "" : " disabled"}>${SVG('<path d="m9.5 6 6 6-6 6"/>')}</button></span></div>`;
+}
+function vlGo(to) {
+  const was = VL.pg;
+  VL.pg = to === "prev" ? VL.pg - 1 : to === "next" ? VL.pg + 1 : +to;
+  vlRender();
+  if (VL.pg === was) return;
+  const box = $("#vl-list"), top = box.getBoundingClientRect().top;
+  if (top < 0 || top > innerHeight * 0.6) box.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+/* показать запись: открыть страницу, где она стоит, и подсветить */
+function vlReveal(id) {
+  const i = vlHits(vlNorm($("#vl-q").value.trim())).findIndex(x => x.id === id);
+  if (i < 0) return;
+  VL.pg = Math.floor(i / VL.per); vlRender();
+  const row = $(`#vl-list .vl-item[data-id="${CSS.escape(id)}"]`);
+  if (row) { row.classList.add("fresh"); setTimeout(() => row.classList.remove("fresh"), 1600); row.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 }
 async function vlCopy(text, what) {
   const a = window.pywebview && window.pywebview.api;
@@ -149,13 +187,14 @@ function vlFormClose() {
   $$("#vl-list .vl-item.cur").forEach(r => r.classList.remove("cur"));
 }
 function vlStr() { const [k, t] = vlStrength($("#vl-value").value); const s = $("#vl-str"); s.className = "vl-str " + k; s.textContent = t; }
-$("#vl-q").oninput = vlRender;
+$("#vl-q").oninput = () => { VL.pg = 0; vlRender(); };
 $("#vl-q").onkeydown = (e) => {
-  if (e.key === "Escape" && $("#vl-q").value) { e.preventDefault(); $("#vl-q").value = ""; vlRender(); return; }
+  if (e.key === "Escape" && $("#vl-q").value) { e.preventDefault(); $("#vl-q").value = ""; VL.pg = 0; vlRender(); return; }
+  if (e.key === "PageDown" || e.key === "PageUp") { e.preventDefault(); vlGo(e.key === "PageDown" ? "next" : "prev"); return; }
   if (e.key !== "Enter") return;
   e.preventDefault();
-  const first = vlHits(vlNorm($("#vl-q").value.trim()))[0], row = first && $(`#vl-list .vl-item[data-id="${CSS.escape(first.id)}"]`);
-  if (first && row) vlAct("copy", first, row);
+  const row = $("#vl-list .vl-item"), first = row && VL.items.find(x => x.id === row.dataset.id);   // первый на открытой странице
+  if (first && row) vlAct(first.kind === "page" ? "page" : "copy", first, row);
 };
 $("#vl-add").onclick = () => { if (VL.edit) { $("#vl-form").scrollIntoView({ block: "nearest", behavior: "smooth" }); return; } vlForm(null, ""); };
 $("#vl-cancel").onclick = async () => { if (await vlLeave()) vlFormClose(); };
@@ -187,14 +226,16 @@ $("#vl-form").onsubmit = async (e) => {
     if (!a.id && VL.items.some(x => x.kind === "page" && vlNorm(x.name) === vlNorm(a.name)) && !await ask(`Страница «${a.name}» уже есть. Заменить её текст?`)) return;
     try { const res = await core.call("vault_put", a); VL.items = res.items || VL.items;
       if (res.item && res.item.id) { VL.edit = res.item.id; vlKind("page"); VL.snap = vlVals(); vlIdle(); }   // страница остаётся открытой
-      r.className = "res ok"; r.textContent = "Сохранено"; vlRender(); toast("Страница в сейфе"); }
+      r.className = "res ok"; r.textContent = "Сохранено"; vlRender(); if (!a.id && res.item && res.item.id) vlReveal(res.item.id); toast("Страница в сейфе"); }
     catch (err) { r.className = "res bad"; r.textContent = err.message; }
     return;
   }
   if (!a.name) { r.className = "res bad"; r.textContent = "Напишите, что это: «Почта», «Вайфай дома»…"; $("#vl-name").focus(); return; }
   if (!a.value && !a.id) { r.className = "res bad"; r.textContent = "Впишите пароль — или нажмите «Придумать»"; $("#vl-value").focus(); return; }
   if (!a.id && VL.items.some(x => x.kind !== "page" && vlNorm(x.name) === vlNorm(a.name)) && !await ask(`«${a.name}» уже есть в сейфе. Заменить пароль?`)) return;
-  try { VL.items = (await core.call("vault_put", a)).items || VL.items; vlFormClose(); vlRender(); toast(a.id ? "Сохранено" : "В сейфе"); }
+  try { const before = new Set(VL.items.map(x => x.id)), res = await core.call("vault_put", a); VL.items = res.items || VL.items; vlFormClose(); vlRender();
+    const nid = a.id || (res.item && res.item.id) || (VL.items.find(x => !before.has(x.id)) || {}).id; if (nid) vlReveal(nid);
+    toast(a.id ? "Сохранено" : "В сейфе"); }
   catch (err) { r.className = "res bad"; r.textContent = err.message; }
 };
 $("#vl-del").onclick = async () => {
@@ -208,6 +249,11 @@ document.addEventListener("keydown", (e) => {                 // «/» или Ct
   if ((e.key === "/" && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f")) { e.preventDefault(); $("#vl-q").focus(); $("#vl-q").select(); }
 });
 window.loadVaultPage = loadVaultPage;
+addEventListener("resize", () => { clearTimeout(VL.rs); VL.rs = setTimeout(() => {
+  const n = vlPer(); if (n === VL.per) return;
+  const first = VL.pg * VL.per; VL.per = n; VL.pg = Math.floor(first / n);
+  if (VL.loaded && $("#p-vault").classList.contains("cur")) vlRender();
+}, 150); });
 /* «Не потерять пароли» (27.10, владелец: «бывают случаи, когда нужно перенести их и не потерять вместе с устройством»):
    сейф не синхронизируется — переносится закрытым «Слепком знаний» с паролем. Здесь — когда была последняя такая копия
    и кнопка: «Главная» → слепок, формат «закрытый». */

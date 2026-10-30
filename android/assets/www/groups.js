@@ -162,6 +162,18 @@ function grNewHtml(st) {
     <button class="btn p w" id="gr-make" ${sel.size && (grNew.name || "").trim() ? "" : "disabled"}>Создать группу</button>
     <p class="hint" style="margin:10px 4px 0">Участники увидят друг друга — имя и фото — и смогут писать всем, даже если не знакомы между собой. Сообщения шифруются на устройствах.</p>`;
 }
+/* Версия Dewiar у участника (30.10, как в студии groups.js grVer): группы видят компьютер 0.61+ и телефон 0.9.5+ */
+const GR_MINV = { pc: [0, 61], phone: [0, 9, 5], web: [0, 9, 5] };
+function grVer(m) {
+  const fresh = ((m && m.devs) || []).filter(d => !d.seen || Date.now() / 1000 - d.seen < 30 * 86400);
+  const lt = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const x = a[i] || 0, y = b[i] || 0; if (x !== y) return x < y; } return false; };
+  const known = fresh.map(d => /^(pc|phone|web) (\d+(?:\.\d+)*)/.exec(d.ver || "")).filter(Boolean);
+  const old = fresh.length > 0 && known.length === fresh.length && known.every(k => lt(k[2].split(".").map(Number), GR_MINV[k[1]]));
+  return { old, txt: known.map(k => ({ pc: "компьютер", phone: "телефон", web: "браузер" })[k[1]] + " " + k[2]).join(", ") };
+}
+function grOldNote(g, ms) {                         // старой программе — личное письмо: группу она не покажет, а его — покажет
+  ms.filter(m => grVer(m).old).forEach(m => { try { clSend(m.pid, `Зову вас в группу «${g.name}» в «Близких». Ваша версия Dewiar групп ещё не знает — обновите Dewiar, и группа появится: https://dewiar.pro/dwrapp/download.php`).catch(() => { }); } catch (e) { } });
+}
 function grInfoHtml(st, g) {
   const add = g.mine ? st.people.filter(p => !(g.members || []).some(m => m.pid === p.pid)) : [];
   const ownerName = g.mine ? "вы" : ((g.members || []).find(m => m.pid === g.owner) || {}).name || "участник";
@@ -170,7 +182,7 @@ function grInfoHtml(st, g) {
       <p class="hint" style="margin:12px 4px 8px">Значок — увидят все в группе</p>${grIconPick(g.icon || "")}` : ""}
     <h3>Участники</h3>
     <div class="clp me">${clAvaH(st.me.pid || "me", st.me.name || "Я", st.me.face)}<span><b>Вы</b><small>${g.mine ? "создали группу" : "участник"}</small></span></div>
-    ${(g.members || []).map(m => `<div class="clp">${clAvaH(m.pid, m.name, m.face)}<span><b>${esc(m.name)}</b><small>${m.pid === g.owner ? "создал(а) группу" : st.people.some(p => p.pid === m.pid) ? "ваш близкий" : "не в ваших близких — только в группе"}</small></span>${g.mine ? `<button class="btn sm ghost" data-drop="${esc(m.pid)}">Убрать</button>` : ""}</div>`).join("")}
+    ${(g.members || []).map(m => `<div class="clp">${clAvaH(m.pid, m.name, m.face)}<span><b>${esc(m.name)}</b><small>${m.pid === g.owner ? "создал(а) группу" : st.people.some(p => p.pid === m.pid) ? "ваш близкий" : "не в ваших близких — только в группе"}${grVer(m).old ? ` · <em class="grold">старая версия Dewiar — группу не видит, пусть обновится</em>` : grVer(m).txt ? " · " + esc(grVer(m).txt) : ""}</small></span>${g.mine ? `<button class="btn sm ghost" data-drop="${esc(m.pid)}">Убрать</button>` : ""}</div>`).join("")}
     ${add.length && (g.members || []).length + 1 < GR_MAX ? `<h3>Позвать ещё</h3><div class="grpick">${add.map(p => `<label class="grpk"><input type="checkbox" data-add="${esc(p.pid)}">${clAvaH(p.pid, p.name, p.face)}<span>${esc(p.name)}</span><i class="grck"></i></label>`).join("")}</div><button class="btn w" id="gr-add" disabled>Позвать в группу</button>` : ""}
     <button class="btn w bad" id="gr-leave" style="margin-top:18px">${g.mine ? "Удалить группу" : "Выйти из группы"}</button>`;
 }
@@ -199,7 +211,9 @@ function grRender(box) {
       if (c.checked && grNew.pids.size + 2 > GR_MAX) { c.checked = false; return toast(`В группе — до ${GR_MAX} человек`); }
       c.checked ? grNew.pids.add(c.dataset.pid) : grNew.pids.delete(c.dataset.pid); grRender(box); });
     $("#gr-make").onclick = async () => { $("#gr-make").disabled = true;
-      try { const d = await grOp({ op: "create", name: grNew.name.trim(), pids: [...grNew.pids], icon: grNew.icon || "" }, `Группа «${grNew.name.trim()}» создана`); grNew = null; clCur = d.gid; clRender(); }
+      try { const d = await grOp({ op: "create", name: grNew.name.trim(), pids: [...grNew.pids], icon: grNew.icon || "" }, `Группа «${grNew.name.trim()}» создана`); grNew = null; clCur = d.gid; clRender();
+        const g2 = grOf(d.gid); if (g2) { const olds = (g2.members || []).filter(m => grVer(m).old); grOldNote(g2, olds);
+          if (olds.length) toast(`У ${olds.map(m => String(m.name || "").split(/\s+/)[0]).join(", ")} старая версия Dewiar — им ушло личное письмо: пусть обновятся`, 6000); } }
       catch (e) { toast(e.message, 4000); $("#gr-make").disabled = false; } };
     clFacesFill(box); return true;
   }
@@ -214,7 +228,8 @@ function grRender(box) {
       if (confirm(`Убрать ${m ? m.name : "участника"} из «${g.name}»?`)) grOp({ op: "drop", gid: g.gid, pid: b.dataset.drop }, "Убран(а) из группы").then(() => clRender()).catch(e => toast(e.message, 4000)); });
     const sel = () => $$(".grpick input[data-add]:checked").map(c => c.dataset.add);
     $$(".grpick input[data-add]").forEach(c => c.onchange = () => { c.closest(".grpk").classList.toggle("on", c.checked); $("#gr-add").disabled = !sel().length; });
-    if ($("#gr-add")) $("#gr-add").onclick = () => grOp({ op: "add", gid: g.gid, pids: sel() }, "Позвали в группу").then(() => clRender()).catch(e => toast(e.message, 4000));
+    if ($("#gr-add")) $("#gr-add").onclick = () => { const added = sel(); grOp({ op: "add", gid: g.gid, pids: added }, "Позвали в группу").then(() => { const g2 = grOf(g.gid);
+      if (g2) grOldNote(g2, (g2.members || []).filter(m => added.includes(m.pid))); clRender(); }).catch(e => toast(e.message, 4000)); };
     $("#gr-leave").onclick = () => {
       if (!confirm(g.mine ? `Удалить группу «${g.name}» у всех? Переписка на телефонах останется.` : `Выйти из «${g.name}»? Новые сообщения группы перестанут приходить.`)) return;
       grOp({ op: g.mine ? "delete" : "leave", gid: g.gid }, g.mine ? "Группа удалена" : "Вы вышли из группы").then(() => { grInfo = ""; clCur = ""; clRender(); }).catch(e => toast(e.message, 4000));
@@ -230,12 +245,10 @@ function grRender(box) {
   $("#gr-info").onclick = $("#gr-info2").onclick = () => { grInfo = g.gid; clRender(); };
   $$("#cl-atts button").forEach(b => b.onclick = () => { clFiles.splice(+b.dataset.i, 1); clRender(); });
   $$(".clf").forEach(b => b.onclick = () => clSaveFile(g, h[+b.dataset.i], +b.dataset.j));
-  $("#cl-file").onchange = () => { [...$("#cl-file").files].forEach(f => { if (f.size > 10 * 1024 * 1024) { toast(`«${f.name}» больше 10 МБ`); return; }
-    const fr = new FileReader(); fr.onload = () => { clFiles.push({ name: f.name, type: f.type, bytes: new Uint8Array(fr.result) }); clRender(); }; fr.readAsArrayBuffer(f); }); };
-  $("#cl-go").onclick = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return; const b = $("#cl-go");
+  $("#cl-file").onchange = () => { [...$("#cl-file").files].forEach(f => clFileTake(f)); };   // фото сжимается (app.js clFileTake)
+  $("#cl-go").onclick = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return;
     if (!clFiles.length) return clSendSoon(g.gid, t, () => grSend(g.gid, t, []));
-    b.disabled = true;
-    try { await grSend(g.gid, t, clFiles); clFiles = []; clRender(); } catch (e) { toast(e.message, 4000); b.disabled = false; } };
+    clSendFiles(g.gid, t); };                                   // пузырь «Отправляю…», не ушло — файлы обратно в поле
   $("#cl-emo-b").onclick = () => { const e = $("#cl-emo"); e.hidden = !e.hidden; $("#cl-emo-b").setAttribute("aria-expanded", String(!e.hidden)); };
   clEmoBind();
   grReBind(g, h);

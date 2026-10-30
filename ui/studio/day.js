@@ -100,23 +100,44 @@ function itemRow(it, withDate) {
 /* Правка напоминания или дела по расписанию прямо в календаре (28.10, владелец: «в 8:56 утренняя сводка — не понимаю,
    где я её включал, пытался изменить время — не понимаю как»). Время, текст; у повторяющегося — новое время для всех
    повторов; у дела — что это за дело, «Выполнить сейчас», «Выключить» и путь к остальным делам. */
+const RE_DN = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const RE_DN_ACC = ["по понедельникам", "по вторникам", "по средам", "по четвергам", "по пятницам", "по субботам", "по воскресеньям"];
+const RE_DN_FULL = ["По понедельникам", "По вторникам", "По средам", "По четвергам", "По пятницам", "По субботам", "По воскресеньям"];
 function remEdit(el, it) {
   const open = el.nextElementSibling && el.nextElementSibling.classList.contains("remed");
   $$(".remed").forEach(x => x.remove()); $$(".cit.rem.on").forEach(x => x.classList.remove("on"));
   if (open) return;
   const job = it.kind === "job", box = document.createElement("div"); box.className = "remed";
+  const rd = it.repeat && Array.isArray(it.rdays) && it.rdays.length ? it.rdays.slice() : null, wd = (parseD(calSel).getDay() + 6) % 7;
   box.innerHTML = (job ? `<p class="remed-k">Дело по расписанию${it.repeat_text ? " · " + escH(it.repeat_text) : ""} · ${it.deliver === "telegram" ? "в Telegram" : it.deliver === "max" ? "в MAX" : "голосом"}</p>`
       + (it.text && it.text !== it.title ? `<p class="remed-task">${escH(it.text)}</p>` : "") : "")
     + `<div class="row2">${job ? "" : `<input type="text" class="grow" id="re-text" maxlength="300" value="${escH(it.title || "")}" aria-label="Текст">`}`
     + `<input type="time" id="re-time" value="${escH(it.time || "")}" aria-label="Время"><button class="btn small primary" id="re-save">Сохранить</button></div>`
+    // повтор по дням (30.10, владелец: «по будням 17:50, а в пятницу — 16:40… вручную не понятно как»): дни недели — кнопками,
+    // и «только в этот день» — другое время одному дню, остальные остаются как были
+    + (rd ? `<div class="remed-days" role="group" aria-label="Дни повтора">${RE_DN.map((n, i) => `<button type="button" class="rd${rd.includes(i) ? " on" : ""}" data-d="${i}" aria-pressed="${rd.includes(i)}">${n}</button>`).join("")}</div>`
+      + (rd.length > 1 && rd.includes(wd) ? `<label class="remed-only"><input type="checkbox" id="re-only"> Новое время — только ${RE_DN_ACC[wd]}, остальные дни — как были</label>` : "") : "")
     + `<div class="remed-acts">${job ? `<button class="btn small" id="re-run">Выполнить сейчас</button>` : ""}`
     + `<button class="btn small ghost danger" id="re-del">${job ? "Выключить" : it.repeat ? "Удалить все повторы" : "Удалить"}</button>`
     + (job ? `<button class="linkb" id="re-all">Все дела по расписанию</button>` : "") + `</div>`;
   el.after(box); el.classList.add("on");
   const day = calSel;
+  $$(".remed-days .rd", box).forEach(b => b.onclick = () => { b.classList.toggle("on"); b.setAttribute("aria-pressed", String(b.classList.contains("on"))); });
   $("#re-save", box).onclick = async () => {
     const tm = $("#re-time", box).value, text = job ? null : $("#re-text", box).value.trim();
     if (!tm) return $("#re-time", box).focus();
+    if ($("#re-only", box) && $("#re-only", box).checked) {               // другое время — только этому дню недели
+      try { await core.call("reminder_split", { id: it.id, day: wd, time: tm }); toast(`${RE_DN_FULL[wd]} — в ${tm}, остальные дни — как были`, 3200); loadCalendar(); }
+      catch (e) { toast(e.message, 3500); }
+      return;
+    }
+    if (rd) {
+      const days = $$(".remed-days .rd.on", box).map(b => +b.dataset.d);
+      if (!days.length) return toast("Оставьте хотя бы один день");
+      if (days.join() !== rd.join()) {
+        try { await core.call("reminder_update", { id: it.id, patch: { days } }); } catch (e) { return toast(e.message, 3500); }
+      }
+    }
     const patch = { at: `${it.repeat ? isoD(new Date()) : day}T${tm}:00` };   // повтор — с ближайшего раза, не с выбранного дня
     if (text && text !== it.title) patch.text = text;
     try { const r = await core.call("reminder_update", { id: it.id, patch }); toast(it.repeat ? `Теперь ${r.repeat_text || "в " + tm}` : `Перенесено: ${r.when || tm}`); loadCalendar(); }

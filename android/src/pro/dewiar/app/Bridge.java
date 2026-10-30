@@ -214,8 +214,15 @@ public final class Bridge {
     /** Выбранный звук и название своего файла: {"id": "chime", "custom": "моя мелодия.mp3"}. */
     @JavascriptInterface public String alarmSound() {
         try {
-            return new JSONObject().put("id", Sounds.current(a)).put("custom", Sounds.customFile(a).isFile() ? prefs.getString("alarm_custom_name", "Свой звук") : "").toString();
+            return new JSONObject().put("id", Sounds.current(a)).put("custom", Sounds.customFile(a).isFile() ? prefs.getString("alarm_custom_name", "Свой звук") : "")
+                    .put("soft", Sounds.softOn(a)).toString();
         } catch (Exception e) { return "{}"; }
+    }
+
+    /** Идея №72: напоминания о делах — громкостью уведомлений (кнопки громкости телефона), будильник — по-прежнему своей. */
+    @JavascriptInterface public boolean alarmSoundSoft(boolean on) {
+        Sounds.setSoft(a, on);
+        return Sounds.softOn(a);
     }
 
     @JavascriptInterface public boolean alarmSoundSet(String id) {

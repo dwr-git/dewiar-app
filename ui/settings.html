@@ -138,10 +138,19 @@
       <linearGradient id="hg9" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fe07a"/><stop offset="1" stop-color="#23a06e"/></linearGradient>
     </defs></svg>
     <div id="hm-body">
-      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p><button class="hm-mode" type="button" id="hm-mode" aria-haspopup="dialog"><i aria-hidden="true"></i><span>Лира — для меня</span></button></div><div class="sn-wrap" id="sn"></div></div>
+      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p><button class="hm-mode" type="button" id="hm-mode" aria-haspopup="dialog"><i aria-hidden="true"></i><span>Лира — для меня</span></button></div>
+        <div class="hm-side"><div class="sn-wrap" id="sn"></div>
+          <div class="fd" role="search"><label class="fd-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg>
+            <input type="search" id="fd-q" placeholder="Найти: почта, пароли, голос…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="fd-res" aria-autocomplete="list" aria-label="Найти раздел или настройку"><kbd aria-hidden="true">Ctrl K</kbd></label>
+            <div class="fd-res" id="fd-res" role="listbox" aria-label="Найдено" hidden></div></div></div></div>
       <div class="hm-morning" id="hm-morning" hidden></div>
       <div class="hm-morning hm-month" id="hm-month" hidden></div>
       <div class="hm-today" id="hm-today"></div>
+      <div class="hm-mail" id="hm-mail" hidden></div>
+      <dialog class="hmm-dlg" id="hmm-dlg" aria-labelledby="hmm-dt"><div class="hmm-dh"><span><small id="hmm-dfrom"></small><b id="hmm-dt"></b></span>
+        <button class="ls-x hmm-x" type="button" id="hmm-x" aria-label="Закрыть" title="Закрыть (Esc)">×</button></div>
+        <div class="hmm-body" id="hmm-body"></div>
+        <div class="hmm-acts"><button class="btn primary" type="button" id="hmm-reply">Ответить с Лирой</button><button class="btn" type="button" id="hmm-close">Закрыть</button></div></dialog>
       <button class="hm-council" type="button" id="hm-council" data-go="council"><span class="hmc-faces" id="hmc-faces" aria-hidden="true"></span>
         <span class="hmc-t"><b>Совет ИИ</b><span>Задайте вопрос — персонажи на разных моделях обсудят его, поспорят и подведут итог</span></span>
         <span class="hmc-go">Собрать совет</span></button>
@@ -437,7 +446,8 @@
     <dialog class="ls-dlg" id="ls-dlg" aria-labelledby="ls-dt"><div class="ls-dh"><b id="ls-dt"></b><button class="ls-x" type="button" id="ls-x" aria-label="Закрыть" title="Закрыть (Esc)">×</button></div>
       <div class="ls-vw"><video id="ls-v" controls playsinline preload="auto"></video>
         <div class="ls-fail" id="ls-fail" hidden><b>Видео не открылось в окне программы</b><span id="ls-fail-why">Откройте его в браузере — там оно играет всегда.</span>
-          <button class="btn primary" type="button" id="ls-ext">Смотреть в браузере</button></div></div></dialog>
+          <span class="ls-fail-acts"><button class="btn primary" type="button" id="ls-codec" hidden>Установить видеокодек</button>
+          <button class="btn" type="button" id="ls-ext">Смотреть в браузере</button></span></div></div></dialog>
   </section>
 
   <section id="p-course" class="wide">
@@ -1486,13 +1496,15 @@
       <h3 style="font-size:15px;margin-bottom:6px">Почта</h3>
       <p class="hint" style="margin-bottom:12px">Ассистент сможет прислать вам результат («пришли мне это на почту»), отправить письмо по вашей просьбе (всегда спросит «отправить?») и рассказать, что нового во входящих.</p>
       <div class="ml-boxes" id="ml-boxes" role="tablist" aria-label="Ящики"></div>
-      <div class="actions" style="margin:0;flex-wrap:wrap">
-        <input type="email" id="ml-addr" placeholder="ваш адрес, например ivan@yandex.ru" autocomplete="email" style="flex:1;min-width:200px">
-        <input type="password" id="ml-pass" placeholder="пароль приложения" autocomplete="off" style="flex:1;min-width:170px">
+      <div class="ml-guide" id="ml-guide" aria-live="polite"></div>
+      <div class="ml-form">
+        <label class="ml-f"><span>Адрес почты</span>
+          <input type="email" id="ml-addr" placeholder="например ivan@gmail.com" autocomplete="email"></label>
+        <label class="ml-f"><span id="ml-pass-l">Пароль приложения</span>
+          <input type="password" id="ml-pass" placeholder="пароль приложения" autocomplete="off" spellcheck="false"></label>
         <button class="btn primary" id="ml-save">Подключить</button>
       </div>
-      <p class="hint" id="ml-help" style="margin-top:8px"></p>
-      <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">Серверы почты (подставляются сами)</summary>
+      <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Серверы почты (подставляются сами)</summary>
         <div class="row" style="margin-top:10px">
           <label class="f">Имя отправителя<input type="text" id="ml-name" placeholder="Dewiar"></label>
           <label class="f">Логин (если не совпадает с адресом)<input type="text" id="ml-login"></label>
@@ -2503,6 +2515,7 @@
 <script src="studio/dewiar.js"></script>
 <script src="studio/look.js"></script>
 <script src="studio/home.js"></script>
+<script src="studio/find.js"></script>
 <script src="studio/morning.js"></script>
 <script src="studio/month.js"></script>
 <script src="assets/emoji/emoji-data.js"></script>

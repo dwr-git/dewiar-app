@@ -129,7 +129,9 @@ DAYS = {D: [
     {"type": "reminder", "title": "Итог дня", "text": EVE, "time": "21:00", "id": "j1", "kind": "job", "repeat": True, "repeat_text": "каждый день в 21:00", "deliver": "voice"},
     {"type": "reminder", "title": "Зарядить наручные часы", "time": "20:56", "done": True, "kind": "reminder", "fired": D + "T08:56"},
     {"type": "reminder", "title": "Главные новости", "time": "08:30", "done": True, "kind": "job", "skipped": True},
-    {"type": "reminder", "title": "Позвонить Артёму", "time": "23:30", "id": "r2", "kind": "reminder"}]}
+    {"type": "reminder", "title": "Позвонить Артёму", "time": "23:30", "id": "r2", "kind": "reminder"},
+    {"type": "reminder", "title": "Пора выключать компьютер", "text": "Пора выключать компьютер", "time": "17:50", "id": "r3", "kind": "reminder",
+     "repeat": True, "repeat_text": "по будням в 17:50", "rdays": [0, 1, 2, 3, 4]}]}
 CORE = r"""
 (() => { window.calls = []; window.DAYS = %s;
   const ready = () => { if (!window.core) return setTimeout(ready, 5);
@@ -137,6 +139,7 @@ CORE = r"""
     core.call = async (c, a) => { calls.push([c, a]);
       if (c === "calendar_month") return { days: DAYS, currency: "BYN" };
       if (c === "reminder_update") return { repeat_text: "каждый день в 22:15", when: "сегодня в 23:45" };
+      if (c === "reminder_split") return { kept: {}, new: {} };
       return {}; }; };
   ready(); })();
 """ % json.dumps(DAYS, ensure_ascii=False)
@@ -168,6 +171,35 @@ with sync_playwright() as p:
     pg.locator("#dd-body .cit", has_text="Позвонить Артёму").locator(".t").click(); pg.wait_for_timeout(200)
     pg.fill("#dd-body #re-text", "Позвонить Артёму Бородину"); pg.fill("#dd-body #re-time", "23:45"); pg.click("#dd-body #re-save"); pg.wait_for_timeout(300)
     ok(any(c[0] == "reminder_update" and c[1]["id"] == "r2" and c[1]["patch"].get("text") == "Позвонить Артёму Бородину" for c in pg.evaluate("calls")), "напоминание: текст и время")
+    # 30.10 (владелец: «по будням 17:50, а по пятницам — 16:40, вручную не понятно как»): дни кнопками, «только в этот день»
+    wd = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"][datetime.fromisoformat(D).weekday()]
+    pg.locator("#dd-body .cit", has_text="Пора выключать компьютер").locator(".t").click(); pg.wait_for_timeout(250)
+    chips = pg.evaluate("[...document.querySelectorAll('#dd-body .remed-days .rd')].map(b => [b.textContent, b.classList.contains('on')])")
+    only = pg.inner_text("#dd-body .remed-only") if pg.locator("#dd-body .remed-only").count() else ""
+    if os.environ.get("DEWIAR_SHOTS"): pg.screenshot(path=str(Path(os.environ["DEWIAR_SHOTS"]) / "studio-calendar-days.png"))
+    wdi = datetime.fromisoformat(D).weekday()
+    ok([c[0] for c in chips] == ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] and [c[1] for c in chips] == [True] * 5 + [False] * 2
+       and (wdi > 4 or f"только по {wd}" in only), f"повтор по дням — кнопки дней (будни включены) и «только по {wd}»: {chips}, {only!r}")
+    if wdi <= 4:
+        pg.fill("#dd-body #re-time", "16:40"); pg.check("#dd-body #re-only"); pg.click("#dd-body #re-save"); pg.wait_for_timeout(300)
+        ok(["reminder_split", {"id": "r3", "day": wdi, "time": "16:40"}] in pg.evaluate("calls"), "«только в этот день» — reminder_split с днём и временем")
+    pg.locator("#dd-body .cit", has_text="Пора выключать компьютер").locator(".t").click(); pg.wait_for_timeout(250)
+    pg.click("#dd-body .remed-days .rd[data-d='4']"); pg.click("#dd-body #re-save"); pg.wait_for_timeout(300)
+    ok(any(c[0] == "reminder_update" and c[1]["id"] == "r3" and c[1]["patch"].get("days") == [0, 1, 2, 3] for c in pg.evaluate("calls")), "сняли «Пт» — дни повтора без пятницы")
+    # 30.10 (владелец: «„Удалить все повторы“ — только затемняет экран: окошко удаления появляется под этим окном»)
+    pg.locator("#dd-body .cit", has_text="Пора выключать компьютер").locator(".t").click(); pg.wait_for_timeout(250)
+    pg.add_script_tag(path=str(ROOT / "ui/assets/dialog.js"))          # настоящий вопрос вместо заглушки выше
+    pg.click("#dd-body #re-del"); pg.wait_for_timeout(300)
+    top = pg.evaluate("""(() => { const y = document.querySelector('.dwq button.yes'); if (!y) return 'нет окна';
+      const r = y.getBoundingClientRect(), el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return el === y ? 'сверху' : (el && (el.id || el.className)) || '?'; })()""")
+    if os.environ.get("DEWIAR_SHOTS"): pg.screenshot(path=str(Path(os.environ["DEWIAR_SHOTS"]) / "studio-calendar-ask.png"))
+    ok(top == "сверху", f"вопрос «Удалить со всеми повторами?» — поверх окна дня, его можно нажать: {top}")
+    pg.click(".dwq button.yes"); pg.wait_for_timeout(400)
+    ok(["reminder_cancel", {"id": "r3"}] in pg.evaluate("calls") and pg.locator(".dwq-back").count() == 0 and pg.evaluate("document.querySelector('#day-dlg').open"),
+       "«Удалить» — повторы удалены, вопрос закрыт, окно дня осталось")
+    pg.locator("#dd-body .cit", has_text="Пора выключать компьютер").locator(".t").click(); pg.wait_for_timeout(250)
+    pg.click("#dd-body #re-del"); pg.wait_for_timeout(250); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    ok(pg.locator(".dwq-back").count() == 0 and pg.evaluate("document.querySelector('#day-dlg').open"), "Esc — закрывает только вопрос, окно дня остаётся")
     b.close()
 ok(not errs, "без ошибок JavaScript" + (f": {errs[:3]}" if errs else ""))
 

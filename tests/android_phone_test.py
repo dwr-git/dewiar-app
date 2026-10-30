@@ -68,6 +68,8 @@ try:
         shot = pg.evaluate("document.querySelector('#card img.shot') && document.querySelector('#card img.shot').src.slice(0, 23)")
         img_req = [r for r in reqs() if any(isinstance(m.get("content"), list) for m in r["messages"])]
         ok(shot == "data:image/jpeg;base64,", "камера: снимок сделан и показан под ответом")
+        sv = pg.evaluate("[!!document.querySelector('#card .appc button[onclick=\"savePhoto()\"]'), (history[history.length - 1] || {}).note || '']")
+        ok(sv[0] and "снимок с камеры показан" in sv[1], f"GitHub №20: после ответа — карточка снимка с «Сохранить», модель знает, что снимок на экране: {sv}")
         ok(img_req and "Вижу картинку" in ans, f"снимок ушёл модели картинкой, ответ — по снимку: {ans[:70]}")
         ok(not pg.evaluate("!!document.querySelector('#cam')"), "окно камеры закрылось, камера выключена")
         pg.evaluate("S.llm.model = 'blind'; saveS()")

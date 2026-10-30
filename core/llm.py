@@ -920,6 +920,10 @@ class BareCallCatcher:
         return out
 
 
+# путь Windows в тексте вызова: «D:\…» или «\\сервер\…» после кавычки, пробела или скобки (GitHub №29)
+WIN_PATH_RX = re.compile(r"""((?:^|(?<=[\s"'(=:,\[{]))(?:[A-Za-z]:|\\\\(?=\w)))((?:\\+[^\\"\s<>|*?]+)+\\*)""")
+
+
 def _loads_loose(s):
     """json.loads, а не вышло — мягче (№390, 28.10: «Вызов функции в тексте не разобран» — run_python с кодом, где модель
     написала настоящие переводы строк внутри строки и «\\'» — JSON их не принимает, задача «застряла»): переводы строк и
@@ -928,6 +932,9 @@ def _loads_loose(s):
         return json.loads(s)
     except ValueError:
         pass
+    # GitHub №29 (29.10): «D:\\Demo\\new\\test.txt» без экранирования — «\\n» и «\\t» в пути становились переводом строки и
+    # табуляцией. Путь Windows (буква диска или \\\\сервер) — обратные слеши в нём буквальные: удваиваем до разбора
+    s = WIN_PATH_RX.sub(lambda m: m.group(1) + re.sub(r"\\+", lambda b: "\\\\", m.group(2)), s)
     t = re.sub(r"\\(.)", lambda m: m.group(0) if m.group(1) in '"\\/bfnrtu' else ("'" if m.group(1) == "'" else "\\\\" + m.group(1)), s, flags=re.S)
     try:
         return json.loads(t, strict=False)
@@ -1363,11 +1370,16 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         timeout = httpx.Timeout(5, read=float(p.get("timeout") or (600 if _local_base(base) else 180)))
         if p.get("kind") == "anthropic":
             url = _anth_root(base) + "/v1/messages"
-            body = {"model": model, "system": system, "messages": messages, "stream": True,
+            # кэш подсказки (GitHub PR №24, maghelp, 26.10): инструменты (≈13 тыс. токенов) и характер уходят с каждым
+            # шагом — с cache_control Claude берёт их из кэша в ~10 раз дешевле. Метки — на последнем инструменте и на
+            # подсказке (порядок кэша: инструменты → system → сообщения)
+            body = {"model": model, "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}] if system else system,
+                    "messages": messages, "stream": True,
                     "max_tokens": max_tokens, "temperature": float(p.get("temperature", 0.7))}
             if tools:
                 body["tools"] = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
                                  for t in tools]
+                body["tools"][-1] = dict(body["tools"][-1], cache_control={"type": "ephemeral"})
         elif native:
             url = _root(base) + "/api/chat"
             body = {"model": model, "stream": True, "messages": _to_ollama([{"role": "system", "content": system}] + messages),

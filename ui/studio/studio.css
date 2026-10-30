@@ -1023,7 +1023,7 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .cl-m .tx { white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(14px * var(--dw-text, 1)); line-height: 1.5; }
 .cl-m time { align-self: flex-end; font-size: 11px; color: var(--dim); }
 .cl-m time { display: inline-flex; align-items: center; gap: 4px; }
-.cl-ck { display: inline-grid; font-style: normal; } .cl-ck.sent, .cl-ck.dlv { opacity: .8; } .cl-ck.read { color: #5ff0c4; opacity: 1; }   /* ✓ отправлено, ✓✓ доставлено, ✓✓ мятный — прочитано */
+.cl-ck { display: inline-grid; font-style: normal; } .cl-ck.sent, .cl-ck.dlv, .cl-ck.grp { opacity: .8; } .cl-ck.read { color: #5ff0c4; opacity: 1; }   /* ✓ отправлено, ✓✓ доставлено, ✓✓ мятный — прочитано */
 .cl-f { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 12px; padding: 8px 10px; background: rgba(0,0,0,.18); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
 .cl-f:disabled { cursor: default; opacity: .75; } .cl-f span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cl-f small { color: var(--muted); font-size: 11.5px; }
@@ -1980,6 +1980,20 @@ html.st-light .cl-me:hover, html.st-light .cl-me[aria-expanded="true"] { backgro
 .vl-copy { color: var(--brand); background: color-mix(in srgb, var(--brand) 14%, transparent); }
 .vl-copy:hover { background: color-mix(in srgb, var(--brand) 24%, transparent); color: var(--brand); }
 .vl-count { margin: 6px 4px 0; font-size: 12px; } .vl-none { margin: 6px 4px; }
+.vl-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin: 10px 2px 0; }
+.vl-range { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.vl-pns { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 14px; background: var(--glass); }
+.vl-pn { min-width: 34px; height: 32px; padding: 0 9px; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: pointer;
+  font: 600 13px "Manrope", sans-serif; font-variant-numeric: tabular-nums; display: grid; place-items: center; transition: background .15s, color .15s; }
+.vl-pn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vl-pn:hover:not(:disabled), .vl-pn:focus-visible { background: rgba(255,255,255,.09); color: var(--ink); outline: none; }
+.vl-pn:focus-visible { box-shadow: inset 0 0 0 2px var(--brand); }
+.vl-pn.cur { background: var(--brand); color: #fff; cursor: default; }
+.vl-pn:disabled { opacity: .35; cursor: default; }
+.vl-gap { color: var(--muted); padding: 0 3px; font-size: 13px; }
+.vl-item.fresh { box-shadow: inset 0 0 0 2px var(--brand); }
+html.st-light .vl-pns { box-shadow: inset 0 0 0 1px rgba(36,50,74,.08); }
+html.st-light .vl-pn:hover:not(:disabled) { background: rgba(36,50,74,.07); }
 .vl-foot { max-width: 900px; margin-top: 18px; }
 .vl-empty { max-width: 900px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 38px 24px; border-radius: 22px; background: var(--glass); }
 .vl-empty b { font: 600 16px "Unbounded", sans-serif; } .vl-empty span { color: var(--muted); font-size: 13.5px; max-width: 420px; line-height: 1.5; }
@@ -2409,6 +2423,21 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 
 /* почта: несколько ящиков (27.10) */
 .ml-boxes { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; } .ml-boxes:empty { display: none; }
+/* почта: шаги «как получить пароль приложения» и подписанные поля (30.10) */
+.ml-guide { margin: 0 0 14px; }
+.ml-lead { margin: 0 0 8px; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.ml-steps { margin: 0; padding: 0; list-style: none; counter-reset: mls; display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.ml-steps li { counter-increment: mls; position: relative; padding: 2px 0 2px 36px; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.ml-steps li::before { content: counter(mls); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font: 700 12px "Manrope", sans-serif; color: #fff; background: var(--brand); }
+.ml-steps .ml-go { display: flex; margin-top: 8px; width: fit-content; }
+.ml-steps a, .ml-lead a { color: var(--brand); }
+.ml-note { margin: 10px 0 0 36px; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 724px; }
+.ml-more { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: var(--brand); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.ml-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.ml-f { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; }
+.ml-f > span { font-size: 12.5px; color: var(--muted); }
+.ml-f input { width: 100%; }
 
 /* ---------- «Вопрос — ответ» (27.10): плитки разделов, поиск, статья ---------- */
 .qa-find { display: flex; gap: 12px; align-items: center; margin: 4px 0 20px; flex-wrap: wrap; }
@@ -3319,21 +3348,24 @@ html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92)
 .cl-ck.pend { opacity: .6; } .cl-ck.fail { color: #ff8a8a; opacity: 1; }
 
 /* группы в меню слева под «Близкими» (groups.js grNav): отступ ступенькой, мини-мозаика лиц, название в строку */
-.nav-groups { display: flex; flex-direction: column; gap: 2px; margin: -2px 0 4px 22px; padding-left: 10px; box-shadow: inset 2px 0 0 color-mix(in srgb, var(--muted) 22%, transparent); }
+/* 30.10 (владелец: «группа с полосочкой — аккуратнее»): без линии слева — значок группы встаёт под значок «Близких», строка плоская */
+.nav-groups { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px 18px; }
 .nav-groups[hidden] { display: none; }
-nav .nav-g { padding: 6px 10px; gap: 9px; font-size: 13px; border-radius: 10px; min-width: 0; }
+nav .nav-g { padding: 6px 10px; gap: 10px; font-size: 13px; border-radius: 10px; min-width: 0; box-shadow: none; color: var(--muted); }
+nav .nav-g:hover { box-shadow: none; background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--ink); }
 nav .nav-g span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-nav .nav-g .nav-gi { width: 22px; height: 22px; flex: none; border-radius: 8px; display: grid; place-items: center; font-style: normal;
+nav .nav-g .nav-gi { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-style: normal;
   font: 700 11px/1 "Unbounded", "Manrope", sans-serif; color: #fff; background: linear-gradient(145deg, color-mix(in srgb, var(--c, #8b7cff) 78%, #fff), var(--c, #8b7cff));
   box-shadow: 0 4px 10px -6px var(--c, #8b7cff); }
 nav .nav-g .nav-gi.emo { font: 400 13px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-  background: color-mix(in srgb, var(--c, #8b7cff) 20%, transparent); box-shadow: none; }
+  background: color-mix(in srgb, var(--c, #8b7cff) 14%, transparent); box-shadow: none; border-radius: 50%; }
 nav .nav-g .cl-gstack { position: relative; width: 24px; height: 24px; flex: none; }
 nav .nav-g .cl-gstack .cl-ava { position: absolute; width: 16px; height: 16px; font-size: 8.5px; margin: 0; }
 nav .nav-g .cl-gstack .cl-ava:first-child { left: 0; top: 0; } nav .nav-g .cl-gstack .cl-ava:nth-child(2) { right: 0; bottom: 0; }
 nav .nav-g .cl-gstack .cl-ava.more { display: none; }
 nav .nav-g em { font-style: normal; font-size: 10.5px; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; background: var(--brand); color: #fff; }
-nav .nav-g.cur { color: var(--ink); background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: none; font-weight: 600; }
+/* открытая группа — тихая подсветка, а не вторая вдавленная кнопка под «Близкими» (темы вдавливают nav button.cur — здесь важнее) */
+nav button.nav-g.cur { color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 10%, transparent) !important; box-shadow: none !important; font-weight: 600; }
 html.st-light nav .nav-g .cl-gstack, html.st-neu nav .nav-g .cl-gstack { --ring: rgba(255,255,255,.92); }
 
 /* Смайлы картинками (ui/assets/emoji/emoji.js, Fluent Emoji): в тексте — размером с букву, «только смайлы» — крупно */
@@ -3782,3 +3814,98 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
   background: radial-gradient(80% 80% at 50% 40%, #1d2133, #0d0f16); }
 .ls-fail[hidden] { display: none; } .ls-fail b { font: 600 18px "Unbounded", sans-serif; } .ls-fail span { color: rgba(255,255,255,.7); font-size: 14px; max-width: 34em; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { .ls-card { transition: none; } }
+.cl-gold { font-style: normal; color: #c9822b; font-weight: 600; }
+
+/* календарь: дни повтора кнопками и «только в этот день» (30.10) */
+.remed-days { display: flex; gap: 6px; flex-wrap: wrap; }
+.remed-days .rd { min-width: 38px; height: 32px; border-radius: 10px; border: 0; background: var(--soft, rgba(127,127,140,.12)); color: var(--muted); font: 600 12.5px/1 inherit; cursor: pointer; }
+.remed-days .rd.on { background: var(--brand); color: #fff; }
+.remed-days .rd:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.remed-only { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink); cursor: pointer; }
+
+.ls-fail-acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.ls-fail .ls-fail-acts { max-width: none; color: inherit; margin-top: 4px; }
+.ls-fail .ls-fail-acts .btn:not(.primary) { background: rgba(255,255,255,.12); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.ls-fail .ls-fail-acts .btn:not(.primary):hover { background: rgba(255,255,255,.2); }
+
+/* Поиск по студии на «Главной» (studio/find.js, 30.10): под «Слепком знаний»; найденное — панелью поверх */
+.hm-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; flex: none; }
+.fd { position: relative; width: 340px; max-width: 100%; }
+.fd-box { display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 8px 0 14px; border-radius: 15px; background: var(--glass); cursor: text;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); transition: box-shadow .15s; }
+html.st-light .fd-box { box-shadow: inset 0 0 0 1px rgba(36,50,74,.1); }
+.fd-box:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
+.fd-box > svg { flex: none; width: 17px; height: 17px; fill: none; stroke: var(--muted); stroke-width: 1.9; stroke-linecap: round; }
+#p-home .fd-box input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; font: inherit; font-size: 14px; color: var(--ink); }
+#p-home .fd-box input::-webkit-search-cancel-button { display: none; }
+.fd-box kbd { flex: none; padding: 3px 7px; border-radius: 8px; font: 600 11px "Manrope", sans-serif; color: var(--dim, var(--muted)); background: rgba(127,127,140,.13); }
+.fd-box:focus-within kbd { visibility: hidden; }
+.fd-res { position: absolute; right: 0; top: calc(100% + 8px); width: 440px; max-width: calc(100vw - 32px); max-height: min(62vh, 520px); overflow: auto; z-index: 70; padding: 8px;
+  border-radius: 20px; background: #1b1b2e; box-shadow: 0 24px 60px -18px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.07); }
+html.st-light .fd-res { background: #f6f8fc; box-shadow: 0 24px 60px -18px rgba(20,30,60,.4), inset 0 0 0 1px rgba(36,50,74,.08); }
+.fd-res[hidden] { display: none; }
+.fd-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border: 0; border-radius: 13px;
+  background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.fd-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.fd-ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-style: normal; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.fd-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.fd-row.qa .fd-ic { color: #c98a1b; background: rgba(255,194,75,.16); }
+.fd-t { display: flex; flex-direction: column; min-width: 0; }
+.fd-t b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fd-t small { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.fd-t mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.fd-go { font-size: 13px; color: var(--muted); opacity: 0; } .fd-row.on .fd-go { opacity: 1; }
+.fd-foot { margin: 6px 10px 2px; font-size: 11.5px; color: var(--muted); }
+.fd-none { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 12px 10px; }
+.fd-none b { font-size: 14px; } .fd-none span { font-size: 13px; color: var(--muted); line-height: 1.5; } .fd-none .btn { margin-top: 4px; }
+@keyframes fdHl { 0%, 55% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent); } 100% { box-shadow: 0 0 0 3px transparent; } }
+.fd-hl { animation: fdHl 2.2s ease-out; border-radius: 14px; }
+@media (max-width: 900px) { .hm-side { width: 100%; align-items: stretch; } .fd { width: 100%; } .fd-res { left: 0; right: auto; width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .fd-hl { animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 60%, transparent); } }
+
+/* «Почта» на главной (home.js hmMail, 30.10): пять последних писем; новые — жирно с точкой */
+.hm-mail { padding: 16px 18px 12px; border-radius: 26px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); }
+.hm-mail[hidden] { display: none; }
+.hmm-head { display: flex; align-items: center; gap: 10px; margin: 0 4px 8px; }
+.hmm-head h2 { margin: 0; font-size: 18px; }
+.hmm-n { padding: 3px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.hmm-sp { flex: 1; }
+.hmm-re { width: 34px; height: 34px; border: 0; border-radius: 11px; display: grid; place-items: center; background: none; color: var(--muted); cursor: pointer; }
+.hmm-re:hover, .hmm-re:focus-visible { background: rgba(127,127,140,.13); color: var(--ink); outline: none; }
+.hmm-re svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hmm-re.busy svg { animation: hmmSpin 1s linear infinite; }
+@keyframes hmmSpin { to { transform: rotate(360deg); } }
+.hmm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.hmm-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border: 0; border-radius: 14px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hmm-row:hover, .hmm-row:focus-visible { background: rgba(127,127,140,.1); outline: none; }
+.hmm-av { flex: none; position: relative; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font: 700 14px "Unbounded", sans-serif; font-style: normal; color: #fff;
+  background: var(--c); }
+.hmm-row.new .hmm-av::after { content: ""; position: absolute; top: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel, #fff); }
+.hmm-t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.hmm-l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.hmm-l1 b { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hmm-row.new .hmm-l1 b, .hmm-row.new .hmm-sub { font-weight: 700; }
+.hmm-clip { font-style: normal; font-size: 12px; }
+.hmm-l1 time { margin-left: auto; flex: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hmm-row.new time { color: var(--accent); font-weight: 600; }
+.hmm-l2 { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.hmm-sub { color: var(--ink); } .hmm-sn { color: var(--muted); }
+.hmm-foot { margin: 8px 10px 2px; font-size: 12.5px; color: var(--muted); }
+.hmm-empty, .hmm-err { margin: 6px 10px 4px; font-size: 13.5px; color: var(--muted); } .hmm-err { color: #d4584f; } .hmm-err a { color: var(--accent); }
+.hmm-dlg { width: min(720px, calc(100vw - 32px)); max-height: min(80vh, 760px); padding: 0; border: 0; border-radius: 24px; color: var(--ink); background: #1b1b2e;
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,.65); display: none; flex-direction: column; overflow: hidden; }
+.hmm-dlg[open] { display: flex; }
+html.st-light .hmm-dlg { background: #f6f8fc; box-shadow: 0 30px 80px -20px rgba(20,30,60,.45); }
+.hmm-dlg::backdrop { background: rgba(10,12,20,.4); backdrop-filter: blur(3px); }
+.hmm-dh { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 10px; }
+.hmm-dh > span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hmm-dh small { font-size: 12.5px; color: var(--muted); } .hmm-dh b { font: 600 17px/1.35 "Unbounded", sans-serif; }
+.hmm-x { position: static; flex: none; }
+.hmm-body { padding: 0 20px; overflow: auto; flex: 1; }
+.hmm-to { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); word-break: break-all; }
+.hmm-text { white-space: pre-wrap; font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; padding-bottom: 6px; }
+.hmm-files { font-size: 13px; color: var(--muted); }
+.hmm-load { color: var(--muted); }
+.hmm-acts { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 20px 18px; }
+.hmm-x { color: var(--ink); background: rgba(127,127,140,.13); }
+.hmm-dlg { position: fixed; inset: 0; margin: auto; height: fit-content; }

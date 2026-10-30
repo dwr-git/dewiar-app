@@ -143,6 +143,7 @@ async function loadHome() {
   if (window.snLoad) snLoad();                          // «Слепок знаний» справа от приветствия (studio/snapshot.js)
   if (typeof moLoad === "function") moLoad();           // «Мой месяц с Лирой» (studio/month.js): первые 7 дней месяца — о прошлом
   if (typeof mnLoad === "function") mnLoad();           // «Утро с Лирой» (studio/morning.js): погода и почта — не ждём их
+  hmMailLoad();                                         // «Почта»: последние письма — не ждём их
   const now = new Date(), get = (c, a) => core.call(c, a).catch(() => null);
   // уроки — с сайта, не ждём их (сеть бывает медленной): пришли — карточка «Новый видеоурок» дорисуется
   if (!(HM.ac && Date.now() - HM.ac.at < 6 * 3600e3)) get("academy_list").then(ac => { if (ac && Array.isArray(ac.items)) { HM.ac = { at: Date.now(), d: ac }; if (HM.data) hmRender(); } });
@@ -238,8 +239,74 @@ function hmRender() {
   const pd = HM.data.pad, lines = pd ? hmPadLines(pd.text) : [];
   $("#hm-pad").innerHTML = `<small>Блокнот${pd ? " · «" + hmEsc(pd.name) + "»" : ""}</small>` + (lines.length ? `<div class="hm-pv">${lines.join("")}</div>` : `<p>Блокнот у виджета — для мыслей на лету. Пишется само.</p>`)
     + `<button class="hm-more" data-pad="1">Открыть блокнот у виджета</button>`;
+  hmMail();
   $("#hm-set").innerHTML = HM_SET.map(([p, n]) => `<button class="hm-pill" data-go="${p}">${hmEsc(n)}</button>`).join("");
   hmWire();
+}
+/* «Почта» на главной (30.10, владелец: «добавил почту — и не могу понять, как увидеть последние письма… может, показывать
+   здесь последние письма красиво, если почта подключена»). Пять последних писем: от кого, тема, начало текста, когда;
+   новые — жирно с точкой. Нажали — письмо целиком (mail_read), «Ответить с Лирой» — в «Чат». Почты нет — карточки нет
+   (позвать подключить — дело «Утра»). Письма — раз в 5 минут, не мешая остальной «Главной». */
+const HMM_TTL = 5 * 60e3;
+async function hmMailLoad(force) {
+  if (HM.mailBusy) return;
+  if (!force && HM.mail && Date.now() - HM.mail.at < HMM_TTL) { hmMail(); return; }
+  HM.mailBusy = true; if (force) hmMail();
+  let r;
+  try { r = await core.call("mail_inbox", { limit: 5 }); }
+  catch (e) { r = /Детский режим/.test(e.message) ? { on: false, items: [] } : { on: true, items: (HM.mail && HM.mail.items) || [], err: e.message }; }
+  HM.mailBusy = false;
+  HM.mail = Object.assign({ at: Date.now() }, r || { on: false, items: [] });
+  hmMail();
+}
+const hmmWho = (f) => { const s = String(f || ""), m = s.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/); return (m ? (m[1].trim() || m[2]) : s.trim()) || "без имени"; };
+const hmmAddr = (f) => { const m = String(f || "").match(/<([^>]+)>/); return m ? m[1] : String(f || "").trim(); };
+function hmmWhen(d) {
+  const t = new Date(d); if (isNaN(t)) return "";
+  const now = new Date(), day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(), diff = Math.round((day(now) - day(t)) / 864e5);
+  if (diff === 0) return t.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  if (diff === 1) return "вчера";
+  return t.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
+}
+function hmMail() {
+  const box = $("#hm-mail"); if (!box) return;
+  const m = HM.mail;
+  if (!m || !m.on) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  const it = m.items || [], un = it.filter(x => x.unread).length;
+  const rows = it.map((x, i) => { const who = hmmWho(x.from), sub = x.subject || "(без темы)", sn = String(x.snippet || "").trim();
+    return `<li><button type="button" class="hmm-row${x.unread ? " new" : ""}" data-i="${i}" title="${hmEsc(hmmAddr(x.from))}">
+      <i class="hmm-av" style="--c:${typeof vlCol === "function" ? vlCol(who) : "#5b8def"}" aria-hidden="true">${hmEsc((who.replace(/^[^\p{L}\d]+/u, "")[0] || "?").toUpperCase())}</i>
+      <span class="hmm-t"><span class="hmm-l1"><b>${hmEsc(who)}</b>${x.files && x.files.length ? '<em class="hmm-clip" title="С вложением">📎</em>' : ""}<time>${hmEsc(hmmWhen(x.date))}</time></span>
+        <span class="hmm-l2"><span class="hmm-sub">${hmEsc(sub)}</span>${sn ? `<span class="hmm-sn"> — ${hmEsc(sn.slice(0, 140))}</span>` : ""}</span></span></button></li>`; }).join("");
+  box.innerHTML = `<div class="hmm-head"><h2>Почта</h2>${un ? `<span class="hmm-n">${un} ${un % 10 === 1 && un % 100 !== 11 ? "новое" : "новых"}</span>` : ""}<span class="hmm-sp"></span>
+      <button type="button" class="hmm-re${HM.mailBusy ? " busy" : ""}" id="hmm-re" title="Проверить почту" aria-label="Проверить почту"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5A8 8 0 1 0 17.7 17"/><path d="M20.5 5.5v6h-6"/></svg></button></div>`
+    + (m.err && !it.length ? `<p class="hmm-err">Почта не ответила: ${hmEsc(m.err)} <a href="#" id="hmm-fix">Проверить подключение</a></p>`
+      : !it.length ? `<p class="hmm-empty">${HM.mailBusy ? "Смотрю почту…" : "Во входящих пусто."}</p>` : `<ul class="hmm-list">${rows}</ul>`)
+    + `<p class="hmm-foot">Голосом: «что нового в почте?», «прочитай письмо от…», «ответь ему, что…»</p>`;
+  $("#hmm-re").onclick = () => hmMailLoad(true);
+  if ($("#hmm-fix")) $("#hmm-fix").onclick = (e) => { e.preventDefault(); hmGo("connect"); setTimeout(() => { const b = $("#mail-box"); if (b) b.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250); };
+  $$("#hm-mail .hmm-row").forEach(b => b.onclick = () => hmmOpen(it[+b.dataset.i]));
+}
+async function hmmOpen(x) {
+  if (!x) return;
+  const d = $("#hmm-dlg"), body = $("#hmm-body");
+  $("#hmm-dfrom").textContent = `${hmmWho(x.from)} · ${hmmWhen(x.date)}`; $("#hmm-dt").textContent = x.subject || "(без темы)";
+  body.innerHTML = `<p class="hmm-load">Открываю письмо…</p>`;
+  if (!d.open) d.showModal();
+  $("#hmm-reply").onclick = () => { d.close(); const t = `Помоги ответить на письмо от ${hmmWho(x.from)} (${hmmAddr(x.from)}) с темой «${x.subject || "без темы"}»`;
+    if (typeof qaAsk === "function") qaAsk(t); else core.call("say", { text: t }).catch(() => {}); };
+  try {
+    const r = await core.call("mail_read", { uid: x.uid });
+    const txt = String(r.text || "").trim();
+    body.innerHTML = `<p class="hmm-to">${hmEsc(hmmAddr(r.from || x.from))}${r.to ? ` → ${hmEsc(r.to)}` : ""}</p><div class="hmm-text">${txt ? hmEsc(txt) : "<i>В письме нет текста.</i>"}</div>`
+      + ((r.files || []).length ? `<p class="hmm-files">📎 ${r.files.map(hmEsc).join(" · ")}</p>` : "");
+    if (x.unread) x.unread = false;
+  } catch (e) { body.innerHTML = `<p class="hmm-err">Не открылось: ${hmEsc(e.message)}</p>`; }
+}
+if ($("#hmm-dlg")) {
+  $("#hmm-x").onclick = $("#hmm-close").onclick = () => $("#hmm-dlg").close();
+  $("#hmm-dlg").addEventListener("click", (e) => { if (e.target === $("#hmm-dlg")) $("#hmm-dlg").close(); });
 }
 function hmGo(p) {
   if (p.startsWith("lesson:")) {                       // карточка «Новый видеоурок» — сразу смотреть

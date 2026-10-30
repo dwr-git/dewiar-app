@@ -75,7 +75,8 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     updateInstall: () => (window._updPerm ? "perm" : (window._updInst = (window._updInst || 0) + 1, "ok")), updateCanInstall: () => !window._updPerm,
     updateReady: () => true, openDownloads: () => { window._dls = (window._dls || 0) + 1; return true; },
     appSize: () => JSON.stringify({ cache: 48e6, data: 12e6 }), clearOwnCache: () => (window._cleared = (window._cleared || 0) + 1, 47e6), openStorage: () => { window._storage = (window._storage || 0) + 1; return true; },
-    alarmSound: () => JSON.stringify({ id: store.alarm_sound || "signature", custom: store.alarm_custom_name || "" }),
+    alarmSound: () => JSON.stringify({ id: store.alarm_sound || "signature", custom: store.alarm_custom_name || "", soft: !!store.rem_soft }),
+    alarmSoundSoft: (on) => (store.rem_soft = !!on),
     alarmSoundSet: (id) => { if (id === "custom" && !store.alarm_custom_name) return false; store.alarm_sound = id; return true; },
     alarmSoundTry: (id) => { const on = window._trying !== id; window._trying = on ? id : ""; return on; },
     alarmSoundCustom: (b64, name) => { if (!b64) return "пустой файл"; store.alarm_custom_name = name; store.alarm_sound = "custom"; return ""; },
@@ -368,6 +369,9 @@ function netErr(e, url) {
       + "Шифрование и учётные данные → Установить сертификат → «Сертификат ЦС» — и Dewiar будет ему доверять. Или откройте сервер по http в домашней сети";
   if (/Unable to resolve|UnknownHost|No address/i.test(e)) return home ? "домашний сервер не найден (возможно, вы не дома)" : "нет интернета или слабая связь";
   if (/timeout|timed out|after \d+\s*ms/i.test(e)) return home ? "домашний сервер долго не отвечает (возможно, вы не дома)" : (/dewiar\.pro/i.test(url || "") ? "сервер Dewiar долго не отвечает — слабая связь или сейчас много людей сразу" : "сервер долго не отвечает — похоже, слабая связь");
+  // веб-версия (пакет 30.10, iPhone: «связь с мозгом: Load failed») — так Safari называет любой обрыв запроса
+  if (/^(?:TypeError:\s*)?(?:Load failed|Failed to fetch|NetworkError.*)$/i.test(e.trim()))
+    return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась — слабая связь или страница была свёрнута";
   if (/ECONNREFUSED|Connection refused|failed to connect|reset|closed|EOF|connection abort/i.test(e)) return home ? "домашний сервер не отвечает (возможно, вы не в домашней сети)" : "связь с сервером оборвалась";
   return e;
 }
@@ -1232,6 +1236,7 @@ let turnMedia = null;                            // картинки этого 
 let turnQ = "";                                 // вопрос этого хода: длинная страница (readPage) — куски по его словам
 const isLongAnswer = (t) => String(t || "").length >= LONG_ANSWER || /\n\s*(?:[-*•]|\d+[.)])\s|\n\s*\||```/.test(String(t || "")) || !!(turnMedia && turnMedia.length);
 function showBot(t, cls) {
+  if (tgTurn && t && cls !== "wait") tgLast = String(t);
   const b = $("#bot"), long = !cls && isLongAnswer(t);
   b.className = cls || (long ? "framed" : ""); b.textContent = t || "";
   $("#stage").classList.toggle("long", long);
@@ -1642,6 +1647,7 @@ function volCard() {
   };
 }
 function say(text, retry = 0) {
+  if (tgTurn) return;                                         // ответ в Telegram за выключенный компьютер — молча (tgHandle)
   const t = speechText(text); if (!t) return;
   if (S.textMode) { vCount("tts_text"); return; }            // текстовый режим — ответ только на экране
   if (!D.mock) {                                              // звук на нуле — голос всё равно не услышат: не синтезируем
@@ -2401,7 +2407,7 @@ async function ask(text, opts = {}) {
     showYou(text); setState("thinking"); showBot("Включаю камеру — держите телефон ровно", "wait");
     const shot = await takePhoto(PHOTO_SELF_RX.test(text) ? "user" : "environment");
     plog("info", `📸 снимок по просьбе: ${shot.ok ? (shot.dark ? "тёмный" : "есть") : shot.error}`);
-    if (shot.ok && !shot.dark) return ask(text, Object.assign({}, opts, { attach: [{ kind: "image", name: "снимок камеры", url: shot.dataUrl }] }));
+    if (shot.ok && !shot.dark) return ask(text, Object.assign({}, opts, { camShot: true, attach: [{ kind: "image", name: "снимок камеры", url: shot.dataUrl }] }));
     if (!shot.ok) { answerLocal({ say: "Не получилось сфотографировать: " + shot.error }); return; }
     answerLocal({ say: "Кадр получился почти чёрным — камера ничего не видит. Уберите палец или чехол с камеры и попросите ещё раз." }); return;
   }
@@ -2418,10 +2424,12 @@ async function ask(text, opts = {}) {
     }
   }
   clearCard(); setState("thinking"); showBot("", "wait");
-  photoTurn = false;
+  photoTurn = !!opts.camShot;                       // GitHub №20: снимок с камеры — модель знает, что он на экране
   convCheck();
   const att = opts.attach || [], pics = att.filter(a => a.kind === "image"), docs = att.filter(a => a.kind === "text");
-  if (pics.length) { showCard(`<div class="attshow">${pics.map(a => `<img src="${a.url}" alt="">`).join("")}</div>`); cardSticky = Date.now() + 60000; }
+  // GitHub №20 (25.10): снимок камеры оставался обычным вложением — без «Сохранить»; теперь — та же карточка снимка
+  if (pics.length) { if (opts.camShot) { showCard(photoCard(pics[0].url)); cardSticky = Date.now() + 180000; }
+    else { showCard(`<div class="attshow">${pics.map(a => `<img src="${a.url}" alt="">`).join("")}</div>`); cardSticky = Date.now() + 60000; } }
   turnAtt = att; turnAsk = opts.hidden ? "" : text;    // hidden — просьба приложения (сканер, сводка): без проверки
   const cap = !opts.hidden && captureAt && Date.now() - captureAt < 120000; captureAt = 0;     // сказано после «Записать»
   let fast = opts.hidden || kidsOn() ? null : att.length ? (remindAttQuick(text, att) || (() => { const say = noteQuick(text, att); return say ? { say } : null; })()) : await quick(text);
@@ -2683,7 +2691,7 @@ async function ask(text, opts = {}) {
     if (turnAbort === ctl) { busy = false; turnAbort = null; }
   }
   if (switchTo) afterSpeak = () => { markHandoff(switchTo); S.persona = switchTo; saveS(); applyPersona(); ask("(Тебя позвали в разговор. Откликнись одной-двумя фразами от себя и продолжи то, о чём просил пользователь.)", { hidden: true }); };
-  else if ((S.follow === "always" || (S.follow === "ask" && /\?\s*$/.test(sink.text()))) && (D.recognizer() || (S.stt.engine === "server" && S.stt.url)))
+  else if (!tgTurn && (S.follow === "always" || (S.follow === "ask" && /\?\s*$/.test(sink.text()))) && (D.recognizer() || (S.stt.engine === "server" && S.stt.url)))
     afterSpeak = () => listen();
   if (sayLeft === 0 && state !== "listening") finishTurn();
 }
@@ -6380,7 +6388,9 @@ function renderSettings() {
     if (setTab === "sound") h.push(`<div class="card"><p class="hint" style="margin-top:0">Мягко и сначала тихо — громкость прибавляется за 20 секунд.</p>
       <div class="snds">${ALARM_SOUNDS.map(([id, n, sub]) => `<button class="snd ${id === (snd.id || "signature") ? "on" : ""}" data-snd="${id}"><i>${PLAY_SVG}</i><span><b>${n}</b><small>${sub}</small></span></button>`).join("")}
         <button class="snd ${snd.id === "custom" ? "on" : ""} ${snd.custom ? "" : "nofile"}" data-snd="custom"><i>${PLAY_SVG}</i><span><b>Свой звук</b><small id="snd-name">${snd.custom ? esc(snd.custom) : "Любая мелодия с телефона"}</small></span></button></div>
-      <label class="btn w" id="snd-pick"><input type="file" id="snd-file" accept="audio/*" hidden>${snd.custom ? "Выбрать другой файл" : "Выбрать файл…"}</label><div class="res" id="snd-res"></div></div>`);
+      <label class="btn w" id="snd-pick"><input type="file" id="snd-file" accept="audio/*" hidden>${snd.custom ? "Выбрать другой файл" : "Выбрать файл…"}</label><div class="res" id="snd-res"></div>
+      ${D.alarmSoundSoft ? `<div class="sw" style="margin-top:12px"><div>Напоминания — громкостью уведомлений<small>Напоминания о делах звучат так громко, как уведомления телефона, — убавьте их кнопками громкости. Будильник и таймер остаются громкими.</small></div>
+      <label class="tg"><input type="checkbox" id="snd-soft" ${snd.soft ? "checked" : ""}><i></i></label></div>` : ""}</div>`);
     if (setTab === "privacy" && window.DEWIAR_PRIVACY) h.push(`<div class="card priv">${DEWIAR_PRIVACY.items.map(([t, x]) => `<p><b>${esc(t)}.</b> ${esc(x)}</p>`).join("")}</div>`);
     if (setTab === "about") cab.push(`<h3>${D.web ? "Этот браузер" : "Этот телефон"} в кабинете</h3><div class="card"><p class="hint" style="margin-top:0">В кабинете облака (экзамен, здоровье) ${D.web ? "этот браузер" : "этот телефон"} —
       <b>${esc((info.device || "Телефон") + " · " + (info.version || "") + " · №" + devId().slice(-4))}</b>. Нет в списке — нажмите «Отметиться в кабинете»: появится через минуту.</p>
@@ -6410,7 +6420,9 @@ function renderSettings() {
     if (setTab === "telegram") h.push(`
       <div class="card" id="tg-card">${!tgOn() ? `<p class="hint" style="margin:0 0 10px">Бот Dewiar в Telegram подключается на компьютере: студия → «Подключение» → Telegram. Бот один для всех ваших устройств: пишите или присылайте голосовые — ответит компьютер, а когда он выключен — сервер Dewiar. На телефоне ничего настраивать не нужно.</p><button class="btn w" id="tg-bot" disabled>Открыть бота в Telegram</button>`
         : (S.tg || {}).linked ? `<div class="row2"><span class="res ok" style="flex:1;margin:0">Подключён${S.tg.name ? ": " + esc(S.tg.name) : ""}${S.tg.bot ? " · @" + esc(S.tg.bot) : ""}</span><button class="btn" id="tg-off">Отключить</button></div>
-          <p class="hint" style="margin:8px 0 0">Пишите боту или присылайте голосовые — ответит ${esc(persona().name)}. Заметки, списки и напоминания из Telegram появятся здесь, в «Мой день». Компьютер с Dewiar включён — отвечает он.</p>${S.tg.bot ? `<button class="btn w" id="tg-open" style="margin-top:8px">Открыть бота</button>` : ""}`
+          <p class="hint" style="margin:8px 0 0">Пишите боту или присылайте голосовые — ответит ${esc(persona().name)}. Заметки, списки и напоминания из Telegram появятся здесь, в «Мой день». Компьютер с Dewiar включён — отвечает он.</p>${S.tg.bot ? `<button class="btn w" id="tg-open" style="margin-top:8px">Открыть бота</button>` : ""}
+          <div class="sw" style="margin-top:12px"><div>Отвечать с телефона, когда компьютер выключен<small>Ответит ${esc(persona().name)} этого телефона своим мозгом, молча — ответ уйдёт в Telegram. Сразу — пока приложение открыто или в шторке значок «Dewiar на связи»; телефон уснул — ответит сервер Dewiar. Тратит немного заряда.</small></div>
+          <label class="tg"><input type="checkbox" id="tg-hand" ${S.tg.hand ? "checked" : ""}><i></i></label></div>`
         : `<p class="hint" style="margin:0 0 10px">Пишите и присылайте голосовые боту Dewiar в Telegram — ассистент ответит, даже когда телефон убран: поставит напоминание, запишет заметку, ответит голосом.</p><button class="btn p w" id="tg-go">Подключить Telegram</button>`}<div class="res" id="tg-res"></div></div>
       `);
     if (setTab === "smart") h.push(`
@@ -6490,6 +6502,9 @@ function wireSettings(info) {
     if (D.alarmSoundSet && D.alarmSoundSet(id)) $$(".snd").forEach(x => x.classList.toggle("on", x === b));
     sndPlaying(D.alarmSoundTry && D.alarmSoundTry(id) ? id : "");
   });
+  // идея №72 (30.10: «в гарнитуре напоминание орёт в ухо, а будильник убавить — просплю»): напоминания — потоком уведомлений
+  if (g("snd-soft")) g("snd-soft").onchange = () => { const on = D.alarmSoundSoft(g("snd-soft").checked); g("snd-soft").checked = on;
+    toast(on ? "Напоминания — громкостью уведомлений, будильник — громкий" : "Напоминания — громко, как будильник", 2600); };
   if (g("snd-file")) g("snd-file").onchange = () => {
     const f = g("snd-file").files[0]; if (!f) return;
     if (f.size > 12 * 1024 * 1024) { g("snd-res").className = "res bad"; g("snd-res").textContent = "Файл больше 12 МБ — выберите покороче."; return; }
@@ -6634,6 +6649,8 @@ function wireSettings(info) {
     if (g("tg-off")) g("tg-off").onclick = async () => { if (!confirm("Отключить Telegram? Бот перестанет отвечать вам.")) return;
       try { await tgCall("dewiarUnlink"); S.tg = { linked: false }; saveS(); renderSettings(); } catch (e) { g("tg-res").className = "res bad"; g("tg-res").textContent = e.message; } };
     if (g("tg-open")) g("tg-open").onclick = () => D.openUrl("https://t.me/" + S.tg.bot);
+    if (g("tg-hand")) g("tg-hand").onchange = () => { const on = g("tg-hand").checked; tgHandSet(on);
+      toast(on ? "Компьютер выключен — в Telegram ответит телефон" : "Компьютер выключен — в Telegram отвечает сервер Dewiar", 2800); };
     if (g("tg-bot")) tgBotName().then(n => { const b = g("tg-bot"); if (!b) return; if (!n) { b.remove(); return; }
       b.disabled = false; b.textContent = "Открыть @" + n; b.onclick = () => D.openUrl("https://t.me/" + n); }).catch(() => { if (g("tg-bot")) g("tg-bot").remove(); });
     if (tgOn() && g("tg-card")) tgStatus().then(t => { if (!!t.linked !== !!$("#tg-off") && setTab === "telegram") renderSettings(); }).catch(() => {});
@@ -7037,6 +7054,7 @@ async function syncRun(manual) {
   // возвращалось людям как своё (отчёт №52, 14.10). Следы прошлых экзаменов убирает examCleanCheck (exam.js).
   if (SANDBOX) return;
   if ((S.tg || {}).linked && Date.now() - (S.tg.at || 0) > 600000) tgSync();      // ключ и персонаж для бота — раз в 10 минут
+  if (!tgHandT && !tgHandBusy && tgHandOn()) tgHandLater(500);                     // «Отвечать с телефона» — опрос не уснул
   if (syncBusy) return; const c = syncChan();
   if (!c || !S.sync.on) { syncStatus = Object.assign(syncStatus, { ok: null, error: "" }); return; }
   syncBusy = true;
@@ -7810,6 +7828,45 @@ async function tgLink(res) {
   throw new Error("не дождался «Старт» в Telegram — попробуйте ещё раз");
 }
 
+/* Телефон отвечает в Telegram, пока компьютер выключен (30.10, идея №67; пользователь: «мобилка постоянно в сети и Лира на
+   ней — почему бы ей не отвечать?»). Включено «Отвечать с телефона» — телефон опрашивает бота (dewiarPhone): открыт — раз
+   в 5 с, свёрнут — раз в 15 с (пока Android не усыпил приложение; значок «Dewiar на связи» держит его живым). Сообщение,
+   пришедшее при выключенном компьютере, сервер держит для телефона до 25 с: телефон свободен (не говорит, не слушает) —
+   забирает и отвечает своим мозгом (ключ сервиса не уходит на сервер), молча — ответ уходит в Telegram; не забрал — как
+   раньше, отвечает сервер. Детский режим и экзамен — не отвечаем. */
+let tgTurn = false, tgHandT = 0, tgHandBusy = false, tgLast = "";
+const tgDone = [];
+const tgHandOn = () => tgOn() && !!(S.tg || {}).linked && !!(S.tg || {}).hand && !kidsOn() && !SANDBOX;
+function tgHandLater(ms) { clearTimeout(tgHandT); tgHandT = setTimeout(tgHandTick, ms); }
+async function tgHandTick() {
+  tgHandT = 0;
+  if (!tgHandOn()) return;
+  if (tgHandBusy) return tgHandLater(3000);
+  tgHandBusy = true; let next = document.hidden ? 15000 : 5000;
+  try {
+    const r = await tgCall("dewiarPhone", { on: true, take: !busy && state === "idle", done: tgDone.splice(0) });
+    for (const m of (r && r.take) || []) await tgHandle(m);
+    if (tgDone.length) next = 200;                 // ответ готов — отдать сразу
+  } catch (e) { plog("warn", "Telegram с телефона: " + e.message); next = 30000; }
+  finally { tgHandBusy = false; }
+  tgHandLater(next);
+}
+async function tgHandle(m) {
+  for (let i = 0; i < 40 && (busy || state !== "idle"); i++) await sleep(1000);   // человек заговорил — дождаться
+  const n0 = history.length; tgLast = ""; tgTurn = true;
+  plog("info", `✈️ Telegram, компьютер выключен — отвечаю с телефона: ${clip(m.text)}`);
+  try { await ask(m.text); } catch (e) { tgLast = "Не получилось ответить: " + (e.message || e); }
+  finally { tgTurn = false; }
+  const a = history.slice(n0).reverse().find(x => x.role === "assistant");
+  const ans = String((a && a.content) || tgLast || "").trim();
+  if (ans) tgDone.push({ id: m.id, answer: ans.slice(0, 4000) });    // нечего сказать — ответит сервер (tick, через пару минут)
+}
+async function tgHandSet(on) {
+  S.tg = Object.assign({}, S.tg, { hand: !!on }); saveS();
+  try { await tgCall("dewiarPhone", { on: !!on }); } catch (e) { plog("warn", "Telegram с телефона: " + e.message); }
+  if (on) tgHandLater(500); else { clearTimeout(tgHandT); tgHandT = 0; }
+}
+
 /* ---------- мессенджеры: MAX, Telegram, WhatsApp… — текст уходит в приложение, получателя выбирает человек ---------- */
 const MESSENGERS = {
   max: { name: "MAX", pkgs: ["ru.oneme.app"] },
@@ -8149,6 +8206,7 @@ $("#typed").onkeydown = (e) => { if (e.key === "Enter") sendTyped(); };
 N.on("intent", (e) => handleIntent(e));
 N.on("htmlview", (e) => { const f = htmlViewSave; htmlViewSave = null; if (e.save && f) f(); });
 // вернулись из настроек Android после «Включить» — карточка «Управлять приложениями» показывает новое состояние
+N.on("resume", () => { if (tgHandOn()) tgHandLater(300); });
 N.on("resume", () => { if (handsAsked && Date.now() - handsAsked < 10 * 60000 && $("#hands-card")) { $("#hands-card").innerHTML = handsCard(); wireHands(); } });
 N.on("pause", () => { if (state === "listening") stopListen(), setState("idle"); });
 /* Что пришло снаружи (MainActivity.handle): при запуске — через Dewiar.takeIntent(), когда страница уже открыта — событием
@@ -8343,7 +8401,10 @@ function ownApply(body) {
 }
 async function clHello() {
   const k = clKeys();
-  clPeople(await clReq("POST", "/close/hello", { dev: k.dev, pub: k.pub, devname: (clInfo().device || "Телефон"), name: (S.close && S.close.name) || S.user_name || "" }));
+  // ver (30.10): версия программы — близкие видят, что у кого старая версия и почему группа не появилась
+  const iv = String(clInfo().version || "").trim();
+  clPeople(await clReq("POST", "/close/hello", { dev: k.dev, pub: k.pub, devname: (clInfo().device || "Телефон"), name: (S.close && S.close.name) || S.user_name || "",
+    ...(iv ? { ver: (D.web || /-web$/.test(iv) ? "web " : "phone ") + iv } : {}) }));
   CLS.hello = Date.now(); clSave(); return CLS;
 }
 const clInfo = () => { try { return JSON.parse(D.info() || "{}"); } catch (e) { return {}; } };
@@ -8410,6 +8471,38 @@ async function clSend(who, text, files, kind, extra) {
 /* Отправка — сразу на экране (28.10, владелец: «в группу отправляет с ощутимой задержкой»): сообщение появляется мгновенно
    с часиками, поле пустеет; письмо (шифрование, сайт) уходит в фоне, потом на месте — настоящее, с галочкой. Не ушло —
    убираем и возвращаем текст в поле. Только текст: файлы ждут, как раньше. */
+/* Файл в «Близкие» (30.10, Валера: «прикрепил фото, но вижу — не отправилось»): фото больше 1,5 МБ сжимается до 2560 px
+   JPEG (снимок камеры 8 МБ base64 — запрос ~11 МБ, сайт его не примет); остальное — до 10 МБ как есть. */
+function clFileTake(f, after) {
+  const add = (it) => { clFiles.push(it); (after || clRender)(); };
+  if (typeof clIsImg === "function" && clIsImg(f) && f.size > 1.5e6 && !/gif$/i.test(f.type || "")) {
+    const fr = new FileReader();
+    fr.onload = () => { const im = new Image();
+      im.onload = () => { try { const k = Math.min(1, 2560 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas");
+        c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+        const u = c.toDataURL("image/jpeg", 0.85), bin = atob(u.split(",")[1]), b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+        add({ name: String(f.name || "фото").replace(/\.[a-z0-9]+$/i, "") + ".jpg", type: "image/jpeg", bytes: b }); }
+        catch (e) { toast("Фото не сжалось — попробуйте другое", 3000); } };
+      im.onerror = () => toast("Это фото не открылось — попробуйте другое", 3000); im.src = String(fr.result); };
+    fr.readAsDataURL(f); return;
+  }
+  if (f.size > 10 * 1024 * 1024) { toast(`«${f.name}» больше 10 МБ`); return; }
+  const fr = new FileReader(); fr.onload = () => add({ name: f.name, type: f.type, bytes: new Uint8Array(fr.result) }); fr.readAsArrayBuffer(f);
+}
+/* С файлами — тоже сразу пузырём «Отправляю…» с именами файлов; не ушло — пузырь уходит, файлы и текст возвращаются в поле
+   и понятная причина (большой файл — так и сказать). */
+async function clSendFiles(pid, t) {
+  const files = clFiles; clFiles = [];
+  const tmp = { mid: "tmp" + Date.now().toString(36), ts: Date.now(), out: true, t, pend: true, f: files.map(f => ({ name: f.name, size: f.bytes.length })) };
+  clAdd(pid, tmp); $("#cl-text").value = ""; clRender();
+  const drop = () => { const st = clLoad(); st.hist[pid] = (st.hist[pid] || []).filter(x => x.mid !== tmp.mid); clSave(); };
+  try { await clSend(pid, t, files); drop(); clRender(); }
+  catch (e) {
+    drop(); clFiles = files.concat(clFiles); clRender();
+    if ($("#cl-text") && !$("#cl-text").value) $("#cl-text").value = t;
+    toast(/413|больш/i.test(e.message) ? "Файл слишком большой — до 10 МБ. Сожмите или отправьте поменьше." : "Не ушло: " + e.message + " — нажмите «Отправить» ещё раз", 5000);
+  }
+}
 async function clSendSoon(pid, t, fn) {
   const tmp = { mid: "tmp" + Date.now().toString(36), ts: Date.now(), out: true, t, pend: true };
   clAdd(pid, tmp); $("#cl-text").value = ""; clRender();
@@ -8482,10 +8575,13 @@ async function clPoll() {
     const st = clLoad(), k = clKeys();
     if (!st.me.pid || Date.now() - (st.hello || 0) > 3600000) await clHello();   // раз в час: новые близкие и «зовут в Близкие»
     if (wkJobs().length && Date.now() - (wkLoad().at || 0) > 3600000) await wkRefresh().catch(() => { });   // и работы: устройства руководителей
-    const d = await clReq("GET", "/close/inbox", null, "&after=" + (+st.cursor || 0) + "&geo=1");
+    const d = await clReq("GET", "/close/inbox", null, "&after=" + (+st.cursor || 0) + "&geo=1&gup=1");
     let got = 0, refreshed = false;
     for (const it of d.items || []) {
       if (it.kind === "ring") continue;                    // признак звонка — для службы CloseLive; сам звонок — в «sig»
+      if (it.kind === "gup") { if (!refreshed) { refreshed = true; try { await clHello(); } catch (e) { } } continue; }   // группы изменились — список сразу (30.10)
+      if (it.kind === "grp" && !refreshed && typeof grOf === "function" && !grOf(String((it.env || {}).g || ""))) {   // письмо раньше, чем узнали о группе
+        refreshed = true; try { await clHello(); } catch (e) { } }
       if (it.kind === "workin" || it.kind === "workx") { wkKind(it); continue; }   // «Работа» (work.js): знаки сайта без шифра
       const env = it.env || {};
       const pubOf = () => clPubOf(it.peer, env.fd, it.out) || (it.kind === "work" && !it.out ? wkPub(it.peer, env.fd) : null)
@@ -9431,12 +9527,10 @@ function clRender() {
     if ($("#cl-call")) { $("#cl-call").onclick = () => clCall(p.pid, false).catch(e => toast(e.message, 4000)); $("#cl-vcall").onclick = () => clCall(p.pid, true).catch(e => toast(e.message, 4000)); }
     $$("#cl-atts button").forEach(b => b.onclick = () => { clFiles.splice(+b.dataset.i, 1); clRender(); });
     $$(".clf").forEach(b => b.onclick = () => clSaveFile(p, h[+b.dataset.i], +b.dataset.j));
-    $("#cl-file").onchange = () => { [...$("#cl-file").files].forEach(f => { if (f.size > 10 * 1024 * 1024) { toast(`«${f.name}» больше 10 МБ`); return; }
-      const fr = new FileReader(); fr.onload = () => { clFiles.push({ name: f.name, type: f.type, bytes: new Uint8Array(fr.result) }); clRender(); }; fr.readAsArrayBuffer(f); }); };
-    const go = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return; const b = $("#cl-go");
+    $("#cl-file").onchange = () => { [...$("#cl-file").files].forEach(f => clFileTake(f)); };
+    const go = async () => { const t = $("#cl-text").value.trim(); if (!t && !clFiles.length) return;
       if (!clFiles.length) return clSendSoon(p.pid, t, () => clSend(p.pid, t, []));
-      b.disabled = true;
-      try { await clSend(p.pid, t, clFiles); clFiles = []; clRender(); } catch (e) { toast(e.message, 4000); b.disabled = false; } };
+      clSendFiles(p.pid, t); };
     $("#cl-go").onclick = go;
     $("#cl-emo-b").onclick = () => { const e = $("#cl-emo"); e.hidden = !e.hidden; $("#cl-emo-b").setAttribute("aria-expanded", String(!e.hidden)); };
     clEmoBind();

@@ -88,7 +88,8 @@ self.addEventListener("install", e => {{ e.waitUntil(caches.open(CACHE).then(c =
 self.addEventListener("activate", e => {{ e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith("dewiar-web-") && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); }});
 self.addEventListener("fetch", e => {{
   const r = e.request, u = new URL(r.url);
-  if (r.method !== "GET" || u.origin !== location.origin || !u.pathname.startsWith(new URL("./", self.registration.scope).pathname)) return;
+  if (r.method !== "GET" || u.origin !== location.origin || !u.pathname.startsWith(new URL("./", self.registration.scope).pathname)
+      || u.searchParams.has("fresh")) return;   // проверка свежей версии (webbridge.js) — всегда с сайта
   if (r.mode === "navigate") {{   // страница — сначала свежая с сайта, без связи — из кэша
     e.respondWith(fetch(r).then(x => {{ const c = x.clone(); caches.open(CACHE).then(k => k.put("./", c)); return x; }}).catch(() => caches.match("./")));
     return;

@@ -627,7 +627,7 @@ class CommandsMixin:
             # (владелец 29.10). Ссылки на файлы уроков — всегда публичные, как в браузере.
             pub = base_of(self.cloud.url).rsplit("/", 1)[0] + "/academy/"
             for it in d.get("items") or []:
-                for k in ("video", "poster"):
+                for k in ("video", "webm", "poster"):
                     u = str(it.get(k) or "")
                     if "/academy/" in u and not u.startswith(pub):
                         it[k] = pub + u.rsplit("/academy/", 1)[1]
@@ -986,6 +986,14 @@ class CommandsMixin:
                     return r
                 if cmd == "mail_guess":
                     return guess(a.get("address", ""))
+                # «Почта» на главной студии (30.10, владелец: «добавил почту — не могу понять, как увидеть последние письма»)
+                if cmd == "mail_inbox":
+                    if not any(b.configured() and b.data.get("imap_host") for b in self.mail.boxes):
+                        return {"on": False, "items": []}
+                    items = self.mail.inbox(max(1, min(int(a.get("limit") or 5), 20)))
+                    return {"on": True, "items": [{k: x.get(k) for k in ("uid", "from", "subject", "date", "snippet", "unread", "files", "box")} for x in items]}
+                if cmd == "mail_read":
+                    return self.mail.read(str(a.get("uid") or ""))
                 if cmd == "mail_test":
                     return self.mail.test(int(a.get("box") or 0))
                 if cmd == "mail_send_test":
@@ -1055,7 +1063,7 @@ class CommandsMixin:
             return {"version": VERSION, "releases": news.releases(seen, VERSION) if seen != VERSION else []}
         if cmd in ("done", "done_add", "done_undo", "done_reminder"):    # «Дела»: сделанное и достижения (студия, done.py)
             return self._done_cmd(cmd, a)
-        if cmd in ("reminders", "reminder_add", "reminder_update", "reminder_cancel", "alarm_ack", "alarm_snooze",
+        if cmd in ("reminders", "reminder_add", "reminder_update", "reminder_split", "reminder_cancel", "alarm_ack", "alarm_snooze",
                    "alarm_get", "alarm_test", "reminder_parse", "job_add", "job_run", "reminder_files", "capture_parse", "capture_save"):
             return self._reminder_cmd(cmd, a)
         if cmd in ("morning_get", "morning_set"):                   # «Утро с Лирой» (morning.py): карточка на главной студии

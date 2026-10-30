@@ -115,6 +115,7 @@ public class CloseLive extends Service {
             if (it.optBoolean("out") || visible) continue;
             String kind = it.optString("kind"), name = it.optString("name", "Близкий");
             if ("msg".equals(kind)) message(name);
+            else if ("grp".equals(kind)) message(name + (it.optString("gname").isEmpty() ? " в группе" : " в «" + it.optString("gname") + "»"));   // 30.10: группы — тоже
             else if ("work".equals(kind)) work(name);           // «Работа» (0.55): от руководителя
             else if ("ring".equals(kind) && System.currentTimeMillis() / 1000 - it.optLong("ts") < 60) {
                 JSONObject env = it.optJSONObject("env");

@@ -70,8 +70,8 @@ public class CloseWatch extends JobService {
                 work.put(n, (work.containsKey(n) ? work.get(n) : 0) + 1);
                 continue;
             }
-            if (!"msg".equals(k)) continue;
-            String n = it.optString("name", "Близкий");
+            if (!"msg".equals(k) && !"grp".equals(k)) continue;   // 30.10: письма в группе — тоже
+            String n = it.optString("name", "Близкий") + ("grp".equals(k) ? (it.optString("gname").isEmpty() ? " в группе" : " в «" + it.optString("gname") + "»") : "");
             who.put(n, (who.containsKey(n) ? who.get(n) : 0) + 1);
         }
         pr.edit().putLong("close_notified", last).apply();

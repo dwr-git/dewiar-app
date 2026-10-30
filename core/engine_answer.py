@@ -139,6 +139,10 @@ REPEAT_RX = re.compile(r"^\W*(?:\w+,\s*)?(?:ну\s+)?(?:а\s+)?(?:теперь|�
                        r"проверь\s+(?:ещё|еще)\s+раз|(?:а\s+)?теперь\s+(?:как|что)|ну\s+что|и\s+как\s+теперь)\W*$", re.I)
 
 # «урок дня», «давай урок», «следующий урок» — курс «Неделя с Лирой» без модели (core/course.py)
+# Урок 12 «Утро с Лирой» обещает: «Скажите „Расскажи утро“» (30.10: голосом это уходило модели как обычный вопрос —
+# без данных «Утра», и она могла сочинить). Теперь — та же сводка, что кнопка «Расскажи утро» на «Главной» (_job_prompt brief).
+MORNING_RX = re.compile(r"^\W*(?:\w+[,!]\s*)?(?:ну\s+|а\s+)?(?:расскажи|давай|скажи|сделай|дай|прочитай|озвучь)\s+(?:мне\s+|нам\s+)?(?:(?:моё|мое|своё|свое)\s+)?"
+                        r"(?:утро|утреннюю\s+сводку|сводку\s+(?:на\s+)?(?:дня|день|утро|сегодня)|сводку)\W*$", re.I)
 COURSE_RX = re.compile(r"^(?:лира[, ]+)?(?:давай |начн[её]м |покажи |какой |открой )?(?:урок(?: дня| курса)?|следующий урок|курс(?: неделя с лирой)?)$")
 
 IDEA_RULE = ("\n\nЧего-то не умеешь и инструмента для этого нет — честно скажи и предложи одной фразой: «Хотите, предложу это "
@@ -148,7 +152,7 @@ IDEA_RULE = ("\n\nЧего-то не умеешь и инструмента дл
 
 # Главные действия на каждый день — для модели с окном поменьше (_fit_window): весь набор — около 13 тысяч токенов
 CORE_TOOLS = {"web_search", "weather", "open_url", "open_app", "play_music", "play_radio", "media_control", "set_volume",
-              "set_reminder", "list_reminders", "cancel_reminder", "calc", "world_time", "mark_done", "save_note", "find_notes",
+              "set_reminder", "list_reminders", "cancel_reminder", "change_reminder", "calc", "world_time", "mark_done", "save_note", "find_notes",
               "remember", "money_add", "money_report", "calendar_list", "smart_home", "read_emails", "send_email",
               "search_documents"}
 
@@ -256,6 +260,10 @@ class AnswerMixin:
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and self._weather_cmd(text, via):
             return                                       # «какая погода?» — настоящие числа сразу (weatherq.py, №373)
+        if not raw and not quiet and not images and not K and MORNING_RX.match(text) and hasattr(self, "_job_prompt"):
+            log.info("🌅 «%s» — утренняя сводка по данным «Утра»", text)
+            self.ask(self._job_prompt({"brief": True}), via=via, raw=True, shown=text)
+            return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._pay_voice(text, via):
             return                                       # «оплатил газ 47,84, показания 28135», «что не оплачено?» — «Платежи»
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._money_cmd(text, via):

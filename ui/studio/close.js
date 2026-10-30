@@ -81,10 +81,13 @@ async function clOpen(pid) {
 const CL_TICK = { pend: ["Отправляю…", "M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"], fail: ["Не ушло — нажмите «Отправить» ещё раз", "M12 8v5M12 16.5v.5M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"],
   sent: ["Отправлено — его Dewiar ещё не забирал почту", "M5 12.5l4 4 9-9"],
   dlv: ["Доставлено — ещё не прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"],
-  read: ["Прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"] };
+  read: ["Прочитано", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"],
+  grp: ["Ушло участникам группы", "M2.5 12.5l4 4 9-9M10.5 15.5l1 1 9-9"] };
 function clMark(m) {
   if (m.out && m.pend) return m.pend === "fail" ? "fail" : "pend";
   if (!m.out || !m.sid) return "";
+  // в группе отметки «забрал» по человеку нет — было вечное «ещё не забирал почту» (30.10); кто прочитал — рядом (grReadersPc)
+  if (typeof grOf === "function" && grOf(CL.cur)) return "grp";
   const p = ((CL.st && CL.st.people) || []).find(x => x.pid === CL.cur) || {}, mk = p.marks || [0, 0];
   return mk[1] >= m.sid ? "read" : mk[0] >= m.sid ? "dlv" : "sent";
 }
@@ -148,11 +151,13 @@ function clRePick(el, m) {
   });
   setTimeout(() => document.addEventListener("pointerdown", function out(ev) { if (!ev.target.closest(".cl-repick")) { clReClose(); document.removeEventListener("pointerdown", out, true); } }, true), 0);
 }
+/* картинка — по расширению имени или пути (студия дописывает его при скачивании, 30.10) или по типу из письма */
+const clIsImg = (f) => !!f && (/\.(jpe?g|png|webp|gif)$/i.test(f.path || "") || /\.(jpe?g|png|webp|gif)$/i.test(f.name || "") || /^image\/(?:png|jpe?g|webp|gif)$/i.test(f.type || ""));
 function clMsgs() {
   const box = $("#cl-msgs");
   box.innerHTML = CL.hist.map((m, i) => `<div class="cl-m ${m.out ? "out" : ""}${clRxList(m).length ? " rx" : ""}${clEmoOnly(m.t) ? " emo" : ""}" data-i="${i}">${m.who && !m.out ? `<b class="cl-gwho" style="color:${clColor(m.from || m.who)}">${clEsc(String(m.who).split(/\s+/)[0])}</b>` : ""}${m.t ? `<div class="tx">${clEmo(clEsc(m.t))}</div>` : ""}
-      ${(m.f || []).map(f => /\.(jpe?g|png|webp|gif)$/i.test(f.name || "") && f.path ? `<button class="cl-ph" data-path="${clEsc(f.path)}" title="${clEsc(f.name)} — открыть"><img data-thumb="${clEsc(f.path)}" alt="${clEsc(f.name)}"></button>`
-        : `<button class="cl-f" data-path="${clEsc(f.path || "")}" ${f.path ? "" : "disabled"}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${clEsc(f.name)}</span><small>${f.error ? "не скачался" : clSize(f.size || 0)}</small></button>`).join("")}
+      ${(m.f || []).map(f => clIsImg(f) && f.path ? `<button class="cl-ph" data-path="${clEsc(f.path)}" title="${clEsc(f.name)} — открыть"><img data-thumb="${clEsc(f.path)}" alt="${clEsc(f.name)}"></button>`
+        : `<button class="cl-f" data-path="${clEsc(f.path || "")}" ${f.path ? "" : "disabled"}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${clEsc(f.name)}</span><small>${f.error ? "не скачался" : f.path || m.out ? clSize(f.size || 0) : "скачиваю…"}</small></button>`).join("")}
       ${m.rem && m.rem.at ? `<span class="cl-grem">⏰ напомню всем: ${clEsc(new Date(m.rem.at).toLocaleString("ru-RU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</span>` : ""}
       <time>${clTime(m.ts)}${clTick(m)}${typeof grReadersPc === "function" ? grReadersPc(m) : ""}</time>${clRxList(m).length ? `<span class="cl-rx">${clEmo(clEsc(clRxList(m).join("")))}</span>` : ""}
       ${m.mid ? `<button class="cl-reb" title="Реакция" aria-label="Реакция"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4.2 4.2 0 0 0 7 0M9 9.6v.01M15 9.6v.01"/></svg></button>` : ""}</div>`).join("") || `<p class="hint" style="text-align:center;margin:30px 0">Напишите первое сообщение — или скажите помощнице: «Напиши ${clEsc((((CL.st || {}).people || []).find(x => x.pid === CL.cur) || {}).name || "")}, …»</p>`;
@@ -228,21 +233,23 @@ async function clSend() {
   const text = $("#cl-text").value.trim(), pid = CL.cur;
   if (!pid || (!text && !CL.files.length)) return;
   const b = $("#cl-go"), files = CL.files;
-  let tmp = null;
-  if (!files.length) {
-    tmp = { mid: "tmp" + Date.now(), ts: Date.now(), out: true, t: text, pend: true };
-    CL.hist = (CL.hist || []).concat([tmp]); clMsgs();
-    $("#cl-text").value = ""; $("#cl-text").focus();
-  } else b.disabled = true;
+  // с файлами — тоже сразу пузырём «Отправляю…» с именами файлов (30.10, Валера: «прикрепил фото, но не вижу, ушло ли»);
+  // не ушло — «!» и понятная причина, файлы и текст остаются в поле — нажать «Отправить» ещё раз
+  const tmp = { mid: "tmp" + Date.now(), ts: Date.now(), out: true, t: text, pend: true,
+    f: files.map(f => ({ name: f.name, size: Math.round((f.b64 || "").length * 0.75) })) };
+  CL.hist = (CL.hist || []).concat([tmp]); clMsgs();
+  $("#cl-text").value = ""; CL.files = []; clFiles(); $("#cl-text").focus();
+  if (files.length) b.disabled = true;
   try {
     await core.call("close_send", { pid, text, files_b64: files });
-    if (files.length) { $("#cl-text").value = ""; CL.files = []; clFiles(); }
     if (CL.cur === pid) { CL.hist = await core.call("close_history", { pid }); clMsgs(); }
   } catch (e) {
-    toast(e.message, 4000);
-    if (tmp) { tmp.pend = "fail"; if (CL.cur === pid) { clMsgs(); if (!$("#cl-text").value) $("#cl-text").value = text; } }
+    const big = /413|слишком больш|больше 10/i.test(e.message);
+    toast(big ? "Файл слишком большой — до 10 МБ. Сожмите фото или отправьте поменьше." : "Не ушло: " + e.message + " — нажмите «Отправить» ещё раз", 5000);
+    tmp.pend = "fail";
+    if (CL.cur === pid) { clMsgs(); if (!$("#cl-text").value) $("#cl-text").value = text; if (!CL.files.length) { CL.files = files; clFiles(); } }
   }
-  b.disabled = false; if (files.length) $("#cl-text").focus();
+  b.disabled = false;
 }
 function clFiles() {
   $("#cl-files").innerHTML = CL.files.map((f, i) => `<span>${clEsc(f.name)} <button data-i="${i}" title="Убрать">✕</button></span>`).join("");
@@ -283,13 +290,30 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && CL
 $("#cl-emo-b").onclick = () => { const r = $("#cl-emo"); r.hidden = !r.hidden; $("#cl-emo-b").setAttribute("aria-expanded", String(!r.hidden)); };
 clEmoDraw();
 $("#cl-text").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); clSend(); } };
-$("#cl-file").onchange = () => {
-  [...$("#cl-file").files].forEach(f => {
+function clAddFiles(list) {
+  [...list].forEach(f => {
     if (f.size > 10 * 1024 * 1024) { toast(`«${f.name}» больше 10 МБ`); return; }
-    const fr = new FileReader(); fr.onload = () => { CL.files.push({ name: f.name, b64: String(fr.result).split(",")[1] || "" }); clFiles(); }; fr.readAsDataURL(f);
+    const fr = new FileReader(); fr.onload = () => { CL.files.push({ name: f.name || clShotName("png"), b64: String(fr.result).split(",")[1] || "" }); clFiles(); }; fr.readAsDataURL(f);
   });
-  $("#cl-file").value = "";
-};
+}
+const clShotName = (ext) => "Снимок " + new Date().toLocaleTimeString("ru-RU").replace(/:/g, "-") + "." + ext;
+$("#cl-file").onchange = () => { clAddFiles($("#cl-file").files); $("#cl-file").value = ""; };
+/* Вставить снимок экрана из буфера — в переписку и в группу (30.10, владелец: «скриншот из буфера не вставляется»).
+   Картинка-файл из буфера — сразу; WebKitGTK часто отдаёт странице только текст — тогда спрашиваем окно
+   (Api.clipboard_image: буфер GTK, на Windows — Pillow), как в «Чате» и блокноте. Перетащить файл — тоже можно. */
+$("#cl-text").addEventListener("paste", async (e) => {
+  const files = [...((e.clipboardData && e.clipboardData.items) || [])].filter(x => x.kind === "file").map(x => x.getAsFile()).filter(Boolean);
+  if (files.length) { e.preventDefault(); clAddFiles(files); return; }
+  if (e.clipboardData && e.clipboardData.getData("text")) return;            // обычный текст — как всегда
+  e.preventDefault();
+  const a = window.api && window.api(); let url = "";
+  try { url = a && a.clipboard_image ? await a.clipboard_image() : ""; } catch (x) { }
+  if (!url) { toast("В буфере обмена нет картинки — скопируйте снимок и вставьте ещё раз", 3000); return; }
+  CL.files.push({ name: clShotName(/^data:image\/png/.test(url) ? "png" : "jpg"), b64: url.split(",")[1] || "" }); clFiles();
+});
+{ const box = $("#cl-send");
+  box.addEventListener("dragover", (e) => { if ([...(e.dataTransfer.types || [])].includes("Files")) e.preventDefault(); });
+  box.addEventListener("drop", (e) => { if (!(e.dataTransfer.files || []).length) return; e.preventDefault(); clAddFiles(e.dataTransfer.files); }); }
 $("#cl-inv-go").onclick = () => clInvite(false);
 $("#cl-inv-new").onclick = async () => { if (await ask("Сделать новую ссылку? Старая перестанет действовать — те, кто уже добавился, останутся в близких.")) clInvite(true); };
 $("#cl-inv-x").onclick = () => { $("#cl-invite").style.display = "none"; clHead(); };
@@ -389,6 +413,7 @@ $("#cl-del").onclick = async () => {
   try { CL.st = await core.call("close_remove", { pid: p.pid }); CL.cur = ""; clRender(); } catch (e) { toast(e.message); }
 };
 core.on("close", e => { CL.st = e.state; if ($("#p-close").classList.contains("cur")) { clRender(); clTicks(); } else clDot(CL.st); })
+  .on("close_files", e => { if ($("#p-close").classList.contains("cur") && e.pid === CL.cur) clOpen(CL.cur); })   // фото скачалось — сразу видно
   .on("close_msg", e => { if ($("#p-close").classList.contains("cur") && e.pid === CL.cur) clOpen(CL.cur); })
   .on("close_react", e => { if ($("#p-close").classList.contains("cur") && e.pid === CL.cur) clOpen(CL.cur); else if (e.e) toast(`${e.name || "Близкий"}: ${e.e} на ваше сообщение`, 2600); })
   .on("hello", () => core.call("close_state").then(st => { CL.st = st; clDot(st); }).catch(() => {}));

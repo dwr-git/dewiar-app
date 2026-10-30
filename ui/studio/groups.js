@@ -34,7 +34,7 @@ function grSide(st) {
 function grNav(gs) {
   const box = $("#nav-groups"); if (!box) return;
   box.hidden = !gs.length;
-  box.innerHTML = gs.map(g => `<button class="nav-g${g.gid === CL.cur && $("#p-close.cur") ? " cur" : ""}" data-gid="${grEsc(g.gid)}" title="${grEsc(g.name)}">${g.icon ? grIco(g, "nav-gi emo") : `<i class="nav-gi" style="--c:${clColor(g.gid)}" aria-hidden="true">${grEsc((String(g.name || "Г").replace(/^(группа|group)\s+/i, "").trim()[0] || "Г").toUpperCase())}</i>`}<span>${grEsc(g.name)}</span>${g.unread ? `<em>${g.unread}</em>` : ""}</button>`).join("");
+  box.innerHTML = gs.map(g => `<button class="nav-g${g.gid === CL.cur && $("#p-close.cur") ? " cur" : ""}" data-gid="${grEsc(g.gid)}" title="${grEsc(g.name)}">${g.icon ? grIco(g, "nav-gi emo") : `<i class="nav-gi" style="--c:${clColor(g.gid)}" aria-hidden="true">${grEsc((String(g.name || "Г").replace(/^(группа|group)\s+/i, "").trim()[0] || "Г").toUpperCase())}</i>`}<span>${grEsc(String(g.name || "").replace(/^(?:группа|group)\s+(?=\S)/i, "") || g.name)}</span>${g.unread ? `<em>${g.unread}</em>` : ""}</button>`).join("");
   $$("#nav-groups .nav-g").forEach(b => b.onclick = () => {
     const nb = $('nav button[data-p="close"]'); if (!$("#p-close.cur")) nb.click();
     $$("#nav-groups .nav-g").forEach(x => x.classList.toggle("cur", x === b));
@@ -81,6 +81,22 @@ function grPick(list, sel, attr) {
     <i class="cl-ava" style="--c:${clColor(p.pid)}" data-face="${grEsc(p.pid)}" data-v="${+p.face || 0}">${grEsc((p.name || "?").slice(0, 1).toUpperCase())}</i><span>${grEsc(p.name)}</span><i class="cl-gck" aria-hidden="true"></i></label>`).join("")}</div>`;
 }
 /* панель вместо переписки: "new" — новая группа, "info" — участники, "" — закрыть */
+/* Версия Dewiar у участника (30.10, владелец: «пишу в группу — ответа нет», а у Валеры старая программа: группы у него нет,
+   письма группы ложатся ему лично). Сервер помнит версию каждого устройства (close_devs.ver: «pc 0.71.0», «phone 0.9.14»,
+   «web 0.9.14-web», «pc?» — компьютер до 0.71, без номера). Группы видят компьютер 0.61+ и телефон 0.9.5+. -> {old, txt} */
+const GR_MIN = { pc: [0, 61], phone: [0, 9, 5], web: [0, 9, 5] };
+function grVer(m) {
+  const fresh = ((m && m.devs) || []).filter(d => !d.seen || Date.now() / 1000 - d.seen < 30 * 86400);
+  const lt = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const x = a[i] || 0, y = b[i] || 0; if (x !== y) return x < y; } return false; };
+  const known = fresh.map(d => /^(pc|phone|web) (\d+(?:\.\d+)*)/.exec(d.ver || "")).filter(Boolean);
+  const old = fresh.length > 0 && known.length === fresh.length && known.every(k => lt(k[2].split(".").map(Number), GR_MIN[k[1]]));
+  const txt = known.map(k => ({ pc: "компьютер", phone: "телефон", web: "браузер" })[k[1]] + " " + k[2]).join(", ");
+  return { old, txt };
+}
+function grOldNote(g, ms) {                     // старой программе — личное письмо: группу она не покажет, а его — покажет
+  ms.filter(m => grVer(m).old).forEach(m => core.call("close_send", { pid: m.pid,
+    text: `Зову вас в группу «${g.name}» в «Близких». Ваша версия Dewiar групп ещё не знает — обновите Dewiar, и группа появится: https://dewiar.pro/dwrapp/download.php` }).catch(() => {}));
+}
 function grPanel(kind) {
   GR.panel = kind;
   const box = $("#cl-gp");
@@ -103,7 +119,10 @@ function grPanel(kind) {
     GR.icon = ""; grIconWire(box, (ic) => { GR.icon = ic; });
     $("#gr-x").onclick = () => { grPanel(""); clHead(); };
     $("#gr-make").onclick = async () => { $("#gr-make").disabled = true;
-      try { const r = await core.call("close_group", { op: "create", name: $("#gr-name").value.trim(), pids: [...GR.pick], icon: GR.icon || "" }); CL.st = r; grPanel(""); clRender(); toast(`Группа «${$("#gr-name") ? $("#gr-name").value.trim() : ""}» создана`); if (r.gid) clOpen(r.gid); }
+      try { const nm = $("#gr-name").value.trim(), r = await core.call("close_group", { op: "create", name: nm, pids: [...GR.pick], icon: GR.icon || "" }); CL.st = r; grPanel(""); clRender();
+        const g2 = grOf(r.gid) || { name: nm, members: [] }, olds = (g2.members || []).filter(m => grVer(m).old);
+        grOldNote(g2, g2.members || []);
+        toast(`Группа «${nm}» создана` + (olds.length ? ` · у ${olds.map(m => grFirst(m.name)).join(", ")} старая версия Dewiar — им ушло личное письмо: пусть обновятся` : ""), olds.length ? 6000 : 2500); if (r.gid) clOpen(r.gid); }
       catch (e) { $("#gr-res").className = "res bad"; $("#gr-res").textContent = e.message; upd(); } };
     clFaces(box); return;
   }
@@ -117,7 +136,7 @@ function grPanel(kind) {
     ${g.mine ? `<div class="actions" style="margin:4px 0 14px"><input type="text" id="gr-rn" maxlength="40" value="${grEsc(g.name)}" aria-label="Название группы" style="flex:1;min-width:0"><button class="btn" id="gr-rn-go">Переименовать</button></div>
       <p class="hint" style="margin:0 0 8px">Значок — увидят все в группе</p>${grIconPick(g.icon || "")}` : ""}
     <div class="cl-gmem"><div class="cl-gm"><i class="cl-ava" style="--c:${clColor((st.me || {}).pid || "me")}" data-face="${grEsc((st.me || {}).pid || "me")}" data-v="${+(st.me || {}).face || 0}">${grEsc(((st.me || {}).name || "Я").slice(0, 1).toUpperCase())}</i><span><b>Вы</b><small>${g.mine ? "создали группу" : "участник"}</small></span></div>
-    ${(g.members || []).map(m => `<div class="cl-gm"><i class="cl-ava" style="--c:${clColor(m.pid)}" data-face="${grEsc(m.pid)}" data-v="${+m.face || 0}">${grEsc((m.name || "?").slice(0, 1).toUpperCase())}</i><span><b>${grEsc(m.name)}</b><small>${m.pid === g.owner ? "создал(а) группу" : people.some(p => p.pid === m.pid) ? "ваш близкий" : "не в ваших близких — только в группе"}</small></span>${g.mine ? `<button class="btn small" data-drop="${grEsc(m.pid)}">Убрать</button>` : ""}</div>`).join("")}</div>
+    ${(g.members || []).map(m => `<div class="cl-gm"><i class="cl-ava" style="--c:${clColor(m.pid)}" data-face="${grEsc(m.pid)}" data-v="${+m.face || 0}">${grEsc((m.name || "?").slice(0, 1).toUpperCase())}</i><span><b>${grEsc(m.name)}</b><small>${m.pid === g.owner ? "создал(а) группу" : people.some(p => p.pid === m.pid) ? "ваш близкий" : "не в ваших близких — только в группе"}${grVer(m).old ? ` · <em class="cl-gold">старая версия Dewiar — группу не видит, пусть обновится</em>` : grVer(m).txt ? " · " + grEsc(grVer(m).txt) : ""}</small></span>${g.mine ? `<button class="btn small" data-drop="${grEsc(m.pid)}">Убрать</button>` : ""}</div>`).join("")}</div>
     ${add.length && (g.members || []).length + 1 < 12 ? `<p class="hint" style="margin:16px 0 8px">Позвать ещё</p>${grPick(add, GR.pick, "data-add")}<button class="btn" id="gr-add" disabled>Позвать в группу</button>` : ""}
     <div class="actions" style="margin-top:18px"><button class="btn" id="gr-ix">К переписке</button><span style="flex:1"></span><button class="btn danger" id="gr-leave">${g.mine ? "Удалить группу" : "Выйти из группы"}</button></div>`;
   clFaces(box);
@@ -128,7 +147,8 @@ function grPanel(kind) {
   $$("#cl-gp [data-drop]").forEach(b => b.onclick = async () => { const m = g.members.find(x => x.pid === b.dataset.drop);
     if (await ask(`Убрать ${m ? m.name : "участника"} из «${g.name}»?`)) op({ op: "drop", pid: b.dataset.drop }, "Убран(а) из группы").then(() => grPanel("info")); });
   $$("#cl-gp input[data-add]").forEach(c => c.onchange = () => { c.checked ? GR.pick.add(c.dataset.add) : GR.pick.delete(c.dataset.add); c.closest(".cl-gpk").classList.toggle("on", c.checked); $("#gr-add").disabled = !GR.pick.size; });
-  if ($("#gr-add")) $("#gr-add").onclick = () => op({ op: "add", pids: [...GR.pick] }, "Позвали в группу").then(() => grPanel("info"));
+  if ($("#gr-add")) $("#gr-add").onclick = () => { const added = [...GR.pick];
+    op({ op: "add", pids: added }, "Позвали в группу").then(() => { const g2 = grOf(g.gid) || g; grOldNote(g2, (g2.members || []).filter(m => added.includes(m.pid))); grPanel("info"); }); };
   $("#gr-leave").onclick = async () => {
     if (!await ask(g.mine ? `Удалить группу «${g.name}» у всех? Переписка у каждого останется.` : `Выйти из «${g.name}»? Новые сообщения группы перестанут приходить.`)) return;
     op({ op: g.mine ? "delete" : "leave" }, g.mine ? "Группа удалена" : "Вы вышли из группы").then(() => { grPanel(""); CL.cur = ""; clRender(); });
@@ -142,7 +162,7 @@ function grReadersPc(m) {
   return ` · <span class="cl-gread">${who.length === (g.members || []).length ? "прочитали все" : "прочитал" + (who.length > 1 ? "и" : "") + ": " + grEsc(who.map(p => grFirst(p.name)).join(", "))}</span>`;
 }
 /* «Фото и файлы» (0.62): альбом переписки — фото сеткой (скачанные — картинкой), файлы списком; «Переслать» у каждого */
-const grIsImg = (f) => /\.(jpe?g|png|webp|gif)$/i.test((f && f.name) || "");
+const grIsImg = (f) => typeof clIsImg === "function" ? clIsImg(f) : /\.(jpe?g|png|webp|gif)$/i.test((f && f.name) || "");
 function grAlbum(box) {
   const h = CL.hist || [], ph = [], fl = [];
   h.forEach((m, i) => (m.f || []).forEach((f, j) => (grIsImg(f) && f.path ? ph : fl).push([m, i, j, f])));

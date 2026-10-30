@@ -1261,6 +1261,8 @@ $("y").onclick = () => core.call("confirm_answer", { ok: true }).catch(showErr);
 $("n").onclick = () => core.call("confirm_answer", { ok: false }).catch(showErr);
 $("ya").onclick = () => core.call("confirm_answer", { ok: true, always: true }).catch(showErr);
 $("b-mic").onclick = guard($("b-mic"), () => core.call("mute", { on: !muted }).then(m => { muted = m; $("b-mic").classList.toggle("on", m); $("b-mic").title = m ? "Включить микрофон" : "Выключить микрофон"; }).catch(showErr));
+/* Кнопки разделов (30.10, пользователь): первое нажатие — студия на разделе, второе подряд — студия сворачивается */
+const studioToggle = (page) => { const a = api(); if (!a) return; if (a.toggle_settings) a.toggle_settings(page); else a.open_settings(page); };
 $("b-set").onclick = () => { const a = api(); if (a) a.open_settings(); };
 /* Dewiar Облако: заряд на исходе — мягкая строка в виджете (нажать — студия, «Мозг») */
 core.on("cloud", c => {
@@ -1309,7 +1311,7 @@ core.on("dev_reply", drbSet)
 $("drb").onclick = () => { const a = api(); if (a) a.open_settings("about"); core.call("complaints_seen").catch(() => {}); $("drb").className = ""; };
 $("drb-x").onclick = (e) => { e.stopPropagation(); core.call("complaints_seen").catch(() => {}); $("drb").className = ""; };
 $("clb-x").onclick = (e) => { e.stopPropagation(); CLB.hid = +($("clb-n").textContent || 1) || 1; $("clb").className = ""; };
-$("b-cal").onclick = () => { const a = api(); if (a) a.open_settings("calendar"); };
+$("b-cal").onclick = () => studioToggle("calendar");
 function setLocal(on) { $("b-lo").hidden = !on; $("corner-l").classList.toggle("lo", !!on); }
 /* «Дозор»: глаз у виджета, пока Лира присматривает (core/engine_watch.py — событие «watch», в hello — watch) */
 function setWatch(w) {
@@ -1320,7 +1322,7 @@ function setWatch(w) {
 }
 core.on("watch", setWatch);
 core.on("hello", d => setWatch(d.watch));
-$("b-watch").onclick = () => { const a = api(); if (a) a.open_settings("watch"); };
+$("b-watch").onclick = () => studioToggle("watch");
 $("b-lo").onclick = () => { const a = api(); if (a) a.open_settings("safety"); };
 // жалоба: сначала снимок экрана (каким его видит человек в момент проблемы), потом форма в студии («О программе»)
 $("b-bug").onclick = guard($("b-bug"), async () => {
@@ -1329,9 +1331,9 @@ $("b-bug").onclick = guard($("b-bug"), async () => {
   note({ note: "" });
   const a = api(); if (a) a.open_settings("about");
 });
-$("b-idea").onclick = () => { const a = api(); if (a) a.open_settings("ideas"); };
-$("b-chat").onclick = () => { const a = api(); if (a) a.open_settings("chat"); };   // «Память» — в студии; здесь — переписка
-$("b-notes").onclick = () => { const a = api(); if (a) a.open_settings("notes"); };
+$("b-idea").onclick = () => studioToggle("ideas");
+$("b-chat").onclick = () => studioToggle("chat");   // «Память» — в студии; здесь — переписка
+$("b-notes").onclick = () => studioToggle("notes");
 /* фоновые задачи и обновления — строкой в карточке */
 const tasks = {}, doneAt = {}, dismissed = new Set();
 /* задача готова — прямо в виджете: что получилось и кнопки «Посмотреть», «HTML» / «Скачать», «PDF»; висит 30 минут

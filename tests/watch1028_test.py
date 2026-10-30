@@ -240,7 +240,8 @@ with sync_playwright() as p:
     ok(not h.evaluate("document.getElementById('b-watch').hidden") and "Claude ответил" in h.evaluate("document.getElementById('b-watch').title"),
        "идёт дозор — у виджета глаз, в подсказке — что Лира ждёт")
     h.click("#b-watch"); h.wait_for_timeout(100)
-    ok(["open_settings", "watch"] in h.evaluate("window.apiCalls || []"), "нажали на глаз — «Дозор» в студии")
+    calls = h.evaluate("window.apiCalls || []")      # с 0.71 — toggle_settings: второе нажатие сворачивает студию
+    ok(["open_settings", "watch"] in calls or ["toggle_settings", "watch"] in calls, f"нажали на глаз — «Дозор» в студии: {calls[-2:]}")
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
 

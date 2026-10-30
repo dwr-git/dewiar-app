@@ -38,6 +38,25 @@ function chatSteps(steps, id) {
   const row = (s) => `<div class="ch-st ${escH(s.s)}"><b aria-hidden="true">${ST_ICON[s.s] || "•"}</b><span>${escH(s.t)}${s.s === "yes" ? " — разрешено" : s.s === "no" ? " — отказано" : ""}</span>${s.e ? `<em>${escH(s.e)}</em>` : ""}</div>`;
   return `<div class="ch-steps">${open ? "" : `<button class="ch-more" data-open="${escH(id || "")}">ещё ${steps.length - 3} — показать</button>`}${list.map(row).join("")}</div>`;
 }
+/* Живой пузырь (пока модель отвечает). GitHub №22 (ALT Linux: «очень сильно тормозит, особенно окно чата»): раньше каждый
+   кусок ответа заново собирал весь список (innerHTML всей ленты + схемы Mermaid) — на длинной переписке и слабой
+   графике это десятки перерисовок в секунду. Теперь кусок меняет только живой пузырь, не чаще кадра; вся лента — когда
+   ответ готов (событие chat). */
+const chatLiveHtml = () => `<div class="cl-m ch-live${CH.live.media ? " wide" : ""}" id="ch-live">${chatLiveInner()}</div>`;
+const chatLiveInner = () => chatSteps(CH.live.steps, "live") + (CH.live.text ? `<div class="tx md">${md(CH.live.text)}</div>` : `<div class="ch-dots"><i></i><i></i><i></i></div>`)
+  + (CH.live.media && window.DewiarRich ? DewiarRich.gallery(CH.live.media) : "");
+let chLiveRaf = 0;
+function chatLive() {
+  if (!$("#p-chat").classList.contains("cur")) return;
+  const el = $("#ch-live");
+  if (!el || !CH.live) return chatRender("stay");          // первый кусок ответа — пузыря ещё нет: вся лента один раз
+  if (chLiveRaf) return;
+  chLiveRaf = requestAnimationFrame(() => { chLiveRaf = 0;
+    const box = $("#ch-msgs"), el2 = $("#ch-live"); if (!box || !el2 || !CH.live) return;
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    el2.classList.toggle("wide", !!CH.live.media); el2.innerHTML = chatLiveInner();
+    if (atBottom) box.scrollTop = box.scrollHeight; });
+}
 function chatRender(keep) {
   const box = $("#ch-msgs"); if (!box) return;
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60, oldH = box.scrollHeight, oldTop = box.scrollTop;
@@ -48,12 +67,10 @@ function chatRender(keep) {
     html += chatBubble(x, lastWho);
     if (x.role === "assistant") lastWho = x.who || "";
   });
-  const liveSteps = CH.live ? chatSteps(CH.live.steps, "live") : "";
-  if (CH.live && lastWho === active) html += `<div class="cl-m ch-live${CH.live.media ? " wide" : ""}">${liveSteps}${CH.live.text ? `<div class="tx md">${md(CH.live.text)}</div>` : `<div class="ch-dots"><i></i><i></i><i></i></div>`}${CH.live.media && window.DewiarRich ? DewiarRich.gallery(CH.live.media) : ""}</div>`;
+  if (CH.live && lastWho === active) html += chatLiveHtml();
   else if (CH.live) {
     const p = chatWho(active);
-    html += `<div class="ch-who"><i style="background:${escH((p && p.color) || "#8A9BFF")}"></i>${escH((p && p.name) || "Ассистент")}</div>`
-      + `<div class="cl-m ch-live${CH.live.media ? " wide" : ""}">${liveSteps}${CH.live.text ? `<div class="tx md">${md(CH.live.text)}</div>` : `<div class="ch-dots"><i></i><i></i><i></i></div>`}${CH.live.media && window.DewiarRich ? DewiarRich.gallery(CH.live.media) : ""}</div>`;
+    html += `<div class="ch-who"><i style="background:${escH((p && p.color) || "#8A9BFF")}"></i>${escH((p && p.name) || "Ассистент")}</div>` + chatLiveHtml();
   }
   $("#ch-empty").style.display = CH.items.length || CH.live ? "none" : "";
   box.innerHTML = html;
@@ -94,13 +111,13 @@ core.on("chat", e => {
 core.on("answer", e => {
   if (!CH.loaded || e.done) return;
   CH.live = Object.assign(CH.live || {}, { text: e.text || "" });
-  if ($("#p-chat").classList.contains("cur")) chatRender("stay");
+  chatLive();
 });
 // картинки к рассказу появляются, пока персонаж ещё говорит, — сразу в живом пузыре
 core.on("media", e => {
   if (!CH.loaded || e.source !== "pics") return;
   CH.live = Object.assign(CH.live || { text: "" }, { media: (CH.live && CH.live.media || []).concat(e.items || []).slice(0, 12) });
-  if ($("#p-chat").classList.contains("cur")) chatRender("stay");
+  chatLive();
 });
 // шаги хода — сразу в живом пузыре: «…» выполняется, ✓ / ✕ — итог
 core.on("tool", e => {
@@ -109,7 +126,7 @@ core.on("tool", e => {
   const i = st.findIndex(s => s.s === "run" && s.n === e.name);
   const row = { t: e.title, s: e.status === "error" ? "error" : e.status === "done" ? "done" : "run", n: e.name, ...(e.error ? { e: e.error } : {}) };
   if (i >= 0) st[i] = row; else st.push(row);
-  if ($("#p-chat").classList.contains("cur")) chatRender("stay");
+  chatLive();
 });
 /* «Выполнить?» — прямо в «Чате» (тот же вопрос, что в виджете: ответ любой из сторон закрывает оба) */
 function chatAsk(e) {

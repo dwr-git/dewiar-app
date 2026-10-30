@@ -244,6 +244,18 @@
   if (/^https?:$/.test(location.protocol) && /\/dwrapp\/web\//.test(location.pathname)) {
     window.DEWIAR_SITE = window.DEWIAR_SITE || location.origin;
     window.DEWIAR_CLOUD_URL = window.DEWIAR_CLOUD_URL || new URL("../cloud.php", location.href).href;
+    /* Свежая версия сама (пакет 30.10: iPhone на 0.9.10-web, когда на сайте давно 0.9.13, — «На экран Домой» не
+       перезагружается неделями): вернулись к странице — не чаще раза в 30 минут спросить webver.js мимо кэша; на сайте
+       новее — перезагрузить сейчас, пока человек ещё ничего не начал. */
+    let verAt = Date.now();
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden || !window.DEWIAR_WEB_VERSION || Date.now() - verAt < 30 * 60e3) return;
+      verAt = Date.now();
+      fetch("webver.js?fresh=" + Date.now(), { cache: "no-store" }).then(r => r.ok ? r.text() : "").then(t => {
+        const v = (/DEWIAR_WEB_VERSION\s*=\s*"([^"]+)"/.exec(t) || [])[1];
+        if (v && v !== window.DEWIAR_WEB_VERSION && !document.hidden) location.reload();
+      }).catch(() => { });
+    });
   }
 
   window.DewiarWeb = function (stub) {
@@ -305,7 +317,7 @@
       http, abort(id) { if (ctl[id]) ctl[id].abort("cancel"); }, setProxy: () => "",
       takeIntent: () => "", snapshot: () => "", toast: (t) => { if (typeof window.toast === "function") window.toast(t); },
       // только у Android: «руки», звук будильника, Bluetooth-микрофон, служба «Близких», обновление APK, размер приложения
-      handsState: undefined, alarmSound: undefined, alarmSoundSet: undefined, alarmSoundTry: undefined, alarmSoundCustom: undefined,
+      handsState: undefined, alarmSound: undefined, alarmSoundSet: undefined, alarmSoundTry: undefined, alarmSoundCustom: undefined, alarmSoundSoft: undefined,
       btMic: undefined, btMicAvailable: undefined, closeWatch: undefined, closeLive: undefined, appSize: undefined, clearOwnCache: undefined,
       updateGet: undefined, openDownloads: undefined, shareTo: undefined, viewHtml: undefined, sttQuiet: undefined,
     });

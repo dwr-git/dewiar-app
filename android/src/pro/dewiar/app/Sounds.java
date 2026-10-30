@@ -39,6 +39,22 @@ final class Sounds {
     static void set(Context c, String id) {
         prefs(c).edit().putString("alarm_sound", id).apply();
         channel(c);
+        if (softOn(c)) channel(c, true);
+    }
+
+    /** «Напоминания — громкостью уведомлений» (идея №72, 30.10: «напоминание орёт прямо в ухо в гарнитуре, т.к. будильник на
+     *  максимуме, а убавлю будильник — просплю»): напоминания о делах звучат потоком уведомлений — своя громкость кнопками
+     *  телефона, отдельно от будильника; будильник и таймер — как прежде, громкостью будильника. */
+    static boolean softOn(Context c) { return prefs(c).getBoolean("rem_soft", false); }
+
+    static void setSoft(Context c, boolean on) {
+        prefs(c).edit().putBoolean("rem_soft", on).apply();
+        if (on) channel(c, true);
+    }
+
+    /** Этот сигнал — тише будильника: напоминание о деле (не будильник и не таймер) при включённом «громкостью уведомлений». */
+    static boolean soft(Context c, String kind) {
+        return softOn(c) && !"alarm".equals(kind) && !"timer".equals(kind);
     }
 
     static int res(String id) {
@@ -74,30 +90,37 @@ final class Sounds {
         return Uri.parse("android.resource://" + c.getPackageName() + "/raw/" + c.getResources().getResourceEntryName(res(id)));
     }
 
-    static AudioAttributes attrs() {
-        return new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+    static AudioAttributes attrs() { return attrs(false); }
+
+    static AudioAttributes attrs(boolean soft) {
+        return new AudioAttributes.Builder().setUsage(soft ? AudioAttributes.USAGE_NOTIFICATION_EVENT : AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
     }
 
     /** Канал для будильников под текущий звук (создаёт; лишние alarm_* и старый «alarms» убирает). До Android 8 — без каналов. */
-    static String channel(Context c) {
+    static String channel(Context c) { return channel(c, false); }
+
+    /** soft — канал напоминаний громкостью уведомлений (rem_<звук>…): свой набор, прежние rem_* убираются так же. */
+    static String channel(Context c, boolean soft) {
         String sound = current(c);
+        String pre = soft ? "rem_" : "alarm_";
         // «_2» (24.10): прежние каналы помнили звук по числу ресурса и фирменный стал «Струной» — каналы пересоздаются
-        String id = "alarm_" + sound + ("custom".equals(sound) ? "_" + customFile(c).lastModified() : "_3");   // _3 — 0.7.9: новые звонки (канал помнит звук — пусть создастся заново)
+        String id = pre + sound + ("custom".equals(sound) ? "_" + customFile(c).lastModified() : "_3");   // _3 — 0.7.9: новые звонки (канал помнит звук — пусть создастся заново)
         if (Build.VERSION.SDK_INT < 26) return id;
         try {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
             Class<?> chc = Class.forName("android.app.NotificationChannel");
             if (NotificationManager.class.getMethod("getNotificationChannel", String.class).invoke(nm, id) == null) {
                 Constructor<?> k = chc.getConstructor(String.class, CharSequence.class, int.class);
-                Object ch = k.newInstance(id, "Напоминания · " + label(sound), 4 /* IMPORTANCE_HIGH */);
-                chc.getMethod("setSound", Uri.class, AudioAttributes.class).invoke(ch, uri(c, sound), attrs());
+                Object ch = k.newInstance(id, (soft ? "Напоминания (громкость уведомлений) · " : "Напоминания · ") + label(sound), 4 /* IMPORTANCE_HIGH */);
+                chc.getMethod("setSound", Uri.class, AudioAttributes.class).invoke(ch, uri(c, sound), attrs(soft));
                 chc.getMethod("enableVibration", boolean.class).invoke(ch, true);
                 NotificationManager.class.getMethod("createNotificationChannel", chc).invoke(nm, ch);
             }
             List<?> all = (List<?>) NotificationManager.class.getMethod("getNotificationChannels").invoke(nm);
             for (Object ch : all) {
                 String cid = (String) chc.getMethod("getId").invoke(ch);
-                if ((cid.startsWith("alarm_") && !cid.equals(id) && !cid.equals(QUIET)) || cid.equals(Compat.CH_ALARM))
+                if ((cid.startsWith(pre) && !cid.equals(id) && !cid.equals(QUIET)) || (!soft && cid.equals(Compat.CH_ALARM)))
                     NotificationManager.class.getMethod("deleteNotificationChannel", String.class).invoke(nm, cid);
             }
         } catch (Throwable ignored) { }
@@ -122,10 +145,12 @@ final class Sounds {
     }
 
     /** Проиграть звук будильника (loop — по кругу) с громкостью vol; не вышло (файл повреждён) — null. */
-    static MediaPlayer play(Context c, String id, boolean loop, float vol) {
+    static MediaPlayer play(Context c, String id, boolean loop, float vol) { return play(c, id, loop, vol, false); }
+
+    static MediaPlayer play(Context c, String id, boolean loop, float vol, boolean soft) {
         MediaPlayer p = new MediaPlayer();
         try {
-            p.setAudioAttributes(attrs());
+            p.setAudioAttributes(attrs(soft));
             if ("custom".equals(id)) p.setDataSource(customFile(c).getAbsolutePath());
             else p.setDataSource(c, uri(c, id));
             p.setLooping(loop);

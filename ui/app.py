@@ -672,6 +672,7 @@ class Api:
         self.token = token
         self._hud = None
         self._studio = None
+        self._toggled, self._studio_minimized = "", False      # toggle_settings: открыто кнопкой виджета и не свёрнуто
         self.wins = {}
         self.mode = "card"
         self.auto = False
@@ -1285,6 +1286,31 @@ class Api:
                     pass
         threading.Thread(target=run, daemon=True).start()
 
+    def install_codec(self):
+        """Видеокодек для уроков в окне программы (30.10, владелец, Ubuntu 0.70: «на убунте не открывается видео, только
+        в браузере»): WebKitGTK играет MP4 (H.264) только с gstreamer1.0-libav — в Recommends пакета он есть, но при
+        обновлении поверх старой версии или dpkg -i его не ставят. Одна кнопка: pkexec apt-get (система спросит пароль).
+        Новый кодек окно увидит после перезапуска Dewiar. DEWIAR_CODEC_CMD — команда вместо pkexec apt-get, для проверок."""
+        if WIN:
+            return {"ok": False, "error": "на Windows кодек уже есть"}
+        cmd = os.environ.get("DEWIAR_CODEC_CMD")
+        if cmd:
+            cmd = cmd.split()
+        elif shutil.which("apt-get") and shutil.which("pkexec"):
+            cmd = ["pkexec", "apt-get", "install", "-y", "gstreamer1.0-libav"]
+        else:
+            return {"ok": False, "error": "поставьте пакет сами: gstreamer1.0-libav (или gst-libav) через менеджер пакетов"}
+        try:
+            r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=900)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return {"ok": False, "error": f"не получилось: {e}"}
+        if r.returncode in (126, 127) and not os.environ.get("DEWIAR_CODEC_CMD"):
+            return {"ok": False, "error": "окно пароля закрыли — нажмите ещё раз и введите пароль от компьютера"}
+        if r.returncode:
+            tail = ((r.stdout or "").strip().splitlines()[-1:] or [""])[0][:200]
+            return {"ok": False, "error": "apt не поставил пакет" + (f": {tail}" if tail else f" (код {r.returncode})")}
+        return {"ok": True}
+
     def open_url(self, url):
         """Ссылка наружу: сайт, Telegram (tg://), Obsidian (obsidian://) — системой. Только эти схемы: страница не
         должна суметь открыть через систему файл или запустить программу (file:, ms-…: и подобные)."""
@@ -1651,6 +1677,9 @@ class Api:
                                             js_api=self)     # без этого в студии нет «Обновить», выбора папки, сохранения
         win, self._studio_born = self._studio, time.monotonic()
         win.events.closed += lambda *a: self._studio_closed(win)
+        for ev, m in (("minimized", True), ("restored", False), ("maximized", False), ("shown", False)):   # для toggle_settings
+            if hasattr(win.events, ev):
+                getattr(win.events, ev).__iadd__(lambda *a, m=m: setattr(self, "_studio_minimized", m))
         if not WIN:
             win.events.shown += lambda *a: __import__("threading").Thread(target=self._raise_studio, daemon=True).start()
         if own:
@@ -1885,6 +1914,24 @@ class Api:
     def studio_min(self):
         if self._studio is not None:
             self._studio.minimize()
+            self._toggled = ""
+
+    def toggle_settings(self, page=""):
+        """Кнопки виджета «Чат», «Заметки», «Календарь»…: первое нажатие — студия на этом разделе, второе подряд — студия
+        сворачивается (30.10, пользователь: «первый клик — открытие, второй — сворачивание, сразу добавит удобства»).
+        «Подряд» — студия открыта этой же кнопкой, её с тех пор не сворачивали и раздел в ней не меняли. -> что сделали."""
+        if self._studio is not None and self._toggled == page and not self._studio_minimized:
+            try:
+                cur = self._studio.evaluate_js("(document.querySelector('nav button.cur') || {dataset: {}}).dataset.p || ''")
+            except Exception:  # noqa: BLE001
+                cur = page
+            if cur in (page, None):
+                _ui_log(f"студия: свернуть (повторное нажатие «{page}»)")
+                self.studio_min()
+                return "min"
+        self.open_settings(page)
+        self._toggled, self._studio_minimized = page, False
+        return "open"
 
     def studio_max(self):
         """Развернуть/вернуть. -> развёрнуто ли теперь."""
@@ -1907,6 +1954,7 @@ class Api:
     def _studio_closed(self, win=None):
         if win is None or self._studio is win:         # закрылось старое окно, а новое уже открыто — его не забываем
             self._studio = None
+            self._toggled = ""
         _ui_log("студия: закрыта")
 
     # ---------- окно-будильник ----------

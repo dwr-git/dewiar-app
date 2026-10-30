@@ -28,15 +28,15 @@ if shutil.which("ffprobe"):
     ok(all(4 <= d <= 15.5 for d in durs), f"каждая — от 4 до 15 секунд (повторяется по кругу): {durs}")
 snd = (SRC / "Sounds.java").read_text(encoding="utf-8")
 ok(all(f"R.raw.alarm_{n}" in snd for n in names) and '"system"' in snd and '"custom"' in snd, "Sounds: свои мелодии, системный звук и свой файл")
-ok('"alarm_" + sound' in snd and "deleteNotificationChannel" in snd and "USAGE_ALARM" in snd, "у каждого звука свой канал уведомлений, прежний убирается")
+ok('pre = soft ? "rem_" : "alarm_"' in snd and 'pre + sound' in snd and "deleteNotificationChannel" in snd and "USAGE_ALARM" in snd, "у каждого звука свой канал уведомлений, прежний убирается")
 ok('"/raw/" + c.getResources().getResourceEntryName(res(id))' in snd and ': "_3")' in snd,
    "звук канала — по имени ресурса (числа R.raw меняются при новых звуках), каналы пересоздаются под новые звонки")
 ok('case "chasha"' not in snd and "res(s) != 0" in snd, "прежний выбор (chasha, kolodec…) — снова фирменный")
 act = (SRC / "AlarmActivity.java").read_text(encoding="utf-8")
-ok("Sounds.play(this, Sounds.current(this), true, vol)" in act and "vol + 0.0375f" in act and "AlarmReceiver.quiet(" in act,
+ok("Sounds.play(this, Sounds.current(this), true, vol, soft)" in act and "vol + 0.0375f" in act and "AlarmReceiver.quiet(" in act,
    "окно будильника: выбранный звук по кругу, громкость нарастает, уведомление смолкает")
 rcv = (SRC / "AlarmReceiver.java").read_text(encoding="utf-8")
-ok("Sounds.channel(c)" in rcv and "Sounds.quietChannel(c)" in rcv and "Compat.CH_ALARM" not in rcv, "уведомление — в канал выбранного звука")
+ok("Sounds.channel(c, soft)" in rcv and "Sounds.quietChannel(c)" in rcv and "Compat.CH_ALARM" not in rcv, "уведомление — в канал выбранного звука")
 ok("addAction(action(c, DONE" in rcv and "SNOOZE" in rcv and "AlarmActivity.closeIfOpen(id)" in rcv and "4 /* IMPORTANCE_HIGH */" in snd and "QUIET = \"alarm_watch\"" in snd,
    "напоминание видно на часах: тихое уведомление остаётся важным, кнопки «Понял» и «Через 10 минут» работают и с часов")
 ok("SOUND_DELAY_MS" in act and "postDelayed" in act and "nm.cancel(id.hashCode());            // снятое" not in rcv and '.putExtra("fired"' in rcv,
@@ -46,6 +46,13 @@ prov = (SRC / "SoundProvider.java").read_text(encoding="utf-8")
 ok('android:name=".SoundProvider"' in man and '"/custom".equals(uri.getPath())' in prov and "MODE_READ_ONLY" in prov,
    "свой файл системе — только чтение и только он")
 br = (SRC / "Bridge.java").read_text(encoding="utf-8")
+# идея №72 (30.10): «в гарнитуре напоминание орёт в ухо, будильник на максимуме — убавлю, просплю работу»
+ok("boolean soft(Context c, String kind)" in snd and '!"alarm".equals(kind) && !"timer".equals(kind)' in snd
+   and "USAGE_NOTIFICATION_EVENT : AudioAttributes.USAGE_ALARM" in snd and 'getBoolean("rem_soft", false)' in snd,
+   "№72: напоминание о деле — потоком уведомлений (своя громкость), будильник и таймер — громкостью будильника; по умолчанию как было")
+ok("boolean soft = Sounds.soft(c, kind)" in rcv and "Sounds.attrs(soft)" in rcv and "Sounds.attrs(soft)" in act
+   and "boolean soft = Sounds.soft(this, kind)" in act, "№72: и уведомление, и окно — одним потоком (иначе первые секунды — громко)")
+ok("public boolean alarmSoundSoft(boolean on)" in br and '.put("soft", Sounds.softOn(a))' in br, "№72: мост — переключатель и его состояние")
 ok(all(f"public String {m}(" in br or f"boolean {m}(" in br for m in ("alarmSound", "alarmSoundSet", "alarmSoundTry", "alarmSoundCustom")),
    "мост: выбор, проба и свой файл")
 
@@ -76,8 +83,15 @@ with sync_playwright() as p:
     ok(not pg.evaluate("!!$('.snd.play')"), "ещё раз — проба смолкла")
     pg.set_input_files("#snd-file", str(audio)); pg.wait_for_timeout(500)
     cu = pg.evaluate("() => [$('.snd.on').dataset.snd, $('#snd-name').textContent, $('#snd-res').textContent, JSON.parse(D.alarmSound())]")
-    ok(cu[0] == "custom" and cu[1] == "моя мелодия" and "выбран" in cu[2] and cu[3] == {"id": "custom", "custom": "моя мелодия"},
+    ok(cu[0] == "custom" and cu[1] == "моя мелодия" and "выбран" in cu[2] and cu[3] == {"id": "custom", "custom": "моя мелодия", "soft": False},
        f"свой файл: сохранён и выбран: {cu}")
+    sw = pg.evaluate("() => [!!$('#snd-soft'), $('#snd-soft') && $('#snd-soft').checked, $('#snd-soft') && $('#snd-soft').closest('.sw').textContent]")
+    ok(sw[0] and sw[1] is False and "громкостью уведомлений" in sw[2] and "Будильник и таймер остаются громкими" in sw[2],
+       f"№72: в «Звуке напоминаний» — «Напоминания — громкостью уведомлений», выключено: {sw[:2]}")
+    pg.click("label:has(#snd-soft)"); pg.wait_for_timeout(150)
+    ok(pg.evaluate("JSON.parse(D.alarmSound()).soft") is True, "№72: включили — телефон запомнил")
+    pg.evaluate("closeSheets(); openSettings('sound')"); pg.wait_for_timeout(300)
+    ok(pg.evaluate("$('#snd-soft').checked") is True, "№72: открыли снова — включено")
     pg.evaluate("closeSheets()"); pg.wait_for_timeout(100)
     ok(not pg.evaluate("window._trying"), "лист закрыли — проба смолкла")
     b.close()

@@ -51,8 +51,9 @@ public class AlarmReceiver extends BroadcastReceiver {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
         PendingIntent fp = PendingIntent.getActivity(c, id.hashCode(), full, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         String head = "alarm".equals(kind) ? "⏰ Будильник" : "timer".equals(kind) ? "⏱ Таймер" : "🔔 Напоминание";
-        Notification.Builder b = Compat.builder(c, loud ? Sounds.channel(c) : Sounds.quietChannel(c));
-        if (loud && android.os.Build.VERSION.SDK_INT < 26) b.setSound(Sounds.uri(c, Sounds.current(c)), Sounds.attrs());   // до Android 8 звук — у самого уведомления
+        boolean soft = Sounds.soft(c, kind);                                // №72: напоминание — громкостью уведомлений
+        Notification.Builder b = Compat.builder(c, loud ? Sounds.channel(c, soft) : Sounds.quietChannel(c));
+        if (loud && android.os.Build.VERSION.SDK_INT < 26) b.setSound(Sounds.uri(c, Sounds.current(c)), Sounds.attrs(soft));   // до Android 8 звук — у самого уведомления
         String name = Faces.dress(c, b, who);
         // с обликом: заголовок — имя персонажа, вид сигнала — значком в тексте и подписью в шапке (так читается и на часах)
         String text = (name.isEmpty() ? title : head.substring(0, head.indexOf(' ')) + " " + title) + (noteFor(c, id).isEmpty() ? "" : " 📎");

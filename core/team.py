@@ -1218,6 +1218,30 @@ class Team:
                 "inbox": [dict(x, name=(self.st["members"].get(x["who"]) or {}).get("name", "—")) for x in self.st.get("inbox", [])[-20:]],
                 "counts": {s: sum(1 for x in tasks if x["state"] == s) for s in STATES}}
 
+    THUMB_MAX = 6                                   # фото-отчётов в снимке для телефона (размер конверта own)
+
+    def _thumb(self, name):
+        """Фото-отчёт для телефона руководителя (30.10, из забытого: «фото отчётов — на телефоне, а не „на компьютере“»):
+        маленькая копия 480 px, JPEG ~30 КБ, data: URL. Нет файла или не картинка -> ""."""
+        if not name or not isinstance(name, str) or "/" in name or "\\" in name:
+            return ""
+        f = self.files / name
+        if not f.is_file():
+            return ""
+        try:
+            import base64
+            import io
+            from PIL import Image, ImageOps
+            with Image.open(f) as im:
+                im = ImageOps.exif_transpose(im).convert("RGB")
+                im.thumbnail((480, 480))
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=62, optimize=True)
+            return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+        except Exception as e:  # noqa: BLE001 — не картинка или нет Pillow: просто без снимка
+            log.debug("Поручения: снимок отчёта: %s", e)
+            return ""
+
     def boss_snap(self):
         """Доска для своего телефона руководителя («Поручения» на телефоне, 0.56): кто, что, сроки, отчёты и переписка —
         без ссылок-приглашений, кодов и путей к фото. Уходит только своим устройствам, зашифрованным (конверт own)."""
@@ -1231,6 +1255,15 @@ class Team:
                   "report": (t.get("report") or {}).get("t", "") if isinstance(t.get("report"), dict) else "",
                   "photo": bool((t.get("report") or {}).get("photo")) if isinstance(t.get("report"), dict) else False,
                   "remark": remark(t), "ts": (t.get("log") or [{}])[-1].get("ts") or t.get("created") or 0} for t in p["tasks"]]
+        # фото-отчёты: у ждущих проверки — снимок (сначала свежие), не больше THUMB_MAX
+        left = self.THUMB_MAX
+        for t in sorted(tasks, key=lambda x: -(x["ts"] or 0)):
+            if left and t["photo"] and t["state"] == "done":
+                rep = (self.st["tasks"].get(t["id"]) or {}).get("report") or {}
+                th = self._thumb(rep.get("photo") if isinstance(rep, dict) else "")
+                if th:
+                    t["thumb"] = th
+                    left -= 1
         return {"company": p["company"], "boss": p["boss"], "at": int(time.time() * 1000),
                 "members": [{k: m[k] for k in ("id", "name", "role", "color", "joined", "open", "left")} for m in p["members"]],
                 "tasks": tasks[:150], "repeats": [{"title": r["title"], "name": r["name"], "rule": r["rule"]} for r in p["repeats"]][:30],

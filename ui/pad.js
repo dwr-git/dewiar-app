@@ -144,7 +144,11 @@ function rename(el, name) {
   const sp = el.querySelector("span"); const inp = document.createElement("input"); inp.value = name; sp.replaceWith(inp); inp.focus(); inp.select();
   let done = false;
   const fin = async (ok) => { if (done) return; done = true; const to = inp.value.trim();
-    if (ok && to && to !== name) { try { await saveNow(); const r = await core.call("pad_rename", { name, to }); P.tabs = r.tabs; if (P.active === name) P.active = r.tabs.find(t => t.name === to.replace(/[\\/:*?"<>|#\[\]^]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60))?.name || r.active; }
+    if (ok && to && to !== name) { try { await saveNow(); const r = await core.call("pad_rename", { name, to }); P.tabs = r.tabs;
+        const nn = r.tabs.find(t => t.name === to.replace(/[\\/:*?"<>|#\[\]^]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60))?.name || (P.active === name ? r.active : "");
+        // GitHub №27 (29.10): история «назад/вперёд» хранится по названию вкладки — переносим её на новое название
+        if (nn && nn !== name && H.tabs[name]) { H.tabs[nn] = H.tabs[name]; delete H.tabs[name]; }
+        if (P.active === name) P.active = nn || r.active; }
       catch (e) { status(e.message, "bad"); } }
     drawTabs(); };
   inp.onkeydown = (e) => { if (e.key === "Enter") fin(true); if (e.key === "Escape") fin(false); e.stopPropagation(); };

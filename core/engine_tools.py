@@ -1428,8 +1428,41 @@ class ToolsMixin:
             threading.Thread(target=self._run_job, args=({"text": task, "brief": bool(a.get("brief")), "deliver": deliver},),
                              daemon=True).start()
             return {"ok": True, "deliver": deliver}
+        if cmd == "reminder_split":
+            # 30.10 (владелец: «по будням 17:50, а в пятницу — 16:40»): один день недели повтора — отдельно, своё время.
+            # У исходного этот день убирается (каждый день → дни недели без него), новое — тот же текст по этому дню.
+            from when import next_time
+            cur = next((x for x in self.reminders.items if x["id"] == a.get("id")), None)
+            rep = (cur or {}).get("repeat") or {}
+            day, tm = int(a.get("day", -1)), str(a.get("time") or "")
+            if not cur or rep.get("kind") not in ("daily", "weekly") or not re.match(r"^\d{1,2}:\d{2}$", tm) or not 0 <= day <= 6:
+                raise ValueError("так можно только с повтором по дням")
+            days = [d for d in (rep.get("days") or range(7)) if d != day]
+            if not days:                                   # повтор и был только в этот день — просто новое время
+                return self._reminder_cmd("reminder_update", {"id": cur["id"], "patch": {"at": f"{datetime.now():%Y-%m-%d}T{tm}:00"}})
+            left = dict(rep, kind="weekly", days=days)
+            self.reminders.update(cur["id"], {"repeat": left, "at": next_time(left, datetime.now()).replace(microsecond=0).isoformat(timespec="seconds")})
+            one = {"kind": "weekly", "days": [day], "time": f"{int(tm.split(':')[0]):02d}:{tm.split(':')[1]}"}
+            item = self.reminders.add(next_time(one, datetime.now()), cur.get("text") or "Напоминание", one, cur.get("kind") or "reminder")
+            for x in (next(y for y in self.reminders.items if y["id"] == cur["id"]), item):
+                self.emit("reminder_set", item=self._reminder_public(x), text="")
+            return {"kept": self._reminder_public(next(y for y in self.reminders.items if y["id"] == cur["id"])), "new": self._reminder_public(item)}
         if cmd == "reminder_update":
             patch = dict(a.get("patch") or {})
+            if isinstance(patch.get("days"), list):      # дни недели повтора (календарь: «Пн Вт Ср Чт Пт Сб Вс», 30.10)
+                from when import next_time
+                cur = next((x for x in self.reminders.items if x["id"] == a.get("id")), None)
+                rep = (cur or {}).get("repeat") or {}
+                days = sorted({int(d) for d in patch.pop("days") if str(d).isdigit() and 0 <= int(d) <= 6})
+                if not days:
+                    raise ValueError("оставьте хотя бы один день")
+                if rep.get("kind") not in ("daily", "weekly"):
+                    raise ValueError("дни можно выбрать только у повтора по дням")
+                rep = dict(rep, kind="daily") if len(days) == 7 else dict({k: v for k, v in rep.items() if k != "days"}, kind="weekly", days=days)
+                if len(days) == 7:
+                    rep.pop("days", None)
+                patch["repeat"] = rep
+                patch.setdefault("at", next_time(rep, datetime.now()).replace(microsecond=0).isoformat(timespec="seconds"))
             if patch.get("when"):
                 r = parse_when("напомни " + patch.pop("when"))
                 if not r:
@@ -1694,7 +1727,10 @@ class ToolsMixin:
                                                 "title": self.job_title(r) if job else r["text"], "text": r["text"],
                                                 "kind": r.get("kind") or "reminder", "repeat": bool(r.get("repeat")),
                                                 "repeat_text": describe_repeat(r.get("repeat")) if r.get("repeat") else "",
-                                                "paused": bool(r.get("paused")), "deliver": r.get("deliver") or ""})
+                                                "paused": bool(r.get("paused")), "deliver": r.get("deliver") or "",
+                                                # дни недели повтора (0 — пн) — календарь даёт их поменять (30.10)
+                                                "rdays": list(range(7)) if (r.get("repeat") or {}).get("kind") == "daily"
+                                                else list((r.get("repeat") or {}).get("days") or []) if (r.get("repeat") or {}).get("kind") == "weekly" else []})
                 if not r.get("repeat"):
                     break
                 at = next_time(r["repeat"], at)

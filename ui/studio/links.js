@@ -139,11 +139,47 @@ $("#kn-go").onclick = async () => {
 $("#kn-q").onkeydown = (e) => { if (e.key === "Enter") $("#kn-go").click(); };
 
 /* ---------- почта ---------- */
-const HELP = { yandex: "Яндекс", mailru: "Mail.ru", gmail: "Google", outlook: "Microsoft", icloud: "Apple" };
-function mlHelp(g) {
-  $("#ml-help").innerHTML = g && g.help ? `Обычный пароль почта сторонним программам не даёт — нужен <b>пароль приложения</b>: <a href="${g.help}" target="_blank">создать в ${HELP[g.provider] || "настройках почты"}</a> (тип «Почта»), затем вставьте его сюда.`
-      + (g.provider === "yandex" ? ` И в настройках Яндекс Почты → «Почтовые программы» включите «С сервера imap.yandex.ru по протоколу IMAP» — без этого Лира не прочтёт письма.` : "")
-    : "Нужен пароль приложения (в настройках безопасности вашей почты) или обычный пароль, если почта его разрешает.";
+/* Как получить пароль приложения — по шагам для своей почты (30.10, владелец: «хотел почту привязать — не понимаю как, не понятно
+   написано; двухэтапная проверка включена, но что и куда откуда ввести — не ясно»). Шаги — пока почта не подключена или вход
+   не прошёл; после успешной проверки — свёрнуты в «Как получить пароль приложения». */
+const ML_GUIDE = {
+  gmail: { who: "Google", page: "«Пароли приложений» Google", url: "https://myaccount.google.com/apppasswords", label: "Пароль приложения — 16 букв от Google",
+    steps: ["Откройте страницу паролей приложений Google. В меню «Безопасность» её не видно — только по этой кнопке или поиском «Пароли приложений» вверху аккаунта Google.",
+            "В поле «Название приложения» впишите <b>Dewiar</b> и нажмите «Создать».",
+            "Google покажет пароль из 16 букв в рамке — скопируйте его. Пробелы между буквами не мешают.",
+            "Вставьте его в поле «Пароль приложения» ниже и нажмите «Подключить»."],
+    note: "Если Google пишет «Настройка недоступна» — включите двухэтапную аутентификацию («Безопасность и вход в аккаунт») и откройте страницу снова." },
+  yandex: { who: "Яндекс", page: "«Пароли приложений» Яндекса", url: "https://id.yandex.ru/security/app-passwords", label: "Пароль приложения от Яндекса",
+    steps: ["Откройте страницу паролей приложений Яндекс ID.", "Выберите «Почта», назовите пароль <b>Dewiar</b> и нажмите «Создать».",
+            "Скопируйте показанный пароль и вставьте его в поле «Пароль приложения» ниже, затем «Подключить».",
+            "Чтобы Лира читала письма: Яндекс Почта → «Все настройки» → «Почтовые программы» → включите «С сервера imap.yandex.ru по протоколу IMAP»."],
+    link2: ["Открыть настройки почтовых программ", "https://mail.yandex.ru/#setup/client"] },
+  mailru: { who: "Mail.ru", page: "«Пароли для внешних приложений»", url: "https://account.mail.ru/user/2-step-auth/passwords/", label: "Пароль для внешнего приложения",
+    steps: ["Откройте «Пароли для внешних приложений» в настройках безопасности Mail.ru.", "«Добавить» → название <b>Dewiar</b> → доступ «Полный (IMAP, SMTP)».",
+            "Скопируйте пароль, вставьте его в поле ниже и нажмите «Подключить»."] },
+  outlook: { who: "Microsoft", page: "пароли приложений Microsoft", url: "https://account.live.com/proofs/AppPassword", label: "Пароль приложения от Microsoft",
+    steps: ["Откройте страницу паролей приложений Microsoft (нужна двухэтапная проверка).", "«Создать пароль приложения» — скопируйте его.",
+            "Вставьте в поле ниже и нажмите «Подключить»."] },
+  icloud: { who: "Apple", page: "аккаунт Apple", url: "https://account.apple.com", label: "Пароль приложения от Apple",
+    steps: ["Откройте аккаунт Apple → «Вход и безопасность» → «Пароли приложений».", "Нажмите «+», назовите пароль <b>Dewiar</b> и скопируйте его.",
+            "Вставьте в поле ниже и нажмите «Подключить»."] },
+};
+let mlOpen = false;                                                    // шаги развернули сами после подключения
+function mlHelp(g, ok) {
+  const G = g && ML_GUIDE[g.provider], box = $("#ml-guide");
+  $("#ml-pass-l").textContent = G ? G.label : "Пароль";
+  let h;
+  if (!g || !g.address && !$("#ml-addr").value.trim()) h = `<p class="ml-lead">Впишите адрес почты — покажу по шагам, где взять пароль для неё. Серверы подставятся сами.</p>`;
+  else if (!G) h = `<p class="ml-lead">Нужен пароль приложения из настроек безопасности вашей почты — или обычный пароль, если почта разрешает вход программам.${g.help ? ` <a href="#" data-ext="${escH(g.help)}">Где его взять</a>` : ""}</p>`;
+  else if (ok && !mlOpen) h = `<button type="button" class="ml-more" id="ml-more">Как получить пароль приложения</button>`;
+  else h = `<p class="ml-lead">Обычный пароль от ${G.who} программам не подходит — нужен <b>пароль приложения</b>. Это займёт минуту:</p>
+      <ol class="ml-steps">${G.steps.map((t, i) => `<li>${t}${i === 0 ? `<button type="button" class="btn small ml-go" data-ext="${escH(G.url)}">Открыть ${G.page}</button>` : ""}${G.link2 && i === G.steps.length - 1 ? ` <a href="#" data-ext="${escH(G.link2[1])}">${G.link2[0]}</a>` : ""}</li>`).join("")}</ol>
+      ${G.note ? `<p class="ml-note">${G.note}</p>` : ""}`;
+  // то же самое не перерисовываем: ушли из поля адреса прямо на кнопку — «change» не должен подменить её под мышью
+  if (box._h === h) return;
+  box._h = h; box.innerHTML = h;
+  if ($("#ml-more")) $("#ml-more").onclick = () => { mlOpen = true; mlHelp(g, ok); };
+  $$("#ml-guide [data-ext]").forEach(a => a.onclick = (e) => { e.preventDefault(); openExt(a.dataset.ext); });
 }
 /* Несколько ящиков (27.10, пакет: «как настроить на несколько ящиков?»): сверху — ящики кнопками, форма правит выбранный;
    «+ Ещё ящик» — пустая форма для нового. Первый — главный (с него письма уходят, если не сказано иначе); «что в почте?» —
@@ -167,12 +203,25 @@ function mlFill(m0) {
   $("#ml-imap").value = m.imap_host || ""; $("#ml-iport").value = m.imap_port || "";
   $("#ml-pass").placeholder = m.has_password ? "пароль сохранён — впишите, чтобы сменить" : "пароль приложения";
   $("#ml-on").style.display = m.configured ? "" : "none";
-  $("#ml-state").textContent = m.configured ? `Подключена: ${m.address}` : "";
-  mlHelp(m);
+  mlState(m);
 }
+/* «Подключена» — только если вход прошёл; проверка не прошла — так и пишем (было зелёным при двух ошибках, владелец 30.10) */
+function mlState(m) {
+  const bad = m.check && !m.check.ok, st = $("#ml-state");
+  st.className = "res " + (bad ? "bad" : "ok");
+  st.textContent = !m.configured ? "" : bad ? `${m.address}: сохранена, но вход не прошёл` : `Подключена: ${m.address}`;
+  mlHelp(m, m.configured && !bad);
+}
+/* ошибки проверки — человеческим языком: пароль не принят — одна строка и ссылка на шаги; иначе — что сказал сервер */
+function mlErr(tr, m) {
+  const G = ML_GUIDE[(m && m.provider) || ""], auth = [tr.smtp, tr.imap].some(v => v && v !== "ok" && /не приняла логин/.test(v));
+  if (auth) return `${G ? G.who + " не принял" : "Почта не приняла"} пароль. Нужен именно пароль приложения${G && G.who === "Google" ? " — 16 букв" : ""}, по шагам выше, а не пароль от почты.`;
+  return [tr.smtp !== "ok" ? "Отправка: " + tr.smtp : "", tr.imap && tr.imap !== "ok" ? "Чтение: " + tr.imap : ""].filter(Boolean).join(" · ");
+}
+$("#ml-addr").oninput = () => { if (!$("#ml-addr").value.trim()) mlHelp(null); };
 $("#ml-addr").onchange = () => { const v = $("#ml-addr").value.trim(); if (!v.includes("@")) return;
   core.call("mail_guess", { address: v }).then(g => { $("#ml-smtp").value = g.smtp_host; $("#ml-sport").value = g.smtp_port; $("#ml-sec").value = g.smtp_security;
-    $("#ml-imap").value = g.imap_host; $("#ml-iport").value = g.imap_port; mlHelp(g); }).catch(() => {}); };
+    $("#ml-imap").value = g.imap_host; $("#ml-iport").value = g.imap_port; mlOpen = false; mlHelp(Object.assign({ address: v }, g)); }).catch(() => {}); };
 $("#ml-save").onclick = async (ev) => {
   const r = $("#ml-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "проверяю вход в почту…";
   const patch = { address: $("#ml-addr").value.trim(), password: $("#ml-pass").value, name: $("#ml-name").value.trim(), login: $("#ml-login").value.trim(),
@@ -182,9 +231,9 @@ $("#ml-save").onclick = async (ev) => {
     const m = await core.call("mail_save", { patch, box: mlBox }); $("#ml-pass").value = ""; mlFill(m);
     const tr = await core.call("mail_test", { box: mlBox });
     const ok = tr.smtp === "ok" && (!patch.imap_host || tr.imap === "ok");
+    const cur = ((m.boxes || [m])[mlBox]) || m; cur.check = tr.check || { ok }; mlOpen = false; mlState(cur);
     r.className = ok ? "res ok" : "res bad";
-    r.textContent = ok ? "Готово: отправка и чтение работают. Скажите: «пришли мне на почту список дел»." :
-      [tr.smtp !== "ok" ? "Отправка: " + tr.smtp : "", tr.imap && tr.imap !== "ok" ? "Чтение: " + tr.imap : ""].filter(Boolean).join(" · ");
+    r.textContent = ok ? "Готово: отправка и чтение работают. Нажмите «Письмо себе» или скажите: «пришли мне на почту список дел»." : mlErr(tr, cur);
   } catch (e) { r.className = "res bad"; r.textContent = e.message; } finally { ev.target.disabled = false; }
 };
 $("#ml-test").onclick = async (ev) => { const r = $("#ml-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "отправляю…";

@@ -29,6 +29,8 @@ const bsSheetOn = () => $("#sh-work").classList.contains("on") && wkCur === BS_T
 /* ждём ответа компьютера — почту проверяем часто (clActive) */
 const bsActive = () => { const st = bsLoad(); return !kidsOn() && (st.pend.length > 0 || Date.now() - (st.asked || 0) < 120000 || ($("#sh-work").classList.contains("on") && wkCur === BS_TAB)); };
 const bsSec = (ts) => (+ts || 0) * 1000;          // компьютер считает в секундах
+/* фото-отчёт (30.10): компьютер присылает маленькую копию (team.py _thumb) — только JPEG data:, иначе не показываем */
+const bsThumbOk = (u) => typeof u === "string" && u.length < 400000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(u);
 
 /* ---------- с компьютера ---------- */
 function bsTake(body) {
@@ -173,7 +175,8 @@ function bsCard(t) {
   return `<div class="card wk-task bs-task s-${esc(t.state)}${t.late ? " late" : ""}${open ? " open" : ""}" data-t="${esc(t.id)}">`
     + `<button class="bs-tap" aria-expanded="${open}"><b>${esc(t.title)}</b><span class="wk-due${t.late ? " late" : ""}"><i class="bs-dot" style="background:${esc(bsColor(t.who))}"></i>${esc(t.name)}${due}</span></button>`
     + (open && t.note ? `<p class="wk-note">${esc(t.note)}</p>` : "")
-    + (t.state === "done" && (t.report || t.photo) ? `<p class="wk-note bs-rep">«${esc(t.report || "без слов")}»${t.photo ? " · фото — на компьютере" : ""}</p>` : "")
+    + (t.state === "done" && (t.report || t.photo) ? `<p class="wk-note bs-rep">«${esc(t.report || "без слов")}»${t.photo && !bsThumbOk(t.thumb) ? " · фото — на компьютере" : ""}</p>` : "")
+    + (t.state === "done" && bsThumbOk(t.thumb) ? `<img class="bs-photo" src="${t.thumb}" alt="Фото-отчёт: ${esc(t.title)}" loading="lazy">` : "")
     + (t.state === "moved" && t.reason ? `<p class="wk-note">Причина переноса: ${esc(t.reason)}</p>` : "")
     + (t.remark ? `<p class="wk-remark">Вы вернули: ${esc(t.remark)}</p>` : "")
     + (pend ? `<p class="bs-wait">${{ accept: "Принимаю", back: "Возвращаю", cancel: "Снимаю", remind: "Напоминаю", message: "Отправляю" }[pend.cmd] || "Отправляю"} — ${bsPendTxt(pend)}</p>` : "")

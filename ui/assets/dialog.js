@@ -14,6 +14,8 @@
       .dwq-back { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; padding: 20px;
         background: rgba(10,12,20,.32); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); opacity: 0; transition: opacity .15s; }
       .dwq-back.on { opacity: 1; }
+      dialog.dwq-back { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; color: inherit; }
+      dialog.dwq-back::backdrop { background: transparent; }
       .dwq { width: min(420px, 100%); border-radius: 20px; padding: 20px 20px 16px; color: var(--ink, #ECEEF4);
         background: var(--dwq-bg, #1b1c27); box-shadow: 0 24px 60px -20px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
         font: 14.5px/1.5 "Manrope", "Ubuntu", "Segoe UI", sans-serif; transform: translateY(6px) scale(.985); transition: transform .18s cubic-bezier(.2,.8,.2,1); }
@@ -37,7 +39,10 @@
     if (window.DEWIAR_AUTO_ASK) return Promise.resolve(input ? (window.DEWIAR_AUTO_ASK === true ? input.value : window.DEWIAR_AUTO_ASK) : true);  // проверки (tests/)
     style();
     return new Promise((resolve) => {
-      const back = document.createElement("div"); back.className = "dwq-back";
+      /* 30.10 (владелец: «Удалить все повторы» в календаре только затемняет экран — окошко вопроса под окном дня): окно дня —
+         <dialog> в верхнем слое, его не перекрыть z-index. Если открыто такое окно — вопрос тоже <dialog>, showModal кладёт его поверх. */
+      const top = typeof HTMLDialogElement === "function" && document.querySelector("dialog[open]");
+      const back = document.createElement(top ? "dialog" : "div"); back.className = "dwq-back";
       const box = document.createElement("div"); box.className = "dwq"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
       const p = document.createElement("p"); p.textContent = text; box.appendChild(p);
       let inp = null;
@@ -49,7 +54,10 @@
       if (opts && opts.only) no.style.display = "none";
       row.append(no, yes); box.appendChild(row); back.appendChild(box); document.body.appendChild(back);
       const prev = document.activeElement;
-      const done = (v) => { back.classList.remove("on"); document.removeEventListener("keydown", key, true); setTimeout(() => back.remove(), 160);
+      if (top) { try { back.showModal(); } catch (e) { back.setAttribute("open", ""); } back.addEventListener("cancel", (e) => { e.preventDefault(); done(input ? null : false); }); }
+      let fin = false;
+      const done = (v) => { if (fin) return; fin = true; back.classList.remove("on"); document.removeEventListener("keydown", key, true);
+        setTimeout(() => { if (top && back.open) { try { back.close(); } catch (e) { } } back.remove(); }, 160);
         try { prev && prev.focus && prev.focus(); } catch (e) { } resolve(v); };
       const key = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(input ? null : false); }
         else if (e.key === "Enter" && (!inp || document.activeElement === inp || document.activeElement === yes)) { e.preventDefault(); e.stopPropagation(); done(input ? inp.value : true); } };

@@ -5,7 +5,8 @@
    «Переслать» — выбрать близкого или группу: файл скачивается, расшифровывается и уходит заново, уже для них. */
 "use strict";
 const CLI_MAX = 8 * 1024 * 1024;
-const clIsImg = (f) => f && (/^image\/(jpeg|png|webp|gif)/i.test(f.type || "") || (!f.type && /\.(jpe?g|png|webp|gif)$/i.test(f.name || "")));
+// картинка — по типу (и image/x-png, image/pjpeg — так пишут старые программы) или по имени (30.10: «PNG непонятно, загрузились или нет»)
+const clIsImg = (f) => f && (/^image\/(x-)?(p?jpeg|jpg|png|webp|gif)/i.test(f.type || "") || /\.(jpe?g|png|webp|gif)$/i.test(f.name || ""));
 const clImgCached = (id) => { try { return fileGet("climg-" + id) || ""; } catch (e) { return ""; } };
 const CLI_WAIT = {};
 let clWipe = null;                                  // «Очистить переписку» открытого человека (ставит clRender)
