@@ -68,7 +68,7 @@ def parse_plugin(d: Path, builtin: bool):
         sets.append({"key": re.sub(r"[^\w]", "_", str(s["key"]))[:40], "label": str(s.get("label") or s["key"])[:80],
                      "type": s.get("type", "text"), "options": [str(o)[:60] for o in (s.get("options") or [])][:12],
                      "default": s.get("default", ""), "placeholder": str(s.get("placeholder") or "")[:120],
-                     "hint": str(s.get("hint") or "")[:200]})
+                     "hint": str(s.get("hint") or "")[:200], "required": bool(s.get("required"))})
     jobs = [{"id": _id(j.get("id") or f"j{i}"), "title": str(j.get("title") or "")[:120], "when": str(j.get("when") or "")[:80],
              "task": str(j.get("task") or "")[:600]}
             for i, j in enumerate(m.get("jobs") or []) if isinstance(j, dict) and j.get("when") and j.get("task")]
@@ -95,7 +95,14 @@ def parse_plugin(d: Path, builtin: bool):
             "description": str(m.get("description") or "")[:1200], "version": str(m.get("version") or "1.0")[:20],
             "author": str(m.get("author") or "")[:60], "phrases": [str(x)[:120] for x in (m.get("phrases") or [])][:10],
             "uses": [str(x)[:40] for x in (m.get("uses") or [])][:12], "settings": sets, "jobs": jobs, "mcp": mcp,
-            "skill_dirs": skills, "dir": d, "builtin": builtin}
+            "skill_dirs": skills, "dir": d, "builtin": builtin,
+            # витрина на «Главной» (31.10): фраза «попробуйте сразу» и ролик — id урока Академии («15-plugins») или адрес
+            "try": str(m.get("try") or (m.get("phrases") or [""])[0])[:120],
+            # ссылки панели плагина на его файлы в папке Dewiar: [{"label": "Открыть галерею", "path": "Рисунки/Галерея.html"}]
+            "links": [{"label": str(x.get("label"))[:40], "path": str(x.get("path"))[:120]} for x in (m.get("links") or [])
+                      if isinstance(x, dict) and x.get("label") and x.get("path") and ".." not in str(x.get("path"))
+                      and not str(x.get("path")).startswith(("/", "\\")) and ":" not in str(x.get("path"))][:3],
+            "video": str(m.get("video") or "") if re.fullmatch(r"[\w-]{1,40}|https://[^\s\"'<>]{8,300}", str(m.get("video") or "")) else ""}
 
 
 class Plugins:
@@ -154,7 +161,7 @@ class Plugins:
         for pid, p in sorted(self.items.items(), key=lambda x: (not x[1]["builtin"], x[1]["category"], x[1]["name"])):
             st = on.get(pid) or {}
             out.append({k: p[k] for k in ("id", "name", "icon", "color", "category", "tagline", "description", "version", "author",
-                                          "phrases", "uses", "settings", "builtin")}
+                                          "phrases", "uses", "settings", "builtin", "try", "video", "links")}
                        | {"installed": pid in on, "values": self.values(pid), "skills": [d.name for d in p["skill_dirs"]],
                           "mcp": [f"{pid}-{n}" for n in p["mcp"]],
                           "jobs": [dict(j, on=bool((st.get("jobs") or {}).get(j["id"]))) for j in p["jobs"]],

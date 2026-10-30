@@ -47,9 +47,9 @@ function plgDrawer(id) {
     <div class="pld-h"><i class="plg-ic" aria-hidden="true">${plgEsc(p.icon)}</i><div><h1 id="pld-name">${plgEsc(p.name)}</h1><p>${plgEsc(p.tagline)}</p></div></div>
     <p class="pld-desc">${plgEsc(p.description)}</p>
     <div class="actions" style="margin:6px 0 4px">${p.installed
-      ? `<span class="pld-ok">✓ Установлен — просто говорите</span><button class="btn ghost" id="pld-rm">Удалить</button>`
+      ? `<span class="pld-ok">✓ Установлен — просто говорите</span>${(p.links || []).map((l, i) => `<button class="btn" data-link="${i}">${plgEsc(l.label)}</button>`).join("")}<button class="btn ghost" id="pld-rm">Удалить</button>`
       : `<button class="btn primary" id="pld-in">Установить</button>`}<span class="res" id="pld-res"></span></div>
-    ${p.phrases.length ? `<h2>Попробуйте сказать</h2><div class="pld-ph">${p.phrases.map(t => `<button class="chip" data-t="${plgEsc(t)}" title="Скопировать">«${plgEsc(t)}»</button>`).join("")}</div>` : ""}
+    ${p.phrases.length ? `<h2>Попробуйте сказать</h2><div class="pld-ph">${p.phrases.map(t => `<button class="chip" data-t="${plgEsc(t)}" title="${p.installed ? "Спросить Лиру" : "Скопировать"}">«${plgEsc(t)}»</button>`).join("")}</div>` : ""}
     ${p.settings.length ? `<h2>Настройки</h2><div class="row one pld-set">${p.settings.map(s => plgField(p, s)).join("")}</div>
       ${p.installed ? `<div class="actions" style="margin-top:6px"><button class="btn" id="pld-save">Сохранить настройки</button></div>` : `<p class="hint">Заполнится при установке — поменять можно в любой момент.</p>`}` : ""}
     ${p.jobs.length ? `<h2>Дела по расписанию</h2><p class="hint" style="margin:-4px 0 6px">Помощница делает их сама и сообщает итог. Каждое — по желанию.</p>
@@ -71,10 +71,15 @@ function plgDrawer(id) {
   if ($("#pld-rm")) $("#pld-rm").onclick = async () => { if (!await ask(`Удалить плагин «${p.name}»? Его навыки и подключения уберутся, дела по расписанию — тоже.`)) return; run("plugin_remove", { id }, `«${p.name}» удалён`); };
   if ($("#pld-save")) $("#pld-save").onclick = () => run("plugin_values", { id, values: plgValues() }, "Настройки сохранены");
   if ($("#pld-del")) $("#pld-del").onclick = async () => { if (!await ask(`Удалить файлы плагина «${p.name}» с этого компьютера?`)) return; plgOpen = ""; plgClose(); run("plugin_delete", { id }, "Плагин удалён"); };
+  $$("#pld [data-link]").forEach(b => b.onclick = () => core.call("ws_open", { path: p.links[+b.dataset.link].path }).catch(e => res(e.message, false)));
   $$("#pld [data-job]").forEach(c => c.onchange = () => run("plugin_job", { id, job: c.dataset.job, on: c.checked }, c.checked ? "Дело включено — помощница сделает его сама" : "Дело выключено"));
-  $$("#pld .pld-ph .chip").forEach(b => b.onclick = () => { try { navigator.clipboard.writeText(b.dataset.t); } catch (e) { } toast("Скопировано — скажите это вслух или вставьте в чат"); });
+  // установлен — фраза сразу уходит Лире в чат (видно, как работает); нет — копируется
+  $$("#pld .pld-ph .chip").forEach(b => b.onclick = () => { if (p.installed && typeof qaAsk === "function") { plgClose(); qaAsk(b.dataset.t); return; }
+    try { navigator.clipboard.writeText(b.dataset.t); } catch (e) { } toast("Скопировано — скажите это вслух или вставьте в чат"); });
 }
 function plgClose() { plgOpen = ""; $("#pld").classList.remove("open"); }
+// ушли в другой раздел (меню слева) — панель плагина не остаётся висеть поверх (31.10: «Подробнее» с «Главной» и обратно)
+document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("nav button[data-p]"); if (b && b.dataset.p !== "skills" && $("#pld").classList.contains("open")) plgClose(); }, true);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if ($("#pld").classList.contains("open")) plgClose(); $("#plg-guide").classList.remove("open"); } });
 
 /* «Как сделать свой плагин»: Markdown → HTML (заголовки, абзацы, списки, таблицы, код) — только для своего README */

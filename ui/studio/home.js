@@ -151,7 +151,8 @@ async function loadHome() {
   const [cal, cl, tk, dn, ch, pad, py, pl, cs] = await Promise.all([get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }), get("close_state"),
     get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"), get("pay_overview"), get("plugins"), get("course_get")]);
   const wt = await get("watch_get");                                    // «Дозор»: сколько идёт — числом на значке
-  HM.plg = ((pl && pl.plugins) || []).filter(p => p.installed);
+  HM.all = (pl && pl.plugins) || [];
+  HM.plg = HM.all.filter(p => p.installed);
   let padText = null;
   if (pad && pad.active) { const r = await get("pad_read", { name: pad.active }); padText = r ? { name: pad.active, text: r.text || "" } : null; }
   HM.data = { cal, cl, tk: Array.isArray(tk) ? tk : [], dn: dn && typeof dn === "object" ? dn : null, ch, pad: padText,
@@ -241,6 +242,7 @@ function hmRender() {
   $("#hm-pad").innerHTML = `<small>Блокнот${pd ? " · «" + hmEsc(pd.name) + "»" : ""}</small>` + (lines.length ? `<div class="hm-pv">${lines.join("")}</div>` : `<p>Блокнот у виджета — для мыслей на лету. Пишется само.</p>`)
     + `<button class="hm-more" data-pad="1">Открыть блокнот у виджета</button>`;
   hmMail();
+  hmTry();
   $("#hm-set").innerHTML = HM_SET.map(([p, n]) => `<button class="hm-pill" data-go="${p}">${hmEsc(n)}</button>`).join("");
   hmWire();
 }
@@ -340,6 +342,64 @@ function hmSave(list) {
   const known = hmAll().map(x => x.id);
   core.call("settings_save", { patch: { ui: { home_apps: list, home_known: known } } }).then(() => { S.ui = Object.assign({}, S.ui, { home_apps: list, home_known: known }); hmNav(); }).catch(e => toast(e.message));
   S.ui = Object.assign({}, S.ui, { home_apps: list, home_known: known }); hmNav();
+}
+/* «Попробуйте плагин» (31.10, владелец: «на главной показывать плагины, чтобы человек видел, мог включить и сразу
+   посмотреть, как работает; в будущем — видео к каждому»). Один ещё не включённый плагин за раз, каждый день — другой
+   (стрелка — следующий): значок, что умеет, фраза. «Включить» — сразу, без похода в «Плагины»; плагину нужны настройки
+   (поле required: «Что искать» у «Тендеров») — открывается его панель. Включили — карточка говорит, что сказать, и
+   «Спросить Лиру» задаёт эту фразу в чате: результат виден сразу. Ролик — свой (поле video плагина: урок Академии или
+   адрес), иначе общий урок «Плагины». Скрыть — на две недели (S.ui.try_hide_until). */
+const TRY_LESSON = "15-plugins";
+function hmTryList() {
+  return (HM.all || []).filter(p => !p.installed && p.builtin !== false).sort((a, b) => a.id < b.id ? -1 : 1);
+}
+function hmTry() {
+  const box = $("#hm-try"); if (!box) return;
+  const ui = (S && S.ui) || {}, list = hmTryList(), done = HM.tryDone && (HM.all || []).find(p => p.id === HM.tryDone);
+  if (HM.edit || !hmFeat("skills") || (!done && (!list.length || (ui.try_hide_until || 0) > Date.now()))) { box.hidden = true; return; }
+  if (HM.tryI == null) HM.tryI = Math.floor(Date.now() / 864e5);          // по дню: сегодня — один, завтра — другой
+  const p = done || list[((HM.tryI % list.length) + list.length) % list.length];
+  const les = ((HM.ac && HM.ac.d.items) || []).find(l => l.id === (p.video || TRY_LESSON));
+  const vid = p.video ? (les || /^https:/.test(p.video) ? "Смотреть ролик" : "") : (les ? "Как работают плагины" : "");
+  const say = p.try || (p.phrases || [])[0] || "";
+  box.style.setProperty("--pc", p.color || "#7c8cff");
+  box.hidden = false;
+  box.classList.toggle("done", !!done);
+  box.innerHTML = `<i class="ht-ic" aria-hidden="true">${hmEsc(p.icon || "🧩")}</i>
+    <div class="ht-t"><small>${done ? "Плагин включён" : "Попробуйте плагин"} · ${hmEsc(p.category || "")}</small>
+      <b>${hmEsc(p.name)}</b><span>${hmEsc(done ? "Скажите Лире — или нажмите, и она ответит в чате:" : p.tagline || "")}</span>
+      ${say ? `<q>${hmEsc(say)}</q>` : ""}
+      <div class="ht-acts">${done
+        ? `<button class="btn primary small" type="button" id="ht-ask">Спросить Лиру</button><button class="btn ghost small" type="button" id="ht-more">Настройки плагина</button>`
+        : `<button class="btn primary small" type="button" id="ht-on">${(p.settings || []).some(x => x.required && !String((p.values || {})[x.key] ?? "").trim()) ? "Настроить и включить" : "Включить"}</button>`
+          + (vid ? `<button class="btn ghost small" type="button" id="ht-vid">▶ ${vid}</button>` : "")
+          + `<button class="btn ghost small" type="button" id="ht-more">Подробнее</button>`}</div></div>
+    <div class="ht-nav">${!done && list.length > 1 ? `<button type="button" class="ht-b" id="ht-next" aria-label="Другой плагин" title="Другой плагин">›</button>` : ""}
+      <button type="button" class="ht-b" id="ht-x" aria-label="Скрыть" title="${done ? "Закрыть" : "Скрыть на две недели"}">×</button></div>`;
+  $("#ht-more").onclick = () => hmOpen("plg:" + p.id);
+  if ($("#ht-next")) $("#ht-next").onclick = () => { HM.tryI++; hmTry(); };
+  if ($("#ht-vid")) $("#ht-vid").onclick = () => {
+    const l = les || { id: "plg-" + p.id, n: "", title: p.name, video: p.video, poster: "" };
+    if (typeof lsPlay === "function") lsPlay(l); };
+  if ($("#ht-ask")) $("#ht-ask").onclick = () => { HM.tryDone = ""; if (typeof qaAsk === "function") qaAsk(say); else core.call("say", { text: say }).catch(() => {}); hmTry(); };
+  $("#ht-x").onclick = () => {
+    if (done) { HM.tryDone = ""; hmTry(); return; }
+    const until = Date.now() + 14 * 864e5;
+    S.ui = Object.assign({}, S.ui, { try_hide_until: until });
+    core.call("settings_save", { patch: { ui: { try_hide_until: until } } }).catch(() => {});
+    hmTry(); toast("Скрыла на две недели. Все плагины — в разделе «Плагины»");
+  };
+  if ($("#ht-on")) $("#ht-on").onclick = async () => {
+    if ((p.settings || []).some(x => x.required && !String((p.values || {})[x.key] ?? "").trim())) {
+      hmOpen("plg:" + p.id); toast("Заполните настройки — и «Установить»"); return; }
+    $("#ht-on").disabled = true;
+    try {
+      const r = await core.call("plugin_install", { id: p.id, values: {} });
+      HM.all = (r && r.plugins) || HM.all; HM.plg = HM.all.filter(x => x.installed); HM.tryDone = p.id;
+      if (typeof plgSet === "function" && r) plgSet(r);
+      hmRender(); hmNav();
+    } catch (e) { toast(e.message); if ($("#ht-on")) $("#ht-on").disabled = false; }
+  };
 }
 function hmWire() {
   $$("#hm-body [data-go]").forEach(b => b.onclick = () => hmGo(b.dataset.go));

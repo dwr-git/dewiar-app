@@ -56,6 +56,8 @@ def plugin_expand(cfg):
     data.mkdir(parents=True, exist_ok=True)
     env.setdefault("DEWIAR_PLUGIN_DATA", str(data))
     env["DEWIAR_PLUGIN_SETTINGS"] = json.dumps(cfg.get("_values") or {}, ensure_ascii=False)
+    if cfg.get("_ws"):                                  # папка ассистента («Документы/Dewiar») — плагину, который сохраняет работы
+        env.setdefault("DEWIAR_WORKSPACE", str(cfg["_ws"]))
     core = str(Path(__file__).resolve().parent)
     env["PYTHONPATH"] = os.pathsep.join(([str(d / "lib")] if (d / "lib").is_dir() else []) + [core]
                                         + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
@@ -291,9 +293,16 @@ class MCPManager:
         """Подключить новые, отключить удалённые/выключенные, переподключить изменённые — в фоне."""
         want = {n: c for n, c in (self.s.get("mcp", "servers") or {}).items() if c.get("enabled", True)}
         on = self.s.get("plugins", "on") or {}
+        ws = ""
+        if any(c.get("plugin") for c in want.values()):
+            try:
+                import workspace
+                ws = str(self.s.get("workspace", "path") or "").strip() or str(workspace.default_dir())
+            except Exception:  # noqa: BLE001
+                ws = ""
         for n, c in list(want.items()):                 # сервер плагина получает его настройки (поменяли — перезапуск)
             if c.get("plugin"):
-                want[n] = dict(c, _values=dict((on.get(c["plugin"]) or {}).get("values") or {}))
+                want[n] = dict(c, _values=dict((on.get(c["plugin"]) or {}).get("values") or {}), **({"_ws": ws} if ws else {}))
         with self.lock:
             for n in list(self.servers):
                 if n not in want or self.servers[n].cfg != want[n]:

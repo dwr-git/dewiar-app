@@ -57,7 +57,7 @@ async function lsPlay(l) {
   lsSeen(l.id);
   if (!l.video && l.youtube) { window.open(l.youtube, "_blank", "noopener"); return; }
   const d = $("#ls-dlg"), v = $("#ls-v"), fail = $("#ls-fail");
-  $("#ls-dt").textContent = `Урок ${l.n} · ${l.title}`;
+  $("#ls-dt").textContent = l.n ? `Урок ${l.n} · ${l.title}` : l.title;          // ролик плагина — без номера урока
   fail.hidden = true; v.hidden = false; LSN.cur = l;
   // 30.10: WebM (VP9) окно в Ubuntu играет без gstreamer1.0-libav — берём его, если сервер уже сделал копию и окно умеет
   const webm = !!(l.webm && v.canPlayType('video/webm; codecs="vp9, opus"'));

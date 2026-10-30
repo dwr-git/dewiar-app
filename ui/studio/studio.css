@@ -4018,3 +4018,28 @@ html:not(.st-light) .ch-tmbar b { color: #ffcf7a; }
 .ft-now { color: var(--muted); font-size: 12px; }
 @media (max-width: 760px) { .ft { grid-template-columns: 1fr; } .ft-r { align-items: flex-start; } }
 .switch[hidden] { display: none; }
+/* ---------- «Попробуйте плагин» на «Главной» (31.10, studio/home.js hmTry): один плагин, его цвет — мягким светом слева,
+   фраза — «репликой», без рамок. Включили — та же карточка зовёт спросить Лиру. ---------- */
+.hm-try { --pc: #7c8cff; position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: start;
+  padding: 18px 18px 18px 20px; border-radius: 22px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); }
+.hm-try[hidden] { display: none; }
+.hm-try::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(44% 150% at 0% 40%, color-mix(in srgb, var(--pc) 20%, transparent), transparent 72%); }
+.ht-ic { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 32px; font-style: normal;
+  background: color-mix(in srgb, var(--pc) 24%, transparent); }
+.ht-t { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ht-t small { color: var(--dim); font-size: 12px; }
+.ht-t b { font: 700 18px/1.25 "Unbounded", Manrope, sans-serif; color: var(--ink); }
+.ht-t > span { font-size: 13.5px; line-height: 1.45; color: var(--muted); max-width: 62ch; }
+.ht-t q { align-self: flex-start; margin-top: 8px; padding: 8px 14px; border-radius: 16px 16px 16px 5px; font-size: 14px; font-weight: 600; color: var(--ink);
+  background: color-mix(in srgb, var(--pc) 15%, var(--frost, rgba(127,127,127,.1))); quotes: "«" "»"; }
+.ht-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ht-nav { display: flex; gap: 6px; }
+.ht-b { width: 32px; height: 32px; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center; font: 600 19px/1 Manrope, sans-serif;
+  color: var(--muted); background: transparent; transition: background .15s, color .15s; }
+.ht-b:hover { color: var(--ink); background: var(--frost, rgba(127,127,127,.12)); }
+.ht-b:focus-visible, .hm-try .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hm-try.done .ht-ic { animation: ht-pop .5s cubic-bezier(.3,1.6,.5,1); }
+@keyframes ht-pop { from { transform: scale(.6); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hm-try.done .ht-ic { animation: none; } }
+@media (max-width: 700px) { .hm-try { grid-template-columns: auto 1fr; } .ht-nav { position: absolute; top: 10px; right: 10px; } .ht-ic { width: 52px; height: 52px; font-size: 26px; } }

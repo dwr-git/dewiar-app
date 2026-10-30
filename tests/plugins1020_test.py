@@ -30,7 +30,8 @@ import engine_commands as EC  # noqa: E402
 s = ST.Settings(tmp / "s.json")
 P = PL.Plugins(s); K = SK.Skills(s); K.plugins = P; K.reload()
 ids = sorted(P.items)
-ok(ids == sorted(["bedtime", "contract", "dacha", "digest", "english", "kitchen", "rates", "travel"]) and "obsidian" not in ids, f"восемь встроенных, без Obsidian: {ids}")
+BUILTIN = ["bedtime", "contract", "dacha", "digest", "english", "kitchen", "rates", "travel", "tenders", "recruiter", "artist"]   # + «Тендеры», «Рекрутер», «Художник» (31.10)
+ok(ids == sorted(BUILTIN) and "obsidian" not in ids, f"встроенные, без Obsidian: {ids}")
 bad = [pid for pid, p in P.items.items() if not (p["skill_dirs"] and p["phrases"] and p["tagline"] and p["description"] and p["icon"] and (p["dir"] / "README.md").is_file())]
 ok(not bad, f"у каждого — навык, фразы, описание, значок и README: {bad}")
 used = {u for p in P.items.values() for u in p["uses"]}
@@ -113,7 +114,7 @@ with sync_playwright() as p:
         if (c === 'plugin_install') cat.plugins.find(x => x.id === a.id).installed = true; return cat; };
       $('nav button[data-p="skills"]').click(); }""", cat)
     pg.wait_for_timeout(600)
-    ok(pg.inner_text('nav button[data-p="skills"]').strip() == "Плагины" and pg.locator("#plg-grid .plg").count() == 8, "раздел «Плагины»: восемь карточек")
+    ok(pg.inner_text('nav button[data-p="skills"]').strip() == "Плагины" and pg.locator("#plg-grid .plg").count() == len(BUILTIN), "раздел «Плагины»: карточка на каждый встроенный")
     ok(pg.locator("#plg-cats .chip").count() >= 6, "категории — фильтром")
     pg.click('#plg-cats .chip[data-c="Семья"]'); ok(pg.locator("#plg-grid .plg").count() == 1, "фильтр «Семья» — одна «Сказка»")
     pg.click('#plg-cats .chip[data-c="Все"]')
