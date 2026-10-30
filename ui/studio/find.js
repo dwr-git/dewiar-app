@@ -14,6 +14,8 @@ const FD_SYN = [
   ["connect#mail-box", "Подключить почту", "почта gmail пароль приложения smtp imap письмо ящик"],
   ["vault", "Пароли и пин-коды", "пароль пароли пин код домофон логин сейф секрет вайфай wifi"],
   ["reminders", "Будильник и напоминания", "будильник напомни напоминание таймер повтор дела"],
+  // 30.10 (владелец: «нигде не могу звонки послушать… даже в поиске искал — ничего»)
+  ["reminders#r-sound", "Звонок будильника — послушать и выбрать", "звук звуки звонок звонки мелодия мелодии рингтон сигнал послушать прослушать пульс будильник"],
   ["calendar", "Календарь и встречи", "календарь встреча событие дата день расписание"],
   ["voice", "Голос и скорость речи", "голос скорость речи быстрее медленнее громкость тембр озвучка"],
   ["ears", "Микрофон и распознавание", "микрофон слух распознавание не слышит имя обращение"],
@@ -73,6 +75,7 @@ function fdScore(o, q, qs) {
     const st = fdStem(w);
     if (tw.some(x => x.startsWith(w))) sc += 14;
     else if (tw.some(x => x.startsWith(st))) sc += 10;
+    else if (ew.includes(w)) sc += 25;                         // слово из словаря людей ровно такое («звуки», «мелодия»)
     else if (ew.some(x => x.startsWith(st))) sc += 6;
     else all = false;
   }
@@ -151,7 +154,10 @@ function fdOpen(h) {
     box.scrollIntoView({ block: "center", behavior: "smooth" });
     box.classList.remove("fd-hl"); void box.offsetWidth; box.classList.add("fd-hl");
     setTimeout(() => box.classList.remove("fd-hl"), 2200);
-    const f = box.matches("input, select, textarea") ? box : box.querySelector("input:not([type=hidden]), select, textarea");
+    // курсор — только в поле ввода: на флажке или переключателе случайный пробел или стрелка меняли бы настройку
+    // (30.10: «Текстовый режим» включился незаметно — голос пропал)
+    const TXT = "input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea";
+    const f = box.matches(TXT) ? box : box.querySelector(TXT);
     if (f && h.k === "set" && el.tagName === "LABEL") setTimeout(() => f.focus({ preventScroll: true }), 350);
   }, h.p === "home" ? 0 : 260);
 }

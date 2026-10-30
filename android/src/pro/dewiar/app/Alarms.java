@@ -28,7 +28,7 @@ public final class Alarms {
         CaptureWidget.refresh(c);           // на значке «Записать» — ближайшее напоминание
     }
 
-    /** item: {id, at (мс), title, kind: reminder|alarm|timer, repeat: ""|daily|weekdays|weekly} */
+    /** item: {id, at (мс), title, kind: reminder|alarm|timer, repeat: ""|daily|weekdays|weekly|d:0123 (дни, пн = 0)} */
     public static synchronized void put(Context c, JSONObject item) throws Exception {
         JSONArray a = list(c), out = new JSONArray();
         for (int i = 0; i < a.length(); i++) if (!a.getJSONObject(i).getString("id").equals(item.getString("id"))) out.put(a.getJSONObject(i));
@@ -101,16 +101,23 @@ public final class Alarms {
         save(c, keep);
     }
 
-    /** Следующий раз для повторяющегося: daily — +1 день, weekly — +7, weekdays — ближайший будний. Считаем днями
-     *  календаря, а не по 24 часа: при переходе на летнее время будильник не съедет на час. */
+    /** Следующий раз для повторяющегося: daily — +1 день, weekly — +7, weekdays — ближайший будний, «d:0123» — ближайший
+     *  из этих дней (понедельник = 0, как в Python; 30.10: «по будням, кроме пятницы»). Считаем днями календаря, а не по
+     *  24 часа: при переходе на летнее время будильник не съедет на час. */
     static long next(JSONObject x) throws Exception {
         java.util.Calendar k = java.util.Calendar.getInstance();
         k.setTimeInMillis(x.getLong("at"));
         String r = x.optString("repeat");
-        do {
+        String set = r.startsWith("d:") ? r.substring(2) : null;
+        if (set != null && !set.matches("[0-6]+")) set = null;
+        for (int i = 0; i < 8; i++) {
             k.add(java.util.Calendar.DAY_OF_MONTH, "weekly".equals(r) ? 7 : 1);
-        } while ("weekdays".equals(r) && (k.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SATURDAY
-                || k.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY));
+            int dow = k.get(java.util.Calendar.DAY_OF_WEEK);           // воскресенье = 1 … суббота = 7
+            int py = (dow + 5) % 7;                                    // понедельник = 0 … воскресенье = 6
+            if ("weekdays".equals(r) && (dow == java.util.Calendar.SATURDAY || dow == java.util.Calendar.SUNDAY)) continue;
+            if (set != null && set.indexOf((char) ('0' + py)) < 0) continue;
+            break;
+        }
         return k.getTimeInMillis();
     }
 

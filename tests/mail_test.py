@@ -54,6 +54,10 @@ BOX = {1: (mk(1, "Бухгалтерия <buh@corp.ru>", "Счёт за сент
        2: (mk(2, "Мама <mama@mail.ru>", "Приезжай в субботу", "Жду тебя в субботу к обеду."), False)}
 
 
+CMDS = []
+RO = False                                  # почта, которая не даёт открыть папку на запись
+
+
 class IMAP(socketserver.StreamRequestHandler):
     def w(self, s): self.wfile.write((s + "\r\n").encode() if isinstance(s, str) else s)
     def handle(self):
@@ -67,7 +71,13 @@ class IMAP(socketserver.StreamRequestHandler):
                 parts = rest.split(" ")
                 u, p = parts[1].strip('"'), parts[2].strip('"')
                 self.w(f"{tag} OK logged in" if (u, p) == (USER, PASS) else f"{tag} NO [AUTHENTICATIONFAILED] bad")
-            elif cmd.startswith("EXAMINE") or cmd.startswith("SELECT"): self.w(f"* {len(BOX)} EXISTS"); self.w(f"{tag} OK [READ-ONLY] done")
+            elif cmd.startswith("EXAMINE") or cmd.startswith("SELECT"):
+                CMDS.append(cmd.split(" ")[0]); self.w(f"* {len(BOX)} EXISTS")
+                self.w(f"{tag} OK [READ-ONLY] done" if cmd.startswith("EXAMINE") or RO else f"{tag} OK [READ-WRITE] done")
+            elif cmd.startswith("UID STORE"):                       # 30.10: «прочитано» — только флаг \Seen этого письма
+                CMDS.append(rest); uid = int(rest.split(" ")[2])
+                if uid in BOX and "+FLAGS" in cmd and "\\SEEN" in cmd: BOX[uid] = (BOX[uid][0], True)
+                self.w(f"{tag} OK done")
             elif cmd.startswith("UID SEARCH"):
                 ids = [str(k) for k, (_, seen) in BOX.items() if "UNSEEN" not in cmd or not seen]
                 self.w("* SEARCH " + " ".join(ids)); self.w(f"{tag} OK done")
@@ -125,6 +135,17 @@ ok([x["uid"] for x in box] == ["2", "1"] and box[1]["files"] == ["счёт.pdf"]
 ok([x["uid"] for x in m.inbox(unread=True)] == ["2"], "только непрочитанные")
 ok([x["uid"] for x in m.inbox(query="счёт")] == ["1"], "поиск по слову")
 full = m.read("1")
+# 30.10 (владелец: «прочитал письмо через Лиру — а оно всё равно непрочитанное»)
+CMDS.clear(); m.read("2")
+ok(BOX[2][1] is False and "EXAMINE" in CMDS and not any(c.startswith("UID STORE") for c in CMDS), "чтение без отметки — почта не тронута (EXAMINE, без STORE)")
+CMDS.clear(); m.read("2", mark=True)
+ok(BOX[2][1] is True and "SELECT" in CMDS and any("+FLAGS" in c and "Seen" in c for c in CMDS), f"прочитали человеку — на почте «прочитано» (только флаг \\Seen): {CMDS}")
+ok(m.inbox(unread=True) == [], "непрочитанных больше нет")
+BOX[2] = (BOX[2][0], False)
+RO = True; CMDS.clear()
+r = m.read("2", mark=True)
+ok(r["subject"] and BOX[2][1] is False and not any(c.startswith("UID STORE") for c in CMDS), "почта не даёт писать — письмо всё равно открывается, без отметки")
+RO = False
 ok("Счёт на оплату" in full["text"] and "Бухгалтерия" in full["from"], "письмо целиком")
 out = t_read_emails({"limit": 5}, {"mail": m})
 ok("Приезжай в субботу" in out and "●" in out, "инструмент read_emails — понятный список для модели")

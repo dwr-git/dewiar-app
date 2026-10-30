@@ -344,16 +344,23 @@ class RemoteMixin:
         except Exception as e:  # noqa: BLE001
             log.info("Движки после смены голоса: %s", e)
 
-    def _engines_for_speech(self, voice=None):
+    def _engines_for_speech(self, voice=None, force=False):
         """Цепочка синтезаторов по порядку попыток: выбранный → Piper (если голос скачан) → eSpeak. Готовый Vosk TTS —
-        единственный: голос персонажа не подменяем. -> [] — речь выключена."""
+        единственный: голос персонажа не подменяем. -> [] — речь выключена.
+        force — «Прослушать» под ответом: в «Текстовом режиме» (голос выключен, прежний запомнен в ui.text_prev) читаем
+        прежним голосом — человек сам попросил вслух (30.10, владелец: «„Прослушать“ тоже не работает»)."""
         eng = self.s.get("tts", "engine")
+        remote = self.tts_remote
         if eng == "off":
-            return []
+            prev = ((self.s.get("ui") or {}).get("text_prev") or "") if force else ""
+            if not prev or prev == "off":
+                return []
+            eng = prev
+            remote = remote or self._listen_remote(prev)
         chain = []
         voice = voice or self._voice_cfg()
-        if eng in ("remote", "elevenlabs") and self.tts_remote:
-            chain.append(self.tts_remote)
+        if eng in ("remote", "elevenlabs") and remote:
+            chain.append(remote)
         if eng == "vosk" and self.vosk_tts.ready and not self.vosk_tts.error and voice.get("prefer") != "piper":
             return [self.vosk_tts]                 # голос персонажа один: Vosk не справился с фразой — пропуск, не Piper
         vid = voice.get("piper", "ru_RU-denis-medium")
@@ -362,6 +369,19 @@ class RemoteMixin:
         if self.espeak.available():
             chain.append(self.espeak)
         return chain
+
+    def _listen_remote(self, eng):
+        """Голос сервера или ElevenLabs для «Прослушать», пока сам голос выключен «Текстовым режимом» (держим один)."""
+        key = (eng, str(self.s.get("tts", "remote")), str(self.s.get("tts", "eleven")))
+        got = getattr(self, "_listen_tts", None)
+        if got and got[0] == key:
+            return got[1]
+        from tts import ElevenTTS, RemoteTTS
+        tt = self.s.get("tts") or {}
+        t = RemoteTTS(tt["remote"]) if eng == "remote" and (tt.get("remote") or {}).get("base_url") else \
+            ElevenTTS(tt.get("eleven") or {}) if eng == "elevenlabs" and (tt.get("eleven") or {}).get("api_key") else None
+        self._listen_tts = (key, t)
+        return t
 
     def _remote_voice_down(self, eng, e):
         """Голос сервера не ответил, и фраза ушла запасному голосу. 23.10, владелец: «голос ужасен, что случилось?» —
@@ -536,7 +556,7 @@ class RemoteMixin:
                     chunks = queue.Queue()
                     if not put(("say", s, text, chunks)):
                         return
-                    for eng in ([locked] if locked is not None else self._engines_for_speech(voice)):
+                    for eng in ([locked] if locked is not None else self._engines_for_speech(voice, force)):
                         sent = False
                         try:
                             # высота голоса без отдельной обработки: синтезируем в 1/pitch раз быстрее, а играем с частотой

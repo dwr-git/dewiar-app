@@ -22,6 +22,7 @@
     <!-- «Близкие» на связи, когда приложение закрыто (CloseLive): служба переднего плана и просьба не усыплять -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <!-- обновление внутри приложения (Update.java): без браузера и без старых версий в «Загрузках» -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
@@ -92,6 +93,8 @@
              тип — remoteMessaging (0x200, Android 14): в framework-res сборки этого имени нет, поэтому здесь метка
              «camera|microphone|location», которую android/tools/fgs_type.py в собранном манифесте меняет на 0x200 -->
         <service android:name=".CloseLive" android:exported="false" android:foregroundServiceType="camera|microphone|location"/>
+        <!-- радио при погасшем экране (30.10): уведомление, кнопки машины и наушников -->
+        <service android:name=".RadioService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
         <!-- свой звук напоминаний — системе, чтобы уведомление его сыграло (только чтение, только этот файл) -->
         <provider android:name=".SoundProvider" android:authorities="pro.dewiar.app.sound" android:exported="true"/>
         <!-- скачанное обновление — установщику Android, только по выданному разрешению -->

@@ -55,13 +55,13 @@ def webview2():
     try:
         import winreg
         key = r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-        for root, sub in ((winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node" + key[8:]), (winreg.HKEY_LOCAL_MACHINE, key),
-                          (winreg.HKEY_CURRENT_USER, key)):
+        for root, sub, where in ((winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node" + key[8:], "машина, 32 бит"),
+                                 (winreg.HKEY_LOCAL_MACHINE, key, "машина, 64 бит"), (winreg.HKEY_CURRENT_USER, key, "пользователь")):
             try:
                 with winreg.OpenKey(root, sub) as k:
                     v = winreg.QueryValueEx(k, "pv")[0]
                     if v and v != "0.0.0.0":
-                        return v
+                        return f"{v} ({where})"          # №419: где записана — pywebview раньше не смотрел «машина, 64 бит»
             except OSError:
                 continue
     except Exception as e:  # noqa: BLE001

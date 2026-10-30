@@ -245,7 +245,7 @@ def _repeat(t):
     if m:
         return {"kind": "weekly", "days": [5, 6]}, (m.start(), m.end())
     # диапазон: «с понедельника по четверг», «пн-чт», «понедельник–четверг» (30.10)
-    m = re.search(r"\b(?:(?:каждую\s+неделю\s+)?с\s+(" + DAY_RX + r")\s+по\s+(" + DAY_RX + r")|(" + DAY_RX + r")\s*[-–—]\s*(" + DAY_RX + r"))\b", t)
+    m = re.search(r"\b(?:(?:каждую\s+неделю\s+)?со?\s+(" + DAY_RX + r")\s+по\s+(" + DAY_RX + r")|(" + DAY_RX + r")\s*[-–—]\s*(" + DAY_RX + r"))\b", t)
     if m:
         a, b = _day_of(m.group(1) or m.group(3)), _day_of(m.group(2) or m.group(4))
         if a is not None and b is not None and a != b:

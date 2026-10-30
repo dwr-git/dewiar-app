@@ -2,6 +2,22 @@
    Сетка обложек с номером, названием и длительностью; нажали — плеер поверх (видео с dewiar.pro/dwrapp/academy/ или
    YouTube в браузере). Список — academy_list (cloud.php ?p=/academy: только уроки, чьё видео уже загружено). */
 const LSN = { items: null };
+/* Урок в «?» раздела (30.10, владелец: «выручает вопросик на каждой странице… что если бы сразу и видео подходящее
+   смотреть? в каждом разделе минимум одно видео»). Какие разделы у урока — поле sections в academy/lessons.json на сайте
+   (новый урок встаёт в свой раздел без обновления программы); у сайта старше 0.72 полей нет — эта запасная таблица. */
+const LS_SECT = { "01-council": ["council"], "02-watch": ["watch"], "03-leads": ["sitechat", "clients"], "04-team": ["team"], "05-clients": ["clients"],
+  "06-mailing": ["mailing"], "07-posts": ["pbot"], "08-prompter": ["prompter"], "09-docs": ["docs", "folder"], "10-mail": ["connect"],
+  "11-jobs": ["reminders"], "12-morning": ["home", "calendar"], "13-money": ["pay", "family"], "14-tasks": ["tasks"] };
+async function lsList() {
+  if (Array.isArray(LSN.items)) return LSN.items;
+  if (typeof HM !== "undefined" && HM.ac && HM.ac.d && Array.isArray(HM.ac.d.items)) return (LSN.items = HM.ac.d.items);
+  try { LSN.items = (await core.call("academy_list")).items || []; } catch (e) { return []; }
+  return LSN.items;
+}
+async function lsFor(section) {
+  return (await lsList()).filter(l => (Array.isArray(l.sections) && l.sections.length ? l.sections : LS_SECT[l.id] || []).includes(section))
+    .sort((a, b) => a.n - b.n);
+}
 const lsMin = (s) => s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "";
 
 async function loadLessons() {
@@ -68,6 +84,7 @@ async function lsCodec() {
 
 (function lsInit() {
   if (!$("#p-lessons")) return;
+  if ($("#ls-dlg") && $("#ls-dlg").parentNode !== document.body) document.body.appendChild($("#ls-dlg"));
   if ($("#ls-codec")) $("#ls-codec").onclick = lsCodec;
   const close = () => { clearTimeout(LSN.t); const v = $("#ls-v"); v.pause(); v.removeAttribute("src"); v.load(); $("#ls-dlg").close(); };
   $("#ls-x").onclick = close;

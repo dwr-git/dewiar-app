@@ -301,7 +301,7 @@ async function hmmOpen(x) {
     const txt = String(r.text || "").trim();
     body.innerHTML = `<p class="hmm-to">${hmEsc(hmmAddr(r.from || x.from))}${r.to ? ` → ${hmEsc(r.to)}` : ""}</p><div class="hmm-text">${txt ? hmEsc(txt) : "<i>В письме нет текста.</i>"}</div>`
       + ((r.files || []).length ? `<p class="hmm-files">📎 ${r.files.map(hmEsc).join(" · ")}</p>` : "");
-    if (x.unread) x.unread = false;
+    if (x.unread) { x.unread = false; hmMail(); }        // открыли — прочитано и здесь, и на самой почте (mail_read отметил)
   } catch (e) { body.innerHTML = `<p class="hmm-err">Не открылось: ${hmEsc(e.message)}</p>`; }
 }
 if ($("#hmm-dlg")) {

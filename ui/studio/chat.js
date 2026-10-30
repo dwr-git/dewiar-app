@@ -143,10 +143,28 @@ function chatAsk(e) {
 }
 core.on("confirm", chatAsk).on("confirm_done", () => chatAsk(null));
 // текстовый режим: без микрофона и голоса (ядро запоминает прежний голос), «Выполнить?» — здесь, а не во всплывающем виджете
-function chatTmSync() { const c = $("#ch-tm"); if (c && typeof S !== "undefined" && S && S.ui) c.checked = !!S.ui.text_mode; }
+/* 30.10 (владелец, №421: «Лира перестала говорить» — режим включился случайным кликом): пока режим включён — строка
+   над лентой с кнопкой «Включить голос»; включить — только после вопроса */
+function chatTmSync() {
+  const c = $("#ch-tm"), on = !!(typeof S !== "undefined" && S && S.ui && S.ui.text_mode);
+  if (c) c.checked = on;
+  let bar = $("#ch-tmbar");
+  if (on && !bar) {
+    bar = document.createElement("div"); bar.id = "ch-tmbar"; bar.className = "ch-tmbar"; bar.setAttribute("role", "status");
+    bar.innerHTML = `<span><b>Текстовый режим</b> — голос и микрофон выключены, ответы только здесь.</span><button class="btn small" type="button">Включить голос</button>`;
+    const box = $("#ch-box"); if (box) box.insertBefore(bar, box.children[1] || null);
+    bar.querySelector("button").onclick = async () => { try { await core.call("text_mode", { on: false }); if (S && S.ui) S.ui.text_mode = false; chatTmSync();
+      $("#ch-res").textContent = "Голос и микрофон снова включены."; } catch (x) { toast(x.message); } };
+  }
+  if (bar) bar.hidden = !on;
+}
 $("#ch-tm").onchange = async (e) => {
   const on = e.target.checked;
-  try { await core.call("text_mode", { on }); $("#ch-res").textContent = on ? "Текстовый режим: микрофон и голос выключены, ответы и «Выполнить?» — здесь." : "Голос и микрофон снова включены."; }
+  if (on && !await ask("Включить текстовый режим? Голос и микрофон выключатся, ответы будут только текстом в «Чате». Вернуть — кнопкой «Включить голос».", { ok: "Включить", danger: false })) {
+    e.target.checked = false; return;
+  }
+  try { await core.call("text_mode", { on }); if (S && S.ui) S.ui.text_mode = on; chatTmSync();
+    $("#ch-res").textContent = on ? "Текстовый режим: микрофон и голос выключены, ответы и «Выполнить?» — здесь." : "Голос и микрофон снова включены."; }
   catch (x) { e.target.checked = !on; $("#ch-res").textContent = x.message; }
 };
 core.on("settings", () => setTimeout(chatTmSync, 0));

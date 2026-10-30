@@ -1562,16 +1562,17 @@ class ToolsMixin:
     # ---------- деньги: «купил … за …», «получил зарплату …», «сколько я потратил …» ----------
 
     def _default_currency(self):
-        """Валюта из настроек, иначе догадка по часовому поясу системы (Минск, Киев, Алматы), по умолчанию RUB."""
+        """Валюта из настроек («Календарь» → «Деньги» → «Валюта»), иначе — страна из настроек системы."""
         c = (self.s.get("money", "currency") or "").strip().upper()
-        if c:
-            return c
-        try:
-            tz = Path("/etc/timezone").read_text().strip() if Path("/etc/timezone").exists() else os.path.realpath("/etc/localtime")
-        except OSError:
-            tz = ""
-        tz = tz or time.tzname[0]
-        return "BYN" if "Minsk" in tz else "UAH" if "Kiev" in tz or "Kyiv" in tz else "KZT" if "Almaty" in tz else "RUB"
+        return c or self._auto_currency()
+
+    def _auto_currency(self):
+        """Догадка по системе (регион Windows, язык и формат, часовой пояс; №422: на Windows раньше всегда выходили рубли
+        — пояс искался только как на Linux). Считается раз за запуск."""
+        if getattr(self, "_auto_cur", None) is None:
+            from money import region_currency
+            self._auto_cur = region_currency("RUB")
+        return self._auto_cur
 
     def _money_cmd(self, text, via=None):
         """Записать доход/расход, отменить последнюю запись (не старше 3 дней) или ответить «сколько потратил».
@@ -1807,7 +1808,8 @@ class ToolsMixin:
             v.sort(key=lambda x: (x.get("time") or "99", x["type"]))
         return {"year": year, "month": month, "days": days,
                 "money": self.money.summary(first.date().isoformat(), last.date().isoformat()),
-                "currency": self._default_currency()}
+                "currency": self._default_currency(), "currency_auto": self._auto_currency(),
+                "currency_set": (self.s.get("money", "currency") or "").strip().upper()}
 
     def _reminder_log(self):
         """Журнал сработавших напоминаний (reminders-log.json, последние 2000): [{at, text, kind, id}]."""

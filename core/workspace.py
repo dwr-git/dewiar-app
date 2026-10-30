@@ -123,8 +123,32 @@ NOTE_LINK_RX = re.compile(r"(?:📎\s*)?(!?)\[[^\]\n]*\]\((Вложения/[^)\
 FRONT_RX = re.compile(r"\A\ufeff?(-{2,3})[ \t]*\n((?:[ \t]*(?:[\w\-а-яёА-ЯЁ]+[ \t]*:.*|-[ \t].*|)\n)*?)\1[ \t]*(?:\n|\Z)")
 
 
+# 30.10, №425: «заметки из Google Keep — пропали метки и цвета». До 0.69 заметка, вернувшаяся с телефона, получала
+# заголовок «# Название» ПЕРЕД шапкой «---» (sync.py ставил его в начало) — шапка переставала быть шапкой: метки и цвет
+# пропадали, а сама шапка показывалась текстом. Такие файлы так и остались на дисках — читаем их и чиним порядок.
+HEAD_FRONT_RX = re.compile(r"\A\ufeff?(#[^\n]*)\n(?:[ \t]*\n)*(?=-{2,3}[ \t]*\n)")
+
+
+def front_first(text):
+    """«# Название\n\n---\nшапка\n---\n…» → «---\nшапка\n---\n\n# Название…» (если после шапки свой заголовок уже есть —
+    наружный не повторяется). Остальное — как было. -> текст."""
+    t = str(text or "")
+    h = HEAD_FRONT_RX.match(t)
+    if not h:
+        return t
+    m = FRONT_RX.match(t[h.end():])
+    if not m or not m.group(2).strip():
+        return t
+    front, rest = t[h.end():h.end() + m.end()], t[h.end() + m.end():]
+    head = h.group(1).strip()
+    if rest.lstrip("\n").startswith("#"):              # после шапки свой заголовок уже есть — наружный был лишним
+        return front + rest
+    return front + "\n" + head + "\n\n" + rest.lstrip("\n")
+
+
 def note_front(text):
     """-> (шапка как словарь, текст без шапки). Без шапки — ({}, text). Значения — строки; список меток — tags."""
+    text = front_first(text)
     m = FRONT_RX.match(str(text or ""))
     if not m or not m.group(2).strip():
         return {}, str(text or "")
@@ -188,7 +212,7 @@ _FRONT_KEYS = {"tags": ("tags", "tag", "labels", "метки"), "color": ("color
 def note_front_set(text, patch):
     """Поменять в шапке заметки метки, цвет, «закреплено», «в архиве» (patch: tags [..], color «TEAL»|«», pinned, archived) —
     остальное в шапке (source, id, свои поля Obsidian) остаётся как было. Пустая шапка — убирается."""
-    text = str(text or "")
+    text = front_first(str(text or ""))
     m = FRONT_RX.match(text)
     delim, lines, rest = (m.group(1), m.group(2).splitlines(), text[m.end():]) if m and m.group(2).strip() else ("---", [], text)
     drop = {k for name, keys in _FRONT_KEYS.items() if name in patch for k in keys}
@@ -393,6 +417,17 @@ class Workspace:
                 text = f.read_text(encoding="utf-8", errors="replace")[:200_000]
             except OSError:
                 continue
+            if HEAD_FRONT_RX.match(text) and st.st_size <= 200_000:      # №425: шапка после заголовка — вернуть наверх
+                fixed = front_first(text)
+                if fixed != text:
+                    try:
+                        tmp = f.with_name(f.name + ".tmp")
+                        tmp.write_text(fixed, encoding="utf-8")
+                        os.replace(tmp, f)
+                        os.utime(f, (st.st_atime, st.st_mtime))      # место в списке — прежнее
+                        text = fixed
+                    except OSError:
+                        pass
             meta, text = note_front(text)                  # шапка «---» (Obsidian, Google Keep) — не в отрывок
             body = re.sub(r"^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?", "", text.lstrip()).strip()     # без заголовка и даты
             folder = "/".join(f.relative_to(base).parts[:-1])

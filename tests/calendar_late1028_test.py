@@ -99,6 +99,7 @@ class Eng:
         self.calendars = types.SimpleNamespace(events=lambda a, b: [])
     def _run_job(self, item): self.ran.append(item["text"])
     def _default_currency(self): return "BYN"
+    def _auto_currency(self): return "BYN"
 
 
 E = Eng()

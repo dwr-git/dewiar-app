@@ -727,6 +727,8 @@ html.framed .drawer { top: 38px; }               /* боковые панели 
 #o-view .otext { padding: 14px 16px; max-height: 60vh; overflow: auto; font-size: 13.5px; white-space: pre-wrap; }
 /* ---------- Календарь и деньги ---------- */
 .calbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.mo-cur { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.mo-cur select { max-width: 320px; min-width: 260px; }
 .calbar b#cal-title { font: 600 18px/1 "Unbounded", "Manrope", sans-serif; margin: 0 8px; text-transform: capitalize; }
 .btn.icon { width: 36px; height: 36px; padding: 0; font-size: 20px; line-height: 1; }
 .btn.small { padding: 6px 12px; font-size: 13px; }
@@ -2467,15 +2469,21 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 .qa-rows { display: flex; flex-direction: column; gap: 8px; }
 .qa-row { text-align: left; border: 0; cursor: pointer; font: inherit; color: var(--ink); padding: 12px 16px; border-radius: 16px; background: var(--glass); box-shadow: var(--raise-s, none); display: flex; flex-direction: column; gap: 3px; }
 .qa-row b { font-size: 14.5px; } .qa-row small { color: var(--muted); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.qa-row.on { box-shadow: inset 0 0 0 2px var(--accent), var(--raise-s, none); }
+/* выбранная статья — без обводки (владелец не любит рамки у активного): подложка цвета темы и заголовок тем же цветом */
+.qa-row { transition: background .15s; }
+.qa-row.on { background: color-mix(in srgb, var(--accent) 14%, var(--glass)); }
+.qa-row.on b { color: color-mix(in srgb, var(--accent) 75%, var(--ink)); }
 .qa-none { color: var(--muted); font-size: 14px; line-height: 1.5; }
 .qa-art { padding: 24px; border-radius: 24px; background: var(--glass); box-shadow: var(--raise-s, none); display: flex; flex-direction: column; gap: 10px; position: sticky; top: 16px; }
 .qa-art:empty { display: none; }
 .qa-meta { color: var(--muted); font-weight: 700; font-size: 12.5px; }
-.qa-art h2 { margin: 0; font-size: 20px; line-height: 1.3; } .qa-art h4 { margin: 8px 0 0; font-size: 13.5px; }
+.qa-art h2 { margin: 0; font-size: 20px; line-height: 1.3; color: var(--h1c, var(--ink)); } .qa-art h4 { margin: 8px 0 0; font-size: 13.5px; }
 .qa-lead { margin: 0; font-size: 14.5px; line-height: 1.55; }
 .qa-how, .qa-tips { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; }
 .qa-tips { color: var(--muted); }
+.qa-art.nt-body .qa-lead { color: var(--ink); }
+html .qa-art.nt-body[data-cs="theme"] { --mk: var(--accent); }   /* точки списка — тоже цветом темы (светлая тема иначе даёт охру блокнота) */
+.qa-art .qa-how b, .qa-art .qa-tips b { font-weight: 600; }
 .qa-say { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .qa-say h4 { margin: 0; color: var(--accent); }
 .qa-try { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 0; background: none; padding: 4px 0; cursor: pointer; font: inherit; font-size: 14px; color: var(--ink); text-align: left; }
@@ -3909,3 +3917,45 @@ html.st-light .hmm-dlg { background: #f6f8fc; box-shadow: 0 30px 80px -20px rgba
 .hmm-acts { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 20px 18px; }
 .hmm-x { color: var(--ink); background: rgba(127,127,140,.13); }
 .hmm-dlg { position: fixed; inset: 0; margin: auto; height: fit-content; }
+
+/* «Текстовый режим» в «Чате» (30.10, №421): заметная строка с кнопкой «Включить голос» */
+.ch-tmbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 14px 4px;
+  padding: 8px 8px 8px 16px; border-radius: 16px; font-size: 13.5px; color: var(--ink); background: rgba(255,190,90,.12); }
+.ch-tmbar .btn { flex: none; }
+.ch-tmbar[hidden] { display: none; }
+.ch-tmbar b { color: #c77f12; }
+html:not(.st-light) .ch-tmbar b { color: #ffcf7a; }
+
+/* «?» раздела: видеоурок сверху (30.10; владелец: «видео показывать как можно красивее — чтобы нажать хотелось»):
+   обложка во всю ширину, длительность, светящаяся ▶; второй урок — строкой поменьше */
+#help .hls { display: flex; flex-direction: column; gap: 10px; margin: 2px 0 8px; }
+#help .hl { display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 0 0 12px; border: 0; border-radius: 20px; cursor: pointer; text-align: left;
+  font: inherit; color: var(--ink); background: rgba(127,127,140,.09); overflow: hidden; transition: background .2s, box-shadow .2s; }
+#help .hl:hover { background: rgba(127,127,140,.15); }
+#help .hl:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--brand); }
+.hl-pic { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; background: #151726 center / cover no-repeat; overflow: hidden; }
+.hl-pic::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(10,12,22,.35)); transition: opacity .2s; }
+.hl-pic.none { background: radial-gradient(120% 90% at 20% 10%, #8b7bff 0%, #5b6cf0 45%, #2b2f6b 100%); display: grid; place-items: end start; }
+.hl-ttl { position: relative; z-index: 1; margin: 0 0 16px 18px; font: 600 22px/1.15 "Unbounded", "Manrope", sans-serif; color: #fff; max-width: 70%; }
+.hl-dur { position: absolute; z-index: 2; top: 10px; left: 10px; padding: 3px 9px; border-radius: 99px; font: 700 12px "Manrope", sans-serif; font-style: normal;
+  font-variant-numeric: tabular-nums; color: #fff; background: rgba(10,12,22,.55); backdrop-filter: blur(6px); }
+/* «Смотреть» — справа внизу обложки, чтобы не закрывать героя мультфильма в центре */
+.hl-play { position: absolute; z-index: 2; right: 12px; bottom: 12px; height: 40px; padding: 0 16px 0 12px; border-radius: 99px; display: inline-flex;
+  align-items: center; gap: 6px; font: 700 13.5px "Manrope", sans-serif; font-style: normal; color: #fff;
+  background: linear-gradient(145deg, #8b7bff, #5b6cf0); box-shadow: 0 10px 26px -6px rgba(91,108,240,.8), 0 0 0 4px rgba(255,255,255,.18);
+  transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s; }
+.hl-play svg { width: 16px; height: 16px; fill: #fff; }
+#help .hl:hover .hl-play, #help .hl:focus-visible .hl-play { transform: translateY(-2px); box-shadow: 0 14px 32px -6px rgba(91,108,240,.95), 0 0 0 6px rgba(255,255,255,.22); }
+.hl-t { display: flex; flex-direction: column; gap: 2px; padding: 0 16px; min-width: 0; }
+.hl-t small { font-size: 12px; color: var(--muted); }
+.hl-t b { font: 600 16px/1.3 "Unbounded", "Manrope", sans-serif; color: var(--ink); }
+.hl-t > span { font-size: 13px; color: var(--muted); line-height: 1.45; }
+/* второй урок — строкой: обложка слева */
+#help .hl.sm { flex-direction: row; align-items: center; padding: 8px; gap: 12px; border-radius: 16px; }
+#help .hl.sm .hl-pic { flex: none; width: 120px; border-radius: 10px; }
+#help .hl.sm .hl-ttl { font-size: 12px; margin: 0 0 8px 10px; }
+#help .hl.sm .hl-play { inset: 0; margin: auto; width: 34px; height: 34px; padding: 0; justify-content: center; box-shadow: 0 0 0 4px rgba(255,255,255,.16); }
+#help .hl.sm .hl-play span { display: none; } #help .hl.sm .hl-play svg { width: 14px; height: 14px; margin-left: 2px; }
+#help .hl.sm .hl-dur { top: 6px; left: 6px; font-size: 10.5px; padding: 2px 7px; }
+#help .hl.sm .hl-t { padding: 0; } #help .hl.sm .hl-t b { font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .hl-play { transition: none; } }

@@ -11,7 +11,38 @@
 const CT = { event: ["Встречи", "#4FC3FF"], reminder: ["Напоминания", "#FFC978"], money: ["Деньги", "#4BE3A1"], note: ["Заметки", "#8B8CF7"],
              diary: ["Дневник", "#5EE0B5"], task: ["Задачи", "#FF7AB6"] };
 const MON_RU = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
-const CUR_SIGN = { BYN: "руб.", RUB: "₽", USD: "$", EUR: "€", PLN: "zł", UAH: "₴", KZT: "₸", CNY: "¥" };
+const CUR_SIGN = { BYN: "руб.", RUB: "₽", USD: "$", EUR: "€", PLN: "zł", UAH: "₴", KZT: "₸", CNY: "¥", UZS: "сум", KGS: "сом", AMD: "֏",
+  GEL: "₾", AZN: "₼", MDL: "лей", GBP: "£", ILS: "₪", CZK: "Kč", TRY: "₺" };
+// выбор валюты в «Деньгах» (30.10, №422: «на ПК валюту не переопределяет — и нет возможности самому выбирать валюту»)
+const CUR_NAME = { BYN: "Белорусский рубль", RUB: "Российский рубль", UAH: "Гривна", KZT: "Тенге", USD: "Доллар США", EUR: "Евро",
+  PLN: "Злотый", UZS: "Узбекский сум", KGS: "Киргизский сом", AMD: "Армянский драм", GEL: "Грузинский лари", AZN: "Азербайджанский манат",
+  MDL: "Молдавский лей", GBP: "Фунт стерлингов", ILS: "Шекель", CZK: "Чешская крона", TRY: "Турецкая лира", CNY: "Юань" };
+const CUR_MANY = { BYN: "белорусских рублях", RUB: "российских рублях", UAH: "гривнах", KZT: "тенге", USD: "долларах", EUR: "евро",
+  PLN: "злотых", UZS: "сумах", KGS: "сомах", AMD: "драмах", GEL: "лари", AZN: "манатах", MDL: "леях", GBP: "фунтах", ILS: "шекелях",
+  CZK: "кронах", TRY: "лирах", CNY: "юанях" };
+function moCurFill() {
+  const sel = $("#mo-cur"); if (!sel || !calData) return;
+  const auto = calData.currency_auto || calData.currency || "RUB", set = calData.currency_set || "";
+  sel.innerHTML = `<option value="">Как в системе — ${escH(CUR_NAME[auto] || auto)}</option>`
+    + Object.keys(CUR_NAME).map(c => `<option value="${c}">${escH(CUR_NAME[c])} · ${escH(CUR_SIGN[c] || c)}</option>`).join("");
+  sel.value = set;
+}
+async function moCurSet(v) {
+  const prev = (calData && calData.currency) || "", next = v || (calData && calData.currency_auto) || "RUB";
+  await save({ money: { currency: v } }, true);
+  if (calData) { calData.currency_set = v; calData.currency = next; }
+  toast(`Траты без названной валюты — в: ${(CUR_NAME[next] || next).toLowerCase()}`, 2600);
+  // прежние записи в старой валюте — скорее всего, та же ошибка: предложить поменять валюту (суммы те же)
+  let n = 0;
+  try { n = (await core.call("money_list", { from: "2000-01-01", to: "2100-12-31" })).filter(x => x.currency === prev).length; } catch (e) { /* без списка — без вопроса */ }
+  if (prev && prev !== next && n && await ask(`Записи в ${CUR_MANY[prev] || prev} (${n}) — на самом деле в ${CUR_MANY[next] || next}? Поменять у них валюту: суммы останутся теми же.`,
+      { ok: "Поменять", cancel: "Оставить как есть", danger: false })) {
+    try { const r = await core.call("money_relabel", { from: prev, to: next }); toast(`Поменял валюту у ${r.changed} ${plural(r.changed, "записи", "записей", "записей")}`, 2600); }
+    catch (e) { toast(e.message); }
+  }
+  loadMoney();
+}
+if ($("#mo-cur")) $("#mo-cur").onchange = (e) => moCurSet(e.target.value);
 let calY = null, calM = null, calSel = "", calData = null, calOff = new Set(), calTab = "month", moPer = "month";
 const isoD = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parseD = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -291,6 +322,8 @@ function perRange(p) {
 }
 const CAT_COL = ["#8B8CF7", "#FF8FA8", "#FFC978", "#5EE0B5", "#4FC3FF", "#B78CFF", "#FF7AB6", "#9FE870", "#F59E6B", "#7DD3FC"];
 async function loadMoney() {
+  if (!calData) { try { calData = await core.call("calendar_month", {}); } catch (e) { /* валюта — по записям */ } }
+  moCurFill();
   const [f, t] = perRange(moPer);
   let sm, list;
   try { [sm, list] = await Promise.all([core.call("money_summary", { from: f, to: t }), core.call("money_list", { from: f, to: t })]); }

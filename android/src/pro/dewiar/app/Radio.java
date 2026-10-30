@@ -40,11 +40,15 @@ final class Radio implements AudioManager.OnAudioFocusChangeListener {
         return inst;
     }
 
+    /** Проигрыватель, если он уже есть (кнопки уведомления и машины — RadioService). */
+    static synchronized Radio current() { return inst; }
+
     private AudioManager am() { return (AudioManager) c.getSystemService(Context.AUDIO_SERVICE); }
 
     private void emit() {
         android.util.Log.i("Dewiar", "радио: " + state + " «" + name + "» " + error + " " + url);
         try { sink.event("radio", new JSONObject().put("state", state).put("name", name).put("error", error).put("by", by)); } catch (Exception ignored) { }
+        RadioService.sync(c, state, name, by);           // 30.10: играет — служба переднего плана, иначе с погасшим экраном звук обрывается
     }
 
     private void applyVolume() {

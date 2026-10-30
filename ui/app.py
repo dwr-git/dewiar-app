@@ -3434,6 +3434,11 @@ def main_win(args, extra):
 
     def on_start():
         started.set()
+        try:                                    # каким движком открылись окна (№419: MSHTML вместо WebView2 — виджет не грузился)
+            from webview.platforms import winforms as _wf
+            print(f"Окна: {getattr(_wf, 'renderer', '?')}", file=sys.stderr)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             api.start_hud(mode, x, y)
             if start_in_tray(uis, args):
@@ -3526,6 +3531,7 @@ def main_win(args, extra):
         studio_in_browser()
 
     print(f"Виджет: {api._url('hud.html').split('?')[0]}", file=sys.stderr)
+    wv2_registry_fix()
     try:
         webview.start(on_start, gui="edgechromium", debug=bool(os.environ.get("DEWIAR_UI_DEBUG")))
     except Exception as e:  # noqa: BLE001 — нет WebView2: ассистент работает, студия — в браузере
@@ -3534,6 +3540,35 @@ def main_win(args, extra):
         studio_in_browser()
         threading.Event().wait()
     api.quit_all()
+
+
+def wv2_registry_fix():
+    """№419 (30.10, Windows 11 сборки 28000, WebView2 156): pywebview ищет WebView2 в реестре только в ключе пользователя и
+    в 32-битной части машины (WOW6432Node), а на новых сборках Windows среда бывает записана только в 64-битной части
+    (SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{…}) — pywebview решал «WebView2 нет», открывал окна старым MSHTML (Internet
+    Explorer), страница виджета в нём не работает — окна прятались, «Dewiar не запускается». Наша диагностика (doctor.py)
+    смотрит все три места; здесь даём их и pywebview: не нашлось в WOW6432Node — ищем тот же ключ без него."""
+    try:
+        import winreg
+    except ImportError:
+        return
+    if getattr(winreg, "_dewiar_wv2", False):
+        return
+    orig = winreg.OpenKey
+
+    def open_key(key, sub_key, *a, **k):
+        try:
+            return orig(key, sub_key, *a, **k)
+        except OSError:
+            s = str(sub_key)
+            if "WOW6432Node\\Microsoft\\EdgeUpdate\\Clients" in s:
+                return orig(key, s.replace("WOW6432Node\\", ""), *a, **k)
+            raise
+    try:
+        winreg.OpenKey = open_key
+        winreg._dewiar_wv2 = True
+    except (AttributeError, TypeError):
+        pass
 
 
 if __name__ == "__main__":

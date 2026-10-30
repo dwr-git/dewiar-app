@@ -1164,7 +1164,7 @@ def t_read_emails(a, ctx):
 def t_read_email(a, ctx):
     from mail import MailError
     try:
-        m = _mail(ctx).read(a.get("uid", ""))
+        m = _mail(ctx).read(a.get("uid", ""), mark=True)    # прочитали человеку — и на почте «прочитано»
     except MailError as e:
         raise ToolError(str(e)) from e
     return (f"От: {m['from']}\nКому: {m['to']}\nТема: {m['subject']}\nДата: {m['date']}\n"

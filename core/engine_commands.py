@@ -993,7 +993,7 @@ class CommandsMixin:
                     items = self.mail.inbox(max(1, min(int(a.get("limit") or 5), 20)))
                     return {"on": True, "items": [{k: x.get(k) for k in ("uid", "from", "subject", "date", "snippet", "unread", "files", "box")} for x in items]}
                 if cmd == "mail_read":
-                    return self.mail.read(str(a.get("uid") or ""))
+                    return self.mail.read(str(a.get("uid") or ""), mark=a.get("mark", True) is not False)
                 if cmd == "mail_test":
                     return self.mail.test(int(a.get("box") or 0))
                 if cmd == "mail_send_test":
@@ -1103,6 +1103,8 @@ class CommandsMixin:
                     r = m.update(a.get("id", ""), a.get("patch") or {})
                 elif cmd == "money_delete":
                     r = m.delete(a.get("id", ""))
+                elif cmd == "money_relabel":                   # ошибочная валюта у записей — исправить разом (№422)
+                    r = {"changed": m.relabel(a.get("from"), a.get("to"))}
                 else:
                     raise ValueError("неизвестная команда")
                 self.emit("money_saved", **(r or {}))
@@ -1541,7 +1543,9 @@ class CommandsMixin:
                 self.s.update({"ui": {"text_mode": True, "text_prev": prev if prev and prev != "off" else (ui.get("text_prev") or "")},
                                "tts": {"engine": "off"}})
                 self.set_mute(True)
+                log.info("⌨ Текстовый режим включён — голос и микрофон выключены (прежний голос: %s)", prev or "—")
             else:
+                log.info("🔊 Текстовый режим выключен — голос (%s) и микрофон снова включены", ui.get("text_prev") or self._tts_local())
                 self.s.update({"ui": {"text_mode": False}, "tts": {"engine": ui.get("text_prev") or self._tts_local()}})
                 if self.s.get("privacy", "mic") != "button":
                     self.set_mute(False)

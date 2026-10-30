@@ -130,7 +130,13 @@ for (const fx of ["bars", "pulse", "wave"]) for (const tone of ["mono", "color"]
     pg.evaluate("openSettings('look')"); pg.wait_for_timeout(400)
     ok(pg.evaluate("$$('.skm').length") >= 20 and pg.evaluate("$$('.skm[data-skin=snow]').length") == 1
        and pg.evaluate("$('.skm.on').dataset.skin") == "neusky", "телефон: все темы — круглыми образцами (группы — в подсказке), и светлые тоже; выбранная отмечена")
+    # 30.10 (отзыв «не видно всё сразу»): «Сейчас — …» сверху, сетка — прежняя
+    ok(pg.locator(".skins").count() == 1, "телефон: темы — одной ровной сеткой (группы с подписями владельцу показались неаккуратными)")
+    ok("Сейчас — Небесный" in pg.inner_text("#sk-now"), f"сверху — какая тема сейчас: {pg.inner_text('#sk-now')!r}")
+    if os.environ.get("DEWIAR_SHOTS"):
+        pg.screenshot(path=os.environ["DEWIAR_SHOTS"] + "/phone-skins.png", full_page=True)
     pg.click('.skm[data-skin="neon"]'); pg.select_option("#ap-fx", "pulse"); pg.wait_for_timeout(300)
+    ok("Сейчас — Неон" in pg.inner_text("#sk-now"), "выбрали — строка сверху обновилась")
     ph1 = pg.evaluate("() => [document.body.className, orb.tone, orb.fx, S.skin, S.voice_fx]")
     ok("skin-neon" in ph1[0] and ph1[1:] == ["color", "pulse", "neon", "pulse"], f"телефон: тема и анимация меняются и запоминаются: {ph1}")
     pg.click('.skm[data-skin="snow"]'); pg.wait_for_timeout(300)

@@ -296,8 +296,9 @@ class MusicMixin:
         self.health_problem(f"Дело по расписанию: {text[:200]}", kind="job")
         # модели не хватает окна контекста — настройка, а не случайность: повтор через 5 и 15 минут упадёт так же
         # (отчёт №407, 29.10: 173 неудачи дела за сутки — каждое по три раза)
-        from llm import CTX_TEXT
-        permanent = CTX_TEXT[:40] in text
+        # и деньги на ключе сервиса кончились (пакет 30.10: 16 неудач за день у одного дела) — до пополнения тоже
+        from llm import CTX_TEXT, NO_MONEY_TEXT
+        permanent = CTX_TEXT[:40] in text or NO_MONEY_TEXT[:40] in text
         if attempt < len(self.JOB_RETRY_MIN) and not permanent:
             log.info("🗓 «%s» не удалось (%s) — повторю через %d мин", title, text[:120], self.JOB_RETRY_MIN[attempt])
             if not self.stopping.wait(self.JOB_RETRY_MIN[attempt] * 60 * float(os.environ.get("DEWIAR_JOB_RETRY_SCALE", "1"))):

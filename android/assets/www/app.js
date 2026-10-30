@@ -2745,7 +2745,7 @@ function wordsNum(s) {
 const DOW = { "понедельник": 1, "вторник": 2, "сред": 3, "четверг": 4, "пятниц": 5, "суббот": 6, "воскресень": 0 };
 /* -> {at: Date, repeat: ""|daily|weekdays|weekly, rel?, rest} или null — времени во фразе нет. rest — фраза без слов о времени
    (из неё берут, о чём напомнить). Только время без дня и оно уже прошло — завтра; день без времени — 9:00. */
-function parseWhen(t, now = new Date()) {
+function parseWhen(t, now = new Date(), again = false) {
   t = " " + String(t || "").toLowerCase().replace(/ё/g, "е") + " ";
   let m = t.match(/через\s+(?:(\S+(?:\s+(?:и\s+)?\S+)?)\s+)?(секунд[а-яё]*|минут[а-яё]*|час[а-яё]*|полчаса|полтора часа)/);
   if (m) {
@@ -2757,9 +2757,14 @@ function parseWhen(t, now = new Date()) {
   let day = new Date(now), hasDay = false, repeat = "", dowToday = false;
   if (/каждый день|ежедневно|каждое утро|каждый вечер/.test(t)) { repeat = "daily"; hasDay = true; }
   else if (/по будням|в будни/.test(t)) { repeat = "weekdays"; hasDay = true; }
+  const wdays = whenDays(t, repeat === "daily" ? [0, 1, 2, 3, 4, 5, 6] : repeat === "weekdays" ? [0, 1, 2, 3, 4] : null, again);
+  let dset = null;
+  if (wdays) { t = wdays.t; dset = wdays.days; repeat = repNorm(dset); hasDay = true;
+    if (repeat === "weekly") { const d = (dset[0] + 1) % 7; day = new Date(now); day.setDate(now.getDate() + ((d - now.getDay() + 7) % 7)); dset = null; } }
   if (/послезавтра/.test(t)) { day.setDate(day.getDate() + 2); hasDay = true; }
   else if (/завтра/.test(t)) { day.setDate(day.getDate() + 1); hasDay = true; }
   for (const [k, v] of Object.entries(DOW)) {
+    if (wdays) break;                                   // дни повтора уже из фразы («пн-чт», «кроме пятницы»)
     const r = new RegExp("(?:в|во|каждый|каждую|каждое|по)\\s+" + k);
     // «в пятницу» в пятницу — сегодня, если час ещё впереди, иначе через неделю (как when.py на компьютере; 16.10)
     if (r.test(t)) { const d = (v - now.getDay() + 7) % 7; day = new Date(now); day.setDate(now.getDate() + d); hasDay = true; dowToday = d === 0; if (/кажд|по\s/.test(t.match(r)[0])) repeat = "weekly"; break; }
@@ -2792,15 +2797,79 @@ function parseWhen(t, now = new Date()) {
   if (!hasDay && day <= now) day.setDate(day.getDate() + 1);
   if (dowToday && !repeat && day <= now) day.setDate(day.getDate() + 7);
   if (repeat && day <= now) day.setDate(day.getDate() + (repeat === "weekly" ? 7 : 1));
+  if (repeat) day = rollRepeat(day, repeat);            // первый раз — в подходящий день («кроме пятницы», сказанное в пятницу)
   return { at: day, repeat, rest: t.replace(m ? m[0] : "", " ") };
 }
 const whenText = (d) => { const now = new Date(), tm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const dd = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
   return dd === 0 ? "сегодня в " + tm : dd === 1 ? "завтра в " + tm : dd === 2 ? "послезавтра в " + tm : `${d.getDate()} ${MON[d.getMonth()]} в ${tm}`; };
 const REP_RU = { daily: "каждый день", weekdays: "по будням", weekly: "каждую неделю" };
+/* Повтор по дням недели (30.10, владелец: «просил по будням, кроме пятницы» — на компьютере сделано в 0.71, а телефон
+   такой повтор не понимал: звонил раз и ждал следующий срок от компьютера). Строка «d:0123» — дни как в Python
+   (понедельник = 0): так же хранит Alarms.java и считает следующий раз, даже когда приложение закрыто. */
+const DAYRX = "(?:понедельник[а-я]*|вторник[а-я]*|сред[аеуы][а-я]*|четверг[а-я]*|пятниц[а-я]*|суббот[а-я]*|воскресень[а-я]*|пн|вт|ср|чт|пт|сб|вс)";
+const DAYP = [["понедельник", 0], ["вторник", 1], ["сред", 2], ["четверг", 3], ["пятниц", 4], ["суббот", 5], ["воскресень", 6]];
+const DAYS2 = { "пн": 0, "вт": 1, "ср": 2, "чт": 3, "пт": 4, "сб": 5, "вс": 6 };
+const wdN = (w) => { w = String(w || "").trim(); if (w in DAYS2) return DAYS2[w]; const f = DAYP.find(([p]) => w.startsWith(p)); return f ? f[1] : null; };
+const daysIn = (s) => [...new Set((String(s).match(new RegExp(DAYRX, "g")) || []).map(wdN).filter(d => d != null))].sort();
+/* дни -> строка повтора: все — daily, пн–пт — weekdays, один — weekly, иначе «d:…» */
+function repNorm(days) {
+  const d = [...new Set(days)].filter(x => x >= 0 && x <= 6).sort();
+  if (!d.length) return "";
+  if (d.length === 7) return "daily";
+  if (d.join("") === "01234") return "weekdays";
+  if (d.length === 1) return "weekly";
+  return "d:" + d.join("");
+}
+/* строка повтора -> дни (понедельник = 0); weekly — день самого напоминания */
+function repDays(rep, at) {
+  if (rep === "daily") return [0, 1, 2, 3, 4, 5, 6];
+  if (rep === "weekdays") return [0, 1, 2, 3, 4];
+  if (rep === "weekly") return [(new Date(at || Date.now()).getDay() + 6) % 7];
+  if (/^d:[0-6]+$/.test(rep || "")) return [...rep.slice(2)].map(Number);
+  return [];
+}
+const DGEN = ["понедельника", "вторника", "среды", "четверга", "пятницы", "субботы", "воскресенья"];
+const DACC = ["понедельник", "вторник", "среду", "четверг", "пятницу", "субботу", "воскресенье"];
+const DDAT = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"];
+/* как сказать повтор: «по будням, кроме пятницы», «с понедельника по четверг», «по понедельникам и средам» */
+function repRu(rep) {
+  if (!rep) return "";
+  if (REP_RU[rep]) return REP_RU[rep];
+  const d = repDays(rep); if (!d.length) return "";
+  const wd = [0, 1, 2, 3, 4], miss = wd.filter(x => !d.includes(x));
+  if (d.every(x => x < 5) && d.length === 4) return `по будням, кроме ${DGEN[miss[0]]}`;
+  if (d.length === 6) return `каждый день, кроме ${DGEN[[0, 1, 2, 3, 4, 5, 6].find(x => !d.includes(x))]}`;
+  if (d.join("") === "56") return "по выходным";
+  if (d.length >= 3 && d[d.length - 1] - d[0] === d.length - 1) return `${d[0] === 1 ? "со" : "с"} ${DGEN[d[0]]} по ${DACC[d[d.length - 1]]}`;
+  return "по " + d.map(x => DDAT[x]).join(", ").replace(/, ([^,]+)$/, " и $1");
+}
+/* дни повтора из фразы (как _repeat и _except_days в core/when.py): диапазон «с понедельника по четверг» / «пн-чт»,
+   «по выходным», «по понедельникам и средам»; потом «кроме пятницы», «но не в среду». -> {days, t} или null; найденное
+   из фразы стёрто, чтобы «в среду» из «но не в среду» не приняли за день срабатывания */
+function whenDays(t, base, again) {
+  let days = base ? base.slice() : null, m;
+  if ((m = t.match(new RegExp("\\s(?:каждую\\s+неделю\\s+)?со?\\s+(" + DAYRX + ")\\s+по\\s+(" + DAYRX + ")(?=[\\s,.])"))) ||
+      (m = t.match(new RegExp("\\s(" + DAYRX + ")\\s*[-–—]\\s*(" + DAYRX + ")(?=[\\s,.])")))) {
+    const a = wdN(m[1]), b = wdN(m[2]);
+    if (a != null && b != null && a !== b) { days = []; for (let i = a; ; i = (i + 1) % 7) { days.push(i); if (i === b) break; } t = t.replace(m[0], " "); }
+  } else if ((m = t.match(/\s(?:по\s+выходным|в\s+выходные|каждые\s+выходные)(?=[\s,.])/))) { days = [5, 6]; t = t.replace(m[0], " "); }
+  else if ((m = t.match(/\s(?:кажд(?:ый|ую|ое)|по)\s+((?:(?:понедельник|вторник|сред|четверг|пятниц|суббот|воскресень)[а-я]*(?:\s*(?:,|и)\s*)?){2,})/))) {
+    const d = daysIn(m[1]); if (d.length >= 2) { days = d; t = t.replace(m[0], " "); }
+  }
+  if ((m = t.match(new RegExp("(?:,\\s*|\\s)(?:кроме|за\\s+исключением|но\\s+не\\s+(?:в|во|по))\\s+(" + DAYRX + "(?:\\s*(?:,|и)\\s*" + DAYRX + ")*)(?=[\\s,.])")))) {
+    const ex = daysIn(m[1]);
+    if (ex.length && (days || again || /напоминай|кажд|ежедневно/.test(t))) {
+      const left = (days || [0, 1, 2, 3, 4, 5, 6]).filter(d => !ex.includes(d));
+      if (left.length) { days = left; t = t.replace(m[0], " "); }
+    }
+  }
+  return days ? { days, t } : null;
+}
 // повторяющееся напоминание: первый раз — ближайший подходящий момент не раньше «сейчас» (будни — без субботы и воскресенья)
 function rollRepeat(at, rep) {
-  const d = new Date(at), step = rep === "weekly" ? 7 : 1, off = x => rep === "weekdays" && (x.getDay() === 0 || x.getDay() === 6);
+  const set = /^d:/.test(rep || "") ? repDays(rep) : null;
+  const d = new Date(at), step = rep === "weekly" ? 7 : 1, off = x => (rep === "weekdays" && (x.getDay() === 0 || x.getDay() === 6)) || (set && !set.includes((x.getDay() + 6) % 7));
   for (let i = 0; i < 800 && (d.getTime() < Date.now() || off(d)); i++) d.setDate(d.getDate() + step);
   return d;
 }
@@ -2808,7 +2877,8 @@ function rollRepeat(at, rep) {
 // что напомнить — из остатка после разбора времени: без «о том, что», «завтра», «в среду», «часов утра»
 function remindWhat(rest) {
   return String(rest || "").replace(/^\s*(о том,? что|о том|что|про|о|об)\s+/, "").replace(/(^|\s)(сегодня|послезавтра|завтра|утром|вечером|днем|каждый день|по будням|ежедневно)(?=\s|$)/g, " ")
-    .replace(/\s+(в|во|по|каждый|каждую)\s+(понедельник|вторник|среду|четверг|пятницу|субботу|воскресенье)[а-яё]*/g, " ").replace(/\s+/g, " ").trim()
+    .replace(/\s+(в|во|по|каждый|каждую)\s+(понедельник|вторник|сред|четверг|пятниц|суббот|воскресень)[а-яё]*/g, " ").replace(/(^|\s)по выходным(?=\s|$)/g, " ")
+    .replace(/\s+,/g, ",").replace(/,(\s*,)+/g, ",").replace(/^[\s,]+|[\s,]+$/g, "").replace(/\s+/g, " ").trim()
     .replace(/^(чтобы|что)\s+/, "").replace(/(^|\s)(?:часов|часа|час|утра|вечера|дня|ночи|ровно)(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
 }
 function addAlarm(title, at, kind, repeat, note) {
@@ -2823,7 +2893,7 @@ function addAlarm(title, at, kind, repeat, note) {
   return x;
 }
 function alarmCard(x) {
-  return `<div class="pill"><span>${x.kind === "alarm" ? "⏰" : x.kind === "timer" ? "⏱" : "🔔"}</span><span><b>${esc(whenText(new Date(x.at)))}</b>${x.repeat ? " · " + REP_RU[x.repeat] : ""}${x.note ? " · 📎" : ""}<br>${esc(x.title)}</span><button onclick="cancelAlarm('${esc(x.id)}', this)">Отменить</button></div>`;
+  return `<div class="pill"><span>${x.kind === "alarm" ? "⏰" : x.kind === "timer" ? "⏱" : "🔔"}</span><span><b>${esc(whenText(new Date(x.at)))}</b>${x.repeat ? " · " + repRu(x.repeat) : ""}${x.note ? " · 📎" : ""}<br>${esc(x.title)}</span><button onclick="cancelAlarm('${esc(x.id)}', this)">Отменить</button></div>`;
 }
 /* Правка напоминания руками (отзыв 17.10: «напоминания можно редактировать только голосом»): текст, дата, время,
    повтор; «Сохранить» — то же напоминание (тот же id) с новым временем, и на компьютер — синхронизацией. */
@@ -2833,14 +2903,23 @@ function remEdit(id) {
   $("#rm-h").textContent = x.kind === "alarm" ? "Будильник" : x.kind === "timer" ? "Таймер" : "Напоминание";
   $("#rem-body").innerHTML = `<label>Что напомнить<input id="rm-text" maxlength="200" value="${esc(x.title || "")}"></label>
     <div class="rmrow"><label>Дата<input type="date" id="rm-date" value="${iso(d)}"></label><label>Время<input type="time" id="rm-time" value="${pad(d.getHours())}:${pad(d.getMinutes())}"></label></div>
-    <label>Повторять<select id="rm-rep">${[["", "не повторять"], ["daily", "каждый день"], ["weekdays", "по будням"], ["weekly", "каждую неделю"]]
-      .map(([v, t]) => `<option value="${v}"${(x.repeat || "") === v ? " selected" : ""}>${t}</option>`).join("")}</select></label>
+    <label>Повторять<select id="rm-rep">${[["", "не повторять"], ["daily", "каждый день"], ["weekdays", "по будням"], ["weekly", "каждую неделю"], ["d", "по дням недели…"]]
+      .map(([v, t]) => `<option value="${v}"${((x.repeat || "").startsWith("d:") ? "d" : x.repeat || "") === v ? " selected" : ""}>${t}</option>`).join("")}</select></label>
+    <div class="rmdays" id="rm-days" role="group" aria-label="Дни повтора"${(x.repeat || "").startsWith("d:") ? "" : " hidden"}>${["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map((n, i) =>
+      `<button type="button" class="rmd${repDays(x.repeat || "", x.at).includes(i) ? " on" : ""}" data-d="${i}" aria-pressed="${repDays(x.repeat || "", x.at).includes(i)}">${n}</button>`).join("")}</div>
     ${x.note ? `<div class="rmatt"><button class="btn" id="rm-note">📎 Вложения</button></div>` : ""}
     <div class="row2"><button class="btn p" id="rm-save" style="flex:1">Сохранить</button><button class="btn" id="rm-del">Удалить</button></div>
     <div class="res" id="rm-res"></div>`;
   const back = () => { closeSheets(true); openSheet("#sh-day"); renderDay(); };
+  // «по дням недели…» (30.10): кнопки дней — как в календаре студии; выбрали «по будням» и т. п. — кнопки прячутся
+  $("#rm-rep").onchange = () => { const v = $("#rm-rep").value, box = $("#rm-days"); box.hidden = v !== "d";
+    if (v === "d" && !$$("#rm-days .rmd.on").length) { const cur = repDays(x.repeat || "weekdays", x.at); $$("#rm-days .rmd").forEach(b => { const on = cur.includes(+b.dataset.d); b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); }); } };
+  $$("#rm-days .rmd").forEach(b => b.onclick = () => { const on = !b.classList.contains("on"); b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
   $("#rm-save").onclick = () => {
-    const title = $("#rm-text").value.trim(), dv = $("#rm-date").value, tv = $("#rm-time").value, rep = $("#rm-rep").value;
+    const title = $("#rm-text").value.trim(), dv = $("#rm-date").value, tv = $("#rm-time").value;
+    let rep = $("#rm-rep").value;
+    if (rep === "d") { rep = repNorm($$("#rm-days .rmd.on").map(b => +b.dataset.d));
+      if (!rep) { $("#rm-res").className = "res bad"; $("#rm-res").textContent = "Выберите хотя бы один день."; return; } }
     if (!title) { $("#rm-res").className = "res bad"; $("#rm-res").textContent = "Напишите, о чём напомнить."; return; }
     let at = new Date(`${dv}T${tv || "09:00"}`);
     if (isNaN(at)) { $("#rm-res").className = "res bad"; $("#rm-res").textContent = "Не понял дату или время."; return; }
@@ -2848,7 +2927,7 @@ function remEdit(id) {
     else if (at < new Date(Date.now() - 60000)) { $("#rm-res").className = "res bad"; $("#rm-res").textContent = "Это время уже прошло — выберите позже."; return; }
     D.alarmSet(JSON.stringify(Object.assign({}, x, { title, at: at.getTime(), repeat: rep })));
     syncSoon(); if (x.kind === "timer") tmrShow();
-    toast(`Сохранено: ${whenText(at)}${rep ? ", " + REP_RU[rep] : ""}`, 2500); back();
+    toast(`Сохранено: ${whenText(at)}${rep ? ", " + repRu(rep) : ""}`, 2500); back();
   };
   $("#rm-del").onclick = () => { D.alarmCancel(x.id); syncSoon(); tmrShow(); toast("Удалено", 1800); back(); };
   if ($("#rm-note")) $("#rm-note").onclick = () => openNoteSoon(x.note);
@@ -3082,10 +3161,10 @@ async function quick(text) {
   }
   if ((m = t.match(/^(?:поставь |заведи )?(?:будильник|разбуди меня)(.*)$/))) {
     const w = parseWhen(" в " + m[1].replace(/^\s*(на|в)\s+/, "").trim() + " ") || parseWhen(m[1]);
-    if (w) { const x = addAlarm("Будильник", w.at, "alarm", w.repeat); return { say: `Будильник ${REP_RU[w.repeat] ? REP_RU[w.repeat] + ", " : ""}${whenText(w.at)}.`, card: alarmCard(x) }; }
+    if (w) { const x = addAlarm("Будильник", w.at, "alarm", w.repeat); return { say: `Будильник ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}.`, card: alarmCard(x) }; }
   }
   if ((m = t.match(/^напомни(?:те)?(?: мне)?\s+(.+)$/)) || (m = t.match(/^напоминай(?: мне)?\s+(.+)$/))) {
-    const w = parseWhen(m[1]);
+    const w = parseWhen(m[1], undefined, /^напоминай/.test(t));        // «напоминай, кроме пятницы, в 9…» — каждый день, кроме пятницы
     if (w) {
       let what = remindWhat(w.rest);
       // «напомни об этом / о ней / о последней заметке завтра в 10» — про что-то сказанное раньше (отчёт №66: вышло
@@ -3098,7 +3177,7 @@ async function quick(text) {
         what = body ? "Заметка: " + (body.length > 90 ? body.slice(0, 90).replace(/\s+\S*$/, "") + "…" : body) : "";
       }
       if (what) { const x = addAlarm(what[0].toUpperCase() + what.slice(1), w.at, "reminder", w.repeat);
-        return { say: `Напомню ${REP_RU[w.repeat] ? REP_RU[w.repeat] + ", " : ""}${whenText(w.at)}: ${what}.`, card: alarmCard(x) }; }
+        return { say: `Напомню ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}: ${what}.`, card: alarmCard(x) }; }
     }
   }
   if ((m = text.trim().match(/^(?:напиши|отправь|скинь|перешли)(?: сообщение)?\s+(?:в|во)\s+(макс\S*|max|телеграм\S*|тг|телег\S*|ватсап\S*|вотсап\S*|вацап\S*|whatsapp|вайбер\S*|viber|вк|вконтакте)[\s:,—-]+([\s\S]+)$/i)))
@@ -3566,7 +3645,7 @@ function calcEval(src) {
 function toolSpecs() {
   if (S.llm.trial) return [];                     // пробный разговор на сайте — без действий (сервер их и не пропустит)
   const t = [
-    { name: "set_reminder", description: "Поставить напоминание, будильник или таймер. when — когда, словами пользователя («через 20 минут», «завтра в 9», «в пятницу в 18:30», «27 октября в 10») — время посчитает телефон по своим часам, сам не считай; at — дата и время ISO (ГГГГ-ММ-ДДTЧЧ:ММ, местное) — только если when не подходит. kind: reminder | alarm (будильник) | timer. repeat: '' | daily | weekdays | weekly.",
+    { name: "set_reminder", description: "Поставить напоминание, будильник или таймер. when — когда, словами пользователя («через 20 минут», «завтра в 9», «в пятницу в 18:30», «27 октября в 10») — время посчитает телефон по своим часам, сам не считай; at — дата и время ISO (ГГГГ-ММ-ДДTЧЧ:ММ, местное) — только если when не подходит. kind: reminder | alarm (будильник) | timer. repeat: '' | daily | weekdays | weekly; дни недели («по будням, кроме пятницы», «пн-чт», «по понедельникам и средам») — словами в when, телефон поймёт сам.",
       parameters: O({ text: STR, when: STR, at: STR, in_minutes: NUM, kind: { type: "string", enum: ["reminder", "alarm", "timer"] }, repeat: { type: "string", enum: ["", "daily", "weekdays", "weekly"] } }, ["text"]) },
     { name: "list_reminders", description: "Какие напоминания и будильники стоят.", parameters: O({}) },
     { name: "calc", description: "Посчитать точно: любые вычисления (проценты, суммы, скидки, деление) и даты. Считай ВСЕГДА этим инструментом, не в уме. Выражение: 2350 * 17 / 100, (1200 - 15%) * 3; даты ГГГГ-ММ-ДД: days_until(\"2027-01-01\") — сколько дней до даты, days_between(\"2026-10-01\", \"2026-12-31\"), weekday(\"2026-10-14\").",
@@ -3674,8 +3753,13 @@ async function runTool(name, a) {
     case "set_reminder": {
       let at = null;
       if (a.in_minutes) at = new Date(Date.now() + a.in_minutes * 60000);
-      else if (a.when && !a.at) { const w = parseWhen(a.when); if (w) { at = w.at; if (!a.repeat && w.repeat) a.repeat = w.repeat; } }
+      else if (a.when && !a.at) { const w = parseWhen(a.when); if (w) { at = w.at; if ((!a.repeat || /^d:/.test(w.repeat)) && w.repeat) a.repeat = w.repeat; } }
       else if (a.at) { at = new Date(a.at); if (isNaN(at)) { const w = parseWhen(a.at); at = w && w.at; } }
+      // «по будням, кроме пятницы» (30.10): модель часто передаёт repeat: weekdays и теряет «кроме» — дни берём из слов человека
+      { const said = String(turnAsk || "").split("\n\nВложения:")[0];
+        if (/кроме|за исключением|но не (?:в|во|по)\s|с понедельника по|с вторника по|(?:пн|вт|ср|чт|пт|сб|вс)\s*[-–—]\s*(?:пн|вт|ср|чт|пт|сб|вс)|по (?:понедельникам|вторникам|средам|четвергам|пятницам|субботам|воскресеньям)\s*(?:,|и)/i.test(said)) {
+          const w = parseWhen(said);
+          if (w && /^d:|^weekly$|^daily$|^weekdays$/.test(w.repeat) && w.repeat !== a.repeat) { a.repeat = w.repeat; if (at && !isNaN(at)) at = rollRepeat(at, a.repeat); } } }
       // «через 20 минут» — считаем сами от часов телефона, а не берём у модели: она могла посчитать от старого времени
       // из разговора (16.10: «сколько времени» — «14:17» в 15:57)
       { const said = String(turnAsk || "").split("\n\nВложения:")[0];
@@ -3696,7 +3780,7 @@ async function runTool(name, a) {
       const n = turnAtt.length ? remindNote(a.text || "", at, turnAsk, turnAtt) : null; if (n) turnAtt = [];
       const x = addAlarm(n ? n.title : a.text || "Напоминание", at, a.kind || "reminder", a.repeat || "", n ? n.id : "");
       showCard(alarmCard(x));
-      return `Поставлено: ${whenText(at)}${a.repeat ? ", " + REP_RU[a.repeat] : ""} — ${x.title} (id ${x.id}).${moved}` +
+      return `Поставлено: ${whenText(at)}${a.repeat ? ", " + repRu(a.repeat) : ""} — ${x.title} (id ${x.id}).${moved}` +
         (n ? ` Вложения из сообщения (${n.att.length}) приложены к напоминанию — в срок они откроются прямо из него; можно так и сказать.` : "");
     }
     case "calc": {
@@ -3705,7 +3789,7 @@ async function runTool(name, a) {
     }
     case "list_reminders": {
       const l = JSON.parse(D.alarms() || "[]").sort((x, y) => x.at - y.at), jobs = (mind().jobs || []).filter(j => !j.paused);
-      const out = l.map(x => `${x.id}: ${whenText(new Date(x.at))}${x.repeat ? " (" + REP_RU[x.repeat] + ")" : ""} — ${x.title}`);
+      const out = l.map(x => `${x.id}: ${whenText(new Date(x.at))}${x.repeat ? " (" + repRu(x.repeat) + ")" : ""} — ${x.title}`);
       if (jobs.length) out.push("Дела по расписанию (делает компьютер): " + jobs.map(j => `${j.title || j.prompt || "дело"}${j.at ? " — " + whenText(new Date(j.at)) : ""}`).join("; "));
       return out.length ? out.join("\n") : "Напоминаний нет.";
     }
@@ -4451,7 +4535,7 @@ function remindAttQuick(text, att) {
   const x = addAlarm(n.title, w.at, "reminder", w.repeat, n.id);
   const pics = n.att.filter(f => f.type === "image").length, many = n.att.length > 1;
   const tail = pics === n.att.length ? (many ? "Фото будут прямо в напоминании." : "Фото будет прямо в напоминании.") : (many ? "Файлы будут прямо в напоминании." : "Файл будет прямо в напоминании.");
-  return { say: `Напомню ${REP_RU[w.repeat] ? REP_RU[w.repeat] + ", " : ""}${whenText(w.at)}: ${n.title[0].toLowerCase() + n.title.slice(1)}. ${tail}`, card: alarmCard(x) };
+  return { say: `Напомню ${repRu(w.repeat) ? repRu(w.repeat) + ", " : ""}${whenText(w.at)}: ${n.title[0].toLowerCase() + n.title.slice(1)}. ${tail}`, card: alarmCard(x) };
 }
 /* ---------- заметка целиком: открыть, поправить, фото и файлы (лист #sh-note) ----------
    Вложения — файлы natt-<id> во внутренней памяти (data: URL; фото сжаты shrinkImage), в заметке — только их список att.
@@ -5151,7 +5235,7 @@ function renderDay() {
           return `<div class="it dn"><div class="ok">✓</div><div class="bd"><b>${esc(x.title)}</b><small>${pad(d.getHours())}:${pad(d.getMinutes())}${x.src === "pc" ? " · на компьютере" : x.src === "alarm" ? " · из напоминания" : ""}</small></div><button class="x" data-undo="${esc(x.id)}" title="Снять отметку" aria-label="Снять отметку">${X_SVG}</button></div>`; }).join("") : "")
       + (l.length ? `<div class="bugh">Напоминания</div>` + l.map(x => { const d = new Date(x.at), task = x.kind !== "alarm" && x.kind !== "timer";
           const nt = x.note ? notes().find(n => n.id === x.note) : null, img = nt && (nt.att || []).find(a => a.type === "image");
-          return `<div class="it" data-edit="${esc(x.id)}"><div class="tm">${pad(d.getHours())}:${pad(d.getMinutes())}</div><div class="bd"><b>${esc(x.title)}</b><small>${x.kind === "alarm" ? "⏰ будильник" : x.kind === "timer" ? "⏱ таймер" : "🔔 напоминание"} · ${esc(whenText(d))}${x.repeat ? " · " + REP_RU[x.repeat] : ""}${x.note ? ` · <span class="ntc">📎${nt ? noteAttCount(nt) || "" : ""}</span>` : ""}</small></div>`
+          return `<div class="it" data-edit="${esc(x.id)}"><div class="tm">${pad(d.getHours())}:${pad(d.getMinutes())}</div><div class="bd"><b>${esc(x.title)}</b><small>${x.kind === "alarm" ? "⏰ будильник" : x.kind === "timer" ? "⏱ таймер" : "🔔 напоминание"} · ${esc(whenText(d))}${x.repeat ? " · " + repRu(x.repeat) : ""}${x.note ? ` · <span class="ntc">📎${nt ? noteAttCount(nt) || "" : ""}</span>` : ""}</small></div>`
             + (img ? `<img class="nthumb rt" data-note="${esc(x.note)}" src="${noteAttGet(img.id)}" alt="">` : "")
             + (task ? `<button class="x ok" data-done="${esc(x.id)}" title="Сделано" aria-label="Сделано">✓</button>` : "") + `<button class="x" data-id="${esc(x.id)}" title="Удалить" aria-label="Удалить">${X_SVG}</button></div>`; }).join("")
       : jobs.length || ds.items.length ? "" : `<div class="empty">Напоминаний нет.<br>Скажите: «напомни завтра в 9 позвонить маме» или «будильник на 7».<br>Сделали дело — скажите «я позвонила маме, отметь» или впишите его выше.</div>`)
@@ -6366,8 +6450,12 @@ function renderSettings() {
     const cab = [];                                   // «Этот телефон в кабинете» — в «О приложении», после версии
     const opt = (list, cur) => list.map(([v, n]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${n}</option>`).join("");
     // фон — плитками с живым образцом (тот же класс темы, что у экрана; кружок — материал её карточек), по группам
-    if (setTab === "look") h.push(`<div class="card"><div class="skins" role="radiogroup" aria-label="Тема">${
-        PHONE_SKINS.map(x => `<button class="skm ${x.id === lookSkin() ? "on" : ""}" data-skin="${x.id}" role="radio" aria-checked="${x.id === lookSkin()}" title="${esc(x.group)} · ${esc(x.name)}"><i class="lk-prev skin-${x.id}"><b></b></i><span>${esc(x.name)}</span></button>`).join("")}</div>
+    // 30.10 (отзыв: «не видно, всё сразу»): сверху — какая тема сейчас и чем она хороша; плитки — ровной сеткой, как
+    // были (группы с подписями пробовали — владелец: «удобно, но не так аккуратно»), порядок — по группам
+    const skCur = PHONE_SKINS.find(x => x.id === lookSkin());
+    const skBtn = (x) => `<button class="skm ${x.id === lookSkin() ? "on" : ""}" data-skin="${x.id}" role="radio" aria-checked="${x.id === lookSkin()}" title="${esc(x.group)} · ${esc(x.name)}"><i class="lk-prev skin-${x.id}"><b></b></i><span>${esc(x.name)}</span></button>`;
+    if (setTab === "look") h.push(`<div class="card"><p class="sk-now" id="sk-now">${skCur ? `Сейчас — <b>${esc(skCur.name)}</b>${skCur.sub ? `<small>${esc(skCur.sub)}</small>` : ""}` : ""}</p>
+      <div class="skins" role="radiogroup" aria-label="Тема">${PHONE_SKINS.map(skBtn).join("")}</div>
       <label class="f" style="margin-top:6px"><span>Когда говорит</span><select id="ap-fx">${opt([["bars", "Лучи"], ["pulse", "Пульс"], ["wave", "Волна"]], lookFx())}</select></label>
       <div class="sw" style="margin-top:10px"><div>Портрет следит за наклоном<small class="hint" style="display:block;margin:2px 0 0">Наклоните телефон — персонаж чуть повернётся и посмотрит на вас. Камера не нужна.</small></div>
         <label class="tg"><input type="checkbox" id="ap-tilt" ${S.tilt === true ? "checked" : ""}><i></i></label></div></div>`);
@@ -6486,7 +6574,8 @@ function wireSettings(info) {
   if (g("dev-ping")) g("dev-ping").onclick = async () => { const r = g("dev-res"); r.className = "res"; r.textContent = "отправляю…";
     const ok = await pulseSend(); r.className = ok ? "res ok" : "res bad";
     r.textContent = ok ? "Готово — обновите список «Где» в кабинете." : (S.pulse === false ? "«Анонимный пульс» выключен — включите его ниже, и телефон появится." : "Не получилось — проверьте интернет."); };
-  $$(".skm").forEach(b => b.onclick = () => { S.skin = b.dataset.skin; saveS(); applyLook(); $$(".skm").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", String(x === b)); }); });
+  $$(".skm").forEach(b => b.onclick = () => { S.skin = b.dataset.skin; saveS(); applyLook(); $$(".skm").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", String(x === b)); });
+    const c = PHONE_SKINS.find(x => x.id === b.dataset.skin), n = $("#sk-now"); if (c && n) n.innerHTML = `Сейчас — <b>${esc(c.name)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}`; });
   if (g("ap-fx")) g("ap-fx").onchange = () => { S.voice_fx = g("ap-fx").value; saveS(); applyLook(); };
   if (g("ap-tilt")) g("ap-tilt").onchange = () => { S.tilt = g("ap-tilt").checked; saveS(); tiltSync(); };
   $$("[data-feat]").forEach(x => x.onchange = () => { S.features = Object.assign({}, S.features || {}, { [x.dataset.feat]: x.checked }); saveS(); featApply();
@@ -6860,6 +6949,7 @@ function repToDict(rep, at) {
   if (rep === "daily") return { kind: "daily", time };
   if (rep === "weekdays") return { kind: "weekly", days: [0, 1, 2, 3, 4], time };
   if (rep === "weekly") return { kind: "weekly", days: [(d.getDay() + 6) % 7], time };
+  if (/^d:[0-6]+$/.test(rep)) return { kind: "weekly", days: repDays(rep), time };
   return null;
 }
 function repFromDict(r) {
@@ -6868,6 +6958,7 @@ function repFromDict(r) {
   if (r.kind === "daily" && (!r.days || r.days.length === 7)) return "daily";
   if ((r.kind === "daily" || r.kind === "weekly") && days === "0,1,2,3,4") return "weekdays";
   if (r.kind === "weekly" && (r.days || []).length === 1) return "weekly";
+  if ((r.kind === "weekly" || r.kind === "daily") && (r.days || []).length > 1) return repNorm(r.days);   // «пн–чт», «кроме пятницы» (30.10)
   return "";                                  // раз в месяц, через N минут и т. п. — телефон позвонит один раз, а следующий срок пришлёт компьютер
 }
 /* ---------- душа, конституция, дневник и задачи — с компьютера через синхронизацию (хранятся в файле mind.json) ----------

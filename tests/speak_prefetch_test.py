@@ -53,7 +53,7 @@ class RealtimePlayer:
 def run(sentences, cancel_after=None):
     tts, pl = SlowTTS(), RealtimePlayer()
     me = types.SimpleNamespace(s=types.SimpleNamespace(get=lambda *k: {"speed": 1.0}.get(k[-1])), _voice_cfg=lambda: {}, _output_muted=lambda: False,
-                               _fx_name=lambda v: "off", player=pl, set_state=lambda s: None, _engines_for_speech=lambda v: [tts], _synth_mixed=lambda eng, text, voice, sp: eng.synth(text, voice, sp),
+                               _fx_name=lambda v: "off", player=pl, set_state=lambda s: None, _engines_for_speech=lambda v, *a: [tts], _synth_mixed=lambda eng, text, voice, sp: eng.synth(text, voice, sp),
                                _wait_vosk_tts=lambda v: None, last_speak_end=0, vosk_tts=None, _said=[], null_player=True)
     turn = types.SimpleNamespace(cancel=threading.Event(), spoken=[])
     q = queue.Queue()

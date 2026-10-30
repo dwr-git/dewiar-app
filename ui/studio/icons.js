@@ -84,6 +84,20 @@ function showHelp(k) {
     setTimeout(() => b.disabled = false, 1500);
   });
   $("#help").classList.add("open");
+  helpLessons(k);
+}
+/* видеоурок этого раздела — сразу под заголовком «?»: обложка, «Видеоурок · 1:12», что в нём; «Смотреть» — плеер поверх */
+async function helpLessons(k) {
+  if (typeof lsFor !== "function") return;
+  const ls = await lsFor(k), body = $("#help-body");
+  if (!ls.length || !$("#help").classList.contains("open") || !body || body.querySelector(".hls")) return;
+  const box = document.createElement("div"); box.className = "hls";
+  box.innerHTML = ls.slice(0, 2).map((l, n) => `<button type="button" class="hl${n ? " sm" : ""}" data-id="${escH(l.id)}" aria-label="Смотреть урок «${escH(l.title)}»">
+      <span class="hl-pic${l.poster ? "" : " none"}"${l.poster ? ` style="background-image:url('${escH(l.poster)}')"` : ""}>${l.poster ? "" : `<b class="hl-ttl">${escH(l.title)}</b>`}
+        ${l.sec ? `<em class="hl-dur">${lsMin(l.sec)}</em>` : ""}<i class="hl-play" aria-hidden="true">${SVG('<path d="M8 5.5v13l11-6.5z"/>')}<span>Смотреть</span></i></span>
+      <span class="hl-t"><small>Видеоурок</small><b>${escH(l.title)}</b>${l.about ? `<span>${escH(l.about)}</span>` : ""}</span></button>`).join("");
+  const h2 = body.querySelector("h2"); if (h2) h2.after(box); else body.prepend(box);
+  $$(".hls .hl", box).forEach(b => b.onclick = () => { const l = ls.find(x => x.id === b.dataset.id); if (l && typeof lsPlay === "function") lsPlay(l); });
 }
 $$("main section[id^='p-']").forEach(s => {
   const k = s.id.slice(2), h = s.querySelector("h1"); if (!h || !(window.DEWIAR_HELP || {})[k]) return;

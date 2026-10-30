@@ -325,15 +325,27 @@ class Box:
             except Exception:  # noqa: BLE001
                 pass
 
-    def read(self, uid, folder="INBOX"):
-        """Письмо целиком по uid из inbox() -> {uid, from, to, subject, date, text, files}."""
+    def read(self, uid, folder="INBOX", mark=False):
+        """Письмо целиком по uid из inbox() -> {uid, from, to, subject, date, text, files}.
+        mark — человек его прочитал (открыл в студии или попросил Лиру прочитать): отметить «прочитано» и на почте
+        (30.10, владелец: «прочитал через Лиру — а оно всё равно непрочитанное»). Меняем только флаг \\Seen этого
+        письма; просмотр списка (inbox) и чтение без mark ничего на почте не трогают."""
         m = self._imap()
         try:
-            m.select(folder, readonly=True)
+            try:
+                m.select(folder, readonly=not mark)
+            except imaplib.IMAP4.readonly:                     # папку не дают открыть на запись — покажем без отметки
+                m.select(folder, readonly=True)
+                mark = False
             typ, d = m.uid("fetch", str(uid).encode(), "(BODY.PEEK[])")
             raw = next((x[1] for x in d if isinstance(x, tuple)), b"")
             if not raw:
                 raise MailError("такого письма нет")
+            if mark:
+                try:
+                    m.uid("store", str(uid).encode(), "+FLAGS", "(\\Seen)")
+                except (imaplib.IMAP4.error, OSError) as e:      # почта не дала поставить флаг — письмо всё равно покажем
+                    log.info("mail: отметить прочитанным не вышло: %s", e)
             msg = email.message_from_bytes(raw)
             body, files = _text_of(msg)
             return {"uid": str(uid), "from": _dec(msg.get("From")), "to": _dec(msg.get("To")), "subject": _dec(msg.get("Subject")),
@@ -467,9 +479,9 @@ class Mail:
         out.sort(key=when, reverse=True)
         return out[: max(limit, limit * min(2, len(live)))] if len(live) > 1 else out[:limit]
 
-    def read(self, uid, folder="INBOX"):
-        """uid из inbox(): «N:uid» — письмо ящика N."""
+    def read(self, uid, folder="INBOX", mark=False):
+        """uid из inbox(): «N:uid» — письмо ящика N. mark — отметить прочитанным и на почте."""
         u = str(uid)
         i, u = (int(u.split(":", 1)[0]), u.split(":", 1)[1]) if re.fullmatch(r"\d+:\S+", u) else (0, u)
         b = self.box(i)
-        return dict(b.read(u, folder), uid=str(uid), box=b.data.get("address", ""))
+        return dict(b.read(u, folder, mark=mark), uid=str(uid), box=b.data.get("address", ""))

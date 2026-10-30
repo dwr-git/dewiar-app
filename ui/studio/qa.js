@@ -12,7 +12,8 @@ const QA_GROUPS = {          // вид плиток: подложка, цвет 
   "Работа": ["#DDE3F7", "#3F4BD8", "M4 8h16v11H4z M9 8V5h6v3 M4 13h16"],
   "Оформление и голос": ["#D9EFE7", "#12704F", "M12 3a9 9 0 1 0 9 9c0-1.5-1-2-2-2h-2a2 2 0 0 1-2-2V6c0-1.5-1.5-3-3-3z"],
   "Данные и аккаунт": ["#F6E6CF", "#8A5300", "M6 10V7a6 6 0 0 1 12 0v3 M5 10h14v10H5z"],
-  "Если что-то не так": ["#F6DDE6", "#A3284F", "M12 4l9 16H3z M12 10v4 M12 17v.5"]
+  "Если что-то не так": ["#F6DDE6", "#A3284F", "M12 4l9 16H3z M12 10v4 M12 17v.5"],
+  "Для себя": ["#E6DEF6", "#5B36A8", "M12 4l2.4 5 5.6.8-4 3.9.9 5.5L12 16.6 7.1 19.2l.9-5.5-4-3.9 5.6-.8z"]
 };
 // статья руководства → раздел студии («Открыть раздел»)
 const QA_OPEN = { reminders: "reminders", "notes-memory": "notes", "calendar-money": "calendar", payments: "pay", vault: "vault", close: "close",
@@ -20,7 +21,8 @@ const QA_OPEN = { reminders: "reminders", "notes-memory": "notes", "calendar-mon
   "folder-docs": "folder", personas: "personas", "brain-account": "brain", voices: "voice", look: "look", hands: "hands",
   "home-tv-mail-calendars": "connect", "home-assistant": "connect", "telegram-max": "connect", "skills-mcp-servers": "skills", sync: "dw",
   privacy: "safety", "safety-backup": "safety", english: "ears", features: "features", tricks: "tricks", "soul-diary": "soul", talk: "ears", "chat-pc": "chat",
-  "invite-friend": "ref", snapshot: "home", play: "home", "report-problem": "about", troubleshooting: "about" };
+  "invite-friend": "ref", mail: "connect", "studio-search": "home", council: "council", pbot: "pbot", watch: "watch", "my-docs": "docs",
+  mailing: "mailing", sitechat: "sitechat", ideas: "ideas", course: "course", snapshot: "home", play: "home", "report-problem": "about", troubleshooting: "about" };
 const QA_WHERE = { pc: "компьютер", phone: "телефон" };
 const qaWord = (n, a, b, c) => `${n} ${plural(n, a, b, c)}`;
 function qaGroups() {
@@ -57,8 +59,13 @@ function qaOpen(id) {
   if (!s || !box) return;
   QA.cur = id;
   $$("#qa-left .qa-row").forEach(b => b.classList.toggle("on", b.dataset.id === id));
-  const li = (a) => (a || []).map(x => `<li>${escH(x)}</li>`).join("");
+  // названия кнопок и разделов «…» — цветом схемы, как жирное в блокноте (30.10, владелец: «справа всё объясняется —
+  // раскрашивать в цвет выбранной темы, как в нашем текстовом редакторе»)
+  const hl = (x) => escH(x).replace(/«([^«»]{1,60})»/g, "<b>«$1»</b>");
+  const li = (a) => (a || []).map(x => `<li>${hl(x)}</li>`).join("");
   const sec = QA_OPEN[s.id];
+  box.classList.add("nt-body");
+  box.dataset.cs = (typeof ntCs === "function" && ntCs()) || "theme";   // схема блокнота; не выбрана — цвет темы
   box.innerHTML = `<small class="qa-meta">${escH(s.group || "")} · ${escH((s.where || []).map(w => QA_WHERE[w] || w).join(" и "))}</small>`
     + `<h2>${escH(s.title)}</h2><p class="qa-lead">${escH(s.lead || "")}</p>`
     + ((s.how || []).length ? `<h4>Как сделать</h4><ul class="qa-how">${li(s.how)}</ul>` : "")

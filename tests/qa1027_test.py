@@ -58,6 +58,21 @@ try:
             pg.click('#qa-left .qa-tile:has-text("Семья и дети")'); time.sleep(0.6)
             rows = pg.evaluate("[...document.querySelectorAll('#qa-left .qa-row b')].map(x => x.textContent)")
             ok(any("Детский режим" in r for r in rows) and any("Семья" in r for r in rows), f"плитка «Семья и дети» — её статьи: {rows}")
+            # 30.10, владелец: «опять выделение активного блока обводкой, которые я не люблю»; «справа всё объясняется —
+            # раскрашивать в цвет выбранной темы, как в нашем текстовом редакторе»
+            pg.click('#qa-left .qa-row:has-text("Детский режим")'); time.sleep(0.4)
+            on = pg.evaluate("(() => { const r = document.querySelector('#qa-left .qa-row.on'); const c = getComputedStyle(r);"
+                             " return [c.boxShadow, c.outlineStyle, c.backgroundColor, getComputedStyle(r.querySelector('b')).color]; })()")
+            ok("inset" not in on[0] and on[1] == "none", f"выбранная статья — без обводки: {on[:2]}")
+            plain = pg.evaluate("getComputedStyle(document.querySelector('#qa-left .qa-row:not(.on)')).backgroundColor")
+            ok(on[2] != plain, f"выбранная — подложкой цвета темы: {on[2]} (остальные {plain})")
+            art = pg.evaluate("(() => { const a = document.querySelector('#qa-art'), ink = getComputedStyle(a.querySelector('.qa-lead')).color;"
+                              " const h = a.querySelector('h4'), b = a.querySelector('.qa-how b');"
+                              " return [a.dataset.cs, ink, h && getComputedStyle(h).color, b && getComputedStyle(b).color]; })()")
+            ok(art[0] and art[2] and art[2] != art[1] and art[3] and art[3] != art[1],
+               f"статья — в цветах схемы ({art[0]}): заголовки {art[2]}, «названия» {art[3]}, текст {art[1]}")
+            if SHOTS:
+                pg.screenshot(path=os.path.join(SHOTS, "qa-on.png"))
             pg.fill("#qa-q", "как связать телефон и компьютер"); time.sleep(1.0)
             ok("Устройства" in pg.inner_text("#qa-art h2") and "Подключить ещё устройство" in pg.inner_text("#qa-art"),
                f"поиск своими словами — нужная статья справа: {pg.inner_text('#qa-art h2')}")

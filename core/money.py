@@ -16,7 +16,92 @@ from pathlib import Path
 
 CURRENCIES = {"BYN": ("руб.", r"бел(?:орусск\w*)?\s*руб\w*|byn|br"), "RUB": ("₽", r"российск\w*\s*руб\w*|rub|₽"),
               "USD": ("$", r"доллар\w*|бакс\w*|usd|\$"), "EUR": ("€", r"евро|eur|€"), "PLN": ("zł", r"злот\w*|pln"),
-              "CNY": ("¥", r"юан\w*|cny")}
+              "CNY": ("¥", r"юан\w*|cny"),
+              # 30.10 (№422, пользователь из Украины: «валюту на ПК не переопределяет и нет возможности самому выбрать»)
+              "UAH": ("₴", r"гривн\w*|гривен\w*|грн|uah|₴"), "KZT": ("₸", r"тенге|kzt|₸"), "UZS": ("сум", r"узбекск\w*\s*сум\w*|uzs"),
+              "KGS": ("сом", r"киргизск\w*\s*сом\w*|кыргызск\w*\s*сом\w*|kgs"), "AMD": ("֏", r"драм\w*|amd|֏"),
+              "GEL": ("₾", r"лари\b|gel|₾"), "AZN": ("₼", r"манат\w*|azn|₼"), "MDL": ("лей", r"молдавск\w*\s*ле\w*|mdl"),
+              "GBP": ("£", r"фунт\w*\s*стерлинг\w*|фунт\w*|gbp|£"), "ILS": ("₪", r"шекел\w*|ils|₪"), "CZK": ("Kč", r"чешск\w*\s*крон\w*|czk"),
+              "TRY": ("₺", r"турецк\w*\s*лир\w*|₺")}       # просто «лира» — имя помощницы, не валюта
+CURRENCY_NAMES = {"BYN": "белорусские рубли", "RUB": "российские рубли", "UAH": "гривны", "KZT": "тенге", "USD": "доллары",
+                  "EUR": "евро", "PLN": "злотые", "UZS": "сумы", "KGS": "сомы", "AMD": "драмы", "GEL": "лари", "AZN": "манаты",
+                  "MDL": "леи", "GBP": "фунты", "ILS": "шекели", "CZK": "кроны", "TRY": "лиры", "CNY": "юани"}
+_EURO = "DE FR IT ES PT NL BE AT FI IE GR SK SI EE LV LT LU MT CY HR".split()
+COUNTRY_CUR = dict({"BY": "BYN", "RU": "RUB", "UA": "UAH", "KZ": "KZT", "UZ": "UZS", "KG": "KGS", "AM": "AMD", "GE": "GEL",
+                    "AZ": "AZN", "MD": "MDL", "PL": "PLN", "US": "USD", "GB": "GBP", "IL": "ILS", "CZ": "CZK", "TR": "TRY",
+                    "CN": "CNY"}, **{c: "EUR" for c in _EURO})
+# часовой пояс → страна (последняя догадка: регион системы надёжнее)
+_TZ_COUNTRY = (("Minsk", "BY"), ("Kiev", "UA"), ("Kyiv", "UA"), ("Zaporozh", "UA"), ("Uzhgorod", "UA"), ("Almaty", "KZ"),
+               ("Astana", "KZ"), ("Qostanay", "KZ"), ("Aqtau", "KZ"), ("Aqtobe", "KZ"), ("Atyrau", "KZ"), ("Oral", "KZ"),
+               ("Qyzylorda", "KZ"), ("Tashkent", "UZ"), ("Samarkand", "UZ"), ("Bishkek", "KG"), ("Yerevan", "AM"),
+               ("Tbilisi", "GE"), ("Baku", "AZ"), ("Chisinau", "MD"), ("Warsaw", "PL"),
+               # Windows: имя пояса из реестра
+               ("Belarus Standard Time", "BY"), ("Russian Standard Time", "RU"), ("Russia Time Zone", "RU"),
+               ("Ekaterinburg Standard", "RU"), ("Volgograd Standard", "RU"), ("Kaliningrad Standard", "RU"),
+               ("Caucasus Standard Time", "AM"), ("Georgian Standard Time", "GE"), ("Azerbaijan Standard Time", "AZ"))
+
+
+def _country_of_locale(name):
+    """«uk_UA.UTF-8», «ru-BY», «Ukrainian_Ukraine» → «UA» | ""."""
+    import re as _re
+    n = str(name or "")
+    m = _re.search(r"[_-]([A-Z]{2})(?:[.@]|$)", n)
+    if m:
+        return m.group(1)
+    for word, cc in (("Ukrain", "UA"), ("Belarus", "BY"), ("Kazakh", "KZ"), ("Russia", "RU")):
+        if word in n.split("_")[-1]:
+            return cc
+    return ""
+
+
+def region_country():
+    """Страна из настроек системы: Windows — «Регион» (GetUserDefaultGeoName), иначе язык и формат (uk-UA);
+    Linux — LC_MONETARY/LC_ALL/LANG; потом часовой пояс. DEWIAR_REGION — подменить (проверки). -> «UA» | ""."""
+    import os, sys
+    env = os.environ.get("DEWIAR_REGION")
+    if env is not None:
+        return env.strip().upper()[:2]
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            k = ctypes.windll.kernel32
+            buf = ctypes.create_unicode_buffer(16)
+            if getattr(k, "GetUserDefaultGeoName", None) and k.GetUserDefaultGeoName(buf, 16) and buf.value.isalpha() and len(buf.value) == 2:
+                return buf.value.upper()
+            buf = ctypes.create_unicode_buffer(85)
+            if k.GetUserDefaultLocaleName(buf, 85):
+                cc = _country_of_locale(buf.value)
+                if cc:
+                    return cc
+        except Exception:  # noqa: BLE001
+            pass
+    tz = ""
+    try:
+        if sys.platform == "win32":
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\TimeZoneInformation") as key:
+                tz = str(winreg.QueryValueEx(key, "TimeZoneKeyName")[0])
+        elif Path("/etc/timezone").exists():
+            tz = Path("/etc/timezone").read_text().strip()
+        else:
+            tz = os.path.realpath("/etc/localtime")
+    except Exception:  # noqa: BLE001
+        tz = ""
+    tz = tz or os.environ.get("TZ", "")
+    for part, cc in _TZ_COUNTRY:
+        if part in tz:
+            return cc
+    if sys.platform != "win32":
+        for var in ("LC_ALL", "LC_MONETARY", "LANG"):
+            cc = _country_of_locale(os.environ.get(var, ""))
+            if cc and cc != "US":                         # en_US.UTF-8 — чаще просто язык по умолчанию, не страна
+                return cc
+    return ""
+
+
+def region_currency(default="RUB"):
+    """Валюта страны из настроек системы (region_country), не узнали — default."""
+    return COUNTRY_CUR.get(region_country(), default)
 RUB_WORD = r"руб\w*|р\b"              # просто «рубли» не задают валюту: берётся валюта по умолчанию (настройки или пояс)
 
 EXPENSE_CATS = [
@@ -344,6 +429,19 @@ class Money:
                       category=str(item.get("category") or ""), note=str(item.get("note") or "")[:200])
             self._save([old, day[:7]])
             return dict(it)
+
+    def relabel(self, old, new):
+        """Записи в валюте old — в new (сумма та же: исправить ошибочную валюту, №422) -> сколько записей."""
+        old, new = str(old or "").upper()[:6], str(new or "").upper()[:6]
+        if not old or not new or old == new:
+            return 0
+        with self._lock:
+            hit = [x for x in self.items if (x.get("currency") or "").upper() == old]
+            for x in hit:
+                x["currency"] = new
+            if hit:
+                self._save([x["date"][:7] for x in hit])
+        return len(hit)
 
     def delete(self, iid):
         with self._lock:

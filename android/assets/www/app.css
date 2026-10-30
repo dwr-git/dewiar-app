@@ -523,6 +523,8 @@ body.neu :is(.cl-bar, #exam-bar .xb) { background: var(--glass); box-shadow: ins
 /* Тема — компактные круглые образцы (отзыв 14.10: «некрасивые прямоугольники, занимают кучу места»): круг — фон
    темы, точка в центре — её «стекло» (материал карточек); выбранная — тонкое кольцо вокруг. Все темы — в две строки. */
 .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 14px 4px; padding: 4px 0 2px; margin-bottom: 16px; }
+.sk-now { margin: 0 2px 14px; font-size: 14px; } .sk-now b { font-weight: 700; }
+.sk-now small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted); }
 .skm { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 0; border: 0; background: none;
   font: inherit; font-size: 11px; line-height: 1.2; color: var(--muted); text-align: center; cursor: pointer; min-width: 0; }
 .skm span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1717,3 +1719,11 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /* «Сотрудники» на телефоне руководителя: фото-отчёт прямо в карточке (30.10) */
 .bs-photo { display: block; width: 100%; max-height: 240px; object-fit: cover; border-radius: 14px; margin: 8px 0 2px; }
 .grold { font-style: normal; color: #c9822b; font-weight: 600; }
+
+/* «по дням недели…» в правке напоминания (30.10): кнопки дней */
+.rmdays { display: flex; gap: 6px; flex-wrap: wrap; margin: -2px 0 12px; }
+.rmdays[hidden] { display: none; }
+.rmd { flex: 1; min-width: 38px; height: 38px; border: 0; border-radius: 12px; font: 600 14px inherit; font-family: inherit; color: var(--muted, #6b7488);
+  background: rgba(127,127,140,.13); cursor: pointer; }
+.rmd.on { color: #fff; background: var(--accent, #6a7cf0); }
+.rmd:focus-visible { outline: 2px solid var(--accent, #6a7cf0); outline-offset: 2px; }

@@ -430,7 +430,14 @@
   #corner .btn svg, #corner-l .btn svg { width: 15px; height: 15px; }
   #corner.pinned { opacity: 1; }
   #corner-l.lo { opacity: 1; }
-  #b-lo[hidden], #b-watch[hidden] { display: none; }                  /* стоп-кран включён — щит виден всегда */
+  #b-lo[hidden], #b-watch[hidden], #b-tm[hidden] { display: none; }
+  /* «Текстовый режим» (30.10, владелец: «Лира перестала говорить» — режим включился незаметно): метка видна всегда */
+  #corner-l.tm { opacity: 1; }
+  #corner-l #b-tm { width: auto; padding: 0 8px 0 6px; gap: 5px; display: inline-flex; align-items: center; border-radius: 99px; color: #ffcf7a;
+    background: rgba(255,190,90,.14); font: 600 11px Manrope, sans-serif; }
+  #corner-l #b-tm:hover { background: rgba(255,190,90,.26); color: #ffe1a8; }
+  body.light #corner-l #b-tm { color: #7f4a00; background: rgba(255,243,222,.94); box-shadow: 0 1px 4px rgba(120,70,0,.18); }   /* сплошная подложка: метка читается и на ярком портрете (contrast1018) */
+  #corner-l.tm:not(:hover):not(:focus-within) #b-bug, #corner-l.tm:not(:hover):not(:focus-within) #b-idea { opacity: 0; }                  /* стоп-кран включён — щит виден всегда */
   /* «Дозор» (0.58): пока Лира присматривает — глаз виден всегда, с числом дозоров и тихим «дыханием» */
   #corner-l.watch { opacity: 1; }
   #corner-l #b-watch { position: relative; color: #8fb4ff; animation: wt-breath 3.2s ease-in-out infinite; }
@@ -576,6 +583,7 @@
   <div id="corner-l">
     <!-- стоп-кран «Ничего не уходит в интернет» включён (студия → «Безопасность», 0.38.98): значок виден всегда -->
     <button class="btn" id="b-watch" hidden title="Лира в дозоре"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><i></i></button>
+    <button class="btn" id="b-tm" hidden title="Текстовый режим: голос и микрофон выключены. Нажмите — включить голос"><svg viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2.5"/><path d="M7 10.5h1M10.5 10.5h1M14 10.5h1M17 10.5h0M7.5 14h9"/></svg><span>голос выключен</span></button>
     <button class="btn" id="b-lo" hidden title="Ничего не уходит в интернет: стоп-кран включён. Выключить — студия → «Безопасность»"><svg viewBox="0 0 24 24"><path d="M12 3.2 5 6v5.6c0 4.2 2.9 7.7 7 9.2 4.1-1.5 7-5 7-9.2V6z"/><path d="m9 12 2.2 2.2L15.3 10"/></svg></button>
     <button class="btn" id="b-bug" title="Сообщить о проблеме — сниму экран и открою форму жалобы"><svg viewBox="0 0 24 24"><rect x="6.5" y="7" width="11" height="14.5" rx="5.5"/><path d="M8.8 7.6a3.2 3.2 0 0 1 6.4 0M12 11.5v10M6.5 12.5H2.5M21.5 12.5h-4M6.8 17.5 3 19.8M17.2 17.5l3.8 2.3M7.5 9.2 4 6.5M16.5 9.2 20 6.5"/></svg></button>
     <!-- обновление одним нажатием (24.10, владелец: «возле жучка не хватает значка обновления») -->
@@ -997,7 +1005,7 @@ core.on("hello", d => {
   clearTimeout(window._turnT);                    // полоса дотаяла — надпись обычная, даже если ядро ещё не сказало «покой»
   window._turnT = setTimeout(() => { if (Date.now() >= turnUntil - 50) setState(state); }, (e.seconds || 0) * 1000 + 100);
 })
-.on("settings", e => { TEXT_MODE = !!((e.settings || {}).ui || {}).text_mode; applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
+.on("settings", e => { TEXT_MODE = !!((e.settings || {}).ui || {}).text_mode; setTextMode(TEXT_MODE); applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
 .on("persona", e => applyPersona(e.persona))
 .on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); })
 .on("level", e => entity.set({ level: e.v, voice: e.src === "voice" }))
@@ -1312,6 +1320,7 @@ $("drb").onclick = () => { const a = api(); if (a) a.open_settings("about"); cor
 $("drb-x").onclick = (e) => { e.stopPropagation(); core.call("complaints_seen").catch(() => {}); $("drb").className = ""; };
 $("clb-x").onclick = (e) => { e.stopPropagation(); CLB.hid = +($("clb-n").textContent || 1) || 1; $("clb").className = ""; };
 $("b-cal").onclick = () => studioToggle("calendar");
+function setTextMode(on) { const b = $("b-tm"); if (!b) return; b.hidden = !on; $("corner-l").classList.toggle("tm", !!on); }
 function setLocal(on) { $("b-lo").hidden = !on; $("corner-l").classList.toggle("lo", !!on); }
 /* «Дозор»: глаз у виджета, пока Лира присматривает (core/engine_watch.py — событие «watch», в hello — watch) */
 function setWatch(w) {
@@ -1323,6 +1332,7 @@ function setWatch(w) {
 core.on("watch", setWatch);
 core.on("hello", d => setWatch(d.watch));
 $("b-watch").onclick = () => studioToggle("watch");
+$("b-tm").onclick = () => core.call("text_mode", { on: false }).then(() => setTextMode(false)).catch(() => {});
 $("b-lo").onclick = () => { const a = api(); if (a) a.open_settings("safety"); };
 // жалоба: сначала снимок экрана (каким его видит человек в момент проблемы), потом форма в студии («О программе»)
 $("b-bug").onclick = guard($("b-bug"), async () => {

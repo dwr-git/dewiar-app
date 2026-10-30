@@ -32,6 +32,8 @@ class LLMError(Exception):
 CTX_RX = re.compile(r"context (?:size|length|window)[^.]{0,40}(?:exceed|too)|exceeds? (?:the )?(?:available |maximum )?context|"
                     r"maximum context length|context_length_exceeded|n_ctx|prompt is too long|too many tokens|"
                     r"превыш\w* (?:размер|длин)\w* контекст|не хватило окна контекста", re.I)
+# деньги на ключе сервиса кончились — повтор через 5 минут не поможет (пакет 30.10: дело по расписанию — 16 неудач за день)
+NO_MONEY_TEXT = "на ключе нет оплаченного пакета или закончились деньги — пополните баланс у сервиса"
 CTX_TEXT = ("модели не хватило окна контекста — разговор и подсказка не помещаются. В LM Studio или Ollama увеличьте "
             "длину контекста (Context Length) до 8192 или больше")
 
@@ -167,7 +169,7 @@ def _humanize(e, base_url, model=""):
                     "(«Подключение» → «Прокси»), подключите Gemini через OpenRouter или выберите другой сервис")
         if NO_MONEY_RX.search(body + " " + msg) and "Dewiar" not in msg:
             zai = "z.ai" in str(base_url or "")
-            return ("на ключе нет оплаченного пакета или закончились деньги — пополните баланс у сервиса"
+            return (NO_MONEY_TEXT
                     + (". Подписка GLM Coding Plan работает по своему адресу (…/api/coding/paas/v4), и по правилам Z.ai — "
                        "только в программах для кода" if zai else ""))
         if msg and (code in (402, 429) or "Dewiar" in msg or "dw-" in msg):
@@ -1091,17 +1093,23 @@ def _lmstudio_wake(url):
 def _stream_retry(method, url, tries=2, **kw):
     """httpx.stream, но соединение не установилось (сеть моргнула, сервер не принял подключение) — ещё раз: запрос
     ещё не ушёл, повторять безопасно. Отчёт №69: «сервер модели не ответил вовремя» через 5 с, а следующий вопрос —
-    ответ за 9 с. Ошибки после подключения не повторяем."""
-    for i in range(tries):
+    ответ за 9 с. Ошибки после подключения не повторяем.
+    30.10 (пакет: «не могу подключиться к dewiar.pro» — 25 раз у 15 компьютеров, по одному-два: связь моргнула, ноутбук
+    проснулся и сеть ещё поднимается): облачной модели при отказе соединения даём ещё ≈ 9 с — повтор через 1, 2,5 и 5 с.
+    Ожидание соединения (таймаут) так не тянем — каждое и так долгое; своя модель на компьютере и в сети — как было."""
+    host = (re.match(r"^\w+://\[?([^/\]:?#]+)", str(url)) or [None, ""])[1]
+    cloud = bool(host) and not LOCAL_HOST_RX.match(host) and not LAN_HOST_RX.search(host)
+    waits = [1.0, 2.5, 5.0] if cloud else [0.8] * (tries - 1)
+    for i in range(len(waits) + 1):
         cm = httpx.stream(method, url, **kw)
         try:
             r = cm.__enter__()
         except (httpx.ConnectTimeout, httpx.ConnectError) as e:
-            if i == tries - 1:
+            if i >= len(waits) or (isinstance(e, httpx.ConnectTimeout) and i >= tries - 1):
                 raise
-            log.info("Сервер модели: соединение не установилось (%s) — пробую ещё раз", type(e).__name__)
+            log.info("Сервер модели: соединение не установилось (%s) — пробую ещё раз через %.1f с", type(e).__name__, waits[i])
             _lmstudio_wake(url)
-            time.sleep(0.8)
+            time.sleep(waits[i])
             continue
         exc = (None, None, None)
         try:

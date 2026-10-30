@@ -58,7 +58,10 @@ try:
         pg.goto((ROOT / "ui/settings.html").as_uri() + f"?token={tok}&port={PORT}"); time.sleep(3)
         pg.click('nav button[data-p="chat"]'); time.sleep(0.8)
         ok(pg.is_visible("label.ch-tm") and not pg.is_checked("#ch-tm"), "в «Чате» — переключатель «Текстовый режим»")
-        pg.click("label.ch-tm"); time.sleep(1.0)
+        pg.click("label.ch-tm"); time.sleep(0.5)
+        # 30.10: перед включением — вопрос (голос и микрофон выключатся); соглашаемся
+        ok(pg.locator(".dwq button.yes").count() == 1, "перед включением — вопрос «Включить текстовый режим?»")
+        pg.click(".dwq button.yes"); time.sleep(1.0)
         st = json.loads((cfg / "settings.json").read_text())
         ok(st["ui"].get("text_mode") is True and st["tts"]["engine"] == "off" and st["ui"].get("text_prev") == "piper",
            f"включили — голос выключен, прежний запомнен: {st['tts']['engine']}, {st['ui'].get('text_prev')}")
