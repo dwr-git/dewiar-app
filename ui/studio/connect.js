@@ -363,3 +363,5 @@ $("#sc-go").onclick = async (ev) => {
   } catch (e) { box.innerHTML = `<div class="res bad">${escH(e.message)}</div>`; }
   ev.target.disabled = false;
 };
+/* «Не мешать компьютеру уснуть» (идея №70) — только в Windows: в Linux открытый микрофон сну не мешает */
+if ($("#sleep-sw")) $("#sleep-sw").hidden = !IS_WIN;

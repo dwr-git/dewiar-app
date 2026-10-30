@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 18 · Заметки и память. Светлый неоморфизм серии. Главная вещь урока — сказанное вслух становится фактом в памяти и тут же находится вопросом. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+#fact { top: 340px; width: 760px; } #fact .big { font-size: 42px; }
+#tiles { position: absolute; left: 620px; top: 150px; width: 1200px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.nt { padding: 24px 24px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); min-height: 200px; }
+.nt b { display: block; font: 700 23px Manrope; margin-bottom: 8px; } .nt p { font-size: 18px; font-weight: 600; color: var(--mut); line-height: 1.45; }
+.nt .tg { display: inline-block; margin-top: 12px; padding: 7px 12px; border-radius: 10px; font-size: 15px; font-weight: 800; }
+#res { top: 330px; width: 900px; }
+#map { position: absolute; left: 640px; top: 130px; width: 1180px; height: 700px; border-radius: 40px; background: radial-gradient(ellipse at 50% 45%, #fff, rgba(255,255,255,.3) 60%), var(--bg); box-shadow: var(--press); }
+#map svg { width: 100%; height: 100%; }
+#about { top: 330px; width: 860px; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 18 · Заметки и память</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/></svg></div>
+    <div id="t-title"><h1>Заметки и память</h1><p>Скажите — запомню. Спросите — найду</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div class="mess" id="mess"><span style="left:0px;top:0px">👟 Размер обуви сына</span><span style="left:420px;top:50px">🔢 Код домофона</span><span style="left:800px;top:10px">🎁 Идея подарка</span><span style="left:120px;top:170px">📖 Что почитать</span><span style="left:560px;top:200px">🏖 Отпуск: куда?</span><span style="left:30px;top:320px">🍰 Рецепт пирога</span><b>В голове не удержать</b></div>
+    <div class="say" id="q1">«Запомни: у Димы тридцать второй размер обуви»</div>
+    <div class="card" id="fact"><small>ЗАПОМНИЛА · ФАКТ О ВАС</small><div class="big">👟 Дима — 32 размер</div></div>
+    <div id="tiles">
+      <div class="nt" style="background:#fff6d9"><b>Идеи для отпуска</b><p>Грузия в мае · море в сентябре · взять палатку</p><span class="tg" style="background:#ffe7a3">#отпуск</span></div>
+      <div class="nt"><b>Покупки</b><p>Молоко, хлеб, батарейки AA</p><span class="tg" style="background:rgba(69,96,234,.12)">#дом</span></div>
+      <div class="nt" style="background:#e9f7ef"><b>Дача</b><p>Посадил чеснок, две грядки</p><span class="tg" style="background:#c8eed8">#дача</span></div></div>
+    <div class="say" id="q2">«Что я писала про отпуск?»</div>
+    <div class="card" id="res"><small>НАШЛА</small>
+      <div class="row"><i>📝</i>Заметка «Идеи для отпуска»<em>Грузия в мае</em></div>
+      <div class="row"><i>📔</i>Дневник, 12 октября<em>«хочу к морю»</em></div>
+      <div class="row"><i>📄</i>Документы: путёвка.pdf<em>сентябрь</em></div></div>
+    <div id="map"><svg viewBox="0 0 1180 700"><path class="ed" d="M590 350 Q 739.8636962494447 336.50816253752214 809.7273924988893 403.01632507504434" stroke="#e3a33a" stroke-opacity=".45" stroke-width="3" fill="none"/><path class="ed" d="M590 350 Q 677.1065080819676 404.5087633170767 684.2130161639351 539.0175266341535" stroke="#7a6be0" stroke-opacity=".45" stroke-width="3" fill="none"/><path class="ed" d="M590 350 Q 574.4669284940156 384.06336365847335 478.9338569880313 498.1267273169467" stroke="#e05a8a" stroke-opacity=".45" stroke-width="3" fill="none"/><path class="ed" d="M590 350 Q 508.6302293563012 333.3268095983633 347.2604587126024 396.6536191967266" stroke="#3fb37f" stroke-opacity=".45" stroke-width="3" fill="none"/><path class="ed" d="M590 350 Q 535.0838745702699 252.73010140776148 400.16774914053997 235.46020281552302" stroke="#4a8be8" stroke-opacity=".45" stroke-width="3" fill="none"/><path class="ed" d="M590 350 Q 615.4201714984429 209.2397322315667 560.8403429968857 148.4794644631334" stroke="#e3a33a" stroke-opacity=".45" stroke-width="3" fill="none"/><path class="ed" d="M590 350 Q 702.989680733403 240.68302546622795 735.979361466806 211.3660509324559" stroke="#3a9fb0" stroke-opacity=".45" stroke-width="3" fill="none"/><path class="ed" d="M590 350 Q 764.4238401310513 279.48782759667733 858.8476802621025 288.9756551933546" stroke="#7a6be0" stroke-opacity=".45" stroke-width="3" fill="none"/><g class="nd"><circle cx="590" cy="350" r="34" fill="#5B5FE0"/><text x="590" y="410" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Вы</text></g><g class="nd"><circle cx="809.7273924988893" cy="403.01632507504434" r="20.22901694889702" fill="#e3a33a"/><text x="809.7273924988893" y="449.24534202394136" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Дима · 32 размер</text></g><g class="nd"><circle cx="684.2130161639351" cy="539.0175266341535" r="21.417869892607293" fill="#7a6be0"/><text x="684.2130161639351" y="586.4353965267608" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Отпуск</text></g><g class="nd"><circle cx="478.9338569880313" cy="498.1267273169467" r="21.951935655656968" fill="#e05a8a"/><text x="478.9338569880313" y="546.0786629726036" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Мама</text></g><g class="nd"><circle cx="347.2604587126024" cy="396.6536191967266" r="23.424502837770504" fill="#3fb37f"/><text x="347.2604587126024" y="446.0781220344971" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Дача</text></g><g class="nd"><circle cx="400.16774914053997" cy="235.46020281552302" r="21.39898574739931" fill="#4a8be8"/><text x="400.16774914053997" y="282.8591885629223" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Работа</text></g><g class="nd"><circle cx="560.8403429968857" cy="148.4794644631334" r="23.22324996665417" fill="#e3a33a"/><text x="560.8403429968857" y="197.7027144297876" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Подарки</text></g><g class="nd"><circle cx="735.979361466806" cy="211.3660509324559" r="14.290052282836147" fill="#3a9fb0"/><text x="735.979361466806" y="251.65610321529203" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Минск</text></g><g class="nd"><circle cx="858.8476802621025" cy="288.9756551933546" r="18.656226543781052" fill="#7a6be0"/><text x="858.8476802621025" y="333.63188173713564" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#2A2F47" stroke="#fff" stroke-width="5" paint-order="stroke">Книга</text></g></svg></div>
+    <div class="say" id="q3">«Что ты обо мне знаешь?»</div>
+    <div class="card" id="about"><small>ЧТО Я ЗНАЮ О ВАС</small>
+      <div class="row"><i>👟</i>У Димы 32-й размер обуви<em>поправить</em></div><div class="row"><i>🏡</i>Дача под Минском<em>поправить</em></div></div>
+  </div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  remember: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  notes: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  find: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  map: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  scene($("#mess"), T, s("problem").start + 0.3, s(ORDER[2]).start);
+  [...$("#mess").querySelectorAll("span")].forEach((c, i) => { const k = out((T - s("problem").start - 0.5 - i * 0.3) / 0.4);
+    c.style.opacity = k; c.style.transform = `translate(${Math.sin(T * 0.9 + i) * 8}px, ${(1 - k) * 20 + Math.cos(T * 0.7 + i) * 6}px) rotate(${Math.sin(i * 1.7) * 4}deg)`; });
+  vis($("#mess b"), out((T - s("problem").start - 3.2) / 0.4), 12);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  scene($("#q1"), T, s("remember").start + 0.2, s("notes").start, 20);
+  scene($("#fact"), T, s("remember").start + 3.0, s("notes").start, 24);
+  scene($("#tiles"), T, s("notes").start + 0.2, s("find").start);
+  [...$("#tiles").children].forEach((c, i) => vis(c, out((T - s("notes").start - 0.6 - i * 0.4) / 0.4), 16, .95));
+  scene($("#q2"), T, s("find").start + 0.2, s("map").start, 20);
+  scene($("#res"), T, s("find").start + 2.4, s("map").start, 24);
+  [...$("#res").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - s("find").start - 2.8 - i * 0.5) / 0.4), 12));
+  scene($("#map"), T, s("map").start + 0.2, s("how").start);
+  [...$("#map").querySelectorAll(".nd")].forEach((g, i) => { const k = out((T - s("map").start - 0.5 - i * 0.2) / 0.4); g.style.opacity = k; });
+  [...$("#map").querySelectorAll(".ed")].forEach((e, i) => { e.style.strokeDasharray = 600; e.style.strokeDashoffset = 600 * (1 - out((T - s("map").start - 0.9 - i * 0.2) / 0.6)); });
+  scene($("#q3"), T, s("how").start + 0.2, s("end").start, 20);
+  scene($("#about"), T, s("how").start + 2.2, s("end").start, 24);
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

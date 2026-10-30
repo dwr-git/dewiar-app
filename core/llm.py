@@ -1403,7 +1403,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             if p.get("_lite"):                         # последняя попытка: короче — начало задачи и последние шаги
                 hist = (hist[:1] + [{"role": "assistant", "content": "…"}] + hist[-10:]) if len(hist) > 12 else hist
                 system = system[:14000]
-            body = {"model": model, "stream": True,
+            body = {"model": model, "stream": not p.get("_whole"),     # «целиком» — последняя попытка после пустого потока
                     "messages": [{"role": "system", "content": system}] + hist,
                     "max_tokens": max_tokens, "temperature": float(p.get("temperature", 0.7))}
             # №226 (24.10): OpenAI напрямую, GPT-5 и o-модели — ошибка 400: им нужен max_completion_tokens, а temperature
@@ -1542,6 +1542,12 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 log.info("Сервер %s ответил без текста и действий — повторяю через 2 с", base)
                 time.sleep(2)
                 yield from stream_events(dict(p, _blank_retry=True), system, messages, cancel, tools, _retry)
+                return
+            if not p.get("_whole") and p.get("kind") not in ("anthropic", "ollama"):
+                # пакет 30.10: «сервер вернул ответ без текста» (qwen3.8-omni-flash у стороннего сервиса, 27 раз) — облако Dewiar
+                # спасает такие ответы, переспрашивая «целиком», без потока; так и здесь, последней попыткой
+                log.info("Сервер %s дважды пусто в потоке — спрашиваю целиком, без потока", base)
+                yield from stream_events(dict(p, _whole=True), system, messages, cancel, tools, _retry)
                 return
             raise LLMError(f"сервер вернул ответ без текста (модель «{model}»). Отчёт для разработчика: студия → «О программе» → «Сохранить отчёт»")
     except LLMError as e:

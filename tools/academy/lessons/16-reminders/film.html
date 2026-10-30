@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 16 · Напоминания. Светлый неоморфизм серии. Главная вещь урока — фраза превращается в напоминание с повтором: дни недели загораются сами, как их назвали. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+#rem { top: 330px; } #rem .big { font-size: 54px; }
+#wk { top: 170px; width: 1100px; } .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 12px; }
+.wk span { text-align: center; padding: 16px 0; border-radius: 16px; box-shadow: var(--press); font-size: 21px; font-weight: 800; color: var(--mut); transition: none; }
+.wk span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.wl { display: flex; align-items: center; gap: 18px; margin-top: 22px; font-size: 24px; font-weight: 800; } .wl b { min-width: 420px; }
+#alarm { left: 760px; top: 170px; width: 620px; text-align: center; }
+#alarm .big { font-size: 96px; margin: 8px 0 4px; } #alarm p { font-size: 28px; font-weight: 700; }
+#alarm .bt { display: flex; gap: 12px; justify-content: center; margin-top: 22px; } #alarm .bt span { padding: 16px 22px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; }
+#alarm .bt span.on { color: #fff; background: var(--brand); box-shadow: none; }
+#ans { left: 620px; top: 600px; width: 520px; padding: 20px 26px; }
+#cal { top: 170px; width: 1000px; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 16 · Напоминания</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></div>
+    <div id="t-title"><h1>Напоминания</h1><p>Скажите, когда и что, — остальное я</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div class="mess" id="mess"><span style="left:0px;top:0px">📞 Позвонить маме</span><span style="left:420px;top:50px">🌐 Оплатить интернет</span><span style="left:800px;top:10px">🗑 Мусор по вторникам</span><span style="left:120px;top:170px">💊 Витамины</span><span style="left:560px;top:200px">🎂 День рождения Оли</span><span style="left:30px;top:320px">🚗 Техосмотр</span><span style="left:480px;top:330px">📚 Сдать книгу</span><span style="left:860px;top:300px">🦷 Записаться к врачу</span><b>Всё не упомнишь</b></div>
+    <div class="say" id="q1">«Напомни завтра в девять позвонить маме»</div>
+    <div class="card" id="rem"><small>НАПОМИНАНИЕ</small><div class="big">Завтра, 9:00</div><div class="row"><i>📞</i>Позвонить маме<em class="ok">записала ✓</em></div></div>
+    <div class="card" id="wk"><small>ПОВТОРЫ — КАК ГОВОРИТЕ ВЫ</small>
+      <div class="wl" id="w0"><b>«По будням, кроме пятницы»</b><div class="wk" style="flex:1"><span data-d="0">пн</span><span data-d="1">вт</span><span data-d="2">ср</span><span data-d="3">чт</span><span data-d="4">пт</span><span data-d="5">сб</span><span data-d="6">вс</span></div></div>
+      <div class="wl" id="w1"><b>«Каждый вторник и четверг»</b><div class="wk" style="flex:1"><span data-d="0">пн</span><span data-d="1">вт</span><span data-d="2">ср</span><span data-d="3">чт</span><span data-d="4">пт</span><span data-d="5">сб</span><span data-d="6">вс</span></div></div>
+      <div class="wl" id="w2"><b>«Каждый месяц 5 числа»</b><div class="chips" style="margin:0"><span class="on">5 ноября</span><span>5 декабря</span><span>5 января</span></div></div></div>
+    <div class="card" id="alarm"><small>НАПОМИНАНИЕ · 9:00</small><div class="big">9:00</div><p>📞 Позвонить маме</p>
+      <div class="bt"><span id="bt1">Готово</span><span id="bt2">Через 10 мин</span><span>Через час</span></div></div>
+    <div class="say" id="a1" style="left:620px;top:640px;max-width:420px">«Понял»</div>
+    <div class="say" id="a2" style="left:620px;top:640px;max-width:520px">«Отложи на десять минут»</div>
+    <div class="card" id="cal"><h3>Дела и напоминания</h3>
+      <div class="row"><i>📞</i>Позвонить маме<em>завтра 9:00</em></div>
+      <div class="row"><i>🗑</i>Вынести мусор<em>вт, чт · 19:00</em></div>
+      <div class="row"><i>🧾</i>Планёрка<em>пн–чт · 9:00</em></div>
+      <div class="row"><i>🌐</i>Оплатить интернет<em>5 числа</em></div></div>
+  </div>
+  <div class="layer" id="L-phone"><div class="phone"><div class="scr"><h5>Напоминание</h5><div class="big" style="font-size:72px">9:00</div>
+    <div class="bub">📞 Позвонить маме</div><div class="bub" style="color:var(--mut);font-size:16px">Компьютер выключен — звенит телефон</div></div></div></div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  say: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  days: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  ring: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  phone: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  scene($("#mess"), T, s("problem").start + 0.3, s(ORDER[2]).start);
+  [...$("#mess").querySelectorAll("span")].forEach((c, i) => { const k = out((T - s("problem").start - 0.5 - i * 0.3) / 0.4);
+    c.style.opacity = k; c.style.transform = `translate(${Math.sin(T * 0.9 + i) * 8}px, ${(1 - k) * 20 + Math.cos(T * 0.7 + i) * 6}px) rotate(${Math.sin(i * 1.7) * 4}deg)`; });
+  vis($("#mess b"), out((T - s("problem").start - 3.2) / 0.4), 12);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  scene($("#q1"), T, s("say").start + 0.2, s("days").start, 20);
+  scene($("#rem"), T, s("say").start + 2.4, s("days").start, 24);
+  scene($("#wk"), T, s("days").start + 0.2, s("ring").start);
+  const D0 = [0, 1, 2, 3], D1 = [1, 3], t0 = s("days").start;
+  [...$("#w0").querySelectorAll("span[data-d]")].forEach(e => { const d = +e.dataset.d; e.classList.toggle("on", D0.includes(d) && T > t0 + 1.6 + d * 0.18); });
+  [...$("#w1").querySelectorAll("span[data-d]")].forEach(e => { const d = +e.dataset.d; e.classList.toggle("on", D1.includes(d) && T > t0 + 4.6 + d * 0.15); });
+  ["#w0", "#w1", "#w2"].forEach((id, i) => vis($(id), out((T - t0 - 0.8 - i * 3.0) / 0.4), 12));
+  scene($("#alarm"), T, s("ring").start + 0.2, s("phone").start);
+  $("#alarm .big").style.transform = `rotate(${Math.sin(T * 30) * (T < at("s5a") + 2 ? 2.5 : 0)}deg)`;
+  scene($("#a1"), T, at("s5a") + 3.0, at("s5b"), 16); scene($("#a2"), T, at("s5b") + 0.4, s("phone").start, 16);
+  $("#bt1").classList.toggle("on", T > at("s5a") + 3.4 && T < at("s5b")); $("#bt2").classList.toggle("on", T > at("s5b") + 0.8);
+  layer("L-phone", T, s("phone").start + 0.2, s("how").start);
+  scene($("#cal"), T, s("how").start + 0.2, s("end").start);
+  [...$("#cal").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - s("how").start - 0.6 - i * 0.3) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

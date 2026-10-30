@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 15 · Плагины. Светлый неоморфизм серии. Главная вещь урока — каталог плиток: из восьми умений выбираем одно, ставим, и оно сразу работает; лишнее — одним нажатием. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+#mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+#mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+#mess b { position: absolute; left: 330px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+#cat { position: absolute; left: 620px; top: 150px; width: 1220px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
+.pt { padding: 24px 22px; border-radius: 28px; background: var(--bg); box-shadow: var(--raise); }
+.pt i { display: grid; place-items: center; width: 66px; height: 66px; border-radius: 20px; font-size: 36px; font-style: normal; margin-bottom: 14px; }
+.pt b { display: block; font: 700 21px Manrope; line-height: 1.2; } .pt small { display: block; margin-top: 6px; font-size: 16px; font-weight: 700; color: var(--mut); }
+.pt.pick { box-shadow: 0 0 0 4px var(--accent), var(--raise); }
+#card { position: absolute; left: 620px; top: 150px; width: 820px; padding: 34px 40px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+#card .hd { display: flex; align-items: center; gap: 20px; } #card .hd i { width: 86px; height: 86px; border-radius: 26px; display: grid; place-items: center; font-size: 48px; font-style: normal; background: rgba(63,179,127,.16); }
+#card h3 { font: 700 34px Unbounded; } #card .hd small { font-size: 19px; font-weight: 700; color: var(--mut); }
+#card label { display: block; margin-top: 24px; font-size: 18px; font-weight: 800; color: var(--mut); }
+#card .in { margin-top: 8px; padding: 18px 22px; border-radius: 18px; box-shadow: var(--press); font-size: 24px; font-weight: 700; min-height: 66px; }
+#card .in::after { content: "|"; color: var(--accent); margin-left: 2px; opacity: var(--cur, 0); }
+#card .go { margin-top: 28px; display: inline-block; padding: 18px 34px; border-radius: 20px; color: #fff; background: var(--brand); font-size: 23px; font-weight: 800; }
+#card .go.ok { background: linear-gradient(135deg, #46d39a, #2fb383); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 720px; padding: 20px 26px; border-radius: 26px 26px 8px 26px; background: var(--brand); color: #fff; font-size: 27px; font-weight: 700; line-height: 1.35; }
+#ans { position: absolute; left: 620px; top: 340px; width: 760px; padding: 28px 32px; border-radius: 8px 30px 30px 30px; background: var(--bg); box-shadow: var(--raise); font-size: 24px; font-weight: 600; line-height: 1.45; }
+#ans b { color: var(--accent); } #ans .t { display: flex; gap: 12px; margin-top: 18px; } #ans .t span { flex: 1; text-align: center; padding: 14px 6px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 19px; font-weight: 800; }
+#ans .t span.cold { color: #3a6fd8; background: rgba(74,139,232,.1); box-shadow: none; }
+#job { position: absolute; left: 620px; top: 200px; width: 720px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#job small { font-size: 18px; font-weight: 800; color: var(--mut); } #job .row { display: flex; align-items: center; gap: 18px; margin-top: 14px; font-size: 25px; font-weight: 700; }
+#job .tg { margin-left: auto; width: 76px; height: 42px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; }
+#job .tg i { position: absolute; top: 5px; left: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); }
+#job .tg.on { background: var(--brand); box-shadow: none; }
+#push { position: absolute; left: 1400px; top: 200px; width: 420px; padding: 24px 26px; border-radius: 28px; background: var(--bg); box-shadow: var(--raise); }
+#push small { font-size: 16px; font-weight: 800; color: var(--mut); } #push p { margin-top: 10px; font-size: 22px; font-weight: 700; line-height: 1.4; }
+#push .tm { font: 600 46px Unbounded; color: var(--accent); margin-bottom: 6px; }
+#rm { position: absolute; left: 620px; top: 200px; width: 760px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#rm .it { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 22px; font-weight: 700; }
+#rm .it em { margin-left: auto; font-style: normal; font-size: 18px; font-weight: 800; padding: 10px 16px; border-radius: 12px; color: #b04a5c; background: rgba(176,74,92,.1); }
+#rm .core { margin-top: 26px; font-size: 20px; font-weight: 800; color: var(--mut); }
+#rm .core span { display: inline-block; margin: 8px 8px 0 0; padding: 10px 16px; border-radius: 14px; box-shadow: var(--press); color: var(--ink); }
+#studio { position: absolute; left: 620px; top: 170px; width: 900px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px 34px; }
+#studio h3 { font: 700 32px Unbounded; margin-bottom: 6px; } #studio > small { font-size: 19px; font-weight: 700; color: var(--mut); }
+#studio .ph { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; } #studio .ph span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 700; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 15 · Плагины</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M9 3h6v4a2 2 0 1 0 4 0h2v6h-4a2 2 0 1 0 0 4h4v4H3V9h4a2 2 0 1 0 0-4H3V3z"/></svg></div>
+    <div id="t-title"><h1>Плагины</h1><p>Готовые умения — включаете только нужное</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div id="mess"><span style="left:0px;top:0px">🌱 Полив и заморозки</span><span style="left:380px;top:60px">🥗 Меню на неделю</span><span style="left:760px;top:0px">🧳 Вещи в дорогу</span><span style="left:120px;top:160px">📈 Курс валют</span><span style="left:560px;top:190px">🇬🇧 Слова на английском</span><span style="left:40px;top:300px">🌙 Сказка на ночь</span><span style="left:470px;top:330px">📄 Договор</span><span style="left:860px;top:290px">📰 Новости</span><b>Всё сразу — каша</b></div>
+    <div id="cat"><div class="pt pick" id="pt0"><i style="background:#3fb37f22">🌱</i><b>Дача и огород</b><small>заморозки, посадки, полив</small></div><div class="pt" id="pt1"><i style="background:#e88a3c22">🥗</i><b>Кухня</b><small>рецепт из того, что есть</small></div><div class="pt" id="pt2"><i style="background:#4a8be822">🧳</i><b>Путешествие</b><small>погода, деньги, вещи</small></div><div class="pt" id="pt3"><i style="background:#8a63e022">📈</i><b>Курсы и цены</b><small>валюты и оповещения</small></div><div class="pt" id="pt4"><i style="background:#d9566b22">🇬🇧</i><b>Учитель английского</b><small>слова и разговоры</small></div><div class="pt" id="pt5"><i style="background:#3a9fb022">📰</i><b>Дайджест</b><small>новости по интересам</small></div><div class="pt" id="pt6"><i style="background:#6a6fd822">🌙</i><b>Сказка на ночь</b><small>с именем ребёнка</small></div><div class="pt" id="pt7"><i style="background:#b07a3a22">📄</i><b>Проверка договора</b><small>сроки и штрафы</small></div></div>
+    <div id="card"><div class="hd"><i>🌱</i><div><h3>Дача и огород</h3><small>Предупредит о заморозках, подскажет, что сажать и когда поливать</small></div></div>
+      <label>Где дача</label><div class="in" id="f1"></div>
+      <label>Что растёт</label><div class="in" id="f2"></div>
+      <div class="go" id="go">Установить</div></div>
+    <div class="say" id="q1">«Будут ли заморозки на этой неделе?»</div>
+    <div id="ans">В Минске в ночь на четверг — <b>до −2°</b>. Укройте томаты и огурцы, клубнику можно не трогать.
+      <div class="t"><span>Пн +4°</span><span>Вт +2°</span><span>Ср +1°</span><span class="cold">Чт −2°</span><span>Пт +3°</span></div></div>
+    <div id="job"><small>ДЕЛА ПО РАСПИСАНИЮ · ДАЧА И ОГОРОД</small>
+      <div class="row">🌡 Каждый вечер в 19:00 — проверить прогноз<span class="tg" id="tg"><i></i></span></div></div>
+    <div id="push"><small>ЛИРА · 19:00</small><div class="tm">−2°</div><p>Ночью заморозок. Укройте томаты и огурцы.</p></div>
+    <div id="rm"><div class="it">🌱 Дача и огород<em id="rmb">Удалить</em></div><div class="it">🥗 Кухня<em>Удалить</em></div>
+      <div class="core">ОСТАЁТСЯ КАК БЫЛО<br><span>💬 Разговор</span><span>⏰ Напоминания</span><span>📝 Заметки</span><span>📅 Календарь</span></div></div>
+    <div id="studio"><h3>Плагины</h3><small>Что умеет каждый — и что ему сказать</small>
+      <div class="ph"><span>«Что сейчас сажать?»</span><span>«Когда поливать помидоры?»</span><span>«Запиши: посадил чеснок»</span><span>«Что я сажал в прошлом году?»</span></div></div>
+  </div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  catalog: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  install: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  use: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  jobs: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  remove: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  scene($("#mess"), T, s("problem").start + 0.3, s("catalog").start);
+  [...$("#mess").querySelectorAll("span")].forEach((c, i) => { const k = out((T - s("problem").start - 0.5 - i * 0.28) / 0.4);
+    c.style.opacity = k; c.style.transform = `translate(${Math.sin(T * 0.9 + i) * 8}px, ${(1 - k) * 20 + Math.cos(T * 0.7 + i) * 6}px) rotate(${Math.sin(i * 1.7) * 4}deg)`; });
+  vis($("#mess b"), out((T - at("s2b")) / 0.4), 12);
+  scene($("#cat"), T, s("catalog").start + 0.2, s("install").start);
+  [...$("#cat").children].forEach((c, i) => vis(c, out((T - s("catalog").start - 0.4 - i * 0.14) / 0.4), 16, .94));
+  $("#pt0").classList.toggle("pick", T > end("s3a") - 0.6);
+  scene($("#card"), T, s("install").start + 0.2, s("use").start);
+  const k1 = (T - s("install").start - 1.8) / 1.0, k2 = (T - s("install").start - 3.2) / 1.6;
+  $("#f1").textContent = type("Минск", k1); $("#f2").textContent = type("томаты, огурцы, клубника", k2);
+  $("#f1").style.setProperty("--cur", k1 > 0 && k1 < 1.3 ? (Math.floor(T * 2) % 2) : 0); $("#f2").style.setProperty("--cur", k2 > 0 && k2 < 1.3 ? (Math.floor(T * 2) % 2) : 0);
+  const done = T > end("s4a") - 0.4; $("#go").classList.toggle("ok", done); $("#go").textContent = done ? "Установлен ✓" : "Установить";
+  scene($("#q1"), T, s("use").start + 0.2, s("jobs").start, 20);
+  scene($("#ans"), T, s("use").start + 2.6, s("jobs").start, 20);
+  scene($("#job"), T, s("jobs").start + 0.2, s("remove").start);
+  $("#tg").classList.toggle("on", T > s("jobs").start + 1.6); $("#tg i").style.left = (T > s("jobs").start + 1.6 ? 39 : 5) + "px";
+  scene($("#push"), T, s("jobs").start + 3.4, s("remove").start, 30);
+  scene($("#rm"), T, s("remove").start + 0.2, s("how").start);
+  const gone = out((T - s("remove").start - 2.2) / 0.5); const r0 = $("#rm .it");
+  r0.style.opacity = 1 - gone; r0.style.transform = `translateX(${gone * -60}px)`; r0.style.marginTop = (14 - gone * 14) + "px"; r0.style.maxHeight = (1 - gone) * 90 + "px";
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  [...$("#studio .ph").children].forEach((c, i) => vis(c, out((T - s("how").start - 0.8 - i * 0.3) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

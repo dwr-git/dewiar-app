@@ -4017,3 +4017,4 @@ html:not(.st-light) .ch-tmbar b { color: #ffcf7a; }
 .ft-seg button:focus-visible { outline: 0; box-shadow: 0 0 0 2px var(--brand, var(--accent)); }
 .ft-now { color: var(--muted); font-size: 12px; }
 @media (max-width: 760px) { .ft { grid-template-columns: 1fr; } .ft-r { align-items: flex-start; } }
+.switch[hidden] { display: none; }

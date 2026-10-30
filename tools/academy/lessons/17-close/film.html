@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 17 · Близкие. Светлый неоморфизм серии. Главная вещь урока — живая переписка семьи: фото, файл, звонок и группа в одном месте, с замком шифрования. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+#seal { left: 760px; top: 160px; width: 560px; text-align: center; }
+#seal .ring { width: 300px; height: 300px; margin: 18px auto 10px; border-radius: 50%; display: grid; place-items: center; box-shadow: var(--press);
+  background: conic-gradient(from var(--a, 0deg), #6f8cff, #b48cff, #ff9ac2, #6f8cff); }
+#seal .ring i { width: 220px; height: 220px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font-style: normal; font-size: 92px; }
+#seal p { font-size: 22px; font-weight: 700; color: var(--mut); }
+#chat { top: 160px; width: 760px; } #chat .bub { box-shadow: var(--raise-s); max-width: 70%; }
+#chat .ph { width: 300px; height: 170px; border-radius: 20px; margin-top: 12px; background: linear-gradient(135deg, #ffd29a, #ff9ac2 55%, #9ab8ff); }
+#lock { position: absolute; left: 1420px; top: 220px; width: 380px; padding: 26px 28px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+#lock .big { font-size: 70px; } #lock p { font-size: 21px; font-weight: 700; margin-top: 8px; line-height: 1.4; }
+#call { left: 760px; top: 150px; width: 560px; text-align: center; }
+#call .av { width: 200px; height: 200px; margin: 16px auto; border-radius: 50%; background: linear-gradient(135deg, #ffd29a, #ff9ac2); display: grid; place-items: center; font-size: 90px; box-shadow: 0 0 0 calc(var(--p, 0) * 30px) rgba(111,140,255,.18); }
+#call .bt { display: flex; gap: 24px; justify-content: center; margin-top: 10px; } #call .bt span { width: 86px; height: 86px; border-radius: 50%; display: grid; place-items: center; font-size: 36px; box-shadow: var(--raise-s); }
+#call .bt span.end { background: #e2566b; color: #fff; box-shadow: none; }
+#grp { top: 150px; width: 900px; } #grp .who { display: flex; gap: 10px; margin: 6px 0 4px; } #grp .who span { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 32px; box-shadow: var(--raise-s); }
+#studio { top: 170px; width: 900px; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 17 · Близкие</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg></div>
+    <div id="t-title"><h1>Близкие</h1><p>Переписка, фото и звонки своих — в одном месте</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div class="mess" id="mess"><span style="left:0px;top:0px">📷 Фото — в мессенджер</span><span style="left:420px;top:50px">📎 Файл — на почту</span><span style="left:800px;top:10px">📞 Звонок — по телефону</span><span style="left:120px;top:170px">💬 Чат — в другом</span><span style="left:560px;top:200px">🔑 Пароль — от всех</span><span style="left:30px;top:320px">🗂 Ищи потом…</span><b>Всё в разных местах</b></div>
+    <div class="card" id="seal"><small>ПРИГЛАШЕНИЕ</small><div class="ring"><i>💗</i></div><p>Покажите печать Dewiar — или отправьте ссылку</p></div>
+    <div class="card" id="chat"><small>МАМА</small>
+      <div class="bub" id="c1">Как доехали? 😊</div><div class="bub me" id="c2">Отлично! Смотри 👇</div><div class="ph" id="c3" style="margin-left:auto"></div>
+      <div class="bub me" id="c4">Я выезжаю, буду в семь</div></div>
+    <div id="lock"><div class="big">🔒</div><p>Шифруется на ваших устройствах — сервер видит только замок</p></div>
+    <div class="card" id="call"><small>ЗВОНОК · С ВИДЕО</small><div class="av">👩</div><h3>Мама</h3><div class="bt"><span>🎤</span><span>📹</span><span class="end">✆</span></div></div>
+    <div class="card" id="grp"><small>ГРУППА</small><h3>Семья</h3><div class="who"><span>👩</span><span>👨</span><span>👧</span><span>👦</span><span>👵</span></div>
+      <div class="row"><i>⏰</i>«Напомни всем в группе Семья в субботу в 10 — дача»<em class="ok">у каждого ✓</em></div>
+      <div class="row"><i>🖼</i>Фото и файлы группы — альбомом</div></div>
+    <div class="card" id="studio"><h3>Близкие</h3><small>В студии и на телефоне — та же переписка</small>
+      <div class="chips"><span>«Напиши маме, что я выезжаю»</span><span>«Позвони маме»</span><span>«Отправь брату файл»</span></div></div>
+  </div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  invite: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  chat: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  call: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  group: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  scene($("#mess"), T, s("problem").start + 0.3, s(ORDER[2]).start);
+  [...$("#mess").querySelectorAll("span")].forEach((c, i) => { const k = out((T - s("problem").start - 0.5 - i * 0.3) / 0.4);
+    c.style.opacity = k; c.style.transform = `translate(${Math.sin(T * 0.9 + i) * 8}px, ${(1 - k) * 20 + Math.cos(T * 0.7 + i) * 6}px) rotate(${Math.sin(i * 1.7) * 4}deg)`; });
+  vis($("#mess b"), out((T - s("problem").start - 3.2) / 0.4), 12);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  scene($("#seal"), T, s("invite").start + 0.2, s("chat").start); $("#seal .ring").style.setProperty("--a", (T * 40) + "deg");
+  scene($("#chat"), T, s("chat").start + 0.2, s("call").start);
+  ["#c1", "#c2", "#c3"].forEach((id, i) => vis($(id), out((T - s("chat").start - 0.8 - i * 0.7) / 0.4), 14));
+  vis($("#c4"), out((T - at("s4a") - 3.4) / 0.4), 14);
+  scene($("#lock"), T, at("s4b") + 0.2, s("call").start, 20);
+  scene($("#call"), T, s("call").start + 0.2, s("group").start); $("#call .av").style.setProperty("--p", (Math.sin(T * 4) + 1) / 2);
+  scene($("#grp"), T, s("group").start + 0.2, s("how").start);
+  [...$("#grp .who").children].forEach((c, i) => vis(c, out((T - s("group").start - 0.6 - i * 0.2) / 0.3), 10, .8));
+  [...$("#grp").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - s("group").start - 2.2 - i * 0.8) / 0.4), 12));
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  [...$("#studio .chips").children].forEach((c, i) => vis(c, out((T - s("how").start - 0.8 - i * 0.3) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

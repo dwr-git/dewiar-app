@@ -7,6 +7,14 @@
 3. Календарь: сработавшее — в назначенное время («прозвенело позже — в 08:56»), у готовых дел — короткое имя («Итог дня»).
 4. Из календаря: нажать на напоминание или дело — сменить время (у повторяющегося — для всех повторов), текст, выключить,
    «Выполнить сейчас», «Все дела по расписанию»."""
+# Ночью (после полуночи до 3 и после 22) сдвиги «−50 минут», «вчера в 21», «завтра» переходят через полночь — проверка
+# падала сама, а не программа (31.10, прогон в 00:43). Тогда — перезапуск в поясе, где сейчас полдень.
+import os as _os, sys as _sys, time as _time  # noqa: E401
+if not _os.environ.get("DEWIAR_TZ_NOON") and not (3 <= _time.localtime().tm_hour < 22):
+    _off = 12 - _time.gmtime().tm_hour
+    _off = _off - 24 if _off > 14 else _off + 24 if _off < -12 else _off
+    _os.execve(_sys.executable, [_sys.executable] + _sys.argv, dict(_os.environ, DEWIAR_TZ_NOON="1",
+               TZ="UTC" if _off == 0 else f"Etc/GMT{'-' if _off > 0 else '+'}{abs(_off)}"))
 import json, os, re, sys, tempfile, threading, time, types
 from datetime import datetime, timedelta
 from pathlib import Path

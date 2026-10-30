@@ -20,12 +20,46 @@ import re
 import shutil
 import subprocess
 import threading
+from pathlib import Path
 
 import httpx
 
 log = logging.getLogger("dewiar.mcp")
 PROTOCOL = "2025-06-18"               # предлагаем при initialize; сервер отвечает своей версией — её и шлём дальше (HTTP)
 CLIENT = {"name": "dewiar", "version": "0.9"}
+
+
+def plugin_expand(cfg):
+    """Плагин со своим кодом (0.75; владелец 30.10: «готовые модули — тендеры, резюме — включаемыми плагинами»): в command,
+    args и env сервера плагина {plugin_dir} — его папка (свои — CONFIG_DIR/plugins/<id>, встроенные — DATA_DIR/plugins/<id>),
+    {python} — Python самой программы (в Windows — python.exe рядом с pythonw.exe: окно консоли не нужно, трубы — да).
+    Есть папка lib/ у плагина — она первой в PYTHONPATH: библиотеки модуля едут вместе с ним."""
+    pid = str(cfg.get("plugin") or "")
+    text = json.dumps([cfg.get("command"), cfg.get("args"), cfg.get("env")], ensure_ascii=False)
+    if not pid or ("{plugin_dir}" not in text and "{python}" not in text):
+        return cfg
+    # и ещё серверу плагина: DEWIAR_PLUGIN_DATA — его папка данных (рядом с настройками, переживает переустановку),
+    # DEWIAR_PLUGIN_SETTINGS — его настройки из карточки плагина (JSON), ядро Dewiar — в пути модулей (knowledge.extract
+    # и др.: текст из PDF и Word без своих библиотек)
+    import sys
+    from plugins import BUILTIN_DIR, USER_DIR
+    d = next((x for x in (USER_DIR / pid, BUILTIN_DIR / pid) if re.fullmatch(r"[\w-]{1,40}", pid) and x.is_dir()), None)
+    if d is None:
+        raise MCPError(f"папка плагина «{pid}» не найдена — переустановите плагин")
+    py = sys.executable
+    if os.name == "nt" and py.lower().endswith("pythonw.exe"):
+        py = py[:-len("pythonw.exe")] + "python.exe"
+    sub = lambda v: str(v).replace("{plugin_dir}", str(d)).replace("{python}", py)   # noqa: E731
+    env = {k: sub(v) for k, v in (cfg.get("env") or {}).items()}
+    from settings import STATE_DIR
+    data = STATE_DIR / "plugins-data" / pid
+    data.mkdir(parents=True, exist_ok=True)
+    env.setdefault("DEWIAR_PLUGIN_DATA", str(data))
+    env["DEWIAR_PLUGIN_SETTINGS"] = json.dumps(cfg.get("_values") or {}, ensure_ascii=False)
+    core = str(Path(__file__).resolve().parent)
+    env["PYTHONPATH"] = os.pathsep.join(([str(d / "lib")] if (d / "lib").is_dir() else []) + [core]
+                                        + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+    return dict(cfg, command=sub(cfg.get("command") or ""), args=[sub(a) for a in cfg.get("args") or []], env=env)
 
 
 class MCPError(Exception):
@@ -37,6 +71,7 @@ class StdioTransport:
     stderr тоже читается постоянно (в журнал, уровень debug): иначе труба переполнится и сервер встанет."""
 
     def __init__(self, cfg):
+        cfg = plugin_expand(cfg)
         cmd = [cfg["command"]] + list(cfg.get("args") or [])
         found = shutil.which(cmd[0])
         if not found and not os.path.exists(cmd[0]):
@@ -255,6 +290,10 @@ class MCPManager:
     def reconcile(self):
         """Подключить новые, отключить удалённые/выключенные, переподключить изменённые — в фоне."""
         want = {n: c for n, c in (self.s.get("mcp", "servers") or {}).items() if c.get("enabled", True)}
+        on = self.s.get("plugins", "on") or {}
+        for n, c in list(want.items()):                 # сервер плагина получает его настройки (поменяли — перезапуск)
+            if c.get("plugin"):
+                want[n] = dict(c, _values=dict((on.get(c["plugin"]) or {}).get("values") or {}))
         with self.lock:
             for n in list(self.servers):
                 if n not in want or self.servers[n].cfg != want[n]:

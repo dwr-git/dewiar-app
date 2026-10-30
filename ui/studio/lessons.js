@@ -19,7 +19,8 @@ function lsPosters(root) {
    (новый урок встаёт в свой раздел без обновления программы); у сайта старше 0.72 полей нет — эта запасная таблица. */
 const LS_SECT = { "01-council": ["council"], "02-watch": ["watch"], "03-leads": ["sitechat", "clients"], "04-team": ["team"], "05-clients": ["clients"],
   "06-mailing": ["mailing"], "07-posts": ["pbot"], "08-prompter": ["prompter"], "09-docs": ["docs", "folder"], "10-mail": ["connect"],
-  "11-jobs": ["reminders"], "12-morning": ["home", "calendar"], "13-money": ["pay", "family"], "14-tasks": ["tasks"] };
+  "11-jobs": ["reminders"], "12-morning": ["home", "calendar"], "13-money": ["pay", "family"], "14-tasks": ["tasks"],
+  "15-plugins": ["skills"], "16-reminders": ["reminders"], "17-close": ["close"], "18-notes": ["notes", "memory", "me"], "19-vault": ["vault"] };
 async function lsList() {
   if (Array.isArray(LSN.items)) return LSN.items;
   if (typeof HM !== "undefined" && HM.ac && HM.ac.d && Array.isArray(HM.ac.d.items)) return (LSN.items = HM.ac.d.items);

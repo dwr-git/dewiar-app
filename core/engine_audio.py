@@ -433,7 +433,17 @@ class AudioMixin:
                 self.emit("eof")
                 return
             if not self.stopping.is_set():
-                if self.restart_audio.is_set():
+                if getattr(self, "_mic_asleep", False):
+                    log.info("💤 Отпускаю микрофон — компьютер может уснуть; тронут мышь или клавиатуру — снова слушаю")
+                    from sleepguard import idle_seconds
+                    while not self.stopping.is_set():
+                        i = idle_seconds()
+                        if i is None or i < 5:
+                            break
+                        self.stopping.wait(2)
+                    self._mic_asleep = False
+                    log.info("💤 Снова слушаю микрофон")
+                elif self.restart_audio.is_set():
                     self.restart_audio.clear()
                     self.aec.teardown()
                 elif last_err and any(s in last_err for s in NO_MIC_ERR):
@@ -455,6 +465,17 @@ class AudioMixin:
                 else:
                     self.note("Микрофон недоступен — переподключаюсь…")
                     time.sleep(2)
+
+    def _sleep_due(self):
+        """Отпустить ли микрофон, чтобы Windows могла уснуть (идея №70; sleepguard.py). Настройка audio.let_sleep."""
+        if self.s.get("audio", "let_sleep") is False:
+            return False
+        from sleepguard import idle_seconds, release_due, standby_seconds
+        radio = getattr(self, "radio", None)
+        busy = (self.turn is not None or self.state != "idle" or bool(getattr(self, "alarm", None)) or self.hold is not None
+                or bool(radio is not None and radio.playing) or bool(getattr(getattr(self, "prompter", None), "on", False))
+                or bool(getattr(self, "meeting", None)))
+        return release_due(idle_seconds(), standby_seconds(), time.monotonic() - float(getattr(self, "mic_voice_t", 0) or 0), busy)
 
     def _mic_silent(self, exact=True):
         """Микрофон открыт, а звука нет: ровные нули (exact) — в Windows так выглядит запрет доступа к микрофону;
@@ -578,11 +599,17 @@ class AudioMixin:
         echo = collections.deque(maxlen=90)             # громкость остаточного эха своего голоса (~3 с)
         half_echo = collections.deque(maxlen=100)       # полудуплекс: громкость своего голоса в микрофоне (~3 с)
         zst = {"since": None, "told": False, "all": True}      # поток идёт, а в нём нули или почти нули (_mic_zero_step)
+        sleep_chk = time.monotonic()
         while not self.stopping.is_set() and not self.restart_audio.is_set():
             frame = self.capture.read()
             if not frame:
                 return
             now = time.monotonic()
+            if now - sleep_chk > 10 and os.name == "nt" and not self.wav_input:
+                sleep_chk = now
+                if self._sleep_due():
+                    self._mic_asleep = True            # отпустить микрофон: компьютер может уснуть (_audio_loop ждёт мышь)
+                    return
             self._mic_ring.append(frame)                # 0,4 с в памяти — удержание не теряет начало фразы (не распознаётся)
             if self.muted and self.hold is None and not self._mute_pass:
                 continue                                 # микрофон выключен: слушаем только удержание и одну фразу по нажатию
