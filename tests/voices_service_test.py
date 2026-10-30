@@ -47,6 +47,11 @@ _t = A.trim(_w)
 ok(_t.size >= _loud.size + _quiet.size and _t.size < _w.size - _sr // 5,
    f"обрезка тишины не срезает тихое последнее слово («…равно два», отзыв 16.10): {_t.size / _sr:.2f} с из {_w.size / _sr:.2f}")
 
+_w2 = _np.concatenate([_np.zeros(_sr // 5), _quiet, _loud, _np.zeros(_sr // 5)]).astype(_np.float32)
+_t2 = A.trim(_w2)
+ok(_t2.size >= _loud.size + _quiet.size and _t2.size < _w2.size - _sr // 10,
+   f"и тихое первое слово не срезается («Что у нас с Ивановым», отзыв 29.10): {_t2.size / _sr:.2f} с из {_w2.size / _sr:.2f}")
+
 # ── кто каким голосом ──
 A.cfg_save({"voices": {"anna": {"kind": "clone", "audio": "anna.wav", "text": "т", "gender": "female"}},
             "personas": {"lira": "anna"}, "aliases": {"serena": "vivian", "loop1": "loop2", "loop2": "loop1"},

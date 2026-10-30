@@ -184,6 +184,14 @@ ok(len(sent) == 1 and "90" in sent[0], f"в Telegram ушёл только уд�
 ok(upd and upd[0]["last_ok"] is False and upd[-1]["last_ok"] is True, "итог записан в само дело (неудача, потом успех)")
 ok(probs and probs[0][0] == "job", "сбой дела — в журнал сбоев")
 
+# отчёт №407 (29.10): модели не хватает окна контекста — повтор через 5 и 15 минут упадёт так же; сразу итог, без повторов
+from llm import CTX_TEXT  # noqa: E402
+calls.clear(); sent.clear(); pushes.clear()
+me.ask = lambda text, via=None, raw=False, shown=None, report=None, **k: (calls.append(1), threading.Thread(target=lambda: report(False, CTX_TEXT)).start())
+run({"id": "j2", "text": "Проверить почту", "deliver": "telegram"})
+ok(len(calls) == 1 and sent and sent[-1].startswith("⚠") and "окна контекста" in sent[-1],
+   f"не хватает окна контекста — без повторов, сразу понятное «не получилось»: {len(calls)} попыток, {sent[-1][:60] if sent else ''!r}")
+
 srv.shutdown()
 print("\nИТОГ:", "всё прошло" if not FAILS else f"провалов {len(FAILS)}")
 sys.exit(1 if FAILS else 0)

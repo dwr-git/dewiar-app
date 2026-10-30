@@ -1,0 +1,14 @@
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};

@@ -70,6 +70,25 @@ ok(not (root / "Заметки/Список покупок.md").exists() and (ro
 st = ob.sync()
 ok(not (mir / "Заметки/Пароль от вайфая.md").exists() and (vault / ".trash/DEWIAR/Заметки/Пароль от вайфая.md").is_file(),
    "удалили у ассистента — в корзине Obsidian (.trash)")
+# отчёт №408 (29.10): хранилище в сетевой папке, один файл без прав — раньше вся сверка падала каждые 20 с
+import logging  # noqa: E402
+import obsidian as OB  # noqa: E402
+_real = OB._hash
+(mir / "Заметки/Закрыто.md").write_text("x", encoding="utf-8"); (mir / "Заметки/Открыто.md").write_text("y", encoding="utf-8")
+def _deny(p):
+    if Path(p).name == "Закрыто.md":
+        raise PermissionError(13, "Permission denied", str(p))
+    return _real(p)
+OB._hash = _deny
+_warns = []
+_h = logging.Handler(); _h.emit = lambda r: _warns.append(r.getMessage()); logging.getLogger("dewiar.obsidian").addHandler(_h)
+st1 = ob.sync(); st2 = ob.sync()
+ok(st1.get("skipped") == 1 and st2.get("skipped") == 1 and (root / "Заметки/Открыто.md").is_file() and "нет доступа" in ob.last["error"]
+   and sum("Закрыто" in w for w in _warns) == 1, f"файл без прав — пропущен, остальное сверено, в журнале один раз: {st1} {_warns}")
+OB._hash = _real; logging.getLogger("dewiar.obsidian").removeHandler(_h)
+for _p in (mir / "Заметки/Закрыто.md", mir / "Заметки/Открыто.md", root / "Заметки/Открыто.md", root / "Заметки/Закрыто.md"):
+    _p.unlink(missing_ok=True)
+ob.sync()
 ok(json.loads((vault / ".obsidian/workspace.json").read_text()) == {} and (vault / "Путешествия/Отпуск 2026.md").read_text(encoding="utf-8").startswith("# Отпуск"),
    "свои заметки пользователя и настройки Obsidian не тронуты")
 

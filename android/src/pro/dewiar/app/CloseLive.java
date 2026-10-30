@@ -40,8 +40,12 @@ public class CloseLive extends Service {
         Intent i = new Intent(c, CloseLive.class);
         try {
             if (!on) { c.stopService(i); return; }
+            // отчёты №393, №401 (29.10): «Падение приложения» — ForegroundServiceDidNotStartInTimeException: после
+            // startForegroundService у службы 10 с на startForeground, а на старте приложения главный поток занят
+            // WebView дольше. Приложение на экране — обычный запуск, без срока (служба сама выйдет на передний план);
+            // из фона (после загрузки телефона) обычный запуск запрещён — тогда как раньше.
+            try { c.startService(i); return; } catch (IllegalStateException bg) { /* фон — ниже */ }
             if (Build.VERSION.SDK_INT >= 26) Context.class.getMethod("startForegroundService", Intent.class).invoke(c, i);
-            else c.startService(i);
         } catch (Throwable ignored) { }
     }
 

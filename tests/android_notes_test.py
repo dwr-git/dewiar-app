@@ -38,8 +38,9 @@ with sync_playwright() as p:
     r = pg.evaluate("() => [noteQuick('что у меня в заметках'), noteQuick('запиши расход 450'), noteQuick('заметка: позвонить Ольге в пять'), notes().length, notes().slice(-1)[0].text]")
     ok(r[0] == "" and r[1] == "" and r[2] == "Записала в заметки." and r[3] == 2 and r[4].startswith("Позвонить Ольге"), f"вопрос о заметках и расход — не заметка; «заметка: …» — заметка: {r}")
     r = pg.evaluate("""() => [!!claimedAction('Записала.', new Set(), 'запиши это в заметки'), !!claimedAction('Записала.', new Set(['save_note']), 'запиши в заметки'),
-      !!claimedAction('Записала.', new Set(), 'запиши расход 450 на продукты')]""")
-    ok(r == [True, False, False], f"«Записала.» без save_note после просьбы о заметке — ловится (и только тогда): {r}")
+      (claimedAction('Записала.', new Set(), 'запиши расход 450 на продукты') || {}).tool]""")
+    # расход — не заметка; «Записала.» без money_add на расход ловится уже как трата (№405, 29.10)
+    ok(r == [True, False, "money_add"], f"«Записала.» без save_note после просьбы о заметке — ловится как заметка, на расход — как трата: {r}")
     # фото из чата с просьбой записать
     r = pg.evaluate(f"""async () => {{ await ask('Сохрани в заметки чек из магазина', {{ attach: [{{ kind: 'image', name: 'чек.jpg', url: '{PIX}' }}] }});
       await new Promise(r => setTimeout(r, 200)); const x = notes().find(n => /чек/i.test(n.title));

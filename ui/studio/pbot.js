@@ -22,7 +22,7 @@ function pbRender() {
   $("#bp-flow").style.setProperty("--c", p.color || "#8B7CFF");
   $("#bp-who").textContent = p.name || "Персонаж";
   $("#bp-at").textContent = d.connected ? "@" + d.bot + (d.on ? "" : " · на паузе") : "бот ещё не подключён";
-  $("#bp-kb").textContent = d.kb && d.kb.length ? d.kb.slice(0, 3).join(", ") + (d.kb.length > 3 ? ` и ещё ${d.kb.length - 3}` : "") : "не подключены — отвечает от себя";
+  $("#bp-kb").textContent = d.kb && d.kb.length ? d.kb.slice(0, 3).join(", ") + (d.kb.length > 3 ? ` и ещё ${d.kb.length - 3}` : "") : "не подключены — нажмите, чтобы подключить";
   $("#bp-n-kb").classList.toggle("dim", !(d.kb && d.kb.length));
   $("#bp-model").textContent = d.model || "общий";
   $("#bp-n-gr").classList.toggle("dim", !d.groups);
@@ -41,7 +41,8 @@ function pbRender() {
   $$("#bp-ps .co-m").forEach(b => b.onclick = () => pbSet({ persona: b.dataset.id }));
   $("#bp-kbtip").innerHTML = d.kb && d.kb.length ? `Отвечает по знаниям: ${d.kb.map(pbEsc).join(", ")}.`
     : `Чтобы бот отвечал по вашим документам, дайте персонажу знания: <a href="#" id="bp-to-p">«Персонажи»</a> → ${pbEsc(p.name)} → «Знания».`;
-  const tp = $("#bp-to-p"); if (tp) tp.onclick = (e) => { e.preventDefault(); const b = $('nav button[data-p="personas"]'); if (b) b.click(); };
+  const tp = $("#bp-to-p"); if (tp) tp.onclick = (e) => { e.preventDefault(); pbToKb(); };
+  const nk = $("#bp-n-kb"); nk.onclick = pbToKb; nk.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pbToKb(); } };
   for (const [id, k] of [["#bp-brief", "brief"], ["#bp-welcome", "welcome"]]) if (document.activeElement !== $(id)) $(id).value = d[k] || "";
   $("#bp-groups").checked = !!d.groups;
   if (document.activeElement !== $("#bp-pu")) $("#bp-pu").value = d.per_user;
@@ -49,6 +50,17 @@ function pbRender() {
   pbLog(d);
   pbEnt(p);
   requestAnimationFrame(pbWires);
+}
+
+/* «Знания» на схеме — кнопка (вопрос пользователя 29.10: «где подключаются Знания (RAG)?»): «Персонажи» → карточка этого
+   персонажа открыта, раздел «Знания» перед глазами */
+function pbToKb() {
+  const id = pbPersona().id, b = $('nav button[data-p="personas"]'); if (b) b.click();
+  let n = 0;
+  const go = () => { const list = typeof personas !== "undefined" ? personas : [], p = list.find(x => x.id === id);
+    if (p && typeof openEditor === "function") { openEditor(p); const k = $("#e-kb"); if (k) k.scrollIntoView({ block: "center" }); }
+    else if (n++ < 20) setTimeout(go, 100); };
+  setTimeout(go, 50);
 }
 
 function pbLog(d) {

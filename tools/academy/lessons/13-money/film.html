@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 13 · Деньги голосом. Светлый неоморфизм серии. Главная вещь урока — записи справа: сказали трату — строка появилась; спросили — Лира посчитала; в начале месяца — полосы «куда ушли деньги». */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: #2fb383; }
+.say { position: absolute; left: 620px; top: 200px; max-width: 640px; padding: 20px 26px; border-radius: 26px 26px 8px 26px; background: var(--brand); color: #fff; font-size: 26px; font-weight: 700; line-height: 1.35; }
+#mess { position: absolute; left: 620px; top: 250px; width: 680px; padding: 34px 40px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#mess b { display: block; font: 600 44px/1.25 Unbounded, sans-serif; }
+#rc { position: absolute; left: 640px; top: 520px; width: 680px; height: 220px; }
+#rc span { position: absolute; width: 120px; padding: 16px 14px; border-radius: 10px; background: #fff; box-shadow: 0 14px 30px -16px rgba(36,50,74,.45); font-size: 15px; font-weight: 700; color: var(--mut); line-height: 1.5; }
+#rc span::before { content: "🧾"; display: block; font-size: 26px; margin-bottom: 4px; }
+#led { position: absolute; left: 1360px; top: 140px; width: 480px; height: 700px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); padding: 28px 26px; overflow: hidden; }
+#led h4 { font: 600 24px Unbounded; margin-bottom: 6px; } #led small.d { font-size: 17px; font-weight: 800; color: var(--mut); }
+.en { display: flex; align-items: center; gap: 14px; padding: 16px 14px; margin-top: 12px; border-radius: 20px; background: #fff; box-shadow: 0 10px 22px -16px rgba(36,50,74,.5); }
+.en i { width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; font-style: normal; font-size: 24px; background: rgba(69,96,234,.1); flex: none; }
+.en div { flex: 1; } .en b { display: block; font-size: 20px; } .en small { font-size: 15px; color: var(--mut); font-weight: 700; }
+.en em { font-style: normal; font: 700 22px Unbounded; } .en em.minus { color: var(--ink); } .en em.plus { color: #1e9b6c; }
+.en.old { opacity: .55; box-shadow: none; background: transparent; }
+#ans { position: absolute; left: 620px; top: 330px; width: 660px; padding: 30px 34px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+#ans b { display: block; font: 700 46px Unbounded; margin: 8px 0 6px; } #ans small { font-size: 20px; font-weight: 800; color: var(--mut); }
+#ans span { display: inline-block; margin-top: 16px; padding: 10px 16px; border-radius: 14px; background: rgba(69,96,234,.1); color: var(--accent); font-size: 18px; font-weight: 800; }
+#mon { position: absolute; left: 620px; top: 150px; width: 1220px; padding: 34px 40px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+#mon h4 { font: 700 34px Unbounded; } #mon p { font-size: 22px; color: var(--mut); font-weight: 700; margin: 8px 0 22px; }
+.bar { display: grid; grid-template-columns: 220px 1fr 150px; align-items: center; gap: 18px; margin-top: 14px; font-size: 23px; font-weight: 800; }
+.bar s { height: 30px; border-radius: 10px; box-shadow: var(--press); position: relative; overflow: hidden; text-decoration: none; display: block; }
+.bar s i { position: absolute; inset: 0 auto 0 0; border-radius: 10px; }
+.bar em { font-style: normal; text-align: right; }
+#fam { position: absolute; left: 620px; top: 200px; width: 760px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#fam h4 { font: 600 26px Unbounded; margin-bottom: 8px; }
+#fam .fr { display: flex; align-items: center; gap: 14px; padding: 14px 0; font-size: 22px; font-weight: 700; } #fam .fr + .fr { box-shadow: 0 -1px 0 rgba(36,50,74,.08); }
+#fam .fr i { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 18px Unbounded; font-style: normal; flex: none; }
+#fam .fr span { flex: 1; } #fam .fr em { font-style: normal; font: 700 22px Unbounded; }
+#studio { position: absolute; left: 620px; top: 210px; width: 760px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px 34px; }
+#studio h3 { font: 700 30px Unbounded; margin-bottom: 18px; }
+#studio .tabs { display: flex; gap: 10px; } #studio .tabs span { padding: 14px 22px; border-radius: 16px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; }
+#studio .tabs span.on { color: #fff; background: var(--brand); box-shadow: none; }
+#studio p { margin-top: 20px; font-size: 21px; color: var(--mut); font-weight: 700; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 13 · Деньги голосом</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/></svg></div>
+    <div id="t-title"><h1>Деньги голосом</h1><p>Сказали трату — записано, спросили — посчитано</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div id="mess"><b>Куда ушли деньги<br>в этом месяце?</b></div>
+    <div id="rc"><span style="left:0px;top:30px;transform:rotate(-8deg)">Пятёрочка<br>1 245 ₽</span><span style="left:150px;top:0px;transform:rotate(6deg)">Такси<br>380 ₽</span><span style="left:300px;top:40px;transform:rotate(-4deg)">Аптека<br>612 ₽</span><span style="left:450px;top:10px;transform:rotate(9deg)">Кафе<br>890 ₽</span><span style="left:560px;top:70px;transform:rotate(-10deg)">АЗС<br>2 100 ₽</span></div>
+    <div class="say" id="q1">«Потратил тысячу двести на продукты»</div>
+    <div class="say" id="q2">«Пришла зарплата, восемьдесят тысяч»</div>
+    <div class="say" id="q3">«Сколько я потратил на кафе в октябре?»</div>
+    <div id="ans"><small>КАФЕ · ОКТЯБРЬ</small><b>7 340 ₽</b><small>12 раз · чаще всего по пятницам</small><br><span>посчитано: 890 + 1 250 + 640 + … = 7 340</span></div>
+    <div id="mon"><h4>Ваш октябрь</h4><p>Куда ушли деньги — 53 440 ₽</p><div class="bar"><span>🛒 Продукты</span><s><i data-w="100.0" style="background:#4f6cf0;width:0"></i></s><em>24 300 ₽</em></div><div class="bar"><span>🏠 Дом</span><s><i data-w="52.7" style="background:#6a8dff;width:0"></i></s><em>12 800 ₽</em></div><div class="bar"><span>☕ Кафе</span><s><i data-w="30.2" style="background:#e59a1f;width:0"></i></s><em>7 340 ₽</em></div><div class="bar"><span>🚕 Транспорт</span><s><i data-w="21.0" style="background:#5aa9e6;width:0"></i></s><em>5 100 ₽</em></div><div class="bar"><span>… Остальное</span><s><i data-w="16.0" style="background:#9aa6b8;width:0"></i></s><em>3 900 ₽</em></div></div>
+    <div id="fam"><h4>Семья · общий бюджет</h4>
+      <div class="fr"><i style="background:linear-gradient(140deg,#ffcf7a,#e59a1f)">А</i><span>Анна: аптека</span><em>−2 400 ₽</em></div>
+      <div class="fr"><i style="background:linear-gradient(140deg,#8fb4ff,#5a7be8)">Я</i><span>Вы: продукты</span><em>−1 200 ₽</em></div>
+      <div class="fr"><i style="background:linear-gradient(140deg,#8fe0b5,#2fb383)">М</i><span>Миша: кружок</span><em>−3 000 ₽</em></div></div>
+    <div id="studio"><h3>Календарь</h3><div class="tabs"><span>Месяц</span><span>Дела</span><span class="on">Деньги</span></div>
+      <p>На телефоне: «Мой день» → «Деньги»</p></div>
+  </div>
+  <div class="layer" id="L-led"><div id="led"><h4>Деньги</h4><small class="d">четверг, 29 октября</small>
+    <div class="en old"><i>🚕</i><div><b>Такси</b><small>вчера</small></div><em class="minus">−380 ₽</em></div>
+    <div class="en" id="e1"><i>🛒</i><div><b>Продукты</b><small>сегодня · голосом</small></div><em class="minus">−1 200 ₽</em></div>
+    <div class="en" id="e2"><i>💼</i><div><b>Зарплата</b><small>сегодня · доход</small></div><em class="plus">+80 000 ₽</em></div>
+  </div></div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Большие задачи»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  say: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  income: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  ask: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  month: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  family: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  layer("L-led", T, s("say").start + 0.4, s("month").start);
+  scene($("#mess"), T, s("problem").start + 0.3, s("say").start);
+  [...$("#rc").children].forEach((c, i) => { const k = out((T - s("problem").start - 0.8 - i * 0.3) / 0.4); c.style.opacity = k * (1 - out((T - s("say").start + 0.4) / 0.4)); });
+  scene($("#q1"), T, s("say").start + 0.2, s("income").start, 20);
+  scene($("#q2"), T, s("income").start + 0.2, s("ask").start, 20);
+  scene($("#q3"), T, s("ask").start + 0.2, s("month").start, 20);
+  const row = (el, t0) => { const k = out((T - t0) / 0.45); el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 24}px) scale(${lerp(0.96, 1, k)})`; };
+  row($("#e1"), at("s3a") + 2.2); row($("#e2"), at("s4a") + 2.4);
+  scene($("#ans"), T, at("s5a") + 2.6, s("month").start);
+  scene($("#mon"), T, s("month").start + 0.2, s("family").start);
+  [...$("#mon").querySelectorAll(".bar i")].forEach((b, i) => { b.style.width = (parseFloat(b.dataset.w) * out((T - s("month").start - 0.8 - i * 0.25) / 0.9)) + "%"; });
+  scene($("#fam"), T, s("family").start + 0.2, s("how").start);
+  [...$("#fam").querySelectorAll(".fr")].forEach((c, i) => vis(c, out((T - s("family").start - 0.7 - i * 0.45) / 0.4), 12));
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

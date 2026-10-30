@@ -144,6 +144,8 @@ async function loadHome() {
   if (typeof moLoad === "function") moLoad();           // «Мой месяц с Лирой» (studio/month.js): первые 7 дней месяца — о прошлом
   if (typeof mnLoad === "function") mnLoad();           // «Утро с Лирой» (studio/morning.js): погода и почта — не ждём их
   const now = new Date(), get = (c, a) => core.call(c, a).catch(() => null);
+  // уроки — с сайта, не ждём их (сеть бывает медленной): пришли — карточка «Новый видеоурок» дорисуется
+  if (!(HM.ac && Date.now() - HM.ac.at < 6 * 3600e3)) get("academy_list").then(ac => { if (ac && Array.isArray(ac.items)) { HM.ac = { at: Date.now(), d: ac }; if (HM.data) hmRender(); } });
   const [cal, cl, tk, dn, ch, pad, py, pl, cs] = await Promise.all([get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }), get("close_state"),
     get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"), get("pay_overview"), get("plugins"), get("course_get")]);
   const wt = await get("watch_get");                                    // «Дозор»: сколько идёт — числом на значке
@@ -171,6 +173,8 @@ function hmToday() {
   const cs = HM.data.cs, L = cs && cs.lesson;          // курс «Неделя с Лирой»: урок дня ещё не пройден
   if (L && L.open && cs.offer !== false && !L.steps.every(s => s.done))
     out.push({ cls: "course", lab: `Урок дня · ${L.day} из ${cs.total}`, b: `🎓 ${L.title}`, s: `5 минут: ${(L.steps.find(s => !s.done) || L.steps[0]).say}`, go: "course" });
+  const nl = hmLesson();                                // новый видеоурок — одной карточкой, пока не посмотрели (3 дня, потом молча)
+  if (nl) out.push({ cls: "lesson", lab: `Новый видеоурок · ${nl.sec ? nl.sec + " с" : "минута"}`, b: `🎬 ${nl.title}`, s: nl.about || "мультфильм о том, как это работает", go: "lesson:" + nl.id });
   const w = tk.find(t => t.status === "waiting");
   if (w) out.push({ cls: "task", lab: "Задача ждёт ответа", b: `⏳ ${w.title}`, s: w.question || "откройте и ответьте", go: "tasks" });
   if (dn) out.push({ cls: "done", lab: "Сделано сегодня", b: `${dn.today || 0} ${(dn.today || 0) % 10 === 1 && (dn.today || 0) % 100 !== 11 ? "дело" : [2, 3, 4].includes((dn.today || 0) % 10) && ![12, 13, 14].includes((dn.today || 0) % 100) ? "дела" : "дел"}`,
@@ -237,7 +241,25 @@ function hmRender() {
   $("#hm-set").innerHTML = HM_SET.map(([p, n]) => `<button class="hm-pill" data-go="${p}">${hmEsc(n)}</button>`).join("");
   hmWire();
 }
-function hmGo(p) { const b = $(`nav button[data-p="${p}"]`); if (b) b.click(); }
+function hmGo(p) {
+  if (p.startsWith("lesson:")) {                       // карточка «Новый видеоурок» — сразу смотреть
+    const l = ((HM.ac && HM.ac.d.items) || []).find(x => x.id === p.slice(7)); hmGo("lessons");
+    if (l && typeof lsPlay === "function") setTimeout(() => lsPlay(l), 150);
+    return;
+  }
+  const b = $(`nav button[data-p="${p}"]`); if (b) b.click();
+}
+/* «Чтобы люди узнали про уроки — ненавязчиво» (29.10, владелец): на «Главной» среди карточек «Сегодня» — самый ранний
+   урок, который ещё не смотрели. Посмотрели (lessons.js lsSeen) — следующий; карточка висит не дольше 3 дней, потом урок
+   считается показанным и больше не напоминает. Отметки — S.ui.lessons_seen {id: время}. */
+function hmLesson() {
+  const items = ((HM.ac && HM.ac.d.items) || []).slice().sort((a, b) => a.n - b.n), ui = (S && S.ui) || {};
+  const seen = ui.lessons_seen || {}, now = Date.now();
+  const l = items.find(x => !seen[x.id] || (seen[x.id] < 0 && now + seen[x.id] < 3 * 864e5));
+  if (!l) return null;
+  if (!seen[l.id] && S) { const m = Object.assign({}, seen, { [l.id]: -now }); S.ui = Object.assign({}, ui, { lessons_seen: m }); save({ ui: { lessons_seen: m } }, true); }
+  return l;
+}
 function hmOpen(id) {
   const a = window.pywebview && window.pywebview.api;
   if (id === "play") { if (a && a.play_open) a.play_open(""); else toast("Игры открываются у виджета: «Лира, давай поиграем»"); return; }

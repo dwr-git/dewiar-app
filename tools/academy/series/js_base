@@ -1,0 +1,9 @@
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });

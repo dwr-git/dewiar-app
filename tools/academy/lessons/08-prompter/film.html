@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 8 · Суфлёр на переговорах. Светлый неоморфизм серии. Главная вещь урока — окно созвона и узкая панель суфлёра справа: клиент спрашивает — подсказка пишется потоком, янтарная полоса растёт. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: #e0a020; }
+#mess { position: absolute; left: 620px; top: 260px; width: 700px; padding: 34px 40px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#mess small { font-size: 20px; color: var(--mut); font-weight: 800; } #mess b { display: block; font: 600 44px/1.3 Unbounded, sans-serif; margin-top: 12px; }
+#mess .dots { display: flex; gap: 10px; margin-top: 22px; } #mess .dots i { width: 16px; height: 16px; border-radius: 50%; background: var(--patrik); }
+#prep { position: absolute; left: 620px; top: 190px; width: 720px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#prep small { font-size: 18px; color: var(--mut); font-weight: 800; } #prep p { font-size: 28px; font-weight: 700; margin: 8px 0 20px; }
+#prep .chips { display: flex; gap: 12px; } #prep .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; }
+#cheat { position: absolute; left: 620px; top: 500px; width: 720px; display: flex; flex-direction: column; gap: 12px; }
+#cheat div { display: flex; gap: 16px; align-items: baseline; padding: 16px 22px; border-radius: 20px; background: rgba(255,181,71,.16); font-size: 22px; font-weight: 700; }
+#cheat div em { font-style: normal; color: var(--mut); flex: none; width: 250px; }
+#call { position: absolute; left: 600px; top: 150px; width: 880px; height: 600px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); padding: 24px; display: grid; grid-template-rows: 1fr auto; gap: 18px; }
+#call .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+#call .tile { position: relative; border-radius: 24px; background: linear-gradient(160deg, #3a4a66, #24324a); display: grid; place-items: center; overflow: hidden; }
+#call .tile.me { background: linear-gradient(160deg, #46587a, #2c3a55); }
+#call .tile i { width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; font: 700 44px Unbounded; font-style: normal; color: #fff; background: linear-gradient(140deg, #8fb4ff, #5a7be8); }
+#call .tile.me i { background: linear-gradient(140deg, #ffcf7a, #e59a1f); }
+#call .tile span { position: absolute; left: 16px; bottom: 14px; color: #fff; font-size: 19px; font-weight: 800; padding: 6px 12px; border-radius: 10px; background: rgba(0,0,0,.28); }
+#call .tile .wave { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 4px; align-items: flex-end; height: 26px; }
+#call .tile .wave b { width: 5px; border-radius: 3px; background: #7ee0b0; }
+#call .bar { display: flex; justify-content: center; gap: 16px; } #call .bar span { width: 64px; height: 64px; border-radius: 50%; box-shadow: var(--raise-s); }
+#call .bar span.red { background: #e2556b; box-shadow: none; }
+#ask { position: absolute; left: 20px; top: 20px; padding: 14px 20px; border-radius: 18px 18px 18px 6px; background: #fff; font-size: 22px; font-weight: 800; color: var(--ink); box-shadow: 0 10px 24px -12px rgba(0,0,0,.5); white-space: nowrap; }
+#share { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); padding: 10px 18px; border-radius: 12px; background: #2fb383; color: #fff; font-size: 18px; font-weight: 800; white-space: nowrap; }
+#pr { position: absolute; left: 1510px; top: 150px; width: 340px; height: 600px; border-radius: 32px; background: #fffaf0; box-shadow: var(--raise); padding: 26px 26px 26px 36px; overflow: hidden; }
+#pr::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: rgba(224,160,32,.18); }
+#pr .amb { position: absolute; left: 0; bottom: 0; width: 10px; background: #e0a020; }
+#pr small { font-size: 16px; font-weight: 800; color: #a0781e; } #pr .st { all: unset; display: block; font-size: 20px; color: var(--mut); font-weight: 700; margin-top: 14px; }
+#pr h4 { font: 700 30px/1.25 Unbounded; margin-top: 12px; min-height: 76px; }
+#pr ul { list-style: none; margin-top: 16px; display: flex; flex-direction: column; gap: 10px; } #pr li { font-size: 19px; font-weight: 700; line-height: 1.35; }
+#pr li::before { content: "• "; color: #e0a020; }
+#pr .src { display: inline-block; margin-top: 16px; padding: 8px 14px; border-radius: 12px; background: rgba(224,160,32,.16); font-size: 16px; font-weight: 800; }
+#pr .hid { position: absolute; left: 36px; right: 26px; bottom: 26px; padding: 12px 14px; border-radius: 14px; background: rgba(47,179,131,.16); font-size: 17px; font-weight: 800; color: #1e7d5b; }
+#sum { position: absolute; left: 620px; top: 190px; width: 760px; padding: 32px 36px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#sum h4 { font: 600 28px Unbounded; margin-bottom: 18px; }
+#sum div { display: flex; gap: 14px; padding: 14px 0; font-size: 23px; font-weight: 700; } #sum div + div { box-shadow: 0 -1px 0 rgba(36,50,74,.08); }
+#sum div em { font-style: normal; color: var(--mut); width: 190px; flex: none; }
+#studio { position: absolute; left: 620px; top: 200px; width: 720px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px 34px; }
+#studio h3 { font: 700 30px Unbounded; margin-bottom: 18px; }
+#studio label { display: block; font-size: 17px; font-weight: 800; color: var(--mut); margin: 14px 0 8px; }
+#studio .box { padding: 16px 18px; border-radius: 18px; box-shadow: var(--press); font-size: 21px; font-weight: 700; }
+#studio .row { display: flex; gap: 10px; flex-wrap: wrap; } #studio .row span { padding: 12px 18px; border-radius: 14px; box-shadow: var(--raise-s); font-size: 19px; font-weight: 800; }
+#studio .go { display: inline-block; margin-top: 22px; padding: 16px 26px; border-radius: 16px; color: #fff; background: var(--brand); font-size: 21px; font-weight: 800; }
+#say { position: absolute; left: 620px; top: 690px; padding: 16px 26px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 8 · Суфлёр на переговорах</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg></div>
+    <div id="t-title"><h1>Суфлёр</h1><p>Подсказки на переговорах — видите только вы</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div id="mess"><small>СОЗВОН С КЛИЕНТОМ · 14:00</small><b>«А скидку дадите?»</b><div class="dots"><i></i><i></i><i></i></div></div>
+    <div id="prep"><small>ЦЕЛЬ ВСТРЕЧИ</small><p>Подписать договор на год</p><div class="chips"><span>📄 Прайс.pdf</span><span>📝 Договор.docx</span><span>📊 План.odt</span></div></div>
+    <div id="cheat"><div><em>«Скидка?»</em>5% при оплате за год</div><div><em>«Сроки поставки?»</em>10 рабочих дней</div><div><em>«Гарантия?»</em>24 месяца, замена за 3 дня</div></div>
+    <div id="sum"><h4>Итог встречи</h4><div><em>Договорились</em>договор на год, скидка 5%</div><div><em>Патрик</em>счёт до пятницы</div><div><em>Клиент</em>подпись до 15-го</div></div>
+    <div id="studio"><h3>Суфлёр</h3><label>Цель</label><div class="box">Подписать договор на год</div><label>Материалы</label><div class="row"><span>Прайс.pdf</span><span>Договор.docx</span><span>+ Файл</span></div><span class="go">Начать встречу</span></div>
+    <div id="say">или голосом: «Включи суфлёр»</div>
+  </div>
+  <div class="layer" id="L-call">
+    <div id="call"><div class="tiles"><div class="tile" id="tc"><i>ОК</i><span>Клиент · ООО «Ока»</span><div class="wave" id="w1"></div><div id="ask">А скидку дадите?</div></div>
+      <div class="tile me"><i>П</i><span>Вы</span><div class="wave" id="w2"></div></div></div>
+      <div class="bar"><span></span><span></span><span class="red"></span></div><div id="share">● Вы показываете экран</div></div>
+    <div id="pr"><i class="amb" id="amb"></i><small>СУФЛЁР</small><span class="st" id="prs">Слушаю…</span><h4 id="ph"></h4>
+      <ul id="pl"><li>Скидка 5% — только при оплате за год</li><li>Помесячно — цена из прайса</li></ul><span class="src" id="psrc">📄 Прайс.pdf, стр. 2</span>
+      <div class="hid" id="phid">👁 Собеседник это окно не видит</div></div>
+  </div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Ваши документы»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 0], patrik: [330, 470, 300, 1] },
+  before: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  listen: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  hint: { lira: [300, 330, 220, 1], patrik: [300, 730, 200, 1] },
+  hidden: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  after: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  scene($("#mess"), T, at("s2a") + 0.3, s("before").start);
+  scene($("#prep"), T, s("before").start + 0.2, s("listen").start);
+  [...$("#prep .chips").children].forEach((c, i) => vis(c, out((T - at("s3a") - 1.2 - i * 0.35) / 0.4), 16));
+  scene($("#cheat"), T, at("s3b") + 0.3, s("listen").start, 20);
+  [...$("#cheat").children].forEach((c, i) => vis(c, out((T - at("s3b") - 0.6 - i * 0.5) / 0.4), 16));
+  layer("L-call", T, s("listen").start + 0.1, s("after").start);
+  const wv = (el, on, ph) => { if (!el.children.length) el.innerHTML = "<b></b>".repeat(5);
+    [...el.children].forEach((b, i) => b.style.height = (on ? 6 + 18 * Math.abs(Math.sin(T * 7 + i * 1.3 + ph)) : 4) + "px"); };
+  const asking = T > s("hint").start + 0.2 && T < at("s5a") + 1.6;
+  wv($("#w1"), (T > s("listen").start && T < s("listen").start + 2.2) || asking, 0);
+  wv($("#w2"), T > s("listen").start + 2.4 && T < s("hint").start, 2);
+  vis($("#ask"), out((T - s("hint").start - 0.2) / 0.4) * (1 - out((T - s("hidden").start) / 0.4)), 14, .9);
+  const k = clamp((T - at("s5a") - 0.8) / 2.6);
+  $("#prs").textContent = T < s("hint").start + 0.4 ? "Слушаю…" : k < 1 ? "Пишу подсказку…" : "Готово";
+  $("#ph").textContent = type("5% — при оплате за год", k * 1.4);
+  [...$("#pl").children].forEach((c, i) => vis(c, out((k - 0.55 - i * 0.18) / 0.15), 10));
+  vis($("#psrc"), out((k - 0.9) / 0.1), 10);
+  $("#amb").style.height = (k * 100) + "%";
+  vis($("#share"), out((T - s("hidden").start - 0.2) / 0.4), -10);
+  vis($("#phid"), out((T - s("hidden").start - 0.8) / 0.4), 14);
+  scene($("#sum"), T, s("after").start + 0.2, s("how").start);
+  [...$("#sum").querySelectorAll("div")].forEach((c, i) => vis(c, out((T - s("after").start - 0.8 - i * 0.5) / 0.4), 12));
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  scene($("#say"), T, at("s8a") + 2.2, s("end").start, 16);
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

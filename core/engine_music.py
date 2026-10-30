@@ -164,6 +164,21 @@ class MusicMixin:
         body = {k: d.get(k) for k in ("date", "city", "weather", "team", "clients", "mail")}
         threading.Thread(target=close._own_quiet, args=({"morning": dict(morning.public(body), dev=self.device_name())},), daemon=True).start()
 
+    JOB_NAMES = {"brief": "Утренняя сводка", "fx": "Курс валют", "evening": "Итог дня", "week": "Итоги недели",
+                 "news": "Главные новости", "weather": "Погода и что надеть"}
+
+    @classmethod
+    def job_name(cls, item):
+        """Короткое имя дела для уведомления (29.10, пользователи: «чтобы само условие не прописывалось в сообщении — только
+        ответ»): готовое дело — его название, даже если текст поправили; своё — начало поручения без ссылок, до 40 знаков."""
+        if item.get("brief"):
+            return "Утренняя сводка"
+        if cls.JOB_NAMES.get(item.get("preset") or ""):
+            return cls.JOB_NAMES[item["preset"]]
+        t = re.sub(r"https?://\S+", "", str(item.get("text") or "Дело по расписанию"))
+        t = re.split(r"[.:;(\n]|\s[—–-]\s", t, maxsplit=1)[0].strip(" ,") or "Дело по расписанию"
+        return t if len(t) <= 40 else t[:40].rsplit(" ", 1)[0].rstrip(" ,") + "…"
+
     def _job_prompt(self, item):
         """Поручение модели для дела по расписанию (или утренней сводки) — модель выполняет его сама, без вопросов."""
         if item.get("brief"):
@@ -178,24 +193,44 @@ class MusicMixin:
         routine = ""
         if SUMMARY_JOB_RX.search(item.get("text", "")) and hasattr(self, "_routine_note"):
             routine = self._routine_note()
+        chat = ""
+        if item.get("deliver") in ("telegram", "max"):   # в мессенджер — как пользователи и просили: строки со смайликами
+            chat = (" Ответ уйдёт в мессенджер: без заголовка и без повтора поручения; каждый пункт — отдельной строкой, "
+                    "в начале строки — подходящий по смыслу смайлик (💵 доллар, 💶 евро, 🪙 биткоин и криптовалюта, 🌤 погода, "
+                    "📰 новость, ✅ сделано, 🗓 планы, 💸 траты). Без Markdown: без звёздочек и решёток.")
         return (f"[Дело по расписанию] Поручение пользователя: «{item.get('text', '')}». Выполни его сам прямо сейчас — "
                 "используй инструменты (поиск в интернете, чтение страниц, почта, заметки, календарь calendar_list, бюджет "
                 "money_report). Ответь готовым коротким сообщением с результатом: без вопросов, без «я могу…», без "
                 f"пересказа поручения. Сейчас {datetime.now():%d.%m.%Y %H:%M}. Если поручение — проверка (почта, новые "
                 f"сообщения, цены, наличие, новости по теме) и нового или важного нет — ответь ровно одним словом: {JOB_SILENT}. "
-                "Тогда пользователя не беспокоим вовсе." + routine)
+                "Тогда пользователя не беспокоим вовсе." + chat + routine)
+
+    def _habits(self):
+        """Напоминания-привычки (каждый день, через интервал, по будням и чаще) -> (их id, их тексты)."""
+        try:
+            items = [x for x in self.reminders.items if not x.get("paused")]
+        except Exception:  # noqa: BLE001
+            items = []
+        hs = [x for x in items if x.get("kind") != "job" and x.get("repeat")
+              and ((x["repeat"].get("kind") in ("daily", "interval")) or (x["repeat"].get("kind") == "weekly" and len(x["repeat"].get("days") or []) >= 5))]
+        return {str(x.get("id")) for x in hs if x.get("id")}, {x.get("text", "").strip() for x in hs if x.get("text", "").strip()}
+
+    def _done_no_habits(self, st):
+        """Сделанное сегодня без привычек (29.10, владелец: «„С возвращением“ опять рассказала, как я взял карту на обед и
+        выключил компьютер» — итог дня при возвращении брал отметки «сделано» у ежедневных напоминаний)."""
+        if not st:
+            return st
+        ids, texts = self._habits()
+        norm = lambda t: re.sub(r"[^\wё]+", " ", str(t or "").lower().replace("ё", "е")).strip()   # noqa: E731
+        hn = {norm(t) for t in texts}
+        keep = [x for x in st.get("items") or [] if str(x.get("rid") or "") not in ids and norm(x.get("title")) not in hn]
+        return dict(st, items=keep, today=len(keep))
 
     def _routine_note(self, silent=True):
         """28.10 (владелец: «каждый день „не забыть карту“ и „выключить комп“ — мне не нужно, чтобы итог дня каждый раз
         говорил, что завтра опять взять карту»): ежедневные и будничные напоминания-привычки и сами дела по расписанию
         (этот итог тоже) в итогах не упоминаются; кроме них ничего не было — итог молчит."""
-        try:
-            items = [x for x in self.reminders.items if not x.get("paused")]
-        except Exception:  # noqa: BLE001
-            items = []
-        habits = sorted({x.get("text", "").strip() for x in items if x.get("kind") != "job" and x.get("repeat")
-                         and ((x["repeat"].get("kind") in ("daily", "interval")) or (x["repeat"].get("kind") == "weekly" and len(x["repeat"].get("days") or []) >= 5))})
-        habits = [h for h in habits if h][:12]
+        habits = sorted(self._habits()[1])[:12]
         return ("\n\nПовторяющиеся каждый день напоминания-привычки" + (" (" + "; ".join(f"«{h[:60]}»" for h in habits) + ")" if habits else "")
                 + " и сами дела по расписанию (утренняя сводка, этот итог) — не дела дня: не упоминай их ни в сделанном, ни в "
                 "оставшемся, ни в планах на завтра. Говори только о разовых делах, встречах, отметках «сделано» не по привычкам "
@@ -222,7 +257,7 @@ class MusicMixin:
         end = time.monotonic() + 180
         while time.monotonic() < end and (self.turn is not None or self.state in ("speaking", "thinking") or self.alarm):
             time.sleep(1.0)
-        title = "Утренняя сводка" if item.get("brief") else item.get("text", "Дело по расписанию")
+        title = MusicMixin.job_name(item)
         prompt = self._job_prompt(item)
         log.info("🗓 По расписанию: %s%s", title, f" (попытка {attempt + 1})" if attempt else "")
         bot = self._bot_for(item.get("deliver"))
@@ -244,7 +279,7 @@ class MusicMixin:
         if ok and not item.get("brief") and self.job_nothing(text):
             log.info("🗓 «%s»: нового нет — не беспокою", title)
         elif ok and to_bot:
-            bot.send(f"🗓 {title}\n\n{text}")
+            bot.send(text)                               # только ответ: поручение и заголовок в чат не пишем (29.10)
             self.emit("push", title=f"🗓 {title}", text=text[:300], critical=False)
         elif ok and not item.get("brief"):
             self.emit("heard", text=f"🗓 {title}")
@@ -259,7 +294,11 @@ class MusicMixin:
         if ok:
             return
         self.health_problem(f"Дело по расписанию: {text[:200]}", kind="job")
-        if attempt < len(self.JOB_RETRY_MIN):
+        # модели не хватает окна контекста — настройка, а не случайность: повтор через 5 и 15 минут упадёт так же
+        # (отчёт №407, 29.10: 173 неудачи дела за сутки — каждое по три раза)
+        from llm import CTX_TEXT
+        permanent = CTX_TEXT[:40] in text
+        if attempt < len(self.JOB_RETRY_MIN) and not permanent:
             log.info("🗓 «%s» не удалось (%s) — повторю через %d мин", title, text[:120], self.JOB_RETRY_MIN[attempt])
             if not self.stopping.wait(self.JOB_RETRY_MIN[attempt] * 60 * float(os.environ.get("DEWIAR_JOB_RETRY_SCALE", "1"))):
                 self._run_job(item, attempt + 1)
@@ -846,7 +885,7 @@ class MusicMixin:
             upcoming = []
         last = getattr(self, "_welcome_at", None)
         try:
-            done = self.done.stats()
+            done = self._done_no_habits(self.done.stats())
         except Exception:  # noqa: BLE001
             done = None
         news_fact = ""

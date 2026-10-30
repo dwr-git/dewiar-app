@@ -380,7 +380,7 @@ section.wide > .lead { max-width: 860px; }
 .wpanel.on { display: block; } .wpanel h3 { font-size: 15px; margin-bottom: 10px; }
 .steps { margin: 10px 0 8px 20px; color: var(--ink); font-size: 13.5px; line-height: 1.7; } .steps code, .wpanel code { background: var(--field); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; user-select: all; }
 .wdone { background: rgba(75,227,161,.12); border: 0; border-radius: 16px; padding: 14px 18px; margin-bottom: 16px; font-size: 14px; line-height: 1.55; }
-.wdone.bad { background: rgba(255,107,138,.12); }
+.wdone.bad { background: rgba(255,107,138,.12); } .wdone .warn { color: var(--warn, #c98a1a); font-weight: 600; }
 /* «Модели Dewiar»: вход аккаунтом — главный путь, ключ dw- — запасной */
 .dk-acc { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: rgba(255,255,255,.07); border-radius: 14px; padding: 12px 14px; font-size: 13.5px; line-height: 1.5; }
 .dk-acc > div { flex: 1; min-width: 220px; } .dk-acc b { color: var(--ink); } .dk-acc .res { display: block; margin-top: 4px; }
@@ -584,7 +584,7 @@ input[type=radio]:checked::after { content: ""; width: 8px; height: 8px; border-
 .res { font-size: 13px; }
 .repoffer { padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; background: rgba(255, 180, 90, .12); font-size: 13.5px; line-height: 1.5; }
 .repoffer .row { display: flex; gap: 8px; margin-top: 8px; }
-.res.ok { color: var(--good); } .res.bad { color: var(--bad); }
+.res.ok { color: var(--good); } .res.bad { color: var(--bad); } .res.warn { color: var(--warn, #c98a1a); }
 
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100%); background: rgba(13,13,15,.95); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); z-index: 5; transform: translateX(105%); transition: transform .28s cubic-bezier(.2,.8,.2,1); overflow-y: auto; padding: 26px 26px 60px; box-shadow: -30px 0 80px rgba(0,0,0,.5); }
 .drawer.open { transform: none; }
@@ -1863,7 +1863,7 @@ html.st-light .py-mbox { background: #f6f9fd; }
 .py-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 0 0 14px; }
 .py-kind { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: rgba(127,127,127,.08); cursor: pointer; box-shadow: inset 0 0 0 1.5px transparent; }
 .py-kind input { position: absolute; opacity: 0; } .py-kind b { font-size: 13.5px; } .py-kind small { font-size: 11.5px; color: var(--dim); }
-.py-kind:has(input:checked) { box-shadow: inset 0 0 0 1.5px var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.py-kind:has(input:checked) { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .py-kind:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pi-list { display: flex; flex-direction: column; gap: 8px; }
 .pi-it { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto auto; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 14px; background: rgba(127,127,127,.07); }
@@ -2233,7 +2233,7 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 .rd-eq i { width: 3px; height: 100%; border-radius: 2px; background: #fff; transform-origin: bottom; animation: rdeq 1s ease-in-out infinite; }
 .rd-eq i:nth-child(2) { animation-delay: -.35s; } .rd-eq i:nth-child(3) { animation-delay: -.7s; }
 @keyframes rdeq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
-.rd-t.on .rd-play { box-shadow: inset 0 0 0 2px var(--accent), var(--raise-s, 0 0 0 transparent); }
+.rd-t.on .rd-play { background: color-mix(in srgb, var(--accent) 16%, var(--glass, transparent)); box-shadow: var(--raise-s, 0 0 0 transparent); }   /* играет — мягким фоном, без обводки (29.10) */
 .rd-t.on .rd-eq { display: flex; }
 .rd-t.on.paused .rd-eq i { animation: none; transform: scaleY(.35); }
 @media (prefers-reduced-motion: reduce) { .rd-eq i, .rd-live { animation: none; } }
@@ -2480,7 +2480,7 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 .cs-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .cs-steps li { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: rgba(127,127,127,.08); }
 .cs-steps li.done { background: color-mix(in srgb, #2fbf94 14%, transparent); }
-.cs-steps li.now { box-shadow: inset 0 0 0 2px var(--accent); }
+.cs-steps li.now { background: color-mix(in srgb, var(--accent) 13%, transparent); }   /* без обводки (29.10, владелец: «эти обводки надоели») — шаг «сейчас» мягким фоном */
 .cs-steps .n { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center; background: rgba(127,127,127,.45); color: #fff; font-weight: 800; font-size: 13px; }
 .cs-steps li.now .n { background: var(--accent); } .cs-steps li.done .n { background: #1d9a74; }
 .cs-steps .n svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
@@ -2518,6 +2518,8 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 
 /* сейф: «не потерять пароли» — закрытый слепок (27.10, владелец: «перенести и не потерять вместе с устройством») */
 .vl-keep { display: flex; align-items: center; gap: 16px; margin-top: 18px; padding: 16px 18px; border-radius: 18px; background: var(--glass); box-shadow: var(--raise-s, none); }
+.vl-keep-acts { display: flex; flex-direction: column; gap: 8px; flex: none; }
+@media (max-width: 760px) { .vl-keep { flex-wrap: wrap; } .vl-keep-acts { flex-direction: row; flex-wrap: wrap; } }
 .vl-keep > svg { width: 34px; height: 34px; flex: none; fill: none; stroke: #1d9a74; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .vl-keep > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; } .vl-keep b { font-size: 14.5px; }
 .vl-keep span { color: var(--muted); font-size: 13px; line-height: 1.5; } .vl-keep em { font-style: normal; display: block; margin-top: 4px; font-weight: 700; }
@@ -2895,7 +2897,7 @@ html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 .mo-cats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; max-width: 420px; }
 .mo-cats li { display: flex; align-items: center; gap: 8px; } .mo-cats li b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mo-cats li > i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.hm-month .c0 { background: #6a6cf0; } .hm-month .c1 { background: #f2a93b; } .hm-month .c2 { background: #2fb7a0; }
+.hm-month .c0 { background: #6a6cf0; } .hm-month .c1 { background: #f2a93b; } .hm-month .c2 { background: #2fb7a0; } .hm-month .c3 { background: #e0708e; } .hm-month .c4 { background: #5aa6e8; } .hm-month .co { background: #9aa3b5; }
 @media (max-width: 760px) { .mo-grid { grid-template-columns: 1fr; } }
 
 /* «Клиенты» → «Сделки и кто должен» (studio/deals.js): итог сверху — сколько нам должны; доска по этапам */
@@ -3472,6 +3474,7 @@ img.emj { width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 .03em; 
 .bp-node { display: flex; align-items: center; gap: 11px; padding: 10px 16px 10px 10px; border-radius: 18px; max-width: 290px;
   background: color-mix(in srgb, var(--panel2) 70%, transparent); backdrop-filter: blur(8px); box-shadow: 0 10px 24px -18px rgba(0,0,0,.5); transition: opacity .3s; }
 .bp-node.dim .bp-ic { opacity: .4; filter: grayscale(.6); }
+.bp-node.go { cursor: pointer; transition: background .15s; } .bp-node.go:hover, .bp-node.go:focus-visible { background: color-mix(in srgb, var(--accent) 12%, var(--card, transparent)); outline: none; }
 .bp-ic { width: 36px; height: 36px; flex: none; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(145deg, #5cc6f5, var(--tg)); }
 .bp-out .bp-ic { background: linear-gradient(145deg, color-mix(in srgb, var(--c, #8B7CFF) 60%, #fff), var(--c, #8B7CFF)); }
 .bp-ic svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -3764,8 +3767,18 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
 .ls-txt { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px 16px; }
 .ls-txt small { font-size: 12px; color: var(--muted); font-weight: 650; } .ls-txt b { font-size: 16px; } .ls-txt span { font-size: 13px; color: var(--muted); line-height: 1.4; }
 .ls-empty { color: var(--muted); }
-.ls-dlg { width: min(1100px, 94vw); padding: 0; border: 0; border-radius: 20px; background: #10131c; color: #fff; overflow: hidden; }
-.ls-dlg::backdrop { background: rgba(10,12,20,.7); }
-.ls-dh { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
-.ls-dlg video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+/* плеер урока (29.10, владелец: «не работает и смотрится некрасиво»): по центру окна, тихая шапка с круглым «×»; не играет
+   (в Linux окну нужен gstreamer1.0-libav) — сразу «Смотреть в браузере» */
+.ls-dlg { position: fixed; inset: 0; margin: auto; width: min(1100px, 92vw); max-height: 92vh; height: fit-content; padding: 0; border: 0; border-radius: 22px;
+  background: #0d0f16; color: #fff; overflow: hidden; box-shadow: 0 40px 120px -30px rgba(0,0,0,.7); }
+.ls-dlg::backdrop { background: rgba(14,16,26,.72); backdrop-filter: blur(6px); }
+.ls-dh { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 20px; }
+.ls-dh b { font: 600 15px "Manrope", sans-serif; letter-spacing: .01em; }
+.ls-x { width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(255,255,255,.08); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; }
+.ls-x:hover { background: rgba(255,255,255,.16); } .ls-x:focus-visible { outline: 2px solid #8b8cf7; outline-offset: 2px; }
+.ls-vw { position: relative; }
+.ls-dlg video { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: calc(92vh - 56px); background: #000; }
+.ls-fail { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center;
+  background: radial-gradient(80% 80% at 50% 40%, #1d2133, #0d0f16); }
+.ls-fail[hidden] { display: none; } .ls-fail b { font: 600 18px "Unbounded", sans-serif; } .ls-fail span { color: rgba(255,255,255,.7); font-size: 14px; max-width: 34em; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { .ls-card { transition: none; } }

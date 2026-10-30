@@ -340,7 +340,10 @@ def trim(a: np.ndarray, sr: int = OUT_SR) -> np.ndarray:
     on = np.where(rms > max(0.006, rms.max() * 0.02))[0]
     if on.size == 0:
         return a[:0]
-    s = max(0, (on[0] - 4) * fr)
+    # начало — тоже по тихому порогу и с запасом 80 мс: тихое первое слово («Что у нас с Ивановым» — Патрик «съедал»
+    # «Что», отзыв зрителей уроков 29.10) не срезается; громкость уровня фразы считаем по громкой части (on)
+    head = np.where(rms > max(0.003, rms.max() * 0.008))[0]
+    s = max(0, (min(on[0], head[0] if head.size else on[0]) - 8) * fr)
     # конец — щедрее и по более тихому порогу: тихое последнее слово («…равно два») не срезается (отзыв 16.10)
     tail = np.where(rms > max(0.003, rms.max() * 0.008))[0]
     e = min(a.size, (max(on[-1], tail[-1] if tail.size else on[-1]) + 14) * fr)

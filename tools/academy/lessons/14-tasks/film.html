@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 14 · Большие задачи. Светлый неоморфизм серии. Главная вещь урока — живой план справа: пункты отмечаются один за другим, текущий крутится, в конце — готовая таблица. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 660px; padding: 20px 26px; border-radius: 26px 26px 8px 26px; background: var(--brand); color: #fff; font-size: 26px; font-weight: 700; line-height: 1.35; }
+#mess { position: absolute; left: 620px; top: 240px; width: 700px; padding: 34px 40px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#mess div { display: flex; flex-wrap: wrap; gap: 12px; } #mess div span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 23px; font-weight: 800; }
+#mess b { display: block; font: 600 42px Unbounded; margin-top: 26px; color: #b04a5c; }
+#plan { position: absolute; left: 1320px; top: 140px; width: 520px; padding: 30px 30px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+#plan h4 { font: 600 24px Unbounded; } #plan small.g { display: block; font-size: 17px; font-weight: 700; color: var(--mut); margin: 6px 0 16px; line-height: 1.4; }
+.pi { display: flex; align-items: center; gap: 14px; padding: 13px 4px; font-size: 20px; font-weight: 700; }
+.pi i { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; font-style: normal; font-size: 18px; box-shadow: var(--press); color: transparent; }
+.pi.done i { background: linear-gradient(135deg, #46d39a, #2fb383); color: #fff; box-shadow: none; }
+.pi.now i { box-shadow: none; border: 4px solid rgba(69,96,234,.2); border-top-color: var(--accent); }
+.pi.now { color: var(--accent); } .pi.todo { color: var(--mut); }
+#plan .pb { height: 12px; border-radius: 99px; box-shadow: var(--press); margin-top: 14px; overflow: hidden; } #plan .pb i { display: block; height: 100%; background: var(--brand); border-radius: 99px; }
+#tbl { position: absolute; left: 620px; top: 170px; width: 1220px; padding: 30px 36px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+#tbl h4 { font: 700 30px Unbounded; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+#tbl h4 span { font: 800 19px Manrope; color: #fff; background: var(--brand); padding: 12px 20px; border-radius: 14px; }
+#tbl table { width: 100%; border-collapse: collapse; font-size: 22px; font-weight: 700; }
+#tbl th { text-align: left; font-size: 17px; color: var(--mut); font-weight: 800; padding: 0 12px 12px; }
+#tbl td { padding: 15px 12px; box-shadow: 0 -1px 0 rgba(36,50,74,.08); } #tbl tr.best td { background: rgba(47,179,131,.12); } #tbl tr.best td:first-child { border-radius: 14px 0 0 14px; } #tbl tr.best td:last-child { border-radius: 0 14px 14px 0; }
+#qa { position: absolute; left: 620px; top: 250px; width: 700px; padding: 30px 34px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#qa small { font-size: 18px; font-weight: 800; color: var(--mut); } #qa p { font: 600 30px/1.3 Unbounded; margin: 10px 0 20px; }
+#qa div { display: flex; gap: 12px; } #qa div span { padding: 14px 22px; border-radius: 16px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 800; }
+#qa div span.on { color: #fff; background: var(--brand); box-shadow: none; }
+#phone { position: absolute; left: 1360px; top: 140px; width: 420px; height: 700px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+#phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; }
+#phone h5 { font: 700 26px Unbounded; margin-bottom: 16px; } #phone .tabs { display: flex; gap: 6px; margin-bottom: 18px; } #phone .tabs span { flex: 1; text-align: center; padding: 10px 0; border-radius: 12px; font-size: 14px; font-weight: 800; background: #fff; }
+#phone .tabs span.on { background: var(--brand); color: #fff; }
+#phone .ta { background: #fff; border-radius: 16px; padding: 14px; font-size: 17px; font-weight: 600; min-height: 120px; line-height: 1.4; }
+#phone .go { margin-top: 14px; padding: 15px; border-radius: 16px; text-align: center; color: #fff; background: var(--brand); font-size: 19px; font-weight: 800; }
+#phone .nt { margin-top: 16px; font-size: 16px; color: var(--mut); font-weight: 700; line-height: 1.4; }
+#studio { position: absolute; left: 620px; top: 200px; width: 760px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px 34px; }
+#studio h3 { font: 700 30px Unbounded; margin-bottom: 14px; }
+#studio .it { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 12px; font-size: 21px; font-weight: 700; }
+#studio .it em { margin-left: auto; font-style: normal; font-size: 17px; font-weight: 800; padding: 8px 14px; border-radius: 12px; }
+#studio .it em.ok { background: rgba(47,179,131,.15); color: #1e7d5b; } #studio .it em.run { background: rgba(69,96,234,.12); color: var(--accent); }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 14 · Большие задачи</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2"/><circle cx="5" cy="18" r="1.2"/></svg></div>
+    <div id="t-title"><h1>Большие задачи</h1><p>Часы работы — Лира делает сама, по шагам</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div id="mess"><div><span>💻 Сравнить 5 ноутбуков</span><span>📊 Отчёт</span><span>🖥 Презентация</span></div><b>≈ 4 часа работы</b></div>
+    <div class="say" id="q1">«Сравни пять ноутбуков до ста тысяч рублей и сделай таблицу»</div>
+    <div id="tbl"><h4>Ноутбуки до 100 000 ₽<span>Открыть</span></h4><table><tr><th>Модель</th><th>Вес</th><th>Батарея</th><th>Цена</th></tr><tr><td>Лёгкий 14″</td><td>1,2 кг</td><td>14 ч</td><td>94 900 ₽</td></tr><tr><td>Рабочий 15″</td><td>1,7 кг</td><td>10 ч</td><td>79 990 ₽</td></tr><tr class="best"><td>Студент 14″</td><td>1,4 кг</td><td>12 ч</td><td>61 500 ₽</td></tr><tr><td>Мощный 16″</td><td>2,1 кг</td><td>7 ч</td><td>99 000 ₽</td></tr><tr><td>Тонкий 13″</td><td>1,1 кг</td><td>11 ч</td><td>88 400 ₽</td></tr></table></div>
+    <div id="qa"><small>ЛИРА СПРАШИВАЕТ</small><p>Что важнее — вес или батарея?</p><div><span id="qa1">Вес</span><span id="qa2">Батарея</span></div></div>
+    <div id="studio"><h3>Задачи</h3>
+      <div class="it">💻 Сравнить ноутбуки<em class="ok">готово ✓</em></div>
+      <div class="it">🖥 Презентация о погоде<em class="run">делаю · 3 из 5</em></div>
+      <div class="it">📊 Отчёт за неделю<em class="ok">готово ✓</em></div></div>
+  </div>
+  <div class="layer" id="L-plan"><div id="plan"><h4>План</h4><small class="g">Сравнить пять ноутбуков до 100 000 ₽ и сделать таблицу</small><div class="pi todo" id="p0"><i>✓</i>Найти ноутбуки до 100 000 ₽</div><div class="pi todo" id="p1"><i>✓</i>Собрать характеристики</div><div class="pi todo" id="p2"><i>✓</i>Сравнить вес и батарею</div><div class="pi todo" id="p3"><i>✓</i>Сделать таблицу</div><div class="pi todo" id="p4"><i>✓</i>Проверить цены</div><div class="pb"><i id="pbar"></i></div></div></div>
+  <div class="layer" id="L-phone"><div id="phone"><div class="scr"><h5>Мой день</h5><div class="tabs"><span>Дела</span><span>Заметки</span><span class="on">Сделанное</span></div>
+    <div class="ta">Сделай презентацию о погоде на завтра</div><div class="go">Передать</div>
+    <div class="nt" id="pn">Компьютер выключен — делаю в облаке Dewiar, пришлю, когда будет готово</div></div></div></div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  give: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  plan: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  result: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  ask: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  phone: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  layer("L-plan", T, s("give").start + 1.2, s("result").start);
+  scene($("#mess"), T, s("problem").start + 0.3, s("give").start);
+  [...$("#mess div").children].forEach((c, i) => vis(c, out((T - s("problem").start - 0.6 - i * 0.35) / 0.4), 12));
+  scene($("#q1"), T, s("give").start + 0.2, s("result").start, 20);
+  const k = clamp((T - s("plan").start - 0.3) / Math.max(1, s("result").start - s("plan").start - 0.6)), n = Math.floor(k * 5);
+  [0, 1, 2, 3, 4].forEach(i => { $("#p" + i).className = "pi " + (i < n || k >= 1 ? "done" : i === n ? "now" : "todo");
+    const ic = $("#p" + i).querySelector("i"); ic.style.transform = i === n && k < 1 ? `rotate(${T * 360}deg)` : ""; });
+  $("#pbar").style.width = (k * 100) + "%";
+  scene($("#tbl"), T, s("result").start + 0.2, s("ask").start);
+  [...$("#tbl").querySelectorAll("tr")].forEach((r, i) => { r.style.opacity = out((T - s("result").start - 0.5 - i * 0.18) / 0.3); });
+  scene($("#qa"), T, s("ask").start + 0.2, s("phone").start);
+  $("#qa1").classList.toggle("on", T > at("s6a") + 2.4);
+  layer("L-phone", T, s("phone").start + 0.2, s("how").start);
+  vis($("#pn"), out((T - s("phone").start - 2.0) / 0.4), 10);
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  [...$("#studio").querySelectorAll(".it")].forEach((c, i) => vis(c, out((T - s("how").start - 0.6 - i * 0.35) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

@@ -558,6 +558,14 @@ class BrainMixin:
     def _join_done(self, key, d):
         j = self.s.get("cloud", "join") or {}
         auto = bool(j.get("auto"))
+        if j.get("standby"):                      # запасной мозг для своей модели: подключить, но главной не делать
+            r = self.cloud.connect(key, j.get("url", ""), activate=False)
+            self.s.update({"cloud": {"join": {"id": 0, "secret": "", "url": "", "auto": False, "standby": False}}})
+            self.emit("settings", settings=self.s.snapshot())
+            self.emit("cloud", **self.cloud.status())
+            log.info("☁ Запасной мозг Dewiar подключён — своя модель остаётся главной")
+            self.note("Запасной мозг Dewiar подключён: если своя модель не ответит, отвечу через него.")
+            return r
         r = self.cloud.connect(key, j.get("url", ""))
         self.s.update({"cloud": {"join": {"id": 0, "secret": "", "url": "", "auto": False}}})
         self._cloud_connected(r, "автоподключение" if auto else "заявка одобрена")
@@ -603,6 +611,23 @@ class BrainMixin:
             log.info("☁ Автоподключение не вышло (%s): %s", why, e)
         finally:
             self._auto_lock.release()
+        return False
+
+    def standby_join(self):
+        """«Если своя модель не отвечает — отвечать через Dewiar» (29.10): бесплатного мозга ещё нет — заявка, как при
+        автоподключении (сайт одобряет сам), но ключ подключается запасным: своя модель остаётся главной. -> True, если готово."""
+        import cloud as C
+        if (self.s.get("llm", "profiles") or {}).get(C.PROFILE_ID):
+            return True
+        if self.s.get("cloud", "key") or (self.s.get("cloud", "join") or {}).get("id"):
+            return False
+        url = self.s.get("cloud", "url") or C.DEFAULT_URL
+        d = C.join_send(url, _who_am_i(), "", "", device=f"компьютер {OS_NAME}", auto=True)
+        self.s.update({"cloud": {"join": {"id": d.get("id"), "secret": d.get("secret"), "url": url, "auto": True, "standby": True}}})
+        log.info("☁ Запасной мозг Dewiar: заявка №%s — %s", d.get("id"), "ключ сразу" if d.get("key") else "ждёт одобрения")
+        if d.get("key"):
+            self._join_done(d["key"], d)
+            return True
         return False
 
     def contact_set(self, name, contact):

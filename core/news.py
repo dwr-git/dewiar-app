@@ -15,7 +15,13 @@ def announcements(url, timeout=10):
     import httpx
     from cloud import DEFAULT_URL, base_of
     base = base_of(url or DEFAULT_URL)
-    r = httpx.get(base + "?p=/news", timeout=timeout)
+    try:
+        from version import VERSION
+    except Exception:  # noqa: BLE001
+        VERSION = ""
+    # версия — сайту (29.10): старым компьютерам он сам покажет «Вышла новая версия» (220 компьютеров сидели на 0.45.3:
+    # обновление там ставится только кнопкой, а её не нажимают)
+    r = httpx.get(base + "?p=/news", timeout=timeout, headers={"User-Agent": f"Dewiar-PC/{VERSION}"})
     r.raise_for_status()
     out = []
     for i in r.json().get("items") or []:

@@ -3290,6 +3290,10 @@ const isRefused = (t) => REFUSED_RX.test(String(t || "").toLowerCase().replace(/
 // просьба сделать вещь на экране — мини-программу, страницу, презентацию (make_app)
 const MAKE_ASK_RX = /(?:сделай|создай|напиши|собери|подготовь|нарисуй|сверстай|покажи|открой|запусти|хочу|построй|сгенерируй)[а-яё]*\s+(?:мне\s+|нам\s+|ей\s+|ему\s+)?(?:[а-яё0-9-]+\s+){0,2}?(?:калькулятор|игр[уаыое]|программ|приложени|таймер|конвертер|викторин|презентаци|слайд|страниц|сайт|открытк|шпаргалк|3d|3д|трёхмерн|трехмерн|визуализаци|анимаци)|на\s+экран/i;
 const CLAIMS = [
+  // №405 (29.10): «Запиши потраченную 2.000 руб» — «Записала», а money_add не вызван: в «Деньгах» пусто, человек переспрашивает
+  { rx: /(?:^|[^а-яёa-z])(?:записал[аи]?|записано|внесл[аи]|внесено|добавил[аи]?|добавлено|занесл[аи]|занесено|учл[аи]|учтено|отметил[аи]?|отмечено|зафиксировал[аи]?|зафиксировано|сохранил[аи]?|сохранено|готово)(?![а-яё])/i,
+    tool: "money_add", what: "записал(а) трату или доход (сумма числом: 2.000 и 2 000 — это две тысячи)",
+    user: /(?:трат|расход|доход|потрат|заплатил|оплатил|купил|зарплат|получил)[^?]*\d|\d[^?]*(?:руб|₽|byn|бел|долл|евро|тенге|грив|тыс)/i },
   { rx: /(?:^|[.!—–-]\s*|,\s*)(?:хорошо,?\s*|секунду,?\s*|сейчас\s+)?(?:звоню|набираю|перезваниваю|позвоню|вызываю)(?:\s|[.!:,]|$)/i, tool: "call", what: "звонишь" },
   { rx: /(?:^|[.!]\s*)(?:хорошо,?\s*)?(?:включаю|ставлю|переключаю(?:сь)?(?:\s+на)?|запускаю)\s+(?:радио|станци|«|"|волну|[А-ЯЁA-Z])/, tool: "play_radio (или radio_control с action next, если просят другую станцию)", what: "включаешь радио" },
   { rx: /(?:^|[.!]\s*)(?:сейчас\s+)?(?:фотографирую|делаю (?:снимок|фото)|смотрю через камеру|открываю камеру)/i, tool: "take_photo", what: "фотографируешь" },
@@ -3353,7 +3357,7 @@ function diagramMissing(ask, answer, called) {
 const SAVED_RX = LBRX("(?<![а-яё])(?<!не )(?:записал[аи]?|запомнил[аи]?|сохранил[аи]?|зафиксировал[аи]?|обновил[аи]?|добавил[аи]?\\s+в\\s+(?:список|память|дела|заметк)|запиш[уе]т?|поправил[аи]?|исправил[аи]?|изменил[аи]?|переписал[аи]?|перен[её]сл[аи]?|перен[её]с|поменял[аи]?|переделал[аи]?|поправлю|исправлю|переделаю|перепишу|изменю)(?![а-яё])|^\\W*(?:готово|сделано)(?![а-яё])", "i");
 function savedClaim(ask, answer) {
   if (!SAVED_RX.test(String(answer || "")) || /\?\s*$/.test(String(ask || ""))) return "";
-  return "ПРОВЕРКА: ты написал(а), что сделал(а) (записала, поправила, готово), но ни одного действия не было — ничего не изменилось. Сделай это сейчас инструментами: новое или изменённое — remember с фактом целиком; напоминание неверное — найди его (list_reminders), отмени (cancel_reminder) и поставь правильное (set_reminder); заметку — инструментом заметок. Потом коротко скажи, что именно изменилось. Неясно, что нужно, — спроси одной фразой; делать было нечего — не говори «готово». Уже сказанное не повторяй.";
+  return "ПРОВЕРКА: ты написал(а), что сделал(а) (записала, поправила, готово), но ни одного действия не было — ничего не изменилось. Сделай это сейчас инструментами: новое или изменённое — remember с фактом целиком; напоминание неверное — найди его (list_reminders), отмени (cancel_reminder) и поставь правильное (set_reminder); заметку — инструментом заметок; трату или доход — money_add. Потом коротко скажи, что именно изменилось. Неясно, что нужно, — спроси одной фразой; делать было нечего — не говори «готово». Уже сказанное не повторяй.";
 }
 // «Напиши Андрею…», а Андрея нет в «Близких» -> пояснение для модели к результату send_message, иначе ""
 function notCloseNote(ask) {
@@ -4753,7 +4757,7 @@ function monthData(y, mo) {
   mm.forEach(x => { const c = cur[x.currency] = cur[x.currency] || { inc: 0, exp: 0, cats: {} }; if (x.kind === "income") c.inc += x.amount; else { c.exp += x.amount; c.cats[x.category || "без категории"] = (c.cats[x.category || "без категории"] || 0) + x.amount; } });
   const main = Object.entries(cur).sort((p, q) => q[1].exp - p[1].exp)[0];
   return { y, mo, ym, title: MONTHS_NOM[mo], done: { n: done.length, days: by.filter(Boolean).length, streak, best: done.length ? [bi + 1, by[bi]] : null, by, top: done.slice(-5).map(x => x.title) },
-    money: main ? { cur: main[0], exp: main[1].exp, inc: main[1].inc, cats: Object.entries(main[1].cats).sort((p, q) => q[1] - p[1]).slice(0, 3) } : null, all: cur,
+    money: main ? { cur: main[0], exp: main[1].exp, inc: main[1].inc, cats: monCats(main[1].cats) } : null, all: cur,
     empty: !done.length && !mm.length };
 }
 function monthSummary(m) {
@@ -4768,6 +4772,13 @@ function monthSummary(m) {
   Object.entries(d.all).forEach(([c, v]) => L.push(`Деньги (${c}): расходы ${+v.exp.toFixed(2)}, доходы ${+v.inc.toFixed(2)}; больше всего — ` + Object.entries(v.cats).sort((p, q) => q[1] - p[1]).slice(0, 3).map(([k, s]) => `${k} ${+s.toFixed(2)}`).join(", ") + "."));
   if (L.length === 1) return L[0] + " Записей за этот месяц почти нет: дел и трат не было. Скажи об этом мягко и предложи отмечать сделанное («я позвонил в банк»).";
   return L.join("\n") + "\n\nРасскажи пользователю его месяц тепло и живо, своими словами, 4–6 предложений: главное число дел и чем он может гордиться (назови одно-два дела), куда ушли деньги (одной фразой, без нравоучений). В конце — одно доброе пожелание на следующий месяц. Без списков и без цифр подряд.";
+}
+/* Куда ушли деньги: четыре самые большие категории, остальные — одной строкой «Остальное», чтобы сумма строк сходилась
+   с «потрачено» (отчёт №405, 29.10: «верх правильный, низ не добавлено» — показывались только три категории). */
+function monCats(cats) {
+  const all = Object.entries(cats).sort((p, q) => q[1] - p[1]);
+  if (all.length <= 5) return all;
+  return all.slice(0, 4).concat([["Остальное", all.slice(4).reduce((a, c) => a + c[1], 0), "rest"]]);
 }
 /* «Мой месяц» карточкой (0.61): «Всё» → «Мой месяц» — числа, календарь (гуще — больше дел), чем гордиться, куда ушли деньги */
 let MON_AT = null;
@@ -4784,7 +4795,7 @@ function monthHtml(d) {
     <div class="mon-sts">${st.map(([v, l, s]) => `<div><b>${v}</b><span>${l}</span>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("")}</div>
     <h3>Дела по дням</h3><div class="mon-cal" role="img" aria-label="Дела по дням: дней с делами — ${dn.days}">${["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map(w => `<u>${w}</u>`).join("")}${"<b></b>".repeat(first)}${dn.by.map((n, i) => `<i class="lv${n ? Math.min(4, 1 + Math.floor(n / max * 3.999)) : 0}">${i + 1}</i>`).join("")}</div>
     ${dn.top.length ? `<h3>Чем можно гордиться</h3><ul class="mon-top">${dn.top.slice(-3).reverse().map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
-    ${m && m.cats.length ? `<h3>Куда ушли деньги</h3><div class="mon-bar">${m.cats.map((c, i) => `<i class="c${i}" style="flex:${c[1] / tot}"></i>`).join("")}</div><ul class="mon-cats">${m.cats.map((c, i) => `<li><i class="c${i}"></i>${esc(c[0])}<b>${Math.round(c[1]).toLocaleString("ru-RU")}</b></li>`).join("")}</ul>` : ""}
+    ${m && m.cats.length ? `<h3>Куда ушли деньги</h3><div class="mon-bar">${m.cats.map((c, i) => `<i class="${c[2] ? "co" : "c" + i}" style="flex:${c[1] / tot}"></i>`).join("")}</div><ul class="mon-cats">${m.cats.map((c, i) => `<li><i class="${c[2] ? "co" : "c" + i}"></i>${esc(c[0])}<b>${Math.round(c[1]).toLocaleString("ru-RU")}</b></li>`).join("")}</ul>` : ""}
     <button class="btn p w" id="mon-say">Рассказать голосом</button>`}`;
 }
 function openMonth(ym) {
@@ -5933,7 +5944,7 @@ function tasksHtml() {
   const m = mind(), on = !!(S.sync.on && syncChan());
   const ts = Object.entries(m.tasks).sort((a, b) => String(b[1].updated).localeCompare(String(a[1].updated))), q = qGet("taskq");
   if (!on) return `<div class="card"><b>Большие задачи</b><p class="hint">Презентации, отчёты, исследования делает компьютер с Dewiar или облако Dewiar — нужна синхронизация: тот же ключ Dewiar или вход аккаунтом, что на компьютере.</p><button class="btn p" id="so-sync">Открыть настройки</button></div>`;
-  return `<div class="card"><label class="f"><span>Поручить большую задачу</span><textarea id="tk-goal" rows="2" placeholder="Например: «сделай презентацию о погоде на завтра» или «сравни 5 ноутбуков до 1500 рублей»"></textarea></label>
+  return `<div class="card"><label class="f"><span>Поручить большую задачу</span><textarea id="tk-goal" rows="4" placeholder="Например: «сделай презентацию о погоде на завтра» или «сравни 5 ноутбуков до 1500 рублей»"></textarea></label>
       <button class="btn p w" id="tk-go">Передать</button><p class="hint">${pcOnline() ? "Компьютер на связи — сделает он." : "Компьютер не на связи — сделает облако Dewiar: найдёт, напишет, соберёт файл. Программы на компьютере облако не запускает."}</p></div>`
     + q.map(x => `<div class="it"><div class="bd"><b>${esc(x.title)}</b><small>⏳ отправляю…</small></div></div>`).join("")
     + (ts.length ? `<div class="bugh">Задачи</div>` + ts.map(([id, t]) => `<details class="dday task ${esc(t.status || "")}"${t.status === "done" && (t.files || []).length ? " open" : ""}><summary><div class="bd"><b>${esc(t.title)}</b><small><span class="tst">${esc(TASK_RU[t.status] || t.status || "")}</span>${t.where === "cloud" ? " · в облаке" : ""}${t.activity && t.status === "running" ? " · " + esc(t.activity) : ""}</small></div></summary>
@@ -5966,6 +5977,9 @@ function wireTasks(box, again) {
   $$("[data-ans]", box).forEach(b => b.onclick = () => { const id = b.dataset.ans, ta = $(`[data-ans-t="${CSS.escape(id)}"]`, box), v = ta ? ta.value.trim() : "";
     if (!v) { if (ta) ta.focus(); return; }
     try { taskCmd(id, "answer", v); toast(pcOnline() ? "Ответ передан — задача продолжит" : "Ответ уйдёт, когда компьютер будет на связи", 3000); again(); } catch (x) { toast(x.message); } });
+  // поле задачи — выше и растёт с текстом (владелец 29.10: «всё время хочется растянуть по высоте»)
+  const tkG = $("#tk-goal");
+  if (tkG) tkG.oninput = () => { tkG.style.height = "auto"; tkG.style.height = Math.min(Math.max(tkG.scrollHeight + 2, 120), innerHeight * 0.45) + "px"; };
   if ($("#tk-go")) $("#tk-go").onclick = () => { const g = $("#tk-goal").value.trim(); if (!g) return; try { taskToPc(g.slice(0, 60), g); toast(pcOnline() ? "Передано компьютеру" : "Делаю в облаке Dewiar — пришлю, когда будет готово", 3000); again(); } catch (e) { toast(e.message); } };
   if ($("#so-sync")) $("#so-sync").onclick = () => openSettings("more");
   wireFiles(box);
@@ -6090,7 +6104,7 @@ function appsHtml() {
   t.push(["radio", "Радио", "станции и жанры"]);
   t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"]);
   t.push(["senior", "Для старших", "для мамы и папы"], ["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
-  return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
+  return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}${k === "lessons" && lsnNew().length ? " new" : ""}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
 }
 function openApps() {
   $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
@@ -6102,11 +6116,23 @@ function openApps() {
 $("#b-apps").onclick = () => openApps();
 /* «Видеоуроки» (0.69; владелец 29.10: «показывать их в приложении»): мультфильмы ИИ Академии — с сайта (?p=/academy:
    только уроки, чьё видео уже загружено); плеер — прямо в листе, YouTube — в браузере. */
+/* Чтобы про уроки узнали без надоеданий (29.10, владелец): раз в 12 часов — какие уроки есть; новые (ещё не открытые) —
+   тихая точка на «Всё» и метка «новое» на плитке; открыли «Видеоуроки» — все увиденные отмечены (S.lsnSeen). */
+const lsnNew = () => (S.lsnKnown || []).filter(id => !(S.lsnSeen || []).includes(id));
+function lsnDot() { const b = $("#b-apps"); if (b) b.classList.toggle("has", !!lsnNew().length && !kidsOn()); }
+async function lsnCheck() {
+  if (Date.now() - (+S.lsnAt || 0) < 12 * 3600e3) return lsnDot();
+  try { const r = await http("GET", annBase() + "?p=/academy", { timeout: 15000 }); const it = JSON.parse(r.body || "{}").items;
+    if (Array.isArray(it)) { S.lsnKnown = it.map(x => x.id); S.lsnAt = Date.now(); saveS(); } } catch (e) { }
+  lsnDot();
+}
+setTimeout(() => lsnCheck(), 9000);
 async function openLessons() {
   const box = $("#lessons-body"); box.innerHTML = `<p class="lsn-empty">Загружаю уроки…</p>`; openSheet("#sh-lessons");
   let items = [];
   try { const r = await http("GET", annBase() + "?p=/academy", { timeout: 15000 }); items = (JSON.parse(r.body || "{}").items || []); }
   catch (e) { box.innerHTML = `<p class="lsn-empty">Нет связи с dewiar.pro — попробуйте позже.</p>`; return; }
+  S.lsnKnown = items.map(x => x.id); S.lsnSeen = [...new Set((S.lsnSeen || []).concat(S.lsnKnown))]; S.lsnAt = Date.now(); saveS(); lsnDot();
   const m = (x) => x ? `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}` : "";
   box.innerHTML = `<div class="lsn-player" id="lsn-player" hidden><video id="lsn-v" controls playsinline preload="metadata"></video><b id="lsn-t"></b></div>`
     + (items.length ? items.map(l => `<button class="lsn" data-id="${esc(l.id)}"><span class="lsn-pic"${l.poster ? ` style="background-image:url('${esc(l.poster)}')"` : ""}><i aria-hidden="true">▶</i>${l.sec ? `<em>${m(l.sec)}</em>` : ""}</span>`
@@ -7346,6 +7372,17 @@ function refFresh(d) {                       // новая золотая зве
    уже в «Близких» — «Написать» и «Позвонить»; нет — «Позвать в Близкие» (cloud.php ?p=/close/ref): друг увидит «… зовёт вас»
    и согласится или откажется. rid — знак связи от сервера (подделать нельзя). refMap — rid → {pid} | {offered}. */
 let refMap = {}, refSel = null;
+/* фото в созвездии (29.10, владелец: «чтобы и фото пользователя поддерживалось»): своё и тех, кто в «Близких» — тем же
+   /close/face с кэшем, что и в списке; подгрузились новые — созвездие перерисовывается спокойно (без появления звёзд) */
+const REF_IMG = {};
+async function refImgs(d) {
+  const st = clLoad(), want = [];
+  if (st.me && st.me.pid && +st.me.face) want.push([st.me.pid, +st.me.face]);
+  (d.invited || []).concat(d.by ? [d.by] : []).forEach(x => { const q = refPeer(x); if (q.pid && q.face) want.push([q.pid, q.face]); });
+  let fresh = false;
+  await Promise.all(want.filter(([pid]) => !REF_IMG[pid]).map(async ([pid, v]) => { const u = await clFace(pid, v); if (u) { REF_IMG[pid] = u; fresh = true; } }));
+  if (fresh && refInfo === d && $("#rf-net")) refDraw(true);
+}
 async function refTab() {
   const box = $("#rf-body"); if (!box) return;
   if (!S.llm.cloud && !syncCred()) { box.innerHTML = `<div class="card"><b>Нужен Dewiar</b><p class="hint" style="margin:6px 0 10px">Приглашения работают через облако Dewiar: подключите мозг бесплатно или войдите аккаунтом dewiar.pro.</p><button class="btn p w" id="rf-brain">Подключить</button></div>`;
@@ -7358,7 +7395,7 @@ async function refTab() {
 }
 function refPeer(x) {                         // друг в «Близких» — его имя оттуда и pid; иначе — как назвал сервер
   const m = (x && refMap[x.rid]) || {}, p = m.pid && clLoad().people.find(q => q.pid === m.pid);
-  return { pid: p ? p.pid : "", name: p ? p.name : x.name, offered: !!m.offered, devs: p ? (p.devs || []).length : 0 };
+  return { pid: p ? p.pid : "", name: p ? p.name : x.name, offered: !!m.offered, devs: p ? (p.devs || []).length : 0, face: p ? +p.face || 0 : 0 };
 }
 /* состояние приглашённого: засчитан; не засчитан (тот же интернет или устройство — защита от накруток); ждёт его
    первого пополнения или нового месяца (лимит наград); пробует Dewiar N из M дней */
@@ -7369,7 +7406,7 @@ function refRow(x, key, sub) {
   const act = q.pid ? `<button class="ib soft" data-w="${esc(q.pid)}" title="Написать"><svg viewBox="0 0 24 24"><path d="M4 5.5h16v11H9l-5 4z"/></svg></button>`
       + (q.devs && window.DewiarCall ? `<button class="ib soft" data-c="${esc(q.pid)}" title="Позвонить"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></button>` : "")
     : q.offered ? `<em class="rfw">ждём ответа</em>` : `<button class="btn rfo" data-o="${esc(x.rid)}">Позвать в Близкие</button>`;
-  return `<div class="rfp ${refSel === key ? "cur" : ""}" data-k="${key}"><i class="clava" style="--c:${col}">${esc((q.name || "?")[0].toUpperCase())}</i>
+  return `<div class="rfp ${refSel === key ? "cur" : ""}" data-k="${key}"><i class="clava" style="--c:${col}"${q.pid && q.face ? ` data-face="${esc(q.pid)}" data-v="${q.face}"` : ""}>${esc((q.name || "?")[0].toUpperCase())}</i>
     <span><b>${esc(q.name)}</b><small>${sub}</small></span>${act}</div>`;
 }
 function refDraw(calm) {
@@ -7391,10 +7428,12 @@ function refDraw(calm) {
     <p class="hint" style="margin:10px 4px">Переписываться и созваниваться можно с теми, кого пригласили вы, и с тем, кто пригласил вас, — когда оба согласны: «Позвать в Близкие».</p>
     ${d.can_use ? `<details class="more" style="margin:4px 2px 0"><summary>Есть код приглашения?</summary><div class="row2" style="margin-top:6px"><input id="ref-code" placeholder="6 знаков" autocapitalize="characters" style="flex:1;padding:12px 14px;border-radius:14px;border:0;background:var(--field)"><button class="btn p" id="ref-use">Ввести</button></div><div class="res" id="ref-res"></div></details>` : ""}`;
   if (window.DewiarRefNet) {
-    const net = Object.assign({}, d, { invited: list.map(x => { const q = refPeer(x); return Object.assign({}, x, { label: q.name, close: q.pid }); }) });
-    DewiarRefNet.render($("#rf-net"), net, { big: true, calm, me: (S.user_name || "Вы").slice(0, 7), by: d.by ? refPeer(d.by).name : "", sel: refSel,
+    const st = clLoad(), me = st.me || {}, img = (pid) => pid && REF_IMG[pid] || "";
+    const net = Object.assign({}, d, { invited: list.map(x => { const q = refPeer(x); return Object.assign({}, x, { label: q.name, close: q.pid, img: img(q.pid) }); }) });
+    DewiarRefNet.render($("#rf-net"), net, { big: true, calm, light: document.body.classList.contains("light"), meImg: img(me.pid), byImg: d.by ? img(refPeer(d.by).pid) : "", me: (S.user_name || "Вы").slice(0, 7), by: d.by ? refPeer(d.by).name : "", sel: refSel,
       seenKey: "dw_refnet_seen_big", onPick: (i) => { refSel = refSel === i ? null : i; refDraw(true); const r = $(`.rfp[data-k="${i}"]`); if (r) r.scrollIntoView({ block: "nearest", behavior: "smooth" }); } });
   }
+  clFacesFill(box); refImgs(d);
   $$(".rfp").forEach(r => r.onclick = (e) => { if (e.target.closest("button")) return; const k = r.dataset.k === "by" ? "by" : +r.dataset.k; refSel = refSel === k ? null : k; refDraw(true); });
   $$(".rfp [data-w]").forEach(b => b.onclick = () => { clTab = "close"; clCur = b.dataset.w; clRender(); });
   $$(".rfp [data-c]").forEach(b => b.onclick = () => clCall(b.dataset.c, false).catch(e => toast(e.message, 4000)));
@@ -9275,7 +9314,14 @@ function famPublic() {
     members: Object.entries(F.members).map(([pid, m]) => Object.assign({}, m, { pid })), share: F.share !== false };
 }
 function famColor(pid) { const o = ["", ...famJoined()], i = o.indexOf(pid); return FAM_COL[(i < 0 ? o.length : i) % FAM_COL.length]; }
-const famAva = (name, pid, cls) => `<span class="fmava${cls ? " " + cls : ""}" style="background:${famColor(pid)}" aria-hidden="true">${esc(String(name || "?").trim().slice(0, 1).toUpperCase() || "?")}</span>`;
+// фото — как в «Близких» (своё — из «Моей карточки»); подставляет clFacesFill после отрисовки
+const famFace = (pid) => { const st = clLoad(), p = pid ? st.people.find(q => q.pid === pid) : st.me; return p && p.pid && +p.face ? [p.pid, +p.face] : null; };
+const famAva = (name, pid, cls) => { const fc = famFace(pid); return `<span class="fmava${cls ? " " + cls : ""}" style="background-color:${famColor(pid)}"${fc ? ` data-face="${esc(fc[0])}" data-v="${fc[1]}"` : ""} aria-hidden="true">${esc(String(name || "?").trim().slice(0, 1).toUpperCase() || "?")}</span>`; };
+/* Вкладка «Семья» — карточками (29.10, владелец: «плохо выглядит, без структуры, форма не в стиле, всё в кучу»): месяц —
+   итог, лимит, полоса и кто сколько; «Общие платежи» — строки «что · до когда · кто» с суммой и кнопками под ними (без
+   рамок, просрочен — мягкий красный фон); «+ Платёж» — форма в стиле приложения, кто платит — чипами; лента; «Кто в
+   семье» — позвать нажатием на имя близкого, не выпадающим списком. */
+let famAddOpen = false, famPayer = "";
 function famRender() {
   const box = $("#fam-body"); if (!box) return;
   const d = famPublic(), st = clLoad(), lim = d.limit, over = lim && d.total > lim, base = Math.max(lim, d.total) || 1;
@@ -9283,43 +9329,59 @@ function famRender() {
   const by = d.by.filter(v => v.sum > 0 || v.pid === "" || joinedNames.includes(v.name));
   const asked = d.members.filter(m => m.st === "asked"), others = d.members.filter(m => m.st !== "asked");
   const free = st.people.filter(p => !d.members.some(m => m.pid === p.pid));
+  const first = (n) => String(n || "").trim().split(/\s+/)[0];
   const CHK = `<svg viewBox="0 0 24 24"><path d="M5 12l5 5L19 7"/></svg>`, CLK = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2 2"/></svg>`;
-  const list = d.feed.length ? d.feed : d.recent.slice(0, 10);
+  const list = d.feed.length ? d.feed : d.recent.slice(0, 10), payers = [d.me, ...joinedNames];
+  if (!payers.includes(famPayer)) famPayer = d.me;
+  const bill = (b) => {
+    const paid = !!b.paid_by, late = !paid && b.due && b.due < famToday(), today = !paid && b.due === famToday();
+    const sub = paid ? `оплатил(а) ${esc(first(b.paid_by))}, ${famDay(isoLocal(new Date(b.paid_at)).slice(0, 10))}`
+      : [b.due ? (late ? `просрочен с ${famDay(b.due)}` : today ? "сегодня" : `до ${famDay(b.due)}`) : "", b.payer ? `платит ${esc(first(b.payer))}` : "кто платит — не выбрано"].filter(Boolean).join(" · ");
+    return `<div class="fmbill ${paid ? "paid" : late ? "late" : "due"}" data-id="${esc(b.id)}"><span class="fmic">${paid ? CHK : CLK}</span>
+      <div class="fmbt"><b>${esc(b.name)}</b><small>${sub}</small></div>${b.amount ? `<b class="fmsum">${famNum(b.amount)}</b>` : "<span></span>"}
+      ${paid ? "" : `<div class="fmbact"><button class="fmbtn ok" data-paid="${esc(b.id)}">${CHK}Оплачено</button>${joinedNames.includes(b.payer) ? `<button class="fmbtn rem" data-rem="${esc(b.id)}">Напомнить</button>` : ""}</div>`}</div>`;
+  };
   box.innerHTML = asked.map(m => `<div class="card fmask">${famAva(m.name, m.pid)}<div><b>${esc(m.name)} приглашает вести общий бюджет</b><small>Траты и общие платежи будут видны вам обоим.</small></div>
       <div class="row2"><button class="btn p" data-acc="${esc(m.pid)}">Принять</button><button class="btn" data-out="${esc(m.pid)}">Не сейчас</button></div></div>`).join("")
-    + `<div class="fmhead"><div><small>Семья</small><h3>${FAM_MONTH[+d.month.slice(5, 7) - 1]}</h3></div><div class="fmstack">${by.map(v => famAva(v.pid ? v.name : d.me, v.pid)).join("")}</div></div>`
-    + `<section class="fmmonth" aria-label="Потрачено за месяц"><div class="fmtot"><b>${famNum(d.total)} <span>${esc(CUR)}</span></b>`
-    + `<button class="lnk" id="fm-lim">${lim ? (over ? `больше лимита на ${famNum(d.total - lim)}` : `из ${famNum(lim)} на месяц`) : "задать лимит"}</button></div>`
+    + `<section class="card fmmonth" aria-label="Потрачено за месяц"><div class="fmhead"><div><small>Общий бюджет</small><h3>${FAM_MONTH[+d.month.slice(5, 7) - 1]}</h3></div><div class="fmstack">${by.map(v => famAva(v.pid ? v.name : d.me, v.pid)).join("")}</div></div>`
+    + `<div class="fmtot"><b>${famNum(d.total)} <span>${esc(CUR)}</span></b><button class="fmlim${over ? " over" : ""}" id="fm-lim">${lim ? (over ? `больше лимита на ${famNum(d.total - lim)}` : `из ${famNum(lim)} на месяц`) : "задать лимит"}</button></div>`
     + `<div class="fmbar${over ? " over" : ""}" role="img" aria-label="${esc(by.map(v => `${v.pid ? v.name : "Я"} ${famNum(v.sum)}`).join(", ") + (lim && !over ? `, остаток ${famNum(lim - d.total)}` : ""))}">${by.filter(v => v.sum > 0).map(v => `<i style="width:${(v.sum / base * 100).toFixed(2)}%;background:${famColor(v.pid)}"></i>`).join("")}</div>`
-    + `<div class="fmby">${by.map(v => `<div><span>${esc(v.pid ? v.name : "Я")}</span><b>${famNum(v.sum)}</b></div>`).join("")}</div></section>`
-    + `<h4 class="fmh">Общие платежи</h4><div class="fmbills">${d.bills.map(b => {
-      const paid = !!b.paid_by, late = !paid && b.due && b.due < famToday();
-      const sub = paid ? `оплатил(а) ${esc(b.paid_by)}, ${famDay(isoLocal(new Date(b.paid_at)).slice(0, 10))}` : [b.due ? `до ${famDay(b.due)}` : "", b.payer ? `платит ${esc(b.payer)}` : ""].filter(Boolean).join(", ") || "кто платит — не выбрано";
-      return `<div class="fmbill ${paid ? "paid" : late ? "late" : "due"}" data-id="${esc(b.id)}"><span class="fmic">${paid ? CHK : CLK}</span><div><b>${esc(b.name)}</b><small>${sub}</small></div>`
-        + (paid ? (b.amount ? `<b>${famNum(b.amount)}</b>` : "") : `${b.amount ? `<b>${famNum(b.amount)}</b>` : ""}<button class="fmbtn" data-paid="${esc(b.id)}">Оплачено</button>`
-          + (joinedNames.includes(b.payer) ? `<button class="fmbtn rem" data-rem="${esc(b.id)}">Напомнить</button>` : "")) + `</div>`;
-    }).join("") || `<p class="hint">Свет, газ, интернет — добавьте, кто и до какого числа платит. «Оплачено» увидят все.</p>`}</div>`
-    + `<details class="fmadd"><summary>Добавить платёж</summary><div class="fmform"><input id="fm-bn" placeholder="Платёж" maxlength="60" aria-label="Платёж"><input id="fm-ba" type="number" inputmode="decimal" placeholder="Сумма" aria-label="Сумма">
-       <input id="fm-bd" type="date" aria-label="Оплатить до"><select id="fm-bp" aria-label="Кто платит">${[d.me, ...joinedNames].map(n => `<option>${esc(n)}</option>`).join("")}</select><button class="btn p" id="fm-bgo">Добавить</button></div></details>`
-    + `<h4 class="fmh">${d.feed.length ? "Сегодня" : "Последние траты"}</h4><div class="fmfeed">${list.map(x => { const nm = x.who ? x.name : d.me, what = String(x.note || x.cat || "Расход");
-      return `<div>${famAva(nm, x.who || "", "sm")}<div><b>${esc(what.slice(0, 1).toUpperCase() + what.slice(1))}</b><small>${x.said ? `голосом: «${esc(x.said)}», ` : ""}${x.who ? esc(nm) + ", " : ""}${x.date === famToday() ? clTime(x.ts) : famDay(x.date)}</small></div><b>${famNum(x.amount)}</b></div>`; }).join("")
-      || `<p class="hint">Скажите «продукты 46,20» — трата запишется и появится у всей семьи.</p>`}</div>`
-    + `<h4 class="fmh">Кто в семье</h4><div class="fmppl">${others.map(m => `<div>${famAva(m.name, m.pid)}<div><b>${esc(m.name)}</b><small>${m.st === "joined" ? "в семье" : "ждём ответа"}</small></div><button class="fmbtn" data-out="${esc(m.pid)}">${m.st === "joined" ? "Убрать" : "Отменить"}</button></div>`).join("")}
-       ${free.length ? `<div class="fminv"><select id="fm-pick" aria-label="Кого пригласить">${free.map(p => `<option value="${esc(p.pid)}">${esc(p.name)}</option>`).join("")}</select><button class="btn p" id="fm-inv">Пригласить</button></div>`
-        : `<p class="hint">${st.people.length ? "Все близкие уже в списке." : "Пригласить можно тех, кто есть в «Близких»: сначала добавьте человека на вкладке «Близкие»."}</p>`}
-       <div class="sw fmshare"><div>Делиться моими тратами<small>Расходы, которые вы записываете, сразу видны семье</small></div><label class="tg"><input type="checkbox" id="fm-share"${d.share ? " checked" : ""}><i></i></label></div></div>`;
+    + `<div class="fmby">${by.map(v => `<div><span><i style="background:${famColor(v.pid)}"></i>${esc(v.pid ? first(v.name) : "Я")}</span><b>${famNum(v.sum)}</b></div>`).join("")}</div></section>`
+    + `<section class="card fmsec"><div class="fmsh"><h4>Общие платежи</h4><button class="fmplus${famAddOpen ? " on" : ""}" id="fm-addb" aria-expanded="${famAddOpen}">${famAddOpen ? "Закрыть" : "+ Платёж"}</button></div>`
+    + (famAddOpen ? `<div class="fmform"><input id="fm-bn" placeholder="Что платим: свет, газ, интернет" maxlength="60" aria-label="Платёж">
+        <div class="fmrow"><input id="fm-ba" type="number" inputmode="decimal" placeholder="Сумма" aria-label="Сумма"><input id="fm-bd" type="date" aria-label="Оплатить до"></div>
+        <div class="fmwho"><small>Кто платит</small><div>${payers.map(n => `<button class="fmchip${n === famPayer ? " on" : ""}" data-payer="${esc(n)}">${esc(first(n))}</button>`).join("")}</div></div>
+        <button class="btn p w" id="fm-bgo">Добавить платёж</button></div>` : "")
+    + `<div class="fmbills">${d.bills.map(bill).join("") || `<p class="hint fmempty">Свет, газ, интернет — добавьте, кто и до какого числа платит. «Оплачено» увидят все.</p>`}</div></section>`
+    + `<section class="card fmsec"><div class="fmsh"><h4>${d.feed.length ? "Сегодня" : "Последние траты"}</h4></div><div class="fmfeed">${list.map(x => { const nm = x.who ? x.name : d.me, what = String(x.note || x.cat || "Расход");
+      return `<div>${famAva(nm, x.who || "", "sm")}<div><b>${esc(what.slice(0, 1).toUpperCase() + what.slice(1))}</b><small>${x.said ? `голосом: «${esc(x.said)}» · ` : ""}${x.who ? esc(first(nm)) + " · " : ""}${x.date === famToday() ? clTime(x.ts) : famDay(x.date)}</small></div><b>${famNum(x.amount)}</b></div>`; }).join("")
+      || `<p class="hint fmempty">Скажите «продукты 46,20» — трата запишется и появится у всей семьи.</p>`}</div></section>`
+    + `<section class="card fmsec"><div class="fmsh"><h4>Кто в семье</h4></div><div class="fmppl">${famAva(d.me, "")}<div><b>${esc(d.me)}</b><small>это вы</small></div></div>`
+    + others.map(m => `<div class="fmppl">${famAva(m.name, m.pid)}<div><b>${esc(m.name)}</b><small>${m.st === "joined" ? "в семье" : "ждём ответа"}</small></div><button class="fmbtn" data-out="${esc(m.pid)}">${m.st === "joined" ? "Убрать" : "Отменить"}</button></div>`).join("")
+    + (free.length ? `<div class="fminv"><small>Позвать в общий бюджет</small><div>${free.map(p => `<button class="fmchip add" data-inv="${esc(p.pid)}">${esc(first(p.name))}<i>+</i></button>`).join("")}</div></div>`
+      : `<p class="hint fmempty">${st.people.length ? "Все близкие уже в списке." : "Позвать можно тех, кто есть в «Близких»: сначала добавьте человека на вкладке «Близкие»."}</p>`)
+    + `<div class="sw fmshare"><div>Делиться моими тратами<small>Расходы, которые вы записываете, сразу видны семье</small></div><label class="tg"><input type="checkbox" id="fm-share"${d.share ? " checked" : ""}><i></i></label></div></section>`;
+  clFacesFill(box);
   const run = (f, ok) => async () => { try { await f(); if (ok) toast(ok); } catch (e) { toast(e.message, 4000); } famRender(); };
   $$("#fam-body [data-acc]").forEach(b => b.onclick = run(() => famAccept(b.dataset.acc), "Вы в общем бюджете"));
   $$("#fam-body [data-out]").forEach(b => b.onclick = run(() => famLeave(b.dataset.out)));
   $$("#fam-body [data-paid]").forEach(b => b.onclick = run(() => famBillPaid(b.dataset.paid, true), "Отмечено: оплачено"));
   $$("#fam-body [data-rem]").forEach(b => b.onclick = run(() => famRemind(b.dataset.rem), "Напоминание отправлено"));
+  $$("#fam-body [data-inv]").forEach(b => b.onclick = run(() => famInvite(b.dataset.inv), "Приглашение отправлено"));
+  $$("#fam-body [data-payer]").forEach(b => b.onclick = () => { famPayer = b.dataset.payer; $$("#fam-body [data-payer]").forEach(x => x.classList.toggle("on", x === b)); });
   $$("#fam-body .fmbill.paid").forEach(el => el.oncontextmenu = (e) => { e.preventDefault();
     if (confirm(`Удалить платёж «${(FAM.bills[el.dataset.id] || {}).name}» у всей семьи?`)) run(() => famBillDel(el.dataset.id), "Платёж удалён")(); });
-  if ($("#fm-inv")) $("#fm-inv").onclick = run(() => famInvite($("#fm-pick").value), "Приглашение отправлено");
+  $("#fm-addb").onclick = () => { famAddOpen = !famAddOpen; famRender(); if (famAddOpen) setTimeout(() => $("#fm-bn") && $("#fm-bn").focus(), 60); };
   $("#fm-share").onchange = () => { FAM.share = $("#fm-share").checked; famSave(); };
   $("#fm-lim").onclick = () => { const v = prompt("Лимит на месяц для всей семьи (0 — без лимита)", lim || ""); if (v !== null) run(() => famLimit(String(v).replace(",", ".")), "Лимит сохранён — у всей семьи")(); };
-  $("#fm-bgo").onclick = run(() => famBillSave({ name: $("#fm-bn").value, amount: +String($("#fm-ba").value).replace(",", "."), due: $("#fm-bd").value, payer: $("#fm-bp").value }), "Платёж добавлен");
+  if ($("#fm-bgo")) $("#fm-bgo").onclick = run(async () => { await famBillSave({ name: $("#fm-bn").value, amount: +String($("#fm-ba").value).replace(",", "."), due: $("#fm-bd").value, payer: famPayer }); famAddOpen = false; }, "Платёж добавлен");
 }
+const CL_TABIC = {
+  close: '<path d="M12 19.5s-7-4.3-7-9.6A3.9 3.9 0 0 1 12 7.6a3.9 3.9 0 0 1 7 2.3c0 5.3-7 9.6-7 9.6z"/>',
+  fam: '<path d="M4.5 11 12 5l7.5 6v7.5a1.5 1.5 0 0 1-1.5 1.5h-3.5v-5h-5v5H6a1.5 1.5 0 0 1-1.5-1.5z"/>',
+  near: '<path d="M12 20.5s-6-5.4-6-10.5a6 6 0 0 1 12 0c0 5.1-6 10.5-6 10.5z"/><circle cx="12" cy="10" r="2.2"/>',
+  meet: '<rect x="3.5" y="6.5" width="11.5" height="11" rx="2.5"/><path d="m15 10.5 5-3v9l-5-3"/>',
+  ref: '<path d="m12 3.8 2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7.9-5.6-4-3.9 5.6-.8z"/>' };
 let clTab = "close";
 function clTabs() { $$("#cl-tabs button").forEach(b => b.onclick = () => { clTab = b.dataset.t; clRender(); }); }
 const clOffers = (st) => (st.offers || []).map(o => `<div class="card clof"><b>${esc(o.name)} зовёт вас в «Близкие»</b>
@@ -9383,7 +9445,9 @@ function clRender() {
   }
   if ((clTab === "near" || clTab === "meet") && !feat(clTab)) clTab = "close";      // «Возможности»: выключено — вкладки нет
   if (clTab === "fam" && !feat("family")) clTab = "close";
-  const tabs = `<div class="tabs" id="cl-tabs"><button data-t="close" class="${clTab === "close" ? "on" : ""}">Близкие</button>${feat("family") ? `<button data-t="fam" class="${clTab === "fam" ? "on" : ""}">Семья</button>` : ""}${feat("near") ? `<button data-t="near" class="${clTab === "near" ? "on" : ""}">Рядом</button>` : ""}${feat("meet") ? `<button data-t="meet" class="${clTab === "meet" ? "on" : ""}">Встречи</button>` : ""}<button data-t="ref" class="${clTab === "ref" ? "on" : ""}">Рефералы</button></div>`;
+  // вкладки — значком и подписью под ним (29.10, владелец: «надписи обрезаны, может иконками показать»)
+  const tb = (t, label, ic) => `<button data-t="${t}" class="${clTab === t ? "on" : ""}" aria-label="${label}"${clTab === t ? ' aria-current="page"' : ""}><svg viewBox="0 0 24 24" aria-hidden="true">${CL_TABIC[t]}</svg><span>${label}</span></button>`;
+  const tabs = `<div class="tabs ictabs" id="cl-tabs">${tb("close", "Близкие")}${feat("family") ? tb("fam", "Семья") : ""}${feat("near") ? tb("near", "Рядом") : ""}${feat("meet") ? tb("meet", "Встречи") : ""}${tb("ref", "Рефералы")}</div>`;
   if (clTab === "fam") { if (!$("#fam-body")) { box.innerHTML = tabs + `<div id="fam-body"></div>`; clTabs(); } famRender(); famDot(); return; }
   if (clTab === "ref") { if (!$("#rf-body")) { box.innerHTML = tabs + `<div id="rf-body"></div>`; clTabs(); } refTab(); return; }
   if (clTab === "meet") { if (!$("#meet-body")) { box.innerHTML = tabs + `<div id="meet-body"></div>`; clTabs(); } meetRender(); mtLoad(); return; }

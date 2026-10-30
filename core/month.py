@@ -14,6 +14,15 @@ MONTHS_GEN = ["января", "февраля", "марта", "апреля", "�
 MONTHS_IN = ["январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре"]
 
 
+def _cats(cats):
+    """Куда ушли деньги: четыре самые большие категории, остальные — одной строкой «Остальное», чтобы сумма строк сходилась
+    с «потрачено» (отчёт №405, 29.10: «верх правильный, низ не добавлено» — показывались только три)."""
+    cats = sorted(cats, key=lambda x: -(x.get("sum") or 0))
+    if len(cats) <= 5:
+        return cats
+    return cats[:4] + [{"name": "Остальное", "sum": round(sum(x.get("sum") or 0 for x in cats[4:]), 2), "rest": True}]
+
+
 def bounds(ym):
     y, m = (int(x) for x in ym.split("-"))
     start = dt.date(y, m, 1)
@@ -64,7 +73,7 @@ def gather(eng, ym=None, today=None):
         s = eng.money.summary(start.isoformat(), (end - dt.timedelta(days=1)).isoformat())
         c = max(s.get("by_currency") or [{}], key=lambda x: x.get("expense", 0))   # главная валюта — где больше трат
         out["money"] = {"cur": c.get("currency", ""), "expense": c.get("expense", 0), "income": c.get("income", 0),
-                        "cats": (c.get("expense_cats") or [])[:3], "n": s.get("count", 0)}
+                        "cats": _cats(c.get("expense_cats") or []), "n": s.get("count", 0)}
     except Exception:  # noqa: BLE001
         out["money"] = {"n": 0}
     # заметки — новые и изменённые за месяц

@@ -31,7 +31,9 @@ function vlRender() {
   const q = vlNorm($("#vl-q").value.trim()), list = vlHits(q), box = $("#vl-list");
   if (!VL.items.length) {
     box.innerHTML = `<div class="vl-empty"><div class="vl-lock" aria-hidden="true"><svg viewBox="0 0 48 48"><rect x="10" y="21" width="28" height="21" rx="6"/><path d="M16 21v-5a8 8 0 0 1 16 0v5"/><circle cx="24" cy="31" r="2.6"/><path d="M24 33.6v3"/></svg></div>
-      <b>В сейфе пока пусто</b><span>Нажмите «Добавить» — или скажите Лире: «запомни пароль от вайфая: …». Пароль будет здесь, вслух его никто не услышит.</span></div>`;
+      <b>В сейфе пока пусто</b><span>Нажмите «Добавить» — или скажите Лире: «запомни пароль от вайфая: …». Пароль будет здесь, вслух его никто не услышит.</span>
+      <span>Пароли есть в закрытом слепке? <a href="#" id="vl-empty-back">Восстановить из слепка</a></span></div>`;
+    $("#vl-empty-back").onclick = (e) => { e.preventDefault(); vlRestore(); };
     return;
   }
   box.innerHTML = (list.length ? list.map(x => {
@@ -218,6 +220,13 @@ async function vlKeep() {
     : "Копии с сейфом ещё нет.";
   el.style.color = VL.items.length && old ? "#b5651d" : "";
 }
+/* «Восстановить из слепка» прямо из сейфа (29.10, владелец: «хотел восстановить из слепка — и не вижу»): тот же выбор слепка,
+   что на «Главной» (snapshot.js snRestore); «Добавить недостающее» возвращает в сейф пароли, которых здесь нет. */
+function vlRestore() {
+  if (typeof snRestore === "function") { snRestore(); return; }
+  const h = $('nav button[data-p="home"]'); if (h) h.click();
+}
+if ($("#vl-keep-back")) $("#vl-keep-back").onclick = vlRestore;
 if ($("#vl-keep-go")) $("#vl-keep-go").onclick = () => {
   if (typeof SN !== "undefined") { SN.fmt = "dwr"; try { localStorage.setItem("dw.snap.fmt", "dwr"); } catch (e) { } }
   const h = $('nav button[data-p="home"]'); if (h) h.click();

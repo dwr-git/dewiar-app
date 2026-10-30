@@ -44,7 +44,8 @@ function renderProfiles() {
     $('[data-a="test"]', el).onclick = async (ev) => {
       ev.target.disabled = true; res.className = "res"; res.textContent = "проверяю…";
       try { const r = await core.call("llm_test", { profile: S.llm.profiles[id] });
-            if (r.ok) { res.className = "res ok"; res.textContent = `работает · модель «${r.model}»${r.api === "ollama" ? " (API Ollama)" : ""} · ответ за ${(r.total_ms / 1000).toFixed(1)} с: «${r.reply}»`; }
+            if (r.ok) { res.className = "res ok"; res.textContent = `работает · модель «${r.model}»${r.api === "ollama" ? " (API Ollama)" : ""} · ответ за ${(r.total_ms / 1000).toFixed(1)} с: «${r.reply}»`;
+                        if (r.ctx_note) { res.className = "res warn"; res.textContent += " · " + r.ctx_note; } }
             else { res.className = "res bad"; res.textContent = r.error || "модель не ответила"; } }
       catch (e) { res.className = "res bad"; res.textContent = e.message; }
       ev.target.disabled = false;
@@ -76,7 +77,27 @@ function renderProfiles() {
     $('[data-a="del"]', el).onclick = () => { delete S.llm.profiles[id]; const patch = { llm: { profiles: S.llm.profiles } }; if (S.llm.active === id) patch.llm.active = Object.keys(S.llm.profiles)[0] || ""; save(patch).then(renderProfiles); };
     box.appendChild(el);
   });
+  ownFbRender();
 }
+/* «Если своя модель не отвечает — отвечать через Dewiar» (29.10): виден, когда главная — своя модель (этот компьютер или
+   сервер в своей сети); включили, а бесплатного мозга нет — ядро подключит его запасным (своя модель остаётся главной). */
+function ownFbRender() {
+  const w = $("#own-fb-w"); if (!w || !S || !S.llm) return;
+  const p = (S.llm.profiles || {})[S.llm.active] || {};
+  const host = String(p.base_url || "").toLowerCase().replace(/^\w+:\/\//, "").split("/")[0].split(":")[0];
+  const own = !p.cloud && !!host && (/^(localhost|127\.|::1|0\.0\.0\.0)/.test(host) || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) || host.endsWith(".local") || !host.includes("."));
+  w.style.display = own ? "" : "none";
+  $("#own-fb").checked = !!S.llm.own_fallback;
+}
+if ($("#own-fb")) $("#own-fb").onchange = async (ev) => {
+  const on = ev.target.checked, r = $("#own-fb-res"); ev.target.disabled = true; r.className = "res"; r.textContent = on ? "подключаю…" : "";
+  try { const d = await core.call("own_fallback", { on }); S.llm.own_fallback = d.on;
+        r.className = "res " + (d.error ? "bad" : "ok");
+        r.textContent = d.error || (!on ? "" : d.ready ? "готово: если своя модель не ответит, ответит Dewiar" : "заявка отправлена — подключится сам, как только сайт одобрит"); }
+  catch (e) { r.className = "res bad"; r.textContent = e.message; ev.target.checked = !on; }
+  ev.target.disabled = false;
+};
+
 /* GitHub #18 (24.10): событие settings (ядро само сменило модель — engine_brain) не перерисовывало «Мозг»: радиокнопка
    оставалась у прежней модели. Ничего не поменялось — не трогаем (список моделей и итог «Проверить» остаются); человек
    печатает в поле профиля — перерисовка сбила бы ввод: тогда только отметка. */

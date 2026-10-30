@@ -99,6 +99,7 @@ class Obsidian:
         self.emit = emit or (lambda *a, **k: None)
         self._lock = threading.Lock()
         self.last = {"time": 0, "stats": {}, "error": ""}
+        self._bad = set()                # файлы, которые не читаются/не пишутся: в журнал — один раз
 
     # ---------- настройки ----------
 
@@ -261,12 +262,13 @@ class Obsidian:
                 return {}
             try:
                 st = self._sync(mir)
-                self.last = {"time": time.time(), "stats": st, "error": ""}
+                self.last = {"time": time.time(), "stats": st,
+                             "error": f"пропущено файлов: {st['skipped']} — нет доступа (сетевая папка или права)" if st.get("skipped") else ""}
             except OSError as e:
                 self.last["error"] = f"не получилось: {e}"
                 log.warning("Obsidian: %s", e)
                 return {}
-        if any(st.values()):
+        if any(v for k, v in st.items() if k != "skipped"):
             log.info("Obsidian: %s", st)
             self.emit("obsidian", **self.public())
         return st
@@ -306,50 +308,58 @@ class Obsidian:
         new_state = {}
         for rel in sorted(set(a) | set(b)):
             pa, pb, known = a.get(rel), b.get(rel), state.get(rel)
-            if pa and not pb:
-                if known and _hash(pa) == known:                 # удалили в Obsidian — у ассистента в корзину (правленый — вернём)
-                    self._trash(pa, root / ".Корзина", rel)
-                    st["trashed"] += 1
-                    continue
-                self._copy(pa, vp(rel))
-                st["to_vault"] += 1
-                new_state[rel] = _hash(pa)
-            elif pb and not pa:
-                if known and _hash(pb) == known:                 # удалили у ассистента — в корзину Obsidian
-                    self._trash(pb, mir.parent / ".trash" / mir.name, alias.get(rel, rel))
-                    st["trashed"] += 1
-                    continue
-                self._copy(pb, root / rel)
-                st["from_vault"] += 1
-                new_state[rel] = _hash(pb)
-            else:
-                ha, hb = _hash(pa), _hash(pb)
-                if ha == hb:
-                    new_state[rel] = ha
-                elif known == ha:                                # правили только в Obsidian
-                    self._copy(pb, pa)
-                    st["from_vault"] += 1
-                    new_state[rel] = hb
-                elif known == hb:                                # правил только ассистент
-                    self._copy(pa, pb)
+            try:
+                if pa and not pb:
+                    if known and _hash(pa) == known:                 # удалили в Obsidian — у ассистента в корзину (правленый — вернём)
+                        self._trash(pa, root / ".Корзина", rel)
+                        st["trashed"] += 1
+                        continue
+                    self._copy(pa, vp(rel))
                     st["to_vault"] += 1
-                    new_state[rel] = ha
-                else:                                            # правили оба: свежее — на место, другое — рядом с пометкой, откуда оно
-                    newer_a = pa.stat().st_mtime >= pb.stat().st_mtime
-                    keep, other = (pa, pb) if newer_a else (pb, pa)
-                    side = "из Obsidian" if newer_a else "от ассистента"
-                    p = Path(rel)
-                    alt = p.with_name(f"{p.stem} ({side}){p.suffix}").as_posix()
-                    if rel in alias:
-                        va = Path(alias[rel])
-                        alias[alt] = va.with_name(f"{va.stem} ({side}){va.suffix}").as_posix()
-                    self._copy(other, root / alt)
-                    self._copy(other, vp(alt))
-                    self._copy(keep, pb if newer_a else pa)
-                    h = _hash(keep)
-                    new_state[rel] = h
-                    new_state[alt] = _hash(other)
-                    st["conflicts"] += 1
+                    new_state[rel] = _hash(pa)
+                elif pb and not pa:
+                    if known and _hash(pb) == known:                 # удалили у ассистента — в корзину Obsidian
+                        self._trash(pb, mir.parent / ".trash" / mir.name, alias.get(rel, rel))
+                        st["trashed"] += 1
+                        continue
+                    self._copy(pb, root / rel)
+                    st["from_vault"] += 1
+                    new_state[rel] = _hash(pb)
+                else:
+                    ha, hb = _hash(pa), _hash(pb)
+                    if ha == hb:
+                        new_state[rel] = ha
+                    elif known == ha:                                # правили только в Obsidian
+                        self._copy(pb, pa)
+                        st["from_vault"] += 1
+                        new_state[rel] = hb
+                    elif known == hb:                                # правил только ассистент
+                        self._copy(pa, pb)
+                        st["to_vault"] += 1
+                        new_state[rel] = ha
+                    else:                                            # правили оба: свежее — на место, другое — рядом с пометкой, откуда оно
+                        newer_a = pa.stat().st_mtime >= pb.stat().st_mtime
+                        keep, other = (pa, pb) if newer_a else (pb, pa)
+                        side = "из Obsidian" if newer_a else "от ассистента"
+                        p = Path(rel)
+                        alt = p.with_name(f"{p.stem} ({side}){p.suffix}").as_posix()
+                        if rel in alias:
+                            va = Path(alias[rel])
+                            alias[alt] = va.with_name(f"{va.stem} ({side}){va.suffix}").as_posix()
+                        self._copy(other, root / alt)
+                        self._copy(other, vp(alt))
+                        self._copy(keep, pb if newer_a else pa)
+                        h = _hash(keep)
+                        new_state[rel] = h
+                        new_state[alt] = _hash(other)
+                        st["conflicts"] += 1
+            except OSError as e:                               # один файл недоступен (сетевая папка, нет прав) — остальные сверяем
+                if known:                                        # отпечаток прошлой сверки сохраняем: в следующий раз — как раньше
+                    new_state[rel] = known
+                st["skipped"] = st.get("skipped", 0) + 1
+                if rel not in self._bad:                         # в журнал — один раз на файл, не каждые 20 с (отчёт №408)
+                    self._bad.add(rel)
+                    log.warning("Obsidian: пропускаю «%s»: %s", rel, e)
         for name in ONE_WAY:                                     # напоминания — только в хранилище, для чтения
             src = root / name
             if src.is_file():

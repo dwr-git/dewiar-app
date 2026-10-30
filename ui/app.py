@@ -218,6 +218,36 @@ def composited_x11():
         return False
 
 
+def gtk_missing():
+    """Чего не хватает для окон (GTK 3 и WebKit2GTK для этого Python) -> "" или коротко что."""
+    try:
+        import gi
+    except ImportError:
+        return f"нет PyGObject для Python {sys.version_info.major}.{sys.version_info.minor}"
+    try:
+        gi.require_version("Gtk", "3.0")
+    except ValueError:
+        return "нет GTK 3"
+    for v in ("4.1", "4.0"):
+        try:
+            gi.require_version("WebKit2", v)
+            return ""
+        except ValueError:
+            pass
+    return "нет WebKit2GTK 4.1"
+
+
+def gtk_tip():
+    """Как поставить GTK/WebKit — командой своего дистрибутива; потом пересобрать окружение Dewiar."""
+    cmd = next((c for exe, c in (("pacman", "sudo pacman -S --needed python-gobject gtk3 webkit2gtk-4.1"),
+                                  ("apt-get", "sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1"),
+                                  ("dnf", "sudo dnf install python3-gobject gtk3 webkit2gtk4.1"),
+                                  ("zypper", "sudo zypper install python3-gobject typelib-1_0-WebKit2-4_1"))
+                if shutil.which(exe)), "поставьте PyGObject, GTK 3 и WebKit2GTK 4.1")
+    env = "/opt/dewiar/dewiar-env"
+    return cmd + (f", затем sudo {env} (пересоберёт окружение Dewiar) и перезапустите Dewiar" if os.path.exists(env) else "")
+
+
 def set_zoom_sizes(z):
     """Размеры окон виджета под масштаб z (SIZES меняется на месте: на него ссылаются все места). -> менялись ли."""
     ZOOM[0] = zoom_of(z)
@@ -3230,6 +3260,17 @@ def main():
             _ui_log(f"сторож «поверх окон» не запущен: {e}")
 
     _raise_idle_priority()
+    why = gtk_missing()
+    if why:
+        # №413 (30.10, Manjaro, Python 3.14): GTK для Python не нашлось — pywebview молча пробовал Qt («QT cannot be
+        # loaded»), виджет не появлялся, а что делать — непонятно. Теперь — прямо: чего нет и какой командой поставить.
+        tip = gtk_tip()
+        _ui_log(f"виджет: нет окна GTK для Python ({why}) — {tip}")
+        try:
+            subprocess.Popen(["notify-send", "-a", "Dewiar", "Dewiar: виджет не открылся",
+                              f"Нет GTK/WebKit для Python ({why}). {tip}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
     webview.start(on_start, gui="gtk", debug=bool(os.environ.get("DEWIAR_UI_DEBUG")))
     del held
 

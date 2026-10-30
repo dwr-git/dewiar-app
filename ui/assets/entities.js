@@ -892,10 +892,15 @@
     if (e.level > 0.06) A.heard = now;
     const voiced = speaking && e.sounding(now) && (e._voiceSeen ? e.level > 0.04 : e._audibleKnown || now - A.heard > 1500 || e.level > 0.04);
     let want = A.mTarget;
-    if (voiced) { if (now > A.nextMouth) { want = Math.random() < 0.12 ? 0 : 1 + Math.floor(Math.random() * 3); A.nextMouth = now + 90 + Math.random() * 60; } }
+    if (e.lipsync) {
+      // мультфильмы ИИ Академии (opts.lipsync): форма рта — по громкости этого кадра, без задержки (владелец 29.10: «рот
+      // у Лиры иногда не попадает»): тихо — закрыт, негромко — приоткрыт (2), громко — открыт (1/3 попеременно)
+      const lv = speaking ? e.target : 0, cls = lv < 0.05 ? 0 : lv < 0.2 ? 2 : 1;
+      if (cls !== A.lsCls || now > A.nextMouth) { A.lsCls = cls; want = cls === 1 ? (A.mTarget === 1 ? 3 : 1) : cls; A.nextMouth = now + 110; }
+    } else if (voiced) { if (now > A.nextMouth) { want = Math.random() < 0.12 ? 0 : 1 + Math.floor(Math.random() * 3); A.nextMouth = now + 90 + Math.random() * 60; } }
     else want = 0;
     if (want !== A.mTarget) { A.mPrev = A.mTarget; A.mTarget = want; A.mBlend = 0; }
-    A.mBlend = Math.min(1, A.mBlend + dt * 9);
+    A.mBlend = Math.min(1, A.mBlend + dt * (e.lipsync ? 18 : 9));
     if (A.wasSpeaking && !speaking && Math.random() < 0.5) A.smileTill = now + 1500;   // договорила — лёгкая улыбка
     A.wasSpeaking = speaking;
     if (A.smileTill && now > A.smileTill) A.smileTill = 0;
@@ -1255,6 +1260,7 @@
       this.still = !!opts.still;          // в покое — один кадр, без анимации (много обликов на одной странице студии)
       this.tone = opts.tone || "color";   // "mono" — сдержанно: белый край портрета и белые лучи вместо цвета персонажа
       this.fx = opts.fx || "wave";        // голос: "wave" — волна по кругу, "bars" — лучи вокруг портрета, "pulse" — расходящиеся круги
+      this.lipsync = !!opts.lipsync;           // рот строго по громкости кадра (мультфильмы tools/academy)
       this.voiceLevels = !!opts.voiceLevels;   // уровни своего голоса придут (виджет компьютера) — без них рот и волна молчат
       this.lookX = 0; this.lookY = 0; this._lx = 0; this._ly = 0; this._looking = false; this._la = 0;   // где зритель (look)
       this.lookGain = opts.lookGain || 1;   // сила эффекта: телефон — 1, виджет компьютера — 0.5 (крупный портрет, отзыв 14.10)

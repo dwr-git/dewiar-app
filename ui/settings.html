@@ -280,7 +280,7 @@
         <small id="bp-at">бот ещё не подключён</small>
       </div>
       <div class="bp-col bp-out">
-        <div class="bp-node bp-kb" id="bp-n-kb"><i class="bp-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 2-2h11v15H7a2 2 0 0 0-2 2z"/><path d="M5 20a2 2 0 0 0 2 2h11v-4M9 7h6M9 10h4"/></svg></i><span><b>Знания</b><small id="bp-kb">не подключены</small></span></div>
+        <div class="bp-node bp-kb go" id="bp-n-kb" role="button" tabindex="0" title="Подключить знания: папки и базы, по которым отвечает бот"><i class="bp-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 2-2h11v15H7a2 2 0 0 0-2 2z"/><path d="M5 20a2 2 0 0 0 2 2h11v-4M9 7h6M9 10h4"/></svg></i><span><b>Знания</b><small id="bp-kb">не подключены</small></span></div>
         <div class="bp-node bp-md" id="bp-n-md"><i class="bp-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3v.5A3 3 0 0 0 4 13a3 3 0 0 0 2 4.5A3 3 0 0 0 12 19V5a3 3 0 0 0-3-1zM15 4a3 3 0 0 1 3 3v.5A3 3 0 0 1 20 13a3 3 0 0 1-2 4.5A3 3 0 0 1 12 19"/></svg></i><span><b>Мозг</b><small id="bp-model">общий</small></span></div>
       </div>
       <div class="bp-wall" aria-label="Чего бот не видит">
@@ -434,8 +434,10 @@
     <h1>Видеоуроки</h1>
     <p class="lead">ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок. Посмотрите и попробуйте сразу.</p>
     <div class="ls-grid" id="ls-grid" aria-live="polite"></div>
-    <dialog class="ls-dlg" id="ls-dlg" aria-labelledby="ls-dt"><div class="ls-dh"><b id="ls-dt"></b><button class="btn small" type="button" id="ls-x">Закрыть</button></div>
-      <video id="ls-v" controls playsinline preload="metadata"></video></dialog>
+    <dialog class="ls-dlg" id="ls-dlg" aria-labelledby="ls-dt"><div class="ls-dh"><b id="ls-dt"></b><button class="ls-x" type="button" id="ls-x" aria-label="Закрыть" title="Закрыть (Esc)">×</button></div>
+      <div class="ls-vw"><video id="ls-v" controls playsinline preload="auto"></video>
+        <div class="ls-fail" id="ls-fail" hidden><b>Видео не открылось в окне программы</b><span id="ls-fail-why">Откройте его в браузере — там оно играет всегда.</span>
+          <button class="btn primary" type="button" id="ls-ext">Смотреть в браузере</button></div></div></dialog>
   </section>
 
   <section id="p-course" class="wide">
@@ -1428,15 +1430,15 @@
           <p class="res" id="dw-net-res"></p>
           <div class="ssh" id="dw-ssh" hidden>
             <div class="switch" style="border:0;padding:12px 0 0"><div>Запасной вход через SSH<span>Для владельца сервера Dewiar. Домен dewiar.pro не отвечает — программа сама откроет туннель к серверу Лиры вашим SSH-ключом (как вы заходите из терминала), и Лира продолжит работать. Домен вернулся — туннель закроется. Пароль не нужен и не хранится.</span></div>
-              <label class="tg"><input type="checkbox" id="ssh-on"><i></i></label></div>
+              <label class="tg"><input type="checkbox" id="sl-on"><i></i></label></div>
             <div class="ssh-grid">
-              <label class="f"><span>Сервер Лиры</span><input type="text" id="ssh-host" placeholder="адрес или имя, как в ssh" spellcheck="false" autocomplete="off"></label>
-              <label class="f"><span>Пользователь</span><input type="text" id="ssh-user" placeholder="имя на сервере" spellcheck="false" autocomplete="off"></label>
-              <label class="f"><span>Порт SSH</span><input type="text" id="ssh-port" placeholder="22" inputmode="numeric" spellcheck="false"></label>
-              <label class="f"><span>Сайт на сервере</span><input type="text" id="ssh-target" placeholder="127.0.0.1:9099" spellcheck="false"></label>
-              <label class="f ssh-wide"><span>Ключ <i>необязательно — если в терминале заходите без -i</i></span><input type="text" id="ssh-key" placeholder="~/.ssh/id_ed25519" spellcheck="false" autocomplete="off"></label>
+              <label class="f"><span>Сервер Лиры</span><input type="text" id="sl-host" placeholder="адрес или имя, как в ssh" spellcheck="false" autocomplete="off"></label>
+              <label class="f"><span>Пользователь</span><input type="text" id="sl-user" placeholder="имя на сервере" spellcheck="false" autocomplete="off"></label>
+              <label class="f"><span>Порт SSH</span><input type="text" id="sl-port" placeholder="22" inputmode="numeric" spellcheck="false"></label>
+              <label class="f"><span>Сайт на сервере</span><input type="text" id="sl-target" placeholder="127.0.0.1:9099" spellcheck="false"></label>
+              <label class="f ssh-wide"><span>Ключ <i>необязательно — если в терминале заходите без -i</i></span><input type="text" id="sl-key" placeholder="~/.ssh/id_ed25519" spellcheck="false" autocomplete="off"></label>
             </div>
-            <div class="actions" style="margin:6px 0 0;flex-wrap:wrap"><button class="btn" id="ssh-test">Проверить</button><span class="res" id="ssh-res" aria-live="polite"></span></div>
+            <div class="actions" style="margin:6px 0 0;flex-wrap:wrap"><button class="btn" id="sl-test">Проверить</button><span class="res" id="sl-res" aria-live="polite"></span></div>
           </div>
         </div>
         <div class="dwc" id="dwc-upd">
@@ -1849,6 +1851,10 @@
 
     <h2>Подключённые модели</h2>
     <div id="profiles"></div>
+    <div class="switch" id="own-fb-w" style="display:none"><div>Если своя модель не отвечает — отвечать через Dewiar<span>LM Studio или Ollama выключены —
+      ответит бесплатный мозг Dewiar, а не тишина. В такие минуты вопрос уходит на сервер Dewiar; своя модель остаётся главной.</span>
+      <span class="res" id="own-fb-res"></span></div>
+      <label class="tg"><input type="checkbox" id="own-fb"><i></i></label></div>
     <details style="margin:4px 0 8px"><summary class="hint" style="cursor:pointer">Добавить вручную (для опытных)</summary>
       <div class="chips" id="presets" style="margin-top:10px"></div>
     </details>
@@ -2188,7 +2194,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
       <div><b>Чтобы не потерять пароли вместе с компьютером</b>
         <span>Сейф живёт только на этом компьютере и никуда не синхронизируется. Сделайте закрытый «Слепок знаний» с паролем — в нём и сейф. Храните файл на флешке или в облаке: на новом компьютере «Восстановить» вернёт все пароли.<em id="vl-keep-when"></em></span></div>
-      <button class="btn" id="vl-keep-go">Сделать закрытую копию</button>
+      <span class="vl-keep-acts"><button class="btn" id="vl-keep-go">Сделать закрытую копию</button><button class="btn" id="vl-keep-back">Восстановить из слепка</button></span>
     </div>
   </section>
   <section id="p-safety">

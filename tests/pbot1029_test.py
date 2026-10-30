@@ -152,6 +152,11 @@ try:
         pg.click('#bp-ps .co-m[data-id="patrik"]'); time.sleep(0.8)
         ok(call("pbot_get").get("persona") == "patrik" and "Патрик" in pg.inner_text("#bp-who") and "claude-mock" in pg.inner_text("#bp-model"),
            "кто отвечает — Патрик; на схеме его мозг: claude-mock")
+        # «Знания» на схеме — кнопка (вопрос пользователя 29.10: «где подключаются Знания (RAG)?»)
+        pg.click("#bp-n-kb"); time.sleep(1.0)
+        ok(pg.is_visible("#drawer.open") and pg.inner_text("#dtitle") == "Патрик" and "Прайс чая" in pg.inner_text("#e-kb"),
+           "«Знания» на схеме бота — открывают этого персонажа на разделе «Знания»")
+        pg.evaluate("closeEditor()"); pg.click('nav button[data-p="pbot"]'); time.sleep(0.8)
         pg.fill("#bp-brief", "Ты консультант магазина «Чайный двор»."); time.sleep(1.4)
         # знания читаются в фоне — «Проверить ответ», пока не найдёт
         for _ in range(30):

@@ -255,7 +255,7 @@ async function wizardCheck(id) {
   try {
     const r = await core.call("llm_test", { profile: S.llm.profiles[id] });
     if (r.ok) {
-      box.innerHTML = `<b>Готово — мозг подключён.</b> Модель «${escH(r.model)}» ответила за ${(r.total_ms / 1000).toFixed(1)} с: «${escH(r.reply)}».<br>Теперь скажите имя персонажа — например, «${escH((personas.find(p => p.id === active) || {}).name || "Агент")}» — и спросите что-нибудь.`;
+      box.innerHTML = `<b>Готово — мозг подключён.</b> Модель «${escH(r.model)}» ответила за ${(r.total_ms / 1000).toFixed(1)} с: «${escH(r.reply)}».<br>${r.ctx_note ? `<br><span class="warn">Учтите: ${escH(r.ctx_note)}.</span>` : ""}<br>Теперь скажите имя персонажа — например, «${escH((personas.find(p => p.id === active) || {}).name || "Агент")}» — и спросите что-нибудь.`;
     } else { box.className = "wdone bad"; box.textContent = "Модель не ответила: " + (r.error || "неизвестная ошибка"); }
     return r.ok;
   } catch (e) { box.className = "wdone bad"; box.textContent = "Модель не ответила: " + e.message; return false; }

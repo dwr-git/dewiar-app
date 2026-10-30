@@ -131,6 +131,12 @@ with sync_playwright() as p:
     pg.evaluate("clearTimeout(VL.idle); VL.idle = setTimeout(() => {}, 0)")
     js = (ROOT / "ui/studio/vault.js").read_text(encoding="utf-8")
     ok("VL_PAGE_IDLE = 3 * 60000" in js and "if (!vlDirty()) { vlFormClose();" in js, "открытая страница без правок прячется сама через 3 минуты")
+    # 29.10 вечер, владелец: «хотел восстановить из слепка — и не вижу»: кнопка прямо в сейфе и ссылка в пустом сейфе
+    pg.evaluate("() => { window._sr = 0; window.snRestore = () => { _sr++; }; }")
+    pg.click("#vl-keep-back"); pg.wait_for_timeout(100)
+    pg.evaluate("window.V = []; loadVaultPage()"); pg.wait_for_timeout(300)
+    pg.click("#vl-empty-back"); pg.wait_for_timeout(100)
+    ok(pg.evaluate("_sr") == 2, "«Восстановить из слепка» — в карточке сейфа и в пустом сейфе: тот же выбор слепка, что на «Главной»")
     pg.set_viewport_size({"width": 720, "height": 900}); pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth <= innerWidth"), "узкое окно — без прокрутки вбок")
     b.close()

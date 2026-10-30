@@ -146,6 +146,13 @@ IDEA_RULE = ("\n\nЧего-то не умеешь и инструмента дл
              "голос за неё). Без согласия не вызывай.")
 
 
+# Главные действия на каждый день — для модели с окном поменьше (_fit_window): весь набор — около 13 тысяч токенов
+CORE_TOOLS = {"web_search", "weather", "open_url", "open_app", "play_music", "play_radio", "media_control", "set_volume",
+              "set_reminder", "list_reminders", "cancel_reminder", "calc", "world_time", "mark_done", "save_note", "find_notes",
+              "remember", "money_add", "money_report", "calendar_list", "smart_home", "read_emails", "send_email",
+              "search_documents"}
+
+
 class AnswerMixin:
     # ---------- ответ ----------
 
@@ -467,7 +474,66 @@ class AnswerMixin:
         self._say_quick(msg, text)
         return True
 
-    def _system(self, with_tools=False):
+    def _system_min(self):
+        """Самая короткая подсказка — для модели с крошечным окном: персонаж, дата — в справке, границы."""
+        from boundaries import RULE
+        return (self.personas.system_prompt(self.s.get("persona"), self.s.get("user_name") or "", "")
+                + "\n\nТекущие дата и время — в справке в начале сообщения пользователя.\n\n" + RULE)
+
+    def _fit_window(self, prof, system, specs, msgs):
+        """Своя модель (LM Studio, Ollama) с известным окном контекста: всё не влезает — сразу короче, а не ошибка и не
+        молча отрезанное начало (Ollama режет характер и инструменты без ошибки). По ступеням: без старой истории
+        разговора → без действий → самая короткая подсказка. Один раз за запуск — заметка, как поставить окно больше
+        (29.10, пакет: «не влезло в окно модели» — 102 за неделю, отчёт №407 — 176 сбоев за сутки). -> (system, specs, msgs)"""
+        from health import brain_kind
+        if brain_kind(prof) not in ("local", "server"):
+            return system, specs, msgs
+        from llm import _ctx_cut, context_window, est_tokens
+        win = context_window(prof)
+        if not win:
+            return system, specs, msgs
+
+        def text_of(ms):
+            out = []
+            for m in ms:
+                c = m.get("content")
+                out.append(c if isinstance(c, str) else " ".join(x.get("text", "") for x in c or [] if isinstance(x, dict)))
+            return "\n".join(out)
+        reserve = min(int(prof.get("max_tokens") or 1024), 2048)
+
+        def need(sy, sp, ms):
+            return est_tokens(sy) + (est_tokens(json.dumps(sp, ensure_ascii=False)) if sp else 0) + est_tokens(text_of(ms)) + reserve
+        if need(system, specs, msgs) <= win:
+            return system, specs, msgs
+        steps = []
+        msgs = _ctx_cut(msgs)
+        steps.append("без старой истории")
+        if specs and need(system, specs, msgs) > win:
+            # главные действия на каждый день — короткой инструкцией: окно 16 тысяч их вмещает
+            core = [x for x in specs if (x.get("name") or (x.get("function") or {}).get("name")) in CORE_TOOLS]
+            sys_lean = self._system(True, lean=True)
+            if core and need(sys_lean, core, msgs) <= win:
+                system, specs = sys_lean, core
+                steps.append("главные действия")
+        if specs and need(system, specs, msgs) > win:
+            specs = []
+            system = self._system(False) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: у модели "
+                                            "маленькое окно контекста. Если просят действие — честно скажи это одной фразой.")
+            steps.append("без действий")
+        if need(system, specs, msgs) > win:
+            system = self._system_min()
+            steps.append("самая короткая подсказка")
+        log.info("Окно модели %s — %d токенов, всё не влезает: %s", prof.get("model") or "", win, ", ".join(steps))
+        if len(steps) > 1 and not getattr(self, "_win_noted", False):   # только без истории — незаметно, не тревожим
+            self._win_noted = True
+            want = 32768 if win < 32768 else win * 2              # всё вместе — подсказка и все действия — около 25 тысяч
+            self.note(f"У модели окно контекста {win} — мало: отвечаю коротко" + (" и без действий" if "без действий" in steps else
+                      " и только с главными действиями" if "главные действия" in steps else "")
+                      + f". Поставьте длину контекста {want} или больше: LM Studio — Context Length при загрузке модели, "
+                      "Ollama — переменная OLLAMA_CONTEXT_LENGTH.")
+        return system, specs, msgs
+
+    def _system(self, with_tools=False, lean=None):
         """Системная подсказка: персонаж, память о пользователе, душа, содержание разговора, выводы из дневника;
         with_tools — ещё навыки и правила действий (инструменты, музыка, компьютер, серверы).
         Она не меняется от вопроса к вопросу: время, найденное в записях, план дня — в справке к самому вопросу
@@ -509,7 +575,8 @@ class AnswerMixin:
                  "появляешься на имя; «покажись» — вернуть виджет; «отключись» — выйти из Dewiar совсем (включить снова — "
                  "Dewiar в меню приложений).")
         if with_tools:
-            base += self.skills.prompt_lean() if self.s.get("llm", "lean_prompt") else self.skills.prompt()
+            lean = self.s.get("llm", "lean_prompt") if lean is None else lean
+            base += self.skills.prompt_lean() if lean else self.skills.prompt()
             base += self.toolbox.off_note()            # выключенные человеком умения — «выключено», а не «не умею»
             base += IDEA_RULE                          # «Идеи Лиры» (0.61): чего не умеешь — предложить разработчику
             try:
@@ -827,6 +894,29 @@ class AnswerMixin:
         threading.Timer(15, lambda: self.note("")).start()
         mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(fb))
         return dict(fb, tools_mode=mode) if mode in ("native", "prompt") else dict(fb)
+
+    def _own_fallback(self, prof, e):
+        """Своя модель (LM Studio, Ollama, свой сервер) не отвечает — не включена или сервер выключен (29.10, пакет:
+        «своя модель · нет связи» — 107 за неделю; у 270 компьютеров из 820 мозг есть, а ответа не было ни разу).
+        Включено «Мозг» → «Если своя модель не отвечает — отвечать через Dewiar» и бесплатный мозг подключён ->
+        его профиль; выключено — один раз за запуск подсказка, что сделать. Без согласия вопрос в облако не уходит:
+        свою модель часто выбирают ради приватности."""
+        from cloud import PROFILE_ID, is_cloud
+        from health import brain_kind, why_kind
+        if is_cloud(prof) or brain_kind(prof) not in ("local", "server") or why_kind(e) != "connect":
+            return None
+        fb = (self.s.get("llm", "profiles") or {}).get(PROFILE_ID)
+        if self.s.get("llm", "own_fallback") and fb:
+            log.warning("Своя модель не отвечает (%s) — отвечает мозг Dewiar", e)
+            self.note("Своя модель не отвечает — ответила через Dewiar. Запустите LM Studio или Ollama, и я вернусь к ней.")
+            threading.Timer(20, lambda: self.note("")).start()
+            mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(fb))
+            return dict(fb, tools_mode=mode) if mode in ("native", "prompt") else dict(fb)
+        if not getattr(self, "_own_fb_hinted", False):
+            self._own_fb_hinted = True
+            self.note("Своя модель не отвечает: запустите LM Studio или Ollama (модель должна быть загружена). Чтобы в такие "
+                      "минуты отвечал бесплатный мозг Dewiar — студия → «Мозг» → «Если своя модель не отвечает».")
+        return None
 
     def self_check(self):
         """«Проверить всё» (студия → «О программе»): по пунктам — работает ли, а если нет — что сделать и где.
@@ -1586,6 +1676,7 @@ class AnswerMixin:
                 except Exception:  # noqa: BLE001
                     pass
             msgs = _put_context(msgs, "\n\n".join(c for c in ctx if c))
+            system, specs, msgs = self._fit_window(prof, system, specs, msgs)
             split, last, codef = SentenceSplitter(), 0.0, CodeFilter()
             # вслух — не больше ~900 символов (около минуты): длинный ответ дальше только на экране («Открыть целиком»);
             # сказки, истории и чтение вслух — целиком
@@ -1615,7 +1706,7 @@ class AnswerMixin:
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -1664,6 +1755,8 @@ class AnswerMixin:
                         events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
                 except LLMError as e:
                     fb = self._cloud_fallback(prof, e) if step == 0 and not turn.full and not turn.cancel.is_set() else None
+                    if not fb and step == 0 and not turn.full and not turn.cancel.is_set():
+                        fb = self._own_fallback(prof, e)    # своя модель выключена — мозг Dewiar (если человек согласился)
                     if fb:                                  # облако не ответило / заряд кончился — отвечает запасной мозг
                         prof = fb
                         events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
@@ -1698,7 +1791,16 @@ class AnswerMixin:
                             system = self._system(False) + ("\n\nСейчас действия (музыка, скриншоты, программы) "
                                                             "недоступны: эта модель не умеет вызывать инструменты. Если "
                                                             "просят действие — честно скажи это одной фразой.")
-                            events = stream_events(prof, system, msgs, cancel=turn.cancel, tools=None)
+                            try:
+                                events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=None))
+                            except LLMError as e2:
+                                if not (ctx_full(e2) or CTX_TEXT in str(e2)):
+                                    raise
+                                # и без действий не влезло (окно 2048–4096, а память и душа длинные) — самое короткое:
+                                # кто ты и вопрос; лучше простой ответ, чем «модели не хватило окна» на каждый вопрос
+                                log.warning("Окно модели мало и без действий — отвечаю с самой короткой подсказкой")
+                                system, msgs = self._system_min(), msgs[-1:]
+                                events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=None))
                         else:
                             raise
                     else:
@@ -1771,7 +1873,8 @@ class AnswerMixin:
                         self.set_state("thinking")
                         continue
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
-                    fix = reminder_missing(text, turn.full, called) or saved_claim(text, step_text, called) \
+                    fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
+                        or saved_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
                         or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")
                     if fix:

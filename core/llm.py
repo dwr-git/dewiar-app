@@ -411,6 +411,62 @@ def _anth_root(base):
     return base[:-3] if base.endswith("/v1") else base
 
 
+_ctx_cache = {}
+
+
+def context_window(p, model=None, timeout=3):
+    """Окно контекста загруженной модели своего сервера -> число токенов или None (не узнать: облако, старый сервер).
+    LM Studio: /api/v0/models (loaded_context_length — как модель загружена сейчас); Ollama: /api/ps (context_length
+    запущенной модели); vLLM: /models (max_model_len). Помним 10 минут на (адрес, модель): спрашиваем перед вопросом без задержки.
+    Зачем (29.10, пакет: «не влезло в окно модели» — 102 за неделю; Ollama с окном 4096 молча отрезает начало подсказки —
+    характер и инструменты — и отвечает «не тем»): знать окно заранее и сразу говорить коротко, а не падать."""
+    try:
+        base = _base(p)
+    except LLMError:
+        return None
+    model = model or p.get("model") or ""
+    key = (base, model)
+    hit = _ctx_cache.get(key)
+    if hit and time.monotonic() - hit[1] < 600:
+        return hit[0]
+    n = None
+    root = _root(base)
+    try:
+        r = httpx.get(root + "/api/v0/models", headers=_headers(p), timeout=timeout)          # LM Studio
+        if r.status_code == 200 and isinstance(r.json().get("data"), list):
+            data = r.json()["data"]
+            m = next((x for x in data if x.get("id") == model), None) or next((x for x in data if x.get("state") == "loaded"), None)
+            if m:
+                n = m.get("loaded_context_length") or m.get("max_context_length")
+        if n is None:
+            r = httpx.get(root + "/api/ps", headers=_headers(p), timeout=timeout)              # Ollama
+            if r.status_code == 200 and isinstance(r.json().get("models"), list):
+                ms = r.json()["models"]
+                m = next((x for x in ms if model and (x.get("name") == model or x.get("model") == model)), None) or (ms[0] if ms else None)
+                if m:
+                    n = m.get("context_length")
+        if n is None:
+            r = httpx.get(base + "/models", headers=_headers(p), timeout=timeout)                # vLLM: max_model_len
+            if r.status_code == 200 and isinstance(r.json().get("data"), list):
+                data = r.json()["data"]
+                m = next((x for x in data if x.get("id") == model), None) or (data[0] if len(data) == 1 else None)
+                if m:
+                    n = m.get("max_model_len") or m.get("context_length")
+    except Exception:  # noqa: BLE001 — не узнали — не страшно
+        n = None
+    try:
+        n = int(n) if n else None
+    except (TypeError, ValueError):
+        n = None
+    _ctx_cache[key] = (n, time.monotonic())
+    return n
+
+
+def est_tokens(text):
+    """Грубо, с запасом: сколько токенов займёт текст (русский — около 3 знаков на токен у Qwen/Llama)."""
+    return len(text or "") // 3 + 1
+
+
 def list_models(p, timeout=6):
     """-> имена моделей на сервере профиля p. Если /models нет (404), а /api/tags есть — это Ollama без
     OpenAI-совместимого API: адрес запоминается в _native. Ошибки — LLMError с понятным текстом."""
@@ -1598,8 +1654,11 @@ def test_profile(p):
         text += piece
     base = _base(p)
     tools_mode = (probe_tools(dict(p, model=model)) or "") if text.strip() else ""
+    win = context_window(dict(p, model=model)) if text.strip() else None
     return {"ok": bool(text.strip()), "models": models, "model": model, "api": "ollama" if base in _native else p.get("kind", "openai"),
-            "tools_mode": tools_mode,
+            "tools_mode": tools_mode, "ctx": win or 0,
+            "ctx_note": (f"окно контекста {win} — мало: Лира ответит коротко" + (" и без действий" if win < 12000 else " и только с главными действиями")
+                         + ". Поставьте 32768 или больше (LM Studio — Context Length, Ollama — OLLAMA_CONTEXT_LENGTH)") if win and win < 24000 else "",
             "first_token_ms": int((first or 0) * 1000), "total_ms": int((time.monotonic() - t0) * 1000),
             "reply": text.strip()[:80], "error": "" if text.strip() else "модель не ответила текстом"}
 

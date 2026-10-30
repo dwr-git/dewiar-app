@@ -8,7 +8,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
@@ -536,10 +536,15 @@ class CommandsMixin:
         """Микрофон выключен (кнопка в виджете или замок «Только кнопка» в «Безопасности»): имя не слушается, «говорить» —
         одна фраза."""
         self.muted = bool(on)
-        if self.muted:
+        # №410 (29.10): «нажал „заглушить микрофон“, пока ассистент говорит, — озвучка оборвалась». Кнопка — про микрофон:
+        # ответ, который уже говорится или думается, договаривается (остановить — кнопка «Стоп»); обрывается только
+        # слушание — недоговорённый вопрос
+        busy = self.state in ("speaking", "thinking")
+        if self.muted and not busy:
             self.cancel_turn()
         self.follow_up_until = 0.0
-        self.set_state("muted" if self.muted else "idle")
+        if not busy:
+            self.set_state("muted" if self.muted else "idle")
         self.emit("muted", on=self.muted)
         return self.muted
 
@@ -612,11 +617,21 @@ class CommandsMixin:
         if cmd.startswith("client"):
             return self.clients_cmd(cmd, a)
         if cmd == "academy_list":                 # «Видеоуроки» (0.69): уроки ИИ Академии с сайта (cloud.php ?p=/academy)
-            from cloud import CloudError, public
+            from cloud import CloudError, base_of, public
             try:
-                return public(self.cloud.url, "/academy", timeout=12)
+                d = public(self.cloud.url, "/academy", timeout=12)
             except CloudError as e:
                 raise ValueError(str(e)) from e
+            # дома запрос ушёл на сайт напрямую (net._LanFirst) — и ссылки сайт собрал с домашним адресом
+            # (http://192.168.…:9099/dwrapp/academy/…); окно студии грузит их само, мимо ядра, — обложек нет, плеер чёрный
+            # (владелец 29.10). Ссылки на файлы уроков — всегда публичные, как в браузере.
+            pub = base_of(self.cloud.url).rsplit("/", 1)[0] + "/academy/"
+            for it in d.get("items") or []:
+                for k in ("video", "poster"):
+                    u = str(it.get(k) or "")
+                    if "/academy/" in u and not u.startswith(pub):
+                        it[k] = pub + u.rsplit("/academy/", 1)[1]
+            return d
         if cmd.startswith("sitechat_"):           # «Чат для сайта» (0.69, sitechat.py): опубликовать, отключить, заявки
             from sitechat import SiteChatError
             W = self.sitechat
@@ -1614,6 +1629,16 @@ class CommandsMixin:
                 # проверка заодно узнала, как этот сервер принимает инструменты, — запомним, чтобы не проверять снова
                 self.s.update({"llm": {"tools_modes": {key: r["tools_mode"]}}})
             return r
+        if cmd == "own_fallback":                         # «Если своя модель не отвечает — отвечать через Dewiar» (29.10)
+            on = bool(a.get("on"))
+            self.s.update({"llm": {"own_fallback": on}})
+            ready = bool((self.s.get("llm", "profiles") or {}).get("dewiar-cloud"))
+            if on and not ready:
+                try:
+                    ready = self.standby_join()
+                except Exception as e:  # noqa: BLE001 — нет сети: настройка остаётся, подключим, когда спросят снова
+                    return {"on": on, "ready": False, "error": f"не получилось подключить мозг Dewiar: {e}"}
+            return {"on": on, "ready": ready}
         if cmd == "llm_models":
             return list_models(a.get("profile") or {})
         if cmd == "llm_economy_suggest":                  # экономный режим: недорогая модель того же сервиса (economy.py)

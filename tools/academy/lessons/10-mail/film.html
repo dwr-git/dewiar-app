@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 10 · Почта голосом. Светлый неоморфизм серии. Главная вещь урока — ящик справа: сто писем, рассылки сворачиваются в одну строку, наверху остаются письма от людей. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+#box { position: absolute; left: 1330px; top: 140px; width: 520px; height: 700px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); padding: 26px 22px; overflow: hidden; }
+#box h4 { font: 600 24px Unbounded; display: flex; justify-content: space-between; padding: 0 8px 14px; } #box h4 em { font-style: normal; color: var(--accent); }
+.ml { display: flex; gap: 12px; align-items: center; padding: 12px 10px; border-radius: 16px; overflow: hidden; }
+.ml i { width: 42px; height: 42px; border-radius: 50%; flex: none; display: grid; place-items: center; font: 700 16px Unbounded; font-style: normal; color: #fff; background: #b9c4d4; }
+.ml.p i { background: linear-gradient(140deg, #8fb4ff, #5a7be8); } .ml.p.o i { background: linear-gradient(140deg, #ffcf7a, #e59a1f); } .ml.p.g i { background: linear-gradient(140deg, #8fe0b5, #2fb383); }
+.ml div { min-width: 0; } .ml b { display: block; font-size: 18px; white-space: nowrap; } .ml small { display: block; font-size: 15px; color: var(--mut); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml.n b { color: var(--mut); font-weight: 700; }
+.ml.p { background: #fff; margin-bottom: 8px; box-shadow: 0 10px 22px -16px rgba(36,50,74,.5); }
+#news { margin-top: 6px; padding: 14px 16px; border-radius: 16px; box-shadow: var(--press); font-size: 19px; font-weight: 800; color: var(--mut); }
+#mess { position: absolute; left: 620px; top: 260px; width: 640px; padding: 34px 40px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+#mess small { font-size: 20px; color: var(--mut); font-weight: 800; } #mess b { display: block; font: 600 46px/1.25 Unbounded, sans-serif; margin-top: 12px; }
+#q { position: absolute; left: 620px; top: 190px; max-width: 640px; padding: 20px 26px; border-radius: 26px 26px 8px 26px; background: var(--brand); color: #fff; font-size: 26px; font-weight: 700; }
+#said { position: absolute; left: 620px; top: 300px; width: 660px; padding: 28px 32px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+#said div { font-size: 23px; font-weight: 700; padding: 10px 0; line-height: 1.35; } #said div b { color: var(--accent); }
+#said small { display: block; margin-top: 10px; font-size: 19px; color: var(--mut); font-weight: 800; }
+#letter { position: absolute; left: 620px; top: 300px; width: 660px; padding: 30px 34px; border-radius: 30px; background: #fff; box-shadow: 0 24px 50px -24px rgba(36,50,74,.45); }
+#letter small { font-size: 18px; color: var(--mut); font-weight: 800; } #letter h4 { font: 600 26px Unbounded; margin: 6px 0 14px; }
+#letter p { font-size: 20px; line-height: 1.5; color: var(--mut); font-weight: 600; }
+#gist { position: absolute; left: 620px; top: 640px; width: 660px; padding: 18px 24px; border-radius: 22px; background: rgba(255,207,122,.35); font-size: 22px; font-weight: 800; }
+#draft { position: absolute; left: 620px; top: 300px; width: 660px; padding: 28px 32px; border-radius: 30px; background: #fff; box-shadow: 0 24px 50px -24px rgba(36,50,74,.45); }
+#draft div { font-size: 19px; color: var(--mut); font-weight: 800; padding: 4px 0; } #draft div b { color: var(--ink); }
+#draft p { font-size: 22px; line-height: 1.5; font-weight: 600; margin-top: 14px; min-height: 100px; }
+#confirm { position: absolute; left: 620px; top: 650px; width: 660px; display: flex; align-items: center; gap: 14px; padding: 18px 22px; border-radius: 24px; background: var(--bg); box-shadow: var(--raise-s); font-size: 22px; font-weight: 800; }
+#confirm span { flex: 1; } #confirm b { padding: 12px 22px; border-radius: 14px; font-size: 20px; box-shadow: var(--raise-s); } #confirm b.y { color: #fff; background: var(--brand); box-shadow: none; }
+#confirm b.ok { background: linear-gradient(135deg, #46d39a, #2fb383); }
+#boxes { position: absolute; left: 620px; top: 250px; width: 680px; display: flex; gap: 20px; }
+#boxes div { flex: 1; padding: 30px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+#boxes i { font-size: 50px; font-style: normal; } #boxes b { display: block; font: 600 26px Unbounded; margin-top: 10px; } #boxes small { font-size: 20px; color: var(--mut); font-weight: 700; }
+#bq { position: absolute; left: 620px; top: 540px; display: flex; flex-direction: column; gap: 14px; }
+#bq span { padding: 14px 24px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 22px; font-weight: 800; align-self: flex-start; }
+#studio { position: absolute; left: 620px; top: 210px; width: 700px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px 34px; }
+#studio h3 { font: 700 30px Unbounded; margin-bottom: 20px; }
+#studio .row { display: flex; gap: 12px; flex-wrap: wrap; } #studio .row span { padding: 14px 22px; border-radius: 16px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; }
+#studio .row span.on { color: #fff; background: var(--brand); box-shadow: none; }
+#studio .more { margin-top: 22px; font-size: 21px; font-weight: 800; color: var(--accent); }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 10 · Почта голосом</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div>
+    <div id="t-title"><h1>Почта голосом</h1><p>Важное — сразу, рассылки — одной строкой</p></div></div>
+
+  <div class="layer" id="L-box"><div id="box"><h4>Входящие <em id="cnt">100</em></h4>
+    <div class="ml p" id="m1"><i>ОМ</i><div><b>Ольга Миронова</b><small>Договор на подпись</small></div></div>
+    <div class="ml p o" id="m2"><i>СК</i><div><b>Сергей Ким</b><small>Переносим встречу?</small></div></div>
+    <div class="ml p g" id="m3"><i>АН</i><div><b>Анна, бухгалтер</b><small>Счёт оплачен</small></div></div>
+    <div id="nl"><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Скидки недели — до −40%</small></div></div><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Ваш заказ передан в доставку</small></div></div><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Дайджест: 10 статей</small></div></div><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Вебинар завтра в 19:00</small></div></div><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Новая коллекция осени</small></div></div><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Бонусы сгорают через 3 дня</small></div></div><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Подборка для вас</small></div></div><div class="ml n"><i>✉</i><div><b>Рассылка</b><small>Обновление условий</small></div></div></div>
+    <div id="news">🗞 27 рассылок — по запросу</div></div></div>
+  <div class="layer" id="L-left">
+    <div id="mess"><small>ВХОДЯЩИЕ</small><b>100 писем.<br>Где важное?</b></div>
+    <div id="q">Что нового в почте?</div>
+    <div id="said"><div><b>Ольга</b> прислала договор на подпись.</div><div><b>Сергей</b> просит перенести встречу.</div><div><b>Анна</b>: счёт оплачен.</div><small>И 27 рассылок.</small></div>
+    <div id="letter"><small>ОЛЬГА МИРОНОВА</small><h4>Договор на подпись</h4><p>Добрый день! Высылаю договор. Внесла правки в пункт 3 — про сроки оплаты. Подпишите, пожалуйста, до пятницы…</p></div>
+    <div id="gist">Главное: подписать до пятницы, правки — в п. 3.</div>
+    <div id="draft"><div>Кому: <b>Ольга Миронова</b></div><div>Тема: <b>Re: Договор на подпись</b></div><p id="dt"></p></div>
+    <div id="confirm"><span>Отправить письмо?</span><b>Нет</b><b class="y" id="yes">Да</b></div>
+    <div id="boxes"><div><i>💼</i><b>Рабочий</b><small>3 новых</small></div><div><i>🏠</i><b>Личный</b><small>1 новое</small></div></div>
+    <div id="bq"><span>«Что нового в почте?» — по всем</span><span>«Что в рабочей почте?» — по одному</span></div>
+    <div id="studio"><h3>Подключение → Почта</h3><div class="row"><span class="on">Яндекс</span><span>Mail.ru</span><span>Gmail</span><span>Другая</span></div><div class="more">+ Ещё ящик</div></div>
+  </div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Дела по расписанию»</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 470, 280, 0], patrik: [330, 470, 300, 1] },
+  new: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  read: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  reply: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  boxes: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  layer("L-box", T, s("problem").start + 0.4, s("boxes").start);
+  scene($("#mess"), T, at("s2a") + 0.3, s("new").start);
+  const fold = out((T - at("s3a") - 1.2) / 0.9);
+  [...$("#nl").children].forEach((c) => { c.style.maxHeight = (66 * (1 - fold)) + "px"; c.style.opacity = 1 - fold; c.style.paddingTop = c.style.paddingBottom = (12 * (1 - fold)) + "px"; });
+  vis($("#news"), fold, 10);
+  for (const [i, id] of [[0, "#m1"], [1, "#m2"], [2, "#m3"]]) { const el = $(id); el.style.background = fold > 0.5 ? "#fff" : "transparent"; el.style.boxShadow = fold > 0.5 ? "" : "none"; }
+  $("#cnt").textContent = fold > 0.5 ? "3 от людей" : "100";
+  scene($("#q"), T, s("new").start + 0.2, s("read").start, 20);
+  scene($("#said"), T, at("s3a") + 1.8, s("read").start);
+  [...$("#said").children].forEach((c, i) => vis(c, out((T - at("s3a") - 2.0 - i * 0.45) / 0.4), 12));
+  scene($("#letter"), T, s("read").start + 0.2, s("reply").start);
+  scene($("#gist"), T, at("s4a") + 2.2, s("reply").start, 16);
+  $("#m1").style.transform = T > s("read").start && T < s("reply").start ? "scale(1.04)" : "";
+  scene($("#draft"), T, s("reply").start + 0.2, s("boxes").start);
+  $("#dt").textContent = type("Ольга, добрый день! Договорились: в четверг в 10:00. Договор подпишу до пятницы.", (T - at("s5a") - 0.8) / 2.2);
+  scene($("#confirm"), T, at("s5b") + 0.2, s("boxes").start, 16);
+  const sent = T > at("s5b") + 2.6; $("#yes").classList.toggle("ok", sent); $("#yes").textContent = sent ? "Отправлено ✓" : "Да";
+  scene($("#boxes"), T, s("boxes").start + 0.2, s("how").start);
+  scene($("#bq"), T, s("boxes").start + 1.2, s("how").start, 16);
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

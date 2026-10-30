@@ -57,7 +57,7 @@ function rfRender() {
   $("#rf-use").style.display = d.can_use ? "" : "none";
   if (window.DewiarRefNet) {
     const net = Object.assign({}, d, { invited: list.map(x => { const q = rfPeer(x); return Object.assign({}, x, { label: q.name, close: q.pid }); }) });
-    const r = DewiarRefNet.render($("#rf-net"), net, { big: true, calm, me: "Вы", by: d.by ? rfPeer(d.by).name : "", sel: RF.sel, seenKey: "dw_refnet_seen",
+    const r = DewiarRefNet.render($("#rf-net"), net, { big: true, calm, light: document.documentElement.classList.contains("st-light"), me: "Вы", by: d.by ? rfPeer(d.by).name : "", sel: RF.sel, seenKey: "dw_refnet_seen",
       onPick: (i) => { RF.sel = RF.sel === i ? null : i; rfRender(); const row = $(`.rf-p[data-k="${i}"]`); if (row) row.scrollIntoView({ block: "nearest", behavior: "smooth" }); } });
     if (r.fresh) toast(r.fresh === 1 ? "Ещё один друг засчитан — звезда загорелась!" : `Засчитано новых друзей: ${r.fresh}`, 3500);
   }

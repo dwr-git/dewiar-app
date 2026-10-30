@@ -105,6 +105,16 @@ def prop_text(p, with_name=True):
     return (name + " " if with_name else "") + fmt_value(p.get("value"), unit)
 
 
+_PLACE_RX = re.compile(r"(?:^|\s)(?:в|во|на)\s+([а-яё]{2,})", re.I)
+_HOME_WORDS = ("дом", "доме", "дома", "квартир", "везде", "всем")
+
+
+def _unknown_place(target):
+    """«…в <месте>» / «…на <месте>», где место — не весь дом: названа комната, которой нет."""
+    m = _PLACE_RX.search(str(target or "").lower().replace("ё", "е"))
+    return bool(m) and not m.group(1).startswith(_HOME_WORDS)
+
+
 def _sim(a, b):
     """Одно слово в разных падежах: «кухня»/«кухне», «люстра»/«люстру», «гостиная»/«гостиной».
     Без словаря: общее начало не короче 4 букв, а отличаются не больше двух последних букв более короткого слова."""
@@ -112,7 +122,11 @@ def _sim(a, b):
     if a == b:
         return True
     if len(a) < 4 or len(b) < 4:
-        return False
+        # короткое название комнаты: «зал»/«зале», «сад»/«саду» (№406, 29.10: «выключи свет в зале» выключал весь свет —
+        # «зале» не узнавалось как «Зал») — слово целиком в начале другого и окончание не длиннее двух букв
+        s_, l_ = (a, b) if len(a) <= len(b) else (b, a)
+        return len(s_) == 3 and l_.startswith(s_) and len(l_) - 3 <= 2 and l_[3:] in ("а", "е", "у", "ом", "ах", "ы", "ой", "ам")
+    
     n = 0
     while n < min(len(a), len(b)) and a[n] == b[n]:
         n += 1
@@ -328,6 +342,8 @@ class Home:
             return 3, [d for x, d in scored if x == top]
         # 2) по типу («свет», «кондиционер», «розетки») — все такие (в комнате, если названа)
         wtype = next((tp for k, tp in TYPES.items() if any(w.startswith(k) for w in rest)), None)
+        if wtype and not room_ids and not allw and _unknown_place(target):
+            return 0, []      # «свет в зимнем саду», а такой комнаты нет — не весь свет в доме (№406): пусть уточнит модель
         if wtype:
             found = [d for d in info["devices"] if str(d.get("type", "")).startswith(wtype) and in_room(d)]
             return (2 if room_ids else 1) if found else 0, found

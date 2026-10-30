@@ -49,8 +49,8 @@ function moRender(force) {
     + `<button class="mn-x" id="mo-hide" title="Скрыть до следующего месяца" aria-label="Скрыть до следующего месяца">×</button></div>`
     + `<div class="mo-sts">${moStats(d)}</div>`
     + `<div class="mo-grid">${moRibbon(d)}<div class="mo-right">${top.length ? `<h3>Чем можно гордиться</h3><ul class="mo-top">${top.slice(-3).reverse().map(t => `<li>${moE(t)}</li>`).join("")}</ul>` : ""}`
-    + (cats.length ? `<h3>Куда ушли деньги</h3><div class="mo-bar" aria-hidden="true">${cats.map((c, i) => `<i class="c${i}" style="flex:${c.sum / tot}"></i>`).join("")}</div>`
-      + `<ul class="mo-cats">${cats.map((c, i) => `<li><i class="c${i}"></i>${moE(c.name || "без категории")}<b>${moMoney(c.sum)}</b></li>`).join("")}</ul>` : "")
+    + (cats.length ? `<h3>Куда ушли деньги</h3><div class="mo-bar" aria-hidden="true">${cats.map((c, i) => `<i class="${c.rest ? "co" : "c" + i}" style="flex:${c.sum / tot}"></i>`).join("")}</div>`
+      + `<ul class="mo-cats">${cats.map((c, i) => `<li><i class="${c.rest ? "co" : "c" + i}"></i>${moE(c.name || "без категории")}<b>${moMoney(c.sum)}</b></li>`).join("")}</ul>` : "")
     + `</div></div><div class="mn-foot"><button class="btn primary" id="mo-say">Рассказать голосом</button>`
     + `<span class="hint">Спросите в любой день: «как прошёл мой месяц?»</span></div>`;
   $("#mo-hide").onclick = () => core.call("month_hide", { ym: d.ym }).then(() => { box.hidden = true; toast(`«Ваш ${d.title}» скрыт`); }).catch(e => toast(e.message));
