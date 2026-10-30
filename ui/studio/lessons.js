@@ -1,7 +1,19 @@
 /* Студия → «Обучение» → «Видеоуроки» (0.69; владелец 29.10: «показывать их в приложении», видео — с его сервера).
    Сетка обложек с номером, названием и длительностью; нажали — плеер поверх (видео с dewiar.pro/dwrapp/academy/ или
    YouTube в браузере). Список — academy_list (cloud.php ?p=/academy: только уроки, чьё видео уже загружено). */
-const LSN = { items: null };
+const LSN = { items: null, files: {} };
+/* Файл урока — через ядро, на диск (academy_file; 30.10, владелец, Ubuntu: «„Смотреть“ — бесполезно, обложки нет; может,
+   потому что я в подсети сайта?»). Окно грузит картинки и видео само, а изнутри сети сайта публичный домен часто не
+   открывается; ядро знает рабочую дорогу (дома — напрямую). Скачали раз — дальше с диска. Не вышло — "" (берём ссылку). */
+async function lsLocal(url) {
+  if (!url || !/^https?:/i.test(url)) return "";
+  if (LSN.files[url]) return LSN.files[url];
+  try { const r = await core.call("academy_file", { url }); if (r && r.uri) return (LSN.files[url] = r.uri); } catch (e) { }
+  return "";
+}
+function lsPosters(root) {
+  $$("[data-poster]", root).forEach(async el => { const u = await lsLocal(el.dataset.poster); if (u) el.style.backgroundImage = `url('${u.replace(/'/g, "%27")}')`; });
+}
 /* Урок в «?» раздела (30.10, владелец: «выручает вопросик на каждой странице… что если бы сразу и видео подходящее
    смотреть? в каждом разделе минимум одно видео»). Какие разделы у урока — поле sections в academy/lessons.json на сайте
    (новый урок встаёт в свой раздел без обновления программы); у сайта старше 0.72 полей нет — эта запасная таблица. */
@@ -26,10 +38,11 @@ async function loadLessons() {
   try { LSN.items = (await core.call("academy_list")).items || []; }
   catch (e) { g.innerHTML = `<p class="ls-empty">Не получилось загрузить уроки: ${escH(e.message)}</p>`; return; }
   g.innerHTML = LSN.items.length ? LSN.items.map(l => `<button type="button" class="ls-card" data-id="${escH(l.id)}" aria-label="Урок ${l.n}: ${escH(l.title)}">`
-      + `<span class="ls-pic"${l.poster ? ` style="background-image:url('${escH(l.poster)}')"` : ""}><i class="ls-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg></i>${l.sec ? `<em>${lsMin(l.sec)}</em>` : ""}</span>`
+      + `<span class="ls-pic"${l.poster ? ` data-poster="${escH(l.poster)}" style="background-image:url('${escH(l.poster)}')"` : ""}><i class="ls-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg></i>${l.sec ? `<em>${lsMin(l.sec)}</em>` : ""}</span>`
       + `<span class="ls-txt"><small>Урок ${l.n}</small><b>${escH(l.title)}</b><span>${escH(l.about)}</span></span></button>`).join("")
     : `<p class="ls-empty">Уроки скоро появятся здесь — первый, «Совет ИИ», уже снят.</p>`;
   $$("#ls-grid .ls-card").forEach(b => b.onclick = () => lsPlay(LSN.items.find(x => x.id === b.dataset.id)));
+  lsPosters(g);
 }
 
 /* посмотрели урок — на «Главной» его карточки больше нет (home.js hmLesson): отметка — время просмотра (плюс), показа — минус */
@@ -38,7 +51,7 @@ function lsSeen(id) {
   const ui = (S && S.ui) || {}, m = Object.assign({}, ui.lessons_seen || {}, { [id]: Date.now() });
   S.ui = Object.assign({}, ui, { lessons_seen: m }); save({ ui: { lessons_seen: m } }, true);
 }
-function lsPlay(l) {
+async function lsPlay(l) {
   if (!l) return;
   lsSeen(l.id);
   if (!l.video && l.youtube) { window.open(l.youtube, "_blank", "noopener"); return; }
@@ -47,10 +60,16 @@ function lsPlay(l) {
   fail.hidden = true; v.hidden = false; LSN.cur = l;
   // 30.10: WebM (VP9) окно в Ubuntu играет без gstreamer1.0-libav — берём его, если сервер уже сделал копию и окно умеет
   const webm = !!(l.webm && v.canPlayType('video/webm; codecs="vp9, opus"'));
-  v.poster = l.poster || ""; v.src = webm ? l.webm : l.video;
-  d.showModal(); v.play().catch(() => {});
-  // окно программы не смогло: ошибка видео или за 8 секунд ни кадра (Ubuntu без gstreamer1.0-libav — чёрный экран)
+  const src = webm ? l.webm : l.video, load = $("#ls-load");
+  v.poster = LSN.files[l.poster] || l.poster || ""; v.removeAttribute("src");
+  if (!d.open) d.showModal();
   clearTimeout(LSN.t);
+  if (!LSN.files[src] && load) { load.hidden = false; }
+  const loc = await lsLocal(src);                         // через ядро: дома и в сети сайта — тоже играет
+  if (load) load.hidden = true;
+  if (LSN.cur !== l || !d.open) return;
+  v.src = loc || src; v.play().catch(() => {});
+  // окно программы не смогло: ошибка видео или за 8 секунд ни кадра (Ubuntu без gstreamer1.0-libav — чёрный экран)
   const linux = /Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
   const bad = (why) => { if (LSN.cur !== l || !d.open) return; clearTimeout(LSN.t); fail.hidden = false; v.pause();
     lsCodecBtn(linux);
@@ -86,9 +105,9 @@ async function lsCodec() {
   if (!$("#p-lessons")) return;
   if ($("#ls-dlg") && $("#ls-dlg").parentNode !== document.body) document.body.appendChild($("#ls-dlg"));
   if ($("#ls-codec")) $("#ls-codec").onclick = lsCodec;
-  const close = () => { clearTimeout(LSN.t); const v = $("#ls-v"); v.pause(); v.removeAttribute("src"); v.load(); $("#ls-dlg").close(); };
+  const close = () => { clearTimeout(LSN.t); if ($("#ls-load")) $("#ls-load").hidden = true; const v = $("#ls-v"); v.pause(); v.removeAttribute("src"); v.load(); $("#ls-dlg").close(); };
   $("#ls-x").onclick = close;
-  $("#ls-ext").onclick = () => { const l = LSN.cur; if (!l) return; close(); if (typeof openExt === "function") openExt(l.video || l.youtube); else window.open(l.video, "_blank", "noopener"); };
+  $("#ls-ext").onclick = () => { const l = LSN.cur; if (!l) return; close(); const u = LSN.files[l.video] || l.video || l.youtube; if (typeof openExt === "function") openExt(u); else window.open(u, "_blank", "noopener"); };
   $("#ls-dlg").addEventListener("cancel", (e) => { e.preventDefault(); close(); });
   $("#ls-dlg").addEventListener("click", (e) => { if (e.target === $("#ls-dlg")) close(); });
   window.loadLessons = loadLessons;

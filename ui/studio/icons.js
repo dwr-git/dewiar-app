@@ -70,7 +70,9 @@ const GUIDE_OF = { ideas: "ideas", devices: "sync", personas: "personas", memory
 function showHelp(k) {
   const H = (window.DEWIAR_HELP || {})[k]; if (!H) return;
   const li = (a) => (a || []).map(x => `<li>${escH(x)}</li>`).join("");
-  const tries = (H.try || []).map((x, i) => `<div class="try"><div><b>«${escH(x.say)}»</b><span>→ ${escH(x.get)}</span></div>${x.noplay ? "" :
+  // пример — объект {say, get} или просто фраза (у «Суфлёра» и «О программе» строкой было «undefined», 30.10)
+  const TRY = (H.try || []).map(x => typeof x === "string" ? { say: x, get: "" } : x);
+  const tries = TRY.map((x, i) => `<div class="try"><div><b>«${escH(x.say)}»</b>${x.get ? `<span>→ ${escH(x.get)}</span>` : ""}</div>${x.noplay ? "" :
     `<button class="tplay" data-i="${i}" title="Отправить ассистенту">${SVG('<path d="M8 5.5v13l10.5-6.5z"/>')}</button>`}</div>`).join("");
   $("#help-body").innerHTML = `<h2>${escH(H.title)}</h2><h4>Что это</h4><p>${escH(H.what)}</p>` +
     (H.how && H.how.length ? `<h4>Как пользоваться</h4><ul>${li(H.how)}</ul>` : "") +
@@ -79,7 +81,7 @@ function showHelp(k) {
     (H.tips && H.tips.length ? `<h4>Советы</h4><ul>${li(H.tips)}</ul>` : "") +
     `<p class="hguide"><a href="${GUIDE_URL}#${GUIDE_OF[k] || ""}" target="_blank" rel="noopener">Подробное руководство с примерами и снимками экрана</a></p>`;
   $$("#help-body .tplay").forEach(b => b.onclick = async () => {
-    const x = H.try[+b.dataset.i]; b.disabled = true;
+    const x = TRY[+b.dataset.i]; b.disabled = true;
     try { await core.call("say", { text: x.say }); toast("Отправил ассистенту — смотрите виджет"); } catch (e) { toast(e.message); }
     setTimeout(() => b.disabled = false, 1500);
   });
@@ -93,11 +95,12 @@ async function helpLessons(k) {
   if (!ls.length || !$("#help").classList.contains("open") || !body || body.querySelector(".hls")) return;
   const box = document.createElement("div"); box.className = "hls";
   box.innerHTML = ls.slice(0, 2).map((l, n) => `<button type="button" class="hl${n ? " sm" : ""}" data-id="${escH(l.id)}" aria-label="Смотреть урок «${escH(l.title)}»">
-      <span class="hl-pic${l.poster ? "" : " none"}"${l.poster ? ` style="background-image:url('${escH(l.poster)}')"` : ""}>${l.poster ? "" : `<b class="hl-ttl">${escH(l.title)}</b>`}
+      <span class="hl-pic${l.poster ? "" : " none"}"${l.poster ? ` data-poster="${escH(l.poster)}" style="background-image:url('${escH(l.poster)}')"` : ""}>${l.poster ? "" : `<b class="hl-ttl">${escH(l.title)}</b>`}
         ${l.sec ? `<em class="hl-dur">${lsMin(l.sec)}</em>` : ""}<i class="hl-play" aria-hidden="true">${SVG('<path d="M8 5.5v13l11-6.5z"/>')}<span>Смотреть</span></i></span>
       <span class="hl-t"><small>Видеоурок</small><b>${escH(l.title)}</b>${l.about ? `<span>${escH(l.about)}</span>` : ""}</span></button>`).join("");
   const h2 = body.querySelector("h2"); if (h2) h2.after(box); else body.prepend(box);
   $$(".hls .hl", box).forEach(b => b.onclick = () => { const l = ls.find(x => x.id === b.dataset.id); if (l && typeof lsPlay === "function") lsPlay(l); });
+  if (typeof lsPosters === "function") lsPosters(box);                  // обложка — через ядро (в сети сайта домен не открывается)
 }
 $$("main section[id^='p-']").forEach(s => {
   const k = s.id.slice(2), h = s.querySelector("h1"); if (!h || !(window.DEWIAR_HELP || {})[k]) return;

@@ -497,19 +497,97 @@ INTROS_FIRST = ["Включаю {what}. Начнём с {track}.", "{What} — �
 INTROS = ["Дальше — {track}.", "А теперь {track}.", "Следующий — {track}.", "Продолжаем: {track}.", "Сейчас прозвучит {track}."]
 
 
+# имя без смысла (30.10, владелец: «объявляет трек „6“») — цифры, «Track 05», «Новая запись 3», «VID-2023…», хэш
+JUNK_RX = re.compile(r"^(?:track|трек|дорожка|audio|аудио|запись|новая\s+запись|unknown|untitled|без\s+названия|"
+                     r"неизвестн\w*|title|песня|sound|звук|rec|record|voice|ptt|aud|vid|img|file|файл|"
+                     r"неизвестный\s+исполнитель|various(?:\s+artists)?|сборник|va)?[\s_\-.#№()\[\]]*\d*[\s_\-.()\[\]]*$", re.I)
+
+
+def meaningful(s):
+    """Стоит ли произносить: в названии есть слово, а не номер дорожки или имя файла с телефона."""
+    s = str(s or "").strip()
+    if sum(c.isalpha() for c in s) < 2 or JUNK_RX.match(s):
+        return False
+    if re.fullmatch(r"[0-9a-f]{8,}", s, re.I) or re.match(r"^(?:vid|aud|ptt|rec|voice|img|wa)[-_ ]?\d", s, re.I):
+        return False
+    return True
+
+
 def intro(t, first=False, what="музыку из вашей папки", prev=None, rnd=random):
     """Фраза ведущего перед треком — только из тегов, без выдумок: альбом и год, если есть; тот же исполнитель —
-    «ещё …»."""
-    tr = label(t)
+    «ещё …». Название без смысла («6», «Track 05») не произносим: только исполнитель, а нет и его — ничего."""
+    named = meaningful(t.get("title"))
+    art = t.get("artist") if meaningful(t.get("artist")) else ""
+    if not named and not art:
+        return f"Включаю {what}." if first else ""
+    tr = label(t) if named else art
     if first:
         s = rnd.choice(INTROS_FIRST).format(what=what, What=what[:1].upper() + what[1:], track=tr)
-    elif prev and prev.get("artist") and prev.get("artist") == t.get("artist"):
-        s = f"Ещё {t['artist']}: «{t['title']}»."
+    elif prev and art and prev.get("artist") == art:
+        s = f"Ещё {art}: «{t['title']}»." if named else f"И снова {art}."
     else:
         s = rnd.choice(INTROS).format(track=tr)
-    if t.get("album") and t.get("year") and rnd.random() < 0.5 and not first:
+    if named and meaningful(t.get("album")) and t.get("year") and rnd.random() < 0.5 and not first:
         s = s.rstrip(".") + f", с альбома «{t['album']}», {t['year']}."
     return s
+
+
+# ---------- ведущий: что сказать между песнями, кроме названия (0.74) ----------
+# галочки в студии («Музыка» → «Ведущий»): по умолчанию — название, время и погода; дела и письма могут раздражать —
+# выключены, пока человек сам не включит
+DJ_SAY = {"track": True, "time": True, "weather": True, "tasks": False, "mail": False}
+DJ_GAP = {"time": 15 * 60, "weather": 60 * 60}             # время — не чаще раза в 15 минут, погода — раз в час
+
+
+def dj_opts(music):
+    o = dict(DJ_SAY)
+    o.update({k: bool(v) for k, v in ((music or {}).get("dj_say") or {}).items() if k in DJ_SAY})
+    return o
+
+
+def _plural(n, one, few, many):
+    n = abs(int(n))
+    return one if n % 10 == 1 and n % 100 != 11 else few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+
+def say_time(now):
+    return f"На часах {now.hour}:{now.minute:02d}."
+
+
+def say_weather(f):
+    """f — weatherq.forecast(): «За окном плюс 5, облачно»."""
+    from weatherq import deg
+    return f"За окном {deg(f['now'])}°" + (f", {f['sky']}" if f.get("sky") else "") + "."
+
+
+def say_task(title, at, now):
+    """Ближайшее дело в пределах двух часов: «Через 40 минут — созвон.» / «В 15:30 — встреча.»"""
+    mins = max(1, round((at - now).total_seconds() / 60))
+    title = str(title or "").strip().rstrip(".")[:80]
+    if mins < 60:
+        return f"Напоминаю: через {mins} {_plural(mins, 'минуту', 'минуты', 'минут')} — {title}."
+    return f"Напоминаю: в {at.hour}:{at.minute:02d} — {title}."
+
+
+def say_mail(n):
+    return "Кстати, пришло новое письмо." if n == 1 else f"Кстати, пришло {n} {_plural(n, 'новое письмо', 'новых письма', 'новых писем')}."
+
+
+def dj_extra(opts, facts, last, now_ts):
+    """Одна полезная фраза между песнями. facts: {"task": (ключ, текст) | None, "mail": новых писем, "weather": текст}.
+    last — когда что говорили ({вид: unix}); говорим самое важное: дело, письмо, погода, время.
+    -> (вид, текст) или ("", "")."""
+    task = facts.get("task")
+    if opts.get("tasks") and task and task[0] not in (last.get("tasks_said") or ()):
+        return "tasks", task[1]
+    if opts.get("mail") and int(facts.get("mail") or 0) > 0:
+        return "mail", say_mail(int(facts["mail"]))
+    if opts.get("weather") and facts.get("weather") and now_ts - float(last.get("weather") or 0) >= DJ_GAP["weather"]:
+        return "weather", facts["weather"]
+    if opts.get("time") and now_ts - float(last.get("time") or 0) >= DJ_GAP["time"]:
+        from datetime import datetime
+        return "time", say_time(datetime.fromtimestamp(now_ts))
+    return "", ""
 
 
 class Dj:

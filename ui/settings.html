@@ -447,6 +447,7 @@
     <div class="ls-grid" id="ls-grid" aria-live="polite"></div>
     <dialog class="ls-dlg" id="ls-dlg" aria-labelledby="ls-dt"><div class="ls-dh"><b id="ls-dt"></b><button class="ls-x" type="button" id="ls-x" aria-label="Закрыть" title="Закрыть (Esc)">×</button></div>
       <div class="ls-vw"><video id="ls-v" controls playsinline preload="auto"></video>
+        <div class="ls-load" id="ls-load" hidden role="status"><i aria-hidden="true"></i>Загружаю урок… Первый раз — до минуты, потом откроется сразу.</div>
         <div class="ls-fail" id="ls-fail" hidden><b>Видео не открылось в окне программы</b><span id="ls-fail-why">Откройте его в браузере — там оно играет всегда.</span>
           <span class="ls-fail-acts"><button class="btn primary" type="button" id="ls-codec" hidden>Установить видеокодек</button>
           <button class="btn" type="button" id="ls-ext">Смотреть в браузере</button></span></div></div></dialog>
@@ -698,10 +699,10 @@
         <h3>Папка с музыкой</h3>
         <button class="mm-folder" id="mm-pick" title="Выбрать другую папку"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="mm-folder">Папка не выбрана</span></button>
         <div class="mm-stats" id="mm-stats"></div>
-        <div class="switch slim"><div>Говорить между треками<span>Раз в несколько песен — пара слов о следующей, поверх её начала</span></div><label class="tg"><input type="checkbox" data-k="music.dj_talk" id="mm-talk"><i></i></label></div>
         <button class="btn small" id="mm-rescan">Перечитать папку</button>
       </div>
       <div class="mm-side rd-side" data-for="radio" hidden>
+        <div class="switch slim"><div>Ведущий на радио<span>Раз в 25 минут, когда тихо, — название станции и что отмечено у ведущего «Моей музыки»: время, погода</span></div><label class="tg"><input type="checkbox" data-k="music.dj_radio" id="mm-radio-host"><i></i></label></div>
         <h3>Как попросить</h3>
         <div class="mm-say">
           <div><b>«Включи радио»</b><span>любимая станция или популярная</span></div>
@@ -717,7 +718,26 @@
         <div class="chips" id="mm-chips"></div>
         <ul class="mm-list" id="mm-list"></ul>
       </div>
-      <div class="mm-panel">
+      <div class="mm-col">
+        <section class="mm-panel mm-hostcard" aria-label="Ведущий">
+          <div class="switch slim"><div><h3>Ведущий</h3><span>Между песнями — пара слов поверх начала следующей. Голосом: «веди эфир», «хватит болтать»</span></div><label class="tg"><input type="checkbox" data-k="music.dj_talk" id="mm-talk"><i></i></label></div>
+          <div class="mm-host" id="mm-host">
+            <div class="mm-hl" id="mm-say-h">Что рассказывать</div>
+            <div class="mm-picks" role="group" aria-labelledby="mm-say-h">
+              <label class="mm-pick"><input type="checkbox" data-k="music.dj_say.track"><span>Название песни</span></label>
+              <label class="mm-pick"><input type="checkbox" data-k="music.dj_say.time"><span>Время</span></label>
+              <label class="mm-pick"><input type="checkbox" data-k="music.dj_say.weather"><span>Погоду</span></label>
+              <label class="mm-pick"><input type="checkbox" data-k="music.dj_say.tasks"><span>Ближайшее дело</span></label>
+              <label class="mm-pick"><input type="checkbox" data-k="music.dj_say.mail"><span>Новые письма</span></label>
+            </div>
+            <p class="mm-hnote" id="mm-hnote"></p>
+            <div class="mm-hl" id="mm-every-h">Как часто</div>
+            <div class="mm-seg" id="mm-every" role="radiogroup" aria-labelledby="mm-every-h">
+              <button role="radio" data-n="1">Каждую песню</button><button role="radio" data-n="2">Раз в 2</button><button role="radio" data-n="3">Раз в 3</button><button role="radio" data-n="5">Раз в 5</button>
+            </div>
+          </div>
+        </section>
+        <div class="mm-panel">
         <h3>Как попросить</h3>
         <div class="mm-say">
           <div><b>«Поставь мою музыку»</b><span>вся папка вперемешку</span></div>
@@ -726,8 +746,10 @@
           <div><b>«Что сейчас играет?»</b><span>трек, альбом и год</span></div>
           <div><b>«Эту — в любимое»</b><span>потом: «включи моё любимое»</span></div>
           <div><b>«Дальше», «предыдущую», «пауза», «стоп»</b><span>как у радио; «громче» и «тише» — тоже</span></div>
+          <div><b>«Веди эфир» и «хватит болтать»</b><span>ведущий между песнями — включить или оставить только музыку</span></div>
         </div>
         <p class="hint">Подходят mp3, flac, ogg, opus, m4a. Названия и исполнители берутся из тегов файлов, а если их нет — из имён файлов и папок («Кино/1989 — Звезда/01 Песня.mp3»). Музыка остаётся на месте и никуда не отправляется.</p>
+        </div>
       </div>
     </div>
     <div class="rd-tab" id="rd-tab" data-for="radio" role="tabpanel" aria-labelledby="mmt-radio" hidden>
@@ -2079,16 +2101,11 @@
 
   <section id="p-features">
     <h1>Возможности</h1>
-    <p class="lead">Dewiar умеет много. Включите только то, чем пользуетесь, — остальное не будет попадаться на глаза.
-      Выключенное ничего не теряет: включите — и всё на месте. Разговор, заметки, напоминания и блокнот есть всегда.</p>
-    <div class="switch"><div>Досуг — милые игры<span>Двадцать три игры на пару минут: сказки «Огонёк», «Хутор Одуванчик» и «Кто боится темноты», «Каляка» — дорисуй мостик ручкой, «Колючая почта», «Выше облаков» — прыжки до луны, «Лукошко» — ловить яйца, как на карманной игре из детства, «Найди пару» на память, «Пять в ряд» против Лиры, головоломки (Тетрис, Конфетки, Слияние, Судоку, Пятнашки), слова (Кроссворд, «Пять букв»), рисованные Крестики-нолики и Реверси против Лиры, аркады. Кнопка с джойстиком у виджета, в блокноте или фраза «Лира, давай поиграем». Управление — клавиатурой, мышью или геймпадом.</span></div><label class="tg"><input type="checkbox" data-k="features.games"><i></i></label></div>
-    <div class="switch"><div>Рядом<span>«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом.</span></div><label class="tg"><input type="checkbox" data-k="features.near"><i></i></label></div>
-    <div class="switch"><div>Встречи<span>«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном.</span></div><label class="tg"><input type="checkbox" data-k="features.meet"><i></i></label></div>
-    <div class="switch"><div>Семья — общий бюджет<span>Траты за месяц у всей семьи, общий лимит и общие платежи (свет, газ, интернет) с близкими. Позовут в семью — включится само.</span></div><label class="tg"><input type="checkbox" data-k="features.family"><i></i></label></div>
-    <div class="switch"><div>Клиенты — личная CRM<span>Карточки клиентов: контакты, о чём договорились, следующий шаг с напоминанием. Голосом: «запиши: Иванов из „Ромашки“ хочет 200 коробок», «что у нас с Ивановым?».</span></div><label class="tg"><input type="checkbox" data-k="features.clients"><i></i></label></div>
-    <div class="switch"><div>Поручения сотрудникам<span>Для работы: поручения в Telegram с кнопками «Беру», «Сделано» с фото, «Перенести» с причиной; отметки в календаре.</span></div><label class="tg"><input type="checkbox" data-k="features.team"><i></i></label></div>
-    <div class="switch"><div>Суфлёр<span>Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить.</span></div><label class="tg"><input type="checkbox" data-k="features.prompter"><i></i></label></div>
-    <p class="hint">На телефоне — свои переключатели: «Настройки» → «Ещё» → «Возможности».</p>
+    <p class="lead">Что Dewiar делает для вас и что у вас на виду — в одном месте. «Выключено» — не работает и нигде не показывается;
+      «Без значка» — работает, но не мелькает на главной и в меню; «На главной» — работает и под рукой. Выключенное ничего не
+      теряет: включите — и всё на месте. Разговор, заметки, напоминания и блокнот есть всегда.</p>
+    <div class="ft-list" id="ft-list"></div>
+    <p class="hint">Порядок значков и остальные значки главной — «Главная» → «Настроить». На телефоне — свои переключатели: «Настройки» → «Ещё» → «Возможности».</p>
   </section>
 
   <section id="p-sound">

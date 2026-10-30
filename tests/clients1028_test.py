@@ -114,7 +114,7 @@ with sync_playwright() as p:
     pg.add_init_script("window.pywebview = { api: new Proxy({}, { get: () => () => Promise.resolve(true) }) };")
     pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1"); pg.wait_for_timeout(1000)
     ok(pg.evaluate("() => document.querySelector('nav button[data-p=clients]').hidden"), "в меню «Клиентов» нет, пока не включены")
-    ok(pg.evaluate("() => !!document.querySelector('input[data-k=\"features.clients\"]')"), "включить — «Возможности» → «Клиенты — личная CRM»")
+    ok(pg.evaluate("() => !!document.querySelector('#ft-list .ft[data-k=\"clients\"]')"), "включить — «Возможности» → «Клиенты — личная CRM»")
     pg.evaluate("""([list, card]) => { window._calls = []; window._card = card;
       core.call = (c, a) => { _calls.push([c, a]);
         if (c === 'clients_list') return Promise.resolve(a.q ? list.filter(x => (x.name + x.company + x.last).toLowerCase().includes(a.q.toLowerCase())) : list);

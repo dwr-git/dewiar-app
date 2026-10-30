@@ -159,7 +159,7 @@ html.st-light #tbar .wb button.x:hover { background: #E5484D; color: #fff; }
 html.st-light #upd .logo img { filter: invert(.85); }
 html.st-light #fedge { box-shadow: inset 0 0 0 1px rgba(20,30,60,.08); }
 html.st-light :is(#upd, #wlc) { background: rgba(230,234,242,.55); }
-html.st-light #m-graph { background: radial-gradient(ellipse at 50% 40%, rgba(60,60,120,.35), rgba(8,8,16,.82) 70%); }   /* граф памяти остаётся ночным: светящиеся узлы */
+/* граф памяти в светлых темах — светлый (0.74, владелец 30.10: «в центре не в том стиле»); правила — в studio.css рядом с #m-graph */
 html.st-light .msplit::after { background: var(--soft2); }
 
 /* ---------- неоморфизм: один материал, форма от двух теней ---------- */

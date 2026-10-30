@@ -101,6 +101,12 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self._chatter = collections.deque(maxlen=20)        # когда слышали фразы «не мне» — вокруг разговор
         self.vosk_wake_check, self._vosk_wake_word = -1, ""
         self.reminders = Reminders(self._on_reminder)
+        try:
+            n = self.reminders.dedupe_jobs()               # два одинаковых дела по расписанию выполнялись оба (30.10) — оставить одно
+            if n:
+                log.info("🗓 Убраны двойники дел по расписанию: %d", n)
+        except Exception:  # noqa: BLE001
+            log.debug("двойники дел", exc_info=True)
         self.alarm = None                 # звенящее напоминание: {"item", "done": Event, "since"}
         self._alarm_lock = threading.Lock()
         self.skills = Skills(settings)
@@ -172,6 +178,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.mail.on_change = lambda: self.own_share()     # почта — и на других своих компьютерах (конвертом, 30.10)
         if self.mail.boxes and not self.mail.at:           # настроена до 0.73 — один раз разослать своим (через 1,5 мин: связь уже есть)
             t = threading.Timer(90, self.mail._store); t.daemon = True; t.start()
+        elif not self.mail.boxes and not self.mail.at:     # здесь почты не было никогда — спросить у своих компьютеров (0.74;
+            # владелец 30.10: «на работе почта есть, дома не вижу»): кто на связи — пришлёт конвертом, кто выключен — когда включится
+            t = threading.Timer(75, lambda: self.own_ask("mail")); t.daemon = True; t.start()
         from recall import Recall
         from obsidian import Obsidian
         self.obsidian = Obsidian(settings, self.workspace, STATE_DIR, emit=self.emit)

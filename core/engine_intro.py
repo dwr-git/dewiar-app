@@ -54,7 +54,10 @@ class IntroMixin:
 
     def intro_auto(self):
         """Фоновый поток при старте: первый запуск — дождаться виджета и слуха (до 3 минут) и познакомиться."""
-        if self.wav_input or getattr(self, "server", False) or (self.s.get("ui", "intro") or "") != "":
+        if self.wav_input or getattr(self, "server", False):
+            return
+        if (self.s.get("ui", "intro") or "") != "":
+            self._first_nudge_start()                     # познакомились, а спросить так и не спросили — мягко напомнить
             return
         end = time.monotonic() + 180
         while time.monotonic() < end and not self.stopping.is_set():
@@ -174,6 +177,8 @@ class IntroMixin:
 
     def _intro_run(self):
         self._intro_stop = False
+        if self.s.get("ui", "first_ask") is None:          # новенький: до первого вопроса — подсказки в виджете (0.74)
+            self.s.update({"ui": {"first_ask": False}})
         try:
             self._intro_script()
         except Exception as e:  # noqa: BLE001
@@ -185,6 +190,57 @@ class IntroMixin:
             if (self.s.get("ui", "intro") or "") != "done":
                 self.s.update({"ui": {"intro": "done"}})
             self.emit("intro", step="done")
+            self._first_nudge_start()
+
+    # ---------- первый вопрос (0.74; воронка 30.10: 63 из 70 новых компьютеров без ответа ни разу ничего не спросили) ----------
+    # Пока человек не спросил ни разу (ui.first_ask == False — ставится только новичкам, у прежних None), виджет держит
+    # под портретом три фразы-кнопки (FIRST_TRY), а через FIRST_NUDGE_S тишины после знакомства персонаж один раз
+    # мягко напомнит о себе голосом (ui.first_nudged). Первый вопрос — голосом, текстом или кнопкой — всё убирает.
+    FIRST_NUDGE_S = 150
+
+    def first_try(self):
+        return ["Какая завтра погода?", "Напомни через 5 минут проверить чайник", "Что ты умеешь?"]
+
+    def first_asked(self):
+        """Человек спросил — подсказки больше не нужны."""
+        if self.s.get("ui", "first_ask") is False:
+            self.s.update({"ui": {"first_ask": True}})
+            self.emit("first_ask", on=False)
+            log.info("👋 Первый вопрос задан")
+
+    def _first_nudge_start(self):
+        if self.s.get("ui", "first_ask") is not False or self.s.get("ui", "first_nudged") or getattr(self, "_first_nudging", False):
+            return
+        self._first_nudging = True
+        threading.Thread(target=self._first_nudge, name="first-nudge", daemon=True).start()
+
+    def _first_nudge(self):
+        try:
+            quiet_since = time.monotonic()
+            while not self.stopping.wait(5):
+                if self.s.get("ui", "first_ask") is not False:
+                    return
+                busy = self.turn is not None or self.state not in ("idle",) or getattr(self, "_intro_running", False) \
+                    or getattr(getattr(self, "prompter", None), "on", False) or getattr(self, "meeting", None) \
+                    or time.monotonic() - float(getattr(self, "mic_voice_t", 0) or 0) < 20
+                if busy:
+                    quiet_since = time.monotonic()
+                    continue
+                if time.monotonic() - quiet_since < self.FIRST_NUDGE_S:
+                    continue
+                name = ""
+                try:
+                    name = self.personas.get(self.s.get("persona"))["name"]
+                except Exception:  # noqa: BLE001
+                    pass
+                self.s.update({"ui": {"first_nudged": True}})
+                tries = self.first_try()
+                self.emit("first_ask", on=True, phrases=tries)
+                self._dj_say(f"Я здесь, если что. Спросите что угодно — например, «{tries[0].rstrip('?')}?» — голосом"
+                             + (f", позвав меня по имени — «{name}»," if name else ",") + " или нажмите на подсказку под портретом.")
+                return
+        finally:
+            self._first_nudging = False
 
     def _intro_more(self, hearing):
         """Город (для погоды и «Утра с Лирой») и утро по расписанию. -> False, если знакомство прервали."""
@@ -283,8 +339,8 @@ class IntroMixin:
             if not self._intro_say("Микрофон сейчас выключен — включишь кнопкой с микрофоном внизу окошка.", "mic_off"):
                 return
         # --- кнопки виджета ---
-        if not self._intro_say("Внизу окошка — кнопки. Микрофон — выключить слух. Динамик — отвечать только текстом. "
-                               "Клавиатура — написать вопрос. А само окошко можно перетащить куда удобно.", "buttons",
+        # 0.74: короче — новички слушали длинный рассказ и так и не спрашивали ни о чём (воронка 30.10)
+        if not self._intro_say("Внизу — кнопки: микрофон, динамик и клавиатура, чтобы писать. Окошко можно перетащить.", "buttons",
                                buttons=["b-mic", "b-voice", "b-type"]):
             return
         # --- мозг и что попробовать ---

@@ -54,7 +54,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("$('nav button[data-p=\"prompter\"]').hidden") and pg.evaluate("$('#cl-tabs button[data-t=\"near\"]').hidden")
        and not pg.evaluate("$('#cl-tabs button[data-t=\"meet\"]').hidden") and not pg.is_visible("nav button[data-p='prompter']"),
        "«Возможности»: «Суфлёр» и «Рядом» выключены — их нет в меню и вкладках, «Встречи» на месте")
-    ok(pg.evaluate("!!document.querySelector('#p-features input[data-k=\"features.games\"]')"), "раздел «Возможности» с переключателями")
+    ok(pg.evaluate("!!document.querySelector('#p-features .ft[data-k=\"games\"] .ft-seg')"), "раздел «Возможности» с переключателями")
     ok(not errs, f"без ошибок на странице: {errs[:2]}")
     b.close()
 

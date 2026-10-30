@@ -81,6 +81,7 @@ function hmNav() {
     while (n && !n.classList.contains("ng")) { if (n.tagName === "BUTTON" && !n.hidden) any = true; n = n.nextElementSibling; }
     g.hidden = !any;
   });
+  if (typeof featuresRender === "function") featuresRender();   // «Возможности» показывают то же положение (0.74)
 }
 window.hmNav = hmNav;
 

@@ -206,6 +206,8 @@ class AnswerMixin:
             return
         if via:
             quiet = False
+        if not quiet and not raw and hasattr(type(self), "first_asked"):
+            type(self).first_asked(self)                   # первый вопрос новичка — подсказки в виджете больше не нужны
         # 24.10 (владелец: «попросил обновиться — нет; „а теперь“ — она что-то не связанное»): короткое «а теперь?»,
         # «ещё раз», «проверь ещё раз» сразу после быстрой команды без модели — та же команда ещё раз
         lq = getattr(self, "_last_quick", None)

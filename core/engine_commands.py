@@ -632,6 +632,17 @@ class CommandsMixin:
                     if "/academy/" in u and not u.startswith(pub):
                         it[k] = pub + u.rsplit("/academy/", 1)[1]
             return d
+        if cmd == "academy_file":                 # файл урока — через ядро на диск (academy_cache: изнутри сети сайта домен не открывается)
+            import academy_cache
+            try:
+                f = academy_cache.fetch(str(a.get("url") or ""), self.cloud.url, STATE_DIR / "academy",
+                                        timeout=60.0 if str(a.get("url") or "").lower().endswith((".mp4", ".webm")) else 15.0)
+            except ValueError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                code = getattr(getattr(e, "response", None), "status_code", 0)
+                raise ValueError(f"урок не скачался: сайт ответил {code}" if code else f"урок не скачался: {e}") from e
+            return {"uri": f.as_uri(), "size": f.stat().st_size}
         if cmd.startswith("sitechat_"):           # «Чат для сайта» (0.69, sitechat.py): опубликовать, отключить, заявки
             from sitechat import SiteChatError
             W = self.sitechat

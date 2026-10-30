@@ -238,7 +238,7 @@ with sync_playwright() as p:
             ok("приглашает вас" not in pg.inner_text("#fm-people") and not pg.evaluate("document.querySelector('#fam-dot').classList.contains('on')"),
                "принял приглашение — точка погасла")
             pg.click('nav button[data-p="features"]'); time.sleep(0.5)
-            pg.click('#p-features label.tg:has(input[data-k="features.family"])'); time.sleep(1.2)
+            pg.click('#ft-list .ft[data-k="family"] button[data-v="off"]'); time.sleep(1.2)
             ok(not pg.is_visible('nav button[data-p="family"]'), "выключили в «Возможностях» — «Семья» пропала из меню")
         pg.close()
     ok(not errs, f"без ошибок на странице: {errs[:2]}")

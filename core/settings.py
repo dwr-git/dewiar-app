@@ -167,6 +167,8 @@ DEFAULTS = {
            "memory_motion": "auto",         # «Память»: анимация карты — auto (на слабом компьютере выкл) | on | off
            "welcome": "",                   # «Первые шаги»: "" — показать, "later" — кнопкой в меню, "done" — всё
            "intro": "",                     # знакомство голосом (engine_intro.py): "" — ещё не было, "done" — было
+           # первый вопрос (0.74): None — прежний пользователь (не трогаем), False — новичок ещё не спросил, True — спросил
+           "first_ask": None, "first_nudged": False,
            "mode_seen": 0,                  # первый экран «Для кого эта Лира?» показан (studio/modes.js, 0.58)
            "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
@@ -214,7 +216,9 @@ DEFAULTS = {
     "music": {"service": "auto",        # где включать музыку: auto (недавно открыта Яндекс Музыка — в ней, иначе радио) | radio | yandex | youtube
               # своя папка с музыкой (27.10, engine_mymusic.py): папка («» — не выбрана), «в любимое» — пути треков,
               # ведущий говорит пару слов перед треком — раз в dj_every треков
-              "folder": "", "favs": [], "dj_talk": True, "dj_every": 3},
+              # 0.74 «Ведущий»: что говорить между песнями (галочки), на радио — раз в 25 минут поверх станции
+              "folder": "", "favs": [], "dj_talk": True, "dj_every": 3, "dj_radio": False,
+              "dj_say": {"track": True, "time": True, "weather": True, "tasks": False, "mail": False}},
     "smarthome": {"client_id": ""},     # ID приложения Яндекс OAuth (iot:view, iot:control) для кнопки «Получить ключ»
     "backup": {"dir": "", "auto": True},  # резервные копии: папка (пусто — «Документы/Dewiar — копии»), раз в неделю сама
     "updates": {"url": "", "auto_check": True},       # пусто = https://dewiar.pro/dwrapp/latest.json

@@ -243,6 +243,20 @@
      плашкой, а «на сегодня всё» — сиреневой «до завтра», не красной. Взрослые кнопки (персонажи, календарь, заметки,
      переписка, студия, жалоба, идеи, блокнот) в детском режиме спрятаны: переключать на Лиру ребёнку не нужно — ядро
      и так не даст (switch_persona), выход — в студии по PIN. */
+  /* первый вопрос (0.74): тихие строки-кнопки под портретом, пока новичок ничего не спросил */
+  #fq { display: none; flex-direction: column; gap: 7px; }
+  body.fq:not(.kids):not(.intro):not(.mini) #fq { display: flex; }
+  #fq .fqt { font-size: 12px; color: var(--muted); text-align: center; }
+  #fq .fqb { display: flex; flex-direction: column; gap: 6px; }
+  #fq button { display: flex; align-items: center; gap: 9px; border: 0; border-radius: 14px; padding: 8px 12px; cursor: pointer; text-align: left;
+    font: 500 13px/1.3 Manrope, sans-serif; color: var(--ink); background: rgba(255,255,255,.08); transition: background .2s, transform .15s; }
+  #fq button:hover { background: rgba(255,255,255,.16); }
+  #fq button:active { transform: scale(.98); }
+  #fq button:focus-visible { outline: 2px solid var(--accent, #8B8CF7); outline-offset: 2px; }
+  #fq button img { width: 18px; height: 18px; flex: none; }
+  body.light #fq button { background: rgba(255,255,255,.62); box-shadow: 0 1px 3px rgba(40,50,90,.08); }
+  body.light #fq button:hover { background: rgba(255,255,255,.9); }
+  @media (prefers-reduced-motion: reduce) { #fq button { transition: none; } }
   #kids { display: none; flex-direction: column; gap: 10px; }
   body.kids #kids { display: flex; }
   #kids .kt { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 5px 13px 5px 8px; border-radius: 999px;
@@ -440,20 +454,20 @@
      [hidden] из общей строки, и метка не пряталась. Скрытая — скрыта, при любой теме. */
   #corner-l #b-tm[hidden], body.light #corner-l #b-tm[hidden] { display: none; }
   body.light #corner-l #b-tm { color: #7f4a00; background: rgba(255,243,222,.94); box-shadow: 0 1px 4px rgba(120,70,0,.18); }   /* сплошная подложка: метка читается и на ярком портрете (contrast1018) */
-  #corner-l.tm:not(:hover):not(:focus-within) #b-bug, #corner-l.tm:not(:hover):not(:focus-within) #b-idea { opacity: 0; }                  /* стоп-кран включён — щит виден всегда */
+  /* щит, дозор, стоп-кран, обновление — видны всегда; остальное в углу (жук, лампочка и «обновления», когда нового нет) —
+     только под курсором (30.10, владелец: «жук и лампочка пропадают, а обновление остаётся») */
+  #card:not(:hover) #corner-l:is(.tm, .lo, .watch, .upd):not(:focus-within) :is(#b-bug, #b-idea, #b-upd:not(.has):not(.busy)) { opacity: 0; pointer-events: none; }
   /* «Дозор» (0.58): пока Лира присматривает — глаз виден всегда, с числом дозоров и тихим «дыханием» */
   #corner-l.watch { opacity: 1; }
   #corner-l #b-watch { position: relative; color: #8fb4ff; animation: wt-breath 3.2s ease-in-out infinite; }
   #corner-l #b-watch i { position: absolute; top: -2px; right: -3px; min-width: 13px; height: 13px; border-radius: 99px; font: 700 9px/13px Manrope, sans-serif;
     font-style: normal; color: #fff; background: #5b74ff; padding: 0 3px; }
   #corner-l #b-watch i:empty { display: none; }
-  #corner-l.watch:not(:hover):not(:focus-within) #b-bug, #corner-l.watch:not(:hover):not(:focus-within) #b-idea { opacity: 0; }
   @keyframes wt-breath { 50% { opacity: .55; } }
   @media (prefers-reduced-motion: reduce) { #corner-l #b-watch { animation: none; } }
   #corner-l #b-lo, body.light #corner-l #b-lo { color: #2fbf83; }
-  #corner-l.lo:not(:hover):not(:focus-within) #b-bug, #corner-l.lo:not(:hover):not(:focus-within) #b-idea { opacity: 0; }
   /* есть обновление — значок виден всегда, с точкой; без него — как жучок, по наведению */
-  #corner-l.upd { opacity: 1; } #corner-l.upd:not(:hover):not(:focus-within) #b-bug, #corner-l.upd:not(:hover):not(:focus-within) #b-idea { opacity: 0; }
+  #corner-l.upd { opacity: 1; }
   #b-upd { position: relative; } #b-upd.has, body.light #b-upd.has { color: var(--accent, #8B8CF7); }
   #b-upd.has::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #ff6f9c; box-shadow: 0 0 0 2px rgba(0,0,0,.15); }
   #b-upd.busy svg { animation: updSpin 1.1s linear infinite; } @keyframes updSpin { to { transform: rotate(360deg); } }
@@ -556,6 +570,8 @@
       <div class="kb"><button data-say="Уго, расскажи сказку"><img src="assets/emoji/img/1f4d6.webp" alt="" draggable="false">Сказка</button>
         <button data-say="Уго, загадай мне загадку"><img src="assets/emoji/img/1f9e9.webp" alt="" draggable="false">Загадка</button>
         <button data-say="Уго, расскажи что-нибудь интересное: почему так бывает?"><img src="assets/emoji/img/1f52d.webp" alt="" draggable="false">Почему?</button></div></div>
+    <!-- первый вопрос (0.74): новичку, пока он ничего не спросил, — три фразы-кнопки; спросил — пропадают навсегда -->
+    <div id="fq" aria-label="С чего начать"><div class="fqt">Спросите меня — например:</div><div class="fqb" id="fq-b"></div></div>
     <div id="rem"><span class="ri" id="rem-ico">⏰</span><span class="rt"><b id="rem-when"></b><span id="rem-text"></span></span><button id="rem-undo" title="Отменить напоминание">Отменить</button></div>
     <div id="task"></div>
     <div id="upd"></div>
@@ -767,6 +783,20 @@ function setKids(k) {
   $("kids").classList.toggle("over", !KIDS.can_talk);
 }
 core.on("hello", d => setKids(d.kids));
+/* первый вопрос (0.74; воронка 30.10: из 70 новых компьютеров 63 так ничего и не спросили): пока ui.first_ask === false —
+   три фразы-кнопки под портретом (видны в покое); нажали или спросили сами — ядро шлёт first_ask {on: false}. */
+let firstAsk = null, fqList = ["Какая завтра погода?", "Напомни через 5 минут проверить чайник", "Что ты умеешь?"];
+const FQ_ICO = ["1f324", "23f0", "1f4a1"];
+function fqSync(st) { st = st || state; document.body.classList.toggle("fq", firstAsk === false && (st === "idle" || st === "listening") && mode === "card"); }
+function fqDraw() {
+  const box = $("fq-b"); if (!box) return; box.innerHTML = "";
+  fqList.forEach((t, i) => { const b = document.createElement("button"); b.innerHTML = `<img src="assets/emoji/img/${FQ_ICO[i % 3]}.webp" alt="" draggable="false"><span></span>`;
+    b.querySelector("span").textContent = t;
+    b.onclick = (ev) => { ev.stopPropagation(); firstAsk = true; fqSync(); core.call("say", { text: t }).catch(showErr); }; box.appendChild(b); });
+}
+core.on("hello", d => { firstAsk = d.settings && d.settings.ui ? d.settings.ui.first_ask : null; fqDraw(); fqSync(); });
+core.on("first_ask", e => { if (e.phrases && e.phrases.length) { fqList = e.phrases; fqDraw(); } firstAsk = e.on ? false : true; fqSync(); });
+core.on("state", e => fqSync(e && e.state));          // этот обработчик — раньше того, что меняет state
 core.on("kids", setKids);
 core.on("council", e => { if (e && e.open) { const a = api(); if (a && a.open_settings) a.open_settings("council"); } });   // «собери совет» голосом — обсуждение в студии
 document.querySelectorAll("#kids [data-say]").forEach(b => b.onclick = (ev) => { ev.stopPropagation(); core.call("say", { text: b.dataset.say }).catch(showErr); });

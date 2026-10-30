@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 log = logging.getLogger("dewiar.engine")
+RADIO_HOST_S = 25 * 60                                     # ведущий на радио — раз в 25 минут
 
 MINE_RX = re.compile(r"\b(?:мо[юяиёе]|сво[юяиёе])\s+(?:музык|песн|трек|подборк|плейлист|папк|любим)\w*|из\s+(?:мо|сво)ей\s+"
                      r"(?:папк|музык|коллекц|библиотек)\w*|из\s+папки|мою\s+коллекци\w*|моя\s+музык\w*", re.I)
@@ -24,6 +25,12 @@ UNFAV_RX = re.compile(r"(?:убери|удали)\s+(?:эту|этот)?\s*(?:п
 NEXT_RX = re.compile(r"^\W*(?:\w+\W+)?(?:дальше|следующ\w*|другую|другой|переключи|пропусти|следующую)\b", re.I)
 COMMON = {"кино", "свет", "радио", "новости", "погода", "телевизор", "тв", "музыка", "звук", "видео", "камера", "фонарик",
           "будильник", "таймер", "игра", "игры", "сон", "утро", "вечер", "любовь", "весна", "лето", "осень", "зима"}
+# 0.74 «Ведущий»: включить и выключить голосом
+HOST_ON_RX = re.compile(r"(?:веди|вести|ведите)\s+(?:эфир|программу)|будь\s+(?:моим\s+|нашим\s+)?(?:ведущ|диджее?м|dj)\w*"
+                        r"|(?:включи|верни)\s+(?:режим\s+)?(?:ведущ\w*|диджея|dj)|говори\s+между\s+(?:песн|трек)\w*", re.I)
+HOST_OFF_RX = re.compile(r"хватит\s+(?:болтать|трепаться|комментировать)|не\s+болтай|меньше\s+(?:болтай|говори)|помолчи\s+между"
+                         r"|без\s+(?:комментариев|ведущего|болтовни|слов)|(?:выключи|убери)\s+(?:режим\s+)?(?:ведущ\w*|диджея|dj)"
+                         r"|не\s+(?:говори|разговаривай)\s+между|только\s+музык\w*\s+без\s+слов", re.I)
 PREV_RX = re.compile(r"^\W*(?:\w+\W+)?(?:предыдущ\w*|назад|прошл\w+\s+(?:песн|трек)|верни\s+(?:прошл|предыдущ))", re.I)
 
 
@@ -36,7 +43,11 @@ class MyMusicMixin:
         # ход чтения папки — в студию полоской (№361); событие то же, что «папка прочитана»
         self.mylib.on_progress = lambda p: self.emit("mymusic", **dict(self.mine_status(), busy=True, progress=p))
         self._dj_track_n = 0
+        self._dj_last = {}                                 # когда что говорил ведущий: {вид: unix, "tasks_said": [...]}
+        self._dj_facts = {"weather": "", "weather_t": 0.0, "mail": 0, "mail_t": 0.0, "mail_seen": None}
+        self._dj_fetching = False
         self.radio.on_end = self._mine_ended
+        threading.Thread(target=self._dj_radio_loop, name="dj-radio", daemon=True).start()
         if self.s.get("music", "folder"):
             threading.Thread(target=self.mylib.scan, name="mymusic", daemon=True).start()
 
@@ -103,10 +114,9 @@ class MyMusicMixin:
         self._dj_track_n += 1
         every = max(1, int(self.s.get("music", "dj_every") or 3))
         talk = self.s.get("music", "dj_talk") is not False and self._dj_track_n % every == 0
-        from mymusic import intro
-        self._mine_play(t, intro(t, prev=prev) if talk else "")
+        self._mine_play(t, self._dj_line(t, prev) if talk else "")
 
-    def _mine_start(self, tracks, what, said):
+    def _mine_start(self, tracks, what, said, lead=""):
         from mymusic import intro
         if not tracks:
             return False
@@ -114,7 +124,7 @@ class MyMusicMixin:
         self._dj_track_n = 0
         w = {"": "музыку из вашей папки", "любимое": "ваше любимое"}.get(what, f"«{what}» из вашей папки")
         talk = self.s.get("music", "dj_talk") is not False
-        msg = intro(t, first=True, what=w) if talk else f"Включаю {w}."
+        msg = lead + (intro(t, first=True, what=w) if talk else f"Включаю {w}.")
         log.info("🎵 Моя музыка: %s — %d треков", what or "вся папка", len(tracks))
         return self._mine_play(t, msg, said)
 
@@ -125,6 +135,8 @@ class MyMusicMixin:
         lib = getattr(self, "mylib", None)
         if lib is None:
             return False
+        if self._dj_host_cmd(text, low, playing, lib):
+            return True
         if playing and NOW_RX.search(low):
             self._say_quick(self.dj.now_text() or "Сейчас ничего не играет.", text)
             return True
@@ -136,8 +148,8 @@ class MyMusicMixin:
             from mymusic import intro
             prev = self.dj.current()
             t = self.dj.next()
-            return bool(t) and self._mine_play(t, intro(t, prev=prev) if self.s.get("music", "dj_talk") is not False
-                                               else "Следующий.", text)
+            say = (self._dj_line(t, prev, extra=False) if self.s.get("music", "dj_talk") is not False else "") or "Следующий."
+            return bool(t) and self._mine_play(t, say, text)
         if playing and PREV_RX.search(low) and len(low.split()) <= 5:
             t = self.dj.prev()
             return bool(t) and self._mine_play(t, "Возвращаю: " + __import__("mymusic").label(t) + ".", text)
@@ -206,7 +218,8 @@ class MyMusicMixin:
         return {"stats": self.mylib.stats(), "busy": self.mylib.busy, "folder": self.s.get("music", "folder") or "",
                 "progress": dict(self.mylib.progress or {}),
                 "now": dict(t, fav=t["path"] in favs, art=Path(art).as_uri() if art else "") if t else None, "what": self.dj.what if t else "",
-                "paused": bool((self.radio.paused or {}).get("_mine")), "live": self._live_now()}
+                "paused": bool((self.radio.paused or {}).get("_mine")), "live": self._live_now(),
+                "mail_on": bool(getattr(self, "mail", None) is not None and self.mail.configured())}
 
     def _live_now(self):
         """Играет (или на паузе) радиостанция, а не своя музыка -> {name, url, tags, logo, fav, paused} для общего плеера."""
@@ -303,3 +316,158 @@ class MyMusicMixin:
         finally:
             self.emit("mymusic", **self.mine_status())
 
+    # ---------- 0.74 «Ведущий»: между песнями — время, погода, ближайшее дело, новые письма (по галочкам) ----------
+
+    def _dj_host_cmd(self, text, low, playing, lib):
+        """«Лира, веди эфир» — ведущий включён (и, если ничего не играет, — своя музыка); «хватит болтать» — только музыка.
+        «Хватит болтать» без музыки — не про ведущего (это разговор), его не трогаем."""
+        radio_on = bool(self.radio.station) and not self.radio.paused
+        if HOST_OFF_RX.search(low) and (playing or radio_on or re.search(r"ведущ|диджей|между\s+(?:песн|трек)", low)):
+            self.s.update({"music": {"dj_talk": False, "dj_radio": False}})
+            self._say_quick("Хорошо, дальше — только музыка. Захотите ведущего — скажите «веди эфир».", text)
+            return True
+        if HOST_ON_RX.search(low):
+            self.s.update({"music": {"dj_talk": True}})
+            if not playing and not radio_on and lib.tracks:
+                return self._mine_start(lib.tracks, "", text, lead="Веду эфир! ")
+            if radio_on and not playing:
+                self.s.update({"music": {"dj_radio": True}})
+                self._say_quick("Веду эфир: раз в полчаса — время и погода, поверх станции.", text)
+                return True
+            every = max(1, int(self.s.get("music", "dj_every") or 3))
+            self._say_quick(f"Веду эфир: раз в {every} {__import__('mymusic')._plural(every, 'песню', 'песни', 'песен')} — пара слов между ними. "
+                            "Что рассказывать — галочками в студии, раздел «Музыка».", text)
+            return True
+        return False
+
+    def _dj_line(self, t, prev=None, extra=True):
+        """Что сказать перед треком: полезная фраза по галочкам (одна, самая важная) и название, если оно со смыслом."""
+        from mymusic import dj_opts, intro
+        o = dj_opts(self.s.get("music") or {})
+        parts = []
+        if extra:
+            kind, x = self._dj_extra(o)
+            if x:
+                parts.append(x)
+        if o["track"]:
+            tr = intro(t, prev=prev)
+            if tr:
+                parts.append(tr)
+        return " ".join(parts)
+
+    def _dj_extra(self, o, now_ts=None):
+        """Одна фраза из того, что известно сейчас; сеть (погода, почта) — фоном, к следующему разу."""
+        from mymusic import dj_extra
+        now_ts = time.time() if now_ts is None else now_ts
+        facts = dict(self._dj_facts)
+        if o.get("tasks"):
+            facts["task"] = self._dj_next_task()
+        kind, x = dj_extra(o, facts, self._dj_last, now_ts)
+        if kind == "tasks":
+            self._dj_last["tasks_said"] = (list(self._dj_last.get("tasks_said") or []) + [facts["task"][0]])[-50:]
+        elif kind == "mail":
+            self._dj_facts["mail"] = 0                     # сказали — до следующего нового
+        if kind:
+            self._dj_last[kind] = now_ts
+        self._dj_fetch(o)
+        return kind, x
+
+    def _dj_next_task(self):
+        """Ближайшее напоминание или событие календаря в ближайшие два часа -> (ключ, фраза) или None."""
+        from datetime import datetime, timedelta
+        from mymusic import say_task
+        now = datetime.now()
+        end = now + timedelta(hours=2)
+        best = None
+        rem = getattr(self, "reminders", None)
+        try:
+            for x in (rem.occurrences(days=1, limit=60) if rem is not None else []):
+                at = datetime.fromtimestamp(x["at"])
+                if now < at <= end and (best is None or at < best[1]):
+                    best = ("r:" + str(x["id"]), at, x.get("text") or "напоминание")
+        except Exception:  # noqa: BLE001
+            log.debug("ведущий: напоминания", exc_info=True)
+        cal = getattr(self, "calendars", None)
+        try:
+            for e in (cal.events(now, end) if cal is not None else []):
+                if e.get("allday") or e["start"] <= now:
+                    continue
+                if best is None or e["start"] < best[1]:
+                    best = (f"c:{e.get('cid')}:{e['title']}:{e['start'].isoformat()}", e["start"], e["title"])
+        except Exception:  # noqa: BLE001
+            log.debug("ведущий: календарь", exc_info=True)
+        return (best[0], say_task(best[2], best[1], now)) if best else None
+
+    def _dj_fetch(self, o):
+        """Фоном: погода (раз в 30 мин, если знаем город) и новые письма (раз в 5 мин) — к следующей фразе ведущего."""
+        f = self._dj_facts
+        now = time.time()
+        city = (self.s.get("morning") or {}).get("city") or ""
+        want_w = o.get("weather") and city and now - f["weather_t"] > 1800
+        mail = getattr(self, "mail", None)
+        want_m = o.get("mail") and mail is not None and mail.configured() and now - f["mail_t"] > 300
+        if not (want_w or want_m) or self._dj_fetching:
+            return
+        self._dj_fetching = True
+
+        def run():
+            try:
+                via = (getattr(getattr(self, "toolbox", None), "hooks", None) or {}).get("dewiar_web")
+                if want_w:
+                    f["weather_t"] = time.time()
+                    try:
+                        import weatherq
+                        from mymusic import say_weather
+                        if f.get("city") != city or not f.get("place"):
+                            f["place"], f["city"] = weatherq.geocode(city, via), city
+                        if f.get("place"):
+                            f["weather"] = say_weather(weatherq.forecast(f["place"], via))
+                    except Exception as e:  # noqa: BLE001
+                        log.debug("ведущий: погода: %s", e)
+                if want_m:
+                    f["mail_t"] = time.time()
+                    try:
+                        uids = {str(x.get("uid")) for x in mail.inbox(limit=20, unread=True)}
+                        if f["mail_seen"] is None:          # первый раз — что уже лежит непрочитанным, не новость
+                            f["mail_seen"] = uids
+                        else:
+                            new = uids - f["mail_seen"]
+                            f["mail"] = int(f.get("mail") or 0) + len(new)
+                            f["mail_seen"] |= uids
+                    except Exception as e:  # noqa: BLE001
+                        log.debug("ведущий: почта: %s", e)
+            finally:
+                self._dj_fetching = False
+        threading.Thread(target=run, name="dj-facts", daemon=True).start()
+
+    def _dj_radio_loop(self):
+        """Ведущий на радио (music.dj_radio): станция играет 25 минут подряд — в тихую минуту пара слов поверх неё:
+        «Вы слушаете …», время, погода (и дела с письмами, если отмечены)."""
+        seen, since = None, 0.0
+        while not self.stopping.wait(20):
+            try:
+                st = self.radio.station or {}
+                if not st or st.get("_mine") or self.radio.paused or not self.s.get("music", "dj_radio"):
+                    seen = None
+                    continue
+                key = st.get("url") or st.get("name")
+                if key != seen:
+                    seen, since = key, time.time()
+                    from mymusic import dj_opts
+                    self._dj_fetch(dj_opts(self.s.get("music") or {}))
+                    continue
+                if time.time() - since < RADIO_HOST_S or self.turn is not None or self.state != "idle":
+                    continue
+                if time.monotonic() - float(getattr(self, "mic_voice_t", 0) or 0) < 30:
+                    continue
+                from mymusic import dj_opts
+                o = dj_opts(self.s.get("music") or {})
+                o["time"] = True                            # раз в полчаса время уместно всегда
+                _, x = self._dj_extra(o)
+                name = str(st.get("name") or "").strip()
+                text = (f"Вы слушаете «{name}». " if name and len(name) < 40 else "") + (x or "")
+                if text.strip():
+                    self._dj_say(text.strip())
+                since = time.time()
+            except Exception:  # noqa: BLE001
+                log.debug("ведущий на радио", exc_info=True)

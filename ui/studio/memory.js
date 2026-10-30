@@ -24,7 +24,7 @@ function renderMemStats(s) {
   const days = []; for (let i = 59; i >= 0; i--) { const d = new Date(Date.now() - i * 864e5); days.push(d.toISOString().slice(0, 10)); }
   const by = Object.fromEntries(g.map(x => [x.day, x.n])), mx = Math.max(1, ...days.map(d => by[d] || 0)), w = 600 / 60;
   svg.innerHTML = days.map((d, i) => { const v = by[d] || 0, h = v ? Math.max(3, 42 * v / mx) : 1.5;
-    return `<rect x="${i * w + 1}" y="${46 - h}" width="${w - 2}" height="${h}" rx="2" fill="${v ? "#8B8CF7" : "rgba(255,255,255,.08)"}"><title>${d}: ${v}</title></rect>`; }).join("");
+    return `<rect x="${i * w + 1}" y="${46 - h}" width="${w - 2}" height="${h}" rx="2" fill="${v ? "#8B8CF7" : "rgba(127,127,140,.16)"}"><title>${d}: ${v}</title></rect>`; }).join("");
   $("#m-growth-t").textContent = `память растёт · ${s.days} ${plural(s.days, "день", "дня", "дней")} вместе`;
 }
 function renderLegend() {
@@ -41,21 +41,31 @@ function applyFilter() {
    Оттенок и изгиб берутся из хэша id (FNV-1a), а не из случайного числа: при обновлении графа картина не меняется. */
 const KHUE = { fact: 38, note: 245, diary: 152, doc: 205, task: 335, skill: 280, entity: 45, tag: 225 };
 function hashN(str) { let h = 2166136261; for (const ch of str) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
+/* Светлые темы студии (30.10, владелец: «Память — в центре не в том стиле, можно под наш стиль?»): карта не тёмным пятном,
+   а из того же материала, что панели: светлое поле, узлы — те же оттенки, но глубже (чтобы читались на светлом), подписи —
+   тёмные с белой обводкой, свечение — мягкая тень. Тёмные темы — как было: «мозг» в ночи. */
+const mLight = () => document.documentElement.classList.contains("st-light");
 function nodeColor(n) {
-  if (n.kind === "me") return "#FFFFFF";
-  if (n.kind === "hub") return "#6B6FA8";
+  const L = mLight();
+  if (n.kind === "me") return L ? "#5B5FE0" : "#FFFFFF";
+  if (n.kind === "hub") return L ? "#A3A8CC" : "#6B6FA8";
   const base = KHUE[n.kind] ?? 260, r = hashN(n.id);
-  return `hsl(${Math.round(base + (r - 0.5) * 70 + 360) % 360}, ${70 + Math.round(r * 20)}%, ${58 + Math.round(r * 10)}%)`;
+  return L ? `hsl(${Math.round(base + (r - 0.5) * 60 + 360) % 360}, ${62 + Math.round(r * 18)}%, ${50 + Math.round(r * 8)}%)`
+    : `hsl(${Math.round(base + (r - 0.5) * 70 + 360) % 360}, ${70 + Math.round(r * 20)}%, ${58 + Math.round(r * 10)}%)`;
 }
 function nodeStyle(n) {
   const c = nodeColor(n), big = n.kind === "me" ? 30 : n.kind === "hub" ? 8 : n.kind === "skill" ? 7 : 9 + Math.min(24, Math.sqrt(n.degree || 1) * 5);
   const lab = n.label.length > 26 ? n.label.slice(0, 25) + "…" : n.label;
+  const L = mLight(), quiet = n.kind === "hub" || n.kind === "skill";
   return { id: n.id, label: lab, title: undefined, shape: "dot", size: big, hidden: mOff.has(n.kind), _c: c,
-    color: { background: n.ghost ? "rgba(139,140,247,.15)" : c, border: n.ghost ? c : c, highlight: { background: "#fff", border: c }, hover: { background: c, border: "#fff" } },
-    borderWidth: n.ghost ? 1.5 : 0, shapeProperties: { borderDashes: n.ghost ? [3, 3] : false },
-    font: { color: n.kind === "hub" ? "rgba(201,202,232,.7)" : n.kind === "skill" ? "rgba(225,226,240,.7)" : "#F2F3FA", size: n.kind === "me" ? 18 : n.kind === "hub" || n.kind === "skill" ? 10.5 : 12.5,
-            face: "Manrope, Inter, system-ui, sans-serif", strokeWidth: 3, strokeColor: "rgba(10,10,20,.9)", vadjust: 1 },
-    shadow: { enabled: true, color: c, size: n.kind === "me" ? 40 : n.kind === "hub" ? 6 : 22, x: 0, y: 0 } };
+    color: { background: n.ghost ? "rgba(139,140,247,.15)" : c, border: n.ghost ? c : c, highlight: { background: L ? c : "#fff", border: L ? "#fff" : c }, hover: { background: c, border: "#fff" } },
+    borderWidth: n.ghost ? 1.5 : L ? 2 : 0, shapeProperties: { borderDashes: n.ghost ? [3, 3] : false },
+    font: L ? { color: quiet ? "rgba(70,76,108,.62)" : "#2A2F47", size: n.kind === "me" ? 18 : quiet ? 10.5 : 12.5,
+                face: "Manrope, Inter, system-ui, sans-serif", strokeWidth: 4, strokeColor: "rgba(255,255,255,.9)", vadjust: 1 }
+      : { color: n.kind === "hub" ? "rgba(201,202,232,.7)" : n.kind === "skill" ? "rgba(225,226,240,.7)" : "#F2F3FA", size: n.kind === "me" ? 18 : quiet ? 10.5 : 12.5,
+          face: "Manrope, Inter, system-ui, sans-serif", strokeWidth: 3, strokeColor: "rgba(10,10,20,.9)", vadjust: 1 },
+    shadow: L ? { enabled: true, color: "rgba(70,80,150,.22)", size: n.kind === "me" ? 22 : n.kind === "hub" ? 4 : 10, x: 2, y: 3 }
+      : { enabled: true, color: c, size: n.kind === "me" ? 40 : n.kind === "hub" ? 6 : 22, x: 0, y: 0 } };
 }
 function edgeStyle(e, i) {
   // Все связи — дугами (как волокна), у каждой свой изгиб и сторона: по хэшу пары узлов, поэтому картина не «прыгает»
@@ -64,7 +74,7 @@ function edgeStyle(e, i) {
     e.kind === "time" ? 2 : hub ? 1.4 : 2.4;
   const r = hashN(e.from + "→" + e.to);
   return { id: "e" + i, from: e.from, to: e.to, width: w, _k: e.kind,
-           color: { inherit: "both", opacity: hub ? 0.42 : e.kind === "similar" ? 0.6 + e.w * 0.4 : 0.85 },
+           color: { inherit: "both", opacity: (hub ? 0.42 : e.kind === "similar" ? 0.6 + e.w * 0.4 : 0.85) * (mLight() ? 0.7 : 1) },
            dashes: e.kind === "time",
            smooth: { enabled: true, type: r < 0.5 ? "curvedCW" : "curvedCCW", roundness: (hub ? 0.18 : 0.22) + (r < 0.5 ? r : r - 0.5) * 0.7 },
            length: hub ? 170 : 55 + (1 - (e.w || 0.5)) * 70, selectionWidth: 1.5, hoverWidth: 1 };
@@ -113,7 +123,7 @@ function drawSparks(ctx) {
     let pt; try { pt = ed.edgeType.getPoint(s.t); } catch (e) { continue; }
     const c = (s.dir > 0 ? ed.to : ed.from).options.color.background || "#fff";
     const g = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 7);
-    g.addColorStop(0, "rgba(255,255,255,.95)"); g.addColorStop(0.35, c); g.addColorStop(1, "rgba(0,0,0,0)");
+    g.addColorStop(0, mLight() ? "rgba(255,255,255,1)" : "rgba(255,255,255,.95)"); g.addColorStop(0.35, c); g.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = g; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(pt.x, pt.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
   }
 }
@@ -157,6 +167,11 @@ async function loadMemory(keep) {
     mNet.once("stabilizationIterationsDone", () => mNet.fit({ animation: { duration: 700 } }));
   } catch (e) { $("#m-graph").innerHTML = `<p class="hint" style="padding:24px">${escH(e.message)}</p>`; }
 }
+/* тему поменяли — карта перекрашивается на месте, без новой раскладки */
+new MutationObserver(() => {
+  const L = mLight(); if (L === window._mLightWas) return; window._mLightWas = L;
+  if (mNet && mData) { mNodes.update(mData.nodes.map(nodeStyle)); mEdges.update(mData.edges.map(edgeStyle)); mNet.redraw(); }
+}).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 /* ---------- «Память»: заметки слева, редактор справа ---------- */
 /* localStorage есть не везде (окно студии на Linux открывает страницу как файл) — тогда помним в памяти до закрытия окна.
    Значения — строки. Хранит то, что касается только этого окна: ширину панелей, открытые папки, вкладку «Души». */

@@ -953,6 +953,14 @@ class ToolsMixin:
             return f"{NOTES}/{rel}"
         return None
 
+    def own_ask(self, what):
+        """Попросить у своих устройств общее (почту, умный дом): ответят own_snapshot, когда будут на связи."""
+        try:
+            if getattr(self, "close", None) and self.credentials()[0]:
+                self.close._own_quiet({"want": [what]})
+        except Exception:  # noqa: BLE001
+            log.debug("свои устройства: просьба не ушла", exc_info=True)
+
     def own_share(self):
         """Умный дом (Яндекс или Home Assistant) поменяли здесь — отправить своим устройствам (в фоне; нет связи — дойдёт со следующим изменением)."""
         snap = self.own_snapshot()
@@ -1103,6 +1111,16 @@ class ToolsMixin:
             log.info("🗓 Пропущено (компьютер был выключен, опоздание %d мин): %s", int(item["late_s"]) // 60, text)
             self._log_reminder(item, skipped=True)
             return
+        if item.get("kind") == "job":
+            from tools import Reminders as _R
+            sig, now_m = _R.job_sig(item), time.monotonic()
+            title = ("t", self.job_title(item).strip().lower()) if hasattr(self, "job_title") else sig
+            seen = getattr(self, "_job_fired", None) or {}
+            if now_m - max(seen.get(sig, -1e9), seen.get(title, -1e9)) < 600:   # такое же дело только что выполнялось — второй раз не надо
+                log.info("🗓 «%s» уже выполнялось только что — двойник, пропускаю", text)
+                return
+            seen[sig] = seen[title] = now_m
+            self._job_fired = seen
         log.info("⏰ %s", text)
         self._log_reminder(item)
         fired = getattr(self, "_fired", None) or {}           # сработавшие (разовые уже убраны из списка) — окну за вложениями
@@ -1422,6 +1440,10 @@ class ToolsMixin:
                 raise ValueError(f"{bot.TITLE} ещё не подключён — подключите в «Подключение» или выберите «голосом»")
             task = (a.get("task") or c["task"]).strip()
             brief = bool(a["brief"]) if "brief" in a else c["brief"]
+            twin = self.reminders.job_twin(self.reminders.job_sig({"at": c["at"].isoformat(timespec="seconds"), "text": task,
+                                                                    "repeat": c["repeat"], "deliver": deliver, "preset": a.get("preset") or ""}))
+            if twin:                                  # такое дело уже есть — второе не заводим (иначе выполнятся оба)
+                return dict(self._reminder_public(twin), already=True)
             item = self.reminders.add(c["at"], task, c["repeat"], "job", {"deliver": deliver, "brief": brief,
                                                                          "preset": a.get("preset") or ""})
             self.emit("reminder_set", item=self._reminder_public(item))

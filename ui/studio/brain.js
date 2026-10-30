@@ -397,8 +397,9 @@ function renderPresets() {
           deliver: dv.value, brief: !!p.brief, preset: p.id });
         // время или способ изменили — старое дело заменяем новым; снимаем его только после удачного job_add:
         // иначе отказ ядра (например, «Telegram ещё не подключён») оставит без дела вовсе
-        if (on) await core.call("reminder_cancel", { id: on.id });
-        toast(`«${p.title}» — ${r.repeat_text}`); loadReminders();
+        // 0.74: такое же дело уже есть — ядро отдаёт его же (already), и его не снимаем
+        if (on && on.id !== r.id) await core.call("reminder_cancel", { id: on.id });
+        toast(r.already && !on ? `«${p.title}» уже есть — второе не завожу` : `«${p.title}» — ${r.repeat_text}`); loadReminders();
       } catch (e) { toast(e.message); }
     };
     go.onclick = async () => {
@@ -478,6 +479,47 @@ core.on("reminders", e => { if ($("#p-reminders").classList.contains("cur")) ren
 
 /* «Возможности» (24.10): выключенное прячется из меню — «Суфлёр» в списке разделов, «Рядом» и «Встречи» во вкладках
    «Близких». Открыта спрятанная вкладка — возвращаемся к переписке; открыт спрятанный раздел — к «Возможностям». */
+/* «Возможности» (0.74; владелец 30.10: «немножко путает — включение и отключение того же суфлёра есть и на главной»).
+   Было два переключателя в разных местах: здесь — «включить совсем», на главной — «показать значок». Теперь здесь оба
+   сразу, тремя положениями: «Выключено» (features.X = false), «Без значка» (работает, значка на главной и раздела в меню
+   нет — ui.home_apps без него), «На главной». Главная → «Настроить» меняет то же самое. */
+const FT = [
+  { k: "games", app: "play", name: "Досуг — игры на пару минут", sub: "Сказки, головоломки, слова и аркады. Кнопка с джойстиком у виджета или «Лира, давай поиграем»." },
+  { k: "prompter", app: "prompter", name: "Суфлёр", sub: "Молчаливые подсказки на встречах и созвонах; на созвоне виджет сам предложит его включить." },
+  { k: "clients", app: "clients", optin: 1, name: "Клиенты — личная CRM", sub: "Контакты, о чём договорились, следующий шаг с напоминанием. «Запиши: Иванов хочет 200 коробок». С ними — «Рассылка» и «Чат для сайта»." },
+  { k: "team", app: "team", optin: 1, name: "Поручения сотрудникам", sub: "Поручения в Telegram с кнопками «Беру», «Сделано» с фото, «Перенести» с причиной; отметки в календаре." },
+  { k: "family", app: "family", optin: 1, name: "Семья — общий бюджет", sub: "Траты за месяц у всей семьи, общий лимит и общие платежи. Позовут в семью — включится само." },
+  { k: "near", name: "Рядом", sub: "«Близкие» → «Рядом»: на карте видно, кто из близких где, если они сами делятся местом." },
+  { k: "meet", name: "Встречи", sub: "«Близкие» → «Встречи»: знакомства с людьми, которые сейчас рядом с вашим телефоном." }];
+const FT_SAY = { off: "Не работает и нигде не показывается.", on: "Работает, но значка на главной и раздела в меню нет.", home: "Работает: значок — на главной, раздел — в меню." };
+function ftState(f) {
+  const v = (get("features") || {})[f.k], on = f.optin ? v === true : v !== false;
+  if (!on) return "off";
+  if (!f.app) return "home";
+  return typeof hmApps === "function" && !hmApps().includes(f.app) ? "on" : "home";
+}
+function featuresRender() {
+  const box = $("#ft-list"); if (!box) return;
+  box.innerHTML = FT.map(f => {
+    const st = ftState(f), opts = f.app ? [["off", "Выключено"], ["on", "Без значка"], ["home", "На главной"]] : [["off", "Выключено"], ["home", "Включено"]];
+    return `<div class="ft" data-k="${f.k}"><div class="ft-t"><b>${escH(f.name)}</b><span>${escH(f.sub)}</span></div>
+      <div class="ft-r"><div class="ft-seg" role="radiogroup" aria-label="${escH(f.name)}">${opts.map(([v, l]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === st}">${l}</button>`).join("")}</div>
+      <small class="ft-now">${f.app ? FT_SAY[st] : st === "off" ? FT_SAY.off : "Работает."}</small></div></div>`;
+  }).join("");
+  $$("#ft-list .ft-seg button").forEach(b => b.onclick = () => ftSet(FT.find(x => x.k === b.closest(".ft").dataset.k), b.dataset.v));
+}
+featuresRender();                                   // сразу, ещё до связи с ядром — потом перерисуется по настройкам
+async function ftSet(f, st) {
+  if (!f || ftState(f) === st) return;
+  const patch = { features: { [f.k]: st !== "off" } };
+  if (f.app && st !== "off" && typeof hmApps === "function") {
+    const cur = hmApps(), list = st === "home" ? (cur.includes(f.app) ? cur : cur.concat([f.app])) : cur.filter(x => x !== f.app);
+    if (list.join() !== cur.join()) patch.ui = { home_apps: list, home_known: typeof hmAll === "function" ? hmAll().map(x => x.id) : list };
+  }
+  await save(patch, true);
+  toast(`«${f.name.split(" — ")[0]}»: ${st === "off" ? "выключено" : st === "on" ? "работает без значка" : f.app ? "на главной" : "включено"}`);
+  featuresRender();
+}
 function featuresApply() {
   const f = get("features") || {}, on = (k) => f[k] !== false;
   const nb = $('nav button[data-p="prompter"]'); if (nb) nb.hidden = !on("prompter");
@@ -491,4 +533,5 @@ function featuresApply() {
   if (cur && cur.hidden && window.rdTab) rdTab("chat");
   if ((nb && nb.hidden && nb.classList.contains("cur")) || (fb0 && fb0.hidden && fb0.classList.contains("cur")) || (tb0 && tb0.hidden && tb0.classList.contains("cur")) || (mb0 && mb0.hidden && mb0.classList.contains("cur"))) { const fb = $('nav button[data-p="features"]'); if (fb) fb.click(); }
   if (window.hmNav) hmNav();                                     // меню — ещё и по «Главной» (home.js): скрытое там скрыто и тут
+  featuresRender();
 }

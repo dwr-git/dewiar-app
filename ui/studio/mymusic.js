@@ -65,7 +65,20 @@ async function mmLoadList() {
 }
 async function mmRefresh() {
   try { mmData = await core.call("mm_status"); } catch (e) { return; }
-  mmNow(mmData); mmStats(mmData); mmChips();
+  mmNow(mmData); mmStats(mmData); mmChips(); mmHost();
+}
+/* «Ведущий» (0.74): галочки сохраняет общий bindFields (data-k); здесь — частота, «выключен — блок бледный» и подсказки,
+   когда отмеченному не из чего говорить (города нет — погоды не будет; почта не подключена — писем тоже) */
+function mmHost() {
+  const box = $("#mm-host"); if (!box) return;
+  box.classList.toggle("off", get("music.dj_talk") === false);
+  const n = +get("music.dj_every") || 3;
+  $$("#mm-every button").forEach(b => b.setAttribute("aria-checked", String(+b.dataset.n === n)));
+  const say = Object.assign({ track: true, time: true, weather: true, tasks: false, mail: false }, get("music.dj_say") || {}), notes = [];
+  if (say.weather && !get("morning.city")) notes.push("Погоду скажу, когда буду знать город: скажите «я живу в Минске» или укажите его в «Утре с Лирой».");
+  if (say.mail && !(mmData && mmData.mail_on)) notes.push("Писем не будет, пока не подключена почта — раздел «Подключения».");
+  if (!Object.values(say).some(Boolean)) notes.push("Ничего не отмечено — ведущий будет молчать.");
+  $("#mm-hnote").textContent = notes.join(" ");
 }
 /* Плеер (27.10, владелец: «не хватает громкости, статуса проигранного, а это окошко фиолетовое — красивую анимацию под
    музыку; кнопочки симпатичнее»). mm_vis (~8 раз в секунду, пока играет и раздел открыт): ход трека, громкость и восемь
@@ -131,6 +144,8 @@ if ($("#p-music")) {
     try { await core.call("mm_folder", { folder: p }); toast("Читаю папку — это быстро", 2500); } catch (e) { toast(e.message, 4000); }
     mmRefresh();
   };
+  $$("#mm-every button").forEach(b => b.onclick = () => save({ music: { dj_every: +b.dataset.n } }, true).then(mmHost));
+  $$("#mm-host input, #mm-talk").forEach(i => i.addEventListener("change", () => setTimeout(mmHost, 120)));
   $("#mm-rescan").onclick = () => core.call("mm_scan").then(() => { toast("Перечитываю папку", 2000); mmRefresh(); }).catch(e => toast(e.message));
   $("#mm-play-all").onclick = () => core.call("mm_play", { what: mmWhat }).then(mmRefresh).catch(e => toast(e.message, 4000));
   $("#mm-pp").onclick = () => core.call("mm_ctl", { act: mmData && (mmData.now && !mmData.paused || mmData.live && !mmData.live.paused) ? "pause" : "play" }).then(mmRefresh).catch(e => toast(e.message, 4000));

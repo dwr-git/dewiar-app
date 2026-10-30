@@ -1344,6 +1344,39 @@ class Reminders:
     def get(self, rid):
         return next((dict(x) for x in self.items if x["id"] == rid), None)
 
+    @staticmethod
+    def job_sig(x):
+        """Чем одно дело по расписанию совпадает с другим: готовое (preset) или текст, повтор, время дня, куда отвечать.
+        30.10 (владелец: «Итог дня в 21:00 запустился два раза подряд») — два одинаковых дела в списке выполнялись оба."""
+        try:
+            hm = datetime.fromisoformat(x["at"]).strftime("%H:%M")
+        except (KeyError, ValueError, TypeError):
+            hm = ""
+        what = (x.get("preset") or "").strip() or re.sub(r"\W+", " ", str(x.get("text") or "").lower().replace("ё", "е")).strip()
+        return (what, json.dumps(x.get("repeat") or None, sort_keys=True, ensure_ascii=False), hm, x.get("deliver") or "")
+
+    def job_twin(self, sig):
+        with self._lock:
+            return next((dict(x) for x in self.items if x.get("kind") == "job" and self.job_sig(x) == sig), None)
+
+    def dedupe_jobs(self):
+        """Одинаковые дела по расписанию — оставить первое (раньше созданное). -> сколько убрано."""
+        with self._lock:
+            seen, keep = set(), []
+            for x in sorted(self.items, key=lambda r: str(r.get("created") or "")):
+                if x.get("kind") == "job":
+                    sig = self.job_sig(x)
+                    if sig in seen:
+                        continue
+                    seen.add(sig)
+                keep.append(x)
+            n = len(self.items) - len(keep)
+            if n:
+                ids = {x["id"] for x in keep}
+                self.items = [x for x in self.items if x["id"] in ids]
+                self._save()
+            return n
+
     def upsert(self, item):
         """Синхронизация (sync.py): напоминание с другого устройства — с тем же id (создать или заменить поля).
         Переносятся только at, text, repeat, kind, paused и note_id (заметка с вложениями; нет ключа — не трогаем)."""
