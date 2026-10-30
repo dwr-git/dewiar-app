@@ -44,6 +44,7 @@ STALL_RX = re.compile(r"\b(?:хороший вопрос|дайте подума
 # слова-паразиты: много их в одной фразе — человек подбирает слова
 FILLERS = {"э", "ээ", "эээ", "эм", "эмм", "мм", "ммм", "м", "ну", "короче", "типа", "вот", "значит", "получается",
            "собственно", "какбы", "вобщем", "таксказать"}
+HINT_WAIT_S = 35.0              # первое слово подсказки не пришло за столько секунд — честно «модель не отвечает»
 STUCK_S = 5.0                   # собеседник спросил, вы молчите — столько секунд, и подсказка выделяется
 PAUSE_S = 10.0                  # молчат оба — столько секунд, и тихая подсказка «что сказать дальше»
 PAUSE_AFTER = 60.0              # …но не в первую минуту встречи (знакомятся, настраивают звук)
@@ -131,6 +132,8 @@ class Prompter:
         self._them_voice_t = 0.0
         self._pause_hint_t = 0.0
         self._t0 = 0.0
+        self._stt_err = ""       # распознавание не ответило — почему (показываем в окне)
+        self._stt_busy = 0       # фраз в распознавании сейчас
 
     @property
     def speaker(self):
@@ -149,8 +152,20 @@ class Prompter:
         with self._lock:
             return {"on": self.on, "paused": self.paused, "meeting": dict(self.meeting), "status": self.status,
                     "files": [{"name": f["name"], "chars": f["chars"]} for f in self.files], "lines": self.lines[-30:],
-                    "hints": self.hints[-20:], "sheet": self.sheet, "summary": self.summary,
-                    "brain": bool(self.eng.s.active_llm()), "loopback": True, "voice": self.voice_info()}
+                    "hints": [h for h in self.hints if not h.get("dropped")][-20:], "sheet": self.sheet, "summary": self.summary,
+                    "brain": bool(self.eng.s.active_llm()), "loopback": True, "voice": self.voice_info(), "hear": self.hearing()}
+
+    def hearing(self):
+        """30.10 (владелец: «запись идёт, ничего не пишет и не отвечает — непонятно»): что суфлёр слышит прямо сейчас —
+        для двух огоньков окна. them/me: «talk» — звучит речь, «quiet» — тишина, «off» — не слушаем; stt — фраз в
+        распознавании; err — распознавание не ответило."""
+        now = time.monotonic()
+        m = self.meeting or {}
+        mic = getattr(self.eng, "mic_voice_t", 0.0) or 0.0
+        them = ("off" if not m.get("them") or self.status.startswith("звук компьютера не слышу") else
+                "talk" if now - self._them_voice_t < 1.5 else "quiet")
+        me = "off" if not m.get("me") else "talk" if now - mic < 1.5 else "quiet"
+        return {"them": them, "me": me, "stt": self._stt_busy, "err": self._stt_err, "lines": len(self.lines)}
 
     def _emit(self, kind, **kw):
         self.eng.emit("prompter", kind=kind, **kw)
@@ -440,11 +455,16 @@ class Prompter:
                 who = self._whose(pcm)
                 if who is None:
                     continue
+            self._stt_busy += 1
             try:
                 text = (self.eng.current_stt().transcribe(pcm) or "").strip()
+                self._stt_err = ""
             except Exception as e:  # noqa: BLE001
                 log.info("🎬 Суфлёр: не распознал фразу: %s", e)
+                self._stt_err = str(e)[:160] or "распознавание не ответило"
                 continue
+            finally:
+                self._stt_busy = max(0, self._stt_busy - 1)
             if text:
                 self.add_line(who, text)
 
@@ -502,7 +522,11 @@ class Prompter:
 
     def _watch(self):
         """Поток prompter-watch: «замешкались» после вопроса и долгая пауза в разговоре."""
+        hear_t = 0.0
         while not self._stop.wait(0.5):
+            if time.monotonic() - hear_t >= 1.0:              # огоньки «слышу / тишина» в окне — раз в секунду
+                hear_t = time.monotonic()
+                self._emit("hear", hear=self.hearing())
             m = self.meeting
             if self.paused or m.get("mode") != "auto" or not m.get("nudge", True):
                 continue
@@ -548,6 +572,10 @@ class Prompter:
             raise ValueError("суфлёр выключен — начните встречу")
         if not self.eng.s.active_llm():
             raise ValueError("нужен «Мозг» — выберите модель в студии")
+        with self._lock:
+            cur = next((x for x in reversed(self.hints) if not x.get("dropped")), None)
+        if why == "button" and cur is not None and not cur.get("done") and time.time() - cur["ts"] < HINT_WAIT_S + 5:
+            return {"id": cur["id"], "busy": True}            # 30.10: «20 из 20» пустых — пока пишется, новую не начинаем
         if self._hint_cancel:
             self._hint_cancel.set()
         cancel = threading.Event()
@@ -595,10 +623,13 @@ class Prompter:
 
     def _hint_run(self, h, cancel):
         from llm import LLMError, stream_events
+        def drop():                                    # отменили (пришла новая) — пустую карточку не оставляем
+            h["dropped"] = True
+            self._emit("hint", hint=dict(h))
         if h["why"] == "them":                         # собеседник мог договорить следующей фразой — подождём чуть-чуть
             cancel.wait(0.5)
             if cancel.is_set():
-                return
+                return drop()
             with self._lock:
                 more = [x["text"] for x in self.lines[h["lines_at"]:] if x["who"] == "them"]
             if more:
@@ -621,12 +652,19 @@ class Prompter:
                + ("ШПАРГАЛКА:\n" + "\n".join(f"В: {x['q']} — О: {x['a']}" for x in self.sheet[:10]) + "\n\n" if self.sheet else "")
                + "РАЗГОВОР (последние реплики):\n" + (self._transcript() or "(пока тихо)") + "\n\n"
                + self._ask_line(h["why"], q))
-        prof = dict(self.eng.s.active_llm(), temperature=0.3, max_tokens=360)
+        prof = dict(self.eng.s.active_llm(), temperature=0.3, max_tokens=500)
         text, last, t0 = "", 0.0, time.monotonic()
+        slow = threading.Event()
+
+        def watchdog():                                # модель молчит — не держим пустую карточку бесконечно
+            if not cancel.wait(HINT_WAIT_S) and not text and not h.get("done"):
+                slow.set()
+                cancel.set()
+        threading.Thread(target=watchdog, name="prompter-hint-wait", daemon=True).start()
         try:
             for kind, val in stream_events(prof, HINT_SYSTEM, [{"role": "user", "content": ctx}], cancel=cancel, tools=None):
                 if cancel.is_set():
-                    return
+                    break
                 if kind != "text":
                     continue
                 if not text:
@@ -637,14 +675,29 @@ class Prompter:
                     self._emit("hint", hint=dict(h))
                     last = time.monotonic()
         except LLMError as e:
-            if not cancel.is_set():
+            if not cancel.is_set() or slow.is_set():
                 h.update(text=h["text"] if h["instant"] else "", done=True, error=str(e)[:200])
                 self._emit("hint", hint=dict(h))
+            elif not h["instant"]:
+                drop()
+            return
+        if slow.is_set():
+            h.update(done=True, error=f"модель не ответила за {HINT_WAIT_S:.0f} с — «Мозг» занят или нет связи. Нажмите «Подсказать» ещё раз")
+            self._emit("hint", hint=dict(h))
+            log.info("🎬 Подсказка №%d: модель молчит %.0f с", h["id"], HINT_WAIT_S)
             return
         if cancel.is_set():
+            if not h["instant"]:
+                drop()
             return
+        cancel.set()                                   # сторожу больше нечего ждать
         text = text.strip()
-        if text in ("—", "-", "–") or not text:
+        if (text in ("—", "-", "–") or not text) and h["why"] == "button" and not h["instant"]:
+            # по кнопке человек ждёт ответа — пустую карточку не прячем молча, а говорим почему
+            h.update(done=True, note=("Разговора пока не слышно — подсказать нечего. Как только собеседник заговорит, "
+                                      "подсказки пойдут сами." if not self.lines else
+                                      "Сейчас подсказывать нечего — последняя реплика не вопрос. Нажмите, когда понадобится."))
+        elif text in ("—", "-", "–") or not text:
             h.update(done=True, empty=not h["instant"], text=h["text"] if h["instant"] else "")
         else:
             h.update(text=text, done=True, instant=False)

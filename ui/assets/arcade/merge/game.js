@@ -68,9 +68,23 @@ function slide(g, dir) {
     }
     if (gained) { if (LAND) g.fx.text(CL, 150, '+' + gained, { size: 38, color: '#fff' }); else g.fx.text(BX + SZ / 2, BY - 40, '+' + gained, { size: 34, color: '#fff' }); }
   }
-  setTimeout(() => { addTile(); if (!canMove()) S.over = .001; }, 110);
+  setTimeout(() => { addTile(); if (!canMove()) S.over = .001; else keep(); }, 110);
   return true;
 }
+/* Партия запоминается после каждого хода (идеи №77/78, 30.10: «возможность сохранить текущее состояние, чтобы позже
+   продолжить») — закрыли игру или телефон, потом «Продолжить» с того же места. Кончились ходы или «Новая игра» — забываем. */
+const SAVE = 'arcade.save.merge';
+function keep() {
+  if (S.mode !== 'play') return;
+  A.store.set(SAVE, JSON.stringify({ g: S.grid.map((r) => r.map((t) => (t ? t.v : 0))), s: S.score, w: S.won ? 1 : 0 }));
+}
+function saved() {
+  try {
+    const d = JSON.parse(A.store.get(SAVE, '') || 'null');
+    return d && Array.isArray(d.g) && d.g.length === N && d.g.every((r) => Array.isArray(r) && r.length === N) && d.g.flat().some((v) => v > 0) ? d : null;
+  } catch (e) { return null; }
+}
+function forget() { try { localStorage.removeItem(SAVE); } catch (e) { /* без сохранения */ } }
 function canMove() {
   if (empty().length) return true;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const v = S.grid[y][x].v; if ((x < N - 1 && S.grid[y][x + 1].v === v) || (y < N - 1 && S.grid[y + 1][x].v === v)) return true; }
@@ -85,11 +99,21 @@ function titleScreen(g) {
   g.screen({
     kicker: A.framed ? 'Досуг' : 'Аркада', title: 'Слияние',
     html: `<p>Смахивайте плитки: две одинаковые сливаются в одну — вдвое больше. Сумеете дойти до 2048?</p>${g.best ? `<p class="record">Рекорд: ${g.best.toLocaleString('ru-RU')}</p>` : ''}`,
-    button: 'Играть', onGo: () => start(g)
+    button: saved() ? 'Продолжить' : 'Играть', onGo: () => (saved() ? resumeSaved(g) : start(g)),
+    alt: saved() ? { label: 'Новая игра', onGo: () => start(g) } : undefined
   });
 }
-function start(g) { fresh('play'); g.fx.clear(); g.setPlaying(true); g.playMusic(); }
+function start(g) { forget(); fresh('play'); g.fx.clear(); g.setPlaying(true); g.playMusic(); }
+function resumeSaved(g) {
+  const d = saved(); if (!d) return start(g);
+  fresh('play');
+  S.grid = d.g.map((r, y) => r.map((v, x) => (v > 0 ? { id: ID++, v: +v, x, y, px: x, py: y, born: 0, merged: 0 } : null)));
+  S.score = S.shown = +d.s || 0; S.won = !!d.w;
+  g.fx.clear(); g.setPlaying(true); g.playMusic();
+  g.tip('Продолжаем с того же места');
+}
 function gameOver(g) {
+  forget();
   S.mode = 'over'; g.setPlaying(false); g.stopMusic(); g.sfx('lose');
   const rec = g.submit(S.score);
   g.screen({
@@ -102,7 +126,7 @@ function undo(g) {
   if (!S.undo || S.anim > 0 || S.mode !== 'play') return;
   S.grid = S.undo.grid; S.score = S.undo.score; S.undo = null; S.over = 0;
   for (const r of S.grid) for (const t of r) if (t) { t.px = t.x; t.py = t.y; t.merged = 0; t.born = 1; }
-  g.sfx('whoosh');
+  g.sfx('whoosh'); keep();
 }
 
 /* ---------------- цикл ---------------- */

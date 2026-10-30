@@ -21,7 +21,8 @@ function ideaItem(x) {
   const can = ["plan", "doing", "new"].includes(x.status);
   return `<div class="idi${x.voted ? " on" : ""}" data-id="${x.id}"><button class="idv" ${can ? "" : "disabled"} aria-pressed="${!!x.voted}" aria-label="${x.voted ? "Снять голос" : "Поддержать"}"><svg viewBox="0 0 24 24"><path d="M12 5.5 5.5 13h4v5.5h5V13h4z"/></svg><b>${x.votes}</b></button>
     <div class="idt"><b>${esc(x.title)}</b><span class="idcs">${fresh ? '<em class="idc new">новое</em>' : ""}${x.mine ? '<em class="idc me">ваша</em>' : ""}${chip}</span>
-      ${x.body ? `<p>${esc(x.body)}</p>` : ""}${x.reply ? `<p class="idr">Ответ разработчика: ${esc(x.reply)}</p>` : ""}</div></div>`;
+      ${x.body ? `<p>${esc(x.body)}</p>` : ""}${x.reply ? `<p class="idr">Ответ разработчика: ${esc(x.reply)}</p>` : ""}
+      ${x.mine && x.status === "new" ? `<button class="iddel">Убрать идею</button>` : ""}</div></div>`;
 }
 function ideasHtml() {
   const d = IDV.d || { counts: {} }, c = d.counts || {};
@@ -51,6 +52,13 @@ function ideasRender() {
   box.innerHTML = ideasHtml(); ideasBind();
   if (focus && $("#" + focus)) { const el = $("#" + focus); el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { } }
 }
+function ideasDelBind(root) {                          // своя идея на рассмотрении — убрать (идея №84)
+  $$(".iddel", root).forEach(b => b.onclick = async () => {
+    const id = +b.closest("[data-id]").dataset.id, x = IDV.items.find(i => i.id === id);
+    if (!confirm(`Убрать идею «${(x && x.title) || "№" + id}»? Разработчик её больше не увидит.`)) return;
+    try { await ideaCall("/ideas/delete", {}, { id }); IDV.items = IDV.items.filter(i => i.id !== id); toast("Идея убрана", 2200); ideasLoad(); } catch (e) { toast(e.message, 3500); }
+  });
+}
 function ideasVoteBind(root) {
   $$(".idv", root).forEach(b => b.onclick = async () => {
     const it = b.closest("[data-id]"), id = +it.dataset.id, on = b.getAttribute("aria-pressed") !== "true", n = b.querySelector("b");
@@ -61,7 +69,7 @@ function ideasVoteBind(root) {
   });
 }
 function ideasBind() {
-  ideasVoteBind($("#idlist"));
+  ideasVoteBind($("#idlist")); ideasDelBind($("#idlist"));
   $$("#ideas-body [data-itab]").forEach(b => b.onclick = () => { IDV.tab = b.dataset.itab; IDV.d = null; ideasRender(); ideasLoad(); });
   if ($("#idmore")) $("#idmore").onclick = () => { IDV.page++; ideasLoad(true); };
   $("#idfind").oninput = () => { clearTimeout(IDV.findT); IDV.findT = setTimeout(() => { IDV.q = $("#idfind").value.trim(); ideasLoad(); }, 350); };

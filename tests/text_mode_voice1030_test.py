@@ -64,7 +64,18 @@ with sync_playwright() as p:
     vis = pg.evaluate("(() => { const b = document.getElementById('b-tm'); const c = document.getElementById('corner-l'); return [!b.hidden, getComputedStyle(c).opacity, b.textContent.trim()]; })()")
     ok(vis[0] and float(vis[1]) == 1 and "голос выключен" in vis[2], f"виджет: метка «голос выключен» видна всегда: {vis}")
     pg.evaluate("document.getElementById('b-tm').click()"); pg.wait_for_timeout(300)
-    ok(["text_mode", {"on": False}] in pg.evaluate("calls") and pg.evaluate("document.getElementById('b-tm').hidden"), "нажали — текстовый режим выключен, метка ушла")
+    ok(["text_mode", {"on": False}] in pg.evaluate("calls") and pg.evaluate("document.getElementById('b-tm').hidden")
+       and pg.evaluate("getComputedStyle(document.getElementById('b-tm')).display") == "none", "нажали — текстовый режим выключен, метка ушла (и с экрана)")
+    # 30.10, владелец: «в 0.72 плашка „голос выключен“ висит, даже когда голос включён» — hidden был, а на экране оставалась
+    for skin in ("neusky", "brand"):
+        hp = b.new_page(viewport={"width": 520, "height": 400}); hp.on("pageerror", lambda e: errs.append(str(e)))
+        hp.route(re.compile(r"^https?://"), lambda r: r.abort())
+        hp.add_init_script("window.pywebview = { api: new Proxy({}, { get: () => () => Promise.resolve(true) }) };")
+        hp.add_init_script(CORE.replace("ui: { text_mode: true }", f"ui: {{ text_mode: false, skin: '{skin}' }}"))
+        hp.goto((ROOT / "ui/hud.html").as_uri() + "?port=1&mode=card"); hp.wait_for_timeout(1200)
+        d = hp.evaluate("(() => { const b = document.getElementById('b-tm'); return [b.hidden, getComputedStyle(b).display, b.getBoundingClientRect().width]; })()")
+        ok(d[0] and d[1] == "none" and d[2] == 0, f"голос включён ({skin}) — плашки «голос выключен» нет на экране: {d}")
+        hp.close()
     # студия → «Чат»: строка «Текстовый режим» и вопрос перед включением
     st = b.new_page(viewport={"width": 1300, "height": 900}); st.on("pageerror", lambda e: errs.append(str(e)))
     st.route(re.compile(r"^https?://"), lambda r: r.abort())

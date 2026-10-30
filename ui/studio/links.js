@@ -321,6 +321,8 @@ $("#tg-off").onclick = () => { const own = tgMode === "own";
 $("#wf-on").onclick = () => core.call("settings_save", { patch: { ui: { widget_fail2: 0 } } })
   .then(() => toast("Готово — перезапустите Dewiar (значок в трее → «Выход», затем снова из меню «Пуск»)")).catch(e => toast(e.message));
 core.on("telegram", e => tgFill(e));
+// почта пришла с другого своего компьютера (30.10) — карточка и письма на «Главной» обновляются сами
+core.on("mail", e => { if (e && e.data) { $("#ml-addr").value = ""; mlFill(e.data); } if (typeof hmMailLoad === "function") hmMailLoad(true); });
 /* ---------- серверы ----------
    Вход по ключу SSH: пароль нужен один раз — ядро ставит ключ на сервер и пароль не хранит. ask — когда спрашивать
    разрешение на команды: на каждую или только на меняющие что-то. */

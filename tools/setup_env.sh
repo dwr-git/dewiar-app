@@ -12,7 +12,7 @@ say "Пакеты системы: сборка Android, PHP, ffmpeg"
 $SUDO apt-get update -qq || true
 DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq \
   android-sdk android-sdk-platform-23 android-framework-res dalvik-exchange \
-  php-cli php-sqlite3 php-curl php-mbstring php-gd ffmpeg zip unzip >/dev/null || echo "часть пакетов не встала — смотрите выше"
+  php-cli php-sqlite3 php-curl php-mbstring php-gd ffmpeg zip unzip espeak-ng >/dev/null || echo "часть пакетов не встала — смотрите выше"
 
 say "Python: библиотеки программы"
 pip install -q --break-system-packages -r requirements.txt || echo "requirements.txt — не всё встало"

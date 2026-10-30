@@ -169,6 +169,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from mail import Mail
         self.mail = Mail(workspace=self.workspace)
         self.toolbox.hooks["mail"] = self.mail
+        self.mail.on_change = lambda: self.own_share()     # почта — и на других своих компьютерах (конвертом, 30.10)
+        if self.mail.boxes and not self.mail.at:           # настроена до 0.73 — один раз разослать своим (через 1,5 мин: связь уже есть)
+            t = threading.Timer(90, self.mail._store); t.daemon = True; t.start()
         from recall import Recall
         from obsidian import Obsidian
         self.obsidian = Obsidian(settings, self.workspace, STATE_DIR, emit=self.emit)

@@ -3269,6 +3269,7 @@ dialog.md-dlg[open] { animation: md-in .32s cubic-bezier(.2,.8,.2,1); }
 .id-d { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; max-width: 76ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
 .id-d.open { -webkit-line-clamp: unset; display: block; }
 .id-r { margin: 8px 0 0; font-size: 13px; padding: 8px 12px; border-radius: 12px; background: var(--panel); max-width: 76ch; }
+.id-del { display: inline-block; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
 .id-chip { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: rgba(127,127,140,.16); color: var(--muted); }
 .id-chip.doing { background: rgba(75,227,161,.16); color: var(--good); }
 .id-chip.done { background: rgba(75,227,161,.16); color: var(--good); }
@@ -3357,18 +3358,20 @@ html.st-light .cl-gstack, html.st-neu .cl-gstack { --ring: rgba(255,255,255,.92)
 
 /* группы в меню слева под «Близкими» (groups.js grNav): отступ ступенькой, мини-мозаика лиц, название в строку */
 /* 30.10 (владелец: «группа с полосочкой — аккуратнее»): без линии слева — значок группы встаёт под значок «Близких», строка плоская */
-.nav-groups { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px 18px; }
+/* 30.10, владелец: «группы в „Близких“ сдвинуты и не аккуратно». Теперь — ровно как остальные пункты меню: та же
+   колонка значков (18 px, как у «Близких»), тот же отступ и шрифт; отличаются только мягкой плашкой-значком группы
+   и приглушённым цветом. */
+.nav-groups { display: flex; flex-direction: column; gap: 0; margin: 0; }
 .nav-groups[hidden] { display: none; }
-nav .nav-g { padding: 6px 10px; gap: 10px; font-size: 13px; border-radius: 10px; min-width: 0; box-shadow: none; color: var(--muted); }
+nav .nav-g { padding: 8px 14px; gap: 10px; font-size: 13.5px; border-radius: 12px; min-width: 0; box-shadow: none; color: var(--muted); }
 nav .nav-g:hover { box-shadow: none; background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--ink); }
 nav .nav-g span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-nav .nav-g .nav-gi { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-style: normal;
-  font: 700 11px/1 "Unbounded", "Manrope", sans-serif; color: #fff; background: linear-gradient(145deg, color-mix(in srgb, var(--c, #8b7cff) 78%, #fff), var(--c, #8b7cff));
-  box-shadow: 0 4px 10px -6px var(--c, #8b7cff); }
-nav .nav-g .nav-gi.emo { font: 400 13px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-  background: color-mix(in srgb, var(--c, #8b7cff) 14%, transparent); box-shadow: none; border-radius: 50%; }
-nav .nav-g .cl-gstack { position: relative; width: 24px; height: 24px; flex: none; }
-nav .nav-g .cl-gstack .cl-ava { position: absolute; width: 16px; height: 16px; font-size: 8.5px; margin: 0; }
+nav .nav-g .nav-gi { width: 18px; height: 18px; flex: none; border-radius: 6px; display: grid; place-items: center; font-style: normal;
+  font: 700 9.5px/1 "Unbounded", "Manrope", sans-serif; color: #fff; background: linear-gradient(145deg, color-mix(in srgb, var(--c, #8b7cff) 78%, #fff), var(--c, #8b7cff)); }
+nav .nav-g .nav-gi.emo { font: 400 12px/1 system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  background: color-mix(in srgb, var(--c, #8b7cff) 16%, transparent); }
+nav .nav-g .cl-gstack { position: relative; width: 18px; height: 18px; flex: none; }
+nav .nav-g .cl-gstack .cl-ava { position: absolute; width: 12px; height: 12px; font-size: 7px; margin: 0; }
 nav .nav-g .cl-gstack .cl-ava:first-child { left: 0; top: 0; } nav .nav-g .cl-gstack .cl-ava:nth-child(2) { right: 0; bottom: 0; }
 nav .nav-g .cl-gstack .cl-ava.more { display: none; }
 nav .nav-g em { font-style: normal; font-size: 10.5px; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; background: var(--brand); color: #fff; }
@@ -3959,3 +3962,10 @@ html:not(.st-light) .ch-tmbar b { color: #ffcf7a; }
 #help .hl.sm .hl-dur { top: 6px; left: 6px; font-size: 10.5px; padding: 2px 7px; }
 #help .hl.sm .hl-t { padding: 0; } #help .hl.sm .hl-t b { font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .hl-play { transition: none; } }
+
+/* журнал задачи: порядок записей (идеи №81/82) — сегменты без рамок, выбранный — подложкой цвета темы */
+.tj-bar { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; flex-wrap: wrap; }
+.tj-o { border: 0; cursor: pointer; font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 99px; color: var(--muted); background: rgba(127,127,140,.1); }
+.tj-o.on { color: var(--ink); font-weight: 600; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.tj-o:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tj-bar span { margin-left: auto; font-size: 12.5px; color: var(--muted); }

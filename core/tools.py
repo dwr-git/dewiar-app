@@ -2094,6 +2094,52 @@ def t_money_add(a, ctx):
             "(«Платежи» — это обязательные счета: свет, газ, интернет). В ответе — коротко.")
 
 
+def _money_line(x):
+    from money import fmt
+    return f"{x['date'][8:10]}.{x['date'][5:7]} {'+' if x['kind'] == 'income' else '−'}{fmt(x['amount'], x['currency'])} {x.get('note') or x.get('category') or ''}".strip()
+
+
+def t_money_find(a, ctx):
+    """Идея №75 (30.10): «убрать ошибочную запись или дубль, поменять валюту — голосом нельзя». Сначала найти."""
+    m = ctx.get("money")
+    if m is None:
+        raise ToolError("учёт денег недоступен")
+    import datetime as _dt
+    end = a.get("to") or a.get("date") or _dt.date.today().isoformat()
+    start = a.get("from") or a.get("date") or (_dt.date.today() - _dt.timedelta(days=31)).isoformat()
+    found = m.find(start, end, a.get("amount"), a.get("text") or "", a.get("currency") or "", a.get("kind") or "")
+    if not found:
+        return f"С {start} по {end} таких записей нет. Скажи человеку и спроси, когда это было или на какую сумму."
+    return ("Найдено (id — для money_fix):\n" + "\n".join(f"{x['id']}: {_money_line(x)}" for x in found)
+            + "\nДальше — money_fix с нужными id (удалить или поправить); подтверждение человек даст сам, переспрашивать не нужно."
+            + (" Похожих несколько — уточни у человека, какую, если он не сказал «все»." if len(found) > 1 else ""))
+
+
+def t_money_fix(a, ctx):
+    m = ctx.get("money")
+    if m is None:
+        raise ToolError("учёт денег недоступен")
+    ids = [str(i) for i in (a.get("ids") or []) if str(i).strip()][:50]
+    if not ids:
+        raise ToolError("нет id — сначала money_find")
+    have = {x["id"]: x for x in m.list()}
+    miss = [i for i in ids if i not in have]
+    if miss:
+        raise ToolError("таких записей нет: " + ", ".join(miss) + " — найди заново money_find")
+    if (a.get("action") or "delete") == "delete":
+        for i in ids:
+            m.delete(i)
+        return f"Удалено записей: {len(ids)}. Скажи коротко, что убрано."
+    patch = {k: a[k] for k in ("amount", "currency", "category", "note", "date", "kind") if a.get(k) not in (None, "")}
+    if "currency" in patch:
+        patch["currency"] = str(patch["currency"]).upper()[:6]
+    if not patch:
+        raise ToolError("что поменять? amount, currency, category, note или date")
+    for i in ids:
+        m.update(i, patch)
+    return "Исправлено: " + "; ".join(_money_line(x) for x in m.list() if x["id"] in ids) + ". Скажи коротко."
+
+
 def t_close_send(a, ctx):
     c = ctx.get("close")
     if c is None:
@@ -3055,6 +3101,19 @@ TOOLS = {
                   S({"kind": {"type": "string", "enum": ["expense", "income"]}, "amount": {"type": "number"},
                      "currency": {"type": "string"}, "category": {"type": "string"}, "note": {"type": "string"},
                      "date": {"type": "string"}}, ["kind", "amount"]), "safe", t_money_add, "Деньги: записать"),
+    "money_find": ("Найти записи о деньгах, чтобы удалить или исправить («удали вчерашний кофе», «трата на такси записалась "
+                   "дважды», «это было в гривнах, а не в рублях»). from/to или date — ГГГГ-ММ-ДД (пусто — последний месяц); "
+                   "amount — сумма; text — слова из заметки или категории; currency — код; kind — expense|income. "
+                   "Потом — money_fix с id найденного.",
+                   S({"from": {"type": "string"}, "to": {"type": "string"}, "date": {"type": "string"}, "amount": {"type": "number"},
+                      "text": {"type": "string"}, "currency": {"type": "string"}, "kind": {"type": "string", "enum": ["expense", "income"]}}),
+                   "safe", t_money_find, "Деньги: найти запись"),
+    "money_fix": ("Удалить или исправить найденные записи о деньгах (id — из money_find). action — delete|update; для update — "
+                  "что поменять: amount, currency (код: UAH, RUB, BYN…), category, note, date, kind. Человек подтверждает сам.",
+                  S({"ids": {"type": "array", "items": {"type": "string"}}, "action": {"type": "string", "enum": ["delete", "update"]},
+                     "amount": {"type": "number"}, "currency": {"type": "string"}, "category": {"type": "string"}, "note": {"type": "string"},
+                     "date": {"type": "string"}, "kind": {"type": "string", "enum": ["expense", "income"]}}, ["ids", "action"]),
+                  "confirm", t_money_fix, "Деньги: удалить или исправить"),
     "close_send": ("Написать человеку из «Близких» (переписка между помощниками Dewiar: дойдёт в его приложение, его помощник "
                    "скажет вслух). Только когда пользователь прямо просит написать, передать или сказать кому-то из близких. "
                    "to — имя как сказал пользователь («Андрею», «маме») или группа своих («в группу Семья» — письмо всем в ней); text — само сообщение от лица пользователя, как он сказал бы сам "
@@ -3241,7 +3300,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
              "cancel_reminder", "change_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "remember", "write_diary",
-             "money_add", "money_report", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
+             "money_add", "money_report", "money_find", "money_fix", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
              "client_list", "client_deal", "client_deals"}
 
@@ -3517,6 +3576,16 @@ class Toolbox:
             who = {"clients": "клиентам", "team": "сотрудникам"}.get(args.get("recipients") or "", "по списку")
             return (f"Разослать письмо «{args.get('subject', '')}» — {n} {who}, каждому своё" +
                     (" (реклама: со строкой «отписаться»)" if args.get("kind") == "ads" else "") + "?")
+        if name == "money_fix":
+            m = self.hooks.get("money")
+            ids = [str(i) for i in (args.get("ids") or [])]
+            rows = [x for x in (m.list() if m else []) if x["id"] in ids]
+            what = "; ".join(_money_line(x) for x in rows[:5]) + (f" и ещё {len(rows) - 5}" if len(rows) > 5 else "")
+            if (args.get("action") or "delete") == "delete":
+                return f"Удалить {'запись' if len(rows) == 1 else 'записи'}: {what}?"
+            ch = ", ".join(f"{ {'amount': 'сумма', 'currency': 'валюта', 'category': 'категория', 'note': 'что', 'date': 'дата', 'kind': 'вид'}[k]} → {str(args[k]).upper() if k == 'currency' else args[k]}"
+                           for k in ("amount", "currency", "category", "note", "date", "kind") if args.get(k) not in (None, ""))
+            return f"Исправить ({ch}): {what}?"
         if name == "send_email":
             to = args.get("to") or "вам самим"
             att = args.get("attachments") or []

@@ -24,7 +24,7 @@ def stub():
     e.pending_confirm, e.task_answer_until = None, 0.0
     e.tasks = SimpleNamespace(waiting=lambda: None)
     e.aliases = ALIASES
-    e.personas = SimpleNamespace(wake_map=lambda only=None: {"эва": "eva", "лира": "lira", "патрик": "patrik"})
+    e.personas = SimpleNamespace(wake_map=lambda only=None, **k: {"эва": "eva", "лира": "lira", "патрик": "patrik"})
     e.s = SimpleNamespace(get=lambda *k, default=None: {"persona": "eva"}.get(k[0], default) if len(k) == 1 else default)
     e.follow_up_until = 0.0
     e._wake_phrase = ""

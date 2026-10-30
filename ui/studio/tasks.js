@@ -147,7 +147,7 @@ async function openTask(id) {
     if (tTab === "plan") body = renderPlan(t.plan, ["running", "waiting"].includes(t.status), t.activity);
     if (tTab === "results") body = renderOutputs(t);
     if (tTab === "notebook") body = `<div class="md">${md(t.notebook)}</div><p class="hint">Блокнот — память задачи: факты, номера, договорённости. Ассистент ведёт его сам и сверяется с ним на каждом шаге.</p>`;
-    if (tTab === "journal") body = `<div class="md">${md(t.journal)}</div>`;
+    if (tTab === "journal") body = tJournal(t.journal);
     if (tTab === "summary") body = `<div class="md">${md(t.summary)}</div>`;
     if (tTab === "diff") body = t.diff ? renderDiff(t.diff) : `<div class="fempty">${t.code_state === "accepted" ? "Изменения уже перенесены в проект." : t.code_state === "discarded" ? "Изменения отклонены." : "Изменений пока нет."}</div>`;
     const pr = t.status === "done" ? 1 : (t.progress && t.progress[1] ? t.progress[0] / t.progress[1] : 0);
@@ -235,3 +235,23 @@ function renderUpdate(u) {
     catch (e) { updShow(a.version, "error", e.message); }
   };
 }
+
+/* Журнал задачи: сначала новое (идеи №81/82, 30.10: «когда шагов много, при входе видна первая запись — мотать вниз, чтобы
+   увидеть, что происходит сейчас»). Записи — «**ЧЧ:ММ:СС** · …» (core/tasks.py journal); порядок — переключателем,
+   выбор помнится на этом компьютере. */
+const TJ_KEY = "dewiar_task_journal_order";
+function tjOrder() { try { return localStorage.getItem(TJ_KEY) === "old" ? "old" : "new"; } catch (e) { return "new"; } }
+function tJournal(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return `<div class="fempty">Журнал пока пуст — записи появятся с первым шагом.</div>`;
+  const parts = raw.split(/\n+(?=\*\*\d{1,2}:\d{2}:\d{2}\*\* · )/), ord = tjOrder();
+  const list = ord === "new" ? parts.slice().reverse() : parts;
+  return `<div class="tj-bar" role="group" aria-label="Порядок записей"><button type="button" class="tj-o${ord === "new" ? " on" : ""}" data-tj="new" aria-pressed="${ord === "new"}">Сначала новое</button>`
+    + `<button type="button" class="tj-o${ord === "old" ? " on" : ""}" data-tj="old" aria-pressed="${ord === "old"}">По порядку</button><span>${parts.length} ${plural(parts.length, "запись", "записи", "записей")}</span></div>`
+    + `<div class="md tj">${md(list.join("\n\n"))}</div>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".tj-o"); if (!b) return;
+  try { localStorage.setItem(TJ_KEY, b.dataset.tj); } catch (x) { /* без памяти — только сейчас */ }
+  const box = b.closest(".tj-bar").parentElement; if (tCur && typeof openTask === "function") openTask(tCur); else if (box) box.innerHTML = "";
+});

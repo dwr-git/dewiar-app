@@ -1441,6 +1441,7 @@ body.neu .idv[aria-pressed="true"] { background: linear-gradient(160deg, #ffcf6e
 .idt { flex: 1; min-width: 0; } .idt > b { font-size: 15px; line-height: 1.35; display: block; overflow-wrap: anywhere; }
 .idt p { margin: 5px 0 0; font-size: 13.5px; color: var(--muted, #9aa0b4); line-height: 1.45; }
 .idt p.idr { color: var(--ink, #fff); background: var(--field); padding: 7px 10px; border-radius: 10px; }
+.iddel { margin-top: 6px; padding: 4px 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .idcs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; } .idcs:empty { display: none; }
 .idc { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: rgba(127,127,140,.18); color: var(--muted, #9aa0b4); }
 .idc.ok { background: rgba(75,227,161,.16); color: #4be3a1; } .idc.new { background: rgba(242,169,59,.2); color: #f2a93b; } .idc.me { background: rgba(139,140,247,.2); color: #a9a9ff; }

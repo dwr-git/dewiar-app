@@ -58,7 +58,24 @@ def due_parse(phrase, now=None):
     p = re.sub(r"\s+", " ", (phrase or "").strip())
     if not p:
         return None, ""
-    q = re.sub(r"(?i)\bдо\s+(" + "|".join(WD_GEN) + r")\b", lambda m: "в " + WD_GEN[m.group(1).lower()], p)
+    now = (now or datetime.now()).replace(microsecond=0)
+    # 30.10 (владелец: «ставлю поручение — что ни пиши, не понимает срок»: «сегодня до 24 часов»). Сроки по-людски:
+    # «до конца дня», «до полуночи», «до 24 часов» — сегодня 23:59; «до 18», «к 18 часам», «до 18 часов» — в 18:00;
+    # «до вечера» — 18:00, «до обеда» — 13:00, «до утра» — 9:00, «в течение часа / дня»; «сегодня» вечером — до 23:59.
+    q = p.replace("ё", "е").replace("Ё", "Е")
+    q = re.sub(r"(?i)\b(?:до|к)\s+(?:конца\s+(?:сегодняшнего\s+)?дня|полуноч\w*|24(?::00)?(?:\s*(?:час\w*|ч)\b\.?)?)", "в 23:59", q)
+    q = re.sub(r"(?i)\bв\s+течение\s+(?:сегодняшнего\s+)?дня\b", "в 23:59", q)
+    q = re.sub(r"(?i)\bв\s+течение\s+часа\b", "через 1 час", q)
+    q = re.sub(r"(?i)\b(?:до|к)\s+вечер[ау]\b", "в 18:00", q)
+    q = re.sub(r"(?i)\b(?:до|к)\s+обед[ау]\b", "в 13:00", q)
+    q = re.sub(r"(?i)\b(?:до|к)\s+утр[ау]\b", ("в 9:00" if re.search(r"(?i)завтра|послезавтра|понедельник|вторник|сред|четверг|пятниц|суббот|воскресен|\d{1,2}\s+[а-я]", q)
+                                                    else "завтра в 9:00"), q)
+    months = r"январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр"
+    q = re.sub(r"(?i)\b(?:до|к)\s+(\d{1,2})(?:\s*(?:часов|часам|часа|час|ч)\b\.?)?(?![:.\d])(?!\s*(?:" + months + r"))",
+               lambda m: f"в {m.group(1)}:00" if int(m.group(1)) < 24 else "в 23:59", q)
+    if re.fullmatch(r"(?i)(?:до\s+)?сегодня", q.strip()):
+        q = "сегодня в 18:00" if now.hour < 18 else "в 23:59"
+    q = re.sub(r"(?i)\bдо\s+(" + "|".join(WD_GEN) + r")\b", lambda m: "в " + WD_GEN[m.group(1).lower()], q)
     q = re.sub(r"(?i)\bдо\s+завтра\b", "завтра", q)
     q = re.sub(r"(?i)\bдо\s+(сегодня|послезавтра)\b", r"\1", q)
     q = re.sub(r"(?i)\bдо\s+(\d{1,2}[:.]\d\d)\b", r"в \1", q)
@@ -67,9 +84,7 @@ def due_parse(phrase, now=None):
                lambda m: "в " + {"понедельнику": "понедельник", "вторнику": "вторник", "среде": "среду", "четвергу": "четверг",
                                  "пятнице": "пятницу", "субботе": "субботу", "воскресенью": "воскресенье"}.get(m.group(1).lower(), m.group(1)), q)
     q = re.sub(r"(?i)(?<!в )(?<!к )\b(\d{1,2}:\d\d)\b", r"в \1", q)          # «в четверг 15:00» -> «в четверг в 15:00»
-    if re.fullmatch(r"(?i)сегодня", q):
-        q = "сегодня в 18:00"
-    r = parse("напомни " + q)
+    r = parse("напомни " + q, now)
     if not r:
         return None, p
     at = r["at"]
@@ -593,8 +608,10 @@ class Team:
                 at = datetime.fromisoformat(str(due))
             except ValueError:
                 at, _ = due_parse(str(due))
+                if at is None and re.search(r"(?i)сегодня", str(due)):
+                    raise TeamError(f"срок «{due}» сегодня уже прошёл — скажите, например: «до конца дня» или «завтра к 12»") from None
                 if at is None:
-                    raise TeamError(f"не поняла срок «{due}» — скажите, например: «до пятницы» или «завтра к 12»") from None
+                    raise TeamError(f"не поняла срок «{due}» — скажите, например: «до пятницы», «сегодня до 18» или «завтра к 12»") from None
         with self._lock:
             tid = secrets.token_hex(4)
             t = {"id": tid, "who": mid, "title": title, "note": str(note or "").strip()[:500],

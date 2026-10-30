@@ -172,4 +172,6 @@ ok(Mail(tmp / "old.json", ws).data.get("address") == USER and len(Mail(tmp / "ol
 m.forget(1)
 ok(len(m.boxes) == 1 and m.data["address"] == USER, "«Отключить» второй ящик — главный остался")
 m.forget()
-ok(not m.configured() and not (tmp / "mail.json").exists(), "«Отключить» — всё стёрто")
+_left = (tmp / "mail.json").read_text(encoding="utf-8") if (tmp / "mail.json").exists() else ""
+# 30.10: файл остаётся с одной отметкой времени — «почту отключили» доходит и до других своих компьютеров
+ok(not m.configured() and USER not in _left and "password" not in _left, "«Отключить» — всё стёрто (адрес и пароль)")

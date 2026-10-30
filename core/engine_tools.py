@@ -768,6 +768,9 @@ class ToolsMixin:
         k = self.sync_key.share() if getattr(self, "sync_key", None) else None
         if k:
             out["sync_key"] = k                    # ключ шифрования синхронизации — только своим устройствам, конвертом
+        ml = self.mail.share() if getattr(self, "mail", None) else None
+        if ml:
+            out["mail"] = ml                       # почта с паролями приложений — только своим устройствам, конвертом (30.10)
         return out or None
 
     # ---------- «Взять мозги с другого устройства» (0.56; письмо 28.10: «на компе настроил — другие компы надо легко
@@ -924,6 +927,10 @@ class ToolsMixin:
         if isinstance(ha, dict) and getattr(self, "ha", None) and self.ha.adopt(ha.get("url"), ha.get("token"), ha.get("at")):
             self.emit("tools", tools=self.toolbox.catalog())
             self.emit("ha", data=self.ha.public())
+        ml = (body or {}).get("mail")
+        if isinstance(ml, dict) and getattr(self, "mail", None) and self.mail.adopt(ml.get("boxes"), ml.get("at")):
+            self.emit("tools", tools=self.toolbox.catalog())
+            self.emit("mail", data=self.mail.public())
         k = (body or {}).get("sync_key")
         if isinstance(k, dict) and getattr(self, "sync_key", None) and self.sync_key.adopt(k.get("k"), k.get("at")):
             log.info("🔐 Ключ шифрования синхронизации получен со своего устройства")

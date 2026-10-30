@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -124,6 +125,8 @@ class Knowledge:
         self._tok = {}                     # ключ -> [основы слов каждого отрывка]: не считать их заново на каждый поиск
         self.fstate = {}                   # своя папка -> {files, indexed, skipped, busy, error}
         self.kick = threading.Event()
+        self.folders_t = 0.0                   # когда свои папки последний раз сверялись (time.time)
+        self.folders_done = threading.Event()  # сверка закончилась — поиск, который её ждал, идёт дальше
 
     @property
     def root(self):
@@ -286,17 +289,34 @@ class Knowledge:
                 self._save()
         if changed:
             log.info("Знания: свои папки — обновлено файлов %d", changed)
+        self.folders_t = time.time()
+        self.folders_done.set()
         return changed
 
-    def watch(self, every=1200):
-        """Фоновый поток: свои папки — при запуске, раз в every секунд и сразу по kick (добавили папку в студии)."""
+    def watch(self, every=120):
+        """Фоновый поток: свои папки — при запуске, раз в every секунд и сразу по kick (добавили папку в студии, спросили
+        Лиру). 30.10, №428: «файлы в Документы добавляются через раз или вообще не добавляются» — файл, положенный в свою
+        папку проводником, ждал сверки до 20 минут; теперь — раз в 2 минуты (сверяются только размер и время файлов,
+        читаются лишь новые) и сразу перед поиском."""
+        self._watching = True
         while True:
+            self.folders_done.clear()
             try:
                 self.refresh_folders()
             except Exception:  # noqa: BLE001
                 log.exception("Знания: свои папки")
+                self.folders_done.set()
             self.kick.wait(every)
             self.kick.clear()
+
+    def fresh_folders(self, wait=4.0):
+        """Перед поиском: свои папки давно не сверялись — сверить сейчас (подождать до wait секунд; большие новые
+        файлы дочитаются в фоне)."""
+        if not getattr(self, "_watching", False) or not (self.folders() or self.extra()) or time.time() - self.folders_t < 20:
+            return
+        self.folders_done.clear()
+        self.kick.set()
+        self.folders_done.wait(wait)
 
     def folders_state(self):
         """Для студии: [{path, name, files, indexed, chunks, busy, skipped, error}]."""
@@ -342,6 +362,7 @@ class Knowledge:
 
     def _search(self, query, limit=5, within=None):
         self.refresh()
+        self.fresh_folders()
         q = [w for w in words(query) if len(w) > 2] or words(query)     # короткие основы — только если других нет
         if not q:
             return []

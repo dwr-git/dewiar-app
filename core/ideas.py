@@ -61,6 +61,8 @@ def command(eng, cmd, a):
             return call(url, dev, "/ideas/similar", {"q": a.get("q") or ""})
         if cmd == "ideas_vote":
             return call(url, dev, "/ideas/vote", body={"id": int(a.get("id") or 0), "on": bool(a.get("on"))})
+        if cmd == "ideas_delete":                           # своя, пока на рассмотрении (идея №84)
+            return call(url, dev, "/ideas/delete", body={"id": int(a.get("id") or 0)})
         if cmd == "ideas_new":
             who = (eng.s.get("ui", "who") or "") if hasattr(eng, "s") else ""
             return call(url, dev, "/ideas/new", body={"title": str(a.get("title") or ""), "text": str(a.get("text") or ""),

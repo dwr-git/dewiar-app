@@ -436,6 +436,9 @@
   #corner-l #b-tm { width: auto; padding: 0 8px 0 6px; gap: 5px; display: inline-flex; align-items: center; border-radius: 99px; color: #ffcf7a;
     background: rgba(255,190,90,.14); font: 600 11px Manrope, sans-serif; }
   #corner-l #b-tm:hover { background: rgba(255,190,90,.26); color: #ffe1a8; }
+  /* 30.10, владелец: «в 0.72 плашка „голос выключен“ висит, даже когда голос включён» — правило выше (два id) сильнее
+     [hidden] из общей строки, и метка не пряталась. Скрытая — скрыта, при любой теме. */
+  #corner-l #b-tm[hidden], body.light #corner-l #b-tm[hidden] { display: none; }
   body.light #corner-l #b-tm { color: #7f4a00; background: rgba(255,243,222,.94); box-shadow: 0 1px 4px rgba(120,70,0,.18); }   /* сплошная подложка: метка читается и на ярком портрете (contrast1018) */
   #corner-l.tm:not(:hover):not(:focus-within) #b-bug, #corner-l.tm:not(:hover):not(:focus-within) #b-idea { opacity: 0; }                  /* стоп-кран включён — щит виден всегда */
   /* «Дозор» (0.58): пока Лира присматривает — глаз виден всегда, с числом дозоров и тихим «дыханием» */

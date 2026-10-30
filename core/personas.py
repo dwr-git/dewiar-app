@@ -679,12 +679,15 @@ class Personas:
             raise ValueError("нет такого специалиста")
         return self.save(dict(copy.deepcopy(g), id=gid, gallery=True))
 
-    def wake_map(self, only=None):
+    def wake_map(self, only=None, kids=False):
         """Слово запуска -> id персонажа: wake плюс то, как имя слышит маленький распознаватель Vosk (heard["vosk"]).
-        only — только для одного персонажа."""
+        only — только для одного персонажа. Друг ребёнка (kids: True, «Совёнок Уго») откликается только в детском режиме
+        (kids=True или only=он): 30.10, владелец — «Лира постоянно пишет про Совёнка, я и вчера его видел, и сегодня»."""
         out = {}
         for p in self.all():
             if only and p["id"] != only:
+                continue
+            if p.get("kids") and not kids and only != p["id"]:
                 continue
             for w in list(p.get("wake", [])) + list((p.get("heard") or {}).get("vosk", [])):
                 out[w.lower()] = p["id"]

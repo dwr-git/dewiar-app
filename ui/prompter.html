@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Dewiar — суфлёр</title>
 <link href="assets/fonts.css" rel="stylesheet">
+<link rel="stylesheet" href="assets/skins.css">
 <style>
   /* Суфлёр: окно-карточка поверх всех окон (ui/app.py → open_prompter; скругление 24px совпадает с PROMPTER_RADIUS).
      Ядро — core/prompter.py, событие «prompter» {kind: state|line|hint|sheet|summary|voice}. Виды: подготовка, встреча
@@ -235,6 +236,44 @@
   .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--glass3); border-top-color: var(--cue); animation: rot .9s linear infinite; }
   @keyframes rot { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+  /* 30.10 (владелец: «суфлёр остался в старом стиле»): тема — та же, что у виджета и студии (ui.skin, assets/skins.css,
+     класс skin-… у body). Светлые темы: тёмный текст разной насыщенности, сигналы — глубже, чтобы читались на светлом;
+     неоморфизм — выпуклые блоки из одного материала, поля ввода — вдавленные. */
+  body.skinned #wrap { background: var(--skin-bg); }
+  body.skinned { --scene: var(--skin-bg); --frost: var(--skin-bg); }
+  body.light { --soft: color-mix(in srgb, var(--ink) 88%, transparent); --them: color-mix(in srgb, var(--ink) 80%, transparent);
+               --faint: color-mix(in srgb, var(--ink) 56%, transparent); --glass2: rgba(20,32,60,.06); --glass3: rgba(20,32,60,.1);
+               --shadow: var(--glass-shadow, 0 8px 24px rgba(20,32,60,.12)); --cue: #c8287e; --calm: #1677a8; --bad: #c4324f; --good: #0f7a50; --accent: #5b5fd6; }
+  body.light .over, body.light #endask .card { box-shadow: 0 24px 60px -16px rgba(20,32,60,.35); }
+  body.light #endask { background: rgba(20,32,60,.25); }
+  body.light .place button.on { background: color-mix(in srgb, var(--accent) 16%, var(--glass)); box-shadow: var(--shadow); }
+  body.light .place button.on b, body.light .place button.on svg { color: var(--ink); stroke: var(--accent); }
+  body.light .place button.on small { color: var(--muted); }
+  body.light .seg button.on { box-shadow: var(--shadow); background: var(--glass); }
+  body.neu input[type=text], body.neu textarea { background: var(--glass); box-shadow: inset 3px 3px 7px var(--neu-dark), inset -3px -3px 7px var(--neu-light); }
+  body.neu input[type=text]:focus, body.neu textarea:focus { background: var(--glass); box-shadow: inset 3px 3px 7px var(--neu-dark), inset -3px -3px 7px var(--neu-light), 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+  body.neu .blk { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body.light #why { background: color-mix(in srgb, var(--cue) 14%, transparent); }
+  body.light #src { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+  /* что суфлёр слышит прямо сейчас (владелец: «запись идёт, ничего не пишет — непонятно»): два огонька */
+  #hearbar { display: flex; align-items: center; gap: 8px; margin: -4px 0 10px; flex-wrap: wrap; }
+  .hc { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px 5px 9px; border-radius: 999px; font-size: 12.5px; background: var(--glass2); color: var(--muted); }
+  .hc b { font-weight: 700; color: var(--soft); }
+  .hc i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .hc.talk i { background: var(--good); box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); animation: talk 1.2s infinite; }
+  .hc.talk em { color: var(--good); }
+  .hc.off i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
+  .hc em { font-style: normal; }
+  @keyframes talk { 70% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent); } }
+  #hc-stt { font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  #hc-stt .spin { width: 12px; height: 12px; border-width: 2px; }
+  #hear:empty { display: none; }
+  /* подсказка пишется / нечего подсказать */
+  #head.wait { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 650; color: var(--muted); }
+  #head.note { font-size: 16px; font-weight: 600; color: var(--muted); line-height: 1.45; }
+  #ask[aria-busy="true"] { filter: saturate(.7); opacity: .85; cursor: progress; }
 </style>
 </head>
 <body>
@@ -285,10 +324,15 @@
 
   <!-- встреча -->
   <main id="live" class="hidden">
+    <div id="hearbar" aria-live="polite">
+      <span class="hc" id="hc-them" title="Звук компьютера: голос собеседника в звонке"><i></i><b>Собеседник</b><em>тишина</em></span>
+      <span class="hc" id="hc-me" title="Микрофон: ваш голос"><i></i><b>Вы</b><em>тишина</em></span>
+      <span id="hc-stt"></span>
+    </div>
     <p id="hear"></p>
     <section id="card" class="blk" aria-live="polite">
       <div id="cue"><i></i></div>
-      <div id="empty"><b>Слушаю разговор</b><span>Подсказка появится здесь, когда собеседник спросит или возразит. Нужна прямо сейчас — нажмите «Подсказать» или <kbd>пробел</kbd>.</span></div>
+      <div id="empty"><b>Слушаю разговор</b><span>Когда собеседник спросит или возразит, подсказка появится здесь сама. Нужна прямо сейчас — нажмите «Подсказать» или <kbd>пробел</kbd>.</span><span id="empty-tip"></span></div>
       <div id="q"></div>
       <div id="body" class="hidden"><span id="why"></span><div id="head"></div><ul id="pts"></ul><span id="src"></span></div>
       <div id="err"></div>
@@ -324,6 +368,7 @@
   </div>
 </div>
 <script src="assets/dewiar.js"></script>
+<script src="assets/skins.js"></script>
 <script>
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -442,9 +487,12 @@ function tick() {
   upd(); clockT = setInterval(upd, 1000);
 }
 function inline(t) { return esc(t).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(\d[\d\s.,]*\d|\d)(\s?(?:%|₽|руб[а-яё]*|тал[а-яё]*|\$|€|дн[а-яё]*|недел[а-яё]*|мес[а-яё]*|лет|года?|мест[а-яё]*|шт)(?![а-яё]))/gi, "<b>$1$2</b>"); }
+function askBusy(on) {
+  const b = $("#ask"); b.setAttribute("aria-busy", String(!!on)); b.textContent = on ? "Пишу подсказку…" : "Подсказать";
+}
 function renderHint() {
-  const hs = (st && st.hints || []).filter(h => !h.empty);
-  if (!hs.length) { $("#empty").classList.remove("hidden"); $("#body").classList.add("hidden"); $("#nav").classList.add("hidden"); $("#q").textContent = "";
+  const hs = (st && st.hints || []).filter(h => !h.empty && !h.dropped);
+  if (!hs.length) { askBusy(false); $("#empty").classList.remove("hidden"); $("#body").classList.add("hidden"); $("#nav").classList.add("hidden"); $("#q").textContent = "";
     $("#card").classList.remove("ready", "stuck", "soft"); $("#cue i").style.height = "0"; $("#err").textContent = ""; return; }
   if (follow || idx < 0 || idx >= hs.length) idx = hs.length - 1;
   const h = hs[idx];
@@ -454,6 +502,24 @@ function renderHint() {
   const stuck = !!h.stuck || h.why === "stuck" || h.why === "me", soft = h.why === "pause";
   $("#card").classList.toggle("stuck", stuck); $("#card").classList.toggle("soft", soft && !stuck);
   $("#why").textContent = stuck ? "Начните так" : soft ? "Можно сказать" : "";
+  const writing0 = !h.done && !h.instant && !String(h.text || "").trim();
+  if (writing0 || h.note || (h.error && !String(h.text || "").trim())) {
+    // пишется (слов ещё нет) / нечего подсказать / модель не ответила — словами, а не пустая карточка с курсором
+    const secs = Math.max(0, Math.round(Date.now() / 1000 - (h.ts || Date.now() / 1000)));
+    $("#head").className = writing0 ? "wait" : "note";
+    $("#head").innerHTML = writing0 ? `<span class="spin"></span>Пишу подсказку…${secs >= 4 ? ` ${secs} с` : ""}`
+      : esc(h.note || "Модель не ответила — нажмите «Подсказать» ещё раз.");
+    $("#pts").innerHTML = ""; $("#src").innerHTML = ""; $("#why").textContent = "";
+    $("#card").classList.remove("stuck", "soft"); $("#card").classList.toggle("ready", !writing0);
+    $("#cue i").style.height = writing0 ? "18%" : "100%";
+    $("#inst").classList.add("hidden");
+    $("#err").textContent = h.error && !h.note ? "Почему: " + h.error : "";
+    $("#nav").classList.toggle("hidden", hs.length < 2); $("#pos").textContent = `${idx + 1} из ${hs.length}`;
+    askBusy(writing0);
+    return;
+  }
+  askBusy(!h.done && !h.instant);
+  $("#head").className = "";
   const lines = String(h.text || "").split("\n").map(s => s.trim()).filter(Boolean);
   const src = lines.find(s => /^источник\s*:/i.test(s));
   const rest = lines.filter(s => s !== src);
@@ -474,6 +540,21 @@ function renderHint() {
   $("#nav").classList.toggle("hidden", hs.length < 2);
   $("#pos").textContent = `${idx + 1} из ${hs.length}`;
 }
+function renderHear() {
+  const h = (st && st.hear) || {}, m = (st && st.meeting) || {};
+  const chip = (id, v, offText) => { const el = $(id); el.className = "hc " + (v || "quiet");
+    el.querySelector("em").textContent = st && st.paused ? "пауза" : v === "talk" ? "слышу" : v === "off" ? offText : "тишина"; };
+  chip("#hc-them", h.them, "не слушаю"); chip("#hc-me", h.me, "не слушаю");
+  $("#hc-stt").innerHTML = h.stt > 0 ? `<span class="spin"></span>распознаю речь…` : "";
+  // подсказки на пустом месте: что делать, если ничего не слышно
+  const tip = $("#empty-tip");
+  if (tip) tip.textContent = st && st.paused ? "" : h.them === "off" && m.place !== "live" && m.them ? "Звук компьютера не слышу — подсказки по кнопке и на ваши фразы."
+    : !h.lines && st && st.meeting && Date.now() / 1000 - st.meeting.started > 25 && h.them !== "talk" && h.me !== "talk"
+      ? "Пока никто не говорит. Онлайн-встреча: звук собеседника должен идти через этот компьютер (колонки или наушники). Вы — в микрофон." : "";
+  const err = h.err ? `Распознавание речи не отвечает (${h.err}). Проверьте «Слух» в студии.` : "";
+  if (!(st && st.paused) && !/не слышу|не слушаю/.test(st && st.status || "")) $("#hear").textContent = err;
+  $("#hear").classList.toggle("bad", !!err || /не слышу|не слушаю/.test(st && st.status || "") || !!(st && st.paused));
+}
 function renderTalk() {
   const ls = (st && st.lines || []).slice(-5);
   $("#talk").innerHTML = ls.length ? ls.map(l => `<div class="ln ${l.who}"><span>${l.who === "them" ? "Собеседник" : "Вы"}</span><span>${esc(l.text)}</span></div>`).join("")
@@ -492,11 +573,11 @@ function render() {
   if (st.on) {
     show("live"); tick();
     $("#title").textContent = $("#title").title = (st.meeting && st.meeting.title) || "Встреча";
-    $("#hear").textContent = st.paused ? "На паузе — не слушаю." : (st.status || "");
+    $("#hear").textContent = st.paused ? "На паузе — не слушаю. Продолжить — ▶ вверху." : /не слышу|не слушаю/.test(st.status || "") ? st.status : "";
     $("#hear").classList.toggle("bad", /не слышу|не слушаю/.test(st.status || "") || st.paused);
     $("#b-pause").title = st.paused ? "Продолжить" : "Пауза — не слушать";
     $("#b-pause").innerHTML = st.paused ? '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg>';
-    renderHint(); renderTalk(); renderSheet();
+    renderHint(); renderTalk(); renderSheet(); renderHear();
   } else if (view === "live" || view === "sum") {
     clearInterval(clockT); $("#title").textContent = "Итог встречи"; show("sum");
   } else { $("#title").textContent = "Суфлёр"; show("setup"); }
@@ -515,7 +596,11 @@ function renderSum(e) {
   if ($("#again")) $("#again").onclick = () => { show("setup"); $("#title").textContent = "Суфлёр"; };
   if ($("#done")) $("#done").onclick = closeWin;
 }
-$("#ask").onclick = () => { follow = true; core.call("prompter_hint", {}).catch(e => { $("#err").textContent = e.message; }); };
+$("#ask").onclick = () => {
+  follow = true; askBusy(true);
+  core.call("prompter_hint", {}).then(() => renderHint()).catch(e => { askBusy(false); $("#err").textContent = e.message; });
+};
+setInterval(() => { if (view === "live" && $("#head").classList.contains("wait")) renderHint(); }, 1000);   // «Пишу подсказку… 7 с»
 $("#b-pause").onclick = () => core.call("prompter_pause", { on: !(st && st.paused) });
 $("#b-stop").onclick = () => core.call("prompter_stop", { summary: true });
 $("#b-sheet").onclick = () => { renderSheet(); $("#sheet").classList.toggle("hidden"); };
@@ -541,13 +626,24 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (view !== "live" || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
-  if (e.key === " " || e.key === "Enter") { e.preventDefault(); $("#ask").click(); }
+  if (e.key === " " || e.key === "Enter") { e.preventDefault(); if (!e.repeat) $("#ask").click(); }   // зажатый пробел — одна подсказка, не двадцать
   else if (e.key === "ArrowLeft") $("#prev").click();
   else if (e.key === "ArrowRight") $("#next").click();
   else if (e.key === "Escape") $("#sheet").classList.add("hidden");
 });
 
 /* ---------- события ядра ---------- */
+function applyTheme(ui) {                       // тема виджета и студии (ui.skin) — и у суфлёра
+  if (!window.dewiarSkin) return;
+  const sk = dewiarSkin((ui || {}).skin);
+  (window.DEWIAR_SKIN_IDS || []).forEach(k => document.body.classList.toggle("skin-" + k, k === sk.id));
+  document.body.classList.toggle("skinned", true);
+  document.body.classList.toggle("light", !!sk.light); document.body.classList.toggle("neu", !!sk.neu);
+  const bg = getComputedStyle(document.body).getPropertyValue("--skin-bg").trim();
+  if (bg) document.documentElement.style.background = document.body.style.background = bg;
+}
+core.on("hello", (d) => { applyTheme(d && d.settings && d.settings.ui); });
+core.on("settings", (e) => applyTheme(((e || {}).settings || {}).ui));
 core.on("hello", () => core.call("prompter_state").then(s => { st = s; render(); if (!s.on && s.summary && view === "sum") renderSum({ summary: s.summary }); }).catch(() => {}));
 core.on("prompter", (e) => {
   if (e.kind === "state") {
@@ -557,6 +653,7 @@ core.on("prompter", (e) => {
     return;
   }
   if (!st) return;
+  if (e.kind === "hear") { st.hear = e.hear; if (view === "live") renderHear(); return; }
   if (e.kind === "line") { st.lines = (st.lines || []).concat([e.line]).slice(-30); if (view === "live") renderTalk(); }
   else if (e.kind === "hint") {
     const hs = st.hints || (st.hints = []); const i = hs.findIndex(h => h.id === e.hint.id);

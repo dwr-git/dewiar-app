@@ -16,6 +16,7 @@ import mimetypes
 import os
 import re
 import smtplib
+import time
 import ssl
 import threading
 from email.header import decode_header, make_header
@@ -372,28 +373,61 @@ class Mail:
             raw = {}
         lst = raw.get("boxes") if isinstance(raw, dict) and isinstance(raw.get("boxes"), list) else ([raw] if raw else [])
         self.boxes = [Box(d, workspace, self._store) for d in lst if isinstance(d, dict) and d]
+        self.at = int(raw.get("at") or 0) if isinstance(raw, dict) and isinstance(raw.get("boxes"), list) else 0
+        self.on_change = None    # почту поменяли здесь — разослать своим устройствам конвертом (engine: own_share)
 
     @property
     def data(self):                                  # прежнее поле: настройки главного ящика
         return self.boxes[0].data if self.boxes else {}
 
-    def _store(self):
+    def _store(self, at=None, quiet=False):
+        """Записать mail.json. at — когда настройки поменялись (мс; своё изменение — сейчас), quiet — пришло с другого
+        устройства: обратно не рассылаем."""
         with self._lock:
+            self.at = int(at if at is not None else time.time() * 1000)
             live = [b.data for b in self.boxes if b.data.get("address")]
-            if not live:
-                try:
-                    self.path.unlink()
-                except OSError:
-                    pass
-                return
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"boxes": live}, ensure_ascii=False, indent=2), encoding="utf-8")
+            # без ящиков файл остаётся с отметкой времени: «почту отключили» тоже доходит до других устройств
+            tmp.write_text(json.dumps({"boxes": live, "at": self.at}, ensure_ascii=False, indent=2), encoding="utf-8")
             try:
                 os.chmod(tmp, 0o600)
             except OSError:
                 pass
             tmp.replace(self.path)
+        if not quiet and callable(self.on_change):
+            try:
+                self.on_change()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # ---------- между своими устройствами (30.10, владелец: «на рабочем компьютере добавил почту — дома её не вижу») ----------
+    # Ящики с паролями приложений уходят только конвертом своим устройствам (сквозное шифрование «Близких», как умный
+    # дом) — сайт их не видит. Новее — заменяет: подключили, поменяли пароль, отключили — то же на всех компьютерах.
+    def share(self):
+        """-> {boxes, at} или None (почту здесь ни разу не настраивали)."""
+        if not self.at and not self.boxes:
+            return None
+        return {"boxes": [dict(b.data) for b in self.boxes if b.data.get("address")], "at": int(self.at or 1)}
+
+    def adopt(self, boxes, at):
+        """Почта с другого своего устройства. Новее здешней — берём. -> True, если что-то поменялось."""
+        try:
+            at = int(at or 0)
+        except (TypeError, ValueError):
+            return False
+        if at <= int(self.at or 0) or not isinstance(boxes, list):
+            return False
+        keep = ("address", "name", "password", "login", "smtp_host", "smtp_port", "smtp_security", "imap_host", "imap_port", "help", "provider")
+        clean = [{k: v for k, v in d.items() if k in keep} for d in boxes[:8] if isinstance(d, dict) and d.get("address")]
+        if not self.at and self.boxes:
+            # здесь почту настроили до 0.73 сами (без отметки времени) — свои ящики не теряем, а добавляем пришедшие
+            have = {(b.data.get("address") or "").lower() for b in self.boxes}
+            clean = [b.data for b in self.boxes] + [d for d in clean if d["address"].lower() not in have]
+        self.boxes = [Box(d, self.ws, self._store) for d in clean]
+        self._store(at=at, quiet=True)
+        log.info("✉ Почта с другого своего устройства: %s", ", ".join(d["address"] for d in clean) or "отключена")
+        return True
 
     def box(self, which=None):
         """Ящик по номеру или адресу (None — главный)."""

@@ -791,6 +791,8 @@ class CommandsMixin:
                     self.s.update({"knowledge": {"folders": cur}})
                     kn.kick.set()
                     self.emit("tools", tools=self.toolbox.catalog())
+                elif time.time() - getattr(kn, "folders_t", 0) > 20:
+                    kn.kick.set()                    # открыли «Документы» — свою папку сверить сейчас (№428), студия спросит снова
                 return kn.folders_state()
             return {"folder": str(kn.root), "files": kn.list()}
         if cmd == "report":

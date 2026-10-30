@@ -1315,17 +1315,31 @@
       this._looking = true; this.lookX = cl(x); this.lookY = cl(y); this._wake();
       this._stillAt = Math.max(this._stillAt || 0, performance.now() + 600);
     }
-    sounding(now = performance.now()) {
+    _stillReady() {
+      if (!this._sizedPaint) return false;
+      if (this.img && !this.img.complete) return false;
+      if (this.live) { const L = liveSet(this.live); if (!L.ready && !L.failed) return false; }
+      if (this.cover && (!this._cov || (!this._cov.ok && !this._cov.img.complete))) return false;
+      return true;
+    }
+        sounding(now = performance.now()) {
       if (this._voiceSeen) return now - (this._voiceAt || 0) < 400;
       if (this._audibleKnown) return this._audible;
       return !this.voiceLevels;
     }
     draw(now) {
       if (this.paused) return 400;                           // окно спрятано — не рисуем (и проверяем редко)
-      if (this.still && this.state === "idle" && now > this._stillAt) return 400;   // неподвижный кадр уже нарисован
+      // неподвижный кадр: замираем, только когда он нарисован целиком — фото, слои живого лица и обложка загрузились,
+      // а у холста есть размер (30.10, владелец: «персонажи без изображений — появляются, только когда наведу мышь»:
+      // фото приходило позже 1,5 с, и кадр замирал пустым)
+      if (this.still && this.state === "idle" && now > this._stillAt) {
+        if (this._stillReady()) return 400;
+        this._stillAt = now + 250;
+      }
       const cv = this.canvas, dpr = window.devicePixelRatio || 1;
       const w = cv.clientWidth, h = cv.clientHeight;
-      if (!w || !h) return;
+      if (!w || !h) { this._sizedPaint = false; return; }
+      this._sizedPaint = true;
       const st = STATE[this.state] || STATE.idle;
       // экономим CPU: в покое (и под пластинку) ~25 кадров/с, без микрофона или связи ~8, в работе до ~70
       let minDt = this.vinyl && (this.state === "idle" || this.state === "muted") ? 40 :

@@ -469,6 +469,26 @@ class Money:
             out = [dict(x) for x in self.items if s <= x["date"] <= e]
         return sorted(out, key=lambda x: (x["date"], x.get("created", 0)), reverse=True)
 
+    def find(self, start=None, end=None, amount=None, text="", currency="", kind="", limit=20):
+        """Записи для правки голосом (идея №75): период, сумма (±0,01), слова в заметке или категории, валюта, вид.
+        -> копии, новые сначала (не больше limit)."""
+        words = [w for w in re.findall(r"[\wё]{3,}", str(text or "").lower().replace("ё", "е"))]
+        out = []
+        for x in self.list(start, end):
+            if amount not in (None, "") and abs(float(x["amount"]) - float(amount)) > 0.011:
+                continue
+            if currency and x["currency"].upper() != str(currency).upper():
+                continue
+            if kind in ("expense", "income") and x["kind"] != kind:
+                continue
+            hay = f"{x.get('note', '')} {x.get('category', '')} {x.get('said', '')}".lower().replace("ё", "е")
+            if words and not all(w[:max(3, len(w) - 2)] in hay for w in words):
+                continue
+            out.append(x)
+            if len(out) >= limit:
+                break
+        return out
+
     def summary(self, start=None, end=None):
         """Итоги за период: по каждой валюте — доходы, расходы, остаток и категории; days — по дням, только для
         первой валюты по алфавиту (валюты не складываем)."""

@@ -3693,6 +3693,11 @@ function toolSpecs() {
       parameters: O({ kind: { type: "string", enum: ["expense", "income"] }, amount: NUM, currency: STR, category: STR, note: STR }, ["kind", "amount"]) },
     { name: "month_summary", description: "Итоги месяца пользователя («Мой месяц с Лирой»): сделанные дела и траты — когда спрашивают «как прошёл мой месяц», «итоги октября», «что я сделал за месяц». month — 2026-10, prev — прошлый, пусто — текущий.", parameters: O({ month: STR }) },
     { name: "money_report", description: "Итоги по деньгам: period today|week|month|year.", parameters: O({ period: { type: "string", enum: ["today", "week", "month", "year"] } }) },
+    // идея №75 (30.10): «убрать ошибочную запись или дубль, поменять валюту — голосом нельзя»
+    { name: "money_find", description: "Найти записи о деньгах, чтобы удалить или исправить («удали вчерашний кофе», «такси записалось дважды», «это было в гривнах»). date или from/to — ГГГГ-ММ-ДД (пусто — последний месяц), amount — сумма, text — слова из заметки или категории, currency — код. Потом — money_fix с id.",
+      parameters: O({ date: STR, from: STR, to: STR, amount: NUM, text: STR, currency: STR }) },
+    { name: "money_fix", description: "Удалить (action delete) или исправить (action update: amount, currency, category, note) записи по id из money_find. Первый вызов ничего не меняет — скажет, о чём спросить; после «да» пользователя вызови снова с теми же данными и confirmed: true.",
+      parameters: O({ ids: { type: "array", items: STR }, action: { type: "string", enum: ["delete", "update"] }, amount: NUM, currency: STR, category: STR, note: STR, confirmed: { type: "boolean" } }, ["ids", "action"]) },
     { name: "call_persona", description: "Позвать другого персонажа команды по имени (он ответит своим голосом).", parameters: O({ name: STR }, ["name"]) },
     { name: "make_app", description: "Сделать мини-программу или страницу прямо на телефоне: калькулятор, игра, таймер, конвертер, викторина, шпаргалка, открытка, презентация (слайды листаются кнопками и свайпом). html — ОДИН самодостаточный HTML-файл: CSS и JS внутри, без внешних файлов и библиотек, компактный код; под экран телефона (крупные кнопки), тёмная тема, по-русски. title — короткое название. Программа сразу откроется на экране и сохранится в «Мой день» → «Сделанное».",
       parameters: O({ title: STR, html: STR }, ["title", "html"]) },
@@ -3942,6 +3947,27 @@ async function runTool(name, a) {
       return `Записано: ${x.kind === "income" ? "+" : "−"}${x.amount} ${x.currency}, ${x.category}.`;
     }
     case "money_report": return moneyReport(a.period || "month").text;
+    case "money_find": {
+      const today = isoLocal(new Date()).slice(0, 10), from = a.from || a.date || isoLocal(new Date(Date.now() - 31 * 864e5)).slice(0, 10), to = a.to || a.date || today;
+      const words = String(a.text || "").toLowerCase().replace(/ё/g, "е").match(/[\wа-я]{3,}/g) || [];
+      const found = money().filter(x => x.date >= from && x.date <= to && (a.amount == null || a.amount === "" || Math.abs(+x.amount - +a.amount) < 0.011)
+        && (!a.currency || String(x.currency).toUpperCase() === String(a.currency).toUpperCase())
+        && words.every(w => `${x.note || ""} ${x.category || ""}`.toLowerCase().replace(/ё/g, "е").includes(w.slice(0, Math.max(3, w.length - 2)))))
+        .sort((p, q) => q.date < p.date ? -1 : 1).slice(0, 20);
+      if (!found.length) return `С ${from} по ${to} таких записей нет. Скажи человеку и спроси, когда это было или на какую сумму.`;
+      return "Найдено (id — для money_fix):\n" + found.map(x => `${x.id}: ${moneyLine(x)}`).join("\n") + (found.length > 1 ? "\nПохожих несколько — уточни, какую, если человек не сказал «все»." : "");
+    }
+    case "money_fix": {
+      const ids = (a.ids || []).map(String), m = money(), rows = m.filter(x => ids.includes(String(x.id)));
+      if (!rows.length) return "Ошибка: таких записей нет — найди заново money_find.";
+      const del = (a.action || "delete") === "delete", patch = {};
+      ["amount", "currency", "category", "note"].forEach(k => { if (a[k] != null && a[k] !== "") patch[k] = k === "currency" ? String(a[k]).toUpperCase().slice(0, 6) : k === "amount" ? +a[k] : String(a[k]); });
+      const what = rows.slice(0, 5).map(moneyLine).join("; ");
+      if (!del && !Object.keys(patch).length) return "Ошибка: что поменять — amount, currency, category или note?";
+      if (!a.confirmed) return `Спроси пользователя: «${del ? "Удалить" : "Исправить (" + Object.entries(patch).map(([k, v]) => ({ amount: "сумма", currency: "валюта", category: "категория", note: "что" })[k] + " → " + v).join(", ") + ")"} ${what}?» Только после «да» вызови money_fix снова с теми же данными и confirmed: true.`;
+      if (del) saveMoney(m.filter(x => !ids.includes(String(x.id)))); else { rows.forEach(x => Object.assign(x, patch)); saveMoney(m); }
+      return del ? `Удалено записей: ${rows.length}.` : "Исправлено: " + rows.map(moneyLine).join("; ") + ".";
+    }
     case "month_summary": return monthSummary(a.month);                // «Мой месяц с Лирой» (0.61)
     case "close_send": {
       if (a.remind_when) {                                   // «Лира в группе»: напоминание у всех участников (groups.js)
@@ -4900,6 +4926,7 @@ function openMonth(ym) {
   $("#mon-prev").onclick = () => go(-1); $("#mon-next").onclick = () => go(1);
   if ($("#mon-say")) $("#mon-say").onclick = () => { closeSheets(); ask(`Как прошёл мой ${d.title} ${d.y}?`); };
 }
+function moneyLine(x) { return `${String(x.date).slice(8, 10)}.${String(x.date).slice(5, 7)} ${x.kind === "income" ? "+" : "−"}${x.amount} ${x.currency} ${x.note || x.category || ""}`.trim(); }
 function moneyReport(p) {
   const from = periodStart(p), items = money().filter(x => x.date >= from), by = {};
   items.forEach(x => { const c = by[x.currency] = by[x.currency] || { inc: 0, exp: 0, cats: {} }; if (x.kind === "income") c.inc += x.amount; else { c.exp += x.amount; c.cats[x.category] = (c.cats[x.category] || 0) + x.amount; } });

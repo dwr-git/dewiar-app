@@ -39,7 +39,7 @@ class AudioMixin:
             self.spotter = NoSpotter()
             self.asr_names = sorted(self.personas.wake_map(only=only))
             self.aliases = {p["id"]: p.get("aliases") or p.get("wake") or [p["name"]]
-                            for p in self.personas.all() if not only or p["id"] == only}
+                            for p in self.personas.all() if (not only or p["id"] == only) and (not p.get("kids") or only == p["id"])}
             return
         wm = self.personas.wake_map(only=only)
         words = {w for phrase in wm for w in phrase.split()}
@@ -63,7 +63,7 @@ class AudioMixin:
         self.asr_names = sorted(p for p in wm if p not in fast)
         self.spotter = WakeSpotter(self.vosk_model, fast, self.decoys)
         self.aliases = {p["id"]: p.get("aliases") or p.get("wake") or [p["name"]]
-                        for p in self.personas.all() if not only or p["id"] == only}
+                        for p in self.personas.all() if (not only or p["id"] == only) and (not p.get("kids") or only == p["id"])}
         log.info("Имена (мгновенно): %s; через точное распознавание: %s",
                  ", ".join(sorted(fast)) or "—", ", ".join(self.asr_names) or "—")
         self._names_note()
@@ -80,11 +80,16 @@ class AudioMixin:
         """Подсказка, если имя персонажа пока нечем надёжно услышать."""
         if not self.asr_names or not self.s.get("audio", "asr_wake") or self.wake_checker() is not None:
             return
-        wm = self.personas.wake_map()
-        untaught = [n for n in self.asr_names if not self.voiceprints.has(wm.get(n, ""))]
-        if untaught:
-            names = ", ".join(n.capitalize() for n in untaught)
-            self.note(f"Научите меня имени «{names}»: студия → «Слух» → «Научить имени» (три раза сказать имя).")
+        kids = getattr(self, "kids", None)
+        wm = self.personas.wake_map(kids=bool(kids and kids.on()))
+        untaught = sorted({n.capitalize() for n in self.asr_names if n in wm and not self.voiceprints.has(wm.get(n, ""))})
+        if not untaught:
+            return
+        names = ", ".join(untaught)
+        if (self.s.get("ui", "names_note") or "") == names:     # тот же совет — один раз, а не при каждом запуске
+            return
+        self.s.update({"ui": {"names_note": names}})
+        self.note(f"Научите меня имени «{names}»: студия → «Слух» → «Научить имени» (три раза сказать имя).")
 
     def apply_engines(self):
         """Выставляет распознаватель и удалённый голос по настройкам и сообщает статус в интерфейс.
@@ -1155,7 +1160,7 @@ class AudioMixin:
             return True
         if mode == "main":
             try:
-                return self.personas.wake_map().get(phrase) not in (None, self.s.get("persona"))
+                return self.personas.wake_map(kids=True).get(phrase) not in (None, self.s.get("persona"))
             except Exception:  # noqa: BLE001
                 return False
         return False
@@ -1366,7 +1371,7 @@ class AudioMixin:
         if not pid and by_wake and dur is not None and dur <= 1.6 and len(text.split()) <= 2 and self._name_like(text):
             # Быстрый слух услышал имя, а точная модель в короткой фразе ослышалась («Игрова», «Элла» вместо «Эва»):
             # это и было имя. Слушаем вопрос, а не гаснем и не отправляем «Эллу» модели как вопрос.
-            spotted = self.personas.wake_map().get(getattr(self, "_wake_phrase", ""))
+            spotted = self.personas.wake_map(kids=True).get(getattr(self, "_wake_phrase", ""))
             if spotted:
                 log.info("🎤 Имя «%s» слышно, распознано как «%s» — слушаю вопрос", self._wake_phrase, text or "—")
                 if spotted != self.s.get("persona"):
@@ -1441,7 +1446,7 @@ class AudioMixin:
         и так проверяет точная модель. -> (pid, конец имени в тексте) или (None, 0)."""
         off = getattr(self, "_wake_off", None)
         self._wake_off = None
-        spotted = self.personas.wake_map().get(getattr(self, "_wake_phrase", ""))
+        spotted = self.personas.wake_map(kids=True).get(getattr(self, "_wake_phrase", ""))
         if not spotted or off is None or off > 2.0 or getattr(self, "_noisy", lambda: False)():
             return None, 0
         m = re.match(r"\s*([\w-]+)", text)
