@@ -103,11 +103,12 @@ function mmTime() {
 async function mmPoll() {
   clearTimeout(MMV.timer);
   const on = $("#p-music") && $("#p-music").classList.contains("cur") && !document.hidden;
-  if (on) { try { mmVisTake(await core.call("mm_vis")); } catch (e) { /* ядро занято — в следующий раз */ } }
-  MMV.timer = setTimeout(mmPoll, on && MMV.playing ? 120 : 1000);
+  if (!on) { MMV.timer = 0; return; }                    // раздел закрыт или окно свёрнуто — не спрашиваем; вернутся — mmVisStart
+  try { mmVisTake(await core.call("mm_vis")); } catch (e) { /* ядро занято — в следующий раз */ }
+  MMV.timer = setTimeout(mmPoll, MMV.playing ? 120 : 1000);
 }
 function mmDraw(now) {
-  const cv = $("#mm-vis"); if (!cv || !cv.isConnected) { MMV.raf = 0; return; }
+  const cv = $("#mm-vis"); if (!cv || !cv.isConnected || !secOn("music")) { MMV.raf = 0; return; }   // не видно — стоим
   const box = cv.parentElement, dpr = Math.min(2, window.devicePixelRatio || 1), W = box.clientWidth, H = box.clientHeight;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
@@ -132,6 +133,7 @@ function mmDraw(now) {
   MMV.raf = still ? 0 : requestAnimationFrame(mmDraw);
 }
 function mmVisStart() { if (!MMV.raf) MMV.raf = requestAnimationFrame(mmDraw); mmPoll(); }
+document.addEventListener("visibilitychange", () => { if (secOn("music")) mmVisStart(); });
 function loadMyMusic() { mmVisStart(); rsTab(); mmRefresh().then(mmLoadList); if (typeof rcLoad === "function") rcLoad(); }
 if ($("#p-music")) {
   core.on("mymusic", e => { if (!$("#p-music").classList.contains("cur")) return; mmData = Object.assign(mmData || {}, e); mmNow(mmData); mmStats(mmData); if (!e.busy) mmLoadList(); });

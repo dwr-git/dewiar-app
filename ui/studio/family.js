@@ -103,5 +103,5 @@ if ($("#p-family")) {
     $("#fm-bname").value = ""; $("#fm-bamt").value = ""; $("#fm-bdue").value = "";
   };
   core.on("family", (e) => { const people = FM && FM.people; FM = Object.assign({}, e, { people: people || [] }); fmRender(); });
-  core.on("hello", () => fmLoad());
+  core.on("hello", () => { if (secSeen("family") || ((S && S.features) || {}).family === true) fmLoad(); });   // точка «позвали в семью» — только у включивших «Семью»
 }

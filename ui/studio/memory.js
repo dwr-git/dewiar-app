@@ -1,7 +1,7 @@
 /* Студия Dewiar, раздел «Память»: карта памяти (граф), список заметок и редактор, поиск по записям.
    Команды ядра: memory_graph (узлы и связи со статистикой), ws_tree/ws_read/ws_write/ws_rename/ws_new_note/ws_delete/ws_open
-   (заметки в папке ассистента), recall (поиск по тексту). Пока раздел открыт, core.js обновляет граф раз в 30 с
-   (mTimer, loadMemory(true)). Здесь же объявлены LS (хранилище настроек окна), plural и MN_TEXT — ими пользуются и другие файлы.
+   (заметки в папке ассистента), recall (поиск по тексту). Пока раздел виден, граф обновляется раз в 30 с
+   (secPoll из core.js — закрыли раздел или свернули окно, опроса нет). Здесь же объявлены LS (хранилище настроек окна), plural и MN_TEXT — ими пользуются и другие файлы.
    Файлы студии подключаются по порядку из ui/settings.html и делят одну глобальную область: при загрузке здесь
    вызывается mPanes() (объявлена выше вызова); escH, md, openFile, openExt, obLast — из файлов ниже, нужны только по клику. */
 /* ---------- «Память»: граф (vis-network из assets/vendor, грузится при первом открытии раздела) ---------- */
@@ -91,20 +91,29 @@ function startPulses() {
   mSparks = ids.map(id => ({ id, t: Math.random(), v: 0.0025 + Math.random() * 0.004, dir: Math.random() < 0.5 ? 1 : -1 }));
   let last = 0;
   const loop = (ts) => {
+    // раздел закрыт или окно свёрнуто — цикл останавливается совсем (раньше просыпался 60 раз в секунду впустую);
+    // вернулись — mPulseGo по событию studio-sec / visibilitychange
+    if (document.hidden || !$("#p-memory").classList.contains("cur")) { mPulse = null; return; }
     mPulse = requestAnimationFrame(loop);
-    if (document.hidden || !$("#p-memory").classList.contains("cur") || ts - last < 33) return;
+    if (ts - last < 33) return;
     last = ts; mSparks.forEach(s => { s.t += s.v * s.dir; if (s.t > 1 || s.t < 0) { s.dir *= -1; s.t = Math.max(0, Math.min(1, s.t)); } });
     mNet.redraw();
   };
+  mLoop = loop;
   mPulse = requestAnimationFrame(loop);
 }
-function stopPulses() { if (mPulse) cancelAnimationFrame(mPulse); mPulse = null; mSparks = []; }
+let mLoop = null;
+function stopPulses() { if (mPulse) cancelAnimationFrame(mPulse); mPulse = null; mSparks = []; mLoop = null; }
+const mPulseGo = () => { if (!mPulse && mLoop && mSparks.length && secOn("memory")) mPulse = requestAnimationFrame(mLoop); };
+document.addEventListener("studio-sec", mPulseGo);
+document.addEventListener("visibilitychange", mPulseGo);
+secPoll("memory", 30000, () => loadMemory(true));
 /* Анимация карты: на мощном компьютере — живая (огоньки, физика), на слабом (лёгкий режим, ≤2 ядра) — карта раскладывается
    один раз и замирает: перерисовка только когда двигаете или масштабируете сами. Выбор — кнопкой, запоминается. */
 function memMotion() {
   const m = get("ui.memory_motion") || "auto";
   if (m === "on" || m === "off") return m === "on";
-  return !(S && S.device && S.device.light) && (navigator.hardwareConcurrency || 4) > 2;
+  return !(S && S.device && S.device.light) && (navigator.hardwareConcurrency || 4) > 2 && !document.documentElement.classList.contains("st-lite");
 }
 function memMotionUi() {
   const b = $("#m-motion"); if (!b) return;

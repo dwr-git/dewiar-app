@@ -461,6 +461,11 @@ def photo(title, prompt, size="", replace=False):
             msg = json.loads(e.read().decode()).get("error", {}).get("message", "")
         except ValueError:
             msg = ""
+        # №502 (03.11: «Нет такого адреса: /images/generations») — сайт Dewiar старше 0.77 или генератор не подключён:
+        # не ошибка человеку, а честно — фото пока нет, рисую векторно
+        if e.code in (404, 503) or "Нет такого адреса" in msg or "не подключён" in msg:
+            raise ValueError("картинки «как фото» на сервере Dewiar пока не включены — скажи об этом одной фразой и сразу "
+                             "нарисуй векторную картинку (art_draw) по тому же описанию") from e
         raise ValueError(msg or f"облако ответило {e.code}") from e
     except OSError as e:
         raise ValueError(f"облако не ответило: {e}") from e

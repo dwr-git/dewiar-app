@@ -29,9 +29,10 @@ const dvOn = (d) => d.me || Date.now() / 1000 - (d.seen || 0) < DV_ONLINE;
 async function loadMyDevices(fresh) {
   try { DV = await core.call("devices_get", { fresh: fresh !== false }); } catch (e) { toast(e.message, 3500); return; }
   dvRender();
-  clearInterval(DV_POLL);
-  DV_POLL = setInterval(() => { if (!$("#p-devices").classList.contains("cur")) { clearInterval(DV_POLL); return; } dvRefresh(); }, DV_CODE ? 5000 : 30000);
+  DV_POLLER.ms = DV_CODE ? 5000 : 30000;
 }
+// состояние устройств — пока раздел виден (secPoll); ждём код с телефона — чаще
+const DV_POLLER = secPoll("devices", 30000, () => dvRefresh());
 window.loadMyDevices = loadMyDevices;
 async function dvRefresh() {
   // кто был до кода (список обновляет не только этот опрос — сравниваем с ним, а не с прошлым опросом)

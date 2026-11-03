@@ -13,7 +13,9 @@ function escH(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ 
 window.__jsErr = window.__jsErr || [];
 window.addEventListener("error", (e) => { window.__jsErr.push(`${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno || 0}`); });
 let S = null, personas = [], active = "lira", entities = [];
-const brand = new DewiarEntity($("#brand"), { style: "nexus", color: "#8A9BFF", ring: false });
+// логотип в меню виден всегда — в покой (~6 кадров/с) уже через 4 с тишины, а не через 20 (03.11: на слабом компьютере
+// живой логотип один занимал до половины времени страницы)
+const brand = new DewiarEntity($("#brand"), { style: "nexus", color: "#8A9BFF", ring: false, restAfter: 4000 });
 const COLORS = ["#FFB547", "#3DF5C8", "#4FC3FF", "#9BD4FF", "#B78CFF", "#FF7AB6", "#FF6B5A", "#9BE15D", "#F5E663", "#7C8CFF", "#E6EEFF"];
 const STYLE_NAMES = { nexus: "Нейросфера", aura: "Сфера", holobrain: "Голограмма мозга", lattice: "Кристалл", orbital: "Орбиты", tactical: "Радар", rings: "Кольца", strings: "Струны", particles: "Частицы" };
 
@@ -31,6 +33,89 @@ if (window.DEWIAR_PRIVACY && $("#priv-box")) {
   $("#priv-box").innerHTML = ($("#priv-box").closest("details") ? "" : `<h3 style="font-size:15px;margin-bottom:8px">${e(DEWIAR_PRIVACY.title)}</h3>`)
     + DEWIAR_PRIVACY.items.map(([t, x]) => `<p class="hint" style="margin:0 0 6px"><b style="color:var(--ink);font-weight:600">${e(t)}.</b> ${e(x)}</p>`).join("");
 }
+
+/* ---------- Лёгкая студия (03.11, группа: «программа становится перегруженной… полная оболочка Dewiar подтормаживает») ----------
+   Раздел строит тяжёлое — данные из ядра, карточки, облики — при первом открытии, а не при запуске:
+   secLazy(p, fn) — fn один раз, когда раздел p впервые открыт и связь с ядром уже есть (иначе — сразу после hello);
+   secSeen(p) — открывался ли раздел; secOn(p) — виден сейчас (открыт, и окно не свёрнуто).
+   secPoll(p, ms, fn) — опрос ядра, который идёт, только пока раздел виден: закрыли раздел или свернули окно — таймера нет,
+   вернулись — опрос продолжается. window.studioSec — то же для проверок (tests/studio_light1103_test.py). */
+const SEC = { seen: new Set(), lazy: {}, done: new Set(), polls: [] };
+const secEl = (p) => document.getElementById("p-" + p);
+const secOn = (p) => !document.hidden && !!secEl(p) && secEl(p).classList.contains("cur");
+const secSeen = (p) => SEC.seen.has(p);
+function secLazy(p, fn) {
+  (SEC.lazy[p] = SEC.lazy[p] || []).push(fn);
+  if (secSeen(p) && S) secLazyRun(p);
+}
+function secLazyRun(p) {
+  if (!S) return;
+  (SEC.lazy[p] || []).forEach(fn => { if (SEC.done.has(fn)) return; SEC.done.add(fn); try { fn(); } catch (e) { console.warn("раздел", p, e); } });
+}
+/* связь с ядром появилась (hello): разделам, открытым раньше, — их первая загрузка */
+function secHello() { SEC.seen.forEach(secLazyRun); }
+function secPoll(p, ms, fn) { const o = { p, ms, fn, t: 0, busy: false }; SEC.polls.push(o); secPollRun(o); return o; }
+function secPollRun(o) {
+  if (!secOn(o.p)) { clearTimeout(o.t); o.t = 0; return; }
+  if (o.t || o.busy) return;
+  o.t = setTimeout(async () => {
+    o.t = 0; if (!secOn(o.p)) return;
+    o.busy = true; try { await o.fn(); } catch (e) { } o.busy = false;
+    secPollRun(o);
+  }, o.ms);
+}
+const secPollsKick = () => SEC.polls.forEach(secPollRun);
+document.addEventListener("visibilitychange", secPollsKick);
+function secOpen(p) {
+  SEC.seen.add(p);
+  secLazyRun(p);
+  secPollsKick();
+  document.dispatchEvent(new CustomEvent("studio-sec", { detail: p }));   // разделам со своей анимацией — продолжить
+}
+{ const c = document.querySelector("main section.cur"); if (c) SEC.seen.add(c.id.replace(/^p-/, "")); }   // «Главная» открыта сразу
+window.studioSec = { seen: () => [...SEC.seen], polls: () => SEC.polls.filter(o => o.t || o.busy).map(o => o.p) };
+
+/* «Облегчённый вид» (ui.studio_lite: "auto" | "on" | "off"; «Оформление» → «Скорость»). html.st-lite (theme.css): без
+   размытия и «стекла» с неподвижным фоном, мягкие тени неоморфизма — короче, украшения без бесконечной анимации,
+   облики персонажей — не чаще ~20 кадров/с. "auto" — сам, если компьютер слабый (мало ядер или памяти, «слабый» по
+   оценке ядра) или кадры студии рисуются медленно. Последнее решение — в localStorage: theme.js ставит класс ещё в <head>,
+   чтобы при запуске не было «тяжёлого» первого кадра. */
+const LITE = { auto: false, why: "" };
+try { if (localStorage.getItem("studio_lite_auto")) { LITE.auto = true; LITE.why = localStorage.getItem("studio_lite_auto"); } } catch (e) { }
+function liteMode() { return (((S && S.ui) || {}).studio_lite) || "auto"; }
+function liteOn() { const m = liteMode(); return m === "on" || (m === "auto" && LITE.auto); }
+function studioLite() {
+  if (!S) return;
+  const on = liteOn();
+  document.documentElement.classList.toggle("st-lite", on);
+  if (window.DewiarEntity) DewiarEntity.lite = on;
+  try { localStorage.setItem("studio_lite", on ? "1" : "0"); } catch (e) { }
+  if (typeof liteRender === "function") liteRender();
+}
+function liteAuto(why) {
+  if (LITE.auto || !why) return;
+  LITE.auto = true; LITE.why = why;
+  try { localStorage.setItem("studio_lite_auto", why); } catch (e) { }
+  studioLite();
+}
+/* слабое железо: по браузеру — сразу; по оценке ядра (device.level) — из dewiar.js, когда пришло */
+(() => {
+  const n = navigator.hardwareConcurrency || 0, m = navigator.deviceMemory || 0;
+  if ((n && n <= 2) || (m && m <= 2)) liteAuto(n && n <= 2 ? `${n} ${n === 1 ? "ядро" : "ядра"} процессора` : `${m} ГБ памяти`);
+})();
+/* медленные кадры: через 4 с после открытия — 90 кадров; если заметная доля дольше 50 мс — студии тяжело */
+function liteProbe() {
+  if (LITE.auto || document.hidden) return;
+  let last = 0, n = 0, slow = 0;
+  const step = (t) => {
+    if (last) { n++; if (t - last > 50) slow++; }
+    last = t;
+    if (n < 90) return requestAnimationFrame(step);
+    if (slow > 22) liteAuto("кадры рисуются медленно");
+  };
+  requestAnimationFrame(step);
+}
+setTimeout(liteProbe, 4000);
 
 /* навигация */
 /* «Душа»: дневник, душа, конституция и «Обо мне» — один пункт слева; каждая страница остаётся отдельной <section>,
@@ -53,6 +138,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   }
   $$("nav button").forEach(x => x.classList.toggle("cur", x === b));
   $$("section").forEach(s => s.classList.toggle("cur", s.id === "p-" + b.dataset.p));
+  secOpen(b.dataset.p);
   if (core.connected) core.call("course_seen", { section: b.dataset.p }).catch(() => {});   // курс: «откройте …» — шаг засчитан
   if (SOUL_TABS.some(t => t[0] === b.dataset.p)) { $('nav button[data-p="diary"]').classList.add("cur"); $$(".stabs button").forEach(x => x.classList.toggle("on", x.dataset.go === b.dataset.p)); try { LS.set("soul_tab", b.dataset.p); } catch (e) { } }
   if (b.dataset.p === "soul") loadSoul();
@@ -83,8 +169,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "me") loadMe();
   if (b.dataset.p === "docs") loadDocs();             // «Документы» — папки, по которым Лира ищет (studio/links.js)
   if (b.dataset.p === "tricks") loadTricks();       // «Что я умею» — data/tricks.json через ядро
-  clearInterval(mTimer);
-  if (b.dataset.p === "memory") { loadNotes(); loadMemory(!!mNet); setTimeout(mPanes, 0); mTimer = setInterval(() => { if (!document.hidden) loadMemory(true); }, 30000); }
+  if (b.dataset.p === "memory") { loadNotes(); loadMemory(!!mNet); setTimeout(mPanes, 0); }   // обновление раз в 30 с — memory.js (secPoll)
   if (b.dataset.p === "voice") core.call("voices_warm").catch(() => {});
   if (b.dataset.p === "brain") core.call("cloud_status", { refresh: true }).then(cloudFill).catch(() => {});
   if (b.dataset.p === "dw") { dwLoad(); dwQr(); }
@@ -97,7 +182,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "safety") { loadSafety(); loadVault(); loadBackups(); }
   if (b.dataset.p === "tasks") loadTasks();
   if (b.dataset.p === "prompter") loadMeetings();
-  if (b.dataset.p === "about") core.call("update_status").then(renderUpdate).catch(() => {});
+  if (b.dataset.p === "about") core.call("update_status").then(u => { if (typeof renderUpdate === "function") renderUpdate(u); }).catch(() => {});   // №499: нажали раньше, чем загрузился tasks.js
   if (b.dataset.p === "voice") loadVosk();
   if (b.dataset.p === "look") loadLook();
   if (b.dataset.p === "close") loadClose(true);

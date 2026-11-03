@@ -2,7 +2,7 @@
    Данные — команда ядра security_state (core/security.py): схема считается по настройкам сейчас, журнал — core/egress.py.
    Изменения — security_set: {local_only} или {lock, value}. Сейф, резервная копия и «Чего не сделает» — ниже, как раньше
    (welcome.js). Вызывается из core.js при открытии раздела; пока раздел открыт, журнал освежается раз в 10 секунд. */
-let SF = null, sfTimer = 0, sfPick = "";
+let SF = null, sfPick = "";
 
 const SF_ICON = {
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
@@ -18,14 +18,11 @@ const sfSvg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${SF_ICON[k]}<
 const sfWho = () => ((typeof personas !== "undefined" && personas.find(p => p.id === active)) || {}).name || "Ассистент";
 
 async function loadSafety() {
-  clearInterval(sfTimer);
   try { SF = await core.call("security_state"); } catch (e) { return; }
   renderSafety();
-  sfTimer = setInterval(async () => {
-    if (!$("#p-safety").classList.contains("cur")) return clearInterval(sfTimer);
-    try { SF = await core.call("security_state"); renderJournal(); renderStop(); } catch (e) { }
-  }, 10000);
 }
+// журнал — раз в 10 с, только пока раздел виден (core.js secPoll: закрыли раздел или свернули окно — опроса нет)
+secPoll("safety", 10000, async () => { if (!SF) return; SF = await core.call("security_state"); renderJournal(); renderStop(); });
 
 function renderSafety() { if (!SF) return; renderStop(); renderMap(); renderLocks(); renderJournal(); loadRights(); }
 

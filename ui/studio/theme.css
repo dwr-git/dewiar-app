@@ -263,3 +263,35 @@ html.st-neu :is(.plp-card, .plp-none) { background: var(--sk-glass); box-shadow:
 html.st-neu .plp-head { background: linear-gradient(120deg, color-mix(in srgb, var(--pc) 16%, var(--sk-glass)), var(--sk-glass) 60%); box-shadow: var(--raise); }
 html.st-neu .plp-tw, html.st-neu .plp-kv > div, html.st-neu .plp-long { background: var(--sk-glass); box-shadow: var(--press); }
 html.st-neu :is(.plp-file, .plp-frow) { background: var(--sk-glass); box-shadow: var(--raise-s); }
+
+/* ---------- «Облегчённый вид» (html.st-lite; «Оформление» → «Скорость», core.js studioLite) ----------
+   Для слабых компьютеров и программной отрисовки (WebKitGTK без ускорения, WebView2 на старой видеокарте). Вид тот же,
+   дешевле в отрисовке: «стекло» — полупрозрачный цвет вместо второй копии фона под каждой панелью (background-attachment:
+   fixed заставлял перерисовывать панели при каждой прокрутке), без backdrop-filter, тени неоморфизма — короче и мягче
+   (стоимость тени растёт с квадратом размытия), без бесконечных украшений: мигание, волны, покачивание значков.
+   Индикаторы «идёт работа» (кружки, полоски загрузки) остаются — по ним видно, что программа не зависла. */
+html.st-lite {
+  --glass: var(--sk-glass, rgba(255,255,255,.075)); --frost: var(--sk-glass, rgba(255,255,255,.05));
+  --frost-hi: color-mix(in srgb, var(--sk-glass, rgba(255,255,255,.075)) 70%, rgba(255,255,255,.35));
+  --frost-on: color-mix(in srgb, var(--sk-glass, rgba(255,255,255,.075)) 80%, rgba(255,255,255,.25));
+}
+html.st-lite:not(.st-skin) { --glass: rgba(255,255,255,.075); --frost: rgba(255,255,255,.05); --frost-hi: rgba(255,255,255,.12); --frost-on: rgba(255,255,255,.1); }
+html.st-lite body { background-attachment: scroll; }
+html.st-lite *, html.st-lite *::before, html.st-lite *::after, html.st-lite ::backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.st-lite.st-neu {
+  --raise: 3px 3px 6px var(--nd), -3px -3px 6px var(--nl);
+  --raise-s: 2px 2px 3px var(--nd), -2px -2px 3px var(--nl);
+  --press: inset 2px 2px 4px var(--nd), inset -2px -2px 4px var(--nl);
+}
+html.st-lite.st-neu :is(.card:hover, .jcard:hover, .tidea:hover, .wtile:hover, .lk:hover, .ritem:hover, .pr-it:hover, .fxgrid button:hover) { box-shadow: var(--raise); }
+html.st-lite nav { box-shadow: 1px 0 0 var(--line); }
+html.st-lite.st-neu nav { box-shadow: 3px 0 6px -3px var(--nd); }
+html.st-lite :is(.hm-apps.edit .hm-ic, .wt-eye svg, .mt-tag.in header, .mt-pin, .dv-spark, .rd-live, .wt-pulse, #cl-near .rad-me::after, .rd-t.sk::after, .pv-wait::after) { animation: none !important; }
+html.st-lite :is(.toast, .drawer, dialog, .py-modal) { box-shadow: 0 8px 24px -10px rgba(0,0,0,.45); }
+
+/* «Что показывать» (show.js) — панели и наборы в светлых темах и в неоморфизме */
+html.st-light :is(.sh-g, .sh-set) { box-shadow: var(--sk-shadow); }
+html.st-light .sh-set[aria-pressed="true"] { box-shadow: var(--sk-shadow), inset 0 0 0 2px var(--accent); }
+html.st-neu :is(.sh-g, .sh-set) { background: var(--sk-glass); box-shadow: var(--raise); }
+html.st-neu .sh-set:hover { background: var(--sk-glass); }
+html.st-neu .sh-set[aria-pressed="true"] { box-shadow: var(--press); }

@@ -1873,6 +1873,17 @@ def lmstudio_start():
         log.info("LM Studio: сервер не включился: %s", e)
         return None, False
     url = status()
+    if not url:
+        # №496 (03.11): «Success! Server is now running on port 1234», а status() не узнал — порт из ответа start и
+        # подольше (сервер поднимается дольше 8 с), и на localhost тоже (иногда слушает только ::1)
+        m = re.search(r"port\D{0,12}(\d{2,5})", (r.stdout or "") + (r.stderr or ""), re.I)
+        if m and re.search(r"success|running", (r.stdout or "") + (r.stderr or ""), re.I):
+            for _ in range(30):
+                for host in ("127.0.0.1", "localhost"):
+                    u = f"http://{host}:{m.group(1)}/v1"
+                    if _models_at(u, 1.0) is not None:
+                        return u, True
+                time.sleep(0.5)
     return url, bool(url)
 
 

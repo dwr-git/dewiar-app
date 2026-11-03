@@ -298,7 +298,10 @@
 
   // Голографический мозг (Профессор) — облако нейронов в форме мозга (вид сбоку: лобная, височная доли,
   // мозжечок, ствол), медленно поворачивается; узлы связаны, по связям бегут импульсы.
-  const HOLO = (() => {
+  // Облако строится при первом рисунке этого облика, а не при загрузке файла: ~800 узлов и поиск соседей — около 0,2 с
+  // на быстром компьютере, а открывался каждый раз — и в студии, где «Голограммы» может не быть вовсе (03.11).
+  let HOLO_ = null;
+  const holo = () => HOLO_ || (HOLO_ = (() => {
     const R = rng(777), P = [];
     const gauss = () => { let u = 0, v = 0; while (!u) u = R(); while (!v) v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); };
     const dir = () => { const a = [gauss(), gauss(), gauss()], n = Math.hypot(...a); return a.map(x => x / n); };
@@ -338,11 +341,11 @@
     edges.forEach(([a, b], n) => { adj[a].push(n); adj[b].push(n); });
     const hubs = P.map((_, i) => i).filter(i => i % 17 === 0);
     return { P, edges, adj, hubs };
-  })();
+  })());
 
   function holobrain(g, e) {
     const { ctx, r, c, t, lv, k } = g;
-    const H = HOLO, bold = e.bold || 1, S = r * 0.86 * (bold > 1 ? 1.12 : 1);
+    const H = holo(), bold = e.bold || 1, S = r * 0.86 * (bold > 1 ? 1.12 : 1);
     const m = e._hb || (e._hb = { pulses: [], acc: 0, lt: null, flash: new Float32Array(H.P.length) });
     const dt = m.lt === null ? 0 : Math.max(0, Math.min(0.1, t - m.lt)); m.lt = t;
     const yaw = -1.25 + Math.sin(t * 0.22) * 0.75, pitch = 0.12 + Math.sin(t * 0.15) * 0.06;
@@ -1263,6 +1266,7 @@
       this.lipsync = !!opts.lipsync;           // рот строго по громкости кадра (мультфильмы tools/academy)
       this.voiceLevels = !!opts.voiceLevels;   // уровни своего голоса придут (виджет компьютера) — без них рот и волна молчат
       this.lookX = 0; this.lookY = 0; this._lx = 0; this._ly = 0; this._looking = false; this._la = 0;   // где зритель (look)
+      this.restAfter = opts.restAfter || 20000;   // через сколько мс без событий — глубокий покой (логотип студии — раньше)
       this.lookGain = opts.lookGain || 1;   // сила эффекта: телефон — 1, виджет компьютера — 0.5 (крупный портрет, отзыв 14.10)
       this.configure(opts);
       this._last = performance.now(); this._frame = 0; this._calm = performance.now();
@@ -1277,9 +1281,22 @@
         else requestAnimationFrame(loop);
       };
       this._loop = loop;
+      /* Холст не на экране — раздел студии закрыт (display:none), прокручен за край, окно свёрнуто — не рисуем и не просыпаемся
+         каждый кадр (03.11, группа: «полная оболочка подтормаживает»: два десятка обликов в закрытых разделах студии крутили
+         requestAnimationFrame по 60 раз в секунду впустую, каждый раз спрашивая размер холста). Показался — IntersectionObserver
+         будит сразу. */
+      this._off = false;
+      try {
+        if (window.IntersectionObserver) {
+          this._io = new IntersectionObserver((es) => { const off = !es[es.length - 1].isIntersecting; if (off !== this._off) { this._off = off; if (!off) this._wake(); } });
+          this._io.observe(canvas);
+        }
+      } catch (e) { this._io = null; }
+      LIVE.add(this);
       requestAnimationFrame(loop);
     }
     _wake() {                                   // что-то изменилось — снова живой темп и кадр сразу
+      if (this.dead) return;
       this._calm = performance.now();
       if (this._sleep) { clearTimeout(this._sleep); this._sleep = 0; requestAnimationFrame(this._loop); }
     }
@@ -1329,6 +1346,7 @@
     }
     draw(now) {
       if (this.paused) return 400;                           // окно спрятано — не рисуем (и проверяем редко)
+      if (this._off || document.hidden) return 2000;         // не на экране — разбудят IntersectionObserver и visibilitychange
       // неподвижный кадр: замираем, только когда он нарисован целиком — фото, слои живого лица и обложка загрузились,
       // а у холста есть размер (30.10, владелец: «персонажи без изображений — появляются, только когда наведу мышь»:
       // фото приходило позже 1,5 с, и кадр замирал пустым)
@@ -1338,7 +1356,7 @@
       }
       const cv = this.canvas, dpr = window.devicePixelRatio || 1;
       const w = cv.clientWidth, h = cv.clientHeight;
-      if (!w || !h) { this._sizedPaint = false; return; }
+      if (!w || !h) { this._sizedPaint = false; return this._io ? 2000 : 250; }   // без размера — не каждый кадр (см. _off)
       this._sizedPaint = true;
       const st = STATE[this.state] || STATE.idle;
       // экономим CPU: в покое (и под пластинку) ~25 кадров/с, без микрофона или связи ~8, в работе до ~70
@@ -1347,11 +1365,12 @@
       // слабый компьютер (или WebKit без ускорения): кадр рисуется долго — рисуем реже, чтобы кнопки не «залипали»
       if (this._cost > 6) minDt = Math.max(minDt, Math.min(120, this._cost * 6));
       if (this.calm) minDt = Math.max(minDt, this.state === "idle" ? 160 : 60);   // созвон: облик почти неподвижен, не мешаем
-      if (this.lite) minDt = Math.max(minDt, 50);         // лёгкий режим телефона: не чаще ~20 кадров/с и в разговоре
+      if (this.lite || Entity.lite) minDt = Math.max(minDt, 50);   // лёгкий режим телефона и «Облегчённый вид» студии: не чаще ~20 кадров/с
+      if (Entity.lite && (this.state === "idle" || this.state === "muted")) minDt = Math.max(minDt, 120);   // студия: в покое ~8 кадров/с
       // глубокий покой: 20 с ничего не происходит (ни голоса, ни взгляда, ни пластинки) — облик дышит ~6 кадров/с, как
       // при созвоне (calm): движение медленное, глазу почти не заметно, а окну на рабочем столе — в 4 раза меньше работы
       const spinning = this.vinyl && VINYL_STATES.has(this.state);
-      if ((this.state === "idle" || this.state === "muted" || this.state === "offline") && !spinning && !this._looking && this.target < 0.05 && now - this._calm > 20000)
+      if ((this.state === "idle" || this.state === "muted" || this.state === "offline") && !spinning && !this._looking && this.target < 0.05 && now - this._calm > this.restAfter)
         minDt = Math.max(minDt, 160);
       // допуск 8 мс: кадр экрана приходит не точно к сроку — без него лишнее пробуждение на каждый рисунок
       this._mdt = minDt;
@@ -1403,8 +1422,17 @@
       }
       this._cost = (this._cost || 0) * 0.9 + (performance.now() - t0) * 0.1;
     }
-    destroy() { this.dead = true; }
+    destroy() {
+      this.dead = true; LIVE.delete(this);
+      if (this._sleep) { clearTimeout(this._sleep); this._sleep = 0; }
+      try { if (this._io) this._io.disconnect(); } catch (e) { }
+      this._io = null;
+    }
   }
+  /* живые облики — разбудить все разом, когда окно снова на экране */
+  const LIVE = new Set();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) LIVE.forEach(e => e._wake()); });
+  Entity.lite = false;                    // студия: «Облегчённый вид» (ui/studio/core.js studioLite) — реже кадры у всех обликов
 
   window.DewiarEntity = Entity;
   window.DewiarStyles = Object.keys(STYLES);

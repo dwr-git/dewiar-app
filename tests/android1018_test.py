@@ -33,7 +33,7 @@ ok(all(f"public {t} {n}(" in br for t, n in (("String", "deviceClass"), ("void",
 app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
 ok("(!liteOn() || ++syncTick % 3 === 0)" in app and "(!liteOn() || ++joinTick % 3 === 0)" in app, "лёгкий режим: синхронизация и проверки — втрое реже")
 ent = (ROOT / "ui/assets/entities.js").read_text(encoding="utf-8")
-ok("if (this.lite) minDt = Math.max(minDt, 50);" in ent, "облик: в лёгком режиме не чаще ~20 кадров/с")
+ok("if (this.lite || Entity.lite) minDt = Math.max(minDt, 50);" in ent, "облик: в лёгком режиме не чаще ~20 кадров/с")
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 www = Path(tempfile.mkdtemp()) / "www"

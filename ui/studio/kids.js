@@ -87,5 +87,7 @@ if ($("#p-kids")) {
     catch (x) { $("#kd-lerr").textContent = x.message; $("#kd-lpin").select(); }
   };
   core.on("kids", (e) => { KD = Object.assign(KD || {}, e); kdRender(); });
-  core.on("hello", () => kdLoad());
+  // 0.80 грузил «Дети» только при открытии раздела — и заслонка с PIN при запуске не вставала (ребёнок видел студию).
+  // Состояние берём всегда, раздел рисуем, только если его открывали
+  core.on("hello", async () => { if (secSeen("kids")) return kdLoad(); try { KD = await core.call("kids_get"); kdLock(KD); } catch (e) {} });
 }

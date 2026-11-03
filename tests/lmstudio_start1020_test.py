@@ -33,6 +33,7 @@ lms.write_text(textwrap.dedent(f"""\
       cd "{srv}" && nohup {sys.executable} -m http.server {PORT} --bind 127.0.0.1 >/dev/null 2>&1 &
       echo "Starting server..."; sleep 1; echo "Success! Server is now running on port {PORT}"
     elif [ "$1 $2" = "server status" ]; then
+      [ -f "{tmp}/weird" ] && {{ echo "Server: ON"; exit 0; }}
       [ -f "{tmp}/broken" ] && {{ echo "The server is not running."; exit 0; }}
       echo "The server is running on port {PORT}."
     fi
@@ -66,6 +67,14 @@ try:
     lm2 = [f for f in d2 if f.get("preset") == "lmstudio"] if isinstance(d2, list) else []
     ok(lm2 and not lm2[0].get("started") and (tmp / "lms.log").read_text().count("server start") == log.count("server start"),
        "сервер уже работает (на своём порту) — второй раз не включаем, находим по lms server status")
+    # №496 (03.11): «Success! Server is now running on port 1234», а status ответил по-своему — порт из ответа start
+    subprocess.run(["pkill", "-f", f"http.server {PORT}"], capture_output=True)
+    import time; time.sleep(0.5)
+    (tmp / "weird").write_text("1")
+    d3 = discover()
+    lm3 = [f for f in d3 if f.get("preset") == "lmstudio"] if isinstance(d3, list) else []
+    ok(lm3 and lm3[0]["base_url"].endswith(f":{PORT}/v1") and lm3[0].get("started"), f"status не назвал порт — берём из ответа start: {d3}")
+    (tmp / "weird").unlink()
     js = (ROOT / "ui/studio/brain.js").read_text(encoding="utf-8")
     ok("f.started" in js and "Сервер LM Studio был выключен — включила" in js, "студия говорит, что сервер LM Studio включён")
 finally:

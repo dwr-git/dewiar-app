@@ -32,5 +32,6 @@ $("#sl-test").onclick = async (ev) => {
   ev.target.disabled = false;
 };
 $("#dw-more") && $("#dw-more").addEventListener("toggle", () => { if ($("#dw-more").open) sshLoad(); });
-core.on("hello", () => setTimeout(sshLoad, 400));
+core.on("hello", () => { if (secSeen("dw")) setTimeout(sshLoad, 400); });
+secLazy("dw", sshLoad);              // запасной вход — при первом открытии «Dewiar.pro», не при запуске
 window.sshLoad = sshLoad;

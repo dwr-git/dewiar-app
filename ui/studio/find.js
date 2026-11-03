@@ -5,7 +5,9 @@
    • разделы меню (название и подсказка у кнопки);
    • внутри раздела — заголовки, подписи полей, «раскрывашки» (h2/h3/summary/label) — переход к ним с подсветкой;
    • слова, которыми люди ищут (FD_SYN: «письма» → «Почта», «будильник» → «Дела»…);
-   • статьи «Вопрос — ответ» (guide.json) — второй строкой.
+   • статьи «Вопрос — ответ» (guide.json) — второй строкой;
+   • скрытые в «Что показывать» или на «Главной» разделы тоже находятся — с подписью «раздел скрыт — показать?»: нажали —
+     раздел снова в меню и открыт (03.11, show.js shShow).
    Ctrl+K (⌘K) — из любого места студии; стрелки и Enter — без мыши; Esc — закрыть. */
 const FD = { idx: null, at: 0, hits: [], sel: 0, qa: null };
 /* слова людей → [куда, название, слова]: «раздел» или «раздел#селектор» (перейти и подсветить); mail — карточка «Почта» */
@@ -37,8 +39,10 @@ function fdNavText(b) { return [...b.childNodes].filter(n => n.nodeType === 3).m
 function fdIndex() {
   if (FD.idx && Date.now() - FD.at < 30000) return FD.idx;
   const out = [], seen = new Set();
-  const add = (o) => { const k = o.p + "|" + fdNorm(o.t); if (seen.has(k) || !o.t || o.t.length < 3) return; seen.add(k); out.push(o); };
-  const navs = $$("nav button[data-p]").filter(b => !b.hidden && b.dataset.p !== "home");
+  const add = (o) => { const k = o.p + "|" + fdNorm(o.t); if (seen.has(k) || !o.t || o.t.length < 3) return; seen.add(k); if (hid.has(o.p)) { o.hid = true; o.w *= 0.85; } out.push(o); };
+  const hidBy = (b) => typeof shHiddenBy === "function" ? shHiddenBy(b.dataset.p) : "";
+  const navs = $$("nav button[data-p]").filter(b => b.dataset.p !== "home" && ((!b.hidden && !b.classList.contains("nh")) || hidBy(b) === "user"));
+  const hid = new Set(navs.filter(b => hidBy(b) === "user").map(b => b.dataset.p));
   const names = {};
   navs.forEach(b => { names[b.dataset.p] = fdNavText(b); });
   names.home = "Главная";
@@ -114,7 +118,7 @@ async function fdRun() {
   box.hidden = false; $("#fd-q").setAttribute("aria-expanded", "true");
   box.innerHTML = FD.hits.length ? FD.hits.map((h, i) => `<button type="button" class="fd-row${i === 0 ? " on" : ""}${h.k === "qa" ? " qa" : ""}" role="option" id="fd-o${i}" aria-selected="${i === 0}" data-i="${i}">
       <i class="fd-ic" aria-hidden="true">${h.k === "qa" ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.7a2.5 2.5 0 0 1 4.9.6c0 1.7-2.5 1.9-2.5 3.6"/><circle cx="12" cy="16.6" r=".6"/></svg>' : fdIcon(h.p)}</i>
-      <span class="fd-t"><b>${fdMark(h.t, q)}</b><small>${escH(h.k === "sec" ? (h.s || "раздел") : h.k === "qa" ? "Вопрос — ответ" : h.s)}</small></span>
+      <span class="fd-t"><b>${fdMark(h.t, q)}</b><small>${h.hid ? `<em class="fd-hid">раздел скрыт — показать?</em> ${escH(h.k === "sec" ? "" : h.s)}` : escH(h.k === "sec" ? (h.s || "раздел") : h.k === "qa" ? "Вопрос — ответ" : h.s)}</small></span>
       <span class="fd-go" aria-hidden="true">↵</span></button>`).join("")
     + `<p class="fd-foot"><span>↑↓ — выбрать · Enter — открыть · Esc — закрыть</span></p>`
     : `<div class="fd-none"><b>Ничего не нашлось по «${escH(raw.trim())}»</b><span>Попробуйте другое слово — или спросите Лиру, она знает всё о программе.</span>
@@ -143,6 +147,11 @@ function fdOpen(h) {
     hmGo("qa");
     setTimeout(async () => { if (typeof qaLoad === "function") await qaLoad(); if (typeof qaOpen === "function") qaOpen(h.id); }, 120);
     return;
+  }
+  if (h.hid && typeof shShow === "function") {           // скрытый раздел — снова в меню и открыть
+    shShow(h.p);
+    const b = $(`nav button[data-p="${h.p}"]`);
+    toast(`«${b ? fdNavText(b) : h.t}» снова в меню. Скрыть — «Оформление» → «Что показывать»`, 3200);
   }
   if (h.p !== "home") hmGo(h.p);
   setTimeout(() => {

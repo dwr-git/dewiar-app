@@ -4,12 +4,16 @@
    приходит в hello и событии personas (dewiar.js) и рисуется renderPersonas(). Облики — DewiarEntity (assets/entities.js);
    у каждого свой цикл анимации — перед перерисовкой старые destroy(), иначе циклы копятся.
    Файлы студии подключаются по порядку из ui/settings.html и делят одну глобальную область; при загрузке здесь создаётся
-   только облик предпросмотра (pv). S_voices, S_fx (dewiar.js), vkSpeakers (brain.js), startCalib (connect.js) нужны
+   только облик предпросмотра (pv); карточки и галерея — при первом открытии раздела (secLazy, core.js). S_voices, S_fx (dewiar.js), vkSpeakers (brain.js), startCalib (connect.js) нужны
    лишь при открытии редактора. */
 /* ---------- персонажи ---------- */
 function accent(color) { document.documentElement.style.setProperty("--persona", color); }   // интерфейс — в фирменных цветах, цвет персонажа — только у его облика
 /* Перерисовать карточки и логотип по personas/active; подпись «сейчас говорит …» читает curName() в soul.js */
 function renderPersonas() {
+  personasHead();
+  // карточки и галерея с обликами — только когда раздел открывали (03.11: при запуске студии их строили впрок,
+  // и полтора десятка обликов в закрытом разделе грузили компьютер); до того — лишь логотип и подпись слева
+  if (!secSeen("personas")) return;
   entities.forEach(e => e.destroy()); entities = [];
   const g = $("#pgrid"); g.innerHTML = "";
   // №369 (28.10, Windows 10: «нет кнопки Добавить и Создать»): одна сломавшаяся карточка (облик не нарисовался) больше
@@ -35,9 +39,15 @@ function renderPersonas() {
   n.innerHTML = "<div><b>+</b>Создать своего<br><span class='hint'>имя, характер, голос, фото</span></div>";
   n.onclick = () => openEditor(null); g.appendChild(n);
   loadGallery();
+}
+/* логотип слева и цвет — по активному персонажу (нужно всегда, даже если «Персонажи» не открывали) */
+function personasHead() {
   const cur = personas.find(p => p.id === active);
   if (cur) { accent(cur.color); brand.configure({ style: cur.avatar_url && cur.style !== "aura" ? "photo" : cur.style, color: cur.color, image: cur.avatar_url || null, soft: !!cur.kids }); $("#bsub").textContent = `сейчас говорит ${cur.name}`; }
 }
+
+// первое открытие «Персонажей»: карточки, галерея и голоса Vosk для редактора (раньше их грузили при запуске — dewiar.js)
+secLazy("personas", () => { renderPersonas(); if (typeof vkSpeakers !== "undefined" && !vkSpeakers.length && typeof loadVosk === "function") loadVosk(); });
 
 /* Компьютеру не хватает памяти (status.tight от ядра) — все облики студии почти неподвижны */
 let stTight = false;

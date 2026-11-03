@@ -536,6 +536,16 @@ $("#sv-use").onclick = async () => {
 };
 
 let S_presets = {}, S_voices = {}, S_fx = [];
+/* «Подключение»: календари, умный дом (Яндекс, Home Assistant), коды для телефона — при первом открытии раздела (03.11) */
+function connLoad() {
+  core.call("cal_list").then(csFill).catch(() => {});
+  core.call("home_get").then(shFill).catch(() => {});
+  core.call("ha_get").then(haFill).catch(() => {});
+  phFill();
+}
+secLazy("connect", connLoad);
+/* оценка ядра «слабый компьютер» (device.level) — повод для «Облегчённого вида» в положении «сам» */
+function liteDevice(x) { if (x && x.level && x.level !== "ok") liteAuto(x.why ? "слабый компьютер: " + x.why : "слабый компьютер"); }
 core.on("hello", d => {
   S = d.settings; personas = d.personas; active = d.persona; S_presets = d.presets; S_voices = d.piper_voices; S_fx = d.voice_fx || [];
   $("#conn").classList.add("ok"); $("#conn span").textContent = "ядро на связи";
@@ -550,15 +560,14 @@ core.on("hello", d => {
   mlFill(d.mail);
   tgFill(d.telegram); mxFill(d.max);
   DW.acc = d.account; DW.tg = d.telegram; DW.mx = d.max; DW.upd = d.update;
-  core.call("device").then(x => { DW.dev = x; dwRender(); }).catch(() => {});
+  core.call("device").then(x => { DW.dev = x; dwRender(); liteDevice(x); }).catch(() => {});
   obFill(d.obsidian);
-  core.call("cal_list").then(csFill).catch(() => {});
-  core.call("home_get").then(shFill).catch(() => {});
-  core.call("ha_get").then(haFill).catch(() => {});
-  phFill();
+  if (secSeen("connect")) connLoad();               // календари, умный дом, телефон — при первом открытии «Подключения» (secLazy ниже)
   core.call("cloud_status").then(cloudFill).catch(() => {});
   if (d.account && d.account.logged_in) core.call("account_check").then(renderAccount).catch(() => {});
-  loadVosk();
+  if (secSeen("voice")) loadVosk();                 // голоса Vosk — когда открыли «Голос» или «Персонажей»
+  studioLite();
+  secHello();
   const q = new URLSearchParams(location.search);
   // перенос настроек: ждущий в ядре импорт, файл (?import=) или адрес (?address=) из ссылки; нет ни модели, ни
   // #раздела — сразу в «Мозг», без модели ассистент не отвечает
@@ -574,10 +583,10 @@ core.on("hello", d => {
   wlcBoot(d);
 })
 .on("offline", () => { $("#conn").classList.remove("ok"); $("#conn span").textContent = "нет связи с ядром"; })
-.on("voices", () => loadVosk())
+.on("voices", () => { if (secSeen("voice") || secSeen("personas")) loadVosk(); })
 .on("persona", e => { active = e.persona; renderPersonas(); })
 .on("personas", e => { personas = e.personas; renderPersonas(); fillNamePick(); })
-.on("settings", e => { S = e.settings; refreshStatic(); renderCurrent(); profilesSync(); })   // GitHub #18 (24.10)
+.on("settings", e => { S = e.settings; refreshStatic(); renderCurrent(); profilesSync(); studioLite(); })   // GitHub #18 (24.10)
 .on("mcp", e => { if ($("#p-skills").classList.contains("cur")) renderMcp(e.status); })
 .on("status", e => renderStatus(e.status));
 bindFields();

@@ -4065,6 +4065,47 @@ html:not(.st-light) .ch-tmbar b { color: #ffcf7a; }
 .ft-seg button[data-v="off"][aria-checked="true"] { background: rgba(127,127,127,.32); color: var(--ink); }
 .ft-seg button:focus-visible { outline: 0; box-shadow: 0 0 0 2px var(--brand, var(--accent)); }
 .ft-now { color: var(--muted); font-size: 12px; }
+.fd-hid { font-style: normal; color: var(--accent); font-weight: 600; }
+/* длинные списки (заметки, идеи, «Вопрос — ответ»): строки за краем окна не раскладываются и не рисуются, пока до них не
+   прокрутили (03.11, «студия тормозит»); auto — запоминается настоящая высота строки, прокрутка не прыгает */
+:is(.nt-row, .id-it, .qa-row) { content-visibility: auto; contain-intrinsic-size: auto 88px; }
+/* «Оформление» → «Что показывать» (show.js): готовые наборы карточками, группы меню — панелями с переключателями */
+nav .nh { display: none !important; }
+.sh { max-width: 1040px; }
+.sh-lead { color: var(--muted); max-width: 72ch; margin-bottom: 14px; }
+.sh-sets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sh-set { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; border: 0; border-radius: 18px; padding: 14px 16px 12px;
+  background: var(--glass); color: var(--ink); font: inherit; cursor: pointer; transition: box-shadow .2s, background .2s; min-width: 0; }
+.sh-set b { font-family: "Unbounded", "Ubuntu", sans-serif; font-weight: 600; font-size: 14px; }
+.sh-set span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.sh-set em { margin-top: 6px; font-style: normal; font-size: 11.5px; color: var(--dim); }
+.sh-set:hover { background: var(--frost-hi); }
+.sh-set[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); }
+.sh-set[aria-pressed="true"] b { color: var(--accent); }
+.sh-set[aria-pressed="true"] em { color: var(--accent); }
+.sh-set:focus-visible { outline: 0; box-shadow: 0 0 0 2px var(--accent); }
+.sh-now { color: var(--muted); font-size: 12.5px; margin: 10px 2px 14px; }
+.sh-gs { columns: 300px 3; column-gap: 14px; }                       /* панели разной высоты — колонками, без пустот */
+.sh-g { border-radius: 18px; background: var(--glass); padding: 12px 16px 6px; min-width: 0; break-inside: avoid; margin-bottom: 14px; }
+.sh-gh { display: flex; align-items: center; gap: 10px; padding: 2px 0 8px; }
+.sh-gh b { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.sh-gh small { margin-left: auto; color: var(--dim); font-size: 12px; white-space: nowrap; }
+.sh-g ul { list-style: none; }
+.sh-it { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.sh-ic { display: grid; place-items: center; color: var(--ink); opacity: .8; }
+.sh-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sh-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sh-t b { font-weight: 600; font-size: 14px; }
+.sh-t small { color: var(--muted); font-size: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sh-t small.sh-note { color: var(--dim); font-style: italic; }
+.sh-it.off .sh-t b, .sh-it.off .sh-ic { opacity: .5; }
+.sh-it .tg input:disabled { cursor: default; }
+.sh-it .tg input:disabled + i { opacity: .4; }
+.sh-g.off .sh-gh b { opacity: .6; }
+.sh-g.lock { padding-bottom: 12px; }
+.sh-locked { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.lite-row { max-width: 1040px; border-bottom: 0; }
+@media (max-width: 900px) { .sh-sets { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .ft { grid-template-columns: 1fr; } .ft-r { align-items: flex-start; } }
 .switch[hidden] { display: none; }
 /* ---------- «Попробуйте плагин» на «Главной» (31.10, studio/home.js hmTry): один плагин, его цвет — мягким светом слева,

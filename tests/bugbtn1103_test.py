@@ -50,5 +50,7 @@ with sync_playwright() as p:
     ok(st.locator("#p-about h1 .hb-bug").count() == 0, "в «О программе» жучка у заголовка нет — форма там же")
     ok(not errs, f"без ошибок: {errs}")
     b.close()
+# №499 (03.11): «О программе» нажали раньше, чем загрузился tasks.js, — «renderUpdate is not defined» в журнале
+ok('typeof renderUpdate === "function"' in (ROOT / "ui/studio/core.js").read_text(encoding="utf-8"), "«О программе» до загрузки tasks.js — без ошибки")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

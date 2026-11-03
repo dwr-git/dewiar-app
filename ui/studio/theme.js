@@ -47,4 +47,6 @@
   try { early = new URLSearchParams(location.search).get("skin") || ""; } catch (e) { }
   if (!early) try { early = localStorage.getItem("studio_skin") || ""; } catch (e) { }
   studioSkin(early || "neusky");
+  // «Облегчённый вид» (core.js studioLite) — тоже до первого кадра: последнее решение запомнено в localStorage
+  try { if (localStorage.getItem("studio_lite") === "1") root.classList.add("st-lite"); } catch (e) { }
 })();

@@ -163,7 +163,7 @@
         <span class="hmc-t"><b>Совет ИИ</b><span>Задайте вопрос — персонажи на разных моделях обсудят его, поспорят и подведут итог</span></span>
         <span class="hmc-go">Собрать совет</span></button>
       <section class="hm-try" id="hm-try" aria-label="Попробуйте плагин" hidden></section>
-      <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
+      <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>», группы меню целиком — в «<a href="#" data-go="look#sh-h">Что показывать</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
       <div class="hm-apps" id="hm-apps"></div>
       <div class="hm-more2"><div class="hm-card2" id="hm-chat"></div><div class="hm-card2" id="hm-pad"></div></div>
       <div class="hm-h"><h2>Настройка</h2><span class="hint">раз настроили — и можно не возвращаться</span></div>
@@ -2157,7 +2157,18 @@
 
   <section id="p-look">
     <h1>Оформление</h1>
-    <p class="lead">Размер, фон виджета и то, как голос отзывается вокруг портрета, — выбираются отдельно, любые сочетания. Меняется сразу: держите виджет рядом и смотрите.</p>
+    <p class="lead">Что показывать, размер, фон виджета и то, как голос отзывается вокруг портрета, — выбираются отдельно, любые сочетания. Меняется сразу: держите виджет рядом и смотрите.</p>
+    <h2 id="sh-h">Что показывать</h2>
+    <div class="sh" id="show-box">
+      <p class="sh-lead">Меню слева и значки «Главной» — только то, чем пользуетесь. Скрытый раздел не загружается и не мешает, но продолжает работать: напоминания звенят, письма близких приходят. Вернуть — здесь же или найти поиском на «Главной».</p>
+      <div class="sh-sets" id="sh-sets" role="group" aria-label="Готовые наборы"></div>
+      <p class="sh-now" id="sh-now" aria-live="polite"></p>
+      <div class="sh-gs" id="sh-groups"></div>
+    </div>
+    <h2>Скорость</h2>
+    <div class="ft lite-row" id="lite-row"><div class="ft-t"><b>Облегчённый вид</b><span>Для слабого компьютера: без размытия и стекла, с мягкими тенями и без бесконечной анимации; облики персонажей двигаются реже. Выглядит почти так же, а студия отзывается быстрее.</span></div>
+      <div class="ft-r"><div class="ft-seg" id="lite-seg" role="radiogroup" aria-label="Облегчённый вид"><button type="button" role="radio" data-v="auto" aria-checked="true">Сам</button><button type="button" role="radio" data-v="on" aria-checked="false">Включён</button><button type="button" role="radio" data-v="off" aria-checked="false">Выключен</button></div>
+      <small class="ft-now" id="lite-now"></small></div></div>
     <h2>Размер</h2>
     <div class="zm" id="zm">
       <div class="zm-row">
@@ -2187,7 +2198,7 @@
       «Без значка» — работает, но не мелькает на главной и в меню; «На главной» — работает и под рукой. Выключенное ничего не
       теряет: включите — и всё на месте. Разговор, заметки, напоминания и блокнот есть всегда.</p>
     <div class="ft-list" id="ft-list"></div>
-    <p class="hint">Порядок значков и остальные значки главной — «Главная» → «Настроить». На телефоне — свои переключатели: «Настройки» → «Ещё» → «Возможности».</p>
+    <p class="hint">Порядок значков и остальные значки главной — «Главная» → «Настроить»; группы меню целиком и готовые наборы («Для себя», «Минимум») — «Оформление» → «Что показывать». На телефоне — свои переключатели: «Настройки» → «Ещё» → «Возможности».</p>
   </section>
 
   <section id="p-sound">
@@ -2618,6 +2629,7 @@
 <script src="studio/dewiar.js"></script>
 <script src="studio/look.js"></script>
 <script src="studio/home.js"></script>
+<script src="studio/show.js"></script>
 <script src="studio/find.js"></script>
 <script src="studio/morning.js"></script>
 <script src="studio/month.js"></script>

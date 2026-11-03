@@ -75,11 +75,15 @@ function hmNav() {
     }
     if (o) o.hidden = !want;
   }
+  if (typeof shNav === "function") shNav();                     // «Оформление» → «Что показывать» (show.js): класс .nh
   const cur = $("nav button.cur");
-  if (cur && cur.hidden) { const h = $('nav button[data-p="home"]'); if (h) h.click(); }
+  if (cur && (cur.hidden || cur.classList.contains("nh"))) { const h = $('nav button[data-p="home"]'); if (h) h.click(); }
   $$("nav .ng").forEach(g => {                                   // заголовок группы, под которым всё скрыто, — тоже прочь
     let n = g.nextElementSibling, any = false;
-    while (n && !n.classList.contains("ng")) { if (n.tagName === "BUTTON" && !n.hidden) any = true; n = n.nextElementSibling; }
+    while (n && !n.classList.contains("ng")) {
+      if (!n.hidden && !n.classList.contains("nh") && (n.tagName === "BUTTON" || (n.classList.contains("nav-groups") && n.querySelector("button")))) any = true;
+      n = n.nextElementSibling;
+    }
     g.hidden = !any;
   });
   if (typeof featuresRender === "function") featuresRender();   // «Возможности» показывают то же положение (0.74)
@@ -147,11 +151,14 @@ async function loadHome() {
   if (typeof mnLoad === "function") mnLoad();           // «Утро с Лирой» (studio/morning.js): погода и почта — не ждём их
   hmMailLoad();                                         // «Почта»: последние письма — не ждём их
   const now = new Date(), get = (c, a) => core.call(c, a).catch(() => null);
+  // скрытое в «Что показывать» (show.js) не грузится и не напоминает о себе карточкой «Сегодня» (03.11)
+  const off = (...ps) => typeof shHiddenBy === "function" && ps.every(p => shHiddenBy(p)), skip = Promise.resolve(null);
   // уроки — с сайта, не ждём их (сеть бывает медленной): пришли — карточка «Новый видеоурок» дорисуется
   if (!(HM.ac && Date.now() - HM.ac.at < 6 * 3600e3)) get("academy_list").then(ac => { if (ac && Array.isArray(ac.items)) { HM.ac = { at: Date.now(), d: ac }; if (HM.data) hmRender(); } });
-  const [cal, cl, tk, dn, ch, pad, py, pl, cs] = await Promise.all([get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }), get("close_state"),
-    get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"), get("pay_overview"), get("plugins"), get("course_get")]);
-  const wt = await get("watch_get");                                    // «Дозор»: сколько идёт — числом на значке
+  const [cal, cl, tk, dn, ch, pad, py, pl, cs] = await Promise.all([off("calendar", "reminders") ? skip : get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }),
+    off("close") ? skip : get("close_state"), off("tasks") ? skip : get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"),
+    off("pay") ? skip : get("pay_overview"), get("plugins"), off("course") ? skip : get("course_get")]);
+  const wt = off("watch") ? null : await get("watch_get");             // «Дозор»: сколько идёт — числом на значке
   HM.all = (pl && pl.plugins) || [];
   HM.plg = HM.all.filter(p => p.installed);
   let padText = null;
@@ -313,6 +320,11 @@ if ($("#hmm-dlg")) {
   $("#hmm-dlg").addEventListener("click", (e) => { if (e.target === $("#hmm-dlg")) $("#hmm-dlg").close(); });
 }
 function hmGo(p) {
+  if (p.includes("#")) {                               // «раздел#элемент» — открыть и показать место (look#show-box)
+    const [q, id] = p.split("#"); hmGo(q);
+    setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ block: "start", behavior: "smooth" }); }, 200);
+    return;
+  }
   if (p.startsWith("lesson:")) {                       // карточка «Новый видеоурок» — сразу смотреть
     const l = ((HM.ac && HM.ac.d.items) || []).find(x => x.id === p.slice(7)); hmGo("lessons");
     if (l && typeof lsPlay === "function") setTimeout(() => lsPlay(l), 150);
