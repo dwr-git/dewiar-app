@@ -35,6 +35,83 @@ class CommandsMixin:
         except Exception:  # noqa: BLE001
             log.debug("курс: шаг %s", key, exc_info=True)
 
+    def vault_sync(self, op, a):
+        """«Синхронизировать сейф между моими устройствами». op: status | on {password} — включить: в облаке сейф уже есть —
+        его мастер-паролем (не подошёл — ошибка), нет — новый мастер-пароль | change {old, password} — сменить (все записи
+        перешифруются) | reset {password} — забыли мастер-пароль: новый с этого компьютера (записи только с других устройств
+        откроются, когда они введут новый) | off — забыть ключ здесь (записи на этом компьютере и в облаке остаются).
+        Мастер-пароль и ключ никуда не уходят; в ответе — только состояние."""
+        from vault import SAFE_MIN, safe_derive, safe_meta_new, safe_try
+        import closecrypto as CC
+        sk, sy = self.safe_key, self.sync
+        hs = getattr(self, "home_sync", None)
+        hs = None if hs is None or getattr(hs, "stopped", False) else hs
+
+        def status():
+            tok, _, _ = self.credentials()
+            st = sy.safe_status()
+            m = sk.remote() or {}
+            return dict(st, linked=bool(tok) or hs is not None, sync_on=self.s.get("sync", "enabled") is not False,
+                        count=self.vault.count(), since=int(((sk.get() or {}).get("meta") or {}).get("at") or 0), min=SAFE_MIN,
+                        phones=sum(1 for d in (sy.status.get("all") or []) if d.get("app") in ("phone", "web")), known=bool(m))
+
+        def refetch():
+            for x in (sy, hs):
+                if x is not None:
+                    x.safe_refetch()
+        if op == "status":
+            return status()
+        pw = str(a.get("password") or "")
+        if op == "on":
+            tok, _, _ = self.credentials()
+            if not tok and hs is None:
+                raise ValueError("сначала подключите синхронизацию устройств: «Устройства» → вход или ключ Dewiar")
+            if tok:                                      # свежие параметры из облака: сейф могли включить на другом устройстве
+                try:
+                    sy.run_once()
+                except Exception as e:  # noqa: BLE001
+                    log.info("Сейф: облако сейчас не ответило (%s) — включаю по тому, что знаю", e)
+            rem = sk.remote()
+            if rem:
+                k = safe_try(pw, rem)
+                if k is None:
+                    raise ValueError("мастер-пароль не подошёл — это пароль, который вы придумали, когда включали сейф на другом устройстве")
+                sk.set(k, rem)
+            else:
+                k, meta = safe_meta_new(pw)
+                sk.set(k, meta)
+            log.info("🔐 Сейф: синхронизация между своими устройствами включена")
+            refetch()
+            return status()
+        if op == "reset":                              # забыли мастер-пароль: сейф этого компьютера — общим под новым
+            tok, _, _ = self.credentials()
+            if not tok and hs is None:
+                raise ValueError("сначала подключите синхронизацию устройств: «Устройства» → вход или ключ Dewiar")
+            k, meta = safe_meta_new(pw)                  # новые параметры позже прежних — другие устройства попросят новый пароль
+            sk.set(k, meta)
+            log.info("🔐 Сейф: начат заново с новым мастер-паролем на этом компьютере")
+            refetch()
+            return status()
+        if op == "change":
+            cur = sk.active()
+            if cur is None:
+                raise ValueError("сначала включите синхронизацию сейфа")
+            m = cur["meta"]
+            if safe_derive(str(a.get("old") or ""), CC.b64d(m["salt"]), int(m["it"])) != cur["k"]:
+                raise ValueError("прежний мастер-пароль не подошёл")
+            k, meta = safe_meta_new(pw)
+            sk.set(k, meta)                              # новый kid — все записи уйдут заново, другим устройствам — спросить новый
+            log.info("🔐 Сейф: мастер-пароль сменён — записи перешифровываются")
+            for x in (sy, hs):
+                if x is not None:
+                    x.soon.set()
+            return status()
+        if op == "off":
+            sk.forget()
+            log.info("🔐 Сейф: синхронизация выключена на этом компьютере")
+            return status()
+        raise ValueError("неизвестная команда сейфа")
+
     PTT_CALM = 2.5                     # с: нажатие на лицо сразу после «стоп» — тоже «стоп» (судорожные нажатия, 28.10)
 
     # ---------- команды из интерфейса ----------
@@ -1061,6 +1138,8 @@ class CommandsMixin:
             if cmd == "vault_delete":
                 self.vault.delete(a.get("id", ""))
                 return {"items": self.vault.list()}
+            if cmd == "vault_sync":                # сейф между своими устройствами — только шифром мастер-пароля (vault.SafeKey)
+                return self.vault_sync(str(a.get("op") or "status"), a)
         if cmd.startswith("backup_"):            # резервная копия
             from backup import BackupError, default_dir
             folder = self.s.get("backup", "dir") or str(default_dir())
@@ -1392,12 +1471,20 @@ class CommandsMixin:
                 elif cmd == "tg_connect_shared":            # общий бот Dewiar — через аккаунт сайта
                     # без аккаунта — по ключу этого компьютера; адреса пробуем по очереди: из настроек, с сайта
                     # аккаунта, общий dewiar.pro
-                    from telegram import SHARED_URL
+                    # Вошли в аккаунт — бот аккаунта (один на все компьютеры и телефон; уже привязан — подхватывается без
+                    # кода); сайт аккаунт не принял — по ключу этого компьютера, как раньше
+                    from telegram import SHARED_URL, TelegramAuthError
                     urls = [u for u in (self.s.get("telegram_url"), self.account.service_url("tg"), SHARED_URL) if u]
+                    acc = self.account.token() if self.account.logged_in() else ""   # бот аккаунта — только у dwrapp/tg.php
                     errs = []
                     for u in dict.fromkeys(urls):
                         try:
-                            r = tg.connect_shared(u)
+                            try:
+                                r = tg.connect_shared(u, acc if ".php" in u else "")
+                            except TelegramAuthError:
+                                if not acc:
+                                    raise
+                                r = tg.connect_shared(u)
                             break
                         except TelegramError as e:
                             log.warning("Telegram: %s — %s", u, e)
@@ -1413,6 +1500,9 @@ class CommandsMixin:
                                     "страница не открывается, дело в сети (фильтр, VPN, роутер)" +
                                     (f"; в системе задан прокси ({px[0]}) — возможно, он не работает" if px else "") + ".")
                         raise TelegramError(f"{e}.{hint}")
+                elif cmd == "tg_join":                      # бот аккаунта — подхватить на этом компьютере сейчас (иначе — раз в минуту)
+                    self._tg_join()
+                    r = tg.public()
                 elif cmd == "tg_sync":                      # без компьютера: обменяться с сервером сейчас
                     n = self.tg_sync()
                     r = dict(tg.public(), got=n)
@@ -1500,8 +1590,8 @@ class CommandsMixin:
                             self.cloud.set_tts(False, self._tts_local())
                             self.apply_engines()
                         self.emit("settings", settings=self.s.snapshot())
-                    if self.telegram.uses_account():           # общий бот через аккаунт — отключаем (по ключу — остаётся)
-                        self.telegram.forget()
+                    if self.telegram.uses_account():           # бот аккаунта: этот компьютер выходит, у аккаунта бот остаётся
+                        self.telegram.leave()
                         self.emit("telegram", **self.telegram.public())
                     r = self.account.logout()
                 elif cmd == "account_stt":                # «Распознавание на сервере Dewiar» — вкл/выкл

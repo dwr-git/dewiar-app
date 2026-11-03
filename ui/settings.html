@@ -1477,7 +1477,7 @@
       </div>
       <div class="dwc" id="dwc-sync">
         <div class="dh"><svg viewBox="0 0 24 24"><path d="M20 7h-9.5a5.5 5.5 0 0 0 0 11H14"/><path d="m17 4 3 3-3 3"/><path d="M4 17h9.5"/><path d="m7 20-3-3 3-3"/></svg><h3>Синхронизация</h3><span class="dws" id="dws-sync">—</span></div>
-        <p class="hint">Телефон и компьютеры — одно и то же: напоминания и будильники, заметки и списки, расходы, память «Обо мне»; между компьютерами — ещё и «Платежи» с платёжками. Через сервер Dewiar, по вашему аккаунту или ключу — на всех устройствах тот же вход.</p>
+        <p class="hint">Телефон и компьютеры — одно и то же: напоминания и будильники, заметки и списки, расходы, память «Обо мне»; между компьютерами — ещё и «Платежи» с платёжками. Через сервер Dewiar, по вашему аккаунту или ключу — на всех устройствах тот же вход. Сейф паролей — по желанию, под мастер-паролем: «Сейф паролей» → «Один сейф на всех устройствах».</p>
         <div class="switch"><div>Синхронизировать<span id="dw-sync-via">—</span></div><label class="tg"><input type="checkbox" id="dw-sync-on"><i></i></label></div>
         <div class="switch"><div>Шифровать на устройстве<span id="dw-e2e-why">Заметки, дела, деньги и память уходят в облако уже зашифрованными — ключ знают только ваши устройства, сервер dewiar.pro их не прочитает. Включите на одном — остальные получат ключ сами.</span></div><label class="tg"><input type="checkbox" id="dw-e2e"><i></i></label></div>
         <div class="actions" style="margin:0"><span class="hint" id="dw-sync-st" style="flex:1;margin:0"></span><button class="btn" id="dw-devs" type="button">Все устройства</button><button class="btn" id="dw-sync-now">Синхронизировать сейчас</button></div>
@@ -1656,6 +1656,7 @@
       </div>
       <div id="tg-on" style="display:none">
         <div class="actions" style="margin:0 0 10px"><span class="res ok" id="tg-state"></span></div>
+        <p class="hint" id="tg-who" style="display:none;margin:-4px 0 10px" title="Бот один на все ваши устройства в аккаунте: отвечает компьютер, за которым вы сидели последним; выключен — следующий, потом телефон, потом сервер Dewiar"></p>
         <div class="switch"><div>Присылать в Telegram важное<span>Итоги задач (с файлом отчёта), напоминания, вопросы задач и уведомления.</span></div><label class="tg"><input type="checkbox" id="tg-notify"><i></i></label></div>
         <div class="switch"><div>На голосовые — отвечать и голосом<span>Ответ придёт текстом и голосовым сообщением, голосом текущего персонажа.</span></div><label class="tg"><input type="checkbox" id="tg-vreply"><i></i></label></div>
         <div class="switch" id="tg-off-row"><div>Отвечать, когда компьютер выключен<span id="tg-off-why">Бот Dewiar сам отвечает с сервера: вопросы, заметки, список покупок, напоминания. Включится компьютер — всё окажется и на нём.</span></div><label class="tg"><input type="checkbox" id="tg-offline"><i></i></label></div>
@@ -2271,8 +2272,8 @@
 
   <section id="p-vault">
     <h1>Сейф паролей</h1>
-    <p class="lead">Пароли, пин-коды, коды от домофона — и целые страницы секретов. Всё зашифровано ключом этого компьютера, в заметки,
-      Obsidian и языковую модель не попадает. Лира вслух не читает никогда — только показывает на экране.</p>
+    <p class="lead">Пароли, пин-коды, коды от домофона — и целые страницы секретов. Всё зашифровано, в заметки, Obsidian и языковую
+      модель не попадает; Лира вслух не читает никогда — только показывает на экране. По желанию — один сейф на всех ваших устройствах.</p>
     <div class="vl-bar">
       <label class="vl-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg>
         <input type="search" id="vl-q" placeholder="Найти: почта, банк, вайфай…" autocomplete="off" spellcheck="false" aria-label="Поиск в сейфе"></label>
@@ -2303,11 +2304,11 @@
     <div class="vl-list" id="vl-list"></div>
     <p class="hint vl-foot">Скопированный пароль сам стирается из буфера обмена через 30 секунд. Голосом: «запомни пароль от вайфая: …»,
       «какой пароль от вайфая?» — ответ появится на экране. В резервную копию сейф попадает только с паролем копии.</p>
+    <!-- 03.11: сейф между своими устройствами — vault.js vlSync, ядро vault_sync (core/vault.py SafeKey) -->
+    <div class="vl-sync" id="vl-sync" aria-live="polite"></div>
     <div class="vl-keep" id="vl-keep">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
-      <div><b>Чтобы не потерять пароли вместе с компьютером</b>
-        <span>Сейф живёт только на этом компьютере и никуда не синхронизируется. Сделайте закрытый «Слепок знаний» с паролем — в нём и сейф. Храните файл на флешке или в облаке: на новом компьютере «Восстановить» вернёт все пароли.<em id="vl-keep-when"></em></span></div>
-      <span class="vl-keep-acts"><button class="btn" id="vl-keep-go">Сделать закрытую копию</button><button class="btn" id="vl-keep-back">Восстановить из слепка</button></span>
+      <span><b>Закрытая копия</b> — «Слепок знаний» с паролем, в нём и сейф.<em id="vl-keep-when"></em></span>
+      <span class="vl-keep-acts"><button class="btn small" id="vl-keep-go">Сделать</button><button class="btn small" id="vl-keep-back">Восстановить из слепка</button></span>
     </div>
   </section>
   <section id="p-safety">

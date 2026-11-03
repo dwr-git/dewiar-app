@@ -1,7 +1,8 @@
 /* Сквозное шифрование «Близких» — тот же формат, что core/closecrypto.py (описание — там): X25519, seal = поток
    HMAC-SHA256 + тег HMAC-SHA256, ключ сообщения завёрнут для каждого устройства. Без WebCrypto: SHA-256 и X25519 —
    свои, синхронные (WebCrypto асинхронный и бывает недоступен в WebView), чтобы телефон и компьютер считали одинаково.
-   window.DewiarCrypto: keypair, x25519, seal, unseal, encryptFor, decryptFrom, b64e, b64d, utf8, fromUtf8, randomBytes. */
+   window.DewiarCrypto: keypair, x25519, seal, unseal, encryptFor, decryptFrom, b64e, b64d, utf8, fromUtf8, randomBytes;
+   hmacKey(key) -> (сообщение -> HMAC) — подготовленный ключ, для многих сообщений (PBKDF2 сейфа, safe.js). */
 (function (root) {
   "use strict";
   // ---------- SHA-256 и HMAC ----------
@@ -134,5 +135,5 @@
     const k = unseal(wrapKey(priv, senderPub, env.fd || "", myDev), b64d(w));
     return JSON.parse(fromUtf8(unseal(k, b64d(env.c || ""))));
   }
-  root.DewiarCrypto = { sha256, hmac, x25519, keypair, seal, unseal, wrapKey, encryptFor, decryptFrom, b64e, b64d, utf8, fromUtf8, randomBytes, BASE };
+  root.DewiarCrypto = { sha256, hmac, hmacKey, x25519, keypair, seal, unseal, wrapKey, encryptFor, decryptFrom, b64e, b64d, utf8, fromUtf8, randomBytes, BASE };
 })(typeof window !== "undefined" ? window : globalThis);

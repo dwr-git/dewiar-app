@@ -2206,6 +2206,8 @@ class AnswerMixin:
                              {"role": "assistant", "content": turn.full.strip(), "who": self.s.get("persona"),
                               **({"acts": acts} if acts else {}), **({"facts": facts} if facts else {}), **({"handoff": hand} if hand else {})}]
             self.last_turn_time = time.monotonic()
+            if not turn.via:
+                self.local_act = time.time()               # человек говорил с этим компьютером сам — бот Telegram отвечает отсюда
             self._conv_after()
             if not turn.via:
                 self._pause_ok()                           # голосом и без обрыва — добавка к паузе понемногу тает

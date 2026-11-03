@@ -144,9 +144,45 @@ class RemoteMixin:
             self.emit("telegram", **tg.public())
         return sum(got.values())
 
+    def _tg_node(self):
+        """Кто этот компьютер для бота аккаунта (telegram.node): id устройства синхронизации, имя из «Устройств» и сколько
+        секунд назад человек говорил с ним сам (голосом или в окне; -1 — с запуска не говорил). Сервер отдаёт сообщения
+        бота тому компьютеру, за которым человек сидел последним."""
+        at = float(getattr(self, "local_act", 0) or 0)
+        sync = getattr(self, "sync", None)
+        return {"device": (sync.state.get("device") if sync else "") or "", "name": self.device_name(),
+                "act": int(max(0, time.time() - at)) if at else -1}
+
+    def _tg_join(self, settle=False):
+        """Бот Telegram аккаунта — и на этом компьютере (03.11): вошли в аккаунт, а бот привязан на другом компьютере или
+        телефоне — подхватываем без повторной активации; бот по ключу этого компьютера — переносим в аккаунт. -> было ли
+        изменение. settle — из фонового цикла: только если вход держится с прошлого круга (вошли и сразу вышли — бота
+        этого компьютера не трогаем)."""
+        tok = self.account.token() if self.account.logged_in() else ""
+        if settle:
+            seen, self._tg_acc_seen = getattr(self, "_tg_acc_seen", ""), tok
+            if not tok or seen != tok:
+                return False
+        if not tok:
+            return False
+        from telegram import SHARED_URL
+        tg = self.telegram
+        url = next((u for u in (self.s.get("telegram_url"), self.account.service_url("tg"), SHARED_URL) if u), SHARED_URL)
+        if not tg.join(self.account.token(), url):
+            return False
+        self._tg_sync_soon.set()                     # сервер сразу узнаёт ключ и персонажа — отвечать, когда все выключены
+        self.emit("telegram", **tg.public())
+        self.emit("tools", tools=self.toolbox.catalog())
+        return True
+
     def _tg_sync_loop(self):
         """Фоновый поток: обмен с сервером раз в минуту или сразу по _tg_sync_soon (изменились напоминания, настройки)."""
+        self._tg_acc_seen = self.account.token() if self.account.logged_in() else ""     # вход с прошлого запуска — сразу
         while not self.stopping.is_set():
+            try:
+                self._tg_join(settle=True)
+            except Exception as e:  # noqa: BLE001
+                log.debug("Telegram: бот аккаунта: %s", e)
             try:
                 self.tg_sync()
             except Exception as e:  # noqa: BLE001
@@ -175,6 +211,9 @@ class RemoteMixin:
         сообщение владельца (kind="ask") — оно идёт в тот же разговор, что голосом дома (история общая).
         Голосовое распознаётся здесь же; ответ на голосовое — ещё и голосом, если так настроено."""
         ev = "max" if tg is getattr(self, "max", None) else "telegram"
+        if kind == "nodes":                          # другой компьютер аккаунта стал отвечать (или этот) — студии
+            self.emit(ev, **tg.public())
+            return
         if kind == "paired":
             self.emit(ev, **tg.public())
             self.push(f"{tg.TITLE} подключён", f"Пишите ассистенту: {'@' if ev == 'telegram' else ''}{tg.public()['bot']}", telegram=False)
@@ -207,6 +246,8 @@ class RemoteMixin:
                 if hasattr(self, "tasks") and hasattr(self.tasks, "list") else []
             lines = [f"{self.persona_name()} на связи.", f"Мозг: {prof.get('name') or prof.get('model') or 'не подключён'}.",
                      "Сейчас отвечаю на вопрос." if busy else "Сейчас свободен."]
+            if getattr(tg, "who", None) and tg.who():
+                lines.append(tg.who() + ".")
             for t in running[:5]:
                 pr = t.get("progress") or [0, 0]
                 lines.append(f"• {t.get('title')}: {t.get('status_ru') or t.get('status')}" + (f" ({pr[0]}/{pr[1]})" if pr and pr[1] else ""))

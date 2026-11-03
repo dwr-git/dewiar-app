@@ -31,6 +31,7 @@ async function loadVaultPage() {
   catch (e) { $("#vl-list").innerHTML = `<p class="res bad">${escH(e.message)}</p>`; return; }
   vlRender();
   vlKeep();
+  vlSync();
   if (!VL.edit) setTimeout(() => { if ($("#p-vault").classList.contains("cur")) $("#vl-q").focus(); }, 60);
 }
 function vlRender() {
@@ -255,8 +256,8 @@ addEventListener("resize", () => { clearTimeout(VL.rs); VL.rs = setTimeout(() =>
   if (VL.loaded && $("#p-vault").classList.contains("cur")) vlRender();
 }, 150); });
 /* «Не потерять пароли» (27.10, владелец: «бывают случаи, когда нужно перенести их и не потерять вместе с устройством»):
-   сейф не синхронизируется — переносится закрытым «Слепком знаний» с паролем. Здесь — когда была последняя такая копия
-   и кнопка: «Главная» → слепок, формат «закрытый». */
+   закрытый «Слепок знаний» с паролем — в нём и сейф. С 03.11 сейф переносится синхронизацией (vlSync выше), а копия —
+   скромной строкой на чёрный день: когда была последняя и кнопка «Главная» → слепок, формат «закрытый». */
 async function vlKeep() {
   const el = $("#vl-keep-when"); if (!el) return;
   let info = null; try { info = await core.call("backup_info"); } catch (e) { return; }
@@ -273,6 +274,75 @@ function vlRestore() {
   const h = $('nav button[data-p="home"]'); if (h) h.click();
 }
 if ($("#vl-keep-back")) $("#vl-keep-back").onclick = vlRestore;
+
+/* Один сейф на всех своих устройствах (03.11, группа Telegram: «сейф не синхронизируется с компа на комп. Смешно читать
+   подсказку, что можно выгрузить его в файл и перенести самому — раз есть синхронизация, а сейф шифруется»). Ядро —
+   vault_sync (op status | on {password} | change {old, password} | off), core/vault.py SafeKey: ключ — из мастер-пароля,
+   сервер видит только шифр. Состояния: нет синхронизации устройств; выключено; на другом устройстве сейф уже общий (remote) —
+   спросить его мастер-пароль; мастер-пароль сменили там (stale); включено — сменить пароль или выключить здесь. */
+const VS = { st: null, mode: "" };              // mode: "" | "new" (придумать) | "join" (ввести) | "change" | "reset" (забыли — заново)
+const I_DEV = '<rect x="2.5" y="5" width="13" height="9.5" rx="2"/><path d="M6 18h6M9 14.5V18"/><rect x="16.5" y="9" width="5" height="10" rx="1.5"/><path d="M19 16.6h.01"/>';
+async function vlSync(again) {
+  const box = $("#vl-sync"); if (!box) return;
+  if (!again) { try { VS.st = await core.call("vault_sync", { op: "status" }); } catch (e) { box.hidden = true; return; } }
+  box.hidden = false;
+  const s = VS.st || {}, on = !!s.on, want = s.remote || s.stale;
+  if (on && VS.mode !== "change") VS.mode = "";
+  if (!on && want && !VS.mode) VS.mode = "join";
+  const state = on ? `<span class="vs-pill ok">включено</span>` : s.stale ? `<span class="vs-pill warn">ждёт новый мастер-пароль</span>` : s.remote ? `<span class="vs-pill warn">ждёт мастер-пароль</span>` : "";
+  const text = !s.linked ? "Сначала подключите синхронизацию устройств: «Dewiar.pro» → вход в аккаунт или ключ Dewiar. Тогда сейф откроется и на телефоне."
+    : on ? `Пароли уходят на ваши устройства только шифром: ключ получается из мастер-пароля и есть только у них — сервер dewiar.pro видит лишь зашифрованные записи. На телефоне: «Всё» → «Сейф», тот же мастер-пароль.${s.sync_on === false ? " Сейчас синхронизация устройств выключена — включите её в «Dewiar.pro»." : ""}${s.server === false ? " Сервер dewiar.pro ещё не знает сейфа — его надо обновить." : ""}`
+    : s.stale ? "Мастер-пароль сейфа сменили на другом устройстве. Введите новый — и сейф снова станет общим. Пароли на этом компьютере на месте."
+    : s.remote ? "На другом вашем устройстве сейф уже общий. Введите его мастер-пароль — записи появятся здесь, а здешние уйдут туда."
+    : "Включите — и пароли будут на телефоне и на другом компьютере. Шифруются здесь мастер-паролем, который знаете только вы: сервер видит лишь шифр.";
+  const form = !s.linked || (on && VS.mode !== "change") || (!on && !VS.mode) ? "" : VS.mode === "join"
+    ? `<form class="vs-form" id="vs-form" autocomplete="off"><label class="f"><span>Мастер-пароль сейфа</span><input type="password" id="vs-pw" autocomplete="current-password" spellcheck="false"></label>
+        <button class="btn primary" type="submit" id="vs-go">${s.stale ? "Открыть" : "Подключить сейф"}</button>
+        <a href="#" class="vs-forgot" id="vs-forgot">Забыли мастер-пароль? Начать заново</a></form>`
+    : `<form class="vs-form" id="vs-form" autocomplete="off">${VS.mode === "change" ? `<label class="f"><span>Прежний мастер-пароль</span><input type="password" id="vs-old" autocomplete="current-password" spellcheck="false"></label>` : ""}
+        <label class="f"><span>${VS.mode === "change" ? "Новый мастер-пароль" : "Придумайте мастер-пароль"}</span><input type="password" id="vs-pw" autocomplete="new-password" spellcheck="false"><i class="vl-str" id="vs-str" aria-live="polite"></i></label>
+        <label class="f"><span>Ещё раз</span><input type="password" id="vs-pw2" autocomplete="new-password" spellcheck="false"></label>
+        <button class="btn primary" type="submit" id="vs-go">${VS.mode === "change" ? "Сменить" : VS.mode === "reset" ? "Начать заново" : "Включить"}</button><button class="btn" type="button" id="vs-cancel">Отмена</button>
+        <p class="hint vs-warn">Не короче ${s.min || 8} знаков. Мастер-пароль нигде не хранится и не восстанавливается — запишите его. Забудете — пароли на этом компьютере останутся, но на новых устройствах сейф не откроется.</p></form>`;
+  box.className = "vl-sync" + (on ? " on" : want ? " ask" : "") + (s.linked ? "" : " off");
+  box.innerHTML = `<div class="vs-head"><i class="vs-ic" aria-hidden="true">${SVG(I_DEV)}</i>
+      <div class="vs-t"><b>Один сейф на всех моих устройствах ${state}</b><span>${escH(text)}</span></div>
+      <label class="tg" title="Синхронизировать сейф между моими устройствами"><input type="checkbox" id="vs-on" aria-label="Синхронизировать сейф между моими устройствами"${on ? " checked" : ""}${s.linked ? "" : " disabled"}><i></i></label></div>
+    ${form}<p class="res" id="vs-res" role="status"></p>
+    ${on && VS.mode !== "change" ? `<div class="vs-acts"><button class="btn small" id="vs-change">Сменить мастер-пароль</button></div>` : ""}`;
+  const res = (t, good) => { const r = $("#vs-res"); r.className = "res " + (good ? "ok" : "bad"); r.textContent = t; };
+  $("#vs-on").onchange = async (e) => {
+    if (e.target.checked) { VS.mode = s.remote || s.stale ? "join" : "new"; vlSync(true); setTimeout(() => $("#vs-pw") && $("#vs-pw").focus(), 30); return; }
+    if (!on) { VS.mode = ""; return vlSync(true); }
+    if (!await ask("Выключить синхронизацию сейфа на этом компьютере? Пароли здесь и на других устройствах останутся, новые правки перестанут ходить сюда и отсюда.")) { e.target.checked = true; return; }
+    try { VS.st = await core.call("vault_sync", { op: "off" }); VS.mode = ""; vlSync(true); toast("Сейф больше не синхронизируется с этим компьютером"); }
+    catch (err) { e.target.checked = true; res(err.message); }
+  };
+  if ($("#vs-change")) $("#vs-change").onclick = () => { VS.mode = "change"; vlSync(true); setTimeout(() => $("#vs-old").focus(), 30); };
+  if ($("#vs-cancel")) $("#vs-cancel").onclick = () => { VS.mode = want && VS.mode === "reset" ? "join" : ""; vlSync(true); };
+  if ($("#vs-forgot")) $("#vs-forgot").onclick = async (e) => {
+    e.preventDefault();
+    if (!await ask("Начать сейф заново с этого компьютера? Его записи станут общими под новым мастер-паролем, другие устройства попросят новый. Записи, которых здесь нет, вернутся, когда на тех устройствах введут новый пароль; добавленные только на телефоне — пропадут.", { ok: "Начать заново" })) return;
+    VS.mode = "reset"; vlSync(true); setTimeout(() => $("#vs-pw") && $("#vs-pw").focus(), 30);
+  };
+  if ($("#vs-pw") && $("#vs-str")) $("#vs-pw").oninput = () => { const [k, t] = vlStrength($("#vs-pw").value); const el = $("#vs-str"); el.className = "vl-str " + k; el.textContent = t; };
+  if ($("#vs-form")) $("#vs-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const pw = $("#vs-pw").value, b = $("#vs-go");
+    if (!pw) { res("Введите мастер-пароль"); $("#vs-pw").focus(); return; }
+    if ($("#vs-pw2")) {
+      if (pw.length < (s.min || 8)) { res(`Не короче ${s.min || 8} знаков — им открывается сейф на телефоне`); $("#vs-pw").focus(); return; }
+      if (pw !== $("#vs-pw2").value) { res("Пароли не совпадают — наберите ещё раз"); $("#vs-pw2").focus(); return; }
+    }
+    b.disabled = true; const was = b.textContent; b.textContent = "Минутку…";
+    try {
+      VS.st = await core.call("vault_sync", VS.mode === "change" ? { op: "change", old: $("#vs-old").value, password: pw } : { op: VS.mode === "reset" ? "reset" : "on", password: pw });
+      const m = VS.mode; VS.mode = ""; vlSync(true);
+      toast(m === "change" || m === "reset" ? "Мастер-пароль сменён — другие устройства попросят новый" : m === "join" ? "Сейф подключён — записи сейчас подтянутся" : "Сейф синхронизируется — откройте его на телефоне: «Всё» → «Сейф»", 4200);
+    } catch (err) { b.disabled = false; b.textContent = was; res(err.message); $("#vs-pw").select(); }
+  };
+}
+core.on("vault_changed", () => { clearTimeout(VS.t); VS.t = setTimeout(() => { if ($("#p-vault").classList.contains("cur") && !VL.edit) loadVaultPage(); }, 400); });
 if ($("#vl-keep-go")) $("#vl-keep-go").onclick = () => {
   if (typeof SN !== "undefined") { SN.fmt = "dwr"; try { localStorage.setItem("dw.snap.fmt", "dwr"); } catch (e) { } }
   const h = $('nav button[data-p="home"]'); if (h) h.click();

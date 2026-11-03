@@ -2605,14 +2605,34 @@ html .qa-art.nt-body[data-cs="theme"] { --mk: var(--accent); }   /* точки �
 html:not(.st-light) .cs-oc { background: rgba(255,255,255,.07); box-shadow: none; }
 html:not(.st-light) .cs-oc:hover { background: rgba(255,255,255,.12); }
 
-/* сейф: «не потерять пароли» — закрытый слепок (27.10, владелец: «перенести и не потерять вместе с устройством») */
-.vl-keep { display: flex; align-items: center; gap: 16px; margin-top: 18px; padding: 16px 18px; border-radius: 18px; background: var(--glass); box-shadow: var(--raise-s, none); }
-.vl-keep-acts { display: flex; flex-direction: column; gap: 8px; flex: none; }
-@media (max-width: 760px) { .vl-keep { flex-wrap: wrap; } .vl-keep-acts { flex-direction: row; flex-wrap: wrap; } }
-.vl-keep > svg { width: 34px; height: 34px; flex: none; fill: none; stroke: #1d9a74; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.vl-keep > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; } .vl-keep b { font-size: 14.5px; }
-.vl-keep span { color: var(--muted); font-size: 13px; line-height: 1.5; } .vl-keep em { font-style: normal; display: block; margin-top: 4px; font-weight: 700; }
-@media (max-width: 760px) { .vl-keep { flex-wrap: wrap; } }
+/* сейф: закрытая копия — скромной строкой на чёрный день (27.10); главное — «Один сейф на всех устройствах» (.vl-sync, 03.11) */
+.vl-keep { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; max-width: 900px; margin-top: 12px; padding: 4px 4px; }
+.vl-keep > span:first-child { flex: 1; min-width: 240px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.vl-keep b { color: var(--ink); font-weight: 600; } .vl-keep em { font-style: normal; margin-left: 6px; font-weight: 600; }
+.vl-keep-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.vl-sync { max-width: 900px; margin-top: 18px; padding: 16px 18px; border-radius: 20px; background: var(--glass); box-shadow: var(--raise-s, none); display: flex; flex-direction: column; gap: 10px; }
+.vl-sync[hidden] { display: none; }
+.vl-sync.on { box-shadow: inset 0 0 0 1px rgba(75,227,161,.35), var(--raise-s, 0 0 0 transparent); }
+.vl-sync.ask { box-shadow: inset 0 0 0 1px rgba(242,170,76,.55), var(--raise-s, 0 0 0 transparent); }
+.vs-head { display: flex; align-items: center; gap: 14px; }
+.vs-ic { width: 46px; height: 46px; flex: none; border-radius: 15px; display: grid; place-items: center; background: var(--brand); box-shadow: 0 10px 24px -14px rgba(118,75,162,.9); }
+.vs-ic svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.vl-sync.off .vs-ic { background: rgba(127,127,160,.25); box-shadow: none; }
+.vs-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.vs-t b { font-size: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.vs-t > span { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.vs-pill { font-size: 11.5px; font-weight: 700; letter-spacing: .02em; padding: 3px 9px; border-radius: 99px; }
+.vs-pill.ok { color: #138a63; background: rgba(75,227,161,.2); } .vs-pill.warn { color: #a5600f; background: rgba(242,170,76,.22); }
+html:not(.st-light) .vs-pill.ok { color: var(--good); } html:not(.st-light) .vs-pill.warn { color: #F6C77A; }
+.vs-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; padding-left: 60px; }
+.vs-form .f { flex: 1 1 220px; margin: 0; }
+.vs-form .f input { width: 100%; }
+.vs-form .vl-str { display: block; min-height: 1.2em; }
+.vs-warn { flex-basis: 100%; margin: 0; font-size: 12.5px; }
+.vs-forgot { align-self: center; font-size: 13px; color: var(--muted); }
+.vl-sync .res { margin: 0 0 0 60px; } .vl-sync .res:empty { display: none; }
+.vs-acts { display: flex; align-items: center; gap: 12px; padding-left: 60px; }
+@media (max-width: 760px) { .vs-form, .vs-acts { padding-left: 0; } .vl-sync .res { margin-left: 0; } }
 
 /* ---------- «Команда» (28.10, макет «Команда»): доска поручений, карточка с историей, сотрудники ---------- */
 #p-team .tm-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }

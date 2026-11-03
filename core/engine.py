@@ -194,6 +194,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.telegram = Telegram(on_message=lambda k, d: self._on_messenger(self.telegram, k, d))
         self.max = Max(on_message=lambda k, d: self._on_messenger(self.max, k, d))
         self.chat = Messengers(self.telegram, self.max)        # Telegram и MAX вместе: уведомления — во все подключённые
+        self.telegram.node = self._tg_node                      # бот аккаунта на нескольких компьютерах: кто этот (03.11)
+        self.telegram.quiet_follower = lambda: self._sync_on()  # напоминания одни на всех — в Telegram шлёт только отвечающий
         self.toolbox.hooks["telegram"] = self.chat
         from pbot import PersonaBot
         self.pbot = PersonaBot(self)                            # «Бот персонажа»: публичный бот, отвечает всем (0.67)
@@ -266,6 +268,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.toolbox.hooks["power"] = self.power
         from vault import Vault
         self.vault = Vault(_CFG / "vault.bin", _CFG / "vault.key")
+        from vault import SafeKey
+        self.safe_key = SafeKey(_CFG / "vault-sync.key", _CFG / "vault.key")   # сейф между своими устройствами (мастер-пароль; 03.11)
+        self.vault.on_change = self.sync.soon.set
         from synckey import SyncKey
         self.sync_key = SyncKey(_CFG / "sync.key", _CFG / "vault.key")     # сквозное шифрование синхронизации (sync.e2e)
         from smarthome import CLIENT_ID as _YCID, Home

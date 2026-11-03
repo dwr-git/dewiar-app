@@ -65,7 +65,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     files: (n) => (n in files ? files[n] : (localStorage.getItem("f_" + n) || "")),
     saveFile: (n, t) => { files[n] = t; try { localStorage.setItem("f_" + n, t); } catch (e) {} return true; },
     saveDownload: (n, m, t) => { (window._downloads = window._downloads || []).push([n, t]); return "Загрузки/Dewiar/" + n; },
-    copy: (t) => { window._copied = t; return true; }, bars: (c, l) => { window._bars = [c, l]; },
+    copy: (t) => { window._copied = t; return true; }, secureScreen: (on) => { window._secure = !!on; }, bars: (c, l) => { window._bars = [c, l]; },
     closeWatch: (j) => { window._closeWatch = j; },
     locate: (age) => { window._locAsked = (window._locAsked || 0) + 1; const l = window._loc === undefined ? { lat: 53.9006, lon: 27.559, acc: 20, ts: Date.now() } : window._loc;
       ev(Object.assign({ type: "loc" }, l || { error: "местоположение выключено в телефоне" })); }, locSettings: () => { window._locSet = 1; return true; },
@@ -690,6 +690,7 @@ async function pulseSend() {
   return true;
 }
 function bugSnapTake() {                                    // открыли настройки — каким был экран до них (для жалобы)
+  if ($("#sh-safe.on")) return;                               // открытый сейф (пароли на экране) в жалобу не снимаем
   try { const b = D.snapshot ? D.snapshot() : ""; bugSnap = b ? { ts: Date.now(), b64: b } : bugSnap; } catch (e) { }
 }
 const bugPickHtml = () => bugPick
@@ -6270,7 +6271,8 @@ const APPS_IC = {
   month: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
   senior: '<path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/><path d="M8.5 12.5h2l1-2 1.5 4 1-2h1.5"/>',
   radio: '<rect x="3" y="9" width="18" height="11" rx="3"/><path d="M7 9l9-5"/><circle cx="15.5" cy="14.5" r="2.5"/><path d="M6.5 13h3M6.5 16h3"/>',
-  lessons: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.2v5.6l4.8-2.8z"/>' };
+  lessons: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.2v5.6l4.8-2.8z"/>',
+  safe: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="12" cy="12" r="3.6"/><path d="M12 8.4V7M12 17v-1.4M15.6 12H17M7 12h1.4M4 8h-1.5M4 16h-1.5"/>' };
 function appsHtml() {
   const t = [];
   if (feat("games")) t.push(["play", "Досуг", "милые игры"]);
@@ -6283,6 +6285,7 @@ function appsHtml() {
   if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "для сотрудников"]);   // 28.10, владелец: «при чём здесь „по коду“»
   if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
   if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
+  if (!kidsOn()) t.push(["safe", "Сейф", "пароли с компьютера"]);       // 03.11: пароли — подглядеть с телефона (safe.js)
   t.push(["radio", "Радио", "станции и жанры"]);
   t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"]);
   t.push(["senior", "Для старших", "для мамы и папы"], ["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
@@ -6292,7 +6295,7 @@ function openApps() {
   $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
   $$("#apps-body [data-app]").forEach(b => b.onclick = () => { const k = b.dataset.app; closeSheets();
     setTimeout(() => ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
-      ideas: () => openIdeas(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(), lessons: () => openLessons(),
+      ideas: () => openIdeas(), safe: () => openSafe(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(), lessons: () => openLessons(),
       news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9", true), true) }[k] || (() => { }))(), 60); });
 }
 $("#b-apps").onclick = () => openApps();
@@ -6600,7 +6603,7 @@ function renderSettings() {
         : (S.tg || {}).linked ? `<div class="row2"><span class="res ok" style="flex:1;margin:0">Подключён${S.tg.name ? ": " + esc(S.tg.name) : ""}${S.tg.bot ? " · @" + esc(S.tg.bot) : ""}</span><button class="btn" id="tg-off">Отключить</button></div>
           <p class="hint" style="margin:8px 0 0">Пишите боту или присылайте голосовые — ответит ${esc(persona().name)}. Заметки, списки и напоминания из Telegram появятся здесь, в «Мой день». Компьютер с Dewiar включён — отвечает он.</p>${S.tg.bot ? `<button class="btn w" id="tg-open" style="margin-top:8px">Открыть бота</button>` : ""}
           <div class="sw" style="margin-top:12px"><div>Отвечать с телефона, когда компьютер выключен<small>Ответит ${esc(persona().name)} этого телефона своим мозгом, молча — ответ уйдёт в Telegram. Сразу — пока приложение открыто или в шторке значок «Dewiar на связи»; телефон уснул — ответит сервер Dewiar. Тратит немного заряда.</small></div>
-          <label class="tg"><input type="checkbox" id="tg-hand" ${S.tg.hand ? "checked" : ""}><i></i></label></div>`
+          <label class="tg"><input type="checkbox" id="tg-hand" ${S.tg.hand !== false ? "checked" : ""}><i></i></label></div>`
         : `<p class="hint" style="margin:0 0 10px">Пишите и присылайте голосовые боту Dewiar в Telegram — ассистент ответит, даже когда телефон убран: поставит напоминание, запишет заметку, ответит голосом.</p><button class="btn p w" id="tg-go">Подключить Telegram</button>`}<div class="res" id="tg-res"></div></div>
       `);
     if (setTab === "smart") h.push(`
@@ -6825,7 +6828,7 @@ function wireSettings(info) {
     wireHands();
     if (g("tg-go")) g("tg-go").onclick = async () => { const b = g("tg-go"), r = g("tg-res"); b.disabled = true; r.className = "res"; r.textContent = "готовлю ссылку…";
       try { await tgLink(r); toast("Telegram подключён"); renderSettings(); } catch (e) { r.className = "res bad"; r.textContent = e.message; b.disabled = false; } };
-    if (g("tg-off")) g("tg-off").onclick = async () => { if (!confirm("Отключить Telegram? Бот перестанет отвечать вам.")) return;
+    if (g("tg-off")) g("tg-off").onclick = async () => { if (!confirm("Отключить Telegram? Бот перестанет отвечать вам — и с компьютеров тоже: он один на все ваши устройства.")) return;
       try { await tgCall("dewiarUnlink"); S.tg = { linked: false }; saveS(); renderSettings(); } catch (e) { g("tg-res").className = "res bad"; g("tg-res").textContent = e.message; } };
     if (g("tg-open")) g("tg-open").onclick = () => D.openUrl("https://t.me/" + S.tg.bot);
     if (g("tg-hand")) g("tg-hand").onchange = () => { const on = g("tg-hand").checked; tgHandSet(on);
@@ -6889,11 +6892,11 @@ function wireSettings(info) {
    меняешь здесь — меняй и там. Дополнительные виды (soul, mind, diary, dayturn, taskreq, task, done) шлём, только если их знает сервер. */
 const MIND_MAX = 8000, MIND_CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g;
 const mindText = (d) => (d && typeof d.text === "string" && d.text.trim() && d.text.length <= MIND_MAX) ? d.text.replace(MIND_CTRL, "") : "";
-const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory"];
+const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory", "safe"];   // safe — сейф шифром мастер-пароля (safe.js)
 /* Сквозное шифрование синхронизации (S.sync.e2e, как core/sync.py и core/synckey.py): ключ 32 байта знают только свои
    устройства (pref sync_key; другим своим — конвертом ownShare), личные записи уходят {e2e: 1, c: seal(K, JSON)}.
    Открытыми — метка mind:e2e, задачи для облака (taskreq с cloud) и удаления. */
-const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory"];
+const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory", "safe"];
 function syncKeyGet() { try { const d = JSON.parse(prefGet("sync_key") || "null"); return d && d.k && DC() && DC().b64d(d.k).length === 32 ? d : null; } catch (e) { return null; } }
 function syncKeyAdopt(kb64, at) {
   let k; try { k = DC().b64d(String(kb64 || "")); } catch (e) { return false; }
@@ -7143,6 +7146,7 @@ function syncSnapshot() {
   if (ks.includes("task")) qGet("taskcmd").forEach(x => { out["task:" + x.id] = Object.assign({}, x.data, { want: x.want, text: x.text, at: x.ts }); });   // «удалить», «ответ» — компьютеру
   if (ks.includes("done")) doneList().forEach(x => { out["done:" + x.id] = { title: x.title, at: +x.at, src: x.src || "", rid: x.rid || "" }; });   // сделанные дела (core/done.py)
   if (ks.includes("persona")) myPersonas().forEach(x => { out["persona:" + x.id] = { name: x.name, gender: x.gender || "female", role: x.role || "", about: x.about || "", color: x.color || "", avatar: x.avatar || "" }; });   // свои персонажи — и на компьютер
+  if (ks.includes("safe") && typeof safeSnap === "function") safeSnap(out);   // сейф — как пришёл, шифром мастер-пароля
   return out;
 }
 const TASK_RU = { running: "в работе", waiting: "ждёт ответа", paused: "на паузе", done: "готово", failed: "не вышло", sleeping: "ждёт времени", stopped: "остановлена" };
@@ -7150,6 +7154,7 @@ const TASK_RU = { running: "в работе", waiting: "ждёт ответа", 
    выводы — их ведёт компьютер; очереди dayturn/taskreq): syncRun помечает её skip, чтобы не отправить обратно удалением. */
 function syncApply(it) {
   const d = it.data || {}, del = it.deleted;
+  if (it.kind === "safe") return typeof safeApply === "function" ? safeApply(it) : false;
   if (it.kind === "persona") {                      // свой персонаж с компьютера или другого телефона
     const l = myPersonas().filter(x => x.id !== it.id);
     if (!del) { if (!d.name) return false; l.push({ id: it.id, name: String(d.name).slice(0, 24), gender: d.gender === "male" ? "male" : "female", role: String(d.role || "").slice(0, 60),
@@ -7234,6 +7239,7 @@ async function syncRun(manual) {
   // экзаменом (память «в среду встреча с подрядчиком», заметки, расход 450, сделанные дела) уходило в аккаунт и
   // возвращалось людям как своё (отчёт №52, 14.10). Следы прошлых экзаменов убирает examCleanCheck (exam.js).
   if (SANDBOX) return;
+  if (tgOn() && Date.now() - ((S.tg || {}).st || 0) > 600000) tgStatus().catch(() => {});   // бот подключили на компьютере — узнать
   if ((S.tg || {}).linked && Date.now() - (S.tg.at || 0) > 600000) tgSync();      // ключ и персонаж для бота — раз в 10 минут
   if (!tgHandT && !tgHandBusy && tgHandOn()) tgHandLater(500);                     // «Отвечать с телефона» — опрос не уснул
   if (syncBusy) return; const c = syncChan();
@@ -7993,13 +7999,17 @@ async function tgSync() {
     S.tg.at = Date.now(); saveS();
   } catch (e) { plog("warn", "Telegram: " + e.message); }
 }
-async function tgStatus() { const r = await tgCall("dewiarStatus"); S.tg = Object.assign({}, S.tg, { linked: !!r.linked, bot: r.bot || "", name: r.name || "" }); saveS(); return S.tg; }
+/* Привязан ли бот у аккаунта. Бот один на все устройства аккаунта (03.11): его могли подключить на компьютере — телефон
+   узнаёт сам при запуске и раз в 10 минут (раньше — только открыв «Ещё → Telegram», и «Отвечать с телефона» не включалось). */
+async function tgStatus() { const r = await tgCall("dewiarStatus"); S.tg = Object.assign({}, S.tg, { linked: !!r.linked, bot: r.bot || "", name: r.name || "", st: Date.now() }); saveS();
+  if (tgHandOn() && !tgHandT && !tgHandBusy) tgHandLater(500);
+  return S.tg; }
 async function tgLink(res) {
   const a = new Uint8Array(18); crypto.getRandomValues(a);
   const code = btoa(String.fromCharCode(...a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");   // как secrets.token_urlsafe на компьютере
   const st = await tgStatus();
   if (!st.bot) throw new Error("на сайте не настроен бот Telegram");
-  await tgCall("setLinkCode", { code });
+  await tgCall("setLinkCode", { code, device: "phone" });     // «Готово» в Telegram скажет сам сервер — компьютеру не ждать
   D.openUrl("https://t.me/" + st.bot + "?start=" + code);
   res.className = "res"; res.textContent = "В Telegram нажмите «Старт» — жду…";
   for (let i = 0; i < 60; i++) {                   // 3 минуты: человек переключился в Telegram и вернулся
@@ -8017,7 +8027,8 @@ async function tgLink(res) {
    раньше, отвечает сервер. Детский режим и экзамен — не отвечаем. */
 let tgTurn = false, tgHandT = 0, tgHandBusy = false, tgLast = "";
 const tgDone = [];
-const tgHandOn = () => tgOn() && !!(S.tg || {}).linked && !!(S.tg || {}).hand && !kidsOn() && !SANDBOX;
+// включено по умолчанию (03.11: «нода на смартфоне ни разу не подхватила» — переключатель был выключен, а про него не знали)
+const tgHandOn = () => tgOn() && !!(S.tg || {}).linked && (S.tg || {}).hand !== false && !kidsOn() && !SANDBOX;
 function tgHandLater(ms) { clearTimeout(tgHandT); tgHandT = setTimeout(tgHandTick, ms); }
 async function tgHandTick() {
   tgHandT = 0;
@@ -10536,7 +10547,7 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
   // приложение живёт неделями, не закрываясь: проверяем и при возвращении в него, но не чаще раза в 6 часов (29.10)
   let updAt = Date.now();
   if (!D.web) document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - updAt > 6 * 3600e3) { updAt = Date.now(); setTimeout(() => checkUpdate(false), 3000); } });
-  setTimeout(() => accountCheck().then(ensureBrain).then(cloudCaps).then(tgSync), 3000);
+  setTimeout(() => accountCheck().then(ensureBrain).then(cloudCaps).then(() => tgOn() ? tgStatus().catch(() => {}) : null).then(tgSync), 3000);
   setTimeout(() => syncRun(false), 4000);
   setTimeout(() => radio.refresh(), 10000);
   // радио одно на приложение и переживает пересоздание экрана (Radio.java) — подхватываем, что сейчас играет

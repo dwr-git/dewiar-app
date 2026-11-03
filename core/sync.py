@@ -6,7 +6,8 @@
 конституция и выводы на завтра; diary — последние дни дневника (пишет компьютер, телефон читает); dayturn — разговор
 с телефона в дневник дня и taskreq — задача с телефона (компьютер забирает их и тем самым удаляет из облака); task —
 ход задач для показа на телефоне; vault — всё хранилище Obsidian между компьютерами (если включено); bill, pay, payfile —
-«Платежи» между компьютерами: счета, оплаты и вложения кусками (_apply_pay).
+«Платежи» между компьютерами: счета, оплаты и вложения кусками (_apply_pay); safe — «Сейф паролей» между своими
+устройствами, только шифром мастер-пароля сейфа (vault.SafeKey, _snap_safe/_apply_safe; 03.11).
 
 Как: каждое устройство раз в минуту (и сразу после своих изменений, событие soon) сравнивает свои данные с тем, что
 уже отправляло (отпечатки в STATE_DIR/sync.json), шлёт изменения и удаления и забирает чужие, начиная с номера
@@ -39,7 +40,7 @@ from settings import STATE_DIR
 log = logging.getLogger("dewiar.sync")
 
 BASE_KINDS = ("reminder", "note", "money", "memory")          # знает любой сервер
-EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory")   # тот же список $extra в cloud.php
+EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory", "safe")   # тот же список $extra в cloud.php
 VAULT_MAX = 300_000                               # сервер не принимает запись больше 300 КБ — такие заметки не шлём
 VAULT_FILES = 15000
 CHUNK = 400                                       # изменений за один запрос (сервер берёт до 2000; первая отправка большого хранилища — частями)
@@ -59,7 +60,7 @@ CONST_PREV = "Память/Конституция — прежняя.md"
 # Сквозное шифрование (sync.e2e, core/synckey.py): что шифруется на устройстве — всё личное. Открытыми остаются только
 # метка «шифрование включено» (mind:e2e), задачи для облака (taskreq с cloud — их выполняет сервер) и удаления (пустые).
 E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory",
-             "bill", "pay", "payfile")
+             "bill", "pay", "payfile", "safe")          # safe и без того шифр мастер-пароля — с e2e он ещё и в конверте ключа синхронизации
 # «Платежи» между компьютерами (27.10, владелец: «платежи дома заполнил… а на работе их нет»): bill — счёт, pay — оплата,
 # payfile — вложение (платёжка, скриншот) кусками: облако берёт запись до 300 КБ, а зашифрованная на треть длиннее
 PF_CHUNK = 150_000
@@ -386,6 +387,8 @@ class Sync:
                     out["pay:" + x["id"]] = dict(x)
         if pm is not None and "payfile" in ok:
             self._snap_payfiles(out, pm)
+        if "safe" in ok:
+            self._snap_safe(out)
         dn = getattr(h, "done", None)
         if dn is not None and "done" in ok:            # сделанные дела (done.py) — как doneList() на телефоне
             with dn._lock:
@@ -502,6 +505,8 @@ class Sync:
             return self._apply_pmemory(iid, d, deleted)
         elif kind == "vault":
             return self._apply_vault(iid, d, deleted, it)
+        elif kind == "safe":
+            return self._apply_safe(iid, d, deleted, it)
         elif kind in EXTRA_KINDS:
             return self._apply_extra(kind, iid, d, deleted, it.get("updated"))
 
@@ -576,8 +581,16 @@ class Sync:
                 return False
             rel = self.state.get("vmap", {}).get(iid)
             return not (rel and (v / rel).exists())
-        if kind in ("soul", "mind", "diary", "task", "done", "persona", "bill", "pay", "payfile") and self.state.get("_extra_failed"):
+        if kind in ("soul", "mind", "diary", "task", "done", "persona", "bill", "pay", "payfile", "safe") and self.state.get("_extra_failed"):
             return False
+        if kind == "safe":                        # выключили здесь, мастер-пароль сменили, сейф не открылся — не удаление
+            vt = getattr(self.host, "vault", None)
+            if iid == "key" or vt is None or self._safe_on() is None or self.state.get("_safe_failed"):
+                return False
+            try:
+                return vt.get(iid) is None
+            except Exception:  # noqa: BLE001
+                return False
         if kind == "payfile":                     # файл ещё не пришёл целиком или не читается — не удаление; удаление — когда
             pm = getattr(self.host, "payments", None)        # ни один счёт и ни одна оплата его больше не помнят
             rel = (self.state.get("pfmap") or {}).get(iid.split(".")[0])
@@ -801,6 +814,121 @@ class Sync:
                 except Exception:  # noqa: BLE001
                     log.debug("дела: emit", exc_info=True)
         return None
+
+    # ---------- «Сейф паролей» между своими устройствами (вид safe; core/vault.py — SafeKey и формат) ----------
+    def _safe_on(self):
+        """Ключ сейфа, которым сейчас синхронизировать ({"k", "meta"}), или None — сейф здесь не синхронизируется."""
+        sk, vt = getattr(self.host, "safe_key", None), getattr(self.host, "vault", None)
+        return sk.active() if sk is not None and vt is not None else None
+
+    def _snap_safe(self, out):
+        """Записи сейфа -> safe:<id> (данные None, отпечаток — HMAC ключом сейфа; шифруем, только когда отправлять —
+        _safe_read) и safe:key — открытые параметры. Сейф не открылся — ничего и пометка _safe_failed (не удаления)."""
+        self.state["_safe_failed"] = False
+        cur = self._safe_on()
+        if cur is None:
+            return
+        from vault import item_ms, safe_hash
+        try:
+            items = self.host.vault.sync_items()
+        except Exception as e:  # noqa: BLE001 — CryptError: ключ компьютера сменился
+            self.state["_safe_failed"] = True
+            log.warning("Синхронизация: сейф не открылся — его записи сейчас не отправляю: %s", e)
+            return
+        meta, kid = cur["meta"], cur["meta"]["kid"]
+        out["safe:key"] = dict(meta)
+        out["safe:key#t"] = int(meta["at"])
+        for x in items:
+            key = "safe:" + str(x.get("id"))
+            out[key] = None
+            out[key + "#h"] = safe_hash(cur["k"], kid, x)
+            out[key + "#t"] = item_ms(x) or _now_ms()
+
+    def _safe_read(self, iid):
+        cur = self._safe_on()
+        vt = getattr(self.host, "vault", None)
+        if cur is None or vt is None:
+            return None
+        from vault import safe_seal
+        try:
+            x = vt.get(iid)
+        except Exception:  # noqa: BLE001
+            return None
+        return safe_seal(cur["k"], cur["meta"]["kid"], x) if x else None
+
+    def _apply_safe(self, iid, d, deleted, it):
+        """Запись сейфа с другого устройства. Параметры (safe:key) запоминаем всегда — так здесь узнают, что сейф уже
+        синхронизируется (студия спросит мастер-пароль). Записи — только когда здесь есть ключ того же мастер-пароля;
+        иначе skip (без удаления своего), а когда ключ появится — safe_refetch() заберёт историю заново.
+        Правка здесь новее пришедшей — оставляем свою (False: она уйдёт в облако следующим обменом)."""
+        from vault import item_ms, safe_open
+        h = self.host
+        sk, vt = getattr(h, "safe_key", None), getattr(h, "vault", None)
+        if sk is None or vt is None:
+            return False
+        if iid == "key":
+            if deleted or not isinstance(d, dict):
+                return False
+            if sk.note(d):
+                cur = sk.get()
+                if cur and cur["meta"]["kid"] != d.get("kid") and sk.active() is None:
+                    log.info("🔐 Мастер-пароль сейфа сменили на другом устройстве — сейф здесь ждёт новый")
+                    self._safe_event()
+            return None
+        cur = self._safe_on()
+        if cur is None:
+            return False
+        if deleted:
+            if vt.sync_drop(iid):
+                log.info("🔐 Сейф: запись удалена на другом устройстве")
+                self._safe_event()
+            return None
+        if not isinstance(d, dict) or d.get("kid") != cur["meta"]["kid"] or not isinstance(d.get("c"), str):
+            return False                                   # другим мастер-паролем (ещё не перешифровали) — ждём
+        try:
+            x = safe_open(cur["k"], d)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Синхронизация: запись сейфа %s не открылась (%s) — пропускаю", iid, e)
+            return False
+        if not isinstance(x, dict) or x.get("id") != iid:
+            return False
+        upd = int(it.get("updated") or 0)
+        x["mt"] = upd or int(x.get("mt") or 0)
+        mine = vt.get(iid)
+        if mine and item_ms(mine) > x["mt"]:
+            return False                                   # здесь правили позже — своя уйдёт в облако
+        if mine is None:                                   # тот же пароль под другим id (сейф заполняли на двух компьютерах) — одна запись
+            for y in vt.sync_items():
+                if (y["id"] != iid and y["name"].lower() == str(x.get("name") or "").lower() and y.get("value") == x.get("value")
+                        and (y.get("kind") == "page") == (x.get("kind") == "page")):
+                    vt.sync_drop(y["id"])
+        if not vt.sync_put(x):
+            return False
+        self._safe_event()
+        return None
+
+    def _safe_event(self):
+        emit = getattr(self.host, "emit", None)
+        if callable(emit):
+            try:
+                emit("vault_changed")
+            except Exception:  # noqa: BLE001
+                pass
+
+    def safe_refetch(self):
+        """Ключ сейфа появился или сменился: забрать историю заново — записи, пропущенные без ключа, лягут теперь."""
+        with self._lock:
+            self.state["rev"] = 0
+            self._save()
+        self.soon.set()
+
+    def safe_status(self):
+        sk = getattr(self.host, "safe_key", None)
+        cur = sk.get() if sk is not None else None
+        rem = sk.remote() if sk is not None else None
+        on = self._safe_on() is not None
+        return {"on": on, "stale": bool(cur) and not on, "remote": bool(rem) and not on,
+               "server": "safe" in (self.state.get("kinds") or ()), "failed": bool(self.state.get("_safe_failed"))}
 
     # ---------- «Платежи»: счета, оплаты и вложения между компьютерами ----------
     def _pf_dir(self):
@@ -1185,6 +1313,10 @@ class Sync:
                         continue
                 elif data is None and key.startswith("payfile:"):
                     data = self._payfile_read(key.split(":", 1)[1])
+                    if data is None:
+                        continue
+                elif data is None and key.startswith("safe:"):
+                    data = self._safe_read(key.split(":", 1)[1])
                     if data is None:
                         continue
                 elif data is None:                        # файл не менялся (отпечаток из кэша), а отправить надо — читаем

@@ -94,6 +94,14 @@ class Telegram:
         self.last_seen = 0.0
         self.last_in = 0.0                 # когда владелец писал сюда последний раз (куда отвечать, если мессенджеров два)
         self._strangers = set()
+        # Несколько компьютеров одного аккаунта (03.11): бот общий, сообщение забирает один — «главный» (выбирает сервер,
+        # dwrapp/tg.php q_main). node() -> {"device", "name", "act"} — кто этот компьютер и сколько секунд назад человек
+        # говорил с ним сам (Engine); main — этот ли компьютер сейчас отвечает; nodes — кто ещё подхватит (для студии).
+        # quiet_follower() -> True — уведомления шлёт только главный (напоминания одни и те же на всех — синхронизация).
+        self.node = None
+        self.main = True
+        self.nodes = {}
+        self.quiet_follower = lambda: True
 
     # ---------- хранение ----------
 
@@ -137,6 +145,13 @@ class Telegram:
     def _hdr(self):
         return {"Authorization": "Bearer " + self.data.get("token", "")} if self.shared() else {}
 
+    def _hdr_dev(self):
+        """Заголовки с прежним ключом компьютера (X-Dewiar-Dev) — когда сервер должен знать, что он прикреплён к аккаунту."""
+        h = self._hdr()
+        if self.uses_account() and str(self.data.get("dev", "")).startswith("dev:"):
+            h["X-Dewiar-Dev"] = self.data["dev"]
+        return h
+
     def uses_account(self):
         """Общий бот через аккаунт сайта (а не по ключу компьютера) — при выходе из аккаунта отключается."""
         return self.shared() and not str(self.data.get("token", "")).startswith("dev:")
@@ -153,7 +168,7 @@ class Telegram:
         return bool(self.data.get("token") and (self.data.get("owner") or {}).get("id"))
 
     def notify_on(self):
-        return self.paired() and self.data.get("notify", True)
+        return self.paired() and self.data.get("notify", True) and (self.main or not self.quiet_follower())
 
     def public(self):
         """Состояние для студии. Токен сюда не попадает никогда; код привязки — только пока владельца нет."""
@@ -165,7 +180,28 @@ class Telegram:
                 "running": bool(self._thread and self._thread.is_alive()), "problem": self.problem,
                 "mode": "dewiar" if self.shared() else ("own" if self.connected() else ""), "link": self.link(),
                 "account": self.uses_account(), "proxy": _hide(d.get("proxy", "")),
-                "offline": d.get("offline", True), "can_offline": self._php(), "offline_state": getattr(self, "offline_state", {})}
+                "offline": d.get("offline", True), "can_offline": self._php(), "offline_state": getattr(self, "offline_state", {}),
+                "main": self.main, "who": self.who()}
+
+    def who(self):
+        """Кто сейчас отвечает в боте и кто подхватит -> строка для студии и /status («Отвечает: Ноутбук (этот компьютер) ·
+        запасные: Домашний ПК, телефон, сервер Dewiar») или "" — сервер не сообщил (старый tg.php) или бот не привязан."""
+        dw = self.nodes or {}
+        if not dw or not self.paired():
+            return ""
+
+        def name(n):
+            s = n.get("name") or "компьютер"
+            return s + (" (этот компьютер)" if n.get("me") else "" if n.get("live") else " (выключен)")
+        pcs = dw.get("nodes") or []
+        main = next((n for n in pcs if n.get("main")), None)
+        spare = [name(n) for n in pcs if n is not main]
+        ph = dw.get("phone") or {}
+        if ph.get("on"):
+            spare.append("телефон" if ph.get("live") else "телефон (когда приложение открыто)")
+        if dw.get("server"):
+            spare.append("сервер Dewiar")
+        return "Отвечает: " + (name(main) if main else "сервер Dewiar") + (" · запасные: " + ", ".join(spare) if spare else "")
 
     # ---------- запросы к Telegram ----------
 
@@ -252,10 +288,15 @@ class Telegram:
         используется вход в аккаунт сайта (uses_account)."""
         api = (api or SHARED_URL).strip()
         old = dict(self.data)
+        k = str(old.get("token", ""))
+        dev = k if old.get("mode") == "dewiar" and k.startswith("dev:") else str(old.get("dev", ""))
+        if not dev.startswith("dev:"):
+            dev = ""
         if not account_token:
-            k = str(old.get("token", ""))
-            account_token = k if old.get("mode") == "dewiar" and k.startswith("dev:") else "dev:" + secrets.token_hex(24)
-        self.data = {"mode": "dewiar", "token": account_token, "api": api.rstrip("/"), "proxy": old.get("proxy", "")}
+            account_token = dev or "dev:" + secrets.token_hex(24)
+        acc = not account_token.startswith("dev:")
+        self.data = {"mode": "dewiar", "token": account_token, "api": api.rstrip("/"), "proxy": old.get("proxy", ""),
+                     **({"dev": dev} if acc and dev else {})}
         try:
             me = self._call("getMe")
         except TelegramError:
@@ -264,13 +305,16 @@ class Telegram:
         self.stop()
         same = old.get("mode") == "dewiar"
         with self._lock:
+            same = same and old.get("token") == account_token
             self.data = {"mode": "dewiar", "token": account_token, "api": api.rstrip("/"),
                          "bot": {"username": me.get("username", ""), "name": me.get("first_name", "")},
                          "owner": old.get("owner") if same else None, "code": "",
                          "notify": old.get("notify", True), "voice_home": old.get("voice_home", False),
                          "voice_reply": old.get("voice_reply", True), "offset": old.get("offset", 0) if same else 0,
-                         "proxy": old.get("proxy", "")}
+                         "proxy": old.get("proxy", ""), **({"dev": dev} if acc and dev else {})}
             self._save()
+        if acc and not self.paired():
+            self._adopt()                    # бот аккаунта уже привязан на другом устройстве — подхватываем без кода
         if not self.paired():
             self._register_code()
         self.problem = ""
@@ -284,7 +328,7 @@ class Telegram:
         for _ in range(5):
             code = secrets.token_urlsafe(18)          # длинный, угадать нельзя; вводить не нужно — он в ссылке
             try:
-                self._call("setLinkCode", code=code)
+                self._call("setLinkCode", code=code, **self._node_params())
             except TelegramError as e:
                 if "занят" in str(e):
                     continue
@@ -294,6 +338,114 @@ class Telegram:
                 self._save()
             return code
         raise TelegramError("не удалось получить код привязки — попробуйте ещё раз")
+
+    def _node_params(self):
+        """Кто этот компьютер — для сервера (device, name, act); пусто, если Engine не сказал."""
+        try:
+            n = self.node() if self.node else None
+        except Exception:  # noqa: BLE001
+            n = None
+        return {k: v for k, v in (n or {}).items() if v is not None and v != ""}
+
+    def _adopt(self, st=None):
+        """Привязка уже есть у аккаунта (её сделал другой компьютер или телефон) — взять владельца с сервера.
+        -> True, если владелец теперь известен."""
+        if st is None:
+            try:                                              # с прежним ключом компьютера — сервер перенесёт его привязку в аккаунт
+                r = self._http("POST", self._url("dewiarStatus"), json=self._node_params(), timeout=15, headers=self._hdr_dev())
+                st = r.json().get("result") if r.status_code == 200 else None
+            except (httpx.HTTPError, ValueError, TelegramError):
+                return False
+        own = (st or {}).get("owner") or {}
+        if not ((st or {}).get("linked") and own.get("id") and own.get("chat")):
+            return False
+        with self._lock:
+            self.data["owner"] = {"id": own["id"], "chat": own["chat"], "name": own.get("name") or st.get("name", ""), "username": ""}
+            self.data.pop("code", None)
+            if st.get("bot") and not (self.data.get("bot") or {}).get("username"):
+                self.data["bot"] = {"username": st["bot"], "name": "Dewiar"}
+            self._save()
+        log.info("Telegram: бот аккаунта подхвачен — владелец %s", self.data["owner"]["name"])
+        return True
+
+    def join(self, account_token, api):
+        """Компьютер вошёл в аккаунт — бот аккаунта отвечает и отсюда, без повторной активации (03.11; «включаю второй
+        комп, синхронизированный с первым, — отвечает сервер»). Раз в минуту (Engine._tg_join):
+        - бот здесь не подключён, а у аккаунта он есть — подхватить (владелец с сервера);
+        - бот здесь по ключу этого компьютера (dev:) — перенести его в аккаунт: ключ уходит заголовком X-Dewiar-Dev, сервер
+          переводит привязку и данные (если у аккаунта своей привязки к другому человеку нет);
+        - бот аккаунта отключили на другом устройстве — здесь тоже отключить.
+        Свой бот (@BotFather) не трогаем. -> True, если что-то поменялось."""
+        if not account_token or (self.connected() and not self.shared()):
+            return False
+        api = (self._api() if self.shared() else api or SHARED_URL).rstrip("/")
+        if ".php" not in api:
+            return False                                      # шлюз server/tg аккаунты не объединяет
+        tok = str(self.data.get("token", ""))
+        dev = tok if self.shared() and tok.startswith("dev:") else str(self.data.get("dev", ""))
+        hdr = {"Authorization": "Bearer " + account_token}
+        if dev.startswith("dev:") and tok != account_token:
+            hdr["X-Dewiar-Dev"] = dev
+        try:
+            r = self._http("POST", f"{api}?m=dewiarStatus", json=self._node_params(), timeout=15, headers=hdr)
+            d = r.json()
+        except (httpx.HTTPError, ValueError, TelegramError):
+            return False
+        if r.status_code != 200 or not d.get("ok"):
+            return False
+        st = d.get("result") or {}
+        own = st.get("owner") or {}
+        if not st.get("linked") or not own.get("id"):
+            if self.uses_account() and self.paired() and tok == account_token:
+                log.info("Telegram: бот аккаунта отключили на другом устройстве — здесь тоже")
+                self.leave(server=False)
+                return True
+            return False
+        mine = (self.data.get("owner") or {}).get("id")
+        if tok == account_token and mine == own.get("id"):
+            return False                                      # уже подхвачен
+        if self.shared() and tok.startswith("dev:") and self.paired() and mine != own.get("id"):
+            return False                                      # здесь бот другого человека в Telegram — не смешиваем
+        moved = self.shared() and tok.startswith("dev:")
+        self.stop()
+        with self._lock:
+            old = dict(self.data)
+            self.data = {"mode": "dewiar", "token": account_token, "api": api, "proxy": old.get("proxy", ""),
+                         "bot": old.get("bot") or {"username": st.get("bot", ""), "name": "Dewiar"},
+                         "notify": old.get("notify", True), "voice_home": old.get("voice_home", False),
+                         "voice_reply": old.get("voice_reply", True), "offline": old.get("offline", True),
+                         "offset": 0, "inbox_ack": old.get("inbox_ack", 0) if moved else 0}
+            if dev.startswith("dev:"):
+                self.data["dev"] = dev
+            self._save()
+        self._adopt(st)
+        self.problem = ""
+        self.start()
+        log.info("Telegram: %s", "бот этого компьютера перенесён в аккаунт" if moved else "бот аккаунта подхвачен на этом компьютере")
+        return True
+
+    def leave(self, server=True):
+        """Выход из аккаунта: этот компьютер больше не отвечает в боте аккаунта, а бот у аккаунта остаётся — телефону и
+        другим компьютерам. Ключ компьютера (dev:) и прокси сохраняются: «Подключить» без аккаунта возьмёт прежний ключ."""
+        if server and self.uses_account():
+            try:                                              # с прежним ключом: сервер открепит его от аккаунта
+                self._http("POST", self._url("dewiarLeave"), json=self._node_params(), timeout=8, headers=self._hdr_dev())
+            except (httpx.HTTPError, TelegramError):
+                pass
+        self.stop()
+        with self._lock:
+            keep = {k: self.data[k] for k in ("proxy", "dev") if self.data.get(k)}
+            self.data = keep
+            try:
+                if keep:
+                    self._save()
+                else:
+                    self.path.unlink()
+            except OSError:
+                pass
+        self.main, self.nodes = True, {}
+        self.problem = ""
+        return self.public()
 
     def can_sync(self):
         """Бот Dewiar на сайте (dwrapp/tg.php) и он привязан — сервер может отвечать, пока компьютер выключен."""
@@ -437,9 +589,11 @@ class Telegram:
         """getUpdates -> список событий. Long polling 25 с (Telegram и server/tg); PHP-шлюз отвечает сразу (timeout 0).
         Отдельно от _call: нужен свой таймаут и пустой список вместо None."""
         url = self._url("getUpdates")
+        body = {"offset": self.data.get("offset", 0), "timeout": 0 if self._php() else 25, "allowed_updates": self.ALLOWED}
+        if self._php():
+            body.update(self._node_params())          # сервер выбирает, какой компьютер аккаунта забирает сообщения
         try:
-            r = self._http("POST", url, json={"offset": self.data.get("offset", 0), "timeout": 0 if self._php() else 25,
-                                              "allowed_updates": self.ALLOWED}, timeout=40, headers=self._hdr())
+            r = self._http("POST", url, json=body, timeout=40, headers=self._hdr())
         except httpx.HTTPError as e:
             raise TelegramError(f"Telegram не отвечает: {e}") from e
         try:
@@ -452,6 +606,14 @@ class Telegram:
             if r.status_code == 409 and not self.shared():
                 raise TelegramError("этого бота уже слушает другая программа (или второй Dewiar)")
             raise TelegramError(d.get("description") or f"ошибка {r.status_code}")
+        dw = d.get("dewiar")
+        if isinstance(dw, dict):                      # кто отвечает в боте (tg.php 03.11); старый сервер не присылает
+            was = (self.main, self.who())
+            self.main, self.nodes = bool(dw.get("main", True)), dw
+            if was != (self.main, self.who()):
+                if was[0] != self.main:
+                    log.info("Telegram: %s", "этот компьютер теперь отвечает в боте" if self.main else "в боте отвечает другой компьютер")
+                self.on_message("nodes", {"main": self.main})
         return d.get("result") or []
 
     def _handle(self, u):

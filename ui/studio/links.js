@@ -258,7 +258,9 @@ function tgFill(t) {
               tgQr(t.connected && !t.paired ? $("#tg-link").href : ""); }
   tgSharedVis();
   $("#tg-code").textContent = "/start " + (t.code || "");
-  $("#tg-state").textContent = t.paired ? `Подключён${t.mode === "dewiar" ? " через бота Dewiar" : ""}: @${t.bot} · владелец ${t.owner || "вы"}` : "";
+  $("#tg-state").textContent = t.paired ? `Подключён${t.mode === "dewiar" ? (t.account ? " через бота Dewiar к аккаунту" : " через бота Dewiar") : ""}: @${t.bot} · владелец ${t.owner || "вы"}` : "";
+  // кто отвечает в боте (03.11): бот аккаунта — один на все компьютеры и телефон, отвечает один, остальные — запасные
+  $("#tg-who").textContent = t.who || ""; $("#tg-who").style.display = t.paired && t.who ? "" : "none";
   $("#tg-notify").checked = t.notify !== false; $("#tg-voice").checked = !!t.voice_home; $("#tg-vreply").checked = t.voice_reply !== false;
   if (t.api) $("#tg-api").value = t.api;
   $("#tg-off-row").style.display = t.can_offline ? "" : "none";

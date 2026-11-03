@@ -4,16 +4,30 @@
 Голосом: «запомни пароль от вайфая: кот123», «пин-код карты — 4512», «какой пароль от вайфая?» (значение — на экране,
 вслух не читается). В студии — раздел «Безопасность» → «Сейф».
 Файл сейфа — crypt.seal ключом device_key (без ключа этого компьютера не открыть); в резервную копию сейф попадает
-только с паролем (backup.py). Значения не отдаём ни в list(), ни в журнал (mask)."""
+только с паролем (backup.py). Значения не отдаём ни в list(), ни в журнал (mask).
 
+Сейф между своими устройствами (03.11, группа Telegram: «сейф не синхронизируется с компа на комп… пароли как раз часто
+нужны на чужом компе — подглядеть со смартфона»): по желанию, только сквозным шифрованием — SafeKey ниже.
+  • Мастер-пароль сейфа → ключ K (PBKDF2-HMAC-SHA256, SAFE_IT повторов, соль 16 байт). Ни пароль, ни K никуда не уходят;
+    на компьютере K лежит запечатанным ключом этого компьютера (vault-sync.key) — сейф и так открыт здесь без пароля.
+  • Запись «safe:<id>» синхронизации — {"kid", "c": base64url(closecrypto.seal(K, JSON записи))}: название, логин, сайт,
+    заметка и пароль — всё внутри шифра. «safe:key» — открытые параметры: соль, повторы, kid, at и check = seal(K,
+    SAFE_CHECK) — по нему другое устройство узнаёт, подошёл ли мастер-пароль. Сервер видит только id, время и размер.
+  • Телефон (android/assets/www/safe.js) хранит записи как пришли — шифром — и открывает их тем же мастер-паролем."""
+
+import hashlib
+import hmac
 import json
 import re
+import secrets
 import threading
 import time
+import unicodedata
 import uuid
 from datetime import datetime
 from pathlib import Path
 
+import closecrypto as CC
 from crypt import CryptError, device_key, seal, unseal
 
 # Фразы сейфа: KEY — о чём речь; SAVE_RX — «запомни пароль от X: значение» (с разделителем), SAVE_LOOSE — без
@@ -86,6 +100,14 @@ class Vault:
         self.path, self.key_path = Path(path), Path(key_path)
         self._lock = threading.RLock()
         self._items = None
+        self.on_change = None            # своя правка (не из синхронизации) — синхронизации поторопиться (engine: sync.soon.set)
+
+    def _changed(self):
+        if callable(self.on_change):
+            try:
+                self.on_change()
+            except Exception:  # noqa: BLE001
+                pass
 
     def _key(self, create=False):
         return device_key(self.key_path, create=create)
@@ -161,9 +183,9 @@ class Vault:
             x = next((i for i in items if (item_id and i["id"] == item_id)
                       or (not item_id and i["name"].lower() == name.lower() and (i.get("kind") == "page") == page)), None)
             if x:
-                x.update(name=name, value=value, note=note if note is not None else x.get("note", ""), updated=now)
+                x.update(name=name, value=value, note=note if note is not None else x.get("note", ""), updated=now, mt=_ms())
             else:
-                x = {"id": uuid.uuid4().hex[:10], "name": name, "value": value, "note": note or "", "created": now, "updated": now}
+                x = {"id": uuid.uuid4().hex[:10], "name": name, "value": value, "note": note or "", "created": now, "updated": now, "mt": _ms()}
                 if page:
                     x["kind"] = "page"
                 items.append(x)
@@ -172,16 +194,20 @@ class Vault:
             if url is not None:
                 x["url"] = str(url).strip()[:300]
             self._save()
-            return {k: v for k, v in x.items() if k != "value"}
+        self._changed()
+        return {k: v for k, v in x.items() if k != "value"}
 
     def delete(self, item_id):
         with self._lock:
             items = self._load()
             n = len(items)
             self._items = [x for x in items if x["id"] != item_id]
-            if len(self._items) != n:
+            gone = len(self._items) != n
+            if gone:
                 self._save()
-            return n != len(self._items)
+        if gone:
+            self._changed()
+        return gone
 
     # ---------- для резервной копии ----------
 
@@ -209,13 +235,222 @@ class Vault:
                 cur = by_name.get(x["name"].lower())
                 if cur:
                     if not only_new:
-                        cur.update({k: v for k, v in x.items() if k not in ("id", "created")})
+                        cur.update({k: v for k, v in x.items() if k not in ("id", "created")}, mt=_ms())   # новое время: уйдёт и на другие устройства
                     continue
-                x = dict(x)
+                x = dict(x, mt=_ms())
                 if not x.get("id") or x["id"] in ids:          # id из копии занят другой записью — выдаём новый
                     x["id"] = uuid.uuid4().hex[:10]
                 ids.add(x["id"])
                 items.append(x)
                 by_name[x["name"].lower()] = x
             self._save()
-            return len(got)
+        self._changed()
+        return len(got)
+
+    # ---------- синхронизация между своими устройствами (core/sync.py, вид «safe») ----------
+
+    def sync_items(self):
+        """Все записи со значениями — только для шифрования в синхронизацию. Сейф не открылся — CryptError (не пустой
+        список: иначе синхронизация сочла бы записи удалёнными)."""
+        with self._lock:
+            return [dict(x) for x in self._load()]
+
+    def sync_put(self, x):
+        """Запись с другого устройства (уже расшифрованная): кладётся как есть, с тем же id и временем. -> взяли ли."""
+        x = item_clean(x)
+        if x is None:
+            return False
+        with self._lock:
+            items = self._load()
+            cur = next((i for i in items if i["id"] == x["id"]), None)
+            if cur is not None:
+                cur.clear()
+                cur.update(x)
+            else:
+                items.append(x)
+            self._save()
+        return True
+
+    def sync_drop(self, item_id):
+        """Удалено на другом устройстве: без on_change — это не своя правка."""
+        with self._lock:
+            items = self._load()
+            keep = [x for x in items if x["id"] != item_id]
+            if len(keep) == len(items):
+                return False
+            self._items = keep
+            self._save()
+            return True
+
+
+def _ms():
+    return int(time.time() * 1000)
+
+
+def item_ms(x):
+    """Когда запись правили, мс: поле mt (с 03.11), у прежних — по updated (местное время этого компьютера)."""
+    try:
+        return int(x.get("mt") or 0) or int(datetime.fromisoformat(str(x.get("updated") or x.get("created"))).timestamp() * 1000)
+    except (TypeError, ValueError):
+        return 0
+
+
+ITEM_ID = re.compile(r"[0-9a-z]{6,24}")
+
+
+def item_clean(x):
+    """Запись сейфа из синхронизации — только известные поля разумной длины; не подходит — None."""
+    if not isinstance(x, dict) or not ITEM_ID.fullmatch(str(x.get("id") or "")):
+        return None
+    name, value = str(x.get("name") or "").strip()[:120], x.get("value")
+    page = x.get("kind") == "page"
+    if not name or not isinstance(value, str) or not value.strip() or len(value) > (PAGE_MAX if page else 5000):
+        return None
+    try:
+        mt = max(0, int(x.get("mt") or 0))
+    except (TypeError, ValueError):
+        mt = 0
+    out = {"id": x["id"], "name": name, "value": value, "note": str(x.get("note") or "")[:300],
+           "created": str(x.get("created") or "")[:32], "updated": str(x.get("updated") or "")[:32], "mt": mt}
+    if page:
+        out["kind"] = "page"
+    for k, n in (("login", 160), ("url", 300)):
+        if x.get(k):
+            out[k] = str(x[k]).strip()[:n]
+    return out
+
+
+# ---------- ключ сейфа из мастер-пароля (см. шапку) ----------
+
+SAFE_IT = 600_000                   # повторов PBKDF2-HMAC-SHA256 (OWASP 2023); число — в «safe:key», менять можно для новых
+SAFE_CHECK = b"dewiar-safe-v1"
+SAFE_MIN = 8                        # мастер-пароль — не короче
+
+
+def safe_derive(password, salt, it):
+    """Ключ 32 байта из мастер-пароля. NFC — чтобы «ё», набранная на телефоне и на компьютере по-разному, давала тот же
+    ключ (safeDerive в safe.js делает то же)."""
+    pw = unicodedata.normalize("NFC", str(password)).encode("utf-8")
+    return hashlib.pbkdf2_hmac("sha256", pw, bytes(salt), int(it), 32)
+
+
+def safe_meta_ok(m):
+    """Открытые параметры сейфа из облака: правильной формы — True."""
+    try:
+        return (isinstance(m, dict) and len(CC.b64d(m.get("salt"))) == 16 and 100_000 <= int(m.get("it")) <= 10_000_000
+                and re.fullmatch(r"[0-9a-f]{8,32}", str(m.get("kid") or "")) is not None and int(m.get("at") or 0) > 0
+                and len(CC.b64d(m.get("check"))) == 48 + len(SAFE_CHECK))
+    except (TypeError, ValueError):
+        return False
+
+
+def safe_meta_new(password, it=SAFE_IT):
+    """Новый мастер-пароль -> (ключ, открытые параметры)."""
+    if len(str(password or "")) < SAFE_MIN:
+        raise ValueError(f"мастер-пароль — не короче {SAFE_MIN} знаков: им открывается сейф на телефоне и других компьютерах")
+    salt = secrets.token_bytes(16)
+    k = safe_derive(password, salt, it)
+    return k, {"v": 1, "salt": CC.b64e(salt), "it": int(it), "kid": secrets.token_hex(8), "at": _ms(),
+               "check": CC.b64e(CC.seal(k, SAFE_CHECK))}
+
+
+def safe_try(password, meta):
+    """Мастер-пароль к этим параметрам: подошёл — ключ, нет — None."""
+    if not safe_meta_ok(meta):
+        return None
+    k = safe_derive(password, CC.b64d(meta["salt"]), int(meta["it"]))
+    try:
+        return k if CC.unseal(k, CC.b64d(meta["check"])) == SAFE_CHECK else None
+    except CC.CloseCryptoError:
+        return None
+
+
+def safe_seal(k, kid, x):
+    return {"kid": kid, "c": CC.b64e(CC.seal(k, json.dumps(x, ensure_ascii=False, sort_keys=True).encode("utf-8")))}
+
+
+def safe_open(k, d):
+    return json.loads(CC.unseal(k, CC.b64d(d.get("c"))).decode("utf-8"))
+
+
+def safe_hash(k, kid, x):
+    """Отпечаток записи для sync.json — HMAC ключом сейфа: обычный хэш открытого пин-кода из 4 цифр подбирается мгновенно."""
+    return hmac.new(k, kid.encode() + b"|" + json.dumps(x, ensure_ascii=False, sort_keys=True).encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+
+
+class SafeKey:
+    """Ключ сейфа на этом компьютере (vault-sync.key, запечатан ключом компьютера) и последние известные параметры сейфа
+    из облака (vault-sync.meta.json — открытые, как и в облаке). Есть ключ — сейф синхронизируется (см. Sync._safe_on)."""
+
+    def __init__(self, path, device_key_path):
+        self.path, self.device_key_path = Path(path), Path(device_key_path)
+        self.meta_path = self.path.with_name(self.path.stem + ".meta.json")
+        self._cache = None
+        self._lock = threading.Lock()
+
+    def _dk(self):
+        return device_key(self.device_key_path, create=True)
+
+    def get(self):
+        """-> {"k": 32 байта, "meta": параметры} или None."""
+        with self._lock:
+            if self._cache is None:
+                try:
+                    d = json.loads(unseal(self.path.read_bytes(), self._dk()).decode("utf-8"))
+                    k = CC.b64d(d["k"])
+                    self._cache = {"k": k, "meta": d["meta"]} if len(k) == 32 and safe_meta_ok(d.get("meta")) else {}
+                except FileNotFoundError:
+                    self._cache = {}
+                except Exception:  # noqa: BLE001 — ключ компьютера сменился: мастер-пароль спросим заново
+                    self._cache = {}
+            return self._cache or None
+
+    def set(self, k, meta):
+        if len(k) != 32 or not safe_meta_ok(meta):
+            raise ValueError("ключ сейфа — 32 байта и правильные параметры")
+        blob = seal(json.dumps({"k": CC.b64e(k), "meta": meta}).encode("utf-8"), self._dk())
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_bytes(blob)
+        tmp.replace(self.path)
+        with self._lock:
+            self._cache = {"k": bytes(k), "meta": dict(meta)}
+        self.note(meta)
+
+    def forget(self):
+        with self._lock:
+            self._cache = {}
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+
+    def remote(self):
+        """Последние параметры сейфа, известные этому компьютеру (свои или из облака), или None."""
+        try:
+            m = json.loads(self.meta_path.read_text(encoding="utf-8"))
+            return m if safe_meta_ok(m) else None
+        except (OSError, ValueError):
+            return None
+
+    def note(self, meta):
+        """Параметры из облака: запоминаем более поздние (по at). -> сменились ли."""
+        cur = self.remote()
+        if not safe_meta_ok(meta) or (cur and int(cur["at"]) > int(meta["at"])) or cur == meta:
+            return False
+        self.meta_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.meta_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(meta), encoding="utf-8")
+        tmp.replace(self.meta_path)
+        return True
+
+    def active(self):
+        """Ключ, которым сейчас синхронизировать, или None: ключа нет, либо мастер-пароль сменили на другом устройстве
+        позже (в облаке новые параметры — старым ключом их записи не открыть, свои шифровать им незачем)."""
+        cur = self.get()
+        if not cur:
+            return None
+        r = self.remote()
+        if r and r["kid"] != cur["meta"]["kid"] and int(r["at"]) > int(cur["meta"]["at"]):
+            return None
+        return cur

@@ -280,6 +280,12 @@
       notify(title, text) { notify(title, text); },
       share(text) { if (navigator.share) navigator.share({ text }).catch(() => { }); },
       copy: (t) => { try { navigator.clipboard.writeText(t); return true; } catch (e) { return false; } },
+      // пароль из «Сейфа» (safe.js): через sec с — стереть, если в буфере всё ещё он (браузер может не дать прочитать — тогда стираем)
+      copySecret(t, sec) {
+        try { navigator.clipboard.writeText(t); } catch (e) { return false; }
+        setTimeout(async () => { let cur = t; try { cur = await navigator.clipboard.readText(); } catch (e) { } if (cur === t) navigator.clipboard.writeText("").catch(() => { }); }, (+sec || 30) * 1000);
+        return true;
+      },
       keepScreen() { }, setFace() { }, bars() { },
       immersive(on) { try { if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => { }); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } },
       recognizer: () => !!SR,

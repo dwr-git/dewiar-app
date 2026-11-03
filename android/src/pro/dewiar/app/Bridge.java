@@ -288,6 +288,58 @@ public final class Bridge {
         return ok[0];
     }
 
+    /** Пароль из «Сейфа» (safe.js, 03.11): в буфер с пометкой «секрет» (Android 13+ не показывает его во всплывающем
+     *  превью и клавиатурах) и через seconds секунд — стереть, если там всё ещё он. Не дали прочитать буфер (приложение
+     *  в фоне, Android 10+) — стираем всё равно: пароль в буфере не должен жить дольше обещанного. -> удалось ли. */
+    private int secretSeq = 0;
+    @JavascriptInterface public boolean copySecret(final String text, final int seconds) {
+        final boolean[] ok = {false};
+        final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        a.runOnUiThread(new Runnable() { @Override public void run() {
+            try {
+                final android.content.ClipboardManager cm = (android.content.ClipboardManager) a.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                android.content.ClipData clip = android.content.ClipData.newPlainText("Dewiar", text);
+                try {                                          // ClipDescription.setExtras — API 24, сборка — против API 23
+                    android.os.PersistableBundle ex = new android.os.PersistableBundle();
+                    ex.putBoolean("android.content.extra.IS_SENSITIVE", true);
+                    android.content.ClipDescription.class.getMethod("setExtras", android.os.PersistableBundle.class).invoke(clip.getDescription(), ex);
+                } catch (Throwable e) { /* старый Android — без пометки */ }
+                cm.setPrimaryClip(clip);
+                final int my = ++secretSeq;
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() { @Override public void run() {
+                    if (my != secretSeq) return;                  // скопировали другой пароль — сотрёт его таймер
+                    try {
+                        android.content.ClipData c = cm.getPrimaryClip();
+                        if (c != null && c.getItemCount() > 0) {
+                            CharSequence t = c.getItemAt(0).getText();
+                            if (t != null && !text.contentEquals(t)) return;   // в буфере уже другое — не трогаем
+                        }
+                    } catch (Throwable e) { /* нет доступа — стираем */ }
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= 28) android.content.ClipboardManager.class.getMethod("clearPrimaryClip").invoke(cm);
+                        else cm.setPrimaryClip(android.content.ClipData.newPlainText("", ""));
+                    } catch (Throwable e) {
+                        try { cm.setPrimaryClip(android.content.ClipData.newPlainText("", "")); } catch (Throwable e2) { }
+                    }
+                } }, Math.max(5, Math.min(300, seconds)) * 1000L);
+                ok[0] = true;
+            } catch (Throwable e) { ok[0] = false; }
+            done.countDown();
+        } });
+        try { done.await(1, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { }
+        return ok[0];
+    }
+
+    /** Открыт «Сейф» — экран без снимков: ни скриншота, ни картинки в «недавних приложениях» (FLAG_SECURE). */
+    @JavascriptInterface public void secureScreen(final boolean on) {
+        a.runOnUiThread(new Runnable() { @Override public void run() {
+            try {
+                if (on) a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+                else a.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+            } catch (Throwable e) { }
+        } });
+    }
+
     /** Текст — прямо в нужный мессенджер (MAX, Telegram…): получателя выбирает человек. Нет приложения — false. */
     @JavascriptInterface public boolean shareTo(String pkg, String text) {
         try {
