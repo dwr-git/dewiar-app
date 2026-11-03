@@ -1,0 +1,1183 @@
+"""«Сайты» (03.11, владелец: «Лира должна научиться делать сайты… переделать сайт в любой момент — от структуры до дизайна —
+одной командой; публикация на dewiar.pro — имя.dewiar.pro; аналитика и заявки — красиво; модерация — потом, в кабинете»).
+
+Сайт — JSON (sites_kit — детали, sites_render — вёрстка):
+  {id, name, tagline, template, theme: {palette, colors, fonts, radius, header, art}, logo: {text, mark, style, svg},
+   menu: {style, cta}, contacts: {phone, email, address, hours, telegram, …}, seo: {description},
+   pages: [{title, slug, description, blocks: [{uid, type, variant, tone, nav, id, …поля, items: […]}]}],
+   assets: {"img/….webp": {w, h}}, published: {name, url, ts, status, reason}, created, updated}
+
+Где лежит: STATE_DIR/sites/<id>/ — site.json, history/ (каждое изменение — версия, «верни как было» — откат), img/
+(картинки, уже уменьшенные в webp), out/ (собранный сайт для просмотра в браузере).
+
+Как меняется: apply(id, ops) — операции (палитра, шрифт, меню, добавить/убрать/переставить блок, поля блока, «другой
+дизайн» — шаблон с сохранением текста…). say(id, фраза) — фраза человека: сначала простые правила (quick_ops: «тёмная
+шапка», «строгий шрифт», «добавь цены», «меню бургером», «верни как было»), иначе — модель пишет операции (llm_ops).
+create() — по описанию: шаблон по словам (sites_kit.pick_template), имя и контакты — из слов, тексты — модель
+переписывает под дело человека (fill), без выдуманных отзывов, людей и цен.
+
+Публикация — dewiar.pro (cloud.php → sites.php): /sites/check, /sites/publish (готовые файлы), /sites/stats (посещения
+без cookie), /sites/leads (заявки с формы — раз в 2 минуты в «Клиенты», как «Чат для сайта»), /sites/remove, /sites/mine
+(статус: заблокирован администратором и почему). Продвижение — audit(): заголовки, описания, h1/h2, alt, вес страниц,
+контакты и форма, Open Graph, заглушки — понятными словами, у каждого пункта — фраза «исправь» для Лиры."""
+
+import base64
+import copy
+import hashlib
+import io
+import json
+import logging
+import re
+import secrets
+import shutil
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+
+import sites_kit as K
+import sites_render as R
+
+log = logging.getLogger("dewiar.sites")
+FONTS_DIR = Path(__file__).resolve().parent.parent / "ui" / "assets" / "fonts"
+HISTORY_MAX = 60
+NAME_RX = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$")
+RESERVED = {"www", "api", "admin", "mail", "dwrapp", "app", "cloud", "pro", "dewiar", "support", "help", "static", "cdn", "ftp",
+            "smtp", "imap", "pop", "ns1", "ns2", "dashboard", "login", "account", "billing", "pay", "test", "dev", "stage", "blog",
+            "shop", "news", "status", "docs", "id", "auth", "oauth", "voice", "voices", "web", "lira", "academy", "abuse", "security"}
+TEXT_MAX = {"title": 200, "text": 3000, "note": 200, "button": 60, "button2": 60, "nav": 40, "caption": 200, "price": 60, "q": 300,
+            "a": 2000, "name": 120, "role": 160, "time": 60, "group": 80, "href": 500, "thanks": 200}
+
+
+class SiteError(Exception):
+    pass
+
+
+def _now():
+    return int(time.time())
+
+
+def _uid():
+    return secrets.token_hex(3)
+
+
+def translit(s):
+    tr = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя", ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p",
+                                                       "r", "s", "t", "u", "f", "h", "ts", "ch", "sh", "sch", "", "y", "", "e", "yu", "ya"]))
+    out = "".join(tr.get(c, c) for c in str(s or "").lower())
+    out = re.sub(r"[^a-z0-9]+", "-", out).strip("-")
+    return out[:30].strip("-")
+
+
+def name_problem(name):
+    """Имя поддомена: латиница, цифры, дефис, 3–30 знаков. -> текст ошибки или ""."""
+    n = str(name or "").strip().lower()
+    if not NAME_RX.match(n):
+        return "имя — латиница, цифры и дефис, от 3 до 30 знаков, не начинается и не кончается дефисом"
+    if "--" in n:
+        return "два дефиса подряд нельзя"
+    if n in RESERVED:
+        return "это имя занято под службы Dewiar — выберите другое"
+    return ""
+
+
+def _clip(k, v):
+    if isinstance(v, bool) or v is None:
+        return v
+    if isinstance(v, (int, float)):
+        return v
+    s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(v))
+    return s[:TEXT_MAX.get(k, 1000)]
+
+
+def clean_fields(d, kind="block"):
+    """Поля блока или карточки от модели или из студии: только строки разумной длины, флаги, без служебного."""
+    out = {}
+    for k, v in (d or {}).items():
+        if not isinstance(k, str) or k.startswith("_") or k in ("uid", "type"):
+            continue
+        if k == "items" and kind == "block":
+            if isinstance(v, list):
+                out["items"] = [clean_fields(x, "item") for x in v[:40] if isinstance(x, dict)]
+            continue
+        if isinstance(v, (dict, list)):
+            continue
+        out[k] = _clip(k, v)
+    return out
+
+
+# ---------- SVG логотипа из «Художника» ----------
+SVG_TAGS = {"svg", "g", "path", "circle", "ellipse", "rect", "line", "polyline", "polygon", "defs", "lineargradient", "radialgradient", "stop",
+            "text", "tspan", "title", "clippath", "mask", "use", "symbol", "pattern"}
+SVG_ATTRS = re.compile(r"^(?:d|x|y|x1|x2|y1|y2|cx|cy|r|rx|ry|width|height|viewbox|points|fill|stroke|stroke-width|stroke-linecap|stroke-linejoin|"
+                       r"stroke-dasharray|stroke-opacity|fill-opacity|opacity|transform|offset|stop-color|stop-opacity|gradientunits|gradienttransform|"
+                       r"font-size|font-weight|font-family|text-anchor|dominant-baseline|letter-spacing|id|clip-path|mask|fill-rule|clip-rule|"
+                       r"preserveaspectratio|href|xmlns|xmlns:xlink|xlink:href|patternunits|fx|fy|dx|dy|class|style)$")
+
+
+def clean_svg(src, size=96):
+    """Свой знак из «Художника»: только рисующие теги и атрибуты, ссылки — только внутренние (#…), без стилей с url()."""
+    import xml.etree.ElementTree as ET
+    s = str(src or "")
+    i = s.find("<svg")
+    if i < 0:
+        raise SiteError("это не SVG")
+    s = s[i:s.rfind("</svg>") + 6]
+    try:
+        root = ET.fromstring(s)
+    except ET.ParseError as e:
+        raise SiteError(f"SVG не читается: {e}") from e
+    for parent in list(root.iter()):
+        for ch in list(parent):
+            tag = ch.tag.split("}")[-1].lower() if isinstance(ch.tag, str) else ""
+            if tag not in SVG_TAGS:
+                parent.remove(ch)
+    for el in root.iter():
+        for k in list(el.attrib):
+            kl = k.split("}")[-1].lower()
+            v = el.attrib[k]
+            full = ("xlink:" if "xlink" in k else "") + kl
+            if not SVG_ATTRS.match(full) and not SVG_ATTRS.match(kl):
+                del el.attrib[k]
+            elif kl == "href" and not v.startswith("#"):
+                del el.attrib[k]
+            elif re.search(r"url\(\s*['\"]?(?!#)|javascript:|expression\(|@import", v, re.I):
+                del el.attrib[k]
+    ET.register_namespace("", "http://www.w3.org/2000/svg")
+    root.attrib["width"], root.attrib["height"] = str(size), str(size)
+    out = ET.tostring(root, encoding="unicode")
+    out = re.sub(r"\sxmlns:ns\d+=\"[^\"]*\"", "", out)
+    if re.search(r"<script|on[a-z]+\s*=|javascript:|foreignObject", out, re.I):
+        raise SiteError("в SVG осталось небезопасное")
+    return out[:60000]
+
+
+# ---------- быстрые правила для фраз ----------
+PALETTE_WORDS = [("pistachio", r"фисташ|оливков"), ("espresso", r"эспрессо|кофейн\w* цвет|коричнев|шоколад"), ("plum", r"слив|розов|пудров|бордов"),
+                 ("navy", r"морск|тёмно-?син|темно-?син|строг\w* син|деловой цвет"), ("ultramarine", r"ультрамарин|ярко-?син|\bсин"),
+                 ("tomato", r"томат|красн|оранжев|терракот"), ("graphite", r"графит|чёрн|черн|тёмн\w* (?:тем|фон|сайт)|темн\w* (?:тем|фон|сайт)"),
+                 ("mint", r"мят|бирюз|медицин"), ("sun", r"солн|жёлт|желт|ярк\w* жёлт"), ("ice", r"лёд|лед\b|бел\w* (?:фон|сайт)|изумруд|чист"),
+                 ("sage", r"шалфе|зелён|зелен|природ|эко"), ("concrete", r"бетон|сер(?:ый|ая|ое|ые)\b"), ("berry", r"ягод|малин|вишн"),
+                 ("night", r"ноч|космос")]
+FONT_WORDS = [("strict", r"строг|делов|современ|плотн"), ("warm", r"тёпл|тепл|уютн|засечк"), ("bold", r"смел|ярк\w* шрифт|крупн\w* шрифт|молодёж|молодеж"),
+              ("classic", r"классич|солидн|традиц"), ("editorial", r"журнал|элегант|курсив|изящн|нежн"), ("light", r"прост|лёгк|легк|системн|обычн")]
+BLOCK_WORDS = [("prices", r"цен|прайс|тариф|стоимост|меню"), ("services", r"услуг"), ("reviews", r"отзыв"), ("faq", r"вопрос|faq|чаво"),
+               ("team", r"команд|сотрудник|врач|мастер\w* (?:раздел|блок)|специалист"), ("gallery", r"галере|фото|портфолио|работ\b|работы"),
+               ("contacts", r"контакт|карт\w|адрес"), ("lead", r"заявк|форм|запис"), ("features", r"преимущ|почему мы|почему нас"),
+               ("steps", r"шаг|как (?:мы )?работа|этап"), ("schedule", r"программ|расписан|агенд"), ("products", r"товар|каталог|витрин"),
+               ("links", r"ссылк|соцсет"), ("about", r"о нас|о себе|о компании|обо мне|истори"), ("cta", r"призыв|баннер"), ("text", r"текст")]
+TEMPLATE_WORDS = [(tid, rx) for tid, rx in K.KIND_WORDS]
+
+
+def _find(rules, text):
+    for k, rx in rules:
+        if re.search(rx, text):
+            return k
+    return None
+
+
+def _simple(rest):
+    """Просьба про один раздел без подробностей («добавь отзывы»)? Иначе («добавь цены: стрижка 1500», «вопросы после
+    раздела о нас и отзывы») — пусть разберёт модель."""
+    rest = rest.strip()
+    hits = {k for k, rx in BLOCK_WORDS if re.search(rx, rest)}
+    return (len(hits) == 1 and len(rest.split()) <= 5 and not re.search(r"[:\d]|после|перед|вместо|сверху|снизу|\bи\b|в конц|в начал", rest))
+
+
+def quick_ops(text, site):
+    """Простые просьбы без модели -> (ops, что сделала) или (None, "") — тогда модель. «undo» — отдельной операцией."""
+    t = " " + str(text or "").lower().replace("ё", "е") + " "
+    tt = t.replace("е", "е")
+    if re.search(r"верни\w* (?:как было|назад|обратно|прежн)|отмени\w*|откати\w*|как было", tt):
+        return [{"op": "undo"}], "Вернула как было."
+    ops, said = [], []
+    if re.search(r"шапк|хедер|верх\w* (?:сайта|част)", tt):
+        if re.search(r"т[её]мн|черн", tt):
+            ops.append({"op": "header", "value": "dark"})
+            said.append("шапка тёмная")
+        elif re.search(r"светл|бел", tt):
+            ops.append({"op": "header", "value": "light"})
+            said.append("шапка светлая")
+        elif re.search(r"акцент|цветн|ярк", tt):
+            ops.append({"op": "header", "value": "accent"})
+            said.append("шапка цвета акцента")
+    if "шрифт" in tt:
+        f = _find(FONT_WORDS, tt)
+        if f:
+            ops.append({"op": "fonts", "name": f})
+            said.append(f"шрифт «{K.FONTS[f]['title']}»")
+    if re.search(r"угл|скругл", tt):
+        r = "sharp" if re.search(r"остр|прям|строг|без скругл", tt) else "round" if re.search(r"кругл|сильн", tt) else "soft"
+        ops.append({"op": "radius", "name": r})
+        said.append(K.RADII[r]["title"].lower() + " углы" if r != "soft" else "мягкие углы")
+    if re.search(r"\bменю\b", tt) and re.search(r"бургер|кнопк|спрят|свер\w+ в|сбоку|слева|боков|по центру|центр|сверху|наверх", tt):
+        st = ("burger" if re.search(r"бургер|кнопк|спрят|свер\w+ в", tt) else "side" if re.search(r"сбоку|слева|боков", tt)
+              else "center" if re.search(r"центр", tt) else "top")
+        ops.append({"op": "menu", "style": st})
+        said.append("меню — " + K.MENUS[st].lower())
+    if re.search(r"цвет|палитр|гамм|оформлени|тем[аеуы]\b", tt) and not re.search(r"шапк", tt):
+        p = _find(PALETTE_WORDS, tt)
+        if p:
+            ops.append({"op": "palette", "name": p})
+            said.append(f"палитра «{K.PALETTES[p]['title']}»")
+    if re.search(r"друг\w+ дизайн|смени\w* дизайн|поменя\w* дизайн|переделай\w* (?:весь )?дизайн|нов\w+ дизайн|в стиле|дизайн как у|как у (?:юрист|кофейн|салон)", tt):
+        tid = _find(TEMPLATE_WORDS, re.sub(r".*(?:в стиле|как у|под)\s+", "", tt)) if re.search(r"в стиле|как у|под ", tt) else None
+        if not tid or tid == site.get("template"):
+            order = [x for x in K.TEMPLATE_ORDER if x != site.get("template")]
+            cur = K.TEMPLATE_ORDER.index(site["template"]) if site.get("template") in K.TEMPLATE_ORDER else 0
+            tid = order[cur % len(order)]
+        ops.append({"op": "template", "id": tid})
+        said.append(f"новый дизайн в духе «{K.TEMPLATES[tid]['title']}» (тексты те же)")
+    m = re.search(r"(?:добав\w*|встав\w*|сделай|нуж\w+|созда\w*)\s+(?:ещ[её]\s+)?(?:раздел|блок|секци\w*|страниц\w*)?\s*(?:с|про|о|об|для)?\s*(.+)", tt)
+    if m and not ops and not _simple(m.group(1)):
+        m = None
+    if m and not ops:
+        bt = _find(BLOCK_WORDS, m.group(1))
+        if bt and not re.search(r"сайт\b", m.group(1)[:20]):
+            ops.append({"op": "add_block", "type": bt})
+            said.append(f"добавила раздел «{K.BLOCKS[bt]['title']}»")
+    m = re.search(r"(?:убер\w*|удал\w*|скрой|спрячь|не нуж\w+)\s+(?:раздел|блок|секци\w*)?\s*(?:с|про|о|об)?\s*(.+)", tt)
+    if m and not ops and not _simple(m.group(1)):
+        m = None
+    if m and not ops:
+        bt = _find(BLOCK_WORDS, m.group(1))
+        if bt:
+            ops.append({"op": "remove_block", "block": bt})
+            said.append(f"убрала раздел «{K.BLOCKS[bt]['title']}»")
+    if not ops:
+        return None, ""
+    return ops, ("Готово: " + ", ".join(said) + ".") if said else "Готово."
+
+
+# ---------- модель ----------
+OPS_HELP = """Операции (JSON-список ops):
+{"op":"palette","name":"<палитра>"} — цвета; палитры: %(pal)s
+{"op":"colors","accent":"#rrggbb","bg":"#rrggbb",…} — точечно (ключи: bg, surface, ink, muted, accent, accent_ink, dark, dark_ink, accent2, line)
+{"op":"header","value":"light|dark|accent"} — шапка
+{"op":"fonts","name":"<пара>"} — шрифты: %(fonts)s
+{"op":"radius","name":"sharp|soft|round"}
+{"op":"menu","style":"top|center|burger|side","cta":"текст кнопки в шапке"}
+{"op":"logo","text":"…","mark":"<знак>","style":"badge|plain|mono|text"} — знаки: %(marks)s
+{"op":"site","name":"…","tagline":"…","description":"описание для поисковиков 120–160 знаков"}
+{"op":"contacts","phone":"…","email":"…","address":"…","hours":"…","telegram":"…","whatsapp":"…","vk":"…"}
+{"op":"template","id":"<шаблон>"} — другой дизайн целиком, тексты остаются: %(tpl)s
+{"op":"add_block","type":"<тип>","after":"<uid блока или пусто — в конец, перед заявкой и контактами>","data":{поля}} — типы: %(blocks)s
+{"op":"remove_block","block":"<uid>"}
+{"op":"move_block","block":"<uid>","to":<номер позиции с 0>}
+{"op":"block","block":"<uid>","variant":"…","tone":"base|alt|dark|accent","nav":"подпись в меню", …поля блока, "items":[…полный новый список карточек]}
+{"op":"add_page","title":"…","blocks":["<тип>",…]} / {"op":"remove_page","page":<номер>}
+"""
+
+
+def ops_help():
+    return OPS_HELP % {"pal": ", ".join(f"{k} ({v['title']})" for k, v in K.PALETTES.items()),
+                       "fonts": ", ".join(f"{k} ({v['title']})" for k, v in K.FONTS.items()),
+                       "marks": ", ".join(K.MARKS), "tpl": ", ".join(f"{k} ({K.TEMPLATES[k]['title']})" for k in K.TEMPLATE_ORDER),
+                       "blocks": "; ".join(f"{k} ({v['title']}: варианты {', '.join(v['variants'])}; поля {', '.join(f[0] for f in v['fields'])}"
+                                           + (f"; карточки {', '.join(f[0] for f in v['items'][0])}" if v.get("items") else "") + ")" for k, v in K.BLOCKS.items())}
+
+
+def site_brief(site, full=True):
+    """Сайт коротко — для модели: тема, страницы, блоки с uid и текстами."""
+    th = site.get("theme") or {}
+    lines = [f"Сайт «{site.get('name')}» — {site.get('tagline') or ''}. Шаблон {site.get('template')}, палитра {th.get('palette')}, "
+             f"шрифты {th.get('fonts')}, углы {th.get('radius')}, шапка {th.get('header')}, меню {(site.get('menu') or {}).get('style')}.",
+             "Контакты: " + json.dumps(site.get("contacts") or {}, ensure_ascii=False)]
+    for i, pg in enumerate(site.get("pages") or []):
+        lines.append(f"Страница {i} «{pg.get('title')}»:")
+        for b in pg.get("blocks") or []:
+            d = {k: v for k, v in b.items() if k not in ("uid", "type", "variant", "tone", "items") and v not in ("", None)}
+            if not full:
+                d = {k: (str(v)[:60] if isinstance(v, str) else v) for k, v in d.items() if k in ("title", "nav")}
+            its = b.get("items") or []
+            lines.append(f"  [{b.get('uid')}] {b.get('type')}/{b.get('variant')}/{b.get('tone')} {json.dumps(d, ensure_ascii=False)}"
+                         + (f" items: {json.dumps(its, ensure_ascii=False)[:1500]}" if its and full else (f" ({len(its)} карточек)" if its else "")))
+    return "\n".join(lines)
+
+
+def _json_in(text):
+    t = str(text or "")
+    t = re.sub(r"^```(?:json)?\s*|\s*```\s*$", "", t.strip())
+    for opener, closer in (("{", "}"), ("[", "]")):
+        i, j = t.find(opener), t.rfind(closer)
+        if i >= 0 and j > i:
+            try:
+                return json.loads(t[i:j + 1])
+            except ValueError:
+                continue
+    return None
+
+
+EDIT_SYSTEM = ("Ты — веб-дизайнер в программе Dewiar. Сайт хранится данными (не HTML), ты меняешь его операциями. Человек просит "
+               "изменение одной фразой — верни ТОЛЬКО JSON: {\"ops\": [...], \"say\": \"что сделала, одной фразой\"}. Тексты пиши "
+               "по-русски, живо и по делу, без канцелярита. НЕ выдумывай отзывы, людей, награды, цифры и цены, которых не дал человек; "
+               "нужен раздел отзывов, а отзывов нет — добавь блок reviews без карточек. Меняй только то, о чём просят.\n\n")
+FILL_SYSTEM = ("Ты — копирайтер и веб-дизайнер в программе Dewiar. Есть шаблон сайта с текстами-заготовками; человек описал своё дело. "
+               "Перепиши тексты под его дело: название, слоган, заголовки, описания, услуги, меню, вопросы. Используй ТОЛЬКО факты "
+               "человека; чего он не сказал — пиши в общем виде, без конкретных цифр. Цены — только названные человеком, остальные "
+               "оставь пустыми (\"\"). НЕ выдумывай отзывы, имена людей, награды, годы, количества клиентов. Пиши живо, коротко, "
+               "по-русски, без «качественно и недорого». Верни ТОЛЬКО JSON: {\"name\": \"…\", \"tagline\": \"…\", \"description\": "
+               "\"описание для поисковиков 120–160 знаков\", \"contacts\": {…только названные}, \"blocks\": {\"<uid>\": {поля и "
+               "\"items\": [полный список карточек]}}}.")
+
+
+class Sites:
+    def __init__(self, root, host=None, llm=None):
+        self.root = Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.host = host
+        self._llm = llm                         # тесты: llm(system, user) -> текст
+        self._lock = threading.RLock()
+        self._stop = threading.Event()
+        self._thread = None
+        self.recent = []                        # заявки с сайтов за сеанс (студия)
+        self.error = ""
+        self._img_cache = {}
+
+    # ---------- хранение ----------
+    def _dir(self, sid):
+        if not re.fullmatch(r"[a-z0-9]{6,16}", str(sid or "")):
+            raise SiteError("нет такого сайта")
+        return self.root / sid
+
+    def ids(self):
+        return [d.name for d in sorted(self.root.iterdir()) if d.is_dir() and (d / "site.json").exists()] if self.root.exists() else []
+
+    def get(self, sid):
+        try:
+            return json.loads((self._dir(sid) / "site.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise SiteError("нет такого сайта") from e
+
+    def list(self):
+        out = []
+        for sid in self.ids():
+            try:
+                s = self.get(sid)
+            except SiteError:
+                continue
+            out.append({"id": sid, "name": s.get("name"), "tagline": s.get("tagline"), "template": s.get("template"),
+                        "updated": s.get("updated"), "created": s.get("created"), "published": s.get("published") or None,
+                        "palette": (s.get("theme") or {}).get("palette"), "pages": len(s.get("pages") or []),
+                        "blocks": sum(len(p.get("blocks") or []) for p in s.get("pages") or [])})
+        return sorted(out, key=lambda x: -(x.get("updated") or 0))
+
+    def find(self, who=""):
+        """Сайт по имени или поддомену (пусто — последний изменённый). -> id."""
+        items = self.list()
+        if not items:
+            raise SiteError("сайтов пока нет — скажите, какой сайт сделать")
+        w = str(who or "").strip().lower()
+        if not w:
+            return items[0]["id"]
+        for x in items:
+            if w in (x["id"], ((x.get("published") or {}).get("name") or "")) or w in str(x.get("name") or "").lower():
+                return x["id"]
+        for x in items:
+            if any(p for p in re.findall(r"\w{4,}", w) if p[:5] in str(x.get("name") or "").lower()):
+                return x["id"]
+        return items[0]["id"]
+
+    def _save(self, s, label, to=None, merge=False):
+        """Записать и положить версию в историю. merge — правка текста в студии: та же подпись в пределах 90 с не плодит
+        версии, а обновляет последнюю (печатают по буквам)."""
+        with self._lock:
+            d = self._dir(s["id"])
+            (d / "history").mkdir(parents=True, exist_ok=True)
+            s["updated"] = _now()
+            txt = json.dumps(s, ensure_ascii=False, indent=1)
+            tmp = d / "site.json.tmp"
+            tmp.write_text(txt, encoding="utf-8")
+            tmp.replace(d / "site.json")
+            idx = self._history(s["id"])
+            if merge and idx and idx[-1]["label"] == str(label)[:120] and s["updated"] - idx[-1]["ts"] < 90 and len(idx) > 1:
+                (d / "history" / f"{idx[-1]['v']:05d}.json").write_text(txt, encoding="utf-8")
+                idx[-1]["ts"] = s["updated"]
+                (d / "history" / "index.json").write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
+                self._emit(s["id"])
+                return s
+            v = (idx[-1]["v"] + 1) if idx else 1
+            (d / "history" / f"{v:05d}.json").write_text(txt, encoding="utf-8")
+            idx.append({"v": v, "ts": s["updated"], "label": str(label or "Изменение")[:120], **({"to": to} if to else {})})
+            for old in idx[:-HISTORY_MAX]:
+                try:
+                    (d / "history" / f"{old['v']:05d}.json").unlink()
+                except OSError:
+                    pass
+            idx = idx[-HISTORY_MAX:]
+            (d / "history" / "index.json").write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
+        self._emit(s["id"])
+        return s
+
+    def _history(self, sid):
+        try:
+            return json.loads((self._dir(sid) / "history" / "index.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+
+    def history(self, sid):
+        return self._history(sid)[::-1]
+
+    def restore(self, sid, v):
+        idx = self._history(sid)
+        it = next((x for x in idx if x["v"] == int(v)), None)
+        if not it:
+            raise SiteError("такой версии нет")
+        s = json.loads((self._dir(sid) / "history" / f"{it['v']:05d}.json").read_text(encoding="utf-8"))
+        cur = self.get(sid)
+        s["published"] = cur.get("published")                   # публикация — состояние, а не версия
+        return self._save(s, f"Возврат к версии от {datetime.fromtimestamp(it['ts']).strftime('%d.%m %H:%M')}: {it['label']}", to=it["v"])
+
+    def undo(self, sid):
+        """«Верни как было»: на шаг назад от того, что сейчас. Откат — запись с to (к какой версии вернулись): её
+        состояние — та версия, поэтому «ещё раз» идёт от неё дальше назад, а не к отменённой правке."""
+        idx = self._history(sid)
+        byv = {x["v"]: x for x in idx}
+        cur = idx[-1] if idx else None
+        while cur and cur.get("to") in byv:
+            cur = byv[cur["to"]]
+        pos = idx.index(cur) if cur in idx else 0
+        if pos < 1:
+            raise SiteError("раньше этого ничего не было — откатывать некуда")
+        return self.restore(sid, idx[pos - 1]["v"])
+
+    def delete(self, sid):
+        s = self.get(sid)
+        if (s.get("published") or {}).get("name"):
+            try:
+                self.unpublish(sid)
+            except SiteError as e:
+                log.info("🌐 Сайт удалён, но с dewiar.pro не снялся: %s", e)
+        shutil.rmtree(self._dir(sid), ignore_errors=True)
+        self._emit("")
+        return {"ok": True}
+
+    def _emit(self, sid):
+        try:
+            if self.host is not None:
+                self.host.emit("sites", id=sid)
+        except Exception:  # noqa: BLE001
+            pass
+
+    # ---------- создание ----------
+    def from_template(self, tid, name="", tagline="", contacts=None):
+        tid = tid if tid in K.TEMPLATES else "personal"
+        t = K.TEMPLATES[tid]
+        s = {"id": secrets.token_hex(5), "template": tid, "name": (name or t["name"]).strip()[:80], "tagline": (tagline or t["tagline"]).strip()[:160],
+             "theme": {"palette": t["palette"], "fonts": t["fonts"], "radius": t["radius"], "header": t["header"], "art": t["art"], "colors": {}},
+             "logo": {"text": (name or t["name"]).strip()[:60], "mark": t["logo"]["mark"], "style": t["logo"]["style"]},
+             "menu": {"style": t["menu"]}, "contacts": dict(contacts if contacts is not None else t["contacts"]), "seo": {"description": ""},
+             "pages": copy.deepcopy(t["pages"]), "assets": {}, "published": None, "created": _now()}
+        for pg in s["pages"]:
+            for b in pg["blocks"]:
+                b["uid"] = _uid()
+        if name and tid:
+            for b in s["pages"][0]["blocks"]:
+                if b["type"] == "hero" and b.get("variant") in ("poster", "center") and b.get("title") == t["name"]:
+                    b["title"] = s["name"]               # обложка-афиша с названием — сразу своё
+        return s
+
+    def create(self, template="", describe="", name="", tagline="", contacts=None, fill=True):
+        """Новый сайт: шаблон (или по описанию), своё имя и контакты; тексты — моделью под дело человека."""
+        tid = template if template in K.TEMPLATES else K.pick_template(f"{describe} {name}")
+        ct = {k: str(v).strip()[:200] for k, v in (contacts or {}).items() if k in K.CONTACT_KEYS and str(v or "").strip()}
+        s = self.from_template(tid, name, tagline, ct if ct else (None if not describe else {}))
+        if describe and not ct:
+            s["contacts"] = {}                          # контактов человек не назвал — заглушки шаблона не оставляем
+        s["describe"] = str(describe or "")[:3000]
+        (self.root / s["id"]).mkdir(parents=True, exist_ok=True)
+        note = ""
+        if fill and describe:
+            try:
+                note = self.fill(s, describe)
+            except Exception as e:  # noqa: BLE001
+                log.info("🌐 Тексты под дело не написались (оставила заготовки шаблона): %s", e)
+                note = "тексты пока из шаблона — модель не ответила"
+        s["logo"]["text"] = s["name"]
+        self._save(s, f"Создан из шаблона «{K.TEMPLATES[tid]['title']}»")
+        s["_note"] = note
+        return s
+
+    def fill(self, s, describe):
+        """Модель переписывает тексты шаблона под дело человека (только его факты)."""
+        user = (f"ЧТО РАССКАЗАЛ ЧЕЛОВЕК:\n{describe}\n\nШАБЛОН (uid блока — в квадратных скобках):\n{site_brief(s)}\n\n"
+                "Верни JSON, как сказано. Блоки, которые не нужно менять, не включай.")
+        d = _json_in(self.llm(FILL_SYSTEM, user, 3500))
+        if not isinstance(d, dict):
+            raise SiteError("модель не вернула JSON")
+        if str(d.get("name") or "").strip():
+            s["name"] = str(d["name"]).strip()[:80]
+        if str(d.get("tagline") or "").strip():
+            s["tagline"] = str(d["tagline"]).strip()[:160]
+        if str(d.get("description") or "").strip():
+            s.setdefault("seo", {})["description"] = str(d["description"]).strip()[:300]
+        for k, v in (d.get("contacts") or {}).items():
+            if k in K.CONTACT_KEYS and str(v or "").strip():
+                s["contacts"][k] = str(v).strip()[:200]
+        by = {b["uid"]: b for pg in s["pages"] for b in pg["blocks"]}
+        for uid, f in (d.get("blocks") or {}).items():
+            b = by.get(uid)
+            if b is None or not isinstance(f, dict):
+                continue
+            f = clean_fields(f)
+            if b["type"] in ("reviews",):
+                f.pop("items", None)                     # отзывы — только от человека
+            if b["type"] == "team" and "items" in f:
+                for x in f["items"]:
+                    x.setdefault("todo", True)
+            b.update({k: v for k, v in f.items() if k not in ("type", "variant", "tone")})
+        for b in s["pages"][0]["blocks"]:
+            if b["type"] == "hero" and b.get("variant") == "poster" and len(str(b.get("title") or "")) > 24:
+                b["variant"] = "split"                   # длинный заголовок на афише не помещается — вёрстка «текст и картинка»
+        return ""
+
+    def llm(self, system, user, max_tokens=2500):
+        if self._llm:
+            return self._llm(system, user)
+        from llm import stream_chat
+        h = self.host
+        prof = h.s.active_llm() if h is not None else None
+        if not (prof or {}).get("base_url") and (prof or {}).get("kind") != "ollama":
+            raise SiteError("нет модели — выберите её в «Мозге»")
+        return "".join(stream_chat(dict(prof, max_tokens=max_tokens, temperature=0.4), system, [{"role": "user", "content": user}]))
+
+    # ---------- изменения ----------
+    def _block(self, s, ref):
+        """Блок по uid, якорю или типу (первый такого типа). -> (страница, индекс, блок)."""
+        ref = str(ref or "").strip()
+        for pi, pg in enumerate(s["pages"]):
+            for j, b in enumerate(pg["blocks"]):
+                if b.get("uid") == ref or (ref and b.get("id") == ref):
+                    return pi, j, b
+        for pi, pg in enumerate(s["pages"]):
+            for j, b in enumerate(pg["blocks"]):
+                if b.get("type") == ref:
+                    return pi, j, b
+        raise SiteError(f"нет такого раздела: {ref}")
+
+    def apply(self, sid, ops, label="", merge=False):
+        s = self.get(sid)
+        if any(o.get("op") == "undo" for o in ops or [] if isinstance(o, dict)):
+            return self.undo(sid)
+        done = self.apply_ops(s, ops)
+        if not done:
+            raise SiteError("ничего не поменялось")
+        return self._save(s, label or "; ".join(done)[:120], merge=merge)
+
+    def apply_ops(self, s, ops):
+        """Операции к сайту (на месте). -> список того, что сделано (для истории)."""
+        done = []
+        th = s.setdefault("theme", {})
+        for o in ops or []:
+            if not isinstance(o, dict):
+                continue
+            op = o.get("op")
+            if op == "palette" and o.get("name") in K.PALETTES:
+                th["palette"], th["colors"] = o["name"], {}
+                done.append(f"палитра {K.PALETTES[o['name']]['title']}")
+            elif op == "colors":
+                cs = {k: v for k, v in o.items() if k in K.COLOR_KEYS and re.fullmatch(r"#[0-9a-fA-F]{6}", str(v or ""))}
+                if cs:
+                    th.setdefault("colors", {}).update(cs)
+                    done.append("цвета")
+                if o.get("header") in K.HEADERS:
+                    th["header"] = o["header"]
+                    done.append("шапка")
+            elif op == "header" and o.get("value") in K.HEADERS:
+                th["header"] = o["value"]
+                done.append(K.HEADERS[o["value"]].lower())
+            elif op == "fonts" and o.get("name") in K.FONTS:
+                th["fonts"] = o["name"]
+                done.append(f"шрифт {K.FONTS[o['name']]['title']}")
+            elif op == "radius" and o.get("name") in K.RADII:
+                th["radius"] = o["name"]
+                done.append(K.RADII[o["name"]]["title"].lower())
+            elif op == "art" and o.get("name") in ("beans", "arches", "frames", "dots", "blocks", "rings", "stripes", "grid"):
+                th["art"] = o["name"]
+                done.append("узор")
+            elif op == "menu":
+                m = s.setdefault("menu", {})
+                if o.get("style") in K.MENUS:
+                    m["style"] = o["style"]
+                    done.append("меню " + K.MENUS[o["style"]].lower())
+                if "cta" in o:
+                    m["cta"] = _clip("button", o.get("cta") or "")
+                    done.append("кнопка в шапке")
+            elif op == "logo":
+                lg = s.setdefault("logo", {})
+                if o.get("text"):
+                    lg["text"] = _clip("title", o["text"])[:60]
+                if o.get("mark") in K.MARKS:
+                    lg["mark"], lg["svg"] = o["mark"], ""
+                if o.get("style") in K.LOGO_STYLES:
+                    lg["style"] = o["style"]
+                if o.get("svg"):
+                    lg["svg"] = clean_svg(o["svg"])
+                done.append("логотип")
+            elif op == "site":
+                for k in ("name", "tagline"):
+                    if str(o.get(k) or "").strip():
+                        s[k] = _clip("title", o[k]).strip()[:160 if k == "tagline" else 80]
+                        if k == "name" and not (s.get("logo") or {}).get("svg"):
+                            s.setdefault("logo", {})["text"] = s["name"]
+                if "description" in o:
+                    s.setdefault("seo", {})["description"] = _clip("text", o.get("description") or "")[:300]
+                done.append("название и описание")
+            elif op == "contacts":
+                ct = s.setdefault("contacts", {})
+                for k, v in o.items():
+                    if k in K.CONTACT_KEYS:
+                        v = str(v or "").strip()[:200]
+                        if v:
+                            ct[k] = v
+                        else:
+                            ct.pop(k, None)
+                done.append("контакты")
+            elif op == "template" and o.get("id") in K.TEMPLATES:
+                self._restyle(s, o["id"])
+                done.append(f"дизайн «{K.TEMPLATES[o['id']]['title']}»")
+            elif op == "add_block" and o.get("type") in K.BLOCKS:
+                pi = int(o.get("page") or 0) if str(o.get("page") or "0").isdigit() else 0
+                pi = max(0, min(pi, len(s["pages"]) - 1))
+                bl = s["pages"][pi]["blocks"]
+                b = K.blank_block(o["type"])
+                b.update(clean_fields(o.get("data") or {}))
+                if o["type"] == "reviews":
+                    b["items"] = [x for x in b.get("items") or [] if str(x.get("text") or "").strip()]
+                if o["type"] == "team":
+                    for x in b.get("items") or []:
+                        if not x.get("image") and not str(x.get("text") or "").strip() and x.get("name") in ("Имя", ""):
+                            x["todo"] = True
+                b["uid"] = _uid()
+                b["nav"] = b.get("nav") or K.BLOCKS[o["type"]]["title"]
+                at = None
+                if o.get("after"):
+                    try:
+                        p2, j, _ = self._block(s, o["after"])
+                        if p2 == pi:
+                            at = j + 1
+                    except SiteError:
+                        pass
+                if at is None:                           # по умолчанию — перед заявкой и контактами в конце страницы
+                    at = len(bl)
+                    while at > 0 and bl[at - 1]["type"] in ("lead", "contacts", "links") and o["type"] not in ("lead", "contacts"):
+                        at -= 1
+                prev = bl[at - 1]["tone"] if at > 0 else "alt"
+                b["tone"] = b.get("tone") if o.get("data", {}).get("tone") in K.TONES else ("alt" if prev == "base" else "base")
+                bl.insert(at, b)
+                done.append(f"добавлен раздел {K.BLOCKS[o['type']]['title']}")
+            elif op == "remove_block":
+                pi, j, b = self._block(s, o.get("block"))
+                s["pages"][pi]["blocks"].pop(j)
+                done.append(f"убран раздел {K.BLOCKS.get(b['type'], {}).get('title', b['type'])}")
+            elif op == "move_block":
+                pi, j, b = self._block(s, o.get("block"))
+                bl = s["pages"][pi]["blocks"]
+                to = o.get("to")
+                if to == "up":
+                    to = j - 1
+                elif to == "down":
+                    to = j + 1
+                try:
+                    to = max(0, min(int(to), len(bl) - 1))
+                except (TypeError, ValueError):
+                    continue
+                bl.insert(to, bl.pop(j))
+                done.append("порядок разделов")
+            elif op == "block":
+                pi, j, b = self._block(s, o.get("block"))
+                f = clean_fields({k: v for k, v in o.items() if k not in ("op", "block")})
+                if f.get("variant") is not None and f["variant"] not in K.BLOCKS[b["type"]]["variants"]:
+                    f.pop("variant")
+                if f.get("tone") is not None and f["tone"] not in K.TONES:
+                    f.pop("tone")
+                if "id" in f:
+                    f["id"] = re.sub(r"[^a-z0-9_-]", "", str(f["id"]).lower())[:30]
+                if b["type"] == "reviews" and "items" in f:
+                    f["items"] = [x for x in f["items"] if str(x.get("text") or "").strip()]
+                if "items" in f:
+                    for x in f["items"]:
+                        if b["type"] == "team" and not x.get("todo") and x.get("name") in ("Имя врача", "Имя"):
+                            x["todo"] = True
+                b.update(f)
+                done.append(f"раздел {K.BLOCKS.get(b['type'], {}).get('title', b['type'])}")
+            elif op == "item":
+                pi, j, b = self._block(s, o.get("block"))
+                its = b.setdefault("items", [])
+                i = o.get("index")
+                if o.get("remove") and isinstance(i, int) and 0 <= i < len(its):
+                    its.pop(i)
+                elif isinstance(i, int) and 0 <= i < len(its):
+                    its[i].update(clean_fields(o.get("data") or {}, "item"))
+                    if its[i].get("todo") and o.get("data"):
+                        its[i].pop("todo", None)          # человек заполнил заглушку — она его
+                else:
+                    its.append(clean_fields(o.get("data") or {}, "item"))
+                done.append("карточки")
+            elif op == "add_page":
+                title = _clip("nav", o.get("title") or "Страница")
+                slug = translit(title) or f"page{len(s['pages'])}"
+                if slug == "index" or any(p.get("slug") == slug for p in s["pages"]):
+                    slug += f"-{len(s['pages'])}"
+                blocks = []
+                for t in o.get("blocks") or ["text"]:
+                    if t in K.BLOCKS:
+                        b = K.blank_block(t)
+                        b["uid"] = _uid()
+                        blocks.append(b)
+                s["pages"].append({"title": title, "slug": slug, "blocks": blocks})
+                done.append(f"страница «{title}»")
+            elif op == "remove_page":
+                i = int(o.get("page") or 0)
+                if 0 < i < len(s["pages"]):
+                    s["pages"].pop(i)
+                    done.append("страница убрана")
+            elif op == "page":
+                i = int(o.get("page") or 0)
+                if 0 <= i < len(s["pages"]):
+                    pg = s["pages"][i]
+                    if o.get("title"):
+                        pg["title"] = _clip("nav", o["title"])
+                    if "description" in o:
+                        pg["description"] = _clip("text", o.get("description") or "")[:300]
+                    if "seo_title" in o:
+                        pg["seo_title"] = _clip("title", o.get("seo_title") or "")[:90]
+                    done.append("страница")
+        return done
+
+    def _restyle(self, s, tid):
+        """«Другой дизайн целиком»: тема, меню, вид логотипа и вёрстка блоков — из шаблона tid; тексты и порядок — свои."""
+        t = K.TEMPLATES[tid]
+        s["template"] = tid
+        s["theme"] = {"palette": t["palette"], "fonts": t["fonts"], "radius": t["radius"], "header": t["header"], "art": t["art"], "colors": {}}
+        s.setdefault("menu", {})["style"] = t["menu"]
+        lg = s.setdefault("logo", {})
+        lg["style"] = t["logo"]["style"]
+        tb = {}
+        for b in t["pages"][0]["blocks"]:
+            tb.setdefault(b["type"], b)
+        for pg in s["pages"]:
+            for j, b in enumerate(pg["blocks"]):
+                src = tb.get(b["type"])
+                if src:
+                    b["variant"], b["tone"] = src["variant"], src["tone"]
+                    if b["type"] == "hero" and src["variant"] == "poster" and len(str(b.get("title") or "")) > 24:
+                        b["variant"] = "split"
+                else:
+                    b["tone"] = "alt" if j % 2 else "base"
+
+    def say(self, sid, text):
+        """Фраза человека -> изменение. -> {site, said}."""
+        s = self.get(sid)
+        ops, said = quick_ops(text, s)
+        if ops:
+            if ops[0].get("op") == "undo":
+                return {"site": self.undo(sid), "said": said}
+            try:
+                return {"site": self.apply(sid, ops, f"«{str(text)[:80]}»"), "said": said}
+            except SiteError:
+                pass
+        d = _json_in(self.llm(EDIT_SYSTEM + ops_help(), f"{site_brief(s)}\n\nПРОСЬБА ЧЕЛОВЕКА: {text}", 3500))
+        if isinstance(d, list):
+            d = {"ops": d}
+        if not isinstance(d, dict) or not d.get("ops"):
+            raise SiteError("не поняла, что поменять, — скажите иначе: «добавь раздел с ценами», «сделай шапку тёмной»")
+        s2 = self.apply(sid, d["ops"], f"«{str(text)[:80]}»")
+        return {"site": s2, "said": str(d.get("say") or "Готово.")[:300]}
+
+    # ---------- картинки ----------
+    def image_add(self, sid, data, alt=""):
+        """Картинка (data:… или байты) -> уменьшенная webp в img/ сайта. -> путь (img/….webp) для поля image."""
+        from PIL import Image, ImageOps
+        if isinstance(data, str):
+            m = re.match(r"data:image/[a-z+.-]+;base64,(.+)$", data, re.S)
+            if not m:
+                raise SiteError("нужна картинка (jpg, png, webp)")
+            raw = base64.b64decode(m.group(1))
+        else:
+            raw = bytes(data)
+        if len(raw) > 25 * 1024 * 1024:
+            raise SiteError("картинка больше 25 МБ")
+        try:
+            im = Image.open(io.BytesIO(raw))
+            im = ImageOps.exif_transpose(im).convert("RGB")
+        except Exception as e:  # noqa: BLE001
+            raise SiteError("это не картинка или она повреждена") from e
+        im.thumbnail((1920, 1920))
+        buf = io.BytesIO()
+        im.save(buf, "WEBP", quality=80, method=5)
+        b = buf.getvalue()
+        name = f"img/{hashlib.sha1(b).hexdigest()[:16]}.webp"
+        d = self._dir(sid)
+        (d / "img").mkdir(parents=True, exist_ok=True)
+        (d / name).write_bytes(b)
+        s = self.get(sid)
+        s.setdefault("assets", {})[name] = {"w": im.width, "h": im.height, "alt": str(alt or "")[:200], "size": len(b)}
+        with self._lock:
+            (d / "site.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+        return name
+
+    def _images(self, sid, s, mode):
+        out = {}
+        for name in (s.get("assets") or {}):
+            f = self._dir(sid) / name
+            if not f.exists():
+                continue
+            if mode == "preview":
+                key = (str(f), f.stat().st_mtime)
+                if key not in self._img_cache:
+                    self._img_cache[key] = "data:image/webp;base64," + base64.b64encode(f.read_bytes()).decode()
+                out[name] = self._img_cache[key]
+            else:
+                out[name] = name
+        return out
+
+    # ---------- вёрстка ----------
+    def render(self, sid, page=0, site=None):
+        s = site or self.get(sid)
+        return R.page_html(s, int(page or 0), "preview", self._images(sid, s, "preview"))
+
+    def build(self, sid, mode="publish", base_url=""):
+        """Собрать сайт целиком: {путь: bytes}."""
+        s = self.get(sid)
+        imgs = self._images(sid, s, mode)
+        files, fonts = R.site_files(s, imgs, base_url, mode)
+        out = {k: v.encode("utf-8") for k, v in files.items()}
+        for name, src in fonts:
+            f = FONTS_DIR / src
+            if f.exists():
+                out["fonts/" + name] = f.read_bytes()
+        used = "".join(files.values())
+        for name in imgs:
+            if name in used:
+                out[name] = (self._dir(sid) / name).read_bytes()
+        return out
+
+    def export(self, sid):
+        """Сайт в папку out/ — открыть в браузере с диска. -> путь к index.html."""
+        d = self._dir(sid) / "out"
+        shutil.rmtree(d, ignore_errors=True)
+        for k, v in self.build(sid, "export").items():
+            f = d / k
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(v)
+        return d / "index.html"
+
+    # ---------- продвижение ----------
+    def audit(self, sid):
+        """Проверка продвижения без внешних служб: заголовки и описания страниц, h1/h2, alt, вес, контакты и форма,
+        Open Graph, заглушки. -> {score, items: [{ok, level, title, detail, fix}]} — fix: фраза для Лиры."""
+        s = self.get(sid)
+        files = self.build(sid, "publish", (s.get("published") or {}).get("url") or "")
+        pages = [(i, pg, files.get(R.slug_of(pg, i) + ".html", b"").decode("utf-8", "replace")) for i, pg in enumerate(s.get("pages") or [])]
+        items = []
+
+        def add(ok, level, title, detail, fix=""):
+            items.append({"ok": bool(ok), "level": level, "title": title, "detail": detail, "fix": "" if ok else fix})
+        for i, pg, h in pages:
+            pname = "главной" if i == 0 else f"страницы «{pg.get('title')}»"
+            t = re.search(r"<title>(.*?)</title>", h, re.S)
+            tl = len(R.html.unescape(t.group(1))) if t else 0
+            add(15 <= tl <= 70, "важно", f"Заголовок {pname} для поисковиков",
+                f"{tl} знаков — хорошо (нужно 15–70)" if 15 <= tl <= 70 else f"{tl} знаков, а лучше 15–70: в поиске заголовок {'обрежется' if tl > 70 else 'слишком короткий'}",
+                f"Сделай заголовок {pname} для поисковиков длиной 40–65 знаков: название и чем занимаемся")
+            dm = re.search(r'<meta name="description" content="([^"]*)"', h)
+            dl = len(R.html.unescape(dm.group(1))) if dm else 0
+            add(70 <= dl <= 170, "важно", f"Описание {pname}",
+                f"{dl} знаков — хорошо" if 70 <= dl <= 170 else ("описания нет — поисковик возьмёт случайный кусок текста" if not dl else
+                                                                 f"{dl} знаков, а лучше 120–160"),
+                f"Напиши описание {pname} для поисковиков на 120–160 знаков: что предлагаем, где и почему к нам")
+            h1 = len(re.findall(r"<h1[\s>]", h))
+            add(h1 == 1, "важно", f"Главный заголовок (h1) {pname}", "один — как нужно" if h1 == 1 else f"их {h1}, а нужен ровно один",
+                f"Добавь на {pname} обложку с главным заголовком")
+            h2 = len(re.findall(r"<h2[\s>]", h))
+            add(h2 >= 2 or len(pg.get("blocks") or []) < 3, "полезно", f"Подзаголовки разделов {pname}", f"{h2} — поисковику понятна структура" if h2 >= 2 else "мало подзаголовков",
+                f"Дай каждому разделу {pname} понятный заголовок")
+            imgs = re.findall(r"<img\b[^>]*>", h)
+            noalt = [x for x in imgs if re.search(r'alt=""', x) or "alt=" not in x]
+            add(not noalt, "полезно", f"Подписи к картинкам {pname}", "у всех картинок есть подписи" if imgs and not noalt else
+                ("картинок нет" if not imgs else f"без подписи: {len(noalt)} из {len(imgs)}"),
+                f"Подпиши фото на {pname}: коротко, что на них")
+        size = sum(len(v) for k, v in files.items() if not k.startswith("fonts/"))
+        fonts = sum(len(v) for k, v in files.items() if k.startswith("fonts/"))
+        add(size < 1_500_000, "важно", "Вес сайта", f"{size // 1024} КБ страниц и картинок + {fonts // 1024} КБ шрифтов — открывается быстро даже с телефона"
+            if size < 1_500_000 else f"{size // 1024} КБ — тяжело для мобильного интернета", "Уменьши фото на сайте или убери лишние")
+        ct = s.get("contacts") or {}
+        add(any(ct.get(k) for k in ("phone", "email", "telegram", "whatsapp", "max")), "важно", "Как связаться",
+            "контакты есть" if any(ct.get(k) for k in ("phone", "email", "telegram", "whatsapp", "max")) else "ни телефона, ни почты, ни мессенджера",
+            "Добавь на сайт телефон или Telegram — я продиктую")
+        types = {b["type"] for pg in s.get("pages") or [] for b in pg.get("blocks") or []}
+        add("lead" in types, "важно", "Форма заявки", "есть — заявки придут в «Клиенты»" if "lead" in types else "нет формы — посетителю сложнее оставить заявку",
+            "Добавь форму заявки перед контактами")
+        add(bool(ct.get("address")) or "contacts" in types, "полезно", "Адрес и карта", "есть" if ct.get("address") else "адреса нет — если вы принимаете у себя, его ищут первым",
+            "Добавь адрес в контакты")
+        add(True, "полезно", "Карточка для соцсетей (Open Graph)", "есть: название, описание и картинка в превью ссылки")
+        if not any(b.get("image") for pg in s.get("pages") or [] for b in pg.get("blocks") or []):
+            items[-1]["detail"] = "есть название и описание; добавьте фото на обложку — ссылка в мессенджерах будет с картинкой"
+        todo = [b for pg in s.get("pages") or [] for b in pg.get("blocks") or [] if any(x.get("todo") for x in b.get("items") or [])]
+        empty_prices = [b for pg in s.get("pages") or [] for b in pg.get("blocks") or [] if b["type"] in ("prices", "services", "products")
+                        and any(not str(x.get("price") or "").strip() for x in b.get("items") or [])]
+        add(not todo, "важно", "Заглушки", "все заглушки заменены" if not todo else
+            f"в разделе «{K.BLOCKS[todo[0]['type']]['title']}» остались заглушки — их не видно на сайте, пока не замените",
+            "Расскажу о сотрудниках — замени заглушки в команде")
+        add(not empty_prices, "полезно", "Цены", "у всех позиций есть цены" if not empty_prices else "у части позиций нет цены — люди чаще пишут, когда видят цену",
+            "Помоги заполнить цены — спроси меня о них")
+        gal = [b for pg in s.get("pages") or [] for b in pg.get("blocks") or [] if b["type"] == "gallery"]
+        if gal:
+            have = sum(1 for b in gal for x in b.get("items") or [] if x.get("image"))
+            add(have > 0, "полезно", "Фото в галерее", f"фото: {have}" if have else "фото не добавлены — галерея на сайте не покажется",
+                "Как добавить фото в галерею?")
+        pub = (s.get("published") or {}).get("url")
+        add(bool(pub), "важно", "Сайт в интернете", f"опубликован: {pub}" if pub else "ещё не опубликован — поисковики его не видят",
+            "Опубликуй сайт")
+        w = {"важно": 3, "полезно": 1}
+        tot = sum(w[x["level"]] for x in items)
+        score = round(100 * sum(w[x["level"]] for x in items if x["ok"]) / tot) if tot else 0
+        return {"score": score, "items": sorted(items, key=lambda x: (x["ok"], x["level"] != "важно")), "size": size, "fonts": fonts}
+
+    # ---------- dewiar.pro ----------
+    def _key(self):
+        return (getattr(getattr(self.host, "cloud", None), "key", "") or "").strip()
+
+    def _fetch(self, path, body=None, timeout=40):
+        from cloud import CloudError, fetch
+        if not self._key():
+            raise SiteError("нужен вход аккаунтом dewiar.pro или ключ Dewiar — студия → «Мозг»")
+        try:
+            return fetch(self.host.cloud.url, self._key(), path, timeout=timeout, body=body)
+        except CloudError as e:
+            raise SiteError(str(e)) from e
+
+    def check_name(self, name, sid=""):
+        n = str(name or "").strip().lower()
+        p = name_problem(n)
+        if p:
+            return {"ok": False, "free": False, "reason": p}
+        s = self.get(sid) if sid else {}
+        if (s.get("published") or {}).get("name") == n:
+            return {"ok": True, "free": True, "mine": True}
+        d = self._fetch("/sites/check", {"name": n})
+        return {"ok": True, "free": bool(d.get("free")), "mine": bool(d.get("mine")), "reason": d.get("reason") or ""}
+
+    def suggest_name(self, sid):
+        s = self.get(sid)
+        return (s.get("published") or {}).get("name") or translit(s.get("name") or "")[:30].strip("-") or "moy-sait"
+
+    def publish(self, sid, name=""):
+        s = self.get(sid)
+        n = str(name or (s.get("published") or {}).get("name") or self.suggest_name(sid)).strip().lower()
+        p = name_problem(n)
+        if p:
+            raise SiteError(p)
+        files = self.build(sid, "publish", f"https://{n}.dewiar.pro")
+        total = sum(len(v) for v in files.values())
+        if total > 8 * 1024 * 1024:
+            raise SiteError(f"сайт весит {total // 1024 // 1024} МБ, а можно до 8 — уменьшите или уберите часть фото")
+        body = {"name": n, "title": R.seo_title(s, 0)[:160], "description": R.seo_desc(s, 0)[:300], "site": sid,
+                "files": {k: ({"t": v.decode("utf-8")} if k.endswith((".html", ".css")) else {"b": base64.b64encode(v).decode()}) for k, v in files.items()}}
+        d = self._fetch("/sites/publish", body, timeout=90)
+        s["published"] = {"name": d.get("name") or n, "url": d.get("url") or f"https://{n}.dewiar.pro", "ts": _now(), "status": "live", "reason": ""}
+        old = (self.get(sid).get("published") or {}).get("name")
+        if old and old != n:
+            try:
+                self._fetch("/sites/remove", {"name": old})
+            except SiteError:
+                pass
+        self._save(s, f"Опубликован: {s['published']['url']}")
+        log.info("🌐 Сайт опубликован: %s", s["published"]["url"])
+        self.start()
+        return s
+
+    def unpublish(self, sid):
+        s = self.get(sid)
+        n = (s.get("published") or {}).get("name")
+        if n:
+            self._fetch("/sites/remove", {"name": n})
+        s["published"] = None
+        return self._save(s, "Снят с публикации")
+
+    def stats(self, sid, days=30, prev=False):
+        s = self.get(sid)
+        n = (s.get("published") or {}).get("name")
+        if not n:
+            return {"none": True}
+        d = self._fetch("/sites/stats", {"name": n, "days": int(days), "prev": bool(prev)})
+        st = s.get("published") or {}
+        if bool(d.get("blocked")) != (st.get("status") == "blocked") or (d.get("reason") or "") != (st.get("reason") or ""):
+            st.update({"status": "blocked" if d.get("blocked") else "live", "reason": d.get("reason") or ""})
+            s["published"] = st
+            with self._lock:
+                (self._dir(sid) / "site.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+        d["leads_local"] = [x for x in self.recent if x.get("site") == n][-20:][::-1]
+        return d
+
+    def sync_status(self):
+        """Состояние своих сайтов на dewiar.pro (блокировка администратором и причина) -> обновить у себя."""
+        if not any((self.get(i).get("published") or {}).get("name") for i in self.ids()):
+            return 0
+        d = self._fetch("/sites/mine", {})
+        by = {x.get("name"): x for x in d.get("sites") or []}
+        n = 0
+        for sid in self.ids():
+            s = self.get(sid)
+            pub = s.get("published") or {}
+            r = by.get(pub.get("name"))
+            if not r:
+                continue
+            st = "blocked" if r.get("blocked") else "live"
+            if st != pub.get("status") or (r.get("reason") or "") != (pub.get("reason") or ""):
+                pub.update({"status": st, "reason": r.get("reason") or ""})
+                s["published"] = pub
+                with self._lock:
+                    (self._dir(sid) / "site.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+                n += 1
+                if st == "blocked":
+                    try:
+                        self.host.push("Сайт заблокирован", f"{pub.get('url')}: {r.get('reason') or 'причина в студии → «Сайты»'}")
+                    except Exception:  # noqa: BLE001
+                        pass
+        if n:
+            self._emit("")
+        return n
+
+    # ---------- заявки ----------
+    def take(self, lead):
+        """Заявка с формы сайта -> клиент (новый или знакомый) в «Клиентах». -> id клиента."""
+        from sitechat import EMAIL_RX, PHONE_RX
+        h = self.host
+        C = getattr(h, "clients", None)
+        if C is None:
+            return ""
+        contact = str(lead.get("contact") or "").strip()
+        m1, m2 = EMAIL_RX.search(contact), PHONE_RX.search(contact)
+        when = datetime.fromtimestamp(lead.get("ts") or time.time()).strftime("%d.%m %H:%M")
+        text = (f"Заявка с сайта {lead.get('site')}.dewiar.pro ({when}): {contact}" + (f" — {lead['note']}" if lead.get("note") else "")
+                + (f" (страница {lead['page']})" if lead.get("page") and lead.get("page") != "index" else ""))
+        cid = h.sitechat._find_client(contact) if getattr(h, "sitechat", None) else None
+        if cid:
+            C.note(cid, text)
+        else:
+            cid = C.add((lead.get("name") or "").strip() or contact, phone=m2.group(0) if m2 and not m1 else "", email=m1.group(0) if m1 else "")["id"]
+            C.note(cid, text)
+        crm = getattr(h, "crm", None)
+        if crm is not None and crm.connected() and crm.st.get("auto"):
+            threading.Thread(target=lambda: crm.send(cid), name="crm-site", daemon=True).start()
+        return cid
+
+    def poll(self):
+        if not self._key() or not any((self.get(i).get("published") or {}).get("name") for i in self.ids()):
+            return 0
+        try:
+            d = self._fetch("/sites/leads", {})
+        except SiteError as e:
+            self.error = str(e)
+            return 0
+        self.error = ""
+        done = []
+        for lead in d.get("leads") or []:
+            try:
+                cid = self.take(lead)
+            except Exception as e:  # noqa: BLE001
+                log.warning("🌐 Заявка с сайта не завелась: %s", e)
+                continue
+            done.append(lead["id"])
+            self._lead_log(lead, cid)
+            self.recent.append({"ts": lead.get("ts"), "site": lead.get("site"), "name": lead.get("name") or "", "contact": lead.get("contact") or "",
+                                "note": lead.get("note") or "", "page": lead.get("page") or "", "cid": cid})
+            self.recent = self.recent[-100:]
+            try:
+                self.host.push("Заявка с сайта", f"{lead.get('name') or 'Посетитель'}, {lead.get('contact')} — в «Клиентах»")
+            except Exception:  # noqa: BLE001
+                pass
+        if done:
+            try:
+                self._fetch("/sites/leads", {"ack": done})
+            except SiteError as e:
+                log.info("🌐 Заявки заведены, но сервер не узнал: %s", e)
+            if self.host is not None:
+                try:
+                    (self.host.s.get("features") or {}).get("clients") or self.host.s.update({"features": {"clients": True}})
+                except Exception:  # noqa: BLE001
+                    pass
+            self._emit("")
+        return len(done)
+
+    def _lead_log(self, lead, cid):
+        """Заявка — и в журнал своего сайта (leads.json): вкладка «Заявки» показывает их и после перезапуска."""
+        for sid in self.ids():
+            if (self.get(sid).get("published") or {}).get("name") == lead.get("site"):
+                f = self._dir(sid) / "leads.json"
+                try:
+                    items = json.loads(f.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    items = []
+                items.append({"ts": lead.get("ts") or _now(), "name": lead.get("name") or "", "contact": lead.get("contact") or "",
+                              "note": lead.get("note") or "", "page": lead.get("page") or "", "cid": cid})
+                f.write_text(json.dumps(items[-500:], ensure_ascii=False), encoding="utf-8")
+                return
+
+    def leads(self, sid):
+        """Заявки этого сайта (журнал leads.json; клиенты — в «Клиентах»), свежие сверху."""
+        try:
+            return json.loads((self._dir(sid) / "leads.json").read_text(encoding="utf-8"))[::-1]
+        except (OSError, ValueError):
+            return []
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._loop, name="sites", daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+
+    def _loop(self):
+        tick = 0
+        while not self._stop.wait(120):
+            try:
+                self.poll()
+                tick += 1
+                if tick % 15 == 1:                      # раз в полчаса — не заблокирован ли сайт
+                    self.sync_status()
+            except Exception:  # noqa: BLE001
+                log.exception("Сайты: заявки")
+
+    # ---------- для студии ----------
+    def meta(self):
+        return {"templates": [{"id": k, "title": K.TEMPLATES[k]["title"], "sub": K.TEMPLATES[k]["sub"], "palette": K.TEMPLATES[k]["palette"],
+                               "fonts": K.TEMPLATES[k]["fonts"], "name": K.TEMPLATES[k]["name"]} for k in K.TEMPLATE_ORDER],
+                "palettes": {k: {c: v[c] for c in ("title",) + K.COLOR_KEYS} for k, v in K.PALETTES.items()},
+                "fonts": {k: {"title": v["title"], "sub": v["sub"], "head": v["head"], "body": v["body"], "hw": v["hw"], "italic": bool(v.get("italic"))}
+                          for k, v in K.FONTS.items()},
+                "radii": {k: v["title"] for k, v in K.RADII.items()}, "menus": K.MENUS, "headers": K.HEADERS, "tones": K.TONES,
+                "marks": {k: {"title": v[0], "svg": K.mark_svg(k)} for k, v in K.MARKS.items()}, "logo_styles": K.LOGO_STYLES,
+                "contacts": K.CONTACT_KEYS,
+                "blocks": {k: {"title": v["title"], "sub": v["sub"], "variants": v["variants"], "fields": v["fields"],
+                               "items": v.get("items")} for k, v in K.BLOCKS.items()}}
+
+    def template_preview(self, tid):
+        s = self.from_template(tid)
+        return R.page_html(s, 0, "preview")
+
+    def artist_logos(self):
+        """SVG из «Художника» (папка «Рисунки») — кандидаты в логотип."""
+        try:
+            ws = self.host.workspace.root() if self.host is not None else None
+        except Exception:  # noqa: BLE001
+            ws = None
+        d = Path(ws) / "Рисунки" if ws else None
+        if not d or not d.exists():
+            return []
+        out = []
+        for f in sorted(d.glob("*.svg"), key=lambda p: -p.stat().st_mtime)[:24]:
+            try:
+                out.append({"name": f.stem, "svg": clean_svg(f.read_text(encoding="utf-8"), 64)})
+            except (OSError, SiteError):
+                continue
+        return out
+
+    def public(self, sid):
+        s = self.get(sid)
+        return {"site": s, "history": self.history(sid)[:40], "meta_v": 1}

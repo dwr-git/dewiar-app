@@ -751,7 +751,12 @@ class AnswerMixin:
             return ""
 
     def _plugin_keep(self, text):
-        """Имена действий плагина, к которому эта просьба (+ use_skill) — их не выбрасываем, даже когда окно модели мало."""
+        """Имена действий плагина, к которому эта просьба (+ use_skill) — их не выбрасываем, даже когда окно модели мало.
+        Просьба о сайте — то же для действий «Сайтов»."""
+        from quality import SITE_ASK, SITE_EDIT_ASK, SITE_TOOLS
+        ask0 = (text or "").split("\n\nВложения:")[0]
+        if ask0 and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)):
+            return set(SITE_TOOLS)
         pl, m = getattr(self, "plugins", None), getattr(self, "mcp", None)
         if pl is None or m is None or not text:
             return set()
@@ -1737,8 +1742,11 @@ class AnswerMixin:
                 cr = self.care_context(text, turn)         # «Заботливая память»: прошло важное — спросить, как прошло
                 if cr:
                     ctx.append(cr)
-                from quality import DIAGRAM_ASK, PAGE_ASK
-                if PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
+                from quality import DIAGRAM_ASK, PAGE_ASK, SITE_ASK, SITE_EDIT_ASK, SITE_NOTE
+                ask0 = text.split("\n\nВложения:")[0]
+                if specs and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)) and any(x.get("name") == "site_create" for x in specs):
+                    system += SITE_NOTE                       # «Сайты» (03.11): сайт — инструментами, а не HTML в чате
+                elif PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
                     system += ("\n\nСЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "
                                "вызовом show_page передай html содержимого — разделы <section> с <h2>, списки, таблицы; оформление "
                                "добавится само, страница откроется в браузере. HTML в ответе не пиши, скрипты для этого не пиши; "

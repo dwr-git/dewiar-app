@@ -349,7 +349,7 @@ with sync_playwright() as pw:
     # своя страница «Тендеров»: найти (сохранённые страницы площадок), лента с фильтрами, карточка, отметки, запросы
     st.evaluate("() => { window.opened = []; window.openExt = (u) => opened.push(u); }")
     st.click('#plp .plp-tabs [data-tab="page"]'); st.wait_for_timeout(2500)
-    tf = next(f for f in st.frames if f != st.main_frame)
+    tf = st.query_selector("#plp-frame").content_frame()
     tfl = st.frame_locator("#plp-frame")
     ok("Тендеров пока нет" in tfl.locator("#rows").text_content() or tfl.locator(".trow").count() > 0, "лента тендеров открылась")
     tfl.locator("#scan").click(); st.wait_for_timeout(4000)
@@ -416,7 +416,7 @@ with sync_playwright() as pw:
     # своя страница «Рекрутёра»: закинуть резюме, каталог, карточка, правка, подбор, сравнение
     st.click('#plp .plp-tabs [data-tab="page"]'); st.wait_for_timeout(2500)
     ok(st.get_attribute("#plp-frame", "sandbox") == "allow-scripts", "фрейм-песочница: только скрипты, без same-origin")
-    frame = next(f for f in st.frames if f != st.main_frame)
+    frame = st.query_selector("#plp-frame").content_frame()          # фрейм страницы плагина (в студии есть и другие — «Сайты»)
     fr = st.frame_locator("#plp-frame")
     names = fr.locator(".cand .who b").all_inner_texts()
     ok(sorted(names) == NAMES, f"ui.html Рекрутёра — каталог кандидатов через мост: {names}")

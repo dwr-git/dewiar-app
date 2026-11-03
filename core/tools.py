@@ -2494,6 +2494,138 @@ def t_client_deals(a, ctx):
     return _clients(ctx).deals_summary(a.get("what") or "")
 
 
+# ---------- «Сайты» (03.11, sites.py): сделать, переделать фразой, показать, опубликовать на dewiar.pro, оценить ----------
+def _sites(ctx):
+    s = ctx.get("sites")
+    if s is None:
+        raise ToolError("«Сайты» выключены — студия → «Возможности» → «Сайты»")
+    return s
+
+
+def _site_open(S, sid):
+    """Собрать сайт в папку и открыть в браузере (с диска)."""
+    f = S.export(sid)
+    launch(["xdg-open", str(f)])
+    return f
+
+
+def t_site_create(a, ctx):
+    """«Сделай сайт для моей кофейни на Садовой, 5…» — шаблон по делу, тексты под человека, сразу открыть."""
+    from sites import SiteError
+    S = _sites(ctx)
+    ct = {k: a[k] for k in ("phone", "email", "address", "hours", "telegram", "whatsapp", "vk") if str(a.get(k) or "").strip()}
+    describe = str(a.get("describe") or "").strip()
+    if not describe and not a.get("name"):
+        raise ToolError("Спроси одной фразой, для чего сайт: чем занимается человек и как называется дело.")
+    try:
+        s = S.create(a.get("kind") or "", describe, a.get("name") or "", a.get("tagline") or "", ct)
+        _site_open(S, s["id"])
+    except SiteError as e:
+        raise ToolError(str(e)) from e
+    import sites_kit as K
+    blocks = [K.BLOCKS[b["type"]]["title"] for b in s["pages"][0]["blocks"]]
+    miss = [w for k, w in (("phone", "телефон"), ("address", "адрес"), ("hours", "часы работы")) if not (s.get("contacts") or {}).get(k)]
+    note = s.get("_note") or ""
+    return (f"Сайт «{s['name']}» готов (дизайн «{K.TEMPLATES[s['template']]['title']}», разделы: {', '.join(blocks)}) и открыт в браузере; "
+            f"редактор — студия → «Сайты». {('Заметка: ' + note + '. ') if note else ''}"
+            "Скажи одной-двумя фразами, что получилось, и предложи: поменять что угодно одной фразой (цвета, шрифт, разделы, "
+            "«другой дизайн»), прислать фото и цены" + (f", назвать {', '.join(miss)}" if miss else "") + ", а когда понравится — опубликовать на "
+            "dewiar.pro под своим именем. Отзывы и людей не выдумывай.")
+
+
+def t_site_edit(a, ctx):
+    """Любая правка фразой: «сделай шапку тёмной», «добавь цены», «другой дизайн целиком», «верни как было»."""
+    from sites import SiteError
+    S = _sites(ctx)
+    try:
+        sid = S.find(a.get("site") or "")
+        r = S.say(sid, str(a.get("request") or "").strip() or "верни как было")
+        S.export(sid)
+        if a.get("show"):
+            _site_open(S, sid)
+    except SiteError as e:
+        raise ToolError(str(e)) from e
+    pub = (r["site"].get("published") or {}).get("url")
+    return (f"{r['said']} Сайт «{r['site']['name']}»: в студии → «Сайты» видно сразу" + (", в открытом браузере — обновите страницу" if not a.get("show") else ", открыла в браузере")
+            + (f". На {pub} изменения появятся после «опубликуй ещё раз»" if pub else "") + ". Скажи это коротко; отменить — «верни как было».")
+
+
+def t_site_show(a, ctx):
+    from sites import SiteError
+    S = _sites(ctx)
+    items = S.list()
+    if not items:
+        return "Сайтов пока нет. Предложи сделать: спроси, чем человек занимается."
+    try:
+        sid = S.find(a.get("site") or "")
+        _site_open(S, sid)
+    except SiteError as e:
+        raise ToolError(str(e)) from e
+    s = S.get(sid)
+    others = [x["name"] for x in items if x["id"] != sid]
+    pub = (s.get("published") or {})
+    return (f"Открыла сайт «{s['name']}» в браузере" + (f" (в интернете: {pub.get('url')}" + (", ЗАБЛОКИРОВАН администратором: " + pub.get("reason", "") if pub.get("status") == "blocked" else "") + ")" if pub.get("url") else ", он ещё не опубликован")
+            + (f". Другие сайты: {', '.join(others)}" if others else "") + ". Скажи это одной фразой.")
+
+
+def t_site_publish(a, ctx):
+    from sites import SiteError, name_problem
+    S = _sites(ctx)
+    try:
+        sid = S.find(a.get("site") or "")
+        n = str(a.get("name") or "").strip().lower() or S.suggest_name(sid)
+        p = name_problem(n)
+        if p:
+            raise ToolError(f"Имя «{n}» не подходит: {p}. Предложи человеку 2–3 имени латиницей и спроси, какое взять.")
+        chk = S.check_name(n, sid)
+        if not chk.get("free"):
+            raise ToolError(f"Адрес {n}.dewiar.pro уже занят. Предложи другие имена латиницей (с городом, с дефисом) и спроси.")
+        s = S.publish(sid, n)
+    except SiteError as e:
+        raise ToolError(str(e)) from e
+    return (f"Сайт «{s['name']}» опубликован: {s['published']['url']} — открывается у всех, с телефона тоже. Заявки с формы придут в «Клиенты», "
+            "посещения — студия → «Сайты» → «Аналитика». Скажи адрес и что после правок нужно сказать «опубликуй ещё раз».")
+
+
+def t_site_review(a, ctx):
+    """«Оцени мой сайт», «как его продвигать» — проверка продвижения + посещения и источники."""
+    from sites import SiteError
+    S = _sites(ctx)
+    try:
+        sid = S.find(a.get("site") or "")
+        au = S.audit(sid)
+        st = {}
+        if (S.get(sid).get("published") or {}).get("name"):
+            try:
+                st = S.stats(sid, 30)
+            except SiteError as e:
+                st = {"error": str(e)}
+    except SiteError as e:
+        raise ToolError(str(e)) from e
+    s = S.get(sid)
+    bad = [x for x in au["items"] if not x["ok"]]
+    good = [x for x in au["items"] if x["ok"]]
+    out = [f"Сайт «{s['name']}»: проверка продвижения — {au['score']} из 100."]
+    if bad:
+        out.append("Что улучшить: " + "; ".join(f"{x['title']} — {x['detail']} ({x['level']})" for x in bad[:8]) + ".")
+    out.append("Уже хорошо: " + "; ".join(x["title"] for x in good[:8]) + ".")
+    if st.get("days") is not None:
+        views = sum(d.get("views", 0) for d in st.get("days") or [])
+        vis = sum(d.get("visitors", 0) for d in st.get("days") or [])
+        refs = ", ".join(f"{r['ref']} — {r['views']}" for r in (st.get("refs") or [])[:5]) or "нет данных"
+        dev = st.get("devices") or {}
+        out.append(f"За 30 дней: просмотров {views}, посетителей примерно {vis}, заявок с формы {st.get('leads', 0)}. Откуда пришли: {refs}. "
+                   f"С телефона {dev.get('phone', 0)}, с компьютера {dev.get('desktop', 0)}.")
+    elif st.get("error"):
+        out.append(f"Посещения не узнала: {st['error']}.")
+    else:
+        out.append("Сайт ещё не опубликован — посещений нет.")
+    out.append("Дай человеку 3–5 советов по продвижению простыми словами, по ЭТИМ данным (что исправить на сайте — предложи сделать "
+               "одной фразой, я исправлю через site_edit; где рассказать о сайте — Яндекс Бизнес/Карты, 2ГИС, соцсети и мессенджеры, "
+               "визитки и QR на месте, подпись в письмах). Не выдумывай цифры, которых здесь нет.")
+    return "\n".join(out)
+
+
 def t_app_help(a, ctx):
     import guide
     return guide.answer(a.get("query") or "", a.get("where") or "")
@@ -3224,6 +3356,32 @@ TOOLS = {
     "client_deals": ("«Клиенты» → сделки: «кто нам должен?» (what owed — выставленные неоплаченные счета, итог, просроченные), "
                      "«какие сделки зависли?» (stuck — без движения неделю, просроченная оплата), или все открытые (пусто).",
                      S({"what": {"type": "string", "enum": ["owed", "stuck", ""]}}), "safe", t_client_deals, "Клиенты: кто должен"),
+    "site_create": ("Сделать человеку САЙТ (лендинг, визитку, сайт компании, кофейни, мастера, школы, магазина…) — «сделай сайт для моей "
+                    "кофейни», «нужен сайт-визитка», «сделай лендинг для курса». Сайт сразу красивый и адаптивный, с формой заявки, "
+                    "откроется в браузере; потом его можно менять фразой (site_edit) и опубликовать на dewiar.pro (site_publish). "
+                    "describe — всё, что человек рассказал о деле, его словами (чем занимается, где, для кого, цены, особенности); "
+                    "name — название, если назвал; kind — coffee|salon|lawyer|school|shop|photo|clinic|event|startup|personal|repair, "
+                    "если ясно; контакты — только продиктованные. НЕ пиши HTML и не обещай «сделаю» — вызывай.",
+                    S({"describe": {"type": "string"}, "name": {"type": "string"}, "tagline": {"type": "string"},
+                       "kind": {"type": "string", "enum": ["", "coffee", "salon", "lawyer", "school", "shop", "photo", "clinic", "event", "startup", "personal", "repair"]},
+                       "phone": {"type": "string"}, "email": {"type": "string"}, "address": {"type": "string"}, "hours": {"type": "string"},
+                       "telegram": {"type": "string"}, "whatsapp": {"type": "string"}, "vk": {"type": "string"}}, ["describe"]),
+                    "safe", t_site_create, "Сайты: сделать"),
+    "site_edit": ("Изменить сайт человека ЛЮБОЙ просьбой одной фразой — от текста до дизайна: «сделай шапку тёмной», «добавь раздел с "
+                  "ценами: стрижка 1500, окрашивание 3000», «поменяй шрифт на строгий», «меню — бургером», «другой дизайн целиком», "
+                  "«убери галерею», «телефон теперь …», «верни как было». request — просьба словами человека, с его фактами; site — "
+                  "название сайта, если их несколько; show — открыть в браузере после правки.",
+                  S({"request": {"type": "string"}, "site": {"type": "string"}, "show": {"type": "boolean"}}, ["request"]),
+                  "safe", t_site_edit, "Сайты: изменить"),
+    "site_show": ("Открыть сайт человека в браузере, сказать, какие сайты есть и опубликованы ли они. site — название (пусто — последний).",
+                  S({"site": {"type": "string"}}), "safe", t_site_show, "Сайты: показать"),
+    "site_publish": ("Опубликовать сайт на dewiar.pro по адресу имя.dewiar.pro (или обновить уже опубликованный — «опубликуй ещё раз»). "
+                     "name — имя латиницей, цифры и дефис, 3–30 знаков (spb-zerno → spb-zerno.dewiar.pro); не назвал — спроси или "
+                     "предложи по названию. site — какой сайт.",
+                     S({"name": {"type": "string"}, "site": {"type": "string"}}), "confirm", t_site_publish, "Сайты: опубликовать"),
+    "site_review": ("Оценить сайт и его продвижение: «оцени мой сайт», «как продвигать сайт», «сколько было посещений», «откуда приходят». "
+                    "Проверка заголовков, описаний, контактов, формы, фото + посещения, источники, устройства, заявки — и твои советы.",
+                    S({"site": {"type": "string"}}), "safe", t_site_review, "Сайты: оценить и продвигать"),
     "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей»; группа — «что ответили в группе "
                    "Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.",
                    S({"who": {"type": "string"}}), "safe", t_close_read, "Близкие: прочитать"),
@@ -3335,7 +3493,8 @@ TOOLS = {
 # Этим умениям нужен интернет из самого Dewiar — при стоп-кране (студия → «Безопасность») модель о них не узнаёт.
 # Открыть сайт, музыку или карту в браузере человека — можно: это его браузер и его просьба.
 NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "mailing", "client_crm", "channel_post", "read_emails", "read_email", "send_telegram", "close_send",
-             "close_call", "close_read", "team_assign", "deal_remind", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update"}
+             "close_call", "close_read", "team_assign", "deal_remind", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update",
+             "site_publish"}
 DEFAULT_OFF = set()          # команды терминала включены, но каждая — только после «Выполнить?»
 # «Только безопасное» (студия → «Безопасность», отзыв 18.10: «лучше чтоб пользователь мог выбрать, что можно делать, а не
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
@@ -3344,7 +3503,7 @@ SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "sho
              "cancel_reminder", "change_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "remember", "write_diary",
              "money_add", "money_report", "money_find", "money_fix", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
-             "client_list", "client_deal", "client_deals"}
+             "client_list", "client_deal", "client_deals", "site_create", "site_edit", "site_show", "site_review"}
 
 
 # инструменты навыков (skills.py): есть, только когда навыки включены; выполняет Toolbox.run
@@ -3398,6 +3557,9 @@ class Toolbox:
             if not (self.hooks.get("clients") is not None and (self.s.get("features") or {}).get("clients")):
                 return False, False
             if name == "client_crm" and not (self.hooks.get("crm") and self.hooks["crm"].connected()):   # и CRM подключена
+                return False, False
+        if name.startswith("site_"):               # «Сайты» (03.11): есть, пока не выключены в «Возможностях»
+            if self.hooks.get("sites") is None or (self.s.get("features") or {}).get("sites") is False:
                 return False, False
         if name in ("team_assign", "team_status", "team_message"):   # «Поручения»: раздел включён и бот компании подключён
             tm = self.hooks.get("team")
@@ -3628,6 +3790,16 @@ class Toolbox:
             ch = ", ".join(f"{ {'amount': 'сумма', 'currency': 'валюта', 'category': 'категория', 'note': 'что', 'date': 'дата', 'kind': 'вид'}[k]} → {str(args[k]).upper() if k == 'currency' else args[k]}"
                            for k in ("amount", "currency", "category", "note", "date", "kind") if args.get(k) not in (None, ""))
             return f"Исправить ({ch}): {what}?"
+        if name == "site_publish":
+            S = self.hooks.get("sites")
+            try:
+                sid = S.find(args.get("site") or "")
+                n = str(args.get("name") or "").strip().lower() or S.suggest_name(sid)
+                was = (S.get(sid).get("published") or {}).get("name")
+                return (f"Обновить сайт «{S.get(sid)['name']}» на {n}.dewiar.pro?" if was == n else
+                        f"Опубликовать сайт «{S.get(sid)['name']}» по адресу {n}.dewiar.pro? Он будет виден всем.")
+            except Exception:  # noqa: BLE001
+                return "Опубликовать сайт на dewiar.pro?"
         if name == "send_email" and str(args.get("reply_to") or "").strip():
             b = " ".join(str(args.get("body") or "").split())
             return f"Отправить ответ на письмо ({args['reply_to']}): «{b[:90]}{'…' if len(b) > 90 else ''}»?"

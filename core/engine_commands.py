@@ -8,7 +8,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
@@ -330,6 +330,70 @@ class CommandsMixin:
             raise ValueError(str(e)) from e
 
     # ---------- окно голосом: «спрячься», «покажись», «отключись» ----------
+
+    def sites_cmd(self, cmd, a):
+        """«Сайты» (03.11, sites.py) для студии: список, шаблоны, предпросмотр, правки и «Сказать Лире», версии, фото,
+        публикация на имя.dewiar.pro, посещения, проверка продвижения, заявки."""
+        from sites import SiteError
+        W = self.sites
+        sid = str(a.get("id") or "")
+        try:
+            if cmd == "sites_list":
+                return {"items": W.list(), "signed": bool(W._key()), "error": W.error}
+            if cmd == "sites_meta":
+                return W.meta()
+            if cmd == "sites_get":
+                return W.public(sid)
+            if cmd == "sites_render":                   # предпросмотр страницы
+                return {"html": W.render(sid, int(a.get("page") or 0))}
+            if cmd == "sites_template":
+                return {"html": W.template_preview(str(a.get("template") or ""))}
+            if cmd == "sites_create":
+                s = W.create(str(a.get("template") or ""), str(a.get("describe") or ""), str(a.get("name") or ""), "",
+                             a.get("contacts") or {}, fill=bool(a.get("describe")))
+                return W.public(s["id"])
+            if cmd == "sites_apply":
+                W.apply(sid, a.get("ops") or [], str(a.get("label") or ""), merge=bool(a.get("merge")))
+                return W.public(sid)
+            if cmd == "sites_say":
+                r = W.say(sid, str(a.get("text") or ""))
+                return dict(W.public(sid), said=r["said"])
+            if cmd == "sites_undo":
+                W.undo(sid)
+                return W.public(sid)
+            if cmd == "sites_restore":
+                W.restore(sid, int(a.get("v") or 0))
+                return W.public(sid)
+            if cmd == "sites_image":
+                return {"image": W.image_add(sid, a.get("data") or "", a.get("alt") or "")}
+            if cmd == "sites_delete":
+                return W.delete(sid)
+            if cmd == "sites_open":
+                import tools as _t
+                _t.launch(["xdg-open", str(W.export(sid))])
+                return {"ok": True}
+            if cmd == "sites_check":
+                return W.check_name(str(a.get("name") or ""), sid)
+            if cmd == "sites_suggest":
+                return {"name": W.suggest_name(sid)}
+            if cmd == "sites_publish":
+                W.publish(sid, str(a.get("name") or ""))
+                return W.public(sid)
+            if cmd == "sites_unpublish":
+                W.unpublish(sid)
+                return W.public(sid)
+            if cmd == "sites_stats":
+                return W.stats(sid, int(a.get("days") or 30), bool(a.get("prev")))
+            if cmd == "sites_audit":
+                return W.audit(sid)
+            if cmd == "sites_leads":
+                W.poll()
+                return {"items": W.leads(sid)}
+            if cmd == "sites_logos":
+                return {"items": W.artist_logos()}
+        except SiteError as e:
+            raise ValueError(str(e)) from e
+        raise ValueError("неизвестная команда сайтов")
 
     def _plugin_cmd(self, cmd, a):
         """plugins — каталог; plugin_install {id, values} / plugin_remove {id, jobs: снимать ли его дела} / plugin_values {id, values} /
@@ -702,6 +766,8 @@ class CommandsMixin:
             except SiteChatError as e:
                 raise ValueError(str(e)) from e
             raise ValueError("неизвестная команда чата для сайта")
+        if cmd.startswith("sites_"):              # «Сайты» (03.11, sites.py): список, редактор, версии, публикация, аналитика
+            return self.sites_cmd(cmd, a)
         if cmd.startswith("crm_"):                # «CRM» (0.69, crm.py): Битрикс24 или свой вебхук; клиент — лидом
             from crm import CrmError
             R = self.crm

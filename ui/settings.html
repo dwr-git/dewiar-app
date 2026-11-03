@@ -12,6 +12,7 @@
 <title>Dewiar — студия</title>
 <link href="assets/fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="studio/studio.css">
+<link rel="stylesheet" href="studio/sites.css">
 <link rel="stylesheet" href="assets/skins.css">
 <link rel="stylesheet" href="studio/theme.css">
 <!-- тема — до первой отрисовки (стили выше уже загружены): окно сразу в своём стиле, без вспышки фирменного фона -->
@@ -86,6 +87,7 @@
   <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden>Поручения<i class="ndot" id="team-dot"></i></button>
   <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden>Клиенты<i class="ndot" id="cr-dot"></i></button>
   <button data-p="mailing" title="Рассылка: каждому своё письмо с вашей почты — клиентам, сотрудникам или по списку" hidden>Рассылка</button>
+  <button data-p="sites" title="Сайты: Лира делает и переделывает сайт одной фразой, публикация на имя.dewiar.pro, аналитика и заявки">Сайты</button>
   <button data-p="sitechat" title="Чат для сайта: консультант отвечает посетителям вашего сайта, заявки — в «Клиенты»" hidden>Чат для сайта</button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
   <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям">Бот в Telegram</button>
@@ -884,6 +886,66 @@
       <textarea id="mg-stoplist" rows="4" spellcheck="false" aria-label="Отписавшиеся адреса" placeholder="адреса через строку"></textarea>
       <button class="btn small" type="button" id="mg-stopsave">Сохранить</button>
     </details>
+  </section>
+
+  <section id="p-sites" class="wide">
+    <!-- «Сайты» (03.11): список и шаблоны, редактор с живым предпросмотром, аналитика, заявки, продвижение (studio/sites.js) -->
+    <div class="st-view" id="st-list">
+      <div class="st-top"><div><h1>Сайты</h1><p class="lead">Лира делает сайт по вашему описанию и переделывает его одной фразой — от текста до дизайна.
+        Публикация — на ваше имя.dewiar.pro, заявки с сайта приходят в «Клиенты».</p></div></div>
+      <form class="st-ask" id="st-ask" autocomplete="off">
+        <label for="st-desc">Расскажите о своём деле — Лира сделает сайт</label>
+        <div class="st-askrow"><textarea id="st-desc" rows="2" maxlength="3000" placeholder="Кофейня «Зерно» на Садовой, 5. Кофе, завтраки и своя выпечка, работаем с 8 до 22, капучино 250 ₽"></textarea>
+          <button class="btn primary" type="submit" id="st-make">Сделать сайт</button></div>
+        <div class="st-eg" id="st-eg"></div>
+      </form>
+      <div class="st-mine" id="st-mine"></div>
+      <div class="st-h2"><h2>Или начните с шаблона</h2><span>11 готовых сайтов — у каждого свой характер. Тексты Лира заменит вашими.</span></div>
+      <div class="st-tpls" id="st-tpls"></div>
+    </div>
+    <div class="st-view" id="st-ed" hidden>
+      <div class="st-bar">
+        <button class="st-back" type="button" id="st-back" title="Все сайты" aria-label="Все сайты"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <input class="st-name" id="st-name" maxlength="80" aria-label="Название сайта">
+        <span class="st-chip" id="st-state"></span>
+        <span class="st-sp"></span>
+        <button class="st-ib" type="button" id="st-undo" title="Верни как было — шаг назад" aria-label="Шаг назад"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+        <button class="btn" type="button" id="st-hist">История</button>
+        <button class="btn" type="button" id="st-open">Открыть в браузере</button>
+        <button class="btn primary" type="button" id="st-pub">Опубликовать</button>
+      </div>
+      <div class="st-ban" id="st-ban" hidden></div>
+      <div class="stabs st-tabs" id="st-tabs" role="tablist">
+        <button data-t="edit" class="on" role="tab">Редактор</button><button data-t="stats" role="tab">Аналитика</button>
+        <button data-t="leads" role="tab">Заявки<i class="st-n" id="st-nleads"></i></button><button data-t="seo" role="tab">Продвижение<i class="st-n" id="st-nseo"></i></button>
+      </div>
+      <div class="st-pane" data-t="edit">
+        <div class="st-work">
+          <aside class="st-side">
+            <div class="st-seg" id="st-seg" role="tablist"><button data-s="blocks" class="on">Разделы</button><button data-s="look">Оформление</button><button data-s="head">Шапка</button><button data-s="info">Контакты</button></div>
+            <div class="st-panel" data-s="blocks"><div class="st-pages" id="st-pages"></div><ol class="st-blocks" id="st-blocks"></ol>
+              <button class="st-add" type="button" id="st-addb"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Добавить раздел</button></div>
+            <div class="st-panel" data-s="look" hidden id="st-look"></div>
+            <div class="st-panel" data-s="head" hidden id="st-head"></div>
+            <div class="st-panel" data-s="info" hidden id="st-info"></div>
+          </aside>
+          <div class="st-stage">
+            <div class="st-stbar"><div class="st-dev" role="radiogroup" aria-label="Как смотреть"><button data-d="pc" class="on" role="radio" aria-checked="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Компьютер</button><button data-d="phone" role="radio" aria-checked="false"><svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>Телефон</button></div>
+              <select id="st-page" aria-label="Страница" hidden></select><span class="st-sp"></span><span class="st-hint" id="st-hint">Нажмите на раздел в предпросмотре — откроется его настройка</span></div>
+            <div class="st-frame" id="st-frame"><div class="st-fwrap" id="st-fwrap"><iframe id="st-if" title="Предпросмотр сайта" sandbox="allow-scripts allow-same-origin"></iframe></div></div>
+            <form class="st-say" id="st-say" autocomplete="off"><span class="st-sayic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3c.9 5 4 8.1 9 9-5 .9-8.1 4-9 9-.9-5-4-8.1-9-9 5-.9 8.1-4 9-9z"/></svg></span>
+              <input id="st-sayt" maxlength="600" placeholder="Сказать Лире: «сделай шапку тёмной», «добавь цены: стрижка 1500», «другой дизайн целиком»" aria-label="Что поменять на сайте">
+              <button class="btn primary" type="submit" id="st-sayb">Изменить</button></form>
+          </div>
+        </div>
+      </div>
+      <div class="st-pane" data-t="stats" hidden id="st-stats"></div>
+      <div class="st-pane" data-t="leads" hidden id="st-leads"></div>
+      <div class="st-pane" data-t="seo" hidden id="st-seo"></div>
+    </div>
+    <div class="st-modal" id="st-pubm" hidden role="dialog" aria-modal="true" aria-labelledby="st-pubh"><div class="st-mbox" id="st-pubbox"></div></div>
+    <div class="st-drawer" id="st-histd" hidden role="dialog" aria-labelledby="st-histh"><div class="st-dbox"><div class="st-dh"><h3 id="st-histh">История версий</h3><button class="st-ib" type="button" id="st-histx" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><p class="hint">Каждое изменение — версия. Вернуть можно любую; текущая тоже останется в истории.</p><ol id="st-histl"></ol></div></div>
+    <div class="st-pop" id="st-addp" hidden role="dialog" aria-label="Добавить раздел"></div>
   </section>
 
   <section id="p-sitechat" class="wide">
@@ -2576,6 +2638,7 @@
 <script src="studio/crm.js"></script>
 <script src="studio/pbot_posts.js"></script>
 <script src="studio/sitechat.js"></script>
+<script src="studio/sites.js"></script>
 <script src="studio/lessons.js"></script>
 <script src="studio/deals.js"></script>
 <script src="studio/devices.js"></script>

@@ -23,6 +23,7 @@ const ICONS = {
   family: '<circle cx="8" cy="7" r="2.6"/><circle cx="16" cy="7" r="2.6"/><circle cx="12" cy="13.5" r="2"/><path d="M3.5 20v-3.2A3.3 3.3 0 0 1 6.8 13.5h2.4M20.5 20v-3.2a3.3 3.3 0 0 0-3.3-3.3h-2.4M9 20v-1.2a3 3 0 0 1 6 0V20"/>',
   clients: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/>',
   mailing: '<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>',
+  sites: '<rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M2.5 8h19"/><circle cx="5.2" cy="5.8" r=".5"/><circle cx="7.4" cy="5.8" r=".5"/><rect x="5.5" y="11" width="6" height="6.5" rx="1"/><path d="M14 11.5h4.5M14 14.5h4.5M14 17.5h2.5"/>',
   sitechat: '<rect x="2.5" y="4" width="19" height="14" rx="2.5"/><path d="M2.5 8h19"/><circle cx="5" cy="6" r=".5"/><path d="M13.5 15.5a3 3 0 0 1 3-3h1a3 3 0 0 1 0 6h-2.2l-1.8 1.3z"/>',
   lessons: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.2v5.6l4.8-2.8z"/>',
   team: '<rect x="3.5" y="7.5" width="17" height="12" rx="2.5"/><path d="M9 7.5V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5v2"/><path d="M9.2 13.4l2 2 3.6-3.6"/>',

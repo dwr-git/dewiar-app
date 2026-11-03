@@ -237,6 +237,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.toolbox.hooks["crm"] = self.crm
         from sitechat import SiteChat
         self.sitechat = SiteChat(self)                              # «Чат для сайта» (0.69): настройка и заявки; отвечает dewiar.pro
+        from sites import Sites
+        self.sites = Sites(STATE_DIR / "sites", self)                # «Сайты» (03.11): делает и переделывает Лира, публикация — dewiar.pro
+        self.toolbox.hooks["sites"] = self.sites
         from sshlink import SshLink
         self.sshlink = SshLink(self)                                # запасной вход через SSH — только у владельца сервера (29.10)
         from mailing import Mailing
@@ -377,6 +380,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.pbot_posts.start()
         if (self.s.get("sitechat") or {}).get("on"):
             self.sitechat.start()                                   # заявки с сайта — раз в 2 минуты
+        if any((self.sites.get(i).get("published") or {}).get("name") for i in self.sites.ids()):
+            self.sites.start()                                      # заявки с опубликованных сайтов — раз в 2 минуты
         if (self.s.get("sshlink") or {}).get("on"):
             self.sshlink.start()                                    # домен не отвечает — к сайту через SSH-туннель
 

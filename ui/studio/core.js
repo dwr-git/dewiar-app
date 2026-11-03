@@ -67,6 +67,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "clients" && window.loadClients) loadClients();     // «Клиенты» — личная CRM (studio/clients.js)
   if (b.dataset.p === "mailing" && window.loadMailing) loadMailing();     // «Рассылка» — каждому своё письмо (studio/mailing.js)
   if (b.dataset.p === "sitechat" && window.loadSitechat) loadSitechat();  // «Чат для сайта» (studio/sitechat.js)
+  if (b.dataset.p === "sites" && window.loadSites) loadSites();             // «Сайты» (studio/sites.js)
   if (b.dataset.p === "lessons" && window.loadLessons) loadLessons();     // «Видеоуроки» (studio/lessons.js)
   if (b.dataset.p === "team" && window.loadTeam) loadTeam();             // «Поручения» — сотрудникам (studio/team.js)
   if (b.dataset.p === "devices" && window.loadMyDevices) loadMyDevices();   // «Устройства» — все мои устройства (studio/devices.js)
