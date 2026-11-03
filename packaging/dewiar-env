@@ -110,6 +110,25 @@ def make_venv(have_uv):
     return True
 
 
+def _pip_cmd(py):
+    """pip: свой в окружении (если оно создано с pip), иначе системный — через --python (pip ≥ 22.3); нет — None."""
+    if subprocess.run([str(py), "-m", "pip", "--version"], capture_output=True).returncode == 0:
+        return [str(py), "-m", "pip"]
+    if shutil.which("pip3") or subprocess.run([system_python(), "-m", "pip", "--version"], capture_output=True).returncode == 0:
+        return [system_python(), "-m", "pip", "--python", str(py)]
+    return None
+
+
+def requirements():
+    """Строки requirements.txt без комментариев: «onnx-asr>=0.12»."""
+    out = []
+    for line in REQ.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            out.append(line)
+    return out
+
+
 def install(have_uv):
     py = VENV / "bin" / "python3"
     if have_uv:
@@ -117,14 +136,31 @@ def install(have_uv):
         if r.returncode == 0:
             return True
         say("uv не справился, пробую pip...")
-    # pip: свой в окружении (если оно создано с pip), иначе системный — через --python (pip ≥ 22.3)
-    if subprocess.run([str(py), "-m", "pip", "--version"], capture_output=True).returncode == 0:
-        cmd = [str(py), "-m", "pip"]
-    elif shutil.which("pip3") or subprocess.run([system_python(), "-m", "pip", "--version"], capture_output=True).returncode == 0:
-        cmd = [system_python(), "-m", "pip", "--python", str(py)]
-    else:
+    cmd = _pip_cmd(py)
+    if cmd and subprocess.run(cmd + ["install", "-q", "--disable-pip-version-check", "-r", str(REQ)]).returncode == 0:
+        return True
+    return install_each(have_uv, cmd)
+
+
+def install_each(have_uv, cmd):
+    """№455/№464 (01.11, Ubuntu с нуля): общий список ставится целиком или никак — одна библиотека без сборки под эту
+    версию Python, и не ставилась ни одна, в том числе onnx_asr (распознавание речи). Тогда — по одной: что встало, то
+    работает, а чего нет — называем (недостающее ядро потом докачает само, core/pydeps.py)."""
+    py = VENV / "bin" / "python3"
+    if not have_uv and not cmd:
         return False
-    return subprocess.run(cmd + ["install", "-q", "--disable-pip-version-check", "-r", str(REQ)]).returncode == 0
+    say("ставлю библиотеки по одной...")
+    bad = []
+    for req in requirements():
+        if have_uv:
+            r = subprocess.run([str(UV), "pip", "install", "--python", str(py), "-q", req], env=uv_env())
+        else:
+            r = subprocess.run(cmd + ["install", "-q", "--disable-pip-version-check", req])
+        if r.returncode:
+            bad.append(req.split(">")[0].split("=")[0].split("<")[0].strip())
+    if bad:
+        say("не встали: " + ", ".join(bad) + " — остальное работает; повторить: sudo /opt/dewiar/dewiar-env")
+    return subprocess.run([str(py), "-c", "import numpy, httpx, websockets"], capture_output=True).returncode == 0
 
 
 def install_extras(have_uv):
@@ -150,6 +186,9 @@ def check():
     r = subprocess.run([str(py), "-c", "import numpy, onnxruntime, vosk, httpx, websockets, webview"], capture_output=True, text=True)
     if r.returncode:
         say("внимание: не хватает библиотек: " + (r.stderr.strip().splitlines() or ["?"])[-1])
+    # точное распознавание речи (GigaAM): без onnx_asr слух работает только запасной моделью — говорим это сразу (№455)
+    if subprocess.run([str(py), "-c", "import onnx_asr"], capture_output=True).returncode:
+        say("внимание: не встала библиотека распознавания речи onnx-asr — Dewiar попробует докачать её сам при запуске")
     return r.returncode == 0
 
 

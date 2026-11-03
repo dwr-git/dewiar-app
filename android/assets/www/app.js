@@ -447,8 +447,12 @@ async function llmRestore(i) {
 /* Первый запуск показывает «Подключить бесплатно» / «У меня есть код». Подключились любым путём (вход аккаунтом, ключ,
    код с другого устройства, одобренная заявка) — карточка уходит, Лира говорит, что готова (отчёт №50, 13.10: вошёл
    логином и паролем, а на экране всё ещё «Подключить бесплатно» — человек решил, что не подключился). */
+/* №454 (01.11, телефон 0.9.16): «ИИ дописывает ответ — и его закрывает баннер „Готово, всё подключено…“». Искали любую
+   .start в карточке, так же выглядят и карточки «Звук на нуле — включить и прочитать ответ» (volCard) и «В коде ссылка»:
+   после ответа saveS() звал проверку, и она «убирала карточку первого запуска» — затирала ответ. Теперь только своя
+   карточка первого запуска (data-first) — и ответ на экране не трогаем. */
 function startCardCheck() {
-  const c = $("#card .start, #card [onclick*='joinPoll']");
+  const c = $("#card [data-first], #card [onclick*='joinPoll']");
   if (!c || !((S.llm.base_url && !S.llm.trial) || loggedIn())) return;     // пробный разговор — ещё не «подключено»
   showCard("");
   if (!busy && state === "idle") showBot(`Готово, всё подключено${loggedIn() ? " — аккаунт " + (S.account.login || "") : ""}. Нажмите на микрофон или удерживайте его и говорите.`);
@@ -2365,8 +2369,26 @@ function sentenceSink() {
     }
     return out;
   };
-  return {
+  // №435 (31.10, телефон: «дважды пишет и проговаривает текст»): модель сказала «Записала: расход 3 795 руб…» до
+  // действия и то же самое — после него. Начало каждого следующего круга придерживаем, пока не станет ясно, не повтор
+  // ли это уже сказанного (первые 18 букв и цифр есть в сказанном) — повтор не показываем и не озвучиваем.
+  let probing = false, probe = "", mute = false;
+  const norm = (t) => String(t || "").toLowerCase().replace(/ё/g, "е").replace(/[^a-zа-я0-9]+/g, "");
+  const decide = (fin) => {
+    const h = norm(probe), seen = norm(shown);
+    if (!fin && h.length < 18) return false;
+    probing = false;
+    const head = h.slice(0, 18);
+    if (head.length >= (fin ? 10 : 18) && seen.includes(head)) { mute = true; plog("info", "🔁 повтор сказанного после действия — не повторяю"); }
+    else { const t = probe; probe = ""; api.push(t); }
+    probe = "";
+    return true;
+  };
+  const api = {
+    round() { if (probing && probe) decide(true); probing = !!norm(shown); probe = ""; mute = false; },
     push(piece) {
+      if (mute) return;
+      if (probing) { probe += piece; decide(false); return; }
       if (piece) turnTime("word");
       shown += piece; showBot(gfix(shown)); raw += piece; pending += speakable(false);    // героиня, а модель сбилась на «рад», «понял» — правим сами
       for (;;) {
@@ -2382,9 +2404,11 @@ function sentenceSink() {
         break;
       }
     },
-    flush() { pending += speakable(true); if (pending.trim()) say(gfix(pending)); pending = ""; },
+    own(t) { if (probing && probe) decide(true); probing = false; mute = false; api.push(t); },   // наши слова (не модели) — не глушим как повтор
+    flush() { if (probing && probe) decide(true); pending += speakable(true); if (pending.trim()) say(gfix(pending)); pending = ""; },
     text: () => gfix(shown),
   };
+  return api;
 }
 
 /* Один ход разговора: быстрые команды без модели (quick) → модель с инструментами, до 6 кругов (шестой — без
@@ -2543,6 +2567,7 @@ async function ask(text, opts = {}) {
     let remindAsked = false;                         // пообещала напомнить без set_reminder — попросили поставить (19.10)
     for (let round = 0; round < maxRounds; round++) {
       let r;
+      if (round) sink.round();                       // №435: следующий круг не повторяет уже сказанное
       try {
         try { r = await round1(round < maxRounds - 1 ? toolSpecs() : null); }
         catch (e0) {                                  // недорогая модель не ответила — тот же вопрос основной
@@ -2583,7 +2608,7 @@ async function ask(text, opts = {}) {
       if (!claim && nudged && !r.calls.length && !called.has("make_app")) {
         // попросили сделать по-настоящему — а она снова только сказала «готово»: честно, а не пустое «готово» (идея №42)
         const again = claimedAction(r.text || "", called, text);
-        if (again && again.tool === "make_app") { plog("warn", "✋ make_app так и не вызван после просьбы — честно говорим"); sink.push(" Но программа так и не собралась — скажите «попробуй ещё раз»."); }
+        if (again && again.tool === "make_app") { plog("warn", "✋ make_app так и не вызван после просьбы — честно говорим"); sink.own(" Но программа так и не собралась — скажите «попробуй ещё раз»."); }
       }
       const fix = !r.calls.length && !numChecked ? numberMismatch(r.text || "", doneCalls) : "";
       if (fix) { numChecked = true; msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: fix }); sink.push(" "); continue; }   // «на 79 минут», а поставлено 59
@@ -2637,7 +2662,13 @@ async function ask(text, opts = {}) {
     }
     if (remindAsked && !called.has("set_reminder") && turnAbort === ctl && !/\?\s*$/.test(sink.text())) {   // и после просьбы нет — честно, а не тишина утром
       plog("warn", "обещала напомнить, но напоминание так и не поставлено — сказала об этом");
-      sink.push(" " + REMIND_NOT_SET);
+      sink.own(" " + REMIND_NOT_SET);
+    }
+    // №439 (31.10): прислал скриншот, а своя модель (сторонний сервис) картинок не видит — «нет доступа к файлам
+    // картинок». Говорим, что сделать: выбрать в «Мозге» модель со зрением (облако Dewiar видит картинки)
+    if (pics.length && !S.llm.cloud && turnAbort === ctl && PIC_BLIND_RX.test(sink.text() || final)) {
+      plog("warn", `📎 модель «${S.llm.model || S.llm.name}» не видит картинки — подсказала, как быть`);
+      sink.own(" " + gfix(`Похоже, модель «${S.llm.model || S.llm.name || "ваша"}» не видит картинки. В «Мозге» выберите модель со зрением — например, облако Dewiar («Подключить бесплатно»), — и я прочитаю скриншот.`));
     }
     sink.flush();
     // модель сделала дело и ничего не сказала: говорим, что сделано (а не «Готово») — и пишем это в историю. Пустой ответ из
@@ -2648,7 +2679,7 @@ async function ask(text, opts = {}) {
     // "Сделала!", а результат через 20–60 минут или не появляется») — поправляемся вслух и в тексте
     if (called.has("start_task") && sink.text().trim() && earlyDone(sink.text())) {
       const fix = "Поправлюсь: задача только началась — результат появится позже, я пришлю уведомление, когда всё будет готово.";
-      sink.push(" " + fix); sink.flush();
+      sink.own(" " + fix); sink.flush();
       plog("warn", "⚠ «готово» сразу после передачи задачи — поправились");
     }
     if (!sink.text().trim() && called.has("start_task") && toolOk) {
@@ -2797,7 +2828,7 @@ function parseWhen(t, now = new Date(), again = false) {
   if (!hasDay && day <= now) day.setDate(day.getDate() + 1);
   if (dowToday && !repeat && day <= now) day.setDate(day.getDate() + 7);
   if (repeat && day <= now) day.setDate(day.getDate() + (repeat === "weekly" ? 7 : 1));
-  if (repeat) day = rollRepeat(day, repeat);            // первый раз — в подходящий день («кроме пятницы», сказанное в пятницу)
+  if (repeat) day = rollRepeat(day, repeat, now);       // первый раз — в подходящий день («кроме пятницы», сказанное в пятницу)
   return { at: day, repeat, rest: t.replace(m ? m[0] : "", " ") };
 }
 const whenText = (d) => { const now = new Date(), tm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -2867,10 +2898,10 @@ function whenDays(t, base, again) {
   return days ? { days, t } : null;
 }
 // повторяющееся напоминание: первый раз — ближайший подходящий момент не раньше «сейчас» (будни — без субботы и воскресенья)
-function rollRepeat(at, rep) {
+function rollRepeat(at, rep, now = Date.now()) {
   const set = /^d:/.test(rep || "") ? repDays(rep) : null;
   const d = new Date(at), step = rep === "weekly" ? 7 : 1, off = x => (rep === "weekdays" && (x.getDay() === 0 || x.getDay() === 6)) || (set && !set.includes((x.getDay() + 6) % 7));
-  for (let i = 0; i < 800 && (d.getTime() < Date.now() || off(d)); i++) d.setDate(d.getDate() + step);
+  for (let i = 0; i < 800 && (d.getTime() < +now || off(d)); i++) d.setDate(d.getDate() + step);
   return d;
 }
 
@@ -3069,6 +3100,8 @@ async function quick(text) {
   { const n = noteQuick(text); if (n) return { say: n }; }
   { const f = factQuick(text); if (f) return { say: f }; }
   { const wq = await weatherQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (wq) return wq; }   // погода — сразу числами (0.63)
+  { const dt = dayTasksQuick(t.replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m)); if (dt) return dt; }
+  { const pw = pcWatchQuick(t); if (pw) return pw; }          // №468: «как там дозор?» — по снимку с компьютера, а не выдумка
   // «покажи напоминания», «какие у меня напоминания» — открыть и сказать, сколько (модель иногда отвечала «чистый лист»,
   // не посмотрев, — отзыв 11.10)
   { const tq = t.replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m);
@@ -3376,7 +3409,36 @@ const isRefused = (t) => REFUSED_RX.test(String(t || "").toLowerCase().replace(/
 /* модель «сделала» действие словами, а инструмент не вызвала — частая беда второго раза: в истории уже есть «Звоню: Мама» */
 // просьба сделать вещь на экране — мини-программу, страницу, презентацию (make_app)
 const MAKE_ASK_RX = /(?:сделай|создай|напиши|собери|подготовь|нарисуй|сверстай|покажи|открой|запусти|хочу|построй|сгенерируй)[а-яё]*\s+(?:мне\s+|нам\s+|ей\s+|ему\s+)?(?:[а-яё0-9-]+\s+){0,2}?(?:калькулятор|игр[уаыое]|программ|приложени|таймер|конвертер|викторин|презентаци|слайд|страниц|сайт|открытк|шпаргалк|3d|3д|трёхмерн|трехмерн|визуализаци|анимаци)|на\s+экран/i;
+/* №436/№437 (31.10, телефон): «Скажи мне список дел на сегодня» — модель отвечала «дел нет», а в заметке «Задачи на
+   сегодня» — два неотмеченных пункта; «посмотри в заметках» — «сейчас смотрю» без поиска. Теперь «дела / задачи на
+   сегодня» — без модели: напоминания до конца дня и неотмеченные пункты ([ ]) из заметок про задачи на сегодня (в
+   заголовке — «сегодня» или сегодняшнее число, или заметка с делами, правленная сегодня). Ничего не нашли — отвечает модель. */
+const DAY_TASKS_RX = /^(?:(?:скажи|назови|покажи|прочитай|напомни|какие|что|есть\s+ли)\s+)?(?:мне\s+)?(?:у\s+меня\s+)?(?:есть\s+)?(?:мой\s+|мои\s+)?(?:список\s+)?(?:дел[аы]?|задач[аи]?|планы?)(?:\s+у\s+меня)?\s+(?:на\s+)?сегодня[?!.\s]*$/i;
+function dayTasksQuick(t) {
+  if (!DAY_TASKS_RX.test(String(t || "").trim())) return null;
+  const now = new Date(), d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), d1 = d0 + 864e5;
+  const day = `${now.getDate()} ${MON[now.getMonth()]}`, dd = `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const rem = alarmsNow().filter(x => x.at >= Date.now() - 3600e3 && x.at < d1).sort((x, y) => x.at - y.at);
+  const items = [];
+  for (const n of notes()) {
+    const head = `${n.title || ""}`.toLowerCase(), body = noteShown(n.text || "");
+    const todo = body.split("\n").map(l => (l.match(/^\s*(?:[-*•]\s*)?\[ \]\s*(.+)$/) || [])[1]).filter(Boolean);
+    if (!todo.length) continue;
+    const about = /задач|дел[аоу]?(?![а-яё])|сделать|todo|план/i.test(head + " " + body.slice(0, 120).toLowerCase());
+    const today = /сегодня/.test(head) || head.includes(day) || head.includes(dd) || body.slice(0, 160).toLowerCase().includes(day) || (+n.time >= d0);
+    if (about && today) items.push(...todo.map(x => x.trim()).filter(x => x && !items.includes(x)));
+  }
+  if (!rem.length && !items.length) return null;
+  const parts = [];
+  if (items.length) parts.push(`${items.length === 1 ? "Одно дело" : `Дел: ${items.length}`} — ${items.slice(0, 8).join("; ")}`);
+  if (rem.length) parts.push(`напоминания: ${rem.slice(0, 5).map(x => `${whenText(new Date(x.at))} — ${x.title}`).join("; ")}`);
+  plog("info", `📋 дела на сегодня без модели: ${items.length} из заметок, ${rem.length} напоминаний`);
+  return { say: `На сегодня. ${parts.join(". ").replace(/^./, c => c.toUpperCase())}.` };
+}
+
 const CLAIMS = [
+  // №436: «Поняла, я сейчас смотрю в твои заметки» — а find_notes не вызван
+  { rx: /(?:смотрю|посмотрю|проверяю|проверю|загляну|заглядываю|ищу|поищу|открываю)\s+(?:в\s+)?(?:(?:тво|ваш)(?:и|их)\s+)?заметк/i, tool: "find_notes", what: "смотришь заметки" },
   // №405 (29.10): «Запиши потраченную 2.000 руб» — «Записала», а money_add не вызван: в «Деньгах» пусто, человек переспрашивает
   { rx: /(?:^|[^а-яёa-z])(?:записал[аи]?|записано|внесл[аи]|внесено|добавил[аи]?|добавлено|занесл[аи]|занесено|учл[аи]|учтено|отметил[аи]?|отмечено|зафиксировал[аи]?|зафиксировано|сохранил[аи]?|сохранено|готово)(?![а-яё])/i,
     tool: "money_add", what: "записал(а) трату или доход (сумма числом: 2.000 и 2 000 — это две тысячи)",
@@ -3512,6 +3574,7 @@ function claimedAction(text, called, asked) {
   if (called && (called.has("take_photo") || called.has("show_photo")) && t.length < 400) return null;
   return CLAIMS.find(c => c.rx.test(t) && (!c.short || t.length <= c.short) && (!c.user || c.user.test(String(asked || ""))) && !(c.noOffer && /(?:^|[^а-яё])(?:если|хотите|могу|можно|скажите)(?![а-яё])/i.test(t)) && !(called && c.tool.split(" ")[0].split("|").some(n => called.has(n)))) || null;
 }
+const PIC_BLIND_RX = /(?:не\s+(?:могу|умею|получается|удаётся|удается|вижу)\s+(?:открыть|прочитать|просмотреть|посмотреть|увидеть|видеть|распознать)?[^.!?]{0,40}(?:изображен|картин|фото|скриншот|снимок|вложен))|(?:нет\s+доступа\s+к\s+(?:файлам\s+)?(?:картин|изображен|фото|вложен))|(?:cannot|can't|unable to)\s+(?:see|view|open|read)\s+(?:the\s+)?(?:image|picture|screenshot)/i;
 const REFUSAL_RX = /нет доступа к интернет|не имею доступа|нет прямого доступа|в реальном времени|как языковая модель|я языковая модель|не могу получить актуальн|не могу искать в интернет|нет возможности выйти в интернет|моя база знаний ограничена|у меня нет доступа|cannot access|don't have access|as an ai/i;
 const CAM_REFUSAL_RX = /нет доступа к камер|не могу (?:сфотограф|сделать (?:фото|снимок)|включить камер|видеть тебя|увидеть тебя|посмотреть на тебя)|не вижу тебя|у меня нет камер|не имею камер/i;
 const CAM_NUDGE = "СТОП. Ты сказал, что у тебя нет камеры, — это НЕВЕРНО: у тебя есть инструмент take_photo (camera front — на пользователя, "
@@ -8488,6 +8551,61 @@ function watchCard(p) {
     box.onclick = () => imgView(u);                       // на весь экран — разглядеть
   }).catch(() => { const box = $("#wshot"); if (box) box.innerHTML = `<span class="hint">Снимок не загрузился</span>`; });
 }
+/* «Дозор» компьютера на телефоне (№468, 01.11: «Дозор включил на компьютере, на телефоне спрашиваю, как там статус, —
+   Лира выдумывает что попало»). Телефон знал только «готово» (ping). Теперь компьютер (0.77+) шлёт снимок дозоров
+   {watch: {dev, at, items}} — храним по компьютерам в pcwatch.json; вопрос про дозор — ответ по снимку без модели
+   (pcWatchQuick) и просьба компьютеру прислать свежий. Снимка нет — честно: отсюда не видно, где посмотреть. */
+const PCW_F = "pcwatch.json";
+function pcWatchAll() { try { const d = JSON.parse(fileGet(PCW_F) || "{}"); return d && typeof d === "object" ? d : {}; } catch (e) { return {}; } }
+function pcWatchTake(w) {
+  if (!w || !Array.isArray(w.items)) return;
+  const all = pcWatchAll(), dev = String(w.dev || "компьютер").slice(0, 60);
+  all[dev] = Object.assign({}, all[dev], { at: +w.at || Date.now(), items: w.items.slice(0, 8).map(x => ({
+    title: String(x.title || "").slice(0, 120), kind: String(x.kind || ""), status: String(x.status || ""), note: String(x.note || "").slice(0, 200),
+    last: +x.last || 0, until: +x.until || 0, done_at: +x.done_at || 0, result: String(x.result || "").slice(0, 240), checks: +x.checks || 0 })) });
+  fileSave(PCW_F, JSON.stringify(all));
+  plog("info", `👁 Дозор с «${dev}»: идёт ${w.items.filter(x => x.status === "active").length}`);
+}
+function pcWatchPing(p, ts) {                                // «готово» — запомнить, даже если компьютер старый и снимков не шлёт
+  const all = pcWatchAll(), dev = String(p.dev || "компьютер").slice(0, 60);
+  all[dev] = Object.assign({ items: [] }, all[dev], { ping: { what: String(p.what || p.text || "").slice(0, 200), note: String(p.note || "").slice(0, 300), at: ts } });
+  fileSave(PCW_F, JSON.stringify(all));
+}
+const PCW_RX = /(?:^|[^а-яё])дозор/i;
+// просьба поставить или снять (повелительное: «включи дозор», а «я включил дозор — как там?» — вопрос о статусе)
+const PCW_SET_RX = /(?:^|[^а-яё])(?:поставь|поставить|включи|включить|запусти|запустить|создай|создать|сделай|заведи|останови|остановить|выключи|выключить|отключи|отключить|сними|убери)\s+(?:мне\s+)?(?:\S+\s+)?дозор/i;
+function pcWatchQuick(t) {
+  t = String(t || "");
+  if (!PCW_RX.test(t)) return null;
+  setTimeout(() => { try { if (typeof devOwnSend === "function") devOwnSend({ want: ["watch"] }).catch(() => {}); } catch (e) { } }, 0);   // свежий снимок — на следующий вопрос
+  if (PCW_SET_RX.test(t))
+    return { say: "Дозор работает на компьютере: поставить или остановить его — там, скажите Лире на компьютере, например: «присмотри, когда закончится загрузка», или в студии → «Дозор». Когда сработает — пришлю сюда уведомление." };
+  const all = pcWatchAll(), devs = Object.keys(all);
+  const hm = (ms) => new Date(ms).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const ago = (ms) => { const m = Math.round((Date.now() - ms) / 60000); return m < 2 ? "только что" : m < 60 ? `${m} мин назад` : Date.now() - ms < 864e5 ? `в ${hm(ms)}` : new Date(ms).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }); };
+  const snap = devs.filter(d => all[d].at && Array.isArray(all[d].items));
+  if (!snap.length) {
+    const pg = devs.map(d => Object.assign({ dev: d }, all[d].ping || {})).filter(x => x.at).sort((a, b) => b.at - a.at)[0];
+    return { say: "С телефона я не вижу, что сейчас делает Дозор на компьютере: компьютер присылает сюда только «готово», когда дозор сработал."
+      + (pg ? ` Последнее такое — ${ago(pg.at)}${devs.length > 1 ? ` с «${pg.dev}»` : ""}: ${clip(pg.what || "дозор", 80)} — ${clip(pg.note || "готово", 120)}.` : " Сегодня таких сообщений не было — значит, дозор пока не сработал или не запущен.")
+      + " Посмотреть сейчас — на компьютере: студия → «Дозор» или спросите Лиру там. Обновите Dewiar на компьютере — и я буду видеть дозоры отсюда." };
+  }
+  const ST = { active: "смотрит", done: "сработал", stopped: "остановлен", expired: "закончился по сроку", failed: "не смог проверять" };
+  const qt = (x) => { const c = clip(x, 70); return /^[«"]/.test(c) ? c : `«${c}»`; };     // название уже в кавычках — не двоим
+  const parts = [];
+  for (const d of snap.sort((a, b) => all[b].at - all[a].at)) {
+    const w = all[d], act = w.items.filter(x => x.status === "active"), fin = w.items.filter(x => x.status !== "active").sort((a, b) => b.done_at - a.done_at);
+    const who = snap.length > 1 ? `На «${d}»: ` : "";
+    const fresh = Date.now() - w.at < 15 * 60e3 ? "" : ` (по данным ${ago(w.at)})`;
+    if (act.length) parts.push(who + `${act.length === 1 ? "идёт дозор" : `идут дозоры (${act.length})`}${fresh}: ` + act.slice(0, 3).map(x =>
+      `${qt(x.title)} — ${ST.active}${x.last ? `, последняя проверка ${ago(x.last * 1000)}` : ""}${x.note ? `: ${clip(x.note, 90)}` : ""}${x.until ? `; до ${hm(x.until * 1000)}` : ""}`).join("; "));
+    else parts.push(who + `сейчас дозоров нет${fresh}`);
+    const f = fin[0];
+    if (f && f.done_at && Date.now() - f.done_at * 1000 < 864e5) parts.push(`Последний: ${qt(f.title)} — ${ST[f.status] || f.status} ${ago(f.done_at * 1000)}${f.result ? `: ${clip(f.result, 100)}` : ""}`);
+  }
+  plog("info", "👁 про дозор — по снимку с компьютера, без модели");
+  return { say: parts.join(". ").replace(/^./, c => c.toUpperCase()) + "." };
+}
 function ownApply(body) {
   if (body && body.natt) nattTake(body.natt);
   try { devBrainsOwn(body); } catch (e) { plog("warn", "мозги со своего устройства: " + e.message); }   // «Устройства» (devices.js)
@@ -8496,8 +8614,9 @@ function ownApply(body) {
   if (body && body.ping && typeof body.ping === "object" && Date.now() - (+body.ts || Date.now()) < 6 * 3600e3) {   // «Дозор» с компьютера: готово
     const t = String(body.ping.title || "Dewiar").slice(0, 80), x = String(body.ping.text || "").slice(0, 300);
     try { D.notify(t, x); } catch (e) { } toast(`${t}: ${x}`, 6000); plog("info", "👁 с компьютера: " + x.slice(0, 80));
-    if (body.ping.wid) watchCard(body.ping);
+    if (body.ping.wid) { watchCard(body.ping); pcWatchPing(body.ping, +body.ts || Date.now()); }
   }
+  if (body && body.watch && typeof body.watch === "object") pcWatchTake(body.watch);   // №468: снимок «Дозора» с компьютера
   if (body && Array.isArray(body.want) && body.want.some(w => w !== "team") && (S.home.at || S.home.token || syncKeyGet())) setTimeout(() => ownShare().catch(() => { }), 0);   // другое моё устройство просит
   const skb = body && body.sync_key;
   if (skb && typeof skb === "object" && syncKeyAdopt(skb.k, skb.at)) {
@@ -10384,11 +10503,11 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
   if (D.web && (S.llm.trial || trialOn()) && !loggedIn()) {
     // веб-версия без входа: говорим сразу (пробный разговор); войти — без ограничений и с действиями
     showBot(gfix(`Привет! Я ${persona().name}. Давайте поговорим прямо сейчас — без входа и установки. Нажмите на меня и говорите или напишите.`));
-    showCard(`<div class="start"><button class="btn w" onclick="startLogin()">Войти — без ограничений и с делами</button></div>`);
+    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — без ограничений и с делами</button></div>`);
   } else if (!S.llm.base_url && !loggedIn() && autoOk() && !(S.join && !S.join.auto) && trialOn()) {
     // 0.69, первый запуск: говорим сразу (пробный разговор), бесплатный мозг Dewiar подключается сам — без анкеты
     showBot(gfix(`Привет! Я ${persona().name}. Говорите сразу — нажмите на меня или удерживайте и говорите. Бесплатный мозг Dewiar подключается сам.`));
-    showCard(`<div class="start"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button></div>`);
+    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button></div>`);
     setTimeout(() => autoJoin("первый запуск").then(ok => { if (ok) showCard(""); }), 1200);
   } else if (!S.llm.base_url && !loggedIn()) {
     // первый запуск: одна понятная кнопка (отзыв: «не понимаю, как ей мозг включить») — бесплатная проба Dewiar;
@@ -10396,7 +10515,7 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
     if (S.join) { showBot(gfix(`Привет! Я ${persona().name}. Заявка отправлена — как только её одобрят, я подключусь сама и скажу. Обычно это быстро.`)); setTimeout(() => joinPoll(false).catch(() => {}), 2500); }
     else showBot(gfix(`Привет! Я ${persona().name}. Чтобы мы могли поговорить, меня нужно один раз подключить — это бесплатно и займёт минуту.`));
     showCard(S.join ? `<div class="row2"><button class="btn p" onclick="joinPoll(true).then(d => d && !d.key && toast((d && d.text) || 'Пока ждёт проверки')).catch(e => toast(e.message))" style="flex:1">Проверить</button><button class="btn" onclick="openBrain()" style="flex:1">Другие способы</button></div>`
-      : `<div class="start"><button class="btn p w" onclick="openBrain('join')">Подключить бесплатно</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button></div>`); }
+      : `<div class="start" data-first="1"><button class="btn p w" onclick="openBrain('join')">Подключить бесплатно</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button></div>`); }
   // последний ответ — только свежий (до 20 минут): старый («С возвращением. В 15:00 встреча…» с утра) после каждого
   // запуска и обновления выглядел как новое сообщение (отчёты №52, №53). Он в истории разговора — там его и видно.
   else if (last && last.t && Date.now() - last.t < 20 * 60e3) showBot(last.content.slice(0, 400));

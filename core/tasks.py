@@ -19,7 +19,7 @@ from pathlib import Path
 
 import quality as Q
 from codework import CodeError, CodeWork
-from llm import LLMError, stream_chat, stream_events, tool_turn_messages
+from llm import LLMError, prompt_tools_mode, stream_chat, stream_events, tool_turn_messages
 
 log = logging.getLogger("dewiar.tasks")
 
@@ -40,6 +40,13 @@ STUCK_STEPS = int(os.environ.get("DEWIAR_TASK_STUCK_STEPS") or 40)   # шаго�
 ASK_DECLINES = 3                                   # отказов человека за запуск — пауза, а не новые вопросы (№54, №58)
 ASK_SILENT = 2                                     # вопросов подряд без ответа (человека нет рядом) — пауза
 PROGRESS_TOOLS = {"code_edit", "code_write", "code_delete", "code_undo"}   # правки рабочей копии — тоже продвижение
+# ответ без действий, но с разметкой вызова (JSON с именем функции, <tool_call>, <tool_calls>/<invoke>, «DSML») — модель
+# пыталась действовать, а вызов не разобрался (№448): просим вызвать правильно, а не «действуй»
+CALL_MARK_RX = re.compile(r'"(?:tool_name|tool|name|function)"\s*:|<[\s｜|▁/]*(?:tool_calls?\b|function[_▁]calls|invoke\b|DSML)', re.I)
+IDLE_CHANCE = ("Ты уже несколько раз подряд ответил(а) текстом, не выполнив ни одного действия. Сейчас одно из двух:\n"
+               "— цель достигнута — вызови finish: в summary итог (что сделано, где результат, ссылки); отчёт пишется в "
+               "finish, а не текстом ответа;\n— цель не достигнута — сделай следующий пункт плана инструментом (web_search, "
+               "read_page, write_file, remember…), одним вызовом, без пересказа плана.\nНе пиши ответ текстом без вызова.")
 HANG_SEC = float(os.environ.get("DEWIAR_TASK_HANG_SEC") or 600)     # шаг молчит столько (модель) — «задача не отвечает»
 HANG_TOOL_SEC = float(os.environ.get("DEWIAR_TASK_HANG_TOOL_SEC") or 1800)   # …а инструмент (скачивание, код) — столько
 PROGRESS_FIRST = float(os.environ.get("DEWIAR_TASK_PROGRESS_FIRST") or 600)  # долгая задача: первая весточка «как идёт»
@@ -428,6 +435,12 @@ class TaskManager:
         else:
             t.data["cycles"] = 0
         t.data.pop("auto_resume", None)
+        if t.data.get("finished"):
+            # №448, №460 (ПК 0.76): «второй раз прошу — не выполняет». Задачу, остановленную «не выполнено» (и готовую),
+            # запускали снова — а метка finished оставалась, и цикл выходил после первого же действия с тем же итогом.
+            # Новый запуск — новая попытка: итог и проверки перед ним — заново.
+            t.data.update(finished=False, finish_checked=False, force_finish=False, force_why="", verified=False, critic_done=False,
+                          refusal_nudged=False, tests_gate=0, gate_rejects=0, unfinished="")
         t.data.update(status="running", error="", wake_at="", sleep_now=False)
         for k in ("hung_told", "progress_told_at", "progress_told_sig"):
             t.data.pop(k, None)
@@ -742,8 +755,7 @@ class TaskManager:
         -> текст для модели (итог не принят) или None (принимаем — или останавливаем, если стоит unfinished)."""
         q = self._q(t)
         if t.data.get("force_finish"):
-            t.data["unfinished"] = t.data.get("unfinished") or ("работа остановлена: задача повторяла одно и то же или "
-                                                               "перестала действовать — цель не подтверждена")
+            t.data["unfinished"] = t.data.get("unfinished") or self._stop_why(t)
             return None
         note = self._gates(t, summary, q)
         if note is None:
@@ -755,6 +767,28 @@ class TaskManager:
             t.journal("⛔ Итог отклонён много раз — останавливаю задачу как «не выполнено».")
             return None
         return note
+
+    DID_RU = {"web_search": "поиск в интернете", "read_page": "чтение страниц", "read_webpage": "чтение страниц",
+              "remember": "записи в блокнот", "notes": "записи в блокнот", "write_file": "запись файлов", "run_python": "расчёты",
+              "read_file": "чтение файлов", "download": "скачивание", "show": "показ результата", "calc": "расчёты",
+              "code_edit": "правки кода", "code_run": "запуски в проекте"}
+
+    def _stop_why(self, t):
+        """Понятная причина остановки «не выполнено» (force_finish) и что задача успела: человеку — не «повторяла одно и
+        то же или перестала действовать» на всё подряд (№448, №460), а что именно случилось и сколько сделано."""
+        why = {"loop": "задача несколько раз повторила одно и то же действие с тем же результатом",
+               "idle": "модель перестала выполнять действия — несколько раз подряд отвечала только текстом",
+               "badcall": "модель пишет действия в виде, который Dewiar не смог разобрать"}.get(
+            t.data.get("force_why") or "", "задача повторяла одно и то же или перестала действовать")
+        did = {}
+        for k, n in (self._q(t).get("tools") or {}).items():
+            if k in self.DID_RU:
+                did[self.DID_RU[k]] = did.get(self.DID_RU[k], 0) + int(n or 0)
+        done, total = (t.data.get("progress") or [0, 0])[:2]
+        parts = [f"{k} ×{n}" for k, n in sorted(did.items(), key=lambda x: -x[1])[:4]]
+        if total:
+            parts.append(f"план — {done} из {total}")
+        return why + (f" (успела: {', '.join(parts)})" if parts else "") + " — цель не подтверждена"
 
     def _gates(self, t, summary, q):
         if not t.data.get("refusal_nudged") and Q.looks_like_refusal(summary) and self._web_available(t) and not self._web_used(t):
@@ -1552,6 +1586,7 @@ class TaskManager:
             t.journal("▶ Продолжаю работу.")
         max_steps = self.host.max_steps()
         idle, acted, run_steps = 0, False, 0
+        chance, bad = False, 0                                    # второй шанс после ответов без действий; вызовы «текстом» подряд
         guard = Q.LoopGuard()                                     # живёт один запуск потока
         self.__dict__.setdefault("_asks", {}).pop(t.id, None)    # отказы и вопросы без ответа — счёт заново на каждый запуск
         t.data.pop("pause_now", None)
@@ -1636,27 +1671,43 @@ class TaskManager:
                     nudge = ("Продолжай по плану. Если всё сделано — вызови finish с итогом." if acted else
                              "Ты пока ничего не сделал — только написал текст. Не рассуждай: прямо сейчас вызови нужный "
                              "инструмент (например, выполни команду проверки), результат увидишь в ответе инструмента.")
-                    if re.search(r'"(?:tool_name|tool|name|function)"\s*:', text or ""):   # пытался вызвать, но не в том виде
+                    garbled = bool(CALL_MARK_RX.search(text or ""))      # пытался вызвать, но не в том виде
+                    bad = bad + 1 if garbled else 0
+                    if garbled:
                         nudge = ("Твой вызов не распознан. Вызывай функцию ровно так (одну за раз), без пояснений:\n"
-                                 '<tool_call>\n{"name": "<имя функции>", "arguments": {<аргументы>}}\n</tool_call>')
-                    t.journal("↻ Модель ответила текстом без действий — напоминаю, что нужно действовать.")
+                                 '<tool_call>\n{"name": "<имя функции>", "arguments": {<аргументы>}}\n</tool_call>'
+                                 if prompt_tools_mode(prof) else
+                                 "Твой вызов не распознан: ты написал его текстом. Вызывай действия штатно — вызовом функции "
+                                 "(tool call), без тегов и пояснений в тексте ответа.")
+                    t.journal("↻ Модель написала вызов в непонятном виде — объясняю, как вызывать." if garbled else
+                              "↻ Модель ответила текстом без действий — напоминаю, что нужно действовать.")
                     msgs += [{"role": "assistant", "content": text or "…"}, {"role": "user", "content": nudge}]
-                    if idle == 2 and not acted and prof.get("kind") != "anthropic" and prof.get("tools_mode") != "prompt":
+                    if (idle == 2 and not acted or bad == 2) and prof.get("kind") != "anthropic" and prof.get("tools_mode") != "prompt":
                         # «Задачи на часы» (пакет 29.10: «модель так и не взялась за дело» — 9 раз у 7 человек, своя модель):
-                        # модель не понимает инструменты полем запроса — пробуем описать их текстом, прежде чем сдаться
+                        # модель не понимает инструменты полем запроса — пробуем описать их текстом, прежде чем сдаться;
+                        # так же — когда она дважды подряд пишет вызов текстом в своём виде (№448: DeepSeek и «DSML»)
                         prof = dict(prof, tools_mode="prompt")
                         idle = 0
                         t.journal("↻ Модель не вызывает действия — описываю их ей текстом и пробую снова.")
                         continue
-                    if idle >= 3:                                   # три ответа подряд без действий — завершаем сами
+                    if idle >= 3:                                   # три ответа подряд без действий
                         if not acted:                               # модель вообще не вызывает инструменты — это провал
-                            raise LLMError("модель так и не взялась за дело — только рассуждала, ни одного действия. "
+                            raise LLMError(("модель пишет действия в виде, который Dewiar не смог разобрать, — ни одно не выполнилось. "
+                                            if bad >= 2 else "модель так и не взялась за дело — только рассуждала, ни одного действия. ") +
                                            "Выберите в «Мозге» модель, которая умеет действия (инструменты), и запустите задачу снова")
+                        if not chance:
+                            # №448, №460: после пары шагов модель отвечала текстом (отчёт без finish, вызовы текстом) — и
+                            # задача сразу вставала «не выполнено». Сначала второй шанс: прямо сказать, что от неё нужно
+                            chance, idle = True, 0
+                            msgs[-1] = {"role": "user", "content": IDLE_CHANCE}
+                            t.journal("✋ Несколько ответов подряд без действий — даю ещё попытку: действовать или подвести итог (finish).")
+                            continue
                         t.data["finish_checked"] = t.data["force_finish"] = True   # завершаем сами — без повторных проверок
+                        t.data["force_why"] = "badcall" if bad >= 2 else "idle"
                         self._tool(t, "finish", {"summary": text.strip() or "Работа закончена."})
                         break
                     continue
-                idle, acted = 0, True
+                idle, acted, chance, bad = 0, True, False, 0
                 results = []
                 # слова модели перед вызовом (без размышлений <think>) — подпись «что делаю» в карточке
                 say = re.sub(r"\s+", " ", re.sub(r"<think>.*?</think>", "", text or "", flags=re.S)).strip()
@@ -1676,6 +1727,7 @@ class TaskManager:
                         r = f"{r}\n\n{Q.LOOP_WARN}"
                     elif loop == "finish":
                         t.data["finish_checked"] = t.data["force_finish"] = True
+                        t.data["force_why"] = "loop"
                         t.journal("🔁 Зациклился — прошу закончить с тем, что есть.")
                         r = f"{r}\n\n{Q.LOOP_FINISH}"
                     elif loop == "stop":                           # не послушала LOOP_FINISH — прерываем с ошибкой
@@ -1724,12 +1776,13 @@ class TaskManager:
                                    "в папке задачи; уточните задачу и запустите снова")
             if t.data.get("finished") and t.data.get("unfinished"):
                 why = t.data["unfinished"]
-                t.data.update(status="failed", activity="", error="не выполнено: " + why, fail_kind="unfinished", failed_at=_now())
                 t.journal(f"⛔ Не выполнено: {why}")
-                self._trace(t, "unfinished")
-                if not t.data.get("parent"):
-                    self.host.announce(f"Задача «{t.title}» не выполнена: {why[:160]}. Что успела — в папке задачи.")
+                if not t.data.get("parent"):                   # журнал и голос — до смены статуса (как у паузы)
+                    # голосом — только причина (счёт «успела: …» — в карточке и журнале)
+                    self.host.announce(f"Задача «{t.title}» не выполнена: {why.split(' (успела:')[0][:160]}. Что успела — в папке задачи.")
                     self._push(f"⛔ Не выполнено: {t.title}", why[:200], critical=True)
+                t.data.update(status="failed", activity="", error="не выполнено: " + why, fail_kind="unfinished", failed_at=_now())
+                self._trace(t, "unfinished")
             elif t.data.get("finished"):
                 t.data.update(status="done", activity="")
                 t.journal("🏁 Готово.")

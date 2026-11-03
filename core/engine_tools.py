@@ -20,6 +20,33 @@ QUERY_TOOLS = ("find_notes", "web_search", "show_images")     # без query —
 CAPTURE_FOLDER = "Идеи"            # «Закинуть идею» (capture_save) — заметки сюда: «Заметки/Идеи/…»
 
 
+# Ответ на «Выполнить?» (№478, №491: «отвечаю „да“ — считает отказом»): «Да.», «да, давай», «разрешаю», «одобряю»,
+# «так точно», «не против» — да; «нет», «не надо», «да нет, не нужно», «подожди» — нет (отрицание сильнее: «нет, давай
+# потом» — не запускать); иначе — не ответ (ждём дальше)
+CONFIRM_YES = {"да", "давай", "давайте", "выполняй", "выполни", "выполнить", "подтверждаю", "подтверди", "конечно", "ага", "угу",
+               "можно", "делай", "yes", "ок", "окей", "ok", "okay", "разрешаю", "разреши", "одобряю", "запускай", "запусти",
+               "действуй", "согласен", "согласна", "хорошо", "ладно", "вперед", "поехали", "продолжай", "верно", "отправляй",
+               "открывай", "ставь", "жми", "го", "валяй", "естественно", "разумеется", "yep", "sure", "давай-давай"}
+CONFIRM_NO = {"нет", "не", "неа", "ни", "отмена", "отмени", "отменить", "стоп", "no", "нельзя", "запрещаю", "погоди",
+              "подожди", "стой", "nope"}
+_CONFIRM_YES_RX = re.compile(r"(?<![а-яё])(?:не\s+против|не\s+возражаю|почему\s+бы\s+(?:и\s+)?нет|не\s+вопрос|ещ[её]\s+бы|так\s+точно)(?![а-яё])")
+
+
+def confirm_word(text):
+    """Короткий ответ «да / нет» -> True, False или None (это не ответ на вопрос)."""
+    t = str(text or "").lower().replace("ё", "е").strip()
+    if t.endswith("?"):                                # «а можно подробнее?», «ты точно уверена?» — вопрос, а не ответ
+        return None
+    if _CONFIRM_YES_RX.search(t):
+        return True
+    w = set(re.findall(r"[\wё-]+", t)) | set(re.findall(r"[\wё]+", t))
+    if w & CONFIRM_NO:
+        return False
+    if w & CONFIRM_YES:
+        return True
+    return None
+
+
 def _att_word(att):
     """[{kind…}] -> «2 картинки», «картинка и файл» — для уведомлений."""
     def plural(n, one, few, many):
@@ -96,7 +123,13 @@ class ToolsMixin:
             ro = name == "server_run" and not force and self.toolbox.server_readonly(args)
             n_conf = getattr(turn, "confirms", 0)
             turn.confirms = n_conf + 1
-            ok = self._confirm(turn, question, sentences, always=ro, again=n_conf)
+            if not force and not n_conf and self._just_agreed(turn):
+                # №478 (ПК 0.76): модель спросила словами «запустить?», человек ответил «да» — и тут же второй вопрос
+                # «Выполнить?», который никто не ждал: 15 с тишины — и «отказ». Только что согласились — это и есть ответ
+                log.info("Подтверждение: да (только что ответили «%s» на вопрос)", (turn.asked or "")[:20])
+                ok = True
+            else:
+                ok = self._confirm(turn, question, sentences, always=ro, again=n_conf)
             if ok == "always":
                 try:
                     srv = self.toolbox.hooks["servers"]
@@ -105,6 +138,11 @@ class ToolsMixin:
                     log.info("🖥 «%s»: команды «только посмотреть» — дальше без вопроса", s_.get("name"))
                 except Exception as e:  # noqa: BLE001
                     log.info("сервер: «всегда» не сохранилось: %s", e)
+            if ok is None:                             # промолчали — это не «нет» (№478: «отвечаю „да“ — считает отказом»)
+                self.emit("tool", name=name, title=title, status="error", error="ответа не было — спрошу ещё раз")
+                return ("Пользователь не ответил на вопрос «Выполнить?» — ответа не дождалась, это НЕ отказ. Ничего не делай; "
+                        "одной фразой скажи, что ждёшь его «да» (кнопкой «Выполнить» или словами), и спроси ещё раз. "
+                        "Не говори, что он отказался.")
             if not ok:
                 self.emit("tool", name=name, title=title, status="declined")
                 return "Пользователь отказался. Ничего не делай и коротко подтверди отказ."
@@ -177,10 +215,28 @@ class ToolsMixin:
         log.info("📎 К напоминанию «%s» — вложения сообщения (%d)", item["text"], n)
         return res + f" Вложения из сообщения ({n}) приложены к напоминанию — в срок они будут прямо в окне напоминания; можно так и сказать."
 
-    def _confirm(self, turn, question, sentences, timeout=15, always=False, again=0):
-        """Спросить голосом и кнопками, дождаться «да»/«нет». -> True, если согласились.
+    def _just_agreed(self, turn):
+        """Этот ход — короткое «да / давай / запускай» в ответ на вопрос ассистента (его прошлая реплика кончилась «?»,
+        не раньше 5 минут назад)? Тогда первое «Выполнить?» за ход уже отвечено (№478). Опасное (защита просит
+        подтверждения сама) — спрашиваем всё равно; вызывающий это проверяет."""
+        said = (getattr(turn, "asked", None) or "").strip()
+        if not said or "\n\nВложения:" in said or len(said) > 60 or len(re.findall(r"[\wё]+", said)) > 6:
+            return False
+        if confirm_word(said) is not True:
+            return False
+        last = next((m for m in reversed(getattr(self, "history", None) or []) if m.get("role") == "assistant"), None)
+        if not last or not str(last.get("content") or "").rstrip().endswith("?"):
+            return False
+        return time.monotonic() - float(getattr(self, "last_turn_time", 0) or 0) < 300
+
+    def _confirm(self, turn, question, sentences, timeout=None, always=False, again=0):
+        """Спросить голосом и кнопками, дождаться «да»/«нет». -> True — согласились («always» — «всегда»), False — «нет»,
+        None — ответа не дождались (молчание — не отказ: №478).
         Ответ приходит из другого потока через pending_confirm (_answer_confirm или кнопка). Голосом — сперва ждём,
-        пока договорится уже начатый ответ, затем слушаем timeout секунд; молчание — это «нет»."""
+        пока договорится уже начатый ответ, затем ждём timeout секунд: 30, а в текстовом режиме (читают и жмут кнопку,
+        №478: 15 с не хватало) — 90."""
+        if timeout is None:
+            timeout = 90 if (getattr(self, "s", None) is not None and self.s.get("ui", "text_mode")) else 30
         if turn.via and turn.via.get("confirm"):             # вопрос из Telegram — и подтверждение там же, кнопками
             box = {"event": threading.Event(), "answer": False}
             self.pending_confirm = box
@@ -207,11 +263,13 @@ class ToolsMixin:
         self.emit("confirm", text=question, always=bool(always))
         self.follow_up_until = time.monotonic() + timeout
         self.set_state("listening")
-        box["event"].wait(timeout)
+        answered = box["event"].wait(timeout)
         self.pending_confirm = None
         self.emit("confirm_done", ok=box["answer"])
-        log.info("Подтверждение: %s", ("всегда" if box.get("always") else "да") if box["answer"] else "нет")
+        log.info("Подтверждение: %s", ("всегда" if box.get("always") else "да") if box["answer"] else "нет" if answered or turn.cancel.is_set() else "без ответа")
         self.set_state("thinking")
+        if not answered and not turn.cancel.is_set():
+            return None
         return "always" if box["answer"] and box.get("always") and always else box["answer"]
 
     def _answer_confirm(self, text):
@@ -219,13 +277,13 @@ class ToolsMixin:
         box = self.pending_confirm
         if not box:
             return False
-        w = set(re.findall(r"[\wё]+", _norm(text)))
-        if w & {"всегда"} or re.search(r"больше не спрашива|без вопрос|не спрашивай", _norm(text)):
+        if re.search(r"больше не спрашива|без вопрос|не спрашивай", _norm(text)) or "всегда" in set(re.findall(r"[\wё]+", _norm(text))):
             box["answer"] = box["always"] = True
-        elif w & {"да", "давай", "выполняй", "подтверждаю", "конечно", "ага", "угу", "можно", "делай", "yes", "ок", "окей"}:
-            box["answer"] = True
-        elif not (w & {"нет", "не", "отмена", "отмени", "стоп", "no", "не надо"}):
-            return False                       # непонятный ответ — ждём дальше
+        else:
+            v = confirm_word(text)
+            if v is None:
+                return False                   # непонятный ответ — ждём дальше
+            box["answer"] = v
         box["event"].set()
         return True
 
@@ -908,6 +966,8 @@ class ToolsMixin:
                 self.watch_more(wm.get("id"), wm.get("why") or "")
             except Exception as e:  # noqa: BLE001
                 log.info("👁 Дозор: «ждать дальше» не применилось: %s", e)
+        if "watch" in ((body or {}).get("want") or ()) and hasattr(self, "_watch_publish"):   # №468: телефон спрашивает про «Дозор»
+            self._watch_publish(True)
         if "team" in ((body or {}).get("want") or ()) and self._team_on():   # телефон руководителя открыл «Поручения»
             import threading
             threading.Thread(target=self._team_publish, daemon=True).start()

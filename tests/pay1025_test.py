@@ -168,6 +168,8 @@ async def go():
         R["ov"] = await call("pay_overview")
         R["att"] = await call("pay_attach", target="bill", id=g["id"], name="памятка.png", data="data:image/png;base64," + base64.b64encode(
             bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc0000003010100c9fe92ef0000000049454e44ae426082")).decode())
+ok(P.guess_group("Пополнение за ИИ") == "Подписки" and P.guess_icon("Пополнение за ИИ") == "🤖" and P.guess_group("Бензин") == "Транспорт"
+   and P.guess_group("Газ") == "Коммунальные", "«Пополнение за ИИ» — сама в «Подписки» со значком 🤖; бензин — «Транспорт»")
 try:
     asyncio.run(go())
     gas = next(b for b in R["ov"]["bills"] if b["name"] == "Газ")
@@ -198,6 +200,16 @@ try:
         pg.click('#py-drawer .py-dtabs button[data-k="set"]'); time.sleep(0.6)
         rep = pg.evaluate("(() => { document.documentElement.classList.add('st-light'); const r = [...document.querySelectorAll('#py-drawer select')].map(x => getComputedStyle(x).backgroundRepeat); document.documentElement.classList.remove('st-light'); return r; })()")
         ok(rep and all(r == "no-repeat" for r in rep), f"списки в настройках платежа — одна стрелка, без «зигзагов»: {rep}")
+        # 03.11, владелец: «нет возможности вставить свою красивую иконку… было бы удобно, если бы сразу была коллекция»
+        pg.click("#py-sicbtn"); time.sleep(0.3)
+        n_ic = pg.locator("#py-drawer .py-icpop .py-icgrid button").count()
+        if SHOTS:
+            time.sleep(0.5); pg.screenshot(path=os.path.join(SHOTS, "pay-icons.png"))
+        pg.click('#py-drawer .py-icpop button[data-i="🤖"]'); time.sleep(0.2)
+        ok(n_ic >= 60 and pg.input_value("#py-sicon") == "🤖" and pg.inner_text("#py-sicbtn") == "🤖" and not pg.locator(".py-icpop").count(),
+           f"значок — из набора по темам ({n_ic} шт.), выбран — в кнопке и в поле")
+        groups = pg.evaluate("[...document.querySelectorAll('#py-sgroup option')].map(o => o.textContent)")
+        ok("Подписки" in groups and "Транспорт" in groups, f"группы: есть «Подписки» и «Транспорт»: {groups}")
         pg.click('#py-drawer .py-dtabs button[data-k="hist"]'); time.sleep(0.4)
         pg.click('#py-drawer .py-dtabs button[data-k="how"]'); time.sleep(0.8)
         ok("ЕРИП" in pg.input_value("#py-how") and pg.locator("#py-drawer .py-atts figure").count() == 1, "«Как платить»: реквизиты и картинка-памятка")

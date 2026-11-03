@@ -1,0 +1,207 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Первый сервер для Лиры — пошаговая инструкция</title>
+<link rel="stylesheet" href="../../ui/assets/fonts.css"><style>
+@page { size: A4; margin: 16mm 16mm 18mm; }
+:root { --ink:#1b1d2a; --muted:#5b6075; --dim:#8a8fa3; --line:#e2e4ec; --acc:#5b4fd6; --soft:#f3f2fd; --code:#f4f5f8; --warn:#fff5e6; --warnb:#e9a23b; --ok:#e9f8f1; --okb:#22a06b; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 10.6pt/1.55 Manrope, sans-serif; color: var(--ink); }
+h1 { font: 700 22pt/1.15 Unbounded, sans-serif; margin: 0 0 4mm; letter-spacing: -.01em; }
+h2 { font: 700 13.5pt/1.25 Unbounded, sans-serif; margin: 8mm 0 3mm; break-after: avoid-page; display: flex; gap: 3mm; align-items: baseline; break-after: avoid; }
+h2 .n { display: inline-grid; place-items: center; min-width: 8mm; height: 8mm; border-radius: 50%; background: var(--acc); color: #fff; font-size: 11pt; flex: none; }
+h3 { font: 700 11pt Manrope, sans-serif; margin: 5mm 0 1.5mm; break-after: avoid; }
+p { margin: 0 0 2.5mm; }
+.lead { font-size: 11.5pt; color: var(--muted); max-width: 165mm; }
+.meta { color: var(--dim); font-size: 9pt; margin-bottom: 6mm; }
+code, pre { font-family: "DejaVu Sans Mono", monospace; font-size: 9pt; }
+code { background: var(--code); padding: .2mm 1.2mm; border-radius: 1mm; }
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 2.5mm; padding: 3mm 4mm; margin: 2mm 0 3mm; white-space: pre-wrap; word-break: break-all; line-height: 1.5; break-inside: avoid; }
+pre .c { color: var(--dim); }
+ul.check { list-style: none; padding: 0; margin: 0 0 3mm; }
+ul.check li { position: relative; padding: 1.2mm 0 1.2mm 8mm; border-bottom: 1px solid var(--line); break-inside: avoid; }
+ul.check li::before { content: ""; position: absolute; left: 0; top: 2.2mm; width: 4.2mm; height: 4.2mm; border: 1.4px solid var(--ink); border-radius: 1mm; }
+ol.steps { margin: 0 0 3mm; padding-left: 6mm; }
+ol.steps li { margin: 0 0 2mm; padding-left: 1mm; break-inside: avoid; }
+.note { border-left: 3px solid var(--acc); background: var(--soft); padding: 3mm 4mm; border-radius: 0 2.5mm 2.5mm 0; margin: 3mm 0; break-inside: avoid; }
+.warn { border-left-color: var(--warnb); background: var(--warn); }
+.okbox { border-left-color: var(--okb); background: var(--ok); }
+.note b:first-child { display: block; margin-bottom: .8mm; }
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.8pt; }
+td, th { text-align: left; vertical-align: top; padding: 2mm 2.5mm; border-bottom: 1px solid var(--line); }
+th { font-weight: 700; color: var(--muted); font-size: 9pt; }
+tr { break-inside: avoid; }
+td:first-child { width: 38%; font-weight: 600; }
+.flow { display: grid; grid-template-columns: 1fr 9mm 1fr 9mm 1.25fr; align-items: center; gap: 0; margin: 4mm 0 2mm; break-inside: avoid; }
+.fb { border: 1.4px solid var(--ink); border-radius: 3mm; padding: 3mm; text-align: center; font-size: 9.6pt; line-height: 1.35; }
+.fb b { display: block; font-size: 10.4pt; }
+.fb small { color: var(--muted); }
+.fa { text-align: center; font-size: 14pt; color: var(--dim); }
+.fs { display: flex; flex-direction: column; gap: 2mm; }
+.fs .fb.main { border-color: var(--acc); }
+.fs .fb.extra { border-style: dashed; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+.page-break { break-before: page; }
+.foot { margin-top: 8mm; color: var(--dim); font-size: 8.8pt; border-top: 1px solid var(--line); padding-top: 3mm; }
+.blank { display: inline-block; min-width: 42mm; border-bottom: 1px solid var(--ink); }
+.pbar { position: sticky; top: 0; display: flex; gap: 3mm; align-items: center; justify-content: flex-end; padding: 3mm 0; background: #fff; border-bottom: 1px solid var(--line); margin-bottom: 5mm; font-size: 10pt; }
+.pbar a, .pbar button { font: 600 10pt Manrope, sans-serif; padding: 2mm 4mm; border-radius: 2mm; border: 1px solid var(--line); background: #fff; color: var(--ink); text-decoration: none; cursor: pointer; }
+.pbar button { background: var(--acc); color: #fff; border-color: var(--acc); }
+@media screen { body { max-width: 190mm; margin: 0 auto; padding: 0 6mm 12mm; } }
+@media print { .pbar { display: none; } }
+</head><body>
+
+h2 { break-after: avoid; } .sm { font-size: 9pt; color: var(--muted); }
+ul.check li ul, ol.steps li ul { margin: 1mm 0 0; padding-left: 5mm; } ol.steps li ul li { margin: .6mm 0; }
+table td:first-child { width: 30%; }
+</style></head><body>
+<h1>Первый сервер для Лиры</h1>
+<p class="lead">Пошаговая инструкция: от голого компьютера с двумя видеокартами до сервера, который отвечает людям вместо главного,
+когда тот занят, и рисует картинки «как фото» для «Художника». Каждый шаг — что сделать и как понять, что получилось.</p>
+<p class="meta">Dewiar 0.77.0 и новее · 31 октября 2026 · сервер с двумя видеокартами NVIDIA (RTX 3090 или RTX A4000)</p>
+
+<div class="flow">
+  <div class="fb"><b>Люди</b><small>программа, телефон, браузер</small></div><div class="fa">→</div>
+  <div class="fb"><b>Сайт dewiar.pro</b><small>очередь, «Мощности»</small></div><div class="fa">→</div>
+  <div class="fs"><div class="fb main"><b>Главный сервер</b><small>отвечает первым</small></div>
+    <div class="fb extra"><b>Новый сервер</b><small>когда главный занят · картинки</small></div></div>
+</div>
+<p>Сайт сам решает, кто отвечает: пока у главного сервера есть свободные места — он; заняты — следующий разговор сразу уходит
+новому серверу. Картинки «как фото» рисует только новый сервер (если вы их включите). Настраивать сайт руками не нужно — новый
+сервер сам сообщит о себе.</p>
+
+<h2><span class="n">1</span>Что нужно заранее</h2>
+<ul class="check">
+  <li><b>Сайт обновлён до 0.77.0.</b> Кабинет → «Обновления» → архив <code>dewiar-server-0.77.0.zip</code> → «Опубликовать».</li>
+  <li><b>Сервер:</b> две видеокарты NVIDIA, оперативной памяти от 64 ГБ (минимум 32 ГБ без картинок), SSD от 250 ГБ.</li>
+  <li><b>Флешка на 8 ГБ</b> — для установки Ubuntu.</li>
+  <li><b>Сеть:</b> сервер подключён кабелем к той же сети, что и сервер сайта, и у него есть интернет.</li>
+  <li><b>Монитор и клавиатура</b> — только на время установки Ubuntu. Дальше всё можно делать с другого компьютера.</li>
+</ul>
+
+<h2><span class="n">2</span>Что поставить на ваши карты</h2>
+<table>
+<tr><th>Карты</th><th>Что выбрать в кабинете</th><th>Что получится</th></tr>
+<tr><td>2 × RTX 3090 (24 ГБ)</td><td>«Qwen3.8-27B AWQ — та же, что у главного» и галочка <b>«и картинки на последней карте»</b></td>
+<td>карта 0 — мозг (ещё 4 разговора сразу), карта 1 — картинки «как фото» (FLUX, 5–15 с на картинку)</td></tr>
+<tr><td>2 × RTX 3090, без картинок</td><td>«Qwen3.8-27B AWQ — та же, что у главного», без галочки</td><td>обе карты — мозг: ещё 8 разговоров сразу</td></tr>
+<tr><td>2 × RTX A4000 (16 ГБ)</td><td>«Qwen3.8-27B AWQ — на двух картах по 16 ГБ», без галочки</td>
+<td>одна копия мозга на обе карты: ещё ~6 разговоров. Картинки на этом сервере не ставим — памяти не хватит обоим</td></tr>
+</table>
+<div class="note"><b>Не знаете, какие карты?</b>Решите в шаге 5, когда сервер уже стоит: команда <code>nvidia-smi</code> покажет названия
+и память карт. Если стоит не тот план — не страшно, в шаге 9 сказано, как поменять.</div>
+
+<h2><span class="n">3</span>Поставить Ubuntu Server 24.04</h2>
+<ol class="steps">
+  <li>На любом компьютере скачайте <b>Ubuntu Server 24.04 LTS</b>: ubuntu.com/download/server (файл .iso, ~3 ГБ).</li>
+  <li>Запишите его на флешку программой <b>balenaEtcher</b> или <b>Rufus</b>: выбрать файл → выбрать флешку → «Flash» / «Старт».</li>
+  <li>Вставьте флешку в сервер, включите его и выберите загрузку с флешки (клавиша F11, F12 или Del при включении — на экране пишут какая).</li>
+  <li>Установщик спросит по очереди. Отвечайте так:
+    <ul><li>язык — English (так меньше путаницы с раскладкой);</li>
+      <li>тип установки — <b>Ubuntu Server</b> (не «minimized»);</li>
+      <li>сеть — оставить как есть (адрес получится сам); запишите адрес, который он покажет, например <code>192.168.1.50</code>;</li>
+      <li>диск — «Use an entire disk» (весь диск, всё на нём сотрётся);</li>
+      <li>имя и пароль — например имя <code>dewiar</code>, пароль надёжный, запишите его;</li>
+      <li><b>отметьте «Install OpenSSH server»</b> — чтобы потом заходить с другого компьютера;</li>
+      <li>дополнительные программы (snaps) — ничего не отмечать.</li></ul></li>
+  <li>Дождитесь «Installation complete», выньте флешку, нажмите «Reboot Now».</li>
+  <li>После перезагрузки войдите с вашим именем и паролем. Обновите систему:
+<pre>sudo apt update && sudo apt -y upgrade && sudo reboot</pre></li>
+  <li>В настройках роутера закрепите за сервером его адрес (DHCP-резервирование), чтобы он не менялся.</li>
+</ol>
+<div class="note okbox"><b>Получилось, если</b>с другого компьютера заходит команда <code>ssh dewiar@192.168.1.50</code> (ваш адрес и имя).
+С этого момента монитор и клавиатура серверу не нужны.</div>
+
+<h2 class="page-break"><span class="n">4</span>Взять команду в кабинете</h2>
+<ol class="steps">
+  <li>Кабинет dewiar.pro → вкладка <b>«Мощности»</b> → блок «Новый сервер — одной командой».</li>
+  <li>В списке выберите план по таблице из шага 2. Поле рядом оставьте пустым — модель скачается сама.</li>
+  <li>Для 3090 с картинками отметьте <b>«и картинки на последней карте»</b>.</li>
+  <li>«Получить команду» → «Скопировать команду». Код в команде живёт 6 часов.</li>
+</ol>
+<pre>curl -fsSL "https://dewiar.pro/dwrapp/cloud.php?p=/worker.sh" | sudo bash -s -- K7M-42Q https://dewiar.pro/dwrapp/cloud.php</pre>
+<p class="sm">Так выглядит команда — код и адрес у вас будут свои.</p>
+
+<h2><span class="n">5</span>Запустить на сервере</h2>
+<ol class="steps">
+  <li>Зайдите на сервер: <code>ssh dewiar@192.168.1.50</code>. Посмотрите карты: <code>nvidia-smi</code> (если пишет «not found» — нормально, драйвер поставит скрипт).</li>
+  <li>Вставьте команду из кабинета (правая кнопка мыши в окне терминала), Enter, пароль сервера.</li>
+  <li>Если скрипт написал <b>«Перезагрузите сервер и выполните ту же команду ещё раз»</b> — это он поставил драйвер видеокарт:
+<pre>sudo reboot</pre>подождите минуту, зайдите снова и вставьте ту же команду.</li>
+  <li>Дальше просто ждать. Скрипт пишет, что делает: Docker → образ vLLM (~10 ГБ) → модель (~16 ГБ) → «порт 8001: отвечает» →
+  «готово — сервер в кабинете». С картинками ещё ~30 ГБ: «картинки: модель загружается…» → «картинки: готово».
+  Первый раз — от 30 минут до 2 часов, смотря какой интернет. Окно можно не трогать.</li>
+  <li>В самом конце скрипт сам запускает проверку (шаг 6).</li>
+</ol>
+
+<h2><span class="n">6</span>Проверить — всё ли работает</h2>
+<h3>На сервере — одной командой</h3>
+<pre>sudo dewiar-worker check</pre>
+<p>Покажет по строке на каждую проверку: ✅ — в порядке, ❌ — что не так и что сделать. Проверяет драйвер и карты, Docker,
+видны ли карты внутри Docker, файл настроек, отвечает ли модель на каждой карте и за сколько, рисует ли пробную картинку
+512×512 и за сколько, открывается ли сайт с этого сервера. В конце — «Всё в порядке» или «Проблем: N».</p>
+<h3>В кабинете</h3>
+<ol class="steps">
+  <li>«Мощности» → «Обновить». В списке «Дополнительные серверы» появились строки: <b>«имя · карта 0»</b> и, если включали
+  картинки, <b>«имя · картинки»</b>.</li>
+  <li>У каждой зелёная точка. У мозга — «действия ✓», модель qwen3.8-27b-awq-vd. У картинок — flux.1-schnell.</li>
+  <li>Нажмите «Проверить» у каждой: сайт задаст вопрос модели (или нарисует пробную картинку) и покажет время.</li>
+  <li>Вкладка «Сервер» → «Проверка»: строка «Мощности: N из N отвечают».</li>
+</ol>
+<h3>В самой Лире</h3>
+<ol class="steps">
+  <li>Студия → «Плагины» → «Художник» → «Установить» (или на главной — карточка «Попробуйте плагин»).</li>
+  <li>Скажите: <b>«Нарисуй фотографию рыжего кота на подоконнике, утренний свет»</b>. Откроется браузер с картинкой — генератор работает.</li>
+  <li>Мозг нового сервера включается сам, когда главный занят. Видно в кабинете → «Мощности» вверху: «ответили дополнительные: N из M» за час.</li>
+</ol>
+
+<h2 class="page-break"><span class="n">7</span>Если что-то не так</h2>
+<table>
+<tr><th>Что видно</th><th>Что сделать</th></tr>
+<tr><td>«Код не подходит или устарел»</td><td>Прошло больше 6 часов. Кабинет → «Мощности» → «Получить команду» — новая команда.</td></tr>
+<tr><td>«Видеокарт не вижу (nvidia-smi)»</td><td><code>sudo ubuntu-drivers install</code>, затем <code>sudo reboot</code> и та же команда из кабинета.</td></tr>
+<tr><td>Долго «модель загружается…»</td><td>Первый раз это нормально. Что происходит: <code>sudo dewiar-worker logs 0</code> (картинки — <code>logs image</code>). Выйти — Ctrl+C.</td></tr>
+<tr><td>«CUDA out of memory» в журнале</td><td>Не хватает памяти карты. <code>sudo nano /etc/dewiar-worker.conf</code>: <code>CONTEXT=16384</code> или <code>SEATS=2</code>; затем <code>sudo dewiar-worker apply</code>.</td></tr>
+<tr><td>Картинки: «Killed» или долго и ошибка</td><td>Мало оперативной памяти для FLUX. В файле настроек: <code>IMAGE_MODEL=stabilityai/stable-diffusion-xl-base-1.0</code> (легче), затем <code>sudo dewiar-worker apply</code>.</td></tr>
+<tr><td>В кабинете красная точка «не отвечает»</td><td>Сайт не видит сервер. На сервере сайта: <code>curl http://192.168.1.50:8001/v1/models</code>. Нет ответа — сеть или брандмауэр (шаг 10).</td></tr>
+<tr><td>«неверный ключ доступа»</td><td>На новом сервере: <code>sudo grep KEY /etc/dewiar-worker.conf</code> — этот ключ вставить в кабинете у строки сервера.</td></tr>
+<tr><td>«без действий»</td><td>В файле настроек <code>TOOLS=qwen3_coder</code>, затем <code>sudo dewiar-worker apply</code>.</td></tr>
+<tr><td>В Лире: «генератор картинок пока не подключён»</td><td>В кабинете нет строки «· картинки» или она красная — <code>sudo dewiar-worker check</code> на сервере.</td></tr>
+</table>
+
+<h2><span class="n">8</span>Управление сервером</h2>
+<table>
+<tr><td><code>sudo dewiar-worker check</code></td><td>полная проверка с ✅ и ❌</td></tr>
+<tr><td><code>sudo dewiar-worker status</code></td><td>коротко: отвечает ли каждая карта</td></tr>
+<tr><td><code>sudo dewiar-worker logs 0</code></td><td>журнал карты 0 (<code>logs image</code> — картинок). Выйти — Ctrl+C</td></tr>
+<tr><td><code>sudo dewiar-worker apply</code></td><td>применить изменения из файла настроек и сообщить сайту</td></tr>
+<tr><td><code>sudo dewiar-worker stop</code></td><td>остановить всё</td></tr>
+</table>
+<p>После перезагрузки сервера всё запускается само. Ничего делать не нужно.</p>
+
+<h2><span class="n">9</span>Поменять план без переустановки</h2>
+<p>Все настройки — в файле <code>/etc/dewiar-worker.conf</code>. Открыть: <code>sudo nano /etc/dewiar-worker.conf</code>
+(сохранить — Ctrl+O, Enter; выйти — Ctrl+X). После изменений — <code>sudo dewiar-worker apply</code>.</p>
+<table>
+<tr><td><code>IMAGES=on</code> / <code>off</code></td><td>картинки включены или нет</td></tr>
+<tr><td><code>IMAGE_GPU=1</code></td><td>на какой карте картинки (пусто — на последней); на ней мозга не будет</td></tr>
+<tr><td><code>IMAGE_MODEL=…</code></td><td>FLUX.1-schnell (лучше, от 64 ГБ памяти компьютера) или stable-diffusion-xl-base-1.0 (легче)</td></tr>
+<tr><td><code>COPIES=per-gpu</code> / <code>one</code></td><td>по копии мозга на карту или одна на все (для карт по 16 ГБ — one)</td></tr>
+<tr><td><code>SEATS=4</code></td><td>разговоров сразу на одну копию. Поменяли — такое же число в кабинете в поле «Мест»</td></tr>
+</table>
+
+<h2><span class="n">10</span>Безопасность</h2>
+<ul class="check">
+  <li>Порты 8001, 8002 и 8100 не открывайте в интернет — сервер нужен только сайту, внутри вашей сети.</li>
+  <li>Если включаете брандмауэр — разрешите вход только от сервера сайта:
+<pre>sudo ufw allow from 192.168.1.10 to any port 8001:8100 proto tcp
+sudo ufw allow OpenSSH && sudo ufw enable</pre>(вместо 192.168.1.10 — адрес сервера сайта).</li>
+  <li>Ключ доступа — в файле, который читает только администратор. Никому его не пересылайте.</li>
+  <li>Картинки: не больше 30 на человека в день (кабинет → настройка <code>image_daily</code>).</li>
+</ul>
+
+<h2><span class="n">11</span>Нагрузка сайта — само</h2>
+<p>С 0.77 сайт сам подбирает, сколько мест держать для «Близких» и долгих запросов, по числу обработчиков PHP. Во вкладке
+«Сервер» видно «подобрано само из N обработчиков PHP». Ничего менять не нужно. Если «занято» за час появляется часто —
+значит, людей стало много: прибавьте обработчиков PHP (pm.max_children), места подстроятся сами.</p>
+
+<div class="foot">Dewiar · «Мощности» · кабинет → «Мощности» · если что-то пошло не так — <code>sudo dewiar-worker check</code> и снимок
+экрана в «Сообщить о проблеме» или в беседу с разработчиком.</div>
+</body></html>

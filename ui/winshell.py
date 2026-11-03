@@ -16,8 +16,12 @@ import time
 from ctypes import wintypes
 from pathlib import Path
 
-user32 = ctypes.windll.user32
-gdi32 = ctypes.windll.gdi32
+# Свои экземпляры библиотек, а не общие ctypes.windll.*: типы аргументов (argtypes) живут у объекта функции, и общий
+# windll.user32.SetWindowPos с нашими «int» ломал pywebview — его window.move передаёт размер None: «ctypes.ArgumentError:
+# argument 5: TypeError: 'NoneType' object cannot be interpreted as an integer» (№476 и др., 0.76: окно «Закинуть идею»
+# и суфлёр не перетаскивались, ошибка в журнале при каждом движении). Свои — ни на кого не влияют.
+user32 = ctypes.WinDLL("user32")
+gdi32 = ctypes.WinDLL("gdi32")
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)    # код ошибки — ctypes.get_last_error(): GetLastError() к моменту вызова уже затёрт самим ctypes
 
 GWL_EXSTYLE = -20
@@ -180,6 +184,7 @@ def shape(h, kind, radius=28):
         r = int(radius * scale(h)) * 2
         rgn = gdi32.CreateRoundRectRgn(0, 0, w + 1, hgt + 1, r, r)
     user32.SetWindowRgn(h, rgn, True)           # регион теперь принадлежит окну — не освобождаем
+    flat_frame(h)
 
 
 def visible(h):
@@ -197,6 +202,34 @@ def has_shape(h):
         gdi32.DeleteObject(tmp)
 
 
+def shape_fits(h):
+    """Форма окна есть и по его нынешнему размеру. №431 (31.10, Windows, свой размер карточки 280×360): форма осталась
+    от прежнего, большего окна — её скруглённые углы оказались за краями, и углы виджета стали острыми, а проверка
+    has_shape этого не видела. -> True, если форма на месте и её рамка совпадает с окном (±2 px)."""
+    tmp = gdi32.CreateRectRgn(0, 0, 0, 0)
+    try:
+        user32.GetWindowRgn.argtypes = [wintypes.HWND, wintypes.HRGN]
+        if user32.GetWindowRgn(h, tmp) in (0, 1):
+            return False
+        box = wintypes.RECT()
+        gdi32.GetRgnBox.argtypes = [wintypes.HRGN, ctypes.POINTER(wintypes.RECT)]
+        gdi32.GetRgnBox(tmp, ctypes.byref(box))
+        _, _, w, hgt = rect(h)
+        return fits_box((box.left, box.top, box.right, box.bottom), w, hgt)
+    finally:
+        gdi32.DeleteObject(tmp)
+
+
+def fits_box(box, w, hgt, tol=2):
+    """Рамка формы (left, top, right, bottom) совпадает с окном w×hgt — с допуском (у CreateRoundRectRgn рамка на 1 px
+    больше; у круглого значка — по меньшей стороне, по центру: тогда достаточно, чтобы рамка была внутри окна)."""
+    l, t, r, b = box
+    bw, bh = r - l, b - t
+    if abs(bw - w) <= tol and abs(bh - hgt) <= tol:
+        return True
+    return abs(bw - bh) <= tol and l >= 0 and t >= 0 and r <= w + tol and b <= hgt + tol and abs(min(w, hgt) - min(bw, bh)) <= tol
+
+
 def shape_rects(h, rects):
     """Форма окна из прямоугольников [(x, y, ш, в)] в физических px (блокнот: лист + «крепления», app.pad_rects)."""
     rgn = None
@@ -209,6 +242,64 @@ def shape_rects(h, rects):
             gdi32.DeleteObject(r)
     if rgn is not None:
         user32.SetWindowRgn(h, rgn, True)           # регион теперь принадлежит окну
+        flat_frame(h)
+
+
+# ---------- Windows 11: подложка DWM под окном с формой ----------
+
+DWMWA_WINDOW_CORNER_PREFERENCE, DWMWA_BORDER_COLOR, DWMWA_SYSTEMBACKDROP_TYPE = 33, 34, 38
+DWMWCP_DONOTROUND, DWMWA_COLOR_NONE, DWMSBT_NONE = 1, 0xFFFFFFFE, 1
+_DWM = []
+
+
+def _dwm():
+    if not _DWM:
+        d = ctypes.WinDLL("dwmapi")
+        d.DwmSetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+        d.DwmSetWindowAttribute.restype = ctypes.c_long          # HRESULT: ошибки (Windows 10 не знает атрибут) — не исключение
+        d.DwmGetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+        d.DwmGetWindowAttribute.restype = ctypes.c_long
+        _DWM.append(d)
+    return _DWM[0]
+
+
+FLAT_FRAME = ((DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_NONE), (DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND),
+              (DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE))
+
+
+def flat_frame(h):
+    """Окну с формой (SetWindowRgn) — без подложки и рамки DWM. №453, №458 (01.11, Windows 11): «по углам виджета чёрные
+    треугольники». pywebview в тёмной теме Windows ставит окнам фон Mica (DWMWA_SYSTEMBACKDROP_TYPE = 2) — и Windows 11
+    рисует его на весь прямоугольник окна, не по форме: страница скруглена, а в углах — тёмная подложка. В светлой теме
+    pywebview её не ставит — потому видно было не у всех. Снимаем подложку, своё скругление DWM и рамку (Windows 10 этих
+    атрибутов не знает — вызовы просто не срабатывают). -> удалось ли снять подложку."""
+    try:
+        d = _dwm()
+    except (OSError, AttributeError):
+        return False
+    ok = True
+    for attr, val in FLAT_FRAME:
+        v = wintypes.DWORD(val)
+        hr = d.DwmSetWindowAttribute(h, attr, ctypes.byref(v), ctypes.sizeof(v))
+        if attr == DWMWA_SYSTEMBACKDROP_TYPE:
+            ok = hr >= 0
+    return ok
+
+
+def backdrop(h):
+    """Какая подложка DWM у окна сейчас (0 — авто, 1 — нет, 2 — Mica, 3 — акрил, 4 — вкладки) или None (Windows 10)."""
+    try:
+        v = wintypes.DWORD(0)
+        if _dwm().DwmGetWindowAttribute(h, DWMWA_SYSTEMBACKDROP_TYPE, ctypes.byref(v), ctypes.sizeof(v)) >= 0:
+            return int(v.value)
+    except (OSError, AttributeError):
+        pass
+    return None
+
+
+def backdrop_wrong(value):
+    """Подложка, которая под формой окна видна тёмными углами (Mica, акрил, вкладки)."""
+    return value is not None and value >= 2
 
 
 def no_capture(h):
@@ -246,12 +337,136 @@ def set_icon(h, ico):
             user32.PostMessageW(h, 0x80, which, hicon)                         # WM_SETICON (из любого потока, без ожидания)
 
 
-def app_id(name="Dewiar.Assistant"):
-    """Свой AppUserModelID процесса: Windows группирует окна на панели задач под Dewiar, а не под Python."""
+def dpi_aware():
+    """Процесс — «знает масштаб экрана» (system DPI aware), и так — с самого начала, до первого окна. pywebview объявляет
+    это сам (SetProcessDPIAware), но только в webview.start — а значок в трее (своё скрытое окно) создаётся раньше: на
+    части Windows режим процесса к этому моменту уже закреплён «не знает масштаба», и система растягивает окна
+    картинкой — текст мыльный на 125–200 % (к жалобе №442 о нечётком шрифте на 4K). Режим тот же, что у pywebview:
+    все размеры и форма окна считаются, как раньше. -> True, если режим поставлен здесь."""
+    u = ctypes.WinDLL("user32")
     try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(name)
-    except Exception:  # noqa: BLE001
+        f = u.SetProcessDpiAwarenessContext                    # Windows 10 1703+
+        f.argtypes, f.restype = [ctypes.c_void_p], wintypes.BOOL
+        if f(ctypes.c_void_p(-2)):                             # DPI_AWARENESS_CONTEXT_SYSTEM_AWARE
+            return True
+    except AttributeError:
         pass
+    try:
+        return bool(u.SetProcessDPIAware())
+    except AttributeError:
+        return False
+
+
+APP_ID = "Dewiar.Assistant"
+
+
+def app_id(name=APP_ID):
+    """Свой AppUserModelID процесса: Windows группирует окна на панели задач под Dewiar, а не под Python. Звать до
+    первого окна (иначе Windows уже запомнила окна под pythonw.exe). -> удалось ли."""
+    try:
+        sh = ctypes.WinDLL("shell32")
+        sh.SetCurrentProcessExplicitAppUserModelID.argtypes = [wintypes.LPCWSTR]
+        sh.SetCurrentProcessExplicitAppUserModelID.restype = ctypes.c_long
+        return sh.SetCurrentProcessExplicitAppUserModelID(name) >= 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# Ярлык со своим AppUserModelID: по нему панель задач Windows 11 берёт значок. №453 (01.11, Windows 11 26H2): «на панели
+# задач значок Python, а не Dewiar» — одного ID процесса и WM_SETICON мало: кнопки на панели (они там всегда
+# сгруппированы) показывают значок ПРИЛОЖЕНИЯ, а его Windows ищет по ID среди ярлыков меню «Пуск»; не нашла — берёт
+# значок программы процесса, pythonw.exe. Установщик (NSIS) ID ярлыку записать не умеет — записываем сами при запуске.
+
+class GUID(ctypes.Structure):                       # размеры явно: 16 байт (как в Windows) на любой платформе
+    _fields_ = [("d1", ctypes.c_uint32), ("d2", ctypes.c_uint16), ("d3", ctypes.c_uint16), ("d4", ctypes.c_ubyte * 8)]
+
+
+class PROPERTYKEY(ctypes.Structure):
+    _fields_ = [("fmtid", GUID), ("pid", ctypes.c_uint32)]
+
+
+class PROPVARIANT(ctypes.Structure):                 # 24 байта на 64-битной Windows: тип, 3 запасных слова, значение
+    _fields_ = [("vt", wintypes.USHORT), ("r1", wintypes.WORD), ("r2", wintypes.WORD), ("r3", wintypes.WORD),
+                ("val", ctypes.c_void_p), ("val2", ctypes.c_void_p)]
+
+
+def guid(text):
+    import uuid
+    u, g = uuid.UUID(text), GUID()
+    g.d1, g.d2, g.d3 = u.fields[0], u.fields[1], u.fields[2]
+    g.d4[:] = list(u.bytes[8:])
+    return g
+
+
+IID_IPropertyStore = "886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"
+PKEY_AppUserModel_ID = ("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3", 5)
+VT_LPWSTR, GPS_READWRITE = 31, 2
+
+
+def link_app_id(path, aumid=APP_ID):
+    """Записать ярлыку .lnk System.AppUserModel.ID (IPropertyStore ярлыка; уже такой — не трогаем).
+    -> True (записан или уже был), False (не вышло)."""
+    shell32, ole32 = ctypes.WinDLL("shell32"), ctypes.WinDLL("ole32")
+    f = shell32.SHGetPropertyStoreFromParsingName
+    f.argtypes = [wintypes.LPCWSTR, ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p)]
+    f.restype = ctypes.c_long
+    ole32.CoInitializeEx.argtypes, ole32.CoInitializeEx.restype = [ctypes.c_void_p, wintypes.DWORD], ctypes.c_long
+    ole32.PropVariantClear.argtypes = [ctypes.POINTER(PROPVARIANT)]
+    init = ole32.CoInitializeEx(None, 2)                     # COINIT_APARTMENTTHREADED — зовём из своего потока
+    ps, iid = ctypes.c_void_p(), guid(IID_IPropertyStore)
+    try:
+        if f(str(path), None, GPS_READWRITE, ctypes.byref(iid), ctypes.byref(ps)) < 0 or not ps.value:
+            return False
+        vt = ctypes.cast(ps, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents     # таблица методов объекта
+
+        def method(i, *args, res=ctypes.c_long):
+            return ctypes.WINFUNCTYPE(res, ctypes.c_void_p, *args)(vt[i])
+        release = method(2, res=ctypes.c_ulong)              # IUnknown: 0 QueryInterface, 1 AddRef, 2 Release
+        try:
+            get_value = method(5, ctypes.POINTER(PROPERTYKEY), ctypes.POINTER(PROPVARIANT))     # IPropertyStore:
+            set_value = method(6, ctypes.POINTER(PROPERTYKEY), ctypes.POINTER(PROPVARIANT))     # 3 GetCount, 4 GetAt,
+            commit = method(7)                                                                  # 5 Get, 6 Set, 7 Commit
+            key = PROPERTYKEY(guid(PKEY_AppUserModel_ID[0]), PKEY_AppUserModel_ID[1])
+            cur = PROPVARIANT()
+            if get_value(ps, ctypes.byref(key), ctypes.byref(cur)) >= 0:
+                now = ctypes.wstring_at(cur.val) if cur.vt == VT_LPWSTR and cur.val else ""
+                ole32.PropVariantClear(ctypes.byref(cur))
+                if now == aumid:
+                    return True
+            buf = ctypes.create_unicode_buffer(aumid)
+            pv = PROPVARIANT()
+            pv.vt, pv.val = VT_LPWSTR, ctypes.addressof(buf)
+            return set_value(ps, ctypes.byref(key), ctypes.byref(pv)) >= 0 and commit(ps) >= 0
+        finally:
+            release(ps)
+    finally:
+        if init >= 0:
+            ole32.CoUninitialize()
+
+
+def dewiar_links():
+    """Ярлыки Dewiar, по которым панель задач узнаёт приложение: «Пуск» (пользователя и общий) и закреплённый на панели."""
+    out = []
+    for env, sub in (("APPDATA", r"Microsoft\Windows\Start Menu\Programs\Dewiar.lnk"),
+                     ("PROGRAMDATA", r"Microsoft\Windows\Start Menu\Programs\Dewiar.lnk"),
+                     ("APPDATA", r"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\Dewiar.lnk")):
+        base = os.environ.get(env)
+        if base:
+            p = Path(base) / sub
+            if p.exists():
+                out.append(p)
+    return out
+
+
+def links_app_id(aumid=APP_ID):
+    """Всем найденным ярлыкам Dewiar — наш ID (в своём потоке: COM). -> сколько ярлыков в порядке."""
+    n = 0
+    for p in dewiar_links():
+        try:
+            n += bool(link_app_id(p, aumid))
+        except Exception as e:  # noqa: BLE001 — общий «Пуск» без прав администратора и т. п.: не главное
+            print(f"Ярлык {p.name}: ID не записан ({e})", file=sys.stderr)
+    return n
 
 
 def tool_window(h):
@@ -385,7 +600,7 @@ class NOTIFYICONDATAW(ctypes.Structure):
 
 
 def _api():
-    u, s, k = ctypes.windll.user32, ctypes.windll.shell32, ctypes.windll.kernel32
+    u, s, k = ctypes.WinDLL("user32"), ctypes.WinDLL("shell32"), ctypes.WinDLL("kernel32")    # свои — см. user32 выше
     u.DefWindowProcW.restype = LRESULT
     u.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
     u.RegisterClassExW.restype = wintypes.ATOM

@@ -15,6 +15,16 @@ function renderProfiles() {
   const profs = S.llm.profiles || {};
   profSig = JSON.stringify([S.llm.active, profs]);
   if (!Object.keys(profs).length) box.innerHTML = '<p class="hint" style="margin-bottom:10px">Пока ни одной — выберите выше, где будет думать ассистент.</p>';
+  // №479 (02.11: «в „Мозге“ выбрана первая, хотя выбирал вторую; у персонажей всё верно — какое-то эфемерное общее подключение?»):
+  // отмеченная здесь — общая, для персонажей без своей; у кого своя — так и пишем, с моделью
+  const own = (typeof personas !== "undefined" ? personas : []).filter(p => typeof brainOf === "function" && brainOf(p.id) && profs[brainOf(p.id)]);
+  const old = document.getElementById("prof-note"); if (old) old.remove();
+  if (Object.keys(profs).length > 1 || own.length) {               // над списком, а не в нём: .prof:first-child — первый профиль
+    const n = document.createElement("p"); n.className = "hint prof-note"; n.id = "prof-note"; n.style.margin = "0 0 10px";
+    n.textContent = "Отмеченная — общая: ею думают персонажи без своей модели."
+      + (own.length ? " Свои: " + own.map(p => `${p.name} — «${brainName(profs[brainOf(p.id)], brainOf(p.id))}»`).join(", ") + " (меняется в «Персонажи» → персонаж → «Мозг»)." : "");
+    box.before(n);
+  }
   Object.entries(profs).forEach(([id, p]) => {
     const el = document.createElement("div"); el.className = "prof" + (S.llm.active === id ? " on" : "") + (openProf === id ? " open" : ""); el.dataset.id = id;
     el.innerHTML = `<div class="head"><input type="radio" name="act" ${S.llm.active === id ? "checked" : ""} title="Сделать активной"><div class="t"><b></b><small></small></div><span class="res"></span><button class="btn small">Настроить</button></div>

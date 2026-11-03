@@ -17,6 +17,7 @@ import asyncio
 import hmac
 import json
 import logging
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -37,6 +38,27 @@ def _probe_noise(rec):
 
 
 logging.getLogger("websockets.server").addFilter(_probe_noise)
+
+# Размер одного сообщения из интерфейса (файлы и картинки — base64 внутри JSON). №473/№474 (01.11): «нет связи с
+# ядром — вопрос вернул в поле»: человек приложил к вопросу выгрузку переписки — несколько файлов, вместе больше
+# прежнего предела 16 МБ; websockets на такое молча рвёт связь (код 1009), окно видит «нет связи», ядро — ничего.
+# Теперь связь рвётся только на совсем огромном (MSG_HARD), а всё, что больше MSG_MAX, получает ответ-отказ словами —
+# связь остаётся, вопрос возвращается в поле с понятной причиной.
+MSG_MAX = 96 * 1024 * 1024
+MSG_HARD = 256 * 1024 * 1024
+_ID_RX = re.compile(r'"id"\s*:\s*(\d+)')
+
+
+def too_big(raw):
+    """Сообщение больше MSG_MAX -> ответ-отказ (с id вызова, если он в начале — так шлёт ui/assets/dewiar.js) или None."""
+    n = len(raw)
+    if n <= MSG_MAX:
+        return None
+    head = raw[:200].decode("utf-8", "replace") if isinstance(raw, (bytes, bytearray)) else raw[:200]
+    m = _ID_RX.search(head)
+    return {"type": "reply", "id": int(m.group(1)) if m else None, "ok": False,
+            "error": f"вложения слишком большие для одного сообщения ({n // 1048576} МБ, можно до {MSG_MAX // 1048576} МБ) — "
+                     "приложите меньше файлов за раз или положите их в папку ассистента и попросите прочитать оттуда"}
 
 
 class Bridge:
@@ -75,7 +97,7 @@ class Bridge:
             from websockets.asyncio.server import serve
         except ImportError:                                  # websockets < 13: нового модуля asyncio.server ещё нет
             from websockets import serve
-        async with serve(self._client, self.host, self.port, max_size=16 * 1024 * 1024):   # 16 МБ: файлы и картинки из интерфейса
+        async with serve(self._client, self.host, self.port, max_size=MSG_HARD):
             log.info("Интерфейс может подключаться: ws://%s:%d", self.host, self.port)
             self.ready.set()
             await asyncio.Future()
@@ -116,13 +138,21 @@ class Bridge:
             self.clients.add(ws)
             self.seen = True
             async for raw in ws:
+                big = too_big(raw)
+                if big is not None:
+                    log.warning("Сообщение из интерфейса %d МБ — больше предела, отказ", len(raw) // 1048576)
+                    await ws.send(json.dumps(big, ensure_ascii=False))
+                    continue
                 try:
                     msg = json.loads(raw)
                 except ValueError:
                     continue
                 asyncio.ensure_future(self._reply(ws, msg))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            # связь оборвалась не по нашей воле (например, сообщение больше MSG_HARD) — в журнал: иначе «нет связи с
+            # ядром» в окне и ни строчки у ядра (№473)
+            if type(e).__name__ not in ("ConnectionClosedOK",):
+                log.info("Связь с окном оборвалась: %s", e)
         finally:
             self.clients.discard(ws)
 

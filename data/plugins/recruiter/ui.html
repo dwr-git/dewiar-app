@@ -1,0 +1,398 @@
+<!doctype html>
+<!-- Своя страница плагина «Рекрутер» (03.11, владелец: «если это плагин Резюме — значит там реально можно закидывать
+     резюме, оно будет подбирать и сравнивать… как в образце», его AI Recruiter: загрузка анкет перетаскиванием, каталог
+     карточками, карточка кандидата с правкой, подбор под вакансию турниром, сравнение двоих).
+     Студия показывает страницу во фрейме-песочнице; связь — только window.dewiar: run(действие, аргументы) — действия
+     ЭТОГО плагина (recruit_board / import / get / edit / update / vacancy / tournament / compare / add), open(путь) — файл
+     резюме, ask(фраза) — Лире в «Чат» (объяснить и сравнить словами). Всё остальное работает без модели.
+     Всё, что пришло из резюме, выводится только через esc() — текст резюме не может стать разметкой. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Рекрутер</title>
+<style>
+  :root { --amber: #F2A65A; --ok: var(--good, #4BE3A1); --no: var(--bad, #FF6B8A); --gold: #F5C451; --silver: #C8D0DC; --bronze: #D99A6C; }
+  body { padding: 2px 2px 30px; }
+  .muted { color: var(--muted); } .dim { color: var(--dim); }
+  /* загрузка */
+  .drop { position: relative; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 16px 20px; border-radius: 20px;
+    background: var(--panel); outline: 2px dashed color-mix(in srgb, var(--amber) 45%, transparent); outline-offset: -8px; transition: background .2s, outline-color .2s; margin: 0 0 14px; }
+  .drop.over { background: color-mix(in srgb, var(--amber) 16%, var(--panel)); outline-color: var(--amber); }
+  .drop .ico { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font-size: 24px; background: color-mix(in srgb, var(--amber) 22%, transparent); }
+  .drop b { display: block; font-size: 15px; } .drop small { color: var(--muted); font-size: 12.5px; }
+  .drop .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .drop.big { grid-template-columns: 1fr; text-align: center; padding: 44px 24px; justify-items: center; }
+  .drop.big .ico { width: 72px; height: 72px; font-size: 36px; border-radius: 22px; }
+  .drop.big b { font-size: 18px; margin-top: 4px; } .drop.big .acts { justify-content: center; margin-top: 8px; }
+  .queue { display: grid; gap: 4px; margin: -6px 0 14px; }
+  .queue div { display: flex; gap: 10px; align-items: center; font-size: 13px; padding: 6px 12px; border-radius: 10px; background: var(--soft, rgba(255,255,255,.05)); }
+  .queue span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .queue em { font-style: normal; font-size: 12px; color: var(--muted); } .queue .ok em { color: var(--ok); } .queue .bad em { color: var(--no); }
+  /* вкладки */
+  .tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 14px; background: var(--soft, rgba(255,255,255,.06)); margin: 0 0 14px; flex-wrap: wrap; }
+  .tabs button { border: 0; background: none; color: var(--muted); font-weight: 650; font-size: 13.5px; padding: 8px 16px; border-radius: 11px; cursor: pointer; }
+  .tabs button:hover { color: var(--ink); } .tabs button.on { background: var(--brand); color: #fff; }
+  .tabs button i { font-style: normal; opacity: .75; margin-left: 4px; font-weight: 700; }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; }
+  .funnel { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 240px; }
+  .funnel .chip b { font-weight: 700; margin-left: 5px; opacity: .75; }
+  .search { width: 230px; max-width: 100%; }
+  /* каталог */
+  .layout { display: grid; grid-template-columns: minmax(290px, 380px) 1fr; gap: 14px; align-items: start; }
+  .list { display: grid; gap: 8px; max-height: 1200px; overflow: auto; padding: 2px; }
+  .cand { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; text-align: left; border: 0; cursor: pointer; color: var(--ink);
+    background: var(--panel); border-radius: 16px; padding: 12px 14px; transition: background .15s, box-shadow .15s; }
+  .cand:hover { background: var(--panel2); }
+  .cand.cur { box-shadow: inset 0 0 0 1.5px var(--amber); background: var(--panel2); }
+  .cand.cmp { box-shadow: inset 0 0 0 1.5px #8FB8FF; }
+  .cand .who { min-width: 0; padding-right: 54px; }
+  .cand .who b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cand .who small { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cand .pills { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .tech { font-size: 11px; padding: 1px 7px; border-radius: 7px; background: var(--soft, rgba(255,255,255,.07)); color: var(--muted); }
+  .cand .corner { position: absolute; right: 10px; top: 10px; display: flex; gap: 4px; align-items: center; }
+  .vs { border: 0; width: 26px; height: 26px; border-radius: 9px; cursor: pointer; background: var(--soft, rgba(255,255,255,.07)); color: var(--muted); font-size: 13px; opacity: 0; transition: opacity .15s; }
+  .cand:hover .vs, .vs.on { opacity: 1; } .vs.on { background: #8FB8FF; color: #10131c; }
+  .ava { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #fff;
+    background: linear-gradient(150deg, hsl(var(--h) 70% 58%), hsl(calc(var(--h) + 40) 60% 42%)); flex: none; grid-row: span 2; }
+  .ava.big { width: 68px; height: 68px; border-radius: 22px; font-size: 23px; }
+  .stage { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--soft, rgba(255,255,255,.08)); color: var(--muted); white-space: nowrap; }
+  .stage.st-интересен { color: #8FB8FF; } .stage.st-собеседование { color: var(--amber); } .stage.st-оффер, .stage.st-принят { color: var(--ok); } .stage.st-отказ { color: var(--no); }
+  .hon { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+  .hon.good { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); } .hon.warn { color: var(--amber); background: color-mix(in srgb, var(--amber) 15%, transparent); }
+  .hon.bad { color: var(--no); background: color-mix(in srgb, var(--no) 15%, transparent); }
+  .pct { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 38%, transparent) calc(var(--v) * 1%), var(--soft, rgba(255,255,255,.08)) 0); }
+  /* карточка */
+  .detail { min-height: 460px; }
+  .dh { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; margin-bottom: 12px; }
+  .dh h1 { margin: 0; font-size: 21px; } .dh p { margin: 2px 0 0; color: var(--muted); }
+  .stages { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 13px; background: var(--soft, rgba(255,255,255,.06)); margin: 2px 0 12px; }
+  .stages button { border: 0; background: none; color: var(--muted); padding: 6px 12px; border-radius: 10px; cursor: pointer; font-size: 12.5px; font-weight: 650; }
+  .stages button:hover { color: var(--ink); } .stages button.on { background: var(--brand); color: #fff; }
+  .stages button.on.st-отказ { background: color-mix(in srgb, var(--no) 70%, #000); }
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; margin: 0 0 14px; }
+  .facts div { background: var(--soft, rgba(255,255,255,.05)); border-radius: 12px; padding: 8px 12px; min-width: 0; }
+  .facts dt { font-size: 11.5px; color: var(--dim); } .facts dd { margin: 0; font-weight: 650; font-size: 13.5px; overflow-wrap: anywhere; }
+  .box { border-radius: 16px; padding: 14px 16px; margin: 0 0 12px; background: var(--soft, rgba(255,255,255,.05)); }
+  .box h3 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .flags { margin: 0; padding-left: 18px; color: var(--amber); } .flags li { margin: 0 0 4px; }
+  .okline { color: var(--ok); font-size: 13.5px; margin: 0; }
+  .meter { height: 9px; border-radius: 6px; background: var(--soft2, rgba(255,255,255,.1)); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--amber), var(--ok)); width: calc(var(--v) * 1%); transition: width .5s; }
+  .big { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .big small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 8px; }
+  .tags span { font-size: 12px; padding: 2px 9px; border-radius: 8px; }
+  .tags.has span { background: color-mix(in srgb, var(--ok) 18%, transparent); } .tags.miss span { background: color-mix(in srgb, var(--no) 14%, transparent); color: var(--muted); }
+  .crit { display: grid; grid-template-columns: 140px 1fr 34px; gap: 7px 10px; align-items: center; font-size: 13px; margin-top: 10px; }
+  .notes { display: grid; gap: 6px; margin: 0 0 10px; } .notes div { font-size: 13px; } .notes small { color: var(--dim); margin-right: 6px; }
+  .noteadd { display: flex; gap: 8px; } .noteadd input { flex: 1; }
+  details.resume summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  details.resume pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 inherit; font-family: inherit; margin: 10px 0 0; max-height: 520px; overflow: auto; }
+  .edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 12px; margin: 0 0 12px; }
+  .edit label { display: grid; gap: 5px; font-size: 12.5px; color: var(--muted); }
+  /* подбор */
+  .vacs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+  .vform { display: grid; gap: 8px; }
+  .vform textarea { min-height: 110px; }
+  .gobar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; align-items: end; }
+  .pod { border: 0; text-align: center; cursor: pointer; color: var(--ink); background: var(--panel); border-radius: 20px; padding: 18px 14px 16px; position: relative; }
+  .pod:hover { background: var(--panel2); }
+  .pod.p1 { order: 2; padding-top: 28px; box-shadow: 0 16px 40px -22px var(--gold), inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 55%, transparent); }
+  .pod.p2 { order: 1; } .pod.p3 { order: 3; }
+  .pod .medal { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #1a1a1a; }
+  .p1 .medal { background: var(--gold); } .p2 .medal { background: var(--silver); } .p3 .medal { background: var(--bronze); }
+  .pod .ava { margin: 0 auto 8px; } .pod b { display: block; } .pod small { color: var(--muted); font-size: 12px; display: block; }
+  .pod .big { margin: 8px 0 2px; }
+  .rank td.c { text-align: center; } .rank tbody tr { cursor: pointer; } .rank tbody tr:hover td { background: var(--soft, rgba(255,255,255,.04)); }
+  .rank .bar2 { display: flex; align-items: center; gap: 8px; min-width: 120px; } .rank .bar2 .meter { flex: 1; height: 7px; }
+  .rank tr.out td { opacity: .6; }
+  .tw { overflow-x: auto; border-radius: 14px; background: var(--soft, rgba(255,255,255,.04)); }
+  .bracket { display: flex; gap: 14px; overflow-x: auto; padding: 4px 2px 8px; }
+  .round { min-width: 230px; display: flex; flex-direction: column; gap: 10px; justify-content: space-around; }
+  .round h4 { margin: 0 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .battle { background: var(--panel); border-radius: 14px; padding: 8px 10px; font-size: 13px; }
+  .battle .s { display: flex; justify-content: space-between; gap: 8px; padding: 3px 4px; border-radius: 8px; }
+  .battle .s.w { background: color-mix(in srgb, var(--ok) 15%, transparent); font-weight: 700; }
+  .battle .s span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .battle p { margin: 6px 4px 0; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  /* сравнение */
+  .cmpsel { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin: 0 0 12px; }
+  .vsb { font-weight: 900; color: var(--muted); }
+  .heads { display: grid; grid-template-columns: 1fr minmax(160px, 260px) 1fr; gap: 12px; align-items: stretch; margin: 10px 0 14px; }
+  .verdict { align-self: center; }
+  .head { text-align: center; background: var(--panel); border-radius: 20px; padding: 16px 12px; }
+  .head.win { box-shadow: inset 0 0 0 1.5px var(--gold), 0 14px 36px -22px var(--gold); }
+  .head .ava { margin: 0 auto 8px; } .head small { color: var(--muted); display: block; }
+  .badge { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: var(--gold); color: #1a1a1a; }
+  .verdict { text-align: center; } .verdict b { display: block; font-size: 15px; } .verdict p { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+  .ptab td.w { background: color-mix(in srgb, var(--ok) 12%, transparent); font-weight: 650; }
+  .ptab td.w::after { content: " ✓"; color: var(--ok); }
+  .advs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .advs ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .empty { text-align: center; padding: 34px 24px; border-radius: 20px; background: var(--panel); color: var(--muted); }
+  .empty b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 4px; }
+  .msg { font-size: 13px; color: var(--muted); min-height: 0; margin: 0 0 10px; } .msg:empty { display: none; }
+  .msg.bad { color: var(--no); } .msg.ok { color: var(--ok); }
+  [hidden] { display: none !important; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } .list { max-height: none; } .podium { grid-template-columns: 1fr; } .pod { order: 0 !important; }
+    .heads { grid-template-columns: 1fr; } .cmpsel { grid-template-columns: 1fr; } .advs { grid-template-columns: 1fr; } .drop { grid-template-columns: 1fr; } .drop .acts { justify-content: flex-start; } }
+</style>
+</head>
+<body>
+<div class="drop" id="drop">
+  <span class="ico" aria-hidden="true">📥</span>
+  <div><b>Перетащите резюме сюда</b><small>PDF, Word, RTF, ODT, текст, HTML или ZIP-архив — разберу контакты, стаж, должность, ожидания и что стоит уточнить. Файлы копируются в <span id="inbox">папку резюме</span>.</small></div>
+  <div class="acts"><button class="btn primary" id="pick">Выбрать файлы</button><button class="btn ghost" id="scan" title="Разобрать новые файлы из папки резюме">Разобрать папку</button></div>
+  <input type="file" id="file" multiple hidden accept=".pdf,.docx,.odt,.rtf,.txt,.md,.html,.htm,.zip">
+</div>
+<div class="queue" id="queue" hidden></div>
+<p class="msg" id="msg" aria-live="polite"></p>
+<div id="app" hidden>
+  <div class="tabs" role="tablist"><button data-tab="cat" class="on">Кандидаты<i id="n-cat"></i></button><button data-tab="pick">Подбор под вакансию</button><button data-tab="cmp">Сравнение двоих</button></div>
+  <section id="t-cat">
+    <div class="bar"><div class="funnel" id="funnel" aria-label="Этапы"></div><input type="search" class="search" id="q" placeholder="Имя, должность, навык, город"></div>
+    <div class="layout"><div class="list" id="list"></div><div class="card detail" id="detail"></div></div>
+  </section>
+  <section id="t-pick" hidden>
+    <div class="card">
+      <div class="vacs" id="vacs"></div>
+      <div class="vform">
+        <input type="text" id="vt" placeholder="Должность — например, Бухгалтер">
+        <textarea id="vx" placeholder="Текст вакансии: требования и условия. Например: «1С 8.3, налоговая отчётность, опыт от трёх лет, Минск, английский B1»"></textarea>
+        <div class="gobar"><button class="btn primary" id="go">Подобрать лучших кандидатов</button><span class="dim" id="pool"></span></div>
+      </div>
+    </div>
+    <div id="res"></div>
+  </section>
+  <section id="t-cmp" hidden>
+    <div class="card">
+      <div class="cmpsel"><select id="ca"></select><span class="vsb">VS</span><select id="cb"></select></div>
+      <div class="gobar"><label class="muted" for="cv">Под вакансию</label><select id="cv" style="width:auto;min-width:200px"></select><button class="btn primary" id="cgo">Сравнить</button></div>
+    </div>
+    <div id="cres"></div>
+  </section>
+</div>
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const st = { board: null, tab: "cat", stage: "", q: "", cur: "", vac: "", cmp: [], tour: null, edit: false };
+  const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+  const ini = (n) => String(n || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  const ava = (id, name, big) => `<span class="ava${big ? " big" : ""}" style="--h:${hue(id)}" aria-hidden="true">${esc(ini(name))}</span>`;
+  const hon = (n) => n == null ? "" : `<span class="hon ${n >= 80 ? "good" : n >= 50 ? "warn" : "bad"}" title="Честность анкеты: чем меньше нестыковок, тем выше">${n >= 80 ? "✓" : "⚠"} ${n}</span>`;
+  const cname = (id) => ((st.board && st.board.cands.find(c => c.id === id)) || {}).name || "—";
+  const msg = (t, kind) => { const m = $("#msg"); m.textContent = t || ""; m.className = "msg" + (kind ? " " + kind : ""); };
+  async function run(tool, args) { const r = await dewiar.run(tool, args || {}); if (!r.ok) throw new Error(r.error || "не получилось"); return r.data; }
+  const exp = (m) => m ? `${Math.floor(m / 12)} г. ${m % 12} мес.` : "";
+
+  /* ---------- данные ---------- */
+  async function load() {
+    try { st.board = await run("recruit_board"); } catch (e) { msg(e.message, "bad"); return; }
+    const b = st.board, have = b.cands.length;
+    $("#inbox").textContent = b.folder ? `«${b.folder}»` : "папку плагина";
+    $("#drop").classList.toggle("big", !have); $("#app").hidden = !have;
+    $("#n-cat").textContent = have ? have : "";
+    if (!b.vacancies.some(v => v.id === st.vac)) st.vac = (b.vacancies[0] || {}).id || "";
+    st.cmp = st.cmp.filter(id => b.cands.some(c => c.id === id));
+    if (!have) return;
+    renderFunnel(); renderList(); renderVacs(); renderCmpSel();
+    if (!st.cur || !b.cands.some(c => c.id === st.cur)) st.cur = (visible()[0] || b.cands[0]).id;
+    if (st.tab === "cat") openCand(st.cur, true);
+  }
+  function setTab(t) {
+    st.tab = t; $$(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+    ["cat", "pick", "cmp"].forEach(k => { $("#t-" + k).hidden = k !== t; });
+    if (t === "cat" && st.cur) openCand(st.cur, true);
+  }
+
+  /* ---------- загрузка резюме ---------- */
+  const b64 = (f) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = () => no(r.error); r.readAsDataURL(f); });
+  async function upload(files) {
+    files = [...files].filter(f => f && f.size >= 0); if (!files.length) return;
+    const q = $("#queue"); q.hidden = false;
+    q.innerHTML = files.map((f, i) => `<div data-i="${i}"><span>${esc(f.name)}</span><em>в очереди</em></div>`).join("");
+    let added = 0, known = 0, bad = 0, last = "";
+    for (let i = 0; i < files.length; i++) {
+      const row = $(`[data-i="${i}"]`, q), em = $("em", row), f = files[i];
+      em.innerHTML = `<span class="spin"></span> разбираю…`;
+      try {
+        if (f.size > 15 * 1024 * 1024 && !/\.zip$/i.test(f.name)) throw new Error("больше 15 МБ");
+        const d = await run("recruit_import", { files: [{ name: f.name, b64: await b64(f) }] });
+        const n = (d.added || []).length;
+        if (n) { added += n; last = d.added[0].id; row.className = "ok"; em.textContent = n > 1 ? `✓ добавлено ${n}` : `✓ ${d.added[0].name}`; }
+        else if (d.already_known) { known += d.already_known; row.className = ""; em.textContent = "уже в базе"; }
+        else { bad++; row.className = "bad"; em.textContent = ((d.problems || [])[0] || "не получилось").replace(/^[^:]+:\s*/, ""); }
+      } catch (e) { bad++; row.className = "bad"; em.textContent = e.message; }
+    }
+    msg(added ? `Готово: добавлено ${added}${known ? `, уже были ${known}` : ""}${bad ? `, не получилось ${bad}` : ""}.` : known && !bad ? "Эти резюме уже в базе." : "Новых резюме нет.", added ? "ok" : bad ? "bad" : "");
+    if (last) { st.cur = last; st.tab = "cat"; }
+    await load(); if (last) setTab("cat");
+    setTimeout(() => { $("#queue").hidden = true; }, $("#queue .bad") ? 15000 : 6000);
+  }
+  const drop = $("#drop");
+  ["dragenter", "dragover"].forEach(ev => document.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => document.addEventListener(ev, (e) => { e.preventDefault(); if (ev === "drop" || !e.relatedTarget) drop.classList.remove("over"); }));
+  document.addEventListener("drop", (e) => { if (e.dataTransfer && e.dataTransfer.files.length) upload(e.dataTransfer.files); });
+  $("#pick").onclick = () => $("#file").click();
+  $("#file").onchange = (e) => { upload(e.target.files); e.target.value = ""; };
+  $("#scan").onclick = async () => {
+    const b = $("#scan"); b.disabled = true; b.innerHTML = `<span class="spin"></span> Разбираю…`;
+    try { const d = await run("recruit_add"); const n = (d.added || []).length;
+      msg(n ? `Из папки добавлено резюме: ${n}${d.already_known ? `, уже были: ${d.already_known}` : ""}.` : `Новых резюме в папке нет${d.already_known ? ` — все ${d.already_known} уже в базе` : ""}.`, n ? "ok" : "");
+      if (n) st.cur = d.added[0].id; await load(); }
+    catch (e) { msg(e.message, "bad"); }
+    b.disabled = false; b.textContent = "Разобрать папку";
+  };
+
+  /* ---------- каталог ---------- */
+  function renderFunnel() {
+    const cs = st.board.cands, by = {}; cs.forEach(c => { by[c.stage] = (by[c.stage] || 0) + 1; });
+    $("#funnel").innerHTML = `<button class="chip ${st.stage ? "" : "on"}" data-s="">Все<b>${cs.length}</b></button>` + st.board.stages.filter(s => by[s])
+      .map(s => `<button class="chip ${st.stage === s ? "on" : ""}" data-s="${esc(s)}">${esc(s[0].toUpperCase() + s.slice(1))}<b>${by[s]}</b></button>`).join("");
+    $$("#funnel .chip").forEach(b => b.onclick = () => { st.stage = b.dataset.s; renderFunnel(); renderList(); });
+  }
+  function visible() {
+    let cs = st.board.cands.slice();
+    if (st.stage) cs = cs.filter(c => c.stage === st.stage);
+    if (st.q) { const q = st.q.toLowerCase(); cs = cs.filter(c => [c.name, c.position, c.city, c.file, (c.tech || []).join(" "), (c.languages || []).join(" ")].join(" ").toLowerCase().includes(q)); }
+    return cs;
+  }
+  function renderList() {
+    const cs = visible();
+    $("#list").innerHTML = cs.length ? cs.map(c => `<div class="cand ${c.id === st.cur ? "cur" : ""} ${st.cmp.includes(c.id) ? "cmp" : ""}" data-id="${esc(c.id)}" role="button" tabindex="0">
+        ${ava(c.id, c.name)}<span class="who"><b>${esc(c.name)}</b><small>${esc(c.position || "должность не указана")}</small><small>${esc([c.age ? c.age + " лет" : "", c.city, c.experience ? "опыт " + c.experience : ""].filter(Boolean).join(" · "))}</small></span>
+        <span class="pills"><span class="stage st-${esc(c.stage)}">${esc(c.stage)}</span>${hon(c.honesty)}${(c.tech || []).slice(0, 3).map(t => `<span class="tech">${esc(t)}</span>`).join("")}</span>
+        <span class="corner">${c.best_score != null ? `<span class="pct" style="--v:${+c.best_score}" title="Оценка Лиры">${+c.best_score}</span>` : ""}<button class="vs ${st.cmp.includes(c.id) ? "on" : ""}" data-vs="${esc(c.id)}" title="${st.cmp.includes(c.id) ? "Убрать из сравнения" : "Сравнить (нужно двое)"}" aria-label="Сравнить">⚖</button></span></div>`).join("")
+      : `<div class="empty"><b>Никого не нашлось</b>Снимите фильтр или поменяйте слова поиска.</div>`;
+    $$("#list .cand").forEach(b => { b.onclick = (e) => { if (e.target.closest(".vs")) return; st.edit = false; openCand(b.dataset.id); }; b.onkeydown = (e) => { if (e.key === "Enter") b.click(); }; });
+    $$("#list .vs").forEach(b => b.onclick = () => { const id = b.dataset.vs;
+      st.cmp = st.cmp.includes(id) ? st.cmp.filter(x => x !== id) : st.cmp.concat(id).slice(-2); renderList(); renderCmpSel();
+      if (st.cmp.length === 2) { msg("Двое выбраны — открываю сравнение.", "ok"); setTab("cmp"); compare(); } else if (st.cmp.length === 1) msg("Отметьте ⚖ ещё одного — и сравню двоих."); });
+  }
+  const FACTS = [["phone", "Телефон"], ["email", "Почта"], ["telegram", "Telegram"], ["city", "Город"], ["age", "Возраст"], ["experience", "Стаж"], ["salary", "Ожидания"], ["languages", "Языки"], ["file", "Файл"], ["added", "Добавлен"]];
+  async function openCand(id, quiet) {
+    st.cur = id; $$("#list .cand").forEach(b => b.classList.toggle("cur", b.dataset.id === id));
+    const box = $("#detail"); if (!quiet) box.innerHTML = `<p class="muted"><span class="spin"></span> Открываю резюме…</p>`;
+    let c; try { c = await run("recruit_get", { id }); } catch (e) { box.innerHTML = `<p class="msg bad">${esc(e.message)}</p>`; return; }
+    if (st.cur !== id) return;
+    c.experience = exp(c.exp_months);
+    const b = st.board.cands.find(x => x.id === id) || {}, vn = Object.fromEntries(st.board.vacancies.map(v => [v.id, v.title]));
+    const sc = c.scores || {}, mine = st.tour && st.tour.ranking.find(r => r.id === id);
+    box.innerHTML = `<div class="dh">${ava(id, c.name || c.file, true)}<div><h1>${esc(c.name || c.file)}</h1><p>${esc([c.position, c.experience].filter(Boolean).join(" · ") || "Должность не указана")}</p></div></div>
+      <div class="stages" role="radiogroup" aria-label="Этап">${st.board.stages.map(s => `<button class="st-${esc(s)} ${c.stage === s ? "on" : ""}" data-stage="${esc(s)}" role="radio" aria-checked="${c.stage === s}">${esc(s)}</button>`).join("")}</div>
+      <div class="acts">${c.path ? `<button class="btn" id="d-open">Открыть оригинал</button>` : ""}<button class="btn" id="d-edit">${st.edit ? "Отмена" : "Поправить"}</button>
+        <button class="btn ghost" id="d-reparse" title="Заново достать факты из текста резюме">Переразобрать</button><button class="btn ghost" id="d-vs">⚖ Сравнить</button>
+        <button class="btn" id="d-qs" title="Лира подготовит вопросы в «Чате»">Вопросы к собеседованию</button><button class="btn ghost" id="d-del">Удалить</button></div>
+      ${st.edit ? `<div class="box"><h3>Карточка</h3><div class="edit">${[["name", "Имя", c.name], ["position", "Должность", c.position], ["phone", "Телефон", c.phone], ["email", "Почта", c.email], ["telegram", "Telegram", c.telegram],
+          ["city", "Город", c.city], ["age", "Возраст", c.age], ["exp_years", "Стаж, лет", c.exp_months ? +(c.exp_months / 12).toFixed(1) : ""], ["salary", "Ожидания", c.salary], ["languages", "Языки (через запятую)", (c.languages || []).join(", ")]]
+          .map(([k, l, v]) => `<label>${l}<input type="text" data-f="${k}" value="${esc(v ?? "")}"></label>`).join("")}</div><div class="acts" style="margin:0"><button class="btn primary" id="d-save">Сохранить</button></div></div>` : ""}
+      <dl class="facts">${FACTS.filter(([k]) => c[k] != null && c[k] !== "" && !(Array.isArray(c[k]) && !c[k].length)).map(([k, l]) => `<div><dt>${l}</dt><dd>${esc(Array.isArray(c[k]) ? c[k].join(", ") : c[k])}</dd></div>`).join("")}</dl>
+      <div class="box"><h3>Уточнить на собеседовании ${hon(b.honesty)}</h3>${(c.flags || []).length ? `<ul class="flags">${c.flags.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : `<p class="okline">✓ Явных нестыковок в анкете нет</p>`}</div>
+      ${mine ? `<div class="box"><h3>Под «${esc(st.tour.vacancy.title)}» · место ${st.tour.ranking.indexOf(mine) + 1} из ${st.tour.ranking.length}</h3><div class="big">${mine.total}<small> из 100</small></div>
+          <div class="crit">${Object.entries(mine.breakdown).map(([k, n]) => `<span class="muted">${esc(st.tour.criteria[k] || k)}</span><div class="meter"><i style="--v:${+n}"></i></div><b>${Math.round(n)}</b>`).join("")}</div>
+          ${mine.has.length ? `<p class="muted" style="margin:12px 0 0">Есть из требований</p><div class="tags has">${mine.has.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+          ${mine.missing.length ? `<p class="muted" style="margin:6px 0 0">Не видно в резюме</p><div class="tags miss">${mine.missing.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}</div>` : ""}
+      ${Object.entries(sc).map(([vid, s]) => `<div class="box"><h3>Оценка Лиры · ${esc(vn[vid] || "вакансия")}</h3><div class="big">${esc(s.total)}<small> из 100</small></div>
+          <div class="crit">${Object.entries(s.breakdown || {}).map(([k, n]) => `<span class="muted">${esc((st.board.criteria || {})[k] || k)}</span><div class="meter"><i style="--v:${+n}"></i></div><b>${Math.round(n)}</b>`).join("")}</div>
+          ${s.summary ? `<p style="margin:10px 0 0">${esc(s.summary)}</p>` : ""}</div>`).join("")}
+      <div class="box"><h3>Заметки</h3><div class="notes">${(c.notes || []).slice(-12).reverse().map(n => `<div><small>${esc(n.at)}</small>${esc(n.text)}</div>`).join("") || `<span class="dim">Пока пусто.</span>`}</div>
+        <div class="noteadd"><input type="text" id="d-note" placeholder="Созвонились, ждёт оффер до пятницы…"><button class="btn small" id="d-noteok">Добавить</button></div></div>
+      <details class="resume box"><summary>Текст резюме</summary><pre>${esc(c.text || "")}</pre></details>`;
+    $$("#detail [data-stage]").forEach(x => x.onclick = () => update({ id, stage: x.dataset.stage }, `Этап: ${x.dataset.stage}`));
+    if ($("#d-open")) $("#d-open").onclick = () => dewiar.open(c.path).catch(e => msg(e.message, "bad"));
+    $("#d-edit").onclick = () => { st.edit = !st.edit; openCand(id, true); };
+    if ($("#d-save")) $("#d-save").onclick = async () => { const fields = {}; $$("#detail [data-f]").forEach(i => { fields[i.dataset.f] = i.value; });
+      try { await run("recruit_edit", { id, fields }); st.edit = false; msg("Карточка сохранена", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
+    $("#d-reparse").onclick = async () => { try { await run("recruit_edit", { id, reparse: true }); msg("Переразобрано из текста резюме", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
+    $("#d-vs").onclick = () => { if (!st.cmp.includes(id)) st.cmp = st.cmp.concat(id).slice(-2); renderList(); renderCmpSel(); if (st.cmp.length === 2) { setTab("cmp"); compare(); } else msg("Отметьте ⚖ ещё одного — и сравню двоих."); };
+    $("#d-qs").onclick = () => dewiar.ask(`Вопросы к собеседованию с кандидатом ${c.name || c.file}`).catch(e => msg(e.message, "bad"));
+    let sure = false;
+    $("#d-del").onclick = () => { if (!sure) { sure = true; $("#d-del").textContent = "Точно удалить?"; $("#d-del").classList.remove("ghost"); return; } update({ id, remove: true }, "Кандидат удалён", true); };
+    const addNote = () => { const t = $("#d-note").value.trim(); if (t) update({ id, note: t }, "Заметка добавлена"); };
+    $("#d-noteok").onclick = addNote; $("#d-note").onkeydown = (e) => { if (e.key === "Enter") addNote(); };
+  }
+  async function update(args, done, gone) {
+    try { await run("recruit_update", args); msg(done, "ok"); if (gone) { st.cur = ""; st.cmp = st.cmp.filter(i => i !== args.id); } await load(); }
+    catch (e) { msg(e.message, "bad"); }
+  }
+
+  /* ---------- подбор под вакансию: оценка всех, турнир лучших, тройка ---------- */
+  function renderVacs() {
+    const vs = st.board.vacancies;
+    $("#vacs").innerHTML = vs.map(v => `<button class="chip ${v.id === st.vac ? "on" : ""}" data-v="${esc(v.id)}">${esc(v.title)}</button>`).join("") + `<button class="chip" data-v="">+ Новая вакансия</button>`;
+    $$("#vacs .chip").forEach(b => b.onclick = () => { st.vac = b.dataset.v; st.tour = null; $("#res").innerHTML = ""; renderVacs(); fillVac(); });
+    fillVac(); renderCmpSel();
+    $("#pool").textContent = `В базе: ${st.board.cands.filter(c => c.stage !== "отказ").length} (без «отказа»)`;
+  }
+  function fillVac() { const v = st.board.vacancies.find(x => x.id === st.vac); $("#vt").value = v ? v.title : ""; $("#vx").value = v ? v.text : ""; }
+  async function tournament() {
+    const title = $("#vt").value.trim(), text = $("#vx").value.trim();
+    if (!title && !text) { $("#vt").focus(); msg("Напишите должность и требования — и подберу лучших.", "bad"); return; }
+    const go = $("#go"); go.disabled = true; go.innerHTML = `<span class="spin"></span> Оцениваю и сравниваю…`;
+    try {
+      const v = st.board.vacancies.find(x => x.id === st.vac);
+      if (!v || v.title !== title || v.text !== text) { const d = await run("recruit_vacancy", { title: title || text.slice(0, 60), text, id: v && v.title === title ? v.id : "" }); st.vac = d.id; }
+      st.tour = await run("recruit_tournament", { vacancy: st.vac });
+      await load(); renderTour(); msg("");
+    } catch (e) { msg(e.message, "bad"); }
+    go.disabled = false; go.textContent = "Подобрать лучших кандидатов";
+  }
+  function renderTour() {
+    const t = st.tour; if (!t) return;
+    const R = Object.fromEntries(t.ranking.map(r => [r.id, r])), pod = t.podium.map(id => R[id]).filter(Boolean);
+    const cell = (n) => `<td class="c">${Math.round(n)}</td>`;
+    $("#res").innerHTML = `<h2 style="margin:20px 0 4px">Лучшие под «${esc(t.vacancy.title)}»</h2>
+      <p class="muted" style="margin:0">${t.vacancy.need_years ? `Нужен опыт от ${t.vacancy.need_years} лет. ` : ""}Оценка по пяти критериям — без модели, одинаково для всех; итог по весам: навыки 40, опыт 30, формат 13, образование 10, языки 7.</p>
+      <div class="podium">${pod.map((r, i) => `<button class="pod p${i + 1}" data-id="${esc(r.id)}"><span class="medal">${i + 1}</span>${ava(r.id, r.name)}<b>${esc(r.name)}</b><small>${esc(r.position || (r.years != null ? `опыт ${r.years} г.` : ""))}</small>
+          <div class="big">${r.total}</div><small>из 100 · ${hon(r.honesty)}</small></button>`).join("")}</div>
+      <div class="acts"><button class="btn" id="why">Попросить Лиру объяснить выбор</button>${pod.length > 1 ? `<button class="btn ghost" id="top2">⚖ Сравнить первых двух</button>` : ""}</div>
+      <h3 style="margin:18px 0 8px">Рейтинг <span class="dim" style="font-weight:500">${t.ranking.length}</span></h3>
+      <div class="tw"><table class="rank"><thead><tr><th>#</th><th>Кандидат</th><th>Балл</th>${Object.values(t.criteria).map(c => `<th class="c">${esc(c[0].toUpperCase() + c.slice(1))}</th>`).join("")}<th class="c">Честность</th><th>Этап</th></tr></thead>
+        <tbody>${t.ranking.map((r, i) => `<tr data-id="${esc(r.id)}" class="${t.in_bracket.includes(r.id) ? "" : "out"}"><td>${i + 1}</td><td><b>${esc(r.name)}</b>${r.lira != null ? ` <span class="pct" style="--v:${r.lira}" title="Оценка Лиры">Лира ${r.lira}</span>` : ""}</td>
+          <td><div class="bar2"><div class="meter"><i style="--v:${r.total}"></i></div><b>${r.total}</b></div></td>${Object.keys(t.criteria).map(k => cell(r.breakdown[k])).join("")}<td class="c">${hon(r.honesty)}</td><td><span class="stage st-${esc(r.stage)}">${esc(r.stage)}</span></td></tr>`).join("")}</tbody></table></div>
+      ${t.rounds.length ? `<h3 style="margin:18px 0 8px">Турнир лучших — попарно</h3><div class="bracket">${t.rounds.map(rd => `<div class="round"><h4>${esc(rd.name)}</h4>${rd.battles.map(b => `<div class="battle">
+          <div class="s ${b.winner === b.a ? "w" : ""}"><span>${esc(cname(b.a))}</span><b>${R[b.a] ? R[b.a].total : ""}</b></div>
+          ${b.b ? `<div class="s ${b.winner === b.b ? "w" : ""}"><span>${esc(cname(b.b))}</span><b>${R[b.b] ? R[b.b].total : ""}</b></div>` : ""}
+          <p>${esc(b.reason)}</p></div>`).join("")}</div>`).join("")}</div>` : ""}`;
+    $$("#res [data-id]").forEach(x => x.onclick = () => { st.cur = x.dataset.id; st.edit = false; renderList(); setTab("cat"); });
+    $("#why").onclick = () => dewiar.ask(`Подбор под вакансию «${t.vacancy.title}»: лучшие — ${pod.map(r => `${r.name} (${r.total})`).join(", ")}. Прочитай их резюме и объясни, кого звать первым и почему`).catch(e => msg(e.message, "bad"));
+    if ($("#top2")) $("#top2").onclick = () => { st.cmp = [pod[0].id, pod[1].id]; renderList(); renderCmpSel(); setTab("cmp"); compare(); };
+  }
+
+  /* ---------- сравнение двоих ---------- */
+  function renderCmpSel() {
+    const cs = st.board.cands, opt = (sel) => cs.map(c => `<option value="${esc(c.id)}" ${c.id === sel ? "selected" : ""}>${esc(c.name)}${c.position ? " — " + esc(c.position) : ""}</option>`).join("");
+    const a = st.cmp[0] || (cs[0] || {}).id, b = st.cmp[1] || (cs.find(c => c.id !== a) || {}).id;
+    $("#ca").innerHTML = opt(a); $("#cb").innerHTML = opt(b);
+    $("#cv").innerHTML = st.board.vacancies.map(v => `<option value="${esc(v.id)}" ${v.id === st.vac ? "selected" : ""}>${esc(v.title)}</option>`).join("") || `<option value="">— вакансий нет —</option>`;
+  }
+  async function compare() {
+    const a = $("#ca").value, b = $("#cb").value;
+    if (!a || !b || a === b) { msg("Выберите двух разных кандидатов.", "bad"); return; }
+    st.cmp = [a, b]; renderList();
+    $("#cres").innerHTML = `<p class="muted"><span class="spin"></span> Сравниваю…</p>`;
+    let r; try { r = await run("recruit_compare", { a, b, vacancy: $("#cv").value }); } catch (e) { $("#cres").innerHTML = `<p class="msg bad">${esc(e.message)}</p>`; return; }
+    const head = (x, side) => `<div class="head ${r.winner === side ? "win" : ""}">${ava(x.id, x.name, true)}<b>${esc(x.name)}</b><small>${esc(x.position || "")}</small><div class="big" style="margin-top:6px">${x.total}<small> из 100</small></div>${r.winner === side ? `<span class="badge">🏆 Рекомендован</span>` : ""}</div>`;
+    $("#cres").innerHTML = `<div class="heads">${head(r.a, "A")}<div class="verdict"><b>${r.close ? "Почти вровень" : esc((r.winner === "A" ? r.a : r.b).name) + " сильнее"}</b><p>${esc(r.reason)}</p><p>Вакансия: ${esc(r.vacancy.title)}</p></div>${head(r.b, "B")}</div>
+      <div class="tw"><table class="ptab"><thead><tr><th>Параметр</th><th>${esc(r.a.name)}</th><th>${esc(r.b.name)}</th><th>Комментарий</th></tr></thead><tbody>
+        ${r.parameters.map(p => `<tr><td class="muted">${esc(p.name)}</td><td class="${p.winner === "A" ? "w" : ""}">${esc(p.a_value)}</td><td class="${p.winner === "B" ? "w" : ""}">${esc(p.b_value)}</td><td class="dim">${esc(p.comment)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="advs"><div class="box"><h3>Где сильнее — ${esc(r.a.name)}</h3>${r.a_advantages.length ? `<ul>${r.a_advantages.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<span class="dim">—</span>`}</div>
+        <div class="box"><h3>Где сильнее — ${esc(r.b.name)}</h3>${r.b_advantages.length ? `<ul>${r.b_advantages.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<span class="dim">—</span>`}</div></div>
+      <div class="acts" style="margin-top:4px"><button class="btn primary" id="cask">Попросить Лиру сравнить словами</button></div>`;
+    $("#cask").onclick = () => dewiar.ask(`Сравни кандидатов ${r.a.name} и ${r.b.name} под вакансию «${r.vacancy.title}»: прочитай оба резюме, кого звать первым и почему`).catch(e => msg(e.message, "bad"));
+  }
+
+  $$(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  $("#q").oninput = () => { st.q = $("#q").value.trim(); renderList(); };
+  $("#go").onclick = tournament;
+  $("#cgo").onclick = compare;
+  load();
+})();
+</script>
+</body>
+</html>

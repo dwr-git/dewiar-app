@@ -340,6 +340,7 @@ ED.addEventListener("keydown", (e) => {
   if (mod && (k === "k" || k === "л")) { e.preventDefault(); cmd("link"); return; }
   if (mod && (k === "s" || k === "ы")) { e.preventDefault(); saveNow(); return; }
   if (k === "Tab") { const b = block(); if (b && b.tagName === "LI") { e.preventDefault(); document.execCommand(e.shiftKey ? "outdent" : "indent"); changed(); } else { e.preventDefault(); document.execCommand("insertText", false, "    "); } return; }
+  if ((k === "Backspace" || k === "Delete" || k === "Enter") && !mod && preKey(k, e)) return;
   if (k === "Enter" && !e.shiftKey) {
     const b = block();
     if (b && b.tagName === "LI" && b.classList.contains("task")) setTimeout(() => { const n = block(); if (n && n !== b && n.tagName === "LI") { n.classList.add("task"); n.setAttribute("data-done", "0"); } }, 0);
@@ -359,6 +360,46 @@ ED.addEventListener("keydown", (e) => {
     changed();
   }
 });
+/* Блок «Код» (№466, 01.11: «добавил блок „Код“ — и его никак не удалить, он только двигается по странице»): Backspace в
+   пустом блоке оставлял его на месте, а Delete втягивал в блок следующий абзац. Теперь как в привычных редакторах:
+   Backspace в начале блока — снова обычный текст (строки — абзацами), Delete в пустом — блок убран, Enter на пустой
+   последней строке — выход из блока абзацем ниже; кнопка «Код» в блоке — убирает его (preUnwrap). */
+const preText = (el) => (el.innerText || el.textContent || "").replace(/\u200b/g, "");
+function preUnwrap(pre) {
+  const lines = preText(pre).replace(/\n$/, "").split("\n");
+  const ps = lines.map(l => { const p = document.createElement("p"); if (l) p.textContent = l; else p.innerHTML = "<br>"; return p; });
+  pre.replaceWith(...ps);
+  caretIn(ps[0]); return ps[0];
+}
+function preKey(k, e) {
+  const b = block(); if (!b || b.tagName !== "PRE") return false;
+  const sel = getSelection(); if (!sel.rangeCount || !sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0);
+  const before = r.cloneRange(); before.selectNodeContents(b); before.setEnd(r.startContainer, r.startOffset);
+  const after = r.cloneRange(); after.selectNodeContents(b); after.setStart(r.endContainer, r.endOffset);
+  const empty = !preText(b).trim();
+  const atStart = !before.toString().replace(/\u200b/g, "") && !before.cloneContents().querySelector("br");
+  const atEnd = !after.toString().replace(/\u200b/g, "").trim();
+  if (k === "Backspace" && (empty || atStart)) {
+    e.preventDefault();
+    if (empty) { const p = document.createElement("p"); p.innerHTML = "<br>"; b.replaceWith(p); caretIn(p); status("Блок кода убран — Ctrl+Z вернёт", ""); }
+    else { preUnwrap(b); status("Блок кода — снова обычный текст", ""); }
+    ensureP(); blank(); changed(); return true;
+  }
+  if (k === "Delete" && empty) {
+    e.preventDefault();
+    const nx = b.nextElementSibling;
+    if (nx) { b.remove(); caretIn(nx); } else { const p = document.createElement("p"); p.innerHTML = "<br>"; b.replaceWith(p); caretIn(p); }
+    status("Блок кода убран — Ctrl+Z вернёт", ""); ensureP(); blank(); changed(); return true;
+  }
+  if (k === "Enter" && !e.shiftKey && atEnd && !empty && /\n\s*$/.test(before.toString() + (before.cloneContents().lastChild && before.cloneContents().lastChild.nodeName === "BR" ? "\n" : ""))) {
+    e.preventDefault();                                // пустая последняя строка + Enter — выйти из блока
+    while (b.lastChild && (b.lastChild.nodeName === "BR" || (b.lastChild.nodeType === 3 && !b.lastChild.nodeValue.replace(/[\n\u200b]/g, "")))) b.lastChild.remove();
+    const last = b.lastChild; if (last && last.nodeType === 3) last.nodeValue = last.nodeValue.replace(/\n+$/, "");
+    const p = document.createElement("p"); p.innerHTML = "<br>"; b.after(p); caretIn(p); changed(); return true;
+  }
+  return false;
+}
 /* Markdown на лету — сами, через DOM: execCommand в WebKitGTK (Ubuntu) ставил список не туда, а текст оставался рядом */
 function shortcut(b, t) {
   let left = t.length;                                // убрать «- » из начала строки
@@ -486,7 +527,11 @@ async function cmd(c) {
       else { const t = b.tagName === "LI" ? b.parentNode : b; const nq = document.createElement("blockquote"); t.replaceWith(nq); nq.appendChild(t); caretIn(t.tagName === "P" ? t : b); }
     }
   }
-  else if (c === "code") { const s = getSelection(); const t = s ? s.toString() : ""; if (t && !t.includes("\n")) insertHtml(`<code>${t.replace(/</g, "&lt;")}</code>&nbsp;`); else document.execCommand("formatBlock", false, "pre"); }
+  else if (c === "code") {
+    const s = getSelection(); const t = s ? s.toString() : ""; const b = block(), pre = b && b.closest("pre");
+    if (pre && ED.contains(pre)) { preUnwrap(pre); status("Блок кода — снова обычный текст", ""); }   // №466: «Код» в блоке — убрать блок
+    else if (t && !t.includes("\n")) insertHtml(`<code>${t.replace(/</g, "&lt;")}</code>&nbsp;`); else document.execCommand("formatBlock", false, "pre");
+  }
   tidy(); changed();
 }
 $$("#tools .tool[data-c]").forEach(b => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => cmd(b.dataset.c); });

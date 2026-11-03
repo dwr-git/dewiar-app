@@ -5,6 +5,7 @@
 Числа в кадрах: один кадр — FRAME_S (32 мс), т. е. 31 кадр ≈ 1 с. Готовая фраза уходит в handle_text,
 дальше — ask() в engine_answer.py."""
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
+from stt import stt_error_text
 
 VOSK_RETRY_MIN = float(os.environ.get("DEWIAR_VOSK_RETRY_MIN") or 30)   # голоса Vosk не скачались — повтор через столько минут
 
@@ -148,11 +149,22 @@ class AudioMixin:
             ok = self.stt.load(on_progress=lambda f: self._dl("stt", f))
             self._loaded("stt")
             self.status["stt_ready"] = ok
-            self.note("" if ok else f"GigaAM не загрузился: {self.gigaam.error}. Работаю на Vosk.")
+            self.note("" if ok else self._gigaam_fail_text(self.stt.error))
             if not ok:
                 self._names_note()
         self.ensure_voice(self.s.get("persona"))
         self.health_mark("full")                               # загрузилось всё: распознавание и голос персонажа
+
+    @staticmethod
+    def _gigaam_fail_text(err):
+        """Почему точное распознавание не запустилось и что делать — словами (№455/№464: раньше человек видел только
+        «No module named 'onnx_asr'», а распознавание тихо становилось хуже)."""
+        err = str(err or "")
+        if "библиотеки" in err:
+            import pydeps
+            return (f"Точное распознавание речи (GigaAM) не запустилось: {err}. Пока слушаю запасной моделью — она ошибается "
+                    f"чаще. Починить: {pydeps.fix_hint()}. Или распознавание через облако: студия → «Слух» → «Dewiar Облако».")
+        return f"GigaAM не загрузился: {err}. Работаю на Vosk."
 
     # ---------- модели на этом компьютере: что скачано и кнопка «Скачать» (студия «Слух» и «Голос») ----------
     # Отзыв 19.10: в «Слухе и голосе» непонятно, что уже скачано и что ещё будет качаться. Каждая модель — строкой:
@@ -987,17 +999,33 @@ class AudioMixin:
             try:
                 t = stt.transcribe(part).strip()
             except Exception as e:  # noqa: BLE001
-                if self.vosk_stt is None:
-                    log.warning("%s не распознал кусок диктовки: %s", stt.name, e)
-                    self.note(f"Не распознал: {e}")
+                spare = self._stt_spare(stt, e, "кусок диктовки")
+                if spare is None:
                     continue
-                log.warning("%s не распознал кусок диктовки: %s — пробую Vosk", stt.name, e)
-                t = self.vosk_stt.transcribe(part).strip()
+                t = spare.transcribe(part).strip()
             if t:
                 out.append(t)
         return " ".join(out)
 
     # ---------- распознавание ----------
+
+    def _stt_spare(self, stt, e, what=""):
+        """Основной распознаватель не справился -> чем распознать эту фразу (или None) и, раз в 10 минут, — что случилось
+        словами. №455 (01.11): свой сервер распознавания после переустановки отвечал 500 (на нём не хватало onnx_asr),
+        а Лира молча переходила на маленький Vosk — «эйра сколько время» вместо «Лира, сколько время», и человек не
+        понимал почему. Теперь запасной — точный GigaAM на этом компьютере, если он уже загружен, иначе Vosk; и
+        подсказка: сервер ответил ошибкой — проверьте его или выберите другое распознавание."""
+        g = getattr(self, "gigaam", None)
+        spare = g if g is not None and g is not stt and getattr(g, "ready", False) else self.vosk_stt
+        spare = None if spare is stt else spare
+        log.warning("%s не распознал%s: %s%s", stt.name, " " + what if what else "", e,
+                    f" — пробую {getattr(spare, 'name', 'запасной')}" if spare is not None else "")
+        now = time.monotonic()
+        if now - getattr(self, "_stt_err_at", -1e9) >= 600 or spare is None:
+            self._stt_err_at = now
+            self.note(stt_error_text(stt, e, spare))
+        return spare
+
 
     def _stt_worker(self):
         """Поток stt: фразы из stt_q → текст → handle_text. Элемент очереди: (pcm, by_wake, follow[, pid]) —
@@ -1015,13 +1043,8 @@ class AudioMixin:
                 try:
                     text = stt.transcribe(pcm).strip()
                 except Exception as e:  # noqa: BLE001
-                    if self.vosk_stt is None:
-                        log.warning("%s не распознал: %s", stt.name, e)
-                        self.note(f"Не распознал: {e}")
-                        text = ""
-                    else:
-                        log.warning("%s не распознал: %s — пробую Vosk", stt.name, e)
-                        text = self.vosk_stt.transcribe(pcm).strip()
+                    spare = self._stt_spare(stt, e)
+                    text = spare.transcribe(pcm).strip() if spare is not None else ""
             text = self._lang2(pcm, text)
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("stt")

@@ -20,6 +20,7 @@ import socket
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 from pathlib import Path
@@ -27,14 +28,47 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / "core"))
-from settings import SETTINGS_PATH, WS_PORT, ensure_token, migrate_from_cortex  # noqa: E402
-from version import VERSION as UI_VERSION  # noqa: E402 — версия, с которой запущен этот процесс
-
 WIN = os.name == "nt"
-if WIN:
-    import winshell  # noqa: E402
-else:
-    import fcntl  # noqa: E402
+CRASH_NAME = "dewiar-ui-crash.txt"     # %TEMP%: сбой интерфейса до журнала — его подбирает диагностика (doctor.py)
+
+
+def fatal_box(e, where="запуск"):
+    """№471, №472 (02.11, Windows 10, «Dewiar не запускается», журналов нет вовсе): интерфейс — pythonw без консоли;
+    упади он до своего журнала — человек не видит ничего. Теперь: текст ошибки — в %TEMP%\\dewiar-ui-crash.txt (его
+    кладёт в отчёт диагностика) и окно Windows с подсказкой, что делать. Не Windows — только печать в stderr."""
+    import traceback
+    txt = f"{time.strftime('%Y-%m-%d %H:%M:%S')} {where}: {e}\n" + "".join(traceback.format_exception(e))
+    if not WIN:
+        print(txt, file=sys.stderr)
+        return txt
+    try:
+        import tempfile
+        with open(Path(tempfile.gettempdir()) / CRASH_NAME, "a", encoding="utf-8") as f:
+            f.write(txt + "\n")
+    except OSError:
+        pass
+    try:
+        import ctypes
+        ctypes.WinDLL("user32").MessageBoxW(
+            None, f"Dewiar не запустился: {e}\n\nЧто делать: меню «Пуск» → «Dewiar — инструменты» → «Диагностика — если Dewiar "
+                  "не запускается» — она соберёт отчёт для разработчика. Часто помогает переустановка Dewiar; если стоит "
+                  "антивирус — добавьте папку Dewiar в его исключения.", "Dewiar", 0x10 | 0x40000 | 0x10000)
+    except Exception:  # noqa: BLE001
+        pass
+    return txt
+
+
+try:
+    from settings import SETTINGS_PATH, WS_PORT, ensure_token, migrate_from_cortex  # noqa: E402
+    from version import VERSION as UI_VERSION  # noqa: E402 — версия, с которой запущен этот процесс
+    if WIN:
+        import winshell  # noqa: E402
+    else:
+        import fcntl  # noqa: E402
+except Exception as _e:  # noqa: BLE001
+    if __name__ == "__main__":
+        fatal_box(_e, "загрузка")
+    raise
 
 # Два непрозрачных окна: карточка и значок (переключение — set_mode). Скругление — формой окна (X Shape на Linux,
 # SetWindowRgn на Windows), тень рисует сама система (GNOME даёт тень непрозрачным окнам без рамки). Прозрачное
@@ -146,7 +180,7 @@ def uptime_s():
     try:
         if WIN:
             import ctypes
-            f = ctypes.windll.kernel32.GetTickCount64
+            f = ctypes.WinDLL("kernel32").GetTickCount64     # своя копия: общий windll.* делим с pywebview (№476)
             f.restype = ctypes.c_ulonglong
             return f() / 1000.0
         return float(Path("/proc/uptime").read_text().split()[0])
@@ -214,6 +248,77 @@ def composited_x11():
         Gtk.init_check([])
         scr = Gdk.Screen.get_default()
         return bool(scr is not None and scr.is_composited() and scr.get_rgba_visual() is not None)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def wayland_gdk():
+    """Окна GTK этого процесса — прямо на Wayland (не через XWayland)?"""
+    try:
+        from gi.repository import Gdk
+        return type(Gdk.Display.get_default()).__name__.startswith("Wayland")
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def blurry_from(features, scales):
+    """Растянет ли GNOME окна XWayland (размытый текст): дробный масштаб монитора включён (scale-monitor-framebuffer),
+    родного масштаба для XWayland нет (xwayland-native-scaling — GNOME 47+) и у какого-то монитора масштаб не 1.
+    features — вывод gsettings, scales — масштабы мониторов. -> наибольший масштаб или 0."""
+    f = str(features or "")
+    if "scale-monitor-framebuffer" not in f or "xwayland-native-scaling" in f:
+        return 0
+    big = max([float(x) for x in scales or [] if x] or [0])
+    return big if big > 1.01 else 0
+
+
+MUTTER_SCALE_RX = re.compile(r"\(\s*-?\d+,\s*-?\d+,\s*(?:double\s+)?([0-9.]+),\s*(?:uint32\s+)?\d+,\s*(?:true|false)")
+
+
+def xwayland_blurry():
+    """№442 (31.10, Ubuntu 24.04, монитор 4K): «шрифт нечёткий, пиксели размазаны». Виджет и студия ради «поверх всех»
+    и положения окна работают через XWayland (ui.force_x11), а GNOME с дробным масштабом (125–175 %, и любым — при
+    включённом scale-monitor-framebuffer) рисует такие окна в масштабе 1 и растягивает картинкой. -> масштаб, если это
+    наш случай, иначе 0. Масштаб — из ~/.config/monitors.xml, нет его — у mutter (DisplayConfig.GetCurrentState)."""
+    if not os.environ.get("WAYLAND_DISPLAY") or "GNOME" not in (os.environ.get("XDG_CURRENT_DESKTOP") or "").upper():
+        return 0
+    try:
+        feat = subprocess.run(["gsettings", "get", "org.gnome.mutter", "experimental-features"], capture_output=True,
+                              text=True, timeout=3).stdout
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    if "scale-monitor-framebuffer" not in feat:
+        return 0
+    scales = []
+    try:
+        scales = re.findall(r"<scale>\s*([0-9.]+)\s*</scale>", (Path.home() / ".config/monitors.xml").read_text(errors="replace"))
+    except OSError:
+        pass
+    if not scales:
+        try:
+            out = subprocess.run(["gdbus", "call", "--session", "--dest", "org.gnome.Mutter.DisplayConfig", "--object-path",
+                                  "/org/gnome/Mutter/DisplayConfig", "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState"],
+                                 capture_output=True, text=True, timeout=3).stdout
+            scales = MUTTER_SCALE_RX.findall(out)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return blurry_from(feat, scales)
+
+
+def wayland_blur_hint(scale):
+    """№442: окна через XWayland будут размытыми — один раз сказать, как сделать текст чётким (студия → «Оформление»)."""
+    _ui_log(f"окна: XWayland при масштабе {scale:g} — GNOME растягивает их, текст размыт (чётко: ui.wayland_sharp)")
+    try:
+        from settings import STATE_DIR
+        mark = STATE_DIR / "wayland-blur-told"
+        if mark.exists():
+            return False
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.write_text(str(scale))
+        subprocess.Popen(["notify-send", "-a", "Dewiar", "Dewiar: текст может быть размытым",
+                          f"У экрана масштаб {round(scale * 100)} %, и GNOME растягивает окно Dewiar. Чёткий текст: студия → "
+                          "«Оформление» → «Чёткий текст на Wayland»."], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
     except Exception:  # noqa: BLE001
         return False
 
@@ -603,7 +708,7 @@ def _win_clip_set(text):
     """Windows: текст в буфер + пометки для пароля (журнал Win+V и облачный буфер его не сохраняют)."""
     import ctypes
     from ctypes import wintypes
-    u32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
+    u32, k32 = ctypes.WinDLL("user32"), ctypes.WinDLL("kernel32")     # свои: argtypes общих windll.* видит и pywebview (№476)
     # 64-битные дескрипторы: без argtypes ctypes передаёт их как int — «int too long» (пакет 27.10: копирование в
     # сейфе молча не удавалось, страница копировала сама и через 30 с спрашивала WebView2 «разрешить читать буфер?»)
     k32.GlobalAlloc.restype = wintypes.HGLOBAL
@@ -643,7 +748,7 @@ def _win_clip_clear_if(text):
     """Windows: в буфере всё ещё этот пароль — стереть; уже другое — не трогать."""
     import ctypes
     from ctypes import wintypes
-    u32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
+    u32, k32 = ctypes.WinDLL("user32"), ctypes.WinDLL("kernel32")
     u32.GetClipboardData.restype = wintypes.HANDLE
     u32.GetClipboardData.argtypes = [wintypes.UINT]
     k32.GlobalLock.restype = ctypes.c_void_p
@@ -661,6 +766,27 @@ def _win_clip_clear_if(text):
                 u32.EmptyClipboard()
     finally:
         u32.CloseClipboard()
+
+
+def _topmost_ui(w, on):
+    """Windows: TopMost формы — только из её потока (Invoke). -> True, если сделано так; False — пусть делает pywebview."""
+    try:
+        from webview.platforms.winforms import BrowserView
+        from System import Action                     # noqa: PLC0415 — pythonnet есть только в Windows
+        f = BrowserView.instances.get(getattr(w, "uid", None))
+        if f is None:
+            return False
+
+        def _set():
+            f.TopMost = on
+        if f.InvokeRequired:
+            f.Invoke(Action(_set))
+        else:
+            _set()
+        w._Window__on_top = on                         # pywebview помнит значение у себя — держим в согласии
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 class Api:
@@ -824,6 +950,31 @@ class Api:
         self.move_to(mode, round(cx - d[1]), round(cy - d[2]))
         return True
 
+    def native_drag(self):
+        """Linux, окна на Wayland напрямую (ui.wayland_sharp, №442): двигать окно может только сам композитор —
+        страница тогда тащит виджет через drag_native, а не move_to. -> нужно ли так."""
+        return bool(not WIN and wayland_gdk())
+
+    def drag_native(self, mode="card"):
+        """Wayland: отдать перетаскивание композитору (gdk_window_begin_move_drag) — пока кнопка мыши ещё нажата.
+        Зовёт страница, когда указатель уже сдвинулся (иначе простое нажатие на облик не дошло бы до страницы)."""
+        if WIN:
+            return False
+        from gi.repository import Gtk
+
+        def run():
+            gw = self._gw(mode)
+            if gw is None or gw.get_window() is None:
+                return False
+            try:
+                ptr = gw.get_display().get_default_seat().get_pointer()
+                _, px, py = ptr.get_position()
+            except Exception:  # noqa: BLE001
+                px = py = 0
+            gw.begin_move_drag(1, px, py, Gtk.get_current_event_time())
+            return True
+        return bool(self._gtk(run))
+
     def move_to(self, mode, x, y):
         if mode == "card" and getattr(self, "_pad_on", False):     # блокнот едет вместе с карточкой
             self._pad_follow_at(x, y)
@@ -897,16 +1048,22 @@ class Api:
         import threading
 
         def run():
-            said = False
+            said, said_bd = False, False
             while True:
                 time.sleep(3)
                 try:
                     h = self._hwnd(self.mode) if self.mode in SIZES else None
-                    if h and winshell.visible(h) and not winshell.has_shape(h):
+                    if h and winshell.visible(h) and not winshell.shape_fits(h):     # нет формы или она от прежнего размера (№431)
                         winshell.shape(h, self.mode, card_r())
                         if not said:
                             said = True
                             _ui_log(f"виджет: форма окна слетела ({self.mode}) — поставлена заново")
+                    # №453/№458: pywebview возвращает фон Mica при смене темы Windows — тёмные углы; снимаем снова
+                    if h and winshell.visible(h) and winshell.backdrop_wrong(winshell.backdrop(h)):
+                        winshell.flat_frame(h)
+                        if not said_bd:
+                            said_bd = True
+                            _ui_log("виджет: подложка Windows 11 под формой окна (тёмные углы) — снята")
                 except Exception:  # noqa: BLE001
                     pass
         threading.Thread(target=run, name="win-shape", daemon=True).start()
@@ -1324,11 +1481,19 @@ class Api:
         return True
 
     def set_on_top(self, on):
-        """Идея №48: окно Лиры поверх всех окон — или как обычное окно (студия → «Оформление»; виджет зовёт при смене)."""
-        ON_TOP[0] = bool(on)
+        """Идея №48: окно Лиры поверх всех окон — или как обычное окно (студия → «Оформление»; виджет зовёт при смене).
+        №438 (31.10, Windows 11: «зависает сразу после запуска, окошко не передвинешь, после перезагрузки окна не видно;
+        0.67 — последняя рабочая»): pywebview ставит Form.TopMost прямо из потока вызова из страницы, а не из потока
+        окна — у кого «поверх» выключено, виджет при каждой загрузке звал это и окно повисало. Теперь: то же значение —
+        ничего не делаем; другое — в Windows через поток окна (Invoke)."""
+        on = bool(on)
+        if on == ON_TOP[0]:
+            return on
+        ON_TOP[0] = on
         for w in list(getattr(self, "wins", {}).values()):
             try:
-                w.on_top = ON_TOP[0]
+                if not (WIN and _topmost_ui(w, on)):
+                    w.on_top = on
             except Exception as e:  # noqa: BLE001
                 _ui_log(f"поверх окон: {e}")
         return ON_TOP[0]
@@ -3204,9 +3369,14 @@ def main():
     migrate_from_cortex()
     fresh = not SETTINGS_PATH.exists() or ui_settings().get("welcome") == ""   # первый запуск — откроем «Первые шаги»
     uis = ui_settings()
-    if uis.get("force_x11", True) and os.environ.get("WAYLAND_DISPLAY"):
+    blur = xwayland_blurry() if os.environ.get("WAYLAND_DISPLAY") else 0
+    if uis.get("force_x11", True) and not uis.get("wayland_sharp") and os.environ.get("WAYLAND_DISPLAY"):
         # На Wayland окно не может само держаться поверх других и двигаться — работаем через XWayland.
         os.environ.setdefault("GDK_BACKEND", "x11")
+        if blur:
+            wayland_blur_hint(blur)
+    elif blur:
+        _ui_log(f"окна: прямо на Wayland — текст чёткий при масштабе {blur:g} (ui.wayland_sharp)")
     os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")     # частая причина белых/чёрных окон на NVIDIA
     if not uis.get("gpu", False):
         # Программная отрисовка: ускоренный WebKitGTK на части систем неверно смешивает полупрозрачные
@@ -3328,6 +3498,8 @@ def main_win(args, extra):
     Свой номер процесса и «версия|папка» — в ui.pid / ui.ver: по ним следующий запуск решает, показать нас или
     сменить устаревший интерфейс, их же собирает диагностика (doctor.py). Нет WebView2 или виджет дважды не
     загрузился — работаем без окон: значок в трее + студия в браузере."""
+    winshell.dpi_aware()   # масштаб экрана — до любого окна (значок в трее раньше pywebview), иначе окна растянуты картинкой
+    winshell.app_id()      # №260, №453: ID приложения — до любого окна (и до значка в трее), иначе панель задач — под Python
     sig = winshell.signal_path()
     from settings import STATE_DIR
     me = f"{UI_VERSION}|{ROOT}"
@@ -3369,7 +3541,8 @@ def main_win(args, extra):
     fresh = not SETTINGS_PATH.exists() or ui_settings().get("welcome") == ""   # первый запуск — откроем «Первые шаги»
     uis = ui_settings()
     icon = ROOT / "icons" / "dewiar.ico"
-    winshell.app_id()                                      # №260: окна на панели задач — под знаком Dewiar, а не Python
+    import threading as _th2
+    _th2.Thread(target=winshell.links_app_id, name="lnk-appid", daemon=True).start()   # №453: ярлыкам «Пуска» — тот же ID
 
     def studio_in_browser():
         os.startfile(api._url("settings.html"))  # noqa: S606 — адрес http://127.0.0.1:… открывает браузер по умолчанию
@@ -3457,9 +3630,20 @@ def main_win(args, extra):
         def watch():
             while True:
                 time.sleep(0.2)                    # сочетание «Закинуть идею» — окно должно появиться сразу
-                if sig.exists():
+                try:
+                    if not sig.exists():
+                        continue
                     what = sig.read_text(encoding="utf-8").strip()
                     sig.unlink()
+                except OSError as e:
+                    # №457 (журнал): временная папка на RAM-диске пропала — «WinError 1005», и сторож умирал: повторный
+                    # запуск Dewiar больше не показывал виджет («не запускается»). Ошибку пишем раз и ждём дальше.
+                    if not getattr(watch, "said", False):
+                        watch.said = True
+                        print(f"Сигнал «покажись»: {e}", file=sys.stderr)
+                    time.sleep(2)
+                    continue
+                try:
                     if what == "capture":
                         api.show_capture()
                         continue
@@ -3467,7 +3651,9 @@ def main_win(args, extra):
                     if what.startswith("settings"):
                         q = what[len("settings"):]
                         api.open_settings("connect" if q else "", q)
-        threading.Thread(target=watch, daemon=True).start()
+                except Exception as e:  # noqa: BLE001 — окно не показалось — в журнал, сторож живёт дальше
+                    print(f"Сигнал «покажись» ({what}): {e}", file=sys.stderr)
+        threading.Thread(target=watch, name="show-signal", daemon=True).start()
         threading.Thread(target=page_guard, daemon=True).start()
 
     def remember_fail(n):
@@ -3485,7 +3671,8 @@ def main_win(args, extra):
         (ассистент работает) и считаем сбой (remember_fail); загрузилась — счётчик сбоев обнуляем."""
         res = ""
         for pause in (10, 15, 25):
-            time.sleep(pause)
+            if WV2_FAIL.wait(pause):
+                return wv2_broken()
             box = {}
 
             def probe():
@@ -3530,7 +3717,27 @@ def main_win(args, extra):
                              "и пришлите снимок отчёта. Выйти из Dewiar — значок в трее (возле часов) → «Выход».")
         studio_in_browser()
 
+    def wv2_broken():
+        """№469 (02.11, Windows 10): WebView2 записан в реестре (150.0…), а запустить его нельзя — «Couldn't find a
+        compatible Webview2 Runtime installation… FileNotFoundException» (файлы среды удалены, например программой
+        «удаления Edge»). pywebview только пишет это в журнал: окна оставались пустыми, закрыть их было нечем, и через
+        минуту человек выходил — «Dewiar не запускается». Теперь окна убираем, говорим прямо, что сломано и как починить,
+        студия — в браузере, ассистент слушает."""
+        print("WebView2 не запустился (среда повреждена или удалена) — окна скрыты, студия в браузере", file=sys.stderr)
+        for w in list(api.wins.values()):
+            try:
+                w.hide()
+            except Exception:  # noqa: BLE001
+                pass
+        if winshell.ask_yes_no(WV2_BROKEN_TEXT, "Dewiar — окно не открылось"):
+            try:
+                os.startfile(WV2_URL)  # noqa: S606 — страница загрузки WebView2 у Microsoft
+            except OSError:
+                pass
+        studio_in_browser()
+
     print(f"Виджет: {api._url('hud.html').split('?')[0]}", file=sys.stderr)
+    wv2_fail_watch()
     wv2_registry_fix()
     try:
         webview.start(on_start, gui="edgechromium", debug=bool(os.environ.get("DEWIAR_UI_DEBUG")))
@@ -3540,6 +3747,33 @@ def main_win(args, extra):
         studio_in_browser()
         threading.Event().wait()
     api.quit_all()
+
+
+WV2_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"      # установщик среды WebView2 (Evergreen) у Microsoft
+WV2_BROKEN_TEXT = ("Окно Dewiar не открылось: компонент Windows «Microsoft Edge WebView2», в котором рисуются окна, на этом "
+                   "компьютере повреждён или удалён (так бывает после программ, которые «удаляют Edge»).\n\n"
+                   "Ассистент работает и слушает, настройки откроются в браузере.\n\n"
+                   "Установить WebView2 заново? Откроется страница Microsoft: скачайте установщик, запустите его, "
+                   "затем перезапустите Dewiar.")
+WV2_FAIL = threading.Event()          # «WebView2 не запустился»: pywebview ошибку не поднимает, только пишет в журнал
+
+
+def wv2_fail_watch():
+    """Слушать журнал pywebview: «WebView2 initialization failed» -> WV2_FAIL (№469)."""
+    import logging
+
+    class H(logging.Handler):
+        def emit(self, rec):
+            try:
+                if "WebView2 initialization failed" in rec.getMessage():
+                    WV2_FAIL.set()
+            except Exception:  # noqa: BLE001
+                pass
+    lg = logging.getLogger("pywebview")
+    if not any(type(h).__name__ == "H" and getattr(h, "_dewiar", False) for h in lg.handlers):
+        h = H()
+        h._dewiar = True
+        lg.addHandler(h)
 
 
 def wv2_registry_fix():
@@ -3575,8 +3809,12 @@ if __name__ == "__main__":
     if WIN and sys.stderr is None:              # pythonw: без консоли — ошибки интерфейса в файл журнала
         try:
             sys.stderr = sys.stdout = open(winshell.log_dir() / "ui.log", "a", encoding="utf-8", buffering=1)
-        except OSError:
-            pass
+        except Exception:  # noqa: BLE001 — папки журнала нет (права, диск): журнал — во временной папке
+            try:
+                import tempfile
+                sys.stderr = sys.stdout = open(Path(tempfile.gettempdir()) / "dewiar-ui.log", "a", encoding="utf-8", buffering=1)
+            except OSError:
+                pass
     try:
         main()
     except Exception as e:  # noqa: BLE001
@@ -3584,6 +3822,7 @@ if __name__ == "__main__":
         if WIN:
             import traceback
             traceback.print_exc()
+            fatal_box(e)
         else:
             print("Ядро продолжает работать. Проверьте: sudo apt install python3-gi gir1.2-webkit2-4.1", file=sys.stderr)
         sys.exit(1)

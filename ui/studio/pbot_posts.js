@@ -58,7 +58,7 @@ function ppRender() {
   $$("#pp-list [data-del]").forEach(b => b.onclick = async () => { if (await ask("Убрать этот пост? В Telegram он не уйдёт.", { ok: "Убрать" })) ppCall("pbot_post_del", { id: b.dataset.del }); });
   $$("#pp-list [data-ed]").forEach(b => b.onclick = async () => {
     const p = d.posts.find(x => x.id === b.dataset.ed); if (!p) return;
-    const t = await askText("Текст поста", p.text, { ok: "Сохранить" }); if (t !== null && t !== undefined && t.trim() !== p.text) ppCall("pbot_post_edit", { id: p.id, text: t }, "Сохранено");
+    const t = await askText("Текст поста", p.text, { ok: "Сохранить", multi: true }); if (t !== null && t !== undefined && t.trim() !== p.text) ppCall("pbot_post_edit", { id: p.id, text: t }, "Сохранено");
   });
   ppRubs();
   $("#pp-greet").checked = !!(d.greet && d.greet.on);

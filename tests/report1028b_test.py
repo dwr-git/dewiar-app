@@ -31,7 +31,7 @@ ok('data-k="tts.read_all"' in html and "Читать длинные ответы
 ws = (ROOT / "ui/winshell.py").read_text(encoding="utf-8")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok("def has_shape(h):" in ws and "GetWindowRgn" in ws, "Windows: есть ли у окна форма")
-ok("self._win_shape_keeper()" in app and "not winshell.has_shape(h)" in app and "форма окна слетела" in app,
+ok("self._win_shape_keeper()" in app and "not winshell.shape_fits(h)" in app and "форма окна слетела" in app,
    "виджет: форма проверяется и ставится заново, в ui.log — запись")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

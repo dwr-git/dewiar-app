@@ -335,6 +335,7 @@ function hmOpen(id) {
   if (id === "play") { if (a && a.play_open) a.play_open(""); else toast("Игры открываются у виджета: «Лира, давай поиграем»"); return; }
   if (id === "pad") { if (a && a.pad_toggle) a.pad_toggle("notes"); return; }
   if (id === "modes") { if (window.mdOpen) mdOpen(false); return; }          // «Режимы» — выбор «Для кого эта Лира?»
+  if (id.startsWith("plg:") && window.plpOpen && ((HM.plg || []).some(p => p.id === id.slice(4) && p.installed !== false))) return plpOpen(id.slice(4));   // установлен — его страница
   if (id.startsWith("plg:")) { plgOpen = id.slice(4); hmGo("skills"); if (PLG.length) plgDrawer(plgOpen); return; }   // карточка плагина — в «Плагинах»
   hmGo(id);
 }

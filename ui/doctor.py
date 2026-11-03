@@ -61,7 +61,15 @@ def webview2():
                 with winreg.OpenKey(root, sub) as k:
                     v = winreg.QueryValueEx(k, "pv")[0]
                     if v and v != "0.0.0.0":
-                        return f"{v} ({where})"          # №419: где записана — pywebview раньше не смотрел «машина, 64 бит»
+                        try:                     # №469: ключ есть, а файлов среды нет — проверка не должна мешать ответу
+                            try:
+                                loc = winreg.QueryValueEx(k, "location")[0]
+                            except Exception:  # noqa: BLE001
+                                loc = ""
+                            broken = "" if wv2_files_ok(v, loc) else " — НО ФАЙЛОВ СРЕДЫ НЕТ: WebView2 повреждён, переустановите его"
+                        except Exception:  # noqa: BLE001
+                            broken = ""
+                        return f"{v} ({where}){broken}"   # №419: где записана — pywebview раньше не смотрел «машина, 64 бит»
             except OSError:
                 continue
     except Exception as e:  # noqa: BLE001
@@ -69,9 +77,49 @@ def webview2():
     return "НЕТ"
 
 
-def check_module(name):
+# коды аварийного завершения Windows (процесс упал внутри DLL, а не ошибкой Python) — словами
+CRASH = {0xC0000005: "сбой доступа к памяти внутри библиотеки", 0xC000001D: "процессор не поддерживает нужные команды",
+         0xC0000409: "аварийная остановка внутри библиотеки", 0xC0000135: "не найдена нужная DLL",
+         0xC0000142: "библиотека не смогла запуститься (DLL)", 0xC0000017: "не хватило памяти"}
+
+
+def crash_text(code):
+    """Код выхода процесса -> «код 0xC0000005 — сбой доступа к памяти…» или "" (обычная ошибка Python)."""
+    c = code & 0xFFFFFFFF if isinstance(code, int) else 0
+    if c < 0xC0000000:
+        return ""
+    return f"процесс упал: код 0x{c:08X}" + (f" — {CRASH[c]}" if c in CRASH else "")
+
+
+def wv2_files_ok(ver, loc="", exists=os.path.exists, env=None):
+    """№469 (02.11): в реестре WebView2 150.0…, а pywebview — «Couldn't find a compatible Webview2 Runtime installation»:
+    ключ остался, файлов нет (их удаляют программы «удаления Edge»). Есть ли msedgewebview2.exe этой версии — в папке
+    из реестра (location) или на обычных местах. Не нашли ни одной папки, где искать, — не тревожим (True)."""
+    env = os.environ if env is None else env
+    dirs = [loc] if loc else []
+    for k in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+        if env.get(k):
+            dirs.append(os.path.join(env[k], "Microsoft", "EdgeWebView", "Application"))
+    dirs = [d for d in dirs if d and exists(d)]
+    if not dirs:
+        return True
+    if any(exists(os.path.join(d, ver, "msedgewebview2.exe")) for d in dirs):
+        return True
+    for d in dirs:                       # версия в реестре отстала от папки (обновление ещё не дописало ключ) — тоже живая
+        try:
+            if any(exists(os.path.join(d, x, "msedgewebview2.exe")) for x in os.listdir(d)):
+                return True
+        except OSError:
+            pass
+    return False
+
+
+def check_module(name, tries=2):
     """Импортирует библиотеку в отдельном процессе -> (загрузилась ли, версия или хвост ошибки).
-    Берём консольный python.exe рядом с pythonw.exe: так в выводе есть полный текст ошибки импорта."""
+    Берём консольный python.exe рядом с pythonw.exe: так в выводе есть полный текст ошибки импорта.
+    №464 (01.11): onnx_asr «не загружалась» кодом 3221225477, а ядро в тот же день GigaAM загрузило — процесс проверки
+    упал внутри DLL (памяти было 0,7 ГБ, рядом антивирус с внедрением в процессы). Такой сбой — повторяем один раз и
+    пишем словами, а не числом."""
     py = Path(sys.executable).with_name("python.exe") if os.name == "nt" else Path(sys.executable)
     if not py.exists():
         py = Path(sys.executable)
@@ -83,8 +131,29 @@ def check_module(name):
         return False, str(e)
     if r.returncode == 0:
         return True, (r.stdout.strip().splitlines() or ["ok"])[-1]
+    crash = crash_text(r.returncode)
+    if crash and tries > 1:
+        good, info = check_module(name, tries - 1)
+        return good, (f"{info} (со второго раза; в первый — {crash})" if good else info)
     err = [x for x in (r.stderr or "").strip().splitlines() if x.strip()]
-    return False, " | ".join(err[-3:]) or f"код {r.returncode}"
+    return False, " | ".join(err[-3:] + ([crash] if crash else [])) or crash or f"код {r.returncode}"
+
+
+def net_note(core_log):
+    """№464: библиотеки были в порядке, а Лира не отвечала — в журнале ядра «нет связи с облаком» и «сервер модели не
+    ответил вовремя». Это и есть беда — в ИТОГ, чтобы не искать её среди 400 строк."""
+    last = core_log[-300:]
+    n = sum(1 for x in last if "нет связи с облаком Dewiar" in x or "соединение не установилось" in x or "не ответил вовремя" in x)
+    if n < 3:
+        return ""
+    return ("; в журнале ядра модель не отвечает: нет связи с сервером модели (" + str(n) + " раз) — проверьте интернет; "
+            "если dewiar.pro блокирует провайдер — прокси: студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»")
+
+
+def works_in_core(mod, core_log):
+    """Библиотека «не загрузилась» у диагностики, а в журнале ядра видно, что она работает (№464) -> пояснение или ""."""
+    proof = {"onnx_asr": "GigaAM готов", "vosk_tts": "Vosk TTS готов", "vosk": "Имена (мгновенно)"}.get(mod)
+    return f"в журнале ядра «{proof}» — у самой программы библиотека работает" if proof and any(proof in x for x in core_log) else ""
 
 
 def reach(host, port=443):
@@ -137,13 +206,14 @@ def main():
     dlls = ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll"]
     L.append("Библиотеки Visual C++ рядом с Python: " + ", ".join(f"{d} {'есть' if (py_dir / d).exists() else 'НЕТ'}" for d in dlls))
     L += ["", "== Библиотеки Python"]
-    bad = []
+    bad, core_log = [], tail(LOCAL / "logs" / "core.log", 4000)
     for m in MODS:
         if os.name == "nt" and m in NO_WIN:
             continue
         good, info = check_module(m)
-        L.append(f"{'ok ' if good else 'ОШИБКА'} {m}: {info}")
-        if not good:
+        fine = "" if good else works_in_core(m, core_log)
+        L.append(f"{'ok ' if good else 'внимание' if fine else 'ОШИБКА'} {m}: {info}" + (f" — но {fine}" if fine else ""))
+        if not good and not fine:
             bad.append(m)
     L += ["", "== Антивирус"]
     av_note = ""
@@ -191,7 +261,12 @@ def main():
             L.append(f"{f}: нет")
     for name in ("ui.log", "core.log"):
         L += ["", f"== {name} (последние строки)"] + tail(LOCAL / "logs" / name, 400 if name == "core.log" else 150)
-    L.insert(2, (("ИТОГ: не загружаются: " + ", ".join(bad)) if bad else "ИТОГ: библиотеки в порядке") + av_note)
+    import tempfile
+    for name in ("dewiar-ui-crash.txt", "dewiar-ui.log"):     # №471/472: интерфейс упал до своего журнала (app.fatal_box)
+        crash = tail(Path(tempfile.gettempdir()) / name, 80)
+        if crash:
+            L += ["", f"== {name} — сбой интерфейса до журнала (временная папка)"] + crash
+    L.insert(2, (("ИТОГ: не загружаются: " + ", ".join(bad)) if bad else "ИТОГ: библиотеки в порядке") + av_note + net_note(core_log))
     text = SECRET.sub(lambda m: m.group(1) + "***", "\n".join(L))
     out = desktop() / f"Dewiar — диагностика {dt.datetime.now():%Y-%m-%d %H-%M}.txt"
     out.write_text(text, encoding="utf-8-sig")                 # с BOM: старый Блокнот иначе читает как ANSI

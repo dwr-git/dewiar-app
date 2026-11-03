@@ -9,6 +9,7 @@ const LOOK_FX = [
 ];
 let lookEnts = [];
 if (typeof IS_WIN !== "undefined" && IS_WIN && $("#lk-smooth")) $("#lk-smooth").style.display = "none";   // прозрачное окно — только Linux (№234)
+if (typeof IS_WIN !== "undefined" && IS_WIN && $("#lk-sharp")) $("#lk-sharp").style.display = "none";     // Wayland — только Linux (№442)
 
 function loadLook() {
   const ui = (S && S.ui) || {};

@@ -4,10 +4,15 @@
 Папка плагина:
     <id>/plugin.json        — {id, name, icon, color, category, tagline, description, version, author,
                                skills: [имена папок в skills/], phrases: [...], uses: [инструменты — для подписи],
-                               settings: [{key, label, type: text|select|number|toggle, options, default, placeholder}],
+                               settings: [{key, label, type: text|select|number|toggle|folder, options, default, placeholder}],
                                jobs: [{id, title, when, task}]  — дела по расписанию, включаются по желанию; {key} в task —
                                                                   значение настройки плагина,
-                               mcp: {имя: {type: stdio|http, command, args, env, url, headers}} — необязательно}
+                               mcp: {имя: {type: stdio|http, command, args, env, url, headers}} — необязательно,
+                               ui: {tools: {инструмент: {title, hint, button, hidden, fields: {арг: подпись | false}}},
+                                    labels: {ключ ответа: подпись}, asks: [{title, hint, say: "… {поле} …", fields}],
+                                    folder: "Рисунки", page_title: подпись вкладки ui.html} — страница плагина в студии (необязательно)}
+    <id>/ui.html            — своя страница плагина (необязательно): студия показывает её во фрейме-песочнице с мостом
+                               window.dewiar (только свои действия, настройки и файлы) — см. core/plugin_pages.py
     <id>/skills/<имя>/SKILL.md — обычные навыки (core/skills.py), видны модели, пока плагин установлен
     <id>/README.md          — для людей
 
@@ -26,13 +31,18 @@ import time
 import zipfile
 from pathlib import Path
 
-from settings import CONFIG_DIR, DATA_DIR
+from settings import CONFIG_DIR, DATA_DIR, STATE_DIR
 
 log = logging.getLogger("dewiar.plugins")
 BUILTIN_DIR = DATA_DIR / "plugins"
 USER_DIR = CONFIG_DIR / "plugins"
 MAX_ZIP = 20 * 1024 * 1024
-SET_TYPES = ("text", "select", "number", "toggle")
+SET_TYPES = ("text", "select", "number", "toggle", "folder")   # folder — путь с кнопкой «Выбрать папку…» (№461)
+
+
+def data_dir(pid):
+    """Папка данных сервера плагина (DEWIAR_PLUGIN_DATA): рядом с настройками, переживает переустановку."""
+    return STATE_DIR / "plugins-data" / _id(pid)
 
 
 class PluginError(Exception):
@@ -41,6 +51,50 @@ class PluginError(Exception):
 
 def _id(x):
     return re.sub(r"[^a-z0-9-]+", "-", str(x or "").lower()).strip("-")[:40]
+
+
+def _txt(v, n):
+    return " ".join(str(v or "").split())[:n]
+
+
+def parse_ui(u):
+    """Блок ui из plugin.json -> проверенный словарь (страница плагина в студии, 03.11: «у каждого плагина своя страничка»).
+    tools — человеческие названия действий и их полей (иначе на странице сырые art_draw / query), hidden — действие только
+    для помощницы (код svg, оценка по критериям); labels — подписи ключей ответа; asks — формы «попросить Лиру» для
+    плагинов без своего кода: say с {поле} уходит в чат; folder — папка плагина в папке Dewiar («Рисунки»)."""
+    u = u if isinstance(u, dict) else {}
+    tools = {}
+    for name, t in (u.get("tools") or {}).items() if isinstance(u.get("tools"), dict) else []:
+        if not isinstance(t, dict) or not re.fullmatch(r"[\w.-]{1,64}", str(name)):
+            continue
+        fields = {}
+        for k, v in (t.get("fields") or {}).items() if isinstance(t.get("fields"), dict) else []:
+            if v is False:
+                fields[str(k)[:64]] = False
+            elif isinstance(v, dict):
+                fields[str(k)[:64]] = {"label": _txt(v.get("label"), 80), "hint": _txt(v.get("hint"), 200),
+                                       "placeholder": _txt(v.get("placeholder"), 120),
+                                       "kind": v.get("kind") if v.get("kind") in ("long", "folder", "file", "path") else ""}
+            elif v:
+                fields[str(k)[:64]] = {"label": _txt(v, 80), "hint": "", "placeholder": "", "kind": ""}
+        tools[str(name)] = {"title": _txt(t.get("title"), 60), "hint": _txt(t.get("hint"), 240), "button": _txt(t.get("button"), 30),
+                            "hidden": bool(t.get("hidden")), "fields": fields}
+    labels = {str(k)[:40]: _txt(v, 60) for k, v in (u.get("labels") or {}).items()} if isinstance(u.get("labels"), dict) else {}
+    asks = []
+    for a in (u.get("asks") or [])[:6] if isinstance(u.get("asks"), list) else []:
+        if not isinstance(a, dict) or not a.get("title") or not a.get("say"):
+            continue
+        fl = {}
+        for k, v in (a.get("fields") or {}).items() if isinstance(a.get("fields"), dict) else []:
+            v = v if isinstance(v, dict) else {"label": v}
+            fl[str(k)[:40]] = {"label": _txt(v.get("label") or k, 80), "placeholder": _txt(v.get("placeholder"), 120),
+                               "kind": "long" if v.get("kind") == "long" else ""}
+        asks.append({"title": _txt(a["title"], 60), "hint": _txt(a.get("hint"), 240), "say": str(a["say"])[:400],
+                     "button": _txt(a.get("button"), 30), "fields": fl})
+    folder = str(u.get("folder") or "")
+    if ".." in folder or folder.startswith(("/", "\\")) or ":" in folder:
+        folder = ""
+    return {"tools": tools, "labels": labels, "asks": asks, "folder": folder[:60], "page_title": _txt(u.get("page_title"), 30)}
 
 
 def parse_plugin(d: Path, builtin: bool):
@@ -94,6 +148,9 @@ def parse_plugin(d: Path, builtin: bool):
             "category": str(m.get("category") or "Разное")[:30], "tagline": str(m.get("tagline") or "")[:160],
             "description": str(m.get("description") or "")[:1200], "version": str(m.get("version") or "1.0")[:20],
             "author": str(m.get("author") or "")[:60], "phrases": [str(x)[:120] for x in (m.get("phrases") or [])][:10],
+            # слова, по которым просьба — к этому плагину («нарисуй кота» — «Художник», 03.11: «на локальной модели Лира
+            # говорит, что не умеет рисовать и такого плагина у неё нет»)
+            "words": [str(x)[:30] for x in (m.get("words") or [])][:24],
             "uses": [str(x)[:40] for x in (m.get("uses") or [])][:12], "settings": sets, "jobs": jobs, "mcp": mcp,
             "skill_dirs": skills, "dir": d, "builtin": builtin,
             # витрина на «Главной» (31.10): фраза «попробуйте сразу» и ролик — id урока Академии («15-plugins») или адрес
@@ -102,6 +159,7 @@ def parse_plugin(d: Path, builtin: bool):
             "links": [{"label": str(x.get("label"))[:40], "path": str(x.get("path"))[:120]} for x in (m.get("links") or [])
                       if isinstance(x, dict) and x.get("label") and x.get("path") and ".." not in str(x.get("path"))
                       and not str(x.get("path")).startswith(("/", "\\")) and ":" not in str(x.get("path"))][:3],
+            "ui": parse_ui(m.get("ui")), "page": (d / "ui.html").is_file(),
             "video": str(m.get("video") or "") if re.fullmatch(r"[\w-]{1,40}|https://[^\s\"'<>]{8,300}", str(m.get("video") or "")) else ""}
 
 
@@ -142,6 +200,60 @@ class Plugins:
         v = dict(on.get("values") or {})
         return {s["key"]: v.get(s["key"], s["default"]) for s in p["settings"]}
 
+    # ---- просьба к плагину (№461, №463, №483: «сейчас посмотрю» — и ни одного действия плагина) ----
+    _STOP = {"сколько", "сейчас", "будет", "какой", "какая", "какие", "каким", "когда", "этот", "этой", "этом", "тебя", "меня",
+             "мне", "есть", "всех", "всего", "нужно", "можно", "пожалуйста", "давай", "сделай", "покажи", "скажи", "через",
+             "неделе", "неделю", "завтра", "сегодня", "лучше", "хорошо", "очень"}
+
+    @classmethod
+    def _stems(cls, text):
+        words = re.findall(r"[a-zа-яё0-9]+", str(text or "").lower().replace("ё", "е"))
+        return {w[:5] for w in words if len(w) >= 4 and w not in cls._STOP}
+
+    def match(self, text):
+        """Установленный плагин, к которому явно эта просьба -> его словарь или None. Признаки: имя плагина в просьбе
+        («путешествие», «тендеры») или пример фразы из его карточки — не меньше двух общих слов и половины её слов
+        («Разбери резюме в папке», «Кто лучше всех подходит на бухгалтера?» — кнопкой из карточки и «Попробуйте плагин»)."""
+        q = self._stems(text)
+        if not q:
+            return None
+        best, top = None, 0
+        for p in self.installed():
+            sc = 3 if q & self._stems(p["name"]) else 0
+            if not sc and any((st := self._stems(w)) and st <= q for w in p.get("words") or []):   # все слова признака
+                sc = 2
+            for ph in p["phrases"]:
+                s = self._stems(ph)
+                n = len(q & s)
+                if n >= 2 and n * 2 >= len(s):
+                    sc = max(sc, n)
+            if sc > top:
+                best, top = p, sc
+        return best
+
+    def hint_for(self, text, tools=None, status=None):
+        """Справка к вопросу: просьба к плагину — какой навык прочитать и какие действия вызвать сразу, а не обещать.
+        tools — {id плагина: [(имя действия для модели, название)]} (подключённые MCP-серверы плагина); status — {id
+        плагина: текст ошибки сервера}. -> строка или ""."""
+        p = self.match(text)
+        if not p:
+            return ""
+        sk = ", ".join(d.name for d in p["skill_dirs"])
+        out = f"Это просьба к плагину «{p['name']}»" + (f": сначала use_skill {sk} (как работать)" if sk else "")
+        acts = (tools or {}).get(p["id"]) or []
+        err = (status or {}).get(p["id"])
+        if acts:
+            out += (", затем его действия: " + "; ".join(f"{n} — «{t}»" if t else n for n, t in acts[:8])
+                    + ". Вызывай их сразу, в этом же ответе")
+        elif p["mcp"] and err:
+            out += (f". Действия плагина сейчас не работают ({str(err)[:160]}) — честно скажи это одной фразой и предложи "
+                    "проверить плагин в студии («Плагины»)")
+        elif p["mcp"]:
+            out += ". Действия плагина ещё подключаются — если их нет в списке инструментов, скажи, что плагин запускается, и попроси повторить через минуту"
+        else:
+            out += " — и делай по нему сразу, в этом же ответе"
+        return out + ". Не отвечай «сейчас посмотрю / собираю» без действия: человек ждёт результат."
+
     def skill_roots(self):
         """[(папка навыка, id плагина)] — для core/skills.py: навыки установленных плагинов."""
         return [(d, p["id"]) for p in self.installed() for d in p["skill_dirs"]]
@@ -161,7 +273,7 @@ class Plugins:
         for pid, p in sorted(self.items.items(), key=lambda x: (not x[1]["builtin"], x[1]["category"], x[1]["name"])):
             st = on.get(pid) or {}
             out.append({k: p[k] for k in ("id", "name", "icon", "color", "category", "tagline", "description", "version", "author",
-                                          "phrases", "uses", "settings", "builtin", "try", "video", "links")}
+                                          "phrases", "uses", "settings", "builtin", "try", "video", "links", "ui", "page")}
                        | {"installed": pid in on, "values": self.values(pid), "skills": [d.name for d in p["skill_dirs"]],
                           "mcp": [f"{pid}-{n}" for n in p["mcp"]],
                           "jobs": [dict(j, on=bool((st.get("jobs") or {}).get(j["id"]))) for j in p["jobs"]],

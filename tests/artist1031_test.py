@@ -58,7 +58,7 @@ r = A.draw("Открытка маме", (ROOT / "tests/fixtures/artist/card.svg"
 d = Path(os.environ["DEWIAR_WORKSPACE"]) / "Рисунки"
 ok(Path(r["saved"]).is_file() and Path(r["page"]).is_file() and r["size"] == "1500×1050" and Path(r["saved"]).parent == d,
    f"сохранено в «Рисунки» папки Dewiar, размер — из настроек плагина: {r['size']}")
-ok(any("рождения" in x for x in r["notes"]) and "replace: true" in r["say"], f"надпись у края — модель просят поправить: {r['notes']}")
+ok(any("рождения" in x for x in r["notes"]) and r["shown"], f"надпись почти у края — замечание, но рисунок показан: {r['notes']}")
 r2 = A.draw("Открытка маме", (ROOT / "tests/fixtures/artist/card.svg").read_text(encoding="utf-8"))
 r3 = A.draw("Открытка маме", (ROOT / "tests/fixtures/artist/card.svg").read_text(encoding="utf-8"), replace=True)
 ok(r2["saved"].endswith("Открытка маме (2).svg") and r3["saved"].endswith("Открытка маме.svg"), "новая — рядом с номером, «поправь» — заменяет")
@@ -117,8 +117,8 @@ msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}, {"jso
 pr = subprocess.run([sys.executable, str(ROOT / "data/plugins/artist/server.py")], input="\n".join(json.dumps(x) for x in msgs) + "\n",
                     capture_output=True, text=True, env=env, timeout=60)
 out = [json.loads(x) for x in pr.stdout.splitlines() if x.strip()]
-ok(len(out) == 4 and {t["name"] for t in out[1]["result"]["tools"]} == {"art_draw", "art_animate", "art_gallery"}
-   and all(t["annotations"]["readOnlyHint"] for t in out[1]["result"]["tools"]), f"MCP: три действия без «Выполнить?»: {pr.stderr[-200:]}")
+ok(len(out) == 4 and {t["name"] for t in out[1]["result"]["tools"]} == {"art_draw", "art_animate", "art_photo", "art_gallery"}
+   and all(t["annotations"]["readOnlyHint"] for t in out[1]["result"]["tools"]), f"MCP: четыре действия без «Выполнить?»: {pr.stderr[-200:]}")
 ok(json.loads(out[2]["result"]["content"][0]["text"])["saved"].endswith("Кот.svg") and out[3]["result"].get("isError")
    and "Исправь" in out[3]["result"]["content"][0]["text"], "через MCP рисует; ошибка — с просьбой исправить")
 

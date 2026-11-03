@@ -1,0 +1,325 @@
+<!doctype html>
+<!-- Своя страница плагина «Тендеры» (03.11, владелец: «рекрутер и тендеры я присылал — выглядят и работают впечатляюще;
+     органично встроить красиво»; по образцу его TenderWatch: лента с фильтрами, карточка тендера, воронка, запросы).
+     Студия показывает страницу во фрейме-песочнице; связь — только window.dewiar: run — действия ЭТОГО плагина
+     (tenders_board / tenders_set / tenders_scan / tenders_mark), settings()/saveSettings() — запросы, плюс- и минус-слова,
+     площадки (сервер плагина перезапускается с ними сам), openUrl — страница тендера на площадке, ask — «разбери» Лире.
+     Всё, что пришло с площадок, выводится только через esc(). -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Тендеры</title>
+<style>
+  :root { --hot: #FF8A5B; --warm: #F5C451; --ok: var(--good, #4BE3A1); --no: var(--bad, #FF6B8A); --blue: #7FA8FF; }
+  body { padding: 2px 2px 30px; }
+  .muted { color: var(--muted); } .dim { color: var(--dim); }
+  [hidden] { display: none !important; }
+  /* сводка */
+  .top { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 10px; align-items: stretch; margin: 0 0 14px; }
+  .stat { background: var(--panel); border-radius: 18px; padding: 12px 16px; min-width: 0; border: 0; text-align: left; color: var(--ink); cursor: pointer; }
+  .stat:hover { background: var(--panel2); }
+  .stat small { display: block; font-size: 12px; color: var(--muted); }
+  .stat b { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .stat em { font-style: normal; font-size: 12px; color: var(--dim); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scanbox { display: flex; flex-direction: column; justify-content: center; gap: 6px; background: var(--panel); border-radius: 18px; padding: 12px 16px; min-width: 210px; }
+  .scanbox small { font-size: 12px; color: var(--muted); }
+  .report { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+  .report span { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--soft, rgba(255,255,255,.07)); }
+  .report .bad { color: var(--no); }
+  /* вкладки и фильтры */
+  .tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 14px; background: var(--soft, rgba(255,255,255,.06)); margin: 0 0 12px; flex-wrap: wrap; }
+  .tabs button { border: 0; background: none; color: var(--muted); font-weight: 650; font-size: 13.5px; padding: 8px 16px; border-radius: 11px; cursor: pointer; }
+  .tabs button:hover { color: var(--ink); } .tabs button.on { background: var(--brand); color: #fff; }
+  .tabs i { font-style: normal; opacity: .75; margin-left: 4px; font-weight: 700; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+  .filters select { width: auto; padding: 7px 30px 7px 12px; font-size: 13px; }
+  .filters .search { flex: 1 1 220px; min-width: 180px; }
+  .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--soft, rgba(255,255,255,.06)); flex-wrap: wrap; }
+  .seg button { border: 0; background: none; color: var(--muted); padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 12.5px; font-weight: 650; }
+  .seg button.on { background: var(--brand); color: #fff; } .seg button:hover:not(.on) { color: var(--ink); }
+  .seg button b { opacity: .7; margin-left: 4px; }
+  .tgl { border: 0; border-radius: 999px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; background: var(--soft, rgba(255,255,255,.07)); color: var(--muted); }
+  .tgl.on { background: color-mix(in srgb, var(--blue) 26%, transparent); color: var(--ink); font-weight: 650; }
+  /* лента */
+  .layout { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(340px, 1.05fr); gap: 14px; align-items: start; }
+  .rows { display: grid; gap: 6px; max-height: 1250px; overflow: auto; padding: 2px; }
+  .grp { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 8px 4px 2px; }
+  .trow { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 12px; align-items: center; border: 0; text-align: left; cursor: pointer; color: var(--ink);
+    background: var(--panel); border-radius: 15px; padding: 11px 14px 11px 18px; position: relative; transition: background .15s, box-shadow .15s; }
+  .trow:hover { background: var(--panel2); }
+  .trow.cur { box-shadow: inset 0 0 0 1.5px var(--blue); background: var(--panel2); }
+  .trow.new::before { content: ""; position: absolute; left: 7px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--hot); }
+  .trow.dim { opacity: .55; }
+  .trow .tt { font-size: 13.5px; font-weight: 650; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .trow .tm { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
+  .trow .tm span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+  .trow .side { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .score { display: inline-flex; align-items: center; gap: 6px; }
+  .meter { display: inline-flex; gap: 2px; } .meter i { width: 5px; height: 14px; border-radius: 2px; background: var(--soft2, rgba(255,255,255,.12)); }
+  .meter.h i.f { background: var(--ok); } .meter.m i.f { background: var(--warm); } .meter i.f { background: var(--dim); }
+  .score b { font-size: 13px; font-variant-numeric: tabular-nums; min-width: 1.2em; }
+  .due { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; background: var(--soft, rgba(255,255,255,.07)); color: var(--muted); }
+  .due.urgent { background: color-mix(in srgb, var(--no) 18%, transparent); color: var(--no); }
+  .due.soon { background: color-mix(in srgb, var(--warm) 20%, transparent); color: color-mix(in srgb, var(--warm) 70%, var(--ink)); }
+  .due.past { text-decoration: line-through; opacity: .7; }
+  .mk { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--dim); }
+  .mk.watching { background: var(--blue); } .mk.applied { background: var(--ok); } .mk.skip { background: var(--no); opacity: .7; } .mk.new { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dim); }
+  .tag { display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 8px; background: var(--soft, rgba(255,255,255,.07)); margin: 2px 4px 2px 0; }
+  .tag.plus { background: color-mix(in srgb, var(--warm) 20%, transparent); } .tag.minus { background: color-mix(in srgb, var(--no) 18%, transparent); }
+  .tag.q { background: color-mix(in srgb, var(--blue) 18%, transparent); }
+  /* карточка */
+  .detail { position: sticky; top: 4px; min-height: 420px; }
+  .detail h2 { font-size: 18px; line-height: 1.35; margin: 8px 0 12px; }
+  .crumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 14px; }
+  .star { border: 0; background: var(--soft, rgba(255,255,255,.07)); width: 36px; height: 36px; border-radius: 11px; cursor: pointer; font-size: 17px; color: var(--muted); }
+  .star.on { color: var(--warm); }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 14px; }
+  .facts div { background: var(--soft, rgba(255,255,255,.05)); border-radius: 12px; padding: 9px 12px; min-width: 0; }
+  .facts .wide { grid-column: 1 / -1; }
+  .facts dt { font-size: 11.5px; color: var(--dim); } .facts dd { margin: 2px 0 0; font-weight: 650; font-size: 13.5px; overflow-wrap: anywhere; }
+  .facts .money { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .box { border-radius: 16px; padding: 14px 16px; margin: 0 0 12px; background: var(--soft, rgba(255,255,255,.05)); }
+  .box h3 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .box p { font-size: 13px; margin: 6px 0 0; }
+  textarea.note { min-height: 80px; }
+  .empty { text-align: center; padding: 34px 24px; border-radius: 20px; background: var(--panel); color: var(--muted); }
+  .empty b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 6px; }
+  /* воронка */
+  .board { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 10px; overflow-x: auto; align-items: start; }
+  .col { background: var(--soft, rgba(255,255,255,.04)); border-radius: 18px; padding: 10px; min-height: 200px; transition: box-shadow .15s; }
+  .col.drop { box-shadow: inset 0 0 0 2px var(--blue); }
+  .col h4 { display: flex; align-items: center; gap: 8px; margin: 2px 4px 10px; font-size: 13px; }
+  .col h4 em { font-style: normal; margin-left: auto; font-size: 12px; color: var(--muted); }
+  .kc { background: var(--panel); border-radius: 13px; padding: 10px 12px; margin: 0 0 8px; cursor: grab; font-size: 13px; }
+  .kc:hover { background: var(--panel2); } .kc.drag { opacity: .4; }
+  .kc .t { font-weight: 650; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .kc .o { color: var(--muted); font-size: 12px; margin: 3px 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kc .m { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .colnote { font-size: 12px; color: var(--dim); padding: 6px 4px; }
+  /* запросы */
+  .qgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .qcard h3 { font-size: 15px; margin: 0 0 4px; } .qcard p { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; min-height: 30px; }
+  .qchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 999px; font-size: 13px; background: var(--soft2, rgba(255,255,255,.1)); }
+  .qchip button { border: 0; background: none; color: var(--muted); cursor: pointer; width: 20px; height: 20px; border-radius: 50%; font-size: 13px; line-height: 1; }
+  .qchip button:hover { background: var(--soft, rgba(255,255,255,.1)); color: var(--no); }
+  .qchip.plus { background: color-mix(in srgb, var(--warm) 22%, transparent); } .qchip.minus { background: color-mix(in srgb, var(--no) 18%, transparent); }
+  .qadd { display: flex; gap: 8px; } .qadd input { flex: 1; }
+  .srcs label { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13.5px; cursor: pointer; }
+  .srcs input { width: 18px; height: 18px; accent-color: var(--blue); }
+  .msg { font-size: 13px; color: var(--muted); margin: 0 0 10px; } .msg:empty { display: none; } .msg.bad { color: var(--no); } .msg.ok { color: var(--ok); }
+  @media (max-width: 900px) { .top { grid-template-columns: 1fr 1fr; } .scanbox { grid-column: 1 / -1; } .layout { grid-template-columns: 1fr; } .detail { position: static; }
+    .rows { max-height: none; } .board { grid-template-columns: repeat(4, 240px); } .facts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="top" id="top"></div>
+<div class="report" id="report"></div>
+<p class="msg" id="msg" aria-live="polite"></p>
+<div class="tabs" role="tablist"><button data-tab="feed" class="on">Лента<i id="n-feed"></i></button><button data-tab="board">Воронка</button><button data-tab="q">Мои запросы<i id="n-q"></i></button></div>
+<section id="t-feed">
+  <div class="filters">
+    <input type="search" class="search" id="f-q" placeholder="Название, заказчик, номер или заметка">
+    <div class="seg" id="f-mark"></div>
+  </div>
+  <div class="filters">
+    <select id="f-src" aria-label="Площадка"></select>
+    <select id="f-score" aria-label="Балл"><option value="0">Любой балл</option><option value="4">От 4 баллов</option><option value="6">От 6 баллов</option><option value="8">От 8 баллов</option></select>
+    <select id="f-sum" aria-label="Сумма"><option value="0">Любая сумма</option><option value="10000">От 10 тыс.</option><option value="100000">От 100 тыс.</option><option value="1000000">От 1 млн</option></select>
+    <select id="f-due" aria-label="Срок"><option value="">Любой срок</option><option value="3">До 3 дней</option><option value="7">До недели</option><option value="30">До месяца</option></select>
+    <button class="tgl on" id="f-open" title="Отменённые, завершённые и с прошедшим сроком">Только открытые</button>
+    <select id="f-sort" aria-label="Порядок"><option value="fresh">Сначала свежие</option><option value="score">По баллу</option><option value="due">Срок ближе</option><option value="sum">Дороже</option></select>
+  </div>
+  <div class="layout"><div class="rows" id="rows"></div><div class="card detail" id="detail"></div></div>
+</section>
+<section id="t-board" hidden><p class="dim" style="margin:0 0 10px;font-size:13px">Перетаскивайте карточки между колонками — отметка меняется сразу. Нажмите на карточку — откроется в ленте.</p><div class="board" id="board"></div></section>
+<section id="t-q" hidden><div class="qgrid" id="qgrid"></div></section>
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const plural = (n, a, b, c) => { n = Math.abs(n) % 100; const n1 = n % 10; if (n > 10 && n < 20) return c; if (n1 > 1 && n1 < 5) return b; if (n1 === 1) return a; return c; };
+  const MARKS = [["all", "Все"], ["new", "Новые"], ["watching", "Интересно"], ["applied", "Подали заявку"], ["skip", "Не подходит"]];
+  const ACT = { new: "Новый", watching: "Интересно", applied: "Подали заявку", skip: "Не подходит" };
+  const st = { b: null, tab: "feed", cur: "", f: { q: "", mark: "all", src: "", score: 0, sum: 0, due: "", open: true, sort: "fresh" }, settings: null };
+  const msg = (t, kind) => { const m = $("#msg"); m.textContent = t || ""; m.className = "msg" + (kind ? " " + kind : ""); };
+  async function run(tool, args) { const r = await dewiar.run(tool, args || {}); if (!r.ok) throw new Error(r.error || "не получилось"); return r.data; }
+  const money = (v, s) => !v ? (s || "—") : (v >= 1e6 ? (v / 1e6).toLocaleString("ru-RU", { maximumFractionDigits: 1 }) + " млн" : v >= 1e4 ? Math.round(v / 1e3).toLocaleString("ru-RU") + " тыс." : Math.round(v).toLocaleString("ru-RU")) + " " + ((s || "").match(/[A-Z€$₽]{1,3}$/) || ["BYN"])[0];
+  const meter = (sc) => { const f = Math.round(sc / 2), c = sc >= 7 ? "h" : sc >= 4 ? "m" : ""; return `<span class="score" title="Балл соответствия ${sc} из 10"><span class="meter ${c}">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= f ? "f" : ""}"></i>`).join("")}</span><b>${sc}</b></span>`; };
+  function due(t, long) {
+    if (!t.deadline) return `<span class="due">без срока</span>`;
+    const d = t.days_left;
+    if (d == null) return `<span class="due">${esc(t.deadline)}</span>`;
+    if (d < 0 || !t.open) return `<span class="due past" title="Срок подачи ${esc(t.deadline)}">${long ? esc(t.deadline) + " · " : ""}${d < 0 ? "срок прошёл" : "закрыт"}</span>`;
+    const txt = d === 0 ? "сегодня" : d === 1 ? "завтра" : `${d} ${plural(d, "день", "дня", "дней")}`;
+    return `<span class="due ${d <= 2 ? "urgent" : d <= 7 ? "soon" : ""}" title="Срок подачи ${esc(t.deadline)}">${long ? esc(t.deadline) + " · осталось " : ""}${txt}</span>`;
+  }
+  const when = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?/.exec(s || ""); if (!m) return "—"; const d = new Date(+m[1], m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+    const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 864e5);
+    return (days === 0 ? "сегодня" : days === 1 ? "вчера" : d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })) + (m[4] ? ` в ${m[4]}:${m[5]}` : ""); };
+
+  /* ---------- данные ---------- */
+  async function load() {
+    try { st.b = await run("tenders_board"); } catch (e) { msg(e.message, "bad"); return; }
+    const items = st.b.items;
+    renderTop();
+    $("#report").innerHTML = (st.b.last_report || []).map(r => `<span class="${r.problem ? "bad" : ""}">${esc(r.source)}: ${r.problem ? esc(r.problem) : `найдено ${r.found}`}</span>`).join("");
+    $("#n-feed").textContent = items.length || ""; $("#n-q").textContent = st.b.queries.length || "";
+    const srcs = [...new Set(items.map(t => t.source).filter(Boolean))];
+    $("#f-src").innerHTML = `<option value="">Все площадки</option>` + srcs.map(s => `<option ${st.f.src === s ? "selected" : ""}>${esc(s)}</option>`).join("");
+    renderMarks(); renderRows();
+    if (st.cur && items.some(t => t.id === st.cur)) renderDetail(st.cur); else renderEmptyDetail();
+    if (st.tab === "board") renderBoard();
+    if (st.tab === "q") renderQ();
+  }
+  function renderTop() {
+    const items = st.b.items;
+    const by = (k) => items.filter(t => t.mark === k).length;
+    const live = items.filter(t => t.open && t.mark !== "skip" && t.days_left != null && t.days_left >= 0).sort((a, b) => a.days_left - b.days_left)[0];
+    $("#top").innerHTML = `<button class="stat" data-go="new"><small>Новые</small><b>${items.filter(t => t.mark === "new" && !t.seen).length}</b><em>всего в учёте ${items.length}</em></button>
+      <button class="stat" data-go="watching"><small>Интересно</small><b>${by("watching")}</b><em>наблюдаю</em></button>
+      <button class="stat" data-go="applied"><small>Подали заявку</small><b>${by("applied")}</b><em>участвую</em></button>
+      <button class="stat" data-go="due"><small>Ближайший срок</small><b>${live ? (live.days_left === 0 ? "сегодня" : live.days_left + " " + plural(live.days_left, "д.", "д.", "дн.")) : "—"}</b><em>${live ? esc(live.title) : "нет открытых"}</em></button>
+      <div class="scanbox"><button class="btn primary" id="scan">Найти новые тендеры</button><small>${st.b.last_scan ? "Последний поиск: " + esc(when(st.b.last_scan)) : "Поиска ещё не было"}</small></div>`;
+    $$("#top [data-go]").forEach(b => b.onclick = () => { setTab("feed"); if (b.dataset.go === "due") { st.f.sort = "due"; $("#f-sort").value = "due"; st.f.mark = "all"; } else st.f.mark = b.dataset.go; renderMarks(); renderRows(); });
+    $("#scan").onclick = scan;
+  }
+  async function scan() {
+    const b = $("#scan"); b.disabled = true; b.innerHTML = `<span class="spin"></span> Ищу на площадках…`; msg("");
+    try {
+      const d = await run("tenders_scan");
+      msg(d.new ? `Новых тендеров: ${d.new}${d.new_good && d.new_good.length ? `, подходящих: ${d.new_good.length}` : ""}.` : "Новых тендеров нет — всё уже в ленте.", d.new ? "ok" : "");
+      st.f.mark = d.new ? "new" : st.f.mark; await load();
+    } catch (e) { msg(e.message, "bad"); if (/запрос/i.test(e.message)) setTab("q"); }
+    if ($("#scan")) { $("#scan").disabled = false; $("#scan").textContent = "Найти новые тендеры"; }
+  }
+
+  /* ---------- лента ---------- */
+  function renderMarks() {
+    const it = st.b.items, n = (k) => k === "all" ? it.length : it.filter(t => t.mark === k).length;
+    $("#f-mark").innerHTML = MARKS.map(([k, l]) => `<button data-m="${k}" class="${st.f.mark === k ? "on" : ""}">${l}${n(k) ? `<b>${n(k)}</b>` : ""}</button>`).join("");
+    $$("#f-mark button").forEach(b => b.onclick = () => { st.f.mark = b.dataset.m; renderMarks(); renderRows(); });
+  }
+  function filtered() {
+    const f = st.f, q = f.q.toLowerCase();
+    let it = st.b.items.filter(t => (f.mark === "all" ? t.mark !== "skip" || false : t.mark === f.mark)
+      && (!f.src || t.source === f.src) && t.score >= f.score && (!f.sum || (t.price_value || 0) >= f.sum)
+      && (!f.due || (t.days_left != null && t.days_left >= 0 && t.days_left <= +f.due))
+      && (!f.open || (t.open && !(t.days_left != null && t.days_left < 0)) || t.mark === "applied")
+      && (!q || [t.title, t.organization, t.number, t.note].join(" ").toLowerCase().includes(q)));
+    const big = 1e9;
+    if (f.sort === "score") it.sort((a, b) => b.score - a.score || (b.first_seen || "").localeCompare(a.first_seen || ""));
+    else if (f.sort === "due") it.sort((a, b) => (a.days_left ?? big) - (b.days_left ?? big));
+    else if (f.sort === "sum") it.sort((a, b) => (b.price_value || 0) - (a.price_value || 0));
+    else it.sort((a, b) => (b.first_seen || "").localeCompare(a.first_seen || "") || b.score - a.score);
+    return it;
+  }
+  const bucket = (s) => { const w = when(s); return /^сегодня/.test(w) ? "Сегодня" : /^вчера/.test(w) ? "Вчера" : "Раньше"; };
+  function renderRows() {
+    const it = filtered(); let h = "", last = "";
+    it.slice(0, 300).forEach(t => {
+      if (st.f.sort === "fresh") { const b = bucket(t.first_seen); if (b !== last) { h += `<div class="grp">${b}</div>`; last = b; } }
+      h += `<div class="trow ${t.id === st.cur ? "cur" : ""} ${!t.seen ? "new" : ""} ${t.mark === "skip" || !t.open ? "dim" : ""}" data-id="${esc(t.id)}" role="button" tabindex="0">
+        ${meter(t.score)}<div style="min-width:0"><div class="tt">${t.star ? "★ " : ""}${esc(t.title)}</div>
+        <div class="tm">${t.organization ? `<span>${esc(t.organization)}</span>` : ""}<span>${esc(t.source)}</span>${t.price ? `<span>${esc(money(t.price_value, t.price))}</span>` : ""}</div></div>
+        <div class="side">${due(t)}<span class="mk ${esc(t.mark)}" title="${esc(ACT[t.mark])}"></span></div></div>`;
+    });
+    $("#rows").innerHTML = h || (st.b.items.length ? `<div class="empty"><b>Ничего не нашлось</b>Ослабьте фильтры — например, снимите «Только открытые».</div>`
+      : `<div class="empty"><b>Тендеров пока нет</b>${st.b.queries.length ? "Нажмите «Найти новые тендеры» — Лира пройдёт по площадкам." : "Сначала впишите, что искать, во вкладке «Мои запросы»."}</div>`);
+    $$("#rows .trow").forEach(r => { r.onclick = () => open(r.dataset.id); r.onkeydown = (e) => { if (e.key === "Enter") open(r.dataset.id); }; });
+  }
+  function renderEmptyDetail() { $("#detail").innerHTML = `<div class="empty" style="background:none"><b>Выберите тендер</b>Слева — лента: свежие сверху, балл — насколько тендер про ваши запросы.</div>`; }
+  async function open(id) {
+    st.cur = id; $$("#rows .trow").forEach(r => r.classList.toggle("cur", r.dataset.id === id));
+    const t = st.b.items.find(x => x.id === id); if (!t) return;
+    renderDetail(id);
+    if (!t.seen) { t.seen = true; const r = $(`#rows .trow[data-id="${CSS.escape(id)}"]`); if (r) r.classList.remove("new"); run("tenders_set", { ids: [id], seen: true }).catch(() => {}); }
+  }
+  function renderDetail(id) {
+    const t = st.b.items.find(x => x.id === id); if (!t) return renderEmptyDetail();
+    const terms = t.terms || [];
+    $("#detail").innerHTML = `<div class="crumbs">${meter(t.score)}<span class="tag">${esc(t.source)}</span>${!t.seen ? `<span class="tag plus">новый</span>` : ""}${t.minus ? `<span class="tag minus">минус-слово</span>` : ""}${!t.open ? `<span class="tag minus">закрыт</span>` : ""}</div>
+      <h2>${esc(t.title)}</h2>
+      <div class="acts"><div class="seg" role="radiogroup" aria-label="Отметка">${Object.entries(ACT).map(([k, l]) => `<button data-mark="${k}" class="${t.mark === k ? "on" : ""}" role="radio" aria-checked="${t.mark === k}">${l}</button>`).join("")}</div>
+        <button class="star ${t.star ? "on" : ""}" id="d-star" title="В избранное" aria-label="В избранное">${t.star ? "★" : "☆"}</button></div>
+      <div class="acts">${t.url ? `<button class="btn primary" id="d-url">Открыть на площадке</button>` : ""}<button class="btn" id="d-ask" title="Лира откроет страницу и расскажет: что нужно, сроки, обеспечение, подходит ли вам">Разобрать с Лирой</button><button class="btn ghost" id="d-del">Убрать из учёта</button></div>
+      <dl class="facts"><div class="wide"><dt>Что закупают</dt><dd>${esc(t.title)}</dd></div>
+        <div class="wide"><dt>Заказчик</dt><dd>${esc(t.organization || "—")}</dd></div>
+        <div><dt>Срок подачи</dt><dd>${due(t, true)}</dd></div><div><dt>Сумма</dt><dd class="money">${esc(t.price ? money(t.price_value, t.price) : "—")}</dd></div>
+        <div><dt>Номер</dt><dd>${esc(t.number || "—")}</dd></div><div><dt>Процедура</dt><dd>${esc([t.procedure_type, t.status].filter(Boolean).join(" · ") || "—")}</dd></div>
+        <div><dt>Площадка</dt><dd>${esc(t.source || "—")}</dd></div><div><dt>Найден</dt><dd>${esc(when(t.first_seen))}</dd></div>
+        <div class="wide"><dt>Найден по запросам</dt><dd>${(t.found_by || []).map(q => `<span class="tag q">${esc(q)}</span>`).join("") || "—"}</dd></div></dl>
+      <div class="box"><h3>Почему ${t.score} ${plural(t.score, "балл", "балла", "баллов")}</h3>${terms.length ? terms.map(x => `<span class="tag ${x[0] === "+" ? "plus" : x[0] === "−" ? "minus" : ""}">${esc(x)}</span>`).join("")
+        : `<p class="muted" style="margin:0">Совпадений с запросами целиком нет — площадка нашла тендер по отдельным словам.</p>`}
+        <p class="dim">Балл 0–10: запрос целиком +5, плюс-слово +4, найден двумя запросами +1; минус-слово — не выше 1.</p></div>
+      <div class="box"><h3>Заметка</h3><textarea class="note" id="d-note" placeholder="Контакты, что подготовить, кто ведёт… Сохраняется сама.">${esc(t.note || "")}</textarea></div>`;
+    $$("#detail [data-mark]").forEach(b => b.onclick = () => setMark([t.id], b.dataset.mark));
+    $("#d-star").onclick = async () => { t.star = !t.star; try { await run("tenders_set", { ids: [t.id], star: t.star }); renderDetail(t.id); renderRows(); } catch (e) { msg(e.message, "bad"); } };
+    if ($("#d-url")) $("#d-url").onclick = () => dewiar.openUrl(t.url).catch(e => msg(e.message, "bad"));
+    $("#d-ask").onclick = () => dewiar.ask(`Разбери тендер${t.number ? " № " + t.number : ""} «${t.title.slice(0, 160)}»${t.url ? " (" + t.url + ")" : ""} — что нужно, сроки, обеспечение, стоит ли участвовать?`).catch(e => msg(e.message, "bad"));
+    let sure = false;
+    $("#d-del").onclick = async () => { if (!sure) { sure = true; $("#d-del").textContent = "Точно убрать? Не вернётся при поиске"; return; }
+      try { await run("tenders_mark", { ids: [t.id], how: "delete" }); st.cur = ""; msg("Тендер убран из учёта", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
+    const note = $("#d-note"); let tm = 0;
+    note.oninput = () => { clearTimeout(tm); tm = setTimeout(async () => { t.note = note.value; try { await run("tenders_set", { ids: [t.id], note: note.value }); msg("Заметка сохранена", "ok"); } catch (e) { msg(e.message, "bad"); } }, 700); };
+  }
+  async function setMark(ids, mark) {
+    try { await run("tenders_set", { ids, mark }); ids.forEach(id => { const t = st.b.items.find(x => x.id === id); if (t) { t.mark = mark; t.seen = true; } });
+      msg(`Отмечено: ${ACT[mark].toLowerCase()}`, "ok"); renderTop(); renderMarks(); renderRows(); if (st.cur) renderDetail(st.cur); if (st.tab === "board") renderBoard(); }
+    catch (e) { msg(e.message, "bad"); }
+  }
+
+  /* ---------- воронка ---------- */
+  function renderBoard() {
+    const cols = [["new", "Новые", st.b.items.filter(t => t.mark === "new" && t.open && t.score >= Math.max(1, st.b.min_score)).sort((a, b) => b.score - a.score).slice(0, 60)],
+      ["watching", "Интересно", st.b.items.filter(t => t.mark === "watching").sort((a, b) => (a.days_left ?? 1e9) - (b.days_left ?? 1e9))],
+      ["applied", "Подали заявку", st.b.items.filter(t => t.mark === "applied").sort((a, b) => (a.days_left ?? 1e9) - (b.days_left ?? 1e9))],
+      ["skip", "Не подходит", st.b.items.filter(t => t.mark === "skip").slice(0, 40)]];
+    $("#board").innerHTML = cols.map(([k, l, it]) => `<div class="col" data-col="${k}"><h4><span class="mk ${k}"></span>${l}<em>${it.length}</em></h4>
+      ${k === "new" ? `<div class="colnote">Открытые от ${Math.max(1, st.b.min_score)} баллов, лучшие сверху</div>` : ""}
+      ${it.map(t => `<div class="kc" draggable="true" data-id="${esc(t.id)}" tabindex="0"><div class="t">${t.star ? "★ " : ""}${esc(t.title)}</div>${t.organization ? `<div class="o">${esc(t.organization)}</div>` : ""}<div class="m">${meter(t.score)}${due(t)}${t.price ? `<span class="dim" style="font-size:12px">${esc(money(t.price_value, t.price))}</span>` : ""}</div></div>`).join("") || `<div class="colnote">Пусто</div>`}</div>`).join("");
+    const bd = $("#board"); let drag = "";
+    bd.ondragstart = (e) => { const c = e.target.closest(".kc"); if (!c) return; drag = c.dataset.id; c.classList.add("drag"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", drag); };
+    bd.ondragend = () => { $$(".kc.drag").forEach(x => x.classList.remove("drag")); $$(".col.drop").forEach(x => x.classList.remove("drop")); };
+    bd.ondragover = (e) => { const c = e.target.closest(".col"); if (!c || !drag) return; e.preventDefault(); $$(".col.drop").forEach(x => x !== c && x.classList.remove("drop")); c.classList.add("drop"); };
+    bd.ondrop = (e) => { const c = e.target.closest(".col"); if (!c || !drag) return; e.preventDefault(); const id = drag; drag = ""; setMark([id], c.dataset.col); };
+    $$("#board .kc").forEach(c => { c.onclick = () => { setTab("feed"); st.f.mark = "all"; renderMarks(); renderRows(); open(c.dataset.id); }; c.onkeydown = (e) => { if (e.key === "Enter") c.click(); }; });
+  }
+
+  /* ---------- мои запросы (настройки плагина) ---------- */
+  async function renderQ() {
+    try { st.settings = await dewiar.settings(); } catch (e) { msg(e.message, "bad"); return; }
+    const v = st.settings.values || {}, list = (k) => String(v[k] || "").split(/[;\n,]+/).map(x => x.trim()).filter(x => x.length >= 2);
+    const card = (k, title, hint, cls, ph) => `<div class="card qcard"><h3>${title}</h3><p>${hint}</p><div class="chips">${list(k).map((x, i) => `<span class="qchip ${cls}">${esc(x)}<button data-del="${k}" data-i="${i}" title="Убрать" aria-label="Убрать «${esc(x)}»">✕</button></span>`).join("") || `<span class="dim" style="font-size:13px">Пусто</span>`}</div>
+      <div class="qadd"><input type="text" data-add="${k}" placeholder="${ph}"><button class="btn small" data-addb="${k}">Добавить</button></div></div>`;
+    $("#qgrid").innerHTML = card("queries", "Что искать", "Каждый запрос ищется на всех площадках. Тот же тендер из двух запросов — одна запись.", "", "например, видеонаблюдение")
+      + card("plus", "Плюс-слова", "Если есть в названии — балл выше (+4).", "plus", "например, монтаж")
+      + card("minus", "Минус-слова", "Если есть в названии — тендер в конце списка (балл не выше 1).", "minus", "например, продукты питания")
+      + `<div class="card qcard"><h3>Площадки</h3><p>Где искать. Своя площадка — в настройках плагина (адрес поиска с {QUERY}).</p><div class="srcs">${(st.b.sources || []).filter(s => s.id !== "own").map(s => `<label><input type="checkbox" data-src="${esc(s.id)}" ${s.on ? "checked" : ""}>${esc(s.name)}</label>`).join("")}</div>
+        <p style="margin-top:10px">Присылать от балла: <select id="q-min" style="width:auto;display:inline-block;margin-left:6px">${[0, 2, 3, 4, 5, 6, 8].map(n => `<option ${+v.min_score === n ? "selected" : ""}>${n}</option>`).join("")}</select></p></div>`;
+    const save = async (patch, done) => { try { const nv = await dewiar.saveSettings(patch); st.settings.values = nv; msg(done + " — балл в ленте уже пересчитан.", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
+    const add = (k) => { const i = $(`[data-add="${k}"]`); const x = i.value.trim().replace(/[;]/g, " "); if (x.length < 2) { i.focus(); return; }
+      const cur = list(k); if (!cur.some(y => y.toLowerCase() === x.toLowerCase())) cur.push(x); save({ [k]: cur.join("; ") }, `«${x}» добавлено`); };
+    $$("[data-addb]").forEach(b => b.onclick = () => add(b.dataset.addb));
+    $$("[data-add]").forEach(i => i.onkeydown = (e) => { if (e.key === "Enter") add(i.dataset.add); });
+    $$("[data-del]").forEach(b => b.onclick = () => { const k = b.dataset.del, cur = list(k), x = cur.splice(+b.dataset.i, 1)[0]; save({ [k]: cur.join("; ") }, `«${x}» убрано`); });
+    $$("[data-src]").forEach(c => c.onchange = () => save({ [c.dataset.src]: c.checked }, c.checked ? "Площадка включена" : "Площадка выключена"));
+    $("#q-min").onchange = (e) => save({ min_score: +e.target.value }, "Порог сохранён");
+  }
+
+  function setTab(t) { st.tab = t; $$(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t)); ["feed", "board", "q"].forEach(k => { $("#t-" + k).hidden = k !== t; });
+    if (t === "board") renderBoard(); if (t === "q") renderQ(); }
+  $$(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  $("#f-q").oninput = () => { st.f.q = $("#f-q").value.trim(); renderRows(); };
+  $("#f-src").onchange = (e) => { st.f.src = e.target.value; renderRows(); };
+  $("#f-score").onchange = (e) => { st.f.score = +e.target.value; renderRows(); };
+  $("#f-sum").onchange = (e) => { st.f.sum = +e.target.value; renderRows(); };
+  $("#f-due").onchange = (e) => { st.f.due = e.target.value; renderRows(); };
+  $("#f-sort").onchange = (e) => { st.f.sort = e.target.value; renderRows(); };
+  $("#f-open").onclick = () => { st.f.open = !st.f.open; $("#f-open").classList.toggle("on", st.f.open); renderRows(); };
+  load();
+})();
+</script>
+</body>
+</html>

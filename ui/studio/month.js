@@ -39,7 +39,7 @@ function moStats(d) {
 function moRender(force) {
   const box = $("#hm-month"); if (!box) return;
   const d = MO;
-  if (!d || d.empty || (d.hidden && !force) || (!moTime() && !force)) { box.hidden = true; return; }
+  if (!d || !d.ym || d.empty || (d.hidden && !force) || (!moTime() && !force)) { box.hidden = true; return; }   // старое ядро без итогов месяца — не падаем
   const nm = typeof hmWho === "function" ? hmWho("") : "Лира", who = typeof mnWith === "function" ? mnWith(nm === "Ассистент" ? "Лира" : nm) : "Лирой";
   const m = d.money || {}, cats = (m.cats || []).filter(c => c.sum > 0);
   const tot = cats.reduce((a, c) => a + c.sum, 0) || 1;

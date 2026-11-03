@@ -49,7 +49,7 @@ ok("chat_template_kwargs" not in seen[0] and seen[0]["max_tokens"] == 6144, f"д
 ok(seen[1].get("chat_template_kwargs") == {"enable_thinking": False}, "обычный вопрос — размышления выключены, как раньше")
 
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
-ok('wants_think(text)' in src and 'think="on"' in src and '"think_auto"' in src, "ядро: сложная просьба — профиль хода с think=on (выключается llm.think_auto)")
+ok('wants_think(think_ask(text' in src and 'think="on"' in src and '"think_auto"' in src, "ядро: сложная просьба — профиль хода с think=on (выключается llm.think_auto)")
 from settings import DEFAULTS  # noqa: E402
 ok(DEFAULTS["llm"]["think_auto"] is True and 'data-k="llm.think_auto"' in (ROOT / "ui/settings.html").read_text(encoding="utf-8"),
    "включено по умолчанию, переключатель в студии («Мозг»)")

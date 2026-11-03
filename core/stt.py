@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import os
+import re
 import threading
 import time
 import wave
@@ -129,6 +130,12 @@ class GigaAMSTT:
             self.loading = True
             os.environ.setdefault("HF_HOME", str(MODELS_DIR / "hf"))
             try:
+                # №455/№464: после переустановки системы onnx_asr не оказалось — докачиваем сами (pydeps), а не
+                # падаем ModuleNotFoundError; не вышло — причина словами (engine скажет, что делать, и слушает Vosk)
+                import pydeps
+                have, why = pydeps.ensure("onnx_asr", on_status=on_status)
+                if not have:
+                    raise RuntimeError(why)
                 import onnx_asr
                 import onnxruntime as _rt
                 so = _rt.SessionOptions()           # половина ядер: созвон, браузер и сам компьютер не должны тормозить
@@ -196,6 +203,37 @@ class GigaAMSTT:
         a = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
         res = self.model.recognize(a, sample_rate=16000)
         return res if isinstance(res, str) else getattr(res, "text", str(res))
+
+
+def stt_error_text(stt, e, spare=None):
+    """Сбой распознавателя -> подсказка человеку (№455): кто не ответил, что это значит, что делать и чем слушаю пока."""
+    name = getattr(stt, "name", "Распознавание")
+    cfg = getattr(stt, "cfg", None) or {}
+    st = getattr(getattr(e, "response", None), "status_code", None)
+    low = str(e).lower()
+    if isinstance(stt, RemoteSTT) and cfg.get("cloud"):
+        what = "Облако Dewiar сейчас не распознало речь" + (f" (ошибка {st})" if st else "")
+        fix = "обычно это ненадолго"
+    elif isinstance(stt, RemoteSTT):
+        host = re.sub(r"^https?://", "", str(cfg.get("base_url") or "")).split("/")[0] or "сервер"
+        if st and st >= 500:
+            what = f"Ваш сервер распознавания {host} ответил ошибкой {st} — на нём сбой"
+            fix = ("проверьте службу на сервере (журнал: sudo journalctl -u dewiar-speech -n 50); если сервер переустанавливали — "
+                   "поставьте службу заново (sudo ./install-server.sh из архива Dewiar Server)")
+        elif st in (401, 403):
+            what, fix = f"Сервер распознавания {host} не принял ключ (ошибка {st})", "проверьте ключ в студии → «Слух»"
+        elif st:
+            what, fix = f"Сервер распознавания {host} ответил ошибкой {st}", "проверьте адрес и модель в студии → «Слух»"
+        elif any(w in low for w in ("connect", "timed out", "timeout", "refused", "unreachable", "name or service")):
+            what, fix = f"Сервер распознавания {host} не отвечает", "проверьте, что он включён и в той же сети"
+        else:
+            what, fix = f"Сервер распознавания {host} не распознал фразу: {str(e)[:120]}", "проверьте его в студии → «Слух»"
+    else:
+        what, fix = f"{name} не распознал фразу: {str(e)[:160]}", ""
+    pend = f"Пока слушаю {'точным GigaAM на этом компьютере' if isinstance(spare, GigaAMSTT) else 'запасной моделью (она ошибается чаще)'}." \
+        if spare is not None else "Другой модели распознавания нет — пока можно писать текстом."
+    alt = "" if cfg.get("cloud") or not isinstance(stt, RemoteSTT) else " Или выберите другое распознавание: студия → «Слух»."
+    return f"{what}. {pend}" + (f" Что сделать: {fix}." if fix else "") + alt
 
 
 class RemoteSTT:

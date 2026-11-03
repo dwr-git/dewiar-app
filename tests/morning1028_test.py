@@ -168,7 +168,7 @@ with sync_playwright() as p:
       document.querySelector('.mn-w').className, [...document.querySelectorAll('.mn-rows b')].map(x => x.textContent), [...document.querySelectorAll('.mn-rows button')].map(x => x.dataset.mgo)]""")
     ok(r[0] is False and r[1] == "Утро с Лирой" and r[2] == "-3°" and "sky-snow" in r[3], f"на главной — «Утро с Лирой», −3°, снежное небо: {r[:4]}")
     ok(r[4][0].startswith("1 встреча, 1 дело") and r[4][1] == "Сотрудники: 1 просрочено · 1 ждёт проверки · 1 сообщение" and r[4][2] == "Клиенты ждут: 1"
-       and r[4][3] == "Почта: 3 новых" and r[5][:4] == ["calendar", "team", "clients", "connect"], f"строки ведут в разделы: {r[4]}")
+       and r[4][3] == "Почта: 3 новых" and r[5][:4] == ["calendar", "team", "clients", "mail"], f"строки ведут в разделы (почта — к письмам, №467): {r[4]}")
     if SHOTS: pg.screenshot(path=str(Path(SHOTS) / "studio-morning.png"), clip={"x": 240, "y": 0, "width": 1160, "height": 560})
     pg.click("#mn-say"); pg.wait_for_timeout(200)
     ok(["job_run", {"task": "Утренняя сводка", "brief": True, "deliver": "voice"}] in pg.evaluate("_calls"), "«Расскажи утро» — сводка голосом сейчас")

@@ -38,7 +38,7 @@ log = logging.getLogger("dewiar.speech")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 app = FastAPI(title="Dewiar Speech")
-_model, _lock = None, threading.Lock()
+_model, _lock, _model_err = None, threading.Lock(), ""
 
 
 def model():
@@ -52,13 +52,23 @@ def model():
                         return f"тест {len(a) / sample_rate:.1f} секунды"
                 _model = Fake()
                 return _model
-            import onnx_asr
-            import onnxruntime as rt
+            # №455 (01.11: Ubuntu переустановили — «onnx_asr снова нет, распознавание обрывается»): нет библиотеки — не 500
+            # без объяснений, а 503 со словами, что поставить; ошибка видна и в /health
+            global _model_err
+            try:
+                import onnx_asr
+                import onnxruntime as rt
+            except ImportError as e:
+                _model_err = (f"не установлена библиотека {e.name or 'onnx-asr'} — запустите install-server.sh заново "
+                              "или: pip install onnx-asr[cpu,hub] onnxruntime")
+                log.error("Распознавание: %s", _model_err)
+                raise HTTPException(503, _model_err) from e
             prov = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in rt.get_available_providers()]
             log.info("Загружаю %s на %s …", MODEL, prov[0])
             t0 = time.time()
             _model = onnx_asr.load_model(MODEL, providers=prov)
             _model.recognize(np.zeros(16000, dtype=np.float32))
+            _model_err = ""
             log.info("Готово за %.1f с", time.time() - t0)
         return _model
 
@@ -102,7 +112,7 @@ def manifest():
 
 @app.get("/health")
 def health():
-    return {"ok": True, "model": MODEL, "loaded": _model is not None,
+    return {"ok": not _model_err, "model": MODEL, "loaded": _model is not None, "error": _model_err,
             "tts": TTS_MODEL if TTS_ON else "", "tts_loaded": _tts is not None, "tts_error": _tts_err}
 
 

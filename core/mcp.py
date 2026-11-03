@@ -58,6 +58,9 @@ def plugin_expand(cfg):
     env["DEWIAR_PLUGIN_SETTINGS"] = json.dumps(cfg.get("_values") or {}, ensure_ascii=False)
     if cfg.get("_ws"):                                  # папка ассистента («Документы/Dewiar») — плагину, который сохраняет работы
         env.setdefault("DEWIAR_WORKSPACE", str(cfg["_ws"]))
+    cl = cfg.get("_cloud") or {}
+    if cl.get("base") and cl.get("key") and d.parent == BUILTIN_DIR:    # облако Dewiar — только встроенным плагинам
+        env["DEWIAR_CLOUD_URL"], env["DEWIAR_CLOUD_KEY"] = str(cl["base"]), str(cl["key"])
     core = str(Path(__file__).resolve().parent)
     env["PYTHONPATH"] = os.pathsep.join(([str(d / "lib")] if (d / "lib").is_dir() else []) + [core]
                                         + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
@@ -66,6 +69,29 @@ def plugin_expand(cfg):
 
 class MCPError(Exception):
     pass
+
+
+_PNAMES = {}
+
+
+def plugin_name(pid):
+    """Имя плагина по его id («recruiter» → «Рекрутер») из plugin.json — для подписи шагов; нет плагина — ""."""
+    pid = str(pid or "")
+    if not pid or not re.fullmatch(r"[\w-]{1,40}", pid):
+        return ""
+    if pid not in _PNAMES:
+        name = ""
+        try:
+            from plugins import BUILTIN_DIR, USER_DIR
+            for d in (BUILTIN_DIR / pid, USER_DIR / pid):
+                f = d / "plugin.json"
+                if f.is_file():
+                    name = str(json.loads(f.read_text(encoding="utf-8")).get("name") or "").strip()[:60]
+                    break
+        except Exception:  # noqa: BLE001
+            name = ""
+        _PNAMES[pid] = name
+    return _PNAMES[pid]
 
 
 class StdioTransport:
@@ -266,6 +292,12 @@ class Server:
         text = "\n".join(parts)[:8000] or "(пусто)"
         return ("Ошибка: " + text) if r.get("isError") else text
 
+    def call_raw(self, tool, args, timeout=180):
+        """Вызвать инструмент для страницы плагина в студии (без модели) -> ответ сервера как есть: {content, isError,
+        structuredContent}. Длинный текст не обрезается до 8000, как для модели, — страница покажет его целиком."""
+        r = self.rpc("tools/call", {"name": tool, "arguments": args or {}}, timeout=timeout)
+        return r if isinstance(r, dict) else {}
+
     def close(self):
         if self.t:
             try:
@@ -273,6 +305,12 @@ class Server:
             except Exception:  # noqa: BLE001
                 pass
         self.t = None
+
+
+def page_only(t):
+    """Действие сервера только для своей страницы плагина в студии (ui.html: список кандидатов целиком и т. п.) —
+    помощнице не показывается: «_meta»: {"dewiar/page": true}."""
+    return bool(((t or {}).get("_meta") or {}).get("dewiar/page"))
 
 
 def _safe(s):
@@ -300,7 +338,14 @@ class MCPManager:
                 ws = str(self.s.get("workspace", "path") or "").strip() or str(workspace.default_dir())
             except Exception:  # noqa: BLE001
                 ws = ""
+        cloud = {}
+        for pr in ((self.s.get("llm", "profiles") or {}).values() if any(c.get("plugin") for c in want.values()) else []):
+            if isinstance(pr, dict) and pr.get("cloud") and pr.get("api_key") and pr.get("base_url"):
+                cloud = {"base": pr["base_url"], "key": pr["api_key"]}   # «Художник»: картинки генератором облака Dewiar
+                break
         for n, c in list(want.items()):                 # сервер плагина получает его настройки (поменяли — перезапуск)
+            if c.get("plugin") and cloud and c.get("plugin") == "artist":
+                c = want[n] = dict(c, _cloud=cloud)
             if c.get("plugin"):
                 want[n] = dict(c, _values=dict((on.get(c["plugin"]) or {}).get("values") or {}), **({"_ws": ws} if ws else {}))
         with self.lock:
@@ -331,6 +376,8 @@ class MCPManager:
                 if s.status != "ok":
                     continue
                 for t in s.tools:
+                    if page_only(t):                # действие только для страницы плагина — помощнице не показываем
+                        continue
                     key = base = f"mcp_{_safe(n)}_{_safe(t['name'])}"[:64]
                     i = 2
                     while key in out:               # совпало после _safe или обрезки до 64 — иначе инструмент пропал бы
@@ -356,12 +403,86 @@ class MCPManager:
         return not (t.get("annotations") or {}).get("readOnlyHint", False)
 
     def title(self, name):
+        """Подпись шага в виджете и «Чате». Сервер плагина — по-человечески: «Плагин «Рекрутер»: разобрать резюме»
+        (№463: пока плагин работает, человек должен видеть, что идёт работа и чья); остальные — «сервер: действие»."""
         s, t = self._index()[name]
-        return f"{s.name}: {(t.get('annotations') or {}).get('title') or t['name']}"
+        what = (t.get("annotations") or {}).get("title") or t["name"]
+        pname = plugin_name(s.cfg.get("plugin"))
+        if pname:
+            return f"Плагин «{pname}»: {what[:1].lower() + what[1:] if what[1:2].islower() else what}"
+        return f"{s.name}: {what}"
+
+    def plugin_tools(self):
+        """{id плагина: [(имя действия для модели, название)]} — только подключённые серверы плагинов."""
+        out = {}
+        for k, (s, t) in self._index().items():
+            if s.cfg.get("plugin"):
+                out.setdefault(s.cfg["plugin"], []).append((k, (t.get("annotations") or {}).get("title") or ""))
+        return out
+
+    def plugin_errors(self):
+        """{id плагина: что не так} — серверы плагинов, которые не подключились."""
+        with self.lock:
+            return {s.cfg["plugin"]: (s.error or "не запустился") for s in self.servers.values()
+                    if s.cfg.get("plugin") and s.status == "error"}
 
     def call(self, name, args):
         s, t = self._index()[name]
         return s.call(t["name"], args)
+
+    # ---- страница плагина в студии (03.11): действия напрямую, без модели ----
+    def _of(self, pid):
+        with self.lock:
+            return [s for s in self.servers.values() if s.cfg.get("plugin") == pid]
+
+    def plugin_info(self, pid):
+        """Серверы плагина -> {state: ok | connecting | error | off, error, tools: [описание инструмента + server]}.
+        off — у плагина нет серверов (навык без своего кода) или их выключили в «MCP-серверах»."""
+        srvs = self._of(pid)
+        if not srvs:
+            return {"state": "off", "error": "", "tools": []}
+        tools, errs, busy = [], [], False
+        for s in srvs:
+            if s.status == "ok":
+                tools += [dict(t, server=s.name) for t in s.tools]
+            elif s.status == "error":
+                errs.append(s.error or "не запустился")
+            else:
+                busy = True
+        state = "error" if errs and not tools else "connecting" if busy and not tools else "ok"
+        return {"state": state, "error": "; ".join(errs)[:400], "tools": tools}
+
+    def plugin_call(self, pid, tool, args, wait=40, timeout=180):
+        """Вызвать инструмент СВОЕГО плагина без модели (кнопка «Выполнить» и мост ui.html) -> ответ сервера как есть.
+        Ищется только среди серверов этого плагина: чужое действие отсюда не вызвать. Сервер ещё подключается — ждём."""
+        import time
+        end = time.time() + wait
+        while True:
+            srvs = self._of(pid)
+            for s in srvs:
+                if s.status == "ok" and any(t.get("name") == tool for t in s.tools):
+                    return s.call_raw(tool, args, timeout)
+            if not srvs:
+                raise MCPError("у плагина нет такого действия — он не установлен или его подключение выключено")
+            if not any(s.status == "connecting" for s in srvs):
+                err = next((s.error for s in srvs if s.status == "error"), "")
+                raise MCPError(f"плагин не запустился: {err}" if err else "у плагина нет такого действия")
+            if time.time() > end:
+                raise MCPError("плагин ещё запускается — попробуйте через минуту")
+            time.sleep(0.2)
+
+    def plugin_restart(self, pid):
+        """«Перезапустить» на странице плагина: его серверы закрываются и подключаются заново (выключенные — включаются)."""
+        servers = dict(self.s.get("mcp", "servers") or {})
+        off = [n for n, c in servers.items() if c.get("plugin") == pid and not c.get("enabled", True)]
+        if off:
+            for n in off:
+                servers[n] = dict(servers[n], enabled=True)
+            self.s.update({"mcp": {"servers": servers}})
+        with self.lock:
+            for n in [n for n, s in self.servers.items() if s.cfg.get("plugin") == pid]:
+                self.servers.pop(n).close()
+        self.reconcile()
 
     def close(self):
         with self.lock:

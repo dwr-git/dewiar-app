@@ -258,3 +258,8 @@ html.st-neu .plg.on::after { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, va
 html.st-light .cl-tabs { background: rgba(20,30,60,.06); }
 html.st-neu .cl-tabs { background: var(--sk-glass); box-shadow: var(--press); }
 html.st-neu .nr-card, html.st-neu .nr-empty { background: var(--sk-glass); box-shadow: var(--raise); }
+/* страница плагина (studio/plugpage.js): карточки действий, шапка и плитки — объёмом, как остальные панели */
+html.st-neu :is(.plp-card, .plp-none) { background: var(--sk-glass); box-shadow: var(--raise); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html.st-neu .plp-head { background: linear-gradient(120deg, color-mix(in srgb, var(--pc) 16%, var(--sk-glass)), var(--sk-glass) 60%); box-shadow: var(--raise); }
+html.st-neu .plp-tw, html.st-neu .plp-kv > div, html.st-neu .plp-long { background: var(--sk-glass); box-shadow: var(--press); }
+html.st-neu :is(.plp-file, .plp-frow) { background: var(--sk-glass); box-shadow: var(--raise-s); }

@@ -215,7 +215,7 @@ function pySet(b) {
   const kinds = PY.ov.kinds, groups = PY.ov.groups;
   return `<div class="py-form">
     <label class="py-f"><span>Название</span><input id="py-sname" value="${escH(b.name)}" maxlength="60"></label>
-    <label class="py-f"><span>Значок</span><input id="py-sicon" value="${escH(b.icon || "")}" maxlength="4" class="py-icin"></label>
+    <div class="py-f"><span id="py-sicl">Значок</span>${pyIconRow("py-s", b.icon || "")}</div>
     <label class="py-f"><span>Вид</span><select id="py-skind">${Object.entries(kinds).map(([k, v]) => `<option value="${k}" ${b.kind === k ? "selected" : ""}>${v.title}</option>`).join("")}</select></label>
     <label class="py-f"><span>Группа (для итогов)</span><select id="py-sgroup">${groups.map(g => `<option ${b.group === g ? "selected" : ""}>${g}</option>`).join("")}</select></label>
     <label class="py-f"><span>Срок — число месяца</span><input id="py-sday" type="number" min="1" max="31" value="${b.day || ""}" placeholder="например, 25"></label>
@@ -270,6 +270,7 @@ function pyDrawerWire(b, pays) {
     $$("#py-drawer .nt-f[data-path]").forEach(x => x.onclick = () => core.call("ws_open", { path: x.dataset.path }).catch(e => toast(e.message)));
     pyImgs(d);
   } else {
+    pyIconWire(d, "py-s");
     $("#py-skind").onchange = () => { const k = $("#py-skind").value; $(".py-onlyy").hidden = k !== "yearly"; $(".py-onlym").hidden = k !== "meter"; $(".py-onlyl").hidden = k !== "loan"; };
     $("#py-ssave").onclick = async () => {
       try {
@@ -289,6 +290,40 @@ function pyDrawerWire(b, pays) {
 async function pyReload() { PY.ov = await core.call("pay_overview").catch(() => PY.ov); if ($("#p-pay").classList.contains("cur")) pyRender(); }
 
 /* ---------- формы: новый платёж и запись оплаты ---------- */
+/* 03.11 (владелец: «нет возможности вставить свою красивую иконку… догадался вставить юникод из Гугла — неудобно, было бы
+   удобно, если бы сразу была коллекция»): значок — кнопкой из набора по темам; своё (любой эмодзи) — в поле рядом. */
+const PY_ICONS = [
+  ["Дом и коммунальные", "🏠 🔥 💡 💧 🌡️ 🗑️ 🛗 🔑 🏢 🏡 🧹 🛠️"],
+  ["Связь и подписки", "🌐 📱 📺 ☁️ 🤖 🎬 🎵 🎮 📰 📚 🔒 💻"],
+  ["Деньги", "🏦 💳 💰 🪙 📈 🧾 🏛️ 🛡️ ⚖️ 📄"],
+  ["Транспорт", "🚗 ⛽ 🅿️ 🚌 🚕 🚲 🛵 ✈️ 🔧"],
+  ["Семья и дети", "👶 🧸 🎒 🏫 🎓 🎨 ⚽ 🎹 👵 🎁"],
+  ["Здоровье и спорт", "💊 🩺 🦷 🏋️ 🧘 🏊 💆 👓"],
+  ["Другое", "🐾 🌿 🛒 ✂️ ⭐ ❤️ 📦 📅 🎉 ⛪"],
+];
+function pyIconRow(pre, icon) {
+  return `<div class="py-icrow"><button type="button" class="py-icbtn" id="${pre}icbtn" aria-haspopup="dialog" aria-expanded="false" title="Выбрать значок">${escH(icon || "✨")}</button>
+    <input id="${pre}icon" value="${escH(icon)}" maxlength="8" class="py-icin" placeholder="свой" aria-label="Свой значок — вставьте любой эмодзи" title="Свой значок: вставьте любой эмодзи (на Windows — Win + .)"></div>`;
+}
+function pyIconWire(root, pre) {
+  const btn = root.querySelector(`#${pre}icbtn`), inp = root.querySelector(`#${pre}icon`);
+  if (!btn || !inp) return;
+  inp.oninput = () => { btn.textContent = inp.value.trim() || "✨"; };
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const old = root.querySelector(".py-icpop"); if (old) { old.remove(); btn.setAttribute("aria-expanded", "false"); return; }
+    const pop = document.createElement("div"); pop.className = "py-icpop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Значки");
+    pop.innerHTML = PY_ICONS.map(([t, list]) => `<h4>${t}</h4><div class="py-icgrid">${list.split(" ").map(i => `<button type="button" data-i="${i}"${i === inp.value ? ' class="on"' : ""}>${i}</button>`).join("")}</div>`).join("")
+      + `<p>Нет нужного? Вставьте любой эмодзи в поле рядом${navigator.platform.startsWith("Win") ? " (Win + . — панель эмодзи)" : ""}.</p>`;
+    btn.parentNode.appendChild(pop); btn.setAttribute("aria-expanded", "true");
+    const close = () => { pop.remove(); btn.setAttribute("aria-expanded", "false"); document.removeEventListener("mousedown", out, true); document.removeEventListener("keydown", key, true); };
+    const out = (ev) => { if (!pop.contains(ev.target) && ev.target !== btn) close(); };
+    const key = (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); close(); btn.focus(); } };
+    document.addEventListener("mousedown", out, true); document.addEventListener("keydown", key, true);
+    pop.onclick = (ev) => { const b = ev.target.closest("[data-i]"); if (!b) return; inp.value = b.dataset.i; btn.textContent = b.dataset.i; inp.dispatchEvent(new Event("change")); close(); btn.focus(); };
+    (pop.querySelector(".on") || pop.querySelector("[data-i]")).focus();
+  };
+}
 function pyModal(html) {
   const o = document.createElement("div"); o.className = "py-modal"; o.innerHTML = `<div class="py-mbox glass" role="dialog" aria-modal="true">${html}</div>`;
   document.body.appendChild(o); requestAnimationFrame(() => o.classList.add("on"));
@@ -301,20 +336,22 @@ function pyModal(html) {
 function pyBillForm() {
   const kinds = PY.ov ? PY.ov.kinds : {};
   const [o, close] = pyModal(`<h2>Новый платёж</h2>
-    <label class="py-f"><span>Название</span><input id="pb-name" placeholder="Газ, Электричество, Интернет, Кредит…" maxlength="60"></label>
+    <div class="py-namerow"><label class="py-f"><span>Название</span><input id="pb-name" placeholder="Газ, Электричество, Интернет, Кредит…" maxlength="60"></label>
+      <div class="py-f"><span>Значок</span>${pyIconRow("pb-", "")}</div></div>
     <div class="py-kinds" role="radiogroup">${Object.entries(kinds).map(([k, v], i) => `<label class="py-kind"><input type="radio" name="pb-kind" value="${k}" ${i === 0 ? "checked" : ""}><b>${v.icon} ${v.title}</b><small>${v.hint}</small></label>`).join("")}</div>
     <div class="py-two"><label class="py-f"><span>Срок — число месяца</span><input id="pb-day" type="number" min="1" max="31" placeholder="25"></label>
       <label class="chk"><input type="checkbox" id="pb-auto"><span>Автооплата</span></label></div>
     <label class="py-f"><span>Как платить (можно потом)</span><textarea id="pb-how" rows="3" placeholder="ЕРИП → … → номер абонента"></textarea></label>
     <div class="py-mact"><button class="btn" id="pb-no">Отмена</button><button class="btn primary" id="pb-ok">Добавить</button></div>`);
-  const nm = o.querySelector("#pb-name"); nm.focus();
+  const nm = o.querySelector("#pb-name"); nm.focus(); pyIconWire(o, "pb-");
   nm.oninput = () => { const t = nm.value.toLowerCase(); const k = /газ|свет|электр|вод|тепл/.test(t) ? "meter" : /кредит|рассроч|ипотек/.test(t) ? "loan" : /страхов|налог|техосмотр/.test(t) ? "yearly" : null;
     if (k) o.querySelector(`input[name=pb-kind][value=${k}]`).checked = true; };
   o.querySelector("#pb-no").onclick = close;
   o.querySelector("#pb-ok").onclick = async () => {
     try {
       const b = await core.call("pay_bill_save", { bill: { name: nm.value, kind: o.querySelector("input[name=pb-kind]:checked").value, day: o.querySelector("#pb-day").value,
-        autopay: o.querySelector("#pb-auto").checked, how: o.querySelector("#pb-how").value } });
+        autopay: o.querySelector("#pb-auto").checked, how: o.querySelector("#pb-how").value,
+        ...(o.querySelector("#pb-icon").value.trim() ? { icon: o.querySelector("#pb-icon").value.trim() } : {}) } });   // не выбран — подберётся по названию
       close(); await pyReload(); pyOpen(b.id, "hist");
     } catch (e) { toast(e.message); }
   };

@@ -87,6 +87,11 @@ ok([x["name"] for x in sp3] == CORE and s3 == SYS_LEAN and len(m3) == 1, "мен
 ok(len(notes) == 1 and "6144" in notes[0] and "главными действиями" in notes[0] and "32768" in notes[0] and "OLLAMA_CONTEXT_LENGTH" in notes[0],
    f"заметка с советом: {notes}")
 
+# 03.11: «Художник» на своей модели — «такого плагина у меня нет»: действия плагина, к которому просьба, остаются
+llm._ctx_cache.clear(); KIND.update(n=6144)
+s3k, sp3k, _ = EA.AnswerMixin._fit_window(e, P, SYS_FULL, specs, hist, keep={"tool42"})
+ok([x["name"] for x in sp3k] == CORE + ["tool42"], f"главные действия + действие плагина, к которому просьба: {[x['name'] for x in sp3k]}")
+
 llm._ctx_cache.clear(); KIND.update(n=2500)
 s3, sp3, m3 = fit(P, SYS_FULL, specs, hist)
 ok(sp3 == [] and s3.startswith(SYS_NO) and "маленькое окно" in s3 and len(m3) == 1, "совсем мало — без действий, с честной фразой")
@@ -115,7 +120,7 @@ llm.stream_chat, llm.probe_tools = orig
 br = (ROOT / "ui/studio/brain.js").read_text(encoding="utf-8")
 ok("r.ctx_note" in br, "студия «Мозг» показывает совет про окно")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
-ok("system, specs, msgs = self._fit_window(prof, system, specs, msgs)" in src and "self._system_min(), msgs[-1:]" in src,
+ok("system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text))" in src and "self._system_min(), msgs[-1:]" in src,
    "в ходе разговора: подгонка до запроса; и без действий не влезло — самая короткая подсказка")
 srv.shutdown()
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

@@ -192,7 +192,8 @@ with sync_playwright() as p:
     if wdi <= 4:
         pg.fill("#dd-body #re-time", "16:40"); pg.check("#dd-body #re-only"); pg.click("#dd-body #re-save"); pg.wait_for_timeout(300)
         ok(["reminder_split", {"id": "r3", "day": wdi, "time": "16:40"}] in pg.evaluate("calls"), "«только в этот день» — reminder_split с днём и временем")
-    pg.locator("#dd-body .cit", has_text="Пора выключать компьютер").locator(".t").click(); pg.wait_for_timeout(250)
+    if not pg.locator("#dd-body .remed-days").count():             # в выходные окно правки ещё открыто — второй щелчок закрыл бы его
+        pg.locator("#dd-body .cit", has_text="Пора выключать компьютер").locator(".t").click(); pg.wait_for_timeout(250)
     pg.click("#dd-body .remed-days .rd[data-d='4']"); pg.click("#dd-body #re-save"); pg.wait_for_timeout(300)
     ok(any(c[0] == "reminder_update" and c[1]["id"] == "r3" and c[1]["patch"].get("days") == [0, 1, 2, 3] for c in pg.evaluate("calls")), "сняли «Пт» — дни повтора без пятницы")
     # 30.10 (владелец: «„Удалить все повторы“ — только затемняет экран: окошко удаления появляется под этим окном»)

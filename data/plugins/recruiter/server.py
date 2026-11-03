@@ -222,6 +222,11 @@ def add(path):
     if not p.exists():
         return {"error": f"Не нашла «{raw}». Проверьте путь."}
     files = [p] if p.is_file() else sorted(x for x in p.rglob("*") if x.is_file() and x.suffix.lower() in EXTS and not x.name.startswith(("~$", ".")))
+    return add_files(files)
+
+
+def add_files(files):
+    """Разобрать файлы резюме -> {added, already_known, problems} (повтор по содержимому не заводится)."""
     d, added, skipped, bad = load(), [], 0, []
     for f in files[:300]:
         try:
@@ -241,12 +246,326 @@ def add(path):
         d["cands"][cid] = c
         added.append(c)
     save(d)
-    res = {"added": [brief(c) | {k: c[k] for k in ("phone", "email", "telegram", "city", "age", "salary") if c.get(k)} for c in added[:30]],
+    res = {"added": [brief(c) | {k: c[k] for k in ("phone", "email", "telegram", "city", "age", "salary", "file") if c.get(k)} for c in added[:30]],
            "already_known": skipped, "problems": bad[:10]}
     if len(added) == 1:
         res["text"] = added[0]["text"][:6000]
         res["flags"] = added[0]["flags"]
     return res
+
+
+# ---------------- своя страница плагина: загрузка, правка, подбор и сравнение без модели ----------------
+
+MAX_FILE = 15 * 1024 * 1024
+
+
+def inbox():
+    """Куда класть резюме, закинутые на странице: папка из настроек (если есть), иначе «Резюме» в папке данных плагина."""
+    raw = str(settings().get("folder") or "").strip()
+    p = Path(os.path.expandvars(os.path.expanduser(raw))) if raw else None
+    if p and p.is_dir():
+        return p
+    p = DATA / "Резюме"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _free_name(folder, name, data):
+    """Имя файла в папке резюме: такой же файл уже лежит — он и есть; иначе «имя (2).pdf»."""
+    stem, ext = Path(name).stem[:80] or "резюме", Path(name).suffix.lower()
+    f, i = folder / f"{stem}{ext}", 2
+    while f.exists():
+        try:
+            if f.read_bytes() == data:
+                return f, False
+        except OSError:
+            pass
+        f, i = folder / f"{stem} ({i}){ext}", i + 1
+    return f, True
+
+
+def import_files(files):
+    """Резюме, закинутые на странице плагина (перетащили или выбрали): [{name, b64}] -> копии в папку резюме и разбор.
+    ZIP распаковывается (только файлы резюме, без путей). Имя — только последняя часть, без «..»."""
+    import base64
+    import io
+    import zipfile
+    folder, saved, bad = inbox(), [], []
+    def put(name, data):
+        name = re.sub(r"[\\/:*?\"<>|\x00-\x1f]+", "_", Path(str(name)).name).strip(" .")
+        if not name or Path(name).suffix.lower() not in EXTS:
+            bad.append(f"{name or 'файл'}: такой формат не читаю (нужен PDF, Word, ODT, RTF, текст или HTML)")
+            return
+        if len(data) > MAX_FILE:
+            bad.append(f"{name}: больше 15 МБ")
+            return
+        f, new = _free_name(folder, name, data)
+        if new:
+            f.write_bytes(data)
+        saved.append(f)
+    for x in (files or [])[:100]:
+        if not isinstance(x, dict):
+            continue
+        try:
+            data = base64.b64decode(str(x.get("b64") or ""), validate=False)
+        except (ValueError, TypeError):
+            bad.append(f"{x.get('name')}: файл не прочитался")
+            continue
+        name = str(x.get("name") or "")
+        if name.lower().endswith(".zip"):
+            try:
+                z = zipfile.ZipFile(io.BytesIO(data))
+                for n in z.namelist()[:300]:
+                    if not n.endswith("/") and not Path(n).name.startswith(("~$", ".")) and Path(n).suffix.lower() in EXTS:
+                        put(Path(n).name, z.read(n))
+            except zipfile.BadZipFile:
+                bad.append(f"{name}: архив повреждён")
+            continue
+        put(name, data)
+    res = add_files(saved) if saved else {"added": [], "already_known": 0, "problems": []}
+    res["problems"] = (bad + res.get("problems", []))[:20]
+    res["folder"] = str(folder)
+    return res
+
+
+EDIT = {"name": 120, "position": 120, "phone": 60, "email": 120, "telegram": 60, "city": 60, "salary": 60}
+
+
+def edit(cid, fields=None, reparse=False):
+    """Правка карточки руками (как «Редактировать» в модуле владельца) или «Переразобрать» — заново из текста резюме.
+    Сигналы «уточнить» пересчитываются."""
+    d = load()
+    c = d["cands"].get(str(cid))
+    if not c:
+        return {"error": "нет такого кандидата"}
+    if reparse:
+        c.update(facts(c["text"]))
+    for k, v in (fields or {}).items():
+        if k in EDIT:
+            c[k] = " ".join(str(v or "").split())[:EDIT[k]]
+        elif k == "age":
+            try:
+                c["age"] = int(v) if str(v).strip() else None
+            except ValueError:
+                return {"error": "возраст — числом"}
+        elif k == "exp_years":
+            try:
+                c["exp_months"] = round(float(str(v).replace(",", ".")) * 12) if str(v).strip() else None
+            except ValueError:
+                return {"error": "стаж — числом лет, например 3,5"}
+        elif k == "languages":
+            c["languages"] = [x.strip()[:60] for x in re.split(r"[;,\n]+", str(v or "")) if x.strip()][:8]
+    c["flags"] = flags(c, c["text"])
+    c.setdefault("notes", []).append({"at": now(), "text": "переразобрано из текста" if reparse else "карточка поправлена"})
+    save(d)
+    return get(cid)
+
+
+NUMWORD = {"одного": 1, "один": 1, "года": 1, "двух": 2, "два": 2, "трёх": 3, "трех": 3, "три": 3, "четырёх": 4, "четырех": 4, "четыре": 4,
+           "пяти": 5, "пять": 5, "шести": 6, "шесть": 6, "семи": 7, "семь": 7, "восьми": 8, "десяти": 10, "десять": 10}
+LEVELS = ["a1", "a2", "b1", "b2", "c1", "c2"]
+LEVEL_WORDS = {"upper": "b2", "начальн": "a2", "базов": "a2", "средн": "b1", "intermediate": "b1", "продвинут": "c1", "advanced": "c1",
+               "свободн": "c1", "fluent": "c1", "родн": "c2", "native": "c2"}
+EDU = re.compile(r"высшее|университет|институт|академи|бгу|бгэу|бнту|бгуир|мгу|university|bachelor|master|магистр|бакалавр|специалитет", re.I)
+LANG_NAMES = {"англ": "english", "english": "english", "нем": "german", "german": "german", "польск": "polish", "polish": "polish",
+              "франц": "french", "french": "french", "китай": "chinese", "испан": "spanish"}
+
+
+def need_years(text):
+    t = text.lower().replace("ё", "е")
+    m = re.search(r"(?:опыт|стаж|experience)[^.\n]{0,40}?(?:от|не менее|более|больше|from|at least)?\s*(\d{1,2})\s*\+?\s*(?:лет|года|год|years?)", t) \
+        or re.search(r"\bот\s+(\d{1,2})\s*(?:лет|года|год)", t) or re.search(r"(\d{1,2})\+?\s*years", t)
+    if m:
+        return int(m[1])
+    m = re.search(r"(?:от|не менее|более)\s+(" + "|".join(NUMWORD) + r")\s+(?:лет|года|год)", t)
+    return NUMWORD[m[1]] if m else None
+
+
+def _langs(text):
+    """{язык: уровень a1..c2} из текста (резюме или вакансии)."""
+    out = {}
+    low = text.lower()
+    for m in re.finditer(r"(англ\w*|english|нем\w*|german|польск\w*|polish|франц\w*|french|китай\w*|испан\w*)[^\n.;]{0,25}", low):
+        name = next((v for k, v in LANG_NAMES.items() if m[1].startswith(k)), None)
+        if not name:
+            continue
+        frag = m[0]
+        lv = re.search(r"\b([abc][12])\b", frag)
+        level = lv[1] if lv else next((v for k, v in LEVEL_WORDS.items() if k in frag), "b1")
+        out[name] = max(out.get(name, "a1"), level)
+    return out
+
+
+def assess(c, v, d=None):
+    """Оценка кандидата под вакансию БЕЗ модели (воспроизводимо): пять критериев 0–100, итог по WEIGHTS, честность анкеты,
+    что есть из требований и чего нет. Модель потом может оценить точнее (recruit_score) — её оценка показывается рядом."""
+    vt = (v.get("title", "") + "\n" + v.get("text", ""))
+    pct, got, miss = match(vt, c["text"])
+    bd = {"hard_skills": pct}
+    need, yrs = need_years(vt), (c.get("exp_months") or 0) / 12
+    if not c.get("exp_months"):
+        bd["experience"] = 35
+    elif need:
+        bd["experience"] = round(min(100, 100 * yrs / need)) if yrs < need else min(100, 85 + round((yrs - need) * 3))
+    else:
+        bd["experience"] = min(100, 40 + round(yrs * 8))
+    low = vt.lower()
+    city = (c.get("city") or "").lower()
+    if re.search(r"удал[её]н|remote|из дома", low):
+        bd["format_match"] = 100
+    elif city and stem(city) in " ".join(stem(w) for w in re.findall(r"[а-яёa-z-]{3,}", low)):
+        bd["format_match"] = 100
+    elif re.search(r"\b(минск|москв|гродн|брест|гомел|могил|витеб|санкт|петербург|киев|алмат|ташкент|варшав)", low):
+        bd["format_match"] = 60 if not city else 30
+    else:
+        bd["format_match"] = 75
+    has_edu = bool(EDU.search(c["text"]))
+    bd["education"] = (100 if has_edu else 40) if re.search(r"высшее|образовани|degree", low) else (85 if has_edu else 65)
+    want, have = _langs(vt), _langs(c["text"] + "\n" + " ".join(c.get("languages") or []))
+    if want:
+        parts = []
+        for lang, lv in want.items():
+            if lang not in have:
+                parts.append(15)
+            else:
+                gap = LEVELS.index(lv) - LEVELS.index(have[lang])
+                parts.append(100 if gap <= 0 else max(20, 100 - gap * 25))
+        bd["languages"] = round(sum(parts) / len(parts))
+    else:
+        bd["languages"] = 80 if have else 65
+    total = round(sum(bd[k] * WEIGHTS[k] for k in WEIGHTS))
+    honesty = max(0, 100 - 25 * len(c.get("flags") or []))
+    out = {"id": c["id"], "name": c.get("name") or c.get("file"), "position": c.get("position") or "", "stage": c.get("stage"),
+           "total": total, "breakdown": bd, "honesty": honesty, "has": got[:12], "missing": miss[:12], "need_years": need,
+           "years": round(yrs, 1) if c.get("exp_months") else None, "city": c.get("city") or "", "salary": c.get("salary") or "",
+           "languages": c.get("languages") or [], "flags": c.get("flags") or [], "education": has_edu}
+    lira = (c.get("scores") or {}).get(v.get("id"))
+    if lira:
+        out["lira"] = lira["total"]
+    return out
+
+
+def rank(ref):
+    d = load()
+    v = find_vac(d, ref)
+    if not v:
+        return None, []
+    rows = [assess(c, v) for c in d["cands"].values() if c.get("stage") != "отказ"]
+    rows.sort(key=lambda r: (-r["total"], -r["honesty"], -(r["years"] or 0)))
+    return v, rows
+
+
+def versus(a, b, need=None):
+    """Двое под одну вакансию -> параметры с победителем по каждому, кто сильнее и почему (без модели)."""
+    yrs = lambda r: "нет данных" if r["years"] is None else f"{r['years']:g}".replace(".", ",") + " г."   # noqa: E731
+    P = []
+    def row(name, av, bv, sa, sb, comment=""):
+        w = "A" if sa > sb else "B" if sb > sa else "="
+        P.append({"name": name, "a_value": av, "b_value": bv, "winner": w, "comment": comment, "gap": abs(sa - sb)})
+    row("Совпадение с требованиями", f"{a['breakdown']['hard_skills']}%", f"{b['breakdown']['hard_skills']}%",
+        a["breakdown"]["hard_skills"], b["breakdown"]["hard_skills"],
+        f"нужно: {', '.join((a['has'] + a['missing'])[:6])}" if (a["has"] or a["missing"]) else "")
+    row("Стаж", yrs(a), yrs(b), a["breakdown"]["experience"], b["breakdown"]["experience"], f"в вакансии — от {need} лет" if need else "")
+    row("Город и формат", a["city"] or "—", b["city"] or "—", a["breakdown"]["format_match"], b["breakdown"]["format_match"])
+    row("Образование", "высшее" if a["education"] else "не видно", "высшее" if b["education"] else "не видно",
+        a["breakdown"]["education"], b["breakdown"]["education"])
+    row("Языки", ", ".join(a["languages"]) or "—", ", ".join(b["languages"]) or "—", a["breakdown"]["languages"], b["breakdown"]["languages"])
+    row("Честность анкеты", f"{a['honesty']}" + (f" · {len(a['flags'])} уточнить" if a["flags"] else ""),
+        f"{b['honesty']}" + (f" · {len(b['flags'])} уточнить" if b["flags"] else ""), a["honesty"], b["honesty"])
+    P.append({"name": "Ожидания", "a_value": a["salary"] or "—", "b_value": b["salary"] or "—", "winner": "", "comment": "сравните с бюджетом", "gap": 0})
+    wt = {"Совпадение с требованиями": WEIGHTS["hard_skills"], "Стаж": WEIGHTS["experience"], "Город и формат": WEIGHTS["format_match"],
+          "Образование": WEIGHTS["education"], "Языки": WEIGHTS["languages"], "Честность анкеты": 0.2}
+    key = max((p for p in P if p["winner"] in ("A", "B")), key=lambda p: p["gap"] * wt.get(p["name"], 0), default=None)   # что весит больше в итоге
+    if a["total"] != b["total"]:
+        win = "A" if a["total"] > b["total"] else "B"
+    else:
+        win = "A" if (a["honesty"], a["years"] or 0) >= (b["honesty"], b["years"] or 0) else "B"
+    W, L = (a, b) if win == "A" else (b, a)
+    adv = lambda side: [f"{p['name'].lower()}: {p['a_value' if side == 'A' else 'b_value']}" for p in P if p["winner"] == side]   # noqa: E731
+    close = abs(a["total"] - b["total"]) < 4
+    kf = (key or {}).get("name", "общий балл")
+    reason = (f"{W['name']} — {W['total']} против {L['total']}" + (", почти вровень" if close else "")
+              + (f"; решило: {kf.lower()}" if key else ""))
+    for p in P:
+        p.pop("gap", None)
+    return {"winner": win, "winner_id": W["id"], "loser_id": L["id"], "close": close, "key_factor": kf, "reason": reason,
+            "parameters": P, "a_advantages": adv("A"), "b_advantages": adv("B")}
+
+
+def compare(a_id, b_id, ref=""):
+    d = load()
+    v = find_vac(d, ref) if (ref or d["vacs"]) else None
+    ca, cb = d["cands"].get(str(a_id)), d["cands"].get(str(b_id))
+    if not ca or not cb:
+        return {"error": "нет такого кандидата"}
+    v = v or {"id": "", "title": "без вакансии", "text": (ca.get("position") or "") + " " + (cb.get("position") or "")}
+    A, B = assess(ca, v), assess(cb, v)
+    out = versus(A, B, need_years(v.get("title", "") + " " + v.get("text", "")))
+    return out | {"vacancy": {"id": v.get("id"), "title": v.get("title")}, "a": A, "b": B}
+
+
+def tournament(ref="", size=8):
+    """«Турнир» как в модуле владельца: все кандидаты оцениваются под вакансию, лучшие (до 8) — в сетку 1–8, 2–7…, пары
+    решаются сравнением (versus), подиум — тройка по баллу (одно правило победителя, как у владельца)."""
+    v, rows = rank(ref)
+    if not v:
+        return {"error": "Нет такой вакансии — сначала опишите её."}
+    if not rows:
+        return {"error": "Кандидатов пока нет — закиньте резюме."}
+    n = max(2, min(16, int(size or 8)))
+    top = rows[:n]
+    need = need_years(v.get("title", "") + " " + v.get("text", ""))
+    pow2 = 1
+    while pow2 < len(top):
+        pow2 *= 2
+    pad = top + [None] * (pow2 - len(top))
+    pairs = [(pad[i], pad[pow2 - 1 - i]) for i in range(pow2 // 2)]
+    rounds = []
+    while pairs:
+        name = "Финал" if len(pairs) == 1 else "Полуфинал" if len(pairs) == 2 else "Четвертьфинал" if len(pairs) == 4 else f"Раунд {len(pairs)} пар"
+        battles, winners = [], []
+        for a, b in pairs:
+            if not a or not b:
+                w = a or b
+                if w:
+                    battles.append({"a": w["id"], "b": None, "winner": w["id"], "bye": True, "reason": "проходит без пары"})
+                    winners.append(w)
+                continue
+            r = versus(a, b, need)
+            w = a if r["winner"] == "A" else b
+            battles.append({"a": a["id"], "b": b["id"], "winner": w["id"], "reason": r["reason"], "key_factor": r["key_factor"], "close": r["close"]})
+            winners.append(w)
+        rounds.append({"name": name, "battles": battles})
+        if len(winners) <= 1:
+            break
+        pairs = [(winners[i], winners[i + 1] if i + 1 < len(winners) else None) for i in range(0, len(winners), 2)]
+    d = load()
+    v2 = d["vacs"].get(v["id"])
+    if v2 is not None:
+        v2["last"] = {"at": now(), "top": [r["id"] for r in rows[:3]]}
+        save(d)
+    return {"vacancy": {"id": v["id"], "title": v["title"], "need_years": need, "key_terms": [x["w"] for x in terms(v["title"] + " " + v.get("text", "")).values()][:20]},
+            "ranking": rows, "in_bracket": [r["id"] for r in top], "rounds": rounds,
+            "champion": rounds[-1]["battles"][0]["winner"] if rounds and rounds[-1]["battles"] else (top[0]["id"] if top else None),
+            "podium": [r["id"] for r in rows[:3]], "criteria": CRIT, "weights": WEIGHTS}
+
+
+def tech(text):
+    """Ключевые технологии и инструменты из резюме (латиница, 1С) — плашки на карточке кандидата."""
+    cnt = {}
+    text = re.sub(r"\S+@\S+|https?://\S+|www\.\S+|t\.me/\S+|@\w+", " ", text)     # почта, ссылки, ники — не навыки
+    for w in re.findall(r"\b(?:1[СC](?::[\w ]{0,20})?|[A-Za-z][A-Za-z0-9+#.]{1,20}[A-Za-z0-9+#])", text):
+        k = w.strip().rstrip(".")
+        if k.lower() in TECH_STOP or len(k) < 2:
+            continue
+        cnt[k] = cnt.get(k, 0) + 1
+    return [k for k, _ in sorted(cnt.items(), key=lambda x: -x[1])][:8]
+
+
+TECH_STOP = set("the and of in on to for with at by from an as is are be or we you it our your this that work experience years year months "
+                "month skills education phone email mail com ru by org net www http https gmail yandex tut senior junior middle lead cv "
+                "resume developer engineer manager ltd llc byn usd eur rub telegram skype linkedin viber whatsapp script alert img src "
+                "onerror male female mr ms".split())
 
 
 def get(cid):
@@ -255,7 +574,30 @@ def get(cid):
         return {"error": "нет такого кандидата"}
     out = {k: v for k, v in c.items() if k not in ("text", "path") and v not in ("", None, [], {})}
     out["text"] = c["text"][:12000]
+    out["flags"] = c.get("flags") or []
+    if c.get("path") and Path(c["path"]).exists():
+        out["path"] = c["path"]                       # исходный файл — «Открыть резюме» на странице плагина
     return out
+
+
+def board():
+    """Всё для своей страницы плагина (ui.html) одним ответом: кандидаты с фактами и оценками, вакансии, этапы.
+    Только для страницы — помощнице не показывается (_meta dewiar/page)."""
+    d = load()
+    vac = {v["id"]: v["title"] for v in d["vacs"].values()}
+    cands = []
+    for c in sorted(d["cands"].values(), key=lambda c: c.get("added", ""), reverse=True)[:500]:
+        x = brief(c) | {k: c[k] for k in ("city", "age", "salary", "phone", "email", "telegram", "file", "added", "languages") if c.get(k)}
+        x["flags"] = c.get("flags") or []
+        x["scores"] = {vid: {"total": s["total"], "vacancy": vac.get(vid, "")} for vid, s in (c.get("scores") or {}).items()}
+        x["notes"] = len(c.get("notes") or [])
+        x["tech"] = tech(c.get("text", ""))
+        x["honesty"] = max(0, 100 - 25 * len(x["flags"]))
+        cands.append(x)
+    return {"stages": STAGES, "criteria": CRIT, "folder": str(settings().get("folder") or ""), "inbox": str(inbox()),
+            "vacancies": [{"id": v["id"], "title": v["title"], "text": v.get("text", "")[:3000], "at": v.get("at", ""), "last": v.get("last")}
+                          for v in sorted(d["vacs"].values(), key=lambda v: v.get("at", ""), reverse=True)],
+            "cands": cands}
 
 
 def lst(stage="", q="", vacancy="", limit=20):
@@ -308,7 +650,7 @@ def shortlist(ref="", limit=10, stage=""):
         rows.append((pct, c, got, miss))
     rows.sort(key=lambda r: -r[0])
     return {"vacancy": {"id": v["id"], "title": v["title"]},
-            "items": [brief(c) | {"words_match": pct, "has": got[:10], "missing": miss[:10]} for pct, c, got, miss in rows[:max(1, min(30, int(limit or 10)))]],
+            "items": [brief(c) | {"words_match": pct, "has": got[:10], "missing": miss[:10]} for pct, c, got, miss in rows[:max(1, min(100, int(limit or 10)))]],
             "note": "Это отбор по словам. Лучших прочитайте (recruit_get) и оцените (recruit_score)."}
 
 
@@ -357,9 +699,10 @@ def update(cid, stage="", note="", remove=False):
 
 # ---------------- MCP ----------------
 
-def T(name, title, desc, props=None, req=None):
+def T(name, title, desc, props=None, req=None, page=False):
     return {"name": name, "description": desc, "annotations": {"readOnlyHint": True, "title": title},
-            "inputSchema": {"type": "object", "properties": props or {}, **({"required": req} if req else {})}}
+            "inputSchema": {"type": "object", "properties": props or {}, **({"required": req} if req else {})},
+            **({"_meta": {"dewiar/page": True}} if page else {})}
 
 
 S_ = {"type": "string"}
@@ -379,6 +722,15 @@ TOOLS = [
        "matches": {"type": "array", "items": S_}, "gaps": {"type": "array", "items": S_}, "summary": S_}, ["id", "vacancy", "breakdown"]),
     T("recruit_update", "Этап и заметка", "Перевести кандидата на этап воронки, добавить заметку или удалить (remove).",
       {"id": S_, "stage": {"type": "string", "enum": STAGES}, "note": S_, "remove": {"type": "boolean"}}, ["id"]),
+    T("recruit_board", "Сводка", "Кандидаты, вакансии и этапы — для страницы плагина в студии.", page=True),
+    T("recruit_import", "Закинуть резюме", "Файлы резюме со страницы (имя и содержимое base64; ZIP распаковывается) — в папку резюме и разбор.",
+      {"files": {"type": "array", "items": {"type": "object", "properties": {"name": S_, "b64": S_}}}}, ["files"], page=True),
+    T("recruit_edit", "Поправить карточку", "Правка карточки кандидата руками или «переразобрать» из текста.",
+      {"id": S_, "fields": {"type": "object"}, "reparse": {"type": "boolean"}}, ["id"], page=True),
+    T("recruit_compare", "Сравнить двоих", "Сравнение двух кандидатов под вакансию по параметрам — кто сильнее и почему (без модели).",
+      {"a": S_, "b": S_, "vacancy": S_}, ["a", "b"]),
+    T("recruit_tournament", "Подбор лучших", "Подбор под вакансию без модели: оценка всех по пяти критериям, турнир лучших попарно, тройка лидеров.",
+      {"vacancy": {"type": "string", "description": "id или часть названия; пусто — последняя"}, "size": {"type": "integer"}}),
 ]
 
 
@@ -395,6 +747,16 @@ def call(name, a):
         return shortlist(a.get("vacancy") or "", a.get("limit") or 10)
     if name == "recruit_score":
         return score(a.get("id"), a.get("vacancy"), a.get("breakdown"), a.get("matches"), a.get("gaps"), a.get("summary") or "")
+    if name == "recruit_board":
+        return board()
+    if name == "recruit_import":
+        return import_files(a.get("files") or [])
+    if name == "recruit_edit":
+        return edit(a.get("id"), a.get("fields") or {}, bool(a.get("reparse")))
+    if name == "recruit_compare":
+        return compare(a.get("a"), a.get("b"), a.get("vacancy") or "")
+    if name == "recruit_tournament":
+        return tournament(a.get("vacancy") or "", a.get("size") or 8)
     if name == "recruit_update":
         return update(a.get("id"), a.get("stage") or "", a.get("note") or "", bool(a.get("remove")))
     raise ValueError("нет такого действия")

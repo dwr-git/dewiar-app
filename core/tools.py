@@ -1106,6 +1106,11 @@ def t_send_email(a, ctx):
     if isinstance(files, str):
         files = [x.strip() for x in files.split(",") if x.strip()]
     try:
+        if str(a.get("reply_to") or "").strip():          # ответ на письмо: кому, тема и цитата — сами (03.11)
+            r = _mail(ctx).reply(a["reply_to"], a.get("body", ""), files)
+            return f"Ответ на письмо «{r['replied']}» отправлен: {', '.join(r['to'])}" + (f"; вложения: {', '.join(r['attachments'])}" if r["attachments"] else "")
+        if not str(a.get("subject") or "").strip():
+            raise ToolError("нужна тема письма (subject) — или reply_to, если это ответ на письмо")
         r = _mail(ctx).send(a.get("to", ""), a.get("subject", ""), a.get("body", ""), files, box=a.get("from") or None)
     except MailError as e:
         raise ToolError(str(e)) from e
@@ -1158,7 +1163,7 @@ def t_read_emails(a, ctx):
     return "\n".join(f"[{x['uid']}] {'● ' if x['unread'] else ''}{x['date'][:22]} · " + (f"в {x['box']} · " if many else "")
                      + f"{x['from']} · «{x['subject']}» — {x['snippet'][:160]}"
                      + (f" (вложения: {', '.join(x['files'])})" if x["files"] else "") for x in items) + \
-        "\n\nЦеликом письмо — read_email с номером в скобках."
+        "\n\nЦеликом письмо — read_email с номером в скобках; ответить — send_email с reply_to=номер и текстом ответа."
 
 
 def t_read_email(a, ctx):
@@ -3022,10 +3027,14 @@ TOOLS = {
                    "пользователю («пришли мне на почту»). Тема, текст письма целиком и вложения — пути файлов из папки "
                    "ассистента (заметки, отчёты задач, «Входящие»). Пиши письмо полностью, вежливо, по-русски. «Отправь карточку "
                    "организации / реквизиты Ивану» — найди заметку с реквизитами (find_notes: «реквизиты», «карточка») и приложи "
-                   "её файл; адрес по имени — из памяти о пользователе, а если его там нет — спроси одной фразой.",
+                   "её файл; адрес по имени — из памяти о пользователе, а если его там нет — спроси одной фразой. "
+                   "ОТВЕТ НА ПИСЬМО («ответь Ивану», «ответь на последнее письмо»): reply_to — номер письма из read_emails "
+                   "(или от кого оно: «Иван») и body — текст ответа; кому, тему «Re:» и цитату подставлю сама. Не пиши «читаю» — "
+                   "сразу read_emails (если номера нет), затем send_email с reply_to.",
                    S({"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"},
+                      "reply_to": {"type": "string", "description": "ответ на письмо: номер из read_emails или от кого оно"},
                       "attachments": {"type": "array", "items": {"type": "string"}},
-                      "from": {"type": "string", "description": "с какого ящика (адрес), если подключено несколько и назван; иначе — главный"}}, ["subject", "body"]),
+                      "from": {"type": "string", "description": "с какого ящика (адрес), если подключено несколько и назван; иначе — главный"}}, ["body"]),
                    "confirm", t_send_email, "Отправить письмо"),
     "mailing": ("Рассылка писем многим со своей почты пользователя: КАЖДОМУ своё письмо (адресов друг друга не видят) — "
                 "«разошли всем клиентам…», «напиши всем сотрудникам письмо…», «отправь этим 20 адресам…». recipients: clients — "
@@ -3619,6 +3628,9 @@ class Toolbox:
             ch = ", ".join(f"{ {'amount': 'сумма', 'currency': 'валюта', 'category': 'категория', 'note': 'что', 'date': 'дата', 'kind': 'вид'}[k]} → {str(args[k]).upper() if k == 'currency' else args[k]}"
                            for k in ("amount", "currency", "category", "note", "date", "kind") if args.get(k) not in (None, ""))
             return f"Исправить ({ch}): {what}?"
+        if name == "send_email" and str(args.get("reply_to") or "").strip():
+            b = " ".join(str(args.get("body") or "").split())
+            return f"Отправить ответ на письмо ({args['reply_to']}): «{b[:90]}{'…' if len(b) > 90 else ''}»?"
         if name == "send_email":
             to = args.get("to") or "вам самим"
             att = args.get("attachments") or []

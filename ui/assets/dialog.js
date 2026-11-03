@@ -21,6 +21,10 @@
         font: 14.5px/1.5 "Manrope", "Ubuntu", "Segoe UI", sans-serif; transform: translateY(6px) scale(.985); transition: transform .18s cubic-bezier(.2,.8,.2,1); }
       .dwq-back.on .dwq { transform: none; }
       .dwq p { margin: 0 0 16px; white-space: pre-line; }
+      .dwq.wide { width: min(640px, 100%); }
+      .dwq textarea { width: 100%; min-height: 220px; max-height: 60vh; margin: 0 0 16px; padding: 10px 12px; border-radius: 12px; border: 0; outline: none;
+        font: inherit; line-height: 1.55; resize: vertical; color: inherit; background: rgba(127,127,127,.14); box-sizing: border-box; }
+      .dwq textarea:focus { box-shadow: 0 0 0 2px var(--accent, #8B8CF7); }
       .dwq input { width: 100%; margin: 0 0 16px; padding: 10px 12px; border-radius: 12px; border: 0; outline: none; font: inherit;
         color: inherit; background: rgba(127,127,127,.14); }
       .dwq input:focus { box-shadow: 0 0 0 2px var(--accent, #8B8CF7); }
@@ -46,7 +50,9 @@
       const box = document.createElement("div"); box.className = "dwq"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
       const p = document.createElement("p"); p.textContent = text; box.appendChild(p);
       let inp = null;
-      if (input) { inp = document.createElement("input"); inp.value = input.value || ""; inp.spellcheck = false; if (opts && opts.ph) inp.placeholder = opts.ph; box.appendChild(inp); }
+      // opts.multi (03.11, №445: «пост для правки открывается одной строкой — не осмыслить») — большое поле; Enter — новая строка
+      if (input && opts && opts.multi) box.classList.add("wide");
+      if (input) { inp = document.createElement(opts && opts.multi ? "textarea" : "input"); inp.value = input.value || ""; inp.spellcheck = false; if (opts && opts.ph) inp.placeholder = opts.ph; box.appendChild(inp); }
       const verb = (opts && opts.ok) || (String(text).match(VERB) || [])[1] || (input ? "Готово" : "Да");
       const row = document.createElement("div"); row.className = "row";
       const no = document.createElement("button"); no.textContent = (opts && opts.cancel) || "Отмена";
@@ -60,12 +66,12 @@
         setTimeout(() => { if (top && back.open) { try { back.close(); } catch (e) { } } back.remove(); }, 160);
         try { prev && prev.focus && prev.focus(); } catch (e) { } resolve(v); };
       const key = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(input ? null : false); }
-        else if (e.key === "Enter" && (!inp || document.activeElement === inp || document.activeElement === yes)) { e.preventDefault(); e.stopPropagation(); done(input ? inp.value : true); } };
+        else if (e.key === "Enter" && (!inp || (document.activeElement === inp && (inp.tagName !== "TEXTAREA" || e.ctrlKey || e.metaKey)) || document.activeElement === yes)) { e.preventDefault(); e.stopPropagation(); done(input ? inp.value : true); } };
       document.addEventListener("keydown", key, true);
       no.onclick = () => done(input ? null : false);
       yes.onclick = () => done(input ? inp.value : true);
       back.onmousedown = (e) => { if (e.target === back) done(input ? null : false); };
-      requestAnimationFrame(() => { back.classList.add("on"); (inp || yes).focus(); if (inp) inp.select(); });
+      requestAnimationFrame(() => { back.classList.add("on"); (inp || yes).focus(); if (inp && inp.tagName === "TEXTAREA") inp.setSelectionRange(0, 0); else if (inp) inp.select(); });
     });
   }
   window.ask = (text, opts) => open(text, opts, null);

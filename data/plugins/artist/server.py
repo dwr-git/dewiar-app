@@ -201,12 +201,51 @@ def text_overflow(root, vb):
         left = x - (width / 2 if anc == "middle" else width if anc == "end" else 0)
         right = left + width
         x0, x1 = vb[0], vb[0] + vb[2]
+        y = _num(el.attrib.get("y"))
+        box = plate_under(root, parents, x, y - fs * 0.35)     # плашка (кнопка, лента) под надписью — влезает ли в неё
+        if box and (left < box[0] - 2 or right > box[2] + 2):
+            out.append(f"надпись «{txt[:40]}» шире плашки под ней (≈{round(width)} при ширине плашки {round(box[2] - box[0])}) — "
+                       "уменьши шрифт, сократи текст или расширь плашку")
+            continue
         if left < x0 - 2 or right > x1 + 2:
             out.append(f"надпись «{txt[:40]}» скорее всего вылезает за {'левый' if left < x0 - 2 else 'правый'} край "
                        f"(≈{round(left)}–{round(right)} при ширине {round(vb[2])}) — уменьши шрифт, перенеси строку или сдвинь")
         elif right > x1 - vb[2] * 0.03 or left < x0 + vb[2] * 0.03:
             out.append(f"надпись «{txt[:40]}» почти касается края — оставь поля")
     return out[:6]
+
+
+def _shift(el, parents):
+    dx = dy = 0.0
+    p = parents.get(el)
+    while p is not None:
+        m = re.search(r"translate\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)?", p.attrib.get("transform", ""))
+        if m:
+            dx += float(m[1]); dy += float(m[2] or 0)
+        p = parents.get(p)
+    return dx, dy
+
+
+def plate_under(root, parents, x, y):
+    """Самая маленькая плашка — <rect> или деталь dw-ribbon (не фон на весь холст), внутри которой точка (x, y) надписи.
+    -> (лево, верх, право, низ) или None."""
+    vb = [float(v) for v in re.split(r"[\s,]+", root.attrib.get("viewBox", "0 0 0 0").strip()) if v][:4]
+    full = (vb[2] * vb[3]) if len(vb) == 4 else 0
+    best = None
+    for el in root.iter():
+        tag = el.tag.split("}")[-1]
+        if tag not in ("rect", "use") or "transform" in el.attrib:
+            continue
+        if tag == "use" and "ribbon" not in (el.attrib.get("href") or el.attrib.get("{http://www.w3.org/1999/xlink}href") or ""):
+            continue
+        w, h = _num(el.attrib.get("width")), _num(el.attrib.get("height"))
+        if w <= 0 or h <= 0 or (full and w * h > full * 0.5):
+            continue
+        dx, dy = _shift(el, parents)
+        l, t = _num(el.attrib.get("x")) + dx, _num(el.attrib.get("y")) + dy
+        if l <= x <= l + w and t <= y <= t + h and (best is None or w * h < (best[2] - best[0]) * (best[3] - best[1])):
+            best = (l, t, l + w, t + h)
+    return best
 
 
 def check_js(code):
@@ -365,10 +404,17 @@ def draw(title, svg, size="", replace=False):
     page = d / f"{stem}.html"
     page.write_text(viewer_svg(stem, out, w, h), encoding="utf-8")
     add_index(d, {"title": stem, "kind": "picture", "file": f"{stem}.svg", "page": page.name, "at": datetime.now().isoformat(timespec="seconds")})
+    bad = [x for x in notes if "шире плашки" in x or "вылезает" in x]
+    # 31.10, владелец: «текст выступал за кнопку — ощущение, что Лира не просмотрела открытку, прежде чем показать».
+    # Есть замечания по надписям и это первая попытка — человеку не показываем: сначала поправить (replace)
+    if bad and not replace:
+        return {"saved": str(d / f"{stem}.svg"), "size": f"{w}×{h}", "notes": notes, "shown": False,
+                "say": f"НЕ ПОКАЗАНО: {'; '.join(bad)}. Исправь это и вызови art_draw снова с title «{stem}» и replace: true — "
+                       "тогда рисунок откроется. Человеку пока ничего не говори."}
     opener(page)
-    return {"saved": str(d / f"{stem}.svg"), "page": str(page), "size": f"{w}×{h}", "elements": n, "notes": notes,
-            "say": (f"Есть замечания — исправь и вызови art_draw снова с тем же title и replace: true. " if any(x.startswith("надпись") for x in notes) else "")
-            + f"Рисунок «{stem}» открыт в браузере: там «Сохранить PNG». Файл — «Рисунки» в папке Dewiar."}
+    return {"saved": str(d / f"{stem}.svg"), "page": str(page), "size": f"{w}×{h}", "elements": n, "notes": notes, "shown": True,
+            "say": f"Рисунок «{stem}» открыт в браузере: там «Сохранить PNG». Все работы — студия → «Рисунки» и «Галерея» в папке "
+                   "Dewiar → «Рисунки». Скажи коротко, что нарисовала."}
 
 
 def animate(title, code, seconds=6, size="", background="#101218", replace=False):
@@ -389,6 +435,52 @@ def animate(title, code, seconds=6, size="", background="#101218", replace=False
     opener(page)
     return {"page": str(page), "size": f"{w}×{h}", "seconds": sec,
             "say": f"Анимация «{stem}» открыта в браузере: там «Записать видео» и «Кадр PNG». Файл — «Рисунки» в папке Dewiar."}
+
+
+def photo(title, prompt, size="", replace=False):
+    """Картинка «как фото» генератором облака Dewiar (сервер из «Мощностей» с IMAGES=on). Нет генератора — понятная
+    ошибка: модель рисует векторную (art_draw)."""
+    url, key = os.environ.get("DEWIAR_CLOUD_URL", ""), os.environ.get("DEWIAR_CLOUD_KEY", "")
+    if not (url and key):
+        raise ValueError("картинки «как фото» рисует облако Dewiar, а оно не подключено — нарисуй векторную картинку (art_draw)")
+    prompt = str(prompt or "").strip()
+    if len(prompt) < 3:
+        raise ValueError("нужно описание картинки по-английски (prompt)")
+    w, h = size_of(size)
+    k = 1024 / max(w, h)
+    sz = f"{int(w * k) // 16 * 16}x{int(h * k) // 16 * 16}"
+    import urllib.request
+    import urllib.error
+    req = urllib.request.Request(url + "/images/generations", data=json.dumps({"prompt": prompt, "size": sz}).encode(),
+                                 headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            data = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.loads(e.read().decode()).get("error", {}).get("message", "")
+        except ValueError:
+            msg = ""
+        raise ValueError(msg or f"облако ответило {e.code}") from e
+    except OSError as e:
+        raise ValueError(f"облако не ответило: {e}") from e
+    import base64
+    png = base64.b64decode(data["data"][0]["b64_json"])
+    d = folder()
+    stem = safe_name(title) if replace else unique(d, safe_name(title), (".png", ".html"))
+    (d / f"{stem}.png").write_bytes(png)
+    page = d / f"{stem}.html"
+    b64 = base64.b64encode(png).decode()
+    page.write_text(f"""<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(stem)}</title><style>{PAGE_CSS}</style></head><body>
+<header><h1>{html.escape(stem)}<small>{sz.replace("x", "×")} · нарисовала Лира · {datetime.now().strftime("%d.%m.%Y")}</small></h1>
+<a class="b" href="{html.escape(stem)}.png" download>Сохранить PNG</a><a class="b" href="Галерея.html">Галерея</a></header>
+<div class="stage"><img class="art" src="data:image/png;base64,{b64}" alt="{html.escape(prompt[:200])}"></div></body></html>""", encoding="utf-8")
+    add_index(d, {"title": stem, "kind": "picture", "file": f"{stem}.png", "page": page.name, "at": datetime.now().isoformat(timespec="seconds")})
+    opener(page)
+    return {"saved": str(d / f"{stem}.png"), "page": str(page), "size": sz,
+            "say": f"Картинка «{stem}» открыта в браузере, файл — «Рисунки» в папке Dewiar. Скажи это одной фразой."}
 
 
 def gallery(open_it=True, q=""):
@@ -419,6 +511,11 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "code": {"type": "string"}, "seconds": {"type": "number"},
                                                       "size": {"type": "string"}, "background": {"type": "string"}, "replace": {"type": "boolean"}},
                      "required": ["title", "code"]}},
+    {"name": "art_photo", "description": "Картинка «как фото» (реалистичная, живопись, сложная сцена) генератором Dewiar: prompt — подробное "
+     "описание ПО-АНГЛИЙСКИ (объект, обстановка, свет, стиль, ракурс). Без надписей. Генератора нет — рисуй art_draw.",
+     "annotations": {"readOnlyHint": True, "title": "Фото-картинка"},
+     "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "prompt": {"type": "string"}, "size": {"type": "string"},
+                                                      "replace": {"type": "boolean"}}, "required": ["title", "prompt"]}},
     {"name": "art_gallery", "description": "Открыть галерею рисунков (или работу по названию q) и вернуть их список.",
      "annotations": {"readOnlyHint": True, "title": "Галерея"},
      "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}, "open": {"type": "boolean"}}}},
@@ -430,6 +527,8 @@ def call(name, a):
         return draw(a.get("title"), a.get("svg"), a.get("size") or "", bool(a.get("replace")))
     if name == "art_animate":
         return animate(a.get("title"), a.get("code"), a.get("seconds") or 6, a.get("size") or "", a.get("background", "#101218"), bool(a.get("replace")))
+    if name == "art_photo":
+        return photo(a.get("title"), a.get("prompt"), a.get("size") or "", bool(a.get("replace")))
     if name == "art_gallery":
         return gallery(a.get("open", True) is not False, str(a.get("q") or ""))
     raise ValueError("нет такого действия")

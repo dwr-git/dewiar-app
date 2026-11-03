@@ -528,13 +528,16 @@ def scan(query=""):
         if old:
             t["found_by"] = sorted(set(old.get("found_by") or []) | set(t["found_by"]))
             t["first_seen"], t["seen"] = old.get("first_seen") or now, old.get("seen", False)
+            for k in ("mark", "note", "star", "mark_at"):           # отметки человека со страницы плагина — не теряем
+                if k in old:
+                    t[k] = old[k]
         else:
             t["first_seen"], t["seen"] = now, False
         t["score"], t["terms"], t["minus"] = score(t, queries, plus, minus)
         items[h] = t
         if not old:
             new.append(t)
-    save(STORE, {"items": items, "gone": sorted(gone), "last_scan": now})
+    save(STORE, {"items": items, "gone": sorted(gone), "last_scan": now, "last_report": report})
     save(RECIPES, recipes)
     try:
         floor = int(s.get("min_score") or 0)
@@ -546,11 +549,15 @@ def scan(query=""):
 
 
 def brief(t):
-    return {k: t.get(k) for k in ("id", "title", "organization", "deadline", "price", "score", "url", "source", "number") if t.get(k) not in (None, "")}
+    out = {k: t.get(k) for k in ("id", "title", "organization", "deadline", "price", "score", "url", "source", "number") if t.get(k) not in (None, "")}
+    if t.get("mark") in ("watching", "applied", "skip"):
+        out["mark"] = {"watching": "интересно", "applied": "подали заявку", "skip": "не подходит"}[t["mark"]]   # отметка человека со страницы
+    return out
 
 
 def listing(only_new=True, min_score=0, q="", limit=20):
     items = list(load(STORE, {"items": {}})["items"].values())
+    items = [t for t in items if t.get("mark") != "skip"]          # «не подходит» на странице плагина — не предлагаем
     if only_new:
         items = [t for t in items if not t.get("seen")]
     if min_score:
@@ -578,6 +585,80 @@ def mark(ids, how):
     return {"marked": n, "how": how}
 
 
+# ---------------- своя страница плагина (ui.html): лента, карточка, отметки ----------------
+
+STATUSES = {"new": "новый", "watching": "интересно", "applied": "подали заявку", "skip": "не подходит"}
+
+
+def price_value(p):
+    m = re.match(r"([\d\s\xa0]+(?:[.,]\d{1,2})?)", str(p or ""))
+    if not m:
+        return None
+    try:
+        return float(re.sub(r"[\s\xa0]", "", m[1]).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def days_left(deadline, today=None):
+    m = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", deadline or "")
+    if not m:
+        return None
+    try:
+        d = datetime(int(m[3]), int(m[2]), int(m[1]))
+    except ValueError:
+        return None
+    t = today or datetime.now()
+    return (d - datetime(t.year, t.month, t.day)).days
+
+
+def board():
+    """Всё для страницы плагина: тендеры с баллом по ТЕКУЩИМ запросам, плюс- и минус-словам (поменяли настройки —
+    оценка сразу другая, без нового поиска), сколько дней до срока, сумма числом, отметка человека; запросы и площадки."""
+    s = settings()
+    queries, plus, minus = plist(s.get("queries")), plist(s.get("plus")), plist(s.get("minus"))
+    st = load(STORE, {"items": {}, "gone": []})
+    out = []
+    for t in st["items"].values():
+        sc, terms, bad = score(t, queries or (t.get("found_by") or []), plus, minus)
+        out.append({k: t.get(k) for k in ("id", "title", "organization", "deadline", "price", "url", "source", "number", "procedure_type",
+                                          "status", "found_by", "first_seen", "seen", "note", "star")}
+                   | {"score": sc, "terms": terms, "minus": bad, "open": is_open(t), "days_left": days_left(t.get("deadline")),
+                      "price_value": price_value(t.get("price")), "mark": t.get("mark") if t.get("mark") in STATUSES else "new"})
+    try:
+        floor = int(s.get("min_score") or 0)
+    except ValueError:
+        floor = 0
+    return {"items": out, "queries": queries, "plus": plus, "minus": minus, "min_score": floor, "marks": STATUSES,
+            "sources": [{"id": x["id"], "name": x["name"], "on": s.get(x["toggle"], True) not in (False, "false", "0", 0)} for x in SOURCES]
+            + ([{"id": "own", "name": "своя площадка", "on": True}] if str(s.get("own_url") or "").strip() else []),
+            "last_scan": st.get("last_scan", ""), "last_report": st.get("last_report") or []}
+
+
+def set_marks(ids, mark=None, note=None, star=None, seen=None):
+    """Отметка человека со страницы: интересно / подали заявку / не подходит, заметка, звёздочка, прочитано."""
+    st = load(STORE, {"items": {}, "gone": []})
+    ids = [str(x) for x in (ids or [])][:500]
+    if mark is not None and mark not in STATUSES:
+        return {"error": "отметка — одна из: " + ", ".join(STATUSES.values())}
+    n = 0
+    for i in ids:
+        t = st["items"].get(i)
+        if not t:
+            continue
+        if mark is not None:
+            t["mark"], t["mark_at"], t["seen"] = mark, datetime.now().strftime("%Y-%m-%d %H:%M"), True
+        if note is not None:
+            t["note"] = str(note)[:2000]
+        if star is not None:
+            t["star"] = bool(star)
+        if seen is not None:
+            t["seen"] = bool(seen)
+        n += 1
+    save(STORE, st)
+    return {"changed": n}
+
+
 # ---------------- MCP ----------------
 
 TOOLS = [
@@ -593,6 +674,13 @@ TOOLS = [
      "annotations": {"readOnlyHint": True, "title": "Отметить тендеры"},
      "inputSchema": {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "string"}},
                                                       "how": {"type": "string", "enum": ["seen", "delete"]}}, "required": ["ids"]}},
+    {"name": "tenders_board", "description": "Тендеры, запросы и площадки — для страницы плагина в студии.",
+     "annotations": {"readOnlyHint": True, "title": "Лента"}, "_meta": {"dewiar/page": True},
+     "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "tenders_set", "description": "Отметка тендеров со страницы: mark (new, watching, applied, skip), заметка, звёздочка, прочитано.",
+     "annotations": {"readOnlyHint": True, "title": "Отметить"}, "_meta": {"dewiar/page": True},
+     "inputSchema": {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "string"}}, "mark": {"type": "string", "enum": list(STATUSES)},
+                                                      "note": {"type": "string"}, "star": {"type": "boolean"}, "seen": {"type": "boolean"}}, "required": ["ids"]}},
 ]
 
 
@@ -601,6 +689,10 @@ def call(name, a):
         return scan(str(a.get("query") or ""))
     if name == "tenders_list":
         return listing(a.get("only_new", True) is not False, int(a.get("min_score") or 0), str(a.get("q") or ""), a.get("limit") or 20)
+    if name == "tenders_board":
+        return board()
+    if name == "tenders_set":
+        return set_marks(a.get("ids"), a.get("mark"), a.get("note"), a.get("star"), a.get("seen"))
     if name == "tenders_mark":
         return mark(a.get("ids"), "delete" if a.get("how") == "delete" else "seen")
     raise ValueError("нет такого действия")

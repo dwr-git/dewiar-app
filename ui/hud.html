@@ -143,7 +143,7 @@
   #cap .bot.wait i { animation-delay: .2s; }
   #cap .bot.wait::after { animation-delay: .4s; }
   @keyframes wdot { 0%, 80%, 100% { opacity: .25; transform: scale(.85); } 40% { opacity: 1; transform: scale(1); } }
-  #cap .you { color: var(--muted); font-size: 12.5px; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #cap .you { user-select: text; -webkit-user-select: text; color: var(--muted); font-size: 12.5px; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   #cap .you::before { content: "Вы: "; opacity: .75; }
   /* длинный ответ прокручивается колесом или пальцем; край, за которым есть ещё текст, плавно тает */
   #cap .bot { color: var(--ink); user-select: text; -webkit-user-select: text; white-space: pre-wrap; flex: 0 1 auto; min-height: 0;
@@ -637,6 +637,7 @@
 <script src="assets/dewiar.js"></script>
 <script src="assets/rich.js"></script>
 <script src="assets/zoom.js"></script>
+<script src="assets/ctxmenu.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 // карточка сама непрозрачная — диск-подложка не нужен; портрет сдержанный (белый край), голос — лучами (ui.voice_fx)
@@ -647,7 +648,9 @@ const VOICE_FX = ["bars", "pulse", "wave"];
 function applyLook(ui) {                      // тема карточки и облика (assets/skins.*) + чем голос отзывается вокруг портрета
   ui = ui || {};
   const top = ui.on_top !== false;             // идея №48: «окошко Лиры поверх всех окон» — выключатель в «Оформлении»
-  if (window.__onTop !== top) { window.__onTop = top; try { const a = api(); if (a && a.set_on_top) a.set_on_top(top); } catch (e) { } }
+  // №438: при загрузке окно уже создано как выбрано — зовём только при смене (вызов сразу после старта вешал окно)
+  if (window.__onTop !== top) { const first = window.__onTop === undefined; window.__onTop = top;
+    if (!first) try { const a = api(); if (a && a.set_on_top) a.set_on_top(top); } catch (e) { } }
   const sk = window.dewiarSkin ? dewiarSkin(ui.skin) : { id: "brand" };
   (window.DEWIAR_SKIN_IDS || ["brand"]).forEach(k => document.body.classList.toggle("skin-" + k, k === sk.id));
   document.body.classList.toggle("light", !!sk.light);
@@ -830,14 +833,32 @@ function showCap(you, bot, err) {
   $("cap").classList.toggle("err", !!err);
   $("cap").classList.add("show");
   requestAnimationFrame(fitCap);
-  clearTimeout(capTimer);
+  clearTimeout(capTimer); capArmed = false; capAt = Date.now();
 }
 /* Пока ответ читают (мышь над ним или его прокрутили) — не прячем; ушли — спрячем чуть позже. */
 let capHover = false, capHideMs = 0, capScrolled = false;
+let capAt = 0, capArmed = false;     // когда карточку показали и ждёт ли она таймера «спрятать» (сторож capGuard, №480)
 function hideCapLater(ms) {
-  clearTimeout(capTimer); capHideMs = ms;
-  capTimer = setTimeout(() => { if (capHover && ms > 1000) return; $("cap").classList.remove("show"); capScrolled = false; requestAnimationFrame(fitCap); }, ms);
+  clearTimeout(capTimer); capHideMs = ms; capArmed = true;
+  capTimer = setTimeout(() => { capArmed = false; if (capHover && ms > 1000) return; $("cap").classList.remove("show"); capScrolled = false; requestAnimationFrame(fitCap); }, ms);
 }
+/* №480 (02.11, Ubuntu): «с вчерашнего дня в виджете висит ответ про время». Карточку прячет только таймер hideCapLater,
+   а showCap его снимает: событие после ответа (ход работы «… — готово», подсказка без таймера) оставляло карточку без
+   таймера — до следующего разговора; и мышь «над ответом» (mouseleave не пришёл: окно спрятали, перезапустили) держала
+   её вечно. Сторож: карточка без таймера, не ждёт «Да/Нет» и ассистент не занят — через 3 минуты прячем; если мышь
+   «над ней» — через 10 минут (а реально над ней — раз в полминуты смотрим снова). */
+const CAP_IDLE = 180e3, CAP_HOVER = 600e3;
+function capGuard(now = Date.now()) {
+  const cap = $("cap");
+  if (!cap.classList.contains("show") || capArmed || $("yn").classList.contains("on")) return false;
+  if (state === "thinking" || state === "speaking" || $("bot").classList.contains("wait")) return false;
+  const over = capHover && (() => { try { return cap.matches(":hover"); } catch (e) { return true; } })();
+  if (now - capAt < (over ? CAP_HOVER : CAP_IDLE)) return false;
+  capHover = false; cap.classList.remove("show"); capScrolled = false; requestAnimationFrame(fitCap);
+  return true;
+}
+setInterval(() => capGuard(), 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) capGuard(); });   // окно вернули из трея — старое не показываем
 $("cap").addEventListener("mouseenter", () => { capHover = true; });
 $("cap").addEventListener("mouseleave", () => { capHover = false; if (capHideMs > 1000 && $("cap").classList.contains("show")) hideCapLater(Math.max(capHideMs, 8000)); });
 /* Карточка ответа на тесном виджете: не обрезать строку посередине и не сжимать ответ в ноль — сначала вопрос в одну
@@ -1128,7 +1149,8 @@ core.on("hello", d => {
 })
 .on("reminder_set", e => {
   const it = e.item || {};
-  if (it.kind === "timer") return;                 // таймер — живым отсчётом (#tmr), а не карточкой $("rem-when").textContent = it.when + (it.repeat_text ? " · " + it.repeat_text : "") + (it.att ? ` · 📎 ${it.att}` : "");
+  if (it.kind === "timer") return;                 // таймер — живым отсчётом (#tmr), а не карточкой
+  $("rem-when").textContent = it.when + (it.repeat_text ? " · " + it.repeat_text : "") + (it.att ? ` · 📎 ${it.att}` : "");   // №480: строка была склеена с комментарием — «когда» не обновлялось
   $("rem-ico").textContent = it.kind === "timer" ? "⏱" : it.kind === "job" ? "🗓" : "⏰"; $("rem-undo").textContent = "Отменить"; $("rem").classList.remove("note", "money", "power"); clearInterval($("rem")._cd);
   $("rem-text").textContent = it.text || ""; $("rem").dataset.id = it.id || ""; $("rem").classList.add("show");
   clearTimeout($("rem")._t); $("rem")._t = setTimeout(() => $("rem").classList.remove("show"), 14000);
@@ -1248,12 +1270,28 @@ function holdFinish(cancel) {
   return true;
 }
 core.on("hold", e => { if (!e.on && hold && hold.on) { clearInterval(hold.timer); hold = null; holdShow(); } });   // ядро само закончило (предел 10 минут)
+/* Где мышь не тащит окно: кнопки, поле ввода, тексты. №457 (01.11, Windows 11): «не могу выделить мышью свой
+   написанный текст — окно двигается» — поле вопроса (textarea) не было в списке, и нажатие в нём начинало перетаскивание
+   (с захватом указателя — выделить нельзя). Теперь ещё и всё, где текст выделяется (user-select: text), — и вверх по
+   родителям до карточки. */
+let nativeDrag = false;              // Linux, окна прямо на Wayland: тащит композитор (app.Api.native_drag, №442)
+function nativeDragCheck() { const a = api(); if (a && a.native_drag) a.native_drag().then(v => { nativeDrag = !!v; }).catch(() => {}); }
+window.addEventListener("pywebviewready", nativeDragCheck); setTimeout(nativeDragCheck, 1500);
+const NO_DRAG = "button, input, textarea, select, a[href], label, [contenteditable], #ask, #cap, #note, #upd, #task, #yn, #rem, #lightbox, #cloudlow, #annb, #clb, #drb, #reader";
+function noDrag(t) {
+  if (!t || !t.closest) return true;
+  if (t.closest(NO_DRAG)) return true;
+  for (let el = t; el && el !== card && el.nodeType === 1; el = el.parentElement) {
+    try { const us = getComputedStyle(el).userSelect || getComputedStyle(el).webkitUserSelect; if (us === "text" || us === "all") return true; } catch (e) { return false; }
+  }
+  return false;
+}
 card.addEventListener("pointerdown", async (ev) => {
   // строки задачи и обновления — кнопки: не перехватываем указатель, иначе щелчок до них не дойдёт
   // большая картинка (#lightbox) — тоже: захват указателя уводил щелчок «закрыть» на карточку, и картинка закрывала
   // виджет намертво (отчёт 70: «при картинке виснет виджет — нужно перезапускать»)
   // строки «ИИ-баланс…» и объявления — тоже кнопки (24.10: щелчок по #cloudlow уходил в перетаскивание и студия не открывалась)
-  if (ev.button !== 0 || ev.target.closest("button, input, #cap, #note, #upd, #task, #yn, #lightbox, #cloudlow, #annb, #clb, #drb")) return;
+  if (ev.button !== 0 || noDrag(ev.target)) return;
   card.setPointerCapture(ev.pointerId);
   drag = { sx: ev.screenX, sy: ev.screenY, moved: false, pos: null, orb: !!ev.target.closest("#orb") };
   if (drag.orb) holdBegin("mouse");
@@ -1282,7 +1320,12 @@ card.addEventListener("pointermove", (ev) => {
     return;
   }
   if (hold && !hold.on && Math.hypot(dx, dy) > 5) { clearTimeout(hold.wait); hold = null; }   // потащили — это перетаскивание
-  if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; card.classList.add("dragging"); }
+  if (!drag.moved && Math.hypot(dx, dy) > 5) {
+    drag.moved = true; card.classList.add("dragging");
+    // №442: окна прямо на Wayland (чёткий текст) — двигает только композитор: отдаём ему, пока кнопка нажата
+    if (nativeDrag) { drag.native = true; const a = api(); if (a && a.drag_native) a.drag_native(mode).catch(() => {}); }
+  }
+  if (drag.native) return;
   if (drag.moved && drag.pos && !raf) {
     raf = requestAnimationFrame(() => { raf = 0; const a = api(); if (!a || !drag) return;
       if (drag.win) a.drag_step(mode); else a.move_to(mode, drag.pos[0] + dx, drag.pos[1] + dy); });
@@ -1292,6 +1335,7 @@ card.addEventListener("pointerup", () => {
   if (!drag) return;
   const d = drag; drag = null; card.classList.remove("dragging");
   if (hold && hold.by === "mouse" && holdFinish(false)) return;   // отпустили после удержания — отправили (или отмена)
+  if (d.moved && d.native) return;                     // Wayland: место окна знает только композитор — не сохраняем
   if (d.moved) { const a = api(); if (a) a.save_pos(mode).then(p => core.call("settings_save", { patch: { ui: { hud_x: p[0], hud_y: p[1] } } })).catch(() => {}); return; }
   if (!d.orb || state === "offline") return;
   tapOrb();

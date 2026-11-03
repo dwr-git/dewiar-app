@@ -50,7 +50,8 @@ class STT:
         return f"кусок {len(got)}"
 
 
-me = SimpleNamespace(vosk_stt=SimpleNamespace(name="Vosk", transcribe=lambda pcm: "из воска"))
+me = SimpleNamespace(vosk_stt=SimpleNamespace(name="Vosk", transcribe=lambda pcm: "из воска"), gigaam=None, note=lambda t: None)
+me._stt_spare = lambda stt, e, what="": engine_audio.AudioMixin._stt_spare(me, stt, e, what)   # запасной распознаватель (№455)
 text = engine_audio.AudioMixin._transcribe_long(me, STT(), a.tobytes())
 ok(len(got) == 3 and all(x <= 20.01 for x in got) and abs(got[0] - 14.0) < 0.4 and abs(sum(got) - sec) < 0.1 and text == "кусок 1 кусок 2 кусок 3",
    f"50 с — три куска до 20 с, разрез в тишине (14 с): {[round(x, 1) for x in got]} → «{text}»")

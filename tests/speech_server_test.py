@@ -51,5 +51,22 @@ with TestClient(server.app) as c:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(b"\0\0" * 32000)
     r = c.post("/v1/audio/transcriptions", headers=H, files={"file": ("a.wav", buf.getvalue(), "audio/wav")})
     ok(r.status_code == 200 and "2.0" in r.json()["text"], f"распознавание по-прежнему: {r.json()}")
+    # №455 (01.11): Ubuntu переустановили — onnx_asr нет: не голый 500, а 503 со словами, что поставить; видно в /health
+    os.environ.pop("DEWIAR_SPEECH_FAKE"); server._model = None
+    import builtins
+    real_imp = builtins.__import__
+
+    def no_asr(name, *a, **kw):
+        if name == "onnx_asr":
+            raise ImportError("No module named 'onnx_asr'", name="onnx_asr")
+        return real_imp(name, *a, **kw)
+    builtins.__import__ = no_asr
+    try:
+        r = c.post("/v1/audio/transcriptions", headers=H, files={"file": ("a.wav", buf.getvalue(), "audio/wav")})
+    finally:
+        builtins.__import__ = real_imp; os.environ["DEWIAR_SPEECH_FAKE"] = "1"
+    h = c.get("/health").json()
+    ok(r.status_code == 503 and "install-server.sh" in r.text and not h["ok"] and "onnx_asr" in h["error"],
+       f"нет onnx_asr — 503 «что поставить», и в /health: {r.status_code} {h.get('error', '')[:60]}")
 print("ALL OK" if not fails else f"ошибок: {len(fails)}")
 sys.exit(1 if fails else 0)

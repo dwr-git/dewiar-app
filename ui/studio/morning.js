@@ -17,7 +17,7 @@ const MN_ROW = {
   today: ['<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>', "calendar"],
   team: ['<rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5M3 12.5h18"/>', "team"],
   clients: ['<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>', "clients"],
-  mail: ['<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/>', "connect"],
+  mail: ['<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/>', "mail"],
   tasks: ['<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', "tasks"],
 };
 const mnE = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -78,6 +78,22 @@ function mnWeather(d) {
     + (w.min != null ? `<p>днём ${w.min > 0 ? "+" : ""}${w.min}…${w.max > 0 ? "+" : ""}${w.max}°${w.rain != null && w.rain >= 30 ? `, осадки ${w.rain}%` : ""}</p>` : "")
     + `<button class="lnk mn-cname" id="mn-cedit" title="Сменить город">${mnE(w.city)}</button></div>`;
 }
+/* Куда ведёт строка «Утра». №467 (01.11, ПК 0.71): «на „Главной“ при нажатии на „Почта“ открывается страница
+   настроек, а не список писем» — строка «Почта: N новых» вела в «Подключение». Теперь почта подключена — к письмам
+   здесь же, на «Главной» (карточка #hm-mail, home.js), со свежей проверкой; не подключена — к её настройке. */
+function mnGo(p) {
+  const go = (x) => (typeof hmGo === "function" ? hmGo(x) : $(`nav button[data-p="${x}"]`).click());
+  if (p !== "mail") return go(p);
+  const box = $("#hm-mail");
+  if (box && !box.hidden && typeof hmMailLoad === "function") {
+    box.scrollIntoView({ block: "start", behavior: "smooth" });
+    box.classList.toggle("hl", false); void box.offsetWidth; box.classList.toggle("hl", true);   // мягкая подсветка: вот письма
+    hmMailLoad(true);
+    return;
+  }
+  go("connect");
+  setTimeout(() => { const b = $("#mail-box"); if (b) b.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250);
+}
 function mnRender() {
   const box = $("#hm-morning"); if (!box) return;
   const d = MN;
@@ -90,7 +106,7 @@ function mnRender() {
     + `<div class="mn-foot"><button class="btn primary" id="mn-say">Расскажи утро</button>`
     + `<label class="mn-daily"><span class="tg"><input type="checkbox" id="mn-dly"${daily ? " checked" : ""}><i></i></span>Каждое утро в <input type="text" id="mn-at" value="${mnE(daily ? daily.at_hm : "08:00")}" maxlength="5" inputmode="numeric" aria-label="Время сводки"> голосом</label>`
     + (!d.mail_on ? `<button class="lnk mn-mail" data-mgo="connect">Подключить почту — скажу о важных письмах</button>` : "") + `</div>`;
-  $$("#hm-morning [data-mgo]").forEach(b => b.onclick = () => (typeof hmGo === "function" ? hmGo(b.dataset.mgo) : $(`nav button[data-p="${b.dataset.mgo}"]`).click()));
+  $$("#hm-morning [data-mgo]").forEach(b => b.onclick = () => mnGo(b.dataset.mgo));
   $("#mn-hide").onclick = () => core.call("morning_set", { hide: mnDay() }).then(r => { MN = r; mnRender(); toast("Утро скрыто до завтра"); }).catch(e => toast(e.message));
   $("#mn-say").onclick = () => { if (MN_BUSY) return; MN_BUSY = true; setTimeout(() => { MN_BUSY = false; }, 4000);
     core.call("job_run", { task: "Утренняя сводка", brief: true, deliver: "voice" }).then(() => toast("Рассказываю…")).catch(e => toast(e.message)); };

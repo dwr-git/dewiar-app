@@ -112,6 +112,16 @@ class Box:
         d = self.data
         return bool(d.get("address") and d.get("password") and d.get("smtp_host"))
 
+    def _missing(self):
+        """Чего не хватает для входа — по-человечески («какого приложения?» — 03.11)."""
+        d = self.data
+        if not d.get("address"):
+            return "впишите адрес почты"
+        if not d.get("password"):
+            return ("впишите пароль приложения — это не пароль от почты, а отдельный пароль для сторонних программ: "
+                    "его выдаёт сама почта (ссылка «создать» — под полями)")
+        return "не знаю сервер отправки для этого адреса — раскройте «Серверы почты» и впишите SMTP (его даёт ваш почтовый сервис)"
+
     def public(self):
         d = dict(self.data)
         d["has_password"] = bool(d.pop("password", ""))
@@ -135,8 +145,13 @@ class Box:
             addr = (patch.get("address") or self.data.get("address") or "").strip()
             if addr and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr):
                 raise MailError("это не похоже на адрес почты")
-            if addr != self.data.get("address") and not patch.get("smtp_host"):
-                patch = {**guess(addr), **patch}                 # новый адрес — подставляем серверы сами
+            # 03.11 (человек: «сгенерил пароль, заполнил поля — просит адрес и пароль приложения»): адрес подставился
+            # автозаполнением, серверы не угадались, а пустые поля студии затирали угаданное — smtp_host оставался пустым
+            for k in ("smtp_host", "imap_host", "smtp_port", "imap_port", "smtp_security"):
+                if k in patch and not str(patch[k] or "").strip():
+                    patch.pop(k)
+            if addr and (addr != self.data.get("address") or not self.data.get("smtp_host")) and not patch.get("smtp_host"):
+                patch = {**guess(addr), **patch}                 # новый адрес (или серверов ещё нет) — подставляем серверы сами
             self.data.update({k: v for k, v in patch.items() if k in (
                 "address", "name", "password", "login", "smtp_host", "smtp_port", "smtp_security", "imap_host",
                 "imap_port", "help", "provider")})
@@ -223,7 +238,7 @@ class Box:
     def test(self):
         """Проверить вход в SMTP и IMAP -> {"smtp": "ok" или текст ошибки, "imap": …} (IMAP — если указан)."""
         if not self.configured():
-            raise MailError("сначала укажите адрес и пароль приложения")
+            raise MailError(self._missing())
         out = {"smtp": "", "imap": ""}
         try:
             self._smtp().quit()
@@ -350,7 +365,8 @@ class Box:
             msg = email.message_from_bytes(raw)
             body, files = _text_of(msg)
             return {"uid": str(uid), "from": _dec(msg.get("From")), "to": _dec(msg.get("To")), "subject": _dec(msg.get("Subject")),
-                    "date": msg.get("Date", ""), "text": body, "files": files}
+                    "date": msg.get("Date", ""), "text": body, "files": files, "message_id": (msg.get("Message-ID") or "").strip(),
+                    "references": (msg.get("References") or "").strip(), "reply_to": _dec(msg.get("Reply-To") or "")}
         finally:
             try:
                 m.logout()
@@ -512,6 +528,35 @@ class Mail:
                 return 0
         out.sort(key=when, reverse=True)
         return out[: max(limit, limit * min(2, len(live)))] if len(live) > 1 else out[:limit]
+
+    def reply(self, which, body, attachments=()):
+        """Ответить на письмо (03.11, владелец: «прошу ответить на письмо — пишет „читаю“ и всё, по 3–4 раза»: модели
+        приходилось вызвать read_emails, read_email и send_email с адресом и темой — слабая сбивалась на полпути).
+        which — номер письма из read_emails или кто/о чём («Иван», «счёт»): берём последнее подходящее. Кому, тема «Re: …»,
+        In-Reply-To/References и цитата — сами; уходит с того ящика, куда пришло. -> {to, subject, attachments, replied}"""
+        w = str(which or "").strip()
+        if not w:
+            raise MailError("на какое письмо ответить? Нужен номер из списка писем или от кого оно")
+        if not re.fullmatch(r"(\d+:)?\d+", w):
+            found = self.inbox(limit=1, query=w)
+            if not found:
+                raise MailError(f"не нашла письма «{w}» среди последних — скажите, от кого оно или о чём")
+            w = found[0]["uid"]
+        m = self.read(w)
+        to = email.utils.parseaddr(m.get("reply_to") or m["from"])[1]
+        if not to:
+            raise MailError("у письма нет адреса отправителя — ответить некуда")
+        subj = m.get("subject") or ""
+        subj = subj if re.match(r"^\s*(re|ответ)\s*:", subj, re.I) else "Re: " + (subj or "ваше письмо")
+        quote = "\n".join("> " + ln for ln in (m.get("text") or "").strip().splitlines()[:30])
+        full = body.rstrip() + (f"\n\n{m.get('date', '')}, {m['from']} пишет:\n{quote}" if quote else "")
+        hdr = {}
+        if m.get("message_id"):
+            hdr = {"In-Reply-To": m["message_id"], "References": (m.get("references", "") + " " + m["message_id"]).strip()}
+        u = str(w)
+        i = int(u.split(":", 1)[0]) if re.fullmatch(r"\d+:\S+", u) else 0
+        r = self.box(i).send(to, subj, full, attachments, headers=hdr)
+        return dict(r, replied=m.get("subject") or "", replied_from=m["from"])
 
     def read(self, uid, folder="INBOX", mark=False):
         """uid из inbox(): «N:uid» — письмо ящика N. mark — отметить прочитанным и на почте."""

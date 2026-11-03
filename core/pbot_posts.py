@@ -46,6 +46,15 @@ def _clean(t):
     return re.sub(r"\n{3,}", "\n\n", t)
 
 
+def _whole(t):
+    """Оборванный текст — до последней законченной фразы (если она не слишком далеко от конца)."""
+    t = t.rstrip()
+    if not t or re.search(r"[.!?…»)\]\"]\s*$|[\U0001F300-\U0001FAFF\u2600-\u27BF]\s*$", t):
+        return t
+    cut = max(t.rfind(". "), t.rfind("! "), t.rfind("? "), t.rfind("…"), t.rfind(".\n"), t.rfind("!\n"), t.rfind("?\n"))
+    return t[:cut + 1].rstrip() if cut >= len(t) * 0.6 else t
+
+
 class Posts:
     def __init__(self, host, bot, path=PATH, now=None):
         self.host, self.bot, self.path = host, bot, Path(path)
@@ -267,11 +276,13 @@ class Posts:
         prof = self.host.persona_llm(p.get("id")) if p.get("id") else self.host.s.active_llm()
         if not (prof or {}).get("base_url") and (prof or {}).get("kind") != "ollama":
             raise PostError("у персонажа нет мозга — выберите модель в «Персонажах»")
-        out = _clean("".join(stream_chat(dict(prof, max_tokens=900, temperature=0.8), system,
+        # №445 (31.10: «пост при написании обрывается и не дописывается»): 900 токенов — впритык для 900 знаков, а думающим
+        # моделям и того меньше; запас побольше, и оборванный хвост — до последней законченной фразы
+        out = _clean("".join(stream_chat(dict(prof, max_tokens=2400, temperature=0.8), system,
                                          [{"role": "user", "content": f"Тема: {topic or 'на твой выбор, по делу канала'}"}])))
         if not out:
             raise PostError("модель ответила пустотой — попробуйте ещё раз")
-        return out[:4096]
+        return _whole(out[:4096])
 
     # ---------- рубрики ----------
     def rubric_set(self, r):

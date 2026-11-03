@@ -33,6 +33,9 @@ function plgField(p, s) {
   const v = (p.values || {})[s.key] ?? s.default ?? "", id = `pls-${s.key}`;
   if (s.type === "select") return `<label class="f">${plgEsc(s.label)}<select id="${id}" data-k="${plgEsc(s.key)}">${s.options.map(o => `<option ${String(o) === String(v) ? "selected" : ""}>${plgEsc(o)}</option>`).join("")}</select></label>`;
   if (s.type === "toggle") return `<div class="switch"><div>${plgEsc(s.label)}${s.hint ? `<span>${plgEsc(s.hint)}</span>` : ""}</div><label class="tg"><input type="checkbox" id="${id}" data-k="${plgEsc(s.key)}" ${v ? "checked" : ""}><i></i></label></div>`;
+  // №461: «нужно вставить адрес папки — не каждый догадается»: путь к папке — кнопкой «Выбрать папку…» (диалог системы)
+  if (s.type === "folder") return `<label class="f">${plgEsc(s.label)}<span class="pld-dir"><input type="text" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}">`
+    + `<button class="btn small" type="button" data-pick="${plgEsc(s.key)}">Выбрать папку…</button></span></label>`;
   return `<label class="f">${plgEsc(s.label)}<input type="${s.type === "number" ? "number" : "text"}" id="${id}" data-k="${plgEsc(s.key)}" value="${plgEsc(v)}" placeholder="${plgEsc(s.placeholder || "")}"></label>`;
 }
 function plgValues() {
@@ -47,7 +50,7 @@ function plgDrawer(id) {
     <div class="pld-h"><i class="plg-ic" aria-hidden="true">${plgEsc(p.icon)}</i><div><h1 id="pld-name">${plgEsc(p.name)}</h1><p>${plgEsc(p.tagline)}</p></div></div>
     <p class="pld-desc">${plgEsc(p.description)}</p>
     <div class="actions" style="margin:6px 0 4px">${p.installed
-      ? `<span class="pld-ok">✓ Установлен — просто говорите</span>${(p.links || []).map((l, i) => `<button class="btn" data-link="${i}">${plgEsc(l.label)}</button>`).join("")}<button class="btn ghost" id="pld-rm">Удалить</button>`
+      ? `<button class="btn primary" id="pld-page">Открыть страницу плагина</button><span class="pld-ok">✓ Установлен</span>${(p.links || []).map((l, i) => `<button class="btn" data-link="${i}">${plgEsc(l.label)}</button>`).join("")}<button class="btn ghost" id="pld-rm">Удалить</button>`
       : `<button class="btn primary" id="pld-in">Установить</button>`}<span class="res" id="pld-res"></span></div>
     ${p.phrases.length ? `<h2>Попробуйте сказать</h2><div class="pld-ph">${p.phrases.map(t => `<button class="chip" data-t="${plgEsc(t)}" title="${p.installed ? "Спросить Лиру" : "Скопировать"}">«${plgEsc(t)}»</button>`).join("")}</div>` : ""}
     ${p.settings.length ? `<h2>Настройки</h2><div class="row one pld-set">${p.settings.map(s => plgField(p, s)).join("")}</div>
@@ -67,10 +70,18 @@ function plgDrawer(id) {
   const res = (t, ok) => { const r = $("#pld-res"); r.className = "res " + (ok ? "ok" : "bad"); r.textContent = t; };
   const run = (cmd, args, done) => core.call(cmd, args).then(r => { plgSet(r); if (done) toast(done); }).catch(e => res(e.message, false));
   $("#pld-x").onclick = plgClose;
+  if ($("#pld-page")) $("#pld-page").onclick = () => { plgClose(); if (window.plpOpen) plpOpen(id); };   // своя страница плагина (plugpage.js)
   if ($("#pld-in")) $("#pld-in").onclick = () => { $("#pld-in").disabled = true; run("plugin_install", { id, values: plgValues() }, `«${p.name}» установлен`); };
   if ($("#pld-rm")) $("#pld-rm").onclick = async () => { if (!await ask(`Удалить плагин «${p.name}»? Его навыки и подключения уберутся, дела по расписанию — тоже.`)) return; run("plugin_remove", { id }, `«${p.name}» удалён`); };
   if ($("#pld-save")) $("#pld-save").onclick = () => run("plugin_values", { id, values: plgValues() }, "Настройки сохранены");
   if ($("#pld-del")) $("#pld-del").onclick = async () => { if (!await ask(`Удалить файлы плагина «${p.name}» с этого компьютера?`)) return; plgOpen = ""; plgClose(); run("plugin_delete", { id }, "Плагин удалён"); };
+  $$("#pld [data-pick]").forEach(b => b.onclick = async (ev) => {
+    ev.preventDefault(); const a = window.api && window.api();
+    if (!a || !a.pick_folder) return toast("Выбор папки доступен в окне студии — или впишите путь вручную");
+    const path = await a.pick_folder(); if (!path) return;
+    const inp = $(`#pld [data-k="${b.dataset.pick}"]`); if (inp) inp.value = path;
+    if (p.installed) run("plugin_values", { id, values: plgValues() }, "Папка выбрана и сохранена");   // сразу в силу — без второй кнопки
+  });
   $$("#pld [data-link]").forEach(b => b.onclick = () => core.call("ws_open", { path: p.links[+b.dataset.link].path }).catch(e => res(e.message, false)));
   $$("#pld [data-job]").forEach(c => c.onchange = () => run("plugin_job", { id, job: c.dataset.job, on: c.checked }, c.checked ? "Дело включено — помощница сделает его сама" : "Дело выключено"));
   // установлен — фраза сразу уходит Лире в чат (видно, как работает); нет — копируется

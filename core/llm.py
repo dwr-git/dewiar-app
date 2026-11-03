@@ -637,14 +637,36 @@ _BARE_CALL = re.compile(r'\{\s*"(?:name|tool_name|function_name|tool)"\s*:\s*"[A
 # Переводим в привычный <tool_call>{json}</tool_call> ещё в потоке — дальше всё как у Qwen.
 # №348 (пакет 27.10, DeepSeek v4.1 через polza.ai): «<DSML calls><DSML invoke name="lab_write"><DSML parameter name="arguments"
 # string="false">{json}» — без «｜», «calls» вместо «function_calls», все аргументы одним JSON — модель читала это вслух.
-_DO = r"<\s*[｜|]?\s*DSML\s*[｜|]?\s*"
-_DC = r"</\s*[｜|]?\s*DSML\s*[｜|]?\s*"
-_DSML_OPEN = re.compile(_DO + r"(?:function_calls|tool_calls|calls|invoke)\b")
-_DSML_END = re.compile(_DC + r"(?:function_calls|tool_calls|calls)\s*>|" + _DC + r"invoke\s*>(?![\s\S]*" + _DO + r"invoke)")
-_DSML_INVOKE = re.compile(_DO + r"invoke\s+name=\"([^\"]+)\"\s*>([\s\S]*?)(?:" + _DC + r"invoke\s*>|$)")
-_DSML_STRAY = re.compile(_DC + r"(?:function_calls|tool_calls|calls)\s*>")     # внешний «</DSML calls>» после invoke
-_DSML_PARAM = re.compile(_DO + r"parameter\s+name=\"([^\"]+)\"(?:\s+string=\"(true|false)\")?\s*>([\s\S]*?)" + _DC + r"parameter\s*>")
-_DSML_HEAD = "<｜DSML｜function_calls>"
+# №448, №460 (ПК 0.76, DeepSeek напрямую, 31.10–01.11): фоновая задача «повторяла одно и то же» и вставала через пару
+# шагов — модель звала действия, а Dewiar их не узнавал. У №448 «｜» стояли и перед «>» («<｜DSML calls｜>» — в журнале
+# после drop_cjk это выглядело как «<DSML calls>»), у №460 сервер выбросил служебное «｜DSML｜» целиком:
+# «<tool_calls><invoke name="remember"><parameter name="fact">…</parameter></invoke></tool_calls>». Поэтому «｜», «|»
+# и «▁» допускаются в любом месте тега, а «DSML» — необязателен (без него — только function_calls/tool_calls и
+# invoke с name=, чтобы не путать с обычным текстом).
+_DB = r"[\s｜|▁]*"                                   # «｜», «|», «▁» и пробелы внутри тега
+_DO = r"<" + _DB + r"(?:DSML" + _DB + r")?"
+_DC = r"<" + _DB + r"/" + _DB + r"(?:DSML" + _DB + r")?"
+_DSML_OPEN = re.compile(r"<" + _DB + r"DSML" + _DB + r"(?:function[_▁]calls|tool[_▁]calls|calls|invoke)\b|"
+                        r"<" + _DB + r"(?:function[_▁]calls|tool[_▁]calls)" + _DB + r">|"
+                        r"<" + _DB + r"invoke[\s｜|▁]+name=\"")
+_DSML_END = re.compile(_DC + r"(?:function[_▁]calls|tool[_▁]calls|calls)" + _DB + r">|" + _DC + r"invoke" + _DB + r">(?![\s\S]*" + _DO + r"invoke)")
+_DSML_INVOKE = re.compile(_DO + r"invoke[\s｜|▁]+name=\"([^\"]+)\"" + _DB + r">([\s\S]*?)(?:" + _DC + r"invoke" + _DB + r">|$)")
+_DSML_STRAY = re.compile(r"<" + _DB + r"/" + _DB + r"DSML" + _DB + r"(?:function[_▁]calls|tool[_▁]calls|calls)" + _DB + r">|"
+                         r"<" + _DB + r"/" + _DB + r"(?:function[_▁]calls|tool[_▁]calls)" + _DB + r">")   # внешний «</DSML calls>» после invoke
+_DSML_PARAM = re.compile(_DO + r"parameter[\s｜|▁]+name=\"([^\"]+)\"(?:[\s｜|▁]+string=\"(true|false)\")?" + _DB + r">([\s\S]*?)"
+                         + _DC + r"parameter" + _DB + r">")
+_DSML_WORDS = ("DSML", "function_calls", "function▁calls", "tool_calls", "tool▁calls", "invoke")
+
+
+def _dsml_part(tail):
+    """Хвост потока «<…» без «>» — может оказаться началом тега DSML («<｜DS», «<tool_ca», «<invoke na»): придержать."""
+    if len(tail) > 48 or ">" in tail or not tail.startswith("<"):
+        return False
+    s = re.sub(r"^<[\s｜|▁/]*", "", tail)
+    w = (re.match(r"[A-Za-z_▁]*", s) or [""])[0]
+    if not s:
+        return True
+    return bool(w) and any(k.startswith(w) or w.startswith(k) for k in _DSML_WORDS)
 
 
 def dsml_calls(text):
@@ -694,11 +716,8 @@ class DSMLFilter:
                 out += self.buf[:m.start()]
                 self.buf, self.inside = self.buf[m.start():], True
                 continue
-            keep = 0
-            for tag in (_DSML_HEAD, "<｜DSML｜invoke", "<|DSML|invoke", "<|DSML|function_calls", "<DSML calls", "<DSML invoke", "</DSML calls>", "</DSML function_calls>", "</｜DSML｜function_calls>", "</|DSML|function_calls>"):
-                for k in range(1, len(tag)):
-                    if self.buf.endswith(tag[:k]):
-                        keep = max(keep, k)
+            i = self.buf.rfind("<")                               # «<｜DSML…», «<tool_ca…», разрезанное между кусками
+            keep = len(self.buf) - i if i >= 0 and _dsml_part(self.buf[i:]) else 0
             out += self.buf[:len(self.buf) - keep]
             self.buf = self.buf[len(self.buf) - keep:]
             return out
@@ -1352,6 +1371,56 @@ def wants_think(text, mode=None):
     return bool(HARD_ASK.search(t)) or len(t) > 280
 
 
+# №446 (ПК 0.76, 31.10: «неимоверно долго отвечает, устал ждать, непонятно, что не так»): пока модель молчит, движок
+# показывает, чего именно ждём. Запрос в работе — запись по его cancel: phase "connect" (сервер ещё не ответил) или
+# "stream" (ответил), reasoning — сколько символов размышлений пришло, calls — модель пишет действие, text — пошли слова.
+_WAIT = {}
+
+
+def _wait_track(cancel, base, p, no_think):
+    if cancel is None:
+        return None
+    st = {"t0": time.monotonic(), "last": time.monotonic(), "phase": "connect", "reasoning": 0, "calls": False, "text": False,
+          "base": base, "model": p.get("model") or "", "think": not no_think, "local": bool(_local_base(base))}
+    _WAIT[cancel] = st
+    return st
+
+
+def _wait_untrack(cancel, st):
+    if cancel is not None and st is not None and _WAIT.get(cancel) is st:
+        _WAIT.pop(cancel, None)
+
+
+def wait_info(cancel):
+    """Запрос к модели с этим cancel ещё идёт -> копия записи (+ "quiet" — сколько секунд сервер молчит), иначе None."""
+    st = _WAIT.get(cancel)
+    if st is None:
+        return None
+    return dict(st, quiet=time.monotonic() - st["last"])
+
+
+def wait_hint(sec, info, think_auto=False):
+    """Строка для виджета, пока модель молчит sec секунд: что происходит и что можно сделать. info — wait_info().
+    think_auto — размышления включила сама «Думать над сложными просьбами» (их можно выключить)."""
+    sec = int(sec)
+    if not info:
+        return f"Выполняю действие — уже {sec} с. «Стоп» — прервать."
+    if info.get("phase") == "connect":
+        return (f"Сервер модели ещё не ответил — жду {sec} с. Если так обычно не бывает — проверьте интернет "
+                f"(и прокси: студия → «Dewiar.pro» → «Сеть», если он включён). «Стоп» — прервать.")
+    if info.get("calls"):
+        return f"Модель готовит действие — {sec} с. Большой рисунок или файл пишется дольше. «Стоп» — прервать."
+    if info.get("reasoning"):
+        how = ("выключите в «Мозге» «Думать над сложными просьбами»" if think_auto else
+               "выберите в «Мозге» модель без размышлений")
+        return f"Модель обдумывает ответ — {sec} с. Жду. Чтобы отвечала быстрее, {how}. «Стоп» — прервать."
+    if info.get("local"):
+        return (f"Модель на этом компьютере отвечает медленно — {sec} с. Жду. Быстрее — модель полегче или облако Dewiar "
+                f"(«Мозг»). «Стоп» — прервать.")
+    return (f"Модель отвечает медленно — жду {sec} с: сервер на связи, но слов пока нет. «Стоп» — прервать; если так "
+            f"часто — выберите в «Мозге» модель побыстрее.")
+
+
 def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     """Поток событий: ("text", кусок) и в конце, если модель решила действовать,
     ("tools", [{"id", "name", "args"}]). cancel — threading.Event для мгновенной остановки. Ошибки — LLMError.
@@ -1370,6 +1439,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     # Размышления выключены по умолчанию: качество ответов помощника почти не растёт, а ответ заметно медленнее.
     # Включить — только явно, "think": "on" в профиле; при повторе после пустого ответа — выключены всегда.
     no_think = p.get("think") != "on" or _retry > 0
+    st = _wait_track(cancel, base, p, no_think)                 # чего ждём (wait_info) — для «модель отвечает медленно»
     try:
         model = resolve_model(p)
         native = p.get("kind") == "ollama" or base in _native    # ещё раз: resolve_model мог узнать, что тут только Ollama
@@ -1481,12 +1551,18 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                         yield from stream_events(p, system, messages, cancel, tools, _retry)
                         return
                 r.raise_for_status()
+            if st is not None:
+                st["phase"] = "stream"                           # сервер ответил — дальше ждём слов модели
             for line in r.iter_lines():
                 if cancel is not None and cancel.is_set():
                     return
                 piece = bare.feed(col.feed_line(line))
+                if st is not None:
+                    st.update(reasoning=col.reasoning, calls=bool(col.calls), last=time.monotonic())
                 if piece:
                     got_text = True
+                    if st is not None:
+                        st["text"] = True
                     yield "text", piece
             if col.pending:
                 try:
@@ -1603,6 +1679,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             yield from stream_events(dict(p, _reload=True), system, messages, cancel, tools, _retry)
             return
         raise LLMError(msg) from e
+    finally:
+        _wait_untrack(cancel, st)
 
 
 def image_block(p, b64):

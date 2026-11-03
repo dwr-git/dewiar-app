@@ -17,6 +17,19 @@ INFO_TOOLS = {"web_search", "weather", "read_webpage", "find_notes", "read_file"
               "read_emails", "read_email", "search_documents", "ask_knowledge", "system_status", "task_status", "look_at_screen",
               "look_through_camera", "app_update"}
 
+JOB_ASK_RX = re.compile(r"Поручение пользователя: «(.+?)»\. Выполни", re.S)
+
+
+def think_ask(text, raw=False):
+    """По какому тексту решать «подумать ли модели» (llm.wants_think). Вопрос человека — по нему самому. Служебное
+    поручение (raw: приветствие «С возвращением», утренняя сводка) — длинное, и раньше всегда считалось «сложной
+    просьбой»: №446 — Лира пять минут «думала» над приветствием в одну фразу. Для дела по расписанию — по самому делу
+    пользователя, для остального служебного — без размышлений."""
+    if not raw:
+        return text
+    m = JOB_ASK_RX.search(text or "")
+    return m.group(1) if m else ""
+
 
 
 def team_window(hist, me, name_of):
@@ -63,6 +76,20 @@ def team_window(hist, me, name_of):
 
 ATT_DEFAULT_Q = "Посмотри вложения и коротко скажи, что в них."
 ACTS_RX = re.compile(r"\s*\[(?:в этом ответе выполнено|узнано инструментами)[^\]]*\]?")       # пометка в истории (team_window) — не для человека
+
+
+def _rep_norm(t):
+    return re.sub(r"[^a-zа-я0-9]+", "", str(t or "").lower().replace("ё", "е"))
+
+
+def repeat_head(said, new, fin=False):
+    """Начало нового шага ответа — повтор уже сказанного? (№435) -> True — повтор, False — новое, None — пока рано судить
+    (меньше 18 букв и цифр). fin — шаг закончился: судим по тому, что есть (от 10 знаков)."""
+    h = _rep_norm(new)
+    if len(h) < 18 and not fin:
+        return None
+    head = h[:18]
+    return len(head) >= (10 if fin else 18) and head in _rep_norm(said)
 
 
 def _norm_answer(t):
@@ -372,6 +399,8 @@ class AnswerMixin:
             turn.report = report
             turn.back_to = prev if handoff and self.s.get("team", "back") is not False else None
             turn.persona = self.s.get("persona")      # кто отвечает; по нему _cancel_locked решает, возвращать ли слово главному
+            turn.raw = raw                            # служебное поручение (приветствие, дело по расписанию) — не вопрос человека
+            turn.greet = bool(raw and str(shown or "").startswith("👋"))   # приветствие «С возвращением»: опоздало — не нужно
             self.turn = turn
         threading.Thread(target=self._run_turn, args=(turn, text, images or []), name=f"turn-{turn.n}", daemon=True).start()
 
@@ -490,7 +519,7 @@ class AnswerMixin:
         return (self.personas.system_prompt(self.s.get("persona"), self.s.get("user_name") or "", "")
                 + "\n\nТекущие дата и время — в справке в начале сообщения пользователя.\n\n" + RULE)
 
-    def _fit_window(self, prof, system, specs, msgs):
+    def _fit_window(self, prof, system, specs, msgs, keep=()):
         """Своя модель (LM Studio, Ollama) с известным окном контекста: всё не влезает — сразу короче, а не ошибка и не
         молча отрезанное начало (Ollama режет характер и инструменты без ошибки). По ступеням: без старой истории
         разговора → без действий → самая короткая подсказка. Один раз за запуск — заметка, как поставить окно больше
@@ -520,7 +549,10 @@ class AnswerMixin:
         steps.append("без старой истории")
         if specs and need(system, specs, msgs) > win:
             # главные действия на каждый день — короткой инструкцией: окно 16 тысяч их вмещает
-            core = [x for x in specs if (x.get("name") or (x.get("function") or {}).get("name")) in CORE_TOOLS]
+            # keep — действия плагина, к которому просьба (03.11: «Художник» на своей модели — «такого плагина у меня нет»:
+            # его действия выпадали вместе со всеми «неглавными»)
+            core = [x for x in specs if (x.get("name") or (x.get("function") or {}).get("name")) in CORE_TOOLS
+                    or (x.get("name") or (x.get("function") or {}).get("name")) in keep]
             sys_lean = self._system(True, lean=True)
             if core and need(sys_lean, core, msgs) <= win:
                 system, specs = sys_lean, core
@@ -704,6 +736,30 @@ class AnswerMixin:
         if en:
             out += " " + en
         return out + (" " + note if note else "")
+
+    def _plugin_hint(self, text):
+        """№461, №463, №483 (ПК 0.76: «плагины не работают — „сейчас посмотрю“ и всё»): просьба к установленному плагину —
+        в справку к вопросу: какой навык прочитать и какие действия плагина вызвать сразу (или что они не запустились)."""
+        pl = getattr(self, "plugins", None)
+        if pl is None or not text:
+            return ""
+        try:
+            m = getattr(self, "mcp", None)
+            return pl.hint_for(text.split("\n\nВложения:")[0], m.plugin_tools() if m else {}, m.plugin_errors() if m else {})
+        except Exception as e:  # noqa: BLE001
+            log.info("подсказка плагина: %s", e)
+            return ""
+
+    def _plugin_keep(self, text):
+        """Имена действий плагина, к которому эта просьба (+ use_skill) — их не выбрасываем, даже когда окно модели мало."""
+        pl, m = getattr(self, "plugins", None), getattr(self, "mcp", None)
+        if pl is None or m is None or not text:
+            return set()
+        try:
+            p = pl.match(text.split("\n\nВложения:")[0])
+            return ({n for n, _ in (m.plugin_tools().get(p["id"]) or [])} | {"use_skill", "read_skill_file"}) if p else set()
+        except Exception:  # noqa: BLE001
+            return set()
 
     def _tasks_now(self):
         """№390 (28.10, Витаха): задача «застряла» через 2 минуты, а Лира на «проверь» отвечала «задача работает» — по
@@ -1551,6 +1607,43 @@ class AnswerMixin:
                 self.emit("lesson", text=rule)
         threading.Thread(target=run, name="learn", daemon=True).start()
 
+    WAIT_NOTE_SEC = 20          # модель молчит дольше — в виджете строка, чего ждём и что можно сделать (№446)
+    GREET_LATE_SEC = 60         # приветствие «С возвращением» без единого слова дольше — уже не к месту: молчим
+
+    def _wait_watch(self, turn):
+        """№446 (ПК 0.76, 31.10: «неимоверно долго отвечает, устал ждать, непонятно, что не так»): «Думаю…» висело 5 минут,
+        а виджет говорил только «Модель отвечает долго — 307 с». Пока у хода нет ни слова, через WAIT_NOTE_SEC в строке
+        состояния — чего ждём (сервер не ответил / модель размышляет / готовит действие / медленная модель) и что можно
+        сделать (llm.wait_hint); обновляется раз в 5 с, с первым словом или концом хода убирается. Приветствие, на которое
+        модель не ответила за GREET_LATE_SEC, отменяется: человек уже за компьютером, «с возвращением» через 5 минут ни к чему."""
+        from llm import wait_hint, wait_info
+        t0, shown, last = time.monotonic(), "", 0.0
+        try:
+            while not turn.cancel.wait(1.0):
+                sec = time.monotonic() - t0
+                if getattr(turn, "ended", False) or self.turn is not turn or turn.full.strip() or sec > 1800:
+                    break
+                if getattr(turn, "greet", False) and sec >= self.GREET_LATE_SEC:
+                    with self._turn_lock:
+                        if self.turn is turn:
+                            self._cancel_locked()
+                            self.set_state("idle")
+                    log.info("👋 Приветствие опоздало (%.0f с без ответа модели) — молчу", sec)
+                    break
+                if sec < self.WAIT_NOTE_SEC or turn.via or getattr(turn, "via_job", False) or time.monotonic() - last < 5:
+                    continue
+                info = wait_info(turn.cancel)
+                self.note(wait_hint(sec, info, getattr(turn, "think_auto", False)))
+                shown, last = self.status.get("note") or "", time.monotonic()
+                if sec < self.WAIT_NOTE_SEC + 2:
+                    log.info("⏳ Модель молчит %.0f с: %s", sec, (info or {}).get("phase", "действие") +
+                             (f", размышлений {info['reasoning']} симв." if info and info.get("reasoning") else ""))
+        except Exception:  # noqa: BLE001 — строка ожидания не должна ронять ход
+            log.debug("ожидание ответа", exc_info=True)
+        finally:
+            if shown and self.status.get("note") == shown:
+                self.note("")
+
     def _run_turn(self, turn, text, images=()):
         """Поток turn-N: один ход разговора. Фразы ответа идут в очередь sentences — их озвучивает отдельный поток
         (_speak_worker; для сообщений без голоса — _drain_worker), None в очереди — конец. До 6 шагов
@@ -1566,6 +1659,7 @@ class AnswerMixin:
                                    daemon=True)
         speaker.start()
         self.set_state("thinking")
+        threading.Thread(target=self._wait_watch, args=(turn,), name=f"wait-{turn.n}", daemon=True).start()
         try:
             if not prof and (self.account.logged_in() or self.s.get("cloud", "key")):
                 try:                                   # модели нет, а вход dewiar.pro (или ключ) есть — подключаем модели Dewiar сами
@@ -1581,9 +1675,10 @@ class AnswerMixin:
                                + (": войдите в аккаунт dewiar.pro — модели Dewiar подключатся сами" if not self.account.logged_in() else ""))
             msgs = self._messages(text, images, prof)
             from llm import wants_think
-            if prof.get("think") not in ("on", "off") and self.s.get("llm", "think_auto") is not False and wants_think(text):
+            if prof.get("think") not in ("on", "off") and self.s.get("llm", "think_auto") is not False and wants_think(think_ask(text, getattr(turn, "raw", False))):
                 # сложная просьба — модель думает (дольше, но стих с рифмой, а расчёт со смыслом); лимит — с запасом на размышления
                 prof = dict(prof, think="on", max_tokens=max(6144, int(prof.get("max_tokens") or 0)))
+                turn.think_auto = True
                 log.info("🧠 Сложная просьба — модель подумает перед ответом")
             econ_main = None                            # экономный режим (economy.py): простое — дешёвой модели, основная — запасом
             try:
@@ -1672,6 +1767,10 @@ class AnswerMixin:
                 system = self._system(False) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: модель на "
                                                 "этом компьютере не успевает с ними. Если просят действие — честно скажи "
                                                 "это одной фразой.")
+            turn.plugin_hint = self._plugin_hint(text) if specs else ""
+            if turn.plugin_hint:                       # №461/463/483: просьба к плагину — сразу его навык и действия
+                log.info("🧩 %s", turn.plugin_hint.split(":")[0].split(" — ")[0])
+                ctx.append(turn.plugin_hint)
             kb = self._persona_knowledge(text, turn)
             if kb:
                 ctx.append(kb.strip())
@@ -1686,7 +1785,7 @@ class AnswerMixin:
                 except Exception:  # noqa: BLE001
                     pass
             msgs = _put_context(msgs, "\n\n".join(c for c in ctx if c))
-            system, specs, msgs = self._fit_window(prof, system, specs, msgs)
+            system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text))
             split, last, codef = SentenceSplitter(), 0.0, CodeFilter()
             # вслух — не больше ~900 символов (около минуты): длинный ответ дальше только на экране («Открыть целиком»);
             # сказки, истории и чтение вслух — целиком
@@ -1818,12 +1917,30 @@ class AnswerMixin:
                         self._blind.add(blind_key)
                         msgs = _drop_images(msgs)
                         events = stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)
+                # №435 (31.10, на телефоне и так же здесь): итог сказан до действия и повторён после — начало следующего
+                # шага придерживаем, пока не ясно, не повтор ли это сказанного (repeat_head); повтор не говорим и не пишем
+                probe, probing, muted = "", bool(step and _rep_norm(turn.full)), False
                 for kind, val in events:
                     if turn.cancel.is_set():
                         break
                     if kind == "tools":
                         calls = val
                         continue
+                    if muted:
+                        step_text += val
+                        continue
+                    if probing:
+                        probe += val
+                        rep = repeat_head(turn.full, probe)
+                        if rep is None:
+                            continue
+                        probing = False
+                        if rep:
+                            muted = True
+                            step_text += probe
+                            log.info("🔁 Повтор сказанного после действия — не повторяю")
+                            continue
+                        val, probe = probe, ""
                     if not turn.full:
                         log.info("⏱ первые слова модели через %.1f с", time.monotonic() - t_start)
                         if getattr(self, "lat", None) is not None:
@@ -1836,6 +1953,11 @@ class AnswerMixin:
                         self.emit("answer", text=fem(turn.full), done=False, model=True)
                         last = time.monotonic()
                     for s_ in split.feed(codef.feed(val)):         # код и команды вслух не читаем
+                        say(s_)
+                if probing and probe and not repeat_head(turn.full, probe, fin=True):   # короткий новый хвост — не терять
+                    turn.full += probe
+                    step_text += probe
+                    for s_ in split.feed(codef.feed(probe)):
                         say(s_)
                 for s_ in split.feed(codef.flush()) + split.flush():
                     say(s_)
@@ -1855,10 +1977,16 @@ class AnswerMixin:
                 if not calls and not turn.cancel.is_set() and specs and step < 5:
                     # «сейчас посмотрю и расскажу» — и ни одного действия; или просили презентацию, а задача не запущена
                     want_task = deliver and "start_task" not in called and not step_text.strip().endswith("?") and nudged < 2
-                    if want_task or (nudged < 1 and looks_like_promise(step_text)):
+                    # №461 (ПК 0.76): «сейчас посмотрю» — просьба — и снова «сейчас посмотрю», и ход кончился: просим дважды,
+                    # второй раз жёстче и с действиями плагина; не взялась и тогда — честно говорим это (ниже, PROMISE_GIVEUP)
+                    promised = not want_task and looks_like_promise(step_text, text)
+                    if want_task or (nudged < 2 and promised):
                         nudged += 1
-                        log.info("✋ Модель %s — прошу сделать, а не обещать", "не запустила задачу" if want_task else "только пообещала")
-                        msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": promise_nudge(want_task)}]
+                        log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else "только пообещала",
+                                 " (ещё раз)" if nudged > 1 else "")
+                        msgs = msgs + [{"role": "assistant", "content": step_text or "…"},
+                                       {"role": "user", "content": promise_nudge(want_task, again=nudged > 1,
+                                                                                 hint=getattr(turn, "plugin_hint", ""))}]
                         if turn.full.strip() and not turn.full.endswith(" "):
                             turn.full += " "
                         self.set_state("thinking")
@@ -1984,6 +2112,13 @@ class AnswerMixin:
                                  + ", но ответ не сложился. Спросите точнее — например, какой раздел разобрать или что именно собрать.")
                     turn.full = self._g(turn.full) if hasattr(self, "_g") else turn.full
                     sentences.put(turn.full)
+            if nudged and not called and not turn.cancel.is_set() and looks_like_promise(step_text or turn.full, text):
+                # №463 (ПК 0.76): «Лира говорит, что сейчас всё сделает, и больше ничего не происходит. Ни статуса, ни ответа» —
+                # просили сделать, а она так и не взялась: человек не должен ждать впустую — говорим прямо
+                from quality import PROMISE_GIVEUP
+                log.warning("✋ Модель так и не взялась за дело после просьб — говорю об этом прямо")
+                turn.full = (turn.full.rstrip() + " " + PROMISE_GIVEUP).strip()
+                sentences.put(PROMISE_GIVEUP)
             if remind_asked and "set_reminder" not in called and not turn.cancel.is_set() and not turn.full.rstrip().endswith("?"):
                 # попросили поставить — и всё равно нет: человек должен знать, что напоминания нет (а не ждать утром)
                 log.warning("Обещала напомнить, но напоминание так и не поставлено — говорю об этом прямо")
@@ -2036,6 +2171,7 @@ class AnswerMixin:
             sentences.put(msg)
         sentences.put(None)
         speaker.join()
+        turn.ended = True                              # _wait_watch: ход кончился — строку ожидания убрать
         self.cloud.after_turn(prof)                    # облако по ключу — узнать новый заряд
         if turn.via and turn.via.get("done"):
             try:

@@ -14,6 +14,8 @@ const ICONS = {
   ref: '<path d="M9 3.5l1.4 4.1 4.1 1.4-4.1 1.4L9 14.5l-1.4-4.1L3.5 9l4.1-1.4z"/><circle cx="18.5" cy="6" r="1.6"/><circle cx="17.5" cy="18.5" r="1.6"/><circle cx="6.5" cy="19.5" r="1.2"/><path d="m13.6 7.8 3.4-1.1M12.6 12.6l3.8 4.6M8.2 15.9l-1.1 2.3"/>',
   vault: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/><path d="M12 14.5v2.5"/>',
   // 28.10, владелец: «Платежи очень похожи на Заметки» — кошелёк вместо чека
+  art: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.3-1.1-1.6-1.1-2.6 0-.9.7-1.5 1.7-1.5h2.2a3.9 3.9 0 0 0 3.9-3.9C20.5 6.9 16.7 3.5 12 3.5z"/><circle cx="7.8" cy="11" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="14.6" cy="7.8" r="1"/>',
+  plg: '<path d="M9 4.5h3.2a1.8 1.8 0 1 1 3.6 0H19v4.2a1.8 1.8 0 1 0 0 3.6v4.2h-3.2a1.8 1.8 0 1 0-3.6 0H9v-3.2a1.8 1.8 0 1 1 0-3.6z"/>',
   pay: '<path d="M5 7.5V6.8A2.3 2.3 0 0 1 7.3 4.5H17v3"/><rect x="3.5" y="7.5" width="17" height="12" rx="2.6"/><path d="M20.5 11.5h-4a2 2 0 0 0 0 4h4"/><circle cx="16.6" cy="13.5" r=".6"/>',
   notes: '<path d="M6.5 3.5h8l4 4v13h-12z"/><path d="M14.5 3.5v4h4M9 12h6M9 15.5h6M9 9h2.5"/>',
   course: '<path d="M3 9l9-4.5L21 9l-9 4.5z"/><path d="M7 11v4.5c0 1.4 2.2 2.8 5 2.8s5-1.4 5-2.8V11"/><path d="M21 9v5"/>',
@@ -107,6 +109,28 @@ $$("main section[id^='p-']").forEach(s => {
   if (h.id) { const sp = document.createElement("span"); sp.id = h.id; h.removeAttribute("id"); sp.append(...h.childNodes); h.appendChild(sp); }   // id переезжает на вложенный span: код меняет текст в нём и не затирает кнопку «?»
   const b = document.createElement("button"); b.className = "hbtn"; b.textContent = "?"; b.title = "Как работает этот раздел";
   b.onclick = (e) => { e.stopPropagation(); showHelp(k); }; h.appendChild(b);
+});
+/* 03.11 (человек: «в версии для Windows на главной Студии нет кнопки-жучка, непонятно, куда выслать скриншот ошибки»;
+   идея №98 — «лампочка идеи и жучок возле вопросика на каждой странице»): у заголовка каждого раздела — «жучок» (снимает
+   экран с этим разделом и открывает «Сообщить о проблеме» с названием раздела) и «лампочка» (к «Идеям Лиры»). */
+const HB_BUG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8.5a4 4 0 0 1 8 0"/><rect x="7" y="8.5" width="10" height="11" rx="5"/><path d="M12 11.5v8M3.5 13H7M17 13h3.5M4.5 8.5 7.4 10M19.5 8.5 16.6 10M4.5 18.5l2.9-1.6M19.5 18.5l-2.9-1.6M9.5 5 8 3M14.5 5 16 3"/></svg>';
+const HB_IDEA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>';
+async function hbBug(name) {
+  let pv = "";
+  try { const x = await core.call("bug_shot"); if (x && x.ok) pv = x.preview; } catch (e) { /* без снимка — тоже можно */ }
+  if (typeof bugFocus === "function") bugFocus(pv);
+  const n = $("#rep-note"); if (n && name && !n.value.trim()) n.value = `Раздел «${name}»: `;
+}
+{ const nb = $("#nav-bug");                                           // и внизу меню — видно с «Главной» и отовсюду
+  if (nb) { nb.insertAdjacentHTML("afterbegin", HB_BUG.replace("<svg ", "<svg class=\"ni\" ")); nb.onclick = () => { const cur = $("nav button[data-p].cur"), k = cur && cur.dataset.p;
+    hbBug(cur && k !== "about" && k !== "home" ? cur.textContent.trim() : ""); }; } }
+$$("main section[id^='p-']").forEach(s => {
+  const k = s.id.slice(2), h = s.querySelector("h1"); if (!h || k === "about" || k === "ideas") return;
+  const nav = $(`nav button[data-p="${k}"]`), name = nav ? nav.textContent.trim() : "";
+  const mk = (cls, svg, title, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "hbtn hb-x " + cls; b.innerHTML = svg; b.title = title;
+    b.setAttribute("aria-label", title); b.onclick = (e) => { e.stopPropagation(); fn(); }; h.appendChild(b); };
+  mk("hb-bug", HB_BUG, "Сообщить о проблеме в этом разделе — со снимком экрана", () => hbBug(name));
+  mk("hb-idea", HB_IDEA, "Предложить идею", () => { const b = $('nav button[data-p="ideas"]'); if (b) b.click(); setTimeout(() => { const q = $("#id-q"); if (q) q.focus(); }, 150); });
 });
 $("#help-x").onclick = () => $("#help").classList.remove("open");
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#help").classList.remove("open"); });

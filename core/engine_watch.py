@@ -25,6 +25,31 @@ class WatchMixin:
     def _watch_emit(self):
         self.emit("watch", **self.watch_public())
 
+    # №468 (01.11, телефон): «Дозор включил на компьютере, на телефоне спрашиваю, как там статус, — Лира выдумывает».
+    # Телефон знал о дозоре только «готово». Теперь компьютер шлёт своим телефонам (конверт own, шифр на устройствах)
+    # короткий снимок дозоров {watch: {dev, at, items}}: при постановке, остановке, срабатывании, конце срока, раз в
+    # WATCH_PUB_EVERY, пока дозор идёт (свежая заметка «пока нет»), и по просьбе телефона {want: ["watch"]}.
+    WATCH_PUB_EVERY = 600
+
+    def watch_snapshot(self):
+        """Дозоры для телефона: идущие и последние закончившиеся (до 6), без папок, адресов и снимков."""
+        items = []
+        for x in (self.watch_public().get("items") or [])[:6]:
+            items.append({k: x.get(k) for k in ("id", "kind", "title", "status", "note", "last", "until", "created", "done_at", "result", "checks")})
+        return {"dev": self.device_name(), "at": int(time.time() * 1000), "items": items,
+                "active": sum(1 for x in items if x.get("status") == "active")}
+
+    def _watch_publish(self, force=False):
+        close = getattr(self, "close", None)
+        if close is None or getattr(self, "watches", None) is None:
+            return False
+        now = time.time()
+        if not force and now - getattr(self, "_watch_pub_at", 0) < self.WATCH_PUB_EVERY:
+            return False
+        self._watch_pub_at = now
+        threading.Thread(target=close._own_quiet, args=({"watch": self.watch_snapshot()},), name="watch-pub", daemon=True).start()
+        return True
+
     def watch_add(self, a):
         """Новый дозор: kind screen|file|page, what, every_minutes, hours, folder, pattern, url. -> запись."""
         kind = str(a.get("kind") or "screen")
@@ -37,32 +62,45 @@ class WatchMixin:
                               folder=a.get("folder") or "", pattern=a.get("pattern") or "", url=a.get("url") or "")
         log.info("👁 Дозор: %s (%s, раз в %d с)", it["title"], kind, it["every"])
         self._watch_emit()
+        self._watch_publish(True)
         threading.Thread(target=self._watch_check, args=(self.watches.get(it["id"]),), name="watch-first", daemon=True).start()
         return it
 
     def watch_stop(self, wid=""):
         n = self.watches.stop(wid)
         self._watch_emit()
+        self._watch_publish(True)
         return n
 
     # ---------- проверки ----------
 
     def _watch_loop(self):
-        while not self.stopping.wait(10):
-            w = getattr(self, "watches", None)
-            if w is None or not w.active() or self._watch_busy:
-                continue
-            try:
-                due, gone = w.due()
-                for x in gone:
-                    log.info("👁 Дозор закончился по сроку: %s", x.get("title"))
-                    self.emit("toast", text=f"Дозор «{x.get('title')}» закончился: срок вышел, условие так и не выполнилось")
-                if gone:
-                    self._watch_emit()
-                for x in due:
-                    self._watch_check(x)
-            except Exception:  # noqa: BLE001
-                log.exception("Дозор")
+        from sleepguard import keep_awake
+        try:
+            while not self.stopping.wait(10):
+                w = getattr(self, "watches", None)
+                on = bool(w is not None and w.active())
+                if keep_awake(on):                      # идея №111: пока идёт дозор — компьютер не засыпает
+                    log.info("👁 Дозор: %s", "компьютер не уснёт, пока он идёт" if on else "сон снова разрешён")
+                if not on or self._watch_busy:
+                    continue
+                self._watch_round(w)
+        finally:
+            keep_awake(False)
+
+    def _watch_round(self, w):
+        try:
+            due, gone = w.due()
+            for x in gone:
+                log.info("👁 Дозор закончился по сроку: %s", x.get("title"))
+                self.emit("toast", text=f"Дозор «{x.get('title')}» закончился: срок вышел, условие так и не выполнилось")
+            if gone:
+                self._watch_emit()
+                self._watch_publish(True)
+            for x in due:
+                self._watch_check(x)
+        except Exception:  # noqa: BLE001
+            log.exception("Дозор")
 
     def _watch_check(self, x):
         if x is None or x.get("status") != "active" or self._watch_busy:
@@ -84,6 +122,7 @@ class WatchMixin:
             else:
                 self.watches.mark(x, note)
             self._watch_emit()
+            self._watch_publish(ok is not False)               # сработал или остановлен — сразу; «пока нет» — раз в 10 минут
         except Exception as e:  # noqa: BLE001
             log.info("👁 Дозор «%s»: проверка не удалась: %s", x.get("title"), e)
             self.watches.mark(x, f"не удалось проверить: {e}")
@@ -187,6 +226,7 @@ class WatchMixin:
         self.watches._save()
         log.info("👁 Дозор «%s»: с телефона — «не то», жду дальше", x.get("title"))
         self._watch_emit()
+        self._watch_publish(True)
         return True
 
     def _watch_done(self, x, note):

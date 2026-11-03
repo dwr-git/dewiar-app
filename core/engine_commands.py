@@ -337,6 +337,8 @@ class CommandsMixin:
         from plugins import PluginError
         from tools import ToolError, t_schedule_job
         P = self.plugins
+        if cmd in ("plugin_page", "plugin_run", "plugin_restart", "plugin_files", "plugin_open", "plugin_ui"):
+            return self._plugin_page_cmd(cmd, a)
         try:
             if cmd == "plugin_install":
                 P.install(a["id"], a.get("values"))
@@ -374,12 +376,50 @@ class CommandsMixin:
         except (PluginError, ToolError, KeyError) as e:
             raise ValueError(str(e)) from e
         self.skills.reload()
-        if cmd in ("plugin_install", "plugin_remove", "plugin_zip", "plugin_delete"):
+        # plugin_values — тоже: сервер плагина получает настройки при запуске (DEWIAR_PLUGIN_SETTINGS), без перезапуска
+        # новая «Папка с резюме» не доходила до него до перезапуска программы (03.11)
+        if cmd in ("plugin_install", "plugin_remove", "plugin_zip", "plugin_delete", "plugin_values"):
             self.mcp.reconcile()
         out = {"plugins": P.catalog(), "skills": self.skills.catalog()}
         if cmd == "plugins":
             out["guide"] = P.guide()
         return out
+
+    def _plugin_page_cmd(self, cmd, a):
+        """Страница плагина в студии (core/plugin_pages.py, ui/studio/plugpage.js): plugin_page {id} — всё для страницы;
+        plugin_run {id, tool, args} — действие плагина напрямую, без модели (только свои действия плагина);
+        plugin_restart {id}; plugin_files {id}; plugin_open {id, path} — только внутри папок плагина и папки Dewiar;
+        plugin_ui {id} — своя страница плагина (ui.html) для фрейма-песочницы."""
+        import plugin_pages as PP
+        from tools import ToolError
+        P, pid = self.plugins, str(a.get("id") or "")
+        try:
+            ws = self.workspace.ensure()
+        except Exception:  # noqa: BLE001
+            ws = None
+        try:
+            if cmd == "plugin_page":
+                return PP.page(P, self.mcp, pid, ws)
+            if cmd == "plugin_run":
+                if pid not in (self.s.get("plugins", "on") or {}):
+                    raise PP.PageError("плагин не установлен — сначала «Установить»")
+                return PP.run(P, self.mcp, pid, a.get("tool"), a.get("args") or {}, ws)
+            if cmd == "plugin_restart":
+                if P.items.get(pid, {}).get("mcp"):
+                    self.mcp.plugin_restart(pid)
+                return PP.page(P, self.mcp, pid, ws)
+            if cmd == "plugin_files":
+                return PP.files(P, pid, ws, a.get("limit") or 12)
+            if cmd == "plugin_open":
+                from tools import launch
+                f = PP.safe_path(P, pid, ws, a.get("path"))
+                launch(["xdg-open", str(f)])
+                return str(f)
+            if cmd == "plugin_ui":
+                return {"html": PP.ui_html(P, pid)}
+        except (PP.PageError, ToolError) as e:
+            raise ValueError(str(e)) from e
+        raise ValueError(f"неизвестная команда {cmd}")
 
     def _pad_cmd(self, cmd, a):
         """pad_tabs / pad_read {name} / pad_write {name, text, base} / pad_new {name} / pad_rename {name, to} /
@@ -1450,6 +1490,12 @@ class CommandsMixin:
                 ext = {"image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}.get(mime, ".jpg")
                 files.append({"name": time.strftime("Картинка %d.%m %H-%M-%S") + (f" ({k + 1})" if k else "") + ext, "b64": im})
             text = a.get("text", "")
+            # №491 (ПК 0.76): на «Выполнить?» набрали «давай» — это ушло новым вопросом, ход с вопросом отменился, а
+            # подтверждение засчиталось как «нет». Короткий набранный ответ, пока ждём «да/нет», — ответ на вопрос
+            if self.pending_confirm and not files and text.strip() and len(re.findall(r"[\wё]+", text)) <= 8 \
+                    and self._answer_confirm(text):
+                log.info("Подтверждение набрано: «%s»", text.strip()[:30])
+                return True
             if files and text.strip() and self._reminder_with_files(text, files):
                 return True                      # «напомни завтра в 10» + снимки — напоминание с картинками, без модели
             if files:
@@ -1961,6 +2007,27 @@ class CommandsMixin:
             except Exception:  # noqa: BLE001
                 pass
             return r
+        if cmd == "art_list":                       # студия → «Рисунки»: работы «Художника» (папка Dewiar → «Рисунки»)
+            import base64
+            d = self.workspace.ensure() / "Рисунки"
+            try:
+                works = json.loads((d / ".gallery.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                works = []
+            out = []
+            for w in sorted((x for x in works if isinstance(x, dict) and (d / str(x.get("page", ""))).is_file()),
+                            key=lambda x: x.get("at", ""), reverse=True)[:int(a.get("limit") or 60)]:
+                f, prev = d / str(w.get("file", "")), ""
+                try:
+                    if f.suffix == ".svg" and f.stat().st_size < 400_000:
+                        prev = "data:image/svg+xml;base64," + base64.b64encode(f.read_bytes()).decode()
+                    elif f.suffix == ".png" and f.stat().st_size < 3_000_000:
+                        prev = "data:image/png;base64," + base64.b64encode(f.read_bytes()).decode()
+                except OSError:
+                    prev = ""
+                out.append({"title": str(w.get("title", "")), "kind": w.get("kind", "picture"), "at": str(w.get("at", "")),
+                            "page": "Рисунки/" + str(w.get("page")), "preview": prev})
+            return {"items": out, "folder": str(d)}
         if cmd == "ws_open":
             from tools import launch
             p = self.workspace.safe(a.get("path", "")) if a.get("path") else self.workspace.ensure()

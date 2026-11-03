@@ -72,6 +72,7 @@
   <div class="ng">Лира делает сама</div>
   <button data-p="tasks" title="Большая работа, которую Лира делает сама: отчёт, сравнение, программа — пишет, когда готово">Задачи</button>
   <button data-p="watch" title="«Дозор»: Лира присмотрит за экраном, папкой или страницей и скажет, когда готово">Дозор<i class="ndot" id="wt-dot"></i></button>
+  <button data-p="art" hidden title="Рисунки и анимации плагина «Художник»">Рисунки</button>
   <button data-p="council" title="«Совет ИИ»: персонажи на разных моделях вместе обсуждают ваш вопрос, спорят и подводят итог">Совет ИИ</button>
   <div class="ng">Семья и близкие</div>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
@@ -88,6 +89,10 @@
   <button data-p="sitechat" title="Чат для сайта: консультант отвечает посетителям вашего сайта, заявки — в «Клиенты»" hidden>Чат для сайта</button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
   <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям">Бот в Telegram</button>
+  <!-- «Плагины» (03.11): пункт на каждый установленный плагин — его страница (studio/plugpage.js, раздел p-plg) -->
+  <div class="ng" id="nav-plg-h" hidden>Плагины</div>
+  <div class="nav-groups nav-plugins" id="nav-plugins" hidden></div>
+  <button data-p="plg" class="sub" hidden>Плагин</button>
   <div class="ng">Обучение</div>
   <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
   <button data-p="lessons" title="ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок">Видеоуроки</button>
@@ -120,6 +125,7 @@
   <div class="grow"></div>
   <button data-p="ideas" title="Что сделать дальше — предложите идею и голосуйте за чужие">Идеи Лиры<i class="ndot" id="id-dot"></i></button>
   <button data-p="about">О программе</button>
+  <button type="button" class="nav-bug" id="nav-bug" title="Что-то не так — снимок экрана и пара слов разработчику">Сообщить о проблеме</button>
   <button class="chip" id="wlc-chip" title="Первые шаги">✨ Первые шаги</button>
   <div class="conn" id="conn"><i></i><span>нет связи с ядром</span></div>
 </nav>
@@ -361,6 +367,13 @@
     </div>
   </section>
 
+  <section id="p-art" class="wide">
+    <h1>Рисунки</h1>
+    <p class="lead">Открытки, картинки и анимации, которые Лира нарисовала плагином «Художник». Нажмите — откроется в браузере:
+      там «Сохранить PNG», у анимации — «Записать видео». Новая работа — просто скажите: «Нарисуй открытку для мамы».</p>
+    <div class="actions" style="margin:0 0 16px"><button class="btn" id="art-folder">Открыть папку «Рисунки»</button><button class="btn ghost" id="art-reload">Обновить</button></div>
+    <div class="art-grid" id="art-grid"></div>
+  </section>
   <section id="p-watch" class="wide">
     <div class="wt-hero">
       <div class="wt-eye" aria-hidden="true"><svg viewBox="0 0 120 72"><path class="wt-lid" d="M6 36S28 6 60 6s54 30 54 30-22 30-54 30S6 36 6 36z"/><circle class="wt-iris" cx="60" cy="36" r="20"/><circle class="wt-pupil" cx="60" cy="36" r="8"/><circle class="wt-glint" cx="66" cy="29" r="3.2"/></svg></div>
@@ -1526,7 +1539,7 @@
         <label class="ml-f"><span>Адрес почты</span>
           <input type="email" id="ml-addr" placeholder="например ivan@gmail.com" autocomplete="email"></label>
         <label class="ml-f"><span id="ml-pass-l">Пароль приложения</span>
-          <input type="password" id="ml-pass" placeholder="пароль приложения" autocomplete="off" spellcheck="false"></label>
+          <input type="password" id="ml-pass" placeholder="не от почты — особый, для программ" autocomplete="off" spellcheck="false"></label>
         <button class="btn primary" id="ml-save">Подключить</button>
       </div>
       <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Серверы почты (подставляются сами)</summary>
@@ -2029,6 +2042,10 @@
     <div id="remlist" class="hint">Все напоминания — на странице «Напоминания».</div>
   </section>
 
+  <section id="p-plg" class="wide">
+    <div class="plp" id="plp"></div>
+  </section>
+
   <section id="p-skills">
     <h1>Плагины</h1>
     <p class="lead">Плагин — готовое умение одной кнопкой: инструкция для помощницы, нужные подключения, ваши настройки и дела
@@ -2097,6 +2114,7 @@
     <div class="switch"><div>Портрет смотрит на курсор<span>Курсор над виджетом — персонаж переводит на него взгляд, лицо чуть смещается. По умолчанию выключено. На телефоне — по наклону, там свой переключатель.</span></div><label class="tg"><input type="checkbox" data-k="ui.cursor_look"><i></i></label></div>
     <div class="switch"><div>Виджет поверх всех окон<span>Окно Лиры всегда видно над другими программами. Выключите — и оно будет обычным окном: его можно перекрыть, а вызвать — по имени или из значка в трее.</span></div><label class="tg"><input type="checkbox" data-k="ui.on_top"><i></i></label></div>
     <div class="switch" id="lk-smooth"><div>Прозрачное окно виджета<span>Гладкие скруглённые края виджета (Linux с композитором). Если виджет мигает, а его фон и кнопки пропадают, — выключите и перезапустите Dewiar. С видеокартой NVIDIA окно и так сплошное: там прозрачное мигало.</span></div><label class="tg"><input type="checkbox" data-k="ui.hud_smooth"><i></i></label></div>
+    <div class="switch" id="lk-sharp"><div>Чёткий текст на Wayland<span>Если экран с масштабом 125–200 % и текст Dewiar размыт (Ubuntu, GNOME), — включите и перезапустите Dewiar: окна будут рисоваться прямо в масштабе экрана. Взамен система не даст виджету держаться поверх всех окон и запоминать своё место; перетаскивать его можно, как обычно.</span></div><label class="tg"><input type="checkbox" data-k="ui.wayland_sharp"><i></i></label></div>
     <p class="hint">На телефоне тема и анимация выбираются отдельно: «Настройки» → «Ещё» → «Оформление».</p>
   </section>
 
@@ -2512,6 +2530,7 @@
 <script src="assets/refnet.js"></script>
 <script src="assets/dewiar.js"></script>
 <script src="assets/dialog.js"></script>
+<script src="assets/ctxmenu.js"></script>
 <script src="assets/qrcode.js"></script>
 <script src="assets/help.js"></script>
 <script src="studio/core.js"></script>
@@ -2571,6 +2590,8 @@
 <script src="studio/news.js"></script>
 <script src="studio/modes.js"></script>
 <script src="studio/watch.js"></script>
+<script src="studio/art.js"></script>
+<script src="studio/plugpage.js"></script>
 <script src="studio/ideas.js"></script>
 </body>
 </html>

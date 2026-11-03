@@ -104,8 +104,9 @@ p = subprocess.run([sys.executable, str(ROOT / "data/plugins/recruiter/server.py
                    capture_output=True, text=True, env=env, timeout=60)
 out = [json.loads(x) for x in p.stdout.splitlines() if x.strip()]
 tl = out[1]["result"]["tools"] if len(out) > 1 else []
-ok(len(tl) == 7 and all(t["annotations"]["readOnlyHint"] for t in tl) and sum(len(t["description"]) for t in tl) < 1400,
-   f"семь действий, короткие описания (подсказка модели не раздувается): {sum(len(t['description']) for t in tl)}")
+tm = [t for t in tl if not (t.get("_meta") or {}).get("dewiar/page")]     # 03.11: действия только для страницы плагина модели не видны
+ok(len(tm) == 9 and all(t["annotations"]["readOnlyHint"] for t in tl) and sum(len(t["description"]) for t in tm) < 1400,
+   f"девять действий для помощницы, короткие описания (подсказка модели не раздувается): {len(tm)}, {sum(len(t['description']) for t in tm)}")
 res = json.loads(out[2]["result"]["content"][0]["text"]) if len(out) > 2 else {}
 ok(len(res.get("added", [])) == 3, f"через MCP — из папки настроек: {p.stderr[-200:]}")
 

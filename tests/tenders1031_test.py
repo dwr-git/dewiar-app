@@ -81,8 +81,8 @@ p = subprocess.run([sys.executable, str(ROOT / "data/plugins/tenders/server.py")
 out = [json.loads(x) for x in p.stdout.splitlines() if x.strip()]
 ok(len(out) == 3 and out[0]["result"]["serverInfo"]["name"] == "dewiar-tenders", f"MCP: initialize (уведомление без ответа): {p.stderr[-300:]}")
 tl = out[1]["result"]["tools"] if len(out) > 1 else []
-ok({t["name"] for t in tl} == {"tenders_scan", "tenders_list", "tenders_mark"} and all(t["annotations"]["readOnlyHint"] for t in tl),
-   "три действия, без лишних «Выполнить?»")
+ok({t["name"] for t in tl if not (t.get("_meta") or {}).get("dewiar/page")} == {"tenders_scan", "tenders_list", "tenders_mark"}
+   and all(t["annotations"]["readOnlyHint"] for t in tl), "три действия для помощницы (остальные — только для страницы плагина), без лишних «Выполнить?»")
 res = json.loads(out[2]["result"]["content"][0]["text"]) if len(out) > 2 else {}
 ok(res.get("new", 0) >= 5, f"tenders_scan через MCP — находит: {str(res)[:120]}")
 

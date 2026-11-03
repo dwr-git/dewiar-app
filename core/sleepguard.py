@@ -78,3 +78,40 @@ def release_due(idle_s, standby_s, voice_ago_s, busy):
         return False
     edge = max(30.0, standby_s - 60.0)
     return idle_s >= edge and voice_ago_s >= edge
+
+
+# идея №111 (01.11: «во время Дозора частая проблема — засыпание компьютера; если Дозор включён, засыпать не должен»):
+# пока есть активный дозор — просим систему не засыпать (экран гаснуть может). Windows: SetThreadExecutionState из потока
+# дозора (состояние — на поток); Linux: systemd-inhibit на время дозора. keep_awake(False) — снова можно спать.
+_awake = {"on": False, "proc": None}
+
+
+def keep_awake(on):
+    """Не давать компьютеру уснуть (on=True) или снова разрешить (False). -> True, если состояние поменялось."""
+    on = bool(on)
+    if on == _awake["on"]:
+        return False
+    _awake["on"] = on
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0))
+        except Exception:  # noqa: BLE001
+            pass
+        return True
+    p = _awake["proc"]
+    if on and p is None:
+        try:
+            _awake["proc"] = subprocess.Popen(["systemd-inhibit", "--what=sleep:idle", "--who=Dewiar", "--why=Идёт Дозор",
+                                               "--mode=block", "sleep", "infinity"],
+                                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, ValueError):
+            _awake["proc"] = None
+    elif not on and p is not None:
+        try:
+            p.terminate()
+        except OSError:
+            pass
+        _awake["proc"] = None
+    return True
