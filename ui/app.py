@@ -370,6 +370,7 @@ CAPTURE_TITLE = "Dewiar — закинуть идею"
 CAPTURE_RADIUS = 24
 CAPTURE_BAR, CAPTURE_BTNS = 58, 60       # заголовок окна идеи (capture.html, header): высота и место под крестик справа
 ALARM_RADIUS = 26
+SNIP_TITLE = "Dewiar — вырезать с экрана"
 PAD_TITLE = "Dewiar — блокнот"
 PAD_W, PAD_MIN_H, PAD_GAP, PAD_RADIUS = 440, 520, 14, 22   # блокнот у виджета (pad.html): ширина, высота не меньше, зазор
 PAD_W_MIN, PAD_W_MAX, PAD_H_MIN = 320, 1100, 300   # пределы своего размера листа (растягивают за нижний уголок), px при 100 %
@@ -704,8 +705,8 @@ def shape_window(gw, kind, size=None, radius=None, rects=None):
     return True
 
 
-def _win_clip_set(text):
-    """Windows: текст в буфер + пометки для пароля (журнал Win+V и облачный буфер его не сохраняют)."""
+def _win_clip_set(text, secret=True):
+    """Windows: текст в буфер; secret — с пометками для пароля (журнал Win+V и облачный буфер его не сохраняют)."""
     import ctypes
     from ctypes import wintypes
     u32, k32 = ctypes.WinDLL("user32"), ctypes.WinDLL("kernel32")     # свои: argtypes общих windll.* видит и pywebview (№476)
@@ -734,8 +735,8 @@ def _win_clip_set(text):
     try:
         u32.EmptyClipboard()
         u32.SetClipboardData(13, blob((text + "\0").encode("utf-16-le")))   # CF_UNICODETEXT
-        for fmt, data in (("ExcludeClipboardContentFromMonitorProcessing", b"\0"), ("CanIncludeInClipboardHistory", b"\0\0\0\0"),
-                          ("CanUploadToCloudClipboard", b"\0\0\0\0")):
+        for fmt, data in ((("ExcludeClipboardContentFromMonitorProcessing", b"\0"), ("CanIncludeInClipboardHistory", b"\0\0\0\0"),
+                           ("CanUploadToCloudClipboard", b"\0\0\0\0")) if secret else ()):
             f = u32.RegisterClipboardFormatW(fmt)
             if f:
                 u32.SetClipboardData(f, blob(data))
@@ -868,6 +869,26 @@ class Api:
             return True
         except Exception as e:  # noqa: BLE001
             print(f"буфер обмена (сейф): {e}", file=sys.stderr)
+            return False
+
+    def clip_text(self, text):
+        """Обычный текст в буфер обмена (распознанный с экрана — «Вырезать кусок экрана», идея №83). -> True/False."""
+        text = str(text or "")
+        if not text:
+            return False
+        try:
+            if WIN:
+                return bool(_win_clip_set(text, secret=False))
+
+            def put():
+                from gi.repository import Gdk, Gtk
+                cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+                cb.set_text(text, -1)
+                cb.store()                                   # текст остаётся в буфере и после закрытия Dewiar
+                return True
+            return bool(self._gtk(put, timeout=3))
+        except Exception as e:  # noqa: BLE001
+            print(f"буфер обмена: {e}", file=sys.stderr)
             return False
 
     def clipboard_image(self):
@@ -1413,9 +1434,27 @@ class Api:
     def bring_back(self):
         """Linux: Dewiar запустили ещё раз (меню приложений, `dewiar`) — виджет поверх и целиком на экране этого
         монитора. GitHub #7 (Kubuntu, KDE): «после того как закрыл окно, больше никакими способами не появилось» —
-        повторный запуск только «будил» уже запущенный интерфейс, а виджет мог остаться за краем экрана."""
+        повторный запуск только «будил» уже запущенный интерфейс, а виджет мог остаться за краем экрана.
+        Windows (№512, 03.11): «Dewiar не запускается» — виджет работал, но его не было видно, а повторный запуск ярлыка
+        только открывал студию. Теперь и там: виджет — целиком на видимом месте рабочей области и поверх окон."""
         if WIN:
-            return False
+            h = self._hwnd(self.mode)
+            if not h:
+                return False
+            try:
+                w, hh = SIZES[self.mode]
+                x, y = winshell.get_pos(h)
+                nx, ny = fit_visible(x, y, w, hh, lambda: winshell.clamp(h, x, y, w, hh))
+                self.wins[self.mode].show()
+                if (nx, ny) != (x, y):
+                    winshell.move(h, nx, ny)
+                    _ui_log(f"виджет: был за краем экрана ({x}, {y}) — вернула на ({nx}, {ny})")
+                winshell.raise_top(h)
+                self._win_shape(self.mode)
+            except Exception as e:  # noqa: BLE001
+                print(f"Виджет не вернулся на экран: {e}", file=sys.stderr)
+                return False
+            return True
 
         def run():
             gw = self._gw(self.mode)
@@ -1469,10 +1508,11 @@ class Api:
         return {"ok": True}
 
     def open_url(self, url):
-        """Ссылка наружу: сайт, Telegram (tg://), Obsidian (obsidian://) — системой. Только эти схемы: страница не
-        должна суметь открыть через систему файл или запустить программу (file:, ms-…: и подобные)."""
+        """Ссылка наружу: сайт, Telegram (tg://), Obsidian (obsidian://), кошелёк TON (ton:// — перевод с комментарием DW-…,
+        кошелёк всё равно спросит подтверждение) — системой. Только эти схемы: страница не должна суметь открыть через
+        систему файл или запустить программу (file:, ms-…: и подобные)."""
         url = str(url or "")
-        if not url.split(":", 1)[0].lower() in ("http", "https", "obsidian", "tg"):
+        if not url.split(":", 1)[0].lower() in ("http", "https", "obsidian", "tg", "ton"):
             return False
         if WIN:
             os.startfile(url)  # noqa: S606
@@ -2365,6 +2405,115 @@ class Api:
         threading.Timer(4.0, reveal).start()
         return True
 
+    # ---------- «Вырезать кусок экрана» (идея №83, 03.11): snip.html поверх всего экрана ----------
+    # Снимок экрана делает ядро (snip_shot), пока окно ещё спрятано — само окно в снимок не попадает; страница рисует
+    # снимок на весь экран (застывший экран), человек выделяет рамку, ядро вырезает (snip_done) и кладёт кусок в блокнот,
+    # текст распознаёт в фоне. Окно на весь монитор: в Linux — fullscreen GTK, в Windows — растягиваем сами (у окна без
+    # рамки WinForms fullscreen не работает, см. pad_full). Несколько мониторов — снимок всех целиком, вписанный в экран.
+
+    def snip_open(self, src="pad"):
+        """Кнопка «Вырезать с экрана» в блокноте или «вырежи кусок экрана» голосом (ядро — событие window: snip).
+        Открытый блокнот прячется, чтобы не закрывать то, что вырезают; после — открывается снова с результатом."""
+        import threading
+        if getattr(self, "_snip", None) is not None:
+            self._focus_title(SNIP_TITLE)
+            return True
+        self._snip, self._snip_shown = "opening", False
+        self._snip_pad = bool(getattr(self, "_pad_on", False))
+        if self._snip_pad:
+            self._pad_on = False
+            self._pad_hide_now()
+
+        def make():
+            import webview
+            time.sleep(0.4 if self._snip_pad else 0.1)          # блокнот успел исчезнуть с экрана до снимка
+            try:
+                win = webview.create_window(SNIP_TITLE, self._url("snip.html"), width=900, height=600, frameless=True,
+                                            easy_drag=False, on_top=True, focus=True, hidden=True, resizable=True,
+                                            background_color="#000000", js_api=self, **_no_shadow())
+            except Exception as e:  # noqa: BLE001
+                print(f"Окно «Вырезать с экрана»: {e}", file=sys.stderr)
+                self._snip = None
+                return
+            self._snip = win
+            win.events.closed += lambda *a: setattr(self, "_snip", None) if getattr(self, "_snip", None) is win else None
+            threading.Timer(20.0, self._snip_watch, args=(win,)).start()
+        threading.Thread(target=make, daemon=True).start()
+        return True
+
+    def _snip_watch(self, win):
+        """Страница так и не показала окно (ядро не сняло экран) — убрать невидимое окно и вернуть блокнот."""
+        if getattr(self, "_snip", None) is win and not getattr(self, "_snip_shown", False):
+            self.snip_close(False)
+
+    def snip_show(self):
+        """Страница нарисовала снимок — окно на весь экран, поверх всех и в фокусе."""
+        win = getattr(self, "_snip", None)
+        if win is None or win == "opening":
+            return False
+        self._snip_shown = True
+        try:
+            if WIN:
+                win.show()
+                hw = winshell.hwnd(SNIP_TITLE)
+                mon = winshell.monitor_area(hw) if hw else None
+                if mon:
+                    l, t, r, b = mon
+                    win.resize(int(round(r - l)), int(round(b - t)))
+                    winshell.move(hw, l, t)
+                return True
+
+            def run():
+                from gi.repository import Gtk
+                gw = next((g for g in Gtk.Window.list_toplevels() if g.get_title() == SNIP_TITLE), None)
+                if gw is None:
+                    return False
+                gw.set_skip_taskbar_hint(True)
+                gw.show_all()
+                gw.fullscreen()
+                _present(gw)
+                return True
+            if not self._gtk(run, timeout=5):
+                win.show()
+            return True
+        except Exception as e:  # noqa: BLE001
+            print(f"Окно «Вырезать с экрана»: {e}", file=sys.stderr)
+            return False
+
+    def snip_close(self, done=False):
+        """Выделили (done) или отменили (Esc): окно убрать; блокнот — открыть (с вырезанным) или вернуть, как был."""
+        import threading
+        win, self._snip, self._snip_shown = getattr(self, "_snip", None), None, False
+        if win is not None and win != "opening":
+            try:
+                win.destroy()
+            except Exception:  # noqa: BLE001
+                pass
+        if done or getattr(self, "_snip_pad", False):
+            self._snip_pad = False
+            threading.Timer(0.15, lambda: self.pad_open("notes")).start()
+        return True
+
+    def _pad_hide_now(self):
+        """Спрятать окно блокнота сразу, без «уезжания» (страница успела сохранить текст до вызова snip_open)."""
+        win = getattr(self, "_pad", None)
+        if win is None:
+            return
+        try:
+            if WIN:
+                win.hide()
+            else:
+                def run():
+                    from gi.repository import Gtk
+                    gw = next((x for x in Gtk.Window.list_toplevels() if x.get_title() == PAD_TITLE), None)
+                    if gw is not None:
+                        gw.hide()
+                    return True
+                self._gtk(run, timeout=3)
+        except Exception:  # noqa: BLE001
+            pass
+        self._js("window.padMark && padMark(false)")
+
     def _focus_title(self, title):
         """Linux: окно с этим заголовком — вперёд и в фокус (сочетание клавиш нажато в чужой программе)."""
         if WIN:
@@ -3150,6 +3299,16 @@ class LinuxTray:
 _TRAY = []
 
 
+def fit_visible(x, y, w, h, clamp):
+    """Положение окна (x, y) размером w×h -> на видимом месте: clamp() даёт (x, y) внутри рабочей области ближайшего
+    монитора (winshell.clamp). Минимизированное окно Windows (-32000) и слишком далёкие числа — тоже через clamp."""
+    try:
+        cx, cy = clamp()
+        return int(cx), int(cy)
+    except Exception:  # noqa: BLE001
+        return max(0, int(x)), max(0, int(y))
+
+
 def _keep_on_screen(gw, center=False):
     """Окно целиком на экране (отзыв 17.10: окно «Закинуть идею» уехало на другой монитор, верх — за краем экрана,
     крестик недоступен). center — поставить по центру монитора, где сейчас мышь (там, где человек работает). Ещё раз
@@ -3647,7 +3806,9 @@ def main_win(args, extra):
                     if what == "capture":
                         api.show_capture()
                         continue
+                    _ui_log(f"повторный запуск: показать виджет{' и студию' if what.startswith('settings') else ''}")
                     api.from_tray()
+                    api.bring_back()                   # №512: виджет — на видимое место и поверх окон
                     if what.startswith("settings"):
                         q = what[len("settings"):]
                         api.open_settings("connect" if q else "", q)

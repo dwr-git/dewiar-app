@@ -34,7 +34,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
               radial-gradient(130% 90% at 15% 95%, rgba(120,119,198,.26) 0%, transparent 60%),
               radial-gradient(120% 80% at 90% 5%, rgba(193,235,255,.2) 0%, transparent 60%),
               linear-gradient(160deg, #11121a 0%, #1b1d30 45%, #262038 75%, #33203a 100%);
-  background-position: 0 0; background-repeat: repeat; background-attachment: fixed;
+  background-position: 0 0; background-repeat: repeat;   /* без background-attachment: fixed — слой и так неподвижен, а на Android «fixed» перерисовывал фон при прокрутке (№93) */
   transition: background 1s; }
 
 /* тема («Ещё» → «Оформление») — фон из skins.css (тот же, что у виджета); нет файла тем — фон выше */
@@ -76,11 +76,12 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 #rchip button svg { width: 16px; height: 16px; stroke-width: 2.2; }
 #rchip .i-play { display: none; } #rchip.paused .i-play { display: block; } #rchip.paused .i-pause { display: none; }
 #rchip .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; flex: none; }
-#rchip .eq i { width: 3px; border-radius: 2px; background: linear-gradient(#a5b4fc, #c084fc); animation: eq 1s ease-in-out infinite; height: 40%; }
+/* столбики — transform, а не height: анимация высоты пересчитывала раскладку шапки 60 раз в секунду (№93) */
+#rchip .eq i { width: 3px; height: 100%; border-radius: 2px; background: linear-gradient(#a5b4fc, #c084fc); transform-origin: 50% 100%; transform: scaleY(.4); animation: eq 1s ease-in-out infinite; }
 #rchip .eq i:nth-child(2) { animation-delay: -.35s; } #rchip .eq i:nth-child(3) { animation-delay: -.7s; }
-#rchip.paused .eq i, #rchip.wait .eq i { animation: none; height: 25%; opacity: .55; }
+#rchip.paused .eq i, #rchip.wait .eq i { animation: none; transform: scaleY(.25); opacity: .55; }
 #rchip.wait b { opacity: .7; }
-@keyframes eq { 0%, 100% { height: 25%; } 50% { height: 100%; } }
+@keyframes eq { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
 @keyframes rin { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .who { display: flex; align-items: center; gap: 9px; padding: 5px 12px 5px 5px; border-radius: 999px; background: var(--frost); flex: 0 1 auto; min-width: 0; }
 .who img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #15152a; }
@@ -181,6 +182,12 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
   backdrop-filter: blur(30px) saturate(1.25); -webkit-backdrop-filter: blur(30px) saturate(1.25); border-top: 1px solid var(--glass-line);
   transition: transform .3s cubic-bezier(.2,.8,.2,1); box-shadow: 0 -30px 80px rgba(0,0,0,.5); }
 .sheet.tall { height: 88vh; max-height: 88vh; }
+/* Плавная прокрутка листов (№93): прокрутка не «проваливается» в страницу под листом.
+   Размытие фона под листом дорогое — его пересчитывают на каждом кадре прокрутки. Поэтому: у неоморфизма фон листа
+   непрозрачный — размытие не нужно вовсе; у светлых тем лист почти белый — хватает лёгкого; в лёгком режиме (слабый
+   телефон) — без размытия, фон плотнее. Пока листают (body.scrolling, app.js), портрет под листом не рисуется. */
+.sheet { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+body.lite-ui .sheet { backdrop-filter: none; -webkit-backdrop-filter: none; background: linear-gradient(rgba(28,28,34,.97), rgba(18,18,24,.98)); }
 .sheet.on { transform: none; }
 .sheet:not(.on) { box-shadow: none; }               /* спрятанный лист ниже края — его тень не заходит на экран */
 .sheet .grab { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.18); margin: 4px auto 12px; }
@@ -277,6 +284,28 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 .cl-shot img { display: none; max-height: 90px; max-width: 160px; border-radius: 10px; } .cl-shot.has img { display: block; }
 #cl-reqs .rqi { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); padding-top: 6px; }
 #cl-reqs .rqi b { color: var(--ink); } #cl-reqs .rqi.done b { color: var(--good); } #cl-reqs .rqi.rejected b { color: var(--bad); }
+/* «Оплатить картой» (ЮMoney, автозачисление) */
+.ym { margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08)); }
+.ym-h { display: flex; flex-direction: column; gap: 2px; } .ym-h span { font-size: 13px; color: var(--muted); }
+.ym-sums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 8px; }
+.ym-sums button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 11px 12px; border-radius: 14px; border: 1px solid rgba(139,140,247,.3);
+  background: rgba(139,140,247,.1); color: var(--ink); font: inherit; text-align: left; }
+.ym-sums button:active { transform: scale(.97); } .ym-sums button b { font-size: 16px; } .ym-sums button small { font-size: 12px; color: var(--muted); }
+/* «Криптой» (TON / USDT): вид, QR, адрес и комментарий с «Скопировать», крупное предупреждение */
+.cx-seg { display: flex; gap: 6px; margin: 10px 0 0; } .cx-seg:empty { display: none; }
+.cx-seg button { flex: 1; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(139,140,247,.3); background: transparent; color: var(--ink); font: inherit; font-weight: 600; }
+.cx-seg button.on { background: rgba(139,140,247,.22); border-color: rgba(139,140,247,.7); }
+.cx-body { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 8px; }
+.cx-qr { align-self: center; width: 156px; } .cx-qr:empty { display: none; } .cx-qr svg { display: block; width: 156px; height: 156px; border-radius: 16px; }
+.cx-info { display: flex; flex-direction: column; gap: 8px; }
+.cx-f { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; }
+.cx-f span { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.cx-f code { font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; padding: 7px 9px; border-radius: 10px; background: rgba(127,127,127,.14); user-select: all; -webkit-user-select: all; }
+.cx-f code.cx-code { font-size: 17px; font-weight: 700; letter-spacing: .02em; }
+.cx-f .btn { padding: 7px 10px; font-size: 13px; min-height: 0; }
+.cx-warn { display: flex; flex-direction: column; gap: 3px; padding: 11px 12px; border-radius: 14px; background: rgba(255,170,60,.14); border: 1px solid rgba(240,150,40,.55); border-left-width: 4px; color: var(--ink); }
+.cx-warn b { font-size: 15px; line-height: 1.35; } .cx-warn span { font-size: 13px; }
+.cx-rate { margin: 8px 0; font-size: 13px; color: var(--muted); }
 /* аккаунт dewiar.pro и Знания персонажа */
 .tile.hero { grid-column: 1 / -1; background: linear-gradient(135deg, rgba(102,126,234,.32), rgba(118,75,162,.32)); }
 .tile.hero.on { background: linear-gradient(135deg, rgba(102,126,234,.46), rgba(118,75,162,.46)); }
@@ -464,6 +493,8 @@ body.light .tile.on, body.light .dday[open], body.light .pi.on { background: #ff
 body.light .tile svg { color: var(--ink); }
 body.light .tile.easy { background: linear-gradient(135deg, rgba(124,92,255,.2), rgba(255,122,198,.16)), var(--glass); }
 body.light .sheet { background: linear-gradient(rgba(255,255,255,.88), rgba(255,255,255,.94)); box-shadow: 0 -20px 60px rgba(20,30,60,.18); }
+body.light .sheet { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }   /* лист почти белый — сильное размытие незаметно, а стоит дорого (№93) */
+body.light.lite-ui .sheet { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(255,255,255,.97); }
 body.light .sheet .grab { background: color-mix(in srgb, var(--ink) 18%, transparent); }
 body.light #dim { background: rgba(30,34,52,.28); }
 body.light :is(.btn, .tabs button, #bot .acts button, #soul-body .chip, .kbi, .tf, .pill button) { background: var(--soft); color: var(--ink); }
@@ -507,7 +538,7 @@ body.neu :is(.card, .tile, .it, .dday, details.brainalt > summary, #bot.framed) 
 body.neu :is(.who, .ib.soft, .pill, #rchip) { background: var(--glass); box-shadow: var(--raise-s); }
 body.neu :is(.ib:active, .ib.soft:active, #b-voice.off) { background: var(--glass); box-shadow: var(--press); }
 body.neu :is(.tile.on, .dday[open], .pi.on) { background: var(--glass); box-shadow: var(--press); }
-body.neu .sheet { background: var(--glass); box-shadow: 0 -12px 30px var(--neu-dark); }
+body.neu .sheet { background: var(--glass); box-shadow: 0 -12px 30px var(--neu-dark); backdrop-filter: none; -webkit-backdrop-filter: none; }   /* фон непрозрачный — размывать нечего (№93) */
 body.neu :is(.btn, .tabs button, #bot .acts button, #soul-body .chip, .pill button) { background: var(--glass); color: var(--ink); box-shadow: var(--raise-s); }
 body.neu :is(.btn:active, .tabs button:active, #bot .acts button:active) { box-shadow: var(--press); }
 body.neu :is(.btn.p, .tabs button.on, #soul-body .chip.on) { background: var(--brand); color: #fff; box-shadow: var(--raise-s); }
@@ -658,10 +689,9 @@ body.neu .clsend textarea, body.neu #cl-name { background: var(--glass); box-sha
 .ntf { border: 0; border-radius: 14px; background: var(--frost-hi); color: var(--ink); padding: 10px 12px; font: inherit; font-size: 13.5px; max-width: 100%; text-align: left; }
 .ntf small { color: var(--muted); margin-left: 6px; }
 .ntadd { display: flex; gap: 8px; margin-bottom: 10px; } .ntadd .btn { flex: 1; text-align: center; }
-.nthumb { width: 46px; height: 46px; border-radius: 12px; object-fit: cover; flex: none; }
-.nthumb.rt { width: 40px; height: 40px; border-radius: 10px; margin-left: 2px; cursor: pointer; }   /* фото напоминания в «Мой день» */
+img.nthumb.rt { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex: none; margin-left: 2px; cursor: pointer; }   /* фото напоминания в «Мой день» */
 .it .bd[data-note] { cursor: pointer; }
-.it.note { cursor: pointer; } .it .bd .ntc { color: var(--accent); font-size: 12px; margin-left: 4px; }
+.it .bd .ntc { color: var(--accent); font-size: 12px; margin-left: 4px; }
 .ntnew { width: 100%; margin-bottom: 10px; }
 #imgview { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.94); display: none; place-items: center; padding: 16px; }
 #imgview.on { display: grid; } #imgview img { max-width: 100%; max-height: 100%; border-radius: 10px; }
@@ -823,6 +853,28 @@ body.light .donewhy p { color: var(--ink); }
 /* свой персонаж: строка списка с карандашом, редактор (облик — круг из галереи, пол, цвет) */
 .pirow { display: flex; align-items: center; gap: 6px; } .pirow .pi { flex: 1; min-width: 0; margin-bottom: 6px; }
 .pirow .pedit { flex: none; margin-bottom: 6px; } .pnew { margin: 4px 0 12px; }
+/* «Готовые персонажи» (идея №56): свёрнутый раздел под своими, карточка — облик цветом персонажа, имя с ролью, девиз и что умеет */
+details.pgal { margin: 2px 0 12px; }
+details.pgal > summary { list-style: none; cursor: pointer; padding: 12px 40px 12px 14px; border-radius: 16px; background: var(--frost); position: relative; }
+details.pgal > summary::-webkit-details-marker { display: none; }
+details.pgal > summary::after { content: "›"; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 20px; transition: transform .2s; }
+details.pgal[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
+details.pgal > summary b { display: block; font-size: 15px; font-weight: 650; } details.pgal > summary small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.pglist { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.pg { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: var(--frost); contain: layout paint style; }
+.pg.in { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, transparent); }
+.pgava { flex: none; width: 48px; height: 48px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--c) 92%, #fff) 0%, var(--c) 38%, color-mix(in srgb, var(--c) 30%, #12121e) 100%); }
+.pgava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pgava i { font: 600 19px/1 "Unbounded", "Manrope", sans-serif; font-style: normal; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.pgtx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pgtx b { font-size: 15.5px; font-weight: 650; line-height: 1.25; }
+.pgtx em { font-style: normal; font-weight: 600; font-size: 12.5px; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.light .pgtx em { color: color-mix(in srgb, var(--c) 58%, #1d2233); }
+.pgtl { color: var(--muted); font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.pg .btn { flex: none; padding: 8px 14px; font-size: 13.5px; min-height: 0; border-radius: 12px; }
+.pgnow { flex: none; font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 999px; color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+body.neu .pg, body.neu details.pgal > summary { background: var(--glass); box-shadow: var(--raise-s); }
 .pe-top { display: flex; gap: 14px; align-items: flex-start; }
 .pe-ava { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
 .pe-ava span { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--field); }
@@ -955,8 +1007,6 @@ body.neu .rad-seen, body.neu .rad-sel { background: var(--glass); box-shadow: va
 .mt-menu { margin-top: 10px; }
 body.light .mtp.match .mt-ok { color: #1d7f55; } body.light .mtp .mt-in { color: #b46a08; }
 body.light .mt-rules li::before, body.light .mt-me .dot { background: #1d7f55; }
-/* папка заметки с компьютера (Блокнот, Работа…) — пометкой рядом с названием (№216) */
-.it.note .ntf { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--frost); color: var(--muted); font-size: 11.5px; font-weight: 500; vertical-align: 1px; }
 /* папки заметок (№195): полоска «Все · Блокнот · Работа…» над списком и поле «Папка» в заметке */
 .ntfolds { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 10px 0 4px; padding-bottom: 2px; }
 .ntfolds::-webkit-scrollbar { display: none; }
@@ -1002,8 +1052,32 @@ body.has-play #top { gap: 2px; } body.has-play #top .ib { width: 38px; height: 3
 .tkans { display: flex; gap: 8px; align-items: flex-end; margin: 10px 0 4px; } .tkans textarea { flex: 1; min-width: 0; padding: 10px 12px; border: 0; border-radius: 14px; background: var(--field); color: inherit; font: inherit; resize: none; }
 .tkdel { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 2px; padding: 8px 12px; border: 0; border-radius: 12px; background: transparent; color: var(--dim); font: inherit; font-size: 13px; }
 .tkdel svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .tkdel:active { color: #FF8FA8; background: rgba(255,107,138,.1); }
-/* начало заметки в списке — с разметкой, без значков Markdown (app.js mdPreview, №246) */
-.it.note .ntpv b { color: var(--ink); font-weight: 650; } .it.note .ntpv i { font-style: italic; }
+/* Карточка заметки в списке (app.js ntCard, 03.11): заголовок до двух строк, начало текста до трёх — одним потоком
+   (mdPreview flat, без значков Markdown, №246), мета-строка — когда, папка (№216) и вложения пилюлями; фото — квадрат
+   58×58 справа у всех одинаковый, несколько фото — счётчик на нём. Карточки вне экрана не рисуются (№93: плавная прокрутка). */
+.ntlist { display: flex; flex-direction: column; gap: 8px; }
+.it.note { align-items: center; gap: 14px; padding: 13px 14px 12px 16px; margin: 0; cursor: pointer; min-height: 64px;
+  contain: layout paint style; content-visibility: auto; contain-intrinsic-size: auto 104px; -webkit-tap-highlight-color: transparent; }
+.it.note:active { transform: scale(.985); transition: transform .12s; }
+.it.note .bd { display: flex; flex-direction: column; gap: 4px; }
+.it.note .bd b.ntt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  font-size: 15.5px; font-weight: 650; line-height: 1.3; color: var(--ink); letter-spacing: -.005em; }
+.it.note .ntpv { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere;
+  color: var(--muted); font-size: 13.5px; line-height: 1.42; font-weight: 400; }
+.it.note.ph .ntpv { -webkit-line-clamp: 2; }
+.it.note .ntm { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 3px; min-height: 20px; line-height: 1; }
+.it.note .ntd { color: var(--dim, var(--muted)); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; margin-right: 2px; }
+.it.note .ntm :is(.ntf, .ntc) { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 8px; margin: 0; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+.it.note .ntm .ntf { display: inline-block; line-height: 20px; background: var(--frost-hi); background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--muted); }
+.it.note .ntm .ntc { background: var(--frost-hi); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-variant-numeric: tabular-nums; }
+.it.note .ntc svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.it.note .nthumb { position: relative; flex: none; width: 58px; height: 58px; border-radius: 14px; overflow: hidden; align-self: center;
+  background: var(--frost-hi); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.it.note .nthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.it.note .nthumb .ntn { position: absolute; right: 4px; bottom: 4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: rgba(10,12,20,.62); color: #fff; font: 700 10.5px/18px "Manrope", sans-serif; font-style: normal; text-align: center; }
+body.light .it.note .nthumb { box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
 /* Вид значка «Записать» (25.10): четыре варианта — подпись сверху, переключатель на всю ширину (на узком телефоне не вылезает) */
 .sw.wglook { display: block; margin-top: 10px; }
 .sw.wglook .seg { display: flex; width: 100%; margin-top: 8px; }

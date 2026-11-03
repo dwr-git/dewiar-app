@@ -2626,6 +2626,61 @@ def t_site_review(a, ctx):
     return "\n".join(out)
 
 
+def _maker(ctx):
+    M = (ctx or {}).get("maker")
+    if M is None:
+        raise ToolError("Создание плагинов здесь недоступно")
+    return M
+
+
+def _plugin_done(ctx, r, open_=True):
+    """Плагин сделан или изменён: ядро — навыки, серверы, событие plugin_made (студия открывает его страницу, в «Чате» под
+    ответом — кнопка «Открыть»)."""
+    eng = (ctx or {}).get("engine")
+    if eng is not None:
+        try:
+            eng.plugins_changed(r["id"], code=bool(r.get("code")), open_=open_)
+            eng._turn_plugin = (time.monotonic(), {"id": r["id"], "name": r.get("name") or "", "icon": r.get("icon") or "🧩"})
+        except Exception as e:  # noqa: BLE001
+            log.info("плагин: студия не узнала: %s", e)
+
+
+def t_plugin_create(a, ctx):
+    """«Сделай плагин, который показывает статистику наших разговоров» — Лира пишет страницу и встраивает её в студию."""
+    from plugin_maker import MakerError
+    M = _maker(ctx)
+    describe = " ".join(str(a.get("describe") or "").split())
+    if len(describe) < 6:
+        raise ToolError("Спроси одной фразой, что должен делать плагин: что на странице и зачем.")
+    try:
+        r = M.create(describe, code=bool(a.get("code")), name=str(a.get("name") or ""))
+    except MakerError as e:
+        raise ToolError(str(e)) from e
+    _plugin_done(ctx, r)
+    import plugins as _pl
+    need = ", ".join(_pl.DATA_SCOPES[x].split(" — ")[0] for x in r.get("data") or [])
+    return (f"Плагин «{r['name']}» {r['icon']} готов и открыт в студии (меню слева → «Плагины» → «{r['name']}»; в чате под ответом "
+            "— кнопка «Открыть»)." + (f" При первом открытии он спросит разрешение: {need} — это нормально, человек решает сам." if need else "")
+            + (" В нём своя программа — человек это разрешил." if r.get("code") else "")
+            + " Скажи одной-двумя фразами, что получилось, и что менять можно словами («сделай крупнее», «добавь график»), а "
+            "«верни как было» — откат. Не пиши код и HTML в ответе.")
+
+
+def t_plugin_change(a, ctx):
+    """«Сделай крупнее», «добавь график», «верни как было» — новая версия плагина, сделанного Лирой."""
+    from plugin_maker import MakerError
+    M = _maker(ctx)
+    req = " ".join(str(a.get("request") or "").split())
+    try:
+        pid = M.find(a.get("plugin") or "")
+        r = M.undo(pid) if a.get("undo") or not req else M.change(pid, req, code=bool(a.get("code")))
+    except MakerError as e:
+        raise ToolError(str(e)) from e
+    _plugin_done(ctx, r)
+    return (f"{r.get('said') or 'Готово'}. Плагин «{r['name']}» — версия {r.get('version')}, страница в студии обновлена. "
+            "Скажи это коротко; вернуть прежнее — «верни как было» (хранятся 10 последних версий).")
+
+
 def t_app_help(a, ctx):
     import guide
     return guide.answer(a.get("query") or "", a.get("where") or "")
@@ -2756,11 +2811,106 @@ def t_find_notes(a, ctx):
     return "\n".join(f"{r['path']}: {r['snippet']}" for r in res) + tail
 
 
+def _ocr_vision(ctx):
+    """Модель со зрением для распознавания текста (Engine.ocr_vision) или None."""
+    eng = ctx.get("engine")
+    return getattr(eng, "ocr_vision", None) if eng is not None else None
+
+
+def _ocr_say(p, ctx, pages=None, limit=12000):
+    """Скан PDF или картинка -> текст для модели: «В скане распознан текст: …» (идея №68: на сканах модели падали или
+    отвечали пусто). OCRError — ToolError со словами, что поставить."""
+    import ocr
+    vision = _ocr_vision(ctx)
+    try:
+        if p.suffix.lower() == ".pdf":
+            r = ocr.ocr_pdf_ex(p, pages=pages, vision=vision)
+            if r["error"] and not r["text"]:
+                raise ocr.OCRError(r["error"])
+            text, done = r["text"], r["ocr_pages"]
+            head = (f"В скане распознан текст (страницы {', '.join(map(str, done[:12]))}{'…' if len(done) > 12 else ''} — "
+                    "распознаны, возможны опечатки):" if done else "Текст PDF:")
+            tail = (f"\n(ещё {r['skipped']} стр. без текста не распознаны — попроси номера страниц: pages)" if r["skipped"] else "")
+        else:
+            text, _ = ocr.recognize(p, vision=vision)
+            head, tail = "На картинке распознан текст (возможны опечатки):", ""
+    except ocr.OCRError as e:
+        raise ToolError(str(e)) from e
+    if not text.strip():
+        return f"{p.name}: текста не нашлось — похоже, там только изображение без надписей." + tail
+    cut = text[:limit]
+    return f"{head}\n{cut}" + ("\n…(дальше обрезано)" if len(cut) < len(text) else "") + tail
+
+
 def t_read_file(a, ctx):
     r = _ws_call(lambda: _ws(ctx).read(a.get("path", ""), limit=12000))
+    rel = str(r.get("path") or "")
+    ext = Path(rel).suffix.lower()
+    if ext == ".pdf" or (r.get("binary") and ext in OCR_EXTS):     # скан PDF, фото документа — распознать (№68)
+        try:
+            p = _ws(ctx)._vault_path(rel) if rel.startswith("obsidian:") else _ws(ctx).safe(rel)
+        except Exception:  # noqa: BLE001
+            p = None
+        if p is not None and p.is_file():
+            if ext != ".pdf":
+                return _ocr_say(p, ctx)
+            import ocr
+            try:
+                if ocr.pdf_needs_ocr(p):
+                    return _ocr_say(p, ctx, pages=a.get("pages"))
+            except ToolError as e:
+                if not r.get("text", "").strip():
+                    raise
+                log.info("read_file: сканы в %s не распознались: %s", rel, e)
     if r.get("binary"):
         return f"{r['path']} — не текстовый файл ({r['size']} байт)."
     return r["text"] + ("\n…(дальше обрезано)" if r.get("truncated") else "")
+
+
+OCR_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
+# куда смотреть, если назвали только имя файла («распознай скан.pdf»): папки, куда файлы обычно попадают
+OCR_DIRS = ("Загрузки", "Downloads", "Рабочий стол", "Desktop", "Документы", "Documents", "Изображения", "Pictures")
+
+
+def _ocr_path(a, ctx):
+    """Путь из просьбы -> файл: полный путь или ~/…, затем папка ассистента, потом «Загрузки», «Рабочий стол»,
+    «Документы», «Изображения» по имени. Только картинки и PDF — инструмент не читает другие файлы."""
+    raw = str(a.get("path") or "").strip().strip("«»\"'")
+    if not raw:
+        raise ToolError("назови файл: путь к картинке или PDF")
+    cands = [Path(os.path.expanduser(raw))]
+    try:
+        cands.append(_ws(ctx).safe(raw))
+    except Exception:  # noqa: BLE001
+        pass
+    if not Path(raw).is_absolute():
+        homes = [Path.home()] + ([pictures_dir().parent] if pictures_dir().parent != Path.home() else [])
+        cands += [h / d / raw for h in homes for d in OCR_DIRS]
+        if "/" not in raw and "\\" not in raw:              # только имя — ещё по всей папке ассистента («Входящие», заметки)
+            try:
+                cands += [next(iter(_ws(ctx).ensure().rglob(raw)), None)]
+            except Exception:  # noqa: BLE001
+                pass
+    cands = [c for c in cands if c is not None]
+    for c in cands:
+        try:
+            if c.is_file():
+                if c.suffix.lower() not in OCR_EXTS | {".pdf"}:
+                    raise ToolError(f"{c.name} — не картинка и не PDF; текст обычных файлов читает read_file")
+                return c
+        except OSError:
+            continue
+    raise ToolError(f"файла «{raw}» не нашлось — уточни полный путь")
+
+
+def t_ocr(a, ctx):
+    """Распознать текст на картинке или в скане PDF; install — поставить распознавание (ocr.install, в фоне)."""
+    if a.get("install"):
+        eng = ctx.get("engine")
+        if eng is None or not hasattr(eng, "ocr_install_start"):
+            raise ToolError("поставить отсюда нельзя")
+        return eng.ocr_install_start()
+    return _ocr_say(_ocr_path(a, ctx), ctx, pages=a.get("pages"))
 
 
 def t_remember(a, ctx):
@@ -3382,6 +3532,19 @@ TOOLS = {
     "site_review": ("Оценить сайт и его продвижение: «оцени мой сайт», «как продвигать сайт», «сколько было посещений», «откуда приходят». "
                     "Проверка заголовков, описаний, контактов, формы, фото + посещения, источники, устройства, заявки — и твои советы.",
                     S({"site": {"type": "string"}}), "safe", t_site_review, "Сайты: оценить и продвигать"),
+    "plugin_create": ("Сделать человеку ПЛАГИН — свою страницу в студии Dewiar по описанию словами (как Creator Mode): «сделай плагин, "
+                      "который показывает статистику наших разговоров», «сделай трекер привычек», «нужна читалка статей», «сделай "
+                      "переключатель темы», «панель расходов по категориям», «таймер помидора». Плагин сразу появится в меню "
+                      "«Плагины» и откроется. describe — всё, что человек хочет, его словами (что на странице, какие данные, как "
+                      "выглядит); name — если назвал. code — true ТОЛЬКО если человек сам просит, чтобы плагин запускал программу на "
+                      "компьютере (файлы, сеть, расчёты) — будет вопрос «Выполнить?». НЕ пиши HTML и код в ответе — вызывай.",
+                      S({"describe": {"type": "string"}, "name": {"type": "string"}, "code": {"type": "boolean"}}, ["describe"]),
+                      "safe", t_plugin_create, "Плагины: сделать"),
+    "plugin_change": ("Изменить плагин, который сделала Лира, словами — новая версия: «сделай крупнее», «добавь график по неделям», "
+                      "«поменяй цвета», «верни как было» (undo — откат на шаг). request — просьба словами человека; plugin — "
+                      "название плагина (пусто — последний); code — только если человек просит свою программу на компьютере.",
+                      S({"request": {"type": "string"}, "plugin": {"type": "string"}, "undo": {"type": "boolean"}, "code": {"type": "boolean"}}),
+                      "safe", t_plugin_change, "Плагины: изменить"),
     "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей»; группа — «что ответили в группе "
                    "Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.",
                    S({"who": {"type": "string"}}), "safe", t_close_read, "Близкие: прочитать"),
@@ -3407,8 +3570,15 @@ TOOLS = {
     "find_notes": ("Найти в папке ассистента заметки, дневник, память по словам (что записывали раньше); если подключён "
                    "Obsidian — и в заметках пользователя там (пути «obsidian:…»).",
                    S({"query": {"type": "string"}}, ["query"]), "safe", t_find_notes, "Поиск по заметкам"),
-    "read_file": ("Прочитать файл из папки ассистента (путь из find_notes или из списка).",
+    "read_file": ("Прочитать файл из папки ассистента (путь из find_notes или из списка). Сканы PDF и картинки "
+                  "распознаются в текст сами.",
                   S({"path": {"type": "string"}}, ["path"]), "safe", t_read_file, "Чтение заметок"),
+    "ocr": ("Распознать текст на картинке или в скане PDF (фото документа, чек, скриншот, PDF без текста) — когда просят "
+            "«прочитай скан», «что написано на фото», «распознай текст», а файл — картинка или PDF. path — полный путь "
+            "или имя файла (ищется в папке ассистента, «Загрузках», «Рабочем столе», «Документах»); pages — страницы PDF "
+            "(«1-3»). install: true — поставить распознавание текста, когда пользователь просит «поставь распознавание».",
+            S({"path": {"type": "string"}, "pages": {"type": "string"}, "install": {"type": "boolean"}}),
+            "safe", t_ocr, "Распознать текст"),
     "remember": ("Запомнить надолго факт о пользователе: имя, близкие, работа, предпочтения, привычки, важные даты. "
                  "Одна короткая фраза в третьем лице («Любит крепкий чай», «Дочь зовут Аня»).",
                  S({"fact": {"type": "string"}}, ["fact"]), "safe", t_remember, "Память о вас"),
@@ -3500,7 +3670,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
-             "cancel_reminder", "change_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "remember", "write_diary",
+             "cancel_reminder", "change_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "ocr", "remember", "write_diary",
              "money_add", "money_report", "money_find", "money_fix", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
              "client_list", "client_deal", "client_deals", "site_create", "site_edit", "site_show", "site_review"}
@@ -3557,6 +3727,11 @@ class Toolbox:
             if not (self.hooks.get("clients") is not None and (self.s.get("features") or {}).get("clients")):
                 return False, False
             if name == "client_crm" and not (self.hooks.get("crm") and self.hooks["crm"].connected()):   # и CRM подключена
+                return False, False
+        if name in ("plugin_create", "plugin_change"):   # Лира делает плагин (03.11): ядро с plugin_maker
+            if self.hooks.get("maker") is None:
+                return False, False
+            if name == "plugin_change" and not any(p.get("made") for p in self.hooks["maker"].P.items.values()):
                 return False, False
         if name.startswith("site_"):               # «Сайты» (03.11): есть, пока не выключены в «Возможностях»
             if self.hooks.get("sites") is None or (self.s.get("features") or {}).get("sites") is False:
@@ -3680,6 +3855,11 @@ class Toolbox:
                 if not any(fp == r or r in fp.parents for r in roots):
                     return (f"«{fp.name}» — вне папки ассистента, а в «Безопасности» стоит замок «Файлы: только папка Dewiar». "
                             "Снять его можно там же"), False, None
+        if name in ("plugin_create", "plugin_change") and (args or {}).get("code"):
+            # своя программа в плагине — только с явного «да» человека (по умолчанию плагин — страница и мост)
+            what = (args.get("name") or args.get("plugin") or "").strip()
+            return None, True, (f"Плагин{(' «' + what + '»') if what else ''} будет запускать свою программу на этом компьютере "
+                                "(Python): читать и писать файлы в своей папке, считать, ходить в интернет. Разрешить?")
         if name == "run_command":
             v = guard.check_command(str((args or {}).get("command") or ""))
             if v["level"] == "block":

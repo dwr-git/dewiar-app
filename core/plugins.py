@@ -10,7 +10,11 @@
                                mcp: {имя: {type: stdio|http, command, args, env, url, headers}} — необязательно,
                                ui: {tools: {инструмент: {title, hint, button, hidden, fields: {арг: подпись | false}}},
                                     labels: {ключ ответа: подпись}, asks: [{title, hint, say: "… {поле} …", fields}],
-                                    folder: "Рисунки", page_title: подпись вкладки ui.html} — страница плагина в студии (необязательно)}
+                                    folder: "Рисунки", page_title: подпись вкладки ui.html} — страница плагина в студии (необязательно),
+                               data: ["notes" | "reminders" | "money" | "chat_stats" | "chat"] — что из данных Лиры странице можно
+                                     попросить (dewiar.data; каждое — только после «Разрешить» человека, см. plugin_bridge.py),
+                               theme: true — страница может перекрасить студию (dewiar.theme),
+                               made: {by: "lira", code: bool} — плагин сделан по описанию словами (plugin_maker.py)}
     <id>/ui.html            — своя страница плагина (необязательно): студия показывает её во фрейме-песочнице с мостом
                                window.dewiar (только свои действия, настройки и файлы) — см. core/plugin_pages.py
     <id>/skills/<имя>/SKILL.md — обычные навыки (core/skills.py), видны модели, пока плагин установлен
@@ -38,6 +42,9 @@ BUILTIN_DIR = DATA_DIR / "plugins"
 USER_DIR = CONFIG_DIR / "plugins"
 MAX_ZIP = 20 * 1024 * 1024
 SET_TYPES = ("text", "select", "number", "toggle", "folder")   # folder — путь с кнопкой «Выбрать папку…» (№461)
+# данные Лиры, которые странице плагина можно попросить (только с разрешения человека; core/plugin_bridge.py)
+DATA_SCOPES = {"notes": "заметки", "reminders": "напоминания и дела", "money": "расходы и доходы",
+               "chat_stats": "статистику разговоров — сколько, когда, с кем, о чём (без текста)", "chat": "текст переписки с Лирой"}
 
 
 def data_dir(pid):
@@ -160,13 +167,60 @@ def parse_plugin(d: Path, builtin: bool):
                       if isinstance(x, dict) and x.get("label") and x.get("path") and ".." not in str(x.get("path"))
                       and not str(x.get("path")).startswith(("/", "\\")) and ":" not in str(x.get("path"))][:3],
             "ui": parse_ui(m.get("ui")), "page": (d / "ui.html").is_file(),
+            "data": [x for x in dict.fromkeys(str(s) for s in (m.get("data") or []) if isinstance(m.get("data"), list)) if x in DATA_SCOPES],
+            "theme": m.get("theme") is True,
+            # сделан Лирой по описанию (Creator, 03.11): только свой (не встроенный), код — только с согласия человека
+            "made": bool(isinstance(m.get("made"), dict) and not builtin),
+            "made_code": bool(isinstance(m.get("made"), dict) and m["made"].get("code") and not builtin),
+            "made_from": str(m["made"].get("template") or "")[:40] if isinstance(m.get("made"), dict) else "",
             "video": str(m.get("video") or "") if re.fullmatch(r"[\w-]{1,40}|https://[^\s\"'<>]{8,300}", str(m.get("video") or "")) else ""}
+
+
+# №507 (03.11): плагин «Луна» без поля words — на «Когда ближайшее полнолуние?» Лира отвечала по памяти и ошибалась:
+# просьба не узнавалась (имя «Луна» — ни «луны», ни «полнолуния» в вопросе). Слова такого плагина выводим сами — из
+# названия, подписи, описания и действий его MCP-сервера; сравниваем по началу слова (корню).
+_AUTO_STOP = set("""ближайший ближайшие ближайшая сегодня завтра вчера текущий текущая дата даты время расчет рассчитать рассчитывает
+показать показывает получить получает возвращает вернуть всегда вызывай вызывать вызов инструмент инструменты плагин плагина
+ответ ответь отвечай вопрос вопросы данные данных информация список город города место места день дней дня месяц месяца
+неделя недели года число числа точный точно точная параметр параметры формат указать указанный указанная нужно можно
+пользователь пользователя человек человека помогает помощь подробно подробный кратко коротко через после перед который
+которая которые если также только этот всего ваш свой своей обычно лучше любой любая какой какая когда сколько будет
+работает использовать используй используется например описание описанию следующие следующий следующая период периода
+начало конец дату дате времени часы часов минут результат результаты значение запрос запросу текст текста строка
+интернет интернета алгоритм алгоритму календарь календаря последний последние последняя первый первая каждый каждая
+mcp json server tool tools next from date days the and for with this that phase""".split())
+# прилагательные и местоимения («первая», «вашего», «точный») — не тема плагина; существительные на -ние — тема
+_ADJ = re.compile(r"(?:ый|ий|ой|ая|яя|ое|ее|ые|ие|ого|его|ому|ему|ым|им|ых|их|ую|юю)$")
+_NOUN_NIE = re.compile(r"(?:ние|тие|вие)$")
+_ROOT_CUT = "аеиоуыэюяйь"
+
+
+def _root(w):
+    """Корень слова для сравнения по началу: без окончания-гласной, не длиннее 7 букв («Луна» → «лун», «полнолуние» →
+    «полнолу», «фазы» → «фаз»)."""
+    w = w.lower().replace("ё", "е")
+    while len(w) > 3 and w[-1] in _ROOT_CUT:
+        w = w[:-1]
+    return w[:7]
+
+
+def _roots(text, topic=False):
+    """Корни слов текста; topic — только похожие на тему: без прилагательных и местоимений (кроме слов с корнем имени)."""
+    ws = [w for w in re.findall(r"[a-zа-яё]+", str(text or "").lower().replace("ё", "е")) if len(w) >= 4]
+    if topic:
+        ws = [w for w in ws if not _ADJ.search(w) or _NOUN_NIE.search(w)]
+    return {_root(w) for w in ws}
+
+
+_AUTO_STOP_ROOTS = {_root(w) for w in _AUTO_STOP}
 
 
 class Plugins:
     def __init__(self, settings):
         self.s = settings
         self.items = {}
+        self.tool_texts = None        # () -> {id плагина: [тексты действий]} — подключённые MCP-серверы (engine.py)
+        self._auto = {}
         self.reload()
 
     def reload(self):
@@ -205,6 +259,33 @@ class Plugins:
              "мне", "есть", "всех", "всего", "нужно", "можно", "пожалуйста", "давай", "сделай", "покажи", "скажи", "через",
              "неделе", "неделю", "завтра", "сегодня", "лучше", "хорошо", "очень"}
 
+    def auto_words(self, p):
+        """№507: корни слов плагина без своего words — из названия, подписи, описания, примеров фраз и действий его
+        MCP-сервера (название, подпись и первые фразы описания каждого). Общие слова («ближайший», «дата», «плагин») и
+        слова, что есть в описаниях двух и больше других плагинов, не берём. -> {корень}."""
+        if p.get("words"):
+            return set()
+        try:
+            tt = [str(x) for x in ((self.tool_texts() if self.tool_texts else {}) or {}).get(p["id"]) or []]
+        except Exception:  # noqa: BLE001
+            tt = []
+        key = (p["id"], p["name"], p["tagline"], p["description"][:200], tuple(tt))
+        if self._auto.get(p["id"], (None,))[0] == key:
+            return self._auto[p["id"]][1]
+        name = _roots(p["name"])
+        own = _roots(" ".join([p["name"], p["tagline"], p["description"][:600], " ".join(p["phrases"]), *[t[:300] for t in tt]]), topic=True)
+        # прилагательные с корнем названия («лунный» у «Луны») — тоже тема
+        own |= {r for r in _roots(" ".join([p["tagline"], *tt])) if any(r.startswith(n) for n in name if len(n) >= 3)}
+        other = {}
+        for q in self.items.values():
+            if q["id"] != p["id"]:
+                for r in _roots(" ".join([q["name"], q["tagline"], q["description"]])):
+                    other[r] = other.get(r, 0) + 1
+        out = {r for r in own if len(r) >= 3 and r not in _AUTO_STOP_ROOTS and r not in self._STOP and other.get(r, 0) < 2}
+        out |= {r for r in name if r not in _AUTO_STOP_ROOTS}     # название — всегда
+        self._auto[p["id"]] = (key, out)
+        return out
+
     @classmethod
     def _stems(cls, text):
         words = re.findall(r"[a-zа-яё0-9]+", str(text or "").lower().replace("ё", "е"))
@@ -227,6 +308,14 @@ class Plugins:
                 n = len(q & s)
                 if n >= 2 and n * 2 >= len(s):
                     sc = max(sc, n)
+            if not sc and not p.get("words"):              # №507: свой плагин без words — по выведенным корням
+                auto = self.auto_words(p)
+                qw = [w for w in re.findall(r"[a-zа-яё]+", str(text or "").lower().replace("ё", "е")) if len(w) >= 3]
+                hit = {r for r in auto if any(w.startswith(r) for w in qw)}
+                if hit & _roots(p["name"]):
+                    sc = 3
+                elif hit:
+                    sc = 1
             if sc > top:
                 best, top = p, sc
         return best
@@ -243,8 +332,10 @@ class Plugins:
         acts = (tools or {}).get(p["id"]) or []
         err = (status or {}).get(p["id"])
         if acts:
+            # №507: «Когда ближайшее полнолуние?» — ответила по памяти, неверно. Подсказка — твёрдая: сначала действие
             out += (", затем его действия: " + "; ".join(f"{n} — «{t}»" if t else n for n, t in acts[:8])
-                    + ". Вызывай их сразу, в этом же ответе")
+                    + ". ОБЯЗАТЕЛЬНО вызови подходящее действие плагина сразу, в этом же ответе, и отвечай только по его "
+                    "результату: даты, числа и факты по памяти не называй — они бывают неверны")
         elif p["mcp"] and err:
             out += (f". Действия плагина сейчас не работают ({str(err)[:160]}) — честно скажи это одной фразой и предложи "
                     "проверить плагин в студии («Плагины»)")
@@ -273,7 +364,8 @@ class Plugins:
         for pid, p in sorted(self.items.items(), key=lambda x: (not x[1]["builtin"], x[1]["category"], x[1]["name"])):
             st = on.get(pid) or {}
             out.append({k: p[k] for k in ("id", "name", "icon", "color", "category", "tagline", "description", "version", "author",
-                                          "phrases", "uses", "settings", "builtin", "try", "video", "links", "ui", "page")}
+                                          "phrases", "uses", "settings", "builtin", "try", "video", "links", "ui", "page",
+                                          "data", "theme", "made", "made_code", "made_from")}
                        | {"installed": pid in on, "values": self.values(pid), "skills": [d.name for d in p["skill_dirs"]],
                           "mcp": [f"{pid}-{n}" for n in p["mcp"]],
                           "jobs": [dict(j, on=bool((st.get("jobs") or {}).get(j["id"]))) for j in p["jobs"]],

@@ -1,0 +1,140 @@
+/* «Создать плагин» (studio/plugmake.js, раздел p-plgnew) и то, что к нему: «Изменить и версии», «Доступ» на странице
+   плагина (plugpage.js), кнопка плагина в «Чате», тема из плагина в «Оформлении». Цвета — переменные студии: светлые и
+   тёмные темы, а также тема из плагина подхватываются сами. */
+
+/* ---------- меню ---------- */
+nav .nav-plg-new { --pc: var(--accent); }
+nav .nav-plg-new .nav-pi { color: var(--accent); font-weight: 700; }
+nav .nav-plg-new:not(.cur) span { color: var(--muted); }
+
+/* ---------- «Создать плагин» ---------- */
+.pmk { max-width: 1120px; }
+.pmk-hero { position: relative; border-radius: 28px; padding: 34px 34px 28px; overflow: hidden; isolation: isolate;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 55%), var(--glass);
+  box-shadow: 0 30px 70px -40px color-mix(in srgb, var(--accent) 80%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent); }
+.pmk-glow { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.pmk-glow i { position: absolute; border-radius: 50%; filter: blur(2px); opacity: .55; }
+.pmk-glow i:nth-child(1) { width: 380px; height: 380px; right: -110px; top: -170px; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 45%, transparent), transparent 68%); }
+.pmk-glow i:nth-child(2) { width: 260px; height: 260px; right: 220px; top: -150px; background: radial-gradient(circle, rgba(255, 140, 200, .28), transparent 70%); }
+.pmk-glow i:nth-child(3) { width: 300px; height: 300px; left: -120px; bottom: -200px; background: radial-gradient(circle, rgba(110, 220, 255, .22), transparent 70%); }
+.pmk-top { max-width: 720px; }
+.pmk-kick { display: inline-flex; align-items: center; gap: 6px; font: 700 11.5px/1 "Manrope", sans-serif; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--accent); padding: 7px 12px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 13%, transparent); margin-bottom: 14px; }
+.pmk-top h1 { font-size: clamp(26px, 3.2vw, 36px); line-height: 1.1; margin: 0 0 10px; letter-spacing: -.01em; }
+.pmk-top p { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 0 0 22px; max-width: 64ch; }
+.pmk-box { position: relative; border-radius: 22px; padding: 18px; background: color-mix(in srgb, var(--field) 70%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line), 0 18px 40px -30px rgba(0, 0, 0, .6); }
+.pmk-l { display: block; font: 700 13px "Manrope", sans-serif; color: var(--muted); margin: 0 0 8px 4px; }
+.pmk-box textarea { width: 100%; min-height: 108px; font-size: 16px; line-height: 1.55; padding: 14px 16px; border-radius: 16px; border: 0; resize: vertical;
+  color: var(--ink); background: color-mix(in srgb, var(--panel) 60%, transparent); box-shadow: inset 0 0 0 1px var(--line); outline: none; transition: box-shadow .2s; }
+.pmk-box textarea:focus { box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); background: color-mix(in srgb, var(--panel) 80%, transparent); }
+.pmk-ideas { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.pmk-idea { display: inline-flex; align-items: center; gap: 7px; border: 0; cursor: pointer; padding: 7px 13px 7px 9px; border-radius: 999px; font-size: 13px;
+  color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); transition: background .2s, transform .15s, box-shadow .2s; }
+.pmk-idea i { font-style: normal; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-size: 13px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); font-family: system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.pmk-idea:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); transform: translateY(-1px); }
+.pmk-idea.on { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); }
+.pmk-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+.pmk-code { display: flex; align-items: center; gap: 12px; cursor: pointer; min-width: 0; flex: 1 1 300px; }
+.pmk-code > span:last-child { display: grid; gap: 1px; min-width: 0; }
+.pmk-code b { font-size: 13.5px; font-weight: 650; }
+.pmk-code small { font-size: 12px; color: var(--dim); line-height: 1.4; }
+.pmk-go { font-size: 15px; padding: 13px 26px; border-radius: 16px; display: inline-flex; align-items: center; gap: 8px; letter-spacing: .01em;
+  box-shadow: 0 14px 34px -14px color-mix(in srgb, var(--accent) 90%, transparent); }
+.pmk-go span { font-size: 16px; }
+.pmk-run { display: flex; align-items: center; gap: 18px; margin-top: 16px; padding: 14px 16px; border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.pmk-run[hidden] { display: none; }
+.pmk-sk { display: grid; grid-template-columns: repeat(3, 26px); grid-auto-rows: 14px; gap: 5px; flex: none; }
+.pmk-sk i { border-radius: 5px; background: color-mix(in srgb, var(--accent) 30%, transparent); animation: pmkPulse 1.4s ease-in-out infinite; }
+.pmk-sk i:nth-child(2) { animation-delay: .15s; } .pmk-sk i:nth-child(3) { animation-delay: .3s; } .pmk-sk i:nth-child(4) { animation-delay: .45s; grid-column: span 2; }
+.pmk-sk i:nth-child(5) { animation-delay: .6s; } .pmk-sk i:nth-child(6) { animation-delay: .75s; grid-column: span 3; }
+@keyframes pmkPulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+.pmk-rt { display: grid; gap: 2px; min-width: 0; }
+.pmk-rt b { font-variant-numeric: tabular-nums; }
+.pmk-rt small { color: var(--muted); font-size: 12.5px; }
+.pmk-err { margin-top: 14px; padding: 12px 16px; border-radius: 14px; background: color-mix(in srgb, var(--bad) 13%, transparent); line-height: 1.5; font-size: 13.5px; }
+.pmk-err[hidden] { display: none; }
+.pmk-err b { color: var(--bad); margin-right: 4px; }
+
+.pmk-sec h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 32px 0 14px; }
+.pmk-sec h2 small { font: 500 12.5px "Manrope", sans-serif; color: var(--dim); letter-spacing: 0; }
+.pmk-sec[hidden] { display: none; }
+.pmk-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px; }
+.pmk-tpl { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px 14px 16px; border-radius: 22px; background: var(--glass); min-width: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 5%, transparent); transition: transform .2s, box-shadow .2s; }
+.pmk-tpl:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 40%, transparent), 0 20px 40px -28px color-mix(in srgb, var(--pc) 80%, transparent); }
+.pmk-tpl > p { margin: 0 4px; color: var(--muted); font-size: 13px; line-height: 1.5; flex: 1; }
+.pmk-tt { display: flex; align-items: center; gap: 10px; margin: 2px 4px 0; }
+.pmk-tt b { font-size: 15.5px; }
+.pmk-ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-style: normal; font-size: 18px; flex: none;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--pc) 40%, transparent), color-mix(in srgb, var(--pc) 14%, transparent));
+  font-family: system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.pmk-tb { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 4px; }
+.pmk-need { font-size: 11.5px; color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmk-art { height: 112px; border-radius: 16px; overflow: hidden; position: relative;
+  background: radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--pc) 30%, transparent), transparent 60%), color-mix(in srgb, var(--pc) 8%, var(--field)); }
+.pmk-art svg { position: absolute; inset: 12px 14px 8px; width: calc(100% - 28px); height: calc(100% - 20px); }
+.pmk-art svg rect { fill: color-mix(in srgb, var(--pc) 78%, transparent); }
+.pmk-art svg rect:nth-child(odd) { fill: color-mix(in srgb, var(--pc) 45%, transparent); }
+.pmk-art svg path { stroke: var(--ink); stroke-opacity: .55; stroke-width: 2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.pmk-page { position: absolute; left: 50%; top: 14px; transform: translateX(-50%) rotate(-2deg); width: 62%; height: 120px; border-radius: 10px 10px 0 0; padding: 14px 16px;
+  background: #fbf7ee; box-shadow: 0 16px 30px -18px rgba(0, 0, 0, .7); display: grid; align-content: start; gap: 7px; }
+.pmk-page b { height: 9px; width: 70%; border-radius: 3px; background: #3b3226; }
+.pmk-page i { height: 5px; border-radius: 3px; background: #b9ae9c; }
+.pmk-page i.s { width: 82%; } .pmk-page i.s2 { width: 60%; }
+.pmk-pal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.pmk-pal i { width: 52px; height: 52px; border-radius: 50%; margin-left: -12px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--field) 90%, #000), 0 10px 20px -10px rgba(0, 0, 0, .6); }
+.pmk-pal i:first-child { margin-left: 0; }
+.pmk-mine { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.pmk-my { display: flex; align-items: center; gap: 12px; border: 0; cursor: pointer; text-align: left; padding: 12px 14px; border-radius: 18px; background: var(--glass); color: var(--ink); min-width: 0;
+  transition: box-shadow .2s; }
+.pmk-my:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 45%, transparent); }
+.pmk-my > span { display: grid; min-width: 0; flex: 1; }
+.pmk-my b { font-size: 14px; }
+.pmk-my small { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pmk-my em { font-style: normal; font-size: 12.5px; color: var(--accent); flex: none; }
+.pmk-how { margin: 30px 0 8px; border-radius: 18px; background: var(--glass); padding: 14px 18px; }
+.pmk-how summary { cursor: pointer; font-weight: 650; }
+.pmk-how ul { margin: 12px 0 2px 18px; display: grid; gap: 8px; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.pmk-how b { color: var(--ink); }
+@media (max-width: 820px) { .pmk-hero { padding: 24px 18px 20px; } .pmk-box { padding: 14px; } .pmk-go { width: 100%; justify-content: center; } }
+@media (prefers-reduced-motion: reduce) { .pmk-sk i { animation: none; } .pmk-idea, .pmk-tpl { transition: none; } }
+
+/* ---------- страница плагина: «Изменить и версии», «Доступ» ---------- */
+.plp-edit .plp-ed-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+.plp-edit textarea { flex: 1 1 320px; min-height: 64px; }
+.plp-edit .plp-ed-row .btn { align-self: flex-end; padding: 11px 22px; }
+.plp-edit .plp-say { margin-top: 10px; }
+.plp-ed-st { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.plp-ed-st:empty { display: none; }
+.plp-vers { display: grid; gap: 8px; }
+.plp-ver { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 16px; background: var(--glass); min-width: 0; }
+.plp-ver > b { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: none; font-size: 13px; background: color-mix(in srgb, var(--pc, var(--accent)) 18%, transparent); }
+.plp-ver.cur > b { background: var(--brand); color: #fff; }
+.plp-ver > span { display: grid; flex: 1; min-width: 0; }
+.plp-ver em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plp-ver small { color: var(--dim); font-size: 12px; }
+.plp-grant { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.plp-grant:last-of-type { border-bottom: 0; }
+
+/* ---------- «Чат»: плагин под ответом ---------- */
+.ch-plg { display: inline-flex; align-items: center; gap: 10px; border: 0; cursor: pointer; text-align: left; padding: 8px 12px 8px 8px; border-radius: 14px; color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); max-width: 100%; }
+.ch-plg i { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-style: normal; flex: none; background: color-mix(in srgb, var(--accent) 22%, transparent);
+  font-family: system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.ch-plg span { display: grid; min-width: 0; }
+.ch-plg b { font-size: 13.5px; } .ch-plg small { font-size: 11.5px; color: var(--muted); }
+.ch-plg em { font-style: normal; font-weight: 700; font-size: 12.5px; color: #fff; background: var(--brand); padding: 5px 11px; border-radius: 10px; }
+.ch-plg:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* ---------- «Оформление»: тема из плагина ---------- */
+.lk-pt { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin: 0 0 14px; border-radius: 18px; background: var(--glass);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+.lk-pt[hidden] { display: none; }
+.lk-pt > div { display: grid; gap: 2px; flex: 1 1 260px; min-width: 0; }
+.lk-pt > div span { color: var(--muted); font-size: 12.5px; }
+.lk-pt-sw { display: flex; flex: none; }
+.lk-pt-sw i { width: 26px; height: 26px; border-radius: 50%; margin-left: -8px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 15%, transparent); }
+.lk-pt-sw i:first-child { margin-left: 0; }

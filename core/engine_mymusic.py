@@ -212,12 +212,13 @@ class MyMusicMixin:
         return True
 
     def mine_status(self):
+        from mymusic import art_url          # data:URL, а не file:// — на Windows студия открыта с http (№511)
         t = self.dj.current() if self._mine_playing() else None
         favs = set(self.s.get("music", "favs") or [])
         art = (self.radio.station or self.radio.paused or {}).get("art") if t else None
         return {"stats": self.mylib.stats(), "busy": self.mylib.busy, "folder": self.s.get("music", "folder") or "",
                 "progress": dict(self.mylib.progress or {}),
-                "now": dict(t, fav=t["path"] in favs, art=Path(art).as_uri() if art else "") if t else None, "what": self.dj.what if t else "",
+                "now": dict(t, fav=t["path"] in favs, art=art_url(art)) if t else None, "what": self.dj.what if t else "",
                 "paused": bool((self.radio.paused or {}).get("_mine")), "live": self._live_now(),
                 "mail_on": bool(getattr(self, "mail", None) is not None and self.mail.configured())}
 

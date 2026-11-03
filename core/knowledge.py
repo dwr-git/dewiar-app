@@ -23,6 +23,7 @@ log = logging.getLogger("dewiar.knowledge")
 FOLDER = "Знания"
 EXTS = {".md", ".txt", ".html", ".htm", ".pdf", ".docx", ".odt", ".csv"}
 CHUNK, OVERLAP = 900, 150
+SCAN_WAIT = "скан без текстового слоя — распознается, когда поставлено распознавание текста"
 MAX_FILE = 60 * 1024 * 1024
 README = """# Знания
 
@@ -58,9 +59,11 @@ def _xml_text(xml, para_tag):
     return html.unescape(re.sub(r"<[^>]+>", "", xml))
 
 
-def extract(p: Path) -> str:
-    """Текст документа; незнакомый формат — "". PDF — через pypdf (если не установлен — RuntimeError), до 500 страниц;
-    скан без текстового слоя даёт пустой текст."""
+def extract(p: Path, ocr=None, info=None) -> str:
+    """Текст документа; незнакомый формат — "". PDF — через pypdf (если не установлен — RuntimeError), до 500 страниц.
+    Страницы-сканы (без текстового слоя, идея №68): ocr=None — пусто, как раньше (info["scan"] = True — пометка для
+    распознавания позже); ocr="local" — распознать локальным движком (ocr.py), если он есть; ocr=функция модели со
+    зрением — локальным, а нет его — моделью."""
     ext = p.suffix.lower()
     if ext in (".md", ".txt", ".csv"):
         return p.read_text(encoding="utf-8", errors="replace")
@@ -81,7 +84,27 @@ def extract(p: Path) -> str:
         except ImportError as e:
             raise RuntimeError("для PDF нужна библиотека pypdf") from e
         r = PdfReader(str(p))
-        return "\n".join((pg.extract_text() or "") for pg in r.pages[:500])
+        pages = []
+        for pg in r.pages[:500]:
+            try:
+                pages.append(pg.extract_text() or "")
+            except Exception:  # noqa: BLE001 — одна битая страница не роняет весь документ
+                pages.append("")
+        import ocr as _ocr
+        if _ocr.mostly_scan(pages):                       # скан, а не обычный PDF с пустой страницей
+            if info is not None:
+                info["scan"] = True
+            if ocr:
+                vision = ocr if callable(ocr) else None
+                if _ocr.can(vision):
+                    res = _ocr.ocr_pdf_ex(p, vision=vision)
+                    if info is not None:
+                        info.update(ocr_pages=res["ocr_pages"], ocr_error=res["error"], ocr_engine=res["engine"])
+                    if res["ocr_pages"] or not res["error"]:
+                        if info is not None:
+                            info["scan"] = "done"
+                        return res["text"]
+        return "\n".join(pages)
     return ""
 
 
@@ -184,9 +207,12 @@ class Knowledge:
                 try:
                     if st.st_size > MAX_FILE:
                         raise RuntimeError("файл больше 60 МБ")
-                    entry["chunks"] = chunks(extract(p))
+                    info = {}
+                    entry["chunks"] = chunks(extract(p, info=info))
+                    if info.get("scan"):
+                        entry["scan"] = True              # сканы распознает фоновый поток (ocr_scans), если есть чем
                     if not entry["chunks"]:
-                        entry["error"] = "в файле нет текста (скан без распознавания?)"
+                        entry["error"] = SCAN_WAIT if info.get("scan") else "в файле нет текста"
                 except Exception as e:  # noqa: BLE001
                     entry["error"] = str(e)[:200]
                     log.info("Знания: %s — %s", rel, entry["error"])
@@ -262,9 +288,12 @@ class Knowledge:
                         raise RuntimeError("файл больше 30 МБ")
                     if total > EXTRA_CHUNKS:
                         raise RuntimeError("в своих папках уже слишком много текста — остальное не ищется")
-                    entry["chunks"] = chunks(extract(p))
+                    info = {}
+                    entry["chunks"] = chunks(extract(p, info=info))
+                    if info.get("scan"):
+                        entry["scan"] = True
                     if not entry["chunks"]:
-                        entry["error"] = "в файле нет текста"
+                        entry["error"] = SCAN_WAIT if info.get("scan") else "в файле нет текста"
                 except Exception as e:  # noqa: BLE001
                     entry["error"] = str(e)[:200]
                 total += len(entry["chunks"]) - len((old or {}).get("chunks") or [])
@@ -306,8 +335,47 @@ class Knowledge:
             except Exception:  # noqa: BLE001
                 log.exception("Знания: свои папки")
                 self.folders_done.set()
+            try:
+                if self.ocr_scans():
+                    continue                       # распознали часть сканов — следующие сразу, не через 2 минуты
+            except Exception:  # noqa: BLE001
+                log.exception("Знания: распознавание сканов")
             self.kick.wait(every)
             self.kick.clear()
+
+    def ocr_scans(self, files=3):
+        """PDF со страницами-сканами (пометка scan в индексе) — распознать локальным движком (ocr.py) и дописать текст
+        в индекс. Вне замка индекса: страница — это секунды, поиск в это время работает по прежнему. Движка нет — ничего
+        не делаем (поставят — распознаются при следующей сверке). -> сколько файлов распознано."""
+        import ocr
+        if not ocr.local_engines():
+            return 0
+        with self._lock:
+            todo = [(k, e["mtime"]) for k, e in self.index.items() if e.get("scan") is True][:files]
+        done = 0
+        for key, mtime in todo:
+            p = Path(key[1:]) if key.startswith("@") else self.root / key
+            res = {}
+            try:
+                res = ocr.ocr_pdf_ex(p, local=True)
+                text, err = res["text"], res["error"]
+            except Exception as e:  # noqa: BLE001
+                text, err = "", str(e)[:200]
+            with self._lock:
+                e = self.index.get(key)
+                if not e or e.get("mtime") != mtime:
+                    continue                       # файл за это время поменяли — его перечитает сверка
+                e["scan"] = "done"
+                if text.strip():
+                    e["chunks"] = chunks(text)
+                    e.pop("error", None)
+                elif err:
+                    e["error"] = ("скан не распознался: " + err)[:200]
+                self._forget(key)
+                self._save()
+            done += 1
+            log.info("Знания: распознан скан %s (%d стр.)", p.name, len(res.get("ocr_pages") or []) if text else 0)
+        return done
 
     def fresh_folders(self, wait=4.0):
         """Перед поиском: свои папки давно не сверялись — сверить сейчас (подождать до wait секунд; большие новые

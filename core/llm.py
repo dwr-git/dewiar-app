@@ -1421,6 +1421,9 @@ def wait_hint(sec, info, think_auto=False):
             f"часто — выберите в «Мозге» модель побыстрее.")
 
 
+_DONE_RX = re.compile(r"^\s*data:\s*\[DONE\]\s*$")
+
+
 def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     """Поток событий: ("text", кусок) и в конце, если модель решила действовать,
     ("tools", [{"id", "name", "args"}]). cancel — threading.Event для мгновенной остановки. Ошибки — LLMError.
@@ -1556,6 +1559,10 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             for line in r.iter_lines():
                 if cancel is not None and cancel.is_set():
                     return
+                if _DONE_RX.match(line):
+                    # 04.11: «data: [DONE]» — конец ответа; не ждём, пока сервер закроет соединение (шлюз мог держать его
+                    # открытым, а облако — слать «: keepalive»: ход ждал минутами)
+                    break
                 piece = bare.feed(col.feed_line(line))
                 if st is not None:
                     st.update(reasoning=col.reasoning, calls=bool(col.calls), last=time.monotonic())

@@ -326,9 +326,12 @@ function remGroup(x) {
   return diff <= 0 ? "Сегодня" : diff === 1 ? "Завтра" : "Позже";
 }
 function renderReminders(items) {
-  remItems = items || []; renderPresets(); const box = $("#r-list"); box.innerHTML = "";
-  if (!remItems.length) { box.innerHTML = '<div class="rempty">Напоминаний пока нет.<br>Скажите «Агент, напомни через 20 минут выключить духовку» — или напишите выше.</div>'; return; }
-  const groups = {}; remItems.forEach(x => (groups[remGroup(x)] = groups[remGroup(x)] || []).push(x));
+  remItems = items || []; renderPresets(); renderTodo(); rtCounts(); const box = $("#r-list"); box.innerHTML = "";
+  const shown = RT.tab === "rem" ? remItems.filter(x => !isTodo(x)) : remItems;
+  if (!shown.length) { box.innerHTML = RT.tab === "rem"
+    ? '<div class="rempty">Повторяющихся напоминаний, будильников и таймеров нет.<br>Скажите «Агент, напоминай каждый день в 8 выпить таблетки» или «разбуди в 7» — или напишите выше. Разовые дела — во вкладке «Дела».</div>'
+    : '<div class="rempty">Напоминаний пока нет.<br>Скажите «Агент, напомни через 20 минут выключить духовку» — или напишите выше.</div>'; return; }
+  const groups = {}; shown.forEach(x => (groups[remGroup(x)] = groups[remGroup(x)] || []).push(x));
   ["Сегодня", "Завтра", "Позже", "Повторяющиеся"].forEach(g => {
     if (!groups[g]) return;
     const h = document.createElement("div"); h.className = "rgroup"; h.textContent = g; box.appendChild(h);
@@ -366,6 +369,87 @@ function editReminder(el, x) {
   [t, w].forEach(i => i.onkeydown = (e) => { if (e.key === "Enter") save(); if (e.key === "Escape") loadReminders(); });
   const act = $(".ract", el); act.innerHTML = ""; const ok = document.createElement("button"); ok.className = "btn primary"; ok.style.width = "auto"; ok.style.padding = "0 12px"; ok.textContent = "Сохранить"; ok.onclick = save; act.appendChild(ok);
 }
+/* ---------- вкладки «Все · Дела · Напоминания» (идея №41, 30.10: «дела отдельно, напоминания отдельно; выполненные — со
+   статусом „выполнено“, зачёркнуты; отметку — голосом или руками в списке») ----------
+   Дело — разовое напоминание (его закрывают «сделано»: done_reminder → журнал done.py); напоминание — что звенит само:
+   повторы, будильники, таймеры, дела по расписанию. «Все» — как было: сделанное сегодня и все напоминания разом.
+   Выбор вкладки — localStorage rem_tab. То же на телефоне — «Мой день» (там свои вкладки). */
+const RT = { tab: "all", done: null };
+try { RT.tab = ["all", "do", "rem"].includes(localStorage.getItem("rem_tab")) ? localStorage.getItem("rem_tab") : "all"; } catch (e) { }
+const RT_HINT = { all: "", do: "Разовые дела: отметьте сделанное кружком — оно зачеркнётся и посчитается в достижениях. Без времени — напомню вечером, в 20:00.",
+  rem: "То, что звенит само: повторяющиеся напоминания, будильники, таймеры и дела по расписанию. Разовые дела — во вкладке «Дела»." };
+const isTodo = (x) => !x.repeat && !["job", "alarm", "timer"].includes(x.kind);
+function rtApply() {
+  $$("#rt-tabs [data-rt]").forEach(b => { const on = b.dataset.rt === RT.tab; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+  $$("#p-reminders [data-rt]:not(button)").forEach(el => { el.style.display = el.dataset.rt.split(" ").includes(RT.tab) ? "" : "none"; });
+  const h = $("#rt-hint"); h.textContent = RT_HINT[RT.tab]; h.style.display = RT_HINT[RT.tab] ? "" : "none";
+  $("#d-phrase").placeholder = RT.tab === "do" ? "Сделали что-то не из списка? Например: отправил отчёт · позвонил Игорю" : "Что сделали? Например: отправил отчёт · позвонил Игорю";
+  $("#r-phrase").placeholder = RT.tab === "rem" ? "например: каждый день в 8 выпить таблетки · по будням в 8:30 планёрка · таймер на 10 минут"
+    : "например: завтра в 9 позвонить маме · по будням в 8:30 планёрка · через 20 минут духовка";
+}
+function rtCounts() {
+  const n = (id, v) => { const el = $(id); if (el) el.textContent = v ? String(v) : ""; };
+  n("#rt-n-do", remItems.filter(isTodo).length); n("#rt-n-rem", remItems.filter(x => !isTodo(x)).length);
+}
+$$("#rt-tabs [data-rt]").forEach(b => b.onclick = () => {
+  RT.tab = b.dataset.rt; try { localStorage.setItem("rem_tab", RT.tab); } catch (e) { }
+  rtApply(); renderReminders(remItems);
+});
+rtApply();
+const hm = (ms) => { const t = new Date(ms); return `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`; };
+/* «Дела»: открытые — по дням, с кружком «сделано»; ниже — сделанные сегодня, зачёркнутые (кружок с галочкой — снять отметку) */
+function renderTodo() {
+  const box = $("#td-list"); if (!box || RT.tab !== "do") return;
+  const open = remItems.filter(isTodo).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const done = ((RT.done && RT.done.items) || []).slice().reverse();
+  box.innerHTML = "";
+  if (!open.length && !done.length) { box.innerHTML = '<div class="rempty">Дел пока нет.<br>Напишите выше «завтра в 10 отправить отчёт» — или скажите Лире «запланируй на завтра: в 13 позвонить в банк, в 19 купить подарок».</div>'; return; }
+  const row = (cls, title, meta, chk) => {
+    const el = document.createElement("div"); el.className = "ritem td" + cls;
+    el.innerHTML = `<button class="tchk" role="checkbox"></button><div class="rbody"><div class="rtext"></div><div class="rmeta"></div></div><div class="ract"></div>`;
+    $(".rtext", el).textContent = title; $(".rmeta", el).append(...meta);
+    const c = $(".tchk", el); c.setAttribute("aria-checked", String(chk)); c.innerHTML = `<svg viewBox="0 0 24 24">${RI.ok}</svg>`;
+    return el;
+  };
+  const span = (t, cls) => { const e = document.createElement("span"); if (cls) e.className = cls; e.textContent = t; return e; };
+  let g = "";
+  open.forEach(x => {
+    const gg = remGroup(x); if (gg !== g) { g = gg; const h = document.createElement("div"); h.className = "rgroup"; h.textContent = g; box.appendChild(h); }
+    const el = row("", x.text, [span(x.when), ...(x.att && x.note ? [span("📎 " + x.att, "rbadge")] : [])], false);
+    const c = $(".tchk", el); c.title = "Отметить сделанным";
+    c.onclick = async () => { c.disabled = true; c.setAttribute("aria-checked", "true"); el.classList.add("ok");
+      try { await core.call("done_reminder", { id: x.id }); setTimeout(loadReminders, 380); }   // праздник — по событию «done» (один раз)
+      catch (e) { c.disabled = false; c.setAttribute("aria-checked", "false"); el.classList.remove("ok"); toast(e.message); } };
+    const act = $(".ract", el), btn = (icon, title, fn) => { const b = document.createElement("button"); b.title = title; b.innerHTML = `<svg viewBox="0 0 24 24">${RI[icon]}</svg>`; b.onclick = fn; act.appendChild(b); };
+    btn("edit", "Изменить", () => editReminder(el, x));
+    btn("del", "Удалить", () => core.call("reminder_cancel", { id: x.id }).then(() => { toast("Удалено"); loadReminders(); }).catch(e => toast(e.message)));
+    box.appendChild(el);
+  });
+  if (done.length) {
+    const h = document.createElement("div"); h.className = "rgroup"; h.textContent = "Выполнено сегодня"; box.appendChild(h);
+    done.forEach(x => {
+      const el = row(" ok", x.title, [span("выполнено в " + hm(x.at), "tst"), ...(x.src && x.src !== "pc" ? [span(x.src === "voice" ? "голосом" : "на телефоне")] : [])], true);
+      const c = $(".tchk", el); c.title = "Снять отметку";
+      c.onclick = () => { c.disabled = true; core.call("done_undo", { id: x.id }).then(() => { toast("Отметка снята"); loadReminders(); }).catch(e => { c.disabled = false; toast(e.message); }); };
+      box.appendChild(el);
+    });
+  }
+}
+let tpT = null;
+/* новое дело: со временем — как напоминание; без времени — на 20:00 (как «запланируй» без времени, dayplan.py) */
+const todoPhrase = async (v) => (await core.call("reminder_parse", { phrase: v }).catch(() => null)) ? v : "в 20:00 " + v;
+$("#td-phrase").oninput = () => { clearTimeout(tpT); const v = $("#td-phrase").value.trim(), el = $("#td-parse");
+  if (!v) { el.textContent = ""; el.className = "rparse"; return; }
+  tpT = setTimeout(async () => { const r = await core.call("reminder_parse", { phrase: await todoPhrase(v) }).catch(() => null);
+    if ($("#td-phrase").value.trim() !== v) return;
+    el.className = "rparse"; el.innerHTML = "";
+    if (!r) { el.textContent = "Не понял — напишите, что сделать и когда: «завтра в 10 отправить отчёт»"; el.className = "rparse bad"; return; }
+    const b = document.createElement("b"); b.textContent = r.when + (r.repeat_text ? ", " + r.repeat_text : ""); el.append("☐ ", r.text, " — ", b); }, 200); };
+$("#td-phrase").onkeydown = (e) => { if (e.key === "Enter") $("#td-add").click(); };
+$("#td-add").onclick = async () => { const v = $("#td-phrase").value.trim(); if (!v) return $("#td-phrase").focus();
+  try { const r = await core.call("reminder_add", { phrase: await todoPhrase(v) }); $("#td-phrase").value = ""; $("#td-parse").textContent = "";
+    toast(r.repeat ? `Повторяющееся — во вкладке «Напоминания»: ${r.when}` : `Дело на ${r.when}`); loadReminders(); }
+  catch (e) { $("#td-parse").className = "rparse bad"; $("#td-parse").textContent = e.message; } };
 /* ---------- готовые дела по расписанию ---------- */
 const J_DAYS = { daily: "каждый день", weekdays: "по будням", fri: "по пятницам", sun: "по воскресеньям" };
 const J_PRESETS = [
@@ -433,6 +517,7 @@ const dela = (n) => n % 10 === 1 && n % 100 !== 11 ? "дело" : [2, 3, 4].incl
 const dney = (n) => n % 10 === 1 && n % 100 !== 11 ? "день" : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? "дня" : "дней";
 function renderDone(d) {
   if (!d) return;
+  RT.done = d; renderTodo(); rtCounts();
   const head = $("#d-head"), max = Math.max(1, ...d.week.map(w => w.n)), WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
   const chips = [];
   for (const g of ["day", "streak", "total"]) {
@@ -481,7 +566,8 @@ $("#r-phrase").oninput = () => { clearTimeout(rpT); const v = $("#r-phrase").val
     el.append("⏰ ", b, " — " + r.text); }).catch(() => {}), 200); };
 $("#r-phrase").onkeydown = (e) => { if (e.key === "Enter") $("#r-add").click(); };
 $("#r-add").onclick = async () => { const v = $("#r-phrase").value.trim(); if (!v) return $("#r-phrase").focus();
-  try { const r = await core.call("reminder_add", { phrase: v }); $("#r-phrase").value = ""; $("#r-parse").textContent = ""; toast(`Напомню ${r.when}`); loadReminders(); }
+  try { const r = await core.call("reminder_add", { phrase: v }); $("#r-phrase").value = ""; $("#r-parse").textContent = "";
+    toast(RT.tab === "rem" && isTodo(r) ? `Напомню ${r.when} — это разовое дело, оно во вкладке «Дела»` : `Напомню ${r.when}`); loadReminders(); }
   catch (e) { $("#r-parse").className = "rparse bad"; $("#r-parse").textContent = e.message; } };
 $("#r-listen").onclick = () => core.call("alarm_test", { sound: $("#r-sound").value }).catch(e => toast(e.message));
 $("#r-try").onclick = () => core.call("reminder_add", { phrase: "через 10 секунд проверка будильника" }).then(() => { toast("Через 10 секунд прозвенит"); loadReminders(); }).catch(e => toast(e.message));

@@ -26,7 +26,8 @@ window.padCfg = (c) => {
 try { padCfg(JSON.parse(Q.get("cfg") || "null") || { side: Q.get("side") || "left" }); } catch (e) { padCfg({ side: Q.get("side") || "left" }); }
 window.padShown = (side) => { if (side) padSide(side); document.body.classList.remove("snap"); $("#wrap").classList.add("away");
   requestAnimationFrame(() => requestAnimationFrame(() => { $("#wrap").classList.remove("away"); document.body.classList.add("snap"); }));
-  setTimeout(() => { if (!document.body.classList.contains("play")) ED.focus(); }, 280); refresh(); };
+  setTimeout(() => { if (!document.body.classList.contains("play")) ED.focus(); }, 280); refresh();
+  setTimeout(() => { if (window.padSnipTake) padSnipTake(); }, 300); };   // вернулись из «Вырезать с экрана» — вставить вырезанное
 window.padClose = async () => { gameStop(); await saveNow(); document.body.classList.remove("snap"); setTimeout(() => $("#wrap").classList.add("away"), 90);
   setTimeout(() => { const a = api(); if (a && a.pad_hide) a.pad_hide(); }, 320); };
 $("#b-close").onclick = () => padClose();
@@ -729,3 +730,80 @@ $("#b-play").onclick = () => padMode("play");
 $("#b-notes").onclick = () => padMode("notes");
 window.padGame = (id) => { padMode("play"); if (id && window.DewiarArcade && DewiarArcade.find(id) && GAMES_ON) gameOpen(id); };
 if (Q.get("mode") === "play") padGame(Q.get("game") || "");
+
+/* ---------- «Вырезать кусок экрана» (идея №83, 03.11) ----------
+   Кнопка ✂ на панели (или голосом «вырежи кусок экрана») — окно выделения поверх экрана (ui/snip.html, Api.snip_open);
+   лист на это время прячется. Ядро вырезает кусок и кладёт его во «Вложения» (snip_done), событие snip приходит дважды:
+   state "image" — вставляем картинку в конец вкладки, state "text" — распознанный текст под ней, в буфер обмена и тост
+   «Текст скопирован». Лист открылся позже события — забираем пропущенное сами (snip_take); вставили — snip_ack, иначе
+   ядро через полминуты допишет вкладку само. */
+const SNIP = { done: {} };
+const escH = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function snipBtn() { const a = api(); $("#b-snip").hidden = !(a && a.snip_open); }
+window.addEventListener("pywebviewready", snipBtn); setTimeout(snipBtn, 400);
+$("#b-snip").onclick = async () => { const a = api(); if (!a || !a.snip_open) return; await saveNow(); a.snip_open("pad"); };
+let toastT = 0;
+function toast(t, kind, btn) {
+  const el = $("#toast"); $("#toast-t").textContent = t; el.className = "on" + (kind ? " " + kind : "");
+  const b = $("#toast-b"); b.hidden = !btn; if (btn) { b.textContent = btn.label; b.onclick = btn.fn; }
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), btn ? 14000 : kind === "bad" ? 7000 : 3200);
+}
+async function snipTab(it) { if (it.tab && it.tab !== P.active && P.tabs.some(t => t.name === it.tab)) await openTab(it.tab); }
+async function snipImage(it) {
+  const d = SNIP.done[it.id] = SNIP.done[it.id] || {};
+  if (d.image) return;
+  d.image = true;
+  await snipTab(it);
+  const m = /\]\(([^)]+)\)/.exec(it.line || ""); if (!m) return;
+  ensureP();
+  const last = ED.lastElementChild;
+  if (last && last.tagName === "P" && !last.textContent.trim() && !last.querySelector("img")) last.remove();   // пустая строка в конце — не копим
+  ED.insertAdjacentHTML("beforeend", `<p><img alt="" data-src="${m[1].replace(/"/g, "&quot;")}"></p>`);
+  paint(); blank(); changed();
+  const im = [...ED.querySelectorAll("img[data-src]")].find(i => i.getAttribute("data-src") === m[1]);
+  if (im) im.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  status("Вырезано · распознаю текст…", "busy");
+  core.call("snip_ack", { id: it.id, stage: "image" }).catch(() => { });
+}
+async function snipText(it) {
+  const d = SNIP.done[it.id] = SNIP.done[it.id] || {};
+  if (d.text) return;
+  if (!d.image) await snipImage(it);
+  d.text = true;
+  core.call("snip_ack", { id: it.id, stage: "text" }).catch(() => { });
+  if (it.error) {
+    const inst = it.install ? { label: "Поставить", fn: ocrInstall } : null;
+    toast(it.install ? "Картинка в блокноте, но распознать текст нечем — поставьте распознавание (≈70 МБ, один раз)" : "Текст не распознан: " + it.error, "bad", inst);
+    status("Картинка в блокноте; текст не распознан", "bad");
+    return;
+  }
+  const text = String(it.text || "").trim();
+  if (!text) { toast("Картинка в блокноте — текста на ней не нашлось"); status("Сохраняется само"); return; }
+  const m = /\]\(([^)]+)\)/.exec(it.line || "");
+  const im = m && [...ED.querySelectorAll("img[data-src]")].find(i => i.getAttribute("data-src") === m[1]);
+  const html = text.split(/\n\s*\n/).map(par => `<p class="snip-new">${par.split("\n").map(escH).join("<br>")}</p>`).join("");
+  const host = im ? im.closest("p") || im : null;
+  if (host && host.parentNode === ED) host.insertAdjacentHTML("afterend", html); else ED.insertAdjacentHTML("beforeend", html);
+  setTimeout(() => ED.querySelectorAll("p.snip-new").forEach(p => { p.classList.remove("snip-new"); if (!p.className) p.removeAttribute("class"); }), 1700);
+  changed();
+  const a = api(); let ok = false;
+  try { ok = a && a.clip_text ? await a.clip_text(text) : false; } catch (e) { }
+  if (!ok) try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { }
+  toast(ok ? "Текст скопирован" : "Текст в блокноте — скопировать не вышло, выделите его и Ctrl+C", ok ? "" : "bad");
+}
+async function ocrInstall() {
+  $("#toast-b").hidden = true;
+  try { const r = await core.call("ocr_install"); toast(r.text, "busy"); } catch (e) { toast(e.message, "bad"); }
+}
+core.on("ocr_install", (e) => { if (e.state === "busy") status(e.text, "busy"); else { toast(e.text, e.state === "done" ? "" : "bad"); status(e.text, e.state === "done" ? "" : "bad"); } });
+core.on("snip", (it) => { if (!P.loaded) return; (it.state === "text" ? snipText(it) : snipImage(it)).catch(() => { }); });
+window.padSnipTake = async () => {
+  for (let k = 0; k < 20 && !P.loaded; k++) await new Promise(r => setTimeout(r, 150));
+  const items = await core.call("snip_take").catch(() => []);
+  for (const it of Array.isArray(items) ? items : []) {
+    const d = SNIP.done[it.id] = SNIP.done[it.id] || {};
+    for (const st of it.acked || []) d[st] = true;            // уже вставлено прежним листом (окно пересоздавали)
+    if (it.state === "text") await snipText(it); else await snipImage(it);
+  }
+};
+setTimeout(() => window.padSnipTake(), 900);

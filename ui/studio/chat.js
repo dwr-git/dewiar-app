@@ -23,7 +23,9 @@ function chatBubble(x, lastWho) {
   // картинки к рассказу (show_images) — миниатюры со ссылкой на источник, лентой; свои вложения — из «Входящих»
   const web = (x.att || []).filter(a => a.kind === "image" && a.url && !a.path);
   const gal = web.length && window.DewiarRich ? DewiarRich.gallery(web.map(a => ({ src: a.thumb, page: a.url, full: a.full, title: a.name, author: a.author, license: a.license, site: a.site, source: a.source }))) : "";
-  const att = (x.att || []).filter(a => !web.includes(a)).map(a => a.kind === "image" && a.thumb
+  const att = (x.att || []).filter(a => !web.includes(a)).map(a => a.kind === "plugin"     // плагин, сделанный Лирой в этом ответе, — «Открыть»
+    ? `<button class="ch-plg" data-plg="${escH(a.plugin || "")}" title="Открыть страницу плагина"><i aria-hidden="true">${escH(a.icon || "🧩")}</i><span><b>${escH(a.name)}</b><small>Плагин в студии</small></span><em>Открыть</em></button>`
+    : a.kind === "image" && a.thumb
     ? `<button class="ch-img" data-path="${escH(a.path || "")}" title="${escH(a.name)} — открыть"><img src="${escH(a.thumb)}" alt="${escH(a.name)}"></button>`
     : `<button class="cl-f" data-path="${escH(a.path || "")}" data-key="${escH(a.key || "")}" title="${escH(a.label || a.name)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg><span>${escH(a.name)}</span><small>${a.size ? chatSize(a.size) : ""}</small></button>`).join("");
   return `${head}<div class="cl-m${out ? " out" : ""}${gal ? " wide" : ""}" data-id="${escH(x.id)}">${x.via ? `<small class="ch-via">${x.via === "dev" ? "ответ разработчика" : "из мессенджера"}</small>` : ""}${att ? `<div class="ch-att">${att}</div>` : ""}${body}${gal}<time>${hm}${!out && x.text ? `<button class="ch-listen" data-listen="${escH(x.id)}" title="Прослушать ответ" aria-label="Прослушать ответ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>Прослушать</button>` : ""}</time></div>`;
@@ -79,6 +81,7 @@ function chatRender(keep) {
   const o = $("#ch-older"); if (o) o.onclick = chatOlder;
   $$("#ch-msgs .ch-more").forEach(b => b.onclick = () => { CH_OPEN.add(b.dataset.open); chatRender("stay"); });
   if (window.DewiarRich) DewiarRich.diagrams(box);      // ```mermaid в ответах — схемами
+  $$("#ch-msgs [data-plg]").forEach(b => b.onclick = () => { if (window.plpOpen && b.dataset.plg) plpOpen(b.dataset.plg, "page"); });
   $$("#ch-msgs [data-path]").forEach(b => b.onclick = () => {
     if (b.dataset.key) core.call("knowledge_open_file", { key: b.dataset.key }).catch(e => { $("#ch-res").textContent = e.message; });   // источник ответа
     else if (b.dataset.path) core.call("ws_open", { path: b.dataset.path }).catch(e => { $("#ch-res").textContent = e.message; }); });

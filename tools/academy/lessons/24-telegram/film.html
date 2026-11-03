@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 24 · Бот в Telegram с любого устройства. Светлый неоморфизм серии. Главная вещь урока — бот один на аккаунт: ноутбук выключен, а ответ уже пришёл с телефона; отвечает кто-то один, без дублей. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+.win { position: absolute; left: 640px; top: 140px; width: 760px; padding: 12px 14px 14px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.win .bar { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 6px 10px; }
+.win .bar i { width: 13px; height: 13px; border-radius: 50%; background: var(--nd); }
+.win .bar span { margin-left: 14px; flex: 1; padding: 7px 16px; border-radius: 99px; box-shadow: var(--press); font-size: 17px; font-weight: 800; color: var(--mut); }
+.win .bar span b { color: var(--ink); }
+.tgl { width: 76px; height: 42px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; }
+.tgl i { position: absolute; top: 5px; left: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); }
+.tgl.on { background: var(--brand); box-shadow: none; } .tgl.on i { left: 39px; }
+.toast { position: absolute; display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); }
+.toast > i { flex: none; width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; font-size: 32px; font-style: normal; background: rgba(47,179,131,.16); }
+.toast small { display: block; font-size: 16px; font-weight: 800; color: var(--mut); } .toast b { display: block; font-size: 22px; font-weight: 800; margin-top: 2px; }
+.st { position: absolute; display: grid; grid-template-columns: 250px 1fr; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); overflow: hidden; }
+.st nav { padding: 24px 16px; background: rgba(255,255,255,.38); display: flex; flex-direction: column; gap: 3px; }
+.st nav .g { margin: 12px 10px 4px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.st nav .g:first-child { margin-top: 0; }
+.st nav span { padding: 8px 12px; border-radius: 12px; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.st nav span.on { color: #fff; background: var(--brand); }
+.st .pg { padding: 28px 32px; } .st .pg h3 { font: 700 30px Unbounded; } .st .pg > small { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; color: var(--mut); }
+
+#plane svg { stroke: var(--tg); }
+.phone .scr.tgc { padding: 0; background: #dfe8ef; position: relative; }
+.tgh { display: flex; align-items: center; gap: 12px; padding: 34px 20px 14px; background: #fff; }
+.tgh img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; } .tgh b { display: block; font-size: 19px; } .tgh small { font-size: 14px; font-weight: 700; color: var(--tg); }
+.tgm { padding: 10px 16px; } .tgm .bub { box-shadow: 0 2px 4px rgba(36,50,74,.08); font-size: 18px; }
+.tgm .bub.me { color: var(--ink); background: #e1f9d4; }
+.tgm .bub small { display: block; margin-top: 8px; font-size: 13px; font-weight: 800; color: #1e7d5b; }
+.typing { display: inline-flex; gap: 5px; padding: 14px 16px; border-radius: 18px; background: #fff; margin-top: 12px; }
+.typing i { width: 8px; height: 8px; border-radius: 50%; background: #9aa7b8; }
+#devs { top: 210px; width: 700px; } #devs .row.act { box-shadow: 0 0 0 3px rgba(47,179,131,.6), var(--raise-s); }
+#acc { position: absolute; left: 640px; top: 130px; width: 1180px; height: 700px; }
+#acc svg { position: absolute; inset: 0; }
+#acc .me { position: absolute; left: 400px; top: 250px; width: 380px; padding: 26px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); text-align: center; }
+#acc .me i { font-size: 56px; font-style: normal; } #acc .me b { display: block; font: 700 24px Unbounded; margin-top: 6px; }
+#acc .me span { display: inline-block; margin-top: 12px; padding: 10px 16px; border-radius: 14px; color: #fff; background: var(--tg); font-size: 18px; font-weight: 800; }
+#acc .dv { position: absolute; width: 230px; padding: 18px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); text-align: center; font-size: 20px; font-weight: 800; }
+#acc .dv i { display: block; font-size: 46px; font-style: normal; } #acc .dv small { display: block; margin-top: 4px; font-size: 15px; color: #1e7d5b; }
+#acc .old { position: absolute; left: 0; top: 0; padding: 14px 20px; border-radius: 18px; box-shadow: var(--press); font-size: 19px; font-weight: 800; color: var(--mut); }
+#acc .old s { color: #b04a5c; }
+#wh { top: 170px; width: 860px; } #wh .row.act { box-shadow: 0 0 0 3px rgba(47,179,131,.6), var(--raise-s); }
+#wh .line { margin-top: 22px; padding: 16px 20px; border-radius: 18px; box-shadow: var(--press); font-size: 20px; font-weight: 700; color: var(--mut); }
+#wh .line b { color: var(--ink); }
+#q1 { left: 640px; top: 640px; }
+#one { position: absolute; left: 640px; top: 150px; display: flex; align-items: center; gap: 16px; padding: 16px 24px; border-radius: 22px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; }
+#one em { font-style: normal; color: #1e7d5b; }
+#steps { position: absolute; left: 640px; top: 270px; width: 1180px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+.stp { padding: 26px 24px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); transition: none; }
+.stp small { display: block; font-size: 16px; font-weight: 800; color: var(--mut); text-transform: uppercase; letter-spacing: .05em; }
+.stp .ic { display: flex; gap: 8px; margin: 16px 0 10px; font-size: 44px; } .stp .ic .off { filter: grayscale(1); opacity: .35; }
+.stp b { display: block; font-size: 23px; line-height: 1.3; } .stp p { margin-top: 10px; font-size: 18px; font-weight: 700; color: var(--mut); line-height: 1.4; }
+.stp.on { box-shadow: 0 0 0 4px var(--tg), var(--raise); }
+#studio { top: 150px; width: 960px; }
+#studio .hd { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; } #studio .hd i { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 32px; font-style: normal; color: #fff; background: var(--tg); }
+#studio .who { margin-top: 18px; padding: 16px 20px; border-radius: 18px; box-shadow: 0 0 0 3px rgba(42,171,238,.5), var(--raise-s); font-size: 21px; font-weight: 800; }
+#studio .row .tgl { margin-left: auto; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 24 · Бот в Telegram с любого устройства</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M21 4 3 11l6 2 2 6 3-4 5 4 2-15z"/><path d="m9 13 8-6"/></svg></div>
+    <div id="t-title"><h1>Telegram везде</h1><p>Один бот — отвечает то устройство, что на связи</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div class="card" id="devs"><small>ВАШИ УСТРОЙСТВА СЕЙЧАС</small>
+      <div class="row"><i>💻</i>Ноутбук — дома<em class="warn">выключен</em></div>
+      <div class="row"><i>🖥</i>Рабочий компьютер<em class="warn">выключен</em></div>
+      <div class="row" id="dph"><i>📱</i>Телефон — в кармане<em class="ok" id="dphe">на связи</em></div></div>
+    <div id="acc"><svg viewBox="0 0 1180 700"><g fill="none" stroke="#2AABEE" stroke-width="4" stroke-dasharray="10 10" stroke-linecap="round">
+        <path id="ln0" d="M590 300 L180 120"/><path id="ln1" d="M590 300 L1000 120"/><path id="ln2" d="M590 420 L590 560"/></g></svg>
+      <div class="old">Раньше: бот — у одного компьютера. <s>Второй не отвечал</s></div>
+      <div class="me"><i>👤</i><b>Ваш аккаунт</b><span>✈️ Бот в Telegram</span></div>
+      <div class="dv" style="left:60px;top:60px"><i>💻</i>Ноутбук<small>знает бота</small></div>
+      <div class="dv" style="left:890px;top:60px"><i>🖥</i>Рабочий<small>знает бота</small></div>
+      <div class="dv" style="left:475px;top:540px"><i>📱</i>Телефон<small>узнал сам</small></div></div>
+    <div class="card" id="wh"><small>КТО ОТВЕЧАЕТ В TELEGRAM</small>
+      <div class="row" id="w0"><i>💻</i>Ноутбук · говорили 5 минут назад<em class="ok" id="w0e">в запасе</em></div>
+      <div class="row" id="w1"><i>🖥</i>Рабочий компьютер · вчера<em>в запасе</em></div>
+      <div class="row" id="w2"><i>📱</i>Телефон<em>в запасе</em></div>
+      <div class="line" id="wl">Отвечает: <b>Ноутбук (этот компьютер)</b> · запасные: Рабочий, Телефон</div></div>
+    <div class="say" id="q1">«Лира, напомни завтра позвонить маме»</div>
+    <div id="one">✉️ Одно сообщение <em>→</em> один ответ <em>· без дублей</em></div>
+    <div id="steps">
+      <div class="stp" id="st0"><small>Компьютер включён</small><div class="ic"><span>💻</span><span class="off">🖥</span></div><b>Отвечает ноутбук</b><p>С ним вы говорили последним</p></div>
+      <div class="stp" id="st1"><small>Компьютеры выключены</small><div class="ic"><span class="off">💻</span><span>📱</span></div><b>Отвечает телефон</b><p>«Отвечать с телефона» включено само</p></div>
+      <div class="stp" id="st2"><small>Никого на связи</small><div class="ic"><span class="off">📱</span><span>☁️</span></div><b>Отвечает сервер Dewiar</b><p>«Компьютер и телефон сейчас не на связи — отвечаю сам»</p></div></div>
+    <div class="card" id="studio"><div class="hd"><i>✈️</i><div><h3>Telegram</h3><small>Студия → «Подключение» → «Telegram — ассистент в телефоне»</small></div></div>
+      <div class="who">Отвечает: Ноутбук (этот компьютер) · запасные: Рабочий, Телефон</div>
+      <div class="row"><i>🌙</i>Отвечать, когда компьютер выключен<span class="tgl on"><i></i></span></div>
+      <div class="row"><i>🎙</i>На голосовые — отвечать и голосом<span class="tgl on"><i></i></span></div></div>
+  </div>
+  <div class="layer" id="L-phone"><div class="phone"><div class="scr tgc">
+    <div class="tgh"><img src="../../../../data/avatars/lira.webp" alt=""><div><b>Лира</b><small id="tgs">в сети</small></div></div>
+    <div class="tgm"><div class="bub me" id="m1">Что у меня завтра?</div><div class="typing" id="ty"><i></i><i></i><i></i></div>
+      <div class="bub" id="m2">Завтра:<br>🦷 10:00 — стоматолог<br>📞 15:00 — созвон с Анной<small>ответил телефон · ноутбук выключен</small></div></div></div></div></div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  account: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  who: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  reserve: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  const p0 = s("problem").start, tr = at("s2b") - 0.2;
+  layer("L-phone", T, p0 + 0.3, s("account").start);
+  vis($("#m1"), out((T - at("s2a") - 1.8) / 0.35), 14);
+  vis($("#ty"), T > at("s2a") + 2.4 && T < tr ? 1 : 0, 6);
+  [...$("#ty").children].forEach((c, i) => { c.style.transform = `translateY(${Math.sin(T * 9 - i) * 3}px)`; });
+  vis($("#m2"), out((T - tr) / 0.4), 14);
+  $("#tgs").textContent = T > at("s2a") + 2.4 && T < tr ? "печатает…" : "в сети";
+  scene($("#devs"), T, p0 + 0.4, s("account").start, 24);
+  [...$("#devs").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - p0 - 0.8 - i * 0.35) / 0.4), 12));
+  $("#dph").classList.toggle("act", T > tr); $("#dphe").textContent = T > tr ? "ответил ✓" : "на связи";
+  scene($("#acc"), T, s("account").start + 0.2, s("who").start);
+  const a0 = s("account").start;
+  vis($("#acc .old"), Math.min(out((T - a0 - 0.4) / 0.4), 1 - out((T - a0 - 3.2) / 0.4)), 10);
+  vis($("#acc .me"), out((T - a0 - 1.0) / 0.5), 16, .9);
+  [...$("#acc").querySelectorAll(".dv")].forEach((c, i) => vis(c, out((T - a0 - 2.4 - i * 0.6) / 0.45), 16, .92));
+  [0, 1, 2].forEach(i => { const l = $("#ln" + i), k = out((T - a0 - 2.2 - i * 0.6) / 0.5); l.style.opacity = k; l.setAttribute("stroke-dashoffset", (-T * 30).toFixed(1)); });
+  scene($("#wh"), T, s("who").start + 0.2, s("reserve").start);
+  const w0 = s("who").start, act = T > w0 + 2.0;
+  $("#w0").classList.toggle("act", act); $("#w0e").textContent = act ? "отвечает" : "в запасе";
+  vis($("#wl"), out((T - w0 - 3.4) / 0.5), 10);
+  scene($("#q1"), T, w0 + 0.6, w0 + 2.6, 16);
+  scene($("#one"), T, s("reserve").start + 0.2, s("how").start, 16);
+  scene($("#steps"), T, s("reserve").start + 0.2, s("how").start);
+  const r1 = at("s5b");
+  [0, 1, 2].forEach(i => { const t0 = [s("reserve").start + 0.4, r1 + 0.2, r1 + 3.0][i]; const c = $("#st" + i);
+    vis(c, out((T - t0) / 0.45), 16, .95); c.classList.toggle("on", T > t0 + 0.3 && (i === 2 || T < [r1 + 0.2, r1 + 3.0][i])); });
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  [...$("#studio").querySelectorAll(".who, .row")].forEach((c, i) => vis(c, out((T - s("how").start - 0.6 - i * 0.4) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

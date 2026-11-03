@@ -220,14 +220,17 @@
   const ctl = {};
   function http(id, method, url, headers, body, stream, timeout) {
     const ac = new AbortController(); ctl[id] = ac;
-    const tm = timeout ? setTimeout(() => ac.abort("timeout"), +timeout) : 0;
+    // как setReadTimeout в Net.java: предел — на молчание, а не на весь ответ (длинная программа make_app идёт минутами)
+    let tm = 0;
+    const arm = () => { clearTimeout(tm); tm = timeout ? setTimeout(() => ac.abort("timeout"), +timeout) : 0; };
+    arm();
     const fin = () => { clearTimeout(tm); delete ctl[id]; };
     let h = {}; try { h = JSON.parse(headers || "{}"); } catch (e) { }
     delete h["User-Agent"];                                   // подпись браузера не меняется — и лишний предзапрос не нужен
     fetch(url, { method, headers: h, body: body || undefined, signal: ac.signal }).then(async r => {
       if (stream && r.ok && r.body) {
         const rd = r.body.getReader(), dec = new TextDecoder();
-        for (;;) { const { value, done } = await rd.read(); if (done) break; ev({ type: "http_chunk", id, text: dec.decode(value, { stream: true }) }); }
+        for (;;) { const { value, done } = await rd.read(); if (done) break; arm(); ev({ type: "http_chunk", id, text: dec.decode(value, { stream: true }) }); }
         fin(); ev({ type: "http_done", id, status: r.status, body: "" });
       } else { const t = await r.text(); fin(); ev({ type: "http_done", id, status: r.status, body: t, url: r.url }); }
     }).catch(e => {

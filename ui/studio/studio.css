@@ -350,6 +350,30 @@ section.wide > .lead { max-width: 860px; }
 .cc-f { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .cc-act { display: flex; gap: 6px; flex-wrap: wrap; }
 .cc-pay { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.05); }
+/* «Оплатить картой» (ЮMoney, автозачисление): суммы плитками, своя сумма, перевод открывается в браузере */
+.ym { margin: 0 0 14px; padding: 0 0 14px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08)); }
+.ym-h { display: flex; flex-direction: column; gap: 2px; } .ym-h b { font-size: 15px; } .ym-h span { font-size: 12.5px; color: var(--muted); }
+.ym-sums { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin: 10px 0 8px; }
+.ym-sums button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(139,140,247,.28);
+  background: rgba(139,140,247,.09); color: var(--ink); font: inherit; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
+.ym-sums button:hover { background: rgba(139,140,247,.18); border-color: var(--accent); transform: translateY(-1px); }
+.ym-sums button b { font-size: 16px; } .ym-sums button small { font-size: 12px; color: var(--muted); }
+.ym-own { display: flex; gap: 8px; max-width: 440px; } .ym-own input { flex: 1; min-width: 0; }
+.ym-n { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); } .ym-n.ok { color: var(--good); } .ym-n.bad { color: var(--bad); }
+/* «Криптой» (TON / USDT): вид, QR для телефона с кошельком, адрес и комментарий с «Скопировать», крупное предупреждение */
+.cx-seg { display: flex; gap: 6px; margin: 10px 0 0; max-width: 260px; } .cx-seg:empty { display: none; }
+.cx-seg button { flex: 1; padding: 7px 12px; border-radius: 12px; border: 1px solid rgba(139,140,247,.28); background: transparent; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.cx-seg button.on { background: rgba(139,140,247,.2); border-color: var(--accent); }
+.cx-body { display: flex; gap: 16px; align-items: flex-start; margin: 12px 0 0; flex-wrap: wrap; }
+.cx-qr { flex: none; width: 150px; } .cx-qr:empty { display: none; } .cx-qr svg { display: block; width: 150px; height: 150px; border-radius: 14px; background: #fff; }
+.cx-info { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 10px; }
+.cx-f { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; }
+.cx-f span { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.cx-f code { font-size: 13px; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 10px; background: var(--panel2, rgba(255,255,255,.08)); -webkit-user-select: all; user-select: all; cursor: text; }
+.cx-f code.cx-code { font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+.cx-warn { display: flex; flex-direction: column; gap: 3px; padding: 11px 13px; border-radius: 14px; background: rgba(255,170,60,.14); border: 1px solid rgba(240,150,40,.55); border-left-width: 4px; color: var(--ink); }
+.cx-warn b { font-size: 15px; line-height: 1.35; } .cx-warn span { font-size: 12.5px; }
+.cx-rate { margin: 0; font-size: 12.5px; color: var(--muted); }
 /* pywebview запрещает выделение на всей странице (body) — текст, который копируют, выделяется */
 #cc-topup, .cl-m .tx, .dw-path, .seltext { -webkit-user-select: text; user-select: text; cursor: text; }
 #cc-topup a { color: var(--accent); cursor: pointer; overflow-wrap: anywhere; }
@@ -760,6 +784,9 @@ html.framed .drawer { top: 38px; }               /* боковые панели 
 .calgrid .ev { font-size: 11.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); display: flex; gap: 4px; align-items: center; }
 .calgrid .ev i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .calgrid .ev.done { opacity: .55; }
+.calgrid .ev.closed span, .cit.closed .t span { text-decoration: line-through; }       /* выполненное дело (идея №41) */
+.caldone { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); cursor: pointer; user-select: none; }
+.caldone input { margin: 0; accent-color: #3fd497; }
 .calgrid .more { font-size: 11px; color: var(--dim); }
 .calside { background: var(--frost); border-radius: 18px; padding: 14px 16px; min-height: 200px; position: relative; }
 /* левый край столбца тянется мышью (bindGrip); двойной щелчок — прежняя ширина */
@@ -1169,6 +1196,24 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .ritem.dn .dok { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(75,227,161,.14); color: #3fd497; }
 .ritem.dn .dok svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 720px) { .dbanner { grid-template-columns: auto 1fr; } .dweek { display: none; } }
+/* «Дела и напоминания» → вкладки (идея №41): «Все · Дела · Напоминания»; дело — кружок «сделано», сделанное зачёркнуто */
+.rtabs { margin: 2px 0 10px; }
+.rtabs button b { margin-left: 6px; font-weight: 600; font-size: 11.5px; opacity: .8; }
+.rtabs button b:empty { display: none; }
+.rt-hint { margin: -2px 0 14px; }
+.ritem.td { gap: 12px; }
+.ritem .tchk { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(127,127,127,.55); background: transparent; color: #fff;
+  display: grid; place-items: center; cursor: pointer; padding: 0; transition: background .18s, border-color .18s, transform .18s; }
+.ritem .tchk svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transform: scale(.6); transition: opacity .18s, transform .18s; }
+.ritem .tchk:hover { border-color: #3fd497; }
+.ritem .tchk:hover svg { opacity: .45; transform: none; color: #3fd497; }
+.ritem .tchk[aria-checked="true"] { background: #3fd497; border-color: #3fd497; }
+.ritem .tchk[aria-checked="true"] svg { opacity: 1; transform: none; color: #fff; }
+.ritem .tchk:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ritem.td.ok .rtext { text-decoration: line-through; text-decoration-thickness: 1.5px; color: var(--muted); }
+.ritem.td.ok { background: transparent; box-shadow: none; }
+.ritem.td .rmeta .tst { color: #3fd497; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .ritem .tchk, .ritem .tchk svg { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .dbanner.cheer { animation: none; } }
 
 /* «Близкие»: эмодзи и реакции (close.js → clRePick) */

@@ -100,7 +100,10 @@ def _cred(grant):
 
 EXAM_PKGS = ["httpx", "websockets", "numpy", "Pillow"]
 EXAM_PROBE = "import httpx, websockets, numpy, PIL"
-EXAM_BEAT = float(os.environ.get("DEWIAR_EXAM_BEAT") or 30)
+# весточка «жив» раз в EXAM_BEAT с: в ответ кабинет говорит «остановить» — так отмена доходит за ~10 с, даже когда сценарий
+# ждёт модель или судью минутами (04.11: «Остановить» висело, пока сценарий не кончится)
+EXAM_BEAT = float(os.environ.get("DEWIAR_EXAM_BEAT") or 10)
+EXAM_CANCELLED = 3                                   # exam.py вышел сам: доступ к модели отозван (экзамен остановлен)
 
 
 class ExamJob(threading.Thread):
@@ -116,19 +119,40 @@ class ExamJob(threading.Thread):
     def post(self, state, **kw):
         try:
             r = httpx.post(URL, params={"p": "/runner/exam"}, json={"id": self.job["id"], "state": state, **self.where, **kw},
-                           headers={"X-Runner-Key": KEY}, timeout=120)
+                           headers={"X-Runner-Key": KEY}, timeout=120 if state == "done" else 20)
             d = r.json() if r.status_code < 400 else {}
             if r.status_code >= 400:
                 log.warning("экзамен: кабинет ответил %s", r.status_code)
         except (httpx.HTTPError, ValueError) as e:
             log.info("экзамен: кабинет: %s", e)
             return {}
-        if d.get("cancel") and not self.cancel:
+        if d.get("cancel"):
+            if not self.cancel:
+                log.info("экзамен %s: остановлен из кабинета", self.job["id"])
             self.cancel = True
-            log.info("экзамен %s: остановлен из кабинета", self.job["id"])
-            if self.proc and self.proc.poll() is None:
-                self.proc.terminate()
+            self.kill()                              # каждый раз: отмена могла прийти, пока процесса ещё не было
         return d
+
+    def kill(self):
+        """Остановить экзамен со всем, что он запустил (ядро, задачи): вся группа процессов — сначала по-хорошему, через 5 с — сразу."""
+        import signal
+        p = self.proc
+        if not p or p.poll() is not None:
+            return
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, AttributeError):
+            p.terminate()
+
+        def hard():
+            try:
+                p.wait(5)
+            except Exception:  # noqa: BLE001
+                try:
+                    os.killpg(p.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, AttributeError):
+                    p.kill()
+        threading.Thread(target=hard, daemon=True, name="exam-kill").start()
 
     def python(self):
         """Окружение экзамена — своё, в папке исполнителя (служба не может менять /opt); ставится один раз."""
@@ -151,7 +175,7 @@ class ExamJob(threading.Thread):
 
     def _beat(self):
         while not self.done.wait(EXAM_BEAT):
-            self.post("running")
+            self.post("stopping" if self.cancel else "running")
 
     def run(self):
         try:
@@ -173,10 +197,19 @@ class ExamJob(threading.Thread):
         if self.cancel:
             self.post("cancelled")
             return
-        out = self.home / "out"
-        shutil.rmtree(out, ignore_errors=True)
-        out.mkdir(parents=True)
+        # своя папка у каждого прогона: перезапустился исполнитель посреди прогона (кабинет отдал его снова, resume) —
+        # partial.json с пройденными сценариями цел, и экзамен продолжается с того места, а не с первого сценария
+        out = self.home / "out" / re.sub(r"[^\w-]", "_", str(j["id"]))
+        part = out / "partial.json"
+        resume = bool(j.get("resume")) and part.exists()
+        for old in (self.home / "out").glob("*") if (self.home / "out").is_dir() else []:
+            if old != out:
+                shutil.rmtree(old, ignore_errors=True) if old.is_dir() else old.unlink(missing_ok=True)
+        if not resume:
+            shutil.rmtree(out, ignore_errors=True)
+        out.mkdir(parents=True, exist_ok=True)
         rep_f = out / "report.json"
+        rep_f.unlink(missing_ok=True)
         prof = {"name": "Dewiar Облако", "kind": "openai", "base_url": f"{URL}?p=", "api_key": _cred(j["grant"]),
                 "model": j.get("model") or MODEL, "cloud": True, "title": j.get("title") or j.get("model") or MODEL}
         env = {k: v for k, v in os.environ.items() if k not in ("DEWIAR_RUNNER_KEY",)}
@@ -188,8 +221,16 @@ class ExamJob(threading.Thread):
             args.append("--lean")
         if j.get("only"):
             args += ["--only", ",".join(j["only"])]
-        self.post("running", note="Экзамен идёт")
-        self.proc = subprocess.Popen(args, cwd=str(self.home), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        args += ["--partial", str(part)] + (["--resume"] if resume else [])
+        self.post("running", note="Продолжаю экзамен с места, где исполнитель перезапустился" if resume else "Экзамен идёт")
+        if self.cancel:                              # остановили, пока готовились, — не начинаем
+            self.post("cancelled")
+            return
+        # своя группа процессов: при отмене гасится всё — и exam.py, и ядро, и то, что ядро запустило
+        self.proc = subprocess.Popen(args, cwd=str(self.home), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                     start_new_session=True)
+        if self.cancel:
+            self.kill()
         threading.Thread(target=self._beat, daemon=True, name="exam-beat").start()
         tail = []
         for line in self.proc.stdout:
@@ -201,8 +242,11 @@ class ExamJob(threading.Thread):
                 self.post("running")
         code = self.proc.wait()
         self.done.set()
+        if code == EXAM_CANCELLED and not self.cancel:   # exam.py сам увидел 403: доступ к модели отозван — остановлен
+            self.cancel = True
+            log.info("экзамен %s: доступ к модели отозван — остановлен", j["id"])
         if self.cancel:
-            self.post("cancelled")
+            self.post("cancelled", note="Остановлен")
             return
         if code or not rep_f.exists():
             self.post("failed", note="\n".join(tail)[-1500:])

@@ -11,7 +11,7 @@
    Группы и разделы берутся из самого меню (settings.html): новый раздел появится здесь сам. Меню прячет по классу .nh
    (а не атрибуту hidden — им управляют «Возможности» и «Главная»). */
 const SH_LOCK = new Set(["home", "personas", "brain", "ears", "voice", "look", "sound", "hands", "skills", "features", "about"]);
-const SH_SKIP = new Set(["home", "plg", "art"]);          // «Главная» — всегда; «Плагин» и «Рисунки» показывает сам плагин
+const SH_SKIP = new Set(["home", "plg", "plgnew", "art"]);          // «Главная» — всегда; «Плагин» и «Рисунки» показывает сам плагин
 const SH_APP = {};                                          // раздел → значок «Главной»
 Object.entries(HM_NAV).forEach(([a, ps]) => ps.forEach(p => { SH_APP[p] = a; }));
 /* готовые наборы — что скрыть (остальное показать) */
@@ -49,7 +49,7 @@ function shFeat(p) {
 function shNav() {
   const nh = shNavHide();
   $$("nav button[data-p]").forEach(b => b.classList.toggle("nh", nh.has(b.dataset.p) && !SH_LOCK.has(b.dataset.p)));
-  ["#nav-plg-h", "#nav-plugins"].forEach(s => { const e = $(s); if (e) e.classList.toggle("nh", nh.has("plugins")); });
+  ["#nav-plg-h", "#nav-plugins", "#nav-plg-new"].forEach(s => { const e = $(s); if (e) e.classList.toggle("nh", nh.has("plugins")); });
 }
 window.shNav = shNav;
 

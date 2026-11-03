@@ -11,11 +11,37 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 DATE_ASK_RX = re.compile(r"дн(я|ей|и|ём)\b|недел|понедельник|вторник|сред[уыа]|четверг|пятниц|суббот|воскресен|завтра|послезавтра|"
                          r"числ[оа]|дат[аыуе]|когда|сколько.{0,20}(дн|недел|месяц|осталось)|через\s+\d|рождени|праздник|"
                          r"январ|феврал|март|апрел|ма[йя]\b|июн|июл|август|сентябр|октябр|ноябр|декабр|\d{1,2}[./]\d{1,2}", re.I)
+# №510 (03.11): «с 1 по 14 января» в ноябре 2026 — Лира искала и писала «января 2026 года», а это уже прошло. Месяц без
+# года — ближайший будущий; к вопросу — какой это год, чтобы и в поиске, и в ответе был верный.
+_MONTH_RX = [(i + 1, re.compile(rx, re.I)) for i, rx in enumerate((
+    r"январ", r"феврал", r"(?<![а-яё])март", r"апрел", r"(?<![а-яё])ма[йяе](?![а-яё])", r"(?<![а-яё])июн",
+    r"(?<![а-яё])июл", r"август", r"сентябр", r"октябр", r"ноябр", r"декабр"))]
+
+
+_MONTH_NOM = ("январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь")
+
+
+def month_years(text, now):
+    """Месяцы в вопросе без года -> «Даты без года — ближайшие будущие: январь — 2027 года.» или ""."""
+    t = text or ""
+    if re.search(r"(?<!\d)(?:19|20)\d\d(?!\d)", t):
+        return ""                                       # год назван — как сказано
+    got = []
+    for m, rx in _MONTH_RX:
+        if rx.search(t):
+            y = now.year + 1 if m < now.month else now.year
+            got.append(f"{_MONTH_NOM[m - 1]} — {y} года")
+    if not got:
+        return ""
+    return ("Даты без года — ближайшие будущие (прошедшие в этом году — уже следующий год): " + ", ".join(got) +
+            ". Этот год пиши и в запросах поиска, и в ответе.")
+
+
 # №390: вопрос про фоновые задачи («задача работает?», «почему не запущена», «что с заданием») — к нему их настоящее состояние
 TASK_ASK_RX = re.compile(r"задач|задани|фонов|застрял|выполня(?:ется|ешь|ет)|запущ|работает ли|что с (?:ней|ним)", re.I)
 INFO_TOOLS = {"web_search", "weather", "read_webpage", "find_notes", "read_file", "calc", "list_reminders", "calendar_list", "money_report",
               "read_emails", "read_email", "search_documents", "ask_knowledge", "system_status", "task_status", "look_at_screen",
-              "look_through_camera", "app_update"}
+              "look_through_camera", "app_update", "ocr"}
 
 JOB_ASK_RX = re.compile(r"Поручение пользователя: «(.+?)»\. Выполни", re.S)
 
@@ -718,6 +744,9 @@ class AnswerMixin:
             week = "; ".join(f"{WEEKDAYS[(now + timedelta(days=i)).weekday()]} — {(now + timedelta(days=i)).day} {MONTHS[(now + timedelta(days=i)).month - 1]}"
                              for i in range(1, 8))
             out += (f" Ближайшие дни: {week}. Сколько дней до даты и какая дата ближе — считай calc days_until, не в уме.")
+            my = month_years(text, now)
+            if my:
+                out += " " + my
         try:
             note = self.conv.turn_note()
         except Exception:  # noqa: BLE001
@@ -750,11 +779,24 @@ class AnswerMixin:
             log.info("подсказка плагина: %s", e)
             return ""
 
+    def _plugin_acts(self, text):
+        """№507: (название плагина, [имена его действий]) — плагин, к которому этот вопрос, с подключёнными действиями."""
+        pl, m = getattr(self, "plugins", None), getattr(self, "mcp", None)
+        if pl is None or m is None or not text:
+            return "", []
+        try:
+            p = pl.match(text.split("\n\nВложения:")[0])
+            return (p["name"], [n for n, _ in (m.plugin_tools().get(p["id"]) or [])]) if p else ("", [])
+        except Exception:  # noqa: BLE001
+            return "", []
+
     def _plugin_keep(self, text):
         """Имена действий плагина, к которому эта просьба (+ use_skill) — их не выбрасываем, даже когда окно модели мало.
         Просьба о сайте — то же для действий «Сайтов»."""
-        from quality import SITE_ASK, SITE_EDIT_ASK, SITE_TOOLS
+        from quality import PLUGIN_ASK, PLUGIN_EDIT_ASK, PLUGIN_TOOLS, SITE_ASK, SITE_EDIT_ASK, SITE_TOOLS
         ask0 = (text or "").split("\n\nВложения:")[0]
+        if ask0 and (PLUGIN_ASK.search(ask0) or PLUGIN_EDIT_ASK.search(ask0)):
+            return set(PLUGIN_TOOLS)                        # «сделай плагин…» (Creator) — до плагинов по словам («нарисуй»)
         if ask0 and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)):
             return set(SITE_TOOLS)
         pl, m = getattr(self, "plugins", None), getattr(self, "mcp", None)
@@ -1430,13 +1472,27 @@ class AnswerMixin:
                 except Exception:  # noqa: BLE001
                     pass
             saved.append({"kind": "file", "name": dst.name, "path": rel, "size": len(data)})
+            info = {}
             try:
-                body = extract(dst) if dst.suffix.lower() in (".md", ".txt", ".csv", ".html", ".htm", ".pdf", ".docx", ".odt") \
+                # скан PDF (идея №68) — страницы без текста распознаёт локальный движок, если он есть (ocr.py)
+                body = extract(dst, ocr="local", info=info) if dst.suffix.lower() in (".md", ".txt", ".csv", ".html", ".htm", ".pdf", ".docx", ".odt") \
                     else (data.decode("utf-8") if len(data) < 400_000 else "")
             except Exception as e:  # noqa: BLE001
                 body = ""
                 log.info("Вложение %s: текст не извлечён (%s)", name, e)
             body = (body or "").strip()
+            if not body and info.get("scan"):
+                # распознать нечем — первые страницы картинками: модель со зрением прочитает их сама (без зрения —
+                # _drop_images оставит пометку, и модель честно скажет, что ей нужно), а не «текста в нём нет»
+                pics = self._scan_pages(dst)
+                if pics:
+                    images.extend(pics)
+                    parts.append(f"[Скан «{name}» без текстового слоя, сохранён: {rel} — первые {len(pics)} стр. приложены "
+                                 "картинками ниже: прочитай текст с них]")
+                    log.info("📎 %s → %s (скан, %d стр. картинками)", name, rel, len(pics))
+                    continue
+            if body and info.get("ocr_pages"):
+                body = f"(скан: текст распознан, возможны опечатки)\n{body}"
             if body:
                 cut = body[:max(2000, budget)]
                 budget -= len(cut)
@@ -1448,6 +1504,22 @@ class AnswerMixin:
         self._chat_att = (time.monotonic(), saved)
         q = text.strip() or ATT_DEFAULT_Q
         return q + "\n\nВложения:\n" + "\n\n".join(parts)
+
+    @staticmethod
+    def _scan_pages(path, n=3):
+        """Первые n страниц скана PDF -> [JPEG base64] для модели со зрением."""
+        try:
+            import ocr
+            out = []
+            for i in range(n):
+                im = ocr.page_image(path, i)
+                if im is None:
+                    break
+                out.append(ocr.jpeg_b64(im))
+            return out
+        except Exception as e:  # noqa: BLE001
+            log.info("Скан %s картинками: %s", path, e)
+            return []
 
     def _thanks(self, text):
         """«Спасибо» — коротко ответить и уснуть до имени (без окна «можно без имени» и без модели)."""
@@ -1742,9 +1814,11 @@ class AnswerMixin:
                 cr = self.care_context(text, turn)         # «Заботливая память»: прошло важное — спросить, как прошло
                 if cr:
                     ctx.append(cr)
-                from quality import DIAGRAM_ASK, PAGE_ASK, SITE_ASK, SITE_EDIT_ASK, SITE_NOTE
+                from quality import DIAGRAM_ASK, PAGE_ASK, PLUGIN_ASK, PLUGIN_EDIT_ASK, PLUGIN_NOTE, SITE_ASK, SITE_EDIT_ASK, SITE_NOTE
                 ask0 = text.split("\n\nВложения:")[0]
-                if specs and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)) and any(x.get("name") == "site_create" for x in specs):
+                if specs and (PLUGIN_ASK.search(ask0) or PLUGIN_EDIT_ASK.search(ask0)) and any(x.get("name") == "plugin_create" for x in specs):
+                    system += PLUGIN_NOTE                     # Creator (03.11): плагин — инструментом, а не HTML в чате
+                elif specs and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)) and any(x.get("name") == "site_create" for x in specs):
                     system += SITE_NOTE                       # «Сайты» (03.11): сайт — инструментами, а не HTML в чате
                 elif PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
                     system += ("\n\nСЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "
@@ -1776,6 +1850,7 @@ class AnswerMixin:
                                                 "этом компьютере не успевает с ними. Если просят действие — честно скажи "
                                                 "это одной фразой.")
             turn.plugin_hint = self._plugin_hint(text) if specs else ""
+            turn.plugin_acts = self._plugin_acts(text) if turn.plugin_hint else ("", [])
             if turn.plugin_hint:                       # №461/463/483: просьба к плагину — сразу его навык и действия
                 log.info("🧩 %s", turn.plugin_hint.split(":")[0].split(" — ")[0])
                 ctx.append(turn.plugin_hint)
@@ -1843,6 +1918,8 @@ class AnswerMixin:
             saved_checked = False                            # «записала» без единого действия — попросили записать (раз за ход)
             remind_asked = False                             # пообещала напомнить без set_reminder — попросили поставить (раз за ход)
             repeat_checked = False                           # ответ слово в слово как недавний — попросили ответить по существу (раз за ход)
+            place_checked = False                            # №510: в запросе поиска нет места из вопроса — попросили искать заново (раз за ход)
+            plug_checked = False                             # №507: ответила фактами по памяти, не вызвав подходящий плагин (раз за ход)
             prev_said = {_norm_answer(m.get("content")) for m in self.history[-8:] if m.get("role") == "assistant" and m.get("content")}
             for step in range(6):                       # модель → действия → результаты → модель…
                 calls, step_text = [], ""
@@ -2031,6 +2108,20 @@ class AnswerMixin:
                             turn.full += " "
                         self.set_state("thinking")
                         continue
+                if not calls and not turn.cancel.is_set() and step < 6 and specs and not plug_checked:
+                    from quality import plugin_skipped
+                    pn, pa = getattr(turn, "plugin_acts", None) or ("", [])
+                    fix = plugin_skipped(step_text, called, pa, pn, getattr(turn, "plugin_hint", ""))
+                    if fix:                                  # №507: «полнолуние 5 ноября» по памяти, а плагин «Луна» есть
+                        plug_checked = True
+                        log.info("✋ Ответила по памяти, не вызвав плагин «%s», — прошу вызвать", pn)
+                        msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
+                        if step_text and turn.full.endswith(step_text):     # неверный ответ по памяти в итог не идёт
+                            turn.full = turn.full[:-len(step_text)]
+                        if turn.full.strip() and not turn.full.endswith(" "):
+                            turn.full += " "
+                        self.set_state("thinking")
+                        continue
                 if not calls and not called and not turn.cancel.is_set() and step < 6 and not repeat_checked \
                         and 0 < len(turn.full.strip()) < 160 and _norm_answer(turn.full) in prev_said:
                     # отзыв 17.10 (съёмка): на «расскажи о себе», «подробнее», «что ты умеешь» Лира раз за разом отвечала
@@ -2076,6 +2167,14 @@ class AnswerMixin:
                     break
                 results = []
                 for c in calls:
+                    if c.get("name") == "web_search" and not place_checked:
+                        from quality import search_place_fix
+                        fix = search_place_fix(text.split("\n\nВложения:")[0], (c.get("args") or {}).get("query"))
+                        if fix:                              # №510: спросили про Прагу — искала «Протвин гостиница»
+                            place_checked = True
+                            log.info("✋ В запросе поиска нет места из вопроса — прошу искать заново")
+                            results.append(fix)
+                            continue
                     key = json.dumps([c.get("name"), c.get("args")], ensure_ascii=False, sort_keys=True)
                     if key in seen_calls:
                         log.info("↺ %s с теми же параметрами уже был в этом ходе — не повторяю", c.get("name"))

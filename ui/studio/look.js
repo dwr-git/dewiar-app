@@ -34,7 +34,11 @@ function loadLook() {
     e.set({ state: "speaking", level: 0.45 });
     lookEnts.push(e);
   });
-  $$("#lk-skins .lk").forEach(b => b.onclick = () => save({ ui: { skin: b.dataset.skin } }).then(() => { if (window.studioSkin) studioSkin(b.dataset.skin); loadLook(); }));
+  $$("#lk-skins .lk").forEach(b => b.onclick = () => save({ ui: { skin: b.dataset.skin } }).then(async () => {
+    if (window.studioSkin) studioSkin(b.dataset.skin);
+    if ((S.ui || {}).plugin_theme) { await lookPtReset(true); toast("Тема из плагина снята — теперь выбранный фон"); }   // выбрали фон — он и виден
+    loadLook(); }));
+  lookPt();
   $$("#lk-fx .lk").forEach(b => b.onclick = () => save({ ui: { voice_fx: b.dataset.fx } }).then(loadLook));
 }
 
@@ -73,3 +77,25 @@ if (window.DewiarZoom && $("#zm")) {
   DewiarZoom.keys(() => DewiarZoom.get().zoom, z => { zoomSync(); zoomSave({ zoom: z }, "Масштаб " + DewiarZoom.pct(z) + " · Ctrl 0 — обычный"); });
   window.zoomSync = zoomSync;
 }
+
+/* Тема из плагина (Creator, 03.11: плагин «Тема оформления» и другие с dewiar.theme): какая сейчас и «Сбросить тему» —
+   всегда здесь, даже если плагин уже удалили. */
+function lookPt() {
+  const box = $("#lk-pt"); if (!box) return;
+  const t = ((S && S.ui) || {}).plugin_theme;
+  box.hidden = !t;
+  if (!t) { box.innerHTML = ""; return; }
+  const sw = Object.entries(t.vars || {}).filter(([k]) => /^--(accent|ink|panel2?|field|good|bad)$/.test(k)).slice(0, 6)
+    .map(([, v]) => `<i style="background:${String(v).replace(/[<>"]/g, "")}"></i>`).join("");
+  box.innerHTML = `<span class="lk-pt-sw" aria-hidden="true">${sw}</span><div><b>Сейчас — тема из плагина «${String(t.name || "").replace(/[&<>"]/g, "")}»</b><span>Цвета студии подобраны плагином. Вернуть выбранный ниже фон — «Сбросить тему».</span></div>
+    <button class="btn" id="lk-pt-reset">Сбросить тему</button>`;
+  $("#lk-pt-reset").onclick = () => lookPtReset();
+}
+async function lookPtReset(quiet) {
+  try { await core.call("plugin_theme", { reset: true }); } catch (e) { if (!quiet) toast(e.message); }
+  if (S && S.ui) S.ui.plugin_theme = null;
+  if (window.studioPluginTheme) studioPluginTheme(null);
+  lookPt();
+  if (!quiet) toast("Тема сброшена");
+}
+window.lookPt = lookPt;

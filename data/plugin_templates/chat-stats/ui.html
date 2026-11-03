@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --you: var(--accent); --lira: color-mix(in oklab, var(--accent) 38%, transparent); --r: 18px; }
+  body { padding: 0 0 28px; }
+  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 2px 2px 18px; }
+  .top h1 { font-size: 26px; letter-spacing: -.01em; margin: 0 0 4px; }
+  .top p { margin: 0; color: var(--muted); font-size: 14px; max-width: 62ch; }
+  .seg { display: inline-flex; padding: 4px; border-radius: 14px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+  .seg button { border: 0; background: none; padding: 7px 14px; border-radius: 10px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; }
+  .seg button[aria-pressed="true"] { background: var(--panel2); color: var(--ink); box-shadow: 0 4px 14px -8px rgba(0,0,0,.6); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .kpi { border-radius: var(--r); padding: 16px 18px 15px; background: var(--panel); position: relative; overflow: hidden; }
+  .kpi small { display: block; color: var(--muted); font-size: 12.5px; font-weight: 600; letter-spacing: .02em; }
+  .kpi b { display: block; font-size: 34px; line-height: 1.1; font-weight: 750; letter-spacing: -.02em; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .kpi span { color: var(--dim); font-size: 12.5px; }
+  .kpi.hero { background: linear-gradient(150deg, color-mix(in oklab, var(--accent) 30%, transparent), color-mix(in oklab, var(--accent) 8%, transparent)), var(--panel); }
+  .kpi .ico { position: absolute; right: 14px; top: 12px; font-size: 18px; opacity: .9; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+  .card { border-radius: var(--r); padding: 18px 20px; }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card .sub { color: var(--dim); font-size: 12.5px; margin: 0 0 14px; }
+  .wide { grid-column: 1 / -1; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: -4px 0 10px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .axis text { fill: var(--dim); font-size: 11px; }
+  .axis line { stroke: var(--line); }
+  .hit { fill: transparent; cursor: default; }
+  .tip { position: absolute; pointer-events: none; z-index: 2; background: var(--panel2); color: var(--ink); border-radius: 12px; padding: 8px 11px; font-size: 12.5px;
+    box-shadow: 0 12px 30px -12px rgba(0,0,0,.7), inset 0 0 0 1px var(--line); white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); opacity: 0; transition: opacity .12s; }
+  .tip.on { opacity: 1; }
+  .tip b { display: block; margin-bottom: 3px; }
+  .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  .hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; align-items: end; height: 84px; padding-bottom: 2px; border-bottom: 1px solid var(--line); }
+  .hours div { height: calc(4% + var(--v) * 96%); border-radius: 4px 4px 1px 1px; background: color-mix(in oklab, var(--accent) calc(25% + var(--v) * 75%), var(--field)); }
+  .hours div.best { background: var(--accent); }
+  .hours div:hover { box-shadow: 0 0 0 2px var(--ink); }
+  .hl { display: grid; grid-template-columns: repeat(4, 1fr); color: var(--dim); font-size: 11px; margin-top: 6px; }
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 96px; margin-top: 8px; }
+  .card h3 { font-size: 13px; color: var(--muted); margin: 20px 0 0; font-weight: 600; }
+  .week div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; }
+  .week span { width: 100%; max-width: 30px; border-radius: 6px 6px 2px 2px; background: var(--accent); min-height: 3px; }
+  .week small { color: var(--dim); font-size: 11px; }
+  .bars { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: minmax(70px, 120px) 1fr auto; gap: 10px; align-items: center; font-size: 13.5px; }
+  .row .tr { height: 10px; border-radius: 6px; background: var(--field); overflow: hidden; }
+  .row .tr i { display: block; height: 100%; border-radius: 6px; background: var(--accent); }
+  .row b { font-variant-numeric: tabular-nums; font-weight: 650; color: var(--muted); }
+  .topics { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .topics span { padding: 4px 11px; border-radius: 999px; background: color-mix(in oklab, var(--accent) calc(8% + var(--w) * 22%), transparent); font-size: calc(12px + var(--w) * 7px); font-weight: 600; }
+  .note { margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+  .note b { color: var(--ink); }
+  details.tbl { margin-top: 14px; }
+  details.tbl summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+  details.tbl table { margin-top: 8px; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .state { text-align: center; padding: 46px 24px; border-radius: 22px; background: var(--panel); }
+  .state .big { font-size: 42px; margin-bottom: 6px; }
+  .state h2 { font-size: 19px; margin-bottom: 8px; }
+  .state p { color: var(--muted); max-width: 52ch; margin: 0 auto 16px; }
+  .sk { border-radius: var(--r); background: var(--panel); height: 104px; animation: pl 1.4s ease-in-out infinite; }
+  .sk.tall { height: 260px; grid-column: 1 / -1; }
+  @keyframes pl { 50% { opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+</style>
+</head>
+<body>
+<div id="app"><div class="kpis"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div><div class="grid"><div class="sk tall"></div></div></div>
+<div class="tip" id="tip" role="tooltip"></div>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const n = (v) => Number(v || 0).toLocaleString("ru-RU");
+const plural = (v, a, b, c) => { const m = Math.abs(v) % 100, k = m % 10; return m > 10 && m < 20 ? c : k > 1 && k < 5 ? b : k === 1 ? a : c; };
+const WD = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"], WDL = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"];
+const dayLabel = (iso, o) => new Date(iso + "T12:00:00").toLocaleDateString("ru-RU", o || { day: "numeric", month: "short" });
+let S = null, period = 30;
+
+function partOfDay(h) { return h < 5 ? "ночью" : h < 12 ? "утром" : h < 17 ? "днём" : h < 22 ? "вечером" : "поздно вечером"; }
+
+function render() {
+  const app = $("#app");
+  const days = S.days.slice(-period);
+  const you = days.reduce((s, d) => s + d.you, 0), lira = days.reduce((s, d) => s + d.lira, 0);
+  if (!S.total.you && !S.total.lira) {
+    app.innerHTML = `<div class="state"><div class="big">💬</div><h2>Разговоров пока нет</h2><p>Поговорите с Лирой голосом или напишите в «Чате» — здесь появятся графики: по дням, по часам, с кем и о чём.</p>
+      <button class="btn primary" id="hi">Написать Лире «Привет!»</button></div>`;
+    $("#hi").onclick = () => dewiar.ask("Привет! Как дела?").catch(e => dewiar.toast(e.message));
+    return;
+  }
+  const active = days.filter(d => d.you || d.lira).length;
+  const hmax = Math.max(...S.hours), hbest = S.hours.indexOf(hmax);
+  const wbest = S.weekdays.indexOf(Math.max(...S.weekdays));
+  const peak = days.reduce((a, d) => (d.you + d.lira > a.you + a.lira ? d : a), days[0]);
+  app.innerHTML = `
+    <div class="top"><div><h1>Наши разговоры</h1>
+      <p>${S.since ? `Вместе с ${esc(dayLabel(S.since, { day: "numeric", month: "long", year: "numeric" }).replace(/\.$/, ""))}. ` : ""}Чаще всего вы пишете <b>${partOfDay(hbest)}</b>, больше всего — по ${WDL[wbest]}.</p></div>
+      <div class="seg" role="group" aria-label="Период">${[7, 30, 60].map(p => `<button data-p="${p}" aria-pressed="${p === period}">${p} дней</button>`).join("")}</div></div>
+    <div class="kpis">
+      <div class="kpi hero"><i class="ico" aria-hidden="true">💬</i><small>Сообщений</small><b>${n(you + lira)}</b><span>${n(you)} ваших · ${n(lira)} ответов</span></div>
+      <div class="kpi"><i class="ico" aria-hidden="true">📅</i><small>Дней с разговором</small><b>${active}</b><span>из ${period}</span></div>
+      <div class="kpi"><i class="ico" aria-hidden="true">🔥</i><small>Серия</small><b>${S.streak}</b><span>${plural(S.streak, "день", "дня", "дней")} подряд</span></div>
+      <div class="kpi"><i class="ico" aria-hidden="true">⏰</i><small>Любимое время</small><b>${String(hbest).padStart(2, "0")}:00</b><span>${partOfDay(hbest)}</span></div>
+    </div>
+    <div class="grid">
+      <section class="card wide" style="background:var(--panel)"><h2>По дням</h2><p class="sub">Сколько сообщений за день — ваших и ответов</p>
+        <div class="legend"><span><i style="background:var(--you)"></i>Вы</span><span><i style="background:var(--lira)"></i>Ответы</span></div>
+        <div class="chart" id="daily"></div>
+        <p class="note">Самый разговорчивый день — <b>${esc(dayLabel(peak.date, { day: "numeric", month: "long" }))}</b>: ${n(peak.you + peak.lira)} ${plural(peak.you + peak.lira, "сообщение", "сообщения", "сообщений")}.</p>
+        <details class="tbl"><summary>Таблица по дням</summary><table><thead><tr><th>День</th><th class="n">Вы</th><th class="n">Ответы</th></tr></thead>
+          <tbody>${days.slice().reverse().filter(d => d.you || d.lira).map(d => `<tr><td>${esc(dayLabel(d.date, { weekday: "short", day: "numeric", month: "short" }))}</td><td class="n">${d.you}</td><td class="n">${d.lira}</td></tr>`).join("")}</tbody></table></details>
+      </section>
+      <section class="card" style="background:var(--panel)"><h2>Когда вы пишете</h2><p class="sub">Ваши сообщения за 60 дней — по часам и дням недели</p>
+        <div class="hours" role="img" aria-label="Сообщения по часам">${S.hours.map((v, h) => `<div class="${h === hbest ? "best" : ""}" style="--v:${hmax ? (v / hmax).toFixed(2) : 0}" title="${String(h).padStart(2, "0")}:00 — ${n(v)} ${plural(v, "сообщение", "сообщения", "сообщений")}"></div>`).join("")}</div>
+        <div class="hl"><span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span></div>
+        <h3>По дням недели</h3>
+        <div class="week" role="img" aria-label="Сообщения по дням недели">${S.weekdays.map((v, i) => { const m = Math.max(1, ...S.weekdays); return `<div title="${WD[i]} — ${n(v)}"><span style="height:${Math.max(3, v / m * 100)}%;${i === wbest ? "" : "opacity:.55"}"></span><small>${WD[i]}</small></div>`; }).join("")}</div>
+      </section>
+      <section class="card" style="background:var(--panel)"><h2>С кем</h2><p class="sub">Кто из персонажей отвечал — за 60 дней</p>
+        <div class="bars">${S.personas.length ? S.personas.map(p => { const m = S.personas[0].count || 1; return `<div class="row"><span>${esc(p.name)}</span><div class="tr"><i style="width:${Math.max(3, p.count / m * 100)}%"></i></div><b>${n(p.count)}</b></div>`; }).join("") : `<p class="hint">Пока никто не отвечал.</p>`}</div>
+      </section>
+      <section class="card" style="background:var(--panel)"><h2>О чём</h2><p class="sub">Частые слова в ваших сообщениях — без самих сообщений</p>
+        <div class="topics">${S.topics.length ? S.topics.map(t => `<span style="--w:${(t.count / S.topics[0].count).toFixed(2)}" title="в ${n(t.count)} ${plural(t.count, "сообщении", "сообщениях", "сообщениях")}">${esc(t.word)}</span>`).join("") : `<span class="hint" style="--w:0;background:none">Пока мало слов</span>`}</div>
+      </section>
+    </div>`;
+  app.querySelectorAll(".seg button").forEach(b => b.onclick = () => { period = +b.dataset.p; dewiar.store.set("period", period).catch(() => {}); render(); });
+  daily(days);
+}
+
+/* столбцы по дням: два ряда стопкой (вы снизу, ответы сверху) с зазором 2 px, скругление сверху, подсказка при наведении */
+function daily(days) {
+  const box = $("#daily"); if (!box) return;
+  const W = Math.max(280, box.clientWidth), H = 190, L = 30, B = 22, T = 8;
+  const max = Math.max(4, ...days.map(d => d.you + d.lira));
+  const raw = max / 3, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(k => k * mag).find(x => x >= raw && Number.isInteger(x)) || Math.ceil(raw), top = step * Math.ceil(max / step);
+  const bw = (W - L) / days.length, w = Math.max(2, Math.min(22, bw * 0.62));
+  const y = (v) => T + (H - T - B) * (1 - v / top);
+  const every = days.length > 40 ? 10 : days.length > 14 ? 5 : 1;
+  const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i);
+  let g = `<g class="axis">${ticks.map(i => `<line x1="${L}" x2="${W}" y1="${y(step * i)}" y2="${y(step * i)}" ${i ? 'stroke-dasharray="2 4"' : ""}/><text x="${L - 8}" y="${y(step * i) + 4}" text-anchor="end">${step * i}</text>`).join("")}`;
+  days.forEach((d, i) => { if ((days.length - 1 - i) % every === 0) g += `<text x="${L + bw * i + bw / 2}" y="${H - 4}" text-anchor="middle">${esc(dayLabel(d.date))}</text>`; });
+  g += `</g>`;
+  const bar = (x, y0, y1, fill, round) => { const h = Math.max(0, y0 - y1); if (h < .5) return ""; const r = round ? Math.min(4, w / 2, h) : 0;
+    return `<path d="M${x},${y0} V${y1 + r} Q${x},${y1} ${x + r},${y1} H${x + w - r} Q${x + w},${y1} ${x + w},${y1 + r} V${y0} Z" fill="${fill}"/>`; };
+  days.forEach((d, i) => {
+    const x = L + bw * i + (bw - w) / 2, y0 = y(0), y1 = y(d.you), y2 = y(d.you + d.lira);
+    g += bar(x, y0, y1, "var(--you)", !d.lira) + bar(x, d.you ? y1 - 2 : y0, y2, "var(--lira)", true);
+    g += `<rect class="hit" x="${L + bw * i}" y="${T}" width="${bw}" height="${H - T - B}" data-i="${i}"/>`;
+  });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Сообщения по дням за ${days.length} дней">${g}</svg>`;
+  const tip = $("#tip");
+  box.querySelectorAll(".hit").forEach(r => {
+    r.onmouseenter = () => { const d = days[+r.dataset.i], rb = r.getBoundingClientRect();
+      tip.innerHTML = `<b>${esc(dayLabel(d.date, { weekday: "long", day: "numeric", month: "long" }))}</b><i style="background:var(--you)"></i>Вы: ${d.you}<br><i style="background:var(--lira)"></i>Ответы: ${d.lira}`;
+      tip.style.left = (rb.left + rb.width / 2 + scrollX) + "px"; tip.style.top = (box.getBoundingClientRect().top + scrollY + y(d.you + d.lira)) + "px"; tip.classList.add("on"); };
+    r.onmouseleave = () => tip.classList.remove("on");
+  });
+}
+
+function needAccess(msg) {
+  $("#app").innerHTML = `<div class="state"><div class="big">🔒</div><h2>Нужен доступ к статистике разговоров</h2>
+    <p>Плагин покажет, сколько и когда вы говорите с Лирой, с кем из персонажей и частые слова. Текст сообщений он не видит, а у страницы нет интернета.</p>
+    <button class="btn primary" id="again">Разрешить и показать</button><p class="hint" style="margin-top:12px">${esc(msg)}</p></div>`;
+  $("#again").onclick = load;
+}
+
+async function load() {
+  try { period = (await dewiar.store.get("period")) || 30; } catch (e) { }
+  try { S = await dewiar.data("chat_stats"); }
+  catch (e) { needAccess(e.message); return; }
+  render();
+}
+let rt = 0;
+addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (S) daily(S.days.slice(-period)); }, 120); });
+load();
+</script>
+</body>
+</html>

@@ -22,7 +22,7 @@ function ideaItem(x) {
   return `<div class="idi${x.voted ? " on" : ""}" data-id="${x.id}"><button class="idv" ${can ? "" : "disabled"} aria-pressed="${!!x.voted}" aria-label="${x.voted ? "Снять голос" : "Поддержать"}"><svg viewBox="0 0 24 24"><path d="M12 5.5 5.5 13h4v5.5h5V13h4z"/></svg><b>${x.votes}</b></button>
     <div class="idt"><b>${esc(x.title)}</b><span class="idcs">${fresh ? '<em class="idc new">новое</em>' : ""}${x.mine ? '<em class="idc me">ваша</em>' : ""}${chip}</span>
       ${x.body ? `<p>${esc(x.body)}</p>` : ""}${x.reply ? `<p class="idr">Ответ разработчика: ${esc(x.reply)}</p>` : ""}
-      ${x.mine && x.status === "new" ? `<button class="iddel">Убрать идею</button>` : ""}</div></div>`;
+      ${x.mine && x.status === "new" ? `<button class="iddel">Снять идею</button>` : ""}</div></div>`;
 }
 function ideasHtml() {
   const d = IDV.d || { counts: {} }, c = d.counts || {};
@@ -52,11 +52,13 @@ function ideasRender() {
   box.innerHTML = ideasHtml(); ideasBind();
   if (focus && $("#" + focus)) { const el = $("#" + focus); el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { } }
 }
-function ideasDelBind(root) {                          // своя идея на рассмотрении — убрать (идея №84)
+function ideasDelBind(root) {                          // своя идея, пока ждёт ответа, — снять (идея №84)
   $$(".iddel", root).forEach(b => b.onclick = async () => {
     const id = +b.closest("[data-id]").dataset.id, x = IDV.items.find(i => i.id === id);
-    if (!confirm(`Убрать идею «${(x && x.title) || "№" + id}»? Разработчик её больше не увидит.`)) return;
-    try { await ideaCall("/ideas/delete", {}, { id }); IDV.items = IDV.items.filter(i => i.id !== id); toast("Идея убрана", 2200); ideasLoad(); } catch (e) { toast(e.message, 3500); }
+    if (!confirm(`Снять идею «${(x && x.title) || "№" + id}»? Она пропадёт из «Моих», разработчик её больше не увидит. Если за неё уже голосовали другие, она останется — но без вашего имени.`)) return;
+    b.disabled = true;
+    try { const r = await ideaCall("/ideas/delete", {}, { id }); IDV.items = IDV.items.filter(i => i.id !== id); toast((r && r.text) || "Идея снята", 3000); ideasLoad(); }
+    catch (e) { b.disabled = false; toast(e.message, 3500); }
   });
 }
 function ideasVoteBind(root) {

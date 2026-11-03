@@ -150,6 +150,29 @@ def net_note(core_log):
             "если dewiar.pro блокирует провайдер — прокси: студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»")
 
 
+# №509 (03.11): «Dewiar не запускается» — библиотеки в порядке, папки настроек и журналов пустые (ядро ни разу не
+# стартовало), включён Kaspersky. ИТОГ должен говорить это сам, а не «библиотеки в порядке».
+AV_WHERE = {"kaspersky": "Настройки → Угрозы и исключения → Исключения",
+            "eset": "Настройка → Расширенные параметры → Обнаружение → Исключения",
+            "avast": "Меню → Настройки → Общее → Исключения", "avg": "Меню → Настройки → Общее → Исключения",
+            "drweb": "шестерёнка → Исключения → Файлы и папки"}
+AV_NAME = {"kaspersky": "Kaspersky", "eset": "ESET", "avast": "Avast", "avg": "AVG", "drweb": "Dr.Web"}
+
+
+def never_started_note(started, prods):
+    """started — есть ли хоть один журнал Dewiar; prods — антивирусы (winav.products). Ни разу не запустился ->
+    начало ИТОГа: что случилось и что сделать (включён Kaspersky, ESET, Avast, AVG или Dr.Web — как добавить в исключения)."""
+    if started:
+        return ""
+    out = "Dewiar ни разу не запустился: журналов нет."
+    av = next((p for p in prods or () if p.get("on") and p.get("kind") in AV_WHERE), None)
+    if av:
+        k = av["kind"]
+        out += (f" Включён {AV_NAME[k]} — добавьте папку программы в исключения ({AV_WHERE[k]}) "
+                "или временно выключите защиту и запустите снова.")
+    return out
+
+
 def works_in_core(mod, core_log):
     """Библиотека «не загрузилась» у диагностики, а в журнале ядра видно, что она работает (№464) -> пояснение или ""."""
     proof = {"onnx_asr": "GigaAM готов", "vosk_tts": "Vosk TTS готов", "vosk": "Имена (мгновенно)"}.get(mod)
@@ -216,7 +239,7 @@ def main():
         if not good and not fine:
             bad.append(m)
     L += ["", "== Антивирус"]
-    av_note = ""
+    av_note, prods = "", []
     try:
         sys.path.insert(0, str(APP / "core"))
         import winav                                       # noqa: PLC0415
@@ -266,7 +289,10 @@ def main():
         crash = tail(Path(tempfile.gettempdir()) / name, 80)
         if crash:
             L += ["", f"== {name} — сбой интерфейса до журнала (временная папка)"] + crash
-    L.insert(2, (("ИТОГ: не загружаются: " + ", ".join(bad)) if bad else "ИТОГ: библиотеки в порядке") + av_note + net_note(core_log))
+    started = any((LOCAL / "logs" / n).is_file() and (LOCAL / "logs" / n).stat().st_size > 0 for n in ("core.log", "ui.log"))
+    first = never_started_note(started, prods)
+    libs = ("не загружаются: " + ", ".join(bad)) if bad else "библиотеки в порядке"
+    L.insert(2, "ИТОГ: " + (first + " " + libs[0].upper() + libs[1:] if first else libs) + av_note + net_note(core_log))
     text = SECRET.sub(lambda m: m.group(1) + "***", "\n".join(L))
     out = desktop() / f"Dewiar — диагностика {dt.datetime.now():%Y-%m-%d %H-%M}.txt"
     out.write_text(text, encoding="utf-8-sig")                 # с BOM: старый Блокнот иначе читает как ANSI

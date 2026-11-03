@@ -420,6 +420,16 @@ class MCPManager:
                 out.setdefault(s.cfg["plugin"], []).append((k, (t.get("annotations") or {}).get("title") or ""))
         return out
 
+    def plugin_tool_texts(self):
+        """{id плагина: [«имя название описание»]} — для слов плагина без своего words (№507, core/plugins.py)."""
+        out = {}
+        for _k, (s, t) in self._index().items():
+            if s.cfg.get("plugin"):
+                out.setdefault(s.cfg["plugin"], []).append(" ".join(str(x) for x in (
+                    str(t.get("name") or "").replace("_", " "), (t.get("annotations") or {}).get("title") or "",
+                    str(t.get("description") or "")[:300])))
+        return out
+
     def plugin_errors(self):
         """{id плагина: что не так} — серверы плагинов, которые не подключились."""
         with self.lock:

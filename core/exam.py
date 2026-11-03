@@ -18,6 +18,13 @@
 
 Вручную (для разработчика): exam-ГГГГММДД-ЧЧММ.json и .md в --out; --upload — в кабинет (cloud.php ?p=/exam, тем же
 ключом). Долгие сценарии (задачи, код) — только с --long.
+
+Пределы времени (04.11: на сервере 6–7 сценариев за полчаса, а «Остановить» висело): шаг — не дольше STEP_S (3 мин;
+дольше — ход ядра прерывается командой stop, сценарий «превышено время шага»), сценарий — не дольше SCEN_S (8 мин;
+долгие — своё время задачи + 3 мин, но не больше 25), судья — не дольше JUDGE_S. Модель облака — сторож раз в ALIVE_S с
+спрашивает ?p=/balance той же доверенностью: 403 (экзамен остановили в кабинете — доступ отозван) — ядро гасится, выход
+с кодом EXIT_CANCELLED. --partial — после каждого сценария сделанное в файл; --resume — продолжить по нему (исполнитель
+перезапустился посреди прогона — не начинать 91 сценарий заново).
     python3 core/exam.py --llm '{"kind":"openai","base_url":"http://…/v1","model":"…"}'"""
 import argparse
 import asyncio
@@ -40,6 +47,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "core"))
 SCEN = ROOT / "data/exam/scenarios.json"
 PASS_SCORE = 6
+STEP_S = float(os.environ.get("DEWIAR_EXAM_STEP_S") or 180)        # шаг (фраза → ответ) — не дольше
+SCEN_S = float(os.environ.get("DEWIAR_EXAM_SCEN_S") or 480)        # обычный сценарий — не дольше 8 минут
+LONG_MAX_S = float(os.environ.get("DEWIAR_EXAM_LONG_MAX_S") or 1500)   # долгий (задача, код) — не дольше 25 минут
+JUDGE_S = float(os.environ.get("DEWIAR_EXAM_JUDGE_S") or 120)      # судья — не дольше
+ALIVE_S = float(os.environ.get("DEWIAR_EXAM_ALIVE_S") or 12)       # раз в столько секунд — «жив ли экзамен» (облако)
+EXIT_CANCELLED = 3                                                  # код выхода: экзамен остановлен (доступ к модели отозван)
 WDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
 JUDGE_SYSTEM = (
     "Ты — строгий и справедливый экзаменатор голосового помощника. Тебе дают сценарий: что говорил пользователь, что "
@@ -558,8 +571,11 @@ class Core:
             await asyncio.sleep(0.05)
         raise TimeoutError(f"{cmd}: нет ответа")
 
-    async def say(self, text, image=None, timeout=240):
-        """Фраза пользователя -> (ответ, события хода). Ждём answer done и покой."""
+    async def say(self, text, image=None, timeout=None):
+        """Фраза пользователя -> (ответ, события хода). Ждём answer done и покой — не дольше timeout (STEP_S); не дождались
+        ответа — self.timed_out (ход ядра тогда прерывает вызывающий)."""
+        timeout = STEP_S if timeout is None else timeout
+        self.timed_out = False
         n0 = len(self.events)
         args = {"text": text}
         if image:
@@ -568,6 +584,7 @@ class Core:
         t0 = time.monotonic()
         answer = None
         slept = None
+        got = None
         while time.monotonic() - t0 < timeout:
             for e in self.events[n0:]:
                 if e.get("type") == "answer" and e.get("done"):
@@ -577,14 +594,24 @@ class Core:
                 if time.monotonic() - slept > 1.5:
                     return "", self.events[n0:]
             if answer is not None:
+                got = got or time.monotonic()
                 await asyncio.sleep(1.0)                 # хвост хода: напоминание, задача, событие инструмента
                 more = [e for e in self.events[n0:] if e.get("type") == "answer" and e.get("done")]
                 answer = more[-1].get("text") or answer
                 st = [e for e in self.events[n0:] if e.get("type") == "state"]
-                if not st or st[-1].get("state") in ("idle", "listening", "sleep", "muted"):
-                    break
+                if not st or st[-1].get("state") in ("idle", "listening", "sleep", "muted") or time.monotonic() - got > 20:
+                    break                                # ответ есть — «покоя» ждём не дольше 20 с
             await asyncio.sleep(0.2)
+        if answer is None:
+            self.timed_out = time.monotonic() - t0 >= timeout
         return (answer if answer is not None else ""), self.events[n0:]
+
+    async def interrupt(self):
+        """Прервать ход ядра (как кнопка «стоп»): шаг не уложился — следующий не должен ждать прошлого."""
+        try:
+            await self.call("stop", timeout=10)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def stop(self):
         try:
@@ -801,7 +828,8 @@ def judge(profile, sc, transcript, state_text, at=None, memory=""):
                + (f"ЧТО ПОМОЩНИК ЗНАЛ О ПОЛЬЗОВАТЕЛЕ (его память с прошлых разговоров — упоминать это не выдумка):\n{memory[-2500:]}\n\n" if memory.strip() else "")
                + f"ХОРОШИЙ ОТВЕТ: {sc['judge']}\n\nРазговор шёл {when:%d.%m.%Y} ({WDAYS[when.weekday()]}) в {when:%H:%M}.")
     try:
-        out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=300), JUDGE_SYSTEM, [{"role": "user", "content": content}]))
+        out = "".join(stream_chat(dict(profile, temperature=0, max_tokens=300, timeout=min(float(profile.get("timeout") or 90), 90)),
+                                  JUDGE_SYSTEM, [{"role": "user", "content": content}]))
     except Exception as e:  # noqa: BLE001
         return {"score": None, "why": f"судья не ответил: {e}"}
     m = re.search(r"\{.*\}", out, re.S)
@@ -953,19 +981,59 @@ async def reset_state(core):
                 pass
 
 
+def _thread(fn, *a, **kw):
+    """Вызвать fn в отдельном потоке и ждать без блокировки (asyncio.to_thread — только с Python 3.9)."""
+    import functools
+    return asyncio.get_running_loop().run_in_executor(None, functools.partial(fn, *a, **kw))
+
+
+def _dur(sec):
+    """180 → «3 мин», 45 → «45 с»."""
+    return f"{round(sec / 60)} мин" if sec >= 90 else f"{round(sec)} с"
+
+
+class StepTimeout(Exception):
+    """Шаг сценария не уложился в STEP_S."""
+
+
+def scenario_limit(sc):
+    """Сколько секунд сценарию можно идти: обычному — SCEN_S; долгому — время его задачи + 3 минуты, не больше LONG_MAX_S."""
+    if sc.get("code") or (sc.get("state") or {}).get("task"):
+        own = float((sc.get("code") or {}).get("timeout") or ((sc.get("state") or {}).get("task") or {}).get("timeout") or 1200)
+        return min(LONG_MAX_S, own + 180)
+    return SCEN_S
+
+
 async def run_scenario(core, sc, judge_prof, work, log):
     t0 = time.time()
-    await reset_state(core)
-    made = await seed(core, sc.get("seed")) if sc.get("seed") else {}
+    res = {"id": sc["id"], "group": sc["group"], "title": sc["title"], "video": bool(sc.get("video")), "steps": [], "checks": []}
+    limit = scenario_limit(sc)
+    made = {}
+
+    async def body():
+        nonlocal made
+        await reset_state(core)
+        made = await seed(core, sc.get("seed")) if sc.get("seed") else {}
+        return await _run_scenario(core, sc, judge_prof, work, log, t0, res)
     try:
-        return await _run_scenario(core, sc, judge_prof, work, log, t0)
+        return await asyncio.wait_for(body(), limit)
+    except asyncio.TimeoutError:
+        # сценарий не уложился (модель или шлюз отвечают очень долго): ход ядра прерываем, в отчёте — «превышено время»
+        await core.interrupt()
+        res["timeout"] = f"превышено время сценария ({_dur(limit)})"
+        res["error"] = "⏱ " + res["timeout"]
+        res["time_s"] = round(time.time() - t0, 1)
+        log(f"   ⏱ {res['timeout']}")
+        return finish_result(core, res)
     finally:
         if made:
-            await unseed(core, made)
+            try:
+                await asyncio.wait_for(unseed(core, made), 60)
+            except Exception:  # noqa: BLE001
+                pass
 
 
-async def _run_scenario(core, sc, judge_prof, work, log, t0):
-    res = {"id": sc["id"], "group": sc["group"], "title": sc["title"], "video": bool(sc.get("video")), "steps": [], "checks": []}
+async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
     try:
         await core.say("Начнём новый разговор", timeout=30)
         if sc.get("code"):
@@ -978,10 +1046,10 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0):
             res["checks"].append({"name": "задача по коду завершена", "ok": st == "done", "detail": f"статус: {st}"})
             wt = Path((t or {}).get("dir", "")) / "рабочая копия"
             folder = wt if wt.is_dir() else repo
-            ok, tail = run_tests(folder)
+            ok, tail = await _thread(run_tests, folder)
             res["checks"].append({"name": "тесты проекта проходят", "ok": ok, "detail": tail[-300:]})
             if c.get("hidden_test"):
-                ok2, tail2 = run_tests(folder, {f"test_hidden_{c['hidden_test']}.py": HIDDEN[c["hidden_test"]]})
+                ok2, tail2 = await _thread(run_tests, folder, {f"test_hidden_{c['hidden_test']}.py": HIDDEN[c["hidden_test"]]})
                 res["checks"].append({"name": "скрытые проверки проходят", "ok": ok2, "detail": tail2[-300:]})
             orig = {n: src for n, src in REPOS[c["repo"]].items() if n.startswith("tests/")}  # сверка с исходным текстом:
             weakened = []                                                                     # дописывать тесты можно,
@@ -1013,6 +1081,12 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0):
                 ans, ev = await core.say(said, img)
                 src = [x.get("label") or x.get("name") for e in ev if e.get("type") == "answer" and e.get("done") for x in e.get("sources") or []]
                 res["steps"].append({"say": said, "image": stp.get("image"), "answer": ans[:2000], "tools": tools_of(ev), "sources": src})
+                if core.timed_out:                      # шаг не уложился в STEP_S — прерываем ход, дальше не идём
+                    await core.interrupt()
+                    res["steps"][-1]["timeout"] = True
+                    res["timeout"] = f"превышено время шага ({_dur(STEP_S)}): модель так и не ответила"
+                    res["error"] = "⏱ " + res["timeout"]
+                    raise StepTimeout(res["timeout"])
             last = res["steps"][-1]["answer"]
             res["checks"] += check_answer(sc.get("expect"), last)
             if sc.get("source"):                          # ответ по документам — под ним нужный файл (кнопка «открыть»)
@@ -1057,12 +1131,24 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0):
             mem = (core.tmp / "ws" / "Память" / "Обо мне.md").read_text(encoding="utf-8")
         except OSError:
             mem = ""
-        res["judge"] = judge(judge_prof, sc, transcript, state_text, at=dt.datetime.fromtimestamp(t0), memory=mem) if sc.get("judge") else None
+        res["judge"] = None
+        if sc.get("judge"):                             # в потоке: сценарий можно прервать по пределу и во время судьи
+            try:
+                res["judge"] = await asyncio.wait_for(_thread(judge, judge_prof, sc, transcript, state_text,
+                                                                        at=dt.datetime.fromtimestamp(t0), memory=mem), JUDGE_S)
+            except asyncio.TimeoutError:
+                res["judge"] = {"score": None, "why": f"судья не ответил за {round(JUDGE_S)} с"}
+    except StepTimeout as e:
+        log(f"   ⏱ {e}")
     except Exception as e:  # noqa: BLE001
         res["error"] = f"{e.__class__.__name__}: {e}"
         log(f"   ⚠ {res['error']}")
     finally:
         res["time_s"] = round(time.time() - t0, 1)
+    return finish_result(core, res)
+
+
+def finish_result(core, res):
     j = (res.get("judge") or {}).get("score")
     res["passed"] = (not res.get("error") and not res.get("skipped") and all(c["ok"] for c in res["checks"])
                      and (j is None or j >= PASS_SCORE))
@@ -1119,28 +1205,101 @@ def markdown(rep):
     return "\n".join(lines) + "\n"
 
 
-async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False):
+def access_revoked(profile, timeout=10):
+    """Модель облака Dewiar: доступ ещё есть? -> текст причины, если отозван (403: экзамен остановили в кабинете, ключ
+    приостановлен), иначе "" (и когда облако просто не ответило — это не повод останавливаться)."""
+    import httpx
+    base = str(profile.get("base_url") or "")
+    if not (profile.get("cloud") or "cloud.php?p=" in base) or not profile.get("api_key"):
+        return ""
+    try:
+        r = httpx.get(base + "/balance", headers={"Authorization": "Bearer " + str(profile["api_key"])}, timeout=timeout)
+    except Exception:  # noqa: BLE001
+        return ""
+    if r.status_code != 403:
+        return ""
+    try:
+        e = (r.json().get("error") or {})
+    except ValueError:
+        e = {}
+    return str(e.get("message") or "доступ к модели отозван")
+
+
+async def watch_access(profile, core, tmp, keep, log):
+    """Сторож: раз в ALIVE_S с — жив ли экзамен (доступ к модели). Отозван — гасим ядро и выходим сразу, не дожидаясь
+    ответа модели или судьи (они могут ждать минутами)."""
+    while True:
+        await asyncio.sleep(ALIVE_S)
+        why = await _thread(access_revoked, profile)
+        if why:
+            log(f"Экзамен остановлен: {why}")
+            try:
+                if core.proc and core.proc.poll() is None:
+                    core.proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+            if not keep:
+                shutil.rmtree(tmp, ignore_errors=True)
+            sys.stdout.flush()
+            os._exit(EXIT_CANCELLED)
+
+
+def load_partial(path):
+    """Сделанное в прошлый раз (--resume): {started, results} или None."""
+    try:
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+        return d if isinstance(d.get("results"), list) else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False, partial=None, resume=False):
     from version import VERSION
     data = json.loads(SCEN.read_text(encoding="utf-8"))
     scs = [s for s in data["scenarios"] if (not only or s["id"] in only) and (long or not s.get("long") or (only and s["id"] in only))]
     tmp = Path(keep) if keep else Path(tempfile.mkdtemp(prefix="dewiar-exam-"))
     core = Core(profile, tmp / "core", log, lean=lean)
     started = dt.datetime.now()
-    log(f"Экзамен Dewiar {VERSION}: {len(scs)} сценариев, модель {profile.get('title') or profile.get('model')}")
     results = []
+    prev = load_partial(partial) if (partial and resume) else None
+    if prev:                                        # исполнитель перезапустился посреди прогона — продолжаем, а не заново
+        ids = {s["id"] for s in scs}
+        results = [r for r in prev["results"] if r.get("id") in ids]
+        try:
+            started = dt.datetime.fromisoformat(prev.get("started") or "")
+        except ValueError:
+            pass
+    done = {r["id"] for r in results}
+    log(f"Экзамен Dewiar {VERSION}: {len(scs)} сценариев, модель {profile.get('title') or profile.get('model')}"
+        + (f" — продолжаю: {len(done)} уже пройдены" if done else ""))
+
+    def save_partial():
+        if partial:
+            try:
+                Path(partial).write_text(json.dumps({"started": started.isoformat(timespec="seconds"), "results": results},
+                                                    ensure_ascii=False), encoding="utf-8")
+            except OSError:
+                pass
     core.start()
+    watch = asyncio.ensure_future(watch_access(profile, core, tmp, keep, log))
     try:
         await core.connect()
         for i, sc in enumerate(scs, 1):
+            if sc["id"] in done:
+                continue
             log(f"[{i}/{len(scs)}] {sc['group']} — {sc['title']}")
             r = await run_scenario(core, sc, judge_prof or profile, tmp / "repos", log)
             log(f"   {'⏭ пропущен' if r.get('skipped') else ('✅ сдан' if r['passed'] else '✗ не сдан')}"
                 + (f", судья {r['score']:g}" if r.get("score") is not None else "") + f", {r['time_s']} с")
             results.append(r)
+            save_partial()
     finally:
+        watch.cancel()
         await core.stop()
         if not keep:
             shutil.rmtree(tmp, ignore_errors=True)
+    order = {s["id"]: k for k, s in enumerate(scs)}
+    results.sort(key=lambda r: order.get(r.get("id"), 0))
     rep = {"version": VERSION, "started": started.isoformat(timespec="seconds"), "duration_s": round((dt.datetime.now() - started).total_seconds()),
            # проба короткой инструкции — в подписи модели: в кабинете и отчёте сразу видно, какой прогон с чем сравнивать
            "model": (profile.get("title") or profile.get("model") or "?") + (" · короткая инструкция" if lean else ""), "lean": bool(lean),
@@ -1179,6 +1338,8 @@ def main():
     ap.add_argument("--keep", help="папка для временных файлов ядра (не удалять — для разбора)")
     ap.add_argument("--lean", action="store_true", help="короткая инструкция модели (llm.lean_prompt) — проба")
     ap.add_argument("--json-out", help="записать отчёт JSON (с md) ещё и в этот файл — так его забирает исполнитель")
+    ap.add_argument("--partial", help="после каждого сценария — сделанное в этот файл (для --resume)")
+    ap.add_argument("--resume", action="store_true", help="продолжить по файлу --partial: пройденные сценарии не повторять")
     a = ap.parse_args()
     env_llm = os.environ.get("DEWIAR_EXAM_LLM")           # исполнитель на сервере: профиль с доверенностью — не в командной строке
     if env_llm:
@@ -1196,7 +1357,7 @@ def main():
         ap.error("нужен --key или --llm")
     jp = json.loads(a.judge) if a.judge else None
     rep = asyncio.run(run_exam(prof, jp, set(a.only.split(",")) if a.only else None, a.long, keep=a.keep, lean=a.lean,
-                               log=lambda t: print(t, flush=True)))
+                               log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume))
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     stem = f"exam-{rep['started'][:16].replace('-', '').replace(':', '').replace('T', '-')}"

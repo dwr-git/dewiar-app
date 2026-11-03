@@ -317,6 +317,55 @@ class Covers:
         return found
 
 
+_ART_URLS = {}
+_ART_LOCK = threading.Lock()
+ART_PX = 320                 # сторона уменьшенной обложки: и в студии, и в виджете она не больше 200 точек
+ART_RAW_MAX = 400_000        # без Pillow большую картинку не отдаём — пусть будет пластинка
+
+
+def art_url(path):
+    """Обложка (путь на диске) -> data:URL небольшой картинки для страниц студии и виджета или "".
+    №511 (03.11, Windows): раньше отдавали file://…, а страницы там открываются с http://127.0.0.1 — Chromium
+    не грузит file:// со страницы http («Not allowed to load local resource»), и обложки не показывались.
+    data:URL показывается везде; уменьшаем до ART_PX, чтобы статус «Музыки» оставался лёгким. Запоминаем по
+    пути и времени изменения файла."""
+    if not path:
+        return ""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return ""
+    key = (str(path), st.st_mtime_ns, st.st_size)
+    with _ART_LOCK:
+        if key in _ART_URLS:
+            return _ART_URLS[key]
+    url = ""
+    try:
+        from PIL import Image
+        import io
+        with Image.open(path) as im:
+            im = im.convert("RGB")
+            im.thumbnail((ART_PX, ART_PX))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=84)
+        url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        try:
+            b = Path(path).read_bytes() if st.st_size <= ART_RAW_MAX else b""
+        except OSError:
+            b = b""
+        kind = _img_kind(b) if b else ""
+        if kind:
+            url = f"data:image/{ {'.jpg': 'jpeg', '.png': 'png', '.webp': 'webp'}[kind] };base64," + base64.b64encode(b).decode()
+    except Exception as e:  # noqa: BLE001 — битая картинка: останется пластинка
+        log.info("Обложка не открылась: %s", e)
+    with _ART_LOCK:
+        if len(_ART_URLS) > 64:
+            _ART_URLS.clear()
+        _ART_URLS[key] = url
+    return url
+
+
 def from_name(path, root):
     """Без тегов: «Исполнитель - Название», «03. Название» в папке «Исполнитель/Альбом»."""
     p = Path(path)

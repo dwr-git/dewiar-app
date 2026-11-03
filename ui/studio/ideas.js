@@ -28,7 +28,7 @@ function idItem(x) {
     <button class="id-vote" type="button" ${can ? "" : "disabled"} aria-pressed="${x.voted}" title="${!can ? (x.status === "done" ? "Уже сделано" : "") : x.voted ? "Снять голос" : "Поддержать — нужно и мне"}">${ID_VOTE}<b>${x.votes}</b></button>
     <div class="id-body"><div class="id-t">${idEsc(x.title)}${fresh ? '<span class="id-chip fresh">новое</span>' : ""}${x.mine ? '<span class="id-chip mine">ваша</span>' : ""}${chip}</div>
       ${x.body ? `<p class="id-d">${idEsc(x.body)}</p>` : ""}${x.reply ? `<p class="id-r">Ответ разработчика: ${idEsc(x.reply)}</p>` : ""}
-      ${x.mine && x.status === "new" ? `<button type="button" class="id-del linkbtn">Убрать идею</button>` : ""}</div></li>`;
+      ${x.mine && x.status === "new" ? `<button type="button" class="id-del linkbtn" title="Повтор или уже не нужна — снять, пока ждёт ответа">Снять идею</button>` : ""}</div></li>`;
 }
 function idRender() {
   const d = ID.d || { items: [], counts: {}, pages: 1, page: 1 };
@@ -54,11 +54,14 @@ function idBind(root) {
     finally { b.disabled = false; }
   });
   $$(".id-d", root).forEach(p => p.onclick = () => p.classList.toggle("open"));
-  // своя идея на рассмотрении — убрать (идея №84: «нечаянно нажал два раза — висят одинаковые»)
+  // своя идея, пока ждёт ответа, — снять (идея №84: «нечаянно нажал два раза — висят одинаковые; нашёл решение»).
+  // Сайт: никто чужой не голосовал — снята совсем; голосовали — остаётся, но без автора (ваш голос тоже уходит)
   $$(".id-del", root).forEach(b => b.onclick = async () => {
-    const li = b.closest("[data-id]"), id = +li.dataset.id, x = ((ID.d && ID.d.items) || []).find(i => i.id === id);
-    if (!await ask(`Убрать идею «${(x && x.title) || "№" + id}»? Разработчик её больше не увидит.`, { ok: "Убрать" })) return;
-    try { await core.call("ideas_delete", { id }); toast("Идея убрана", 2200); loadIdeas(true); } catch (e) { toast(e.message, 3500); }
+    const li = b.closest("[data-id]"), id = +li.dataset.id, x = ((ID.d && ID.d.items) || []).concat(ID.sim || []).find(i => i.id === id);
+    if (!await ask(`Снять идею «${(x && x.title) || "№" + id}»? Она пропадёт из «Моих», разработчик её больше не увидит. Если за неё уже голосовали другие, она останется — но без вашего имени.`, { ok: "Снять идею", danger: true })) return;
+    b.disabled = true;
+    try { const r = await core.call("ideas_delete", { id }); toast((r && r.text) || "Идея снята", 3000); li.remove(); loadIdeas(true); }
+    catch (e) { b.disabled = false; toast(e.message, 3500); }
   });
 }
 

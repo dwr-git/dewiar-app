@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 23 · Сейф на всех устройствах. Светлый неоморфизм серии. Главная вещь урока — пароль, оставшийся дома, есть в телефоне: открыл сейф, скопировал, буфер сам очистился; ключ — только у вас, сервер видит шифр. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+.win { position: absolute; left: 640px; top: 140px; width: 760px; padding: 12px 14px 14px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.win .bar { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 6px 10px; }
+.win .bar i { width: 13px; height: 13px; border-radius: 50%; background: var(--nd); }
+.win .bar span { margin-left: 14px; flex: 1; padding: 7px 16px; border-radius: 99px; box-shadow: var(--press); font-size: 17px; font-weight: 800; color: var(--mut); }
+.win .bar span b { color: var(--ink); }
+.tgl { width: 76px; height: 42px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; }
+.tgl i { position: absolute; top: 5px; left: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); }
+.tgl.on { background: var(--brand); box-shadow: none; } .tgl.on i { left: 39px; }
+.toast { position: absolute; display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); }
+.toast > i { flex: none; width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; font-size: 32px; font-style: normal; background: rgba(47,179,131,.16); }
+.toast small { display: block; font-size: 16px; font-weight: 800; color: var(--mut); } .toast b { display: block; font-size: 22px; font-weight: 800; margin-top: 2px; }
+.st { position: absolute; display: grid; grid-template-columns: 250px 1fr; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); overflow: hidden; }
+.st nav { padding: 24px 16px; background: rgba(255,255,255,.38); display: flex; flex-direction: column; gap: 3px; }
+.st nav .g { margin: 12px 10px 4px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.st nav .g:first-child { margin-top: 0; }
+.st nav span { padding: 8px 12px; border-radius: 12px; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.st nav span.on { color: #fff; background: var(--brand); }
+.st .pg { padding: 28px 32px; } .st .pg h3 { font: 700 30px Unbounded; } .st .pg > small { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; color: var(--mut); }
+
+#shop { left: 640px; top: 200px; width: 700px; }
+#shop .pg { padding: 30px 34px 34px; border-radius: 16px; background: #fff; }
+#shop .pg h4 { font: 700 28px Unbounded; } #shop .pg > small { display: block; margin-top: 6px; font-size: 17px; font-weight: 700; color: var(--mut); }
+#shop label { display: block; margin-top: 20px; font-size: 16px; font-weight: 800; color: var(--mut); }
+#shop .f { margin-top: 8px; padding: 15px 18px; border-radius: 14px; border: 2px solid #dfe5ef; font-size: 22px; font-weight: 700; min-height: 58px; letter-spacing: .02em; }
+#shop .f.pw { border-color: var(--accent); }
+#shop .go { margin-top: 24px; padding: 17px; border-radius: 14px; text-align: center; color: #fff; background: #2fa36b; font-size: 21px; font-weight: 800; }
+#shop .go.ok { background: #1e7d5b; }
+.phone { top: 110px; } .phone .scr { position: relative; }
+.pn { position: absolute; inset: 0; padding: 34px 22px; }
+.pn h5 { display: flex; align-items: center; gap: 10px; } .pn h5 small { margin-left: auto; font: 800 14px Manrope; color: #1e7d5b; }
+.srch { padding: 12px 16px; border-radius: 16px; background: #fff; font-size: 17px; font-weight: 700; color: var(--mut); }
+.rec { margin-top: 14px; padding: 18px; border-radius: 22px; background: #fff; }
+.rec .t { display: flex; align-items: center; gap: 12px; } .rec .t i { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; font-size: 28px; font-style: normal; background: rgba(69,96,234,.1); }
+.rec .t b { font-size: 19px; } .rec .t small { display: block; font-size: 14px; font-weight: 700; color: var(--mut); }
+.rec label { display: block; margin-top: 14px; font-size: 13px; font-weight: 800; color: var(--mut); letter-spacing: .04em; }
+.rec .v { margin-top: 4px; font-size: 20px; font-weight: 800; letter-spacing: .04em; }
+.rec .pwv { font: 600 22px Unbounded; letter-spacing: .02em; color: var(--accent); }
+.bts { display: flex; gap: 8px; margin-top: 16px; } .bts span { flex: 1; text-align: center; padding: 12px 6px; border-radius: 14px; background: #eef2f8; font-size: 15px; font-weight: 800; }
+.bts span.on { color: #fff; background: var(--brand); }
+.clip { position: absolute; left: 18px; right: 18px; bottom: 26px; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; color: #fff; background: rgba(36,50,74,.92); font-size: 15px; font-weight: 700; line-height: 1.3; }
+.clip svg { flex: none; width: 46px; height: 46px; } .clip b { display: block; font-size: 16px; }
+.apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 8px; }
+.apps span { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 4px; border-radius: 18px; background: #fff; font-size: 14px; font-weight: 800; }
+.apps span i { font-size: 30px; font-style: normal; } .apps span.on { box-shadow: 0 0 0 3px var(--accent); }
+.mpw { margin-top: 18px; padding: 16px; border-radius: 16px; background: #fff; font-size: 26px; font-weight: 800; letter-spacing: .12em; min-height: 62px; }
+.lst .rw { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 13px 14px; border-radius: 16px; background: #fff; font-size: 16px; font-weight: 800; }
+.lst .rw i { font-style: normal; font-size: 22px; } .lst .rw em { margin-left: auto; font-style: normal; color: var(--mut); letter-spacing: .08em; }
+.lock { position: absolute; inset: 0; border-radius: 42px; display: grid; place-content: center; text-align: center; background: rgba(238,242,248,.86); backdrop-filter: blur(8px); }
+.lock i { font-size: 92px; font-style: normal; } .lock b { display: block; font: 700 24px Unbounded; margin-top: 8px; } .lock small { display: block; margin-top: 8px; font-size: 16px; font-weight: 700; color: var(--mut); }
+#syn { top: 170px; width: 820px; }
+#syn .sw { display: flex; align-items: center; gap: 18px; margin-top: 16px; padding: 20px 22px; border-radius: 22px; box-shadow: var(--raise-s); }
+#syn .sw b { display: block; font-size: 24px; } #syn .sw span { display: block; margin-top: 4px; font-size: 18px; font-weight: 700; color: var(--mut); line-height: 1.35; }
+#syn .sw.on { box-shadow: 0 0 0 3px rgba(69,96,234,.55), var(--raise-s); }
+#syn .row { margin-top: 12px; }
+#mp { top: 190px; width: 560px; } #mp .in { margin-top: 12px; padding: 18px 22px; border-radius: 18px; box-shadow: var(--press); font-size: 32px; font-weight: 800; letter-spacing: .14em; min-height: 74px; }
+#mp p { margin-top: 18px; font-size: 19px; font-weight: 700; color: var(--mut); line-height: 1.4; }
+#mp .ok2 { margin-top: 18px; display: inline-block; padding: 16px 28px; border-radius: 18px; color: #fff; background: var(--brand); font-size: 21px; font-weight: 800; }
+#dg { position: absolute; left: 1220px; top: 150px; width: 620px; height: 640px; }
+#dg svg { position: absolute; inset: 0; }
+#dg .dv { position: absolute; width: 170px; padding: 16px 12px; border-radius: 24px; background: var(--bg); box-shadow: var(--raise); text-align: center; font-size: 18px; font-weight: 800; }
+#dg .dv i { display: block; font-size: 44px; font-style: normal; } #dg .dv small { display: block; margin-top: 4px; font-size: 14px; color: #1e7d5b; }
+#dg .sv { position: absolute; left: 160px; top: 230px; width: 300px; padding: 20px; border-radius: 26px; background: #24324a; color: #fff; text-align: center; }
+#dg .sv b { display: block; font: 700 20px Unbounded; } #dg .sv code { display: block; margin-top: 10px; font: 600 15px/1.5 monospace; color: #9fb4ff; word-break: break-all; }
+#dg .sv small { display: block; margin-top: 10px; font-size: 15px; font-weight: 700; color: rgba(255,255,255,.75); }
+#edit { top: 200px; width: 720px; } #edit .ar { margin: 10px 0 0 34px; font-size: 30px; color: var(--accent); }
+#rules { top: 170px; width: 740px; } #rules .row { font-size: 21px; }
+#studio { top: 170px; width: 900px; }
+#studio .sw2 { display: flex; align-items: center; gap: 16px; margin-top: 14px; padding: 16px 18px; border-radius: 18px; box-shadow: 0 0 0 3px rgba(69,96,234,.45), var(--raise-s); font-size: 22px; font-weight: 800; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 23 · Сейф на всех устройствах</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="12" height="9" rx="1.6"/><path d="M1 17h15"/><rect x="16" y="8" width="6" height="11" rx="1.6"/><path d="M6.4 9.6V8.4a2.1 2.1 0 0 1 4.2 0v1.2"/><rect x="5.6" y="9.6" width="5.8" height="3.2" rx=".8"/></svg></div>
+    <div id="t-title"><h1>Сейф везде</h1><p>Один сейф паролей — на всех ваших устройствах</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div class="win" id="shop"><div class="bar"><i></i><i></i><i></i><span>🔒 <b>Интернет-магазин «Дом и сад»</b></span></div>
+      <div class="pg"><h4>Вход</h4><small>Чтобы оплатить заказ — войдите</small><label>ЛОГИН</label><div class="f">patrik</div>
+        <label>ПАРОЛЬ</label><div class="f pw" id="spw"></div><div class="go" id="sgo">Войти и оплатить</div></div></div>
+    <div class="card" id="syn"><h3>Сейф паролей</h3>
+      <div class="sw" id="sw"><div><b>Один сейф на всех моих устройствах</b><span>Записи уходят на ваши устройства только шифром</span></div><span class="tgl" id="tg1"><i></i></span></div>
+      <div class="row"><i>🛒</i>Магазин «Дом и сад»<em>• • • • • • • •</em></div><div class="row"><i>📶</i>Вайфай дома<em>• • • • • •</em></div><div class="row"><i>🔢</i>Домофон<em>• • • •</em></div></div>
+    <div class="card" id="mp"><small>ПРИДУМАЙТЕ МАСТЕР-ПАРОЛЬ</small><div class="in" id="mpi"></div>
+      <p>Он нигде не хранится — ни на сервере, ни у нас. Из него на ваших устройствах получается ключ.</p><span class="ok2">Включить</span></div>
+    <div id="dg"><svg viewBox="0 0 620 640"><g fill="none" stroke="#4560ea" stroke-width="3" stroke-dasharray="8 9" opacity=".45">
+        <path d="M95 140 L230 250"/><path d="M525 140 L390 250"/><path d="M310 540 L310 400"/></g></svg>
+      <div class="dv" style="left:10px;top:30px"><i>💻</i>Ноутбук<small>🔑 ключ здесь</small></div>
+      <div class="dv" style="left:440px;top:30px"><i>🖥</i>Рабочий<small>🔑 ключ здесь</small></div>
+      <div class="dv" style="left:225px;top:470px"><i>📱</i>Телефон<small>🔑 ключ здесь</small></div>
+      <div class="sv"><b>dewiar.pro</b><code id="hex"></code><small>видит только шифр</small></div></div>
+    <div class="card" id="edit"><small>ПОПРАВИЛИ НА КОМПЬЮТЕРЕ</small><div class="row"><i>📶</i>Вайфай дома — новый пароль<em>12:04</em></div>
+      <div class="ar">↓</div><div class="row"><i>📱</i>На телефоне — уже новый<em class="ok">✓</em></div>
+      <div class="row"><i>🗑</i>Удалили старый домофон — не вернётся<em class="ok">✓</em></div></div>
+    <div class="card" id="rules"><small>ЧТОБЫ ПАРОЛЬ НЕ УВИДЕЛ НИКТО ЛИШНИЙ</small>
+      <div class="row"><i>👁</i>«Показать» — на 15 секунд</div><div class="row"><i>📋</i>Буфер стирается через 30 секунд</div>
+      <div class="row"><i>🔒</i>Свернули или 5 минут без дела — закрыт</div><div class="row"><i>📵</i>Снимок экрана — запрещён</div></div>
+    <div class="card" id="studio"><h3>Сейф паролей</h3><small>Студия → «Сейф паролей» · телефон → «Всё» → «Сейф»</small>
+      <div class="sw2">🔐 Один сейф на всех моих устройствах<span class="tgl on" style="margin-left:auto"><i></i></span></div>
+      <div class="row"><i>✍️</i>Мастер-пароль — запишите: его не восстановить</div>
+      <div class="row"><i>🖥</i>Сервер видит только время и шифр</div></div>
+  </div>
+  <div class="layer" id="L-phone"><div class="phone"><div class="scr">
+    <div class="pn" id="pA"><h5>🔐 Сейф<small>● открыт</small></h5><div class="srch">🔎 магазин</div>
+      <div class="rec"><div class="t"><i>🛒</i><div><b>Дом и сад</b><small>интернет-магазин</small></div></div><label>ЛОГИН</label><div class="v">patrik</div>
+        <label>ПАРОЛЬ</label><div class="v">• • • • • • • •</div><div class="bts"><span>👁 Показать</span><span id="cpy">📋 Скопировать</span></div></div>
+      <div class="clip" id="clip"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="5"/><circle id="r1" cx="23" cy="23" r="19" fill="none" stroke="#7ee0b0" stroke-width="5" stroke-linecap="round" stroke-dasharray="119.4" transform="rotate(-90 23 23)"/><text id="r1t" x="23" y="28" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="14" fill="#fff">30</text></svg><div><b id="clipb">Скопировано</b><span id="clips">сотрётся из буфера через 30 с</span></div></div></div>
+    <div class="pn" id="pB1"><h5>Всё</h5><div class="apps"><span class=""><i>📝</i>Заметки</span><span class=""><i>⏰</i>Дела</span><span class=""><i>💬</i>Чат</span><span class=""><i>❤️</i>Близкие</span><span class="on"><i>🔐</i>Сейф</span><span class=""><i>💸</i>Деньги</span><span class=""><i>📅</i>Календарь</span><span class=""><i>🎬</i>Уроки</span><span class=""><i>⚙️</i>Настройки</span></div></div>
+    <div class="pn" id="pB2"><h5>🔐 Сейф</h5><div style="font-size:16px;font-weight:700;color:var(--mut)">Мастер-пароль — тот же, что на компьютере</div><div class="mpw" id="mpw2"></div></div>
+    <div class="pn lst" id="pB3"><h5>🔐 Сейф<small>● открыт</small></h5><div class="srch">🔎 поиск</div>
+      <div class="rw"><i>📶</i>Вайфай дома<em>••••••</em></div><div class="rw"><i>🛒</i>Дом и сад<em>••••••••</em></div><div class="rw"><i>🔢</i>Домофон<em>••••</em></div>
+      <div class="rw"><i>💳</i>ПИН карты<em>••••</em></div><div class="rw"><i>🏦</i>Банк онлайн<em>••••••</em></div></div>
+    <div class="pn" id="pC"><h5>🔐 Сейф<small>● открыт</small></h5>
+      <div class="rec"><div class="t"><i>📶</i><div><b>Вайфай дома</b><small>сеть Home_5G</small></div></div><label>ПАРОЛЬ</label><div class="v pwv" id="pwv">Solnce-25!</div>
+        <div class="bts"><span class="on" id="eye">👁 Скрыть</span><span>📋 Скопировать</span></div></div>
+      <div class="clip"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="5"/><circle id="r2" cx="23" cy="23" r="19" fill="none" stroke="#7ee0b0" stroke-width="5" stroke-linecap="round" stroke-dasharray="119.4" transform="rotate(-90 23 23)"/><text id="r2t" x="23" y="28" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="14" fill="#fff">30</text></svg><div><b>Пароль на экране</b><span>скроется сам</span></div></div>
+      <div class="lock" id="lk"><div><i>🔒</i><b>Сейф закрыт</b><small>Свернули телефон — закрылся сам</small></div></div></div>
+  </div></div></div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  sync: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  master: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  phone: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  guard: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  const ring = (id, left, total) => { $("#" + id).setAttribute("stroke-dashoffset", (119.4 * (1 - left / total)).toFixed(1)); $("#" + id + "t").textContent = Math.max(0, Math.ceil(left)); };
+  const pane = (id, a, b) => vis($(id), Math.min(out((T - a) / 0.35), 1 - out((T - b + 0.3) / 0.3)), 12);
+  // телефон: в живой сцене, в «телефоне» и в «защите»
+  const ph = Math.max(Math.min(out((T - s("problem").start - 0.4) / 0.6), 1 - out((T - s("sync").start + 0.5) / 0.5)),
+                      Math.min(out((T - s("phone").start - 0.2) / 0.6), 1 - out((T - s("how").start + 0.5) / 0.5)));
+  vis($("#L-phone"), clamp(ph));
+  scene($("#shop"), T, s("problem").start + 0.3, s("sync").start, 24);
+  pane("#pA", s("problem").start + 0.2, s("sync").start);
+  const tc = at("s2b") + 1.6, cp = T > tc;
+  $("#cpy").classList.toggle("on", cp);
+  vis($("#clip"), Math.min(out((T - tc) / 0.35), 1), 16);
+  const left = 30 - clamp((T - tc - 0.6) / 4.2) * 30; ring("r1", left, 30);
+  const wiped = left <= 0; $("#clipb").textContent = wiped ? "Буфер очищен ✓" : "Скопировано"; $("#clips").textContent = wiped ? "пароля там больше нет" : "сотрётся из буфера через " + Math.ceil(left) + " с";
+  $("#spw").textContent = T > tc + 0.9 ? "• • • • • • • • • •" : ""; $("#sgo").classList.toggle("ok", T > tc + 1.6); $("#sgo").textContent = T > tc + 1.6 ? "Вход выполнен ✓" : "Войти и оплатить";
+  scene($("#syn"), T, s("sync").start + 0.2, s("master").start);
+  const on = T > s("sync").start + 3.2; $("#tg1").classList.toggle("on", on); $("#sw").classList.toggle("on", on);
+  scene($("#mp"), T, s("master").start + 0.2, s("phone").start);
+  const km = (T - s("master").start - 0.8) / 1.4; $("#mpi").textContent = "•".repeat(Math.round(12 * clamp(km)));
+  scene($("#dg"), T, s("master").start + 1.6, s("phone").start, 24);
+  [...$("#dg").querySelectorAll(".dv")].forEach((c, i) => vis(c, out((T - s("master").start - 2.0 - i * 0.3) / 0.4), 14));
+  const H = "0123456789abcdef"; let hx = ""; for (let i = 0; i < 60; i++) hx += H[Math.floor((Math.sin(i * 12.9898 + Math.floor(T * 6)) * 43758.5453 % 1 + 1) % 1 * 16)] + (i % 4 === 3 ? " " : "");
+  $("#hex").textContent = hx;
+  pane("#pB1", s("phone").start + 0.2, s("phone").start + 2.6);
+  pane("#pB2", s("phone").start + 2.6, s("phone").start + 4.6);
+  $("#mpw2").textContent = "•".repeat(Math.round(12 * clamp((T - s("phone").start - 3.0) / 1.0)));
+  pane("#pB3", s("phone").start + 4.6, s("guard").start);
+  scene($("#edit"), T, s("phone").start + 0.3, s("guard").start);
+  [...$("#edit").querySelectorAll(".row, .ar")].forEach((c, i) => vis(c, out((T - s("phone").start - 0.8 - i * 0.7) / 0.4), 12));
+  pane("#pC", s("guard").start + 0.1, s("how").start + 0.4);
+  const lt = 15 - clamp((T - s("guard").start - 0.8) / 3.0) * 15; ring("r2", lt, 15);
+  $("#pwv").textContent = lt > 0 ? "Solnce-25!" : "• • • • • • • •";
+  $("#eye").classList.toggle("on", lt > 0); $("#eye").textContent = lt > 0 ? "👁 Скрыть" : "👁 Показать";
+  vis($("#lk"), out((T - end("s6a") + 1.4) / 0.5), 0, 1.04);
+  scene($("#rules"), T, s("guard").start + 0.2, s("how").start);
+  [...$("#rules").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - s("guard").start - 0.6 - i * 0.6) / 0.4), 12));
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  [...$("#studio").querySelectorAll(".sw2, .row")].forEach((c, i) => vis(c, out((T - s("how").start - 0.6 - i * 0.4) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

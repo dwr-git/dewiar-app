@@ -202,7 +202,7 @@ with sync_playwright() as p:
               dayTab = 'notes'; renderDay()"""); pg.wait_for_timeout(400)
             pv = pg.inner_text(".it.note .ntpv")
             ok(not any(x in pv for x in ("**", "##", "> ", "[x]", "](", "```")) and "Ответы для GitHub" in pv and "☑" in pv
-               and pg.locator(".it.note .ntpv b").count() >= 1, f"заметки на телефоне — без сырого Markdown (№246): {pv[:120]!r}")
+               and pg.locator(".it.note .ntpv b").count() == 0, f"заметки на телефоне — без сырого Markdown (№246), превью сплошным текстом без жирного (03.11): {pv[:120]!r}")
             mu = pg.evaluate("getComputedStyle(document.body).getPropertyValue('--muted')")
             ok(float(re.findall(r"[\d.]+", mu)[-1]) >= 0.7, f"второстепенный текст светлой темы — плотнее (№242): {mu}")
         pg.close()

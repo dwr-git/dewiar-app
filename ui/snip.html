@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Dewiar — вырезать с экрана</title>
+<link href="assets/fonts.css" rel="stylesheet">
+<style>
+  /* «Вырезать кусок экрана» (идея №83, 03.11): окно на весь экран (ui/app.py snip_open / snip_show) со снимком экрана,
+     который ядро сделало, пока окно было спрятано (snip_shot). Экран как будто застыл и притемнён; рамкой выделяют
+     кусок — он ложится картинкой в блокнот, а текст с него распознаётся и копируется (ядро: snip_done → событие snip).
+     Esc или правая кнопка — отмена. Несколько мониторов — снимок всех целиком, вписанный в этот экран. */
+  :root { --acc: #8B8CF7; --acc2: #5FD7E8; --ink: #F5F3FF; --dim: rgba(8, 9, 16, .52); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font: 14px/1.4 "Manrope", "Ubuntu", "Segoe UI", "Noto Sans", sans-serif; color: var(--ink); cursor: crosshair;
+         user-select: none; -webkit-user-select: none; -webkit-font-smoothing: antialiased; }
+  #shot { position: absolute; display: block; pointer-events: none; image-rendering: auto; }
+  /* притемнение — вокруг рамки (огромная тень у рамки); пока рамки нет — весь экран */
+  #veil { position: absolute; inset: 0; background: var(--dim); pointer-events: none; transition: opacity .12s; }
+  body.sel #veil { opacity: 0; }
+  #box { position: absolute; display: none; pointer-events: none; border-radius: 3px;
+         box-shadow: 0 0 0 1.5px var(--acc), 0 0 0 4px rgba(139,140,247,.28), 0 0 0 100vmax var(--dim); }
+  body.sel #box { display: block; }
+  #box i { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--acc); }
+  #box i:nth-child(1) { left: -5px; top: -5px; } #box i:nth-child(2) { right: -5px; top: -5px; }
+  #box i:nth-child(3) { left: -5px; bottom: -5px; } #box i:nth-child(4) { right: -5px; bottom: -5px; }
+  #size { position: absolute; display: none; padding: 3px 8px; border-radius: 7px; background: rgba(13,11,20,.82); color: #fff;
+          font: 600 12px/1.3 "Manrope", sans-serif; font-variant-numeric: tabular-nums; pointer-events: none; white-space: nowrap; }
+  body.sel #size { display: block; }
+  /* подсказка сверху: что будет и как отменить */
+  #tip { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px;
+         padding: 10px 12px 10px 16px; border-radius: 16px; pointer-events: auto; cursor: default; width: max-content; max-width: calc(100% - 32px);
+         background: linear-gradient(180deg, rgba(28,24,42,.94), rgba(16,14,24,.94)); border: 1px solid rgba(157,140,255,.28);
+         box-shadow: 0 18px 50px -12px rgba(0,0,0,.7); transition: opacity .15s, transform .15s; }
+  body.drag #tip { opacity: 0; transform: translate(-50%, -8px); pointer-events: none; }
+  #tip svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--acc2); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  #tip b { font-weight: 700; } #tip span { color: rgba(245,243,255,.72); }
+  #tip kbd { font: 700 11.5px/1 "Manrope", sans-serif; padding: 4px 7px; border-radius: 6px; background: rgba(255,255,255,.1);
+             border: 1px solid rgba(255,255,255,.14); color: #fff; }
+  #x { width: 30px; height: 30px; flex: none; border: 0; border-radius: 10px; display: grid; place-items: center; cursor: pointer;
+       background: rgba(255,255,255,.07); color: rgba(245,243,255,.8); }
+  #x:hover, #x:focus-visible { background: rgba(255,255,255,.16); color: #fff; outline: none; }
+  #x svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2.2; }
+  /* после выделения — «кладу в блокнот»; ошибка — карточкой по центру */
+  #msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; width: max-content; max-width: min(520px, calc(100% - 32px));
+         padding: 18px 20px; border-radius: 18px; text-align: center; cursor: default;
+         background: linear-gradient(180deg, rgba(28,24,42,.96), rgba(16,14,24,.96)); border: 1px solid rgba(157,140,255,.28);
+         box-shadow: 0 24px 60px -16px rgba(0,0,0,.75); }
+  #msg.on { display: block; } #msg p { color: rgba(245,243,255,.8); margin-top: 6px; }
+  #msg button { margin-top: 14px; padding: 8px 16px; border: 0; border-radius: 11px; font: 700 13.5px "Manrope", sans-serif; cursor: pointer;
+                background: var(--acc); color: #fff; }
+  #msg.busy b::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 10px; border-radius: 50%;
+                       border: 2px solid var(--acc2); border-right-color: transparent; animation: spin .8s linear infinite; vertical-align: -1px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #veil, #tip { transition: none; } #msg.busy b::after { animation: none; } }
+</style>
+</head>
+<body role="application" aria-label="Выделите кусок экрана мышкой; Escape — отмена">
+<img id="shot" alt="">
+<div id="veil"></div>
+<div id="box"><i></i><i></i><i></i><i></i></div>
+<div id="size"></div>
+<div id="tip" role="status">
+  <svg viewBox="0 0 24 24"><circle cx="6" cy="6.5" r="2.6"/><circle cx="6" cy="17.5" r="2.6"/><path d="M8.2 8 20 18M8.2 16 20 6"/></svg>
+  <div><b>Выделите кусок экрана</b> <span>— он ляжет в блокнот, а текст с него скопируется</span></div>
+  <kbd>Esc</kbd>
+  <button id="x" title="Отмена (Esc)" aria-label="Отмена"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+</div>
+<div id="msg" role="alert"><b id="msg-t"></b><p id="msg-p"></p><button id="msg-b" hidden>Закрыть</button></div>
+<script src="assets/dewiar.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const S = { id: "", w: 0, h: 0, k: 1, ox: 0, oy: 0, a: null, b: null, busy: false, shown: false };
+const api = () => window.pywebview && window.pywebview.api;
+
+/* снимок вписан в окно (contain): k — масштаб, ox/oy — отступы; рамка в окне -> пиксели снимка */
+function fit() {
+  if (!S.w) return;
+  const W = innerWidth, H = innerHeight;
+  S.k = Math.min(W / S.w, H / S.h); S.ox = (W - S.w * S.k) / 2; S.oy = (H - S.h * S.k) / 2;
+  Object.assign($("#shot").style, { left: S.ox + "px", top: S.oy + "px", width: S.w * S.k + "px", height: S.h * S.k + "px" });
+  draw();
+}
+addEventListener("resize", fit);
+const clampX = (x) => Math.max(S.ox, Math.min(S.ox + S.w * S.k, x)), clampY = (y) => Math.max(S.oy, Math.min(S.oy + S.h * S.k, y));
+function rect() {
+  if (!S.a || !S.b) return null;
+  const x = Math.min(S.a.x, S.b.x), y = Math.min(S.a.y, S.b.y);
+  return { x, y, w: Math.abs(S.b.x - S.a.x), h: Math.abs(S.b.y - S.a.y) };
+}
+function draw() {
+  const r = rect(); document.body.classList.toggle("sel", !!r && (r.w > 2 || r.h > 2));
+  if (!r) return;
+  Object.assign($("#box").style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+  const sz = $("#size"); sz.textContent = `${Math.round(r.w / S.k)} × ${Math.round(r.h / S.k)}`;
+  const below = r.y + r.h + 30 < innerHeight;
+  sz.style.left = Math.min(r.x, innerWidth - 90) + "px"; sz.style.top = (below ? r.y + r.h + 8 : Math.max(4, r.y - 28)) + "px";
+}
+function msg(t, p, closeBtn, busy) {
+  const m = $("#msg"); m.classList.toggle("on", !!t); m.classList.toggle("busy", !!busy);
+  $("#msg-t").textContent = t || ""; $("#msg-p").textContent = p || ""; $("#msg-b").hidden = !closeBtn;
+  if (closeBtn) setTimeout(() => $("#msg-b").focus(), 30);
+}
+function cancel() {
+  if (S.id) core.call("snip_cancel", { id: S.id }).catch(() => { });
+  const a = api(); if (a && a.snip_close) a.snip_close(false); else window.close();
+}
+$("#x").onclick = (e) => { e.stopPropagation(); cancel(); };
+$("#msg-b").onclick = cancel;
+$("#tip").addEventListener("pointerdown", (e) => e.stopPropagation());
+addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); cancel(); } });
+addEventListener("contextmenu", (e) => { e.preventDefault(); if (!S.busy) cancel(); });
+
+addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || S.busy || !S.id || $("#msg").classList.contains("on")) return;
+  S.a = S.b = { x: clampX(e.clientX), y: clampY(e.clientY) }; document.body.classList.add("drag");
+  try { document.body.setPointerCapture(e.pointerId); } catch (x) { }
+  draw();
+});
+addEventListener("pointermove", (e) => { if (!S.a || S.busy || !document.body.classList.contains("drag")) return; S.b = { x: clampX(e.clientX), y: clampY(e.clientY) }; draw(); });
+addEventListener("pointerup", async () => {
+  if (!document.body.classList.contains("drag")) return;
+  document.body.classList.remove("drag");
+  const r = rect();
+  if (!r || r.w < 6 || r.h < 6) { S.a = S.b = null; draw(); return; }   // щелчок без рамки — ничего не вырезаем
+  S.busy = true; msg("Кладу в блокнот", "Текст распознается и скопируется сам.", false, true);
+  try {
+    await core.call("snip_done", { id: S.id, rect: [(r.x - S.ox) / S.k, (r.y - S.oy) / S.k, r.w / S.k, r.h / S.k] });
+    S.id = "";
+    const a = api(); if (a && a.snip_close) a.snip_close(true); else window.close();
+  } catch (err) { S.busy = false; S.a = S.b = null; draw(); msg("Не вырезалось", err.message, true); }
+});
+
+/* снимок делает ядро, пока окно спрятано; нарисовали — показываем окно на весь экран */
+async function start() {
+  try {
+    const r = await core.call("snip_shot");
+    S.id = r.id; S.w = r.w; S.h = r.h;
+    const img = $("#shot");
+    await new Promise((ok) => { img.onload = ok; img.onerror = ok; img.src = r.url; });
+    fit();
+  } catch (e) {
+    msg("Снимок экрана не получился", e.message, true);
+  }
+  const a = api(); if (a && a.snip_show) a.snip_show();
+  S.shown = true; setTimeout(() => { try { window.focus(); } catch (x) { } }, 60);
+}
+let started = false;
+const go = () => { if (started) return; started = true; start(); };
+if (window.pywebview && window.pywebview.api) setTimeout(go, 50); else addEventListener("pywebviewready", go);
+setTimeout(go, 1500);                                       // открыли не в окне Dewiar (проверки) — всё равно начать
+</script>
+</body>
+</html>

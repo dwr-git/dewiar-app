@@ -4,7 +4,9 @@
   найденное — в кэш, одна на альбом; трек → «станция» с art; в статусе радио и «Музыки» — адрес картинки;
 - виджет: вместо пластинки рисуется обложка (битая или не загрузилась — пластинка);
 - чтение папки: сначала «ищу файлы, нашлось N», потом «читаю треки: i из N» — событием, не чаще двух раз в секунду;
-- студия: обложка в «Сейчас играет», полоска хода чтения."""
+- студия: обложка в «Сейчас играет», полоска хода чтения.
+№511 (03.11, Windows): обложки не показывались — отдавались как file://, а студия там открыта с http://127.0.0.1;
+теперь статус отдаёт data:URL уменьшенной картинки."""
 import json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -62,8 +64,17 @@ dj = Dj(lib, lambda: []); dj.covers = cov
 st = dj.station(by["01.mp3"])
 ok(st.get("art") == a_mp3 and "art" not in dj.station(by["plain.wav"]), "трек → «станция» с обложкой (без обложки — без поля)")
 src = (ROOT / "core/radio.py").read_text(encoding="utf-8") + (ROOT / "core/engine_mymusic.py").read_text(encoding="utf-8")
-ok('"art": Path(art).as_uri()' in src and "art=Path(art).as_uri()" in src and "progress=p" in src,
-   "статус радио и «Музыки» отдают адрес обложки, ход чтения уходит событием")
+ok('"art": _art_url(art)' in src and "art=art_url(art)" in src and "as_uri()" not in src and "progress=p" in src,
+   "статус радио и «Музыки» отдают обложку data:URL (не file:// — №511), ход чтения уходит событием")
+# №511 (03.11, Windows): «бэкенд отдаёт обложки как file:// URI, а Chromium блокирует file:// из веб-страницы студии»
+from mymusic import art_url  # noqa: E402
+big = tmp / "big.png"
+run("-f", "lavfi", "-i", "color=c=red:s=1600x1600", "-frames:v", "1", str(big))
+u_big, u_mp3 = art_url(str(big)), art_url(a_mp3)
+ok(u_big.startswith("data:image/jpeg;base64,") and len(u_big) < 60_000, f"№511: обложка — data:URL, большая уменьшена ({len(u_big)} знаков)")
+ok(u_mp3.startswith("data:image/") and art_url(a_mp3) is u_mp3, "№511: обложка из кэша — data:URL, второй раз не пересчитывается")
+ok(art_url("") == "" and art_url(str(tmp / "нет.jpg")) == "" and art_url(str(mus / "Папка/song.wav")) == "",
+   "№511: нет файла или не картинка — пусто (останется пластинка)")
 
 # виджет: обложка вместо пластинки
 page = tmp / "e.html"
@@ -113,6 +124,15 @@ const core = {{ on() {{}}, call: () => Promise.resolve({{}}) }}; const toast = (
     r = pg.evaluate("""() => { mmStats({ busy: true, folder: '/m', progress: { phase: 'find', found: 5120 } });
         return [document.getElementById('mm-stats').innerText, !!document.querySelector('#mm-stats i.run')]; }""")
     ok("нашлось 5" in r[0] and r[1], f"студия: пока ищем файлы — «нашлось N» и бегущая полоска: {r}")
+    # №511: страница с http://127.0.0.1 (так студия открыта на Windows) — file:// не грузится, data:URL — да
+    import functools, http.server, threading
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(tmp)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    pg.goto(f"http://127.0.0.1:{srv.server_address[1]}/s.html"); pg.wait_for_timeout(300)
+    load = """(u) => new Promise(r => { const i = new Image(); i.onload = () => r(i.naturalWidth); i.onerror = () => r(0); i.src = u; setTimeout(() => r(-1), 3000); })"""
+    ok(pg.evaluate(load, Path(a_mp3).as_uri()) <= 0 and pg.evaluate(load, u_mp3) == 64,
+       "№511: со страницы http картинка file:// не грузится, а data:URL обложки — показывается")
+    srv.shutdown()
     ok(not errs, f"без ошибок: {errs[:2]}")
     b.close()
 print("ИТОГ:", "все проверки пройдены" if not fails else f"не пройдено {len(fails)}")

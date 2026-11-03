@@ -1831,13 +1831,32 @@ class ToolsMixin:
                     break
                 at = next_time(r["repeat"], at)
                 n += 1
+        # сделанные дела (done.py; идея №41: «дела и напоминания — в календаре, выполненные — со статусом „выполнено“»):
+        # закрытое напоминание — его же прозвеневшая строка с пометкой closed, остальное — отдельной строкой «выполнено»
+        closed = {}
+        try:
+            for x in list(getattr(self, "done", None).items if getattr(self, "done", None) else []):
+                t = datetime.fromtimestamp(int(x["at"]) / 1000)
+                if first <= t <= last:
+                    closed.setdefault((x.get("rid") or "", t.date().isoformat()), []).append((x, t))
+        except Exception:  # noqa: BLE001
+            log.debug("календарь: сделанное", exc_info=True)
         for h in self._reminder_log():                          # что уже звенело — в назначенное время (опоздавшее тоже)
             when = h.get("due") or h.get("at", "")
             d = when[:10]
             if first.date().isoformat() <= d <= last.date().isoformat():
-                put(d, {"type": "reminder", "time": when[11:16], "title": h.get("title") or h.get("text", ""), "done": True,
-                        "kind": h.get("kind") or "reminder", "skipped": bool(h.get("skipped")),
-                        "fired": h["at"][:16] if h.get("due") and not h.get("skipped") else ""})
+                same = closed.get((h["id"], d)) if h.get("id") else None
+                it = {"type": "reminder", "time": when[11:16], "title": h.get("title") or h.get("text", ""), "done": True,
+                      "kind": h.get("kind") or "reminder", "skipped": bool(h.get("skipped")),
+                      "fired": h["at"][:16] if h.get("due") and not h.get("skipped") else ""}
+                if same:                                        # закрыли «сделано» в тот же день
+                    x, t = same.pop(0)
+                    it.update(closed=True, closed_at=t.strftime("%H:%M"), did=x["id"], skipped=False)
+                put(d, it)
+        for (_rid, d), xs in closed.items():
+            for x, t in xs:
+                put(d, {"type": "reminder", "kind": "done", "time": t.strftime("%H:%M"), "title": x.get("title") or "Дело",
+                        "done": True, "closed": True, "closed_at": t.strftime("%H:%M"), "did": x["id"]})
         for m in self.money.list(first.date().isoformat(), last.date().isoformat()):
             put(m["date"], {"type": "money", "id": m["id"], "kind": m["kind"], "amount": m["amount"],
                             "currency": m["currency"], "title": m["note"] or m["category"], "category": m["category"]})

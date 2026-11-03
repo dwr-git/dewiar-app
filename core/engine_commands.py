@@ -14,7 +14,7 @@ _KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", 
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_", "month_")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_", "month_", "ocr_install")
 
 
 def _kids_blocked(cmd, a):
@@ -480,6 +480,9 @@ class CommandsMixin:
         P = self.plugins
         if cmd in ("plugin_page", "plugin_run", "plugin_restart", "plugin_files", "plugin_open", "plugin_ui"):
             return self._plugin_page_cmd(cmd, a)
+        if cmd in ("plugin_make", "plugin_change", "plugin_versions", "plugin_restore", "plugin_undo", "plugin_templates",
+                   "plugin_store", "plugin_data", "plugin_grant", "plugin_theme", "plugin_fetch"):
+            return self._plugin_make_cmd(cmd, a)
         try:
             if cmd == "plugin_install":
                 P.install(a["id"], a.get("values"))
@@ -512,6 +515,11 @@ class CommandsMixin:
                 P.install(P.install_zip(base64.b64decode(a.get("zip_b64") or "")))
             elif cmd == "plugin_delete":
                 P.delete(a["id"])
+                import plugin_bridge as B
+                B.forget(self.s, a["id"])
+                if ((self.s.get("ui", "plugin_theme") or {}).get("id")) == a["id"]:
+                    self.s.update({"ui": {"plugin_theme": None}})
+                    self.emit("plugin_theme", theme=None)
             elif cmd != "plugins":
                 raise ValueError(f"неизвестная команда {cmd}")
         except (PluginError, ToolError, KeyError) as e:
@@ -525,6 +533,69 @@ class CommandsMixin:
         if cmd == "plugins":
             out["guide"] = P.guide()
         return out
+
+    def plugins_changed(self, pid="", code=False, open_=False):
+        """Плагин сделан или изменён Лирой: навыки, серверы (если есть код), меню студии и страница — сразу."""
+        self.skills.reload()
+        if code:
+            self.mcp.reconcile()
+            if pid:
+                try:
+                    self.mcp.plugin_restart(pid)
+                except Exception:  # noqa: BLE001 — сервер ещё не поднялся: reconcile поднимет
+                    pass
+        p = self.plugins.items.get(pid) or {}
+        self.emit("plugin_made", id=pid, name=p.get("name", ""), icon=p.get("icon", ""), open=bool(open_))
+
+    def _plugin_make_cmd(self, cmd, a):
+        """Лира делает плагин по описанию (core/plugin_maker.py) и расширенный мост страницы (core/plugin_bridge.py):
+        plugin_make {describe, code, template} / plugin_change {id, request, code} / plugin_versions {id} /
+        plugin_restore {id, v} / plugin_undo {id} / plugin_templates / plugin_store {id, op: get|set, key, value} /
+        plugin_data {id, scope} — только с разрешения / plugin_grant {id, scope, on: true|false|null} /
+        plugin_theme {id, vars | reset} / plugin_fetch {id, url} — текст статьи (читалка)."""
+        import plugin_bridge as B
+        from plugin_maker import MakerError
+        M, P, pid = self.maker, self.plugins, str(a.get("id") or "")
+        try:
+            if cmd == "plugin_templates":
+                return {"items": M.templates()}
+            if cmd == "plugin_make":
+                code = bool(a.get("code"))
+                r = M.from_template(a["template"]) if a.get("template") else M.create(a.get("describe") or "", code=code, name=a.get("name") or "")
+                self.plugins_changed(r["id"], code=code)
+                return dict(r, plugins=P.catalog())
+            if cmd in ("plugin_change", "plugin_restore", "plugin_undo"):
+                code = bool(a.get("code"))
+                r = (M.change(pid, a.get("request") or "", code=code) if cmd == "plugin_change" else
+                     M.restore(pid, int(a.get("v") or 0)) if cmd == "plugin_restore" else M.undo(pid))
+                self.plugins_changed(pid, code=code or bool(r.get("code")))
+                return dict(r, plugins=P.catalog(), versions=M.versions(pid))
+            if cmd == "plugin_versions":
+                M._made(pid)
+                return M.versions(pid)
+            if cmd == "plugin_theme" and a.get("reset"):        # «Оформление» → «Сбросить тему» — даже если плагина уже нет
+                self.s.update({"ui": {"plugin_theme": None}})
+                self.emit("plugin_theme", theme=None)
+                return {"theme": None}
+            if pid not in P.items:
+                raise ValueError("нет такого плагина")
+            if cmd == "plugin_store":
+                if a.get("op") == "set":
+                    return B.store_set(pid, a.get("key"), a.get("value"))
+                return {"value": B.store_get(pid, a.get("key"))}
+            if cmd == "plugin_grant":
+                return {"grants": B.grant(self.s, P, pid, str(a.get("scope") or ""), a.get("on"))}
+            if cmd == "plugin_data":
+                return B.data(self.s, P, self, pid, str(a.get("scope") or ""))
+            if cmd == "plugin_theme":
+                t = B.set_theme(self.s, P, pid, a.get("vars"))
+                self.emit("plugin_theme", theme=t)
+                return {"theme": t}
+            if cmd == "plugin_fetch":
+                return B.read_url(self.s, a.get("url"))
+        except (MakerError, B.BridgeError, KeyError) as e:
+            raise ValueError(str(e).strip("'")) from e
+        raise ValueError(f"неизвестная команда {cmd}")
 
     def _plugin_page_cmd(self, cmd, a):
         """Страница плагина в студии (core/plugin_pages.py, ui/studio/plugpage.js): plugin_page {id} — всё для страницы;
@@ -540,7 +611,12 @@ class CommandsMixin:
             ws = None
         try:
             if cmd == "plugin_page":
-                return PP.page(P, self.mcp, pid, ws)
+                import plugin_bridge as B
+                pg = PP.page(P, self.mcp, pid, ws)
+                pg["grants"] = B.grants(self.s, pid)
+                if P.items[pid].get("made"):
+                    pg["versions"] = self.maker.versions(pid)
+                return pg
             if cmd == "plugin_run":
                 if pid not in (self.s.get("plugins", "on") or {}):
                     raise PP.PageError("плагин не установлен — сначала «Установить»")
@@ -561,6 +637,161 @@ class CommandsMixin:
         except (PP.PageError, ToolError) as e:
             raise ValueError(str(e)) from e
         raise ValueError(f"неизвестная команда {cmd}")
+
+    # ---------- «Вырезать кусок экрана» и распознавание текста (идеи №83 и №68, 03.11) ----------
+    # Окно выделения (ui/snip.html, ui/app.py snip_open) берёт снимок экрана здесь (snip_shot) и присылает рамку
+    # (snip_done): вырезанное ложится картинкой во вкладку блокнота, текст распознаётся (core/ocr.py) в фоне и приходит
+    # событием «snip»: блокнот вставляет его под картинкой, виджет кладёт в буфер обмена. Блокнот не открылся (виджет в
+    # трее) — через SNIP_KEEP с ядро допишет картинку и текст во вкладку само.
+    SNIP_KEEP = 25.0
+
+    def ocr_vision(self, b64):
+        """Модель со зрением распознаёт текст на картинке (JPEG base64) -> ответ модели. LLMError — модели нет или она
+        не видит картинок (тогда запоминаем: _blind, как в разговоре)."""
+        import ocr
+        from llm import LLMError, stream_events, user_message
+        prof = self.persona_llm()
+        if not prof:
+            raise LLMError("модель не подключена")
+        key = f"{prof.get('base_url')}|{prof.get('model')}"
+        if key in self._blind:
+            raise LLMError("модель не видит картинок")
+        prof = dict(prof, temperature=0, think="off", max_tokens=max(2048, int(prof.get("max_tokens") or 0)))
+        out = ""
+        try:
+            for kind, val in stream_events(prof, "Ты точно переписываешь текст с картинок.", [user_message(prof, ocr.VISION_PROMPT, [b64])], tools=None):
+                if kind == "text":
+                    out += val
+        except LLMError as e:
+            if re.search(r"image|vision|multimodal|картин|изображ", str(e), re.I):
+                self._blind.add(key)
+            raise
+        return out
+
+    def ocr_install_start(self):
+        """«Поставить распознавание текста» — в фоне (ocr.install). -> что сказать сейчас."""
+        if getattr(self, "_ocr_installing", False):
+            return "Распознавание текста уже ставится — скажу, когда будет готово."
+        self._ocr_installing = True
+
+        def run():
+            import ocr
+            try:
+                ok, msg = ocr.install(on_status=lambda t: self.emit("ocr_install", state="busy", text=t))
+            except Exception as e:  # noqa: BLE001
+                ok, msg = False, f"не получилось: {str(e)[:200]}"
+            self._ocr_installing = False
+            if not ok:
+                msg = "Распознавание текста не поставилось: " + msg
+            log.info("🔤 %s", msg)
+            self.emit("ocr_install", state="done" if ok else "fail", text=msg)
+            self.note(msg)
+        threading.Thread(target=run, name="ocr-install", daemon=True).start()
+        return "Ставлю распознавание текста (около 70 МБ, пару минут) — напишу, когда будет готово."
+
+    def _snip_cmd(self, cmd, a):
+        import base64
+        import io
+        import uuid
+        shots = self.__dict__.setdefault("_snip_shots", {})
+        items = self.__dict__.setdefault("_snips", {})
+        now = time.monotonic()
+        for k in [k for k, v in shots.items() if now - v["t"] > 300]:
+            shots.pop(k, None)                                  # снимок экрана в памяти — не дольше 5 минут
+        for k in [k for k, v in items.items() if now - v["t"] > 600]:
+            items.pop(k, None)
+        if cmd == "snip_shot":
+            from eyes import EyesError, capture_screen
+            from PIL import Image
+            from tools import desktop_env
+            try:
+                data = capture_screen(desktop_env())
+                im = Image.open(io.BytesIO(data))
+                im.load()
+            except (EyesError, OSError) as e:
+                raise ValueError(str(e)) from e
+            except Exception as e:  # noqa: BLE001
+                raise ValueError(f"снимок экрана не прочитался: {e}") from e
+            shots.clear()                                       # одно выделение за раз
+            sid = uuid.uuid4().hex[:12]
+            shots[sid] = {"im": im.convert("RGB"), "t": now}
+            buf = io.BytesIO()
+            shots[sid]["im"].save(buf, "JPEG", quality=90)
+            return {"id": sid, "url": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode(),
+                    "w": im.width, "h": im.height}
+        if cmd == "snip_cancel":
+            shots.pop(str(a.get("id") or ""), None)
+            return True
+        if cmd == "snip_done":
+            shot = shots.pop(str(a.get("id") or ""), None)
+            if shot is None:
+                raise ValueError("снимок экрана устарел — вырежьте ещё раз")
+            im = shot["im"]
+            try:
+                x, y, w, h = [int(round(float(v))) for v in (a.get("rect") or [])][:4]
+            except (TypeError, ValueError) as e:
+                raise ValueError("не понял рамку") from e
+            x, y = max(0, min(x, im.width - 1)), max(0, min(y, im.height - 1))
+            w, h = max(1, min(w, im.width - x)), max(1, min(h, im.height - y))
+            if w < 4 or h < 4:
+                raise ValueError("выделен слишком маленький кусок")
+            crop = im.crop((x, y, x + w, y + h))
+            buf = io.BytesIO()
+            crop.save(buf, "PNG")
+            try:
+                tab = self.pad.tabs()["active"]
+                att = self.pad.attach(tab, time.strftime("Вырезано %d.%m %H-%M-%S") + ".png", base64.b64encode(buf.getvalue()).decode())
+            except Exception as e:  # noqa: BLE001
+                raise ValueError(f"в блокнот не легло: {e}") from e
+            sid = str(a.get("id"))
+            it = {"id": sid, "tab": tab, "line": att["line"], "state": "image", "text": "", "engine": "", "error": "",
+                  "install": False, "t": now, "acked": []}
+            items[sid] = it
+            self.emit("snip", **{k: v for k, v in it.items() if k not in ("t", "acked")})
+            threading.Thread(target=self._snip_ocr, args=(it, crop), name="snip-ocr", daemon=True).start()
+            log.info("✂ Вырезан кусок экрана %d×%d → блокнот «%s»", w, h, tab)
+            return {"id": sid, "tab": tab, "line": att["line"]}
+        if cmd == "snip_take":                                  # блокнот открылся — что вырезано и ещё не вставлено
+            return [{k: v for k, v in it.items() if k not in ("t",)} for it in items.values()
+                    if "text" not in it["acked"] and now - it["t"] < 120]
+        if cmd == "snip_ack":                                   # блокнот вставил: stage — image или text
+            it = items.get(str(a.get("id") or ""))
+            if it is not None and a.get("stage") in ("image", "text") and a["stage"] not in it["acked"]:
+                it["acked"].append(a["stage"])
+            return True
+        raise ValueError(f"неизвестная команда {cmd}")
+
+    def _snip_ocr(self, it, crop):
+        import ocr
+        try:
+            text, engine = ocr.recognize(crop, vision=self.ocr_vision)
+            it.update(text=text, engine=engine)
+            log.info("✂ Распознано %d знаков (%s)", len(text), engine)
+        except ocr.OCRError as e:
+            it.update(error=str(e), install=not ocr.local_engines())
+            log.info("✂ Текст не распознан: %s", e)
+        except Exception as e:  # noqa: BLE001
+            it.update(error=f"не получилось распознать: {str(e)[:200]}")
+            log.warning("✂ Распознавание: %s", e)
+        it["state"] = "text"
+        self.emit("snip", **{k: v for k, v in it.items() if k not in ("t", "acked")})
+        threading.Timer(self.SNIP_KEEP, self._snip_fallback, args=(it,)).start()
+
+    def _snip_fallback(self, it):
+        """Блокнот так и не вставил вырезанное (не открылся) — дописать во вкладку самим."""
+        add = ([it["line"]] if "image" not in it["acked"] else []) + ([it["text"]] if it["text"] and "text" not in it["acked"] else [])
+        if not add:
+            return
+        it["acked"] += ["image", "text"]
+        try:
+            p = self.pad._path(it["tab"])
+            old = p.read_text(encoding="utf-8") if p.is_file() else ""
+            self.pad.write(it["tab"], old.rstrip("\n") + ("\n\n" if old.strip() else "") + "\n\n".join(add) + "\n")
+            self.emit("pad_changed", name=p.stem, deleted=False)
+            if it["text"]:
+                self.note("Текст с экрана — в блокноте и в буфере обмена.")
+        except Exception as e:  # noqa: BLE001
+            log.warning("✂ Во вкладку не дописалось: %s", e)
 
     def _pad_cmd(self, cmd, a):
         """pad_tabs / pad_read {name} / pad_write {name, text, base} / pad_new {name} / pad_rename {name, to} /
@@ -646,6 +877,12 @@ class CommandsMixin:
                 say = f"Открываю {names[game]}." if game else "Давайте! Выбирайте игру."
                 self.emit("window", do="play", game=game)  # сразу: игра — это и есть ответ (экзамен 25.10 не видел, что она открылась)
                 self._say_quick(say, text)
+        elif kind == "snip":                             # «вырежи кусок экрана» (идея №83) — окно выделения у интерфейса
+            if not ui:
+                self._say_quick("Вырезать кусок экрана можно, когда Dewiar на экране. Скажите «покажись» — и ещё раз.", text)
+            else:
+                self.emit("window", do="snip")
+                self._say_quick("Выделите мышкой нужный кусок экрана.", text)
         elif kind == "show":
             if ui:
                 self._say_quick("Я здесь.", text, then=lambda: self.emit("window", do="show"))
@@ -2110,6 +2347,13 @@ class CommandsMixin:
                 raise ValueError(str(e)) from e
         if cmd.startswith("pad_"):                              # блокнот у виджета (ui/pad.html, core/pad.py)
             return self._pad_cmd(cmd, a)
+        if cmd.startswith("snip_"):                             # «Вырезать кусок экрана» (ui/snip.html → блокнот)
+            return self._snip_cmd(cmd, a)
+        if cmd == "ocr_status":                                 # есть ли чем распознавать текст (core/ocr.py)
+            import ocr
+            return dict(ocr.status(), installing=bool(getattr(self, "_ocr_installing", False)))
+        if cmd == "ocr_install":                                # «Поставить распознавание текста»
+            return {"text": self.ocr_install_start()}
         if cmd == "notes_list":                                 # «Заметки»: все заметки и поиск
             return self.workspace.notes(a.get("q", ""))
         if cmd == "note_meta":                                  # метки, цвет, «закрепить», «в архив» — в шапку заметки (0.58)

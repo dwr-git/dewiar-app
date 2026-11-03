@@ -18,9 +18,9 @@
   const VARS = { "--glass": "--sk-glass", "--glass-shadow": "--sk-shadow", "--ink": "--sk-ink", "--muted": "--sk-muted",
                  "--neu-dark": "--sk-nd", "--neu-light": "--sk-nl" };
   let cur = null;
-  window.studioSkin = (id) => {
+  window.studioSkin = (id, force) => {
     const sk = window.dewiarSkin ? dewiarSkin(id) : { id: "brand" };
-    if (sk.id === cur) return;
+    if (sk.id === cur && !force) return;
     cur = sk.id;
     try { localStorage.setItem("studio_skin", sk.id); } catch (e) { }
     root.classList.toggle("st-light", !!sk.light);
@@ -47,6 +47,27 @@
   try { early = new URLSearchParams(location.search).get("skin") || ""; } catch (e) { }
   if (!early) try { early = localStorage.getItem("studio_skin") || ""; } catch (e) { }
   studioSkin(early || "neusky");
+  /* Тема из плагина (Creator, 03.11: dewiar.theme в плагине «Тема оформления»): переменные студии поверх выбранного фона —
+     <style id="plg-theme"> с !important (фон темы ставится в style корня). mode light/dark — свои поля и кнопки
+     (html.st-light). null — сброс: выбранный фон заново. Хранится в settings.ui.plugin_theme (ядро проверяет значения:
+     только цвета и градиенты, plugin_bridge.py) и в localStorage — чтобы окно не мигало при запуске. */
+  const PT_OK = /^[#\w\s.,%()+\-/]{1,700}$/, PT_BAD = /url|image|element|expression|attr|import|javascript/i;
+  window.studioPluginTheme = (t) => {
+    let st = document.getElementById("plg-theme");
+    const vars = t && t.vars ? Object.entries(t.vars).filter(([k, v]) => /^--[a-z0-9-]+$/.test(k) && PT_OK.test(String(v)) && !PT_BAD.test(String(v))) : [];
+    if (!vars.length) {
+      if (st) st.remove();
+      if (root.dataset.ptheme) { delete root.dataset.ptheme; window.studioSkin(root.dataset.skin || "brand", true); }
+      try { localStorage.removeItem("studio_ptheme"); } catch (e) { }
+      return;
+    }
+    if (!st) { st = document.createElement("style"); st.id = "plg-theme"; (document.head || root).appendChild(st); }
+    st.textContent = `html:root, html.st-light:root, html.st-skin:root { ${vars.map(([k, v]) => `${k}: ${v} !important;`).join(" ")} }`;
+    root.dataset.ptheme = t.id || "plugin";
+    if (t.vars.mode === "light" || t.vars.mode === "dark") root.classList.toggle("st-light", t.vars.mode === "light");
+    try { localStorage.setItem("studio_ptheme", JSON.stringify(t)); } catch (e) { }
+  };
+  try { const pt = JSON.parse(localStorage.getItem("studio_ptheme") || "null"); if (pt) window.studioPluginTheme(pt); } catch (e) { }
   // «Облегчённый вид» (core.js studioLite) — тоже до первого кадра: последнее решение запомнено в localStorage
   try { if (localStorage.getItem("studio_lite") === "1") root.classList.add("st-lite"); } catch (e) { }
 })();

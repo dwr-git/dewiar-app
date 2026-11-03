@@ -267,6 +267,16 @@ const EXAM_PHONE = [
   { id: "weather_hello", group: "Интернет", title: "«Привет! Какая погода?» — приветствие не мешает, числа настоящие",
     steps: ["Привет! Какая сейчас погода в Минске?"], expect: { regex: "[-+−]?\\d+\\s*(?:°|градус)|(?:плюс|минус)\\s*\\d+|\\d+\\s*[–—-]\\s*\\d+|(?:^|[\\s(])[+−]\\d+\\b" },
     judge: "Сразу настоящая погода в Минске сейчас: температура и коротко, что на улице (можно коротко поздороваться). Без выдуманных чисел и без «не могу узнать»." },
+  // экзамен 0.9.18 (03.11): «Помахала Мише 👋», «Отметила! 🎉», «Привет! Давай гляну.» — словами, без действия; те же просьбы иначе
+  { id: "close_wave_mom", group: "Близкие", title: "«Помаши маме» — помахать через радар, а не словами", seed: { close: ["Мама", "Миша Исаев"] },
+    steps: ["Помаши маме"], tool: { close_wave: {} }, expect: { none: ["не могу", "не умею"] },
+    judge: "Помахал маме через Dewiar (close_wave) и коротко подтвердил. «Помахала 👋» без вызова действия — 0 баллов (экзамен 0.9.18)." },
+  { id: "done_bread", group: "Заметки", title: "«Отметь, что я купил хлеб» — отметка правда стоит", seed: { alarms: [{ title: "купить хлеб", in_h: 1 }] },
+    steps: ["отметь, что я купил хлеб"], done: { min: 1, all: ["хлеб"], reminder_gone: "хлеб" }, tool: { mark_done: {} },
+    judge: "Отметил дело «купить хлеб» сделанным (mark_done или сразу без модели), напоминание о нём закрыто, коротко похвалил. «Отметила!» без отметки — 0 баллов." },
+  { id: "weather_hi_short", group: "Интернет", title: "«Привет! А погода?» — погода в городе человека, а не «давай гляну»", seed: { memory: ["Пользователь живёт в Минске"] },
+    steps: ["Привет! А погода?"], expect: { regex: "[-+−]?\\d+\\s*(?:°|градус)|(?:плюс|минус)\\s*\\d+|\\d+\\s*[–—-]\\s*\\d+|(?:^|[\\s(])[+−]\\d+\\b|ноль" },
+    judge: "Город не назван — взял город пользователя (Минск, из памяти или настроек) и сразу назвал погоду: температура и что на улице. «Давай гляну», «сейчас посмотрю» без чисел или выдуманные числа без прогноза — 0 баллов." },
   { id: "help_lessons", group: "Как в жизни", title: "«Есть видеоуроки?» — где они, по руководству",
     steps: ["А есть у тебя видеоуроки, чтобы посмотреть, что ты умеешь?"], tool: { app_help: {} }, expect: { any: ["Видеоурок", "видеоурок"] },
     judge: "Да: «Видеоуроки» (ИИ Академия Лиры) — на телефоне «Всё» → «Видеоуроки», в студии «Обучение» → «Видеоуроки»; короткие мультфильмы по минуте. Без выдуманных уроков." },
@@ -375,6 +385,7 @@ syncRun = async function (m) { if (!EXAM) return _examSyncRun(m); };            
 
 async function examAsk(text, image) {
   const h0 = history.length, n0 = EXAM.tools.length, d0 = (SANDBOX.dev || []).length;
+  turnServers = new Set();                                                       // eslint-disable-line no-global-assign
   if (image) { attached = [{ kind: "image", name: "фото.png", url: EXAM_PIX }]; renderAtts(); }   // прикреплено в поле ввода, как у человека
   if (image) askHeard(text); else await ask(text);
   await sleep(50);
@@ -383,8 +394,9 @@ async function examAsk(text, image) {
   const fresh = history.slice(h0).filter(m => m.role === "assistant");
   const answer = fresh.length ? String(fresh[fresh.length - 1].content || "") : String(($("#bot") || {}).textContent || "");
   // быстрые ответы без модели (фонарик, громкость, радио) — тоже действия: судья должен их видеть
-  const dev = (SANDBOX.dev || []).slice(d0).map(x => ({ name: x.name, args: x.args || (x.op ? x.op + (x.v != null ? " " + x.v : "") : x.on != null ? (x.on ? "вкл" : "выкл") : ""), result: "выполнено сразу, без модели", ok: true }));
-  return { say: text, answer: answer.slice(0, 2000), tools: dev.concat(EXAM.tools.slice(n0).map(({ argsObj, ...x }) => x)) };
+  const dev = (SANDBOX.dev || []).slice(d0).map(x => ({ name: x.name, args: x.args || (x.op ? x.op + (x.v != null ? " " + x.v : "") : x.on != null ? (x.on ? "вкл" : "выкл") : ""), result: x.result || "выполнено сразу, без модели", ok: true }));
+  // экзамен 0.9.18: «Помахала Мише 👋» без действия — какой сервер облака отвечал (главный, дополнительный, лёгкий)
+  return { say: text, answer: answer.slice(0, 2000), tools: dev.concat(EXAM.tools.slice(n0).map(({ argsObj, ...x }) => x)), servers: [...turnServers] };
 }
 
 function examChecks(sc, last, toolsAll, t0) {
@@ -482,6 +494,7 @@ function examSeed(seed) {
     const id = "seedC" + i; ids.calendar.push(id);
     EXAM.calendar.push({ id, title: c.title, begin: d.getTime(), end: d.getTime() + (c.min || 60) * 6e4, all_day: false, location: c.where || "", made: 0 });
   });
+  if (seed.memory) S.memory = seed.memory.slice();                                   // «живу в Минске» — город для погоды
   if (seed.notes) { const all = notes(); seed.notes.forEach((n, i) => { const id = "seed" + i + Date.now(); ids.notes.push(id); all.push({ id, title: n.title, text: n.text, time: Date.now() - (i + 1) * 3600e3 }); }); saveNotes(all); }
   if (seed.close) { const st = clLoad(); ids.close = st.people; st.people = seed.close.map((n, i) => ({ pid: "pseed" + i, name: n, devs: [{ dev: "d" + i, pub: "A".repeat(43) }] })); }
   (seed.alarms || []).forEach((a, i) => { const id = "seedA" + i; ids.alarms.push(id); EXAM.alarms.push({ id, title: a.title, at: Date.now() + (a.in_h || 1) * 36e5, kind: "reminder", repeat: "", made: 0 }); });
@@ -542,7 +555,7 @@ function examMarkdown(rep) {
     for (const st of r.steps) {
       L.push("", `> **Вы:** ${st.say}`);
       for (const x of st.tools || []) L.push(`>  🔧 \`${x.name}\` ${x.args.slice(0, 120)} → ${(x.result || "⚠ " + x.error).slice(0, 160).replace(/\n/g, " ")}`);
-      L.push("", `**Помощник:** ${st.answer || "—"}`);
+      L.push("", `**Помощник:** ${st.answer || "—"}` + ((st.servers || []).some(x => x !== "main") ? ` _(сервер: ${st.servers.join(", ")})_` : ""));
     }
     for (const c of r.checks) L.push(`- ${c.ok ? "✓" : "✗"} ${c.name}` + (!c.ok && c.detail ? ` — \`${c.detail.slice(0, 160)}\`` : ""));
     if (r.error) L.push(`- ⚠ ${r.error}`);

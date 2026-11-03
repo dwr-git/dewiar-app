@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+  body { padding: 0 0 28px; }
+  .wrap { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.15fr); gap: 16px; align-items: start; }
+  @media (max-width: 760px) { .wrap { grid-template-columns: 1fr; } }
+  .card { border-radius: 22px; padding: 22px; background: var(--panel); }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 16px; }
+  .in { display: flex; gap: 8px; }
+  .in input { flex: 1; font-size: 15px; padding: 12px 14px; border-radius: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 18px; }
+  .chips .chip { font-size: 12.5px; }
+  .sw { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 4px 0 16px; }
+  .sw div { border-radius: 14px; height: 64px; position: relative; box-shadow: inset 0 0 0 1px rgba(127,127,127,.18); }
+  .sw small { position: absolute; left: 8px; bottom: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; padding: 2px 6px; border-radius: 6px; background: rgba(0,0,0,.35); color: #fff; }
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .acts .btn.primary { padding: 11px 20px; }
+  .name { font: 700 13px "Manrope", sans-serif; color: var(--muted); margin: 0 0 8px; }
+  .name b { color: var(--ink); }
+  /* предпросмотр: маленькая студия в цветах палитры */
+  .pv { border-radius: 22px; overflow: hidden; display: grid; grid-template-columns: 30% 1fr; min-height: 300px; background: var(--x-scene); color: var(--x-ink);
+    box-shadow: 0 30px 60px -36px rgba(0,0,0,.8), inset 0 0 0 1px rgba(127,127,127,.2); font-size: 12px; transition: background .3s; }
+  .pv nav { padding: 16px 10px; display: grid; align-content: start; gap: 4px; background: var(--x-panel); }
+  .pv nav i { display: block; height: 22px; border-radius: 8px; padding: 4px 8px; font-style: normal; color: var(--x-muted); white-space: nowrap; overflow: hidden; }
+  .pv nav i.on { background: var(--x-brand); color: #fff; font-weight: 700; }
+  .pv nav b { display: block; margin: 0 6px 10px; font-size: 12.5px; }
+  .pv main { padding: 18px; display: grid; gap: 10px; align-content: start; }
+  .pv h3 { font-size: 15px; margin: 0; color: var(--x-ink); }
+  .pv p { margin: 0; color: var(--x-muted); }
+  .pv .c { border-radius: 14px; padding: 12px; background: var(--x-panel); display: grid; gap: 8px; }
+  .pv .f { height: 30px; border-radius: 10px; background: var(--x-field); box-shadow: inset 0 0 0 1px var(--x-line); color: var(--x-muted); padding: 7px 10px; }
+  .pv .row { display: flex; gap: 8px; align-items: center; }
+  .pv .bt { border-radius: 10px; padding: 7px 12px; background: var(--x-brand); color: #fff; font-weight: 700; }
+  .pv .bt2 { border-radius: 10px; padding: 7px 12px; background: var(--x-panel2); }
+  .pv .ac { color: var(--x-accent); font-weight: 700; }
+  .pv .bars { display: flex; align-items: end; gap: 5px; height: 46px; }
+  .pv .bars span { flex: 1; border-radius: 4px 4px 1px 1px; background: var(--x-accent); }
+  .saved h2 { font-size: 15px; margin: 24px 2px 10px; }
+  .sv { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .sv button { border: 0; cursor: pointer; border-radius: 16px; padding: 10px; text-align: left; background: var(--panel); color: var(--ink); display: grid; gap: 8px; }
+  .sv button:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+  .sv .dots { display: flex; } .sv .dots i { width: 22px; height: 22px; border-radius: 50%; margin-right: -6px; box-shadow: 0 0 0 2px var(--panel); }
+  .sv small { color: var(--muted); font-size: 12.5px; }
+  .now { margin-top: 14px; font-size: 12.5px; color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="card">
+    <h1>Тема оформления</h1>
+    <p class="lead">Опишите настроение словами — подберу цвета и покажу, как будет выглядеть студия.</p>
+    <div class="in"><input type="text" id="q" placeholder="тёплый закат, лесной и спокойный…" aria-label="Настроение словами"><button class="btn primary" id="pick">Подобрать</button></div>
+    <div class="chips" id="chips"></div>
+    <p class="name" id="name"></p>
+    <div class="sw" id="sw"></div>
+    <div class="acts"><button class="btn primary" id="apply">Применить к студии</button><button class="btn" id="more">Ещё вариант</button><button class="btn ghost" id="keep">☆ Сохранить</button></div>
+    <div class="acts" style="margin-top:8px"><button class="btn ghost small" id="reset">Вернуть как было</button></div>
+    <p class="now" id="now"></p>
+  </section>
+  <section>
+    <div class="pv" id="pv" aria-label="Как будет выглядеть студия">
+      <nav><b>Dewiar</b><i>Главная</i><i class="on">Плагины</i><i>Чат</i><i>Заметки</i><i>Оформление</i></nav>
+      <main><h3>Добрый вечер</h3><p>Вот как будет выглядеть студия.</p>
+        <div class="c"><div class="row"><span class="ac">Сегодня</span><span style="opacity:.7">· 3 дела</span></div><div class="bars"><span style="height:40%"></span><span style="height:70%"></span><span style="height:55%"></span><span style="height:90%"></span><span style="height:65%"></span><span style="height:80%"></span></div></div>
+        <div class="f">Спросите Лиру…</div>
+        <div class="row"><span class="bt">Сохранить</span><span class="bt2">Отмена</span></div></main>
+    </div>
+    <div class="saved" id="saved"></div>
+  </section>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const IDEAS = ["тёплый закат", "лесной и спокойный", "морской бриз", "ночной неон", "кофе с молоком", "сакура", "строгий графит", "лаванда", "светлое утро"];
+/* слова -> оттенок, насыщенность, светлая или тёмная */
+const MOODS = [
+  [/закат|тёпл|тепл|огон|осен|оранж|мандарин|персик/, 22, 78], [/мор|вод|океан|бриз|неб|голуб|син|лёд|лед/, 205, 72],
+  [/лес|зел|трав|мят|природ|хвой|изумруд/, 150, 55], [/неон|кибер|ночн|клуб/, 290, 90], [/сакур|розов|нежн|цвет|пион/, 335, 62],
+  [/коф|шокол|корич|молок|карамел|какао/, 28, 38], [/лаванд|фиолет|сирен|аметист/, 265, 55], [/графит|строг|сер|монохром|делов|офис/, 222, 14],
+  [/солн|жёлт|желт|лимон|золот|мёд|мед/, 45, 85], [/красн|вишн|рубин|страст/, 352, 72], [/бирюз|тропи|лагун/, 176, 70],
+];
+let pal = null, seed = 0, saved = [];
+const hsl = (h, s, l, a) => a == null ? `hsl(${Math.round((h + 360) % 360)}, ${Math.round(s)}%, ${Math.round(l)}%)` : `hsla(${Math.round((h + 360) % 360)}, ${Math.round(s)}%, ${Math.round(l)}%, ${a})`;
+function hash(t) { let x = 7; for (const c of t) x = (x * 31 + c.charCodeAt(0)) % 360; return x; }
+function make(text, jitter) {
+  const t = String(text || "").toLowerCase();
+  const m = MOODS.find(([rx]) => rx.test(t));
+  let h = m ? m[1] : hash(t), s = m ? m[2] : 62;
+  if (/спокой|мягк|пастел|приглуш|тих/.test(t)) s *= .7;
+  if (/ярк|сочн|насыщ|неон/.test(t)) s = Math.min(95, s * 1.25);
+  h += jitter * 23; s = Math.max(10, Math.min(95, s + (jitter % 2 ? -8 : 6) * Math.sign(jitter)));
+  const light = /светл|утр|ден|днев|бумаг|молок|нежн|белый/.test(t) && !/тёмн|темн|ночн/.test(t);
+  const hn = ((h % 360) + 360) % 360, h2 = hn + (s < 25 ? 8 : hn < 70 || hn > 300 ? -32 : 32);   // тёплые — к розовому, холодные — дальше по кругу
+  const v = light ? {
+    "--accent": hsl(h, Math.max(s, 40), 46), "--brand": `linear-gradient(135deg, ${hsl(h, Math.max(s, 45), 52)} 0%, ${hsl(h2, Math.max(s, 45), 44)} 100%)`,
+    "--scene": `radial-gradient(circle at 15% 85%, ${hsl(h, s, 80, .55)} 0%, transparent 55%) fixed, radial-gradient(circle at 85% 15%, ${hsl(h2, s, 85, .6)} 0%, transparent 50%) fixed, linear-gradient(135deg, ${hsl(h, 45, 97)} 0%, ${hsl(h2, 40, 92)} 100%) fixed`,
+    "--ink": hsl(h, 30, 15), "--muted": hsl(h, 18, 15, .7), "--dim": hsl(h, 15, 15, .5), "--panel": "rgba(255, 255, 255, .62)", "--panel2": "rgba(255, 255, 255, .86)",
+    "--field": "rgba(255, 255, 255, .78)", "--line": hsl(h, 30, 25, .12), mode: "light" } : {
+    "--accent": hsl(h, Math.max(s, 35), 70), "--brand": `linear-gradient(135deg, ${hsl(h, Math.max(s, 45), 54)} 0%, ${hsl(h2, Math.max(s, 45), 42)} 100%)`,
+    "--scene": `radial-gradient(circle at 20% 80%, ${hsl(h, s, 50, .32)} 0%, transparent 50%) fixed, radial-gradient(circle at 80% 20%, ${hsl(h2, s, 55, .26)} 0%, transparent 50%) fixed, linear-gradient(135deg, ${hsl(h, 35, 5)} 0%, ${hsl(h2, 32, 11)} 55%, ${hsl(h, 30, 13)} 100%) fixed`,
+    "--ink": "#F4F4F6", "--muted": "rgba(255, 255, 255, .66)", "--dim": "rgba(255, 255, 255, .45)", "--panel": hsl(h, 30, 70, .08), "--panel2": hsl(h, 30, 70, .13),
+    "--field": "rgba(0, 0, 0, .28)", "--line": "rgba(255, 255, 255, .07)", mode: "dark" };
+  return { text: String(text || "").trim() || "без названия", vars: v, dots: [hsl(h, Math.max(s, 35), light ? 46 : 70), hsl(h2, Math.max(s, 45), 48), hsl(h, 35, light ? 96 : 8), hsl(h2, 32, light ? 90 : 14), light ? hsl(h, 30, 15) : "#F4F4F6"] };
+}
+function draw() {
+  const v = pal.vars, pv = $("#pv");
+  const map = { "--x-scene": v["--scene"].replace(/ fixed/g, ""), "--x-ink": v["--ink"], "--x-muted": v["--muted"], "--x-panel": v["--panel"], "--x-panel2": v["--panel2"],
+    "--x-field": v["--field"], "--x-line": v["--line"], "--x-brand": v["--brand"], "--x-accent": v["--accent"] };
+  Object.entries(map).forEach(([k, x]) => pv.style.setProperty(k, x));
+  $("#name").innerHTML = `Палитра <b>«${esc(pal.text)}»</b> · ${v.mode === "light" ? "светлая" : "тёмная"}`;
+  $("#sw").innerHTML = [["акцент", 0], ["кнопки", 1], ["фон", 2], ["фон 2", 3], ["текст", 4]].map(([n, i]) => `<div style="background:${pal.dots[i]}"><small>${n}</small></div>`).join("");
+}
+function pick(text) { seed = 0; pal = make(text, 0); draw(); dewiar.store.set("last", text).catch(() => {}); }
+function drawSaved() {
+  $("#saved").innerHTML = saved.length ? `<h2>Сохранённые</h2><div class="sv">${saved.map((p, i) => `<button data-i="${i}"><span class="dots">${p.dots.map(c => `<i style="background:${c}"></i>`).join("")}</span><small>${esc(p.text)}</small></button>`).join("")}</div>` : "";
+  document.querySelectorAll(".sv button").forEach(b => b.onclick = () => { pal = saved[+b.dataset.i]; draw(); });
+}
+$("#chips").innerHTML = IDEAS.map(t => `<button class="chip" data-t="${esc(t)}">${esc(t)}</button>`).join("");
+document.querySelectorAll("#chips .chip").forEach(b => b.onclick = () => { $("#q").value = b.dataset.t; pick(b.dataset.t); });
+$("#pick").onclick = () => pick($("#q").value || IDEAS[0]);
+$("#q").onkeydown = (e) => { if (e.key === "Enter") $("#pick").click(); };
+$("#more").onclick = () => { seed = seed >= 0 ? -(seed + 1) : -seed; pal = make(pal.text, seed); draw(); };
+$("#apply").onclick = async () => {
+  try { await dewiar.theme(pal.vars); $("#now").textContent = `Студия — в палитре «${pal.text}». Вернуть — кнопкой выше или в «Оформлении» → «Сбросить тему».`; dewiar.toast("Готово — студия перекрашена"); }
+  catch (e) { dewiar.toast(e.message); }
+};
+$("#reset").onclick = async () => { try { await dewiar.theme(null); $("#now").textContent = "Студия — в своём обычном оформлении."; } catch (e) { dewiar.toast(e.message); } };
+$("#keep").onclick = async () => { saved = [pal, ...saved.filter(p => p.text !== pal.text)].slice(0, 12); drawSaved();
+  try { await dewiar.store.set("saved", saved); dewiar.toast("Палитра сохранена"); } catch (e) { dewiar.toast(e.message); } };
+(async () => {
+  let last = "";
+  try { saved = (await dewiar.store.get("saved")) || []; last = (await dewiar.store.get("last")) || ""; } catch (e) { }
+  $("#q").value = last; pick(last || IDEAS[0]); drawSaved();
+})();
+</script>
+</body>
+</html>

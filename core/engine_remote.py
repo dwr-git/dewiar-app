@@ -214,6 +214,10 @@ class RemoteMixin:
         if kind == "nodes":                          # другой компьютер аккаунта стал отвечать (или этот) — студии
             self.emit(ev, **tg.public())
             return
+        if kind == "conflict":                       # №512: тот же бот слушает другой компьютер (слепок принёс токен)
+            self.emit(ev, **tg.public())
+            self.push(tg.TITLE, d.get("text") or "Этого бота слушает другой ваш компьютер — бот отвечает оттуда", telegram=False)
+            return
         if kind == "paired":
             self.emit(ev, **tg.public())
             self.push(f"{tg.TITLE} подключён", f"Пишите ассистенту: {'@' if ev == 'telegram' else ''}{tg.public()['bot']}", telegram=False)

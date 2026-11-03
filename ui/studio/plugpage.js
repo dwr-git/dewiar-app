@@ -14,8 +14,18 @@
        фраза в «Чат») и «Попробуйте сказать»;
      • «Настройки» — поля плагина (сохраняются сразу) и дела по расписанию;
      • «Файлы» — последние файлы плагина (plugin_files), открытие — plugin_open.
-   Ядро: core/plugin_pages.py (команды plugin_page / plugin_run / plugin_restart / plugin_files / plugin_open / plugin_ui). */
-const PLP = { known: {}, cur: "", page: null, tab: "", cat: [], nav: "", poll: 0, frameLoads: 0, busy: {} };
+   Ядро: core/plugin_pages.py (команды plugin_page / plugin_run / plugin_restart / plugin_files / plugin_open / plugin_ui).
+   Creator (03.11): плагин, сделанный Лирой по описанию (p.made), — вкладки «Изменить» (правка словами и «Версии» с откатом,
+   plugin_change / plugin_restore / plugin_undo) и «Доступ» (какие данные Лиры странице разрешены — plugin_grant). Мост
+   страницы шире: dewiar.store.get/set (своё хранилище), dewiar.data(область) — только объявленное в plugin.json и только
+   после «Разрешить» человека, dewiar.theme(цвета) — у плагина с theme: true, по нажатию; dewiar.readUrl(адрес) — текст
+   статьи (по нажатию; у плагина с доступом к данным — всегда с вопросом). Ядро — core/plugin_bridge.py, создание —
+   studio/plugmake.js. */
+const PLP = { known: {}, cur: "", page: null, tab: "", cat: [], nav: "", poll: 0, frameLoads: 0, busy: {}, asking: {} };
+// данные Лиры, которые плагин может попросить (как plugins.DATA_SCOPES в ядре): что сказать человеку в вопросе
+const PLP_SCOPES = { notes: ["заметки", "названия и текст ваших заметок"], reminders: ["напоминания и дела", "что и когда напомнить"],
+  money: ["расходы и доходы", "суммы, категории и даты"], chat_stats: ["статистику разговоров", "сколько сообщений по дням и часам, с кем из персонажей и частые слова — без текста"],
+  chat: ["текст переписки", "ваши сообщения и ответы Лиры целиком"] };
 const plpEsc = (t) => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 // подписи, если плагин не дал своих (чтобы на странице не было сырых query, limit, path)
 const PLP_WORDS = { query: "Запрос", q: "Слова", limit: "Сколько показать", path: "Файл или папка", folder: "Папка", file: "Файл", title: "Название",
@@ -37,7 +47,7 @@ function plpNav(list) {
   const box = $("#nav-plugins"), head = $("#nav-plg-h"); if (!box) return;
   const on = PLP.cat.filter(p => p.installed);
   const key = on.map(p => p.id + p.icon + p.name).join("|");
-  head.hidden = box.hidden = !on.length;
+  box.hidden = !on.length; head.hidden = false;           // «Создать плагин» — всегда в группе
   if (key !== PLP.nav) {
     PLP.nav = key;
     box.innerHTML = on.map(p => `<button class="nav-g nav-plg" data-plg="${plpEsc(p.id)}" title="${plpEsc(p.tagline || p.name)}" style="--pc:${plpEsc(p.color)}"><i class="nav-gi emo nav-pi" aria-hidden="true">${plpEsc(p.icon)}</i><span>${plpEsc(p.name)}</span></button>`).join("");
@@ -95,6 +105,8 @@ function plpKnow(r) { if (r && r.state === "ok" && r.plugin) PLP.known[r.plugin.
 function plpState() {
   const r = PLP.page, p = r.plugin, n = r.tools.filter(t => !t.page_only && !t.hidden).length;
   if (!p.installed) return `<div class="plp-st off"><i></i><span>Не установлен</span><button class="btn small primary" id="plp-install">Установить</button></div>`;
+  if (p.made && r.state === "none") { const v = (r.versions || {}).current || 1;
+    return `<div class="plp-st ok"><i></i><span>Сделан Лирой · версия ${v}</span><button class="btn small ghost" data-goto="edit">Изменить словами</button></div>`; }
   if (r.state === "none") return `<div class="plp-st ok"><i></i><span>Работает через разговор с Лирой — ничего запускать не нужно</span></div>`;
   if (r.state === "connecting") return `<div class="plp-st wait"><i class="plp-spin"></i><span>Запускается…</span></div>`;
   if (r.state === "error") return `<div class="plp-st bad"><i></i><span><b>Не запустился.</b> ${plpEsc(r.error)}</span><button class="btn small" id="plp-restart">Перезапустить</button></div>`;
@@ -111,6 +123,7 @@ function plpHead() {
     catch (e) { toast(e.message); rs.disabled = false; rs.textContent = "Перезапустить"; } };
   const ins = $("#plp-install"); if (ins) ins.onclick = () => core.call("plugin_install", { id: p.id, values: {} }).then(r => { plgSet(r); toast(`«${p.name}» установлен`); plpLoad(); }).catch(e => toast(e.message));
   const v = $("#plp-video"); if (v) v.onclick = () => plpVideo(p);
+  $$("#plp-head [data-goto]").forEach(b => b.onclick = () => plpTab(b.dataset.goto));
   $("#plp-more").onclick = () => { const b = $('nav button[data-p="skills"]'); if (b) b.click(); plgOpen = p.id; setTimeout(() => plgDrawer(p.id), PLG.length ? 0 : 400); if (!PLG.length) loadPlugins(); };
 }
 async function plpVideo(p) {
@@ -125,9 +138,11 @@ function plpTabs() {
   const r = PLP.page, p = r.plugin, tabs = [];
   if (p.page && p.installed) tabs.push(["page", (p.ui && p.ui.page_title) || "Своя страница"]);
   if (p.id === "artist" && p.installed) tabs.push(["art", "Рисунки"]);
-  tabs.push(["do", "Сделать сейчас"]);
+  if (!p.made || r.tools.length || (p.ui && (p.ui.asks || []).length)) tabs.push(["do", "Сделать сейчас"]);
+  if (p.made) tabs.push(["edit", "Изменить и версии"]);
+  if ((p.data || []).length || p.theme) tabs.push(["access", "Доступ"]);
   if (p.settings.length || p.jobs.length) tabs.push(["set", "Настройки"]);
-  tabs.push(["files", "Файлы"]);
+  if (!p.made || r.tools.length) tabs.push(["files", "Файлы"]);
   return tabs;
 }
 function plpRender() {
@@ -139,8 +154,11 @@ function plpRender() {
     <div class="stabs plp-tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" data-tab="${k}" class="${k === PLP.tab ? "on" : ""}" aria-selected="${k === PLP.tab}">${plpEsc(t)}</button>`).join("")}</div>
     <div id="plp-body"></div>`;
   plpHead();
-  $$("#plp .plp-tabs button").forEach(b => b.onclick = () => { PLP.tab = b.dataset.tab; $$("#plp .plp-tabs button").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); }); plpBody(); });
+  $$("#plp .plp-tabs button").forEach(b => b.onclick = () => plpTab(b.dataset.tab));
   plpBody();
+}
+function plpTab(k) {
+  PLP.tab = k; $$("#plp .plp-tabs button").forEach(x => { const on = x.dataset.tab === k; x.classList.toggle("on", on); x.setAttribute("aria-selected", on); }); plpBody();
 }
 function plpBody() {
   const b = $("#plp-body"); if (!b) return;
@@ -148,6 +166,8 @@ function plpBody() {
   if (PLP.tab === "art") return plpArt(b);
   if (PLP.tab === "set") return plpSettings(b);
   if (PLP.tab === "files") return plpFiles(b);
+  if (PLP.tab === "edit") return plpEdit(b);
+  if (PLP.tab === "access") return plpAccess(b);
   return plpDo(b);
 }
 
@@ -360,6 +380,57 @@ function plpSettings(box) {
     .then(r => { plgSet(r); toast(c.checked ? "Дело включено — Лира сделает его сама" : "Дело выключено"); }).catch(e => toast(e.message)));
 }
 
+/* ---------- «Изменить и версии» (плагин, сделанный Лирой) ---------- */
+const PLP_EDIT_IDEAS = ["Сделай всё крупнее", "Добавь график по неделям", "Поменяй цвета на спокойные", "Добавь кнопку «Очистить»", "Сделай компактнее"];
+function plpEdit(box) {
+  const r = PLP.page, p = r.plugin, vs = (r.versions || {}).items || [];
+  box.innerHTML = `<div class="plp-card plp-edit">
+      <h2 class="plp-h2" style="margin-top:0">Что поменять? <small>словами — Лира перепишет страницу, прежняя версия сохранится</small></h2>
+      <div class="plp-ed-row"><textarea id="plp-ed-q" rows="2" placeholder="Например: сделай цифры крупнее и добавь график по неделям"></textarea>
+        <button class="btn primary" id="plp-ed-go">Изменить</button></div>
+      <div class="plp-say">${PLP_EDIT_IDEAS.map(t => `<button class="chip" data-idea="${plpEsc(t)}">${plpEsc(t)}</button>`).join("")}</div>
+      <p class="plp-ed-st" id="plp-ed-st" aria-live="polite"></p>
+    </div>
+    <h2 class="plp-h2">Версии <small>хранятся ${(r.versions || {}).keep || 10} последних · вернуть можно любую</small></h2>
+    <div class="plp-vers">${vs.map(x => `<div class="plp-ver${x.current ? " cur" : ""}"><b>${x.v}</b><span><em>${plpEsc(x.label || "Версия " + x.v)}</em><small>${plpEsc(plpWhen(x.at))}${x.code ? " · со своей программой" : ""}${x.to ? " · возврат" : ""}</small></span>
+      ${x.current ? `<span class="plp-tag">сейчас</span>` : `<button class="btn small" data-v="${x.v}">Вернуть эту</button>`}</div>`).join("") || `<p class="hint">Версий пока нет.</p>`}</div>
+    <div class="actions"><button class="btn ghost" id="plp-undo" ${vs.length > 1 ? "" : "disabled"}>↶ Вернуть как было</button></div>`;
+  const st = $("#plp-ed-st"), go = $("#plp-ed-go"), q = $("#plp-ed-q");
+  $$("#plp-body [data-idea]").forEach(b => b.onclick = () => { q.value = b.dataset.idea; q.focus(); });
+  q.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go.click(); } };
+  const done = (res, msg) => { toast(msg); PLP.tab = "page"; plpCatalog(); PLP.page = null; plpLoad(); };
+  go.onclick = async () => {
+    const text = q.value.trim(); if (!text) { q.focus(); return; }
+    go.disabled = true; const t0 = Date.now();
+    const tick = setInterval(() => { st.innerHTML = `<i class="plp-spin"></i> Лира переписывает плагин… ${Math.round((Date.now() - t0) / 1000)} с`; }, 500);
+    try { const res = await core.call("plugin_change", { id: p.id, request: text }); clearInterval(tick); done(res, res.said || "Готово"); }
+    catch (e) { clearInterval(tick); go.disabled = false; st.innerHTML = `<span class="plp-err plp-small">${plpEsc(e.message)}</span>`; }
+  };
+  $$("#plp-body [data-v]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { const res = await core.call("plugin_restore", { id: p.id, v: +b.dataset.v }); done(res, res.said || "Вернула"); } catch (e) { b.disabled = false; toast(e.message); }
+  });
+  $("#plp-undo").onclick = async () => { try { const res = await core.call("plugin_undo", { id: p.id }); done(res, res.said || "Вернула как было"); } catch (e) { toast(e.message); } };
+}
+
+/* ---------- «Доступ»: какие данные Лиры странице плагина разрешены ---------- */
+function plpAccess(box) {
+  const r = PLP.page, p = r.plugin, g = r.grants || {};
+  const theme = ((S && S.ui) || {}).plugin_theme;
+  box.innerHTML = `${(p.data || []).length ? `<div class="plp-card"><h2 class="plp-h2" style="margin-top:0">Данные Лиры <small>плагин спрашивает при первом обращении; выбор можно поменять здесь</small></h2>
+      ${(p.data || []).map(s => { const v = g[s]; const w = PLP_SCOPES[s] || [s, ""];
+        return `<div class="switch plp-grant"><div>${plpEsc(w[0][0].toUpperCase() + w[0].slice(1))}<span>${plpEsc(w[1])} · ${v === true ? "разрешено" : v === false ? "запрещено" : "ещё не спрашивал"}</span></div><label class="tg"><input type="checkbox" data-scope="${plpEsc(s)}" ${v === true ? "checked" : ""}><i></i></label></div>`; }).join("")}
+      <p class="hint">Страница плагина видит только то, что здесь включено. Ничего не уходит в интернет: у страницы нет сети.</p></div>` : ""}
+    ${p.theme ? `<div class="plp-card"><h2 class="plp-h2" style="margin-top:0">Оформление студии <small>этот плагин может перекрасить студию — по вашему нажатию</small></h2>
+      <p>${theme && theme.id === p.id ? "Сейчас студия — в цветах этого плагина." : theme ? `Сейчас — тема плагина «${plpEsc(theme.name)}».` : "Сейчас — обычное оформление."}</p>
+      <div class="actions"><button class="btn" id="plp-th-reset" ${theme ? "" : "disabled"}>Сбросить тему</button></div></div>` : ""}`;
+  $$("#plp-body [data-scope]").forEach(c => c.onchange = async () => {
+    try { const res = await core.call("plugin_grant", { id: p.id, scope: c.dataset.scope, on: c.checked }); PLP.page.grants = res.grants; plpAccess(box); toast(c.checked ? "Разрешено" : "Доступ закрыт"); }
+    catch (e) { toast(e.message); c.checked = !c.checked; }
+  });
+  const tr = $("#plp-th-reset"); if (tr) tr.onclick = async () => { if (typeof lookPtReset === "function") await lookPtReset(); plpAccess(box); };
+}
+
 /* ---------- «Файлы» ---------- */
 async function plpFiles(box) {
   box.innerHTML = `<p class="plp-loading"><i class="plp-spin"></i> Смотрю файлы…</p>`;
@@ -406,14 +477,18 @@ function plpTheme() {
   const vars = PLP_TOKENS.map(k => { const v = cs.getPropertyValue(k).trim(); return v ? `${k}:${v};` : ""; }).join("");
   return `:root{${vars}color-scheme:${cs.colorScheme || "dark"}}`;
 }
+/* тема студии поменялась (тема из плагина, сброс) — страница плагина во фрейме перекрашивается следом */
+function plpFrameTheme() { const f = $("#plp-frame"); if (f && f.contentWindow) setTimeout(() => { try { f.contentWindow.postMessage({ __dwt: plpTheme() }, "*"); } catch (e) { } }, 30); }
+window.plpFrameTheme = plpFrameTheme;
 function plpSrcdoc(html, p) {
   const info = JSON.stringify({ id: p.id, name: p.name, icon: p.icon, color: p.color }).replace(/</g, "\\u003c");
-  const bridge = `(()=>{let n=0;const w={};addEventListener("message",e=>{if(e.source!==parent)return;const d=e.data||{};if(!d.__dwr||!w[d.rid])return;const x=w[d.rid];delete w[d.rid];d.ok?x[0](d.result):x[1](new Error(d.error||"ошибка"));});
+  const bridge = `(()=>{let n=0;const w={};addEventListener("message",e=>{if(e.source!==parent)return;const d=e.data||{};if(typeof d.__dwt==="string"){let s=document.getElementById("dw-theme");if(!s){s=document.createElement("style");s.id="dw-theme";document.head.appendChild(s);}s.textContent=d.__dwt;return;}if(!d.__dwr||!w[d.rid])return;const x=w[d.rid];delete w[d.rid];d.ok?x[0](d.result):x[1](new Error(d.error||"ошибка"));});
 const q=(op,args)=>new Promise((ok,no)=>{const rid=++n;w[rid]=[ok,no];parent.postMessage({__dw:1,rid,op,args:args||{}},"*");});
-window.dewiar={plugin:${info},run:(tool,args)=>q("run",{tool,args:args||{}}),settings:()=>q("settings"),saveSettings:(values)=>q("save",{values}),open:(path)=>q("open",{path}),openUrl:(url)=>q("url",{url}),ask:(text)=>q("ask",{text}),toast:(text)=>q("toast",{text})};
+window.dewiar={plugin:${info},run:(tool,args)=>q("run",{tool,args:args||{}}),settings:()=>q("settings"),saveSettings:(values)=>q("save",{values}),open:(path)=>q("open",{path}),openUrl:(url)=>q("url",{url}),ask:(text)=>q("ask",{text}),toast:(text)=>q("toast",{text}),
+store:{get:(key)=>q("store_get",{key}),set:(key,value)=>q("store_set",{key,value:value===undefined?null:value})},data:(scope)=>q("data",{scope}),theme:(vars)=>q("theme",{vars:vars||null}),readUrl:(url)=>q("read_url",{url})};
 let lh=0;const post=()=>{const h=Math.ceil(document.documentElement.scrollHeight);if(Math.abs(h-lh)>2){lh=h;parent.postMessage({__dw:1,op:"height",h},"*");}};
 try{new ResizeObserver(post).observe(document.documentElement);}catch(e){setInterval(post,500);}addEventListener("load",post);})();`;
-  const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'"><style>${plpTheme()}${PLP_KIT}</style><script>${bridge}</script>`;
+  const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net/npm/ https://cdnjs.cloudflare.com/ajax/libs/; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'"><style>${plpTheme()}${PLP_KIT}</style><script>${bridge}</script>`;
   let body = String(html || "").replace(/^\s*<!doctype[^>]*>/i, "");
   // своё <meta http-equiv> плагина не должно ослабить наш CSP: CSP складываются, ослабить нельзя — но убираем на всякий случай
   body = body.replace(/<meta[^>]+http-equiv\s*=\s*["']?content-security-policy[^>]*>/gi, "");
@@ -449,6 +524,27 @@ async function plpGesture(text, verb) {
   if (ua && ua.isActive) return true;
   return typeof ask === "function" ? !!(await ask(text, { ok: verb })) : false;
 }
+/* dewiar.data(область): только объявленное в plugin.json; первый раз — вопрос человеку, ответ запоминается (plugin_grant).
+   Запрещено раньше — без нажатия сразу отказ, по нажатию — спросить снова. Ядро проверяет разрешение ещё раз. */
+async function plpData_(pid, scope) {
+  const pl = PLP.page.plugin, w = PLP_SCOPES[scope];
+  if (!w) throw new Error(`нет таких данных: «${scope}»`);
+  if (!(pl.data || []).includes(scope)) throw new Error(`плагин не просит доступ к «${scope}» — добавьте его в plugin.json → data`);
+  const g = PLP.page.grants || {};
+  if (g[scope] !== true) {
+    const ua = navigator.userActivation;
+    if (g[scope] === false && !(ua && ua.isActive)) throw new Error(`доступ запрещён: ${w[0]} (вкладка «Доступ»)`);
+    const key = pid + ":" + scope;                                    // два вызова подряд — один вопрос
+    PLP.asking[key] = PLP.asking[key] || (async () => {
+      const yes = typeof ask === "function" && !!(await ask(`Плагин «${pl.name}» просит доступ: ${w[0]} — ${w[1]}.\nСтраница плагина без сети: данные не уйдут в интернет. Разрешить?`, { ok: "Разрешить", cancel: "Не разрешать", danger: false }));
+      const res = await core.call("plugin_grant", { id: pid, scope, on: yes });
+      if (PLP.page && PLP.page.plugin.id === pid) PLP.page.grants = res.grants;
+      return yes;
+    })().finally(() => { setTimeout(() => { delete PLP.asking[key]; }, 0); });
+    if (!await PLP.asking[key]) throw new Error(`человек не разрешил доступ: ${w[0]}`);
+  }
+  return core.call("plugin_data", { id: pid, scope });
+}
 window.addEventListener("message", async (e) => {
   const f = $("#plp-frame");
   if (!f || e.source !== f.contentWindow) return;                   // только наш фрейм — и только его окно
@@ -472,7 +568,7 @@ window.addEventListener("message", async (e) => {
     }
     if (d.op === "open") return reply(true, !!(await core.call("plugin_open", { id: pid, path: String(a.path || "") })));
     if (d.op === "ask") {
-      const t = String(a.text || "").trim().slice(0, 600); if (!t) throw new Error("пустая фраза");
+      const t = String(a.text || "").trim().slice(0, 12000); if (!t) throw new Error("пустая фраза");     // читалка: «перескажи» с текстом статьи
       if (!await plpGesture(`Страница плагина «${PLP.page.plugin.name}» хочет спросить Лиру:\n«${t.slice(0, 300)}»`, "Спросить")) throw new Error("человек не разрешил");
       plpAsk(t); return reply(true, true);
     }
@@ -482,6 +578,24 @@ window.addEventListener("message", async (e) => {
       if (typeof openExt === "function") openExt(u); else window.open(u, "_blank", "noopener"); return reply(true, true);
     }
     if (d.op === "toast") { toast(String(a.text || "").slice(0, 160)); return reply(true, true); }
+    if (d.op === "store_get") return reply(true, (await core.call("plugin_store", { id: pid, op: "get", key: a.key == null ? "" : String(a.key) })).value ?? null);
+    if (d.op === "store_set") return reply(true, await core.call("plugin_store", { id: pid, op: "set", key: String(a.key ?? ""), value: a.value ?? null }));
+    if (d.op === "data") return reply(true, await plpData_(pid, String(a.scope || "")));
+    if (d.op === "theme") {
+      const pl = PLP.page.plugin; if (!pl.theme) throw new Error("этот плагин не может менять оформление (нет \"theme\": true в plugin.json)");
+      if (a.vars === null) { if (typeof lookPtReset === "function") await lookPtReset(true); else { await core.call("plugin_theme", { reset: true }); studioPluginTheme(null); } plpFrameTheme(); return reply(true, null); }
+      if (!await plpGesture(`Плагин «${pl.name}» хочет перекрасить студию. Вернуть можно в «Оформлении» → «Сбросить тему».`, "Перекрасить")) throw new Error("человек не разрешил");
+      const res = await core.call("plugin_theme", { id: pid, vars: a.vars || {} });
+      if (S && S.ui) S.ui.plugin_theme = res.theme; if (window.studioPluginTheme) studioPluginTheme(res.theme); if (typeof lookPt === "function") lookPt(); plpFrameTheme();
+      return reply(true, res.theme && res.theme.vars);
+    }
+    if (d.op === "read_url") {                                      // читалка: текст статьи по ссылке — по нажатию; есть доступ к данным — всегда с вопросом
+      const u = String(a.url || "").trim(); if (!/^https?:\/\/[^\s"'<>]+$/.test(u) || u.length > 2000) throw new Error("это не адрес страницы");
+      const risky = Object.values(PLP.page.grants || {}).some(Boolean);
+      const q = `Плагин «${PLP.page.plugin.name}» хочет прочитать страницу:\n${u.slice(0, 200)}`;
+      if (risky ? !(typeof ask === "function" && await ask(q, { ok: "Прочитать" })) : !await plpGesture(q, "Прочитать")) throw new Error("человек не разрешил");
+      return reply(true, await core.call("plugin_fetch", { id: pid, url: u }));
+    }
     throw new Error("мост не знает такой просьбы");
   } catch (err) { reply(false, null, err.message || String(err)); }
 });
@@ -494,7 +608,12 @@ core.on("hello", () => { setTimeout(plpCatalog, 0);
     const have = PLP.cat.filter(p => p.installed).map(p => p.id).sort().join(",");
     if (on !== have) plpCatalog();
   })
-  .on("mcp", () => { if (PLP.cur && $("#p-plg.cur")) plpRefresh(); });
+  .on("mcp", () => { if (PLP.cur && $("#p-plg.cur")) plpRefresh(); })
+  // Лира сделала или изменила плагин (голосом, в чате или здесь): меню догоняет; голосом — сразу его страница
+  .on("plugin_made", (e) => { plpCatalog().then(() => { if (!e || !e.id) return;
+    if (e.open) { PLP.tab = ""; PLP.page = null; plpOpen(e.id); } else if (PLP.cur === e.id && $("#p-plg.cur")) { PLP.page = null; plpLoad(); } }); })
+  .on("plugin_theme", (e) => { if (S && S.ui) S.ui.plugin_theme = e ? e.theme : null; if (window.studioPluginTheme) studioPluginTheme(e ? e.theme : null); if (typeof lookPt === "function") lookPt(); plpFrameTheme(); });
+core.on("hello", () => { if (window.studioPluginTheme) studioPluginTheme(((S && S.ui) || {}).plugin_theme || null); });
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("nav button[data-p]"); if (b && b.dataset.p !== "plg") { clearTimeout(PLP.poll); setTimeout(plpNavCur, 0); } }, true);
 // файл, брошенный мимо страницы плагина (на шапку, меню), окно студии не должно открыть вместо себя
 ["dragover", "drop"].forEach(ev => document.addEventListener(ev, (e) => { if ($("#p-plg.cur") && e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files")) e.preventDefault(); }));

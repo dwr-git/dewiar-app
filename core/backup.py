@@ -535,6 +535,12 @@ class Backup:
         if ov and not Path(os.path.expanduser(ov)).is_dir():
             s["obsidian"]["vault"] = ""
             ch = True
+        if other:                                         # №512: место виджета — этого компьютера (у другого — свой экран)
+            ui, hu = s.setdefault("ui", {}), here.get("ui") or {}
+            for k in ("hud_x", "hud_y"):
+                if ui.get(k) != hu.get(k):
+                    ui[k] = hu.get(k)
+                    ch = True
         for k in ("input", "output"):                     # микрофон и динамики с другого компьютера — по умолчанию
             if other and (s.get("audio") or {}).get(k):
                 s["audio"][k] = ""

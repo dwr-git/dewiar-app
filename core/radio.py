@@ -373,12 +373,13 @@ class Radio:
         return True
 
     def status(self):
+        from mymusic import art_url as _art_url
         art = (self.station or self.paused or {}).get("art") or ""
         return {"playing": self.playing, "station": (self.station or {}).get("name", ""),
                 "paused": (self.paused or {}).get("name", ""), "volume": round(self.volume, 2),
                 "tags": (self.station or self.paused or {}).get("tags", ""),
                 "logo": (self.station or self.paused or {}).get("logo", ""), "url": (self.station or self.paused or {}).get("url", ""),
-                "art": Path(art).as_uri() if art else ""}     # обложка своей музыки (№361) — вместо пластинки
+                "art": _art_url(art)}     # обложка своей музыки (№361) — вместо пластинки; data:URL, не file:// (№511)
 
     def _changed(self):
         if self.on_change:

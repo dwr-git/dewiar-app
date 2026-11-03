@@ -21,8 +21,21 @@ from pathlib import Path
 from settings import APP_DIR, STATE_DIR
 
 log = logging.getLogger("dewiar.pydeps")
-# модуль → что ставить (версия — как в requirements.txt)
-PACKAGES = {"onnx_asr": "onnx-asr>=0.12"}
+# модуль → что ставить (версия — как в requirements.txt). Строка — одна библиотека без зависимостей; словарь —
+# {"pkgs": [...], "deps": True — с зависимостями (у них их много, а в основном окружении их нет), "what": что говорим человеку}.
+# Распознавание текста (ocr.py, «Поставить распознавание текста»): rapidocr тянет opencv, shapely, omegaconf… — с ними;
+# numpy и Pillow из своей папки не мешают — она в конце sys.path. opencv до 4.12: новые требуют numpy 2, а в Windows-сборке 1.26.
+PACKAGES = {"onnx_asr": "onnx-asr>=0.12",
+            "rapidocr": {"pkgs": ["rapidocr>=3.4,<4", "opencv-python-headless>=4.8,<4.12"], "deps": True,
+                         "what": "распознавание текста (rapidocr, около 70 МБ)"}}
+
+
+def _spec(module):
+    """-> (список библиотек, с зависимостями ли, что говорим человеку)."""
+    p = PACKAGES[module]
+    if isinstance(p, str):
+        return [p], False, f"недостающую часть распознавания речи ({p.split('>')[0]})"
+    return list(p["pkgs"]), bool(p.get("deps")), p.get("what") or module
 _lock = threading.Lock()
 _tried = {}                                   # модуль → причина неудачи: второй раз за запуск не качаем
 
@@ -47,15 +60,17 @@ def _python():
     return str(exe)
 
 
-def _installers(pkg, target):
-    """Чем ставить, по порядку: uv программы, uv из PATH, pip этого Python."""
+def _installers(pkg, target, deps=False):
+    """Чем ставить, по порядку: uv программы, uv из PATH, pip этого Python. pkg — строка или список библиотек."""
+    pkgs = [pkg] if isinstance(pkg, str) else list(pkg)
+    nd = [] if deps else ["--no-deps"]
     out = []
     for uv in (APP_DIR / "bin" / ("uv.exe" if os.name == "nt" else "uv"), shutil.which("uv")):
         if uv and Path(uv).exists():
-            out.append([str(uv), "pip", "install", "--python", _python(), "--target", str(target), "--no-deps", "-q", pkg])
+            out.append([str(uv), "pip", "install", "--python", _python(), "--target", str(target), *nd, "-q", *pkgs])
             break
     out.append([_python(), "-m", "pip", "install", "--disable-pip-version-check", "--no-warn-script-location",
-                "--target", str(target), "--no-deps", "-q", pkg])
+                "--target", str(target), *nd, "-q", *pkgs])
     return out
 
 
@@ -76,16 +91,16 @@ def ensure(module, on_status=None, run=subprocess.run):
     with _lock:
         if module in _tried:
             return False, _tried[module]
-        pkg, target = PACKAGES[module], extra_dir()
-        log.info("📦 Нет библиотеки %s — докачиваю %s в %s", module, pkg, target)
+        (pkgs, deps, what), target = _spec(module), extra_dir()
+        log.info("📦 Нет библиотеки %s — докачиваю %s в %s", module, " ".join(pkgs), target)
         if on_status:
-            on_status(f"Докачиваю недостающую часть распознавания речи ({pkg.split('>')[0]}) — минуту…")
+            on_status(f"Докачиваю {what} — минуту…")
         err = ""
         try:
             target.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             err = f"нет доступа к папке {target}: {e}"
-        for cmd in ([] if err else _installers(pkg, target)):
+        for cmd in ([] if err else _installers(pkgs, target, deps)):
             try:
                 r = run(cmd, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL,
                         creationflags=0x08000000 if os.name == "nt" else 0)

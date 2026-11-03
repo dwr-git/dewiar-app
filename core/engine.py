@@ -114,6 +114,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.skills.plugins = self.plugins
         self.skills.reload()
         self.mcp = MCPManager(settings, on_change=lambda: self.emit("mcp", status=self.mcp.status()))
+        self.plugins.tool_texts = self.mcp.plugin_tool_texts       # №507: слова плагина без words — и из его действий
         self.toolbox = Toolbox(settings, self.reminders, self.skills, self.mcp)
         from kids import Kids
         self.kids = Kids(settings, STATE_DIR / "kids.json")          # детский режим: время, отчёт, PIN родителя
@@ -242,6 +243,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         from sites import Sites
         self.sites = Sites(STATE_DIR / "sites", self)                # «Сайты» (03.11): делает и переделывает Лира, публикация — dewiar.pro
         self.toolbox.hooks["sites"] = self.sites
+        from plugin_maker import Maker
+        self.maker = Maker(self.plugins, self)                      # Лира делает плагин по описанию словами (03.11, plugin_maker.py)
+        self.toolbox.hooks["maker"] = self.maker
         from sshlink import SshLink
         self.sshlink = SshLink(self)                                # запасной вход через SSH — только у владельца сервера (29.10)
         from mailing import Mailing
@@ -821,6 +825,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
                                               "full": m.get("full", ""), "author": m.get("author", ""), "license": m.get("license", ""),
                                               "site": m.get("site", ""), "source": m.get("source", "")}
                                              for m in media], None
+            if type_ == "answer":                          # плагин, сделанный в этом ходе, — кнопкой «Открыть» под ответом
+                at, pl = getattr(self, "_turn_plugin", None) or (0, None)
+                if pl and time.monotonic() - at < 600:
+                    att, self._turn_plugin = list(att or []) + [{"kind": "plugin", "name": pl["name"], "plugin": pl["id"], "icon": pl["icon"]}], None
             steps = None
             if type_ == "answer":
                 steps, self._turn_tools = list(getattr(self, "_turn_tools", None) or []), []

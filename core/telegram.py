@@ -39,6 +39,14 @@ class TelegramError(Exception):
     pass
 
 
+class TelegramConflict(TelegramError):
+    """Ответ 409: этот же бот (свой токен) уже опрашивает другая программа — обычно второй компьютер с тем же токеном
+    (№512: слепок с другого компьютера принёс токен бота «своего» режима). См. _conflict_hit."""
+
+
+CONFLICT_SAY = "Этого бота слушает другой ваш компьютер — бот отвечает оттуда"
+
+
 class TelegramAuthError(TelegramError):
     """Ответ 401: ключ (токен бота, ключ компьютера или вход в аккаунт) больше не принимают. Сам по себе не
     пройдёт — приём не повторяет запрос по кругу, а ждёт долго (см. _poll)."""
@@ -102,6 +110,8 @@ class Telegram:
         self.main = True
         self.nodes = {}
         self.quiet_follower = lambda: True
+        self._c_first = self._c_last = 0.0      # №512: 409 — с какого и до какого времени бота слушает кто-то ещё
+        self._c_said = False                    # сказали человеку «слушает другой компьютер» — опрашиваем редко
 
     # ---------- хранение ----------
 
@@ -239,7 +249,7 @@ class Telegram:
             if r.status_code == 401:
                 raise TelegramAuthError(self._e401())
             if r.status_code == 409 and not self.shared():
-                raise TelegramError("этого бота уже слушает другая программа (или второй Dewiar)")
+                raise TelegramConflict("этого бота уже слушает другая программа (или второй Dewiar)")
             raise TelegramError(d.get("description") or f"ошибка {r.status_code}")
         return d.get("result")
 
@@ -549,6 +559,32 @@ class Telegram:
         self._thread = None
 
     ALLOWED = ["message", "callback_query"]          # какие события просить у Telegram (бот персонажа — ещё my_chat_member)
+    CONFLICT_AFTER = 60       # №512: 409 дольше минуты — это второй компьютер, а не перезапуск: говорим и опрашиваем реже
+    CONFLICT_RARE = 600       # тогда — раз в 10 минут (вдруг тот компьютер выключили)
+
+    def _conflict_hit(self, now=None):
+        """Очередной 409 -> перешли ли на редкий опрос. Один раз за такой период — сказать человеку (on_message
+        «conflict») и в журнал; дальше молча."""
+        now = time.time() if now is None else now
+        if not self._c_first or now - self._c_last > 3 * self.CONFLICT_RARE:
+            self._c_first = now
+        self._c_last = now
+        if not self._c_said and now - self._c_first >= self.CONFLICT_AFTER:
+            self._c_said = True
+            log.warning("Telegram: %s — здесь проверяю раз в %d мин", CONFLICT_SAY, self.CONFLICT_RARE // 60)
+            try:
+                self.on_message("conflict", {"text": CONFLICT_SAY})
+            except Exception:  # noqa: BLE001
+                log.exception("Telegram: сообщение о втором компьютере")
+        return self._c_said
+
+    def _conflict_gone(self, now=None):
+        """Опрос прошёл. 409 давно не было (тот компьютер выключили) — снова отвечаем отсюда, как обычно."""
+        now = time.time() if now is None else now
+        if self._c_said and now - self._c_last > 2 * self.CONFLICT_RARE:
+            self._c_said, self._c_first = False, 0.0
+            log.info("Telegram: другой компьютер больше не слушает бота — отвечаю отсюда")
+        return not self._c_said
 
     def _poll(self):
         """Поток приёма. Ошибки сети — повтор с паузой 3→60 с; негодный токен — пауза 5 минут (сам он не исправится).
@@ -562,13 +598,20 @@ class Telegram:
                 continue
             try:
                 ups = self._get_updates()
-                self.problem, wait = "", 3
+                rare = not self._conflict_gone()
+                self.problem, wait = (CONFLICT_SAY if rare else ""), 3
                 self.last_seen = time.time()
-                if not ups and self._php():
+                if rare:
+                    self._stop.wait(self.CONFLICT_RARE)     # №512: бот отвечает с другого компьютера — не перебиваем его
+                elif not ups and self._php():
                     self._stop.wait(2.0)             # PHP-шлюз не умеет ждать — спрашиваем раз в 2 секунды
             except TelegramError as e:
                 if self._stop.is_set():
                     break
+                if isinstance(e, TelegramConflict) and self._conflict_hit():
+                    self.problem = CONFLICT_SAY             # сказано один раз; дальше — редко и без записей в журнал
+                    self._stop.wait(self.CONFLICT_RARE)
+                    continue
                 if self.problem != str(e):
                     log.warning("Telegram: %s", e)
                 self.problem = str(e)
@@ -604,7 +647,7 @@ class Telegram:
             if r.status_code == 401:
                 raise TelegramAuthError(self._e401())
             if r.status_code == 409 and not self.shared():
-                raise TelegramError("этого бота уже слушает другая программа (или второй Dewiar)")
+                raise TelegramConflict("этого бота уже слушает другая программа (или второй Dewiar)")
             raise TelegramError(d.get("description") or f"ошибка {r.status_code}")
         dw = d.get("dewiar")
         if isinstance(dw, dict):                      # кто отвечает в боте (tg.php 03.11); старый сервер не присылает

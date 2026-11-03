@@ -75,7 +75,7 @@
      вкладок и текста — полка игр (assets/arcade/shelf.js) и сама игра во фрейме. Вкладки, панель, лист и строка
      внизу на это время прячутся; уголок размера остаётся — игру можно сделать крупнее. */
   #play-t { display: none; flex: 1; min-width: 0; padding-left: 4px; font: 600 15px/1 "Unbounded", "Manrope", sans-serif; letter-spacing: .01em; }
-  #b-play[hidden], #b-notes[hidden] { display: none; }
+  #b-play[hidden], #b-notes[hidden], #b-snip[hidden] { display: none; }
   #b-play.on { color: var(--acc); }
   #play { display: none; flex: 1; min-height: 0; flex-direction: column; }
   body.play #play { display: flex; }
@@ -302,6 +302,22 @@
   #foot.busy .dot { background: #FFC266; } #foot.bad .dot { background: #FF6B8A; }
   #foot span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #hint { font-size: 11.5px; }
+  /* «Вырезать кусок экрана» (идея №83): тост над строкой состояния — «Текст скопирован»; нечем распознать — «Поставить» */
+  #toast { position: absolute; left: 50%; bottom: 44px; z-index: 9; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 28px);
+           padding: 9px 10px 9px 12px; border-radius: 14px; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--paper);
+           box-shadow: 0 14px 34px -12px rgba(0,0,0,.55), inset 0 0 0 1px var(--line); transform: translate(-50%, 8px); opacity: 0;
+           pointer-events: none; transition: transform .2s cubic-bezier(.2,.8,.2,1), opacity .16s; }
+  body.light #toast { box-shadow: 0 16px 38px -14px rgba(20,32,60,.35), inset 0 0 0 1px var(--line); }
+  #toast.on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+  #toast i { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #3fbf86; }
+  #toast i svg { width: 13px; height: 13px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  #toast.bad i { background: #e5677d; } #toast.busy i { background: var(--acc); }
+  #toast span { flex: 1; min-width: 0; line-height: 1.4; font-weight: 600; }
+  #toast button { flex: none; padding: 5px 11px; border-radius: 9px; font-size: 12.5px; font-weight: 700; background: var(--acc); color: #fff; }
+  #toast button[hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+  #ed p.snip-new { animation: snipIn 1.6s ease-out; border-radius: 8px; }
+  @keyframes snipIn { from { background: var(--acc-soft); } to { background: transparent; } }
   #ask { position: absolute; inset: auto 12px 44px; padding: 12px 14px; border-radius: 14px; background: var(--chip2); backdrop-filter: blur(12px);
          -webkit-backdrop-filter: blur(12px); display: none; gap: 10px; align-items: center; font-size: 13px; }
   #ask.on { display: flex; } #ask b { flex: 1; font-weight: 600; }
@@ -341,6 +357,7 @@
     <span class="sep"></span>
     <button class="tool" data-c="link" title="Ссылка (Ctrl+K)"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
     <button class="tool" data-c="table" title="Таблица"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M3.5 14.5h17M10 9.5v10"/></svg></button>
+    <button class="tool" id="b-snip" hidden title="Вырезать кусок экрана — картинка ляжет сюда, текст с неё скопируется (или голосом: «вырежи кусок экрана»)" aria-label="Вырезать кусок экрана"><svg viewBox="0 0 24 24"><circle cx="6" cy="6.5" r="2.6"/><circle cx="6" cy="17.5" r="2.6"/><path d="M8.2 8 20 18M8.2 16 20 6"/></svg></button>
     <button class="tool" data-c="image" title="Картинка (или Ctrl+V)"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 15.5-5-5-9 9"/></svg></button>
     <button class="tool" data-c="hr" title="Разделитель — черта (--- и Enter)"><svg viewBox="0 0 24 24"><path d="M3.5 12h17"/><path d="M8 6.5h8M8 17.5h8" opacity=".4"/></svg></button>
     <button class="tool" data-c="code" title="Код"><svg viewBox="0 0 24 24"><path d="m9 8-4 4 4 4M15 8l4 4-4 4"/></svg></button>
@@ -354,6 +371,7 @@
   <div id="sheet"><div id="ed" contenteditable="true" spellcheck="true" data-ph="Пишите прямо здесь — сохранится само.&#10;- пробел — список, [] пробел — задача, # пробел — заголовок.&#10;Ссылки, таблицы и картинки — просто вставьте (Ctrl+V)."></div><button id="imgx" hidden title="Убрать картинку (Delete)" aria-label="Убрать картинку"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div id="foot"><i class="dot"></i><span id="st">Открываю…</span><em id="hint"></em></div>
   <div id="grip" title="Потяните — размер блокнота. Двойной щелчок — как было"></div>
+  <div id="toast" role="status" aria-live="polite"><i><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17l9-10"/></svg></i><span id="toast-t"></span><button id="toast-b" hidden>Поставить</button></div>
   <div id="ask" role="alertdialog"><b id="ask-t"></b><button id="ask-no">Нет</button><button class="danger" id="ask-yes">Удалить</button></div>
 </div>
 <script src="assets/skins.js"></script>

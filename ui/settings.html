@@ -13,6 +13,7 @@
 <link href="assets/fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="studio/studio.css">
 <link rel="stylesheet" href="studio/sites.css">
+<link rel="stylesheet" href="studio/plugmake.css">
 <link rel="stylesheet" href="assets/skins.css">
 <link rel="stylesheet" href="studio/theme.css">
 <!-- тема — до первой отрисовки (стили выше уже загружены): окно сразу в своём стиле, без вспышки фирменного фона -->
@@ -94,7 +95,9 @@
   <!-- «Плагины» (03.11): пункт на каждый установленный плагин — его страница (studio/plugpage.js, раздел p-plg) -->
   <div class="ng" id="nav-plg-h" hidden>Плагины</div>
   <div class="nav-groups nav-plugins" id="nav-plugins" hidden></div>
+  <button class="nav-g nav-plg nav-plg-new" id="nav-plg-new" type="button" title="Опишите словами — Лира сделает плагин и встроит его сюда"><i class="nav-gi emo nav-pi" aria-hidden="true">✦</i><span>Создать плагин</span></button>
   <button data-p="plg" class="sub" hidden>Плагин</button>
+  <button data-p="plgnew" class="sub" hidden>Создать плагин</button>
   <div class="ng">Обучение</div>
   <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
   <button data-p="lessons" title="ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок">Видеоуроки</button>
@@ -202,6 +205,7 @@
         <button class="btn small" id="cal-today">Сегодня</button>
         <span style="flex:1"></span>
         <div class="calf" id="cal-filter"></div>
+        <label class="caldone" title="Сделанные дела, прозвеневшие напоминания и выполненные дела по расписанию"><input type="checkbox" id="cal-done" checked> Показывать выполненные</label>
       </div>
       <div class="calwrap">
         <div class="calgrid" id="cal-grid"></div>
@@ -591,19 +595,34 @@
       Сделали дело — скажите «Агент, я позвонил маме, отметь» или впишите его здесь: ассистент считает сделанное за день, серии и достижения.
       А дела по расписанию ассистент выполняет сам: «каждое утро в 9 присылай курс доллара в Телеграм», «по пятницам в 18 собирай,
       что я сделал за неделю», «каждый день в 8 делай утреннюю сводку».</p>
-    <div class="dbanner" id="d-head"></div>
-    <div class="radd">
+    <!-- идея №41: «Все · Дела · Напоминания» (выбор — localStorage rem_tab). Дела — разовые: отмечаются сделанными, сделанные
+         зачёркнуты; напоминания — что звенит само: повторы, будильники, таймеры, дела по расписанию -->
+    <div class="tabs rtabs" id="rt-tabs" role="tablist" aria-label="Что показывать"><button data-rt="all" role="tab">Все</button><button data-rt="do" role="tab">Дела<b id="rt-n-do"></b></button><button data-rt="rem" role="tab">Напоминания<b id="rt-n-rem"></b></button></div>
+    <p class="hint rt-hint" id="rt-hint"></p>
+    <div class="dbanner" id="d-head" data-rt="all do"></div>
+    <div id="td-box" data-rt="do">
+      <div class="radd">
+        <input type="text" id="td-phrase" placeholder="Новое дело: завтра в 10 отправить отчёт · в пятницу купить подарок · купить хлеб" maxlength="160" autocomplete="off">
+        <button class="btn primary" id="td-add">Добавить дело</button>
+      </div>
+      <div class="rparse" id="td-parse"></div>
+      <div id="td-list"></div>
+    </div>
+    <div class="radd" data-rt="all do" id="d-addrow">
       <input type="text" id="d-phrase" placeholder="Что сделали? Например: отправил отчёт · позвонил Игорю" maxlength="120" autocomplete="off">
       <button class="btn" id="d-add">Отметить сделанным</button>
     </div>
-    <div id="d-list"></div>
-    <h2>Напоминания</h2>
-    <div class="radd">
-      <input type="text" id="r-phrase" placeholder="например: завтра в 9 позвонить маме · по будням в 8:30 планёрка · через 20 минут духовка" autocomplete="off">
-      <button class="btn primary" id="r-add">Добавить</button>
+    <div id="d-list" data-rt="all"></div>
+    <h2 data-rt="all">Напоминания</h2>
+    <div data-rt="all rem">
+      <div class="radd">
+        <input type="text" id="r-phrase" placeholder="например: завтра в 9 позвонить маме · по будням в 8:30 планёрка · через 20 минут духовка" autocomplete="off">
+        <button class="btn primary" id="r-add">Добавить</button>
+      </div>
+      <div class="rparse" id="r-parse"></div>
+      <div id="r-list"></div>
     </div>
-    <div class="rparse" id="r-parse"></div>
-    <div id="r-list"></div>
+    <div data-rt="all rem">
     <h2>Готовые дела</h2>
     <p class="hint" style="margin:-4px 0 14px">Ассистент сам выполняет их по расписанию — ищет, считает, собирает — и говорит итог голосом или присылает в Telegram или MAX. Выберите время и нажмите «Включить».</p>
     <div class="jpre" id="j-pre"></div>
@@ -615,6 +634,7 @@
     <div class="switch"><div>Окно по центру экрана<span>Большая карточка поверх всех окон с кнопками «Готово» и «Отложить». Выключено — только звонок, голос и уведомление.</span></div><label class="tg"><input type="checkbox" data-k="reminders.window"><i></i></label></div>
     <div class="switch"><div>Произносить напоминание голосом<span>Между звонками ассистент говорит, о чём напоминание.</span></div><label class="tg"><input type="checkbox" data-k="reminders.speak"><i></i></label></div>
     <div class="actions"><button class="btn" id="r-try">Проверить: напомнить через 10 секунд</button></div>
+    </div>
   </section>
 
   <section id="p-prompter">
@@ -1863,6 +1883,27 @@
         <button class="btn small" id="cc-use">Отвечать моделями Dewiar</button><button class="btn small" id="cc-ref">Обновить</button><button class="btn small" id="cc-pair" title="Код из 6 цифр и QR — в «Устройствах»">Подключить ещё устройство</button><button class="btn small danger" id="cc-off">Убрать ключ</button></span></div>
       <p class="res" id="cc-pair-res" style="margin:6px 0 0"></p>
       <div class="cc-pay" id="cc-pay" style="display:none">
+        <div class="ym" id="cc-ym" style="display:none">
+          <div class="ym-h"><b>Оплатить картой</b><span>Талеры зачислятся сами — через минуту после оплаты, снимок не нужен</span></div>
+          <div class="ym-sums" id="cc-ym-sums"></div>
+          <div class="ym-own"><input type="text" id="cc-ym-own" inputmode="numeric" placeholder="своя сумма, ₽"><button class="btn primary" id="cc-ym-go">Оплатить</button></div>
+          <p class="ym-n" id="cc-ym-note"></p>
+        </div>
+        <div class="ym cx" id="cc-cx" style="display:none">
+          <div class="ym-h"><b>Криптой · TON или USDT</b><span>Перевод в сети TON — талеры зачислятся сами через несколько минут</span></div>
+          <div class="cx-seg" id="cc-cx-seg"></div>
+          <div class="cx-body"><div class="cx-qr" id="cc-cx-qr" title="Наведите камеру телефона с кошельком TON"></div>
+            <div class="cx-info">
+              <div class="cx-f"><span>Адрес кошелька</span><code id="cc-cx-addr"></code><button class="btn small" id="cc-cx-addr-cp">Скопировать</button></div>
+              <div class="cx-f"><span>Комментарий — обязательно</span><code class="cx-code" id="cc-cx-code"></code><button class="btn small" id="cc-cx-code-cp">Скопировать</button></div>
+              <div class="cx-warn" id="cc-cx-warn"></div>
+              <p class="cx-rate" id="cc-cx-rate"></p>
+              <div><button class="btn primary" id="cc-cx-open">Открыть кошелёк</button></div>
+              <p class="ym-n" id="cc-cx-note"></p>
+            </div></div>
+        </div>
+        <div class="cc-man" id="cc-man">
+        <div class="ym-h" id="cc-man-h" style="display:none;margin-bottom:8px"><b>Снимок оплаты администратору</b><span>Оплатите удобным способом и пришлите снимок — администратор зачислит</span></div>
         <p class="hint" id="cc-topup" style="margin:0 0 10px;white-space:pre-line;line-height:1.55"></p>
         <div class="actions" style="margin:0;align-items:flex-end;flex-wrap:wrap">
           <label class="f" style="width:150px">Сколько талеров<input type="text" id="cp-amount" inputmode="decimal" placeholder="например, 5"></label>
@@ -1871,6 +1912,7 @@
         <div class="cp-shot" id="cp-shot" tabindex="0"><span id="cp-shot-t">Приложите снимок оплаты — нажмите сюда или вставьте Ctrl+V</span><img id="cp-img" alt=""></div>
         <input type="file" id="cp-file" accept="image/png,image/jpeg,image/webp" hidden>
         <div class="actions" style="margin:10px 0 0"><button class="btn primary" id="cp-send">Отправить заявку</button><span class="res" id="cp-res"></span></div>
+        </div>
         <div id="cp-list"></div>
       </div>
       <div class="cc-use" id="cc-usage"></div>
@@ -2109,6 +2151,10 @@
     <div class="plp" id="plp"></div>
   </section>
 
+  <section id="p-plgnew" class="wide">
+    <div class="pmk" id="pmk"></div>
+  </section>
+
   <section id="p-skills">
     <h1>Плагины</h1>
     <p class="lead">Плагин — готовое умение одной кнопкой: инструкция для помощницы, нужные подключения, ваши настройки и дела
@@ -2116,6 +2162,7 @@
     <div class="plg-cats" id="plg-cats" role="tablist" aria-label="Категории"></div>
     <div class="plg-grid" id="plg-grid"></div>
     <div class="actions plg-own">
+      <button class="btn primary" id="plg-new" type="button">✦ Создать плагин словами</button>
       <label class="btn">Установить плагин из файла…<input type="file" id="plg-file" accept=".zip" hidden></label>
       <button class="btn ghost" id="plg-guide-b">Как сделать свой плагин</button>
       <span class="res" id="plg-res"></span>
@@ -2182,6 +2229,7 @@
       <div class="zm-prev"><div class="cl-m"><div class="tx">Завтра в Минске облачно, днём до +11, ночью небольшой дождь — зонт не помешает.</div></div><button class="btn small ghost" id="zm-reset">Как было</button></div>
     </div>
     <h2>Фон</h2>
+    <div class="lk-pt" id="lk-pt" hidden></div>
     <div id="lk-skins"></div>
     <h2>Когда помощница говорит</h2>
     <div class="lk-grid" id="lk-fx"></div>
@@ -2668,6 +2716,7 @@
 <script src="studio/watch.js"></script>
 <script src="studio/art.js"></script>
 <script src="studio/plugpage.js"></script>
+<script src="studio/plugmake.js"></script>
 <script src="studio/ideas.js"></script>
 </body>
 </html>

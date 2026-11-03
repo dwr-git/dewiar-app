@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 22 · Страница плагина. Светлый неоморфизм серии. Главная вещь урока — у плагина своя страница: бросили сорок резюме — кандидаты разобраны и сравнены; кнопки, настройки и «спросить Лиру» — там же. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+.win { position: absolute; left: 640px; top: 140px; width: 760px; padding: 12px 14px 14px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.win .bar { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 6px 10px; }
+.win .bar i { width: 13px; height: 13px; border-radius: 50%; background: var(--nd); }
+.win .bar span { margin-left: 14px; flex: 1; padding: 7px 16px; border-radius: 99px; box-shadow: var(--press); font-size: 17px; font-weight: 800; color: var(--mut); }
+.win .bar span b { color: var(--ink); }
+.tgl { width: 76px; height: 42px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; }
+.tgl i { position: absolute; top: 5px; left: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); }
+.tgl.on { background: var(--brand); box-shadow: none; } .tgl.on i { left: 39px; }
+.toast { position: absolute; display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); }
+.toast > i { flex: none; width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; font-size: 32px; font-style: normal; background: rgba(47,179,131,.16); }
+.toast small { display: block; font-size: 16px; font-weight: 800; color: var(--mut); } .toast b { display: block; font-size: 22px; font-weight: 800; margin-top: 2px; }
+.st { position: absolute; display: grid; grid-template-columns: 250px 1fr; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); overflow: hidden; }
+.st nav { padding: 24px 16px; background: rgba(255,255,255,.38); display: flex; flex-direction: column; gap: 3px; }
+.st nav .g { margin: 12px 10px 4px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.st nav .g:first-child { margin-top: 0; }
+.st nav span { padding: 8px 12px; border-radius: 12px; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.st nav span.on { color: #fff; background: var(--brand); }
+.st .pg { padding: 28px 32px; } .st .pg h3 { font: 700 30px Unbounded; } .st .pg > small { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; color: var(--mut); }
+
+#drop { position: absolute; left: 640px; top: 140px; width: 1180px; height: 170px; border-radius: 30px; box-shadow: var(--press); }
+#drop .dz { position: absolute; inset: 14px; border-radius: 22px; border: 3px dashed rgba(69,96,234,.35); display: flex; align-items: center; gap: 22px; padding: 0 30px; }
+#drop .dz > i { font-size: 54px; font-style: normal; } #drop .dz b { display: block; font: 700 26px Unbounded; } #drop .dz small { font-size: 19px; font-weight: 700; color: var(--mut); }
+#drop .cnt { margin-left: auto; padding: 14px 20px; border-radius: 18px; background: var(--bg); box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; white-space: nowrap; }
+#drop .cnt.ok { color: #1e7d5b; }
+.fl { position: absolute; top: 60px; padding: 12px 16px; border-radius: 14px; background: #fff; box-shadow: 0 10px 24px -8px rgba(36,50,74,.35); font-size: 18px; font-weight: 800; white-space: nowrap; }
+#cands { position: absolute; left: 640px; top: 350px; width: 1180px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.cd { padding: 24px 24px 22px; border-radius: 28px; background: var(--bg); box-shadow: var(--raise); }
+.cd.top { box-shadow: 0 0 0 4px #f2a65a, var(--raise); }
+.cd .hd { display: flex; align-items: center; gap: 14px; } .cd .av { flex: none; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 21px Unbounded; }
+.cd b { display: block; font-size: 22px; } .cd .hd small { font-size: 17px; font-weight: 700; color: var(--mut); }
+.cd .meta { margin-top: 14px; font-size: 18px; font-weight: 700; color: var(--mut); }
+.cd .sc { display: flex; align-items: center; gap: 12px; margin-top: 16px; } .cd .sc s { flex: 1; height: 12px; border-radius: 99px; background: rgba(69,96,234,.12); position: relative; overflow: hidden; text-decoration: none; }
+.cd .sc s i { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--brand); } .cd.top .sc s i { background: linear-gradient(90deg, #f7b96d, #e8893a); }
+.cd .sc b { font: 700 26px Unbounded; } .cd .sc em { font-style: normal; font-size: 15px; font-weight: 800; color: var(--mut); }
+.cd .win1 { margin-top: 14px; display: inline-block; padding: 8px 14px; border-radius: 12px; font-size: 16px; font-weight: 800; color: #9a5a17; background: rgba(242,166,90,.2); }
+#stu { left: 620px; top: 130px; width: 1220px; height: 720px; }
+#stu nav span i { font-style: normal; margin-right: 8px; } #stu nav span.new { box-shadow: 0 0 0 3px rgba(242,166,90,.7); }
+#stu .pg { position: relative; }
+.ph { display: flex; align-items: center; gap: 18px; } .ph > i { flex: none; width: 76px; height: 76px; border-radius: 24px; display: grid; place-items: center; font-size: 42px; font-style: normal; background: rgba(242,166,90,.22); }
+.ph small { display: block; font-size: 17px; font-weight: 700; color: var(--mut); margin-top: 4px; } .ph .st-on { margin-left: auto; padding: 9px 14px; border-radius: 12px; font-size: 16px; font-weight: 800; color: #1e7d5b; background: rgba(47,179,131,.15); white-space: nowrap; }
+.tabs { display: flex; gap: 10px; margin-top: 22px; } .tabs span { padding: 11px 18px; border-radius: 14px; box-shadow: var(--raise-s); font-size: 18px; font-weight: 800; }
+.tabs span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.pane { position: absolute; left: 32px; right: 32px; top: 196px; }
+.fun { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.fun > div { padding: 16px; border-radius: 20px; box-shadow: var(--press); min-height: 380px; } .fun h6 { font-size: 16px; font-weight: 800; color: var(--mut); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+.fun h6 b { color: var(--accent); margin-left: 6px; } .fun p { padding: 11px 13px; border-radius: 14px; background: var(--bg); box-shadow: var(--raise-s); font-size: 16px; font-weight: 700; margin-top: 10px; }
+.acts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.ac { padding: 20px 22px; border-radius: 22px; box-shadow: var(--raise-s); } .ac b { display: block; font-size: 21px; } .ac small { display: block; font-size: 15px; font-weight: 700; color: var(--mut); margin-top: 4px; }
+.ac .f { margin-top: 12px; padding: 12px 16px; border-radius: 14px; box-shadow: var(--press); font-size: 18px; font-weight: 700; min-height: 48px; }
+.ac .f::after { content: "|"; display: inline-block; width: 0; color: var(--accent); opacity: var(--cur, 0); }
+.ac .go { margin-top: 14px; display: inline-block; padding: 12px 22px; border-radius: 14px; color: #fff; background: var(--brand); font-size: 17px; font-weight: 800; }
+.ac .go.ok { background: linear-gradient(135deg, #46d39a, #2fb383); }
+.tbl { margin-top: 18px; border-radius: 20px; box-shadow: var(--raise-s); overflow: hidden; font-size: 18px; font-weight: 700; }
+.tbl div { display: grid; grid-template-columns: 1.4fr 1fr .6fr .9fr; padding: 12px 20px; } .tbl div:first-child { font-size: 15px; font-weight: 800; color: var(--mut); text-transform: uppercase; letter-spacing: .04em; background: rgba(255,255,255,.35); }
+.tbl div + div { border-top: 1px solid rgba(36,50,74,.08); }
+#q1 { left: 640px; top: 140px; }
+#cmp { left: 640px; top: 260px; width: 1000px; padding: 30px 36px; }
+#cmp .cr { display: grid; grid-template-columns: 220px 1fr 70px 1fr 70px; align-items: center; gap: 14px; margin-top: 14px; font-size: 20px; font-weight: 700; }
+#cmp .hd2 { display: grid; grid-template-columns: 220px 1fr 1fr; gap: 14px; font-size: 21px; font-weight: 800; } #cmp .hd2 span:nth-child(2) { color: #c4741f; } #cmp .hd2 span:nth-child(3) { color: var(--accent); }
+#cmp s { height: 12px; border-radius: 99px; background: rgba(69,96,234,.12); position: relative; overflow: hidden; text-decoration: none; }
+#cmp s i { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--brand); } #cmp s.a i { background: linear-gradient(90deg, #f7b96d, #e8893a); }
+#cmp .cr b { font-size: 20px; text-align: right; } #cmp .vd { margin-top: 22px; padding: 16px 20px; border-radius: 18px; box-shadow: var(--press); font-size: 21px; font-weight: 700; line-height: 1.4; }
+#set { top: 160px; width: 760px; } #set label { display: block; margin-top: 18px; font-size: 17px; font-weight: 800; color: var(--mut); }
+#set .in { margin-top: 8px; padding: 16px 20px; border-radius: 16px; box-shadow: var(--press); font-size: 22px; font-weight: 700; }
+#set .jb .tgl { margin-left: auto; }
+#set .jb { display: flex; align-items: center; gap: 16px; margin-top: 24px; padding: 18px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 700; }
+#ring { left: 1420px; top: 220px; width: 400px; flex-direction: column; align-items: flex-start; }
+#ring .tm { font: 600 46px Unbounded; color: var(--accent); } #ring p { font-size: 21px; font-weight: 700; line-height: 1.4; }
+#pages { position: absolute; left: 620px; top: 170px; width: 1200px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+.pp { padding: 24px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.pp .ph > i { width: 64px; height: 64px; font-size: 34px; border-radius: 20px; } .pp .ph b { font-size: 22px; }
+.pp .pv { margin-top: 18px; height: 250px; border-radius: 20px; box-shadow: var(--press); padding: 16px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.pp .pv p { padding: 11px 13px; border-radius: 12px; background: var(--bg); box-shadow: var(--raise-s); font-size: 16px; font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+.pp .pv p em { font-style: normal; color: var(--accent); font-weight: 800; white-space: nowrap; }
+.pp .gal { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; } .pp .gal i { border-radius: 12px; display: grid; place-items: center; font-size: 40px; font-style: normal; }
+.pp > small { display: block; margin-top: 14px; font-size: 17px; font-weight: 800; color: var(--mut); }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 22 · Страница плагина</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/><path d="M12.5 9h5M12.5 12.5h5M12.5 16h3"/></svg></div>
+    <div id="t-title"><h1>Страница плагина</h1><p>Свой раздел у каждого плагина — кнопки, настройки, результаты</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div id="drop"><div class="dz"><i>📥</i><div><b>Перетащите резюме сюда</b><small>PDF, Word, текст или ZIP — сколько угодно</small></div><span class="cnt" id="cnt">0 резюме</span></div>
+      <span class="fl">📄 Ковалёва.pdf</span><span class="fl">📝 Петров.docx</span><span class="fl">🗜 резюме-октябрь.zip</span><span class="fl">📄 Лис_А.pdf</span><span class="fl">📝 Орлова.docx</span><span class="fl">📄 Мороз_П.pdf</span></div>
+    <div id="cands"><div class="cd top"><div class="hd"><span class="av" style="background:#e8893a">ИК</span><div><b>Ирина Ковалёва</b><small>главный бухгалтер</small></div></div>
+      <div class="meta">7 лет · 1С, налоги, отчётность</div><div class="sc"><s><i data-w="87"></i></s><b>87</b><em>из 100</em></div><span class="win1">🏆 Лучшая под «Бухгалтер»</span></div><div class="cd"><div class="hd"><span class="av" style="background:#5a7bea">СП</span><div><b>Сергей Петров</b><small>бухгалтер</small></div></div>
+      <div class="meta">5 лет · 1С, зарплата</div><div class="sc"><s><i data-w="74"></i></s><b>74</b><em>из 100</em></div></div><div class="cd"><div class="hd"><span class="av" style="background:#3a9fb0">АЛ</span><div><b>Анна Лис</b><small>бухгалтер</small></div></div>
+      <div class="meta">3 года · первичка, банк</div><div class="sc"><s><i data-w="68"></i></s><b>68</b><em>из 100</em></div></div></div>
+    <div class="st" id="stu"><nav><div class="g">Главное</div><span class="" data-n="Главная"><i>🏠</i>Главная</span><span class="" data-n="Чат"><i>💬</i>Чат</span><span class="" data-n="Напоминания"><i>⏰</i>Напоминания</span><div class="g">Работа</div><span class="" data-n="Клиенты"><i>👥</i>Клиенты</span><span class="" data-n="Сайты"><i>🌐</i>Сайты</span><div class="g">Плагины</div><span class="on" data-n="Рекрутер"><i>🧑‍💼</i>Рекрутер</span><span class="" data-n="Тендеры"><i>📄</i>Тендеры</span><span class="" data-n="Художник"><i>🎨</i>Художник</span></nav>
+      <div class="pg"><div class="ph"><i>🧑‍💼</i><div><h3>Рекрутер</h3><small>Разбор резюме, отбор под вакансию, честная оценка</small></div><span class="st-on">● работает</span></div>
+        <div class="tabs"><span id="tb1" class="on">Резюме и подбор</span><span id="tb2">Сделать сейчас</span><span>Настройки</span><span>Файлы</span></div>
+        <div class="pane" id="pn1"><div class="fun"><div><h6>Новый<b>12</b></h6><p>Орлова Е.</p><p>Гаврик М.</p><p>Савич Д.</p><p>Бондарь О.</p></div><div><h6>Интересен<b>6</b></h6><p>Петров С.</p><p>Лис А.</p><p>Жук Т.</p></div><div><h6>Собеседование<b>3</b></h6><p>Ковалёва И.</p><p>Мороз П.</p></div><div><h6>Оффер<b>1</b></h6><p>Жданова В.</p></div></div></div>
+        <div class="pane" id="pn2"><div class="acts">
+          <div class="ac"><b>Новая вакансия</b><small>Под неё Лира отбирает и оценивает</small><div class="f" id="f1"></div><div class="f" id="f2"></div><span class="go" id="go1">Сохранить вакансию</span></div>
+          <div class="ac"><b>Кандидаты</b><small>Кто в базе — по этапу или по словам</small><div class="f">этап: интересен</div><div class="f">бухгалтер</div><span class="go" id="go2">Показать</span></div></div>
+          <div class="tbl" id="tbl"><div><span>Имя</span><span>Должность</span><span>Стаж</span><span>Этап</span></div>
+            <div><span>Ирина Ковалёва</span><span>гл. бухгалтер</span><span>7 лет</span><span>собеседование</span></div>
+            <div><span>Сергей Петров</span><span>бухгалтер</span><span>5 лет</span><span>интересен</span></div>
+            <div><span>Анна Лис</span><span>бухгалтер</span><span>3 года</span><span>интересен</span></div></div></div>
+      </div></div>
+    <div class="say" id="q1">«Сравни Ковалёву и Петрова»</div>
+    <div class="card" id="cmp"><div class="hd2"><span></span><span>Ирина Ковалёва · 87</span><span>Сергей Петров · 74</span></div>
+      <div class="cr"><span>навыки</span><s class="a"><i data-w="92"></i></s><b>92</b><s><i data-w="78"></i></s><b>78</b></div><div class="cr"><span>опыт</span><s class="a"><i data-w="88"></i></s><b>88</b><s><i data-w="70"></i></s><b>70</b></div><div class="cr"><span>формат и условия</span><s class="a"><i data-w="80"></i></s><b>80</b><s><i data-w="90"></i></s><b>90</b></div><div class="cr"><span>образование</span><s class="a"><i data-w="85"></i></s><b>85</b><s><i data-w="80"></i></s><b>80</b></div><div class="cr"><span>языки</span><s class="a"><i data-w="60"></i></s><b>60</b><s><i data-w="75"></i></s><b>75</b></div>
+      <div class="vd">Ковалёва сильнее в 1С и налогах, у Петрова — удобнее график. На собеседовании уточните у неё ожидания по зарплате.</div></div>
+    <div class="card" id="set"><h3>Настройки</h3><label>ПАПКА С РЕЗЮМЕ</label><div class="in">📁 ~/Документы/Резюме</div>
+      <label>О КОМПАНИИ — ДЛЯ ПИСЕМ КАНДИДАТАМ</label><div class="in">ООО «Север», Минск, производство</div>
+      <div class="jb">🗓 Новые резюме из папки — по будням в 10:00<span class="tgl" id="tg"><i></i></span></div></div>
+    <div class="toast" id="ring"><small>ЛИРА · 10:00</small><div class="tm">+3 резюме</div><p>Новые на бухгалтера: Мороз, Савич, Бондарь. У Мороза уточните стаж в 1С.</p></div>
+    <div id="pages">
+      <div class="pp"><div class="ph"><i>🧑‍💼</i><b>Рекрутер</b></div><div class="pv"><p>Ирина Ковалёва<em>87</em></p><p>Сергей Петров<em>74</em></p><p>Анна Лис<em>68</em></p><p>Турнир лучших<em>→</em></p></div><small>Кандидаты, этапы, сравнение</small></div>
+      <div class="pp"><div class="ph"><i style="background:rgba(74,139,232,.18)">📄</i><b>Тендеры</b></div><div class="pv"><p>Поставка бумаги<em>12 дн.</em></p><p>Ремонт кровли<em>5 дн.</em></p><p>Мебель для школы<em>9 дн.</em></p><p>Мои запросы<em>3</em></p></div><small>Лента с фильтрами и сроками</small></div>
+      <div class="pp"><div class="ph"><i style="background:rgba(255,122,182,.2)">🎨</i><b>Художник</b></div><div class="pv"><div class="gal"><i style="background:linear-gradient(160deg,#FFE3D3,#F59BB0)">🎂</i><i style="background:linear-gradient(160deg,#0B1636,#3A3F73)">❄️</i><i style="background:linear-gradient(160deg,#F3E2CF,#8B5A3C)">☕</i><i style="background:linear-gradient(160deg,#BFD0FF,#4F6CF0)">🚀</i></div></div><small>Рисунки — все в одном месте</small></div>
+    </div>
+  </div>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  open: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  act: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  ask: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  settings: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  const p0 = s("problem").start, tA = end("s2a") - 0.4;
+  scene($("#drop"), T, p0 + 0.3, s("open").start, 24);
+  [...$("#drop").querySelectorAll(".fl")].forEach((c, i) => { const k = ease((T - p0 - 0.9 - i * 0.32) / 0.9);
+    c.style.left = (1060 - k * (700 - i * 40)) + "px"; c.style.top = (30 + (i % 3) * 38 - Math.sin(k * Math.PI) * 40) + "px"; c.style.opacity = k <= 0 ? 0 : k < 0.85 ? 1 : (1 - k) / 0.15;
+    c.style.transform = `rotate(${(1 - k) * (i % 2 ? 8 : -8)}deg)`; });
+  const n = Math.round(40 * clamp((T - p0 - 1.0) / 2.6));
+  $("#cnt").textContent = n >= 40 ? "40 резюме · разобрано ✓" : n + " резюме"; $("#cnt").classList.toggle("ok", n >= 40);
+  scene($("#cands"), T, tA, s("open").start, 24);
+  [...$("#cands").children].forEach((c, i) => vis(c, out((T - tA - 0.2 - i * 0.35) / 0.45), 18, .95));
+  [...$("#cands").querySelectorAll(".sc i")].forEach((c, i) => { c.style.width = (+c.dataset.w * out((T - tA - 0.7 - i * 0.35) / 0.8)) + "%"; });
+  [...$("#cands").querySelectorAll(".cd")].forEach((c, i) => c.classList.toggle("top", i === 0 && T > at("s2b") + 2.6));
+  vis($(".win1"), out((T - at("s2b") - 2.6) / 0.4), 10);
+  // студия: меню слева — группа «Плагины», страница «Рекрутера»; потом «Сделать сейчас»
+  scene($("#stu"), T, s("open").start + 0.2, s("ask").start);
+  const nav = [...$("#stu nav").children];
+  nav.forEach((c, i) => { if (i >= 7) vis(c, out((T - s("open").start - 1.4 - (i - 7) * 0.3) / 0.4), 10); });
+  $('#stu nav [data-n="Рекрутер"]').classList.toggle("new", T > s("open").start + 1.4 && T < s("open").start + 4);
+  const onAct = T > s("act").start + 0.1;
+  $("#tb1").classList.toggle("on", !onAct); $("#tb2").classList.toggle("on", onAct);
+  vis($("#pn1"), Math.min(out((T - s("open").start - 1.0) / 0.5), 1 - out((T - s("act").start) / 0.3)), 14);
+  vis($("#pn2"), out((T - s("act").start - 0.2) / 0.4), 14);
+  [...$("#pn1").querySelectorAll("p")].forEach((c, i) => vis(c, out((T - s("open").start - 1.8 - i * 0.12) / 0.4), 10));
+  const k1 = (T - s("act").start - 1.0) / 0.8, k2 = (T - s("act").start - 2.0) / 1.2;
+  $("#f1").textContent = type("Бухгалтер", k1); $("#f2").textContent = type("1С, налоги, опыт от трёх лет", k2);
+  $("#f1").style.setProperty("--cur", k1 > 0 && k1 < 1.3 ? (Math.floor(T * 2) % 2) : 0); $("#f2").style.setProperty("--cur", k2 > 0 && k2 < 1.3 ? (Math.floor(T * 2) % 2) : 0);
+  const sv = T > s("act").start + 3.6; $("#go1").classList.toggle("ok", sv); $("#go1").textContent = sv ? "Сохранено ✓" : "Сохранить вакансию";
+  $("#go2").classList.toggle("ok", T > s("act").start + 4.6);
+  vis($("#tbl"), out((T - s("act").start - 5.0) / 0.5), 16);
+  scene($("#q1"), T, s("ask").start + 0.2, s("settings").start, 20);
+  scene($("#cmp"), T, s("ask").start + 2.2, s("settings").start, 24);
+  [...$("#cmp").querySelectorAll("s i")].forEach((c, i) => { c.style.width = (+c.dataset.w * out((T - s("ask").start - 2.6 - Math.floor(i / 2) * 0.2) / 0.7)) + "%"; });
+  vis($("#cmp .vd"), out((T - s("ask").start - 4.0) / 0.5), 10);
+  scene($("#set"), T, s("settings").start + 0.2, s("how").start);
+  const on = T > s("settings").start + 3.0; $("#tg").classList.toggle("on", on);
+  scene($("#ring"), T, s("settings").start + 4.0, s("how").start, 30);
+  scene($("#pages"), T, s("how").start + 0.2, s("end").start);
+  [...$("#pages").children].forEach((c, i) => vis(c, out((T - s("how").start - 0.5 - i * 0.4) / 0.45), 16, .95));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

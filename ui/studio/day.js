@@ -75,7 +75,16 @@ function renderCalFilter() {
   $("#cal-filter").innerHTML = Object.entries(CT).map(([k, [n, c]]) => `<button data-k="${k}" class="${calOff.has(k) ? "off" : ""}"><i style="background:${c}"></i>${n}</button>`).join("");
   $$("#cal-filter button").forEach(b => b.onclick = () => { const k = b.dataset.k; calOff.has(k) ? calOff.delete(k) : calOff.add(k); renderCalFilter(); renderCal(); renderSide(); if (calTab === "feed") renderFeed(); });
 }
-function dayItems(d) { return ((calData && calData.days[d]) || []).filter(it => !calOff.has(it.type)); }
+/* «Показывать выполненные» (идея №41): сделанные дела, прозвеневшие напоминания, выполненные дела по расписанию;
+   выбор — localStorage cal_done */
+let calShowDone = true;
+try { calShowDone = localStorage.getItem("cal_done") !== "0"; } catch (e) { }
+if ($("#cal-done")) {
+  $("#cal-done").checked = calShowDone;
+  $("#cal-done").onchange = () => { calShowDone = $("#cal-done").checked; try { localStorage.setItem("cal_done", calShowDone ? "1" : "0"); } catch (e) { }
+    renderCal(); renderSide(); if (calTab === "feed") renderFeed(); if ($("#day-dlg").open) renderDay(); };
+}
+function dayItems(d) { return ((calData && calData.days[d]) || []).filter(it => !calOff.has(it.type) && (calShowDone || !it.done)); }
 function renderCal() {
   $("#cal-title").textContent = `${MON_RU[calM - 1]} ${calY}`;
   const first = new Date(calY, calM - 1, 1), off = (first.getDay() + 6) % 7, n = new Date(calY, calM, 0).getDate();
@@ -90,7 +99,7 @@ function renderCal() {
     const sum = exp ? `<em style="color:#FFB3C3">−${Math.round(exp)}</em>` : inc ? `<em style="color:var(--good)">+${Math.round(inc)}</em>` : "";
     const evs = its.filter(it => it.type !== "money" || its.filter(x => x.type === "money").length <= 2);   // много трат — только сумма, без строк
     html += `<div class="day${inM ? "" : " out"}${k === today ? " today" : ""}${k === calSel ? " sel" : ""}" data-d="${k}"><div class="n"><b>${d.getDate()}</b>${sum}</div>` +
-      evs.slice(0, CAL_N).map(it => `<div class="ev${it.done ? " done" : ""}" title="${escH(itemText(it))}"><i style="background:${itemColor(it)}"></i><span>${escH(it.type === "money" ? itemText(it) : it.title || "")}</span></div>`).join("") +
+      evs.slice(0, CAL_N).map(it => `<div class="ev${it.done ? " done" : ""}${it.closed ? " closed" : ""}" title="${escH(itemText(it) + (it.closed ? " — выполнено" : ""))}"><i style="background:${itemColor(it)}"></i><span>${escH(it.type === "money" ? itemText(it) : it.title || "")}</span></div>`).join("") +
       (evs.length > CAL_N ? `<div class="more">ещё ${evs.length - CAL_N}</div>` : "") + `</div>`;
   }
   $("#cal-grid").innerHTML = html;
@@ -106,11 +115,13 @@ function itemRow(it, withDate) {
   const job = it.kind === "job";
   const fired = it.fired ? (it.fired.slice(0, 10) === isoD(new Date()) ? it.fired.slice(11, 16) : parseD(it.fired.slice(0, 10)).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) + ", " + it.fired.slice(11, 16)) : "";
   const sub = it.type === "money" ? it.category : it.type === "reminder"
-    ? (it.skipped ? "пропущено — компьютер был выключен" : it.done ? (job ? "выполнено" : "прозвенело") + (fired ? " позже — в " + fired : "")
+    ? (it.closed ? (it.kind === "done" ? "дело · выполнено" : "напоминание · выполнено") + (it.closed_at ? " в " + it.closed_at : "")
+      : it.skipped ? "пропущено — компьютер был выключен" : it.done ? (job ? "выполнено" : "прозвенело") + (fired ? " позже — в " + fired : "")
       : (job ? "дело по расписанию" : it.repeat ? "повторяется" : "напоминание") + (it.repeat_text ? " · " + it.repeat_text : it.time ? " · " + it.time : "") + (it.paused ? " · на паузе" : ""))
     : it.type === "event" ? (it.time ? `${it.time}–${it.end}` : "весь день") + " · " + (it.cal || "календарь") + (it.place ? " · " + it.place : "")
     : it.type === "note" ? "заметка" : it.type === "diary" ? "дневник ассистента" : "задача" + (it.status ? " · " + it.status.toLowerCase() : "");
   el.innerHTML = `<i style="background:${itemColor(it)}"></i><div class="t"><span></span><small></small></div>`;
+  if (it.closed) el.classList.add("closed");
   $(".t span", el).textContent = it.type === "money" ? (it.title || it.category) : it.title || "";
   $(".t small", el).textContent = (withDate ? parseD(withDate).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) + " · " : "") + sub;
   if (it.type === "money") el.insertAdjacentHTML("beforeend", `<span class="amt ${it.kind === "income" ? "inc" : "exp"}">${it.kind === "income" ? "+" : "−"}${escH(fmtMoney(it.amount, it.currency))}</span>`);

@@ -335,7 +335,7 @@ function cloudFill(c) {
     : c.frozen ? "Ключ приостановлен — напишите администратору." : c.empty ? "Заряд закончился — пополните, и ассистент снова будет отвечать."
     : `Хватит примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` + (c.low ? " — скоро понадобится пополнить" : "");
   if (c.error && !err) $("#cc-turns").textContent += ` · сейчас не обновилось: ${c.error}`;   // показано последнее известное — честно говорим
-  topupText(c.topup || "");
+  ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); topupText(c.topup || "");
   $("#cc-use").style.display = c.active ? "none" : "";
   // по аккаунту ключа нет — «Убрать ключ» только у своего ключа dw-
   $("#cc-off").style.display = c.account || c.site ? "none" : "";
@@ -357,11 +357,84 @@ function cpList(reqs) {
   $("#cp-list").innerHTML = (reqs || []).map(r => `<div class="rqi ${r.status}"><span>${new Date(r.ts * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
     ${r.amount ? " · " + r.amount + " тал." : ""}${r.reply ? " · «" + escH(r.reply) + "»" : ""}</span><b>${RQ[r.status] || r.status}${r.status === "done" ? " +" + r.credited : ""}</b></div>`).join("");
 }
-async function cpLoad() { try { const r = await core.call("cloud_topup"); topupText(r.text || ""); cpList(r.requests); } catch (e) { $("#cc-topup").textContent = e.message; } }
+async function cpLoad() { try { const r = await core.call("cloud_topup"); ymFill(r.yoomoney); cxFill(payPick(r.pay, "crypto")); payArrange(r.pay); topupText(r.text || ""); cpList(r.requests); } catch (e) { $("#cc-topup").textContent = e.message; } }
+/* «Оплатить картой» (ЮMoney, 03.11; владелец: «пришли оплаты — только номера карт и суммы, как найти этих людей?»): сервер
+   отдаёт ссылку перевода с меткой человека DW-… (yoomoney.url), суммы и курс; сумма дописывается, страница ЮMoney открывается
+   в браузере, а талеры зачисляются сами (cloud.php ym_notify) — потом баланс обновляем несколько раз, чтобы «+N» было видно */
+let ymCur = null, ymT = 0;
+const ymTal = (y, s) => (Math.round(s * y.rate * 1e4) / 1e4).toLocaleString("ru-RU") + " тал.";
+function ymFill(y) {
+  ymCur = y && y.url ? y : null;
+  $("#cc-ym").style.display = ymCur ? "" : "none";
+  if (!ymCur) return;
+  $("#cc-ym-sums").innerHTML = (y.sums || []).map(s => `<button type="button" data-s="${+s}"><b>${(+s).toLocaleString("ru-RU")} ₽</b><small>${ymTal(y, +s)}</small></button>`).join("");
+  $$("#cc-ym-sums button").forEach(b => b.onclick = () => ymPay(+b.dataset.s));
+}
+function ymPay(s) {
+  const n = $("#cc-ym-note"), y = ymCur, lo = (y && y.min) || 10, hi = (y && y.max) || 100000;
+  if (!y) return;
+  if (!(s >= lo && s <= hi)) { n.className = "ym-n bad"; n.textContent = `Сумма — от ${lo} до ${hi.toLocaleString("ru-RU")} ₽`; return; }
+  s = Math.round(s);
+  openExt(y.url + "&sum=" + s);
+  n.className = "ym-n ok"; n.textContent = `Открыла страницу ЮMoney: ${s.toLocaleString("ru-RU")} ₽ → ${ymTal(y, s)}. Оплатите — талеры придут сами, баланс обновится.`;
+  payWatch();
+}
+function payWatch() {                               // ждём зачисления: 10 минут, раз в 20 секунд
+  clearInterval(ymT); let k = 0;
+  ymT = setInterval(() => { if (++k > 30) return clearInterval(ymT); core.call("cloud_status", { refresh: true }).then(c => { cloudFill(c); if ($("#cc-pay").style.display !== "none") cpLoad(); }).catch(() => {}); }, 20000);
+}
+/* Способы пополнения (03.11, владелец: «что-то на будущее, не привязанное к одному платёжному сервису, возможно даже
+   криптовалютой»): сервер отдаёт pay — включённые способы в порядке владельца; блоки встают в этом порядке.
+   «Криптой»: TON или USDT в сети TON на кошелёк владельца с комментарием DW-… — адрес, комментарий, QR для телефона
+   с кошельком и ссылка ton:// (сайт сам видит перевод и зачисляет — cloud.php cx_poll). */
+let cxCur = null, cxAsset = "ton";
+const payPick = (list, id) => (Array.isArray(list) ? list : []).find(m => m && m.id === id) || null;
+const numRu = (v) => (+v || 0).toLocaleString("ru-RU", { maximumFractionDigits: 6 });
+function payArrange(list) {
+  const box = $("#cc-pay"), end = $("#cp-list"), map = { yoomoney: "#cc-ym", crypto: "#cc-cx", manual: "#cc-man" };
+  if (!box || !end || !Array.isArray(list)) return;
+  list.forEach(m => { const el = map[m.id] && $(map[m.id]); if (el) box.insertBefore(el, end); });
+  $("#cc-man-h").style.display = list.some(m => m.id !== "manual") ? "" : "none";
+}
+function cxQr(text) {
+  if (typeof qrPretty === "function") return qrPretty(text, "M");
+  if (typeof qrcode !== "function") return "";
+  const q = qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+function cxFill(x) {
+  cxCur = x && x.address && (x.assets || []).length ? x : null;
+  $("#cc-cx").style.display = cxCur ? "" : "none";
+  if (!cxCur) return;
+  if (!cxCur.assets.some(a => a.id === cxAsset)) cxAsset = cxCur.assets[0].id;
+  const a = cxCur.assets.find(z => z.id === cxAsset);
+  $("#cc-cx-seg").innerHTML = cxCur.assets.length > 1 ? cxCur.assets.map(z => `<button type="button" data-a="${escH(z.id)}" class="${z.id === cxAsset ? "on" : ""}">${escH(z.name)}</button>`).join("") : "";
+  $$("#cc-cx-seg button").forEach(b => b.onclick = () => { cxAsset = b.dataset.a; cxFill(cxCur); });
+  $("#cc-cx-addr").textContent = cxCur.address; $("#cc-cx-code").textContent = cxCur.code;
+  $("#cc-cx-warn").innerHTML = `<b>⚠ ${escH(cxCur.warn)}</b>` + (a.note ? `<span>${escH(a.name)} — ${escH(a.note)}.</span>` : "");
+  $("#cc-cx-rate").textContent = `1 ${a.name} = ${numRu(a.rate)} тал. · от ${numRu(a.min)} ${a.name} · проверяем раз в ${cxCur.every || 2} мин.`;
+  const qr = $("#cc-cx-qr"); if (qr.dataset.u !== a.link) { qr.innerHTML = cxQr(a.link); qr.dataset.u = a.link; }
+}
+function cxCopy(what, btn) {
+  if (!cxCur) return;
+  const done = () => { const o = btn.textContent; btn.textContent = "Скопировано"; setTimeout(() => btn.textContent = o, 1500); };
+  (navigator.clipboard ? navigator.clipboard.writeText(cxCur[what]) : Promise.reject()).then(done).catch(() => toast("Не скопировалось — выделите и скопируйте вручную"));
+}
+$("#cc-cx-addr-cp").onclick = (e) => cxCopy("address", e.target);
+$("#cc-cx-code-cp").onclick = (e) => cxCopy("code", e.target);
+$("#cc-cx-open").onclick = () => {
+  const a = cxCur && cxCur.assets.find(z => z.id === cxAsset), n = $("#cc-cx-note"); if (!a) return;
+  openExt(a.link);
+  n.className = "ym-n ok"; n.textContent = `Если кошелёк не открылся — наведите на QR камеру телефона с кошельком TON или скопируйте адрес и комментарий ${cxCur.code}. Талеры придут сами.`;
+  payWatch();
+};
+$("#cc-ym-go").onclick = () => ymPay(+String($("#cc-ym-own").value).replace(/\s/g, "").replace(",", "."));
+$("#cc-ym-own").onkeydown = (e) => { if (e.key === "Enter") $("#cc-ym-go").click(); };
 /* Как пополнить (текст администратора): выделяется и копируется, ссылки открываются в браузере (отзыв 11.10: «нельзя
    выделить, ссылка на донаты не нажимается»). pywebview по умолчанию запрещает выделение — здесь оно включено (CSS). */
 function topupText(t) {
   const el = $("#cc-topup");
+  if (ymCur) t = String(t).replace(/^[^\n]*\?p=\/pay\/card[^\n]*\n*/m, "");     // для «Оплатить картой» есть кнопка выше
+  if (cxCur) t = String(t).replace(/^[^\n]*\?p=\/pay\/crypto[^\n]*\n*/m, "");   // и для «Криптой»
   el.innerHTML = escH(t).replace(/(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])/g, '<a href="#" data-ext="$1">$1</a>');
   $$("a[data-ext]", el).forEach(a => a.onclick = (e) => { e.preventDefault(); openExt(a.dataset.ext); });
 }
