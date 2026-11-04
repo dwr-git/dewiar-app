@@ -83,7 +83,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.piper = PiperTTS()
         self.vosk_tts = VoskTTS(MODELS_DIR)
         self._vosk_loading = False
-        self.espeak = SapiTTS() if os.name == "nt" else EspeakTTS()      # аварийный голос без скачивания
+        # аварийный голос без скачивания: Windows — SAPI, Mac — `say`, Linux — eSpeak
+        self.espeak = SapiTTS() if os.name == "nt" else MacSayTTS() if sys.platform == "darwin" else EspeakTTS()
         self.gigaam = None
         self.vosk_model = None
         self.names_off = False           # модель имён не скачалась — слух работает без имён (кнопка), см. _start_hearing

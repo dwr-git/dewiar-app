@@ -617,6 +617,41 @@ class SapiTTS:
         yield 22050, base64.b64decode(r.stdout.strip())
 
 
+class MacSayTTS:
+    """Mac: голос системы (`say`, русские голоса Milena, Yuri…) — аварийный, как eSpeak в Linux и голос Windows: без
+    скачивания. WAV во временный файл (say не пишет в stdout). Русского голоса нет — недоступен (его добавляют:
+    Системные настройки → Универсальный доступ → Устная речь → Системный голос → «Управлять голосами»)."""
+    name = "Голос Mac"
+
+    def available(self):
+        import sys
+        if sys.platform != "darwin":
+            return False
+        import macsys
+        return bool(macsys.say_voices())
+
+    def synth(self, text, voice_cfg, speed=1.0):
+        import tempfile
+        import macsys
+        from speechnorm import speech_norm
+        text = speech_norm(text, latin=False) or text
+        d = tempfile.mkdtemp()
+        out = Path(d) / "say.wav"
+        try:
+            cmd = macsys.say_cmd(text, out, voice_cfg.get("_gender") or "", speed)
+            if not cmd:
+                raise RuntimeError("на этом Mac нет русского голоса системы")
+            r = subprocess.run(cmd, capture_output=True, timeout=60)
+            data = out.read_bytes() if out.exists() else b""
+            if r.returncode != 0 or len(data) < 64:
+                raise RuntimeError("голос Mac не сработал" + (f": {r.stderr.decode(errors='replace')[-200:]}" if r.stderr else ""))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+        idx = data.find(b"data")
+        rate = int.from_bytes(data[24:28], "little") if data[:4] == b"RIFF" else 22050
+        yield rate, data[idx + 8:] if idx >= 0 else data
+
+
 class RemoteTTS:
     """OpenAI-совместимый /audio/speech (base_url — с /v1) с потоковым PCM. Понимает три формы ответа: сырой PCM
     (частота — из настройки sample_rate, по умолчанию 24 кГц, как у OpenAI), WAV (частота из заголовка) и SSE

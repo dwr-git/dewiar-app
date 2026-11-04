@@ -1,4 +1,5 @@
-"""Пути и настройки. Настройки — один JSON: CONFIG_DIR/settings.json (Linux ~/.config/dewiar, Windows %APPDATA%\\Dewiar);
+"""Пути и настройки. Настройки — один JSON: CONFIG_DIR/settings.json (Linux ~/.config/dewiar, Windows %APPDATA%\\Dewiar,
+Mac ~/Library/Application Support/Dewiar/Settings);
 модели, голоса и прочие данные — STATE_DIR. Оба пути можно переопределить DEWIAR_CONFIG_DIR / DEWIAR_STATE_DIR.
 
 Файл пишет только ядро (окно настроек присылает изменения через WebSocket), поэтому гонок нет. Ключи API лежат там же,
@@ -11,6 +12,7 @@ import json
 import logging
 import os
 import secrets
+import sys
 import threading
 from pathlib import Path
 
@@ -19,6 +21,7 @@ log = logging.getLogger("dewiar.settings")
 APP_DIR = Path(__file__).resolve().parent.parent            # /opt/dewiar или папка исходников
 DATA_DIR = APP_DIR / "data"                                  # то, что едет в пакете
 WIN = os.name == "nt"
+MAC = sys.platform == "darwin"
 # HOME — буквально «~» или относительный путь (так бывает при запуске из некоторых ярлыков и служб): Path.home() тогда
 # «~», и всё пишется в папку «~» там, где запустили (выгрузка 25.10: «близкие: сохранить — Permission denied: '~/.local'»).
 # Берём настоящую домашнюю папку из учётной записи — один раз здесь, до всех Path.home() в ядре.
@@ -35,6 +38,23 @@ else:
     _cfg, _state = Path.home() / ".config/dewiar", Path.home() / ".local/share/dewiar"
 
 
+def mac_dirs(home=None):
+    """Mac: всё в ~/Library/Application Support/Dewiar (как у программ Mac): настройки — …/Settings, модели, голоса и
+    журналы — …/Data. Папки рядом, а не одна в другой: резервная копия обходит папку настроек целиком, модели в неё
+    попасть не должны. Кто уже запускал Dewiar из исходников (там ~/.config/dewiar) и нового места ещё нет — остаётся
+    на прежних папках: ничего не теряется и не переносится. -> (config, state)."""
+    home = Path(home or Path.home())
+    new = home / "Library" / "Application Support" / "Dewiar"
+    old_cfg, old_state = home / ".config/dewiar", home / ".local/share/dewiar"
+    if (old_cfg / "settings.json").exists() and not (new / "Settings" / "settings.json").exists():
+        return old_cfg, old_state
+    return new / "Settings", new / "Data"
+
+
+if MAC:
+    _cfg, _state = mac_dirs()
+
+
 def _os_name():
     """Название системы для подсказки модели: «Windows 11» (по номеру сборки — platform.release() у 11 говорит «10»)
     или «Linux, <PRETTY_NAME из /etc/os-release>»."""
@@ -45,7 +65,6 @@ def _os_name():
         except ValueError:
             build = 0
         return "Windows 11" if build >= 22000 else "Windows 10" if build else "Windows"
-    import sys
     if sys.platform == "darwin":                          # №332 (пакет 27.10): на Mac модель думала, что она в Linux
         return ("macOS " + (platform.mac_ver()[0] or "")).strip()
     try:
@@ -254,9 +273,7 @@ def _merge(base, over):
 def system_dark():
     """Тёмная ли тема у системы: Windows — «AppsUseLightTheme» = 0; Linux — GNOME color-scheme «prefer-dark» или тема
     GTK с «dark» в имени. Не узнали — False (светлая тема по умолчанию)."""
-    import os
     import subprocess
-    import sys
     if os.environ.get("DEWIAR_SYSTEM_DARK") in ("0", "1"):                 # для проверок
         return os.environ["DEWIAR_SYSTEM_DARK"] == "1"
     try:
@@ -264,6 +281,9 @@ def system_dark():
             import winreg
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as k:
                 return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+        if sys.platform == "darwin":                                      # «Оформление» → «Тёмное»
+            r = subprocess.run(["defaults", "read", "-g", "AppleInterfaceStyle"], capture_output=True, text=True, timeout=2)
+            return "dark" in r.stdout.lower()
         if sys.platform.startswith("linux"):
             for key in ("color-scheme", "gtk-theme"):
                 r = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", key], capture_output=True, text=True, timeout=2)

@@ -9,6 +9,7 @@
 (vLLM, Ollama, llama.cpp, LM Studio) или облачной (Dewiar, OpenRouter, OpenAI, Claude).
 
 <a href="https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-Setup-online.exe"><img src="https://img.shields.io/badge/Windows-%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-667eea?style=for-the-badge&logo=windows&logoColor=white" alt="Windows — скачать"></a>
+<a href="https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-mac.dmg"><img src="https://img.shields.io/badge/Mac-%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-8b8cf7?style=for-the-badge&logo=apple&logoColor=white" alt="Mac — скачать"></a>
 <a href="https://github.com/dwr-git/dewiar-app/releases/latest/download/dewiar-assistant_all.deb"><img src="https://img.shields.io/badge/Ubuntu-%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-764ba2?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu — скачать"></a>
 <a href="https://dewiar.pro/dwrapp/Dewiar.apk"><img src="https://img.shields.io/badge/Android-%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-3ddc84?style=for-the-badge&logo=android&logoColor=white" alt="Android — скачать"></a>
 <a href="https://dewiar.pro/dwrapp/web/"><img src="https://img.shields.io/badge/%D0%92%20%D0%B1%D1%80%D0%B0%D1%83%D0%B7%D0%B5%D1%80%D0%B5-%D0%B1%D0%B5%D0%B7%20%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B8-4BE3A1?style=for-the-badge&logo=safari&logoColor=white" alt="В браузере — без установки"></a>
@@ -105,10 +106,10 @@
 - **Кто думает — выбираете вы.** Облако Dewiar (кнопка «Подключить бесплатно»; расход — в ИИ-талерах, на старте они
   уже есть), ваш компьютер (Ollama или LM Studio — бесплатно и без интернета, нужна видеокарта) или ключ сервиса
   (OpenAI, DeepSeek, OpenRouter и другие — платите им по их тарифу).
-- **Компьютер.** С облаком или ключом — Windows 10–11 или Linux, память от 8 ГБ (удобнее 16); слабому компьютеру
+- **Компьютер.** С облаком или ключом — Windows 10–11, macOS 13 и новее или Linux, память от 8 ГБ (удобнее 16); слабому компьютеру
   Dewiar сам включит лёгкий режим. Для своей модели — видеокарта от 8 ГБ для лёгких моделей, для моделей уровня
   Qwen 27B — от 24 ГБ или две по 16.
-- **Телефон** — Android 7 и новее. **iPhone, iPad и Mac** — [в браузере](https://dewiar.pro/dwrapp/web/), без установки;
+- **Телефон** — Android 7 и новее. **iPhone и iPad** — [в браузере](https://dewiar.pro/dwrapp/web/), без установки;
   на iPhone: Safari → «Поделиться» → «На экран Домой».
 
 ## Скачать — всегда последняя версия
@@ -123,6 +124,7 @@
 |---|---|
 | **Windows 10 / 11** | [Dewiar-Setup-online.exe](https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-Setup-online.exe) |
 | **Ubuntu 22.04 / 24.04** | [dewiar-assistant_all.deb](https://github.com/dwr-git/dewiar-app/releases/latest/download/dewiar-assistant_all.deb) |
+| **macOS 13 и новее** | Apple Silicon (M1 и новее) — [Dewiar-mac.dmg](https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-mac.dmg) · Mac на Intel — [Dewiar-mac-intel.dmg](https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-mac-intel.dmg) |
 | **Android** | [Dewiar.apk](https://dewiar.pro/dwrapp/Dewiar.apk) · с управлением приложениями — [Dewiar-hands.apk](https://dewiar.pro/dwrapp/Dewiar-hands.apk) — с сайта, подписаны ключом выпуска |
 
 ## Установка
@@ -132,6 +134,7 @@
 | **Ubuntu 22.04 / 24.04** | `sudo apt install ./dewiar-assistant_X.Y.Z_all.deb` — дальше обновляется сам |
 | **Другой Linux** (Arch, Manjaro, Omarchy, Fedora, openSUSE, ALT, Void, Debian…) | `curl -fsSL https://raw.githubusercontent.com/dwr-git/dewiar-app/main/install.sh \| bash` — поставит библиотеки окна и звука вашим менеджером пакетов и сам Dewiar; удалить — `bash install.sh --remove` |
 | **Windows 10 / 11** | `Dewiar-Setup-X.Y.Z-online.exe` (< 30 МБ) или полный `Dewiar-Setup-X.Y.Z.exe`; права администратора не нужны |
+| **macOS 13 и новее** | откройте `Dewiar-mac.dmg` и перетащите Dewiar в «Программы» — дальше обновляется сам. Mac пишет «Не удалось проверить разработчика» — нажмите «Готово», затем «Системные настройки» → «Конфиденциальность и безопасность» → «Всё равно открыть» (один раз: Dewiar пока не подписан сертификатом Apple) |
 | **Android** | [`Dewiar.apk`](https://dewiar.pro/dwrapp/Dewiar.apk) или QR-код в студии → «Подключение» → «Dewiar на телефоне» |
 | **Сервер, круглосуточно** | тот же `.deb`, затем `sudo dewiar-server setup` — [подробнее](docs/self-hosting.md#ассистент-круглосуточно-dewiar-server) |
 

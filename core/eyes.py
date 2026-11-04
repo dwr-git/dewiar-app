@@ -157,6 +157,7 @@ def _portal_screenshot(env, timeout=30):
 
 
 WIN = os.name == "nt"
+MAC = __import__("sys").platform == "darwin"
 NO_WINDOW = 0x08000000 if WIN else 0
 
 
@@ -178,6 +179,12 @@ def capture_screen(env):
     if WIN:
         try:
             return _win_screen()
+        except Exception as e:  # noqa: BLE001
+            raise EyesError(f"не получилось сделать снимок экрана: {e}") from e
+    if MAC:                                           # screencapture; без разрешения «Запись экрана» — подсказка, где его дать
+        import macsys
+        try:
+            return macsys.screenshot()
         except Exception as e:  # noqa: BLE001
             raise EyesError(f"не получилось сделать снимок экрана: {e}") from e
     tmpdir = tempfile.mkdtemp()
@@ -221,6 +228,8 @@ def capture_camera(device="/dev/video0"):
         if not name:
             raise EyesError("камера не найдена")
         src = ["-f", "dshow", "-i", f"video={name}"]
+    elif MAC:                                         # AVFoundation: первая камера (встроенная FaceTime), без звука
+        src = ["-f", "avfoundation", "-framerate", "30", "-i", "0:none"]
     else:
         if not Path(device).exists():
             raise EyesError(f"камера {device} не найдена")
@@ -250,4 +259,6 @@ def list_cameras():
         import re
         text = r.stderr.decode("utf-8", errors="replace")
         return [m.group(1) for m in re.finditer(r'"([^"]+)"\s*\(video\)', text)]
+    if MAC:
+        return ["0"]                                 # первая камера AVFoundation; выбор камеры на Mac — позже
     return sorted(str(p) for p in Path("/dev").glob("video*"))

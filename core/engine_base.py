@@ -15,6 +15,7 @@ import logging
 import os
 import queue
 import re
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -40,7 +41,7 @@ from skills import SkillError, Skills
 from plugins import Plugins
 from pad import Pad, PadError  # noqa: F401
 from tools import Reminders, ToolError, Toolbox, desktop_notify
-from tts import ElevenTTS, EspeakTTS, PiperTTS, RemoteTTS, SapiTTS, VoskTTS
+from tts import ElevenTTS, EspeakTTS, MacSayTTS, PiperTTS, RemoteTTS, SapiTTS, VoskTTS
 
 log = logging.getLogger("dewiar.engine")
 _report_tls = threading.local()

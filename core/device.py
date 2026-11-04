@@ -11,6 +11,7 @@
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 WEAK_RAM_GB = 7.0        # «8 ГБ» Windows показывает как 7,8 — это уже нормально; 6 ГБ и меньше — тяжело
@@ -43,7 +44,13 @@ def ram_gb():
         return int(mem["MemTotal"]) / 1048576, int(mem.get("MemAvailable", 0)) / 1048576
     except (OSError, KeyError, ValueError):
         pass
-    try:                                              # macOS
+    try:                                              # macOS: psutil (есть в Dewiar.app) знает и свободную память
+        import psutil
+        vm = psutil.virtual_memory()
+        return vm.total / 2**30, vm.available / 2**30
+    except Exception:  # noqa: BLE001
+        pass
+    try:                                              # macOS без psutil (из исходников) — только объём
         out = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=3).stdout
         return int(out.strip()) / 2**30, 0.0
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -164,6 +171,13 @@ def pressure():
         except Exception:  # noqa: BLE001
             pass
         return {"total": 0, "free": 0, "swap": None, "psi": None, "psi10": None, "tight": False, "critical": False}
+    if sys.platform == "darwin":                      # Mac: psutil (память и подкачка), PSI нет
+        try:
+            import psutil
+            vm, sw = psutil.virtual_memory(), psutil.swap_memory()
+            return _judge(vm.total / 2**30, vm.available / 2**30, sw.percent if sw.total else None, None)
+        except Exception:  # noqa: BLE001
+            return {"total": 0, "free": 0, "swap": None, "psi": None, "psi10": None, "tight": False, "critical": False}
     try:
         mem = {k: int(v) for k, v in re.findall(r"(\w+):\s+(\d+)", Path("/proc/meminfo").read_text())}
     except (OSError, ValueError):

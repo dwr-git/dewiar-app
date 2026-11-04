@@ -8,7 +8,8 @@
 Отдельный процесс от ядра: если окно на каком-то рабочем столе поведёт себя странно, слушать и отвечать
 ассистент всё равно продолжит. Страницы говорят с ядром сами (WebSocket, токен и порт — в адресе страницы,
 см. assets/dewiar.js), а с окнами — через класс Api (window.pywebview.api). Окна — pywebview: на Linux GTK +
-WebKitGTK (форма окна — X Shape, см. shape_window), на Windows WebView2 (Win32 — в winshell.py).
+WebKitGTK (форма окна — X Shape, см. shape_window), на Windows WebView2 (Win32 — в winshell.py), на Mac — Cocoa
+(WKWebView; свои методы окон, значок в строке меню, ядро и обновление — в macui.py).
 Здесь же сторожа: версия на диске, главный цикл окон (Linux), запуск ядра и загрузка виджета (Windows).
 """
 
@@ -29,6 +30,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / "core"))
 WIN = os.name == "nt"
+MAC = sys.platform == "darwin"
 CRASH_NAME = "dewiar-ui-crash.txt"     # %TEMP%: сбой интерфейса до журнала — его подбирает диагностика (doctor.py)
 
 
@@ -2678,6 +2680,8 @@ class Api:
             if WIN:
                 l, t_, r, b = winshell.work_area(self._hwnd("card"))     # монитор виджета, а не основной (№161)
                 mx, my, mw, mh = l, t_, r - l, b - t_
+            elif MAC:
+                mx, my, mw, mh = self._work_area(int(cx) + cw // 2, int(cy) + ch // 2)
             else:
                 from gi.repository import Gdk
                 g = Gdk.Display.get_default().get_monitor_at_point(int(cx) + cw // 2, int(cy) + ch // 2).get_workarea()
@@ -3518,6 +3522,10 @@ def main():
     ON_TOP[0] = ui_settings().get("on_top", True) is not False
     if WIN:
         return main_win(args, extra)
+    if MAC:
+        import macui
+        macui.bind(sys.modules[__name__])
+        return macui.main_mac(args, extra)
     if args.capture:                           # сочетание клавиш: программа работает — сразу сигнал, без коробки systemd
         fh = lock("ui")
         if fh is None:
@@ -3967,6 +3975,13 @@ def wv2_registry_fix():
 
 
 if __name__ == "__main__":
+    if MAC and not (sys.stderr and sys.stderr.isatty()):      # из Finder вывод уходит в никуда — пишем в ui.log
+        try:
+            from settings import STATE_DIR
+            (STATE_DIR / "logs").mkdir(parents=True, exist_ok=True)
+            sys.stderr = sys.stdout = open(STATE_DIR / "logs" / "ui.log", "a", encoding="utf-8", buffering=1)
+        except Exception:  # noqa: BLE001
+            pass
     if WIN and sys.stderr is None:              # pythonw: без консоли — ошибки интерфейса в файл журнала
         try:
             sys.stderr = sys.stdout = open(winshell.log_dir() / "ui.log", "a", encoding="utf-8", buffering=1)
@@ -3984,6 +3999,9 @@ if __name__ == "__main__":
             import traceback
             traceback.print_exc()
             fatal_box(e)
+        elif MAC:
+            import traceback
+            traceback.print_exc()
         else:
             print("Ядро продолжает работать. Проверьте: sudo apt install python3-gi gir1.2-webkit2-4.1", file=sys.stderr)
         sys.exit(1)

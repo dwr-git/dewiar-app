@@ -174,6 +174,12 @@ class EchoCancel:
         self.active = False
 
     def setup(self, source_master="", sink_master=""):
+        if MAC:
+            if not getattr(EchoCancel, "_said", False):
+                log.info("Mac: эхоподавления для программ нет — пока ассистент говорит, микрофон не слушаем "
+                         "(в наушниках включите «Я в наушниках»)")
+                EchoCancel._said = True
+            return False
         if WIN:
             if not getattr(EchoCancel, "_said", False):     # один раз, а не при каждом переподключении микрофона
                 log.info("Windows: системного эхоподавления нет — пока ассистент говорит, микрофон не слушаем "

@@ -133,6 +133,8 @@ def fix_hint():
     """Как поставить библиотеки заново — словами для этой системы."""
     if os.name == "nt":
         return "переустановите Dewiar поверх (установщик с dewiar.pro) — библиотеки поставятся заново"
+    if sys.platform == "darwin" and ".app/Contents/" in str(APP_DIR):
+        return "скачайте Dewiar для Mac с dewiar.pro заново и перетащите в «Программы» с заменой — библиотеки внутри приложения"
     if str(APP_DIR).startswith("/opt/dewiar"):
         return "в терминале: sudo /opt/dewiar/dewiar-env — поставит библиотеки заново"
     return "в терминале: pip install -r requirements.txt"

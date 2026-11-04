@@ -4,6 +4,8 @@ name: Метка версии
 # затем (задание files) собираем и прикладываем к выпуску всё: .deb, установщик Windows (компактный, -online),
 # «что нового» и — если в секретах репозитория есть ключ подписи (DEWIAR_KEYSTORE_B64, DEWIAR_KEYPASS) —
 # телефон (.apk). Каждый файл — ещё и под постоянным именем без версии: …/releases/latest/download/<имя> — всегда свежее.
+# Mac (.dmg, Apple Silicon и Intel) — задание mac (.github/workflows/mac.yml): идёт параллельно с files на своих раннерах
+# macOS и прикладывает образы сам, когда готов, — выпуск его не ждёт.
 
 on:
   push:
@@ -36,7 +38,7 @@ jobs:
           notes() {   # раздел версии из CHANGELOG.md (заголовок «## 0.28.6 …» или «### 0.28.2 …») + где скачать
             python3 tools/release_refresh.py --section "$1"
             # прямые ссылки (папка dwrapp сайта не открывается списком — 403): последние версии; старые — в кабинете → «Обновления»
-            printf '\n**Скачать:** файлы для компьютера (Linux — .deb, Windows — Setup-…-online.exe) — ниже, в «Assets». Телефон — [Dewiar.apk](https://dewiar.pro/dwrapp/Dewiar.apk) (с управлением приложениями — [Dewiar-hands.apk](https://dewiar.pro/dwrapp/Dewiar-hands.apk)); компьютер обновляется сам («Доступна версия…»).\n'
+            printf '\n**Скачать:** файлы для компьютера (Linux — .deb, Windows — Setup-…-online.exe, Mac — Dewiar-mac.dmg) — ниже, в «Assets». Телефон — [Dewiar.apk](https://dewiar.pro/dwrapp/Dewiar.apk) (с управлением приложениями — [Dewiar-hands.apk](https://dewiar.pro/dwrapp/Dewiar-hands.apk)); компьютер обновляется сам («Доступна версия…»).\n'
           }
 
           release() {   # release <версия> <запись> — пропускает, если метка уже есть
@@ -59,6 +61,14 @@ jobs:
           release "$CURRENT" "$GITHUB_SHA"
           # поправили текст прошлых версий в CHANGELOG.md — освежить и их выпуски (таблица «Скачать» остаётся)
           python3 tools/release_refresh.py 6 || true
+
+  mac:
+    name: Mac
+    needs: tag
+    uses: ./.github/workflows/mac.yml
+    with:
+      release: true
+    secrets: inherit
 
   files:
     name: Файлы к выпуску
@@ -129,12 +139,16 @@ jobs:
             echo "| **Windows 10 / 11** | [Dewiar-Setup-$V-online.exe]($R/Dewiar-Setup-$V-online.exe) | [Dewiar-Setup-online.exe]($L/Dewiar-Setup-online.exe) |"
             echo "| **Windows, полный** (ничего не скачивает при установке) | [Dewiar-Setup-$V.exe]($R/Dewiar-Setup-$V.exe) | [Dewiar-Setup.exe]($L/Dewiar-Setup.exe) |"
             echo "| **Ubuntu 22.04 / 24.04** | [dewiar-assistant_${V}_all.deb]($R/dewiar-assistant_${V}_all.deb) | [dewiar-assistant_all.deb]($L/dewiar-assistant_all.deb) |"
+            echo "| **macOS** 13 и новее, Apple Silicon (M1 и новее) | [Dewiar-$V-mac.dmg]($R/Dewiar-$V-mac.dmg) | [Dewiar-mac.dmg]($L/Dewiar-mac.dmg) |"
+            echo "| **macOS** 13 и новее, Mac на Intel | [Dewiar-$V-mac-intel.dmg]($R/Dewiar-$V-mac-intel.dmg) | [Dewiar-mac-intel.dmg]($L/Dewiar-mac-intel.dmg) |"
             if ls dist/Dewiar-[0-9]*.apk >/dev/null 2>&1; then
               echo "| **Android** | [Dewiar-$PH.apk]($R/Dewiar-$PH.apk) | [Dewiar.apk]($L/Dewiar.apk) |"
               echo "| **Android, с управлением приложениями** | [Dewiar-$PH-hands.apk]($R/Dewiar-$PH-hands.apk) | [Dewiar-hands.apk]($L/Dewiar-hands.apk) |"
             else
               echo "| **Android** | [Dewiar.apk](https://dewiar.pro/dwrapp/Dewiar.apk) — с сайта | |"
             fi
+            echo
+            echo "Mac пишет «Не удалось проверить разработчика»? Нажмите «Готово», затем: Системные настройки → Конфиденциальность и безопасность → «Всё равно открыть». Образ для Mac появляется здесь через несколько минут после остальных файлов."
             echo
             echo "Все последние версии одним списком: https://github.com/$GITHUB_REPOSITORY/releases/latest"
             echo

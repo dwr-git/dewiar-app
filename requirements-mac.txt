@@ -1,0 +1,29 @@
+# Библиотеки сборки для Mac (Dewiar.app, tools/build_mac.sh): ставятся в свой Python внутри приложения.
+# Закреплённые версии — requirements-mac.lock; ставятся с --no-deps ровно по нему (tools/build_mac.sh). Обновить:
+#   uv pip compile requirements-mac.txt --python-platform aarch64-apple-darwin --python-version 3.12 --no-header
+#     --no-annotate --no-emit-package sympy --no-emit-package mpmath --no-emit-package coloredlogs
+#     --no-emit-package humanfriendly -o requirements-mac.lock      (и убрать из конца файла список исключённых)
+# sympy и прочие — зависимости инструментов onnxruntime 1.23, программе не нужны (~80 МБ). Для x86_64 список тот же.
+# numpy 1.26 — та же, что в Windows-сборке (проверена со всем ядром).
+numpy==1.26.4
+onnxruntime==1.23.2      # последняя с колёсами и для Intel (x86_64), и для macOS 13
+vosk==0.3.44            # 0.3.45 для Mac не собран
+onnx-asr>=0.12
+huggingface_hub>=0.23,<1.0
+piper-tts>=1.3
+httpx>=0.27
+websockets>=12.0
+pywebview>=5.0          # окна — Cocoa (WKWebView); pyobjc ставится вместе с ним
+pyobjc-framework-Quartz>=10
+Pillow>=9.0
+sounddevice>=0.4        # микрофон и динамики (CoreAudio; PortAudio внутри колеса)
+psutil>=5.9
+vosk-tts>=0.3.56
+tokenizers>=0.19
+catt>=0.12
+imageio-ffmpeg>=0.5
+pypdf>=4.0
+tzdata>=2024.1
+socksio>=1.0
+truststore>=0.10        # сертификаты из Связки ключей (антивирусы и прокси с проверкой HTTPS)
+yt-dlp>=2024.8

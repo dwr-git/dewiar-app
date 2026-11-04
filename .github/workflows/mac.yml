@@ -1,0 +1,126 @@
+name: Mac
+
+# Dewiar для Mac: Dewiar.app в образе диска (.dmg) — Apple Silicon и Intel, каждый на своём раннере, параллельно с
+# остальными сборками выпуска (их не ждёт и не задерживает). Сборка и проверка — tools/build_mac.sh (ядро запускается и
+# отвечает, окна Cocoa открываются; не прошла — файла нет).
+#   - из release.yml (задание mac, после метки): прикладывает к выпуску Dewiar-X-mac.dmg, Dewiar-X-mac-intel.dmg и их
+#     постоянные имена Dewiar-mac.dmg, Dewiar-mac-intel.dmg + Dewiar-mac.json (версия и sha256 — по нему программа на Mac
+#     находит обновление: core/updater.py);
+#   - push в ветку mac-ci или запуск вручную — только сборка и проверка, файлы — в артефактах запуска, выпуск не трогаем.
+# Подпись Apple — если в секретах есть MAC_CERT_P12_B64 и MAC_CERT_PASS (нотаризация — ещё APPLE_ID, APPLE_TEAM_ID,
+# APPLE_APP_PASSWORD); нет — подпись ad-hoc, и при первом запуске Mac попросит «Всё равно открыть».
+
+on:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+  push:
+    branches: [mac-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Mac ${{ matrix.name }}
+    # закрытый репозиторий: Actions выключены (19.10) — работает в открытой копии (dwr-git/dewiar-app)
+    if: github.repository != 'dwr-git/dewiar'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Apple Silicon
+            os: macos-14
+            arch: arm64
+          - name: Intel
+            os: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      DEWIAR_MAC_ARCH: ${{ matrix.arch }}
+      DEWIAR_MAC_UI_SMOKE: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Кэш Python для Mac
+        uses: actions/cache@v4
+        with:
+          path: ~/maccache
+          key: maccache-${{ matrix.arch }}-${{ hashFiles('tools/build_mac.sh') }}
+
+      - name: Сборка и проверка
+        env:
+          MAC_CERT_P12_B64: ${{ secrets.MAC_CERT_P12_B64 }}
+          MAC_CERT_PASS: ${{ secrets.MAC_CERT_PASS }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: bash tools/build_mac.sh dist
+
+      - name: Файл в артефакты запуска
+        uses: actions/upload-artifact@v4
+        with:
+          name: dewiar-mac-${{ matrix.arch }}
+          path: dist/*.dmg
+          retention-days: 7
+          if-no-files-found: error
+
+      # ветка mac-ci: образ ещё и в черновик выпуска «mac-ci-build» (людям не виден) — оттуда его можно скачать по
+      # обычной ссылке выпуска, где хранилище артефактов недоступно; после проверки черновик удаляют вместе с веткой
+      - name: Черновик для проверки (только ветка mac-ci)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/mac-ci'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          R="$GITHUB_REPOSITORY"
+          gh release view mac-ci-build -R "$R" >/dev/null 2>&1 || gh release create mac-ci-build --draft --target mac-ci \
+            --title "Проверка сборки Mac (черновик, удаляется)" --notes "Временный черновик ветки mac-ci." -R "$R" || true
+          for i in 1 2 3; do gh release upload mac-ci-build dist/*.dmg --clobber -R "$R" && break; sleep 10; done
+
+      - name: Приложить к выпуску
+        if: inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' core/version.py)
+          S=$([ "${{ matrix.arch }}" = x86_64 ] && echo -intel || true)
+          cd dist
+          cp "Dewiar-$V-mac$S.dmg" "Dewiar-mac$S.dmg"
+          gh release upload "v$V" "Dewiar-$V-mac$S.dmg" "Dewiar-mac$S.dmg" --clobber -R "$GITHUB_REPOSITORY"
+
+  manifest:
+    name: Mac — сведения для обновления
+    needs: build
+    if: inputs.release && !cancelled() && github.repository != 'dwr-git/dewiar'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dewiar-mac-*
+          path: dist
+          merge-multiple: true
+      - name: Dewiar-mac.json — версия и sha256 образов
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' core/version.py)
+          python3 - "$V" <<'PY'
+          import hashlib, json, sys, time
+          from pathlib import Path
+          v = sys.argv[1]
+          out = {"version": v, "date": time.strftime("%Y-%m-%d"), "tag": f"v{v}"}
+          for key, suf in (("arm64", ""), ("x86_64", "-intel")):
+              f = Path("dist") / f"Dewiar-{v}-mac{suf}.dmg"
+              if f.is_file():
+                  out[key] = {"dmg": f.name, "sha256": hashlib.sha256(f.read_bytes()).hexdigest(), "size": f.stat().st_size}
+          if "arm64" not in out and "x86_64" not in out:
+              sys.exit("нет ни одного образа Mac")
+          Path("dist/Dewiar-mac.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+          print(json.dumps(out, ensure_ascii=False, indent=1))
+          PY
+          gh release upload "v$V" dist/Dewiar-mac.json --clobber -R "$GITHUB_REPOSITORY"

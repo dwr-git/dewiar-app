@@ -131,7 +131,7 @@ class AudioMixin:
         prof = self.s.active_llm()
         self.status.update(stt=self.stt.name, stt_ready=getattr(self.stt, "ready", True),
                            tts={"piper": "Piper", "vosk": "Vosk TTS" + ("" if self.vosk_tts.ready else " (загружается, пока Piper)"),
-                                "remote": "Голос Dewiar" if (tt.get("remote") or {}).get("cloud") else "Удалённый голос", "elevenlabs": "ElevenLabs", "espeak": "Голос Windows" if os.name == "nt" else "eSpeak", "off": "Выключен"}.get(tt["engine"], tt["engine"]),
+                                "remote": "Голос Dewiar" if (tt.get("remote") or {}).get("cloud") else "Удалённый голос", "elevenlabs": "ElevenLabs", "espeak": "Голос Windows" if os.name == "nt" else "Голос Mac" if sys.platform == "darwin" else "eSpeak", "off": "Выключен"}.get(tt["engine"], tt["engine"]),
                            llm=(prof or {}).get("name", ""))
         self.emit("status", status=self.status)
 
@@ -515,6 +515,10 @@ class AudioMixin:
             text = ("Микрофон молчит: Windows не даёт программам его слушать. Откройте «Параметры → Конфиденциальность и защита → "
                     "Микрофон» и включите «Доступ к микрофону» и «Разрешить классическим приложениям доступ к микрофону». "
                     "Или выберите другой микрофон в студии → «Звук и поведение» → «Микрофон».")
+        elif exact and sys.platform == "darwin":
+            text = ("Микрофон молчит: Mac не даёт Dewiar его слушать. Откройте «Системные настройки → Конфиденциальность и "
+                    "безопасность → Микрофон» и включите Dewiar, затем перезапустите Dewiar (значок в строке меню → «Выйти», "
+                    "и откройте снова).")
         elif exact:
             text = "Микрофон молчит — проверьте, что он включён и не выключен звук записи, или выберите другой в студии → «Звук и поведение» → «Микрофон»."
         else:
@@ -556,6 +560,12 @@ class AudioMixin:
         if exact and os.name == "nt" and not fake:
             try:
                 os.startfile("ms-settings:privacy-microphone")  # noqa: S606 — сразу открыть нужную страницу настроек
+            except OSError:
+                pass
+        if exact and sys.platform == "darwin" and not fake and not os.environ.get("DEWIAR_FAKE_MIC"):
+            try:                                          # сразу нужная страница настроек Mac
+                subprocess.Popen(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except OSError:
                 pass
 

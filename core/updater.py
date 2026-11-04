@@ -12,7 +12,8 @@ latest.json (его делает tools/publish_update.py):
     "vosk_tts":   {"url": "models/vosk-model-tts-ru-0.9-multi.zip", "sha256": "…", "name": "vosk-model-tts-ru-0.9-multi"},
     "piper":      {"url": "models/piper/", "files": {"ru_RU-denis-medium.onnx": "sha256…", …}}
   },
-  "windows": {"version": "…", "exe": "Dewiar-Setup-….exe", "sha256": "…"}               # свой раздел для Windows
+  "windows": {"version": "…", "exe": "Dewiar-Setup-….exe", "sha256": "…"},              # свой раздел для Windows
+  "mac": {"version": "…", "arm64": {"dmg": "…", "sha256": "…"}, "x86_64": {…}}           # Mac — по желанию (зеркало)
 }
 Пути — относительно latest.json (или полные адреса). Всё это делает tools/publish_update.py (--models); формат менять
 вместе с ним. Модели скачиваются с проверкой sha256; нет сайта или нет модели на нём — берём с исходного места.
@@ -20,19 +21,28 @@ latest.json (его делает tools/publish_update.py):
 Ядро проверяет адрес через минуту после запуска и раз в 6 часов, новую версию скачивает само и сверяет sha256
 (без sha256 не ставим). Устанавливает интерфейс (ui/app.py, он в сеансе рабочего стола): на Linux — pkexec apt-get
 install, GNOME спросит пароль.
+
+Mac: раздела "mac" в latest.json нет — сведения с GitHub: Dewiar-mac.json последнего выпуска открытой копии (его кладёт
+задание mac в .github/workflows/mac.yml — версия, имя образа и sha256 для Apple Silicon и Intel); образ — с того же
+выпуска. Ставит ui/macui.py (подмена Dewiar.app на месте).
 """
 
 import hashlib
 import os
 import json
 import logging
+import platform
 import re
+import sys
 import threading
 import time
 from pathlib import Path
 from urllib.parse import urljoin
 
 WIN = os.name == "nt"
+MAC = sys.platform == "darwin"
+MAC_JSON = "https://github.com/dwr-git/dewiar-app/releases/latest/download/Dewiar-mac.json"
+MAC_DL = "https://github.com/dwr-git/dewiar-app/releases/download/"
 
 log = logging.getLogger("dewiar.update")
 
@@ -121,6 +131,30 @@ def _sha(path):
 
 
 CHECK_EVERY = 6 * 3600
+
+
+def mac_arch():
+    """Какой образ нужен этому Mac: arm64 (Apple Silicon) или x86_64 (Intel; и Intel-сборка под Rosetta — та же)."""
+    return "x86_64" if platform.machine() == "x86_64" else "arm64"
+
+
+def mac_info(d, base, arch):
+    """Сведения о Mac-версии ({version, tag?, date?, arm64: {dmg, sha256, size}, x86_64: {…}}) -> {version, url, sha256,
+    size, date, notes} для этого Mac или None (нет версии, образа для этой архитектуры или sha256). base — откуда считать
+    путь к образу: адрес latest.json или папка выпусков GitHub (тогда …/v<версия>/<образ>)."""
+    if not isinstance(d, dict):
+        return None
+    ver = str(d.get("version") or "")
+    one = d.get(arch)
+    if not ver or not isinstance(one, dict) or not one.get("dmg") or not one.get("sha256"):
+        return None
+    dmg = str(one["dmg"])
+    if base == MAC_DL:
+        url = dmg if dmg.startswith("https://") else f"{MAC_DL}{d.get('tag') or 'v' + ver}/{dmg}"
+    else:
+        url = urljoin(base, dmg)
+    return {"version": ver, "url": url, "sha256": str(one["sha256"]).lower(), "size": one.get("size"),
+            "date": d.get("date", ""), "notes": d.get("notes", "")}
 
 
 def vtuple(v):
@@ -228,6 +262,8 @@ class Updater:
                 log.info("Обновления: %s", self.last["error"])
                 return None
             self.last["error"] = ""
+            if MAC:
+                return self._check_mac(m, base, download)
             if WIN:                     # Windows: свой раздел в том же latest.json — {"windows": {"version", "exe", "sha256", …}}
                 m, key = (m.get("windows") or {}), "exe"
             else:
@@ -251,13 +287,47 @@ class Updater:
             self.emit("update", update=self.public())
             return info
 
+    def _check_mac(self, m, base, download=True):
+        """Mac: раздел "mac" latest.json (если сайт его публикует) или Dewiar-mac.json с GitHub -> как check()."""
+        try:
+            info = mac_info(m.get("mac") or {}, base, mac_arch())
+            if info is None:
+                import httpx
+                r = httpx.get(MAC_JSON, timeout=15, follow_redirects=True, headers={"Cache-Control": "no-cache"})
+                r.raise_for_status()
+                info = mac_info(r.json(), MAC_DL, mac_arch())
+        except Exception as e:  # noqa: BLE001
+            self.last["error"] = f"{MAC_JSON}: {e}"
+            log.info("Обновления (Mac): %s", self.last["error"])
+            return None
+        if info is None:
+            self.available = None
+            return None
+        self.last["remote"] = info["version"]
+        if vtuple(info["version"]) <= vtuple(self.version):
+            self.available = None
+            return None
+        if info["version"] == str(m.get("version") or ""):
+            info.update(notes=m.get("notes", ""), date=info.get("date") or m.get("date", ""))
+        if download:
+            try:
+                info["path"] = str(self._download(info))
+            except Exception as e:  # noqa: BLE001
+                self.last["error"] = f"не скачалось: {e}"
+                log.warning("Обновление %s не скачалось: %s", info["version"], e)
+                return None
+        self.available = info
+        log.info("Доступно обновление %s", info["version"])
+        self.emit("update", update=self.public())
+        return info
+
     def _download(self, info):
         """Скачать пакет обновления -> путь. Без sha256 в latest.json или при несовпадении — не сохраняем:
         пакет ставится с правами администратора, непроверенный файл ставить нельзя. Уже скачанный и проверенный —
         не качаем заново."""
         import httpx
         self.dir.mkdir(parents=True, exist_ok=True)
-        name = info["url"].rsplit("/", 1)[-1].split("?")[0] or f"dewiar-{info['version']}.{'exe' if WIN else 'deb'}"
+        name = info["url"].rsplit("/", 1)[-1].split("?")[0] or f"dewiar-{info['version']}.{'exe' if WIN else 'dmg' if MAC else 'deb'}"
         dst = self.dir / name
         if dst.exists() and self._sha(dst) == info["sha256"]:
             return dst
@@ -280,7 +350,7 @@ class Updater:
         except PermissionError:          # Windows: прежний файл занят (антивирус проверяет, установщик открыт) — WinError 32,
             dst = dst.with_name(f"{dst.stem}-{int(time.time())}{dst.suffix}")   # пакет 20.10, №153: «не скачалось»
             tmp.replace(dst)
-        for old in self.dir.glob("*.exe" if WIN else "*.deb"):   # старые скачанные версии не копим
+        for old in self.dir.glob("*.exe" if WIN else "*.dmg" if MAC else "*.deb"):   # старые скачанные версии не копим
             if old != dst:
                 try:
                     old.unlink(missing_ok=True)

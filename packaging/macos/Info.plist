@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Dewiar.app: tools/build_mac.sh подставляет @VERSION@. Тексты разрешений — то, что macOS покажет человеку. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Dewiar</string>
+  <key>CFBundleDisplayName</key><string>Dewiar</string>
+  <key>CFBundleIdentifier</key><string>pro.dewiar.app</string>
+  <key>CFBundleExecutable</key><string>Dewiar</string>
+  <key>CFBundleIconFile</key><string>Dewiar</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>@VERSION@</string>
+  <key>CFBundleVersion</key><string>@VERSION@</string>
+  <key>CFBundleDevelopmentRegion</key><string>ru</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+  <!-- у пускача нет своего значка в Доке: значок и окна — у процесса интерфейса (packaging/macos/launcher.c) -->
+  <key>LSUIElement</key><true/>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Dewiar слушает микрофон, чтобы услышать своё имя и ваш вопрос. Речь распознаётся на этом Mac.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Dewiar смотрит на экран только по вашей просьбе: «посмотри на экран», «сделай снимок экрана».</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Dewiar включает камеру только по вашей просьбе: «посмотри на меня», «Дозор».</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Dewiar управляет музыкой и программами по вашей просьбе: «пауза», «следующая песня», «открой Заметки».</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Dewiar находит ваш телефон и колонки в домашней сети, чтобы связать их с компьютером.</string>
+  <!-- ссылки «подключить устройство» и файлы настроек открываются в Dewiar (пускач передаёт их интерфейсу) -->
+  <key>CFBundleURLTypes</key>
+  <array><dict>
+    <key>CFBundleURLName</key><string>pro.dewiar.connect</string>
+    <key>CFBundleURLSchemes</key><array><string>dewiar</string></array>
+  </dict></array>
+  <key>CFBundleDocumentTypes</key>
+  <array><dict>
+    <key>CFBundleTypeName</key><string>Настройки Dewiar</string>
+    <key>CFBundleTypeExtensions</key><array><string>dewiar</string></array>
+    <key>CFBundleTypeRole</key><string>Viewer</string>
+    <key>LSHandlerRank</key><string>Owner</string>
+  </dict></array>
+  <key>NSHumanReadableCopyright</key><string>Dewiar · dewiar.pro</string>
+</dict>
+</plist>

@@ -11,10 +11,12 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 
 log = logging.getLogger("dewiar.pc")
 WIN = os.name == "nt"
+MAC = sys.platform == "darwin"
 DRY = os.environ.get("DEWIAR_DRY_TOOLS")
 
 PC = r"(?:компьютер|комп|ноутбук|ноут|пк|систему)"
@@ -78,6 +80,11 @@ def _cmd(action):
         return {"shutdown": ["shutdown", "/s", "/t", "0"], "reboot": ["shutdown", "/r", "/t", "0"],
                 "sleep": ["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"],
                 "lock": ["rundll32.exe", "user32.dll,LockWorkStation"], "logout": ["shutdown", "/l"]}[action]
+    if MAC:                                      # Mac: питание — pmset и «События системы» (macOS спросит разрешение один раз)
+        se = 'tell application "System Events" to '
+        return {"shutdown": ["osascript", "-e", se + "shut down"], "reboot": ["osascript", "-e", se + "restart"],
+                "sleep": ["pmset", "sleepnow"], "lock": ["pmset", "displaysleepnow"],
+                "logout": ["osascript", "-e", se + "log out"]}[action]
     if action == "lock":                         # первая найденная из программ блокировки разных рабочих столов
         for c in (["loginctl", "lock-session"], ["xdg-screensaver", "lock"], ["gnome-screensaver-command", "-l"]):
             if shutil.which(c[0]):

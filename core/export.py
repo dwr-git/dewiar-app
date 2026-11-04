@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -73,6 +74,14 @@ def find_browser():
             for x in rel:
                 p = Path(r) / x
                 if r and p.is_file():
+                    return str(p)
+        return None
+    if sys.platform == "darwin":                      # Mac: браузеры в «Программах»
+        for app, exe in (("Google Chrome", "Google Chrome"), ("Microsoft Edge", "Microsoft Edge"), ("Yandex", "Yandex"),
+                         ("Brave Browser", "Brave Browser"), ("Chromium", "Chromium")):
+            for root in ("/Applications", str(Path.home() / "Applications")):
+                p = Path(root) / f"{app}.app" / "Contents" / "MacOS" / exe
+                if p.is_file():
                     return str(p)
         return None
     for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "microsoft-edge-stable",
@@ -196,6 +205,8 @@ def reveal(path):
     try:
         if WIN:
             subprocess.Popen(["explorer", "/select,", str(p)], creationflags=0x08000000)
+        elif sys.platform == "darwin":                       # Finder с выделенным файлом
+            subprocess.Popen(["open", "-R", str(p)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             subprocess.Popen(["xdg-open", str(p.parent)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError as e:
@@ -209,6 +220,6 @@ def open_file(path):
         if WIN:
             os.startfile(str(p))  # noqa: S606
         else:
-            subprocess.Popen(["xdg-open", str(p)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(p)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError as e:
         raise ExportError(f"не открылось: {e}") from e

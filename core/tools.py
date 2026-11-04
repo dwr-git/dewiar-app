@@ -4,7 +4,7 @@ TOOLS[имя] = (описание для модели, JSON-схема, риск
 подтверждение (настройки tools.enabled / tools.confirm). Команды и удаление дополнительно проверяет guard.py.
 ctx обработчика — настройки, напоминания, навыки и Toolbox.hooks (объекты ядра, кладёт engine.py).
 Описания и тексты результатов — подсказки модели: их правка меняет её поведение. Действия на рабочем столе записаны
-командами Linux (xdg-open, gio, gdbus); на Windows их переводят launch() и winsys.py.
+командами Linux (xdg-open, gio, gdbus); на Windows их переводят launch() и winsys.py, на Mac — launch() и macsys.py.
 """
 
 import html
@@ -24,15 +24,18 @@ from pathlib import Path
 
 import httpx
 
-from settings import STATE_DIR, WIN
+from settings import MAC, STATE_DIR, WIN
 
 if WIN:
     import winsys
+if MAC:
+    import macsys
 
 log = logging.getLogger("dewiar.tools")
 DRY = os.environ.get("DEWIAR_DRY_TOOLS")          # тесты: путь к файлу, куда пишутся команды вместо запуска программ
 EXAM_LAUNCH = os.environ.get("DEWIAR_EXAM_LAUNCH")   # экзамен: программы и браузер не запускаем, а записываем (core/exam.py)
-UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Dewiar/0.12" if WIN else "Mozilla/5.0 (X11; Linux x86_64) Dewiar/0.8"}
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Dewiar/0.12" if WIN else
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Dewiar/0.81" if MAC else "Mozilla/5.0 (X11; Linux x86_64) Dewiar/0.8"}
 
 
 class ToolError(Exception):
@@ -51,7 +54,7 @@ def desktop_env():
     графического сеанса и не знать DISPLAY/WAYLAND_DISPLAY и шины D-Bus — берём их у systemctl --user show-environment."""
     env = dict(os.environ)
     env.pop("DEWIAR_BOX", None)
-    if WIN:
+    if WIN or MAC:
         return env
     if not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")):
         try:
@@ -83,6 +86,15 @@ def launch(cmd):
         except OSError as e:
             raise ToolError(f"не открылось: {e}") from e
         return
+    if MAC:                             # xdg-open, gio launch → open; прочие команды Linux на Mac не работают
+        mc = macsys.translate(cmd)
+        if mc is None:
+            raise ToolError("это действие на Mac пока недоступно")
+        try:
+            subprocess.Popen(mc, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as e:
+            raise ToolError(f"не открылось: {e}") from e
+        return
     import memcap                       # своя коробка systemd: программа не закроется при перезапуске ядра
     subprocess.Popen(memcap.scope_cmd(cmd), env=desktop_env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
@@ -95,7 +107,7 @@ def browser_cmd(url):
     """Команда открыть адрес в браузере — в НОВОМ окне (отзыв 17.10: «включи смешное видео на YouTube» раз сработало, потом
     «включаю» — и ничего: ролик открывался новой вкладкой в окне браузера, которое было свёрнуто или на другом мониторе).
     Браузер по умолчанию (xdg-settings) из семейства Chrome/Firefox — с --new-window; иначе и в тестах — xdg-open."""
-    if DRY or WIN:
+    if DRY or WIN or MAC:
         return ["xdg-open", url]
     try:
         desk = subprocess.run(["xdg-settings", "get", "default-web-browser"], capture_output=True, text=True, timeout=3,
@@ -523,6 +535,8 @@ def desktop_apps():
     flatpak), Windows — winsys.apps(). DEWIAR_APPS_DIR — тесты: только эта папка .desktop."""
     if WIN and not os.environ.get("DEWIAR_APPS_DIR"):
         return winsys.apps()
+    if MAC and not os.environ.get("DEWIAR_APPS_DIR"):
+        return macsys.apps()
     dirs = [Path("/usr/share/applications"), Path("/usr/local/share/applications"),
             Path.home() / ".local/share/applications", Path("/var/lib/snapd/desktop/applications"),
             Path("/var/lib/flatpak/exports/share/applications"),
@@ -594,7 +608,7 @@ def t_open_app(a, ctx):
     if not app:
         sample = ", ".join(sorted({x["ru"] or x["name"] for x in apps})[:40])
         raise ToolError(f"не нашёл программу «{q}». Установлены, например: {sample}")
-    launch(["gio", "launch", app["path"]] if shutil.which("gio") or DRY else ["gtk-launch", app["id"]])
+    launch(["gio", "launch", app["path"]] if shutil.which("gio") or DRY or MAC else ["gtk-launch", app["id"]])
     if ctx.get("music_app") and re.search(r"yandex.?music|яндекс.?музык", f"{app.get('id', '')} {app['name']} {app['ru']}".lower()):
         ctx["music_app"]("yandex")                  # запомнить: следующие «включи электронную», «играй» — в ней
     return f"Запустил {app['ru'] or app['name']}"
@@ -607,7 +621,9 @@ def t_open_path(a, ctx):
     low = str(a.get("path", "")).lower().strip()
     if low in aliases and WIN:
         cand = [winsys.known_folder(aliases[low])]
-    if low in aliases and not WIN:
+    if low in aliases and MAC:
+        cand = [macsys.known_folder(aliases[low])]
+    if low in aliases and not WIN and not MAC:
         cand = [Path.home() / aliases[low], Path.home() / low.capitalize()]
     if low in aliases:
         p = next((c for c in cand if c.exists()), cand[0])
@@ -665,6 +681,8 @@ def yandex_music_installed():
             return True
         except OSError:
             return False
+    if MAC:
+        return any("yandex" in (x.get("id") or "").lower() and "music" in (x.get("id") or "").lower() for x in desktop_apps())
     try:
         r = subprocess.run(["xdg-mime", "query", "default", "x-scheme-handler/yandexmusic"], capture_output=True, text=True,
                            env=desktop_env(), timeout=4)
@@ -774,8 +792,8 @@ def t_play_youtube(a, ctx):
 
 
 def media_players():
-    """Сколько открыто плееров (MPRIS); None — узнать нельзя (Windows)."""
-    if WIN:
+    """Сколько открыто плееров (MPRIS); None — узнать нельзя (Windows, Mac)."""
+    if WIN or MAC:
         return None
     if DRY:
         return 1 if os.environ.get("DEWIAR_FAKE_PLAYING") or os.environ.get("DEWIAR_FAKE_PLAYER") else 0
@@ -790,6 +808,8 @@ def media_playing():
     r = RADIO[0] if RADIO else None
     if r is not None and r.playing:
         return True
+    if MAC and not DRY:             # спросить «Музыку» можно только с разрешением на управление — не дёргаем его без просьбы
+        return None
     if WIN or DRY:
         return None if WIN else bool(os.environ.get("DEWIAR_FAKE_PLAYING"))
     env = desktop_env()
@@ -837,6 +857,13 @@ def t_media(a, ctx):
     if WIN:
         winsys.media(action)
         return "Готово"
+    if MAC:
+        who = macsys.media(action, prefer)
+        if not who:
+            raise ToolError("на Mac я управляю «Музыкой» и Spotify, а они не открыты. Музыку в браузере (YouTube, "
+                            "Яндекс Музыка) поставь на паузу в самой вкладке")
+        return {"play": "Включил воспроизведение", "pause": "Поставил на паузу", "play_pause": "Нажал «играть/пауза»",
+                "next": "Следующий трек", "previous": "Предыдущий трек", "stop": "Остановил"}[action] + f" — {who}"
     env = desktop_env()
     done = {"play": "Включил воспроизведение", "pause": "Поставил на паузу", "play_pause": "Нажал «играть/пауза»",
             "next": "Следующий трек", "previous": "Предыдущий трек", "stop": "Остановил"}[action]
@@ -888,6 +915,8 @@ def desktop_notify(text, critical=False, env=None):
     -> показано ли."""
     if WIN:
         return winsys.notify(text)
+    if MAC:
+        return macsys.notify(text)
     env = env or desktop_env()
     try:
         if shutil.which("notify-send"):
@@ -935,6 +964,13 @@ def t_volume(a, ctx):
         if a.get("mute") is not None and a.get("percent") is None and a.get("change") is None:
             return "Звук выключен" if a["mute"] else "Звук включён"
         return f"Громкость {v}%" if v is not None else "Готово"
+    if MAC:
+        if a.get("mute") is None and a.get("percent") is None and a.get("change") is None:
+            raise ToolError("укажите percent, change или mute")
+        v = macsys.volume(percent=a.get("percent"), change=a.get("change"), mute=a.get("mute"))
+        if a.get("mute") is not None and a.get("percent") is None and a.get("change") is None:
+            return "Звук выключен" if a["mute"] else "Звук включён"
+        return f"Громкость {v}%" if v is not None else "Готово"
     if not shutil.which("pactl"):                          # нет pactl — через libpulse напрямую (pulse.py)
         import pulse
         try:
@@ -964,9 +1000,9 @@ def t_volume(a, ctx):
 
 
 def t_system(a, ctx):
-    if WIN:
+    if WIN or MAC:
         du = shutil.disk_usage(str(Path.home()))
-        return "; ".join(winsys.system_parts() + [f"диск: свободно {du.free / 1e9:.0f} из {du.total / 1e9:.0f} ГБ"])
+        return "; ".join((winsys if WIN else macsys).system_parts() + [f"диск: свободно {du.free / 1e9:.0f} из {du.total / 1e9:.0f} ГБ"])
     parts = []
     bats = list(Path("/sys/class/power_supply").glob("BAT*"))
     for b in bats:
@@ -1042,7 +1078,7 @@ def t_run_command(a, ctx):
         return f"команда не закончилась за {timeout} с — остановил. Если она долгая, запусти её в фоне или раздели на части"
     out = (r.stdout + ("\n" + r.stderr if r.stderr else "")).strip()
     # «no askpass program» печатает наш ASKPASS, когда нет ни zenity, ни kdialog, ни ssh-askpass
-    if "no askpass program" in out or "askpass" in out and r.returncode != 0 and "incorrect password" not in out:
+    if not MAC and ("no askpass program" in out or "askpass" in out and r.returncode != 0 and "incorrect password" not in out):
         out += ("\n(Окно для пароля не открылось — нет программы zenity. Попроси пользователя выполнить эту команду в "
                 "терминале самому или установить zenity: sudo apt install zenity.)")
     return f"код выхода {r.returncode}\n{out[-3000:]}"
@@ -1070,10 +1106,11 @@ def askpass_path():
     (0o700 — только владельцу)."""
     from settings import STATE_DIR
     p = STATE_DIR / "askpass.sh"
+    text = macsys.ASKPASS if MAC else ASKPASS             # Mac: окно пароля — AppleScript (zenity там нет)
     try:
-        if not p.exists() or p.read_text() != ASKPASS:
+        if not p.exists() or p.read_text() != text:
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(ASKPASS)
+            p.write_text(text)
         os.chmod(p, 0o700)
     except OSError as e:
         log.warning("Окно пароля sudo: %s", e)
@@ -1222,6 +1259,8 @@ def pictures_dir():
     """Папка «Изображения» пользователя (на Linux — по xdg-user-dir, она может называться по-русски)."""
     if WIN:
         return winsys.known_folder("Pictures")
+    if MAC:
+        return macsys.known_folder("Pictures")
     try:
         d = subprocess.run(["xdg-user-dir", "PICTURES"], capture_output=True, text=True, timeout=3).stdout.strip()
         if d and Path(d) != Path.home():
@@ -3658,7 +3697,7 @@ TOOLS = {
                    "top -bn1, cat, tail. Каждую команду пользователь подтверждает.",
                    S({"server": {"type": "string"}, "command": {"type": "string"}, "timeout": {"type": "integer"}}, ["server", "command"]),
                    "confirm", t_server_run, "Команды на сервере"),
-    "run_command": (("Выполнить команду в PowerShell (Windows)" if WIN else "Выполнить команду в терминале Linux (bash)") + " и вернуть вывод. Только если пользователь явно просит.", S({"command": {"type": "string"}}, ["command"]), "confirm", t_run_command, "Команды терминала"),
+    "run_command": (("Выполнить команду в PowerShell (Windows)" if WIN else "Выполнить команду в терминале Mac (bash, команды macOS)" if MAC else "Выполнить команду в терминале Linux (bash)") + " и вернуть вывод. Только если пользователь явно просит.", S({"command": {"type": "string"}}, ["command"]), "confirm", t_run_command, "Команды терминала"),
 }
 # Этим умениям нужен интернет из самого Dewiar — при стоп-кране (студия → «Безопасность») модель о них не узнаёт.
 # Открыть сайт, музыку или карту в браузере человека — можно: это его браузер и его просьба.
