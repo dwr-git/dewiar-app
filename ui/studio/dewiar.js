@@ -139,9 +139,11 @@ function dwRender() {
   // обновления
   const u = DW.upd;
   if (u) {
-    $("#dw-upd-text").textContent = u.available ? `Доступна версия ${u.available.version} — уже скачана.` : `Dewiar ${u.current}` + (u.error ? ` · не проверилось: ${u.error}` : u.checked ? " — последняя версия." : "");
+    const d = u.downloading;
+    $("#dw-upd-text").textContent = u.available ? `Доступна версия ${u.available.version} — уже скачана.` : d ? `Скачиваю ${d.version} — ${d.pct | 0} %${d.from ? " (с " + d.from + ")" : ""}`
+      : `Dewiar ${u.current}` + (u.error ? ` · не проверилось: ${u.error}` : u.checked ? " — последняя версия." : "");
     $("#dw-upd-open").style.display = u.available ? "" : "none";
-    dwSet("upd", u.available ? "warn" : u.error ? "bad" : "ok", u.available ? "есть новая" : u.error ? "ошибка" : "последняя");
+    dwSet("upd", u.available ? "warn" : d ? "run" : u.error ? "bad" : "ok", u.available ? "есть новая" : d ? "скачиваю" : u.error ? "ошибка" : "последняя");
   }
   // свёрнутый блок «Компьютер, сеть, антивирус и обновления»: в заголовке — их метки; что-то не так — раскрывается сам
   // (если человек сам его не сворачивал)
@@ -229,7 +231,7 @@ core.on("cloud", e => { DW.cloud = e; if ($("#p-dw").classList.contains("cur")) 
 core.on("telegram", e => { DW.tg = e; dwRender(); });
 core.on("max", e => { DW.mx = e; dwRender(); });
 core.on("device", e => { DW.dev = e; dwRender(); });
-core.on("update", e => { DW.upd = e.update; });
+core.on("update", e => { DW.upd = e.update; if (e.update && $("#p-dw").classList.contains("cur")) dwRender(); });   // ход скачивания
 $("#dw-check").onclick = async (ev) => {
   ev.target.disabled = true; $("#dw-sum").textContent = "проверяю…";
   ["acc", "cloud", "speech", "kb", "chat", "pc", "net", "upd", "av"].forEach(k => dwSet(k, "run", "проверяю…"));

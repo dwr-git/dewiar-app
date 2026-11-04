@@ -1483,7 +1483,7 @@ core.on("hello", d => { (d.tasks || []).forEach(t => tasks[t.id] = t); renderTas
 $("task").onclick = () => { const a = api(); if (a) a.open_settings("tasks"); };
 /* значок обновления у жучка: есть обновление — ставит сразу (как строка «Доступна версия…»); нет — проверяет (и скачивает
    найденное) и тоже ставит; новее нет — так и говорит строкой на 5 секунд */
-const UPD = { avail: null };
+const UPD = { avail: null, want: 0 };   // want — нажали значок, версия ещё качается: скачается — ставим
 /* 29.10 (236 компьютеров на 0.45.3: строку «Доступна версия…» легко не заметить) — раз в сутки, когда я свободна,
    спрашиваю прямо: «Вышла новая версия — обновить сейчас?» с одной кнопкой (она жмёт ту же строку). «Позже» — завтра. */
 function updAsk(a) {
@@ -1511,8 +1511,11 @@ $("b-upd").onclick = async () => {
   b.classList.add("busy"); updMsg("Проверяю обновления…");
   let u = null;
   try { u = await core.call("update_check"); } catch (e) { b.classList.remove("busy"); updMsg("Не получилось проверить: " + (e.message || e), 6000); return; }
+  if (u && u.available) { b.classList.remove("busy"); showUpd(u); if ($("upd").onclick) $("upd").onclick(); return; }
+  // 0.82.2 (04.11: «Занят: проверяет обновления — 200 с»): проверка — секунды, новая версия качается в фоне с ходом;
+  // скачалась (событие "update") — ставится, как и раньше по этому нажатию
+  if (u && u.downloading) { UPD.want = Date.now(); updDl(u.downloading); return; }
   b.classList.remove("busy");
-  if (u && u.available) { showUpd(u); if ($("upd").onclick) $("upd").onclick(); return; }
   updMsg(u && u.error ? `Не получилось проверить: ${String(u.error).slice(0, 120)}` : `У вас последняя версия${u && u.current ? " — " + u.current : ""}`, 5000);
 };
 /* подсказка у кнопки обновлений — с нынешней версией (27.10, владелец: «было бы удобно, если бы была указана текущая версия») */
@@ -1521,8 +1524,18 @@ function updTitle() {
   const a = UPD.avail, cur = CUR_VER ? `Сейчас версия ${CUR_VER}` : "";
   $("b-upd").title = a ? `${cur ? cur + " · " : ""}доступна ${a.version} — нажмите, чтобы обновить` : `${cur ? cur + ". " : ""}Обновления — проверить и обновить одним нажатием`;
 }
+/* «Скачиваю 0.82.2 — 45 % (с dewiar.pro)» — честная подпись вместо «Проверяю обновления…» на минуты */
+function updDl(d) {
+  const u = $("upd"); u.classList.add("on"); u.onclick = null; clearTimeout(window._updMsgT);
+  u.textContent = `Скачиваю ${d.version} — ${Math.max(0, Math.min(100, d.pct | 0))} %` + (d.from ? ` (с ${d.from})` : "");
+}
 function showUpd(u) {
   if (u && u.current) CUR_VER = u.current;
+  if (u && !u.available && u.downloading && (u.downloading.manual || UPD.want)) { updDl(u.downloading); return; }
+  if (u && !u.available && UPD.want && !u.downloading) {          // ручное скачивание кончилось неудачей — сказать и отпустить значок
+    UPD.want = 0; $("b-upd").classList.remove("busy");
+    if (u.error) { updMsg(`Не получилось скачать: ${String(u.error).slice(0, 140)}`, 8000); return; }
+  }
   const f = u && u.failed && u.failed.path ? u.failed : null;
   if (f) {           // нажимали «обновить», а запустилась прежняя версия — открыть установщик обычным окном: в нём видно, что мешает
     $("upd").classList.add("on");
@@ -1539,7 +1552,9 @@ function showUpd(u) {
   UPD.avail = a || null; $("b-upd").classList.toggle("has", !!a); $("corner-l").classList.toggle("upd", !!a);
   updTitle();
   if (a) $("upd").textContent = `Доступна версия ${a.version} — нажмите, чтобы обновить`;
-  if (a) updAsk(a);
+  const want = a && UPD.want && Date.now() - UPD.want < 3600e3;   // скачивали по нажатию значка — ставим, как раньше сразу
+  if (a && UPD.want) { UPD.want = 0; $("b-upd").classList.remove("busy"); }
+  if (a && !want) updAsk(a);
   $("upd").onclick = async () => {
     const x = api(); if (!x || !a) return;
     // страница новее запущенной программы (обновились, а интерфейс не перезапускали) — кнопки установки в ней нет
@@ -1564,6 +1579,7 @@ function showUpd(u) {
         $("upd").textContent = `Не встало: ${String(u.error || "ошибка установки").slice(0, 140)} — нажмите, чтобы попробовать снова`; }
     }, 700);
   };
+  if (want && !updating) $("upd").onclick();
 }
 
 /* карточка ↔ значок: это два окна; эта страница живёт в одном из них */

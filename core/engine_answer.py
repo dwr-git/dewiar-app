@@ -1696,12 +1696,15 @@ class AnswerMixin:
 
         def run():
             try:
-                info = up.check()
+                info = up.check(wait=False)      # 0.82.2: скачивание — в фоне, с ходом в виджете
                 st = up.public()
             except Exception as e:  # noqa: BLE001
                 info, st = None, {"error": str(e)}
             cur = st.get("current") or ""
-            if info:
+            if info and not info.get("path"):
+                msg = (f"Есть новая версия — {info['version']}. Скачиваю — ход видно в виджете; когда скачается, нажмите на плашку "
+                       "«Доступна версия» — обновление встанет за минуту, разговор и настройки сохранятся.")
+            elif info:
                 msg = (f"Есть новая версия — {info['version']}, она уже скачана. Нажмите на плашку «Доступна версия» в виджете — "
                        "обновление встанет за минуту, разговор и настройки сохранятся.")
             elif st.get("error"):

@@ -24,7 +24,8 @@
 
 Что получается в папке (сайт отдаёт её как https://dewiar.pro/dwrapp/):
     latest.json                         версия, sha256 пакета, что нового, список моделей;
-                                        разделы "windows" и "android" — для установщика и телефона
+                                        разделы "windows" и "android" — для установщика и телефона;
+                                        "github" — запасной адрес того же файла (только если sha256 на GitHub тот же)
     dewiar-assistant_X.Y.Z_all.deb      пакеты, установщики, .apk (старые не удаляются — можно откатиться)
     Dewiar.apk                          копия последнего .apk — постоянная ссылка для телефона
     models/                             распознавание имён (Vosk), GigaAM, голоса Vosk TTS и Piper
@@ -94,6 +95,35 @@ def fetch(url, dst, expect_sha=None):
         raise RuntimeError(f"{url}: контрольная сумма не совпала")
     tmp.replace(dst)
     return dst
+
+
+GH_REPO = os.environ.get("DEWIAR_GH_REPO") or "dwr-git/dewiar-app"
+GH_API = (os.environ.get("DWR_GH_API") or "https://api.github.com").rstrip("/")
+_gh_rel = {}
+
+
+def gh_mirror(name, ver, sha):
+    """Запасной путь скачивания (0.82.2): тот же файл в выпуске v<ver> открытой копии на GitHub -> (адрес или "", пояснение).
+    Только при совпадении sha256 (digest, его даёт GitHub); нет связи, выпуска или файл другой — "" (программы берут только
+    с сайта). Как upd_gh_mirror в cloud.php."""
+    if ver not in _gh_rel:
+        try:
+            req = urllib.request.Request(f"{GH_API}/repos/{GH_REPO}/releases/tags/v{ver}",
+                                         headers={"User-Agent": "dewiar-publish", "Accept": "application/vnd.github+json"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                _gh_rel[ver] = json.load(r)
+        except Exception as e:  # noqa: BLE001
+            _gh_rel[ver] = f"GitHub не ответил ({e})" if "404" not in str(e) else f"на GitHub нет выпуска v{ver}"
+    rel = _gh_rel[ver]
+    if not isinstance(rel, dict):
+        return "", rel
+    for a in rel.get("assets") or []:
+        if a.get("name") == name:
+            url, dg = str(a.get("browser_download_url") or ""), str(a.get("digest") or "")
+            if not dg.startswith("sha256:") or not url.startswith("https://"):
+                return "", "GitHub не сообщил сумму файла"
+            return (url, "тот же файл") if dg[7:].lower() == sha else ("", "на GitHub другой файл")
+    return "", f"на GitHub нет {name}"
 
 
 def get_json(url):
@@ -194,6 +224,8 @@ def main():
     ap.add_argument("paths", nargs="+", metavar="[пакет.deb] папка", help="пакет (необязательно) и папка сайта")
     ap.add_argument("--notes", default=None, help="что нового (Markdown)")
     ap.add_argument("--models", action="store_true", help="скачать все модели в папку сайта (models/)")
+    ap.add_argument("--no-github", action="store_true",
+                    help="не давать программам запасной путь на GitHub (по умолчанию — даётся, если там тот же файл)")
     ap.add_argument("--model", help=argparse.SUPPRESS)                   # скрытый: выложить готовый архив Vosk TTS вместо скачивания
     a = ap.parse_args()
     exes = [Path(p) for p in a.paths if p.lower().endswith(".exe")]
@@ -233,6 +265,11 @@ def main():
             shutil.copy2(deb, target / deb.name)
         data.update(version=ver, date=dt.date.today().isoformat(), deb=deb.name, sha256=sha256(deb),
                     size=deb.stat().st_size, notes=a.notes or "")
+        data.pop("github", None)                          # прежний запасной адрес — от прежней версии
+        gu, why = ("", "выключен") if a.no_github else gh_mirror(deb.name, ver, data["sha256"])
+        if gu:
+            data["github"] = gu
+        say(f"Linux: запасной путь на GitHub — {'есть' if gu else 'нет (' + why + ')'}")
     elif a.notes is not None and not apks:            # заметки к телефону не трогают «что нового» на компьютере
         data["notes"] = a.notes
     if a.model:
@@ -264,6 +301,10 @@ def main():
             shutil.copy2(exe, target / exe.name)
         data["windows"] = {"version": m.group(1), "date": dt.date.today().isoformat(), "exe": exe.name,
                            "sha256": sha256(exe), "size": exe.stat().st_size, "notes": a.notes or ""}
+        gu, why = ("", "выключен") if a.no_github else gh_mirror(exe.name, m.group(1), data["windows"]["sha256"])
+        if gu:
+            data["windows"]["github"] = gu
+        say(f"Windows: запасной путь на GitHub — {'есть' if gu else 'нет (' + why + ')'}")
         say(f"Windows: {exe.name} ({exe.stat().st_size / 1e6:.0f} МБ)")
     if apks:                            # Android: свой раздел — телефон проверяет его сам
         apk = apks[0]
@@ -291,7 +332,8 @@ def main():
     say(f"Опубликовано → {target}/latest.json" + (f" (Dewiar {data['version']})" if data.get("version") else ""))
     if data.get("models"):
         say("Модели на сайте: " + ", ".join(sorted(data["models"])))
-    say("Клиенты увидят обновление при следующей проверке (запуск программы или раз в 6 часов),")
+    say("Клиенты увидят обновление при следующей проверке (запуск программы или раз в 6 часов) и скачают его")
+    say("в течение 6 часов — каждый в своё время (0.82.2+), чтобы не забить канал сайта;")
     say("или сразу — студия → «О программе» → «Проверить сейчас».")
 
 

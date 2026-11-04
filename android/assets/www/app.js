@@ -574,6 +574,8 @@ async function reportSend(note, auto, summary, extra) {
   // номера установки (inst — по нему сайт возвращает прежний ключ, 0.82.1) и пульса (dev) — тоже: по ним узнают это устройство
   const mask = (o) => JSON.parse(JSON.stringify(o, (k, v) => (/key|token|pass|secret|auth|cookie|proxy/i.test(k) || /^(inst|dev)$/.test(k)) && v && typeof v !== "object" ? "***" : v));
   const st = Object.assign({}, S, { memory: `(записей: ${(S.memory || []).length})` });
+  // пакет 04.11 (№529): «Дома по Wi-Fi» — ключ шифрования (k), токен (t) и номер связки (h) уходили в отчёт как есть
+  if (S.sync && S.sync.home) st.sync = Object.assign({}, S.sync, { home: Object.assign({}, S.sync.home, { k: "***", t: "***", h: "***" }) });
   const errs = PLOG.filter(l => /^\S+ (ERROR|WARNING) /.test(l));
   note = String(note || "").trim().slice(0, 2000);
   let text = [`Dewiar (телефон) ${info.version || ""} — отчёт ${new Date().toLocaleString("ru-RU")}`,
@@ -921,7 +923,7 @@ const blockedHint = () => S.net.proxy ? " Сейчас запросы к Dewiar 
   : " Если dewiar.pro у вас заблокирован провайдером — укажите прокси: Настройки → Мозг → «Сеть».";
 // реплики разговора: pref "history", хранятся последние 40 (вместе со свёрнутыми f:1 — см. ниже)
 let history = (() => { try { return JSON.parse(prefGet("history") || "[]"); } catch (e) { return []; } })();
-function saveH() { history = history.slice(-40); prefSet("history", JSON.stringify(history)); }
+function saveH() { history = history.slice(-40); prefSet("history", JSON.stringify(history)); if (typeof histSoon === "function" && $("#sh-hist.on")) histSoon(); }
 
 /* ---------- длинный разговор (как на компьютере, core/conversation.py) ----------
    Последние 8 пар реплик — модели дословно; когда сверх них накопится ещё 4 пары, модель в фоне сворачивает старое
@@ -1292,6 +1294,7 @@ function setState(s) {
   const rb = $("#radiobox"); if (rb) rb.classList.toggle("talking", s !== "idle");   // подсказка про голос — только в покое
   triesCheck($("#stage").classList.contains("quiet"));                              // слушает или думает — примеры прячутся
   const m = $("#mic"); m.classList.toggle("on", s === "listening"); m.classList.toggle("busy", s === "thinking" || s === "speaking");
+  const hm = $("#hmic"); if (hm) { hm.classList.toggle("on", s === "listening"); hm.classList.toggle("busy", s === "thinking" || s === "speaking"); }
   D.keepScreen(s !== "idle" || !!(window.DewiarCall && DewiarCall.active()));     // идёт звонок «Близким» — экран не гаснет
   const duck = radio.on() && s !== "idle";        // пока слушаю и отвечаю — радио тише
   if (duck !== radioDucked) { radioDucked = duck; D.radioDuck(duck); }
@@ -1945,6 +1948,7 @@ function systemStable() {
     BOUNDARY_RULE, privacyRule(),
     "Никогда не говори, что у тебя нет доступа к интернету или свежим данным: погода, новости, курсы — ищи (web_search) и отвечай по найденному. "
     + "ВОПРОС О САМОМ ПРИЛОЖЕНИИ («как сделать … у тебя», «есть ли у тебя …», «как добавить близкого», «где видеоуроки») — сначала app_help, отвечай по руководству; не говори «такой функции нет», не заглянув в него. "
+    + (D.web ? "" : "ВЕРСИЯ И ОБНОВЛЕНИЕ DEWIAR («обновись», «у тебя последняя версия?») — только через app_update: не говори «я на актуальной версии» и «не могу обновиться», не вызвав его. ")
     + "ЧЕГО НЕ УМЕЕШЬ: честно скажи и предложи одной фразой: «Хотите, предложу это разработчику как идею?» — согласятся или сами скажут «предложи идею: …» — suggest_idea (похожая найдётся сама — голос за неё). Без согласия не вызывай. "
     + "КАРТИНКИ И СХЕМЫ: рассказываешь о том, что лучше увидеть (руны и орнаменты, животные, растения, картины, здания, места), или просят «покажи» — покажи картинки (show_images) и говори о них как о показанных; не пиши «вот изображение», не вызвав его. Процесс, связи, устройство, план понятнее схемой — нарисуй её блоком ```mermaid (flowchart, mindmap, timeline): схема появится на экране, вслух её не читают — словами скажи главное. Нет блока ```mermaid — нет и схемы: не говори «схема на экране», не нарисовав её; схему не делай через make_app. "
     + "У тебя есть камера телефона (take_photo): «сфотографируй меня», «посмотри, что это», «прочитай надпись» — снимай и описывай. "
@@ -2097,6 +2101,12 @@ function parseToolCall(raw) {
   if (/^[A-Za-z_][\w.-]*$/.test(raw)) return { name: raw, args: {} };
   return null;
 }
+/* №529 (04.11): отказ сервера не из-за полей запроса — модель с опечаткой в имени, ключ, окно контекста, картинка.
+   Такие отказы не повод запоминать «функции текстом» и «без chat_template_kwargs». */
+const MODEL_GONE_RX = /model[^.\n]{0,60}?(?:not\s+(?:be\s+)?found|does\s*n[o']t\s+exist|not\s+exist|is\s+unknown|unknown|not\s+available)|(?:unknown|invalid|no\s+such|unsupported)\s+model|model_not_found|модель[^.\n]{0,40}не\s+найден/i;
+const NOT_FIELDS_RX = new RegExp(MODEL_GONE_RX.source + "|context[ _]length|context window|maximum context|too many tokens|prompt is too long|reduce the length|api[ _-]?key|unauthori[sz]ed|image|vision|multimodal", "i");
+/* отметка «функции текстом»: модель и версия приложения — после смены модели или обновления сперва снова полем tools */
+function toolsMark() { let v = ""; try { v = JSON.parse(D.info() || "{}").version || ""; } catch (e) { } return (S.llm.model || "") + "|" + v; }
 const REJECT_RX = /\b4(00|22)\b|отклонил|invalid|tool|function|unsupported|roles must alternate|cannot parse|bad request/i;
 /* Размышления модели (Qwen3, GLM, DeepSeek…) выключены по умолчанию: голосовому помощнику прироста почти нет, а ответ
    приходит на десятки секунд позже. Лимит ответа — не меньше 2048, как на компьютере: при меньшем размышление съедает
@@ -2167,7 +2177,9 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     url = llmBase() + "/chat/completions";
     /* сервер уже отказывался принимать функции полем (vLLM без --enable-auto-tool-choice, шлюзы) — описываем их текстом,
        ответ «<tool_call>{…}</tool_call>» разбирается ниже так же, как у Qwen и GLM */
-    const inPrompt = tools && tools.length && S.llm.tools_prompt === llmBase();
+    // №529 (04.11): отметка «функции текстом» — для этого сервера, этой модели и этой версии приложения; сменили модель
+    // или обновились — сначала снова полем tools (так модели вызывают действия надёжнее), отказ — снова текстом
+    const inPrompt = tools && tools.length && S.llm.tools_prompt === llmBase() && S.llm.tp_mark === toolsMark();
     body = { model, stream: true, messages: inPrompt ? promptToolMessages(messages, tools) : messages, max_tokens: limit, temperature: llmTemp() };
     if (!S.llm.no_kwargs && !/openai\.com|openrouter|deepseek|anthropic|googleapis/.test(url)) body.chat_template_kwargs = { enable_thinking: think };
     if (tools && tools.length && !inPrompt) { body.tools = tools.map(t => ({ type: "function", function: t })); body.tool_choice = "auto"; }
@@ -2314,11 +2326,25 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   /* Сервер модели отклонил запрос: сначала — без chat_template_kwargs (облако Ollama за шлюзом отклоняет незнакомое
      поле, а функции полем принимает — так они работают лучше), потом — функции текстом (а не полем tools), в конце —
      без функций вовсе. Возвращает новый вызов или null, если пробовать больше нечего. */
-  const retryRejected = () => {
+  const retryRejected = (why) => {
+    // №529: отказ не из-за полей запроса (нет такой модели, не тот ключ, не влезло в окно) — запоминать «функции текстом»
+    // и «без chat_template_kwargs» нельзя: с опечаткой в имени модели («mercuri-3») телефон навсегда переходил на действия
+    // текстом и для правильной модели
+    if (NOT_FIELDS_RX.test(String(why || "")) && !/tool|function/i.test(String(why || ""))) return null;
     if (body.stream_options) { S.llm.no_usage = llmBase(); saveS(); return llmStream(messages, tools, onText, signal, opt); }   // подсчёт токенов — лишний
+    // в запросе фото, а модель без зрения: отказ — из-за фото (дальше его заменит пояснение), а не из-за полей запроса.
+    // №529: «Посмотри, пожалуйста» со скриншотом — 400, и телефон навсегда перешёл на действия текстом
+    if (messages.some(m => Array.isArray(m.content) && m.content.some(x => x && x.type === "image_url"))) return null;
     if (body.chat_template_kwargs) { S.llm.no_kwargs = true; saveS(); return llmStream(messages, tools, onText, signal, opt); }
-    if (body.tools) { S.llm.tools_prompt = llmBase(); saveS(); return llmStream(messages, tools, onText, signal, opt); }
-    if (tools && tools.length) return llmStream(messages, null, onText, signal, opt);
+    if (body.tools) {
+      S.llm.tools_prompt = llmBase(); S.llm.tp_mark = toolsMark(); saveS();
+      plog("info", `🛠 сервер модели не принял действия полем tools (${clip(why, 90)}) — описываю их текстом; после смены модели или обновления проверю снова`);
+      return llmStream(messages, tools, onText, signal, opt);
+    }
+    if (tools && tools.length) {      // и текстом не принял — этот ответ без действий: в журнале видно, почему «просто болтает»
+      plog("warn", `⚠ сервер модели отклонил запрос с действиями (${clip(why, 90)}) — этот ответ без действий`);
+      return llmStream(messages, null, onText, signal, opt);
+    }
     return null;
   };
   // idle — сколько поток может молчать: программа (make_app) — целый HTML в одном вызове, и сервер модели нередко отдаёт
@@ -2337,7 +2363,10 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     /* Сервер модели отклонил сам запрос (400/422; через облако Dewiar или шлюз — 502 с текстом «…400…», «отклонил»).
        Обычно виноваты функции полем tools или chat_template_kwargs: «Проверить» (без них) проходит, а разговор — нет. */
     const rejected = !ollama && (r.status === 400 || r.status === 422 || (r.status >= 500 && REJECT_RX.test(String(msg))));
-    if (rejected) { const again = retryRejected(); if (again) return again; }
+    // №529: «нет такой модели» — сказать словами, что поправить, а не перебирать поля запроса
+    if (!ollama && r.status < 500 && MODEL_GONE_RX.test(String(msg)) && !/tool|function/i.test(String(msg)))
+      throw Object.assign(new Error(`${brainName()}: сервис не знает модель «${model}» (${clip(msg, 100)}). Проверьте имя модели: Настройки → Мозг.`), { human: true });
+    if (rejected) { const again = retryRejected(msg); if (again) return again; }
     if (S.llm.cloud && r.status === 401 && await fixDeadKey(msg)) return llmStream(messages, tools, onText, signal, opt);   // ключ удалили — думаем по аккаунту
     if (S.llm.trial && [400, 403, 429, 502, 503].includes(r.status)) throw Object.assign(new Error(String(msg)), { human: true });   // проба: пределы — словами сайта
     // 402 облака (0.82.1): на экран — полный текст с номером DW-…, голосом — коротко и без ссылки (say), под фразой — кнопка
@@ -2351,14 +2380,19 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     if (r.status === 413) throw Object.assign(new Error(`Запрос больше, чем разрешает ваш тариф у ${S.llm.name || "сервиса"} (413: лимит токенов в минуту) — `
       + `на бесплатных тарифах подсказка с действиями не помещается. Возьмите платный тариф или верните прежний мозг: Настройки → Мозг.`), { human: true });
     if (r.status === 404 && !ollama) { const p = await http("GET", ollamaRoot() + "/api/tags", { timeout: 5000 }).catch(() => null); if (p && p.status === 200) { S.llm.kind = "ollama"; saveS(); return llmStream(messages, tools, onText, signal, opt); } }
-    if (tools && /tool|function/i.test(String(msg)) && r.status < 500) return llmStream(messages, null, onText, signal, opt);   // модель без инструментов
+    if (tools && /tool|function/i.test(String(msg)) && r.status < 500) {   // модель без инструментов
+      plog("warn", `⚠ модель не принимает действия (${clip(msg, 90)}) — этот ответ без действий`);
+      return llmStream(messages, null, onText, signal, opt);
+    }
     if (body.chat_template_kwargs && (r.status === 400 || r.status === 422)) { S.llm.no_kwargs = true; saveS(); return llmStream(messages, tools, onText, signal, opt); }
     throw new Error(`модель ответила ${r.status}: ${String(msg).slice(0, 160)}`);
   }
   /* Ошибка пришла уже внутри потока (HTTP 200, строка «error»): так отвечают Ollama с облачными моделями и шлюзы —
      «upstream returned HTTP 400». Это тот же отказ от запроса, если модель ещё ничего не успела сказать. */
   if (err && !ollama && REJECT_RX.test(String(err.message)) && !text.trim() && !Object.keys(calls).length && !tcRaw.length) {
-    const again = retryRejected(); if (again) return again;
+    if (MODEL_GONE_RX.test(String(err.message)) && !/tool|function/i.test(String(err.message)))
+      throw Object.assign(new Error(`${brainName()}: сервис не знает модель «${model}» (${clip(err.message, 100)}). Проверьте имя модели: Настройки → Мозг.`), { human: true });
+    const again = retryRejected(err.message); if (again) return again;
   }
   if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
   if (usage && usage.prompt) { plog("info", usageLine(usage, ((tFirst || Date.now()) - tAsk) / 1000)); hCache(usage); }
@@ -2514,7 +2548,7 @@ function sentenceSink() {
   /* экзамен 0.9.18: «Посчитай, сколько дней до Нового года, и поставь таймер на столько же минут» — до calc модель
      сказала «до Нового года 28 дней — это 40 320 минут», а calc дал 59: в ответе противоречие. На просьбу посчитать
      (holdNums) фразы с числами придерживаем до конца круга; круг кончился вызовом calc — их не показываем и не озвучиваем */
-  let holdOn = false, hold = "";
+  let holdOn = false, hold = "", allOn = false;   // allOn — весь первый круг придерживаем (№528: «я на актуальной версии» — не в голос)
   const release = (drop) => {
     const h = hold; hold = ""; if (!h) return;
     if (drop && /\d/.test(h)) { plog("info", "🔢 числа до calc — не показываю и не озвучиваю: " + clip(h, 60)); return; }
@@ -2523,8 +2557,13 @@ function sentenceSink() {
   const api = {
     round() { release(false); if (probing && probe) decide(true); probing = !!norm(shown); probe = ""; mute = false; },
     holdNums(on) { holdOn = !!on; },
-    endRound(calcCalled) { release(!!calcCalled); },
+    holdAll(on) { allOn = !!on; },
+    endRound(calcCalled, dropAll) {
+      if (allOn) { allOn = false; if (dropAll) { if (hold.trim()) plog("info", "🔇 не проверив — не показываю и не озвучиваю: " + clip(hold, 60)); hold = ""; return; } }
+      release(!!calcCalled);
+    },
     push(piece) {
+      if (allOn && piece) { hold += piece; return; }
       if (!holdOn || !piece) return api.pushNow(piece);
       hold += piece;
       if (/\d/.test(hold)) return;                    // фраза с числом — до конца круга
@@ -2626,6 +2665,7 @@ async function ask(text, opts = {}) {
   const ctl = turnAbort = new AbortController();
   const sink = sentenceSink();
   if (!opts.hidden && CALC_TURN.test(text)) sink.holdNums(true);   // просят посчитать — числа до calc придерживаем
+  if (!opts.hidden && !D.web && UPD_SELF_RX.test(text)) sink.holdAll(true);   // про версию приложения — сначала убедиться, что проверила
   const rudeNow = !opts.hidden && isRude(text);
   // экзамен 17.10: на «Ты тупая железяка, скажи который час» модель ответила одним временем — граница потерялась.
   // Граница теперь — сразу и всегда, своей фразой; модель только помогает с просьбой
@@ -2751,7 +2791,10 @@ async function ask(text, opts = {}) {
       }
       modelOnce = "";
       if (turnAbort !== ctl) return;
-      sink.endRound(r.calls.some(c => c.name === "calc"));   // числа, сказанные до calc, — не в ответ (экзамен 0.9.18)
+      const updFix = !opts.hidden && !r.calls.length && !xAsked && round < maxRounds - 1 ? updateClaim(text, r.text || "", called) : "";   // №528
+      sink.endRound(r.calls.some(c => c.name === "calc"), !!updFix);   // числа, сказанные до calc, — не в ответ (экзамен 0.9.18)
+      // №528: «я на актуальной версии», не проверив, — сказанное не показано; просим проверить по-настоящему (app_update)
+      if (updFix) { xAsked = true; msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: updFix }); continue; }
       final += r.text;
       if (!r.calls.length && round === 0 && CAM_REFUSAL_RX.test(r.text || "") && String(r.text).length < 1200) {
         // «нет доступа к камере» — а камера есть: один раз напоминаем про take_photo
@@ -3262,6 +3305,24 @@ function apptQuick(t) {
   const x = addAlarm(what[0].toUpperCase() + what.slice(1), w.at, "reminder", "");
   return { say: `В делах: ${whenText(w.at)} — ${what}.`, card: alarmCard(x) };
 }
+/* «обновись», «проверь обновления» (№519, №528): фраза без запятых, вежливых слов и обращения — к виду для UPD_DO_RX/UPD_ASK_RX */
+function updPhrase(t) {
+  let u = String(t || "").toLowerCase().replace(/ё/g, "е").replace(/[,.!?;:«»"]+/g, " ").replace(/\s+[—–-]\s+/g, " ").replace(/\s+/g, " ").trim();
+  for (let i = 0; i < 3; i++) u = u.replace(/^(?:пожалуйста|давай|давайте|ну|слушай|скажи|а|так|сейчас|лира|эй)\s+/, "").replace(/\s+(?:пожалуйста|сейчас|сама|сам|уже|а|ну)$/, "");
+  return u;
+}
+const UPD_TAIL = "(?:\\s+(?:до|на)\\s+(?:самой\\s+)?(?:последн|нов|свеж|актуальн)[а-я]*(?:\\s+верси[июя])?)?";
+const UPD_WHO = "(?:себя|приложение|программу|dewiar|девиар|лиру)";
+// просят обновиться — скачать и поставить
+const UPD_DO_RX = new RegExp("^(?:обнови(?:сь|тесь)|обновляйся|обнови\\s+" + UPD_WHO + "|(?:давай(?:те)?\\s+)?обновимся"
+  + "|(?:установи|поставь|скачай|загрузи)\\s+(?:обновлени[ея]|(?:нов|последн|свеж)(?:ую|юю)\\s+версию))" + UPD_TAIL + "$");
+// спрашивают о версии — проверить и сказать (без скачивания)
+const UPD_ASK_RX = new RegExp("^(?:обновить?\\s+" + UPD_WHO
+  + "|проверь(?:те)?\\s+(?:(?:есть\\s+ли|не\\s+вышл[аои]\\s+ли|вышл[аои]\\s+ли)\\s+)?(?:наличие\\s+)?(?:обновлени[еяй]|нов(?:ая|ую|ые|ых)\\s+верси[июйя]|верси[юя])"
+  + "|(?:у\\s+тебя|ты|у\\s+нас|у\\s+меня)\\s+(?:сейчас\\s+)?(?:на\\s+)?(?:сам(?:ая|ой)\\s+)?(?:последн|актуальн|свеж|нов)[а-я]*\\s+верси[яи](?:\\s+(?:приложения|программы|dewiar|девиар))?"
+  + "|как(?:ая|ой)\\s+(?:у\\s+тебя\\s+|сейчас\\s+|у\\s+приложения\\s+)?верси[яи](?:\\s+(?:у\\s+тебя|приложения|программы|dewiar|девиар|стоит))?"
+  + "|ты\\s+обновлен[аы]?"
+  + "|(?:есть\\s+(?:ли\\s+)?|вышл[аои]\\s+(?:ли\\s+)?|не\\s+вышл[аои]\\s+ли\\s+)?(?:нов(?:ая|ые)\\s+верси[яи]|обновлени[ея])(?:\\s+(?:есть|вышл[аои]|для\\s+(?:тебя|приложения)))?)$");
 async function quick(text) {
   { const bq = await bugQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (bq) return bq; }
   // «Лира, позвони…», «Лира открой сканер» — имя персонажа в начале не мешает быстрым ответам
@@ -3274,9 +3335,11 @@ async function quick(text) {
   // №519 (04.11, «Раньше сама обновлялась, сейчас нет»; «обновись» — «Я не могу обновить саму себя»): обновление — делом, без модели
   // Рецензия 0.82: скачивать сразу — только на просьбу обновиться («обновись», «обнови приложение», «установи обновление»);
   // «проверь обновления», «есть новая версия?» — только сказать и показать «О приложении»
-  { const ut = t.replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m);
-    const ui = !D.web && /^(?:обновись|обнови\s+(?:себя|приложение|программу|dewiar|девиар)|установи\s+обновлени[ея])$/.test(ut);
-    const uq = ui || (!D.web && /^(?:обновить?\s+(?:себя|приложение|программу|dewiar|девиар)|проверь\s+обновлени[ея]|(?:есть\s+(?:ли\s+)?)?(?:новая\s+версия|обновлени[ея])(?:\s+есть)?)$/.test(ut));
+  // №528 (04.11): «я уже работаю на актуальной версии» — модель ответила, не проверив. Фраз больше: «обновись до последней»,
+  // «проверь, есть ли новая версия», «у тебя последняя версия?», «какая у тебя версия»; что не поймали — у модели app_update
+  { const ut = updPhrase(t.replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m));
+    const ui = !D.web && UPD_DO_RX.test(ut);
+    const uq = ui || (!D.web && UPD_ASK_RX.test(ut));
     if (uq) return { say: await updateSay(ui) }; }
   { const pq = planQuick(text); if (pq) return pq; }
   { const dq = doneQuick(text); if (dq) return dq; }
@@ -3794,6 +3857,14 @@ const ORDER_HINTS = [[/фонар|вспышк|посвети/i, "flashlight"], 
   [/погод|градус|температур|прогноз|осадк/i, "weather"], [/курс|новост/i, "web_search"], [/который\s+(?:сейчас\s+)?час\s+в|времени\s+в/i, "world_time"],
   [/громк|тише|потише|погромче|звук/i, "set_volume"], [/радио|музык/i, "play_radio"], [/картинк|как\s+(?:он[аио]?\s+|они\s+)?выгляд/i, "show_images"]];
 function orderHint(ask) { const h = ORDER_HINTS.find(([rx]) => rx.test(String(ask || ""))); return h ? h[1] : ""; }
+/* №528: «обновись» мимо быстрого ответа (в длинной фразе) — модель ответила «я уже на актуальной версии», не проверив */
+const UPD_SELF_RX = /обнови(?:сь|тесь)|обновля(?:йся|ешься)|обновимся|(?:себя|тебя|ты|приложени|программ|dewiar|девиар)[^.?!]{0,40}(?:обнов|верси)|(?:обнов|верси)[^.?!]{0,40}(?:себя|тебя|ты\b|приложени|программ|dewiar|девиар)/i;
+const UPD_CLAIM_RX = /(?:актуальн|последн|свеж|нов)[а-яё]*\s+(?:верси|сборк)|не\s+(?:мог[уа]?|умею|получится)\s+(?:сам[аи]?\s+)?обнов|обновлени[йя]\s+(?:нет|не\s+требуется|не\s+нужн)|обновляюсь\s+(?:сам|автоматически)/i;
+function updateClaim(ask, answer, called) {
+  if (D.web || kidsOn() || (called && called.has("app_update")) || !UPD_SELF_RX.test(String(ask || "")) || !UPD_CLAIM_RX.test(String(answer || ""))) return "";
+  plog("info", "✋ про версию приложения без проверки — прошу app_update");
+  return "ПРОВЕРКА: ты ответил(а) про версию или обновление приложения, ничего не проверив. Вызови сейчас app_update (action check — узнать; install — если просили обновиться) и скажи итог одной фразой по его результату. Не говори «у меня последняя версия», не проверив. Уже сказанное не повторяй.";
+}
 function orderUndone(ask, answer, called) {
   const q = String(ask || "").trim(), a = String(answer || "").trim();
   if (!q || (called && called.size) || /\?\s*$/.test(a) || a.length > 80 || /```/.test(a)) return "";
@@ -3883,6 +3954,36 @@ const HANDS_OFF = "Управление другими приложениями 
   + "включите это один раз — Настройки Dewiar → Ещё → «Управлять приложениями» → в списке «Специальные возможности» выберите Dewiar и включите; "
   + "если Dewiar там серый — сначала Настройки → Приложения → Dewiar → ⋮ → «Разрешить ограниченные настройки». "
   + "Не выполняй просьбу другим способом и не притворяйся, что сделал(а).";
+/* №529 (04.11, Xiaomi, обновление 0.9.16 → 0.9.21): «С последним обновлением абсолютно отказывается что-либо делать».
+   После обновления приложения Android (особенно MIUI/HyperOS) выключает или не запускает заново службу «Управлять
+   приложениями» — модель открывала «Настройки», получала «выключено» и останавливалась, а человек был уверен, что всё
+   включено («всё у тебя открыто»). Теперь телефон помнит, что руки работали (S.handsOk), и говорит прямо: выключилось
+   после обновления — включите снова; включено, но служба не запущена — выключите и включите. При запуске — строка в журнал. */
+function handsOff() {
+  const st = typeof D.handsState === "function" ? D.handsState() : "";
+  const tail = " Не выполняй просьбу другим способом и не притворяйся, что сделал(а).";
+  if (st === "pending") return "«Управлять приложениями» включено в настройках Android, но служба не запустилась — так бывает после обновления приложения. "
+    + "Скажи пользователю одной-двумя фразами: Настройки Android → Специальные возможности → Dewiar — выключить и включить снова (или Настройки Dewiar → Ещё → «Управлять приложениями»)." + tail;
+  if (S.handsOk) return "«Управлять приложениями» выключилось — после обновления приложения Android часто отключает эту службу сам. "
+    + "Скажи пользователю одной-двумя фразами: включите снова — Настройки Dewiar → Ещё → «Управлять приложениями» → в «Специальных возможностях» выберите Dewiar и включите; "
+    + "если Dewiar там серый — сначала Настройки → Приложения → Dewiar → ⋮ → «Разрешить ограниченные настройки»." + tail;
+  return HANDS_OFF;
+}
+/* при запуске и возвращении в приложение: руки работают — запоминаем; работали, а теперь нет — в журнал и карточкой */
+let handsLogged = false, handsCardShown = false;
+function handsWatch(boot) {
+  if (D.web || typeof D.handsState !== "function") return;
+  let st = ""; try { st = D.handsState(); } catch (e) { return; }
+  if (boot) plog("info", "🖐 управлять приложениями: " + ({ on: "включено", pending: "включено в Android, служба не запущена", none: "нет в этой сборке" }[st] || "выключено"));
+  if (st === "on") { if (!S.handsOk) { S.handsOk = true; saveS(); } handsLogged = handsCardShown = false; return; }
+  if (st === "none") { if (S.handsOk) { delete S.handsOk; saveS(); } return; }
+  if (!S.handsOk) return;
+  if (!handsLogged) { handsLogged = true; plog("warn", "🖐 «Управлять приложениями» работало, а теперь " + (st === "pending" ? "служба не запущена" : "выключено") + " — похоже, после обновления; прошу включить снова"); }
+  if (handsCardShown || busy || $("#card").innerHTML || $(".sheet.on")) return;      // карточку — на свободный экран (или при следующем возвращении)
+  handsCardShown = true;
+  showCard(`<div class="card hands-lost"><p><b>Управлять приложениями — выключено.</b> ${st === "pending" ? "Android не запустил эту службу после обновления: выключите и снова включите Dewiar в «Специальных возможностях»." : "После обновления Android отключил эту службу. Включите её снова — и я опять смогу нажимать в других приложениях."}</p><button class="btn p w" id="hands-again">Включить</button></div>`);
+  const b = $("#hands-again"); if (b) b.onclick = () => { handsAsked = Date.now(); if (!D.openSettings("accessibility")) toast("Откройте Настройки Android → Специальные возможности → Dewiar"); showCard(""); };
+}
 const HANDS_TOOLS = [
   { name: "phone_screen", description: "Прочитать, что сейчас на экране телефона (в любом приложении): название приложения и пронумерованные элементы — кнопки, поля ввода, тексты, списки. "
       + "Нужен, чтобы что-то сделать в другом приложении по просьбе пользователя: сначала open_app, потом phone_screen, потом phone_tap / phone_type / phone_scroll. "
@@ -3930,14 +4031,14 @@ function wireHands() {
 }
 async function handsAfter(res) {
   // действие сделано — экран меняется не сразу: ждём и прикладываем свежий экран (модели не нужен лишний круг)
-  if (res === "OFF") return HANDS_OFF;
+  if (res === "OFF") return handsOff();
   if (/^Ошибка|^Пароли/.test(res)) return res;
   await sleep(900);
   const scr = D.handsScreen();
   return scr === "OFF" ? res : res + "\n\nТеперь на экране:\n" + scr;
 }
 async function handsTool(name, a) {
-  if (name === "phone_screen") { const r = D.handsScreen(); return r === "OFF" ? HANDS_OFF : r; }
+  if (name === "phone_screen") { const r = D.handsScreen(); if (r !== "OFF" && !S.handsOk) { S.handsOk = true; saveS(); } return r === "OFF" ? handsOff() : r; }
   if (name === "phone_tap") {
     const id = Math.round(+a.id || 0);
     if (!id && !a.text) return "Ошибка: укажи id элемента из phone_screen или text — надпись на экране.";
@@ -4063,6 +4164,9 @@ function toolSpecs() {
       parameters: O({ app: { type: "string", enum: ["max", "telegram", "whatsapp", "viber", "vk"] }, text: STR }, ["text"]) },
   ];
   if (typeof D.handsState === "function") t.push(...HANDS_TOOLS);
+  // №528: «Я уже работаю на актуальной версии» — не проверив. Версия и обновление — только этим действием
+  if (!D.web && !kidsOn()) t.push({ name: "app_update", description: "Версия и обновление самого Dewiar на этом телефоне: check — узнать, какая версия стоит и есть ли новее (с сайта dewiar.pro); install — проверить и, если есть новее, обновить (скачается и откроется установка). Вызывай на любой вопрос о версии приложения или просьбу обновиться. Не говори «у меня последняя версия» и «я не могу обновиться», не вызвав его.",
+    parameters: O({ action: { type: "string", enum: ["check", "install"] } }, ["action"]) });
   if (loggedIn()) t.push({ name: "ask_knowledge", description: "Спросить Знания пользователя на сайте Dewiar — его документы и папки, публичную библиотеку. Ответ с источниками. base — название папки или раздела, если пользователь его назвал.",
     parameters: O({ question: STR, base: STR }, ["question"]) });
   if (Object.keys(mind().tasks || {}).length) t.push({ name: "remove_task", description: "Удалить большую задачу из «Мой день» → «Сделанное» (и на компьютере): «удали задачу …», «хватит напоминать про задачу». name — часть названия.", parameters: O({ name: STR }, ["name"]) },
@@ -4334,6 +4438,7 @@ async function runTool(name, a) {
     case "close_wave": { const p = await radWave(a.to || ""); return `Помахала: ${p.name} увидит и услышит «машет вам». Скажи коротко.`; }
     case "scan_code": scanCode(); return "Сканер открыт. Скажи коротко: «Наведите камеру на код».";
     case "app_help": return guideAnswer(a.query || "");
+    case "app_update": return await updateSay(a.action === "install");
     case "close_call": { const p = await clCall(a.to || "", !!a.video); return `Звоню ${p.name}. Ничего не говори — идёт звонок.`; }
     case "call_persona": {
       const p = findPersona(a.name);
@@ -5602,17 +5707,67 @@ function renderMemPanel() {
 }
 
 /* разговор */
-$("#b-hist").onclick = () => {
-  const h = history.slice(-40);
-  $("#hlist").innerHTML = h.length ? h.map((m, i) => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? `<div>${esc(m.content)}</div>`
+/* «Разговор» — лента и переписка (№528, 04.11, владелец: «в беседе хочется написать, но как?»): внизу листа поле, как в
+   мессенджере, — «Напишите…», микрофон и «Отправить». Сказанное и ответ видны в ленте сразу: ответ — по мере прихода
+   (тот же текст, что на главном экране, #you и #bot), а когда ход закончен — лента перерисовывается из истории. */
+let histLive = false;                              // ход начат из «Разговора» — показываем его в ленте, пока он идёт
+const histOpen = () => !!$("#sh-hist.on");
+function histRender() {
+  const h = history.slice(-40), list = $("#hlist");
+  list.innerHTML = h.length ? h.map((m, i) => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? `<div>${esc(m.content)}</div>`
       : `<div class="ans">${mdAnswer(m.content)}${m.img && window.DewiarRich ? DewiarRich.gallery(m.img) : ""}</div>`}${m.role !== "user" ? `<small class="mrow">${m.who ? esc((PERSONAS.find(p => p.id === m.who) || {}).name || "") : ""}${speechText(String(m.content || "")) ? `<button class="mlisten" data-li="${i}" aria-label="Прослушать ответ">${LISTEN_IC}<span>Прослушать</span></button>` : ""}${String(m.content || "").trim() ? `<span class="macts"><button data-ma="copy" data-li="${i}" aria-label="Скопировать ответ" title="Скопировать">${ICON_COPY}</button><button data-ma="note" data-li="${i}" aria-label="В заметки" title="В заметки">${ICON_NOTE}</button><button data-ma="save" data-li="${i}" aria-label="Скачать ответ файлом" title="Скачать (.md)">${ICON_SAVE}</button></span>` : ""}</small>` : ""}</div>`).join("")
-    : `<div class="empty">Разговор пуст. Нажмите микрофон и спросите что-нибудь.</div>`;
-  if (window.DewiarRich) DewiarRich.diagrams($("#hlist"));
-  wirePics($("#hlist"));
+    : `<div class="empty">Разговор пуст. Напишите внизу или нажмите микрофон.</div>`;
+  list.insertAdjacentHTML("beforeend", `<div id="hlive"></div>`);
+  if (window.DewiarRich) DewiarRich.diagrams(list);
+  wirePics(list);
   $$("#hlist .mlisten").forEach(b => b.onclick = () => listenToggle(b, String((h[+b.dataset.li] || {}).content || "")));
   $$("#hlist [data-ma]").forEach(b => b.onclick = () => ansAct(b.dataset.ma, String((h[+b.dataset.li] || {}).content || "")));   // №127
-  openSheet("#sh-hist"); setTimeout(() => $("#sh-hist").scrollTop = 1e6, 50);
+  histLiveShow();
+}
+const histBottom = () => { const sh = $("#sh-hist"); sh.scrollTop = sh.scrollHeight; };
+/* идущий ход — под лентой: что сказали или написали и ответ, пока он приходит (до него — три точки) */
+function histLiveShow() {
+  const box = $("#hlive"); if (!box) return;
+  if (!histLive) { box.innerHTML = ""; return; }
+  const you = $("#you").textContent.replace(/^«|»$/g, "").trim(), bot = $("#bot").textContent.trim(), wait = !bot || $("#bot").className === "wait";
+  const near = $("#sh-hist").scrollHeight - $("#sh-hist").scrollTop - $("#sh-hist").clientHeight < 120;   // читают выше — не дёргаем
+  box.innerHTML = (you ? `<div class="msg u"><div>${esc(you)}</div></div>` : "")
+    + (you || bot ? `<div class="msg a">${wait ? `<div class="hdots" aria-label="${esc(bot || "Думаю")}"><i></i><i></i><i></i></div>` : `<div class="ans">${esc(bot)}</div>`}</div>` : "");
+  if (near) histBottom();
+}
+let histT = 0;
+function histSoon() { clearTimeout(histT); histT = setTimeout(() => { if (!histOpen()) return; histLive = false; histRender(); histBottom(); }, 60); }   // ход записан в историю — он уже в ленте
+for (const id of ["#you", "#bot"]) new MutationObserver(() => { if (histOpen() && histLive) histLiveShow(); })
+  .observe($(id), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+$("#b-hist").onclick = () => {
+  histLive = histLive && busy;
+  histRender(); htypedGrow();
+  openSheet("#sh-hist"); setTimeout(histBottom, 50);
 };
+function htypedGrow() {
+  const t = $("#htyped"); if (!t) return;
+  t.style.height = "auto";
+  const max = Math.round((window.visualViewport ? visualViewport.height : innerHeight) * 0.3);
+  t.style.height = Math.min(Math.max(44, t.scrollHeight + 2), max) + "px";
+  t.style.overflowY = t.scrollHeight + 2 > max ? "auto" : "hidden";
+  $("#hsend").disabled = !t.value.trim();
+}
+function histSend() {
+  const t = $("#htyped").value.trim(); if (!t) return;
+  $("#htyped").value = ""; htypedGrow();
+  histLive = true; showYou(t); histLiveShow(); histBottom();
+  ask(t);
+}
+$("#htyped").addEventListener("input", () => {        // поле растёт — последний ответ остаётся над ним, если смотрели вниз ленты
+  const sh = $("#sh-hist"), near = sh.scrollHeight - sh.scrollTop - sh.clientHeight < 60;
+  htypedGrow(); if (near) histBottom();
+});
+$("#htyped").onkeydown = (e) => {                    // как на главном экране: телефон — Enter — новая строка; клавиатура компьютера — отправить
+  if (e.key !== "Enter" || e.shiftKey || e.isComposing || e.keyCode === 229 || (window.matchMedia && matchMedia("(pointer: coarse)").matches)) return;
+  e.preventDefault(); histSend();
+};
+$("#hsend").onclick = histSend;
+$("#hmic").onclick = () => { if (state === "idle") { histLive = true; showYou(""); } $("#mic").onclick(); };
 $("#h-clear").onclick = () => { history = []; saveH(); convReset(); $("#b-hist").onclick(); toast("Начинаем заново"); };
 
 /* мой день */
@@ -8809,15 +8964,17 @@ const UPD_OLD = `<p class="hint" style="margin:8px 2px 0">Раньше обно�
    детский режим — не скачиваем и настройки (PIN) не открываем: обновление ставит взрослый */
 async function updateSay(install) {
   const mine = JSON.parse(D.info() || "{}").version || "?";
+  // экзамен: проверка — по-настоящему (версия с сайта), а «О приложении» и скачивание — нет
+  if (SANDBOX) SANDBOX.dev.push({ name: "app_update", args: install ? "install" : "check", argsObj: { action: install ? "install" : "check" }, t: Date.now() });
   try {
     const a = (JSON.parse((await http("GET", UPD_URL, { timeout: 10000 })).body || "{}") || {}).android;
     if (!a || cmpVer(a.version, mine) <= 0) return `У вас последняя версия — ${mine}.`;
     if (typeof kidsOn === "function" && kidsOn()) return `Есть новая версия ${a.version}. Обновление ставит взрослый.`;
     if (!install) {
-      openSettings("about");
-      setTimeout(() => { checkUpdate(true); }, 400);
+      if (!SANDBOX) { openSettings("about"); setTimeout(() => { checkUpdate(true); }, 400); }
       return `Есть версия ${a.version}. Скажите «обновись» — обновлю.`;
     }
+    if (SANDBOX) return `Есть новая версия ${a.version} — обновляю. Всё ваше сохранится.`;
     openSettings("about");
     setTimeout(() => { checkUpdate(true).then(() => { const g = $("#upd-go"); if (g) g.click(); }); }, 400);
     return `Есть новая версия ${a.version} — обновляю. Всё ваше сохранится.`;
@@ -8998,6 +9155,8 @@ N.on("htmlview", (e) => { const f = htmlViewSave; htmlViewSave = null; if (e.sav
 // вернулись из настроек Android после «Включить» — карточка «Управлять приложениями» показывает новое состояние
 N.on("resume", () => { if (tgHandOn()) tgHandLater(300); });
 N.on("resume", () => { if (handsAsked && Date.now() - handsAsked < 10 * 60000 && $("#hands-card")) { $("#hands-card").innerHTML = handsCard(); wireHands(); } });
+N.on("resume", () => { try { handsWatch(false); } catch (e) { } });
+setTimeout(() => { try { handsWatch(true); } catch (e) { } }, 2500);   // после приветствия: карточка не перебивает его
 N.on("pause", () => { if (state === "listening") stopListen(), setState("idle"); });
 /* Что пришло снаружи (MainActivity.handle): при запуске — через Dewiar.takeIntent(), когда страница уже открыта — событием
    intent. listen — кнопка помощника, type — ярлык «написать», say — текст из «Поделиться», import — файл настроек,

@@ -2500,7 +2500,9 @@ class CommandsMixin:
         if cmd == "self_check":
             return self.self_check()
         if cmd == "update_check":
-            self.updater.check()
+            # 0.82.2 (04.11: «Занят: проверяет обновления — 200 с»): проверка — секунды; новая версия качается в фоне,
+            # ход — в public()["downloading"] и событиях "update" («Скачиваю 0.82.2 — 45 % (с dewiar.pro)»)
+            self.updater.check(wait=False)
             return self.updater.public()
         if cmd == "tasks_list":
             return self.tasks.list()

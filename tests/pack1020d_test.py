@@ -28,7 +28,7 @@ class Up:
     def __init__(self, info=None, err=""):
         self.info, self.err, self.calls = info, err, 0
 
-    def check(self):
+    def check(self, **kw):
         self.calls += 1
         return self.info
 
@@ -55,6 +55,7 @@ sha = hashlib.sha256(data).hexdigest()
 
 
 class Resp:
+    status_code, headers = 200, {}
     def __enter__(self): return self
     def __exit__(self, *a): return False
     def raise_for_status(self): pass

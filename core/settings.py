@@ -247,7 +247,8 @@ DEFAULTS = {
               "dj_say": {"track": True, "time": True, "weather": True, "tasks": False, "mail": False}},
     "smarthome": {"client_id": ""},     # ID приложения Яндекс OAuth (iot:view, iot:control) для кнопки «Получить ключ»
     "backup": {"dir": "", "auto": True},  # резервные копии: папка (пусто — «Документы/Dewiar — копии»), раз в неделю сама
-    "updates": {"url": "", "auto_check": True},       # пусто = https://dewiar.pro/dwrapp/latest.json
+    "updates": {"url": "", "auto_check": True,         # пусто = https://dewiar.pro/dwrapp/latest.json
+                "mirror_github": True},             # запасной путь скачивания — GitHub (если latest.json даёт "github"); False — только сайт
     "tasks": {"llm": "", "max_steps": 80, "cycles": 15, "auto_run": False,   # модель задач (пусто = активная); шагов за круг и кругов подряд; команды без вопроса
               "self_check": True, "learn": True},              # самопроверка итога и уроки из прошлых задач (quality.py)
     "welcome": {"on": True, "away_min": 20},   # вернулись к компьютеру после away_min минут — коротко сказать главное (presence.py)

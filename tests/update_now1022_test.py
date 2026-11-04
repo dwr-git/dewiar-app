@@ -27,7 +27,7 @@ for t in ("обнови список дел", "обнови заметку пр�
 class Up:
     def __init__(self, info=None, err=""):
         self.info, self.err = info, err
-    def check(self):
+    def check(self, **kw):
         return self.info
     def public(self):
         return {"current": "0.39.1", "error": self.err}
@@ -46,8 +46,10 @@ def run(up, text="Обновись"):
 
 mix = next(v for v in vars(EA).values() if isinstance(v, type) and "_direct_update" in vars(v))
 EA.AnswerMixin = mix
-r, said = run(Up({"version": "0.39.2"}))
-ok(r is True and said and "0.39.2" in said[0] and "плашку" in said[0], f"есть новая — версия и что нажать: {said}")
+r, said = run(Up({"version": "0.39.2", "path": "/tmp/x.deb"}))
+ok(r is True and said and "0.39.2" in said[0] and "уже скачана" in said[0] and "плашку" in said[0], f"есть новая — версия и что нажать: {said}")
+r, said = run(Up({"version": "0.39.2", "downloading": True}))
+ok(r is True and said and "0.39.2" in said[0] and "Скачиваю" in said[0] and "плашку" in said[0], f"новая ещё качается — так и сказано: {said}")
 r, said = run(Up(None))
 ok(said and "последняя версия 0.39.1" in said[0], f"обновлений нет — так и сказано: {said}")
 r, said = run(Up(None, "timeout"))

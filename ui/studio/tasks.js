@@ -219,8 +219,12 @@ core.on("task", e => {                     // события идут поток
 function renderUpdate(u) {
   if (!u) return;
   $("#ab-title").textContent = `Dewiar ${u.current}`;
-  const a = u.available;
+  const a = u.available, d = u.downloading;
+  const when = t => new Date(t * 1000).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" });
+  // 0.82.2: скачивание идёт в фоне с ходом; фоновая проверка качает новую версию в своё (случайное) время — так и пишем
   $("#up-state").textContent = a ? `Доступна версия ${a.version}${a.date ? " от " + a.date : ""} — уже скачана и проверена.` :
+    d ? `Скачиваю ${d.version} — ${d.pct | 0} %${d.from ? " (с " + d.from + ")" : ""}…` :
+    !u.error && u.next && u.remote && u.next * 1000 > Date.now() ? `На сайте версия ${u.remote} — скачается сама около ${when(u.next)} (компьютеры качают в разное время, чтобы сайт не тормозил). Можно сейчас — «Проверить».` :
     u.error ? `Не удалось обновиться: ${u.error}` : u.checked ? `У вас последняя версия${u.remote ? " (на сайте — " + u.remote + ")" : ""}. Проверено ${new Date(u.checked * 1000).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}.` : "Проверка — через минуту после запуска и раз в 6 часов.";
   $("#up-notes").innerHTML = a && a.notes ? md(a.notes) : "";
   $("#up-install").style.display = a ? "" : "none";

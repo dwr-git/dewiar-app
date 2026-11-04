@@ -875,6 +875,41 @@ body.light .nwtry { background: rgba(79,108,240,.1); color: #2c44b0; }   /* св
 #picview .pv-t { color: #ddd; font-size: 13px; text-align: center; max-width: 520px; }
 #hlist .msg.a .ans { font-size: inherit; }
 #hlist .msg.a .ans p { margin: 0 0 6px; }
+/* «Разговор» — и переписка (№528, 04.11): поле внизу листа, как в мессенджере. Лента прокручивается под ним, поле — на месте;
+   короткий разговор — поле всё равно у нижнего края. Фон поля — плотный цвет листа своей темы (лента под ним не просвечивает). */
+#sh-hist { display: flex; flex-direction: column; padding-bottom: 0; --hc-bg: rgba(20,20,27,.94); --hc-line: var(--glass-line); }
+#sh-hist #hlist { flex: 1 0 auto; padding-bottom: 6px; }
+#hcomp { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: flex-end; gap: 8px; margin: 0 -18px; padding: 10px 14px calc(12px + var(--safe-b)) 18px;
+  background: var(--hc-bg); border-top: 1px solid var(--hc-line); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+#hcomp textarea { flex: 1; min-width: 0; display: block; box-sizing: border-box; height: 44px; min-height: 44px; resize: none; overflow-y: hidden;
+  padding: 11px 16px; border: 0; border-radius: 22px; background: var(--field); color: var(--ink); outline: none;
+  font-family: inherit; font-size: 16px; line-height: 1.4; scrollbar-width: thin; transition: height .12s ease-out; }
+#hcomp textarea::placeholder { color: var(--muted); }
+#hcomp .ib { flex: none; width: 44px; height: 44px; }
+#hcomp .ib svg { width: 21px; height: 21px; }
+#hsend { background: var(--brand); color: #fff; transition: opacity .15s, transform .15s; }
+#hsend:disabled { opacity: .38; cursor: default; }
+#hsend:not(:disabled):active { transform: scale(.94); }
+#hmic.on { background: linear-gradient(135deg, #ff6b8a, #b45cff); color: #fff; animation: pulse 1.4s ease-in-out infinite; }
+#hmic.busy { color: var(--accent, #8b8cf7); }
+@media (prefers-reduced-motion: reduce) { #hmic.on { animation: none; } }
+body.lite-ui #sh-hist { --hc-bg: rgba(18,18,24,.99); }
+body.lite-ui #hcomp { backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.light #sh-hist { --hc-bg: rgba(255,255,255,.95); --hc-line: rgba(20,30,60,.08); }
+body.neu #sh-hist { --hc-bg: var(--glass); --hc-line: transparent; }
+body.neu #hcomp { backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 -10px 18px -14px var(--neu-dark); }
+body.neu #hcomp textarea { background: var(--glass); box-shadow: var(--press); }
+body.neu #hsend { box-shadow: var(--raise-s); }
+body.neu #hsend:disabled { box-shadow: none; }
+/* ответ ещё идёт — три точки, как в мессенджере */
+#hlist .msg.a .hdots { display: inline-flex; align-self: flex-start; gap: 5px; align-items: center; padding: 15px 18px; }
+#hlist .hdots i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .3; animation: hdot 1.2s ease-in-out infinite; }
+#hlist .hdots i:nth-child(2) { animation-delay: .15s; } #hlist .hdots i:nth-child(3) { animation-delay: .3s; }
+@keyframes hdot { 0%, 70%, 100% { opacity: .25; transform: none; } 35% { opacity: .85; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { #hlist .hdots i { animation: none; opacity: .55; } }
+/* «Управлять приложениями» выключилось после обновления (№529) — карточка на главном экране */
+#card .hands-lost { text-align: left; }
+#card .hands-lost p { margin: 0 0 12px; font-size: 14.5px; line-height: 1.45; }
 /* светлые темы: подсказка и объяснение достижений — тёмным янтарём, а не светлым */
 body.light .achc em, body.light .dwhy.on, body.light .ach.on { color: #9a5a00; }
 body.light .donewhy p { color: var(--ink); }

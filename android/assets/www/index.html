@@ -64,7 +64,11 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 <!-- листы снизу -->
 <section class="sheet" id="sh-persona"><div class="grab"></div><h2>Кто отвечает</h2><div id="plist"></div><div id="pmem"></div><div id="pkb"></div></section>
 <section class="sheet tall" id="sh-pedit" aria-labelledby="pe-h"><div class="grab"></div><h2 id="pe-h">Свой персонаж</h2><div id="pe-body"></div></section>
-<section class="sheet tall" id="sh-hist"><div class="grab"></div><h2>Разговор<button class="lnk" id="h-clear">Начать заново</button></h2><div id="hlist"></div></section>
+<section class="sheet tall" id="sh-hist"><div class="grab"></div><h2>Разговор<button class="lnk" id="h-clear">Начать заново</button></h2><div id="hlist"></div>
+  <!-- №528 (04.11): «в беседе хочется написать, но как?» — поле внизу, как в мессенджере -->
+  <div id="hcomp"><textarea id="htyped" rows="1" placeholder="Напишите…" autocomplete="off" enterkeyhint="send" aria-label="Сообщение"></textarea>
+    <button class="ib soft" id="hmic" aria-label="Сказать голосом" title="Сказать голосом"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+    <button class="ib" id="hsend" aria-label="Отправить" title="Отправить" disabled><svg viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-2.5-6.5z"/></svg></button></div></section>
 <section class="sheet tall" id="sh-day"><div class="grab"></div><h2>Мой день <span class="hdate" id="day-date"></span></h2>
   <div class="tabs" id="day-tabs"><button data-t="rem" class="on">Дела</button><button data-t="notes">Заметки</button><button data-t="money">Деньги</button><button data-t="made">Сделанное</button></div>
   <div id="day-body"></div>
