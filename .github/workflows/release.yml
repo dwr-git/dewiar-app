@@ -43,17 +43,29 @@ jobs:
 
           release() {   # release <версия> <запись> — пропускает, если метка уже есть
             local v=$1 sha=$2 title
-            if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then   # метка есть — текст освежит release_refresh.py
-              echo "v$v уже есть"                                          # (таблицу «Скачать» не трогаем)
-              return
-            fi
             title=$(grep -m1 -E "^##+ $v([ ·/]|$)" CHANGELOG.md | sed -E 's/^#+ //; s/ — [0-9]{4}-[0-9]{2}-[0-9]{2}$//')
-            git tag -a "v$v" "$sha" -m "Dewiar ${title:-$v}"
-            git push origin "v$v"
+            if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then   # метка есть — текст освежит release_refresh.py
+              # 04.11 (0.82.0): метка встала, а выпуск GitHub не создал (HTTP 502) — повтор задания создаёт выпуск,
+              # а не пропускает его молча (иначе files не к чему прикладывать); только для текущей версии — у старых
+              # меток выпуски могли убрать нарочно
+              if [ "$v" != "$CURRENT" ] || gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$v" >/dev/null 2>&1; then
+                echo "v$v уже есть"                                        # (таблицу «Скачать» не трогаем)
+                return
+              fi
+              echo "v$v: метка есть, выпуска нет — создаю"
+            else
+              git tag -a "v$v" "$sha" -m "Dewiar ${title:-$v}"
+              git push origin "v$v"
+            fi
             notes "$v" > notes.md
             # текущая версия — черновиком: люди увидят выпуск, когда задание files приложит все файлы и таблицу «Скачать»
-            gh release create "v$v" --title "Dewiar ${title:-$v}" --notes-file notes.md --verify-tag \
-              $( [ "$v" = "$CURRENT" ] && echo --draft || echo --latest=false )
+            local i                                                       # GitHub отвечает 502 и тут — три попытки
+            for i in 1 2 3; do
+              gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$v" >/dev/null 2>&1 && break
+              gh release create "v$v" --title "Dewiar ${title:-$v}" --notes-file notes.md --verify-tag \
+                $( [ "$v" = "$CURRENT" ] && echo --draft || echo --latest=false ) && break
+              [ "$i" = 3 ] && exit 1; sleep 20
+            done
             echo "v$v → $sha"
           }
 

@@ -58,6 +58,7 @@ fi
 
 sec "== Ядро"
 run "текст, имена"                  $PY "$T/unit_test.py"
+run "выпуск открытой копии: метка есть, а выпуска нет (GitHub 502) — создаётся" $PY "$T/release_retry1104_test.py"
 run "версия: окно читает верно"     $PY "$T/version_read_test.py"
 run "мозг: форматы серверов"        $PY "$T/llm_compat_test.py"
 run "размышления и код не в ответе" $PY "$T/reasoning_test.py"
