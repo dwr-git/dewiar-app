@@ -1,5 +1,7 @@
 """Телефон: длинный разговор, как на компьютере. Начало разговора модель сворачивает в содержание (факт из первой реплики
-не теряется), запрос не растёт; перерыв виден модели; «начнём новый разговор» и 8 часов тишины — с чистого листа."""
+не теряется), запрос не растёт; перерыв виден модели; «начнём новый разговор» и 8 часов тишины — с чистого листа.
+С «Голосом без пауз» (04.11) личная справка (память, содержание разговора) — в начале первого сообщения пользователя
+(putProfile), а время, перерыв и журнал недели — в справке к последнему (putContext); каждая — ровно один раз."""
 import json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -49,6 +51,21 @@ def reqs():
 
 
 SUM = "Ты ведёшь краткое содержание"
+PROF, PROF_END = "(О пользователе и о тебе — справка от программы", "(Дальше — разговор)\n"
+CTX, CTX_END = "(Справка к этому сообщению", "(Сообщение пользователя)\n"
+
+
+def parts(req):
+    """Запрос модели по частям: личная справка, справка к вопросу, слова человека, реплики разговора без справок."""
+    m = req["messages"][1:]
+    first = str(m[0]["content"]) if m else ""
+    prof = first.split(PROF_END, 1)[0] if first.startswith(PROF) else ""
+    lastu = (str(m[-1]["content"]) if m else "").split(PROF_END, 1)[-1]   # одна реплика — в ней обе справки
+    ctx = lastu.split(CTX_END, 1)[0] if CTX in lastu else ""
+    words = lastu.split(CTX_END, 1)[-1].split(PROF_END, 1)[-1]
+    dialog = [str(x["content"]).split(CTX_END, 1)[-1].split(PROF_END, 1)[-1] for x in m]
+    heads = sum(str(x["content"]).count(PROF) for x in m), sum(str(x["content"]).count(CTX) for x in m)
+    return dict(prof=prof, ctx=ctx, words=words, dialog=dialog, heads=heads)
 chats = lambda: [r for r in reqs() if not r["messages"][0]["content"].startswith(SUM)]
 folds = lambda: [r for r in reqs() if r["messages"][0]["content"].startswith(SUM)]
 try:
@@ -76,17 +93,24 @@ try:
             pg.wait_for_timeout(200)
         say("Вопрос номер 15: как дела?")
         last = chats()[-1]
-        sysp = last["messages"][0]["content"]
+        # подсказка и личная справка в начале разговора (04.11, «Голос без пауз»: содержание — в putProfile, не в подсказке)
+        prof1 = str(last["messages"][1]["content"]) if len(last["messages"]) > 1 else ""
+        sysp = last["messages"][0]["content"] + "\n" + prof1.split("(Дальше — разговор)")[0]
         ok(folds(), f"начало разговора свёрнуто в фоне ({len(folds())} раз)")
         ok("Раньше в нём было" in sysp and "Бублик" in sysp and "15:00" in sysp, "через 15 реплик факт из первой — у модели в содержании")
-        ok(len(last["messages"]) <= 2 * (8 + 8) + 2 and not any("Запомни для разговора" in m["content"] for m in last["messages"][1:]),
+        ok(len(last["messages"]) <= 2 * (8 + 8) + 2 and not any("Запомни для разговора" in str(m["content"]).split("(Дальше — разговор)")[-1] for m in last["messages"][1:]),
            f"запрос не растёт, первая реплика дословно не уходит ({len(last['messages'])} сообщений)")
         ok("номер 14" in json.dumps(last["messages"], ensure_ascii=False), "последние реплики — дословно")
         ok(pg.evaluate("history.length") > len(last["messages"]) - 2, "в «Разговоре» видно и свёрнутое начало")
 
         pg.evaluate("conv.last = Date.now() - 45 * 60000; saveConv()")
         say("Как зовут мою собаку?")
-        ok("перерыв 45 мин" in chats()[-1]["messages"][0]["content"], "перерыв 45 минут модель видит")
+        P = parts(chats()[-1])
+        # перерыв — в справке к вопросу (не в подсказке: она одна у всех, её берёт кэш сервера модели); содержание
+        # разговора — в личной справке; обе — по одному разу, слова человека — как сказаны
+        ok("перерыв 45 мин" in P["ctx"] and "Раньше в нём было" in P["prof"] and "Бублик" in P["prof"] and P["heads"] == (1, 1)
+           and P["words"] == "Как зовут мою собаку?" and "перерыв" not in chats()[-1]["messages"][0]["content"],
+           f"перерыв 45 минут модель видит, содержание разговора на месте, справки без дублей {P['heads']}")
         ans = say("Начнём новый разговор")
         n = len(chats())
         say("Привет!")
@@ -98,8 +122,17 @@ try:
         say("Добрый вечер")
         c = chats()[n:]
         # в самом разговоре прошлого нет; в подсказке — только короткий журнал недели («что мы делали», см. android_feedback_test)
-        ok(c and "Мурк" not in json.dumps(c[-1]["messages"][1:], ensure_ascii=False) and len(c[-1]["messages"]) == 2, "8 часов тишины — новый разговор")
-        ans = say("Какая погода в Минске?")
+        # новый разговор: одна реплика человека, личная справка свежая — без прежнего содержания, в справке к вопросу нет
+        # ни перерыва, ни «разговор идёт»; прошлое — только строкой журнала недели («что мы делали», android_feedback_test)
+        P = parts(c[-1]) if c else None
+        ctx_now = "\n\n".join(x for x in P["ctx"].split("\n\n") if "ЧТО БЫЛО НЕДАВНО" not in x) if P else ""
+        ok(c and len(c[-1]["messages"]) == 2 and P["words"] == "Добрый вечер" and P["heads"] == (1, 1)
+           and "Мурк" not in P["prof"] + ctx_now and "Раньше в нём было" not in P["prof"] and "перерыв" not in ctx_now
+           and "Разговор идёт" not in ctx_now and pg.evaluate("conv.summary") == "",
+           f"8 часов тишины — новый разговор, справка свежая и одна {P and P['heads']}")
+        # «нет доступа к интернету» (погоду с 1028 телефон отвечает сам, без модели — phone_weather1028_test; ложный отказ
+        # проверяем на другом свежем вопросе)
+        ans = say("Сколько сейчас стоит биткоин?")
         ok("посмотрю в интернете" in ans and any(r["messages"][-1]["content"].startswith("СТОП. Ты отказался") and "web_search" in r["tools"]
                                                  for r in chats()) and "Готово. Результат" in ans,
            f"«нет доступа к интернету» — телефон сам просит поискать и отвечает по найденному: {ans[:90]}")

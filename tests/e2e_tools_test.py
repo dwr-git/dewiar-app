@@ -1,6 +1,7 @@
 """Сквозной тест «Рук» (этап 4): модель вызывает инструменты, ядро их выполняет.
 Программы не запускаются — DEWIAR_DRY_TOOLS пишет команды в файл.
-    python3 tests/e2e_tools_test.py /tmp/dewiar-test-audio/tools.wav     (WAV: тишина + «да, выполняй» на 12-й секунде)"""
+    python3 tests/e2e_tools_test.py [/tmp/dewiar-test-audio/tools.wav]   (WAV: тишина + «да, выполняй» на 12-й секунде;
+    без аргумента — этот файл, его сделает tests/make_audio.py)"""
 import asyncio, json, os, subprocess, sys, tempfile, time
 from pathlib import Path
 import websockets
@@ -19,7 +20,11 @@ dry = tmp / "launched.jsonl"
 env = dict(os.environ, DEWIAR_CONFIG_DIR=str(tmp / "cfg"), DEWIAR_STATE_DIR=str(tmp / "st"), DEWIAR_PORT=str(PORT),
            DEWIAR_ASSUME_AEC="1", DEWIAR_DRY_TOOLS=str(dry), DEWIAR_WORKSPACE=str(tmp / "ws"))
 mock = subprocess.Popen([sys.executable, str(TESTS / "mock_llm.py"), str(LLM_PORT), "Да, выполняй."])
-core = subprocess.Popen([PY, str(ROOT / "core/main.py"), "--wav", sys.argv[1], "--null-audio"], env=env,
+# без аргумента — тот же файл, что даёт run_all.sh ($DEWIAR_TEST_AUDIO/tools.wav); нет его — сделаем (make_audio.py)
+WAV = sys.argv[1] if len(sys.argv) > 1 else str(Path(os.environ.get("DEWIAR_TEST_AUDIO", "/tmp/dewiar-test-audio")) / "tools.wav")
+if not Path(WAV).exists():
+    subprocess.run([sys.executable, str(TESTS / "make_audio.py")], check=True, stdout=subprocess.DEVNULL)
+core = subprocess.Popen([PY, str(ROOT / "core/main.py"), "--wav", WAV, "--null-audio"], env=env,
                         stdout=open(tmp / "core.log", "w"), stderr=subprocess.STDOUT)
 events = []
 

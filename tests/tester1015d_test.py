@@ -63,7 +63,9 @@ try:
     r = T.t_show_images({"query": "rune knotwork", "count": 3}, {"settings": type("S", (), {"get": lambda self, *k: ""})()})
 finally:
     IM.search = orig
-ok(asked == ["rune knotwork", "knotwork"] and r.startswith("На экране показано картинок: 1"), f"не нашлось — попробовали слово отдельно: {asked}")
+# экзамен ПК 0.81.1: слова — в порядке запроса (главное модель ставит первым: «runestone knotwork runic inscription» — сначала
+# «runestone», а не самое длинное «inscription»); подписи не о том — пробуем дальше, ничего лучше — показываем найденное
+ok(asked == ["rune knotwork", "rune", "knotwork"] and r.startswith("На экране показано картинок: 1"), f"не нашлось — попробовали слово отдельно: {asked}")
 
 # ── телефон ──
 tmp = Path(tempfile.mkdtemp()); www = tmp / "www"

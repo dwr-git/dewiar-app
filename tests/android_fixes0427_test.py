@@ -38,6 +38,16 @@ def utext(m):
     return " ".join(x.get("text", "") for x in c if isinstance(x, dict)) if isinstance(c, list) else str(c or "")
 
 
+def said(m):
+    """Что сказал сам человек: без справок программы в начале сообщения («О пользователе…» — putProfile, «Справка к этому
+    сообщению» — putContext). В справке — журнал недели («Посмотри, как я выгляжу» вчера), по нему отвечать нельзя."""
+    t = utext(m)
+    for mk in ("(Сообщение пользователя)\n", "(Дальше — разговор)\n"):
+        if mk in t:
+            return t.rsplit(mk, 1)[1]
+    return t
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -57,7 +67,7 @@ class H(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         msgs = body["messages"]
         REQS.append(body)
-        first_user = next((utext(m) for m in reversed(msgs) if m["role"] == "user" and not utext(m).startswith(("СТОП", "Скажи пользователю", "Снимок с камеры"))
+        first_user = next((said(m) for m in reversed(msgs) if m["role"] == "user" and not utext(m).startswith(("СТОП", "Скажи пользователю", "Снимок с камеры"))
                            and not utext(m).startswith("<tool_response>")), "").lower()
         last = msgs[-1]
         lu = utext(last)
@@ -77,8 +87,8 @@ class H(BaseHTTPRequestHandler):
             if last["role"] == "tool":
                 return stream(self, "")
             return stream(self, "", [("flashlight", {"on": True})])
-        if "погода" in first_user:
-            return stream(self, "Солнечно, плюс двенадцать.")
+        if "радуг" in first_user:
+            return stream(self, "Радуга — это солнечный свет, разложенный каплями дождя.")
         return stream(self, "Хорошо.")
 
 
@@ -157,8 +167,9 @@ try:
         # ---------- связь ----------
         cut["n"] = 1
         n0 = len(REQS)
-        ans = say("Какая погода сегодня", 30)
-        ok("Солнечно" in ans, f"связь оборвалась — круг повторён сам, ответ пришёл: {ans}")
+        # вопрос к модели: погоду телефон с 1028 отвечает сам, без модели (phone_weather1028_test) — обрыв тут не проверить
+        ans = say("Откуда берётся радуга", 30)
+        ok("Радуга" in ans, f"связь оборвалась — круг повторён сам, ответ пришёл: {ans}")
         ok(len(REQS) - n0 == 1, "после обрыва — один повторный запрос, ход заново не начинается")
 
         # ---------- пустой ответ после действия ----------

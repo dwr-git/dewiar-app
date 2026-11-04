@@ -14,6 +14,7 @@ import json
 import logging
 import re
 import sys
+import threading
 import time
 
 import httpx
@@ -502,13 +503,90 @@ def list_models(p, timeout=6):
         raise LLMError(_humanize(e, base)) from e
 
 
+# «Голос без пауз» (идея №5, 04.11): личное — память о человеке, его имя, душа, свежие выводы, счётчики дел, свои
+# компьютеры — не в системной подсказке, а справкой в начале первого сообщения разговора. У Qwen (облако Dewiar, vLLM)
+# описания инструментов идут в шаблоне сразу ПОСЛЕ подсказки: любая личная мелочь в подсказке ломала кэш начала запроса
+# (APC) и для всех ~13 тыс. токенов инструментов, а у разных людей общего начала было ~1,5 тыс. токенов. Теперь подсказка
+# и инструменты одинаковы у всех с одним персонажем и настройками — сервер держит их в кэше один раз для всех.
+PROFILE_HEAD = "(О пользователе и о тебе — справка от программы, вслух её не упоминай)\n"
+PROFILE_END = "\n\n(Дальше — разговор)\n"
+
+
+def put_profile(messages, text):
+    """Личную справку — в начало первого сообщения (не меняя исходный список). Первое — ответ ассистента или вызов —
+    отдельным сообщением пользователя перед ним. -> новый список."""
+    text = (text or "").strip()
+    if not text or not messages:
+        return list(messages or [])
+    head = PROFILE_HEAD + text + PROFILE_END
+    m0 = messages[0]
+    if m0.get("role") == "user" and not m0.get("tool_call_id"):
+        c = m0.get("content")
+        if isinstance(c, list):
+            c = [dict(x) for x in c]
+            i = next((i for i, x in enumerate(c) if x.get("type") == "text"), None)
+            if i is None:
+                c.insert(0, {"type": "text", "text": head.rstrip()})
+            else:
+                c[i]["text"] = head + str(c[i].get("text") or "")
+        else:
+            c = head + str(c or "")
+        return [dict(m0, content=c)] + list(messages[1:])
+    return [{"role": "user", "content": head.rstrip()}] + list(messages)
+
+
+def take_profile(messages):
+    """Личная справка из начала первого сообщения (put_profile) -> её текст или ""."""
+    if not messages:
+        return ""
+    c = messages[0].get("content")
+    if isinstance(c, list):
+        c = next((x.get("text") for x in c if isinstance(x, dict) and x.get("type") == "text"), "")
+    c = c if isinstance(c, str) else ""
+    if not c.startswith(PROFILE_HEAD):
+        return ""
+    rest = c[len(PROFILE_HEAD):]
+    if PROFILE_END in rest:
+        return rest.split(PROFILE_END, 1)[0]
+    end = PROFILE_END.rstrip()                         # справка отдельным сообщением — метка в самом конце, без «\n»
+    return rest[:-len(end)] if rest.endswith(end) else rest
+
+
+def drop_profile(messages):
+    """Без личной справки (самая короткая подсказка для крошечного окна): отдельное сообщение — прочь, голова первого — прочь."""
+    if not messages or not take_profile(messages):
+        return list(messages or [])
+    m0 = messages[0]
+    c = m0.get("content")
+    if isinstance(c, list):
+        c = [dict(x) for x in c]
+        i = next((i for i, x in enumerate(c) if x.get("type") == "text"), None)
+        t = str(c[i].get("text") or "")
+        c[i]["text"] = t.split(PROFILE_END, 1)[1] if PROFILE_END in t else ""
+        return [dict(m0, content=c)] + list(messages[1:])
+    if PROFILE_END not in c:                           # отдельным сообщением
+        return list(messages[1:])
+    return [dict(m0, content=c.split(PROFILE_END, 1)[1])] + list(messages[1:])
+
+
+def ask_text(t):
+    """Сам вопрос человека — без личной справки и справки к вопросу (их вставляет программа)."""
+    t = t or ""
+    for mark in ("(Сообщение пользователя)\n", PROFILE_END):
+        if mark in t:
+            return t.rsplit(mark, 1)[1]
+    return t
+
+
 def _ctx_cut(messages):
-    """Короткая история: только текущая просьба и то, что модель уже сделала по ней (вызовы и результаты)."""
+    """Короткая история: только текущая просьба и то, что модель уже сделала по ней (вызовы и результаты).
+    Личная справка (put_profile) из начала разговора переезжает в начало оставшегося — память о человеке не теряется."""
+    prof = take_profile(messages)
     for i in range(len(messages) - 1, -1, -1):
         m = messages[i]
         if m.get("role") == "user" and isinstance(m.get("content"), (str, list)) and not m.get("tool_call_id"):
-            return messages[i:]
-    return messages[-1:]
+            return put_profile(messages[i:], prof) if prof and i > 0 else messages[i:]
+    return put_profile(messages[-1:], prof) if prof and len(messages) > 1 else messages[-1:]
 
 
 def _ctx_retry(p, system, messages, cancel, tools, _retry, e):
@@ -543,6 +621,39 @@ _REJECT = re.compile(r"\b4(00|22)\b|invalid|unsupported|roles must alternate|can
 _no_tools = set()          # серверы, которые отказались принимать инструменты (vLLM без --enable-auto-tool-choice)
 _flat = set()              # серверы, которые не принимают историю вызовов (роль tool, tool_calls) — пишем её текстом
 _no_kw = set()             # серверы, которые отклоняют запрос с chat_template_kwargs (облако Ollama: «upstream returned HTTP 400»)
+_no_usage = set()          # серверы, которые отклонили stream_options (подсчёт токенов в конце потока)
+_usage = threading.local()
+
+
+def last_usage():
+    """Сколько токенов было в подсказке последнего запроса этого потока и сколько из них сервер взял из кэша начала
+    запроса: {"prompt": N, "cached": M или None (сервер не сказал)} или None. Читается один раз."""
+    u = getattr(_usage, "v", None)
+    _usage.v = None
+    return u
+
+
+def usage_line(u, sec=None):
+    """«⏱ модель: 6.1 с, подсказка 12 400 ток., из кэша 11 900» — для журнала."""
+    def n(x):
+        return f"{int(x):,}".replace(",", " ")
+    out = "⏱ модель" + (f": {sec:.1f} с," if sec is not None else ":") + f" подсказка {n(u['prompt'])} ток."
+    if u.get("cached") is not None:
+        out += f", из кэша {n(u['cached'])}" + (f" ({100 * u['cached'] / u['prompt']:.0f}%)" if u["prompt"] else "")
+    else:
+        out += ", сколько из кэша — сервер не сообщает"
+    return out
+
+
+def _usage_ok(p, base):
+    """Просить ли подсчёт токенов в конце потока (stream_options.include_usage). Только там, где поле точно понимают:
+    облако Dewiar, своя модель (vLLM, llama.cpp, LM Studio, Ollama), OpenAI, OpenRouter, DeepSeek. Незнакомое поле
+    другим сервисам — ошибка 400, а за ней цепочка упрощений запроса — не рискуем."""
+    if p.get("_no_usage") or base in _no_usage or p.get("_whole"):
+        return False
+    host = re.sub(r"^\w+://", "", base).split("/")[0].split(":")[0].lower()
+    return bool(p.get("cloud") or "dewiar" in host or _local_base(base)
+                or re.search(r"(^|\.)(openai\.com|openrouter\.ai|deepseek\.com)$", host))
 
 
 def _has_tool_history(messages):
@@ -1154,7 +1265,8 @@ def wants_cjk(messages):
         if m.get("role") == "user":
             c = m.get("content")
             t = c if isinstance(c, str) else " ".join(x.get("text", "") for x in c if isinstance(x, dict)) if isinstance(c, list) else ""
-            return bool(_CJK_ASK.search(t or ""))
+            # 04.11 (рецензия): только сам вопрос — в справке перед ним (память: «был в Китае») слова «китай» не в счёт
+            return bool(_CJK_ASK.search(ask_text(t)))
     return False
 
 
@@ -1178,6 +1290,28 @@ class _Collector:
         self.raw_head = ""
         self.pending = ""
         self.no_cjk = False
+        self.usage = None                 # {"prompt": N, "cached": M | None} — если сервер посчитал (last_usage)
+
+    def _take_usage(self, obj):
+        """Подсчёт токенов подсказки: OpenAI/vLLM (usage + prompt_tokens_details.cached_tokens), llama.cpp (timings.cache_n),
+        Anthropic (message_start: cache_read_input_tokens), Ollama (prompt_eval_count — без кэша)."""
+        u = obj.get("usage") if isinstance(obj.get("usage"), dict) else None
+        if self.anthropic and obj.get("type") == "message_start":
+            u0 = (obj.get("message") or {}).get("usage") or {}
+            rd = int(u0.get("cache_read_input_tokens") or 0)
+            self.usage = {"prompt": int(u0.get("input_tokens") or 0) + rd + int(u0.get("cache_creation_input_tokens") or 0), "cached": rd}
+            return
+        tm = obj.get("timings") if isinstance(obj.get("timings"), dict) else None
+        if tm and "cache_n" in tm and "prompt_n" in tm:
+            self.usage = {"prompt": int(tm.get("prompt_n") or 0) + int(tm.get("cache_n") or 0), "cached": int(tm.get("cache_n") or 0)}
+            return
+        if u and u.get("prompt_tokens") is not None and not self.anthropic:
+            det = u.get("prompt_tokens_details") if isinstance(u.get("prompt_tokens_details"), dict) else {}
+            c = det.get("cached_tokens", u.get("cached_tokens"))
+            self.usage = {"prompt": int(u.get("prompt_tokens") or 0), "cached": int(c) if isinstance(c, (int, float)) else None}
+            return
+        if obj.get("done") and obj.get("prompt_eval_count") is not None:
+            self.usage = {"prompt": int(obj.get("prompt_eval_count") or 0), "cached": None}
 
     def _call(self, idx, cid="", name="", args=""):
         c = self.calls.setdefault(idx, {"id": "", "name": "", "args": ""})
@@ -1193,6 +1327,10 @@ class _Collector:
             e = obj["error"]
             raise LLMError(e.get("message", str(e)) if isinstance(e, dict) else str(e))
         piece = ""
+        try:
+            self._take_usage(obj)
+        except (TypeError, ValueError):
+            pass
         if self.anthropic:
             typ = obj.get("type")
             if typ == "content_block_start" and obj.get("content_block", {}).get("type") == "tool_use":
@@ -1346,11 +1484,13 @@ CREATIVE_TEMP = 0.95
 # существующее; RECO_ASK / RECO_NOTE — так же на телефоне (app.js)
 RECO_ASK = re.compile(r"(?:посоветуй|порекомендуй|подбери|что посмотреть|что почитать|что послушать|составь)\b[^.?!]{0,60}?"
                       r"(?:фильм|сериал|кино|посмотреть|книг|почитать|песн|музык|послушать|плейлист|трек|альбом)|плейлист", re.I)
-RECO_NOTE = "\n\nСейчас просят посоветовать фильмы, сериалы, книги, песни или плейлист. Называй только то, что точно существует и что ты точно знаешь: название, автор или исполнитель, год — без догадок; из результатов поиска бери названия ровно как там. Нет уверенности, что у исполнителя есть такая песня, — не называй её (лучше три верных, чем пять с выдуманными). 1–3 пункта с одной живой фразой «почему именно это», а не справочный список."
+RECO_NOTE = "\n\nСейчас просят посоветовать фильмы, сериалы, книги, песни или плейлист. Называй только то, что точно существует и что ты точно знаешь: название, автор или исполнитель, год — без догадок; из результатов поиска бери названия ровно как там. Нет уверенности, что у исполнителя есть такая песня, — не называй её (лучше три верных, чем пять с выдуманными). Русское название — как в прокате; не помнишь его точно — оригинальное, без своего перевода (экзамен ПК 0.81.1: «Медвежий ритм» вместо «Медведя»); страну, год и жанр — только если уверен(а). Не исправляйся на ходу («…нет, подожди») — называй только проверенное. 1–3 пункта с одной живой фразой «почему именно это», а не справочный список."
 POEM_NOTE = ("\n\nСейчас просят стихи. Ремесло: сначала про себя выбери размер (например, хорей или ямб) и подбери пары рифм "
              "по ударному слогу — совпадают ударная гласная и всё после неё (осень — просинь, листва — синева, дождя — шутя); "
              "глагольные рифмы («шла — пришла») и «рифмы» без совпадения ударения не годятся. Образы — простые, точные и "
-             "живые, без нелепых сравнений. Количество строк — ровно как просили. Перед ответом проверь каждую пару рифм.")
+             "живые, без нелепых сравнений. Количество строк — ровно как просили (четверостишие — 4 строки). Рифма — по "
+             "окончаниям строк: последние слова рифмующихся строк звучат одинаково от ударного слога до конца; повтор того же "
+             "слова или однокоренного («тишина — тишине») — не рифма. Перед ответом проверь каждую пару рифм.")
 
 
 def creative_temp(text, temp=None):
@@ -1434,6 +1574,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     Служебные ключи профиля с «_» (_flat, _lite, _no_kwargs, _empty_retry) ставит только сама при повторах."""
     base = _base(p)
     tools_all = tools
+    _usage.v = None
     if tools and prompt_tools_mode(p):
         system = system + tools_prompt(tools)            # сервер не принимает функции полем — описываем текстом
         tools = None
@@ -1490,6 +1631,9 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             if tools:
                 body["tools"] = [{"type": "function", "function": t} for t in tools]
                 body["tool_choice"] = "auto"
+            # «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — в журнал и в пульс
+            if body["stream"] and _usage_ok(p, base):
+                body["stream_options"] = {"include_usage": True}
         col = _Collector(anthropic=p.get("kind") == "anthropic")
         col.tags.known = {x["name"] for x in (tools_all or [])}   # голый JSON в тексте — вызов, только если такая функция есть
         col.no_cjk = not wants_cjk(messages)
@@ -1522,6 +1666,20 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                             return
                         time.sleep(0.5)
                     yield from stream_events(dict(p, _rl=n + 1), system, messages, cancel, tools, _retry)
+                    return
+                usage_err = bool(re.search(r"stream_options|include_usage|extra (?:fields|inputs)|unrecognized|unknown (?:field|param)", err))
+                # отказ назвал другую причину (функции полем, картинки, max_completion_tokens, chat_template_kwargs) — дело
+                # не в подсчёте токенов: сразу к нужному упрощению, без лишнего запроса (prompt_tools_test: vLLM без
+                # --enable-auto-tool-choice — было три запроса вместо двух)
+                other_err = not usage_err and bool((tools and ("tool" in err or "function" in err)) or "image" in err
+                                                   or "max_completion_tokens" in err or "chat_template_kwargs" in err)
+                if "stream_options" in body and r.status_code in (400, 422) and not other_err:
+                    # сказал, что не понимает поле, — больше не просим; отказ без объяснений — один повтор без него (этот
+                    # запрос), дальше — обычные упрощения
+                    if usage_err:
+                        _no_usage.add(base)
+                    log.info("Сервер %s отклонил запрос (%s) — повторяю без подсчёта токенов (stream_options)", base, r.status_code)
+                    yield from stream_events(dict(p, _no_usage=True), system, messages, cancel, tools, _retry)
                     return
                 if r.status_code == 400 and not p.get("_mct") and ("max_completion_tokens" in err or
                                                                  ("temperature" in err and re.search(r"unsupported|only 1 is allowed|invalid temperature|does not support", err))):
@@ -1584,6 +1742,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 if piece:
                     got_text = True
                     yield "text", piece
+        if col.usage:
+            _usage.v = col.usage
         calls = col.tool_calls()
         held, bare_calls = bare.finish()
         if not calls and bare_calls:

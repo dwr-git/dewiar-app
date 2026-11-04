@@ -580,6 +580,7 @@ class RemoteMixin:
             """Поток speak-synth: фразы из sentences → куски звука (rate, pcm) в очередь фразы; None в конце фразы,
             исключение — вместо None, если фраза так и не прозвучала."""
             locked = None                               # движок, которым начали говорить (весь ответ — им)
+            chunks = None                               # куски фразы, которая сейчас синтезируется (None — ни одной)
             try:
                 while True:
                     s = sentences.get()
@@ -643,9 +644,16 @@ class RemoteMixin:
                             log.warning("Синтез %s не удался: %s — пробую следующий", getattr(eng, "name", eng), e)
                             self._remote_voice_down(eng, e)
                     chunks.put(None)
+                    chunks = None
                     if turn.cancel.is_set():
                         return
+            except Exception as e:  # noqa: BLE001 — сбой самого потока (не движка): ответ договорим тем, что успели
+                log.warning("Синтез речи прервался: %s", e, exc_info=True)
             finally:
+                # фраза уже в очереди звука — закрыть её: иначе звук ждал бы её куски вечно и Лира «говорила» без конца
+                # (fixes_0121: сбой в потоке синтеза вешал весь голос до перезапуска)
+                if chunks is not None:
+                    chunks.put(None)
                 put(None) if not done.is_set() else None
 
         threading.Thread(target=synth_all, name="speak-synth", daemon=True).start()

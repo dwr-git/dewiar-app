@@ -201,7 +201,7 @@ ok(len(R.get("stt1") or []) == 1 and 1.5 <= R["stt1"][0] <= 4.6, f"распоз�
 asked = [json.loads(x) for x in (tmp / "llm.jsonl").read_text(encoding="utf-8").splitlines()] if (tmp / "llm.jsonl").exists() else []
 users = [m["content"] if isinstance(m["content"], str) else json.dumps(m["content"], ensure_ascii=False) for x in asked for m in x["messages"] if m["role"] == "user"]
 ok(any("письмо Игорю о встрече в четверг" in u for u in users), "текст диктовки ушёл вопросом — без имени и без «разговор не со мной»")
-ok(R.get("persona") is not None and any("расскажи короткий анекдот" in u and "Патрик" not in u for u in users), "«Патрик, …» первым словом — отвечает Патрик, имя из вопроса убрано")
+ok(R.get("persona") is not None and any("расскажи короткий анекдот" in u and not re.search(r"Патрик[,\s]+расскажи", u) for u in users), "«Патрик, …» первым словом — отвечает Патрик, имя из вопроса убрано")
 c = (R.get("cancel") or {}).get("data") or {}
 ok(c.get("cancel") and not c.get("ok") and R.get("st_idle") and not R.get("stt_after_cancel"), f"отмена — ничего не распознаётся и не уходит: {c} {R.get('stt_after_cancel')}")
 ok("Диктовка удержанием" in log and "Traceback" not in log, "в журнале — понятные строки, без ошибок")

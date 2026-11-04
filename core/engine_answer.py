@@ -58,13 +58,22 @@ def think_ask(text, raw=False):
 
 
 
-def team_window(hist, me, name_of):
+def model_label(prof):
+    """Какой моделью думает персонаж — для пометок о смене модели в истории (№515): «gemma4:12b», «DWR Chat»…"""
+    prof = prof or {}
+    return str(prof.get("model") if prof.get("model") and prof.get("model") != "chat" else prof.get("title") or prof.get("name") or prof.get("model") or "")
+
+
+def team_window(hist, me, name_of, model=""):
     """Реплики для модели персонажа me: у каждого персонажа свой разговор (письмо пользователя 23.10: «при переключении
     они нередко продолжали чужую тему — хочется, чтобы мой персонаж помнил разговор со мной, Лира — с Лирой; передавать
     беседу другому — по моей просьбе»). Разговор пользователя с другим персонажем в окно не попадает вовсе. Исключение —
     передали слово явно («позови Патрика», инструмент call_persona): ответ коллеги помечен handoff=me, тогда его разговор —
     одной справкой «для справки, не продолжай их тему». Реплика человека относится к тому, кто на неё ответил; последняя
-    (без ответа) — к me. Общее (память о человеке, заметки, календарь) — в подсказке, у всех. -> [{role, content[, team]}]"""
+    (без ответа) — к me. Общее (память о человеке, заметки, календарь) — в подсказке, у всех. -> [{role, content[, team]}]
+    №515 (пакет 04.11: «научить Джарвиса, Кодера и Лиру понимать, что они переходят от одного к другому»): на месте
+    чужого разговора — короткая пометка «(до этого пользователь говорил с Лирой; дальше отвечаешь ты — Кодер)», без
+    самого разговора; сменилась модель персонажа (model — нынешняя, у ответов — "model") — тоже пометка."""
     msgs = [m for m in hist if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str)]
     owner, nxt = [None] * len(msgs), me
     for i in range(len(msgs) - 1, -1, -1):
@@ -73,10 +82,17 @@ def team_window(hist, me, name_of):
         owner[i] = nxt
     from engine_base import FACT_TURNS
     with_facts = [k for k, m in enumerate(msgs) if m["role"] == "assistant" and m.get("facts") and owner[k] == me][-FACT_TURNS:]
-    out, i = [], 0
+    out, i, prev_model = [], 0, ""
+    my_name = name_of(me) or "ты"
     while i < len(msgs):
         if owner[i] == me:
             c = msgs[i]["content"]
+            mm = msgs[i].get("model") or "" if msgs[i]["role"] == "assistant" else ""
+            if mm and prev_model and mm != prev_model:     # пометка — перед вопросом, на который ответила уже новая модель
+                at = len(out) - 1 if out and out[-1]["role"] == "user" and not out[-1].get("team") else len(out)
+                out.insert(at, {"role": "user", "mark": True, "content": f"[Здесь сменилась модель: до этого отвечала «{prev_model}», "
+                                                                         f"дальше — «{mm}». Это всё тот же разговор с тобой, {my_name}.]"})
+            prev_model = mm or prev_model
             if msgs[i]["role"] == "assistant" and msgs[i].get("acts"):
                 # что было сделано за этим ответом (съёмка 17.10: в истории оставались одни слова «Звоню», «Включаю»,
                 # «Отправила» — и модель решала, что достаточно сказать их ещё раз, не вызывая действие)
@@ -97,8 +113,23 @@ def team_window(hist, me, name_of):
             out.append({"role": "user", "team": True,
                         "content": f"[До этого пользователь говорил не с тобой, а с коллегой по имени {name} — и {name} передал(а) "
                                    "слово тебе. Это для справки: не отвечай за коллегу, продолжай то, о чём тебя просят.]\n" + "\n".join(lines)})
+        else:                                          # №515: сам разговор — не твой, но что слово переходило — знаешь
+            name = name_of(who) or "коллега"
+            n = sum(1 for m in msgs[i:j] if m["role"] == "user")
+            out.append({"role": "user", "team": True,
+                        "content": f"[До этого пользователь говорил не с тобой, а с коллегой — {name} ({n} {_plural(n, 'реплика', 'реплики', 'реплик')}); "
+                                   f"дальше отвечаешь ты — {my_name}. Их разговор тебе не показан: не продолжай его и не отвечай "
+                                   f"за коллегу; спросит о нём — так и скажи и предложи позвать коллегу ({name}).]"})
         i = j
+    if model and prev_model and model != prev_model:
+        out.append({"role": "user", "mark": True, "content": f"[Здесь сменилась модель: до этого отвечала «{prev_model}», дальше — "
+                                                              f"«{model}». Это всё тот же разговор с тобой, {my_name}.]"})
     return out
+
+
+def _plural(n, one, few, many):
+    n = abs(int(n)) % 100
+    return many if 11 <= n <= 14 else one if n % 10 == 1 else few if 2 <= n % 10 <= 4 else many
 
 ATT_DEFAULT_Q = "Посмотри вложения и коротко скажи, что в них."
 ACTS_RX = re.compile(r"\s*\[(?:в этом ответе выполнено|узнано инструментами)[^\]]*\]?")       # пометка в истории (team_window) — не для человека
@@ -205,7 +236,7 @@ IDEA_RULE = ("\n\nЧего-то не умеешь и инструмента дл
 
 # Главные действия на каждый день — для модели с окном поменьше (_fit_window): весь набор — около 13 тысяч токенов
 CORE_TOOLS = {"web_search", "weather", "open_url", "open_app", "play_music", "play_radio", "media_control", "set_volume",
-              "set_reminder", "list_reminders", "cancel_reminder", "change_reminder", "calc", "world_time", "mark_done", "save_note", "find_notes",
+              "set_reminder", "list_reminders", "cancel_reminder", "change_reminder", "calc", "world_time", "mark_done", "save_note", "update_note", "find_notes",
               "remember", "money_add", "money_report", "calendar_list", "smart_home", "read_emails", "send_email",
               "search_documents"}
 
@@ -441,7 +472,8 @@ class AnswerMixin:
         out = []
         # своё окно у каждого персонажа: сначала его разговор из общей истории, потом окно (раньше окно резалось по общей
         # истории, и после долгого разговора с Патриком Лира не помнила свой)
-        mine = team_window(self.history, me, lambda pid: (self.personas.get(pid) or {}).get("name") or "коллега")
+        mine = team_window(self.history, me, lambda pid: (self.personas.get(pid) or {}).get("name") or "коллега",
+                           model=model_label(prof) if prof else "")
         for m in (self.conv.window(mine, turns) if turns > 0 else []):
             if out and out[-1]["role"] == m["role"] == "user" and isinstance(out[-1]["content"], str):
                 out[-1] = {"role": "user", "content": out[-1]["content"] + "\n\n" + m["content"]}
@@ -545,7 +577,7 @@ class AnswerMixin:
         return (self.personas.system_prompt(self.s.get("persona"), self.s.get("user_name") or "", "")
                 + "\n\nТекущие дата и время — в справке в начале сообщения пользователя.\n\n" + RULE)
 
-    def _fit_window(self, prof, system, specs, msgs, keep=()):
+    def _fit_window(self, prof, system, specs, msgs, keep=(), personal=True):
         """Своя модель (LM Studio, Ollama) с известным окном контекста: всё не влезает — сразу короче, а не ошибка и не
         молча отрезанное начало (Ollama режет характер и инструменты без ошибки). По ступеням: без старой истории
         разговора → без действий → самая короткая подсказка. Один раз за запуск — заметка, как поставить окно больше
@@ -579,17 +611,20 @@ class AnswerMixin:
             # его действия выпадали вместе со всеми «неглавными»)
             core = [x for x in specs if (x.get("name") or (x.get("function") or {}).get("name")) in CORE_TOOLS
                     or (x.get("name") or (x.get("function") or {}).get("name")) in keep]
-            sys_lean = self._system(True, lean=True)
+            sys_lean = self._system(True, lean=True, personal=personal)
             if core and need(sys_lean, core, msgs) <= win:
                 system, specs = sys_lean, core
                 steps.append("главные действия")
         if specs and need(system, specs, msgs) > win:
             specs = []
-            system = self._system(False) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: у модели "
+            system = self._system(False, personal=personal) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: у модели "
                                             "маленькое окно контекста. Если просят действие — честно скажи это одной фразой.")
             steps.append("без действий")
         if need(system, specs, msgs) > win:
             system = self._system_min()
+            # 04.11 (рецензия): личная справка в сообщениях (память, душа, содержание — тысячи токенов) на этой ступени тоже
+            # прочь: в _system_min и так имя собеседника; иначе окно 4096 снова «не влезло»
+            msgs = drop_profile(msgs)
             steps.append("самая короткая подсказка")
         log.info("Окно модели %s — %d токенов, всё не влезает: %s", prof.get("model") or "", win, ", ".join(steps))
         if len(steps) > 1 and not getattr(self, "_win_noted", False):   # только без истории — незаметно, не тревожим
@@ -601,37 +636,34 @@ class AnswerMixin:
                       "Ollama — переменная OLLAMA_CONTEXT_LENGTH.")
         return system, specs, msgs
 
-    def _system(self, with_tools=False, lean=None):
-        """Системная подсказка: персонаж, память о пользователе, душа, содержание разговора, выводы из дневника;
-        with_tools — ещё навыки и правила действий (инструменты, музыка, компьютер, серверы).
-        Она не меняется от вопроса к вопросу: время, найденное в записях, план дня — в справке к самому вопросу
-        (_turn_context, _put_context). Отзыв 19.10: время с минутами в подсказке не давало своему серверу модели
-        переиспользовать прочитанное (кэш начала запроса) — он перечитывал тысячи слов на каждый вопрос."""
-        base = self.personas.system_prompt(self.s.get("persona"), self.s.get("user_name") or "", "")
+    def _system(self, with_tools=False, lean=None, personal=True):
+        """Системная подсказка: персонаж, правила, навыки и правила действий (with_tools), затем личное (_personal).
+        Она не меняется от вопроса к вопросу: время, найденное в записях, план дня, подсказки к роду просьбы (стихи, схема,
+        страница) — в справке к самому вопросу (_turn_context, _put_context). Отзыв 19.10: время с минутами в подсказке не
+        давало своему серверу модели переиспользовать прочитанное (кэш начала запроса).
+        «Голос без пауз» (идея №5, 04.11): сначала — общее для всех людей (_system_stable), личное — в конце; а в разговоре
+        (personal=False) личное уходит справкой в начало первого сообщения (llm.put_profile): у Qwen описания инструментов
+        идут сразу после подсказки, и личная мелочь ломала кэш и для них (tools/prefix_audit.py)."""
+        base = self._system_stable(with_tools, lean)
+        return base + (self._personal(with_tools) if personal else "")
+
+    def _system_stable(self, with_tools=False, lean=None):
+        """Часть подсказки, одинаковая у всех людей с тем же персонажем и настройками — без имени, памяти, путей и счётчиков."""
+        base = self.personas.system_prompt(self.s.get("persona"), "", "")
         base += ("\n\nТекущие дата и время — в справке в начале последнего сообщения пользователя; они верные, а время и даты "
-                 "из прошлых реплик разговора устарели — не повторяй их.")
-        mem = self.memory_core()
-        if mem:
-            base += ("\n\nЧто ты знаешь о пользователе (твоя память, файл «Память/Обо мне.md»; «вспомни, что я говорил…» — "
-                     "отвечай отсюда, даже если в заметках и календаре пусто):\n" + mem)
-        try:
-            import quality as Q
-            base += Q.talk_lessons_block(self.workspace.root / Q.TALK_LESSONS_FILE)   # уроки из его поправок
-        except Exception:  # noqa: BLE001
-            log.debug("уроки: подсказка", exc_info=True)
-        try:
-            base += self.soul.prompt(self.persona_name())   # конституция и душа персонажа
-        except Exception:  # noqa: BLE001
-            log.debug("душа: подсказка", exc_info=True)
-        base += self.conv.prompt()                     # долгий разговор: что было раньше, был ли перерыв
-        base += self.diary.prompt()                    # выводы, которые ассистент записал ночью в дневник
+                 "из прошлых реплик разговора устарели — не повторяй их. Справка «О пользователе и о тебе» в начале разговора "
+                 "всегда свежая (программа обновляет её к каждому вопросу) — память, дела и прочее бери из неё.")
         from boundaries import RULE, OWN_MATERIAL
         base += "\n\n" + RULE + "\n\n" + OWN_MATERIAL
+        try:
+            base += self.soul.const_prompt()           # конституция — правила, а не личное: всегда в самой подсказке
+        except Exception:  # noqa: BLE001
+            log.debug("конституция: подсказка", exc_info=True)
         kids = getattr(self, "kids", None)
         if kids and kids.on():
             base += kids.prompt()                      # детский режим: правила разговора с ребёнком (kids.py)
         elif getattr(self, "senior", None) is not None and self.senior.on():
-            base += self.senior.prompt()               # «Для старших»: просто, тепло, неторопливо; осторожно с деньгами                          # границы: достоинство без обидчивости (boundaries.py)
+            base += self.senior.prompt()               # «Для старших»: просто, тепло, неторопливо; осторожно с деньгами
         try:                                           # «Ваши данные»: что хранится и куда уходит (privacy.py)
             import privacy
             base += "\n\n" + privacy.rule((self.s.active_llm() or {}).get("base_url", ""),
@@ -644,27 +676,12 @@ class AnswerMixin:
                  "Dewiar в меню приложений).")
         if with_tools:
             lean = self.s.get("llm", "lean_prompt") if lean is None else lean
-            base += self.skills.prompt_lean() if lean else self.skills.prompt()
-            base += self.toolbox.off_note()            # выключенные человеком умения — «выключено», а не «не умею»
             base += IDEA_RULE                          # «Идеи Лиры» (0.61): чего не умеешь — предложить разработчику
             try:
                 import done as _done
-                base += _done.prompt(self.done)        # «Дела»: отметить сделанное, сколько сегодня (done.py)
+                base += _done.rules()                  # «Дела»: как отмечать сделанное (сколько сегодня — в личном)
             except Exception:  # noqa: BLE001
                 log.debug("дела: подсказка", exc_info=True)
-            try:
-                base += self.close.prompt()            # «Близкие»: кому можно написать (close.py)
-            except Exception:  # noqa: BLE001
-                log.debug("близкие: подсказка", exc_info=True)
-            try:
-                comps = self.computers()                # «Устройства» (0.56): свои компьютеры — «сделай на рабочем…»
-                if len(comps) > 1:
-                    base += ("\n\nТВОИ КОМПЬЮТЕРЫ (ты одна и та же на всех): " + ", ".join(
-                        f"«{c['name']}»" + (" — этот" if c["me"] else " — на связи" if c["on"] else " — не на связи") for c in comps)
-                        + ". «Сделай/запусти на рабочем (другом) компьютере…» — start_task с on (имя компьютера); не на связи — "
-                        "спроси, подождать или сделать в облаке (if_off).")
-            except Exception:  # noqa: BLE001
-                log.debug("компьютеры: подсказка", exc_info=True)
             base += ("\n\nУ тебя есть инструменты: открыть сайт или программу, найти в интернете, прочитать страницу, "
                      "включить музыку, громкость, напоминания и другие. Когда просят что-то сделать или узнать "
                      "свежее — вызывай инструмент, а не рассказывай, как это сделать. Не выдумывай результаты поиска. "
@@ -685,7 +702,7 @@ class AnswerMixin:
                      "понятнее показать схемой — нарисуй её блоком ```mermaid (flowchart, mindmap, sequenceDiagram, timeline): "
                      "схема появится на экране, вслух её не читают — словами скажи главное. Нет блока ```mermaid — нет и схемы: "
                      "не говори «схема на экране», не нарисовав её."
-                     f"\n\nУ тебя есть своя папка «{self.workspace.root}» — пользователь видит её в студии. Просят записать, "
+                     "\n\nУ тебя есть своя папка (где она — в справке о пользователе) — пользователь видит её в студии. Просят записать, "
                      "составить список или план — сохраняй заметку (save_note), а вслух скажи коротко, что записал. "
                      "Узнал о пользователе что-то полезное надолго — запомни одной фразой (remember), без лишних "
                      "вопросов; в том числе как он любит, чтобы ты работал: длина и стиль ответов, форматы файлов, "
@@ -720,18 +737,83 @@ class AnswerMixin:
                        "и в названии, и в исполнителе (не придумывай и не приписывай песню чужому исполнителю); включай, "
                        "только если просят включить. "
                        "Никогда не говори, что что-то открыл или включил, если инструмент этого не сделал.")
-            base += f"\n\nКомпьютер пользователя: {OS_NAME}."
-            base += (" Просят разобраться с компьютером (тормозит, не работает, настроить) — сначала посмотри "
+            base += ("\n\nПросят разобраться с компьютером (тормозит, не работает, настроить) — сначала посмотри "
                      "командами, которые ничего не меняют (run_command), объясни, что нашёл, и предложи исправление; "
                      "каждую команду пользователь подтверждает."
                      # OS_NAME на Windows — «Windows 10»/«Windows 11», поэтому систему узнаём по os.name, не по строке
                      + (" Нужны права администратора — пиши sudo как обычно: Dewiar сам покажет окно для пароля. Никогда "
                         "не проси пароль в разговоре и не вставляй его в команды (echo … | sudo -S)." if os.name != "nt" else ""))
+            base += self.skills.prompt_lean() if lean else self.skills.prompt()
+        return base
+
+    def _personal(self, with_tools=False):
+        """Личное — то, что у каждого своё и меняется со временем: имя, память «Обо мне», уроки из поправок, душа,
+        содержание долгого разговора, выводы ночи; с действиями — выключенные умения, «Близкие», свои компьютеры, дела
+        сегодня, своя папка, система, серверы. Каждый кусок начинается с «\n\n». -> строка (может быть пустой)."""
+        base = ""
+        name = (self.s.get("user_name") or "").strip()
+        if name:
+            base += f"\n\nСобеседника зовут {name}."
+        mem = self.memory_core()
+        if mem:
+            base += ("\n\nЧто ты знаешь о пользователе (твоя память, файл «Память/Обо мне.md»; «вспомни, что я говорил…» — "
+                     "отвечай отсюда, даже если в заметках и календаре пусто):\n" + mem)
+        try:
+            import quality as Q
+            base += Q.talk_lessons_block(self.workspace.root / Q.TALK_LESSONS_FILE)   # уроки из его поправок
+        except Exception:  # noqa: BLE001
+            log.debug("уроки: подсказка", exc_info=True)
+        try:
+            base += self.soul.soul_prompt(self.persona_name())   # душа персонажа (конституция — в общей части)
+        except Exception:  # noqa: BLE001
+            log.debug("душа: подсказка", exc_info=True)
+        base += self.conv.prompt()                     # долгий разговор: что было раньше
+        base += self.diary.prompt()                    # выводы, которые ассистент записал ночью в дневник
+        if with_tools:
+            base += self.toolbox.off_note()            # выключенные человеком умения — «выключено», а не «не умею»
+            try:
+                base += self.close.prompt()            # «Близкие»: кому можно написать (close.py)
+            except Exception:  # noqa: BLE001
+                log.debug("близкие: подсказка", exc_info=True)
+            try:
+                comps = self.computers()                # «Устройства» (0.56): свои компьютеры — «сделай на рабочем…»
+                if len(comps) > 1:
+                    base += ("\n\nТВОИ КОМПЬЮТЕРЫ (ты одна и та же на всех): " + ", ".join(
+                        f"«{c['name']}»" + (" — этот" if c["me"] else " — на связи" if c["on"] else " — не на связи") for c in comps)
+                        + ". «Сделай/запусти на рабочем (другом) компьютере…» — start_task с on (имя компьютера); не на связи — "
+                        "спроси, подождать или сделать в облаке (if_off).")
+            except Exception:  # noqa: BLE001
+                log.debug("компьютеры: подсказка", exc_info=True)
+            try:
+                import done as _done
+                base += _done.now_line(self.done)      # сколько дел сделано сегодня (меняется с каждой отметкой)
+            except Exception:  # noqa: BLE001
+                log.debug("дела: подсказка", exc_info=True)
+            base += f"\n\nТвоя папка: «{self.workspace.root}». Компьютер пользователя: {OS_NAME}."
             if self.servers.items:
                 base += ("\n\nСЕРВЕРЫ пользователя (команды — server_run, по SSH): " + self.servers.names() +
                          ". Сначала диагностика (место, память, службы, логи), потом исправление; объясняй простыми "
                          "словами, что нашёл и что сделал.")
         return base
+
+    def _usage_note(self, prof, sec):
+        """«Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша начала запроса — в журнал
+        («⏱ модель: 6.1 с, подсказка 12 400 ток., из кэша 11 900») и в пульс (health_cache). Сервер не посчитал — молчим."""
+        try:
+            from llm import last_usage, usage_line
+            u = last_usage()
+            if not u or not u.get("prompt"):
+                return
+            log.info(usage_line(u, sec))
+            if hasattr(self, "health_cache"):
+                self.health_cache(u, prof)
+        except Exception:  # noqa: BLE001
+            log.debug("подсчёт токенов", exc_info=True)
+
+    def _profile_in_msgs(self, prof):
+        """Личное — справкой в начале разговора (а не в подсказке)? Да, кроме Claude (у него кэш идёт «инструменты →
+        подсказка», личное в конце подсказки ему не мешает) и если в настройках не вернули по-старому (llm.profile_in_system)."""
+        return (prof or {}).get("kind") != "anthropic" and not self.s.get("llm", "profile_in_system")
 
     def _turn_context(self, text=""):
         """Справка к вопросу (меняется каждую минуту — поэтому не в системной подсказке): дата и время, сколько идёт
@@ -1780,15 +1862,21 @@ class AnswerMixin:
                 prof = dict(prof, tools_mode=mode)
             elif mode is None and specs:
                 self.probe_tools_bg()                  # ещё не проверяли — проверим в фоне, этот ответ — в режиме по умолчанию
-            system = self._system(bool(specs))
+            # «Голос без пауз» (04.11): подсказка — общая для всех и неизменная; личное (имя, память, душа, дела сегодня) —
+            # справкой в начале разговора, подсказки к роду просьбы (стихи, советы, схема, грубость) — в справке к вопросу.
+            # Иначе каждая такая добавка ломала кэш начала запроса и для всех инструментов после подсказки (tools/prefix_audit.py)
+            pmsg = self._profile_in_msgs(prof)
+            system = self._system(bool(specs), personal=not pmsg)
+            personal = self._personal(bool(specs)).strip() if pmsg else ""
+            notes = []                                 # подсказки к этой просьбе — в справку к вопросу
             import boundaries
             from llm import POEM_ASK, POEM_NOTE, RECO_ASK, RECO_NOTE
             if POEM_ASK.search(text.split("\n\nВложения:")[0]):
-                system += POEM_NOTE                     # стихи — рифмы по ударению подбираются заранее
+                notes.append(POEM_NOTE)                 # стихи — рифмы по ударению подбираются заранее
             elif RECO_ASK.search(text.split("\n\nВложения:")[0]):
-                system += RECO_NOTE                     # советы фильмов и песен — только существующее
+                notes.append(RECO_NOTE)                 # советы фильмов и песен — только существующее
             if boundaries.rude(text):                  # грубят самому помощнику — спокойная граница в этом ходе, счётчик в пульс
-                system += boundaries.NOTE
+                notes.append(boundaries.NOTE)
                 self.health_count("rude")
                 log.info("🛡 грубость в адрес помощника — отвечу спокойно, с границей")
             recalled = ""
@@ -1796,7 +1884,7 @@ class AnswerMixin:
                 recalled = self.recall.context(text.split("\n\nВложения:")[0])
             except Exception as e:  # noqa: BLE001
                 log.info("Поиск по записям: %s", e)
-            ctx = [self._turn_context(text)]           # меняющееся — в справку к вопросу, подсказка остаётся прежней
+            ctx = [self._turn_context(text)] + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней
             mlines, mpages = self.memory_for(text.split("\n\nВложения:")[0])
             if mlines:                                 # Память 2.0: старое о человеке не теряется — приходит к вопросу
                 log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))
@@ -1817,28 +1905,42 @@ class AnswerMixin:
                 from quality import DIAGRAM_ASK, PAGE_ASK, PLUGIN_ASK, PLUGIN_EDIT_ASK, PLUGIN_NOTE, SITE_ASK, SITE_EDIT_ASK, SITE_NOTE
                 ask0 = text.split("\n\nВложения:")[0]
                 if specs and (PLUGIN_ASK.search(ask0) or PLUGIN_EDIT_ASK.search(ask0)) and any(x.get("name") == "plugin_create" for x in specs):
-                    system += PLUGIN_NOTE                     # Creator (03.11): плагин — инструментом, а не HTML в чате
+                    ctx.append(PLUGIN_NOTE.strip())           # Creator (03.11): плагин — инструментом, а не HTML в чате
                 elif specs and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)) and any(x.get("name") == "site_create" for x in specs):
-                    system += SITE_NOTE                       # «Сайты» (03.11): сайт — инструментами, а не HTML в чате
+                    ctx.append(SITE_NOTE.strip())             # «Сайты» (03.11): сайт — инструментами, а не HTML в чате
                 elif PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
-                    system += ("\n\nСЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "
+                    ctx.append("СЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "
                                "вызовом show_page передай html содержимого — разделы <section> с <h2>, списки, таблицы; оформление "
                                "добавится само, страница откроется в браузере. HTML в ответе не пиши, скрипты для этого не пиши; "
                                "после — одна фраза, что открыла.")
+                from quality import COUNCIL_ASK, COUNCIL_NOTE, WEATHER_ASK, WRITING_ASK, WRITING_NOTE, _READ_ASK, ask_url
+                names_ = {x.get("name") for x in specs or []}
+                if COUNCIL_ASK.search(ask0) and "council" in names_:
+                    system += COUNCIL_NOTE                    # экзамен ПК 0.81.1: «собери совет» — call_persona вместо council
+                if WRITING_ASK.search(ask0) and "writing_today" in names_:
+                    system += WRITING_NOTE                    # «сколько я написал сегодня?» — числа выдумывала
+                url_ = ask_url(ask0)
+                if url_ and _READ_ASK.search(ask0) and "read_webpage" in names_:
+                    ctx.append(f"В вопросе ссылка {url_}: прежде чем рассказывать о ней, прочитай страницу read_webpage — "
+                               "отвечай по прочитанному, не по памяти.")
+                if WEATHER_ASK.search(ask0) and "weather" in names_ and not re.search(r"погод|градус|температур|прогноз|осадк", ask0, re.I):
+                    ctx.append("Человек едет в поездку: сначала узнай погоду там на эти даты (weather с городом из вопроса) и "
+                               "собери советы под неё; погоду и градусы — только из weather.")
+                turn.agenda = ag
                 if DIAGRAM_ASK.search(text):                  # экзамен 15.10: «Схема готова и уже на экране» — а схемы нет
-                    system += ("\n\nСЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи "
+                    ctx.append("СЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи "
                                "узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши "
                                "«схема готова» или «на экране», не нарисовав её. Сначала блок, потом одна-две фразы о главном.")
             except Exception as e:  # noqa: BLE001
                 log.info("План на день: %s", e)
             if turn.via and not turn.via_job:
                 src = turn.via.get("from") or "Telegram"
-                system += (f"\n\nСейчас пользователь пишет тебе из {src} (не голосом): ответ уйдёт ему сообщением. Можно "
+                ctx.append(f"Сейчас пользователь пишет тебе из {src} (не голосом): ответ уйдёт ему сообщением. Можно "
                            "чуть подробнее и со списками; файлы из папки ассистента — инструментом send_telegram"
                            + (" (to: max)." if src == "MAX" else "."))
             if mode == "none" and specs:
                 specs = []
-                system = self._system(False) + ("\n\nЭта модель не умеет выполнять действия (музыка, скриншоты, "
+                system = self._system(False, personal=not pmsg) + ("\n\nЭта модель не умеет выполнять действия (музыка, скриншоты, "
                                                 "программы). Если просят действие — честно скажи одной фразой, что с этой "
                                                 "моделью действия недоступны, и предложи выбрать другую модель в «Мозге».")
             slow_at = (getattr(self, "_tools_slow", None) or {}).get(self._tools_key(prof))
@@ -1846,7 +1948,7 @@ class AnswerMixin:
                 # своя модель только что не дождалась ответа с инструментами (180 с) — 20 минут спрашиваем без них, а не
                 # ждём те же 180 с на каждом вопросе и потом ещё ответ без них (№133, 20.10: 4 ядра, Ollama, «вечно в думках»)
                 specs = []
-                system = self._system(False) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: модель на "
+                system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: модель на "
                                                 "этом компьютере не успевает с ними. Если просят действие — честно скажи "
                                                 "это одной фразой.")
             turn.plugin_hint = self._plugin_hint(text) if specs else ""
@@ -1862,13 +1964,26 @@ class AnswerMixin:
             elif len(text) < 400:
                 try:
                     import guide
-                    gh = guide.hint(text, "pc")                  # «как защищены мои данные?» — раздел руководства сразу
+                    # экзамен ПК 0.81.1 (как appGuideFor на телефоне): «как сделать, чтобы сын говорил с тобой безопасно?»,
+                    # «есть видеоуроки?», «как добавить маму?» — вопрос о самом приложении: руководство прикладываем сами
+                    # (как вызов app_help — и в событиях хода, и для экзамена)
+                    gh = guide.attach(text.split("\n\nВложения:")[0], "pc")
+                    if gh:
+                        turn.guided = True
+                        log.info("📖 Вопрос о приложении — руководство приложено к вопросу")
+                        self.emit("tool", name="app_help", title="Руководство", status="done", args={"query": text[:200]},
+                                  detail="руководство приложено к вопросу", result="руководство приложено к вопросу приложением")
+                    else:
+                        gh = guide.hint(text, "pc")              # «как защищены мои данные?» — раздел руководства сразу
                     if gh:
                         ctx.append(gh)
                 except Exception:  # noqa: BLE001
                     pass
             msgs = _put_context(msgs, "\n\n".join(c for c in ctx if c))
-            system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text))
+            if personal:
+                from llm import put_profile
+                msgs = put_profile(msgs, personal)
+            system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)
             split, last, codef = SentenceSplitter(), 0.0, CodeFilter()
             # вслух — не больше ~900 символов (около минуты): длинный ответ дальше только на экране («Открыть целиком»);
             # сказки, истории и чтение вслух — целиком
@@ -1905,13 +2020,36 @@ class AnswerMixin:
             # фразу с отговоркой и всё после неё в озвучку не отдаём, пока шаг не кончится: иначе отказ прозвучит, а потом
             # его заменит ответ по поиску. Обычная первая фраза идёт в голос сразу — задержки для неё нет
             held, hold = [], [False]
+            # Экзамен ПК 0.81.1: проверки «сказала, но не сделала» срабатывают после шага, а ответ к тому времени уже прозвучал
+            # и остался в тексте («Сейчас открою. Готово, Википедия открыта…», «в Минске около +4»). Рецензия 0.82 («Голос без
+            # пауз»): придерживаем не весь ответ, а только пока проверка не прошла — с фразы, на которой она сработает
+            # (quality.hold_sentence: «открыла» без открытия, выдуманные градусы, дело не из планов, «записала» без money_add),
+            # или весь шаг, если нужный инструмент ещё не вызывался (quality.hold_step: ссылка, «сколько написал», совет).
+            # После вызова нужного инструмента фразы идут сразу; стихи и вопросы о приложении не придерживаются — проверка после.
+            from quality import COUNCIL_ASK as _CA, hold_sentence as _hold_s, hold_step as _hold_step
+            names0 = {x.get("name") for x in specs or []}
+            known0 = text + "\n" + "\n".join(c for c in ctx if c)
+            strict, gate = [False], [True]           # gate: на последнем шаге (только слова) проверок нет — не придерживаем
 
             def say(s_):
-                if hold[0] and (held or looks_like_refusal(s_)):
+                if gate[0] and not strict[0] and not turn.cancel.is_set():
+                    try:
+                        strict[0] = _hold_s(ask0, text, s_, called, names0, known0, getattr(turn, "agenda", ""))
+                    except Exception:  # noqa: BLE001
+                        strict[0] = False
+                if strict[0] or (hold[0] and (held or looks_like_refusal(s_))):
                     held.append(s_)
                     return
                 hold[0] = False
                 speak(s_)
+
+            def retract(drop=False):
+                """Проверка попросила переделать шаг: придержанное не звучит и уходит из текста ответа. drop — неверный шаг
+                уходит из текста, даже если часть его уже прозвучала (ответ дадут заново)."""
+                if (strict[0] and held) or drop:
+                    held.clear()
+                    if step_text and turn.full.endswith(step_text):
+                        turn.full = turn.full[:-len(step_text)]
             seen_calls = {}                              # одинаковый вызов в одном ходе — не повторяем (результат уже есть)
             done_calls, checked = [], False                  # что вызвано с результатами — сверить числа ответа (number_mismatch)
             drew = 0                                         # просили схему, а её нет — попросили нарисовать (до двух раз за ход)
@@ -1920,14 +2058,18 @@ class AnswerMixin:
             repeat_checked = False                           # ответ слово в слово как недавний — попросили ответить по существу (раз за ход)
             place_checked = False                            # №510: в запросе поиска нет места из вопроса — попросили искать заново (раз за ход)
             plug_checked = False                             # №507: ответила фактами по памяти, не вызвав подходящий плагин (раз за ход)
+            deed_checked = False                             # экзамен ПК 0.81.1: «открыла» без open_url, погода без weather… (раз за ход)
             prev_said = {_norm_answer(m.get("content")) for m in self.history[-8:] if m.get("role") == "assistant" and m.get("content")}
             for step in range(6):                       # модель → действия → результаты → модель…
                 calls, step_text = [], ""
+                t_step, t_ev = time.monotonic(), None     # «⏱ модель: …» — от запроса до первого события этого шага
                 if step == 5 and specs:                  # последний шаг — только слова: ответить тем, что уже узнал
                     specs = []
                     system += ("\n\nДействий больше не будет: прямо сейчас ответь пользователю словами по тому, что уже "
                                "узнал и сделал. Не пиши «готово» без сути.")
                 hold[0] = step == 0 and any(x.get("name") == "web_search" for x in specs or [])
+                gate[0] = step < 5 and bool(specs) and not deed_checked
+                strict[0] = gate[0] and _hold_step(ask0, called, names0)    # весь шаг — только пока нужный инструмент не вызван
                 if blind_key in self._blind and _has_images(msgs):
                     msgs = _drop_images(msgs)
                 if step and econ_main is not None:       # после действий продолжает основная модель
@@ -1982,7 +2124,7 @@ class AnswerMixin:
                                     self.note("У модели маленькое окно контекста — отвечаю без действий и почти без памяти "
                                               "разговора. В LM Studio или Ollama поставьте длину контекста 8192 или больше.")
                             specs = []
-                            system = self._system(False) + ("\n\nСейчас действия (музыка, скриншоты, программы) "
+                            system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (музыка, скриншоты, программы) "
                                                             "недоступны: эта модель не умеет вызывать инструменты. Если "
                                                             "просят действие — честно скажи это одной фразой.")
                             try:
@@ -1993,7 +2135,7 @@ class AnswerMixin:
                                 # и без действий не влезло (окно 2048–4096, а память и душа длинные) — самое короткое:
                                 # кто ты и вопрос; лучше простой ответ, чем «модели не хватило окна» на каждый вопрос
                                 log.warning("Окно модели мало и без действий — отвечаю с самой короткой подсказкой")
-                                system, msgs = self._system_min(), msgs[-1:]
+                                system, msgs = self._system_min(), drop_profile(msgs[-1:])
                                 events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=None))
                         else:
                             raise
@@ -2006,6 +2148,8 @@ class AnswerMixin:
                 # шага придерживаем, пока не ясно, не повтор ли это сказанного (repeat_head); повтор не говорим и не пишем
                 probe, probing, muted = "", bool(step and _rep_norm(turn.full)), False
                 for kind, val in events:
+                    if t_ev is None:
+                        t_ev = time.monotonic()
                     if turn.cancel.is_set():
                         break
                     if kind == "tools":
@@ -2039,6 +2183,7 @@ class AnswerMixin:
                         last = time.monotonic()
                     for s_ in split.feed(codef.feed(val)):         # код и команды вслух не читаем
                         say(s_)
+                self._usage_note(prof, (t_ev or time.monotonic()) - t_step)
                 if probing and probe and not repeat_head(turn.full, probe, fin=True):   # короткий новый хвост — не терять
                     turn.full += probe
                     step_text += probe
@@ -2055,9 +2200,10 @@ class AnswerMixin:
                         turn.full = ""
                         self.set_state("thinking")
                         continue
-                for s_ in held:                               # не отказ (длинный ответ с оговоркой или вызвала инструменты) — озвучить
-                    speak(s_)
-                held.clear()
+                if not strict[0]:
+                    for s_ in held:                           # не отказ (длинный ответ с оговоркой или вызвала инструменты) — озвучить
+                        speak(s_)
+                    held.clear()
                 called |= {c.get("name") for c in calls}
                 if not calls and not turn.cancel.is_set() and specs and step < 5:
                     # «сейчас посмотрю и расскажу» — и ни одного действия; или просили презентацию, а задача не запущена
@@ -2069,6 +2215,7 @@ class AnswerMixin:
                         nudged += 1
                         log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else "только пообещала",
                                  " (ещё раз)" if nudged > 1 else "")
+                        retract()
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"},
                                        {"role": "user", "content": promise_nudge(want_task, again=nudged > 1,
                                                                                  hint=getattr(turn, "plugin_hint", ""))}]
@@ -2080,6 +2227,7 @@ class AnswerMixin:
                     if fix:                                 # «таймер на 79 минут», а поставлено 59 (экзамен 14.10)
                         checked = True
                         log.info("✋ Число в ответе не совпадает с поставленным — прошу исправить")
+                        retract()
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
                         if turn.full.strip() and not turn.full.endswith(" "):
                             turn.full += " "
@@ -2090,6 +2238,7 @@ class AnswerMixin:
                     if fix:                                  # «напомню тебе в понедельник в 9» — а напоминания нет (19.10)
                         remind_asked = True
                         log.info("✋ Пообещала напомнить, а напоминание не поставлено — прошу поставить")
+                        retract()
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
                         if turn.full.strip() and not turn.full.endswith(" "):
                             turn.full += " "
@@ -2103,6 +2252,7 @@ class AnswerMixin:
                     if fix:
                         saved_checked = True
                         log.info("✋ Сказала «готово/записала» или не поставила просимое напоминание — прошу сделать")
+                        retract()
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
                         if turn.full.strip() and not turn.full.endswith(" "):
                             turn.full += " "
@@ -2115,6 +2265,7 @@ class AnswerMixin:
                     if fix:                                  # №507: «полнолуние 5 ноября» по памяти, а плагин «Луна» есть
                         plug_checked = True
                         log.info("✋ Ответила по памяти, не вызвав плагин «%s», — прошу вызвать", pn)
+                        retract()
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
                         if step_text and turn.full.endswith(step_text):     # неверный ответ по памяти в итог не идёт
                             turn.full = turn.full[:-len(step_text)]
@@ -2131,6 +2282,7 @@ class AnswerMixin:
                     fix = (f"Ты слово в слово повторил(а) свой прошлый ответ «{turn.full.strip()[:80]}». Человек спрашивает снова — "
                            "значит, тот ответ его не устроил. Ответь сейчас по существу на его последний вопрос, развёрнуто и "
                            "живо, своими словами; прошлый ответ не повторяй.")
+                    retract()
                     msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
                     if turn.full.strip() and not turn.full.endswith(" "):
                         turn.full += " "
@@ -2158,15 +2310,46 @@ class AnswerMixin:
                     if fix:
                         drew += 1
                         log.info("✋ Просили схему, а её нет — прошу нарисовать (mermaid)")
+                        retract()
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
                         if turn.full.strip() and not turn.full.endswith(" "):
                             turn.full += " "
                         self.set_state("thinking")
                         continue
+                if not calls and not turn.cancel.is_set() and step < 5 and specs and not deed_checked:
+                    from quality import agenda_invented, council_missing, feature_deny, invented_numbers, open_claim, poem_check, \
+                        url_unread, writing_missing
+                    names_ = {x.get("name") for x in specs or []}
+                    fix = (open_claim(ask0, step_text, called) if "open_url" in names_ else "") \
+                        or (url_unread(ask0, step_text, called) if "read_webpage" in names_ else "") \
+                        or (invented_numbers(text, step_text, called, known=text + "\n" + "\n".join(c for c in ctx if c))
+                            if names_ & {"weather", "web_search"} else "") \
+                        or (writing_missing(ask0, step_text, called) if "writing_today" in names_ else "") \
+                        or (council_missing(ask0, step_text, called) if "council" in names_ else "") \
+                        or feature_deny(ask0, step_text, called, getattr(turn, "guided", False)) \
+                        or agenda_invented(step_text, getattr(turn, "agenda", "")) \
+                        or poem_check(ask0, step_text)
+                    if fix:                                  # экзамен ПК 0.81.1: сказала, но не сделала; числа без инструмента
+                        deed_checked = True
+                        log.info("✋ %s — прошу переделать", fix.split(" — ")[0].split(":", 1)[-1].strip()[:90])
+                        retract(drop=True)                   # ответ дадут заново — неверный в тексте не остаётся
+                        msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
+                        if turn.full.strip() and not turn.full.endswith(" "):
+                            turn.full += " "
+                        self.set_state("thinking")
+                        continue
+                for s_ in held:                               # придержанное (strict) — проверки прошли: теперь вслух
+                    speak(s_)
+                held.clear()
                 if turn.cancel.is_set() or not calls:
                     break
                 results = []
                 for c in calls:
+                    if c.get("name") == "call_persona" and _CA.search(ask0) and any(x.get("name") == "council" for x in specs or []):
+                        log.info("✋ «Собери совет» — call_persona вместо council: прошу council")
+                        results.append("Не передано: это просьба собрать совет — вызови council (question — вопрос человека "
+                                       "целиком), а не call_persona.")
+                        continue
                     if c.get("name") == "web_search" and not place_checked:
                         from quality import search_place_fix
                         fix = search_place_fix(text.split("\n\nВложения:")[0], (c.get("args") or {}).get("query"))
@@ -2240,6 +2423,7 @@ class AnswerMixin:
                     raise LLMError("модель вернула пустой ответ")
                 log.info("⏱ ответ целиком за %.1f с (%s, %d симв.)", time.monotonic() - t_start, prof.get("model") or "?",
                          len(turn.full))
+                turn.model = model_label(prof)            # №515: какой моделью ответил — в историю (пометка о смене модели)
                 early = self._early_done(turn)
                 if early:                                 # «Готово!» сразу после start_task — поправиться вслух и в тексте
                     turn.full = turn.full.rstrip() + " " + early
@@ -2303,7 +2487,8 @@ class AnswerMixin:
             hand = getattr(turn, "switch_to", None) or getattr(turn, "back_to", None)
             self.history += [{"role": "user", "content": said},
                              {"role": "assistant", "content": turn.full.strip(), "who": self.s.get("persona"),
-                              **({"acts": acts} if acts else {}), **({"facts": facts} if facts else {}), **({"handoff": hand} if hand else {})}]
+                              **({"acts": acts} if acts else {}), **({"facts": facts} if facts else {}), **({"handoff": hand} if hand else {}),
+                              **({"model": turn.model} if getattr(turn, "model", "") else {})}]
             self.last_turn_time = time.monotonic()
             if not turn.via:
                 self.local_act = time.time()               # человек говорил с этим компьютером сам — бот Telegram отвечает отсюда

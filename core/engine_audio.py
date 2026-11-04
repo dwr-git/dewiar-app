@@ -152,6 +152,11 @@ class AudioMixin:
             self.note("" if ok else self._gigaam_fail_text(self.stt.error))
             if not ok:
                 self._names_note()
+                try:
+                    if self._stt_temp_server():                # №513: временно — сервер Dewiar, выбор человека помним
+                        self.note("")
+                except Exception:  # noqa: BLE001
+                    log.exception("распознавание: временная замена")
         self.ensure_voice(self.s.get("persona"))
         self.health_mark("full")                               # загрузилось всё: распознавание и голос персонажа
 
@@ -806,7 +811,7 @@ class AudioMixin:
                         and (self.wake_checker() or self.voiceprints.items)):
                     self.barge_sent = self.utt_id                 # 1.5 с речи поверх ответа — не имя ли это?
                     self.check_q.put(("barge", b"".join(utt), self.utt_id))
-                if silence >= self._end_frames or len(utt) * FRAME_S > 25:  # фраза длиннее 25 с — режем принудительно
+                if silence >= self._end_need(len(utt) * FRAME_S) or len(utt) * FRAME_S > 25:  # фраза длиннее 25 с — режем принудительно
                     log.debug("речь кончилась (фраза %d, %.1f с)", self.utt_id, len(utt) * FRAME_S)
                     in_speech, starts = False, 0
                     if ducked and self.player:                  # кашлянули, «угу» — продолжаем как было
@@ -917,13 +922,24 @@ class AudioMixin:
         self._end_frames = max(8, int(ms / 1000 / FRAME_S))
         return ms
 
+    def _end_need(self, said_s):
+        """Сколько кадров тишины — конец фразы, если человек говорит уже said_s секунд. №514 (04.11): «не успеваешь сказать
+        больше трёх предложений — она отключается»: в долгой речи пауза между предложениями длиннее, чем после короткой
+        команды. Короткие фразы — как раньше (быстрый ответ), после 4 с речи ждём на 0,35 с дольше, после 10 с — на 0,6 с."""
+        base = getattr(self, "_end_frames", 20)
+        for at, add in LONG_SPEECH:
+            if said_s >= at:
+                return base + int(add / FRAME_S)
+        return base
+
     def _pause_check(self, t0):
         """Началась речь. Если прошлую фразу сочли законченной меньше 0,8 с назад, а ответа ещё нет (модель думает), —
         человек не договорил: ждать паузу дольше (+150 мс, до +600) и склеить обе части (_on_utterance).
         №226 (24.10): «после нескольких „перебил“ добавка дошла до 900 мс и сама не уменьшается — ассистент всё медленнее»:
         потолок +600 (вся пауза ~1,25 с), а тает она вдвое быстрее (_pause_ok); в студии — «вернуть обычную»."""
         lf = getattr(self, "_last_final", None)
-        if not lf or lf.get("cut") or self.state != "thinking" or t0 - lf["t"] > 0.8 or t0 < lf["t"] - 0.5:
+        gap = 1.5 if lf and len(lf.get("pcm") or b"") / 2 / RATE >= LONG_SPEECH[-1][0] else 0.8   # №514: после долгой речи — до 1,5 с
+        if not lf or lf.get("cut") or self.state != "thinking" or t0 - lf["t"] > gap or t0 < lf["t"] - 0.5:
             return
         lf["cut"] = self.utt_id
         if self.s.get("audio", "end_silence_auto") is False:
@@ -1470,7 +1486,7 @@ class AudioMixin:
             # №182/№183: «пропадает, не дослушав вопрос»: 15-секундный вопрос после имени принимался за разговор рядом)
             invited = time.monotonic() < getattr(self, "_invited_until", 0.0)
             self._invited_until = 0.0
-            if long_ and not named and not invited and not to_me(text):
+            if long_ and not named and not invited and not addressed(text):
                 # без имени, долго и много слов — это разговор людей рядом, а не продолжение со мной (отчёт 11.10:
                 # «как только кто-то рядом — она сама вклинивается в беседу»). Слушаю дальше только по имени.
                 log.info("Продолжение разговора: длинная фраза без имени (%.1f с, %d слов) — похоже, говорят не со мной",
@@ -1529,8 +1545,11 @@ class AudioMixin:
         names = [_norm(a).replace(" ", "") for al in self.aliases.values() for a in al]
         return any(difflib.SequenceMatcher(None, w[0], a).ratio() >= 0.55 for a in names)
 
-    def listen_for_command(self, seconds=8):
-        """Имя услышали без вопроса: ждём вопрос seconds секунд (без имени) и даём короткий сигнал."""
+    def listen_for_command(self, seconds=None):
+        """Имя услышали без вопроса: ждём вопрос seconds секунд (без имени) и даём короткий сигнал. По умолчанию —
+        «Сколько ждать, пока я молчу» из «Слуха» (audio.follow_up_seconds, не меньше 8 с; №514)."""
+        if seconds is None:
+            seconds = max(8.0, float(self.s.get("audio", "follow_up_seconds") or 0))
         self._listen_peak, self._listen_vad = 0.0, 0.0
         log.info("🎤 Слушаю вопрос (%d с)", seconds)
         self.follow_up_until = time.monotonic() + seconds

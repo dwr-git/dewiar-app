@@ -144,7 +144,8 @@ ok(E.shared and E.shared[0]["morning"]["dev"] == "Рабочий" and E.shared[0
 E._brief_context(); time.sleep(0.2)
 ok(len(E.shared) == 1, "своему телефону — не чаще раза в полчаса")
 jp = EM.MusicMixin._job_prompt(types.SimpleNamespace(_brief_context=lambda: "X"), {"brief": True})
-ok("[Утро с Лирой]" in jp and "если она есть в данных, бери оттуда" in jp and "рассылки не перечисляй" in jp, "поручение сводки: погода из данных, сотрудники, клиенты, письма")
+ok("[Утро с Лирой]" in jp and "только если она есть в данных" in jp and "не выдумывай" in jp and "рассылки не перечисляй" in jp,
+   "поручение сводки: погода только из данных (нет — пропустить, экзамен ПК 0.81.1), сотрудники, клиенты, письма")
 import presence  # noqa: E402
 pp = presence.prompt({"kind": "day", "facts": [], "gone": "9 ч"}, "ctx")
 ok("что ждёт от сотрудников и клиентов" in pp, "сводка дня у компьютера — тоже про сотрудников и клиентов")

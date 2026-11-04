@@ -50,11 +50,13 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 
 <footer id="bar">
   <div id="atts"></div>
-  <div id="typebox"><button id="b-att" class="ib att" title="Фото или файл — показать Лире"><svg viewBox="0 0 24 24"><path d="M20.5 11.5 12.6 19.4a5 5 0 0 1-7.1-7.1l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg></button><input id="att-file" type="file" accept="image/*,text/*,application/json" multiple hidden><input id="typed" type="text" placeholder="Напишите…" autocomplete="off" enterkeyhint="send"><button id="send" class="ib"><svg viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-2.5-6.5z"/></svg></button></div>
+  <div id="typebox"><textarea id="typed" rows="1" placeholder="Напишите…" autocomplete="off" enterkeyhint="send" aria-label="Сообщение"></textarea></div>
   <div id="row">
+    <button id="b-att" class="ib att" aria-label="Приложить фото или файл" title="Фото или файл — показать Лире"><svg viewBox="0 0 24 24"><path d="M20.5 11.5 12.6 19.4a5 5 0 0 1-7.1-7.1l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6"/></svg></button><input id="att-file" type="file" accept="image/*,text/*,application/json" multiple hidden>
     <button class="ib soft" id="b-kb" title="Написать"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12.5" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14.5h9"/></svg></button>
     <button id="mic" title="Говорить"><span class="ring"></span><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
     <button class="ib soft" id="b-hist" title="Разговор"><svg viewBox="0 0 24 24"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/></svg></button>
+    <button id="send" class="ib" title="Отправить" aria-label="Отправить"><svg viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-2.5-6.5z"/></svg></button>
   </div>
 </footer>
 

@@ -1,7 +1,7 @@
 """«Дома по Wi-Fi» в ядре (core/homehub.py — узел и обмен; core/sync.py HomeSync — компьютер со своим узлом).
 
 Настройка sync.home {on}: включили — узел слушает домашнюю сеть, HomeSync меняется с ним по 127.0.0.1. Команды студии:
-home_get, home_set {on}, home_pair (новый код на 10 минут: ссылка для QR), home_forget {tid}. Телефон, подключённый так,
+homelan_get, homelan_set {on}, homelan_pair (новый код на 10 минут: ссылка для QR), homelan_forget {tid}. Телефон, подключённый так,
 синхронизируется с компьютером напрямую — без dewiar.pro; если у компьютера есть и облако, он передаёт правки дальше
 (компьютер — мост между телефоном и другими устройствами)."""
 import sys
@@ -69,9 +69,9 @@ class HomeMixin:
         return out
 
     def home_cmd(self, cmd, a):
-        if cmd == "home_get":
+        if cmd == "homelan_get":
             return self.home_public()
-        if cmd == "home_set":
+        if cmd == "homelan_set":
             on = bool(a.get("on"))
             self.s.update({"sync": {"home": {"on": on}}})
             if on:
@@ -79,7 +79,7 @@ class HomeMixin:
             else:
                 self.home_stop()
             return self.home_public()
-        if cmd == "home_pair":
+        if cmd == "homelan_pair":
             if not (self.homehub and self.homehub.running()):
                 self.s.update({"sync": {"home": {"on": True}}})
                 self.home_start()
@@ -88,7 +88,7 @@ class HomeMixin:
                 raise ValueError("этот компьютер сейчас не в домашней сети (Wi-Fi или кабель) — подключитесь и попробуйте снова")
             p = self.homehub.pair_new()
             return self.home_public(pair={"link": self.homehub.pair_link(p), "until": p["until"], "tid": p["tid"]})
-        if cmd == "home_forget":
+        if cmd == "homelan_forget":
             if self.homehub:
                 self.homehub.forget(str(a.get("tid") or ""))
             return self.home_public()

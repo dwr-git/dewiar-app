@@ -31,7 +31,7 @@ from version import VERSION
 from audio_io import AEC_SINK, AEC_SOURCE, AudioOutError, Capture, EchoCancel, FRAME, RATE, Player, ToneOut, list_devices, tone
 from listen import MEDIA_WORDS, STOP_WORDS, SileroVAD, WakeSpotter, ensure_vosk, kaldi_path, missing_words
 from llm import (CodeFilter, LLMError, SentenceSplitter, discover_local, list_models, speakable, stream_chat, stream_events,
-                 test_profile, tool_turn_messages, user_message, probe_tools)
+                 test_profile, tool_turn_messages, user_message, probe_tools, drop_profile)
 from personas import PIPER_VOICES, pronounce
 from settings import DATA_DIR, LLM_PRESETS, MODELS_DIR, OS_NAME, STATE_DIR
 from stt import GigaAMSTT, RemoteSTT, VoskSTT
@@ -138,6 +138,23 @@ def to_me(text):
     return bool(_TO_ME.search(head))
 
 
+# №514: «Смотри, я делал систему…», «Смотри, смотри, я говорю тебе…» — длинный рассказ в продолжении разговора, обращённый
+# ко мне, отбрасывался как «разговор рядом». Рецензия 0.82: «знаешь», «понимаешь», «тебе», «подожди» люди говорят и друг
+# другу («ты знаешь, вчера мы с Машей…, я тебе говорю…») — это откатывало жалобу 11.10 «вклинивается в беседу». Обращение —
+# только повелительное и только в самом начале фразы (первые три слова).
+_ADDR = re.compile(r"(?<![\w-])(?:смотри|слушай|послушай|представь|ответь|продолжай|расскажи)(?![\w-])", re.I)
+
+# Сам журнал №514: «Я даю тебе все карт-бланши… ты можешь заходить куда хочешь, на диске F» — разрешение и поручение мне
+# («даю/разрешаю/доверяю/поручаю/прошу тебе|тебя») в начале фразы — моё; «я тебе сейчас объясню» — нет.
+_GRANT = re.compile(r"(?<![\w-])(?:даю|разрешаю|доверяю|поручаю|прошу)\s+(?:тебе|тебя)(?![\w-])", re.I)
+
+
+def addressed(text):
+    """Обращение ко мне: просьба среди первых восьми слов (to_me) или «смотри», «слушай», «представь»… в первых трёх."""
+    head3 = " ".join(_WORD.findall(text or "")[:3]).lower().replace("ё", "е")
+    return bool(to_me(text) or _ADDR.search(head3) or _GRANT.search(head3))
+
+
 _PW_PIPE = re.compile(r"((?:echo|printf)\s+)(['\"]?)([^'\"|;&\s]+)\2(\s*\|\s*sudo)")
 _PW_WORD = re.compile(r"(парол\w*|password|passwd|pass)([^.\n]{0,60})", re.I)
 
@@ -234,7 +251,11 @@ class Turn:
 
 
 # продолжение разговора без имени — не дольше и не длиннее этого: дальше это разговор людей рядом, не со мной
-FOLLOW_MAX_S, FOLLOW_MAX_WORDS = 9.0, 26
+# длинная фраза без имени после ответа — разговор людей рядом. №514 (04.11): «не успеваешь сказать больше трёх
+# предложений» — 9,8 с и 22 слова отбрасывались; порог 12 с / 32 слова, а обращение ко мне (addressed) — моё при любой длине
+FOLLOW_MAX_S, FOLLOW_MAX_WORDS = 12.0, 32
+FOLLOW_WAIT = (8, 15, 30)  # «Сколько ждать, пока я молчу» (студия → «Слух»): после ответа и после имени
+LONG_SPEECH = ((10.0, 0.6), (4.0, 0.35))   # №514: говорят долго — между предложениями пауза длиннее: (сколько говорят, с; +пауза, с)
 PAUSE_EXTRA_MAX = 600       # подстройка паузы конца фразы — не больше +600 мс (№226: при +900 ассистент «всё медленнее»)
 SLEEP_STRONG = {"стоп", "stop", "хватит", "замолчи", "замолкни", "стой", "тихо", "тишина", "пауза", "достаточно", "помолчи",
                 "прекрати", "прекращай", "остановись", "останови", "перестань", "отмена", "отмени", "отбой", "всё", "все",

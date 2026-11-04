@@ -79,8 +79,9 @@ async def main():
         # заглушка не вызывает функций — фоновая проверка решит, что модель их не умеет; смотрим запрос до этого
         tools = next((x["tools"] for x in SEEN if len(x["tools"]) > 10), [])
         ok("calc" in tools and "web_search" in tools, f"у модели есть калькулятор: {[(x['last'][:30], len(x['tools'])) for x in SEEN]}")
-        ok(not {"open_url", "play_music", "set_volume", "open_app", "look_at_screen"} & set(tools),
-           f"на сервере нет экранных инструментов: {sorted(set(tools) & {'open_url', 'play_music', 'set_volume'})}")
+        # экзамен ПК 0.81.1: open_url и open_app на экзамене есть — запуск там записывается (EXAM_LAUNCH), звука и экрана — нет
+        ok(not {"play_music", "set_volume", "look_at_screen", "media_control"} & set(tools) and {"open_url", "open_app"} <= set(tools),
+           f"на сервере экзамена нет звука и экрана, а открыть сайт — понарошку можно: {sorted(set(tools) & {'open_url', 'play_music', 'set_volume'})}")
         n = len(SEEN)
         a, _ = await core.say("Сделай потише.")
         ok("нет звука" in a and "pulsectl" not in a and "?" in a, f"«потише» на сервере — честно и с уточнением: {a}")

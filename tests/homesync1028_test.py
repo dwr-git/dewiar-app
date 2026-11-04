@@ -237,12 +237,12 @@ try:
     import engine_home
     engine_home.STATE_DIR = tmp / "st2"
     e = E()
-    h0 = e.home_cmd("home_get", {})
+    h0 = e.home_cmd("homelan_get", {})
     ok(h0["on"] is False and not h0["running"], "по умолчанию узел выключен — компьютер сеть не слушает")
-    h1 = e.home_cmd("home_pair", {})
+    h1 = e.home_cmd("homelan_pair", {})
     ok(h1["on"] and h1["running"] and h1["pair"]["link"].startswith("dewiar://home?") and e.s.get("sync", "home", "on") is True,
        f"«Показать код» — узел включается сам, ссылка для QR: {h1['pair']['link'][:40]}")
-    h2 = e.home_cmd("home_set", {"on": False})
+    h2 = e.home_cmd("homelan_set", {"on": False})
     ok(not h2["on"] and not h2["running"], "выключили — сеть больше не слушает")
     e.stopping.set()
 
@@ -260,9 +260,9 @@ try:
           core.call = (c, a) => {
             if (c === 'devices_get') return Promise.resolve({ me: { name: 'Домашний', id: 'pc-1' }, devices: [{ id: 'pc-1', name: 'Домашний', app: 'pc', me: true, seen: now }].concat(_home.phones.length ? [{ id: 'phone-x', name: 'Pixel Миши', app: 'phone', seen: now - 20, home: true }] : []),
               sync: { available: false, on: true }, home: _home, can_pair: false });
-            if (c === 'home_pair') { Object.assign(_home, { on: true, running: true }); return Promise.resolve(Object.assign({}, _home, { pair: { link, until: now + 600, tid: 'ab12' } })); }
-            if (c === 'home_get') { _home.phones = [{ tid: 'ab12', name: 'Pixel Миши', seen: Date.now() / 1000, created: now }]; _home.ok = true; _home.at = now; return Promise.resolve(_home); }
-            if (c === 'home_set') { _home.on = a.on; _home.running = a.on; return Promise.resolve(_home); }
+            if (c === 'homelan_pair') { Object.assign(_home, { on: true, running: true }); return Promise.resolve(Object.assign({}, _home, { pair: { link, until: now + 600, tid: 'ab12' } })); }
+            if (c === 'homelan_get') { _home.phones = [{ tid: 'ab12', name: 'Pixel Миши', seen: Date.now() / 1000, created: now }]; _home.ok = true; _home.at = now; return Promise.resolve(_home); }
+            if (c === 'homelan_set') { _home.on = a.on; _home.running = a.on; return Promise.resolve(_home); }
             return Promise.resolve({}); };
           document.querySelector('nav button[data-p=devices]').click(); }""", link3)
         pg.wait_for_timeout(700)

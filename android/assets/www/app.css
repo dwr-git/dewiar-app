@@ -157,12 +157,22 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 #mic.holdx { background: linear-gradient(135deg, #5b5f72, #44475a); transform: scale(1.05); }
 @media (prefers-reduced-motion: reduce) { #mic.hold .ring { animation: none; } }
 @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.08); opacity: .6; } }
-#typebox { display: none; gap: 8px; margin-bottom: 10px; }
-#typebox.on { display: flex; }
-#typebox input { flex: 1; padding: 13px 16px; border-radius: 16px; border: 0; background: var(--field); outline: none; font-size: 16px; }
-#typebox .ib { background: var(--brand); color: #fff; }
-#typebox .ib.att { background: var(--field); color: var(--muted); flex: none; }
-#typebox .ib.att:active { background: var(--frost-hi); }
+/* Поле ввода (идея №126, 04.11: «больше; при наборе растёт вверх; кнопки — в линию»): многострочное, растёт вверх до 40%
+   экрана (дальше — прокрутка внутри), а скрепка, клавиатура, микрофон поменьше, разговор и «Отправить» — одной строкой под ним */
+#typebox { display: none; margin-bottom: 10px; }
+#typebox.on { display: block; }
+#typebox textarea { display: block; width: 100%; box-sizing: border-box; min-height: 50px; max-height: 40vh; max-height: 40dvh; resize: none;
+  overflow-y: auto; padding: 13px 16px; border-radius: 18px; border: 0; background: var(--field); color: var(--ink); outline: none;
+  font-family: inherit; font-size: 16px; line-height: 1.42; scrollbar-width: thin; transition: height .12s ease-out; }
+#typebox textarea::placeholder { color: var(--muted); }
+#row #send, #row .ib.att { display: none; flex: none; }
+#row #send { background: var(--brand); color: #fff; }
+#row .ib.att { background: var(--field); color: var(--muted); }
+#row .ib.att:active { background: var(--frost-hi); }
+body.typing #row #send, body.typing #row .ib.att { display: grid; }
+body.typing #mic { width: 58px; height: 58px; box-shadow: 0 10px 24px -12px rgba(118,75,162,.95), inset 0 1px 0 rgba(255,255,255,.25); }
+body.typing #mic svg { width: 25px; height: 25px; }
+body.typing #bar { padding-top: 6px; padding-bottom: calc(10px + var(--safe-b)); }
 /* вложения перед отправкой: фото миниатюрой, файл — названием; ✕ убирает */
 #atts { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 8px; scrollbar-width: none; }
 #atts:empty { display: none; }
@@ -472,10 +482,10 @@ details.pro > .tiles { margin-top: 10px; }
 #bot .acts button:active { background: var(--frost-hi); }
 #bot .acts svg { width: 16px; height: 16px; }
 /* открыто поле ввода — сцена заканчивается выше него, ответ не уходит под поле */
-body.typing #stage { bottom: calc(190px + var(--safe-b)); }
+body.typing #stage { bottom: calc(var(--barh, 140px) + 6px); }     /* --barh — высота нижней панели (app.js), поле растёт — сцена выше */
 @media (orientation: landscape) and (min-width: 600px) {
   #stage.long #orbwrap { width: min(36vw, 50vh, 400px); }       /* лёжа ответ и так справа — облик не уменьшаем */
-  body.typing #stage { bottom: calc(176px + var(--safe-b)); }
+  body.typing #stage { bottom: calc(var(--barh, 130px) + 4px); }
 }
 
 /* ---------- светлые темы (body.light — skins.js light): тёмный текст, светлое стекло, кнопки — глубокий чернильный ----------
@@ -542,7 +552,7 @@ body.neu .sheet { background: var(--glass); box-shadow: 0 -12px 30px var(--neu-d
 body.neu :is(.btn, .tabs button, #bot .acts button, #soul-body .chip, .pill button) { background: var(--glass); color: var(--ink); box-shadow: var(--raise-s); }
 body.neu :is(.btn:active, .tabs button:active, #bot .acts button:active) { box-shadow: var(--press); }
 body.neu :is(.btn.p, .tabs button.on, #soul-body .chip.on) { background: var(--brand); color: #fff; box-shadow: var(--raise-s); }
-body.neu :is(#typebox input, .f input, .f select, .f textarea, .wk-form textarea, .wk-msg textarea, .bs-msg select, #typebox .ib.att, .cl-shot, .kbi, .tf) { background: var(--glass); box-shadow: var(--press); }
+body.neu :is(#typebox textarea, .f input, .f select, .f textarea, .wk-form textarea, .wk-msg textarea, .bs-msg select, #row .ib.att, .cl-shot, .kbi, .tf) { background: var(--glass); box-shadow: var(--press); }
 body.neu .tg i { background: var(--glass); box-shadow: inset 2px 2px 5px var(--neu-dark), inset -2px -2px 5px var(--neu-light); }
 body.neu .tg input:checked + i { background: var(--brand); box-shadow: inset 2px 2px 5px rgba(0,0,0,.18); }
 body.neu #mic { box-shadow: var(--raise), inset 0 1px 0 rgba(255,255,255,.25); }
@@ -1775,6 +1785,12 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mlisten svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mlisten.on { background: rgba(106,108,240,.22); }
 .mlisten.on svg { fill: currentColor; stroke: none; }
+/* №127: «Скопировать», «В заметки», «Скачать» у ответа в «Разговоре» — тихие круглые значки справа в той же строке */
+.macts { display: inline-flex; gap: 4px; margin-left: auto; }
+.macts button { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 99px; display: grid; place-items: center;
+  background: transparent; color: var(--dim, #9aa); }
+.macts button:active { background: var(--frost); color: var(--ink); }
+.macts svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .nwv { margin: 16px 2px 6px; font-size: 14px; } .nwv small { color: var(--dim); font-weight: 500; margin-left: 6px; }
 
 /* «Видеоуроки» (0.69): плитка и лист — обложки 16:9, плеер сверху */

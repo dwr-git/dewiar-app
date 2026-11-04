@@ -32,7 +32,7 @@ ALLOW = {"tales": "Сказки и истории", "games": "Загадки и 
 DEFAULT_ALLOW = list(ALLOW)
 # умения модели в детском режиме: ничего на компьютере, никаких отправок и покупок
 KIDS_TOOLS = {"calc", "world_time", "weather", "set_reminder", "list_reminders", "cancel_reminder", "play_radio",
-              "media_control", "set_volume", "save_note", "find_notes"}
+              "media_control", "set_volume", "save_note", "update_note", "find_notes"}
 TOOLS_BY_ALLOW = {"draw": {"show_images"}}
 # просьбы вне правил — в отчёт родителю (и в Telegram); сами просьбы модель вежливо не выполняет
 OFF_RX = re.compile(

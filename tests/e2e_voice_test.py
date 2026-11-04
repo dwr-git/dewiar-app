@@ -11,6 +11,10 @@ ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.par
 PY = os.environ.get("DEWIAR_PY") or sys.executable
 TESTS = Path(__file__).resolve().parent
 WAV = sys.argv[1]
+if os.environ.get("SCENARIO") in ("smart_barge", "half_stop"):   # «хватит» поверх рассказа слышит модель имён Vosk
+    sys.path.insert(0, str(TESTS))
+    from vosk_have import skip_without_vosk
+    skip_without_vosk(ROOT)
 PORT, LLM_PORT = 8799, 8124
 tmp = Path(tempfile.mkdtemp())
 (tmp / "cfg").mkdir()

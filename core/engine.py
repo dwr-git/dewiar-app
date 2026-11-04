@@ -350,6 +350,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             self._start_background()
         self.health_begin()                                    # «Здоровье»: время запуска, нагрузка, пульс (core/health.py)
         self._auto_provision()
+        self._stt_choice_back()                                # №513: сервер распознавал временно — сначала снова своя модель
         self._device_check()
         if not self.wav_input and not getattr(self, "server", False):
             threading.Thread(target=self._memory_watch, name="memory", daemon=True).start()

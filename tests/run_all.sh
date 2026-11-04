@@ -16,7 +16,10 @@ run() { local name=$1; shift; local out; local ws; ws=$(mktemp -d)   # у каж
   # в конце) иначе выглядела бы пройденной
   out=$(DEWIAR_WORKSPACE_DIR=$ws timeout 600 "$@" 2>&1 | tr -d "\r"; echo "RC=${PIPESTATUS[0]}"); local rc=${out##*RC=}; out=${out%RC=*}
   local ok=$(grep -c "✅" <<<"$out"); local bad=$(grep "❌" <<<"$out")
-  if [ -z "$bad" ] && [ "$rc" = 0 ] && { [ "$ok" -gt 0 ] || grep -qE "ALL OK|^OK$" <<<"$out"; }; then printf "✅ %-34s %s\n" "$name" "$ok"
+  # нечем проверить в этой среде (нет модели Vosk и сети к её сайту — tests/vosk_have.py): не зелёная и не красная, с причиной
+  local skip=$(grep -m1 "^⏭ ПРОПУСК" <<<"$out")
+  if [ -z "$bad" ] && [ "$rc" = 0 ] && [ -n "$skip" ]; then printf "⏭ %-34s %s\n" "$name" "${skip#⏭ ПРОПУСК: }"
+  elif [ -z "$bad" ] && [ "$rc" = 0 ] && { [ "$ok" -gt 0 ] || grep -qE "ALL OK|^OK$" <<<"$out"; }; then printf "✅ %-34s %s\n" "$name" "$ok"
   else printf "❌ %-34s (код %s)\n%s\n" "$name" "$rc" "$bad$(tail -5 <<<"$out")"; fi; }
 run "текст, имена"                  $PY "$T/unit_test.py"
 run "облики не грузят компьютер"      $PY "$T/ui_light_test.py"

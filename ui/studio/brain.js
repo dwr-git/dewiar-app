@@ -142,6 +142,9 @@ $("#discover").onclick = async () => {
   } catch (e) { r.className = "res bad"; r.textContent = e.message; }
 };
 
+/* №513: речь временно распознаёт сервер Dewiar, пока своя модель не загрузилась -> выбор человека ("gigaam" | "vosk") или "" */
+const sttTemp = () => (S && S.stt && S.stt.auto_from && S.stt.engine === "remote" && S.stt.remote && S.stt.remote.cloud) ? S.stt.auto_from : "";
+
 /* ---------- простые поля ---------- */
 /* Текстовые поля сохраняются через 600 мс после последней буквы, остальные — почти сразу; ползунок — без «Сохранено» */
 function bindFields() {
@@ -167,6 +170,8 @@ function bindFields() {
   // «Язык Лиры» (28.10, владелец: «думал, будет выбор языка в настройках, русский по умолчанию, английский — в списке»):
   // список вместо переключателя «Понимать английскую речь»; English целиком (с меню) — когда переведём программу
   if ($("#lang-sel")) $("#lang-sel").onchange = () => save({ stt: { english: $("#lang-sel").value === "ru_en" } });
+  // №514: «не успеваешь сказать больше трёх предложений… можно 30 с пауза и тишина — тогда выкл, или 15»
+  if ($("#follow-sel")) $("#follow-sel").onchange = () => save({ audio: { follow_up_seconds: +$("#follow-sel").value } });
   // extra — тоже заменяется целиком (settings._merge), так что лишние ключи из поля убираются
   $("#ttsextra").onchange = () => { try { save({ tts: { remote: { extra: JSON.parse($("#ttsextra").value || "{}") } } }); } catch (e) { toast("Это не JSON"); } };
 }
@@ -180,6 +185,13 @@ function refreshStatic() {
     const v = get(inp.dataset.k); if (inp.type === "checkbox") inp.checked = !!v; else if (v !== undefined && v !== null) inp.value = v;
   });
   const ls = $("#lang-sel"); if (ls && document.activeElement !== ls) ls.value = get("stt.english") ? "ru_en" : "ru";
+  const fs = $("#follow-sel");                            // «Сколько ждать, пока я молчу»: своё число (из «Звука») — отдельной строкой
+  if (fs && document.activeElement !== fs) {
+    const v = String(+get("audio.follow_up_seconds") || 0);
+    $$("option[data-own]", fs).forEach(o => o.remove());
+    if (![...fs.options].some(o => o.value === v)) { const o = new Option(`${v} с — выбрано в «Звуке и поведении»`, v); o.dataset.own = "1"; fs.add(o); }
+    fs.value = v;
+  }
   $("#speedv").textContent = `×${S.tts.speed}`;
   const pl = $("#pause-learn"), px = +get("audio.end_silence_extra") || 0;          // подстройка паузы: сколько уже добавлено
   if (pl) {
@@ -194,7 +206,8 @@ function refreshStatic() {
   }
   // «Сервер Dewiar» — отдельный вариант: адрес и ключ подставлены из аккаунта, поля «своего сервера» человеку не показываем
   // (отзыв 17.10: «зачем пользователю эти данные? Он должен их вносить руками?»)
-  const dws = typeof dwSttOn === "function" && dwSttOn(), eng = dws ? "dewiar" : S.stt.engine;
+  // №513: сервер Dewiar распознаёт временно (своя модель не загрузилась) — отмечен выбор человека, а не сервер
+  const tmp = sttTemp(), dws = !tmp && typeof dwSttOn === "function" && dwSttOn(), eng = tmp || (dws ? "dewiar" : S.stt.engine);
   $$("[data-eng]").forEach(o => { const on = eng === o.dataset.eng; o.classList.toggle("on", on); $("input", o).checked = on; });
   $$('#p-ears .sub').forEach(s => s.style.display = eng === s.dataset.for ? "" : "none");
   if (typeof renderSrvSttOpt === "function") renderSrvSttOpt();
@@ -287,7 +300,8 @@ function renderStatus(st) {
   $("#status").innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd></dd>`).join("");
   $$("#status dd").forEach((d, i) => d.textContent = rows[i][1]);
   $("#aecst").textContent = st.headphones ? "Не нужно: включён режим наушников." : st.aec ? "Работает: ассистент не слышит сам себя, и его можно перебить голосом." : "Сейчас не работает — пока ассистент говорит, микрофон приглушается. В наушниках включите режим ниже.";
-  $("#sttstat").textContent = st.stt ? `Сейчас: ${st.stt}${st.stt_ready === false ? " — загружается, пока работает Vosk" : ""}` : "";
+  $("#sttstat").textContent = sttTemp() ? "Сейчас: временно — сервер Dewiar, пока своя модель не готова. Загрузится — вернусь к ней сам."
+    : st.stt ? `Сейчас: ${st.stt}${st.stt_ready === false ? " — загружается, пока работает Vosk" : ""}` : "";
   if (mdlData && Object.keys(st.downloads || {}).some(k => k.startsWith("m:"))) mdlRender();   // ход скачивания — сразу в строке
 }
 

@@ -49,7 +49,7 @@ function shFeat(p) {
 function shNav() {
   const nh = shNavHide();
   $$("nav button[data-p]").forEach(b => b.classList.toggle("nh", nh.has(b.dataset.p) && !SH_LOCK.has(b.dataset.p)));
-  ["#nav-plg-h", "#nav-plugins", "#nav-plg-new"].forEach(s => { const e = $(s); if (e) e.classList.toggle("nh", nh.has("plugins")); });
+  ["#nav-plg-h", "#nav-plugins", "#nav-plg-new", "#nav-plg-all"].forEach(s => { const e = $(s); if (e) e.classList.toggle("nh", nh.has("plugins")); });
 }
 window.shNav = shNav;
 

@@ -695,6 +695,17 @@ def words_to_digits(text):
     return re.sub(r"[ ]{2,}", " ", "".join(out))
 
 
+def _said(low, x):
+    """Фраза x есть в ответе — и не как «больше … ничего не запланировано» после названного дела (экзамен ПК 0.81.1: «Завтра
+    одно дело: в 10:00 позвонить маме. Больше на завтра ничего не запланировано.» — верно, а проверка «нет: ничего не
+    запланировано» его роняла)."""
+    for m in re.finditer(re.escape(x), low):
+        head = re.split(r"[.!?\n]", low[:m.start()])[-1]
+        if not re.search(r"(?<![а-яё])(?:больше|кроме\s+(?:этого|того|него|неё|нее)|остальн\w*|других|ещё|еще)(?![а-яё])", head):
+            return True
+    return False
+
+
 def check_answer(expect, answer):
     out = []
     answer = f"{answer}\n{words_to_digits(answer)}"
@@ -706,7 +717,7 @@ def check_answer(expect, answer):
         elif k == "sleep":                                 # проверяется по событиям хода (run_one)
             continue
         elif k == "none":                                  # «заметок нет», когда они есть, — такого быть не должно
-            out.append({"name": f"в ответе нет: {' / '.join(v)}", "ok": not any(x.lower() in low for x in v)})
+            out.append({"name": f"в ответе нет: {' / '.join(v)}", "ok": not any(_said(low, x.lower()) for x in v)})
         elif k == "regex":
             out.append({"name": "в ответе есть нужное число", "ok": bool(re.search(v, answer, re.I))})
         elif k == "num":
@@ -774,7 +785,20 @@ async def check_state(core, state, t_start):
         amt = float(state["money"]["amount"])
         hit = [r for r in rows if abs(abs(float(r.get("amount") or 0)) - amt) < 0.01]
         out.append({"name": f"расход {amt:g} записан", "ok": bool(hit), "detail": json.dumps(rows[-3:], ensure_ascii=False)[:300]})
-    if "note" in state:                                   # заметка правда в папке Dewiar (а не «сохранила» на словах)
+    if "note" in state and state["note"].get("path"):    # №516: дописано именно в эту заметку, прежний текст на месте
+        nt, path = state["note"], state["note"]["path"]
+        try:
+            r = (await core.call("ws_read", path=path)) or {}
+        except Exception as e:  # noqa: BLE001
+            r = {"error": str(e)}
+        text = str(r.get("text") or "").lower()
+        fresh = (r.get("mtime") or 0) >= t_start - 5
+        keep = [w.lower() for w in nt.get("keep", [])]
+        want = [w.lower() for w in nt.get("all", [])]
+        good = fresh and all(w in text for w in keep + want)
+        out.append({"name": f"дописано в ту же заметку «{path}», прежний текст на месте", "ok": good,
+                    "detail": ("изменена" if fresh else "не менялась") + f", {len(text)} знаков" + (f"; {r['error']}" if r.get("error") else "")})
+    elif "note" in state:                                 # заметка правда в папке Dewiar (а не «сохранила» на словах)
         want = [w.lower() for w in state["note"].get("all", [])]
         tree = await core.call("ws_tree") or {}
         files = []
@@ -864,7 +888,24 @@ def core_warnings(core, n=25):
         lines = (core.tmp / "core.log").read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return ""
-    bad = [ln for ln in lines if re.search(r"WARNING|ERROR|Traceback|Пустой ответ|Отказ сервера", ln)]
+    # экзамен ПК 0.81.1: в отчёт попадали одни «Traceback (most recent call last):» — без самой ошибки. Трассировку берём
+    # целиком сжато: место (последний «File …») и строку исключения
+    bad, i = [], 0
+    while i < len(lines):
+        ln = lines[i]
+        if ln.startswith("Traceback"):
+            j, where = i + 1, ""
+            while j < len(lines) and (lines[j].startswith((" ", "\t")) or not lines[j].strip()):
+                if lines[j].strip().startswith("File "):
+                    where = lines[j].strip()
+                j += 1
+            exc = lines[j] if j < len(lines) else ""
+            bad.append(f"Traceback: {exc.strip()[:240]}" + (f" ({where[:160]})" if where else ""))
+            i = j + 1
+            continue
+        if re.search(r"WARNING|ERROR|Пустой ответ|Отказ сервера", ln):
+            bad.append(ln)
+        i += 1
     return "\n".join(x[:400] for x in bad[-n:])
 
 
@@ -966,6 +1007,16 @@ async def reset_state(core):
     root = core.tmp / "ws" / "Заметки"
     if root.is_dir():
         shutil.rmtree(root, ignore_errors=True)
+    # и журнал сработавших напоминаний: календарь и «что по плану?» показывают прозвеневшее — прошлое испытание подсовывало
+    # своё («подготовить презентацию, сработало в 8:05» — судья счёл выдумкой, экзамен ПК 0.81.1)
+    try:
+        (core.tmp / "st" / "reminders-log.json").unlink()
+    except OSError:
+        pass
+    try:                                           # «Собери совет» прошлого испытания не должен договаривать итог в этом
+        await core.call("council_stop")
+    except Exception:  # noqa: BLE001
+        pass
     for cmd, lst, kill, key in (("reminders", None, "reminder_cancel", "id"), ("money_list", None, "money_delete", "id"),
                                 ("tasks_list", None, "task_delete", "id")):
         try:

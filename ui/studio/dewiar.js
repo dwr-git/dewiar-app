@@ -659,7 +659,7 @@ core.on("hello", d => {
 .on("voices", () => { if (secSeen("voice") || secSeen("personas")) loadVosk(); })
 .on("persona", e => { active = e.persona; renderPersonas(); })
 .on("personas", e => { personas = e.personas; renderPersonas(); fillNamePick(); })
-.on("settings", e => { S = e.settings; refreshStatic(); renderCurrent(); profilesSync(); studioLite(); })   // GitHub #18 (24.10)
+.on("settings", e => { S = e.settings; refreshStatic(); renderCurrent(); profilesSync(); studioLite(); renderStatus(); })   // GitHub #18 (24.10); №513 — строка «Сейчас» в «Слухе»
 .on("mcp", e => { if ($("#p-skills").classList.contains("cur")) renderMcp(e.status); })
 .on("status", e => renderStatus(e.status));
 bindFields();

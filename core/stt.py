@@ -53,12 +53,19 @@ def _heavy():
         return contextlib.nullcontext()
 
 
+def oom_error(e):
+    """Ошибка — нехватка памяти (Python MemoryError или onnxruntime «Failed to allocate» / bad_alloc) -> bool."""
+    return isinstance(e, MemoryError) or bool(re.search(r"bad_alloc|failed to allocate|out of memory|cannot allocate memory|"
+                                                        r"memoryerror|не хватает памяти", str(e), re.I))
+
+
 class GigaAMSTT:
     def __init__(self, model_name="gigaam-v3-e2e-rnnt"):
         self.model_name = model_name
         self.name = f"GigaAM ({model_name})"
         self.model = None
         self.error = ""
+        self.oom = False                # не загрузился из-за нехватки памяти — повторять в фоне бессмысленно
         self.loading = False
         self.mirror = None              # {"url", "sha256"} — архив модели на своём сайте (dewiar.pro/dwrapp)
         self._lock = threading.Lock()
@@ -184,8 +191,9 @@ class GigaAMSTT:
                 self.error = ""
                 return True
             except Exception as e:  # noqa: BLE001
-                self.error = str(e)
-                log.warning("GigaAM не загрузился: %s", e)
+                self.error = str(e) or type(e).__name__          # MemoryError() — без текста, а это тоже «не загрузился»
+                self.oom = oom_error(e)
+                log.warning("GigaAM не загрузился: %s", self.error)
                 return False
             finally:
                 self.loading = False

@@ -29,8 +29,9 @@ ASK = "найди у меня в заметках рецепты блюд и п�
 ok(Q.PAGE_ASK.search(ASK) and Q.PAGE_ASK.search("сделай страницу с подборкой фильмов") and not Q.PAGE_ASK.search("какая погода завтра")
    and not Q.PAGE_ASK.search("нарисуй схему процесса"), "просьбу «покажи в браузере красиво» узнаём, обычные — нет")
 spec = T.TOOLS["show_page"]
-ok("НЕ пиши HTML в ответе" in spec[0] and spec[2] == "safe" and "show_page" in T.SAFE_CORE and "show_page" in T.SERVER_OFF,
-   "инструмент show_page: безопасный, в основном наборе; в облаке (без браузера) — нет")
+# экзамен ПК 0.81.1: на сервере без окна show_page не выключен, а честно сохраняет файл (tests/pc_exam0811_1104_test.py)
+ok("НЕ пиши HTML в ответе" in spec[0] and spec[2] == "safe" and "show_page" in T.SAFE_CORE and "show_page" not in T.SERVER_OFF,
+   "инструмент show_page: безопасный, в основном наборе; на сервере без браузера — сохраняет файл")
 ok("show_page" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8").split("СЕЙЧАС ПРОСЯТ СТРАНИЦУ")[1][:200],
    "просят страницу — модели подсказка: show_page, а не HTML в ответе")
 

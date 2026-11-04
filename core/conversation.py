@@ -72,9 +72,9 @@ class Conversation:
         return h
 
     def save(self, history):
-        """conversation.json: содержание, счётчики и до 80 последних текстовых сообщений (role, content, who)."""
+        """conversation.json: содержание, счётчики и до 80 последних текстовых сообщений (role, content, who, model)."""
         d = {"summary": self.summary, "turns": self.turns, "folded": self.folded, "started": self.started, "last": self.last,
-             "history": [{k: v for k, v in m.items() if k in ("role", "content", "who")} for m in history
+             "history": [{k: v for k, v in m.items() if k in ("role", "content", "who", "model")} for m in history
                          if isinstance(m.get("content"), str)][-80:]}
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)

@@ -96,6 +96,7 @@
   <div class="ng" id="nav-plg-h" hidden>Плагины</div>
   <div class="nav-groups nav-plugins" id="nav-plugins" hidden></div>
   <button class="nav-g nav-plg nav-plg-new" id="nav-plg-new" type="button" title="Опишите словами — Лира сделает плагин и встроит его сюда"><i class="nav-gi emo nav-pi" aria-hidden="true">✦</i><span>Создать плагин</span></button>
+  <button class="nav-g nav-plg nav-plg-all" id="nav-plg-all" type="button" title="Готовые плагины Dewiar: Художник, Переводчик, Путешествия, Рекрутер, Тендеры и другие — поставить одним нажатием"><i class="nav-gi emo nav-pi" aria-hidden="true">🧩</i><span>Все плагины</span></button>
   <button data-p="plg" class="sub" hidden>Плагин</button>
   <button data-p="plgnew" class="sub" hidden>Создать плагин</button>
   <div class="ng">Обучение</div>
@@ -2048,6 +2049,14 @@
     <h2 style="margin-top:0">Что я слышу</h2>
     <p class="hint" style="margin-bottom:8px">Каждая фраза вокруг — и нашёл ли я в ней имя. Если зовёте, а я молчу, — загляните сюда.</p>
     <div id="hear" style="font-size:13.5px;background:rgba(255,255,255,.05);border-radius:14px;padding:6px 12px;min-height:44px;max-height:230px;overflow:auto;margin-bottom:22px"><p class="hint" id="hear-empty" style="padding:8px 0">Пока тихо. Скажите что-нибудь.</p></div>
+    <h2>Разговор голосом</h2>
+    <div class="row" id="follow-box">
+      <label class="f">Сколько ждать, пока я молчу<select id="follow-sel">
+        <option value="8">8 секунд — засыпать быстрее</option>
+        <option value="15">15 секунд — рекомендуем</option>
+        <option value="30">30 секунд — для долгих рассказов</option></select>
+        <span class="hint">После ответа и после имени можно говорить без имени. Пока вы говорите — слушаю, сколько бы ни длилась речь; короткие паузы между предложениями фразу не обрывают.</span></label>
+    </div>
     <h2>Распознавание фраз</h2>
     <label class="opt" data-eng="dewiar" id="srv-stt-opt" style="display:none"><input type="radio" name="stt"><div><b>Сервер Dewiar</b><span>Быстро и точно даже на слабом компьютере, немного расходует заряд. Настраивать ничего не нужно — работает по вашему аккаунту dewiar.pro или ключу Dewiar. Пропала связь — ассистент сам перейдёт на распознавание этого компьютера.</span></div></label>
     <label class="opt" data-eng="gigaam"><input type="radio" name="stt"><div><b>GigaAM v3 на этом компьютере</b><span>Лучшее качество для русского, работает на процессоре, без интернета. Скачивается один раз, около 250 МБ.</span></div></label>
@@ -2287,7 +2296,7 @@
       <label class="f">Говорить без имени после ответа, сек<input type="number" min="0" max="30" data-k="audio.follow_up_seconds"></label>
       <label class="f">Пауза, после которой фраза закончена, мс<input type="number" min="300" max="2000" step="50" data-k="audio.end_silence_ms"></label>
       <div class="switch slim"><div>Подстраиваться под мою манеру речи<span id="pause-learn">Если вы продолжаете говорить сразу после того, как ассистент решил, что фраза закончена, — он начнёт ждать дольше; со временем вернётся к обычной паузе.</span></div><label class="tg"><input type="checkbox" data-k="audio.end_silence_auto"><i></i></label></div>
-      <div class="switch slim"><div>Отвечать и на длинный рассказ без имени<span>Обычно длинную фразу без имени после ответа (дольше 9 секунд) ассистент принимает за разговор людей рядом и молчит. Включите, если вы сами часто рассказываете долго; разговоры рядом тогда тоже могут попадать к нему.</span></div><label class="tg"><input type="checkbox" data-k="audio.follow_long"><i></i></label></div>
+      <div class="switch slim"><div>Отвечать и на длинный рассказ без имени<span>Обычно длинную фразу без имени после ответа (дольше 12 секунд) без обращения — «смотри», «слушай», «расскажи» — ассистент принимает за разговор людей рядом и молчит. Включите, если вы сами часто рассказываете долго; разговоры рядом тогда тоже могут попадать к нему.</span></div><label class="tg"><input type="checkbox" data-k="audio.follow_long"><i></i></label></div>
       <label class="f">Как вас зовут<input type="text" placeholder="необязательно" data-k="user_name"></label>
       <label class="f">Во время созвона<select data-k="audio.meeting">
         <option value="pause">Не слушать имя — только по кнопке (рекомендуем)</option>

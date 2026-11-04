@@ -76,8 +76,11 @@ ok(H2 == [{"role": "user", "content": "Помоги с поздравление�
 seen = R["seen"]
 # с 0.39.1 первый повтор — без chat_template_kwargs (облако Ollama за шлюзом отклоняет это поле), функции ещё полем
 k = next((i for i, x in enumerate(seen) if not x.get("tools")), None)
-ok(seen[0].get("tools") and k is not None and all(x.get("tools") and "chat_template_kwargs" not in x for x in seen[1:k]),
-   f"сервер отклонил функции полем — сперва повтор без chat_template_kwargs, потом без поля tools (запрос {k})")
+# 04.11 («Голос без пауз»): если просили подсчёт токенов (stream_options), самый первый повтор — без него
+so = 1 if "stream_options" in seen[0] else 0
+ok(seen[0].get("tools") and k is not None and (not so or ("stream_options" not in seen[1] and "chat_template_kwargs" in seen[1]))
+   and all(x.get("tools") and "chat_template_kwargs" not in x and "stream_options" not in x for x in seen[1 + so:k]),
+   f"сервер отклонил функции полем — сперва повтор без подсчёта токенов, потом без chat_template_kwargs, потом без поля tools (запрос {k})")
 ok(k is not None and "# Инструменты" in seen[k]["messages"][0]["content"] and "get_time" in seen[k]["messages"][0]["content"], "функции описаны в системном сообщении")
 ok([c["name"] for c in R["r1"]["calls"]] == ["get_time"] and not R["r1"]["text"].strip(), f"вызов <tool_call> распознан, на экран не попал: {R['r1']}")
 ok(R["mode"] == "https://dewiar.pro/dwrapp/cloud.php?p=", "режим «функции текстом» запомнен для этого сервера")

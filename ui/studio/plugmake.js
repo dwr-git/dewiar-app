@@ -47,8 +47,12 @@ function pmkRender() {
         <div class="pmk-err" id="pmk-err" hidden role="alert"></div>
       </div>
     </header>
+    <div class="pmk-cat" id="pmk-cat">
+      <div><b>Готовые плагины Dewiar</b><small id="pmk-cat-names">Художник, Переводчик, Путешествия, Рекрутер, Тендеры и другие — уже собраны и проверены, ставятся одним нажатием.</small></div>
+      <button class="btn" id="pmk-cat-go" type="button">🧩 Все плагины</button>
+    </div>
     <div class="pmk-sec">
-      <h2>Готовые — одним нажатием <small>без ожидания; потом их тоже можно менять словами</small></h2>
+      <h2>Заготовки для своего плагина <small>Лира поставит сразу, без ожидания; потом их можно менять словами</small></h2>
       <div class="pmk-tpls" id="pmk-tpls"><p class="plp-loading"><i class="plp-spin"></i> Загружаю…</p></div>
     </div>
     <div class="pmk-sec" id="pmk-mine-sec">
@@ -141,6 +145,11 @@ window.pmkOpen = () => { const b = $('nav button[data-p="plgnew"]'); if (b) b.cl
 /* меню: «✦ Создать плагин» в группе «Плагины» и кнопка в каталоге */
 (() => {
   const n = $("#nav-plg-new"); if (n) n.onclick = window.pmkOpen;
+  // 04.11 (владелец: «у нас же есть готовые плагины — переводчик, путешествия, художник, — где они?»): каталог готовых —
+  // «Все плагины» в группе «Плагины» и полосой на странице «Создать плагин»
+  const allGo = () => { const b = $('nav button[data-p="skills"]'); if (b) b.click(); };
+  const na = $("#nav-plg-all"); if (na) na.onclick = allGo;
+  document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#pmk-cat-go")) allGo(); });
   const c = $("#plg-new"); if (c) c.onclick = window.pmkOpen;
   document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("nav button[data-p]");
     if (b) setTimeout(() => { const nn = $("#nav-plg-new"); if (nn) nn.classList.toggle("cur", !!$("#p-plgnew.cur")); }, 0); }, true);

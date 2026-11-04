@@ -63,7 +63,7 @@ notes = []
 SYS_FULL = "Ты Лира. " + "Правила действий и навыки. " * 900          # ≈ 24 тыс. знаков ≈ 8 тыс. токенов
 SYS_NO = "Ты Лира. Память о пользователе. " * 120                     # ≈ 4 тыс. знаков
 SYS_LEAN = "Ты Лира. Короткие правила. " * 150                      # ≈ 3,5 тыс. знаков
-e = types.SimpleNamespace(_system=lambda with_tools=False, lean=None: (SYS_LEAN if lean else SYS_FULL) if with_tools else SYS_NO,
+e = types.SimpleNamespace(_system=lambda with_tools=False, lean=None, personal=True: (SYS_LEAN if lean else SYS_FULL) if with_tools else SYS_NO,
                           _system_min=lambda: "Ты Лира.", note=notes.append)
 CORE = ["weather", "set_reminder", "calc", "web_search"]
 specs = [{"name": CORE[i] if i < len(CORE) else f"tool{i}", "description": "Делает что-то полезное " * 8,
@@ -100,6 +100,27 @@ llm._ctx_cache.clear(); KIND.update(n=900)
 s4, sp4, m4 = fit(P, SYS_FULL, specs, hist)
 ok(s4 == "Ты Лира." and sp4 == [] and len(notes) == 1, "совсем крошечное — самая короткая подсказка; заметка второй раз не повторяется")
 
+# рецензия 04.11 («Голос без пауз»): личное — справкой в сообщениях (llm.put_profile). Окно 4096, память, душа и содержание
+# разговора длинные: на самой короткой ступени справка тоже уходит (имя — в _system_min), иначе снова «не хватило окна»
+BIG = ("Собеседника зовут Михаил.\n\nЧто ты знаешь о пользователе:\n" + "- Любит долгие прогулки по парку и пишет рассказы.\n" * 50
+       + "\nТВОЯ ДУША\n" + "Я такая, добрая. " * 80 + "\nРаньше в разговоре было: " + "говорили о даче и детях. " * 120)
+hp = llm.put_profile(hist, BIG)
+llm._ctx_cache.clear(); KIND.update(k="lmstudio", n=4096)
+s6, sp6, m6 = EA.AnswerMixin._fit_window(e, P, SYS_FULL, specs, hp, personal=False)
+need6 = llm.est_tokens(s6) + llm.est_tokens("\n".join(str(m["content"]) for m in m6)) + 1024
+ok(s6 == "Ты Лира." and not llm.take_profile(m6) and need6 <= 4096 and m6[-1]["content"].endswith("Какая погода?"),
+   f"окно 4096, длинная личная справка — самая короткая ступень без неё: {need6} токенов из 4096")
+llm._ctx_cache.clear(); KIND.update(n=15000)
+s7, sp7, m7 = EA.AnswerMixin._fit_window(e, P, SYS_FULL, specs, hp, personal=False)
+ok(len(m7) == 1 and llm.take_profile(m7) == BIG.strip() and m7[0]["content"].count("(Дальше — разговор)") == 1,
+   "без старой истории — справка переезжает к вопросу, одна, метка не удваивается")
+sa = llm.put_profile([{"role": "assistant", "content": "Привет!"}, {"role": "user", "content": "вопрос"}], "Имя: Миша.")
+sc = llm._ctx_cut(sa)
+ok(llm.take_profile(sa) == "Имя: Миша." and sc[0]["content"].count("(Дальше — разговор)") == 1 and llm.take_profile(sc) == "Имя: Миша."
+   and llm.drop_profile(sa)[0]["role"] == "assistant", "справка отдельным сообщением: читается без метки, после _ctx_cut метка одна, снимается целиком")
+src6 = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ok("system, msgs = self._system_min(), drop_profile(msgs[-1:])" in src6, "запасной путь «и без действий не влезло» — тоже без личной справки")
+
 for prof, why in (({"base_url": "https://dewiar.pro/dwrapp/cloud.php?p=", "cloud": True}, "облако Dewiar"),
                   ({"base_url": "https://api.openai.com/v1", "model": "gpt-4.1"}, "чужой облачный сервис")):
     s5, sp5, m5 = fit(prof, SYS_FULL, specs, hist)
@@ -120,7 +141,7 @@ llm.stream_chat, llm.probe_tools = orig
 br = (ROOT / "ui/studio/brain.js").read_text(encoding="utf-8")
 ok("r.ctx_note" in br, "студия «Мозг» показывает совет про окно")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
-ok("system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text))" in src and "self._system_min(), msgs[-1:]" in src,
+ok("system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)" in src and "self._system_min(), drop_profile(msgs[-1:])" in src,
    "в ходе разговора: подгонка до запроса; и без действий не влезло — самая короткая подсказка")
 srv.shutdown()
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

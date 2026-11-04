@@ -704,7 +704,8 @@ class TaskManager:
                     continue
         return out[:200]
 
-    PROMISE_RX = re.compile(r"([\wА-Яа-яЁё][\wА-Яа-яЁё .()\-]{0,80}\.(?:html?|xlsx|xls|csv|pdf|docx|pptx|png|jpe?g|webp|gif|svg|mp3|wav|ogg|mp4|webm|zip|md|py|js))\b", re.I)
+    # №516 (04.11): апостроф в имени («…You Don't.md») обрывал имя — проверка искала «t.md» и трижды отклоняла верный итог
+    PROMISE_RX = re.compile(r"([\wА-Яа-яЁё][\wА-Яа-яЁё .()\-'’]{0,80}\.(?:html?|xlsx|xls|csv|pdf|docx|pptx|png|jpe?g|webp|gif|svg|mp3|wav|ogg|mp4|webm|zip|md|py|js))\b", re.I)
 
     def _promised_missing(self, t, summary):
         """Файлы, названные в итоге, которых нет ни в папке задачи, ни в «Лаборатории», ни в папке ассистента.
@@ -716,7 +717,10 @@ class TaskManager:
                 continue                                   # часть ссылки на сайт — не наш файл
             n = Path(m.group(1).strip().split("/")[-1].split("\\")[-1]).name.strip(" .«»\"'")
             words = n.split()
-            cands = [" ".join(words[-k:]) for k in range(1, min(len(words), 5) + 1)]   # «в файле продажи.csv» → «продажи.csv», …
+            cands = [" ".join(words[-k:]) for k in range(1, min(len(words), 12) + 1)]   # «в файле продажи.csv» → «продажи.csv», …
+            # рецензия 0.82: «сохранён в файл 'report.md'» — кавычки по краям не часть имени (апостроф внутри — часть: «Don't.md»)
+            cands = list(dict.fromkeys(c.strip(" '’\"«»“”„`") for c in cands))
+            cands = [c for c in cands if c]
             if cands and cands not in names:
                 names.append(cands)
         if not names:
@@ -738,7 +742,8 @@ class TaskManager:
             if any(c.lower() in have for c in cands):
                 continue
             try:
-                if any(any(True for _ in self.host.workspace.root.rglob(c)) for c in cands):
+                import glob as _glob
+                if any(any(True for _ in self.host.workspace.root.rglob(_glob.escape(c))) for c in cands):
                     continue
             except (OSError, ValueError):
                 pass
@@ -1162,6 +1167,15 @@ class TaskManager:
         if name == "read_file":
             p = self._path(t, args.get("path"))
             if not p.is_file():
+                # №516: путь из find_notes («Заметки/….md») — это папка ассистента, а не папка задачи: читаем оттуда
+                try:
+                    from tools import t_read_file
+                    w = self.host.workspace.safe(str(args.get("path") or ""))
+                    if w.is_file():
+                        return t_read_file({"path": w.relative_to(self.host.workspace.root.resolve()).as_posix()},
+                                           {"workspace": self.host.workspace})
+                except Exception:  # noqa: BLE001
+                    pass
                 return "Такого файла нет — посмотри list_files."
             lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
             a, b = max(1, int(args.get("start") or 1)), int(args.get("end") or 0)

@@ -126,7 +126,8 @@ with sync_playwright() as p:
         pg.wait_for_timeout(100)
         if pg.evaluate("window._done && state === 'idle'"):
             break
-    sysm = str(seen[0][0].get("content")) if seen else ""
+    # 04.11 «Голос без пауз»: подсказка к просьбе — в справке к вопросу (последнее сообщение), подсказка остаётся прежней
+    sysm = (str(seen[0][0].get("content")) + "\n" + str(seen[0][-1].get("content"))) if seen else ""
     ok("СЕЙЧАС ПРОСЯТ СХЕМУ" in sysm and "не делай схему через make_app" in sysm, "телефон: просят схему — модель заранее знает, что рисует только ```mermaid")
     ok(len(seen) == 1, f"нарисовала сразу — без второго запроса: {len(seen)}")
     b.close()

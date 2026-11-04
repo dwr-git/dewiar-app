@@ -191,7 +191,7 @@ $("#dv-e2e").onchange = async (ev) => {
 
 /* «Телефон по Wi-Fi — без dewiar.pro» (0.59, core/homehub.py): переключатель — компьютер слушает домашнюю сеть; «Показать
    код» — QR со ссылкой dewiar://home (адреса, номер ключа, ключ) на 10 минут; подключился — телефон в списке («Отключить»
-   — ключ удалён). Ядро: home_get, home_set {on}, home_pair, home_forget {tid}. */
+   — ключ удалён). Ядро: homelan_get, homelan_set {on}, homelan_pair, homelan_forget {tid} (home_* — умный дом Яндекса). */
 let DV_HOME = null, DV_HTICK = 0, DV_HPOLL = 0;
 function dvHome(h) {
   if (!h || !$("#dv-home")) return;
@@ -209,7 +209,7 @@ function dvHome(h) {
   $$("#dv-home-list [data-hforget]").forEach(b => b.onclick = async () => {
     const p = (h.phones || []).find(x => x.tid === b.dataset.hforget);
     if (!await ask(`Отключить «${p ? p.name : "телефон"}»? Он больше не сможет синхронизироваться с этим компьютером, пока не отсканирует код заново. Его данные останутся у него.`, { ok: "Отключить" })) return;
-    try { dvHome(await core.call("home_forget", { tid: b.dataset.hforget })); toast("Телефон отключён"); } catch (e) { toast(e.message); }
+    try { dvHome(await core.call("homelan_forget", { tid: b.dataset.hforget })); toast("Телефон отключён"); } catch (e) { toast(e.message); }
   });
 }
 /* способ связи: вкладки «Через dewiar.pro» / «Дома по Wi-Fi»; по умолчанию — включённый (Wi-Fi включён или входа в Dewiar нет) */
@@ -226,12 +226,12 @@ function dvHomeCodeHide() { clearInterval(DV_HTICK); clearInterval(DV_HPOLL); $(
 $("#dv-home-on").onchange = async (e) => {
   const on = e.target.checked;
   if (!on && !await ask("Выключить синхронизацию с телефоном по Wi-Fi? Телефоны перестанут получать изменения с этого компьютера. Данные останутся и там, и здесь.", { ok: "Выключить" })) { e.target.checked = true; return; }
-  try { dvHome(await core.call("home_set", { on })); if (!on) dvHomeCodeHide(); } catch (x) { toast(x.message, 4000); e.target.checked = !on; }
+  try { dvHome(await core.call("homelan_set", { on })); if (!on) dvHomeCodeHide(); } catch (x) { toast(x.message, 4000); e.target.checked = !on; }
 };
 $("#dv-home-go").onclick = async (ev) => {
   const r = $("#dv-home-res"); ev.target.disabled = true;
   try {
-    const h = await core.call("home_pair"); dvHome(h);
+    const h = await core.call("homelan_pair"); dvHome(h);
     const p = h.pair, until = p.until * 1000, known = new Set((h.phones || []).map(x => x.tid + ":" + x.seen));
     $("#dv-home-qr").innerHTML = typeof qrSvg === "function" ? qrSvg(p.link) : "";
     $("#dv-home-code").hidden = false; ev.target.textContent = "Новый код";
@@ -241,7 +241,7 @@ $("#dv-home-go").onclick = async (ev) => {
     clearInterval(DV_HPOLL);
     DV_HPOLL = setInterval(async () => {                 // подключился — видно сразу
       if (!$("#p-devices").classList.contains("cur")) { clearInterval(DV_HPOLL); return; }
-      let x; try { x = await core.call("home_get"); } catch (e) { return; }
+      let x; try { x = await core.call("homelan_get"); } catch (e) { return; }
       const fresh = (x.phones || []).find(q => q.tid === p.tid);
       dvHome(x);
       if (fresh) { dvHomeCodeHide(); toast(`Подключился «${fresh.name || "телефон"}» — теперь это одна Лира`, 4000); loadMyDevices(false); }

@@ -101,7 +101,15 @@ import shutil  # noqa: E402
 if voice is None and (A / "d.wav").exists() and shutil.which("ffmpeg"):
     r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(A / "d.wav"), "-c:a", "libopus", "-f", "ogg", "pipe:1"], capture_output=True)
     voice = r.stdout if r.returncode == 0 and r.stdout else None
-mock = subprocess.Popen([sys.executable, str(TESTS / "mock_llm.py"), str(LLM_PORT)])
+sys.path.insert(0, str(TESTS))
+from vosk_have import vosk_missing  # noqa: E402
+NO_VOSK = vosk_missing(ROOT)
+if NO_VOSK:      # голосовое распознаёт заглушка (/v1/audio/transcriptions) — путь тот же: ogg → звук → распознавание → ответ
+    print("ℹ " + NO_VOSK + " — голосовое распознаёт заглушка")
+    st = json.loads((tmp / "cfg/settings.json").read_text())
+    st["stt"] = {"engine": "remote", "remote": {"base_url": f"http://127.0.0.1:{LLM_PORT}/v1"}}
+    (tmp / "cfg/settings.json").write_text(json.dumps(st))
+mock = subprocess.Popen([sys.executable, str(TESTS / "mock_llm.py"), str(LLM_PORT)] + (["Как дела?"] if NO_VOSK else []))
 core = subprocess.Popen([PY, str(ROOT / "core/main.py"), "--wav", str(sil), "--null-audio"], env=env,
                         stdout=open(tmp / "core.log", "w"), stderr=subprocess.STDOUT)
 R = {}

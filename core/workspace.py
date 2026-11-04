@@ -617,6 +617,92 @@ class Workspace:
             p.write_text(f"# {title}\n\n*{_human_date()}*\n\n{text}\n", encoding="utf-8")
         return p.relative_to(self.root).as_posix()
 
+    # №516/№517 (пакет 04.11): «сделай краткое описание статьи из заметки и сохрани в мою же заметку» — save_note с
+    # append находил заметку только по точному имени в «Заметках» (иначе молча создавал новую), а итог задачи с
+    # «Don't.md» проверка читала как «t.md» и считала несуществующим. Теперь заметку находят по названию или пути
+    # (find_note) и дописывают в неё (update_note), ответ — однозначный: куда и сколько записано.
+
+    @staticmethod
+    def _note_key(name):
+        """Название для сравнения: без регистра, «ё», кавычек, вида апострофа и .md на конце."""
+        n = str(name or "").strip().replace("ё", "е").replace("Ё", "Е")
+        n = re.sub(r"[’‘ʼ`´]", "'", n)
+        n = re.sub(r"\.md$", "", n, flags=re.I)
+        n = re.sub(r"[«»\"“”„]", "", n)
+        return re.sub(r"\s+", " ", n).strip(" .").lower()
+
+    def find_note(self, name):
+        """Существующая заметка (.md) по пути («Заметки/…md», как отдаёт find_notes) или по названию — точно, иначе по
+        части названия. -> путь от корня. Не нашлась или подходит несколько — WorkspaceError с подсказкой."""
+        raw = str(name or "").strip().strip("«»\"")
+        if not raw:
+            raise WorkspaceError("не сказано, в какую заметку")
+        if raw.startswith("obsidian:"):
+            raise WorkspaceError("заметки Obsidian Dewiar только читает — сохранить можно в новую заметку (save_note)")
+        root = self.ensure().resolve()
+        if "/" in raw or "\\" in raw or raw.lower().endswith(".md"):
+            for rel in (raw, "Заметки/" + raw.lstrip("/\\")):
+                for cand in (rel, rel if rel.lower().endswith(".md") else rel + ".md"):
+                    try:
+                        p = self.safe(cand)
+                    except WorkspaceError:
+                        continue
+                    if p.is_file() and p.suffix.lower() == ".md":
+                        return p.relative_to(root).as_posix()
+        key = self._note_key(Path(raw.replace("\\", "/")).name)
+        if not key:
+            raise WorkspaceError("не сказано, в какую заметку")
+        exact, part = [], []
+        for p in root.rglob("*.md"):
+            rel = p.relative_to(root)
+            if any(x.startswith(".") for x in rel.parts) or not p.is_file():
+                continue
+            k = self._note_key(p.stem)
+            if k == key:
+                exact.append(p)
+            elif len(key) >= 4 and rel.parts[0] == "Заметки" and (key in k or (len(k) >= 6 and k in key)):
+                part.append(p)             # рецензия 0.82: по части названия — только «Заметки», не «Память», дневник, «Лаборатория»
+        if exact:
+            notes = [p for p in exact if p.relative_to(root).parts[0] == "Заметки"] or exact
+            best = max(notes, key=lambda p: p.stat().st_mtime)
+            return best.relative_to(root).as_posix()
+        if len(part) == 1:
+            return part[0].relative_to(root).as_posix()
+        if part:                           # несколько похожих — не выбираем наугад: путь нужной или новая заметка
+            raise WorkspaceError("подходит несколько заметок: " + "; ".join(p.relative_to(root).as_posix() for p in part[:5])
+                                 + " — передай путь нужной")
+        raise WorkspaceError(f"заметку «{raw}» не нашла — найди её find_notes и передай путь")
+
+    def update_note(self, name, text, mode="append"):
+        """Дописать в существующую заметку: mode=append — в конец (с датой), top — сразу под заголовком (например,
+        «Краткое содержание» над статьёй). Прежний текст не теряется. -> (путь от корня, сколько добавлено знаков, размер)."""
+        rel = self.find_note(name)
+        p = self.safe(rel)
+        text = (text or "").strip()
+        if not text:
+            raise WorkspaceError("нечего дописывать — текст пустой")
+        try:                               # рецензия 0.82: не UTF-8 (cp1251) — errors="replace" испортил бы заметку при записи
+            old = p.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raise WorkspaceError(f"заметка «{p.stem}» не в кодировке UTF-8 (похоже, cp1251) — дописывать не стану, чтобы не "
+                                 "испортить её; сохрани текст в новую заметку (save_note) и скажи об этом") from None
+        if mode == "top":
+            body, head = old, ""
+            if body.startswith("---"):                           # метки Obsidian (front matter) — остаются сверху
+                end = body.find("\n---", 3)
+                if end > 0:
+                    nl = body.find("\n", end + 4)
+                    cut = len(body) if nl < 0 else nl + 1
+                    head, body = body[:cut], body[cut:]
+            m = re.match(r"\s*# [^\n]*\n", body)
+            if m:
+                head, body = head + body[:m.end()], body[m.end():]
+            new = head + ("\n" if head and not head.endswith("\n\n") else "") + text + "\n\n" + body.lstrip("\n")
+        else:
+            new = old.rstrip("\n") + f"\n\n*{_human_date()}*\n\n{text}\n"
+        p.write_text(new, encoding="utf-8")
+        return rel, len(text), len(new)
+
     def list_add(self, name, items):
         """«Добавь молоко в список покупок» — пункт «- молоко» в заметку-список (создаётся, если нет).
         Уже имеющиеся пункты (без учёта регистра) не дублируются. -> (путь, добавленные пункты)."""

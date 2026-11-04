@@ -42,14 +42,15 @@ with sync_playwright() as p:
           return { text: "", calls: [], finish: "stop" };
         }
         if (mode === "net1") { mode = "ok"; throw Object.assign(new Error("связь с сервером оборвалась"), { net: true, raw: "failed to connect to dewiar.pro after 15000ms", url: "https://dewiar.pro/dwrapp/cloud.php" }); }
-        onText("Солнечно, плюс двенадцать."); return { text: "Солнечно, плюс двенадцать.", calls: [], finish: "stop" };
+        onText("Фотосинтез — это когда растение делает сахар из света."); return { text: "Фотосинтез — это когда растение делает сахар из света.", calls: [], finish: "stop" };
       };
       await ask("Кодер, сделай калькулятор на html");
       await new Promise(r => setTimeout(r, 300));
       R.bot1 = document.querySelector("#bot").textContent;
       R.hist1 = history.slice(-1)[0];
       mode = "ok";
-      await ask("Какая погода сегодня?");
+      // вопрос к модели (погоду с 1028 телефон отвечает сам, без модели — phone_weather1028_test; здесь нужен ход модели)
+      await ask("Что такое фотосинтез?");
       const last = seen[seen.length - 1];
       R.lastUser = last.filter(m => m.role === "user").slice(-1)[0].content;
       R.sys = last[0].content;
@@ -73,7 +74,7 @@ with sync_playwright() as p:
       D.setPref("net_inc", "[]");
       mode = "net1";
       const n0 = seen.length;
-      await ask("Погода на завтра?");
+      await ask("А зачем растениям фотосинтез?");
       for (let i = 0; i < 40 && seen.length < n0 + 2; i++) await new Promise(r => setTimeout(r, 100));
       await new Promise(r => setTimeout(r, 400));
       R.retried = seen.length - n0; R.bot3 = document.querySelector("#bot").textContent;
@@ -91,8 +92,8 @@ with sync_playwright() as p:
 
 ok("Калькулятор" in R["bot1"] and "Сделанное" in R["bot1"] and "Готово." != R["bot1"].strip(), f"сделала и промолчала — говорит, что сделано и где найти: {R['bot1']}")
 ok(R["hist1"]["role"] == "assistant" and "Калькулятор" in R["hist1"]["content"], "в историю — не пустой ответ")
-ok(R["lastUser"].split("(Сообщение пользователя)\n")[-1].strip() == "Какая погода сегодня?", f"следующий вопрос не склеивается с прошлой просьбой: {R['lastUser'][:120]}")
-ok(R["bot2"].startswith("Солнечно"), "на новый вопрос — новый ответ, а не «Готово»")
+ok(R["lastUser"].split("(Сообщение пользователя)\n")[-1].strip() == "Что такое фотосинтез?", f"следующий вопрос не склеивается с прошлой просьбой: {R['lastUser'][-120:]}")
+ok(R["bot2"].startswith("Фотосинтез"), f"на новый вопрос — новый ответ, а не «Готово»: {R['bot2'][:80]}")
 ctx_ = R["sys"] + R["lastUser"]   # с 0.5x справка к ходу — в реплике человека (putContext), не в системной подсказке
 ok("ЧТО БЫЛО НЕДАВНО" in ctx_ and "«Калькулятор»" in ctx_ and "сделай калькулятор" in ctx_.lower(), "в подсказке — что было за неделю и что сделано")
 ok("калькулятор" in R["recall"].lower() and "Вы:" in R["recall"], f"recall вспоминает разговор: {R['recall'][:160]}")
@@ -103,7 +104,7 @@ ok(R["saved"] and R["saved"][1] == "image/jpeg" and R["saved"][2] == "QUJD" and 
 ok("домашней" not in R["errCity"] and "дома" not in R["errCity"] and "связь" in R["errCity"], f"в городе — про связь, не про домашнюю сеть: {R['errCity']}")
 ok("дома" in R["errHome"], f"домашний сервер — «вы не дома»: {R['errHome']}")
 ok("домашней" not in R["errRefused"], "отказ облака — не «домашняя сеть»")
-ok(R["retried"] >= 2 and R["bot3"].startswith("Солнечно"), f"сбой связи — повторная попытка, ответ пришёл ({R['retried']}): {R['bot3']}")
+ok(R["retried"] >= 2 and R["bot3"].startswith("Фотосинтез"), f"сбой связи — повторная попытка, ответ пришёл ({R['retried']}): {R['bot3']}")
 # пакеты 22.10 №189 и 23.10 №208: повтор помог — сбой «прошёл сам», в отчёт разработчику не идёт (журнал очищен)
 ok(all(x.get("ok") for x in R["inc"]), f"повтор помог — сбой не считается для отчёта: {R['inc']}")
 ok("<pre" in R["viewPy"] and "&lt;b&gt;" in R["viewPy"] and "data:image/png;base64,iVBOR" in R["viewPng"] and R["viewable"], "файлы задач: код и текст — текстом, картинки — картинкой, pptx — в «Загрузки»")

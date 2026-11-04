@@ -136,6 +136,7 @@ DEFAULTS = {
         "english": False,           # понимать и английскую речь (lang2.py: английская модель Vosk ~40 МБ, выбор по уверенности)
         "gigaam_model": "gigaam-v3-e2e-rnnt",
         "remote": {"base_url": "", "api_key": "", "model": "gigaam-v3", "language": "ru"},
+        "auto_from": "",            # №513: свой выбор (gigaam | vosk), пока речь временно распознаёт сервер Dewiar; загрузится — вернёмся
     },
     "tts": {
         "engine": "vosk",           # vosk | piper | remote | elevenlabs | espeak | off
@@ -158,12 +159,14 @@ DEFAULTS = {
         "headphones": False,        # в наушниках эха нет — можно слушать во время ответа и без эхоподавления
         "barge_in": "smart",        # smart (речью ~0,8 с, сначала приглушает) | any_speech | wakeword | off
         "barge_v2": False,          # метка разового перевода barge_in с wakeword на smart (engine.py)
-        "follow_up_seconds": 8,     # после ответа можно говорить без имени
+        "follow_up_seconds": 15,    # «Сколько ждать, пока я молчу» (8/15/30): после ответа и после имени можно говорить без имени (№514: 8 — мало)
+        "follow_v2": False,         # метка разового перевода прежних 8 с по умолчанию на 15 (№514)
         "end_silence_ms": 650,      # столько тишины — конец фразы
         # подстройка под манеру речи (engine_audio._pause_*): человек продолжил сразу после того, как фразу сочли законченной, —
         # ждать дольше (+150 мс, до +600); обычные разговоры понемногу возвращают к end_silence_ms
         "end_silence_auto": True, "end_silence_extra": 0,
-        # длинная фраза без имени после ответа (дольше 9 с или 26 слов) — обычно разговор людей рядом; True — это тоже мне (№226)
+        # длинная фраза без имени после ответа (дольше 12 с или 32 слов, без обращения ко мне) — обычно разговор людей рядом;
+        # True — это тоже мне (№226, №514)
         "follow_long": False,
         "sounds": True,
         "turn_tone": True,          # ответ закончен и можно говорить без имени — мягкий сигнал «ваша очередь» (нужно и sounds)
@@ -319,6 +322,10 @@ class Settings:
                 self.data["ui"]["skin_v2"] = True                         # выбранную потом «Фирменную» больше не трогаем)
                 if "features" not in raw:                                # уже пользуются — ничего не прячем (24.10)
                     self.data["features"] = {"meet": True, "near": True, "prompter": True, "games": True, "family": False, "team": False, "clients": False}
+                au = raw.get("audio") or {}
+                if au.get("follow_up_seconds", 8) == 8 and not au.get("follow_v2"):
+                    self.data["audio"]["follow_up_seconds"] = 15             # №514: 8 с — прежнее значение по умолчанию, не выбор
+                self.data["audio"]["follow_v2"] = True                        # перевод один раз: выбранные потом 8 с не трогаем
                 if (raw.get("llm") or {}).get("history_reset_seconds") in (300, 1200):
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
             except FileNotFoundError:

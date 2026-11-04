@@ -8,7 +8,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "home_set", "ideas_new", "home_pair", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "homelan_set", "ideas_new", "homelan_pair", "homelan_forget", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
@@ -1006,7 +1006,9 @@ class CommandsMixin:
         if cmd.startswith("ideas_"):             # «Идеи Лиры»: список, голос, своя идея (ideas.py → сайт)
             import ideas
             return ideas.command(self, cmd, a)
-        if cmd.startswith("home_"):              # «Дома по Wi-Fi» (engine_home.py)
+        if cmd.startswith("homelan_"):           # «Дома по Wi-Fi» (engine_home.py)
+            # 04.11 (smarthome_test): были home_get/home_forget — те же имена, что у умного дома Яндекса ниже, и
+            # перехватывали их: «Подключить» Яндекс отвечал «неизвестная команда home_connect», «Отключить» не отключал
             return self.home_cmd(cmd, a)
         if cmd == "watch_get":                   # «Дозор» (engine_watch.py)
             return self.watch_public()
@@ -1832,6 +1834,7 @@ class CommandsMixin:
                         self.emit("telegram", **self.telegram.public())
                     r = self.account.logout()
                 elif cmd == "account_stt":                # «Распознавание на сервере Dewiar» — вкл/выкл
+                    self.s.update({"stt": {"auto_from": ""}})   # №513: выбрали сами — это уже не временная замена
                     if a.get("on"):
                         url = self.account.service_url("stt")
                         if not url:
@@ -1968,7 +1971,7 @@ class CommandsMixin:
                             self.note("")
                     threading.Timer(60, unquiet).start()
                 return "sleep"
-            self.listen_for_command(8)
+            self.listen_for_command()                    # №514: сколько ждать — как выбрано в «Слухе»
             return "listening"
         if cmd == "chat_list":                            # «Чат» студии: лента переписки, старые сверху; before — подгрузить раньше
             return self.chatlog.page(a.get("before"), int(a.get("limit") or 80), str(a.get("q") or ""))
@@ -2066,6 +2069,8 @@ class CommandsMixin:
                 self._brain_manual = time.monotonic()           # модель выбрали сами — автоматика час её не трогает
                 if after["llm"].get("auto_from"):
                     self.s.update({"llm": {"auto_from": ""}})
+            if "engine" in (a["patch"].get("stt") or {}) and after["stt"].get("auto_from"):
+                self.s.update({"stt": {"auto_from": ""}})       # №513: распознавание выбрали сами — временной замены больше нет
             if before["tts"].get("engine") != after["tts"].get("engine") and "engine" in (a["patch"].get("tts") or {}) \
                     and "auto_piper" not in (a["patch"].get("tts") or {}) and after["tts"].get("auto_piper"):
                 self.s.update({"tts": {"auto_piper": 0}})       # голос выбрали сами — автоматика больше не решает
@@ -2131,6 +2136,7 @@ class CommandsMixin:
                     r = self.cloud.set_model(a.get("id", ""))
                 elif cmd == "cloud_stt":
                     r = self.cloud.set_stt(bool(a.get("on")))
+                    self.s.update({"stt": {"auto_from": ""}})   # №513: выбрали сами — это уже не временная замена
                     if not a.get("on") and self._stt_local() != "gigaam":
                         self.s.update({"stt": {"engine": self._stt_local()}})
                         r = self.s.get("stt")

@@ -24,7 +24,7 @@ class H(BaseHTTPRequestHandler):
             return self._json(200, {"text": SCRIPT.pop(0) if SCRIPT else ""})
         body = json.loads(raw)
         if os.environ.get("MOCK_LOG"):                   # отладка: что пришло модели
-            open(os.environ["MOCK_LOG"], "a", encoding="utf-8").write(json.dumps(body.get("messages", [])[1:], ensure_ascii=False)[:3000] + "\n")
+            open(os.environ["MOCK_LOG"], "a", encoding="utf-8").write(json.dumps(body.get("messages", [])[1:], ensure_ascii=False)[:30000] + "\n")   # 04.11: в начале — личная справка (память), не обрезать вопрос
         if os.environ.get("MOCK_LOG_FULL"):              # проверки: весь запрос (с системной подсказкой и инструментами — только имена)
             open(os.environ["MOCK_LOG_FULL"], "a", encoding="utf-8").write(json.dumps(
                 {"messages": body.get("messages", []), "tools": [t["function"]["name"] for t in body.get("tools") or []]}, ensure_ascii=False) + "\n")
@@ -191,13 +191,14 @@ class H(BaseHTTPRequestHandler):
         user = body["messages"][-1]["content"]
         if isinstance(user, list):                       # сообщение из частей (текст + картинки)
             user = " ".join(x.get("text", "") for x in user if isinstance(x, dict))
-        if "Из записей пользователя" in sys_prompt and "записям" not in user:     # подсказка из заметок дошла до модели
-            hint = sys_prompt.split("Из записей пользователя", 1)[1].split("\n", 2)[1]
+        found = sys_prompt + "\n" + "".join(heads[-1:])  # найденное в записях — в справке к вопросу (с «Голосом без пауз», 04.11)
+        if "Из записей пользователя" in found and "записям" not in user:     # подсказка из заметок дошла до модели
+            hint = found.split("Из записей пользователя", 1)[1].split("\n", 2)[1]
             ans = "По вашим записям: " + hint
         elif "истори" in user.lower() or "сказк" in user.lower():
             ans = ("Жил-был старый маяк на краю света. Каждую ночь он светил кораблям. "
                    "Однажды к нему приплыл кит и спросил, зачем он светит. Маяк долго молчал. ") * 3
-        if "Из записей пользователя" in sys_prompt and "записям" not in user:
+        if "Из записей пользователя" in found and "записям" not in user:
             pass
         elif "ТВОЯ БАЗА ЗНАНИЙ" in sys_prompt + "".join(heads[-1:]):   # персонаж с базой сайта: отвечает по найденному
             ctx = (sys_prompt + "\n" + "".join(heads[-1:])).split("ТВОЯ БАЗА ЗНАНИЙ", 1)[1]   # справка — в сообщении (с 0.38.87, _put_context)
@@ -206,7 +207,7 @@ class H(BaseHTTPRequestHandler):
             ans = "В моей базе об этом ничего нет, скажу от себя."
         elif "MOCKSAY:" in str(user):                                    # проверки: готовый ответ в самой просьбе
             ans = str(user).split("MOCKSAY:", 1)[1].split("»")[0].strip()
-        elif "какая погода в минске" in str(user).lower():               # «ложный отказ», хотя поиск есть
+        elif any(q in str(user).lower() for q in ("какая погода в минске", "сколько сейчас стоит биткоин")):   # «ложный отказ», хотя поиск есть
             ans = "К сожалению, у меня нет доступа к интернету в реальном времени."
         elif not ("истори" in user.lower() or "сказк" in user.lower()):
             said = user.split("\n\n")[-1] if os.environ.get("MOCK_ECHO_LAST") else user   # только последняя реплика

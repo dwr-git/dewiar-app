@@ -185,7 +185,8 @@ try:
     ok(ds and ds[0]["title"] == "День, когда я узнал про Бублика" and ds[0]["night"] and (R["list"].get("insights") or {}).get("lines"),
        "студия: день с заголовком и выводы «на завтра»")
     chats = [r for r in requests() if r["tools"] and "Доброе утро" in json.dumps(r["messages"][-1], ensure_ascii=False)]
-    sysp = chats[-1]["messages"][0]["content"] if chats else ""
+    # подсказка и личная справка в начале разговора (04.11, «Голос без пауз»: личное — не в подсказке, llm.put_profile)
+    sysp = (chats[-1]["messages"][0]["content"] + "\n" + str(chats[-1]["messages"][1].get("content"))) if chats else ""
     ok("Твои выводы после прошлого дня" in sysp and "Отвечать короче" in sysp, "выводы ночи — в подсказке дневного разговора")
     ok("свой дневник" in sysp, "днём ассистент сам записывает мысли в дневник (подсказка)")
     # душа (пишется по дневнику) и конституция — в подсказке разговора

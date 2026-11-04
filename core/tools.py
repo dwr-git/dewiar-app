@@ -232,17 +232,23 @@ def t_show_images(a, ctx):
     n = max(1, min(6, int(a.get("count") or 4)))
     # не нашлось — пробуем проще сами (экзамен 0.38.49: модель трижды подряд звала «rune knotwork» и сдалась): самые
     # длинные слова запроса по отдельности, не больше двух попыток
-    words = sorted({w for w in re.findall(r"[\w-]{4,}", q)}, key=len, reverse=True)
-    tries = [q] + ([w for w in words if w.lower() != q.lower()][:2] if len(q.split()) > 1 else [])
-    items, err = [], None
+    # экзамен ПК 0.81.1: «runestone knotwork runic inscription» в Commons — морские узлы и церковные скамьи, трижды. Подписи
+    # не о том — пробуем дальше по словам запроса в его порядке (главное слово модель ставит первым), пока подписи не совпадут
+    words = list(dict.fromkeys(w for w in re.findall(r"[\w-]{4,}", q)))
+    tries = [q] + ([w for w in words if w.lower() != q.lower()][:3] if len(q.split()) > 1 else [])
+    items, err, first = [], None, []
     for qq in tries:
         try:
             items = IM.search(qq, n, searx_url=ctx["settings"].get("tools", "search_url") or "", via=ctx.get("dewiar_web"))
         except httpx.HTTPError as e:
             err = e
             continue
-        if items:
+        if items and IM.relevant(items, qq):
+            items = IM.relevant(items, qq) + [x for x in items if x not in IM.relevant(items, qq)]
             break
+        first = first or items
+        items = []
+    items = items or first
     if not items and err is not None:
         raise ToolError(f"картинки сейчас не загрузились ({err}) — скажи об этом коротко") from err
     if not items:
@@ -1606,6 +1612,12 @@ def _when(a):
     phrase = str(a.get("when") or "").strip()
     if phrase:
         r = parse("напомни " + phrase + " " + text)
+        # экзамен ПК 0.81.1: when «завтра в 9», text «Встреча с Ирой — послезавтра в 12» — день брался из текста
+        # («послезавтра в 9:00»). when — главное: свой день и час есть в нём — берём их, а из текста только вид (будильник…)
+        alone = parse("напомни " + phrase) if text else None
+        if alone and re.search(r"\d|через|полчаса|час|утр|вечер|дн[её]м|ночь|полдень|полночь|кажд|будн|выходн", phrase, re.I) \
+                and (not r or (alone["at"], alone["repeat"]) != (r["at"], r["repeat"])):
+            return alone["at"], alone["repeat"], text, (r or alone)["kind"]
         if r:
             return r["at"], r["repeat"], text or r["text"], r["kind"]
     rep = a.get("repeat")
@@ -2065,6 +2077,11 @@ def t_show_page(a, ctx):
     root.mkdir(parents=True, exist_ok=True)
     f = root / f"{title}.html"
     f.write_text(page_html(title, html), encoding="utf-8")
+    if ctx.get("server") and not (DRY or EXAM_LAUNCH):
+        # сервер без окна (main.py --server): открыть некому — честно отдаём файл, а не «открыла в браузере»
+        return (f"Страница «{title}» готова и сохранена файлом «Страницы/{f.name}» в папке Dewiar; браузера здесь нет (Dewiar "
+                "работает на сервере без экрана), поэтому открыть её некому. Скажи одной фразой, что страница сохранена и где "
+                "файл; не говори, что открыла. HTML в ответе не повторяй.")
     launch(["xdg-open", str(f)])
     return (f"Страница «{title}» открыта в браузере (файл — «Страницы/{f.name}» в папке Dewiar). Скажи одной фразой, что "
             "открыла. HTML в ответе не повторяй.")
@@ -2137,9 +2154,32 @@ def t_suggest_idea(a, ctx):
 
 
 def t_save_note(a, ctx):
-    rel = _ws_call(lambda: _ws(ctx).save_note(a.get("title", ""), a.get("text", ""), a.get("folder", ""),
-                                              bool(a.get("append"))))
+    from workspace import WorkspaceError
+    ws = _ws(ctx)
+    if a.get("append"):
+        # №516: «дописать в существующую» — ищем её по названию (как update_note), а не только точное имя в «Заметках»;
+        # не нашлась — новая заметка, и так и говорим (раньше молча рождалась вторая, а модель считала, что дописала)
+        try:
+            ws.find_note(a.get("title", ""))
+        except WorkspaceError as e:
+            rel = _ws_call(lambda: ws.save_note(a.get("title", ""), a.get("text", ""), a.get("folder", ""), False))
+            why = "Подходящих заметок несколько" if "несколько" in str(e) else "Такой заметки не было"
+            return f"{why} — создал новую: {rel}. Если нужно было дописать в другую — найди её find_notes и вызови update_note с её путём."
+        # нашлась — дописываем; не вышло (например, заметка не в UTF-8) — честная ошибка, а не тихая новая заметка
+        return t_update_note({"note": a.get("title", ""), "text": a.get("text", "")}, ctx)
+    rel = _ws_call(lambda: ws.save_note(a.get("title", ""), a.get("text", ""), a.get("folder", ""), False))
     return f"Записал в папку Dewiar: {rel}"
+
+
+def t_update_note(a, ctx):
+    """№516/№517: дописать в существующую заметку (по пути из find_notes или по названию). Ответ однозначный: записано,
+    куда и сколько — модель не должна гадать, получилось ли (Лира говорила «не смогла сохранить», а заметка уже была)."""
+    mode = "top" if str(a.get("where") or "").lower() in ("top", "начало", "вверх", "сверху") else "append"
+    rel, n, size = _ws_call(lambda: _ws(ctx).update_note(a.get("note") or a.get("title") or a.get("path") or "", a.get("text", ""), mode))
+    title = Path(rel).stem
+    return (f"Готово, сохранено: {'в начало заметки' if mode == 'top' else 'в конец заметки'} «{title}» ({rel}) дописано {n} "
+            f"знаков, прежний текст на месте; теперь в заметке {size} знаков. Повторно не вызывай — скажи пользователю, что "
+            f"заметка «{title}» обновлена.")
 
 
 # Бюджет, лимит, «заложим 70 тысяч» — план, а не трата: в расходы не пишем (иначе «потрачено 70 000» в отчёте)
@@ -3244,8 +3284,10 @@ def t_call_persona(a, ctx):
 
 # ---------- реестр ----------
 
-# На сервере (main.py --server) нет экрана, звука, камеры и окна — эти инструменты там выключены.
-SERVER_OFF = {"council", "open_url", "open_app", "open_path", "show_page", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
+# На сервере (main.py --server) нет экрана, звука, камеры и окна — эти инструменты там выключены. Экзамен — тоже ядро
+# --server, но открыть сайт или программу там можно «понарошку» (EXAM_LAUNCH: запуск записывается), а совет идёт без окна
+EXAM_ON = {"open_url", "open_app", "open_path", "council"}
+SERVER_OFF = {"council", "open_url", "open_app", "open_path", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
               "set_volume", "look_at_screen", "save_screenshot", "look_through_camera", "widget", "power"}
 
 
@@ -3451,6 +3493,13 @@ TOOLS = {
                   "(необязательно); append=true — дописать в существующую заметку.",
                   S({"title": {"type": "string"}, "text": {"type": "string"}, "folder": {"type": "string"},
                      "append": {"type": "boolean"}}, ["title", "text"]), "safe", t_save_note, "Заметки"),
+    "update_note": ("Дописать в СУЩЕСТВУЮЩУЮ заметку пользователя: «добавь итог в эту заметку», «сохрани краткое описание в ту же "
+                    "заметку», «допиши в заметку про ремонт». note — путь из find_notes (Заметки/….md) или название заметки; "
+                    "text — что дописать (Markdown); where — end (в конец, по умолчанию) или top (сразу под заголовком: "
+                    "краткое содержание над текстом). Прежний текст не стирается. Ответ «Готово, сохранено» — значит "
+                    "записано: так и скажи. Новую заметку — save_note.",
+                    S({"note": {"type": "string"}, "text": {"type": "string"}, "where": {"type": "string", "enum": ["end", "top"]}},
+                      ["note", "text"]), "safe", t_update_note, "Заметки"),
     "calendar_list": ("Календарь пользователя за период: встречи и события из его календарей (Google, Яндекс), "
                       "напоминания (и что уже прозвенело), заметки, дневник, задачи, деньги — по дням. Для «что у меня "
                       "завтра?», «какие встречи на неделе?», «что я сделал за неделю». from/to — ГГГГ-ММ-ДД "
@@ -3709,7 +3758,7 @@ DEFAULT_OFF = set()          # команды терминала включен�
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере
 # не трогают и ничего не отправляют от вашего имени. Остальное кнопка выключает; включить по одному — «Руки» → «Умения».
 SAFE_CORE = {"calc", "world_time", "weather", "web_search", "read_webpage", "show_images", "set_reminder", "list_reminders",
-             "cancel_reminder", "change_reminder", "mark_done", "done_report", "save_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "ocr", "remember", "write_diary",
+             "cancel_reminder", "change_reminder", "mark_done", "done_report", "save_note", "update_note", "save_link", "show_page", "suggest_idea", "month_summary", "writing_today", "watch", "find_notes", "read_file", "ocr", "remember", "write_diary",
              "money_add", "money_report", "money_find", "money_fix", "payments", "calendar_list", "app_help", "call_persona", "widget", "play_radio", "media_control",
              "set_volume", "system_status", "task_status", "search_documents", "ask_knowledge", "client_note", "client_info", "client_next",
              "client_list", "client_deal", "client_deals", "site_create", "site_edit", "site_show", "site_review"}
@@ -3748,7 +3797,10 @@ class Toolbox:
             m = self.hooks.get("mail")
             if not (m and m.configured()):
                 return False, False
-        if name in SERVER_OFF and self.hooks.get("server"):   # сервер без экрана и звука: «открыла сайт» было бы неправдой
+        # сервер без экрана и звука: «открыла сайт» было бы неправдой. Экзамен (EXAM_LAUNCH) — тоже ядро --server, но запуск
+        # программ и браузера там записывается (launch), а «Совет ИИ» идёт без окна: выключать нечего (экзамен ПК 0.81.1:
+        # open_url, show_page и council не было — «открой сайт», «покажи в браузере», «собери совет» проваливались)
+        if name in SERVER_OFF and self.hooks.get("server") and not (EXAM_LAUNCH and name in EXAM_ON):
             return False, False
         if name == "smart_home":                # только когда подключён умный дом (Яндекс или Home Assistant)
             h = self.hooks.get("home")

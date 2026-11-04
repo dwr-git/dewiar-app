@@ -6,6 +6,9 @@ import websockets
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 PY = os.environ.get("DEWIAR_PY") or sys.executable
 TESTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TESTS))
+from vosk_have import skip_without_vosk  # noqa: E402
+skip_without_vosk(ROOT)                                 # отпечаток имени снимает модель Vosk
 PORT, LLM_PORT = 8789, 8132
 tmp = Path(tempfile.mkdtemp()); (tmp / "cfg").mkdir()
 def say(text, voice, speed, name):

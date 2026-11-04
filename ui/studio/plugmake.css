@@ -138,3 +138,13 @@ nav .nav-plg-new:not(.cur) span { color: var(--muted); }
 .lk-pt-sw { display: flex; flex: none; }
 .lk-pt-sw i { width: 26px; height: 26px; border-radius: 50%; margin-left: -8px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 15%, transparent); }
 .lk-pt-sw i:first-child { margin-left: 0; }
+
+/* «Готовые плагины Dewiar» — полоса со ссылкой на каталог (04.11) */
+nav .nav-plg-all .nav-pi { font-size: 14px; }
+nav .nav-plg-all:not(.cur) span { color: var(--muted); }
+.pmk-cat { display: flex; align-items: center; gap: 16px; justify-content: space-between; margin: 22px 0 6px; padding: 14px 18px;
+  border-radius: 16px; background: var(--card, var(--glass)); box-shadow: var(--shadow-sm, none); }
+.pmk-cat b { display: block; font-size: 15px; margin-bottom: 2px; }
+.pmk-cat small { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.pmk-cat .btn { flex: none; white-space: nowrap; }
+@media (max-width: 640px) { .pmk-cat { flex-direction: column; align-items: stretch; } }

@@ -47,6 +47,21 @@ def chats():
     return [r for r in requests() if not r["messages"][0]["content"].startswith("Ты ведёшь краткое содержание")]
 
 
+def sys_of(r):
+    """Подсказка и личная справка в начале разговора (04.11: память, содержание долгого разговора — справкой в первом
+    сообщении, llm.put_profile)."""
+    ms = r["messages"]
+    return ms[0]["content"] + ("\n" + str(ms[1].get("content")).split("(Дальше — разговор)")[0] if len(ms) > 1 else "")
+
+
+def talk_of(r):
+    """Сообщения разговора без личной справки."""
+    ms = [dict(m) for m in r["messages"][1:]]
+    if ms and isinstance(ms[0].get("content"), str) and "(Дальше — разговор)" in ms[0]["content"]:
+        ms[0]["content"] = ms[0]["content"].split("(Дальше — разговор)\n", 1)[-1]
+    return ms
+
+
 def folds():
     return [r for r in requests() if r["messages"][0]["content"].startswith("Ты ведёшь краткое содержание")]
 
@@ -125,7 +140,7 @@ try:
     st = json.loads(CONV.read_text(encoding="utf-8")) if CONV.exists() else {}
     cs = chats()
     last = cs[-1] if cs else {"messages": [{"content": ""}]}
-    sysp = last["messages"][0]["content"]
+    sysp = sys_of(last)
     ok(folds(), f"начало разговора сворачивается в фоне — запросов на сворачивание: {len(folds())}")
     ok("Бублик" in st.get("summary", "") and st.get("turns", 0) >= 13, f"содержание разговора сохранено, в нём — факт из первой реплики ({st.get('turns')} реплик)")
     ok("Раньше в нём было" in sysp and "Бублик" in sysp and "15:00" in sysp,
@@ -133,7 +148,7 @@ try:
     sizes = [len(r["messages"]) for r in cs]
     ok(max(sizes) <= 2 * (3 + 8) + 2 and len(last["messages"]) <= 2 * (3 + 4) + 2,
        f"запрос к модели не растёт с разговором: реплик в запросах {sizes}")
-    ok(not any("Запомни для разговора" in m["content"] for m in last["messages"][1:]), "сама первая реплика дословно уже не отправляется — только содержанием")
+    ok(not any("Запомни для разговора" in m["content"] for m in talk_of(last)), "сама первая реплика дословно уже не отправляется — только содержанием")
     ok("вопрос номер 12" in json.dumps(last["messages"][1:], ensure_ascii=False).lower(), "последние реплики — дословно")
     ok(len(st.get("history", [])) <= 2 * (3 + 4) + 2, f"на диске — содержание и последние реплики ({len(st.get('history', []))})")
 
@@ -148,7 +163,7 @@ try:
         R["fresh"] = await say("Привет!")
     asyncio.run(session(2, second))
     cs2 = chats()[n0:]
-    s1 = cs2[0]["messages"][0]["content"] if cs2 else ""
+    s1 = (sys_of(cs2[0]) + "\n" + json.dumps(cs2[0]["messages"][-1], ensure_ascii=False)) if cs2 else ""
     ok("Бублик" in s1 and len(cs2[0]["messages"]) > 3 if cs2 else False, "после перезапуска программы разговор продолжается: содержание и последние реплики на месте")
     ok("перерыв 45 мин" in s1, "перерыв 45 минут модель видит и не путает новую просьбу со старой темой")
     ok("чистого листа" in R.get("new", ""), f"«Начнём новый разговор» — ответ без модели: {R.get('new')}")
@@ -164,7 +179,9 @@ try:
 
     async def third(say):
         await say("Добрый вечер")
-        R["weather"] = await say("Какая погода в Минске?", 30)
+        # погоду с 0.6x ядро отвечает само, без модели (№373, engine_music._weather_cmd); ложный отказ «нет доступа
+        # к интернету» — на другом свежем вопросе
+        R["weather"] = await say("Сколько сейчас стоит биткоин?", 30)
     asyncio.run(session(3, third))
     cs3 = chats()[n1:]
     ok(cs3 and "Бублик" not in json.dumps(cs3[0], ensure_ascii=False) and len(cs3[0]["messages"]) == 2,
@@ -173,6 +190,12 @@ try:
     ok("Модель отказалась" in logs and R.get("weather", "").startswith("Готово. Результат") and
        any("web_search" in r.get("tools", []) and r["messages"][-1]["content"].startswith("СТОП. Ты отказался") for r in requests()),
        f"«нет доступа к интернету», а поиск есть — ассистент сам ищет и отвечает по найденному: {R.get('weather', '')[:60]}")
+    # личная справка (llm.put_profile) и справка к вопросу — в каждом запросе разговора ровно по разу, и в кругах с
+    # инструментами тоже (поиск после ложного отказа): дубли раздували бы запрос и сбивали кэш сервера модели
+    heads = [(sum(str(m.get("content")).count("(О пользователе и о тебе — справка от программы") for m in r["messages"]),
+              sum(str(m.get("content")).count("(Справка к этому сообщению") for m in r["messages"])) for r in chats()[n0:]]
+    ok(heads and all(h == (1, 1) for h in heads),
+       f"справки в запросах без дублей: {heads}")
     ok("Traceback" not in logs, "без ошибок в журнале ядра")
 finally:
     mock.terminate()

@@ -69,7 +69,7 @@ class H(BaseHTTPRequestHandler):
             else:
                 send({"content": "Окей, записала 65 000."}); send({}, "stop")
         elif any("Нарисуй схему" in str(m.get("content")) for m in msgs if m["role"] == "user"):
-            HINT.append("СЕЙЧАС ПРОСЯТ СХЕМУ" in str(msgs[0].get("content")))                   # экзамен 15.10: «Схема готова и уже на экране» — без схемы
+            HINT.append("СЕЙЧАС ПРОСЯТ СХЕМУ" in str(msgs[0].get("content")) + ctx)   # экзамен 15.10: «Схема готова и уже на экране» — без схемы (подсказка — в справке к вопросу)
             if user.startswith("ПРОВЕРКА: тебя попросили нарисовать схему"):
                 send({"content": "Вот она.\n```mermaid\nflowchart LR\n  A[\"Клиент\"] --> B[\"Менеджер\"] --> C[\"Склад\"] --> A\n```"}); send({}, "stop")
             else:
@@ -98,7 +98,7 @@ class H(BaseHTTPRequestHandler):
             send({"content": "Ты спросил, что у нас по плану. Достаю календарь и напоминания — одну секунду."}); send({}, "stop")
         elif "город" in first_q:
             send({"content": "Какой город?"}); send({}, "stop")
-        elif "презентац" in first_q or "погод" in first_q:
+        elif "презентац" in first_q or "погод" in first_q or "кино" in first_q:
             send({"content": "Я сейчас посмотрю, какая будет погода на завтра, а затем расскажу."}); send({}, "stop")
         else:
             send({"content": "Привет! Всё хорошо."}); send({}, "stop")
@@ -119,6 +119,8 @@ base = f"http://127.0.0.1:{UP}/v1"
 env = dict(os.environ, DEWIAR_CONFIG_DIR=str(tmp / "cfg"), DEWIAR_STATE_DIR=str(tmp / "st"), DEWIAR_PORT=str(PORT), DEWIAR_ASSUME_AEC="1",
            DEWIAR_WORKSPACE_DIR=str(tmp / "ws"), DEWIAR_FAKE_RAM_GB="16", DEWIAR_FAKE_CORES="8")
 R = {}
+# «Какая погода завтра?» с 28.10 отвечает быстрый путь погоды без модели (weather_quick1028_test) — обещание и уточняющий
+# вопрос проверяем на других просьбах (экзамен ПК 0.81.1: проверка падала и до него)
 
 
 async def session():
@@ -165,8 +167,8 @@ async def session():
             d = [e for e in events[mark:] if e["type"] == "answer" and e.get("done")]
             return d[-1].get("text", "") if d else ""
         await call("reminder_add", phrase="через 30 минут полить цветы")
-        for q, key in (("Сделай мне презентацию о завтрашней погоде", "pres"), ("Какая погода завтра?", "promise"),
-                       ("Какая погода в моём городе?", "ask"), ("Привет", "plain"), ("Что у нас по плану?", "plan"),
+        for q, key in (("Сделай мне презентацию о завтрашней погоде", "pres"), ("Посмотри, какой фильм идёт в кино завтра", "promise"),
+                       ("Сколько стоит такси в моём городе?", "ask"), ("Привет", "plain"), ("Что у нас по плану?", "plan"),
                        ("А я что у тебя просил?", "asked"), ("Поставь таймер на столько минут, сколько дней до Нового года", "timer"),
                        ("Нарисуй схему: как заявка проходит от клиента через менеджера на склад и обратно клиенту.", "diagram"),
                        ("Ладно, остановимся на 65 тысячах.", "saved"),
@@ -207,7 +209,10 @@ ok("Поправка: верно 59" in R["timer_all"] and "✋ Число в о
 ok("```mermaid" in R["diagram"] and "✋ Просили схему" in log, f"«нарисуй схему» — ответ словами → дорисовала: {R['diagram'][-140:]!r}")
 ok(HINT and all(HINT), f"просят схему — модель заранее знает: только блок mermaid рисует, «на экране» без него не говорить: {HINT}")
 mem = "".join(x.read_text(encoding="utf-8") for x in (tmp / "ws").rglob("Обо мне.md"))
-ok("✋ Сказала «готово/записала»" in log and "65 000" in mem and "Записала: 65 000" in R["saved_all"],
+# рецензия 0.82 («Голос без пауз»): бюджет — не «Деньги», фраза не придерживается — «записала» звучит сразу, после remember
+# это уже правда; повтор «Записала: 65 000» глушит проверка повторов (№435)
+ok("✋ Сказала «готово/записала»" in log and "65 000" in mem and "аписала" in R["saved_all"] and "65 000" in R["saved_all"]
+   and "money_add" not in log.split("остановимся на 65")[-1].split("❓")[0] and R["saved_all"].lower().count("записала") == 1,
    f"«записала 65 000», ничего не вызвав, → записала по-настоящему: {R['saved_all'][-100:]!r}, в памяти: {'65 000' in mem}")
 ok("Поставила таймер на 78 минут" in R["ny_all"] and "set_reminder" in log, f"«поставь таймер» — а модель переспросила: попросили поставить, поставила: {R['ny_all'][-120:]!r}")
 ok("📅 Вопрос о планах" in log, "в журнале: вопрос о планах — дела и календарь в подсказке")

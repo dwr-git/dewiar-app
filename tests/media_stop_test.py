@@ -7,6 +7,9 @@ tmp = Path(tempfile.mkdtemp())
 ok = lambda c, m: print(("✅ " if c else "❌ ") + m)
 if not __import__("shutil").which("espeak-ng"):
     print("нет espeak-ng — пропускаю"); print("ALL OK"); sys.exit(0)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vosk_have import skip_without_vosk  # noqa: E402
+skip_without_vosk(ROOT)                                 # «пауза» из WAV слышит модель Vosk
 subprocess.run(["espeak-ng", "-v", "ru", "-s", "150", "-w", str(tmp / "w.wav"), "пауза"], check=True)
 subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-t", "2", "-i", "anullsrc=r=16000:cl=mono", "-i", str(tmp / "w.wav"),
                 "-f", "lavfi", "-t", "6", "-i", "anullsrc=r=16000:cl=mono", "-filter_complex",

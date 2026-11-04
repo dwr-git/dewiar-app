@@ -9,6 +9,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 # просьба записать: «запиши», «сохрани», «в заметки», «запомни списком», «зафиксируй», «в файл»
 NOTE_ASK_RX = re.compile(r"заметк|запиш|запис|сохран|запомн|занеси|зафиксир|в\s+файл|в\s+папк|конспект", re.I)
+UPDATE_ASK_RX = re.compile(r"допиш|добав|дополн|обнов|вставь|в\s+(?:эт|т)[уоа]\w*\s+же", re.I)   # №516: «добавь итог в ту же»
 
 # «сгенерируй / нарисуй картинку …» — просьба нарисовать, а не найти (отчёт 70); слово «картинку» — часть просьбы
 _PIC = r"(?:картинк|изображени|рисун|арт|аватар|логотип|постер|обо[ий])\w*"
@@ -96,7 +97,8 @@ class ToolsMixin:
             if appt_ask(asked):                        # дело со временем — в «Дела», а не в заметки (отчёт №94, 19.10)
                 log.info("📝 дело со временем — не в заметки, а напоминанием")
                 return APPT_NOTE
-        if name == "save_note" and asked is not None and not NOTE_ASK_RX.search(asked):
+        if name in ("save_note", "update_note") and asked is not None and not NOTE_ASK_RX.search(asked) \
+                and not (name == "update_note" and UPDATE_ASK_RX.search(asked)):
             # стихи, список идей, ответ на вопрос — в чат, а не в заметки без спроса (экзамен 11.10: «записала это в
             # заметку», хотя просили просто четверостишие)
             log.info("📝 save_note без просьбы записать — не пишу")
@@ -1639,13 +1641,15 @@ class ToolsMixin:
             self.turn_n += 1
             turn = Turn(self.turn_n)
             self.turn = turn
+        if keep:                                         # keep=False — ход игры («Морской бой»): в разговор не пишем
+            # в разговор — сразу, а не после озвучки (экзамен ПК 0.81.1: «17% от 2350 — 399,5», следующий вопрос «объясни, как
+            # посчитал» пришёл раньше, чем фраза договорилась, — и модель ответила «я ничего не считал, мы только начали»)
+            self.history += [{"role": "user", "content": said}, {"role": "assistant", "content": msg + (f" (Расчёт: {note}.)" if note else ""),
+                                                             "who": self.s.get("persona"), **({"acts": list(acts)} if acts else {})}]
+            self._conv_after()
 
         def run():
             self._speak_worker(turn, q)
-            if keep:                                     # keep=False — ход игры («Морской бой»): в разговор не пишем
-                self.history += [{"role": "user", "content": said}, {"role": "assistant", "content": msg + (f" (Расчёт: {note}.)" if note else ""),
-                                                                 "who": self.s.get("persona"), **({"acts": list(acts)} if acts else {})}]
-                self._conv_after()
             with self._turn_lock:
                 if self.turn is turn:
                     self.turn = None

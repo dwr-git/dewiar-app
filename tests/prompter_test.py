@@ -29,6 +29,11 @@ ok(parse_sheet("В: Сколько стоит?\nО: 4800 за 30 мест\n- В:
    "шпаргалка разбирается")
 
 
+sys.path.insert(0, str(TESTS))
+from vosk_have import skip_without_vosk  # noqa: E402
+skip_without_vosk(ROOT)                                 # дальше — живое ядро: речь собеседника из WAV слышит Vosk
+
+
 def free():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 

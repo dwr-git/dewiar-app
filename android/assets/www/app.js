@@ -626,6 +626,29 @@ let bugSnap = null, thanksCache = null, bugWait = 0, bugPick = "";   // bugPick 
 function hLoad() { try { return JSON.parse(prefGet("health") || "{}") || {}; } catch (e) { return {}; } }
 function hSave(h) { try { prefSet("health", JSON.stringify(h)); } catch (e) { } }
 function hCount(k, n = 1) { const h = hLoad(); h[k] = (h[k] || 0) + n; hSave(h); }
+/* «Голос без пауз» (04.11): подсказка в токенах и сколько из неё сервер взял из кэша начала запроса — как llm.last_usage */
+function usageOf(o) {
+  const t = o.timings;                                         // llama.cpp: prompt_n — прочитано заново, cache_n — из кэша
+  if (t && t.cache_n != null && t.prompt_n != null) return { prompt: (+t.prompt_n || 0) + (+t.cache_n || 0), cached: +t.cache_n || 0 };
+  const u = o.usage;
+  if (u && u.prompt_tokens != null) { const c = (u.prompt_tokens_details || {}).cached_tokens; return { prompt: +u.prompt_tokens || 0, cached: c != null ? +c : null }; }
+  if (o.done && o.prompt_eval_count != null) return { prompt: +o.prompt_eval_count || 0, cached: null };   // Ollama
+  return null;
+}
+function usageLine(u, sec) {
+  const n = (x) => String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `⏱ модель: ${sec.toFixed(1)} с, подсказка ${n(u.prompt)} ток.` + (u.cached != null ? `, из кэша ${n(u.cached)}` + (u.prompt ? ` (${Math.round(100 * u.cached / u.prompt)}%)` : "") : ", сколько из кэша — сервер не сообщает");
+}
+/* в пульс — суммы (как health_cache на компьютере): n — запросов, k — из них с ответом про кэш, ptok/cached — токены по k */
+function hCache(u) {
+  const h = hLoad(), pc = h.pcache = h.pcache || {};
+  pc.n = (pc.n || 0) + 1; pc.ptok_all = (pc.ptok_all || 0) + u.prompt;
+  if (u.cached != null) {
+    pc.k = (pc.k || 0) + 1; pc.ptok = (pc.ptok || 0) + u.prompt; pc.cached = (pc.cached || 0) + u.cached;
+    const b = (pc.by = pc.by || {})[brainKind()] = (pc.by || {})[brainKind()] || [0, 0, 0]; b[0]++; b[1] += u.prompt; b[2] += u.cached;
+  }
+  hSave(h);
+}
 /* Почему не ответил мозг — «где думает : почему» (пакет 20.10: «неудачных 10,7 %» — а каких?). Как why_kind в core/health.py. */
 const WHY_RX = [["timeout", /не ответил вовремя|timed? ?out|таймаут|отменено|abort/i], ["connect", /подключ|connect|resolve|сеть|network|failed to fetch|refused/i],
   ["context", /окна контекста|context/i], ["busy", /много людей|занят|429|503|busy/i], ["balance", /заряд|талер|402|quota/i],
@@ -674,7 +697,8 @@ async function pulseSend() {
     brain: brainKind(), uptime_h: Math.round((Date.now() - H_T0) / 36e4) / 10, starts: h.starts || [], turns: h.turns || 0, net_ok: h.net_ok || 0,
     net_fail: h.net_fail || 0, net_why: h.net_why || {}, errors: h.errors || 0, rude: h.rude || 0, refused: h.refused || 0, problems: Object.entries(h.problems || {}).map(([sig, p]) => ({ sig, text: p.text, n: p.n })),
     voice: Object.assign({}, h.voice || {}, { tts_engine: S.tts.engine || "", tts_ready: D.ttsReady() ? 1 : 0, text_mode: S.textMode ? 1 : 0,
-      stt_engine: S.stt.engine || "", recognizer: D.recognizer() ? 1 : 0, vol: (() => { try { return D.volume("get", 0); } catch (e) { return -1; } })() }) };
+      stt_engine: S.stt.engine || "", recognizer: D.recognizer() ? 1 : 0, vol: (() => { try { return D.volume("get", 0); } catch (e) { return -1; } })() }),
+    pcache: h.pcache || {} };
   let r; try { r = await http("POST", healthBase() + "?p=/pulse", { headers: { "Content-Type": "application/json" }, body, timeout: 20000 }); }
   catch (e) { console.log("💓 пульс не ушёл: " + (e.message || e)); return false; }
   if (r.status >= 400) return false;
@@ -684,6 +708,11 @@ async function pulseSend() {
   if (now.voice) { for (const k of Object.keys(body.voice)) if (typeof now.voice[k] === "number" && !/^(tts_ready|text_mode|recognizer|vol)$/.test(k)) now.voice[k] = Math.max(0, now.voice[k] - (body.voice[k] || 0)); }
   for (const p of body.problems) if (now.problems && now.problems[p.sig]) { now.problems[p.sig].n -= p.n; if (now.problems[p.sig].n <= 0) delete now.problems[p.sig]; }
   now.starts = (now.starts || []).slice(body.starts.length);
+  if (now.pcache) {                                           // кэш подсказки: вычесть отправленное
+    for (const k of ["n", "k", "ptok_all", "ptok", "cached"]) if (now.pcache[k]) now.pcache[k] = Math.max(0, now.pcache[k] - (body.pcache[k] || 0));
+    for (const [kind, v] of Object.entries(body.pcache.by || {})) { const b = (now.pcache.by || {})[kind]; if (b) { for (let i = 0; i < 3; i++) b[i] = Math.max(0, b[i] - v[i]); if (!b[0]) delete now.pcache.by[kind]; } }
+    if (!now.pcache.n) delete now.pcache;
+  }
   hSave(now); prefSet("pulse_at", String(Date.now()));
   console.log(`💓 Пульс отправлен: запусков ${body.starts.length}, ответов ${body.turns}, сбоев ${body.problems.length}`);
   try { const d = JSON.parse(r.body || "{}"); if (d.exam && typeof examOffer === "function") examOffer(d.exam); } catch (e) { }   // экзамен из кабинета
@@ -1017,6 +1046,16 @@ function putContext(msgs, ctx) {
   if (Array.isArray(last.content)) { const t = last.content.find(x => x.type === "text"); if (t) t.text = head + (t.text || ""); else last.content.unshift({ type: "text", text: head.trim() }); }
   else last.content = head + String(last.content || "");
 }
+/* Личное (systemPersonal) — справкой в начало первого сообщения разговора (как llm.put_profile на компьютере). */
+const PROFILE_HEAD = "(О пользователе и о тебе — справка от программы, вслух её не упоминай)\n", PROFILE_END = "\n\n(Дальше — разговор)\n";
+function putProfile(msgs, text) {
+  text = String(text || "").trim(); if (!text) return;
+  const i = msgs.findIndex(m => m.role !== "system"); if (i < 0) return;
+  const m = msgs[i], head = PROFILE_HEAD + text + PROFILE_END;
+  if (m.role !== "user") { msgs.splice(i, 0, { role: "user", content: head.trim() }); return; }
+  if (Array.isArray(m.content)) { const t = m.content.find(x => x.type === "text"); if (t) t.text = head + (t.text || ""); else m.content.unshift({ type: "text", text: head.trim() }); }
+  else m.content = head + String(m.content || "");
+}
 const NEW_CONV_RX = /^(?:давай(?:те)?\s+)?(?:начн(?:ем|и)|начать)\s+(?:новый\s+разговор|разговор\s+заново|сначала|заново|с\s+чистого\s+листа)$|^(?:забудь|сотри|очисти)\s+(?:наш\s+|этот\s+|весь\s+)?разговор$|^новый\s+разговор$|^новая\s+тема$/;
 
 /* ---------- персонажи и облик ---------- */
@@ -1320,15 +1359,28 @@ function frameAnswer(t) {      // ответ готов: длинный — с �
   b.innerHTML = `<div class="ans">${mdAnswer(t)}${turnMedia && window.DewiarRich ? DewiarRich.gallery(turnMedia) : ""}</div><div class="acts"><button data-a="copy">${ICON_COPY}Копировать</button><button data-a="note">${ICON_NOTE}В заметки</button><button data-a="save">${ICON_SAVE}Скачать</button></div>`;
   if (window.DewiarRich) DewiarRich.diagrams(b.querySelector(".ans"));   // ```mermaid — схемой
   wirePics(b);
-  const title = t.replace(/[#*_`|]/g, "").split(/[.!?\n]/)[0].trim().slice(0, 60) || "Ответ";
-  b.querySelector('[data-a="copy"]').onclick = () => copyText(t).then(ok => toast(ok ? "Скопировано" : "Не получилось скопировать"));
-  b.querySelector('[data-a="note"]').onclick = () => { const n = notes(); n.push({ id: "n" + Date.now(), title, text: t, time: Date.now() }); saveNotes(n); toast(`В заметках: «${title}»`, 2800); };
-  b.querySelector('[data-a="save"]').onclick = () => {
+  b.querySelector('[data-a="copy"]').onclick = () => ansAct("copy", t);
+  b.querySelector('[data-a="note"]').onclick = () => ansAct("note", t);
+  b.querySelector('[data-a="save"]').onclick = () => ansAct("save", t);
+  $("#talk").scrollTop = 0;
+}
+/* Действия с ответом: «Скопировать», «В заметки», «Скачать» (.md) — у длинного ответа на главном экране и (идея №127,
+   04.11: «в чате добавить кнопки… открыл чат — сделал то, что упустил сначала») у каждого ответа в «Разговоре». */
+function ansTitle(t) { return String(t || "").replace(/[#*_`|>\[\]]/g, "").split(/[.!?\n]/)[0].trim().slice(0, 60) || "Ответ"; }
+function ansAct(a, t) {
+  t = String(t || "").trim(); if (!t) return;
+  const title = ansTitle(t);
+  if (a === "copy") return copyText(t).then(ok => toast(ok ? "Скопировано" : "Не получилось скопировать"));
+  if (a === "note") {
+    const n = notes();
+    if (n.some(x => x.text === t)) return toast(`Уже в заметках: «${title}»`, 2600);     // нажали второй раз — не дублируем
+    n.push({ id: "n" + Date.now(), title, text: t, time: Date.now() }); saveNotes(n); return toast(`В заметках: «${title}»`, 2800);
+  }
+  if (a === "save") {
     const name = title.replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 40) + ".md";
     const where = D.saveDownload ? D.saveDownload(name, "text/markdown", t) : "";
     toast(where ? `Сохранено: ${where}` : "Не получилось сохранить", 3500);
-  };
-  $("#talk").scrollTop = 0;
+  }
 }
 const ICON_COPY = `<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`;
 const ICON_NOTE = `<svg viewBox="0 0 24 24"><path d="M6 3.5h9l4 4V20a.5.5 0 0 1-.5.5h-12A.5.5 0 0 1 6 20z"/><path d="M14.5 3.5V8H19M9 12.5h7M9 16h5"/></svg>`;
@@ -1852,7 +1904,16 @@ function webTrimSettings() {
   $$("#set-body .sw").forEach(r => { if (/^(Контакты|Звонки без|Точные будильники)/.test((r.firstElementChild || r).textContent.trim())) hide(r); });
   hide($("#upd-check"));
 }
+/* Подсказка модели. «Голос без пауз» (идея №5, 04.11): общее для всех (характер, правила, действия) — systemStable(),
+   личное (имя, память, близкие, душа, дела сегодня, содержание разговора) — systemPersonal(): в разговоре оно идёт справкой
+   в начале первого сообщения (putProfile), а подсказка и инструменты одинаковы у всех людей с тем же персонажем — сервер
+   модели (vLLM у облака Dewiar) берёт их из кэша начала запроса, а не перечитывает ~15 тыс. токенов на каждый вопрос.
+   systemPrompt() — всё вместе (так подсказку видят проверки и «что знает модель»). */
 function systemPrompt() {
+  const pers = systemPersonal();
+  return systemStable() + (pers ? "\n\n" + pers : "");
+}
+function systemStable() {
   if (kidsOn()) return kidsSystemPrompt();         // детский режим — своя короткая подсказка с правилами
   const p = persona(), others = PERSONAS.filter(x => x.id !== p.id).map(x => `${x.name} — ${(x.role || "").toLowerCase()}`).join("; ");
   const parts = [p.character, window.DEWIAR_TALK_RULES || "", (window.DEWIAR_GENDER_RULES || {})[p.gender] || "", p.focus, window.DEWIAR_VOICE_RULES || "Отвечай коротко, живой речью, по-русски.",
@@ -1886,7 +1947,8 @@ function systemPrompt() {
     + "Снимок уже сделан и его просят показать снова («покажи фото», «покажи на экране») — show_photo. Не отвечай «Вот» и «Смотрю», не вызвав камеру: без вызова ничего не покажется.",
     // время меняется каждую минуту — оно в справке к вопросу (turnContext), а подсказка остаётся прежней: свой сервер
     // модели берёт её из кэша, а не перечитывает целиком (отзыв 19.10: «на своём сервере долго отвечает»)
-    "Текущие дата и время — в справке в начале последнего сообщения пользователя; они верные, а время и даты из прошлых реплик разговора устарели — не повторяй их."];
+    "Текущие дата и время — в справке в начале последнего сообщения пользователя; они верные, а время и даты из прошлых реплик разговора устарели — не повторяй их. "
+    + "Справка «О пользователе и о тебе» в начале разговора всегда свежая (приложение обновляет её к каждому вопросу) — память, дела и прочее бери из неё."];
   const hands = typeof D.handsState === "function" ? D.handsState() : "";
   if (!D.web) parts.push(hands === "on"
     ? "Ты умеешь работать в других приложениях телефона, как человек пальцем: open_app, затем phone_screen (что на экране), phone_tap, phone_type, phone_scroll, phone_nav. "
@@ -1896,16 +1958,23 @@ function systemPrompt() {
       + "Пароли и коды не вводи. Не получилось за несколько попыток — честно скажи, на чём остановился."
     : "Нажимать в других приложениях (написать в мессенджере конкретному человеку, найти что-то внутри приложения) ты сможешь, если пользователь включит «Управлять приложениями» "
       + "(Настройки Dewiar → Ещё). На такую просьбу вызови phone_screen — он объяснит, как включить; сам не притворяйся, что сделал.");
+  try { parts.push(mindConst()); } catch (e) { }
+  try { parts.push(doneRules()); } catch (e) { }
+  try { parts.push(srPrompt()); } catch (e) { }             // «Для старших» (senior.js) — правила режима, без счётчиков
+  return parts.filter(Boolean).join("\n\n");
+}
+function systemPersonal() {
+  if (kidsOn()) return "";
+  const parts = [];
   if (S.user_name) parts.push(`Собеседника зовут ${S.user_name}.`);
   { const mem = memArr(); if (mem.length) parts.push((pmemOwn(persona().name) ? "Что ты знаешь о пользователе (твоя собственная память — другие персонажи её не видят):\n- " : "Что ты знаешь о пользователе:\n- ") + mem.slice(-MEM_CORE).join("\n- ")
     + (mem.length > MEM_CORE ? `\n(И ещё ${mem.length - MEM_CORE} — нужное к вопросу придёт в справке «Из памяти».)` : "")); }
   { const rl = Object.entries(S.relations || {}).filter(([, v]) => v && v.name); if (rl.length) parts.push("Кто есть кто в контактах (для звонков и сообщений): " + rl.map(([k, v]) => `${REL_RU[k] || k} — «${v.name}»`).join(", ") + "."); }
   const mp = mindPrompt(); if (mp) parts.push(mp.trim());
   // «что было недавно» растёт с каждой репликой — в справке к вопросу (turnContext), чтобы подсказка не менялась
-  try { parts.push(donePrompt()); } catch (e) { }
+  try { parts.push(doneNow()); } catch (e) { }
   if (S.sync.on && syncChan() && pcSeen()) parts.push("Большую задачу (исследование с отчётом, документ, презентация, работа с файлами или кодом) не делай в разговоре — передай компьютеру пользователя (start_task) и скажи, что взялся: ход и итог появятся здесь, в «Мой день» → «Сделанное».");
   try { parts.push(clPrompt()); } catch (e) { }
-  try { parts.push(srPrompt()); } catch (e) { }             // «Для старших» (senior.js)
   try { parts.push(wkPrompt()); } catch (e) { }
   try { parts.push(bsPrompt()); } catch (e) { }
   parts.push(convPrompt());
@@ -2095,7 +2164,10 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     body = { model, stream: true, messages: inPrompt ? promptToolMessages(messages, tools) : messages, max_tokens: limit, temperature: llmTemp() };
     if (!S.llm.no_kwargs && !/openai\.com|openrouter|deepseek|anthropic|googleapis/.test(url)) body.chat_template_kwargs = { enable_thinking: think };
     if (tools && tools.length && !inPrompt) { body.tools = tools.map(t => ({ type: "function", function: t })); body.tool_choice = "auto"; }
+    // «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — только там, где поле точно понимают
+    if (S.llm.no_usage !== llmBase() && (["dewiar", "local", "server"].includes(brainKind()) || /openai\.com|openrouter|deepseek\.com/.test(url))) body.stream_options = { include_usage: true };
   }
+  const tAsk = Date.now(); let tFirst = 0, usage = null;
   let hold = null, held = "", text = "", buf = "", inThink = false, gate = true, gbuf = "", tcBuf = "", inTool = false, finish = "", sawReason = false;
   let afterCall = false, dropped = "";      // текст после вызова — сочинённый до результата: не озвучиваем
   const known = new Set((tools || []).map(x => x.name));
@@ -2123,7 +2195,9 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
      DSMLFilter в core/llm.py; начало тега, разрезанное между кусками, придерживаем. */
   const CJK_RX = /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff00-\uff60]+/g;
   const lastUser = [...(messages || [])].reverse().find(m => m && m.role === "user");
-  const lastTxt = lastUser ? (typeof lastUser.content === "string" ? lastUser.content : JSON.stringify(lastUser.content || "")) : "";
+  let lastTxt = lastUser ? (typeof lastUser.content === "string" ? lastUser.content : JSON.stringify(lastUser.content || "")) : "";
+  // рецензия 04.11: только сам вопрос — в справке перед ним (память «был в Китае») слова «китай» не в счёт
+  for (const mk of ["(Сообщение пользователя)\n", "(Дальше — разговор)\n"]) { const i = lastTxt.lastIndexOf(mk); if (i >= 0) { lastTxt = lastTxt.slice(i + mk.length); break; } }
   const noCjk = !/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]|китай|япон|корей|иероглиф|chinese|japanese|korean|mandarin|kanji|hanzi/i.test(lastTxt);
   let dsBuf = "", dsIn = false;
   // №348: и «<DSML calls>», «<DSML invoke …>» без «｜», все аргументы — одним JSON в parameter name="arguments"
@@ -2206,10 +2280,12 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   let srv = "";                             // какой сервер облака отвечал (строка-комментарий «: dewiar-server …», 0.81)
   const line = (l) => {
     l = l.trim(); if (!l) return;
+    if (!tFirst) tFirst = Date.now();
     if (!ollama && l.startsWith(":")) { const m = /^:\s*dewiar-server\s+(\S+)/.exec(l); if (m) srv = m[1]; return; }   // и «: keepalive» — поток жив
     if (!ollama) { if (!l.startsWith("data:")) return; l = l.slice(5).trim(); if (l === "[DONE]") return; }
     let o; try { o = JSON.parse(l); } catch (e) { return; }
     if (o.error) throw new Error(typeof o.error === "string" ? o.error : (o.error.message || "ошибка модели"));
+    try { usage = usageOf(o) || usage; } catch (e) { }
     if (ollama) {
       const m = o.message || {};
       if (m.thinking) sawReason = true;
@@ -2232,6 +2308,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
      поле, а функции полем принимает — так они работают лучше), потом — функции текстом (а не полем tools), в конце —
      без функций вовсе. Возвращает новый вызов или null, если пробовать больше нечего. */
   const retryRejected = () => {
+    if (body.stream_options) { S.llm.no_usage = llmBase(); saveS(); return llmStream(messages, tools, onText, signal, opt); }   // подсчёт токенов — лишний
     if (body.chat_template_kwargs) { S.llm.no_kwargs = true; saveS(); return llmStream(messages, tools, onText, signal, opt); }
     if (body.tools) { S.llm.tools_prompt = llmBase(); saveS(); return llmStream(messages, tools, onText, signal, opt); }
     if (tools && tools.length) return llmStream(messages, null, onText, signal, opt);
@@ -2274,6 +2351,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     const again = retryRejected(); if (again) return again;
   }
   if (srv) { turnServers.add(srv); if (srv !== "main") plog("info", `🖥 ответил сервер облака ${srv}`); }   // экзамен 0.9.18: кто выдумал — видно в отчёте
+  if (usage && usage.prompt) { plog("info", usageLine(usage, ((tFirst || Date.now()) - tAsk) / 1000)); hCache(usage); }
   if (err) throw err;
   if (inTool && tcBuf.trim()) tcRaw.push(tcBuf);
   const found = Object.values(calls).filter(c => c.name);
@@ -2546,7 +2624,10 @@ async function ask(text, opts = {}) {
   const nq = (t) => String(t || "").toLowerCase().replace(/ё/g, "е").replace(/[^a-zа-я0-9]+/g, " ").trim();
   const againAsk = !opts.hidden && text.length < 300 && liveHistory().slice(-12).some(m => m.role === "user" && nq(m.content) === nq(text));
   const AGAIN_NOTE = "\n\nЧеловек повторил вопрос, на который ответ уже был, — значит, прошлый ответ его не устроил. Не повторяй его: ответь иначе — конкретнее, с другими примерами, другими словами.";
-  const msgs = [{ role: "system", content: systemPrompt() + (!opts.hidden && POEM_ASK.test(text) ? POEM_NOTE : !opts.hidden && RECO_ASK.test(text) ? RECO_NOTE : !opts.hidden && STORY_ASK.test(text) ? STORY_NOTE : "") + (againAsk ? AGAIN_NOTE : "") + (rudeNow ? BOUNDARY_NOTE + " Эту фразу ты уже сказала вслух: «Мне неприятно, когда со мной так разговаривают, но помогу». Не повторяй её — сразу помоги с просьбой одной-двумя фразами." : "") }]
+  // подсказка — одна и та же (кэш сервера модели); подсказки к роду просьбы (стихи, советы, повтор, грубость) — в справку к вопросу
+  const turnNotes = [(!opts.hidden && POEM_ASK.test(text) ? POEM_NOTE : !opts.hidden && RECO_ASK.test(text) ? RECO_NOTE : !opts.hidden && STORY_ASK.test(text) ? STORY_NOTE : ""), (againAsk ? AGAIN_NOTE : ""),
+    (rudeNow ? BOUNDARY_NOTE + " Эту фразу ты уже сказала вслух: «Мне неприятно, когда со мной так разговаривают, но помогу». Не повторяй её — сразу помоги с просьбой одной-двумя фразами." : "")].map(x => String(x || "").trim()).filter(Boolean);
+  const msgs = [{ role: "system", content: systemStable() }]
     .concat(chatHistory(liveHistory().slice(-2 * (CONV_TURNS + 2 * CONV_MARGIN)), opts.hidden ? text : text.replace(LISTEN_LEAD, "")));
   if (att.length) {                               // вложения — в последнюю реплику человека: текст файлов и картинки
     const last = msgs[msgs.length - 1];
@@ -2588,7 +2669,7 @@ async function ask(text, opts = {}) {
   lastDone = "";
   try {
     let guided = false;                                      // руководство приложено к вопросу (как вызов app_help)
-    const ctxParts = [turnContext(text)];                   // меняющееся — в справку к вопросу, подсказка остаётся прежней
+    const ctxParts = [turnContext(text)].concat(turnNotes);   // меняющееся — в справку к вопросу, подсказка остаётся прежней
     if (!opts.hidden) {
       const kb = await personaKnowledge(text);
       if (turnAbort !== ctl) return;
@@ -2603,11 +2684,12 @@ async function ask(text, opts = {}) {
       const pl = agendaPlans(text);                    // «что у меня в среду?» — запомненное и напоминания на этот день сразу
       if (pl) ctxParts.push("ПЛАНЫ ПОЛЬЗОВАТЕЛЯ на этот день (кроме календаря):" + pl);
       if (DIAGRAM_ASK.test(text))                      // экзамен 15.10: «Схема готова, она уже на экране» — а схемы нет
-        msgs[0].content += "\n\nСЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши «схема готова» или «на экране», не нарисовав её, и не делай схему через make_app. Сначала блок, потом одна-две фразы о главном.";
+        ctxParts.push("СЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши «схема готова» или «на экране», не нарисовав её, и не делай схему через make_app. Сначала блок, потом одна-две фразы о главном.");
     }
     // фото в вопросе (или только что снятое): перевод, документ, еда — как отвечать (идеи пользователей 24.10; компьютер — VISION_HINT)
     { const lm = msgs[msgs.length - 1]; if (lm && Array.isArray(lm.content) && lm.content.some(x => x.type === "image_url")) ctxParts.push(VISION_HINT); }
     putContext(msgs, ctxParts.filter(Boolean).join("\n\n"));
+    putProfile(msgs, systemPersonal());               // личное — справкой в начале разговора, не в подсказке
     const called = new Set(); let nudged = false;      // какие инструменты уже вызваны в этом ходе; напоминали ли «сделай по-настоящему»
     if (guided) called.add("app_help");
     let toolOk = false, toolErr = "", spoke = false;   // хоть один инструмент сработал; первая ошибка; просили ли ответить словами
@@ -2691,18 +2773,20 @@ async function ask(text, opts = {}) {
       if (sfix) { nudged = true; msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: sfix }); sink.push(" "); continue; }   // «Готово», а ничего не сделано (№66)
       const dfix = !r.calls.length && !drew && round < maxRounds - 1 ? diagramMissing(text, sink.text() + (r.text || ""), called) : "";
       if (dfix) { drew = true; msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: dfix }); sink.push(" "); continue; }   // «нарисуй схему» — словами
+      if (!r.calls.length && round === 0 && REFUSAL_RX.test(r.text || "") && String(r.text).length < 1200) {
+        // «у меня нет доступа к интернету», а поиск есть — один раз просим поискать (как в задачах на компьютере).
+        // Раньше проверок ниже: «у меня нет…» FEATURE_DENY принимал за «такой функции нет» и просил app_help, а до поиска
+        // дело уже не доходило (android_conv_test, 04.11: «Сколько сейчас стоит биткоин?» — «ПРОВЕРКА: вопрос про приложение»)
+        msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: REFUSAL_NUDGE });
+        sink.push(" Секунду — посмотрю в интернете. ");
+        continue;
+      }
       // экзамен 0.9.18: «на столько же минут» — другое число; погода числами без weather; «покажи, как выглядит» — без картинок;
       // «в Dewiar такого нет» без руководства; «через сколько дней» — без числа; поручение — «Я проверю.» (один раз за ход)
       const xfix = !opts.hidden && !r.calls.length && !xAsked && round < maxRounds - 1 ? (sameMinutesFix(text, doneCalls) || inventedFacts(text, sink.text() + (r.text || ""), called)
         || imagesMissing(text, r.text || "", called) || appHelpMissing(text, r.text || "", called) || daysMissing(text, sink.text() + (r.text || ""), called)
         || (!nudged ? orderUndone(text, r.text || "", called) : "")) : "";
       if (xfix) { xAsked = true; msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: xfix }); sink.push(" "); continue; }
-      if (!r.calls.length && round === 0 && REFUSAL_RX.test(r.text || "") && String(r.text).length < 1200) {
-        // «у меня нет доступа к интернету», а поиск есть — один раз просим поискать (как в задачах на компьютере)
-        msgs.push({ role: "assistant", content: r.text || "" }, { role: "user", content: REFUSAL_NUDGE });
-        sink.push(" Секунду — посмотрю в интернете. ");
-        continue;
-      }
       if (!r.calls.length) break;
       msgs.push({ role: "assistant", content: r.text || "", tool_calls: r.calls.map(c => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.args || "{}" } })) });
       const shots = [];
@@ -3172,6 +3256,13 @@ async function quick(text) {
   // «запиши в заметки …», «добавь в заметки …», «заметка: …» — сразу в заметки, без модели: модель иногда отвечала
   // «Записала.», не вызвав save_note, и заметка терялась (отзыв 11.10). Текст — как сказан, заголовок — первые слова.
   // «запланируй на сегодня: в 13 …, в 16 …» — дела дня; «я позвонил в банк», «готово, купил хлеб» — отметка (17.10, без модели)
+  // №519 (04.11, «Раньше сама обновлялась, сейчас нет»; «обновись» — «Я не могу обновить саму себя»): обновление — делом, без модели
+  // Рецензия 0.82: скачивать сразу — только на просьбу обновиться («обновись», «обнови приложение», «установи обновление»);
+  // «проверь обновления», «есть новая версия?» — только сказать и показать «О приложении»
+  { const ut = t.replace(/^([а-яa-z-]+)\s*,?\s+(?=\S)/, (m, w) => findPersona(w, true) ? "" : m);
+    const ui = !D.web && /^(?:обновись|обнови\s+(?:себя|приложение|программу|dewiar|девиар)|установи\s+обновлени[ея])$/.test(ut);
+    const uq = ui || (!D.web && /^(?:обновить?\s+(?:себя|приложение|программу|dewiar|девиар)|проверь\s+обновлени[ея]|(?:есть\s+(?:ли\s+)?)?(?:новая\s+версия|обновлени[ея])(?:\s+есть)?)$/.test(ut));
+    if (uq) return { say: await updateSay(ui) }; }
   { const pq = planQuick(text); if (pq) return pq; }
   { const dq = doneQuick(text); if (dq) return dq; }
   { const dr = draftQuick(text.replace(/^[А-ЯЁA-Z][а-яёa-z-]+\s*,\s*(?=\S)/, (m) => findPersona(m.replace(/[\s,]/g, ""), true) ? "" : m)); if (dr) return { say: dr }; }
@@ -3521,7 +3612,9 @@ const CLAIMS = [
   // №405 (29.10): «Запиши потраченную 2.000 руб» — «Записала», а money_add не вызван: в «Деньгах» пусто, человек переспрашивает
   { rx: /(?:^|[^а-яёa-z])(?:записал[аи]?|записано|внесл[аи]|внесено|добавил[аи]?|добавлено|занесл[аи]|занесено|учл[аи]|учтено|отметил[аи]?|отмечено|зафиксировал[аи]?|зафиксировано|сохранил[аи]?|сохранено|готово)(?![а-яё])/i,
     tool: "money_add", what: "записал(а) трату или доход (сумма числом: 2.000 и 2 000 — это две тысячи)",
-    user: /(?:трат|расход|доход|потрат|заплатил|оплатил|купил|зарплат|получил)[^?]*\d|\d[^?]*(?:руб|₽|byn|бел|долл|евро|тенге|грив|тыс)/i },
+    // сумма как решение или план («остановимся на 65 тысячах» о бюджете, «лимит 30 тысяч») — не трата: money_add выдумал бы
+    // расход (как core/quality._MONEY_PLAN); «записала» без действия там ловит общая проверка — модель выберет remember
+    user: /^(?![\s\S]*(?:^|[^а-яё])(?:бюджет|лимит|остановимся|останавливаемся|договорились|накоп|копить|копим|откладыва|мечта|цел[ьию](?![а-яё])))[\s\S]*?(?:(?:трат|расход|доход|потрат|заплатил|оплатил|купил|зарплат|получил)[^?]*\d|\d[^?]*(?:руб|₽|byn|бел|долл|евро|тенге|грив|тыс))/i },
   { rx: /(?:^|[.!—–-]\s*|,\s*)(?:хорошо,?\s*|секунду,?\s*|сейчас\s+)?(?:звоню|набираю|перезваниваю|позвоню|вызываю)(?:\s|[.!:,]|$)/i, tool: "call", what: "звонишь" },
   { rx: /(?:^|[.!]\s*)(?:хорошо,?\s*)?(?:включаю|ставлю|переключаю(?:сь)?(?:\s+на)?|запускаю)\s+(?:радио|станци|«|"|волну|[А-ЯЁA-Z])/, tool: "play_radio (или radio_control с action next, если просят другую станцию)", what: "включаешь радио" },
   { rx: /(?:^|[.!]\s*)(?:сейчас\s+)?(?:фотографирую|делаю (?:снимок|фото)|смотрю через камеру|открываю камеру)/i, tool: "take_photo", what: "фотографируешь" },
@@ -5497,11 +5590,12 @@ function renderMemPanel() {
 $("#b-hist").onclick = () => {
   const h = history.slice(-40);
   $("#hlist").innerHTML = h.length ? h.map((m, i) => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? `<div>${esc(m.content)}</div>`
-      : `<div class="ans">${mdAnswer(m.content)}${m.img && window.DewiarRich ? DewiarRich.gallery(m.img) : ""}</div>`}${m.role !== "user" ? `<small class="mrow">${m.who ? esc((PERSONAS.find(p => p.id === m.who) || {}).name || "") : ""}${speechText(String(m.content || "")) ? `<button class="mlisten" data-li="${i}" aria-label="Прослушать ответ">${LISTEN_IC}<span>Прослушать</span></button>` : ""}</small>` : ""}</div>`).join("")
+      : `<div class="ans">${mdAnswer(m.content)}${m.img && window.DewiarRich ? DewiarRich.gallery(m.img) : ""}</div>`}${m.role !== "user" ? `<small class="mrow">${m.who ? esc((PERSONAS.find(p => p.id === m.who) || {}).name || "") : ""}${speechText(String(m.content || "")) ? `<button class="mlisten" data-li="${i}" aria-label="Прослушать ответ">${LISTEN_IC}<span>Прослушать</span></button>` : ""}${String(m.content || "").trim() ? `<span class="macts"><button data-ma="copy" data-li="${i}" aria-label="Скопировать ответ" title="Скопировать">${ICON_COPY}</button><button data-ma="note" data-li="${i}" aria-label="В заметки" title="В заметки">${ICON_NOTE}</button><button data-ma="save" data-li="${i}" aria-label="Скачать ответ файлом" title="Скачать (.md)">${ICON_SAVE}</button></span>` : ""}</small>` : ""}</div>`).join("")
     : `<div class="empty">Разговор пуст. Нажмите микрофон и спросите что-нибудь.</div>`;
   if (window.DewiarRich) DewiarRich.diagrams($("#hlist"));
   wirePics($("#hlist"));
   $$("#hlist .mlisten").forEach(b => b.onclick = () => listenToggle(b, String((h[+b.dataset.li] || {}).content || "")));
+  $$("#hlist [data-ma]").forEach(b => b.onclick = () => ansAct(b.dataset.ma, String((h[+b.dataset.li] || {}).content || "")));   // №127
   openSheet("#sh-hist"); setTimeout(() => $("#sh-hist").scrollTop = 1e6, 50);
 };
 $("#h-clear").onclick = () => { history = []; saveH(); convReset(); $("#b-hist").onclick(); toast("Начинаем заново"); };
@@ -5899,7 +5993,7 @@ function renderTricks() {
   $$(".trk", box).forEach(b => b.onclick = () => {
     const say = b.dataset.say;
     closeSheets();
-    if (b.dataset.fill) { $("#typebox").classList.add("on"); $("#typed").value = say.replace(/…$/, " ").replace(/:\s*…?$/, ": "); setTimeout(() => $("#typed").focus(), 250); return; }
+    if (b.dataset.fill) { $("#typebox").classList.add("on"); $("#typed").value = say.replace(/…$/, " ").replace(/:\s*…?$/, ": "); typedGrow(); setTimeout(() => $("#typed").focus(), 250); return; }
     setTimeout(() => ask(say), 200);
   });
 }
@@ -5962,12 +6056,16 @@ function doneReport(days) {
     + `\nДостижения: ${s.earned.length ? s.earned.map(a => a.icon + " " + a.name).join(", ") : "пока нет"}.`
     + (next.length ? ` Следующие: ${next.map(a => `${a.icon} ${a.name} (${a.what}, сейчас ${achVal(a, s)})`).join("; ")}.` : "");
 }
-function donePrompt() {
-  const s = doneStats();
+function donePrompt() { return doneRules() + " " + doneNow(); }
+/* правила — в общей подсказке; сколько сделано сегодня — в личной справке (меняется с каждой отметкой) */
+function doneRules() {
   return "ДЕЛА И ДОСТИЖЕНИЯ. «Запланируй на сегодня…», «план на день», «мои дела на завтра» — это дела, не календарь: на каждое дело — свой set_reminder с его временем. Встреча, запись к мастеру, дело со временем («запиши встречу с Ирой на вторник в 12», «завтра в 13 у меня массаж», «в 8:10 встреча с Максимом») — тоже дело: set_reminder на это время, не заметка; «напомни за день / за час» — ещё один set_reminder на то время. В календарь — только если прямо сказано «в календарь». Поставил(а) или отметил(а) дело — подтверди одной фразой только его; остальные дела и планы вслух не перечисляй, пока не спросят: рядом могут быть чужие люди (19.10: «перед клиентами начал вслух перечислять то, что касается только меня»). Пользователь говорит, что сделал дело («я позвонила Игорю и сделала тренировку», «отметь как исполненное», «готово, купил хлеб») — "
     + "вызови mark_done (каждое дело — отдельной строкой, коротко: «Позвонить Игорю», «Тренировка»), подходящее напоминание закроется само; потом похвали коротко, одной фразой. "
-    + "Отметил по ошибке — mark_done с undo. «Что я сегодня сделал», «мои достижения» — done_report. "
-    + `Сейчас: сегодня сделано ${s.today} ${delaRu(s.today)}` + (s.items.length ? ` (${s.items.slice(-6).map(x => x.title).join("; ")})` : "")
+    + "Отметил по ошибке — mark_done с undo. «Что я сегодня сделал», «мои достижения» — done_report.";
+}
+function doneNow() {
+  const s = doneStats();
+  return `Дела сейчас: сегодня сделано ${s.today} ${delaRu(s.today)}` + (s.items.length ? ` (${s.items.slice(-6).map(x => x.title).join("; ")})` : "")
     + (s.streak >= 2 ? `, серия ${s.streak} ${dnRu(s.streak)} подряд` : "") + `, всего ${s.total}.`;
 }
 
@@ -7381,11 +7479,16 @@ function taskToPc(title, goal, to) {
 }
 const pcOnline = () => (syncStatus.devices || []).some(x => x.pc && x.name !== "Облако Dewiar" && Date.now() / 1000 - (x.seen || 0) < 180);
 const pcSeen = () => (syncStatus.devices || []).some(x => x.pc && Date.now() / 1000 - (x.seen || 0) < 14 * 86400);   // компьютер на связи (за 2 недели)
+const mindBody = (t) => String(t || "").replace(/^\s*#[^\n]*\n+/, "").replace(/^_[^\n]*_\s*\n+/gm, "").trim();
+/* конституция — правила (честность, подтверждение необратимого, «не помогаю вредить»): в самой подсказке (systemStable) */
+function mindConst() {
+  const c = mindBody(mind().constitution).slice(0, 1800);
+  return c ? "ТВОЯ КОНСТИТУЦИЯ — принципы, которые ты соблюдаешь всегда, с любым характером и в любом настроении (их написал пользователь; ты их не меняешь):\n" + c : "";
+}
+/* душа и выводы ночи — в личной справке (systemPersonal) */
 function mindPrompt() {
-  const m = mind(), p = persona(), body = (t) => String(t || "").replace(/^\s*#[^\n]*\n+/, "").replace(/^_[^\n]*_\s*\n+/gm, "").trim();
+  const m = mind(), p = persona(), body = mindBody;
   let out = "";
-  const c = body(m.constitution).slice(0, 1800);
-  if (c) out += "\n\nТВОЯ КОНСТИТУЦИЯ — принципы, которые ты соблюдаешь всегда, с любым характером и в любом настроении (их написал пользователь; ты их не меняешь):\n" + c;
   const sl = body((m.souls[p.name] || {}).text).slice(0, 1400);
   if (sl) out += "\n\nТВОЯ ДУША — автопортрет, который ты сам(а) пишешь по своему дневнику. Это ты; но характер и конституция важнее:\n" + sl;
   const ins = m.insights;
@@ -8584,6 +8687,25 @@ N.on("upd_ready", () => { plog("info", "⬇️ обновление скачан
 N.on("upd_error", e => updRender(`Не скачалось: ${esc(e.error || "ошибка связи")}.<button class="btn w" id="upd-go" style="margin-top:8px">Попробовать ещё раз</button>`, "bad"));
 document.addEventListener("visibilitychange", () => { if (!document.hidden && updWantInstall && D.updateCanInstall && D.updateCanInstall()) { updWantInstall = false; updInstall(); } });
 const UPD_OLD = `<p class="hint" style="margin:8px 2px 0">Раньше обновления скачивал браузер — в «Загрузках» могли остаться старые Dewiar-….apk, их можно удалить.</p><button class="btn w" id="upd-dl" style="margin-top:6px">Открыть Загрузки</button>`;
+/* «обновись» голосом: есть новее — открываем «О приложении» и запускаем обновление; нет — говорим, какая стоит.
+   install=false («проверь обновления», «есть новая версия?») — только говорим и показываем «О приложении», без скачивания;
+   детский режим — не скачиваем и настройки (PIN) не открываем: обновление ставит взрослый */
+async function updateSay(install) {
+  const mine = JSON.parse(D.info() || "{}").version || "?";
+  try {
+    const a = (JSON.parse((await http("GET", UPD_URL, { timeout: 10000 })).body || "{}") || {}).android;
+    if (!a || cmpVer(a.version, mine) <= 0) return `У вас последняя версия — ${mine}.`;
+    if (typeof kidsOn === "function" && kidsOn()) return `Есть новая версия ${a.version}. Обновление ставит взрослый.`;
+    if (!install) {
+      openSettings("about");
+      setTimeout(() => { checkUpdate(true); }, 400);
+      return `Есть версия ${a.version}. Скажите «обновись» — обновлю.`;
+    }
+    openSettings("about");
+    setTimeout(() => { checkUpdate(true).then(() => { const g = $("#upd-go"); if (g) g.click(); }); }, 400);
+    return `Есть новая версия ${a.version} — обновляю. Всё ваше сохранится.`;
+  } catch (e) { return "Не получилось проверить обновление — нет связи с dewiar.pro. Попробуйте чуть позже."; }
+}
 async function checkUpdate(manual) {
   const r = $("#upd-res");
   try {
@@ -8684,7 +8806,22 @@ $("#mic").onclick = () => {
 $("#orbwrap").onclick = () => $("#mic").onclick();
 new MutationObserver(() => document.body.classList.toggle("typing", $("#typebox").classList.contains("on")))
   .observe($("#typebox"), { attributes: true, attributeFilter: ["class"] });     // поле ввода открыто — сцена выше него (app.css)
-$("#b-kb").onclick = () => { const b = $("#typebox"); b.classList.toggle("on"); if (b.classList.contains("on")) $("#typed").focus(); };
+$("#b-kb").onclick = () => { const b = $("#typebox"); b.classList.toggle("on"); if (b.classList.contains("on")) { typedGrow(); $("#typed").focus(); } };
+/* Идея №126 (04.11): поле — многострочное, растёт вверх по мере набора до 40% высоты экрана; сцена с ответом поднимается
+   над нижней панелью (--barh). Телефон (палец): Enter — новая строка, отправка — кнопкой; клавиатура компьютера (веб на
+   Mac и ПК): Enter — отправить, Shift+Enter — новая строка. */
+const TOUCH = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+function typedGrow() {
+  const t = $("#typed"); if (!t) return;
+  t.style.height = "auto";
+  const max = Math.round((window.visualViewport ? visualViewport.height : innerHeight) * 0.4);
+  t.style.height = Math.min(Math.max(50, t.scrollHeight + 2), max) + "px";
+  t.style.overflowY = t.scrollHeight + 2 > max ? "auto" : "hidden";
+}
+if (TOUCH) $("#typed").setAttribute("enterkeyhint", "enter");
+$("#typed").addEventListener("input", typedGrow);
+$("#typed").addEventListener("focus", typedGrow);
+if (window.ResizeObserver) new ResizeObserver(() => document.documentElement.style.setProperty("--barh", $("#bar").offsetHeight + "px")).observe($("#bar"));
 $("#talk-x").onclick = (e) => { e.stopPropagation(); talkDismiss(60); };
 (() => {                                                  // смахнуть сказанное вбок — тоже убрать (вертикально — прокрутка, как была)
   const t = $("#talk"); let sw = null;
@@ -8731,11 +8868,14 @@ $("#att-file").onchange = async (e) => {
 const sendTyped = () => {
   const t = $("#typed").value.trim(); if (!t && !attached.length) return;
   const att = attached; attached = []; renderAtts();
-  $("#typed").value = ""; $("#typed").blur();
+  $("#typed").value = ""; typedGrow(); $("#typed").blur();
   ask(t || (att.some(a => a.kind === "image") ? "Посмотри, пожалуйста." : "Посмотри этот файл."), att.length ? { attach: att } : {});
 };
 $("#send").onclick = sendTyped;
-$("#typed").onkeydown = (e) => { if (e.key === "Enter") sendTyped(); };
+$("#typed").onkeydown = (e) => {
+  if (e.key !== "Enter" || e.shiftKey || e.isComposing || e.keyCode === 229 || TOUCH) return;    // новая строка
+  e.preventDefault(); sendTyped();
+};
 N.on("intent", (e) => handleIntent(e));
 N.on("htmlview", (e) => { const f = htmlViewSave; htmlViewSave = null; if (e.save && f) f(); });
 // вернулись из настроек Android после «Включить» — карточка «Управлять приложениями» показывает новое состояние
@@ -8749,11 +8889,11 @@ function handleIntent(e) {
   if (!e || !e.action) return;
   if (e.action === "listen") { closeSheets(); listen(); }
   else if (e.action === "say") {        // текст, которым поделилось другое приложение, — в поле ввода: отправляет сам человек
-    closeSheets(); $("#typebox").classList.add("on"); $("#typed").value = String(e.text || "").slice(0, 4000); setTimeout(() => $("#typed").focus(), 300); }
+    closeSheets(); $("#typebox").classList.add("on"); $("#typed").value = String(e.text || "").slice(0, 4000); typedGrow(); setTimeout(() => $("#typed").focus(), 300); }
   else if (e.action === "type") { closeSheets(); $("#typebox").classList.add("on"); setTimeout(() => $("#typed").focus(), 300); }
   else if (e.action === "images") {     // фото из «Поделиться» — во вложения; подпись пишет сам человек («напомни завтра в 10»)
     closeSheets(); attached = attached.concat((e.images || []).map((url, i) => ({ kind: "image", name: "фото " + (i + 1), url }))).slice(0, ATT_MAX);
-    renderAtts(); $("#typebox").classList.add("on"); if (e.text && !$("#typed").value) $("#typed").value = String(e.text).slice(0, 2000);
+    renderAtts(); $("#typebox").classList.add("on"); if (e.text && !$("#typed").value) { $("#typed").value = String(e.text).slice(0, 2000); typedGrow(); }
     $("#typed").placeholder = "Например: напомни завтра в 10"; setTimeout(() => $("#typed").focus(), 300); }
   else if (e.action === "note") openNoteSoon(e.id);           // «Посмотреть вложения» в окне напоминания
   else if (e.action === "capture") captureStart();             // значок «Записать» на рабочем столе

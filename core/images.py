@@ -144,6 +144,12 @@ def search(query, n=4, searx_url="", via=None):
     raise err if isinstance(err, httpx.HTTPError) else httpx.HTTPError(str(err))
 
 
+def relevant(items, query):
+    """Картинки, в подписи которых есть слово запроса (по основе: «runestone» → «runest», «вязь» → «вязь»)."""
+    stems = {w.lower()[:max(4, min(6, len(w) - 2))] for w in re.findall(r"[\w-]{4,}", query or "")}
+    return [x for x in items or [] if any(st in f"{x.get('title', '')} {x.get('desc', '')}".lower() for st in stems)] if stems else list(items or [])
+
+
 def credit(items):
     """Подпись для модели и ленты: откуда картинки."""
     if items and all(x.get("source") == "commons" for x in items):

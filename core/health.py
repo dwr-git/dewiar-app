@@ -216,6 +216,26 @@ class HealthMixin:
         with self._health_lock:
             self._h[what] = int(self._h.get(what, 0)) + n
 
+    def health_cache(self, u, prof=None):
+        """«Голос без пауз» (04.11): запрос к модели — сколько токенов в подсказке и сколько сервер взял из кэша начала
+        запроса (llm.last_usage). Для пульса — суммы: n — запросов с подсчётом, k — из них сервер сказал про кэш, ptok и
+        cached — токены (по k), by — то же по «где думает». Только числа."""
+        if self._health_lock is None or not u or not u.get("prompt"):
+            return
+        kind = brain_kind(prof) if prof else "?"
+        with self._health_lock:
+            pc = self._h.setdefault("pcache", {})
+            pc["n"] = int(pc.get("n", 0)) + 1
+            pc["ptok_all"] = int(pc.get("ptok_all", 0)) + int(u["prompt"])
+            if u.get("cached") is not None:
+                pc["k"] = int(pc.get("k", 0)) + 1
+                pc["ptok"] = int(pc.get("ptok", 0)) + int(u["prompt"])
+                pc["cached"] = int(pc.get("cached", 0)) + int(u["cached"])
+                b = pc.setdefault("by", {}).setdefault(kind, [0, 0, 0])
+                b[0] += 1
+                b[1] += int(u["prompt"])
+                b[2] += int(u["cached"])
+
     def health_use(self, what, n=1):
         """«Чем пользуются» (0.67): сколько раз за день собирали «Совет ИИ», отвечал «Бот персонажа»… — только числа, чтобы
         решать, что развивать дальше (владелец 29.10: «бот на сервере — когда будут цифры»)."""
@@ -341,7 +361,7 @@ class HealthMixin:
                 "turns": h.get("turns", 0), "net_ok": h.get("net_ok", 0), "net_fail": h.get("net_fail", 0), "errors": h.get("errors", 0),
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
                 "problems": [{"sig": k, "text": v["text"], "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
-                "lat": self._lat_summary(), "uses": self._uses()}
+                "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}}
 
     def _lat_how(self):
         """Чем думает ассистент — для разбивки задержки голоса (dewiar, local, cloud…)."""
@@ -397,6 +417,18 @@ class HealthMixin:
                     if pr[sig]["n"] <= 0:
                         del pr[sig]
             self._h["starts"] = (self._h.get("starts") or [])[len(body["starts"]):]
+            pc, sent_pc = self._h.get("pcache") or {}, body.get("pcache") or {}
+            for k in ("n", "k", "ptok_all", "ptok", "cached"):     # кэш подсказки: вычесть отправленное
+                if k in pc:
+                    pc[k] = max(0, int(pc[k]) - int(sent_pc.get(k, 0)))
+            for kind, v in (sent_pc.get("by") or {}).items():
+                b = (pc.get("by") or {}).get(kind)
+                if b:
+                    pc["by"][kind] = [max(0, int(b[i]) - int(v[i])) for i in range(3)]
+                    if not pc["by"][kind][0]:
+                        del pc["by"][kind]
+            if pc and not pc.get("n"):
+                self._h.pop("pcache", None)
             u = self._h.get("uses") or {}
             for k, n in (body.get("uses") or {}).items():
                 if k in u and k not in ("pbot_on", "writing"):

@@ -10,8 +10,13 @@ from types import SimpleNamespace
 def start(tmp):
     # --- сертификаты: свой центр и «dewiar.pro» ---
     sh = lambda *a: subprocess.run(a, cwd=tmp, check=True, capture_output=True)
-    sh("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "ca.key", "-out", "ca.pem", "-days", "2", "-subj", "/CN=Dewiar Test CA")
-    (tmp / "ext.cnf").write_text("subjectAltName=DNS:dewiar.pro,DNS:*.dewiar.pro,DNS:my.site.test\nbasicConstraints=CA:FALSE\n")
+    # расширения — как у настоящих центров: Python 3.13 проверяет сертификаты строго (VERIFY_X509_STRICT) и без keyUsage
+    # у центра и authorityKeyIdentifier у сайта отвергает их («CA cert does not include key usage extension»)
+    sh("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "ca.key", "-out", "ca.pem", "-days", "2", "-subj", "/CN=Dewiar Test CA",
+       "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign", "-addext", "subjectKeyIdentifier=hash")
+    (tmp / "ext.cnf").write_text("subjectAltName=DNS:dewiar.pro,DNS:*.dewiar.pro,DNS:my.site.test\nbasicConstraints=CA:FALSE\n"
+                                 "keyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n"
+                                 "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n")
     sh("openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout", "site.key", "-out", "site.csr", "-subj", "/CN=dewiar.pro")
     sh("openssl", "x509", "-req", "-in", "site.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial", "-out", "site.pem", "-days", "2", "-extfile", "ext.cnf")
     SEEN = {"site": [], "socks": 0, "http": 0}

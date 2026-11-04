@@ -462,16 +462,129 @@ class BrainMixin:
                     self.emit("settings", settings=self.s.snapshot())
                 except CloudError as e:
                     log.info("☁ Вернуть модели Dewiar в «Мозг» не вышло: %s", e)
-            # распознавание: умеет ли облако речь — спрашиваем у сервера каждый раз; свой GigaAM не загрузился — речь серверу
+            # распознавание: умеет ли облако речь — спрашиваем у сервера каждый раз; свой GigaAM не загрузился — речь
+            # серверу, временно (№513: stt.auto_from помнит выбор человека)
             self._cloud_caps()
-            st = self.s.get("stt") or {}
-            if st.get("engine") in ("gigaam", "vosk") and self.status.get("stt_ready") is False and self._cloud_stt_ok():
-                self._apply_light_stt("cloud")
-                self.apply_engines()
-                log.info("🎤 Свой GigaAM не загрузился — речь распознаёт сервер Dewiar")
-                self.push("Речь распознаёт сервер Dewiar", "Своя модель распознавания не загрузилась — теперь речь распознаёт "
-                          "сервер Dewiar (тот же GigaAM). Вернуть — в «Слухе».", telegram=False)
-                self.emit("settings", settings=self.s.snapshot())
+            self._stt_temp_server()
+
+    # ---------- №513: временная замена распознавания не перезаписывает выбор человека ----------
+    # Пакет 04.11, №513: «после обновления слетают настройки распознавания — переключается на «Сервер Dewiar»». Ключ
+    # Dewiar подключался через 6 с после запуска, пока GigaAM ещё грузился (stt_ready=False — «ещё не готов», а не
+    # «сломался»), _ensure_brain отдавал речь серверу и записывал это в настройки насовсем. Теперь: на сервер — только
+    # если своя модель правда не загрузилась; выбор человека — в stt.auto_from; при следующем запуске и раз в час
+    # пробуем свою модель снова и возвращаемся к ней; студия показывает «временно — сервер Dewiar».
+
+    def _own_stt_failed(self):
+        """Своя модель распознавания не загрузилась (не «ещё грузится», а ошибка) -> bool."""
+        stt = getattr(self, "stt", None)
+        if isinstance(stt, GigaAMSTT):
+            return not stt.ready and not stt.loading and bool(stt.error)
+        from listen import NoSTT
+        return isinstance(stt, NoSTT)
+
+    def _stt_temp_server(self, quiet=False):
+        """Своя модель (gigaam/vosk) не загрузилась, а облако умеет речь — временно распознаёт сервер Dewiar; выбор
+        человека помним в stt.auto_from. -> True, если переключили."""
+        st = self.s.get("stt") or {}
+        if st.get("engine") not in ("gigaam", "vosk") or not self._own_stt_failed() or not self._cloud_stt_ok():
+            return False
+        own = st["engine"]
+        try:
+            self._apply_light_stt("cloud")
+        except Exception as e:  # noqa: BLE001
+            log.info("🎤 Временно отдать речь серверу не вышло: %s", e)
+            return False
+        self.s.update({"stt": {"auto_from": own}})
+        self._stt_retry_at = time.monotonic()
+        self.apply_engines()
+        log.info("🎤 Свой %s не загрузился — временно речь распознаёт сервер Dewiar (выбор «%s» сохранён)",
+                 "GigaAM" if own == "gigaam" else "Vosk", own)
+        if not quiet and not getattr(self, "_stt_was_temp", False):
+            self.push("Речь распознаёт сервер Dewiar — временно", "Своя модель распознавания не загрузилась — пока речь "
+                      "распознаёт сервер Dewiar (тот же GigaAM). Ваш выбор в «Слухе» сохранён: когда своя модель "
+                      "загрузится, вернусь к ней сам.", telegram=False)
+        self.emit("settings", settings=self.s.snapshot())
+        return True
+
+    def _stt_choice_back(self):
+        """При запуске: прошлый раз речь временно распознавал сервер (stt.auto_from) — сначала снова пробуем свою модель
+        (выбор человека); не загрузится — _background_loads опять временно отдаст речь серверу, без уведомления."""
+        back = self.s.get("stt", "auto_from") or ""
+        if not back:
+            return False
+        st = self.s.get("stt") or {}
+        if st.get("engine") != "remote" or not (st.get("remote") or {}).get("cloud"):
+            self.s.update({"stt": {"auto_from": ""}})          # человек сам выбрал другое — помнить нечего
+            return False
+        self.s.update({"stt": {"engine": back, "auto_from": "", "remote": {"cloud": False}}})
+        self._stt_was_temp = True
+        log.info("🎤 Распознавание — снова «%s», как выбрано в «Слухе» (сервер Dewiar был временной заменой)", back)
+        return True
+
+    def _stt_retry_own(self, every=3600):
+        """Раз в час (при _brain_watch): речь временно распознаёт сервер — пробуем вернуть свою модель. Рецензия 0.82:
+        GigaAM грузится долго и тяжело — не в потоке _brain_watch, а в отдельном (не больше одного сразу), и только если
+        модель уже скачана (cached); не загрузилась из-за нехватки памяти — не повторяем.
+        -> True, если вернулись сразу (модель уже готова или Vosk); поток загрузки — в self._stt_retry_thread."""
+        back = self.s.get("stt", "auto_from") or ""
+        if not back:
+            return False
+        st = self.s.get("stt") or {}
+        if st.get("engine") != "remote" or not (st.get("remote") or {}).get("cloud"):
+            self.s.update({"stt": {"auto_from": ""}})
+            return False
+        if time.monotonic() - getattr(self, "_stt_retry_at", -1e9) < every:
+            return False
+        th = getattr(self, "_stt_retry_thread", None)
+        if th is not None and th.is_alive():                  # прошлая попытка ещё грузит — вторую не начинаем
+            return False
+        self._stt_retry_at = time.monotonic()
+        if back == "gigaam":
+            name = st.get("gigaam_model") or "gigaam-v3-e2e-rnnt"
+            g = self.gigaam if getattr(self, "gigaam", None) and self.gigaam.model_name == name else GigaAMSTT(name)
+            if not g.ready:
+                if getattr(g, "oom", False):
+                    log.info("🎤 Свой GigaAM не загрузился из-за нехватки памяти — не повторяю, распознаёт сервер Dewiar")
+                    return False
+                if not g.cached():
+                    log.info("🎤 Свой GigaAM не скачан — в фоне не качаю, пока распознаёт сервер Dewiar")
+                    return False
+                self._stt_retry_thread = threading.Thread(target=self._stt_retry_load, args=(g, back), name="stt-retry", daemon=True)
+                self._stt_retry_thread.start()
+                return False
+            self.gigaam = g
+        elif getattr(self, "vosk_stt", None) is None:
+            return False
+        return self._stt_back_own(back)
+
+    def _stt_retry_load(self, g, back):
+        """Поток: загрузить свой GigaAM (с пониженным приоритетом) и, если вышло, вернуть выбор человека."""
+        try:
+            try:
+                from engine_base import low_priority
+                low_priority()
+            except Exception:  # noqa: BLE001
+                pass
+            if not g.load():
+                log.info("🎤 Свой GigaAM всё ещё не загружается (%s) — пока распознаёт сервер Dewiar", g.error or "без причины")
+                return
+            self.gigaam = g
+            self._stt_back_own(back)
+        except Exception:  # noqa: BLE001
+            log.exception("распознавание: возврат своей модели")
+
+    def _stt_back_own(self, back):
+        """Своя модель готова — вернуть выбор человека (если он не выбрал другое, пока грузили). -> bool."""
+        if (self.s.get("stt", "auto_from") or "") != back:      # пока грузили, человек выбрал сам
+            return False
+        self.s.update({"stt": {"engine": back, "auto_from": "", "remote": {"cloud": False}}})
+        self.apply_engines()
+        self.status["stt_ready"] = getattr(self.stt, "ready", True)
+        log.info("🎤 Своя модель распознавания загрузилась — снова распознаёт этот компьютер («%s»)", back)
+        self.push("Речь снова распознаёт этот компьютер", "Своя модель распознавания загрузилась — вернул ваш выбор из «Слуха».",
+                  telegram=False)
+        self.emit("settings", settings=self.s.snapshot())
+        return True
 
     def _brain_watch(self):
         """Фоновый поток: через 20 с после запуска (сеть и вход уже есть) и затем раз в 10 минут — проверить «мозг»
@@ -488,6 +601,10 @@ class BrainMixin:
                 self._ensure_brain(why)
             except Exception:  # noqa: BLE001
                 log.exception("мозг: проверка")
+            try:
+                self._stt_retry_own()                          # №513: речь временно у сервера — раз в час пробуем свою модель
+            except Exception:  # noqa: BLE001
+                log.exception("распознавание: возврат своей модели")
             why = "проверка"
             try:
                 self._dewiar_proxy_fetch()                     # прокси Dewiar (если включён) — свежий, пока сайт открывается

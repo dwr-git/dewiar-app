@@ -47,8 +47,8 @@ class FakePlayer:
 vosk, piper = FakeTTS("vosk", fail_on=("Nvidia",)), FakeTTS("piper")
 me = types.SimpleNamespace(s=types.SimpleNamespace(get=lambda *k: {"speed": 1.0}.get(k[-1])), _voice_cfg=lambda: {}, _output_muted=lambda: False,
                            _fx_name=lambda v: "off", player=FakePlayer(), set_state=lambda s: None,
-                           _engines_for_speech=lambda v: [vosk, piper], _synth_mixed=lambda eng, text, voice, sp: eng.synth(text, voice, sp), _wait_vosk_tts=lambda v: None, last_speak_end=0,
-                           vosk_tts=vosk, _said=[])
+                           _engines_for_speech=lambda v, force=False: [vosk, piper], _synth_mixed=lambda eng, text, voice, sp: eng.synth(text, voice, sp), _wait_vosk_tts=lambda v: None, last_speak_end=0,
+                           _remote_voice_down=lambda eng, e: None, vosk_tts=vosk, _said=[])
 turn = types.SimpleNamespace(cancel=threading.Event(), spoken=[])
 q = queue.Queue()
 for s in ["Привет, это первая фраза.", "Видеокарта Nvidia RTX, вторая фраза.", "И третья фраза."]:
@@ -57,10 +57,20 @@ q.put(None)
 E.Engine._speak_worker(me, turn, q)
 ok(not piper.said and len(vosk.said) == 3, f"одним голосом весь ответ (vosk: {len(vosk.said)} фраз, piper: {len(piper.said)})")
 vosk2, piper2 = FakeTTS("vosk", fail_on=("Привет",)), FakeTTS("piper")
-me._engines_for_speech = lambda v: [vosk2, piper2]
+me._engines_for_speech = lambda v, force=False: [vosk2, piper2]
 q = queue.Queue(); [q.put(s) for s in ["Привет!", "Вторая фраза.", None]]
 E.Engine._speak_worker(me, turn, q)
 ok(len(piper2.said) == 2 and not vosk2.said, "не вышло с первой фразы — весь ответ запасным голосом, без скачков")
+# сбой в самом потоке синтеза (не в движке) не вешает голос: фраза закрывается, ход заканчивается (раньше — ждал вечно)
+def _boom(eng, e):
+    raise AttributeError("сбой потока синтеза")
+me._remote_voice_down = _boom
+vosk3, piper3 = FakeTTS("vosk", fail_on=("Привет",)), FakeTTS("piper")
+me._engines_for_speech = lambda v, force=False: [vosk3, piper3]
+q = queue.Queue(); [q.put(s) for s in ["Привет!", "Вторая фраза.", None]]
+th = threading.Thread(target=E.Engine._speak_worker, args=(me, turn, q), daemon=True); th.start(); th.join(15)
+ok(not th.is_alive(), "сбой в потоке синтеза — голос не зависает, ход заканчивается")
+me._remote_voice_down = lambda eng, e: None
 
 # ---------- живое ядро: позвать персонажа, модель без зрения, отчёт ----------
 import websockets  # noqa: E402

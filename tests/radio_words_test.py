@@ -9,6 +9,9 @@ ok = lambda c, m: print(("✅ " if c else "❌ ") + m)
 ff = shutil.which("ffmpeg")
 if not ff or not shutil.which("espeak-ng"):
     print("нет ffmpeg/espeak-ng — пропускаю"); print("ALL OK"); sys.exit(0)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vosk_have import skip_without_vosk  # noqa: E402
+skip_without_vosk(ROOT)                                 # «тише», «следующую» из WAV слышит модель Vosk
 www = tmp / "www"; www.mkdir()
 subprocess.run([ff, "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=120", "-ac", "1", "-b:a", "64k",
                 str(www / "a.mp3")], check=True)

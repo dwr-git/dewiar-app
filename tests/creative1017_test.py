@@ -26,7 +26,8 @@ ok(llm.creative_temp("Напиши стих", 1.1) == 1.1, "температур
 ok(llm.creative_temp("Напиши стих", 0.3) == 0.3 and llm.creative_temp("Напиши стих", None) == 0.95 and llm.creative_temp("Который час?", None) == 0.7,
    "№311: свою температуру в профиле (0,3) творческая просьба не поднимает; без неё — 0,95")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
-ok("prof = dict(prof, temperature=temp)" in src and "system += POEM_NOTE" in src, "компьютер: ответ берёт эту температуру и ремесло рифмы")
+# 04.11 «Голос без пауз»: ремесло рифмы — в справке к вопросу (notes → ctx), подсказка остаётся прежней (кэш начала запроса)
+ok("prof = dict(prof, temperature=temp)" in src and "notes.append(POEM_NOTE)" in src, "компьютер: ответ берёт эту температуру и ремесло рифмы")
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 www = Path(tempfile.mkdtemp()) / "www"
