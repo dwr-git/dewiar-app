@@ -155,7 +155,7 @@ try:
         ok("Играет радио «Радио Шансон Москва»" in res and CATALOG and "tag=chanson" in CATALOG[-1],
            f"нет в своём списке — каталог radio-browser по жанру: {res[:70]} / {CATALOG[-1] if CATALOG else '—'}")
         res2 = pg.evaluate("runTool('radio_control', { action: 'pause' })")
-        ok(res2 == "Радио на паузе." and pg.evaluate("radio.state().state") == "paused", "radio_control pause — для модели")
+        ok(res2 == "На паузе." and pg.evaluate("radio.state().state") == "paused", "radio_control pause — для модели")
         pg.click("#r-pp"); pg.wait_for_timeout(200)
         ok(pg.evaluate("radio.state().state") == "playing", "кнопка на плашке — продолжить")
         pg.screenshot(path=str(www.parent / "radio-chip.png"))

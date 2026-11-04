@@ -11,7 +11,7 @@ const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [..
 function escH(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 // ошибки страницы — в журнал ядра (в отчёт): какой файл не загрузился и почему видно сразу, без догадок
 window.__jsErr = window.__jsErr || [];
-window.addEventListener("error", (e) => { window.__jsErr.push(`${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno || 0}`); });
+window.addEventListener("error", (e) => { if (/^ResizeObserver loop/i.test(e.message || "")) return; window.__jsErr.push(`${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno || 0}`); });
 let S = null, personas = [], active = "lira", entities = [];
 // логотип в меню виден всегда — в покой (~6 кадров/с) уже через 4 с тишины, а не через 20 (03.11: на слабом компьютере
 // живой логотип один занимал до половины времени страницы)

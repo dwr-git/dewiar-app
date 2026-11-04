@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -49,13 +50,16 @@ class FakeS:
 
 class PC:
     def __init__(self, hub):
-        self.hub = hub
+        self.hub = self.homehub = hub                     # узел этого компьютера: реестр связанных телефонов
         self.workspace = Workspace(FakeS())
         self.reminders = Reminders(lambda it: None)
         self.reminders.path = tmp / "reminders.json"; self.reminders.items = []
         self.money = Money(tmp / "money.json", self.workspace, lambda: "BYN")
         self.sync = Sync(self)
         self.home = HomeSync(self, self.sync)
+        self.made = []
+        self.tasks = types.SimpleNamespace(tasks={}, create=lambda title, goal, project="": (self.made.append((title, goal)), types.SimpleNamespace(title=title))[1])
+    def push(self, *a, **k): pass
     def credentials(self): return "", "", ""                       # облака нет совсем
     def home_credentials(self): return self.hub.own_token(), "", f"http://127.0.0.1:{self.hub.port}/"
     def device_name(self): return "Домашний"
@@ -173,6 +177,75 @@ try:
         ok("компьютер дома" in txt.lower() and "Домашний" in txt and "Отключить" in txt and "ввести код" not in txt.lower(), "«Устройства»: компьютер дома и «Отключить»; облачного «Ввести код» нет")
         pg.screenshot(path=str(Path(os.environ.get("DEWIAR_SHOTS") or tmp) / "home-phone.png"))
 
+        # ---- задания с телефона по Wi-Fi (04.11: «Лира на смартфоне могла бы давать задания конкретным ПК»; раньше
+        # узел забирал задание в _claims, а взяться — некому: следующим обменом оно удалялось, телефон его уже забыл) ----
+        R7 = pg.evaluate("""async () => { while (syncBusy) await new Promise(r => setTimeout(r, 100));
+            const said = await runTool("start_task", { title: "Отчёт", goal: "Собрать отчёт за неделю" });
+            await syncRun(true); return { said, q: qGet("taskq").length }; }""")
+        A.home.run_once(); A.home.run_once()
+        ok(R7["q"] == 0 and [m[0] for m in A.made] == ["Отчёт"] and "Собрать отчёт за неделю" in A.made[0][1],
+           f"задание с телефона по Wi-Fi — компьютер взялся (и один раз): {A.made} {R7['said'][:50]}")
+        # второй компьютер — из облака этого (узел показывает телефону и его); облака нет — честное «не передано»
+        hub.others = lambda: [{"id": "pc-rabochij", "name": "Рабочий", "app": "pc", "seen": int(time.time()) - 20, "ver": "0.82.0"}]
+        R8 = pg.evaluate("""async () => { while (syncBusy) await new Promise(r => setTimeout(r, 100)); await syncRun(true);
+            const comps = devComputers().map(c => c.name + ":" + c.on);
+            const said = await runTool("start_task", { title: "Презентация", goal: "Презентация к встрече", on: "на рабочем" });
+            const q = qGet("taskq").slice(-1)[0]; await syncRun(true); return { comps, said, q }; }""")
+        ok("Рабочий:true" in R8["comps"] and R8["q"] and R8["q"].get("to") == "pc-rabochij",
+           f"по Wi-Fi телефон видит и второй компьютер (из облака первого) и ставит задание ему: {R8['comps']} {R8['said'][:60]}")
+        ok("итог увидите там" in R8["said"] and "уже берётся" not in R8["said"],
+           f"итог пересланного на телефон по Wi-Fi не вернётся — так и сказано, без «уже берётся»: {R8['said'][:90]}")
+        A.home.run_once(); A.home.run_once()
+        R9 = pg.evaluate("""async () => { await syncRun(true); const t = Object.values(mind().tasks).find(v => v.title === "Презентация"); return t || null; }""")
+        ok(R9 and R9.get("status") == "failed" and "Рабочий" in R9.get("error", "") and "не на связи" in R9["error"] and "dewiar.pro" in R9["error"]
+           and "Презентация" not in [m[0] for m in A.made],
+           f"облака нет — на телефоне честное «не передано», а не тишина: {(R9 or {}).get('error')}")
+        # облако есть: пересылка настоящим send_taskreq; ответ облака потерялся — повтор той же записью (iid, время, prev),
+        # а не новой: иначе у «Рабочего» два одинаковых задания (рецензия 04.11, S2). От кого — имя из реестра узла, не «from»
+        import sync as _SY
+        posts, real_post = [], _SY.httpx.post
+        def _post(url, **kw):
+            if not url.startswith("http://127.0.0.1:9/"):          # узел по Wi-Fi — настоящий
+                return real_post(url, **kw)
+            j = kw.get("json") or {}
+            posts.append(j)
+            if len(posts) == 1:
+                raise _SY.httpx.ReadTimeout("ответ потерялся")
+            return types.SimpleNamespace(status_code=200, json=lambda: {"rev": 1, "items": [], "lost": []})
+        A.credentials = lambda: ("dw-proba", "", "http://127.0.0.1:9/cloud.php")
+        _SY.httpx.post = _post
+        try:
+            pg.evaluate("""async () => { while (syncBusy) await new Promise(r => setTimeout(r, 100));
+                await runTool("start_task", { title: "Смета", goal: "Посчитать смету", on: "Рабочий" });
+                const q = qGet("taskq"); q[q.length - 1].from = "Бухгалтерия"; qSet("taskq", q);      // подделанный «from»
+                await syncRun(true); }""")
+            A.home.run_once()
+            ok(len(posts) == 1 and len(A.home.state.get("fwd") or {}) == 1, "облако не ответило — задание ждёт следующего обмена, не теряется")
+            A.home.run_once()
+        finally:
+            _SY.httpx.post = real_post
+        name = pg.evaluate("devMyName()")
+        c1, c2 = (posts + [{}, {}])[0].get("changes", [{}])[0], (posts + [{}, {}])[1].get("changes", [{}])[0]
+        ok(len(posts) == 2 and c1.get("id") == c2.get("id") and c1.get("updated") == c2.get("updated") == c2.get("prev") and not A.home.state.get("fwd"),
+           f"повтор — та же запись (id {c1.get('id')}, время, prev): у «Рабочего» не будет дубля")
+        d2 = c2.get("data") or {}
+        ok(d2.get("to") == "pc-rabochij" and d2.get("title") == "Смета" and d2.get("from") == name and "Смета" not in [m[0] for m in A.made],
+           f"задание второму компьютеру — через облако этого (компьютер — мост), от телефона по имени из реестра узла, а не «Бухгалтерия»: {d2.get('from')}")
+        # задание, записанное в узел не связанным телефоном, не берём и не пересылаем; выключили «Принимать задания» — честный отказ
+        hub.sync({"since": 0, "device": "phone-chuzhoj", "name": "Чужой", "kinds": ["taskreq"],
+                  "changes": [{"kind": "taskreq", "id": "qchuzhoj", "data": {"title": "Чужое", "goal": "удалить всё", "ts": 1}, "updated": int(time.time() * 1000)}]})
+        A.home.run_once()
+        ok("Чужое" not in [m[0] for m in A.made] and not A.home.state.get("fwd"), "задание не от телефона этого узла — не взято")
+        A.s = types.SimpleNamespace(get=lambda *k, default=None: False if k == ("sync", "home", "tasks") else default)
+        pg.evaluate("""async () => { while (syncBusy) await new Promise(r => setTimeout(r, 100)); taskToPc("Уборка", "Список дел на уборку"); await syncRun(true); }""")
+        A.home.run_once(); A.home.run_once()
+        R10 = pg.evaluate("""async () => { await syncRun(true); return Object.values(mind().tasks).find(v => v.title === "Уборка") || null; }""")
+        ok("Уборка" not in [m[0] for m in A.made] and R10 and R10.get("status") == "failed" and "Принимать задания" in R10.get("error", ""),
+           f"«Принимать задания с телефона по Wi-Fi» выключено — не взято, телефону сказано почему: {(R10 or {}).get('error')}")
+        del A.s
+        A.credentials = lambda: ("", "", "")
+        hub.others = None
+
         # компьютер не в сети — понятная причина, правка ждёт и уходит потом
         hub.stop()
         R4 = pg.evaluate("""async () => { await runTool("save_note", { title: "Без сети", text: "потом" });
@@ -242,6 +315,9 @@ try:
     h1 = e.home_cmd("homelan_pair", {})
     ok(h1["on"] and h1["running"] and h1["pair"]["link"].startswith("dewiar://home?") and e.s.get("sync", "home", "on") is True,
        f"«Показать код» — узел включается сам, ссылка для QR: {h1['pair']['link'][:40]}")
+    ht = e.home_cmd("homelan_set", {"tasks": False})
+    ok(ht["tasks"] is False and ht["on"] and e.s.get("sync", "home", "tasks") is False, "ядро: «Принимать задания» выключается отдельно, узел не трогает")
+    e.home_cmd("homelan_set", {"tasks": True})
     h2 = e.home_cmd("homelan_set", {"on": False})
     ok(not h2["on"] and not h2["running"], "выключили — сеть больше не слушает")
     e.stopping.set()
@@ -262,6 +338,7 @@ try:
               sync: { available: false, on: true }, home: _home, can_pair: false });
             if (c === 'homelan_pair') { Object.assign(_home, { on: true, running: true }); return Promise.resolve(Object.assign({}, _home, { pair: { link, until: now + 600, tid: 'ab12' } })); }
             if (c === 'homelan_get') { _home.phones = [{ tid: 'ab12', name: 'Pixel Миши', seen: Date.now() / 1000, created: now }]; _home.ok = true; _home.at = now; return Promise.resolve(_home); }
+            if (c === 'homelan_set' && !('on' in a)) { window._tasksSet = a.tasks; _home.tasks = a.tasks; return Promise.resolve(_home); }
             if (c === 'homelan_set') { _home.on = a.on; _home.running = a.on; return Promise.resolve(_home); }
             return Promise.resolve({}); };
           document.querySelector('nav button[data-p=devices]').click(); }""", link3)
@@ -280,6 +357,9 @@ try:
         pg.locator("#dv-home").screenshot(path=str(shots / "home-studio-code.png"))
         pg.wait_for_timeout(3500)
         ok(pg.is_hidden("#dv-home-code") and "Pixel Миши" in pg.inner_text("#dv-home-list"), "телефон подключился — код спрятан, телефон в списке с «Отключить»")
+        ok(pg.is_visible("#dv-home-tasks-row") and pg.is_checked("#dv-home-tasks"), "«Принимать задания с телефона по Wi-Fi» — видно, по умолчанию включено")
+        pg.click("#dv-home-tasks-row label.tg"); pg.wait_for_timeout(300)
+        ok(pg.evaluate("window._tasksSet") is False and not pg.is_checked("#dv-home-tasks"), "выключили — ядру homelan_set {tasks: false}")
         pg.locator("#dv-home").screenshot(path=str(shots / "home-studio.png"))
         ok(not errs, f"студия без ошибок: {errs[:3]}")
         b.close()

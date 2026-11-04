@@ -394,6 +394,12 @@ class AudioMixin:
     def _open_audio(self):
         """Открывает микрофон и динамик. С эхоподавлением (AEC) слушаем его источник и играем в его приёмник,
         иначе — выбранные устройства напрямую. status["aec"] — можно ли слушать во время своего ответа."""
+        if not getattr(self, "_out_checked", False):
+            self._out_checked = True
+            try:
+                self._out_crash_check()
+            except Exception:  # noqa: BLE001 — проверка не должна мешать слуху
+                log.debug("проверка вывода звука", exc_info=True)
         a = self.s.get("audio")
         if self.wav_input:
             use_aec = os.environ.get("DEWIAR_ASSUME_AEC") == "1"      # тесты: в файле нет эха
@@ -414,6 +420,33 @@ class AudioMixin:
             self.player = Player(device=dev, on_level=lambda v: self._level(v, "voice"), null=self.null_player)
         log.info("Микрофон: %s; эхоподавление: %s", self.status["input"], "да" if use_aec else "нет")
         self.emit("status", status=self.status)
+
+    def _out_crash_check(self, mark=None):
+        """№521, №523 (04.11): ядро обрывалось, как только начинал звучать голос (вывод — HDMI монитора), без строчки в
+        журнале. Метка audio_io._mark_out осталась от прошлого запуска — значит, он оборвался посреди звука: пишем это в
+        журнал (видно в отчёте), а второй раз подряд через одно и то же выбранное устройство — переключаем звук на
+        устройство по умолчанию и говорим об этом. Нормальный запуск (метки нет) сбрасывает счёт."""
+        import audio_io
+        mark = mark or (STATE_DIR / "audio_out.live")
+        dev = audio_io.out_crash_marker(mark)
+        if not getattr(self, "null_player", False) and not getattr(self, "wav_input", None):
+            audio_io.OUT_MARK[0] = mark
+        n = int(self.s.get("audio", "out_crash") or 0)
+        if dev is None:
+            if n:
+                self.s.update({"audio": {"out_crash": 0}})
+            return None
+        cur = self.s.get("audio", "output") or ""
+        n += 1
+        log.warning("🔊 Прошлый запуск ядра оборвался, пока звучал голос (вывод: %s) — %d-й раз подряд", dev or "по умолчанию", n)
+        if n >= 2 and cur and dev == cur:
+            self.s.update({"audio": {"output": "", "out_crash": 0, "out_crash_dev": cur}})
+            log.warning("🔊 Звук — на устройство по умолчанию вместо «%s»", cur)
+            self.note(f"Программа дважды закрылась, пока звучал голос через «{cur}», — переключила звук на устройство по "
+                      "умолчанию. Вернуть можно в студии → «Звук и поведение» → «Динамики».")
+            return "switched"
+        self.s.update({"audio": {"out_crash": n}})
+        return "counted"
 
     def _audio_loop(self):
         """Поток audio: держит микрофон открытым и переоткрывает его после сбоя или restart_audio;
@@ -499,8 +532,7 @@ class AudioMixin:
         почти нули — выбран виртуальный микрофон (HitPaw, VB-Cable, Voicemod…) или громкость записи на нуле.
         Подбирает подсказку по списку устройств и показывает её (заметка, уведомление, отчёт о проблеме);
         в Windows при запрете доступа сразу открывает нужную страницу параметров."""
-        virt = re.compile(r"virtual|vb-audio|cable output|voicemod|hitpaw|stereo mix|стерео ?микшер|what u hear|loopback", re.I)
-        mapper = re.compile(r"sound mapper|переназначение звук|первичный драйвер", re.I)
+        from audio_io import MAPPER_RX as mapper, VIRTUAL_MIC_RX as virt     # №520: и Steam Streaming Microphone
         try:
             srcs = [d for d in list_devices() if d.get("kind") == "source"]
         except Exception:  # noqa: BLE001
@@ -535,6 +567,19 @@ class AudioMixin:
                 text = (f"Микрофон почти ничего не слышит. Слушаю микрофон по умолчанию, а их у вас {len(real)}: "
                         + ", ".join(f"«{n}»" for n in real[:3]) + ". Выберите тот, в который говорите, в студии → «Звук и "
                         "поведение» → «Микрофон» — или проверьте уровень записи в настройках звука системы.")
+            # №520 (04.11): выбран «Graphite 2 Wireless» — беспроводная гарнитура выключена или спит, а рядом USB-микрофон.
+            # Называем выбранный и другие настоящие; у беспроводных — про питание и сопряжение
+            elif cur and [n for n in real if n != cur]:
+                others = [n for n in real if n != cur]
+                wl = re.search(r"wireless|bluetooth|hands-?free|headset|гарнитур|airpods|buds|беспровод", cur, re.I)
+                text = (f"Микрофон почти ничего не слышит: выбран «{cur}»" +
+                        (" — если это беспроводная гарнитура, проверьте, что она включена, заряжена и подключена." if wl else ".") +
+                        " Говорите в другой? У вас есть ещё: " + ", ".join(f"«{n}»" for n in others[:3]) +
+                        " — выберите его в студии → «Звук и поведение» → «Микрофон».")
+            # №527 (04.11): один микрофон — гарнитура, звук то есть, то нет: выключен кнопкой на ней
+            elif len(real) == 1:
+                text += (f" Если «{real[0]}» — гарнитура или веб-камера, проверьте, не выключен ли микрофон на ней самой "
+                         "(кнопка на проводе или чашке, поднятая штанга).")
             mute = next((n for n in real if re.search(r"quadcast|yeti|fifine|seiren|elgato wave|nt-usb|podmic|maono|samson", n, re.I)), "")
             if mute:
                 text += (f" У «{mute}» есть кнопка выключения на корпусе (у QuadCast — сенсор сверху): если он светится "

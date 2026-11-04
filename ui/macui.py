@@ -433,7 +433,7 @@ class MacWindows:
             try:
                 front(st, activate=True)
                 if page:
-                    st.evaluate_js(f"(document.querySelector('nav button[data-p=\"{page}\"]') || {{click(){{}}}}).click()")
+                    st.evaluate_js(A.studio_go_js(page))
                 return
             except Exception:  # noqa: BLE001
                 self._studio = None

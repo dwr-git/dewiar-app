@@ -14,6 +14,7 @@ import sys
 import shutil
 import subprocess
 import queue
+import re
 import threading
 import time
 import wave
@@ -117,6 +118,37 @@ def _sd_devices():
     return out
 
 
+# Виртуальные микрофоны (звук программ, а не голос) и «переназначение» Windows (Sound Mapper — не устройство, а ссылка на
+# устройство по умолчанию). №520 (04.11): гарнитура выключена — брали микрофон Windows по умолчанию, а им бывает Steam
+# Streaming Microphone: «почти тишина» и подсказка без толку. Запасным берём настоящий микрофон.
+VIRTUAL_MIC_RX = re.compile(
+    r"virtual|vb-audio|cable output|voicemod|hitpaw|stereo mix|стерео ?микшер|what u hear|loopback|steam streaming|"
+    r"voicemeeter|manycam", re.I)
+MAPPER_RX = re.compile(r"sound mapper|переназначение звук|первичный драйвер", re.I)
+
+
+def fallback_source(devs, default_name=""):
+    """Выбранный микрофон недоступен — какой взять вместо него. devs — [{name, kind, index}] (_sd_devices),
+    default_name — микрофон Windows по умолчанию. -> номер устройства или None (брать по умолчанию): по умолчанию —
+    если он настоящий; виртуальный (Steam Streaming, VB-Cable…) — первый настоящий из списка."""
+    if default_name and not VIRTUAL_MIC_RX.search(default_name) and not MAPPER_RX.search(default_name):
+        return None
+    real = [d for d in devs if d.get("kind") == "source" and not VIRTUAL_MIC_RX.search(d.get("name") or "")
+            and not MAPPER_RX.search(d.get("name") or "")]
+    return real[0].get("index") if real and default_name else None
+
+
+def _sd_fallback():
+    """Windows: номер микрофона взамен недоступного (fallback_source) или None — микрофон по умолчанию."""
+    try:
+        import sounddevice as sd
+        di = sd.default.device[0]
+        default_name = sd.query_devices(di)["name"] if di is not None and di >= 0 else ""
+        return fallback_source(_sd_devices(), default_name)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _sd_index(name, kind):
     """Имя из настроек → номер устройства (None — по умолчанию)."""
     if not name:
@@ -127,8 +159,20 @@ def _sd_index(name, kind):
                 return d["index"]
     except Exception:  # noqa: BLE001
         pass
-    log.warning("Устройство «%s» не найдено — беру устройство по умолчанию", name)
+    warn_rare("missing:" + kind + name, "Устройство «%s» не найдено — беру устройство по умолчанию", name)
     return None
+
+
+_WARN_AT = {}
+
+
+def warn_rare(key, msg, *args, every=600):
+    """Предупреждение в журнал, но одно и то же (key) — не чаще раза в every секунд: микрофон переоткрывается каждые 5 с,
+    и без этого строка вытесняет весь журнал (пакеты 27.10 и 04.11)."""
+    now = time.monotonic()
+    if now - _WARN_AT.get(key, -1e9) > every:
+        _WARN_AT[key] = now
+        log.warning(msg, *args)
 
 
 def list_devices():
@@ -297,15 +341,14 @@ class Capture:
         label = self.device or "микрофон по умолчанию"
         with _SD_LOCK:
             try:
-                self.stream = mk(_sd_index(self.device, "source"))
+                idx = _sd_index(self.device, "source")
+                if idx is None and self.device:        # выбранного нет в списке — не виртуальный «по умолчанию» (№520)
+                    idx = _sd_fallback()
+                self.stream = mk(idx)
             except sd.PortAudioError as e:     # номер устарел (микрофон отключили, переподключили) — перечитать список
                 # пакет 27.10 (№293, №307): без микрофона эта строка шла каждые 5 с — 1400 строк вытесняли весь журнал.
                 # Одна и та же ошибка — раз в 10 минут
-                global _MIC_WARN
-                key, now = str(e), time.monotonic()
-                if _MIC_WARN[0] != key or now - _MIC_WARN[1] > 600:
-                    log.warning("Микрофон не открылся (%s) — перечитываю список устройств", e)
-                    _MIC_WARN = (key, now)
+                warn_rare("open:" + str(e), "Микрофон не открылся (%s) — перечитываю список устройств", e)
                 sd_refresh(force=True)
                 idx = _sd_index(self.device, "source")
                 try:
@@ -313,8 +356,12 @@ class Capture:
                 except sd.PortAudioError:
                     if idx is None:
                         raise
-                    log.warning("«%s» недоступен — беру микрофон по умолчанию", self.device)
-                    self.stream = mk(None)
+                    # №520 (04.11): гарнитура выключена — и эта строка шла каждые 5 с: раз в 10 минут; взамен — настоящий
+                    # микрофон, а не виртуальный Steam Streaming, если он стоит в Windows по умолчанию
+                    alt = _sd_fallback()
+                    warn_rare("fallback:" + str(self.device), "«%s» недоступен — беру %s", self.device,
+                              "другой настоящий микрофон" if alt is not None else "микрофон по умолчанию")
+                    self.stream = mk(alt)
                     label = "микрофон по умолчанию (выбранный недоступен)"
             self.stream.start()
             _sd_open(1)
@@ -432,7 +479,41 @@ class AudioOutError(Exception):
     """Вывод звука не открылся: нет устройства, занято, выключено."""
 
 
-_MIC_WARN = ("", -1e9)
+# №521, №523 (04.11, Windows, звук на HDMI монитора): ядро падало без строчки в журнале сразу после «первые слова модели» —
+# в тот миг, когда начинал звучать голос; падение внутри драйвера звука не поймать из Python. Пока звучит голос через
+# PortAudio, лежит файл-метка с именем устройства; ядро упало — метка осталась, и следующий запуск это видит
+# (engine_audio._out_crash_check: дважды подряд — звук на устройство по умолчанию). OUT_MARK задаёт ядро; None — не пишем.
+OUT_MARK = [None]
+_OUT_LIVE = [0]
+
+
+def _mark_out(n, device=""):
+    p = OUT_MARK[0]
+    if p is None:
+        return
+    with _SD_LOCK:
+        _OUT_LIVE[0] = max(0, _OUT_LIVE[0] + n)
+        try:
+            if n > 0 and _OUT_LIVE[0] == 1:
+                p.write_text(device or "-", encoding="utf-8")
+            elif _OUT_LIVE[0] == 0:
+                p.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def out_crash_marker(path):
+    """Метка прошлого запуска (_mark_out) -> устройство вывода, через которое звучал голос, когда ядро оборвалось
+    ("" — по умолчанию), или None — метки нет (прошлый запуск закончился нормально). Метку убирает."""
+    try:
+        dev = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    try:
+        path.unlink()
+    except OSError:
+        pass
+    return "" if dev == "-" else dev
 
 
 class Player:
@@ -486,6 +567,7 @@ class Player:
                                                        device=_sd_index(self.device, "sink"))
                         self.proc.start()
                         _sd_open(1)
+                        _mark_out(1, self.device)
                 except Exception as e:  # noqa: BLE001 — PortAudioError, нет библиотеки: нет устройства вывода или оно занято
                     self.proc = None
                     raise AudioOutError(f"вывод звука не открылся (нет устройства или оно занято): {e}") from e
@@ -575,6 +657,7 @@ class Player:
                     p.close()
                 finally:
                     _sd_open(-1)
+                    _mark_out(-1)
         except Exception:  # noqa: BLE001
             pass
 

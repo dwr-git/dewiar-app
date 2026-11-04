@@ -347,11 +347,11 @@ class IntroMixin:
         auto_ok = self.s.get("llm", "trial") is not False and (not getattr(self, "wav_input", None) or bool(os.environ.get("DEWIAR_TRIAL")))
         if not self.s.active_llm() and not auto_ok:
             self._intro_say("Чтобы думать и отвечать, мне нужен мозг. Выбери любой: модель на этом компьютере, ключ "
-                            "любимого сервиса — OpenAI или Claude — или подключи Dewiar бесплатно. Раздел «Мозг» в студии я открыл.",
+                            "любимого сервиса — OpenAI или Claude — или мозг Dewiar — на старте подарок. Раздел «Мозг» в студии я открыл.",
                             "brain", page="brain")
             return
         if not self.s.active_llm():                # 0.69: мозг Dewiar подключается сам, а пока — пробный разговор
-            if not self._intro_say("Мой бесплатный мозг Dewiar подключается сам, а отвечать я могу уже сейчас. Захочешь свою "
+            if not self._intro_say("Мой мозг Dewiar подключается сам — на старте подарок, а отвечать я могу уже сейчас. Захочешь свою "
                                    "модель или ключ сервиса — раздел «Мозг» в студии.", "brain_auto"):
                 return
         tries = [f"{name}, который час?", "Напомни через пять минут проверить чайник", f"{name}, что ты умеешь?"]

@@ -341,7 +341,7 @@ function wkBind(j) {
 function wkEmptyHtml() {
   return `<div class="wk-hero">${WK_IC}<b>Поручения с работы — отдельно от личного</b>`
     + `<p>Руководитель добавит вас в Dewiar на своём компьютере и покажет печать — наведите на неё сканер. Или откройте ссылку, которую он прислал.</p></div>`
-    + (syncCred() ? "" : `<p class="hint">Сначала войдите в Dewiar: Настройки → Мозг → «Подключить бесплатно».</p>`)
+    + (syncCred() ? "" : `<p class="hint">Сначала войдите в Dewiar: Настройки → Мозг → «Подключить мозг Dewiar».</p>`)
     + `<button class="btn p w" id="wk-scan">${WK_CAM}<span>Сканировать печать</span></button>`
     + `<div class="card wk-paste"><label class="f"><span>Или вставьте ссылку</span><input id="wk-plink" placeholder="https://dewiar.pro/…?work=…" autocomplete="off"></label><button class="btn w" id="wk-pgo">Открыть приглашение</button><div class="res" id="wk-pres"></div></div>`
     + `<p class="hint wk-foot">Уйдёте с работы — уйдёт и всё рабочее. Личное — заметки, напоминания, близкие — остаётся с вами. Работ может быть несколько.</p>`

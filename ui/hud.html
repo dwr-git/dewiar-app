@@ -158,6 +158,8 @@
              color: #fff; background: rgba(255,255,255,.12); cursor: pointer; }
   #bot .rep:hover { background: rgba(255,255,255,.2); }
   #bot .repask { display: flex; gap: 6px; flex-wrap: wrap; } #bot .repask .rep { display: inline-block; }
+  #bot .rep.pay { display: inline-block; padding: 7px 16px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 6px 16px -8px rgba(118,75,162,.9); }
+  #bot .rep.pay:hover { filter: brightness(1.1); }
   #act { font-size: 12px; color: #D6E4F0; margin-bottom: 4px; display: none; }
   #act.on { display: block; }
   #act.bad { color: #ff8aa2; }
@@ -933,10 +935,17 @@ function reportOffer(e) {
   row.append(yes, no); $("bot").appendChild(row); hideCapLater(45000);
 }
 
+/* 0.82.1 (владелец 04.11: «много новых людей, а донатов нет — чтобы было понятно и просто»): талеры кончились — под текстом
+   кнопка «Пополнить»: студия → «Мозг» с уже раскрытой панелью оплаты */
+function topupBtn() {
+  const b = document.createElement("button"); b.className = "rep pay"; b.textContent = "Пополнить";
+  b.onclick = (ev) => { ev.stopPropagation(); const a = api(); if (a && a.open_settings) a.open_settings("topup"); hideCapLater(1500); };
+  $("bot").appendChild(b); hideCapLater(60000);
+}
 // автоподключение (0.69): после нескольких разговоров — один раз попросить контакт, по желанию (core _contact_maybe)
 function contactAsk() {
   if (mode !== "card" || state !== "idle" && state !== "listening") return;
-  showCap(null, "Мы подключили вас к бесплатному мозгу Dewiar без анкеты. Оставите контакт? Если что-то сломается — разработчик сможет вам ответить. Это по желанию.", false);
+  showCap(null, "Мы подключили вас к мозгу Dewiar без анкеты. Оставите контакт? Если что-то сломается — разработчик сможет вам ответить. Это по желанию.", false);
   const row = document.createElement("div"); row.className = "repask";
   const yes = document.createElement("button"); yes.className = "rep"; yes.textContent = "Оставить контакт";
   const no = document.createElement("button"); no.className = "rep"; no.textContent = "Не сейчас";
@@ -1042,8 +1051,8 @@ core.on("hello", d => {
   setLocal(d.settings.privacy && d.settings.privacy.local_only);
   personas = d.personas; muted = d.muted; $("b-mic").classList.toggle("on", muted); setTextOnly(d.settings.tts && d.settings.tts.text_only);
   applyPersona(d.persona); setRadio(d.radio); setState(d.state); note(d.status);
-  if (!d.settings.llm.active && (d.settings.ui || {}).intro !== "") { showCap("", d.settings.llm.trial === false ? "Чтобы я могла отвечать, меня нужно один раз подключить — бесплатно: студия → «Мозг» → «Подключить бесплатно»."
-    : "Спросите меня что-нибудь — отвечу и без настройки, пока коротко. Напоминания, поиск и дела — после бесплатного подключения: студия → «Мозг» → «Подключить бесплатно».", true); }
+  if (!d.settings.llm.active && (d.settings.ui || {}).intro !== "") { showCap("", d.settings.llm.trial === false ? "Чтобы я могла отвечать, меня нужно один раз подключить — без регистрации, на старте подарок: студия → «Мозг» → «Подключить мозг Dewiar»."
+    : "Спросите меня что-нибудь — отвечу и без настройки, пока коротко. Напоминания, поиск и дела — после подключения мозга (на старте подарок): студия → «Мозг» → «Подключить мозг Dewiar».", true); }
 })
 .on("offline", () => { setState("offline"); })
 .on("reminders", e => tmrSet(e.items))
@@ -1081,6 +1090,7 @@ core.on("hello", d => {
 })
 .on("answer", e => {
   showCap(null, capText(e.text)); if (e.done) hideCapLater(Math.min(20000, 5000 + e.text.length * 60));
+  if (e.done && e.topup) topupBtn();
   if (e.done && e.sources && e.sources.length) {   // ответ по документам — источники кнопками: нажать — открыть файл
     const box = document.createElement("div"); box.className = "srcs";
     e.sources.forEach(x => { const b = document.createElement("button"); b.title = "Открыть: " + (x.label || x.name);
@@ -1097,7 +1107,7 @@ core.on("hello", d => {
   }
 })
 .on("intro", introStep)
-.on("error", e => showErr(e.text))
+.on("error", e => { if (!e.topup) showErr(e.text); })        // талеры кончились — кнопка «Пополнить» в ответе (topupBtn), не «отчёт разработчику»
 .on("report_offer", reportOffer)
 .on("prompter", e => { if (e.kind === "open" && mode === "card") { const a = api(); if (a && a.open_prompter) a.open_prompter(); } })
 .on("prompter_offer", prompterOffer)

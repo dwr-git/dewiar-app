@@ -294,6 +294,52 @@ body.lite-ui .sheet { backdrop-filter: none; -webkit-backdrop-filter: none; back
 .cl-shot img { display: none; max-height: 90px; max-width: 160px; border-radius: 10px; } .cl-shot.has img { display: block; }
 #cl-reqs .rqi { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); padding-top: 6px; }
 #cl-reqs .rqi b { color: var(--ink); } #cl-reqs .rqi.done b { color: var(--good); } #cl-reqs .rqi.rejected b { color: var(--bad); }
+/* 0.82.1 (владелец 04.11: «много новых людей, а донатов нет — чтобы было понятно и просто»): «Пополнить» — три шага;
+   «Забыть ключ» — ссылкой внизу; карточка «Пополнить» под фразой Лиры; значок баланса у имени персонажа */
+.pay-steps { list-style: none; margin: 2px 0 0; padding: 0; }
+.pay-steps > li { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; position: relative; padding-bottom: 18px; }
+.pay-steps > li:last-child { padding-bottom: 2px; }
+.pay-steps > li > i { font: 700 12.5px/28px "Unbounded", sans-serif; font-style: normal; width: 28px; height: 28px; border-radius: 50%; text-align: center;
+  background: var(--brand); color: #fff; position: relative; z-index: 1; box-shadow: 0 6px 16px -8px rgba(102,126,234,.9); }
+.pay-steps > li:not(:last-child)::before { content: ""; position: absolute; left: 13.5px; top: 32px; bottom: 4px; width: 1.5px; border-radius: 1px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 55%, transparent), color-mix(in srgb, var(--accent) 12%, transparent)); }
+.ps-b { min-width: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 4px; }
+.ps-b > b { font-size: 15.5px; line-height: 1.25; }
+.ps-go { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 18px; font-size: 16px; }
+.ps-go[hidden] { display: none; } .ps-go svg { width: 18px; height: 18px; stroke-width: 2.2; }
+.ps-own { white-space: pre-line; line-height: 1.5; margin: 0; font-size: 13.5px; } .ps-own:empty { display: none; }
+.ps-b .cl-shot { margin: 0; min-height: 58px; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 7%, var(--field)); color: var(--ink); font-weight: 600; }
+.ps-b .cl-shot svg { width: 22px; height: 22px; color: var(--accent); flex: none; } .ps-b .cl-shot.has { border-style: solid; } .ps-b .cl-shot.has svg { display: none; }
+.ps-f { gap: 8px; align-items: flex-start; } .ps-f .f { margin: 0; min-width: 0; }
+.ps-rub { display: block; margin: 5px 4px 0; font-size: 12.5px; font-weight: 600; color: var(--accent); } .ps-rub:empty { display: none; }
+.ps-when { display: block; text-align: center; font-size: 12.5px; margin: -1px 0 0; }
+.ps-b .res { margin: 0 4px; } .ps-b .res:empty { display: none; }
+.ps-code { margin: 12px 0 0 40px; font-size: 12.5px; color: var(--dim); text-align: left; } .ps-code:empty { display: none; } .ps-code b { color: var(--muted); letter-spacing: .02em; }
+#cl-how.on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent), 0 8px 22px -12px rgba(118,75,162,.9); }
+.cl-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 20px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line, rgba(127,127,127,.14)); }
+.cl-foot .lnk { font-size: 13px; color: var(--muted); padding: 7px 2px; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; }
+.cl-foot #cl-forget { color: var(--dim); }
+.paycard { padding: 16px; }
+.paycard .pc-h { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.pc-ic { flex: none; width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; color: #FFC98A; background: rgba(255,184,107,.14); box-shadow: inset 0 0 0 1px rgba(255,184,107,.32); }
+.paycard.empty .pc-ic { color: #FF9DB2; background: rgba(255,107,138,.14); box-shadow: inset 0 0 0 1px rgba(255,107,138,.36); }
+.pc-ic svg { width: 23px; height: 23px; }
+.pc-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; } .pc-t b { font-size: 16px; line-height: 1.25; } .pc-t small { font-size: 13.5px; color: var(--muted); }
+.paycard #pc-go { padding: 14px 18px; font-size: 16px; }
+.pc-ct { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line, rgba(127,127,127,.16)); }
+.pc-ct small { font-size: 13px; line-height: 1.45; color: var(--muted); } .pc-ct .row2 { gap: 8px; margin: 0; } .pc-ct .grname { font-size: 15px; padding: 11px 13px; }
+.pay-steps, .paycard, .cl-foot { text-align: left; }
+/* значок баланса — маленькая плашка на нижнем краю аватара персонажа (имя не теснит: верхняя панель на 390 px и так полна) */
+.bal { display: none; position: absolute; left: 33px; top: 42px; transform: translateX(-50%); z-index: 2; align-items: center; gap: 3px; height: 18px; padding: 0 6px 0 5px;
+  border-radius: 999px; font: 800 10.5px/1 "Manrope", sans-serif; letter-spacing: .01em; color: #3a2100; background: #FFC27A;
+  box-shadow: 0 0 0 2px var(--bal-ring, #0a0a0f), 0 4px 10px -4px rgba(255,160,60,.8); }
+.bal::before { content: ""; position: absolute; inset: -9px -8px; }          /* палец попадает и чуть мимо */
+.bal:not([hidden]) { display: inline-flex; } .bal svg { width: 11px; height: 11px; stroke-width: 2.4; }
+.bal.empty { color: #fff; background: #F0587A; box-shadow: 0 0 0 2px var(--bal-ring, #0a0a0f), 0 4px 10px -4px rgba(240,88,122,.85); }
+body.light, body.neu { --bal-ring: var(--glass, #eef2f8); }
+body.light .bal { color: #5a2e00; background: #FFB65C; } body.light .bal.empty { color: #fff; background: #D23C60; }
+body.light .pc-ic { color: #a35400; background: rgba(255,160,40,.16); box-shadow: inset 0 0 0 1px rgba(205,120,10,.32); }
+body.light .paycard.empty .pc-ic { color: #b4234a; background: rgba(220,60,90,.11); box-shadow: inset 0 0 0 1px rgba(192,48,79,.3); }
 /* «Оплатить картой» (ЮMoney, автозачисление) */
 .ym { margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08)); }
 .ym-h { display: flex; flex-direction: column; gap: 2px; } .ym-h span { font-size: 13px; color: var(--muted); }

@@ -301,10 +301,12 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         net.set_lan(lan.get("public", ""), lan.get("base", ""), lan.get("id", ""))   # дома — напрямую с первого запроса
         # сайт хоть раз ответил напрямую — этот компьютер бывает рядом с сервером: в «Сети» показываем «Запасной вход через SSH»
         net.on_lan_ok = lambda: None if self.s.get("net", "lan_seen") else self.s.update({"net": {"lan_seen": True}})
+        # 0.82.1: коротко и без ссылки (раньше — весь текст «Как пополнить» со ссылкой): где кнопка — и всё
         self.cloud.on_low = lambda c: self.chat.notify(
-            ("Заряд Dewiar Облака закончился — ассистент не сможет отвечать, пока вы не пополните. " if c.get("empty") else
-             f"Заряд Dewiar Облака: {c.get('percent')}% — хватит примерно на {c.get('turns')} ответов. ")
-            + (c.get("topup") or "") + "\nПополнить: студия → «Мозг» → «Пополнить».")
+            ("Талеры Dewiar закончились — пока вы не пополните, я не смогу отвечать. " if c.get("empty") else
+             ("Талеры заканчиваются" if c.get("paid", True) else "Подарок почти закончился")
+             + f" — осталось около {c.get('turns')} " + ("ответа" if int(c.get("turns") or 0) % 10 == 1 and int(c.get("turns") or 0) % 100 != 11 else "ответов")
+             + ". ") + "Пополнить: студия → «Мозг» → «Пополнить».")
         self.cloud.on_key_gone = self._cloud_key_gone
         self.toolbox.hooks["calendars"] = self.calendars
         self.toolbox.hooks["dewiar_web"] = self._dewiar_web          # поиск и страницы через сервер Dewiar, если сеть режет

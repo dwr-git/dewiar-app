@@ -4,7 +4,7 @@
 Зачем: телефон отдаёт большие задачи «компьютеру» (start_task через синхронизацию), Telegram-бот отвечает, напоминания
 и календари идут — даже когда домашний компьютер выключен. Сервер — такой же «компьютер» в вашем аккаунте dewiar.pro.
 
-    sudo dewiar-server setup      — пользователь dewiar-assistant, вход в аккаунт, модель, служба (спросит всё сам)
+    sudo dewiar-server setup      — пользователь dewiar-assistant, модель, вход в аккаунт (со своей моделью — по желанию), служба
     sudo dewiar-server status     — работает ли, чем занят
     sudo dewiar-server log        — журнал (Ctrl+C — выйти)
     sudo dewiar-server restart | stop | remove
@@ -51,13 +51,21 @@ def ensure_user():
 
 def configure():
     """Вход в аккаунт и модель — модулями ядра, от имени пользователя службы (его ~/.config/dewiar)."""
-    login = ask("Логин на dewiar.pro", "DEWIAR_LOGIN")
-    password = ask("Пароль", "DEWIAR_PASSWORD", secret=True) if login else ""
+    # идея №131 (04.11): «при локальной установке с Ollama мастер всё равно спрашивает логин dewiar.pro, а регистрации на сайте
+    # нет». Сначала — модель; со своей моделью вход необязателен (Enter — пропустить): без него сервер работает сам по себе,
+    # только без связи с телефоном и Telegram. Без своей модели вход нужен — модели тогда берутся по аккаунту
     print("Модель: адрес OpenAI-совместимого сервера (Ollama — http://127.0.0.1:11434/v1, vLLM — http://127.0.0.1:8000/v1).")
-    print("Пусто — модели Dewiar по аккаунту (облако).")
+    print("Пусто — модели Dewiar по аккаунту (облако; тогда нужен вход на dewiar.pro).")
     url = ask("Адрес модели", "DEWIAR_LLM_URL")
     model = ask("Имя модели", "DEWIAR_LLM_MODEL") if url else ""
     key = ask("Ключ модели (если нужен)", "DEWIAR_LLM_KEY", secret=True) if url else ""
+    if url:
+        print("Вход на dewiar.pro — необязательно (Enter — пропустить). С ним сервер виден телефону как компьютер и отвечает "
+              "в Telegram; без него — работает сам по себе, на своей модели.")
+    login = ask("Логин на dewiar.pro" + (" (необязательно)" if url else ""), "DEWIAR_LOGIN")
+    password = ask("Пароль", "DEWIAR_PASSWORD", secret=True) if login else ""
+    if not url and not login:
+        sys.exit("Нужна модель или вход на dewiar.pro: укажите адрес своей модели (например, Ollama) или логин и пароль.")
     job = {"site": os.environ.get("DEWIAR_SITE") or "https://dewiar.pro", "login": login, "password": password,
            "url": url, "model": model, "key": key}
     code = r'''
@@ -85,6 +93,7 @@ if job["login"]:
         say(line)
     if r.returncode:
         sys.exit("Настройка не удалась — проверьте логин и пароль и повторите: sudo dewiar-server setup")
+    return bool(login)
 
 
 def write_unit():
@@ -128,9 +137,10 @@ def main():
         if not (APP / "core/main.py").exists():
             sys.exit(f"Dewiar не найден в {APP} — сначала: sudo apt install ./dewiar-assistant_*.deb")
         ensure_user()
-        configure()
+        account = configure()
         write_unit()
-        say("служба запущена. Телефон увидит сервер как компьютер в «Синхронизации» (через минуту-две) и будет отдавать ему задачи.")
+        say("служба запущена. Телефон увидит сервер как компьютер в «Синхронизации» (через минуту-две) и будет отдавать ему задачи."
+            if account else "служба запущена — на своей модели, без аккаунта dewiar.pro.")
         say("Журнал: sudo dewiar-server log")
         return 0
     if cmd == "status":

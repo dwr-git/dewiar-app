@@ -117,6 +117,32 @@ function brainOf(pid) {
   const own = ((S.llm || {}).persona || {})[pid] || "", profs = (S.llm || {}).profiles || {};
   return own && profs[own] ? own : "";
 }
+/* GitHub №30: выбор модели персонажа — успех только после подтверждения ядра. Сохранения идут по одному и по порядку
+   (последний выбор не перезапишется более ранним, даже если ответы придут наоборот); ответ относится к тому персонажу,
+   для которого выбирали (pid и имя запомнены до запроса), — открытый за это время другой персонаж или закрытый редактор
+   не трогаем. Отказ — прежний выбор на месте и ошибка словами. */
+const brainSeq = {}; let brainChain = Promise.resolve();
+function brainPick(pid, pname, patch, okMsg, btn) {
+  const n = brainSeq[pid] = (brainSeq[pid] || 0) + 1;
+  if (btn) { btn.classList.add("wait"); btn.setAttribute("aria-busy", "true"); }
+  const run = async () => {
+    if (brainSeq[pid] !== n) return;                      // пока ждали очереди, выбрали другое — отправим только последнее
+    let s;
+    try { s = await core.call("settings_save", { patch }); }
+    catch (e) {
+      if (brainSeq[pid] !== n) return;
+      toast(`Не сохранилось — ${pname} думает прежней моделью: ${e.message}`, 4000);
+      if (ed && ed.id === pid) renderBrain();
+      return;
+    }
+    S = s; try { refreshStatic(); } catch (x) { }
+    if (brainSeq[pid] !== n) return;                      // впереди ещё выбор — итог покажет он
+    renderPersonas(); if (ed && ed.id === pid) renderBrain();
+    toast(okMsg);
+  };
+  brainChain = brainChain.then(run, run);
+  return brainChain;
+}
 function renderBrain() {
   const box = $("#e-brain"); if (!box) return;
   const profs = (S.llm || {}).profiles || {}, act = (S.llm || {}).active || "", cur = ed && ed.id ? brainOf(ed.id) : "";
@@ -128,12 +154,11 @@ function renderBrain() {
     // №403 (29.10: «не получается установить персонажам разные модели — слетает к последнему»): у сервера вроде Ollama много
     // моделей — персонажу своя модель того же сервера (llm.persona_model[id]), профиль у остальных не меняется
     + (cur && !profs[cur].cloud ? `<label class="bp-m"><span>Модель ${escH(ed.name)}</span><select id="e-brain-m"><option value="">как в профиле — ${escH(profs[cur].model || "")}</option></select></label>` : "");
-  $$("#e-brain [data-b]").forEach(b => b.onclick = async () => {
-    const id = b.dataset.b;
-    await save({ llm: { persona: { [ed.id]: id }, persona_model: { [ed.id]: "" } } }, true);
-    S.llm.persona = Object.assign({}, S.llm.persona || {}, { [ed.id]: id });
-    S.llm.persona_model = Object.assign({}, S.llm.persona_model || {}, { [ed.id]: "" }); renderBrain(); renderPersonas();
-    toast(id ? `${ed.name} думает моделью «${brainName(profs[id], id)}»` : `${ed.name} думает общим мозгом`);
+  $$("#e-brain [data-b]").forEach(b => b.onclick = () => {
+    const id = b.dataset.b, pid = ed.id, pname = ed.name;
+    $$("#e-brain [data-b]").forEach(x => x.classList.remove("wait"));
+    brainPick(pid, pname, { llm: { persona: { [pid]: id }, persona_model: { [pid]: "" } } },
+      id ? `${pname} думает моделью «${brainName(profs[id], id)}»` : `${pname} думает общим мозгом`, b);
   });
   const sel = $("#e-brain-m");
   if (sel) {
@@ -143,10 +168,11 @@ function renderBrain() {
       if (!ed || ed.id !== pid || !$("#e-brain-m")) return;
       (ms || []).filter(m => m !== mine).forEach(m => sel.insertAdjacentHTML("beforeend", `<option value="${escH(m)}">${escH(m)}</option>`));
     }).catch(() => {});
-    sel.onchange = async () => {
-      await save({ llm: { persona_model: { [pid]: sel.value } } }, true);
-      S.llm.persona_model = Object.assign({}, S.llm.persona_model || {}, { [pid]: sel.value }); renderPersonas();
-      toast(sel.value ? `${ed.name} думает моделью «${sel.value}» — у остальных всё как было` : `${ed.name} думает моделью профиля`);
+    const pname = ed.name;
+    sel.onchange = () => {
+      const v = sel.value;
+      brainPick(pid, pname, { llm: { persona_model: { [pid]: v } } },
+        v ? `${pname} думает моделью «${v}» — у остальных всё как было` : `${pname} думает моделью профиля`);
     };
   }
   $("#e-brain-add").onclick = () => { closeEditor(); const b = $('nav button[data-p="brain"]'); if (b) b.click(); };
@@ -274,6 +300,8 @@ function voiceHint() {
   el.textContent = eng === "remote" ? "Сейчас звучит голос сервера (поле «Голос на сервере»); Piper — запасной, если сервер молчит."
     : eng === "elevenlabs" ? "Сейчас звучит ElevenLabs; Piper — запасной."
     : eng === "off" ? "Голос выключен — студия → «Голос»."
+    // GitHub №31: при eSpeak / голосе Windows подсказка говорила «звучит Piper»
+    : eng === "espeak" ? `Сейчас звучит ${typeof IS_WIN !== "undefined" && IS_WIN ? "голос Windows" : "eSpeak"} — запасной голос без скачивания. Голоса Piper и Vosk зазвучат, если выбрать их в студии → «Голос».`
     : eng === "vosk" && $("#e-vosk").value !== "piper" ? `Сейчас звучит Vosk TTS (${$("#e-vosk").selectedOptions[0] ? $("#e-vosk").selectedOptions[0].textContent.toLowerCase() : "по полу"}). Выберите голос Piper — персонаж заговорит им.`
     : `Сейчас звучит Piper — «${pn}».`;
 }
@@ -304,7 +332,7 @@ $("#e-teach").onclick = () => { if (ed && ed.id) { const id = ed.id; closeEditor
 $("#e-listen").onclick = () => {
   if (!(ed && ed.id)) return toast("Сначала сохраните персонажа");
   const v = $("#e-vosk").value, voice = Object.assign(v === "piper" ? { prefer: "piper" } : /^\d+$/.test(v) ? { vosk: +v, prefer: "" } : { prefer: "" },
-    { piper: $("#e-piper").value, length_scale: +(2 - $("#e-len").value).toFixed(2) });   // слушаем выбранное, а не сохранённое
+    { piper: $("#e-piper").value, length_scale: +(2 - $("#e-len").value).toFixed(2), remote: $("#e-remote").value.trim() });   // слушаем выбранное, а не сохранённое (и голос сервера — GitHub №31)
   core.call("voice_test", { persona: ed.id, fx: $("#e-fx").value, voice }).catch(e => toast(e.message));
 };
 $("#e-del").onclick = async () => {

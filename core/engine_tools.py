@@ -1138,12 +1138,31 @@ class ToolsMixin:
                 err = str(e)
         if not any(d.get("me") for d in devs):
             devs.insert(0, {"id": me["id"], "name": me["name"], "app": "pc", "seen": st.get("at") or 0, "me": True})
+        # одно устройство — одна строка (04.11: облачная запись телефона со старым временем перебивала свежую с узла
+        # «Дома по Wi-Fi» — «второй компьютер видит смарт неактивным»): склеиваем по id, время — самое свежее
+        merged = {}
+        for d in devs:
+            if not isinstance(d, dict):
+                continue
+            cur = merged.get(d.get("id"))
+            if cur is None:
+                merged[d.get("id")] = dict(d)
+            elif int(d.get("seen") or 0) > int(cur.get("seen") or 0):
+                cur.update(d, me=bool(cur.get("me") or d.get("me")))
+        devs = list(merged.values())
         hs = getattr(self, "home_sync", None)              # телефоны по Wi-Fi (0.59) — в том же списке, с пометкой
         if hs is not None:
-            known = {d.get("id") for d in devs}
             for d in hs.status.get("all") or []:
-                if not d.get("me") and d.get("id") not in known:
-                    devs.append(dict(d, home=True))
+                if d.get("me") or d.get("cloud") or not d.get("id"):    # cloud — узел знает о нём из облака, а не сам
+                    continue
+                cur = merged.get(d["id"])
+                if cur is None:
+                    cur = merged[d["id"]] = dict(d, home=True)
+                    devs.append(cur)
+                cur["home"] = True
+                cur.pop("via", None)                       # «через этот же компьютер» здесь — просто «по Wi-Fi»
+                if int(d.get("seen") or 0) > int(cur.get("seen") or 0):
+                    cur["seen"] = int(d["seen"])
         for d in devs:
             if d.get("me"):
                 d["name"] = me["name"]

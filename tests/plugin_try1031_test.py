@@ -52,6 +52,13 @@ with sync_playwright() as p:
     vis = lambda: st.evaluate("() => { const b = document.querySelector('#hm-try'); return !!b && !b.hidden && b.getBoundingClientRect().height > 60; }")
     name = lambda: st.inner_text("#hm-try .ht-t b")
     ok(vis() and "Попробуйте плагин" in st.inner_text("#hm-try"), "на «Главной» — карточка «Попробуйте плагин»")
+    # 04.11 (владелец, снимок: «Дайджест по интересам» уже соседних блоков и «как будто другой дизайн»): ширина — как у
+    # «Совета ИИ» и всей колонки, заголовок — шрифтом соседних карточек, не крупным Unbounded
+    wd = st.evaluate("""() => { const t = document.querySelector('#hm-try'), c = document.querySelector('#hm-council'), p = t.parentElement, cs = getComputedStyle(p);
+      return { t: t.getBoundingClientRect().width, c: c.hidden ? 0 : c.getBoundingClientRect().width,
+               col: p.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), f: getComputedStyle(t.querySelector('.ht-t b')).fontFamily }; }""")
+    ok(abs(wd["t"] - wd["col"]) < 2 and (not wd["c"] or abs(wd["t"] - wd["c"]) < 2) and "Unbounded" not in wd["f"],
+       f"карточка плагина — во всю ширину, как «Совет ИИ», заголовок как у соседей: {wd}")
     first = name()
     order = sorted([x for x in cat["plugins"] if not x["installed"]], key=lambda x: x["id"])
     ok(first == order[0]["name"] and "«" not in st.inner_text("#hm-try q"), f"плагин дня, фраза — репликой: {first}")

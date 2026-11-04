@@ -285,4 +285,8 @@ def read_url(s, url, get=None):
     if art and len(art.group(0)) > 1500:
         body = art.group(0)                      # статья — без меню, подвала и рекламы вокруг
     text = html_to_text(body) if "html" in (ctype or "html") else str(page or "")
+    # 04.11 (пользователь: «Читалка статей показывала сплошным текстом, без разбивки на абзацы»): html_to_text разделяет
+    # абзацы «\n » — с пробелом, и читалка их не видела. Отдаём абзацы через пустую строку — так их видят и уже
+    # поставленные копии плагина, и свои переделки
+    text = "\n\n".join(ln.strip() for ln in text.replace("\r", "").split("\n") if ln.strip())
     return {"url": final, "title": title, "text": text[:200_000]}

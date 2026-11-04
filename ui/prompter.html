@@ -204,6 +204,8 @@
                   animation: rise .18s ease-out; }
   #endask h2 { font: 600 16px/1.3 "Unbounded", "Manrope", sans-serif; margin-bottom: 6px; }
   #endask p { color: var(--muted); font-size: 14px; line-height: 1.45; margin-bottom: 16px; }
+  #endask p.bad { color: #FF8FA6; }
+  #endask .row button:disabled { opacity: .6; cursor: default; }
   #endask .row { display: flex; gap: 10px; }
   #endask .row button { flex: 1; margin: 0; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -602,27 +604,48 @@ $("#ask").onclick = () => {
 };
 setInterval(() => { if (view === "live" && $("#head").classList.contains("wait")) renderHint(); }, 1000);   // «Пишу подсказку… 7 с»
 $("#b-pause").onclick = () => core.call("prompter_pause", { on: !(st && st.paused) });
-$("#b-stop").onclick = () => core.call("prompter_stop", { summary: true });
+$("#b-stop").onclick = () => core.call("prompter_stop", { summary: true }).catch(e => { $("#hear").textContent = "Не получилось закончить встречу: " + e.message; $("#hear").classList.add("bad"); });
 $("#b-sheet").onclick = () => { renderSheet(); $("#sheet").classList.toggle("hidden"); };
 $("#sheet-x").onclick = () => $("#sheet").classList.add("hidden");
 $("#prev").onclick = () => { follow = false; idx = Math.max(0, idx - 1); renderHint(); };
 $("#next").onclick = () => { const n = (st.hints || []).filter(h => !h.empty).length; idx = Math.min(n - 1, idx + 1); follow = idx === n - 1; renderHint(); };
-function closeWin(sure) {
+/* GitHub №33: окно закрывается только после ответа ядра «встреча остановлена». Пока ждём — «Заканчиваю…» в том же
+   вопросе; отказ — ошибка там же, «Закончить» — повторить. Поздний ответ старой остановки не закрывает окно, если за это
+   время началась другая встреча (сверяем время начала). */
+let stopping = null;
+function winClose() { const a = api(); if (a && a.close_prompter) a.close_prompter(); else window.close(); }
+async function closeWin(sure) {
   if (st && st.on && sure !== true) { endAsk(); return; }       // встреча идёт — сначала спросить (своим окном, не системным диалогом)
-  if (st && st.on) core.call("prompter_stop", { summary: true });
-  const a = api(); if (a && a.close_prompter) a.close_prompter(); else window.close();
+  if (!(st && st.on)) return winClose();
+  if (stopping) return;
+  const mine = stopping = { started: st.meeting && st.meeting.started };
+  endAsk(true, "busy");
+  try {
+    const r = await core.call("prompter_stop", { summary: true });
+    if (r && r.on) throw new Error("встреча всё ещё идёт");
+  } catch (e) { if (stopping === mine) { stopping = null; endAsk(true, "Не получилось закончить: " + (e.message || "ядро не ответило") + ". Нажмите «Закончить» ещё раз."); } return; }
+  if (stopping !== mine) return;
+  stopping = null;
+  const now = st && st.on && st.meeting && st.meeting.started;
+  if (now && now !== mine.started) { endAsk(false); return; }    // уже идёт другая встреча — её не закрываем
+  endAsk(false); winClose();
 }
-function endAsk(open = true) {
+function endAsk(open = true, msg = "") {
   $("#endask").classList.toggle("hidden", !open);
-  if (open) setTimeout(() => $("#endask-yes").focus(), 30);
+  const busy = msg === "busy";
+  $("#endask-yes").disabled = $("#endask-no").disabled = busy;
+  $("#endask-yes").textContent = busy ? "Заканчиваю…" : "Закончить";
+  $("#endask-d").classList.toggle("bad", !!msg && !busy);
+  $("#endask-d").textContent = busy ? "Подвожу итог — окно закроется, как только встреча остановится." : msg || "Подведу итог и сохраню его в папку «Встречи».";
+  if (open && !busy) setTimeout(() => $("#endask-yes").focus(), 30);
 }
 $("#endask-no").onclick = () => endAsk(false);
-$("#endask-yes").onclick = () => { endAsk(false); closeWin(true); };
-$("#endask").onclick = (e) => { if (e.target.id === "endask") endAsk(false); };
+$("#endask-yes").onclick = () => closeWin(true);
+$("#endask").onclick = (e) => { if (e.target.id === "endask" && !stopping) endAsk(false); };
 $("#b-close").onclick = closeWin;
 document.addEventListener("keydown", (e) => {
   if (!$("#endask").classList.contains("hidden")) {           // открыт вопрос «Закончить встречу?»
-    if (e.key === "Escape") { e.preventDefault(); endAsk(false); }
+    if (e.key === "Escape" && !stopping) { e.preventDefault(); endAsk(false); }
     return;
   }
   if (view !== "live" || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;

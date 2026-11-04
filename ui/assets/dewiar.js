@@ -35,7 +35,8 @@
       ws.onclose = () => {
         if (this.connected) this.emit("offline", {});
         this.connected = false;
-        Object.values(this.pending).forEach(p => p.reject(new Error("нет связи с ядром"))); this.pending = {};
+        // lost — запрос ушёл, ответ потерян: сделано или нет, неизвестно (блокнот, GitHub №34, так и пишет)
+        Object.values(this.pending).forEach(p => p.reject(Object.assign(new Error("нет связи с ядром"), { lost: true }))); this.pending = {};
         this.retry();
       };
       ws.onerror = () => {};

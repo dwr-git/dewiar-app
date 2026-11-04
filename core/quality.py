@@ -321,6 +321,37 @@ def looks_like_promise(text, ask=""):
     return 0 < len(t) <= 400 and not t.endswith("?") and bool(PROMISE.search(t) or PROMISE_NOW.search(t))
 
 
+# №522 (04.11, LM Studio, своя модель): «Загружаю навык и выполняю подключение к серверу: [вызваны инструменты: load_skill
+# …, run_command (command: ssh …)] Жду вывод — как дойдёт, отчитаюсь» — вызов действия написан текстом, а не сделан, и
+# человек решил, что «инструмент работы с сервером не работает». Такой текст — то же обещание: просим вызвать по-настоящему
+_FAKE_HEAD = re.compile(r"\[\s*(?:вызва\w*\s+)?(?:инструмент\w*|tools?|функци\w*|действи\w*)\s*:", re.I)
+_FAKE_WAIT = re.compile(r"(?<![а-яё])жду\s+(?:вывод|результат|ответ\s+(?:команды|сервера|инструмента))", re.I)
+
+
+def fake_call(text, names=()):
+    """Вызов действия, написанный текстом вместо настоящего вызова -> имя действия (или «?») или "". names — действия,
+    которые есть у модели на этом шаге: «[run_command: …]», «[load_skill(…)]», «run_command (command: …)»;
+    и общее «[вызваны инструменты: …]»."""
+    t = text or ""
+    if not t.strip():
+        return ""
+    if _FAKE_HEAD.search(t):
+        return "?"
+    for n in sorted({x for x in names or () if x and re.fullmatch(r"[a-z][a-z0-9_]{2,}", x)}, key=len, reverse=True):
+        if re.search(r"\[\s*" + n + r"\b\s*[:(]", t) or ("_" in n and re.search(r"(?<![\w`/.])" + n + r"\s*\(\s*\w+\s*[:=]", t)):
+            return n
+    return "?" if _FAKE_WAIT.search(t) and re.search(r"\[[^\]]{3,}\]", t) else ""
+
+
+FAKE_NUDGE = ("СТОП. Ты написал(а) вызов действия ТЕКСТОМ — он НЕ выполнен, человек ничего не получит и ждать вывода "
+              "бессмысленно. Вызови нужный инструмент настоящим вызовом функции (tool call), без описания в квадратных скобках, "
+              "и ответь по его результату. Если такого инструмента у тебя нет — одной фразой честно скажи об этом.")
+
+
+FAKE_GIVEUP = ("Простите: эта модель пишет действия словами, а не выполняет их, — поэтому ничего не сделано. Скажите ещё раз "
+               "или выберите в «Мозге» другую модель, которая умеет вызывать инструменты.")
+
+
 def promise_nudge(deliverable, again=False, hint=""):
     """Что сказать модели, когда она пообещала (или не запустила задачу на просьбу о готовой вещи). again — второй раз за
     ход (№461: «сейчас посмотрю» дважды — и всё): жёстче, только вызов; hint — какие действия подходят (плагин)."""
@@ -961,6 +992,8 @@ def hold_sentence(ask, text, sentence, called=(), names=(), known="", agenda="")
     c, names = set(called or ()), set(names or ())
     s = sentence or ""
     if "open_url" in names and OPEN_ASK.search(ask or "") and not c & OPEN_TOOLS and open_claim(ask, s, c):
+        return True
+    if names and fake_call(s, names):                 # №522: «[run_command: …] Жду вывод» — не озвучивать
         return True
     if names & {"weather", "web_search"} and not c & INFO_TOOLS_Q and invented_numbers(text, s, c, known=known):
         return True

@@ -85,6 +85,8 @@ class HomeHub:
         self.server = None
         self.port = 0
         self.on_change = None                 # (устройство) -> чужая правка записана: компьютеру забрать сразу
+        self.others = None                    # () -> устройства из облака этого компьютера [{id, name, seen, app, ver}] — телефону
+                                              # по Wi-Fi видны и другие компьютеры (04.11: «смартфон видит только тот компьютер…»)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(str(self.path), check_same_thread=False, isolation_level=None)
         self.db.execute("PRAGMA journal_mode=WAL")
@@ -193,6 +195,37 @@ class HomeHub:
         except ValueError:
             return []
 
+    def local_devices(self):
+        """Телефоны, которые сами меняются с этим узлом: [{id, name, app, seen}] — облаку (Sync._via)."""
+        return [{"id": d["id"], "name": str(d.get("name") or "")[:60], "app": d.get("app") or "phone", "seen": int(d.get("seen") or 0)}
+                for d in self._devs() if isinstance(d, dict) and d.get("id") and d.get("tid") and d.get("app") in ("phone", "web")]
+
+    def _all(self, devs, dev):
+        """Список устройств для ответа: свои (кто менялся с узлом) и, если есть, из облака этого компьютера. Одно устройство —
+        одна строка: записи склеиваются по id, время — самое свежее; кого узел сам не видел — с пометкой cloud."""
+        by = {}
+        for d in devs:
+            if isinstance(d, dict) and d.get("id"):
+                by[d["id"]] = {"id": d["id"], "name": d.get("name", ""), "seen": int(d.get("seen", 0) or 0), "app": d.get("app", "phone"), "ver": d.get("ver", "")}
+        ext = []
+        if callable(self.others):
+            try:
+                ext = list(self.others() or [])
+            except Exception:  # noqa: BLE001
+                ext = []
+        for d in ext:
+            if not isinstance(d, dict) or not d.get("id") or d.get("app") == "cloud":
+                continue
+            cur, seen = by.get(d["id"]), int(d.get("seen", 0) or 0)
+            if cur is None:
+                by[d["id"]] = {"id": d["id"], "name": str(d.get("name") or "")[:60], "seen": seen, "app": d.get("app") or "phone",
+                               "ver": str(d.get("ver") or "")[:20], "cloud": True}
+                if d.get("via"):
+                    by[d["id"]]["via"] = str(d["via"])[:60]
+            elif seen > cur["seen"]:
+                cur["seen"] = seen
+        return sorted((dict(d, me=d["id"] == dev) for d in by.values()), key=lambda d: (not d["me"], -d["seen"]))
+
     def sync(self, body, tid=""):
         """Обмен — как sync_handler() в cloud.php. -> ответ (dict)."""
         body = body if isinstance(body, dict) else {}
@@ -265,8 +298,7 @@ class HomeHub:
                 r = db.execute("SELECT kind, iid, data, updated, deleted, rev, dev FROM items WHERE kind = ? AND iid = ? AND rev <= ?", (kind, iid, since)).fetchone()
                 if r:
                     items.append(self._item(r))
-        all_ = sorted(({"id": d["id"], "name": d.get("name", ""), "seen": d.get("seen", 0), "app": d.get("app", "phone"), "ver": d.get("ver", ""),
-                        "me": d["id"] == dev} for d in devs if d.get("id")), key=lambda d: (not d["me"], -d["seen"]))
+        all_ = self._all(devs, dev)
         return {"rev": nxt, "items": items, "more": more, "written": written, "kinds": kinds, "lost": [k + ":" + i for k, i in lost[:2000]],
                 "space": "home", "devices": [{"name": d["name"], "seen": d["seen"], "pc": d["app"] == "pc"} for d in all_ if not d["me"]],
                 "all": all_, "box": 0, "hub": {"id": self.hub_id(), "name": str(self.name() or "")[:40], "urls": [f"http://{ip}:{self.port}/" for ip in lan_addresses()]}}

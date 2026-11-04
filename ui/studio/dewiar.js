@@ -101,7 +101,7 @@ function dwRender() {
     if (tight) dwSet("pc", "warn", "мало свободной памяти");
     if (weak) $("#dw-weak").innerHTML = `<b>На этом компьютере мало мощности (${escH(d.why)})</b><p>${d.light ? "Включён лёгкий режим — ассистент работает, но распознаёт речь попроще." : "Ассистент может тормозить."}
       Чтобы стало быстро и точно, пусть думает и слушает сервер Dewiar:</p>
-      <ol>${a.logged_in || d.cloud ? `<li>Включите ниже «Распознавать речь на сервере» — и всё.</li>` : `<li><a href="#" data-free>«Подключить бесплатно»</a> — без регистрации, за минуту (или войдите в аккаунт dewiar.pro ниже, если он у вас есть).</li><li>Готово: модели и распознавание речи включатся на сервере сами.</li>`}</ol>`;
+      <ol>${a.logged_in || d.cloud ? `<li>Включите ниже «Распознавать речь на сервере» — и всё.</li>` : `<li><a href="#" data-free>«Подключить мозг Dewiar»</a> — без регистрации, за минуту (или войдите в аккаунт dewiar.pro ниже, если он у вас есть).</li><li>Готово: модели и распознавание речи включатся на сервере сами.</li>`}</ol>`;
     $("#dw-dot").classList.toggle("on", weak || tight);
   }
   // антивирус
@@ -273,7 +273,14 @@ $("#dw-out").onclick = async () => { if (await ask("Выйти из аккаун
 $("#dw-cloud-use").onclick = () => $("#cc-use").click();
 $("#dw-cloud-go").onclick = async (ev) => { const r = $("#dw-cloud-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "подключаю по аккаунту…";
   try { await cloudUse(); r.className = "res ok"; r.textContent = "Модели Dewiar подключены — отвечают они."; dwLoad(); } catch (e) { r.className = "res bad"; r.textContent = e.message; } ev.target.disabled = false; };
-$("#dw-topup").onclick = () => { $('nav button[data-p="brain"]').click(); setTimeout(() => { $("#cc-top").click(); $("#cloud-card").scrollIntoView({ behavior: "smooth" }); }, 200); };
+$("#dw-topup").onclick = () => openTopup();
+/* «Пополнить» откуда угодно (0.82.1: кнопка в виджете после «талеры закончились», #topup в адресе): «Мозг», панель оплаты
+   раскрыта и прокручена к себе */
+function openTopup() {
+  $('nav button[data-p="brain"]').click();
+  setTimeout(() => { if ($("#cc-pay") && $("#cc-pay").style.display === "none") $("#cc-top").click(); if ($("#cloud-card")) $("#cloud-card").scrollIntoView({ behavior: "smooth" }); }, 200);
+}
+window.studioGo = (p) => p === "topup" ? openTopup() : ($(`nav button[data-p="${p}"]`) || { click() {} }).click();
 $("#dw-key-go").onclick = async () => { const r = $("#dw-cloud-res"), key = $("#dw-key").value.trim(); if (!key) return; r.className = "res"; r.textContent = "проверяю ключ…";
   try { const c = await core.call("cloud_connect", { key }); DW.cloud = c; cloudFill(c); renderProfiles(); $("#dw-key").value = ""; r.className = "res ok"; r.textContent = "Ключ подключён."; dwLoad(); } catch (e) { r.className = "res bad"; r.textContent = e.message; } };
 $("#dw-stt").onchange = async (e) => {
@@ -652,6 +659,7 @@ core.on("hello", d => {
     $('nav button[data-p="dw"]').click(); setTimeout(() => { $("#dw-ref-use").open = true; $("#dw-ref-code").value = (/[?&]c=([A-Za-z0-9]+)/.exec(q.get("address")) || [])[1] || ""; }, 1200); }
   else if (q.get("address")) { $("#c-addr").value = q.get("address"); preview({ address: q.get("address") }); }
   else if (q.get("note") && !DW.noteShown) { DW.noteShown = true; ntGoto(q.get("note")); }    // заметка из окна напоминания
+  else if (location.hash === "#topup") setTimeout(openTopup, 300);
   else if (!S.llm.active && !location.hash) $('nav button[data-p="brain"]').click();
   wlcBoot(d);
 })
@@ -664,7 +672,7 @@ core.on("hello", d => {
 .on("status", e => renderStatus(e.status));
 bindFields();
 
-/* «Подключить бесплатно» из текста (data-free): регистрации на dewiar.pro нет — там вход для тех, кому выдали аккаунт
+/* «Подключить мозг Dewiar» из текста (data-free): регистрации на dewiar.pro нет — там вход для тех, кому выдали аккаунт
    (жалобы №88–89 и комментарии 19.10: «как пройти регистрацию? только окно входа»). Ведём в «Мозг» → плитка. */
 document.addEventListener("click", (e) => {
   const a = e.target.closest && e.target.closest("[data-free]");

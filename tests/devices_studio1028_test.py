@@ -80,6 +80,16 @@ with sync_playwright() as p:
     ok("Жду ответа" in pg.inner_text("#dv-brains-res"), "«Взять мозги» — жду ответа")
     pg.evaluate("async () => dvBrains(await core.call('brains_status'))"); pg.wait_for_timeout(200)
     ok("С «Рабочий»: Qwen домашний, Claude" in pg.inner_text("#dv-brains-res"), f"пришли мозги — видно, с какого устройства и какие: {pg.inner_text('#dv-brains-res')}")
+    # телефон «Дома по Wi-Fi» у другого компьютера (04.11): «на связи через „Домашний“»; давно — «был N мин назад»
+    pg.evaluate("(via) => { _st = via; return loadMyDevices(true); }", dict(DEV, devices=DEV["devices"][:1] + [
+        {"id": "phone-2", "name": "Pixel Вани", "app": "phone", "ver": "0.9.21", "seen": now - 50, "via": "Домашний"},
+        {"id": "phone-3", "name": "Старый", "app": "phone", "ver": "0.9.0", "seen": now - 1200, "via": "Домашний"}]))
+    pg.wait_for_timeout(400)
+    rows = pg.evaluate("() => [...document.querySelectorAll('#dv-list li')].map(li => [li.querySelector('b').textContent, li.querySelector('small').textContent, li.className])")
+    ok(any("Pixel Вани" in r[0] and "на связи через «Домашний»" in r[1] and "on" in r[2] for r in rows)
+       and any("Старый" in r[0] and "был 20 мин назад" in r[1] and "не на связи" not in r[1] for r in rows), f"подписи телефонов: {rows[1:]}")
+    sub = pg.evaluate("() => [...document.querySelectorAll('#dv-map .dv-sub')].map(e => e.textContent)")
+    ok("через «Домашний»" in sub, f"и на карте: {sub}")
     # без входа
     pg.evaluate("() => { _st = _nolog; return loadMyDevices(true); }"); pg.wait_for_timeout(400)
     ok(pg.get_attribute("#dv-ways [data-way=home]", "aria-selected") == "true" and pg.is_visible("#dv-home"),

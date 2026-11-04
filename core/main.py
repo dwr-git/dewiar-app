@@ -93,6 +93,14 @@ def main():
         from personas import Personas
 
         log.info("Dewiar %s — запуск ядра", VERSION)
+        try:                                   # №521, №523: прошлый запуск упал посреди работы — сторож окна (ui/app.py core_guard)
+            import json as _json               # записал код выхода: оставим его в журнале — он уходит в отчёт
+            ex = STATE_DIR / "core.exit"
+            d = _json.loads(ex.read_text(encoding="utf-8"))
+            ex.unlink(missing_ok=True)
+            log.warning("Прошлый запуск ядра упал: %s", d.get("why") or d.get("code"))
+        except (OSError, ValueError, AttributeError):
+            pass
         migrate_from_cortex()
         settings = Settings()
         import egress                                       # стоп-кран и журнал «что уходило наружу» — до первых соединений

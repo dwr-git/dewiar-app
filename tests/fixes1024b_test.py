@@ -34,7 +34,7 @@ ok("bare_done(text, step_text, called)" in src and re.search(r"from quality impo
 
 # --- №237: текст про аккаунт ---
 st = (ROOT / "ui/settings.html").read_text(encoding="utf-8")
-ok("вам выдали — введите" not in st and "Регистрации на сайте нет" in st and "Подключить бесплатно" in st,
+ok("вам выдали — введите" not in st and "Регистрации на сайте нет" in st and "Подключить мозг Dewiar" in st,
    "№237: студия не говорит «аккаунт вам выдали»; ясно, что регистрации нет и вход обычно не нужен")
 ok("Войдите аккаунтом dewiar.pro" not in st, "Dewiar.pro: заголовок не зовёт входить аккаунтом")
 app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")

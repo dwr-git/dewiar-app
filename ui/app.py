@@ -424,6 +424,14 @@ def ui_settings():
         return {}
 
 
+def studio_go_js(page):
+    """JS для открытой студии: перейти в раздел page. «topup» (0.82.1) — «Мозг» с раскрытой панелью оплаты (studioGo в
+    ui/studio/dewiar.js); студия старее — просто кнопка раздела."""
+    p = json.dumps(str(page))
+    return (f"(window.studioGo || (p => (document.querySelector('nav button[data-p=\"' + p + '\"]') || {{click(){{}}}}).click()))"
+            f"({p} === 'topup' && !window.studioGo ? 'brain' : {p})")
+
+
 def ui_skin():
     """Тема студии и виджета, как её видит ядро (core/settings.py: «Фирменная» без отметки skin_v2 — это прежнее
     значение по умолчанию, теперь вместо неё «Небесный»), и светлая ли она — для фона окна до загрузки страницы."""
@@ -586,6 +594,46 @@ def core_watch(api=None, limit=240, tries=2):
     winshell.message_box("Ядро Dewiar не запустилось" + (f": {error[:300]}" if error else "") + ".\n\nСделайте, пожалуйста: "
                          "меню «Пуск» → «Dewiar — диагностика» — на рабочем столе появится файл отчёта, пришлите его разработчику.")
     return False
+
+
+CORE_EXPECTED = [0.0]    # time.time(), когда ядро остановили нарочно (перезапуск кнопкой, выход): сторож его не поднимает
+
+
+def core_guard(stop=None, every=3.0, alive=None, start=None, now=time.time):
+    """Windows: ядро упало посреди работы (№521, №523, 04.11: «как только отправляю запрос — вылет», «Нет связи с ядром»
+    до перезапуска программы, а в журнале ядра — ни строчки). Раньше сторож (core_watch) смотрел только на запуск; теперь
+    и дальше: процесс ядра завершился с ошибкой (не 0), а мы его не останавливали — пишем код в ui.log (по нему видно,
+    где упало: 0xC0000005 — сбой внутри библиотеки) и в core.exit (ядро при следующем запуске напишет это в свой журнал,
+    он попадает в отчёт) и запускаем снова — не больше трёх раз за 10 минут. stop — Event (проверки)."""
+    alive = alive or core_alive
+    start = start or start_core_win
+    restarts = []
+    while not (stop is not None and stop.is_set()):
+        (stop.wait(every) if stop is not None else time.sleep(every))
+        proc = CORE_PROC[0] if CORE_PROC else None
+        code = proc.poll() if proc is not None else None
+        if code is None or code == 0 or getattr(proc, "_guarded", False):
+            continue
+        proc._guarded = True
+        if now() - CORE_EXPECTED[0] < 30 or alive():
+            continue
+        try:
+            from doctor import crash_text
+            why = crash_text(code) or f"код выхода {code}"
+        except Exception:  # noqa: BLE001
+            why = f"код выхода {code}"
+        restarts = [t for t in restarts if now() - t < 600]
+        try:
+            from settings import STATE_DIR
+            (STATE_DIR / "core.exit").write_text(json.dumps({"code": code, "why": why, "time": now()}, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+        if len(restarts) >= 3:
+            _ui_log(f"ядро упало ({why}) — третий раз за 10 минут, больше сам не запускаю")
+            continue
+        restarts.append(now())
+        _ui_log(f"ядро упало ({why}) — запускаю снова")
+        start()
 
 
 def lock(name):
@@ -1669,6 +1717,7 @@ class Api:
         установщик заменит файлы и сам запустит новую версию. Права администратора не нужны (установка в профиль)."""
         if allowed not in p.parents or p.suffix.lower() != ".exe" or not p.is_file():
             return {"ok": False, "error": "это не скачанное обновление Dewiar"}
+        CORE_EXPECTED[0] = time.time() + 600                 # ядро останавливает обновление — сторож не поднимает
         try:
             winshell.core_call(WS_PORT, self.token, "quit")
         except Exception:  # noqa: BLE001
@@ -1704,6 +1753,7 @@ class Api:
         allowed = STATE_DIR.resolve() / "updates"
         if not WIN or allowed not in p.parents or p.suffix.lower() != ".exe" or not p.is_file():
             return {"ok": False, "error": "это не скачанное обновление Dewiar"}
+        CORE_EXPECTED[0] = time.time() + 600                 # установщик остановит ядро — сторож не поднимает
         try:
             os.startfile(str(p))  # noqa: S606 — проверенный (sha256) установщик из своей папки обновлений
         except OSError as e:
@@ -1718,6 +1768,7 @@ class Api:
 
         def run():
             from settings import STATE_DIR
+            CORE_EXPECTED[0] = time.time()              # сторож (core_guard) не поднимает ядро, остановленное нарочно
             try:
                 if WIN:
                     try:
@@ -1748,6 +1799,7 @@ class Api:
         интерфейс. Linux: ядро — служба systemd --user; stop не отключает её автозапуск, так что при следующем
         входе в систему или запуске Dewiar из меню всё снова работает. Без службы (из исходников) — команда quit."""
         _ui_log("выход: ядро и интерфейс завершаются")
+        CORE_EXPECTED[0] = time.time()
         if WIN:
             try:
                 winshell.core_call(WS_PORT, self.token, "quit")
@@ -1861,7 +1913,7 @@ class Api:
                 else:
                     self._studio.restore()
                 if page:
-                    self._studio.evaluate_js(f"(document.querySelector('nav button[data-p=\"{page}\"]') || {{click(){{}}}}).click()")
+                    self._studio.evaluate_js(studio_go_js(page))          # «topup» (0.82.1) — «Мозг» с раскрытой оплатой
                 return
             except Exception:  # noqa: BLE001
                 self._studio = None
@@ -3702,7 +3754,10 @@ def main_win(args, extra):
         pass
     ensure_core()
     import threading as _th
-    _th.Thread(target=core_watch, name="core-watch", daemon=True).start()
+    def _watch_then_guard():
+        if core_watch():
+            core_guard()                                   # и дальше: упало посреди работы — поднять снова (№521, №523)
+    _th.Thread(target=_watch_then_guard, name="core-watch", daemon=True).start()
     token = ensure_token()
     api = Api(token)
     fresh = not SETTINGS_PATH.exists() or ui_settings().get("welcome") == ""   # первый запуск — откроем «Первые шаги»

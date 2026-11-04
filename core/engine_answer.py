@@ -149,6 +149,17 @@ def repeat_head(said, new, fin=False):
     return len(head) >= (10 if fin else 18) and head in _rep_norm(said)
 
 
+
+# Падение внутри библиотеки (faulthandler, core.crash): «Fatal Python error», «access violation», «stack overflow», а с №521/
+# №523 (04.11) и прочие «Windows fatal exception» (деление на ноль, неверная команда, «code 0x…») — раньше их не брали в
+# отчёт. 0xE06D7363 — пойманное исключение C++, шум. Такое же правило — в ui/doctor.py (crash_blocks)
+_CRASH_RX = re.compile(r"Fatal Python error|Windows fatal exception: (?!code 0xe06d7363)", re.I)
+
+
+def crash_blocks(text):
+    """core.crash -> блоки запусков, в которых было настоящее падение (текст блока без «--- запуск »)."""
+    return [b for b in (text or "").split("\n--- запуск ") if _CRASH_RX.search(b) or "stack overflow" in b]
+
 def _norm_answer(t):
     """Ответ без регистра, знаков и пробелов — сравнить с прошлыми («Я Лира.» == «я лира»)."""
     return re.sub(r"[\W_]+", " ", str(t or "").lower()).strip()
@@ -974,7 +985,7 @@ class AnswerMixin:
 
     def _trial_llm(self):
         """Пробный разговор сайта (cloud.php ?p=/trial/chat/completions) — мозг на первые минуты, пока свой не подключён:
-        без ключа и настройки, без действий (напоминания, поиск — после «Подключить бесплатно»), с пределами сайта (12 ответов
+        без ключа и настройки, без действий (напоминания, поиск — после «Подключить мозг Dewiar»), с пределами сайта (12 ответов
         в час с адреса). Выключатель — llm.trial: false. При вводе из wav (проверки) — только с DEWIAR_TRIAL. -> профиль или None."""
         if self.s.get("llm", "trial") is False or (self.wav_input and not os.environ.get("DEWIAR_TRIAL")):
             return None
@@ -1072,7 +1083,7 @@ class AnswerMixin:
         """Ошибка, которую облако Dewiar объяснило само («заряд закончился», «лимит на сегодня») -> True.
         Такую ошибку говорим как есть и не повторяем запрос без инструментов. Тексты — от сервера облака (cloud.php)."""
         from cloud import is_cloud
-        return is_cloud(prof) and bool(re.match(r"(Заряд|Ключ) Dewiar|На сегодня лимит|Слишком много|Сейчас у Dewiar много людей", str(e)))
+        return is_cloud(prof) and bool(re.match(r"(Заряд|Ключ) Dewiar|Талер|На счёте dewiar\.pro|На сегодня лимит|Слишком много|Сейчас у Dewiar много людей", str(e)))
 
     def _cloud_fallback(self, prof, e):
         """Запасной мозг для облака: «Мозг» → карточка облака → «Если облако не отвечает» -> профиль или None
@@ -1093,7 +1104,7 @@ class AnswerMixin:
     def _own_fallback(self, prof, e):
         """Своя модель (LM Studio, Ollama, свой сервер) не отвечает — не включена или сервер выключен (29.10, пакет:
         «своя модель · нет связи» — 107 за неделю; у 270 компьютеров из 820 мозг есть, а ответа не было ни разу).
-        Включено «Мозг» → «Если своя модель не отвечает — отвечать через Dewiar» и бесплатный мозг подключён ->
+        Включено «Мозг» → «Если своя модель не отвечает — отвечать через Dewiar» и мозг Dewiar подключён ->
         его профиль; выключено — один раз за запуск подсказка, что сделать. Без согласия вопрос в облако не уходит:
         свою модель часто выбирают ради приватности."""
         from cloud import PROFILE_ID, is_cloud
@@ -1110,7 +1121,7 @@ class AnswerMixin:
         if not getattr(self, "_own_fb_hinted", False):
             self._own_fb_hinted = True
             self.note("Своя модель не отвечает: запустите LM Studio или Ollama (модель должна быть загружена). Чтобы в такие "
-                      "минуты отвечал бесплатный мозг Dewiar — студия → «Мозг» → «Если своя модель не отвечает».")
+                      "минуты отвечал мозг Dewiar — студия → «Мозг» → «Если своя модель не отвечает».")
         return None
 
     def self_check(self):
@@ -1178,7 +1189,8 @@ class AnswerMixin:
         import platform
         # в настройках скрываем всё, чьё имя похоже на секрет (ключи, заголовки и переменные окружения MCP-программ)
         # №311 (пакет 27.10): «max_tokens» в отчёте был «***» — числа и флаги вида *_tokens, keys_* не секрет
-        secret = re.compile(r"^(?!max_tokens$|.*_tokens$|tokens$|token_count$)(?:.*(api_key|token|password|key|secret|headers|auth|cookie|env))", re.I)
+        # 0.82.1: и номера установки (cloud.dev — по нему сайт отдаёт прежний ключ) и пульса (report.dev)
+        secret = re.compile(r"^(?!max_tokens$|.*_tokens$|tokens$|token_count$)(?:.*(api_key|token|password|key|secret|headers|auth|cookie|env)|dev$|inst$)", re.I)
 
         def clean(x):
             if isinstance(x, dict):
@@ -1220,7 +1232,7 @@ class AnswerMixin:
         lines += ["== Журнал (последние строки)"] + tail[-tail_lines:]
         try:                                    # ядро падало в библиотеке (faulthandler в main.py) — где именно
             cr = (STATE_DIR / "logs" / "core.crash").read_text(encoding="utf-8", errors="replace")
-            blocks = [b for b in cr.split("\n--- запуск ") if "Fatal Python error" in b or "access violation" in b or "stack overflow" in b]   # 0xe06d7363 (пойманное C++) — шум
+            blocks = crash_blocks(cr)
             if blocks:
                 lines += ["", "== Падения ядра (core.crash)"] + ("--- запуск " + blocks[-1]).splitlines()[:80]
         except OSError:
@@ -1634,7 +1646,7 @@ class AnswerMixin:
             st = self.radio.pause()
             log.info("⏸ «%s» — радио «%s» на паузе", word, (st or {}).get("name", ""))
             self.emit("heard", text=word.capitalize())
-            self.emit("answer", text=f"Радио на паузе. Продолжить — «{self.persona_name()}, продолжи».", done=True)
+            self.emit("answer", text=f"На паузе. Продолжить — «{self.persona_name()}, продолжи».", done=True)
             return True
         playing = media_playing()
         if not (playing or (force and playing is None)):
@@ -2013,7 +2025,7 @@ class AnswerMixin:
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -2210,14 +2222,15 @@ class AnswerMixin:
                     want_task = deliver and "start_task" not in called and not step_text.strip().endswith("?") and nudged < 2
                     # №461 (ПК 0.76): «сейчас посмотрю» — просьба — и снова «сейчас посмотрю», и ход кончился: просим дважды,
                     # второй раз жёстче и с действиями плагина; не взялась и тогда — честно говорим это (ниже, PROMISE_GIVEUP)
-                    promised = not want_task and looks_like_promise(step_text, text)
+                    faked = "" if want_task else fake_call(step_text, names0)       # №522: «[run_command: …] Жду вывод»
+                    promised = not want_task and (bool(faked) or looks_like_promise(step_text, text))
                     if want_task or (nudged < 2 and promised):
                         nudged += 1
-                        log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else "только пообещала",
-                                 " (ещё раз)" if nudged > 1 else "")
-                        retract()
+                        log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else
+                                 f"написала вызов «{faked}» текстом" if faked else "только пообещала", " (ещё раз)" if nudged > 1 else "")
+                        retract(drop=bool(faked))                    # текст с выдуманным вызовом — не в ответ
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"},
-                                       {"role": "user", "content": promise_nudge(want_task, again=nudged > 1,
+                                       {"role": "user", "content": FAKE_NUDGE if faked else promise_nudge(want_task, again=nudged > 1,
                                                                                  hint=getattr(turn, "plugin_hint", ""))}]
                         if turn.full.strip() and not turn.full.endswith(" "):
                             turn.full += " "
@@ -2377,11 +2390,15 @@ class AnswerMixin:
                 if turn.full.strip() and not turn.full.endswith(" "):
                     turn.full += " "
                 self.set_state("thinking")
-            if not turn.cancel.is_set() and not turn.full.strip() and done_calls and not (set(getattr(turn, "tools_ok", None) or []) - INFO_TOOLS):
+            ok_tools = set(getattr(turn, "tools_ok", None) or [])
+            if not turn.cancel.is_set() and not turn.full.strip() and done_calls and (not ok_tools or ok_tools & INFO_TOOLS):
                 # отчёт №69: прочитала страницу трижды, поискала — и вернула пустоту («Не получилось: пустой ответ»).
-                # Сведения уже есть — просим ответить по ним словами, без новых действий (один раз)
+                # Сведения уже есть — просим ответить по ним словами, без новых действий (один раз).
+                # №524 (04.11, разобрал сам человек): справочное ВМЕСТЕ с действием (calc + world_time, web_search +
+                # set_reminder) не попадало ни сюда (было: только справочные), ни в «Готово.» (только действия) — и выходило
+                # «модель вернула пустой ответ». Теперь — сюда: есть что сказать по найденному и сделанному
                 log.warning("Модель замолчала после поиска и чтения — прошу ответить по найденному")
-                ask_ = [{"role": "user", "content": "Ответь мне сейчас словами по тому, что уже нашлось выше (страницы, поиск). "
+                ask_ = [{"role": "user", "content": "Ответь мне сейчас словами по тому, что уже нашлось и сделано выше (страницы, поиск, действия). "
                                                     "Новых действий не будет. Чего-то не хватило — так и скажи и предложи, "
                                                     "что сделать дальше (например, какие разделы сайта открыть)."}]
                 try:
@@ -2395,6 +2412,10 @@ class AnswerMixin:
                         speak(s_)
                 except LLMError as e:
                     log.info("И по найденному ответа нет: %s", e)
+                if not turn.full.strip() and not turn.cancel.is_set() and ok_tools - INFO_TOOLS:
+                    # и так ничего, но действие сделано (№524) — как у одних действий: «Готово.» / «Задача запущена…»
+                    turn.full = "Задача запущена — сообщу, когда будет готово." if "start_task" in ok_tools else "Готово."
+                    sentences.put(turn.full)
                 if not turn.full.strip() and not turn.cancel.is_set():
                     # и так ничего — не «Не получилось: пустой ответ», а честно: что сделано и что дальше
                     seen = [c["args"].get("url") or c["args"].get("query") for c in done_calls if c["name"] in ("read_webpage", "web_search")]
@@ -2402,13 +2423,19 @@ class AnswerMixin:
                                  + ", но ответ не сложился. Спросите точнее — например, какой раздел разобрать или что именно собрать.")
                     turn.full = self._g(turn.full) if hasattr(self, "_g") else turn.full
                     sentences.put(turn.full)
-            if nudged and not called and not turn.cancel.is_set() and looks_like_promise(step_text or turn.full, text):
+            if nudged and not called and not turn.cancel.is_set() and (looks_like_promise(step_text or turn.full, text)
+                                                                       or fake_call(step_text or turn.full, names0)):
                 # №463 (ПК 0.76): «Лира говорит, что сейчас всё сделает, и больше ничего не происходит. Ни статуса, ни ответа» —
                 # просили сделать, а она так и не взялась: человек не должен ждать впустую — говорим прямо
-                from quality import PROMISE_GIVEUP
+                from quality import FAKE_GIVEUP, PROMISE_GIVEUP
                 log.warning("✋ Модель так и не взялась за дело после просьб — говорю об этом прямо")
-                turn.full = (turn.full.rstrip() + " " + PROMISE_GIVEUP).strip()
-                sentences.put(PROMISE_GIVEUP)
+                faked = fake_call(step_text or turn.full, names0)
+                if faked:                                # №522: выдуманный вызов («жду вывод») не показываем; честно — почему не сделано
+                    turn.full = turn.full[:-len(step_text)] if step_text and turn.full.endswith(step_text) else \
+                        re.sub(r"\[[^\]\n]{0,400}\]", "", turn.full)
+                giveup = FAKE_GIVEUP if faked else PROMISE_GIVEUP
+                turn.full = (turn.full.rstrip() + " " + giveup).strip()
+                sentences.put(giveup)
             if remind_asked and "set_reminder" not in called and not turn.cancel.is_set() and not turn.full.rstrip().endswith("?"):
                 # попросили поставить — и всё равно нет: человек должен знать, что напоминания нет (а не ждать утром)
                 log.warning("Обещала напомнить, но напоминание так и не поставлено — говорю об этом прямо")
@@ -2456,10 +2483,18 @@ class AnswerMixin:
             if is_cloud(prof) and key_gone(e) and self._cloud_key_gone():
                 msg = "Ключ Dewiar удалён на сайте — теперь думаю по аккаунту dewiar.pro. Повторите, пожалуйста, вопрос."
             turn.error = msg
-            self.emit("error", text=msg)
-            self.emit("answer", text=msg, done=True)
-            turn.full = ""
-            sentences.put(msg)
+            if getattr(e, "topup", False):
+                # 0.82.1: талеры кончились — на экран полный текст (номер DW-…, как пополнить), голосом — коротко и без
+                # ссылки; виджет и студия показывают кнопку «Пополнить» (topup)
+                self.emit("error", text=msg, topup=True)
+                self.emit("answer", text=msg, done=True, topup=True)
+                turn.full = ""
+                sentences.put(getattr(e, "say", "") or "Талеры закончились. Пополнить — кнопкой на экране.")
+            else:
+                self.emit("error", text=msg)
+                self.emit("answer", text=msg, done=True)
+                turn.full = ""
+                sentences.put(msg)
         sentences.put(None)
         speaker.join()
         turn.ended = True                              # _wait_watch: ход кончился — строку ожидания убрать

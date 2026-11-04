@@ -842,7 +842,7 @@ def t_media(a, ctx):
     if r and (r.playing or r.paused) and action in ("play", "pause", "play_pause", "stop", "next"):
         if action in ("pause", "stop") or (action == "play_pause" and r.playing):
             st = r.pause()
-            return f"Радио «{(st or {}).get('name', '')}» на паузе"
+            return f"На паузе: «{(st or {}).get('name', '')}»"
         if action == "next" and r.station:
             from radio import search
             cur = r.station

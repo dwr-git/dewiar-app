@@ -59,7 +59,7 @@ function mins(t) { return Math.max(1, Math.round(words(t) / 180)); }
 
 /* текст -> абзацы; короткая строка без точки в конце — подзаголовок */
 function paras(text) {
-  const blocks = String(text || "").replace(/\r/g, "").split(/\n\s*\n|\n(?=\S)/).map(x => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const blocks = String(text || "").replace(/\r/g, "").split(/\n\s*\n|\n[ \t]*(?=\S)/).map(x => x.replace(/\s+/g, " ").trim()).filter(Boolean);
   return blocks.map(b => b.length < 90 && !/[.!?…:;»"]$/.test(b) && /[А-ЯЁA-Z]/.test(b[0]) ? `<h3>${esc(b)}</h3>` : `<p>${esc(b)}</p>`).join("");
 }
 

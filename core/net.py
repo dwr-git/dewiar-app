@@ -15,6 +15,7 @@ check() — проверка связи для студии: напрямую и
 адресом в другой сети ответить так не сможет). Не отвечает — как обычно (прокси или напрямую); проверка — не чаще раза в
 LAN_OK_SEC, неудача — снова не раньше чем через LAN_BAD_SEC."""
 import logging
+import re
 import threading
 import time
 from urllib.parse import parse_qs, quote, urlparse
@@ -250,6 +251,13 @@ def normalize_proxy(text):
     if low.startswith(("tg://proxy", "https://t.me/proxy", "http://t.me/proxy", "t.me/proxy")) or "secret=" in low:
         raise NetError("это MTProto-прокси — он работает только в приложении Telegram. Нужен SOCKS5- или "
                        "HTTP-прокси (socks5://адрес:порт) или VPN на компьютере")
+    # №526 (04.11): продавцы прокси дают «адрес:порт:логин:пароль» — люди вписывают это и с http:// впереди, а получали
+    # «нужен адрес и порт». Переводим в обычный вид scheme://логин:пароль@адрес:порт; «адрес:порт@логин:пароль» — тоже
+    m = re.fullmatch(r"(?:(?P<s>[a-z0-9]+)://)?(?P<h>[^:/@\s]+):(?P<p>\d{1,5}):(?P<u>[^:@\s]+):(?P<w>\S+)", t, re.I) or \
+        re.fullmatch(r"(?:(?P<s>[a-z0-9]+)://)?(?P<h>[^:/@\s]+):(?P<p>\d{1,5})@(?P<u>[^:@\s]+):(?P<w>\S*\D\S*)", t, re.I)
+    if m:                                       # (во втором виде пароль не из одних цифр: «логин:1234@адрес:порт» — обычный)
+        t = (f"{m.group('s') or 'http'}://{quote(m.group('u'), safe='')}:{quote(m.group('w'), safe='')}@"
+             f"{m.group('h')}:{m.group('p')}")
     if "://" not in t:
         t = "http://" + t
     u = urlparse(t)
@@ -262,7 +270,8 @@ def normalize_proxy(text):
     except ValueError:
         port = None
     if not u.hostname or not port:
-        raise NetError("у прокси нужен адрес и порт, например socks5://192.168.1.10:1080")
+        raise NetError("у прокси нужен адрес и порт: http://адрес:порт, с логином — http://логин:пароль@адрес:порт "
+                       "(или адрес:порт:логин:пароль), для SOCKS — socks5://…")
     return t
 
 
@@ -506,6 +515,9 @@ def _probe_try(url, proxy, timeout):
             r = c.get(url)
         return r.status_code < 500, f"ответ {r.status_code}"
     except httpx.ProxyError as e:
+        if "407" in str(e):                              # №526: прокси с логином, а его не вписали (или он неверный)
+            return False, ("прокси просит логин и пароль (407)" + (" — логин или пароль не подошли" if "@" in proxy else
+                           " — впишите их так: http://логин:пароль@адрес:порт или адрес:порт:логин:пароль"))
         return False, f"прокси не пускает: {e}"
     except httpx.ConnectTimeout:
         return False, "нет ответа (время вышло)"

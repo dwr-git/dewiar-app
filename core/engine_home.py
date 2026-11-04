@@ -1,7 +1,7 @@
 """«Дома по Wi-Fi» в ядре (core/homehub.py — узел и обмен; core/sync.py HomeSync — компьютер со своим узлом).
 
 Настройка sync.home {on}: включили — узел слушает домашнюю сеть, HomeSync меняется с ним по 127.0.0.1. Команды студии:
-homelan_get, homelan_set {on}, homelan_pair (новый код на 10 минут: ссылка для QR), homelan_forget {tid}. Телефон, подключённый так,
+homelan_get, homelan_set {on, tasks}, homelan_pair (новый код на 10 минут: ссылка для QR), homelan_forget {tid}. Телефон, подключённый так,
 синхронизируется с компьютером напрямую — без dewiar.pro; если у компьютера есть и облако, он передаёт правки дальше
 (компьютер — мост между телефоном и другими устройствами)."""
 import sys
@@ -28,6 +28,9 @@ class HomeMixin:
         from sync import HomeSync
         if self.homehub is None:
             self.homehub = HomeHub(STATE_DIR / "homehub.sqlite", name=self.device_name)
+            # телефону по Wi-Fi — и другие свои устройства из облака этого компьютера (04.11): задачу «на рабочем» он
+            # сможет поставить и отсюда, а этот компьютер перешлёт её через облако (HomeSync._forward)
+            self.homehub.others = lambda: [d for d in (self.sync.status.get("all") or []) if not d.get("me")]
         try:
             port = self.homehub.start()
         except HubError as e:
@@ -63,7 +66,8 @@ class HomeMixin:
         st = dict(self.home_sync.status) if self.home_sync is not None else {}
         out = {"on": on, "running": bool(hub and hub.running()), "port": hub.port if hub else 0, "ips": lan_addresses(),
                "phones": hub.phones() if hub else [], "ok": st.get("ok"), "at": st.get("at", 0), "error": st.get("error", ""),
-               "counts": st.get("counts") or {}, "win": sys.platform.startswith("win")}
+               "counts": st.get("counts") or {}, "win": sys.platform.startswith("win"),
+               "tasks": ((self.s.get("sync") or {}).get("home") or {}).get("tasks") is not False}   # «Принимать задания с телефона по Wi-Fi»
         if pair:
             out["pair"] = pair
         return out
@@ -71,7 +75,12 @@ class HomeMixin:
     def home_cmd(self, cmd, a):
         if cmd == "homelan_get":
             return self.home_public()
+        if cmd == "homelan_set" and "on" not in a and "tasks" in a:      # только переключатель «Принимать задания»
+            self.s.update({"sync": {"home": {"tasks": bool(a.get("tasks"))}}})
+            return self.home_public()
         if cmd == "homelan_set":
+            if "tasks" in a:
+                self.s.update({"sync": {"home": {"tasks": bool(a.get("tasks"))}}})
             on = bool(a.get("on"))
             self.s.update({"sync": {"home": {"on": on}}})
             if on:

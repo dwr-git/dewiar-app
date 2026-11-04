@@ -53,6 +53,7 @@ function grHead() {
   $("#cl-devs").textContent = ["вы"].concat((g.members || []).map(m => grFirst(m.name))).join(", ") + " · сообщения шифруются";
   $("#cl-devs").title = "";
   $("#cl-call").style.display = $("#cl-vcall").style.display = "none";
+  if ($("#cl-ren")) $("#cl-ren").style.display = "none";                // у группы — своё название в «Участниках»
   $("#cl-del").style.display = "";
   $("#cl-del").textContent = g.mine ? "Значок и участники" : "Участники";
   $("#cl-del").title = g.mine ? "Значок группы, название, участники" : "Кто в группе";

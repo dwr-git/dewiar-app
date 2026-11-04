@@ -65,12 +65,12 @@ try:
         # первый запуск: одна главная кнопка — бесплатно; остальное — второй кнопкой
         first = pg.evaluate("() => [...document.querySelectorAll('#card .start button')].map(b => b.textContent)")
         # 23.10 (№216): второе устройство — код, а не вторая заявка
-        ok(first == ["Подключить бесплатно", "Dewiar уже есть на компьютере — ввести код", "Свой ключ или своя модель"], f"первый запуск — понятные кнопки: {first}")
+        ok(first == ["Подключить мозг Dewiar", "Dewiar уже есть на компьютере — ввести код", "Свой ключ или своя модель"], f"первый запуск — понятные кнопки: {first}")
         ok("подключить" in pg.evaluate("document.querySelector('#bot').textContent") and "Ollama" not in pg.content().split('id="sheet')[0],
            "приветствие простыми словами, без названий моделей")
         pg.evaluate("openBrain()"); pg.wait_for_timeout(400)
         tiles = pg.evaluate("() => [...document.querySelectorAll('.tiles > .tile')].map(t => [t.querySelector('b').textContent, !!t.closest('details.pro')])")
-        ok(tiles[0] == ["Подключить бесплатно", False] and all(pro for n, pro in tiles if n in ("Своя модель", "Ключ любимого сервиса")),
+        ok(tiles[0] == ["Подключить мозг Dewiar", False] and all(pro for n, pro in tiles if n in ("Своя модель", "Ключ любимого сервиса")),
            f"в выборе мозга — сначала бесплатно, своя модель и ключи — в «Для опытных»: {tiles}")
         ok(not pg.evaluate("() => [...document.querySelectorAll('.card, .tile')].some(e => getComputedStyle(e).borderTopWidth !== '0px')"),
            "карточки и плитки — без рамок (стекло и тень)")

@@ -175,7 +175,7 @@ e = make(llm=False)
 e.s.d["llm"] = {"trial": False}
 run(e, ("text", "раз два три"))
 br = [k for ev, k in e.events if ev == "intro" and k.get("step") == "brain"]
-ok(br and br[0].get("page") == "brain" and "try" not in steps(e) and "Claude" in br[0].get("text", "") and "бесплатно" in br[0].get("text", ""), "без мозга — мягкий выбор в «Мозге», фраз не предлагает")
+ok(br and br[0].get("page") == "brain" and "try" not in steps(e) and "Claude" in br[0].get("text", "") and "подарок" in br[0].get("text", "") and "бесплатн" not in br[0].get("text", ""), "без мозга — мягкий выбор в «Мозге», фраз не предлагает")
 ok(any("я открыла" in t.lower() for t in e.said), f"женский род: {[t for t in e.said if 'открыл' in t]}")
 # 5б. 0.69: мозга нет, но мозг Dewiar подключается сам (автоподключение), а пока — пробный разговор: студию не открываем,
 # говорим, что можно спрашивать сразу, и предлагаем фразы

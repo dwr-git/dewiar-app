@@ -168,7 +168,7 @@ try:
         ok(pg.evaluate("core.call('radio_status')").get("station") == "Джаз Тест", f"▶ — следующая: {pg.evaluate('core.call(`radio_status`)')}")
         # пауза плиткой и «играть» в плеере
         pg.click("#rd-tab .rd-t.on .rd-play"); time.sleep(1.2)
-        ok(not pg.evaluate("core.call('radio_status')").get("playing") and "на паузе" in pg.inner_text("#mm-np"), "нажать играющую плитку — пауза")
+        ok(not pg.evaluate("core.call('radio_status')").get("playing") and "на паузе" in pg.inner_text("#mm-np").lower(), "нажать играющую плитку — пауза")
         pg.click("#mm-pp"); time.sleep(3)
         ok(pg.evaluate("core.call('radio_status')").get("station") == "Джаз Тест", "«играть» в плеере — та же станция снова")
 

@@ -53,7 +53,7 @@ WS_SKIP_DIRS = {"рабочая копия", "_run", "_guard", ".git", "__pycach
 BIG = 100 << 20                     # файлы больше 100 МБ (видео в задачах) не копируем
 SECRET_DIRS = ("ssh/",)             # ключи серверов — только в копию с паролем
 SECRET_RX = re.compile(r"(?:^|_)(?:api_?key|key|token|secret|password|passwd|pass|pwd|cookie|session|authorization|"
-                       r"private_?key|access_?token|refresh_?token|client_?secret|bearer|proxy)$", re.I)
+                       r"private_?key|access_?token|refresh_?token|client_?secret|bearer|proxy|dev|inst)$", re.I)   # dev — номер установки (0.82.1)
 
 
 def scrub(obj):

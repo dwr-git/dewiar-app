@@ -83,6 +83,25 @@ CRASH = {0xC0000005: "сбой доступа к памяти внутри би�
          0xC0000142: "библиотека не смогла запуститься (DLL)", 0xC0000017: "не хватило памяти"}
 
 
+# То же правило, что в core/engine_answer.py crash_blocks: настоящее падение в core.crash (без шума 0xE06D7363)
+_CRASH_RX = re.compile(r"Fatal Python error|Windows fatal exception: (?!code 0xe06d7363)", re.I)
+
+
+def crash_blocks(text):
+    """core.crash -> блоки запусков с настоящим падением (faulthandler ядра)."""
+    return [b for b in (text or "").split("\n--- запуск ") if _CRASH_RX.search(b) or "stack overflow" in b]
+
+
+def core_crash_lines(logs):
+    """№521 (04.11): «Dewiar не запускается (диагностика)» — ядро обрывалось, а в диагностике не было ни где оно упало
+    (core.crash), ни с каким кодом (ui.log: «ядро упало (…)»). -> строки раздела или []."""
+    try:
+        blocks = crash_blocks((logs / "core.crash").read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        blocks = []
+    return ("--- запуск " + blocks[-1]).splitlines()[:60] if blocks else []
+
+
 def crash_text(code):
     """Код выхода процесса -> «код 0xC0000005 — сбой доступа к памяти…» или "" (обычная ошибка Python)."""
     c = code & 0xFFFFFFFF if isinstance(code, int) else 0
@@ -284,6 +303,9 @@ def main():
             L.append(f"{f}: нет")
     for name in ("ui.log", "core.log"):
         L += ["", f"== {name} (последние строки)"] + tail(LOCAL / "logs" / name, 400 if name == "core.log" else 150)
+    cr = core_crash_lines(LOCAL / "logs")
+    if cr:
+        L += ["", "== Падения ядра (core.crash)"] + cr
     import tempfile
     for name in ("dewiar-ui-crash.txt", "dewiar-ui.log"):     # №471/472: интерфейс упал до своего журнала (app.fatal_box)
         crash = tail(Path(tempfile.gettempdir()) / name, 80)

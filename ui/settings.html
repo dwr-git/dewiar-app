@@ -570,7 +570,7 @@
         <div class="cl-gp" id="cl-gp" hidden></div>
         <div class="cl-chat" id="cl-chat">
           <div class="cl-empty" id="cl-empty"><b>Здесь будет переписка</b><span>Пригласите близкого — когда он примет приглашение, можно писать прямо отсюда или голосом.</span></div>
-          <div class="cl-head" id="cl-head" style="display:none"><i class="cl-ava" id="cl-ava"></i><div><b id="cl-who"></b><span id="cl-devs"></span></div><span style="flex:1"></span><button class="btn small" id="cl-call" title="Позвонить — окно звонка откроется в браузере">Позвонить</button><button class="btn small" id="cl-vcall" title="Видеозвонок">Видео</button><button class="btn small" id="cl-album" title="Фото и файлы этой переписки">Фото и файлы</button><button class="btn small" id="cl-pick" title="Отметить сообщения и удалить их у себя (одно — правой кнопкой по нему)">Удалить сообщения</button><button class="btn small danger" id="cl-del">Убрать из близких</button></div>
+          <div class="cl-head" id="cl-head" style="display:none"><i class="cl-ava" id="cl-ava"></i><div><b id="cl-who"></b><span id="cl-devs"></span></div><span style="flex:1"></span><button class="btn small" id="cl-call" title="Позвонить — окно звонка откроется в браузере">Позвонить</button><button class="btn small" id="cl-vcall" title="Видеозвонок">Видео</button><button class="btn small" id="cl-album" title="Фото и файлы этой переписки">Фото и файлы</button><button class="btn small" id="cl-pick" title="Отметить сообщения и удалить их у себя (одно — правой кнопкой по нему)">Удалить сообщения</button><button class="btn small" id="cl-ren" title="Назвать по-своему — имя видите только вы, на этом компьютере">Переименовать</button><button class="btn small danger" id="cl-del">Убрать из близких</button></div>
           <div class="cl-msgs" id="cl-msgs"></div>
           <div class="cl-emo" id="cl-emo" hidden></div>
           <div class="cl-send" id="cl-send" style="display:none">
@@ -1422,6 +1422,8 @@
       </div>
       <div class="dv-acts"><button class="btn primary" id="dv-home-go" type="button">Показать код для телефона</button></div>
       <ul class="dv-hlist" id="dv-home-list" aria-label="Телефоны по Wi-Fi"></ul>
+      <div class="switch" id="dv-home-tasks-row" hidden><div>Принимать задания с телефона по Wi-Fi<span>«Лира, сделай на компьютере…» — возьмётся этот компьютер; задание другому вашему компьютеру он передаст через dewiar.pro.</span></div>
+        <label class="tg"><input type="checkbox" id="dv-home-tasks" aria-label="Принимать задания с телефона по Wi-Fi"><i></i></label></div>
       <p class="res" id="dv-home-res"></p>
     </div>
       </div>
@@ -1460,7 +1462,7 @@
         <div class="dh"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg><h3>Аккаунт dewiar.pro</h3><span class="dws" id="dws-acc">—</span></div>
         <div id="dw-acc-out">
           <p class="hint">Подключили — и всё настроится само: модели Dewiar с зарядом в талерах, Знания (ваши документы и публичная библиотека), распознавание речи на сервере для слабых компьютеров. Пароль не сохраняется.</p>
-          <ol class="dw-steps"><li>Аккаунта нет — он и не нужен: <a href="#" data-free>«Подключить бесплатно»</a> — без регистрации, на счёте сразу подарок.</li><li>Логин и пароль — только если команда Dewiar сама создала вам аккаунт (например, для организации). Регистрации на сайте нет, и ничего на почту не приходит — если вы не получали логин от нас, вход не нужен.</li></ol>
+          <ol class="dw-steps"><li>Аккаунта нет — он и не нужен: <a href="#" data-free>«Подключить мозг Dewiar»</a> — без регистрации, на счёте сразу подарок.</li><li>Логин и пароль — только если команда Dewiar сама создала вам аккаунт (например, для организации). Регистрации на сайте нет, и ничего на почту не приходит — если вы не получали логин от нас, вход не нужен.</li></ol>
           <div class="actions" style="margin:0;flex-wrap:wrap">
             <input type="text" id="dw-login" placeholder="логин" autocomplete="username" style="flex:1;min-width:130px">
             <input type="password" id="dw-pass" placeholder="пароль" autocomplete="current-password" style="flex:1;min-width:130px">
@@ -1550,8 +1552,8 @@
         </div>
         <div class="dwc" id="dwc-net">
           <div class="dh"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/></svg><h3>Сеть</h3><span class="dws" id="dws-net">—</span></div>
-          <p class="hint">Провайдер блокирует dewiar.pro? Укажите прокси — через него пойдут только запросы к Dewiar (вход, модели, Знания, речь, обновления), остальное — напрямую.</p>
-          <div class="actions" style="margin:0;flex-wrap:wrap"><input type="text" id="dw-px" placeholder="socks5://адрес:порт или http://адрес:порт" spellcheck="false" style="flex:1;min-width:200px"><button class="btn primary" id="dw-px-save" style="flex:none;white-space:nowrap">Сохранить</button></div>
+          <p class="hint">Провайдер блокирует dewiar.pro? Укажите прокси — через него пойдут только запросы к Dewiar (вход, модели, Знания, речь, обновления), остальное — напрямую. Прокси с логином и паролем: <kbd>http://логин:пароль@адрес:порт</kbd> — или как выдал продавец, <kbd>адрес:порт:логин:пароль</kbd>.</p>
+          <div class="actions" style="margin:0;flex-wrap:wrap"><input type="text" id="dw-px" placeholder="http://адрес:порт или socks5://адрес:порт" spellcheck="false" autocomplete="off" style="flex:1;min-width:200px"><button class="btn primary" id="dw-px-save" style="flex:none;white-space:nowrap">Сохранить</button></div>
           <div class="switch" style="border:0;padding:10px 0 0"><div>Использовать прокси Dewiar<span>Свой прокси не нужен: его выдаёт dewiar.pro тем, кто вошёл аккаунтом или подключил ключ. Только для серверов Dewiar — Telegram и остальной интернет идут напрямую. Свой прокси, если указан, главнее.</span></div>
             <label class="tg"><input type="checkbox" id="dw-px-dw"><i></i></label></div>
           <div class="switch" style="border:0;padding:10px 0 0"><div>Запасной путь, если dewiar.pro не открывается<span id="dw-rv-hint">Сначала — напрямую. Если провайдер или сеть не пускают к dewiar.pro, программа сама идёт через прокси Dewiar, полученный заранее, и скажет об этом. Ничего настраивать не нужно.</span></div>
@@ -1925,7 +1927,7 @@
       </div>
     </div>
     <div class="wz" id="wz">
-      <button class="wtile easy" data-w="dwkey"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><b>Подключить бесплатно</b><span>Проще всего: модели Dewiar без регистрации — или аккаунт dewiar.pro, ключ, код с телефона</span></button>
+      <button class="wtile easy" data-w="dwkey"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><b>Подключить мозг Dewiar</b><span>Проще всего: модели Dewiar без регистрации, на старте подарок — или аккаунт dewiar.pro, ключ, код с телефона</span></button>
       <button class="wtile" data-w="local"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg><b>На этом компьютере</b><span>Ollama или LM Studio — бесплатно и без интернета</span></button>
       <button class="wtile" data-w="server"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01"/></svg><b>Сервер компании или дома</b><span>vLLM, Ollama, llama.cpp на другом компьютере — нужен только адрес</span></button>
       <button class="wtile" data-w="cloud"><svg viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4.5 4.5 0 0 1-.5 9.5z"/></svg><b>Ключ любимого сервиса</b><span>OpenAI, Claude, OpenRouter, DeepSeek или любой сервис по адресу — своим ключом</span></button>
@@ -2008,7 +2010,7 @@
     <h2>Подключённые модели</h2>
     <div id="profiles"></div>
     <div class="switch" id="own-fb-w" style="display:none"><div>Если своя модель не отвечает — отвечать через Dewiar<span>LM Studio или Ollama выключены —
-      ответит бесплатный мозг Dewiar, а не тишина. В такие минуты вопрос уходит на сервер Dewiar; своя модель остаётся главной.</span>
+      ответит мозг Dewiar, а не тишина. В такие минуты вопрос уходит на сервер Dewiar; своя модель остаётся главной.</span>
       <span class="res" id="own-fb-res"></span></div>
       <label class="tg"><input type="checkbox" id="own-fb"><i></i></label></div>
     <details style="margin:4px 0 8px"><summary class="hint" style="cursor:pointer">Добавить вручную (для опытных)</summary>

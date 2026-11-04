@@ -48,13 +48,14 @@ else:
 
 import settings  # noqa: E402
 st = settings.Settings(tmp / "cfg" / "settings.json")
-real = Path.replace
+import atomicio  # noqa: E402 — с 04.11 настройки пишутся через atomicio (своё имя временного файла, повторы)
+real = os.replace
 n = {"k": 0}
-def flaky(self, target):
-    if self.name == "settings.json.tmp" and n["k"] < 2:
+def flaky(src, target):
+    if Path(src).name.startswith("settings.json.") and str(src).endswith(".tmp") and n["k"] < 2:
         n["k"] += 1; raise PermissionError(5, "Отказано в доступе")
-    return real(self, target)
-with mock.patch.object(Path, "replace", flaky):
+    return real(src, target)
+with mock.patch.object(atomicio.os, "replace", flaky):
     st.update({"ui": {"zoom": 1.1}})
 ok(n["k"] == 2 and settings.Settings(tmp / "cfg" / "settings.json").get("ui", "zoom") == 1.1, "файл занят антивирусом — сохранилось с третьей попытки")
 with mock.patch.object(settings.sys if hasattr(settings, "sys") else sys, "platform", "darwin"), mock.patch.object(settings, "WIN", False):

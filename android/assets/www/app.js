@@ -444,9 +444,9 @@ async function llmRestore(i) {
   else { S.llm = Object.assign({}, DEF.llm, l); delete S.llm.restore; delete S.llm.got; saveS(); }
   cloudInfo = l.cloud ? cloudInfo : null;
 }
-/* Первый запуск показывает «Подключить бесплатно» / «У меня есть код». Подключились любым путём (вход аккаунтом, ключ,
+/* Первый запуск показывает «Подключить мозг Dewiar» / «У меня есть код». Подключились любым путём (вход аккаунтом, ключ,
    код с другого устройства, одобренная заявка) — карточка уходит, Лира говорит, что готова (отчёт №50, 13.10: вошёл
-   логином и паролем, а на экране всё ещё «Подключить бесплатно» — человек решил, что не подключился). */
+   логином и паролем, а на экране всё ещё «Подключить мозг Dewiar» — человек решил, что не подключился). */
 /* №454 (01.11, телефон 0.9.16): «ИИ дописывает ответ — и его закрывает баннер „Готово, всё подключено…“». Искали любую
    .start в карточке, так же выглядят и карточки «Звук на нуле — включить и прочитать ответ» (volCard) и «В коде ссылка»:
    после ответа saveS() звал проверку, и она «убирала карточку первого запуска» — затирала ответ. Теперь только своя
@@ -490,7 +490,10 @@ for (const [lv, fn] of [["INFO", "log"], ["WARNING", "warn"], ["ERROR", "error"]
 const NETLIKE = /network|timeout|timed out|сеть|интернет|облако ответило|failed to fetch|отменено|abort|unable to resolve|connect/i;
 // «Script error. (:0)» — браузер прячет подробности чужого скрипта (расширения браузера, переводчики, блокировщики):
 // не наша ошибка и не понять, где она (пакет 27.10: 51 такой «сбой» веб-версии с шести устройств) — не шлём
-window.addEventListener("error", (e) => { if (e.message && !(/^Script error\.?$/i.test(e.message) && !e.filename)) problem("js:" + e.message, `${e.message} (${String(e.filename || "").split("/").pop()}:${e.lineno || 0})`, e.error); });
+// «ResizeObserver loop limit exceeded» / «…completed with undelivered notifications» — предупреждение браузера, что подгонка
+// размеров не уложилась в один кадр; ничего не ломается (пакет 04.11: 8 «сбоев» с одного телефона) — тоже не шлём
+const JS_NOISE = /^ResizeObserver loop/i;
+window.addEventListener("error", (e) => { if (e.message && !JS_NOISE.test(e.message) && !(/^Script error\.?$/i.test(e.message) && !e.filename)) problem("js:" + e.message, `${e.message} (${String(e.filename || "").split("/").pop()}:${e.lineno || 0})`, e.error); });
 window.addEventListener("unhandledrejection", (e) => {
   const m = String((e.reason && e.reason.message) || e.reason || "");
   // «No Listener: tabs:outgoing.message.ready», «Extension context invalidated» — сообщения расширений браузера, не наши (пакет 28.10)
@@ -568,7 +571,8 @@ function reportOffer(summary) {
 async function reportSend(note, auto, summary, extra) {
   let info = {}; try { info = JSON.parse(D.info() || "{}"); } catch (e) { }
   // в отчёт не попадает секретное: ключи, токены, пароли, прокси (в нём бывает логин) — звёздочками; ниже то же для текста журнала
-  const mask = (o) => JSON.parse(JSON.stringify(o, (k, v) => /key|token|pass|secret|auth|cookie|proxy/i.test(k) && v && typeof v !== "object" ? "***" : v));
+  // номера установки (inst — по нему сайт возвращает прежний ключ, 0.82.1) и пульса (dev) — тоже: по ним узнают это устройство
+  const mask = (o) => JSON.parse(JSON.stringify(o, (k, v) => (/key|token|pass|secret|auth|cookie|proxy/i.test(k) || /^(inst|dev)$/.test(k)) && v && typeof v !== "object" ? "***" : v));
   const st = Object.assign({}, S, { memory: `(записей: ${(S.memory || []).length})` });
   const errs = PLOG.filter(l => /^\S+ (ERROR|WARNING) /.test(l));
   note = String(note || "").trim().slice(0, 2000);
@@ -1582,7 +1586,7 @@ function sttForeign(t) {
   const c = Date.now() < sttSysUntil ? null : cloudEars();
   if (!c) {
     setState("idle"); showYou(t);
-    showBot("Распознавание этого телефона слышит не по-русски. Подключите Dewiar в «Мозге» (вход аккаунтом dewiar.pro или бесплатный мозг) — слушать будет сервер Dewiar. Или поставьте «Распознавание речи от Google» и выберите в нём русский.", "err");
+    showBot("Распознавание этого телефона слышит не по-русски. Подключите Dewiar в «Мозге» (вход аккаунтом dewiar.pro или мозг Dewiar) — слушать будет сервер Dewiar. Или поставьте «Распознавание речи от Google» и выберите в нём русский.", "err");
     return true;
   }
   if (S.stt.notRu >= 2) {
@@ -1634,6 +1638,7 @@ N.on("stt_error", e => {
     }
     setState("idle"); showYou("");
     showBot((why || "Сервер распознавания не пускает.") + " Своего распознавания у этого телефона нет — напишите текстом.", "err");
+    if (/ответил 402\b/.test(String(e.msg || "")) && S.llm.cloud) { showCard(payCardHtml(null, true)); payCardWire(); }
     return;
   }
   if (sttVia === "system" && STT_NET.includes(e.code) && !heardPartial && !dict) {
@@ -1984,7 +1989,9 @@ function systemPersonal() {
 const llmBase = () => (S.llm.base_url || "").replace(/\/+$/, "");
 const isOllama = () => S.llm.kind === "ollama";
 const ollamaRoot = () => llmBase().replace(/\/v1$/, "");
-function llmHeaders() { const h = { "Content-Type": "application/json" }; if (S.llm.api_key) h.Authorization = "Bearer " + S.llm.api_key; if (/openrouter/.test(llmBase())) { h["HTTP-Referer"] = "https://dewiar.pro"; h["X-Title"] = "Dewiar"; } return h; }
+function llmHeaders() { const h = { "Content-Type": "application/json" }; if (S.llm.api_key) h.Authorization = "Bearer " + S.llm.api_key;
+  if (S.llm.cloud) h["X-Dewiar-Pay"] = "2";        // 0.82.1: умеем кнопку «Пополнить» — 402 с номером DW-… и короткой фразой
+  if (/openrouter/.test(llmBase())) { h["HTTP-Referer"] = "https://dewiar.pro"; h["X-Title"] = "Dewiar"; } return h; }
 var lastPics = null;                               // последние присланные фото: {urls, at} — только в памяти
 /* «Заботливая память» (0.61, как core/care.py): «завтра иду к врачу», «в пятницу собеседование» — запомнить (pref care);
    событие прошло (вчера и раньше, или сегодня с 18:00) — один раз к ближайшему ответу: «спроси, как прошло». S.care === false — выкл. */
@@ -2321,7 +2328,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   if (buf) { try { line(buf); } catch (e) { err = err || e; } }
   if (!err) { gateEnd(); feedInner("", true); }      // остаток, придержанный на случай разрезанного тега
   if (r.status >= 400) {
-    let msg = r.body || ""; try { let j = JSON.parse(msg); if (Array.isArray(j)) j = j[0] || {}; msg = (j.error && (j.error.message || j.error)) || j.detail || msg; } catch (e) { }   // Gemini — ошибкой-списком
+    let msg = r.body || "", ej = {}; try { let j = JSON.parse(msg); if (Array.isArray(j)) j = j[0] || {}; ej = (j && typeof j.error === "object" && j.error) || {}; msg = (j.error && (j.error.message || j.error)) || j.detail || msg; } catch (e) { }   // Gemini — ошибкой-списком
     // Gemini из России и др. (пакет 22.10): «User location is not supported» — повторять бесполезно, сказать, что делать
     if (/location is not supported|unsupported_country|not available in your (country|region)/i.test(String(msg)))
       throw Object.assign(new Error(`${brainName()}: Gemini недоступен из вашей страны. Включите VPN, подключите Gemini через OpenRouter или выберите другой мозг: Настройки → Мозг.`), { human: true });
@@ -2333,7 +2340,10 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
     if (rejected) { const again = retryRejected(); if (again) return again; }
     if (S.llm.cloud && r.status === 401 && await fixDeadKey(msg)) return llmStream(messages, tools, onText, signal, opt);   // ключ удалили — думаем по аккаунту
     if (S.llm.trial && [400, 403, 429, 502, 503].includes(r.status)) throw Object.assign(new Error(String(msg)), { human: true });   // проба: пределы — словами сайта
-    if (S.llm.cloud && [401, 402, 403, 429, 502, 503].includes(r.status)) { cloudInfo = null; throw Object.assign(new Error(String(msg)), { human: true }); }
+    // 402 облака (0.82.1): на экран — полный текст с номером DW-…, голосом — коротко и без ссылки (say), под фразой — кнопка
+    // «Пополнить» (topup). Сайт до 0.82.1 полей не присылает — тогда тоже кнопка и та же короткая фраза.
+    if (S.llm.cloud && r.status === 402) { cloudInfo = null; throw Object.assign(new Error(String(msg)), { human: true, topup: ej.topup !== false, say: String(ej.say || "Талеры закончились. Пополнить — кнопкой на экране.") }); }
+    if (S.llm.cloud && [401, 403, 429, 502, 503].includes(r.status)) { cloudInfo = null; throw Object.assign(new Error(String(msg)), { human: true }); }
     if (r.status === 401) msg = "ключ не подходит (401)";
     // отчёт №117: Groq с компьютера (через VPN) работает, а с телефона — «403: Forbidden» и «413: Request too large»
     if (r.status === 403) throw Object.assign(new Error(`${brainName()} не пускает (403): так бывает, когда сервис закрыт для вашей страны или у ключа нет доступа. `
@@ -2831,7 +2841,7 @@ async function ask(text, opts = {}) {
     // картинок». Говорим, что сделать: выбрать в «Мозге» модель со зрением (облако Dewiar видит картинки)
     if (pics.length && !S.llm.cloud && turnAbort === ctl && PIC_BLIND_RX.test(sink.text() || final)) {
       plog("warn", `📎 модель «${S.llm.model || S.llm.name}» не видит картинки — подсказала, как быть`);
-      sink.own(" " + gfix(`Похоже, модель «${S.llm.model || S.llm.name || "ваша"}» не видит картинки. В «Мозге» выберите модель со зрением — например, облако Dewiar («Подключить бесплатно»), — и я прочитаю скриншот.`));
+      sink.own(" " + gfix(`Похоже, модель «${S.llm.model || S.llm.name || "ваша"}» не видит картинки. В «Мозге» выберите модель со зрением — например, облако Dewiar («Подключить мозг Dewiar»), — и я прочитаю скриншот.`));
     }
     sink.flush();
     // модель сделала дело и ничего не сказала: говорим, что сделано (а не «Готово») — и пишем это в историю. Пустой ответ из
@@ -2878,7 +2888,12 @@ async function ask(text, opts = {}) {
     }
     if (e.net) netIncident(e);                          // повторы — уже в round1 (по кругу, без повторных действий)
     else { hCount("net_fail"); hWhy(e.message); }       // не сеть, а отказ (ключ, заряд, тариф, «много людей») — тоже не ответил
-    if (e.human) { plog("warn", "облако: " + e.message); showBot(e.message, "err"); say(e.message); }       // облако Dewiar объясняет само: «заряд закончился…»
+    if (e.topup) {                                      // 0.82.1: талеры кончились — коротко, кнопка «Пополнить», ссылку вслух не читаем
+      plog("warn", "облако: " + clip(e.message, 200));
+      showBot(gfix(String(e.say).split(". ")[0].replace(/\.?$/, ".")), "err"); showCard(payCardHtml(null, true)); payCardWire(); say(e.say);
+      cloudBalance(true).catch(() => {});
+    }
+    else if (e.human) { plog("warn", "облако: " + e.message); showBot(e.message, "err"); say(e.message); }       // облако Dewiar объясняет само: «много людей…»
     else if (!D.mock && SELF_HOST_RX.test(llmBase() + "/")) { const m = "Не получилось связаться с мозгом: " + SELF_HOST_TEXT; console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом: адрес модели указывает на сам телефон. Как поправить — на экране."); }
     else { const m = "Не получилось связаться с мозгом: " + e.message + netHint(); console.warn(m); showBot(m, "err"); say("Не получилось связаться с мозгом."); }
   } finally {
@@ -4184,7 +4199,7 @@ async function runTool(name, a) {
       if (!radio.on() && act !== "resume") return "Радио сейчас не играет.";
       if (act === "stop") { radio.stop(); return "Радио выключено."; }
       if (act === "resume") return radio.resume() ? "Радио снова играет." : "Нечего продолжать — скажи, какое радио включить.";
-      radio.pause(); return "Радио на паузе.";
+      radio.pause(); return "На паузе.";
     }
     case "web_search": return await webSearch(a.query || "");
     case "show_images": return await webImages(a.query || "", a.count);
@@ -6615,6 +6630,7 @@ const ICON = {
 let setTab = "brain";
 function openSettings(tab) { if (kidsLocked()) { kidsPin(() => openSettings(tab)); return; } if (!$("#sh-set").classList.contains("on")) bugSnapTake(); setTab = tab || setTab; renderSettings(); openSheet("#sh-set"); }
 $("#b-set").onclick = () => openSettings("menu");
+if ($("#bal")) $("#bal").onclick = (e) => { e.stopPropagation(); openTopup(); };                // значок баланса у имени персонажа (0.82.1) — сразу «Пополнить»
 /* «Всё» (0.60; владелец 28.10: «сверху иконок многовато»): Досуг, Душа, Работа, Идеи, обучение — плитками в одном листе,
    как «Главная» на компьютере; на панели остались звук, «Близкие», день, «Всё» и настройки. */
 const APPS_IC = {
@@ -6807,7 +6823,7 @@ function renderSettings() {
     else if (S.account.problem) h.push(`<div class="card"><div class="res bad" style="margin:0">${esc(S.account.problem)}</div></div>`);
     const on = !!S.llm.base_url && !S.llm.trial;   // пробный разговор на сайте — ещё не «подключено»: выбор мозга открыт
     if (S.llm.trial) h.push(`<div class="card"><small class="hint" style="margin:0">Сейчас</small><div style="font-weight:600">Пробный разговор</div>
-      <small class="hint" style="margin:2px 0 0;display:block">Можно говорить без входа — несколько ответов в час и без дел (будильники, заметки, поиск). Войдите или подключите бесплатно — и без ограничений.</small></div>`);
+      <small class="hint" style="margin:2px 0 0;display:block">Можно говорить без входа — несколько ответов в час и без дел (будильники, заметки, поиск). Подключите мозг Dewiar (на старте подарок) или войдите — и я смогу всё.</small></div>`);
     else h.push(`<div class="card brain ${on ? "ok" : ""}"><div class="row2"><div style="flex:1;min-width:0"><small class="hint" style="margin:0">${on ? "Подключено · думает" : "Мозг"}</small>
       <div style="font-weight:600">${esc(on ? brainName() : loggedIn() ? "подключаю модели Dewiar…" : "не подключён")}</div>
       ${on && S.llm.title ? `<small class="hint" style="margin:2px 0 0;display:block">${esc(S.llm.title)}${S.llm.cloud ? " · " + esc(cloudWho()) : ""}</small>` : ""}</div>
@@ -6834,8 +6850,6 @@ function renderSettings() {
       <div class="cl-bar"><i id="cl-fill"></i></div><div class="hint" id="cl-turns" style="margin:0"></div>
       <div class="cl-use" id="cl-use"></div>
       <div class="row2" style="margin-top:10px"><button class="btn" id="cl-ref" style="flex:1">Обновить</button><button class="btn p" id="cl-how" style="flex:1">Пополнить</button></div>
-      <button class="btn w" id="cl-pair" style="margin-top:8px">Подключить ещё устройство</button>${S.llm.account ? "" : `
-      <div class="row2" style="margin-top:8px">${loggedIn() ? `<button class="btn" id="cl-acc" style="flex:1">Думать по аккаунту</button>` : ""}<button class="btn" id="cl-forget" style="flex:1;color:#FFB3C3">Забыть ключ</button></div>`}
       <div id="cl-pay" style="display:none;margin-top:12px"><div class="ym" id="cl-ym" style="display:none"><div class="ym-h"><b>Оплатить картой</b><span>Талеры зачислятся сами — через минуту после оплаты, снимок не нужен</span></div>
         <div class="ym-sums" id="cl-ym-sums"></div><div class="row2"><label class="f" style="flex:1;margin:0"><input id="cl-ym-own" inputmode="numeric" placeholder="своя сумма, ₽"></label><button class="btn p" id="cl-ym-go">Оплатить</button></div>
         <div class="res" id="cl-ym-res"></div></div>
@@ -6845,11 +6859,17 @@ function renderSettings() {
         <div class="cx-f"><span>Комментарий — обязательно</span><code class="cx-code" id="cl-cx-code"></code><button class="btn" id="cl-cx-code-cp">Скопировать</button></div></div></div>
         <div class="cx-warn" id="cl-cx-warn"></div><p class="cx-rate" id="cl-cx-rate"></p><button class="btn p w" id="cl-cx-open">Открыть кошелёк</button><div class="res" id="cl-cx-res"></div></div>
         <div class="ym" id="cl-man"><div class="ym-h" id="cl-man-h" style="display:none;margin-bottom:8px"><b>Снимок оплаты администратору</b><span>Оплатите удобным способом и пришлите снимок — администратор зачислит</span></div>
-        <div class="hint" id="cl-top" style="margin:0 0 8px;white-space:pre-line;line-height:1.5"></div>
-        <div class="row2"><label class="f" style="flex:1"><span>Талеров</span><input id="cl-amt" inputmode="decimal" placeholder="5"></label>
-        <label class="f" style="flex:2"><span>Комментарий</span><input id="cl-note" placeholder="как оплатили"></label></div>
-        <label class="cl-shot" id="cl-shot"><input type="file" id="cl-file" accept="image/*" hidden><span id="cl-shot-t">Приложить снимок оплаты</span><img id="cl-img" alt=""></label>
-        <button class="btn p w" id="cl-send" style="margin-top:8px">Отправить заявку</button><div class="res" id="cl-res"></div></div><div id="cl-reqs"></div></div></div>`);
+        <ol class="pay-steps">
+          <li><i>1</i><div class="ps-b"><b>Оплатите</b><button class="btn p w ps-go" id="cl-go" hidden>Перейти к оплате<svg viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></svg></button>
+            <div class="hint ps-own" id="cl-top"></div></div></li>
+          <li><i>2</i><div class="ps-b"><b>Приложите снимок оплаты</b>
+            <label class="cl-shot" id="cl-shot"><input type="file" id="cl-file" accept="image/*" hidden><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m20.5 15.5-4.5-4.5-7.5 8"/></svg><span id="cl-shot-t">Выбрать снимок</span><img id="cl-img" alt=""></label>
+            <div class="row2 ps-f"><label class="f" style="flex:1"><span>Сколько талеров</span><input id="cl-amt" inputmode="decimal" placeholder="напр. 5"><small class="ps-rub" id="cl-rub"></small></label>
+            <label class="f" style="flex:1.4"><span>Комментарий</span><input id="cl-note" placeholder="как оплатили"></label></div></div></li>
+          <li><i>3</i><div class="ps-b"><button class="btn p w" id="cl-send">Отправить заявку</button><small class="hint ps-when">Обычно зачисляем в течение дня — заряд пополнится сам.</small><div class="res" id="cl-res"></div></div></li>
+        </ol><p class="hint ps-code" id="cl-code"></p></div><div id="cl-reqs"></div></div>
+      <button class="btn w" id="cl-pair" style="margin-top:10px">Подключить ещё устройство</button>
+      <div class="cl-foot">${loggedIn() && !S.llm.account ? `<button class="lnk" id="cl-acc">Думать по аккаунту</button>` : ""}<button class="lnk" id="cl-other">Подключить другой мозг</button>${S.llm.account ? "" : `<button class="lnk" id="cl-forget">Забыть ключ</button>`}</div></div>`);
     // приглашения друзей (cloud.php ?p=/ref): одна строка и «Пригласить»; список и чужой код — свёрнуты (refFill)
     if (S.llm.cloud) h.push(`<div class="card refc" id="ref-card"><div class="row2"><div style="flex:1"><b>Пригласить друга</b><small class="hint" id="ref-sub" style="margin:2px 0 0;display:block">Подарки вам и другу — талерами</small></div>
       <button class="btn p" id="ref-share">Пригласить</button></div><div id="ref-more"></div></div>`);
@@ -6857,8 +6877,8 @@ function renderSettings() {
       <div class="row2"><button class="btn p" id="jn-check" style="flex:1">Проверить</button><button class="btn" id="jn-cancel" style="flex:1">Забыть заявку</button></div><div class="res" id="jn-res"></div></div>`);
     // сначала — то, что подходит любому человеку (бесплатная проба, код, аккаунт); своя модель и ключи сервисов —
     // свёрнуты в «Для опытных»: слова Ollama и OpenRouter новичка только пугали
-    const tiles = `<p class="hint" style="margin:4px 2px 10px">«Мозг» — это то, чем помощница думает. Проще всего — бесплатно через Dewiar; поменять можно в любой момент.</p><div class="tiles">
-      ${loggedIn() || S.join ? "" : `<button class="tile easy" data-w="join">${ICON.dewiar}<b>Подключить бесплатно</b><small>Проще всего: имя и как с вами связаться — и всё. Без регистрации, с подарком на счёте</small></button>`}
+    const tiles = `<p class="hint" style="margin:4px 2px 10px">«Мозг» — это то, чем помощница думает. Проще всего — облако Dewiar: на старте подарок, дальше — пополнение; поменять можно в любой момент.</p><div class="tiles">
+      ${loggedIn() || S.join ? "" : `<button class="tile easy" data-w="join">${ICON.dewiar}<b>Подключить мозг Dewiar</b><small>Проще всего: имя и как с вами связаться — и всё. Без регистрации, на старте подарок</small></button>`}
       <button class="tile" data-w="dwkey">${ICON.key}<b>Код или ключ Dewiar</b><small>6 цифр с устройства, где Dewiar уже работает, или ключ dw-… от друга</small></button>
       ${loggedIn() ? "" : `<button class="tile" data-w="account">${ICON.user}<b>Аккаунт dewiar.pro</b><small>Только если команда Dewiar выдала вам логин — регистрации на сайте нет</small></button>`}</div>
       <details class="more pro"><summary>Для опытных: своя модель или ключ сервиса</summary><div class="tiles">
@@ -7133,26 +7153,30 @@ function wireSettings(info) {
         g("cl-turns").textContent = e.message + (keyGone(e.message) ? " Нажмите «Забыть ключ»" + (loggedIn() ? " или «Думать по аккаунту»." : " и подключите мозг заново.") : ""); g("cl-pct").textContent = "—"; });
       if (g("cl-acc")) g("cl-acc").onclick = async () => { g("cl-acc").disabled = true; if (await fixDeadKey()) renderSettings(); else { g("cl-acc").disabled = false; toast("Не получилось подключиться по аккаунту — проверьте интернет"); } };
       if (g("cl-pair")) g("cl-pair").onclick = () => { setTab = "devices"; renderSettings(); setTimeout(devGive, 50); };   // 0.56: код — в «Устройствах»
+      // «Забыть ключ» (0.82.1) — не красной кнопкой под «Пополнить», а ссылкой внизу карточки; подтверждение — как есть на деле
       if (g("cl-forget")) g("cl-forget").onclick = async () => {
         const k4 = String(S.llm.api_key || "").slice(-4);
-        if (!confirm((loggedIn() ? `Забыть ключ Dewiar …${k4}? Думать буду по аккаунту ${S.account.login || ""}.` : `Забыть ключ Dewiar …${k4}? Пока не подключите мозг снова, я не смогу отвечать.`)
-          + "\n\nПередумаете — ключ можно будет вернуть одной кнопкой: «Мозг» → «Прежние мозги» → «Вернуть».")) return;
+        if (!confirm((loggedIn() ? `Забыть ключ Dewiar …${k4}? Думать буду по аккаунту ${S.account.login || ""}.`
+          : `Забыть ключ Dewiar …${k4}? Пока не подключите другой мозг, я не смогу отвечать. Нового подарка не будет — он на этом устройстве уже был.`)
+          + "\n\nТалеры останутся на ключе. Вернуть его — одной кнопкой: «Мозг» → «Прежние мозги» → «Вернуть».")) return;
         await forgetKey(); toast("Ключ забыт. Вернуть — «Прежние мозги» → «Вернуть»", 6000); renderSettings(); };
+      if (g("cl-other")) g("cl-other").onclick = () => { const d = $(".brainalt"); if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); } };
+      g("cl-amt").oninput = clRubShow;
       // «Обновить» — заметно: что сейчас на счёте (раньше нажатие выглядело так, будто ничего не произошло)
       g("cl-ref").onclick = () => cloudBalance(true).then(c => { cloudFill(c); cloudUsage && cloudUsage();
         toast("Обновлено: " + (c.site ? (c.balance_text || c.balance + " тал.") + " на счёте dewiar.pro" : "заряд " + (c.percent ?? 0) + "%")); }).catch(e => toast(e.message));
-      g("cl-how").onclick = () => { const t = g("cl-pay"), open = t.style.display === "none"; t.style.display = open ? "" : "none"; if (open) clPayLoad(); };
+      g("cl-how").onclick = () => { const t = g("cl-pay"), open = t.style.display === "none"; t.style.display = open ? "" : "none"; g("cl-how").classList.toggle("on", open); if (open) clPayLoad(); };
       g("cl-ym-go").onclick = () => ymPay(+String(g("cl-ym-own").value).replace(/\s/g, "").replace(",", "."));
       g("cl-cx-addr-cp").onclick = () => cxCopy("address"); g("cl-cx-code-cp").onclick = () => cxCopy("code"); g("cl-cx-open").onclick = cxOpen;
       cloudUsage();
       let img = "";
       g("cl-file").onchange = (e) => { const f = e.target.files[0]; if (!f) return; if (f.size > 6e6) { toast("Снимок больше 6 МБ"); return; }
-        const fr = new FileReader(); fr.onload = () => { img = fr.result; g("cl-img").src = img; g("cl-shot").classList.add("has"); g("cl-shot-t").textContent = "Снимок приложен"; }; fr.readAsDataURL(f); };
+        const fr = new FileReader(); fr.onload = () => { img = fr.result; g("cl-img").src = img; g("cl-shot").classList.add("has"); g("cl-shot-t").textContent = "Снимок приложен — заменить"; }; fr.readAsDataURL(f); };
       g("cl-send").onclick = async () => { const r = g("cl-res"), amount = +(g("cl-amt").value.replace(",", ".")) || 0;
-        if (!amount && !img) { r.className = "res bad"; r.textContent = "Укажите сумму или приложите снимок"; return; }
+        if (!amount && !img) { r.className = "res bad"; r.textContent = "Приложите снимок оплаты (шаг 2) — или напишите, сколько талеров"; return; }
         r.className = "res"; r.textContent = "отправляю…";
         try { const x = await cloudPost("/topup", { amount, note: g("cl-note").value.trim(), image: img }); r.className = "res ok"; r.textContent = "Заявка отправлена — после проверки заряд пополнится сам.";
-          img = ""; g("cl-shot").classList.remove("has"); g("cl-shot-t").textContent = "Приложить снимок оплаты"; g("cl-amt").value = ""; g("cl-note").value = ""; clReqs(x.requests); }
+          img = ""; g("cl-shot").classList.remove("has"); g("cl-shot-t").textContent = "Выбрать снимок"; g("cl-amt").value = ""; g("cl-note").value = ""; clRubShow(); clReqs(x.requests); }
         catch (e) { r.className = "res bad"; r.textContent = e.message; } };
     }
   } else if (setTab === "voice") {
@@ -7734,7 +7758,7 @@ const cloudBase = () => (S.llm.base_url || "").split("?")[0] || CLOUD_URL;
    pairClaim — код из 6 цифр с другого устройства → тот же ключ (одни данные и заряд). */
 async function joinSend(name, contact, note, opts = {}) {
   const base = CLOUD_URL.split("?")[0];
-  const body = { name: String(name || "").trim(), contact: String(contact || "").trim(), note: String(note || "").trim(), device: opts.device || (D.web ? "веб-версия" : "телефон") };
+  const body = { name: String(name || "").trim(), contact: String(contact || "").trim(), note: String(note || "").trim(), device: opts.device || (D.web ? "веб-версия" : "телефон"), ids: joinIds() };
   if (opts.auto) body.auto = 1;
   const r = await http("POST", base + "?p=/join", { headers: { "Content-Type": "application/json" }, body, timeout: opts.auto ? 15000 : 20000 });
   let d = {}; try { d = JSON.parse(r.body || "{}"); } catch (e) { }
@@ -7758,13 +7782,32 @@ async function joinDone(key, d) {
   await cloudConnect(key, S.join && S.join.base);
   S.join = null; if (auto) S.autoJoined = true; saveS();
   if (auto) {                      // автоподключение — тихо: человек, может, уже разговаривает; голосом — только если ждёт
-    plog("info", "☁ автоподключение: бесплатный мозг Dewiar подключён");
-    toast("Подключён бесплатный мозг Dewiar — теперь умею всё", 3500);
-    if (!busy && state === "idle") showBot(gfix(`Я подключена к бесплатному мозгу Dewiar и готова. Спросите меня что-нибудь!`));
+    plog("info", `☁ автоподключение: мозг Dewiar подключён (${(d && d.gift) || "?"})`);
+    toast(giftLine(d), 6000);
+    if (!busy && state === "idle") showBot(gfix(`Я подключена к мозгу Dewiar и готова. Спросите меня что-нибудь!`));
     startCardCheck(); return;
   }
   const msg = gfix("Готово — Dewiar подключён" + (d && d.reply ? ` («${d.reply}»)` : "") + ". Спросите меня что-нибудь!");
-  showBot(msg); toast("Мозг подключён: модели Dewiar", 3500); say(msg);
+  showBot(msg); toast(d && d.gift ? giftLine(d) : "Мозг подключён: модели Dewiar", 5000); say(msg);
+}
+/* 0.82.1 (владелец 04.11: «много новых людей, а донатов нет — чтобы было понятно и просто»): вместо «бесплатный мозг — теперь
+   умею всё» — честно: сколько примерно ответов в подарке и где пополнить; подарок здесь уже был — так и говорим. */
+function giftLine(d) {
+  d = d || {};
+  if (d.gift === "again") return "Подключено — вернула ваш прежний ключ. Пополнить: ⚙ → Мозг";
+  if (d.gift === "none") return "Подключено. Подарок на этом устройстве уже был — пополнить: ⚙ → Мозг";
+  if (d.gift === "busy") return "Подключено. Сейчас подключается необычно много людей — подарок не выдан. Пополнить: ⚙ → Мозг";
+  if (d.gift === "ip") return "Подключено. С этого адреса сегодня подключалось много людей — подарок меньше. Пополнить можно в ⚙ → Мозг";
+  const n = +d.gift_turns || 0;
+  return "Подключено. В подарок — " + (n ? `примерно ${n.toLocaleString("ru-RU")} ${turnsWord(n)}` : "несколько ответов") + ", дальше — пополнение в ⚙ → Мозг";
+}
+/* Постоянные номера этого устройства для /join (0.82.1): свой номер установки (S.inst — «Забыть ключ» его не сбрасывает) и
+   номер Android от приложения (хэш ANDROID_ID — переживает переустановку). По ним сайт узнаёт устройство: прежний ключ
+   вместо нового подарка. */
+function joinIds() {
+  if (!/^in-[0-9a-f]{24}$/.test(S.inst || "")) { S.inst = "in-" + Array.from({ length: 24 }, () => "0123456789abcdef"[Math.random() * 16 | 0]).join(""); saveS(); }
+  let aid = ""; try { aid = String(JSON.parse(D.info() || "{}").aid || ""); } catch (e) { }
+  return /^an-[0-9a-f]{40}$/.test(aid) ? [S.inst, aid] : [S.inst];
 }
 /* Автоподключение (0.69; владелец 29.10: «за наш счёт по умолчанию — важно, чтобы у пользователя всё работало сразу;
    взять хотя бы что-то для узнавания, контакт попросить позже»). Мозга нет, входа и заявки нет — заявка auto: модель
@@ -7782,7 +7825,7 @@ function contactMaybe() {
   saveS();
 }
 function contactCardHtml(ask) {
-  return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Бесплатный мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
+  return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
     <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">
     <div class="row2" style="margin-top:10px"><button class="btn p" id="ct-go" style="flex:1">Сохранить</button>${ask ? `<button class="btn" id="ct-x">Не сейчас</button>` : ""}</div></div>`;
 }
@@ -7792,10 +7835,10 @@ function contactWire() {
     if (n && !n.value && d.name && d.name !== "Без имени" && !/^(телефон|веб)/i.test(d.name)) n.value = d.name; if (c && !c.value) c.value = d.contact || ""; }).catch(() => {});
   if ($("#ct-x")) $("#ct-x").onclick = () => showCard("");
   go.onclick = async () => {
-    const name = $("#ct-name").value.trim(), contact = $("#ct-contact").value.trim();
+    const name = $("#ct-name") ? $("#ct-name").value.trim() : "", contact = $("#ct-contact").value.trim();
     if (!name && !contact) return toast("Напишите имя или контакт");
     go.disabled = true;
-    try { await cloudPost("/me/contact", { name, contact }); S.contactDone = true; saveS(); toast("Сохранено — спасибо!", 3000); if ($("#ct-x")) showCard(""); }
+    try { await cloudPost("/me/contact", { name, contact }); S.contactDone = true; saveS(); toast("Сохранено — спасибо!", 3000); if ($("#ct-x")) showCard(""); if (go.closest(".pc-ct")) go.closest(".pc-ct").remove(); }
     catch (e) { toast(e.message, 4000); }
     go.disabled = false;
   };
@@ -7803,7 +7846,7 @@ function contactWire() {
 let autoJoinBusy = null;
 /* Автоподключение — в приложении (не в веб-версии: там и так сразу пробный разговор без входа, а ключ на каждый браузер —
    лишнее) и не в проверках в браузере без своего флага (window.DEWIAR_AUTOJOIN); S.autoJoin === false — выключено. */
-const autoOk = () => S.autoJoin !== false && !D.web && (!D.mock || !!window.DEWIAR_AUTOJOIN);
+const autoOk = () => S.autoJoin !== false && !S.forgotKey && !D.web && (!D.mock || !!window.DEWIAR_AUTOJOIN);
 function autoJoin(why) {
   if (!autoOk() || loggedIn() || (S.llm.base_url && !S.llm.trial) || (S.join && S.join.id)) return Promise.resolve(false);
   if (Date.now() - (S.autoTried || 0) < 3600e3) return Promise.resolve(false);
@@ -7841,7 +7884,7 @@ async function cloudPost(path, body) {
 const RQ = { new: "на проверке", done: "зачислено", rejected: "отклонено" };
 function clReqs(list) {
   const el = $("#cl-reqs"); if (!el) return;
-  el.innerHTML = (list || []).map(r => `<div class="rqi ${esc(r.status)}"><span>${new Date(r.ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}${r.amount ? " · " + (+r.amount || 0) + " тал." : ""}${r.reply ? " · «" + esc(r.reply) + "»" : ""}</span><b>${RQ[r.status] || esc(r.status)}${r.status === "done" ? " +" + (+r.credited || 0) : ""}</b></div>`).join("");
+  el.innerHTML = (list || []).map(r => `<div class="rqi ${esc(r.status)}"><span>${new Date(r.ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}${r.amount ? " · " + (+r.amount || 0) + " тал." + (rubText(+r.amount) ? " " + rubText(+r.amount) : "") : ""}${r.reply ? " · «" + esc(r.reply) + "»" : ""}</span><b>${RQ[r.status] || esc(r.status)}${r.status === "done" ? " +" + (+r.credited || 0) : ""}</b></div>`).join("");
 }
 /* «Оплатить картой» (ЮMoney, 03.11; владелец: «пришли оплаты — только номера карт и суммы, как найти этих людей?»): сервер
    отдаёт ссылку перевода с меткой человека DW-… (yoomoney.url), суммы и курс; сумма дописывается, страница ЮMoney — во внешнем
@@ -7912,12 +7955,80 @@ function cxOpen() {
   payWatch();
 }
 async function clPayLoad() {
-  try { const r = await cloudGet(cloudBase(), S.llm.api_key, "/topup"), el = $("#cl-top");      // как пополнить: выделяется, ссылки открываются
-    ymFill(r.yoomoney); cxFill(payPick(r.pay, "crypto")); payArrange(r.pay);
-    el.innerHTML = esc(ymStrip(r.text)).replace(/(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])/g, '<a href="#" data-ext="$1">$1</a>');
-    $$("#cl-top a[data-ext]").forEach(x => x.onclick = (e) => { e.preventDefault(); D.openUrl(x.dataset.ext); }); clReqs(r.requests); }
-  catch (e) { $("#cl-top").textContent = e.message; }
+  try { const r = await cloudGet(cloudBase(), S.llm.api_key, "/topup");
+    ymFill(r.yoomoney); cxFill(payPick(r.pay, "crypto")); payArrange(r.pay); clTopFill(r.text, r.code, r.rub); clReqs(r.requests); }
+  catch (e) { if ($("#cl-top")) $("#cl-top").textContent = e.message; }
 }
+/* «Как пополнить» (0.82.1): текст владельца — шагом «1. Оплатите»; ссылки в нём нажимаются (и после «Обновить» — раньше
+   cloudFill писал textContent, и ссылка становилась простым текстом); первая ссылка — крупной кнопкой «Перейти к оплате».
+   Номер DW-… — не первой строкой, а мелко после шагов: «ваш номер для оплаты (если спросят)». */
+let clRub = null;
+const PAY_URL_RX = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])/g;
+function clTopFill(text, code, rub) {
+  const el = $("#cl-top"); if (!el) return;
+  if (rub !== undefined) clRub = +rub > 0 ? +rub : null;
+  const t = ymStrip(text).replace(/^Ваш номер для оплаты:[^\n]*\n*/, "").trim();
+  el.innerHTML = esc(t).replace(PAY_URL_RX, '<a href="#" data-ext="$1">$1</a>');
+  $$("#cl-top a[data-ext]").forEach(x => x.onclick = (e) => { e.preventDefault(); D.openUrl(x.dataset.ext); });
+  const url = (t.match(PAY_URL_RX) || [])[0], go = $("#cl-go");
+  if (go) { go.hidden = !url; go.onclick = () => { if (url && !D.openUrl(url)) toast("Не открылся браузер — нажмите ссылку ниже"); }; }
+  const cd = $("#cl-code"); if (cd) cd.innerHTML = code ? `Ваш номер для оплаты: <b>${esc(code)}</b> (если спросят)` : "";
+  clRubShow();
+}
+const rubText = (tal) => clRub && tal > 0 ? "≈ " + Math.round(tal * clRub).toLocaleString("ru-RU") + " ₽" : "";
+function clRubShow() { const a = $("#cl-amt"), r = $("#cl-rub"); if (a && r) r.textContent = rubText(+String(a.value).replace(",", ".") || 0); }
+/* Открыть «Пополнить» откуда угодно (карточка после 402, предупреждение, значок баланса): «Мозг», панель уже раскрыта и
+   прокручена к себе. Ключа нет — просто «Мозг». */
+function openTopup() {
+  showCard(""); openSettings("brain");
+  let n = 0;
+  const go = () => { const t = $("#cl-pay"); if (!t) { if (++n < 30 && S.llm.cloud) setTimeout(go, 100); return; }
+    if (t.style.display === "none") { t.style.display = ""; clPayLoad(); }
+    $("#cl-how") && $("#cl-how").classList.add("on");
+    setTimeout(() => (t.querySelector(".pay-steps") ? $("#cl-how") : t).scrollIntoView({ behavior: "smooth", block: "start" }), 60); };
+  setTimeout(go, 60);
+}
+/* Значок баланса у имени персонажа (0.82.1): ниже ~30 % — маленькая плашка с процентом; нажали — «Пополнить». */
+function balBadge(c) {
+  const b = $("#bal"); if (!b) return;
+  const pct = c ? Math.max(0, Math.min(100, +c.percent || 0)) : 100, on = !!c && S.llm.cloud && !c.frozen && (c.empty || pct < 30);
+  b.hidden = !on; b.classList.toggle("empty", !!(c && c.empty));
+  $("#who").classList.toggle("low", false);
+  if (on) { $("#bal-t").textContent = c.site ? (c.empty ? "0" : (c.balance_text || "")) : pct + "%";
+    b.title = b.ariaLabel = (c.empty ? "Талеры закончились" : `Талеров осталось ${pct}%`) + " — пополнить"; }
+}
+/* Предупреждение заранее (0.82.1): один раз при ~30 % и один раз при ~10 % — Лира говорит, сколько примерно ответов осталось,
+   и под фразой карточка с кнопкой «Пополнить» (и полями для контакта, если его ещё нет). Пополнили (≥ 50 %) — снова с начала. */
+function payWarnCheck(c) {
+  if (!c || c.site || c.frozen || c.empty || !S.llm.cloud || S.llm.account) return;
+  const p = +c.percent || 0;
+  if (p >= 50) { if (S.payWarn) { S.payWarn = 0; saveS(); } return; }
+  const lvl = p <= 10 ? 10 : p <= 30 ? 30 : 0;
+  if (!lvl || (S.payWarn && S.payWarn <= lvl)) return;
+  S.payWarn = lvl; saveS();
+  const n = +c.turns || 0, left = n ? `около ${n.toLocaleString("ru-RU")} ${turnsGen(n)}` : "совсем немного";
+  const text = gfix((c.paid ? "Талеры заканчиваются" : "Подарок почти закончился") + ` — осталось ${left}. Пополнить можно кнопкой ниже.`);
+  let k = 0;
+  const run = () => { if ((busy || state !== "idle" || sayLeft > 0) && ++k < 120) { setTimeout(run, 1000); return; }
+    plog("info", `☁ заряд ${p}% — предупредила (${lvl})`); showBot(text); showCard(payCardHtml(c, false)); payCardWire(); say(text); };
+  setTimeout(run, 1500);
+}
+/* Карточка «Пополнить» под фразой Лиры: 402 (empty) или предупреждение; контакт — если его ещё не оставили (по желанию). */
+function payCardHtml(c, empty) {
+  const ask = !empty && S.autoJoined && !S.contactDone && !S.llm.account;     // при 402 главное — пополнить; контакт — в предупреждениях
+  const n = +(c && c.turns) || 0;
+  const sub = empty ? "Пополните — и я снова буду отвечать" : n ? `Осталось около ${n.toLocaleString("ru-RU")} ${turnsGen(n)}` : "Осталось совсем немного";
+  return `<div class="card paycard${empty ? " empty" : ""}"><div class="pc-h"><span class="pc-ic"><svg viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="12.5" rx="3"/><path d="M3 10.5h18M16.5 14.8h1.5"/><path d="M7 6.5 15.5 3.6a1.5 1.5 0 0 1 1.9 1l.6 1.9"/></svg></span>
+    <div class="pc-t"><b>${empty ? "Пополнить талеры" : c && c.paid ? "Талеры заканчиваются" : "Подарок почти закончился"}</b><small>${esc(sub)}</small></div></div>
+    <button class="btn p w" id="pc-go">Пополнить</button>${ask ? `<div class="pc-ct"><small>Контакт для разработчика — по желанию</small>
+    <div class="row2"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта или Telegram" aria-label="Почта, Telegram или телефон"><button class="btn" id="ct-go">Сохранить</button></div></div>` : ""}</div>`;
+}
+/* Карточка под фразой: облик меньше (#stage.long), а прокрутка — к началу фразы Лиры (рецензия 04.11: «в самый низ» на
+   360×780 прятало первую строку под «Нажмите или удерживайте»); не влезло всё — видна фраза и кнопка «Пополнить». */
+function payCardWire() { const g = $("#pc-go"); if (g) g.onclick = openTopup; if ($("#ct-go")) contactWire();
+  $("#stage").classList.add("long");
+  requestAnimationFrame(() => requestAnimationFrame(() => { const t = $("#talk"), b = $("#bot"); if (!t || !b) return;
+    t.scrollTop = Math.max(0, t.scrollTop + b.getBoundingClientRect().top - t.getBoundingClientRect().top - 6); })); }
 async function cloudUsage() {
   try {
     const u = await cloudGet(cloudBase(), S.llm.api_key, "/usage"), days = u.days || [], mx = Math.max(1, ...days.map(d => d.answers));
@@ -7933,7 +8044,7 @@ async function cloudBalance(force) {
   if (prev && ((cloudInfo.low && !prev.low) || (cloudInfo.empty && !prev.empty)))          // один раз, когда стало мало; site — общий счёт с сайтом (вход аккаунтом)
     D.notify(cloudInfo.site ? (cloudInfo.empty ? "На счёте dewiar.pro закончились ИИ-талеры" : `На счёте dewiar.pro: ${cloudInfo.balance_text || cloudInfo.balance + " тал."}`)
       : cloudInfo.empty ? "Заряд Dewiar Облака закончился" : `Заряд Dewiar Облака: ${cloudInfo.percent}%`, cloudInfo.site ? "Пополнить — в личном кабинете на сайте" : "Настройки → Мозг → Пополнить");
-  if (cloudInfo.empty || cloudInfo.low) $("#who").classList.add("low"); else $("#who").classList.remove("low");
+  balBadge(cloudInfo); payWarnCheck(cloudInfo);
   return cloudInfo;
 }
 /* Ключ Dewiar удалили или перевыпустили на сайте, а вход в аккаунт есть — не мучаем человека ошибкой: думаем по аккаунту. */
@@ -7955,12 +8066,17 @@ function forgetKey() {                          // «Забыть ключ»: е
     S.llmSaved = [keep].concat((S.llmSaved || []).filter(x => llmId(x) !== llmId(keep))).slice(0, 5);
   }
   if (loggedIn()) return fixDeadKey();
+  // 0.82.1: «Забыть ключ» — значит, этот ключ не нужен: сами больше не подключаемся (раньше следующий вопрос подключал
+  // новый ключ с новым подарком, а подтверждение говорило «не смогу отвечать»). Подключить снова — «Мозг», одной плиткой.
+  S.forgotKey = Date.now();
   S.llm = Object.assign({}, DEF.llm); cloudInfo = null; S.accCloud = null;
   if (S.stt.engine === "server" && /cloud\.php/.test(S.stt.url || "") && !S.stt.from_account) S.stt = Object.assign({}, DEF.stt);
-  saveS(); $("#who").classList.remove("low");
+  saveS(); balBadge(null);
   return Promise.resolve(true);
 }
 const cloudWho = () => S.llm.account ? "по аккаунту " + (S.account.login || "") : "ключ …" + S.llm.api_key.slice(-4);
+/* «около N …» — родительный падеж (рецензия 04.11: было «около 82 ответа»): «около 1 ответа», «около 82 ответов» */
+const turnsGen = (n) => n % 10 === 1 && n % 100 !== 11 ? "ответа" : "ответов";
 const turnsWord = (n) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? "ответ" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "ответа" : "ответов"; };
 function cloudFill(c) {
   if (!c || !$("#cl-card")) return;
@@ -7973,7 +8089,7 @@ function cloudFill(c) {
       : `Общий счёт с сайтом: ${bal}` + (c.turns ? ` — примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` : ""))
     : c.frozen ? "Ключ приостановлен — напишите администратору." : c.empty ? "Заряд закончился — пополните, и ассистент снова будет отвечать."
     : `Хватит примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` + (c.low ? " — скоро понадобится пополнить" : "");
-  ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); $("#cl-top").textContent = ymStrip(c.topup);
+  ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); clTopFill(c.topup, c.code, c.rub);
 }
 /* key — ключ dw-… или (account) токен входа на сайт: его регистр не трогаем. activate:false — только запомнить, своя модель остаётся. */
 async function cloudConnect(key, base, opts = {}) {
@@ -7982,6 +8098,7 @@ async function cloudConnect(key, base, opts = {}) {
   const info = await cloudGet(base, key, "/balance"), md = await cloudGet(base, key, "/models"), m = (md.data || [])[0];
   if (!m) throw new Error("в облаке пока нет доступных моделей — напишите администратору");
   if (opts.activate === false) { S.accCloud = { base, model: m.id, title: m.title || m.id, stt: !!md.stt, tts: !!md.tts }; saveS(); return info; }
+  delete S.forgotKey;
   S.accCloud = opts.account ? { base, model: m.id, title: m.title || m.id, stt: !!md.stt, tts: !!md.tts } : null;
   S.llm = Object.assign({}, DEF.llm, { kind: "openai", name: "Dewiar Облако", base_url: base + "?p=", api_key: key, model: m.id, cloud: true, title: m.title || m.id,
     disable_thinking: false, account: !!opts.account, stt: !!md.stt, tts: !!md.tts });
@@ -8034,7 +8151,7 @@ async function refImgs(d) {
 }
 async function refTab() {
   const box = $("#rf-body"); if (!box) return;
-  if (!S.llm.cloud && !syncCred()) { box.innerHTML = `<div class="card"><b>Нужен Dewiar</b><p class="hint" style="margin:6px 0 10px">Приглашения работают через облако Dewiar: подключите мозг бесплатно или войдите аккаунтом dewiar.pro.</p><button class="btn p w" id="rf-brain">Подключить</button></div>`;
+  if (!S.llm.cloud && !syncCred()) { box.innerHTML = `<div class="card"><b>Нужен Dewiar</b><p class="hint" style="margin:6px 0 10px">Приглашения работают через облако Dewiar: подключите мозг Dewiar или войдите аккаунтом dewiar.pro.</p><button class="btn p w" id="rf-brain">Подключить</button></div>`;
     $("#rf-brain").onclick = () => openSettings("brain"); return; }
   if (refInfo) refDraw(); else box.innerHTML = `<p class="hint" style="text-align:center;margin:30px 0">Загружаю созвездие…</p>`;
   try { refInfo = await cloudGet(cloudBase(), S.llm.api_key, "/ref"); } catch (e) { if (!refInfo) box.innerHTML = `<div class="card"><b>Не получилось</b><p class="hint" style="margin:4px 0 0">${esc(e.message)}</p></div>`; return; }
@@ -8542,7 +8659,7 @@ function wizard(kind) {
   } else if (kind === "join") {
     // №216: на втором устройстве — не новая заявка (второй ключ — и ни заметок, ни блокнота друг у друга), а код
     w.innerHTML = `<div class="card have"><b>Dewiar уже есть на компьютере или другом телефоне?</b><p class="hint" style="margin:4px 0 10px">Не отправляйте новую заявку — введите код с того устройства: память, заметки, блокнот и счёт будут общими. Код там: «Мозг» → «Добавить устройство».</p><button class="btn w" id="w-have">Ввести код</button></div>
-      <div class="card"><b>Подключить бесплатно</b><p class="hint" style="margin:4px 0 8px">Без регистрации: напишите, как к вам обращаться и как связаться. Обычно всё подключается сразу; если заявку проверяют вручную — я сама скажу, когда готово. На счёте будет подарок, чтобы попробовать.</p>
+      <div class="card"><b>Подключить мозг Dewiar</b><p class="hint" style="margin:4px 0 8px">Без регистрации: напишите, как к вам обращаться и как связаться. Обычно всё подключается сразу; если заявку проверяют вручную — я сама скажу, когда готово. На счёте будет подарок, чтобы попробовать.</p>
       <label class="f"><span>Как к вам обращаться</span><input id="w-name" autocomplete="name"></label>
       <label class="f"><span>Как связаться: почта, Telegram или телефон</span><input id="w-contact" autocapitalize="off" spellcheck="false" placeholder="@ник или почта"></label>
       <label class="f"><span>Пара слов, зачем (необязательно)</span><input id="w-note" placeholder="например: попробовать помощника"></label>
@@ -8924,7 +9041,7 @@ function handleIntent(e) {
   else if (e.action === "link" && /^dewiar:\/\/ref/.test(e.url || "")) {            // приглашение друга: …/download.php?ref= → «Открыть в Dewiar»
     S.refPending = ((/[?&]c=([A-Za-z0-9]+)/.exec(e.url) || [])[1] || "").toUpperCase(); saveS();
     if (S.llm.cloud) refPendingUse();
-    else showBot("Код приглашения сохранён. Подключите мозг бесплатно через Dewiar — и подарок придёт сам.");
+    else showBot("Код приглашения сохранён. Подключите мозг Dewiar — и подарок придёт сам.");
   }
   else if (e.action === "link") { const m = /server=([^&]+)/.exec(e.url || ""); if (m) { openSettings("brain"); setTimeout(() => { const d = $(".brainalt"); if (d) d.open = true; $('.tile[data-w="pc"]').click(); $("#w-addr").value = decodeURIComponent(m[1]); }, 300); } }
 }
@@ -9416,7 +9533,7 @@ async function clInvite(renew) {
 }
 async function clAcceptLink(link) {
   const t = clToken(link); if (!t) { showBot("Это не ссылка-приглашение в «Близкие».", "err"); return; }
-  if (!syncCred()) { S.closePending = t; saveS(); showBot("Приглашение в «Близкие» сохранено. Подключите Dewiar (Настройки → Мозг → «Подключить бесплатно») — и я его приму.", ""); return; }
+  if (!syncCred()) { S.closePending = t; saveS(); showBot("Приглашение в «Близкие» сохранено. Подключите Dewiar (Настройки → Мозг → «Подключить мозг Dewiar») — и я его приму.", ""); return; }
   try {
     const who = await clReq("GET", "/close/peek", null, "&t=" + encodeURIComponent(t));
     if (!confirm(`Принять приглашение в «Близкие» от «${who.name}»? Ваши помощники смогут передавать друг другу сообщения.`)) return;
@@ -10227,7 +10344,7 @@ function clRender() {
   }
   $("#cl-h").firstChild.textContent = p ? "" : clTab === "ref" ? "Рефералы" : "Близкие";
   $("#cl-inv").style.display = p ? "none" : "";
-  if (!syncCred()) { box.innerHTML = `<div class="card"><b>Нужен Dewiar</b><p class="hint" style="margin:6px 0 10px">«Близкие» работают через облако Dewiar: подключите мозг бесплатно или войдите аккаунтом dewiar.pro.</p><button class="btn p w" id="cl-brain">Подключить</button></div>`;
+  if (!syncCred()) { box.innerHTML = `<div class="card"><b>Нужен Dewiar</b><p class="hint" style="margin:6px 0 10px">«Близкие» работают через облако Dewiar: подключите мозг Dewiar или войдите аккаунтом dewiar.pro.</p><button class="btn p w" id="cl-brain">Подключить</button></div>`;
     $("#cl-brain").onclick = () => openSettings("brain"); return; }
   if (p) {
     delete st.unread[p.pid]; clSave(); clBadge(); clSeen(p.pid);
@@ -10995,19 +11112,19 @@ setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // по�
   if (D.web && (S.llm.trial || trialOn()) && !loggedIn()) {
     // веб-версия без входа: говорим сразу (пробный разговор); войти — без ограничений и с действиями
     showBot(gfix(`Привет! Я ${persona().name}. Давайте поговорим прямо сейчас — без входа и установки. Нажмите на меня и говорите или напишите.`));
-    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — без ограничений и с делами</button></div>`);
+    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — подробные ответы и дела</button></div>`);
   } else if (!S.llm.base_url && !loggedIn() && autoOk() && !(S.join && !S.join.auto) && trialOn()) {
     // 0.69, первый запуск: говорим сразу (пробный разговор), бесплатный мозг Dewiar подключается сам — без анкеты
-    showBot(gfix(`Привет! Я ${persona().name}. Говорите сразу — нажмите на меня или удерживайте и говорите. Бесплатный мозг Dewiar подключается сам.`));
+    showBot(gfix(`Привет! Я ${persona().name}. Говорите сразу — нажмите на меня или удерживайте и говорите. Мозг Dewiar подключается сам — на старте подарок.`));
     showCard(`<div class="start" data-first="1"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button></div>`);
     setTimeout(() => autoJoin("первый запуск").then(ok => { if (ok) showCard(""); }), 1200);
   } else if (!S.llm.base_url && !loggedIn()) {
     // первый запуск: одна понятная кнопка (отзыв: «не понимаю, как ей мозг включить») — бесплатная проба Dewiar;
     // своя модель, ключ сервиса и код с другого устройства — второй кнопкой
     if (S.join) { showBot(gfix(`Привет! Я ${persona().name}. Заявка отправлена — как только её одобрят, я подключусь сама и скажу. Обычно это быстро.`)); setTimeout(() => joinPoll(false).catch(() => {}), 2500); }
-    else showBot(gfix(`Привет! Я ${persona().name}. Чтобы мы могли поговорить, меня нужно один раз подключить — это бесплатно и займёт минуту.`));
+    else showBot(gfix(`Привет! Я ${persona().name}. Чтобы мы могли поговорить, меня нужно один раз подключить — без регистрации, на старте подарок. Это займёт минуту.`));
     showCard(S.join ? `<div class="row2"><button class="btn p" onclick="joinPoll(true).then(d => d && !d.key && toast((d && d.text) || 'Пока ждёт проверки')).catch(e => toast(e.message))" style="flex:1">Проверить</button><button class="btn" onclick="openBrain()" style="flex:1">Другие способы</button></div>`
-      : `<div class="start" data-first="1"><button class="btn p w" onclick="openBrain('join')">Подключить бесплатно</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button></div>`); }
+      : `<div class="start" data-first="1"><button class="btn p w" onclick="openBrain('join')">Подключить мозг Dewiar</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button></div>`); }
   // последний ответ — только свежий (до 20 минут): старый («С возвращением. В 15:00 встреча…» с утра) после каждого
   // запуска и обновления выглядел как новое сообщение (отчёты №52, №53). Он в истории разговора — там его и видно.
   else if (last && last.t && Date.now() - last.t < 20 * 60e3) showBot(last.content.slice(0, 400));

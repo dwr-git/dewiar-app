@@ -3,7 +3,7 @@
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const Q = new URLSearchParams(location.search);
 const ED = $("#ed");
-const P = { tabs: [], active: "", base: null, dirty: false, saving: false, loaded: false, t: 0, imgCache: {} };
+const P = { tabs: [], active: "", base: null, dirty: false, saving: false, loaded: false, t: 0, imgCache: {}, edits: 0, openSeq: 0, saveP: null, failed: "" };
 
 /* ---------- тема и «выезд» ---------- */
 function skin(id) {
@@ -124,20 +124,31 @@ async function refresh() {
     if (!P.loaded) await openTab(P.active, true);
   } catch (e) { status("Нет связи с Dewiar — " + e.message, "bad"); }
 }
+/* GitHub №34: несохранённую правку ничто не затирает. Перед сменой вкладки (и перед перечитыванием после
+   переподключения) — сначала записать; не записалось — остаёмся на месте с текстом и ошибкой. Ответ чтения, пришедший
+   после того, как человек продолжил печатать или открыл другую вкладку, — выбрасываем. */
+function unsaved() {
+  return `правка во вкладке «${P.active}» ${P.failed === "lost" ? "— не знаю, сохранилась ли: нет связи с Dewiar" : "не сохранилась"}. Текст на месте; Ctrl+S — повторить`;
+}
 async function openTab(name, first) {
-  if (!first) await saveNow();
+  if ((P.dirty || P.saveP) && !(await saveNow())) { P.loaded = true; status((name === P.active ? "Не перечитываю: " : "Не переключаю: ") + unsaved(), "bad"); return false; }
+  const seq = ++P.openSeq, edits = P.edits;
   try {
     const r = await core.call("pad_read", { name });
-    P.active = r.name; P.base = r.mtime; P.dirty = false; P.loaded = true;
+    if (seq !== P.openSeq) return false;                                  // уже открывают другую вкладку
+    if (P.edits !== edits || P.dirty || P.saveP) {                        // пока читали, человек печатал — его текст важнее
+      P.loaded = true; status(`Остаюсь во вкладке «${P.active}» — вы продолжили писать`, "busy"); return false; }
+    P.active = r.name; P.base = r.mtime; P.dirty = false; P.failed = ""; P.loaded = true;
     ED.innerHTML = PadMD.md2html(r.text); paint(); drawTabs();
     if (!H.tabs[r.name]) histReset(); else { H.kind = "ext"; histPush(); histBtns(); }   // с диска пришло другое — тоже шаг
     status(`${P.tabs.length > 1 ? `«${r.name}» · сохраняется` : "Сохраняется"} само · ${await syncLine()}`);
     if (!first) ED.focus();
-  } catch (e) { status(e.message, "bad"); P.loaded = true; }
+    return true;
+  } catch (e) { if (seq === P.openSeq) { status(e.message, "bad"); P.loaded = true; } return false; }
 }
 $("#b-new").onclick = () => newTab();
 async function newTab() {
-  await saveNow();
+  if (!(await saveNow())) return status("Новую вкладку не открываю: " + unsaved(), "bad");
   try { const r = await core.call("pad_new", {}); P.tabs = r.tabs; P.active = r.created; drawTabs(); await openTab(r.created, true); ED.focus(); const el = $(`.tab.on`); if (el) rename(el, r.created); }
   catch (e) { status(e.message, "bad"); }
 }
@@ -160,14 +171,17 @@ function askDelete(name) {
   $("#ask-t").textContent = P.tabs.length > 1 ? `Удалить вкладку «${name}»? Она уйдёт в корзину Dewiar.` : `Очистить «${name}»? Последнюю вкладку не удаляю.`;
   $("#ask").classList.add("on"); $("#ask-yes").focus();
   askFn = async () => { $("#ask").classList.remove("on");
-    try { const r = await core.call("pad_delete", { name }); P.tabs = r.tabs; if (P.active === name || !P.tabs.some(t => t.name === P.active)) { P.loaded = false; P.active = r.active; } drawTabs();
+    try { const r = await core.call("pad_delete", { name }); P.tabs = r.tabs;
+      if (P.active === name) { clearTimeout(P.t); P.dirty = false; P.failed = ""; }   // правка удалённой вкладки ушла вместе с ней
+      if (P.active === name || !P.tabs.some(t => t.name === P.active)) { P.loaded = false; P.active = r.active; } drawTabs();
       if (!P.loaded || P.active !== name) await openTab(P.active, true); } catch (e) { status(e.message, "bad"); } };
 }
 $("#ask-yes").onclick = () => askFn && askFn();
 $("#ask-no").onclick = () => $("#ask").classList.remove("on");
 
 /* ---------- сохранение ---------- */
-function changed() { histPush(); P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700); status("Сохраняю…", "busy"); }
+function changed() { histPush(); P.edits++; later(); }
+function later() { P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700); status("Сохраняю…", "busy"); }
 
 /* ---------- шаг назад и шаг вперёд (25.10, владелец: «удалил часть текста, захватил лишнее, жал Ctrl+Z — не
    возвращается… фактически потерял важную информацию»). Своя история листа: Markdown на лету, уборка tidy() и
@@ -212,7 +226,7 @@ function histGo(d) {
       const el = node && node.parentElement; if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
     }
   } finally { H.restoring = false; }
-  P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700);
+  P.edits++; P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700);
   status(d < 0 ? "Шаг назад" : "Шаг вперёд", ""); histBtns();
   return true;
 }
@@ -226,27 +240,44 @@ ED.addEventListener("beforeinput", (e) => {
   const sel = getSelection(), one = sel && sel.isCollapsed;
   H.kind = t === "insertText" && one && !/\s/.test(e.data || "") ? "type" : /^delete(Content)?(Backward|Forward)$/.test(t) && one ? "del1" : t || "edit";
 });
+/* Записать лист. -> true, если несохранённого не осталось. Идёт запись — сначала дождаться её (раньше вторую просто
+   пропускали, и смена вкладки шла, не дождавшись). Отказ (GitHub №34) — правка остаётся «несохранённой», ошибка видна,
+   сами не повторяем: повтор — Ctrl+S или следующая правка; оборвалась связь посреди записи — честно «не знаю,
+   сохранилось ли», и запись ещё раз, когда ядро вернётся (hello). */
 async function saveNow() {
   clearTimeout(P.t);
-  if (!P.dirty || !P.active || P.saving) return;
-  P.saving = true; P.dirty = false;
-  const md = PadMD.html2md(ED);
-  try {
-    const r = await core.call("pad_write", { name: P.active, text: md, base: P.base });
-    P.base = r.mtime;
-    if (r.conflict) { status(`Её правили и на другом устройстве — их вариант сохранён во вкладке «${r.conflict}»`, "busy"); refresh(); }
-    else status("Сохранено · " + await syncLine());
-  } catch (e) { P.dirty = true; status("Не сохранилось: " + e.message, "bad"); }
-  P.saving = false;
-  if (P.dirty) changed();
+  while (P.saveP) await P.saveP;
+  if (!P.dirty || !P.active) return !P.dirty;
+  const run = (async () => {
+    P.saving = true; P.dirty = false;
+    const name = P.active, md = PadMD.html2md(ED);
+    let ok = false;
+    try {
+      const r = await core.call("pad_write", { name, text: md, base: P.base });
+      P.base = r.mtime; P.failed = ""; ok = true;
+      if (r.conflict) { status(`Её правили и на другом устройстве — их вариант сохранён во вкладке «${r.conflict}»`, "busy"); refresh(); }
+      else if (!P.dirty) status("Сохранено · " + await syncLine());
+    } catch (e) {
+      P.dirty = true; P.failed = e && e.lost ? "lost" : "no";
+      status(P.failed === "lost" ? "Связь с Dewiar оборвалась во время записи — не знаю, сохранилось ли. Текст на месте: запишу ещё раз, когда связь вернётся (Ctrl+S — сейчас)"
+        : `Не сохранилось: ${e && e.message || "ошибка"}. Текст на месте — Ctrl+S или следующая правка повторит запись`, "bad");
+    }
+    P.saving = false;
+    if (ok && P.dirty) later();                    // печатали, пока шла запись, — дописать
+  })();
+  P.saveP = run;
+  try { await run; } finally { if (P.saveP === run) P.saveP = null; }
+  return !P.dirty;
 }
 ED.addEventListener("input", () => { P.lastInput = performance.now(); tidy(); ensureP(); changed(); });
 ED.addEventListener("focus", ensureP);
 window.addEventListener("beforeunload", () => { if (P.dirty) saveNow(); });
 core.on("pad_changed", async (e) => {                 // правка с другого устройства
   if (e.deleted || e.name !== P.active) return refresh();
-  if (P.dirty || document.activeElement === ED && Date.now() - lastKey < 4000) return;   // сейчас печатают — их вариант не перетирает
-  const r = await core.call("pad_read", { name: P.active }).catch(() => null);
+  if (P.dirty || P.saveP || document.activeElement === ED && Date.now() - lastKey < 4000) return;   // сейчас печатают — их вариант не перетирает
+  const name = P.active, edits = P.edits, seq = P.openSeq;
+  const r = await core.call("pad_read", { name }).catch(() => null);
+  if (P.active !== name || P.edits !== edits || P.openSeq !== seq || P.dirty || P.saveP) return;   // пока читали — печатали или сменили вкладку
   if (r && r.mtime !== P.base) { P.base = r.mtime; ED.innerHTML = PadMD.md2html(r.text); paint(); H.kind = "ext"; histPush(); status("Обновлено с другого устройства"); }
 });
 core.on("hello", (d) => { try { const u = (d && d.settings && d.settings.ui) || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); colorScheme(u.pad_colors, true); gamesOn((d.settings || {}).features); } catch (e) { }

@@ -25,7 +25,19 @@ log = logging.getLogger("dewiar.llm")
 
 
 class LLMError(Exception):
-    """Ошибка с понятным человеку текстом."""
+    """Ошибка с понятным человеку текстом. say — короче для голоса (без ссылок), topup — нужна кнопка «Пополнить»
+    (облако Dewiar: талеры кончились, 402 — 0.82.1); приходят из текста _humanize (HumanText)."""
+
+    def __init__(self, *a):
+        super().__init__(*a)
+        self.say = getattr(a[0], "say", "") if a else ""
+        self.topup = bool(getattr(a[0], "topup", False)) if a else False
+
+
+class HumanText(str):
+    """Текст ошибки для экрана + короткая фраза для голоса и признак «нужна кнопка Пополнить»."""
+    say = ""
+    topup = False
 
 
 # Модели не хватило окна контекста: LM Studio «Context size has been exceeded», llama.cpp «exceeds the available context
@@ -162,9 +174,11 @@ def _humanize(e, base_url, model=""):
         try:                                          # облако Dewiar и др. объясняют сами: «заряд закончился…»
             j = e.response.json()
             j = j[0] if isinstance(j, list) and j else j   # Gemini отдаёт ошибку списком: [{"error": …}]
-            msg = ((j or {}).get("error") or {}).get("message", "") if isinstance(j, dict) else ""
+            ej = ((j or {}).get("error") or {}) if isinstance(j, dict) else {}
+            ej = ej if isinstance(ej, dict) else {}
+            msg = ej.get("message", "")
         except Exception:  # noqa: BLE001
-            msg = ""
+            msg, ej = "", {}
         if LOCATION_RX.search(body + " " + msg):
             return ("Gemini недоступен из вашей страны — Google не пускает к API отсюда. Включите VPN или прокси "
                     "(«Подключение» → «Прокси»), подключите Gemini через OpenRouter или выберите другой сервис")
@@ -173,6 +187,11 @@ def _humanize(e, base_url, model=""):
             return (NO_MONEY_TEXT
                     + (". Подписка GLM Coding Plan работает по своему адресу (…/api/coding/paas/v4), и по правилам Z.ai — "
                        "только в программах для кода" if zai else ""))
+        if msg and code == 402 and (ej.get("topup") or "Dewiar" in msg or "Талер" in msg):
+            # облако Dewiar: талеры кончились (0.82.1) — на экран полный текст с номером DW-…, голосом — коротко, без ссылки
+            t = HumanText(msg.rstrip("."))
+            t.say, t.topup = str(ej.get("say") or "Талеры закончились. Пополнить — кнопкой на экране."), True
+            return t
         if msg and (code in (402, 429) or "Dewiar" in msg or "dw-" in msg):
             return msg.rstrip(".")
         if code == 402:
@@ -342,7 +361,37 @@ def _headers(p):
         h["anthropic-version"] = "2023-06-01"
     elif p.get("api_key"):
         h["Authorization"] = f"Bearer {p['api_key']}"
+    if p.get("cloud"):
+        h["X-Dewiar-Pay"] = "2"          # облако Dewiar (0.82.1): умеем кнопку «Пополнить» — 402 с номером DW-… и короткой фразой
+    if "opencode.ai" in str(p.get("base_url") or "").lower():
+        # №524 (04.11): OpenCode Go без заголовка сессии отвечает 400 MissingSessionID («cannot be routed efficiently»).
+        # Постоянный id этой установки — один и тот же между запусками (сервис держит кэш разговора по сессии)
+        h["x-opencode-session"] = opencode_session()
     return h
+
+
+_OC_SESSION = []
+
+
+def opencode_session(path=None):
+    """Постоянный id сессии для OpenCode (x-opencode-session): случайный, хранится в STATE_DIR/opencode.session;
+    не записался — свой на время работы программы."""
+    if _OC_SESSION and path is None:
+        return _OC_SESSION[0]
+    import uuid
+    try:
+        if path is None:
+            from settings import STATE_DIR
+            path = STATE_DIR / "opencode.session"
+        sid = path.read_text(encoding="ascii").strip() if path.exists() else ""
+        if not re.fullmatch(r"[0-9a-f-]{16,64}", sid):
+            sid = str(uuid.uuid4())
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(sid, encoding="ascii")
+    except (OSError, UnicodeError):
+        sid = str(uuid.uuid4())
+    _OC_SESSION[:] = [sid]
+    return sid
 
 
 _NOT_CHAT = re.compile(r"embed|rerank|ocr|whisper|tts|asr|speech|stt|clip|bge|e5-|guard|moderat", re.I)

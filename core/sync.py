@@ -790,8 +790,8 @@ class Sync:
                 return None
             if d.get("taken_by") and d.get("taken_by") != self.state.get("device"):
                 return False
-            if d.get("to") and d.get("to") != self.state.get("device"):     # задача другому компьютеру («на рабочем…», 0.56)
-                return False
+            if d.get("to") and d.get("to") != self.state.get("device") and not self.HOME:   # задача другому компьютеру («на рабочем…», 0.56)
+                return False                       # (по Wi-Fi её берём — HomeSync перешлёт её тому через облако)
             if str(d.get("goal") or d.get("title") or "").strip() and not d.get("taken_by"):
                 self._claims[iid] = (dict(d), int(it_updated or 0))
         elif kind == "task" and isinstance(d, dict) and d.get("want") in ("delete", "stop", "answer"):
@@ -1132,35 +1132,46 @@ class Sync:
                 idx[key] = {"h": None, "u": prev, "skip": True}
                 continue
             idx[key] = {"h": None, "u": now}
-            goal = str(d.get("goal") or d.get("title") or "").strip()
-            try:
-                who = str(d.get("from") or "").strip()[:40]
-                t = h.tasks.create(str(d.get("title") or goal[:50]), goal + (f"\n\n(Задачу поставили с устройства «{who}».)" if who else "\n\n(Задачу поставили с телефона — результат он увидит.)"))
-            except (OSError, ValueError) as e:            # не роняем весь обмен из-за одной задачи
-                log.warning("Задача с телефона не создалась: %s", e)
-                continue
-            log.info("🔄 Задача с телефона: «%s»", t.title)
-            try:
-                h.push("Задача с " + (f"«{who}»" if who else "телефона"), f"Взялся: «{t.title}». Ход — в «Задачах», на телефоне тоже.", telegram=False)
-            except Exception:  # noqa: BLE001
-                pass
+            self._start_task(d)
 
-    def send_taskreq(self, data):
+    def _start_task(self, d):
+        """Задача с телефона (или другого устройства) — в «Задачи» этого компьютера. -> задача или None."""
+        h = self.host
+        goal = str(d.get("goal") or d.get("title") or "").strip()
+        try:
+            who = str(d.get("from") or "").strip()[:40]
+            t = h.tasks.create(str(d.get("title") or goal[:50]), goal + (f"\n\n(Задачу поставили с устройства «{who}».)" if who else "\n\n(Задачу поставили с телефона — результат он увидит.)"))
+        except (OSError, ValueError, AttributeError) as e:     # не роняем весь обмен из-за одной задачи
+            log.warning("Задача с телефона не создалась: %s", e)
+            return None
+        log.info("🔄 Задача с телефона: «%s»", t.title)
+        try:
+            h.push("Задача с " + (f"«{who}»" if who else "телефона"), f"Взялся: «{t.title}». Ход — в «Задачах», на телефоне тоже.", telegram=False)
+        except Exception:  # noqa: BLE001
+            pass
+        return t
+
+    def send_taskreq(self, data, sender=None, iid=None, updated=None):
         """Задача другому своему устройству («сделай на рабочем компьютере…», 0.56): запись taskreq сразу в облако.
-        data — {title, goal, to (id компьютера) или cloud}; от кого — имя этого. Шифрование включено — запечатана
-        (кроме задачи для облака: её читает сервер). -> id"""
+        data — {title, goal, to (id компьютера) или cloud}; от кого — имя этого (или sender — телефон, чью задачу этот
+        компьютер пересылает с Wi-Fi). Шифрование включено — запечатана (кроме задачи для облака: её читает сервер).
+        iid и updated — повтор той же задачи (ответ облака потерялся): та же запись, с prev — если её уже занял тот
+        компьютер, облако её не перепишет (lost), и второй раз он не возьмётся. -> id"""
         token, link, url = self.host.credentials()
         if not token:
             raise SyncError("нет входа в Dewiar — задачу другому устройству не передать")
-        iid = "p" + uuid.uuid4().hex[:12]
-        d = dict(data, ts=_now_ms(), **{"from": self.host.device_name()})
+        iid = iid or "p" + uuid.uuid4().hex[:12]
+        upd = int(updated or _now_ms())
+        d = dict(data, ts=upd, **{"from": str(sender or self.host.device_name())[:40]})   # sender — пересылаем чужую (телефона по Wi-Fi)
         ek = self.e2e_key()
         body_data = _seal(ek, d) if ek and self._sealable("taskreq", iid, d) else d
         headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
         if link and link != token:
             headers["X-Sync-Link"] = link
         body = {"since": int(self.state.get("rev") or 0), "device": self.state["device"], "name": self.host.device_name(), "app": "pc", "ver": _version(),
-                "kinds": ["taskreq"], "changes": [{"kind": "taskreq", "id": iid, "data": body_data, "updated": _now_ms()}]}
+                "kinds": ["taskreq"], "changes": [{"kind": "taskreq", "id": iid, "data": body_data, "updated": upd}]}
+        if updated:
+            body["changes"][0]["prev"] = upd
         try:
             r = httpx.post(url + "?p=/sync", json=body, headers=headers, timeout=30)
         except httpx.HTTPError as e:
@@ -1357,6 +1368,9 @@ class Sync:
             body = {"since": int(self.state.get("rev") or 0), "device": self.state["device"], "name": self.host.device_name(),
                     "app": "pc", "ver": _version(), "kinds": kinds,
                     "changes": []}
+            via = self._via()
+            if via:                                      # телефоны, что синхронизируются с этим компьютером по Wi-Fi (04.11)
+                body["via"] = via
             rest = [{k: v for k, v in c.items() if k != "_h"} for c in changes]
             body["changes"], rest = rest[:CHUNK], rest[CHUNK:]
             headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
@@ -1440,8 +1454,7 @@ class Sync:
                 for key in sent:
                     if key in idx:
                         idx[key].pop("reseal", None)
-            if not self.HOME:
-                self._claim_tasks(url, headers, idx)
+            self._claim_tasks(url, headers, idx)          # HomeSync — свой: по Wi-Fi занимать не у кого
             if got:                                       # отпечатки принятого — по тому, как оно легло у нас, иначе ушло бы обратно
                 snap2 = self.snapshot()
                 for key, st in idx.items():
@@ -1459,6 +1472,18 @@ class Sync:
             if changes or got:
                 log.info("🔄 Синхронизация: отправлено %d, получено %d", len(changes), got)
             return True
+
+    def _via(self):
+        """Телефоны, подключённые к узлу «Дома по Wi-Fi» этого компьютера: [{id, name, app, seen}] — облаку, чтобы и другие
+        устройства видели их на связи («через „Домашний“»), а не со временем их последнего захода в облако (04.11,
+        жалоба: «второй компьютер видит смарт неактивным, хотя в одной Wi-Fi сети»)."""
+        hub = getattr(self.host, "homehub", None)
+        if self.HOME or hub is None or not callable(getattr(hub, "local_devices", None)):
+            return []
+        try:
+            return list(hub.local_devices())[:8]
+        except Exception:  # noqa: BLE001
+            return []
 
     def loop(self, stopping, interval=60):
         """Фоновый поток: обмен раз в interval секунд или раньше — по self.soon.set() после своих правок."""
@@ -1502,11 +1527,14 @@ class HomeSync(Sync):
     (общий замок) — что пришло с телефона, следующим обменом уходит в облако, и наоборот: компьютер — мост.
     Шифрование записей на устройстве здесь не нужно: весь обмен телефона с узлом зашифрован его ключом."""
     HOME = True
+    FWD_WAIT = 1800                      # облако не отвечает так долго — задачу другому компьютеру не передать: сказать телефону
+    FAIL_KEEP = 3 * 86400                # «не передано» видно на телефоне в «Задачах» трое суток
 
     def __init__(self, host, cloud_sync):
         super().__init__(host)
         self.path = STATE_DIR / "sync-home.json"
         self.state = self._load()
+        self.cloud = cloud_sync
         if cloud_sync is not None:
             self.state["device"] = cloud_sync.state.get("device") or self.state["device"]
             self._lock = cloud_sync._lock
@@ -1517,6 +1545,139 @@ class HomeSync(Sync):
 
     def e2e_key(self):
         return None
+
+    # ---------- задачи с телефона по Wi-Fi (04.11: раньше терялись молча) ----------
+    # Облачная Sync сначала занимает задачу в облаке (taken_by), потому что взяться могут два компьютера. По Wi-Fi узел —
+    # этот компьютер, занимать не у кого: задача без to (или с to = этот) — сразу в «Задачи»; с to другого компьютера —
+    # в облако (send_taskreq): этот компьютер — мост. Облака нет — на телефон честное «не передано» (запись task, failed).
+
+    def _apply(self, it):
+        if it.get("kind") == "taskreq" and not it.get("deleted"):      # кто записал задачу в узел — по нему и имя (а не «from»)
+            self._tdev = getattr(self, "_tdev", {})
+            self._tdev[it.get("id")] = str(it.get("dev") or "")
+        return super()._apply(it)
+
+    def _phone_of(self, dev):
+        """Телефон, связанный с узлом этого компьютера (ключом из кода на экране): {id, name} или None. Имя — из реестра
+        узла, а не из записи: «from» телефон пишет сам, и подставить туда можно что угодно (рецензия 04.11)."""
+        hub = getattr(self.host, "homehub", None)
+        try:
+            for x in (hub.local_devices() if hub is not None else []):
+                if x.get("id") == dev:
+                    return x
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+    def tasks_on(self):
+        """Переключатель «Принимать задания с телефона по Wi-Fi» (sync.home.tasks, по умолчанию включён)."""
+        s = getattr(self.host, "s", None)
+        try:
+            v = s.get("sync", "home", "tasks") if s is not None else None
+        except Exception:  # noqa: BLE001
+            v = None
+        return v is not False
+
+    def _refuse(self, iid, d, why):
+        self.state.setdefault("fwd_fail", {})[iid] = {"title": str(d.get("title") or d.get("goal") or "Задача")[:80], "goal": str(d.get("goal") or "")[:400],
+                                                      "error": why, "at": int(time.time())}
+        log.info("🔄 Задача с телефона не принята: %s", why)
+        self.soon.set()
+
+    def _claim_tasks(self, url, headers, idx):
+        claims, self._claims = self._claims, {}
+        devs, self._tdev = getattr(self, "_tdev", {}), {}
+        me = self.host.device_name()
+        for iid, (d, _prev) in claims.items():
+            ph = self._phone_of(devs.get(iid))
+            if ph is None:                                 # записал не телефон этого узла — не берём и не пересылаем
+                log.info("🔄 Задача по Wi-Fi не от связанного телефона (%s) — пропускаю", devs.get(iid) or "?")
+                continue
+            if not self.tasks_on():
+                self._refuse(iid, d, f"На «{me}» выключено «Принимать задания с телефона по Wi-Fi» (студия → «Устройства» → «Дома по Wi-Fi»). Задание не принято.")
+                continue
+            d = dict(d, **{"from": str(ph.get("name") or "телефон")[:40]})
+            to = str(d.get("to") or "")
+            if not to or to == self.state.get("device"):
+                self._start_task(d)
+            else:                                          # iid и время — одни на все повторы: дубля у того компьютера не будет
+                self.state.setdefault("fwd", {})[iid] = {"d": d, "at": int(time.time()), "iid": "p" + uuid.uuid4().hex[:12], "ts": _now_ms()}
+
+    def run_once(self):
+        r = super().run_once()
+        if self.state.get("fwd"):
+            self._forward()
+        return r
+
+    def _pc_name(self, dev):
+        cs = self.cloud
+        for d in ((cs.status.get("all") if cs is not None else None) or []) + (self.status.get("all") or []):
+            if d.get("id") == dev and d.get("name"):
+                return str(d["name"])[:40]
+        return "другой компьютер"
+
+    def _forward(self):
+        """Задачи другим компьютерам, пришедшие по Wi-Fi, — в облако. Сеть подвела — повтор в следующий обмен, до FWD_WAIT."""
+        from_cloud = self.cloud
+        with self._lock:
+            pend = dict(self.state.get("fwd") or {})
+        sent, failed = [], {}
+        me = self.host.device_name()
+        for iid, x in pend.items():
+            d = x.get("d") or {}
+            name = self._pc_name(d.get("to"))
+            data = {"title": str(d.get("title") or d.get("goal") or "")[:80], "goal": str(d.get("goal") or d.get("title") or "")[:4000], "to": d.get("to")}
+            tok = ""
+            try:
+                tok = from_cloud.host.credentials()[0] if from_cloud is not None else ""
+            except Exception:  # noqa: BLE001
+                tok = ""
+            if not tok:
+                failed[iid] = (d, f"«{name}» не на связи с телефоном: телефон подключён по Wi-Fi к «{me}», а «{me}» передаёт задания "
+                                  f"другим компьютерам только через dewiar.pro — входа в Dewiar на нём нет. Задание не передано.")
+                continue
+            try:
+                from_cloud.send_taskreq(data, sender=d.get("from") or "телефон", iid=x.get("iid"), updated=x.get("ts"))
+                sent.append(iid)
+                log.info("🔄 Задача с телефона «%s» передана компьютеру «%s» через облако", data["title"], name)
+            except SyncError as e:
+                if time.time() - int(x.get("at") or 0) > self.FWD_WAIT:
+                    failed[iid] = (d, f"«{name}» не на связи: облако Dewiar не отвечает ({e}) — задание не передано.")
+        if not sent and not failed:
+            return
+        with self._lock:
+            fwd = self.state.setdefault("fwd", {})
+            ff = self.state.setdefault("fwd_fail", {})
+            for iid in sent:
+                fwd.pop(iid, None)
+            for iid, (d, why) in failed.items():
+                fwd.pop(iid, None)
+                ff[iid] = {"title": str(d.get("title") or d.get("goal") or "Задача")[:80], "goal": str(d.get("goal") or "")[:400], "error": why, "at": int(time.time())}
+                log.info("🔄 Задача с телефона не передана: %s", why)
+            self._save()
+        if failed:
+            self.soon.set()                           # телефону — сразу
+
+    def _task_want(self, iid, d):
+        ff = self.state.get("fwd_fail") or {}
+        if iid in ff:                                  # «Удалить» у непереданной — убрать и с телефона
+            if d.get("want") in ("delete", "stop"):
+                ff.pop(iid, None)
+            return
+        super()._task_want(iid, d)
+
+    def _snap_extra(self, out):
+        super()._snap_extra(out)
+        ff = self.state.get("fwd_fail") or {}
+        if "task" not in (self.state.get("kinds") or ()):
+            return
+        now = time.time()
+        for iid in [i for i, x in ff.items() if now - int(x.get("at") or 0) > self.FAIL_KEEP]:
+            ff.pop(iid, None)
+        for iid, x in ff.items():
+            at = dt.datetime.fromtimestamp(int(x.get("at") or now)).isoformat(timespec="seconds")
+            out["task:" + iid] = {"title": x.get("title", ""), "status": "failed", "goal": x.get("goal", ""), "result": "", "error": x.get("error", "")[:300],
+                                  "question": "", "activity": "", "updated": at, "created": at, "outputs": [], "files": []}
 
     def loop(self, stopping, interval=60):
         """Свой цикл (без стоп-крана «Ничего не уходит в интернет»: обмен — в домашней сети)."""

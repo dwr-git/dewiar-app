@@ -2182,6 +2182,8 @@ class CommandsMixin:
                     return c.offer(a.get("pid", ""), a.get("yes"))
                 if cmd == "close_remove":
                     return c.remove(a.get("pid", ""))
+                if cmd == "close_rename":           # №128: своё имя близкого (только здесь); пустое — как он сам себя назвал
+                    return c.rename(a.get("pid", ""), a.get("name", ""))
                 if cmd == "close_forget":           # убрать сообщения у себя: mids — выбранные, без mids — всю переписку
                     mids = a.get("mids")
                     return c.forget(a.get("pid", ""), None if mids is None else list(mids))
@@ -2291,6 +2293,8 @@ class CommandsMixin:
                     own_key = not self.s.get("cloud", "account")
                     was_active = self.s.get("llm", "active") == "dewiar-cloud"
                     r = self.cloud.forget()
+                    if own_key:                          # 0.82.1: сами больше не подключаемся (раньше — новый ключ с новым подарком)
+                        self.s.update({"cloud": {"forgot": time.time()}})
                     if own_key and self.account.logged_in():   # убрали свой ключ, а вход аккаунтом есть — модели Dewiar по аккаунту
                         self._account_cloud(force_active=was_active, quiet=True)
                         r = self.cloud.status()

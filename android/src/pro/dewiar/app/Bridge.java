@@ -38,8 +38,21 @@ public final class Bridge {
             if (f.exists()) crash = Net.readAll(new FileInputStream(f));
             return new JSONObject().put("version", BuildInfo.VERSION).put("sdk", Build.VERSION.SDK_INT)
                     .put("android", Build.VERSION.RELEASE).put("device", Build.MANUFACTURER + " " + Build.MODEL)
-                    .put("recognizer", Speech.systemAvailable(a)).put("tts", a.tts.ready()).put("crash", crash).toString();
+                    .put("recognizer", Speech.systemAvailable(a)).put("tts", a.tts.ready()).put("crash", crash).put("aid", joinAid()).toString();
         } catch (Exception e) { return "{}"; }
+    }
+
+    /** 0.82.1 (владелец 04.11: «Забыть ключ» и переустановка давали новый подарок): номер этого телефона для сайта — хэш
+     *  ANDROID_ID (у каждого приложения свой и переживает переустановку); сам ANDROID_ID наружу не уходит. Нет — "". */
+    private String joinAid() {
+        try {
+            String id = android.provider.Settings.Secure.getString(a.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+            if (id == null || id.isEmpty()) return "";
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(("dewiar-join|" + id).getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder("an-");
+            for (int i = 0; i < 20; i++) sb.append(String.format("%02x", h[i]));
+            return sb.toString();
+        } catch (Exception e) { return ""; }
     }
 
     // ---------- обновление внутри приложения (Update.java) ----------

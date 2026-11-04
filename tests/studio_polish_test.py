@@ -43,7 +43,7 @@ with sync_playwright() as p:
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
 ph = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
-ok('data-ext="$1"' in ph[ph.index("async function clPayLoad"):ph.index("async function clPayLoad") + 800] and "#cl-top { -webkit-user-select: text"
+ok('data-ext="$1"' in ph[ph.index("function clTopFill"):ph.index("function clTopFill") + 800] and "#cl-top { -webkit-user-select: text"
    in (ROOT / "android/assets/www/app.css").read_text(encoding="utf-8"), "телефон: как пополнить — тоже выделяется, ссылки открываются")
 # слух и голоса грузятся по очереди (отзыв 11.10: GigaAM + Vosk TTS вместе — компьютер завис)
 import threading  # noqa: E402

@@ -61,6 +61,8 @@ function clHead() {
   if (!p) { $("#cl-msgs").innerHTML = ""; return; }
   clAva($("#cl-ava"), p.pid, p.name, p.face);
   $("#cl-who").textContent = p.name;
+  $("#cl-who").title = p.orig && p.orig !== p.name ? `Сам себя назвал: «${p.orig}»` : "";
+  $("#cl-ren").style.display = "";
   $("#cl-devs").textContent = (p.about ? p.about + " · " : "") + ((p.devs || []).length ? "устройств: " + p.devs.length + " · сообщения шифруются" : "ещё не открывал Dewiar после приглашения");
   $("#cl-devs").title = p.about || "";
   $("#cl-call").style.display = $("#cl-vcall").style.display = (p.devs || []).length ? "" : "none";
@@ -407,6 +409,18 @@ $("#cl-card-save").onclick = async () => {
 $("#cl-speak").onchange = () => core.call("close_speak", { on: $("#cl-speak").checked }).catch(() => {});
 $("#cl-call").onclick = () => core.call("close_call", { pid: CL.cur, video: false }).then(r => toast("Звоню " + r.name + " — окно звонка открыто в браузере", 3000)).catch(e => toast(e.message, 4000));
 $("#cl-vcall").onclick = () => core.call("close_call", { pid: CL.cur, video: true }).then(r => toast("Видеозвонок " + r.name + " — окно открыто в браузере", 3000)).catch(e => toast(e.message, 4000));
+/* №128 (04.11): «как редактировать контакт без имени» — имя близкого приходит с его устройства («Без имени», если он его не
+   вписал). Своё имя — только здесь: в списке, в переписке и голосом («напиши маме»); пустое — снова как он себя назвал */
+$("#cl-ren").onclick = async () => {
+  const p = ((CL.st && CL.st.people) || []).find(x => x.pid === CL.cur); if (!p) return;
+  const cur = p.name === "Без имени" ? "" : p.name;
+  const v = await askText(`Как назвать${p.orig ? "" : " этого близкого"}? Имя видите только вы, на этом компьютере.` +
+    (p.orig && p.orig !== "Без имени" ? `
+Сам себя он назвал «${p.orig}» — оставьте поле пустым, чтобы вернуть.` : ""), cur, { ok: "Сохранить", ph: "Например: Мама" });
+  if (v === null) return;
+  try { CL.st = await core.call("close_rename", { pid: p.pid, name: v.trim() }); clRender(); toast(v.trim() ? `Теперь — «${v.trim()}»` : "Имя — как он сам себя назвал", 2200); }
+  catch (e) { toast(e.message, 4000); }
+};
 $("#cl-del").onclick = async () => {
   const p = ((CL.st && CL.st.people) || []).find(x => x.pid === CL.cur); if (!p) return;
   if (!await ask(`Убрать «${p.name}» из близких? Переписка у вас останется, но писать друг другу будет нельзя, пока не пригласите снова.`)) return;

@@ -33,6 +33,9 @@ const devAgo = (ts) => {
   return "был " + new Date(ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 };
 const devOn = (d) => d.me || Date.now() / 1000 - (d.seen || 0) < DEV_ONLINE;
+/* состояние словами (04.11): другой телефон, что синхронизируется с компьютером «Дома по Wi-Fi» (via — имя компьютера,
+   cloud.php sync_devs_via), — «на связи через „Дом“»; давно не было — «был N мин назад» (не «не на связи»: телефон не исполнитель) */
+const devState = (d) => d.me ? "здесь" : d.via && devOn(d) ? `на связи через «${d.via}»` : devAgo(d.seen);
 const devOwnBrain = () => !!S.llm.base_url && !S.llm.trial && !S.llm.cloud;
 function devHdr(c) { const h = { Authorization: "Bearer " + c.token, "Content-Type": "application/json" }; if (c.link && c.link !== c.token) h["X-Sync-Link"] = c.link; return h; }
 async function devCall(method, path, body) {
@@ -57,7 +60,7 @@ function devHtml() {
   const rows = (list.length ? list : [Object.assign({ me: true, seen: 0, ver: "" }, me)]).map(d => {
     const app = d.app || "phone", live = devOn(d);
     return `<div class="dvr${live ? " on" : ""}"><span class="dvi"><svg viewBox="0 0 24 24">${DEV_IC[app] || DEV_IC.phone}</svg></span><div class="dvt"><b>${esc(d.me ? me.name : (d.name || DEV_APP[app]))}${d.me ? '<em>это устройство</em>' : ""}</b>`
-      + `<small>${DEV_APP[app] || "Устройство"}${d.ver ? " · Dewiar " + esc(d.ver) : ""} · <i></i>${d.me ? "здесь" : devAgo(d.seen)}</small></div>`
+      + `<small>${DEV_APP[app] || "Устройство"}${d.ver ? " · Dewiar " + esc(d.ver) : ""} · <i></i>${esc(devState(d))}</small></div>`
       + (d.me || app === "cloud" || (c && c.home) ? "" : `<button class="lnk" data-dforget="${esc(d.id)}">Убрать</button>`) + `</div>`;
   }).join("");
   return `<div class="card dvme"><small class="hint" style="margin:0">Это устройство</small>
@@ -241,7 +244,7 @@ async function devClaimFlow(link) {
 /* задача названному компьютеру («Лира, на рабочем компьютере подготовь презентацию», письмо 28.10): свои компьютеры —
    из последнего обмена (на связи — синхронизировался за 3 минуты); не на связи — спросить: подождать или в облаке */
 function devComputers() {
-  return (DEVS || syncStatus.all || []).filter(d => d.app === "pc").map(d => ({ id: d.id, name: d.name || "Компьютер", on: Date.now() / 1000 - (d.seen || 0) < DEV_ONLINE, seen: d.seen || 0 }));
+  return (DEVS || syncStatus.all || []).filter(d => d.app === "pc").map(d => ({ id: d.id, name: d.name || "Компьютер", on: Date.now() / 1000 - (d.seen || 0) < DEV_ONLINE, seen: d.seen || 0, cloud: !!d.cloud }));
 }
 const devComputersText = () => { const c = devComputers(); return c.length > 1 || (c.length && c[0].name) ? " Компьютеры пользователя: " + c.map(x => `«${x.name}» (${x.on ? "на связи" : "не на связи"})`).join(", ") + "." : ""; };
 function devFindComputer(name) {
@@ -265,6 +268,10 @@ function devTaskOn(a) {
   }
   if (!c.on && a.if_off === "cloud") { taskToPc(title, goal); return `Задача «${title}» ушла в облако Dewiar — «${c.name}» не на связи. Ход и итог — в «Мой день» → «Сделанное». Скажи коротко, что взялась.`; }
   taskToPc(title, goal, c.id);
+  const ch = syncChan();
+  if (ch && ch.home && c.cloud)       // телефон только по Wi-Fi, а «Рабочий» — за облаком: задание передаст компьютер дома, итог сюда не вернётся
+    return `Задача «${title}» передана на «${c.name}» через «${(S.sync.home || {}).n || "компьютер дома"}» — итог увидите там, на «${c.name}», сюда он не придёт.`
+      + " Результата ЕЩЁ НЕТ — скажи одной фразой, что передала и где смотреть итог; не обещай, что тот компьютер уже взялся.";
   return `Задача «${title}» передана компьютеру «${c.name}»` + (c.on ? " — он уже берётся." : " — он возьмётся, как только включится.") + " Результата ЕЩЁ НЕТ — скажи одной фразой, что передала.";
 }
 

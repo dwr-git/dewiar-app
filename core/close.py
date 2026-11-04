@@ -193,11 +193,14 @@ class Close:
         return d
 
     def _save(self):
+        # пакет 04.11 (Windows): «PermissionError … close.tmp» — один close.tmp на все потоки, и его на миг держал антивирус.
+        # Своё имя временного файла и повтор (atomicio); под замком — состояние не меняется посреди записи
+        import atomicio
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(self.st, ensure_ascii=False), encoding="utf-8")
-            os.replace(tmp, self.path)
+            with self._lock:
+                data = json.dumps(self.st, ensure_ascii=False)
+            atomicio.write_text(self.path, data)
         except OSError:
             log.exception("близкие: сохранить")
 
@@ -250,7 +253,7 @@ class Close:
     def _people(self, d):
         with self._lock:
             self.st["me"] = d.get("me") or {}
-            self.st["people"] = d.get("people") or []
+            self.st["people"] = self._named(d.get("people") or [])
             self.st["offers"] = d.get("offers") or []   # «… зовёт вас в «Близкие»» (из «Рефералов») — ждут ответа
             if "groups" in d:                           # «Группы своих» (0.61): gid, name, mine, owner, members (как близкие)
                 self.st["groups"] = d.get("groups") or []
@@ -623,6 +626,41 @@ class Close:
             self.hello()
         self._people(self._req("POST", "/close/offer", {"pid": pid, "yes": bool(yes)}).json())
         self.soon.set()
+        return self.state()
+
+    def _named(self, people):
+        """Своё имя близкого (№128, 04.11: «как редактировать контакт без имени»): имя приходит с его устройства, а если он
+        его не вписал — «Без имени». Своё имя (rename) хранится только здесь и заменяет присланное везде — в списке, в
+        переписке, голосом («напиши маме»); присланное остаётся в поле orig. Без своего имени — как прислал."""
+        names = self.st.get("names") or {}
+        out = []
+        for p in people:
+            p = dict(p)
+            own = str(names.get(p.get("pid")) or "").strip()
+            if own:
+                p["orig"] = p.get("orig") or p.get("name") or ""
+                p["name"] = own
+            out.append(p)
+        return out
+
+    def rename(self, pid, name):
+        """Назвать близкого по-своему (только на этом компьютере). Пустое имя — снова как он сам себя назвал. -> состояние."""
+        name = " ".join(str(name or "").split())[:40]
+        with self._lock:
+            p = next((x for x in self.st["people"] if x.get("pid") == pid), None)
+            if p is None:
+                raise CloseError("такого близкого нет")
+            names = self.st.setdefault("names", {})
+            orig = p.get("orig") or p.get("name") or ""
+            if name and name != orig:
+                names[pid] = name
+            else:
+                names.pop(pid, None)
+            base = dict(p, name=orig)
+            base.pop("orig", None)
+            self.st["people"] = [self._named([base])[0] if x.get("pid") == pid else x for x in self.st["people"]]
+            self._save()
+        self.host.emit("close", state=self.state())
         return self.state()
 
     def remove(self, pid):

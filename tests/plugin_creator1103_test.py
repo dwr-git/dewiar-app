@@ -257,6 +257,15 @@ ok(B.clean_theme({"--accent": "#ff8800", "--ink": "url(https://evil/x)", "--scen
 ART = "<html><head><title>Как спят киты</title></head><body><nav>Меню Реклама</nav><article><h1>Как спят киты</h1>" + "<p>Киты спят вертикально, по очереди отключая половину мозга.</p>" * 40 + "</article><footer>Подвал</footer></body></html>"
 ra = B.read_url(s, "https://example.org/kity", get=lambda u: (ART, "text/html", u))
 ok(ra["title"] == "Как спят киты" and "вертикально" in ra["text"] and "Реклама" not in ra["text"] and "Подвал" not in ra["text"], "читалка: статья без меню и подвала")
+# 04.11 (пользователь: «сколько ни засовывал ссылок — сплошной текст без разбивки на абзацы»): абзацы — через пустую строку,
+# и шаблон читалки делит текст на абзацы (в том числе прежний вид «\n » с пробелом)
+paras = [x for x in ra["text"].split("\n\n") if x.strip()]
+ok(len(paras) >= 40 and all(x == x.strip() for x in paras), f"читалка: абзацы статьи — через пустую строку ({len(paras)})")
+import subprocess as _sp
+_ui = (ROOT / "data/plugin_templates/reader/ui.html").read_text(encoding="utf-8")
+_m = re.search(r"const blocks = (String\(text[^;]+);", _ui)
+_js = "const text = " + json.dumps("Заголовок\n Первый абзац текста.\n Второй абзац.") + "; const b = " + _m.group(1) + "; console.log(b.length);"
+ok(_m and _sp.run(["node", "-e", _js], capture_output=True, text=True).stdout.strip() == "3", "шаблон читалки: «\\n » с пробелом — тоже новый абзац")
 for bad in ("file:///etc/passwd", "javascript:alert(1)", ""):
     try:
         B.read_url(s, bad, get=lambda u: (ART, "text/html", u)); ok(False, f"{bad!r} — нельзя")

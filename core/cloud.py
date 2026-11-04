@@ -91,13 +91,80 @@ def public(url, path, body=None, timeout=20):
     return d
 
 
-def join_send(url, name, contact, note="", device="компьютер", auto=False):
-    """Заявка на модели Dewiar без регистрации (cloud.php ?p=/join) -> {id, secret, status: new|ok, key?, text}.
-    auto — автоподключение при первом запуске (0.69): без контакта, сайт одобряет сам."""
+def join_send(url, name, contact, note="", device="компьютер", auto=False, ids=()):
+    """Заявка на модели Dewiar без регистрации (cloud.php ?p=/join) -> {id, secret, status: new|ok, key?, gift, gift_turns, text}.
+    auto — автоподключение при первом запуске (0.69): без контакта, сайт одобряет сам. ids — постоянные номера этого
+    компьютера (device_ids, 0.82.1): по ним сайт узнаёт его и вместо нового подарка возвращает прежний ключ."""
     body = {"name": name, "contact": contact, "note": note, "device": device}
+    if ids:
+        body["ids"] = list(ids)[:3]
     if auto:
         body["auto"] = 1
     return public(url, "/join", body)
+
+
+def _machine_id():
+    """Номер машины от системы (Linux — /etc/machine-id, Windows — MachineGuid, Mac — IOPlatformUUID) или ''."""
+    import sys
+    try:
+        if sys.platform.startswith("win"):
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography", 0,
+                                winreg.KEY_READ | getattr(winreg, "KEY_WOW64_64KEY", 0)) as k:
+                return str(winreg.QueryValueEx(k, "MachineGuid")[0])
+        if sys.platform == "darwin":
+            import subprocess
+            out = subprocess.run(["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"], capture_output=True, text=True, timeout=5).stdout
+            m = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', out)
+            return m.group(1) if m else ""
+        for f in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+            try:
+                t = open(f, encoding="ascii").read().strip()
+                if t:
+                    return t
+            except OSError:
+                continue
+    except Exception:  # noqa: BLE001 — нет номера машины — обойдёмся номером установки
+        pass
+    return ""
+
+
+def device_ids(settings):
+    """Постоянные номера этого компьютера для /join (0.82.1, владелец 04.11: «Убрать ключ» и переустановка давали новый
+    подарок): номер установки (cloud.dev — «Убрать ключ» его не трогает) и хэш номера машины (переживает переустановку).
+    Сам номер машины наружу не уходит — только sha256 с солью Dewiar."""
+    import hashlib
+    import secrets
+    dev = settings.get("cloud", "dev") or ""
+    if not re.fullmatch(r"pc-[0-9a-f]{24}", dev):
+        dev = "pc-" + secrets.token_hex(12)
+        settings.update({"cloud": {"dev": dev}})
+    out = [dev]
+    mid = _machine_id()
+    if mid:
+        out.append("mid-" + hashlib.sha256(("dewiar-join|" + mid).encode("utf-8")).hexdigest()[:40])
+    return out
+
+
+def gift_text(d):
+    """Честно, что с подарком после подключения (ответ /join): примерно сколько ответов и где пополнить."""
+    d = d or {}
+    if d.get("gift") == "again":
+        return "Подключено — вернулся ваш прежний ключ. Пополнить: студия → «Мозг» → «Пополнить»."
+    if d.get("gift") == "none":
+        return "Подключено. Подарок на этом компьютере уже был — пополнить: студия → «Мозг» → «Пополнить»."
+    if d.get("gift") == "busy":
+        return "Подключено. Сейчас подключается необычно много людей — подарок не выдан. Пополнить: студия → «Мозг» → «Пополнить»."
+    if d.get("gift") == "ip":
+        return "Подключено. С этого адреса сегодня подключалось много людей — подарок меньше. Пополнить: студия → «Мозг» → «Пополнить»."
+    n = int(d.get("gift_turns") or 0)
+    return ("Подключено. В подарок — " + (f"примерно {n} {plural_answers(n)}" if n else "несколько ответов")
+            + ", дальше — пополнение: студия → «Мозг» → «Пополнить».")
+
+
+def plural_answers(n):
+    a, b = n % 10, n % 100
+    return "ответ" if a == 1 and b != 11 else "ответа" if 2 <= a <= 4 and not 12 <= b <= 14 else "ответов"
 
 
 def join_status(url, jid, secret):
@@ -160,7 +227,8 @@ class Cloud:
         llm = {"profiles": profiles}
         if activate:
             llm["active"] = PROFILE_ID
-        self.s.update({"llm": llm, "cloud": {"key": key, "url": base_of(url), "account": bool(account), "stt_ok": bool(md.get("stt")), "tts_ok": bool(md.get("tts"))}})
+        self.s.update({"llm": llm, "cloud": {"key": key, "url": base_of(url), "account": bool(account), "stt_ok": bool(md.get("stt")), "tts_ok": bool(md.get("tts")),
+                                             "forgot": 0}})        # подключили снова — автоподключение опять можно (0.82.1)
         self._set(info)
         log.info("☁ Подключён ключ Dewiar Облака …%s (%s): заряд %s%%", key[-4:], info.get("label"), info.get("percent"))
         return dict(self.status(), model=m["id"], title=prof["title"], profile=PROFILE_ID)

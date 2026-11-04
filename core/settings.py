@@ -344,20 +344,11 @@ class Settings:
         """Через .tmp с правами 600 (в файле ключи API): файл не останется недописанным и не будет виден другим."""
         with self._lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_name("settings.json.tmp")
-            tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
-            os.chmod(tmp, 0o600)
             # №269 (пакет 27.10): антивирус (Касперский) на миг держит файл — WinError 5, и настройки не сохранялись.
-            # Пять попыток с растущей паузой; не вышло — исключение, как раньше
-            import time as _t
-            for i in range(5):
-                try:
-                    tmp.replace(self.path)
-                    break
-                except PermissionError:
-                    if i == 4:
-                        raise
-                    _t.sleep(0.1 * (i + 1))
+            # Пять попыток с растущей паузой; не вышло — исключение, как раньше. Пакет 04.11: и временный файл бывает занят
+            # (close.tmp у «Близких») — у каждой записи своё имя временного файла (atomicio)
+            import atomicio
+            atomicio.write_text(self.path, json.dumps(self.data, ensure_ascii=False, indent=2), mode=0o600)
 
     def get(self, *keys, default=None):
         """get("llm", "active") — копия значения по пути ключей; нет такого — default."""

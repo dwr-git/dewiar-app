@@ -25,6 +25,10 @@ const dvAgo = (ts) => {
   return "был " + new Date(ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 };
 const dvOn = (d) => d.me || Date.now() / 1000 - (d.seen || 0) < DV_ONLINE;
+/* состояние словами (04.11): телефон не исполнитель — «не на связи» о нём сбивает с толку. Телефон, что синхронизируется
+   с другим компьютером «Дома по Wi-Fi» (via — имя того компьютера, cloud.php sync_devs_via), — «на связи через „Дом“»;
+   давно не было — просто «был N мин назад». */
+const dvState = (x) => x.me ? "здесь" : x.via && dvOn(x) ? `на связи через «${x.via}»` : dvAgo(x.seen);
 
 async function loadMyDevices(fresh) {
   try { DV = await core.call("devices_get", { fresh: fresh !== false }); } catch (e) { toast(e.message, 3500); return; }
@@ -68,7 +72,7 @@ function dvRender() {
     const live = dvOn(x), app = x.app || "pc";
     return `<li class="${live ? "on" : ""}${x.me ? " me" : ""}"><span class="dv-ic ${escH(app)}"><svg viewBox="0 0 24 24">${DV_IC[app] || DV_IC.pc}</svg></span>`
       + `<div class="dv-row"><b>${escH(x.name || DV_APP[app])}${x.me ? '<em class="dv-chip">это устройство</em>' : ""}</b>`
-      + `<small>${DV_APP[app] || "Устройство"}${x.home ? " · по Wi-Fi" : ""}${x.ver ? " · Dewiar " + escH(x.ver) : ""} · <span class="dv-dot"></span>${x.me ? "здесь" : dvAgo(x.seen)}</small></div>`
+      + `<small>${DV_APP[app] || "Устройство"}${x.home ? " · по Wi-Fi" : ""}${x.ver ? " · Dewiar " + escH(x.ver) : ""} · <span class="dv-dot"></span>${escH(dvState(x))}</small></div>`
       + (x.me || app === "cloud" || x.home ? "" : `<button class="btn small" data-forget="${escH(x.id)}" type="button" title="Убрать из списка — выйдет на связь снова, появится снова">Убрать</button>`) + `</li>`;
   }).join("") || `<li class="dv-empty">Пока только это устройство. Подключите ещё одно кодом — и оно появится здесь.</li>`;
   $$("#dv-list [data-forget]").forEach(b => b.onclick = async () => {
@@ -109,7 +113,7 @@ function dvMap(devs) {
       + `<linearGradient id="dvt${i}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${tone[0]}"/><stop offset="1" stop-color="${tone[1]}"/></linearGradient>`;
     const path = `M${sx.toFixed(1)} ${sy.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
     lines += `<path d="${path}" class="dv-ln${on ? " on" : ""}" ${on ? `style="stroke:url(#dvg${i})"` : ""}/>` + (on ? `<path d="${path}" class="dv-spark" style="animation-delay:${(-i * 0.7).toFixed(1)}s"/>` : "");
-    const label = (d.name || DV_APP[app]).slice(0, 18), sub = d.me ? "это устройство" : on ? "на связи" : dvAgo(d.seen);
+    const label = (d.name || DV_APP[app]).slice(0, 18), sub = d.me ? "это устройство" : on ? (d.via ? `через «${d.via}»`.slice(0, 24) : "на связи") : dvAgo(d.seen);
     const below = y >= cy - 4, ly = below ? y + T / 2 + 18 : y - T / 2 - 22;
     nodes += `<g class="dv-node${on ? " on" : ""}${d.me ? " me" : ""}" transform="translate(${(x - T / 2).toFixed(1)} ${(y - T / 2).toFixed(1)})">`
       + (d.me ? `<circle cx="${T / 2}" cy="${T / 2 + 4}" r="${T * 0.62}" class="dv-halo" fill="${tone[0]}" filter="url(#dvblur)"/>` : "")
@@ -191,12 +195,13 @@ $("#dv-e2e").onchange = async (ev) => {
 
 /* «Телефон по Wi-Fi — без dewiar.pro» (0.59, core/homehub.py): переключатель — компьютер слушает домашнюю сеть; «Показать
    код» — QR со ссылкой dewiar://home (адреса, номер ключа, ключ) на 10 минут; подключился — телефон в списке («Отключить»
-   — ключ удалён). Ядро: homelan_get, homelan_set {on}, homelan_pair, homelan_forget {tid} (home_* — умный дом Яндекса). */
+   — ключ удалён). Ядро: homelan_get, homelan_set {on, tasks}, homelan_pair, homelan_forget {tid} (home_* — умный дом Яндекса). */
 let DV_HOME = null, DV_HTICK = 0, DV_HPOLL = 0;
 function dvHome(h) {
   if (!h || !$("#dv-home")) return;
   DV_HOME = h;
   $("#dv-home-on").checked = !!h.on; $("#dv-home").classList.toggle("on", !!h.on);
+  if ($("#dv-home-tasks")) { $("#dv-home-tasks").checked = h.tasks !== false; $("#dv-home-tasks-row").hidden = !h.on; }
   const t = h.at ? new Date(h.at * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
   const r = $("#dv-home-res");
   if (!r.dataset.keep) { r.className = "res" + (h.on && h.ok === false ? " bad" : "");
@@ -227,6 +232,9 @@ $("#dv-home-on").onchange = async (e) => {
   const on = e.target.checked;
   if (!on && !await ask("Выключить синхронизацию с телефоном по Wi-Fi? Телефоны перестанут получать изменения с этого компьютера. Данные останутся и там, и здесь.", { ok: "Выключить" })) { e.target.checked = true; return; }
   try { dvHome(await core.call("homelan_set", { on })); if (!on) dvHomeCodeHide(); } catch (x) { toast(x.message, 4000); e.target.checked = !on; }
+};
+if ($("#dv-home-tasks")) $("#dv-home-tasks").onchange = async (e) => {      // задания с телефона по Wi-Fi (рецензия 04.11)
+  try { dvHome(await core.call("homelan_set", { tasks: e.target.checked })); } catch (x) { toast(x.message, 4000); e.target.checked = !e.target.checked; }
 };
 $("#dv-home-go").onclick = async (ev) => {
   const r = $("#dv-home-res"); ev.target.disabled = true;

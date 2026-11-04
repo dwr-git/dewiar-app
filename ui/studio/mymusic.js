@@ -311,7 +311,7 @@ function rsNowCard(s, L) {
   box.classList.remove("idle");
   cv.classList.remove("art"); cv.style.backgroundImage = "";
   cv.innerHTML = rsLogo(L, "rd-logo big"); rsLogoFix(cv);
-  $("#mm-np").innerHTML = `<small>${L.paused ? "Радио на паузе" : "<span class=\"rd-live\"></span>В эфире"}</small><h2>${escH(L.name)}</h2><div class="ar">${escH(L.tags || "радио")}</div>`;
+  $("#mm-np").innerHTML = `<small>${L.paused ? "На паузе" : "<span class=\"rd-live\"></span>В эфире"}</small><h2>${escH(L.name)}</h2><div class="ar">${escH(L.tags || "радио")}</div>`;
   $("#mm-pp").classList.toggle("playing", !L.paused); $("#mm-pp").title = L.paused ? "Играть" : "Пауза";
   if ($("#mm-time")) $("#mm-time").hidden = true;
   $("#mm-prev").title = $("#mm-prev").ariaLabel = "Предыдущая станция"; $("#mm-next").title = $("#mm-next").ariaLabel = "Следующая станция";

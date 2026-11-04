@@ -646,7 +646,7 @@ class BrainMixin:
         """Заявка на модели Dewiar: одобрят (или само) — ключ подключится сам (_join_loop). -> ответ облака без секрета."""
         import cloud as C
         url = self.s.get("cloud", "url") or C.DEFAULT_URL
-        d = C.join_send(url, (name or "").strip(), (contact or "").strip(), (note or "").strip())
+        d = C.join_send(url, (name or "").strip(), (contact or "").strip(), (note or "").strip(), ids=C.device_ids(self.s))
         self.s.update({"cloud": {"join": {"id": d.get("id"), "secret": d.get("secret"), "url": url}}})
         if d.get("key"):
             self._join_done(d["key"], d)
@@ -686,12 +686,14 @@ class BrainMixin:
         r = self.cloud.connect(key, j.get("url", ""))
         self.s.update({"cloud": {"join": {"id": 0, "secret": "", "url": "", "auto": False}}})
         self._cloud_connected(r, "автоподключение" if auto else "заявка одобрена")
-        text = ("Я подключена к бесплатному мозгу Dewiar и готова. Спросите меня что-нибудь!" if auto else
+        import cloud as C
+        text = ("Я подключена к мозгу Dewiar и готова. Спросите меня что-нибудь!" if auto else
                 "Готово — Dewiar подключён" + (f" («{d.get('reply')}»)" if d.get("reply") else "") + ". Спроси меня что-нибудь!")
-        log.info("☁ %s — ключ подключён", "Автоподключение к Dewiar" if auto else "Заявка на Dewiar одобрена")
+        log.info("☁ %s — ключ подключён (%s)", "Автоподключение к Dewiar" if auto else "Заявка на Dewiar одобрена", d.get("gift") or "?")
         self.emit("cloud", **self.cloud.status())
-        self.push("Dewiar подключён", "Бесплатный мозг Dewiar подключён — можно разговаривать." if auto else
-                  "Заявку одобрили — модели Dewiar работают.", telegram=False)
+        # 0.82.1 (владелец 04.11: «много новых людей, а донатов нет»): не «бесплатный мозг», а честно — сколько примерно
+        # ответов в подарке и где пополнить (или что подарок на этом компьютере уже был)
+        self.push("Dewiar подключён", C.gift_text(d) if auto or d.get("gift") else "Заявку одобрили — модели Dewiar работают.", telegram=False)
         try:
             self.announce(text)
         except Exception:  # noqa: BLE001
@@ -704,6 +706,8 @@ class BrainMixin:
         (нет сети — попробуем при следующем вопросе). Выключатель — cloud.auto_join: false. -> True, если ключ уже здесь."""
         import cloud as C
         if self.s.get("cloud", "auto_join") is False or self.s.get("llm", "active") or self.s.get("cloud", "key"):
+            return False
+        if self.s.get("cloud", "forgot"):            # «Убрать ключ» (0.82.1): ключ не нужен — сами не подключаемся снова
             return False
         if self.account.logged_in() or (self.s.get("cloud", "join") or {}).get("id"):
             return False
@@ -718,7 +722,7 @@ class BrainMixin:
         try:
             self.s.update({"cloud": {"auto_tried": time.time()}})
             url = self.s.get("cloud", "url") or C.DEFAULT_URL
-            d = C.join_send(url, _who_am_i(), "", "", device=f"компьютер {OS_NAME}", auto=True)
+            d = C.join_send(url, _who_am_i(), "", "", device=f"компьютер {OS_NAME}", auto=True, ids=C.device_ids(self.s))
             self.s.update({"cloud": {"join": {"id": d.get("id"), "secret": d.get("secret"), "url": url, "auto": True}, "auto": True}})
             log.info("☁ Автоподключение (%s): заявка №%s — %s", why, d.get("id"), "ключ сразу" if d.get("key") else "ждёт одобрения")
             if d.get("key"):
@@ -731,7 +735,7 @@ class BrainMixin:
         return False
 
     def standby_join(self):
-        """«Если своя модель не отвечает — отвечать через Dewiar» (29.10): бесплатного мозга ещё нет — заявка, как при
+        """«Если своя модель не отвечает — отвечать через Dewiar» (29.10): мозга Dewiar ещё нет — заявка, как при
         автоподключении (сайт одобряет сам), но ключ подключается запасным: своя модель остаётся главной. -> True, если готово."""
         import cloud as C
         if (self.s.get("llm", "profiles") or {}).get(C.PROFILE_ID):
@@ -739,7 +743,7 @@ class BrainMixin:
         if self.s.get("cloud", "key") or (self.s.get("cloud", "join") or {}).get("id"):
             return False
         url = self.s.get("cloud", "url") or C.DEFAULT_URL
-        d = C.join_send(url, _who_am_i(), "", "", device=f"компьютер {OS_NAME}", auto=True)
+        d = C.join_send(url, _who_am_i(), "", "", device=f"компьютер {OS_NAME}", auto=True, ids=C.device_ids(self.s))
         self.s.update({"cloud": {"join": {"id": d.get("id"), "secret": d.get("secret"), "url": url, "auto": True, "standby": True}}})
         log.info("☁ Запасной мозг Dewiar: заявка №%s — %s", d.get("id"), "ключ сразу" if d.get("key") else "ждёт одобрения")
         if d.get("key"):

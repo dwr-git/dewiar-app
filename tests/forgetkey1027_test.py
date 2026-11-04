@@ -38,7 +38,7 @@ with sync_playwright() as p:
     r = pg.evaluate("""() => { const x = (S.llmSaved || []).find(y => y.forgot); x.forgot = Date.now() - 31 * 864e5; saveS(); return llmBack().some(y => y.forgot); }""")
     ok(r is False, "через 30 дней забытый ключ из списка уходит сам")
     app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
-    ok("ключ можно будет вернуть одной кнопкой: «Мозг» → «Прежние мозги» → «Вернуть»" in app and "Забыть ключ Dewiar …${k4}?" in app,
+    ok("Вернуть его — одной кнопкой: «Мозг» → «Прежние мозги» → «Вернуть»" in app and "Забыть ключ Dewiar …${k4}?" in app,
        "вопрос называет ключ и говорит, как вернуть")
     ok(not errs, f"без ошибок: {errs[:2]}")
     b.close()

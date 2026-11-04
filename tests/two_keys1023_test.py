@@ -30,7 +30,7 @@ try:
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.goto((www / "index.html").as_uri()); pg.wait_for_timeout(1200)
         btns = pg.evaluate("() => [...document.querySelectorAll('#card .start .btn')].map(b => b.textContent.trim())")
-        ok(len(btns) == 3 and btns[0] == "Подключить бесплатно" and "уже есть на компьютере" in btns[1], f"первый экран: бесплатно / уже есть — код / свой ключ: {btns}")
+        ok(len(btns) == 3 and btns[0] == "Подключить мозг Dewiar" and "уже есть на компьютере" in btns[1], f"первый экран: бесплатно / уже есть — код / свой ключ: {btns}")
         pg.evaluate("() => openBrain('join')"); pg.wait_for_timeout(700)
         ok(pg.evaluate("() => { const h = document.querySelector('.card.have'), j = document.getElementById('w-go'); return !!h && !!j && (h.compareDocumentPosition(j) & 4) > 0; }"),
            "над заявкой — «Dewiar уже есть на компьютере или другом телефоне?»")
