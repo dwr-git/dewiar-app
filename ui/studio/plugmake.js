@@ -38,6 +38,7 @@ function pmkRender() {
           <label class="pmk-code" title="По умолчанию плагин — только страница: без сети и без доступа к файлам">
             <span class="tg"><input type="checkbox" id="pmk-code"><i></i></span>
             <span><b>Своя программа на компьютере</b><small>Обычно не нужна. Только если плагину надо работать с файлами или интернетом.</small></span></label>
+          ${pmkWho("pmk-who")}
           <button class="btn primary pmk-go" id="pmk-go"><span>✦</span> Создать плагин</button>
         </div>
         <div class="pmk-run" id="pmk-run" hidden aria-live="polite">
@@ -91,6 +92,17 @@ function pmkBusy(on) {
     say(); PMK.tick = setInterval(say, 500);
   }
 }
+/* «Кто делает» (04.11, пользователь: «у Лиры модель слабее, а Патрик для таких дел настроен — не смог поручить ему»):
+   плагин пишет модель выбранного персонажа (студия → «Персонажи» → «Мозг»); по умолчанию — тот, кто сейчас говорит. */
+function pmkWho(id) {
+  const list = (typeof personas !== "undefined" ? personas : []).filter(p => p && p.id && p.installed !== false);
+  if (list.length < 2) return "";
+  const profs = (S.llm || {}).profiles || {}, cur = S.persona;
+  const brain = (p) => { try { return typeof brainOf === "function" && typeof brainName === "function" ? brainName(profs[brainOf(p.id)], brainOf(p.id)) : ""; } catch (e) { return ""; } };
+  return `<label class="pmk-who" for="${id}"><span>Кто делает</span><select id="${id}">${list.map(p =>
+    `<option value="${pmkEsc(p.id)}"${p.id === cur ? " selected" : ""}>${pmkEsc(p.name)}${brain(p) ? " — " + pmkEsc(brain(p)) : ""}</option>`).join("")}</select></label>`;
+}
+function pmkWhoVal(id) { const el = document.getElementById(id); return el ? el.value : ""; }
 function pmkErr(msg) { const e = $("#pmk-err"); if (!e) return; e.hidden = !msg; e.innerHTML = msg ? `<b>Не получилось.</b> ${pmkEsc(msg)}` : ""; }
 async function pmkMake() {
   const q = $("#pmk-q"), text = q.value.trim();
@@ -99,7 +111,7 @@ async function pmkMake() {
   if (PMK.busy) return;
   PMK.busy = true; PMK.t0 = Date.now(); pmkBusy(true);
   let r;
-  try { r = await core.call("plugin_make", { describe: text, code: !!($("#pmk-code") || {}).checked }); }
+  try { r = await core.call("plugin_make", { describe: text, code: !!($("#pmk-code") || {}).checked, by: pmkWhoVal("pmk-who") }); }
   catch (e) { PMK.busy = false; pmkBusy(false); pmkErr(e.message); return; }
   PMK.busy = false; pmkBusy(false);
   if ($("#pmk-q")) $("#pmk-q").value = "";

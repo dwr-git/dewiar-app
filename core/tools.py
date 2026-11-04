@@ -2716,6 +2716,18 @@ def _maker(ctx):
     return M
 
 
+def _maker_by(M, a):
+    """«Пусть Патрик сделает» — by: имя персонажа -> его id (модель персонажа); пусто — тот, кто отвечает."""
+    name = str((a or {}).get("by") or "").strip()
+    if not name:
+        return None
+    h = M.host
+    pid = h.find_persona(name) if h is not None and hasattr(h, "find_persona") else None
+    if not pid:
+        raise ToolError(f"Персонажа «{name}» нет — назови одного из своих персонажей или оставь пустым.")
+    return pid
+
+
 def _plugin_done(ctx, r, open_=True):
     """Плагин сделан или изменён: ядро — навыки, серверы, событие plugin_made (студия открывает его страницу, в «Чате» под
     ответом — кнопка «Открыть»)."""
@@ -2736,7 +2748,9 @@ def t_plugin_create(a, ctx):
     if len(describe) < 6:
         raise ToolError("Спроси одной фразой, что должен делать плагин: что на странице и зачем.")
     try:
-        r = M.create(describe, code=bool(a.get("code")), name=str(a.get("name") or ""))
+        with M.using(_maker_by(M, a)):
+            r = M.create(describe, code=bool(a.get("code")), name=str(a.get("name") or ""))
+            r["by"] = M.who()
     except MakerError as e:
         raise ToolError(str(e)) from e
     _plugin_done(ctx, r)
@@ -2756,7 +2770,9 @@ def t_plugin_change(a, ctx):
     req = " ".join(str(a.get("request") or "").split())
     try:
         pid = M.find(a.get("plugin") or "")
-        r = M.undo(pid) if a.get("undo") or not req else M.change(pid, req, code=bool(a.get("code")))
+        with M.using(_maker_by(M, a)):
+            r = M.undo(pid) if a.get("undo") or not req else M.change(pid, req, code=bool(a.get("code")))
+            r["by"] = M.who()
     except MakerError as e:
         raise ToolError(str(e)) from e
     _plugin_done(ctx, r)
@@ -3208,7 +3224,9 @@ def t_start_task(a, ctx):
         if r is not None:
             return r
     try:
-        t = _tm(ctx).create(a.get("title") or goal[:50], goal, a.get("project") or "")
+        fl = a.get("folders") or []
+        fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
+        t = _tm(ctx).create(a.get("title") or goal[:50], goal, a.get("project") or "", **({"folders": fl} if fl else {}))
     except ValueError as e:
         raise ToolError(str(e)) from e
     return (f"Задача «{t.title}» запущена в фоне. План и журнал — в папке «Задачи» и в студии. Результата ЕЩЁ НЕТ — он "
@@ -3629,13 +3647,18 @@ TOOLS = {
                       "переключатель темы», «панель расходов по категориям», «таймер помидора». Плагин сразу появится в меню "
                       "«Плагины» и откроется. describe — всё, что человек хочет, его словами (что на странице, какие данные, как "
                       "выглядит); name — если назвал. code — true ТОЛЬКО если человек сам просит, чтобы плагин запускал программу на "
-                      "компьютере (файлы, сеть, расчёты) — будет вопрос «Выполнить?». НЕ пиши HTML и код в ответе — вызывай.",
-                      S({"describe": {"type": "string"}, "name": {"type": "string"}, "code": {"type": "boolean"}}, ["describe"]),
+                      "компьютере (файлы, сеть, расчёты) — будет вопрос «Выполнить?». НЕ пиши HTML и код в ответе — вызывай. "
+                      "by — имя персонажа, если человек просит, чтобы плагин сделал именно он («пусть Патрик сделает»); "
+                      "пусто — делаешь ты своей моделью.",
+                      S({"describe": {"type": "string"}, "name": {"type": "string"}, "code": {"type": "boolean"}, "by": {"type": "string"}}, ["describe"]),
                       "safe", t_plugin_create, "Плагины: сделать"),
     "plugin_change": ("Изменить плагин, который сделала Лира, словами — новая версия: «сделай крупнее», «добавь график по неделям», "
                       "«поменяй цвета», «верни как было» (undo — откат на шаг). request — просьба словами человека; plugin — "
-                      "название плагина (пусто — последний); code — только если человек просит свою программу на компьютере.",
-                      S({"request": {"type": "string"}, "plugin": {"type": "string"}, "undo": {"type": "boolean"}, "code": {"type": "boolean"}}),
+                      "название плагина (пусто — последний); code — только если человек просит свою программу на компьютере. "
+                      "by — имя персонажа, если человек просит, чтобы правил именно он («Патрик, добавь кнопку…» к другому "
+                      "персонажу); пусто — правишь ты своей моделью.",
+                      S({"request": {"type": "string"}, "plugin": {"type": "string"}, "undo": {"type": "boolean"}, "code": {"type": "boolean"},
+                         "by": {"type": "string"}}),
                       "safe", t_plugin_change, "Плагины: изменить"),
     "close_read": ("Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей»; группа — «что ответили в группе "
                    "Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.",
@@ -3691,6 +3714,7 @@ TOOLS = {
                    "кодом (необязательно).",
                    S({"title": {"type": "string"}, "goal": {"type": "string", "description": "подробная цель"},
                       "project": {"type": "string"},
+                      "folders": {"type": "array", "items": {"type": "string"}, "description": "папки пользователя, с которыми работать (полные пути): задача читает их без вопросов, меняет — с разрешения"},
                       "on": {"type": "string", "description": "на каком своём компьютере («на рабочем», «Ноутбук») — имя из списка компьютеров; пусто — здесь"},
                       "if_off": {"type": "string", "enum": ["", "wait", "cloud"], "description": "тот компьютер не на связи: wait — сделать, когда включится; cloud — сейчас в облаке Dewiar (только если пользователь так ответил)"}},
                      ["goal"]), "safe", t_start_task, "Фоновая задача"),
@@ -3950,6 +3974,27 @@ class Toolbox:
                 if not any(fp == r or r in fp.parents for r in roots):
                     return (f"«{fp.name}» — вне папки ассистента, а в «Безопасности» стоит замок «Файлы: только папка Dewiar». "
                             "Снять его можно там же"), False, None
+        if name == "start_task" and (args or {}).get("folders"):
+            # рецензия 0.83: папки задаче даёт ЧЕЛОВЕК. Модель просит их в start_task — только после «да» с перечнем папок;
+            # корень диска и домашняя папка целиком — нельзя; детский режим и замок «только папка Dewiar» — нельзя вовсе
+            fl = args["folders"]
+            fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
+            kids = self.hooks.get("kids")
+            if kids is not None and kids.on():
+                return "в детском режиме задача не получает папки компьютера", False, None
+            home = Path.home().resolve()
+            roots = [Path(w).expanduser().resolve() for w in guard.WORKSPACE]
+            lock = s is not None and (s.get("privacy") or {}).get("files") == "folder"
+            for x in fl:
+                fp = Path(x).expanduser().resolve()
+                if fp == Path(fp.anchor) or fp == home or fp in home.parents:
+                    return (f"«{fp}» — это весь диск или вся домашняя папка; задаче можно дать только конкретную папку "
+                            "(например, ~/Документы/Отчёты)"), False, None
+                if lock and not any(fp == r or r in fp.parents for r in roots):
+                    return (f"«{fp}» — вне папки ассистента, а в «Безопасности» стоит замок «Файлы: только папка Dewiar». "
+                            "Снять его можно там же"), False, None
+            return None, True, ("Фоновая задача получит доступ к папкам: " + "; ".join(str(Path(x).expanduser()) for x in fl)
+                                + ". Читать их она будет без вопросов, менять — только с вашего разрешения. Разрешить?")
         if name in ("plugin_create", "plugin_change") and (args or {}).get("code"):
             # своя программа в плагине — только с явного «да» человека (по умолчанию плагин — страница и мост)
             what = (args.get("name") or args.get("plugin") or "").strip()

@@ -129,84 +129,8 @@ def check_syntax(p, rel):
     return ""
 
 
-def _norm_line(ln):
-    return " ".join(ln.split())
-
-
-def fuzzy_find(text, old):
-    """Найти old в text, не глядя на отступы и пробелы внутри строк. -> (начало, конец, сдвиг отступа) или None.
-    Сдвиг — сколько пробелов добавить к строкам new (у модели отступ меньше, чем в файле) или убрать (отрицательный).
-    Только если совпадение одно."""
-    want = [_norm_line(x) for x in old.strip("\n").split("\n")]
-    while want and not want[-1]:
-        want.pop()
-    if not want or not any(want):
-        return None
-    lines = text.split("\n")
-    hits = []
-    for i in range(len(lines) - len(want) + 1):
-        if all(_norm_line(lines[i + k]) == want[k] for k in range(len(want))):
-            hits.append(i)
-            if len(hits) > 1:
-                return None
-    if not hits:
-        return None
-    i = hits[0]
-    start = sum(len(x) + 1 for x in lines[:i])
-    end = start + sum(len(x) + 1 for x in lines[i:i + len(want)]) - 1
-    return start, end, lines[i:i + len(want)]
-
-
-def reindent(old, file_lines, new):
-    """Отступы new — как в файле: строки new сопоставляются со строками old (difflib), и каждая берёт отступ своей
-    строки файла плюс свою разницу с old; вставленные — от предыдущей строки. Так правка с «плоскими» отступами
-    модели ложится в файл с правильной вложенностью."""
-    ind = lambda x: len(x) - len(x.lstrip())                       # noqa: E731
-    old_l = old.strip("\n").split("\n")
-    while old_l and not old_l[-1].strip():
-        old_l.pop()
-    new_l = new.strip("\n").split("\n")
-    sm = difflib.SequenceMatcher(None, [_norm_line(x) for x in old_l], [_norm_line(x) for x in new_l], autojunk=False)
-    pair = {}
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag in ("equal", "replace"):
-            for k in range(min(i2 - i1, j2 - j1)):
-                pair[j1 + k] = i1 + k
-    out, prev = [], None
-    for j, ln in enumerate(new_l):
-        if not ln.strip():
-            out.append("")
-            continue
-        if j in pair and pair[j] < len(file_lines):
-            i = pair[j]
-            d = ind(file_lines[i]) + ind(ln) - ind(old_l[i])
-        elif prev:
-            d = prev[1] + ind(ln) - prev[0]
-        else:
-            d = ind(file_lines[0]) + ind(ln) - ind(old_l[0])
-        d = max(0, d)
-        out.append(" " * d + ln.lstrip())
-        prev = (ind(ln), d)
-    return "\n".join(out)
-
-
-def nearest(text, old):
-    """Подсказка: самый похожий кусок файла с номерами строк (когда фрагмент не нашёлся)."""
-    want = old.strip("\n").split("\n")
-    lines = text.split("\n")
-    if not lines or not want:
-        return ""
-    n = len(want)
-    best, at = 0.0, 0
-    key = "\n".join(_norm_line(x) for x in want)
-    for i in range(0, max(1, len(lines) - n + 1)):
-        r = difflib.SequenceMatcher(None, key, "\n".join(_norm_line(x) for x in lines[i:i + n])).quick_ratio()
-        if r > best:
-            best, at = r, i
-    if best < 0.5:
-        return " Похожего куска нет — прочитай файл (code_read) заново."
-    body = "\n".join(f"{j + 1:5d}  {lines[j]}" for j in range(at, min(len(lines), at + n)))
-    return f" Самый похожий кусок (строки {at + 1}–{at + n}):\n{body}"
+# неточная правка куском — общий модуль textedit (им же пользуется file_edit задач, выпуск 2 «Больших задач»)
+from textedit import _norm_line, fuzzy_find, nearest, reindent  # noqa: E402,F401
 
 
 def run_hint(command, out, code, cwd):
@@ -458,11 +382,14 @@ class CodeWork:
                 raise CodeError("фрагмент не найден — скопируй кусок точно, с отступами." + nearest(text, old))
             a_, b_, file_lines = span
             new = reindent(old, file_lines, new)
-            old = text[a_:b_]
             note = " (фрагмент найден без учёта отступов и пробелов — проверь результат)"
+        else:
+            a_ = text.find(old)
+            b_ = a_ + len(old)
         self._snap(rel, p)
-        p.write_text(text.replace(old, new, 1), encoding="utf-8")
-        at = text.find(old)
+        # рецензия 0.83: заменяется найденное место, а не первое вхождение того же текста
+        p.write_text(text[:a_] + new + text[b_:], encoding="utf-8")
+        at = a_
         line = text[:at].count("\n") + 1
         return f"Изменён {rel}, строки {line}–{line + new.count(chr(10))}{note}" + check_syntax(p, rel)
 

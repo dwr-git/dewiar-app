@@ -96,8 +96,7 @@ function devWays(c) {
       ${tab("cloud", DEV_IC.cloud, "Через dewiar.pro", "везде, где есть интернет")}${tab("home", DEV_IC.home, "Дома по Wi-Fi", "без интернета")}</div>
     <p class="hint dvwnote">${way === "home" ? "Телефон связывается прямо с компьютером, когда вы дома в одной сети. В интернет ничего не уходит, обмен зашифрован ключом из кода. Вне дома правки копятся здесь и уходят, когда вернётесь."
       : "Телефоны и компьютеры связываются через ваш вход в Dewiar — синхронизация идёт в дороге, на работе и дома."}</p>`
-    + (way === "home" ? devHomeHtml(c) : c && c.home ? `<div class="card"><p class="hint" style="margin:0">Сейчас телефон связан с «${esc((S.sync.home || {}).n || "компьютером")}» по Wi-Fi. Перейти на dewiar.pro — во вкладке «Дома по Wi-Fi»: «Отключить», потом подключитесь кодом здесь.</p></div>`
-      : devGiveHtml(c) + devCloudMore(c));
+    + (way === "home" ? devHomeHtml(c) : devGiveHtml(c) + devCloudMore(c));   // 04.11: вход в Dewiar и Wi-Fi — вместе (облако главное, Wi-Fi запасной)
 }
 function devCloudMore(c) {                          // «Ввести код» и «Мозги» — облачное; по Wi-Fi не нужны
   return `<h3>Ввести код</h3><div class="card" id="dv-take"><p class="hint" style="margin:0 0 10px">Dewiar уже есть на другом устройстве? Там: «Устройства» → «Подключить ещё устройство». ${devOwnBrain() ? "Ваша модель здесь останется главной." : ""}</p>
@@ -110,9 +109,11 @@ function devCloudMore(c) {                          // «Ввести код» �
 function devHomeHtml(c) {
   const h = S.sync && S.sync.home;
   if (D.web) return "";                                   // браузер (https) не может ходить на компьютер по http — только приложение
-  if (c && c.home) return `<div class="card dvhome on"><small class="hint" style="margin:0">Компьютер дома</small><div class="row2"><div><b>${esc(h.n || "Компьютер")}</b>
-      <small class="hint" style="display:block;margin:2px 0 0">напрямую по Wi-Fi, без dewiar.pro</small></div>
-      <button class="btn" id="dv-home-off">Отключить</button></div></div>`;
+  const cl = !!syncCred(), hs = (syncStatus.chans || []).find(x => x.home);
+  if (homeOn()) return `<div class="card dvhome on"><small class="hint" style="margin:0">Компьютер дома</small><div class="row2"><div><b>${esc(h.n || "Компьютер")}</b>
+      <small class="hint" style="display:block;margin:2px 0 0">${cl ? "дома — ещё и напрямую по Wi-Fi; главное — через dewiar.pro" : "напрямую по Wi-Fi, без dewiar.pro"}</small></div>
+      <button class="btn" id="dv-home-off">Отключить</button></div>
+      ${cl && hs && hs.ok === false ? `<p class="hint" style="margin:8px 0 0">Сейчас телефон не в одной сети с «${esc(h.n || "компьютером")}» — всё идёт через dewiar.pro.</p>` : ""}</div>`;
   return `<div class="card dvhome"><p class="hint" style="margin:0 0 10px">На компьютере: студия → «Устройства» → «Дома по Wi-Fi» → «Показать код для телефона».
       Телефон и компьютер — в одном Wi-Fi.</p>
       ${window.DewiarCodes && window.ZXing ? `<button class="btn w" id="dv-home-scan">Сканировать код компьютера</button>` : ""}</div>`;

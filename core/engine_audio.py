@@ -659,6 +659,24 @@ class AudioMixin:
             self._mic_silent(exact=st["all"])
         return None
 
+    def _default_mic_moved(self):
+        """Идея №134 (04.11): выбрано «Системный по умолчанию», Bluetooth-гарнитуру переподключили — Windows снова сделала её
+        главной, а слух остался на прежнем микрофоне («не слышит, пока не поменяешь туда-обратно»). Раз в 3 с сверяем, какой
+        микрофон сейчас по умолчанию и сколько их; сменился — переоткрываем слух (только в покое: ответ не обрываем).
+        -> True, если пора переоткрыть."""
+        cap = getattr(self, "capture", None)
+        if cap is None or getattr(cap, "device", "") or getattr(cap, "wav_path", None) or getattr(cap, "def_sig", None) is None:
+            return False
+        if getattr(self, "state", "idle") in ("speaking", "thinking", "listening") or getattr(self, "hold", None) is not None:
+            return False
+        from audio_io import win_default_input
+        now_sig = win_default_input()
+        if now_sig is None or now_sig == cap.def_sig:
+            return False
+        log.info("🎧 Микрофон Windows по умолчанию сменился: %s → %s — слушаю новый", cap.def_sig[1] or "?", now_sig[1] or "?")
+        cap.def_sig = now_sig
+        return True
+
     def _listen(self):
         """Главный цикл слуха, кадр за кадром: проверка «микрофон молчит», полудуплекс во время ответа,
         слово запуска и «стоп» (быстрый слух Vosk), VAD — начало и конец фразы, перебивание речью поверх ответа.
@@ -671,7 +689,7 @@ class AudioMixin:
         echo = collections.deque(maxlen=90)             # громкость остаточного эха своего голоса (~3 с)
         half_echo = collections.deque(maxlen=100)       # полудуплекс: громкость своего голоса в микрофоне (~3 с)
         zst = {"since": None, "told": False, "all": True}      # поток идёт, а в нём нули или почти нули (_mic_zero_step)
-        sleep_chk = time.monotonic()
+        sleep_chk = defmic_chk = time.monotonic()
         while not self.stopping.is_set() and not self.restart_audio.is_set():
             frame = self.capture.read()
             if not frame:
@@ -681,6 +699,11 @@ class AudioMixin:
                 sleep_chk = now
                 if self._sleep_due():
                     self._mic_asleep = True            # отпустить микрофон: компьютер может уснуть (_audio_loop ждёт мышь)
+                    return
+            if now - defmic_chk > 3:
+                defmic_chk = now
+                if self._default_mic_moved():
+                    self.restart_audio.set()           # №134: Windows сменила микрофон по умолчанию — переоткрыть на новый
                     return
             self._mic_ring.append(frame)                # 0,4 с в памяти — удержание не теряет начало фразы (не распознаётся)
             if self.muted and self.hold is None and not self._mute_pass:

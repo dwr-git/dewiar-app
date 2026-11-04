@@ -257,10 +257,16 @@ SectionEnd
   System::Call 'kernel32::WideCharToMultiByte(i 20127, i 0, w "${PATH}", i -1, p 0, i 0, p 0, *i 0 R9) i .R8'
 !macroend
 
+; №537 (04.11, «ругается на путь»): человек обновлялся установщиком с сайта поверх Dewiar, который давно стоит и работает
+; в папке профиля с русским именем, — и получал страшный вопрос. Dewiar уже здесь — не спрашиваем: ставим поверх, как обновление.
+; Новая папка с русскими буквами — вопрос понятнее: что будет, что нажать.
 Function DirLeave
+  ${If} ${FileExists} "$INSTDIR\app\ui\app.py"
+    Return
+  ${EndIf}
   !insertmacro NONASCII "$INSTDIR"
   ${If} $R9 <> 0
-    MessageBox MB_YESNO|MB_ICONEXCLAMATION "В пути к папке есть русские буквы:$\r$\n$INSTDIR$\r$\n$\r$\nЧасть библиотек речи такие пути не открывает — голоса и слух могут не заработать. Лучше выбрать папку латиницей, например C:\Dewiar.$\r$\n$\r$\nВсё равно ставить сюда?" /SD IDYES IDYES +2
+    MessageBox MB_YESNO|MB_ICONQUESTION "В пути к папке есть русские буквы:$\r$\n$INSTDIR$\r$\n$\r$\nDewiar будет работать, но надёжнее папка латиницей — например, C:\Dewiar или D:\Dewiar: часть библиотек речи не открывает файлы по пути с русскими буквами; Dewiar это обходит, но с латиницей надёжнее.$\r$\n$\r$\n«Да» — ставить сюда.$\r$\n«Нет» — выбрать другую папку." /SD IDYES IDYES +2
     Abort
   ${EndIf}
 FunctionEnd

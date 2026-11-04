@@ -698,7 +698,7 @@
       <span class="fpath" id="f-root"></span>
       <button class="btn primary" id="f-open">Открыть в файлах</button>
       <button class="btn" id="f-reload">Обновить</button>
-      <button class="btn" id="f-move">Другая папка…</button>
+      <button class="btn" id="f-move" title="Перенести папку ассистента на другой диск или в другую папку — со всем содержимым">Перенести…</button>
     </div>
     <div class="fsync" id="f-sync"></div>
     <div class="fbox">
@@ -1529,6 +1529,23 @@
         <div class="dh"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M18 8v6M15 11h6"/></svg><h3>Рефералы</h3><span class="dws" id="dws-ref">—</span></div>
         <p class="hint" id="dw-ref-text">Поделитесь Dewiar — подарки талерами и вам, и другу.</p>
         <div class="actions" style="margin:0"><button class="btn primary" id="dw-ref-open">Открыть «Рефералы»</button></div>
+      </div>
+      <div class="dwc" id="dwc-lnet">
+        <div class="dh"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="17.5" r="2.2"/><circle cx="19" cy="17.5" r="2.2"/><path d="M10.9 6.9 6.1 15.6M13.1 6.9l4.8 8.7M7.3 17.5h9.4"/></svg><h3>Сеть Лиры</h3><span class="dws" id="dws-lnet">—</span></div>
+        <p class="hint">Люди отдают свои видеокарты — и на общие вопросы иногда отвечает компьютер другого человека, а он за это получает талеры. Правила, курс и допуск задаёт только владелец Dewiar; правила подписаны сайтом Dewiar, ключ — у владельца.</p>
+        <div class="switch"><div>Пускать мои общие вопросы в Сеть Лиры<span>Узлу уходит только текст самого вопроса вроде «почему небо голубое» — без истории разговора, памяти, вашего ключа и имени аккаунта. Вопросы, похожие на личные (память, заметки, письма, деньги, близкие, здоровье, суд, адрес, имена людей и городов посреди фразы), фото, детский режим и «Для старших» — только серверу Dewiar. Телефоны и почты в вопросе заменяются метками, но фильтр узнаёт не всё — личного в таких вопросах лучше не писать. Ответ узла со ссылками, номерами или просьбами о деньгах не принимается, а по его ответу программа выполняет только безопасные действия (поиск, погода, время). Выключено — всё отвечает сервер Dewiar.</span></div><label class="tg"><input type="checkbox" id="dw-ln-share"><i></i></label></div>
+        <p class="hint" id="dw-ln-rules" style="margin:8px 0 0"></p>
+        <div id="dw-ln-mine" hidden>
+          <div class="dw-kv" id="dw-ln-kv" style="margin-top:10px"></div>
+          <div class="switch" style="border:0;padding:8px 0 0"><div>Не брать задания<span>Пауза для всех моих узлов — например, когда компьютер нужен для игр. Снимите — узел снова отвечает.</span></div><label class="tg"><input type="checkbox" id="dw-ln-pause"><i></i></label></div>
+        </div>
+        <details id="dw-ln-give" style="margin-top:10px"><summary class="hint" style="cursor:pointer">Поделиться мощностью — подключить свою видеокарту</summary>
+          <ul class="dw-steps" id="dw-ln-needs" style="margin:8px 0 8px 18px"></ul>
+          <div class="actions" style="margin:0"><button class="btn primary" id="dw-ln-inv">Получить команду</button><span style="flex:1"></span><button class="btn" id="dw-ln-trust" hidden>Доверять новому ключу</button></div>
+          <div class="dw-path" id="dw-ln-cmd" hidden style="margin-top:8px;user-select:all;word-break:break-all"></div>
+          <div class="actions" id="dw-ln-cmd-row" hidden style="margin:6px 0 0"><button class="btn" id="dw-ln-copy">Скопировать команду</button><span class="hint" id="dw-ln-exp" style="margin:0"></span></div>
+        </details>
+        <p class="res" id="dw-ln-res"></p>
       </div>
     </div>
     <details class="dw-more" id="dw-more">

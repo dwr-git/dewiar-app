@@ -19,7 +19,7 @@ from pathlib import Path
 
 import quality as Q
 from codework import CodeError, CodeWork
-from llm import LLMError, prompt_tools_mode, stream_chat, stream_events, tool_turn_messages
+from llm import LLMError, ctx_full, est_tokens, prompt_tools_mode, stream_chat, stream_events, take_usage, tool_turn_messages
 
 log = logging.getLogger("dewiar.tasks")
 
@@ -29,7 +29,18 @@ ACTIVE = ("running", "waiting")
 ALIVE = ("running", "waiting", "sleeping")         # задача ещё в работе: sleeping проснётся сама
 STATUS_RU = {"running": "выполняется", "waiting": "ждёт ответа", "paused": "на паузе", "done": "готово",
              "failed": "не получилось", "stopped": "остановлена", "sleeping": "ждёт и вернётся"}
-BUDGET = int(os.environ.get("DEWIAR_TASK_BUDGET") or 60000)     # сколько разговора задачи держать в памяти (символов)
+BUDGET = int(os.environ.get("DEWIAR_TASK_BUDGET") or 60000)     # потолок разговора задачи в памяти (символов); меньше —
+                                                   # если не позволяет окно модели (_budget)
+# «Большие задачи», выпуск 1 (docs/HARNESS.md): запрос задачи подстраивается под окно модели, начало запроса не меняется
+WIN_DEFAULT = int(os.environ.get("DEWIAR_TASK_WINDOW") or 65536)   # окно модели, если сервер его не называет
+TINY_WIN = 6144                                    # окно меньше — описания инструментов до первой фразы, набор короче
+TINY_DROP = {"notes", "notify", "wait", "download", "file_glob"}   # …без этих (они — через find_tool)
+LIGHT_WIN = 16384                                  # окно не больше — «лёгкий режим»: короче подсказка, без уроков и частей
+COMPACT_AT = float(os.environ.get("DEWIAR_TASK_COMPACT_AT") or 0.65)   # весь запрос больше этой доли окна — сжать историю
+TRIM_AFTER = int(os.environ.get("DEWIAR_TASK_TRIM_AFTER") or 12)   # результаты старше стольких шагов — заглушкой
+TRIM_EVERY = 6                                     # чистить пачкой раз в столько шагов: каждая чистка — промах кэша
+OUT_MAX = 4000                                     # вывод инструмента длиннее (знаков) — целиком в _out/, в историю — начало
+CTX_TRIES = 3                                      # «не хватило окна» подряд — столько раз сжимаем и повторяем, потом сбой
 RETRY_MIN = tuple(float(x) for x in (os.environ.get("DEWIAR_TASK_RETRY") or "2,5,15,30").split(","))  # сбой модели/сети — повтор через N минут
 RESUME_SEC = float(os.environ.get("DEWIAR_TASK_RESUME_SEC") or 20)   # после запуска программы — продолжить прерванные
 CYCLES = int(os.environ.get("DEWIAR_TASK_CYCLES") or 0)   # кругов по max_steps шагов подряд (0 — из настроек tasks.cycles,
@@ -46,7 +57,7 @@ CALL_MARK_RX = re.compile(r'"(?:tool_name|tool|name|function)"\s*:|<[\s｜|▁/]
 IDLE_CHANCE = ("Ты уже несколько раз подряд ответил(а) текстом, не выполнив ни одного действия. Сейчас одно из двух:\n"
                "— цель достигнута — вызови finish: в summary итог (что сделано, где результат, ссылки); отчёт пишется в "
                "finish, а не текстом ответа;\n— цель не достигнута — сделай следующий пункт плана инструментом (web_search, "
-               "read_page, write_file, remember…), одним вызовом, без пересказа плана.\nНе пиши ответ текстом без вызова.")
+               "read_webpage, write_file, remember…), одним вызовом, без пересказа плана.\nНе пиши ответ текстом без вызова.")
 HANG_SEC = float(os.environ.get("DEWIAR_TASK_HANG_SEC") or 600)     # шаг молчит столько (модель) — «задача не отвечает»
 HANG_TOOL_SEC = float(os.environ.get("DEWIAR_TASK_HANG_TOOL_SEC") or 1800)   # …а инструмент (скачивание, код) — столько
 PROGRESS_FIRST = float(os.environ.get("DEWIAR_TASK_PROGRESS_FIRST") or 600)  # долгая задача: первая весточка «как идёт»
@@ -96,7 +107,7 @@ PART_TOOLS = {
                                                                                             "goal": {"type": "string"}},
                                                            "required": ["goal"]}}}, ["parts"])),
     "wait_parts": ("Дождаться частей, розданных spawn_parts, и получить их итоги; файлы частей появятся в parts/<название>/ "
-                   "твоей папки (read_file, run_python). minutes — сколько ждать сейчас (по умолчанию 60).",
+                   "твоей папки (file_read, run_python). minutes — сколько ждать сейчас (по умолчанию 60).",
                    S({"minutes": {"type": "number"}})),
 }
 # «Мастерская»: задача сама делает файлы-результаты (страница, дашборд, презентация, таблица, расшифровка) и показывает
@@ -107,7 +118,21 @@ WORK_TOOLS = {
                    "относительный, результаты — в outputs/ (например outputs/app.html). Большой файл пиши частями: "
                    "append=true дописывает в конец. HTML/CSS/JS пиши обычным текстом здесь, а не строкой внутри Python.",
                    S({"path": {"type": "string"}, "content": {"type": "string"}, "append": {"type": "boolean"}}, ["path", "content"])),
-    "read_file": ("Прочитать файл из папки задачи (по 400 строк; start/end — диапазон строк).",
+    "file_read": ("Прочитать текстовый файл с номерами строк: из папки задачи (путь относительный) или из папок, которые "
+                  "человек дал задаче (полный путь). Кусками до ~4000 знаков; start/end — диапазон строк.",
+                  S({"path": {"type": "string"}, "start": {"type": "integer"}, "end": {"type": "integer"}}, ["path"])),
+    "file_edit": ("Правка файла куском: old — точный кусок из файла (лучше с соседней строкой, чтобы был единственным), new — "
+                  "чем заменить; replace_all=true — заменить все вхождения. Не нужно переписывать файл целиком. После правки "
+                  ".py, .json, .html проверяются: сломанный синтаксис не сохраняется.",
+                  S({"path": {"type": "string"}, "old": {"type": "string"}, "new": {"type": "string"}, "replace_all": {"type": "boolean"}},
+                    ["path", "old", "new"])),
+    "file_grep": ("Поиск по содержимому файлов (регулярное выражение, без учёта регистра): в папке задачи или в данной ей "
+                  "папке (path — полный путь или подпапка); glob — какие файлы (*.csv, **/*.py). Ответ — файл:строка: текст.",
+                  S({"pattern": {"type": "string"}, "path": {"type": "string"}, "glob": {"type": "string"}}, ["pattern"])),
+    "file_glob": ("Список файлов по шаблону (**/*.pdf, отчёты/*.md, *) с размерами: в папке задачи или в данной ей папке "
+                  "(path). Вместо обхода папок по одной.",
+                  S({"pattern": {"type": "string"}, "path": {"type": "string"}})),
+    "read_file": ("То же, что file_read (старое имя).",
                   S({"path": {"type": "string"}, "start": {"type": "integer"}, "end": {"type": "integer"}}, ["path"])),
     "list_files": ("Файлы в папке задачи (что уже сделано, что скачано).", S({})),
     "run_python": ("Выполнить код Python в папке задачи (текущая папка = папка задачи): расчёты, обработка данных, "
@@ -147,14 +172,29 @@ CODE_TOOLS = {
     "code_diff": ("Посмотреть свои изменения (diff) — перед finish проверь, что всё как задумано.", S({})),
 }
 # что показать в карточке задачи, пока идёт вызов (если модель не написала своих слов)
-ACT_RU = {"write_file": "пишу файл", "read_file": "читаю файл", "list_files": "смотрю файлы", "run_python": "запускаю Python",
+ACT_RU = {"write_file": "пишу файл", "read_file": "читаю файл", "file_read": "читаю файл", "file_edit": "правлю файл",
+          "file_grep": "ищу в файлах", "file_glob": "смотрю файлы", "list_files": "смотрю файлы", "run_python": "запускаю Python",
           "show": "показываю результат", "transcribe": "расшифровываю запись", "download": "скачиваю файл",
-          "web_search": "ищу в интернете", "read_page": "читаю страницу", "update_plan": "обновляю план", "log": "пишу журнал",
+          "web_search": "ищу в интернете", "read_webpage": "читаю страницу", "update_plan": "обновляю план", "log": "пишу журнал",
           "finish": "подвожу итог", "code_run": "запускаю в проекте", "code_edit": "правлю код", "code_read": "читаю код",
           "remember": "записываю в блокнот", "notes": "обновляю блокнот", "notify": "сообщаю вам", "wait": "жду и вернусь"}
 # инструменты чата, которые не нужны внутри задачи
 SKIP_IN_TASK = {"start_task", "task_status", "stop_task", "remove_task", "resume_task", "tell_task", "call_persona", "write_diary"}
-ACT_RU.update(spawn_parts="раздаю части помощникам", wait_parts="жду части", code_process="смотрю фоновый процесс",
+# Профиль задачи (выпуск 1): постоянный узкий набор — файлы, веб, run_python, план и блокнот, ask/notify/wait/finish, части,
+# навыки. Всё остальное (музыка, деньги, напоминания…) — через find_tool: подключается до конца задачи и встаёт В КОНЕЦ
+# списка, чтобы начало запроса (подсказка и инструменты) не менялось и сервер брал его из кэша.
+PROFILE_TASK = ("update_plan", "ask_user", "finish", "remember", "notes", "notify", "wait")   # log, list_files, read_file — по имени
+PROFILE_WORK = ("write_file", "file_read", "file_edit", "file_grep", "file_glob", "run_python", "show", "download")
+PROFILE_CHAT = ("web_search", "read_webpage", "use_skill")      # read_skill_file — подключается сам, когда навык его назовёт
+RETRY_SAFE = {"web_search", "read_webpage", "download", "file_read", "read_file", "file_grep", "file_glob", "use_skill", "read_skill_file"}
+RETRY_SEC = float(os.environ.get("DEWIAR_TASK_TOOL_RETRY_SEC") or 3)    # безопасный инструмент упал на сбое сети — пауза и ещё раз
+LIST_MAX = 200                                     # строк в ответе поиска и списка файлов — дальше «сузь: …»
+FIND_TOOL = {"find_tool": ("Найти инструмент, которого нет в списке (напоминания, погода, расчёты, почта, расшифровка записи, "
+                           "музыка…): query — что нужно сделать, своими словами. Вернёт подходящие с описанием; connect — имя "
+                           "инструмента, чтобы подключить его до конца задачи (или просто вызови его).",
+                           S({"query": {"type": "string"}, "connect": {"type": "string"}}))}
+NO_TRIM = {"ask_user", "wait_parts", "finish", "spawn_parts", "update_plan", "remember", "notes", "notify", "wait", "log", "show"}
+ACT_RU.update(find_tool="ищу нужный инструмент", spawn_parts="раздаю части помощникам", wait_parts="жду части", code_process="смотрю фоновый процесс",
               code_undo="откатываю правку", code_search="ищу в коде", code_diff="проверяю изменения")
 
 
@@ -216,10 +256,23 @@ class Task:
             return ""
 
     def set_notebook(self, text):
-        """Перезаписать блокнот (не больше 30 000 символов — он целиком идёт в подсказку каждого шага)."""
+        """Перезаписать блокнот (не больше 30 000 символов; в «Состояние задачи» каждого шага он идёт с ограничением по окну)."""
         text = (text or "").strip()
         if not text.startswith("#"):
             text = "# Блокнот задачи\n\n" + text
+        # «Ответы человека» (рецензия 0.83): модель переписывает блокнот целиком (notes, сжатие) — его слова не теряются
+        head = "## Ответы человека"
+        old = self.notebook()
+        if head in old:
+            sec = old.split(head, 1)[1].split("\n## ", 1)[0]
+            lost = [ln for ln in sec.splitlines() if ln.startswith("- ") and re.sub(r"\s*_\(.*?\)_$", "", ln[2:]).strip()[:120] not in text]
+            if lost:
+                if head in text:
+                    text = text.replace(head + "\n", head + "\n" + "\n".join(lost) + "\n", 1) if head + "\n" in text else text + "\n" + "\n".join(lost)
+                else:
+                    m = re.search(r"^# .*\n+", text)
+                    at = m.end() if m else 0
+                    text = text[:at] + head + "\n" + "\n".join(lost) + "\n\n" + text[at:]
         (self.dir / "блокнот.md").write_text(text[:30000] + "\n", encoding="utf-8")
 
     def code(self):
@@ -231,6 +284,7 @@ class Task:
         d = dict(self.data)
         d["dir"] = str(self.dir)
         d["status_ru"] = STATUS_RU.get(d.get("status"), d.get("status"))
+        d["metrics"] = usage_text((d.get("quality") or {}).get("usage"))
         if d.get("status") == "sleeping" and d.get("wake_at"):
             try:
                 w = dt.datetime.fromisoformat(d["wake_at"])
@@ -238,6 +292,19 @@ class Task:
             except ValueError:
                 pass
         return d
+
+def usage_text(u):
+    """Метрики задачи для карточки в студии одной строкой: «токены: 140 тыс. на вход, 6 тыс. на выход · из кэша 78%»."""
+    if not u or not u.get("req"):
+        return ""
+    def k(x):
+        x = int(x or 0)
+        return f"{x / 1e6:.1f} млн" if x >= 1e6 else (f"{round(x / 1000)} тыс." if x >= 1000 else str(x))
+    out = f"токены: {k(u.get('in'))} на вход, {k(u.get('out'))} на выход" + (" (оценка)" if u.get("est") == u.get("req") else "")
+    if u.get("ck") and u.get("in"):
+        out += f" · из кэша {round(100 * u.get('cached', 0) / max(1, u['in']))}%"
+    return out
+
 
 def _write_hist(path, msgs):
     """история.json — через временный файл и замену: прерванная запись (падение, выключение) оставляет прежнюю историю
@@ -384,8 +451,17 @@ class TaskManager:
 
     # ---------- управление ----------
 
-    def create(self, title, goal, project="", start=True, persona="", parent=""):
-        """Создать папку задачи и начальные файлы; project — папка проекта для режима «Код». Нет папки — ValueError."""
+    def create(self, title, goal, project="", start=True, persona="", parent="", folders=()):
+        """Создать папку задачи и начальные файлы; project — папка проекта для режима «Код»; folders — папки человека, которые
+        задача может читать без вопросов (менять — с разрешения; выпуск 2). Нет папки — ValueError."""
+        fl = []
+        for f in folders or ():
+            fp = Path(str(f)).expanduser()
+            if not fp.is_dir():
+                raise ValueError(f"папки нет: {f}")
+            if fp.resolve() == Path(fp.resolve().anchor):     # весь диск — никогда (откуда бы ни пришла просьба)
+                raise ValueError(f"«{fp.resolve()}» — это весь диск; задаче можно дать только конкретную папку")
+            fl.append(str(fp.resolve()))
         title = _clean(title or goal[:50])
         tid = uuid.uuid4().hex[:8]
         if project:
@@ -412,6 +488,8 @@ class TaskManager:
                 "question": "", "result": "", "error": "", "activity": ""}
         if parent:
             data["parent"] = parent
+        if fl:
+            data["folders"] = fl
         (d / "план.md").write_text(f"# {title}\n\n**Цель:** {goal.strip()}\n\n_План появится, когда ассистент начнёт._\n", encoding="utf-8")
         (d / "журнал.md").write_text(f"# Журнал: {title}\n", encoding="utf-8")
         (d / "блокнот.md").write_text(NOTEBOOK_HEAD, encoding="utf-8")
@@ -587,14 +665,17 @@ class TaskManager:
             return text
 
     def _system(self, t):
-        """Подсказка модели на каждый шаг: задача, правила, блокнот, план, проект, память, уроки, навыки.
-        Собирается заново каждый шаг — блокнот и план всегда свежие."""
+        """Подсказка модели — только НЕИЗМЕННОЕ за время задачи (выпуск 1, docs/HARNESS.md): задача, правила, папка, проект,
+        память, уроки, навыки. Время, план, блокнот и критерии — в «Состоянии задачи» в конце каждого запроса (_state):
+        так начало запроса байт в байт одно и то же на каждом шаге, и сервер модели (Claude, vLLM, llama.cpp) берёт его из
+        кэша. Лёгкий режим (окно ≤ LIGHT_WIN) — короче, без уроков, частей и списка навыков."""
         code = t.code()
-        now = dt.datetime.now()
+        light = bool(t.data.get("light"))
         s = (f"Ты — {t.persona}, голосовой ассистент. Сейчас ты выполняешь задачу В ФОНЕ: пользователь занят своими "
              f"делами. Ты доводишь задачу до конца, как надёжный личный помощник: не бросаешь на полпути, не забываешь, "
-             f"зачем всё делается, и держишь человека в курсе.\n\nЗАДАЧА: {t.title}\nЦЕЛЬ: {t.goal}\n"
-             f"Сейчас: {now:%d.%m.%Y %H:%M} ({['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье'][now.weekday()]}).\n\n"
+             f"зачем всё делается, и держишь человека в курсе.\n\nЗАДАЧА: {t.title}\nЦЕЛЬ: {t.goal}\n\n"
+             "В конце каждого запроса — «Состояние задачи»: текущие время, план, критерии готовности и блокнот. Сверяйся с ним "
+             "на каждом шаге — он всегда свежий.\n\n"
              "Как работать:\n"
              "1. Сначала разберись и составь план (update_plan — чек-лист). В начале плана — строка «**Готово, когда:** …» "
              "(по чему понятно, что цель достигнута). Отмечай сделанное.\n"
@@ -606,21 +687,32 @@ class TaskManager:
              "4. Сообщай пользователю важное по ходу (notify): что выяснил, что изменилось, что дальше — коротко, по делу.\n"
              "5. Не выдумывай результаты — проверяй инструментами. Без решения пользователя дальше нельзя — ask_user.\n"
              "6. finish — только когда цель достигнута (или точно недостижима): итог в Markdown — что сделано, где результат, "
-             "что проверить. Пиши по-русски.\n\n"
-             f"БЛОКНОТ ЗАДАЧИ (твоя память):\n{t.notebook() or '(пока пусто)'}\n\n"
+             "что проверить. Пиши по-русски.\n"
+             "7. Нужного инструмента нет в списке (напоминание, погода, расчёт, почта, расшифровка…) — find_tool.\n\n"
              f"Твоя папка: {self.host.workspace.root} (заметки — save_note; файлы, которые прислал пользователь, — "
-             f"в «Входящие» там же). Папка этой задачи: {t.dir}.\n\n"
-             "МАСТЕРСКАЯ. Если результат — файл (страница, дашборд, презентация, калькулятор, игра, таблица, документ, "
-             "расшифровка), делай его сам: write_file в outputs/ (HTML — один самодостаточный файл, CSS и JS внутри), "
-             "run_python — расчёты и сборка файлов, transcribe — расшифровка аудио/видео, download — скачать. Сначала "
-             "загляни в подходящий навык (use_skill: slides, html-app, html-viz, data-report, media-transcribe, research…). "
-             "Длина одного твоего ответа ограничена: файл длиннее ~120 строк пиши за несколько шагов — write_file с первой частью, "
-             "потом write_file с append=true. Перед finish проверь файл (read_file) и покажи его пользователю (show). Ответ в finish — коротко: что "
-             "получилось и как пользоваться; содержимое файла не пересказывай.\n\nТЕКУЩИЙ ПЛАН:\n{t.plan()}")
+             f"в «Входящие» там же). Папка этой задачи: {t.dir}.\n\n")
+        if t.data.get("folders"):
+            s += ("ПАПКИ ЧЕЛОВЕКА (он дал их задаче): " + "; ".join(t.data["folders"]) + ". Читай и ищи в них без вопросов — "
+                  "file_read, file_grep, file_glob с полным путём. Менять там — только с разрешения (спрошу сама); лучше — "
+                  "копия в outputs/.\n\n")
+        if light:
+            s += ("МАСТЕРСКАЯ. Результат-файл делай сам: write_file в outputs/, расчёты и сборка — run_python. Пиши файл частями "
+                  "(append=true), по ~80 строк. Длинные выводы инструментов лежат в _out/ — читай их file_read кусками. Перед "
+                  "finish покажи главный файл (show).")
+        else:
+            s += ("МАСТЕРСКАЯ. Если результат — файл (страница, дашборд, презентация, калькулятор, игра, таблица, документ, "
+                  "расшифровка), делай его сам: write_file в outputs/ (HTML — один самодостаточный файл, CSS и JS внутри), "
+                  "run_python — расчёты и сборка файлов, download — скачать. Сначала "
+                  "загляни в подходящий навык (use_skill: slides, html-app, html-viz, data-report, media-transcribe, research…). "
+                  "Длина одного твоего ответа ограничена: файл длиннее ~120 строк пиши за несколько шагов — write_file с первой частью, "
+                  "потом write_file с append=true. Длинный вывод инструмента целиком лежит в _out/ (в ответе — начало и путь): "
+                  "читай его file_read кусками, а не запускай заново. Старые результаты со временем убираются из памяти — "
+                  "важное записывай в блокнот. Правь файлы куском (file_edit), а не переписывай целиком; ищи по файлам — file_grep и file_glob. Перед finish проверь файл (file_read) и покажи его пользователю (show). Ответ в "
+                  "finish — коротко: что получилось и как пользоваться; содержимое файла не пересказывай.")
         if t.data.get("parent"):
             s += ("\n\nТы — помощник: делаешь одну часть большой задачи, параллельно с другими. Не спрашивай пользователя без "
                   "крайней нужды и не уведомляй его — твой итог (finish) прочитает основная задача: пиши в нём суть результата.")
-        else:
+        elif not light:
             s += ("\n\nЧАСТИ. Большая работа из независимых кусков (сведения по нескольким компаниям или городам, несколько "
                   "разделов отчёта, несколько файлов) идёт быстрее, если раздать куски помощникам: spawn_parts — они работают "
                   "одновременно, wait_parts — собрать итоги и файлы (в parts/). Мелкое и связанное делай сама.")
@@ -638,7 +730,8 @@ class TaskManager:
                     log.debug("карта проекта", exc_info=True)
                     t.data["code_map"] = ""
             if t.data.get("code_map"):
-                s += ("\n\nКАРТА ПРОЕКТА (на начало работы; подробности — code_read/code_search):\n" + t.data["code_map"] +
+                cm = t.data["code_map"] if not light else t.data["code_map"][:3000]
+                s += ("\n\nКАРТА ПРОЕКТА (на начало работы; подробности — code_read/code_search):\n" + cm +
                       "\nЦикл работы: найди место → прочитай → поправь (code_edit) → запусти тесты → по ошибкам поправь снова. "
                       "Не меняй тесты, если об этом не просили. Перед finish тесты должны проходить — я проверю. "
                       "Свои тесты пиши по КАЖДОМУ требованию цели и на краевые случаи: цифры, латиница и кириллица, "
@@ -647,11 +740,37 @@ class TaskManager:
                       "(запрос к нему, code_process output) и останавливай.")
         mem = self.host.memory()
         if mem:
-            s += "\n\nЧто ты знаешь о пользователе:\n" + mem
+            s += "\n\nЧто ты знаешь о пользователе:\n" + (mem if not light else mem[:1500])
+        if light:
+            return s
         s += Q.lessons_block(self.lessons_path())          # выводы из прошлых задач (quality.reflect)
         s += Q.talk_lessons_block(self.host.workspace.root / Q.TALK_LESSONS_FILE)   # и из поправок в разговоре
         sp = getattr(self.host, "skills_prompt", None)
         return s + (sp() if sp else "")
+
+    def _state(self, t):
+        """«Состояние задачи» — последним сообщением каждого запроса (в историю не пишется): время, шаг, критерии готовности,
+        план и блокнот. План и цель в конце контекста — модель не уходит от цели на длинной дистанции (Manus todo.md,
+        Cline Focus Chain). Объём плана и блокнота — по окну модели."""
+        win = int(t.data.get("win") or WIN_DEFAULT)
+        now = dt.datetime.now()
+        wd = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье'][now.weekday()]
+        plan = t.plan()
+        nb = t.notebook() or "(пока пусто)"
+        nb_max = max(1500, min(30000, int(win * 3 * 0.12)))
+        plan_max = max(1200, min(12000, int(win * 3 * 0.08)))
+        crit = re.search(r"Готово,? когда:?\**:?\s*(.+)", plan)
+        out = [f"[Состояние задачи — обновляется на каждом шаге; это не сообщение пользователя]",
+               f"Сейчас: {now:%d.%m.%Y %H:%M} ({wd}). Шаг {int(t.data.get('steps') or 0) + 1}."]
+        if crit:
+            out.append("Критерии готовности: " + crit.group(1).strip()[:600])
+        out.append("ТЕКУЩИЙ ПЛАН:\n" + (plan if len(plan) <= plan_max else plan[:plan_max] + "\n…(план длиннее — целиком: file_read план.md)"))
+        out.append("БЛОКНОТ ЗАДАЧИ (твоя память):\n" + (nb if len(nb) <= nb_max else nb[:nb_max] + "\n…(блокнот длиннее — целиком: "
+                                                                                                "file_read блокнот.md; сократи его — notes)"))
+        on = t.data.get("tools_on") or []
+        if on:
+            out.append("Подключено через find_tool: " + ", ".join(on))
+        return "\n\n".join(out)
 
     # ---------- качество (quality.py): проверка кодом, самопроверка, уроки ----------
     def _opt(self, key):
@@ -681,7 +800,7 @@ class TaskManager:
     def _web_used(self, t):
         """Пользовалась ли задача интернетом — без этого отказ «нет доступа» считается ложным."""
         used = self._q(t)["tools"]
-        return any(used.get(k) for k in ("web_search", "read_page", "read_webpage", "download"))
+        return any(used.get(k) for k in ("web_search", "read_webpage", "read_page", "download"))
 
     def _web_available(self, t):
         return any(x["name"] == "web_search" for x in self._specs(t))
@@ -775,7 +894,7 @@ class TaskManager:
 
     DID_RU = {"web_search": "поиск в интернете", "read_page": "чтение страниц", "read_webpage": "чтение страниц",
               "remember": "записи в блокнот", "notes": "записи в блокнот", "write_file": "запись файлов", "run_python": "расчёты",
-              "read_file": "чтение файлов", "download": "скачивание", "show": "показ результата", "calc": "расчёты",
+              "read_file": "чтение файлов", "file_read": "чтение файлов", "file_edit": "правки файлов", "file_grep": "поиск по файлам", "download": "скачивание", "show": "показ результата", "calc": "расчёты",
               "code_edit": "правки кода", "code_run": "запуски в проекте"}
 
     def _stop_why(self, t):
@@ -807,7 +926,7 @@ class TaskManager:
             q["verify_fail"] += 1
             t.journal("🔎 В итоге названы файлы, которых нет: " + ", ".join(miss[:8]))
             return ("В итоге назван результат, которого нет на диске: " + ", ".join(miss[:8]) + ". Названный файл — не "
-                    "доказательство. Создай его (write_file или run_python в папке задачи, outputs/), проверь (read_file) и "
+                    "доказательство. Создай его (write_file или run_python в папке задачи, outputs/), проверь (file_read) и "
                     "покажи (show) — или честно напиши в итоге, что сделать не удалось, и снова вызови finish.")
         if True:
             probs = Q.verify_outputs(t.dir, shown)
@@ -855,7 +974,7 @@ class TaskManager:
             diff = ""
             if code is not None and code.work.exists():
                 try:
-                    diff = code.diff(limit=20000)
+                    diff = code.diff(limit=max(3000, min(20000, int(int(t.data.get("win") or WIN_DEFAULT) * 3 * 0.3))))
                 except Exception:  # noqa: BLE001
                     log.debug("diff для самопроверки", exc_info=True)
             problems = Q.critic(self._ask, f"{t.title}\n{t.goal}", summary, files, facts, diff=diff)
@@ -884,7 +1003,8 @@ class TaskManager:
         Q.save_trace(STATE_DIR / "task_traces", {
             "id": t.id, "goal": f"{t.title}: {t.goal}"[:400], "ok": reason == "final", "reason": reason,
             "steps": t.data.get("steps", 0), "tools": q["tools"], "errors": q["errors"][-10:], "loop_warns": q["loop_warns"],
-            "refusal": q["refusal"], "verify_fail": q["verify_fail"], "critic": q["critic"], "time": _now()})
+            "refusal": q["refusal"], "verify_fail": q["verify_fail"], "critic": q["critic"], "usage": q.get("usage") or {},
+            "time": _now()})
         self._maybe_reflect(STATE_DIR / "task_traces")
 
     def _maybe_reflect(self, traces):
@@ -909,22 +1029,108 @@ class TaskManager:
                 log.info("Уроки задач не получились: %s", e)
         threading.Thread(target=run, name="task-reflect", daemon=True).start()
 
-    def _specs(self, t):
-        """Инструменты задачи: инструменты чата (кроме SKIP_IN_TASK) + TASK_TOOLS + WORK_TOOLS (+ CODE_TOOLS для проекта)."""
-        specs = [s for s in self.host.toolbox.specs() if s["name"] not in SKIP_IN_TASK]
-        specs += [{"name": n, "description": d, "parameters": p} for n, (d, p) in TASK_TOOLS.items()]
-        specs = [x for x in specs if x["name"] not in WORK_TOOLS]          # одноимённые инструменты чата заменяем своими
-        specs += [{"name": n, "description": d, "parameters": p} for n, (d, p) in WORK_TOOLS.items()]
+    def _catalog(self, t):
+        """Все инструменты, которые задача МОЖЕТ получить: имя -> описание. Инструменты чата (кроме SKIP_IN_TASK) +
+        свои (TASK_TOOLS, WORK_TOOLS — одноимённые инструменты чата заменяются своими) + код (только у задачи с проектом)
+        + части (не у части) + find_tool."""
+        cat = {}
+        for x in self.host.toolbox.specs():
+            if x["name"] not in SKIP_IN_TASK:
+                cat.setdefault(x["name"], x)
+        own = dict(TASK_TOOLS, **WORK_TOOLS)
         if t.data.get("project"):
-            specs += [{"name": n, "description": d, "parameters": p} for n, (d, p) in CODE_TOOLS.items()]
+            own.update(CODE_TOOLS)
         if not t.data.get("parent"):                       # часть сама частей не раздаёт
-            specs += [{"name": n, "description": d, "parameters": p} for n, (d, p) in PART_TOOLS.items()]
-        return specs
+            own.update(PART_TOOLS)
+        own.update(FIND_TOOL)
+        for n, (d, prm) in own.items():
+            cat[n] = {"name": n, "description": d, "parameters": prm}
+        return cat
+
+    def _specs(self, t):
+        """Инструменты задачи (выпуск 1): постоянный профиль ≈20 штук в неизменном порядке + подключённые через find_tool
+        (t.data["tools_on"]) — в конце, по порядку подключения: список только растёт с конца, начало запроса не меняется.
+        Лёгкий режим (маленькое окно) — без частей и навыков."""
+        cat = self._catalog(t)
+        light = bool(t.data.get("light"))
+        names = list(PROFILE_TASK) + list(PROFILE_WORK)
+        names += [n for n in PROFILE_CHAT if not (light and n in ("use_skill", "read_skill_file"))]
+        if t.data.get("project"):
+            names += list(CODE_TOOLS)
+        if not light:
+            names += list(PART_TOOLS)
+        names += list(FIND_TOOL)
+        tiny = int(t.data.get("win") or WIN_DEFAULT) < TINY_WIN
+        if tiny:                                           # окно меньше 6 тыс.: самое нужное, остальное — find_tool
+            names = [n for n in names if n not in TINY_DROP]
+        names += [n for n in t.data.get("tools_on") or [] if n not in names]
+        out = [cat[n] for n in dict.fromkeys(names) if n in cat]
+        if tiny:                                           # …и описания — до первой фразы
+            out = [dict(x, description=self._first(x.get("description") or "")) for x in out]
+        return out
+
+    @staticmethod
+    def _first(d):
+        m = re.match(r"(.+?[.!?])(?:\s|$)", d, re.S)
+        return (m.group(1) if m else d)[:160]
+
+    @staticmethod
+    def _stems(text):
+        """Слова для поиска инструмента: нижний регистр, первые 5 букв (грубая основа: «напоминание» ~ «напомни»)."""
+        return {w[:5] for w in re.findall(r"[a-zа-яё0-9]{3,}", (text or "").lower().replace("_", " "))}
+
+    def _connect(self, t, name):
+        on = list(t.data.get("tools_on") or [])
+        if name not in on:
+            on.append(name)
+            t.data["tools_on"] = on
+            t.journal(f"🧰 Подключил инструмент: {name}")
+
+    def _find_tool(self, t, args):
+        """find_tool: подходящие инструменты по описанию; connect — подключить до конца задачи."""
+        cat = self._catalog(t)
+        active = {x["name"] for x in self._specs(t)}
+        want = str(args.get("connect") or args.get("name") or "").strip()
+        q = str(args.get("query") or "").strip()
+        if not want and q in cat:
+            want = q
+        if want:
+            if want in active:
+                return f"Инструмент {want} уже доступен — вызывай его."
+            if want in cat:
+                self._connect(t, want)
+                return f"Подключил {want}: {cat[want]['description'][:400]}\nТеперь вызывай его как обычно."
+            return self._unknown(t, want)
+        qs = self._stems(q)
+        scored = []
+        for n, x in cat.items():
+            if n in active:
+                continue
+            words = self._stems(n + " " + x.get("description", ""))
+            sc = len(qs & words) + (3 if n.lower() in q.lower() else 0)
+            if sc:
+                scored.append((-sc, n))
+        scored.sort()
+        if not scored:
+            return ("Ничего подходящего не нашлось. Сейчас доступны: " + ", ".join(sorted(active)) + ". Опиши, что нужно "
+                    "сделать, другими словами — или обойдись этими.")
+        top = [n for _, n in scored[:5]]
+        return ("Подходящие инструменты (подключить — find_tool с connect=<имя>, или просто вызови его):\n" +
+                "\n".join(f"- {n} — {cat[n]['description'][:220]}" for n in top))
+
+    def _unknown(self, t, name):
+        """Модель позвала инструмент, которого нет: понятная ошибка с тем, что есть (а не «выключен пользователем», №…:
+        подсказки называли read_page, а на компьютере — read_webpage)."""
+        import difflib
+        active = [x["name"] for x in self._specs(t)]
+        near = difflib.get_close_matches(name, list(self._catalog(t)), n=2, cutoff=0.6)
+        return (f"Ошибка: нет такого инструмента «{name}»." + (f" Похоже, нужен: {', '.join(near)}." if near else "")
+                + " Есть: " + ", ".join(active) + ". Другие — через find_tool(query).")
 
     def _coerce(self, t, name, args):
         """Привести аргументы к схеме инструмента (слабые модели шлют список вместо строки и т. п.), см. tools.coerce_args."""
         from tools import coerce_args
-        spec = next((x for x in self._specs(t) if x["name"] == name), None)
+        spec = self._catalog(t).get(name)
         return coerce_args((spec or {}).get("parameters"), args)
 
     def _tool(self, t, name, args):
@@ -932,7 +1138,15 @@ class TaskManager:
         _truncated ставит llm.py, когда ответ модели оборвался по лимиту длины и аргументы удалось спасти лишь частично."""
         trunc = isinstance(args, dict) and bool(args.pop("_truncated", False))
         try:
-            r = self._tool_raw(t, name, self._coerce(t, name, args))
+            ca = self._coerce(t, name, args)
+            r = self._tool_raw(t, name, ca)
+            if name in RETRY_SAFE and isinstance(r, str) and r.startswith(("Ошибка", "Поиск не удался", "Страница не открылась")) \
+                    and self._transient(r) and "Как исправить" not in r and not t.cancel.is_set():
+                # выпуск 2: безопасный инструмент (поиск, чтение, скачивание) упал на сбое сети — пауза и ещё раз, сам
+                t.journal(f"↻ {name}: сбой сети ({self._short(r, 120)}) — повторяю через {RETRY_SEC:g} с.")
+                t.cancel.wait(RETRY_SEC)
+                if not t.cancel.is_set():
+                    r = self._tool_raw(t, name, ca)
             if trunc:
                 self._q(t)["errors"].append({"tool": name, "text": "ответ оборвался по лимиту длины"})
                 if name == "write_file" and isinstance(r, str) and not r.startswith("Ошибка"):
@@ -942,12 +1156,40 @@ class TaskManager:
                           "файл с нуля.")
                 else:
                     r = f"{r}\n\n(Твой ответ оборвался по лимиту длины — аргументы могли дойти не целиком: проверь результат. Делай шаги меньше.)"
-            return r
+            return self._offload(t, name, r)
         except Exception as e:  # noqa: BLE001
             log.exception("задача %s: инструмент %s", t.id, name)
             if not isinstance(e, (ValueError, OSError, TimeoutError)):   # не «плохие аргументы», а ошибка в программе
                 self._problem(f"Задача, инструмент {name}: {e.__class__.__name__}: {str(e)[:160]}")
-            return f"Ошибка инструмента {name}: {e}. Проверь аргументы (строки — строками) и попробуй ещё раз или иначе."
+            return (f"Ошибка инструмента {name}: {e}. Как исправить: проверь аргументы (строки — строками, пути — как в "
+                    "file_glob) и попробуй ещё раз или иначе.")
+
+    def _out_max(self, t):
+        """Сколько знаков вывода инструмента держать в истории: OUT_MAX, при маленьком окне — меньше (~10% окна)."""
+        return max(1500, min(OUT_MAX, int(int(t.data.get("win") or WIN_DEFAULT) * 3 * 0.1)))
+
+    def _offload(self, t, name, r):
+        """Вывод любого инструмента длиннее _out_max — целиком в _out/<инструмент>-<шаг>.txt, в историю — начало, конец и
+        путь (Manus, Anthropic: файловая система как память). read_file и ответы человека не трогаем: read_file сам режет
+        куски по размеру, а ответ человека — главное."""
+        lim = self._out_max(t)
+        if not isinstance(r, str) or len(r) <= lim or name in ("read_file", "file_read", "ask_user", "finish", "wait_parts", "use_skill", "read_skill_file"):
+            return r
+        n = int(t.data.get("steps") or 0)
+        f = t.dir / "_out" / f"{name}-{n}.txt"
+        k = 2
+        while f.exists():
+            f = t.dir / "_out" / f"{name}-{n}-{k}.txt"
+            k += 1
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(r, encoding="utf-8")
+        except OSError:
+            return r[:lim] + "\n…(вывод обрезан)"
+        rel = f.relative_to(t.dir).as_posix()
+        head, tail = int(lim * 0.65), int(lim * 0.25)
+        return (r[:head] + f"\n…[вывод {len(r)} знаков — целиком в файле {rel}: читай его file_read кусками (start/end), "
+                "не запускай заново]…\n" + r[-tail:])
 
     def _tool_raw(self, t, name, args):
         """Собственно выполнение. Сначала свои инструменты задачи, потом инструменты ассистента — с теми же
@@ -987,6 +1229,7 @@ class TaskManager:
             if t.cancel.is_set():
                 return "Задачу остановили."
             t.journal(f"💬 Ответ: {t.answer}")
+            self._note_human(t, f"На вопрос «{q[:200]}»: {t.answer}")
             return f"Ответ пользователя: {t.answer}"
         if name == "remember":
             fact = re.sub(r"\s+", " ", (args.get("fact") or "").strip())
@@ -1110,10 +1353,22 @@ class TaskManager:
                 return f"Ошибка: {e}"
             except OSError as e:                     # №222: «Access is denied» на сетевой папке — ошибка шага, а не сбой программы
                 return f"Ошибка: нет доступа к файлу {getattr(e, 'filename', '') or ''} ({e.strerror or e}). Обойди этот файл или выбери другую папку."
+        if name == "find_tool":
+            return self._find_tool(t, args)
         # обычные инструменты ассистента
         on, need = self.host.toolbox.policy(name)
+        if name not in self._catalog(t):
+            try:
+                from tools import TOOLS as _ALL
+            except Exception:  # noqa: BLE001
+                _ALL = {}
+            if not on and name in _ALL and name not in SKIP_IN_TASK:
+                return f"Инструмент {name} выключен пользователем (студия → «Руки» → «Умения»). Обойдись без него."
+            return self._unknown(t, name)
         if not on:
             return f"Инструмент {name} выключен пользователем."
+        if name not in {x["name"] for x in self._specs(t)}:
+            self._connect(t, name)                     # позвала знакомый инструмент не из профиля — подключаем до конца задачи
         blocked, force, warn_q = self.host.toolbox.guard(name, args)
         if blocked:
             t.journal(f"🛡 Защита не дала: {name} — {blocked}")
@@ -1143,13 +1398,305 @@ class TaskManager:
         rel = rel.lstrip("/\\")
         p = (t.dir / rel).resolve()
         if not rel or (t.dir.resolve() not in p.parents and p != t.dir.resolve()):
-            raise ValueError("путь должен быть внутри папки задачи, например outputs/app.html")
+            raise ValueError("путь вне папки задачи. Как исправить: пиши относительный путь в папке задачи, например "
+                             "outputs/app.html")
         return p
+
+    @staticmethod
+    def _folders(t):
+        """Папки, которые человек дал задаче (start_task folders): [Path] — только существующие."""
+        out = []
+        for f in t.data.get("folders") or []:
+            try:
+                p = Path(f).expanduser().resolve()
+            except OSError:
+                continue
+            if p.is_dir():
+                out.append(p)
+        return out
+
+    def _area(self, t, rel, write=False):
+        """Путь от модели в области задачи (выпуск 2): папка задачи (относительный путь) или папки, которые человек дал
+        задаче (полный путь). -> (путь, папка человека или None). Вне области — ValueError «что случилось — как исправить».
+        Запись в папку человека — только с разрешением (раз на папку за задачу), иначе — в копию в outputs/."""
+        raw = str(rel or "").strip()
+        try:
+            ab = Path(raw).expanduser()
+            if ab.is_absolute():
+                ab = ab.resolve()
+                for f in self._folders(t):
+                    if ab == f or f in ab.parents:
+                        if write:
+                            key = f"write:{f}"
+                            if key not in (t.data.get("write_ok") or []):
+                                okd, why = self._permit(t, key, f"Задача «{t.title}» хочет изменить файлы в вашей папке {f}. Разрешить?")
+                                if not okd:
+                                    raise ValueError(f"человек не разрешил менять файлы в {f}. Как исправить: сделай копию "
+                                                     "в outputs/ (file_read → write_file) и правь её. " + why)
+                                t.data["write_ok"] = (t.data.get("write_ok") or []) + [key]
+                                t.journal(f"✍ Разрешено менять файлы в {f}")
+                        return ab, f
+        except OSError:
+            pass
+        try:
+            if Path(raw).expanduser().is_absolute():
+                ab = Path(raw).expanduser().resolve()
+                if not (ab == t.dir.resolve() or t.dir.resolve() in ab.parents):
+                    raise ValueError("вне")
+            return self._path(t, raw), None
+        except (ValueError, OSError):
+            fs = self._folders(t)
+            raise ValueError(f"путь «{raw}» вне папки задачи" + (" и данных ей папок (" + ", ".join(map(str, fs)) + ")" if fs else "")
+                             + ". Как исправить: пиши относительный путь в папке задачи (outputs/…)"
+                             + (", а в папках человека — полный путь" if fs else ", а нужную папку попроси человека дать задаче")) from None
+
+    def _shown(self, t, p, f):
+        """Путь для ответа модели: в папке задачи — относительный, в папке человека — полный."""
+        return p.relative_to(t.dir.resolve()).as_posix() if f is None else str(p)
+
+    READ_MAX = 20 << 20                               # file_read и file_edit — текстовые файлы не больше 20 МБ
+
+    @classmethod
+    def _load_text(cls, p):
+        """Текстовый файл -> (текст с переводами строк \\n, кодировка, был ли CRLF). Кодировка: UTF-8 (с BOM — utf-8-sig),
+        иначе cp1251 (рецензия 0.83: file_edit портил cp1251 и CRLF). Не текст или слишком большой — ValueError с советом."""
+        size = p.stat().st_size
+        if size > cls.READ_MAX:
+            raise ValueError(f"{p.name} — {size // (1 << 20)} МБ, это слишком много для чтения целиком. Как исправить: "
+                             "ищи в нём file_grep или разбери кодом (run_python) по частям")
+        data = p.read_bytes()
+        if b"\0" in data[:8192]:
+            raise ValueError(f"{p.name} — не текстовый файл ({size} байт). Как исправить: разбери его кодом (run_python: "
+                             "pypdf, openpyxl, Pillow…)")
+        enc = "utf-8-sig" if data.startswith(b"\xef\xbb\xbf") else "utf-8"
+        try:
+            text = data.decode(enc)
+        except UnicodeDecodeError:
+            enc = "cp1251"
+            text = data.decode(enc, errors="replace")
+        crlf = b"\r\n" in data
+        return (text.replace("\r\n", "\n") if crlf else text), enc, crlf
+
+    @staticmethod
+    def _save_text(p, text, enc, crlf):
+        """Записать так же, как было: та же кодировка и те же переводы строк. Символ не кодируется — ValueError."""
+        if crlf:
+            text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+        try:
+            data = text.encode(enc)
+        except UnicodeEncodeError as e:
+            raise ValueError(f"в файле кодировка {enc}, а в правке есть символ «{text[e.start:e.end]}», которого в ней нет. "
+                             "Как исправить: замени его (например, кавычки «» на \"\") или сделай копию файла в UTF-8 (write_file)") from None
+        p.write_bytes(data)
+
+    def _read_lines(self, t, p, args, name="file_read"):
+        """Кусок файла с номерами строк, не больше _out_max знаков: «показаны строки a–b из N; дальше — start=…»."""
+        try:
+            text = self._load_text(p)[0]
+        except ValueError as e:
+            return f"Ошибка: {e}."
+        lines = text.splitlines()
+        if not lines:
+            return "(файл пуст)"
+        a, b = max(1, int(args.get("start") or 1)), int(args.get("end") or 0)
+        if a > len(lines):
+            return f"Ошибка: в файле {len(lines)} строк, а start={a}. Как исправить: start от 1 до {len(lines)}."
+        b = min(len(lines), b or a + 399)
+        lim, out, size = self._out_max(t), [], 0     # кусок — не больше ~_out_max знаков: история не раздувается
+        for i in range(a, b + 1):
+            ln = f"{i}: {lines[i - 1]}"
+            if out and size + len(ln) > lim:
+                b = i - 1
+                break
+            out.append(ln if len(ln) <= lim else ln[:lim] + f"…(строка обрезана, в ней {len(lines[i - 1])} знаков)")
+            size += len(ln) + 1
+        return "\n".join(out) + (f"\n… показаны строки {a}–{b} из {len(lines)}; дальше — {name} с start={b + 1}" if b < len(lines) else "")
+
+    def _limit(self, t, items, what, how):
+        """Ограничитель ответов: не больше LIST_MAX строк и ~_out_max знаков, дальше — «показано 1–200 из 5000, сузь: …»
+        (Anthropic «Writing tools»: ответ с пределом и подсказкой, как сузить)."""
+        lim, size, k = self._out_max(t) - 200, 0, 0
+        for x in items[:LIST_MAX]:
+            if k and size + len(x) + 1 > lim:
+                break
+            size += len(x) + 1
+            k += 1
+        if k >= len(items):
+            return "\n".join(items)
+        return "\n".join(items[:k]) + f"\n… показано 1–{k} из {len(items)} {what}. Сузь: {how}."
+
+    SKIP_SCAN = {"история.json", "история.json.tmp", "задача.json"}
+
+    def _scan_root(self, t, args):
+        """Где искать (file_grep, file_glob): path — подпапка задачи или папка человека (полный путь); пусто — папка задачи."""
+        raw = str(args.get("path") or "").strip()
+        if not raw or raw in (".", "./"):
+            return t.dir.resolve(), None
+        p, f = self._area(t, raw)
+        if not p.exists():
+            raise ValueError(f"нет папки «{raw}». Как исправить: посмотри file_glob без path, что есть в папке задачи")
+        return p, f
+
+    WALK_MAX = 50000                                  # файлов за один обход (file_grep, file_glob) — дальше не идём
+
+    @staticmethod
+    def _glob_rx(pattern):
+        """Шаблон file_glob -> регулярное выражение по относительному пути: ** — любые папки, * и ? — внутри имени.
+        Безопасность (рецензия 0.83): «..» и полный путь в шаблоне — отказ: шаблон не выводит из области задачи."""
+        pat = str(pattern or "**/*").replace("\\", "/").strip() or "**/*"
+        parts = pat.split("/")
+        if pat.startswith("/") or re.match(r"^[A-Za-z]:", pat) or ".." in parts or pat.startswith("~"):
+            raise ValueError("в шаблоне «..» или полный путь. Как исправить: шаблон — внутри папки (например **/*.csv), "
+                             "а папку человека передай в path полным путём")
+        out, i = "", 0
+        while i < len(pat):
+            if pat.startswith("**/", i):
+                out, i = out + "(?:.*/)?", i + 3
+            elif pat.startswith("**", i):
+                out, i = out + ".*", i + 2
+            elif pat[i] == "*":
+                out, i = out + "[^/]*", i + 1
+            elif pat[i] == "?":
+                out, i = out + "[^/]", i + 1
+            else:
+                out, i = out + re.escape(pat[i]), i + 1
+        return re.compile(out + r"\Z", re.I if os.name == "nt" else 0)
+
+    def _walk(self, t, root, pattern="**/*"):
+        """Файлы под root по шаблону. Через os.walk с пределом WALK_MAX, без перехода по ссылкам на папки; файл-ссылка,
+        ведущая наружу root, пропускается (рецензия 0.83: symlink и «..» выводили из области задачи). Сортировка — потом."""
+        rx = self._glob_rx(pattern)
+        root_r = Path(root).resolve()
+        task_r = t.dir.resolve()
+        out, seen = [], 0
+        for dp, dns, fns in os.walk(root_r, followlinks=False):
+            d = Path(dp)
+            if d == task_r:
+                dns[:] = [x for x in dns if not x.startswith(("рабочая копия", "_run"))]
+            for fn in fns:
+                seen += 1
+                if seen > self.WALK_MAX:
+                    break
+                p = d / fn
+                if fn in self.SKIP_SCAN and d == task_r:
+                    continue
+                rel = p.relative_to(root_r).as_posix()
+                if not rx.match(rel):
+                    continue
+                try:
+                    real = p.resolve()
+                except OSError:
+                    continue
+                if not (real == root_r or root_r in real.parents) or not real.is_file():
+                    continue
+                out.append(p)
+            if seen > self.WALK_MAX:
+                break
+        return sorted(out)
+
+    def _file_tools(self, t, name, args):
+        """file_read, file_edit, file_grep, file_glob (выпуск 2 «Руки задачи»)."""
+        if name in ("file_read", "read_file"):
+            p, f = self._area(t, args.get("path"))
+            if not p.is_file():
+                if f is None:
+                    # №516: путь из find_notes («Заметки/….md») — это папка ассистента, а не папка задачи: читаем оттуда
+                    try:
+                        from tools import t_read_file
+                        w = self.host.workspace.safe(str(args.get("path") or ""))
+                        if w.is_file():
+                            return t_read_file({"path": w.relative_to(self.host.workspace.root.resolve()).as_posix()},
+                                               {"workspace": self.host.workspace})
+                    except Exception:  # noqa: BLE001
+                        pass
+                return (f"Такого файла нет: «{args.get('path')}». Как исправить: посмотри file_glob (или list_files), "
+                        "как он называется.")
+            return self._read_lines(t, p, args, name)
+        if name == "file_edit":
+            import textedit as TE
+            p, f = self._area(t, args.get("path"), write=True)
+            if not p.is_file():
+                return f"Ошибка: файла «{args.get('path')}» нет. Как исправить: новый файл создай write_file, а путь проверь file_glob."
+            try:
+                text, enc, crlf = self._load_text(p)
+            except ValueError as e:
+                return f"Ошибка: {e}."
+            old_, new_ = (str(args.get(k) or "").replace("\r\n", "\n") for k in ("old", "new"))
+            try:
+                out, line, note = TE.apply_edit(text, old_, new_, bool(args.get("replace_all")))
+            except TE.EditError as e:
+                return f"Ошибка: {e}"
+            bad = TE.syntax_error(out, p.suffix)
+            if bad and not TE.syntax_error(text, p.suffix):
+                return (f"Ошибка: после правки {p.name} не разбирается ({bad}) — файл НЕ изменён. Как исправить: поправь new "
+                        "(скобки, кавычки, закрывающие теги) и повтори file_edit.")
+            try:
+                self._save_text(p, out, enc, crlf)
+            except ValueError as e:
+                return f"Ошибка: {e}. Файл НЕ изменён."
+            shown = self._shown(t, p, f)
+            t.journal(f"✏ Правка {shown}, строка {line}{note}")
+            n_new = str(args.get("new") or "").count("\n")
+            return f"Изменён {shown}, строки {line}–{line + n_new}{note}." + (f" ⚠ Файл и до правки не разбирался: {bad}." if bad else "")
+        if name == "file_glob":
+            root, f = self._scan_root(t, args)
+            pat = str(args.get("pattern") or "**/*").strip() or "**/*"
+            files = self._walk(t, root, pat if "/" in pat or "**" in pat or ".." in pat else "**/" + pat)
+            base = t.dir.resolve() if f is None else root
+            items = [f"{(p.relative_to(base).as_posix() if f is None else str(p))} — {p.stat().st_size} байт" for p in files]
+            if not items:
+                return f"Ничего не нашлось по «{pat}»" + (f" в {root}" if f else "") + ". Как исправить: шаблон шире (**/*) или другая папка (path)."
+            return self._limit(t, items, "файлов", "шаблон точнее (отчёты/*.md, **/*2024*.csv) или path — подпапка")
+        if name == "file_grep":
+            pat = str(args.get("pattern") or "")
+            try:
+                rx = re.compile(pat, re.I)
+            except re.error as e:
+                rx = re.compile(re.escape(pat), re.I)
+                if not pat:
+                    return f"Ошибка: пустой pattern ({e}). Как исправить: что искать — слово или регулярное выражение."
+            root, f = self._scan_root(t, args)
+            g = str(args.get("glob") or "").strip()
+            files = [root] if root.is_file() else self._walk(t, root, (g if "/" in g or "**" in g or ".." in g else "**/" + g) if g else "**/*")
+            hits, nfiles = [], 0
+            base = t.dir.resolve() if f is None else None
+            for p in files:
+                try:
+                    if p.stat().st_size > 5 << 20:
+                        continue
+                    data = p.read_bytes()
+                except OSError:
+                    continue
+                if b"\0" in data[:4096]:
+                    continue                               # не текст
+                try:
+                    text = data.decode("utf-8")
+                except UnicodeDecodeError:
+                    text = data.decode("cp1251", errors="replace")
+                got = False
+                for i, ln in enumerate(text.splitlines(), 1):
+                    if rx.search(ln):
+                        where = p.relative_to(base).as_posix() if base is not None and base in p.parents else str(p)
+                        hits.append(f"{where}:{i}: {ln.strip()[:200]}")
+                        got = True
+                nfiles += got
+            if not hits:
+                return f"Совпадений с «{pat}» нет (просмотрено файлов: {len(files)}). Как исправить: другое слово или шаблон шире, glob пустой."
+            return self._limit(t, hits, f"совпадений в {nfiles} файлах", "pattern точнее, glob (*.csv) или path — подпапка")
+        return "неизвестный инструмент"
 
     def _work(self, t, name, args):
         """Инструменты мастерской (WORK_TOOLS)."""
+        if name in ("file_read", "read_file", "file_edit", "file_grep", "file_glob"):
+            return self._file_tools(t, name, args)
         if name == "write_file":
-            p = self._path(t, args.get("path"))
+            p, f = self._area(t, args.get("path"), write=True)
+            if f is not None:                              # папка человека (с его разрешения): пишем туда как есть
+                p.parent.mkdir(parents=True, exist_ok=True)
+                with open(p, "a" if args.get("append") else "w", encoding="utf-8") as fh:
+                    fh.write(args.get("content") or "")
+                t.journal(f"📄 записал {p} ({p.stat().st_size} байт)")
+                return f"Файл {p} — {p.stat().st_size} байт."
             p.parent.mkdir(parents=True, exist_ok=True)
             with open(p, "a" if args.get("append") else "w", encoding="utf-8") as f:
                 f.write(args.get("content") or "")
@@ -1164,23 +1711,6 @@ class TaskManager:
             if warn:
                 t.journal(warn)
             return f"Файл {p.relative_to(t.dir).as_posix()} — {size} байт{hint}." + (f"\n{warn} Почини до запуска." if warn else "")
-        if name == "read_file":
-            p = self._path(t, args.get("path"))
-            if not p.is_file():
-                # №516: путь из find_notes («Заметки/….md») — это папка ассистента, а не папка задачи: читаем оттуда
-                try:
-                    from tools import t_read_file
-                    w = self.host.workspace.safe(str(args.get("path") or ""))
-                    if w.is_file():
-                        return t_read_file({"path": w.relative_to(self.host.workspace.root.resolve()).as_posix()},
-                                           {"workspace": self.host.workspace})
-                except Exception:  # noqa: BLE001
-                    pass
-                return "Такого файла нет — посмотри list_files."
-            lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
-            a, b = max(1, int(args.get("start") or 1)), int(args.get("end") or 0)
-            b = min(len(lines), b or a + 399)
-            return "\n".join(f"{i}: {lines[i - 1]}" for i in range(a, b + 1)) + (f"\n… ещё строк: {len(lines) - b}" if b < len(lines) else "")
         if name == "list_files":
             out = []
             for p in sorted(t.dir.rglob("*")):
@@ -1234,7 +1764,7 @@ class TaskManager:
             (out / f"{p.stem}.srt").write_text("\n".join(f"{i}\n{ts(a, True)} --> {ts(b, True)}\n{x}\n" for i, (a, b, x) in enumerate(segs, 1)), encoding="utf-8")
             t.journal(f"🎙 Расшифровал {p.name}: {len(segs)} фрагментов")
             return (f"Готово: outputs/{p.stem}.txt и outputs/{p.stem}.srt ({len(segs)} фрагментов). Начало:\n" + txt[:6000]
-                    + ("\n…(дальше — в файле, читай read_file)" if len(txt) > 6000 else ""))
+                    + ("\n…(дальше — в файле, читай file_read)" if len(txt) > 6000 else ""))
         if name == "download":
             import httpx
             url = str(args.get("url") or "").strip()
@@ -1302,12 +1832,7 @@ class TaskManager:
         if r.returncode:
             q = self._q(t)
             q["errors"] = (q["errors"] + [{"tool": "run_python", "text": (r.stderr.strip() or out)[-240:]}])[-10:]
-        if len(out) > 12000:                                  # длинный вывод целиком — в файл, модели — начало и конец
-            full = t.dir / "_out" / f"вывод{n}.txt"
-            full.parent.mkdir(parents=True, exist_ok=True)
-            full.write_text(out, encoding="utf-8")
-            out = (out[:6000] + f"\n…[середина вывода — в файле _out/вывод{n}.txt: читай её read_file по частям, не запускай заново]…\n"
-                   + out[-5000:])
+        # длинный вывод целиком — в _out/, модели — начало и конец (_offload в _tool, общий для всех инструментов)
         return f"Код выхода {r.returncode}.\n{out or '(вывода нет)'}" + (f"\n\n{hint}" if hint else "")
 
     @staticmethod
@@ -1325,21 +1850,56 @@ class TaskManager:
         else:
             msgs.append({"role": "user", "content": text})
 
+    @staticmethod
+    def _note_human(t, text):
+        """Ответ человека (ask_user) и его сообщение задаче — сразу в блокнот, раздел «Ответы человека»: при сжатии памяти
+        они не теряются (рецензия 0.83: «Казань» пропадала после сжатия)."""
+        text = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not text:
+            return
+        nb = t.notebook() or NOTEBOOK_HEAD
+        line = f"- {text[:1500]} _({dt.datetime.now():%d.%m %H:%M})_"
+        head = "## Ответы человека\n"
+        if head in nb:
+            nb = nb.replace(head, head + line + "\n", 1)
+        else:
+            m = re.search(r"^# .*\n+", nb)
+            at = m.end() if m else 0
+            nb = nb[:at] + head + line + "\n\n" + nb[at:]
+        t.set_notebook(nb)
+
     def _consolidate(self, t, prof, dropped):
         """Важное из шагов, которые уходят из разговора, — в блокнот (переписывает модель). Не вышло — дописываем
         в блокнот краткие действия и результаты как есть, чтобы факты не потерялись."""
         lines = []
+
+        def res(txt):
+            txt = str(txt or "")
+            return ("Ответ человека" if txt.startswith(("Ответ пользователя", "Ответ на твой вопрос")) else "Результат") + f": {txt[:1500]}"
         for m in dropped:
             c = m.get("content")
-            if isinstance(c, list):
-                c = " ".join(str(x.get("text", "")) if isinstance(x, dict) else str(x) for x in c)
+            role = m.get("role")
             for x in m.get("tool_calls") or []:
                 f = x.get("function") or {}
                 lines.append(f"Действие: {f.get('name')} {str(f.get('arguments'))[:300]}")
-            if c:
-                lines.append(f"{'Результат' if m.get('role') == 'tool' else 'Модель' if m.get('role') == 'assistant' else 'Сообщение'}: "
-                             f"{str(c)[:1500]}")
-        text = "\n".join(lines)[-24000:]
+            if isinstance(c, list):                    # Claude: text, tool_use, tool_result — блоками (рецензия 0.83)
+                for b in c:
+                    if not isinstance(b, dict):
+                        continue
+                    if b.get("type") == "tool_use":
+                        lines.append(f"Действие: {b.get('name')} {json.dumps(b.get('input') or {}, ensure_ascii=False)[:300]}")
+                    elif b.get("type") == "tool_result":
+                        bc = b.get("content")
+                        lines.append(res("".join(x.get("text", "") for x in bc if isinstance(x, dict)) if isinstance(bc, list) else bc))
+                    elif b.get("type") == "text" and b.get("text"):
+                        lines.append(f"{'Модель' if role == 'assistant' else 'Сообщение'}: {b['text'][:1500]}")
+            elif c:
+                lines.append(res(c) if role == "tool" else f"{'Модель' if role == 'assistant' else 'Сообщение'}: {str(c)[:1500]}")
+        # окно модели маленькое — и переписка блокнота короче (иначе она сама не влезет: выпуск 1); слова человека — всегда
+        human = [ln for ln in lines if ln.startswith(("Ответ человека", "Сообщение"))]
+        lim = max(2000, min(24000, int(int(t.data.get("win") or WIN_DEFAULT) * 3 * 0.3)))
+        rest = "\n".join(ln for ln in lines if ln not in human)[-max(500, lim - len("\n".join(human))):]
+        text = "\n".join(human)[:lim] + ("\n" if human else "") + rest
         try:
             from llm import stream_chat
             out = "".join(stream_chat(prof, "Ты ведёшь блокнот долгой задачи. Ответь только новым текстом блокнота в Markdown.",
@@ -1357,7 +1917,7 @@ class TaskManager:
                 return
         except Exception as e:  # noqa: BLE001
             log.info("Блокнот задачи не обновился моделью: %s", e)
-        keep = [ln for ln in lines if ln.startswith(("Результат", "Действие"))]
+        keep = [ln for ln in lines if ln.startswith(("Результат", "Действие", "Сообщение", "Ответ человека"))]
         t.set_notebook((t.notebook() or NOTEBOOK_HEAD).rstrip() + "\n\n## Из ранних шагов (кратко)\n"
                        + "\n".join("- " + ln[:300] for ln in keep)[-6000:])
         t.journal("🧠 Ранние шаги ушли из памяти — их краткие итоги дописаны в блокнот.")
@@ -1369,7 +1929,18 @@ class TaskManager:
         budget = budget or BUDGET
         size = lambda m: len(json.dumps(m, ensure_ascii=False))  # noqa: E731
         total = sum(size(m) for m in msgs)
-        if len(msgs) <= 3 or total <= budget:
+        if total <= budget:
+            return msgs
+        # выпуск 1: сначала дешевле — убрать старые результаты и большие тексты в вызовах (даже в последних шагах, если
+        # одного шага хватает, чтобы не влезть: write_file на 10 тыс. знаков при окне 8 тыс.) — шаги и факты остаются
+        for keep in (TRIM_AFTER // 2, 2, 0):
+            msgs, n = self._trim(t, msgs, keep=keep)
+            total = sum(size(m) for m in msgs)
+            if n:
+                t.journal(f"🧹 Старые результаты убраны из памяти ({n}) — память задачи упёрлась в окно модели.")
+            if total <= budget:
+                return msgs
+        if len(msgs) <= 3:
             return msgs
         k = 1
         while k < len(msgs) - 2 and total > budget * 0.6:
@@ -1386,6 +1957,185 @@ class TaskManager:
         if note not in str(first.get("content")):
             first["content"] = f"{first.get('content')}\n\n{note}"
         return [first] + msgs[k:]
+
+    # ---------- окно и кэш (выпуск 1 «Больших задач», docs/HARNESS.md) ----------
+
+    @staticmethod
+    def _window(prof):
+        """Окно модели в токенах: из профиля (context_window), у своего сервера — спросить (llm.context_window: LM Studio,
+        Ollama, vLLM), у Claude — 200 тыс., иначе WIN_DEFAULT. Ошибка «не хватило окна» уменьшает его для задачи (_run)."""
+        try:
+            w = int(prof.get("context_window") or prof.get("ctx") or 0)
+        except (TypeError, ValueError):
+            w = 0
+        if not w and prof.get("kind") == "anthropic":
+            w = 200000
+        if not w:
+            try:
+                from llm import context_window
+                w = int(context_window(prof) or 0)
+            except Exception:  # noqa: BLE001
+                w = 0
+        return w or WIN_DEFAULT
+
+    @staticmethod
+    def _reserve(t, prof):
+        """Место под ответ модели (токенов): лимит ответа профиля, но не больше четверти окна. Его же задача и шлёт модели
+        как max_tokens (рецензия 0.83: окно 4 тыс. — запрос + 2048 на ответ не помещались, задача падала на первом шаге)."""
+        win = int(t.data.get("win") or WIN_DEFAULT)
+        return max(256, min(int(prof.get("max_tokens") or 2048), win // 4))
+
+    @staticmethod
+    def _win_key(prof):
+        return f"{prof.get('base_url') or ''}|{prof.get('model') or ''}"
+
+    @staticmethod
+    def _size(x):
+        return est_tokens(json.dumps(x, ensure_ascii=False))
+
+    def _budget(self, t, prof, system, specs, state):
+        """Сколько знаков истории можно держать: доля окна COMPACT_AT минус подсказка, инструменты, состояние и запас на
+        ответ; не больше BUDGET (у больших окон — как раньше: дольше держать дороже)."""
+        win = int(t.data.get("win") or WIN_DEFAULT)
+        reserve = self._reserve(t, prof)                                       # место под ответ (vLLM: запрос + max_tokens ≤ окна)
+        # как на деле уходит серверу: строки в JSON (переводы строк — «\\n»), инструменты — в обёртке {"type": "function"}
+        fixed = self._size(system) + (self._size([{"type": "function", "function": x} for x in specs]) if specs else 0) + self._size(state)
+        return max(1200, min(BUDGET, (min(int(win * COMPACT_AT), win - reserve) - fixed) * 3))
+
+    @staticmethod
+    def _calls_of(m):
+        """Вызовы в сообщении модели (любой протокол) -> [(id, name, args)]; prompt-режим — по тегам <tool_call>."""
+        out = []
+        for x in m.get("tool_calls") or []:                               # OpenAI
+            f = x.get("function") or {}
+            try:
+                a = json.loads(f.get("arguments") or "{}")
+            except ValueError:
+                a = {}
+            out.append((x.get("id"), f.get("name"), a if isinstance(a, dict) else {}))
+        c = m.get("content")
+        if isinstance(c, list):                                          # Claude
+            out += [(b.get("id"), b.get("name"), b.get("input") or {}) for b in c if isinstance(b, dict) and b.get("type") == "tool_use"]
+        elif isinstance(c, str) and "<tool_call>" in c:                  # функции текстом
+            for j in re.findall(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", c, re.S):
+                try:
+                    d = json.loads(j)
+                    out.append((None, d.get("name"), d.get("arguments") or {}))
+                except ValueError:
+                    pass
+        return out
+
+    @staticmethod
+    def _stub(name, args, text):
+        """Заглушка вместо старого результата: что это было и где взять снова."""
+        hint = ""
+        for k in ("path", "url", "query", "command", "pattern", "name"):
+            if isinstance(args, dict) and args.get(k):
+                hint = str(args[k])[:160]
+                break
+        m = re.search(r"_out/[^\s\]:]+\.txt", text or "")
+        where = f"целиком — {m.group(0)}" if m else ("перечитай, если нужно" if hint else "повтори, если нужно")
+        return f"[убрано из памяти: результат {name}" + (f" ({hint})" if hint else "") + f" — {where}]"
+
+    def _trim(self, t, msgs, keep=None):
+        """Чистка: результаты инструментов старше keep шагов (кроме ответов человека и итогов частей) — заглушкой
+        «[убрано из памяти: …]», большие тексты в старых вызовах (содержимое write_file, код run_python) — короткой пометкой.
+        Шаги и порядок действий остаются — модель видит, что делала. -> (новый список, сколько убрано)."""
+        keep = TRIM_AFTER if keep is None else keep
+        steps = [i for i, m in enumerate(msgs) if m.get("role") == "assistant" and self._calls_of(m)]
+        if len(steps) <= keep:
+            return msgs, 0
+        cut = steps[-keep] if keep else len(msgs)
+        # keep=0 — только большие тексты в вызовах (и в последнем шаге); результат последнего шага модель ещё не видела —
+        # его не трогаем никогда (иначе после сжатия она получала заглушку вместо ответа инструмента)
+        cut_res = steps[-max(keep, 1)]
+        out, n = [dict(m) for m in msgs], 0
+        calls = {}
+        last_calls = []
+        for i in range(len(out)):
+            if i >= cut:
+                break
+            m = out[i]
+            cs = self._calls_of(m) if m.get("role") == "assistant" else []
+            if cs:
+                last_calls = cs
+                for cid, nm, a in cs:
+                    calls[cid] = (nm, a)
+                # большие тексты в аргументах старых вызовов
+                if m.get("tool_calls"):
+                    tc = []
+                    for x in m["tool_calls"]:
+                        f = dict(x.get("function") or {})
+                        try:
+                            a = json.loads(f.get("arguments") or "{}")
+                        except ValueError:
+                            a = None
+                        if isinstance(a, dict):
+                            a2 = self._slim_args(f.get("name"), a)
+                            if a2 is not a:
+                                f["arguments"] = json.dumps(a2, ensure_ascii=False)
+                                n += 1
+                        tc.append(dict(x, function=f))
+                    m["tool_calls"] = tc
+                elif isinstance(m.get("content"), list):
+                    bl = []
+                    for b in m["content"]:
+                        if isinstance(b, dict) and b.get("type") == "tool_use":
+                            a2 = self._slim_args(b.get("name"), b.get("input") or {})
+                            if a2 is not (b.get("input") or {}):
+                                b = dict(b, input=a2)
+                                n += 1
+                        bl.append(b)
+                    m["content"] = bl
+                continue
+            if i >= cut_res:
+                continue
+            if m.get("role") == "tool":                                  # OpenAI
+                nm, a = calls.get(m.get("tool_call_id"), ("?", {}))
+                c = m.get("content")
+                if isinstance(c, str) and len(c) > 400 and nm not in NO_TRIM and not c.startswith("[убрано"):
+                    m["content"] = self._stub(nm, a, c)
+                    n += 1
+            elif m.get("role") == "user" and isinstance(m.get("content"), list):   # Claude: tool_result
+                bl = []
+                for b in m["content"]:
+                    if isinstance(b, dict) and b.get("type") == "tool_result":
+                        nm, a = calls.get(b.get("tool_use_id"), ("?", {}))
+                        parts = b.get("content")
+                        txt = "".join(x.get("text", "") for x in parts if isinstance(x, dict)) if isinstance(parts, list) else str(parts or "")
+                        if len(txt) > 400 and nm not in NO_TRIM and not txt.startswith("[убрано") and \
+                                not any(isinstance(x, dict) and x.get("type") == "image" for x in (parts if isinstance(parts, list) else [])):
+                            b = dict(b, content=[{"type": "text", "text": self._stub(nm, a, txt)}])
+                            n += 1
+                    bl.append(b)
+                m["content"] = bl
+            elif m.get("role") == "user" and isinstance(m.get("content"), str) and "<tool_response>" in m["content"]:
+                parts = re.split(r"(<tool_response>\n?.*?\n?</tool_response>)", m["content"], flags=re.S)
+                k, changed = 0, False
+                for j, part in enumerate(parts):
+                    if part.startswith("<tool_response>"):
+                        nm, a = (last_calls[k][1], last_calls[k][2]) if k < len(last_calls) else ("?", {})
+                        k += 1
+                        body = part[len("<tool_response>"):-len("</tool_response>")].strip()
+                        if len(body) > 400 and nm not in NO_TRIM and not body.startswith("[убрано"):
+                            parts[j] = f"<tool_response>\n{self._stub(nm, a, body)}\n</tool_response>"
+                            changed = True
+                            n += 1
+                if changed:
+                    m["content"] = "".join(parts)
+        return out, n
+
+    @staticmethod
+    def _slim_args(name, a):
+        """Аргументы старого вызова без больших текстов (тот же объект, если убирать нечего)."""
+        big = {k: v for k, v in a.items() if isinstance(v, str) and len(v) > 1500}
+        if not big:
+            return a
+        a2 = dict(a)
+        for k, v in big.items():
+            where = f" — в файле {a.get('path')}" if a.get("path") else ""
+            a2[k] = f"[убрано из памяти: {len(v)} знаков{where}]"
+        return a2
 
     def _fail(self, t, e, bug=False):
         """Задача остановилась с ошибкой: статус, журнал, след для уроков, голос и уведомление, пульс и журнал сбоев."""
@@ -1498,7 +2248,8 @@ class TaskManager:
             goal = (f"{p['goal'].strip()}\n\n(Это часть большой задачи «{t.title}»: {t.goal[:600]}\nСделай только эту часть. "
                     "Результат — файлы в outputs/ (покажи их show) и итог в finish: что сделано и главное содержание — "
                     "его прочитает основная задача.)")
-            c = self.create(title, goal, project="", start=False, persona=t.data.get("persona") or "", parent=t.id)
+            c = self.create(title, goal, project="", start=False, persona=t.data.get("persona") or "", parent=t.id,
+                            folders=[str(f) for f in self._folders(t)])     # части видят те же папки человека
             made.append(c)
             t.journal(f"🧩 Часть «{c.title}» отдана помощнику.")
         self._launch_parts(t)
@@ -1610,9 +2361,22 @@ class TaskManager:
             prof = self.host.llm_profile()
             if not prof:
                 raise LLMError("не выбрана языковая модель")
+            # окно модели — на весь запуск (выпуск 1): от него бюджет истории, объём блокнота в состоянии, лёгкий режим
+            win = self._window(prof)
+            wl = t.data.get("win_learned")
+            if isinstance(wl, dict) and wl.get("key") == self._win_key(prof):   # упирались в окно этой же модели — она меньше,
+                win = min(win, int(wl.get("win") or win))                     # чем говорит сервер
+            elif wl is not None:
+                t.data.pop("win_learned", None)               # другая модель (или старая запись) — окно узнаём заново
+            t.data.update(win=win, light=win <= LIGHT_WIN)
+            system = self._system(t)                      # неизменна весь запуск: начало запроса — из кэша сервера
+            ctx_tries = 0
+            qu = q.setdefault("usage", {"in": 0, "out": 0, "cached": 0, "req": 0, "est": 0, "ck": 0, "sec": 0.0})
             while not t.cancel.is_set():
                 inbox = t.data.pop("inbox", None)
                 if inbox:                                         # пользователь написал задаче
+                    for x in inbox:
+                        self._note_human(t, x.get("text"))
                     self._add_user(msgs, "Сообщение пользователя для этой задачи:\n" + "\n".join(f"— {x['text']}" for x in inbox)
                                    + "\nУчти это (важное — в блокнот) и продолжай.")
                     t.save()
@@ -1640,14 +2404,36 @@ class TaskManager:
                     break
                 text, calls = "", []
                 self._beat(t)
+                specs = self._specs(t)
+                state = self._state(t)
+                budget = self._budget(t, prof, system, specs, state)
+                msgs = self._compact(t, prof, msgs, budget)
+                t_call = time.monotonic()
                 try:
-                    for kind, val in stream_events(prof, self._system(t), msgs, cancel=t.cancel, tools=self._specs(t)):
+                    # _tail — «Состояние задачи» в конец запроса (в историю не пишется); _ctx — не резать историю в llm
+                    # (_ctx_cut оставил бы ответ инструмента без вызова): «не хватило окна» решаем здесь — сжатием
+                    for kind, val in stream_events(dict(prof, _ctx=True, _tail=state, max_tokens=self._reserve(t, prof)), system, msgs,
+                                                   cancel=t.cancel, tools=specs):
                         self._beat(t)
                         if kind == "tools":
                             calls = val
                         else:
                             text += val
                 except LLMError as e:
+                    if ctx_full(e) and ctx_tries < CTX_TRIES and not t.cancel.is_set():
+                        # выпуск 1: не хватило окна — сначала сжать и повторить, а не провал задачи
+                        ctx_tries += 1
+                        req = est_tokens(system) + self._size(specs) + self._size(msgs) + est_tokens(state)
+                        learned = max(2048, int((req + self._reserve(t, prof)) * 0.9))   # сервер считает и место под ответ
+                        if learned < int(t.data.get("win") or WIN_DEFAULT):
+                            t.data.update(win=learned, win_learned={"key": self._win_key(prof), "win": learned}, light=learned <= LIGHT_WIN)
+                            system = self._system(t)
+                        msgs, _n = self._trim(t, msgs, keep=2)
+                        cur = sum(len(json.dumps(m, ensure_ascii=False)) for m in msgs)
+                        msgs = self._compact(t, prof, msgs, max(1200, cur // 2))
+                        t.journal(f"↻ Модели не хватило окна — сжал память задачи и повторяю шаг (окно ≈{int(t.data['win'])} ток.).")
+                        _write_hist(hist, msgs)
+                        continue
                     blanks = int(t.data.get("blank_replies") or 0)
                     # «Задачи на часы» (пакет 29.10: «модель думала, но так и не ответила» — 42 раза у 4 человек, и задача
                     # падала): ушла в размышления и не уложилась — это тоже сбой шага, а не конец работы
@@ -1666,6 +2452,19 @@ class TaskManager:
                                              "если всё сделано).")
                     continue
                 t.data["blank_replies"] = 0
+                ctx_tries = 0
+                u = take_usage() or {}                     # метрики (выпуск 1): токены, доля кэша — в quality.usage
+                qu["req"] += 1
+                qu["sec"] = round(float(qu.get("sec") or 0) + time.monotonic() - t_call, 3)
+                if u.get("prompt"):
+                    qu["in"] += int(u["prompt"])
+                else:
+                    qu["in"] += est_tokens(system) + self._size(specs) + self._size(msgs) + est_tokens(state)
+                    qu["est"] += 1
+                if u.get("cached") is not None:
+                    qu["cached"] += int(u["cached"] or 0)
+                    qu["ck"] += 1
+                qu["out"] += int(u.get("out") or est_tokens(text + (json.dumps([c.get("args") for c in calls], ensure_ascii=False) if calls else "")))
                 if t.cancel.is_set():
                     break
                 t.data["steps"] += 1
@@ -1759,7 +2558,11 @@ class TaskManager:
                 # на каждый вызов нужен ответ, иначе модель отвергнет историю — невыполненные закрываем заглушкой
                 results += ["(не выполнено: задача ушла ждать — повтори после пробуждения, если нужно)"] * (len(calls) - len(results))
                 msgs += tool_turn_messages(prof, text, calls, results)
-                msgs = self._compact(t, prof, msgs)
+                if run_steps % TRIM_EVERY == 0:              # чистка пачкой: кэш ломается раз в TRIM_EVERY шагов, а не каждый
+                    msgs, _n = self._trim(t, msgs)
+                    if _n:
+                        t.journal(f"🧹 Старые результаты убраны из памяти ({_n}) — они в журнале и файлах.")
+                msgs = self._compact(t, prof, msgs, budget)
                 _write_hist(hist, msgs)
                 t.save()
                 self._emit(t)

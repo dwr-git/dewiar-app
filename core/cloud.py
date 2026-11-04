@@ -221,7 +221,8 @@ class Cloud:
             raise CloudError("в облаке пока нет доступных моделей — напишите администратору")
         m = models[0]
         prof = {"name": "Dewiar Облако", "kind": "openai", "base_url": api_base(url), "api_key": key, "model": m["id"],
-                "cloud": True, "title": m.get("title") or m["id"]}
+                "cloud": True, "title": m.get("title") or m["id"],
+                "net": bool(self.s.get("cloud", "net_share"))}       # «Сеть Лиры»: X-Dewiar-Net — только если человек разрешил (liranet.py)
         profiles = dict(self.s.get("llm", "profiles") or {})
         profiles[PROFILE_ID] = prof
         llm = {"profiles": profiles}

@@ -251,15 +251,15 @@ class HomeHub:
                         continue
                     upd = min(int(c.get("updated") or now_ms), now_ms + 60000)
                     cur = db.execute("SELECT updated, dev FROM items WHERE kind = ? AND iid = ?", (kind, iid)).fetchone()
-                    if "prev" in c and kind in ("vault", "taskreq") and cur and int(cur[0]) != int(c.get("prev") or 0) and cur[1] != dev:
+                    if "prev" in c and kind in ("vault", "taskreq", "note") and cur and int(cur[0]) != int(c.get("prev") or 0) and cur[1] != dev:
                         lost.append((kind, iid))
                         continue
                     if count is None:
                         count = db.execute("SELECT COUNT(*) FROM items").fetchone()[0]
                     if count > ITEMS_MAX:
                         break
-                    if cur and int(cur[0]) > upd:
-                        lost.append((kind, iid))           # здесь правка новее — она и останется, устройству вернём её
+                    if cur and (int(cur[0]) > upd or (int(cur[0]) == upd and cur[1] != dev)):
+                        lost.append((kind, iid))           # здесь правка новее (или та же с другого устройства — как в cloud.php) — она и останется
                         continue
                     deleted = 1 if c.get("deleted") else 0
                     db.execute("INSERT OR REPLACE INTO items (kind, iid, data, updated, deleted, rev, dev) VALUES (?, ?, ?, ?, ?, ?, ?)",

@@ -388,6 +388,7 @@ function plpEdit(box) {
       <h2 class="plp-h2" style="margin-top:0">Что поменять? <small>словами — Лира перепишет страницу, прежняя версия сохранится</small></h2>
       <div class="plp-ed-row"><textarea id="plp-ed-q" rows="2" placeholder="Например: сделай цифры крупнее и добавь график по неделям"></textarea>
         <button class="btn primary" id="plp-ed-go">Изменить</button></div>
+      ${typeof pmkWho === "function" ? pmkWho("plp-ed-who") : ""}
       <div class="plp-say">${PLP_EDIT_IDEAS.map(t => `<button class="chip" data-idea="${plpEsc(t)}">${plpEsc(t)}</button>`).join("")}</div>
       <p class="plp-ed-st" id="plp-ed-st" aria-live="polite"></p>
     </div>
@@ -403,7 +404,7 @@ function plpEdit(box) {
     const text = q.value.trim(); if (!text) { q.focus(); return; }
     go.disabled = true; const t0 = Date.now();
     const tick = setInterval(() => { st.innerHTML = `<i class="plp-spin"></i> Лира переписывает плагин… ${Math.round((Date.now() - t0) / 1000)} с`; }, 500);
-    try { const res = await core.call("plugin_change", { id: p.id, request: text }); clearInterval(tick); done(res, res.said || "Готово"); }
+    try { const res = await core.call("plugin_change", { id: p.id, request: text, by: typeof pmkWhoVal === "function" ? pmkWhoVal("plp-ed-who") : "" }); clearInterval(tick); done(res, res.said || "Готово"); }
     catch (e) { clearInterval(tick); go.disabled = false; st.innerHTML = `<span class="plp-err plp-small">${plpEsc(e.message)}</span>`; }
   };
   $$("#plp-body [data-v]").forEach(b => b.onclick = async () => {

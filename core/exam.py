@@ -50,6 +50,7 @@ PASS_SCORE = 6
 STEP_S = float(os.environ.get("DEWIAR_EXAM_STEP_S") or 180)        # шаг (фраза → ответ) — не дольше
 SCEN_S = float(os.environ.get("DEWIAR_EXAM_SCEN_S") or 480)        # обычный сценарий — не дольше 8 минут
 LONG_MAX_S = float(os.environ.get("DEWIAR_EXAM_LONG_MAX_S") or 1500)   # долгий (задача, код) — не дольше 25 минут
+BIG_MAX_S = float(os.environ.get("DEWIAR_EXAM_BIG_MAX_S") or 3600)     # большая задача (группа «Большие задачи») — до 60 минут
 JUDGE_S = float(os.environ.get("DEWIAR_EXAM_JUDGE_S") or 120)      # судья — не дольше
 ALIVE_S = float(os.environ.get("DEWIAR_EXAM_ALIVE_S") or 12)       # раз в столько секунд — «жив ли экзамен» (облако)
 EXIT_CANCELLED = 3                                                  # код выхода: экзамен остановлен (доступ к модели отозван)
@@ -456,6 +457,9 @@ if __name__ == "__main__":
     unittest.main()
 ''',
 })
+# большие задачи (docs/HARNESS.md, раздел 5): заготовки и проверки — в exam_big.py, здесь — те же имена
+from exam_big import BIG_CHECKS, make_fixture  # noqa: E402,F401
+
 TEST_CMD = [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", ".", "-q"]
 
 
@@ -527,8 +531,10 @@ class Core:
         # ядро экзамена применяло само («apply_on_upgrade») — и писало память экзамена в настоящий аккаунт
         env["DEWIAR_PROVISION"] = str(self.tmp / "нет-provision.json")
         env["DEWIAR_EXAM_LAUNCH"] = str(self.tmp / "launch.jsonl")   # «включи видео» в экзамене — записано, а не браузер на сервере
+        # своя группа процессов: stop() гасит и ядро, и всё, что оно запустило (скрипты задач) — без сирот (Б11 перезапускает)
         self.proc = subprocess.Popen([sys.executable, str(ROOT / "core/main.py"), "--server"], env=env,
-                                     stdout=open(self.tmp / "core.log", "w"), stderr=subprocess.STDOUT)
+                                     stdout=open(self.tmp / "core.log", "a"), stderr=subprocess.STDOUT,
+                                     **({"start_new_session": True} if os.name != "nt" else {}))
         for _ in range(240):
             if (cfg / "token").exists():
                 break
@@ -622,11 +628,30 @@ class Core:
         except Exception:  # noqa: BLE001
             pass
         if self.proc:
-            self.proc.terminate()
+            import signal
+            grp = os.name != "nt" and hasattr(os, "killpg")
+
+            def kill(sig):
+                try:
+                    if grp:
+                        os.killpg(self.proc.pid, sig)
+                    elif sig == signal.SIGTERM:
+                        self.proc.terminate()
+                    else:
+                        self.proc.kill()
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
+            kill(signal.SIGTERM)
             try:
                 self.proc.wait(15)
             except subprocess.TimeoutExpired:
-                self.proc.kill()
+                kill(getattr(signal, "SIGKILL", signal.SIGTERM))
+                try:
+                    self.proc.wait(5)
+                except subprocess.TimeoutExpired:
+                    pass
+            if grp:
+                kill(getattr(signal, "SIGKILL", signal.SIGTERM))   # остатки группы (скрипты задач), если ядро ушло само
 
 
 # ---------- проверки ----------
@@ -1048,7 +1073,10 @@ class StepTimeout(Exception):
 
 
 def scenario_limit(sc):
-    """Сколько секунд сценарию можно идти: обычному — SCEN_S; долгому — время его задачи + 3 минуты, не больше LONG_MAX_S."""
+    """Сколько секунд сценарию можно идти: обычному — SCEN_S; долгому — время его задачи + 3 минуты, не больше LONG_MAX_S;
+    большой задаче — так же, но до BIG_MAX_S (60 минут)."""
+    if sc.get("big"):
+        return min(BIG_MAX_S, float(sc["big"].get("timeout") or 2400) + 180)
     if sc.get("code") or (sc.get("state") or {}).get("task"):
         own = float((sc.get("code") or {}).get("timeout") or ((sc.get("state") or {}).get("task") or {}).get("timeout") or 1200)
         return min(LONG_MAX_S, own + 180)
@@ -1087,7 +1115,9 @@ async def run_scenario(core, sc, judge_prof, work, log):
 async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
     try:
         await core.say("Начнём новый разговор", timeout=30)
-        if sc.get("code"):
+        if sc.get("big"):
+            state_text = await run_big(core, sc, res, t0, work, log)
+        elif sc.get("code"):
             c = sc["code"]
             repo = make_repo(c["repo"], work)
             t = await core.call("task_create", title=sc["title"], goal=c["goal"], project=str(repo))
@@ -1199,10 +1229,77 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
     return finish_result(core, res)
 
 
+async def run_big(core, sc, res, t0, work, log):
+    """Большая задача (группа «Большие задачи», docs/HARNESS.md раздел 5): задача создаётся без запуска, в её папку кладётся
+    заготовка (make_fixture — ответы остаются у экзамена), задача запускается; restart_after — после стольких шагов ядро
+    останавливается и запускается снова (Б11). Проверки — BIG_CHECKS, метрики — шаги, токены, доля кэша, время. -> текст для судьи."""
+    b = sc["big"]
+    goal = fill(b["goal"])
+    t = await core.call("task_create", title=sc["title"], goal=goal, start=False)
+    tdir = Path(t["dir"])
+    info = await _thread(make_fixture, b["fixture"], tdir, int(b.get("seed") or 1))
+    (Path(work) / "big").mkdir(parents=True, exist_ok=True)
+    (Path(work) / "big" / f"{sc['id']}.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")   # ответы — не в папке задачи
+    res["steps"].append({"say": f"[большая задача] {goal}", "answer": ""})
+    await core.call("task_resume", id=t["id"])
+    limit = float(b.get("timeout") or 2400)
+    if b.get("restart_after"):
+        end = time.monotonic() + limit
+        while time.monotonic() < end:
+            lst = await core.call("tasks_list") or []
+            x = next((y for y in lst if y.get("id") == t["id"]), {})
+            if int(x.get("steps") or 0) >= int(b["restart_after"]) or x.get("status") in ("done", "failed", "stopped"):
+                break
+            await asyncio.sleep(1)
+        if x.get("status") not in ("done", "failed", "stopped"):
+            log(f"   ↻ перезапуск ядра после шага {x.get('steps')}")
+            await core.stop()
+            core.start()
+            await core.connect()
+            info["restarted"] = True
+            for _ in range(120):                           # продолжит сама через ~20 с (auto_resume) — ждём, пока проснётся
+                lst = await core.call("tasks_list") or []
+                x = next((y for y in lst if y.get("id") == t["id"]), {})
+                if x.get("status") != "paused" or not x.get("auto_resume"):
+                    break
+                await asyncio.sleep(1)
+    t = await wait_task(core, t0, limit, tid=t["id"])
+    task_detail(res, t)
+    res["steps"][-1]["answer"] = ((t or {}).get("result") or "")[:1500]
+    st = (t or {}).get("status")
+    if b["fixture"] != "anki":
+        res["checks"].append({"name": "задача завершена", "ok": st == "done", "detail": f"статус: {st}"})
+    try:
+        res["checks"] += await _thread(BIG_CHECKS[b["fixture"]], tdir, info, t)
+    except Exception as e:  # noqa: BLE001 — сломалась проверка (кривой файл результата) — это провал сценария, не экзамена
+        res["checks"].append({"name": "проверка итога", "ok": False, "detail": f"{e.__class__.__name__}: {e}"})
+    res["metrics"] = big_metrics(t, time.time() - t0)
+    files = []
+    for p in sorted((tdir / "outputs").rglob("*")) if (tdir / "outputs").is_dir() else []:
+        if p.is_file():
+            files.append(f"{p.relative_to(tdir).as_posix()} ({p.stat().st_size} байт)")
+    return (f"задача: {st}; файлы: {', '.join(files[:20]) or 'нет'}; "
+            + "; ".join(f"{x['name']}: {'да' if x['ok'] else 'нет'}" + (f" ({x['detail']})" if x.get("detail") and not x["ok"] else "")
+                        for x in res["checks"]))
+
+
+def big_metrics(t, sec):
+    """Метрики большой задачи: шаги, токены на вход и выход, доля кэша, время (с)."""
+    u = ((t or {}).get("quality") or {}).get("usage") or {}
+    return {"steps": int((t or {}).get("steps") or 0), "tok_in": int(u.get("in") or 0), "tok_out": int(u.get("out") or 0),
+            "cache": round(u["cached"] / u["in"], 3) if u.get("ck") and u.get("in") else None, "time_s": round(sec), "req": int(u.get("req") or 0)}
+
+
 def finish_result(core, res):
     j = (res.get("judge") or {}).get("score")
     res["passed"] = (not res.get("error") and not res.get("skipped") and all(c["ok"] for c in res["checks"])
                      and (j is None or j >= PASS_SCORE))
+    # «не проверено» (нет браузера для Б5): не «сдано» и не «провал» — отдельный статус: всё, что проверено, прошло
+    unch = [c["name"] for c in res["checks"] if c.get("unchecked")]
+    res["partial"] = bool(unch and not res["passed"] and not res.get("error") and not res.get("skipped")
+                          and all(c["ok"] or c.get("unchecked") for c in res["checks"]) and (j is None or j >= PASS_SCORE))
+    if unch:
+        res["unchecked"] = unch
     if not res["passed"] and not res.get("skipped"):
         w = core_warnings(core)
         if w:
@@ -1219,23 +1316,44 @@ def summary(results):
         g = by.setdefault(r["group"], {"passed": 0, "total": 0})
         g["total"] += 1
         g["passed"] += 1 if r["passed"] else 0
+        if r.get("partial"):
+            g["partial"] = g.get("partial", 0) + 1
     done = [r for r in results if not r.get("skipped")]
     scores = [r["score"] for r in done if r.get("score") is not None]
-    return {"passed": sum(1 for r in done if r["passed"]), "total": len(done), "by_group": by,
-            "avg_score": round(sum(scores) / len(scores), 1) if scores else None}
+    out = {"passed": sum(1 for r in done if r["passed"]), "total": len(done), "by_group": by,
+           "partial": sum(1 for r in done if r.get("partial")),        # сдано не полностью: часть не проверить (нет браузера)
+           "avg_score": round(sum(scores) / len(scores), 1) if scores else None}
+    big = [r["metrics"] for r in done if r.get("metrics")]
+
+    def mean(xs):
+        return sum(xs) / len(xs) if xs else 0
+    if big:                                          # большие задачи: средние шаги, токены, доля кэша, время
+        cache = [m["cache"] for m in big if m.get("cache") is not None]
+        out["big"] = {"n": len(big), "steps": round(mean([m["steps"] for m in big]), 1), "tok_in": round(mean([m["tok_in"] for m in big])),
+                      "tok_out": round(mean([m["tok_out"] for m in big])), "cache": round(mean(cache), 3) if cache else None,
+                      "time_s": round(mean([m["time_s"] for m in big]))}
+    return out
 
 
 def markdown(rep):
     s = rep["summary"]
     lines = [f"# Экзамен Dewiar {rep['version']} — {rep['started'][:16].replace('T', ' ')}", "",
              f"Модель: **{rep['model']}**. Сдано **{s['passed']} из {s['total']}**"
+             + (f" (и ещё {s['partial']} — не проверено до конца: нет браузера)" if s.get("partial") else "")
              + (f", средняя оценка судьи {s['avg_score']}" if s.get("avg_score") is not None else "") + f", {round(rep['duration_s'] / 60)} мин.", ""]
     for g, v in s["by_group"].items():
-        lines.append(f"- {g}: {v['passed']} из {v['total']}")
+        lines.append(f"- {g}: {v['passed']} из {v['total']}" + (f", не проверено до конца — {v['partial']}" if v.get("partial") else ""))
+    if s.get("big"):
+        b = s["big"]
+        lines.append(f"- большие задачи в среднем: шагов {b['steps']}, токенов {b['tok_in']} на вход и {b['tok_out']} на выход"
+                     + (f", из кэша {round(100 * b['cache'])}%" if b.get("cache") is not None else "") + f", {_dur(b['time_s'])}")
     for r in rep["scenarios"]:
-        mark = "⏭" if r.get("skipped") else ("✅" if r["passed"] else "❌")
+        mark = "⏭" if r.get("skipped") else ("✅" if r["passed"] else ("◐" if r.get("partial") else "❌"))
         lines += ["", f"## {mark} {r['group']} — {r['title']}" + (" 🎬" if r.get("video") else ""),
                   f"_{r['time_s']} с" + (f", судья: {r['score']:g}/10 — {r['judge']['why']}" if r.get("score") is not None else "") + "_"]
+        if r.get("metrics"):
+            m = r["metrics"]
+            lines.append(f"_Шагов {m['steps']}, токенов {m['tok_in']} → {m['tok_out']}" + (f", из кэша {round(100 * m['cache'])}%" if m.get("cache") is not None else "") + "_")
         for st in r["steps"]:
             lines += ["", f"> **Вы:** {st['say']}"]
             for x in st.get("tools") or []:
@@ -1248,7 +1366,7 @@ def markdown(rep):
             if tk.get("journal"):
                 lines += ["", "<details><summary>Журнал задачи (конец)</summary>", "", "```", tk["journal"][-2000:], "```", "", "</details>"]
         for c in r["checks"]:
-            lines.append(f"- {'✓' if c['ok'] else '✗'} {c['name']}" + (f" — `{c['detail'][:160]}`" if c.get("detail") and not c["ok"] else ""))
+            lines.append(f"- {'✓' if c['ok'] else ('◐' if c.get('unchecked') else '✗')} {c['name']}" + (f" — `{c['detail'][:160]}`" if c.get("detail") and not c["ok"] else ""))
         if r.get("error"):
             lines.append(f"- ⚠ {r['error']}")
         if r.get("skipped"):
@@ -1304,10 +1422,11 @@ def load_partial(path):
         return None
 
 
-async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False, partial=None, resume=False):
+async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, keep=None, lean=False, partial=None, resume=False, big=False):
     from version import VERSION
     data = json.loads(SCEN.read_text(encoding="utf-8"))
-    scs = [s for s in data["scenarios"] if (not only or s["id"] in only) and (long or not s.get("long") or (only and s["id"] in only))]
+    scs = [s for s in data["scenarios"] if (not only or s["id"] in only) and (long or not s.get("long") or (only and s["id"] in only))
+           and (big or not s.get("big") or (only and s["id"] in only))]   # большие задачи — только с --big (галочка)
     tmp = Path(keep) if keep else Path(tempfile.mkdtemp(prefix="dewiar-exam-"))
     core = Core(profile, tmp / "core", log, lean=lean)
     started = dt.datetime.now()
@@ -1355,7 +1474,7 @@ async def run_exam(profile, judge_prof=None, only=None, long=False, log=print, k
            # проба короткой инструкции — в подписи модели: в кабинете и отчёте сразу видно, какой прогон с чем сравнивать
            "model": (profile.get("title") or profile.get("model") or "?") + (" · короткая инструкция" if lean else ""), "lean": bool(lean),
            "host": platform.node()[:40],
-           "os": f"{platform.system()} {platform.release()}"[:60], "long": bool(long), "scenarios": results}
+           "os": f"{platform.system()} {platform.release()}"[:60], "long": bool(long), "big": bool(big), "scenarios": results}
     rep["summary"] = summary(results)
     return rep
 
@@ -1384,6 +1503,7 @@ def main():
     ap.add_argument("--judge", help="профиль судьи JSON (по умолчанию — та же модель)")
     ap.add_argument("--only", help="только эти сценарии: id через запятую")
     ap.add_argument("--long", action="store_true", help="и долгие: фоновые задачи и код")
+    ap.add_argument("--big", action="store_true", help="и большие задачи (Б3–Б7, Б11: до часа каждая, docs/HARNESS.md)")
     ap.add_argument("--out", default=".", help="куда положить отчёт")
     ap.add_argument("--upload", action="store_true", help="отправить отчёт в кабинет (тем же ключом)")
     ap.add_argument("--keep", help="папка для временных файлов ядра (не удалять — для разбора)")
@@ -1408,7 +1528,7 @@ def main():
         ap.error("нужен --key или --llm")
     jp = json.loads(a.judge) if a.judge else None
     rep = asyncio.run(run_exam(prof, jp, set(a.only.split(",")) if a.only else None, a.long, keep=a.keep, lean=a.lean,
-                               log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume))
+                               log=lambda t: print(t, flush=True), partial=a.partial, resume=a.resume, big=a.big))
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     stem = f"exam-{rep['started'][:16].replace('-', '').replace(':', '').replace('T', '-')}"

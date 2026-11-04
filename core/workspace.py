@@ -284,6 +284,75 @@ class Workspace:
             (r / MEMORY).write_text(MEMORY_HEAD, encoding="utf-8")
         return r
 
+    @staticmethod
+    def _is_dewiar(p: Path) -> bool:
+        return (p / "Заметки").is_dir() and (p / "Память").is_dir()
+
+    def move_to(self, target, on_progress=None):
+        """Перенести папку ассистента в target с копированием (№538, 04.11: «поставил на диск F, а база — в „Документах“
+        на диске C»). Выбрали непустую чужую папку (например, корень диска F) — внутри неё «Dewiar». Там уже папка Dewiar — просто
+        переключаемся на неё. Копия — во временную папку рядом, сверка числа файлов и размеров, затем переименование;
+        места не хватает или копия не сошлась — ничего не меняется. Старая папка остаётся: удалить её — решает человек.
+        -> {"path", "old", "files", "bytes", "switched"} (переключить настройку — дело вызывающего: ws_set_path)."""
+        src = self.root
+        dst = Path(os.path.expanduser(str(target or "").strip().strip('"')))
+        if not str(target or "").strip():
+            raise WorkspaceError("укажите папку, куда перенести")
+        if not dst.is_absolute():
+            raise WorkspaceError("нужен полный путь к папке")
+        try:
+            dst = dst.resolve()
+        except OSError:
+            pass
+        if dst.exists() and any(dst.iterdir()) and not self._is_dewiar(dst):
+            dst = dst / "Dewiar"                        # корень диска или «Мои документы» — внутри неё своя папка
+        if dst == src:
+            raise WorkspaceError("папка ассистента уже здесь")
+        if src in dst.parents or dst in src.parents:
+            raise WorkspaceError("новая папка не может быть внутри старой (и наоборот)")
+        if dst.exists() and self._is_dewiar(dst):
+            return {"path": str(dst), "old": str(src), "files": 0, "bytes": 0, "switched": True}
+        if dst.exists() and any(dst.iterdir()):
+            raise WorkspaceError(f"в «{dst}» уже что-то есть — выберите пустую папку")
+        files = [f for f in src.rglob("*") if f.is_file()] if src.exists() else []
+        size = sum(f.stat().st_size for f in files)
+        base = dst.parent
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+            free = shutil.disk_usage(str(base)).free
+        except OSError as e:
+            raise WorkspaceError(f"нет доступа к «{base}»: {e.strerror or e}") from e
+        if free < size + 50 * 2 ** 20:
+            raise WorkspaceError(f"на диске мало места: нужно {size / 2 ** 20:.0f} МБ, свободно {free / 2 ** 20:.0f} МБ")
+        tmp = dst.with_name(dst.name + ".перенос")
+        shutil.rmtree(tmp, ignore_errors=True)
+        try:
+            if src.exists():
+                done = [0]
+
+                def cp(a, b):
+                    shutil.copy2(a, b)
+                    done[0] += 1
+                    if on_progress and done[0] % 200 == 0:
+                        on_progress(done[0], len(files))
+                shutil.copytree(src, tmp, copy_function=cp)
+            else:
+                tmp.mkdir(parents=True)
+            got = [f for f in tmp.rglob("*") if f.is_file()]
+            if len(got) < len(files) or sum(f.stat().st_size for f in got) < size:
+                raise WorkspaceError(f"копия не сошлась ({len(got)} из {len(files)} файлов) — ничего не меняю")
+            if dst.exists():
+                dst.rmdir()                                 # пустая — на её место копия
+            tmp.rename(dst)
+        except OSError as e:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise WorkspaceError(f"не получилось скопировать: {e.strerror or e}") from e
+        except WorkspaceError:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        log.info("📁 Папка ассистента перенесена: %s → %s (%d файлов, %.1f МБ)", src, dst, len(files), size / 2 ** 20)
+        return {"path": str(dst), "old": str(src), "files": len(files), "bytes": size, "switched": False}
+
     def safe(self, rel) -> Path:
         """Путь внутри папки ассистента — и никуда больше. resolve() раскрывает «..» и ссылки до проверки,
         поэтому выйти наружу не помогает и символическая ссылка внутри папки."""

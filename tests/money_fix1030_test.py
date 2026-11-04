@@ -66,7 +66,7 @@ with sync_playwright() as p:
     pg.goto((www / "index.html").as_uri()); pg.wait_for_timeout(900)
     r = pg.evaluate("""async () => { await runTool('money_add', { kind: 'expense', amount: 8, category: 'Кафе', note: 'кофе' });
         await runTool('money_add', { kind: 'expense', amount: 8, category: 'Кафе', note: 'кофе' });
-        const f = await runTool('money_find', { text: 'кофе' }); const ids = [...f.matchAll(/^(m\\d+):/gm)].map(x => x[1]);
+        const f = await runTool('money_find', { text: 'кофе' }); const ids = [...f.matchAll(/^(m[0-9a-z]+):/gm)].map(x => x[1]);
         const ask = await runTool('money_fix', { ids: [ids[0]], action: 'delete' }); const n1 = money().length;
         const done = await runTool('money_fix', { ids: [ids[0]], action: 'delete', confirmed: true });
         return [f, ids.length, ask, n1, done, money().length]; }""")

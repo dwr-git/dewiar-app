@@ -16,7 +16,8 @@
     }
     on(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); return this; }
     off(type, fn) { this.handlers[type] = (this.handlers[type] || []).filter(f => f !== fn); return this; }
-    emit(type, e) { (this.handlers[type] || []).forEach(fn => { try { fn(e); } catch (err) { console.error(err); } }); }
+    emit(type, e) { (this.handlers[type] || []).forEach(fn => { try { fn(e); } catch (err) { console.error(err);
+      if (window.__jsErr) window.__jsErr.push(`${type}: ${err && err.message}`); } }); }   // №530: и в журнал ядра (studio/news.js)
     connect() {
       let ws;
       try { ws = new WebSocket(`ws://127.0.0.1:${this.port}`); } catch (e) { return this.retry(); }

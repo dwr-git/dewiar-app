@@ -20,6 +20,7 @@
 связывает их в одно пространство (X-Sync-Link), чтобы телефон с ключом и компьютер с аккаунтом видели одно и то же.
 """
 
+import base64
 import datetime as dt
 import hashlib
 import json
@@ -40,7 +41,8 @@ from settings import STATE_DIR
 log = logging.getLogger("dewiar.sync")
 
 BASE_KINDS = ("reminder", "note", "money", "memory")          # знает любой сервер
-EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory", "safe")   # тот же список $extra в cloud.php
+EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory", "safe",
+               "plugin")                          # тот же список $extra в cloud.php; plugin — только между компьютерами (не по Wi-Fi)
 VAULT_MAX = 300_000                               # сервер не принимает запись больше 300 КБ — такие заметки не шлём
 VAULT_FILES = 15000
 CHUNK = 400                                       # изменений за один запрос (сервер берёт до 2000; первая отправка большого хранилища — частями)
@@ -60,7 +62,7 @@ CONST_PREV = "Память/Конституция — прежняя.md"
 # Сквозное шифрование (sync.e2e, core/synckey.py): что шифруется на устройстве — всё личное. Открытыми остаются только
 # метка «шифрование включено» (mind:e2e), задачи для облака (taskreq с cloud — их выполняет сервер) и удаления (пустые).
 E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory",
-             "bill", "pay", "payfile", "safe")          # safe и без того шифр мастер-пароля — с e2e он ещё и в конверте ключа синхронизации
+             "bill", "pay", "payfile", "safe", "plugin")          # safe и без того шифр мастер-пароля — с e2e он ещё и в конверте ключа синхронизации
 # «Платежи» между компьютерами (27.10, владелец: «платежи дома заполнил… а на работе их нет»): bill — счёт, pay — оплата,
 # payfile — вложение (платёжка, скриншот) кусками: облако берёт запись до 300 КБ, а зашифрованная на треть длиннее
 PF_CHUNK = 150_000
@@ -108,6 +110,24 @@ def _pmem_id(name, text):
     return "m" + hashlib.sha1(str(name).strip().lower().encode("utf-8")).hexdigest()[:8] + "-" + (_fact_id(text) if text else "")
 
 
+_NUM_TAIL = re.compile(r"\s*\(\d{1,3}\)$")
+
+
+def _base_title(title):
+    """Название без хвоста « (2)» — его дописывает компьютер, когда имя файла занято (как noteBase в app.js)."""
+    return _NUM_TAIL.sub("", " ".join(str(title or "").split()))
+
+
+def _note_norm(title, text):
+    """Текст заметки для сравнения «та же ли»: без «# Название» в начале (компьютер его дописывает, и там может не быть
+    « (2)» из имени файла) и лишних пробелов — как noteNorm в app.js."""
+    t = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    first = t.split("\n", 1)[0]
+    if first.startswith("# ") and _base_title(first[2:]) == _base_title(title):
+        t = t[len(first):].strip()
+    return re.sub(r"\s+", " ", t)
+
+
 def _fact_id(text):
     """id строки памяти — по её тексту; нормализация та же, что у factId() в app.js, иначе телефон и компьютер
     разойдутся в id и удаление строки на одном не найдёт её на другом."""
@@ -147,6 +167,7 @@ class Sync:
         self.state = self._load()
         self.status = {"enabled": False, "ok": None, "at": 0, "error": "", "devices": [], "space": "", "counts": {}}
         self._claims = {}            # задачи с телефона, которые надо занять в облаке, прежде чем браться (см. _claim_tasks)
+        self.sibling = None          # облачная ↔ домашняя (HomeSync) того же компьютера: общий id заметок (см. _note_paths)
 
     # ---------- состояние ----------
 
@@ -231,11 +252,72 @@ class Sync:
     def _notes_root(self):
         return self.host.workspace.ensure() / NOTES
 
+    def _note_paths(self):
+        """Путь заметки -> id: свой map, а для путей, которых в нём нет, — map соседней синхронизации этого компьютера
+        (облачной или «Дома по Wi-Fi»). Телефон с входом и Wi-Fi шлёт одну заметку обоими путями (04.11) — без общего
+        id она легла бы здесь двумя файлами («… (2)»), а с компьютера ушла бы под другим id."""
+        by_path = {v: k for k, v in self.state["map"].items()}
+        sib = getattr(self, "sibling", None)
+        if sib is not None:
+            for k, v in list((sib.state.get("map") or {}).items()):
+                by_path.setdefault(v, k)
+        return by_path
+
+    def _sib_rel(self, sid):
+        sib = getattr(self, "sibling", None)
+        rel = (sib.state.get("map") or {}).get(sid) if sib is not None else None
+        return rel if rel and rel not in self.state["map"].values() else None
+
+    def _note_alias(self, sid, d, deleted):
+        """Та же заметка под вторым id (рецензия 04.11: до 0.83 мост давал заметке с телефона в облаке id по пути — f…, а на
+        узле Wi-Fi у неё оставался id телефона — n…; после входа на телефоне «Покупки» ложились вторым и третьим файлом).
+        -> id, под которым этот обмен знает её файл, или None. Второе имя — если соседняя синхронизация этого компьютера
+        положила sid в тот же файл, или если это новая заметка, а на её месте уже лежит файл с тем же текстом."""
+        m = self.state["map"]
+        if sid in m:
+            return None
+        al = (self.state.get("alias") or {}).get(sid)
+        if al and al in m:
+            return al
+        sib = getattr(self, "sibling", None)
+        srel = (sib.state.get("map") or {}).get(sid) if sib is not None else None
+        if srel:
+            return next((k for k, v in m.items() if v == srel), None)
+        if deleted or not isinstance(d, dict):
+            return None
+        from workspace import _clean_name
+        folder = "/".join(_clean_name(x) for x in str(d.get("folder") or "").split("/") if x.strip() and x not in (".", ".."))
+        base = _clean_name(_base_title(d.get("title") or "Заметка")) or "Заметка"
+        want = _note_norm(d.get("title") or "", d.get("text") or "")
+        rel = None
+        for n in range(1, 31):                            # «Список.md», «Список (2).md»… — компьютер мог занять имя раньше
+            cand = (folder + "/" if folder else "") + (base if n == 1 else f"{base} ({n})") + ".md"
+            p = self._notes_root() / cand
+            if not p.is_file():
+                if n > 2:
+                    break
+                continue
+            try:
+                if _note_norm(p.stem, p.read_text(encoding="utf-8")) == want:
+                    rel = cand
+                    break
+            except (OSError, UnicodeDecodeError):
+                continue
+        if rel is None:
+            return None
+        own = next((k for k, v in m.items() if v == rel), None)
+        if own is None:                                   # файл ещё не в обмене — его id тот же, что даст снимок
+            own = self._note_paths().get(rel) or "f" + hashlib.sha1(rel.encode("utf-8")).hexdigest()[:12]
+            m[own] = rel
+            if own == sid:
+                return None
+        return own
+
     def note_sid(self, rel):
         """Путь заметки в папке ассистента («Заметки/…») -> её id синхронизации (тот же, что в snapshot: из map или
         отпечаток пути) — им её знает телефон."""
         sub = str(rel)[len(NOTES) + 1:] if str(rel).startswith(NOTES + "/") else str(rel)
-        by_path = {v: k for k, v in self.state["map"].items()}
+        by_path = self._note_paths()
         return by_path.get(sub) or "f" + hashlib.sha1(sub.encode("utf-8")).hexdigest()[:12]
 
     def snapshot(self):
@@ -244,7 +326,9 @@ class Sync:
         Попутно обновляет map и кэш mt. Чего нет в снимке — уйдёт удалением, см. шапку."""
         out = {}
         root = self._notes_root()
-        by_path = {v: k for k, v in self.state["map"].items()}
+        by_path = self._note_paths()
+        sib = getattr(self, "sibling", None)
+        sib_by = {v: k for k, v in list(((sib.state.get("map") or {}) if sib is not None else {}).items())}
         for r in list(self.host.reminders.items):
             if r.get("kind") == "job":
                 continue
@@ -284,6 +368,11 @@ class Sync:
                 out[key + "#t"] = st.st_mtime_ns // 1_000_000     # когда правили на самом деле: старая копия не перебьёт новую
                 sig = f"{st.st_mtime_ns}:{st.st_size}"
                 c = cache.get(rel)
+                # другой обмен этого компьютера знает файл под другим id (мост до 0.83) — подсказка телефону: aka, та же заметка
+                aka = sib_by.get(rel) if sib_by.get(rel) not in (None, sid) else None
+                if aka:
+                    cache.pop(rel, None)
+                    c = None
                 if c and c[0] == sig:                     # файл не менялся — не читаем его каждую минуту
                     out[key] = None
                     out[key + "#h"] = c[1]
@@ -294,8 +383,11 @@ class Sync:
                     continue
                 folder = p.parent.relative_to(root).as_posix()
                 d = {"title": p.stem, "text": text, "folder": "" if folder == "." else folder}
+                if aka:
+                    d["aka"] = aka
                 out[key] = d
-                cache[rel] = [sig, _h(d)]
+                if not aka:
+                    cache[rel] = [sig, _h(d)]
         for rel in [r for r in cache if r not in seen_paths]:
             cache.pop(rel, None)
         # id пропавшей заметки забываем, только если синхронизация о ней не знает: известному id путь ещё понадобится
@@ -389,6 +481,8 @@ class Sync:
             self._snap_payfiles(out, pm)
         if "safe" in ok:
             self._snap_safe(out)
+        if "plugin" in ok and not self.HOME and getattr(h, "plugins", None) is not None:
+            self._snap_plugins(out)
         dn = getattr(h, "done", None)
         if dn is not None and "done" in ok:            # сделанные дела (done.py) — как doneList() на телефоне
             with dn._lock:
@@ -498,7 +592,7 @@ class Sync:
             elif float(d.get("amount") or 0) > 0:
                 self.host.money.upsert(dict(d, id=iid))
         elif kind == "note":
-            return self._apply_note(iid, d, deleted)
+            return self._apply_note(iid, d, deleted, it.get("updated"))
         elif kind == "memory":
             self._apply_fact(iid, d.get("text") or "", deleted)
         elif kind == "pmemory":
@@ -581,8 +675,18 @@ class Sync:
                 return False
             rel = self.state.get("vmap", {}).get(iid)
             return not (rel and (v / rel).exists())
-        if kind in ("soul", "mind", "diary", "task", "done", "persona", "bill", "pay", "payfile", "safe") and self.state.get("_extra_failed"):
+        if kind in ("soul", "mind", "diary", "task", "done", "persona", "bill", "pay", "payfile", "safe", "plugin") and self.state.get("_extra_failed"):
             return False
+        if kind == "plugin":                      # удаление — только если плагин был здесь и его папки больше нет (не «не влез»,
+            import plugin_sync as PS              # не «не прочитался», не «ещё не собрался из кусков»)
+            pid, _, i = iid.partition(".")
+            c = (self.state.get("plg") or {}).get(pid)
+            P = getattr(self.host, "plugins", None)
+            if P is None or pid not in (self.state.get("plg_had") or {}):
+                return False
+            if not PS.present(P, pid):
+                return True
+            return bool(i) and c is not None and i.isdigit() and int(i) >= c[2]     # сборка стала короче — лишний кусок
         if kind == "safe":                        # выключили здесь, мастер-пароль сменили, сейф не открылся — не удаление
             vt = getattr(self.host, "vault", None)
             if iid == "key" or vt is None or self._safe_on() is None or self.state.get("_safe_failed"):
@@ -718,6 +822,8 @@ class Sync:
             return self._apply_persona(iid, d, deleted)
         if kind in ("bill", "pay", "payfile"):
             return self._apply_pay(kind, iid, d, deleted)
+        if kind == "plugin":
+            return self._apply_plugin(iid, d, deleted, it_updated)
         if kind == "mind" and iid == "e2e":
             return self._apply_mark(d, deleted)
         if kind in ("soul", "mind", "diary", "task") and deleted:
@@ -776,7 +882,9 @@ class Sync:
                 p.parent.mkdir(parents=True, exist_ok=True)
                 p.write_text(text, encoding="utf-8")
         elif kind == "dayturn":
-            if not deleted:
+            if not deleted and self._q_seen(iid, add=True):
+                log.info("🔄 Разговор с телефона %s уже в дневнике (пришёл другим путём) — пропускаю", iid)
+            elif not deleted:
                 when = None
                 try:
                     when = dt.datetime.fromtimestamp(int(d.get("ts") or 0) / 1000)
@@ -793,7 +901,7 @@ class Sync:
             if d.get("to") and d.get("to") != self.state.get("device") and not self.HOME:   # задача другому компьютеру («на рабочем…», 0.56)
                 return False                       # (по Wi-Fi её берём — HomeSync перешлёт её тому через облако)
             if str(d.get("goal") or d.get("title") or "").strip() and not d.get("taken_by"):
-                self._claims[iid] = (dict(d), int(it_updated or 0))
+                self._claims[iid] = (dict(d), int(it_updated or 0))      # взятую уже по Wi-Fi тоже занимаем (другому не взять), но не начинаем
         elif kind == "task" and isinstance(d, dict) and d.get("want") in ("delete", "stop", "answer"):
             self._task_want(iid, d)
             return False
@@ -814,6 +922,20 @@ class Sync:
                 except Exception:  # noqa: BLE001
                     log.debug("дела: emit", exc_info=True)
         return None
+
+    def _q_seen(self, iid, add=False):
+        """Разговор (dayturn) и задача (taskreq) с телефона, которые этот компьютер уже взял — облачным обменом или по Wi-Fi
+        (рецензия 04.11: ответ облака потерялся, телефон отдал то же по Wi-Fi — разговор дважды в дневнике, задача дважды).
+        Набор общий у облачной и домашней синхронизации (sibling); add — отметить. -> было ли уже."""
+        seen = self.state.setdefault("qseen", {})
+        sib = getattr(self, "sibling", None)
+        hit = iid in seen or (sib is not None and iid in (sib.state.get("qseen") or {}))
+        if add and not hit:
+            seen[iid] = int(time.time())
+            if len(seen) > 3000:                          # месяц разговоров с запасом; старые id телефон второй раз не пришлёт
+                for k in sorted(seen, key=seen.get)[:len(seen) - 2500]:
+                    seen.pop(k, None)
+        return hit
 
     # ---------- «Сейф паролей» между своими устройствами (вид safe; core/vault.py — SafeKey и формат) ----------
     def _safe_on(self):
@@ -929,6 +1051,144 @@ class Sync:
         on = self._safe_on() is not None
         return {"on": on, "stale": bool(cur) and not on, "remote": bool(rem) and not on,
                "server": "safe" in (self.state.get("kinds") or ()), "failed": bool(self.state.get("_safe_failed"))}
+
+    # ---------- свои плагины Лиры между компьютерами (вид plugin, core/plugin_sync.py) ----------
+    def _snap_plugins(self, out):
+        """Плагины Лиры -> plugin:<id> (заголовок) и plugin:<id>.<i> (куски сжатой сборки; данные None + отпечаток, читаем,
+        только когда отправлять — _plugin_read). Кэш plg {id: [подпись файлов, sha, кусков, code, name]}; сборка — в памяти."""
+        import plugin_sync as PS
+        P = self.host.plugins
+        cache = self.state.setdefault("plg", {})
+        had = self.state.setdefault("plg_had", {})
+        mem = self.__dict__.setdefault("_plg_mem", {})
+        seen = set()
+        for pid, d in PS.made_dirs(P):
+            sig = PS.signature(d, pid)
+            c = cache.get(pid)
+            if not c or c[0] != sig or pid not in mem:
+                blob, info = PS.bundle(d, pid)
+                if blob is None:
+                    if not c:
+                        if isinstance(info, str) and info.startswith("больше"):
+                            log.info("🔄 Плагин %s не синхронизируется: %s", pid, info)
+                        continue
+                else:
+                    c = [sig, hashlib.sha1(blob).hexdigest(), len(PS.parts(blob)), info["code"], info["name"]]
+                    cache[pid] = c
+                    mem[pid] = blob
+            seen.add(pid)
+            had[pid] = int(time.time())
+            out["plugin:" + pid] = {"name": c[4], "sha": c[1], "n": c[2], "code": bool(c[3]), "from": str(self.host.device_name())[:40]}
+            for i in range(c[2]):
+                out[f"plugin:{pid}.{i}"] = None
+                out[f"plugin:{pid}.{i}#h"] = f"{c[1]}:{i}:{c[2]}"
+        for pid in [p for p in cache if p not in seen]:
+            cache.pop(pid, None)
+            mem.pop(pid, None)
+        self._plg_prune()
+
+    PLG_STALE = 7 * 86400                    # куски сборки, которая так и не собралась (другой компьютер ушёл, сборку сменили)
+
+    def _plg_prune(self):
+        now = time.time()
+        pin = self.state.get("plg_in") or {}
+        for pid in [p for p, h in pin.items() if now - int(h.get("at") or 0) > self.PLG_STALE]:
+            pin.pop(pid, None)
+        root = self._plg_dir()
+        if not root.is_dir():
+            return
+        for d in root.iterdir():
+            try:
+                cur = (pin.get(d.name) or {}).get("sha")
+                for f in d.iterdir():
+                    if not cur or not f.name.startswith(cur + ".") or now - f.stat().st_mtime > self.PLG_STALE:
+                        if now - f.stat().st_mtime > 3600:          # кусок не той сборки (или старый) — через час убираем
+                            f.unlink()
+                if not any(d.iterdir()):
+                    d.rmdir()
+            except OSError:
+                pass
+
+    def _plugin_read(self, iid):
+        import plugin_sync as PS
+        pid, _, i = iid.partition(".")
+        c = (self.state.get("plg") or {}).get(pid)
+        blob = getattr(self, "_plg_mem", {}).get(pid)
+        if not c or blob is None or not i.isdigit() or hashlib.sha1(blob).hexdigest() != c[1]:
+            return None
+        return PS.part_data(blob, c[1], int(i))
+
+    def _plg_dir(self):
+        return self.path.parent / "plugparts"
+
+    def _apply_plugin(self, iid, d, deleted, it_updated=0):
+        """Заголовок или кусок плагина с другого компьютера. Плагин ставится, когда пришли заголовок и все куски одной
+        сборки и сошёлся отпечаток. Удаление заголовка — удалить плагин и здесь; удаление куска — ничего."""
+        import plugin_sync as PS
+        pid, _, i = iid.partition(".")
+        if not PS.ID_RX.fullmatch(pid) or getattr(self.host, "plugins", None) is None:
+            return False
+        pdir = self._plg_dir() / pid
+        if deleted:
+            if not i:
+                shutil.rmtree(pdir, ignore_errors=True)
+                (self.state.get("plg_in") or {}).pop(pid, None)
+                PS.remove(self.host, pid)
+                (self.state.get("plg_had") or {}).pop(pid, None)
+            return None
+        if not isinstance(d, dict):
+            return False
+        sha = str(d.get("sha") or "")
+        if not re.fullmatch(r"[0-9a-f]{40}", sha) or not isinstance(d.get("n"), int) or not 0 < d["n"] <= -(-PS.MAX // PS.CHUNK) + 1:
+            return False
+        if i:
+            if not i.isdigit() or not 0 <= int(i) < d["n"] or d.get("i") != int(i):
+                return False
+            try:
+                part = base64.b64decode(str(d.get("b64") or ""), validate=True)
+            except ValueError:
+                return False
+            pdir.mkdir(parents=True, exist_ok=True)
+            (pdir / f"{sha}.{int(i)}").write_bytes(part)
+        else:
+            self.state.setdefault("plg_in", {})[pid] = {"sha": sha, "n": d["n"], "from": str(d.get("from") or "")[:40], "at": int(time.time())}
+        return self._plugin_try(pid)
+
+    def _plugin_try(self, pid):
+        """Все куски сборки на месте — поставить плагин. -> None (легло или ждём кусков), False — не принят."""
+        import plugin_sync as PS
+        head = (self.state.get("plg_in") or {}).get(pid)
+        if not head:
+            return None
+        c = (self.state.get("plg") or {}).get(pid)
+        pdir = self._plg_dir() / pid
+        if c and c[1] == head["sha"]:                  # такая сборка здесь уже есть
+            self.state["plg_in"].pop(pid, None)
+            shutil.rmtree(pdir, ignore_errors=True)
+            return None
+        ps = [pdir / f"{head['sha']}.{k}" for k in range(head["n"])]
+        if not all(p.is_file() for p in ps):
+            return None
+        blob = b"".join(p.read_bytes() for p in ps)
+        self.state["plg_in"].pop(pid, None)
+        shutil.rmtree(pdir, ignore_errors=True)
+        b = PS.unpack(blob) if hashlib.sha1(blob).hexdigest() == head["sha"] else None
+        if b is None:
+            log.warning("🔄 Плагин %s с другого компьютера пришёл испорченным — пропускаю", pid)
+            return False
+        try:
+            r = PS.install(self.host, pid, b, head)
+            if not r:
+                return False
+            # здешнее сохранилось рядом (свои версии, правка до синхронизации) — сборку надо отправить, иначе отпечаток
+            # «как легло у нас» спрятал бы её от других компьютеров. Только тогда: разница лишь в отброшенной чужой
+            # программе старых версий или в обрезке по размеру — не повод (иначе два компьютера пересылали бы её по кругу)
+            if r == "more":
+                self.__dict__.setdefault("_plg_resend", set()).add(pid)
+            return None
+        except Exception as e:  # noqa: BLE001
+            log.warning("🔄 Плагин %s с другого компьютера не поставился: %s", pid, e)
+            return False
 
     # ---------- «Платежи»: счета, оплаты и вложения между компьютерами ----------
     def _pf_dir(self):
@@ -1130,8 +1390,12 @@ class Sync:
                 continue
             if key in lost:                                   # уже взял другой компьютер
                 idx[key] = {"h": None, "u": prev, "skip": True}
+                self._q_seen(iid, add=True)
                 continue
             idx[key] = {"h": None, "u": now}
+            if self._q_seen(iid, add=True):                   # эту задачу этот компьютер уже взял по Wi-Fi — второй раз не начинаем
+                log.info("🔄 Задача с телефона %s уже взята по Wi-Fi — второй раз не начинаю", iid)
+                continue
             self._start_task(d)
 
     def _start_task(self, d):
@@ -1183,13 +1447,35 @@ class Sync:
             self._save()
         return iid
 
-    def _apply_note(self, sid, d, deleted):
+    def _apply_note(self, sid, d, deleted, upd=None):
         """Удаление — в корзину Dewiar (workspace.remove). Новая заметка получает свободное имя по заголовку в своей
         папке; известная перезаписывается на месте — смена заголовка или папки на другом устройстве файл не переносит.
         Имена из облака чистит _clean_name, «..» отбрасывается: выйти из «Заметок» нельзя."""
+        al = self._note_alias(sid, d, deleted)
+        if al is not None:                                 # второе имя заметки: правка — в тот же файл
+            self.state.setdefault("alias", {})[sid] = al
+            arel = self.state["map"].get(al)
+            ah = self.state.setdefault("alias_h", {})
+            if deleted:
+                # удалили по второму имени (там, где оно главное): файл после склейки здесь не меняли — удаляем и его,
+                # наше удаление уйдёт под нашим id; меняли — оставляем (правка дороже удаления)
+                if arel and ah.get(sid) and self._file_h(arel) == ah.get(sid):
+                    log.info("🔄 Заметка %s удалена на другом устройстве (второе имя %s) — удаляю", arel, sid)
+                    self._apply_note(al, {}, True)
+                    self.state["alias"].pop(sid, None)
+                ah.pop(sid, None)
+                return False
+            log.info("🔄 Заметка %s — та же, что %s: склеиваю, а не кладу второй", sid, al)
+            self._apply_note(al, d, False, upd)
+            arel = self.state["map"].get(al)
+            if arel:
+                ah[sid] = self._file_h(arel)
+            return False                                   # skip: удалением второе имя отсюда не уйдёт
         ws = self.host.workspace
         root = self._notes_root()
         rel = self.state["map"].get(sid)
+        if not rel and (rel := self._sib_rel(sid)):        # эту заметку уже положила соседняя синхронизация — тот же файл
+            self.state["map"][sid] = rel
         if deleted:
             if rel and (root / rel).exists():
                 from workspace import _locked
@@ -1212,6 +1498,8 @@ class Sync:
                 n += 1
             self.state["map"][sid] = rel
         else:
+            if self._note_conflict(sid, rel, d, upd) == "mine":   # до переноса в другую папку: отпечаток — с прежней папкой
+                return None                                # здешняя правка позже — она остаётся, пришедшая — копией рядом
             rel = self._move_to_folder(sid, rel, d, root)
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -1223,7 +1511,88 @@ class Sync:
         if not rest.lstrip().startswith("#") and not pad:  # заметка с телефона: заголовок — как у заметок компьютера
             text = front + ("\n" if front else "") + f"# {d.get('title') or p.stem}\n\n{rest.lstrip(chr(10))}\n"   # (вкладки блокнота — как есть)
         p.write_text(text, encoding="utf-8")
+        try:                                              # время файла — время правки на том устройстве, а не «сейчас»:
+            u = int(upd or 0)                             # иначе мост («Дома по Wi-Fi») понесёт старую копию дальше как
+            if 0 < u <= _now_ms():                        # свежую, и она перебьёт более позднюю правку (рецензия 04.11, S4)
+                os.utime(p, ns=(u * 1_000_000, u * 1_000_000))
+        except (OSError, ValueError, OverflowError):
+            pass
         self._pad_event(rel, False)
+
+    def _file_h(self, rel):
+        try:
+            return hashlib.sha1((self._notes_root() / rel).read_bytes()).hexdigest()
+        except OSError:
+            return None
+
+    def _note_conflict(self, sid, rel, d, upd=None):
+        """Заметку правили и здесь (после последнего обмена — отпечаток файла не тот, что в idx), и на другом устройстве, —
+        ни одна правка не теряется (рецензия 04.11: две правки одной заметки на двух компьютерах — одна пропадала молча;
+        часы одного отстают — пропадала более поздняя). Здешняя позже пришедшей — остаётся (и уходит другим следующим
+        обменом), а пришедшая ложится рядом копией «(конфликт с „Устройство“, время)»; раньше — наоборот: рядом копией
+        здешняя. -> "mine" (здешняя остаётся, пришедшую не писать) или None."""
+        p = self._notes_root() / rel
+        base = (self.state.get("idx", {}).get("note:" + sid) or {}).get("h")
+        if not isinstance(base, str) or not p.is_file():
+            return
+        try:
+            cur = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return
+        title = str(d.get("title") or p.stem)
+        mine = {_note_norm(p.stem, cur), _note_norm(title, cur)}
+        if mine & {_note_norm(title, d.get("text") or ""), _note_norm(p.stem, d.get("text") or "")}:
+            return                                         # та же правка (с «# Названием» или без, под новым названием) — не конфликт
+        folder = p.parent.relative_to(self._notes_root()).as_posix()
+        dl = {"title": p.stem, "text": cur, "folder": "" if folder == "." else folder}
+        sib = getattr(self, "sibling", None)
+        aka = next((k for k, v in ((sib.state.get("map") or {}) if sib is not None else {}).items() if v == rel and k != sid), None)
+        if base in (_h(dl), _h(dict(dl, aka=aka)) if aka else None):
+            return                                         # здесь с прошлого обмена не правили
+        who = self._dev_name(getattr(self, "_cur_dev", "")) or "другим устройством"
+        alt = p.with_name(f"{p.stem} (конфликт с «{who}», {dt.datetime.now():%d.%m %H-%M}).md")
+        n = 2
+        while alt.exists():
+            alt = p.with_name(f"{p.stem} (конфликт с «{who}», {dt.datetime.now():%d.%m %H-%M}) {n}.md")
+            n += 1
+        try:
+            mine_later = p.stat().st_mtime_ns // 1_000_000 > int(upd or 0) > 0
+        except OSError:
+            mine_later = False
+        if mine_later:
+            t = str(d.get("text") or "")
+            alt.write_text(t if t.lstrip().startswith("#") else f"# {title}\n\n{t.lstrip(chr(10))}\n", encoding="utf-8")
+            self.__dict__.setdefault("_note_resend", set()).add("note:" + sid)
+            log.info("🔄 Заметку «%s» правили и здесь (позже), и на «%s» — та правка рядом: %s", p.stem, who, alt.name)
+            return "mine"
+        alt.write_text(cur, encoding="utf-8")
+        log.info("🔄 Заметку «%s» правили и здесь, и на «%s» — здешняя версия рядом: %s", p.stem, who, alt.name)
+        return None
+
+    def _note_change(self, key, ek, idx):
+        """Запись обмена для заметки как она сейчас лежит здесь (с prev — версией, которую видели). -> dict или None."""
+        sid = key.split(":", 1)[1]
+        rel = self.state["map"].get(sid)
+        p = self._notes_root() / rel if rel else None
+        try:
+            text, st = p.read_text(encoding="utf-8"), p.stat()
+        except (OSError, UnicodeDecodeError, TypeError):
+            return None
+        folder = p.parent.relative_to(self._notes_root()).as_posix()
+        data = {"title": p.stem, "text": text, "folder": "" if folder == "." else folder}
+        h = _h(data)
+        if ek is not None and self._sealable("note", sid, data):
+            data = _seal(ek, data)
+        c = {"kind": "note", "id": sid, "data": data, "updated": min(_now_ms(), st.st_mtime_ns // 1_000_000), "_h": h}
+        if (idx.get(key) or {}).get("u") is not None:
+            c["prev"] = idx[key]["u"]
+        return c
+
+    def _dev_name(self, dev):
+        for x in (self.status.get("all") or []):
+            if x.get("id") == dev and x.get("name"):
+                return str(x["name"])[:40]
+        return ""
 
     def _move_to_folder(self, sid, rel, d, root):
         """Папку заметки сменили на телефоне (№195, 23.10: папки в заметках) — переносим файл в эту папку, имя то же.
@@ -1330,6 +1699,10 @@ class Sync:
                     data = self._safe_read(key.split(":", 1)[1])
                     if data is None:
                         continue
+                elif data is None and key.startswith("plugin:"):
+                    data = self._plugin_read(key.split(":", 1)[1])
+                    if data is None:
+                        continue
                 elif data is None:                        # файл не менялся (отпечаток из кэша), а отправить надо — читаем
                     rel = self.state["map"].get(key.split(":", 1)[1])
                     root = self._notes_root()
@@ -1347,7 +1720,7 @@ class Sync:
                         log.info("Синхронизация: %s слишком большая для зашифрованной отправки — пропускаю", key)
                         continue
                 changes.append({"kind": kind, "id": iid, "data": data, "updated": upd, "_h": h})
-                if kind == "vault" and st and st.get("u") is not None:
+                if kind in ("vault", "note") and st and st.get("u") is not None and not st.get("del"):
                     changes[-1]["prev"] = st["u"]       # от какой версии облака правили (облако отклонит правку поверх устаревшей)
             present = set(keys)
             for key, st in list(idx.items()):
@@ -1359,7 +1732,7 @@ class Sync:
             # применились бы «в никуда», а номер rev ушёл бы вперёд. Вернулось — забираем историю заново с начала.
             ob = getattr(self.host, "obsidian", None)
             vault_on = ob is not None and ob.sync_all()
-            kinds = [k for k in BASE_KINDS + EXTRA_KINDS if k != "vault" or vault_on]
+            kinds = [k for k in BASE_KINDS + EXTRA_KINDS if (k != "vault" or vault_on) and not (k == "plugin" and self.HOME)]
             if vault_on and self.state.get("vault_paused"):
                 self.state["vault_paused"] = False
                 self.state["rev"] = 0
@@ -1397,8 +1770,8 @@ class Sync:
                     key = c["kind"] + ":" + c["id"]
                     if c["kind"] not in srv:            # сервер такого вида ещё не знает — отправим, когда узнает
                         continue
-                    if key in lost and c["kind"] == "vault":   # облако не приняло (правили поверх устаревшей) — придёт свежая
-                        continue
+                    if key in lost and c["kind"] in ("vault", "note"):   # облако не приняло (у него новее) — придёт свежая;
+                        continue                         # прежний отпечаток в idx: заметка увидит, что здесь её правили (конфликт)
                     idx[key] = {"h": sent[key]["_h"], "u": c["updated"], "del": bool(c.get("deleted"))}
                     if c["kind"] == "vault":
                         idx[key]["b"] = sent[key]["_h"]          # с этой версией облако согласно — от неё и считаем «правили здесь»
@@ -1429,9 +1802,12 @@ class Sync:
                             continue
                     elif ek is not None and not it.get("deleted") and self._sealable(it["kind"], it["id"], it.get("data") or {}):
                         plain_in = True                   # пришло открытым (Telegram на сервере, старое устройство) — перешифруем
+                    self._cur_dev = it.get("dev") or ""
                     try:
                         if self._apply(it) is False:
-                            idx[key] = {"h": None, "u": it.get("updated"), "skip": True}
+                            # метка шифрования: у нас она та же — отпечаток сразу, иначе два компьютера с шифрованием
+                            # пересылали бы её друг другу каждый обмен
+                            idx[key] = {"h": _h({"on": True}) if key == E2E_MARK else None, "u": it.get("updated"), "skip": True}
                             continue
                     except Exception as e:  # noqa: BLE001
                         log.warning("Синхронизация: %s %s не применилось: %s", it.get("kind"), it.get("id"), e)
@@ -1447,6 +1823,11 @@ class Sync:
                             idx[key]["b"] = _h(it.get("data") or {})
                 self.state["rev"] = int(d.get("rev") or self.state.get("rev") or 0)
                 body["since"] = self.state["rev"]
+                for key in self.__dict__.pop("_note_resend", ()):   # здешняя правка заметки позже пришедшей — сразу туда же
+                    c = self._note_change(key, ek, idx)
+                    if c is not None:
+                        sent[key] = c
+                        body["changes"].append({k: v for k, v in c.items() if k != "_h"})
                 if not d.get("more") and not body["changes"]:
                     break
             if ek is not None:                            # перешифровали — флаги больше не нужны
@@ -1460,6 +1841,9 @@ class Sync:
                 for key, st in idx.items():
                     if st.get("h") is None and not st.get("del") and key in snap2:
                         st["h"] = self._hash_of(snap2, key)
+            for pid in self.__dict__.pop("_plg_resend", ()):   # плагин собрался здесь с добавками — уйдёт следующим обменом
+                for key in [k for k in idx if k == "plugin:" + pid or k.startswith("plugin:" + pid + ".")]:
+                    idx[key]["h"] = "merged"
             self._save()
             cl = getattr(self.host, "close", None)           # в ящике своих устройств новое — забрать сразу (просьба «пришли мозги»)
             if cl is not None and int(d.get("box") or 0) > int((getattr(cl, "st", None) or {}).get("cursor") or 0):
@@ -1539,6 +1923,7 @@ class HomeSync(Sync):
             self.state["device"] = cloud_sync.state.get("device") or self.state["device"]
             self._lock = cloud_sync._lock
             cloud_sync.soon.also.append(self.soon)
+            self.sibling, cloud_sync.sibling = cloud_sync, self
 
     def _creds(self):
         return self.host.home_credentials()
@@ -1589,6 +1974,9 @@ class HomeSync(Sync):
         devs, self._tdev = getattr(self, "_tdev", {}), {}
         me = self.host.device_name()
         for iid, (d, _prev) in claims.items():
+            if self._q_seen(iid):                          # уже взята облачным обменом (ответ облака телефону потерялся)
+                log.info("🔄 Задача с телефона %s уже взята через облако — по Wi-Fi пропускаю", iid)
+                continue
             ph = self._phone_of(devs.get(iid))
             if ph is None:                                 # записал не телефон этого узла — не берём и не пересылаем
                 log.info("🔄 Задача по Wi-Fi не от связанного телефона (%s) — пропускаю", devs.get(iid) or "?")
@@ -1598,10 +1986,13 @@ class HomeSync(Sync):
                 continue
             d = dict(d, **{"from": str(ph.get("name") or "телефон")[:40]})
             to = str(d.get("to") or "")
+            self._q_seen(iid, add=True)
             if not to or to == self.state.get("device"):
                 self._start_task(d)
-            else:                                          # iid и время — одни на все повторы: дубля у того компьютера не будет
-                self.state.setdefault("fwd", {})[iid] = {"d": d, "at": int(time.time()), "iid": "p" + uuid.uuid4().hex[:12], "ts": _now_ms()}
+            else:
+                # id — тот же, что дал телефон, и время одно на все повторы: если телефон успел отдать задачу и облаком
+                # (ответ потерялся), облако пересылку не примет (lost) — у того компьютера не будет второй
+                self.state.setdefault("fwd", {})[iid] = {"d": d, "at": int(time.time()), "iid": iid, "ts": _now_ms()}
 
     def run_once(self):
         r = super().run_once()

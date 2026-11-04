@@ -126,7 +126,7 @@ tm.answer(q.id, "PDF")
 ok(wait_for(lambda: tm.get(q.id).status == "done", 15), "ответили — доделала")
 
 # ---------- ошибка в программе ----------
-orig, orig_sys = TK.TaskManager._tool_raw, TK.TaskManager._system
+orig, orig_sys = TK.TaskManager._tool_raw, TK.TaskManager._state   # 0.83: _system — раз на запуск, _state — каждый шаг
 seen = {"n": 0}
 
 
@@ -144,14 +144,14 @@ def sys_boom(self, t):
     return orig_sys(self, t)
 
 
-TK.TaskManager._tool_raw, TK.TaskManager._system = boom, sys_boom
+TK.TaskManager._tool_raw, TK.TaskManager._state = boom, sys_boom
 b = tm.create("Сломанная", "Упасть")
 ok(wait_for(lambda: tm.get(b.id).status == "failed", 15), "ошибка программы — задача остановлена честно")
 ok("внутренняя ошибка" in tm.get(b.id).error and any("Сломанная" in s for s in host.said), "сказано голосом, что сломалось")
 ok(any(p[0].startswith("⚠ Задача остановилась") for p in host.pushes), "и уведомлением")
 ok(any(k == "task" and "AttributeError" in x for k, x in host.problems), "и в пульс разработчику (тип ошибки, без содержания задачи)")
 ok(any(k == "task" and "инструмент log: KeyError" in x for k, x in host.problems), "упавший инструмент — тоже в пульс")
-TK.TaskManager._tool_raw, TK.TaskManager._system = orig, orig_sys
+TK.TaskManager._tool_raw, TK.TaskManager._state = orig, orig_sys
 
 # ---------- дело по расписанию: сбой → повтор → успех ----------
 import engine_music as EM  # noqa: E402

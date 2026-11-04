@@ -1425,6 +1425,26 @@ class Api:
 
     # ---------- трей ----------
 
+    def rest_note(self, on, until=""):
+        """Виджет сообщает, идёт ли «Отдых» (№540): подпись пункта в трее — «Отдых на час» или «Вернуть из отдыха»."""
+        self._rest = (bool(on), str(until or "")[:5])
+        t = getattr(self, "_tray", None)
+        if t is not None and hasattr(t, "rest_label"):
+            try:
+                t.rest_label(self.rest_label())
+            except Exception:  # noqa: BLE001
+                pass
+        return True
+
+    def rest_label(self):
+        on, until = getattr(self, "_rest", (False, ""))
+        return f"Вернуть из отдыха (отдыхает до {until})" if on else "Отдых на час — не слушать и не говорить"
+
+    def rest_toggle(self):
+        """Пункт трея «Отдых»: то же, что кнопка в углу виджета (виджет зовёт ядро — rest_toggle)."""
+        self._js("window.restToggle && restToggle()")
+        return True
+
     def _hide_now(self):
         if WIN:
             self.wins[self.mode].hide()
@@ -3337,12 +3357,16 @@ class LinuxTray:
         self.ind = AI.Indicator.new("dewiar", str(icon), AI.IndicatorCategory.APPLICATION_STATUS)
         self.ind.set_title("Dewiar")
         menu = Gtk.Menu()
+        self._rest_it = None
         for title, fn in (("Показать Dewiar", api.from_tray), ("Закинуть идею", api.show_capture), ("Убрать в трей", api.to_tray),
-                          ("Студия", lambda: api.open_settings()), (None, None), ("Выйти из Dewiar", api.quit_all)):
+                          (api.rest_label(), api.rest_toggle), ("Студия", lambda: api.open_settings()), (None, None),
+                          ("Выйти из Dewiar", api.quit_all)):
             if title is None:
                 menu.append(Gtk.SeparatorMenuItem())
                 continue
             it = Gtk.MenuItem(label=title)
+            if fn == api.rest_toggle:
+                self._rest_it = it                                  # «Отдых» (№540): подпись меняется — rest_label
             it.connect("activate", lambda _w, f=fn: __import__("threading").Thread(target=f, daemon=True).start())
             menu.append(it)
             if title == "Показать Dewiar":
@@ -3350,6 +3374,11 @@ class LinuxTray:
         menu.show_all()
         self.ind.set_menu(menu)
         self.ind.set_status(AI.IndicatorStatus.ACTIVE)
+
+    def rest_label(self, text):
+        if self._rest_it is not None:
+            from gi.repository import GLib
+            GLib.idle_add(self._rest_it.set_label, text)
 
 
 _TRAY = []
@@ -3790,7 +3819,8 @@ def main_win(args, extra):
         ("Окна чёрные? Перерисовать проще", lambda: soft_switch(True, "Dewiar: окна перерисовываются попроще — через секунду."))
     api._tray = winshell.Tray(icon, on_show=lambda: api.from_tray() if started.is_set() else studio_in_browser(),
                              on_studio=lambda: api.open_settings() if started.is_set() else studio_in_browser(),
-                             on_quit=api.quit_all, on_capture=lambda: api.show_capture() if started.is_set() else None, fix=fix)
+                             on_quit=api.quit_all, on_capture=lambda: api.show_capture() if started.is_set() else None, fix=fix,
+                             rest=(api.rest_label, lambda: api.rest_toggle() if started.is_set() else None))
     _TRAY.append(api._tray)
     try:
         if os.environ.get("DEWIAR_NO_WEBVIEW"):        # проверка запасного пути (как без WebView2)

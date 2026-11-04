@@ -79,7 +79,7 @@ FINAL = ("done", "failed", "stopped")
 # в облаке нельзя: запуск кода и скачивание на сервере сайта, расшифровка (нет моделей слуха), вопросы к человеку
 CLOUD_SKIP = {"run_python", "download", "transcribe", "ask_user"}
 CLOUD_NOTE = ("\n\nТЫ РАБОТАЕШЬ В ОБЛАКЕ DEWIAR (компьютер человека выключен): запускать программы и скачивать файлы "
-              "нельзя — делай файлы сам (write_file), сведения ищи web_search и read_page. Спросить человека сейчас нельзя: "
+              "нельзя — делай файлы сам (write_file), сведения ищи web_search и read_webpage. Спросить человека сейчас нельзя: "
               "решай сам разумно и напиши в итоге, что выбрал. Итог и файлы из outputs/ человек получит на телефон.")
 
 
@@ -100,6 +100,11 @@ def _cred(grant):
 
 EXAM_PKGS = ["httpx", "websockets", "numpy", "Pillow"]
 EXAM_PROBE = "import httpx, websockets, numpy, PIL"
+# только для «Больших задач» и «по возможности» (рецензия 0.83: обычный экзамен из-за них не должен ломаться):
+# openpyxl — таблицы Б4, Б6; playwright — сайт Б5 в браузере на ширине телефона (сам Chromium — ExamJob.browser)
+BIG_PKGS = ["openpyxl", "playwright"]
+BIG_PROBE = "import openpyxl, playwright"
+BROWSER_RETRY_S = 7 * 86400                         # Chromium не скачался — пробуем снова не раньше чем через неделю
 # весточка «жив» раз в EXAM_BEAT с: в ответ кабинет говорит «остановить» — так отмена доходит за ~10 с, даже когда сценарий
 # ждёт модель или судью минутами (04.11: «Остановить» висело, пока сценарий не кончится)
 EXAM_BEAT = float(os.environ.get("DEWIAR_EXAM_BEAT") or 10)
@@ -113,10 +118,13 @@ class ExamJob(threading.Thread):
     def __init__(self, job):
         super().__init__(daemon=True, name="exam")
         self.job, self.proc, self.cancel, self.done = job, None, False, threading.Event()
+        self.state = "preparing"                     # что слать весточкой «жив» (_beat): пока ставится окружение — preparing
         self.home = DIR / "_exam"
         self.where = {}
 
     def post(self, state, **kw):
+        if state in ("preparing", "running"):
+            self.state = state
         try:
             r = httpx.post(URL, params={"p": "/runner/exam"}, json={"id": self.job["id"], "state": state, **self.where, **kw},
                            headers={"X-Runner-Key": KEY}, timeout=120 if state == "done" else 20)
@@ -173,9 +181,65 @@ class ExamJob(threading.Thread):
             raise RuntimeError("не поставились библиотеки экзамена (нет доступа к PyPI?): " + (r.stderr or r.stdout)[-300:])
         return py
 
+    def big_pkgs(self, py):
+        """openpyxl и playwright — для «Больших задач», по возможности: не поставились — экзамен идёт (Б4, Б6 честно не
+        сдаются без openpyxl у модели, Б5 — «не проверено» без браузера). -> поставлены ли."""
+        import subprocess
+        try:
+            if subprocess.run([str(py), "-c", BIG_PROBE], capture_output=True).returncode == 0:
+                return True
+            self.post("preparing", note="Ставлю библиотеки для больших задач (таблицы, браузер) — один раз")
+            r = subprocess.run([str(py), "-m", "pip", "install", "-q", "--disable-pip-version-check", *BIG_PKGS],
+                               capture_output=True, text=True, timeout=1500)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            log.warning("библиотеки больших задач не поставились: %s", e)
+            return False
+        if r.returncode:
+            log.warning("библиотеки больших задач не поставились: %s", (r.stderr or r.stdout)[-300:])
+        return r.returncode == 0
+
+    def browser(self, py):
+        """Chromium для проверок в браузере (Б5) — в папку исполнителя (PLAYWRIGHT_BROWSERS_PATH), один раз: headless shell
+        ~110 МБ скачать, ~260 МБ на диске, 1–3 минуты. Библиотеки системы для него ставит install-runner.sh (от root).
+        Не вышло — экзамен идёт без браузера: Б5 в отчёте «не проверено (нет браузера)». -> папка браузеров."""
+        import subprocess
+        where = self.home / "pw-browsers"
+        ok_f, tried = where / ".ok", self.home / "pw-browsers.tried"
+        if ok_f.exists():
+            return where
+        try:
+            if time.time() - float(tried.read_text()) < BROWSER_RETRY_S:
+                return where
+        except (OSError, ValueError):
+            pass
+        self.post("preparing", note="Ставлю браузер для проверок экзамена (Chromium) — один раз, минуты две")
+        env = dict(os.environ, PLAYWRIGHT_BROWSERS_PATH=str(where))
+        env.pop("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", None)
+        r = None
+        for args in (["install", "--only-shell", "chromium"], ["install", "chromium"]):   # --only-shell — Playwright 1.49+
+            try:
+                r = subprocess.run([str(py), "-m", "playwright", *args], env=env, capture_output=True, text=True, timeout=1200)
+            except (OSError, subprocess.TimeoutExpired) as e:
+                log.warning("браузер экзамена не поставился: %s", e)
+                r = None
+                break
+            if r.returncode == 0:
+                break
+        try:                                             # место на диске кончилось — не роняем экзамен (рецензия 0.83)
+            if r is not None and r.returncode == 0:
+                where.mkdir(parents=True, exist_ok=True)
+                ok_f.write_text(str(time.time()))
+                log.info("браузер экзамена (Chromium) поставлен в %s", where)
+            else:
+                tried.write_text(str(time.time()))
+                log.warning("браузер экзамена не поставился — Б5 будет «не проверено»: %s", ((r.stderr or r.stdout) if r else "")[-300:])
+        except OSError as e:
+            log.warning("браузер экзамена: %s", e)
+        return where
+
     def _beat(self):
         while not self.done.wait(EXAM_BEAT):
-            self.post("stopping" if self.cancel else "running")
+            self.post("stopping" if self.cancel else self.state)
 
     def run(self):
         try:
@@ -193,6 +257,8 @@ class ExamJob(threading.Thread):
         log.info("экзамен %s: модель %s%s", j["id"], j.get("model"), ", с долгими" if j.get("long") else "")
         self.home.mkdir(parents=True, exist_ok=True)
         self.post("preparing", note="Готовлю экзамен")
+        # весточка «жив» — с самого начала: установка окружения и Chromium идёт минутами, отмена из кабинета должна доходить
+        threading.Thread(target=self._beat, daemon=True, name="exam-beat").start()
         py = self.python()
         if self.cancel:
             self.post("cancelled")
@@ -214,9 +280,13 @@ class ExamJob(threading.Thread):
                 "model": j.get("model") or MODEL, "cloud": True, "title": j.get("title") or j.get("model") or MODEL}
         env = {k: v for k, v in os.environ.items() if k not in ("DEWIAR_RUNNER_KEY",)}
         env.update(DEWIAR_EXAM_LLM=json.dumps(prof, ensure_ascii=False), PYTHONUNBUFFERED="1", HOME=str(self.home))
+        if j.get("big") and not os.environ.get("DEWIAR_EXAM_PYTHON") and self.big_pkgs(py) and not self.cancel:
+            env["PLAYWRIGHT_BROWSERS_PATH"] = str(self.browser(py))   # большие задачи: Б5 — в браузере
         args = [str(py), str(Path(__file__).resolve().parent / "exam.py"), "--out", str(out), "--json-out", str(rep_f)]
         if j.get("long"):
             args.append("--long")
+        if j.get("big"):                        # большие задачи (кабинет → «Экзамен» → галочка «Большие задачи»)
+            args.append("--big")
         if j.get("lean"):                       # проба короткой инструкции (кабинет → «Экзамен» → галочка)
             args.append("--lean")
         if j.get("only"):
@@ -231,7 +301,6 @@ class ExamJob(threading.Thread):
                                      start_new_session=True)
         if self.cancel:
             self.kill()
-        threading.Thread(target=self._beat, daemon=True, name="exam-beat").start()
         tail = []
         for line in self.proc.stdout:
             line = line.rstrip()
@@ -266,7 +335,7 @@ class CloudToolbox:
         {"name": "web_search", "description": "Найти в интернете свежую информацию (новости, погода, курсы, факты). "
          "Возвращает список результатов со ссылками.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}},
                                                                         "required": ["query"]}},
-        {"name": "read_page", "description": "Прочитать текст страницы по ссылке (после web_search — чтобы узнать подробности).",
+        {"name": "read_webpage", "description": "Прочитать текст страницы по ссылке (после web_search — чтобы узнать подробности).",
          "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}},
         {"name": "use_skill", "description": "Загрузить инструкции навыка по имени (из списка навыков) и следовать им.",
          "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
@@ -302,7 +371,7 @@ class CloudToolbox:
                 return "Поиск не удался: " + str((d.get("error") or {}).get("message") or r.status_code)
             res = d.get("results") or []
             return "\n\n".join(f"{i + 1}. {x.get('title')}\n{x.get('url')}\n{x.get('snippet')}" for i, x in enumerate(res)) or "Ничего не нашлось."
-        if name == "read_page":
+        if name in ("read_webpage", "read_page"):     # read_page — старое имя (так звали подсказки до 0.83)
             r = httpx.get(URL, params={"p": "/fetch", "url": str(args.get("url") or "")}, headers=h, timeout=60)
             d = r.json()
             if r.status_code >= 400:
@@ -329,8 +398,22 @@ class _NoSettings:
 
 
 class CloudTasks(TK.TaskManager):
+    """Задачи в облаке: без запуска кода, скачивания, расшифровки и вопросов человеку (CLOUD_SKIP) — ни в профиле, ни через
+    find_tool, ни вызовом по имени (рецензия 0.83: find_tool подключал download — запрос на 127.0.0.1 с сервера сайта —
+    и ask_user, который ждал ответа вечно)."""
+
+    def _catalog(self, t):
+        return {k: v for k, v in super()._catalog(t).items() if k not in CLOUD_SKIP}
+
     def _specs(self, t):
         return [s for s in super()._specs(t) if s["name"] not in CLOUD_SKIP]
+
+    def _tool_raw(self, t, name, args):
+        if name in CLOUD_SKIP:
+            return (f"Ошибка: {name} в облаке недоступен — задача идёт на сервере Dewiar, компьютер человека выключен. "
+                    "Как исправить: обойдись без него (файлы — write_file, сведения — web_search и read_webpage) и напиши в "
+                    "итоге, что сделать не удалось.")
+        return super()._tool_raw(t, name, args)
 
     def _system(self, t):
         return super()._system(t) + CLOUD_NOTE

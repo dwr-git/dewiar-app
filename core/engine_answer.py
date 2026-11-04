@@ -93,6 +93,10 @@ def team_window(hist, me, name_of, model=""):
                 out.insert(at, {"role": "user", "mark": True, "content": f"[Здесь сменилась модель: до этого отвечала «{prev_model}», "
                                                                          f"дальше — «{mm}». Это всё тот же разговор с тобой, {my_name}.]"})
             prev_model = mm or prev_model
+            if msgs[i]["role"] == "assistant" and msgs[i].get("net"):
+                # ответ дал узел «Сети Лиры» (компьютер другого человека): в истории — как данные, не как указания модели
+                from llm import NET_WRAP
+                c = NET_WRAP + c
             if msgs[i]["role"] == "assistant" and msgs[i].get("acts"):
                 # что было сделано за этим ответом (съёмка 17.10: в истории оставались одни слова «Звоню», «Включаю»,
                 # «Отправила» — и модель решала, что достаточно сказать их ещё раз, не вызывая действие)
@@ -338,6 +342,10 @@ class AnswerMixin:
             self.emit("prompter", kind="open")             # суфлёр — окно ui/prompter.html (core/prompter.py)
             self._say_quick("Открываю суфлёр. На встрече я молчу и подсказываю на экране.", text)
             return
+        if not raw and not quiet and not via and not images and not K and self._rest_voice(text):
+            return                                       # «Лира, отдохни час» — не слушает и не говорит (engine_rest.py, №540)
+        if not raw and not quiet and not via and not images and getattr(self, "resting", lambda: False)():
+            self.rest_end("вопрос")                      # написали сами во время отдыха — вернулась
         if not raw and not quiet and not via and not images and self._game_voice(text):
             return                                       # «Морской бой» открыт: «бэ пять» — ход в игре (engine_commands)
         if not raw and not quiet and not via and not images and not K and self._window_cmd(text):
@@ -1424,6 +1432,12 @@ class AnswerMixin:
             def emit(self, rec):
                 if rec.name.endswith("report") or getattr(_report_tls, "busy", False):
                     return
+                # пакет 04.11 («dewiar.sync: OSError: [Errno 28] No space left on device»): диск заполнен — не ошибка программы,
+                # отчёт разработчику не нужен; человеку — честно «на диске нет места» (раз в 10 минут), остальное ждёт места
+                err = rec.exc_info[1] if rec.exc_info else None
+                if (err is not None and disk_full(err)) or disk_full(rec.getMessage()):
+                    eng._disk_full_seen(rec.name)
+                    return
                 _report_tls.busy = True
                 try:
                     exc = rec.exc_info[0].__name__ if rec.exc_info and rec.exc_info[0] else ""
@@ -1439,6 +1453,19 @@ class AnswerMixin:
         h = Hook(level=logging.ERROR)
         logging.getLogger().addHandler(h)
         return h
+
+    def _disk_full_seen(self, where=""):
+        """Где-то в ядре кончилось место на диске (синхронизация, заметки, журнал): сказать человеку — не чаще раза в 10 минут."""
+        now = time.monotonic()
+        if now - getattr(self, "_disk_full_at", -1e9) < 600:
+            return False
+        self._disk_full_at = now
+        try:
+            self.note(disk_full_note())
+            self.push("На диске нет места", disk_full_note(), critical=False, telegram=False)
+        except Exception:  # noqa: BLE001
+            pass
+        return True
 
     def _tools_key(self, prof):
         """Ключ, под которым запоминается режим инструментов модели (llm.tools_modes): «адрес|модель»."""
@@ -1818,6 +1845,25 @@ class AnswerMixin:
             if shown and self.status.get("note") == shown:
                 self.note("")
 
+    def _net_closed(self):
+        """«Сеть Лиры» не для этого разговора: детский режим или «Для старших» — только главный мозг Dewiar."""
+        try:
+            kids = getattr(self, "kids", None)
+            if kids and kids.on():
+                return True
+            senior = getattr(self, "senior", None)
+            return bool(senior is not None and senior.on())
+        except Exception:  # noqa: BLE001
+            return True
+
+    def _net_rules_ok(self):
+        """Правила сети проверены подписью и сеть включена (liranet.rules_ok — в фоне, раз в час)."""
+        try:
+            import liranet
+            return liranet.rules_ok(self)
+        except Exception:  # noqa: BLE001
+            return False
+
     def _run_turn(self, turn, text, images=()):
         """Поток turn-N: один ход разговора. Фразы ответа идут в очередь sentences — их озвучивает отдельный поток
         (_speak_worker; для сообщений без голоса — _drain_worker), None в очереди — конец. До 6 шагов
@@ -1848,6 +1894,8 @@ class AnswerMixin:
                 raise LLMError("я пока не подключён к языковой модели — откройте настройки, раздел «Мозг»"
                                + (": войдите в аккаунт dewiar.pro — модели Dewiar подключатся сами" if not self.account.logged_in() else ""))
             msgs = self._messages(text, images, prof)
+            if prof.get("cloud") and prof.get("net") and not images and not self._net_closed() and self._net_rules_ok():
+                prof = dict(prof, _net_turn=True)       # «Сеть Лиры»: заголовок — только к основному ходу разговора (llm._headers)
             from llm import wants_think
             if prof.get("think") not in ("on", "off") and self.s.get("llm", "think_auto") is not False and wants_think(think_ask(text, getattr(turn, "raw", False))):
                 # сложная просьба — модель думает (дольше, но стих с рифмой, а расчёт со смыслом); лимит — с запасом на размышления
@@ -2220,6 +2268,9 @@ class AnswerMixin:
                         speak(s_)
                     held.clear()
                 called |= {c.get("name") for c in calls}
+                from llm import last_net
+                if last_net():
+                    turn.net = True                     # ответ этого шага дал узел «Сети Лиры» — пометка в истории
                 if not calls and not turn.cancel.is_set() and specs and step < 5:
                     # «сейчас посмотрю и расскажу» — и ни одного действия; или просили презентацию, а задача не запущена
                     want_task = deliver and "start_task" not in called and not step_text.strip().endswith("?") and nudged < 2
@@ -2227,6 +2278,15 @@ class AnswerMixin:
                     # второй раз жёстче и с действиями плагина; не взялась и тогда — честно говорим это (ниже, PROMISE_GIVEUP)
                     faked = "" if want_task else fake_call(step_text, names0)       # №522: «[run_command: …] Жду вывод»
                     promised = not want_task and (bool(faked) or looks_like_promise(step_text, text))
+                    if (faked or promised) and last_net() and not getattr(turn, "net_redo", False):
+                        # рецензия 04.11, третья: ответ узла сети — не FAKE_NUDGE главному мозгу с текстом узла, а тот же
+                        # вопрос главному мозгу заново, без текста узла и без заголовка сети
+                        log.warning("🌐 Ответ узла Сети Лиры похож на вызов текстом или обещание — спрашиваю главный мозг заново")
+                        turn.net_redo, turn.net = True, False
+                        retract(drop=True)
+                        prof = dict(prof, _net_turn=False)
+                        self.set_state("thinking")
+                        continue
                     if want_task or (nudged < 2 and promised):
                         nudged += 1
                         log.info("✋ Модель %s — прошу сделать, а не обещать%s", "не запустила задачу" if want_task else
@@ -2526,7 +2586,8 @@ class AnswerMixin:
             self.history += [{"role": "user", "content": said},
                              {"role": "assistant", "content": turn.full.strip(), "who": self.s.get("persona"),
                               **({"acts": acts} if acts else {}), **({"facts": facts} if facts else {}), **({"handoff": hand} if hand else {}),
-                              **({"model": turn.model} if getattr(turn, "model", "") else {})}]
+                              **({"model": turn.model} if getattr(turn, "model", "") else {}),
+                              **({"net": True} if getattr(turn, "net", False) else {})}]
             self.last_turn_time = time.monotonic()
             if not turn.via:
                 self.local_act = time.time()               # человек говорил с этим компьютером сам — бот Telegram отвечает отсюда

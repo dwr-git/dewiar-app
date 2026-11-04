@@ -318,6 +318,8 @@ class RemoteMixin:
         """Сказать что-то по своей инициативе (напоминание, итог задачи) в фоновом потоке: дождаться (до 60 с),
         пока текущий ответ закончится, сыграть сигнал, сказать и послушать ответ follow_up_seconds."""
         text = self._g(text)
+        if hasattr(self, "_rest_hold") and self._rest_hold("say", text=text):
+            return                                       # «Отдых» (№540): сама не говорит — скажет, когда вернётся
         if getattr(self, "server", False) or getattr(getattr(self, "prompter", None), "on", False):
             # сервер: сказать некому; идёт встреча с суфлёром — вслух нельзя: текстом в окна, телефон и Telegram
             self.emit("answer", text=text, done=True)

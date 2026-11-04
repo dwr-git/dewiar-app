@@ -12,6 +12,29 @@ function escH(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ 
 // ошибки страницы — в журнал ядра (в отчёт): какой файл не загрузился и почему видно сразу, без догадок
 window.__jsErr = window.__jsErr || [];
 window.addEventListener("error", (e) => { if (/^ResizeObserver loop/i.test(e.message || "")) return; window.__jsErr.push(`${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno || 0}`); });
+/* №530 (04.11, «раздел „Мозг“ после обновления пустой»): человек правил файлы программы сам, после обновления часть файлов
+   студии не сошлась — скрипт упал ещё до подключения к ядру, и студия молча показывала пустые поля и «нет связи с ядром»,
+   хотя ядро работало. Теперь связь отмечается отсюда (первый файл студии), а если основной файл студии (studio/dewiar.js)
+   не дошёл до конца — вверху честная плашка: какой файл с ошибкой и что делать (переустановить поверх), а ошибки — в журнал ядра. */
+function studioBroken() {
+  if (window.__studioReady || document.getElementById("studio-broken")) return;
+  const errs = (window.__jsErr || []).slice(0, 3);
+  const file = (errs.map(e => (/ @ ([\w.-]+\.(?:js|html)):\d+/.exec(e) || [])[1]).find(Boolean)) || "";
+  const b = document.createElement("div"); b.id = "studio-broken"; b.setAttribute("role", "alert");
+  b.style.cssText = "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;max-width:min(760px,calc(100vw - 32px));"
+    + "padding:12px 16px;border-radius:14px;background:#3a1f24;color:#ffe3e6;box-shadow:0 12px 34px -10px rgba(0,0,0,.6);font:13.5px/1.45 Manrope,'Segoe UI',sans-serif";
+  b.innerHTML = `<b style="display:block;margin-bottom:4px">Студия загрузилась не целиком${file ? ` — ошибка в файле «${escH(file)}»` : ""}</b>`
+    + "Ядро работает, но часть страницы не открылась. Так бывает, когда файлы программы изменены вручную или повреждены. "
+    + "Переустановите Dewiar поверх — установщиком с dewiar.pro: настройки, заметки и память сохранятся."
+    + (errs.length ? `<small style="display:block;margin-top:6px;opacity:.7;word-break:break-word">${escH(errs[0])}</small>` : "");
+  document.body.appendChild(b);
+  if (window.core && core.connected) core.call("js_errors", { errors: ["студия не загрузилась целиком", ...errs] }).catch(() => {});
+}
+if (window.core) core.on("hello", () => {
+  const c = document.getElementById("conn"); if (c) { c.classList.add("ok"); c.querySelector("span").textContent = "ядро на связи"; }
+  const check = () => setTimeout(studioBroken, 1500);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", check); else check();
+});
 let S = null, personas = [], active = "lira", entities = [];
 // логотип в меню виден всегда — в покой (~6 кадров/с) уже через 4 с тишины, а не через 20 (03.11: на слабом компьютере
 // живой логотип один занимал до половины времени страницы)

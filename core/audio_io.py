@@ -149,6 +149,41 @@ def _sd_fallback():
         return None
 
 
+def win_default_input():
+    """Windows: какой микрофон сейчас «по умолчанию» -> (сколько микрофонов, имя по умолчанию) или None (не Windows, ошибка).
+    Через winmm (waveIn*, без COM — можно из любого потока, дёшево). Идея №134 (04.11): Bluetooth-гарнитура — выбрано
+    «Системный по умолчанию», гарнитуру переподключили, Windows снова сделала её главной, а Dewiar «не слышит, пока не
+    поменяешь микрофон туда-обратно»: поток остался на прежнем устройстве. По смене этого отпечатка слух переоткрывается.
+    DEWIAR_FAKE_DEFMIC — «число|имя» для проверок не в Windows."""
+    fake = os.environ.get("DEWIAR_FAKE_DEFMIC")
+    if fake is not None:
+        n, _, name = fake.partition("|")
+        return (int(n or 0), name)
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class WAVEINCAPSW(ctypes.Structure):
+            _fields_ = [("wMid", wintypes.WORD), ("wPid", wintypes.WORD), ("vDriverVersion", wintypes.UINT),
+                        ("szPname", wintypes.WCHAR * 32), ("dwFormats", wintypes.DWORD), ("wChannels", wintypes.WORD),
+                        ("wReserved1", wintypes.WORD)]
+        mm = ctypes.windll.winmm
+        n = int(mm.waveInGetNumDevs())
+        dev, flags = wintypes.DWORD(0), wintypes.DWORD(0)
+        name = ""
+        # WAVE_MAPPER (-1), DRVM_MAPPER_PREFERRED_GET (0x2015): номер устройства, которое Windows считает главным
+        if mm.waveInMessage(ctypes.c_void_p(-1 & 0xFFFFFFFFFFFFFFFF), 0x2015, ctypes.byref(dev), ctypes.byref(flags)) == 0 \
+                and dev.value != 0xFFFFFFFF:
+            caps = WAVEINCAPSW()
+            if mm.waveInGetDevCapsW(ctypes.c_size_t(dev.value), ctypes.byref(caps), ctypes.sizeof(caps)) == 0:
+                name = caps.szPname
+        return (n, name)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _sd_index(name, kind):
     """Имя из настроек → номер устройства (None — по умолчанию)."""
     if not name:
@@ -303,6 +338,7 @@ class Capture:
         self._sd_q = None
         self.pa = None
         self._pa_lock = threading.Lock()
+        self.def_sig = None              # №134: какой микрофон Windows был «по умолчанию», когда открыли (win_default_input)
 
     def open(self):
         if self.wav_path:
@@ -339,6 +375,11 @@ class Capture:
                 pass
         mk = lambda i: sd.RawInputStream(samplerate=RATE, blocksize=FRAME, channels=1, dtype="int16", callback=cb, device=i)
         label = self.device or "микрофон по умолчанию"
+        if not self.device and (os.name == "nt" or os.environ.get("DEWIAR_FAKE_DEFMIC") is not None):
+            # №134: «по умолчанию» — каждый раз заново спросить Windows, какой он сейчас (PortAudio помнит список с запуска:
+            # переподключённая гарнитура для него — не главная, и поток вставал на прежний микрофон)
+            sd_refresh(force=True)
+            self.def_sig = win_default_input()
         with _SD_LOCK:
             try:
                 idx = _sd_index(self.device, "source")

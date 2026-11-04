@@ -177,10 +177,22 @@ core.on("diary", e => { if ($("#p-diary").classList.contains("cur")) loadDiary(e
 /* ---------- «Папка»: кнопки над деревом ---------- */
 $("#f-open").onclick = () => core.call("ws_open", {}).catch(e => toast(e.message));
 $("#f-reload").onclick = loadFolder;
+/* «Перенести…» (№538, 04.11: «поставил Dewiar на диск F, а база — в „Документах“ на C»): выбрать папку — ядро всё копирует
+   (сверяет), переключается на новую; старая остаётся, пока человек сам её не удалит. Выбрали корень диска — внутри него «Dewiar». */
 $("#f-move").onclick = async () => {
-  const p = await askText("Путь к папке ассистента (пусто — ~/Dewiar):", $("#f-root").textContent);
-  if (p === null) return;
-  try { const r = await core.call("ws_set_path", { path: p }); toast("Папка: " + r); fCur = ""; loadFolder(); } catch (e) { toast(e.message); }
+  const a = window.api && api();
+  let p = "";
+  if (a && a.pick_folder) p = await a.pick_folder();
+  else p = await askText("Куда перенести папку ассистента — полный путь к папке:", "");
+  if (!p) return;
+  if (!await ask(`Перенести папку ассистента сюда?\n${p}\n\nСкопирую всё: заметки, память, дневник, знания, задачи. Старая папка останется на месте — удалите её сами, когда убедитесь, что всё на новом месте. Настройки и модели остаются в профиле Windows.`, { ok: "Перенести" })) return;
+  const b = $("#f-move"); b.disabled = true; toast("Переношу папку…", 120000);
+  try {
+    const r = await core.call("ws_move", { path: p });
+    toast(r.switched ? `Папка ассистента теперь: ${r.path}` : `Перенесено: файлов ${r.files} → ${r.path}. Старая папка осталась: ${r.old}`, 8000);
+    fCur = ""; loadFolder();
+  } catch (e) { toast(e.message, 6000); }
+  b.disabled = false;
 };
 // студия открыта на нужном разделе: ui/app.py добавляет #раздел к адресу (open_settings("calendar") и т. п.)
 // после всех скриптов студии: раньше раздел «Заметки» открывался пустым — notes.js ещё не загрузился (loadNotesPage is not defined)

@@ -335,6 +335,31 @@ def human_problems(probs):
 class Maker:
     def __init__(self, P, host=None, llm=None):
         self.P, self.host, self._llm = P, host, llm
+        self.by = None          # id персонажа, который делает плагин (None — тот, кто сейчас отвечает)
+
+    def using(self, by):
+        """Кто делает плагин (04.11, пользователь: «у Лиры модель слабее, а Патрик для таких дел настроен — не смог
+        поручить Патрику»): модель этого персонажа (студия → «Персонажи» → «Мозг»), а не общий «Мозг»."""
+        import contextlib
+
+        @contextlib.contextmanager
+        def _cm():
+            old, self.by = self.by, (by or None)
+            try:
+                yield self
+            finally:
+                self.by = old
+        return _cm()
+
+    def who(self):
+        """-> имя персонажа, чьей моделью делается плагин, или ""."""
+        h = self.host
+        try:
+            pid = self.by or (h.s.get("persona") if h is not None else None)
+            p = h.personas.get(pid) if (h is not None and pid and hasattr(h, "personas")) else None
+            return (p or {}).get("name") or ""
+        except Exception:  # noqa: BLE001
+            return ""
 
     # ---------- модель ----------
     def llm(self, system, user):
@@ -342,7 +367,10 @@ class Maker:
             return self._llm(system, user)
         from llm import stream_chat
         h = self.host
-        prof = h.s.active_llm() if h is not None else None
+        if h is not None and hasattr(h, "persona_llm"):
+            prof = h.persona_llm(self.by)
+        else:
+            prof = h.s.active_llm() if h is not None else None
         if not (prof or {}).get("base_url") and (prof or {}).get("kind") != "ollama":
             raise MakerError("нет модели — выберите её в «Мозге»")
         return "".join(stream_chat(dict(prof, max_tokens=14000, temperature=0.35), system, [{"role": "user", "content": user}]))
@@ -376,7 +404,7 @@ class Maker:
 
     # ---------- папки и версии ----------
     def _dir(self, pid):
-        return PL.USER_DIR / pid
+        return getattr(self.P, "user_dir", PL.USER_DIR) / pid
 
     def _free_id(self, pid):
         base, n = pid, 2
@@ -487,7 +515,7 @@ class Maker:
         p = self._made(pid)
         request = " ".join(str(request or "").split())
         if not request or UNDO_RX.search(request):
-            return self.undo(pid)
+            return self.undo(pid, code=code)
         cur = self._current(pid)
         allow = bool(code)
         keep = {}
@@ -511,7 +539,9 @@ class Maker:
         self.P.reload()
         return dict(self.info(pid), v=v, said=f"Изменила: {request[:120]}")
 
-    def restore(self, pid, v):
+    def restore(self, pid, v, code=False):
+        """Вернуть версию v. Программа (server.py) той версии не такая, как сейчас, — только с разрешения (code): версии
+        приходят и с других компьютеров (core/plugin_sync.py), «верни как было» не должно запускать чужой код (рецензия 04.11)."""
         self._made(pid)
         idx = self._index(pid)
         e = next((x for x in idx if x["v"] == int(v)), None)
@@ -520,13 +550,15 @@ class Maker:
         vd = self._vdir(pid) / str(e["v"])
         files = {n: (vd / n).read_text(encoding="utf-8") for n in FILES if (vd / n).is_file()}
         cur = self._current(pid)
-        if files.get("server.py") and not cur.get("server.py"):
-            raise MakerError("в той версии была своя программа — вернуть её можно только с вашего разрешения: попросите Лиру")
+        if files.get("server.py") and files["server.py"] != cur.get("server.py") and not code:
+            raise MakerError("в той версии своя программа — не та, что сейчас; вернуть её можно только с вашего разрешения: попросите Лиру")
+        if not files.get("server.py") and cur.get("server.py") and e.get("code"):
+            files["server.py"] = cur["server.py"]           # программу той версии сюда не перенесли (другой компьютер) — остаётся нынешняя
         self._write(pid, files, f"Вернула версию {e['v']}", to=e["v"])
         self.P.reload()
         return dict(self.info(pid), said=f"Вернула версию {e['v']}")
 
-    def undo(self, pid):
+    def undo(self, pid, code=False):
         self._made(pid)
         idx = self._index(pid)
         if not idx:
@@ -535,7 +567,7 @@ class Maker:
         prev = [x for x in idx if x["v"] < eff and "to" not in x]
         if not prev:
             raise MakerError("это первая версия — раньше ничего не было")
-        r = self.restore(pid, prev[-1]["v"])
+        r = self.restore(pid, prev[-1]["v"], code=code)
         return dict(r, said=f"Вернула как было (версия {prev[-1]['v']})")
 
     def info(self, pid):

@@ -632,10 +632,12 @@ class Tray:
     Своё скрытое окно и цикл сообщений — в потоке tray (конструктор ждёт его до 5 с); пункты меню выполняются
     каждый в своём потоке, чтобы не держать цикл. ok — значок действительно добавлен."""
 
-    def __init__(self, icon_path, on_show, on_studio, on_quit, on_capture=None, fix=None):
-        """fix — (подпись, действие): «Окна чёрные? Перерисовать проще» (комментарии 19.10 — студия и виджет чёрные)."""
+    def __init__(self, icon_path, on_show, on_studio, on_quit, on_capture=None, fix=None, rest=None):
+        """fix — (подпись, действие): «Окна чёрные? Перерисовать проще» (комментарии 19.10 — студия и виджет чёрные).
+        rest — (подпись(), действие): «Отдых на час» / «Вернуть из отдыха» (№540); подпись спрашивается при каждом меню."""
         self.icon_path, self.hwnd, self.ok = str(icon_path), None, False
         self.items = [(1, "Показать Dewiar", on_show)] + ([(4, "Закинуть идею", on_capture)] if on_capture else []) + \
+                     ([(6, rest[0], rest[1])] if rest else []) + \
                      [(2, "Студия", on_studio)] + ([(0, None, None), (5, fix[0], fix[1])] if fix else []) + \
                      [(0, None, None), (3, "Выход", on_quit)]
         self._ready = threading.Event()
@@ -657,6 +659,11 @@ class Tray:
     def _menu(self):
         m = self.u.CreatePopupMenu()
         for cid, text, _ in self.items:
+            if callable(text):                               # подпись, которая меняется («Отдых» / «Вернуть из отдыха»)
+                try:
+                    text = text()
+                except Exception:  # noqa: BLE001
+                    text = "Отдых на час"
             self.u.AppendMenuW(m, MF_SEPARATOR if not cid else MF_STRING, cid, text)
         pt = wintypes.POINT()
         self.u.GetCursorPos(ctypes.byref(pt))

@@ -8,12 +8,12 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("council_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "homelan_set", "ideas_new", "homelan_pair", "homelan_forget", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("lnet_share", "lnet_invite", "lnet_pause", "council_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "homelan_set", "ideas_new", "homelan_pair", "homelan_forget", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
-                "vault_", "ws_delete", "ws_set_path", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
+                "vault_", "ws_delete", "ws_set_path", "ws_move", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
                 "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_", "month_", "ocr_install")
 
 
@@ -22,6 +22,8 @@ def _kids_blocked(cmd, a):
     if cmd == "settings_save":
         patch = (a or {}).get("patch") or {}
         return not all(k == "ui" or (k == "tts" and set(v or {}) <= {"text_only"}) for k, v in patch.items())
+    if cmd == "lnet_info" and (a or {}).get("trust_new"):
+        return True                                    # «Доверять новому ключу» Сети Лиры — только взрослому
     return cmd.startswith(_KIDS_LOCKED)
 
 
@@ -561,13 +563,16 @@ class CommandsMixin:
                 return {"items": M.templates()}
             if cmd == "plugin_make":
                 code = bool(a.get("code"))
-                r = M.from_template(a["template"]) if a.get("template") else M.create(a.get("describe") or "", code=code, name=a.get("name") or "")
+                with M.using(str(a.get("by") or "") or None):          # «Кто делает» в студии — модель этого персонажа
+                    r = M.from_template(a["template"]) if a.get("template") else M.create(a.get("describe") or "", code=code, name=a.get("name") or "")
                 self.plugins_changed(r["id"], code=code)
                 return dict(r, plugins=P.catalog())
             if cmd in ("plugin_change", "plugin_restore", "plugin_undo"):
                 code = bool(a.get("code"))
-                r = (M.change(pid, a.get("request") or "", code=code) if cmd == "plugin_change" else
-                     M.restore(pid, int(a.get("v") or 0)) if cmd == "plugin_restore" else M.undo(pid))
+                with M.using(str(a.get("by") or "") or None):
+                    r0 = M.change(pid, a.get("request") or "", code=code) if cmd == "plugin_change" else None
+                r = (r0 if cmd == "plugin_change" else
+                     M.restore(pid, int(a.get("v") or 0), code=code) if cmd == "plugin_restore" else M.undo(pid, code=code))
                 self.plugins_changed(pid, code=code or bool(r.get("code")))
                 return dict(r, plugins=P.catalog(), versions=M.versions(pid))
             if cmd == "plugin_versions":
@@ -974,7 +979,7 @@ class CommandsMixin:
                 "version": VERSION, "update": self.updater.public(), "tasks": self.tasks.list(),
                 "skills": self.skills.catalog(), "mcp": self.mcp.status(), "account": self.account.status(), "mail": self.mail.public(), "telegram": self.telegram.public(), "max": self.max.public(), "obsidian": self.obsidian.public(),
                 "reminders": self.reminders_list(), "alarm": self._alarm_public(),
-                "radio": self.radio.status(), "kids": self.kids_public(), "watch": self.watch_public(),
+                "radio": self.radio.status(), "kids": self.kids_public(), "watch": self.watch_public(), "rest": self.rest_public(),
                 "pending_import": provision.preview(self.pending_import, self.s.snapshot()) if self.pending_import else None}
 
     def command(self, cmd, a):
@@ -1946,6 +1951,8 @@ class CommandsMixin:
             if now - getattr(self, "_ptt_stop_at", 0.0) < self.PTT_CALM and self.state not in ("speaking", "thinking", "listening"):
                 self._ptt_stop_at = now
                 return "sleep"
+            if getattr(self, "resting", lambda: False)():    # «Отдых»: нажали на лицо — вернулась и слушаю (№540)
+                self.rest_end("лицо")
             if self.muted and self.state not in ("speaking", "thinking"):
                 self._mute_pass = True                      # нажали «говорить» при выключенном микрофоне — одна фраза, и снова тихо
             if self.state in ("speaking", "thinking", "listening"):
@@ -1986,7 +1993,12 @@ class CommandsMixin:
             self.interrupt("кнопка", follow=False)
             return True
         if cmd == "mute":
+            if not a.get("on") and getattr(self, "resting", lambda: False)():          # «Отдых»: включили микрофон — значит, вернулись (№540)
+                self.rest_end("кнопка")
+                return self.muted
             return self.set_mute(bool(a.get("on")))
+        if cmd in ("rest", "rest_end", "rest_toggle", "rest_state"):   # «Отдых» (engine_rest.py, №540)
+            return self.rest_cmd(cmd, a)
         if cmd == "text_mode":
             # YouTube 26.10: «выключил микрофон и синтез речи… для чисто текстового режима не очень удобно — добавить
             # переключение в текстовый режим (без распознавания, без синтеза, с инструментами в чате)». Включили —
@@ -2278,6 +2290,12 @@ class CommandsMixin:
                 return self.pair_new()
             except CloudError as e:
                 raise ValueError(str(e)) from e
+        if cmd.startswith("lnet_"):                   # «Сеть Лиры»: правила с подписью, «Мой узел», приглашение узла (liranet.py)
+            import liranet
+            try:
+                return liranet.command(self, cmd, a)
+            except liranet.NetError as e:
+                raise ValueError(str(e)) from e
         if cmd in ("cloud_connect", "cloud_status", "cloud_forget"):
             from cloud import CloudError
             try:
@@ -2488,13 +2506,19 @@ class CommandsMixin:
             if a.get("reveal", True) and not os.environ.get("DEWIAR_DRY_TOOLS"):
                 X.reveal(out)
             return {"path": str(out), "name": out.name, "dir": str(out.parent)}
+        if cmd == "ws_move":                              # №538: перенести папку ассистента (с копированием) и переключиться
+            r = self.workspace.move_to(a.get("path") or "")
+            a = {"path": r["path"]}
+            cmd = "ws_set_path"
+            self._ws_moved = r
         if cmd == "ws_set_path":
             path = (a.get("path") or "").strip()
             self.s.update({"workspace": {"path": path}})
             self.workspace.ensure()
             self.skills.set_folder(self.workspace.root / "Навыки")
             self.workspace.sync_reminders(self.reminders.items)
-            return str(self.workspace.root)
+            moved, self._ws_moved = getattr(self, "_ws_moved", None), None
+            return dict(moved, path=str(self.workspace.root)) if moved else str(self.workspace.root)
         if cmd == "update_status":
             return self.updater.public()
         if cmd == "self_check":
@@ -2512,7 +2536,8 @@ class CommandsMixin:
             except KeyError as e:                       # пакет 28.10: задачу уже удалили, а студия просит её — не сбой программы
                 raise ValueError(str(e).strip("'\"")) from None
         if cmd == "task_create":
-            t = self.tasks.create(a.get("title", ""), a.get("goal", ""), a.get("project", ""), start=a.get("start", True))
+            t = self.tasks.create(a.get("title", ""), a.get("goal", ""), a.get("project", ""), start=a.get("start", True),
+                                  folders=a.get("folders") or ())
             return t.public()
         if cmd in ("task_export", "task_open_result"):        # результат задачи: скачать (HTML/PDF/как есть) или открыть
             import export as X

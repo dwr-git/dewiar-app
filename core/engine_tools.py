@@ -1171,6 +1171,8 @@ class ToolsMixin:
 
     def sync_public(self):
         st = dict(self.sync.status)
+        if st.get("error") and disk_full(st["error"]):    # пакет 04.11: «[Errno 28] No space left on device» — по-человечески
+            st["error"] = "на диске нет места — синхронизация ждёт, пока его освободят (хотя бы 1 ГБ)"
         tok, _, _ = self.credentials()
         st["available"] = bool(tok)
         st["on"] = self.s.get("sync", "enabled") is not False
@@ -1192,6 +1194,8 @@ class ToolsMixin:
     def _on_reminder(self, item):
         """Сработало: окно-будильник по центру, звонок до «Готово»/«Отложить», голос, уведомление, Telegram."""
         text = item["text"]
+        if hasattr(self, "_rest_hold") and self._rest_hold("reminder", item=dict(item)):
+            return                                       # «Отдых» (№540): напоминание подождёт конца отдыха
         if item.get("kind") == "job" and int(item.get("late_s") or 0) > self.JOB_LATE_MAX:
             # 28.10 (владелец): компьютер был выключен — утром выполнился вчерашний «Итог дня» в 8:56. Дело, опоздавшее больше
             # чем на JOB_LATE_MAX, не выполняем: в календаре оно на своём месте с пометкой «пропущено»

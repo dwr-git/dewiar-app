@@ -20,10 +20,11 @@ from engine_senior import SeniorMixin  # noqa: E402  режимы Лиры и «
 from engine_watch import WatchMixin  # noqa: E402  «Дозор»: присмотреть и сказать, когда готово (watch.py)
 from engine_home import HomeMixin  # noqa: E402  «Дома по Wi-Fi»: синхронизация без dewiar.pro (homehub.py)
 from engine_mymusic import MyMusicMixin  # noqa: E402
+from engine_rest import RestMixin  # noqa: E402  «Отдых»: час без Лиры — не слушает и не говорит (№540)
 
 
 class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin,
-             PayMixin, SeniorMixin, WatchMixin, HomeMixin):
+             PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
@@ -364,6 +365,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         if not self.wav_input:
             threading.Thread(target=self.close.loop, args=(self.stopping,), name="close", daemon=True).start()
         self.home_boot()                                   # «Дома по Wi-Fi» — если включён (engine_home.py)
+        if not self.server:
+            self.rest_boot()                               # «Отдых» шёл до перезапуска — продолжаем (engine_rest.py)
         threading.Thread(target=self._start_hearing, name="hearing-init", daemon=True).start()
         threading.Timer(4.0, self.probe_tools_bg).start()     # умеет ли модель действия — узнаём заранее
         self.telegram.start()

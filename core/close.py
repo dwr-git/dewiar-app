@@ -209,7 +209,10 @@ class Close:
         if self._priv:
             return self._priv, self.st["pub"]
         from crypt import CryptError, device_key, seal, unseal
-        dk = device_key(self.key_path)
+        try:
+            dk = device_key(self.key_path)
+        except CryptError as e:
+            dk = self._key_reset(e)
         if self.st.get("priv"):
             try:
                 self._priv = unseal(CC.b64d(self.st["priv"]), dk)
@@ -221,6 +224,49 @@ class Close:
         self._priv = priv
         self._save()
         return priv, self.st["pub"]
+
+    def _key_reset(self, why):
+        """Частый сбой 04.11 (7 раз у одного человека): «Близкие — CryptError: Windows не дал доступ к ключу сейфа». Файл ключа
+        этого компьютера есть, а Windows (DPAPI) его не открывает — так бывает после сброса пароля Windows, переноса папки
+        настроек с другого компьютера или из другой учётной записи; само это не пройдёт, и опрос падал каждые несколько
+        секунд. Теперь: прежний файл — в сторону (close.key.broken, не стираем), новый ключ и новая пара ключей «Близких»;
+        близкие получат новый открытый ключ при следующем приветствии. Старые сообщения, зашифрованные для прежнего ключа,
+        прочитать уже нельзя — так и пишем в журнал, один раз."""
+        from crypt import device_key
+        p = Path(self.key_path)
+        try:
+            p.replace(p.with_name(p.name + ".broken"))
+        except OSError:
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        log.warning("Близкие: Windows не открыл ключ этого компьютера (%s) — так бывает после сброса пароля Windows или переноса "
+                    "настроек; новый ключ, переписка продолжится (сообщения, отправленные на прежний ключ, не откроются)", why)
+        self.st.pop("priv", None)
+        self._priv = None
+        self.st["hello_at"] = 0                         # новый открытый ключ — на сервер при ближайшем опросе (тот же dev)
+        self.st["key_reset_at"] = time.time()
+        # человеку — одной заметкой, а не только строкой журнала. Прочитанная переписка хранится здесь уже открытой
+        # (close.json → hist) и не пропадает; не откроются только сообщения, зашифрованные на прежний ключ и ещё не забранные
+        self._notify_user("Близкие: новый ключ переписки",
+                   "Windows не дал открыть ключ переписки этого компьютера (так бывает после сброса пароля Windows или переноса "
+                   "настроек) — создан новый. Близкие пишут вам как прежде, вся переписка на этом компьютере на месте. Сообщения, "
+                   "отправленные в эти минуты, могут не открыться — тогда я скажу, от кого, и их стоит попросить повторить.")
+        return device_key(self.key_path, create=True)
+
+    def _name_of(self, pid):
+        with self._lock:
+            return next((x.get("name") or "" for x in self.st.get("people") or [] if x.get("pid") == pid), "")
+
+    def _notify_user(self, title, text):
+        """Сказать человеку: уведомление на компьютере и заметка в виджете и студии (host.push), без Telegram."""
+        try:
+            self.host.push(title, text, telegram=False)
+        except TypeError:
+            self.host.push(title, text)
+        except Exception:  # noqa: BLE001
+            log.debug("близкие: уведомление", exc_info=True)
 
     # ---------- сеть ----------
     def _req(self, method, path, body=None, raw=None, params=None, timeout=20):
@@ -919,6 +965,12 @@ class Close:
         with self._lock:
             self.st["cursor"] = max(int(self.st["cursor"]), int(d.get("last") or 0))
             self._save()
+        lost, self._lost = getattr(self, "_lost", []), []
+        if lost:
+            who = ", ".join(dict.fromkeys(x for x in lost if x)) or "близких"
+            self._notify_user("Близкие: сообщение не открылось",
+                       f"Не открылись сообщения ({len(lost)}) — от: {who}. Они зашифрованы прежним ключом этого компьютера; "
+                       "попросите повторить — новые дойдут как обычно.")
         if self.st.get("natt"):
             self._natt_kick()
         gm = d.get("gmarks")
@@ -992,6 +1044,9 @@ class Close:
             body = CC.decrypt_from(env, priv, self.st["dev"], pub)
         except CC.CloseCryptoError as e:
             log.info("близкие: не открылось (%s)", e)
+            # ключ этого компьютера недавно сменился (_key_reset) — это сообщение шло на прежний: сказать, от кого (poll)
+            if time.time() - float(self.st.get("key_reset_at") or 0) < 7 * 86400 and not it.get("out") and it.get("kind") in ("msg", "grp", None):
+                self._lost = getattr(self, "_lost", []) + [it.get("name") or self._name_of(peer)]
             return 0, refreshed
         if not isinstance(body, dict):
             return 0, refreshed
@@ -1239,7 +1294,16 @@ class Close:
                 log.info("Близкие: %s (подряд %s)", e, self._fail_n)
             except ValueError as e:      # ответ сайта оборвался или пришла страница ошибки вместо JSON — повторим (пакет 23.10, №209)
                 log.info("Близкие: сайт ответил не так, как ждали (%s) — повторю", e)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                from crypt import CryptError
+                if isinstance(e, CryptError):            # ключ не открылся и новый не завёлся (диск, права) — понятно и без лавины
+                    self.error = "не открылся ключ шифрования этого компьютера — переписка на паузе; перезапустите Dewiar"
+                    self._fail_n = 0
+                    if time.time() - getattr(self, "_crypt_logged", 0) > 3600:
+                        self._crypt_logged = time.time()
+                        log.warning("Близкие: %s (%s)", self.error, e)
+                    self.soon.wait(600)
+                    continue
                 log.exception("Близкие")
             try:
                 wait = 1 if self._fast() else 3 if getattr(self, "_fail_n", 0) == 1 else 6 if self.active() else 600

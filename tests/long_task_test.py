@@ -140,9 +140,13 @@ ok("ждёт" in T.t_task_status({}, {"tasks": tm}) and "ABC123" in T.t_task_sta
    "task_status: ждёт и что уже известно из блокнота")
 nb = t.notebook()
 ok("ABC123" in nb and "## Что известно" in nb, "факт записан в блокнот под «Что известно»")
-ok(any("БЛОКНОТ ЗАДАЧИ" in r["system"] and "ABC123" in r["system"] for r in reqs if r["title"] == A and r["i"] >= 2),
-   "блокнот — в каждом шаге модели")
-ok(any("Готово, когда" in r["system"] for r in reqs if r["title"] == A), "план с критерием готовности виден модели")
+# выпуск 1 «Больших задач»: блокнот и план — в «Состоянии задачи» последним сообщением, а не в подсказке (кэш начала запроса)
+def st_of(r):
+    return json.dumps(r["messages"][-1], ensure_ascii=False)
+ok(any("БЛОКНОТ ЗАДАЧИ" in st_of(r) and "ABC123" in st_of(r) for r in reqs if r["title"] == A and r["i"] >= 2)
+   and not any("ABC123" in r["system"] for r in reqs if r["title"] == A),
+   "блокнот — в каждом шаге модели (в состоянии задачи, не в подсказке)")
+ok(any("Готово, когда" in st_of(r) for r in reqs if r["title"] == A), "план с критерием готовности виден модели")
 notif = [p for p in host.pushes if p[0] == f"📌 {A}"]
 ok(len(notif) == 1 and "KL1234" in notif[0][1], f"сообщение по ходу ушло пользователю, второе подряд — придержано ({len(notif)})")
 ok("🔕" in (t.dir / "журнал.md").read_text(encoding="utf-8"), "придержанное сообщение — в журнале")
@@ -179,7 +183,7 @@ ok(consolidations and "секретный код 4242" in json.dumps(consolidati
 late = [r for r in reqs if r["title"] == B][-1]
 ok(len(late["messages"]) < 2 * 11, f"разговор задачи сжат ({len(late['messages'])} сообщений вместо {2 * 11 + 1})")
 ok("ранние шаги убраны" in late["messages"][0]["content"] and "Собрать много" in late["messages"][0]["content"], "цель на месте, пометка о сжатии")
-ok("4242" in late["system"] and "консолидировано" in late["system"], "факт из ранних шагов виден через блокнот")
+ok("4242" in st_of(late) and "консолидировано" in st_of(late), "факт из ранних шагов виден через блокнот")
 ok("🧠" in (tb.dir / "журнал.md").read_text(encoding="utf-8"), "сжатие отмечено в журнале")
 TK.BUDGET = 60000
 

@@ -154,6 +154,8 @@ function remEdit(el, it) {
   box.innerHTML = (job ? `<p class="remed-k">Дело по расписанию${it.repeat_text ? " · " + escH(it.repeat_text) : ""} · ${it.deliver === "telegram" ? "в Telegram" : it.deliver === "max" ? "в MAX" : "голосом"}</p>`
       + (it.text && it.text !== it.title ? `<p class="remed-task">${escH(it.text)}</p>` : "") : "")
     + `<div class="row2">${job ? "" : `<input type="text" class="grow" id="re-text" maxlength="300" value="${escH(it.title || "")}" aria-label="Текст">`}`
+    // идея №135 (04.11: «менять время руками» — и день): разовое напоминание — на другой день, не только на другое время
+    + (!job && !it.repeat ? `<input type="date" id="re-date" value="${escH(calSel || "")}" aria-label="Дата">` : "")
     + `<input type="time" id="re-time" value="${escH(it.time || "")}" aria-label="Время"><button class="btn small primary" id="re-save">Сохранить</button></div>`
     // повтор по дням (30.10, владелец: «по будням 17:50, а в пятницу — 16:40… вручную не понятно как»): дни недели — кнопками,
     // и «только в этот день» — другое время одному дню, остальные остаются как были
@@ -180,7 +182,9 @@ function remEdit(el, it) {
         try { await core.call("reminder_update", { id: it.id, patch: { days } }); } catch (e) { return toast(e.message, 3500); }
       }
     }
-    const patch = { at: `${it.repeat ? isoD(new Date()) : day}T${tm}:00` };   // повтор — с ближайшего раза, не с выбранного дня
+    const dt = ($("#re-date", box) && $("#re-date", box).value) || day;           // №135: другой день — тоже можно
+    if (!it.repeat && new Date(`${dt}T${tm}:00`) < new Date(Date.now() - 60000)) return toast("Это время уже прошло — выберите позже", 3000);
+    const patch = { at: `${it.repeat ? isoD(new Date()) : dt}T${tm}:00` };   // повтор — с ближайшего раза, не с выбранного дня
     if (text && text !== it.title) patch.text = text;
     try { const r = await core.call("reminder_update", { id: it.id, patch }); toast(it.repeat ? `Теперь ${r.repeat_text || "в " + tm}` : `Перенесено: ${r.when || tm}`); loadCalendar(); }
     catch (e) { toast(e.message, 3500); }

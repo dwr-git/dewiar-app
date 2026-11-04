@@ -25,7 +25,7 @@ function plgRender() {
   $("#plg-grid").innerHTML = list.map(p => `<button class="plg${p.installed ? " on" : ""}" data-id="${plgEsc(p.id)}" style="--pc:${plgEsc(p.color)}">
       <i class="plg-ic" aria-hidden="true">${plgEsc(p.icon)}</i>
       <span class="plg-t"><b>${plgEsc(p.name)}</b><small>${plgEsc(p.tagline)}</small></span>
-      <span class="plg-st">${p.installed ? "Установлен" : plgEsc(p.category)}</span></button>`).join("")
+      <span class="plg-st">${p.installed ? "Установлен" : p.arrived ? `С «${plgEsc(p.arrived.from)}» — включить?` : plgEsc(p.category)}</span></button>`).join("")
     || `<p class="hint">Плагинов пока нет.</p>`;
   $$("#plg-grid .plg").forEach(b => b.onclick = () => plgDrawer(b.dataset.id));
 }
@@ -51,7 +51,9 @@ function plgDrawer(id) {
     <p class="pld-desc">${plgEsc(p.description)}</p>
     <div class="actions" style="margin:6px 0 4px">${p.installed
       ? `<button class="btn primary" id="pld-page">Открыть страницу плагина</button><span class="pld-ok">✓ Установлен</span>${(p.links || []).map((l, i) => `<button class="btn" data-link="${i}">${plgEsc(l.label)}</button>`).join("")}<button class="btn ghost" id="pld-rm">Удалить</button>`
-      : `<button class="btn primary" id="pld-in">Установить</button>`}<span class="res" id="pld-res"></span></div>
+      : `<button class="btn primary" id="pld-in">${p.arrived ? "Включить" : "Установить"}</button>`}<span class="res" id="pld-res"></span></div>
+    ${!p.installed && p.arrived ? `<p class="hint pld-arr">Пришёл с «${plgEsc(p.arrived.from)}» синхронизацией. ${p.arrived.code
+      ? "В нём своя программа — она запустится на этом компьютере. Включайте, если делали плагин вы." : ""}</p>` : ""}
     ${p.phrases.length ? `<h2>Попробуйте сказать</h2><div class="pld-ph">${p.phrases.map(t => `<button class="chip" data-t="${plgEsc(t)}" title="${p.installed ? "Спросить Лиру" : "Скопировать"}">«${plgEsc(t)}»</button>`).join("")}</div>` : ""}
     ${p.settings.length ? `<h2>Настройки</h2><div class="row one pld-set">${p.settings.map(s => plgField(p, s)).join("")}</div>
       ${p.installed ? `<div class="actions" style="margin-top:6px"><button class="btn" id="pld-save">Сохранить настройки</button></div>` : `<p class="hint">Заполнится при установке — поменять можно в любой момент.</p>`}` : ""}
@@ -71,10 +73,11 @@ function plgDrawer(id) {
   const run = (cmd, args, done) => core.call(cmd, args).then(r => { plgSet(r); if (done) toast(done); }).catch(e => res(e.message, false));
   $("#pld-x").onclick = plgClose;
   if ($("#pld-page")) $("#pld-page").onclick = () => { plgClose(); if (window.plpOpen) plpOpen(id); };   // своя страница плагина (plugpage.js)
-  if ($("#pld-in")) $("#pld-in").onclick = () => { $("#pld-in").disabled = true; run("plugin_install", { id, values: plgValues() }, `«${p.name}» установлен`); };
+  if ($("#pld-in")) $("#pld-in").onclick = () => { $("#pld-in").disabled = true; run("plugin_install", { id, values: plgValues() }, `«${p.name}» ${p.arrived ? "включён" : "установлен"}`); };
   if ($("#pld-rm")) $("#pld-rm").onclick = async () => { if (!await ask(`Удалить плагин «${p.name}»? Его навыки и подключения уберутся, дела по расписанию — тоже.`)) return; run("plugin_remove", { id }, `«${p.name}» удалён`); };
   if ($("#pld-save")) $("#pld-save").onclick = () => run("plugin_values", { id, values: plgValues() }, "Настройки сохранены");
-  if ($("#pld-del")) $("#pld-del").onclick = async () => { if (!await ask(`Удалить файлы плагина «${p.name}» с этого компьютера?`)) return; plgOpen = ""; plgClose(); run("plugin_delete", { id }, "Плагин удалён"); };
+  // плагин Лиры синхронизируется между компьютерами (core/plugin_sync.py) — и удаляется со всех
+  if ($("#pld-del")) $("#pld-del").onclick = async () => { if (!await ask(p.made ? `Удалить плагин «${p.name}»? Он удалится и с других ваших компьютеров, где включена синхронизация.` : `Удалить файлы плагина «${p.name}» с этого компьютера?`)) return; plgOpen = ""; plgClose(); run("plugin_delete", { id }, "Плагин удалён"); };
   $$("#pld [data-pick]").forEach(b => b.onclick = async (ev) => {
     ev.preventDefault(); const a = window.api && window.api();
     if (!a || !a.pick_folder) return toast("Выбор папки доступен в окне студии — или впишите путь вручную");

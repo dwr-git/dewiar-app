@@ -167,8 +167,78 @@ async function dwRef() {
     : d.bonus > 0 ? ` Вам +${refTal(d.bonus)} тал. за каждого друга, который попользуется Dewiar ${d.days} дн.` : "");
 }
 $("#dw-ref-open").onclick = () => $('nav button[data-p="ref"]').click();
+/* «Сеть Лиры» (04.11, core/liranet.py → server/dwrapp/liranet.php): переключатель «Пускать мои общие вопросы», правила с
+   проверенной подписью (отпечаток ключа сети), «Мой узел» и «Поделиться мощностью» — команда для Ubuntu по приглашению. */
+const lnTal = (x) => String(Math.round((+x || 0) * 10000) / 10000).replace(".", ",");
+const lnDate = (ts) => ts ? new Date(ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
+async function lnLoad(trustNew) {
+  const box = $("#dwc-lnet"); if (!box) return;
+  let d;
+  try { d = await core.call("lnet_info", trustNew ? { trust_new: true } : {}); } catch (e) { dwSet("lnet", "", "—"); $("#dw-ln-rules").textContent = e.message; return; }
+  $("#dw-ln-share").checked = !!d.share;
+  const sg = d.signed || {}, r = sg.rules || {}, me = d.me || {};
+  $("#dw-ln-trust").hidden = !(sg.error && /сменился/.test(sg.error));
+  if (!sg.ok) { $("#dw-ln-rules").className = "hint bad"; $("#dw-ln-rules").textContent = sg.error || "правила сети не получены"; }
+  else {
+    $("#dw-ln-rules").className = "hint";
+    $("#dw-ln-rules").textContent = (r.on ? "Сеть открыта" : "Сеть пока закрыта") + ` · правила подписаны сайтом Dewiar (ключ — у владельца), отпечаток ${sg.fp}` + (sg.first ? " (запомнила его)" : "")
+      + (r.rate != null ? ` · курс ${lnTal(r.rate)} тал. за 1000 токенов` + (r.rate_since ? ` с ${lnDate(r.rate_since)}` : "") : " · начислений пока нет");
+  }
+  const nodes = me.nodes || [];
+  $("#dw-ln-mine").hidden = !nodes.length;
+  if (nodes.length) {
+    const kv = [["Мой узел", nodes.map(n => `${n.gpu || n.name} — ${n.state_text}`).join("; ")],
+      ["Ответов за сутки", `${me.answers_day || 0} · токенов ${(me.tokens_day || 0).toLocaleString("ru-RU")}`],
+      ["Начислено", `${lnTal(me.paid_total)} тал.` + (me.waiting > 0 ? ` · ещё ${lnTal(me.waiting)} ждут решения владельца` : "")],
+      ["Курс", me.rate != null ? `${lnTal(me.rate)} тал. за 1000 токенов` + (me.rate_since ? `, с ${lnDate(me.rate_since)}` : "") : "не задан — начислений нет"]];
+    if (nodes.some(n => n.new)) kv.push(["Новый узел", "первые 7 дней начисления ×0,5"]);
+    $("#dw-ln-kv").innerHTML = kv.map(([k, v]) => `<span>${escH(k)}</span><b>${escH(v)}</b>`).join("");
+    $("#dw-ln-pause").checked = nodes.every(n => n.paused);
+  }
+  dwSet("lnet", nodes.some(n => n.state === "on" && !n.paused) ? "ok" : nodes.length ? "run" : d.share ? "ok" : "", nodes.length ? nodes[0].state_text : d.share ? "вопросы — в сеть" : "выключено");
+}
+$("#dw-ln-share").onchange = async (e) => {
+  const on = e.target.checked, res = $("#dw-ln-res");
+  try { await core.call("lnet_share", { on }); res.className = "res ok"; res.textContent = on ? "Общие вопросы иногда будет отвечать Сеть Лиры. Личное — только сервер Dewiar." : "Выключено: всё отвечает сервер Dewiar."; }
+  catch (x) { e.target.checked = !on; res.className = "res bad"; res.textContent = x.message; }
+  lnLoad();
+};
+$("#dw-ln-pause").onchange = async (e) => {
+  const res = $("#dw-ln-res");
+  try { await core.call("lnet_pause", { on: e.target.checked }); res.className = "res ok"; res.textContent = e.target.checked ? "Пауза: узел не берёт задания." : "Узел снова берёт задания."; }
+  catch (x) { e.target.checked = !e.target.checked; res.className = "res bad"; res.textContent = x.message; }
+  lnLoad();
+};
+$("#dw-ln-give").ontoggle = () => {
+  if (!$("#dw-ln-give").open || $("#dw-ln-needs").childElementCount) return;
+  const needs = ["Ubuntu 22.04 или 24.04 и видеокарта NVIDIA от 16 ГБ (лучше 24 ГБ: RTX 3090, 4090), 32 ГБ памяти, 60 ГБ на диске.",
+    "Белый IP не нужен: узел сам держит соединение с dewiar.pro и забирает задания, порт открывать не надо.",
+    "Компьютер включён — узел работает; пауза — переключателем «Не брать задания».",
+    "Узел видит только общий вопрос без имени, ключа и адреса спрашивающего."];
+  $("#dw-ln-needs").innerHTML = needs.map(x => `<li>${escH(x)}</li>`).join("");
+};
+$("#dw-ln-inv").onclick = async (ev) => {
+  const b = ev.target, res = $("#dw-ln-res");
+  b.disabled = true; res.className = "res"; res.textContent = "беру приглашение…";
+  try {
+    const d = await core.call("lnet_invite");
+    if (d.needs && d.needs.length) $("#dw-ln-needs").innerHTML = d.needs.map(x => `<li>${escH(x)}</li>`).join("");
+    $("#dw-ln-cmd").textContent = d.cmd; $("#dw-ln-cmd").hidden = false; $("#dw-ln-cmd-row").hidden = false;
+    $("#dw-ln-exp").textContent = `Вставьте в терминал того компьютера. Приглашение действует до ${new Date(d.exp * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}.`;
+    res.className = "res ok"; res.textContent = "Команда готова. Узел появится у владельца Dewiar «на допуске», а здесь — в «Мой узел».";
+  } catch (x) { res.className = "res bad"; res.textContent = x.message; }
+  b.disabled = false;
+};
+$("#dw-ln-copy").onclick = async () => { const t = $("#dw-ln-cmd").textContent; let okc = false;
+  try { await navigator.clipboard.writeText(t); okc = true; } catch (e) { }
+  $("#dw-ln-res").className = okc ? "res ok" : "res"; $("#dw-ln-res").textContent = okc ? "Скопировано." : "Выделите команду и скопируйте (Ctrl+C)."; };
+$("#dw-ln-trust").onclick = async () => {
+  if (!await ask("Доверять новому ключу сети? Делайте так, только если владелец Dewiar сам объявил о смене ключа — иначе правила могли подменить.")) return;
+  lnLoad(true);
+};
 async function dwLoad(full) {
   dwRef();
+  lnLoad();
   const tasks = [core.call("device").then(x => DW.dev = x), core.call("sync_status").then(x => DW.sync = x), core.call("cloud_status", { refresh: !!full }).then(x => DW.cloud = x), core.call("update_status").then(x => DW.upd = x)];
   if (!DW.av || full) tasks.push(core.call("av_status").then(x => DW.av = x));
   if (full) tasks.push(core.call("account_check").then(x => DW.acc = x));
@@ -687,3 +757,6 @@ document.addEventListener("click", (e) => {
 /* «Dewiar уже есть на другом устройстве?» (№216, 23.10: компьютер и телефон — каждый со своей заявкой «Подключить
    бесплатно», два ключа — и ни заметок, ни блокнота друг у друга): не новая заявка, а код с того устройства */
 if ($("#dk-have-go")) $("#dk-have-go").onclick = () => { const k = $("#dk-key"); if (k) { k.scrollIntoView({ block: "center" }); k.focus(); } };
+
+/* №530 (04.11): последняя строка этого файла выполнилась — обработчик «hello» студии на месте (studio/core.js проверяет) */
+window.__studioReady = true;

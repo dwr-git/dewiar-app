@@ -455,6 +455,14 @@
   /* 30.10, владелец: «в 0.72 плашка „голос выключен“ висит, даже когда голос включён» — правило выше (два id) сильнее
      [hidden] из общей строки, и метка не пряталась. Скрытая — скрыта, при любой теме. */
   #corner-l #b-tm[hidden], body.light #corner-l #b-tm[hidden] { display: none; }
+  /* «Отдых» (№540, 04.11: «поработать без неё»): пока Лира отдыхает — метка «отдыхаю до 15:40» видна всегда, нажатие — вернуть */
+  #corner-l.rst { opacity: 1; }
+  #corner-l #b-rst { width: auto; padding: 0 8px 0 6px; gap: 5px; display: inline-flex; align-items: center; border-radius: 99px; color: #a9d8ff;
+    background: rgba(110,180,255,.16); font: 600 11px Manrope, sans-serif; }
+  #corner-l #b-rst:hover { background: rgba(110,180,255,.28); color: #d9eeff; }
+  #corner-l #b-rst[hidden], body.light #corner-l #b-rst[hidden] { display: none; }
+  body.light #corner-l #b-rst { color: #0d4f8b; background: rgba(226,240,255,.95); box-shadow: 0 1px 4px rgba(20,70,130,.18); }
+  body.rest #b-rest { color: #a9d8ff; }
   body.light #corner-l #b-tm { color: #7f4a00; background: rgba(255,243,222,.94); box-shadow: 0 1px 4px rgba(120,70,0,.18); }   /* сплошная подложка: метка читается и на ярком портрете (contrast1018) */
   /* щит, дозор, стоп-кран, обновление — видны всегда; остальное в углу (жук, лампочка и «обновления», когда нового нет) —
      только под курсором (30.10, владелец: «жук и лампочка пропадают, а обновление остаётся») */
@@ -604,6 +612,7 @@
   <div id="corner-l">
     <!-- стоп-кран «Ничего не уходит в интернет» включён (студия → «Безопасность», 0.38.98): значок виден всегда -->
     <button class="btn" id="b-watch" hidden title="Лира в дозоре"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><i></i></button>
+    <button class="btn" id="b-rst" hidden title="Лира отдыхает: не слушает и не говорит, напоминания ждут. Нажмите — вернуть сейчас"><svg viewBox="0 0 24 24"><path d="M4.5 9.5h12v4.5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5z"/><path d="M16.5 11h1.2a2.3 2.3 0 0 1 0 4.6h-1.6M8 3.5c-.6.9.6 1.6 0 2.5M11.5 3.5c-.6.9.6 1.6 0 2.5"/></svg><span id="b-rst-t">отдыхаю</span></button>
     <button class="btn" id="b-tm" hidden title="Текстовый режим: голос и микрофон выключены. Нажмите — включить голос"><svg viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2.5"/><path d="M7 10.5h1M10.5 10.5h1M14 10.5h1M17 10.5h0M7.5 14h9"/></svg><span>голос выключен</span></button>
     <button class="btn" id="b-lo" hidden title="Ничего не уходит в интернет: стоп-кран включён. Выключить — студия → «Безопасность»"><svg viewBox="0 0 24 24"><path d="M12 3.2 5 6v5.6c0 4.2 2.9 7.7 7 9.2 4.1-1.5 7-5 7-9.2V6z"/><path d="m9 12 2.2 2.2L15.3 10"/></svg></button>
     <button class="btn" id="b-bug" title="Сообщить о проблеме — сниму экран и открою форму жалобы"><svg viewBox="0 0 24 24"><rect x="6.5" y="7" width="11" height="14.5" rx="5.5"/><path d="M8.8 7.6a3.2 3.2 0 0 1 6.4 0M12 11.5v10M6.5 12.5H2.5M21.5 12.5h-4M6.8 17.5 3 19.8M17.2 17.5l3.8 2.3M7.5 9.2 4 6.5M16.5 9.2 20 6.5"/></svg></button>
@@ -617,6 +626,8 @@
     <!-- «Досуг» (24.10): милые игры в том же листе, что блокнот (ui/pad.html, assets/arcade); выключается в «Возможностях» -->
     <button class="btn" id="b-play" hidden title="Досуг — милые игры на пару минут. Или скажите: «Лира, давай поиграем»"><svg viewBox="0 0 24 24"><path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg></button>
     <button class="btn" id="b-pad" title="Блокнот — вкладки под рукой: ссылки, задачи, таблицы, картинки. Синхронизируется между устройствами"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2.5"/><path d="M8.5 3v4M12 3v4M15.5 3v4"/><path d="M8.5 11h7M8.5 14.5h7M8.5 18h4"/></svg></button>
+    <!-- «Отдых» (№540): час без Лиры одним нажатием — не слушает и не говорит, напоминания подождут -->
+    <button class="btn" id="b-rest" title="Отдых на час: не слушаю и не говорю, напоминания подождут. Или скажите: «Лира, отдохни час»" aria-label="Отдых на час"><svg viewBox="0 0 24 24"><path d="M4.5 9.5h12v4.5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5z"/><path d="M16.5 11h1.2a2.3 2.3 0 0 1 0 4.6h-1.6M8 3.5c-.6.9.6 1.6 0 2.5M11.5 3.5c-.6.9.6 1.6 0 2.5"/></svg></button>
     <button class="btn" id="b-tray" title="Спрятать — появлюсь сам, когда позовёте по имени или придёт напоминание"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
   </div>
   <div id="bar">
@@ -737,6 +748,7 @@ function renderDots() {                       // список команды —
 }
 let radioNow = "";                           // играет радио — в покое вместо персонажа крутится пластинка
 let stateSince = Date.now();
+let REST = { on: false };     // «Отдых» (№540): {on, until, until_text, held} — событие «rest», в hello — rest
 let hold = null;              // диктовка удержанием (ниже, у перетаскивания): {on, t0, far, timer, by: "mouse"|"key"}
 let turnUntil = 0;                           // до какого времени ждём ответа без имени (событие turn от ядра)
 // обновление: ядро перезапускается — это не «нет связи», а спокойное «обновляюсь» с обычным лицом (без притушенного
@@ -763,7 +775,8 @@ function setState(s) {
     return;
   }
   bub.classList.remove("turn");
-  if (LABEL[s]) { say.textContent = LABEL[s]; say.title = ""; }
+  if (REST.on && (s === "muted" || s === "idle")) { say.textContent = "Отдыхаю до " + REST.until_text; say.title = "Не слушаю и не говорю. Нажмите на лицо или на «отдыхаю» — и я снова с вами"; }
+  else if (LABEL[s]) { say.textContent = LABEL[s]; say.title = ""; }
   else if (radioNow && (s === "idle" || s === "muted")) { say.innerHTML = ""; const b = document.createElement("b"); b.textContent = "♪ " + radioNow; say.appendChild(b); say.title = "Играет радио. «Пауза», «дальше», «выключи музыку»"; }
   else { say.innerHTML = ""; say.title = ""; const b = document.createElement("b"); b.textContent = current ? current.name : "Dewiar"; say.appendChild(b); }
 }
@@ -1421,6 +1434,20 @@ core.on("watch", setWatch);
 core.on("hello", d => setWatch(d.watch));
 $("b-watch").onclick = () => studioToggle("watch");
 $("b-tm").onclick = () => core.call("text_mode", { on: false }).then(() => setTextMode(false)).catch(() => {});
+/* «Отдых» (№540): кнопка в углу — час без Лиры; метка слева «отдыхаю до 15:40» — вернуть; трей зовёт restToggle() */
+function setRest(r) {
+  REST = Object.assign({ on: false }, r || {});
+  const b = $("b-rst"); b.hidden = !REST.on; $("corner-l").classList.toggle("rst", !!REST.on); document.body.classList.toggle("rest", !!REST.on);
+  $("b-rst-t").textContent = REST.on ? "отдыхаю до " + REST.until_text + (REST.held ? ` · ждут: ${REST.held}` : "") : "";
+  $("b-rest").title = REST.on ? "Вернуть Лиру сейчас" : "Отдых на час: не слушаю и не говорю, напоминания подождут. Или скажите: «Лира, отдохни час»";
+  const a = api(); if (a && a.rest_note) a.rest_note(!!REST.on, REST.until_text || "").catch?.(() => {});
+  setState(state);
+}
+window.restToggle = () => core.call("rest_toggle", { minutes: 60 }).then(setRest).catch(showErr);
+core.on("rest", setRest);
+core.on("hello", d => setRest(d.rest));
+$("b-rst").onclick = () => core.call("rest_end", {}).then(setRest).catch(showErr);
+$("b-rest").onclick = () => window.restToggle();
 $("b-lo").onclick = () => { const a = api(); if (a) a.open_settings("safety"); };
 // жалоба: сначала снимок экрана (каким его видит человек в момент проблемы), потом форма в студии («О программе»)
 $("b-bug").onclick = guard($("b-bug"), async () => {

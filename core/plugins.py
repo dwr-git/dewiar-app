@@ -221,11 +221,12 @@ class Plugins:
         self.items = {}
         self.tool_texts = None        # () -> {id плагина: [тексты действий]} — подключённые MCP-серверы (engine.py)
         self._auto = {}
+        self.user_dir = USER_DIR      # свои плагины (проверки с двумя компьютерами в одном процессе дают каждому свою)
         self.reload()
 
     def reload(self):
         items = {}
-        for root, builtin in ((BUILTIN_DIR, True), (USER_DIR, False)):
+        for root, builtin in ((BUILTIN_DIR, True), (self.user_dir, False)):
             if not root.is_dir():
                 continue
             for f in sorted(root.glob("*/plugin.json")):
@@ -361,6 +362,7 @@ class Plugins:
 
     def catalog(self):
         on, out = self._on(), []
+        arrived = dict(self.s.get("plugins", "arrived") or {})
         for pid, p in sorted(self.items.items(), key=lambda x: (not x[1]["builtin"], x[1]["category"], x[1]["name"])):
             st = on.get(pid) or {}
             out.append({k: p[k] for k in ("id", "name", "icon", "color", "category", "tagline", "description", "version", "author",
@@ -369,6 +371,8 @@ class Plugins:
                        | {"installed": pid in on, "values": self.values(pid), "skills": [d.name for d in p["skill_dirs"]],
                           "mcp": [f"{pid}-{n}" for n in p["mcp"]],
                           "jobs": [dict(j, on=bool((st.get("jobs") or {}).get(j["id"]))) for j in p["jobs"]],
+                          # пришёл с другого компьютера со своей программой — включает человек (core/plugin_sync.py)
+                          "arrived": arrived.get(pid) if pid not in on else None,
                           "readme": self._readme(p)})
         return out
 
@@ -397,6 +401,10 @@ class Plugins:
         if values is not None:
             cur["values"] = self._clean(p, values)
         on[pid] = cur
+        arrived = dict(self.s.get("plugins", "arrived") or {})
+        if arrived.pop(pid, None) is not None:          # «Включить» плагин, пришедший с другого компьютера, — разрешение дано
+            self.s.update({"plugins": {"arrived": None}})
+            self.s.update({"plugins": {"arrived": arrived}})
         servers = dict(self.s.get("mcp", "servers") or {})
         for n, c in p["mcp"].items():
             servers.setdefault(f"{pid}-{n}", dict(c, plugin=pid, enabled=True))
@@ -476,8 +484,8 @@ class Plugins:
         if not top:
             raise PluginError("в архиве нет plugin.json")
         prefix = top[0][:-len("plugin.json")]
-        USER_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = USER_DIR / ".new"
+        self.user_dir.mkdir(parents=True, exist_ok=True)
+        tmp = self.user_dir / ".new"
         shutil.rmtree(tmp, ignore_errors=True)
         try:
             for n in names:
@@ -492,7 +500,7 @@ class Plugins:
             p = parse_plugin(tmp, False)
             if p["id"] in self.items and self.items[p["id"]]["builtin"]:
                 raise PluginError(f"«{p['id']}» — имя встроенного плагина, выберите другое id")
-            target = USER_DIR / p["id"]
+            target = self.user_dir / p["id"]
             shutil.rmtree(target, ignore_errors=True)
             tmp.rename(target)
         finally:
