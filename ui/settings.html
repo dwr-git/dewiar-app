@@ -1929,12 +1929,15 @@
         </div>
         <div class="cc-man" id="cc-man">
         <div class="ym-h" id="cc-man-h" style="display:none;margin-bottom:8px"><b>Снимок оплаты администратору</b><span>Оплатите удобным способом и пришлите снимок — администратор зачислит</span></div>
-        <p class="hint" id="cc-topup" style="margin:0 0 10px;white-space:pre-line;line-height:1.55"></p>
+        <div class="tp-step"><i>1</i><b>Оплатите удобным способом</b></div>
+        <div class="tp-text" id="cc-topup"></div>
+        <div class="tp-step"><i>2</i><b>Пришлите снимок оплаты</b><span>администратор проверит и зачислит талеры</span></div>
         <div class="actions" style="margin:0;align-items:flex-end;flex-wrap:wrap">
           <label class="f" style="width:150px">Сколько талеров<input type="text" id="cp-amount" inputmode="decimal" placeholder="например, 5"></label>
           <label class="f" style="flex:1;min-width:220px">Комментарий<input type="text" id="cp-note" placeholder="как оплатили: карта, перевод, дата"></label>
         </div>
-        <div class="cp-shot" id="cp-shot" tabindex="0"><span id="cp-shot-t">Приложите снимок оплаты — нажмите сюда или вставьте Ctrl+V</span><img id="cp-img" alt=""></div>
+        <div class="cp-shot" id="cp-shot" tabindex="0" role="button" aria-label="Приложить снимок оплаты"><span class="cp-si" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m4.5 17.5 4.8-4.6 3.4 3.1 2.6-2.4 4.2 3.9"/></svg></span>
+          <span class="cp-st"><b id="cp-shot-t">Приложите снимок оплаты</b><small id="cp-shot-s">нажмите, перетащите файл сюда или вставьте Ctrl+V</small></span><img id="cp-img" alt="Снимок оплаты"></div>
         <input type="file" id="cp-file" accept="image/png,image/jpeg,image/webp" hidden>
         <div class="actions" style="margin:10px 0 0"><button class="btn primary" id="cp-send">Отправить заявку</button><span class="res" id="cp-res"></span></div>
         </div>

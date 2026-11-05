@@ -536,19 +536,71 @@ function topupText(t) {
   const el = $("#cc-topup");
   if (ymCur) t = String(t).replace(/^[^\n]*\?p=\/pay\/card[^\n]*\n*/m, "");     // для «Оплатить картой» есть кнопка выше
   if (cxCur) t = String(t).replace(/^[^\n]*\?p=\/pay\/crypto[^\n]*\n*/m, "");   // и для «Криптой»
-  el.innerHTML = escH(t).replace(/(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])/g, '<a href="#" data-ext="$1">$1</a>');
-  $$("a[data-ext]", el).forEach(a => a.onclick = (e) => { e.preventDefault(); openExt(a.dataset.ext); });
+  el.innerHTML = topupHtml(t);
+  $$("a[data-ext], button[data-ext]", el).forEach(a => a.onclick = (e) => { e.preventDefault(); openExt(a.dataset.ext); });
+  $$("button[data-copy]", el).forEach(b => b.onclick = () => {
+    const done = () => { const o = b.textContent; b.textContent = "Скопировано"; setTimeout(() => b.textContent = o, 1500); };
+    (navigator.clipboard ? navigator.clipboard.writeText(b.dataset.copy) : Promise.reject()).then(done).catch(() => toast("Не скопировалось — выделите номер и скопируйте вручную"));
+  });
+}
+/* 05.11 (владелец: «блок оплаты блеклый, серый, светлый текст; поле для снимка непонятно, что нажимается»): текст
+   администратора — по смыслу: номер DW — крупно с «Скопировать», абзац со ссылкой на отдельной строке — способ оплаты
+   (название из строки над ссылкой, сайт, «Открыть», пояснения под ним), остальное — обычным текстом. Ссылки внутри
+   предложения остаются ссылками; незнакомый вид текста — просто абзацы, ничего не теряется. */
+const TP_URL = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])/g;
+function tpLink(t) { return escH(t).replace(TP_URL, '<a href="#" data-ext="$1">$1</a>'); }
+function tpHost(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return u; } }
+function tpTitle(t) {
+  t = String(t || "").replace(/[:：]\s*$/, "").replace(/^(?:пополнить\s+)?(?:можно\s+)?(?=через|по|с\s|картой|переводом)/i, "").trim();
+  return t ? t[0].toUpperCase() + t.slice(1) : "";
+}
+function topupHtml(t) {
+  const blocks = String(t || "").replace(/\r/g, "").split(/\n\s*\n/).map(b => b.split("\n").map(l => l.trim()).filter(Boolean)).filter(b => b.length);
+  let out = "", opts = "";
+  const flush = () => { if (opts) { out += `<div class="tp-opts">${opts}</div>`; opts = ""; } };
+  for (const ls of blocks) {
+    const code = ls[0].match(/^(.*?номер[^:]*):\s*(DW-\d+)\s*(?:[—–-]\s*(.*))?$/i);
+    if (code) {
+      flush();
+      const more = [code[3] || "", ...ls.slice(1)].filter(Boolean).join(" ");
+      out += `<div class="tp-code"><div class="tp-cv"><small>${escH(code[1])}</small><b>${escH(code[2])}</b></div>`
+        + `<button type="button" class="btn small" data-copy="${escH(code[2])}">Скопировать</button>${more ? `<p>${tpLink(more)}</p>` : ""}</div>`;
+      continue;
+    }
+    const ui = ls.findIndex(l => /^https?:\/\/\S+$/.test(l));
+    if (ui >= 0) {
+      const head = ls.slice(0, ui), urls = ls.filter(l => /^https?:\/\/\S+$/.test(l)), rest = ls.slice(ui + 1).filter(l => !/^https?:\/\/\S+$/.test(l));
+      urls.forEach((u, i) => {
+        const name = tpTitle(head.join(" ")) || tpHost(u);
+        opts += `<div class="tp-opt"><span class="tp-oi" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10.5h18M7 15h4"/></svg></span>`
+          + `<span class="tp-ot"><b>${escH(name)}${urls.length > 1 ? " · " + (i + 1) : ""}</b><small>${escH(tpHost(u))}</small>${i === urls.length - 1 && rest.length ? `<small class="tp-on">${rest.map(tpLink).join("<br>")}</small>` : ""}</span>`
+          + `<button type="button" class="btn small primary" data-ext="${escH(u)}" title="${escH(u)}">Открыть</button></div>`;
+      });
+      continue;
+    }
+    flush();
+    out += `<p class="tp-p">${ls.map(tpLink).join("<br>")}</p>`;
+  }
+  flush();
+  return out;
 }
 function cpSet(file) {
   if (!file || !/^image\//.test(file.type)) return;
   if (file.size > 6 * 1024 * 1024) { toast("Снимок больше 6 МБ — сохраните его поменьше"); return; }
-  const fr = new FileReader(); fr.onload = () => { cpImage = fr.result; $("#cp-img").src = cpImage; $("#cp-shot").classList.add("has"); $("#cp-shot-t").textContent = "Снимок приложен — нажмите, чтобы заменить"; };
+  const fr = new FileReader(); fr.onload = () => { cpImage = fr.result; $("#cp-img").src = cpImage; $("#cp-shot").classList.add("has"); cpShotText(true); };
   fr.readAsDataURL(file);
 }
+function cpShotText(has) {
+  $("#cp-shot-t").textContent = has ? "Снимок приложен" : "Приложите снимок оплаты";
+  $("#cp-shot-s").textContent = has ? "нажмите, чтобы заменить" : "нажмите, перетащите файл сюда или вставьте Ctrl+V";
+}
 $("#cp-shot").onclick = () => $("#cp-file").click();
+$("#cp-shot").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#cp-file").click(); } };
+$("#cp-shot").ondragenter = () => $("#cp-shot").classList.add("over");
+$("#cp-shot").ondragleave = () => $("#cp-shot").classList.remove("over");
 $("#cp-file").onchange = (e) => { cpSet(e.target.files[0]); e.target.value = ""; };
 $("#cp-shot").ondragover = (e) => e.preventDefault();
-$("#cp-shot").ondrop = (e) => { e.preventDefault(); cpSet(e.dataTransfer.files[0]); };
+$("#cp-shot").ondrop = (e) => { e.preventDefault(); $("#cp-shot").classList.remove("over"); cpSet(e.dataTransfer.files[0]); };
 document.addEventListener("paste", (e) => {
   if ($("#cc-pay").style.display === "none") return;
   const it = [...(e.clipboardData || {}).items || []].find(x => x.type && x.type.startsWith("image/")); if (it) { cpSet(it.getAsFile()); e.preventDefault(); }
@@ -560,7 +612,7 @@ $("#cp-send").onclick = async (ev) => {
   try {
     const x = await core.call("cloud_topup_send", { amount: +amount || 0, note, image: cpImage });
     r.className = "res ok"; r.textContent = "Заявка отправлена — " + pendingLine().replace(/^заявка на пополнение /, "") + "; когда зачислим, баланс обновится сам."; cpList(x.requests);
-    cpImage = ""; $("#cp-img").removeAttribute("src"); $("#cp-shot").classList.remove("has"); $("#cp-shot-t").textContent = "Приложите снимок оплаты — нажмите сюда или вставьте Ctrl+V";
+    cpImage = ""; $("#cp-img").removeAttribute("src"); $("#cp-shot").classList.remove("has"); cpShotText(false);
     $("#cp-amount").value = ""; $("#cp-note").value = "";
   } catch (e) { r.className = "res bad"; r.textContent = e.message; }
   ev.target.disabled = false;

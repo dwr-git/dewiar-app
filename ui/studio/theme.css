@@ -295,3 +295,9 @@ html.st-light .sh-set[aria-pressed="true"] { box-shadow: var(--sk-shadow), inset
 html.st-neu :is(.sh-g, .sh-set) { background: var(--sk-glass); box-shadow: var(--raise); }
 html.st-neu .sh-set:hover { background: var(--sk-glass); }
 html.st-neu .sh-set[aria-pressed="true"] { box-shadow: var(--press); }
+/* 05.11 (владелец: «блок оплаты блеклый, сероватый»): в светлой теме — светлая панель, способы оплаты — белыми строками */
+html.st-light #cc-pay { background: rgba(255,255,255,.5); box-shadow: inset 0 0 0 1px rgba(20,30,60,.07); }
+html.st-light .tp-opt { background: rgba(255,255,255,.85); box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 6px 16px -12px rgba(20,30,60,.35); }
+html.st-light .tp-code { background: rgba(75,91,214,.08); box-shadow: inset 0 0 0 1px rgba(75,91,214,.25); }
+html.st-light #cp-shot { background: rgba(255,255,255,.6); border-color: rgba(75,91,214,.45); box-shadow: none; }
+html.st-light #cp-shot:hover, html.st-light #cp-shot:focus-visible, html.st-light #cp-shot.over { background: rgba(75,91,214,.08); border-color: #4b5bd6; }

@@ -377,10 +377,38 @@ section.wide > .lead { max-width: 860px; }
 /* pywebview запрещает выделение на всей странице (body) — текст, который копируют, выделяется */
 #cc-topup, .cl-m .tx, .dw-path, .seltext { -webkit-user-select: text; user-select: text; cursor: text; }
 #cc-topup a { color: var(--accent); cursor: pointer; overflow-wrap: anywhere; }
-.cp-shot { margin-top: 10px; min-height: 64px; border-radius: 14px; background: rgba(0,0,0,.22); display: flex; align-items: center; justify-content: center;
-  gap: 12px; padding: 10px; cursor: pointer; color: var(--muted); font-size: 13px; outline: none; transition: background .2s; }
-.cp-shot:hover, .cp-shot:focus { background: rgba(0,0,0,.32); } .cp-shot img { max-height: 120px; max-width: 220px; border-radius: 10px; display: none; }
-.cp-shot.has img { display: block; }
+/* 05.11: пополнение — шаги, номер DW крупно, способы оплаты строками с «Открыть», текст тёмный; поле снимка — видно, что
+   его нажимают: пунктир, значок, две строки, подсветка при наведении и перетаскивании */
+.cc-man .tp-step { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 4px 0 10px; }
+.cc-man .tp-step:not(:first-of-type) { margin-top: 18px; }
+.cc-man .tp-step i { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font: 700 12px/1 "Manrope", sans-serif;
+  font-style: normal; color: #fff; background: var(--brand); transform: translateY(-1px); }
+.cc-man .tp-step b { font-size: 15px; color: var(--ink); } .cc-man .tp-step span { font-size: 12.5px; color: var(--muted); }
+.tp-text { display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+.tp-text a { color: var(--accent); cursor: pointer; overflow-wrap: anywhere; }
+.tp-p { margin: 0; -webkit-user-select: text; user-select: text; }
+.tp-code { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 14px; padding: 12px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent); }
+.tp-cv { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; } .tp-cv small { font-size: 12.5px; color: var(--muted); }
+.tp-cv b { font: 700 20px/1.1 "Unbounded", "Manrope", sans-serif; letter-spacing: .02em; color: var(--ink); -webkit-user-select: all; user-select: all; }
+.tp-code p { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.tp-opts { display: flex; flex-direction: column; gap: 8px; }
+.tp-opt { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 10px 12px 10px 10px; border-radius: 14px;
+  background: var(--glass, rgba(255,255,255,.06)); box-shadow: inset 0 0 0 1px var(--line, rgba(255,255,255,.08)); }
+.tp-oi { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.tp-oi svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tp-ot { display: flex; flex-direction: column; gap: 1px; min-width: 0; } .tp-ot b { font-size: 14px; font-weight: 600; color: var(--ink); }
+.tp-ot small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; } .tp-ot .tp-on { margin-top: 3px; color: var(--ink); opacity: .8; -webkit-user-select: text; user-select: text; }
+#cp-shot { margin-top: 12px; box-shadow: none; min-height: 76px; padding: 12px 16px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 14px;
+  cursor: pointer; text-align: left; color: var(--ink); background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent); transition: background .15s, border-color .15s; }
+#cp-shot:hover, #cp-shot:focus-visible, #cp-shot.over { background: color-mix(in srgb, var(--accent) 13%, transparent); border-color: var(--accent); outline: none; }
+.cp-si { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: #fff; background: var(--brand); }
+.cp-si svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.cp-st { display: flex; flex-direction: column; gap: 2px; } .cp-st b { font-size: 14.5px; font-weight: 600; } .cp-st small { font-size: 12.5px; color: var(--muted); }
+.cp-shot img { max-height: 120px; max-width: 220px; border-radius: 10px; display: none; }
+#cp-shot.has { border-style: solid; } .cp-shot.has .cp-si { display: none; } .cp-shot.has img { display: block; }
+@media (prefers-reduced-motion: reduce) { .cp-shot { transition: none; } }
 #cp-list .rqi { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 7px 0 0; color: var(--muted); }
 #cp-list .rqi b { color: var(--ink); font-weight: 600; } #cp-list .rqi.done b { color: var(--good); } #cp-list .rqi.rejected b { color: var(--bad); }
 .cc-use { margin-top: 14px; } .cc-use:empty { display: none; }
@@ -711,7 +739,9 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 kbd { font-family: inherit; background: rgba(255,255,255,.12); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 /* ---------- Подсказки «?» к разделам ---------- */
-.hbtn { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-left: 10px; vertical-align: 4px; border: 0; border-radius: 50%;
+/* 05.11 (владелец: «жучок и лампочка визуально выше вопросика»): у кнопки с текстом («?») базовая линия — по тексту, у кнопки
+   со значком — по низу, и vertical-align: 4px поднимал их по-разному. Теперь все — по середине строки заголовка */
+.hbtn { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-left: 10px; vertical-align: middle; position: relative; top: -.08em; border: 0; border-radius: 50%;
         cursor: pointer; font: 700 14px/1 "Manrope", sans-serif; color: #fff; background: rgba(255,255,255,.12); transition: background .15s, transform .15s; }
 .hbtn:hover { background: var(--brand); transform: scale(1.08); }
 .hbtn.hb-x { margin-left: 6px; background: transparent; color: var(--dim); opacity: .75; } .hbtn.hb-x.hb-bug { margin-left: 10px; }
