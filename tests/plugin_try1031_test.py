@@ -88,6 +88,14 @@ with sync_playwright() as p:
     ok(st.evaluate("_asked") == next(x for x in cat["plugins"] if x["id"] == "kitchen")["try"], "«Спросить Лиру» — его фраза в чате: видно, как работает")
     st.evaluate("() => { document.querySelector('nav button[data-p=\"home\"]').click(); hmTry(); }"); st.wait_for_timeout(200)
     ok(vis() and "Попробуйте плагин" in st.inner_text("#hm-try") and name() != "Кухня", "дальше — снова не включённые")
+    # 05.11 (владелец: «блок в студии ты должен был выровнять — без изменений»): это <section>, а общее «section
+    # {max-width: 1040px}» сужало его — на широком окне справа оставался зазор. Ширина — как у «Совета ИИ» и «Почты»
+    st.set_viewport_size({"width": 1700, "height": 900}); st.wait_for_timeout(250)
+    wd = st.evaluate("""() => { const w = (s) => { const e = document.querySelector(s); return e && !e.hidden ? Math.round(e.getBoundingClientRect().width) : 0; };
+      return [w('#hm-try'), w('#hm-council'), w('#hm-today')]; }""")
+    ok(wd[0] > 1040 and abs(wd[0] - max(wd[1], wd[2])) <= 2, f"широкое окно: «Попробуйте плагин» — во всю ширину, как соседние блоки: {wd}")
+    if os.environ.get("TRY_WIDE"): st.screenshot(path=os.environ["TRY_WIDE"], full_page=True)
+    st.set_viewport_size({"width": 1300, "height": 900}); st.wait_for_timeout(150)
     shot = tmp / "try.png"; st.locator("#hm-try").screenshot(path=str(shot))
     if os.environ.get("TRY_SHOT"): st.evaluate("() => { const h = document.documentElement; h.classList.toggle(\"st-light\"); }"); st.wait_for_timeout(300); st.locator("#hm-try").screenshot(path=os.environ["TRY_SHOT"]); st.evaluate("() => document.documentElement.classList.toggle(\"st-light\")")
     st.click("#ht-x"); st.wait_for_timeout(300)

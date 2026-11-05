@@ -267,6 +267,12 @@ CORE_TOOLS = {"web_search", "weather", "open_url", "open_app", "play_music", "pl
               "search_documents"}
 
 
+
+def device_os():
+    """Система крупно для подсказки: Windows, macOS или Linux (без версии — подсказка общая у многих людей)."""
+    import sys as _sys
+    return "Windows" if os.name == "nt" else ("macOS" if _sys.platform == "darwin" else "Linux")
+
 class AnswerMixin:
     # ---------- ответ ----------
 
@@ -685,6 +691,11 @@ class AnswerMixin:
         base += ("\n\nТекущие дата и время — в справке в начале последнего сообщения пользователя; они верные, а время и даты "
                  "из прошлых реплик разговора устарели — не повторяй их. Справка «О пользователе и о тебе» в начале разговора "
                  "всегда свежая (программа обновляет её к каждому вопросу) — память, дела и прочее бери из неё.")
+        # идея №141 (05.11): устройство — в каждом запросе. Телефон пишет «Android» сам (app.js), здесь — компьютер; система —
+        # крупно (Windows / Linux / macOS), без номера сборки: подсказка остаётся общей у многих людей (кэш начала запроса)
+        base += (f"\n\nТы работаешь на компьютере пользователя ({device_os()}) — в программе Dewiar для компьютера: команды, файлы "
+                 "и приложения — этого компьютера. Телефон — отдельное приложение Dewiar; про него не говори «открыла на телефоне», "
+                 "если не передавала туда задание.")
         from boundaries import RULE, OWN_MATERIAL
         base += "\n\n" + RULE + "\n\n" + OWN_MATERIAL
         try:
@@ -1962,10 +1973,10 @@ class AnswerMixin:
                 prof = dict(prof, model=cheap)
                 self.health_count("econ")
                 log.info("💸 Простой вопрос — отвечает недорогая модель «%s»", cheap)
-            from llm import creative_temp
+            from llm import creative_temp, prof_temp
             ask0 = text.split("\n\nВложения:")[0]
             temp = creative_temp(ask0, prof.get("temperature"))
-            if temp != float(prof.get("temperature") or 0.7):
+            if temp != prof_temp(prof):
                 prof = dict(prof, temperature=temp)       # творческая просьба — смелее (отзыв 17.10 про креатив)
                 log.info("🎨 Творческая просьба — температура %.2f", temp)
             specs = self.toolbox.specs() if self.s.get("tools", "enabled_all") is not False else []

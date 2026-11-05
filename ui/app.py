@@ -3741,6 +3741,22 @@ def main():
     del held
 
 
+def hung_instance(sig, state_dir, wait=8.0, alive=None):
+    """Прежний экземпляр той же версии не взял сигнал «покажись» за wait секунд, и его номера (ui.pid) нет в живых —
+    значит, мьютекс держит осиротевший процесс (№555). Номер жив — не трогаем: тот мог ещё запускаться."""
+    end = time.time() + wait
+    while time.time() < end:
+        if not sig.exists():
+            return False
+        time.sleep(0.25)
+    try:
+        pid = (Path(state_dir) / "ui.pid").read_text(encoding="ascii").strip()
+    except OSError:
+        pid = ""
+    alive = alive or winshell.pid_alive
+    return not (pid and alive(pid))
+
+
 def main_win(args, extra):
     """Windows: один экземпляр, ядро отдельным процессом (и его сторож core_watch), значок в трее, окна на WebView2.
     Свой номер процесса и «версия|папка» — в ui.pid / ui.ver: по ним следующий запуск решает, показать нас или
@@ -3758,22 +3774,38 @@ def main_win(args, extra):
             other = (STATE_DIR / "ui.ver").read_text(encoding="utf-8").strip()
         except OSError:
             other = ""
+        hung = False
         if other == me:
             sig.write_text("capture" if args.capture else ("settings" + extra) if args.settings else "hud", encoding="utf-8")
-            return
-        print(f"Запущен другой интерфейс ({other or 'старая версия'}) — завершаю его", file=sys.stderr)
-        for name in ("ui.pid", "core.pid"):
-            try:
-                winshell.kill_pid((STATE_DIR / name).read_text(encoding="ascii").strip())
-            except OSError:
-                pass
+            if not hung_instance(sig, STATE_DIR):
+                return
+            # №555 (05.11): «Dewiar не запускается» — мьютекс держал осиротевший процесс прошлого запуска (с 04.11), а
+            # номера из ui.pid уже нет в живых; сигнал «покажись» никто не брал, и каждый запуск молча выходил
+            hung = True
+            print("Прежний запуск не отвечает (сигнал не взят, его номера нет в живых) — завершаю его процессы", file=sys.stderr)
+            _ui_log("запуск: прежний экземпляр завис — завершаю его процессы (№555)")
+            for pid in winshell.our_pythons(Path(sys.executable).parent.parent):
+                winshell.kill_pid(pid)
+        else:
+            print(f"Запущен другой интерфейс ({other or 'старая версия'}) — завершаю его", file=sys.stderr)
+            for name in ("ui.pid", "core.pid"):
+                try:
+                    winshell.kill_pid((STATE_DIR / name).read_text(encoding="ascii").strip())
+                except OSError:
+                    pass
         for _ in range(30):
             time.sleep(0.3)
             if lock("ui") is not None:
                 break
         else:
-            sig.write_text(("settings" + extra) if args.settings else "hud", encoding="utf-8")
+            if not hung:
+                sig.write_text(("settings" + extra) if args.settings else "hud", encoding="utf-8")
             return
+        if hung:
+            try:
+                sig.unlink()
+            except OSError:
+                pass
     try:     # номер — сразу, до ожидания ядра: по нему сторож обновления видит, что мы уже запущены (иначе второй запуск)
         (STATE_DIR / "ui.pid").write_text(str(os.getpid()), encoding="ascii")
         (STATE_DIR / "ui.ver").write_text(me, encoding="utf-8")

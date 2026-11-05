@@ -68,9 +68,11 @@ function srMedsToday() {
   }));
   return out.sort((a, b) => a.at - b.at);
 }
-/* «выпила» голосом — ближайшее прошедшее неотмеченное лекарство (за 3 часа) */
+/* «выпила» голосом — ближайшее прошедшее неотмеченное лекарство (за 3 часа); прошедших нет — то, что через ≤15 минут
+   (выпила чуть раньше). 05.11: в 8:53 «выпила» отмечало таблетку на 9:00, а не витамин, напомненный в 8:43 */
 function srTakenVoice() {
-  const now = Date.now(), m = srMedsToday().filter(x => !x.taken && x.at.getTime() <= now + 15 * 6e4 && now - x.at.getTime() < 3 * 3600e3).pop();
+  const now = Date.now(), open = srMedsToday().filter(x => !x.taken && x.at.getTime() <= now + 15 * 6e4 && now - x.at.getTime() < 3 * 3600e3);
+  const m = open.filter(x => x.at.getTime() <= now).pop() || open[0];
   if (!m) return "";
   doneAdd([{ title: `Выпить: ${m.med.text}`, rid: m.rid, at: now }], "voice");
   return `Хорошо, отметила: ${m.med.text} в ${m.time} — ${srG("выпила", "выпил")}. Спасибо!`;

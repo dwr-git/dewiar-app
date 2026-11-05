@@ -4199,7 +4199,7 @@ nav .nh { display: none !important; }
 /* 04.11 (владелец: «всё гармонично, кроме „Дайджеста“ — размер и как будто другой дизайн»): ширина — как у «Совета ИИ» и
    остальных блоков, тот же материал и тот же мягкий отсвет слева, заголовок — шрифтом соседних карточек */
 .hm-try { --pc: #7c8cff; position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: start;
-  width: 100%; box-sizing: border-box; margin: 0;
+  width: 100%; max-width: none; box-sizing: border-box; margin: 0;   /* 05.11: это <section> — общее «section {max-width: 1040px}» сужало блок */
   padding: 16px 18px; border-radius: 22px; background: var(--glass); box-shadow: var(--raise-s, 0 10px 30px -18px rgba(0,0,0,.5)); }
 .hm-try[hidden] { display: none; }
 .hm-try::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;

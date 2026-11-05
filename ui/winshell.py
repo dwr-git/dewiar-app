@@ -523,6 +523,42 @@ def kill_pid(pid):
     return True
 
 
+def our_pythons(folder):
+    """Процессы python/pythonw из папки программы (folder — папка Dewiar) -> [pid, …] без нашего и родителя. Для №555:
+    мьютекс держит осиротевший процесс прошлого запуска, а номер в ui.pid — уже не его."""
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                            "Get-Process pythonw,python -ErrorAction SilentlyContinue | ForEach-Object { \"$($_.Id)|$($_.Path)\" }"],
+                           capture_output=True, text=True, timeout=20, creationflags=NO_WINDOW)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return pythons_in(r.stdout or "", folder, (os.getpid(), os.getppid()))
+
+
+def pythons_in(listing, folder, skip=()):
+    """Разбор «pid|путь» построчно: только процессы из folder (без учёта регистра), кроме skip."""
+    root = str(folder).rstrip("\\/").lower() + "\\"
+    out = []
+    for line in listing.splitlines():
+        pid, _, path = line.strip().partition("|")
+        if pid.isdigit() and path.lower().replace("/", "\\").startswith(root) and int(pid) not in skip:
+            out.append(int(pid))
+    return out
+
+
+def pid_alive(pid):
+    """Жив ли процесс с этим номером (python/pythonw)."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    try:
+        r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, timeout=10, creationflags=NO_WINDOW)
+    except (OSError, subprocess.SubprocessError):
+        return True                      # не знаем — считаем живым (ничего не убиваем)
+    return str(pid) in (r.stdout or "") and "python" in (r.stdout or "").lower()
+
+
 def signal_path():
     """Файл-сигнал «покажись» для уже запущенного интерфейса (пишет второй запуск, читает main_win в app.py)."""
     return Path(tempfile.gettempdir()) / f"dewiar-show-{os.environ.get('USERNAME', 'user')}"

@@ -1754,12 +1754,23 @@ POEM_NOTE = ("\n\nСейчас просят стихи. Ремесло: снач
              "слова или однокоренного («тишина — тишине») — не рифма. Перед ответом проверь каждую пару рифм.")
 
 
+def prof_temp(p, default=0.7):
+    """Температура из профиля: пусто, None или не число — default (пакет 05.11: «Задача: float() argument must be … not
+    'NoneType'» — в профиле задачи было "temperature": null, и каждый шаг падал)."""
+    try:
+        v = p.get("temperature")
+        return default if v in (None, "") else float(v)
+    except (TypeError, ValueError):
+        return default
+
+
 def creative_temp(text, temp=None):
     """Температура для этой просьбы: творческая — не ниже CREATIVE_TEMP, иначе — как в профиле. Температуру вписали
     в профиль сами (не пусто и не 0,7 по умолчанию) — она главнее (пакет 27.10, №311: «задал 0,3, а на просьбу о стихе
     стало 0,95»). Так же на телефоне (app.js llmTemp)."""
-    if temp not in (None, "") and float(temp) != 0.7:
-        return float(temp)
+    t = prof_temp({"temperature": temp}, None)
+    if t is not None and t != 0.7:
+        return t
     return CREATIVE_TEMP if CREATIVE_ASK.search(str(text or "")) else 0.7
 
 
@@ -1858,7 +1869,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             # подсказке (порядок кэша: инструменты → system → сообщения)
             body = {"model": model, "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}] if system else system,
                     "messages": with_tail(p, messages, p.get("_tail")), "stream": True,
-                    "max_tokens": max_tokens, "temperature": float(p.get("temperature", 0.7))}
+                    "max_tokens": max_tokens, "temperature": prof_temp(p)}
             if tools:
                 body["tools"] = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
                                  for t in tools]
@@ -1866,7 +1877,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         elif native:
             url = _root(base) + "/api/chat"
             body = {"model": model, "stream": True, "messages": with_tail(p, _to_ollama([{"role": "system", "content": system}] + messages), p.get("_tail")),
-                    "options": {"num_predict": max_tokens, "temperature": float(p.get("temperature", 0.7))}}
+                    "options": {"num_predict": max_tokens, "temperature": prof_temp(p)}}
             if no_think:
                 body["think"] = False
             if tools:
@@ -1881,7 +1892,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             hist = with_tail(p, hist, p.get("_tail"))   # задача: «Состояние задачи» — последним, после истории
             body = {"model": model, "stream": not p.get("_whole"),     # «целиком» — последняя попытка после пустого потока
                     "messages": [{"role": "system", "content": system}] + hist,
-                    "max_tokens": max_tokens, "temperature": float(p.get("temperature", 0.7))}
+                    "max_tokens": max_tokens, "temperature": prof_temp(p)}
             # №226 (24.10): OpenAI напрямую, GPT-5 и o-модели — ошибка 400: им нужен max_completion_tokens, а temperature
             # они не принимают (только 1). Через OpenRouter работало — там поле переводят сами.
             if p.get("_mct") or (re.search(r"api\.openai\.com", base) and re.match(r"(?:gpt-5|o\d)", str(model).lower())):

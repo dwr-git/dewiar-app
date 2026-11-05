@@ -3255,7 +3255,9 @@ function remEdit(id) {
   const x = JSON.parse(D.alarms() || "[]").find(a => a.id === id); if (!x) return;
   const d = new Date(+x.at), iso = (v) => `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
   $("#rm-h").textContent = x.kind === "alarm" ? "Будильник" : x.kind === "timer" ? "Таймер" : "Напоминание";
-  $("#rem-body").innerHTML = `<label>Что напомнить<input id="rm-text" maxlength="200" value="${esc(x.title || "")}"></label>
+  // №556 (05.11): «малое поле, мало символов — хочется как в заметках, с пунктами»: поле растёт, до 1000 знаков, «• Пункт»
+  $("#rem-body").innerHTML = `<div class="rmhead"><label for="rm-text">Что напомнить</label><div class="ntmd rmmd" role="toolbar" aria-label="Оформление"><button type="button" data-md="li">• Пункт</button></div></div>
+    <textarea id="rm-text" class="rmtext" maxlength="1000" rows="3" aria-label="Что напомнить">${esc(x.title || "")}</textarea>
     <div class="rmrow"><label>Дата<input type="date" id="rm-date" value="${iso(d)}"></label><label>Время<input type="time" id="rm-time" value="${pad(d.getHours())}:${pad(d.getMinutes())}"></label></div>
     <label>Повторять<select id="rm-rep">${[["", "не повторять"], ["daily", "каждый день"], ["weekdays", "по будням"], ["weekly", "каждую неделю"], ["d", "по дням недели…"]]
       .map(([v, t]) => `<option value="${v}"${((x.repeat || "").startsWith("d:") ? "d" : x.repeat || "") === v ? " selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -3265,6 +3267,7 @@ function remEdit(id) {
     <div class="row2"><button class="btn p" id="rm-save" style="flex:1">Сохранить</button><button class="btn" id="rm-del">Удалить</button></div>
     <div class="res" id="rm-res"></div>`;
   const back = () => { closeSheets(true); openSheet("#sh-day"); renderDay(); };
+  remTextWire($("#rm-text"), $(".rmmd button[data-md=li]"));
   // «по дням недели…» (30.10): кнопки дней — как в календаре студии; выбрали «по будням» и т. п. — кнопки прячутся
   $("#rm-rep").onchange = () => { const v = $("#rm-rep").value, box = $("#rm-days"); box.hidden = v !== "d";
     if (v === "d" && !$$("#rm-days .rmd.on").length) { const cur = repDays(x.repeat || "weekdays", x.at); $$("#rm-days .rmd").forEach(b => { const on = cur.includes(+b.dataset.d); b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); }); } };
@@ -3286,6 +3289,27 @@ function remEdit(id) {
   $("#rm-del").onclick = () => { D.alarmCancel(x.id); syncSoon(); tmrShow(); toast("Удалено", 1800); back(); };
   if ($("#rm-note")) $("#rm-note").onclick = () => openNoteSoon(x.note);
   openSheet("#sh-rem");
+}
+/* Поле «Что напомнить» (№556): растёт с текстом (до половины экрана), «• Пункт» ставит/снимает пункт в начале строки,
+   Enter в пункте — следующий пункт, Enter в пустом пункте — пункт снимается. */
+function remTextWire(ta, li) {
+  if (!ta) return;
+  const grow = () => { ta.style.height = "auto"; ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, 84), innerHeight * 0.5) + "px"; };
+  ta.addEventListener("input", grow); setTimeout(grow, 0);
+  ta.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    const v = ta.value, a = ta.selectionStart, ls = v.lastIndexOf("\n", a - 1) + 1, line = v.slice(ls, a);
+    if (!/^• /.test(line)) return;
+    e.preventDefault();
+    if (line === "• ") ta.setRangeText("", ls, a, "end"); else ta.setRangeText("\n• ", a, ta.selectionEnd, "end");
+    grow();
+  });
+  if (li) { li.onmousedown = (e) => e.preventDefault(); li.onclick = () => {
+    const v = ta.value, a = ta.selectionStart, ls = v.lastIndexOf("\n", a - 1) + 1;
+    if (v.slice(ls).startsWith("• ")) ta.setRangeText("", ls, ls + 2, "end");               // уже пункт — снять
+    else if (a === v.length && v.slice(ls).trim()) ta.setRangeText("\n• ", a, a, "end");    // в конце текста — новый пункт ниже
+    else ta.setRangeText("• ", ls, ls, "end");                                              // иначе — эта строка становится пунктом
+    ta.focus(); grow(); }; }
 }
 /* Отменить — и все его отложенные копии (№339, пакет 27.10: «нажал „отложить на 10 минут“, потом „Отменить“ — стало
    „Отменено“, а через 3 минуты всё равно сработало»: «Отложить» заводит новое напоминание <id>-s<время>). */
@@ -5978,7 +6002,8 @@ function renderDay() {
           return `<div class="it dn"><div class="ok">✓</div><div class="bd"><b>${esc(x.title)}</b><small>${pad(d.getHours())}:${pad(d.getMinutes())}${x.src === "pc" ? " · на компьютере" : x.src === "alarm" ? " · из напоминания" : ""}</small></div><button class="x" data-undo="${esc(x.id)}" title="Снять отметку" aria-label="Снять отметку">${X_SVG}</button></div>`; }).join("") : "")
       + (l.length ? `<div class="bugh">Напоминания</div>` + l.map(x => { const d = new Date(x.at), task = x.kind !== "alarm" && x.kind !== "timer";
           const nt = x.note ? notes().find(n => n.id === x.note) : null, img = nt && (nt.att || []).find(a => a.type === "image");
-          return `<div class="it" data-edit="${esc(x.id)}"><div class="tm">${pad(d.getHours())}:${pad(d.getMinutes())}</div><div class="bd"><b>${esc(x.title)}</b><small>${x.kind === "alarm" ? "⏰ будильник" : x.kind === "timer" ? "⏱ таймер" : "🔔 напоминание"} · ${esc(whenText(d))}${x.repeat ? " · " + repRu(x.repeat) : ""}${x.note ? ` · <span class="ntc">📎${nt ? noteAttCount(nt) || "" : ""}</span>` : ""}</small></div>`
+          // №556: время — строкой-заголовком над текстом (а не столбиком слева): тексту — вся ширина, пункты — с новой строки
+          return `<div class="it rem" data-edit="${esc(x.id)}"><div class="bd"><div class="rh"><span class="tm">${pad(d.getHours())}:${pad(d.getMinutes())}</span><small>${x.kind === "alarm" ? "⏰ будильник" : x.kind === "timer" ? "⏱ таймер" : "🔔"} · ${esc(whenText(d))}${x.repeat ? " · " + repRu(x.repeat) : ""}${x.note ? ` · <span class="ntc">📎${nt ? noteAttCount(nt) || "" : ""}</span>` : ""}</small></div><b>${esc(x.title)}</b></div>`
             + (img ? `<img class="nthumb rt" data-note="${esc(x.note)}" src="${noteAttGet(img.id)}" alt="">` : "")
             + (task ? `<button class="x ok" data-done="${esc(x.id)}" title="Сделано" aria-label="Сделано">✓</button>` : "") + `<button class="x" data-id="${esc(x.id)}" title="Удалить" aria-label="Удалить">${X_SVG}</button></div>`; }).join("")
       : jobs.length || ds.items.length ? "" : `<div class="empty">Напоминаний нет.<br>Скажите: «напомни завтра в 9 позвонить маме» или «будильник на 7».<br>Сделали дело — скажите «я позвонила маме, отметь» или впишите его выше.</div>`)

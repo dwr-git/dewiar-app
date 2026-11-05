@@ -1980,3 +1980,15 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sf-pwrow .sf-gen { padding: 12px 12px; font-size: 13.5px; }
 .sf-form .btn.w { margin-top: 12px; }
 .f .sf-pwrow { display: flex; margin: 0; font-size: inherit; color: inherit; }
+/* №556: напоминание — время строкой-заголовком, текст во всю ширину и с пунктами; поле правки растёт */
+.it.rem { align-items: flex-start; }
+.it.rem .rh { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
+.it.rem .rh .tm { min-width: 0; font-size: 15px; }
+.it.rem .bd b { white-space: pre-line; line-height: 1.38; }
+.it.rem .x { margin-top: 2px; }
+#rem-body .rmhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 2px; }
+#rem-body .rmhead label { margin: 0 4px; }
+#rem-body .rmmd { margin: 0; padding: 0; overflow: visible; }
+#rem-body .rmmd button { padding: 6px 12px; font-size: 13px; }
+#rem-body .rmtext { display: block; width: 100%; box-sizing: border-box; min-height: 84px; resize: none; border: 0; border-radius: 14px; background: var(--field);
+  color: var(--ink); font: inherit; font-size: 16px; font-weight: 600; line-height: 1.45; padding: 12px 14px; margin: 6px 0 12px; outline: none; }
