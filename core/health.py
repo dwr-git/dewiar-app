@@ -147,6 +147,20 @@ def complaints_every(lst, base=600.0, now=None):
     return base if young < 2 * 86400 else 3600.0 if young < 14 * 86400 else 0
 
 
+BUG_MAX = 5                     # №546 (04.11: «нельзя отправить несколько снимков, а если можно — вижу только один»)
+
+
+def _bug_list(obj):
+    """Снимки к жалобе, которую сейчас пишут: свежие (до 30 минут), не больше BUG_MAX."""
+    lst = [b for b in (getattr(obj, "_bugs", None) or []) if time.time() - b["ts"] < 1800]
+    obj._bugs = lst[-BUG_MAX:]
+    return obj._bugs
+
+
+def _bug_pub(lst):
+    return [{"id": b["id"], "preview": b["preview"]} for b in lst]
+
+
 class HealthMixin:
     _health_lock = None
 
@@ -505,10 +519,20 @@ class HealthMixin:
         threading.Thread(target=send, name="complaint", daemon=True).start()
         return True
 
-    def bug_shot(self, image=None):
+    def bug_shot_drop(self, sid):
+        """Убрать один снимок из жалобы (× на превью). -> {"shots": [...]}."""
+        self._bugs = [b for b in _bug_list(self) if b["id"] != sid]
+        return {"shots": _bug_pub(self._bugs)}
+
+    def bug_shot(self, image=None, add=False):
         """Снимок экрана для жалобы — до того, как откроется студия (виден человеку перед отправкой, можно не прикладывать).
         image — своя картинка (data:-адрес): вставили из буфера (Ctrl+V) или перетащили в форму (№139, 20.10: «нельзя
-        скриншот из буфера к отчёту приложить»). -> {"ok", "preview": data:-адрес уменьшенной копии} или {"ok": False, "error"}."""
+        скриншот из буфера к отчёту приложить»). add — из формы жалобы: снимок добавляется к уже приложенным (до 5, №546);
+        без add (кнопка жалобы в виджете) — новая жалоба, прежние снимки забываются.
+        -> {"ok", "preview": data:-адрес уменьшенной копии, "shots": [{id, preview}]} или {"ok": False, "error"}."""
+        if add and len(_bug_list(self)) >= BUG_MAX:
+            return {"ok": False, "error": f"не больше {BUG_MAX} снимков к одной жалобе — уберите лишний (×)",
+                    "shots": _bug_pub(_bug_list(self))}
         from eyes import EyesError, capture_screen
         from tools import desktop_env
         from PIL import Image, UnidentifiedImageError
@@ -524,8 +548,9 @@ class HealthMixin:
             try:
                 raw = capture_screen(desktop_env())
             except (EyesError, OSError) as e:
-                self._bug = None
-                return {"ok": False, "error": str(e)}
+                if not add:
+                    self._bug, self._bugs = None, []
+                return {"ok": False, "error": str(e), "shots": _bug_pub(_bug_list(self))}
         im = Image.open(io.BytesIO(raw)).convert("RGB")
         im.thumbnail((1600, 1600))
         buf = io.BytesIO()
@@ -535,17 +560,21 @@ class HealthMixin:
         sb = io.BytesIO()
         small.save(sb, "JPEG", quality=84)
         prev = "data:image/jpeg;base64," + base64.b64encode(sb.getvalue()).decode()
-        self._bug = {"ts": time.time(), "jpeg": buf.getvalue(), "preview": prev, "seen": False}
-        self.emit("bug_shot", preview=prev)
-        return {"ok": True, "preview": prev}
+        b = {"id": f"{time.time():.6f}", "ts": time.time(), "jpeg": buf.getvalue(), "preview": prev, "seen": False}
+        self._bugs = (_bug_list(self) if add else []) + [b]
+        self._bug = self._bugs[0]
+        shots = _bug_pub(self._bugs)
+        self.emit("bug_shot", preview=prev, shots=shots)
+        return {"ok": True, "preview": prev, "shots": shots}
 
     def bug_state(self):
         """Студия при открытии: свежий (до 5 минут) снимок для жалобы, ещё не показанный, — {preview} или {}."""
-        b = getattr(self, "_bug", None)
+        lst = _bug_list(self)
+        b = lst[0] if lst else None
         if not b or time.time() - b["ts"] > 300 or b["seen"]:
             return {}
         b["seen"] = True
-        return {"preview": b["preview"]}
+        return {"preview": b["preview"], "shots": _bug_pub(lst)}
 
     def complaint_send(self, note, who="", shot=True, via="кнопкой"):
         """Жалоба разработчику: слова человека (обязательно), снимок экрана (если снят и shot), подпись для «Помощников»,
@@ -555,14 +584,14 @@ class HealthMixin:
             raise ValueError("напишите хотя бы пару слов — что пошло не так")
         who = re.sub(r"[<>\"]", "", (who or "").strip())[:40]
         self.s.update({"report": {"who": who}})
-        b = getattr(self, "_bug", None)
-        jpeg = b["jpeg"] if shot and b and time.time() - b["ts"] < 1800 else None
-        r = self.report_send(note, shot=jpeg, who=who, summary=f"жалоба ({via})")
-        self._bug = None
+        jpegs = [b["jpeg"] for b in _bug_list(self)] if shot else []
+        r = self.report_send(note, shot=jpegs or None, who=who, summary=f"жалоба ({via})")
+        self._bug, self._bugs = None, []
         self._complaints_add({"id": r["id"], "s": r.get("secret", ""), "note": note[:2000], "ts": int(time.time()), "status": "new",
-                              "reply": "", "fixed": "", "shot": bool(jpeg)})
-        log.info("🐞 Жалоба №%s отправлена (%s)%s", r["id"], via, " со снимком" if jpeg else "")
-        return {"id": r["id"], "shot": bool(jpeg)}
+                              "reply": "", "fixed": "", "shot": bool(jpegs), "shots": len(jpegs)})
+        log.info("🐞 Жалоба №%s отправлена (%s)%s", r["id"], via,
+                 "" if not jpegs else " со снимком" if len(jpegs) == 1 else f" со снимками ({len(jpegs)})")
+        return {"id": r["id"], "shot": bool(jpegs), "shots": len(jpegs)}
 
     def _complaints(self):
         try:

@@ -429,7 +429,7 @@ class CommandsMixin:
                 return {"html": W.template_preview(str(a.get("template") or ""))}
             if cmd == "sites_create":
                 s = W.create(str(a.get("template") or ""), str(a.get("describe") or ""), str(a.get("name") or ""), "",
-                             a.get("contacts") or {}, fill=bool(a.get("describe")))
+                             a.get("contacts") or {}, fill=bool(a.get("describe") or a.get("ref")), ref=str(a.get("ref") or ""))
                 return W.public(s["id"])
             if cmd == "sites_apply":
                 W.apply(sid, a.get("ops") or [], str(a.get("label") or ""), merge=bool(a.get("merge")))
@@ -457,6 +457,9 @@ class CommandsMixin:
                 return {"name": W.suggest_name(sid)}
             if cmd == "sites_publish":
                 W.publish(sid, str(a.get("name") or ""))
+                return W.public(sid)
+            if cmd == "sites_reach":                     # №549: «Проверить адрес» — открывается ли сайт
+                W.recheck(sid)
                 return W.public(sid)
             if cmd == "sites_unpublish":
                 W.unpublish(sid)
@@ -826,6 +829,12 @@ class CommandsMixin:
                 return P.delete(a.get("name", ""))
             if cmd == "pad_order":
                 return P.order(a.get("names") or [])
+            if cmd == "pad_lock":                       # 05.11: 🔒 — запереть / открыть вкладку (только руками)
+                r = P.lock(a.get("name", ""), bool(a.get("on")))
+                sy = getattr(self, "sync", None)
+                if sy is not None and hasattr(sy, "soon"):
+                    sy.soon.set()                       # замок — и на другие устройства
+                return r
             if cmd == "pad_attach":
                 return P.attach(a.get("name", ""), a.get("filename", ""), a.get("b64", ""))
             if cmd == "pad_file":
@@ -1242,7 +1251,9 @@ class CommandsMixin:
             return {"auto": bool(a.get("on"))}
         # жалобы (core/health.py): снимок экрана до открытия студии, отправка, мои жалобы и помощники проекта
         if cmd == "bug_shot":
-            return self.bug_shot(a.get("image"))
+            return self.bug_shot(a.get("image"), add=bool(a.get("add")))
+        if cmd == "bug_shot_drop":                            # №546: × на одном из снимков жалобы
+            return self.bug_shot_drop(str(a.get("id") or ""))
         if cmd == "bug_state":
             return self.bug_state()
         if cmd == "complaint_send":
@@ -1897,6 +1908,8 @@ class CommandsMixin:
                     and self._answer_confirm(text):
                 log.info("Подтверждение набрано: «%s»", text.strip()[:30])
                 return True
+            if not files and self._task_reply(text):
+                return True                      # №551: задача спросила — набранный ответ уходит ей
             if files and text.strip() and self._reminder_with_files(text, files):
                 return True                      # «напомни завтра в 10» + снимки — напоминание с картинками, без модели
             if files:
@@ -2537,7 +2550,7 @@ class CommandsMixin:
                 raise ValueError(str(e).strip("'\"")) from None
         if cmd == "task_create":
             t = self.tasks.create(a.get("title", ""), a.get("goal", ""), a.get("project", ""), start=a.get("start", True),
-                                  folders=a.get("folders") or ())
+                                  folders=a.get("folders") or (), search_url=a.get("search_url") or "")
             return t.public()
         if cmd in ("task_export", "task_open_result"):        # результат задачи: скачать (HTML/PDF/как есть) или открыть
             import export as X

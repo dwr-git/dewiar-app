@@ -185,19 +185,30 @@ def parse_ddg(page):
     return out
 
 
+def searx_results(base, q):
+    """Поиск через SearXNG (JSON) -> [{title, url, snippet}]. Ошибка сети — httpx.HTTPError."""
+    r = httpx.get(base.rstrip("/") + "/search", params={"q": q, "format": "json", "language": "ru"}, headers=UA, timeout=12)
+    r.raise_for_status()
+    return [{"title": x.get("title", ""), "url": x.get("url", ""), "snippet": x.get("content", "")} for x in r.json().get("results", [])]
+
+
+def search_text(res):
+    """Выдача -> текст для модели: 6 результатов хватает модели и не раздувает контекст."""
+    if not res:
+        return "Ничего не нашлось."
+    return "\n".join(f"{i + 1}. {x['title']} — {x['snippet']} ({x['url']})" for i, x in enumerate(res[:6]))
+
+
 def t_web_search(a, ctx):
     q = (a.get("query") or "").strip()
     if not q:
         raise ToolError("пустой запрос")
-    searx = ctx["settings"].get("tools", "search_url") or ""
+    # DEWIAR_SEARCH_URL — свой поиск (SearXNG JSON) поверх настроек: проверки и экзамен с локальным «интернетом» (docs/HARNESS.md)
+    searx = os.environ.get("DEWIAR_SEARCH_URL") or ctx["settings"].get("tools", "search_url") or ""
     via = ctx.get("dewiar_web")                                     # запасной путь: поиск через сервер Dewiar
     try:
         if searx:                                                   # свой SearXNG (JSON)
-            r = httpx.get(searx.rstrip("/") + "/search", params={"q": q, "format": "json", "language": "ru"},
-                          headers=UA, timeout=12)
-            r.raise_for_status()
-            res = [{"title": x.get("title", ""), "url": x.get("url", ""), "snippet": x.get("content", "")}
-                   for x in r.json().get("results", [])]
+            res = searx_results(searx, q)
         else:
             r = httpx.post("https://html.duckduckgo.com/html/", data={"q": q, "kl": "ru-ru"}, headers=UA, timeout=12,
                            follow_redirects=True)
@@ -216,10 +227,7 @@ def t_web_search(a, ctx):
                 log.info("Поиск через сервер Dewiar не удался: %s", e2)
         if res is None:
             raise ToolError(f"поиск недоступен: {e}") from e
-    if not res:
-        return "Ничего не нашлось."
-    # 6 результатов хватает модели и не раздувает контекст
-    return "\n".join(f"{i + 1}. {x['title']} — {x['snippet']} ({x['url']})" for i, x in enumerate(res[:6]))
+    return search_text(res)
 
 
 def t_show_images(a, ctx):
@@ -1211,6 +1219,68 @@ def t_read_emails(a, ctx):
                      + f"{x['from']} · «{x['subject']}» — {x['snippet'][:160]}"
                      + (f" (вложения: {', '.join(x['files'])})" if x["files"] else "") for x in items) + \
         "\n\nЦеликом письмо — read_email с номером в скобках; ответить — send_email с reply_to=номер и текстом ответа."
+
+
+def mail_table_make(mail, days=None, limit=1000, box=None, title=""):
+    """Таблица .xlsx по почте -> {path, n, att, senders, top: [(адрес, писем)], limit}. Ошибки почты — MailError."""
+    import email.utils as eu
+    import export as X
+    import xlsx_lite
+    since = (datetime.now() - timedelta(days=max(1, int(days)))).date() if days else None
+    limit = max(1, min(5000, int(limit or 1000)))
+    items = mail.headers(limit=limit, box=box or None, since=since)
+    if not items:
+        return {"path": None, "n": 0, "att": 0, "senders": 0, "top": [], "limit": limit}
+    many = len({x.get("box") for x in items}) > 1
+    rows = [(["Ящик"] if many else []) + ["Дата", "Отправитель", "Адрес", "Тема", "Вложение", "Прочитано"]]
+    stat = {}
+    for x in items:
+        name, addr = eu.parseaddr(x.get("from") or "")
+        addr = (addr or x.get("from") or "").strip().lower()
+        try:
+            when = eu.parsedate_to_datetime(x.get("date") or "").strftime("%Y-%m-%d %H:%M")
+        except (TypeError, ValueError, IndexError, OverflowError):
+            when = (x.get("date") or "")[:25]
+        rows.append(([x.get("box", "")] if many else []) + [when, name or addr, addr, x.get("subject", ""), bool(x.get("attach")), not x.get("unread")])
+        s_ = stat.setdefault(addr, {"name": name, "n": 0, "att": 0, "last": ""})
+        s_["n"] += 1
+        s_["att"] += 1 if x.get("attach") else 0
+        s_["name"] = s_["name"] or name
+        s_["last"] = max(s_["last"], when)
+    top = sorted(stat.items(), key=lambda kv: (-kv[1]["n"], kv[0]))
+    rows2 = [["Адрес", "Отправитель", "Писем", "С вложениями", "Последнее"]] + [[k, v["name"], v["n"], v["att"], v["last"]] for k, v in top]
+    out = X.unique(X.downloads_dir() / X.safe_name((title or "").strip() or f"Почта {datetime.now():%d.%m.%Y}", ".xlsx"))
+    xlsx_lite.write(out, [("Письма", rows), ("По отправителям", rows2)])
+    return {"path": out, "n": len(items), "att": sum(1 for x in items if x.get("attach")), "senders": len(stat),
+            "top": [(k, v["n"]) for k, v in top[:3]], "limit": limit}
+
+
+def t_mail_table(a, ctx):
+    """№541 (04.11, ПК, своя модель в LM Studio): «подготовь Excel с содержимым почтового ящика: адрес отправителя, дата,
+    тема, с вложением или нет, и статистика, с какого адреса сколько писем». read_emails отдаёт до 20 писем и без поля
+    «вложение», файла Excel сделать было нечем — модель выдала скрипт на Python. Теперь — одним действием: таблица .xlsx
+    в «Загрузках» (лист «Письма» и лист «По отправителям»)."""
+    from mail import MailError
+    try:
+        r = mail_table_make(_mail(ctx), a.get("days") or None, a.get("limit") or 1000, a.get("box") or None, a.get("title") or "")
+    except MailError as e:
+        raise ToolError(str(e)) from e
+    except (TypeError, ValueError) as e:
+        raise ToolError(f"неверные параметры: {e}") from e
+    except OSError as e:
+        raise ToolError(f"не получилось записать файл: {e}") from e
+    if not r["path"]:
+        return "В ящике писем не нашлось — таблицу не делаю."
+    if ctx.get("made"):
+        try:
+            ctx["made"](str(r["path"]))
+        except Exception:  # noqa: BLE001
+            pass
+    return (f"Готово: таблица Excel «{r['path'].name}» в папке «Загрузки» ({r['path'].parent}). Писем: {r['n']}"
+            + (" (это предел — скажи, если нужно больше)" if r["n"] >= r["limit"] else "")
+            + f", с вложениями: {r['att']}, отправителей: {r['senders']}. Чаще всего пишут: "
+            + "; ".join(f"{k} — {n}" for k, n in r["top"]) + ". Лист «Письма» — дата, отправитель, адрес, тема, есть ли вложение, "
+            "прочитано; лист «По отправителям» — сколько писем с какого адреса. Скажи это человеку коротко и назови, где файл.")
 
 
 def t_read_email(a, ctx):
@@ -2598,10 +2668,10 @@ def t_site_create(a, ctx):
     S = _sites(ctx)
     ct = {k: a[k] for k in ("phone", "email", "address", "hours", "telegram", "whatsapp", "vk") if str(a.get(k) or "").strip()}
     describe = str(a.get("describe") or "").strip()
-    if not describe and not a.get("name"):
+    if not describe and not a.get("name") and not a.get("ref"):
         raise ToolError("Спроси одной фразой, для чего сайт: чем занимается человек и как называется дело.")
     try:
-        s = S.create(a.get("kind") or "", describe, a.get("name") or "", a.get("tagline") or "", ct)
+        s = S.create(a.get("kind") or "", describe, a.get("name") or "", a.get("tagline") or "", ct, ref=str(a.get("ref") or ""))
         _site_open(S, s["id"])
     except SiteError as e:
         raise ToolError(str(e)) from e
@@ -2666,6 +2736,10 @@ def t_site_publish(a, ctx):
         s = S.publish(sid, n)
     except SiteError as e:
         raise ToolError(str(e)) from e
+    if not ((s["published"] or {}).get("reach") or {"ok": True}).get("ok"):
+        from sites import REACH_SAY
+        return (REACH_SAY.format(url=s["published"]["url"]) + " Скажи человеку именно это — не говори, что сайт уже открывается; "
+                "ссылку пока не предлагай отправлять клиентам.")
     return (f"Сайт «{s['name']}» опубликован: {s['published']['url']} — открывается у всех, с телефона тоже. Заявки с формы придут в «Клиенты», "
             "посещения — студия → «Сайты» → «Аналитика». Скажи адрес и что после правок нужно сказать «опубликуй ещё раз».")
 
@@ -3041,8 +3115,15 @@ def t_lab_run(a, ctx):
 def t_delete_files(a, ctx):
     """Удаление только в корзину и только того, что разрешил guard.plan_delete (системное и главные папки — нельзя)."""
     import guard
+    from workspace import _locked, LOCKED_MSG
     try:
         plan = guard.plan_delete([str(x) for x in (a.get("paths") or []) if str(x).strip()])
+        for it in plan:                              # 05.11: запертые заметки (и папки с ними) — не удаляем
+            p = Path(it["path"])
+            held = [x for x in ([p] if p.is_file() else p.rglob("*.md") if p.is_dir() else []) if x.suffix.lower() == ".md" and _locked(x)]
+            if held:
+                raise ToolError(f"«{held[0].stem}» — {LOCKED_MSG}. Снять замок может только человек (значок 🔒 у заметки); "
+                                "ничего не удалено — так и скажи")
         if DRY:
             launch(["trash"] + [x["path"] for x in plan])
             return "В корзине (тест)"
@@ -3270,6 +3351,44 @@ def t_remove_task(a, ctx):
     return f"Задача «{title}» удалена — напоминаний о ней больше не будет."
 
 
+def t_tell_task(a, ctx):
+    """№551 (04.11): «я спросил дать права — молчит». Задача «Анализ кода и БД проекта» час ходила по своей папке, не зная, где
+    проект, а «может, тебе дать доступ» уходило в разговор — передать задаче было нечем. Теперь разговор передаёт задаче
+    сообщение, ответ на её вопрос или папки человека (папки — только после «да» человека, см. Toolbox.guard)."""
+    tm = _tm(ctx)
+    text = (a.get("text") or "").strip()
+    fl = a.get("folders") or []
+    fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
+    if not text and not fl:
+        raise ToolError("что передать задаче: text (сообщение, ответ) или folders (папки)")
+    try:
+        t = tm.get(a.get("name") or "")
+    except KeyError as e:
+        raise ToolError(str(e)) from e
+    if fl:
+        have = list(t.data.get("folders") or [])
+        add = []
+        for x in fl:
+            fp = Path(x).expanduser()
+            if not fp.is_dir():
+                raise ToolError(f"папки нет: {x}")
+            if fp.resolve() == Path(fp.resolve().anchor):
+                raise ToolError(f"«{fp.resolve()}» — это весь диск; задаче можно дать только конкретную папку")
+            if str(fp.resolve()) not in have:
+                add.append(str(fp.resolve()))
+        if add:
+            t.data["folders"] = have + add
+            t.save()
+        text = ((text + "\n\n") if text else "") + ("Пользователь дал задаче доступ к папкам: " + "; ".join(add or fl)
+                                                     + ". Читай и ищи в них без вопросов, менять — только с разрешения.")
+    try:
+        tm.tell(t.id, text)
+    except ValueError as e:
+        raise ToolError(str(e)) from e
+    return (f"Передала задаче «{t.title}»" + (f" доступ к папкам: {'; '.join(fl)}" if fl else "")
+            + ". Задача продолжит с этим — результата ещё нет, не говори, что готово.")
+
+
 def t_stop_task(a, ctx):
     try:
         t = _tm(ctx).stop(a.get("name") or "")
@@ -3286,22 +3405,12 @@ def t_resume_task(a, ctx):
     return f"Продолжаю задачу «{t.title}»."
 
 
-def t_tell_task(a, ctx):
-    text = (a.get("text") or "").strip()
-    if not text:
-        raise ToolError("что передать задаче?")
-    try:
-        t = _tm(ctx).tell(a.get("name") or "", text)
-    except (KeyError, ValueError) as e:
-        raise ToolError(str(e)) from e
-    return f"Передал задаче «{t.title}» — она учтёт и продолжит работу."
-
-
 def t_call_persona(a, ctx):
     fn = ctx.get("call_persona")
     if fn is None:
         raise ToolError("переключение персонажей недоступно")
-    return fn(str(a.get("name", "")))
+    task = str(a.get("task") or "").strip()[:1500]
+    return fn(str(a.get("name", "")), task) if task else fn(str(a.get("name", "")))
 
 
 # ---------- реестр ----------
@@ -3445,6 +3554,12 @@ TOOLS = {
                     S({"limit": {"type": "integer"}, "unread_only": {"type": "boolean"}, "query": {"type": "string"},
                        "box": {"type": "string"}}),
                     "safe", t_read_emails, "Проверить почту"),
+    "mail_table": ("Таблица Excel (.xlsx) по почте пользователя — все письма ящика: дата, отправитель, адрес, тема, есть ли "
+                   "вложение, прочитано, и лист «По отправителям» (сколько писем с какого адреса). Когда просят выгрузить, "
+                   "сделать таблицу, Excel, отчёт или статистику по письмам. days — только за последние N дней; box — один "
+                   "ящик; limit — сколько писем (по умолчанию 1000). Файл ложится в «Загрузки».",
+                   S({"days": {"type": "integer"}, "box": {"type": "string"}, "limit": {"type": "integer"}, "title": {"type": "string"}}),
+                   "safe", t_mail_table, "Почта: таблица Excel"),
     "read_email": ("Прочитать одно письмо целиком по номеру из read_emails.", S({"uid": {"type": "string"}}, ["uid"]),
                    "safe", t_read_email, "Прочитать письмо"),
     "search_documents": ("Найти в документах пользователя на этом компьютере (папка «Знания» и его папки, выбранные для "
@@ -3621,8 +3736,9 @@ TOOLS = {
                     "откроется в браузере; потом его можно менять фразой (site_edit) и опубликовать на dewiar.pro (site_publish). "
                     "describe — всё, что человек рассказал о деле, его словами (чем занимается, где, для кого, цены, особенности); "
                     "name — название, если назвал; kind — coffee|salon|lawyer|school|shop|photo|clinic|event|startup|personal|repair, "
-                    "если ясно; контакты — только продиктованные. НЕ пиши HTML и не обещай «сделаю» — вызывай.",
-                    S({"describe": {"type": "string"}, "name": {"type": "string"}, "tagline": {"type": "string"},
+                    "если ясно; контакты — только продиктованные; ref — ссылка на сайт-образец, если человек дал пример («сделай как "
+                    "у …»): возьмём разделы и стиль, но тексты и бренды — свои. НЕ пиши HTML и не обещай «сделаю» — вызывай.",
+                    S({"describe": {"type": "string"}, "name": {"type": "string"}, "tagline": {"type": "string"}, "ref": {"type": "string"},
                        "kind": {"type": "string", "enum": ["", "coffee", "salon", "lawyer", "school", "shop", "photo", "clinic", "event", "startup", "personal", "repair"]},
                        "phone": {"type": "string"}, "email": {"type": "string"}, "address": {"type": "string"}, "hours": {"type": "string"},
                        "telegram": {"type": "string"}, "whatsapp": {"type": "string"}, "vk": {"type": "string"}}, ["describe"]),
@@ -3728,10 +3844,12 @@ TOOLS = {
                     S({"name": {"type": "string"}}, ["name"]), "safe", t_remove_task, "Задачи: удалить"),
     "resume_task": ("Продолжить остановленную или приостановленную задачу (или ждущую — прямо сейчас).",
                     S({"name": {"type": "string"}}), "safe", t_resume_task, "Задачи: продолжить"),
-    "tell_task": ("Передать фоновой задаче новые сведения, уточнение или просьбу пользователя (например: «по багажу "
-                  "ответили, номер такой-то», «бюджет до 500 евро»). Ждущая задача сразу проснётся и учтёт. "
-                  "name — часть названия (пусто — текущая).",
-                  S({"name": {"type": "string"}, "text": {"type": "string"}}, ["text"]), "safe", t_tell_task,
+    "tell_task": ("Передать фоновой задаче новые сведения, уточнение, ответ на её вопрос, разрешение или просьбу "
+                  "пользователя (например: «по багажу ответили, номер такой-то», «бюджет до 500 евро»). Ждущая задача "
+                  "сразу проснётся и учтёт. Пользователь даёт задаче папку («дай ей доступ к папке проекта F:\\Bot») — "
+                  "folders: полные пути (спросим его «да»). name — часть названия (пусто — текущая).",
+                  S({"name": {"type": "string"}, "text": {"type": "string"},
+                     "folders": {"type": "array", "items": {"type": "string"}}}), "safe", t_tell_task,
                   "Задачи: сообщить"),
     "tv": ("Телевизор с Chromecast / Google TV / Android TV в домашней сети. action: play — включить видео по ссылке "
            "или найти на YouTube (query); site — показать сайт; pause, resume, stop, volume (level 0–100), status; "
@@ -3743,8 +3861,11 @@ TOOLS = {
            "safe", t_tv, "Телевизор"),
     "call_persona": ("Позвать другого персонажа команды (Агент, Лира, Патрик, Джарвис, Эва, Кодер или созданного "
                      "пользователем), когда пользователь просит позвать, передать слово или поговорить с ним. После "
-                     "твоего ответа персонаж сам откликнется своим голосом и обликом и продолжит разговор.",
-                     S({"name": {"type": "string", "description": "имя персонажа"}}, ["name"]), "safe", t_call_persona,
+                     "твоего ответа персонаж сам откликнется своим голосом и обликом и продолжит разговор. task — поручение ему "
+                     "своими словами, если пользователь его дал («Патрик, сверь эти цифры с прошлым периодом и запиши вывод»): "
+                     "что сделать, с чем (файлы, заметки, цифры из разговора) и куда положить итог.",
+                     S({"name": {"type": "string", "description": "имя персонажа"},
+                        "task": {"type": "string", "description": "поручение: что сделать и где взять данные"}}, ["name"]), "safe", t_call_persona,
                      "Позвать персонажа"),
     "delete_files": ("Удалить файлы или папки пользователя — В КОРЗИНУ (можно восстановить). paths — полные пути "
                      "(~ — домашняя папка). Системные папки, домашнюю папку целиком и главные папки (Документы, "
@@ -3821,7 +3942,7 @@ class Toolbox:
             return True, self.mcp.needs_confirm(name) if conf is None else bool(conf)
         if name not in TOOLS:
             return False, False
-        if name in ("send_email", "read_emails", "read_email", "mailing", "mailing_status"):     # только когда почта подключена
+        if name in ("send_email", "read_emails", "read_email", "mail_table", "mailing", "mailing_status"):     # только когда почта подключена
             m = self.hooks.get("mail")
             if not (m and m.configured()):
                 return False, False
@@ -3926,7 +4047,7 @@ class Toolbox:
         """Чего не хватает инструменту (№264, 25.10: «включаю — пишет „Сохранено“, а переключатель не включается»: почта,
         Telegram, «Знания», аккаунт не подключены). -> (что сделать, раздел студии) или None."""
         h = self.hooks
-        if name in ("send_email", "read_emails", "read_email", "mailing", "mailing_status") and not (h.get("mail") and h["mail"].configured()):
+        if name in ("send_email", "read_emails", "read_email", "mail_table", "mailing", "mailing_status") and not (h.get("mail") and h["mail"].configured()):
             return "Сначала подключите почту — «Подключение» → «Почта»", "connect"
         if name == "send_telegram" and not (h.get("telegram") and h["telegram"].paired()):
             return "Сначала подключите Telegram или MAX — «Подключение»", "connect"
@@ -3974,7 +4095,7 @@ class Toolbox:
                 if not any(fp == r or r in fp.parents for r in roots):
                     return (f"«{fp.name}» — вне папки ассистента, а в «Безопасности» стоит замок «Файлы: только папка Dewiar». "
                             "Снять его можно там же"), False, None
-        if name == "start_task" and (args or {}).get("folders"):
+        if name in ("start_task", "tell_task") and (args or {}).get("folders"):
             # рецензия 0.83: папки задаче даёт ЧЕЛОВЕК. Модель просит их в start_task — только после «да» с перечнем папок;
             # корень диска и домашняя папка целиком — нельзя; детский режим и замок «только папка Dewiar» — нельзя вовсе
             fl = args["folders"]

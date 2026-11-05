@@ -167,7 +167,7 @@ host = Host()
 tm = TK.TaskManager(host)
 J = lambda t: (t.dir / "журнал.md").read_text(encoding="utf-8")
 user_after = lambda title, i: next((m["content"] for m in reversed([r for r in reqs if r["title"] == title and r["i"] == i][0]["messages"])
-                                    if m["role"] in ("user", "tool")), "")
+                                    if m["role"] in ("user", "tool") and not str(m["content"]).startswith("[Состояние задачи")), "")   # 0.83: состояние — последним
 
 t = tm.create("Страница", "Сделай страницу-калькулятор")
 ok(wait_for(lambda: t.status in ("done", "failed")), f"задача «Страница» закончилась ({t.status})")

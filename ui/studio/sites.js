@@ -94,7 +94,9 @@ async function stOpen(id, keep, data) {
 function stBar() {
   const s = SITES.cur, p = s.published || {};
   if (document.activeElement !== $("#st-name")) $("#st-name").value = s.name || "";
-  $("#st-state").outerHTML = `<span class="st-chip${p.status === "blocked" ? " bad" : p.name ? " live" : ""}" id="st-state">${p.status === "blocked" ? "Заблокирован" : p.name ? `<i></i><a href="${stE(p.url)}" target="_blank" rel="noopener">${stE(p.name)}.dewiar.pro</a>` : "Черновик"}</span>`;
+  const nr = p.name && (p.reach || {}).ok === false;          // №549: опубликован, но адрес ещё не открывается
+  $("#st-state").outerHTML = `<span class="st-chip${p.status === "blocked" ? " bad" : nr ? " wait" : p.name ? " live" : ""}" id="st-state"${nr ? ` title="${stE(stReachSay(p.url))}"` : ""}>${p.status === "blocked" ? "Заблокирован" : p.name ? `<i></i><a href="${stE(p.url)}" data-ext="1">${stE(p.name)}.dewiar.pro</a>${nr ? " · ждёт адреса" : ""}` : "Черновик"}</span>`;
+  const sa = $("#st-state a[data-ext]"); if (sa) sa.onclick = (e) => { e.preventDefault(); nr ? stRecheck(sa, null) : openExt(p.url); };
   $("#st-pub").textContent = p.name ? "Обновить на сайте" : "Опубликовать";
   $("#st-pub").disabled = p.status === "blocked";
   $("#st-ban").hidden = p.status !== "blocked";
@@ -432,6 +434,20 @@ function stHistory() {
 }
 
 /* ---------- публикация ---------- */
+/* №549 (04.11): «Опубликовать» открывал пустую страницу, а адрес имя.dewiar.pro не открывался (у сервера ещё не настроены
+   адреса сайтов). Теперь программа проверяет адрес после публикации и, если не открывается, говорит как есть */
+const stReachSay = (url) => `Сайт сохранён на dewiar.pro. Адрес ${String(url || "").replace("https://", "")} заработает, когда сервер сайтов будет настроен — администратор об этом знает; я проверю сам и скажу, когда откроется.`;
+const ST_REACH_WHY = { dns: "Адрес пока не известен интернету (нет записи DNS для сайтов).", cert: "У адреса пока нет сертификата.",
+  server: "Сервер сайтов ещё не отдаёт сайты по этому адресу.", net: "Адрес не ответил — возможно, сеть или сервер сайтов." };
+async function stRecheck(btn, done) {
+  btn.disabled = true; const was = btn.textContent; btn.textContent = "Проверяю…";
+  try { const r = await core.call("sites_reach", { id: SITES.sid }); SITES.cur = r.site; stBar(); stInfo();
+    const rc = (r.site.published || {}).reach || {};
+    if (rc.ok) { toast("Открывается! " + r.site.published.url.replace("https://", ""), 4000); openExt(r.site.published.url); if (done) done(); }
+    else toast("Пока не открывается. " + (ST_REACH_WHY[rc.why] || ""), 5000); }
+  catch (e) { toast(e.message, 5000); }
+  btn.disabled = false; btn.textContent = was;
+}
 async function stPublish() {
   const p = SITES.cur.published || {};
   const box = $("#st-pubbox"), m = $("#st-pubm");
@@ -439,7 +455,8 @@ async function stPublish() {
   m.onclick = (e) => { if (e.target === m) close(); };
   if (p.name) {                                      // уже опубликован — просто обновить
     const b = $("#st-pub"); b.disabled = true; b.textContent = "Обновляю…";
-    try { const r = await core.call("sites_publish", { id: SITES.sid, name: p.name }); SITES.cur = r.site; SITES.hist = r.history; toast(`Обновлено на ${p.name}.dewiar.pro`, 3500); }
+    try { const r = await core.call("sites_publish", { id: SITES.sid, name: p.name }); SITES.cur = r.site; SITES.hist = r.history;
+      const rc = (r.site.published || {}).reach; toast(rc && rc.ok === false ? stReachSay(r.site.published.url) : `Обновлено на ${p.name}.dewiar.pro`, rc && rc.ok === false ? 9000 : 3500); }
     catch (e) { toast(e.message, 6000); }
     stBar(); return;
   }
@@ -474,12 +491,22 @@ async function stPublish() {
     try {
       const r = await core.call("sites_publish", { id: SITES.sid, name: inp.value.trim() });
       SITES.cur = r.site; SITES.hist = r.history; stBar(); stInfo();
-      const url = r.site.published.url;
+      const url = r.site.published.url, rc = r.site.published.reach || {};
+      if (rc.ok === false) {                       // №549: адрес ещё не открывается — не показываем пустую страницу, говорим как есть
+        box.innerHTML = `<div class="st-dh"><h3>Сайт сохранён</h3><button class="st-ib" type="button" id="st-pubx" aria-label="Закрыть">${stI('<path d="M6 6l12 12M18 6 6 18"/>')}</button></div>
+          <p>${stE(stReachSay(url))}</p><p class="hint">${stE(ST_REACH_WHY[rc.why] || "")}</p>
+          <div class="st-mact"><button class="btn" type="button" id="st-pubok">Понятно</button><button class="btn primary" type="button" id="st-recheck">Проверить адрес</button></div>`;
+        $("#st-pubx").onclick = $("#st-pubok").onclick = close;
+        $("#st-recheck").onclick = () => stRecheck($("#st-recheck"), close);
+        return;
+      }
       box.innerHTML = `<div class="st-dh"><h3>Сайт опубликован</h3><button class="st-ib" type="button" id="st-pubx" aria-label="Закрыть">${stI('<path d="M6 6l12 12M18 6 6 18"/>')}</button></div>
-        <div class="st-done"><div class="st-qr">${typeof qrPretty === "function" ? qrPretty(url) : ""}</div><div><a class="st-url" href="${stE(url)}" target="_blank" rel="noopener">${stE(url.replace("https://", ""))}</a>
+        <div class="st-done"><div class="st-qr">${typeof qrPretty === "function" ? qrPretty(url) : ""}</div><div><a class="st-url" href="${stE(url)}">${stE(url.replace("https://", ""))}</a>
         <p class="hint">Отправьте ссылку клиентам, поставьте в соцсети и на визитку; QR-код — распечатать у кассы. Заявки с формы придут в «Клиенты», посещения — во вкладке «Аналитика».</p>
-        <div class="st-mact"><button class="btn" type="button" id="st-cp">Скопировать ссылку</button><a class="btn primary" href="${stE(url)}" target="_blank" rel="noopener">Открыть сайт</a></div></div></div>`;
+        <div class="st-mact"><button class="btn" type="button" id="st-cp">Скопировать ссылку</button><button class="btn primary" type="button" id="st-open">Открыть сайт</button></div></div></div>`;
       $("#st-pubx").onclick = close;
+      $("#st-open").onclick = () => openExt(url);       // №549: во внешнем браузере — окно студии открывало пустую страницу
+      $(".st-done .st-url").onclick = (e) => { e.preventDefault(); openExt(url); };
       $("#st-cp").onclick = async () => { try { await navigator.clipboard.writeText(url); toast("Ссылка скопирована"); } catch (e) { toast(url, 5000); } };
     } catch (e) { toast(e.message, 6000); go.disabled = false; go.textContent = "Опубликовать"; }
   };
@@ -619,7 +646,10 @@ async function stSeo() {
 
 (function stInit() {
   if (!$("#p-sites")) return;
-  $("#st-ask").onsubmit = (e) => { e.preventDefault(); const d = $("#st-desc").value.trim(); if (!d) { $("#st-desc").focus(); toast("Опишите дело в паре фраз — чем занимаетесь, где, для кого"); return; } stCreate({ describe: d }, $("#st-make")); };
+  // №552: «Сайт-образец» — ссылка на сайт, который нравится: Лира возьмёт разделы и стиль, тексты и бренды — свои
+  $("#st-ask").onsubmit = (e) => { e.preventDefault(); const d = $("#st-desc").value.trim(), ref = ($("#st-ref") || { value: "" }).value.trim();
+    if (!d) { $("#st-desc").focus(); toast("Опишите дело в паре фраз — чем занимаетесь, где, для кого"); return; }
+    stCreate(Object.assign({ describe: d }, ref ? { ref } : {}), $("#st-make")); };
   $("#st-back").onclick = () => { SITES.sid = ""; loadSites(); };
   $("#st-name").oninput = (e) => stLater("name", () => [{ op: "site", name: e.target.value }], "Название сайта");
   $("#st-undo").onclick = async () => { try { const r = await core.call("sites_undo", { id: SITES.sid }); SITES.cur = r.site; SITES.hist = r.history; stBar(); stSide(); stPreview(); toast("Вернула как было"); } catch (e) { toast(e.message, 3000); } };

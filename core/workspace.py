@@ -183,11 +183,15 @@ def note_front(text):
     return meta, str(text)[m.end():]
 
 
-LOCKED_MSG = "заметка защищена от удаления — сначала снимите замок"
+# Владелец, 05.11: «в заметках и блокноте иногда информация настолько важная, что переживаю — не сотру ли случайно».
+# Замок (locked: true в шапке заметки — поле, которое уходит синхронизацией вместе с текстом): запертую заметку и вкладку
+# блокнота нельзя ни изменить, ни удалить — ни руками, ни Лирой (save_note, update_note, списки, удаление, папкой целиком,
+# правка с другого устройства). Снять замок — только руками: значок 🔒 в студии, блокноте или на телефоне.
+LOCKED_MSG = "заметка заперта — сначала откройте замок"
 
 
 def _locked(p):
-    """Заметка с замком (locked: true в шапке) — не удаляется ни из студии, ни голосом, пока замок не снят."""
+    """Заметка с замком (locked: true в шапке) — не меняется и не удаляется ни из студии, ни голосом, пока замок не сняли."""
     try:
         with open(p, encoding="utf-8", errors="replace") as f:
             head = f.read(4096)
@@ -390,8 +394,10 @@ class Workspace:
         if parts[0] == "Задачи":
             raise WorkspaceError("папку задачи удаляйте в разделе «Задачи» — там же её план и журнал")
         files = [x for x in p.rglob("*") if x.is_file()]
-        if any(x.suffix.lower() == ".md" and _locked(x) for x in files):
-            raise WorkspaceError("в папке есть защищённые заметки — сначала снимите с них замок")
+        held = [x for x in files if x.suffix.lower() == ".md" and _locked(x)]
+        if held:
+            raise WorkspaceError(f"в папке есть запертые заметки ({len(held)}: «{held[0].stem}»"
+                                 f"{'…' if len(held) > 1 else ''}) — сначала откройте замок")
         import guard
         guard.trash([{"path": str(p), "dir": True, "files": len(files), "size": sum(x.stat().st_size for x in files)}])
         return True
@@ -464,6 +470,8 @@ class Workspace:
             raise WorkspaceError("править здесь можно только заметки (.md, .txt)")
         if p.is_dir():
             raise WorkspaceError("это папка")
+        if p.is_file() and _locked(p):
+            raise WorkspaceError(LOCKED_MSG)
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_name(p.name + ".tmp")               # через временный файл: оборванная запись не испортит заметку
         tmp.write_text(str(text or "").replace("\r\n", "\n"), encoding="utf-8")
@@ -535,8 +543,8 @@ class Workspace:
         tmp = p.with_name(p.name + ".tmp")
         tmp.write_text(text, encoding="utf-8")
         os.replace(tmp, p)
-        if "tags" not in (patch or {}):                 # закрепить, цвет — не «правка текста»: место в списке по времени не меняем
-            os.utime(p, (st.st_atime, st.st_mtime))
+        if not {"tags", "locked"} & set(patch or {}):  # закрепить, цвет — не «правка текста»: место в списке по времени не меняем
+            os.utime(p, (st.st_atime, st.st_mtime))      # (замок — новее всего: при встрече правок на двух устройствах он и победит)
         return next((n for n in self.notes(limit=100000) if n["path"] == rel), None)
 
     # ---------- вложения заметок: фото и файлы рядом с заметкой ----------
@@ -548,6 +556,8 @@ class Workspace:
         p = self.safe(rel)
         if p.suffix.lower() != ".md" or not p.is_file() or Path(str(rel)).parts[:1] != ("Заметки",):
             raise WorkspaceError("прикреплять можно только к заметке из «Заметок»")
+        if _locked(p):
+            raise WorkspaceError(LOCKED_MSG)
         if len(data) > NOTE_ATT_MAX:
             raise WorkspaceError(f"файл больше {NOTE_ATT_MAX // 1048576} МБ")
         ext = re.sub(r"[^a-z0-9]", "", Path(str(name or "")).suffix.lower())[:8]
@@ -628,6 +638,8 @@ class Workspace:
         p = self.safe(rel)
         if not p.is_file():
             raise WorkspaceError("файла нет")
+        if _locked(p):
+            raise WorkspaceError(LOCKED_MSG)
         if rel in (MEMORY.as_posix(), "README.md"):
             raise WorkspaceError("этот файл переименовывать нельзя")
         q = p.with_name(_clean_name(title) + p.suffix)
@@ -674,6 +686,8 @@ class Workspace:
         title = _clean_name(title)
         p = base / f"{title}.md"
         text = (text or "").strip()
+        if p.exists() and append and _locked(p):
+            raise WorkspaceError(f"«{p.stem}» — {LOCKED_MSG}")
         if p.exists() and append:
             with open(p, "a", encoding="utf-8") as f:
                 f.write(f"\n\n*{_human_date()}*\n\n{text}\n")
@@ -747,6 +761,9 @@ class Workspace:
         «Краткое содержание» над статьёй). Прежний текст не теряется. -> (путь от корня, сколько добавлено знаков, размер)."""
         rel = self.find_note(name)
         p = self.safe(rel)
+        if _locked(p):
+            raise WorkspaceError(f"«{p.stem}» — {LOCKED_MSG}. Снять замок может только человек (значок 🔒 у заметки); "
+                                 "можно сохранить текст в новую заметку (save_note), если он попросит")
         text = (text or "").strip()
         if not text:
             raise WorkspaceError("нечего дописывать — текст пустой")
@@ -779,6 +796,8 @@ class Workspace:
         base.mkdir(parents=True, exist_ok=True)
         title = _clean_name(name, "Список")
         p = base / f"{title}.md"
+        if p.exists() and _locked(p):
+            raise WorkspaceError(f"«{title}» — {LOCKED_MSG}")
         old = p.read_text(encoding="utf-8") if p.exists() else f"# {title}\n\n"
         have = {ln[2:].strip().lower() for ln in old.splitlines() if ln.startswith("- ")}
         new = [i for i in items if i.strip().lower() not in have]

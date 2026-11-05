@@ -274,6 +274,31 @@ class ToolsMixin:
             return None
         return "always" if box["answer"] and box.get("always") and always else box["answer"]
 
+    TASK_REPLY_RX = re.compile(r"разреш|дай|даю|доступ|права?\b|папк|можно|нельзя|не надо|не нужно|путь|лежит|находится|"
+                               r"[a-z]:\\|/home/|~/", re.I)
+
+    def _task_reply(self, text, how="chat"):
+        """№551: задача спросила, а человек ответил в чате («разрешаю», «дай права», «папка — D:\\Bot») — ответ уходит ей,
+        а не новым вопросом в разговор. В первые 2 минуты после вопроса — любой короткий ответ без имени персонажа, потом —
+        похожий на ответ (да/нет, разрешение, папка, путь). -> True, если передали."""
+        tm = getattr(self, "tasks", None)
+        wt = tm.waiting() if tm is not None and (text or "").strip() else None
+        if wt is None or len(re.findall(r"[\wё]+", text)) > 40:
+            return False
+        if find_name(text, self.aliases, strict=True)[0]:
+            return False                                   # «Патрик, …» — это разговор с персонажем
+        fresh = time.monotonic() < getattr(self, "task_answer_until", 0.0)
+        if not (fresh or confirm_word(text) is not None or self.TASK_REPLY_RX.search(text)):
+            return False
+        self.task_answer_until = 0.0
+        try:
+            self.tasks.answer(wt.id, text.strip())
+        except ValueError:
+            return False
+        log.info("Ответ в задачу «%s» (%s): %s", wt.title, how, text.strip()[:80])
+        self.emit("answer", text=self._g(f"Передала в задачу «{wt.title}»."), done=True)
+        return True
+
     def _answer_confirm(self, text):
         """Разобрать услышанное как ответ на вопрос _confirm. -> True, если фраза была ответом и вопрос закрыт."""
         box = self.pending_confirm
@@ -695,12 +720,61 @@ class ToolsMixin:
         try:
             self.workspace.save_note(title, body, folder="Черновики", append=True)
         except Exception as e:  # noqa: BLE001
+            if "заперта" in str(e):                   # 05.11: черновик заперт — так и говорим, модель не зовём
+                self._say_quick(f"Заметка «{title}» заперта — сначала откройте замок.", text, via)
+                return True
             log.warning("черновик: %s", e)
             return False
         n = len(body.split())
         w = "слово" if n % 10 == 1 and n % 100 != 11 else "слова" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "слов"
         acc = {"Книга": "Книгу", "Статья": "Статью", "Песня": "Песню", "Сказка": "Сказку"}.get(title, title)   # «в «Книгу»»
         self._say_quick(f"Записала в «{acc}» — {n} {w}.", text, via)
+        return True
+
+    MAIL_TABLE_RX = re.compile(r"(?=.*(?:excel|эксел|ексел|xlsx|таблиц))(?=.*(?:почт|письм|ящик|inbox))"
+                               r"(?=.*(?:подготов|сдела|выгруз|созда|состав|сформир|собер|собери|экспорт|нужн))", re.I | re.S)
+
+    def _mail_table_cmd(self, text, via=None):
+        """№541 (04.11): «подготовь Excel с содержимым почтового ящика: отправитель, дата, тема, с вложением или нет,
+        статистика по адресам». Своя модель отвечала по 200 с и вместо файла выдала скрипт на Python. Просьба ясная —
+        делаем без модели (mail_table): таблица в «Загрузках» и короткий ответ. -> True, если это оно."""
+        t = (text or "").strip()
+        if len(t) > 400 or not self.MAIL_TABLE_RX.search(t) or re.search(r"отправ\w*\s+(?:по\s+почте|письм)|рассыл", t, re.I):
+            return False
+        m = getattr(self, "mail", None)
+        if m is None or not m.configured():
+            return False                                   # почты нет — пусть модель объяснит, как подключить
+        days = None
+        md = re.search(r"за\s+(?:последн\w+\s+)?(\d+)\s*(дн|день|недел|месяц)", t, re.I)
+        if md:
+            days = int(md.group(1)) * {"дн": 1, "ден": 1, "нед": 7, "мес": 30}[md.group(2)[:3].lower()]
+        elif re.search(r"за\s+(?:последн\w+\s+)?(?:недел)", t, re.I):
+            days = 7
+        elif re.search(r"за\s+(?:последн\w+\s+)?месяц", t, re.I):
+            days = 30
+        self.emit("heard", text=t)
+        self.set_state("thinking")
+
+        def run():
+            from tools import mail_table_make
+            try:
+                r = mail_table_make(m, days)
+                if not r["path"]:
+                    msg = "В ящике писем не нашлось — таблицу не делала."
+                else:
+                    msg = (f"Готово: таблица «{r['path'].name}» в «Загрузках». Писем — {r['n']}"
+                           + (" (первые тысяча — скажите, если нужно больше)" if r["n"] >= r["limit"] else "")
+                           + f", с вложениями — {r['att']}, отправителей — {r['senders']}. Второй лист — сколько писем с какого адреса.")
+                    try:
+                        import export as X
+                        if not os.environ.get("DEWIAR_DRY_TOOLS"):
+                            X.reveal(r["path"])          # показать файл в папке — искать не придётся
+                    except Exception:  # noqa: BLE001
+                        pass
+            except Exception as e:  # noqa: BLE001
+                msg = f"Таблицу по почте сделать не получилось: {e}."
+            self._say_quick(msg, t, via)
+        threading.Thread(target=run, name="mail-table", daemon=True).start()
         return True
 
     def _timer_cmd(self, text, via=None):
@@ -1634,6 +1708,9 @@ class ToolsMixin:
                 rel = "Память/Обо мне.md"
                 card = {"kind": "fact", "title": "Память о вас", "path": rel, "text": c["fact"]}
         except WorkspaceError as e:
+            if "заперта" in str(e):                   # 05.11: список заперт — честно, без модели
+                self._say_quick(f"Заметка «{c.get('name') or c.get('title')}» заперта — сначала откройте замок.", said, via)
+                return True
             log.info("Быстрая заметка не записалась (%s) — спрошу модель", e)
             return False
         log.info("📝 %s → %s", c["op"], rel)

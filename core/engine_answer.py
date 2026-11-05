@@ -39,6 +39,17 @@ def month_years(text, now):
 
 # №390: вопрос про фоновые задачи («задача работает?», «почему не запущена», «что с заданием») — к нему их настоящее состояние
 TASK_ASK_RX = re.compile(r"задач|задани|фонов|застрял|выполня(?:ется|ешь|ет)|запущ|работает ли|что с (?:ней|ним)", re.I)
+def _no_money(e):
+    """Ошибка «на ключе нет денег» (сбой 04.11: 27 раз) — повтор того же запроса без действий её не исправит."""
+    from llm import NO_MONEY_TEXT
+    return NO_MONEY_TEXT[:40] in str(e)
+
+
+TALER_RX = re.compile(r"талер", re.I)     # №542: вопрос о талерах — к нему настоящий счёт облака (_taler_now)
+
+
+# №551: «может, тебе дать доступ», «стоишь на одном месте» — пока идёт задача, это про неё: её состояние и tell_task
+TASK_GIVE_RX = re.compile(r"доступ|\bправа?\b|разреш|папк|стоишь|висишь|завис", re.I)
 INFO_TOOLS = {"web_search", "weather", "read_webpage", "find_notes", "read_file", "calc", "list_reminders", "calendar_list", "money_report",
               "read_emails", "read_email", "search_documents", "ask_knowledge", "system_status", "task_status", "look_at_screen",
               "look_through_camera", "app_update", "ocr"}
@@ -252,7 +263,7 @@ IDEA_RULE = ("\n\nЧего-то не умеешь и инструмента дл
 # Главные действия на каждый день — для модели с окном поменьше (_fit_window): весь набор — около 13 тысяч токенов
 CORE_TOOLS = {"web_search", "weather", "open_url", "open_app", "play_music", "play_radio", "media_control", "set_volume",
               "set_reminder", "list_reminders", "cancel_reminder", "change_reminder", "calc", "world_time", "mark_done", "save_note", "update_note", "find_notes",
-              "remember", "money_add", "money_report", "calendar_list", "smart_home", "read_emails", "send_email",
+              "remember", "money_add", "money_report", "calendar_list", "smart_home", "read_emails", "send_email", "mail_table",
               "search_documents"}
 
 
@@ -383,6 +394,8 @@ class AnswerMixin:
                 return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._draft_cmd(text, via):
             return                                       # «запиши в книгу: …» — дословно в черновик автора
+        if not raw and not quiet and not images and not K and self._mail_table_cmd(text, via):
+            return                                       # №541: «Excel по почте» — таблица сразу, без модели
         if not raw and not quiet and not images and "\n\nВложения:" not in text:
             ma = APPT_RX.match(text.strip())
             if ma and APPT_TIME_RX.search(ma.group("rest")):
@@ -859,8 +872,10 @@ class AnswerMixin:
                 hint = ""
             if hint:
                 out += " " + hint
-        if TASK_ASK_RX.search(text or ""):              # №390: «задача работает?» — ответ по настоящему состоянию, не по памяти
-            out += " " + self._tasks_now()
+        if TALER_RX.search(text or ""):                # №542: «на сколько хватает 1 талер?» — по настоящему счёту
+            out += " " + self._taler_now()
+        if TASK_ASK_RX.search(text or "") or (TASK_GIVE_RX.search(text or "") and self._task_alive()):
+            out += " " + self._tasks_now()            # №390: «задача работает?» — по настоящему состоянию; №551: «дать доступ?»
         from lang2 import en_hint
         en = en_hint(text)                                 # спросили по-английски — ответ по-английски (второй язык)
         if en:
@@ -909,6 +924,32 @@ class AnswerMixin:
         except Exception:  # noqa: BLE001
             return set()
 
+    def _taler_now(self):
+        """Счёт облака Dewiar для ответа о талерах: сколько ответов в одном талере и сколько осталось."""
+        try:
+            c = self.cloud.status() if getattr(self, "cloud", None) is not None else {}
+        except Exception:  # noqa: BLE001
+            c = {}
+        if not c.get("connected"):
+            return ("Талеры — счёт моделей Dewiar; сейчас они не подключены, ответы идут своей моделью — талеры не тратятся. "
+                    "Подключить — «Мозг» → «Подключить мозг Dewiar».")
+        try:
+            per = int(c.get("per_taler") or 0) or (round(float(c.get("turns") or 0) / float(c.get("balance"))) if float(c.get("balance") or 0) > 0 else 0)
+        except (TypeError, ValueError, ZeroDivisionError):
+            per = 0
+        bal = c.get("balance_text") or (f"{c.get('balance')} тал." if c.get("balance") is not None else "")
+        return ("Счёт Dewiar (проверено сейчас, говори по этим числам): "
+                + (f"1 талер ≈ {per} обычных ответов; " if per else "")
+                + (f"на счёте {bal} — примерно на {c.get('turns')} ответов. " if bal else "")
+                + "Длинные ответы, размышления, картинки и большие задачи дороже. Где видно: «Мозг» → «ИИ-баланс» "
+                  "(на телефоне — «Мозг» → «Баланс»).")
+
+    def _task_alive(self):
+        try:
+            return any(x.get("status") in ("running", "waiting", "sleeping", "paused") for x in self.tasks.list()[:6])
+        except Exception:  # noqa: BLE001
+            return False
+
     def _tasks_now(self):
         """№390 (28.10, Витаха): задача «застряла» через 2 минуты, а Лира на «проверь» отвечала «задача работает» — по
         памяти разговора. К вопросу про задачи — их настоящее состояние: что идёт, что остановилось и почему."""
@@ -924,7 +965,9 @@ class AnswerMixin:
             why = (x.get("error") or x.get("activity") or "") if x.get("status") in ("failed", "stopped", "paused") else (x.get("activity") or "")
             parts.append(f"«{x.get('title', '')}» — {st}" + (f" ({str(why)[:140]})" if why else ""))
         return ("Фоновые задачи сейчас (проверено только что, говори по этому, не по памяти разговора): " + "; ".join(parts)
-                + ". Остановилась — так и скажи и предложи перезапустить (start_task заново или resume_task).")
+                + ". Остановилась — так и скажи и предложи перезапустить (start_task заново или resume_task). Пользователь "
+                "даёт задаче сведения, ответ, разрешение или папку («дай ей доступ к папке проекта») — передай их tell_task, "
+                "а не отвечай словами.")
 
     # ---------- для фоновых задач (TaskManager.host) ----------
 
@@ -1357,12 +1400,15 @@ class AnswerMixin:
                 "device": platform.node()[:60], "summary": (summary or self._report_summary())[:500], "note": note, "text": text}
         if shot:
             import base64
-            body["shot"] = "data:image/jpeg;base64," + base64.b64encode(shot).decode()
+            shots = list(shot) if isinstance(shot, (list, tuple)) else [shot]          # №546: до 5 снимков к жалобе
+            body["shot"] = "data:image/jpeg;base64," + base64.b64encode(shots[0]).decode()
+            if len(shots) > 1:
+                body["shots"] = ["data:image/jpeg;base64," + base64.b64encode(x).decode() for x in shots[1:5]]
         if who:
             body["who"] = who
         h = {"Authorization": f"Bearer {norm_key(key)}"} if key else {}
         try:
-            r = httpx.post(url.split("?", 1)[0] + "?p=/report", json=body, headers=h, timeout=60 if shot else 40)
+            r = httpx.post(url.split("?", 1)[0] + "?p=/report", json=body, headers=h, timeout=(60 + 20 * len(body.get("shots") or [])) if shot else 40)
             d = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
         except (httpx.HTTPError, ValueError) as e:
             from net import blocked_hint
@@ -1767,9 +1813,10 @@ class AnswerMixin:
                      f"чем помочь.)", quiet=True)
         return True
 
-    def _tool_call_persona(self, name):
+    def _tool_call_persona(self, name, task=""):
         """Инструмент «позвать персонажа»: сама передача — после ответа (turn.switch_to, конец _run_turn).
-        -> текст для модели: что сказать сейчас."""
+        task — поручение (идея №137, Gray: «передать задачу, а не только слово — второй начинает с чистого листа»):
+        уходит новому персонажу явной вводной. -> текст для модели: что сказать сейчас."""
         pid = self.find_persona(name)
         if not pid:
             names = ", ".join(p["name"] for p in self.personas.all())
@@ -1779,9 +1826,10 @@ class AnswerMixin:
         t = self.turn
         if t is not None:
             t.switch_to = pid
+            t.switch_task = str(task or "").strip()[:1500]
         who = self.personas.get(pid)["name"]
-        return (f"Готово: как только ты договоришь, {who} откликнется сам(а) своим голосом. Скажи одну короткую фразу, "
-                f"что передаёшь слово, и не отвечай за {who}.")
+        return (f"Готово: как только ты договоришь, {who} откликнется сам(а) своим голосом" + (" и возьмётся за поручение" if task else "")
+                + f". Скажи одну короткую фразу, что передаёшь слово, и не отвечай за {who}.")
 
     def _maybe_learn(self, said, prof):
         """Учиться на ошибках: человек поправил ассистента («нет, я же просил коротко», «опять не то») — в фоне модель выводит
@@ -1873,6 +1921,7 @@ class AnswerMixin:
         персонажу после специалиста и передача слова, если её попросил инструмент. Отменённый ход в историю не идёт."""
         prof = self.persona_llm()
         self._turn_text = text                       # read_webpage: длинная страница — куски по словам вопроса
+        turn.q, turn.images = text, list(images or ())   # №543: перебило эхо — задать тот же вопрос заново
         sentences = queue.Queue()
         silent = bool(turn.via) and not turn.via.get("speak")
         speaker = threading.Thread(target=self._drain_worker if silent else self._speak_worker, args=(turn, sentences),
@@ -2167,7 +2216,7 @@ class AnswerMixin:
                             msgs = msgs + [{"role": "user", "content": "Ответь на мой вопрос: вызови нужный инструмент или ответь словами."}]
                             events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
                         elif specs and step == 0 and not turn.full and not turn.cancel.is_set() and not self._cloud_said(prof, e) \
-                                and "без текста" not in str(e):
+                                and "без текста" not in str(e) and not _no_money(e):     # деньги на ключе кончились — без действий не поможет
                             # с инструментами модель не отвечает — ответим хотя бы без них
                             log.warning("Модель не справилась с инструментами (%s) — отвечаю без действий", e)
                             from health import brain_kind, why_kind
@@ -2513,6 +2562,7 @@ class AnswerMixin:
                     raise LLMError("модель вернула пустой ответ")
                 log.info("⏱ ответ целиком за %.1f с (%s, %d симв.)", time.monotonic() - t_start, prof.get("model") or "?",
                          len(turn.full))
+                turn.gen_done = True                      # №543: ответ сложился — после ложного перебивания его договорим
                 turn.model = model_label(prof)            # №515: какой моделью ответил — в историю (пометка о смене модели)
                 early = self._early_done(turn)
                 if early:                                 # «Готово!» сразу после start_task — поправиться вслух и в тексте
@@ -2620,5 +2670,11 @@ class AnswerMixin:
             prev = self.personas.get(self.s.get("persona"))["name"]
             self.switch_persona(pid)
             # новый персонаж откликается сам — своим голосом, зная весь разговор
-            self.ask(f"({prev} позвал(а) тебя в разговор. Откликнись одной-двумя короткими фразами от себя и "
-                     f"продолжи то, о чём просил пользователь.)", quiet=True)
+            task = getattr(turn, "switch_task", "")
+            if task:                                   # №137: поручение — явной вводной, итог — в общую заметку
+                self.ask(f"({prev} передал(а) тебе поручение пользователя: «{task}». Это твоя задача сейчас — сделай её "
+                         "сам(а), нужными инструментами (данные — в разговоре выше, в заметках и файлах). Итог скажи коротко; если он "
+                         "больше пары фраз — запиши в заметку «Команда: <о чём>» (save_note) и скажи, где он.)", quiet=True)
+            else:
+                self.ask(f"({prev} позвал(а) тебя в разговор. Откликнись одной-двумя короткими фразами от себя и "
+                         f"продолжи то, о чём просил пользователь.)", quiet=True)

@@ -28,7 +28,7 @@ PLAN = [
     ("code_edit", {"path": "calc.py", "old": "return a - b", "new": "return a + b"}),
     ("code_run", {"command": "python3 test_calc.py"}),
     ("ask_user", {"question": "Закоммитить изменения?"}),
-    ("update_plan", {"plan": "- [x] найти add\n- [x] исправить\n- [x] запустить тест"}),
+    ("update_plan", {"plan": "- [x] найти add — calc.py\n- [x] исправить — calc.py\n- [x] запустить тест — код 0: 1 passed"}),   # 0.84: «[x]» — с доказательством
     ("code_diff", {}),
     ("finish", {"summary": "Исправил **add**: было вычитание. Тест проходит."}),
 ]

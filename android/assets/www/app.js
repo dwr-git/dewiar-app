@@ -5071,6 +5071,7 @@ function draftQuick(text) {
   let body = m[3].trim(); body = body.charAt(0).toUpperCase() + body.slice(1); if (!/[.!?…»"]$/.test(body)) body += ".";
   const d = new Date(), stamp = `*${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}*`;
   const all = notes(), x = all.find(y => (y.folder || "") === "Черновики" && (y.title || "") === title);
+  if (x && noteLocked(x.text)) return `Заметка «${title}» заперта — сначала откройте замок.`;
   if (x) { x.text = (x.text || "").replace(/\s+$/, "") + "\n\n" + stamp + "\n\n" + body; x.time = Date.now(); }
   else all.push({ id: uid("n"), title, text: stamp + "\n\n" + body, time: Date.now(), folder: "Черновики" });
   saveNotes(all);
@@ -5134,6 +5135,20 @@ let turnAtt = [], turnAsk = "", noteCur = "", notePend = [];
 const NOTE_FRONT = /^\ufeff?(-{2,3})[ \t]*\n((?:[ \t]*(?:[\w\-а-яёА-ЯЁ]+[ \t]*:.*|-[ \t].*|)\n)*?)\1[ \t]*(?:\n|$)/;
 const noteFront = (t) => { const m = NOTE_FRONT.exec(String(t || "")); return m && m[2].trim() ? m[0].replace(/\n?$/, "\n") : ""; };
 const noteBody = (t) => String(t || "").slice(noteFront(t).length).replace(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/, "");   // заметка с компьютера: без шапки, заголовка и даты
+/* Замок (владелец 05.11: «информация настолько важная, что переживаю — не сотру ли случайно»): «locked: true» в шапке
+   заметки — то же поле, что на компьютере (core/workspace.py note_front_set), и уходит синхронизацией вместе с текстом.
+   Запертую нельзя изменить и удалить — ни руками, ни Лирой; открыть замок — только кнопкой 🔒 у названия. */
+const NOTE_LOCKED = "Заметка заперта — сначала откройте замок 🔒";
+const noteLocked = (t) => /^\s*locked\s*:\s*(true|yes|1|да)\s*$/mi.test(noteFront(t));
+function noteLockSet(t, on) {
+  t = String(t || ""); const fr = noteFront(t); let rest = t.slice(fr.length);
+  const lines = (fr ? fr.replace(/\n$/, "").split("\n").slice(1, -1) : []).filter(l => l.trim() && !/^\s*locked\s*:/i.test(l));
+  if (on) lines.push("locked: true");
+  if (!lines.length) return rest.replace(/^\n+/, "");
+  return "---\n" + lines.join("\n") + "\n---\n" + (rest.startsWith("\n") ? rest : "\n" + rest);
+}
+// пришедшая с другого устройства — та же заметка, кроме замка (его открыли или заперли там руками)
+const noteLockOnly = (a, b) => { const k = (t) => { const u = noteLockSet(t, false); return noteFront(u) + "|" + noteBody(u).replace(/\s+/g, " ").trim(); }; return k(a) === k(b); };
 // строки-ссылки на вложения компьютера («![фото.jpg](Вложения/…)», «📎 [план.pdf](Вложения/…)», core/workspace.py NOTE_LINK_RX):
 // в тексте на телефоне их не показываем, а при сохранении возвращаем в конец — иначе ссылки потерялись бы на компьютере
 const NOTE_LINK_LINE = /^[ \t]*(?:📎\s*)?!?\[[^\]\n]*\]\(Вложения\/[^)\s]+\)[ \t]*$/gm;
@@ -5192,8 +5207,7 @@ function noteAttSave(list) {
    случайное нажатие — и заметки нет). Удалить — только из открытой заметки, крестика в списке нет. */
 function noteDelete(id, ask) {
   const n = notes().find(x => x.id === id); if (!n) return;
-  if (/^\s*locked\s*:\s*(true|yes|1|да)\s*$/mi.test(noteFront(n.text))) {      // замок с компьютера (29.10): не удаляется и здесь
-    toast("Заметка защищена от удаления — защиту снимают в студии на компьютере"); return; }
+  if (noteLocked(n.text)) { toast(NOTE_LOCKED, 3200); return; }      // замок (здесь или с компьютера): не удаляется
   if (ask && !confirm(`Удалить заметку «${n.title}»${(n.att || []).length ? " вместе с вложениями" : ""}?`)) return;
   const keep = (n.att || []).map(a => [a.id, noteAttGet(a.id)]);
   (n.att || []).forEach(a => fileSave("natt-" + a.id, ""));
@@ -5291,15 +5305,20 @@ function renderNote() {
       : `<div class="ntfile"><button class="ntopen" data-id="${esc(a.id)}">${NT_IC.file}<span>${esc(a.name)}</span><small>${fsize(a.size)}</small></button>${edit ? `<button class="ntrm" data-rm="${esc(a.id)}" aria-label="Убрать файл">${NT_IC.x}</button>` : ""}</div>`).join("");
   const view = (a) => a.type === "image" ? imgView(a.data || noteAttGet(a.id)) : noteFileSave(a);
   if (noteMode === "view") {
+    const lk = noteLocked(n.text);
     $("#nt-h").textContent = n.title || "Заметка";
+    const lb = $("#nt-lock"); lb.hidden = false; lb.classList.toggle("on", lk); lb.textContent = lk ? "🔒" : "🔓";
+    lb.setAttribute("aria-pressed", String(lk)); lb.setAttribute("aria-label", lk ? "Открыть замок" : "Запереть заметку");
     $("#note-body").innerHTML = `<div class="ntmeta">${n.folder ? `<button class="ntchip" id="nt-gofold">${NT_IC.fold}${esc(n.folder)}</button>` : ""}<span>${esc(ntDate(n.time))}</span></div>
       <article class="ntread" id="nt-read">${noteHtml(noteShown(n.text))}</article>
       ${att.length ? `<div class="ntatt big">${attHtml(false)}</div>` : ""}
-      <div class="ntbar"><button class="btn p" id="nt-edit">${NT_IC.edit}Править</button><button class="btn ic" id="nt-share" aria-label="Поделиться" title="Поделиться">${NT_IC.share}</button><button class="btn ic dl" id="nt-del" aria-label="Удалить" title="Удалить">${NT_IC.del}</button></div>`;
+      ${lk ? `<div class="ntlocked">🔒 Заперта: не изменить и не удалить — ни здесь, ни голосом, ни на компьютере. Открыть — 🔒 у названия.</div>` : ""}
+      <div class="ntbar"><button class="btn p${lk ? " off" : ""}" id="nt-edit">${NT_IC.edit}Править</button><button class="btn ic" id="nt-share" aria-label="Поделиться" title="Поделиться">${NT_IC.share}</button><button class="btn ic dl" id="nt-del" aria-label="Удалить" title="Удалить">${NT_IC.del}</button></div>`;
     if (window.DewiarRich) DewiarRich.diagrams($("#nt-read"));
     $$("#nt-read a[data-url]").forEach(a => a.onclick = (e) => { e.preventDefault(); D.openUrl(a.dataset.url); });
     $$("#nt-read .tk").forEach(b => b.onclick = () => {                       // дело отметили прямо в чтении
       const all = notes(), x = all.find(y => y.id === n.id); if (!x) return;
+      if (noteLocked(x.text)) { toast(NOTE_LOCKED, 3200); return; }
       const shown = noteShown(x.text).split("\n"), i = +b.dataset.ln, line = shown[i] || "";
       shown[i] = /\[[ ]\]/.test(line) ? line.replace("[ ]", "[x]") : line.replace(/\[[xX]\]/, "[ ]");
       const fr = noteFront(x.text), head = String(x.text || "").slice(fr.length).match(/^\s*#[^\n]*\n+(\*[^\n]*\*\n+)?/), ln = noteLinks(x.text);
@@ -5307,13 +5326,17 @@ function renderNote() {
       const li = b.closest("li"), on = !li.classList.contains("done"); li.classList.toggle("done", on); b.setAttribute("aria-pressed", on);
     });
     $$("#note-body .ntopen").forEach(b => b.onclick = () => { const a = att.find(x => x.id === b.dataset.id); if (a) view(a); });
-    $("#nt-edit").onclick = () => { noteMode = "edit"; renderNote(); setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 200); };
+    $("#nt-edit").onclick = () => { if (lk) { toast(NOTE_LOCKED, 3200); return; } noteMode = "edit"; renderNote(); setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 200); };
+    $("#nt-lock").onclick = () => {                                          // 🔒 — запереть / открыть одним нажатием
+      const all = notes(), x = all.find(y => y.id === n.id); if (!x) return;
+      x.text = noteLockSet(x.text, !lk); x.time = Date.now(); saveNotes(all); renderDay(); renderNote();
+      toast(lk ? "Замок открыт — заметку можно менять и удалять" : "Заперта — не изменится и не удалится, пока не откроете замок", 2600); };
     $("#nt-del").onclick = () => noteDelete(n.id, true);
     $("#nt-share").onclick = () => D.share((n.title ? n.title + "\n\n" : "") + noteShown(n.text));
     if ($("#nt-gofold")) $("#nt-gofold").onclick = () => { ntFolder = n.folder; closeSheets(); renderDay(); openSheet("#sh-day"); };
     return;
   }
-  $("#nt-h").textContent = n ? "Правка" : "Новая заметка";
+  $("#nt-h").textContent = n ? "Правка" : "Новая заметка"; $("#nt-lock").hidden = true;
   const folds = noteFolders(), cur = n ? folderName(n.folder || "") : folderName(ntFolder || "");
   $("#note-body").innerHTML = `<input id="nt-title" placeholder="Заголовок" maxlength="120" value="${esc(n ? n.title : "")}" aria-label="Заголовок">
     <div class="ntmd" role="toolbar" aria-label="Оформление"><button data-md="h">Заголовок</button><button data-md="b"><b>Ж</b></button><button data-md="li">• Пункт</button><button data-md="task">☐ Дело</button></div>
@@ -5375,6 +5398,7 @@ function renderNote() {
     const title = $("#nt-title").value.trim(), text = $("#nt-text").value.trim();
     if (!title && !text && !notePend.length) { toast("Пустая заметка"); return; }
     const all = notes(), t0 = title || text.split(/\n/)[0].replace(/^#+\s*|^[-*]\s+(\[[ xX]\]\s*)?/, "").slice(0, 60) || "Фото", fold = folderName($("#nt-folder").value);
+    if (n && noteLocked((all.find(y => y.id === n.id) || {}).text)) { toast(NOTE_LOCKED, 3200); noteMode = "view"; renderNote(); return; }   // заперли на другом устройстве, пока правили
     if (n) { const x = all.find(y => y.id === n.id), ln = noteLinks(x && x.text); if (x) { x.title = t0; x.text = noteFront(x.text) + text + (ln.length ? "\n\n" + ln.join("\n") : ""); x.time = Date.now(); x.folder = fold; } }
     else { const id = uid("n"); all.push(Object.assign({ id, title: t0, text, time: Date.now() }, notePend.length ? { att: noteAttSave(notePend.map(p => p.src)) } : {}, fold ? { folder: fold } : {})); noteCur = id; }
     notePend = []; saveNotes(all); renderDay(); noteMode = "view"; renderNote(); toast("Заметка сохранена");
@@ -5937,7 +5961,7 @@ function ntCard(x) {
   const fold = x.folder && !ntFolder ? `<span class="ntf">${esc(String(x.folder).split("/").pop())}</span>` : "";
   const att = na ? `<span class="ntc" aria-label="Вложений: ${na}">${NT_CLIP}${na}</span>` : "", when = ntWhen(x.time);
   const meta = when || fold || att ? `<div class="ntm">${when ? `<span class="ntd">${esc(when)}</span>` : ""}${fold}${att}</div>` : "";
-  return `<div class="it note${src ? " ph" : ""}" data-id="${esc(x.id)}"><div class="bd"><b class="ntt">${esc(x.title || "Без названия")}</b>`
+  return `<div class="it note${src ? " ph" : ""}" data-id="${esc(x.id)}"><div class="bd"><b class="ntt">${esc(x.title || "Без названия")}${noteLocked(x.text) ? ' <i class="ntlk" aria-label="заперта">🔒</i>' : ""}</b>`
     + (pv ? `<div class="ntpv">${pv}</div>` : "") + meta + `</div>`
     + (src ? `<span class="nthumb"><img src="${src}" alt="" loading="lazy" decoding="async">${imgs.length > 1 ? `<i class="ntn">${imgs.length}</i>` : ""}</span>` : "") + `</div>`;
 }
@@ -7107,7 +7131,7 @@ function renderSettings() {
     if (S.llm.cloud && !kidsOn()) h.push(`<div class="card" id="br-net"><div class="sw" style="margin:0"><div>Пускать мои общие вопросы в Сеть Лиры<small>Люди отдают свои видеокарты, и на общие вопросы вроде «почему небо голубое» иногда отвечает их компьютер. Узел получает только текст самого вопроса — без истории разговора, памяти, ключа и имени аккаунта; вопросы, похожие на личные (память, заметки, письма, деньги, близкие, здоровье, суд, адрес, имена людей и городов посреди фразы), и фото туда не уходят. Телефоны и почты в вопросе заменяются метками, но фильтр узнаёт не всё — не пишите в таких вопросах личного. Ответ узла со ссылками, номерами или просьбами о деньгах не принимается, а действия по его ответу программа выполняет только безопасные (поиск, погода, время). Правила подписаны сайтом Dewiar; ключ — у владельца.</small></div>
       <label class="tg"><input type="checkbox" id="br-net-on" ${S.netShare === true ? "checked" : ""}><i></i></label></div></div>`);
     if (S.llm.cloud) h.push(`<div class="card cloudc" id="cl-card"><div class="row2"><div style="flex:1"><b>Баланс</b><small class="hint" style="margin:2px 0 0;display:block" id="cl-sub">${esc(cloudWho())}</small></div><div class="cl-pct" id="cl-pct">…</div></div>
-      <div class="cl-bar"><i id="cl-fill"></i></div><div class="hint" id="cl-turns" style="margin:0"></div>
+      <div class="cl-bar"><i id="cl-fill"></i></div><div class="hint" id="cl-turns" style="margin:0"></div><div class="hint" id="cl-per" style="margin:4px 0 0"></div>
       <div class="cl-use" id="cl-use"></div>
       <div class="row2" style="margin-top:10px"><button class="btn" id="cl-ref" style="flex:1">Обновить</button><button class="btn p" id="cl-how" style="flex:1">Пополнить</button></div>
       <div id="cl-pay" style="display:none;margin-top:12px"><div class="ym" id="cl-ym" style="display:none"><div class="ym-h"><b>Оплатить картой</b><span>Талеры зачислятся сами — через минуту после оплаты, снимок не нужен</span></div>
@@ -8126,6 +8150,15 @@ async function syncOne(c, opts) {
         const loc = notes().find(n => n.id === lk.slice(5)), d0 = it.data || {};
         same = !!loc && noteBase(loc.title) === noteBase(d0.title) && String(loc.folder || "") === String(d0.folder || "") && noteNorm(loc.title, loc.text) === noteNorm(d0.title, d0.text);
       }
+      if (it.kind === "note") {                                       // 05.11: запертую здесь правка оттуда не перетирает
+        const loc = notes().find(n => n.id === lk.slice(5)), d0 = it.data || {};
+        if (loc && noteLocked(loc.text) && (it.deleted || !noteLockOnly(loc.text, d0.text || ""))) {
+          if (!it.deleted && !same) {                                   // их правка — рядом копией, без замка
+            const all = notes(); all.push({ id: uid("n"), title: `${d0.title || loc.title || "Заметка"} (правка с другого устройства — заметка заперта)`,
+              text: noteLockSet(d0.text || "", false), folder: d0.folder || loc.folder || "", time: Date.now() }); fileSave("notes.json", JSON.stringify(all)); }
+          st.idx[k] = { h: "older", u: it.updated }; plog("info", `🔒 заметка «${clip(loc.title || "", 40)}» заперта — ${it.deleted ? "удаление" : "правка"} с другого устройства не принята`); continue;
+        }
+      }
       let okApply; syncCurKey = c.key;
       if (same) { got++; st.idx[k] = { h: null, u: it.updated, r: 1 }; syncCurKey = ""; continue; }
       try { okApply = syncApply(lk === k ? it : Object.assign({}, it, { id: lk.slice(lk.indexOf(":") + 1) })); } catch (e2) { console.error("sync", it.kind, it.id, e2); continue; }
@@ -8347,9 +8380,19 @@ function ymPay(s) {
   payWatch();
 }
 function payWatch() {                                 // ждём зачисления: 10 минут, раз в 20 секунд
-  clearInterval(ymT); let k = 0;
-  ymT = setInterval(() => { if (++k > 30) return clearInterval(ymT);
-    cloudBalance(true).then(c => { cloudFill(c); if ($("#cl-pay") && $("#cl-pay").style.display !== "none") clPayLoad(); }).catch(() => {}); }, 20000);
+  clearInterval(ymT); let k = 0; const was = +clBal || 0;
+  ymT = setInterval(() => { if (++k > 30) { clearInterval(ymT); return payLate(); }
+    cloudBalance(true).then(c => { cloudFill(c); if ($("#cl-pay") && $("#cl-pay").style.display !== "none") clPayLoad();
+      if (+c.balance > was + 1e-6) { clearInterval(ymT); const r = $("#cl-ym-res"); if (r) { r.className = "res ok"; r.textContent = `Пришло: +${(Math.round((+c.balance - was) * 1e4) / 1e4).toLocaleString("ru-RU")} тал. Спасибо!`; } } }).catch(() => {}); }, 20000);
+}
+/* №544/№545 (04.11: «пополнил DW-…, ничего не пришло»): 10 минут после оплаты картой талеров нет — перевод мог уйти без
+   номера DW-…: что делать — снимок оплаты заявкой, проверят вручную */
+function pendingLine() { return "заявка на пополнение на проверке — обычно зачисляем в течение дня"; }
+var clBal = 0;                                       // последний известный остаток — понять, что оплата пришла
+function payLate() {
+  const r = $("#cl-ym-res"); if (!r) return;
+  r.className = "res bad"; r.textContent = "Талеры пока не пришли. Если вы оплатили — пришлите снимок оплаты ниже («Отправить заявку»): проверим вручную, обычно в течение дня.";
+  const m = $("#cl-man"); if (m) { m.style.display = ""; const h = $("#cl-man-h"); if (h) h.style.display = ""; m.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 }
 /* Способы пополнения (03.11, владелец: «что-то на будущее, не привязанное к одному платёжному сервису, возможно даже
    криптовалютой»): сервер отдаёт pay — включённые способы в порядке владельца; блоки «Оплатить картой», «Криптой» и
@@ -8521,6 +8564,10 @@ function cloudFill(c) {
       : `Общий счёт с сайтом: ${bal}` + (c.turns ? ` — примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` : ""))
     : c.frozen ? "Ключ приостановлен — напишите администратору." : c.empty ? "Заряд закончился — пополните, и ассистент снова будет отвечать."
     : `Хватит примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` + (c.low ? " — скоро понадобится пополнить" : "");
+  const pt = (+c.per_taler) || (+c.balance > 0 && +c.turns > 0 ? Math.max(1, Math.round(c.turns / c.balance)) : 0);   // №542
+  if ($("#cl-per")) $("#cl-per").textContent = pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы и размышления дороже` : "";
+  if (c.pending) $("#cl-turns").textContent += " · " + pendingLine();     // №544/№545: заявка видна, со сроком
+  clBal = +c.balance || 0;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); clTopFill(c.topup, c.code, c.rub);
 }
 /* key — ключ dw-… или (account) токен входа на сайт: его регистр не трогаем. activate:false — только запомнить, своя модель остаётся. */

@@ -514,6 +514,7 @@
       <div class="cl-empty" id="ch-empty"><b>Здесь будет ваша переписка</b><span>Скажите «Лира, …» или напишите ниже — разговор появится в ленте.</span></div>
       <div class="cl-msgs" id="ch-msgs"></div>
       <div class="ch-ask" id="ch-ask" hidden></div>
+      <div class="ch-ask ch-tq" id="ch-tq" hidden></div>
       <div class="ch-atts" id="ch-atts"></div>
       <div class="cl-send"><label class="btn icon" title="Прикрепить фото или файл (txt, docx, pdf, jpeg, png — до 11 МБ). Можно перетащить сюда или вставить Ctrl+V"><input type="file" id="ch-file" hidden multiple accept=".txt,.md,.csv,.doc,.docx,.odt,.pdf,.rtf,.html,.json,.xlsx,.pptx,image/*"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 11.5-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg></label><textarea id="ch-text" rows="1" placeholder="Сообщение…"></textarea><button class="btn primary" id="ch-go">Отправить</button></div>
       <div class="ch-drop" id="ch-drop">Отпустите — приложу к сообщению</div>
@@ -682,11 +683,12 @@
     <h2>Настройки задач</h2>
     <div class="row">
       <label class="f">Модель для задач<select id="t-llm"></select><span class="hint">Для сложного кода можно выбрать модель посильнее, чем для разговора.</span></label>
+      <label class="f">Проверяющий итога<select id="t-judge"></select><span class="hint">Перед «готово» итог проверяет отдельная модель с чистым взглядом: файлы, цифры, ссылки. Сильная модель здесь ловит больше ошибок; один вызов на итог.</span></label>
       <label class="f">Шагов без передышки<input type="number" min="10" max="500" data-k="tasks.max_steps"><span class="hint">После них — минута передышки, и задача продолжает.</span></label>
       <label class="f">Передышек подряд<input type="number" min="1" max="100" data-k="tasks.cycles"><span class="hint">Потом задача ждёт вашего «продолжи». 80 × 15 = 1200 шагов — часы работы. Если два круга подряд ничего не продвинулось, задача остановится раньше.</span></label>
     </div>
     <div class="switch"><div>Выполнять команды в проекте без вопроса<span>Тесты, сборка, git — в рабочей копии проекта. Выключено: ассистент спрашивает перед каждой командой.</span></div><label class="tg"><input type="checkbox" data-k="tasks.auto_run"><i></i></label></div>
-    <div class="switch"><div>Самопроверка итога моделью<span>Перед «готово» итог ещё раз коротко и независимо смотрит модель: выполнена ли цель, есть ли обещанные файлы (немного расходует заряд). Готовые файлы кодом проверяются всегда — оборванный HTML, битая таблица, сломанный документ ассистент чинит сам.</span></div><label class="tg"><input type="checkbox" data-k="tasks.self_check"><i></i></label></div>
+    <div class="switch"><div>Самопроверка итога моделью<span>Перед «готово» итог независимо проверяет модель: выполнена ли цель, совпадают ли цифры и ссылки отчёта с прочитанным и с файлами (один вызов на итог). Кодом проверяется всегда: критерии готовности, файлы (оборванный HTML, битая таблица), ссылки, которых задача не открывала, ошибки страниц в браузере.</span></div><label class="tg"><input type="checkbox" data-k="tasks.self_check"><i></i></label></div>
     <div class="switch"><div>Учиться на прошлых задачах<span>Раз в несколько задач ассистент делает выводы из своих ошибок — короткие правила в «Память/Уроки задач.md» (их можно править) — и соблюдает их дальше. А на ваших поправках в разговоре («нет, я же просил…») учится всегда: правила — в «Память/Уроки.md», их тоже можно править.</span></div><label class="tg"><input type="checkbox" data-k="tasks.learn"><i></i></label></div>
   </section>
 
@@ -918,6 +920,8 @@
         <label for="st-desc">Расскажите о своём деле — Лира сделает сайт</label>
         <div class="st-askrow"><textarea id="st-desc" rows="2" maxlength="3000" placeholder="Кофейня «Зерно» на Садовой, 5. Кофе, завтраки и своя выпечка, работаем с 8 до 22, капучино 250 ₽"></textarea>
           <button class="btn primary" type="submit" id="st-make">Сделать сайт</button></div>
+        <div class="st-refrow"><label for="st-ref">Сайт-образец <small>необязательно — возьму разделы и стиль, тексты и бренды будут ваши</small></label>
+          <input id="st-ref" type="url" inputmode="url" maxlength="300" placeholder="https://… — сайт, который нравится" spellcheck="false" autocapitalize="off"></div>
         <div class="st-eg" id="st-eg"></div>
       </form>
       <div class="st-mine" id="st-mine"></div>
@@ -1901,6 +1905,7 @@
       <div class="cc-bar"><i id="cc-fill"></i></div>
       <div class="cc-f"><span id="cc-turns"></span><span class="cc-act"><button class="btn small primary" id="cc-top">Пополнить</button>
         <button class="btn small" id="cc-use">Отвечать моделями Dewiar</button><button class="btn small" id="cc-ref">Обновить</button><button class="btn small" id="cc-pair" title="Код из 6 цифр и QR — в «Устройствах»">Подключить ещё устройство</button><button class="btn small danger" id="cc-off">Убрать ключ</button></span></div>
+      <p class="hint cc-per" id="cc-per" style="margin:6px 0 0"></p>
       <p class="res" id="cc-pair-res" style="margin:6px 0 0"></p>
       <div class="cc-pay" id="cc-pay" style="display:none">
         <div class="ym" id="cc-ym" style="display:none">
@@ -2538,10 +2543,11 @@
       <div class="bugrow">
         <div class="bugshot" id="bug-shot">
           <img id="bug-img" alt="Снимок экрана" title="Уменьшенная копия — разработчику уйдёт снимок в полном размере" hidden>
+          <div class="bugthumbs" id="bug-thumbs" hidden></div>
           <small class="bugnote" id="bug-note" hidden>Здесь — уменьшенная копия; разработчику уйдёт снимок в полном размере</small>
           <div class="bugempty" id="bug-empty"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="12" cy="12" r="3.2"/><path d="M8 5l1.5-2h5L16 5"/></svg><span>Снимка нет</span></div>
           <div class="bugbar"><button class="btn small" id="bug-snap" title="Снять весь экран сейчас (окно студии тоже попадёт)">Снять экран</button>
-            <label class="btn small" title="Картинка с компьютера; или Ctrl+V — из буфера, или перетащите сюда">Картинка…<input type="file" id="bug-file" accept="image/*" hidden></label>
+            <label class="btn small" title="Картинки с компьютера (до 5); или Ctrl+V — из буфера, или перетащите сюда">Картинка…<input type="file" id="bug-file" accept="image/*" multiple hidden></label>
             <label class="chk"><input type="checkbox" id="bug-use" checked> приложить</label></div>
         </div>
         <div class="bugtxt">

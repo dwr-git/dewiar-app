@@ -1235,9 +1235,22 @@ async def run_big(core, sc, res, t0, work, log):
     останавливается и запускается снова (Б11). Проверки — BIG_CHECKS, метрики — шаги, токены, доля кэша, время. -> текст для судьи."""
     b = sc["big"]
     goal = fill(b["goal"])
-    t = await core.call("task_create", title=sc["title"], goal=goal, start=False)
+    web = None
+    if b["fixture"] == "research":                     # Б1: локальный «интернет» — страницы и поиск заготовки (WebFixture)
+        from exam_big import WebFixture
+        web = WebFixture(Path(work) / "big" / f"site-{sc['id']}")
+    try:
+        return await _run_big(core, sc, res, t0, work, log, b, goal, web)
+    finally:
+        if web is not None:
+            web.close()
+
+
+async def _run_big(core, sc, res, t0, work, log, b, goal, web):
+    t = await core.call("task_create", title=sc["title"], goal=goal, start=False, **({"search_url": web.url} if web else {}))
     tdir = Path(t["dir"])
-    info = await _thread(make_fixture, b["fixture"], tdir, int(b.get("seed") or 1))
+    kw = {"site": str(web.root), "base": web.url} if web else {}
+    info = await _thread(make_fixture, b["fixture"], tdir, int(b.get("seed") or 1), **kw)
     (Path(work) / "big").mkdir(parents=True, exist_ok=True)
     (Path(work) / "big" / f"{sc['id']}.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")   # ответы — не в папке задачи
     res["steps"].append({"say": f"[большая задача] {goal}", "answer": ""})
@@ -1503,7 +1516,7 @@ def main():
     ap.add_argument("--judge", help="профиль судьи JSON (по умолчанию — та же модель)")
     ap.add_argument("--only", help="только эти сценарии: id через запятую")
     ap.add_argument("--long", action="store_true", help="и долгие: фоновые задачи и код")
-    ap.add_argument("--big", action="store_true", help="и большие задачи (Б3–Б7, Б11: до часа каждая, docs/HARNESS.md)")
+    ap.add_argument("--big", action="store_true", help="и большие задачи (Б1, Б3–Б7, Б11: до часа каждая, docs/HARNESS.md)")
     ap.add_argument("--out", default=".", help="куда положить отчёт")
     ap.add_argument("--upload", action="store_true", help="отправить отчёт в кабинет (тем же ключом)")
     ap.add_argument("--keep", help="папка для временных файлов ядра (не удалять — для разбора)")

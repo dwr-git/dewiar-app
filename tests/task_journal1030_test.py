@@ -15,13 +15,13 @@ def ok(c, m):
 
 
 J = "".join(f"\n**10:0{i}:00** · шаг {i}\n" for i in range(1, 6))
-TASK = {"id": "t1", "title": "Собрать отчёт", "status": "running", "status_ru": "идёт", "steps": 5, "plan": "- [x] один\n- [ ] два",
+TASK = {"id": "t1", "goal": "отчёт", "title": "Собрать отчёт", "status": "running", "status_ru": "идёт", "steps": 5, "plan": "- [x] один\n- [ ] два",
         "journal": J, "summary": "", "notebook": "", "outputs": [], "created": "2026-10-30T10:00:00", "progress": [1, 2], "activity": "читаю"}
 CORE = """(() => { const ready = () => { if (!window.core) return setTimeout(ready, 5);
     core.retry = () => {}; core.connect = () => {}; if (core.ws) { core.ws.onclose = null; core.ws.onerror = null; try { core.ws.close(); } catch (e) {} }
-    core.call = async (c, a) => { if (c === "task_get") return TASK; if (c === "tasks_list" || c === "task_list") return [TASK]; return null; };
+    window.TASK = TASK_JSON; core.call = async (c, a) => { if (c === "task_get") return window.TASK; if (c === "tasks_list" || c === "task_list") return [window.TASK]; return null; };
     setTimeout(() => core.emit("hello", {}), 200); };
-  ready(); })();""".replace("TASK", json.dumps(TASK, ensure_ascii=False))
+  ready(); })();""".replace("TASK_JSON", json.dumps(TASK, ensure_ascii=False))
 with sync_playwright() as p:
     b = p.chromium.launch(); errs = []
     pg = b.new_page(viewport={"width": 1300, "height": 900}); pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -40,6 +40,17 @@ with sync_playwright() as p:
     ok("шаг 1" in pg.evaluate("document.querySelector('#t-view .tj').innerText.trim().split('\\n')[0]"), "выбор помнится")
     if os.environ.get("DEWIAR_SHOTS"):
         pg.locator("#t-view").screenshot(path=os.environ["DEWIAR_SHOTS"] + "/task-journal.png")
+    # выпуск 4 «Больших задач»: в карточке — список дел со статусами и «Готово, когда» с итогом проверки (критерии)
+    pg.evaluate("""TASK.todos = [{id: 1, text: "найти источники", status: "done", evidence: "outputs/цифры.csv"},
+                                 {id: 2, text: "сравнить с газом", status: "in_progress", evidence: ""},
+                                 {id: 3, text: "позвонить", status: "blocked", evidence: "нет телефона"}];
+                   TASK.criteria = [{label: "страниц в outputs/site: 3", ok: false, detail: "есть 2, нужно 3"}, {label: "файл есть", ok: true}];""")
+    pg.evaluate("openTask('t1')"); pg.wait_for_timeout(300)
+    pg.click('#t-view [data-tab="plan"]'); pg.wait_for_timeout(300)
+    cls = pg.evaluate("[...document.querySelectorAll('#t-view .pchk .pi')].map(e => e.className)")
+    ok(cls == ["pi done", "pi now", "pi blocked"] and "outputs/цифры.csv" in pg.inner_text("#t-view .pi.done small")
+       and "нет телефона" in pg.inner_text("#t-view .pi.blocked small"), f"список дел со статусами и доказательствами: {cls}")
+    ok("есть 2, нужно 3" in pg.inner_text("#t-view .pc.bad") and pg.locator("#t-view .pc.ok").count() == 1, "«Готово, когда» — критерии с итогом проверки")
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

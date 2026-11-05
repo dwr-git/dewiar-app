@@ -592,13 +592,26 @@ core.on("account", e => renderAccount(e.account));
    до открытия студии, событие bug_shot или bug_state при открытии), подпись для «Помощников проекта»; complaints — мои
    жалобы с ответами разработчика и помощники проекта; report — только сохранить отчёт файлом; report_offer — ядро
    заметило сбой и предлагает отправлять такие отчёты самому ---------- */
-let bugPreview = "";
-function bugShow(preview) {
-  bugPreview = preview || "";
+let bugPreview = "", bugShots = [];
+/* №546 (04.11: «нельзя отправить несколько снимков, а если можно — вижу только один»): до 5 снимков к жалобе — каждый
+   миниатюрой с «×», крупно — выбранный; «Снять экран», «Картинка…» (можно несколько), Ctrl+V и перетаскивание добавляют */
+function bugShow(preview, shots) {
+  if (Array.isArray(shots)) bugShots = shots; else if (!preview) bugShots = [];
+  bugPreview = preview || (bugShots.length ? bugShots[bugShots.length - 1].preview : "");
   const img = $("#bug-img"); img.hidden = !bugPreview; if (bugPreview) img.src = bugPreview;
   if ($("#bug-note")) $("#bug-note").hidden = !bugPreview;      // №387: видно превью — это не то, что уйдёт
   $("#bug-empty").hidden = !!bugPreview; $("#bug-use").checked = !!bugPreview; $("#bug-use").disabled = !bugPreview;
   $("#bug-shot").classList.remove("off");
+  const th = $("#bug-thumbs");
+  if (th) {
+    th.hidden = bugShots.length < 2;
+    th.innerHTML = bugShots.map((x, i) => `<span class="bugth${x.preview === bugPreview ? " on" : ""}"><img src="${x.preview}" alt="Снимок ${i + 1}" data-i="${i}">`
+      + `<button type="button" data-id="${escH(x.id)}" aria-label="Убрать снимок ${i + 1}" title="Убрать">×</button></span>`).join("")
+      + `<small>${bugShots.length} из 5</small>`;
+    $$("#bug-thumbs img").forEach(im => im.onclick = () => bugShow(bugShots[+im.dataset.i].preview, bugShots));
+    $$("#bug-thumbs button").forEach(b => b.onclick = async () => {
+      try { const x = await core.call("bug_shot_drop", { id: b.dataset.id }); bugShow("", x.shots || []); } catch (e) { toast(e.message); } });
+  }
 }
 function bugFocus(preview) {                                       // из виджета: на «О программе», к форме, снимок — сразу виден
   const b = $('nav button[data-p="about"]'); if (b && !b.classList.contains("on")) b.click();
@@ -613,7 +626,7 @@ function bugRender(v) {
   const mine = (v.mine || []).slice(0, 8);
   $("#bug-mine").innerHTML = mine.length ? '<div class="bugh">Мои жалобы</div>' + mine.map(c =>
     `<div class="bugc${c.unread ? " new" : ""}"><span class="n">№${c.id}${c.unread ? ' <i class="bugnew">новый ответ</i>' : ""}</span><span class="t${(c.note || "").length > 180 ? " long" : ""}" title="${(c.note || "").length > 180 ? "Нажмите — показать целиком" : ""}">${escH(c.note || "")}</span><span class="st"><span class="chip ${c.status}">${BUG_ST[c.status] || c.status}`
-    + `${c.status === "fixed" && c.fixed ? " в " + escH(c.fixed) : ""}</span>${new Date(c.ts * 1000).toLocaleDateString("ru")}${c.shot ? " · со снимком" : ""}`
+    + `${c.status === "fixed" && c.fixed ? " в " + escH(c.fixed) : ""}</span>${new Date(c.ts * 1000).toLocaleDateString("ru")}${c.shots > 1 ? " · снимков: " + c.shots : c.shot ? " · со снимком" : ""}`
     + `${c.reward ? ` · спасибо ${c.reward} тал.` : ""}</span>${c.reply ? `<span class="reply">${escH(c.reply)}</span>` : ""}</div>`).join("") : "";
   // №263 (25.10): «сообщения отображаются только частично — сделайте, чтобы при нажатии раскрывались»: длинная — три
   // строки и «…ещё», нажали — целиком
@@ -626,7 +639,7 @@ $("#bug-img").onclick = (e) => e.target.classList.toggle("zoom");
 $("#bug-use").onchange = (e) => $("#bug-shot").classList.toggle("off", !e.target.checked);
 $("#bug-snap").onclick = guardBtn(async () => {
   const r = $("#rep-res"); r.className = "res"; r.textContent = "снимаю экран…";
-  try { const x = await core.call("bug_shot"); if (x.ok) { bugShow(x.preview); r.textContent = ""; } else { r.className = "res bad"; r.textContent = "Не снялся: " + (x.error || ""); } }
+  try { const x = await core.call("bug_shot", { add: true }); if (x.ok) { bugShow(x.preview, x.shots); r.textContent = ""; } else { r.className = "res bad"; r.textContent = "Не снялся: " + (x.error || ""); } }
   catch (e) { r.className = "res bad"; r.textContent = e.message; }
 });
 /* своя картинка к жалобе: Ctrl+V в форме (снимок из буфера), «Картинка…» или перетащить на место снимка (№139) */
@@ -634,32 +647,33 @@ async function bugPick(file) {
   if (!file || !/^image\//.test(file.type)) return false;
   const r = $("#rep-res"); r.className = "res"; r.textContent = "прикладываю…";
   const data = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(file); });
-  try { const x = await core.call("bug_shot", { image: data }); if (x.ok) { bugShow(x.preview); r.textContent = ""; } else { r.className = "res bad"; r.textContent = x.error || "не приложилось"; } }
+  try { const x = await core.call("bug_shot", { image: data, add: true }); if (x.ok) { bugShow(x.preview, x.shots); r.textContent = ""; } else { r.className = "res bad"; r.textContent = x.error || "не приложилось"; } }
   catch (e) { r.className = "res bad"; r.textContent = e.message; }
   return true;
 }
-$("#bug").addEventListener("paste", (e) => { const f = [...(e.clipboardData || {}).files || []].find(x => /^image\//.test(x.type)); if (f) { e.preventDefault(); bugPick(f); } });
-$("#bug-file").onchange = (e) => { bugPick(e.target.files[0]); e.target.value = ""; };
+const bugPickAll = async (files) => { for (const f of [...files || []].filter(x => /^image\//.test(x.type)).slice(0, 5)) await bugPick(f); };
+$("#bug").addEventListener("paste", (e) => { const fs = [...(e.clipboardData || {}).files || []].filter(x => /^image\//.test(x.type)); if (fs.length) { e.preventDefault(); bugPickAll(fs); } });
+$("#bug-file").onchange = (e) => { bugPickAll(e.target.files); e.target.value = ""; };
 $("#bug-shot").addEventListener("dragover", (e) => { e.preventDefault(); $("#bug-shot").classList.add("drop"); });
 $("#bug-shot").addEventListener("dragleave", () => $("#bug-shot").classList.remove("drop"));
-$("#bug-shot").addEventListener("drop", (e) => { e.preventDefault(); $("#bug-shot").classList.remove("drop"); bugPick((e.dataTransfer.files || [])[0]); });
+$("#bug-shot").addEventListener("drop", (e) => { e.preventDefault(); $("#bug-shot").classList.remove("drop"); bugPickAll(e.dataTransfer.files); });
 $("#bug-send").onclick = guardBtn(async () => {
   const r = $("#rep-res"), note = $("#rep-note").value.trim();
   if (note.length < 3) { r.className = "res bad"; r.textContent = "Напишите хотя бы пару слов — что пошло не так"; $("#rep-note").focus(); return; }
   r.className = "res"; r.textContent = "собираю и отправляю…";
   try {
     const x = await core.call("complaint_send", { note, who: $("#bug-who").value.trim(), shot: !!bugPreview && $("#bug-use").checked });
-    r.className = "res ok"; r.textContent = `Жалоба №${x.id} у разработчика — спасибо! Ответ придёт сюда.`;
+    r.className = "res ok"; r.textContent = `Жалоба №${x.id} у разработчика${x.shots > 1 ? ` (снимков: ${x.shots})` : ""} — спасибо! Ответ придёт сюда.`;
     $("#rep-note").value = ""; bugShow("");
     core.call("complaints").then(bugRender).catch(() => {});
   } catch (e) { r.className = "res bad"; r.textContent = e.message; }
 });
 function guardBtn(fn) { return async (ev) => { const b = ev.currentTarget; if (b.disabled) return; b.disabled = true; try { await fn(ev); } finally { b.disabled = false; } }; }
-core.on("bug_shot", e => bugFocus(e.preview));
+core.on("bug_shot", e => { bugFocus(e.preview); if (e.shots) bugShow(e.preview, e.shots); });
 core.on("complaints", bugRender);
 $('nav button[data-p="about"]') && $('nav button[data-p="about"]').addEventListener("click", () => core.call("complaints").then(v => {
   bugRender(v); if (v && v.unread) setTimeout(() => core.call("complaints_seen").catch(() => {}), 1500); }).catch(() => {}));   // открыли — прочитано
-core.on("hello", () => core.call("bug_state").then(x => { if (x && x.preview) bugFocus(x.preview); }).catch(() => {}));
+core.on("hello", () => core.call("bug_state").then(x => { if (x && x.preview) { bugFocus(x.preview); if (x.shots) bugShow(x.preview, x.shots); } }).catch(() => {}));
 core.on("report_offer", e => { $("#rep-offer-t").textContent = e.summary ? `(${e.summary.slice(0, 160)})` : ""; $("#rep-offer").hidden = false; });
 const repAuto = (on) => core.call("report_auto", { on }).then(() => { $("#rep-offer").hidden = true; const cb = document.querySelector('[data-k="report.auto"]'); if (cb) cb.checked = on; toast(on ? "При сбое отчёт уйдёт сам" : "Хорошо, не отправляю"); });
 $("#rep-yes").onclick = () => repAuto(true);

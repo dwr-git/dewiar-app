@@ -777,6 +777,8 @@ class RemoteMixin:
         Звонящий будильник глушится всем, кроме имени: на имя дальше разбирается фраза (_alarm_voice)."""
         if self.alarm and reason != "имя":
             self.alarm_finish("ack")
+        if hasattr(self, "_barge_keep") and self.state == "speaking":
+            self._barge_keep(reason)                   # №543: вдруг это моё эхо — тогда договорю (engine_audio._echo_resume)
         if self.cancel_turn():
             log.info("⏹ Перебили (%s)", reason)
             self.emit("interrupted", reason=reason)

@@ -40,6 +40,8 @@ async function loadTasks() {
     if (!tCur && list.length) openTask(list[0].id);
     $("#t-llm").innerHTML = `<option value="">Та же, что для разговора</option>` + Object.entries(S.llm.profiles || {}).map(([k, p]) => `<option value="${k}">${escH(p.name || k)}</option>`).join("");
     $("#t-llm").value = S.tasks && S.tasks.llm || "";
+    $("#t-judge").innerHTML = `<option value="">Та же, что для задач</option>` + Object.entries(S.llm.profiles || {}).map(([k, p]) => `<option value="${k}">${escH(p.name || k)}</option>`).join("");
+    $("#t-judge").value = S.tasks && S.tasks.judge_llm || "";
   } catch (e) { toast(e.message); }
 }
 function renderDiff(d) {
@@ -65,6 +67,21 @@ function renderPlan(text, live, activity) {
     <div class="pchk">${items.map((x, i) => `<div class="pi ${x.done ? "done" : i === cur ? "now" : ""}"><i></i><span>${md(x.text).replace(/^<p>|<\/p>\s*$/g, "")}</span></div>`).join("")}</div>
     ${live && activity ? `<div class="pnow"><i class="tspin"></i><span>${escH(activity)}</span></div>` : ""}
     <div class="hint" style="margin-top:8px">Выполнено ${done} из ${items.length}</div>`;
+}
+/* «Большие задачи», выпуск 4: список дел со статусами (задачи.json) вместо чек-листа — сделано ✓ с доказательством, в работе
+   крутится, не сделать ✕ с причиной; ниже — критерии готовности (выпуск 3) с итогом проверки кодом перед «готово» */
+const TODO_RU = { done: "сделано", in_progress: "в работе", pending: "ждёт", blocked: "не сделать" };
+function renderTodos(t, live, activity) {
+  const items = t.todos || [], crit = t.criteria || [];
+  const done = items.filter(x => x.status === "done").length, blocked = items.filter(x => x.status === "blocked").length;
+  const cls = (x) => x.status === "done" ? "done" : x.status === "in_progress" ? (live ? "now" : "ip") : x.status === "blocked" ? "blocked" : "";
+  const fallback = !crit.length && ((t.plan || "").match(/Готово,? когда:?\**:?\s*(.+)/) || [])[1];
+  return `<div class="pgoal">${md("**Цель:** " + (t.goal || "")).replace(/^<p>|<\/p>\s*$/g, "")}</div>
+    <div class="pchk">${items.map(x => `<div class="pi ${cls(x)}" title="${TODO_RU[x.status] || ""}"><i></i><span><span>${md(x.text || "").replace(/^<p>|<\/p>\s*$/g, "")}</span>${x.evidence && ["done", "blocked"].includes(x.status) ? `<small>${escH(x.evidence)}</small>` : ""}</span></div>`).join("")}</div>
+    ${live && activity ? `<div class="pnow"><i class="tspin"></i><span>${escH(activity)}</span></div>` : ""}
+    <div class="hint" style="margin-top:8px">Выполнено ${done} из ${items.length}${blocked ? ` · не сделать: ${blocked}` : ""}</div>
+    ${crit.length ? `<div class="pcrit-h">Готово, когда</div><div class="pcrit">${crit.map(c => `<div class="pc ${c.ok === true ? "ok" : c.ok === false ? "bad" : ""}"><b>${c.ok === true ? "✓" : c.ok === false ? "✕" : "·"}</b><span>${escH(c.label || "")}${c.ok === false && c.detail ? `<small>${escH(c.detail)}</small>` : ""}</span></div>`).join("")}</div>`
+      : fallback ? `<div class="pcrit-h">Готово, когда</div><div class="pcrit"><div class="pc"><b>·</b><span>${escH(fallback.replace(/\*+/g, ""))}</span></div></div>` : ""}`;
 }
 const OUT_ICON = { html: "🌐", htm: "🌐", pdf: "📕", png: "🖼", jpg: "🖼", jpeg: "🖼", webp: "🖼", svg: "🖼", md: "📝", txt: "📝", srt: "💬",
                    csv: "📊", xlsx: "📊", docx: "📄", pptx: "📽", mp3: "🎵", wav: "🎵", mp4: "🎬", zip: "🗜" };
@@ -144,7 +161,7 @@ async function openTask(id) {
     acts.push(`<button class="btn danger" data-a="task_delete">Удалить</button>`);
     const prog = t.progress && t.progress[1] ? ` · план ${t.progress[0]}/${t.progress[1]}` : "";
     let body = "";
-    if (tTab === "plan") body = renderPlan(t.plan, ["running", "waiting"].includes(t.status), t.activity);
+    if (tTab === "plan") body = (t.todos || []).length ? renderTodos(t, ["running", "waiting"].includes(t.status), t.activity) : renderPlan(t.plan, ["running", "waiting"].includes(t.status), t.activity);
     if (tTab === "results") body = renderOutputs(t);
     if (tTab === "notebook") body = `<div class="md">${md(t.notebook)}</div><p class="hint">Блокнот — память задачи: факты, номера, договорённости. Ассистент ведёт его сам и сверяется с ним на каждом шаге.</p>`;
     if (tTab === "journal") body = tJournal(t.journal);
@@ -210,6 +227,7 @@ $("#t-go").onclick = async () => {
     $("#t-form").style.display = "none"; $("#t-goal").value = ""; tCur = t.id; tTab = "plan"; loadTasks(); } catch (e) { toast(e.message); }
 };
 $("#t-llm").onchange = () => save({ tasks: { llm: $("#t-llm").value } });
+$("#t-judge").onchange = () => save({ tasks: { judge_llm: $("#t-judge").value } });
 core.on("task", e => {                     // события идут потоком на каждый шаг — перерисовываем не чаще раза в 400 мс
   if (!$("#p-tasks").classList.contains("cur")) return;
   clearTimeout(tTimer); tTimer = setTimeout(() => { loadTasks(); if (tCur === e.task.id) openTask(tCur); }, 400);

@@ -48,6 +48,8 @@ run "большие задачи: имена, find_tool"         $PY "$T/task_to
 run "большие задачи: чистка памяти, _out/"     $PY "$T/task_trim_test.py"
 run "руки задачи: правка куском, поиск, папки" $PY "$T/task_files_test.py"
 run "большие задачи: рецензия (папки, облако, кодировки, окно 4 тыс.)" $PY "$T/task_review1104_test.py"
+run "большие задачи: проверка по существу (критерии, ссылки, цифры)" $PY "$T/task_verify_test.py"
+run "большие задачи: список дел, застой — новый план, сверка" $PY "$T/task_ledger_test.py"
 run "экзамен больших задач: заготовки, проверки"  $PY "$T/exam_big_test.py"
 run "долгие задачи до конца"            $PY "$T/long_task_test.py"
 run "сервер: ядро без звука, задачи"     $PY "$T/server_mode_test.py"

@@ -33,6 +33,25 @@ MAX_SEARCH_FILES = 8000
 SKIP_DIRS = {".obsidian", ".trash", ".git", "node_modules"}
 
 
+
+def _locked_note(p):
+    """Заметка Dewiar заперта (замок 05.11, workspace._locked)."""
+    if Path(p).suffix.lower() != ".md":
+        return False
+    from workspace import _locked
+    return _locked(p)
+
+
+def _lock_only(pa, pb):
+    """Файлы отличаются только замком (его открыли или поставили в Obsidian руками, поправив шапку)."""
+    from workspace import note_front
+    try:
+        a, b = Path(pa).read_text(encoding="utf-8"), Path(pb).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    k = lambda t: ({x: v for x, v in note_front(t)[0].items() if x != "locked" and v}, " ".join(note_front(t)[1].split()))  # noqa: E731
+    return k(a) == k(b)
+
 class ObsidianError(Exception):
     pass
 
@@ -309,6 +328,19 @@ class Obsidian:
         for rel in sorted(set(a) | set(b)):
             pa, pb, known = a.get(rel), b.get(rel), state.get(rel)
             try:
+                if pa and pb and _hash(pa) != _hash(pb) and known != _hash(pb) and _locked_note(pa) and not _lock_only(pa, pb):
+                    # 05.11: заметка заперта в Dewiar — правка из Obsidian её не перетирает: ложится рядом, запертая — обратно
+                    p = Path(rel)
+                    alt = p.with_name(f"{p.stem} (правка из Obsidian — заметка заперта){p.suffix}").as_posix()
+                    self._copy(pb, root / alt)
+                    self._copy(pa, pb)
+                    new_state[rel], new_state[alt] = _hash(pa), _hash(root / alt)
+                    st["conflicts"] += 1
+                    continue
+                if pa and not pb and known and _hash(pa) == known and _locked_note(pa):
+                    self._copy(pa, vp(rel))                          # удалили в Obsidian запертую — возвращаем туда
+                    new_state[rel] = _hash(pa)
+                    continue
                 if pa and not pb:
                     if known and _hash(pa) == known:                 # удалили в Obsidian — у ассистента в корзину (правленый — вернём)
                         self._trash(pa, root / ".Корзина", rel)

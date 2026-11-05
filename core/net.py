@@ -203,11 +203,32 @@ class _SysProxy(httpx.BaseTransport):
                 x.close()
 
 
+SOCKS4 = {"seen": ""}      # системный прокси SOCKS4 (Windows) — его показывает «Сеть» (net_cmd: sys_socks4)
+SOCKS4_HINT = ("Прокси компьютера — SOCKS4 ({px}): Dewiar его не умеет и ходит через этот адрес как через SOCKS5 (программы VPN — "
+               "v2rayN, Clash, Nekoray — обычно понимают оба). Если связи нет — в программе VPN включите SOCKS5 или HTTP-прокси "
+               "или впишите прокси здесь: socks5://адрес:порт или http://адрес:порт.")
+
+
+def _socks4_fix(env):
+    """Сбой 04.11 (8 раз, 4 компьютера): «dewiar.sync: ValueError: Unknown scheme for proxy URL socks4://127.0.0.1:10808».
+    Windows отдаёт прокси «socks=адрес:порт» (v2rayN, Clash) как socks4:// — httpx такого не знает и не создавал ни одного
+    соединения: синхронизация, облако, обновления падали. Берём тот же адрес как SOCKS5 и запоминаем — «Сеть» скажет."""
+    out = {}
+    for k, v in (env or {}).items():
+        if v and str(v).lower().startswith("socks4"):
+            if not SOCKS4["seen"]:
+                log.warning("🌐 Прокси компьютера — SOCKS4 (%s): httpx его не знает — иду через него как через SOCKS5", hide(v))
+            SOCKS4["seen"] = str(v)
+            v = "socks5" + str(v)[str(v).index(":"):]
+        out[k] = v
+    return out
+
+
 def _env_proxies():
-    """Прокси из окружения и системы, как их видит httpx: {шаблон: прокси | None (без прокси)}."""
+    """Прокси из окружения и системы, как их видит httpx: {шаблон: прокси | None (без прокси)}; SOCKS4 — как SOCKS5."""
     try:
         from httpx._utils import get_environment_proxies
-        return get_environment_proxies()
+        return _socks4_fix(get_environment_proxies())
     except Exception:  # noqa: BLE001
         return {}
 
@@ -261,6 +282,9 @@ def normalize_proxy(text):
     if "://" not in t:
         t = "http://" + t
     u = urlparse(t)
+    if u.scheme.lower() in ("socks4", "socks4a"):
+        raise NetError("socks4 не поддерживается — используйте socks5 или http (в программе VPN обычно есть оба): "
+                       "socks5://адрес:порт или http://адрес:порт")
     if u.scheme.lower() not in ("http", "https", "socks5", "socks5h", "socks"):
         raise NetError("прокси — socks5://адрес:порт или http://адрес:порт")
     if u.scheme.lower() == "socks":
@@ -460,6 +484,8 @@ def _patched_init(self, *a, **kw):
             sp = _SysProxy(env, kw.get("verify", True), kw.get("cert"))
             m.setdefault("http://", sp)
             m.setdefault("https://", sp)
+            if SOCKS4["seen"]:
+                kw["trust_env"] = False               # сам httpx прочитал бы socks4:// и упал — прокси системы уже в _SysProxy
     if m:
         kw["mounts"] = {**m, **dict(kw.get("mounts") or {})}
     _orig_init(self, *a, **kw)

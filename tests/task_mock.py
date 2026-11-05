@@ -55,6 +55,7 @@ class Mock:
         self.pos, self.reqs, self.over, self.side = {}, [], [], []
         self.force_ctx = 0                       # столько следующих запросов задачи — ошибка «не хватило окна»
         self.fail_503 = 0
+        self.side_fn = None                      # служебные запросы (без инструментов): fn(подсказка, тело) -> ответ | None
         self.lock = threading.Lock()
         mock = self
 
@@ -125,6 +126,10 @@ class Mock:
                 return h._json(400, {"error": {"message": f"This model's maximum context length is {self.window or 8192} tokens."}})
             if not body.get("tools"):
                 self.side.append({"system": sysm, "size": size})
+                if self.side_fn is not None:
+                    out = self.side_fn(sysm, body)
+                    if out is not None:
+                        return self.send(h, out)
                 if sysm.startswith("Ты — строгий"):
                     return self.send(h, '{"verdict": "ok"}')
                 if sysm.startswith("Ты — аналитик"):

@@ -35,7 +35,7 @@ ok("locked: true" in txt and "важное" in txt, "в файле: «locked: tr
 try:
     w.remove(rel); ok(False, "защищённая заметка удалилась")
 except workspace.WorkspaceError as e:
-    ok("защищ" in str(e) and w.safe(rel).is_file(), f"удалить защищённую нельзя: «{e}»")
+    ok("запер" in str(e) and w.safe(rel).is_file(), f"удалить защищённую нельзя: «{e}»")      # 05.11: «заперта — сначала откройте замок»
 n = w.note_meta(rel, {"color": "RED", "pinned": True})
 ok(n["locked"] and n["color"] == "RED", "цвет и «закрепить» замок не снимают")
 w.safe("Заметки/Дом").mkdir(parents=True, exist_ok=True)
@@ -44,7 +44,7 @@ w.note_meta(sub, {"locked": True})
 try:
     w.remove_dir("Заметки/Дом"); ok(False, "папка с защищённой заметкой удалилась")
 except workspace.WorkspaceError as e:
-    ok("защищ" in str(e) and w.safe(sub).is_file(), f"папку с защищённой заметкой — тоже нельзя: «{e}»")
+    ok("запер" in str(e) and w.safe(sub).is_file(), f"папку с защищённой заметкой — тоже нельзя: «{e}»")
 w.note_meta(rel, {"locked": False})
 ok(not w.note_meta(rel, {})["locked"] and "locked" not in w.safe(rel).read_text(encoding="utf-8"), "замок снят — из шапки убран")
 w.note_meta(rel, {"locked": True})
@@ -118,10 +118,10 @@ with sync_playwright() as p:
     ok(r[0] >= 70 and r[1] >= 70 and r[2], f"в списке — крупная миниатюра картинки: {r}")
     # замок: «Удалить» не спрашивает и не удаляет — подсказывает
     pg.click('#nt-list .nt-row[data-p="Заметки/Ключи.md"]'); pg.wait_for_timeout(500)
-    ok(pg.evaluate("document.querySelector('#nt-lockb').classList.contains('on') && document.querySelector('#nt-lockb').textContent.includes('Защищено')"), "кнопка замка — «Защищено»")
+    ok(pg.evaluate("document.querySelector('#nt-lockb').classList.contains('on') && document.querySelector('#nt-lockb').textContent.includes('Заперта')"), "кнопка замка — «Заперта» (05.11)")
     pg.evaluate("() => { window._asked = 0; window.ask = () => { _asked++; return Promise.resolve(true); }; }")
     pg.click("#nt-del"); pg.wait_for_timeout(300)
-    ok(not any(c[0] == "ws_delete" for c in pg.evaluate("_calls")) and pg.evaluate("_asked") == 0 and any("защищ" in t for t in pg.evaluate("_toasts")),
+    ok(not any(c[0] == "ws_delete" for c in pg.evaluate("_calls")) and pg.evaluate("_asked") == 0 and any("заперта" in t for t in pg.evaluate("_toasts")),
        "защищённую «Удалить» не удаляет — подсказка, где снять")
     pg.click("#nt-lockb"); pg.wait_for_timeout(400)
     ok(["note_meta", {"path": "Заметки/Ключи.md", "patch": {"locked": False}}] in pg.evaluate("_calls"), "«Защищено» → снять замок")

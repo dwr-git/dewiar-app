@@ -17,6 +17,34 @@ NO_MIC_ERR = ("device -1", "No Default Input", "Invalid device", "out of range f
 
 
 
+BARGE_LOUD = 1.8           # №543: без настоящего AEC перебить речью — во столько раз громче, чем микрофон слышит мой голос
+
+
+def barge_floor(levels, recent=30):
+    """№543 (04.11, Windows без эхоподавления, включено «Я в наушниках», а звук — в колонки MacBook): ответ «перебивал»
+    сам себя — эхо в микрофоне проходило как речь человека. levels — громкость микрофона по кадрам, пока ассистент
+    говорит; последние recent кадров (≈1 с) — возможно, уже голос человека — в основу не берём. Порог — BARGE_LOUD ×
+    медиана. В наушниках микрофон пока молчит — порог низкий; в колонках эхо громкое — перебить можно только громче его
+    или именем. Первые полторы секунды ответа данных мало — тогда по всему, что есть (строже), а без данных — нельзя."""
+    lv = sorted(levels[:-recent] if len(levels) >= recent + 20 else levels)
+    if len(lv) < 10:
+        return float("inf")
+    return BARGE_LOUD * float(lv[len(lv) // 2])
+
+
+def rest_after(full, spoken):
+    """Что из ответа full ещё не прозвучало: всё после последней целиком сказанной фразы (spoken — фразы по порядку).
+    Фраза, на которой перебили, в spoken не попала — её повторим целиком. Не нашли сказанное — весь ответ."""
+    pos = 0
+    for s_ in spoken:
+        s_ = (s_ or "").strip()
+        i = full.find(s_, pos) if s_ else -1
+        if i < 0:
+            return full[pos:].strip() if pos else full
+        pos = i + len(s_)
+    return full[pos:].strip()
+
+
 def stop_mid_phrase(in_speech, utt_s):
     """Слово-стоп от быстрого слуха посреди длинной фразы (дольше 1,5 с) — не команда: «схватит» ≈ «хватит» (№404)."""
     return bool(in_speech) and utt_s > 1.5
@@ -410,6 +438,9 @@ class AudioMixin:
         headphones = bool(a.get("headphones")) and not use_aec
         self.status["aec"] = bool(use_aec) or headphones        # «можно слушать во время ответа»: в наушниках эха нет
         self.status["headphones"] = headphones
+        # №543: «наушники» — это слово человека, а не проверенное эхоподавление (Windows, звук шёл в колонки
+        # MacBook). Без настоящего AEC перебить речью можно только заметно громче своего голоса в микрофоне
+        self.status["aec_real"] = bool(use_aec)
         self.capture = Capture(device=AEC_SOURCE if use_aec else a["input"], wav_path=self.wav_input,
                                realtime=True)
         if self.player is None:                  # голос — и без микрофона: напечатанный вопрос получит ответ вслух
@@ -688,6 +719,7 @@ class AudioMixin:
         bs, quiet, ducked = 0, 0, False                 # перебивание речью: кадры речи, тишины, приглушили ли
         echo = collections.deque(maxlen=90)             # громкость остаточного эха своего голоса (~3 с)
         half_echo = collections.deque(maxlen=100)       # полудуплекс: громкость своего голоса в микрофоне (~3 с)
+        spk_all = collections.deque(maxlen=160)         # №543: громкость микрофона, пока говорим (~5 с), — все кадры
         zst = {"since": None, "told": False, "all": True}      # поток идёт, а в нём нули или почти нули (_mic_zero_step)
         sleep_chk = defmic_chk = time.monotonic()
         while not self.stopping.is_set() and not self.restart_audio.is_set():
@@ -770,6 +802,10 @@ class AudioMixin:
                     log.info("🎤 «%s»? Вокруг разговор — проверю точной моделью", phrase)
                     self.vosk_wake_check, self._vosk_wake_word = self.utt_id, phrase
                     continue
+                if kind == "wake" and self.state == "speaking" and not self.status.get("aec_real") and self._own_word(phrase):
+                    # №543: без настоящего эхоподавления быстрый слух слышит имя в моём же ответе («…Джарвис расскажет»)
+                    log.info("🎤 «%s» — имя в моей же речи (эхо), не перебиваю", phrase)
+                    continue
                 if kind == "wake":
                     log.info("🎤 Имя «%s» услышано", phrase)
                     self.wake_time, self._wake_phrase = now, phrase
@@ -839,6 +875,10 @@ class AudioMixin:
                 self._level(min(1.0, rms / 3000.0), "mic")
             if speaking and p < 0.6:
                 echo.append(rms)                            # что остаётся от своего голоса после эхоподавления
+            if speaking:
+                spk_all.append(rms)
+            elif spk_all:
+                spk_all.clear()
             if not in_speech:
                 preroll.append(frame)
                 starts = starts + 1 if p > 0.5 else 0
@@ -855,11 +895,15 @@ class AudioMixin:
                 if p > 0.5:
                     self.mic_voice_t = now                    # суфлёр: «человек говорит» — для «замешкались» и пауз
                 silence = silence + 1 if p < 0.35 else 0
-                if speaking and barge in ("smart", "any_speech") and self.status["aec"]:
+                if speaking and barge in ("smart", "any_speech") and self.status["aec"] and now >= self._barge_name_until:
                     # Перебить можно просто начав говорить: через ~0,25 с речи ответ приглушается («слышу вас»),
                     # через ~0,8 с (any_speech — ~0,4 с) замолкает, а сказанное идёт как новый вопрос, без имени.
                     # Свой голос, просочившийся через эхоподавление, тише живой речи — порог считаем от него.
+                    # №543: без настоящего AEC («Я в наушниках», а звук в колонках) своё эхо — тоже «речь»: порог —
+                    # заметно громче того, что микрофон слышал, пока я говорила (до последней секунды — без вашей речи)
                     floor = max(220.0, 2.6 * float(np.median(echo)) if len(echo) > 10 else 400.0)
+                    if not self.status.get("aec_real"):
+                        floor = max(floor, barge_floor(list(spk_all)))
                     if p > 0.6 and rms > floor:
                         bs, quiet = bs + 1, 0
                     else:
@@ -1237,6 +1281,9 @@ class AudioMixin:
                 log.debug("проверка имени не удалась: %s", e)
                 continue
             pid, _ = find_name(text, self._wake_aliases(), strict=True)
+            if pid and kind == "barge" and not self.status.get("aec_real") and self._is_self_echo(text, barge=True):
+                log.info("🔁 Имя поверх ответа — в моей же фразе из колонок, не перебиваю: «%s»", text[:80])
+                pid = None                                 # №543: «…Джарвис» в ответе — не зов
             ms = int((time.monotonic() - t0) * 1000)
             if pid:
                 log.info("👂 %s: «%s» → %s (%d мс)", checker.name, text, pid, ms)
@@ -1364,6 +1411,18 @@ class AudioMixin:
                 log.warning("Календари: %s", e)
             self.stopping.wait(tick)
 
+    def _task_guard_loop(self):
+        """№551: задача, шаг которой молчит вдвое дольше порога, или час без единого пункта плана — на паузу с понятной
+        причиной (taskguard.py), а не «висит 2 часа». Раз в 30 с."""
+        import taskguard
+        tick = float(os.environ.get("DEWIAR_TASK_GUARD_TICK") or 30)
+        while not self.stopping.wait(tick):
+            try:
+                for tid, why in taskguard.check(self):
+                    log.info("⏸ Задача %s на паузе: %s", tid, why)
+            except Exception:  # noqa: BLE001
+                log.warning("сторож задач", exc_info=True)
+
     def _auto_backup(self):
         """Поток backup: раз в неделю — тихая резервная копия; хранятся 4 последние (backup.py). Пароль слепка
         запомнен на этом компьютере — закрытая и полная (с сейфом), иначе — без сейфа и паролей. Проверяем раз в 6 часов."""
@@ -1453,13 +1512,18 @@ class AudioMixin:
         said = _norm(" ".join([self._now_saying or ""] + [t for at, t in list(self._said) if now - at < 8]))
         return bool(stem) and stem in said
 
-    def _is_self_echo(self, text):
+    def _is_self_echo(self, text, barge=False):
         """Микрофон услышал наш же голос из колонок (эхоподавление не справилось): фраза почти целиком — из того,
-        что ассистент сказал за последние 25 секунд."""
+        что ассистент сказал за последние 25 секунд. barge — фраза, которой меня только что перебили (№543): тогда
+        хватает двух слов («Сергей, вот что.») и окна в 20 с от перебивания — распознавание идёт уже после него."""
         norm = lambda t: (t or "").lower().replace("ё", "е")  # noqa: E731
         words = re.findall(r"\w{3,}", norm(text))
         now = time.monotonic()
-        if len(words) < 4 or (self.state != "speaking" and now - self._spoke_until > 3.5):
+        snap = getattr(self, "_barge_snap", None)
+        fresh = barge or bool(snap and now - snap["at"] < 20)
+        if len(words) < (2 if fresh else 4):
+            return False
+        if not fresh and self.state != "speaking" and now - self._spoke_until > 3.5:
             return False                                  # эхо бывает, пока говорим, и сразу после
         said = set(re.findall(r"\w{3,}", norm(" ".join(t for at, t in list(self._said) if now - at < 25))))
         if not said:
@@ -1468,6 +1532,71 @@ class AudioMixin:
         hit = sum(1 for w in words if w in said or (len(w) >= 5 and w[:5] in stems))
         return hit / len(words) >= 0.75
 
+    def _barge_keep(self, reason):
+        """Перебили голосом (речь, имя) во время ответа — запомнить ход: если окажется, что «перебила» я сама себя
+        (эхо из колонок), _echo_resume договорит ответ, а не бросит его (№543: «сам себя перебил и перестал работать»)."""
+        t = self.turn
+        if t is None or reason not in ("речь", "имя") or getattr(t, "via", None):
+            return
+        self._barge_snap = {"at": time.monotonic(), "turn": t, "persona": self.s.get("persona"),
+                            "said": " ".join(t.spoken).strip()}
+
+    def _echo_resume(self):
+        """Фраза, которой меня перебили, — моё же эхо: договорить. Ответ уже готов (gen_done) — досказать то, что не
+        прозвучало; модель ещё думала (поиск, чтение страниц) — задать тот же вопрос заново. -> взялись ли."""
+        snap, self._barge_snap = getattr(self, "_barge_snap", None), None
+        now = time.monotonic()
+        if not snap or now - snap["at"] > 30 or self.turn is not None:
+            return False
+        t = snap["turn"]
+        q = getattr(t, "q", "") or ""
+        mark = (snap["said"] + " …(меня перебили)").strip()
+        for i in range(len(self.history) - 1, max(-1, len(self.history) - 4), -1):
+            m = self.history[i]
+            if m.get("role") == "assistant" and (m.get("content") or "").strip() == mark:
+                del self.history[i]                       # «перебили» не было — запись хода будет целой
+                break
+        full = (t.full or "").strip()
+        if getattr(t, "gen_done", False) and full:
+            rest = rest_after(full, list(t.spoken))
+            log.info("🔁 Это был мой же голос — договариваю ответ (%d симв.)", len(rest))
+            threading.Thread(target=self._resume_say, args=(snap, q, full, rest), name="echo-resume", daemon=True).start()
+            return True
+        if q:
+            log.info("🔁 Это был мой же голос — ответ не успел сложиться, спрашиваю заново: «%s»", q[:80])
+            if snap["persona"] != self.s.get("persona"):
+                self.switch_persona(snap["persona"])
+            self.ask(q, images=list(getattr(t, "images", None) or []) or None, quiet=True)
+            return True
+        return False
+
+    def _resume_say(self, snap, q, full, rest):
+        """Договорить ответ после ложного перебивания: остаток — вслух, весь ответ — в историю, как будто не перебивали."""
+        with self._turn_lock:
+            self.turn_n += 1
+            turn = Turn(self.turn_n)
+            turn.full = full
+            self.turn = turn
+        sq = queue.Queue()
+        if rest:
+            sp = SentenceSplitter()
+            for x in sp.feed(rest + " ") + sp.flush():
+                sq.put(x)
+        sq.put(None)
+        self.set_state("speaking" if rest else "idle")
+        try:
+            self._speak_worker(turn, sq)
+        finally:
+            with self._turn_lock:
+                mine = self.turn is turn
+                if mine:
+                    self.turn = None
+            if not turn.cancel.is_set() and q:
+                self.history += [{"role": "user", "content": q},
+                                 {"role": "assistant", "content": full, "who": snap["persona"]}]
+            if mine:
+                self.set_state("idle")
+
     def _echo_heard(self, text):
         """Фраза оказалась нашим эхом: пропускаем. Второй раз за 3 минуты — на 10 минут отключаем «продолжение
         разговора» без имени (_echo_until, см. конец хода в engine_answer.py) и подсказываем про наушники."""
@@ -1475,10 +1604,21 @@ class AudioMixin:
         log.info("🔁 Услышал свой же голос — пропускаю: «%s»", text[:120])
         self._echo_hits = [t for t in self._echo_hits if now - t < 180] + [now]
         self.follow_up_until = 0.0
+        # №543: эхо прорвалось — 10 минут перебить ответ можно только именем или «стоп», не просто речью
+        first = now >= self._barge_name_until
+        self._barge_name_until = now + 600
+        hp = bool(self.status.get("headphones"))
+        if first and hp:
+            self.note("Похоже, звук идёт в колонки, хотя включено «Я в наушниках»: я слышу свой голос. Пока говорю, "
+                      "перебить меня можно именем или словом «стоп». Без наушников выключите «Я в наушниках» "
+                      "(студия → «Звук и поведение»).")
         if len(self._echo_hits) >= 2 and now > self._echo_until:
             self._echo_until = now + 600                  # 10 минут слушаем только по имени
-            self.note("Я слышу сам себя: звук из колонок попадает в микрофон. Наденьте наушники или включите "
-                      "эхоподавление (студия → «Звук и поведение»). Пока отвечаю только когда зовут по имени.")
+            if not hp:
+                self.note("Я слышу сам себя: звук из колонок попадает в микрофон. Наденьте наушники или включите "
+                          "эхоподавление (студия → «Звук и поведение»). Пока отвечаю только когда зовут по имени.")
+        if self._echo_resume():
+            return
         self.set_state("idle")
 
     def handle_text(self, text, by_wake, follow, forced=None, dur=None):
@@ -1489,6 +1629,7 @@ class AudioMixin:
         if text and not forced and self._is_self_echo(text):
             self._echo_heard(text)
             return
+        self._barge_snap = None                            # перебили по-настоящему — прежний ответ не договариваем
         if self._intro_ear is not None and self._intro_take(text, forced):
             return                                         # знакомство проверяет микрофон — фраза ему
         if forced:

@@ -102,7 +102,7 @@ async function ntLoad() {
   $$("#nt-sort [data-s]").forEach(b => { const on = b.dataset.s === NT.sort; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
   $$("#nt-vw [data-v]").forEach(b => { const on = (b.dataset.v === "grid") === NT.grid; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
   const tg = (n, k) => (n.tags || []).slice(0, k).map(t => `<i class="nt-chip nt-tag">#${escH(t)}</i>`).join("");
-  const lk = (n) => n.locked ? '<i class="nt-lock" title="Защищено от удаления"></i>' : "";
+  const lk = (n) => n.locked ? '<i class="nt-lock" title="Заперта: не изменить и не удалить, пока не откроете замок"></i>' : "";
   const col = (n) => ntColor(n.color) ? ` style="--nc:${ntColor(n.color)}"` : "";
   // 28.10, владелец: «важнейший раздел… дизайн лучше»: список по дням («Сегодня», «Вчера», «На этой неделе», «Раньше»)
   const row = (n) => `<button class="nt-row ${n.path === NT.cur ? "cur" : ""}" data-p="${escH(n.path)}"${col(n)}>
@@ -170,7 +170,7 @@ function ntMetaHtml(d) {
       <button type="button" class="nt-mb nt-tbtn" id="nt-tbtn" title="Добавить метку — по ней заметка найдётся в фильтре над списком"><i class="nt-hash">#</i>Метка</button>
       <input id="nt-tadd" class="nt-tin" list="nt-tlist" placeholder="название метки" maxlength="40" aria-label="Добавить метку" hidden><datalist id="nt-tlist">${known.map(t => `<option value="${escH(t)}">`).join("")}</datalist></span>
     <span class="nt-msp"></span>
-    <button type="button" class="nt-mb${m.locked ? " on" : ""}" id="nt-lockb" aria-pressed="${!!m.locked}" title="${m.locked ? "Снять защиту — заметку снова можно удалить" : "Защитить от случайного удаления — ни из студии, ни голосом, ни с телефона"}"><i class="nt-lock"></i>${m.locked ? "Защищено" : "Защитить"}</button>
+    <button type="button" class="nt-mb${m.locked ? " on" : ""}" id="nt-lockb" aria-pressed="${!!m.locked}" title="${m.locked ? "Открыть замок — заметку снова можно менять и удалять" : "Запереть — заметку нельзя будет ни изменить, ни удалить: ни здесь, ни голосом, ни с телефона"}"><i class="nt-lock"></i>${m.locked ? "Заперта" : "Запереть"}</button>
     <button type="button" class="nt-mb" id="nt-archb" title="${m.archived ? "Вернуть из архива" : "Убрать в архив — с глаз долой, поиск находит"}">${m.archived ? "Из архива" : "В архив"}</button></div>`;
 }
 async function ntMetaSet(patch, msg) {
@@ -178,12 +178,22 @@ async function ntMetaSet(patch, msg) {
   await ntFlush();                                   // сначала набранный текст: иначе он лёг бы поверх со старой шапкой
   try { await core.call("note_meta", { path: NT.cur, patch }); } catch (e) { toast(e.message); return; }
   if (msg) toast(msg, 2200);
-  const keep = NT.cur, ed = NT.edit; await ntOpen(keep, ed); ntLoad();        // в правке — остаёмся в правке
+  const keep = NT.cur, ed = NT.edit && !patch.locked; await ntOpen(keep, ed); ntLoad();   // в правке — остаёмся (заперли — к чтению)
+}
+/* Замок (владелец 05.11: «важное — не сотру ли случайно»): 🔒 у названия и «Заперта» в строке меток — одним нажатием.
+   Запертую не изменить и не удалить — ни здесь, ни голосом, ни с телефона; открыть замок — только этой кнопкой. */
+function ntLockToggle(m) {
+  return ntMetaSet({ locked: !m.locked }, m.locked ? "Замок открыт — заметку можно менять и удалять" : "Заперта — не изменится и не удалится, пока не откроете замок");
+}
+function ntLockedNudge() {
+  toast("Заметка заперта — сначала откройте замок 🔒", 3600);
+  const b = $("#nt-lockh") || $("#nt-lockb"); if (b) { b.classList.remove("nt-nudge"); void b.offsetWidth; b.classList.add("nt-nudge"); b.focus(); }
 }
 function ntMetaBind(d) {
   const m = d.meta || {};
   $("#nt-pinb").onclick = () => ntMetaSet({ pinned: !m.pinned }, m.pinned ? "Откреплено" : "Закреплено — теперь сверху");
-  $("#nt-lockb").onclick = () => ntMetaSet({ locked: !m.locked }, m.locked ? "Защита снята — заметку можно удалить" : "Защищено — случайно не удалится");
+  $("#nt-lockb").onclick = () => ntLockToggle(m);
+  if ($("#nt-lockh")) $("#nt-lockh").onclick = () => ntLockToggle(m);
   $("#nt-archb").onclick = () => ntMetaSet({ archived: !m.archived, pinned: false }, m.archived ? "Вернула из архива" : "В архиве — найти можно в «Архиве» над списком");
   const pal = $("#nt-pal"), cb = $("#nt-colb");
   cb.onclick = (e) => { e.stopPropagation(); pal.hidden = !pal.hidden; cb.setAttribute("aria-expanded", !pal.hidden); };
@@ -256,12 +266,13 @@ function ntShow() {
   const attHtml = (edit) => `${pics.length ? `<div class="nt-pics">${pics.map(a => `<figure data-i="${d.att.indexOf(a)}"><i data-img="${escH(ntAbs(path, a.link))}"></i>${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</figure>`).join("")}</div>` : ""}
     ${files.length ? `<div class="nt-files">${files.map(a => `<span class="nt-f" data-i="${d.att.indexOf(a)}"><svg viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/></svg>${escH(a.name)}${edit ? `<button class="nt-x" title="Убрать">×</button>` : ""}</span>`).join("")}</div>` : ""}`;
   if (!NT.edit) {
-    v.innerHTML = `<div class="nt-top"><div><h2 class="nt-h">${escH(d.title)}</h2><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? `<i class="nt-chip">${escH(ntDir(path).replace(/^Заметки\//, ""))}</i>` : ""}${ntChips((d.meta || {}).tags, (d.meta || {}).source && (d.meta || {}).source !== ntDir(path).replace(/^Заметки\//, "") ? d.meta.source : "")}</small></div>
-        <span class="nt-act"><button class="btn primary" id="nt-edit">Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger${(d.meta || {}).locked ? " nt-locked" : ""}" id="nt-del"${(d.meta || {}).locked ? ' title="Заметка защищена — сначала снимите защиту"' : ""}>${(d.meta || {}).locked ? '<i class="nt-lock"></i>' : ""}Удалить</button>${NT.grid ? '<button class="nt-close" type="button" id="nt-close" aria-label="Закрыть">×</button>' : ""}</span></div>
+    const lkd = !!(d.meta || {}).locked;
+    v.innerHTML = `<div class="nt-top"><div><div class="nt-htl"><h2 class="nt-h">${escH(d.title)}</h2><button type="button" class="nt-lockh${lkd ? " on" : ""}" id="nt-lockh" aria-pressed="${lkd}" aria-label="${lkd ? "Открыть замок" : "Запереть заметку"}" title="${lkd ? "Заперта — нажмите, чтобы открыть замок" : "Запереть: не изменить и не удалить случайно"}">${lkd ? "🔒" : "🔓"}</button></div><small>${ntDate(d.mtime)}${ntDir(path) !== "Заметки" ? `<i class="nt-chip">${escH(ntDir(path).replace(/^Заметки\//, ""))}</i>` : ""}${ntChips((d.meta || {}).tags, (d.meta || {}).source && (d.meta || {}).source !== ntDir(path).replace(/^Заметки\//, "") ? d.meta.source : "")}</small></div>
+        <span class="nt-act"><button class="btn primary${lkd ? " nt-locked" : ""}" id="nt-edit"${lkd ? ' title="Заметка заперта — сначала откройте замок"' : ""}>${lkd ? '<i class="nt-lock"></i>' : ""}Изменить</button><button class="btn" id="nt-open" title="Открыть файл заметки в своей программе">В программе</button><button class="btn danger${(d.meta || {}).locked ? " nt-locked" : ""}" id="nt-del"${(d.meta || {}).locked ? ' title="Заметка заперта — сначала откройте замок"' : ""}>${(d.meta || {}).locked ? '<i class="nt-lock"></i>' : ""}Удалить</button>${NT.grid ? '<button class="nt-close" type="button" id="nt-close" aria-label="Закрыть">×</button>' : ""}</span></div>
       ${ntMetaHtml(d)}
       <div class="nt-body"${ntCs() ? ` data-cs="${escH(ntCs())}"` : ""}>${ntRender(d.body) || `<p class="hint">Пустая заметка — нажмите «Изменить».</p>`}</div>${attHtml(false)}`;
     if (window.DewiarRich) DewiarRich.diagrams($("#nt-view .nt-body")).catch(() => { });   // ```mermaid — схемой
-    $("#nt-edit").onclick = () => { NT.edit = true; ntShow(); setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 50); };
+    $("#nt-edit").onclick = () => { if (lkd) return ntLockedNudge(); NT.edit = true; ntShow(); setTimeout(() => $("#nt-text") && $("#nt-text").focus(), 50); };
     ntMetaBind(d); ntCards();
     if ($("#nt-close")) $("#nt-close").onclick = ntCloseTile;
     $("#nt-open").onclick = () => core.call("ws_open", { path }).catch(e => toast(e.message));
@@ -321,11 +332,7 @@ async function ntAdd(files) {
 }
 async function ntDelete() {
   const d = NT.doc;
-  if (d && (d.meta || {}).locked) {                  // замок: не спрашиваем «удалить?» — подсказываем, где снять
-    toast("Заметка защищена от удаления — снимите защиту кнопкой «Защищено»", 3600);
-    const b = $("#nt-lockb"); if (b) { b.classList.remove("nt-nudge"); void b.offsetWidth; b.classList.add("nt-nudge"); b.focus(); }
-    return;
-  }
+  if (d && (d.meta || {}).locked) return ntLockedNudge();     // замок: не спрашиваем «удалить?» — подсказываем, где открыть
   if (!d || !await ask(`Удалить заметку «${d.title}»${d.att.length ? " вместе с вложениями" : ""}? Она уйдёт в корзину — оттуда её можно вернуть.`)) return;
   try { await core.call("ws_delete", { path: NT.cur }); NT.cur = ""; NT.doc = null; $("#nt-view").innerHTML = ""; ntLoad(); } catch (e) { toast(e.message); }
 }

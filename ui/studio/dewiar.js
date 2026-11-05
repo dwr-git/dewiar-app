@@ -135,6 +135,7 @@ function dwRender() {
     if (ck) dwSet("net", ck.proxy ? (viaOk ? "ok" : "bad") : (dirOk ? "ok" : "bad"), ck.proxy ? (viaOk ? "через прокси" : "прокси не работает") : (dirOk ? "напрямую" : "сайт не открывается"));
     else dwSet("net", n.on ? "ok" : "", n.on ? (n.via === "dewiar" ? "прокси Dewiar" : "через прокси") : "напрямую");
     if (n.dewiar_error) { $("#dw-net-res").className = "res bad"; $("#dw-net-res").textContent = "Прокси Dewiar: " + n.dewiar_error; }
+    else if (n.sys_socks4 && !(ck && (dirOk || viaOk))) { $("#dw-net-res").className = "res"; $("#dw-net-res").textContent = n.sys_socks4; }   // прокси Windows — SOCKS4
   }
   // обновления
   const u = DW.upd;
@@ -397,6 +398,9 @@ async function dwQr() {
 
 /* ---------- Dewiar Облако по ключу ----------
    Карточка в «Мозге» и значок заряда в меню (#nav-cloud); данные — cloud_status и событие cloud. */
+/* №542 (04.11: «на сколько хватает 1 талер?»): сколько обычных ответов в одном талере — с сервера (per_taler), у старого
+   сервера — по остатку */
+const perTaler = (c) => (c && +c.per_taler) || (c && +c.balance > 0 && +c.turns > 0 ? Math.max(1, Math.round(c.turns / c.balance)) : 0);
 const turnsWord = (n) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? "ответ" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "ответа" : "ответов"; };
 function cloudFill(c) {
   const card = $("#cloud-card"), chip = $("#nav-cloud");
@@ -414,6 +418,9 @@ function cloudFill(c) {
     : c.frozen ? "Ключ приостановлен — напишите администратору." : c.empty ? "Заряд закончился — пополните, и ассистент снова будет отвечать."
     : `Хватит примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` + (c.low ? " — скоро понадобится пополнить" : "");
   if (c.error && !err) $("#cc-turns").textContent += ` · сейчас не обновилось: ${c.error}`;   // показано последнее известное — честно говорим
+  const pt = perTaler(c); $("#cc-per").textContent = pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы, размышления и картинки дороже` : "";
+  // №544/№545 (04.11: «пополнил — ничего не пришло»): заявка видна прямо в карточке, со сроком
+  if (c.pending) $("#cc-turns").textContent += ` · ${pendingLine()}`;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); topupText(c.topup || "");
   $("#cc-use").style.display = c.active ? "none" : "";
   // по аккаунту ключа нет — «Убрать ключ» только у своего ключа dw-
@@ -460,7 +467,22 @@ function ymPay(s) {
 }
 function payWatch() {                               // ждём зачисления: 10 минут, раз в 20 секунд
   clearInterval(ymT); let k = 0;
-  ymT = setInterval(() => { if (++k > 30) return clearInterval(ymT); core.call("cloud_status", { refresh: true }).then(c => { cloudFill(c); if ($("#cc-pay").style.display !== "none") cpLoad(); }).catch(() => {}); }, 20000);
+  const was = +((DW.cloud || {}).balance || 0);
+  ymT = setInterval(() => {
+    if (++k > 30) { clearInterval(ymT); return payLate(); }
+    core.call("cloud_status", { refresh: true }).then(c => { cloudFill(c); if ($("#cc-pay").style.display !== "none") cpLoad();
+      if (+c.balance > was + 1e-6) { clearInterval(ymT); const n = $("#cc-ym-note"); n.className = "ym-n ok";
+        n.textContent = `Пришло: +${(Math.round((+c.balance - was) * 1e4) / 1e4).toLocaleString("ru-RU")} тал. Спасибо!`; } }).catch(() => {});
+  }, 20000);
+}
+/* №544/№545 (04.11: «пополнил DW-…, ничего не пришло»): 10 минут после оплаты картой талеров нет — перевод мог уйти без
+   номера DW-… (переводом на кошелёк, а не со страницы оплаты). Говорим, что делать: снимок оплаты — заявкой, проверят вручную. */
+function pendingLine() { return "заявка на пополнение на проверке — обычно зачисляем в течение дня"; }
+function payLate() {
+  const n = $("#cc-ym-note"); if (!n) return;
+  n.className = "ym-n bad";
+  n.textContent = "Талеры пока не пришли. Если вы оплатили — пришлите снимок оплаты ниже («Отправить заявку»): проверим вручную, обычно в течение дня.";
+  const m = $("#cc-man"); if (m) { m.style.display = ""; const h = $("#cc-man-h"); if (h) h.style.display = ""; m.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 }
 /* Способы пополнения (03.11, владелец: «что-то на будущее, не привязанное к одному платёжному сервису, возможно даже
    криптовалютой»): сервер отдаёт pay — включённые способы в порядке владельца; блоки встают в этом порядке.
@@ -537,7 +559,7 @@ $("#cp-send").onclick = async (ev) => {
   ev.target.disabled = true; r.className = "res"; r.textContent = "отправляю…";
   try {
     const x = await core.call("cloud_topup_send", { amount: +amount || 0, note, image: cpImage });
-    r.className = "res ok"; r.textContent = "Заявка отправлена — после проверки заряд пополнится сам."; cpList(x.requests);
+    r.className = "res ok"; r.textContent = "Заявка отправлена — " + pendingLine().replace(/^заявка на пополнение /, "") + "; когда зачислим, баланс обновится сам."; cpList(x.requests);
     cpImage = ""; $("#cp-img").removeAttribute("src"); $("#cp-shot").classList.remove("has"); $("#cp-shot-t").textContent = "Приложите снимок оплаты — нажмите сюда или вставьте Ctrl+V";
     $("#cp-amount").value = ""; $("#cp-note").value = "";
   } catch (e) { r.className = "res bad"; r.textContent = e.message; }

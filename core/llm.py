@@ -47,6 +47,33 @@ CTX_RX = re.compile(r"context (?:size|length|window)[^.]{0,40}(?:exceed|too)|exc
                     r"превыш\w* (?:размер|длин)\w* контекст|не хватило окна контекста", re.I)
 # деньги на ключе сервиса кончились — повтор через 5 минут не поможет (пакет 30.10: дело по расписанию — 16 неудач за день)
 NO_MONEY_TEXT = "на ключе нет оплаченного пакета или закончились деньги — пополните баланс у сервиса"
+# Сбой 04.11 (27 раз, 8 компьютеров): «пополните баланс у сервиса» — у какого и где? Название и страница пополнения по адресу
+# сервиса, и выход без своего ключа — облако Dewiar
+TOPUP_PAGES = (("openrouter.ai", "OpenRouter", "https://openrouter.ai/settings/credits"),
+               ("openai.com", "OpenAI", "https://platform.openai.com/settings/organization/billing"),
+               ("deepseek.com", "DeepSeek", "https://platform.deepseek.com/top_up"),
+               ("anthropic.com", "Anthropic", "https://console.anthropic.com/settings/billing"),
+               ("mistral.ai", "Mistral", "https://console.mistral.ai/billing"),
+               ("groq.com", "Groq", "https://console.groq.com/settings/billing"),
+               ("x.ai", "xAI", "https://console.x.ai"),
+               ("z.ai", "Z.ai", "https://z.ai"), ("bigmodel.cn", "Zhipu", "https://bigmodel.cn"),
+               ("moonshot", "Moonshot", "https://platform.moonshot.ai"),
+               ("googleapis.com", "Google AI Studio", "https://aistudio.google.com"),
+               ("together", "Together AI", "https://api.together.ai"), ("fireworks.ai", "Fireworks", "https://fireworks.ai/account/billing"),
+               ("perplexity.ai", "Perplexity", "https://www.perplexity.ai/settings/api"),
+               ("yandex", "Yandex Cloud", "https://console.yandex.cloud"), ("sber", "GigaChat", "https://developers.sber.ru/studio"))
+NO_MONEY_DEWIAR = "Без своего ключа — в «Мозге» выберите «Dewiar Облако»"
+
+
+def topup_page(base_url):
+    """Адрес сервиса -> (название, страница пополнения) или (адрес, "")."""
+    host = (re.match(r"^\w+://([^/:?#]+)", str(base_url or "")) or [None, ""])[1].lower()
+    for key, name, url in TOPUP_PAGES:
+        if key in host:
+            return name, url
+    return host, ""
+
+
 CTX_TEXT = ("модели не хватило окна контекста — разговор и подсказка не помещаются. В LM Studio или Ollama увеличьте "
             "длину контекста (Context Length) до 8192 или больше")
 
@@ -184,9 +211,10 @@ def _humanize(e, base_url, model=""):
                     "(«Подключение» → «Прокси»), подключите Gemini через OpenRouter или выберите другой сервис")
         if NO_MONEY_RX.search(body + " " + msg) and "Dewiar" not in msg:
             zai = "z.ai" in str(base_url or "")
-            return (NO_MONEY_TEXT
+            name, page = topup_page(base_url)
+            return (NO_MONEY_TEXT + (f" {name}" if name else "") + (f": {page}" if page else "")
                     + (". Подписка GLM Coding Plan работает по своему адресу (…/api/coding/paas/v4), и по правилам Z.ai — "
-                       "только в программах для кода" if zai else ""))
+                       "только в программах для кода" if zai else "") + ". " + NO_MONEY_DEWIAR)
         if msg and code == 402 and (ej.get("topup") or "Dewiar" in msg or "Талер" in msg):
             # облако Dewiar: талеры кончились (0.82.1) — на экран полный текст с номером DW-…, голосом — коротко, без ссылки
             t = HumanText(msg.rstrip("."))
@@ -1869,7 +1897,9 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             if body["stream"] and _usage_ok(p, base):
                 body["stream_options"] = {"include_usage": True}
         col = _Collector(anthropic=p.get("kind") == "anthropic")
-        col.tags.known = {x["name"] for x in (tools_all or [])}   # голый JSON в тексте — вызов, только если такая функция есть
+        # голый JSON в тексте — вызов, только если такая функция есть (или её зовут по имени — _known: задача, совместимость)
+        known_names = [x["name"] for x in (tools_all or [])] + ([n for n in p.get("_known") or ()] if tools_all else [])
+        col.tags.known = set(known_names)
         col.no_cjk = not wants_cjk(messages)
         net_buf = []
         _net.v = False
@@ -1878,7 +1908,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             lc = last_u.get("content")
             col.net_q = ask_text(lc if isinstance(lc, str) else " ".join(str(x.get("text") or "") for x in lc or [] if isinstance(x, dict)))
             col.net_enums = frozenset(net_enums([t.get("parameters") for t in tools_all or []]))
-        bare = BareCallCatcher([x["name"] for x in (tools_all or [])] if prompt_tools_mode(p) or native else [])
+        bare = BareCallCatcher(known_names if prompt_tools_mode(p) or native else [])
         got_text = False
         with _stream_retry("POST", url, json=body, headers=_headers(p), timeout=timeout) as r:
             if r.status_code >= 400:

@@ -1498,6 +1498,8 @@ class Sync:
                 n += 1
             self.state["map"][sid] = rel
         else:
+            if self._locked_keep(sid, rel, d, root) == "mine":   # 05.11: запертую правка с другого устройства не перетирает
+                return None
             if self._note_conflict(sid, rel, d, upd) == "mine":   # до переноса в другую папку: отпечаток — с прежней папкой
                 return None                                # здешняя правка позже — она остаётся, пришедшая — копией рядом
             rel = self._move_to_folder(sid, rel, d, root)
@@ -1518,6 +1520,49 @@ class Sync:
         except (OSError, ValueError, OverflowError):
             pass
         self._pad_event(rel, False)
+
+    def _locked_keep(self, sid, rel, d, root):
+        """Владелец, 05.11: замок на заметке. Здесь она заперта, а с другого устройства пришла другая — правка (старое
+        приложение без замков или правка, сделанная до того, как замок туда дошёл) не перетирает запертую молча: здешняя
+        остаётся и уходит туда следующим обменом, пришедшая ложится рядом копией «(правка с „…“ — заметка заперта)».
+        Пришло то же самое, только без замка (его открыли руками там) или с другой папкой без правки текста — замок
+        открывается здесь. -> "mine" или None."""
+        from workspace import _locked, note_front
+        p = root / rel
+        if not p.is_file() or not _locked(p):
+            return None
+        try:
+            cur = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
+        text = str(d.get("text") or "")
+        strip = lambda t: ({k: v for k, v in note_front(t)[0].items() if k != "locked" and v}, _note_norm(p.stem, note_front(t)[1]))  # noqa: E731
+        folder = p.parent.relative_to(root).as_posix()
+        same_place = not str(d.get("folder") or "") or str(d.get("folder") or "") == ("" if folder == "." else folder)
+        if strip(cur) == strip(text) and same_place:
+            return None                                   # изменился только замок (открыли там руками) — принимаем
+        who = self._dev_name(getattr(self, "_cur_dev", "")) or "другого устройства"
+        alt = p.with_name(f"{p.stem} (правка с «{who}» — заметка заперта, {dt.datetime.now():%d.%m %H-%M}).md")
+        n = 2
+        while alt.exists():
+            alt = p.with_name(f"{p.stem} (правка с «{who}» — заметка заперта, {dt.datetime.now():%d.%m %H-%M}) {n}.md")
+            n += 1
+        meta, body = note_front(text)
+        if meta.get("locked"):                            # копия — обычная заметка, без замка
+            from workspace import note_front_set
+            text = note_front_set(text, {"locked": False})
+        title = str(d.get("title") or p.stem)
+        try:
+            alt.write_text(text if text.lstrip().startswith(("#", "---")) else f"# {title}\n\n{text.lstrip(chr(10))}\n", encoding="utf-8")
+        except OSError:
+            pass
+        self.__dict__.setdefault("_note_resend", set()).add("note:" + sid)
+        try:
+            os.utime(p, None)                              # здешняя запертая — новее пришедшей: уйдёт туда и вернёт замок
+        except OSError:
+            pass
+        log.info("🔒 Заметка «%s» заперта — правка с «%s» не перетёрла её, лежит рядом: %s", p.stem, who, alt.name)
+        return "mine"
 
     def _file_h(self, rel):
         try:

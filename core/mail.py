@@ -97,6 +97,41 @@ def _text_of(msg, limit=20000):
     return body[:limit], files
 
 
+_ATT_RX = re.compile(rb'"attachment"|"(?:file)?name"\s', re.I)
+
+
+def _parse_heads(d):
+    """Ответ IMAP на FETCH (UID FLAGS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS …]) -> [{uid, from, subject, date, unread, attach}].
+    imaplib режет ответ на куски там, где сервер прислал литерал {n}: заголовки — литерал, но и имя файла внутри
+    BODYSTRUCTURE бывает литералом (кириллица) — куски одного письма склеиваем, новое письмо начинается с «N (»."""
+    msgs = []
+    for x in d or []:
+        if isinstance(x, tuple):
+            head, lit = x[0] or b"", x[1] or b""
+            if re.match(rb"\d+ \(", head) or not msgs:
+                msgs.append({"meta": b"", "hdr": b""})
+            cur = msgs[-1]
+            if b"BODY[HEADER" in head.upper():
+                cur["meta"] += head
+                cur["hdr"] = lit
+            else:
+                cur["meta"] += head + b'"' + lit.replace(b'"', b"") + b'"'
+        elif isinstance(x, bytes) and msgs:
+            msgs[-1]["meta"] += x
+    out = []
+    for r in msgs:
+        meta = r["meta"]
+        mu = re.search(rb"UID (\d+)", meta)
+        if not mu:
+            continue
+        fl = re.search(rb"FLAGS \(([^)]*)\)", meta)
+        bs = meta[meta.upper().find(b"BODYSTRUCTURE"):] if b"BODYSTRUCTURE" in meta.upper() else b""
+        h = email.message_from_string(r["hdr"].decode("utf-8", errors="replace"))    # бывают и некодированные UTF-8 заголовки
+        out.append({"uid": mu.group(1).decode(), "from": _dec(h.get("From")), "subject": _dec(h.get("Subject")) or "(без темы)",
+                    "date": h.get("Date", "") or "", "unread": not (fl and b"\\Seen" in fl.group(1)), "attach": bool(_ATT_RX.search(bs))})
+    return out
+
+
 class Box:
     """Один ящик. Соединение открывается на каждую операцию и сразу закрывается — держать его незачем.
     data — его настройки; store() — записать все ящики (Mail._store)."""
@@ -341,6 +376,31 @@ class Box:
             except Exception:  # noqa: BLE001
                 pass
 
+    def headers(self, limit=500, folder="INBOX", since=None):
+        """Список писем без текста — для таблицы (№541, 04.11: «Excel с содержимым ящика: отправитель, дата, тема, есть ли
+        вложение»; inbox тянет каждое письмо целиком и отдаёт до 20). Заголовки и строение письма пачками по 100 ->
+        [{uid, from, subject, date, unread, attach}] — новые сверху; since — datetime.date: только письма с этого дня."""
+        m = self._imap()
+        try:
+            typ, _ = m.select(folder, readonly=True)
+            if typ != "OK":
+                raise MailError(f"нет папки {folder}")
+            crit = ["SINCE", since.strftime("%d-%b-%Y")] if since else ["ALL"]
+            typ, data = m.uid("search", None, *crit)
+            uids = (data[0] or b"").split()[::-1][:max(1, int(limit))]
+            out = []
+            for i in range(0, len(uids), 100):
+                typ, d = m.uid("fetch", b",".join(uids[i:i + 100]).decode(), "(UID FLAGS BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+                out += _parse_heads(d)
+            order = {u.decode(): k for k, u in enumerate(uids)}
+            out.sort(key=lambda x: order.get(x["uid"], 1 << 30))
+            return out
+        finally:
+            try:
+                m.logout()
+            except Exception:  # noqa: BLE001
+                pass
+
     def read(self, uid, folder="INBOX", mark=False):
         """Письмо целиком по uid из inbox() -> {uid, from, to, subject, date, text, files}.
         mark — человек его прочитал (открыл в студии или попросил Лиру прочитать): отметить «прочитано» и на почте
@@ -528,6 +588,28 @@ class Mail:
                 return 0
         out.sort(key=when, reverse=True)
         return out[: max(limit, limit * min(2, len(live)))] if len(live) > 1 else out[:limit]
+
+    def headers(self, limit=500, box=None, since=None):
+        """Все ящики (или один — box): список писем без текста для таблицы, у каждого — box (адрес). Новые сверху."""
+        boxes = [self.box(box)] if box not in (None, "") else [b for b in self.boxes if b.configured() and b.data.get("imap_host")]
+        if not boxes:
+            raise MailError("почта не подключена (студия → «Подключение» → «Почта»)")
+        out, errs = [], []
+        for b in boxes:
+            try:
+                out += [dict(x, box=b.data.get("address", "")) for x in b.headers(limit, since=since)]
+            except MailError as e:
+                errs.append(f"{b.data.get('address')}: {e}")
+        if errs and not out:
+            raise MailError("; ".join(errs))
+
+        def when(x):
+            try:
+                return email.utils.parsedate_to_datetime(x.get("date") or "").timestamp()
+            except (TypeError, ValueError, IndexError, OverflowError):
+                return 0
+        out.sort(key=when, reverse=True)
+        return out
 
     def reply(self, which, body, attachments=()):
         """Ответить на письмо (03.11, владелец: «прошу ответить на письмо — пишет „читаю“ и всё, по 3–4 раза»: модели

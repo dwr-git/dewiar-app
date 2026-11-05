@@ -124,7 +124,7 @@ t = tm.create("Обещание", "Сделай таблицу продаж")
 ok(wait_for(lambda: t.status in ("done", "failed")) and t.status == "done", f"«Обещание» готова, когда файл появился ({t.status})")
 ok("продажи.csv" in after("Обещание", 1) and "нет на диске" in after("Обещание", 1), "назван файл, которого нет, — итог не принят")
 
-t = tm.create("Лаба", "Посчитай сумму скриптом")
+t = tm.create("Лаба", "Посчитай сумму скриптом (по документации https://docs.python.org/3/index.html)")   # выпуск 3: ссылка итога — из прочитанного
 ok(wait_for(lambda: t.status in ("done", "failed")) and t.status == "done", f"«Лаба» готова ({t.status}; {t.data.get('error', '')})")
 ok("Лаборатория/calc.py" in after("Лаба", 2), f"list_files видит файл «Лаборатории»: {after('Лаба', 2)[-200:]!r}")
 ok(any("Лаборатория/calc.py" in c for c in crit), "самопроверка видит файл «Лаборатории»")

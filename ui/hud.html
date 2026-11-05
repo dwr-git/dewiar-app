@@ -306,6 +306,11 @@
   #task .tl { display: flex; align-items: center; gap: 7px; } #task .tl b { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #task .tl em { font-style: normal; opacity: .75; font-variant-numeric: tabular-nums; }
   #task .tsub { opacity: .75; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #task .tsub.tq { white-space: normal; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; opacity: .9; }
+  #task .tans { display: flex; gap: 6px; margin-top: 6px; }
+  #task .tans button { flex: 1; font: inherit; font-size: 12px; padding: 4px 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: inherit; cursor: pointer; }
+  #task .tans button:hover { background: rgba(255,255,255,.16); }
+  body.light #task .tans button { border-color: rgba(0,0,0,.15); background: rgba(0,0,0,.04); }
   #task .tp { display: block; height: 3px; margin-top: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
   #task .tp b { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, rgba(255,255,255,.55), rgba(193,235,255,.95)); transition: width .6s; }
   #task.done { background: rgba(75,227,161,.08); cursor: default; }
@@ -1496,7 +1501,9 @@ function renderTask_() {
   const pr = t.progress && t.progress[1] ? t.progress[0] / t.progress[1] : 0;
   const esc = (s) => String(s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   el.innerHTML = t.status === "waiting"
-    ? `<div class="tl">❓ <b>${esc(t.title)}</b></div><div class="tsub">${esc(t.question)}</div>`
+    /* №551: вопрос задачи — целиком и с ответом прямо здесь: «Да», «Нет» или «Ответить…» (студия, «Задачи») */
+    ? `<div class="tl">❓ <b>${esc(t.title)}</b></div><div class="tsub tq">${esc(t.question)}</div>` +
+      `<div class="tans"><button data-tans="Да">Да</button><button data-tans="Нет">Нет</button><button data-topen>Ответить…</button></div>`
     : `<div class="tl"><span class="spin"></span><b>${esc(t.title)}</b><em>${t.progress && t.progress[1] ? `${t.progress[0]}/${t.progress[1]}` : `шаг ${t.steps}`}</em></div>` +
       (t.activity ? `<div class="tsub">${esc(t.activity)}</div>` : "") + `<i class="tp"><b style="width:${Math.max(4, pr * 100)}%"></b></i>`;
 }
@@ -1507,7 +1514,16 @@ core.on("hello", d => { (d.tasks || []).forEach(t => tasks[t.id] = t); renderTas
       tasks[e.task.id] = e.task; renderTask();
     })
     .on("update", e => showUpd(e.update));
-$("task").onclick = () => { const a = api(); if (a) a.open_settings("tasks"); };
+$("task").onclick = (ev) => {
+  const b = ev.target.closest && ev.target.closest("[data-tans]");
+  const w = Object.values(tasks).find(x => x.status === "waiting");
+  if (b && w) {                                  // №551: ответ на вопрос задачи — кнопкой в виджете
+    ev.stopPropagation(); b.disabled = true;
+    core.call("task_answer", { id: w.id, text: b.dataset.tans }).catch(e => { b.disabled = false; showCap("", e.message); hideCapLater(6000); });
+    return;
+  }
+  const a = api(); if (a) a.open_settings("tasks");
+};
 /* значок обновления у жучка: есть обновление — ставит сразу (как строка «Доступна версия…»); нет — проверяет (и скачивает
    найденное) и тоже ставит; новее нет — так и говорит строкой на 5 секунд */
 const UPD = { avail: null, want: 0 };   // want — нажали значок, версия ещё качается: скачается — ставим

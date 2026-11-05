@@ -89,6 +89,7 @@ function chatRender(keep) {
   $("#ch-text").placeholder = `Сообщение — ответит ${p ? p.name : "ассистент"}. Enter — отправить, Shift+Enter — новая строка`;
 }
 async function loadChat() {
+  if (typeof chatTaskQLoad === "function") chatTaskQLoad();          // №551: ждущий вопрос задачи — сразу виден
   chatTmSync();
   try {
     const r = await core.call("chat_list", { limit: 80 });
@@ -145,6 +146,32 @@ function chatAsk(e) {
   const pg = $("#p-chat"); if (pg && pg.classList.contains("cur")) $("#ch-ask .btn.primary").focus({ preventScroll: true });
 }
 core.on("confirm", chatAsk).on("confirm_done", () => chatAsk(null));
+/* №551 (04.11: «висит 2 часа, я спросил дать права — молчит»): задача спросила — вопрос виден и в «Чате», ответить можно
+   кнопкой «Да»/«Нет» или словами; ответ уходит задаче (task_answer), а не новым вопросом в разговор */
+const chTQ = { id: "" };
+function chatTaskQ(t) {
+  const box = $("#ch-tq"); if (!box) return;
+  if (!t || t.status !== "waiting" || !t.question) {
+    if (!t || t.id === chTQ.id) { box.hidden = true; box.innerHTML = ""; chTQ.id = ""; }
+    return;
+  }
+  if (chTQ.id === t.id && !box.hidden) return;
+  chTQ.id = t.id;
+  box.innerHTML = `<div class="q">❓ Задача «${escH(t.title)}» спрашивает:\n${escH(t.question)}</div><div class="row">`
+    + `<button class="btn primary small" data-v="Да">Да</button><button class="btn small" data-v="Нет">Нет</button>`
+    + `<input id="ch-tqa" placeholder="Или ответьте словами…" aria-label="Ответ задаче"><button class="btn small" data-v="">Ответить</button></div>`;
+  box.hidden = false;
+  const send = (v) => {
+    const text = (v || ($("#ch-tqa") || {}).value || "").trim(); if (!text) return;
+    core.call("task_answer", { id: t.id, text }).then(() => { chatTaskQ(null); $("#ch-res").textContent = `Передала в задачу «${t.title}».`; })
+      .catch(x => { $("#ch-res").textContent = x.message; });
+  };
+  box.querySelectorAll("[data-v]").forEach(b => b.onclick = () => send(b.dataset.v));
+  $("#ch-tqa").onkeydown = (e) => { if (e.key === "Enter") send(""); };
+}
+core.on("task", e => chatTaskQ(e.task)).on("tasks", e => { const w = (e.tasks || []).find(x => x.status === "waiting"); chatTaskQ(w || null); });
+// вопрос, заданный до открытия «Чата», — спрашиваем, только когда «Чат» открыли (лёгкая студия не грузит скрытое)
+const chatTaskQLoad = () => core.call("tasks_list").then(list => chatTaskQ((list || []).find(x => x.status === "waiting") || null)).catch(() => {});
 // текстовый режим: без микрофона и голоса (ядро запоминает прежний голос), «Выполнить?» — здесь, а не во всплывающем виджете
 /* 30.10 (владелец, №421: «Лира перестала говорить» — режим включился случайным кликом): пока режим включён — строка
    над лентой с кнопкой «Включить голос»; включить — только после вопроса */

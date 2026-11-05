@@ -34,7 +34,7 @@ BUDGET = int(os.environ.get("DEWIAR_TASK_BUDGET") or 60000)     # потолок
 # «Большие задачи», выпуск 1 (docs/HARNESS.md): запрос задачи подстраивается под окно модели, начало запроса не меняется
 WIN_DEFAULT = int(os.environ.get("DEWIAR_TASK_WINDOW") or 65536)   # окно модели, если сервер его не называет
 TINY_WIN = 6144                                    # окно меньше — описания инструментов до первой фразы, набор короче
-TINY_DROP = {"notes", "notify", "wait", "download", "file_glob"}   # …без этих (они — через find_tool)
+TINY_DROP = {"notes", "notify", "wait", "download", "file_glob", "set_criteria"}   # …без этих (они — через find_tool)
 LIGHT_WIN = 16384                                  # окно не больше — «лёгкий режим»: короче подсказка, без уроков и частей
 COMPACT_AT = float(os.environ.get("DEWIAR_TASK_COMPACT_AT") or 0.65)   # весь запрос больше этой доли окна — сжать историю
 TRIM_AFTER = int(os.environ.get("DEWIAR_TASK_TRIM_AFTER") or 12)   # результаты старше стольких шагов — заглушкой
@@ -66,6 +66,15 @@ ASK_REMIND_SEC = float(os.environ.get("DEWIAR_TASK_ASK_REMIND_SEC") or 7200)  # 
 PARTS_MAX = 4                                      # частей за раз у spawn_parts
 PARTS_PARALLEL = int(os.environ.get("DEWIAR_TASK_PARALLEL") or 3)   # сколько частей работают одновременно
 NOTEBOOK_HEAD = ("# Блокнот задачи\n\n## Что известно\n\n## Что решено\n\n## Чего ждём\n\n## Что дальше\n")
+# «Большие задачи», выпуски 3–4 (docs/HARNESS.md): критерии готовности, проверка по существу, список дел со статусами, опрос хода
+POLL_EVERY = int(os.environ.get("DEWIAR_TASK_POLL_EVERY") or 8)   # раз в столько шагов — короткий опрос хода (Magentic-One)
+POLL_LOCAL = int(os.environ.get("DEWIAR_TASK_POLL_LOCAL") or POLL_EVERY * 3)   # …у своего сервера модели (кэш одного разговора)
+TODO_STATUS = ("pending", "in_progress", "done", "blocked")
+TODO_MARK = {"pending": "○", "in_progress": "▶", "done": "✓", "blocked": "✗"}
+SRC_MAX = 8 << 20                                  # _src/результаты.txt — опора для сверки ссылок и цифр, не больше (байт)
+# результаты этих инструментов пишет сама модель — опорой для сверки итога они не считаются
+SELF_MADE = {"write_file", "file_edit", "update_plan", "todo_update", "set_criteria", "remember", "notes", "log", "notify", "finish",
+             "show", "wait", "find_tool", "spawn_parts", "code_write", "code_edit", "code_delete", "code_undo", "code_diff"}
 
 
 def S(props, req=()):
@@ -74,8 +83,24 @@ def S(props, req=()):
 
 
 TASK_TOOLS = {
-    "update_plan": ("Записать или обновить план задачи — чек-лист Markdown («- [ ] шаг», выполненные «- [x]»). "
-                    "Первым делом составь план, потом отмечай сделанное.", S({"plan": {"type": "string"}}, ["plan"])),
+    "todo_update": ("Список дел задачи со статусами — твой план. items — пункты {id, text, status, evidence}: новый пункт — "
+                    "без id; изменить — по id. status: pending — ждёт, in_progress — делаю (один за раз), done — сделано: "
+                    "ТОЛЬКО с evidence (путь к файлу, вывод команды или ссылка — доказательство), blocked — не сделать (в "
+                    "evidence — почему). replace=true — новый план целиком (сменить подход).",
+                    S({"items": {"type": "array", "items": {"type": "object", "properties": {
+                        "id": {"type": "integer"}, "text": {"type": "string"},
+                        "status": {"type": "string", "enum": list(TODO_STATUS)}, "evidence": {"type": "string"}}}},
+                       "replace": {"type": "boolean"}}, ["items"])),
+    "set_criteria": ("Критерии готовности — по ним код проверит итог перед finish. Задай в начале, сразу после плана: 2–6 "
+                     "проверяемых пунктов {check, target, value}. check: file — файл есть (target — путь); contains — в файле "
+                     "есть текст (value); number — в файле есть число (value); command — команда проходит; url — ссылка "
+                     "открывается; page — HTML-страница без ошибок в браузере; pages / lines / rows / files — сколько страниц, "
+                     "строк, строк таблицы, файлов (value — число или «3-5»); manual — остальное словами (text).",
+                     S({"items": {"type": "array", "items": {"type": "object", "properties": {
+                         "check": {"type": "string", "enum": list(Q.CRIT_CHECKS)}, "target": {"type": "string"},
+                         "value": {"type": "string"}, "text": {"type": "string"}}, "required": ["check"]}}}, ["items"])),
+    "update_plan": ("План чек-листом Markdown («- [ ] шаг», выполненные «- [x]») — старый способ; лучше todo_update.",
+                    S({"plan": {"type": "string"}}, ["plan"])),
     "log": ("Короткая заметка в журнал задачи: что выяснил, что решил, что дальше.", S({"text": {"type": "string"}}, ["text"])),
     "ask_user": ("Спросить пользователя, если без его решения дальше нельзя. Ответ придёт результатом. "
                  "Спрашивай редко и по делу.", S({"question": {"type": "string"}}, ["question"])),
@@ -183,7 +208,9 @@ SKIP_IN_TASK = {"start_task", "task_status", "stop_task", "remove_task", "resume
 # Профиль задачи (выпуск 1): постоянный узкий набор — файлы, веб, run_python, план и блокнот, ask/notify/wait/finish, части,
 # навыки. Всё остальное (музыка, деньги, напоминания…) — через find_tool: подключается до конца задачи и встаёт В КОНЕЦ
 # списка, чтобы начало запроса (подсказка и инструменты) не менялось и сервер брал его из кэша.
-PROFILE_TASK = ("update_plan", "ask_user", "finish", "remember", "notes", "notify", "wait")   # log, list_files, read_file — по имени
+PROFILE_TASK = ("todo_update", "set_criteria", "ask_user", "finish", "remember", "notes", "notify", "wait")   # update_plan, log,
+                                                   # list_files, read_file — по имени (совместимость)
+BY_NAME = ("update_plan", "log", "list_files", "read_file")   # не в профиле, но вызов по имени (и текстом) — выполняется
 PROFILE_WORK = ("write_file", "file_read", "file_edit", "file_grep", "file_glob", "run_python", "show", "download")
 PROFILE_CHAT = ("web_search", "read_webpage", "use_skill")      # read_skill_file — подключается сам, когда навык его назовёт
 RETRY_SAFE = {"web_search", "read_webpage", "download", "file_read", "read_file", "file_grep", "file_glob", "use_skill", "read_skill_file"}
@@ -193,8 +220,9 @@ FIND_TOOL = {"find_tool": ("Найти инструмент, которого н
                            "музыка…): query — что нужно сделать, своими словами. Вернёт подходящие с описанием; connect — имя "
                            "инструмента, чтобы подключить его до конца задачи (или просто вызови его).",
                            S({"query": {"type": "string"}, "connect": {"type": "string"}}))}
-NO_TRIM = {"ask_user", "wait_parts", "finish", "spawn_parts", "update_plan", "remember", "notes", "notify", "wait", "log", "show"}
-ACT_RU.update(find_tool="ищу нужный инструмент", spawn_parts="раздаю части помощникам", wait_parts="жду части", code_process="смотрю фоновый процесс",
+NO_TRIM = {"ask_user", "wait_parts", "finish", "spawn_parts", "update_plan", "todo_update", "set_criteria", "remember", "notes", "notify",
+           "wait", "log", "show"}
+ACT_RU.update(todo_update="обновляю список дел", set_criteria="записываю критерии готовности", find_tool="ищу нужный инструмент", spawn_parts="раздаю части помощникам", wait_parts="жду части", code_process="смотрю фоновый процесс",
               code_undo="откатываю правку", code_search="ищу в коде", code_diff="проверяю изменения")
 
 
@@ -275,6 +303,26 @@ class Task:
                     text = text[:at] + head + "\n" + "\n".join(lost) + "\n\n" + text[at:]
         (self.dir / "блокнот.md").write_text(text[:30000] + "\n", encoding="utf-8")
 
+    def _json(self, name, default):
+        try:
+            d = json.loads((self.dir / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return default
+        return d if isinstance(d, type(default)) else default
+
+    def todos(self):
+        """Список дел (задачи.json, выпуск 4): [{id, text, status, evidence, at}]."""
+        return [x for x in self._json("задачи.json", {}).get("items") or [] if isinstance(x, dict) and x.get("text")]
+
+    def criteria(self):
+        """Критерии готовности (критерии.json, выпуск 3): {items, results, checked}."""
+        return self._json("критерии.json", {})
+
+    def put_json(self, name, d):
+        tmp = self.dir / (name + ".tmp")
+        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, self.dir / name)
+
     def code(self):
         """CodeWork для задачи с проектом, иначе None. Рабочая копия создаётся лениво — при первом code_* (prepare)."""
         return CodeWork(self.data["project"], self.dir / "рабочая копия") if self.data.get("project") else None
@@ -342,6 +390,7 @@ class TaskManager:
                     elif t.data.get("auto_resume") and t.status == "paused" and (now - self._started_at).total_seconds() > RESUME_SEC:
                         t.data.pop("auto_resume", None)
                         t.journal("▶ Компьютер включили — продолжаю, где остановился.")
+                        t.data["resume_why"] = "после перезапуска программы"
                         self.start(t.id)
                     elif t.status == "running" and alive:
                         self._watch(t)
@@ -451,9 +500,13 @@ class TaskManager:
 
     # ---------- управление ----------
 
-    def create(self, title, goal, project="", start=True, persona="", parent="", folders=()):
+    def create(self, title, goal, project="", start=True, persona="", parent="", folders=(), search_url=""):
         """Создать папку задачи и начальные файлы; project — папка проекта для режима «Код»; folders — папки человека, которые
-        задача может читать без вопросов (менять — с разрешения; выпуск 2). Нет папки — ValueError."""
+        задача может читать без вопросов (менять — с разрешения; выпуск 2). search_url — свой поиск (SearXNG JSON) только для
+        этой задачи: экзамен Б1 — «интернет» из заготовки; только адрес на этом компьютере. Нет папки — ValueError."""
+        search_url = str(search_url or "").strip()
+        if search_url and not re.match(r"^http://(?:127\.0\.0\.1|localhost)(?::\d+)?(?:/|$)", search_url):
+            raise ValueError("search_url — только адрес на этом компьютере (http://127.0.0.1:…)")
         fl = []
         for f in folders or ():
             fp = Path(str(f)).expanduser()
@@ -490,6 +543,8 @@ class TaskManager:
             data["parent"] = parent
         if fl:
             data["folders"] = fl
+        if search_url:
+            data["search_url"] = search_url
         (d / "план.md").write_text(f"# {title}\n\n**Цель:** {goal.strip()}\n\n_План появится, когда ассистент начнёт._\n", encoding="utf-8")
         (d / "журнал.md").write_text(f"# Журнал: {title}\n", encoding="utf-8")
         (d / "блокнот.md").write_text(NOTEBOOK_HEAD, encoding="utf-8")
@@ -506,19 +561,26 @@ class TaskManager:
         или пришло сообщение) счёт кругов CYCLES начинается заново."""
         t = self.get(tid)
         if t.thread and t.thread.is_alive():
-            return t
+            if t.status in ALIVE or t.thread is threading.current_thread():
+                return t
+            # поток уже закончил работу (готово / не выполнено / пауза) и дописывает состояние — дождаться, а не потерять
+            # «продолжи» человека (task_stop1103 под нагрузкой: перезапуск сразу после «не выполнено» молча не стартовал)
+            t.thread.join(10)
+            if t.thread.is_alive():
+                return t
         t.cancel.clear()
         if wake:
             t.data["wake_note"] = wake
         else:
             t.data["cycles"] = 0
+            t.data["stalls"] = 0                          # человек запустил снова — застой считаем заново
         t.data.pop("auto_resume", None)
         if t.data.get("finished"):
             # №448, №460 (ПК 0.76): «второй раз прошу — не выполняет». Задачу, остановленную «не выполнено» (и готовую),
             # запускали снова — а метка finished оставалась, и цикл выходил после первого же действия с тем же итогом.
             # Новый запуск — новая попытка: итог и проверки перед ним — заново.
             t.data.update(finished=False, finish_checked=False, force_finish=False, force_why="", verified=False, critic_done=False,
-                          refusal_nudged=False, tests_gate=0, gate_rejects=0, unfinished="")
+                          refusal_nudged=False, tests_gate=0, gate_rejects=0, unfinished="", verify_revise=0, nums_checked=False, nums_unclear=False)
         t.data.update(status="running", error="", wake_at="", sleep_now=False)
         for k in ("hung_told", "progress_told_at", "progress_told_sig"):
             t.data.pop(k, None)
@@ -545,7 +607,7 @@ class TaskManager:
         if not (t.thread and t.thread.is_alive()):
             if t.status == "done":
                 t.data.update(finished=False, finish_checked=False, force_finish=False, verified=False, critic_done=False, refusal_nudged=False, tests_gate=0,
-                              gate_rejects=0, unfinished="")
+                              gate_rejects=0, unfinished="", verify_revise=0, nums_checked=False, nums_unclear=False)
                 t.journal("↺ Новое сообщение после итога — продолжаю работу.")
             self.start(t.id)
         self._emit(t)
@@ -624,6 +686,8 @@ class TaskManager:
         read = lambda n: (t.dir / n).read_text(encoding="utf-8") if (t.dir / n).exists() else ""  # noqa: E731
         d = t.public()
         d.update(plan=read("план.md"), journal=read("журнал.md")[-60000:], summary=read("итог.md"), notebook=read("блокнот.md"))
+        cr = t.criteria()                                  # выпуски 3–4: список дел со статусами и критерии с итогом проверки
+        d.update(todos=t.todos(), criteria=[dict(c, label=Q.crit_label(c)) for c in (cr.get("results") or cr.get("items") or [])])
         c = t.code()
         if c and c.work.exists():
             try:
@@ -677,8 +741,11 @@ class TaskManager:
              "В конце каждого запроса — «Состояние задачи»: текущие время, план, критерии готовности и блокнот. Сверяйся с ним "
              "на каждом шаге — он всегда свежий.\n\n"
              "Как работать:\n"
-             "1. Сначала разберись и составь план (update_plan — чек-лист). В начале плана — строка «**Готово, когда:** …» "
-             "(по чему понятно, что цель достигнута). Отмечай сделанное.\n"
+             "1. Сначала разберись и составь план — список дел (todo_update) — и критерии готовности (set_criteria): "
+             "проверяемые — файл есть, в нём есть текст или число, команда проходит, ссылка открывается, страница без ошибок, "
+             "N страниц или строк. Пункт, за который берёшься, — in_progress; сделанный — done С ДОКАЗАТЕЛЬСТВОМ (путь к файлу, "
+             "вывод команды, ссылка). Перед finish критерии проверит код, а итог — проверяющий: каждая цифра и ссылка итога "
+             "должна быть из прочитанного или из файлов.\n"
              "2. Всё важное сразу записывай в блокнот (remember): номера, коды, суммы, ответы людей и компаний, "
              "договорённости, сроки. Ранние шаги со временем уходят из памяти — блокнот остаётся.\n"
              "3. Если результат зависит от внешнего (ответ на письмо, обращение, смена статуса, нужное время) — не "
@@ -762,15 +829,779 @@ class TaskManager:
         crit = re.search(r"Готово,? когда:?\**:?\s*(.+)", plan)
         out = [f"[Состояние задачи — обновляется на каждом шаге; это не сообщение пользователя]",
                f"Сейчас: {now:%d.%m.%Y %H:%M} ({wd}). Шаг {int(t.data.get('steps') or 0) + 1}."]
-        if crit:
+        cr = t.criteria()
+        if cr.get("items"):                                # выпуск 3: критерии — с итогом последней проверки кодом
+            res = cr.get("results") or []
+            mark = lambda i: ("✓ " if res[i].get("ok") else "✗ " if res[i].get("ok") is False else "? ") if i < len(res) else ""  # noqa: E731
+            out.append("КРИТЕРИИ ГОТОВНОСТИ (код проверит их перед finish):\n" + "\n".join(
+                f"{i + 1}. {mark(i)}{Q.crit_label(c)}" + (f" — {res[i]['detail']}" if i < len(res) and res[i].get("ok") is False and res[i].get("detail") else "")
+                for i, c in enumerate(cr["items"]))[:plan_max])
+        elif crit:
             out.append("Критерии готовности: " + crit.group(1).strip()[:600])
-        out.append("ТЕКУЩИЙ ПЛАН:\n" + (plan if len(plan) <= plan_max else plan[:plan_max] + "\n…(план длиннее — целиком: file_read план.md)"))
+        elif int(t.data.get("steps") or 0) and win >= TINY_WIN:
+            out.append("Критериев готовности ещё нет — задай их (set_criteria), чтобы итог проверялся по существу.")
+        todos = t.todos()
+        if todos and t._json("задачи.json", {}).get("source") != "md":   # выпуск 4: список дел со статусами
+            out.append(self._todo_text(todos)[:plan_max])
+        else:
+            out.append("ТЕКУЩИЙ ПЛАН:\n" + (plan if len(plan) <= plan_max else plan[:plan_max] + "\n…(план длиннее — целиком: file_read план.md)"))
+        poll = t.data.get("poll") or {}
+        if poll.get("next"):
+            out.append(f"Опрос хода (шаг {poll.get('step')}): дальше — {poll['next']}"
+                       + ("; похоже, цель достигнута — проверь критерии и вызови finish" if poll.get("done") else ""))
         out.append("БЛОКНОТ ЗАДАЧИ (твоя память):\n" + (nb if len(nb) <= nb_max else nb[:nb_max] + "\n…(блокнот длиннее — целиком: "
                                                                                                 "file_read блокнот.md; сократи его — notes)"))
         on = t.data.get("tools_on") or []
         if on:
             out.append("Подключено через find_tool: " + ", ".join(on))
         return "\n\n".join(out)
+
+    # ---------- список дел со статусами (выпуск 4 «Больших задач», docs/HARNESS.md) ----------
+    @staticmethod
+    def _todo_text(items):
+        """Список дел для «Состояния задачи»: ✓ сделано (с доказательством), ▶ в работе, ○ ждёт, ✗ не сделать."""
+        done = sum(1 for x in items if x.get("status") == "done")
+        lines = [f"СПИСОК ДЕЛ (сделано {done} из {len(items)}; done — только с доказательством):"]
+        for x in items:
+            st = x.get("status") or "pending"
+            ev = str(x.get("evidence") or "")
+            lines.append(f"{TODO_MARK.get(st, '○')} {x.get('id')}. {x.get('text')}" + (f" — {ev[:120]}" if ev and st in ("done", "blocked") else "")
+                         + (" (в работе)" if st == "in_progress" else ""))
+        return "\n".join(lines)
+
+    def _plan_md(self, t, items):
+        """план.md из списка дел: его читают студия, finish (невыполненные пункты) и люди."""
+        lines = [f"# {t.title}", "", f"**Цель:** {t.goal}", ""]
+        crit = t.criteria().get("items")
+        if crit:
+            lines += ["**Готово, когда:** " + "; ".join(Q.crit_label(c) for c in crit), ""]
+        for x in items:
+            st, ev = x.get("status"), str(x.get("evidence") or "")
+            box = "[x]" if st == "done" else "[-]" if st == "blocked" else "[ ]"
+            tail = (f" — ✓ {ev}" if st == "done" and ev else " _(в работе)_" if st == "in_progress" else
+                    f" _(не сделать: {ev})_" if st == "blocked" else "")
+            lines.append(f"- {box} {x.get('id')}. {x.get('text')}{tail}")
+        return "\n".join(lines) + "\n"
+
+    def _save_todos(self, t, items, source="json", render=True, **extra):
+        d = t._json("задачи.json", {})
+        d.update(items=items, source=source, updated=_now(), **extra)
+        t.put_json("задачи.json", d)
+        if render:
+            (t.dir / "план.md").write_text(self._plan_md(t, items), encoding="utf-8")
+        t.data["progress"] = [sum(1 for x in items if x.get("status") == "done"), len(items)]
+
+    def _sync_md(self, t, plan):
+        """update_plan (совместимость): чек-лист Markdown -> задачи.json. «[x]» — сделано, только если в тексте пункта есть
+        доказательство (путь к файлу, ссылка, вывод с цифрами) или оно было раньше; иначе пункт — «в работе» (рецензия 0.84).
+        -> пункты, отмеченные без доказательства."""
+        old = {str(x.get("text")).casefold(): x for x in t.todos()}
+        items, weak = [], []
+        for k, m in enumerate(re.finditer(r"^\s*[-*]\s*\[([ xX~-])\]\s*(.+)$", plan, re.M), 1):
+            text = re.sub(r"^\d+[.)]\s*", "", m.group(2)).strip()
+            st = {"x": "done", "X": "done", "~": "in_progress", "-": "blocked"}.get(m.group(1), "pending")
+            was = old.get(text.casefold()) or {}
+            ev = was.get("evidence") if was.get("status") == "done" else ""
+            if st == "done" and not ev:
+                tail = re.split(r"\s+[—–-]\s+|✓", text, maxsplit=1)
+                cand = tail[1] if len(tail) > 1 else text
+                if not self._proof_bad(t, cand):
+                    ev = cand.strip()[:300]
+                else:
+                    st = "in_progress"
+                    weak.append(text[:80])
+            items.append({"id": k, "text": text[:300], "status": st, "at": _now(), "evidence": ev or ""})
+        if items:
+            self._save_todos(t, items, source="md", render=False)
+        return weak
+
+    PROOF_PATH = re.compile(r"(?<![\w/.-])(?:outputs/[^\s,;:«»()]*|[\w.~А-Яа-яЁё/\\-]+\.(?:md|csv|tsv|xlsx|xls|html?|json|py|txt|pdf|docx|"
+                            r"pptx|png|jpe?g|svg|zip|srt|js|css|ts|java|go|rs|ipynb|log)\b)", re.I)
+
+    def _proof_bad(self, t, ev):
+        """Доказательство пункта «done» -> "" (годится) или почему нет. Годится: ссылка; путь к файлу, который есть (не
+        служебный: журнал, план, блокнот — не доказательство); вывод с цифрами («код 0: 12 passed»). «USD/RUB», «05/11» —
+        не пути: путь — с расширением или начинается с outputs/."""
+        ev = str(ev or "").strip()
+        if not ev:
+            return "нет доказательства (evidence)"
+        if re.search(r"https?://(?:[\w-]+\.)+[\w-]{2,}|https?://(?:localhost|127\.0\.0\.1)", ev):
+            return ""
+        paths = [m.group(0).rstrip(".,;:") for m in self.PROOF_PATH.finditer(ev)]
+        for rel in paths:
+            first = re.split(r"[\\/]", rel.lstrip("./"))[0]
+            if first in Q.SERVICE or Path(rel).name in Q.SERVICE:
+                return f"«{rel}» — служебный файл задачи, не доказательство: нужен результат (outputs/…), вывод или ссылка"
+            if rel.rstrip("/") == "outputs":
+                continue
+            cands = [t.dir / rel, t.dir / "outputs" / rel, self.host.workspace.root / rel]
+            if Path(rel).expanduser().is_absolute():
+                cands.append(Path(rel).expanduser())
+            code = t.code()
+            if code is not None:
+                cands += [Path(code.work) / rel.split("::")[0], Path(code.project) / rel.split("::")[0]]
+            try:
+                if not any(c.exists() for c in cands):
+                    return f"файла {rel} нет — сначала сделай его (или укажи верный путь)"
+            except OSError:
+                pass
+            return ""
+        if re.search(r"\d", ev) and len(ev) >= 4:
+            return ""                                      # вывод команды, счёт, сумма — принимаем как есть
+        return f"«{ev[:60]}» — не доказательство: нужен путь к файлу, ссылка или вывод с цифрами"
+
+    def _todo_update(self, t, args):
+        raw = args.get("items")
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except ValueError:
+                raw = [{"text": ln.strip(" -*")} for ln in raw.splitlines() if ln.strip(" -*")]
+        if isinstance(raw, dict):
+            raw = [raw]
+        if not isinstance(raw, list) or not raw:
+            return ("Ошибка: нужен items — список пунктов {text, status, evidence}. Как исправить: например items=[{\"text\": "
+                    "\"собрать данные\", \"status\": \"in_progress\"}, {\"text\": \"сделать отчёт\"}].")
+        if not (t.dir / "задачи.json").exists() and "[" in t.plan():
+            self._sync_md(t, t.plan())                     # задача 0.83: план из план.md — в список дел, ничего не теряем
+        old = t.todos()
+        extra = {}
+        if args.get("replace") and old:                      # новый план: сделанное остаётся, прежний — в журнал и задачи.json
+            d = t._json("задачи.json", {})
+            extra["replans"] = (d.get("replans") or []) + [{"at": _now(), "step": int(t.data.get("steps") or 0), "why": "новый план",
+                                                            "was": [f"{TODO_MARK.get(x.get('status'), '○')} {x.get('text')}" for x in old][:30]}]
+            items = [dict(x) for x in old if x.get("status") == "done"]
+            t.journal("🔄 Новый план: " + "; ".join(str(x.get("text"))[:60] for x in raw if isinstance(x, dict))[:400])
+        else:
+            items = [dict(x) for x in old]
+        nid = max([int(x.get("id") or 0) for x in items], default=0) + 1
+        alias = {"todo": "pending", "new": "pending", "ждёт": "pending", "doing": "in_progress", "active": "in_progress", "progress": "in_progress",
+                 "в_работе": "in_progress", "completed": "done", "complete": "done", "сделано": "done", "failed": "blocked", "skip": "blocked",
+                 "skipped": "blocked", "cancelled": "blocked"}
+        notes, changed, now_ip = [], 0, None
+        for x in raw:
+            if isinstance(x, str):
+                x = {"text": x}
+            if not isinstance(x, dict):
+                continue
+            st = str(x.get("status") or "").strip().lower().replace(" ", "_")
+            st = alias.get(st, st)
+            if st and st not in TODO_STATUS:
+                notes.append(f"статус «{st}» не знаю — бывает: {', '.join(TODO_STATUS)}")
+                continue
+            ev = str(x.get("evidence") or "").strip()
+            cur = None
+            try:
+                xid = int(x.get("id")) if x.get("id") not in (None, "") else None
+            except (TypeError, ValueError):
+                xid = None
+            if xid is not None:
+                cur = next((y for y in items if int(y.get("id") or 0) == xid), None)
+            if cur is None and x.get("text"):
+                cur = next((y for y in items if str(y.get("text")).casefold() == str(x["text"]).strip().casefold()), None)
+            if cur is None:
+                text = str(x.get("text") or "").strip()
+                if not text:
+                    notes.append(f"пункта {xid} нет — новый пункт пиши с text")
+                    continue
+                cur = {"id": nid, "text": text[:300], "status": "pending", "evidence": "", "at": _now()}
+                nid += 1
+                items.append(cur)
+            elif x.get("text") and xid is not None:
+                cur["text"] = str(x["text"]).strip()[:300]
+            if st == "done" and cur.get("status") != "done":
+                why = self._proof_bad(t, ev)
+                if why:
+                    notes.append(f"пункт {cur['id']} «{str(cur['text'])[:60]}» НЕ отмечен сделанным: {why}")
+                    continue
+            if st == "blocked" and not ev:
+                notes.append(f"пункт {cur['id']}: blocked — напиши в evidence, почему не сделать")
+                continue
+            if st:
+                cur["status"], cur["at"] = st, _now()
+                if st == "in_progress":
+                    now_ip = cur
+            if ev:
+                cur["evidence"] = ev[:300]
+            changed += 1
+        if now_ip is not None:                               # «в работе» — один пункт за раз
+            for y in items:
+                if y is not now_ip and y.get("status") == "in_progress":
+                    y["status"] = "pending"
+        if not items:
+            return "Ошибка: список дел пуст. Как исправить: пункты с text."
+        self._save_todos(t, items, **extra)
+        done = sum(1 for y in items if y.get("status") == "done")
+        ip = next((y for y in items if y.get("status") == "in_progress"), None)
+        t.journal(f"📋 Список дел: сделано {done} из {len(items)}" + (f"; в работе — {ip['text'][:80]}" if ip else "")
+                  + (f"; не принято: {len(notes)}" if notes else ""))
+        msg = f"Список дел сохранён: сделано {done} из {len(items)}" + (f"; в работе: {ip['id']}. {ip['text']}" if ip else "") + "."
+        if notes:
+            msg = ("Ошибка: " if not changed else "") + msg + "\nНе принято:\n- " + "\n- ".join(notes[:8]) + (
+                "\nКак исправить: done — только с evidence: путь к файлу (outputs/…), вывод команды или ссылка, которые это "
+                "подтверждают. Сначала сделай и проверь, потом отмечай.")
+        return msg
+
+    # ---------- критерии готовности (выпуск 3) ----------
+    def _set_criteria(self, t, args):
+        raw = args.get("items") if "items" in args else args.get("criteria")
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except ValueError:
+                raw = [ln.strip(" -*") for ln in raw.splitlines() if ln.strip(" -*")]
+        if isinstance(raw, dict):
+            raw = [raw]
+        items, errs = Q.norm_criteria(raw if isinstance(raw, list) else [])
+        if not items:
+            return ("Ошибка: критерии не записаны" + (": " + "; ".join(errs[:6]) if errs else "") + ". Как исправить: items=[{\"check\": "
+                    "\"file\", \"target\": \"outputs/отчёт.md\"}, {\"check\": \"contains\", \"target\": \"outputs/отчёт.md\", \"value\": "
+                    "\"Вывод\"}, {\"check\": \"manual\", \"text\": \"у каждой цифры — ссылка\"}].")
+        d = t.criteria()
+        if any(r.get("ok") is False for r in d.get("results") or []):
+            d["was"] = (d.get("was") or []) + [[Q.crit_label(c) for c in d.get("items") or []]]
+            t.journal("⚠ Критерии изменены после непройденной проверки — проверяющий это увидит.")
+        d.update(items=items, results=[], set_at=_now())
+        t.put_json("критерии.json", d)
+        if t.todos() and t._json("задачи.json", {}).get("source") != "md":
+            (t.dir / "план.md").write_text(self._plan_md(t, t.todos()), encoding="utf-8")
+        t.journal("🎯 Критерии готовности: " + "; ".join(Q.crit_label(c) for c in items)[:500])
+        return (f"Критерии записаны ({len(items)}):\n" + "\n".join(f"{i}. {Q.crit_label(c)}" for i, c in enumerate(items, 1))
+                + "\nПеред finish я проверю их кодом." + (f"\nНе принято: {'; '.join(errs[:4])}" if errs else ""))
+
+    def _auto_criteria(self, t):
+        """Файлы outputs/…, названные в цели, должны быть — всегда, даже если модель задала свои критерии (рецензия 0.84:
+        «файл план.md есть» снимал требование файла из цели)."""
+        out = []
+        for m in re.finditer(r"outputs/[\wА-Яа-яЁё./ -]*?\.(?:md|csv|xlsx|html?|json|py|txt|pdf|docx|pptx|png|jpe?g|svg|zip)\b", t.goal or ""):
+            tg = m.group(0).strip()
+            if tg not in [c["target"] for c in out]:
+                out.append({"check": "file", "target": tg, "value": "", "text": "файл из цели", "auto": True})
+        return out[:6]
+
+    def _crit_path(self, t, rel):
+        p, _f = self._area(t, rel)
+        if not p.exists():
+            code = t.code()
+            if code is not None and not Path(str(rel)).is_absolute():
+                for root in (code.work, code.project):
+                    q = Path(root) / str(rel)
+                    if q.exists():
+                        return q
+        return p
+
+    def _crit_cmd(self, t, cmd):
+        """Критерий «команда проходит»: та же защита, что у code_run; без разрешения на запуск кода — не проверяется."""
+        import subprocess
+        import guard
+        if not self.host.code_auto_run():               # разрешение на run_python — не разрешение на любые команды
+            return None, "проверит проверяющий"
+        code = t.code()
+        cwd = str(code.work) if code is not None and Path(code.work).exists() else str(t.dir)
+        v = guard.check_command(cmd, cwd=cwd)
+        if v["level"] != "ok":
+            return None, f"команду не запускаю без человека: {v.get('reason') or v['level']}"
+        t.journal(f"▶ команда критерия: {cmd[:300]}")
+        try:
+            r = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               timeout=120, stdin=subprocess.DEVNULL, env=self._py_env(t, ""))
+        except subprocess.TimeoutExpired:
+            return False, "не уложилась в 120 с"
+        tail = (r.stdout + r.stderr).strip()[-300:]
+        return r.returncode == 0, f"код {r.returncode}" + (f": {tail}" if r.returncode and tail else "")
+
+    @staticmethod
+    def _url_inner(t, url):
+        """Адрес внутренней сети (loopback, частные сети, link-local…) -> причина или "". Свой поиск задачи (search_url —
+        экзамен Б1) — можно. Рецензия 0.84: критерий «ссылка открывается» ходил куда угодно, в том числе на 127.0.0.1."""
+        import ipaddress
+        import socket
+        from urllib.parse import urlparse
+        u = urlparse(str(url or ""))
+        if u.scheme not in ("http", "https") or not u.hostname:
+            return "нужен адрес http(s)://"
+        su = t.data.get("search_url")
+        if su and urlparse(su).netloc == u.netloc:
+            return ""
+        try:
+            infos = socket.getaddrinfo(u.hostname, u.port or (443 if u.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+        except (OSError, UnicodeError, ValueError):
+            return ""                                      # не нашёлся адрес — откроется с ошибкой (или через прокси)
+        for *_x, sa in infos:
+            try:
+                ip = ipaddress.ip_address(sa[0])
+            except ValueError:
+                continue
+            if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+                return "адрес внутренней сети"
+        return ""
+
+    def _crit_url(self, t, url):
+        """Критерий «ссылка открывается»: GET без автоперехода — каждая переадресация проверяется на внутреннюю сеть."""
+        import httpx
+        from urllib.parse import urljoin
+        cur = str(url)
+        try:
+            with httpx.Client(follow_redirects=False, timeout=15, headers={"User-Agent": "Mozilla/5.0 (Dewiar)"}) as c:
+                for _ in range(6):
+                    why = self._url_inner(t, cur)
+                    if why:
+                        return False, f"{why} — такие адреса не открываю"
+                    r = c.get(cur)
+                    if 300 <= r.status_code < 400 and r.headers.get("location"):
+                        cur = urljoin(cur, r.headers["location"])
+                        continue
+                    return r.status_code < 400, f"HTTP {r.status_code}"
+        except httpx.HTTPError as e:
+            return False, f"не открылась: {e.__class__.__name__}"
+        return False, "слишком много переадресаций"
+
+    @staticmethod
+    def _browser_ok(paths):
+        res = Q.html_check([str(p) for p in paths])
+        if res is None:
+            return None
+        return {k: (None if v.get("unchecked") or v.get("soft") else not v["errors"],
+                    v.get("unchecked") or "; ".join(v["errors"]) or "ошибок нет") for k, v in res.items()}
+
+    def _check_criteria(self, t, quick=False):
+        """Проверить критерии (или файлы из цели, если критериев нет) -> результаты; полная проверка сохраняется в критерии.json."""
+        d = t.criteria()
+        own = d.get("items") or []
+        have = {str(c.get("target") or "").strip("./") for c in own}
+        crits = own + [c for c in self._auto_criteria(t) if c["target"].strip("./") not in have]
+        if not crits:
+            return []
+        res = Q.check_criteria(crits, lambda rel: self._crit_path(t, rel), run_cmd=lambda c: self._crit_cmd(t, c),
+                               http_ok=lambda u: self._crit_url(t, u), browser=self._browser_ok, quick=quick)
+        if not quick and d.get("items"):
+            d.update(results=res, checked=_now())
+            t.put_json("критерии.json", d)
+        return res
+
+    # ---------- опора для сверки итога: что задача прочитала и получила (выпуск 3) ----------
+    PROSE = (".md", ".txt", ".html", ".htm")
+
+    def _prose(self, t):
+        """Тексты отчётов задачи (outputs/*.md, .txt, .html) — то, что модель написала сама: опорой они не бывают."""
+        out = []
+        d = t.dir / "outputs"
+        for p in sorted(d.rglob("*")) if d.is_dir() else []:
+            if p.is_file() and p.suffix.lower() in self.PROSE:
+                out.append(Q.file_text(p, limit=500000))
+        return "\n".join(out)
+
+    def _own_path(self, t, path):
+        """Путь чтения указывает на результаты (outputs/) или служебные файлы задачи — то, что пишет сама модель."""
+        raw = str(path or "").strip()
+        if not raw:
+            return False
+        try:
+            p = Path(raw).expanduser()
+            p = (p if p.is_absolute() else t.dir / raw.lstrip("/\\")).resolve()
+            rel = p.relative_to(t.dir.resolve())
+        except (OSError, ValueError):
+            return False
+        return bool(rel.parts) and (rel.parts[0] == "outputs" or rel.parts[0] in Q.SERVICE)
+
+    def _evidence_piece(self, t, name, args, r):
+        """Что из результата инструмента — опора для сверки -> (заголовок, текст) или None. Не опора (рецензия 0.84): то,
+        что пишет сама модель; чтение своих outputs/ и служебных файлов; строки вывода run_python, которые есть в её же
+        отчётах (скрипт печатает собственный отчёт); код run_python."""
+        if name in SELF_MADE or not isinstance(r, str) or not r.strip():
+            return None
+        args = args if isinstance(args, dict) else {}
+        if name in ("file_read", "read_file") and self._own_path(t, args.get("path")):
+            return None
+        if name == "file_grep":
+            if self._own_path(t, args.get("path")):
+                return None
+            r = "\n".join(ln for ln in r.splitlines() if not ln.startswith(("outputs/", "_src/", "задачи.json", "критерии.json")))
+        if name in ("run_python", "code_run"):
+            prose = self._prose(t)
+            if prose:
+                r = "\n".join(ln for ln in r.splitlines() if len(ln.strip()) < 12 or ln.strip() not in prose)
+            return (name, r) if r.strip() else None
+        return (f"{name} {json.dumps(args, ensure_ascii=False)[:5000]}", r)
+
+    def _src_log(self, t, name, args, r):
+        """Опора (_evidence_piece) — в _src/результаты.txt: по ней проверяющий сверяет ссылки и цифры итога. Пишется ДО
+        обрезки вывода (_offload) — целиком; после SRC_MAX — только заголовок с аргументами (адреса не теряются).
+        Задача по коду — без опоры: её итог проверяют тесты и diff."""
+        if t.code() is not None:
+            return
+        piece = self._evidence_piece(t, name, args, r)
+        if not piece:
+            return
+        f = t.dir / "_src" / "результаты.txt"
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            full = f.exists() and f.stat().st_size > SRC_MAX
+            with open(f, "a", encoding="utf-8") as fh:
+                fh.write(f"\n\n### {piece[0]}\n" + ("(вывод не сохранён: опора переполнена)" if full else piece[1][:400000]) + "\n")
+        except OSError:
+            pass
+
+    def _src_backfill(self, t):
+        """Опоры нет (задача начата до 0.84 или опору стёрли) — собрать её из история.json и _out/ (рецензия 0.84)."""
+        try:
+            msgs = json.loads((t.dir / "история.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            msgs = []
+        calls, last, parts = {}, [], []
+
+        def add(nm, a, txt):
+            piece = self._evidence_piece(t, nm, a, txt)
+            if piece:
+                parts.append(f"### {piece[0]}\n{piece[1]}")
+        for m in msgs if isinstance(msgs, list) else []:
+            if not isinstance(m, dict):
+                continue
+            if m.get("role") == "assistant":
+                cs = self._calls_of(m)
+                if cs:
+                    last = cs
+                    for cid, nm, a in cs:
+                        calls[cid] = (nm, a)
+                        if nm not in SELF_MADE and nm not in ("run_python", "code_run"):   # адреса из вызовов чтения — тоже видены
+                            parts.append(f"### {nm} {json.dumps(a, ensure_ascii=False)[:5000]}")
+                continue
+            c = m.get("content")
+            if m.get("role") == "tool":
+                nm, a = calls.get(m.get("tool_call_id"), ("?", {}))
+                add(nm, a, c if isinstance(c, str) else json.dumps(c, ensure_ascii=False))
+            elif isinstance(c, list):
+                for b in c:
+                    if isinstance(b, dict) and b.get("type") == "tool_result":
+                        nm, a = calls.get(b.get("tool_use_id"), ("?", {}))
+                        bc = b.get("content")
+                        add(nm, a, "".join(x.get("text", "") for x in bc if isinstance(x, dict)) if isinstance(bc, list) else str(bc or ""))
+            elif isinstance(c, str) and "<tool_response>" in c:
+                for k, body in enumerate(re.findall(r"<tool_response>\n?(.*?)\n?</tool_response>", c, re.S)):
+                    nm, a = (last[k][1], last[k][2]) if k < len(last) else ("?", {})
+                    add(nm, a, body)
+        for f in sorted((t.dir / "_out").glob("*.txt")) if (t.dir / "_out").is_dir() else []:
+            nm = re.sub(r"-\d+(?:-\d+)?$", "", f.stem)
+            add(nm, {}, f.read_text(encoding="utf-8", errors="replace")[:400000])
+        return "\n\n".join(parts)
+
+    def _given(self, t, limit=8 << 20):
+        """Тексты, которые дала не модель этой задачи: итоги частей (parts/), скачанное (downloads/), файлы человека в папке
+        задачи (заготовки, материалы) — тоже опора (рецензия 0.84)."""
+        out, size = [], 0
+        for p in sorted(t.dir.rglob("*")):
+            try:
+                rel = p.relative_to(t.dir)
+            except ValueError:
+                continue
+            if not p.is_file() or rel.parts[0] in Q.SERVICE or rel.parts[0] == "outputs" or rel.parts[0].startswith("рабочая копия") \
+                    or p.name.endswith(".tmp") or rel.as_posix() in (t.data.get("authored") or []):
+                continue
+            txt = Q.file_text(p, limit=2_000_000)
+            size += len(txt)
+            out.append(txt)
+            if size > limit:
+                break
+        return "\n".join(out)
+
+    def _evidence(self, t):
+        """Опора для ссылок и цифр: результаты инструментов (_src, а если его нет — из истории), тексты частей, скачанного и
+        файлов человека, цель, слова человека."""
+        try:
+            src = (t.dir / "_src" / "результаты.txt").read_text(encoding="utf-8")
+        except OSError:
+            src = self._src_backfill(t)
+        nb = t.notebook()
+        human = nb.split("## Ответы человека", 1)[1].split("\n## ", 1)[0] if "## Ответы человека" in nb else ""
+        return f"{t.goal}\n{human}\n{src}\n{self._given(t)}"
+
+    def _data_files(self, t, limit=16 << 20):
+        """Файлы с данными для сверки цифр: в outputs/ — только сделанные скриптом (не write_file / file_edit) и не отчёты
+        (.md, .html); остальное — в опоре (_given). -> [(путь, текст)]."""
+        out, size = [], 0
+        d = t.dir / "outputs"
+        authored = set(t.data.get("authored") or [])
+        for p in sorted(d.rglob("*")) if d.is_dir() else []:
+            rel = p.relative_to(t.dir).as_posix()
+            if not p.is_file() or p.suffix.lower() in (".md", ".html", ".htm") or rel in authored:
+                continue
+            txt = Q.file_text(p, limit=2_000_000)
+            size += len(txt)
+            out.append((p, txt))
+            if size > limit:
+                break
+        return out
+
+    def _ask_with(self, prof, system, messages, max_tokens=900):
+        if not prof:
+            return ""
+        return "".join(stream_chat(dict(prof, max_tokens=max_tokens, temperature=0.1), system, messages))
+
+    def _judge(self, t):
+        """Сильная модель проверяющего (tasks.judge_llm), если настроена -> профиль или None (тогда — модель задачи)."""
+        pid = self._opt("judge_llm") or ""
+        if not pid:
+            return None
+        try:
+            profs = self.host.s.get("llm", "profiles") or {}
+        except Exception:  # noqa: BLE001
+            return None
+        return dict(profs[pid], id=pid) if pid in profs else None
+
+    def _verify(self, t, summary, q, files, facts, diff):
+        """Проверка по существу перед «готово» (выпуск 3): критерии кодом -> выдуманные ссылки -> ошибки страниц в браузере ->
+        цифры без опоры (один раз) -> проверяющий с чистым контекстом (один вызов). -> текст для модели или None (принять)."""
+        win = int(t.data.get("win") or WIN_DEFAULT)
+        res = self._check_criteria(t)
+        if any(r.get("ok") is False for r in res):
+            q["verify_fail"] += 1
+            t.journal("🎯 Критерии готовности не выполнены: " + "; ".join(f"{Q.crit_label(r)} — {r.get('detail')}" for r in res if r.get("ok") is False)[:600])
+            return Q.criteria_note(res)
+        outs = sorted(p for p in (t.dir / "outputs").rglob("*") if p.is_file()) if (t.dir / "outputs").is_dir() else []
+        reports = [p for p in outs if p.suffix.lower() == ".md"][:10]
+        claims = summary + "\n" + "\n".join(Q.file_text(p, limit=200000) for p in reports)
+        evidence = self._evidence(t)
+        code = t.code() is not None
+        ghost = [] if code else Q.unseen_urls(claims, evidence)
+        findings = []
+        if ghost and set(ghost) <= set(t.data.get("ghost_checked") or []):
+            findings.append("Ссылки, которых задача не открывала (она предупреждена и не исправила): " + ", ".join(ghost[:8]))
+            ghost = []                                     # один возврат на тот же список — дальше решает проверяющий
+        if ghost:
+            t.data["ghost_checked"] = sorted(set(t.data.get("ghost_checked") or []) | set(ghost))[:60]
+            q["verify_fail"] += 1
+            t.journal("🔗 В итоге ссылки, которых задача не открывала и не видела: " + ", ".join(ghost[:6]))
+            return ("ССЫЛКИ БЕЗ ИСТОЧНИКА: в итоге или отчёте есть адреса, которых нет ни в одном прочитанном (поиск, страницы, "
+                    "файлы): " + ", ".join(ghost[:8]) + ". Ссылка, которую ты не открывал(а), — догадка. Открой каждую "
+                    "read_webpage и проверь, что факт или цифра там есть, — или убери её (замени ссылкой, которую читал(а)). "
+                    "Затем снова вызови finish.")
+        html = [p for p in outs if p.suffix.lower() in (".html", ".htm")][:4]
+        hc = Q.html_check(html) if html else None
+        if hc:
+            bad = {Path(k).relative_to(t.dir).as_posix(): v["errors"] for k, v in hc.items() if v["errors"] and not v.get("soft") and not v.get("unchecked")}
+            for k, v in hc.items():                        # не загрузилась или ошибки из-за внешних ресурсов — замечание, не брак
+                rel = Path(k).relative_to(t.dir).as_posix()
+                if v.get("unchecked"):
+                    findings.append(f"{rel}: в браузере не проверена ({v['unchecked'][:120]})")
+                elif v.get("soft") and v["errors"]:
+                    findings.append(f"{rel}: ошибки скриптов, возможно, из-за внешних ресурсов без сети ({', '.join(v.get('external') or [])[:160]}): "
+                                    + " | ".join(v["errors"][:2]))
+            if bad:
+                q["verify_fail"] += 1
+                t.journal("🌐 Браузер: ошибки на страницах — " + "; ".join(f"{k}: {v[0]}" for k, v in bad.items())[:500])
+                return ("СТРАНИЦА С ОШИБКАМИ (открыта в браузере, проверено кодом):\n" + "\n".join(
+                    f"- {k}: " + " | ".join(v[:3]) for k, v in bad.items()) + "\nПочини скрипт страницы (file_edit) и снова вызови finish.")
+        data = self._data_files(t)
+        nums = []
+        if not code:
+            sizes = " ".join(str(p.stat().st_size) for p in outs)
+            pool = Q.number_pool("\n".join([evidence, facts, sizes] + [x for _, x in data]))
+            nums = Q.unsupported_numbers(claims, pool)
+        if nums and not t.data.get("nums_checked"):
+            t.data["nums_checked"] = True
+            q["verify_fail"] += 1
+            t.journal("🔢 Числа итога без опоры в источниках и файлах: " + ", ".join(nums))
+            return ("ЦИФРЫ БЕЗ ОПОРЫ: в итоге или отчёте есть числа, которых нет ни в прочитанных источниках, ни в файлах с "
+                    "данными: " + ", ".join(nums) + ". Сверь каждое: неверное — исправь по источнику или файлу; посчитанное — "
+                    "посчитай в run_python (расчёт и вывод останутся опорой); без опоры — убери. Затем снова вызови finish.")
+        judge = self._judge(t)
+        light = bool(t.data.get("light"))
+        if self._opt("self_check") is False or (win < TINY_WIN and not judge):
+            return None                                    # проверяющий выключен (или окно крошечное) — решают машинные проверки
+        if judge:
+            if not t.data.get("judge_win"):
+                t.data["judge_win"] = self._window(judge)
+            jwin, short = int(t.data["judge_win"]), False
+        else:
+            jwin, short = win, light
+        budget = int(max(2500, min(30000, jwin * 3 * (0.3 if short else 0.35))))
+        ex, used = [], 0
+        per = max(500, min(3000, budget // max(1, min(6, len(outs) or 1)) // (2 if Q.claim_urls(claims) else 1)))
+        for p in outs[:8]:
+            rel = p.relative_to(t.dir).as_posix()
+            if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp3", ".wav", ".mp4", ".zip"):
+                continue
+            if hc and str(p) in hc:
+                body = "[в браузере] " + (hc[str(p)]["text"] or "(пусто)") + (" [есть горизонтальная прокрутка на телефоне]" if hc[str(p)]["overflow"] else "")
+            else:
+                body = Q.file_text(p, limit=per * 2)
+                if p.suffix.lower() in (".html", ".htm"):
+                    body = re.sub(r"\s+", " ", re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>|<[^>]+>", " ", body))
+            body = body.strip()[:per]
+            if used + len(body) > budget:
+                break
+            used += len(body)
+            ex.append(f"### {rel}\n{body or '(пусто)'}")
+        srcs = []
+        for u in Q.claim_urls(claims)[:6 if not short else 3]:
+            block = self._src_block(t, u)
+            if not block and not short and len(srcs) < 6:
+                block = self._fetch_src(t, u)
+            if block:
+                srcs.append(f"- {u}\n{block[:max(400, (budget - used) // 6)]}")
+        crit_txt = "\n".join(("✓ " if r.get("ok") else "? ") + Q.crit_label(r) + (f" ({r['detail']})" if r.get("detail") else "") for r in res)
+        if t.criteria().get("was"):
+            crit_txt += "\n(критерии менялись после непройденной проверки; прежние: " + " / ".join("; ".join(x) for x in t.criteria()["was"])[:400] + ")"
+        ask = (lambda s_, m_: self._ask_with(judge, s_, m_)) if judge else self._ask
+        verdict, problems = Q.verify_task(ask, f"{t.title}\n{t.goal}", summary, files, facts, diff=diff, criteria=crit_txt,
+                                          excerpts="\n\n".join(ex), sources="\n".join(srcs), findings="\n".join(findings), short=short)
+        if verdict == "ok":
+            t.journal("🧐 Проверяющий: итог подтверждён" + (f" (модель {judge.get('name') or judge.get('id')})" if judge else "") + ".")
+            return None
+        if verdict == "revise":
+            q["critic"] += 1
+            t.data["verify_revise"] = int(t.data.get("verify_revise") or 0) + 1
+            t.journal(f"🧐 Самопроверка вернула итог на доработку: {problems}")
+            return Q.critic_note(problems)
+        # непонятный ответ или сбой проверяющего — не «ок»: решают машинные проверки
+        if nums and not t.data.get("nums_unclear"):
+            t.data["nums_unclear"] = True
+            t.journal("🧐 Проверяющий ответил непонятно — решают машинные проверки: есть числа без опоры.")
+            return ("Проверить итог по существу не удалось, а машинная проверка нашла числа без опоры: " + ", ".join(nums) +
+                    ". Подтверди каждое источником или расчётом (run_python) или убери, затем снова вызови finish.")
+        t.journal("🧐 Проверяющий дважды ответил непонятно — решили машинные проверки: " + ("прошли" if not nums else "числа без опоры уже показаны задаче дважды")
+                  + (f". Замечание проверяющего: {problems[:300]}" if problems else "") + (f". Замечания: {'; '.join(findings)[:300]}" if findings else "") + ".")
+        return None
+
+    def _src_block(self, t, url):
+        """Выдержка источника из _src: что вернул read_webpage (или download) по этому адресу."""
+        try:
+            src = (t.dir / "_src" / "результаты.txt").read_text(encoding="utf-8")
+        except OSError:
+            return ""
+        key = url.rstrip("/")
+        for part in src.split("\n\n### ")[1:]:
+            head, _, body = part.partition("\n")
+            if head.startswith(("read_webpage", "download", "read_page")) and key in head:
+                return re.sub(r"\s+", " ", body).strip()
+        return ""
+
+    def _fetch_src(self, t, url):
+        """Ссылку итога задача не читала (видела только в выдаче поиска) — проверяющий открывает её сам (read_webpage)."""
+        if self._url_inner(t, url):
+            return ""
+        try:
+            on, _need = self.host.toolbox.policy("read_webpage")
+            if not on:
+                return ""
+            r = self.host.toolbox.run("read_webpage", {"url": url})
+        except Exception as e:  # noqa: BLE001
+            return f"(не открылась: {str(e)[:120]})"
+        return re.sub(r"\s+", " ", str(r or "")).strip()
+
+    # ---------- опрос хода, застой и новый план, сверка при продолжении (выпуск 4) ----------
+    POLL_SYS = ("Ты — наблюдатель хода фоновой задачи. По цели, списку дел и последним шагам ответь строго одним JSON без пояснений: "
+                "{\"done\": цель уже достигнута — true/false, \"loop\": задача ходит по кругу (те же действия без нового результата) — "
+                "true/false, \"progress\": за эти шаги есть продвижение к цели — true/false, \"next\": \"следующий шаг одной фразой\"}.")
+
+    def _poll(self, t, recent):
+        """Короткий опрос хода раз в POLL_EVERY шагов (Magentic-One): сделано? петля? есть ход? что дальше? -> dict или None.
+        Окно меньше TINY_WIN — не спрашиваем (только машинные признаки); лёгкий режим — короче."""
+        win = int(t.data.get("win") or WIN_DEFAULT)
+        if win < TINY_WIN or not recent:
+            return None
+        light = bool(t.data.get("light"))
+        per = 90 if light else 220
+        acts = "\n".join(f"{i}. {n} {a[:80]} → {r[:per]}" for i, (n, a, r) in enumerate(recent[-(5 if light else POLL_EVERY):], 1))
+        todo = self._todo_text(t.todos()) if t.todos() else t.plan()
+        msg = (f"ЦЕЛЬ: {t.goal[:400 if light else 900]}\n\nСПИСОК ДЕЛ:\n{todo[:600 if light else 1600] or '(нет)'}\n\n"
+               f"ПОСЛЕДНИЕ ШАГИ:\n{acts}\n\nОтветь одним JSON.")
+        try:
+            prof = self.host.llm_profile()
+            raw = "".join(stream_chat(dict(prof, max_tokens=160, temperature=0.1), self.POLL_SYS, [{"role": "user", "content": msg}],
+                                      cancel=t.cancel))
+        except Exception as e:  # noqa: BLE001 — опрос хода — подсказка, его сбой задачу не останавливает
+            log.info("Опрос хода не удался: %s", e)
+            return None
+        raw = re.sub(r"<think>.*?</think>", "", raw or "", flags=re.S)
+        m = re.search(r"\{.*\}", raw, re.S)
+        try:
+            d = json.loads(m.group(0)) if m else None
+        except ValueError:
+            d = None
+        if not isinstance(d, dict) or not any(k in d for k in ("done", "loop", "progress")):
+            return None
+        b = lambda v: v is True or str(v).strip().lower() in ("true", "да", "yes")  # noqa: E731
+        return {"done": b(d.get("done")), "loop": b(d.get("loop")), "progress": None if d.get("progress") is None else b(d.get("progress")),
+                "next": str(d.get("next") or "").strip()[:240]}
+
+    @staticmethod
+    def _poll_every(prof):
+        """Свой сервер модели (llama.cpp, LM Studio, Ollama — адрес на этом компьютере или в домашней сети) держит кэш одного
+        разговора: каждый опрос хода вытесняет его, и следующий шаг считает запрос заново. Там — втрое реже."""
+        from urllib.parse import urlparse
+        host = (urlparse(str(prof.get("base_url") or "")).hostname or "").lower()
+        local = (host in ("localhost", "0.0.0.0", "::1") or host.startswith(("127.", "192.168.", "10.")) or host.endswith(".local")
+                 or re.match(r"172\.(1[6-9]|2\d|3[01])\.", host) or str(prof.get("kind") or "").lower() in ("ollama", "lmstudio", "llamacpp")
+                 or prof.get("tools_mode") == "prompt")
+        return POLL_LOCAL if local else POLL_EVERY
+
+    def _work_sig(self, t):
+        """Отпечаток работы: файлы (кроме плана и списков), блокнот, число сделанных пунктов. Смена плана сама по себе — не работа."""
+        import hashlib
+        try:
+            files = sorted(f"{p.relative_to(t.dir)}:{p.stat().st_size}" for p in t.dir.rglob("*") if p.is_file()
+                           and p.relative_to(t.dir).parts[0] not in Q.SERVICE and "рабочая копия" not in p.parts and not p.name.endswith(".tmp"))
+        except OSError:
+            files = []
+        done = sum(1 for x in t.todos() if x.get("status") == "done")
+        return hashlib.sha1("\n".join([t.notebook(), str(done), *files[:2000]]).encode()).hexdigest()[:16]
+
+    REPLAN = ("ЗАСТОЙ: {why}. Прежний подход не двигает задачу. Остановись и составь НОВЫЙ план: todo_update с replace=true — "
+              "другой путь к цели (другие источники или способ, разбить иначе, обойти то, что не получается). Сделанное останется "
+              "отмеченным. Затем действуй по новому плану. Если цель недостижима — честно скажи это в finish.")
+
+    def _stall(self, t, msgs, why, can_pause=True):
+        """Застой (выпуск 4): первый — новый план с записью в журнал, а не пауза; второй подряд без работы между ними — пауза."""
+        sig = self._work_sig(t)
+        steps = int(t.data.get("steps") or 0)
+        if int(t.data.get("stalls") or 0) >= 1 and can_pause and t.data.get("replan_sig") == sig:
+            t.data["pause_now"] = (f"{why}: шагов подряд без продвижения и после смены плана — ни новых файлов, ни записей в "
+                                   "блокноте, ни сделанных пунктов. Остановился, чтобы не тратить время и токены впустую. Напишите "
+                                   "задаче, что делать, или скажите «продолжи задачу».")
+            t.data["stuck"] = True
+            return
+        t.data.update(stalls=int(t.data.get("stalls") or 0) + 1, replan_sig=sig, replan_step=steps)
+        d = t._json("задачи.json", {})
+        d["replans"] = (d.get("replans") or []) + [{"at": _now(), "step": steps, "why": why}]
+        if d.get("items") or d.get("replans"):
+            t.put_json("задачи.json", d)
+        t.journal(f"🔄 Застой ({why}) — прошу новый план, а не паузу.")
+        self._add_user(msgs, self.REPLAN.format(why=why))
+
+    def _reconcile(self, t, why):
+        """Сверка при каждом продолжении после сна, передышки или перезапуска (Anthropic harness): что сделано по списку
+        дел, какие файлы есть, что с критериями; «сделано», доказательства которого больше нет, — снова в работу."""
+        items = t.todos()
+        lost = []
+        for x in items:
+            if x.get("status") == "done" and str(x.get("evidence") or "") != "отмечено в план.md":
+                bad = self._proof_bad(t, x.get("evidence"))
+                if bad.startswith("файла"):
+                    x.update(status="pending", evidence="", at=_now())
+                    lost.append(f"{x.get('id')}. {x.get('text')}")
+        if lost:
+            self._save_todos(t, items, source=t._json("задачи.json", {}).get("source") or "json",
+                             render=t._json("задачи.json", {}).get("source") != "md")
+        light = bool(t.data.get("light"))
+        outs = sorted(p for p in (t.dir / "outputs").rglob("*") if p.is_file()) if (t.dir / "outputs").is_dir() else []
+        files = ", ".join(f"{p.relative_to(t.dir).as_posix()} ({p.stat().st_size} байт)" for p in outs[:8 if light else 20])
+        done = sum(1 for x in items if x.get("status") == "done")
+        nxt = next((x for x in items if x.get("status") == "in_progress"), None) or next((x for x in items if x.get("status") == "pending"), None)
+        lines = [f"СВЕРКА ПЕРЕД ПРОДОЛЖЕНИЕМ ({why}). Прежде чем действовать, сверься с тем, что уже сделано:"]
+        if items:
+            lines.append(f"- список дел: сделано {done} из {len(items)}" + (f"; дальше — {nxt.get('id')}. {nxt.get('text')}" if nxt else ""))
+        lines.append("- файлы результатов: " + (files + (f" и ещё {len(outs) - 20}" if len(outs) > 20 else "") if outs else "пока нет"))
+        res = self._check_criteria(t, quick=True) if t.criteria().get("items") else []
+        if res:
+            lines.append("- критерии: " + "; ".join(("✓ " if r.get("ok") else "✗ " if r.get("ok") is False else "? ") + Q.crit_label(r) for r in res)[:600])
+        if lost:
+            lines.append("- ВНИМАНИЕ: отмечены сделанными, но доказательства больше нет — снова в работе: " + "; ".join(lost)[:400])
+        lines.append("Проверь главное (file_glob, file_read), продолжай с первого несделанного пункта. Не начинай заново и не "
+                     "переделывай сделанное.")
+        t.journal(f"🔎 Сверка перед продолжением ({why}): сделано {done} из {len(items)}, файлов {len(outs)}"
+                  + (f"; пропало: {'; '.join(lost)[:200]}" if lost else "") + ".")
+        return "\n".join(lines)
 
     # ---------- качество (quality.py): проверка кодом, самопроверка, уроки ----------
     def _opt(self, key):
@@ -959,7 +1790,7 @@ class TaskManager:
                             "с задачей и было до тебя — объясни это в итоге и снова вызови finish.")
                 t.data["tests_gate"] = 9                  # прошли — больше не проверяем
                 t.journal(f"🧪 Проверка перед итогом: тесты проходят ({cmd}).")
-        if self._opt("self_check") is not False:
+        if True:                                          # выпуск 3: проверка по существу (критерии, ссылки, цифры, проверяющий)
             files = []
             for p in sorted(t.dir.rglob("*")):
                 rel = p.relative_to(t.dir)
@@ -977,17 +1808,14 @@ class TaskManager:
                     diff = code.diff(limit=max(3000, min(20000, int(int(t.data.get("win") or WIN_DEFAULT) * 3 * 0.3))))
                 except Exception:  # noqa: BLE001
                     log.debug("diff для самопроверки", exc_info=True)
-            problems = Q.critic(self._ask, f"{t.title}\n{t.goal}", summary, files, facts, diff=diff)
-            if problems:
-                q["critic"] += 1
-                t.journal(f"🧐 Самопроверка вернула итог на доработку: {problems}")
-                return Q.critic_note(problems)
+            return self._verify(t, summary, q, files, facts, diff)
         return None
 
-    def _clean(self, t):
-        """По готовности удалить служебное: скрипты шагов (_run) и длинные выводы (_out). Остаётся то, что нужно человеку."""
+    def _clean(self, t, names=("_run", "_out", "_src")):
+        """По готовности удалить служебное: скрипты шагов (_run), длинные выводы (_out), опору проверки (_src). Остаётся то,
+        что нужно человеку. Не выполнена или остановлена — без _out: продолжение читает длинные выводы оттуда."""
         import shutil
-        for name in ("_run", "_out"):
+        for name in names:
             d = t.dir / name
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
@@ -1147,6 +1975,7 @@ class TaskManager:
                 t.cancel.wait(RETRY_SEC)
                 if not t.cancel.is_set():
                     r = self._tool_raw(t, name, ca)
+            self._src_log(t, name, ca, r)                  # выпуск 3: опора для сверки итога — целиком, до обрезки
             if trunc:
                 self._q(t)["errors"].append({"tool": name, "text": "ответ оборвался по лимиту длины"})
                 if name == "write_file" and isinstance(r, str) and not r.startswith("Ошибка"):
@@ -1165,8 +1994,11 @@ class TaskManager:
                     "file_glob) и попробуй ещё раз или иначе.")
 
     def _out_max(self, t):
-        """Сколько знаков вывода инструмента держать в истории: OUT_MAX, при маленьком окне — меньше (~10% окна)."""
-        return max(1500, min(OUT_MAX, int(int(t.data.get("win") or WIN_DEFAULT) * 3 * 0.1)))
+        """Сколько знаков вывода инструмента держать в истории: OUT_MAX, при маленьком окне — меньше (~10% окна). Окно
+        меньше TINY_WIN — без нижней планки 1500 (0.84: при окне 4 тыс. последний результат, которого сжатие не трогает,
+        вместе с длинным путём папки выводил запрос за окно)."""
+        win = int(t.data.get("win") or WIN_DEFAULT)
+        return max(1500 if win >= TINY_WIN else 800, min(OUT_MAX, int(win * 3 * 0.1)))
 
     def _offload(self, t, name, r):
         """Вывод любого инструмента длиннее _out_max — целиком в _out/<инструмент>-<шаг>.txt, в историю — начало, конец и
@@ -1201,8 +2033,19 @@ class TaskManager:
                 plan = f"# {t.title}\n\n**Цель:** {t.goal}\n\n{plan}"
             (t.dir / "план.md").write_text(plan + "\n", encoding="utf-8")
             done, total = plan.count("[x]") + plan.count("[X]"), len(re.findall(r"\[[ xX]\]", plan))
+            weak = self._sync_md(t, plan)                 # выпуск 4: и в задачи.json (совместимость Markdown ↔ JSON)
+            if weak:
+                done -= len(weak)
+                t.journal("📋 Отмечены без доказательства — в списке дел «в работе»: " + "; ".join(weak)[:300])
             t.data["progress"] = [done, total]
-            return f"План сохранён ({done} из {total} пунктов выполнено)."
+            return f"План сохранён ({done} из {total} пунктов выполнено)." + (
+                "\nОтмечены [x] без доказательства — считаю их «в работе»: " + "; ".join(weak[:6]) + ". Допиши в пункт доказательство "
+                "(путь к файлу, ссылку или вывод с цифрами: «- [x] свести данные — outputs/свод.csv») или отметь через todo_update "
+                "с evidence." if weak else "")
+        if name == "todo_update":
+            return self._todo_update(t, args)
+        if name == "set_criteria":
+            return self._set_criteria(t, args)
         if name == "log":
             t.journal("📝 " + (args.get("text") or ""))
             return "Записано."
@@ -1378,6 +2221,9 @@ class TaskManager:
             if not okd:
                 return why
         try:
+            if name == "web_search" and t.data.get("search_url"):     # свой поиск задачи (экзамен Б1: «интернет» из заготовки)
+                from tools import search_text, searx_results
+                return search_text(searx_results(t.data["search_url"], str(args.get("query") or "")))
             return self.host.toolbox.run(name, args)
         except Exception as e:  # noqa: BLE001
             return f"Ошибка: {e}"
@@ -1443,9 +2289,18 @@ class TaskManager:
                 ab = Path(raw).expanduser().resolve()
                 if not (ab == t.dir.resolve() or t.dir.resolve() in ab.parents):
                     raise ValueError("вне")
-            return self._path(t, raw), None
+            p = self._path(t, raw)
         except (ValueError, OSError):
-            fs = self._folders(t)
+            p = None
+        if p is not None:
+            rel = p.relative_to(t.dir.resolve()).parts
+            if write and rel and (rel[0] in Q.SERVICE or rel[0].startswith("рабочая копия")):
+                # рецензия 0.84: запись в _src/, задачи.json, критерии.json, блокнот… подделывала опору проверки и учёт
+                raise ValueError(f"«{rel[0]}» — служебный файл задачи, его ведёт Dewiar. Как исправить: план — todo_update, "
+                                 "критерии — set_criteria, блокнот — remember или notes, результаты — в outputs/")
+            return p, None
+        fs = self._folders(t)
+        if True:
             raise ValueError(f"путь «{raw}» вне папки задачи" + (" и данных ей папок (" + ", ".join(map(str, fs)) + ")" if fs else "")
                              + ". Как исправить: пиши относительный путь в папке задачи (outputs/…)"
                              + (", а в папках человека — полный путь" if fs else ", а нужную папку попроси человека дать задаче")) from None
@@ -1572,7 +2427,7 @@ class TaskManager:
         for dp, dns, fns in os.walk(root_r, followlinks=False):
             d = Path(dp)
             if d == task_r:
-                dns[:] = [x for x in dns if not x.startswith(("рабочая копия", "_run"))]
+                dns[:] = [x for x in dns if not x.startswith(("рабочая копия", "_run", "_src"))]
             for fn in fns:
                 seen += 1
                 if seen > self.WALK_MAX:
@@ -1636,6 +2491,8 @@ class TaskManager:
                 return f"Ошибка: {e}. Файл НЕ изменён."
             shown = self._shown(t, p, f)
             t.journal(f"✏ Правка {shown}, строка {line}{note}")
+            if f is None:                                  # написано моделью — не опора для сверки итога (_given, _data_files)
+                t.data["authored"] = (list(dict.fromkeys((t.data.get("authored") or []) + [shown])))[-300:]
             n_new = str(args.get("new") or "").count("\n")
             return f"Изменён {shown}, строки {line}–{line + n_new}{note}." + (f" ⚠ Файл и до правки не разбирался: {bad}." if bad else "")
         if name == "file_glob":
@@ -1707,6 +2564,7 @@ class TaskManager:
                 if "</html>" not in txt.lower():
                     hint = " (нет </html> — если файл пишется частями, допиши; иначе проверь)"
             t.journal(f"📄 {'дописал' if args.get('append') else 'записал'} {p.relative_to(t.dir).as_posix()} ({size} байт)")
+            t.data["authored"] = (list(dict.fromkeys((t.data.get("authored") or []) + [p.relative_to(t.dir).as_posix()])))[-300:]
             warn = Q.quick_check(p, p.relative_to(t.dir).as_posix())
             if warn:
                 t.journal(warn)
@@ -1715,7 +2573,7 @@ class TaskManager:
             out = []
             for p in sorted(t.dir.rglob("*")):
                 rel = p.relative_to(t.dir)
-                if p.is_file() and not rel.parts[0].startswith(("рабочая копия", "_run")) and p.name not in ("задача.json", "история.json", "история.json.tmp", "журнал.md"):
+                if p.is_file() and not rel.parts[0].startswith(("рабочая копия", "_run", "_src")) and p.name not in ("задача.json", "история.json", "история.json.tmp", "журнал.md"):
                     out.append(f"{rel.as_posix()} — {p.stat().st_size} байт")
             lab = self._lab_files(t)
             if lab:                                    # №368: что задача положила в «Лабораторию» (lab_write, lab_run)
@@ -2000,7 +2858,9 @@ class TaskManager:
         reserve = self._reserve(t, prof)                                       # место под ответ (vLLM: запрос + max_tokens ≤ окна)
         # как на деле уходит серверу: строки в JSON (переводы строк — «\\n»), инструменты — в обёртке {"type": "function"}
         fixed = self._size(system) + (self._size([{"type": "function", "function": x} for x in specs]) if specs else 0) + self._size(state)
-        return max(1200, min(BUDGET, (min(int(win * COMPACT_AT), win - reserve) - fixed) * 3))
+        # запас ~3 % окна: оценка знаками неточна, а в результатах шагов бывают переменные числа (секунды, время) — при
+        # окне 4 тыс. запрос «впритык» (0.84: 4107 из 4096 под нагрузкой) сервер отвергал
+        return max(1200, min(BUDGET, (min(int(win * COMPACT_AT), win - reserve - max(64, win // 32)) - fixed) * 3))
 
     @staticmethod
     def _calls_of(m):
@@ -2217,11 +3077,14 @@ class TaskManager:
 
     @staticmethod
     def _progress_sig(t):
-        """Отпечаток продвижения: план (сколько отмечено), блокнот, файлы-результаты и файлы в папке задачи."""
+        """Отпечаток продвижения: план (сколько отмечено), блокнот, файлы-результаты и файлы в папке задачи. Служебное
+        (Q.SERVICE: скрипты шагов _run/, длинные выводы _out/, опора _src/, журнал, история…) — не продвижение: №551 — каждый
+        run_python оставлял _run/шагN.py, и задача час крутила скрипты, а «буксует» не срабатывало."""
         import hashlib
         try:
             files = sorted(f"{p.relative_to(t.dir)}:{p.stat().st_size}" for p in t.dir.rglob("*")
-                           if p.is_file() and p.name not in ("журнал.md", "задача.json", "история.json", "история.json.tmp") and "рабочая копия" not in p.parts)
+                           if p.is_file() and p.relative_to(t.dir).parts[0] not in Q.SERVICE and "рабочая копия" not in p.parts
+                           and not p.name.endswith(".tmp"))
         except OSError:
             files = []
         h = hashlib.sha1("\n".join([t.plan(), t.notebook(), json.dumps(t.data.get("outputs") or []), *files[:2000]]).encode()).hexdigest()
@@ -2332,6 +3195,8 @@ class TaskManager:
         except ValueError:
             msgs = []
         wake = t.data.pop("wake_note", "")
+        cont = bool(msgs)                                         # продолжение (после сна, передышки, перезапуска, паузы)
+        resume_why = t.data.pop("resume_why", "")
         # чем продолжить разговор — зависит от причины пробуждения (тексты wait_reason задаются ниже и в wait)
         if not msgs:
             msgs = [{"role": "user", "content": f"Начинай задачу: {t.goal}"}]
@@ -2349,6 +3214,15 @@ class TaskManager:
         elif not t.data.get("inbox"):
             self._add_user(msgs, "Продолжай задачу с того места, где остановился (сверься с планом и блокнотом).")
             t.journal("▶ Продолжаю работу.")
+        if cont:                                                  # выпуск 4: каждое продолжение начинается со сверки
+            try:
+                why = resume_why or ("после передышки" if wake.startswith("передышка") else "после сбоя модели или сети"
+                                     if wake.startswith("модель или сеть") else "после ожидания" if wake else "после паузы")
+                self._add_user(msgs, self._reconcile(t, why))
+            except Exception:  # noqa: BLE001 — сверка не должна мешать продолжить
+                log.exception("сверка задачи %s", t.id)
+        recent = []                                               # последние шаги — для опроса хода
+        t.data["poll_sig"] = self._work_sig(t)
         max_steps = self.host.max_steps()
         idle, acted, run_steps = 0, False, 0
         chance, bad = False, 0                                    # второй шанс после ответов без действий; вызовы «текстом» подряд
@@ -2412,7 +3286,7 @@ class TaskManager:
                 try:
                     # _tail — «Состояние задачи» в конец запроса (в историю не пишется); _ctx — не резать историю в llm
                     # (_ctx_cut оставил бы ответ инструмента без вызова): «не хватило окна» решаем здесь — сжатием
-                    for kind, val in stream_events(dict(prof, _ctx=True, _tail=state, max_tokens=self._reserve(t, prof)), system, msgs,
+                    for kind, val in stream_events(dict(prof, _ctx=True, _tail=state, _known=BY_NAME, max_tokens=self._reserve(t, prof)), system, msgs,
                                                    cancel=t.cancel, tools=specs):
                         self._beat(t)
                         if kind == "tools":
@@ -2548,6 +3422,7 @@ class TaskManager:
                         t.data["looped"] = True
                     t.journal(f"🛠 `{c['name']}` {self._short(json.dumps(c.get('args') or {}, ensure_ascii=False), 200)} → "
                               f"{self._short(r)}")
+                    recent = (recent + [(c["name"], json.dumps(c.get("args") or {}, ensure_ascii=False), self._short(r, 300))])[-POLL_EVERY:]
                     results.append(r)
                     if t.data.get("looped"):
                         break
@@ -2570,13 +3445,27 @@ class TaskManager:
                     break
                 if not t.data.get("pause_now") and run_steps % 5 == 0:     # продвинулась ли работа (раз в 5 шагов)
                     sig = self._progress_sig(t)
+                    if t.data.get("stalls") and self._work_sig(t) != t.data.get("replan_sig"):
+                        t.data["stalls"] = 0                      # после смены плана пошла работа — застой позади
                     if sig != prog_sig:
                         prog_sig, prog_step = sig, int(t.data["steps"])
                     elif int(t.data["steps"]) - prog_step >= STUCK_STEPS:
-                        t.data["pause_now"] = (f"{int(t.data['steps']) - prog_step} шагов подряд без продвижения: план, блокнот "
-                                               "и файлы не менялись. Остановился, чтобы не тратить время и токены впустую. "
-                                               "Напишите задаче, что делать, или скажите «продолжи задачу».")
-                        t.data["stuck"] = True
+                        # выпуск 4: первый застой — новый план (а не пауза), второй подряд без работы — пауза
+                        self._stall(t, msgs, f"{int(t.data['steps']) - prog_step} шагов подряд без продвижения: план, блокнот и "
+                                             "файлы не менялись")
+                        prog_sig, prog_step = self._progress_sig(t), int(t.data["steps"])
+                if not t.data.get("pause_now") and run_steps % self._poll_every(prof) == 0 and not t.data.get("parent"):
+                    p = self._poll(t, recent)                     # опрос хода (Magentic-One): короткий, раз в POLL_EVERY шагов
+                    wsig, was_sig = self._work_sig(t), t.data.get("poll_sig")
+                    t.data["poll_sig"] = wsig
+                    if p:
+                        t.data["poll"] = dict(p, step=int(t.data["steps"]))
+                        t.journal("🧭 Опрос хода: " + ("есть ход" if p["progress"] is not False else "хода нет") + (", ходит по кругу" if p["loop"] else "")
+                                  + (", похоже, цель достигнута" if p["done"] else "") + (f". Дальше: {p['next']}" if p["next"] else "."))
+                        # новый план — только если и по делу (файлы, блокнот, сделанные пункты) с прошлого опроса ничего (рецензия 0.84)
+                        if (p["loop"] or p["progress"] is False) and not p["done"] and wsig == was_sig:
+                            self._stall(t, msgs, "опрос хода: " + ("задача ходит по кругу" if p["loop"] else "за последние шаги нет продвижения"),
+                                        can_pause=False)
                 if t.data.get("pause_now"):
                     why = t.data.pop("pause_now")
                     t.journal(f"⏸ {why}")                          # журнал и голос — до смены статуса: кто увидел «на паузе»,
@@ -2638,6 +3527,8 @@ class TaskManager:
             self._fail(t, e, bug=True)
         finally:
             t.data["activity"] = ""
+            if t.data.get("status") in ("failed", "stopped"):
+                self._clean(t, ("_run", "_src"))         # опора проверки — не копится; _out нужен продолжению
             if t.data.get("status") in ("done", "failed", "stopped", "paused") and t.code() is not None:
                 try:
                     t.code().stop_all()                  # сервер разработки и прочее, что задача запускала в фоне

@@ -6,7 +6,11 @@
 (одна папка на все вкладки — переименование вкладки ссылок не ломает) и уходят своим устройствам шифрованным конвертом
 (Close.natt_share, у каждого файла — его путь rel: другой компьютер кладёт его туда же).
 
-Порядок вкладок и открытая — свои у каждого компьютера (настройки ui.pad); сами вкладки — общие."""
+Порядок вкладок и открытая — свои у каждого компьютера (настройки ui.pad); сами вкладки — общие.
+
+Замок (владелец 05.11): «locked: true» в шапке файла вкладки, как у заметок (workspace.LOCKED_MSG). Лист шапку не
+показывает — read отдаёт текст без неё и флаг locked, write возвращает шапку на место. Запертую вкладку нельзя изменить,
+переименовать, удалить и дополнить картинкой; открыть замок — только кнопкой 🔒 (pad_lock)."""
 import base64
 import logging
 import re
@@ -67,6 +71,30 @@ class Pad:
         cur.update(kw)
         self.s.update({"ui": {"pad": cur}})
 
+    @staticmethod
+    def _split(raw):
+        """Текст файла -> (шапка «---…---\n» или "", текст листа, заперта ли)."""
+        from workspace import FRONT_RX, note_front
+        m = FRONT_RX.match(raw or "")
+        if not m or not m.group(2).strip():
+            return "", raw or "", False
+        return raw[:m.end()], raw[m.end():].lstrip("\n"), bool(note_front(raw)[0].get("locked"))
+
+    def _check_open(self, p):
+        from workspace import _locked
+        if p.is_file() and _locked(p):
+            raise PadError(f"вкладка «{p.stem}» заперта — сначала откройте замок 🔒")
+
+    def lock(self, name, on):
+        """Запереть / открыть вкладку (только человек — кнопкой 🔒 в блокноте). -> {name, locked, mtime}."""
+        p = self._path(name)
+        if not p.is_file():
+            raise PadError("такой вкладки нет")
+        rel = p.relative_to(self.ws.ensure()).as_posix()
+        self.ws.note_meta(rel, {"locked": bool(on)})
+        self.emit("pad_saved", name=p.stem)
+        return {"name": p.stem, "locked": bool(on), "mtime": p.stat().st_mtime}
+
     # ---------- вкладки ----------
     def tabs(self):
         """-> {tabs: [{name, mtime, size}], active}. Порядок — свой у компьютера (ui.pad.order), новые с других устройств —
@@ -86,18 +114,24 @@ class Pad:
                 st = files[n].stat()
             except OSError:
                 continue
-            out.append({"name": n, "mtime": st.st_mtime, "size": st.st_size})
+            out.append({"name": n, "mtime": st.st_mtime, "size": st.st_size, "locked": self._locked(files[n])})
         active = self._ui().get("active")
         if active not in files:
             active = names[0]
         return {"tabs": out, "active": active, "folder": FOLDER}
+
+    @staticmethod
+    def _locked(p):
+        from workspace import _locked
+        return _locked(p)
 
     def read(self, name):
         p = self._path(name)
         if not p.is_file():
             raise PadError("такой вкладки нет — её могли удалить на другом устройстве")
         self._set_ui(active=p.stem)
-        return {"name": p.stem, "text": p.read_text(encoding="utf-8", errors="replace"), "mtime": p.stat().st_mtime}
+        _, text, locked = self._split(p.read_text(encoding="utf-8", errors="replace"))
+        return {"name": p.stem, "text": text, "mtime": p.stat().st_mtime, "locked": locked}
 
     def write(self, name, text, base=None):
         """Сохранить вкладку. base — mtime, с которым страница её открыла: если файл с тех пор изменили на другом
@@ -107,6 +141,10 @@ class Pad:
         if len(text.encode("utf-8")) > PAD_MAX:
             raise PadError("вкладка слишком большая (до 300 КБ текста) — перенесите часть в новую вкладку")
         p = self._path(name)
+        self._check_open(p)
+        front = self._split(p.read_text(encoding="utf-8", errors="replace"))[0] if p.is_file() else ""
+        if front and not self._split(text)[0]:
+            text = front + text                       # шапку (метки, цвет) лист не показывает — возвращаем её на место
         out = {}
         # GitHub №26 (29.10): было «+ 0.5» — правка с другого устройства в пределах полсекунды молча затиралась; страница
         # хранит mtime, который сама получила от save/open, — сравниваем точно (с запасом на округление float)
@@ -142,6 +180,7 @@ class Pad:
         p = self._path(name)
         if not p.is_file():
             raise PadError("такой вкладки нет")
+        self._check_open(p)
         to = _name(to)
         q = self.root() / f"{to}.md"
         # GitHub №28 (29.10): в Windows пути без учёта регистра — «заметки» → «Заметки» считалось «то же имя», и
@@ -160,6 +199,7 @@ class Pad:
         p = self._path(name)
         if not p.is_file():
             return self.tabs()
+        self._check_open(p)
         if len([x for x in self.root().glob("*.md") if x.is_file()]) <= 1:
             p.write_text("", encoding="utf-8")
             return self.tabs()
@@ -174,6 +214,7 @@ class Pad:
     # ---------- картинки ----------
     def attach(self, name, filename, b64):
         """Картинка или файл во вкладку: «Заметки/Блокнот/Вложения/…» -> {line, path, url?}. Своим устройствам — следом."""
+        self._check_open(self._path(name))
         try:
             data = base64.b64decode(str(b64 or "").split(",", 1)[-1])
         except (ValueError, TypeError) as e:

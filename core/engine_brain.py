@@ -134,7 +134,8 @@ class BrainMixin:
              "reserve": self.s.get("net", "reserve") is not False, "reserve_ready": bool(net.reserve()),
              "reserve_used": bool(net._reserve_bad),
              "dewiar": bool(self.s.get("net", "dewiar")), "dewiar_ready": bool(self.s.get("net", "dewiar_secret")), "dewiar_error": err,
-             "via": "own" if cur else ("dewiar" if eff else "")}
+             "via": "own" if cur else ("dewiar" if eff else ""),
+             "sys_socks4": net.SOCKS4_HINT.format(px=net.hide(net.SOCKS4["seen"])) if net.SOCKS4["seen"] and not cur else ""}
         if cmd not in ("net", "net_dewiar", "net_reserve") or (cmd == "net_dewiar" and a.get("on")):
             r["check"] = net.check(url, eff)
         return r

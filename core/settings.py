@@ -251,7 +251,8 @@ DEFAULTS = {
     "updates": {"url": "", "auto_check": True,         # пусто = https://dewiar.pro/dwrapp/latest.json
                 "mirror_github": True},             # запасной путь скачивания — GitHub (если latest.json даёт "github"); False — только сайт
     "tasks": {"llm": "", "max_steps": 80, "cycles": 15, "auto_run": False,   # модель задач (пусто = активная); шагов за круг и кругов подряд; команды без вопроса
-              "self_check": True, "learn": True},              # самопроверка итога и уроки из прошлых задач (quality.py)
+              "self_check": True, "learn": True,               # самопроверка итога и уроки из прошлых задач (quality.py)
+              "judge_llm": ""},   # проверяющий итога (выпуск 3 «Больших задач»): сильная модель; пусто — та же, что у задачи
     "welcome": {"on": True, "away_min": 20},   # вернулись к компьютеру после away_min минут — коротко сказать главное (presence.py)
     "diary": {"night": True, "hour": 3},   # дневник ассистента: ночью (после hour:00) — запись о прожитом дне и выводы на завтра
     "night": {"on": True},                 # ночной обход (night.py): сбои за сутки, повтор задач, утром — фраза, отчёт — с согласия

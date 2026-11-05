@@ -418,6 +418,16 @@ class CloudTasks(TK.TaskManager):
     def _system(self, t):
         return super()._system(t) + CLOUD_NOTE
 
+    def _crit_url(self, t, url):
+        """Критерий «ссылка открывается» в облаке — тем же путём, что read_webpage (/fetch сервера с его фильтром адресов),
+        а не прямым запросом с сервера (рецензия 0.84: обход фильтра)."""
+        try:
+            r = self.host.toolbox.run("read_webpage", {"url": url})
+        except Exception as e:  # noqa: BLE001
+            return False, f"не открылась: {str(e)[:120]}"
+        r = str(r or "")
+        return not r.startswith(("Ошибка", "Страница не открылась")), "открылась" if r and not r.startswith("Ошибка") else r[:160]
+
 
 class Space:
     """Задачи одного человека (пространство синхронизации u<id> или k<id>)."""

@@ -59,6 +59,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.follow_up_until = 0.0
         self._said = collections.deque(maxlen=40)       # что ассистент сказал вслух (время, текст) — узнать своё эхо
         self._echo_hits, self._echo_until, self._spoke_until = [], 0.0, 0.0
+        # №543: перебили голосом — что говорили (_barge_snap), чтобы договорить, если «перебила» сама себя;
+        # до _barge_name_until перебить речью нельзя — только именем или словом «стоп» (эхо уже прорывалось)
+        self._barge_snap, self._barge_name_until = None, 0.0
         self._quiet_until = 0.0                          # после «ложного срабатывания» (остановили кнопкой) — не откликаться на голос
         self.wake_time, self._wake_phrase = 0.0, ""
         self.stop_utt = False
@@ -521,6 +524,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         """Фоновые службы: резервная копия, календари, облако."""
         threading.Thread(target=self._auto_backup, name="backup", daemon=True).start()
         threading.Thread(target=self._calendar_loop, name="calendars", daemon=True).start()
+        threading.Thread(target=self._task_guard_loop, name="task-guard", daemon=True).start()
         threading.Thread(target=self.cloud.loop, name="cloud", daemon=True).start()
 
     def shutdown(self):

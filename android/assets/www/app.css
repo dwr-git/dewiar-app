@@ -1191,6 +1191,15 @@ body.light .it.note .nthumb { box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
 /* ---------- Заметка: чтение и правка (владелец 27.10, №321) ---------- */
 #sh-note.ntv #nt-h { font-size: 24px; line-height: 1.22; margin-bottom: 6px; overflow-wrap: anywhere; }
 .ntmeta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 0 0 14px; color: var(--dim); font-size: 13px; }
+/* замок (владелец 05.11): 🔒 у названия — запереть / открыть одним нажатием; запертую не изменить и не удалить */
+.nthead { display: flex; align-items: flex-start; gap: 10px; }
+.nthead #nt-h { flex: 1; min-width: 0; }
+.nthead .ntlockh { margin-top: 2px; }
+.ntlockh { flex: none; min-width: 44px; min-height: 44px; border-radius: 14px; font-size: 20px; line-height: 1; background: var(--frost-hi); opacity: .6; }
+.ntlockh.on { opacity: 1; box-shadow: inset 0 0 0 1.5px var(--ink); }
+.ntlocked { margin: 0 0 12px; padding: 10px 14px; border-radius: 14px; background: var(--frost-hi); color: var(--dim); font-size: 13px; line-height: 1.45; }
+.ntbar .btn.off { opacity: .45; }
+.ntlk { font-style: normal; font-size: 12px; opacity: .8; }
 .ntchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 9px; border-radius: 999px; background: var(--frost-hi); color: var(--ink); font-size: 13px; font-weight: 600; }
 .ntchip svg { width: 15px; height: 15px; }
 .ntread { -webkit-user-select: text; user-select: text; font-size: 16px; line-height: 1.6; color: var(--ink); padding: 16px 18px; border-radius: 20px;

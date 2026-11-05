@@ -19,6 +19,11 @@
 .st-askrow textarea { flex: 1; resize: none; border: 0; outline: 0; border-radius: 16px; padding: 14px 16px; background: var(--field); font-size: 15px; line-height: 1.5; min-height: 58px; }
 .st-askrow textarea:focus { box-shadow: 0 0 0 2px rgba(169,170,255,.55); }
 .st-askrow .btn { padding: 0 24px; border-radius: 16px; font-size: 15px; white-space: nowrap; }
+.st-refrow { margin-top: 10px; }
+.st-refrow label { font: 500 13px var(--font, inherit); margin-bottom: 6px; letter-spacing: 0; }
+.st-refrow label small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.st-refrow input { width: 100%; box-sizing: border-box; border: 0; outline: 0; border-radius: 12px; padding: 10px 14px; background: var(--field); font-size: 14px; }
+.st-refrow input:focus { box-shadow: 0 0 0 2px rgba(169,170,255,.55); }
 .st-eg { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .st-egb { border: 0; background: var(--st-soft); color: var(--muted); font-size: 12.5px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
 .st-egb:hover { background: var(--st-soft2); color: var(--ink); }
@@ -41,6 +46,10 @@
 .st-chip.live { background: var(--st-okbg); color: var(--st-ok); }
 .st-chip.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px rgba(75,227,161,.2); }
 .st-chip.live a { color: inherit; text-decoration: none; }
+/* №549: опубликован, но адрес ещё не открывается — янтарная метка «ждёт адреса» */
+.st-chip.wait { background: rgba(233,162,59,.14); color: #E9A23B; }
+.st-chip.wait i { width: 7px; height: 7px; border-radius: 50%; background: #E9A23B; }
+.st-chip.wait a { color: inherit; text-decoration: none; }
 .st-chip.live a:hover { text-decoration: underline; }
 .st-chip.bad { background: rgba(255,107,138,.16); color: var(--st-badc); }
 

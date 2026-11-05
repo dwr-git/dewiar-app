@@ -3,7 +3,7 @@
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const Q = new URLSearchParams(location.search);
 const ED = $("#ed");
-const P = { tabs: [], active: "", base: null, dirty: false, saving: false, loaded: false, t: 0, imgCache: {}, edits: 0, openSeq: 0, saveP: null, failed: "" };
+const P = { tabs: [], active: "", base: null, dirty: false, saving: false, loaded: false, t: 0, imgCache: {}, edits: 0, openSeq: 0, saveP: null, failed: "", locked: false };
 
 /* ---------- тема и «выезд» ---------- */
 function skin(id) {
@@ -49,12 +49,12 @@ function drawTabs() {
     const el = document.createElement("div");
     el.className = "tab" + (t.name === P.active ? " on" : ""); el.setAttribute("role", "tab"); el.setAttribute("aria-selected", t.name === P.active);
     el.draggable = true; el.dataset.name = t.name; el.title = t.name + " — двойной щелчок: переименовать; перетащите, чтобы переставить";
-    el.innerHTML = `<span></span><button class="x" title="Удалить вкладку" aria-label="Удалить вкладку"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
+    el.innerHTML = `<span></span>${t.locked ? '<i class="lk" aria-label="заперта">🔒</i>' : ""}<button class="x" title="Удалить вкладку" aria-label="Удалить вкладку"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
     el.querySelector("span").textContent = t.name;
     el.onclick = (e) => { if (!e.target.closest(".x") && t.name !== P.active) openTab(t.name); };
-    el.ondblclick = () => rename(el, t.name);
-    el.querySelector(".x").onclick = (e) => { e.stopPropagation(); askDelete(t.name); };
-    el.onauxclick = (e) => { if (e.button === 1) askDelete(t.name); };
+    el.ondblclick = () => t.locked ? lockedSay(t.name) : rename(el, t.name);
+    el.querySelector(".x").onclick = (e) => { e.stopPropagation(); t.locked ? lockedSay(t.name) : askDelete(t.name); };
+    el.onauxclick = (e) => { if (e.button === 1) (t.locked ? lockedSay(t.name) : askDelete(t.name)); };
     el.ondragstart = (e) => { e.dataTransfer.setData("text/x-pad-tab", t.name); e.dataTransfer.effectAllowed = "move"; };
     el.ondragover = (e) => { if ([...e.dataTransfer.types].includes("text/x-pad-tab")) { e.preventDefault(); el.classList.add("drop"); } };
     el.ondragleave = () => el.classList.remove("drop");
@@ -138,10 +138,10 @@ async function openTab(name, first) {
     if (seq !== P.openSeq) return false;                                  // уже открывают другую вкладку
     if (P.edits !== edits || P.dirty || P.saveP) {                        // пока читали, человек печатал — его текст важнее
       P.loaded = true; status(`Остаюсь во вкладке «${P.active}» — вы продолжили писать`, "busy"); return false; }
-    P.active = r.name; P.base = r.mtime; P.dirty = false; P.failed = ""; P.loaded = true;
-    ED.innerHTML = PadMD.md2html(r.text); paint(); drawTabs();
+    P.active = r.name; P.base = r.mtime; P.dirty = false; P.failed = ""; P.loaded = true; P.locked = !!r.locked;
+    ED.innerHTML = PadMD.md2html(r.text); paint(); drawTabs(); lockShow();
     if (!H.tabs[r.name]) histReset(); else { H.kind = "ext"; histPush(); histBtns(); }   // с диска пришло другое — тоже шаг
-    status(`${P.tabs.length > 1 ? `«${r.name}» · сохраняется` : "Сохраняется"} само · ${await syncLine()}`);
+    status(P.locked ? lockLine() : `${P.tabs.length > 1 ? `«${r.name}» · сохраняется` : "Сохраняется"} само · ${await syncLine()}`);
     if (!first) ED.focus();
     return true;
   } catch (e) { if (seq === P.openSeq) { status(e.message, "bad"); P.loaded = true; } return false; }
@@ -179,8 +179,31 @@ function askDelete(name) {
 $("#ask-yes").onclick = () => askFn && askFn();
 $("#ask-no").onclick = () => $("#ask").classList.remove("on");
 
+/* ---------- замок (05.11, владелец: «информация настолько важная, что переживаю — не сотру ли случайно») ----------
+   🔒 на панели — запереть / открыть вкладку одним нажатием (core/pad.py lock; «locked: true» в шапке файла уходит
+   синхронизацией). Запертую нельзя ни править, ни переименовать, ни удалить — ни здесь, ни голосом, ни с телефона. */
+const lockLine = () => `«${P.active}» заперта — правка и удаление выключены. Открыть — 🔒 вверху`;
+function lockedSay(name) { status(`«${name}» заперта — сначала откройте замок 🔒`, "bad"); const b = $("#b-lock"); if (b && name === P.active) b.focus(); }
+function lockShow() {
+  ED.contentEditable = P.locked ? "false" : "true";
+  document.body.classList.toggle("locked", P.locked);
+  const b = $("#b-lock"); b.classList.toggle("on", P.locked); b.setAttribute("aria-pressed", String(P.locked));
+  b.title = P.locked ? "Заперта — нажмите, чтобы открыть замок" : "Запереть вкладку: не изменить и не удалить случайно";
+  b.setAttribute("aria-label", P.locked ? "Открыть замок вкладки" : "Запереть вкладку");
+  const t = P.tabs.find(x => x.name === P.active); if (t && !!t.locked !== P.locked) { t.locked = P.locked; drawTabs(); }
+}
+$("#b-lock").onclick = async () => {
+  if (!P.active) return;
+  if (!P.locked && !(await saveNow())) return status("Не запираю: " + unsaved(), "bad");
+  try { const r = await core.call("pad_lock", { name: P.active, on: !P.locked }); P.locked = !!r.locked; P.base = r.mtime; lockShow();
+    status(P.locked ? lockLine() : "Замок открыт — можно править · " + await syncLine()); }
+  catch (e) { status(e.message, "bad"); }
+};
+
 /* ---------- сохранение ---------- */
-function changed() { histPush(); P.edits++; later(); }
+function changed() {
+  if (P.locked) { status(lockLine(), "bad"); openTab(P.active, true); return; }   // вставка, вырезанное с экрана — не в запертую
+  histPush(); P.edits++; later(); }
 function later() { P.dirty = true; clearTimeout(P.t); P.t = setTimeout(saveNow, 700); status("Сохраняю…", "busy"); }
 
 /* ---------- шаг назад и шаг вперёд (25.10, владелец: «удалил часть текста, захватил лишнее, жал Ctrl+Z — не
@@ -212,6 +235,7 @@ function histPush() {
   h.at = now; h.kind = kind; histBtns();
 }
 function histGo(d) {
+  if (P.locked) { lockedSay(P.active); return false; }
   const h = hist(), j = h.i + d;
   if (j < 0 || j >= h.s.length) { status(d < 0 ? "Назад больше некуда" : "Вперёд больше некуда", ""); return false; }
   h.i = j; h.kind = ""; const s = h.s[j];
@@ -278,7 +302,9 @@ core.on("pad_changed", async (e) => {                 // правка с дру�
   const name = P.active, edits = P.edits, seq = P.openSeq;
   const r = await core.call("pad_read", { name }).catch(() => null);
   if (P.active !== name || P.edits !== edits || P.openSeq !== seq || P.dirty || P.saveP) return;   // пока читали — печатали или сменили вкладку
-  if (r && r.mtime !== P.base) { P.base = r.mtime; ED.innerHTML = PadMD.md2html(r.text); paint(); H.kind = "ext"; histPush(); status("Обновлено с другого устройства"); }
+  if (r && r.mtime !== P.base) { P.base = r.mtime; ED.innerHTML = PadMD.md2html(r.text); paint(); H.kind = "ext"; histPush();
+    const was = P.locked; P.locked = !!r.locked; lockShow();
+    status(was !== P.locked ? (P.locked ? "Заперта на другом устройстве — " + lockLine() : "Замок открыт на другом устройстве") : "Обновлено с другого устройства"); }
 });
 core.on("hello", (d) => { try { const u = (d && d.settings && d.settings.ui) || {}; if (u.skin) skin(u.skin); textSize(u.pad_text, true); colorScheme(u.pad_colors, true); gamesOn((d.settings || {}).features); } catch (e) { }
   if (P.loaded) { P.loaded = false; refresh(); } });

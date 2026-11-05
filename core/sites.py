@@ -36,6 +36,56 @@ from datetime import datetime
 from pathlib import Path
 
 import sites_kit as K
+
+def ref_outline(url, timeout=12.0):
+    """№552 (05.11: «в „Сайтах“ — поле для ссылки на сайт-референс, по которому создать свой»): схема чужой страницы без
+    её текстов — заголовок, разделы (h1–h3), меню, кнопки, основные цвета. -> строка до ~1500 знаков; не открылась — SiteError."""
+    import html as _h
+    import httpx
+    u = url if re.match(r"^https?://", url, re.I) else "https://" + url
+    if not re.match(r"^https?://[^/\s]+\.[^/\s]+", u):
+        raise SiteError("это не похоже на адрес сайта")
+    try:
+        r = httpx.get(u, timeout=timeout, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 Dewiar"})
+        r.raise_for_status()
+    except httpx.HTTPError as e:
+        raise SiteError(f"сайт-образец не открылся: {e}") from e
+    page = r.text[:600_000]
+    page = re.sub(r"(?is)<(script|style|noscript|svg)\b.*?</\1>", " ", page)
+    txt = lambda x: re.sub(r"\s+", " ", _h.unescape(re.sub(r"<[^>]+>", " ", x))).strip()   # noqa: E731
+    title = txt((re.search(r"(?is)<title[^>]*>(.*?)</title>", page) or [None, ""])[1])[:120]
+    heads = [f"{m.group(1).upper()}: {txt(m.group(2))[:90]}" for m in re.finditer(r"(?is)<(h[1-3])[^>]*>(.*?)</\1>", page) if txt(m.group(2))][:24]
+    nav = [txt(x)[:30] for x in re.findall(r"(?is)<nav\b.*?</nav>", page)[:1] for x in re.findall(r"(?is)<a\b[^>]*>(.*?)</a>", x) if txt(x)][:12]
+    btns = list(dict.fromkeys(txt(x)[:30] for x in re.findall(r"(?is)<button\b[^>]*>(.*?)</button>", page) if txt(x)))[:8]
+    colors = [c for c, _ in __import__("collections").Counter(x.lower() for x in re.findall(r"#[0-9a-fA-F]{6}\b", r.text[:600_000])).most_common(5)]
+    out = [f"Адрес: {u}", f"Заголовок страницы: {title}" if title else "", "Разделы по порядку: " + " · ".join(heads) if heads else "",
+           "Меню: " + ", ".join(nav) if nav else "", "Кнопки: " + ", ".join(btns) if btns else "", "Основные цвета: " + ", ".join(colors) if colors else ""]
+    res = "\n".join(x for x in out if x)[:1500]
+    if not heads and not title:
+        raise SiteError("на странице-образце не нашлось ни заголовков, ни разделов")
+    return res
+
+
+REACH_SAY = ("Сайт сохранён на dewiar.pro. Адрес {url} заработает, когда сервер сайтов будет настроен — администратор об этом знает; "
+             "я проверю сам и скажу, когда откроется.")
+
+
+def reach(url, timeout=8.0):
+    """№549 (04.11: «Опубликовать» — пустая страница, адрес не открывается: DNS_PROBE_FINISHED_NXDOMAIN): открывается ли сайт по
+    своему адресу -> {ok, why: "" | dns | cert | server | net, at}. Не открывается — не показываем пустую страницу, а говорим как есть."""
+    import httpx
+    why = ""
+    try:
+        r = httpx.get(url, timeout=timeout, follow_redirects=True)
+        if r.status_code >= 400:
+            why = "server"
+    except httpx.ConnectError as e:
+        t = str(e).lower()
+        why = ("dns" if re.search(r"getaddrinfo|name or service|nodename|11001|no address|name resolution|not known|temporary failure in name", t)
+               else "cert" if "certificate" in t or "ssl" in t else "net")
+    except httpx.HTTPError as e:
+        why = "cert" if "certificate" in str(e).lower() or "ssl" in str(e).lower() else "net"
+    return {"ok": not why, "why": why, "at": int(time.time())}
 import sites_render as R
 
 log = logging.getLogger("dewiar.sites")
@@ -477,19 +527,28 @@ class Sites:
                     b["title"] = s["name"]               # обложка-афиша с названием — сразу своё
         return s
 
-    def create(self, template="", describe="", name="", tagline="", contacts=None, fill=True):
-        """Новый сайт: шаблон (или по описанию), своё имя и контакты; тексты — моделью под дело человека."""
-        tid = template if template in K.TEMPLATES else K.pick_template(f"{describe} {name}")
+    def create(self, template="", describe="", name="", tagline="", contacts=None, fill=True, ref=""):
+        """Новый сайт: шаблон (или по описанию), своё имя и контакты; тексты — моделью под дело человека.
+        ref — сайт-образец (№552): его разделы и тон — подсказкой для шаблона и текстов, тексты и бренды — не копируем."""
+        outline = ""
+        if str(ref or "").strip():
+            try:
+                outline = ref_outline(str(ref).strip())
+            except SiteError as e:
+                log.info("🌐 Сайт-образец не прочитался: %s", e)
+        tid = template if template in K.TEMPLATES else K.pick_template(f"{describe} {name} {outline[:600]}")
         ct = {k: str(v).strip()[:200] for k, v in (contacts or {}).items() if k in K.CONTACT_KEYS and str(v or "").strip()}
         s = self.from_template(tid, name, tagline, ct if ct else (None if not describe else {}))
         if describe and not ct:
             s["contacts"] = {}                          # контактов человек не назвал — заглушки шаблона не оставляем
         s["describe"] = str(describe or "")[:3000]
+        if outline:
+            s["ref"] = str(ref).strip()[:300]
         (self.root / s["id"]).mkdir(parents=True, exist_ok=True)
         note = ""
-        if fill and describe:
+        if fill and (describe or outline):
             try:
-                note = self.fill(s, describe)
+                note = self.fill(s, describe or s.get("name") or "", outline)
             except Exception as e:  # noqa: BLE001
                 log.info("🌐 Тексты под дело не написались (оставила заготовки шаблона): %s", e)
                 note = "тексты пока из шаблона — модель не ответила"
@@ -498,9 +557,13 @@ class Sites:
         s["_note"] = note
         return s
 
-    def fill(self, s, describe):
-        """Модель переписывает тексты шаблона под дело человека (только его факты)."""
-        user = (f"ЧТО РАССКАЗАЛ ЧЕЛОВЕК:\n{describe}\n\nШАБЛОН (uid блока — в квадратных скобках):\n{site_brief(s)}\n\n"
+    def fill(self, s, describe, ref=""):
+        """Модель переписывает тексты шаблона под дело человека (только его факты). ref — схема сайта-образца (№552)."""
+        user = (f"ЧТО РАССКАЗАЛ ЧЕЛОВЕК:\n{describe}\n\n"
+                + (f"САЙТ-ОБРАЗЕЦ, который человек привёл в пример (возьми только идею: какие разделы и в каком порядке, тон и "
+                   f"длину текстов; НЕ копируй его тексты, названия, бренды, имена, цены, телефоны и адреса — всё своё, по делу "
+                   f"человека):\n{ref}\n\n" if ref else "")
+                + f"ШАБЛОН (uid блока — в квадратных скобках):\n{site_brief(s)}\n\n"
                 "Верни JSON, как сказано. Блоки, которые не нужно менять, не включай.")
         d = _json_in(self.llm(FILL_SYSTEM, user, 3500))
         if not isinstance(d, dict):
@@ -983,9 +1046,29 @@ class Sites:
                 self._fetch("/sites/remove", {"name": old})
             except SiteError:
                 pass
+        s["published"]["reach"] = reach(s["published"]["url"])
         self._save(s, f"Опубликован: {s['published']['url']}")
-        log.info("🌐 Сайт опубликован: %s", s["published"]["url"])
+        log.info("🌐 Сайт опубликован: %s%s", s["published"]["url"],
+                 "" if s["published"]["reach"]["ok"] else f" — по адресу пока не открывается ({s['published']['reach']['why']})")
         self.start()
+        return s
+
+    def recheck(self, sid):
+        """Открывается ли опубликованный сайт по своему адресу — снова (кнопка «Проверить адрес», фон раз в полчаса)."""
+        s = self.get(sid)
+        pub = s.get("published") or {}
+        if not pub.get("url"):
+            return s
+        was = (pub.get("reach") or {}).get("ok")
+        pub["reach"] = reach(pub["url"])
+        s["published"] = pub
+        with self._lock:
+            (self._dir(sid) / "site.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+        if pub["reach"]["ok"] and was is False and self.host is not None:
+            try:
+                self.host.push("Сайт открывается", f"{pub['url']} — адрес заработал, можно отправлять ссылку")
+            except Exception:  # noqa: BLE001
+                pass
         return s
 
     def unpublish(self, sid):
@@ -1141,6 +1224,9 @@ class Sites:
                 tick += 1
                 if tick % 15 == 1:                      # раз в полчаса — не заблокирован ли сайт
                     self.sync_status()
+                    for sid in self.ids():               # №549: адрес ещё не открывался — проверить снова, заработал — сказать
+                        if ((self.get(sid).get("published") or {}).get("reach") or {}).get("ok") is False:
+                            self.recheck(sid)
             except Exception:  # noqa: BLE001
                 log.exception("Сайты: заявки")
 
