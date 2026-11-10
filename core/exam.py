@@ -962,6 +962,8 @@ async def seed(core, sd):
         r = await core.call("reminder_add", phrase=ph)
         if isinstance(r, dict) and r.get("id"):
             made["reminders"].append(r["id"])
+    if (sd or {}).get("history"):                     # разговор до сценария (№625–628: перебитый вопрос «Выполнить?»)
+        await core.call("exam_history", items=sd["history"])
     for tk in (sd or {}).get("tasks") or []:         # фоновая задача (не запущена) — «удали задачу …» (24.10)
         r = await core.call("task_create", title=tk["title"], goal=tk.get("goal") or tk["title"], start=False)
         if isinstance(r, dict) and r.get("id"):
@@ -1156,6 +1158,8 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                 if stp.get("image") and img is None:
                     res["skipped"] = "нет шрифта с кириллицей для картинки"
                     return res
+                if stp.get("template"):                 # готовый персонаж из галереи (Джарвис, Эва…) — добавить перед шагом
+                    await core.call("gallery_add", id=stp["template"])
                 if stp.get("persona"):                  # кто отвечает на этот шаг (команда: Лира, Патрик)
                     await core.call("persona_set", id=stp["persona"])
                 said = fill(stp["say"])
@@ -1299,8 +1303,13 @@ async def _run_big(core, sc, res, t0, work, log, b, goal, web):
 def big_metrics(t, sec):
     """Метрики большой задачи: шаги, токены на вход и выход, доля кэша, время (с)."""
     u = ((t or {}).get("quality") or {}).get("usage") or {}
-    return {"steps": int((t or {}).get("steps") or 0), "tok_in": int(u.get("in") or 0), "tok_out": int(u.get("out") or 0),
-            "cache": round(u["cached"] / u["in"], 3) if u.get("ck") and u.get("in") else None, "time_s": round(sec), "req": int(u.get("req") or 0)}
+    m = {"steps": int((t or {}).get("steps") or 0), "tok_in": int(u.get("in") or 0), "tok_out": int(u.get("out") or 0),
+         "cache": round(u["cached"] / u["in"], 3) if u.get("ck") and u.get("in") else None, "time_s": round(sec), "req": int(u.get("req") or 0)}
+    subs = ((t or {}).get("quality") or {}).get("subs") or {}
+    if subs:                                           # выпуск 6: помощники (разведчик, проверяющий — в tok_*; части — отдельно)
+        m["tok_sub"] = sum(int(x.get("in") or 0) + int(x.get("out") or 0) for x in subs.values() if isinstance(x, dict))
+        m["parts"] = int((subs.get("part") or {}).get("n") or 0)
+    return m
 
 
 def finish_result(core, res):

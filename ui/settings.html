@@ -60,8 +60,9 @@
   document.getElementById("wb-x").onclick = () => call("studio_close");
 })();
 </script>
-<nav>
-  <div class="brand"><canvas id="brand"></canvas><div><b id="bname">Dewiar</b><span id="bsub">голосовой ассистент</span></div></div>
+<nav id="nav-main">
+  <div class="brand"><canvas id="brand"></canvas><div><b id="bname">Dewiar</b><span id="bsub">голосовой ассистент</span></div>
+    <button class="nav-hide" id="nav-hide" type="button" title="Спрятать меню — раздел на всю ширину (Ctrl+B)" aria-label="Спрятать меню" aria-controls="nav-main" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15M15.5 9.5 13 12l2.5 2.5"/></svg></button></div>
   <button class="cchip" id="nav-cloud" style="display:none" title="ИИ-баланс: на сколько хватит моделей Dewiar. Нажмите — подробности и пополнение"><span>ИИ-баланс</span><em></em><i><b></b></i></button>
   <button data-p="home" class="cur" title="Сегодня и все приложения Dewiar">Главная</button>
   <div class="ng">Для себя</div>
@@ -137,6 +138,7 @@
   <div class="conn" id="conn"><i></i><span>нет связи с ядром</span></div>
 </nav>
 
+<button class="nav-show" id="nav-show" type="button" title="Показать меню (Ctrl+B)" aria-label="Показать меню" aria-controls="nav-main" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15M13 9.5l2.5 2.5-2.5 2.5"/></svg></button>
 <main>
   <section id="p-home" class="cur wide">
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -521,11 +523,24 @@
   <section id="p-chat" class="wide">
     <h1>Чат</h1>
     <p class="lead">Вся переписка с персонажами: что вы сказали голосом или написали и что они ответили. Удобнее текстом — пишите здесь:
-      ответ появится в ленте и прозвучит голосом, если голос не выключен в виджете. Фото и файлы — скрепкой, перетаскиванием или Ctrl+V.</p>
+      ответ появится в ленте и прозвучит голосом, если голос не выключен в виджете. Фото и файлы — скрепкой, перетаскиванием или Ctrl+V.
+      Под ответом — «Ещё раз» и «Подробности», у своего вопроса — «Изменить»; пока отвечает — «Стоп» или Esc.</p>
     <div class="cl-chat ch-chat" id="ch-box">
-      <div class="ch-bar"><span class="hint" id="ch-res" style="margin:0;flex:1"></span>
+      <div class="ch-bar">
+        <div class="ch-thw">
+          <button class="ch-th" id="ch-th" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="ch-thp" title="Беседы: открыть прежнюю, переименовать, удалить"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h14M5 12h14M5 17.5h9"/></svg><span><b>Новая беседа</b><small></small></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+          <div class="ch-thp" id="ch-thp" role="dialog" aria-label="Беседы" hidden>
+            <div class="ch-thh"><b>Беседы</b><span>У каждой — своя память: открыли прежнюю — продолжаете с того же места.</span></div>
+            <ul class="ch-thl" id="ch-thl"></ul>
+            <div class="ch-thf"><button class="btn small" type="button" id="ch-clear">Очистить эту беседу</button></div>
+          </div>
+        </div>
+        <span class="hint ch-res" id="ch-res"></span>
         <label class="ch-tm" title="Без микрофона и голоса: пишете здесь, ответы — текстом; «Выполнить?» и что сделано — прямо в ленте, виджет не выскакивает"><input type="checkbox" id="ch-tm"><i></i>Текстовый режим</label>
-        <button class="btn small" id="ch-clear">Очистить</button></div>
+        <details class="ch-exp" id="ch-exp"><summary class="btn small" title="Сохранить беседу файлом"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v10M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg>Сохранить</summary>
+          <div class="ch-expm" role="menu"><button type="button" role="menuitem" data-fmt="md"><b>Markdown, .md</b><small>с заголовками и выделением — для заметок и Obsidian</small></button>
+            <button type="button" role="menuitem" data-fmt="txt"><b>Простой текст, .txt</b><small>откроется где угодно, хоть в Блокноте</small></button></div></details>
+        <button class="btn small" type="button" id="ch-new" title="Начать с чистого листа — эта беседа останется в списке"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg>Новая беседа</button></div>
       <div class="cl-empty" id="ch-empty"><b>Здесь будет ваша переписка</b><span>Скажите «Лира, …» или напишите ниже — разговор появится в ленте.</span></div>
       <div class="cl-msgs" id="ch-msgs"></div>
       <div class="ch-ask" id="ch-ask" hidden></div>
@@ -680,12 +695,13 @@
     <div class="actions" style="margin:0 0 16px"><button class="btn primary" id="t-new">Новая задача</button></div>
     <div class="prof on" id="t-form" style="display:none;padding:16px 18px;margin-bottom:16px">
       <label class="f">Что сделать<textarea id="t-goal" placeholder="Например: в проекте сайта при отправке формы ошибка 500 — найди причину, исправь и проверь тестами"></textarea></label>
+      <div class="ch-atts t-atts" id="t-atts" aria-live="polite"></div>
       <div class="row" style="margin-top:12px">
         <label class="f">Папка проекта (для работы с кодом, необязательно)<input type="text" id="t-proj" placeholder="~/Проекты/сайт"></label>
         <label class="f">Название (необязательно)<input type="text" id="t-title"></label>
       </div>
       <div class="switch slim" style="margin-top:10px"><div>Интернет для кода задачи<span>Сеть коду задачи нужна редко — поиск и чтение страниц у задачи есть и так. Без своей сети песочницы (slirp4netns) это сеть компьютера целиком, вместе с его локальными службами.</span></div><label class="tg"><input type="checkbox" id="t-netnew"><i></i></label></div>
-      <div class="actions"><button class="btn primary" id="t-go">Начать</button><button class="btn" id="t-pick">Выбрать папку…</button><button class="btn" id="t-cancel">Отмена</button></div>
+      <div class="actions"><button class="btn primary" id="t-go">Начать</button><button class="btn" id="t-pick">Выбрать папку…</button><label class="btn t-clip" title="Файлы к задаче (документы, таблицы, фото — до 11 МБ каждый): лягут во «Входящие» папки задачи. Можно перетащить на форму или вставить Ctrl+V"><input type="file" id="t-file" hidden multiple><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 11.5-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8"/></svg>Прикрепить файлы</label><button class="btn" id="t-cancel">Отмена</button></div>
     </div>
     <div id="t-ideas">
       <h2 style="margin-top:6px">С чего начать</h2>
@@ -699,9 +715,12 @@
     <h2>Настройки задач</h2>
     <div class="row">
       <label class="f">Модель для задач<select id="t-llm"></select><span class="hint">Для сложного кода можно выбрать модель посильнее, чем для разговора.</span></label>
-      <label class="f">Проверяющий итога<select id="t-judge"></select><span class="hint">Перед «готово» итог проверяет отдельная модель с чистым взглядом: файлы, цифры, ссылки. Сильная модель здесь ловит больше ошибок; один вызов на итог.</span></label>
+      <label class="f">Проверяющий итога<select id="t-judge"></select><span class="hint">Перед «готово» итог проверяет отдельная модель с чистым взглядом: файлы, цифры, ссылки — и сама дочитывает, если выдержки мало. Сильная модель здесь ловит больше ошибок.</span></label>
       <label class="f">Шагов без передышки<input type="number" min="10" max="500" data-k="tasks.max_steps"><span class="hint">После них — минута передышки, и задача продолжает.</span></label>
       <label class="f">Передышек подряд<input type="number" min="1" max="100" data-k="tasks.cycles"><span class="hint">Потом задача ждёт вашего «продолжи». 80 × 15 = 1200 шагов — часы работы. Если два круга подряд ничего не продвинулось, задача остановится раньше.</span></label>
+      <label class="f">Помощников сразу<input type="number" min="1" max="8" data-k="tasks.parts_max"><span class="hint">Большую работу задача делит на части — они идут одновременно. Больше помощников — быстрее, но дороже: у каждого свои запросы к модели.</span></label>
+      <label class="f">Бюджет задачи<select id="t-budget"><option value="0">Без предела</option><option value="500000">500 тыс. токенов</option><option value="1000000">1 млн токенов</option><option value="2000000">2 млн токенов</option><option value="5000000">5 млн токенов</option><option value="10000000">10 млн токенов</option></select><span class="hint">На половине — весточка вам; на 80 % задача подводит итог и встаёт на паузу. «Продолжи» — ещё столько же. Для новых задач.</span></label>
+      <label class="f">Шагов у помощника<input type="number" min="5" max="400" data-k="tasks.part_steps"><span class="hint">Сколько шагов у одной части. Кончились — часть сдаёт то, что успела, и главная задача решает, что дальше.</span></label>
     </div>
     <div class="switch"><div>Выполнять команды в проекте без вопроса<span>Тесты, сборка, git — в рабочей копии проекта. Выключено: ассистент спрашивает перед каждой командой.</span></div><label class="tg"><input type="checkbox" data-k="tasks.auto_run"><i></i></label></div>
     <div class="switch"><div>Самопроверка итога моделью<span>Перед «готово» итог независимо проверяет модель: выполнена ли цель, совпадают ли цифры и ссылки отчёта с прочитанным и с файлами (один вызов на итог). Кодом проверяется всегда: критерии готовности, файлы (оборванный HTML, битая таблица), ссылки, которых задача не открывала, ошибки страниц в браузере.</span></div><label class="tg"><input type="checkbox" data-k="tasks.self_check"><i></i></label></div>
@@ -1923,6 +1942,7 @@
       <div class="cc-f"><span id="cc-turns"></span><span class="cc-act"><button class="btn small primary" id="cc-top">Пополнить</button>
         <button class="btn small" id="cc-use">Отвечать моделями Dewiar</button><button class="btn small" id="cc-ref">Обновить</button><button class="btn small" id="cc-pair" title="Код из 6 цифр и QR — в «Устройствах»">Подключить ещё устройство</button><button class="btn small danger" id="cc-off">Убрать ключ</button></span></div>
       <p class="hint cc-per" id="cc-per" style="margin:6px 0 0"></p>
+      <div class="cc-prev" id="cc-prev" hidden><p id="cc-prev-t"></p><button class="btn small primary" id="cc-prev-go">Перенести прежний заряд</button></div>
       <p class="res" id="cc-pair-res" style="margin:6px 0 0"></p>
       <div class="cc-pay" id="cc-pay" style="display:none">
         <div class="ym" id="cc-ym" style="display:none">
@@ -2329,6 +2349,16 @@
       </div>
       <p class="hint" id="cap-st"></p>
       <p class="hint" id="cap-cmdh" hidden>Команда для своего сочетания: <code id="cap-cmd"></code></p>
+    </div>
+    <h2>Позвать Лиру одной клавишей</h2>
+    <div class="capbox" id="mic-box">
+      <div class="switch slim"><div>Сочетание клавиш в любой программе<span>Нажали — Лира слушает, как после нажатия на лицо в виджете; нажали ещё раз — перестала. Можно сделать его кнопкой микрофона: вкл и выкл.</span></div><label class="tg"><input type="checkbox" id="mic-on"><i></i></label></div>
+      <div class="row capkey">
+        <label class="f">Сочетание<input type="text" id="mic-key" placeholder="Ctrl+Alt+Space" autocomplete="off" spellcheck="false" title="Нажмите нужное сочетание прямо в этом поле"></label>
+        <label class="f mic-act">Что делает<select id="mic-act"><option value="call">Позвать: слушает, ещё раз — стоп</option><option value="mute">Микрофон: включить или выключить</option></select></label>
+      </div>
+      <p class="hint" id="mic-st"></p>
+      <p class="hint" id="mic-cmdh" hidden>Команда для своего сочетания: <code id="mic-cmd"></code></p>
     </div>
     <h2>Разговор</h2>
     <div class="row">

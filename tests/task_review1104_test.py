@@ -107,7 +107,7 @@ src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 ok("self.toolbox.guard(name, args)" in src and "if need_confirm or force:" in src, "разговор спрашивает человека, когда guard требует (force)")
 tp = tm.create("С частями", "цель", start=False, folders=[str(mine)])
 tm.start = lambda tid, wake="": tm.tasks[tid]                      # части не запускаем — нужна только их папка
-tm._spawn_parts(tp, [{"title": "часть", "goal": "сделай"}])
+tm._spawn_parts(tp, [{"title": "часть", "goal": "сделай", "output": "outputs/часть.md — итог"}])
 part = [x for x in tm.tasks.values() if x.data.get("parent") == tp.id][0]
 ok(part.data.get("folders") == [str(mine.resolve())], "часть получает папки основной задачи")
 del tm.start

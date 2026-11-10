@@ -866,7 +866,7 @@ def main_mac(args, extra):
     if held is None:                                     # уже запущен — попросить показаться (или открыть студию)
         try:
             sig.parent.mkdir(parents=True, exist_ok=True)
-            sig.write_text("capture" if args.capture else ("settings" + extra) if args.settings else "hud", encoding="utf-8")
+            sig.write_text("capture" if args.capture else "mic" if getattr(args, "mic", False) else ("settings" + extra) if args.settings else "hud", encoding="utf-8")
         except OSError:
             pass
         return
@@ -949,6 +949,9 @@ def main_mac(args, extra):
                 try:
                     if what == "capture":
                         api.show_capture()
+                        continue
+                    if what == "mic":                      # «Позвать Лиру» (идея №154) — сочетание назначают сами
+                        threading.Thread(target=api.mic_hotkey, daemon=True).start()
                         continue
                     api.from_tray()
                     api.bring_back()

@@ -67,7 +67,8 @@ ok(not errs, f"виджет без ошибок страницы: {errs[:2]}")
 hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
 ok("«Стоп» — прервать`" not in hud, "подсказка больше не отсылает к несуществующей кнопке")
 eng = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
-ok('if cmd == "stop":\n            self.interrupt("кнопка", follow=False)' in eng, "ядро: «stop» — тот же обрыв, что голосом, без «слушаю дальше»")
+# 0.86: перед обрывом написанное уходит в ленту «Чата» («остановлено») — строка между ними допустима
+ok(bool(re.search(r'if cmd == "stop":\n(?:[^\n]*\n)?            self\.interrupt\("кнопка", follow=False\)', eng)), "ядро: «stop» — тот же обрыв, что голосом, без «слушаю дальше»")
 
 # ---------- телефон и веб-версия ----------
 www = Path(tempfile.mkdtemp()) / "www"

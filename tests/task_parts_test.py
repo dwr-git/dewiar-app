@@ -34,7 +34,9 @@ def part_script(city):
 SCRIPTS = {
     "Обзор трёх городов": [
         ("update_plan", {"plan": "**Готово, когда:** обзор по трём городам\n\n- [ ] раздать части\n- [ ] собрать"}),
-        ("spawn_parts", {"parts": [{"title": c, "goal": f"Погода в городе {c} на сегодня, файл outputs/{c}.md"} for c in CITIES]}),
+        ("spawn_parts", {"parts": [{"title": c, "goal": f"Погода в городе {c} на сегодня"} for c in CITIES]}),   # без формата — ошибка поручения
+        ("spawn_parts", {"parts": [{"title": c, "goal": f"Погода в городе {c} на сегодня", "output": f"outputs/{c}.md: погода одной строкой"}
+                                   for c in CITIES]}),
         ("wait_parts", {"minutes": 2}),
         ("update_plan", {"plan": "**Готово, когда:** обзор по трём городам\n\n- [x] раздать части\n- [x] собрать"}),
         ("finish", {"summary": "Обзор готов: Минск, Гродно, Брест — ясно."}),
@@ -112,11 +114,12 @@ ok(len(kids) == 3 and all(c.status == "done" for c in kids), f"три части
 ok(peak[0] >= 2, f"части работали одновременно (сразу до {peak[0]})")
 ok(peak[0] <= TK.PARTS_PARALLEL, f"не больше {TK.PARTS_PARALLEL} сразу")
 first = [r for r in reqs if r["title"] == "Обзор трёх городов"][0]
-ok("spawn_parts" in first["tools"] and "ЧАСТИ." in first["system"], "у главной задачи есть spawn_parts и подсказка про части")
+ok("spawn_parts" in first["tools"] and "ЧАСТИ И РАЗВЕДКА" in first["system"], "у главной задачи есть spawn_parts и подсказка про части")
+ok("Сравнение вариантов — 2–4 части" in first["system"] and "до 4 сразу" in first["system"], "правило объёма в подсказке (выпуск 6)")
 kid_req = [r for r in reqs if r["title"] == "Минск"][0]
 ok("spawn_parts" not in kid_req["tools"] and "Ты — помощник" in kid_req["system"], "часть сама частей не раздаёт, знает, что она помощник")
 ok("часть большой задачи «Обзор трёх городов»" in kid_req["system"], "часть знает общую цель")
-waited = [r for r in reqs if r["title"] == "Обзор трёх городов" and r["i"] == 3]
+waited = [r for r in reqs if r["title"] == "Обзор трёх городов" and r["i"] == 4]
 hist = json.loads((t.dir / "история.json").read_text(encoding="utf-8"))
 got = json.dumps(hist, ensure_ascii=False)
 ok("Гродно: ясно, +12" in got and "parts/Брест/Брест.md" in got, "wait_parts вернул итоги и пути файлов частей")
@@ -125,7 +128,7 @@ ok(not any(s.startswith(("Задача «Минск»", "Задача «Грод
    f"объявлена только главная задача: {host.said}")
 
 # ---------- 2. стоп главной — стоп частей ----------
-SCRIPTS["Стоп"] = [("spawn_parts", {"parts": [{"title": "Долгая часть", "goal": "долго"}]}), ("wait_parts", {"minutes": 5})]
+SCRIPTS["Стоп"] = [("spawn_parts", {"parts": [{"title": "Долгая часть", "goal": "долго", "output": "outputs/долго.md — отчёт"}]}), ("wait_parts", {"minutes": 5})]
 SCRIPTS["Долгая часть"] = [("wait", {"minutes": 60, "reason": "ждём"})]
 ts = tm.create("Стоп", "проверка остановки")
 ok(wait_for(lambda: any(c.data.get("parent") == ts.id for c in tm.tasks.values()) and ts.data.get("activity", "").startswith("жду части")),

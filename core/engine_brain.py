@@ -378,6 +378,32 @@ class BrainMixin:
                   telegram=False)
         return True
 
+    BRAIN_FLAP_QUIET = 6 * 3600                 # №591: после сказанного «не отвечает» — столько часов о разрывах молчим
+
+    def _brain_flap(self, kind, title, text):
+        """№591 (06.11, нестабильный интернет): «Лира постоянно сообщает поверх всех окон: соединение с таким-то мозгом
+        восстановлено, потеряно; вылезает посреди экрана, а спрятать нельзя» — в журнале три «не отвечает → снова на
+        связи» за полдня, каждый раз окно Windows и виджет из трея. Теперь спокойно: тихо (без окна системы, виджет не
+        поднимается), строкой в виджете; «не отвечает» — один раз за BRAIN_FLAP_QUIET, «снова на связи» — только после
+        сказанного «не отвечает». Повторные разрывы — только в журнал. kind — "down" | "back"."""
+        now = time.monotonic()
+        if kind == "down":
+            if now - getattr(self, "_brain_down_at", -1e9) < self.BRAIN_FLAP_QUIET:
+                log.info("🧠 Снова переключился на модели Dewiar — о разрыве уже говорил, не тревожу")
+                return
+            self._brain_down_at, self._brain_down_open = now, True
+            self._brain_note = f"{title}: {text}"
+            self.note(self._brain_note)
+            self.push(title, text, telegram=False, quiet=True)
+            return
+        if not getattr(self, "_brain_down_open", False):
+            log.info("🧠 Модель снова на связи — о разрыве не говорили, молчу")
+            return
+        self._brain_down_open = False
+        if (self.status or {}).get("note") == self._g(getattr(self, "_brain_note", "")):
+            self.note("")
+        self.push(title, text, telegram=False, quiet=True)
+
     def _ensure_brain(self, why="start"):
         """Рабочий «мозг» сам, без настроек. Есть вход dewiar.pro или ключ Dewiar, а модель не выбрана или не отвечает
         (например, домашний сервер из преднастроенной сборки вне дома) — переключаемся на модели Dewiar и помним
@@ -419,7 +445,7 @@ class BrainMixin:
             if active == PROFILE_ID and back and back in profiles and alive(back):
                 self.s.update({"llm": {"active": back, "auto_from": ""}})        # свой сервер снова отвечает — к нему
                 log.info("🧠 «%s» снова отвечает — думаю им", profiles[back].get("name", back))
-                self.push("Ваша модель снова на связи", f"Думаю моделью «{profiles[back].get('name', back)}».", telegram=False)
+                self._brain_flap("back", "Ваша модель снова на связи", f"Думаю моделью «{profiles[back].get('name', back)}».")
                 self.emit("settings", settings=self.s.snapshot())
                 return
             # ручной выбор модели час не перебиваем; но «никакой модели» человек не выбирает — её чиним всегда
@@ -446,9 +472,13 @@ class BrainMixin:
                     if active:
                         self.s.update({"llm": {"auto_from": active}})
                     log.info("🧠 %s — думают модели Dewiar (%s)", f"«{was}» не отвечает" if was else "модель не выбрана", why)
-                    self.push("Думают модели Dewiar", (f"«{was}» сейчас не отвечает — " if was else "") + "подключил модели Dewiar"
-                              + (" по вашему аккаунту." if self.s.get("cloud", "account") else " по ключу.")
-                              + (" Когда ваш сервер ответит, вернусь к нему сам." if was else ""), telegram=False)
+                    msg = ((f"«{was}» сейчас не отвечает — " if was else "") + "подключил модели Dewiar"
+                           + (" по вашему аккаунту." if self.s.get("cloud", "account") else " по ключу.")
+                           + (" Когда ваш сервер ответит, вернусь к нему сам." if was else ""))
+                    if was:
+                        self._brain_flap("down", "Думают модели Dewiar", msg)
+                    else:
+                        self.push("Думают модели Dewiar", msg, telegram=False)
                     self.probe_tools_bg()
                     self.emit("settings", settings=self.s.snapshot())
                     self.emit("cloud", **self.cloud.status())
@@ -685,7 +715,8 @@ class BrainMixin:
             self.note("Запасной мозг Dewiar подключён: если своя модель не ответит, отвечу через него.")
             return r
         r = self.cloud.connect(key, j.get("url", ""))
-        self.s.update({"cloud": {"join": {"id": 0, "secret": "", "url": "", "auto": False}}})
+        # №567: заряд остался на прежнем ключе этого компьютера — карточка «Мозга» предложит перенести его сюда
+        self.s.update({"cloud": {"join": {"id": 0, "secret": "", "url": "", "auto": False}, "prev": str(d.get("prev") or "")[:20]}})
         self._cloud_connected(r, "автоподключение" if auto else "заявка одобрена")
         import cloud as C
         text = ("Я подключена к мозгу Dewiar и готова. Спросите меня что-нибудь!" if auto else

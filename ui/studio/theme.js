@@ -70,4 +70,6 @@
   try { const pt = JSON.parse(localStorage.getItem("studio_ptheme") || "null"); if (pt) window.studioPluginTheme(pt); } catch (e) { }
   // «Облегчённый вид» (core.js studioLite) — тоже до первого кадра: последнее решение запомнено в localStorage
   try { if (localStorage.getItem("studio_lite") === "1") root.classList.add("st-lite"); } catch (e) { }
+  // идея №156: меню слева спрятано (core.js navToggle, Ctrl+B) — тоже до первого кадра
+  try { if (localStorage.getItem("studio_nav_off") === "1") root.classList.add("nav-off"); } catch (e) { }
 })();

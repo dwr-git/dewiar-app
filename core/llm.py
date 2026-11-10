@@ -967,6 +967,112 @@ class DSMLFilter:
         return t
 
 
+# №603 (Mac, «Dewiar Облако / DWR Chat Qwen 3.8», 07.11): «Лира вызывает search_documents — и останавливается; следующим
+# сообщением уже отвечает по найденному». По журналу вызова в эти ходы не было вовсе: модель писала его ТЕКСТОМ —
+# «[Вызов инструмента: search_documents, query=LIRA_02_OPERATING_SYSTEM]» (54–128 знаков), ход кончался, а человек видел
+# строку как «вызвала». Такую запись (и английскую «[Tool call: …]») с известным именем функции переводим в <tool_call>.
+_BR_OPEN = re.compile(r"\[\s*(?:вызов\s+инструмента|вызываю\s+инструмент|инструмент|tool[\s_]*call|calling\s+tool|function\s+call)\s*:\s*", re.I)
+_BR_WORDS = ("вызов инструмента", "вызываю инструмент", "инструмент", "tool call", "tool_call", "calling tool", "function call")
+_BR_CALL = re.compile(r"\s*([A-Za-z_][\w.-]*)\s*(?:(?:[,;(]|(?=\{))\s*([\s\S]*?))?\)?\s*\]")
+
+
+BR_MAX = 700                       # длиннее весь ответ — это уже рассказ, а не «вызов текстом» (№603: 54–128 знаков)
+# Рецензия 0.86: скобочная запись — не настоящий вызов, её легко подсунуть пересказом письма или страницы. Поэтому только
+# хвостом короткого ответа (строка в конце, не в кавычках и не в ```), только в ходе, где внешних текстов ещё не читали,
+# и всё, кроме чтения, — через «Выполнить?» (engine_tools: call["bracket"]).
+_BR_POS = re.compile(r"(?:^|\n|[.!?…]\s+|:\s+)$")
+
+
+def bracket_call(text, known):
+    """«[Вызов инструмента: name, k=v, k2="v 2"]» -> строка <tool_call>{json}</tool_call> или "" (не вызов / чужое имя).
+    В JSON — метка "_bracket": вызов разобран из скобок (см. ToolTagStripper.calls)."""
+    m = _BR_OPEN.match(text or "")
+    c = _BR_CALL.match(text, m.end()) if m else None
+    if not c or c.group(1) not in known or text[c.end():].strip():
+        return ""
+    args, raw = {}, (c.group(2) or "").strip()
+    if raw.startswith("{"):
+        try:
+            args = json.loads(raw)
+        except ValueError:
+            args = {}
+        if not isinstance(args, dict):
+            return ""
+    else:
+        for part in re.split(r"[,;]\s*(?=[A-Za-z_][\w-]*\s*[=:])", raw):
+            kv = re.match(r"\s*([A-Za-z_][\w-]*)\s*[=:]\s*([\s\S]*)", part)
+            if kv:
+                v = kv.group(2).strip().strip("`").strip()
+                if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                    v = v[1:-1]
+                elif v.startswith("«") and v.endswith("»"):
+                    v = v[1:-1]
+                try:
+                    v = json.loads(v) if re.fullmatch(r"-?\d+(?:\.\d+)?|true|false|\[.*\]|\{.*\}", v) else v
+                except ValueError:
+                    pass
+                args[kv.group(1)] = v
+    return "<tool_call>" + json.dumps({"name": c.group(1), "arguments": args, "_bracket": 1}, ensure_ascii=False) + "</tool_call>"
+
+
+def _br_place_ok(before):
+    """Может ли скобочная запись начаться здесь: начало строки или после конца фразы, и не внутри ``` или кавычек."""
+    if not _BR_POS.search(before):
+        return False
+    if before.count("```") % 2 or before.count("«") > before.count("»") or before.count('"') % 2 or before.count("`") % 2:
+        return False
+    return True
+
+
+class BracketCallFilter:
+    """Поток -> тот же поток; «[Вызов инструмента: …]» хвостом короткого ответа — в <tool_call> (только в tail()).
+    С подходящего места «[Выз…» поток придерживается до конца: пришёл текст после «]» — это был просто текст."""
+
+    def __init__(self, owner):
+        self.owner, self.buf, self.seen, self.held = owner, "", "", False
+
+    def _ok(self):
+        return bool(self.owner.known) and not getattr(self.owner, "no_bracket", False)
+
+    def feed(self, s):
+        self.buf += s
+        out = ""
+        while True:
+            if self.held:
+                j = self.buf.find("]")
+                if j >= 0 and self.buf[j + 1:].strip():               # после «]» есть текст — не хвост, обычный текст
+                    self.held = False
+                    out, self.seen, self.buf = out + self.buf[0], self.seen + self.buf[0], self.buf[1:]
+                    continue
+                if len(self.seen) + len(self.buf) > BR_MAX:
+                    self.held = False
+                    out, self.seen, self.buf = out + self.buf, self.seen + self.buf, ""
+                return out
+            i = self.buf.find("[")
+            if i < 0 or not self._ok():
+                out, self.seen, self.buf = out + self.buf, self.seen + self.buf, ""
+                return out
+            out, self.seen, self.buf = out + self.buf[:i], self.seen + self.buf[:i], self.buf[i:]
+            if _br_place_ok(self.seen) and len(self.seen) < BR_MAX:
+                m = _BR_OPEN.match(self.buf)
+                head = re.sub(r"\s+", " ", self.buf[1:].lstrip().lower())
+                if m or (len(self.buf) < 40 and "]" not in self.buf and any(w.startswith(head) or head.startswith(w) for w in _BR_WORDS)):
+                    if m:
+                        self.held = True
+                        continue
+                    return out                                      # «[Выз» — может оказаться записью вызова
+            out, self.seen, self.buf = out + self.buf[0], self.seen + self.buf[0], self.buf[1:]
+
+    def tail(self):
+        t, self.buf = self.buf, ""
+        conv = bracket_call(t, self.owner.known) if self._ok() and _br_place_ok(self.seen) and len(self.seen) + len(t) <= BR_MAX else ""
+        self.held = False
+        if conv:
+            log.info("🛠 Вызов записан текстом в конце ответа — выполню как вызов (через «Выполнить?», если это не чтение)")
+        self.seen += t
+        return conv or t
+
+
 class ToolTagStripper:
     """Вызовы функций прямо в тексте ответа — <tool_call>{json}</tool_call> (родной формат Qwen/Hermes).
     Нужен, когда сервер сам их не разбирает (vLLM без --tool-call-parser) или функции описаны в тексте
@@ -981,6 +1087,7 @@ class ToolTagStripper:
         self.buf, self.inside, self.found, self.after, self.dropped = "", False, [], False, ""
         self.known = set()          # имена функций этого запроса: голый JSON с другим именем (или без функций) — текст
         self.dsml = DSMLFilter()    # вызовы DeepSeek (DSML) — сначала в <tool_call>
+        self.br = BracketCallFilter(self)   # «[Вызов инструмента: …]» текстом (№603) — тоже в <tool_call>
 
     def _bare_end(self):
         """inside == "bare": конец JSON вызова в buf -> индекс после него или -1 (ещё не пришёл целиком)."""
@@ -991,7 +1098,7 @@ class ToolTagStripper:
             return -1
 
     def feed(self, s):
-        self.buf += self.dsml.feed(s)
+        self.buf += self.dsml.feed(self.br.feed(s))
         out = ""
         while True:
             if self.inside == "bare":
@@ -1065,7 +1172,8 @@ class ToolTagStripper:
 
     def tail(self):
         """Конец потока: придержанное на случай разрезанного «<tool_call>» — оказалось обычным текстом."""
-        rest = self.dsml.tail()
+        br = self.br.tail()
+        rest = self.dsml.feed(br) + self.dsml.tail() if br else self.dsml.tail()
         if rest:
             out = self.feed("")
             self.buf += rest
@@ -1087,6 +1195,9 @@ class ToolTagStripper:
         for raw in self.found:
             c = parse_tool_call(raw)
             if c:
+                if isinstance(c.get("args"), dict) and '"_bracket": 1' in raw:   # из скобок (№603) — engine спросит «Выполнить?»
+                    c["args"].pop("_bracket", None)
+                    c["bracket"] = True
                 out.append(c)
             else:
                 log.warning("Вызов функции в тексте не разобран: %r", raw[:300])
@@ -1665,6 +1776,8 @@ class _Collector:
             tagged = []
         for i, c in enumerate(tagged):
             self.calls[1000 + i] = {"id": f"call_t{i}", "name": c["name"], "args": json.dumps(c["args"], ensure_ascii=False)}
+            if c.get("bracket"):
+                self.calls[1000 + i]["bracket"] = True
         out = []
         for i in sorted(self.calls):
             c = self.calls[i]
@@ -1678,7 +1791,7 @@ class _Collector:
                     args = {"_raw": c["args"]}
                 else:
                     args["_truncated"] = True              # ответ оборвался по длине — аргументы закрыли сами
-            out.append({"id": c["id"] or f"call_{i}", "name": c["name"], "args": args})
+            out.append(dict({"id": c["id"] or f"call_{i}", "name": c["name"], "args": args}, **({"bracket": True} if c.get("bracket") else {})))
         return net_calls_filter(out, self.net_q, self.net_enums) if self.net else out
 
 
@@ -1836,6 +1949,27 @@ def wait_hint(sec, info, think_auto=False):
 _DONE_RX = re.compile(r"^\s*data:\s*\[DONE\]\s*$")
 
 
+def turn_read_outside(messages):
+    """В этом ходе модель уже видела тексты не от человека: результаты действий (страница, письмо, файл, поиск) или
+    вложения к сообщению -> True. Тогда «[Вызов инструмента: …]» текстом не выполняем (рецензия 0.86: пересказ письма)."""
+    msgs = list(messages or [])
+    last = None
+    for i in range(len(msgs) - 1, -1, -1):
+        m = msgs[i]
+        c = m.get("content")
+        if m.get("role") == "user" and not (isinstance(c, str) and c.lstrip().startswith("<tool_response>")):
+            last = i
+            break
+    if last is None:
+        return False
+    c = msgs[last].get("content")
+    txt = c if isinstance(c, str) else " ".join(str(x.get("text") or "") for x in c or [] if isinstance(x, dict))
+    if "\n\nВложения:" in txt:
+        return True
+    return any(m.get("role") == "tool" or m.get("tool_calls") or (m.get("role") == "user" and isinstance(m.get("content"), str)
+               and m["content"].lstrip().startswith("<tool_response>")) for m in msgs[last + 1:])
+
+
 def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     """Поток событий: ("text", кусок) и в конце, если модель решила действовать,
     ("tools", [{"id", "name", "args"}]). cancel — threading.Event для мгновенной остановки. Ошибки — LLMError.
@@ -1846,6 +1980,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
     Служебные ключи профиля с «_» (_flat, _lite, _no_kwargs, _empty_retry) ставит только сама при повторах."""
     base = _base(p)
     tools_all = tools
+    turn_read = turn_read_outside(messages)
     _usage.v = _usage.out = None
     if tools and prompt_tools_mode(p):
         system = system + tools_prompt(tools)            # сервер не принимает функции полем — описываем текстом
@@ -1911,6 +2046,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         # голый JSON в тексте — вызов, только если такая функция есть (или её зовут по имени — _known: задача, совместимость)
         known_names = [x["name"] for x in (tools_all or [])] + ([n for n in p.get("_known") or ()] if tools_all else [])
         col.tags.known = set(known_names)
+        col.tags.no_bracket = turn_read                     # рецензия 0.86: в ходе уже читали внешнее — «[Вызов…]» не вызов
         col.no_cjk = not wants_cjk(messages)
         net_buf = []
         _net.v = False

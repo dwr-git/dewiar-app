@@ -176,6 +176,8 @@ class PiperTTS:
         иначе с Hugging Face. Конфиг — первым: голос считается скачанным, только когда есть оба файла."""
         if self.has(voice_id):
             return True
+        if not re.match(r"^[a-z]{2,3}_[A-Z]{2}-[\w]+-[\w]+$", voice_id or ""):
+            raise ValueError(f"нет такого голоса Piper: «{voice_id}»")      # №611: пустое имя голоса — понятной ошибкой
         loc, name, quality = voice_id.split("-", 2)
         VOICES_DIR.mkdir(parents=True, exist_ok=True)
         m, c = self.paths(voice_id)
@@ -581,8 +583,12 @@ def _sapi_run(args, timeout):
     import subprocess
     import sys
     exe = sys.executable.replace("pythonw.exe", "python.exe")
-    return subprocess.run([exe, "-c", SAPI_PY], input=json.dumps(args, ensure_ascii=False), capture_output=True, text=True,
+    # №592, №611 (06–07.11): голос Windows читал «ЭСССР ноль градусов», «РРР сССС … градусов». Текст уходил в процесс
+    # SAPI в UTF-8, а Python в Windows читает стандартный ввод в кодировке системы (cp1251): «а» (D0 B0) становилась
+    # «Р°» — «эр градусов», «с» — «С‘»… Теперь только ASCII (\uXXXX) — никакая кодировка его не исказит
+    return subprocess.run([exe, "-c", SAPI_PY], input=json.dumps(args, ensure_ascii=True), capture_output=True, text=True,
                           timeout=timeout, encoding="utf-8", errors="replace",
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1"),
                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
 
 
@@ -655,19 +661,79 @@ class MacSayTTS:
         yield rate, data[idx + 8:] if idx >= 0 else data
 
 
+_RATE_SEEN = {}          # №600: какую частоту на самом деле отдаёт свой сервер голоса (адрес|модель|голос → Гц или 0)
+_AUDIO_MAGIC = (b"ID3", b"\xff\xfb", b"\xff\xf3", b"\xff\xf2", b"OggS", b"fLaC")
+
+
+def _rate_from_headers(headers):
+    """Частота звука из ответа сервера: «audio/pcm; rate=48000», «audio/L16;rate=48000», X-Sample-Rate… -> Гц или None."""
+    ct = headers.get("content-type", "") or ""
+    m = re.search(r"(?:^|;)\s*(?:rate|samplerate|sample_rate|sample-rate)\s*=\s*(\d{4,6})", ct, re.I)
+    if m:
+        return int(m.group(1))
+    for h in ("x-sample-rate", "sample-rate", "x-audio-sample-rate", "x-samplerate"):
+        v = (headers.get(h) or "").strip()
+        if v.isdigit() and 4000 <= int(v) <= 192000:
+            return int(v)
+    return None
+
+
+class _NeedWav(Exception):
+    """Сервер не умеет PCM (400 «Only wav and mp3») или прислал mp3/ogg вместо PCM — повторить запрос с форматом WAV."""
+
+
 class RemoteTTS:
     """OpenAI-совместимый /audio/speech (base_url — с /v1) с потоковым PCM. Понимает три формы ответа: сырой PCM
-    (частота — из настройки sample_rate, по умолчанию 24 кГц, как у OpenAI), WAV (частота из заголовка) и SSE
-    с base64-кусками (vLLM-Omni и шлюзы). cfg["extra"] дописывается в тело запроса как есть (параметры сервера)."""
+    (частота — из заголовков ответа, иначе из настройки sample_rate, по умолчанию 24 кГц, как у OpenAI), WAV (частота
+    из заголовка) и SSE с base64-кусками (vLLM-Omni и шлюзы). cfg["extra"] дописывается в тело запроса как есть.
+    №600 (07.11, свой сервер голоса, Silero «kseniya»/«aidar»): «озвучка делает крайне низкий голос, будто pitch 0,5».
+    Сервер отдавал сырой PCM 48 кГц, а мы играли его как 24 кГц — вдвое медленнее и на октаву ниже. Теперь: частота из
+    заголовков; нет её — свой сервер один раз спрашиваем тот же текст в WAV и берём частоту из его заголовка; сервер не
+    умеет PCM или прислал mp3 — сами просим WAV."""
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.name = f"Удалённый ({cfg.get('base_url', '')})"
 
-    def synth(self, text, voice_cfg, speed=1.0):
+    def _own_server(self):
+        """Свой сервер человека (не служба голосов Dewiar) и частота в настройке не менялась — её стоит проверить."""
+        c = self.cfg
+        if c.get("cloud") or c.get("from_account") or "dewiar.pro" in str(c.get("base_url") or ""):
+            return False
+        return int(c.get("sample_rate") or 24000) == 24000 and "response_format" not in (c.get("extra") or {})
+
+    def _post(self, body):
         import httpx
         c = self.cfg
-        rate = int(c.get("sample_rate") or 24000)
+        headers = {"Content-Type": "application/json"}
+        if c.get("api_key"):
+            headers["Authorization"] = f"Bearer {c['api_key']}"
+        return httpx.stream("POST", c["base_url"].rstrip("/") + "/audio/speech", json=body, headers=headers,
+                            timeout=httpx.Timeout(30, read=60))
+
+    def _learn_rate(self, body, key):
+        """Один раз на сервер и голос: тот же текст в WAV — частота из его заголовка (0 — не узнали)."""
+        got = 0
+        try:
+            with self._post(dict(body, response_format="wav", stream=False)) as r:
+                if r.status_code < 400:
+                    head = b""
+                    for chunk in r.iter_bytes(4096):
+                        head += chunk
+                        if len(head) >= 44:
+                            break
+                    if head[:4] == b"RIFF" and head[8:12] == b"WAVE":
+                        got = int.from_bytes(head[24:28], "little")
+        except Exception as e:  # noqa: BLE001 — не узнали — играем с частотой из настройки
+            log.debug("частота голоса сервера: %s", e)
+        _RATE_SEEN[key] = got if 4000 <= got <= 192000 else 0
+        if _RATE_SEEN[key] and _RATE_SEEN[key] != int(self.cfg.get("sample_rate") or 24000):
+            log.info("🗣 Сервер голоса отдаёт звук %d Гц (в настройке %s) — играю с его частотой", got,
+                     self.cfg.get("sample_rate") or 24000)
+        return _RATE_SEEN[key]
+
+    def synth(self, text, voice_cfg, speed=1.0):
+        c = self.cfg
         own = c.get("voice_f") if voice_cfg.get("_gender") == "female" else c.get("voice_m")   # голос героинь / героев с сервера
         # русский (или одни цифры: ответ «14:10» целиком — без букв, отзыв 16.10 «ствисе»): числа словами и здесь — служба голосов старой
         if re.search(r"[А-Яа-яЁё]", text or "") or (re.search(r"\d", text or "") and not re.search(r"[A-Za-z]", text or "")):
@@ -681,15 +747,29 @@ class RemoteTTS:
         if voice_cfg.get("_pid"):                         # служба голосов Dewiar даёт персонажу его собственный голос
             body["persona"] = voice_cfg["_pid"]
         body.update(c.get("extra") or {})
-        headers = {"Content-Type": "application/json"}
-        if c.get("api_key"):
-            headers["Authorization"] = f"Bearer {c['api_key']}"
-        with httpx.stream("POST", c["base_url"].rstrip("/") + "/audio/speech", json=body, headers=headers,
-                          timeout=httpx.Timeout(30, read=60)) as r:
+        key = f"{c.get('base_url')}|{body.get('model')}|{body.get('voice')}"
+        if _RATE_SEEN.get(key) == -1:                      # этот сервер PCM не умеет — сразу WAV
+            body["response_format"] = "wav"
+        try:
+            yield from self._stream(body, key, retry=body["response_format"] == "pcm")
+        except _NeedWav:
+            _RATE_SEEN[key] = -1
+            log.info("🗣 Сервер голоса не отдаёт PCM — прошу WAV")
+            yield from self._stream(dict(body, response_format="wav"), key, retry=False)
+
+    def _stream(self, body, key, retry):
+        rate = int(self.cfg.get("sample_rate") or 24000)
+        sent = False
+        with self._post(body) as r:
             if r.status_code >= 400:
                 r.read()
+                if retry and r.status_code in (400, 415, 422) and re.search(r"format|wav|pcm", r.text or "", re.I):
+                    raise _NeedWav()
                 raise RuntimeError(f"TTS-сервер ответил {r.status_code}: {r.text[:200]}")
             ctype = r.headers.get("content-type", "")
+            told = _rate_from_headers(r.headers)
+            if told:
+                rate = told
             if "event-stream" in ctype:
                 for line in r.iter_lines():
                     if not line.startswith("data:"):
@@ -715,7 +795,15 @@ class RemoteTTS:
                         rate = int.from_bytes(head[24:28], "little")
                         i = head.find(b"data")
                         chunk = head[i + 8:] if i >= 0 else head[44:]
+                    elif retry and head.startswith(_AUDIO_MAGIC) and not sent:
+                        raise _NeedWav()                   # mp3/ogg вместо PCM — играть его как PCM нельзя (шум)
                     else:
+                        if not told and self._own_server():
+                            seen = _RATE_SEEN.get(key)
+                            if seen is None:
+                                seen = self._learn_rate(body, key)
+                            if seen and seen > 0:
+                                rate = seen
                         chunk = head
                     head = None
                 chunk = carry + chunk
@@ -724,6 +812,7 @@ class RemoteTTS:
                 else:
                     carry = b""
                 if chunk:
+                    sent = True
                     yield rate, chunk
             if head:
                 yield rate, head[:len(head) // 2 * 2]

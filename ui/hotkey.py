@@ -6,7 +6,11 @@ Linux (GNOME, Ubuntu): своё сочетание в настройках кл�
 …/custom-keybindings/dewiar-capture/ и трогаем только её. Другие рабочие столы — сочетание назначают сами (команду
 показывает студия). Windows — RegisterHotKey окна значка в трее (winshell.Tray.hotkey).
 
-Сочетание пишется по-человечески: «Ctrl+Alt+N»; to_gnome / to_win переводят его."""
+Сочетание пишется по-человечески: «Ctrl+Alt+N»; to_gnome / to_win переводят его.
+
+Идея №154 (0.86): второе сочетание — «Позвать Лиру» (по умолчанию Ctrl+Alt+Space): нажали — слушает (как нажатие на лицо),
+нажали ещё раз — перестала; или, если выбрано, — включить/выключить микрофон. kind="mic": своя запись GNOME
+…/custom-keybindings/dewiar-mic/ с командой «… --mic», на Windows — второй RegisterHotKey того же окна значка."""
 import ast
 import os
 import re
@@ -17,10 +21,13 @@ import sys
 from pathlib import Path
 
 DEFAULT = "Ctrl+Alt+N"
+DEFAULT_MIC = "Ctrl+Alt+Space"
 GN_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys"
 GN_ONE = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding"
 GN_PATH = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dewiar-capture/"
 NAME = "Dewiar — закинуть идею"
+KINDS = {"capture": (GN_PATH, NAME, "--capture"),
+         "mic": ("/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/dewiar-mic/", "Dewiar — позвать Лиру", "--mic")}
 _MODS = {"ctrl": ("<Control>", 0x2), "control": ("<Control>", 0x2), "alt": ("<Alt>", 0x1), "shift": ("<Shift>", 0x4),
          "super": ("<Super>", 0x8), "win": ("<Super>", 0x8)}
 _KEYS = {"space": ("space", 0x20), "пробел": ("space", 0x20), "enter": ("Return", 0x0D)}
@@ -58,10 +65,10 @@ def to_win(combo):
     return m, vk
 
 
-def command(root):
+def command(root, kind="capture"):
     """Команда для сочетания: тот же Python и ui/app.py, что у работающей программы (установленная — /opt/dewiar/venv…),
     без /usr/bin/dewiar: тот сперва донастраивает службу — лишние полсекунды до окна."""
-    return f"{shlex.quote(sys.executable)} {shlex.quote(str(Path(root) / 'ui' / 'app.py'))} --capture"
+    return f"{shlex.quote(sys.executable)} {shlex.quote(str(Path(root) / 'ui' / 'app.py'))} {KINDS[kind][2]}"
 
 
 # ---------- GNOME ----------
@@ -104,8 +111,9 @@ def gnome_available():
         return False
 
 
-def gnome_state(combo=DEFAULT):
+def gnome_state(combo=DEFAULT, kind="capture"):
     """-> {on: наша запись есть в списке, binding, command, conflict: имя другого своего сочетания на ту же клавишу}."""
+    GN_PATH = KINDS[kind][0]
     lst = _strv(_gs("get", GN_SCHEMA, "custom-keybindings"))
     want = to_gnome(combo)
     out = {"on": GN_PATH in lst, "binding": "", "command": "", "conflict": ""}
@@ -123,9 +131,10 @@ def gnome_state(combo=DEFAULT):
     return out
 
 
-def gnome_set(on, combo, cmd):
+def gnome_set(on, combo, cmd, kind="capture"):
     """Включить (записать нашу запись и добавить в список) или выключить (убрать из списка и сбросить её ключи).
     Чужие сочетания не трогаем; та же клавиша занята своим сочетанием — не включаем. -> (ок, пояснение)."""
+    GN_PATH, NAME = KINDS[kind][0], KINDS[kind][1]
     lst = _strv(_gs("get", GN_SCHEMA, "custom-keybindings"))
     if not on:
         if GN_PATH in lst:
@@ -138,8 +147,8 @@ def gnome_set(on, combo, cmd):
         return True, "выключено"
     want = to_gnome(combo)
     if not want:
-        return False, f"не понял сочетание «{combo}» — например, Ctrl+Alt+N"
-    st = gnome_state(combo)
+        return False, f"не понял сочетание «{combo}» — например, {DEFAULT if kind == 'capture' else DEFAULT_MIC}"
+    st = gnome_state(combo, kind)
     if st["conflict"]:
         return False, f"{combo} уже занято сочетанием «{st['conflict']}» — выберите другое"
     _gs("set", f"{GN_ONE}:{GN_PATH}", "name", _gv(NAME))

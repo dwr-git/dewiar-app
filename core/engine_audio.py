@@ -4,6 +4,8 @@
 Потоки: audio (_audio_loop → _listen), stt (_stt_worker), name-check (_check_worker) и фоновые циклы.
 Числа в кадрах: один кадр — FRAME_S (32 мс), т. е. 31 кадр ≈ 1 с. Готовая фраза уходит в handle_text,
 дальше — ask() в engine_answer.py."""
+import contextlib
+
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
 from stt import stt_error_text
 
@@ -484,6 +486,9 @@ class AudioMixin:
         нет микрофона — ждём подключения, отвечать можно по написанному. Для wav-файла (тесты) — один проход и «eof»."""
         last_err = None
         while not self.stopping.is_set():
+            if self._mic_rest_due():
+                self._mic_rest()                     # №622: выключен ещё до открытия (замок «только кнопка», текстовый режим)
+                continue
             try:
                 self._open_audio()
                 last_err = None
@@ -514,7 +519,10 @@ class AudioMixin:
                 self.emit("eof")
                 return
             if not self.stopping.is_set():
-                if getattr(self, "_mic_asleep", False):
+                if getattr(self, "_mic_off", False):
+                    self._mic_off = False
+                    self._mic_rest()                 # №622: микрофон выключили — устройство свободно до включения
+                elif getattr(self, "_mic_asleep", False):
                     log.info("💤 Отпускаю микрофон — компьютер может уснуть; тронут мышь или клавиатуру — снова слушаю")
                     from sleepguard import idle_seconds
                     while not self.stopping.is_set():
@@ -546,6 +554,63 @@ class AudioMixin:
                 else:
                     self.note("Микрофон недоступен — переподключаюсь…")
                     time.sleep(2)
+
+    def _mic_rest_due(self):
+        """№622, идея №151 (07–08.11): «микрофон выключен кнопкой, а Windows показывает значок микрофона, и мессенджеры
+        пишут „занят другой программой“». Раньше выключенный микрофон только глушили — поток оставался открытым. Теперь
+        выключен (кнопка, «Отдых», текстовый режим, замок «только кнопка») и не держат «говорить» — поток закрываем совсем.
+        audio.mic_release = false — по-старому (держать открытым). Файл вместо микрофона (проверки) — не трогаем."""
+        if self.wav_input:
+            return False
+        if getattr(self, "_mic_pause", 0):
+            return True                             # идея №165: камера снимает (mic_paused)
+        if not self.muted or self.hold is not None or self._mute_pass:
+            return False
+        return self.s.get("audio", "mic_release") is not False
+
+    def _mic_kick_now(self):
+        """Включили микрофон, нажали «говорить» или начали удержание — открыть микрофон сразу, не дожидаясь опроса."""
+        ev = getattr(self, "_mic_kick", None)
+        if ev is not None:
+            ev.set()
+
+    def _mic_rest(self):
+        """Микрофон закрыт: ждём, пока его включат (или держат «говорить», или нажали «говорить» для одной фразы), —
+        тогда _audio_loop откроет его заново (доли секунды). Кольцо последних кадров очищаем: удержание после включения
+        не должно начаться со звука минутной давности. Смена устройства в студии, пока микрофон выключен, — просто
+        примется при открытии."""
+        self._mic_ring.clear()
+        paused = bool(getattr(self, "_mic_pause", 0))
+        log.info("🎤 %s — отпускаю микрофон: другие программы могут им пользоваться",
+                 "Снимок с камеры" if paused else "Микрофон выключен")
+        self.status["mic_free"] = True
+        self.emit("status", status=self.status)
+        ev = getattr(self, "_mic_kick", None) or threading.Event()
+        while not self.stopping.is_set() and self._mic_rest_due():
+            ev.wait(0.5)
+            ev.clear()
+            if self.restart_audio.is_set():
+                self.restart_audio.clear()          # устройства сменили, пока выключен, — откроем уже новое
+                self.aec.teardown()
+        self.status["mic_free"] = False
+        if not self.stopping.is_set():
+            log.info("🎤 Открываю микрофон снова")
+
+    @contextlib.contextmanager
+    def mic_paused(self, why="камера", wait=2.0):
+        """Идея №165 (08.11): веб-камера с микрофоном на одном USB — пока камера снимает, общий драйвер «вешает» поток
+        микрофона, и он отваливается до перезапуска драйвера. На время снимка микрофон закрываем (как выключенный) и
+        открываем после — только если это и правда одно устройство (mic_shares_camera). wait — сколько ждать, пока поток
+        закроется (один кадр — 32 мс; чтение из драйвера — до 2 с)."""
+        self._mic_pause = getattr(self, "_mic_pause", 0) + 1
+        try:
+            end = time.monotonic() + wait
+            while time.monotonic() < end and self.capture is not None and not self.status.get("mic_free"):
+                time.sleep(0.03)
+            yield
+        finally:
+            self._mic_pause = max(0, getattr(self, "_mic_pause", 1) - 1)
+            self._mic_kick_now()
 
     def _sleep_due(self):
         """Отпустить ли микрофон, чтобы Windows могла уснуть (идея №70; sleepguard.py). Настройка audio.let_sleep."""
@@ -719,6 +784,7 @@ class AudioMixin:
         bs, quiet, ducked = 0, 0, False                 # перебивание речью: кадры речи, тишины, приглушили ли
         echo = collections.deque(maxlen=90)             # громкость остаточного эха своего голоса (~3 с)
         half_echo = collections.deque(maxlen=100)       # полудуплекс: громкость своего голоса в микрофоне (~3 с)
+        half_pcm = collections.deque(maxlen=70)         # №564: полудуплекс — последние ~2,2 с микрофона (проверить «стоп»)
         spk_all = collections.deque(maxlen=160)         # №543: громкость микрофона, пока говорим (~5 с), — все кадры
         zst = {"since": None, "told": False, "all": True}      # поток идёт, а в нём нули или почти нули (_mic_zero_step)
         sleep_chk = defmic_chk = time.monotonic()
@@ -738,7 +804,10 @@ class AudioMixin:
                     self.restart_audio.set()           # №134: Windows сменила микрофон по умолчанию — переоткрыть на новый
                     return
             self._mic_ring.append(frame)                # 0,4 с в памяти — удержание не теряет начало фразы (не распознаётся)
-            if self.muted and self.hold is None and not self._mute_pass:
+            if (self.muted and self.hold is None and not self._mute_pass) or getattr(self, "_mic_pause", 0):
+                if self._mic_rest_due():
+                    self._mic_off = True               # №622: выключен — закрыть поток совсем (_audio_loop ждёт включения)
+                    return
                 continue                                 # микрофон выключен: слушаем только удержание и одну фразу по нажатию
             hold = self.hold
             if hold is not None:
@@ -764,7 +833,9 @@ class AudioMixin:
                 if not was_speaking:
                     self.spotter.rec.Reset()
                     half_echo.clear()
+                    half_pcm.clear()
                 was_speaking = True
+                half_pcm.append(frame)
                 a = np.frombuffer(frame, dtype=np.int16).astype(np.float32)
                 rms = float(np.sqrt(np.mean(a * a)))
                 half_echo.append(rms)
@@ -775,6 +846,8 @@ class AudioMixin:
                         log.info("«%s» — это моё же слово во фразе, не останавливаюсь", w)
                     elif max(list(half_echo)[-15:] or [0]) < 1.4 * loud:
                         log.info("«%s» тише моего голоса — похоже на эхо, не останавливаюсь", w)
+                    elif self._stop_verify(w, b"".join(half_pcm), now):
+                        pass                                   # №564: решит точная модель (_stop_check), голос пока тише
                     else:
                         log.info("✋ «%s» — замолкаю (без эхоподавления)", w)
                         self.stop_utt, self.stop_time, self._stop_sleep = True, now, True
@@ -1091,6 +1164,7 @@ class AudioMixin:
         self.follow_up_until = 0.0
         n = max(0, min(len(self._mic_ring), int(back_ms / 1000 / FRAME_S)))
         self.hold = {"pcm": list(self._mic_ring)[len(self._mic_ring) - n:] if n else [], "t0": time.monotonic(), "max": max(5, int(max_s))}
+        self._mic_kick_now()                           # №622: микрофон выключен и закрыт — открыть сейчас же
         log.info("🎙 Диктовка удержанием — говорите, отпустите — отправлю")
         self.set_state("listening")
         self.emit("hold", on=True)
@@ -1266,6 +1340,9 @@ class AudioMixin:
                 pass
         while not self.stopping.is_set():
             kind, pcm, uid = self.check_q.get()
+            if kind == "stop":
+                self._stop_check(pcm, uid)
+                continue
             if self._check_voiceprint(kind, pcm, uid):
                 continue
             checker = self.wake_checker()
@@ -1404,9 +1481,10 @@ class AudioMixin:
                         told.add(key)
                         left = max(1, round((e["start"] - now).total_seconds() / 60))
                         text = f"{e['title']}" + (f", {e['place']}" if e.get("place") else "")
-                        self.push(f"📅 Через {left} мин — {e['start']:%H:%M}", text)
+                        from when import span                # №563: «через 1 ч 27 мин», а не «через 87 минут»
+                        self.push(f"📅 Через {span(left)} — {e['start']:%H:%M}", text)
                         if self.state == "idle" and not self.meeting:
-                            self.announce(f"Через {left} минут: {e['title']}.")
+                            self.announce(f"Через {span(left, voice=True)}: {e['title']}.")
             except Exception as e:  # noqa: BLE001
                 log.warning("Календари: %s", e)
             self.stopping.wait(tick)
@@ -1503,6 +1581,74 @@ class AudioMixin:
             return
         self.set_state("thinking")
         self.stt_q.put((rest, True, False, pid))
+
+    def _stop_verify(self, w, pcm, now):
+        """№564, идея №143 (05.11, Windows, ноутбук без эхоподавления): «голос обрывается посреди фразы, и виджет уходит
+        в трей». В журнале — «✋ «перестань» — замолкаю (без эхоподавления)» трижды за три минуты, хотя человек молчал:
+        быстрый слух (Vosk с грамматикой из стоп-слов) принимал голос Лиры из колонок за «перестань» / «достаточно», ответ
+        обрывался, Лира засыпала, а виджет, показавшийся из трея на имя, через 9 с прятался обратно. Теперь в полудуплексе
+        слово-стоп перепроверяет точная модель (свой GigaAM) по последним ~2 с микрофона; пока она
+        думает (доли секунды), голос приглушён. -> True — проверка запущена (решит _stop_check); False — проверить нечем
+        (audio.stop_check = false или нет точной модели), останавливаемся сразу, как раньше."""
+        if self.s.get("audio", "stop_check") is False or not pcm:
+            return False
+        checker = self._stop_checker()
+        if checker is None:
+            return False
+        if getattr(self, "_stop_checking", False):
+            return True                                  # уже проверяем — второе «стоп» той же фразы ждёт её решения
+        self._stop_checking = True
+        if self.player is not None:
+            self.player.gain = 0.35                      # «слышу» — тише, пока проверяем
+        self.check_q.put(("stop", pcm, (w, now)))
+        return True
+
+    def _stop_checker(self):
+        """Чем перепроверить «стоп»: только своим GigaAM (доли секунды, без сети). Распознаёт сервер — решает быстрый
+        слух, как раньше: круг по сети на каждое «стоп» — это и задержка, и лишние запросы."""
+        g = getattr(self, "gigaam", None)
+        return g if g is not None and getattr(g, "ready", False) else None
+
+    STOP_FORMS = {"перестаньте", "замолчите", "прекратите", "остановитесь", "помолчите", "хватит", "стоп", "stop"}
+
+    def _stop_hit(self, text):
+        """Слово-стоп в тексте точной модели -> само слово или None («стоп», «хватит», «перестань(те)»…)."""
+        forms = set(STOP_WORDS) | self.STOP_FORMS
+        for x in re.findall(r"[\wё]+", _norm(text or "")):
+            if x in forms:
+                return x
+        return None
+
+    def _stop_check(self, pcm, info):
+        """Поток name-check: точная модель решает, было ли слово-стоп поверх ответа (_stop_verify). Было и это не моё же
+        слово в ответе — замолкаю, как раньше; не было — эхо: голос снова в полную силу, ответ договаривается."""
+        w, at = info
+        text = None
+        try:
+            checker = self._stop_checker()
+            if checker is not None:
+                t0 = time.monotonic()
+                text = checker.transcribe(pcm).strip()
+                log.debug("👂 проверка «%s»: «%s» (%d мс)", w, text, int((time.monotonic() - t0) * 1000))
+        except Exception as e:  # noqa: BLE001 — не проверилось: верим быстрому слуху, как раньше
+            log.debug("проверка слова-стоп не удалась: %s", e)
+        finally:
+            self._stop_checking = False
+        hit = w if text is None else self._stop_hit(text)
+        if hit and text is not None and self._own_word(hit):
+            hit = None
+        if self.state != "speaking":
+            if self.player is not None:
+                self.player.gain = 1.0
+            return
+        if hit:
+            log.info("✋ «%s» — замолкаю (без эхоподавления%s)", w, f"; точная модель: «{text[:60]}»" if text else "")
+            self.stop_utt, self.stop_time, self._stop_sleep = True, at, True
+            self.interrupt(w, follow=False)
+            return
+        if self.player is not None:
+            self.player.gain = 1.0
+        log.info("🔁 «%s» от быстрого слуха — эхо моего голоса (точная модель: «%s»), договариваю", w, (text or "")[:80])
 
     def _own_word(self, w):
         """Слово-команда («пауза», «стоп») есть в том, что ассистент сам говорит сейчас (или только что) — это эхо."""

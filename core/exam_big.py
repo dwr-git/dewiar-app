@@ -833,10 +833,84 @@ def check_research(tdir, info, task=None):
     return out
 
 
+# ---------- Б13: дашборд по данным, через части (выпуск 6: поручения частям, помощники) ----------
+REGIONS = ["Север", "Юг", "Запад", "Восток"]
+PRODUCTS = [("Чайник", 2490), ("Тостер", 3190), ("Миксер", 4590), ("Блендер", 5990), ("Утюг", 3790), ("Пылесос", 12990),
+            ("Кофеварка", 8990), ("Фен", 2890), ("Мультиварка", 6990), ("Соковыжималка", 7490)]
+MONTHS_RU = ["январ", "феврал", "март", "апрел", "ма[йея]", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр"]
+BEST_WORDS = re.compile(r"лучш|максим|больше всего|самы[йм]|лидер|первое место|рекорд|пик|наибольш|выше всех|top|best", re.I)
+
+
+def fix_dashboard(d, rng):
+    """продажи.csv за 2024–2025 по 4 регионам и 10 товарам: один регион сильнее остальных, один месяц — пик продаж."""
+    best_r = rng.choice(REGIONS)
+    peak = (rng.choice([2024, 2025]), rng.randint(1, 12))
+    rows, by_m, by_r, by_p = [], {}, {}, {}
+    for y in (2024, 2025):
+        for m in range(1, 13):
+            for r in REGIONS:
+                for name, price in PRODUCTS:
+                    k = (1.35 if r == best_r else 1.0) * (1.7 if (y, m) == peak else 1.0)
+                    qty = int(rng.randint(3, 40) * k)
+                    total = qty * price
+                    rows.append((f"{y}-{m:02d}-01", r, name, qty, price, total))
+                    by_m[f"{y}-{m:02d}"] = by_m.get(f"{y}-{m:02d}", 0) + total
+                    by_r[r] = by_r.get(r, 0) + total
+                    by_p[name] = by_p.get(name, 0) + total
+    with open(Path(d) / "продажи.csv", "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["дата", "регион", "товар", "количество", "цена", "сумма"])
+        w.writerows(rows)
+    return {"kind": "dashboard", "regions": REGIONS, "best_month": max(by_m, key=by_m.get), "best_region": max(by_r, key=by_r.get),
+            "top": sorted(by_p, key=by_p.get, reverse=True)[:3], "rows": len(rows)}
+
+
+def _named_best(text, rx):
+    """Названо ли «лучшим» (лучший, больше всего, пик…) то, что ловит rx: рядом с упоминанием — слово о лидерстве."""
+    for m in rx.finditer(text):
+        if BEST_WORDS.search(text[max(0, m.start() - 140):m.end() + 140]):
+            return True
+    return False
+
+
+def check_dashboard(tdir, info, task=None, browser=True):
+    f = Path(tdir) / "outputs" / "дашборд.html"
+    if not f.is_file():
+        return [_chk("outputs/дашборд.html есть", False, "файла нет")]
+    html = f.read_text(encoding="utf-8", errors="replace")
+    charts = len(re.findall(r"<svg\b|<canvas\b", html, re.I)) + len(re.findall(r"new\s+Chart\s*\(|Plotly\.(?:newPlot|react)\s*\(|echarts\.init\s*\(", html))
+    out = [_chk("три графика и больше (svg, canvas или библиотека графиков)", charts >= 3, f"графиков: {charts}")]
+    text = _text(html)
+    y, mo = info["best_month"].split("-")
+    month_rx = re.compile(rf"{y}-{mo}|{mo}[./]{y}|(?:{MONTHS_RU[int(mo) - 1]})\w*\s*{y}", re.I)
+    out.append(_chk(f"лучший месяц назван верно ({info['best_month']})", _named_best(text, month_rx),
+                    "месяц не назван или не как лучший" if not month_rx.search(text) else "назван, но не как лучший"))
+    out.append(_chk(f"лучший регион назван верно ({info['best_region']})", _named_best(text, re.compile(re.escape(info["best_region"])))))
+    lis = [x for x in re.findall(r"(?is)<li[^>]*>(.*?)</li>", html) if re.search(r"\d", _text(x))]
+    out.append(_chk("пять выводов с цифрами (списком)", len(lis) >= 5, f"пунктов с цифрами: {len(lis)}"))
+    reg = Path(tdir) / "outputs" / "регионы"
+    docs = [p for p in reg.rglob("*") if p.is_file() and p.suffix.lower() in (".md", ".html", ".txt")] if reg.is_dir() else []
+    have = {r for r in info["regions"] for p in docs if _cf(r) in _cf(p.stem) or _cf(r) in _cf(p.read_text(encoding="utf-8", errors="replace")[:4000])}
+    out.append(_chk("4 справки по регионам в outputs/регионы/", len(docs) >= 4 and have == set(info["regions"]),
+                    f"файлов: {len(docs)}; регионы: {sorted(have)}"))
+    if task is not None:
+        used = int((((task or {}).get("quality") or {}).get("tools") or {}).get("spawn_parts") or 0)
+        out.append(_chk("справки по регионам — через части (spawn_parts)", used >= 1, f"spawn_parts ×{used}"))
+    if browser:
+        res = browser_pages([f], width=1280)
+        name = "дашборд открывается в браузере без ошибок скриптов и консоли"
+        if res is None:
+            out.append({"name": name, "ok": False, "unchecked": True, "detail": "не проверено (нет браузера: Playwright и Chromium)"})
+        else:
+            bad = [f"{n}: {r[1]}" for n, r in res.items() if not r[0]]
+            out.append(_chk(name, not bad, "; ".join(bad[:2])))
+    return out
+
+
 FIXTURES = {"research": fix_research, "downloads": fix_downloads, "statements": fix_statements, "bakery": fix_bakery,
-            "reconcile": fix_reconcile, "trip": fix_trip, "anki": fix_anki}
+            "reconcile": fix_reconcile, "trip": fix_trip, "anki": fix_anki, "dashboard": fix_dashboard}
 BIG_CHECKS = {"research": check_research, "downloads": check_downloads, "statements": check_statements, "bakery": check_bakery,
-              "reconcile": check_reconcile, "trip": check_trip, "anki": check_anki}
+              "reconcile": check_reconcile, "trip": check_trip, "anki": check_anki, "dashboard": check_dashboard}
 
 
 def make_fixture(kind, d, seed=1, **kw):

@@ -48,7 +48,8 @@ def tok(x):
 
 
 class Mock:
-    """SCRIPTS: название задачи -> [(инструмент, аргументы) | callable(запрос) -> (инструмент, аргументы)]."""
+    """SCRIPTS: название задачи -> [(инструмент, аргументы) | callable(запрос) -> (инструмент, аргументы)]; «@explore» —
+    сценарий разведчика (выпуск 6); шаг (None, текст) — ответ текстом без вызова."""
 
     def __init__(self, scripts, window=None):
         self.scripts, self.window = scripts, window
@@ -137,6 +138,8 @@ class Mock:
                 return self.send(h, "# Блокнот задачи\n\n## Что известно\n- сжато из ранних шагов\n")
             m = re.search(r"ЗАДАЧА: (.+)", sysm)
             title = m.group(1).strip() if m else "?"
+            if sysm.startswith("Ты — разведчик"):           # выпуск 6: разведчик задачи — свой сценарий «@explore»
+                title = "@explore"
             i = self.pos.get(title, 0)
             self.pos[title] = i + 1
             sc = self.scripts.get(title, [])
@@ -146,6 +149,8 @@ class Mock:
             self.reqs.append(req)
         if callable(step):
             step = step(req)
+        if step and step[0] is None:                   # ответ текстом, без вызова
+            return self.send(h, step[1])
         self.send(h, f"Шаг {i + 1}. ", step)
 
     def of(self, title):

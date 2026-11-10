@@ -39,6 +39,10 @@
           display: grid; place-items: center; opacity: 0; transition: opacity .2s; color: var(--muted); touch-action: none; }
   html.tw #grip { right: 7px; bottom: 7px; }
   #card:hover #grip, #grip.on { opacity: .75; }
+  /* идея №155: уголок виден всегда (тихо) — что карточку можно тянуть, понятно без наведения */
+  #grip { opacity: .3; }
+  #bar { zoom: var(--okt, 1); }                     /* и панель кнопок — крупнее на большой карточке */
+  #grip:hover, #grip.on, #grip:focus-visible { opacity: 1; color: var(--ink); }
   #grip svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
   body.mini #grip { display: none; }
   /* Темы (ui.skin, студия → «Оформление»): фон и стекло — в assets/skins.css; здесь только то, что меняет «Неон»
@@ -107,7 +111,7 @@
      столько осталось ждать; кончилась — снова покой и сигнал «не слушаю». */
   #bubble { flex: none; margin-top: 4px; position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 9px;
             background: var(--glass); box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-            color: #fff; border-radius: 999px; padding: 6px 18px 8px 15px; min-width: 120px; font-size: 13.5px; letter-spacing: .01em; transition: background .3s; }
+            color: #fff; border-radius: 999px; padding: 6px 18px 8px 15px; min-width: 120px; font-size: calc(13.5px * var(--okt, 1)); letter-spacing: .01em; transition: background .3s; }
   #bubble::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.28); transition: background .3s, box-shadow .3s; }
   #bubble.live { background: rgb(255 255 255 / 7%); }
   #bubble.live::before { background: #fff; box-shadow: 0 0 10px rgba(255,255,255,.75); animation: breathe 1.8s ease-in-out infinite; }
@@ -152,7 +156,7 @@
   /* по центру, но не выше имени: при нехватке места «распорки» сжимаются до нуля, а лишнее уходит вниз (не наезжает на имя) */
   #mid { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; padding: 10px 0 8px; }
   #mid::before, #mid::after { content: ""; flex: 1 1 0; min-height: 0; margin: -4px 0; }
-  #cap { display: none; flex: 0 1 auto; min-height: 0; width: 100%; overflow: hidden; padding: 10px 13px; border-radius: 18px; background: var(--glass); font-size: calc(13.5px * var(--dw-text, 1)); line-height: 1.42; cursor: default;
+  #cap { display: none; flex: 0 1 auto; min-height: 0; width: 100%; overflow: hidden; padding: 10px 13px; border-radius: 18px; background: var(--glass); font-size: calc(13.5px * var(--dw-text, 1) * var(--okt, 1)); line-height: 1.42; cursor: default;
          box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
   #cap.show { display: flex; flex-direction: column; }
   #cap > * { flex: none; }
@@ -164,7 +168,7 @@
   #cap .bot.wait i { animation-delay: .2s; }
   #cap .bot.wait::after { animation-delay: .4s; }
   @keyframes wdot { 0%, 80%, 100% { opacity: .25; transform: scale(.85); } 40% { opacity: 1; transform: scale(1); } }
-  #cap .you { user-select: text; -webkit-user-select: text; color: var(--muted); font-size: 12.5px; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #cap .you { user-select: text; -webkit-user-select: text; color: var(--muted); font-size: calc(12.5px * var(--okt, 1)); margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   #cap .you::before { content: "Вы: "; opacity: .75; }
   /* длинный ответ прокручивается колесом или пальцем; край, за которым есть ещё текст, плавно тает */
   #cap .bot { color: var(--ink); user-select: text; -webkit-user-select: text; white-space: pre-wrap; flex: 0 1 auto; min-height: 0;
@@ -392,7 +396,7 @@
   /* поле ввода — одна карточка: текст сверху, под ним вложения и «отправить» */
   .askbox { border-radius: 18px; background: var(--glass); box-shadow: var(--glass-shadow); padding: 9px 6px 4px 13px; transition: background .2s; }
   .askbox:focus-within { background: rgba(255,255,255,.115); }
-  #ask textarea { width: 100%; padding: 2px 6px 4px 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13.5px;
+  #ask textarea { width: 100%; padding: 2px 6px 4px 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: calc(13.5px * var(--okt, 1));
     line-height: 1.45; outline: none; resize: none; display: block; height: 24px; max-height: 210px; overflow-y: hidden;
     scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.2) transparent; }
   #ask textarea::placeholder { color: rgba(255,255,255,.4); }
@@ -437,6 +441,7 @@
           padding: 6px; border-radius: 18px; background: #16161c;
           box-shadow: 0 18px 40px -12px rgba(0,0,0,.8); }
   #team.show { display: block; animation: tpop .16s ease-out; }
+  #team.show:empty { display: none; }        /* №587: пустое меню — не полоса посреди окна */
   @keyframes tpop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   #team button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 7px 10px; border: 0; border-radius: 12px;
                  background: none; color: var(--ink); cursor: pointer; text-align: left; font: inherit; }
@@ -758,6 +763,7 @@ function paintAv(el, p) {
   el.className = "gi"; el.style.backgroundImage = ""; el.dataset.g = g || "none";
   el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${GENDER_SVG[g]}</svg>`;
 }
+setTimeout(() => { if (!current) paintAv($("team-dot"), null); });   // №587: значок у «⌄» с самого начала
 function renderDots() {                       // список команды — во всплывающем меню, панель не растёт с числом персонажей
   const box = $("team"); box.innerHTML = "";
   personas.forEach(p => {
@@ -769,7 +775,7 @@ function renderDots() {                       // список команды —
     b.onclick = guard(b, () => { box.classList.remove("show"); return core.call("persona_set", { id: p.id }).catch(showErr); });
     box.appendChild(b);
   });
-  if (current) paintAv($("team-dot"), current);
+  paintAv($("team-dot"), current);          // №587: и без выбранного персонажа у «⌄» — значок, а не одна галочка
   $("b-team").title = current ? `Сейчас: ${current.name}${current.role ? " — " + current.role.toLowerCase() : ""}. Нажмите, чтобы выбрать другого` : "Выбрать персонажа";
 }
 let radioNow = "";                           // играет радио — в покое вместо персонажа крутится пластинка
@@ -1047,7 +1053,7 @@ let TMR = [], tmrTick = 0;
 const tmrAt = (x) => new Date(x.at).getTime(), tmrFrom = (x) => new Date(x.created || x.at).getTime();
 function tmrFmt(ms) { const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), c = s % 60;
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(c).padStart(2, "0")}` : `${m}:${String(c).padStart(2, "0")}`; }
-const tmrWords = (m) => m >= 60 && m % 60 === 0 ? (m / 60 === 1 ? "час" : `${m / 60} ч`) : `${m} мин`;
+const tmrWords = (m) => m === 60 ? "час" : m >= 60 ? `${Math.floor(m / 60)} ч` + (m % 60 ? ` ${m % 60} мин` : "") : `${m} мин`;   // №563: «1 ч 27 мин», не «87 мин»
 function tmrSet(items) {
   TMR = (items || []).filter(x => x.kind === "timer" && !x.paused && tmrAt(x) > Date.now() - 1500 && tmrAt(x) - Date.now() < 24 * 3600e3)
     .sort((a, b) => tmrAt(a) - tmrAt(b)).slice(0, 3);
@@ -1095,13 +1101,18 @@ function alarmWin(e, n = 0) {
   if (n < 20) setTimeout(() => alarmWin(e, n + 1), 500);
 }
 core.on("hello", d => {
-  tmrSet(d.reminders);
-  if (d.alarm) alarmWin(d.alarm);
-  applyLook(d.settings.ui);
-  featuresSet(d.settings.features);
-  setLocal(d.settings.privacy && d.settings.privacy.local_only);
-  personas = d.personas; muted = d.muted; $("b-mic").classList.toggle("on", muted); setTextOnly(d.settings.tts && d.settings.tts.text_only);
-  applyPersona(d.persona); setRadio(d.radio); setState(d.state); note(d.status);
+  // №587: персонажи — первыми, а остальное по шагу и каждый сам по себе: споткнулся один шаг снимка — раньше виджет оставался
+  // без команды (ни значка у «⌄», ни имени, а меню выбора — пустой полосой)
+  personas = Array.isArray(d.personas) ? d.personas : personas; muted = d.muted;
+  const step = (f) => { try { f(); } catch (e) { console.error(e); if (window.__jsErr) window.__jsErr.push(`hello: ${e && e.message}`); } };
+  step(() => applyPersona(d.persona));
+  step(() => tmrSet(d.reminders));
+  if (d.alarm) step(() => alarmWin(d.alarm));
+  step(() => applyLook(d.settings.ui));
+  step(() => featuresSet(d.settings.features));
+  step(() => setLocal(d.settings.privacy && d.settings.privacy.local_only));
+  step(() => { $("b-mic").classList.toggle("on", muted); setTextOnly(d.settings.tts && d.settings.tts.text_only); });
+  step(() => { setRadio(d.radio); setState(d.state); note(d.status); });
   if (!d.settings.llm.active && (d.settings.ui || {}).intro !== "") { showCap("", d.settings.llm.trial === false ? "Чтобы я могла отвечать, меня нужно один раз подключить — без регистрации, на старте подарок: студия → «Мозг» → «Подключить мозг Dewiar»."
     : "Спросите меня что-нибудь — отвечу и без настройки, пока коротко. Напоминания, поиск и дела — после подключения мозга (на старте подарок): студия → «Мозг» → «Подключить мозг Dewiar».", true); }
 })
@@ -1675,6 +1686,8 @@ function orbScale() {
   const z = (window.DewiarZoom && DewiarZoom.get().zoom) || 1;
   const k = Math.max(1, Math.min(1.6, Math.min(innerWidth / z / 300, innerHeight / z / 420)));
   document.documentElement.style.setProperty("--ok", k.toFixed(3));
+  // идея №155 («морды сделать резиновыми»): крупнее карточка — крупнее и текст ответа, строка состояния и поле (до 1,3 раза)
+  document.documentElement.style.setProperty("--okt", (1 + (k - 1) * 0.5).toFixed(3));
 }
 addEventListener("resize", orbScale); orbScale();
 /* Растянуть карточку за правый нижний угол: окно меняет размер на лету (Api.resize_card), отпустили — размер в
@@ -1713,7 +1726,14 @@ function setMode(m, auto = false) {
   const a = api(); if (!a || m === mode) return;
   a.set_mode(m, auto).then(p => { if (p && !auto) core.call("settings_save", { patch: { ui: { hud_mode: m, hud_x: p[0], hud_y: p[1] } } }).catch(() => {}); }).catch(() => {});
 }
-$("b-team").onclick = (e) => { e.stopPropagation(); $("team").classList.toggle("show"); };
+$("b-team").onclick = async (e) => {
+  e.stopPropagation();
+  if (!personas.length) {                    // №587: списка нет — не открываем пустую полосу, а спрашиваем ядро заново
+    try { const d = await core.call("hello"); if (Array.isArray(d.personas) && d.personas.length) { personas = d.personas; applyPersona(d.persona); } } catch (err) { }
+    if (!personas.length) { showErr(new Error("Список персонажей не загрузился — откройте студию → «Персонажи»")); return; }
+  }
+  $("team").classList.toggle("show");
+};
 document.addEventListener("click", (e) => { if (!e.target.closest("#team")) $("team").classList.remove("show"); });
 $("grow").onclick = () => setMode("card");
 /* текстовый режим (студия → «Чат», 27.10): «Выполнить?» — в «Чате» студии, а не выскакивающим виджетом с мелким текстом */
@@ -1752,7 +1772,7 @@ core.on("window", e => { const a = api(); if (!a || mode !== "card") return;
 core.on("snip", e => { const a = api(); if (mode === "card" && e.state === "text" && e.text && a && a.clip_text) a.clip_text(String(e.text)); });
 window.trayLeft = () => { if (mode === "card") core.call("settings_save", { patch: { ui: { hud_tray: false } } }).catch(() => {}); };
 core.on("state", e => { if (e.state === "listening") popUp(); if (e.state === "idle") backLater(9000); else clearTimeout(backT); })
-    .on("push", () => { popUp(); backLater(12000); })
+    .on("push", e => { if (e && e.quiet) return; popUp(); backLater(12000); })   // №591: тихое — из трея не поднимаемся
     .on("reminder", () => { popUp(); backLater(20000); })
     .on("confirm", () => { if (!TEXT_MODE) popUp(); });
 $("b-type").onclick = () => {

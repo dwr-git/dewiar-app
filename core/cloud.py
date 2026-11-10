@@ -4,6 +4,7 @@
 Программа ходит к моделям через cloud.php на сайте как к обычному OpenAI-совместимому серверу (адрес …/cloud.php?p= —
 к нему приписывается /chat/completions): профиль модели "dewiar-cloud" в настройках llm. Человек видит не деньги,
 а полосу заряда и сколько примерно ответов осталось. Серверная часть — server/dwrapp/cloud.php."""
+import os
 import logging
 import re
 import threading
@@ -137,8 +138,9 @@ def device_ids(settings):
     import secrets
     dev = settings.get("cloud", "dev") or ""
     if not re.fullmatch(r"pc-[0-9a-f]{24}", dev):
-        dev = "pc-" + secrets.token_hex(12)
+        dev = _dev_kept() or "pc-" + secrets.token_hex(12)
         settings.update({"cloud": {"dev": dev}})
+    _dev_keep(dev)
     out = [dev]
     mid = _machine_id()
     if mid:
@@ -146,9 +148,52 @@ def device_ids(settings):
     return out
 
 
+DEV_REG = r"Software\Dewiar"          # №567: номер установки — и в реестре пользователя: «удалить настройки» при удалении его не стирает
+
+
+def _dev_kept():
+    """Номер установки, сохранённый вне папки настроек (Windows — HKCU\\Software\\Dewiar, значение cloud_dev) или ''.
+    №567/569/571 (05.11): переустановка с «удалить настройки» стирала номер — сайт не узнавал программу и выдавал новый
+    ключ с нулём, а заряд оставался на прежнем. Тесты подменяют хранилище переменной DEWIAR_DEV_KEEP (путь к файлу)."""
+    import sys
+    f = os.environ.get("DEWIAR_DEV_KEEP")
+    try:
+        if f:
+            v = open(f, encoding="ascii").read().strip()
+        elif sys.platform.startswith("win"):
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEV_REG) as k:
+                v = str(winreg.QueryValueEx(k, "cloud_dev")[0])
+        else:
+            return ""                          # Linux, Mac: при удалении пакета настройки остаются на месте
+    except (OSError, ValueError):
+        return ""
+    return v if re.fullmatch(r"pc-[0-9a-f]{24}", v or "") else ""
+
+
+def _dev_keep(dev):
+    import sys
+    f = os.environ.get("DEWIAR_DEV_KEEP")
+    try:
+        if f:
+            open(f, "w", encoding="ascii").write(dev)
+        elif sys.platform.startswith("win") and _dev_kept() != dev:
+            import winreg
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, DEV_REG) as k:
+                winreg.SetValueEx(k, "cloud_dev", 0, winreg.REG_SZ, dev)
+    except OSError:
+        pass
+
+
 def gift_text(d):
     """Честно, что с подарком после подключения (ответ /join): примерно сколько ответов и где пополнить."""
     d = d or {}
+    if d.get("prev"):                     # №567: новый ключ, а заряд — на прежнем ключе этого компьютера: не пропал
+        if not re.fullmatch(r"DW-\d+", str(d["prev"])):      # совпал только номер машины — номер ключа сайт не называет
+            return ("Подключено новым ключом. Если раньше на этом компьютере у вас был заряд Dewiar, он не пропал: студия → «Мозг» → "
+                    "«Перенести прежний заряд» — администратор проверит и перенесёт.")
+        return (f"Подключено новым ключом. Прежний заряд этой программы не пропал — он на ключе {d['prev']}. "
+                "Перенести его сюда: студия → «Мозг» → «Перенести прежний заряд».")
     if d.get("gift") == "again":
         return "Подключено — вернулся ваш прежний ключ. Пополнить: студия → «Мозг» → «Пополнить»."
     if d.get("gift") == "none":
@@ -355,7 +400,8 @@ class Cloud:
         if refresh or (self.info is None and not self.error) or time.monotonic() - self.at > REFRESH:
             threading.Thread(target=self.refresh, daemon=True).start() if not refresh else self.refresh()
         d = {"connected": True, "url": self.url, "tail": "" if self.s.get("cloud", "account") else self.key[-4:], "error": self.error,
-             "active": (self.s.get("llm", "active") == PROFILE_ID), "account": bool(self.s.get("cloud", "account"))}
+             "active": (self.s.get("llm", "active") == PROFILE_ID), "account": bool(self.s.get("cloud", "account")),
+             "prev": str(self.s.get("cloud", "prev") or "")}       # №567: заряд остался на прежнем ключе этого компьютера
         d.update(self.info or {})
         return d
 

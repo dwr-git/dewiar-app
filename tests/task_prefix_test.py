@@ -42,7 +42,7 @@ pre = [r["tools"] for r in rs]
 ok(all(pre[k + 1][:len(pre[k])] == pre[k] for k in range(len(pre) - 1)), "инструменты: каждый следующий список начинается с прошлого байт в байт")
 ok(names[0] == names[5] and "calc" not in names[5] and names[7][-1] == "calc" and names[7][:-1] == names[0],
    f"find_tool подключил calc — он встал в КОНЕЦ списка, начало не тронуто ({names[7][-3:]})")
-ok(12 <= len(names[0]) <= 21, f"профиль задачи — {len(names[0])} инструментов, а не все ~70: {names[0]}")
+ok(12 <= len(names[0]) <= 23, f"профиль задачи — {len(names[0])} инструментов, а не все ~70: {names[0]}")
 ok(all(str(r["messages"][-1].get("content", "")).startswith("[Состояние задачи") or "[Состояние задачи" in str(r["messages"][-1].get("content"))
        for r in rs), "«Состояние задачи» — последним сообщением каждого запроса")
 st = str(rs[3]["messages"][-1]["content"])

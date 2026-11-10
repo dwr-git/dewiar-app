@@ -28,7 +28,7 @@ async function loadTasks() {
       const pinned = pins.includes(t.id);
       const el = document.createElement("div"); el.className = "titem" + (t.id === tCur ? " cur" : "") + (pinned ? " pinned" : "");
       const pr = t.progress && t.progress[1] ? t.progress[0] / t.progress[1] : 0;
-      el.innerHTML = `<b></b><span><i class="badge ${t.status}">${t.status_ru}</i>${tsince(t.created)}${t.project ? " · код" : ""}</span>` +
+      el.innerHTML = `<b></b><span><i class="badge ${t.status}">${t.status_ru}</i>${tsince(t.created)}${t.project ? " · код" : ""}${t.parent ? " · часть задачи" : ""}</span>` +
         (["running", "waiting", "sleeping"].includes(t.status) || pr ? `<i class="tbar${t.status === "running" ? " live" : ""}"><b style="width:${Math.max(3, (t.status === "done" ? 1 : pr) * 100)}%"></b></i>` : "");
       $("b", el).textContent = t.title; el.onclick = () => openTask(t.id);
       const pb = document.createElement("button"); pb.className = "tpin"; pb.type = "button";
@@ -42,6 +42,9 @@ async function loadTasks() {
     $("#t-llm").value = S.tasks && S.tasks.llm || "";
     $("#t-judge").innerHTML = `<option value="">Та же, что для задач</option>` + Object.entries(S.llm.profiles || {}).map(([k, p]) => `<option value="${k}">${escH(p.name || k)}</option>`).join("");
     $("#t-judge").value = S.tasks && S.tasks.judge_llm || "";
+    const bs = $("#t-budget"), bv = String(+(S.tasks && S.tasks.budget_tokens) || 0);   // выпуск 7: бюджет задачи в токенах
+    if (![...bs.options].some(o => o.value === bv)) bs.add(new Option(`${Math.round(+bv / 1000)} тыс. токенов`, bv));
+    bs.value = bv;
   } catch (e) { toast(e.message); }
 }
 function renderDiff(d) {
@@ -82,6 +85,29 @@ function renderTodos(t, live, activity) {
     <div class="hint" style="margin-top:8px">Выполнено ${done} из ${items.length}${blocked ? ` · не сделать: ${blocked}` : ""}</div>
     ${crit.length ? `<div class="pcrit-h">Готово, когда</div><div class="pcrit">${crit.map(c => `<div class="pc ${c.ok === true ? "ok" : c.ok === false ? "bad" : ""}"><b>${c.ok === true ? "✓" : c.ok === false ? "✕" : "·"}</b><span>${escH(c.label || "")}${c.ok === false && c.detail ? `<small>${escH(c.detail)}</small>` : ""}</span></div>`).join("")}</div>`
       : fallback ? `<div class="pcrit-h">Готово, когда</div><div class="pcrit"><div class="pc"><b>·</b><span>${escH(fallback.replace(/\*+/g, ""))}</span></div></div>` : ""}`;
+}
+/* «Большие задачи», выпуск 6: помощники задачи — кто что делает. Части — отдельные задачи (по поручению: формат результата,
+   бюджет шагов), «Открыть» ведёт в их карточку; разведчик (explore) и проверяющий (verify) работают в потоке задачи с её
+   правами и своим окном. Токены помощников входят в общий счёт задачи. */
+const HLP_ICON = { part: '<path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3h7z"/>',
+  explore: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/>', verify: '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>' };
+const HLP_RU = { part: "Часть", explore: "Разведчик", verify: "Проверяющий" };
+const tTok = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(".0", "").replace(".", ",")} млн` : n >= 1000 ? `${Math.round(n / 1000)} тыс.` : String(n);
+function renderHelpers(t) {
+  const hs = t.helpers || []; if (!hs.length) return "";
+  const busy = hs.filter(h => ["running", "waiting"].includes(h.status)).length, tok = hs.reduce((a, h) => a + (h.tokens || 0), 0);
+  const row = (h) => {
+    const st = h.kind === "verify" && h.status === "done" ? (h.verdict === "revise" ? "warn" : h.verdict === "ok" ? "ok" : "") : h.status;
+    const what = h.kind === "part" ? h.what : h.what === "итог" ? "итог перед «готово»" : h.what;
+    const note = h.kind === "verify" && h.verdict === "revise" && h.note ? h.note : h.kind === "part" && h.status === "running" ? h.activity : h.status === "failed" ? h.note : "";
+    const meta = [h.kind === "verify" && h.status === "done" ? (h.verdict === "ok" ? "подтвердил" : h.verdict === "revise" ? "вернул на доработку" : "не решил") : h.status_ru,
+      h.steps ? `шагов ${h.steps}${h.limit ? " из " + h.limit : ""}` : "", h.tokens ? `${tTok(h.tokens)} токенов` : ""].filter(Boolean).join(" · ");
+    return `<div class="hlp ${h.kind} ${st}"><i class="hk${h.status === "running" ? " live" : ""}"><svg viewBox="0 0 24 24">${HLP_ICON[h.kind] || ""}</svg></i>
+      <span><b>${escH(h.kind === "part" ? h.title : HLP_RU[h.kind] || h.kind)}</b>${h.kind === "part" ? `<u>часть</u>` : ""}<small>${escH(what || "")}</small>${note ? `<small class="hn">${escH(note)}</small>` : ""}</span>
+      <em>${escH(meta)}</em>${h.task ? `<button class="btn small" data-hopen="${escH(h.task)}">Открыть</button>` : ""}</div>`;
+  };
+  return `<div class="pcrit-h">Помощники<span class="hsum">${busy ? `работают ${busy} · ` : ""}${hs.length} · ${tTok(tok)} токенов</span></div>
+    <div class="helpers">${hs.slice(0, 12).map(row).join("")}</div>${hs.length > 12 ? `<p class="hint">И ещё ${hs.length - 12} — в журнале задачи.</p>` : ""}`;
 }
 /* «Большие задачи», выпуск 5: песочница кода и снимки outputs/ — «Откатить к шагу N» возвращает результаты к виду перед
    шагом N (лишнее уходит), текущий вид перед этим сохраняется снимком «перед откатом» — его можно вернуть. Пока задача
@@ -189,7 +215,7 @@ async function openTask(id) {
     acts.push(`<button class="btn danger" data-a="task_delete">Удалить</button>`);
     const prog = t.progress && t.progress[1] ? ` · план ${t.progress[0]}/${t.progress[1]}` : "";
     let body = "";
-    if (tTab === "plan") body = (t.todos || []).length ? renderTodos(t, ["running", "waiting"].includes(t.status), t.activity) : renderPlan(t.plan, ["running", "waiting"].includes(t.status), t.activity);
+    if (tTab === "plan") body = ((t.todos || []).length ? renderTodos(t, ["running", "waiting"].includes(t.status), t.activity) : renderPlan(t.plan, ["running", "waiting"].includes(t.status), t.activity)) + renderHelpers(t);
     if (tTab === "results") body = renderOutputs(t);
     if (tTab === "notebook") body = `<div class="md">${md(t.notebook)}</div><p class="hint">Блокнот — память задачи: факты, номера, договорённости. Ассистент ведёт его сам и сверяется с ним на каждом шаге.</p>`;
     if (tTab === "journal") body = tJournal(t.journal);
@@ -199,7 +225,7 @@ async function openTask(id) {
     const pr = t.status === "done" ? 1 : (t.progress && t.progress[1] ? t.progress[0] / t.progress[1] : 0);
     const mins = Math.max(0, Math.round((Date.now() - new Date(t.created)) / 60000));
     const live = ["running", "waiting"].includes(t.status);
-    $("#t-view").innerHTML = `<div class="fhead"><div class="t"><b></b><span><i class="badge ${t.status}">${t.status_ru}</i>шагов ${t.steps}${prog}${t.metrics ? " · " + escH(t.metrics) : ""}${t.project ? " · " + escH(t.project) : ""}</span></div></div>
+    $("#t-view").innerHTML = `<div class="fhead"><div class="t"><b></b><span><i class="badge ${t.status}">${t.status_ru}</i>шагов ${t.steps}${prog}${t.metrics ? " · " + escH(t.metrics) : ""}${t.budget_pct != null ? ` · <b class="tbud${t.budget_pct >= 80 ? " over" : t.budget_pct >= 50 ? " half" : ""}">бюджет ${t.budget_pct} %</b>` : ""}${t.project ? " · " + escH(t.project) : ""}</span></div></div>
       <div class="tprog${live ? " live" : ""}"><div class="bar"><b style="width:${Math.max(2, pr * 100)}%"></b></div>
         <div class="tline">${live ? `<i class="tspin"></i>` : ""}<span>${t.status === "done" ? "готово" : live ? (escH(t.activity) || "думает…") : t.status_ru}</span><em>${t.progress && t.progress[1] ? `${t.progress[0]} из ${t.progress[1]} пунктов плана · ` : ""}${live ? `идёт ${tDur(mins)}` + tEta(t, mins) : ""}</em></div></div>
       ${t.error ? `<p class="res bad" style="margin-bottom:10px">${escH(t.error)}</p>` : ""}
@@ -218,6 +244,7 @@ async function openTask(id) {
     if (tTab === "results") wireOutputs(t);
     if (tTab === "snaps") wireSnaps(t);
     $$("#t-view [data-tab]").forEach(b => b.onclick = () => { tTab = b.dataset.tab; openTask(id); });
+    $$("#t-view [data-hopen]").forEach(b => b.onclick = () => { tTab = "plan"; openTask(b.dataset.hopen); });
     $$("#t-view [data-a]").forEach(b => b.onclick = async () => {
       if (b.dataset.a === "task_delete" && !await ask("Удалить задачу вместе с её папкой?")) return;
       if (b.dataset.a === "task_discard" && !await ask("Отклонить изменения? Рабочая копия будет удалена.")) return;
@@ -251,13 +278,46 @@ $$("#t-ideas-grid .tidea").forEach(b => b.onclick = () => {
 });
 $("#t-cancel").onclick = () => { $("#t-form").style.display = "none"; };
 $("#t-pick").onclick = async () => { const a = api(); if (!a) return toast("Выбор папки доступен в окне студии"); const p = await a.pick_folder(); if (p) $("#t-proj").value = p; };
+/* Идея №164: файлы к новой задаче — скрепкой, перетаскиванием на форму или Ctrl+V в поле (как в «Чате»); ядро кладёт их во
+   «Входящие» папки задачи (tasks._inbox_files), у документов рядом — их текст, и говорит задаче начать с них. */
+let tAtts = [];
+const T_FMAX = 11e6;
+const tB64 = (file) => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(file); });
+const tSize = (n) => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + " КБ" : (n / 1048576).toFixed(1).replace(".", ",") + " МБ";
+async function tAddFiles(list) {
+  for (const f of list) {
+    if (f.size > T_FMAX) { toast(`«${f.name}» больше 11 МБ — положите его в папку и дайте задаче папку`, 4000); continue; }
+    try { tAtts.push({ name: f.name || "файл", size: f.size, img: /^image\//.test(f.type) ? URL.createObjectURL(f) : "", b64: await tB64(f) }); }
+    catch (e) { toast(`«${f.name}»: ${e.message}`); }
+  }
+  tAtts = tAtts.slice(0, 10); tAttsRender();
+}
+function tAttsRender() {
+  $("#t-atts").innerHTML = tAtts.map((a, i) => `<span class="ch-chip">${a.img ? `<img src="${escH(a.img)}" alt="">` : `<i>${escH((a.name.split(".").pop() || "").slice(0, 4).toUpperCase())}</i>`}<b title="${escH(a.name)}">${escH(a.name)}</b><small>${tSize(a.size)}</small><button type="button" data-i="${i}" title="Убрать" aria-label="Убрать ${escH(a.name)}">✕</button></span>`).join("")
+    + (tAtts.length ? `<span class="t-atth">лягут во «Входящие» папки задачи</span>` : "");
+  $$("#t-atts button").forEach(b => b.onclick = () => { const a = tAtts.splice(+b.dataset.i, 1)[0]; if (a && a.img) URL.revokeObjectURL(a.img); tAttsRender(); });
+}
+$("#t-file").onchange = (e) => { tAddFiles([...e.target.files]); e.target.value = ""; };
+{ const f = $("#t-form");
+  f.addEventListener("dragover", (e) => { if ([...(e.dataTransfer.types || [])].includes("Files")) { e.preventDefault(); f.classList.add("over"); } });
+  f.addEventListener("dragleave", (e) => { if (!f.contains(e.relatedTarget)) f.classList.remove("over"); });
+  f.addEventListener("drop", (e) => { if (!(e.dataTransfer.files || []).length) return; e.preventDefault(); f.classList.remove("over"); tAddFiles([...e.dataTransfer.files]); });
+  $("#t-goal").addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData && e.clipboardData.items || [])].filter(x => x.kind === "file").map(x => x.getAsFile()).filter(Boolean);
+    if (files.length) { e.preventDefault(); tAddFiles(files); }
+  }); }
 $("#t-go").onclick = async () => {
   const goal = $("#t-goal").value.trim(); if (!goal) return toast("Опишите, что сделать");
-  try { const t = await core.call("task_create", { goal, title: $("#t-title").value.trim(), project: $("#t-proj").value.trim(), net: $("#t-netnew").checked });
-    $("#t-form").style.display = "none"; $("#t-goal").value = ""; $("#t-netnew").checked = false; tCur = t.id; tTab = "plan"; loadTasks(); } catch (e) { toast(e.message); }
+  const files = tAtts.map(a => ({ name: a.name, b64: a.b64 }));
+  $("#t-go").disabled = true;
+  try { const t = await core.call("task_create", { goal, title: $("#t-title").value.trim(), project: $("#t-proj").value.trim(), net: $("#t-netnew").checked, files });
+    $("#t-form").style.display = "none"; $("#t-goal").value = ""; $("#t-netnew").checked = false; tAtts.forEach(a => a.img && URL.revokeObjectURL(a.img)); tAtts = []; tAttsRender();
+    tCur = t.id; tTab = "plan"; loadTasks(); } catch (e) { toast(e.message); }
+  finally { $("#t-go").disabled = false; }
 };
 $("#t-llm").onchange = () => save({ tasks: { llm: $("#t-llm").value } });
 $("#t-judge").onchange = () => save({ tasks: { judge_llm: $("#t-judge").value } });
+$("#t-budget").onchange = () => save({ tasks: { budget_tokens: +$("#t-budget").value } });
 core.on("task", e => {                     // события идут потоком на каждый шаг — перерисовываем не чаще раза в 400 мс
   if (!$("#p-tasks").classList.contains("cur")) return;
   clearTimeout(tTimer); tTimer = setTimeout(() => { loadTasks(); if (tCur === e.task.id) openTask(tCur); }, 400);

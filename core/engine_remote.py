@@ -305,10 +305,12 @@ class RemoteMixin:
         self.ask(text, images, via={"done": done, "confirm": tg.ask_confirm, "speak": bool(tg.data.get("voice_home")) and not self.server,
                                     "from": tg.TITLE})
 
-    def push(self, title, text="", critical=False, file=None, telegram=True):
-        """Уведомление о важном: всплывающее окно системы + событие для виджета и студии + Telegram (с файлом итога)."""
-        desktop_notify(f"{title}\n{text}".strip(), critical=critical)
-        self.emit("push", title=title, text=text, critical=critical)
+    def push(self, title, text="", critical=False, file=None, telegram=True, quiet=False):
+        """Уведомление о важном: всплывающее окно системы + событие для виджета и студии + Telegram (с файлом итога).
+        quiet — тихое (№591): без всплывающего окна системы, виджет из трея не поднимается — строка в виджете и студии."""
+        if not quiet:
+            desktop_notify(f"{title}\n{text}".strip(), critical=critical)
+        self.emit("push", title=title, text=text, critical=critical, **({"quiet": True} if quiet else {}))
         if telegram and self.chat.notify_on():
             threading.Thread(target=self.chat.notify, args=(f"🔔 {title}" + (f"\n{text}" if text else ""),),
                              kwargs={"file": file}, daemon=True).start()
@@ -564,6 +566,8 @@ class RemoteMixin:
         voice = self._voice_cfg()
         if voice_override:
             voice.update(voice_override)
+            from personas import fix_voice                   # №611: пустой голос из студии — не аварийный голос Windows
+            voice = fix_voice(voice, voice.get("_gender"), self._voice_cfg())
         fx_name = fx_override or self._fx_name(voice)
         pitch = voicefx.pitch_of(fx_name)
         ready = queue.Queue(maxsize=2)                  # готовящиеся фразы: ("say", s, text, chunks) | ("skip", s) | ("sync", ev) | None
@@ -758,9 +762,17 @@ class RemoteMixin:
             t.cancel.set()
             if self.player:
                 self.player.stop()
-            said = " ".join(t.spoken).strip()
-            if said:
-                self.history.append({"role": "assistant", "content": said + " …(меня перебили)", "who": self.s.get("persona")})
+            # №625–628: вопрос «Выполнить действие…? Скажите «да» или «нет».» — слова программы: в историю моими словами
+            # не пишем (модель начинала задавать его сама, текстом). Перебили на нём — помечаем, что действие не сделано,
+            # а «да» сразу после — ответ на него (_just_agreed)
+            sys_said = set(getattr(t, "sys_said", None) or [])
+            said = " ".join(x for x in t.spoken if x not in sys_said).strip()
+            asking = getattr(t, "asking", "") or ""          # непусто, пока идёт вопрос «выполнить?» (_confirm)
+            if asking:
+                self._confirm_cut = (time.monotonic(), asking, getattr(t, "n", 0))
+            if said or asking:
+                mark = " …(меня перебили" + (f", пока ждала разрешения на «{asking[:60]}», — это не сделано)" if asking else ")")
+                self.history.append({"role": "assistant", "content": (said + mark).strip(), "who": self.s.get("persona")})
             self.turn = None
             back = getattr(t, "back_to", None)
             # персонажа уже сменили (новая передача, «позови …») — не спорим с новым выбором

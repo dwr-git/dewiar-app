@@ -18,6 +18,14 @@ GEN_IMG_RX = re.compile(r"(?<![а-яё])(?:(?:с?генерир\w*|сгенер\
 QUERY_TOOLS = ("find_notes", "web_search", "show_images")     # без query — бессмысленны: тему берём из просьбы
 
 
+# вызовы, записанные текстом (№603), без «Выполнить?» — только чтение и поиск
+BRACKET_READ = {"search_documents", "find_notes", "read_file", "web_search", "weather", "world_time", "calc", "list_reminders",
+                "calendar_list", "money_report", "money_find", "app_help", "system_status", "task_status", "ask_knowledge",
+                "month_summary", "writing_today", "mailing_status", "team_status", "client_info", "client_list", "client_deals"}
+ROUTE_MAX = 400                    # длиннее — вставленный документ, а не просьба к специалисту (№566)
+# инструменты, что меняют папку «Заметки», — после них открытый список освежается сам (№633: удалила — карточка осталась)
+NOTE_TOOLS = {"save_note", "update_note", "delete_files", "save_link", "client_note", "write_diary"}
+
 CAPTURE_FOLDER = "Идеи"            # «Закинуть идею» (capture_save) — заметки сюда: «Заметки/Идеи/…»
 
 
@@ -116,6 +124,12 @@ class ToolsMixin:
                     "безопасный вариант — например, назвать конкретные файлы, которые убрать в корзину.")
         if need_confirm and not force and self.toolbox.auto_ok(name, args):
             need_confirm = False                       # команды «только посмотреть» (напр. на сервере) — без вопроса, если так настроено
+        # рецензия 0.86 (№603): вызов, записанный текстом «[Вызов инструмента: …]», — не настоящий вызов модели; его можно
+        # подсунуть. Только чтение — сразу, всё, что пишет людям, меняет данные или дом, — через «Выполнить?», всегда
+        br_strict = bool(call.get("bracket")) and name not in BRACKET_READ
+        if br_strict:
+            log.info("🛠 %s записан текстом — спрашиваю «Выполнить?»", name)
+            need_confirm = True
         if need_confirm or force:
             question = warn_q or self.toolbox.describe(name, args)
             # №353 (пакет 27.10 12:22): разбор сервера — двадцать команд подряд, и каждая — «На сервере … выполнить?
@@ -125,13 +139,15 @@ class ToolsMixin:
             ro = name == "server_run" and not force and self.toolbox.server_readonly(args)
             n_conf = getattr(turn, "confirms", 0)
             turn.confirms = n_conf + 1
-            if not force and not n_conf and self._just_agreed(turn):
+            if not force and not n_conf and not br_strict and self._just_agreed(turn):
                 # №478 (ПК 0.76): модель спросила словами «запустить?», человек ответил «да» — и тут же второй вопрос
                 # «Выполнить?», который никто не ждал: 15 с тишины — и «отказ». Только что согласились — это и есть ответ
                 log.info("Подтверждение: да (только что ответили «%s» на вопрос)", (turn.asked or "")[:20])
                 ok = True
             else:
+                turn.asking = title or name                 # №625–628: что ждёт разрешения (если перебьют на вопросе)
                 ok = self._confirm(turn, question, sentences, always=ro, again=n_conf)
+                turn.asking = ""
             if ok == "always":
                 try:
                     srv = self.toolbox.hooks["servers"]
@@ -172,15 +188,19 @@ class ToolsMixin:
             if name in FACT_TOOLS and out.strip():          # что узнала — коротко в историю разговора (engine_answer)
                 turn.facts = (getattr(turn, "facts", []) + [fact_line(name, args, out)])[-FACTS_PER_TURN:]
             self.emit("tool", name=name, title=title, status="done", detail=detail, result=out[:1500])
+            if name in NOTE_TOOLS:                          # №633: удалила или поправила заметку — открытый список «Заметок» освежается
+                self.emit("notes_changed")
             log.info("   ↳ %s", (res["text"] if isinstance(res, dict) else res)[:160].replace("\n", " "))
             return res
         except (ToolError, SkillError, MCPError) as e:
             log.info("   ↳ Ошибка: %s", redact(str(e))[:200].replace("\n", " "))    # №316 (пакет 27.10): в журнале не было видно, чем кончилось
             self.emit("tool", name=name, title=title, status="error", error=str(e))
+            turn.tools_err = getattr(turn, "tools_err", []) + [(name, redact(str(e))[:300])]   # №573: не выдавать за сделанное
             return f"Ошибка: {e}"
         except Exception as e:  # noqa: BLE001
             log.exception("инструмент %s", name)
             self.emit("tool", name=name, title=title, status="error", error=str(e))
+            turn.tools_err = getattr(turn, "tools_err", []) + [(name, redact(str(e))[:300])]
             return f"Ошибка: {e}"
 
     def _reminder_link_files(self, turn, res):
@@ -221,11 +241,19 @@ class ToolsMixin:
         """Этот ход — короткое «да / давай / запускай» в ответ на вопрос ассистента (его прошлая реплика кончилась «?»,
         не раньше 5 минут назад)? Тогда первое «Выполнить?» за ход уже отвечено (№478). Опасное (защита просит
         подтверждения сама) — спрашиваем всё равно; вызывающий это проверяет."""
+        # «Ещё раз»/«Изменить» в «Чате» (рецензия 0.86): переспрошенное «да» — не согласие на новое действие
+        if getattr(turn, "replay", False) or time.monotonic() - float(getattr(self, "_chat_replay", 0) or 0) < 60:
+            return False
         said = (getattr(turn, "asked", None) or "").strip()
         if not said or "\n\nВложения:" in said or len(said) > 60 or len(re.findall(r"[\wё]+", said)) > 6:
             return False
         if confirm_word(said) is not True:
             return False
+        cut = getattr(self, "_confirm_cut", None)
+        if cut and time.monotonic() - cut[0] < 180 and getattr(turn, "n", 0) == cut[2] + 1:   # только следующий ход
+            # №625–628: перебили, пока я спрашивала «выполнить?», и человек тут же ответил «да» — это и есть ответ
+            self._confirm_cut = None
+            return True
         last = next((m for m in reversed(getattr(self, "history", None) or []) if m.get("role") == "assistant"), None)
         if not last or not str(last.get("content") or "").rstrip().endswith("?"):
             return False
@@ -250,11 +278,14 @@ class ToolsMixin:
             log.info("Подтверждение (Telegram): %s", "да" if box["answer"] else "нет")
             return box["answer"] and not turn.cancel.is_set()
         if again:                                            # не первый вопрос за ход — коротко (полный — на экране)
-            sentences.put("Ещё команда — выполнить?" if always or "сервер" in question else "Выполнить и это?")
+            ask_ = "Ещё команда — выполнить?" if always or "сервер" in question else "Выполнить и это?"
         else:
-            sentences.put(_spoken_question(question) + (" Скажите «да», «нет» или «всегда» — тогда команды, которые только "
-                                                        "смотрят, на этом сервере больше не буду спрашивать." if always
-                                                        else " Скажите «да» или «нет»."))
+            ask_ = _spoken_question(question) + (" Скажите «да», «нет» или «всегда» — тогда команды, которые только "
+                                                 "смотрят, на этом сервере больше не буду спрашивать." if always
+                                                 else " Скажите «да» или «нет».")
+        # №625–628: вопрос — слова программы, не модели: при перебивании он не должен попасть в историю её словами
+        turn.sys_said = list(getattr(turn, "sys_said", None) or []) + [ask_]
+        sentences.put(ask_)
         drained = threading.Event()
         sentences.put(("sync", drained))
         drained.wait(30)
@@ -1486,7 +1517,13 @@ class ToolsMixin:
         cur = self.personas.get(self.s.get("persona"))
         if not cur.get("main"):
             return None
-        low = _norm(text)
+        # №566: «прикрепил .md с задачей — вверху Лира, а отвечает Ирис»: в тексте приложенного файла нашлось «книгу» — и вопрос
+        # ушёл библиотекарю. Специалиста выбираем по словам самого человека: без вложений и не по длинной вставке (документ,
+        # промпт, письмо целиком — это не короткая просьба к специалисту, отвечает тот, с кем говорят)
+        own = str(text or "").split("\n\nВложения:", 1)[0].strip()
+        if not own or len(own) > ROUTE_MAX or own.count("\n") > 6:
+            return None
+        low = _norm(own)
         order = ["agent", "lira", "jarvis", "eva", "patrik"]
         others = sorted((p for p in self.personas.all() if p.get("route") and p["id"] != cur["id"]),
                         key=lambda p: order.index(p["id"]) if p["id"] in order else -1)   # свои и из галереи — первыми

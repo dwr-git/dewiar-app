@@ -184,6 +184,26 @@ def win_default_input():
         return None
 
 
+# Идея №165 (08.11): веб-камера с микрофоном — одно USB-устройство («HK 1080P Cam» и «Микрофон (4- HK 1080P Cam)»).
+# Общие слова в именах ничего не значат: совпасть должно своё — модель, марка
+_CAM_GENERIC = {"usb", "audio", "camera", "cam", "webcam", "web", "hd", "full", "fullhd", "microphone", "mic", "микрофон",
+                "device", "video", "array", "input", "digital", "pro", "the", "for", "and", "integrated", "default",
+                "по", "умолчанию", "камера", "веб", "встроенный", "встроенная", "набор", "микрофонов", "high", "definition"}
+
+
+def _cam_tokens(name):
+    s = re.sub(r"^\s*(?:микрофон|microphone|mic|headset|гарнитура)\s*\(", "(", name or "", flags=re.I)
+    s = re.sub(r"(?<![\w-])\d+-\s+", " ", s)                 # «4- HK…» — номер экземпляра у Windows, не имя
+    return {t for t in re.findall(r"[a-zа-яё0-9]+", s.lower()) if len(t) >= 2 and t not in _CAM_GENERIC}
+
+
+def mic_shares_camera(mic, cam):
+    """Микрофон — из той же веб-камеры? -> True, если в именах есть общее своё слово (модель, марка): «HK 1080P Cam» и
+    «Микрофон (4- HK 1080P Cam)», «HD Pro Webcam C920» и «alsa_input.usb-046d_HD_Pro_Webcam_C920…»."""
+    a, b = _cam_tokens(mic), _cam_tokens(cam)
+    return bool(a and b and a & b)
+
+
 def _sd_index(name, kind):
     """Имя из настроек → номер устройства (None — по умолчанию)."""
     if not name:

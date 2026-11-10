@@ -360,9 +360,28 @@ function http(method, url, { headers = {}, body = null, stream = false, onChunk 
    связи в городе ошибка облака Dewiar — это связь или сервер, а не «домашняя сеть». Таймаут проверяем раньше отказа:
    у Android таймаут соединения звучит как «failed to connect … after 15000ms». */
 const HOME_URL = /^https?:\/\/(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|127\.|localhost\b|[\w-]+\.local\b)/i;
+/* №607 (07.11): «пришёл к другу — телефон в его Wi-Fi, интернет есть, а Лира не видит; на мобильном всё заработало». Адрес в
+   домашней сети (компьютер, LM Studio, свой сервер) из чужой сети не виден — так и задумано. Где телефон сейчас -> "wifi" (в
+   другой сети Wi-Fi: ни один его адрес не из сети этого адреса), "mobile" (Wi-Fi нет) или "" (та же сеть или не узнать). */
+function lanAway(url) {
+  const m = /^https?:\/\/(\d+\.\d+\.\d+)\.\d+/.exec(url || ""); if (!m || !D.lanIps) return "";
+  let own = []; try { own = JSON.parse(D.lanIps() || "[]") || []; } catch (x) { return ""; }
+  const wifi = own.filter(x => x && x.wifi && /^\d+\.\d+\.\d+\.\d+$/.test(x.ip || ""));
+  if (!wifi.length) return own.length ? "mobile" : "";
+  return wifi.some(x => x.ip.startsWith(m[1] + ".")) ? "" : "wifi";
+}
+function awayText(url) {
+  const w = lanAway(url), host = (/^https?:\/\/([^/]+)/.exec(url || "") || [])[1] || "";
+  if (!w) return "";
+  return `${host} — адрес в домашней сети, а телефон сейчас ${w === "wifi" ? "в другой сети Wi-Fi (в гостях, на работе)" : "на мобильном интернете"}. `
+    + "Так и задумано: напрямую телефон видит его только в той же сети Wi-Fi. Вне дома нужен путь через интернет — в «Мозге» выберите Dewiar Облако (или сервер с адресом в интернете)";
+}
 function netErr(e, url) {
   e = String(e || "");
   const home = HOME_URL.test(url || "");
+  if (home && !/^https?:\/\/(?:127\.|localhost\b)/i.test(url || "") && /Unable to resolve|UnknownHost|No address|timeout|timed out|after \d+\s*ms|Load failed|Failed to fetch|ECONNREFUSED|refused|failed to connect|reset|closed|EOF|abort|unreachable|EHOSTUNREACH|ENETUNREACH/i.test(e)) {
+    const aw = awayText(url); if (aw) return aw;
+  }
   // №229 (24.10): «Failed to connect to /127.0.0.1:1234» — 127.0.0.1 на телефоне — это сам телефон, а LM Studio — на компьютере
   if (/^https?:\/\/(?:127\.|localhost\b)/i.test(url || "") && /refused|failed to connect|timeout|timed out/i.test(e))
     return "адрес 127.0.0.1 — это сам телефон, а модель работает на компьютере. В «Мозге» впишите адрес компьютера в домашней сети (например, 192.168.1.5:1234 — он есть в LM Studio или Ollama)";
@@ -2136,11 +2155,37 @@ const callName = (o) => (o.function && typeof o.function === "object" ? o.functi
 const callArgs = (o) => { const src = o.function && typeof o.function === "object" && o.function.arguments !== undefined ? o.function : o;
   const k = ["arguments", "args", "parameters", "params", "input", "tool_input", "action_input"].find(k => src[k] !== undefined); return k ? src[k] : {}; };
 /* весь ответ — голые JSON-вызовы известных функций (без <tool_call>) -> [{name, args}] или [] — как BareCallCatcher в llm.py */
-function bareCalls(text, known) {
+/* рецензия 0.86 (№603): «[Вызов инструмента: …]» текстом — не настоящий вызов, его легко подсунуть пересказом письма или
+   страницы. На телефоне подтверждения нет — из такой записи выполняем только чтение (BR_READ), и только если в этом ходе
+   ещё не читали внешнего (результатов действий после вопроса и вложений нет — turnReadOutside). */
+const BR_READ = new Set(["search_documents", "find_notes", "read_file", "web_search", "weather", "world_time", "calc", "list_reminders",
+  "calendar_list", "money_report", "app_help", "ask_knowledge", "pc_documents", "recall"]);
+function turnReadOutside(messages) {
+  const m = messages || []; let i = m.length - 1;
+  while (i >= 0 && m[i].role !== "user") i--;
+  if (i < 0) return false;
+  const c = m[i].content, t = typeof c === "string" ? c : (c || []).map(x => (x && x.text) || "").join(" ");
+  return /\n\nВложения:/.test(t) || m.slice(i + 1).some(x => x.role === "tool" || (x.tool_calls && x.tool_calls.length));
+}
+function bareCalls(text, known, opt = {}) {
   const t = String(text || "").replace(/```[a-zA-Z]*/g, "").trim();
   // экзамен 17.10: ответ целиком «[Действие: calendar_list]» — так модель «вызвала» функцию текстом (и человек это видел)
-  const act = /^\[\s*(?:действие|действия|action|tool)\s*:\s*([A-Za-z_]\w*)\s*(\{[\s\S]*\})?\s*\]$/i.exec(t);
-  if (act) { if (!known.has(act[1])) return []; let a = {}; try { a = act[2] ? JSON.parse(act[2]) : {}; } catch (e) { a = {}; } return [{ name: act[1], args: a }]; }
+  // №603 (07.11): и «[Вызов инструмента: search_documents, query=…]» / «[Tool call: …]» в конце ответа — ход обрывался на этой строке
+  const act = /(?:^|\n|[.!?…:]\s)\[\s*(?:действие|действия|action|tool|tool[\s_]*call|calling\s+tool|вызов\s+инструмента|вызываю\s+инструмент)\s*:\s*([A-Za-z_][\w.-]*)\s*(?:(\{[\s\S]*\})|[,;(]\s*([\s\S]*?)\)?)?\s*\]\s*$/i.exec(t.length < 700 ? t : "");
+  if (act || /^\[/.test(t) && (act = /^\[\s*(?:действие|действия|action|tool)\s*:\s*([A-Za-z_]\w*)\s*(\{[\s\S]*\})?\s*\]$/i.exec(t))) {
+    if (!known.has(act[1]) || opt.ext) return [];
+    if (/вызов|вызываю|call/i.test(act[0].slice(0, 30)) && !BR_READ.has(act[1])) return [];
+    let a = {};
+    if (act[2]) { try { a = JSON.parse(act[2]); } catch (e) { a = {}; } }
+    else if (act[3]) for (const part of act[3].split(/[,;]\s*(?=[A-Za-z_][\w-]*\s*[=:])/)) {
+      const kv = /^\s*([A-Za-z_][\w-]*)\s*[=:]\s*([\s\S]*)$/.exec(part); if (!kv) continue;
+      let v = kv[2].trim().replace(/^`|`$/g, "");
+      if (/^(["'«]).*(["'»])$/.test(v)) v = v.slice(1, -1);
+      else if (/^(-?\d+(\.\d+)?|true|false)$/.test(v)) v = JSON.parse(v);
+      a[kv[1]] = v;
+    }
+    return [{ name: act[1], args: a }];
+  }
   if (!t.startsWith("{") && !t.startsWith("[")) return [];
   let objs; try { objs = JSON.parse(t); } catch (e) { try { objs = JSON.parse("[" + t.replace(/\}\s*[,;]?\s*\{/g, "},{") + "]"); } catch (e2) { return []; } }
   const out = [];
@@ -2496,7 +2541,7 @@ async function llmStream(messages, tools, onText, signal, opt = {}) {
   else if (tcRaw.length) plog("warn", `🌐 Сеть Лиры: узел ${srv} прислал вызовы текстом — не выполняю`);
   if (afterCall && !found.length && dropped.trim()) { text += dropped; emitT(dropped); }   // вызов так и не разобрался — текст не теряем
   if (hold) {
-    const bare = found.length || fromNet ? [] : bareCalls(text, new Set((tools || []).map(x => x.name)));
+    const bare = found.length || fromNet ? [] : bareCalls(text, new Set((tools || []).map(x => x.name)), { ext: turnReadOutside(messages) });
     if (bare.length) { bare.forEach((c, i) => found.push({ id: "call_b" + i, name: c.name, args: JSON.stringify(c.args) })); text = ""; plog("info", "🛠 вызов голым JSON: " + bare.map(c => c.name).join(", ")); }
     else if (held) emitT(held);
   }
@@ -3161,6 +3206,8 @@ function parseWhen(t, now = new Date(), again = false) {
 const whenText = (d) => { const now = new Date(), tm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const dd = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
   return dd === 0 ? "сегодня в " + tm : dd === 1 ? "завтра в " + tm : dd === 2 ? "послезавтра в " + tm : `${d.getDate()} ${MON[d.getMonth()]} в ${tm}`; };
+/* №563: сколько осталось — часами и минутами: «1 ч 27 мин», а не «87 мин» (как when.span на компьютере) */
+const spanRu = (mins) => { const t = Math.max(0, Math.round(mins)), h = Math.floor(t / 60), m = t % 60; return [h ? h + " ч" : "", m || !h ? m + " мин" : ""].filter(Boolean).join(" "); };
 const REP_RU = { daily: "каждый день", weekdays: "по будням", weekly: "каждую неделю" };
 /* Повтор по дням недели (30.10, владелец: «просил по будням, кроме пятницы» — на компьютере сделано в 0.71, а телефон
    такой повтор не понимал: звонил раз и ждал следующий срок от компьютера). Строка «d:0123» — дни как в Python
@@ -3365,7 +3412,7 @@ function tmrShow() {
   const box = $("#tmrs"); if (!box) return;
   box.hidden = !TMRS.length;
   box.innerHTML = TMRS.map(x => { const mins = Math.round((x.at - x.from) / 60000);
-    const name = !x.title || /^Таймер( на .*)?$/i.test(x.title) ? (mins >= 1 ? `таймер на ${mins} мин` : "таймер") : x.title;
+    const name = !x.title || /^Таймер( на .*)?$/i.test(x.title) ? (mins >= 1 ? `таймер на ${spanRu(mins)}` : "таймер") : x.title;
     return `<div class="tr" data-id="${esc(x.id)}"><svg class="pg" viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15.5"/><circle class="fg" cx="18" cy="18" r="15.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/></svg>`
       + `<div class="tt"><b></b><span>${esc(name)}</span></div><button class="x" aria-label="Отменить таймер">${X_SVG}</button></div>`; }).join("");
   $$("#tmrs .x").forEach(b => b.onclick = () => { D.alarmCancel(b.closest(".tr").dataset.id); syncSoon(); tmrShow(); });
@@ -4141,14 +4188,37 @@ function handsCard() {
   // Android 13+: приложения не из магазина в «Специальных возможностях» серые («Ограниченная настройка») — сначала
   // разрешить их на странице Dewiar (отчёт №87, 18.10: «почему нельзя выбрать помощника» — Dewiar серый в списке)
   const back = handsAsked && Date.now() - handsAsked < 10 * 60000;
-  return `<p class="hint" style="margin:0 0 10px">Ассистент сможет сам нажимать кнопки, вводить текст и листать в других приложениях — по вашей просьбе голосом: «напиши маме в Telegram…», «найди в YouTube…». Включается один раз:</p>
-    ${back ? `<p class="res bad" style="margin:0 0 10px">Не включилось? Если Dewiar в списке серый — это защита Android 13+ для приложений не из магазина: сделайте шаг 2.</p>` : ""}
-    ${androidSdk() >= 33 ? `<ol class="steps hsteps">
-      <li><b>Разрешите Dewiar на его странице</b>: «Страница Dewiar» → ⋮ (вверху справа) → «Разрешить ограниченные настройки». Android 13+ так защищает приложения не из Google Play — без этого Dewiar в «Специальных возможностях» серый. Пункта ⋮ нет? Сначала нажмите на серый Dewiar в «Специальных возможностях» и вернитесь.</li>
-      <li><b>«Специальные возможности»</b> → Dewiar → включить.</li></ol>
-    <div class="row2"><button class="btn p" id="hands-app" style="flex:1">1. Страница Dewiar</button><button class="btn" id="hands-go" style="flex:1">2. Включить</button></div>`
-    : `<ol class="steps hsteps"><li><b>«Специальные возможности»</b> → Dewiar → включить.</li></ol>
-    <div class="row2"><button class="btn p" id="hands-go" style="flex:1">Включить</button></div>`}`;
+  // Идея №144 (05.11): «новичок пять раз переключался между экранами и не понимал, что включать» — по шагам, с названиями
+  // пунктов как на экране, у Xiaomi, Samsung, Huawei — их подписи; серый Dewiar и «Ограниченная настройка» — отдельно
+  const dev = handsDevice(), where = HANDS_WHERE[dev] || HANDS_WHERE[""];
+  const s13 = androidSdk() >= 33;
+  return `<p class="hint" style="margin:0 0 10px">Ассистент сможет сам нажимать кнопки, вводить текст и листать в других приложениях — по вашей просьбе голосом: «напиши маме в Telegram…», «найди в YouTube…». Включается один раз, около минуты:</p>
+    ${back ? `<p class="res bad" style="margin:0 0 10px">Не включилось? Если Dewiar в списке серый или пишет «Ограниченная настройка» — это защита Android 13+ для приложений не из Google Play: сделайте шаг 1 и потом снова шаг 2.</p>` : ""}
+    <ol class="steps hsteps hguide">
+      ${s13 ? `<li><b>Снимите защиту Android 13+.</b> Нажмите «1. Страница Dewiar» → откроется «О приложении» → вверху справа <b>⋮</b> → <b>«Разрешить ограниченные настройки»</b> → подтвердите отпечатком или PIN-кодом.
+        <small>Пункта ⋮ нет? Сначала сделайте шаг 2 и нажмите на серый Dewiar — Android скажет «Ограниченная настройка»; закройте окно, вернитесь сюда и снова «1. Страница Dewiar» — ⋮ появится.</small></li>` : ""}
+      <li><b>Включите Dewiar в «Специальных возможностях».</b> Нажмите «${s13 ? "2. " : ""}Включить» → откроются «Специальные возможности» → <b>«${where[0]}»</b>${where[1]} → <b>Dewiar</b> → переключатель <b>«Использовать Dewiar»</b> → <b>«Разрешить»</b>.
+        <small>Не видите Dewiar — прокрутите вниз: он в разделе «${where[0]}», а не среди системных служб.</small></li>
+      <li><b>Вернитесь в Dewiar</b> (кнопка «Назад»): здесь появится «Включено». Проверьте: «Лира, открой YouTube и найди новости».</li>
+    </ol>
+    <details class="hfaq"><summary>Что-то не так?</summary>
+      <p><b>Dewiar серый, переключатель не нажимается.</b> Это «Ограниченная настройка» Android 13+ — сделайте шаг 1.</p>
+      <p><b>Включил, а через время снова выключено.</b> Android и оптимизация батареи иногда отключают службу после обновления. Включите снова; на Xiaomi — ещё «Автозапуск» и «Без ограничений» в «Контроле активности» для Dewiar.</p>
+      <p><b>Страшное предупреждение «полный контроль над устройством».</b> Так Android пишет про любое приложение, которое умеет нажимать за вас. Dewiar нажимает только по вашей просьбе, пароли не читает и не вводит, перед отправкой, оплатой и удалением спрашивает.</p>
+    </details>
+    ${s13 ? `<div class="row2"><button class="btn p" id="hands-app" style="flex:1">1. Страница Dewiar</button><button class="btn" id="hands-go" style="flex:1">2. Включить</button></div>`
+      : `<div class="row2"><button class="btn p" id="hands-go" style="flex:1">Включить</button></div>`}`;
+}
+/* Где в «Специальных возможностях» лежат службы скачанных приложений — у разных марок по-разному (идея №144) */
+const HANDS_WHERE = {          // [пункт, пояснение]
+  xiaomi: ["Скачанные приложения", " (на старых MIUI — «Расширенные настройки» → «Спец. возможности»)"],
+  samsung: ["Установленные приложения", ""],
+  huawei: ["Загруженные службы", ""],
+  "": ["Скачанные приложения", " (или «Установленные службы», «Загруженные службы» — смотря какой телефон)"],
+};
+function handsDevice() {
+  let d = ""; try { d = String(JSON.parse(D.info() || "{}").device || "").toLowerCase(); } catch (e) { }
+  return /xiaomi|redmi|poco/.test(d) ? "xiaomi" : /samsung/.test(d) ? "samsung" : /huawei|honor/.test(d) ? "huawei" : "";
 }
 function androidSdk() { try { return +JSON.parse(D.info() || "{}").sdk || 0; } catch (e) { return 0; } }
 function wireHands() {
@@ -4597,7 +4667,7 @@ async function runTool(name, a) {
     case "start_task": {
       if (a.on) { try { const r = devTaskOn(a); if (r) return r; } catch (e) { return "Ошибка: " + e.message; } }   // «на рабочем компьютере…» (devices.js)
       try { taskToPc(a.title || String(a.goal || "").slice(0, 60), a.goal || a.title || ""); } catch (e) { return "Не получилось: " + e.message; }
-      return (pcOnline() ? "Задача передана компьютеру — он уже берётся." : "Компьютер сейчас не на связи — задачу делает облако Dewiar.")
+      return (pcOnline() ? "Задача отправлена компьютеру — он возьмёт её в течение минуты; пока не взял, она видна в «Мой день» → «Сделанное» как «ждёт, когда компьютер возьмёт»." : "Компьютер сейчас не на связи — задачу делает облако Dewiar.")
         + " Ход и итог — в «Мой день» → «Сделанное»; когда будет готово, пришлю уведомление, а файлы можно будет открыть и сохранить прямо здесь."
         + " Результата ЕЩЁ НЕТ — он появится через несколько минут или дольше. Скажи одной фразой, что взялась (взялся) и сообщишь, когда будет готово; не говори «готово», «сделала», «вот презентация» — это неправда, пока задача не закончилась.";
     }
@@ -6824,6 +6894,22 @@ function mdLite(t) {          // Markdown дневника → HTML: снача�
   return esc(String(t || "").replace(/^# [^\n]*\n+/, "").replace(/\n{3,}/g, "\n\n").trim()).replace(/^## (.*)$/gm, "<h4>$1</h4>").replace(/^### (.*)$/gm, "<h5>$1</h5>")
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>").replace(/^_(.*)_$/gm, "<i>$1</i>").replace(/^- (.*)$/gm, "• $1").replace(/<\/(h4|h5)>\n+/g, "</$1>");
 }
+/* №586 (06.11): «возьми задачу» — «передана компьютеру, он уже берётся», а в «Задачах» пусто, и человек решил, что Лира
+   врёт. Отправленная задача теперь видна сразу («ждёт, когда компьютер возьмёт»), пока её запись не пришла синхронизацией;
+   не взяли за 10 минут — честно: компьютер выключен или Dewiar на нём не запущен; можно отдать облаку или убрать. */
+const TASK_WAIT_MS = 10 * 60000;
+function taskSentList() {
+  const ts = Object.values(mind().tasks || {}), now = Date.now(), norm = (t) => String(t || "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 40);
+  const left = qGet("tasksent").filter(x => now - (x.sent || 0) < 864e5 && !ts.some(t => norm(t.title) && (norm(t.title).startsWith(norm(x.title).slice(0, 25)) || norm(x.title).startsWith(norm(t.title).slice(0, 25)))));
+  if (left.length !== qGet("tasksent").length) qSet("tasksent", left);
+  return left;
+}
+function taskSentHtml(x) {
+  const late = Date.now() - (x.sent || 0) > TASK_WAIT_MS;
+  return `<div class="it tksent${late ? " late" : ""}"><div class="bd"><b>${esc(x.title)}</b><small>${late
+    ? "Компьютер пока не взял задачу — он выключен или Dewiar на нём не запущен. Включите его — задача начнётся сама, или отдайте облаку Dewiar."
+    : "⏳ Отправлена — ждёт, когда компьютер возьмёт (обычно меньше минуты)"}</small>${late ? `<div class="start"><button class="btn" data-tks-cloud="${esc(x.id)}">Сделать в облаке</button><button class="btn" data-tks-del="${esc(x.id)}">Убрать</button></div>` : ""}</div></div>`;
+}
 /* Задачи (большая работа на компьютере или в облаке) — в «Мой день» → «Сделанное»: там их и ищут, рядом со сделанным
    на телефоне. Поручить — taskToPc; ход и итог приходят синхронизацией (mind().tasks). */
 function tasksHtml() {
@@ -6833,6 +6919,7 @@ function tasksHtml() {
   return `<div class="card"><label class="f"><span>Поручить большую задачу</span><textarea id="tk-goal" rows="4" placeholder="Например: «сделай презентацию о погоде на завтра» или «сравни 5 ноутбуков до 1500 рублей»"></textarea></label>
       <button class="btn p w" id="tk-go">Передать</button><p class="hint">${pcOnline() ? "Компьютер на связи — сделает он." : "Компьютер не на связи — сделает облако Dewiar: найдёт, напишет, соберёт файл. Программы на компьютере облако не запускает."}</p></div>`
     + q.map(x => `<div class="it"><div class="bd"><b>${esc(x.title)}</b><small>⏳ отправляю…</small></div></div>`).join("")
+    + taskSentList().map(taskSentHtml).join("")
     + (ts.length ? `<div class="bugh">Задачи</div>` + ts.map(([id, t]) => `<details class="dday task ${esc(t.status || "")}"${t.status === "done" && (t.files || []).length ? " open" : ""}><summary><div class="bd"><b>${esc(t.title)}</b><small><span class="tst">${esc(TASK_RU[t.status] || t.status || "")}</span>${t.where === "cloud" ? " · в облаке" : ""}${t.activity && t.status === "running" ? " · " + esc(t.activity) : ""}</small></div></summary>
         <div class="dtext tk">${t.question && t.status === "waiting" ? `<p><b>Вопрос:</b> ${esc(t.question)}</p>` : ""}${t.result ? `<p>${mdLite(t.result)}</p>` : `<p class="hint">${esc(t.goal || "")}</p>`}${t.error ? `<p style="color:#FF8FA8">${esc(t.error)}</p>` : ""}${taskFiles(t)}
         ${t.status === "waiting" && t.where !== "cloud" ? `<div class="tkans"><textarea rows="2" data-ans-t="${esc(id)}" placeholder="Ваш ответ — задача продолжит"></textarea><button class="btn p" data-ans="${esc(id)}">Ответить</button></div>` : ""}
@@ -6868,6 +6955,13 @@ function wireTasks(box, again) {
   if (tkG) tkG.oninput = () => { tkG.style.height = "auto"; tkG.style.height = Math.min(Math.max(tkG.scrollHeight + 2, 120), innerHeight * 0.45) + "px"; };
   if ($("#tk-go")) $("#tk-go").onclick = () => { const g = $("#tk-goal").value.trim(); if (!g) return; try { taskToPc(g.slice(0, 60), g); toast(pcOnline() ? "Передано компьютеру" : "Делаю в облаке Dewiar — пришлю, когда будет готово", 3000); again(); } catch (e) { toast(e.message); } };
   if ($("#so-sync")) $("#so-sync").onclick = () => openSettings("more");
+  $$("[data-tks-del]", box).forEach(b => b.onclick = () => { qSet("tasksent", qGet("tasksent").filter(x => x.id !== b.dataset.tksDel)); again(); });
+  $$("[data-tks-cloud]", box).forEach(b => b.onclick = () => {      // компьютер так и не взял — облаку (новой заявкой только для облака)
+    const x = qGet("tasksent").find(y => y.id === b.dataset.tksCloud); if (!x) return;
+    qSet("tasksent", qGet("tasksent").filter(y => y.id !== x.id));
+    // to «pc-cloud» — компьютеры её не берут (core/sync.py: чужой to), берёт исполнитель в облаке (cloud.php runner/pending)
+    const q = qGet("taskq"); q.push({ id: "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: x.title, goal: x.goal, ts: Date.now(), cloud: true, to: "pc-cloud", from: devMyName() });
+    qSet("taskq", q); syncSoon(); toast("Делаю в облаке Dewiar — пришлю, когда будет готово", 3000); again(); });
   wireFiles(box);
 }
 function renderSoul() {
@@ -7725,7 +7819,8 @@ async function homePost(c, body, again) {          // c.quick — облако �
     const f = await homeSeek();
     if (f) { h.u = [f].concat((h.u || []).filter(x => x !== f)).slice(0, 6); saveS(); return homePost(Object.assign({}, c, { base: f }), body, true); }
   }
-  throw Object.assign(new Error(`компьютер «${h.n || "дома"}» не в этой сети — синхронизируется, когда телефон и компьютер будут в одном Wi-Fi`), { home: true, net: true, cause: last });
+  throw Object.assign(new Error(`компьютер «${h.n || "дома"}» не в этой сети — синхронизируется, когда телефон и компьютер будут в одном Wi-Fi`
+    + (lanAway(c.base) === "wifi" ? " (сейчас телефон в другой сети Wi-Fi — в гостях напрямую компьютер не виден, так и задумано; связь везде — «Устройства» → «Через dewiar.pro»)" : "")), { home: true, net: true, cause: last });
 }
 async function homeClaim(link) {
   const p = homeLinkParse(link); if (!p) throw new Error("это не код компьютера для синхронизации по Wi-Fi");
@@ -8158,7 +8253,11 @@ async function syncOne(c, opts) {
       if (x.kind in qdone) { qdone[x.kind].push(x.id); st.idx[k] = { h: null, u: x.updated, skip: true }; return; }   // отдали компьютеру — у себя забываем
       st.idx[k] = { h: src ? src._h : null, u: x.updated, del: !!x.deleted }; });
     if (qdone.dayturn.length) qSet("dayq", qGet("dayq").filter(x => !qdone.dayturn.includes(x.id)));
-    if (qdone.taskreq.length) qSet("taskq", qGet("taskq").filter(x => !qdone.taskreq.includes(x.id)));
+    if (qdone.taskreq.length) {                    // №586: отданная задача видна, пока компьютер (или облако) её не возьмёт
+      const gone = qGet("taskq").filter(x => qdone.taskreq.includes(x.id));
+      qSet("taskq", qGet("taskq").filter(x => !qdone.taskreq.includes(x.id)));
+      qSet("tasksent", qGet("tasksent").filter(x => !qdone.taskreq.includes(x.id)).concat(gone.map(x => Object.assign({}, x, { sent: Date.now() }))).slice(-20));
+    }
     if (qdone.task.length) qSet("taskcmd", qGet("taskcmd").filter(x => !qdone.task.includes(x.id)));   // команда задаче ушла — дальше решает компьютер
     body.changes = [];
     if (srv.some(k => !(st.kinds || []).includes(k))) { st.kinds = srv; st.rev = 0; body.since = 0; save(); continue; }   // сервер узнал новое — история с начала

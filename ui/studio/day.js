@@ -367,11 +367,24 @@ async function loadMoney() {
   const box = $("#mo-list"); box.innerHTML = "";
   if (!list.length) box.innerHTML = `<p class="hint">Операций нет.</p>`;
   list.slice(0, 200).forEach(x => box.appendChild(itemRow({ type: "money", id: x.id, kind: x.kind, amount: x.amount, currency: x.currency, title: x.note, category: x.category }, x.date)));
-  const allCats = ["Продукты", "Кафе и рестораны", "Транспорт", "Дом и связь", "Здоровье", "Одежда", "Развлечения", "Подарки", "Техника", "Учёба",
-                   "Красота и спорт", "Дети", "Животные", "Зарплата", "Аванс", "Премия", "Подработка", "Возврат", "Другое"];
-  $("#mo-cats-list").innerHTML = allCats.map(c => `<option value="${c}">`).join("");
+  moCats();
   if (!$("#mo-date").value) $("#mo-date").value = isoD(new Date());
 }
+/* №596 (06.11): «при выборе „Доход“ пусть в списке будут только доходы, при „Расходе“ — расходы» — категории подсказки
+   зависят от вида записи (как EXPENSE_CATS / INCOME_CATS в core/money.py); чужая категория при смене вида — стирается */
+const MO_CATS = {
+  expense: ["Продукты", "Кафе и рестораны", "Транспорт", "Дом и связь", "Здоровье", "Одежда", "Развлечения", "Подарки", "Техника", "Учёба",
+            "Красота и спорт", "Дети", "Животные", "Другое"],
+  income: ["Зарплата", "Аванс", "Премия", "Подработка", "Подарок", "Возврат", "Проценты", "Клиенты", "Другое"],
+};
+function moCats() {
+  const kind = $("#mo-kind").value === "income" ? "income" : "expense", other = kind === "income" ? "expense" : "income";
+  $("#mo-cats-list").innerHTML = MO_CATS[kind].map(c => `<option value="${c}">`).join("");
+  const cur = $("#mo-cat").value.trim();
+  if (cur && MO_CATS[other].includes(cur) && !MO_CATS[kind].includes(cur)) $("#mo-cat").value = "";
+  $("#mo-cat").placeholder = kind === "income" ? "категория дохода" : "категория расхода";
+}
+$("#mo-kind").onchange = moCats;
 $$("#cal-tabs button").forEach(b => b.onclick = () => {
   calTab = b.dataset.ct; $$("#cal-tabs button").forEach(x => x.classList.toggle("on", x === b));
   ["month", "money", "feed"].forEach(k => $("#ct-" + k).style.display = k === calTab ? "" : "none");

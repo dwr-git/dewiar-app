@@ -96,6 +96,17 @@ if (window.core) core.on("hello", () => {
   const check = () => setTimeout(studioBroken, 1500);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", check); else check();
 });
+/* №566 (снимок): файл бросили мимо поля приёма — окно открывало его вместо студии (на Linux — «кракозябры» во всё окно,
+   студию приходилось закрывать). Файл мимо поля: в «Чате» — во вложения сообщения, в других разделах — не открываем. */
+const dropFiles = (e) => !!(e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files"));
+document.addEventListener("dragover", (e) => { if (dropFiles(e) && !e.defaultPrevented) { e.preventDefault(); e.dataTransfer.dropEffect = document.querySelector("#p-chat.cur") ? "copy" : "none"; } });
+document.addEventListener("drop", (e) => {
+  if (!dropFiles(e) || e.defaultPrevented) return;
+  e.preventDefault();
+  const fs = [...(e.dataTransfer.files || [])];
+  if (fs.length && document.querySelector("#p-chat.cur") && typeof chatAddFiles === "function") chatAddFiles(fs);
+  else if (fs.length && typeof toast === "function") toast("Сюда файл не принять — перетащите его в «Чат» или в поле с пунктиром", 3500);
+});
 let S = null, personas = [], active = "lira", entities = [];
 // логотип в меню виден всегда — в покой (~6 кадров/с) уже через 4 с тишины, а не через 20 (03.11: на слабом компьютере
 // живой логотип один занимал до половины времени страницы)
@@ -272,4 +283,26 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "close") loadClose(true);
   if (b.dataset.p === "chat") loadChat();
   if (b.dataset.p === "home" && window.loadHome) loadHome();
+});
+/* Идея №156 (11.2026): «кнопка „спрятать меню слева“ — чтобы раздел, например чат, был на всю ширину». Кнопка в углу меню
+   прячет его, маленькая кнопка слева вверху — возвращает; Ctrl+B (и Ctrl+И в русской раскладке) — то же с клавиатуры.
+   Выбор помнится (localStorage studio_nav_off; theme.js ставит html.nav-off ещё до первого кадра). */
+function navToggle(off) {
+  const root = document.documentElement;
+  off = off === undefined ? !root.classList.contains("nav-off") : !!off;
+  root.classList.toggle("nav-off", off);
+  try { localStorage.setItem("studio_nav_off", off ? "1" : "0"); } catch (e) { }
+  const h = $("#nav-hide"), s = $("#nav-show");
+  if (h) h.setAttribute("aria-expanded", off ? "false" : "true");
+  if (s) s.setAttribute("aria-expanded", off ? "false" : "true");
+  const f = off ? s : h; if (f && document.activeElement && (document.activeElement === h || document.activeElement === s)) f.focus({ preventScroll: true });
+  window.dispatchEvent(new Event("resize"));              // схемы, календарь и графики подстраиваются под новую ширину
+}
+if ($("#nav-hide")) $("#nav-hide").onclick = () => navToggle(true);
+if ($("#nav-show")) $("#nav-show").onclick = () => navToggle(false);
+navToggle(document.documentElement.classList.contains("nav-off"));
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || !(e.code === "KeyB" || (e.key || "").toLowerCase() === "b")) return;
+  if (e.target && e.target.isContentEditable) return;      // в редакторе с оформлением Ctrl+B — «жирный»
+  e.preventDefault(); navToggle();
 });

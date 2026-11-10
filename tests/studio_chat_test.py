@@ -133,6 +133,7 @@ try:
         days = pg.evaluate("() => [...document.querySelectorAll('#ch-msgs .ch-day')].map(x => x.textContent.trim())")
         ok(n == 158 and not pg.is_visible("#ch-older") and len(days) == 2 and days[1] == "Сегодня" and "Патрик" in pg.inner_text("#ch-msgs"),
            f"«Показать раньше» — вся лента, разделитель дня, имя Патрика: {n} {days}")
+        pg.click("#ch-th"); pg.wait_for_timeout(200)          # 0.86: «Очистить» — в окне «Беседы»
         pg.click("#ch-clear"); pg.wait_for_timeout(300)
         ok(pg.locator(".dwq").count() == 1 and pg.inner_text(".dwq .yes") == "Очистить" and "danger" in pg.get_attribute(".dwq .yes", "class"), "своё окно вопроса: «Очистить» красным, без адреса страницы")
         pg.click(".dwq .yes"); pg.wait_for_timeout(500)

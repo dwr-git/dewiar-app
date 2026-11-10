@@ -325,6 +325,36 @@ def wayland_blur_hint(scale):
         return False
 
 
+# №576 (Omarchy, Hyprland): плиточный менеджер окон растянул виджет в «плитку» — тёмная рамка на весь экран, а сам виджет
+# маленьким квадратом посередине. Свои окна-карточки просим держать плавающими, без рамки и тени (правила живут до выхода
+# из сеанса; синтаксис у Hyprland менялся — пробуем по очереди, что приняли — в ui.log)
+HYPR_FLOAT = r"^(Dewiar|Dewiar — значок|Dewiar — напоминание|Dewiar — закинуть идею|Dewiar — вырезать с экрана|Dewiar — суфлёр)$"
+
+
+def hypr_rules(run=None):
+    """Hyprland: окна-карточки Dewiar — плавающие, без рамки и тени, виджет — на всех рабочих столах. -> принятый вариант или ""."""
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") or not (run or shutil.which("hyprctl")):
+        return ""
+    run = run or (lambda args: subprocess.run(["hyprctl", *args], capture_output=True, text=True, timeout=5).stdout)
+    t = HYPR_FLOAT
+    tries = {
+        "windowrulev2": [f"{r}, class:^(Dewiar)$, title:{t}" for r in ("float", "noborder", "noshadow")] + ["pin, class:^(Dewiar)$, title:^(Dewiar)$"],
+        "windowrule": [f"{r}, class:^(Dewiar)$, title:{t}" for r in ("float", "noborder", "noshadow")] + ["pin, class:^(Dewiar)$, title:^(Dewiar)$"],
+        "windowrule ": [f"match:class ^(Dewiar)$, match:title {t}, float on, border_size 0, no_shadow on",
+                        "match:class ^(Dewiar)$, match:title ^(Dewiar)$, pin on"],
+    }
+    for kw, rules in tries.items():
+        try:
+            out = run(["--batch", "; ".join(f"keyword {kw.strip()} {r}" for r in rules)])
+        except Exception:  # noqa: BLE001
+            return ""
+        if out and all(x.strip() == "ok" for x in str(out).split("\n\n") if x.strip()) and "ok" in str(out):
+            _ui_log(f"окна: Hyprland — карточки Dewiar плавающие ({kw.strip()}, №576)")
+            return kw.strip() + ("" if kw == kw.strip() else " (новый)")
+    _ui_log("окна: Hyprland не принял правила для окон Dewiar — сделайте их плавающими сами (windowrule float, class Dewiar)")
+    return ""
+
+
 def gtk_missing():
     """Чего не хватает для окон (GTK 3 и WebKit2GTK для этого Python) -> "" или коротко что."""
     try:
@@ -669,10 +699,25 @@ def ui_http_base():
         extensions_map = dict(http.server.SimpleHTTPRequestHandler.extensions_map, **{
             ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
             ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp",
-            ".woff2": "font/woff2", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".ogg": "audio/ogg"})
+            ".woff2": "font/woff2", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
+            ".mp4": "video/mp4", ".webm": "video/webm", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"})
 
         def log_message(self, *a):
             pass
+
+        def translate_path(self, path):
+            # №575: видеоурок из кэша ядра (STATE_DIR/academy, core/academy_cache.py) — по имени, без папок: страница
+            # с http://127.0.0.1 не может открыть file://, а data: для видео слишком велик
+            p = path.split("?", 1)[0].split("#", 1)[0]
+            if p.startswith("/academy-cache/"):
+                import re as _re
+                from settings import STATE_DIR
+                name = urllib.parse.unquote(p[len("/academy-cache/"):])
+                if (_re.fullmatch(r"[\w-][\w.-]{0,119}\.(?:mp4|webm|jpe?g|png|webp)", name, _re.I) and ".." not in name
+                        and not _re.match(r"(?:con|prn|aux|nul|com\d|lpt\d)(?:\.|$)", name, _re.I)):   # имена устройств Windows
+                    return str(Path(STATE_DIR) / "academy" / name)
+                return str(Path(HERE) / "-нет-")
+            return super().translate_path(path)
 
         def end_headers(self):
             self.send_header("Cache-Control", "no-store")
@@ -1457,6 +1502,22 @@ class Api:
             return
         self._gtk(lambda: self._gw(self.mode).hide())
 
+    def _remember_pos(self):
+        """Идея №155 (07.11: «должны помнить размер и место, где закрылись»): положение карточки — в настройки (ui.hud_x,
+        hud_y) перед тем, как её спрятать или выйти: окно могли сдвинуть не только перетаскиванием (система, масштаб,
+        «вернуть на экран»). Размер помнится сам — при растягивании за угол (ui.hud_w, hud_h)."""
+        try:
+            if getattr(self, "in_tray", False) or self.mode not in SIZES:
+                return
+            x, y = self.save_pos(self.mode)
+            pos = {"hud_x": int(x), "hud_y": int(y)}
+            if WIN:
+                winshell.core_call(WS_PORT, self.token, "settings_save", {"patch": {"ui": pos}}, timeout=2)
+            else:
+                _core_save_ui(self.token, pos)
+        except Exception as e:  # noqa: BLE001 — не запомнили — не беда
+            print(f"Положение виджета не запомнено: {e}", file=sys.stderr)
+
     def to_tray(self, quiet=False):
         """Кнопка «В трей»: виджет прячется, ассистент слушает. Вернётся сам — на имя, напоминание, уведомление."""
         if getattr(self, "_pad_on", False):
@@ -1465,6 +1526,8 @@ class Api:
         elif not self.in_tray:
             self._pad_back = False
         first = not self.in_tray
+        if first and hasattr(self, "_remember_pos"):  # (проверки зовут to_tray у заглушек окна)
+            self._remember_pos()                      # идея №155: где спрятали — там и появится (и после перезапуска)
         self.in_tray, self.popped = True, False
         self._hide_now()
         if first and not quiet:
@@ -1825,6 +1888,7 @@ class Api:
         интерфейс. Linux: ядро — служба systemd --user; stop не отключает её автозапуск, так что при следующем
         входе в систему или запуске Dewiar из меню всё снова работает. Без службы (из исходников) — команда quit."""
         _ui_log("выход: ядро и интерфейс завершаются")
+        self._remember_pos()                          # идея №155: следующий запуск — на том же месте
         CORE_EXPECTED[0] = time.time()
         if WIN:
             try:
@@ -2698,6 +2762,65 @@ class Api:
         err = capture_apply(self, bool(on), key)
         return dict(self.capture_status(), **({"error": err} if err else {}))
 
+    # ---------- «Позвать Лиру» одной клавишей (идея №154, 0.86; ui/hotkey.py kind="mic") ----------
+
+    def mic_hotkey(self):
+        """Нажали сочетание «Позвать Лиру»: ui.mic_key_action "call" (по умолчанию) — как нажатие на лицо: слушает, нажали ещё
+        раз — перестала (команда ptt); "mute" — включить/выключить микрофон (mute_toggle)."""
+        cmd = "mute_toggle" if ui_settings().get("mic_key_action") == "mute" else "ptt"
+        try:
+            if WIN:
+                winshell.core_call(WS_PORT, self.token, cmd, {})
+            else:
+                _core_call(self.token, cmd)
+        except Exception as e:  # noqa: BLE001
+            print(f"«Позвать Лиру»: ядро не ответило ({e})", file=sys.stderr)
+        return True
+
+    def mic_status(self):
+        """Студия: {on, key, action, works, how, command} — как capture_status, для сочетания «Позвать Лиру»."""
+        import hotkey
+        uis = ui_settings()
+        key = uis.get("mic_key") or hotkey.DEFAULT_MIC
+        on = uis.get("mic_hotkey", True) is not False
+        out = {"on": on, "key": key, "action": "mute" if uis.get("mic_key_action") == "mute" else "call", "works": False, "how": "",
+               "command": hotkey.command(ROOT, "mic")}
+        if WIN:
+            ok = getattr(self, "_hk_mic_ok", False)
+            out.update(works=bool(on and ok), how="работает в любой программе" if ok else
+                       ("Windows не дала это сочетание — его заняла другая программа; выберите другое" if on else ""))
+            return out
+        try:
+            if not hotkey.gnome_available():
+                out["how"] = "на этом рабочем столе назначьте сочетание сами — командой ниже (Настройки → Клавиатура)"
+                return out
+            st = hotkey.gnome_state(key, "mic")
+            out.update(works=bool(on and st["on"] and st["binding"]), conflict=st["conflict"],
+                       how="работает в любой программе (это сочетание — в настройках клавиатуры GNOME)" if st["on"] else
+                       (f"{key} занято сочетанием «{st['conflict']}»" if st["conflict"] else ""))
+        except Exception as e:  # noqa: BLE001
+            out["how"] = f"не получилось проверить: {e}"
+        return out
+
+    def mic_set(self, on=True, key="", action=""):
+        """Студия: включить/выключить «Позвать Лиру» одной клавишей, сменить сочетание и что оно делает. -> mic_status()."""
+        import hotkey
+        key = (key or ui_settings().get("mic_key") or hotkey.DEFAULT_MIC).strip()
+        if not hotkey.parse(key):
+            return dict(self.mic_status(), error=f"не понял «{key}» — нужно с Ctrl, Alt или Win и клавишей, например {hotkey.DEFAULT_MIC}")
+        patch = {"mic_hotkey": bool(on), "mic_key": key}
+        if action in ("call", "mute"):
+            patch["mic_key_action"] = action
+        try:
+            if WIN:
+                winshell.core_call(WS_PORT, self.token, "settings_save", {"patch": {"ui": patch}})
+            else:
+                _core_save_ui(self.token, patch)
+        except Exception as e:  # noqa: BLE001
+            print(f"Настройка «Позвать Лиру» не сохранилась: {e}", file=sys.stderr)
+        err = mic_apply(self, bool(on), key)
+        return dict(self.mic_status(), **({"error": err} if err else {}))
+
     # ---------- суфлёр: окно-карточка у правого края, поверх всех окон ----------
 
     def open_prompter(self):
@@ -3287,7 +3410,7 @@ def no_file_xhr():
 # assets/dewiar.js подставляет ключ первым параметром, Python сверяет его (hmac.compare_digest) и в охране
 # js_bridge_call, и в самом фасаде. Чужой вызов молча отбрасывается: ответа фрейм не получит.
 JS_API = (
-    "auto_back", "cancel_back", "capture_set", "capture_status", "card_size", "clip_secret", "clip_text", "clipboard_image",
+    "auto_back", "cancel_back", "capture_set", "capture_status", "mic_set", "mic_status", "card_size", "clip_secret", "clip_text", "clipboard_image",
     "close_alarm", "close_capture", "close_prompter", "drag_begin", "drag_native", "drag_step", "from_tray", "get_pos",
     "install_codec", "install_update", "move_to", "native_drag", "open_note", "open_prompter", "open_settings",
     "open_skills_folder", "open_url", "pad_flip", "pad_full", "pad_hide", "pad_mode_mark", "pad_resize", "pad_size",
@@ -3702,6 +3825,45 @@ def _core_save_ui(token, patch):
         ws.recv(timeout=3)
 
 
+
+def mic_boot(api, uis):
+    """При запуске: сочетание «Позвать Лиру» включено — назначить (как capture_boot)."""
+    import hotkey
+    key = uis.get("mic_key") or hotkey.DEFAULT_MIC
+    try:
+        if not WIN and hotkey.gnome_available():
+            st = hotkey.gnome_state(key, "mic")
+            if st["on"] and st["binding"] == hotkey.to_gnome(key) and st["command"] == hotkey.command(ROOT, "mic"):
+                return
+        err = mic_apply(api, True, key)
+        if err:
+            print(f"«Позвать Лиру»: {err}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001
+        print(f"«Позвать Лиру»: {e}", file=sys.stderr)
+
+
+def mic_apply(api, on, key):
+    """Назначить (или снять) сочетание «Позвать Лиру»: Windows — второй RegisterHotKey значка в трее, GNOME — своё
+    сочетание с командой «… --mic». -> текст ошибки или ""."""
+    import hotkey
+    try:
+        if WIN:
+            tray = getattr(api, "_tray", None)
+            if tray is None or not hasattr(tray, "hotkey"):
+                return "нет значка в трее — сочетание не назначить"
+            spec = hotkey.to_win(key) if on else None
+            api._hk_mic_ok = bool(tray.hotkey(spec[0] if spec else None, spec[1] if spec else 0, api.mic_hotkey,
+                                              winshell.HOTKEY_MIC_ID)) and on
+            return "" if api._hk_mic_ok or not on else f"{key} уже занято другой программой — выберите другое сочетание"
+        if not hotkey.gnome_available():
+            return ""
+        ok, msg = hotkey.gnome_set(on, key, hotkey.command(ROOT, "mic"), "mic")
+        return "" if ok else msg
+    except Exception as e:  # noqa: BLE001 — сочетание не главное
+        print(f"Сочетание «Позвать Лиру»: {e}", file=sys.stderr)
+        return str(e)
+
+
 def capture_boot(api, uis):
     """При запуске: сочетание «Закинуть идею» включено — назначить. GNOME: уже назначено нами с той же клавишей и
     командой — не трогаем; Windows — регистрируем каждый запуск (живёт, пока жив процесс)."""
@@ -3831,6 +3993,7 @@ def main():
     ap.add_argument("--settings", action="store_true")
     ap.add_argument("--autostart", action="store_true", help="запуск вместе с системой: убранный в трей виджет остаётся в трее")
     ap.add_argument("--capture", action="store_true", help="окно «Закинуть идею» (сочетание клавиш, ui/hotkey.py)")
+    ap.add_argument("--mic", action="store_true", help="«Позвать Лиру» (сочетание клавиш, ui/hotkey.py, идея №154)")
     ap.add_argument("target", nargs="?", help="файл .dewiar или ссылка dewiar://connect?server=…")
     args = ap.parse_args()
     from urllib.parse import quote
@@ -3850,10 +4013,10 @@ def main():
         import macui
         macui.bind(sys.modules[__name__])
         return macui.main_mac(args, extra)
-    if args.capture:                           # сочетание клавиш: программа работает — сразу сигнал, без коробки systemd
+    if args.capture or args.mic:               # сочетание клавиш: программа работает — сразу сигнал, без коробки systemd
         fh = lock("ui")
         if fh is None:
-            (Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / f"dewiar-show-{os.getuid()}").write_text("capture")
+            (Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / f"dewiar-show-{os.getuid()}").write_text("mic" if args.mic else "capture")
             return
         fh.close()                             # не запущена — запускаемся как обычно, окно идеи откроется после старта
     _own_box()
@@ -3868,6 +4031,7 @@ def main():
             wayland_blur_hint(blur)
     elif blur:
         _ui_log(f"окна: прямо на Wayland — текст чёткий при масштабе {blur:g} (ui.wayland_sharp)")
+    hypr_rules()                                                       # №576: Hyprland — карточки не «плитками»
     os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")     # частая причина белых/чёрных окон на NVIDIA
     if not uis.get("gpu", False):
         # Программная отрисовка: ускоренный WebKitGTK на части систем неверно смешивает полупрозрачные
@@ -3880,7 +4044,7 @@ def main():
         # Интерфейс уже запущен — просим его показаться и выходим. Сигнал-файл: «hud» или «settings» + параметры
         # студии (&import=…, &address=…); его ждёт watch() в on_start, на Windows — то же в main_win.
         (Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / f"dewiar-show-{os.getuid()}").write_text(
-            "capture" if args.capture else ("settings" + extra) if args.settings else "hud")
+            "capture" if args.capture else "mic" if args.mic else ("settings" + extra) if args.settings else "hud")
         return
 
     ensure_core()
@@ -3945,6 +4109,8 @@ def main():
         sig = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / f"dewiar-show-{os.getuid()}"
         if uis.get("capture", True) is not False:          # «Закинуть идею» одной клавишей — назначить (GNOME), если ещё нет
             threading.Thread(target=capture_boot, args=(api, uis), daemon=True).start()
+        if uis.get("mic_hotkey", True) is not False:       # «Позвать Лиру» одной клавишей (идея №154)
+            threading.Thread(target=mic_boot, args=(api, uis), daemon=True).start()
 
         def watch():
             while True:
@@ -3954,6 +4120,9 @@ def main():
                     sig.unlink()
                     if what == "capture":                  # сочетание клавиш: только окно идеи, виджет не трогаем
                         api.show_capture()
+                        continue
+                    if what == "mic":                      # «Позвать Лиру»: слушать / перестать — без окон
+                        threading.Thread(target=api.mic_hotkey, daemon=True).start()
                         continue
                     api.from_tray()
                     api.bring_back()
@@ -4021,7 +4190,7 @@ def main_win(args, extra):
             other = ""
         hung = False
         if other == me:
-            sig.write_text("capture" if args.capture else ("settings" + extra) if args.settings else "hud", encoding="utf-8")
+            sig.write_text("capture" if args.capture else "mic" if args.mic else ("settings" + extra) if args.settings else "hud", encoding="utf-8")
             if not hung_instance(sig, STATE_DIR):
                 return
             # №555 (05.11): «Dewiar не запускается» — мьютекс держал осиротевший процесс прошлого запуска (с 04.11), а
@@ -4156,6 +4325,8 @@ def main_win(args, extra):
             api.show_capture()
         if uis.get("capture", True) is not False:
             threading.Thread(target=capture_boot, args=(api, uis), daemon=True).start()
+        if uis.get("mic_hotkey", True) is not False:       # «Позвать Лиру» одной клавишей (идея №154)
+            threading.Thread(target=mic_boot, args=(api, uis), daemon=True).start()
 
         def watch():
             while True:
@@ -4176,6 +4347,9 @@ def main_win(args, extra):
                 try:
                     if what == "capture":
                         api.show_capture()
+                        continue
+                    if what == "mic":                      # «Позвать Лиру»: слушать / перестать — без окон
+                        api.mic_hotkey()
                         continue
                     _ui_log(f"повторный запуск: показать виджет{' и студию' if what.startswith('settings') else ''}")
                     api.from_tray()

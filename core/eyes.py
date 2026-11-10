@@ -218,7 +218,7 @@ def capture_screen(env):
         shutil.rmtree(tmpdir, ignore_errors=True)       # снимок экрана не должен оставаться во временной папке
 
 
-def capture_camera(device="/dev/video0"):
+def capture_camera(device="/dev/video0", timeout=20):
     """Один кадр с камеры -> байты JPEG. На Windows device — имя устройства DirectShow (путь /dev/… — значит первая
     камера). DEWIAR_FAKE_CAMERA — тестовая картинка ffmpeg вместо камеры (для проверок)."""
     if os.environ.get("DEWIAR_FAKE_CAMERA"):
@@ -237,12 +237,52 @@ def capture_camera(device="/dev/video0"):
     ff = ffmpeg_path()
     if not ff:
         raise EyesError("для камеры нужен ffmpeg — переустановите Dewiar или поставьте: sudo apt install ffmpeg")
-    r = subprocess.run([ff, "-loglevel", "error"] + src + ["-vf", "select=gte(n\\,8)", "-frames:v", "1",
-                                                                 "-f", "image2", "-vcodec", "mjpeg", "-"],
-                       capture_output=True, timeout=20, creationflags=NO_WINDOW)
-    if r.returncode or not r.stdout:
-        raise EyesError("камера не отдала кадр: " + r.stderr.decode(errors="replace")[-200:])
-    return r.stdout
+    # идея №165 (08.11): ffmpeg, убитый по тайм-ауту посреди съёмки, не закрывал камеру — у камеры с микрофоном на одном
+    # USB «зависал» общий драйвер. Не успел — сперва просим закончить по-хорошему («q»), и только потом — убить
+    p = subprocess.Popen([ff, "-loglevel", "error"] + src + ["-vf", "select=gte(n\\,8)", "-frames:v", "1",
+                                                           "-f", "image2", "-vcodec", "mjpeg", "-"],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+    import threading
+    box = {}
+    rd = [threading.Thread(target=lambda k=k, f=f: box.__setitem__(k, f.read()), daemon=True)
+          for k, f in (("out", p.stdout), ("err", p.stderr))]
+    for t in rd:
+        t.start()
+    try:
+        p.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            p.stdin.write(b"q")
+            p.stdin.flush()
+            p.wait(timeout=4)
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            p.kill()
+            p.wait()
+        raise EyesError("камера не отдала кадр вовремя — возможно, она занята другой программой") from None
+    finally:
+        try:
+            p.stdin.close()
+        except OSError:
+            pass
+        for t in rd:
+            t.join(2)
+    out, err = box.get("out") or b"", box.get("err") or b""
+    if p.returncode or not out:
+        raise EyesError("камера не отдала кадр: " + (err or b"").decode(errors="replace")[-200:])
+    return out
+
+
+def camera_label(device=""):
+    """Имя камеры для сравнения с микрофоном (идея №165): Windows — имя DirectShow (пусто — первая камера), Linux —
+    /sys/class/video4linux/videoN/name, Mac — пусто (камера без своего микрофона в списке)."""
+    if WIN:
+        return device if device and not device.startswith("/dev/") else ((list_cameras() or [""])[0])
+    if MAC:
+        return ""
+    try:
+        return (Path("/sys/class/video4linux") / Path(device or "/dev/video0").name / "name").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
 
 
 def list_cameras():

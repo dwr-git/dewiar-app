@@ -33,7 +33,7 @@ t = tm.create("Руки", "Проверка инструментов файло�
 ok(t.data.get("folders") == [str(mine.resolve())], "задаче дана папка человека (folders)")
 ok("ПАПКИ ЧЕЛОВЕКА" in tm._system(t) and str(mine.resolve()) in tm._system(t), "папки человека — в подсказке задачи (неизменной)")
 names = [x["name"] for x in tm._specs(t)]
-ok({"file_read", "file_edit", "file_grep", "file_glob", "write_file"} <= set(names) and len(names) <= 21,
+ok({"file_read", "file_edit", "file_grep", "file_glob", "write_file"} <= set(names) and len(names) <= 23,
    f"руки — в профиле задачи ({len(names)} инструментов)")
 
 

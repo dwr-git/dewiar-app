@@ -113,7 +113,8 @@ function devHomeHtml(c) {
   if (homeOn()) return `<div class="card dvhome on"><small class="hint" style="margin:0">Компьютер дома</small><div class="row2"><div><b>${esc(h.n || "Компьютер")}</b>
       <small class="hint" style="display:block;margin:2px 0 0">${cl ? "дома — ещё и напрямую по Wi-Fi; главное — через dewiar.pro" : "напрямую по Wi-Fi, без dewiar.pro"}</small></div>
       <button class="btn" id="dv-home-off">Отключить</button></div>
-      ${cl && hs && hs.ok === false ? `<p class="hint" style="margin:8px 0 0">Сейчас телефон не в одной сети с «${esc(h.n || "компьютером")}» — всё идёт через dewiar.pro.</p>` : ""}</div>`;
+      ${cl && hs && hs.ok === false ? `<p class="hint" style="margin:8px 0 0">Сейчас телефон не в одной сети с «${esc(h.n || "компьютером")}» — всё идёт через dewiar.pro.</p>` : ""}
+      ${!cl && hs && hs.ok === false ? `<p class="hint dvaway" style="margin:8px 0 0">Сейчас телефон не в одной сети Wi-Fi с «${esc(h.n || "компьютером")}» (в гостях, на работе, на мобильном интернете). Так и задумано: напрямую телефон видит компьютер только в одной с ним сети — чужой Wi-Fi его не покажет. Правки копятся здесь и уйдут, когда вернётесь домой. Чтобы связь была везде — вкладка «Через dewiar.pro».</p>` : ""}</div>`;   /* №607 */
   return `<div class="card dvhome"><p class="hint" style="margin:0 0 10px">На компьютере: студия → «Устройства» → «Дома по Wi-Fi» → «Показать код для телефона».
       Телефон и компьютер — в одном Wi-Fi.</p>
       ${window.DewiarCodes && window.ZXing ? `<button class="btn w" id="dv-home-scan">Сканировать код компьютера</button>` : ""}</div>`;

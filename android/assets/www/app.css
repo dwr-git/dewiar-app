@@ -2004,3 +2004,13 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #rem-body .rmmd button { padding: 6px 12px; font-size: 13px; }
 #rem-body .rmtext { display: block; width: 100%; box-sizing: border-box; min-height: 84px; resize: none; border: 0; border-radius: 14px; background: var(--field);
   color: var(--ink); font: inherit; font-size: 16px; font-weight: 600; line-height: 1.45; padding: 12px 14px; margin: 6px 0 12px; outline: none; }
+/* №586: отданная задача ждёт, когда компьютер возьмёт; не взял за 10 минут — спокойное предупреждение и два выхода */
+.it.tksent .bd small { white-space: normal; }
+.it.tksent.late .bd small { color: #FFC978; }
+.it.tksent .start { margin-top: 10px; gap: 8px; }
+body.light .it.tksent.late .bd small { color: #9A5B00; }
+/* Идея №144: пошаговое включение «Управлять приложениями» — шаги, подсказки под ними и «Что-то не так?» */
+.hguide li { margin: 0 0 10px; } .hguide small { display: block; margin-top: 4px; font-size: 12.5px; color: var(--muted); opacity: .9; }
+.hfaq { margin: 0 0 12px; font-size: 13.5px; color: var(--muted); }
+.hfaq summary { cursor: pointer; color: var(--accent, #8B8CF7); font-weight: 600; padding: 4px 0; }
+.hfaq p { margin: 8px 0 0; line-height: 1.45; } .hfaq b { color: var(--ink); font-weight: 600; }

@@ -257,6 +257,38 @@ chs = exam.BIG_CHECKS["trip"](d, info)
 nb = [c["name"] for c in chs if not c["ok"]]
 ok(any("понедельник" in n for n in nb) and any("60000" in n for n in nb), f"Б7: закрытый в понедельник музей и перерасход — не сдано {nb}")
 
+# ---------- Б13: дашборд и справки по регионам (выпуск 6: части) ----------
+d, info = fresh("dashboard", "b13")
+rows = list(csv.DictReader(io.StringIO((d / "продажи.csv").read_text(encoding="utf-8")), delimiter=";"))
+ok(len(rows) == info["rows"] == 960 and info["best_region"] in EB.REGIONS and info["best_month"].startswith(("2024-", "2025-")),
+   f"Б13: 960 строк, лучший регион {info['best_region']}, лучший месяц {info['best_month']}")
+MONTH_NAMES = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
+
+
+def dash(d, info, bad=False):
+    (d / "outputs" / "регионы").mkdir(parents=True, exist_ok=True)
+    y, m = info["best_month"].split("-")
+    month = f"{MONTH_NAMES[int(m) - 1]} {y}" if not bad else "январь 2024"
+    svg = "<svg width='300' height='120'><rect x='0' y='0' width='50' height='100'/></svg>"
+    lis = [f"Лучший месяц — {month}: 1 234 567 ₽", f"Больше всего продал регион {info['best_region'] if not bad else next(r for r in info['regions'] if r != info['best_region'])}: 9 876 543 ₽",
+           f"Топ товар — {info['top'][0]}: 3 210 000 ₽", "Рост 2025 к 2024 — 4 %", "Средний месяц — 1 100 000 ₽"]
+    (d / "outputs" / "дашборд.html").write_text("<!doctype html><html><head><meta charset='utf-8'><title>Дашборд</title></head><body>"
+        + "<h1>Продажи</h1>" + svg * (3 if not bad else 2) + "<ul>" + "".join(f"<li>{x}</li>" for x in lis) + "</ul></body></html>", encoding="utf-8")
+    for r in info["regions"][:(4 if not bad else 3)]:
+        (d / "outputs" / "регионы" / f"{r}.md").write_text(f"# {r}\n\nИтог: 5 000 000 ₽\n", encoding="utf-8")
+
+
+dash(d, info)
+chs = exam.BIG_CHECKS["dashboard"](d, info, browser=False)
+ok(passed(chs), f"Б13: верный дашборд и 4 справки — сдано {[(c['name'][:40], c['detail'][:80]) for c in chs if not c['ok']]}")
+chs = exam.BIG_CHECKS["dashboard"](d, info, task={"quality": {"tools": {"write_file": 3}}}, browser=False)
+ok([c["name"] for c in chs if not c["ok"]] == ["справки по регионам — через части (spawn_parts)"], "Б13: без частей — не сдано (так просили)")
+shutil.rmtree(d / "outputs")
+dash(d, info, bad=True)
+nb = [c["name"] for c in exam.BIG_CHECKS["dashboard"](d, info, browser=False) if not c["ok"]]
+ok(any("графика" in n for n in nb) and any("месяц" in n for n in nb) and any("регион назван" in n for n in nb) and any("4 справки" in n for n in nb),
+   f"Б13: два графика, не тот месяц, не тот регион, три справки — не сдано {nb}")
+
 # ---------- Б11: Anki с перезапуском ----------
 d, info = fresh("anki", "b11")
 ok(len((d / "слова.txt").read_text(encoding="utf-8").split()) == 40, "Б11: 40 слов")
@@ -325,6 +357,9 @@ ok(all(exam.scenario_limit(s) <= exam.BIG_MAX_S == 3600 and exam.scenario_limit(
    "предел большой задачи — до 60 минут (обычный долгий — 25)")
 m = exam.big_metrics({"steps": 30, "quality": {"usage": {"in": 1000, "out": 50, "cached": 700, "ck": 3, "req": 3}}}, 125.4)
 ok(m == {"steps": 30, "tok_in": 1000, "tok_out": 50, "cache": 0.7, "time_s": 125, "req": 3}, f"метрики: шаги, токены, доля кэша, время {m}")
+m2 = exam.big_metrics({"steps": 9, "quality": {"usage": {"in": 900, "out": 40, "req": 4}, "subs": {"explore": {"n": 1, "in": 300, "out": 20},
+                                                                                              "part": {"n": 4, "in": 5000, "out": 400}}}}, 10)
+ok(m2.get("tok_sub") == 5720 and m2.get("parts") == 4, f"метрики: токены помощников и число частей (выпуск 6) {m2}")
 s = exam.summary([{"group": "Большие задачи", "passed": True, "score": 7, "metrics": m}, {"group": "Разговор", "passed": False, "score": 3}])
 ok(s["big"]["n"] == 1 and s["big"]["cache"] == 0.7, f"в сводке — средние метрики больших задач {s.get('big')}")
 md = exam.markdown({"version": "x", "started": "2026-11-04T10:00:00", "model": "m", "duration_s": 60, "summary": s,
@@ -446,6 +481,49 @@ ok(all(c["ok"] for c in res["checks"]) and tb1["status"] == "done",
    f"Б1 целиком: поиск и 6 страниц заготовки, отчёт со ссылками — сдано: {[(c['name'][:40], c['detail'][:80]) for c in res['checks'] if not c['ok']]}")
 ok(tb1.get("search_url", "").startswith("http://127.0.0.1:") and (TMP / "work" / "big" / "site-big_b1_research").is_dir()
    and not list(Path(tb1["dir"]).rglob("*.html")), "задача искала в своём «интернете» (search_url), сайт — у экзамена, не в папке задачи")
+fc.host.stopping.set()
+
+# ---------- Б13 целиком: exam.run_big — части по поручению (копия продажи.csv в inputs/), дашборд из частей ----------
+B13 = "Б13. Дашборд продаж и справки по регионам — частями"
+PART_CODE = ("import csv, os\nR = {r!r}\nrows = [x for x in csv.DictReader(open('inputs/продажи.csv', encoding='utf-8'), delimiter=';') if x['регион'] == R]\n"
+             "by_m, by_p = {{}}, {{}}\nfor x in rows:\n    by_m[x['дата'][:7]] = by_m.get(x['дата'][:7], 0) + int(x['сумма'])\n"
+             "    by_p[x['товар']] = by_p.get(x['товар'], 0) + int(x['сумма'])\nos.makedirs('outputs/регионы', exist_ok=True)\n"
+             "top = sorted(by_p, key=by_p.get, reverse=True)[:3]\nbm = max(by_m, key=by_m.get)\n"
+             "open(f'outputs/регионы/{{R}}.md', 'w', encoding='utf-8').write(f'# {{R}}\\n\\nИтог: {{sum(by_m.values())}} ₽\\nЛучший месяц: {{bm}}\\nТоп-3: {{\", \".join(top)}}\\n')\n"
+             "print(R, sum(by_m.values()), bm, top)")
+DASH_CODE = ("import csv, os, glob, shutil\nrows = list(csv.DictReader(open('продажи.csv', encoding='utf-8'), delimiter=';'))\n"
+             "agg = lambda k: {x[k][:7] if k == 'дата' else x[k]: 0 for x in rows}\nm, r, p = agg('дата'), agg('регион'), agg('товар')\n"
+             "for x in rows:\n    s = int(x['сумма']); m[x['дата'][:7]] += s; r[x['регион']] += s; p[x['товар']] += s\n"
+             "bm, br = max(m, key=m.get), max(r, key=r.get)\ntop = sorted(p, key=p.get, reverse=True)[:3]\n"
+             "bars = lambda d: '<svg width=\"600\" height=\"160\">' + ''.join(f'<rect x=\"{i * 22}\" y=\"{150 - 140 * v // max(d.values())}\" width=\"18\" height=\"{140 * v // max(d.values())}\"><title>{k}: {v}</title></rect>' for i, (k, v) in enumerate(d.items())) + '</svg>'\n"
+             "lis = [f'Лучший месяц — {bm}: {m[bm]} ₽', f'Лучший регион — {br}: {r[br]} ₽', f'Топ товар — {top[0]}: {p[top[0]]} ₽', f'Всего строк: {len(rows)}', f'Регионов: {len(r)}']\n"
+             "os.makedirs('outputs/регионы', exist_ok=True)\n"
+             "open('outputs/дашборд.html', 'w', encoding='utf-8').write('<!doctype html><meta charset=\"utf-8\"><title>Дашборд</title><h1>Продажи</h1>' + bars(m) + bars(r) + bars({k: p[k] for k in top}) + '<ul>' + ''.join(f'<li>{x}</li>' for x in lis) + '</ul>')\n"
+             "for f in glob.glob('parts/*/регионы/*.md'):\n    shutil.copyfile(f, 'outputs/регионы/' + os.path.basename(f))\nprint(bm, m[bm], br, r[br], top, p[top[0]], len(rows))")
+for reg in EB.REGIONS:
+    mk.scripts[reg] = [("run_python", {"code": PART_CODE.format(r=reg)}), ("show", {"path": f"outputs/регионы/{reg}.md"}),
+                       ("finish", {"summary": f"Справка по региону {reg}: outputs/регионы/{reg}.md"})]
+mk.scripts[B13] = [
+    ("spawn_parts", {"parts": [{"title": reg, "goal": f"Справка по региону {reg} по данным продаж",
+                                "output": f"outputs/регионы/{reg}.md: итог продаж, лучший месяц, топ-3 товара",
+                                "sources": "продажи.csv (копия в inputs/)", "limits": f"только регион {reg}", "files": ["продажи.csv"]}
+                               for reg in EB.REGIONS]}),
+    ("wait_parts", {"minutes": 2}),
+    ("run_python", {"code": DASH_CODE}),
+    ("show", {"path": "outputs/дашборд.html"}),
+    ("finish", {"summary": "Дашборд — outputs/дашборд.html, справки по регионам — outputs/регионы/."})]
+sc13 = next(s for s in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"] if s["id"] == "big_b13_dashboard")
+sc13 = dict(sc13, big=dict(sc13["big"], timeout=120))
+fc = FakeCore()
+res = {"id": sc13["id"], "group": sc13["group"], "title": sc13["title"], "steps": [], "checks": []}
+st = asyncio.run(exam.run_big(fc, sc13, res, time.time(), TMP / "work", lambda x: None))
+main13 = next(x for x in fc.tm.list() if x["title"].startswith("Б13"))
+kids13 = [x for x in fc.tm.list() if x.get("parent") == main13["id"]]
+ok(all(c["ok"] or c.get("unchecked") for c in res["checks"]) and main13["status"] == "done",
+   f"Б13 целиком: 4 части по поручению, дашборд из их справок — сдано: {[(c['name'][:40], c['detail'][:80]) for c in res['checks'] if not c['ok']]}")
+ok(len(kids13) == 4 and all(k["status"] == "done" and k.get("inputs") == ["inputs/продажи.csv"] for k in kids13),
+   f"части получили копию продажи.csv в inputs/ и сдали: {[(k['title'], k['status'], k.get('inputs'), k.get('error')) for k in kids13]}")
+ok(res["metrics"].get("parts") == 4 and res["metrics"].get("tok_sub", 0) > 0, f"метрики Б13: части и их токены {res['metrics']}")
 fc.host.stopping.set()
 
 # браузер экзамена у исполнителя: ставится один раз в его папку; не вышло — экзамен идёт, повтор не раньше чем через неделю

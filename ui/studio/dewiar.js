@@ -421,6 +421,17 @@ function cloudFill(c) {
   const pt = perTaler(c); $("#cc-per").textContent = pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы, размышления и картинки дороже` : "";
   // №544/№545 (04.11: «пополнил — ничего не пришло»): заявка видна прямо в карточке, со сроком
   if (c.pending) $("#cc-turns").textContent += ` · ${pendingLine()}`;
+  // №567/569/571: переустановили с «удалить настройки» — новый ключ с нулём, а заряд остался на прежнем ключе этого
+  // компьютера; не пугаем «баланс слетел»: говорим, где он, и переносим одной кнопкой (заявка администратору)
+  // c.prev — «DW-N» (та же установка) или «?» (совпал только номер машины: номер чужого ключа сайт не называет)
+  const pv = !c.site && !c.account && /^(DW-\d+|\?)$/.test(c.prev || "") && c.empty !== false && (c.percent ?? 0) < 5;
+  const pn = /^DW-/.test(c.prev || "") ? c.prev : "";
+  $("#cc-prev").hidden = !pv;
+  if (pv) $("#cc-prev-t").textContent = c.pending
+    ? "Заявка на перенос прежнего заряда отправлена — администратор проверит и перенесёт, баланс обновится сам."
+    : pn ? `Это новый ключ. Прежний заряд этой программы не пропал — он остался на ключе ${pn} (так бывает после переустановки с удалением настроек). Перенести его сюда?`
+      : "Это новый ключ. Если раньше на этом компьютере у вас был заряд Dewiar, он не пропал — администратор проверит, что это ваш ключ, и перенесёт его сюда.";
+  $("#cc-prev-go").hidden = !!c.pending;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); topupText(c.topup || "");
   $("#cc-use").style.display = c.active ? "none" : "";
   // по аккаунту ключа нет — «Убрать ключ» только у своего ключа dw-
@@ -605,6 +616,17 @@ document.addEventListener("paste", (e) => {
   if ($("#cc-pay").style.display === "none") return;
   const it = [...(e.clipboardData || {}).items || []].find(x => x.type && x.type.startsWith("image/")); if (it) { cpSet(it.getAsFile()); e.preventDefault(); }
 });
+$("#cc-prev-go").onclick = async (ev) => {          // №567: перенос заряда с прежнего ключа — заявкой без суммы и снимка
+  const prev = (DW.cloud && DW.cloud.prev) || ""; if (!prev) return;
+  ev.target.disabled = true;
+  try {
+    // номер прежнего ключа сервер берёт из своей записи о подключении, а не из этой строки (рецензия 0.86)
+    await core.call("cloud_topup_send", { amount: 0, note: "Перенести прежний заряд этого компьютера на этот ключ (переустановка программы)", image: "" });
+    toast("Заявка отправлена — администратор перенесёт заряд, баланс обновится сам", 5000);
+    core.call("cloud_status", { refresh: true }).then(cloudFill).catch(() => { });
+  } catch (e) { toast(e.message, 5000); }
+  ev.target.disabled = false;
+};
 $("#cp-send").onclick = async (ev) => {
   const r = $("#cp-res"), amount = $("#cp-amount").value.trim().replace(",", "."), note = $("#cp-note").value.trim();
   if (!cpImage && !amount) { r.className = "res bad"; r.textContent = "Укажите сумму или приложите снимок оплаты"; return; }

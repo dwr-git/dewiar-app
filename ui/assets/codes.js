@@ -86,6 +86,10 @@
   .dwq .x{position:absolute;z-index:2;left:50%;bottom:max(34px,calc(env(safe-area-inset-bottom) + 24px));transform:translateX(-50%);width:64px;height:64px;border-radius:50%;
     border:0;background:rgba(255,255,255,.16);backdrop-filter:blur(12px);color:#fff;display:grid;place-items:center}
   .dwq .x svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+  .dwq .tl{position:absolute;z-index:2;right:max(26px,calc(50% - 150px));bottom:max(40px,calc(env(safe-area-inset-bottom) + 30px));width:52px;height:52px;border-radius:50%;
+    border:0;background:rgba(255,255,255,.16);backdrop-filter:blur(12px);color:#fff;display:grid;place-items:center;transition:background .2s,color .2s}
+  .dwq .tl[hidden]{display:none} .dwq .tl.on{background:#FFE7A3;color:#3a2a00;box-shadow:0 0 28px rgba(255,220,130,.55)}
+  .dwq .tl svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   @media (prefers-reduced-motion:reduce){.dwq .fr::before{animation:none}}`;
 
   function scan(o) {
@@ -95,11 +99,28 @@
     // poster — прозрачная точка: иначе Android WebView до первого кадра камеры рисует свою серую кнопку «play» на весь экран
     el.innerHTML = `<video playsinline muted autoplay poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video><div class="fr"></div>
       <div class="hd"><b>${o.title || "Наведите на код"}</b><span>${o.sub || "QR, Aztec и печати Dewiar"}</span></div>
-      <button class="x" title="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
+      <button class="x" title="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button class="tl" title="Фонарик" aria-label="Фонарик" aria-pressed="false" hidden><svg viewBox="0 0 24 24"><path d="M8 3h8l-1 5H9z"/><path d="M9 8h6v4l-1 1v7a2 2 0 0 1-4 0v-7l-1-1z"/><path d="M12 14.5v1.5"/></svg></button>`;
     document.body.appendChild(el);
     const v = el.querySelector("video"), cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true }),
       wide = document.createElement("canvas");
     let stream = null, timer = 0, done = false, frame = 0;
+    // №634 (09.11, телефон): «в тёмном помещении сканер запущен, а кнопки фонарика нет — или пусть Лира включает его сама».
+    // Камера умеет фонарик (torch) — кнопка; темно ~1,5 с подряд и человек фонарик не трогал — включаем сами
+    const tl = el.querySelector(".tl"), lum = document.createElement("canvas");
+    let torch = false, touched = false, dark = 0;
+    const setTorch = async (on) => {
+      const tr = stream && stream.getVideoTracks()[0]; if (!tr) return;
+      try { await tr.applyConstraints({ advanced: [{ torch: !!on }] }); torch = !!on; } catch (e) { return; }
+      tl.classList.toggle("on", torch); tl.setAttribute("aria-pressed", String(torch)); tl.title = torch ? "Выключить фонарик" : "Фонарик";
+    };
+    tl.onclick = () => { touched = true; setTorch(!torch); };
+    const darkness = () => {                         // средняя яркость середины кадра (0–255) на маленькой копии
+      lum.width = lum.height = 24; const g = lum.getContext("2d", { willReadFrequently: true });
+      g.drawImage(cv, 0, 0, 24, 24); const d = g.getImageData(0, 0, 24, 24).data; let sum = 0;
+      for (let i = 0; i < d.length; i += 4) sum += d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+      return sum / (d.length / 4);
+    };
     const close = (txt) => {
       if (done) return; done = true; clearTimeout(timer);
       (stream ? stream.getTracks() : []).forEach(t => t.stop()); el.remove();
@@ -112,6 +133,7 @@
         const s = Math.min(v.videoWidth, v.videoHeight), k = Math.min(1, 720 / s);           // середина кадра, не больше 720 точек
         cv.width = cv.height = Math.round(s * k);
         cx.drawImage(v, (v.videoWidth - s) / 2, (v.videoHeight - s) / 2, s, s, 0, 0, cv.width, cv.height);
+        if (!tl.hidden && !torch && !touched && frame % 2 === 0) { dark = darkness() < 45 ? dark + 1 : 0; if (dark >= 5) { touched = true; setTorch(true); } }
         let t = decodeCanvas(cv, frame++);
         if (!t && frame % 3 === 0) {                 // штрихкод шире квадрата в середине — раз в три кадра весь кадр целиком
           const k2 = Math.min(1, 1280 / v.videoWidth); wide.width = Math.round(v.videoWidth * k2); wide.height = Math.round(v.videoHeight * k2);
@@ -127,6 +149,7 @@
         if (done) { stream.getTracks().forEach(t => t.stop()); return; }
         v.addEventListener("playing", () => v.classList.add("on"), { once: true });   // показываем, когда пошли кадры
         v.srcObject = stream; await v.play().catch(() => { }); tick();
+        try { const tr = stream.getVideoTracks()[0], cap = tr && tr.getCapabilities ? tr.getCapabilities() : {}; tl.hidden = !cap.torch; } catch (e) { }
       } catch (e) { close(null); o.onError && o.onError("нет доступа к камере"); }
     })();
     return () => close(null);

@@ -618,6 +618,7 @@ MF_STRING, MF_SEPARATOR, MF_DEFAULT = 0, 0x800, 0x1000
 IMAGE_ICON, LR_LOADFROMFILE, LR_DEFAULTSIZE = 1, 0x10, 0x40
 TRAY_MSG = WM_APP + 1
 WM_HOTKEY, WM_HOTKEY_SET, HOTKEY_ID = 0x0312, WM_APP + 2, 0xD3A1    # «Закинуть идею» (ui/hotkey.py)
+HOTKEY_MIC_ID = 0xD3A2                                                # «Позвать Лиру» (идея №154, 0.86)
 
 
 class WNDCLASSEXW(ctypes.Structure):
@@ -651,6 +652,12 @@ def _api():
     u.AppendMenuW.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_size_t, wintypes.LPCWSTR]
     u.TrackPopupMenu.argtypes = [wintypes.HMENU, wintypes.UINT, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, wintypes.LPVOID]
     u.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    # отчёт №587 (ui.log): «Трей: argument 1: OverflowError: int too long to convert» — без argtypes ctypes передаёт
+    # 64-битный дескриптор меню как int, DestroyMenu падал, и выбранный пункт меню трея не выполнялся
+    u.DestroyMenu.argtypes = [wintypes.HMENU]
+    u.SetForegroundWindow.argtypes = [wintypes.HWND]
+    u.DestroyWindow.argtypes = [wintypes.HWND]
+    u.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
     u.RegisterWindowMessageW.restype = wintypes.UINT
     u.RegisterWindowMessageW.argtypes = [wintypes.LPCWSTR]
     u.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT]
@@ -672,6 +679,7 @@ class Tray:
         """fix — (подпись, действие): «Окна чёрные? Перерисовать проще» (комментарии 19.10 — студия и виджет чёрные).
         rest — (подпись(), действие): «Отдых на час» / «Вернуть из отдыха» (№540); подпись спрашивается при каждом меню."""
         self.icon_path, self.hwnd, self.ok = str(icon_path), None, False
+        self._hk_lock, self._hk_fns = threading.Lock(), {}
         self.items = [(1, "Показать Dewiar", on_show)] + ([(4, "Закинуть идею", on_capture)] if on_capture else []) + \
                      ([(6, rest[0], rest[1])] if rest else []) + \
                      [(2, "Студия", on_studio)] + ([(0, None, None), (5, fix[0], fix[1])] if fix else []) + \
@@ -725,8 +733,8 @@ class Tray:
             if msg == WM_HOTKEY_SET:
                 self._hk_apply()
                 return 0
-            if msg == WM_HOTKEY and wp == HOTKEY_ID and getattr(self, "_hk_fn", None):
-                threading.Thread(target=self._hk_fn, daemon=True).start()
+            if msg == WM_HOTKEY and (getattr(self, "_hk_fns", None) or {}).get(wp):
+                threading.Thread(target=self._hk_fns[wp], daemon=True).start()
                 return 0
             if msg == self.taskbar_created:                # Проводник перезапустился — значок пропал, вернуть
                 self._add()
@@ -772,22 +780,26 @@ class Tray:
             self.u.TranslateMessage(ctypes.byref(msg))
             self.u.DispatchMessageW(ctypes.byref(msg))
 
-    def hotkey(self, mods, vk, fn):
+    def hotkey(self, mods, vk, fn, hid=HOTKEY_ID):
         """Сочетание клавиш на всю систему (RegisterHotKey окна значка): fn — в своём потоке. Регистрировать можно только
-        из потока окна — просим его сообщением и ждём ответа. mods=None — снять. -> True, если Windows приняла."""
+        из потока окна — просим его сообщением и ждём ответа. mods=None — снять. hid — номер сочетания (у каждого своё:
+        «Закинуть идею» HOTKEY_ID, «Позвать Лиру» HOTKEY_MIC_ID). -> True, если Windows приняла."""
         if not (self.ok and self.hwnd):
             return False
-        self._hk = (mods, vk, fn, threading.Event(), [False])
-        self.u.PostMessageW(self.hwnd, WM_HOTKEY_SET, 0, 0)
-        self._hk[3].wait(3)
-        return self._hk[4][0]
+        with self._hk_lock:                      # два сочетания назначаются из разных потоков — по одному
+            self._hk = (mods, vk, fn, threading.Event(), [False], hid)
+            self.u.PostMessageW(self.hwnd, WM_HOTKEY_SET, 0, 0)
+            self._hk[3].wait(3)
+            return self._hk[4][0]
 
     def _hk_apply(self):
-        mods, vk, fn, done, res = self._hk
+        mods, vk, fn, done, res, hid = self._hk
         try:
-            self.u.UnregisterHotKey(self.hwnd, HOTKEY_ID)
-            self._hk_fn = fn
-            res[0] = True if mods is None else bool(self.u.RegisterHotKey(self.hwnd, HOTKEY_ID, mods, vk))
+            self.u.UnregisterHotKey(self.hwnd, hid)
+            if not hasattr(self, "_hk_fns"):
+                self._hk_fns = {}
+            self._hk_fns[hid] = fn if mods is not None else None
+            res[0] = True if mods is None else bool(self.u.RegisterHotKey(self.hwnd, hid, mods, vk))
         finally:
             done.set()
 

@@ -277,7 +277,10 @@ async function ntThumb(el) {
 
 async function ntOpen(path, edit) {
   await ntFlush();
-  let d; try { d = await core.call("ws_read", { path }); } catch (e) { toast(e.message); return; }
+  let d; try { d = await core.call("ws_read", { path }); }
+  catch (e) {                     // №633: заметку убрали мимо студии (Лира, корзина, другой компьютер) — карточку прочь, без «файла нет»
+    if (/файла нет|не найден/i.test(e.message || "")) { if (NT.cur === path) NT.cur = ""; toast("Этой заметки уже нет — список обновлён", 3000); ntLoad().catch(() => { }); return; }
+    toast(e.message); return; }
   NT.cur = path; NT.edit = !!edit; NT.doc = Object.assign(ntParse(path, d.text), { mtime: d.mtime });
   $$("#nt-list .nt-row, #nt-list .nt-tile").forEach(b => b.classList.toggle("cur", b.dataset.p === path));
   $(".nt-cols").classList.toggle("open", NT.grid);                       // плитками — заметка открывается поверх

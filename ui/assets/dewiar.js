@@ -83,4 +83,9 @@
   }
   window.core = new Core();
   window.api = () => (window.pywebview && window.pywebview.api) || null;
+  // №566: файл, брошенный мимо поля приёма, окно открывало вместо себя (Linux — «кракозябры» во всё окно). Последний рубеж
+  // для всех окон: никто не принял — не открываем (поля приёма и страницы сами решают раньше, на document)
+  const files = (e) => !!(e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files"));
+  window.addEventListener("dragover", (e) => { if (files(e) && !e.defaultPrevented) { e.preventDefault(); e.dataTransfer.dropEffect = "none"; } });
+  window.addEventListener("drop", (e) => { if (files(e) && !e.defaultPrevented) e.preventDefault(); });
 })();

@@ -8,8 +8,14 @@ const LSN = { items: null, files: {} };
 async function lsLocal(url) {
   if (!url || !/^https?:/i.test(url)) return "";
   if (LSN.files[url]) return LSN.files[url];
-  try { const r = await core.call("academy_file", { url }); if (r && r.uri) return (LSN.files[url] = r.uri); } catch (e) { }
+  try { const r = await core.call("academy_file", { url }); if (r && r.uri) return (LSN.files[url] = lsUri(r)); } catch (e) { }
   return "";
+}
+/* №575 (Windows): студия открыта с http://127.0.0.1, а оттуда file:// не грузится — обложки пропадали. Картинки ядро отдаёт
+   data:URL, видео — тот же сервер окон по имени из кэша (/academy-cache/…, ui/app.py); окно, открытое с диска, — file:// */
+function lsUri(r) {
+  if (/^file:/i.test(r.uri) && /^https?:$/.test(location.protocol) && r.name) return location.origin + "/academy-cache/" + encodeURIComponent(r.name);
+  return r.uri;
 }
 function lsPosters(root) {
   $$("[data-poster]", root).forEach(async el => { const u = await lsLocal(el.dataset.poster); if (u) el.style.backgroundImage = `url('${u.replace(/'/g, "%27")}')`; });

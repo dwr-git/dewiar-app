@@ -93,7 +93,9 @@ function openEditor(p) {
   $("#dtitle").textContent = p ? p.name : "Новый персонаж";
   $("#e-name").value = ed.name; $("#e-gender").value = ed.gender || "neutral";
   $("#e-wake").value = (ed.wake || []).join(", "); $("#e-tag").value = ed.tagline || ""; $("#e-char").value = ed.character || "";
-  $("#e-piper").innerHTML = Object.entries(S_voices).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  // №611: сохранённого голоса нет в списке (или список ещё не пришёл) — показываем его как есть, а не пустой выбор
+  const pvs = Object.assign({}, S_voices || {}); if (ed.voice.piper && !pvs[ed.voice.piper]) pvs[ed.voice.piper] = ed.voice.piper;
+  $("#e-piper").innerHTML = Object.entries(pvs).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   // ползунок темпа: вправо — быстрее, а length_scale у Piper — длительность (меньше — быстрее), поэтому 2 − x
   $("#e-piper").value = ed.voice.piper; $("#e-len").value = 2 - (ed.voice.length_scale || 1); $("#e-remote").value = ed.voice.remote || "";
   $("#e-fx").innerHTML = S_fx.map(f => `<option value="${f.id}">${f.name} — ${f.description}</option>`).join(""); $("#e-fx").value = ed.voice.fx || "clear";
@@ -316,7 +318,7 @@ $("#e-save").onclick = async () => {
   const wake = $("#e-wake").value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
   const body = { id: ed.id, name, gender: $("#e-gender").value, wake: wake.length ? wake : [name.toLowerCase()], tagline: $("#e-tag").value.trim(),
     character: $("#e-char").value.trim() || `Тебя зовут ${name}. Ты дружелюбный голосовой помощник.`, style: ed.style, color: ed.color,
-    voice: Object.assign({ piper: $("#e-piper").value, length_scale: +(2 - $("#e-len").value).toFixed(2), remote: $("#e-remote").value.trim(), fx: $("#e-fx").value },
+    voice: Object.assign({ piper: $("#e-piper").value || ed.voice.piper, length_scale: +(2 - $("#e-len").value).toFixed(2), remote: $("#e-remote").value.trim(), fx: $("#e-fx").value },
       $("#e-vosk").value === "piper" ? { prefer: "piper" } : /^\d+$/.test($("#e-vosk").value) ? { vosk: +$("#e-vosk").value } : {}) };
   body.knowledge = ed.knowledge || [];
   if (ed.avatar_data) body.avatar_data = ed.avatar_data; else if (ed.style !== "photo") body.avatar = "";
@@ -332,7 +334,7 @@ $("#e-teach").onclick = () => { if (ed && ed.id) { const id = ed.id; closeEditor
 $("#e-listen").onclick = () => {
   if (!(ed && ed.id)) return toast("Сначала сохраните персонажа");
   const v = $("#e-vosk").value, voice = Object.assign(v === "piper" ? { prefer: "piper" } : /^\d+$/.test(v) ? { vosk: +v, prefer: "" } : { prefer: "" },
-    { piper: $("#e-piper").value, length_scale: +(2 - $("#e-len").value).toFixed(2), remote: $("#e-remote").value.trim() });   // слушаем выбранное, а не сохранённое (и голос сервера — GitHub №31)
+    { piper: $("#e-piper").value || ed.voice.piper, length_scale: +(2 - $("#e-len").value).toFixed(2), remote: $("#e-remote").value.trim() });   // слушаем выбранное, а не сохранённое (и голос сервера — GitHub №31)
   core.call("voice_test", { persona: ed.id, fx: $("#e-fx").value, voice }).catch(e => toast(e.message));
 };
 $("#e-del").onclick = async () => {

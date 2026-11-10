@@ -509,6 +509,22 @@ def parse(text, now=None):
     return {"text": what, "at": when, "repeat": rep, "kind": kind}
 
 
+def _pl(n, one, few, many):
+    return one if n % 10 == 1 and n % 100 != 11 else few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+
+def span(mins, voice=False):
+    """Сколько осталось — часами и минутами (№563: «через 87 минут» сложно понять, проще «1 ч 27 мин»).
+    voice=False — для текста: «1 ч 27 мин», «2 ч», «45 мин»; voice=True — для речи после «через»: «час 27 минут»,
+    «2 часа», «21 минуту»."""
+    h, m = divmod(max(0, int(round(mins))), 60)
+    if not voice:
+        return " ".join(([f"{h} ч"] if h else []) + ([f"{m} мин"] if m or not h else []))
+    hs = ("час" if h == 1 else f"{h} {_pl(h, 'час', 'часа', 'часов')}") if h else ""
+    ms = f"{m} {_pl(m, 'минуту', 'минуты', 'минут')}" if m or not h else ""
+    return " ".join(x for x in (hs, ms) if x)
+
+
 def human(when: datetime, now=None):
     """«сегодня в 15:30», «завтра в 9:00», «в пятницу, 3 октября, в 10:00»."""
     now = now or datetime.now()

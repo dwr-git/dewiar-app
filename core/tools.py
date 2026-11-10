@@ -668,19 +668,33 @@ def t_open_app(a, ctx):
     return f"Запустил {app['ru'] or app['name']}"
 
 
+OPEN_ALIASES = {"загрузки": "Downloads", "документы": "Documents", "рабочий стол": "Desktop", "музыка": "Music",
+                "изображения": "Pictures", "картинки": "Pictures", "видео": "Videos", "downloads": "Downloads",
+                "documents": "Documents", "desktop": "Desktop", "music": "Music", "pictures": "Pictures", "videos": "Videos"}
+
+
+def _known_dir(name):
+    """«Изображения» / Pictures -> папка этого компьютера (на Windows — настоящая, в том числе перенесённая)."""
+    if WIN:
+        cand = [winsys.known_folder(name)]
+    elif MAC:
+        cand = [macsys.known_folder(name)]
+    else:
+        ru = {v: k for k, v in OPEN_ALIASES.items() if not k.isascii()}
+        cand = [Path.home() / name, Path.home() / ru.get(name, name).capitalize()]
+    return next((c for c in cand if c and c.exists()), cand[0])
+
+
 def t_open_path(a, ctx):
     p = Path(os.path.expanduser((a.get("path") or "~").strip()))
-    aliases = {"загрузки": "Downloads", "документы": "Documents", "рабочий стол": "Desktop", "музыка": "Music",
-               "изображения": "Pictures", "видео": "Videos"}
-    low = str(a.get("path", "")).lower().strip()
-    if low in aliases and WIN:
-        cand = [winsys.known_folder(aliases[low])]
-    if low in aliases and MAC:
-        cand = [macsys.known_folder(aliases[low])]
-    if low in aliases and not WIN and not MAC:
-        cand = [Path.home() / aliases[low], Path.home() / low.capitalize()]
-    if low in aliases:
-        p = next((c for c in cand if c.exists()), cand[0])
+    # №573 (05.11): «сделай снимок» → «сохранил в „Изображения/Снимки экрана“», «открой эту папку» → open_path с тем же
+    # «Изображения/Снимки экрана» — «нет такого пути», а модель сказала, что открыла. Первая часть пути — имя папки
+    # системы по-русски или по-английски — это она, остальное — внутри неё
+    raw = str(a.get("path", "")).strip().strip("/\\")
+    raw = re.sub(r"^~[/\\]", "", raw)
+    parts = [x for x in re.split(r"[/\\]+", raw) if x]
+    if parts and parts[0].lower() in OPEN_ALIASES and not p.exists():
+        p = _known_dir(OPEN_ALIASES[parts[0].lower()]).joinpath(*parts[1:])
     if not p.exists() and not DRY:
         raise ToolError(f"нет такого пути: {p}")
     launch(["xdg-open", str(p)])
@@ -1437,10 +1451,34 @@ def t_look_screen(a, ctx):
     return {"text": f"Снимок экрана {w}×{h} приложен. Виджет ассистента на нём не учитывай.", "image": b64}
 
 
+def _camera_mic_lock(ctx, dev):
+    """Идея №165 (08.11): камера и микрофон — одно USB-устройство — на время кадра закрыть поток микрофона (общий
+    драйвер иначе «вешает» микрофон до перезапуска), после кадра он откроется сам (Engine.mic_paused)."""
+    import contextlib
+    eng = ctx.get("engine")
+    if eng is None or not hasattr(eng, "mic_paused") or getattr(eng, "muted", False):
+        return contextlib.nullcontext()
+    try:
+        from audio_io import mic_shares_camera, win_default_input
+        from eyes import camera_label
+        mic = ctx["settings"].get("audio", "input") or ((win_default_input() or (0, ""))[1]) or \
+            str((getattr(eng, "status", None) or {}).get("input") or "")
+        cam = camera_label(dev)
+        if mic_shares_camera(mic, cam):
+            log.info("📷 Камера «%s» и микрофон «%s» — одно устройство: микрофон закрываю на время кадра", cam, mic)
+            return eng.mic_paused("камера")
+    except Exception:  # noqa: BLE001 — сравнение имён не должно мешать снимку
+        log.debug("камера и микрофон", exc_info=True)
+    return contextlib.nullcontext()
+
+
 def t_look_camera(a, ctx):
     from eyes import EyesError, capture_camera, prepare
+    dev = ctx["settings"].get("eyes", "camera") or ("" if WIN else "/dev/video0")
     try:
-        b64, w, h = prepare(capture_camera(ctx["settings"].get("eyes", "camera") or ("" if WIN else "/dev/video0")))
+        with _camera_mic_lock(ctx, dev):
+            raw = capture_camera(dev)
+        b64, w, h = prepare(raw)
     except EyesError as e:
         raise ToolError(str(e)) from e
     return {"text": f"Кадр с камеры {w}×{h} приложен.", "image": b64}
@@ -3056,7 +3094,9 @@ def _chat_hits(ctx, q, days=14):
         return ""
     import time as _t
     since = _t.time() - days * 86400
-    mine = [x for x in list(getattr(log_, "items", []))[-2000:] if x.get("role") == "user" and x.get("ts", 0) >= since and x.get("text")]
+    # 0.86: беседы — сказанное в отложенной беседе («Новая беседа» в «Чате») тоже вспоминается (chatlog.recent)
+    pool = log_.recent(since) if hasattr(log_, "recent") else list(getattr(log_, "items", []))
+    mine = [x for x in pool[-2000:] if x.get("role") == "user" and x.get("ts", 0) >= since and x.get("text")]
     hit = [i for i, x in enumerate(mine) if any(st in x["text"].lower().replace("ё", "е") for st in stems)]
     if not hit:
         return ""

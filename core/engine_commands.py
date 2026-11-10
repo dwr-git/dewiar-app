@@ -5,6 +5,7 @@ command(cmd, a) — единый разбор: bridge.py вызывает его
 совпадают с вызовами в ui/ (студия, виджет); новую команду добавляйте и сюда, и туда.
 Многие команды лишь передают работу службам (reminders, money, telegram, cloud…) и шлют событие для обновления окна."""
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
+from engine_chat import CHAT_CMDS
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
@@ -14,7 +15,7 @@ _KIDS_LOCKED = ("lnet_share", "lnet_invite", "lnet_pause", "council_", "pbot_", 
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
                 "security_set", "server_", "skill_", "soul_save", "soul_update", "soul_delete", "sync_set", "sync_e2e", "tg_", "tools",
                 "vault_", "ws_delete", "ws_set_path", "ws_move", "text_mode", "mm_folder", "radio_custom_add", "radio_custom_del",
-                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_", "month_", "ocr_install")
+                "report_auto", "power_cancel", "fam_", "join_", "ref_use", "exam_traces_remove", "chat_clear", "chat_thread", "chat_export", "chat_regen", "chat_edit", "diary_", "update_install", "team_", "client", "device_", "pair_", "brains_pull", "morning_", "month_", "ocr_install")
 
 
 def _kids_blocked(cmd, a):
@@ -1009,6 +1010,8 @@ class CommandsMixin:
         if not busy:
             self.set_state("muted" if self.muted else "idle")
         self.emit("muted", on=self.muted)
+        if not self.muted and hasattr(self, "_mic_kick_now"):
+            self._mic_kick_now()                     # №622: микрофон был закрыт — открыть сразу
         return self.muted
 
     def snapshot(self):
@@ -1107,7 +1110,15 @@ class CommandsMixin:
             except Exception as e:  # noqa: BLE001
                 code = getattr(getattr(e, "response", None), "status_code", 0)
                 raise ValueError(f"урок не скачался: сайт ответил {code}" if code else f"урок не скачался: {e}") from e
-            return {"uri": f.as_uri(), "size": f.stat().st_size}
+            # №575 (Windows): студия открыта с http://127.0.0.1 (№442), а Chromium с http-страницы file:// не грузит — обложки
+            # пропадали. Картинки — data:URL (как close_thumb, art_url №511); видео велико для data: — его отдаёт сам
+            # ui-http по имени из кэша (/academy-cache/<name>, ui/app.py), file:// — для окон, открытых с диска
+            size = f.stat().st_size
+            if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp") and size <= 6 * 1024 * 1024:
+                import base64
+                mime = {".png": "image/png", ".webp": "image/webp"}.get(f.suffix.lower(), "image/jpeg")
+                return {"uri": f"data:{mime};base64," + base64.b64encode(f.read_bytes()).decode(), "size": size, "name": f.name}
+            return {"uri": f.as_uri(), "size": size, "name": f.name}
         if cmd.startswith("sitechat_"):           # «Чат для сайта» (0.69, sitechat.py): опубликовать, отключить, заявки
             from sitechat import SiteChatError
             W = self.sitechat
@@ -1834,6 +1845,14 @@ class CommandsMixin:
             n = examtrace.remove(self.workspace, self.money, self.done, list(a.get("items") or []))
             log.info("🧹 записи экзамена убраны: %s", n)     # удаление уйдёт ближайшей синхронизацией — и с телефона тоже
             return {"removed": n}
+        if cmd == "exam_history" and os.environ.get("DEWIAR_EXAM_LAUNCH"):
+            # экзамен (№625–628): разговор до сценария — как его оставило прошлое (например, перебитый вопрос «Выполнить?»).
+            # Только в ядре экзамена (DEWIAR_EXAM_LAUNCH ставит exam.py); строки — {role: user|assistant, content}
+            items = [{"role": m["role"], "content": str(m["content"])[:2000], "who": self.s.get("persona")}
+                     for m in (a.get("items") or [])[:12] if isinstance(m, dict) and m.get("role") in ("user", "assistant")]
+            self.history += items
+            self.last_turn_time = time.monotonic()
+            return {"added": len(items)}
         if cmd == "persona_memory":               # своя память у персонажа (0.56): {name, own}
             return self.persona_memory_set(str(a.get("name") or ""), bool(a.get("own")))
         who = str(a.get("who") or "") if cmd.startswith("memory_") else ""      # студия: «Общая» или своя память персонажа
@@ -1953,6 +1972,8 @@ class CommandsMixin:
                 return True                      # «напомни завтра в 10» + снимки — напоминание с картинками, без модели
             if files:
                 text = self._attach_files(text, files, images)
+            if text.strip() or images:
+                self._chat_keep_partial(self.turn)        # новый вопрос посреди ответа — написанное остаётся в ленте
             self.ask(text, images)
             return True
         if cmd == "screenshot_attach":               # кнопка «снимок экрана» в поле вопроса
@@ -2007,6 +2028,7 @@ class CommandsMixin:
                 self.rest_end("лицо")
             if self.muted and self.state not in ("speaking", "thinking"):
                 self._mute_pass = True                      # нажали «говорить» при выключенном микрофоне — одна фраза, и снова тихо
+                self._mic_kick_now()                        # №622: микрофон закрыт — открыть для этой фразы
             if self.state in ("speaking", "thinking", "listening"):
                 self._ptt_stop_at = now
                 by_voice = now - (getattr(self, "wake_time", 0.0) or 0.0) < 25   # начато голосом, а не кнопкой
@@ -2037,11 +2059,14 @@ class CommandsMixin:
         if cmd == "chat_clear":
             self.chatlog.clear()
             return True
+        if cmd.startswith("chat_") and cmd in CHAT_CMDS:   # «Ещё раз», «Изменить», беседы, выгрузка (engine_chat.py)
+            return self.chat_cmd(cmd, a)
         if cmd == "hold_start":                           # диктовка удержанием: держат кнопку или пробел — говорят сколько нужно
             return self.hold_start(int(a.get("back_ms") or 400), int(a.get("max_s") or 600))
         if cmd == "hold_end":
             return self.hold_end(bool(a.get("cancel")))
         if cmd == "stop":
+            self._chat_keep_partial(self.turn)            # написанное до «Стоп» — в ленту «Чата» с пометкой «остановлено»
             self.interrupt("кнопка", follow=False)
             return True
         if cmd == "mute":
@@ -2049,6 +2074,11 @@ class CommandsMixin:
                 self.rest_end("кнопка")
                 return self.muted
             return self.set_mute(bool(a.get("on")))
+        if cmd == "mute_toggle":                          # сочетание «Позвать Лиру» в режиме «микрофон вкл/выкл» (идея №154)
+            if self.muted and getattr(self, "resting", lambda: False)():
+                self.rest_end("кнопка")
+                return self.muted
+            return self.set_mute(not self.muted)
         if cmd in ("rest", "rest_end", "rest_toggle", "rest_state"):   # «Отдых» (engine_rest.py, №540)
             return self.rest_cmd(cmd, a)
         if cmd == "text_mode":
@@ -2593,7 +2623,8 @@ class CommandsMixin:
                 raise ValueError(str(e).strip("'\"")) from None
         if cmd == "task_create":
             t = self.tasks.create(a.get("title", ""), a.get("goal", ""), a.get("project", ""), start=a.get("start", True),
-                                  folders=a.get("folders") or (), search_url=a.get("search_url") or "", net=bool(a.get("net")))
+                                  folders=a.get("folders") or (), search_url=a.get("search_url") or "", net=bool(a.get("net")),
+                                  files=a.get("files") or ())
             return t.public()
         if cmd == "task_rewind":                               # выпуск 5: «Откатить к шагу N» / вернуть снимок (отменить откат)
             st, sq = a.get("step"), a.get("seq")

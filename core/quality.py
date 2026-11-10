@@ -24,7 +24,7 @@ LESSONS_PROMPT_MAX = 2500        # символов уроков в подска
 REFLECT_MIN = 3                  # новых следов задач, чтобы было из чего делать выводы
 REFLECT_EVERY = 6 * 3600         # не чаще (секунд); проверяет tasks.py, можно переопределить DEWIAR_REFLECT_EVERY
 # служебные файлы и папки верхнего уровня папки задачи (tasks.py): готовыми результатами не считаются
-SERVICE = ("_run", "_out", "_src", "_snap", "задача.json", "история.json", "история.json.tmp", "журнал.md", "план.md", "блокнот.md", "итог.md",
+SERVICE = ("_run", "_out", "_src", "_snap", "_explore", "задача.json", "история.json", "история.json.tmp", "журнал.md", "план.md", "блокнот.md", "итог.md",
            "задачи.json", "критерии.json", "_undo", "код.json")   # экзамен 0.84.1: «готовые файлы — только _undo/…, код.json»
 
 # ---------------- проверка файлов ----------------
@@ -332,6 +332,22 @@ _FAKE_HEAD = re.compile(r"\[\s*(?:вызва\w*\s+)?(?:инструмент\w*|t
 _FAKE_WAIT = re.compile(r"(?<![а-яё])жду\s+(?:вывод|результат|ответ\s+(?:команды|сервера|инструмента))", re.I)
 
 
+# №625–628 (08.11, своя модель Qwen3.6-35B в LM Studio): «спрашивает 100 раз одно и то же, повторяется». Вопрос
+# «Выполнить действие «pc: FileSystem»? Скажите «да» или «нет».» задаёт программа, а не модель, — но при перебивании он
+# попадал в историю как слова ассистента, и модель стала писать его САМА, текстом, без вызова действия: человек
+# отвечает «да» — спрашивать нечего, и модель снова пишет тот же вопрос. Это наш служебный текст: из истории — вон,
+# а в ответе модели — то же, что вызов, написанный текстом (fake_call → FAKE_NUDGE)
+CONFIRM_ECHO_RX = re.compile(
+    r"\s*(?:Выполнить действие «[^»\n]{1,80}»\?|Выполнить и это\?|Ещё команда — выполнить\?)"
+    r"(?:\s*Подробности — на экране\.)?(?:\s*Скажите «да»(?:, «нет» или «всегда»[^.\n]*\.|\s*или\s*«нет»\.?))?")
+_CONFIRM_SAY = re.compile(r"Скажите\s*«да»\s*(?:,\s*«нет»\s*или\s*«всегда»|или\s*«нет»)", re.I)
+
+
+def strip_confirm_echo(text):
+    """Убрать из реплики ассистента служебный вопрос «Выполнить действие «…»? Скажите «да» или «нет»."."""
+    return re.sub(r"[ \t]{2,}", " ", CONFIRM_ECHO_RX.sub(" ", text or "")).strip()
+
+
 def fake_call(text, names=()):
     """Вызов действия, написанный текстом вместо настоящего вызова -> имя действия (или «?») или "". names — действия,
     которые есть у модели на этом шаге: «[run_command: …]», «[load_skill(…)]», «run_command (command: …)»;
@@ -341,6 +357,8 @@ def fake_call(text, names=()):
         return ""
     if _FAKE_HEAD.search(t):
         return "?"
+    if _CONFIRM_SAY.search(t) and re.search(r"Выполнить (?:действие «|и это\?)", t):
+        return "?"                                 # №625–628: вопрос программы «Выполнить действие…?» написан моделью
     for n in sorted({x for x in names or () if x and re.fullmatch(r"[a-z][a-z0-9_]{2,}", x)}, key=len, reverse=True):
         if re.search(r"\[\s*" + n + r"\b\s*[:(]", t) or ("_" in n and re.search(r"(?<![\w`/.])" + n + r"\s*\(\s*\w+\s*[:=]", t)):
             return n
@@ -698,6 +716,49 @@ def action_claim(ask, answer, called=()):
     return (f"ПРОВЕРКА: ты сказал(а) «{a[:80]}», но ничего не сделал(а) — действие не выполнено, на устройстве ничего не "
             "произошло. Выполни его сейчас нужным инструментом (звонок близкому — close_call, сообщение — close_send, "
             "напоминание или таймер — set_reminder и т. д.). Уже сказанное не повторяй — человек это слышал.")
+
+
+# №573 (05.11, «научилась врать, типо сделала задание»): «открой эту папку» → open_path вернул «нет такого пути», а ответ —
+# «Открыла папку со снимками». Действие кончилось ошибкой (и потом не удалось), а ответ говорит, что сделано, -> просим либо
+# сделать правильно, либо честно сказать, что не вышло (раз за ход); не вышло и после этого — дописываем честно (FAILED_NOTE).
+_FAIL_VERBS = {
+    "open_path": r"открыл|открыт|открываю", "open_app": r"открыл|открыт|запустил|запущен|открываю|запускаю", "open_url": r"открыл|открыт|открываю",
+    "send_email": r"отправил|отправлен", "send_telegram": r"отправил|отправлен", "close_send": r"отправил|отправлен|передал",
+    "close_call": r"звоню|позвонил|набираю", "delete_files": r"удалил|удален|удалён|в\s+корзин", "set_reminder": r"напомню|поставил|поставлен",
+    "save_note": r"записал|сохранил|записан|сохранен|сохранён", "update_note": r"дописал|добавил|записал|обновил", "play_music": r"включил|включен|играет",
+    "media_control": r"включил|выключил|поставил|переключил", "set_volume": r"сделал|прибавил|убавил|громкост", "money_add": r"записал|внесл|учл",
+    "run_command": r"выполнил|запустил|выполнен",
+}
+_DONE_ANY = r"готово|сделал[аи]?|сделано|выполнил[аи]?|выполнено"
+# только посмотрела (поиск, чтение) — «готово» тогда о действии с ошибкой; а если удалось другое действие — «готово» о нём
+INFO_TOOLS_ALL = {"web_search", "weather", "read_webpage", "find_notes", "read_file", "calc", "list_reminders", "calendar_list",
+                  "money_report", "money_find", "search_documents", "ask_knowledge", "system_status", "world_time", "app_help"}
+_HONEST_FAIL = re.compile(r"не\s+(?:получилось|удалось|вышло|смог|смогла|нашл|нашёл|нашел|открыл|открывается|сработал|найден)|ошибк|"
+                          r"не\s+существует|нет\s+такого|нет\s+такой|недоступ|к\s+сожалению|не\s+могу", re.I)
+
+
+def failed_claim(answer, failed, ok=()):
+    """Действие вернуло ошибку (а потом то же действие не удалось), а ответ говорит «открыла / отправила / готово» ->
+    подсказка модели или "". failed — [(имя, текст ошибки)], ok — имена удавшихся за ход действий."""
+    a = (answer or "").strip()
+    okset = set(ok or ())
+    bad = [(n, e) for n, e in (failed or ()) if n not in okset]
+    if not bad or not a or _HONEST_FAIL.search(a):
+        return ""
+    hit = next(((n, e) for n, e in bad if re.search(r"(?<![а-яё])(?:" + _FAIL_VERBS.get(n, _DONE_ANY) + r")", a, re.I)), None)
+    if not hit and not okset - INFO_TOOLS_ALL and re.search(r"(?<![а-яё])(?:" + _DONE_ANY + r")(?![а-яё])", a, re.I):
+        hit = bad[0]
+    if not hit:
+        return ""
+    return (f"ПРОВЕРКА: действие {hit[0]} НЕ выполнено — оно вернуло ошибку «{str(hit[1])[:160]}», а ты сказал(а), что сделано. "
+            "Это неправда, человек будет ждать результата. Либо сделай правильно сейчас (другой путь, другое имя — например, "
+            "папку «Изображения» ищи как Pictures), либо скажи честно одной фразой, что не получилось и почему. Не говори «готово».")
+
+
+def failed_note(failed, ok=()):
+    """Честная приписка, если и после просьбы ответ говорит «сделано» про действие с ошибкой."""
+    bad = [(n, e) for n, e in (failed or ()) if n not in set(ok or ())]
+    return f"Честно: это не получилось — {str(bad[0][1])[:160].rstrip('.')}." if bad else ""
 
 
 # Экзамен 0.38.51: «посчитай дни до Нового года и поставь таймер на столько же минут» — посчитала 78 и спросила «скажи —
@@ -1230,7 +1291,11 @@ def file_text(p, limit=2_000_000):
             return ""
         try:
             return data.decode("utf-8-sig")
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as e:
+            # 0.86: предел обрезал UTF-8 посреди буквы — это всё ещё UTF-8, а не cp1251 (было: выдержка русского отчёта для
+            # проверяющего приходила «РћС‚С‡С‘С‚» примерно в половине случаев)
+            if len(data) >= limit and e.start >= len(data) - 3:
+                return data[:e.start].decode("utf-8-sig", "replace")
             return data.decode("cp1251", "replace")
     except Exception as e:  # noqa: BLE001 — битый файл: проверка «не прочитался», а не сбой задачи
         log.debug("текст %s: %s", p, e)
@@ -1620,9 +1685,35 @@ VERIFY = (
     "«проверка пройдена») — это подлог, verdict revise.")
 
 
-def verify_task(ask, goal, summary, files, facts="", diff="", criteria="", excerpts="", sources="", findings="", short=False):
-    """Проверяющий с чистым контекстом (вместо critic): один вызов перед finish. ask(system, messages) -> текст.
-    -> ("ok" | "revise" | "unclear", замечания). unclear — ответ не разобрать или сбой: решают машинные проверки (не «ок»)."""
+# выпуск 6: проверяющий — подагент: может попросить дочитать файлы и источники (look), прежде чем решить
+VERIFY_LOOK = (
+    "\nНе хватает выдержки, чтобы решить (конец файла, нужные строки, источник цифры)? Тогда вместо вердикта ответь "
+    "{\"verdict\":\"look\",\"read\":[\"outputs/отчёт.md:120-200\",\"https://адрес-из-итога\"]} — до 4 пунктов: путь (можно со "
+    "строками) или адрес; получишь эти куски и решишь. Осталось таких просьб: {n}. Не проси того, что уже есть в выдержках.")
+
+
+def parse_look(raw):
+    """Просьба проверяющего дочитать -> [путь[:a-b] | адрес] (до 4) или []."""
+    raw = re.sub(r"<think>.*?</think>", "", raw or "", flags=re.S)
+    for x in reversed(re.findall(r'\{[^{}]*"verdict"[^{}]*\}', raw)):
+        try:
+            d = json.loads(x)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and str(d.get("verdict") or "").strip().lower() in ("look", "read"):
+            r = d.get("read") or d.get("files") or []
+            r = [r] if isinstance(r, str) else r
+            return [str(i).strip() for i in r if str(i).strip()][:4] if isinstance(r, list) else []
+        return []
+    return []
+
+
+def verify_task(ask, goal, summary, files, facts="", diff="", criteria="", excerpts="", sources="", findings="", short=False,
+                look=None, looks=0):
+    """Проверяющий с чистым контекстом (вместо critic): вызов перед finish (и по просьбе задачи — verify). ask(system,
+    messages) -> текст. look(items) -> текст (выпуск 6): проверяющий может до looks раз попросить дочитать файлы и источники
+    ({"verdict":"look","read":[…]}) — получает куски и решает. -> ("ok" | "revise" | "unclear", замечания). unclear — ответ не
+    разобрать или сбой: решают машинные проверки (не «ок»)."""
     cut = (lambda s, n: s if len(s) <= n else s[:n] + "\n…(обрезано)")
     k = 0.4 if short else 1.0
     msg = (f"ЗАДАЧА:\n{cut(goal, int(1500 * k))}\n\n"
@@ -1633,19 +1724,31 @@ def verify_task(ask, goal, summary, files, facts="", diff="", criteria="", excer
            + (f"\n\nФАКТЫ ОТ СИСТЕМЫ (проверено кодом, это истина):\n{facts}" if facts else "")
            + (f"\n\nЗАМЕЧАНИЯ МАШИННОЙ ПРОВЕРКИ:\n{findings}" if findings else "")
            + (f"\n\nИЗМЕНЕНИЯ В КОДЕ (diff):\n{cut(diff, int(12000 * k))}" if diff else ""))
-    note = ""
-    for attempt in range(2):                           # непонятный ответ — ещё один раз, строже; потом решают машинные проверки
+    note, attempt, left = "", 0, (looks if look else 0)
+    while attempt < 2:                                 # непонятный ответ — ещё один раз, строже; потом решают машинные проверки
+        sys_ = VERIFY + (VERIFY_LOOK.replace("{n}", str(left)) if left else "")
         try:
-            raw = ask(VERIFY, [{"role": "user", "content": msg + ("\n\nПрошлый ответ не разобран. Ответь ТОЛЬКО одним JSON: "
-                                                                  "{\"verdict\": \"ok\"} или {\"verdict\": \"revise\", \"problems\": \"…\"}."
-                                                                  if attempt else "")}]) or ""
+            raw = ask(sys_, [{"role": "user", "content": msg + ("\n\nПрошлый ответ не разобран. Ответь ТОЛЬКО одним JSON: "
+                                                                "{\"verdict\": \"ok\"} или {\"verdict\": \"revise\", \"problems\": \"…\"}."
+                                                                if attempt else "")}]) or ""
         except Exception as e:  # noqa: BLE001
             log.info("Проверяющий не ответил: %s", e)
+            attempt += 1
             continue
         v, p = parse_verdict(raw)
         if v in ("ok", "revise"):
             return v, p
+        items = parse_look(raw) if left else []
+        if items:                                      # подагент дочитывает — это не «непонятный ответ»
+            left -= 1
+            try:
+                got = look(items) or "(ничего не прочитано)"
+            except Exception as e:  # noqa: BLE001
+                got = f"(не прочитать: {e})"
+            msg += "\n\nДОЧИТАНО ПО ТВОЕЙ ПРОСЬБЕ (" + "; ".join(items) + "):\n" + got
+            continue
         note = note or p
+        attempt += 1
     return "unclear", note
 
 

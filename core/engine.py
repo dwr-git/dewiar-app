@@ -21,10 +21,11 @@ from engine_watch import WatchMixin  # noqa: E402  «Дозор»: присмо�
 from engine_home import HomeMixin  # noqa: E402  «Дома по Wi-Fi»: синхронизация без dewiar.pro (homehub.py)
 from engine_mymusic import MyMusicMixin  # noqa: E402
 from engine_rest import RestMixin  # noqa: E402  «Отдых»: час без Лиры — не слушает и не говорит (№540)
+from engine_chat import ChatMixin  # noqa: E402  «Чат» студии: «Ещё раз», «Изменить», беседы, выгрузка (0.86)
 
 
 class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin,
-             PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin):
+             PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin, ChatMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
         self.s, self.personas, self.bridge = settings, personas, bridge
         if self.s.get("persona") not in {p["id"] for p in personas.all()}:   # выбранного больше нет (стал шаблоном и т. п.)
@@ -101,6 +102,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.stt = None                  # распознаватель — появится, когда загрузится модель (до этого настройки сохраняются без него)
         self.decoys = []
         self.restart_audio = threading.Event()
+        self._mic_kick = threading.Event()   # №622: микрофон выключен и отпущен — включили, «говорить», удержание: открыть сразу
         self.pending_confirm = None
         self.meeting = []                                  # программы, которые сейчас слушают микрофон (созвон)
         self._chatter = collections.deque(maxlen=20)        # когда слышали фразы «не мне» — вокруг разговор
@@ -778,6 +780,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         if type_ == "answer" and not kw.pop("model", False) and kw.get("text"):
             kw["text"] = self._g(kw["text"])               # быстрые ответы без модели — в роде персонажа
         self.bridge.broadcast(dict(kw, type=type_))
+        if type_ == "interrupted":
+            self._chat_pending = None                      # «Ещё раз»/«Изменить» перебили — следующий вопрос обычный
         self._turn_step(type_, kw)
         if (type_ == "heard" or (type_ == "answer" and kw.get("done"))) and kw.get("text") and getattr(self, "chatlog", None) is not None:
             self._chat_add(type_, kw)
@@ -843,8 +847,14 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             steps = None
             if type_ == "answer":
                 steps, self._turn_tools = list(getattr(self, "_turn_tools", None) or []), []
-            item = self.chatlog.add("user" if type_ == "heard" else "assistant", text,
-                                    who=None if type_ == "heard" else self.s.get("persona"), via=via, att=att, steps=steps)
+            pend = self._chat_pend(type_, text) if hasattr(self, "_chat_pend") else None
+            if pend == "skip":                             # «Ещё раз»/«Изменить»: вопрос уже в ленте
+                return
+            meta = kw.get("meta") if type_ == "answer" else None
+            item = self.chatlog.variant(pend, text, meta=meta, steps=steps, att=att, who=self.s.get("persona")) if pend else None
+            if item is None:
+                item = self.chatlog.add("user" if type_ == "heard" else "assistant", text,
+                                        who=None if type_ == "heard" else self.s.get("persona"), via=via, att=att, steps=steps, meta=meta)
             if item:
                 self.bridge.broadcast({"type": "chat", "item": item})
         except Exception as e:  # noqa: BLE001

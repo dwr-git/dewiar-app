@@ -71,6 +71,19 @@ class Conversation:
         h, self._restored = self._restored, []
         return h
 
+    def reload(self):
+        """Беседа «Чата» сменилась (chatlog.thread_open/thread_new): conversation.json уже другой — прочитать его и
+        продолжить ту беседу. -> её история (дословные реплики). Открыли — значит, разговор идёт: «долгую тишину» не
+        считаем (иначе старая беседа обнулилась бы на первом же вопросе)."""
+        with self._lock:
+            self.summary, self.turns, self.folded, self.started, self.last = "", 0, 0, 0.0, 0.0
+        self._restored = []
+        self._load()
+        h, self._restored = self._restored, []
+        if self.last:
+            self.last = time.time()
+        return h
+
     def save(self, history):
         """conversation.json: содержание, счётчики и до 80 последних текстовых сообщений (role, content, who, model)."""
         d = {"summary": self.summary, "turns": self.turns, "folded": self.folded, "started": self.started, "last": self.last,
