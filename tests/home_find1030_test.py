@@ -52,7 +52,7 @@ with sync_playwright() as p:
     ok("shop@ozon.ru" in pg.inner_text("#hm-mail .hmm-row >> nth=2"), "без имени — адрес")
     if SHOT: pg.screenshot(path=str(Path(SHOT) / "home-find-mail.png"))
     pg.click("#hm-mail .hmm-row >> nth=0"); pg.wait_for_timeout(300)
-    ok(pg.evaluate("document.querySelector('#hmm-dlg').open") and "Прикладываю договор на ноябрь" in pg.inner_text("#hmm-body") and ["mail_read", {"uid": "41"}] in pg.evaluate("calls"),
+    ok(pg.evaluate("document.querySelector('#hmm-dlg').open") and "Прикладываю договор на ноябрь" in pg.inner_text("#hmm-body") and ["mail_read", {"uid": "41", "html": True}] in pg.evaluate("calls"),
        "нажали — письмо целиком (mail_read)")
     if SHOT: pg.screenshot(path=str(Path(SHOT) / "home-mail-read.png"))
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)

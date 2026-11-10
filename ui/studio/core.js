@@ -8,6 +8,67 @@
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
 // экранирование для innerHTML — общее для всех файлов студии (здесь, в первом файле: 24.10 у человека «escH is not defined»
 // при подключении по коду — общий помощник жил в folder.js и пропал вместе с ним)
+/* Страница-результат (задача, «Папка»): только srcdoc без allow-same-origin и с CSP — у неё нет ни прав студии (ключ в
+   адресе, core.call родителя), ни файлов компьютера (XHR к file://), ни сети. Ресурсы — только встроенные (data:, blob:);
+   так страницу уже видели в Windows. Рецензия выпуска 5 (05.11): file:// + allow-same-origin отдавали странице студию. */
+const SAFE_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; " +
+  "media-src data: blob:; form-action 'none'; frame-src 'none'; base-uri 'none'";
+const SAFE_SANDBOX = "allow-scripts";
+/* <meta http-equiv> страницы (refresh, свой CSP, set-cookie…) — прочь. Не регуляркой: четвёртая рецензия обошла её
+   «>» внутри кавычек и сущностью в значении. Каждый «<meta» разбирается так, как его разберёт браузер (атрибуты, значения
+   в кавычках и без), и тег с атрибутом http-equiv заменяется пробелом (не склеится в новый тег). Поиск — по всем вхождениям
+   исходной строки, а не «с конца прошлого тега»: «<meta» внутри строки скрипта не спрячет настоящий тег за собой.
+   Повторяем, пока что-то убирается. То же в Python: core/export.py, strip_meta_equiv. */
+function stripMetaEquiv(html) {
+  const WS = /[\t\n\f\r ]/;
+  let s = String(html == null ? "" : html);
+  for (let pass = 0; pass < 8; pass++) {
+    const low = s.replace(/[A-Z]/g, c => c.toLowerCase()), cut = [];   // только A–Z, как браузер: «İ» — два знака (рецензия 5e)
+    for (let j = low.indexOf("<meta"); j >= 0; j = low.indexOf("<meta", j + 5)) {
+      const c = s[j + 5];
+      if (c !== undefined && !WS.test(c) && c !== "/" && c !== ">") continue;
+      let k = j + 5, end = -1, eq = false;
+      while (k < s.length) {
+        const ch = s[k];
+        if (WS.test(ch) || ch === "/") { k++; continue; }
+        if (ch === ">") { end = k + 1; break; }
+        let n = s[k++];                                          // первый знак имени (и «=») — часть имени
+        while (k < s.length && !WS.test(s[k]) && s[k] !== "/" && s[k] !== ">" && s[k] !== "=") n += s[k++];
+        if (n.replace(/[A-Z]/g, c => c.toLowerCase()) === "http-equiv") eq = true;
+        while (k < s.length && WS.test(s[k])) k++;
+        if (s[k] === "=") {
+          k++; while (k < s.length && WS.test(s[k])) k++;
+          const q = s[k];
+          if (q === '"' || q === "'") { const e = s.indexOf(q, k + 1); k = e < 0 ? s.length : e + 1; }
+          else while (k < s.length && !WS.test(s[k]) && s[k] !== ">") k++;
+        }
+      }
+      if (end < 0) { cut.push([j, s.length]); break; }       // тег не закрыт до конца: браузер его отбросит — и мы
+      if (eq) cut.push([j, end]);
+    }
+    if (!cut.length) return s;
+    let out = "", at = 0;
+    cut.sort((x, y) => x[0] - y[0]).forEach(([a, b]) => { if (b <= at) return; out += s.slice(at, Math.max(at, a)) + " "; at = b; });
+    s = out + s.slice(at);
+  }
+  return s;
+}
+/* CSP — самой первой строкой, до всего, что есть у страницы (третья рецензия): вставка «после <head>» обходилась —
+   скрипт до <head>, «<head>» в комментарии или строке, и meta оказывалась в <body>, где CSP не действует. Шрифты
+   предпросмотра сайтов приходят внутри страницы (data:, core/sites_render.py) — файлов с диска фрейму не нужно. */
+function safeDoc(html) {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${SAFE_CSP}">`;
+  html = stripMetaEquiv(String(html || "").replace(/^\ufeff?\s*<!doctype[^>]*>/i, ""));
+  return "<!doctype html>" + meta + html;
+}
+function safeFrame(html, cls) {                    // -> <iframe> (srcdoc ставится свойством — без экранирования в разметке)
+  const f = document.createElement("iframe");
+  f.setAttribute("sandbox", SAFE_SANDBOX);
+  f.setAttribute("referrerpolicy", "no-referrer");
+  if (cls) f.className = cls;
+  f.srcdoc = safeDoc(html);
+  return f;
+}
 function escH(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 // ошибки страницы — в журнал ядра (в отчёт): какой файл не загрузился и почему видно сразу, без догадок
 window.__jsErr = window.__jsErr || [];

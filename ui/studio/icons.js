@@ -70,7 +70,8 @@ $$("main section[id^='p-']").forEach(s => { const i = ICONS[s.id.slice(2)], h = 
 const GUIDE_URL = "https://dewiar.pro/dwrapp/guide.php";
 const GUIDE_OF = { ideas: "ideas", devices: "sync", personas: "personas", memory: "notes-memory", calendar: "calendar-money", close: "close", ref: "invite-friend", notes: "notes-memory", music: "music", pay: "payments", vault: "vault", snapshot: "snapshot", reminders: "reminders", tasks: "tasks",
   me: "notes-memory", folder: "folder-docs", docs: "my-docs", senior: "senior", watch: "watch", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
-  hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting" };
+  hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting",
+  sites: "sites", sitechat: "sitechat" };
 function showHelp(k) {
   const H = (window.DEWIAR_HELP || {})[k]; if (!H) return;
   const li = (a) => (a || []).map(x => `<li>${escH(x)}</li>`).join("");
@@ -106,9 +107,11 @@ async function helpLessons(k) {
   $$(".hls .hl", box).forEach(b => b.onclick = () => { const l = ls.find(x => x.id === b.dataset.id); if (l && typeof lsPlay === "function") lsPlay(l); });
   if (typeof lsPosters === "function") lsPosters(box);                  // обложка — через ядро (в сети сайта домен не открывается)
 }
+/* id заголовка переезжает на вложенный span: код меняет текст в нём и не затирает кнопки «?», «жучок» и «лампочку» */
+function hbSpan(h) { if (h.id) { const sp = document.createElement("span"); sp.id = h.id; h.removeAttribute("id"); sp.append(...h.childNodes); h.appendChild(sp); } }
 $$("main section[id^='p-']").forEach(s => {
   const k = s.id.slice(2), h = s.querySelector("h1"); if (!h || !(window.DEWIAR_HELP || {})[k]) return;
-  if (h.id) { const sp = document.createElement("span"); sp.id = h.id; h.removeAttribute("id"); sp.append(...h.childNodes); h.appendChild(sp); }   // id переезжает на вложенный span: код меняет текст в нём и не затирает кнопку «?»
+  hbSpan(h);
   const b = document.createElement("button"); b.className = "hbtn"; b.textContent = "?"; b.title = "Как работает этот раздел";
   b.onclick = (e) => { e.stopPropagation(); showHelp(k); }; h.appendChild(b);
 });
@@ -119,7 +122,7 @@ const HB_BUG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8.5a4 4 
 const HB_IDEA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>';
 async function hbBug(name) {
   let pv = "";
-  try { const x = await core.call("bug_shot"); if (x && x.ok) pv = x.preview; } catch (e) { /* без снимка — тоже можно */ }
+  try { const x = await core.shot(); if (x && x.ok) pv = x.preview; } catch (e) { /* без снимка — тоже можно */ }
   if (typeof bugFocus === "function") bugFocus(pv);
   const n = $("#rep-note"); if (n && name && !n.value.trim()) n.value = `Раздел «${name}»: `;
 }
@@ -128,7 +131,10 @@ async function hbBug(name) {
     hbBug(cur && k !== "about" && k !== "home" ? cur.textContent.trim() : ""); }; } }
 $$("main section[id^='p-']").forEach(s => {
   const k = s.id.slice(2), h = s.querySelector("h1"); if (!h || k === "about" || k === "ideas") return;
-  const nav = $(`nav button[data-p="${k}"]`), name = nav ? nav.textContent.trim() : "";
+  // №557 (05.11): «не нашёл „жучка“ на главной» — у «Главной» заголовок «Доброе утро, …» (h1#hm-greet) каждый раз
+  // переписывается целиком (home.js hmRender) и стирал кнопки. Теперь текст — в своём span, кнопки остаются
+  hbSpan(h);
+  const nav = $(`nav button[data-p="${k}"]`), name = k === "home" ? "" : nav ? nav.textContent.trim() : "";
   const mk = (cls, svg, title, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "hbtn hb-x " + cls; b.innerHTML = svg; b.title = title;
     b.setAttribute("aria-label", title); b.onclick = (e) => { e.stopPropagation(); fn(); }; h.appendChild(b); };
   mk("hb-bug", HB_BUG, "Сообщить о проблеме в этом разделе — со снимком экрана", () => hbBug(name));

@@ -44,12 +44,31 @@ PALETTES = {
               "accent_ink": "#FFFFFF", "dark": "#33141E", "dark_ink": "#FFF7F3", "accent2": "#F2B84B", "line": "#F2D6CD"},
     "night": {"title": "Ночь", "bg": "#101626", "surface": "#182036", "ink": "#E8ECF6", "muted": "#A3ACC2", "accent": "#8EA2FF",
               "accent_ink": "#101626", "dark": "#0A0F1C", "dark_ink": "#E8ECF6", "accent2": "#F5C26B", "line": "#252F4A"},
+    # 05.11 (владелец: «ещё шаблоны и более разнообразные») — палитры новых шаблонов
+    "pulse": {"title": "Пульс", "bg": "#F2F2EE", "surface": "#E4E5DF", "ink": "#14161B", "muted": "#50545C", "accent": "#FF5A1F",
+              "accent_ink": "#14161B", "dark": "#14161B", "dark_ink": "#F2F2EE", "accent2": "#2F5BFF", "line": "#D3D5CD"},
+    "aqua": {"title": "Аква", "bg": "#F6FAFB", "surface": "#E4F0F3", "ink": "#0D2B35", "muted": "#476670", "accent": "#12708C",
+             "accent_ink": "#FFFFFF", "dark": "#0D2B35", "dark_ink": "#F6FAFB", "accent2": "#F3B49B", "line": "#D2E3E8"},
+    "crayon": {"title": "Мелки", "bg": "#FFFAF0", "surface": "#FFEFC7", "ink": "#2A2154", "muted": "#5A5480", "accent": "#5B3FD6",
+               "accent_ink": "#FFFFFF", "dark": "#2A2154", "dark_ink": "#FFFAF0", "accent2": "#FF7B47", "line": "#F1DFAF"},
+    "garage": {"title": "Гараж", "bg": "#1A1F26", "surface": "#232A33", "ink": "#EDF0F3", "muted": "#A3ABB5", "accent": "#FF7A1A",
+               "accent_ink": "#1A1F26", "dark": "#10141A", "dark_ink": "#EDF0F3", "accent2": "#5FA8FF", "line": "#313A45"},
+    "garden": {"title": "Сад", "bg": "#F8F6F1", "surface": "#ECE8DE", "ink": "#1F2A26", "muted": "#58625C", "accent": "#2C4A3E",
+               "accent_ink": "#F8F6F1", "dark": "#1F2A26", "dark_ink": "#F8F6F1", "accent2": "#C29B5F", "line": "#DDD8CB"},
+    "brick": {"title": "Кирпич", "bg": "#F6F4F1", "surface": "#EBE6DF", "ink": "#22262B", "muted": "#5B5F65", "accent": "#9C3F2A",
+              "accent_ink": "#FFFFFF", "dark": "#22262B", "dark_ink": "#F6F4F1", "accent2": "#3E6B78", "line": "#DCD5CC"},
+    "lagoon": {"title": "Лагуна", "bg": "#FBF6EC", "surface": "#F1E6D1", "ink": "#0F2A3B", "muted": "#4A5D69", "accent": "#0A6C96",
+               "accent_ink": "#FFFFFF", "dark": "#0F2A3B", "dark_ink": "#FBF6EC", "accent2": "#EE8648", "line": "#E5D7BC"},
+    "apricot": {"title": "Абрикос", "bg": "#FFF9F0", "surface": "#FDEBD3", "ink": "#2B2620", "muted": "#66594A", "accent": "#E8702A",
+                "accent_ink": "#2B2620", "dark": "#1F3A3A", "dark_ink": "#FFF9F0", "accent2": "#1F7A7A", "line": "#F1DCC0"},
+    "vanilla": {"title": "Ваниль", "bg": "#FDF6EC", "surface": "#F5E4CC", "ink": "#3A2820", "muted": "#6F5A4D", "accent": "#3A2820",
+                "accent_ink": "#FDF6EC", "dark": "#3A2820", "dark_ink": "#FDF6EC", "accent2": "#E58BA3", "line": "#EAD5B8"},
 }
 COLOR_KEYS = ("bg", "surface", "ink", "muted", "accent", "accent_ink", "dark", "dark_ink", "accent2", "line")
 
 # ---------- шрифты ----------
-# Вшитые (OFL, лежат в ui/assets/fonts, на опубликованный сайт уходят только нужные): Lora, Manrope, Unbounded —
-# у всех есть кириллица. Остальное — системные стеки (ничего не грузится).
+# Вшитые (OFL, лежат в ui/assets/fonts, на опубликованный сайт уходят только нужные): Lora, Manrope, Unbounded, а с 05.11 —
+# Oswald (узкий, «вывеска»), Cormorant (праздничные засечки), Nunito (округлый); у всех есть кириллица. Остальное — системные стеки (ничего не грузится).
 SANS = '"Manrope", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'
 SYS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 SERIF_SYS = 'Georgia, "Times New Roman", "PT Serif", Times, serif'
@@ -63,6 +82,12 @@ FONTS = {
              "scale": .84, "files": ["unbounded", "manrope"]},
     "classic": {"title": "Классический", "sub": "Georgia + системный", "head": SERIF_SYS, "body": SYS, "hw": 700, "track": "0", "files": []},
     "light": {"title": "Лёгкий", "sub": "системный, без загрузки", "head": SYS, "body": SYS, "hw": 700, "track": "-0.02em", "files": []},
+    "sport": {"title": "Вывеска", "sub": "узкий Oswald + Manrope", "head": '"Oswald", "Arial Narrow", ' + SANS, "body": SANS, "hw": 600,
+              "track": "0", "scale": 1.1, "scale3": 1.08, "files": ["oswald", "manrope"]},
+    "elegant": {"title": "Праздничный", "sub": "Cormorant + Manrope", "head": '"Cormorant", Georgia, serif', "body": SANS, "hw": 600,
+                "track": "-0.005em", "scale": 1.14, "scale3": 1.22, "files": ["cormorant", "manrope"]},
+    "round": {"title": "Дружелюбный", "sub": "округлый Nunito", "head": '"Nunito", ' + SANS, "body": '"Nunito", ' + SANS, "hw": 800,
+              "track": "-0.015em", "files": ["nunito"]},
 }
 # файлы шрифтов: (имя на сайте, файл в ui/assets/fonts, семейство, стиль, unicode-range)
 _CYR = "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116"
@@ -77,6 +102,12 @@ FONT_FILES = {
                 ("manrope-lat.woff2", "manrope-latin-wght-normal.woff2", "Manrope", "normal", _LAT)],
     "unbounded": [("unbounded-cyr.woff2", "unbounded-cyrillic-wght-normal.woff2", "Unbounded", "normal", _CYR),
                   ("unbounded-lat.woff2", "unbounded-latin-wght-normal.woff2", "Unbounded", "normal", _LAT)],
+    "oswald": [("oswald-cyr.woff2", "oswald-cyrillic-wght-normal.woff2", "Oswald", "normal", _CYR),
+               ("oswald-lat.woff2", "oswald-latin-wght-normal.woff2", "Oswald", "normal", _LAT)],
+    "cormorant": [("cormorant-cyr.woff2", "cormorant-cyrillic-wght-normal.woff2", "Cormorant", "normal", _CYR),
+                  ("cormorant-lat.woff2", "cormorant-latin-wght-normal.woff2", "Cormorant", "normal", _LAT)],
+    "nunito": [("nunito-cyr.woff2", "nunito-cyrillic-wght-normal.woff2", "Nunito", "normal", _CYR),
+               ("nunito-lat.woff2", "nunito-latin-wght-normal.woff2", "Nunito", "normal", _LAT)],
 }
 RADII = {"sharp": {"title": "Строгие углы", "r": 2, "btn": 2}, "soft": {"title": "Мягкие", "r": 12, "btn": 10},
          "round": {"title": "Круглые", "r": 26, "btn": 999}}
@@ -129,8 +160,19 @@ MARKS = {
     "shield": ("Щит", '<path d="M12 3 4.5 6v6c0 4.5 3.2 7.8 7.5 9 4.3-1.2 7.5-4.5 7.5-9V6z"/><path d="M8.8 12l2.2 2.2 4.2-4.4"/>'),
     "truck": ("Доставка", '<path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3.2v2.8h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'),
     "gift": ("Подарок", '<path d="M4 11h16v9.5H4zM3 7.5h18V11H3zM12 7.5v13"/><path d="M12 7.5C10.5 4 7 3.5 7 5.8 7 7.2 9.5 7.5 12 7.5zM12 7.5c1.5-3.5 5-4 5-1.7 0 1.4-2.5 1.7-5 1.7z"/>'),
+    "key": ("Ключ от дома", '<circle cx="7.5" cy="15.5" r="4"/><path d="M10.4 12.6 20 3M15.8 7.2l2.6 2.6M18.4 4.6 21 7.2"/>'),
+    "car": ("Машина", '<path d="M5 11l1.6-4.2A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.9 1.3L19 11"/><rect x="3" y="11" width="18" height="6" rx="2"/><path d="M5.5 17v2.5M18.5 17v2.5"/><circle cx="7.5" cy="14" r="1"/><circle cx="16.5" cy="14" r="1"/>'),
+    "rings": ("Кольца", '<circle cx="9" cy="14.5" r="5.5"/><circle cx="15" cy="14.5" r="5.5"/><path d="M13 5.6 15 3l2 2.6-2 2.4z"/>'),
+    "cake": ("Торт", '<path d="M3.5 20.5h17M5 20.5V14h14v6.5"/><path d="M5 16.6c1.2 1 2.3 1 3.5 0s2.3-1 3.5 0 2.3 1 3.5 0 2.3-1 3.5 0"/><path d="M7.5 14v-3h9v3M12 11V8.4"/><path d="M12 4c.9 1 .9 2 0 3-.9-1-.9-2 0-3z"/>'),
+    "compass": ("Компас", '<circle cx="12" cy="12" r="9"/><path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z"/>'),
+    "mountain": ("Горы", '<path d="M2.5 19.5 9.5 7l4.2 7.4L16 11l5.5 8.5z"/><path d="M7.6 10.4 9.5 11.6l1.8-1.2"/>'),
+    "blocks": ("Кубики", '<rect x="3.5" y="12" width="8" height="8" rx="1.2"/><rect x="12.5" y="12" width="8" height="8" rx="1.2"/><rect x="8" y="4" width="8" height="8" rx="1.2"/>'),
 }
 MARK_TITLES = {k: v[0] for k, v in MARKS.items()}
+# узоры вместо фото (sites_render.art_svg) — у каждого шаблона свой мотив
+ARTS = {"beans": "Зёрна", "arches": "Арки", "frames": "Рамки", "dots": "Точки", "blocks": "Фигуры", "rings": "Круги", "stripes": "Полосы",
+        "grid": "Сетка", "pulse": "Пульс", "pebbles": "Галька", "confetti": "Конфетти", "hazard": "Сигнальные полосы", "botanic": "Ветви",
+        "plan": "Планировка", "horizon": "Горизонт", "spots": "Пятна", "sprinkles": "Посыпка"}
 LOGO_STYLES = {"badge": "Знак в круге", "plain": "Знак и надпись", "mono": "Буква", "text": "Только надпись"}
 
 
@@ -159,7 +201,7 @@ BLOCKS = {
                  "fields": [("title", "Заголовок", "line"), ("text", "Вступление", "text")],
                  "items": ([("title", "Услуга", "line"), ("text", "Описание", "text"), ("price", "Цена", "line"), ("mark", "Знак", "mark")], "Добавить услугу")},
     "prices": {"title": "Цены", "sub": "меню, прайс или тарифы",
-               "variants": {"menu": "Меню с точками", "plans": "Тарифы колонками", "table": "Таблица"},
+               "variants": {"menu": "Меню с точками", "plans": "Тарифы колонками", "table": "Таблица", "tabs": "Вкладки по разделам"},
                "fields": [("title", "Заголовок", "line"), ("text", "Вступление", "text")] + _BTN,
                "items": ([("group", "Раздел (необязательно)", "line"), ("title", "Название", "line"), ("text", "Описание", "line"),
                           ("price", "Цена", "line"), ("featured", "Выделить", "flag")], "Добавить позицию")},
@@ -172,7 +214,7 @@ BLOCKS = {
               "fields": [("title", "Заголовок", "line"), ("text", "Вступление", "text")],
               "items": ([("title", "Шаг", "line"), ("text", "Пояснение", "text")], "Добавить шаг")},
     "gallery": {"title": "Галерея", "sub": "фото работ, интерьера, товаров",
-                "variants": {"grid": "Сетка", "mosaic": "Мозаика", "strip": "Лента"},
+                "variants": {"grid": "Сетка", "mosaic": "Мозаика", "strip": "Лента", "pairs": "До и после (фото парами)"},
                 "fields": [("title", "Заголовок", "line"), ("text", "Подпись", "text")],
                 "items": ([("image", "Фото", "image"), ("caption", "Подпись", "line")], "Добавить фото")},
     "products": {"title": "Товары", "sub": "витрина с ценами",
@@ -525,20 +567,355 @@ TEMPLATES = {
                 button="Получить смету", ask_message=True, thanks="Спасибо! Перезвоним сегодня."),
             blk("contacts", "band", "base", nav="Контакты", title="Связаться", text="Работаем по городу и области."),
         ]}]},
+    # ---------- 05.11: ещё девять — у каждого свой характер (палитра, шрифт, вёрстка, узор) ----------
+    "fitness": {
+        "title": "Фитнес, тренер", "sub": "энергичный: смелый шрифт, тёмная обложка, абонементы и «до и после»", "palette": "pulse", "fonts": "bold",
+        "radius": "sharp", "menu": "top", "header": "dark", "art": "pulse", "logo": {"mark": "dumbbell", "style": "badge"},
+        "name": "Пульс", "tagline": "студия функционального тренинга",
+        "contacts": {"phone": "+7 900 000-00-00", "address": "ул. Спортивная, 14", "hours": "Пн–Пт 7:00–22:00, Сб–Вс 9:00–20:00", "telegram": "@puls_studio"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "photo", "dark", title="Тренировки, после которых хочется вернуться",
+                text="Малые группы до 8 человек — тренер видит каждого. Первая тренировка бесплатно: подберём нагрузку под вашу форму.",
+                note="ул. Спортивная, 14 · с 7 утра", button="Записаться на пробную", button_to="lead", button2="Расписание", button2_to="#schedule"),
+            blk("features", "big", "base", title="Почему у нас получается", items=[
+                it(title="Группы до 8 человек", text="Тренер поправит технику каждому, а не только тем, кто впереди", mark="dumbbell"),
+                it(title="План под вас", text="Замеры и цель — на первой встрече, дальше проверяем прогресс раз в месяц", mark="check"),
+                it(title="С 7 утра", text="Успеть до работы — и весь день чувствовать себя бодрее", mark="clock")]),
+            blk("schedule", "days", "alt", nav="Расписание", id="schedule", title="Расписание", text="Занятия по 55 минут. Записаться — в Telegram или формой ниже.", items=[
+                it(time="Пн, Ср, Пт · 7:30", title="Функциональный тренинг", text="Выносливость, кор и координация"),
+                it(time="Вт, Чт · 19:00", title="Силовая в малой группе", text="Штанга и гантели с постановкой техники"),
+                it(time="Сб · 10:00", title="Растяжка и мобильность", text="Спина, плечи, тазобедренные суставы"),
+                it(time="Каждый день", title="Персональные тренировки", text="Один на один, в удобное время")]),
+            blk("prices", "plans", "base", nav="Абонементы", title="Абонементы", items=[
+                it(title="Разовое", text="одно групповое занятие", price="800 ₽"),
+                it(title="8 занятий", text="на месяц, любые группы", price="5 600 ₽", featured=True),
+                it(title="Персонально", text="тренировка один на один", price="2 500 ₽")], button="Выбрать", button_to="lead"),
+            blk("gallery", "pairs", "alt", nav="Результаты", title="Результаты", text="Фото «до» и «после» — только с согласия наших учеников.", items=[
+                it(caption="Три месяца, минус 9 кг"), it(caption=""), it(caption="Полгода силовых"), it(caption="")]),
+            blk("steps", "line", "base", title="Как начать", items=[
+                it(title="Заявка", text="Оставьте телефон — перезвоним в течение часа"),
+                it(title="Пробная тренировка", text="Бесплатно, с замерами и разговором о цели"),
+                it(title="Свой план", text="Подберём группу, время и абонемент")]),
+            blk("faq", "list", "alt", nav="Вопросы", title="Вопросы", items=[
+                it(q="Я никогда не занимался — подойдёт?", a="Да. Нагрузку подбираем под вашу форму, технику ставим с нуля."),
+                it(q="Что взять с собой?", a="Удобную одежду, кроссовки и воду. Полотенце дадим."),
+                it(q="Можно заморозить абонемент?", a="Да, один раз до 14 дней — на болезнь или отпуск.")]),
+            blk("lead", "split", "dark", nav="Запись", title="Запишитесь на пробную тренировку", text="Это бесплатно. Перезвоним и подберём удобное время.",
+                button="Записаться", thanks="Спасибо! Перезвоним в течение часа."),
+            blk("contacts", "band", "base", nav="Контакты", title="Как нас найти", text="Вход со двора, второй этаж. Есть душевые, шкафчики и парковка."),
+        ]}]},
+    "dental": {
+        "title": "Стоматология", "sub": "спокойная аква, засечки, цены вкладками и «до и после»", "palette": "aqua", "fonts": "warm", "radius": "round",
+        "menu": "top", "header": "light", "art": "pebbles", "logo": {"mark": "tooth", "style": "plain"},
+        "name": "Белая линия", "tagline": "стоматология",
+        "contacts": {"phone": "+7 900 000-00-00", "address": "ул. Гагарина, 21", "hours": "Пн–Сб 9:00–21:00", "email": "clinic@example.ru"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "split", "base", title="Лечим зубы спокойно и без боли",
+                text="Современная анестезия, план лечения с ценой до начала и врачи, которые объясняют каждый шаг.",
+                note="ул. Гагарина, 21 · Пн–Сб с 9 до 21", button="Записаться на осмотр", button_to="lead", button2="Цены", button2_to="#prices"),
+            blk("services", "cards", "alt", nav="Услуги", title="Что лечим", items=[
+                it(title="Лечение кариеса", text="Пломбы, лечение каналов под микроскопом", mark="tooth"),
+                it(title="Гигиена", text="Чистка ультразвуком и Air Flow, фторирование", mark="spark"),
+                it(title="Имплантация", text="План на 3D-снимке, импланты с гарантией", mark="shield"),
+                it(title="Детский приём", text="Врачи, которые умеют договариваться с детьми", mark="sun"),
+                it(title="Ортодонтия", text="Брекеты и элайнеры для взрослых и детей", mark="check"),
+                it(title="Протезирование", text="Коронки, виниры и съёмные протезы", mark="star")]),
+            blk("prices", "tabs", "base", nav="Цены", id="prices", title="Цены", text="Точную стоимость назовём после осмотра — и запишем её в план лечения.", items=[
+                it(group="Терапия", title="Консультация и план лечения", price="0 ₽"), it(group="Терапия", title="Лечение кариеса", text="с пломбой", price="от 4 500 ₽"),
+                it(group="Терапия", title="Лечение канала", text="под микроскопом", price="от 9 000 ₽"),
+                it(group="Гигиена", title="Профессиональная чистка", text="ультразвук и Air Flow", price="4 900 ₽"),
+                it(group="Гигиена", title="Отбеливание", price="от 15 000 ₽"),
+                it(group="Имплантация", title="Имплант под ключ", text="с коронкой", price="от 45 000 ₽"),
+                it(group="Имплантация", title="Синус-лифтинг", price="от 25 000 ₽"),
+                it(group="Детям", title="Лечение молочного зуба", price="от 3 000 ₽"), it(group="Детям", title="Герметизация фиссур", price="1 500 ₽")]),
+            blk("features", "split", "alt", title="Без страха и сюрпризов", text="Знаем, как непросто прийти к стоматологу. Поэтому всё объясняем заранее.", items=[
+                it(title="Без боли", text="Анестезия, которую вы почти не почувствуете", mark="heart"),
+                it(title="Цена до начала", text="План лечения со стоимостью — до первого укола", mark="check"),
+                it(title="Гарантия", text="До 5 лет на пломбы, коронки и импланты", mark="shield")]),
+            blk("gallery", "pairs", "base", nav="Работы", title="До и после", text="Работы наших врачей — с согласия пациентов.", items=[
+                it(caption="Виниры на шесть зубов"), it(caption=""), it(caption="Отбеливание"), it(caption="")]),
+            blk("team", "cards", "alt", nav="Врачи", title="Врачи", text="Расскажите о врачах — фото, опыт и специализацию.", items=[
+                it(name="Имя врача", role="Стоматолог-терапевт, стаж … лет", todo=True), it(name="Имя врача", role="Хирург-имплантолог, стаж … лет", todo=True),
+                it(name="Имя врача", role="Детский стоматолог, стаж … лет", todo=True)]),
+            blk("faq", "two", "base", nav="Вопросы", title="Вопросы", items=[
+                it(q="Больно ли лечить зубы?", a="Нет: делаем анестезию и ждём, пока она подействует. Станет неприятно — остановимся."),
+                it(q="Можно ли в рассрочку?", a="Да, без переплаты на срок до 12 месяцев."),
+                it(q="Дадите справку для налогового вычета?", a="Да, вернуть можно 13% стоимости лечения."),
+                it(q="С какого возраста принимаете детей?", a="С 3 лет. Первый визит — знакомство с врачом, без лечения.")]),
+            blk("lead", "card", "accent", nav="Запись", title="Запишитесь на осмотр", text="Перезвоним в течение 15 минут и подберём удобное время.",
+                button="Записаться", ask_message=True, thanks="Спасибо! Администратор перезвонит в течение 15 минут."),
+            blk("contacts", "split", "base", nav="Контакты", title="Как добраться", text="Пять минут пешком от остановки «Гагарина». Парковка у входа."),
+        ]}]},
+    "kids": {
+        "title": "Детский центр, репетитор", "sub": "мелки и конфетти, округлый шрифт, занятия и расписание", "palette": "crayon", "fonts": "round",
+        "radius": "round", "menu": "top", "header": "light", "art": "confetti", "logo": {"mark": "blocks", "style": "badge"},
+        "name": "Карандаш", "tagline": "детский развивающий центр",
+        "contacts": {"phone": "+7 900 000-00-00", "address": "ул. Школьная, 3", "hours": "Пн–Сб 9:00–20:00", "telegram": "@karandash_center"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "split", "base", title="Здесь дети учатся с удовольствием",
+                text="Подготовка к школе, английский, рисование и логопед — для детей от 3 до 10 лет. Группы до 6 человек.",
+                note="ул. Школьная, 3 · пробное занятие бесплатно", button="Записать ребёнка", button_to="lead", button2="Занятия", button2_to="#classes"),
+            blk("services", "cards", "alt", nav="Занятия", id="classes", title="Занятия", items=[
+                it(title="Подготовка к школе", text="Чтение, счёт и письмо, 5–7 лет", price="от 600 ₽ за занятие", mark="book"),
+                it(title="Английский", text="Через игры и песни, с 4 лет", price="от 650 ₽", mark="chat"),
+                it(title="Рисование и лепка", text="Акварель, гуашь, пластилин, с 3 лет", price="от 550 ₽", mark="brush"),
+                it(title="Логопед", text="Индивидуально, 30 минут", price="1 200 ₽", mark="mic"),
+                it(title="Шахматы", text="Логика и усидчивость, с 5 лет", price="от 500 ₽", mark="blocks"),
+                it(title="Продлёнка", text="После школы: уроки, обед и прогулка", price="от 9 000 ₽ в месяц", mark="home")]),
+            blk("features", "icons", "base", title="Почему родители выбирают нас", items=[
+                it(title="Маленькие группы", text="До 6 детей — педагог видит каждого", mark="heart"),
+                it(title="Отчёт после занятия", text="Фото и пара слов — вам в мессенджер", mark="chat"),
+                it(title="Безопасно", text="Охрана и камеры, ребёнка отдаём только вам", mark="shield"),
+                it(title="Рядом со школой", text="Заберём после уроков сами", mark="pin")]),
+            blk("schedule", "days", "alt", nav="Расписание", title="Расписание на неделю", items=[
+                it(time="Пн и Ср", title="Подготовка к школе", text="17:00 и 18:00"),
+                it(time="Вт и Чт", title="Английский", text="16:30 — младшие, 17:30 — старшие"),
+                it(time="Пятница", title="Рисование и лепка", text="17:00"),
+                it(time="Суббота", title="Шахматы", text="11:00")]),
+            blk("prices", "plans", "base", nav="Цены", title="Абонементы", items=[
+                it(title="Пробное", text="первое занятие — познакомиться", price="0 ₽"),
+                it(title="8 занятий", text="любое направление на месяц", price="4 400 ₽", featured=True),
+                it(title="Безлимит", text="все групповые занятия месяца", price="9 900 ₽")], button="Записаться", button_to="lead"),
+            blk("faq", "list", "alt", nav="Вопросы", title="Вопросы родителей", items=[
+                it(q="С какого возраста можно прийти?", a="С 3 лет — на рисование и лепку, с 4 — на английский, с 5 — на подготовку к школе."),
+                it(q="Можно посидеть на занятии?", a="На пробном — да. Потом дети занимаются без родителей: так им легче включиться."),
+                it(q="Что, если ребёнок заболел?", a="Пропущенное по болезни занятие перенесём на другой день.")]),
+            blk("lead", "split", "dark", nav="Запись", title="Запишите ребёнка на пробное занятие", text="Расскажите возраст и что ребёнку интересно — подберём группу.",
+                button="Записаться", ask_message=True, thanks="Спасибо! Перезвоним сегодня и подберём группу."),
+            blk("contacts", "split", "base", nav="Контакты", title="Где мы", text="Первый этаж жилого дома, отдельный вход с колясочным пандусом."),
+        ]}]},
+    "auto": {
+        "title": "Автосервис", "sub": "тёмный индустриальный, узкий шрифт-вывеска, цены вкладками", "palette": "garage", "fonts": "sport",
+        "radius": "sharp", "menu": "top", "header": "dark", "art": "hazard", "logo": {"mark": "car", "style": "badge"},
+        "name": "Гараж 24", "tagline": "автосервис",
+        "contacts": {"phone": "+7 900 000-00-00", "address": "ул. Промышленная, 7", "hours": "Ежедневно 8:00–22:00", "whatsapp": "+7 900 000-00-00"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "split", "base", title="Ремонт без «а ещё вот это надо»",
+                text="Диагностика за 30 минут, смета до начала работ и запчасти, которые вы видите в чеке. Иномарки и отечественные.",
+                note="ул. Промышленная, 7 · ежедневно с 8 до 22", button="Записаться на ремонт", button_to="lead", button2="Позвонить", button2_to="phone"),
+            blk("services", "rows", "alt", nav="Услуги", title="Что делаем", items=[
+                it(title="Техобслуживание", text="Масло, фильтры и проверка машины по 40 пунктам", price="от 2 500 ₽"),
+                it(title="Ходовая", text="Подвеска, рулевое, развал-схождение", price="от 1 500 ₽"),
+                it(title="Тормоза", text="Колодки, диски, замена жидкости", price="от 1 200 ₽"),
+                it(title="Диагностика", text="Компьютерная и ходовой части — с отчётом", price="от 900 ₽"),
+                it(title="Шиномонтаж", text="Сезонная замена и хранение колёс", price="от 2 000 ₽")]),
+            blk("prices", "tabs", "base", nav="Цены", id="prices", title="Цены на работы", text="Запчасти — по чеку; можно привезти свои.", items=[
+                it(group="ТО", title="Замена масла двигателя", price="800 ₽"), it(group="ТО", title="Замена воздушного фильтра", price="300 ₽"),
+                it(group="ТО", title="ТО-1 под ключ", text="масло, фильтры, проверка", price="от 3 500 ₽"),
+                it(group="Ходовая", title="Замена передних колодок", price="1 200 ₽"), it(group="Ходовая", title="Развал-схождение", price="1 800 ₽"),
+                it(group="Ходовая", title="Замена амортизатора", price="от 1 500 ₽"),
+                it(group="Шины", title="Шиномонтаж R13–R16", text="четыре колеса с балансировкой", price="2 000 ₽"),
+                it(group="Шины", title="Хранение колёс", text="сезон", price="3 000 ₽")]),
+            blk("features", "split", "alt", title="Почему нам доверяют машину", items=[
+                it(title="Смета до работ", text="Без вашего согласия ничего не меняем", mark="check"),
+                it(title="Старые запчасти — вам", text="Покажем, что сняли и почему", mark="wrench"),
+                it(title="Гарантия полгода", text="На все работы и наши запчасти", mark="shield")]),
+            blk("steps", "line", "base", nav="Как работаем", title="Как проходит ремонт", items=[
+                it(title="Запись", text="Перезвоним и подберём время"), it(title="Диагностика", text="30 минут, при вас"),
+                it(title="Смета", text="Согласуем каждую позицию"), it(title="Ремонт", text="Фото и видео — в мессенджер"),
+                it(title="Выдача", text="Проверим машину вместе")]),
+            blk("gallery", "grid", "alt", nav="Сервис", title="Наш сервис", items=[it(caption="Шесть подъёмников"), it(caption="Зона ожидания с кофе"),
+                                                                                it(caption="Шиномонтаж и хранение колёс")]),
+            blk("lead", "split", "accent", nav="Запись", title="Запишитесь на ремонт", text="Марка, модель и что беспокоит — перезвоним с ценой и временем.",
+                button="Записаться", ask_message=True, thanks="Спасибо! Мастер перезвонит в течение 20 минут."),
+            blk("contacts", "split", "base", nav="Контакты", title="Как проехать", text="С Объездного шоссе — второй поворот направо после заправки."),
+        ]}]},
+    "wedding": {
+        "title": "Свадьбы, праздники", "sub": "праздничные засечки, ветви и золото, меню по центру", "palette": "garden", "fonts": "elegant",
+        "radius": "sharp", "menu": "center", "header": "light", "art": "botanic", "logo": {"mark": "rings", "style": "plain"},
+        "name": "Белый сад", "tagline": "свадьбы и выездные регистрации",
+        "contacts": {"phone": "+7 900 000-00-00", "email": "hello@example.ru", "telegram": "@belyi_sad"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "center", "base", title="Свадьба, на которой отдыхаете вы сами",
+                text="Берём на себя площадку, декор, подрядчиков и тайминг дня. Вам остаётся выбирать и радоваться.",
+                note="Москва и Подмосковье · открыт сезон 2027", button="Обсудить свадьбу", button_to="lead", button2="Пакеты", button2_to="#packages"),
+            blk("about", "split", "alt", nav="О нас", title="Девять лет делаем свадьбы",
+                text="На 20–150 гостей: от камерных ужинов до праздников в загородных усадьбах.\n\n"
+                     "Начинаем со встречи, где слушаем вашу историю, и только потом предлагаем концепцию, бюджет и площадки."),
+            blk("services", "rows", "base", nav="Пакеты", id="packages", title="Пакеты", items=[
+                it(title="Координация дня", text="Ведём день по таймингу — вы не думаете о деталях", price="от 40 000 ₽"),
+                it(title="Частичная организация", text="Подбор подрядчиков, смета и координация", price="от 120 000 ₽"),
+                it(title="Свадьба под ключ", text="Концепция, площадка, декор, подрядчики и сам день", price="от 250 000 ₽"),
+                it(title="Выездная регистрация", text="Арка, церемония и ведущий церемонии", price="от 60 000 ₽")]),
+            blk("gallery", "mosaic", "alt", nav="Свадьбы", title="Наши свадьбы", items=[
+                it(caption="Церемония у озера"), it(caption="Ужин в оранжерее"), it(caption="Букет невесты"), it(caption="Декор зала"), it(caption="Первый танец")]),
+            blk("steps", "list", "base", nav="Как готовим", title="Как мы готовим свадьбу", items=[
+                it(title="Знакомство", text="Встреча или видеозвонок: идея, дата, бюджет"),
+                it(title="Концепция", text="Стиль, палитра и площадки на выбор"),
+                it(title="Подготовка", text="Договоры с подрядчиками, общий чат и смета по статьям"),
+                it(title="День свадьбы", text="Координаторы на месте с утра и до последнего гостя")]),
+            blk("faq", "two", "alt", nav="Вопросы", title="Вопросы", items=[
+                it(q="За сколько начинать подготовку?", a="Лучше за 6–9 месяцев: популярные площадки бронируют заранее. Камерную свадьбу успеем за два месяца."),
+                it(q="Можно со своими подрядчиками?", a="Да. Подключим вашего фотографа или ведущего и впишем их в тайминг."),
+                it(q="Как складывается бюджет?", a="Смета по статьям: стоимость каждого подрядчика и наш гонорар — отдельными строками."),
+                it(q="Работаете в других городах?", a="Да, проведём свадьбу в любом городе России.")]),
+            blk("lead", "card", "dark", nav="Заявка", title="Расскажите о вашей свадьбе", text="Дата, город и примерное число гостей — ответим в течение дня.",
+                button="Отправить", ask_message=True, thanks="Спасибо! Ответим в течение дня."),
+            blk("contacts", "band", "base", nav="Контакты", title="Связаться", text="Встречаемся в студии или по видеосвязи — как удобнее."),
+        ]}]},
+    "realty": {
+        "title": "Недвижимость, риелтор", "sub": "кирпич и графит, планировки вместо фото, объекты с ценами", "palette": "brick", "fonts": "strict",
+        "radius": "sharp", "menu": "top", "header": "light", "art": "plan", "logo": {"mark": "key", "style": "badge"},
+        "name": "Ключ", "tagline": "агентство недвижимости",
+        "contacts": {"phone": "+7 900 000-00-00", "email": "info@example.ru", "address": "пр. Ленина, 55, офис 12", "hours": "Пн–Сб 9:00–20:00"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "split", "base", title="Квартира, в которой вы уверены",
+                text="Проверяем документы и историю квартиры, ведём переговоры и сопровождаем сделку до ключей. Вторичка и новостройки.",
+                note="Комиссию называем до начала работы", button="Подобрать квартиру", button_to="lead", button2="Объекты", button2_to="#objects"),
+            blk("products", "grid", "alt", nav="Объекты", id="objects", title="Сейчас в продаже", text="Нажмите «Посмотреть» — договоримся о показе.",
+                button="Посмотреть", button_to="lead", items=[
+                    it(title="2-комнатная, 54 м²", text="ЖК «Северный», 7 этаж из 12, с ремонтом", price="7 900 000 ₽"),
+                    it(title="Студия, 27 м²", text="Центр, дом сдаётся в 2027 году", price="4 300 000 ₽"),
+                    it(title="3-комнатная, 78 м²", text="Сталинский дом, потолки 3,2 м, тихий двор", price="11 500 000 ₽"),
+                    it(title="Дом, 120 м²", text="Участок 8 соток, газ, 15 км от города", price="9 800 000 ₽")]),
+            blk("services", "cards", "base", nav="Услуги", title="Чем поможем", items=[
+                it(title="Купить", text="Подбор, проверка документов, торг за цену", price="от 50 000 ₽", mark="home"),
+                it(title="Продать", text="Оценка, фото, реклама и показы", price="2% от цены", mark="tag"),
+                it(title="Сдать", text="Проверим жильцов и составим договор", price="50% месячной платы", mark="key"),
+                it(title="Ипотека", text="Подадим заявки сразу в несколько банков", price="бесплатно для клиентов", mark="check")]),
+            blk("steps", "line", "alt", nav="Как работаем", title="Как проходит сделка", items=[
+                it(title="Встреча", text="Обсуждаем задачу, бюджет и сроки"), it(title="Подбор", text="Показы в удобное время"),
+                it(title="Проверка", text="Юрист проверяет документы и историю"), it(title="Сделка", text="Безопасные расчёты через банк"),
+                it(title="Ключи", text="Подписываем акт и передаём ключи")]),
+            blk("about", "facts", "base", nav="О нас", title="Агентство «Ключ»", text="Работаем в городе с 2014 года. Каждую сделку проверяет юрист, "
+                "а договор с нами фиксирует комиссию и сроки.",
+                items=[it(title="с 2014", text="года на рынке"), it(title="Юрист в штате", text="проверяет каждую сделку"),
+                       it(title="Без предоплат", text="комиссия — после сделки")]),
+            blk("faq", "list", "alt", nav="Вопросы", title="Вопросы", items=[
+                it(q="Когда платить комиссию?", a="После подписания договора купли-продажи. Предоплат нет."),
+                it(q="Работаете с ипотекой и маткапиталом?", a="Да: поможем с одобрением и согласуем сделку с банком и Пенсионным фондом."),
+                it(q="Можно продать квартиру с долгом по ипотеке?", a="Да, это обычная сделка — расскажем, как она проходит, на встрече.")]),
+            blk("lead", "split", "dark", nav="Заявка", title="Расскажите, что ищете", text="Район, бюджет и сроки — пришлём подходящие варианты.",
+                button="Подобрать", ask_message=True, thanks="Спасибо! Пришлём варианты сегодня."),
+            blk("contacts", "split", "base", nav="Контакты", title="Офис", text="Бизнес-центр на проспекте Ленина, вход со двора, первый этаж."),
+        ]}]},
+    "travel": {
+        "title": "Туры, экскурсии", "sub": "песок и море, афиша с горизонтом, туры и программа по дням", "palette": "lagoon", "fonts": "editorial",
+        "radius": "round", "menu": "top", "header": "accent", "art": "horizon", "logo": {"mark": "compass", "style": "badge"},
+        "name": "Тропа", "tagline": "авторские туры по России",
+        "contacts": {"phone": "+7 900 000-00-00", "telegram": "@tropa_tours", "email": "go@example.ru"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "poster", "base", title="Тропа", text="Небольшие группы, проверенные маршруты и гиды, которые здесь выросли. Карелия, Алтай, Байкал — от выходных до двух недель.",
+                note="Ближайший выезд — 14 июня · Карелия, 5 дней", button="Выбрать тур", button_to="#tours", button2="Задать вопрос", button2_to="lead"),
+            blk("products", "grid", "alt", nav="Туры", id="tours", title="Туры сезона", text="Цена — за человека: проживание, питание, трансферы и гид.",
+                button="Хочу в тур", button_to="lead", items=[
+                    it(title="Карелия: озёра и шхеры", text="5 дней, июнь–август, байдарки", price="38 000 ₽"),
+                    it(title="Алтай: Чуйский тракт", text="8 дней, на машинах и пешком", price="64 000 ₽"),
+                    it(title="Байкал по льду", text="6 дней, февраль–март", price="72 000 ₽"),
+                    it(title="Выходные в Плёсе", text="2 дня, можно с детьми", price="14 500 ₽")]),
+            blk("schedule", "agenda", "base", nav="Программа", title="Карелия за пять дней", text="Пример программы — так же подробно расписан каждый тур.", items=[
+                it(time="День 1", title="Встреча в Петрозаводске", text="Трансфер на базу, ужин у костра"),
+                it(time="День 2", title="Байдарки по шхерам", text="15 км по воде, обед на острове"),
+                it(time="День 3", title="Рускеала", text="Мраморный каньон и горный парк"),
+                it(time="День 4", title="Свободный день", text="Баня, рыбалка или прогулка по лесу"),
+                it(time="День 5", title="Возвращение", text="Трансфер к поезду к 14:00")]),
+            blk("features", "icons", "alt", title="Почему с нами спокойно", items=[
+                it(title="Группы до 12", text="Успеваем поговорить с каждым", mark="chat"),
+                it(title="Местные гиды", text="Знают тропы, погоду и лучшие виды", mark="compass"),
+                it(title="Всё включено", text="Жильё, еда и трансферы — уже в цене", mark="check"),
+                it(title="Безопасность", text="Страховка и спутниковая связь на маршруте", mark="shield")]),
+            blk("gallery", "strip", "base", nav="Фото", title="С наших маршрутов", items=[
+                it(caption="Рассвет на Онежском озере"), it(caption="Перевал Кату-Ярык"), it(caption="Лёд Байкала"), it(caption="Плёс с высоты")]),
+            blk("faq", "list", "alt", nav="Вопросы", title="Вопросы", items=[
+                it(q="Нужна ли физическая подготовка?", a="Для большинства туров — нет. У каждого тура указана сложность; подскажем, какой подойдёт."),
+                it(q="Что взять с собой?", a="Список вещей пришлём после записи. Палатки и байдарки — наши."),
+                it(q="Можно с детьми?", a="Да, в семейные туры — с 7 лет.")]),
+            blk("lead", "card", "accent", nav="Запись", title="Забронируйте место", text="Мест в группе немного — напишите, какой тур интересен.",
+                button="Забронировать", ask_message=True, thanks="Спасибо! Напишем сегодня и расскажем о туре подробно."),
+        ]}]},
+    "pets": {
+        "title": "Груминг, питомцы", "sub": "абрикосовый и бирюзовый, округлый шрифт, меню цен и «до и после»", "palette": "apricot", "fonts": "round",
+        "radius": "round", "menu": "center", "header": "light", "art": "spots", "logo": {"mark": "paw", "style": "badge"},
+        "name": "Хвост", "tagline": "груминг для собак и кошек",
+        "contacts": {"phone": "+7 900 000-00-00", "address": "ул. Лесная, 9", "hours": "Ежедневно 10:00–21:00", "telegram": "@hvost_groom"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "split", "base", title="Стрижка без стресса — и для питомца, и для вас",
+                text="Груминг собак и кошек любых пород. Работаем без седации, спокойно и с перерывами, если питомец устал.",
+                note="ул. Лесная, 9 · ежедневно с 10 до 21", button="Записать питомца", button_to="lead", button2="Цены", button2_to="#prices"),
+            blk("prices", "menu", "alt", nav="Цены", id="prices", title="Цены", text="Точная цена зависит от породы и состояния шерсти — скажем при записи.", items=[
+                it(group="Собаки", title="Комплекс, мелкие породы", text="мытьё, стрижка, когти, уши", price="от 2 000 ₽", featured=True),
+                it(group="Собаки", title="Комплекс, средние породы", price="от 3 000 ₽"),
+                it(group="Собаки", title="Тримминг", text="для жесткошёрстных пород", price="от 3 500 ₽"),
+                it(group="Кошки", title="Комплекс", text="мытьё, сушка, вычёсывание", price="от 2 500 ₽"),
+                it(group="Кошки", title="Стрижка «под льва»", price="от 3 000 ₽"),
+                it(group="Отдельно", title="Стрижка когтей", price="500 ₽"), it(group="Отдельно", title="Чистка ушей", price="300 ₽")]),
+            blk("features", "big", "base", title="Как мы работаем с питомцем", items=[
+                it(title="Без седации", text="Успокаиваем лаской, лакомством и перерывами", mark="heart"),
+                it(title="Стерильно", text="Инструменты обрабатываем после каждого гостя", mark="shield"),
+                it(title="Вы в курсе", text="Фото и видео процесса — вам в мессенджер", mark="camera")]),
+            blk("gallery", "pairs", "alt", nav="Работы", title="До и после", items=[
+                it(caption="Шпиц, стрижка «мишка»"), it(caption=""), it(caption="Мейн-кун, вычёсывание"), it(caption="")]),
+            blk("steps", "line", "base", title="Первый визит", items=[
+                it(title="Запись", text="Порода, возраст и что нужно сделать"),
+                it(title="Знакомство", text="Даём питомцу привыкнуть к мастеру"),
+                it(title="Груминг", text="С перерывами, без спешки"),
+                it(title="Домой", text="Подскажем, как ухаживать за шерстью")]),
+            blk("faq", "two", "alt", nav="Вопросы", title="Вопросы", items=[
+                it(q="Мой пёс боится стрижки — что делать?", a="Начнём с короткого визита-знакомства без стрижки. Обычно со второго раза питомцы спокойнее."),
+                it(q="Можно остаться рядом?", a="Да, если питомцу так спокойнее. Некоторым, наоборот, легче без хозяина."),
+                it(q="С какого возраста можно стричь щенка?", a="После всех прививок и карантина, обычно с 4 месяцев."),
+                it(q="Сколько длится груминг?", a="От часа до трёх — зависит от породы и шерсти.")]),
+            blk("lead", "split", "dark", nav="Запись", title="Запишите питомца", text="Расскажите породу и что нужно сделать — подберём мастера и время.",
+                button="Записаться", ask_message=True, thanks="Спасибо! Перезвоним и подберём время."),
+            blk("contacts", "split", "base", nav="Контакты", title="Как нас найти", text="Отдельный вход с улицы, рядом — площадка для выгула."),
+        ]}]},
+    "cakes": {
+        "title": "Торты на заказ, кондитер", "sub": "ваниль и шоколад, праздничные засечки, витрина и начинки", "palette": "vanilla", "fonts": "elegant",
+        "radius": "round", "menu": "burger", "header": "light", "art": "sprinkles", "logo": {"mark": "cake", "style": "plain"},
+        "name": "Безе", "tagline": "торты на заказ",
+        "contacts": {"phone": "+7 900 000-00-00", "telegram": "@beze_cakes", "address": "Самовывоз: ул. Цветочная, 16", "hours": "Заказы — с 9:00 до 21:00"},
+        "pages": [{"title": "Главная", "blocks": [
+            blk("hero", "split", "base", title="Торты, которые сначала фотографируют, а потом съедают",
+                text="Пеку на сливочном масле и настоящих сливках, без растительных жиров. Бенто, бисквитные и муссовые торты — к любому празднику.",
+                note="Заказ — за три дня · доставка по городу", button="Заказать торт", button_to="lead", button2="Начинки", button2_to="#fillings"),
+            blk("products", "grid", "alt", nav="Торты", title="Торты и десерты", text="Фото — для примера: каждый торт оформляю под ваш праздник.",
+                button="Заказать", button_to="lead", items=[
+                    it(title="Бенто-торт", text="Ø 11 см, 450 г, надпись по желанию", price="1 500 ₽"),
+                    it(title="Бисквитный торт", text="от 1,5 кг, две начинки на выбор", price="2 600 ₽ за кг"),
+                    it(title="Муссовый торт", text="от 1,2 кг, зеркальная глазурь", price="2 900 ₽ за кг"),
+                    it(title="Капкейки", text="набор из 6 штук", price="1 500 ₽")]),
+            blk("prices", "menu", "base", nav="Начинки", id="fillings", title="Начинки", text="Цена за килограмм; декор — от 500 ₽.", items=[
+                it(group="Бисквитные", title="Шоколад и вишня", price="2 600 ₽"), it(group="Бисквитные", title="Ваниль и клубника", price="2 600 ₽"),
+                it(group="Бисквитные", title="Морковный", text="крем из сливочного сыра, грецкий орех", price="2 700 ₽", featured=True),
+                it(group="Муссовые", title="Три шоколада", price="2 900 ₽"), it(group="Муссовые", title="Манго и маракуйя", price="3 000 ₽")]),
+            blk("steps", "line", "alt", nav="Как заказать", title="Как заказать", items=[
+                it(title="Напишите", text="Дата, повод и сколько будет гостей"), it(title="Обсудим", text="Начинку, вес и оформление"),
+                it(title="Предоплата", text="50% — и дата закреплена за вами"), it(title="Праздник", text="Заберите сами или привезём")]),
+            blk("gallery", "mosaic", "base", nav="Фото", title="Мои торты", items=[
+                it(caption="Свадебный, три яруса"), it(caption="Бенто на день рождения"), it(caption="Капкейки"), it(caption="Детский торт"), it(caption="Муссовый")]),
+            blk("faq", "list", "alt", nav="Вопросы", title="Вопросы", items=[
+                it(q="За сколько дней заказывать?", a="Минимум за три дня, на выходные и праздники — лучше за неделю."),
+                it(q="Можно без сахара или без глютена?", a="Некоторые начинки — да. Напишите, что нельзя, — предложу варианты."),
+                it(q="Как хранить торт?", a="В холодильнике, до трёх суток. Достаньте за 30 минут до подачи.")]),
+            blk("lead", "split", "dark", nav="Заказ", title="Заказать торт", text="Расскажите о празднике — отвечу и пришлю варианты оформления.",
+                button="Отправить", ask_message=True, thanks="Спасибо! Отвечу в течение пары часов."),
+            blk("contacts", "band", "base", nav="Контакты", title="Связаться", text="Доставка по городу — 400 ₽, бесплатно от 5 000 ₽."),
+        ]}]},
 }
-TEMPLATE_ORDER = ["coffee", "salon", "lawyer", "school", "shop", "photo", "clinic", "event", "startup", "personal", "repair"]
+TEMPLATE_ORDER = ["coffee", "salon", "fitness", "dental", "lawyer", "kids", "school", "auto", "shop", "cakes", "photo", "wedding", "clinic",
+                  "realty", "travel", "pets", "event", "startup", "personal", "repair"]
 
-# слова в описании -> шаблон (первый подошедший; ничего — «личная страница», если о человеке, иначе «стартап»)
+# слова в описании -> шаблон (первый подошедший; ничего — «личная страница», если о человеке, иначе «стартап»). Порядок важен:
+# «торты» раньше «кофейни», «стоматология» и «груминг» раньше «клиники», «экскурсии» раньше «курсов» (в слове есть «курс»)
 KIND_WORDS = [
-    ("coffee", r"коф|кафе|ресторан|\bбар\b|пекарн|пицц|суши|столов|кондитер|бургер|чайн|булочн|кулинар|доставк\w* еды|гастро|бистро|кухн"),
+    ("cakes", r"торт|кондитер|капкейк|бенто|пряник|макарон|зефир|десерт\w* на заказ|выпечк\w* на заказ"),
+    ("coffee", r"коф|кафе|ресторан|\bбар\b|пекарн|пицц|суши|столов|бургер|чайн|булочн|кулинар|доставк\w* еды|гастро|бистро|кухн"),
+    ("pets", r"груминг|грумер|зоосалон|зоомагаз|ветеринар|ветклиник|питом|собак|кошек|кошк|щен|котят|кинолог|передержк|животн"),
+    ("dental", r"стоматолог|зуб|дантист|ортодонт|имплантаци|брекет|элайнер"),
     ("salon", r"салон|маникюр|педикюр|парикмах|барбер|косметолог|массаж|бров|ресниц|красот|\bспа\b|ногт|визаж|эпиляц|тату"),
-    ("clinic", r"клиник|врач|стоматолог|медицин|ветеринар|ветклиник|доктор|здоровь|поликлин|медцентр|анализ|лечени"),
-    ("lawyer", r"юрист|юридич|адвокат|консалтинг|бухгалт|нотари|финансов|страхов|риелтор|недвижимост|аудит|налог"),
-    ("school", r"школ|курс|обучени|репетитор|урок|академи|тренинг|вебинар|занятия|преподава|учител|детск\w* центр|развивашк"),
-    ("event", r"мероприят|конференц|фестивал|концерт|свадьб|праздник|вечеринк|митап|выставк|ярмарк|маркет|форум|турнир"),
+    ("fitness", r"фитнес|тренаж|спортзал|спортклуб|\bйог|пилатес|кроссфит|растяжк|бокс|единоборств|танц|стретчинг|персональн\w* тренер|фитнес-тренер|тренер по"),
+    ("clinic", r"клиник|врач|медицин|доктор|здоровь|поликлин|медцентр|анализ|лечени"),
+    ("realty", r"риелтор|риэлтор|недвижимост|новостро|ипотек|агентств\w* недвиж|продаж\w* квартир|аренд\w* квартир"),
+    ("lawyer", r"юрист|юридич|адвокат|консалтинг|бухгалт|нотари|финансов|страхов|аудит|налог"),
+    ("kids", r"детск|развива|репетитор|логопед|дошкол|подготовк\w* к школе|кружок|кружк|продлёнк|продленк|няня|для детей"),
+    ("travel", r"\bтур(?:ы|ов|ам|агент|оператор|изм|ист)?\b|экскурс|путешеств|\bгид\b|поход|сплав|турбаз|глэмпинг|гостев\w* дом|база отдыха"),
+    ("school", r"школ|курс|обучени|урок|академи|тренинг|вебинар|занятия|преподава|учител"),
+    ("wedding", r"свадьб|свадеб|венчан|выездн\w* регистрац|декор\w* (?:зала|праздник|свадьб)|организаци\w* праздник|ведущ\w* (?:свадьб|праздник)"),
+    ("event", r"мероприят|конференц|фестивал|концерт|праздник|вечеринк|митап|выставк|ярмарк|маркет|форум|турнир"),
     ("photo", r"фотограф|портфолио|дизайнер|художни|видеограф|иллюстрат|архитект|фотостуди|видеосъ"),
     ("shop", r"магазин|витрин|товар|интернет-магазин|\bшоп|одежд|цвет(?:ы|ов|очн)|букет|флорист|подарк|сувенир|украшени|мебел\w* на заказ|каталог"),
-    ("repair", r"ремонт|стро(?:ит|йк)|сантехник|электрик|отделк|муж на час|мастер на час|клининг|уборк|шиномонтаж|автосервис|окна|потолк|кровл"),
+    ("auto", r"автосервис|шиномонтаж|автомойк|детейлинг|кузовн|автомастерск|\bсто\b|авторемонт|ремонт\w* (?:авто|машин)|автоэлектр|развал"),
+    ("repair", r"ремонт|стро(?:ит|йк)|сантехник|электрик|отделк|муж на час|мастер на час|клининг|уборк|окна|потолк|кровл"),
     ("startup", r"стартап|\bit\b|сервис|приложени|программ|saas|разработ|платформ|digital|продукт|айти|бот"),
     ("personal", r"личн|о себе|резюме|блогер|визитк|автор|эксперт|психолог|коуч|тренер|наставник|портфолио"),
 ]

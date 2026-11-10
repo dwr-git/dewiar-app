@@ -99,6 +99,7 @@ class Telegram:
         self._stop = threading.Event()
         self._thread = None
         self.problem = ""
+        self._px_skip = 0.0                # до какого времени ходить мимо прокси, просившего логин (407)
         self.last_seen = 0.0
         self.last_in = 0.0                 # когда владелец писал сюда последний раз (куда отвечать, если мессенджеров два)
         self._strangers = set()
@@ -219,12 +220,40 @@ class Telegram:
         """Запрос к Telegram — напрямую или через прокси из настроек (на случай, когда провайдер блокирует Telegram).
         Прокси применяется ко всем запросам этого бота, в том числе к шлюзу общего бота."""
         px = self.data.get("proxy") or None
+        if time.time() < getattr(self, "_px_skip", 0):                      # прокси недавно просил логин (407), а напрямую связь была
+            px = None
+            kw = {**kw, "trust_env": False}
         try:
-            return httpx.request(method, url, proxy=px, **kw) if px else httpx.request(method, url, **kw)
+            r = httpx.request(method, url, proxy=px, **kw) if px else httpx.request(method, url, **kw)
         except ImportError as e:
             raise TelegramError("для SOCKS-прокси нужна библиотека socksio — обновите Dewiar или возьмите HTTP-прокси") from e
         except httpx.ProxyError as e:
-            raise TelegramError(f"прокси не отвечает или не пускает: {e}") from e
+            if "407" not in str(e):
+                raise TelegramError(f"прокси не отвечает или не пускает: {e}") from e
+            return self._past_proxy(method, url, px, kw, e)
+        if r.status_code == 407:                             # адрес http:// — прокси отвечает 407 сам, ответом
+            return self._past_proxy(method, url, px, kw, None)
+        return r
+
+    def _past_proxy(self, method, url, px, kw, err):
+        """407 (10.11: «бот готовит ответ, а при отправке — 407 Proxy Authentication Required»): прокси требует логин —
+        свой в поле «Прокси» Telegram (его нет или срок платного прокси вышел) или прокси компьютера (Windows не отдаёт
+        программам пароль от него). До Telegram запрос не дошёл — пробуем напрямую, без всякого прокси; вышло — полчаса
+        ходим напрямую."""
+        whose = "прокси в настройках Telegram" if px else "прокси компьютера (Windows: «Параметры → Сеть → Прокси»)"
+        try:
+            r = httpx.request(method, url, **{**kw, "trust_env": False})
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ProxyError):
+            r = None
+        if r is None or r.status_code == 407:
+            raise TelegramError(
+                f"{whose} просит логин и пароль (ошибка 407), а напрямую Telegram не открывается. "
+                + ("Впишите прокси с логином: http://логин:пароль@адрес:порт — или проверьте, не закончился ли срок прокси."
+                   if px else "Впишите в «Прокси» Telegram свой прокси с логином: http://логин:пароль@адрес:порт.")) from err
+        if not getattr(self, "_px_skip", 0):
+            log.warning("Telegram: %s просит логин (407), а напрямую связь есть — отправляю напрямую", whose)
+        self._px_skip = time.time() + 1800
+        return r
 
     def _call(self, method, timeout=20, files=None, **params):
         """Метод Bot API -> поле result ответа. С files — multipart (вложенные dict/list уходят строкой JSON,

@@ -76,11 +76,23 @@ except ImportError:
 NAME = "Облако Dewiar"
 FILE_MAX = 10 * 1024 * 1024
 FINAL = ("done", "failed", "stopped")
-# в облаке нельзя: запуск кода и скачивание на сервере сайта, расшифровка (нет моделей слуха), вопросы к человеку
-CLOUD_SKIP = {"run_python", "download", "transcribe", "ask_user"}
+# в облаке нельзя: скачивание на сервере сайта, расшифровка (нет моделей слуха), вопросы к человеку; код (run_python,
+# run_shell) — только в песочнице bubblewrap со строгим корнем (sandbox.py, strict): нет bwrap — нет и кода
+CLOUD_SKIP = {"run_python", "run_shell", "download", "transcribe", "ask_user"}
+CODE_TOOLS_SBX = {"run_python", "run_shell"}
 CLOUD_NOTE = ("\n\nТЫ РАБОТАЕШЬ В ОБЛАКЕ DEWIAR (компьютер человека выключен): запускать программы и скачивать файлы "
               "нельзя — делай файлы сам (write_file), сведения ищи web_search и read_webpage. Спросить человека сейчас нельзя: "
               "решай сам разумно и напиши в итоге, что выбрал. Итог и файлы из outputs/ человек получит на телефон.")
+CLOUD_NOTE_SBX = ("\n\nТЫ РАБОТАЕШЬ В ОБЛАКЕ DEWIAR (компьютер человека выключен): скачивать файлы нельзя, сведения ищи "
+                  "web_search и read_webpage. Считать и собирать файлы можно: run_python и run_shell работают в песочнице — "
+                  "только папка задачи, без интернета. Спросить человека сейчас нельзя: решай сам разумно и напиши в итоге, "
+                  "что выбрал. Итог и файлы из outputs/ человек получит на телефон.")
+
+
+def cloud_skip():
+    """Чего нет в облаке сейчас: код — только если на сервере работает bubblewrap (песочница со строгим корнем)."""
+    import sandbox
+    return CLOUD_SKIP - CODE_TOOLS_SBX if sandbox.mode(strict=True) == "bwrap" else set(CLOUD_SKIP)
 
 
 _skills = []
@@ -402,21 +414,39 @@ class CloudTasks(TK.TaskManager):
     find_tool, ни вызовом по имени (рецензия 0.83: find_tool подключал download — запрос на 127.0.0.1 с сервера сайта —
     и ask_user, который ждал ответа вечно)."""
 
+    MAX_BYTES = int(os.environ.get("DEWIAR_RUNNER_TASK_MB") or 2048) << 20     # папка задачи на сервере — не больше
+
     def _catalog(self, t):
-        return {k: v for k, v in super()._catalog(t).items() if k not in CLOUD_SKIP}
+        skip = cloud_skip()
+        return {k: v for k, v in super()._catalog(t).items() if k not in skip}
 
     def _specs(self, t):
-        return [s for s in super()._specs(t) if s["name"] not in CLOUD_SKIP]
+        skip = cloud_skip()
+        return [s for s in super()._specs(t) if s["name"] not in skip]
+
+    def _sbx_mode(self, t):
+        """В облаке — только настоящая изоляция (bubblewrap); охраны внутри Python на общем сервере мало."""
+        import sandbox
+        return sandbox.mode(strict=True)
+
+    def _sbx_kw(self, t):
+        """Строгий корень (ни сайта, ни .env, ни /etc/dewiar-runner.env), папки всех людей закрыты, сети у кода нет."""
+        return dict(grants=[], net=False, hide=[str(DIR)], protect=self.PROTECT, strict=True, max_bytes=self.MAX_BYTES)
+
+    def _task_python(self):
+        """Python для кода задачи: окружение экзамена исполнителя (numpy, Pillow, openpyxl…), если уже стоит, иначе свой."""
+        py = DIR / "_exam" / "venv" / "bin" / "python3"
+        return str(py) if py.exists() else sys.executable
 
     def _tool_raw(self, t, name, args):
-        if name in CLOUD_SKIP:
+        if name in cloud_skip():
             return (f"Ошибка: {name} в облаке недоступен — задача идёт на сервере Dewiar, компьютер человека выключен. "
                     "Как исправить: обойдись без него (файлы — write_file, сведения — web_search и read_webpage) и напиши в "
                     "итоге, что сделать не удалось.")
         return super()._tool_raw(t, name, args)
 
     def _system(self, t):
-        return super()._system(t) + CLOUD_NOTE
+        return super()._system(t) + (CLOUD_NOTE if "run_python" in cloud_skip() else CLOUD_NOTE_SBX)
 
     def _crit_url(self, t, url):
         """Критерий «ссылка открывается» в облаке — тем же путём, что read_webpage (/fetch сервера с его фильтром адресов),

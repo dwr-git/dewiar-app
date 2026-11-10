@@ -11,9 +11,12 @@ r = subprocess.run([PY, "-c", "import gi; gi.require_version('Gtk','3.0'); from 
 if r.returncode:
     print("✅ пропуск: нет python с GTK и pywebview"); sys.exit(0)
 tmp = Path(tempfile.mkdtemp())
-disp = ":91"
-xv = subprocess.Popen(["Xvfb", disp, "-screen", "0", "1600x900x24"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(1.5)
+rfd, wfd = os.pipe()                  # свободный номер экрана выбирает сам Xvfb: проверки могут идти параллельно
+xv = subprocess.Popen(["Xvfb", "-displayfd", str(wfd), "-screen", "0", "1600x900x24"], pass_fds=(wfd,),
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+os.close(wfd)
+disp = ":" + os.read(rfd, 16).decode().strip()
+os.close(rfd)
 env = dict(os.environ, DISPLAY=disp, HOME=str(tmp), XDG_CONFIG_HOME=str(tmp / "cfg"), XDG_DATA_HOME=str(tmp / "data"),
            DEWIAR_CONFIG_DIR=str(tmp / "cfg/dewiar"), DEWIAR_STATE_DIR=str(tmp / "state"), DEWIAR_UPDATE_CMD="1",
            DEWIAR_NO_CORE="1", PYTHONUNBUFFERED="1")

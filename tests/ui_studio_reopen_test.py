@@ -11,9 +11,12 @@ if os.environ.get("_STUDIO_CHILD") != "1":
     if r.returncode or not shutil.which("Xvfb"):
         print("✅ пропуск: нет python с GTK и pywebview или Xvfb"); sys.exit(0)
     tmp = Path(tempfile.mkdtemp())
-    disp = ":93"
-    xv = subprocess.Popen(["Xvfb", disp, "-screen", "0", "1600x900x24"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.5)
+    rfd, wfd = os.pipe()                  # свободный номер экрана выбирает сам Xvfb: проверки могут идти параллельно
+    xv = subprocess.Popen(["Xvfb", "-displayfd", str(wfd), "-screen", "0", "1600x900x24"], pass_fds=(wfd,),
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.close(wfd)
+    disp = ":" + os.read(rfd, 16).decode().strip()
+    os.close(rfd)
     env = dict(os.environ, DISPLAY=disp, HOME=str(tmp), DEWIAR_CONFIG_DIR=str(tmp / "cfg"), DEWIAR_STATE_DIR=str(tmp / "st"),
                DEWIAR_NO_CORE="1", PYTHONUNBUFFERED="1", _STUDIO_CHILD="1")
     try:
@@ -38,8 +41,9 @@ import webview  # noqa: E402
 import app as A  # noqa: E402
 
 api = A.Api("tok")
-api.wins["card"] = webview.create_window(A.TITLES["card"], api._url("hud.html", "&mode=card"), width=340, height=520,
-                                         frameless=True, hidden=True, js_api=api)
+url, bridge = api._bridged(api._url("hud.html", "&mode=card"))     # как в программе: фасад моста и ключ окна
+api.wins["card"] = webview.create_window(A.TITLES["card"], url, width=340, height=520,
+                                         frameless=True, hidden=True, js_api=bridge)
 api._hud = api.wins["card"]
 fails = []
 
@@ -85,4 +89,5 @@ def scenario():
         os._exit(0)
 
 
+A.harden_webview("gtk")                                              # как в программе: охрана моста
 webview.start(lambda: threading.Thread(target=scenario, daemon=True).start(), gui="gtk")

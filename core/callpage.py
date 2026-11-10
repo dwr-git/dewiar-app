@@ -10,6 +10,7 @@ from pathlib import Path
 log = logging.getLogger("dewiar.callpage")
 UI = Path(__file__).resolve().parent.parent / "ui"
 FILES = {"/call.html": (UI / "call.html", "text/html; charset=utf-8"),
+         "/assets/boot.js": (UI / "assets" / "boot.js", "text/javascript; charset=utf-8"),   # первый скрипт каждой страницы (0.85)
          "/assets/call.js": (UI / "assets" / "call.js", "text/javascript; charset=utf-8"),
          "/assets/dewiar.js": (UI / "assets" / "dewiar.js", "text/javascript; charset=utf-8"),
          "/assets/logo-white.png": (UI / "assets" / "logo-white.png", "image/png")}

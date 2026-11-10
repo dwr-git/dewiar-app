@@ -345,6 +345,44 @@ def site_brief(site, full=True):
     return "\n".join(lines)
 
 
+def chat_knowledge(site):
+    """05.11 (владелец: «как на наш созданный сайт вставить виджет Лиры?»): «Чат для сайта» включают прямо из «Сайтов» —
+    и если знаний у консультанта ещё нет, он узнаёт дело с сайта: название, о чём, контакты, услуги и цены, расписание,
+    вопросы и ответы. Только то, что написано на сайте (заглушки людей и скрытые разделы — нет). -> {title, brief, greeting, kb}"""
+    name = str(site.get("name") or "").strip()
+    seo = str((site.get("seo") or {}).get("description") or "").strip()
+    brief = " — ".join(x for x in (name, str(site.get("tagline") or "").strip()) if x)
+    brief = (brief + (". " + seo if seo else "")).strip()[:1500]
+    out = []
+    ct = {k: v for k, v in (site.get("contacts") or {}).items() if str(v or "").strip() and k in K.CONTACT_KEYS}
+    if ct:
+        out.append("Контакты:\n" + "\n".join(f"{K.CONTACT_KEYS[k]}: {v}" for k, v in ct.items()))
+    for pg in site.get("pages") or []:
+        for b in pg.get("blocks") or []:
+            if b.get("hidden") or b.get("type") in ("lead", "links", "gallery", "team", "reviews"):
+                continue
+            head = str(b.get("title") or K.BLOCKS.get(b.get("type"), {}).get("title") or "").strip()
+            lines = [str(b.get(k) or "").strip() for k in ("text", "note") if str(b.get(k) or "").strip()]
+            for x in b.get("items") or []:
+                if not isinstance(x, dict) or x.get("todo"):
+                    continue
+                if b.get("type") == "faq":
+                    q, a = str(x.get("q") or "").strip(), str(x.get("a") or "").strip()
+                    if q and a:
+                        lines.append(f"Вопрос: {q} Ответ: {a}")
+                    continue
+                parts = [str(x.get(k) or "").strip() for k in ("time", "group", "title", "text") if str(x.get(k) or "").strip()]
+                if str(x.get("price") or "").strip():
+                    parts.append("цена " + str(x["price"]).strip())
+                if parts:
+                    lines.append("— " + ", ".join(parts))
+            if lines:
+                out.append(f"{head}:\n" + "\n".join(lines) if head else "\n".join(lines))
+    kb = "\n\n".join(out)[:12000]
+    return {"title": name[:300], "brief": brief, "kb": kb,
+            "greeting": f"Здравствуйте! Подскажу по услугам, ценам и записи{' в «' + name + '»' if name else ''}. Что вас интересует?"[:300]}
+
+
 def _json_in(text):
     t = str(text or "")
     t = re.sub(r"^```(?:json)?\s*|\s*```\s*$", "", t.strip())
@@ -655,7 +693,7 @@ class Sites:
             elif op == "radius" and o.get("name") in K.RADII:
                 th["radius"] = o["name"]
                 done.append(K.RADII[o["name"]]["title"].lower())
-            elif op == "art" and o.get("name") in ("beans", "arches", "frames", "dots", "blocks", "rings", "stripes", "grid"):
+            elif op == "art" and o.get("name") in K.ARTS:
                 th["art"] = o["name"]
                 done.append("узор")
             elif op == "menu":

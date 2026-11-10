@@ -49,6 +49,18 @@ def _git(cwd, *args, check=True, input_=None):
     return r.stdout if isinstance(r.stdout, str) else r.stdout.decode(errors="replace")
 
 
+# Рабочую копию правит код задачи в песочнице (выпуск 5), а git по ней Dewiar запускает вне песочницы. Поэтому git
+# рабочей копии — только с явным GIT_DIR (служебная папка worktree в .git проекта, куда песочница писать не может; файл
+# «.git» рабочей копии не читается вовсе), без fsmonitor, хуков, внешнего diff, пейджера, подмодулей, и с выключенными
+# драйверами filter/diff/merge, которые назвали .gitattributes рабочей копии (B3, рецензия выпуска 5).
+GIT_SAFE = ["-c", "core.fsmonitor=false", "-c", f"core.hooksPath={'NUL' if os.name == 'nt' else '/dev/null'}",
+            "-c", "diff.external=", "-c", "core.pager=cat", "-c", "core.untrackedCache=false", "-c", "submodule.recurse=false",
+            "-c", "diff.ignoreSubmodules=all", "-c", "status.submoduleSummary=false", "-c", "safe.bareRepository=explicit",
+            "-c", "core.sshCommand=false", "-c", "protocol.allow=never", "-c", "credential.helper="]
+ATTR_RX = re.compile(r"\b(filter|diff|merge)=([^\s]+)")
+SHA_RX = re.compile(r"[0-9a-f]{40,64}\Z")
+
+
 def _walk(root: Path, limit=5000):
     """Файлы проекта -> [PurePosixPath относительно root], отсортированные, без IGNORE_DIRS; не больше limit."""
     out = []
@@ -225,7 +237,7 @@ class CodeWork:
             _git(self.project, "worktree", "add", "--detach", str(self.work), "HEAD")
             patch = subprocess.run(["git", "-C", str(self.project), "diff", "HEAD", "--binary"], capture_output=True).stdout
             if patch.strip():
-                subprocess.run(["git", "-C", str(self.work), "apply", "--whitespace=nowarn"], input=patch, capture_output=True)
+                self.wgit("apply", "--whitespace=nowarn", input_=patch, check=False, raw=True)
             # GitHub #16 (24.10): без -z git отдаёт «новый.py» C-кавычками ("\320\275…"), и файл не находился —
             # в копию не попадали неотслеживаемые файлы с кириллицей. С -z имена как есть, через NUL.
             for rel in filter(None, _git(self.project, "ls-files", "-z", "--others", "--exclude-standard").split("\0")):
@@ -233,9 +245,9 @@ class CodeWork:
                 if src.is_file():
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
-            _git(self.work, "add", "-A")
-            _git(self.work, "commit", "-q", "--allow-empty", "--no-verify", "-m", "dewiar: исходное состояние")
-            base = _git(self.work, "rev-parse", "HEAD").strip()
+            self.wgit("add", "-A")
+            self.wgit("commit", "-q", "--allow-empty", "--no-verify", "-m", "dewiar: исходное состояние")
+            base = self.wgit("rev-parse", "HEAD").strip()
             self.meta.write_text(f'{{"mode": "git", "base": "{base}"}}', encoding="utf-8")
         else:
             size = 0
@@ -274,9 +286,74 @@ class CodeWork:
     def mode(self):
         import json
         try:
-            return json.loads(self.meta.read_text(encoding="utf-8"))
+            m = json.loads(self.meta.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return {"mode": "none"}
+        # код.json лежит в папке задачи — проверяем, что в нём не подсунули ключ git вместо коммита (--output=…)
+        if not isinstance(m, dict) or (m.get("mode") == "git" and not SHA_RX.match(str(m.get("base") or ""))):
+            return {"mode": "none"}
+        return m
+
+    def gitdir(self):
+        """Служебная папка worktree рабочей копии в .git проекта: та, чей файл gitdir указывает на «рабочая копия/.git».
+        Ищется по папке проекта (её песочница не меняет), а не по файлу .git рабочей копии. Нет — CodeError."""
+        common = self.project / ".git"
+        if not common.is_dir():
+            out = _git(self.project, "rev-parse", "--git-common-dir", check=False).strip()
+            common = (self.project / out).resolve() if out else common
+        want = os.path.normcase(os.path.abspath(str(self.work / ".git")))
+        for d in sorted((common / "worktrees").glob("*")) if (common / "worktrees").is_dir() else []:
+            try:
+                got = (d / "gitdir").read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            if os.path.normcase(os.path.abspath(got)) == want:
+                return d
+        raise CodeError("служебная папка рабочей копии в .git проекта не найдена — отклоните изменения и начните заново")
+
+    def _attr_off(self):
+        """Драйверы, которые назвали .gitattributes рабочей копии (их мог написать код задачи), — выключить: -c с пустой
+        командой у filter/diff/merge с этими именами."""
+        names = {"filter": set(), "diff": set(), "merge": set()}
+        n = 0
+        for dp, dns, fns in os.walk(self.work):
+            dns[:] = [d for d in dns if d != ".git"]
+            if ".gitattributes" in fns:
+                n += 1
+                try:
+                    txt = Path(dp, ".gitattributes").read_text(encoding="utf-8", errors="replace")[:200000]
+                except OSError:
+                    continue
+                for kind, name in ATTR_RX.findall(txt):
+                    names[kind].add(name)
+            if n > 200:
+                break
+        out = []
+        for name in sorted(names["filter"]):
+            out += ["-c", f"filter.{name}.clean=", "-c", f"filter.{name}.smudge=", "-c", f"filter.{name}.process=",
+                    "-c", f"filter.{name}.required=false"]
+        for name in sorted(names["diff"]):
+            out += ["-c", f"diff.{name}.textconv=", "-c", f"diff.{name}.command="]
+        for name in sorted(names["merge"]):
+            out += ["-c", f"merge.{name}.driver="]
+        return out
+
+    def wgit(self, *args, check=True, input_=None, raw=False):
+        """git по рабочей копии — безопасно (GIT_SAFE, явный GIT_DIR и GIT_WORK_TREE, без системных .gitattributes)."""
+        env = dict(os.environ, **GIT_ENV, GIT_DIR=str(self.gitdir()), GIT_WORK_TREE=str(self.work), GIT_ATTR_NOSYSTEM="1",
+                   GIT_TERMINAL_PROMPT="0", GIT_OPTIONAL_LOCKS="0")
+        env.pop("GIT_CONFIG_PARAMETERS", None)
+        cmd = ["git"] + GIT_SAFE + self._attr_off() + list(args)
+        txt = not raw and (input_ is None or isinstance(input_, str))
+        r = subprocess.run(cmd, cwd=str(self.work), capture_output=True, text=txt, encoding="utf-8" if txt else None,
+                           errors="replace" if txt else None, input=input_, env=env, timeout=120,
+                           creationflags=0x08000000 if os.name == "nt" else 0)
+        if check and r.returncode:
+            err = r.stderr if isinstance(r.stderr, str) else r.stderr.decode(errors="replace")
+            raise CodeError(f"git {' '.join(args[:2])}: {err.strip()[-300:]}")
+        if raw:
+            return r.stdout
+        return r.stdout if isinstance(r.stdout, str) else r.stdout.decode(errors="replace")
 
     def _to_work(self, text):
         """Путь исходного проекта в пути или команде -> путь рабочей копии (модель видит путь проекта в подсказке и
@@ -437,11 +514,19 @@ class CodeWork:
         work = {str(p) for p in _walk(self.work, limit=200000)}
         proj = {str(p) for p in _walk(self.project, limit=200000)}
         skipped = self.mode.get("skipped") or []
-        changed = []
+        changed, self.link_skips = [], []
         for rel in sorted(work | proj):
             a, b = self.project / rel, self.work / rel
             if rel in proj and any(rel == s or rel.startswith(s + "/") for s in skipped):
                 continue                              # GitHub #14 (24.10): не скопировался при подготовке — не трогаем
+            if a.is_symlink() or b.is_symlink():      # ссылки — не изменения (вторая рецензия: по ним «Принять» писал наружу)
+                try:
+                    same = a.is_symlink() and b.is_symlink() and os.readlink(a) == os.readlink(b)
+                except OSError:
+                    same = False
+                if not same and (rel in work):        # задача заменила ссылку файлом или сделала свою — человеку скажем
+                    self.link_skips.append(rel)
+                continue
             if rel not in proj:
                 changed.append(("added", rel))
             elif rel not in work:
@@ -457,9 +542,9 @@ class CodeWork:
             return []
         m = self.mode
         if m.get("mode") == "git":
-            _git(self.work, *GIT_ADD)
+            self.wgit(*GIT_ADD)
             # GitHub #16 (24.10): -z — и здесь имена с кириллицей без C-кавычек; R/C — два пути, берём новый
-            parts = _git(self.work, "diff", "--cached", "-z", "--name-status", m["base"]).split("\0")
+            parts = self.wgit("diff", "--no-ext-diff", "--no-textconv", "--cached", "-z", "--name-status", m["base"]).split("\0")
             res, i = [], 0
             while i < len(parts) and parts[i]:
                 st = parts[i]
@@ -584,8 +669,8 @@ class CodeWork:
             return ""
         m = self.mode
         if m.get("mode") == "git":
-            _git(self.work, *GIT_ADD)
-            d = _git(self.work, "diff", "--cached", m["base"])
+            self.wgit(*GIT_ADD)
+            d = self.wgit("diff", "--no-ext-diff", "--no-textconv", "--cached", m["base"])
         else:
             parts = []
             for st, rel in self._copy_changes():
@@ -602,10 +687,15 @@ class CodeWork:
         m = self.mode
         n = len(self.changes())                       # до переноса: после него копия и проект совпадают, и счёт был бы 0
         skipped = m.get("skipped") or []
+        refused, retyped = [], []
         if m.get("mode") == "git":
-            patch = subprocess.run(["git", "-C", str(self.work), "diff", "--cached", "--binary", m["base"]], capture_output=True).stdout
+            patch = self.wgit("diff", "--no-ext-diff", "--no-textconv", "--cached", "--binary", m["base"], raw=True, check=False)
             if not patch.strip():
                 return "Изменений нет."
+            # ссылка проекта, которую задача заменила файлом (или наоборот), — git перенесёт как замену: сказать прямо
+            ns = self.wgit("diff", "--no-ext-diff", "--cached", "--name-status", "-z", m["base"], check=False) or ""
+            bits = ns.split("\0")
+            retyped = [bits[i + 1] for i in range(0, len(bits) - 1, 2) if bits[i].startswith("T")]
             r = subprocess.run(["git", "-C", str(self.project), "apply", "--whitespace=nowarn"], input=patch, capture_output=True)
             if r.returncode:
                 r = subprocess.run(["git", "-C", str(self.project), "apply", "--3way", "--whitespace=nowarn"], input=patch,
@@ -614,15 +704,32 @@ class CodeWork:
                 raise CodeError("изменения не накладываются на проект (его успели поменять?): "
                                 + r.stderr.decode(errors="replace")[-300:])
         else:
+            proj = os.path.realpath(self.project)
             for st, rel in self._copy_changes():
                 a, b = self.project / rel, self.work / rel
+                # только внутри проекта и не по ссылкам: ни папка, ни сам файл проекта не ведут наружу
+                par = os.path.realpath(a.parent)
+                if a.is_symlink() or b.is_symlink() or not (par == proj or par.startswith(proj.rstrip(os.sep) + os.sep)):
+                    refused.append(rel)
+                    continue
                 if st == "deleted":
-                    a.unlink(missing_ok=True)
+                    if a.is_file():
+                        a.unlink()
                 else:
                     a.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(b, a)
+                    tmp = a.with_name(f".{a.name}.dewiar.tmp")
+                    shutil.copyfile(b, tmp, follow_symlinks=False)
+                    shutil.copystat(b, tmp, follow_symlinks=False)
+                    os.replace(tmp, a)
+            refused += [x for x in getattr(self, "link_skips", []) if x not in refused]
+            if refused:
+                log.warning("Принять: не перенесено (ссылки или путь вне проекта): %s", refused[:10])
         self.discard()
-        return f"Изменения перенесены в проект ({n} файлов)." + (
+        names = (lambda xs: ", ".join(xs[:5]) + (f" и ещё {len(xs) - 5}" if len(xs) > 5 else ""))
+        moved = n - len([x for x in refused if x not in getattr(self, "link_skips", [])])
+        return f"Изменения перенесены в проект ({moved} файлов)." + (
+            f" Не перенесено {len(refused)} — ссылки или путь вне проекта: {names(refused)}." if refused else "") + (
+            f" Ссылка заменена файлом (или файл — ссылкой): {names(retyped)}." if retyped else "") + (
             f" Файлы, которые не удалось прочитать при подготовке ({len(skipped)}), остались как были." if skipped else "")
 
     def discard(self):

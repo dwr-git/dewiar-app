@@ -45,7 +45,9 @@ const plpSize = (n) => n > 1e6 ? (n / 1e6).toFixed(1).replace(".", ",") + " МБ
 function plpNav(list) {
   if (Array.isArray(list)) PLP.cat = list;
   const box = $("#nav-plugins"), head = $("#nav-plg-h"); if (!box) return;
-  const on = PLP.cat.filter(p => p.installed);
+  const rank = typeof hmOrder === "function" ? hmOrder() : null;          // №558: в порядке значков на «Главной»
+  const on = PLP.cat.filter(p => p.installed).map((p, i) => [p, i])
+    .sort((a, b) => ((rank && rank["plg:" + a[0].id]) ?? 1e6) - ((rank && rank["plg:" + b[0].id]) ?? 1e6) || a[1] - b[1]).map(x => x[0]);
   const key = on.map(p => p.id + p.icon + p.name).join("|");
   box.hidden = !on.length; head.hidden = false;           // «Создать плагин» — всегда в группе
   if (key !== PLP.nav) {
@@ -490,11 +492,13 @@ store:{get:(key)=>q("store_get",{key}),set:(key,value)=>q("store_set",{key,value
 let lh=0;const post=()=>{const h=Math.ceil(document.documentElement.scrollHeight);if(Math.abs(h-lh)>2){lh=h;parent.postMessage({__dw:1,op:"height",h},"*");}};
 try{new ResizeObserver(post).observe(document.documentElement);}catch(e){setInterval(post,500);}addEventListener("load",post);})();`;
   const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net/npm/ https://cdnjs.cloudflare.com/ajax/libs/; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'"><style>${plpTheme()}${PLP_KIT}</style><script>${bridge}</script>`;
-  let body = String(html || "").replace(/^\s*<!doctype[^>]*>/i, "");
-  // своё <meta http-equiv> плагина не должно ослабить наш CSP: CSP складываются, ослабить нельзя — но убираем на всякий случай
-  body = body.replace(/<meta[^>]+http-equiv\s*=\s*["']?content-security-policy[^>]*>/gi, "");
-  body = /<head[^>]*>/i.test(body) ? body.replace(/<head[^>]*>/i, m => m + head) : `<head>${head}</head>` + body;
-  return "<!doctype html>" + body;
+  let body = String(html || "").replace(/^\ufeff?\s*<!doctype[^>]*>/i, "");
+  // своё <meta http-equiv> плагина не должно ослабить наш CSP: CSP складываются, ослабить нельзя — но убираем на всякий случай;
+  // и <meta refresh> — переход фрейма не туда, куда разрешено
+  body = stripMetaEquiv(body);                                           // core.js: разбор, как у браузера (четвёртая рецензия)
+  // наш CSP и мост — самыми первыми, до всего, что есть у страницы (третья рецензия: «после <head>» обходилось скриптом
+  // до <head> или «<head>» в комментарии — и meta оказывалась в <body>, где CSP не действует)
+  return "<!doctype html>" + head + body;
 }
 async function plpFrame(box) {
   const p = PLP.page.plugin;

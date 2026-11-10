@@ -293,9 +293,71 @@ def roman_norm(t):
     return re.sub(r"(?<![A-Za-z])([А-ЯЁа-яё]+)\s+([IVXLCDM]+)(?![A-Za-z0-9])(?!\s+[A-Za-z])", _roman_after, t)
 
 
+# №561 (05.11, веб-версия на Mac): «при озвучивании ответов происходит чтение кавычек в названиях задачи — слышится
+# отвратительно. Спецсимволы (кавычки, восклицательный знак, тире…) не нужно озвучивать». Голоса устройств (Safari,
+# Android, голос Windows и macOS) читали «» и прочее вслух. speech_clean — до любого голоса: кавычки и разметка прочь, тире —
+# пауза (запятая), «!!!» и «?!» — один знак, скобки — паузы, эмодзи прочь. Числа, время, «12 - 10», «XIX–XX» не трогает —
+# их читает speech_norm. Тот же разбор — clean в ui/assets/speechnorm.js (tests/speech_clean561_test.py сверяет оба).
+_EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\u2190-\u21FF\u2300-\u23FF\u25A0-\u25FF"
+                    "\uFE0E\uFE0F\u200D\u20E3\U000E0020-\U000E007F\u00A9\u00AE\u2122]")
+_KEEP_DASH = re.compile(r"[0-9IVXLCDM]")              # «12 - 10», «16:30 — 45%», «XIX – XX»: тире между числами — не пауза
+
+
+def _dash(m):
+    s, a, b = m.string, m.start(), m.end()
+    prev = s[a - 1] if a > 0 else ""
+    nxt = s[b] if b < len(s) else ""
+    if _KEEP_DASH.match(prev or " ") and _KEEP_DASH.match(nxt or " "):
+        return m.group(0)
+    return ", "
+
+
+def _glue(m):
+    """«*», «_» между цифрами или внутри слова — не разметка («3 * 4», x86_64): остаются; остальное — прочь."""
+    s, a, b, c = m.string, m.start(), m.end(), m.group(0)[0]
+    prev, nxt = (s[a - 1] if a > 0 else ""), (s[b] if b < len(s) else "")
+    if c == "*" and re.match(r"[\d ]", prev or "x") and re.match(r"[\d ]", nxt or "x") and re.search(r"\d\s*$", s[:a]) and re.match(r"\s*\d", s[b:]):
+        return m.group(0)
+    if c == "_" and re.match(r"\w", prev or " ") and re.match(r"\w", nxt or " "):
+        return m.group(0)
+    return " "
+
+
+def speech_clean(text):
+    """Текст для любого голоса без символов, которые голос прочитал бы словами («кавычка», «решётка», «звёздочка»)."""
+    t = str(text or "")
+    t = re.sub(r"```.*?```", " ", t, flags=re.S)
+    t = re.sub(r"`([^`]*)`", r"\1", t)
+    t = re.sub(r"!?\[([^\]]*)\]\([^()]*\)", r"\1", t)                       # [текст](ссылка) → текст
+    t = re.sub(r"https?://\S+", "ссылка", t)
+    t = re.sub(r"(?m)^[ \t]*(?:#{1,6}|>+|[-*+•·▪◦‣●–—]+)[ \t]+", "", t)       # заголовки, цитаты, пункты списка
+    t = re.sub(r"([^\s.!?…:;,])[ \t]*\n\s*", r"\1. ", t)                    # строка без точки — пауза перед следующей
+    t = _EMOJI.sub(" ", t)
+    t = re.sub(r"[«»“”„‟\"＂〝〞‹›]", "", t)
+    t = re.sub(r"[‘’‚‛`´]", "'", t)
+    t = re.sub(r"(^|[^A-Za-zА-Яа-яЁё])'+|'+(?![A-Za-zА-Яа-яЁё])", r"\1", t)    # апостроф — только внутри слова (don't)
+    t = re.sub(r"[*_]+", _glue, t)
+    t = re.sub(r"~\s*(?=\d)", "около ", t)
+    t = re.sub(r"[#~^|\\<>]+", " ", t)
+    t = re.sub(r"[(\[{]", ", ", t)
+    t = re.sub(r"[)\]}]", ", ", t)
+    t = t.replace("&", " и ").replace("¡", "").replace("¿", "").replace("§", "")
+    t = re.sub(r"(^|[.!?…:;]\s*)[-–—]+\s+", r"\1", t)                        # «— Привет», «Итак: — …»
+    t = re.sub(r"[ \t]+(?:—|–|-{1,3})[ \t]+|—+", _dash, t)                    # тире — пауза
+    t = re.sub(r"([!?])[!?.…]+", r"\1", t)                                     # «!!!», «?!», «?..» — один знак
+    t = re.sub(r"\.{3,}", "…", t)
+    t = re.sub(r"\s+", " ", t)
+    t = re.sub(r"\s+([,.!?…;:])", r"\1", t)
+    t = re.sub(r"([,;:])(?:\s*[,;:])+", r"\1", t)                            # «, ,» и «: ,» — одна пауза
+    t = re.sub(r"[,;:]+\s*(?=[.!?…])", "", t)                                  # «…, .» → «….»
+    t = re.sub(r"([.!?…])\s*[,;:]+", r"\1", t)
+    t = re.sub(r"^[\s,.;:!?…]+|[\s,;:]+$", "", t)
+    return t.strip()
+
+
 def speech_norm(text, latin=True):
     """latin=False — только числа, суммы, проценты, время (Piper, eSpeak, голос Windows: латиницу они читают сами)."""
-    t = roman_norm(str(text or ""))
+    t = roman_norm(speech_clean(text))
     for _ in range(3):                                             # «1 437 500» — одно число (разряды через пробел)
         t = re.sub(r"(?<![\d.,])(\d{1,3})[ \u00a0\u202f](?=\d{3}(?!\d))", r"\1", t)
     num = r"(?P<n>\d+)(?:[.,](?P<k>\d{1,2}))?"

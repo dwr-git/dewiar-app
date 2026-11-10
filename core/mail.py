@@ -6,6 +6,7 @@
 не отдаётся (public()). Чтение не помечает письма прочитанными (папка открывается только для чтения, BODY.PEEK).
 """
 
+import base64
 import email
 import email.utils
 import html
@@ -297,7 +298,7 @@ class Box:
 
     # ---------- письма ----------
 
-    def send(self, to="", subject="", body="", attachments=(), headers=None):
+    def send(self, to="", subject="", body="", attachments=(), headers=None, extra=()):
         """Отправить письмо -> {to, subject, attachments}. Без получателя — себе на свой адрес. headers — свои заголовки
         (рассылка: List-Unsubscribe).
         Вложения — пути в папке ассистента: ws.safe() не даёт выйти за её пределы. Предел 20 МБ на файл — столько
@@ -329,6 +330,9 @@ class Box:
             main, sub = ctype.split("/", 1)
             msg.add_attachment(p.read_bytes(), maintype=main, subtype=sub, filename=p.name)
             names.append(p.name)
+        for part, fname in extra or ():                         # пересылка (№562): исходное письмо целиком — вложением .eml
+            msg.add_attachment(part, filename=fname)
+            names.append(fname)
         s = self._smtp()
         try:
             s.send_message(msg)
@@ -401,8 +405,135 @@ class Box:
             except Exception:  # noqa: BLE001
                 pass
 
-    def read(self, uid, folder="INBOX", mark=False):
-        """Письмо целиком по uid из inbox() -> {uid, from, to, subject, date, text, files}.
+    # ---------- управление письмом (№562, 05.11, Serge: «минимальное управление: Удалить, В спам, Переслать») ----------
+
+    def special(self, kind, m=None):
+        """Папка «Корзина» (kind="trash") или «Спам» ("junk") -> (имя для сервера, имя по-человечески) или None.
+        Сначала — по пометке самой почты (\\Trash, \\Junk), потом — по частым именам."""
+        own = m is None
+        m = m or self._imap()
+        try:
+            fl = _folders(m)
+        except (imaplib.IMAP4.error, OSError) as e:
+            raise MailError(f"почта не показала папки: {e}") from e
+        finally:
+            if own:
+                try:
+                    m.logout()
+                except Exception:  # noqa: BLE001
+                    pass
+        flag, names = ("\\trash", _TRASH_NAMES) if kind == "trash" else ("\\junk", _JUNK_NAMES)
+        hit = next((f for f in fl if flag in f[0].split()), None) \
+            or next((f for f in fl if kind == "junk" and "\\spam" in f[0].split()), None) \
+            or next((f for n in names for f in fl if f[2].lower() == n), None)
+        return (hit[1], hit[2]) if hit else None
+
+    def peek(self, uid, folder="INBOX"):
+        """От кого и тема письма — без текста и без отметок (для вопроса «Удалить письмо …?») -> {from, subject}."""
+        m = self._imap()
+        try:
+            m.select(folder, readonly=True)
+            typ, d = m.uid("fetch", str(uid).encode(), "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
+            raw = next((x[1] for x in d or [] if isinstance(x, tuple)), b"")
+            if not raw:
+                raise MailError("такого письма нет")
+            h = email.message_from_bytes(raw)
+            return {"from": _dec(h.get("From")), "subject": _dec(h.get("Subject")) or "(без темы)"}
+        finally:
+            try:
+                m.logout()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def move(self, uid, kind, folder="INBOX"):
+        """Убрать письмо в «Корзину» (kind="trash") или в «Спам» ("junk") -> {ok, folder, permanent}.
+        Как принято у почт: MOVE, если почта его знает (Яндекс, Gmail, Mail.ru), иначе COPY + \\Deleted + EXPUNGE этого
+        письма (UID EXPUNGE, если есть UIDPLUS). Корзины нет — «удалить» стирает письмо совсем (так и говорим: permanent);
+        папки «Спам» нет — ошибка, письмо не трогаем."""
+        if not re.fullmatch(r"\d+", str(uid)):
+            raise MailError("нужен номер письма")
+        m = self._imap()
+        try:
+            dest = self.special(kind, m)
+            if not dest and kind == "junk":
+                raise MailError("в этой почте не нашла папку «Спам» — пометьте письмо спамом на сайте почты")
+            if dest and dest[1].strip().lower() == folder.lower():
+                raise MailError(f"письмо уже в папке «{dest[1]}»")
+            typ, _ = m.select(folder)
+            if typ != "OK":
+                raise MailError(f"нет папки {folder}")
+            u = str(uid).encode()
+            typ, d = m.uid("fetch", u, "(UID)")
+            if not any(isinstance(x, (bytes, tuple)) and b"UID" in (x[0] if isinstance(x, tuple) else x) for x in d or []):
+                raise MailError("такого письма нет — возможно, его уже убрали")
+            caps = {c.upper() for c in (m.capabilities or ())}
+            try:                                                # после входа почта часто называет больше умений (MOVE, UIDPLUS)
+                typ, cd = m.capability()
+                caps |= {c.decode(errors="ignore").upper() for c in (cd[0] or b"").split()} if typ == "OK" and cd else set()
+            except (imaplib.IMAP4.error, OSError):
+                pass
+            if dest and "MOVE" in caps:
+                typ, r = m.uid("MOVE", u, _q(dest[0]))
+                if typ != "OK":
+                    raise MailError(f"почта не перенесла письмо: {(r or [b''])[0]!r}")
+            else:
+                if dest:
+                    typ, r = m.uid("COPY", u, _q(dest[0]))
+                    if typ != "OK":
+                        raise MailError(f"почта не перенесла письмо: {(r or [b''])[0]!r}")
+                m.uid("STORE", u, "+FLAGS.SILENT", "(\\Deleted)")
+                if "UIDPLUS" in caps:
+                    m.uid("EXPUNGE", u)
+                else:
+                    m.expunge()
+            log.info("✉ Письмо %s → %s", uid, dest[1] if dest else "удалено совсем (корзины нет)")
+            return {"ok": True, "folder": dest[1] if dest else "", "permanent": not dest}
+        except imaplib.IMAP4.error as e:
+            raise MailError(f"почта не дала это сделать: {e}") from e
+        finally:
+            try:
+                m.logout()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def forward(self, uid, to, note="", folder="INBOX"):
+        """Переслать письмо -> {to, subject, attachments}. Письмо уходит целиком: сверху — note и «Пересланное сообщение»
+        (от кого, когда, тема, текст), а оригинал со всеми вложениями и оформлением — вложением .eml (message/rfc822)."""
+        import email.policy
+        to = [x.strip() for x in re.split(r"[,;\s]+", to or "") if x.strip()]
+        if not to:
+            raise MailError("кому переслать? Нужен адрес")
+        for x in to:
+            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", x):
+                raise MailError(f"неверный адрес: {x}")
+        m = self._imap()
+        try:
+            m.select(folder, readonly=True)
+            typ, d = m.uid("fetch", str(uid).encode(), "(BODY.PEEK[])")
+            raw = next((x[1] for x in d or [] if isinstance(x, tuple)), b"")
+        finally:
+            try:
+                m.logout()
+            except Exception:  # noqa: BLE001
+                pass
+        if not raw:
+            raise MailError("такого письма нет")
+        if len(raw) > 20 * 1024 * 1024:
+            raise MailError("письмо больше 20 МБ — почта не примет его пересылку")
+        orig = email.message_from_bytes(raw, policy=email.policy.default)
+        text, files = _text_of(email.message_from_bytes(raw), 20000)
+        subj = _dec(orig.get("Subject")) or ""
+        subj = subj if re.match(r"^\s*(fwd?|пересл\w*)\s*:", subj, re.I) else "Fwd: " + (subj or "письмо")
+        head = (f"---------- Пересланное сообщение ----------\nОт: {_dec(orig.get('From'))}\nДата: {orig.get('Date', '')}\n"
+                f"Тема: {_dec(orig.get('Subject'))}\nКому: {_dec(orig.get('To'))}\n")
+        body = ((note or "").strip() + "\n\n" if (note or "").strip() else "") + head + "\n" + text.strip()
+        name = re.sub(r'[\\/:*?"<>|\r\n]+', " ", _dec(orig.get("Subject")) or "письмо").strip()[:60] or "письмо"
+        r = self.send(", ".join(to), subj, body, (), extra=[(orig, name + ".eml")])
+        return dict(r, forwarded=_dec(orig.get("Subject")) or "", files=files)
+
+    def read(self, uid, folder="INBOX", mark=False, html_view=False):
+        """Письмо целиком по uid из inbox() -> {uid, from, to, subject, date, text, files}; html_view — ещё html (безопасный),
+        html_links, html_remote и plain (есть ли в письме своя текстовая часть) — для студии (№562).
         mark — человек его прочитал (открыл в студии или попросил Лиру прочитать): отметить «прочитано» и на почте
         (30.10, владелец: «прочитал через Лиру — а оно всё равно непрочитанное»). Меняем только флаг \\Seen этого
         письма; просмотр списка (inbox) и чтение без mark ничего на почте не трогают."""
@@ -424,14 +555,72 @@ class Box:
                     log.info("mail: отметить прочитанным не вышло: %s", e)
             msg = email.message_from_bytes(raw)
             body, files = _text_of(msg)
-            return {"uid": str(uid), "from": _dec(msg.get("From")), "to": _dec(msg.get("To")), "subject": _dec(msg.get("Subject")),
-                    "date": msg.get("Date", ""), "text": body, "files": files, "message_id": (msg.get("Message-ID") or "").strip(),
-                    "references": (msg.get("References") or "").strip(), "reply_to": _dec(msg.get("Reply-To") or "")}
+            out = {"uid": str(uid), "from": _dec(msg.get("From")), "to": _dec(msg.get("To")), "subject": _dec(msg.get("Subject")),
+                   "date": msg.get("Date", ""), "text": body, "files": files, "message_id": (msg.get("Message-ID") or "").strip(),
+                   "references": (msg.get("References") or "").strip(), "reply_to": _dec(msg.get("Reply-To") or "")}
+            if html_view:                                       # №562: «как в письме» — безопасный HTML (core/mailhtml.py)
+                import mailhtml
+                src = mailhtml.html_part(msg)
+                out["plain"] = any(pt.get_content_type() == "text/plain" and not pt.get_filename()
+                                   for pt in (msg.walk() if msg.is_multipart() else [msg]))
+                if src:
+                    out.update({("html" if k == "html" else "html_" + k): v for k, v in mailhtml.sanitize(src, mailhtml.cid_map(msg)).items()})
+            return out
         finally:
             try:
                 m.logout()
             except Exception:  # noqa: BLE001
                 pass
+
+
+def _utf7_imap(s):
+    """Имя папки IMAP (изменённый UTF-7: «&BBoEPgRABDcEOAQ9BDA-» — «Корзина») -> обычная строка."""
+    def dec(m):
+        b = m.group(1)
+        if not b:
+            return "&"
+        b = b.replace(",", "/")
+        try:
+            return base64.b64decode(b + "=" * (-len(b) % 4)).decode("utf-16-be")
+        except Exception:  # noqa: BLE001
+            return m.group(0)
+    return re.sub(r"&([A-Za-z0-9+,]*)-", dec, s)
+
+
+# куда «удалить» и «в спам», если почта не помечает папки (SPECIAL-USE, RFC 6154): частые имена у разных служб
+_TRASH_NAMES = ("trash", "корзина", "deleted", "deleted items", "deleted messages", "удалённые", "удаленные", "[gmail]/trash",
+                "[gmail]/корзина", "[google mail]/trash", "inbox.trash", "inbox/trash")
+_JUNK_NAMES = ("junk", "spam", "спам", "junk e-mail", "junk email", "bulk mail", "[gmail]/spam", "[gmail]/спам",
+               "[google mail]/spam", "inbox.junk", "inbox.spam", "нежелательная почта")
+
+
+def _folders(m):
+    """LIST "" "*" -> [(флаги в нижнем регистре, имя как у сервера, имя по-человечески)]."""
+    typ, data = m.list()
+    out, i, data = [], 0, list(data or [])
+    while i < len(data):
+        x = data[i]
+        if isinstance(x, tuple):                              # имя пришло литералом: (b'(\\Trash) "/" {12}', b'Корзина')
+            line, name = x[0] or b"", (x[1] or b"").decode("utf-8", errors="replace")
+        else:
+            line, name = x or b"", None
+        i += 1
+        mm = re.match(rb'\(([^)]*)\)\s+(?:"(?:[^"\\]|\\.)*"|NIL)\s*(.*)$', line.strip())
+        if not mm:
+            continue
+        flags = mm.group(1).decode(errors="ignore").lower()
+        if name is None:
+            raw = mm.group(2).decode("utf-8", errors="replace").strip()
+            name = raw[1:-1].replace('\\"', '"').replace("\\\\", "\\") if raw.startswith('"') and raw.endswith('"') else raw
+        if "\\noselect" in flags or "\\nonexistent" in flags:
+            continue
+        out.append((flags, name, _utf7_imap(name)))
+    return out
+
+
+def _q(name):
+    """Имя папки для команды IMAP — в кавычках."""
+    return '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 class Mail:
@@ -640,9 +829,41 @@ class Mail:
         r = self.box(i).send(to, subj, full, attachments, headers=hdr)
         return dict(r, replied=m.get("subject") or "", replied_from=m["from"])
 
-    def read(self, uid, folder="INBOX", mark=False):
+    def read(self, uid, folder="INBOX", mark=False, html_view=False):
         """uid из inbox(): «N:uid» — письмо ящика N. mark — отметить прочитанным и на почте."""
+        b, u = self._where(uid)
+        return dict(b.read(u, folder, mark=mark, **({"html_view": True} if html_view else {})), uid=str(uid), box=b.data.get("address", ""))
+
+    def _where(self, uid):
+        """«N:uid» -> (ящик N, uid в нём); просто uid — главный ящик."""
         u = str(uid)
         i, u = (int(u.split(":", 1)[0]), u.split(":", 1)[1]) if re.fullmatch(r"\d+:\S+", u) else (0, u)
-        b = self.box(i)
-        return dict(b.read(u, folder, mark=mark), uid=str(uid), box=b.data.get("address", ""))
+        return self.box(i), u
+
+    def find(self, which):
+        """Номер письма из read_emails или «от кого / о чём» («Андрей», «счёт») -> uid последнего подходящего."""
+        w = str(which or "").strip()
+        if not w:
+            raise MailError("какое письмо? Нужен номер из списка писем или от кого оно")
+        if re.fullmatch(r"(\d+:)?\d+", w):
+            return w
+        found = self.inbox(limit=1, query=w)
+        if not found:
+            raise MailError(f"не нашла письма «{w}» среди последних — скажите, от кого оно или о чём")
+        return found[0]["uid"]
+
+    def peek(self, which):
+        b, u = self._where(self.find(which))
+        return b.peek(u)
+
+    def manage(self, which, action, to="", note=""):
+        """Удалить («trash»), в спам («junk») или переслать («forward», to — кому, note — пара слов сверху) -> итог."""
+        uid = self.find(which)
+        b, u = self._where(uid)
+        if action in ("trash", "delete"):
+            return dict(b.move(u, "trash"), uid=uid, action="trash")
+        if action in ("junk", "spam"):
+            return dict(b.move(u, "junk"), uid=uid, action="junk")
+        if action == "forward":
+            return dict(b.forward(u, to, note), uid=uid, action="forward")
+        raise MailError(f"не знаю действия «{action}» — умею удалить, в спам и переслать")

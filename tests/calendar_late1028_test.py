@@ -96,6 +96,7 @@ class Eng:
                                                                              ET.ToolsMixin._reminder_log, ET.ToolsMixin.job_title,
                                                                              ET.ToolsMixin.calendar_month)
     JOB_LATE_MAX, JOB_TITLES = ET.ToolsMixin.JOB_LATE_MAX, ET.ToolsMixin.JOB_TITLES
+    job_label = ET.ToolsMixin.job_label          # имя дела для людей (№557)
 
     def __init__(self):
         self.ran = []

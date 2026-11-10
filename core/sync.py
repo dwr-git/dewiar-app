@@ -446,7 +446,11 @@ class Sync:
                     rep = describe_repeat(r.get("repeat")) if r.get("repeat") else ""
                 except Exception:  # noqa: BLE001
                     rep = ""
-                jobs.append({"text": str(r.get("text", ""))[:200], "at": at, "repeat": rep, "paused": bool(r.get("paused"))})
+                try:                           # имя для людей (№557): на телефоне — «Дача: заморозки и полив», а не поручение модели
+                    title = str(h.job_label(r))[:80] if hasattr(h, "job_label") else ""
+                except Exception:  # noqa: BLE001
+                    title = ""
+                jobs.append({"text": str(r.get("text", ""))[:200], "title": title, "at": at, "repeat": rep, "paused": bool(r.get("paused"))})
             # своя запись у каждого компьютера (jobs-<устройство>): два компьютера не перетирают друг друга по кругу;
             # без дел — не шлём (а если раньше были — шлём пустой список, чтобы телефон их убрал)
             if jobs or self.state.get("jobs_sent"):

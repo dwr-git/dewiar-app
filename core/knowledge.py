@@ -59,37 +59,42 @@ def _xml_text(xml, para_tag):
     return html.unescape(re.sub(r"<[^>]+>", "", xml))
 
 
+TEXT_MAX = 32 << 20            # текст документа — не больше (огромный .txt или распакованный XML не съедает память)
+
+
+def _head(p, cap=None):
+    """Начало файла — не больше cap байт (без чтения целиком)."""
+    with open(p, "rb") as f:
+        return f.read(cap or TEXT_MAX)
+
+
 def extract(p: Path, ocr=None, info=None) -> str:
     """Текст документа; незнакомый формат — "". PDF — через pypdf (если не установлен — RuntimeError), до 500 страниц.
     Страницы-сканы (без текстового слоя, идея №68): ocr=None — пусто, как раньше (info["scan"] = True — пометка для
     распознавания позже); ocr="local" — распознать локальным движком (ocr.py), если он есть; ocr=функция модели со
     зрением — локальным, а нет его — моделью."""
     ext = p.suffix.lower()
+    if not p.is_file():                                   # FIFO, устройство: чтение повисло бы навсегда
+        return ""
     if ext in (".md", ".txt", ".csv"):
-        return p.read_text(encoding="utf-8", errors="replace")
+        return _head(p).decode("utf-8", errors="replace")
     if ext in (".html", ".htm"):
-        t = p.read_text(encoding="utf-8", errors="replace")
+        t = _head(p).decode("utf-8", errors="replace")
         t = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", t)
         t = re.sub(r"(?i)<br\s*/?>|</p>|</h\d>|</li>|</div>|</tr>", "\n", t)
         return html.unescape(re.sub(r"<[^>]+>", " ", t))
-    if ext == ".docx":
+    if ext in (".docx", ".odt"):
+        from quality import zip_bomb
         with zipfile.ZipFile(p) as z:
-            return _xml_text(z.read("word/document.xml").decode("utf-8", "replace"), "w:p")
-    if ext == ".odt":
-        with zipfile.ZipFile(p) as z:
-            return _xml_text(z.read("content.xml").decode("utf-8", "replace"), "text:p")
+            why = zip_bomb(z)
+            if why:                                       # третья рецензия выпуска 5: «Папка» и «Знания» — без бомб
+                raise ValueError(f"архив документа подозрительный ({why}) — текст не извлекаю")
+            with z.open("word/document.xml" if ext == ".docx" else "content.xml") as f:
+                xml = f.read(TEXT_MAX)
+        return _xml_text(xml.decode("utf-8", "replace"), "w:p" if ext == ".docx" else "text:p")
     if ext == ".pdf":
-        try:
-            from pypdf import PdfReader
-        except ImportError as e:
-            raise RuntimeError("для PDF нужна библиотека pypdf") from e
-        r = PdfReader(str(p))
-        pages = []
-        for pg in r.pages[:500]:
-            try:
-                pages.append(pg.extract_text() or "")
-            except Exception:  # noqa: BLE001 — одна битая страница не роняет весь документ
-                pages.append("")
+        import pdftext                                    # pypdf — в отдельном процессе с пределами (PDF-бомба)
+        pages = pdftext.pages(p, limit=500, cap=TEXT_MAX)
         import ocr as _ocr
         if _ocr.mostly_scan(pages):                       # скан, а не обычный PDF с пустой страницей
             if info is not None:

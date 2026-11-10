@@ -1,7 +1,7 @@
 /* Блокнот у виджета: вкладки, правка «как выглядит», сохранение само (core/pad.py — команды pad_*), правки с других
    устройств — событие pad_changed (sync.py). Окно — ui/app.py (pad_open / pad_hide / pad_toggle). */
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
-const Q = new URLSearchParams(location.search);
+const Q = dwQuery();
 const ED = $("#ed");
 const P = { tabs: [], active: "", base: null, dirty: false, saving: false, loaded: false, t: 0, imgCache: {}, edits: 0, openSeq: 0, saveP: null, failed: "", locked: false };
 

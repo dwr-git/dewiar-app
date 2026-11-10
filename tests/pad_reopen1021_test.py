@@ -43,13 +43,16 @@ asyncio.run(m())
 """)
     import socket
     s = socket.socket(); s.bind(("127.0.0.1", 0)); PORT = str(s.getsockname()[1]); s.close()
-    disp = ":" + str(70 + os.getpid() % 20)
+    rfd, wfd = os.pipe()                      # свободный номер экрана выбирает сам Xvfb: проверки могут идти параллельно
+    xv = subprocess.Popen(["Xvfb", "-displayfd", str(wfd), "-screen", "0", "1280x800x24", "+extension", "Composite"], pass_fds=(wfd,),
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.close(wfd)
+    disp = ":" + os.read(rfd, 16).decode().strip()
+    os.close(rfd)
     env = dict(os.environ, DEWIAR_CONFIG_DIR=str(T / "cfg"), DEWIAR_STATE_DIR=str(T / "st"), DEWIAR_WORKSPACE_DIR=str(T / "ws"),
                DEWIAR_PORT=PORT, HOME=str(T), DISPLAY=disp)
     core = subprocess.Popen([sys.executable, str(ROOT / "core/main.py"), "--null-audio", "--wav", str(ROOT / "tests/silence90.wav")],
                             env=env, stdout=open(T / "core.log", "w"), stderr=subprocess.STDOUT, cwd=str(ROOT))
-    xv = subprocess.Popen(["Xvfb", disp, "-screen", "0", "1280x800x24", "+extension", "Composite"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2)
     vis = "xdotool search --onlyvisible --name 'блокнот' >/dev/null 2>&1 && echo ДА || echo НЕТ"
     script = f"""
       mutter --x11 --replace --sm-disable >/dev/null 2>&1 & MP=$!

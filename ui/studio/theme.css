@@ -132,6 +132,7 @@ html.st-light .md .when { color: var(--dim); }
 /* цветные метки: пастель на светлом не читается — насыщенные тона */
 html.st-light .dws.ok, html.st-light .badge.done, html.st-light .bugc .chip.fixed { color: #11724b; }
 html.st-light .dws.warn, html.st-light .bugc .chip.work, html.st-light .pnow, html.st-light .me-tools .st.dirty { color: #9a5a00; }
+html.st-light .sbx b { color: #9a5a00; } html.st-light .sbx.real b { color: var(--good); } html.st-light .snap.undo b { color: var(--accent); }
 html.st-light .dws.bad, html.st-light .badge.failed { color: #b4234a; }
 html.st-light .dws.run, html.st-light .badge.sleeping { color: #3a46b8; }
 html.st-light :is(.ritem .rtime, .rparse b, .ritem .rbadge.k) { color: #a2650a; }

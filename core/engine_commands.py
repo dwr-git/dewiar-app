@@ -473,9 +473,39 @@ class CommandsMixin:
                 return {"items": W.leads(sid)}
             if cmd == "sites_logos":
                 return {"items": W.artist_logos()}
+            if cmd == "sites_chat":                      # 05.11: «Чат Лиры на сайте» — состояние и «Включить» прямо из «Сайтов»
+                return self._sites_chat(sid, bool(a.get("on")))
         except SiteError as e:
             raise ValueError(str(e)) from e
         raise ValueError("неизвестная команда сайтов")
+
+    def _sites_chat(self, sid, on):
+        """«Чат для сайта» на опубликованных сайтах: sites.php сам ставит кнопку чата на каждый сайт аккаунта, когда чат
+        включён. Здесь — честное состояние для «Сайтов» и «Включить»: нет знаний у консультанта — берём их с сайта sid
+        (sites.chat_knowledge), прежние настройки «Чата для сайта» не трогаем. -> {available, on, signed, name, color, knows, link}"""
+        SC = getattr(self, "sitechat", None)
+        if SC is None:
+            return {"available": False}
+        from sitechat import SiteChatError, readable
+        seeded = False
+        if on:
+            c = SC.cfg()
+            patch = {}
+            if sid and not (str(c.get("kb") or "").strip() or str(c.get("brief") or "").strip()):
+                from sites import chat_knowledge
+                patch = {k: v for k, v in chat_knowledge(self.sites.get(sid)).items() if v and not str(c.get(k) or "").strip()}
+                seeded = bool(patch.get("kb") or patch.get("brief"))
+            try:
+                SC.publish(patch)
+            except SiteChatError as e:
+                raise ValueError(str(e)) from e
+        c = SC.cfg()
+        p = SC._persona(c.get("persona"))
+        col = str(p.get("color") or "")
+        r = SC.remote if SC.remote and not SC.remote.get("none") else {}
+        return {"available": True, "on": bool(c.get("on")), "signed": bool(SC._key()), "name": p.get("name") or "Лира",
+                "color": readable(col) if re.fullmatch(r"#[0-9a-fA-F]{6}", col) else "#6a5cf0",
+                "knows": bool(str(c.get("kb") or "").strip() or str(c.get("brief") or "").strip()), "link": (r or {}).get("link", ""), "seeded": seeded}
 
     def _plugin_cmd(self, cmd, a):
         """plugins — каталог; plugin_install {id, values} / plugin_remove {id, jobs: снимать ли его дела} / plugin_values {id, values} /
@@ -510,8 +540,9 @@ class CommandsMixin:
                         pass
                 rid = ""
                 if a.get("on"):
-                    task, when = P.job_text(pid, jid)
-                    out = t_schedule_job({"task": task, "when": when}, {"reminders": self.reminders})
+                    from tools import home_city
+                    task, when = P.job_text(pid, jid, fallback={"city": home_city(self)[0]})   # «Где дача» пусто — город из «Утра» или памяти
+                    out = t_schedule_job({"task": task, "when": when, "title": P.job_label(pid, jid)}, {"reminders": self.reminders})
                     m = re.search(r"\(id ([^)]+)\)", out)
                     rid = m.group(1) if m else ""
                 P.job_mark(pid, jid, rid)
@@ -1446,7 +1477,15 @@ class CommandsMixin:
                     items = self.mail.inbox(max(1, min(int(a.get("limit") or 5), 20)))
                     return {"on": True, "items": [{k: x.get(k) for k in ("uid", "from", "subject", "date", "snippet", "unread", "files", "box")} for x in items]}
                 if cmd == "mail_read":
-                    return self.mail.read(str(a.get("uid") or ""), mark=a.get("mark", True) is not False)
+                    return self.mail.read(str(a.get("uid") or ""), mark=a.get("mark", True) is not False, html_view=bool(a.get("html")))
+                # №562 (05.11): письмо в студии — «Удалить» (в «Корзину»), «В спам», «Переслать»; вопрос «точно?» задаёт студия
+                if cmd == "mail_act":
+                    act = str(a.get("action") or "")
+                    if act not in ("trash", "junk", "forward"):
+                        raise MailError("неизвестное действие с письмом")
+                    r = self.mail.manage(str(a.get("uid") or ""), act, str(a.get("to") or ""), str(a.get("note") or ""))
+                    log.info("✉ Студия: письмо %s — %s", r.get("uid"), {"trash": "в корзину", "junk": "в спам", "forward": "переслано"}[act])
+                    return r
                 if cmd == "mail_test":
                     return self.mail.test(int(a.get("box") or 0))
                 if cmd == "mail_send_test":
@@ -2471,7 +2510,11 @@ class CommandsMixin:
             return {"items": out, "folder": str(d)}
         if cmd == "ws_open":
             from tools import launch
+            import export as X
             p = self.workspace.safe(a.get("path", "")) if a.get("path") else self.workspace.ensure()
+            if not X.safe_to_open(p):               # .desktop, .sh, .jar… (мог написать код задачи) — только показать в папке
+                launch(["xdg-open", str(p.parent)])
+                return str(p)
             launch(["xdg-open", str(p)])
             return str(p)
         if cmd in ("soul_get", "soul_save", "soul_update", "soul_delete", "const_get", "const_save", "const_reset"):
@@ -2550,8 +2593,14 @@ class CommandsMixin:
                 raise ValueError(str(e).strip("'\"")) from None
         if cmd == "task_create":
             t = self.tasks.create(a.get("title", ""), a.get("goal", ""), a.get("project", ""), start=a.get("start", True),
-                                  folders=a.get("folders") or (), search_url=a.get("search_url") or "")
+                                  folders=a.get("folders") or (), search_url=a.get("search_url") or "", net=bool(a.get("net")))
             return t.public()
+        if cmd == "task_rewind":                               # выпуск 5: «Откатить к шагу N» / вернуть снимок (отменить откат)
+            st, sq = a.get("step"), a.get("seq")
+            return self.tasks.rewind(a.get("id"), step=int(st) if st not in (None, "") else None,
+                                     seq=int(sq) if sq not in (None, "") else None)
+        if cmd == "task_net":                                  # сеть для кода задачи (песочница) — даёт человек
+            return self.tasks.set_net(a.get("id"), bool(a.get("on"))).public()
         if cmd in ("task_export", "task_open_result"):        # результат задачи: скачать (HTML/PDF/как есть) или открыть
             import export as X
             t = self.tasks.get(a.get("id"))
@@ -2566,7 +2615,7 @@ class CommandsMixin:
                 return {"opened": str(src)}
             title = next((o.get("title") for o in t.data.get("outputs") or [] if o.get("path") == rel), "") or t.title
             try:
-                out = X.export(src, title, a.get("fmt") or "file")
+                out = X.export(src, title, a.get("fmt") or "file", root=t.dir)
             except X.ExportError as e:
                 raise ValueError(str(e)) from e
             if a.get("reveal", True) and not os.environ.get("DEWIAR_DRY_TOOLS"):

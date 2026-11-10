@@ -39,7 +39,7 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
     <button id="r-x" title="Выключить радио"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></div>
     <p id="rhint">Нажмите микрофон: «дальше», «тише», «пауза»</p></div>
   <div id="tmrs" hidden aria-live="off"></div>
-  <div id="state">Нажмите и говорите</div>
+  <div id="statebar"><div id="state">Нажмите и говорите</div><button id="stopx" type="button" hidden aria-label="Остановить ответ" title="Остановить: замолчать и не отвечать дальше (Esc)"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.2"/></svg>Стоп</button></div>
   <div id="talk">
     <button id="talk-x" class="ib soft" title="Убрать с экрана" aria-label="Убрать сообщение с экрана" hidden><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button>
     <div id="you"></div>

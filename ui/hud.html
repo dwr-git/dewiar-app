@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
+<base href="hud.html"><script src="assets/boot.js"></script>
 <meta charset="utf-8">
 <title>Dewiar</title>
 <link href="assets/fonts.css" rel="stylesheet">
@@ -127,6 +128,26 @@
   #orb.holding { transform: scale(1.04); transition: transform .2s ease, width .35s ease, height .35s ease; }
   @media (prefers-reduced-motion: reduce) { #bubble.hold::before { animation: none; } #orb.holding { transform: none; } }
   #bubble b { font-family: "Unbounded", "Ubuntu", sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .03em; }
+  /* №560 (05.11): «кнопку стоп, чтобы не говорить, когда работаешь без микрофона». Пока думаю или говорю — справа в строке
+     состояния «■ Стоп» (то же, что голосом «стоп»: core «stop» → interrupt), Esc в виджете — то же самое */
+  #stopb { display: none; position: relative; z-index: 1; align-items: center; gap: 6px; margin: -2px -10px -4px 7px; padding: 4px 11px 4px 9px;
+           border: 0; border-radius: 999px; font: 600 12.5px/1.2 "Manrope", sans-serif; letter-spacing: .01em; color: inherit; cursor: pointer;
+           background: rgb(255 255 255 / 10%); transition: background .15s, color .15s; }
+  #stopb::before { content: ""; width: 1px; height: 14px; position: absolute; left: -8px; top: 50%; transform: translateY(-50%); background: currentColor; opacity: .16; }
+  #stopb svg { width: 11px; height: 11px; fill: currentColor; flex: none; }
+  #stopb:hover, #stopb:focus-visible { background: rgb(255 107 138 / 24%); color: #FFD3DD; outline: none; }
+  #stopb:focus-visible { box-shadow: 0 0 0 2px rgb(255 255 255 / 45%); }
+  #stopb:active { transform: scale(.96); }
+  #bubble.stoppable #stopb { display: inline-flex; }
+  #bubble.stoppable { padding-right: 15px; }
+  body.light #stopb { background: rgba(20,20,40,.07); }
+  body.light #stopb:hover, body.light #stopb:focus-visible { background: rgba(210,50,90,.12); color: #b0284c; }
+  body.light #stopb:focus-visible { box-shadow: 0 0 0 2px rgba(91,124,255,.45); }
+  body.neu #stopb { background: var(--glass); box-shadow: 2px 2px 5px var(--neu-dark), -2px -2px 5px var(--neu-light); }
+  body.neu #stopb:hover, body.neu #stopb:focus-visible { background: var(--glass); box-shadow: inset 2px 2px 5px var(--neu-dark), inset -2px -2px 5px var(--neu-light); color: #e0436b; }
+  body.neu:not(.light) #stopb:hover, body.neu:not(.light) #stopb:focus-visible { color: #FF8FA8; }
+  #health button.stop { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 8px; vertical-align: middle; font-weight: 600; }
+  #health button.stop svg { width: 10px; height: 10px; fill: currentColor; }
 
   /* по центру, но не выше имени: при нехватке места «распорки» сжимаются до нуля, а лишнее уходит вниз (не наезжает на имя) */
   #mid { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; padding: 10px 0 8px; }
@@ -574,7 +595,7 @@
 <div id="card">
   <div id="orb" title="Нажмите — говорить. Удерживайте (или пробел) — диктовка любой длины, отпустите — отправлю"><canvas id="cv"></canvas>
     <svg id="tarc" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="tarcg" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="90" y2="100"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient></defs><circle class="tk" cx="50" cy="50" r="48.5"/><circle class="fg" cx="50" cy="50" r="48.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" stroke="url(#tarcg)" transform="rotate(-90 50 50)"/><circle class="bead" cx="50" cy="1.5" r="1.45"/></svg><span id="tmini"></span></div>
-  <div id="bubble"><span id="say">Подключаюсь…</span></div>
+  <div id="bubble"><span id="say">Подключаюсь…</span><button id="stopb" type="button" aria-label="Остановить ответ" title="Остановить: замолчать и не отвечать дальше (Esc)"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.2"/></svg>Стоп</button></div>
   <div id="mid">
     <div id="cap"><div class="you" id="you"></div><div id="act" title="Ход работы"></div><div class="bot" id="bot"></div><div id="media"></div><button id="more">Открыть целиком</button></div>
     <div id="yn"><button class="yes" id="y">Да</button><button id="ya" hidden title="Команды, которые только смотрят, на этом сервере — дальше без вопроса">Всегда</button><button id="n">Нет</button></div>
@@ -759,16 +780,27 @@ let turnUntil = 0;                           // до какого времени
 // обновление: ядро перезапускается — это не «нет связи», а спокойное «обновляюсь» с обычным лицом (без притушенного
 // портрета и пунктирного круга); дольше 3 минут — значит, правда что-то не так, и снова честное «Нет связи с ядром»
 let updating = 0;
+/* «Стоп» (№560): пока думаю или говорю, а диктовка удержанием не идёт — кнопка в строке состояния; нажали (или Esc) —
+   то же, что голосом «стоп»: ядро обрывает ответ и голос (core «stop» → interrupt, без «слушаю дальше») */
+const canStop = () => (state === "thinking" || state === "speaking") && !(hold && hold.on);
+function stopSync() { $("bubble").classList.toggle("stoppable", canStop()); }
+function stopNow(by) {
+  if (!canStop()) return false;
+  $("bubble").classList.remove("stoppable");
+  core.call("stop").catch(showErr);
+  if (by === "key") setTimeout(() => { if (canStop()) stopSync(); }, 1500);   // ядро так и не ответило «покой» — кнопка вернётся
+  return true;
+}
 function setState(s) {
   if (s === "offline" && updating && Date.now() - updating < 180000) {
     state = "offline"; entity.set({ state: "idle" });
-    $("bubble").classList.remove("live", "turn"); $("say").textContent = "Обновляюсь — скоро вернусь"; $("say").title = "";
+    $("bubble").classList.remove("live", "turn", "stoppable"); $("say").textContent = "Обновляюсь — скоро вернусь"; $("say").title = "";
     return;
   }
   if (s !== "offline") updating = 0;
   if (s !== state) stateSince = Date.now();
   if (s !== "listening") turnUntil = 0;
-  state = s; entity.set({ state: s });
+  state = s; entity.set({ state: s }); stopSync();
   if (hold && hold.on) return holdShow();
   const say = $("say"), bub = $("bubble");
   bub.classList.toggle("live", s === "listening" || s === "speaking" || s === "thinking");
@@ -913,6 +945,7 @@ function guard(el, fn) {
   };
 }
 let orbBusy = false;
+$("stopb").addEventListener("click", (ev) => { ev.stopPropagation(); stopNow(); });
 function tapOrb() {
   if (orbBusy) return; orbBusy = true;
   core.call("ptt").catch(showErr).finally(() => { orbBusy = false; });
@@ -1201,10 +1234,16 @@ core.on("hello", () => { connectedAt = Date.now(); });
 /* Долгое молчание ядра — почти всегда запуск (грузятся слух, голос, модели) или долгая работа, а не сбой; тревожное
    «не отвечает» пугает зря. Поэтому сначала — спокойное «запускаюсь / занят», и только если долго — мягкий совет и
    кнопка перезапуска (api().restart_core). */
-function health(text, bad, restart, calm) {
+function health(text, bad, restart, calm, stop) {
   const el = $("health"); el.textContent = text || ""; el.classList.toggle("on", !!text); el.classList.toggle("bad", !!bad);
   el.classList.toggle("calm", !!calm && !bad);
   if (text && calm) { const d = document.createElement("span"); d.className = "dots"; el.appendChild(d); }
+  if (text && stop) {                                                       // №560: «Стоп» в подсказке — тоже кнопка
+    const b = document.createElement("button"); b.className = "stop"; b.type = "button"; b.title = "Прервать ответ (Esc)";
+    b.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.2"/></svg>Стоп';
+    b.onclick = (ev) => { ev.stopPropagation(); stopNow(); health(""); };
+    el.appendChild(b);
+  }
   if (text && restart && api() && api().restart_core) {                      // ядро молчит давно — предложить перезапуск
     const b = document.createElement("button"); b.textContent = Date.now() - restarting < 30000 ? "Перезапускаю…" : "Перезапустить";
     b.disabled = Date.now() - restarting < 30000;
@@ -1237,7 +1276,7 @@ setInterval(() => {
   core.call("ping").then(r => {
     pingAt = 0;
     const think = (state === "thinking") ? Math.round((Date.now() - stateSince) / 1000) : 0;
-    if (think > 40) health(`Модель отвечает долго — ${think} с. «Стоп» — прервать`);
+    if (think > 40) health(`Модель отвечает долго — ${think} с.`, false, false, false, true);
     else if (r && r.oldest > 25) health(`Занят: ${CMD_RU[r.cmd] || r.cmd} — ${Math.round(r.oldest)} с`);
     else if (Date.now() > padFailUntil) health("");
   }).catch(() => { pingAt = 0; });
@@ -1273,7 +1312,7 @@ const card = $("card");
    паузы не обрывают; отпустили — уходит одним вопросом. Увели палец в сторону или Esc — отмена. Короткое нажатие —
    как раньше («слушай» / «замолчи»). Ядро берёт звук с самого нажатия (hold_start back_ms), так что начало не теряется. */
 function holdShow() {
-  const say = $("say"), bub = $("bubble");
+  const say = $("say"), bub = $("bubble"); stopSync();
   if (!hold || !hold.on) { bub.classList.remove("hold", "holdx"); $("orb").classList.remove("holding"); return setState(state); }
   const sec = Math.floor((Date.now() - hold.t0) / 1000);
   bub.classList.add("live", "hold"); bub.classList.remove("turn"); bub.classList.toggle("holdx", !!hold.far); $("orb").classList.add("holding");
@@ -1329,6 +1368,9 @@ card.addEventListener("pointerdown", async (ev) => {
 });
 document.addEventListener("keydown", (e) => {          // пробел в виджете — то же удержание (не в поле ввода)
   if (e.code === "Escape" && hold) { e.preventDefault(); if (!holdFinish(true)) hold = null; return; }
+  // Esc — «Стоп» (№560), если не закрывает что-то своё: поле вопроса, ответ целиком, картинку
+  if (e.key === "Escape" && !e.defaultPrevented && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")
+      && !$("reader").classList.contains("on") && !$("lightbox").classList.contains("on") && stopNow("key")) { e.preventDefault(); return; }
   if (e.code !== "Space" || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
   if (/^(INPUT|TEXTAREA|BUTTON|SELECT)$/.test((document.activeElement || {}).tagName || "") || $("reader").classList.contains("on")) return;
   e.preventDefault(); holdBegin("key");
@@ -1457,7 +1499,7 @@ $("b-lo").onclick = () => { const a = api(); if (a) a.open_settings("safety"); }
 // жалоба: сначала снимок экрана (каким его видит человек в момент проблемы), потом форма в студии («О программе»)
 $("b-bug").onclick = guard($("b-bug"), async () => {
   note({ note: "Снимаю экран для жалобы…" });
-  try { await core.call("bug_shot"); } catch (e) { /* без снимка — форма всё равно откроется */ }
+  try { await core.shot(); } catch (e) { /* без снимка — форма всё равно откроется */ }
   note({ note: "" });
   const a = api(); if (a) a.open_settings("about");
 });
@@ -1626,8 +1668,8 @@ function showUpd(u) {
 }
 
 /* карточка ↔ значок: это два окна; эта страница живёт в одном из них */
-const mode = new URLSearchParams(location.search).get("mode") === "mini" ? "mini" : "card";
-if (new URLSearchParams(location.search).get("tw") === "1") document.documentElement.classList.add("tw");
+const mode = dwQuery().get("mode") === "mini" ? "mini" : "card";
+if (dwQuery().get("tw") === "1") document.documentElement.classList.add("tw");
 // растянутая карточка — и портрет крупнее (--ok: во сколько раз карточка больше обычной 300×420, 1…1,6)
 function orbScale() {
   const z = (window.DewiarZoom && DewiarZoom.get().zoom) || 1;

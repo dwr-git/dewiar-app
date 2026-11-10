@@ -1776,12 +1776,16 @@ class ToolsMixin:
     def _money_cmd(self, text, via=None):
         """Записать доход/расход, отменить последнюю запись (не старше 3 дней) или ответить «сколько потратил».
         -> True, если фраза разобрана и ответ дан без модели."""
-        from money import fmt, parse
+        from money import fmt, parse, parse_more
         c = parse(text, self._default_currency())
+        last = getattr(self, "_money_last", None)
+        if not c and last and time.time() - last["ts"] < 15 * 60:
+            c = parse_more(text, last, self._default_currency())      # «И ещё 1250 на кафе» — следом за записью
         if not c:
             return False
         if c["op"] == "add":
             it = self.money.add(c["kind"], c["amount"], c["currency"], c["category"], c["note"], c["date"], said=text)
+            self._money_last = {"ts": time.time(), "kind": it["kind"], "currency": it["currency"], "category": it["category"]}
             what = "доход" if it["kind"] == "income" else "расход"
             today = datetime.now().date()
             d = datetime.fromisoformat(it["date"]).date()
@@ -1921,10 +1925,11 @@ class ToolsMixin:
                 continue
             n = 0
             job = r.get("kind") == "job"
+            title = self.job_label(r) if job else r["text"]
             while at <= last and n < 400:                        # предел — чтобы частый повтор не раздул месяц и не зациклил
                 if at >= first:
                     put(at.date().isoformat(), {"type": "reminder", "id": r["id"], "time": at.strftime("%H:%M"),
-                                                "title": self.job_title(r) if job else r["text"], "text": r["text"],
+                                                "title": title, "text": r["text"],
                                                 "kind": r.get("kind") or "reminder", "repeat": bool(r.get("repeat")),
                                                 "repeat_text": describe_repeat(r.get("repeat")) if r.get("repeat") else "",
                                                 "paused": bool(r.get("paused")), "deliver": r.get("deliver") or "",
@@ -2041,8 +2046,24 @@ class ToolsMixin:
                   "news": "Главные новости", "weather": "Погода и что надеть"}
 
     def job_title(self, item):
-        """Короткое имя дела для календаря: готовое — по названию карточки («Итог дня»), своё — его текст."""
+        """Имя дела для двойников (_on_reminder): готовое — по названию карточки («Итог дня»), своё — его текст."""
         return self.JOB_TITLES.get(item.get("preset") or "") or ("Утренняя сводка" if item.get("brief") else item.get("text", ""))
+
+    def job_label(self, item):
+        """Имя дела по расписанию для людей — календарь, «Утро с Лирой», «Дальше сегодня», телефон (№557, 05.11: вместо
+        «Дача: заморозки и полив» строкой ехало всё поручение модели «Посмотри прогноз погоды (weather) …»). Готовое —
+        название карточки; своё имя дела (title) → дело плагина (его short или имя плагина) → первая фраза поручения."""
+        if item.get("brief") or self.JOB_TITLES.get(item.get("preset") or ""):
+            return self.job_title(item)
+        if item.get("title"):
+            return str(item["title"])
+        P = getattr(self, "plugins", None)
+        try:
+            t = P.job_label_by_rid(item.get("id")) if P is not None else ""
+        except Exception:  # noqa: BLE001 — плагины не загрузились: имя — из поручения
+            t = ""
+        from tools import job_short
+        return t or job_short(item.get("text", ""))
 
     def _log_reminder(self, item, skipped=False):
         """Что сработало — в журнал (календарь: «прозвенело»). Опоздавшее — с назначенным временем (due): в календаре оно
@@ -2051,7 +2072,7 @@ class ToolsMixin:
         e = {"at": datetime.now().isoformat(timespec="seconds"), "text": item.get("text", ""),
              "kind": item.get("kind") or "reminder", "id": item.get("id")}
         if item.get("kind") == "job":
-            e["title"] = self.job_title(item)
+            e["title"] = self.job_label(item)
         if item.get("late") and item.get("at"):
             e["due"] = str(item["at"])[:19]
         if skipped:

@@ -120,6 +120,8 @@ ch.confirm = lambda q, cancel=None: False
 ch.skills_prompt = lambda: ""
 ctm = CR.CloudTasks(ch)
 ct = ctm.create("Облако", "цель", start=False)
+os.environ["DEWIAR_SANDBOX"] = "guard"         # выпуск 5: без bubblewrap кода в облаке нет (с ним — sandbox_test)
+ok(CR.cloud_skip() == CR.CLOUD_SKIP and "run_shell" in CR.CLOUD_SKIP, "облако без bubblewrap: run_python и run_shell недоступны")
 cat = ctm._catalog(ct)
 ok(not (set(cat) & CR.CLOUD_SKIP) and not ({x["name"] for x in ctm._specs(ct)} & CR.CLOUD_SKIP), "облако: download, run_python, ask_user, transcribe — нет в каталоге")
 for qq in ("скачать файл по ссылке", "спросить пользователя", "выполнить код python", "расшифровать запись"):
@@ -131,6 +133,7 @@ for name in sorted(CR.CLOUD_SKIP):
     t0 = time.time()
     r = ctm._tool(ct, name, {"url": "http://127.0.0.1:1/x", "question": "?", "code": "print(1)", "path": "a"})
     ok("в облаке недоступен" in r and time.time() - t0 < 2, f"облако: вызов {name} по имени — «недоступен», сразу")
+os.environ.pop("DEWIAR_SANDBOX", None)
 
 # ---------- 4–5. кодировка, CRLF, неточный поиск ----------
 f = t.dir / "outputs" / "win.txt"

@@ -2,7 +2,7 @@
 которые ждут, важная почта; на компьютере и на телефоне).
 
 gather(eng) собирает утро из того, что уже есть в Dewiar, — без модели и без выдумок:
-  weather  — Open-Meteo по городу из настроек («Утро» → город; tools.t_weather), одной строкой и числами;
+  weather  — Open-Meteo по городу из настроек («Утро» → город; нет — из памяти, city_mem), одной строкой и числами;
   today    — встречи календаря и дела на сегодня;
   team     — «Поручения»: просрочено, ждут вашей проверки, что сотрудники написали за ночь;
   clients  — «Клиенты»: чей следующий шаг просрочен или сегодня;
@@ -53,7 +53,7 @@ def weather(city, eng=None):
         if not place:
             return None
         f = W.forecast(place, via)
-        w = {"city": place["name"], "now": f["now"], "feels": f["feels"], "sky": f["sky"], "wind": f["wind"]}
+        w = {"city": place["name"], "place": W.stored(place), "now": f["now"], "feels": f["feels"], "sky": f["sky"], "wind": f["wind"]}
         if f["days"]:
             x = f["days"][0]
             w.update(min=x["min"], max=x["max"], sky_day=x["sky"], rain=x["rain"])
@@ -160,8 +160,17 @@ def gather(eng, net=True, fresh=False):
         except Exception:  # noqa: BLE001
             log.debug("утро: %s", k, exc_info=True)
     if net:
-        if d["city"]:
-            d["weather"] = weather(d["city"], eng) if not fresh else (_cache.pop("w:" + d["city"].lower(), None), weather(d["city"], eng))[1]
+        c = d["city"]
+        if not c:
+            # идея №142 (05.11): города в «Утре» нет — из памяти («живу в Балашове», «я из Минска»); карточка на «Главной»
+            # покажет погоду и предложит запомнить город (city_mem; сам город «Утра» не меняем без согласия)
+            try:
+                import weatherq as W
+                c = d["city_mem"] = W.memory_place(eng.workspace.memory_get())[0]
+            except Exception:  # noqa: BLE001 — памяти нет
+                c = ""
+        if c:
+            d["weather"] = weather(c, eng) if not fresh else (_cache.pop("w:" + c.lower(), None), weather(c, eng))[1]
         d["mail"] = _mail(eng, fresh)
     return d
 

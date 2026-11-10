@@ -1,7 +1,7 @@
 /* Студия Dewiar, разделы «Задачи» и обновление в «О программе».
    Задачи — долгие поручения мастерской (core/tasks.py): список, карточка с вкладками (план, блокнот, результаты, журнал,
    изменения кода, итог), просмотр и выгрузка результатов, «идеи» для пустой страницы. Команды ядра: tasks_list, task_get,
-   task_create, task_tell, task_answer, task_resume/stop/accept/discard/delete, task_export, ws_open, ws_read;
+   task_create, task_tell, task_answer, task_resume/stop/accept/discard/delete, task_export, task_rewind, task_net, ws_open, ws_read;
    событие "task" перерисовывает раздел, пока он открыт. Обновление: renderUpdate() показывает update_status,
    ставит его окно (api().install_update), экран хода установки — updShow/updPoll в day.js.
    Файлы студии подключаются по порядку из ui/settings.html и делят одну глобальную область: при загрузке здесь
@@ -83,13 +83,41 @@ function renderTodos(t, live, activity) {
     ${crit.length ? `<div class="pcrit-h">Готово, когда</div><div class="pcrit">${crit.map(c => `<div class="pc ${c.ok === true ? "ok" : c.ok === false ? "bad" : ""}"><b>${c.ok === true ? "✓" : c.ok === false ? "✕" : "·"}</b><span>${escH(c.label || "")}${c.ok === false && c.detail ? `<small>${escH(c.detail)}</small>` : ""}</span></div>`).join("")}</div>`
       : fallback ? `<div class="pcrit-h">Готово, когда</div><div class="pcrit"><div class="pc"><b>·</b><span>${escH(fallback.replace(/\*+/g, ""))}</span></div></div>` : ""}`;
 }
+/* «Большие задачи», выпуск 5: песочница кода и снимки outputs/ — «Откатить к шагу N» возвращает результаты к виду перед
+   шагом N (лишнее уходит), текущий вид перед этим сохраняется снимком «перед откатом» — его можно вернуть. Пока задача
+   работает, откатывать нельзя (ядро откажет): она пишет в те же файлы. */
+const tKB = (b) => b >= 1048576 ? `${(b / 1048576).toFixed(1).replace(".0", "")} МБ` : b >= 1024 ? `${Math.round(b / 1024)} КБ` : `${b} байт`;
+const tFiles = (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "файл" : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? "файла" : "файлов"}`;
+const SBX_RU = { bwrap: ["Песочница", "Код задачи пишет только в её папку и не видит ваших личных папок."],
+  landlock: ["Защита ядра", "Код задачи пишет только в её папку и не видит ваших личных папок (Landlock), но это не полная песочница — поэтому код и команды задачи запускаются с вашего разрешения. Полная — с bubblewrap."],
+  guard: ["Охрана кода", "Защищает от случайных ошибок кода, но не от нарочного взлома — поэтому код и команды задачи запускаются только с вашего разрешения. Настоящая песочница появится, если поставить bubblewrap."],
+  off: ["Без песочницы", "Код задачи запускается только с вашего разрешения."] };
+function renderSnaps(t, live) {
+  const sb = t.sandbox || {}, snaps = t.snaps || [], ru = SBX_RU[sb.mode];
+  const head = ru ? `<div class="sbx${sb.mode === "bwrap" ? " real" : ""}"><b>${ru[0]}</b><span>${ru[1]}</span></div>
+    <div class="switch slim"><div>Интернет для кода задачи<span>Скрипты и команды получат ${escH(sb.net_note || "сеть")}. Поиск и чтение страниц работают и без этого.</span></div><label class="tg"><input type="checkbox" id="t-net"${sb.net ? " checked" : ""}><i></i></label></div>` : "";
+  if (!snaps.length) return head + `<div class="fempty">Снимков пока нет: перед каждой записью в результаты задача запоминает их, и испорченное можно вернуть.</div>`;
+  return head + `<div class="pcrit-h">Снимки результатов</div><div class="snaps">${snaps.map(x => `<div class="snap${x.kind === "step" ? "" : " undo"}">
+      <span><b>${x.kind === "step" ? `Перед шагом ${x.step}` : "Перед откатом"}</b><small>${escH(tsince(x.time))} · ${x.files ? `${tFiles(x.files)}, ${tKB(x.bytes)}` : "пусто"}${x.why && x.kind === "step" ? " · " + escH(x.why) : ""}</small></span>
+      <button class="btn small" data-snap="${x.kind === "step" ? "s" + x.step : "q" + x.seq}"${live ? " disabled title=\"Сначала остановите задачу\"" : ""}>${x.kind === "step" ? `Откатить к шагу ${x.step}` : "Вернуть как было"}</button></div>`).join("")}</div>
+    <p class="hint">Откат меняет только папку результатов (outputs). Текущий вид перед откатом тоже сохраняется — откат можно отменить.</p>`;
+}
+function wireSnaps(t) {
+  if ($("#t-net")) $("#t-net").onchange = (e) => core.call("task_net", { id: t.id, on: e.target.checked }).then(() => openTask(t.id)).catch(err => toast(err.message));
+  $$("#t-view [data-snap]").forEach(b => b.onclick = async () => {
+    const k = b.dataset.snap, step = k[0] === "s" ? +k.slice(1) : null;
+    if (!await ask(step !== null ? `Вернуть результаты к виду перед шагом ${step}? Текущий вид сохранится снимком.` : "Вернуть результаты к виду перед откатом?")) return;
+    try { toast(await core.call("task_rewind", step !== null ? { id: t.id, step } : { id: t.id, seq: +k.slice(1) }), 6000); openTask(t.id); } catch (e) { toast(e.message, 7000); }
+  });
+}
 const OUT_ICON = { html: "🌐", htm: "🌐", pdf: "📕", png: "🖼", jpg: "🖼", jpeg: "🖼", webp: "🖼", svg: "🖼", md: "📝", txt: "📝", srt: "💬",
                    csv: "📊", xlsx: "📊", docx: "📄", pptx: "📽", mp3: "🎵", wav: "🎵", mp4: "🎬", zip: "🗜" };
 /* Результат показывается прямо с диска (file://): # и ? в имени файла иначе читаются как якорь и строка запроса;
    t.dir — абсолютный путь ядра, в Windows с буквой диска и «\» -> file:///C:/… */
 function outUrl(t, rel) { const p = (t.dir + "/" + rel).replace(/\\/g, "/"); return "file://" + (p.startsWith("/") ? "" : "/") + encodeURI(p).replace(/#/g, "%23").replace(/\?/g, "%3F"); }
-/* Windows: страницы студии отдаёт http://127.0.0.1 (ui/app.py, _url), а со страницы http браузер не загружает file://
-   («Not allowed to load local resource») — там страницу и SVG берём текстом через ws_read, картинку покажет своя программа */
+/* Картинки — с диска (file://; скрипты в <img> не работают). Windows: страницы студии отдаёт http://127.0.0.1 (ui/app.py,
+   _url), а со страницы http браузер не загружает file:// — там SVG берём текстом, картинку покажет своя программа.
+   Страницы (HTML) — всегда текстом в safeFrame (core.js). */
 const OUT_FILE_OK = location.protocol === "file:";
 function renderOutputs(t) {
   const outs = t.outputs || []; if (!outs.find(o => o.path === tOutSel)) tOutSel = (outs[outs.length - 1] || {}).path || "";
@@ -123,11 +151,11 @@ async function wireOutputs(t) {
   $("#o-full").onclick = () => { const el = v.firstElementChild; if (el) (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el); };
   const openHint = `<p class="hint" style="padding:30px">Этот файл открывается в своей программе — нажмите «Открыть».</p>`;
   if (["html", "htm"].includes(ext)) {
-    if (OUT_FILE_OK) v.innerHTML = `<iframe src="${outUrl(t, rel)}" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>`;
-    else try {
+    // на всех системах — текстом в srcdoc без allow-same-origin и с CSP (safeFrame, core.js): у страницы нет прав студии
+    try {
       const f = await core.call("ws_read", { path: dirRel + "/" + rel });
-      v.innerHTML = `<iframe sandbox="allow-scripts allow-popups allow-forms"></iframe>${f.truncated ? '<p class="hint">Показано начало страницы — целиком она откроется по кнопке «Открыть».</p>' : ""}`;
-      $("iframe", v).srcdoc = f.text || "";
+      v.innerHTML = f.truncated ? '<p class="hint">Показано начало страницы — целиком она откроется по кнопке «Открыть».</p>' : "";
+      v.prepend(safeFrame(f.text || ""));
     } catch (e) { v.innerHTML = `<p class="hint">${escH(e.message)}</p>`; }
   } else if (["png", "jpg", "jpeg", "webp", "svg", "gif"].includes(ext)) {
     if (OUT_FILE_OK) v.innerHTML = `<img src="${outUrl(t, rel)}" alt="">`;
@@ -150,7 +178,7 @@ async function openTask(id) {
     const outs = t.outputs || [];
     const nbFacts = (t.notebook || "").split("\n").filter(l => /^\s*[-*]\s+\S/.test(l)).length;
     const tabs = [["plan", "План"]].concat(nbFacts ? [["notebook", `Блокнот (${nbFacts})`]] : []).concat(outs.length ? [["results", `Результаты (${outs.length})`]] : []).concat([["journal", "Журнал"]])
-      .concat(t.project ? [["diff", `Изменения${t.changes ? " (" + t.changes.length + ")" : ""}`]] : []).concat(t.summary ? [["summary", "Итог"]] : []);
+      .concat(t.project ? [["diff", `Изменения${t.changes ? " (" + t.changes.length + ")" : ""}`]] : []).concat([["snaps", `Снимки${(t.snaps || []).length ? " (" + t.snaps.length + ")" : ""}`]]).concat(t.summary ? [["summary", "Итог"]] : []);
     if (tOpenedFor !== id) { tOpenedFor = id; tTab = outs.length && t.status === "done" ? "results" : t.summary ? "summary" : "plan"; }
     if (!tabs.find(x => x[0] === tTab)) tTab = t.summary ? "summary" : "plan";
     const acts = [];
@@ -166,6 +194,7 @@ async function openTask(id) {
     if (tTab === "notebook") body = `<div class="md">${md(t.notebook)}</div><p class="hint">Блокнот — память задачи: факты, номера, договорённости. Ассистент ведёт его сам и сверяется с ним на каждом шаге.</p>`;
     if (tTab === "journal") body = tJournal(t.journal);
     if (tTab === "summary") body = `<div class="md">${md(t.summary)}</div>`;
+    if (tTab === "snaps") body = renderSnaps(t, ["running"].includes(t.status));
     if (tTab === "diff") body = t.diff ? renderDiff(t.diff) : `<div class="fempty">${t.code_state === "accepted" ? "Изменения уже перенесены в проект." : t.code_state === "discarded" ? "Изменения отклонены." : "Изменений пока нет."}</div>`;
     const pr = t.status === "done" ? 1 : (t.progress && t.progress[1] ? t.progress[0] / t.progress[1] : 0);
     const mins = Math.max(0, Math.round((Date.now() - new Date(t.created)) / 60000));
@@ -187,6 +216,7 @@ async function openTask(id) {
       $("#t-msggo").onclick = send; $("#t-msg").onkeydown = (e) => { if (e.key === "Enter") send(); };
     }
     if (tTab === "results") wireOutputs(t);
+    if (tTab === "snaps") wireSnaps(t);
     $$("#t-view [data-tab]").forEach(b => b.onclick = () => { tTab = b.dataset.tab; openTask(id); });
     $$("#t-view [data-a]").forEach(b => b.onclick = async () => {
       if (b.dataset.a === "task_delete" && !await ask("Удалить задачу вместе с её папкой?")) return;
@@ -223,8 +253,8 @@ $("#t-cancel").onclick = () => { $("#t-form").style.display = "none"; };
 $("#t-pick").onclick = async () => { const a = api(); if (!a) return toast("Выбор папки доступен в окне студии"); const p = await a.pick_folder(); if (p) $("#t-proj").value = p; };
 $("#t-go").onclick = async () => {
   const goal = $("#t-goal").value.trim(); if (!goal) return toast("Опишите, что сделать");
-  try { const t = await core.call("task_create", { goal, title: $("#t-title").value.trim(), project: $("#t-proj").value.trim() });
-    $("#t-form").style.display = "none"; $("#t-goal").value = ""; tCur = t.id; tTab = "plan"; loadTasks(); } catch (e) { toast(e.message); }
+  try { const t = await core.call("task_create", { goal, title: $("#t-title").value.trim(), project: $("#t-proj").value.trim(), net: $("#t-netnew").checked });
+    $("#t-form").style.display = "none"; $("#t-goal").value = ""; $("#t-netnew").checked = false; tCur = t.id; tTab = "plan"; loadTasks(); } catch (e) { toast(e.message); }
 };
 $("#t-llm").onchange = () => save({ tasks: { llm: $("#t-llm").value } });
 $("#t-judge").onchange = () => save({ tasks: { judge_llm: $("#t-judge").value } });

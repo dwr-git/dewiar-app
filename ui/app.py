@@ -863,6 +863,12 @@ class Api:
         base = ui_http_base() if WIN or os.environ.get("DEWIAR_UI_HTTP") else None
         return (base + page if base else (HERE / page).as_uri()) + f"?token={self.token}&port={WS_PORT}{extra}"
 
+    def _bridged(self, url):
+        """-> (адрес с ключом моста, фасад для js_api): у каждого нового окна свой ключ (bridge_api, guard_bridge)."""
+        import secrets
+        n = secrets.token_urlsafe(24)
+        return bridged_url(url, n), bridge_api(self, n)
+
     # ---------- окна виджета: карточка и значок ----------
 
     def _gw(self, mode):
@@ -1859,6 +1865,40 @@ class Api:
         self._gtk(lambda: self._gw(self.mode).hide())
         _notify("Dewiar продолжает слушать. Вернуть виджет — «Dewiar» в меню приложений.")
 
+    SHOT_WAIT = 0.35        # окну — погаснуть до снимка: у GNOME и Windows окно гаснет плавно, ~0,2 с
+    SHOT_BACK = 15.0        # страница так и не вернула виджет (упала, закрыли) — вернём сами
+
+    def shot_hide(self, on=True):
+        """№559 (05.11): «чтобы скриншот делался без окна персонажа». Перед снимком экрана для жалобы («Снять экран» в
+        «Сообщить о проблеме», «жучок» у разделов и в виджете) виджет прячется, после — сразу возвращается на место
+        (страница зовёт shot_hide(False) в finally; core.shot в assets/dewiar.js). Студию не трогаем — её и снимают.
+        Виджет в трее или уже спрятан для снимка — ничего не делаем. -> спрятали ли (True — потом вернуть)."""
+        import threading
+        if on:
+            if self.in_tray or getattr(self, "_shot_hid", False):
+                return False
+            try:
+                self._hide_now()
+            except Exception as e:  # noqa: BLE001 — не спрятался — снимем как есть
+                print(f"виджет перед снимком: {e}", file=sys.stderr)
+                return False
+            self._shot_hid = True
+            t = threading.Timer(self.SHOT_BACK, lambda: self.shot_hide(False))
+            t.daemon = True
+            t.start()
+            self._shot_t = t
+            time.sleep(self.SHOT_WAIT)
+            return True
+        if not getattr(self, "_shot_hid", False):
+            return False
+        self._shot_hid = False
+        t = getattr(self, "_shot_t", None)
+        if t is not None:
+            t.cancel()
+        if not self.in_tray:                   # пока снимали, ушёл в трей — так и оставить
+            self.show()
+        return True
+
     def save_file(self, content, filename):
         """Сохранение через системный диалог (в окне pywebview обычные загрузки не работают)."""
         import webview
@@ -1948,12 +1988,13 @@ class Api:
         own = not WIN and ui_settings().get("studio_frame", "custom") != "native"
         sw, sh = self._studio_size()
         skin, light = ui_skin()                     # тема — сразу в адресе: студия открывается в своём стиле, без вспышки
-        self._studio = webview.create_window(STUDIO_TITLE, self._url("settings.html", ("&frame=1" if own else "") + "&skin=" + urllib.parse.quote(skin) + query + ("#" + page if page else "")),
+        url, bridge = self._bridged(self._url("settings.html", ("&frame=1" if own else "") + "&skin=" + urllib.parse.quote(skin) + query + ("#" + page if page else "")))
+        self._studio = webview.create_window(STUDIO_TITLE, url,
                                             width=sw, height=sh, min_size=(min(820, sw), min(560, sh)), background_color="#e3eaf4" if light else "#0a0a0f",
                                             maximized=bool(ui_settings().get("studio_max", True)),
                                             frameless=own, easy_drag=False,
                                             text_select=True,    # текст студии можно выделять и копировать (pywebview по умолчанию запрещает; пакет 23.10, №202)
-                                            js_api=self)     # без этого в студии нет «Обновить», выбора папки, сохранения
+                                            js_api=bridge)   # без этого в студии нет «Обновить», выбора папки, сохранения
         win, self._studio_born = self._studio, time.monotonic()
         win.events.closed += lambda *a: self._studio_closed(win)
         for ev, m in (("minimized", True), ("restored", False), ("maximized", False), ("shown", False)):   # для toggle_settings
@@ -2276,9 +2317,10 @@ class Api:
         q = "&" + urlencode({"id": rid, "text": p.get("text", ""), "title": p.get("title", ""), "rep": p.get("repeat_text", ""),
                              "late": "1" if p.get("late") else "", "at": p.get("at", ""), "att": int(p.get("att") or 0)})
         self._alarm_id = rid
-        win = self._alarm_wins()[rid] = webview.create_window(ALARM_TITLE, self._url("alarm.html", q), width=w, height=h, x=x, y=y,
+        url, bridge = self._bridged(self._url("alarm.html", q))
+        win = self._alarm_wins()[rid] = webview.create_window(ALARM_TITLE, url, width=w, height=h, x=x, y=y,
                                     resizable=False, frameless=True, easy_drag=True, on_top=True, focus=True, hidden=True,
-                                    background_color="#0c0a12", js_api=self, **_no_shadow())
+                                    background_color="#0c0a12", js_api=bridge, **_no_shadow())
         self._alarm = win
         win.events.closed += self._alarm_closed
         done = []
@@ -2435,9 +2477,10 @@ class Api:
         except Exception:  # noqa: BLE001
             x = y = None
         self._capture_shown = True
-        win = webview.create_window(CAPTURE_TITLE, self._url("capture.html"), width=w, height=h, x=x, y=y,
+        url, bridge = self._bridged(self._url("capture.html"))
+        win = webview.create_window(CAPTURE_TITLE, url, width=w, height=h, x=x, y=y,
                                     resizable=False, frameless=True, easy_drag=False, on_top=True, focus=True, hidden=True,
-                                    background_color="#0d0b14", js_api=self, **_no_shadow())   # тянуть — за заголовок: в поле выделяют текст
+                                    background_color="#0d0b14", js_api=bridge, **_no_shadow())   # тянуть — за заголовок: в поле выделяют текст
         self._capture = win
         win.events.closed += lambda *a: setattr(self, "_capture", None) if self._capture is win else None
         done, lock = [], threading.Lock()
@@ -2502,9 +2545,10 @@ class Api:
             import webview
             time.sleep(0.4 if self._snip_pad else 0.1)          # блокнот успел исчезнуть с экрана до снимка
             try:
-                win = webview.create_window(SNIP_TITLE, self._url("snip.html"), width=900, height=600, frameless=True,
+                url, bridge = self._bridged(self._url("snip.html"))
+                win = webview.create_window(SNIP_TITLE, url, width=900, height=600, frameless=True,
                                             easy_drag=False, on_top=True, focus=True, hidden=True, resizable=True,
-                                            background_color="#000000", js_api=self, **_no_shadow())
+                                            background_color="#000000", js_api=bridge, **_no_shadow())
             except Exception as e:  # noqa: BLE001
                 print(f"Окно «Вырезать с экрана»: {e}", file=sys.stderr)
                 self._snip = None
@@ -2682,9 +2726,10 @@ class Api:
             x, y = int(ox + sw - w - 28), int(oy + 40)
         except Exception:  # noqa: BLE001
             x = y = None
-        win = webview.create_window(PROMPTER_TITLE, self._url("prompter.html"), width=w, height=h, x=x, y=y,
+        url, bridge = self._bridged(self._url("prompter.html"))
+        win = webview.create_window(PROMPTER_TITLE, url, width=w, height=h, x=x, y=y,
                                     resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
-                                    background_color="#16131d", js_api=self, **_no_shadow())
+                                    background_color="#16131d", js_api=bridge, **_no_shadow())
         self._prompter = win
         win.events.closed += lambda *a: setattr(self, "_prompter", None)
         done, lock = [], threading.Lock()
@@ -3040,9 +3085,10 @@ class Api:
         q = "&cfg=" + urllib.parse.quote(json.dumps({"side": g["side"], "gap": g["gap"], "clips": g["clips"]})) + "&skin=" + urllib.parse.quote(skin) \
             + ("&mode=play" if mode == "play" else "") + ("&game=" + getattr(self, "_pad_game", "") if mode == "play" and getattr(self, "_pad_game", "") else "")
         self._pad_game = ""
-        win = webview.create_window(PAD_TITLE, self._url("pad.html", q), width=W, height=g["h"], x=g["x"], y=g["y"],
+        url, bridge = self._bridged(self._url("pad.html", q))
+        win = webview.create_window(PAD_TITLE, url, width=W, height=g["h"], x=g["x"], y=g["y"],
                                     resizable=False, frameless=True, easy_drag=False, on_top=True, hidden=True,
-                                    background_color="#dbe5f1" if light else "#12131b", js_api=self, **_no_shadow())
+                                    background_color="#dbe5f1" if light else "#12131b", js_api=bridge, **_no_shadow())
         self._pad, self._pad_born = win, time.monotonic()
         win.events.closed += lambda *a: (setattr(self, "_pad", None), setattr(self, "_pad_on", False)) if getattr(self, "_pad", None) is win else None
         win.events.loaded += lambda *a: setattr(self, "_pad_tries", 0)
@@ -3218,6 +3264,203 @@ class Api:
             except Exception:  # noqa: BLE001
                 pass
         return True
+
+
+def no_file_xhr():
+    """Страницы студии не читают файлы компьютера запросами (XHR/fetch к file://): pywebview по умолчанию это разрешает
+    (ALLOW_FILE_URLS). Студии это не нужно — данные идут через ядро, картинки и звук <img>/<audio> грузятся и так.
+    Рецензия выпуска 5: HTML-результат задачи в студии читал так ~/.ssh. Вызывать до webview.start."""
+    try:
+        import webview
+        if isinstance(getattr(webview, "settings", None), dict) and "ALLOW_FILE_URLS" in webview.settings:
+            webview.settings["ALLOW_FILE_URLS"] = False
+    except Exception as e:  # noqa: BLE001
+        print(f"ALLOW_FILE_URLS не выключен: {e}", file=sys.stderr)
+
+
+# ---------- мост окон pywebview: только свои методы и только своей странице (третья рецензия выпуска 5) ----------
+# В WebKitGTK и WKWebView window.webkit.messageHandlers.jsBridge есть в КАЖДОМ фрейме — и во фрейме-песочнице
+# с результатом задачи, сайтом, страницей плагина. А pywebview ищет метод по пути через точки (get_nested_attribute,
+# без запрета «_»): страница звала _studio.evaluate_js(…) — и брала ключ студии, или open_url, quit_all, clip_*.
+# Теперь у каждого окна вместо Api — фасад: только методы из JS_API (без полей и вложенных объектов), и каждый вызов
+# несёт ключ окна (bn= в адресе страницы; его знает только сама страница — фреймы-песочницы адреса не видят).
+# assets/dewiar.js подставляет ключ первым параметром, Python сверяет его (hmac.compare_digest) и в охране
+# js_bridge_call, и в самом фасаде. Чужой вызов молча отбрасывается: ответа фрейм не получит.
+JS_API = (
+    "auto_back", "cancel_back", "capture_set", "capture_status", "card_size", "clip_secret", "clip_text", "clipboard_image",
+    "close_alarm", "close_capture", "close_prompter", "drag_begin", "drag_native", "drag_step", "from_tray", "get_pos",
+    "install_codec", "install_update", "move_to", "native_drag", "open_note", "open_prompter", "open_settings",
+    "open_skills_folder", "open_url", "pad_flip", "pad_full", "pad_hide", "pad_mode_mark", "pad_resize", "pad_size",
+    "pad_toggle", "pick_file", "pick_folder", "play_open", "quit_all", "resize_card", "rest_note", "rest_toggle", "restart",
+    "restart_core", "run_installer", "save_file", "save_file_b64", "save_pos", "set_mode", "set_on_top", "set_zoom", "shot_hide",
+    "show", "show_alarm", "show_capture", "snip_close", "snip_open", "snip_show", "studio_close", "studio_max", "studio_min",
+    "to_tray", "toggle_settings", "tray_back", "update_progress",
+)
+_BRIDGE_OWN = frozenset({"pywebviewMoveWindow", "pywebviewAsyncCallback"})   # служебные вызовы pywebview (без ключа)
+_BRIDGE_KEYS = None          # WeakKeyDictionary: фасад -> ключ окна (вне фасада: путём через точки его не достать)
+_BRIDGE_SAID = set()
+
+
+def _bridge_keys():
+    global _BRIDGE_KEYS
+    if _BRIDGE_KEYS is None:
+        import weakref
+        _BRIDGE_KEYS = weakref.WeakKeyDictionary()
+    return _BRIDGE_KEYS
+
+
+def _bridge_method(name, api, key):
+    """Метод фасада: первый параметр — ключ окна, остальное — параметры метода Api. Функция собрана с крохотными
+    globals: путь «метод.__func__.__globals__…» из страницы (если охрана не встала) не дотянется до модуля."""
+    import hmac
+    import types
+    ga, eq, s, no = getattr, hmac.compare_digest, str, PermissionError
+
+    def m(self, *a):
+        if a and type(a[0]) is s and eq(a[0].encode(), key):
+            return ga(api, name)(*a[1:])
+        raise no("мост окна: вызов без ключа")
+    return types.FunctionType(m.__code__, {"__builtins__": {"type": type}}, name, None, m.__closure__)
+
+
+def bridge_api(api, nonce, names=JS_API):
+    """Фасад для js_api окна: только names, каждый вызов — с ключом nonce."""
+    key = nonce.encode()
+    cls = type("Bridge", (), {"__slots__": ("__weakref__",), **{n: _bridge_method(n, api, key) for n in names if callable(getattr(api, n, None))}})
+    obj = cls()
+    _bridge_keys()[obj] = key
+    return obj
+
+
+def bridged_url(url, nonce):
+    """Ключ моста — в адрес страницы до «#…» (там часть адреса для раздела студии)."""
+    base, sharp, frag = url.partition("#")
+    return base + ("&" if "?" in base else "?") + "bn=" + nonce + sharp + frag
+
+
+def _bridge_ok(window, func_name, param):
+    import hmac
+    try:
+        key = _bridge_keys().get(getattr(window, "_js_api", None))
+    except TypeError:
+        key = None
+    return bool(key and type(func_name) is str and func_name in JS_API and isinstance(param, list) and param
+                and type(param[0]) is str and hmac.compare_digest(param[0].encode(), key))
+
+
+_BRIDGE_ID = re.compile(r"[\w.-]{1,64}", re.ASCII)
+
+
+def _bridge_shape_ok(func_name, param, value_id):
+    """Поля сообщения — строго по типам (четвёртая рецензия: value_id pywebview подставляет в evaluate_js без
+    экранирования — «x",код,"» исполнялся в главной странице). Перемещение окна — два числа; ответ evaluate_js — строка
+    или null; методы окна — список."""
+    if type(func_name) is not str or type(value_id) is not str or not _BRIDGE_ID.fullmatch(value_id):
+        return False
+    if func_name == "pywebviewMoveWindow":
+        return isinstance(param, list) and len(param) == 2 and all(type(x) in (int, float) for x in param)
+    if func_name == "pywebviewAsyncCallback":
+        return param is None or type(param) is str
+    return isinstance(param, list)
+
+
+def _bridge_guard(orig):
+    def js_bridge_call(window, func_name, param, value_id):
+        if _bridge_shape_ok(func_name, param, value_id) and (func_name in _BRIDGE_OWN or _bridge_ok(window, func_name, param)):
+            return orig(window, func_name, param, value_id)
+        name = str(func_name)[:60]
+        if name not in _BRIDGE_SAID and len(_BRIDGE_SAID) < 50:
+            _BRIDGE_SAID.add(name)
+            print(f"Мост окна: отклонён вызов «{name}» (не из списка или без ключа окна — фрейм страницы?)", file=sys.stderr)
+        return None
+    js_bridge_call._dewiar = True
+    return js_bridge_call
+
+
+UI_NAV_OK = []                # ещё адреса страниц программы: локальный веб-сервер папки ui (DEWIAR_UI_HTTP), проверки
+
+
+def ui_path_ok(uri):
+    """Куда окну и фрейму можно перейти без нажатия человека: about:, data:, blob: и страницы самой программы (папка ui).
+    В WebKitGTK у решения о переходе нет признака «фрейм или окно» — поэтому правило одно на всё."""
+    scheme = uri.split(":", 1)[0].lower() if ":" in uri else ""
+    if scheme in ("about", "data", "blob"):
+        return True
+    if any(uri.startswith(p) for p in UI_NAV_OK if p):
+        return True
+    if scheme == "file":
+        p = os.path.realpath(urllib.parse.unquote(urllib.parse.urlparse(uri).path))
+        return p.startswith(str(HERE.resolve()) + os.sep)
+    return False
+
+
+def guard_bridge(gui=""):
+    """Охрана моста: подменяет js_bridge_call в webview.util и в уже загруженных модулях платформ. Linux (gui="gtk"):
+    alert() фреймов не доходит до окна сообщения, а переходы фреймов без нажатия человека — только по ui_path_ok
+    (иначе страница уводила себя на http://…?данные). Вызывать до webview.start (и можно ещё раз — повтор безвреден).
+    -> True, если охрана стоит."""
+    try:
+        import webview.util as U
+    except Exception as e:  # noqa: BLE001
+        print(f"Мост окна: охрана не поставлена ({e})", file=sys.stderr)
+        return False
+    cur = U.js_bridge_call
+    g = cur if getattr(cur, "_dewiar", False) else _bridge_guard(cur)
+    U.js_bridge_call = g
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("webview.platforms.") and getattr(mod, "js_bridge_call", None) is not None \
+                and not getattr(mod.js_bridge_call, "_dewiar", False):
+            mod.js_bridge_call = g
+    if gui == "gtk":
+        try:
+            import webview.platforms.gtk as G
+            if getattr(G, "js_bridge_call", g) is not g:
+                G.js_bridge_call = g
+            BV = G.BrowserView
+            if not getattr(BV.on_js_bridge_call, "_dewiar", False):
+                orig_call = BV.on_js_bridge_call
+
+                def on_js_bridge_call(self, manager, message):
+                    try:
+                        body = json.loads(message.get_js_value().to_string())
+                        if not isinstance(body, dict) or body.get("funcName") == "_pywebviewAlert":
+                            return None                   # alert(): своим страницам не нужен, фреймам — не давать
+                    except Exception:  # noqa: BLE001
+                        return None
+                    return orig_call(self, manager, message)
+                on_js_bridge_call._dewiar = True
+                BV.on_js_bridge_call = on_js_bridge_call
+            if not getattr(BV.on_navigation, "_dewiar", False):
+                orig_nav = BV.on_navigation
+
+                def on_navigation(self, webview, decision, decision_type):
+                    try:
+                        from gi.repository import WebKit2
+                        if decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+                            act = decision.get_navigation_action()
+                            uri = act.get_request().get_uri() or ""
+                            if not ui_path_ok(uri) and not act.is_user_gesture():
+                                decision.ignore()
+                                return True
+                    except Exception:  # noqa: BLE001
+                        pass
+                    return orig_nav(self, webview, decision, decision_type)
+                on_navigation._dewiar = True
+                BV.on_navigation = on_navigation
+        except Exception as e:  # noqa: BLE001
+            print(f"Мост окна: охрана GTK не полная ({e})", file=sys.stderr)
+    return getattr(U.js_bridge_call, "_dewiar", False)
+
+
+def harden_webview(gui=""):
+    """Всё, что окна pywebview должны получить до webview.start: без XHR к file:// и мост только своей странице."""
+    no_file_xhr()
+    if os.environ.get("DEWIAR_UI_HTTP") and not WIN:
+        try:
+            UI_NAV_OK.append(ui_http_base())
+        except Exception:  # noqa: BLE001
+            pass
+    guard_bridge(gui)
 
 
 def _raise_idle_priority():
@@ -3672,9 +3915,10 @@ def main():
             x, y = 100, 100
     for m in ("card",):
         w, h = SIZES[m]
-        api.wins[m] = webview.create_window(TITLES[m], api._url("hud.html", "&mode=" + m + ("&tw=1" if TRANSPARENT[0] else "")),
+        url, bridge = api._bridged(api._url("hud.html", "&mode=" + m + ("&tw=1" if TRANSPARENT[0] else "")))
+        api.wins[m] = webview.create_window(TITLES[m], url,
                                             width=w, height=h, resizable=False, min_size=(w, h), frameless=True, easy_drag=False,
-                                            on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=api,
+                                            on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=bridge,
                                             transparent=TRANSPARENT[0])
     api._hud = api.wins["card"]
 
@@ -3737,6 +3981,7 @@ def main():
                               f"Нет GTK/WebKit для Python ({why}). {tip}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
             pass
+    harden_webview("gtk")
     webview.start(on_start, gui="gtk", debug=bool(os.environ.get("DEWIAR_UI_DEBUG")))
     del held
 
@@ -3884,9 +4129,10 @@ def main_win(args, extra):
         # shadow=False (_no_shadow): pywebview 6 для окон «с тенью» включает рамку DWM (DwmExtendFrameIntoClientArea +
         # NCRENDERING_POLICY) — с ней Windows перестаёт резать окно по форме SetWindowRgn: углы остаются острыми,
         # значок — квадратным.
-        api.wins[m] = webview.create_window(TITLES[m], api._url("hud.html", "&mode=" + m), width=w, height=h,
+        url, bridge = api._bridged(api._url("hud.html", "&mode=" + m))
+        api.wins[m] = webview.create_window(TITLES[m], url, width=w, height=h,
                                             resizable=False, min_size=(w, h), frameless=True, easy_drag=False,
-                                            on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=api, **_no_shadow())
+                                            on_top=ON_TOP[0], hidden=True, background_color="#0b0b0e", js_api=bridge, **_no_shadow())
     api._hud = api.wins["card"]
 
     def on_start():
@@ -4026,6 +4272,7 @@ def main_win(args, extra):
     wv2_fail_watch()
     wv2_registry_fix()
     try:
+        harden_webview("edgechromium")
         webview.start(on_start, gui="edgechromium", debug=bool(os.environ.get("DEWIAR_UI_DEBUG")))
     except Exception as e:  # noqa: BLE001 — нет WebView2: ассистент работает, студия — в браузере
         print(f"WebView2 недоступен ({e}) — студия откроется в браузере", file=sys.stderr)

@@ -344,6 +344,34 @@ def parse(text, default_currency="BYN"):
     return None
 
 
+MORE_RX = re.compile(r"^(?:и\s+|а\s+)?(?:ещ[её]|еще|плюс)\s+(?P<rest>.+)$")
+
+
+def parse_more(text, last, default_currency="BYN"):
+    """«И ещё 1250 на кафе» сразу после записи — та же запись ещё раз (экзамен 0.84.1: ответила «Записал: 1 250 руб.», а не
+    записала). last — {"kind", "currency", "category"} прошлой записи. -> {"op": "add", …} | None."""
+    if not last:
+        return None
+    t = re.sub(r"[«»\"“”!?]", " ", (text or "").lower().replace("ё", "е"))
+    t = " ".join(t.split()).strip(" .")
+    m = MORE_RX.match(t)
+    if not m:
+        return None
+    rest = m.group("rest")
+    if re.search(r"\b(?:раз|минут|час|дн|штук|слов|песн|пример)", rest):
+        return None                                       # «ещё 5 минут», «ещё 3 песни» — не деньги
+    amount = amount_of(rest)
+    if not amount or amount <= 0 or amount > 50_000_000:
+        return None
+    kind = last.get("kind") or "expense"
+    cat = _category(rest, kind)
+    if cat == "Другое" or not re.search(r"\b(?:на|за|в)\s+\w", rest):
+        cat = last.get("category") or cat
+    cur = _currency(rest, last.get("currency") or default_currency) if re.search(CUR_ANY, rest) else (last.get("currency") or default_currency)
+    return {"op": "add", "kind": kind, "amount": round(amount, 2), "currency": cur, "category": cat,
+            "note": _clean_note(rest)[:80], "date": dt.date.today().isoformat()}
+
+
 def _query_category(t):
     """Категория в вопросе («сколько ушло на такси») — только после «на/в/за», иначе ""."""
     for name, rx in EXPENSE_CATS + INCOME_CATS:

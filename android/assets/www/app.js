@@ -1294,6 +1294,7 @@ function setState(s) {
   if (orb) orb.set({ state: s, level: s === "speaking" ? 0.3 : 0 });
   $("#state").textContent = holdTalk && s === "listening" ? (holdCancel ? "Отпустите — отменить" : "Говорите · отпустите — отправлю") : STATE_RU[s] || "";
   $("#state").classList.toggle("idle", s === "idle");
+  const sx = $("#stopx"); if (sx) sx.hidden = !(s === "thinking" || s === "speaking") || holdTalk;   // №560: «Стоп» без микрофона
   const rb = $("#radiobox"); if (rb) rb.classList.toggle("talking", s !== "idle");   // подсказка про голос — только в покое
   triesCheck($("#stage").classList.contains("quiet"));                              // слушает или думает — примеры прячутся
   const m = $("#mic"); m.classList.toggle("on", s === "listening"); m.classList.toggle("busy", s === "thinking" || s === "speaking");
@@ -1690,8 +1691,11 @@ const SPEAK_RULES = [[/(?:https?:\/\/|www\.)\S+/gi, ""],
 function speechText(t) {
   t = t.replace(/```[\s\S]*?```/g, " ")
     .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, " ").replace(/<!--[\s\S]*?-->|<!doctype[^>]*>|<\/?[A-Za-z][\w:-]*(?:\s[^<>]*)?\/?>/gi, " ");   // теги вслух не читаем (28.10)
+  t = t.replace(/!?\[([^\]]*)\]\([^()]*\)/g, "$1");                     // [текст](ссылка) → текст, до правил про ссылки
   for (const [rx, to] of SPEAK_RULES) t = t.replace(rx, to);
-  return t.replace(/[*_#>`|~]+/g, " ").replace(EMOJI, "").replace(/\s+/g, " ").trim();
+  // №561 (05.11): голос Safari читал «кавычки» вслух — кавычки, тире, «!!!», скобки и разметка — ui/assets/speechnorm.js clean
+  if (typeof window !== "undefined" && window.DewiarSpeech && window.DewiarSpeech.clean) return window.DewiarSpeech.clean(t.replace(EMOJI, " "));
+  return t.replace(/[*_#>`|~«»"“”„]+/g, " ").replace(EMOJI, "").replace(/\s+/g, " ").trim();
 }
 /* <option> голосов устройства для выбора в настройках; пометка «муж.» / «жен.», если пол известен */
 function voiceOpts(voices, cur) {
@@ -1944,7 +1948,7 @@ function systemStable() {
     "СЧЁТ: любые вычисления — проценты, суммы, скидки, даты, «сколько дней до…» — только инструментом calc, никогда в уме; числа говори после результата calc, не до. «Через сколько дней» — посчитай (calc days_until) и назови число. «На столько же минут» — то же число: 59 дней → таймер на 59 минут (не 59×24×60). Просят объяснить расчёт — покажи его с числами («2 350 × 17 / 100 = 399,5»), а не «использовал калькулятор». "
     + "Просьба с условием («если завтра дождь — напомни…») — сначала узнай нужное (погоду — weather или web_search), потом сделай только подходящее. "
     + "Узнать, ответил ли человек на звонок, ты не можешь: на «позвони, а если не ответит — напиши» позвони один раз и честно скажи, что ждать ответа не умеешь, — предложи отправить сообщение сразу. "
-    + "Просят подобрать песни или плейлист — назови конкретные песни (исполнитель — название): только известные, в которых уверен и в названии, и в исполнителе — не придумывай; не говори, что что-то открыл или включил, если не вызвал инструмент.",
+    + "Просят подобрать песни или плейлист — назови конкретные песни (исполнитель — название), ровно сколько просили: известные хиты, в которых уверен и в названии, и в исполнителе — не придумывай, не сокращай список и не оговаривайся; не говори, что что-то открыл или включил, если не вызвал инструмент.",
     "СПИСКИ И ТЕКСТЫ: просят список, таблицу, план, подборку или текст — пиши его прямо в ответе (пунктами или таблицей Markdown): "
     + "он появится на экране в рамке с кнопками «Копировать», «В заметки» и «Скачать». В заметки сохраняй, только если об этом просят, и только вызовом save_note; "
     + "не говори «сохранила», «записала», «теперь она в заметках», если в этом ходе не вызвала save_note. Не нашла заметку — так и скажи и покажи содержимое в ответе.",
@@ -4375,7 +4379,7 @@ async function runTool(name, a) {
     case "list_reminders": {
       const l = JSON.parse(D.alarms() || "[]").sort((x, y) => x.at - y.at), jobs = (mind().jobs || []).filter(j => !j.paused);
       const out = l.map(x => `${x.id}: ${whenText(new Date(x.at))}${x.repeat ? " (" + repRu(x.repeat) + ")" : ""} — ${x.title}`);
-      if (jobs.length) out.push("Дела по расписанию (делает компьютер): " + jobs.map(j => `${j.title || j.prompt || "дело"}${j.at ? " — " + whenText(new Date(j.at)) : ""}`).join("; "));
+      if (jobs.length) out.push("Дела по расписанию (делает компьютер): " + jobs.map(j => `${jobShort(j)}${j.at ? " — " + whenText(new Date(j.at)) : ""}`).join("; "));
       return out.length ? out.join("\n") : "Напоминаний нет.";
     }
     case "cancel_reminder": {
@@ -4892,14 +4896,20 @@ async function meteoGet(url) {
   }
 }
 async function weather(city, days) {
+  // идея №142 (05.11): город не назван — запомненный, из «Утра» с компьютера или из памяти («живу в Балашове», «я из Минска»)
+  let mem = "";
+  if (!city) { mem = wqHome().replace(/^во?\s+/i, ""); city = mem; }
   if (!city) return "Ошибка: спроси, в каком городе.";
   const g = await meteoGet("https://geocoding-api.open-meteo.com/v1/search?count=1&language=ru&name=" + encodeURIComponent(city));
-  const p = (g.results || [])[0]; if (!p) return `Город «${city}» не нашёлся.`;
+  let p = (g.results || [])[0];
+  if (!p) { const q = await wqGeocode(city).catch(() => null); if (q) p = { name: q.name, latitude: q.lat, longitude: q.lon }; }   // «Балашове», «Минска» — по основам
+  if (!p) return `Город «${city}» не нашёлся.`;
   const u = `https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=${Math.min(7, Math.max(1, days))}`;
   const w = await meteoGet(u), c = w.current || {}, d = w.daily || {};
   const lines = [`${p.name}: сейчас ${Math.round(c.temperature_2m)}°, ощущается как ${Math.round(c.apparent_temperature)}°, ${WMO[c.weather_code] || ""}, ветер ${Math.round(c.wind_speed_10m)} км/ч.`];
   const dayName = (t) => { const k = Math.round((new Date(t + "T12:00") - new Date(isoLocal(new Date()).slice(0, 10) + "T12:00")) / 864e5); return k === 0 ? " (сегодня)" : k === 1 ? " (завтра)" : k === 2 ? " (послезавтра)" : ""; };
   (d.time || []).forEach((t, i) => lines.push(`${t}${dayName(t)}: ${Math.round(d.temperature_2m_min[i])}…${Math.round(d.temperature_2m_max[i])}°, ${WMO[d.weather_code[i]] || ""}, осадки ${d.precipitation_probability_max[i] != null ? d.precipitation_probability_max[i] : 0}%.`));
+  if (mem) lines.push(`[Город не назван — взят город человека (запомненный или из памяти): ${p.name}. Назови его в ответе; нужен другой — пусть скажет какой.]`);
   return lines.join("\n");
 }
 
@@ -4914,6 +4924,8 @@ const WQ_TIME = new Set("сейчас сегодня завтра послеза
 const WQ_PLACE = "([А-ЯЁA-Z][А-Яа-яЁёA-Za-z-]+(?:,?\\s+[А-ЯЁа-яё-]+(?:ой|ей|ого)\\s+(?:области|края)|[\\s-][А-ЯЁA-Z][А-Яа-яЁёA-Za-z-]+)?)";
 const WQ_MEM = new RegExp("(?:[Жж]иву|[Жж]ив[её]т|[Пп]роживаю|[Пп]роживает|[Нн]ахожусь|[Нн]аходится)\\s+(?:[Вв]о?)\\s+(?:[Гг]ороде\\s+)?" + WQ_PLACE
   + "|(?:[Мм]ой\\s+город|[Гг]ород\\s+проживания|[Рр]одной\\s+город|[Гг]ород)\\s*(?:—|-|:|это)?\\s*" + WQ_PLACE);
+// идея №142 (05.11): «я из Минска», «родом из Балашова» — если «живу в …» в памяти нет
+const WQ_FROM = new RegExp("(?:^|[\\s,.;])(?:[Яя]\\s+(?:сам[а-яё]*\\s+)?(?:родом\\s+)?из|[Рр]одом\\s+из|[Пп]риехал[а-яё]*\\s+из)\\s+(?:города\\s+)?" + WQ_PLACE);
 const WQ_HELLO = /^(?:(?:привет|приветик|приветствую|здравствуй(?:те)?|добрый\s+(?:день|вечер)|доброе\s+утро|хай|салют)(?:\s*,?\s*(?:лира|патрик))?\s*[!,.]*\s+)/;
 function wqParse(text) {
   const t = String(text || "").replace(/\s+/g, " ").trim().replace(/^[\s.!?…]+|[\s.!?…]+$/g, "");
@@ -4946,7 +4958,7 @@ function wqParse(text) {
 }
 function wqStems(word) {
   const w = word.trim(), low = w.toLowerCase(), out = [w];
-  for (const [end, rep] of [["ском", "ск"], ["ске", "ск"], ["ем", "ий"], ["ом", ""], ["е", "а"], ["е", ""], ["и", "ь"], ["и", "а"], ["у", "а"], ["ой", "ая"], ["ей", "ь"]])
+  for (const [end, rep] of [["ском", "ск"], ["ске", "ск"], ["ем", "ий"], ["ом", ""], ["е", "а"], ["е", ""], ["и", "ь"], ["и", "а"], ["ы", "а"], ["у", "а"], ["ой", "ая"], ["ей", "ь"]])
     if (low.endsWith(end) && low.length - end.length >= 3) out.push(w.slice(0, w.length - end.length) + rep);
   if (w.length > 4) out.push(w.slice(0, -1));
   const seen = new Set(); return out.filter(x => !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
@@ -4987,6 +4999,7 @@ function wqHome() {
   if (S.weatherCity) return S.weatherCity;
   try { const m = JSON.parse(fileGet("morning.json") || "null"); if (m && m.city) return m.city; } catch (e) { }
   for (const f of S.memory || []) { const m = String(f || "").match(WQ_MEM); if (m) return (m[1] ? "в " + m[1] : m[2] || "").trim(); }   // «живу в Минске» — «в Минске»
+  for (const f of S.memory || []) { const m = String(f || "").match(WQ_FROM); if (m) return m[1].trim(); }                          // «я из Минска»
   return "";
 }
 async function weatherQuick(text) {
@@ -5991,6 +6004,16 @@ function ntCard(x) {
 }
 // «Мой день» — какой сегодня день: «Среда, 15 октября» (просьба 15.10: «почему он не пишет число и день недели?»)
 function dayDate(d = new Date()) { const w = WD[d.getDay()]; return `${w[0].toUpperCase()}${w.slice(1)}, ${d.getDate()} ${MON[d.getMonth()]}`; }
+/* Имя дела по расписанию (№557, 05.11): компьютер присылает title («Дача: заморозки и полив»); старый компьютер — только
+   поручение модели, тогда — его первая фраза без «(weather)» и ссылок, как core/tools.job_short */
+function jobShort(j) {
+  if (j && j.title) return String(j.title);
+  let t = String((j && j.text) || "").replace(/https?:\/\/\S+/g, "").replace(/\s*\((?:[a-z][a-z0-9_]*(?:\s*[,/]\s*[a-z][a-z0-9_]*)*)\)/g, "").replace(/\s+/g, " ").trim();
+  const cut = /[.!?…;]\s+(?=[А-ЯЁA-Z«"])/.exec(t); if (cut) t = t.slice(0, cut.index + 1);   // без «взгляда назад»: старый Safari
+  t = t.replace(/^[\s.;,]+|[\s.;,]+$/g, "");
+  if (t.length > 80) t = t.slice(0, 80).replace(/\s+\S*$/, "").replace(/[\s,;:—–-]+$/, "") + "…";
+  return t || "Дело по расписанию";
+}
 function renderDay() {
   const box = $("#day-body"), dd = $("#day-date");
   if (dd) dd.textContent = dayDate();
@@ -6008,7 +6031,7 @@ function renderDay() {
             + (task ? `<button class="x ok" data-done="${esc(x.id)}" title="Сделано" aria-label="Сделано">✓</button>` : "") + `<button class="x" data-id="${esc(x.id)}" title="Удалить" aria-label="Удалить">${X_SVG}</button></div>`; }).join("")
       : jobs.length || ds.items.length ? "" : `<div class="empty">Напоминаний нет.<br>Скажите: «напомни завтра в 9 позвонить маме» или «будильник на 7».<br>Сделали дело — скажите «я позвонила маме, отметь» или впишите его выше.</div>`)
       + (jobs.length ? `<div class="bugh">По расписанию — делает компьютер</div>` + jobs.map(j => { const d = new Date(j.at);
-          return `<div class="it job"><div class="tm">${pad(d.getHours())}:${pad(d.getMinutes())}</div><div class="bd"><b>${esc(String(j.text).split(":")[0].slice(0, 80))}</b><small>${esc(j.repeat || whenText(d))}</small></div></div>`; }).join("")
+          return `<div class="it job"><div class="tm">${pad(d.getHours())}:${pad(d.getMinutes())}</div><div class="bd"><b>${esc(jobShort(j))}</b><small>${esc(j.repeat || whenText(d))}</small></div></div>`; }).join("")
         + `<p class="hint" style="margin:6px 4px 0">Изменить или выключить — на компьютере: студия → «Напоминания».</p>` : "")
       + (D.exactAlarms() ? "" : `<div class="card"><b>Будильники могут опаздывать</b><p class="hint">Разрешите точное время: «Будильники и напоминания».</p><button class="btn p" onclick="Dewiar.openSettings('alarms')">Разрешить</button></div>`);
     $$("[data-id]", box).forEach(b => b.onclick = (e) => { e.stopPropagation(); D.alarmCancel(b.dataset.id); syncSoon(); renderDay(); });
@@ -9427,6 +9450,14 @@ $("#mic").onclick = () => {
   }
   if (state !== "idle") interrupt(true); listen(); };
 $("#orbwrap").onclick = () => $("#mic").onclick();
+/* №560 (05.11): «Стоп» — замолчать и не отвечать дальше, не включая микрофон (тем, кто пишет, а не говорит); Esc на
+   клавиатуре (веб-версия, планшет с клавиатурой) — то же, если не закрывает лист или картинку (N.back) */
+$("#stopx").onclick = (e) => { e.stopPropagation(); if (state === "thinking" || state === "speaking") { interrupt(); plog("info", "⏹ «Стоп» кнопкой"); } };
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.defaultPrevented || e.isComposing) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "") && state === "idle") return;   // в поле ввода Esc — его дело
+  if (N.back()) e.preventDefault();
+});
 new MutationObserver(() => document.body.classList.toggle("typing", $("#typebox").classList.contains("on")))
   .observe($("#typebox"), { attributes: true, attributeFilter: ["class"] });     // поле ввода открыто — сцена выше него (app.css)
 $("#b-kb").onclick = () => { const b = $("#typebox"); b.classList.toggle("on"); if (b.classList.contains("on")) { typedGrow(); $("#typed").focus(); } };

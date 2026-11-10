@@ -4,7 +4,8 @@ host — Engine (модель, инструменты, подтверждени�
 Задача — папка «Задачи/‹дата название›/» в папке ассистента:
     задача.json — состояние; история.json — разговор с моделью; план.md, журнал.md, блокнот.md (память задачи), итог.md;
     outputs/ — результаты для пользователя, downloads/ — скачанное; _run/, _out/ — скрипты шагов и длинные выводы
-    (удаляются по готовности); рабочая копия/ — для задач по коду. Имена служебных файлов перечислены и в quality.SERVICE.
+    (удаляются по готовности); рабочая копия/ — для задач по коду; _snap/ — снимки outputs/ для отката (выпуск 5, snapshots.py).
+    Имена служебных файлов перечислены и в quality.SERVICE. Код задачи (run_python, run_shell) — в песочнице (sandbox.py).
 """
 
 import datetime as dt
@@ -18,6 +19,8 @@ import uuid
 from pathlib import Path
 
 import quality as Q
+import sandbox as SBX
+import snapshots as SNAP
 from codework import CodeError, CodeWork
 from llm import LLMError, ctx_full, est_tokens, prompt_tools_mode, stream_chat, stream_events, take_usage, tool_turn_messages
 
@@ -162,8 +165,16 @@ WORK_TOOLS = {
     "list_files": ("Файлы в папке задачи (что уже сделано, что скачано).", S({})),
     "run_python": ("Выполнить код Python в папке задачи (текущая папка = папка задачи): расчёты, обработка данных, "
                    "сборка файлов (есть numpy, Pillow, httpx, pypdf; openpyxl, python-docx, python-pptx — если "
-                   "установлены, проверь import). Печатай print — увидишь вывод. До 3 минут.",
+                   "установлены, проверь import). Печатай print — увидишь вывод. До 3 минут (timeout — до 600 с). Код "
+                   "работает в песочнице: пишет только в папку задачи, личные папки человека не видит, сеть — если задаче её дали.",
                    S({"code": {"type": "string"}, "timeout": {"type": "integer"}}, ["code"])),
+    "run_shell": ("Выполнить команду в папке задачи (" + ("PowerShell" if os.name == "nt" else "bash") + "): утилиты — ffmpeg, "
+                  "pandoc, unzip, git, sort… В песочнице: пишет только в папку задачи, сеть — если задаче её дали. "
+                  "timeout — секунд (до 600).",
+                  S({"command": {"type": "string"}, "timeout": {"type": "integer"}}, ["command"])),
+    "rewind": ("Откатить outputs/ к виду перед шагом step (номер шага — из журнала или списка снимков): испорченные файлы "
+               "вернутся, лишние уйдут. Без step — список снимков. Текущий вид перед откатом тоже сохраняется.",
+               S({"step": {"type": "integer"}})),
     "show": ("Показать файл пользователю как готовый результат: страница, дашборд, презентация, картинка, PDF, документ, "
              "таблица. Он появится в студии во вкладке «Результаты» с просмотром. Вызывай для каждого главного файла.",
              S({"path": {"type": "string"}, "title": {"type": "string"}}, ["path"])),
@@ -199,7 +210,7 @@ CODE_TOOLS = {
 # что показать в карточке задачи, пока идёт вызов (если модель не написала своих слов)
 ACT_RU = {"write_file": "пишу файл", "read_file": "читаю файл", "file_read": "читаю файл", "file_edit": "правлю файл",
           "file_grep": "ищу в файлах", "file_glob": "смотрю файлы", "list_files": "смотрю файлы", "run_python": "запускаю Python",
-          "show": "показываю результат", "transcribe": "расшифровываю запись", "download": "скачиваю файл",
+          "show": "показываю результат", "run_shell": "выполняю команду", "rewind": "откатываю результаты", "transcribe": "расшифровываю запись", "download": "скачиваю файл",
           "web_search": "ищу в интернете", "read_webpage": "читаю страницу", "update_plan": "обновляю план", "log": "пишу журнал",
           "finish": "подвожу итог", "code_run": "запускаю в проекте", "code_edit": "правлю код", "code_read": "читаю код",
           "remember": "записываю в блокнот", "notes": "обновляю блокнот", "notify": "сообщаю вам", "wait": "жду и вернусь"}
@@ -243,6 +254,50 @@ def _clean(name):
     return re.sub(r"\s+", " ", name)[:60].strip(" .") or "задача"
 
 
+_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_NONBLOCK = getattr(os, "O_NONBLOCK", 0)
+
+
+def _regular(p):
+    """Обычный файл (не ссылка, не FIFO, не устройство) — по lstat."""
+    import stat
+    try:
+        return stat.S_ISREG(os.lstat(p).st_mode)
+    except OSError:
+        return False
+
+
+def _rd(p, default=""):
+    """Прочитать служебный файл задачи: только обычный файл — FIFO, оставленный кодом, повесил бы карточку (вторая рецензия)."""
+    if not _regular(p):
+        return default
+    try:
+        fd = os.open(p, os.O_RDONLY | _NOFOLLOW | _NONBLOCK | getattr(os, "O_BINARY", 0))
+    except OSError:
+        return default
+    with os.fdopen(fd, "rb") as f:
+        return f.read().decode("utf-8", errors="replace")
+
+
+def _wr(p, data, append=False, root=None):
+    """Запись Dewiar в папку задачи (B2, выпуск 5): код задачи мог оставить там ссылку (журнал.md → ~/.bashrc) — по ссылкам
+    не пишем: ссылка на месте файла удаляется, файл открывается без перехода по ссылке (O_NOFOLLOW), а папка, куда пишем
+    (root задан), должна быть внутри root по настоящему пути."""
+    p = Path(p)
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    if root is not None:
+        par, r = os.path.realpath(p.parent), os.path.realpath(root)
+        if not (par == r or par.startswith(r.rstrip(os.sep) + os.sep)):
+            raise OSError(f"«{p.name}»: папка ведёт за пределы папки задачи (ссылка) — не пишу")
+    if p.is_symlink() or (os.path.lexists(p) and not os.path.isdir(p) and not _regular(p)):
+        p.unlink()                                     # ссылка или FIFO/сокет на месте файла
+    fl = os.O_WRONLY | os.O_CREAT | (os.O_APPEND if append else os.O_TRUNC) | _NOFOLLOW | _NONBLOCK | getattr(os, "O_BINARY", 0)
+    fd = os.open(p, fl, 0o644)
+    with os.fdopen(fd, "ab" if append else "wb") as f:
+        f.write(data)
+
+
 class Task:
     """Одна задача: папка и состояние data (задача.json). Поля data читаются как атрибуты: t.status, t.title…
     События cancel/answer_ev связывают поток задачи с командами человека (стоп, ответ на вопрос)."""
@@ -265,23 +320,16 @@ class Task:
 
     def save(self):
         self.data["updated"] = _now()
-        (self.dir / "задача.json").write_text(json.dumps(self.data, ensure_ascii=False, indent=1), encoding="utf-8")
+        _wr(self.dir / "задача.json", json.dumps(self.data, ensure_ascii=False, indent=1))
 
     def journal(self, text):
-        with open(self.dir / "журнал.md", "a", encoding="utf-8") as f:
-            f.write(f"\n**{dt.datetime.now():%H:%M:%S}** · {text}\n")
+        _wr(self.dir / "журнал.md", f"\n**{dt.datetime.now():%H:%M:%S}** · {text}\n", append=True)
 
     def plan(self):
-        try:
-            return (self.dir / "план.md").read_text(encoding="utf-8")
-        except OSError:
-            return ""
+        return _rd(self.dir / "план.md")
 
     def notebook(self):
-        try:
-            return (self.dir / "блокнот.md").read_text(encoding="utf-8")
-        except OSError:
-            return ""
+        return _rd(self.dir / "блокнот.md")
 
     def set_notebook(self, text):
         """Перезаписать блокнот (не больше 30 000 символов; в «Состояние задачи» каждого шага он идёт с ограничением по окну)."""
@@ -301,11 +349,11 @@ class Task:
                     m = re.search(r"^# .*\n+", text)
                     at = m.end() if m else 0
                     text = text[:at] + head + "\n" + "\n".join(lost) + "\n\n" + text[at:]
-        (self.dir / "блокнот.md").write_text(text[:30000] + "\n", encoding="utf-8")
+        _wr(self.dir / "блокнот.md", text[:30000] + "\n")
 
     def _json(self, name, default):
         try:
-            d = json.loads((self.dir / name).read_text(encoding="utf-8"))
+            d = json.loads(_rd(self.dir / name) or "null")
         except (OSError, ValueError):
             return default
         return d if isinstance(d, type(default)) else default
@@ -320,7 +368,7 @@ class Task:
 
     def put_json(self, name, d):
         tmp = self.dir / (name + ".tmp")
-        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+        _wr(tmp, json.dumps(d, ensure_ascii=False, indent=1))
         os.replace(tmp, self.dir / name)
 
     def code(self):
@@ -358,7 +406,7 @@ def _write_hist(path, msgs):
     """история.json — через временный файл и замену: прерванная запись (падение, выключение) оставляет прежнюю историю
     целой, а читающий одновременно не видит пустой файл (GitHub, task_parts_test: JSONDecodeError на «готовой» задаче)."""
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(msgs, ensure_ascii=False), encoding="utf-8")
+    _wr(tmp, json.dumps(msgs, ensure_ascii=False))
     os.replace(tmp, path)
 
 
@@ -471,8 +519,10 @@ class TaskManager:
             f = d / "задача.json"
             if f.exists():
                 try:
-                    data = json.loads(f.read_text(encoding="utf-8"))
+                    data = json.loads(_rd(f) or "null")
                 except ValueError:
+                    continue
+                if not isinstance(data, dict) or not data.get("id"):
                     continue
                 t = Task(d, data)
                 if data.get("status") == "running":
@@ -500,10 +550,11 @@ class TaskManager:
 
     # ---------- управление ----------
 
-    def create(self, title, goal, project="", start=True, persona="", parent="", folders=(), search_url=""):
+    def create(self, title, goal, project="", start=True, persona="", parent="", folders=(), search_url="", net=False):
         """Создать папку задачи и начальные файлы; project — папка проекта для режима «Код»; folders — папки человека, которые
         задача может читать без вопросов (менять — с разрешения; выпуск 2). search_url — свой поиск (SearXNG JSON) только для
-        этой задачи: экзамен Б1 — «интернет» из заготовки; только адрес на этом компьютере. Нет папки — ValueError."""
+        этой задачи: экзамен Б1 — «интернет» из заготовки; только адрес на этом компьютере. net — сеть для кода задачи
+        (run_python, run_shell в песочнице; выпуск 5), по умолчанию выключена — её даёт человек. Нет папки — ValueError."""
         search_url = str(search_url or "").strip()
         if search_url and not re.match(r"^http://(?:127\.0\.0\.1|localhost)(?::\d+)?(?:/|$)", search_url):
             raise ValueError("search_url — только адрес на этом компьютере (http://127.0.0.1:…)")
@@ -545,6 +596,8 @@ class TaskManager:
             data["folders"] = fl
         if search_url:
             data["search_url"] = search_url
+        if net:
+            data["net"] = True
         (d / "план.md").write_text(f"# {title}\n\n**Цель:** {goal.strip()}\n\n_План появится, когда ассистент начнёт._\n", encoding="utf-8")
         (d / "журнал.md").write_text(f"# Журнал: {title}\n", encoding="utf-8")
         (d / "блокнот.md").write_text(NOTEBOOK_HEAD, encoding="utf-8")
@@ -683,11 +736,18 @@ class TaskManager:
     def detail(self, tid):
         """Всё для карточки задачи в студии: план, журнал (последние 60 000 символов), итог, блокнот, изменения кода."""
         t = self.get(tid)
-        read = lambda n: (t.dir / n).read_text(encoding="utf-8") if (t.dir / n).exists() else ""  # noqa: E731
+        read = lambda n: _rd(t.dir / n)  # noqa: E731
         d = t.public()
         d.update(plan=read("план.md"), journal=read("журнал.md")[-60000:], summary=read("итог.md"), notebook=read("блокнот.md"))
         cr = t.criteria()                                  # выпуски 3–4: список дел со статусами и критерии с итогом проверки
         d.update(todos=t.todos(), criteria=[dict(c, label=Q.crit_label(c)) for c in (cr.get("results") or cr.get("items") or [])])
+        try:                                               # выпуск 5: снимки outputs/ для отката и песочница кода
+            d["snaps"] = SNAP.Snapshots(t.dir).listing()
+        except (OSError, ValueError):
+            d["snaps"] = []
+        m = self._sbx_mode(t)
+        d["sandbox"] = {"mode": m, "net": bool(t.data.get("net")), "text": SBX.describe(m, bool(t.data.get("net"))),
+                        "net_note": SBX.net_note(m)}
         c = t.code()
         if c and c.work.exists():
             try:
@@ -776,6 +836,7 @@ class TaskManager:
                   "читай его file_read кусками, а не запускай заново. Старые результаты со временем убираются из памяти — "
                   "важное записывай в блокнот. Правь файлы куском (file_edit), а не переписывай целиком; ищи по файлам — file_grep и file_glob. Перед finish проверь файл (file_read) и покажи его пользователю (show). Ответ в "
                   "finish — коротко: что получилось и как пользоваться; содержимое файла не пересказывай.")
+        s += self._sbx_prompt(t, light)
         if t.data.get("parent"):
             s += ("\n\nТы — помощник: делаешь одну часть большой задачи, параллельно с другими. Не спрашивай пользователя без "
                   "крайней нужды и не уведомляй его — твой итог (finish) прочитает основная задача: пиши в нём суть результата.")
@@ -888,7 +949,7 @@ class TaskManager:
         d.update(items=items, source=source, updated=_now(), **extra)
         t.put_json("задачи.json", d)
         if render:
-            (t.dir / "план.md").write_text(self._plan_md(t, items), encoding="utf-8")
+            _wr(t.dir / "план.md", self._plan_md(t, items))
         t.data["progress"] = [sum(1 for x in items if x.get("status") == "done"), len(items)]
 
     def _sync_md(self, t, plan):
@@ -1064,7 +1125,7 @@ class TaskManager:
         d.update(items=items, results=[], set_at=_now())
         t.put_json("критерии.json", d)
         if t.todos() and t._json("задачи.json", {}).get("source") != "md":
-            (t.dir / "план.md").write_text(self._plan_md(t, t.todos()), encoding="utf-8")
+            _wr(t.dir / "план.md", self._plan_md(t, t.todos()))
         t.journal("🎯 Критерии готовности: " + "; ".join(Q.crit_label(c) for c in items)[:500])
         return (f"Критерии записаны ({len(items)}):\n" + "\n".join(f"{i}. {Q.crit_label(c)}" for i, c in enumerate(items, 1))
                 + "\nПеред finish я проверю их кодом." + (f"\nНе принято: {'; '.join(errs[:4])}" if errs else ""))
@@ -1108,7 +1169,11 @@ class TaskManager:
         except subprocess.TimeoutExpired:
             return False, "не уложилась в 120 с"
         tail = (r.stdout + r.stderr).strip()[-300:]
-        return r.returncode == 0, f"код {r.returncode}" + (f": {tail}" if r.returncode and tail else "")
+        # экзамен 0.84.1: «grep -c 'class="slide' …» вывел 5, а в справке было только «код 0» — проверяющий прочёл «вернул 0
+        # слайдов» и вернул итог трижды. Теперь — «прошла (код выхода 0), вывод: 5»
+        if r.returncode == 0:
+            return True, "прошла (код выхода 0)" + (f", вывод: {tail}" if tail else "")
+        return False, f"не прошла (код выхода {r.returncode})" + (f", вывод: {tail}" if tail else "")
 
     @staticmethod
     def _url_inner(t, url):
@@ -1157,8 +1222,14 @@ class TaskManager:
         return False, "слишком много переадресаций"
 
     @staticmethod
-    def _browser_ok(paths):
-        res = Q.html_check([str(p) for p in paths])
+    def _page_roots(t):
+        """Откуда странице задачи можно брать файлы в браузере проверки: папка задачи и рабочая копия проекта."""
+        code = t.code()
+        return [str(t.dir)] + ([str(code.work), str(code.project)] if code is not None else [])
+
+    @staticmethod
+    def _browser_ok(paths, roots=None):
+        res = Q.html_check([str(p) for p in paths], roots=roots)
         if res is None:
             return None
         return {k: (None if v.get("unchecked") or v.get("soft") else not v["errors"],
@@ -1173,7 +1244,7 @@ class TaskManager:
         if not crits:
             return []
         res = Q.check_criteria(crits, lambda rel: self._crit_path(t, rel), run_cmd=lambda c: self._crit_cmd(t, c),
-                               http_ok=lambda u: self._crit_url(t, u), browser=self._browser_ok, quick=quick)
+                               http_ok=lambda u: self._crit_url(t, u), browser=lambda ps: self._browser_ok(ps, self._page_roots(t)), quick=quick)
         if not quick and d.get("items"):
             d.update(results=res, checked=_now())
             t.put_json("критерии.json", d)
@@ -1187,7 +1258,7 @@ class TaskManager:
         out = []
         d = t.dir / "outputs"
         for p in sorted(d.rglob("*")) if d.is_dir() else []:
-            if p.is_file() and p.suffix.lower() in self.PROSE:
+            if p.is_file() and not p.is_symlink() and p.suffix.lower() in self.PROSE:
                 out.append(Q.file_text(p, limit=500000))
         return "\n".join(out)
 
@@ -1237,15 +1308,15 @@ class TaskManager:
         try:
             f.parent.mkdir(parents=True, exist_ok=True)
             full = f.exists() and f.stat().st_size > SRC_MAX
-            with open(f, "a", encoding="utf-8") as fh:
-                fh.write(f"\n\n### {piece[0]}\n" + ("(вывод не сохранён: опора переполнена)" if full else piece[1][:400000]) + "\n")
+            _wr(f, f"\n\n### {piece[0]}\n" + ("(вывод не сохранён: опора переполнена)" if full else piece[1][:400000]) + "\n",
+                append=True, root=t.dir)
         except OSError:
             pass
 
     def _src_backfill(self, t):
         """Опоры нет (задача начата до 0.84 или опору стёрли) — собрать её из история.json и _out/ (рецензия 0.84)."""
         try:
-            msgs = json.loads((t.dir / "история.json").read_text(encoding="utf-8"))
+            msgs = json.loads(_rd(t.dir / "история.json") or "[]")
         except (OSError, ValueError):
             msgs = []
         calls, last, parts = {}, [], []
@@ -1282,7 +1353,7 @@ class TaskManager:
                     add(nm, a, body)
         for f in sorted((t.dir / "_out").glob("*.txt")) if (t.dir / "_out").is_dir() else []:
             nm = re.sub(r"-\d+(?:-\d+)?$", "", f.stem)
-            add(nm, {}, f.read_text(encoding="utf-8", errors="replace")[:400000])
+            add(nm, {}, _rd(f)[:400000])
         return "\n\n".join(parts)
 
     def _given(self, t, limit=8 << 20):
@@ -1323,7 +1394,7 @@ class TaskManager:
         authored = set(t.data.get("authored") or [])
         for p in sorted(d.rglob("*")) if d.is_dir() else []:
             rel = p.relative_to(t.dir).as_posix()
-            if not p.is_file() or p.suffix.lower() in (".md", ".html", ".htm") or rel in authored:
+            if not p.is_file() or p.is_symlink() or p.suffix.lower() in (".md", ".html", ".htm") or rel in authored:
                 continue
             txt = Q.file_text(p, limit=2_000_000)
             size += len(txt)
@@ -1357,7 +1428,7 @@ class TaskManager:
             q["verify_fail"] += 1
             t.journal("🎯 Критерии готовности не выполнены: " + "; ".join(f"{Q.crit_label(r)} — {r.get('detail')}" for r in res if r.get("ok") is False)[:600])
             return Q.criteria_note(res)
-        outs = sorted(p for p in (t.dir / "outputs").rglob("*") if p.is_file()) if (t.dir / "outputs").is_dir() else []
+        outs = sorted(p for p in (t.dir / "outputs").rglob("*") if p.is_file() and not p.is_symlink()) if (t.dir / "outputs").is_dir() else []
         reports = [p for p in outs if p.suffix.lower() == ".md"][:10]
         claims = summary + "\n" + "\n".join(Q.file_text(p, limit=200000) for p in reports)
         evidence = self._evidence(t)
@@ -1376,7 +1447,7 @@ class TaskManager:
                     "read_webpage и проверь, что факт или цифра там есть, — или убери её (замени ссылкой, которую читал(а)). "
                     "Затем снова вызови finish.")
         html = [p for p in outs if p.suffix.lower() in (".html", ".htm")][:4]
-        hc = Q.html_check(html) if html else None
+        hc = Q.html_check(html, roots=self._page_roots(t)) if html else None
         if hc:
             bad = {Path(k).relative_to(t.dir).as_posix(): v["errors"] for k, v in hc.items() if v["errors"] and not v.get("soft") and not v.get("unchecked")}
             for k, v in hc.items():                        # не загрузилась или ошибки из-за внешних ресурсов — замечание, не брак
@@ -1427,7 +1498,9 @@ class TaskManager:
                 body = Q.file_text(p, limit=per * 2)
                 if p.suffix.lower() in (".html", ".htm"):
                     body = re.sub(r"\s+", " ", re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>|<[^>]+>", " ", body))
-            body = body.strip()[:per]
+            body = body.strip()
+            if len(body) > per:                            # экзамен 0.84.1: обрезанную выдержку проверяющий принимал за обрыв файла
+                body = body[:per] + f"\n…[выдержка обрезана: показано {per} из {len(body)} знаков, файл целиком больше — это не обрыв]"
             if used + len(body) > budget:
                 break
             used += len(body)
@@ -1540,7 +1613,7 @@ class TaskManager:
         """Отпечаток работы: файлы (кроме плана и списков), блокнот, число сделанных пунктов. Смена плана сама по себе — не работа."""
         import hashlib
         try:
-            files = sorted(f"{p.relative_to(t.dir)}:{p.stat().st_size}" for p in t.dir.rglob("*") if p.is_file()
+            files = sorted(f"{p.relative_to(t.dir)}:{p.stat().st_size}" for p in t.dir.rglob("*") if p.is_file() and not p.is_symlink()
                            and p.relative_to(t.dir).parts[0] not in Q.SERVICE and "рабочая копия" not in p.parts and not p.name.endswith(".tmp"))
         except OSError:
             files = []
@@ -1584,7 +1657,7 @@ class TaskManager:
             self._save_todos(t, items, source=t._json("задачи.json", {}).get("source") or "json",
                              render=t._json("задачи.json", {}).get("source") != "md")
         light = bool(t.data.get("light"))
-        outs = sorted(p for p in (t.dir / "outputs").rglob("*") if p.is_file()) if (t.dir / "outputs").is_dir() else []
+        outs = sorted(p for p in (t.dir / "outputs").rglob("*") if p.is_file() and not p.is_symlink()) if (t.dir / "outputs").is_dir() else []
         files = ", ".join(f"{p.relative_to(t.dir).as_posix()} ({p.stat().st_size} байт)" for p in outs[:8 if light else 20])
         done = sum(1 for x in items if x.get("status") == "done")
         nxt = next((x for x in items if x.get("status") == "in_progress"), None) or next((x for x in items if x.get("status") == "pending"), None)
@@ -1675,7 +1748,7 @@ class TaskManager:
                 names.append(cands)
         if not names:
             return []
-        have = {p.name.lower() for p in t.dir.rglob("*") if p.is_file()} | {p.name.lower() for p in self._lab_files(t)}
+        have = {p.name.lower() for p in t.dir.rglob("*") if p.is_file() and not p.is_symlink()} | {p.name.lower() for p in self._lab_files(t)}
         code = t.code()
         if code is not None:                               # задача по коду: файлы проекта (рабочая копия и сам проект)
             for root in (getattr(code, "work", None), getattr(code, "project", None)):
@@ -1765,7 +1838,7 @@ class TaskManager:
                 q["verify_fail"] += 1
                 t.journal("🔎 Машинная проверка файлов нашла брак:\n" + "\n".join("- " + x for x in probs[:8]))
                 return Q.summarize(probs)
-            outs = [p for p in (t.dir / "outputs").rglob("*") if p.is_file()] if (t.dir / "outputs").is_dir() else []
+            outs = [p for p in (t.dir / "outputs").rglob("*") if p.is_file() and not p.is_symlink()] if (t.dir / "outputs").is_dir() else []
             if outs and not shown:
                 t.journal("✋ Проверка перед итогом: файлы готовы, но пользователю не показаны.")
                 return ("Файлы в outputs/ готовы, но ты не показал их пользователю — он их не увидит. Вызови show для главных "
@@ -1794,7 +1867,7 @@ class TaskManager:
             files = []
             for p in sorted(t.dir.rglob("*")):
                 rel = p.relative_to(t.dir)
-                if p.is_file() and rel.parts[0] not in Q.SERVICE and not rel.parts[0].startswith("рабочая копия"):
+                if p.is_file() and not p.is_symlink() and rel.parts[0] not in Q.SERVICE and not rel.parts[0].startswith("рабочая копия"):
                     files.append(f"{rel.as_posix()} — {p.stat().st_size} байт")
             files += [f"Лаборатория/{p.relative_to(self.host.workspace.root / 'Лаборатория').as_posix()} — {p.stat().st_size} байт"
                       for p in self._lab_files(t)]
@@ -1804,6 +1877,13 @@ class TaskManager:
                      (". Это задача по коду: изменения пользователь примет сам (рабочая копия)." if t.data.get("project") else ""))
             diff = ""
             if code is not None and code.work.exists():
+                try:                                      # экзамен 0.84.1: «файлы не созданы» — их искали среди готовых файлов
+                    ch = code.changes()
+                    if ch:
+                        ru = {"added": "новый", "modified": "изменён", "deleted": "удалён"}
+                        files = [f"Изменено в рабочей копии: {rel} ({ru.get(st, st)})" for st, rel in ch[:40]] + files
+                except Exception:  # noqa: BLE001
+                    log.debug("изменения рабочей копии для самопроверки", exc_info=True)
                 try:
                     diff = code.diff(limit=max(3000, min(20000, int(int(t.data.get("win") or WIN_DEFAULT) * 3 * 0.3))))
                 except Exception:  # noqa: BLE001
@@ -2015,7 +2095,7 @@ class TaskManager:
             k += 1
         try:
             f.parent.mkdir(parents=True, exist_ok=True)
-            f.write_text(r, encoding="utf-8")
+            _wr(f, r, root=t.dir)
         except OSError:
             return r[:lim] + "\n…(вывод обрезан)"
         rel = f.relative_to(t.dir).as_posix()
@@ -2031,7 +2111,7 @@ class TaskManager:
             plan = (args.get("plan") or "").strip()
             if not plan.startswith("#"):
                 plan = f"# {t.title}\n\n**Цель:** {t.goal}\n\n{plan}"
-            (t.dir / "план.md").write_text(plan + "\n", encoding="utf-8")
+            _wr(t.dir / "план.md", plan + "\n")
             done, total = plan.count("[x]") + plan.count("[X]"), len(re.findall(r"\[[ xX]\]", plan))
             weak = self._sync_md(t, plan)                 # выпуск 4: и в задачи.json (совместимость Markdown ↔ JSON)
             if weak:
@@ -2143,7 +2223,7 @@ class TaskManager:
             summary = self._russian((args.get("summary") or "").strip()) or "Готово."
             if t.data.get("unfinished"):                 # №368: честное «не выполнено» — остановка, а не успех
                 summary = f"**Не выполнено:** {t.data['unfinished']}.\n\nЧто успела:\n\n{summary}"
-            (t.dir / "итог.md").write_text(f"# Итог: {t.title}\n\n{summary}\n", encoding="utf-8")
+            _wr(t.dir / "итог.md", f"# Итог: {t.title}\n\n{summary}\n")
             t.data.update(result=summary, finished=True)
             return "Задача завершена." if not t.data.get("unfinished") else "Задача остановлена: не выполнено."
         if name in WORK_TOOLS:
@@ -2272,6 +2352,14 @@ class TaskManager:
                 ab = ab.resolve()
                 for f in self._folders(t):
                     if ab == f or f in ab.parents:
+                        try:
+                            ws = [str(self.host.workspace.root)]
+                        except Exception:  # noqa: BLE001
+                            ws = []
+                        if SBX.is_private(ab, grants=self._folders(t), hide=ws, root=t.dir):
+                            # S1: дали всю ~ или ~/.config — ~/.ssh, папки Dewiar, .env всё равно закрыты
+                            raise ValueError(f"«{ab}» — личное (ключи, пароли, настройки Dewiar, профиль браузера); задаче "
+                                             "его не давали, хоть оно и внутри данной папки. Как исправить: обойдись без него")
                         if write:
                             key = f"write:{f}"
                             if key not in (t.data.get("write_ok") or []):
@@ -2427,7 +2515,7 @@ class TaskManager:
         for dp, dns, fns in os.walk(root_r, followlinks=False):
             d = Path(dp)
             if d == task_r:
-                dns[:] = [x for x in dns if not x.startswith(("рабочая копия", "_run", "_src"))]
+                dns[:] = [x for x in dns if not x.startswith(("рабочая копия", "_run", "_src", SNAP.DIR))]
             for fn in fns:
                 seen += 1
                 if seen > self.WALK_MAX:
@@ -2544,6 +2632,13 @@ class TaskManager:
 
     def _work(self, t, name, args):
         """Инструменты мастерской (WORK_TOOLS)."""
+        if name in ("write_file", "file_edit"):                # выпуск 5: перед записью в outputs/ — снимок (раз на шаг)
+            try:
+                p0, f0 = self._area(t, args.get("path"))
+                if f0 is None and p0.relative_to(t.dir.resolve()).parts[:1] == ("outputs",):
+                    self._snap(t, f"{name} {p0.relative_to(t.dir.resolve()).as_posix()}")
+            except (ValueError, OSError):
+                pass                                       # путь плохой — скажет сам инструмент
         if name in ("file_read", "read_file", "file_edit", "file_grep", "file_glob"):
             return self._file_tools(t, name, args)
         if name == "write_file":
@@ -2573,7 +2668,7 @@ class TaskManager:
             out = []
             for p in sorted(t.dir.rglob("*")):
                 rel = p.relative_to(t.dir)
-                if p.is_file() and not rel.parts[0].startswith(("рабочая копия", "_run", "_src")) and p.name not in ("задача.json", "история.json", "история.json.tmp", "журнал.md"):
+                if p.is_file() and not p.is_symlink() and not rel.parts[0].startswith(("рабочая копия", "_run", "_src", SNAP.DIR)) and p.name not in ("задача.json", "история.json", "история.json.tmp", "журнал.md"):
                     out.append(f"{rel.as_posix()} — {p.stat().st_size} байт")
             lab = self._lab_files(t)
             if lab:                                    # №368: что задача положила в «Лабораторию» (lab_write, lab_run)
@@ -2582,13 +2677,20 @@ class TaskManager:
                        [f"Лаборатория/{p.relative_to(root).as_posix()} — {p.stat().st_size} байт" for p in lab]
             return "\n".join(out[:300]) or "Папка пуста."
         if name == "run_python":
-            if not self.host.code_auto_run() and not t.data.get("py_ok"):    # разрешение спрашиваем раз на задачу
+            # выпуск 5: в песочнице (bwrap или охрана) — без вопроса: код пишет только в папку задачи, личное не видит, и
+            # задача не встаёт на паузу, когда человека нет рядом. Под охраной (guard) и без песочницы — как до выпуска 5:
+            # разрешение раз на задачу (рецензия выпуска 5: охрану Python обходят в несколько строк — это не песочница)
+            if not SBX.real_sandbox(self._sbx_mode(t)) and not self.host.code_auto_run() and not t.data.get("py_ok"):
                 okd, why = self._permit(t, "run_python", f"Задача «{t.title}» хочет запускать свои скрипты Python в папке задачи. Разрешить для этой задачи?")
                 if not okd:
                     return why + " Без запуска кода: write_file."
                 t.data["py_ok"] = True
                 t.save()
             return self._run_python(t, args.get("code") or "", int(args.get("timeout") or 180))
+        if name == "run_shell":
+            return self._run_shell(t, str(args.get("command") or "").strip(), int(args.get("timeout") or 180))
+        if name == "rewind":
+            return self._rewind_tool(t, args)
         if name == "show":
             p = self._path(t, args.get("path"))
             if not p.is_file():
@@ -2605,11 +2707,12 @@ class TaskManager:
             src = str(args.get("path") or "").strip()
             # источник можно взять и вне папки задачи: из папки ассистента или по полному пути
             cands = [t.dir / src, self.host.workspace.root / src, Path(os.path.expanduser(src))]
-            p = next((c for c in cands if c.is_file()), None)
+            p = next((c for c in cands if c.is_file() and not c.is_symlink()), None)
             if p is None:
                 return "Файл не найден — укажи путь в папке задачи (например downloads/лекция.mp4) или полный путь."
             t.data["activity"] = "расшифровываю запись…"
             self._emit(t)
+            self._snap(t, f"transcribe {p.name}")
             segs = self.host.transcribe_file(p, cancel=t.cancel)
             out = t.dir / "outputs"
             out.mkdir(parents=True, exist_ok=True)
@@ -2618,8 +2721,9 @@ class TaskManager:
                 h, m, s_ = int(x // 3600), int(x % 3600 // 60), x % 60
                 return f"{h:02d}:{m:02d}:{int(s_):02d},{int((s_ % 1) * 1000):03d}" if srt else (f"{h}:{m:02d}:{int(s_):02d}" if h else f"{m:02d}:{int(s_):02d}")
             txt = "\n".join(f"[{ts(a)}] {x}" for a, b, x in segs)
-            (out / f"{p.stem}.txt").write_text(txt + "\n", encoding="utf-8")
-            (out / f"{p.stem}.srt").write_text("\n".join(f"{i}\n{ts(a, True)} --> {ts(b, True)}\n{x}\n" for i, (a, b, x) in enumerate(segs, 1)), encoding="utf-8")
+            _wr(out / f"{p.stem}.txt", txt + "\n", root=t.dir)
+            _wr(out / f"{p.stem}.srt", "\n".join(f"{i}\n{ts(a, True)} --> {ts(b, True)}\n{x}\n" for i, (a, b, x) in enumerate(segs, 1)),
+                root=t.dir)
             t.journal(f"🎙 Расшифровал {p.name}: {len(segs)} фрагментов")
             return (f"Готово: outputs/{p.stem}.txt и outputs/{p.stem}.srt ({len(segs)} фрагментов). Начало:\n" + txt[:6000]
                     + ("\n…(дальше — в файле, читай file_read)" if len(txt) > 6000 else ""))
@@ -2631,11 +2735,12 @@ class TaskManager:
             nm = re.sub(r'[\\/:*?"<>|]', "_", (args.get("name") or url.split("?")[0].rstrip("/").rsplit("/", 1)[-1] or "file"))[:120]
             dst = t.dir / "downloads" / nm
             dst.parent.mkdir(parents=True, exist_ok=True)
+            _wr(dst, b"", root=t.dir)                      # B2: ни ссылки на месте файла, ни папки-ссылки наружу
             got = 0
             with httpx.stream("GET", url, follow_redirects=True, timeout=httpx.Timeout(20, read=120),
                               headers={"User-Agent": "Mozilla/5.0 (Dewiar)"}) as r:
                 r.raise_for_status()
-                with open(dst, "wb") as f:
+                with os.fdopen(os.open(dst, os.O_WRONLY | os.O_TRUNC | _NOFOLLOW | getattr(os, "O_BINARY", 0)), "wb") as f:
                     for b_ in r.iter_bytes(1 << 16):
                         got += len(b_)
                         if got > 500 << 20:
@@ -2661,37 +2766,305 @@ class TaskManager:
                     PYTHONPATH=pp + (os.pathsep + old if old else ""), DEWIAR_ALLOW_DEL=allow)
 
     def _run_python(self, t, code, timeout):
-        """Сохранить код шагом _run/шагN.py и выполнить в папке задачи (до 600 с) -> код выхода, вывод и подсказка по ошибке."""
-        import subprocess
-        import sys
+        """Сохранить код шагом _run/шагN.py и выполнить в папке задачи в песочнице (до 600 с) -> код выхода, вывод и
+        подсказка по ошибке."""
+        m = self._sbx_mode(t)
+        if not m:
+            return ("Ошибка: запуск кода здесь недоступен — нет песочницы. Как исправить: обойдись без кода (файлы — write_file) "
+                    "и напиши в итоге, что не удалось посчитать.")
         n = len(list(t.dir.glob("_run/*.py"))) + 1
         f = t.dir / "_run" / f"шаг{n}.py"
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(code, encoding="utf-8")
         (t.dir / "outputs").mkdir(exist_ok=True)
-        py = sys.executable
-        if os.name == "nt" and py.lower().endswith("pythonw.exe"):     # pythonw не даёт stdout — скрипту нужен python.exe
-            py = py[:-len("pythonw.exe")] + "python.exe"
         try:
             from eyes import ffmpeg_path
             ff = ffmpeg_path() or ""
         except Exception:  # noqa: BLE001
             ff = ""
+        timeout = max(5, min(600, timeout))
+        env = self._py_env(t, ff) if m == "off" else {"FFMPEG": ff}
         try:
-            r = subprocess.run([py, str(f)], cwd=str(t.dir), capture_output=True, text=True, encoding="utf-8",
-                               errors="replace", timeout=max(5, min(600, timeout)), stdin=subprocess.DEVNULL,
-                               env=self._py_env(t, ff),
-                               creationflags=0x08000000 if os.name == "nt" else 0)
-        except subprocess.TimeoutExpired:
-            return f"Остановлено по времени ({timeout} с). Делай работу частями: сохраняй прогресс в файл."
-        out = (r.stdout + ("\n[stderr]\n" + r.stderr if r.stderr.strip() else "")).strip()
-        t.journal(f"🐍 Python (шаг {n}): код {r.returncode}")
-        hint = Q.error_hint(out) if r.returncode else ""
-        if r.returncode:
+            r = self._sandboxed(t, m, [self._task_python(), str(f)], timeout, f"run_python, шаг {n}", env, tools=[ff] if ff else ())
+        except SBX.SandboxError as e:
+            return f"Ошибка: {e}. Обойдись без кода."
+        if r.cancelled:
+            return "Задачу остановили — код прерван."
+        if r.timed_out:
+            return (f"Остановлено по времени ({timeout} с): все процессы кода завершены. Делай работу частями: сохраняй "
+                    "прогресс в файл.")
+        if r.oversize:
+            return self._oversize(t)
+        out = (r.out + ("\n[stderr]\n" + r.err if r.err.strip() else "")).strip()
+        t.journal(f"🐍 Python (шаг {n}): код {r.code}")
+        hint = Q.error_hint(out) if r.code else ""
+        if r.code:
             q = self._q(t)
-            q["errors"] = (q["errors"] + [{"tool": "run_python", "text": (r.stderr.strip() or out)[-240:]}])[-10:]
+            q["errors"] = (q["errors"] + [{"tool": "run_python", "text": (r.err.strip() or out)[-240:]}])[-10:]
         # длинный вывод целиком — в _out/, модели — начало и конец (_offload в _tool, общий для всех инструментов)
-        return f"Код выхода {r.returncode}.\n{out or '(вывода нет)'}" + (f"\n\n{hint}" if hint else "")
+        return f"Код выхода {r.code}.\n{out or '(вывода нет)'}" + (f"\n\n{hint}" if hint else "")
+
+    def _run_shell(self, t, cmd, timeout):
+        """run_shell (выпуск 5): команда в папке задачи. В bwrap — без вопроса (изоляция настоящая); в режиме охраны и без
+        песочницы команда оболочки ничем не ограничена, кроме папки, окружения и времени, — как code_run: с разрешения
+        человека (или с автозапуском из настроек). Запрещённое защитой (guard.check_command) — никогда."""
+        if not cmd:
+            return "Ошибка: пустая команда. Как исправить: command — что выполнить, например «ls -la outputs»."
+        m = self._sbx_mode(t)
+        if not m:
+            return "Ошибка: команды здесь недоступны — нет песочницы. Как исправить: обойдись без них."
+        import guard
+        v = guard.check_command(cmd, cwd=str(t.dir))
+        if v["level"] == "block":
+            t.journal(f"🛡 Защита не дала: {cmd} — {v['reason']}")
+            return f"Защита Dewiar запретила эту команду: {v['reason']}. Найди другой путь."
+        if not SBX.real_sandbox(m):
+            # под охраной команда оболочки ничем не заперта — спрашиваем всегда, даже при автозапуске кода (N3)
+            warn = guard.describe_warn(v) + " " if v["level"] == "warn" else ""
+            if True:
+                okd, why = self._permit(t, "run_shell", f"Задача «{t.title}»: {warn}выполнить в папке задачи «{cmd[:300]}»?")
+                if not okd:
+                    return why
+        (t.dir / "outputs").mkdir(exist_ok=True)
+        timeout = max(5, min(600, timeout))
+        try:
+            r = self._sandboxed(t, m, SBX.shell_argv(cmd), timeout, "run_shell " + cmd[:120], {})
+        except SBX.SandboxError as e:
+            return f"Ошибка: {e}."
+        if r.cancelled:
+            return "Задачу остановили — команда прервана."
+        if r.timed_out:
+            return f"Остановлено по времени ({timeout} с): все процессы команды завершены. Делай работу частями."
+        if r.oversize:
+            return self._oversize(t)
+        out = (r.out + ("\n[stderr]\n" + r.err if r.err.strip() else "")).strip()
+        t.journal(f"⌨ Команда: {self._short(cmd, 120)} — код {r.code}")
+        if r.code:
+            q = self._q(t)
+            q["errors"] = (q["errors"] + [{"tool": "run_shell", "text": (r.err.strip() or out)[-240:]}])[-10:]
+        return f"Код выхода {r.code}.\n{out or '(вывода нет)'}"
+
+    # ---------- выпуск 5: песочница, служебные файлы, снимки и откат ----------
+
+    # служебное в папке задачи, которое код задачи только читает: ведёт Dewiar (подделка учёта, критериев, опоры проверки)
+    PROTECT = tuple(dict.fromkeys(tuple(Q.SERVICE) + (SNAP.DIR, "код.json")))
+    SVC_RESTORE = ("задачи.json", "критерии.json", "план.md", "блокнот.md", "итог.md", "код.json")
+    MAX_BYTES = None                                   # потолок папки задачи на один запуск кода (облако — свой)
+
+    def _oversize(self, t):
+        lim = self.MAX_BYTES or 0
+        t.journal(f"🛑 Папка задачи выросла больше {lim >> 20} МБ — код остановлен.")
+        return (f"Остановлено: папка задачи больше {lim >> 20} МБ — здесь это предел. Как исправить: удали лишнее (большие "
+                "промежуточные файлы) и делай результат компактнее.")
+
+    def _git_state(self, t):
+        """Задача по коду: файл (или папка) «рабочая копия/.git» до запуска кода — содержимое (B3)."""
+        g = t.dir / "рабочая копия" / ".git"
+        try:
+            if g.is_symlink() or not g.exists():
+                return None
+            return ("file", g.read_bytes()) if g.is_file() else ("dir", None)
+        except OSError:
+            return None
+
+    def _git_check(self, t, was):
+        """После кода: «рабочая копия/.git» — как был (код мог направить его на свой gitdir с core.fsmonitor — а git по копии
+        Dewiar и code_run запускают вне песочницы)."""
+        if was is None:
+            return
+        g = t.dir / "рабочая копия" / ".git"
+        try:
+            if was[0] == "file":
+                if g.is_symlink() or not g.is_file() or g.read_bytes() != was[1]:
+                    if g.is_symlink() or g.is_file():
+                        g.unlink()
+                    elif g.is_dir():
+                        import shutil
+                        shutil.rmtree(g, ignore_errors=True)
+                    g.write_bytes(was[1])
+                    t.journal("🛡 Код задачи менял «рабочая копия/.git» — вернул как было.")
+        except OSError:
+            log.debug("рабочая копия/.git", exc_info=True)
+
+    def _sbx_mode(self, t):
+        """Режим песочницы для кода задачи: "bwrap" | "landlock" (настоящая изоляция) | "guard" (охрана, с разрешения
+        человека) | "off"; "" — кода здесь нет (облако без bubblewrap)."""
+        return SBX.mode()
+
+    def _sbx_prompt(self, t, light=False):
+        """Строка о песочнице для неизменной подсказки задачи (режим и сеть меняются редко — начало запроса из кэша)."""
+        m = self._sbx_mode(t)
+        if not m:
+            return ""
+        if light:
+            return ("\nПЕСОЧНИЦА: код пишет только в папку задачи" + ("" if t.data.get("net") else ", сети у кода нет")
+                    + ". Испортил outputs/ — rewind(step).")
+        return ("\n\nПЕСОЧНИЦА: " + SBX.describe(m, bool(t.data.get("net"))) + ". Командная строка — run_shell. Испортил "
+                "файлы в outputs/ — rewind(step=N) вернёт их как перед шагом N (без step — список снимков).")
+
+    def _task_python(self):
+        import sys
+        py = sys.executable
+        if os.name == "nt" and py.lower().endswith("pythonw.exe"):     # pythonw не даёт stdout — скрипту нужен python.exe
+            py = py[:-len("pythonw.exe")] + "python.exe"
+        return py
+
+    def _sbx_kw(self, t):
+        """Что видит код задачи: данные человеком папки — только чтение; папка ассистента — закрыта (кроме папки задачи)."""
+        try:
+            ws = str(self.host.workspace.root)
+        except Exception:  # noqa: BLE001
+            ws = ""
+        prot = self.PROTECT + (("рабочая копия/.git",) if (t.dir / "рабочая копия" / ".git").exists() else ())
+        return dict(grants=[str(f) for f in self._folders(t)], net=bool(t.data.get("net")), hide=[ws] if ws else [],
+                    protect=prot, strict=False, max_bytes=self.MAX_BYTES)
+
+    def _sandboxed(self, t, m, argv, timeout, why, env, tools=()):
+        """Снимок outputs/ → запуск в песочнице → служебные файлы задачи как были -> SBX.Result."""
+        self._snap(t, why)
+        before = self._svc_state(t)
+        git0 = self._git_state(t)
+        r = None
+        try:
+            r = SBX.run(argv, t.dir, timeout=timeout, env=env, cancel=t.cancel, m=m, python=self._task_python(),
+                        tools=tools, **self._sbx_kw(t))
+            return r
+        finally:
+            if r is not None and r.links:              # B2: ссылки наружу, оставленные кодом, — удалены (sandbox.purge_links)
+                links = self._relink_work(t, r.links)
+                if links:
+                    t.journal("🛡 Код задачи оставил ссылки за пределы папки задачи (или особые файлы) — удалил: "
+                              + ", ".join(links[:8]) + (f" и ещё {len(links) - 8}" if len(links) > 8 else ""))
+            self._svc_check(t, before)
+            self._git_check(t, git0)
+
+    def _relink_work(self, t, links):
+        """Ссылки рабочей копии, которые были в проекте ещё до задачи (проект/shared → ../ext), sandbox.purge_links убрал как
+        «ведущие наружу» — возвращаем их как в проекте, иначе они выглядели бы удалёнными, и «Принять» удалил бы их в проекте
+        (вторая рецензия). Код и Dewiar по ним не ходят: codework.path() — только внутри копии. -> остальные пути (для журнала)."""
+        code = t.code()
+        rest = []
+        for rel in links:
+            pre = "рабочая копия" + os.sep
+            if code is not None and rel.startswith(pre):
+                w = rel[len(pre):]
+                src, dst = code.project / w, code.work / w
+                try:
+                    if src.is_symlink() and not os.path.lexists(dst):
+                        os.symlink(os.readlink(src), dst)
+                        continue
+                except OSError:
+                    pass
+            rest.append(rel)
+        return rest
+
+    def _svc_state(self, t):
+        """Служебные файлы до запуска кода: какие есть и содержимое небольших (учёт, критерии, план, блокнот, итог)."""
+        st = {}
+        for n in self.PROTECT:
+            p = t.dir / n
+            if p.is_file() and n in self.SVC_RESTORE and p.stat().st_size <= 4 << 20:
+                st[n] = p.read_bytes()
+            else:
+                st[n] = True if p.exists() else None
+        return st
+
+    def _svc_check(self, t, before):
+        """После кода: служебное, которое код всё же изменил (обход охраны в режиме guard) или создал, — назад. Состояние
+        задачи (задача.json) переписывается из памяти — подделанные папки, сеть и прочее не доживут до перезапуска."""
+        fixed = []
+        for n, was in before.items():
+            p = t.dir / n
+            try:
+                if p.is_symlink() or (os.path.lexists(p) and not p.is_dir() and not _regular(p)):
+                    p.unlink()                             # служебное — ссылкой или FIFO/сокетом: Dewiar по нему не пойдёт
+                    fixed.append(n)
+                    continue
+                if was is None and p.exists():             # создал код (Dewiar в это время их не пишет), в том числе _snap
+                    (p.unlink() if not p.is_dir() else __import__("shutil").rmtree(p, ignore_errors=True))
+                    fixed.append(n)
+                elif isinstance(was, bytes) and (not p.is_file() or p.read_bytes() != was):
+                    if p.is_symlink() or p.is_dir():
+                        p.unlink() if p.is_symlink() else __import__("shutil").rmtree(p, ignore_errors=True)
+                    p.write_bytes(was)
+                    fixed.append(n)
+            except OSError:
+                log.debug("служебный файл %s", n, exc_info=True)
+        try:
+            t.save()
+        except OSError:
+            pass
+        if fixed:
+            t.journal("🛡 Код задачи менял служебные файлы (" + ", ".join(fixed) + ") — вернул как было.")
+
+    def _snap(self, t, why):
+        """Перед записью в outputs/ — снимок «как перед шагом N» (раз на шаг; snapshots.py). Не вышло — один раз в журнал."""
+        try:
+            seq, no = SNAP.Snapshots(t.dir).take(int(t.data.get("steps") or 0), why)
+        except (OSError, SNAP.SnapError) as e:
+            seq, no = None, f"ошибка диска ({e})"
+        if no and not t.data.get("snap_told"):
+            t.data["snap_told"] = True
+            t.journal(f"📸 Снимок outputs/ не сделан: {no} — этот шаг откатить не получится.")
+        return seq
+
+    def _rewind_tool(self, t, args):
+        try:
+            sn = SNAP.Snapshots(t.dir)
+        except (OSError, SNAP.SnapError) as e:
+            return f"Ошибка: {e}"
+        if args.get("step") in (None, ""):
+            ls = sn.listing()
+            if not ls:
+                return "Снимков пока нет: outputs/ ещё не менялся."
+            lines = [(f"перед шагом {x['step']}" if x["kind"] == "step" else f"снимок №{x['seq']} ({x['why']})")
+                     + f" — {x['time'][11:16]}, файлов {x['files']}" + (f" ({x['why']})" if x["kind"] == "step" and x["why"] else "")
+                     for x in ls[:20]]
+            return "Снимки outputs/ (новые первыми):\n" + "\n".join(lines) + "\nОткат: rewind(step=N) — outputs/ станет как перед шагом N."
+        try:
+            msg = sn.rewind(int(t.data.get("steps") or 0), step=int(args.get("step")))
+        except (SNAP.SnapError, ValueError, TypeError) as e:
+            return f"Ошибка: {e}"
+        except OSError as e:
+            return f"Ошибка: откатить не вышло ({e}). Как исправить: проверь outputs/ (file_glob)."
+        self._after_rewind(t, msg)
+        return msg + " Проверь outputs/ (file_glob) и продолжай с этого места."
+
+    def _after_rewind(self, t, msg, who="задача"):
+        outs = [o for o in t.data.get("outputs") or [] if (t.dir / str(o.get("path") or "")).is_file()]
+        t.data["outputs"] = outs
+        t.journal(f"⏪ Откат ({who}): {msg}")
+        t.save()
+        self._emit(t)
+
+    def rewind(self, tid, step=None, seq=None):
+        """Студия: «Откатить к шагу N» (или вернуть снимок № seq — например, отменить откат). Пока задача работает — нельзя:
+        она пишет в те же файлы. Задача узнает об откате на следующем шаге. -> текст для человека."""
+        t = self.get(tid)
+        if t.status == "running" and t.thread is not None and t.thread.is_alive():
+            raise ValueError("задача сейчас работает — сначала остановите её, потом откатывайте")
+        try:
+            msg = SNAP.Snapshots(t.dir).rewind(int(t.data.get("steps") or 0) + 1, step=step, seq=seq)
+        except SNAP.SnapError as e:
+            raise ValueError(str(e)) from None
+        self._after_rewind(t, msg, who="человек")
+        t.data.setdefault("sys_notes", []).append(f"Человек откатил результаты задачи: {msg} Сверься с outputs/ (file_glob), "
+                                                  "прежде чем продолжать.")
+        t.save()
+        return msg
+
+    def set_net(self, tid, on):
+        """Студия: сеть для кода задачи (run_python, run_shell) — вкл/выкл. Поиск и чтение страниц работают всегда."""
+        t = self.get(tid)
+        on = bool(on)
+        if bool(t.data.get("net")) != on:
+            t.data["net"] = on
+            t.journal("🌐 Человек " + ("дал коду задачи доступ в интернет." if on else "закрыл коду задачи доступ в интернет."))
+            t.data.setdefault("sys_notes", []).append("Человек " + ("включил" if on else "выключил") + " сеть для кода задачи "
+                                                      "(run_python, run_shell).")
+            t.save()
+            self._emit(t)
+        return t
 
     @staticmethod
     def _short(v, n=300):
@@ -3083,7 +3456,7 @@ class TaskManager:
         import hashlib
         try:
             files = sorted(f"{p.relative_to(t.dir)}:{p.stat().st_size}" for p in t.dir.rglob("*")
-                           if p.is_file() and p.relative_to(t.dir).parts[0] not in Q.SERVICE and "рабочая копия" not in p.parts
+                           if p.is_file() and not p.is_symlink() and p.relative_to(t.dir).parts[0] not in Q.SERVICE and "рабочая копия" not in p.parts
                            and not p.name.endswith(".tmp"))
         except OSError:
             files = []
@@ -3112,7 +3485,8 @@ class TaskManager:
                     "Результат — файлы в outputs/ (покажи их show) и итог в finish: что сделано и главное содержание — "
                     "его прочитает основная задача.)")
             c = self.create(title, goal, project="", start=False, persona=t.data.get("persona") or "", parent=t.id,
-                            folders=[str(f) for f in self._folders(t)])     # части видят те же папки человека
+                            folders=[str(f) for f in self._folders(t)],     # части видят те же папки человека
+                            net=bool(t.data.get("net")))                     # и ту же сеть для кода (выпуск 5)
             made.append(c)
             t.journal(f"🧩 Часть «{c.title}» отдана помощнику.")
         self._launch_parts(t)
@@ -3159,9 +3533,12 @@ class TaskManager:
             if c.status == "done":
                 dst = t.dir / "parts" / _clean(c.title)
                 src = c.dir / "outputs"
-                if src.is_dir():
-                    shutil.copytree(src, dst, dirs_exist_ok=True)
-                    files = [str(p.relative_to(t.dir)) for p in dst.rglob("*") if p.is_file()]
+                if src.is_dir() and not src.is_symlink():
+                    # без ссылок и особых файлов (FIFO): иначе копия читала бы через ссылку чужие файлы (вторая рецензия)
+                    shutil.copytree(src, dst, dirs_exist_ok=True, symlinks=True,
+                                    ignore=lambda d, names: [n for n in names if os.path.islink(os.path.join(d, n))
+                                                             or not (os.path.isdir(os.path.join(d, n)) or _regular(os.path.join(d, n)))])
+                    files = [str(p.relative_to(t.dir)) for p in dst.rglob("*") if p.is_file() and not p.is_symlink()]
                     if files:
                         line += "\nФайлы: " + ", ".join(files[:20])
                 line += "\n" + (c.result or "")[:4000]
@@ -3191,7 +3568,7 @@ class TaskManager:
         и повтор (RETRY_MIN), прочие ошибки — status=failed с объявлением."""
         hist = t.dir / "история.json"
         try:
-            msgs = json.loads(hist.read_text(encoding="utf-8")) if hist.exists() else []
+            msgs = json.loads(_rd(hist) or "[]")
         except ValueError:
             msgs = []
         wake = t.data.pop("wake_note", "")
@@ -3253,6 +3630,10 @@ class TaskManager:
                         self._note_human(t, x.get("text"))
                     self._add_user(msgs, "Сообщение пользователя для этой задачи:\n" + "\n".join(f"— {x['text']}" for x in inbox)
                                    + "\nУчти это (важное — в блокнот) и продолжай.")
+                    t.save()
+                notes = t.data.pop("sys_notes", None)
+                if notes:                                         # выпуск 5: человек откатил результаты, дал или закрыл сеть
+                    self._add_user(msgs, "Сообщение Dewiar:\n" + "\n".join(f"— {x}" for x in notes))
                     t.save()
                 if run_steps >= max_steps:
                     cyc = int(t.data.get("cycles") or 0) + 1

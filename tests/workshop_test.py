@@ -41,11 +41,21 @@ ok(esc and not (tmp / "ws/escape.txt").exists(), "за пределы папки
 ok("2: </body>" not in w("read_file", path="outputs/app.html") and "1: <!doctype" in w("read_file", path="outputs/app.html"), "read_file с номерами строк")
 ok("outputs/app.html" in w("list_files"), "list_files")
 r = w("run_python", code="import json, os\nopen('outputs/data.json','w').write(json.dumps({'sum': 2+2}))\nprint('сумма', 2+2, bool(os.environ.get('FFMPEG') is not None))")
-ok("сумма 4 True" in r and (t.dir / "outputs/data.json").exists() and len(h.asked) == 1, "run_python: спросил разрешение один раз, выполнил, файл создан")
-r = w("run_python", code="print('снова')")
-ok("снова" in r and len(h.asked) == 1, "второй запуск — без вопроса (разрешено для этой задачи)")
+import sandbox  # noqa: E402
+real = sandbox.real_sandbox(sandbox.mode())
+ok("сумма 4 True" in r and (t.dir / "outputs/data.json").exists() and len(h.asked) == (0 if real else 1),
+   f"run_python ({sandbox.mode()}): {'в песочнице — без вопроса' if real else 'под охраной — с разрешения'}, выполнил, файл создан")
+# без песочницы (DEWIAR_SANDBOX=off) — как раньше: разрешение раз на задачу
+os.environ["DEWIAR_SANDBOX"] = "off"
+h.asked.clear()
+t_off = tm.create("Калькулятор 2", "сделай калькулятор", start=False)
+r = tm._work(t_off, "run_python", {"code": "print('снова')"})
+ok("снова" in r and len(h.asked) == 1, "без песочницы: спросил разрешение один раз, выполнил")
+r = tm._work(t_off, "run_python", {"code": "print('и ещё')"})
+ok("и ещё" in r and len(h.asked) == 1, "второй запуск — без вопроса (разрешено для этой задачи)")
 t2 = tm.create("Другая", "x", start=False); h.answer = False
 ok("отказался" in tm._work(t2, "run_python", {"code": "print(1)"}), "отказ — код не запускается")
+os.environ.pop("DEWIAR_SANDBOX")
 r = w("show", path="outputs/app.html", title="Калькулятор")
 ok(t.data["outputs"][0] == {**t.data["outputs"][0], "path": "outputs/app.html", "title": "Калькулятор"} and any(k == "task" for k, _ in h.events),
    "show → в «Результатах» и студия узнала")

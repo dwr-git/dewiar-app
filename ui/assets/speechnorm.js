@@ -163,8 +163,45 @@
       return `${w} ${ordinalWords(romanValue(r), form)}`;
     });
   }
+  /* №561 (05.11, веб-версия на Mac): голос Safari читал кавычки «Прогулка в парке» вслух — «отвратительно». clean — до
+     любого голоса (и устройства, и сервера): кавычки и разметка прочь, тире — пауза (запятая), «!!!» и «?!» — один знак,
+     скобки — паузы, эмодзи прочь; числа, время, «12 - 10», «XIX–XX» не трогает. Как speech_clean в core/speechnorm.py
+     (tests/speech_clean561_test.py сверяет оба). Без «взгляда назад» — старый Safari (см. lbReplace). */
+  const EMO = (() => { try { return new RegExp("[\\u{1F000}-\\u{1FAFF}\\u2600-\\u27BF\\u2B00-\\u2BFF\\u2190-\\u21FF\\u2300-\\u23FF\\u25A0-\\u25FF\\uFE0E\\uFE0F\\u200D\\u20E3\\u{E0020}-\\u{E007F}\\u00A9\\u00AE\\u2122]", "gu"); }
+    catch (e) { return /[☀-➿⬀-⯿←-⇿⌀-⏿■-◿︎️‍⃣©®™]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/g; } })();
+  const KEEP_DASH = /[0-9IVXLCDM]/, WCH = new RegExp(`[${W}]`);
+  function clean(text) {
+    let t = String(text == null ? "" : text);
+    t = t.replace(/```[\s\S]*?```/g, " ").replace(/`([^`]*)`/g, "$1");
+    t = t.replace(/!?\[([^\]]*)\]\([^()]*\)/g, "$1");                                   // [текст](ссылка) → текст
+    t = t.replace(/https?:\/\/\S+/g, "ссылка");
+    t = t.replace(/^[ \t]*(?:#{1,6}|>+|[-*+•·▪◦‣●–—]+)[ \t]+/gm, "");                   // заголовки, цитаты, пункты списка
+    t = t.replace(/([^\s.!?…:;,])[ \t]*\n\s*/g, "$1. ");                                // строка без точки — пауза перед следующей
+    t = t.replace(EMO, " ");
+    t = t.replace(/[«»“”„‟"＂〝〞‹›]/g, "").replace(/[‘’‚‛`´]/g, "'");
+    t = t.replace(/(^|[^A-Za-zА-Яа-яЁё])'+|'+(?![A-Za-zА-Яа-яЁё])/g, (m, a) => a || "");   // апостроф — только внутри слова
+    t = t.replace(/[*_]+/g, (m, i, s) => {                                               // «3 * 4», x86_64 — не разметка
+      const prev = i ? s[i - 1] : "", nxt = s[i + m.length] || "";
+      if (m[0] === "*" && /[\d ]/.test(prev || "x") && /[\d ]/.test(nxt || "x") && /\d\s*$/.test(s.slice(0, i)) && /^\s*\d/.test(s.slice(i + m.length))) return m;
+      if (m[0] === "_" && prev && nxt && WCH.test(prev) && WCH.test(nxt)) return m;
+      return " ";
+    });
+    t = t.replace(/~\s*(?=\d)/g, "около ").replace(/[#~^|\\<>]+/g, " ");
+    t = t.replace(/[(\[{]/g, ", ").replace(/[)\]}]/g, ", ");
+    t = t.replace(/&/g, " и ").replace(/[¡¿§]/g, "");
+    t = t.replace(/(^|[.!?…:;]\s*)[-–—]+\s+/g, "$1");                                   // «— Привет», «Итак: — …»
+    t = t.replace(/[ \t]+(?:—|–|-{1,3})[ \t]+|—+/g, (m, i, s) => {                       // тире — пауза, между числами — нет
+      const prev = i ? s[i - 1] : "", nxt = s[i + m.length] || "";
+      return KEEP_DASH.test(prev || " ") && KEEP_DASH.test(nxt || " ") ? m : ", ";
+    });
+    t = t.replace(/([!?])[!?.…]+/g, "$1").replace(/\.{3,}/g, "…");                      // «!!!», «?!», «?..» — один знак
+    t = t.replace(/\s+/g, " ").replace(/\s+([,.!?…;:])/g, "$1").replace(/([,;:])(?:\s*[,;:])+/g, "$1");
+    t = t.replace(/[,;:]+\s*(?=[.!?…])/g, "").replace(/([.!?…])\s*[,;:]+/g, "$1");
+    t = t.replace(/^[\s,.;:!?…]+|[\s,;:]+$/g, "");
+    return t.trim();
+  }
   function norm(text, latin = true) {
-    let t = romanNorm(String(text == null ? "" : text));
+    let t = romanNorm(clean(text));
     for (let i = 0; i < 3; i++) t = lbReplace(t, /(\d{1,3})[   ](?=\d{3}(?!\d))/g, (c) => !/[\d.,]/.test(c), (m, a) => a);
     t = t.replace(/(\d+)(?:[.,](\d{1,2}))?\s*(?:руб(?:л[а-яё]*)?\.?|₽|р\.|BYN|RUB)(?![а-яёА-ЯЁA-Za-z])/g, (m, n, k) => money(n, k, "rub"));
     t = t.replace(/\$\s*(\d+)(?:[.,](\d{1,2}))?|(\d+)(?:[.,](\d{1,2}))?\s*(?:\$|долл\.|USD)/g, (m, n, k, n2, k2) => money(n || n2, k || k2, "usd"));
@@ -197,5 +234,5 @@
   }
   // фраза без точки в конце — с точкой: иначе голос сервера глотал последнее слово («…равно два» — без «два»)
   const end = (t) => t && /[0-9A-Za-zА-Яа-яЁё»)"']$/.test(t) ? t + "." : t;
-  window.DewiarSpeech = { norm, numberWords, ordinalWords };
+  window.DewiarSpeech = { norm, clean, numberWords, ordinalWords };
 })();

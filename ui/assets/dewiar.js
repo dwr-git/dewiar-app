@@ -5,8 +5,9 @@
    token и port приходят в адресе страницы (?token=…&port=…, их подставляет ui/app.py).
    При разрыве ждущие вызовы отклоняются, переподключение — каждые 1,5 с, пока ядро не ответит.
    window.api() — методы окна pywebview (там, где окно открыто через него), иначе null. */
+/* Ключ моста окна и параметры адреса — в assets/boot.js (первый скрипт каждой страницы): адрес окна там же очищается. */
 (function () {
-  const q = new URLSearchParams(location.search);
+  const q = window.dwQuery ? dwQuery() : new URLSearchParams(location.search);
   class Core {
     constructor() {
       this.token = q.get("token") || ""; this.port = q.get("port") || "8765";
@@ -58,6 +59,15 @@
     /* Нет связи — подождать её до 6 с, а не отказать сразу (владелец 27.10 и №308: «с виджета в заметки — первый раз
        пустая страница и „нет связи с ядром“, второй раз всё открывается»: студия звала ядро раньше, чем успела
        подключиться). Ядро так и не ответило — тогда «нет связи с ядром». */
+    /* Снимок экрана для жалобы (bug_shot) — без виджета (№559, 05.11: «чтобы скриншот делался без окна персонажа»):
+       окно виджета прячется на время снимка (ui/app.py shot_hide) и возвращается в любом случае — и при ошибке. */
+    async shot(args = {}) {
+      const a = window.api && window.api();
+      let hid = false;
+      try { hid = !!(a && a.shot_hide && await a.shot_hide(true)); } catch (e) { hid = false; }
+      try { return await this.call("bug_shot", args); }
+      finally { if (hid) { try { await a.shot_hide(false); } catch (e) { /* вернётся сам через 15 с */ } } }
+    }
     call(cmd, args = {}) {
       if (!this.connected) return new Promise((resolve, reject) => {
         let done = false;

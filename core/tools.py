@@ -377,6 +377,9 @@ def t_weather(a, ctx):
     import datetime as _dt
     city = str(a.get("city") or "").strip()
     days = max(1, min(7, int(float(a.get("days") or 3))))
+    src = ""
+    if not city:                         # идея №142: город не назван — из «Утра с Лирой», потом из памяти («живу в Балашове»)
+        city, src = home_city((ctx or {}).get("engine") if isinstance(ctx, dict) else None)
     if not city:
         raise ToolError("спроси, в каком городе")
     def get(url, params):
@@ -395,6 +398,13 @@ def t_weather(a, ctx):
     try:
         g = get("https://geocoding-api.open-meteo.com/v1/search", {"name": city, "count": 1, "language": "ru"})
         p = (g.get("results") or [None])[0]
+        if not p:                        # «Балашове», «Минска» — как сказали: ищем по основам (weatherq)
+            import weatherq as W
+            try:
+                q = W.geocode(city, (ctx or {}).get("dewiar_web") if isinstance(ctx, dict) else None)
+            except W.WeatherError:
+                q = None
+            p = {"name": q["name"], "latitude": q["lat"], "longitude": q["lon"]} if q else None
         if not p:
             return f"Город «{city}» не нашёлся — уточни название."
         w = get("https://api.open-meteo.com/v1/forecast", {
@@ -416,7 +426,33 @@ def t_weather(a, ctx):
         pr = (d.get("precipitation_probability_max") or [None] * 99)[i]
         out.append(f"{t}{mark}: {round(d['temperature_2m_min'][i])}…{round(d['temperature_2m_max'][i])}°, "
                    f"{WMO.get(d['weather_code'][i], '')}, осадки {pr if pr is not None else '?'}%")
-    return "\n".join(out) + "\n[Прогноз Open-Meteo. Называй только эти числа.]"
+    note = ""
+    if src == "memory":
+        note = (f"\n[Город не назван — взят из памяти о человеке: {p.get('name', city)}. Назови его в ответе; нужен другой — пусть "
+                "скажет какой. Сделать его городом для погоды по умолчанию — «Главная» студии → «Утро с Лирой» → «Запомнить город».]")
+    elif src:
+        note = f"\n[Город не назван — взят город человека из «Утра с Лирой»: {p.get('name', city)}. Назови его в ответе.]"
+    return "\n".join(out) + "\n[Прогноз Open-Meteo. Называй только эти числа.]" + note
+
+
+def home_city(eng):
+    """Город человека, когда его не назвали (идея №142, 05.11: «если не указано место — брать моё местоположение из Памяти;
+    то же для „Дачи и огорода“»): город «Утра с Лирой» (morning.city) → память («живу в Балашове», «мой город — Гродно»,
+    «я из Минска» — как сказано, в падеже: геокодер weatherq ищет по основам). -> (город, "settings" | "memory" | "")."""
+    if eng is None:
+        return "", ""
+    try:
+        mine = str(((eng.s.get("morning") or {}) if hasattr(eng, "s") else {}).get("city") or "").strip()
+    except Exception:  # noqa: BLE001
+        mine = ""
+    if mine:
+        return mine, "settings"
+    try:
+        import weatherq as W
+        c = W.memory_place(eng.workspace.memory_get())[0]
+    except Exception:  # noqa: BLE001 — памяти нет
+        c = ""
+    return (c, "memory") if c else ("", "")
 
 
 # Часовые пояса без сети: города, о которых спрашивают чаще всего (отчёт №131, 20.10: «время говорит на 3 часа позднее» —
@@ -1293,6 +1329,28 @@ def t_read_email(a, ctx):
             + (f"Вложения: {', '.join(m['files'])}\n" if m["files"] else "") + "\n" + m["text"][:8000])
 
 
+def t_manage_email(a, ctx):
+    """№562 (05.11, Serge: «минимальное управление почтой: Удалить, В спам, Переслать»): «удали это письмо», «отправь
+    в спам», «перешли Андрею». Письмо — номер из read_emails или от кого оно; удалить — в «Корзину» почты (как на сайте
+    почты), в спам — в её «Спам»; переслать — целиком, с вложениями (исходное письмо — вложением .eml)."""
+    from mail import MailError
+    act = {"delete": "trash", "trash": "trash", "spam": "junk", "junk": "junk", "forward": "forward"}.get(str(a.get("action") or "").lower())
+    if not act:
+        raise ToolError("action: delete, spam или forward")
+    if act == "forward" and not str(a.get("to") or "").strip():
+        raise ToolError("кому переслать? Нужен адрес (to); по имени — из памяти о пользователе, а нет его там — спроси")
+    try:
+        r = _mail(ctx).manage(a.get("uid", ""), act, a.get("to", ""), a.get("note", ""))
+    except MailError as e:
+        raise ToolError(str(e)) from e
+    if act == "forward":
+        return f"Письмо «{r['forwarded']}» переслано: {', '.join(r['to'])} (целиком, с вложениями)."
+    if act == "junk":
+        return f"Письмо убрано в «{r['folder']}». Скажи коротко, что оно в спаме."
+    return ("Письмо удалено совсем: корзины в этой почте нет." if r["permanent"]
+            else f"Письмо убрано в «{r['folder']}» — его можно вернуть оттуда на сайте почты. Скажи коротко.")
+
+
 def t_search_documents(a, ctx):
     kn = ctx.get("knowledge")
     if not kn:
@@ -1459,7 +1517,7 @@ class Reminders:
             item = {"id": uuid.uuid4().hex[:6], "at": when.replace(microsecond=0).isoformat(timespec="seconds"),
                     "text": (text or "Напоминание").strip(), "repeat": repeat or None, "kind": kind,
                     "created": datetime.now().isoformat(timespec="seconds")}
-            item.update({k: v for k, v in (extra or {}).items() if k in ("deliver", "brief", "preset", "note", "note_id",
+            item.update({k: v for k, v in (extra or {}).items() if k in ("deliver", "brief", "preset", "note", "note_id", "title",
                          "care", "care_n", "care_of", "care_root", "care_at") and v not in (None, "")})   # care — лекарство (senior.py)
             self.items.append(item)
             self._save()
@@ -1535,7 +1593,9 @@ class Reminders:
         with self._lock:
             for x in self.items:
                 if x["id"] == rid:
-                    for k in ("text", "at", "repeat", "paused", "kind", "deliver", "last_run", "last_ok", "last_error", "note", "note_id"):
+                    if "text" in patch and patch["text"] != x.get("text") and "title" not in patch:
+                        x.pop("title", None)                 # поручение переписали — прежнее короткое имя ему уже не подходит
+                    for k in ("text", "at", "repeat", "paused", "kind", "deliver", "last_run", "last_ok", "last_error", "note", "note_id", "title"):
                         if k in patch:
                             x[k] = patch[k]
                     self._save()
@@ -1787,10 +1847,24 @@ def t_schedule_job(a, ctx):
         raise ToolError("when — с повтором: «каждый день в 9», «по будням с 9 до 18 каждый час», «каждые 2 часа»; разовое дело — "
                         "сделай сейчас или set_reminder")
     deliver = a.get("deliver") if a.get("deliver") in ("telegram", "max", "voice") else "voice"
-    item = ctx["reminders"].add(r["at"], task[0].upper() + task[1:], r["repeat"], "job", {"deliver": deliver, "brief": False})
+    title = " ".join(str(a.get("title") or "").split())[:80]           # имя для людей (дело плагина: «Дача: заморозки и полив»)
+    item = ctx["reminders"].add(r["at"], task[0].upper() + task[1:], r["repeat"], "job", {"deliver": deliver, "brief": False, "title": title})
     return (f"Дело «{item['text']}» заведено: {describe_repeat(r['repeat'])}, первый раз {human(r['at'])} (id {item['id']}). "
             "В срок его выполнишь ты сам и сообщишь итог"
             + (" в Telegram" if deliver == "telegram" else " в Max" if deliver == "max" else " голосом") + ". Подтверди одной фразой.")
+
+
+def job_short(text, n=80):
+    """Короткое имя дела по расписанию для людей — из поручения модели (№557, 05.11: на «Главной» строкой ехало целиком
+    «Посмотри прогноз погоды (weather) для города «Балашов» на 2 дня. Если ночью до 0° …»): первая фраза, без ссылок
+    и названий инструментов в скобках («(weather)», «(web_search, read_webpage)»), не длиннее n знаков."""
+    t = re.sub(r"https?://\S+", "", str(text or ""))
+    t = re.sub(r"\s*\((?:[a-z][a-z0-9_]*(?:\s*[,/]\s*[a-z][a-z0-9_]*)*)\)", "", t)
+    t = " ".join(t.split())
+    t = re.split(r"(?<=[.!?…;])\s+(?=[А-ЯЁA-Z«\"])|\s*\n", t, maxsplit=1)[0].strip(" .;,")
+    if len(t) > n:
+        t = t[:n].rsplit(" ", 1)[0].rstrip(" ,;:—–-") + "…"
+    return t or "Дело по расписанию"
 
 
 def calc_eval(expr, today=None):
@@ -2783,6 +2857,34 @@ def t_site_review(a, ctx):
     return "\n".join(out)
 
 
+def t_plugin_enable(a, ctx):
+    """«Нарисуй открытку», а «Художник» выключен (04.11: «я не умею рисовать») — включить готовый плагин из каталога после
+    «Выполнить?». Только готовые плагины Dewiar (не свои и не пришедшие с других компьютеров) и только выключенные."""
+    eng = (ctx or {}).get("engine")
+    P = getattr(eng, "plugins", None)
+    if P is None:
+        raise ToolError("Плагины здесь недоступны")
+    pid = str(a.get("id") or "").strip().lower()
+    p = P.items.get(pid) or next((x for x in P.items.values() if x["name"].lower() == pid), None)
+    if not p or not p.get("builtin"):
+        raise ToolError(f"Готового плагина «{a.get('id')}» нет. Готовые: " + ", ".join(f"{x['name']} ({x['id']})" for x in P.items.values() if x.get("builtin")))
+    if p["id"] in {x["id"] for x in P.installed()}:
+        return f"Плагин «{p['name']}» уже включён — выполни просьбу им сразу (use_skill и его действия)."
+    need = [x["label"] for x in p.get("settings") or [] if x.get("required")]
+    if need:
+        return (f"Плагину «{p['name']}» сначала нужны настройки ({', '.join(need)}). Скажи человеку: студия → «Все плагины» → "
+                f"«{p['name']}» — заполнить их и нажать «Включить».")
+    try:
+        if hasattr(eng, "command"):
+            eng.command("plugin_install", {"id": p["id"]})       # как кнопкой в студии: навыки и действия плагина подхватятся
+        else:
+            P.install(p["id"])
+    except Exception as e:  # noqa: BLE001
+        raise ToolError(f"Плагин не включился: {e}") from e
+    return (f"Плагин «{p['name']}» включён. Его действия подключаются несколько секунд — скажи человеку одной фразой, что "
+            "плагин включён, и попроси повторить просьбу (или нажать «Повторить»).")
+
+
 def _maker(ctx):
     M = (ctx or {}).get("maker")
     if M is None:
@@ -3292,6 +3394,21 @@ def _tm(ctx):
     return tm
 
 
+def _net_note():
+    """Честно: что именно получит код задачи с сетью в этой песочнице (S3) — своя сеть или сеть компьютера целиком."""
+    try:
+        import sandbox
+        return sandbox.net_note(sandbox.mode())
+    except Exception:  # noqa: BLE001
+        return "сеть этого компьютера, включая локальные службы"
+
+
+def _wants_net(a):
+    """start_task(network=true): модель просит сеть для кода задачи (строку «true» тоже понимаем)."""
+    v = (a or {}).get("network")
+    return v is True or str(v).strip().lower() == "true"
+
+
 def t_start_task(a, ctx):
     goal = (a.get("goal") or "").strip()
     if not goal:
@@ -3307,7 +3424,10 @@ def t_start_task(a, ctx):
     try:
         fl = a.get("folders") or []
         fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
-        t = _tm(ctx).create(a.get("title") or goal[:50], goal, a.get("project") or "", **({"folders": fl} if fl else {}))
+        kw = {"folders": fl} if fl else {}
+        if _wants_net(a):                                  # сеть для кода задачи — с «да» человека (Toolbox.guard)
+            kw["net"] = True
+        t = _tm(ctx).create(a.get("title") or goal[:50], goal, a.get("project") or "", **kw)
     except ValueError as e:
         raise ToolError(str(e)) from e
     return (f"Задача «{t.title}» запущена в фоне. План и журнал — в папке «Задачи» и в студии. Результата ЕЩЁ НЕТ — он "
@@ -3562,6 +3682,13 @@ TOOLS = {
                    "safe", t_mail_table, "Почта: таблица Excel"),
     "read_email": ("Прочитать одно письмо целиком по номеру из read_emails.", S({"uid": {"type": "string"}}, ["uid"]),
                    "safe", t_read_email, "Прочитать письмо"),
+    "manage_email": ("Письмо из почты пользователя: удалить (action=delete — в «Корзину» почты), в спам (spam — в её «Спам») или "
+                     "переслать (forward: to — адрес; note — пара слов сверху, если просили). uid — номер письма из read_emails "
+                     "или от кого оно («Андрей», «счёт»). «Удали это письмо», «отправь в спам», «перешли Андрею». Адрес по "
+                     "имени — из памяти о пользователе; нет его — спроси одной фразой. Номера нет — сначала read_emails.",
+                     S({"action": {"type": "string", "enum": ["delete", "spam", "forward"]}, "uid": {"type": "string"},
+                        "to": {"type": "string"}, "note": {"type": "string"}}, ["action", "uid"]),
+                     "confirm", t_manage_email, "Почта: удалить, в спам, переслать"),
     "search_documents": ("Найти в документах пользователя на этом компьютере (папка «Знания» и его папки, выбранные для "
                          "поиска: инструкции, договоры, регламенты, книги, конспекты, рабочие файлы). Вызывай, когда вопрос "
                          "про его документы или файлы, «что написано в…», «найди в моих документах». "
@@ -3735,11 +3862,10 @@ TOOLS = {
                     "кофейни», «нужен сайт-визитка», «сделай лендинг для курса». Сайт сразу красивый и адаптивный, с формой заявки, "
                     "откроется в браузере; потом его можно менять фразой (site_edit) и опубликовать на dewiar.pro (site_publish). "
                     "describe — всё, что человек рассказал о деле, его словами (чем занимается, где, для кого, цены, особенности); "
-                    "name — название, если назвал; kind — coffee|salon|lawyer|school|shop|photo|clinic|event|startup|personal|repair, "
-                    "если ясно; контакты — только продиктованные; ref — ссылка на сайт-образец, если человек дал пример («сделай как "
+                    "name — название, если назвал; kind — вид дела (шаблон), если ясно; контакты — только продиктованные; ref — ссылка на сайт-образец, если человек дал пример («сделай как "
                     "у …»): возьмём разделы и стиль, но тексты и бренды — свои. НЕ пиши HTML и не обещай «сделаю» — вызывай.",
                     S({"describe": {"type": "string"}, "name": {"type": "string"}, "tagline": {"type": "string"}, "ref": {"type": "string"},
-                       "kind": {"type": "string", "enum": ["", "coffee", "salon", "lawyer", "school", "shop", "photo", "clinic", "event", "startup", "personal", "repair"]},
+                       "kind": {"type": "string", "enum": [""] + __import__("sites_kit").TEMPLATE_ORDER},   # шаблоны — из sites_kit (05.11: их 20)
                        "phone": {"type": "string"}, "email": {"type": "string"}, "address": {"type": "string"}, "hours": {"type": "string"},
                        "telegram": {"type": "string"}, "whatsapp": {"type": "string"}, "vk": {"type": "string"}}, ["describe"]),
                     "safe", t_site_create, "Сайты: сделать"),
@@ -3758,6 +3884,10 @@ TOOLS = {
     "site_review": ("Оценить сайт и его продвижение: «оцени мой сайт», «как продвигать сайт», «сколько было посещений», «откуда приходят». "
                     "Проверка заголовков, описаний, контактов, формы, фото + посещения, источники, устройства, заявки — и твои советы.",
                     S({"site": {"type": "string"}}), "safe", t_site_review, "Сайты: оценить и продвигать"),
+    "plugin_enable": ("Включить ГОТОВЫЙ плагин Dewiar из каталога (Художник, Курсы и цены, Тендеры, Рекрутер…), если просьба — для "
+                      "него, а он выключен (так сказано в справке к вопросу). id — id плагина из справки. Человек подтвердит "
+                      "кнопкой «Выполнить?». Не для своих плагинов (их делает plugin_create).",
+                      S({"id": {"type": "string"}}, ["id"]), "confirm", t_plugin_enable, "Плагины: включить готовый"),
     "plugin_create": ("Сделать человеку ПЛАГИН — свою страницу в студии Dewiar по описанию словами (как Creator Mode): «сделай плагин, "
                       "который показывает статистику наших разговоров», «сделай трекер привычек», «нужна читалка статей», «сделай "
                       "переключатель темы», «панель расходов по категориям», «таймер помидора». Плагин сразу появится в меню "
@@ -3831,6 +3961,7 @@ TOOLS = {
                    S({"title": {"type": "string"}, "goal": {"type": "string", "description": "подробная цель"},
                       "project": {"type": "string"},
                       "folders": {"type": "array", "items": {"type": "string"}, "description": "папки пользователя, с которыми работать (полные пути): задача читает их без вопросов, меняет — с разрешения"},
+                      "network": {"type": "boolean", "description": "интернет для скриптов задачи (run_python, run_shell в песочнице) — только если пользователь сам просит, чтобы код ходил в сеть; поиск и чтение страниц работают и без этого"},
                       "on": {"type": "string", "description": "на каком своём компьютере («на рабочем», «Ноутбук») — имя из списка компьютеров; пусто — здесь"},
                       "if_off": {"type": "string", "enum": ["", "wait", "cloud"], "description": "тот компьютер не на связи: wait — сделать, когда включится; cloud — сейчас в облаке Dewiar (только если пользователь так ответил)"}},
                      ["goal"]), "safe", t_start_task, "Фоновая задача"),
@@ -3899,7 +4030,7 @@ TOOLS = {
 }
 # Этим умениям нужен интернет из самого Dewiar — при стоп-кране (студия → «Безопасность») модель о них не узнаёт.
 # Открыть сайт, музыку или карту в браузере человека — можно: это его браузер и его просьба.
-NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "mailing", "client_crm", "channel_post", "read_emails", "read_email", "send_telegram", "close_send",
+NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "mailing", "client_crm", "channel_post", "read_emails", "read_email", "manage_email", "send_telegram", "close_send",
              "close_call", "close_read", "team_assign", "deal_remind", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update",
              "site_publish"}
 DEFAULT_OFF = set()          # команды терминала включены, но каждая — только после «Выполнить?»
@@ -3942,7 +4073,7 @@ class Toolbox:
             return True, self.mcp.needs_confirm(name) if conf is None else bool(conf)
         if name not in TOOLS:
             return False, False
-        if name in ("send_email", "read_emails", "read_email", "mail_table", "mailing", "mailing_status"):     # только когда почта подключена
+        if name in ("send_email", "read_emails", "read_email", "manage_email", "mail_table", "mailing", "mailing_status"):     # только когда почта подключена
             m = self.hooks.get("mail")
             if not (m and m.configured()):
                 return False, False
@@ -4047,7 +4178,7 @@ class Toolbox:
         """Чего не хватает инструменту (№264, 25.10: «включаю — пишет „Сохранено“, а переключатель не включается»: почта,
         Telegram, «Знания», аккаунт не подключены). -> (что сделать, раздел студии) или None."""
         h = self.hooks
-        if name in ("send_email", "read_emails", "read_email", "mail_table", "mailing", "mailing_status") and not (h.get("mail") and h["mail"].configured()):
+        if name in ("send_email", "read_emails", "read_email", "manage_email", "mail_table", "mailing", "mailing_status") and not (h.get("mail") and h["mail"].configured()):
             return "Сначала подключите почту — «Подключение» → «Почта»", "connect"
         if name == "send_telegram" and not (h.get("telegram") and h["telegram"].paired()):
             return "Сначала подключите Telegram или MAX — «Подключение»", "connect"
@@ -4115,7 +4246,15 @@ class Toolbox:
                     return (f"«{fp}» — вне папки ассистента, а в «Безопасности» стоит замок «Файлы: только папка Dewiar». "
                             "Снять его можно там же"), False, None
             return None, True, ("Фоновая задача получит доступ к папкам: " + "; ".join(str(Path(x).expanduser()) for x in fl)
-                                + ". Читать их она будет без вопросов, менять — только с вашего разрешения. Разрешить?")
+                                + ". Читать их она будет без вопросов, менять — только с вашего разрешения."
+                                + (f" А её скрипты получат {_net_note()}." if _wants_net(args) else "") + " Разрешить?")
+        if name == "start_task" and _wants_net(args):
+            # выпуск 5: сеть для кода задачи (песочница) даёт ЧЕЛОВЕК — только после «да»; в детском режиме — нет
+            kids = self.hooks.get("kids")
+            if kids is not None and kids.on():
+                return "в детском режиме скрипты задачи в интернет не ходят", False, None
+            return None, True, (f"Скрипты фоновой задачи получат {_net_note()} (поиск и чтение страниц у неё есть и так). "
+                                "Разрешить?")
         if name in ("plugin_create", "plugin_change") and (args or {}).get("code"):
             # своя программа в плагине — только с явного «да» человека (по умолчанию плагин — страница и мост)
             what = (args.get("name") or args.get("plugin") or "").strip()
@@ -4241,6 +4380,17 @@ class Toolbox:
                         f"Опубликовать сайт «{S.get(sid)['name']}» по адресу {n}.dewiar.pro? Он будет виден всем.")
             except Exception:  # noqa: BLE001
                 return "Опубликовать сайт на dewiar.pro?"
+        if name == "manage_email":
+            act = str(args.get("action") or "").lower()
+            what = f"письмо {args.get('uid', '')}"
+            try:                                         # от кого и тема — чтобы человек видел, о каком письме речь
+                h = self.hooks["mail"].peek(args.get("uid", ""))
+                what = f"письмо «{h['subject']}» от {h['from']}"
+            except Exception:  # noqa: BLE001
+                pass
+            if act == "forward":
+                return f"Переслать {what} → {args.get('to') or '?'}?"
+            return f"Отправить в спам {what}?" if act == "spam" else f"Удалить {what}? Оно уйдёт в «Корзину» почты."
         if name == "send_email" and str(args.get("reply_to") or "").strip():
             b = " ".join(str(args.get("body") or "").split())
             return f"Отправить ответ на письмо ({args['reply_to']}): «{b[:90]}{'…' if len(b) > 90 else ''}»?"

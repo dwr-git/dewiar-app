@@ -27,7 +27,8 @@ bad = {k: speakable(k) for k, v in CASES.items() if speakable(k) != v}
 ok(not bad, "компьютер: ссылки, пути и сокращения" + (f": {bad}" if bad else ""))
 src = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
 a, b = src.index("const FILE_EXT"), src.index("function speechText")
-js = src[a:src.index("\n}\n", b) + 3] + "\nconst EMOJI=/[\\u2600-\\u27BF]/g;\nconsole.log(JSON.stringify(" + json.dumps(list(CASES)) + ".map(speechText)));"
+# с ui/assets/speechnorm.js, как в приложении (№561: speechText — через DewiarSpeech.clean)
+js = "global.window = {};\n" + (ROOT / "ui/assets/speechnorm.js").read_text(encoding="utf-8") + "\n" + src[a:src.index("\n}\n", b) + 3] + "\nconst EMOJI=/[\\u2600-\\u27BF]/g;\nconsole.log(JSON.stringify(" + json.dumps(list(CASES)) + ".map(speechText)));"
 r = subprocess.run(["node", "-e", js], capture_output=True, text=True)
 got = json.loads(r.stdout or "[]")
 badj = {k: g for (k, v), g in zip(CASES.items(), got) if g != v.replace("то есть завтра", "то есть завтра")}

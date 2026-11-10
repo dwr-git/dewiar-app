@@ -17,7 +17,7 @@ def ok(c, m):
         fails.append(m)
 
 
-ok(8 <= len(K.TEMPLATE_ORDER) <= 12 and set(K.TEMPLATE_ORDER) == set(K.TEMPLATES), f"шаблонов {len(K.TEMPLATE_ORDER)} (8–12)")
+ok(8 <= len(K.TEMPLATE_ORDER) <= 30 and set(K.TEMPLATE_ORDER) == set(K.TEMPLATES), f"шаблонов {len(K.TEMPLATE_ORDER)} (8–30; 05.11 — 20)")
 ok(len({(t["palette"], t["fonts"], t["menu"]) for t in K.TEMPLATES.values()}) == len(K.TEMPLATES), "у каждого шаблона свой характер (палитра+шрифт+меню)")
 for k, p in K.PALETTES.items():
     c1, c2, c3 = R.contrast(p["ink"], p["bg"]), R.contrast(p["muted"], p["bg"]), R.contrast(p["accent_ink"], p["accent"])
@@ -60,8 +60,8 @@ ok("<img src=x" not in h and "&lt;img src=x onerror=alert(1)&gt;" in h and "java
 # предпросмотр: блоки выбираются, заглушки видны
 s = S.create("clinic", fill=False)
 pv = S.render(s["id"])
-ok(pv.count(' data-b="') == len(S.get(s["id"])["pages"][0]["blocks"]) and "Имя врача" in pv and "assets/fonts/" in pv,
-   "предпросмотр: блоки с data-b, заглушки видны, шрифты из студии")
+ok(pv.count(' data-b="') == len(S.get(s["id"])["pages"][0]["blocks"]) and "Имя врача" in pv and "data:font/woff2;base64," in pv,
+   "предпросмотр: блоки с data-b, заглушки видны, шрифты внутри страницы (фрейм без allow-same-origin)")
 
 # телефон 390 и компьютер: нет горизонтальной прокрутки, меню на телефоне — кнопкой
 try:

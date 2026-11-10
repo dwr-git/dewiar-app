@@ -44,7 +44,7 @@
   };
   // тема из адреса (ui/app.py кладёт &skin= из настроек) — точнее всего; иначе последняя запомненная; иначе «Небесный»
   let early = "";
-  try { early = new URLSearchParams(location.search).get("skin") || ""; } catch (e) { }
+  try { early = dwQuery().get("skin") || ""; } catch (e) { }
   if (!early) try { early = localStorage.getItem("studio_skin") || ""; } catch (e) { }
   studioSkin(early || "neusky");
   /* Тема из плагина (Creator, 03.11: dewiar.theme в плагине «Тема оформления»): переменные студии поверх выбранного фона —

@@ -8,6 +8,7 @@
      на Linux (скрипт сразу за рамкой), #раздел — какой раздел открыть. -->
 <html lang="ru">
 <head>
+<base href="settings.html"><script src="assets/boot.js"></script>
 <meta charset="utf-8">
 <title>Dewiar — студия</title>
 <link href="assets/fonts.css" rel="stylesheet">
@@ -40,7 +41,7 @@
 <div class="grip nw"></div><div class="grip ne"></div><div class="grip sw"></div><div class="grip se"></div><div id="fedge"></div>
 <script>
 (() => {
-  if (new URLSearchParams(location.search).get("frame") !== "1") return;
+  if (dwQuery().get("frame") !== "1") return;
   document.documentElement.classList.add("framed");
   const ICON_MAX = '<rect x="2.5" y="2.5" width="9" height="9" rx="1.5"/>';
   const ICON_RES = '<rect x="2.5" y="4.5" width="7" height="7" rx="1.3"/><path d="M5 4.5V3.6c0-.6.5-1.1 1.1-1.1h4.3c.6 0 1.1.5 1.1 1.1v4.3c0 .6-.5 1.1-1.1 1.1h-.9"/>';
@@ -161,8 +162,22 @@
       <div class="hm-mail" id="hm-mail" hidden></div>
       <dialog class="hmm-dlg" id="hmm-dlg" aria-labelledby="hmm-dt"><div class="hmm-dh"><span><small id="hmm-dfrom"></small><b id="hmm-dt"></b></span>
         <button class="ls-x hmm-x" type="button" id="hmm-x" aria-label="Закрыть" title="Закрыть (Esc)">×</button></div>
+        <!-- №562 (05.11): «как в письме» (безопасная рамка, studio/home.js hmmFrame) или «текстом»; картинки — по кнопке -->
+        <div class="hmm-bar" id="hmm-bar" hidden><div class="hmm-seg" role="group" aria-label="Как показать письмо">
+          <button type="button" data-v="html" aria-pressed="true">Как в письме</button><button type="button" data-v="text" aria-pressed="false">Текстом</button></div>
+          <button type="button" class="hmm-pics" id="hmm-pics" hidden title="Картинки грузятся с сайта отправителя — он может узнать, что письмо открыли"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m4 17.5 5-4.5 3.5 3 3-2.5 4.5 4"/></svg><span>Показать картинки</span></button></div>
         <div class="hmm-body" id="hmm-body"></div>
-        <div class="hmm-acts"><button class="btn primary" type="button" id="hmm-reply">Ответить с Лирой</button><button class="btn" type="button" id="hmm-close">Закрыть</button></div></dialog>
+        <form class="hmm-fwd" id="hmm-fwd" hidden novalidate><b class="hmm-fh">Переслать письмо</b>
+          <label class="hmm-fl"><span>Кому</span><input type="email" id="hmm-fto" multiple autocomplete="email" placeholder="адрес@почта.ru — можно несколько через запятую" spellcheck="false"></label>
+          <label class="hmm-fl"><span>Пара слов сверху</span><textarea id="hmm-fnote" rows="2" placeholder="Необязательно — например, «Посмотри, пожалуйста»"></textarea></label>
+          <div class="hmm-frow"><small>Уйдёт целиком — с вложениями и оформлением</small><button class="btn" type="button" id="hmm-fcancel">Отмена</button><button class="btn primary" type="submit" id="hmm-fgo">Переслать</button></div></form>
+        <p class="hmm-st" id="hmm-st" role="status" aria-live="polite" hidden></p>
+        <div class="hmm-acts">
+          <button class="btn hmm-ic danger" type="button" id="hmm-del" title="Удалить — письмо уйдёт в «Корзину» почты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M10 4h4M6.5 7l.9 11.6a2 2 0 0 0 2 1.9h5.2a2 2 0 0 0 2-1.9L17.5 7M10.2 11v5.5M13.8 11v5.5"/></svg><span>Удалить</span></button>
+          <button class="btn hmm-ic danger" type="button" id="hmm-spam" title="Это спам — в папку «Спам» почты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 4.5 6.5v5c0 4.4 3.1 8 7.5 9 4.4-1 7.5-4.6 7.5-9v-5z"/><path d="m9 9 6 6M15 9l-6 6"/></svg><span>В спам</span></button>
+          <span class="hmm-sp"></span>
+          <button class="btn hmm-ic" type="button" id="hmm-fwdb" aria-expanded="false" aria-controls="hmm-fwd" title="Переслать письмо целиком"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5.5 20 11l-6 5.5M20 11H10a6 6 0 0 0-6 6v1.5"/></svg><span>Переслать</span></button>
+          <button class="btn primary" type="button" id="hmm-reply">Ответить с Лирой</button></div></dialog>
       <button class="hm-council" type="button" id="hm-council" data-go="council"><span class="hmc-faces" id="hmc-faces" aria-hidden="true"></span>
         <span class="hmc-t"><b>Совет ИИ</b><span>Задайте вопрос — персонажи на разных моделях обсудят его, поспорят и подведут итог</span></span>
         <span class="hmc-go">Собрать совет</span></button>
@@ -669,6 +684,7 @@
         <label class="f">Папка проекта (для работы с кодом, необязательно)<input type="text" id="t-proj" placeholder="~/Проекты/сайт"></label>
         <label class="f">Название (необязательно)<input type="text" id="t-title"></label>
       </div>
+      <div class="switch slim" style="margin-top:10px"><div>Интернет для кода задачи<span>Сеть коду задачи нужна редко — поиск и чтение страниц у задачи есть и так. Без своей сети песочницы (slirp4netns) это сеть компьютера целиком, вместе с его локальными службами.</span></div><label class="tg"><input type="checkbox" id="t-netnew"><i></i></label></div>
       <div class="actions"><button class="btn primary" id="t-go">Начать</button><button class="btn" id="t-pick">Выбрать папку…</button><button class="btn" id="t-cancel">Отмена</button></div>
     </div>
     <div id="t-ideas">
@@ -916,6 +932,7 @@
     <div class="st-view" id="st-list">
       <div class="st-top"><div><h1>Сайты</h1><p class="lead">Лира делает сайт по вашему описанию и переделывает его одной фразой — от текста до дизайна.
         Публикация — на ваше имя.dewiar.pro, заявки с сайта приходят в «Клиенты».</p></div></div>
+      <div class="st-chat" id="st-chat" hidden></div>
       <form class="st-ask" id="st-ask" autocomplete="off">
         <label for="st-desc">Расскажите о своём деле — Лира сделает сайт</label>
         <div class="st-askrow"><textarea id="st-desc" rows="2" maxlength="3000" placeholder="Кофейня «Зерно» на Садовой, 5. Кофе, завтраки и своя выпечка, работаем с 8 до 22, капучино 250 ₽"></textarea>
@@ -925,7 +942,7 @@
         <div class="st-eg" id="st-eg"></div>
       </form>
       <div class="st-mine" id="st-mine"></div>
-      <div class="st-h2"><h2>Или начните с шаблона</h2><span>11 готовых сайтов — у каждого свой характер. Тексты Лира заменит вашими.</span></div>
+      <div class="st-h2"><h2>Или начните с шаблона</h2><span id="st-tpln">Готовые сайты — у каждого свой характер. Тексты Лира заменит вашими.</span></div>
       <div class="st-tpls" id="st-tpls"></div>
     </div>
     <div class="st-view" id="st-ed" hidden>
@@ -956,8 +973,8 @@
           </aside>
           <div class="st-stage">
             <div class="st-stbar"><div class="st-dev" role="radiogroup" aria-label="Как смотреть"><button data-d="pc" class="on" role="radio" aria-checked="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Компьютер</button><button data-d="phone" role="radio" aria-checked="false"><svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>Телефон</button></div>
-              <select id="st-page" aria-label="Страница" hidden></select><span class="st-sp"></span><span class="st-hint" id="st-hint">Нажмите на раздел в предпросмотре — откроется его настройка</span></div>
-            <div class="st-frame" id="st-frame"><div class="st-fwrap" id="st-fwrap"><iframe id="st-if" title="Предпросмотр сайта" sandbox="allow-scripts allow-same-origin"></iframe></div></div>
+              <select id="st-page" aria-label="Страница" hidden></select><span class="st-sp"></span><span class="st-hint" id="st-hint">Нажмите на раздел в предпросмотре — откроется его настройка</span><button type="button" class="st-chatc" id="st-chatc" hidden></button></div>
+            <div class="st-frame" id="st-frame"><div class="st-fwrap" id="st-fwrap"><iframe id="st-if" title="Предпросмотр сайта" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></div></div>
             <form class="st-say" id="st-say" autocomplete="off"><span class="st-sayic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3c.9 5 4 8.1 9 9-5 .9-8.1 4-9 9-.9-5-4-8.1-9-9 5-.9 8.1-4 9-9z"/></svg></span>
               <input id="st-sayt" maxlength="600" placeholder="Сказать Лире: «сделай шапку тёмной», «добавь цены: стрижка 1500», «другой дизайн целиком»" aria-label="Что поменять на сайте">
               <button class="btn primary" type="submit" id="st-sayb">Изменить</button></form>

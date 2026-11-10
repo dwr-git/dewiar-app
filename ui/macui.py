@@ -445,8 +445,9 @@ class MacWindows:
         sw, sh = self._studio_size()
         skin, light = A.ui_skin()
         url = self._url("settings.html", "&skin=" + urllib.parse.quote(skin) + query + ("#" + page if page else ""))
+        url, bridge = self._bridged(url)
         win = webview.create_window(A.STUDIO_TITLE, url, width=sw, height=sh, min_size=(min(820, sw), min(560, sh)),
-                                    background_color="#e3eaf4" if light else "#0a0a0f", text_select=True, js_api=self)
+                                    background_color="#e3eaf4" if light else "#0a0a0f", text_select=True, js_api=bridge)
         self._studio, self._studio_born = win, time.monotonic()
         win.events.closed += lambda *a: self._studio_closed(win)
         win.events.shown += lambda *a: front(win, activate=True)
@@ -892,10 +893,11 @@ def main_mac(args, extra):
         mx, my, mw, mh = work_area()
         x, y = mx + mw - A.SIZES["card"][0] - A.MARGIN, my + mh - A.SIZES["card"][1] - A.MARGIN
     w, h = A.SIZES["card"]
-    api.wins["card"] = webview.create_window(A.TITLES["card"], api._url("hud.html", "&mode=card&tw=1"), width=w, height=h,
+    url, bridge = api._bridged(api._url("hud.html", "&mode=card&tw=1"))
+    api.wins["card"] = webview.create_window(A.TITLES["card"], url, width=w, height=h,
                                              resizable=False, min_size=(w, h), frameless=True, easy_drag=False,
                                              on_top=A.ON_TOP[0], hidden=True, transparent=True,
-                                             background_color="#0b0b0e", js_api=api)
+                                             background_color="#0b0b0e", js_api=bridge)
     api._hud = api.wins["card"]
     if SMOKE:
         def smoke_ok(*_a):
@@ -958,6 +960,7 @@ def main_mac(args, extra):
         threading.Thread(target=watch, name="show-signal", daemon=True).start()
 
     icon = A.ROOT / "icons" / "dewiar-512.png"
+    A.harden_webview("cocoa")                          # без XHR к file://, мост — только своей странице (рецензия выпуска 5)
     webview.start(on_start, debug=bool(os.environ.get("DEWIAR_UI_DEBUG")), icon=str(icon) if icon.exists() else None)
     # окна закрыты (выход из меню программы, Cmd+Q) — завершаем и ядро, как «Выйти из Dewiar»
     api.quit_all()

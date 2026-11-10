@@ -33,7 +33,11 @@
   // ---------- голос: очередь фраз — голос сервера (fetch → <audio>) и голос браузера (speechSynthesis) строго по одной ----------
   const queue = []; let playing = null, gen = 0;
   function ruVoices() { return (synth ? synth.getVoices() : []).filter(v => /^ru/i.test(v.lang)); }
+  // №561 (05.11, Mac): голос Safari читал кавычки вслух («Прогулка в парке» — «кавычка… кавычка») — последний рубеж перед
+  // speechSynthesis: всё, что дойдёт до голоса браузера, — без кавычек, разметки и «!!!» (ui/assets/speechnorm.js clean)
+  const forVoice = (t) => { try { return window.DewiarSpeech && window.DewiarSpeech.clean ? window.DewiarSpeech.clean(t) || String(t || "") : String(t || ""); } catch (e) { return String(t || ""); } };
   function sayLocal(id, text, rate, pitch, voice, lang) {
+    text = forVoice(text);
     return new Promise(done => {
       if (!synth) { ev({ type: "tts_fail", id, code: -1 }); ev({ type: "tts_done", id }); done(); return; }
       const u = new SpeechSynthesisUtterance(text);

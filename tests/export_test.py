@@ -18,7 +18,8 @@ def ok(c, m):
 
 
 import export as X  # noqa: E402
-br = next(iter(glob.glob("/opt/pw-browsers/chromium-*/chrome-linux/chrome")), None) or X.find_browser()
+br = next(iter(glob.glob("/opt/pw-browsers/chromium_headless_shell-*/chrome-headless-shell-linux*/chrome-headless-shell")
+               + glob.glob("/opt/pw-browsers/chromium-*/chrome-linux/chrome")), None) or X.find_browser()
 d = tmp / "task"; (d / "outputs").mkdir(parents=True)
 deck = (ROOT / "data/skills/slides/deck.html").read_text(encoding="utf-8")
 (d / "outputs/slides.html").write_text(deck, encoding="utf-8")
@@ -45,15 +46,16 @@ if br:
 else:
     print("⚠ браузера нет — PDF не проверен")
 os.environ["DEWIAR_PDF_BROWSER"] = ""
-saved = shutil.which
+saved, saved_pw = shutil.which, X._pw_pdf
 shutil.which = lambda *a, **k: None
+X._pw_pdf = lambda *a, **k: None                       # и Chromium от Playwright тоже нет
 try:
     try:
         X.export(d / "outputs/slides.html", "Погода", "pdf"); err = ""
     except X.ExportError as e:
         err = str(e)
 finally:
-    shutil.which = saved
+    shutil.which, X._pw_pdf = saved, saved_pw
 ok("Печать → Сохранить как PDF" in err or os.path.exists("/snap/bin/chromium"), f"браузера нет — честный совет: {err[:70]}")
 try:
     X.export(d / "outputs/нет.html", "x", "html"); err = ""

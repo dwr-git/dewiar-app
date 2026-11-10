@@ -794,6 +794,13 @@ html.framed .drawer { top: 38px; }               /* боковые панели 
 .pc b { flex: none; width: 18px; text-align: center; color: var(--dim); font-weight: 700; }
 .pc.ok b { color: var(--good); } .pc.bad { background: rgba(255,107,138,.07); color: var(--ink); } .pc.bad b { color: var(--bad); }
 .pc small { display: block; color: var(--dim); font-size: 12px; }
+.sbx { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 8px; border-radius: 14px; background: rgba(255,201,120,.08); font-size: 13.5px; color: var(--muted); }
+.sbx b { color: #FFD9A0; font-weight: 600; } .sbx.real { background: rgba(75,227,161,.07); } .sbx.real b { color: var(--good); }
+.snaps { display: flex; flex-direction: column; gap: 4px; }
+.snap { display: flex; gap: 12px; align-items: center; padding: 8px 10px 8px 12px; border-radius: 12px; background: rgba(255,255,255,.035); font-size: 13.5px; }
+.snap > span { flex: 1; min-width: 0; } .snap b { font-weight: 600; color: var(--ink); }
+.snap small { display: block; color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snap.undo b { color: #A5B4FC; } .snap .btn { flex: none; }
 .pnow { display: flex; gap: 10px; align-items: center; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,201,120,.08); color: #FFD9A0; font-size: 13.5px; }
 .outs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .oi { display: flex; gap: 8px; align-items: center; border: 0; border-radius: 12px; padding: 8px 12px; background: rgba(255,255,255,.06); color: var(--ink); cursor: pointer; font: inherit; text-align: left; max-width: 280px; }
@@ -1739,6 +1746,11 @@ html.st-light .chip.shd.on small { opacity: .8 !important; }
   background: var(--glass); color: var(--ink); font: inherit; cursor: pointer; box-shadow: var(--raise-s, none); transition: transform .15s; }
 .hm-card:hover { transform: translateY(-2px); }
 .hm-card small { color: var(--dim); font-size: 12px; } .hm-card b { font-size: 15.5px; } .hm-card span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+/* №557 (05.11): длинное дело заливало синюю карточку «Дальше сегодня» на восемь строк — заголовок не длиннее трёх строк,
+   подпись — двух, дальше многоточие; полный текст — во всплывающей подсказке */
+.hm-card { min-width: 0; overflow-wrap: anywhere; }
+.hm-card b, .hm-card span { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.hm-card b { -webkit-line-clamp: 3; line-height: 1.35; } .hm-card span { -webkit-line-clamp: 2; }
 .hm-card.next { background: linear-gradient(135deg, #6a8dff, #4f6cf0); color: #fff; } .hm-card.next small, .hm-card.next span { color: rgba(255,255,255,.8); }
 .hm-h { display: flex; align-items: center; gap: 12px; } .hm-h h2 { margin: 0; font-size: 16px; } .hm-h .hint { margin: 0; flex: 1; } .hm-h .btn { margin-left: auto; }
 .hm-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 22px 14px; }
@@ -3055,7 +3067,9 @@ html:not(.st-light) .vs-pill.ok { color: var(--good); } html:not(.st-light) .vs-
 .mn-head h2 { margin: 0; font-size: 18px; }
 .mn-x { width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--dim); font-size: 20px; line-height: 1; cursor: pointer; }
 .mn-x:hover { background: rgba(127,127,140,.14); color: var(--ink); }
-.mn-grid { display: grid; grid-template-columns: minmax(190px, 230px) 1fr; gap: 16px; align-items: stretch; }
+/* minmax(0, 1fr), а не 1fr: длинная строка дела (№557) растягивала колонку за край панели — теперь переносится внутри */
+.mn-grid { display: grid; grid-template-columns: minmax(190px, 230px) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.mn-grid > * { min-width: 0; }
 .mn-w { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 170px; padding: 16px 18px 14px; border-radius: 20px;
   color: #fff; background: linear-gradient(160deg, #7b8fb8, #4d5f86); }
 .mn-w.sky-sun { background: linear-gradient(160deg, #ffb36b 0%, #ff8a6a 45%, #c96bd1 100%); }
@@ -3068,6 +3082,12 @@ html:not(.st-light) .vs-pill.ok { color: var(--good); } html:not(.st-light) .vs-
 .mn-t { font-size: 56px; font-weight: 300; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .mn-w p { margin: 4px 0 0; font-size: 13.5px; opacity: .9; } .mn-w .mn-sk { font-size: 15px; font-weight: 600; opacity: 1; margin-top: 8px; }
 .mn-w .lnk { align-self: flex-start; margin-top: 8px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-size: 12.5px; opacity: .8; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.mn-w .mn-memrow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 5px; margin: 8px 0 0; font-size: 12.5px; opacity: .85; }
+.mn-w .mn-memrow .lnk { margin-top: 0; opacity: 1; }
+.mn-w .mn-csave { align-self: flex-start; margin-top: 8px; padding: 4px 11px; border: 0; border-radius: 999px; background: rgba(255,255,255,.22); color: inherit;
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); transition: background .15s; }
+.mn-w .mn-csave:hover, .mn-w .mn-csave:focus-visible { background: rgba(255,255,255,.34); }
+.mn-w .mn-csave:disabled { opacity: .6; cursor: default; }
 .mn-w.mn-city { color: var(--ink); background: rgba(127,127,140,.1); justify-content: center; gap: 4px; }
 .mn-w.mn-city b { font-size: 16px; } .mn-w.mn-city p { color: var(--muted); opacity: 1; }
 .mn-cin { display: flex; gap: 6px; margin-top: 10px; } .mn-cin input { flex: 1; min-width: 0; }
@@ -3076,13 +3096,16 @@ html:not(.st-light) .vs-pill.ok { color: var(--good); } html:not(.st-light) .vs-
 .mn-rows button:hover { background: rgba(127,127,140,.1); }
 .mn-rows svg { flex: none; width: 34px; height: 34px; padding: 7px; border-radius: 11px; box-sizing: border-box; fill: none; stroke: var(--accent); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
   background: color-mix(in srgb, var(--accent) 13%, transparent); }
-.mn-rows span { display: flex; flex-direction: column; min-width: 0; }
-.mn-rows b { font-size: 14.5px; margin: 1px 0 2px; } .mn-rows small { line-height: 1.55; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mn-rows span { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.mn-rows b { font-size: 14.5px; margin: 1px 0 2px; }
+.mn-rows small { line-height: 1.5; color: var(--muted); font-size: 13px; overflow-wrap: anywhere;   /* до двух строк на дело, дальше «…» */
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.mn-rows small + small { margin-top: 2px; }
 .mn-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; }
 .mn-daily { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; }
 .mn-daily #mn-at { width: 56px; padding: 5px 8px; border-radius: 9px; text-align: center; font-variant-numeric: tabular-nums; }
 .mn-foot .mn-mail { margin-left: auto; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
-@media (max-width: 760px) { .mn-grid { grid-template-columns: 1fr; } .mn-w { min-height: 130px; } }
+@media (max-width: 760px) { .mn-grid { grid-template-columns: minmax(0, 1fr); } .mn-w { min-height: 130px; } }
 
 /* «Мой месяц с Лирой» (studio/month.js): числа крупно в ряд; ниже — календарь месяца (чем больше дел, тем гуще день)
    и рядом — чем гордиться и куда ушли деньги (одна полоса) */
@@ -4118,6 +4141,49 @@ html.st-light .hmm-dlg { background: #f6f8fc; box-shadow: 0 30px 80px -20px rgba
 .hmm-acts { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 20px 18px; }
 .hmm-x { color: var(--ink); background: rgba(127,127,140,.13); }
 .hmm-dlg { position: fixed; inset: 0; margin: auto; height: fit-content; }
+/* №562 (05.11): письмо «как в письме» — белый лист в рамке (как у почтовых программ, и в тёмной теме), над ним выбор
+   вида и «Показать картинки»; под ним — ссылки списком; внизу — «Удалить», «В спам», «Переслать», «Ответить с Лирой» */
+.hmm-dlg { width: min(820px, calc(100vw - 32px)); max-height: min(88vh, 900px); }
+.hmm-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 20px 12px; }
+.hmm-bar[hidden], .hmm-fwd[hidden], .hmm-st[hidden], .hmm-pics[hidden] { display: none; }
+.hmm-seg { display: inline-flex; padding: 3px; border-radius: 12px; background: rgba(127,127,140,.13); }
+.hmm-seg button { border: 0; padding: 6px 13px; border-radius: 9px; font: 600 13px/1.2 "Manrope", sans-serif; color: var(--muted); background: none; cursor: pointer; transition: background .15s, color .15s; }
+.hmm-seg button[aria-pressed="true"] { color: var(--ink); background: rgba(255,255,255,.14); box-shadow: 0 2px 8px -3px rgba(0,0,0,.4); }
+html.st-light .hmm-seg button[aria-pressed="true"] { background: #fff; box-shadow: 0 2px 8px -3px rgba(20,30,60,.25); }
+.hmm-seg button:focus-visible, .hmm-pics:focus-visible, .hmm-links button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hmm-pics { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; border: 0; padding: 7px 13px 7px 11px; border-radius: 11px; cursor: pointer;
+  font: 600 13px/1.2 "Manrope", sans-serif; color: var(--ink); background: rgba(127,127,140,.13); }
+.hmm-pics:hover { background: rgba(127,127,140,.22); }
+.hmm-pics svg, .hmm-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.hmm-paper { border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px rgba(127,127,140,.18), 0 10px 30px -18px rgba(0,0,0,.6); }
+.hmm-frame { display: block; width: 100%; height: clamp(300px, 54vh, 640px); border: 0; background: #fff; }
+.hmm-links { margin: 12px 0 4px; font-size: 13px; }
+.hmm-links summary { cursor: pointer; color: var(--muted); font-weight: 600; padding: 4px 0; width: fit-content; }
+.hmm-links summary:hover { color: var(--ink); }
+.hmm-links ul { list-style: none; margin: 6px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.hmm-links button { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 7px 10px; border: 0; border-radius: 10px; text-align: left; font: inherit; color: inherit; background: none; cursor: pointer; }
+.hmm-links button:hover { background: rgba(127,127,140,.1); }
+.hmm-lt { font-weight: 600; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hmm-lu { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .hmm-lu b { color: var(--ink); font-weight: 600; }
+.hmm-links small { display: block; color: var(--muted); font-size: 12px; margin: 2px 10px 6px; }
+.hmm-fwd { margin: 12px 20px 0; padding: 14px 16px; border-radius: 16px; background: rgba(127,127,140,.1); display: flex; flex-direction: column; gap: 10px; }
+.hmm-fh { font: 600 14px/1.3 "Unbounded", sans-serif; }
+.hmm-fl { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); }
+.hmm-fl input, .hmm-fl textarea { font: 14px/1.45 "Manrope", sans-serif; color: var(--ink); background: var(--field); border: 0; border-radius: 11px; padding: 9px 12px; outline: none; resize: vertical; }
+.hmm-fl textarea { min-height: 0; height: 58px; }
+#hmm-fwdb[aria-expanded="true"] { box-shadow: inset 0 0 0 1.5px var(--accent); }
+html.st-light .hmm-fl input, html.st-light .hmm-fl textarea { background: #fff; box-shadow: inset 0 0 0 1px rgba(20,30,60,.12); }
+.hmm-fl input:focus, .hmm-fl textarea:focus { box-shadow: 0 0 0 2px var(--accent); }
+.hmm-frow { display: flex; align-items: center; gap: 8px; } .hmm-frow small { margin-right: auto; color: var(--muted); font-size: 12px; }
+.hmm-st { margin: 10px 20px 0; padding: 8px 12px; border-radius: 11px; font-size: 13px; color: var(--ink); background: rgba(75,227,161,.12); }
+.hmm-st.bad { background: rgba(255,107,138,.14); color: var(--bad); }
+.hmm-acts { align-items: center; flex-wrap: wrap; }
+.hmm-acts .hmm-sp { flex: 1; }
+.hmm-ic { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); }
+.hmm-ic.danger:hover:not(:disabled) { background: rgba(255,107,138,.16); color: var(--bad); }
+html.st-light .hmm-ic, html.st-light .hmm-acts .btn:not(.primary) { background: rgba(20,30,60,.06); }
+html.st-light .hmm-acts .btn:not(.primary):hover { background: rgba(20,30,60,.11); }
+@media (max-width: 560px) { .hmm-ic span { display: none; } .hmm-ic { padding: 8px 11px; } }
 
 /* «Текстовый режим» в «Чате» (30.10, №421): заметная строка с кнопкой «Включить голос» */
 .ch-tmbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 14px 4px;

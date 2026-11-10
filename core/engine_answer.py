@@ -776,8 +776,9 @@ class AnswerMixin:
                                                   "Яндекс Музыка — yandex_music, если о ней просят."}[sv]
                      + " Кнопки уже открытого плеера (играть, пауза, следующий трек) — только media_control: не нажимай по экрану "
                        "и не используй команды терминала. Просят ПОДОБРАТЬ или посоветовать песни, плейлист — назови "
-                       "конкретные песни (исполнитель — название), сколько просили: только известные песни, в которых ты уверен — "
-                       "и в названии, и в исполнителе (не придумывай и не приписывай песню чужому исполнителю); включай, "
+                       "конкретные песни (исполнитель — название), РОВНО сколько просили (просили пять — пять): бери известные хиты, "
+                       "в которых уверен и в названии, и в исполнителе (не придумывай и не приписывай песню чужому исполнителю); "
+                       "не оговаривайся, что не уверен, и не сокращай список — выбери другие известные песни; включай, "
                        "только если просят включить. "
                        "Никогда не говори, что что-то открыл или включил, если инструмент этого не сделал.")
             base += ("\n\nПросят разобраться с компьютером (тормозит, не работает, настроить) — сначала посмотри "
@@ -901,7 +902,20 @@ class AnswerMixin:
             return ""
         try:
             m = getattr(self, "mcp", None)
-            return pl.hint_for(text.split("\n\nВложения:")[0], m.plugin_tools() if m else {}, m.plugin_errors() if m else {})
+            ask = text.split("\n\nВложения:")[0]
+            h = pl.hint_for(ask, m.plugin_tools() if m else {}, m.plugin_errors() if m else {})
+            if h:
+                return h
+            # «Нарисуй открытку» без «Художника» — «Я не умею рисовать» (04.11): предложить включить готовый плагин. Отказался —
+            # тот же плагин не предлагаем 6 часов (_offered)
+            off = pl.match_off(ask)
+            seen = getattr(self, "_plugin_offered", None)
+            if seen is None:
+                seen = self._plugin_offered = {}
+            if off and time.time() - seen.get(off["id"], 0) > 6 * 3600:
+                seen[off["id"]] = time.time()
+                return pl.offer_hint(off)
+            return ""
         except Exception as e:  # noqa: BLE001
             log.info("подсказка плагина: %s", e)
             return ""
@@ -931,6 +945,8 @@ class AnswerMixin:
             return set()
         try:
             p = pl.match(text.split("\n\nВложения:")[0])
+            if not p and pl.match_off(text.split("\n\nВложения:")[0]):
+                return {"plugin_enable"}                   # выключенный готовый плагин — предложить включить
             return ({n for n, _ in (m.plugin_tools().get(p["id"]) or [])} | {"use_skill", "read_skill_file"}) if p else set()
         except Exception:  # noqa: BLE001
             return set()
@@ -2183,6 +2199,7 @@ class AnswerMixin:
             plug_checked = False                             # №507: ответила фактами по памяти, не вызвав подходящий плагин (раз за ход)
             deed_checked = False                             # экзамен ПК 0.81.1: «открыла» без open_url, погода без weather… (раз за ход)
             prev_said = {_norm_answer(m.get("content")) for m in self.history[-8:] if m.get("role") == "assistant" and m.get("content")}
+            prev_asked = {_norm_answer(m.get("content")) for m in self.history[-9:-1] if m.get("role") == "user" and isinstance(m.get("content"), str)}
             for step in range(6):                       # модель → действия → результаты → модель…
                 calls, step_text = [], ""
                 t_step, t_ev = time.monotonic(), None     # «⏱ модель: …» — от запроса до первого события этого шага
@@ -2410,7 +2427,10 @@ class AnswerMixin:
                         self.set_state("thinking")
                         continue
                 if not calls and not called and not turn.cancel.is_set() and step < 6 and not repeat_checked \
-                        and 0 < len(turn.full.strip()) < 160 and _norm_answer(turn.full) in prev_said:
+                        and 0 < len(turn.full.strip()) and _norm_answer(turn.full) in prev_said \
+                        and (len(turn.full.strip()) < 160 or _norm_answer(ask0) in prev_asked):
+                    # экзамен 0.84.1: «расскажи о себе» дважды — длинный ответ слово в слово; длинный повтор ловим, когда и
+                    # вопрос повторён (человек спрашивает снова — прошлый ответ его не устроил)
                     # отзыв 17.10 (съёмка): на «расскажи о себе», «подробнее», «что ты умеешь» Лира раз за разом отвечала
                     # «Я Лира.» — модель копировала свои прошлые реплики из разговора. Повтор — просим ответить по существу
                     repeat_checked = True
@@ -2454,7 +2474,7 @@ class AnswerMixin:
                         continue
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not deed_checked:
                     from quality import agenda_invented, council_missing, feature_deny, invented_numbers, open_claim, poem_check, \
-                        url_unread, writing_missing
+                        songs_count, url_unread, writing_missing, agenda_missed
                     names_ = {x.get("name") for x in specs or []}
                     fix = (open_claim(ask0, step_text, called) if "open_url" in names_ else "") \
                         or (url_unread(ask0, step_text, called) if "read_webpage" in names_ else "") \
@@ -2464,7 +2484,9 @@ class AnswerMixin:
                         or (council_missing(ask0, step_text, called) if "council" in names_ else "") \
                         or feature_deny(ask0, step_text, called, getattr(turn, "guided", False)) \
                         or agenda_invented(step_text, getattr(turn, "agenda", "")) \
-                        or poem_check(ask0, step_text)
+                        or agenda_missed(text, step_text, getattr(turn, "agenda", "")) \
+                        or poem_check(ask0, step_text) \
+                        or songs_count(ask0, step_text)
                     if fix:                                  # экзамен ПК 0.81.1: сказала, но не сделала; числа без инструмента
                         deed_checked = True
                         log.info("✋ %s — прошу переделать", fix.split(" — ")[0].split(":", 1)[-1].strip()[:90])

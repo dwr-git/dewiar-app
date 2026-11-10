@@ -130,8 +130,9 @@ def parse_plugin(d: Path, builtin: bool):
                      "type": s.get("type", "text"), "options": [str(o)[:60] for o in (s.get("options") or [])][:12],
                      "default": s.get("default", ""), "placeholder": str(s.get("placeholder") or "")[:120],
                      "hint": str(s.get("hint") or "")[:200], "required": bool(s.get("required"))})
+    # short — имя дела для людей в календаре, «Утре» и на телефоне («Дача: заморозки и полив»); task — поручение модели (№557)
     jobs = [{"id": _id(j.get("id") or f"j{i}"), "title": str(j.get("title") or "")[:120], "when": str(j.get("when") or "")[:80],
-             "task": str(j.get("task") or "")[:600]}
+             "task": str(j.get("task") or "")[:600], "short": " ".join(str(j.get("short") or "").split())[:60]}
             for i, j in enumerate(m.get("jobs") or []) if isinstance(j, dict) and j.get("when") and j.get("task")]
     mcp = {}
     for n, c in (m.get("mcp") or {}).items() if isinstance(m.get("mcp"), dict) else []:
@@ -321,6 +322,39 @@ class Plugins:
                 best, top = p, sc
         return best
 
+    # Готовые плагины, без которых просьбу не выполнить (рисунок, курс сейчас, тендеры, разбор резюме): если такой выключен,
+    # Лира не говорит «не умею», а предлагает включить его кнопкой «Выполнить?» (plugin_enable). Остальные (кухня, сказки,
+    # путешествия) — Лира отвечает и без плагина, навязывать их не нужно.
+    OFFER_NEED = ("artist", "rates", "tenders", "recruiter")
+
+    @staticmethod
+    def _word_hit(word, toks):
+        """Слово признака («открытку», «курс доллара») в словах просьбы: каждое его слово — началом слова просьбы без
+        последней буквы («открытк…», но не «открыть»)."""
+        ws = re.findall(r"[a-zа-яё0-9]+", str(word).lower().replace("ё", "е"))
+        return bool(ws) and all(any(t.startswith(w[:max(4, len(w) - 1)]) for t in toks) for w in ws)
+
+    def match_off(self, text):
+        """Выключенный готовый плагин из OFFER_NEED, к которому явно эта просьба -> его словарь или None («Нарисуй открытку
+        маме» — «Художник»). Только по словам-признакам и названию — строже, чем match(): ошибиться тут — навязать плагин."""
+        toks = re.findall(r"[a-zа-яё0-9]+", str(text or "").lower().replace("ё", "е"))
+        if not toks:
+            return None
+        on = self._on()
+        for pid in self.OFFER_NEED:
+            p = self.items.get(pid)
+            if not p or pid in on or not p.get("builtin"):
+                continue
+            if any(self._word_hit(w, toks) for w in (p.get("words") or [])) or self._word_hit(p["name"], toks):
+                return p
+        return None
+
+    def offer_hint(self, p):
+        """Справка к вопросу: просьба к выключенному плагину p — предложить включить, а не «не умею»."""
+        return (f"Это умеет готовый плагин «{p['name']}» ({p['tagline']}), но он выключен. Не отвечай «не умею» и не делай "
+                f"по-своему: одной фразой скажи, что для этого есть плагин «{p['name']}», и сразу вызови plugin_enable с id "
+                f"«{p['id']}» — человек подтвердит кнопкой «Выполнить?». Включится — скажи, что готово, и попроси повторить просьбу.")
+
     def hint_for(self, text, tools=None, status=None):
         """Справка к вопросу: просьба к плагину — какой навык прочитать и какие действия вызвать сразу, а не обещать.
         tools — {id плагина: [(имя действия для модели, название)]} (подключённые MCP-серверы плагина); status — {id
@@ -450,14 +484,32 @@ class Plugins:
         self.s.update({"plugins": {"on": on}, "mcp": {"servers": servers}})
         return [x for x in (st.get("jobs") or {}).values() if x]
 
-    def job_text(self, pid, jid):
+    def job_text(self, pid, jid, fallback=None):
+        """-> (поручение с подставленными настройками, когда). fallback — что подставить в пустую настройку (идея №142:
+        «Где дача» не заполнено — город человека из «Утра» или памяти, tools.home_city)."""
         p = self.items.get(pid)
         j = next((x for x in (p or {}).get("jobs") or [] if x["id"] == jid), None)
         if not j:
             raise PluginError("нет такого дела у плагина")
-        vals = self.values(pid)
-        task = re.sub(r"\{(\w+)\}", lambda m: str(vals.get(m.group(1)) or "…"), j["task"])
+        vals, fb = self.values(pid), fallback or {}
+        task = re.sub(r"\{(\w+)\}", lambda m: str(vals.get(m.group(1)) or fb.get(m.group(1)) or "…"), j["task"])
         return task, j["when"]
+
+    def job_label(self, pid, jid):
+        """Имя дела плагина для людей (№557): short из plugin.json, иначе — имя плагина. Нет такого — ""."""
+        p = self.items.get(pid)
+        j = next((x for x in (p or {}).get("jobs") or [] if x["id"] == jid), None)
+        return (j.get("short") or p["name"]) if j else ""
+
+    def job_label_by_rid(self, rid):
+        """Дело по расписанию заведено плагином (settings.plugins.on[pid].jobs[jid] = id напоминания) — его имя, иначе ""."""
+        if not rid:
+            return ""
+        for pid, st in self._on().items():
+            for jid, r in ((st or {}).get("jobs") or {}).items():
+                if r == rid:
+                    return self.job_label(pid, jid)
+        return ""
 
     def job_mark(self, pid, jid, rid):
         on = self._on()

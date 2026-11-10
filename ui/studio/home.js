@@ -49,10 +49,46 @@ const HM_NAV = { council: ["council"], pbot: ["pbot"], ideas: ["ideas"], chat: [
 const HM_FEAT = { play: "games", prompter: "prompter", family: "family", team: "team", clients: "clients", sites: "sites" };
 const HM_OPTIN = { family: 1, team: 1, clients: 1 };                                  // по желанию: видно, только когда включили (27.10)
 const hmFeat = (id) => { if (!HM_FEAT[id]) return true; const v = ((S && S.features) || {})[HM_FEAT[id]]; return HM_OPTIN[id] ? v === true : v !== false; };
+/* №558 (05.11): «чтобы в левой колонке был именно тот порядок, который я настроил под себя». Значки на «Главной»
+   переставляют перетаскиванием (ui.home_apps); теперь в том же порядке и разделы меню — внутри своих групп («Для себя»,
+   «Работа»…): группы и их заголовки на месте, двигаются только разделы со значком на «Главной», остальные — где были.
+   Плагины в группе «Плагины» — тоже по главной (plugpage.js plpNav). Пока главную не настраивали — порядок меню свой. */
+function hmOrder() {
+  const a = ((S && S.ui) || {}).home_apps;
+  if (!Array.isArray(a) || !a.length) return null;
+  const r = {}; a.forEach((id, i) => { const k = id === "kids" ? "modes" : id; if (!(k in r)) r[k] = i; });
+  return r;
+}
+window.hmOrder = hmOrder;
+function hmNavSort() {
+  const rank = hmOrder(), nav = $("nav"); if (!rank || !nav) return;
+  const app = {}; for (const [id, ps] of Object.entries(HM_NAV)) for (const p of ps) app[p] = id;
+  const rk = (el) => el.tagName === "BUTTON" && !el.classList.contains("sub") && el.dataset.p && app[el.dataset.p] in rank ? rank[app[el.dataset.p]] : null;
+  let grp = [];
+  const flush = (ref) => {
+    // раздел едет вместе со своей строкой «+ Поручения» (.nopt) сразу за ним
+    const units = [], slot = new Set();
+    grp.forEach((el, i) => { if (rk(el) == null) return; const u = [el]; let j = i + 1;
+      while (grp[j] && grp[j].classList.contains("nopt")) u.push(grp[j++]);
+      units.push({ r: rk(el), i, u }); slot.add(i); });
+    if (units.length < 2) return;
+    const sorted = units.slice().sort((a, b) => a.r - b.r || a.i - b.i);
+    if (sorted.every((x, n) => x === units[n])) return;                     // уже по порядку — DOM не трогаем
+    const moved = new Set(units.flatMap(x => x.u.slice(1))), seq = []; let n = 0;
+    grp.forEach((el, i) => { if (slot.has(i)) seq.push(...sorted[n++].u); else if (!moved.has(el)) seq.push(el); });
+    seq.forEach(el => nav.insertBefore(el, ref));
+  };
+  for (const el of [...nav.children]) {
+    if (el.classList.contains("ng") || el.classList.contains("grow")) { flush(el); grp = []; } else grp.push(el);
+  }
+  flush(null);
+  if (typeof plpNav === "function" && typeof PLP !== "undefined" && PLP.cat && PLP.cat.length) plpNav();
+}
 /** Меню слева — по главной: скрытый значок прячет свой раздел; открыт спрятанный раздел — на «Главную». */
 function hmNav() {
   if (!S) return;
   const shown = hmApps();
+  try { hmNavSort(); } catch (e) { console.error(e); }
   for (const [id, ps] of Object.entries(HM_NAV)) {
     const off = !shown.includes(id) || !hmFeat(id);
     for (const p of ps) { const b = $(`nav button[data-p="${p}"]`); if (b) b.hidden = off; }
@@ -233,7 +269,7 @@ function hmRender() {
     $("#hmc-faces").innerHTML = ps.map((p, i) => `<i style="--c:${hmEsc(p.color || "#8b7cff")};z-index:${9 - i}${p.avatar_url ? `;background-image:url('${String(p.avatar_url).replace(/'/g, "%27")}')` : ""}" class="${p.avatar_url ? "pic" : ""}">${p.avatar_url ? "" : hmEsc((p.name || "?")[0])}</i>`).join("");
     $("#hm-council").hidden = !shown.includes("council");
   }
-  $("#hm-today").innerHTML = t.map(c => `<button class="hm-card ${c.cls}" data-go="${c.go}"><small>${hmEsc(c.lab)}</small><b>${hmEsc(c.b)}</b><span>${hmEsc(c.s)}</span></button>`).join("");
+  $("#hm-today").innerHTML = t.map(c => `<button class="hm-card ${c.cls}" data-go="${c.go}"${String(c.b).length > 70 ? ` title="${hmEsc(c.b)}"` : ""}><small>${hmEsc(c.lab)}</small><b>${hmEsc(c.b)}</b><span>${hmEsc(c.s)}</span></button>`).join("");
   $("#hm-apps").classList.toggle("edit", HM.edit);
   $("#hm-apps").innerHTML = list.filter(Boolean).map(a => { const on = shown.includes(a.id), n = hmBadge(a.id);
     const md = a.id === "modes" && typeof MD !== "undefined" && MD.st && MD.st.mode && MD.st.mode !== "me" ? MD.st.mode : "";
@@ -299,25 +335,101 @@ function hmMail() {
   if ($("#hmm-fix")) $("#hmm-fix").onclick = (e) => { e.preventDefault(); hmGo("connect"); setTimeout(() => { const b = $("#mail-box"); if (b) b.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250); };
   $$("#hm-mail .hmm-row").forEach(b => b.onclick = () => hmmOpen(it[+b.dataset.i]));
 }
+/* Письмо целиком (№562, 05.11, Serge: «удобно: просмотр письма в HTML-виде; минимальное управление: Удалить, В спам,
+   Переслать»). «Как в письме» — HTML письма в рамке <iframe sandbox="" srcdoc>: без скриптов, без своего источника, CSP
+   default-src 'none' (core/mailhtml.py уже вычистил скрипты, формы и on…). Картинки из интернета — только по «Показать
+   картинки» (до того отправитель не узнает, что письмо открыли). Ссылки внутри рамки не нажимаются — переход внутри неё
+   ушёл бы на чужой сайт мимо всех запретов, — они списком под письмом, с настоящим адресом, и открываются в браузере.
+   Есть у письма своя текстовая часть — по умолчанию «Текстом»; выбор человека запоминается. */
+const HMM = { x: null, r: null, view: "", pics: false, busy: false };
+function hmmView() { try { return localStorage.getItem("dw_mail_view") || ""; } catch (e) { return ""; } }
+function hmmDoc(r, pics) {
+  const csp = `default-src 'none'; img-src data:${pics ? " https:" : ""}; style-src 'unsafe-inline'; font-src data:`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}">`
+    + `<meta name="referrer" content="no-referrer"><style>html{background:#fff}body{margin:0;padding:18px 20px;color:#1d2330;background:#fff;`
+    + `font:14.5px/1.55 -apple-system,"Segoe UI","Manrope",Ubuntu,"Noto Sans",sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}`
+    + `table{max-width:100%}:where(a[data-href]){color:#1a5fd0;text-decoration:underline}a[data-href]{cursor:default}pre{white-space:pre-wrap}</style></head><body>`
+    + (r.html || "") + `</body></html>`;
+}
+function hmmShow() {
+  const r = HMM.r, body = $("#hmm-body"); if (!r) return;
+  const html = !!r.html && HMM.view === "html", txt = String(r.text || "").trim();
+  $$("#hmm-bar .hmm-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (html ? "html" : "text"))));
+  $("#hmm-bar").hidden = !r.html;
+  $("#hmm-pics").hidden = !html || HMM.pics || !(r.html_remote > 0);
+  if (!$("#hmm-pics").hidden) $("#hmm-pics span").textContent = `Показать картинки · ${r.html_remote}`;
+  const head = `<p class="hmm-to">${hmEsc(hmmAddr(r.from || HMM.x.from))}${r.to ? ` → ${hmEsc(r.to)}` : ""}</p>`;
+  const files = (r.files || []).length ? `<p class="hmm-files">📎 ${r.files.map(hmEsc).join(" · ")}</p>` : "";
+  if (!html) { body.innerHTML = head + `<div class="hmm-text">${txt ? hmEsc(txt) : "<i>В письме нет текста.</i>"}</div>` + files; return; }
+  const links = (r.html_links || []).filter(l => /^(https?:|mailto:)/i.test(l.url));
+  body.innerHTML = head + `<div class="hmm-paper"><iframe class="hmm-frame" sandbox="" referrerpolicy="no-referrer" title="Письмо: ${hmEsc(r.subject || "")}"></iframe></div>` + files
+    + (links.length ? `<details class="hmm-links"><summary>Ссылки в письме · ${links.length}</summary><ul>${links.map((l, i) => {
+        let host = l.url, rest = ""; try { const u = new URL(l.url); host = u.protocol === "mailto:" ? u.pathname : u.host; rest = u.protocol === "mailto:" ? "" : (u.pathname + u.search).replace(/^\/$/, ""); } catch (e) { }
+        return `<li><button type="button" data-l="${i}" title="${hmEsc(l.url)}"><span class="hmm-lt">${hmEsc(l.text || host)}</span><span class="hmm-lu"><b>${hmEsc(host)}</b>${hmEsc(rest.slice(0, 80))}</span></button></li>`; }).join("")}</ul>`
+      + `<small>Ссылки открываются в браузере. Смотрите на адрес: письмо может выдавать себя за банк или магазин.</small></details>` : "");
+  $(".hmm-frame", body).srcdoc = hmmDoc(r, HMM.pics);
+  $$(".hmm-links button", body).forEach(b => b.onclick = () => { const l = links[+b.dataset.l]; if (l) openExt(l.url); });
+}
+function hmmFwd(on) { $("#hmm-fwd").hidden = !on; $("#hmm-fwdb").setAttribute("aria-expanded", String(!!on)); }
+function hmmStatus(t, bad) { const el = $("#hmm-st"); el.hidden = !t; el.textContent = t || ""; el.classList.toggle("bad", !!bad); }
+function hmmBusy(on) { HMM.busy = on; ["#hmm-del", "#hmm-spam", "#hmm-fwdb", "#hmm-fgo"].forEach(id => { const b = $(id); if (b) b.disabled = on; }); }
+function hmmGone(x) {                                    // письмо убрали — и из списка на «Главной»
+  if (HM.mail && HM.mail.items) HM.mail.items = HM.mail.items.filter(it => it !== x && it.uid !== x.uid);
+  hmMail(); setTimeout(() => hmMailLoad(true), 1500);
+}
+async function hmmAct(action) {
+  const x = HMM.x, r = HMM.r || {}; if (!x || HMM.busy) return;
+  const what = `«${r.subject || x.subject || "без темы"}» от ${hmmWho(r.from || x.from)}`;
+  if (action === "trash" && !await ask(`Удалить письмо ${what}?\nОно уйдёт в «Корзину» почты — оттуда его можно вернуть.`, { ok: "Удалить" })) return;
+  if (action === "junk" && !await ask(`Отправить письмо ${what} в «Спам»?\nПочта будет узнавать такие письма.`, { ok: "В спам", danger: true })) return;
+  let to = "", note = "";
+  if (action === "forward") {
+    to = $("#hmm-fto").value.trim(); note = $("#hmm-fnote").value.trim();
+    const bad = to.split(/[,;\s]+/).filter(Boolean).find(a => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a));
+    if (!to || bad) { hmmStatus(to ? `Проверьте адрес: ${bad}` : "Впишите, кому переслать", true); $("#hmm-fto").focus(); return; }
+    if (!await ask(`Переслать письмо ${what} → ${to}?`, { ok: "Переслать" })) return;
+  }
+  hmmBusy(true); hmmStatus(action === "forward" ? "Пересылаю…" : action === "junk" ? "Убираю в «Спам»…" : "Удаляю…");
+  try {
+    const res = await core.call("mail_act", { uid: x.uid, action, to, note });
+    if (action === "forward") {
+      hmmStatus(`Переслала: ${(res.to || [to]).join(", ")}`); hmmFwd(false); $("#hmm-fnote").value = "";
+    } else {
+      $("#hmm-dlg").close(); hmmGone(x);
+      toast(action === "junk" ? `Письмо в «${res.folder || "Спам"}»` : res.permanent ? "Письмо удалено — корзины в этой почте нет" : `Письмо в «${res.folder || "Корзине"}»`, 3200);
+    }
+  } catch (e) { hmmStatus("Не вышло: " + e.message, true); }
+  hmmBusy(false);
+}
 async function hmmOpen(x) {
   if (!x) return;
   const d = $("#hmm-dlg"), body = $("#hmm-body");
+  HMM.x = x; HMM.r = null; HMM.pics = false; HMM.busy = false; hmmBusy(false); hmmStatus("");
+  hmmFwd(false); $("#hmm-bar").hidden = true;
   $("#hmm-dfrom").textContent = `${hmmWho(x.from)} · ${hmmWhen(x.date)}`; $("#hmm-dt").textContent = x.subject || "(без темы)";
   body.innerHTML = `<p class="hmm-load">Открываю письмо…</p>`;
   if (!d.open) d.showModal();
   $("#hmm-reply").onclick = () => { d.close(); const t = `Помоги ответить на письмо от ${hmmWho(x.from)} (${hmmAddr(x.from)}) с темой «${x.subject || "без темы"}»`;
     if (typeof qaAsk === "function") qaAsk(t); else core.call("say", { text: t }).catch(() => {}); };
   try {
-    const r = await core.call("mail_read", { uid: x.uid });
-    const txt = String(r.text || "").trim();
-    body.innerHTML = `<p class="hmm-to">${hmEsc(hmmAddr(r.from || x.from))}${r.to ? ` → ${hmEsc(r.to)}` : ""}</p><div class="hmm-text">${txt ? hmEsc(txt) : "<i>В письме нет текста.</i>"}</div>`
-      + ((r.files || []).length ? `<p class="hmm-files">📎 ${r.files.map(hmEsc).join(" · ")}</p>` : "");
+    const r = await core.call("mail_read", { uid: x.uid, html: true });
+    if (HMM.x !== x) return;                             // пока грузилось, открыли другое
+    // своего текста у письма нет — «текстом» лишь выжимка из HTML: сразу «как в письме»; есть — как выбрал человек (сначала текстом)
+    HMM.r = r; HMM.view = r.html && (!r.plain || hmmView() === "html") ? "html" : "text";
+    hmmShow();
     if (x.unread) { x.unread = false; hmMail(); }        // открыли — прочитано и здесь, и на самой почте (mail_read отметил)
   } catch (e) { body.innerHTML = `<p class="hmm-err">Не открылось: ${hmEsc(e.message)}</p>`; }
 }
 if ($("#hmm-dlg")) {
-  $("#hmm-x").onclick = $("#hmm-close").onclick = () => $("#hmm-dlg").close();
+  $("#hmm-x").onclick = () => $("#hmm-dlg").close();
   $("#hmm-dlg").addEventListener("click", (e) => { if (e.target === $("#hmm-dlg")) $("#hmm-dlg").close(); });
+  $$("#hmm-bar .hmm-seg button").forEach(b => b.onclick = () => { HMM.view = b.dataset.v; try { localStorage.setItem("dw_mail_view", HMM.view); } catch (e) { } hmmShow(); });
+  $("#hmm-pics").onclick = () => { HMM.pics = true; hmmShow(); };
+  $("#hmm-del").onclick = () => hmmAct("trash");
+  $("#hmm-spam").onclick = () => hmmAct("junk");
+  $("#hmm-fwdb").onclick = () => { const f = $("#hmm-fwd"); hmmFwd(f.hidden); hmmStatus(""); if (!f.hidden) { $("#hmm-fto").focus(); f.scrollIntoView({ block: "nearest" }); } };
+  $("#hmm-fcancel").onclick = () => { hmmFwd(false); hmmStatus(""); };
+  $("#hmm-fwd").onsubmit = (e) => { e.preventDefault(); hmmAct("forward"); };
 }
 function hmGo(p) {
   if (p.includes("#")) {                               // «раздел#элемент» — открыть и показать место (look#show-box)

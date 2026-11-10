@@ -397,7 +397,7 @@ class RemoteMixin:
         force — «Прослушать» под ответом: в «Текстовом режиме» (голос выключен, прежний запомнен в ui.text_prev) читаем
         прежним голосом — человек сам попросил вслух (30.10, владелец: «„Прослушать“ тоже не работает»)."""
         eng = self.s.get("tts", "engine")
-        remote = self.tts_remote
+        remote = getattr(self, "tts_remote", None)        # экзамен 0.84.1 (исполнитель на сервере): атрибута ещё не было — речь падала
         if eng == "off":
             prev = ((self.s.get("ui") or {}).get("text_prev") or "") if force else ""
             if not prev or prev == "off":

@@ -794,7 +794,7 @@ core.on("hello", d => {
   if (secSeen("voice")) loadVosk();                 // голоса Vosk — когда открыли «Голос» или «Персонажей»
   studioLite();
   secHello();
-  const q = new URLSearchParams(location.search);
+  const q = dwQuery();
   // перенос настроек: ждущий в ядре импорт, файл (?import=) или адрес (?address=) из ссылки; нет ни модели, ни
   // #раздела — сразу в «Мозг», без модели ассистент не отвечает
   if (d.pending_import) showPreview(d.pending_import);

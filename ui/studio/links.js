@@ -639,7 +639,7 @@ $("#bug-img").onclick = (e) => e.target.classList.toggle("zoom");
 $("#bug-use").onchange = (e) => $("#bug-shot").classList.toggle("off", !e.target.checked);
 $("#bug-snap").onclick = guardBtn(async () => {
   const r = $("#rep-res"); r.className = "res"; r.textContent = "снимаю экран…";
-  try { const x = await core.call("bug_shot", { add: true }); if (x.ok) { bugShow(x.preview, x.shots); r.textContent = ""; } else { r.className = "res bad"; r.textContent = "Не снялся: " + (x.error || ""); } }
+  try { const x = await core.shot({ add: true }); if (x.ok) { bugShow(x.preview, x.shots); r.textContent = ""; } else { r.className = "res bad"; r.textContent = "Не снялся: " + (x.error || ""); } }
   catch (e) { r.className = "res bad"; r.textContent = e.message; }
 });
 /* своя картинка к жалобе: Ctrl+V в форме (снимок из буфера), «Картинка…» или перетащить на место снимка (№139) */

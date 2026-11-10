@@ -9,17 +9,27 @@
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const safeUrl = (u) => /^(https?:|mailto:|tg:|obsidian:)/i.test(u) || /^[^:]*$/.test(u) ? u : "#";
 
+  /* Строка Markdown → HTML. Третья рецензия выпуска 5 (05.11): голые ссылки превращались в <a> регуляркой уже ВНУТРИ
+     собранной разметки — https://… в подписи картинки выходил из alt="…", и onerror=… исполнялся в окне блокнота (там
+     ключ ядра в адресе). Теперь каждый готовый кусок (код, картинка, ссылка, голая ссылка) сразу уходит в «заглушку»
+     \u0001N\u0001, атрибуты собираются только из экранированного текста, а регулярки дальше видят лишь текст и заглушки. */
+  /* Четвёртая рецензия: заглушка картинки, попавшая в адрес ссылки ([x](![…](b))), раскрывалась уже внутри href="…" —
+     и картинка с onanimationstart выходила из атрибута. Теперь: \u0001 из входа убран сразу; в адрес и alt заглушка не
+     попадает (адрес — без \u0001, из alt они вырезаются); подпись ссылки раскрывается сразу при сборке (это содержимое,
+     а не атрибут), и в конце заглушки раскрываются ОДИН раз — готовый кусок никогда не содержит заглушек. */
   function inline(t) {
-    const codes = [];
-    t = String(t).replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return "\u0000" + (codes.length - 1) + "\u0000"; });
-    t = esc(t);
-    t = t.replace(/!\[([^\]\n]*)\]\(([^)\s]+)\)/g, (_, a, u) => `<img alt="${a}" data-src="${esc(safeUrl(u.replace(/&amp;/g, "&")))}">`);
-    t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (_, a, u) => `<a href="${esc(safeUrl(u.replace(/&amp;/g, "&")))}">${a}</a>`);
-    t = t.replace(/(^|[\s(>])((?:https?:\/\/)[^\s<>()"]+[^\s<>()".,;:!?'])/g, (m, pre, u) => `${pre}<a href="${u}">${u}</a>`);
-    t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>").replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
-    t = t.replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>").replace(/(^|[^_\w])_([^_\n]+)_(?![_\w])/g, "$1<em>$2</em>");
-    t = t.replace(/~~([^~\n]+)~~/g, "<s>$1</s>").replace(/==([^=\n]+)==/g, "<mark>$1</mark>");
-    return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[+i])}</code>`);
+    const parts = [], PH = /\u0001(\d+)\u0001/g;
+    const put = (html) => { parts.push(html); return "\u0001" + (parts.length - 1) + "\u0001"; };
+    const open = (x) => x.replace(PH, (_, i) => parts[+i] || "");
+    const emph = (x) => x.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>").replace(/__([^_\n]+)__/g, "<strong>$1</strong>")
+      .replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>").replace(/(^|[^_\w])_([^_\n]+)_(?![_\w])/g, "$1<em>$2</em>")
+      .replace(/~~([^~\n]+)~~/g, "<s>$1</s>").replace(/==([^=\n]+)==/g, "<mark>$1</mark>");
+    t = String(t == null ? "" : t).replace(/[\u0000-\u0002]/g, "");
+    t = t.replace(/`([^`\n]+)`/g, (_, c) => put(`<code>${esc(c)}</code>`));
+    t = t.replace(/!\[([^\]\n]*)\]\(([^)\s\u0001]+)\)/g, (_, a, u) => put(`<img alt="${esc(a.replace(PH, ""))}" data-src="${esc(safeUrl(u))}">`));
+    t = t.replace(/\[([^\]\n]+)\]\(([^)\s\u0001]+)\)/g, (_, a, u) => put(`<a href="${esc(safeUrl(u))}">${open(emph(esc(a)))}</a>`));
+    t = t.replace(/(^|[\s(>])((?:https?:\/\/)[^\s<>()"\u0001]+[^\s<>()".,;:!?'\u0001])/g, (m, pre, u) => pre + put(`<a href="${esc(u)}">${esc(u)}</a>`));
+    return open(emph(esc(t)));
   }
   const LI = /^(\s*)([-*+]|\d+[.)])\s+(?:\[([ xX])\]\s+)?(.*)$/;
   const cells = (l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, "|"));
@@ -68,6 +78,7 @@
       const buf = [];                                                              // абзац: строки — через перевод строки
       while (i < L.length && L[i].trim() && !/^(#{1,3}\s|```|\s*>)/.test(L[i]) && !LI.test(L[i]) && !(/\|/.test(L[i]) && isTableSep(L[i + 1]))
              && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(L[i])) buf.push(L[i++]);
+      if (!buf.length) buf.push(L[i++]);       // строку не взял никто (```js {1,3}, «> ```[») — абзацем, иначе цикл без конца (рецензия 5e)
       out += `<p>${buf.map(inline).join("<br>")}</p>`;
     }
     return out;

@@ -9,16 +9,23 @@
 // escH — в core.js (24.10: нужен всем файлам студии; если этот файл не загрузится, остальные не должны падать)
 /* Markdown -> HTML для текста, который пишет модель, пользователь или сайт. Безопасность: весь текст сначала проходит
    escH, разметка добавляется поверх; ссылки — только http(s), [[вики-ссылки]] — a.wl с href "wiki:…" (их ловит memory.js).
-   Код в `…` прячется за метки \u0000n\u0000, чтобы *, _ и # внутри него не стали разметкой. */
+   Код и ссылки прячутся за метки \u0001n\u0001, чтобы *, _ и # внутри них не стали разметкой (mdInline). */
 function mdInline(t) {
-  const codes = [];
-  t = escH(t).replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
-  t = t.replace(/(^|\s)#([\p{L}\p{N}_-]{2,40})/gu, '$1<span class="tag">#$2</span>');
-  t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
-       .replace(/(^|\W)_([^_]+)_(?=\W|$)/g, "$1<em>$2</em>").replace(/~~([^~]+)~~/g, "<s>$1</s>")
-       .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, a, b) => `<a class="wl" href="wiki:${encodeURIComponent(a.trim())}">${b || a}</a>`)
-       .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-  return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);
+  /* Четвёртая рецензия: атрибуты — только из своего экранированного текста. Раньше код `…` раскрывался и внутри href
+     (\u0000 из входа не вырезался), а **жирный** резал адрес ссылки тегом. Теперь, как в блокноте (assets/padmd.js):
+     \u0000–\u0002 из входа прочь, код и ссылки — в заглушки до разметки, в адрес заглушка не попадает, подпись
+     раскрывается сразу (содержимое, не атрибут), в конце — один проход. */
+  const parts = [], PH = /\u0001(\d+)\u0001/g;
+  const put = (h) => { parts.push(h); return "\u0001" + (parts.length - 1) + "\u0001"; };
+  const open = (x) => x.replace(PH, (_, i) => parts[+i] || "");
+  const emph = (x) => x.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
+    .replace(/(^|\W)_([^_]+)_(?=\W|$)/g, "$1<em>$2</em>").replace(/~~([^~]+)~~/g, "<s>$1</s>");
+  t = String(t == null ? "" : t).replace(/[\u0000-\u0002]/g, "");
+  t = t.replace(/`([^`]+)`/g, (_, c) => put(`<code>${escH(c)}</code>`));
+  t = t.replace(/\[\[([^\]|\u0001]+)(?:\|([^\]]+))?\]\]/g, (_, a, b) => put(`<a class="wl" href="wiki:${encodeURIComponent(a.trim())}">${open(emph(escH(b || a)))}</a>`));
+  t = t.replace(/\[([^\]]+)\]\((https?:[^)\s\u0001]+)\)/g, (_, a, u) => put(`<a href="${escH(u)}" target="_blank">${open(emph(escH(a)))}</a>`));
+  t = escH(t).replace(/(^|\s)#([\p{L}\p{N}_-]{2,40})/gu, '$1<span class="tag">#$2</span>');
+  return open(emph(t));
 }
 /* Блоки: ``` код, заголовки (не глубже h4), черта, таблицы | |, цитаты, списки и чек-листы [ ]/[x], абзацы */
 function md(src) {
@@ -155,7 +162,7 @@ async function openFile(path) {
     const size = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + " МБ" : f.size > 1024 ? Math.round(f.size / 1024) + " КБ" : (f.size || 0) + " Б";
     const code = () => `<pre class="code">${escH(kind === "json" ? prettyJson(f.text || "") : f.text || "")}</pre>`;
     const views = {                                            // вид → разметка; «Код» — исходный текст
-      page: () => `<iframe class="fpage" src="${url}" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>`,
+      page: () => `<div class="fpage-slot"></div>`,      // страница — safeFrame (core.js): текстом, без прав студии
       svg: () => `<div class="fpic"><img src="${url}" alt=""></div>`,
       img: () => `<div class="fpic"><img src="${url}" alt=""></div>`,
       audio: () => `<div class="fplay"><div class="big">🎵</div><audio controls preload="metadata" src="${url}"></audio></div>`,
@@ -176,10 +183,13 @@ async function openFile(path) {
       <button class="btn small" id="f-app">Открыть</button>${["README.md", "Память/Обо мне.md", "Напоминания.md"].includes(path) || path.startsWith("Задачи/") ? "" : '<button class="btn small" id="f-del" title="В корзину">Удалить</button>'}<button class="btn small primary" id="f-dl">${page ? "Скачать HTML" : "Скачать"}</button>
       ${printable ? '<button class="btn small primary" id="f-pdf">PDF</button>' : ""}</div></div><div id="f-body">${body}</div>`;
     $("#f-view .fhead b").textContent = name;
+    const fillPage = () => { const sl = $("#f-body .fpage-slot"); if (sl) sl.replaceWith(safeFrame(f.text || "", "fpage")); };
+    fillPage();
     $("#f-app").onclick = () => core.call("ws_open", { path }).catch(e => toast(e.message));
     $$("#f-mode button").forEach(b => b.onclick = () => {
       $$("#f-mode button").forEach(x => x.classList.toggle("on", x === b));
       $("#f-body").innerHTML = b.dataset.m === "code" ? code() : views[kind]();
+      fillPage();
     });
     if ($("#f-full")) $("#f-full").onclick = () => { const el = $("#f-body").firstElementChild; if (el) (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el); };
     const dl = async (fmt, b) => {

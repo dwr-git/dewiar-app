@@ -338,6 +338,8 @@ def _text(html):
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).replace("&nbsp;", " ")
 
 
+NO_NET_ARGS = ["--proxy-server=socks5://127.0.0.1:9", "--proxy-bypass-list=<-loopback>",    # как quality.NO_NET_ARGS:
+               "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"]                    # WebSocket и WebRTC — тоже
 NET_NOISE = re.compile(r"Failed to load resource|net::ERR_|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED", re.I)
 
 
@@ -353,11 +355,11 @@ def browser_pages(pages, width=375):
     try:
         with sync_playwright() as pw:
             try:
-                br = pw.chromium.launch()
+                br = pw.chromium.launch(args=NO_NET_ARGS)         # страница модели — без сети (рецензия выпуска 5)
             except Exception:  # noqa: BLE001 — Chromium не скачан или не запускается (нет библиотек системы)
                 return None
             try:
-                ctx = br.new_context(viewport={"width": width, "height": 800})
+                ctx = br.new_context(viewport={"width": width, "height": 800}, offline=True)
                 for page in pages:
                     pg = ctx.new_page()
                     errs = []

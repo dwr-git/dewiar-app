@@ -108,6 +108,17 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 #orb { width: 100%; height: 100%; display: block; transform-origin: 50% 50%; }
 #orbwrap.tap { transform: scale(.97); transition: transform .15s; }
 #state { margin-top: 10px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); min-height: 18px; text-align: center; }
+/* №560 (05.11): «кнопку стоп — когда работаешь без микрофона». Пока думаю или говорю — справа от состояния «■ Стоп»
+   (висит сбоку, разговор под ним не прыгает); нажали или Esc на клавиатуре — замолкаю и не отвечаю дальше */
+#statebar { position: relative; display: flex; justify-content: center; max-width: 100%; }
+#stopx { position: absolute; left: 100%; top: calc(50% + 5px); transform: translateY(-50%); margin-left: 12px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 13px 6px 11px; border-radius: 999px; background: var(--frost); color: var(--ink); font: 600 13px/1.1 inherit; letter-spacing: .01em; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent; transition: background .15s, color .15s; }
+#stopx[hidden] { display: none; }
+#stopx svg { width: 10px; height: 10px; fill: currentColor; flex: none; }
+#stopx:active { transform: translateY(-50%) scale(.95); }
+@media (hover: hover) { #stopx:hover { background: color-mix(in srgb, var(--bad, #ff6b8a) 22%, var(--frost)); color: var(--bad, #ff8fa8); } }
+#stopx:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; }
 #talk { width: 100%; flex: 1; min-height: 0; overflow-y: auto; padding: 10px 24px 8px; text-align: center; scrollbar-width: none;
   -webkit-mask-image: linear-gradient(transparent 0, #000 14px, #000 calc(100% - 18px), transparent); }
 #talk::-webkit-scrollbar { display: none; }
@@ -447,7 +458,7 @@ details.brainalt[open] > summary { margin-bottom: 10px; } details.brainalt[open]
   #tries .tlist { justify-content: flex-start; } #tries .tx { margin-left: 0; }
   #orbwrap { grid-column: 1; grid-row: 2; justify-self: center; width: min(36vw, 50vh, 400px); margin-top: 0; }
   #radiobox { grid-column: 1; grid-row: 3; justify-self: center; }
-  #state { grid-column: 1; grid-row: 4; justify-self: center; }
+  #statebar { grid-column: 1; grid-row: 4; justify-self: center; }
   #talk { grid-column: 2; grid-row: 1 / 6; align-self: stretch; max-width: none; text-align: left; display: flex; flex-direction: column; padding: 16px 8px; }
   #talk::before, #talk::after { content: ""; flex: 1 1 0; }      /* по центру по высоте, а длинный ответ прокручивается с начала */
   #card { margin-left: 0; }
@@ -506,7 +517,7 @@ details.pro > .tiles { margin-top: 10px; }
 /* длинный ответ в рамке: облик уступает место, текст — в стеклянной карточке слева, внизу — кнопки */
 #orbwrap { transition: width .35s ease, margin .35s ease; }
 #stage.long #orbwrap { width: min(34vw, 20vh, 160px); margin-top: 0; }
-#stage.long #state { margin-top: 6px; }
+#stage.long #state { margin-top: 6px; } #stage.long #stopx { top: calc(50% + 3px); }
 #bot.framed { text-align: left; font-size: 16px; line-height: 1.5; font-weight: 400; white-space: pre-wrap; background: var(--frost);
   border-radius: 20px; padding: 14px 16px 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 14px 34px -22px rgba(0,0,0,.95); }
 #bot.framed .ans { white-space: normal; }
@@ -602,6 +613,7 @@ body.neu :is(#typebox textarea, .f input, .f select, .f textarea, .wk-form texta
 body.neu .tg i { background: var(--glass); box-shadow: inset 2px 2px 5px var(--neu-dark), inset -2px -2px 5px var(--neu-light); }
 body.neu .tg input:checked + i { background: var(--brand); box-shadow: inset 2px 2px 5px rgba(0,0,0,.18); }
 body.neu #mic { box-shadow: var(--raise), inset 0 1px 0 rgba(255,255,255,.25); }
+body.neu #stopx { background: var(--glass); box-shadow: var(--raise-s); } body.neu #stopx:active { box-shadow: var(--press); }
 body.neu #mic.busy { background: var(--glass); color: var(--accent); box-shadow: var(--press); }
 body.neu :is(.cl-bar, #exam-bar .xb) { background: var(--glass); box-shadow: inset 2px 2px 4px var(--neu-dark), inset -2px -2px 4px var(--neu-light); }
 

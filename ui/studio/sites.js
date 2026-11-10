@@ -1,6 +1,6 @@
 /* Студия → «Работа» → «Сайты» (03.11, владелец: «Лира должна научиться делать сайты… переделать сайт в любой момент —
    от структуры до дизайна — одной командой; публикация на dewiar.pro; посещаемость и аналитика — красивые»).
-   Список: «Расскажите о своём деле» (Лира делает сайт по описанию), мои сайты карточками с живым превью, 11 шаблонов.
+   Список: «Расскажите о своём деле» (Лира делает сайт по описанию), мои сайты карточками с живым превью, шаблоны (05.11: 20; число — из ядра).
    Редактор: слева — разделы (перетаскивание, вариант вёрстки, фон, поля и карточки), оформление (палитры, шрифтовые
    пары, углы, шапка), шапка (логотип, знак, меню), контакты и описание для поисковиков; справа — живой предпросмотр
    (компьютер/телефон; щелчок по разделу открывает его настройку) и «Сказать Лире». «Верни как было», «История»,
@@ -8,8 +8,11 @@
    устройства, заявки), «Заявки» (в «Клиентах»), «Продвижение» (проверка и «Попросить Лиру исправить»).
    Ядро — sites.py: sites_list, sites_meta, sites_get, sites_render, sites_template, sites_create, sites_apply, sites_say,
    sites_undo, sites_restore, sites_image, sites_open, sites_check, sites_suggest, sites_publish, sites_unpublish,
-   sites_stats, sites_audit, sites_leads, sites_logos, sites_delete; событие «sites». */
-const SITES = { meta: null, items: [], sid: "", cur: null, hist: [], page: 0, sel: "", open: "", dev: "pc", scroll: 0, tab: "edit", seg: "blocks", t: {}, days: 30, busy: false };
+   sites_stats, sites_audit, sites_leads, sites_logos, sites_delete; событие «sites».
+   05.11 (владелец: «как на наш созданный сайт вставить виджет Лиры?»): строка «Чат Лиры на сайте: включён/выключен» в списке
+   и в редакторе (sites_chat {id, on}) — «Включить» включает «Чат для сайта» (знания — с этого сайта, если их ещё нет); кнопка
+   чата ставится сервером на все опубликованные сайты аккаунта, а в предпросмотре видно, где она появится. */
+const SITES = { chat: null, meta: null, items: [], sid: "", cur: null, hist: [], page: 0, sel: "", open: "", dev: "pc", scroll: 0, tab: "edit", seg: "blocks", t: {}, days: 30, busy: false };
 const stE = (t) => escH(t);
 const stI = (p, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 const ST_EG = ["Кофейня «Зерно» на Садовой, 5: кофе, завтраки, своя выпечка, с 8 до 22", "Мастер маникюра Алина, Казань, запись в Telegram @alina_nails",
@@ -25,6 +28,7 @@ function stAgo(ts) {
 }
 
 async function loadSites() {
+  stChatLoad();
   try {
     if (!SITES.meta) SITES.meta = await core.call("sites_meta");
     const r = await core.call("sites_list"); SITES.items = r.items || []; SITES.signed = !!r.signed;
@@ -35,20 +39,24 @@ async function loadSites() {
 
 /* ---------- список ---------- */
 function stShowList() {
-  SITES.sid = ""; SITES.cur = null;
+  SITES.sid = ""; SITES.cur = null; stChatShow();
   $("#st-ed").hidden = true; $("#st-list").hidden = false;
   $("#st-eg").innerHTML = ST_EG.map(t => `<button type="button" class="st-egb">${stE(t)}</button>`).join("");
   $$("#st-eg .st-egb").forEach(b => b.onclick = () => { $("#st-desc").value = b.textContent; $("#st-desc").focus(); });
   const mine = SITES.items;
   $("#st-mine").innerHTML = mine.length ? `<div class="st-h2"><h2>Мои сайты</h2><span>${mine.length === 1 ? "Один сайт" : mine.length + " " + (mine.length < 5 ? "сайта" : "сайтов")}</span></div>
-    <div class="st-grid">${mine.map(x => `<button type="button" class="st-card" data-id="${stE(x.id)}"><span class="st-thumb"><iframe tabindex="-1" aria-hidden="true" sandbox="allow-same-origin" loading="lazy"></iframe></span>
+    <div class="st-grid">${mine.map(x => `<button type="button" class="st-card" data-id="${stE(x.id)}"><span class="st-thumb"><iframe tabindex="-1" aria-hidden="true" sandbox="" referrerpolicy="no-referrer" loading="lazy"></iframe></span>
       <span class="st-cb"><b>${stE(x.name)}</b><small>${stE(x.tagline || "")}</small><span class="st-cm">${stStateChip(x.published)}<em>${stE(stAgo(x.updated))}</em></span></span></button>`).join("")}</div>` : "";
   $$("#st-mine .st-card").forEach(b => b.onclick = () => stOpen(b.dataset.id));
-  $("#st-tpls").innerHTML = (SITES.meta.templates || []).map(t => `<button type="button" class="st-tpl" data-t="${t.id}"><span class="st-thumb"><iframe tabindex="-1" aria-hidden="true" sandbox="allow-same-origin" loading="lazy"></iframe></span>
+  const nt = (SITES.meta.templates || []).length;
+  $("#st-tpln").textContent = `${nt} ${stPlural(nt, "готовый сайт", "готовых сайта", "готовых сайтов")} — у каждого свой характер. Тексты Лира заменит вашими.`;
+  $("#st-tpls").innerHTML = (SITES.meta.templates || []).map(t => `<button type="button" class="st-tpl" data-t="${t.id}"><span class="st-thumb"><iframe tabindex="-1" aria-hidden="true" sandbox="" referrerpolicy="no-referrer" loading="lazy"></iframe></span>
     <span class="st-cb"><b>${stE(t.title)}</b><small>${stE(t.sub)}</small></span></button>`).join("");
   $$("#st-tpls .st-tpl").forEach(b => b.onclick = () => stFromTemplate(b.dataset.t));
   stThumbs();
 }
+
+function stPlural(n, one, few, many) { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; }
 
 function stStateChip(p) {
   if (!p || !p.name) return `<span class="st-chip">Черновик</span>`;
@@ -62,7 +70,7 @@ async function stThumbs() {
   const gen = (SITES.gen = (SITES.gen || 0) + 1);
   for (const [cmd, a, b] of jobs) {
     if (gen !== SITES.gen || $("#st-list").hidden) return;
-    try { const r = await core.call(cmd, a); const f = b.querySelector("iframe"); f.srcdoc = r.html.replace(/<script>[\s\S]*?<\/script>/g, ""); stThumbFit(b); } catch (e) { }   // превью — без скрипта предпросмотра
+    try { const r = await core.call(cmd, a); const f = b.querySelector("iframe"); f.srcdoc = safeDoc(r.html.replace(/<script>[\s\S]*?<\/script>/g, "")); stThumbFit(b); } catch (e) { }   // превью — без скрипта предпросмотра
   }
 }
 function stThumbFit(b) { const box = b.querySelector(".st-thumb"), f = b.querySelector("iframe"); if (box && f) f.style.transform = `scale(${box.clientWidth / 1280})`; }
@@ -88,7 +96,7 @@ async function stOpen(id, keep, data) {
   SITES.sid = id; SITES.cur = data.site; SITES.hist = data.history || [];
   $("#st-list").hidden = true; $("#st-ed").hidden = false;
   stTab(SITES.tab, true); stSeg(SITES.seg);
-  stBar(); stSide(); stPreview();
+  stBar(); stSide(); stPreview(); stChatShow();
 }
 
 function stBar() {
@@ -130,7 +138,7 @@ async function stPreview() {
   try {
     const r = await core.call("sites_render", { id, page: pg });
     if (id !== SITES.sid) return;
-    $("#st-if").srcdoc = r.html;
+    $("#st-if").srcdoc = safeDoc(stChatPv(r.html));   // без сети и без адреса студии; шрифты — внутри страницы (четвёртая рецензия)
   } catch (e) { toast(e.message, 3000); }
   stFit();
 }
@@ -154,6 +162,7 @@ window.addEventListener("message", (e) => {
   if (d.dwsite === "ready") f.contentWindow.postMessage({ dwsite: "scrollTo", y: SITES.scroll, sel: SITES.sel }, "*");
   else if (d.dwsite === "scroll") SITES.scroll = d.y || 0;
   else if (d.dwsite === "pick") { SITES.sel = d.id; SITES.open = d.id; stSeg("blocks"); stBlocksList(); const row = $(`#st-blocks [data-uid="${d.id}"]`); if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+  else if (d.dwsite === "chat") toast(`Так кнопка чата выглядит на опубликованном сайте: посетитель спросит — ${(SITES.chat || {}).name || "Лира"} ответит, оставленный контакт придёт в «Клиенты». Настроить — «Чат для сайта».`, 6000);
   else if (d.dwsite === "page") { const i = (SITES.cur.pages || []).findIndex((p, j) => (j === 0 ? "index" : p.slug) === d.slug); if (i >= 0) { SITES.page = i; SITES.scroll = 0; stSide(); stPreview(); } }
 });
 
@@ -410,6 +419,66 @@ function stInfo() {
   };
 }
 
+/* ---------- «Чат Лиры на сайте» ----------
+   Кнопку чата на опубликованные сайты ставит сервер (sites.php: sites_widget), когда у аккаунта включён «Чат для сайта».
+   Здесь — честное состояние (sites_chat) и «Включить» без похода на другую страницу; настроить — «Чат для сайта». */
+const ST_CHATI = '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>';
+async function stChatLoad() {
+  try { SITES.chat = await core.call("sites_chat", {}); } catch (e) { SITES.chat = null; }
+  stChatShow();
+}
+function stChatTitle(c) { return c.name === "Лира" ? "Чат Лиры на сайте" : "Чат на сайте"; }
+function stChatShow() {
+  const c = SITES.chat, box = $("#st-chat"), chip = $("#st-chatc");
+  const ok = !!(c && c.available);
+  if (box) {
+    box.hidden = !ok;
+    if (ok) {
+      box.className = "st-chat" + (c.on ? " on" : "");
+      box.style.setProperty("--sc", c.on ? c.color : "");
+      box.innerHTML = `<span class="st-chati" aria-hidden="true">${stI(ST_CHATI)}</span><span class="st-chatw"><b>${stE(stChatTitle(c))}: ${c.on ? "включён" : "выключен"}</b>
+        <span>${c.on ? `${stE(c.name)} отвечает посетителям ваших опубликованных сайтов, заявки приходят в «Клиенты».`
+          : `Включите — на опубликованных сайтах появится кнопка чата: ${stE(c.name)} ответит посетителям по вашим услугам и ценам, контакты придут в «Клиенты».`}</span></span>
+        <button type="button" class="btn${c.on ? "" : " primary"}" id="st-chatb">${c.on ? "Настроить" : "Включить"}</button>`;
+      $("#st-chatb").onclick = () => c.on ? stChatPage() : stChatOn($("#st-chatb"));
+    }
+  }
+  if (chip) {
+    chip.hidden = !ok || !SITES.sid;
+    if (ok) {
+      chip.className = "st-chatc" + (c.on ? " on" : "");
+      chip.style.setProperty("--sc", c.on ? c.color : "");
+      chip.innerHTML = `${stI(ST_CHATI)}<span>${c.on ? `${stE(stChatTitle(c))}: включён` : `${stE(stChatTitle(c))}: выключен`}</span>${c.on ? "" : "<b>Включить</b>"}`;
+      chip.title = c.on ? `${c.name} отвечает посетителям этого сайта, когда он опубликован; заявки — в «Клиентах». Нажмите, чтобы настроить.` : "Включить чат: кнопка появится на опубликованном сайте";
+      chip.onclick = () => c.on ? stChatPage() : stChatOn(chip);
+    }
+  }
+}
+function stChatPage() { const n = $('nav button[data-p="sitechat"]'); if (n) { n.hidden = false; n.click(); } }
+async function stChatOn(btn) {
+  const c = SITES.chat || {};
+  if (!c.signed) { toast("Для чата нужен вход аккаунтом dewiar.pro или ключ Dewiar — с него платится за ответы. Открываю «Чат для сайта».", 6000); stChatPage(); return; }
+  if (!await ask(`Включить чат на сайте? На всех ваших опубликованных сайтах появится круглая кнопка: ${c.name} ответит посетителям${c.knows ? " по знаниям из «Чата для сайта»" : SITES.sid ? " — услуги, цены и контакты возьму с этого сайта" : ""}, оставленные контакты придут в «Клиенты». Ответы оплачиваются с вашего счёта Dewiar, дневные пределы — в «Чате для сайта».`, { ok: "Включить" })) return;
+  const was = btn.innerHTML; btn.disabled = true; btn.textContent = "Включаю…";
+  try {
+    SITES.chat = await core.call("sites_chat", { id: SITES.sid || "", on: true });
+    toast(SITES.chat.seeded ? "Чат включён — знания взяла с сайта, поправить можно в «Чате для сайта»" : "Чат включён — кнопка уже на ваших опубликованных сайтах", 5000);
+    if (SITES.sid) stPreview();
+  } catch (e) { toast(e.message, 6000); btn.innerHTML = was; }
+  btn.disabled = false; stChatShow();
+}
+/* в предпросмотре — где появится кнопка чата (на опубликованном сайте её ставит сервер); подпись видна первые секунды и при наведении */
+function stChatPv(html) {
+  const c = SITES.chat;
+  if (!c || !c.available || !c.on) return html;
+  const pv = `<style>.dwscpv{position:fixed;right:20px;bottom:20px;z-index:2147483000;display:flex;align-items:center;gap:10px;font:600 13px/1.2 system-ui,sans-serif}
+.dwscpv span{background:#fff;color:#1d2230;padding:8px 13px;border-radius:999px;box-shadow:0 8px 22px -10px rgba(0,0,0,.5);animation:dwscpv 7s forwards;pointer-events:none}
+.dwscpv:hover span{animation:none;opacity:1}@keyframes dwscpv{0%,80%{opacity:1}100%{opacity:0}}
+.dwscpv button{width:60px;height:60px;border-radius:50%;border:0;padding:0;background:${c.color};box-shadow:0 10px 28px -8px rgba(0,0,0,.45);display:grid;place-items:center;cursor:pointer}</style>
+<div class="dwscpv"><span>${stE(stChatTitle(c))} — появится на опубликованном сайте</span><button type="button" aria-label="${stE(stChatTitle(c))}" onclick="parent.postMessage({dwsite:'chat'},'*')"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ST_CHATI}</svg></button></div>`;
+  return html.includes("</body>") ? html.replace("</body>", pv + "</body>") : html + pv;
+}
+
 /* ---------- «Сказать Лире», история, открыть ---------- */
 async function stSay(text) {
   const b = $("#st-sayb"), inp = $("#st-sayt");
@@ -664,6 +733,7 @@ async function stSeo() {
   $$("#st-seg button").forEach(b => b.onclick = () => stSeg(b.dataset.s));
   $$("#st-tabs button").forEach(b => b.onclick = () => stTab(b.dataset.t));
   $$("#p-sites .st-dev button").forEach(b => b.onclick = () => { SITES.dev = b.dataset.d; $$("#p-sites .st-dev button").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); stFit(); });
+  core.on("sitechat", () => { if ($("#p-sites").classList.contains("cur")) { const was = (SITES.chat || {}).on; stChatLoad().then(() => { if (SITES.sid && was !== (SITES.chat || {}).on) stPreview(); }); } });
   core.on("sites", (e) => {
     if (!$("#p-sites").classList.contains("cur")) return;
     if (!SITES.sid) { core.call("sites_list").then(r => { SITES.items = r.items || []; if (!SITES.sid) stShowList(); }).catch(() => {}); return; }

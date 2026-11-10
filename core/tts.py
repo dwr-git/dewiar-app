@@ -210,6 +210,9 @@ class PiperTTS:
         if norm:                                                # английскому голосу числа по-русски не нужны (norm=False)
             from speechnorm import speech_norm
             text = speech_norm(text, latin=False) or text      # 1437,50 руб. → «тысяча … рублей пятьдесят копеек»
+        else:                                                   # №561: и английскому — без кавычек и разметки вслух
+            from speechnorm import speech_clean
+            text = speech_clean(text) or text
         # 29.10, отчёт №400 (Windows, 0.45.3): «Windows fatal exception: access violation» в piper/phonemize_espeak — eSpeak
         # не переносит двух фраз сразу (ответ, заготовка следующей фразы, напоминание, «послушать» — из разных потоков), и
         # ядро падало целиком. Синтез — по очереди; фраза короткая, ждать соседу — доли секунды.
@@ -670,6 +673,9 @@ class RemoteTTS:
         if re.search(r"[А-Яа-яЁё]", text or "") or (re.search(r"\d", text or "") and not re.search(r"[A-Za-z]", text or "")):
             from speechnorm import speech_norm                   # версии читала цифры странными звуками (отзыв 15.10)
             text = speech_norm(text, latin=False) or text
+        else:                                                    # №561: кавычки, «!!!» и разметку голос не читает
+            from speechnorm import speech_clean
+            text = speech_clean(text) or text
         body = {"model": c.get("model") or "tts-1", "input": text, "voice": own or voice_cfg.get("remote") or "alloy",
                 "response_format": "pcm", "stream": True, "speed": speed}
         if voice_cfg.get("_pid"):                         # служба голосов Dewiar даёт персонажу его собственный голос
@@ -740,6 +746,8 @@ class ElevenTTS(RemoteTTS):
         c = self.cfg
         fem = voice_cfg.get("_gender") == "female"
         vid = (c.get("voice_f") if fem else c.get("voice_m")) or self.VOICES["female" if fem else "male"]
+        from speechnorm import speech_clean                      # №561: кавычки, «!!!» и разметку голос не читает
+        text = speech_clean(text) or text
         body = {"text": text, "model_id": c.get("model") or "eleven_flash_v2_5",
                 "voice_settings": {"speed": max(0.7, min(1.2, float(speed or 1.0)))}}
         with httpx.stream("POST", self.URL.format(vid=quote(vid, safe="")), params={"output_format": "pcm_24000"}, json=body,

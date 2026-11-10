@@ -363,16 +363,9 @@ def can(vision=None):
 # ---------- PDF ----------
 
 def pdf_texts(path, limit=500):
-    """Текстовый слой PDF постранично (pypdf): [текст страницы, …]."""
-    from pypdf import PdfReader
-    r = PdfReader(str(path))
-    out = []
-    for pg in r.pages[:limit]:
-        try:
-            out.append(pg.extract_text() or "")
-        except Exception:  # noqa: BLE001 — битая страница: пусть будет «скан»
-            out.append("")
-    return out
+    """Текстовый слой PDF постранично (pypdf в отдельном процессе с пределами — pdftext.py): [текст страницы, …]."""
+    import pdftext
+    return pdftext.pages(path, limit=limit)
 
 
 def is_scan(text):
@@ -389,16 +382,37 @@ def pdf_renderer():
     return "pypdf"
 
 
+PAGE_MAX_PX = 40_000_000           # растр страницы — не больше 40 Мп (A4 при 200 dpi — 4 Мп)
+
+
+def _safe_dpi(w_pt, h_pt, dpi):
+    """Рецензия 5e: PDF в 416 байт со страницей 7200×7200 pt при 200 dpi — растр 20000×20000, 3 ГБ памяти в ядре за 3 с.
+    Огромная страница рисуется мельче: так, чтобы растр уложился в PAGE_MAX_PX."""
+    w, h = max(1.0, float(w_pt or 0)), max(1.0, float(h_pt or 0))
+    px = (w / 72 * dpi) * (h / 72 * dpi)
+    return dpi if px <= PAGE_MAX_PX else max(1.0, dpi * (PAGE_MAX_PX / px) ** 0.5)
+
+
+def _page_size(path, i):
+    try:
+        from pypdf import PdfReader
+        box = PdfReader(str(path)).pages[i].mediabox
+        return float(box.width), float(box.height)
+    except Exception:  # noqa: BLE001
+        return 14400.0, 14400.0                                  # не узнали — считаем огромной: нарисуется мельче
+
+
 def page_image(path, i, dpi=PDF_DPI):
     """Страница i (с нуля) -> PIL.Image или None. Рисуем, чем есть; нечем — берём самую большую картинку, вложенную в
-    страницу (у скана это и есть страница)."""
+    страницу (у скана это и есть страница). Растр — не больше PAGE_MAX_PX (_safe_dpi)."""
     from PIL import Image
     if _spec("pypdfium2"):
         try:
             import pypdfium2 as pdfium
             doc = pdfium.PdfDocument(str(path))
             try:
-                return doc[i].render(scale=dpi / 72).to_pil().convert("RGB")
+                pg = doc[i]
+                return pg.render(scale=_safe_dpi(*pg.get_size(), dpi) / 72).to_pil().convert("RGB")
             finally:
                 doc.close()
         except Exception as e:  # noqa: BLE001
@@ -407,7 +421,8 @@ def page_image(path, i, dpi=PDF_DPI):
         try:
             import fitz
             with fitz.open(str(path)) as doc:
-                pix = doc[i].get_pixmap(dpi=dpi)
+                pg = doc[i]
+                pix = pg.get_pixmap(dpi=max(1, int(_safe_dpi(pg.rect.width, pg.rect.height, dpi))))
                 return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
         except Exception as e:  # noqa: BLE001
             log.info("pymupdf: %s", e)
@@ -416,7 +431,8 @@ def page_image(path, i, dpi=PDF_DPI):
         tmp = tempfile.mkdtemp()
         try:
             out = Path(tmp) / "p"
-            subprocess.run([exe, "-f", str(i + 1), "-l", str(i + 1), "-r", str(dpi), "-png", "-singlefile", str(path), str(out)],
+            r = max(1, int(_safe_dpi(*_page_size(path, i), dpi)))
+            subprocess.run([exe, "-f", str(i + 1), "-l", str(i + 1), "-r", str(r), "-png", "-singlefile", str(path), str(out)],
                            capture_output=True, timeout=60, creationflags=NO_WINDOW)
             f = out.with_suffix(".png")
             if f.exists():

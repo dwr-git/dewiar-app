@@ -1,7 +1,7 @@
 """«Сайты»: JSON сайта -> статичный адаптивный HTML + CSS (sites_kit — детали, sites.py — работа с сайтами).
 
 Режимы (mode):
-  • "preview" — для студии: одна страница целиком (CSS внутри), картинки data:, шрифты из ui/assets/fonts, у блоков
+  • "preview" — для студии: одна страница целиком (CSS внутри), картинки и шрифты (из ui/assets/fonts) — data:, у блоков
     data-b — щелчок по блоку в предпросмотре выбирает его в редакторе; маленький скрипт предпросмотра (только в студии);
     заглушки (todo, пустая галерея) видны пунктиром.
   • "publish" — файлы для dewiar.pro: страницы *.html, style.css, fonts/*.woff2, img/*; ни одного <script> (кроме
@@ -14,6 +14,7 @@
 import base64
 import html
 import json
+import math
 import re
 import urllib.parse
 from datetime import datetime
@@ -240,6 +241,152 @@ def art_svg(kind, pal, seed="a", w=800, h=1000, mark=""):
                      f'<circle cx="{x + 46:.0f}" cy="{y + h * .085:.0f}" r="20" fill="{[a1, a2, ink][i]}"/>'
                      f'<rect x="{x + 84:.0f}" y="{y + h * .06:.0f}" width="{w * .3:.0f}" height="12" rx="6" fill="{mix(sf, ink, .25)}"/>'
                      f'<rect x="{x + 84:.0f}" y="{y + h * .095:.0f}" width="{w * .18:.0f}" height="10" rx="5" fill="{mix(sf, ink, .12)}"/>')
+    elif kind == "pulse":                              # фитнес: косые полосы скорости и линия пульса
+        sw = w / 7
+        for i in range(-3, 9):
+            col = [a1, mix(bg, a1, .28), mix(bg, ink, .1)][i % 3]
+            if r() < .35:
+                continue
+            o.append(f'<path d="M{i * sw:.0f} {h} L{i * sw + h * .5:.0f} 0 H{i * sw + h * .5 + sw * .42:.0f} L{i * sw + sw * .42:.0f} {h}Z" fill="{col}"/>')
+        y0, pts = h * (.5 + (r() - .5) * .16), []
+        x = -10
+        while x < w + 20:
+            pts.append(f"{x:.0f},{y0:.0f}")
+            if r() < .5:
+                pk = h * (.14 + r() * .12)
+                pts += [f"{x + 22:.0f},{y0:.0f}", f"{x + 36:.0f},{y0 - pk:.0f}", f"{x + 54:.0f},{y0 + pk * .7:.0f}", f"{x + 68:.0f},{y0:.0f}"]
+                x += 68
+            x += w * .1
+        o.append(f'<polyline points="{" ".join(pts)}" fill="none" stroke="{ink}" stroke-width="{max(w, h) * .016:.0f}" stroke-linejoin="round" stroke-linecap="round"/>')
+        o.append(f'<circle cx="{w * .82:.0f}" cy="{h * .2:.0f}" r="{min(w, h) * .07:.0f}" fill="{a2}"/>')
+    elif kind == "pebbles":                            # стоматология: мягкая галька и блики
+        for i in range(7):
+            cx, cy = w * (.1 + r() * .8), h * (.1 + r() * .8)
+            rx = min(w, h) * (.14 + r() * .16)
+            col = [mix(bg, a1, .22), a2, sf, mix(bg, a1, .45)][i % 4]
+            o.append(f'<ellipse cx="{cx:.0f}" cy="{cy:.0f}" rx="{rx:.0f}" ry="{rx * (.62 + r() * .25):.0f}" fill="{col}" transform="rotate({r() * 180:.0f} {cx:.0f} {cy:.0f})"/>')
+        for i in range(3):
+            cx, cy, s = w * (.2 + r() * .6), h * (.15 + r() * .7), min(w, h) * (.03 + r() * .03)
+            o.append(f'<path d="M{cx:.0f} {cy - s * 2:.0f} C{cx + s * .3:.0f} {cy - s * .3:.0f} {cx + s * .3:.0f} {cy - s * .3:.0f} {cx + s * 2:.0f} {cy:.0f} '
+                     f'C{cx + s * .3:.0f} {cy + s * .3:.0f} {cx + s * .3:.0f} {cy + s * .3:.0f} {cx:.0f} {cy + s * 2:.0f} C{cx - s * .3:.0f} {cy + s * .3:.0f} {cx - s * .3:.0f} {cy + s * .3:.0f} {cx - s * 2:.0f} {cy:.0f} '
+                     f'C{cx - s * .3:.0f} {cy - s * .3:.0f} {cx - s * .3:.0f} {cy - s * .3:.0f} {cx:.0f} {cy - s * 2:.0f}Z" fill="{sf}"/>')
+    elif kind == "confetti":                           # детский центр: конфетти — кружки, треугольники, волнистые ленты
+        cols = [a1, a2, ink, mix(a1, a2, .5), mix(bg, a1, .5)]
+        u = min(w, h)
+        o.append(f'<circle cx="{w * (.55 + r() * .2):.0f}" cy="{h * (.45 + r() * .1):.0f}" r="{u * .3:.0f}" fill="{mix(bg, a2, .3)}"/>')
+        for i in range(16):
+            cx, cy, s, col, rot = w * r(), h * r(), u * (.03 + r() * .04), cols[i % len(cols)], r() * 360
+            k = i % 4
+            if k == 0:
+                o.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{s:.0f}" fill="{col}"/>')
+            elif k == 1:
+                o.append(f'<path d="M0 {-s * 1.2:.0f} L{s * 1.1:.0f} {s * .8:.0f} L{-s * 1.1:.0f} {s * .8:.0f}Z" fill="{col}" transform="translate({cx:.0f} {cy:.0f}) rotate({rot:.0f})"/>')
+            elif k == 2:
+                o.append(f'<path d="M{-s * 2.4:.0f} 0 q{s * .6:.0f} {-s:.0f} {s * 1.2:.0f} 0 t{s * 1.2:.0f} 0 t{s * 1.2:.0f} 0 t{s * 1.2:.0f} 0" fill="none" stroke="{col}" '
+                         f'stroke-width="{s * .55:.0f}" stroke-linecap="round" transform="translate({cx:.0f} {cy:.0f}) rotate({rot:.0f})"/>')
+            else:
+                o.append(f'<rect x="{-s:.0f}" y="{-s * .45:.0f}" width="{s * 2:.0f}" height="{s * .9:.0f}" rx="{s * .45:.0f}" fill="{col}" transform="translate({cx:.0f} {cy:.0f}) rotate({rot:.0f})"/>')
+    elif kind == "hazard":                             # автосервис: сигнальная лента, шестерня и болты
+        u = min(w, h)
+        g = "".join(f'<path d="M{x} 0V{h}" stroke="{ln}"/>' for x in range(0, w + 1, 50)) + "".join(f'<path d="M0 {y}H{w}" stroke="{ln}"/>' for y in range(0, h + 1, 50))
+        o.append(g)
+        cx, cy, R1 = w * (.58 + r() * .1), h * .42, u * .3
+        teeth = "".join(f'<rect x="{-u * .045:.0f}" y="{-R1 - u * .07:.0f}" width="{u * .09:.0f}" height="{u * .12:.0f}" rx="4" fill="{mix(bg, ink, .22)}" transform="rotate({k * 30})"/>' for k in range(12))
+        o.append(f'<g transform="translate({cx:.0f} {cy:.0f})">{teeth}<circle r="{R1:.0f}" fill="{mix(bg, ink, .22)}"/><circle r="{R1 * .42:.0f}" fill="{bg}"/>'
+                 f'<circle r="{R1 * .18:.0f}" fill="{a1}"/></g>')
+        by, bh = h * .74, h * .12
+        cid = f"hz{_seed(f'{seed}-{w}-{h}') % 99991}"                # своё имя на каждый узор: на странице их несколько
+        o.append(f'<clipPath id="{cid}"><rect x="0" y="{by:.0f}" width="{w}" height="{bh:.0f}"/></clipPath><g clip-path="url(#{cid})"><rect x="0" y="{by:.0f}" width="{w}" height="{bh:.0f}" fill="{ink}"/>'
+                 + "".join(f'<path d="M{x:.0f} {by + bh:.0f} L{x + bh:.0f} {by:.0f} H{x + bh * 1.9:.0f} L{x + bh * .9:.0f} {by + bh:.0f}Z" fill="{a1}"/>' for x in range(-int(bh * 2), w + 1, int(bh * 1.8))) + "</g>")
+        for i in range(4):
+            bx, byy = [(.1, .1), (.9, .1), (.1, .6), (.9, .6)][i]
+            o.append(f'<circle cx="{w * bx:.0f}" cy="{h * byy:.0f}" r="{u * .025:.0f}" fill="none" stroke="{mix(bg, ink, .4)}" stroke-width="3"/>')
+    elif kind == "botanic":                            # свадьбы: тонкое золотое кольцо и ветви
+        u = min(w, h)
+        cx, cy = w * (.5 + (r() - .5) * .16), h * .5                # по центру: кадр 5:4 и 16:9 срезает верх и низ
+        o.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{u * .27:.0f}" fill="{sf}"/>')
+        o.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{u * .3:.0f}" fill="none" stroke="{a2}" stroke-width="{u * .006 + 1:.1f}"/>')
+        for side, (bx, by, ang) in enumerate(((cx - u * .36, h * .5 + u * .3, -52 - r() * 10), (cx + u * .36, h * .5 + u * .26, -128 + r() * 10),
+                                              (cx, h * .5 + u * .36, -90))):
+            L = u * (.5 if side < 2 else .34)
+            col = [a1, mix(a1, bg, .35), a2][side]
+            o.append(f'<g transform="translate({bx:.0f} {by:.0f}) rotate({ang:.0f})"><path d="M0 0 Q{L * .5:.0f} {-L * .06:.0f} {L:.0f} 0" fill="none" stroke="{col}" stroke-width="3"/>')
+            for k in range(1, 8):
+                px = L * k / 8
+                ls = u * (.06 - k * .0045)
+                for sgn in (1, -1):
+                    o.append(f'<path d="M{px:.0f} 0 q{ls * .5:.0f} {sgn * -ls * .9:.0f} {ls * 1.3:.0f} {sgn * -ls * .7:.0f} q{-ls * .4:.0f} {sgn * ls * .6:.0f} {-ls * 1.3:.0f} {sgn * ls * .7:.0f}Z" fill="{col}"/>')
+            o.append("</g>")
+    elif kind == "plan":                               # недвижимость: планировка квартиры
+        u = min(w, h)
+        x0, y0, W2, H2 = w * .12, h * .14, w * .76, h * .72
+        st = max(6, u * .016)
+        flip = r() < .5
+        if flip:
+            o.append(f'<g transform="translate({w} 0) scale(-1 1)">')
+        o.append(f'<rect x="{x0:.0f}" y="{y0:.0f}" width="{W2:.0f}" height="{H2:.0f}" fill="{bg}"/>')
+        sx, sy = x0 + W2 * (.42 + r() * .18), y0 + H2 * (.44 + r() * .16)
+        o.append(f'<rect x="{x0:.0f}" y="{y0:.0f}" width="{sx - x0:.0f}" height="{sy - y0:.0f}" fill="{mix(sf, a1, .16)}"/>')
+        o.append(f'<rect x="{sx:.0f}" y="{sy:.0f}" width="{x0 + W2 - sx:.0f}" height="{y0 + H2 - sy:.0f}" fill="{mix(sf, a2, .14)}"/>')
+        wall = f'stroke="{ink}" stroke-width="{st:.0f}" stroke-linecap="square" fill="none"'
+        o.append(f'<rect x="{x0:.0f}" y="{y0:.0f}" width="{W2:.0f}" height="{H2:.0f}" {wall}/>')
+        o.append(f'<path d="M{sx:.0f} {y0:.0f}V{sy - H2 * .12:.0f}M{sx:.0f} {sy + H2 * .05:.0f}V{y0 + H2:.0f}M{x0:.0f} {sy:.0f}H{x0 + (sx - x0) * .6:.0f}M{sx + (x0 + W2 - sx) * .3:.0f} {sy:.0f}H{x0 + W2:.0f}" {wall}/>')
+        d = H2 * .12                                   # двери — четверть круга
+        o.append(f'<path d="M{sx:.0f} {sy - d:.0f} A{d:.0f} {d:.0f} 0 0 1 {sx + d:.0f} {sy:.0f}" fill="none" stroke="{ink}" stroke-width="2" stroke-dasharray="6 5"/>')
+        o.append(f'<path d="M{x0 + (sx - x0) * .6:.0f} {sy:.0f} A{d:.0f} {d:.0f} 0 0 0 {x0 + (sx - x0) * .6 + d:.0f} {sy + d:.0f}" fill="none" stroke="{ink}" stroke-width="2" stroke-dasharray="6 5"/>')
+        for wx in (x0 + W2 * .18, x0 + W2 * .7):                                 # окна
+            o.append(f'<rect x="{wx:.0f}" y="{y0 - st:.0f}" width="{W2 * .14:.0f}" height="{st * 2:.0f}" fill="{bg}" stroke="{ink}" stroke-width="2"/>')
+        o.append(f'<rect x="{x0 + W2 * .08:.0f}" y="{y0 + H2 * .1:.0f}" width="{W2 * .16:.0f}" height="{H2 * .24:.0f}" rx="6" fill="{a1}" opacity=".85"/>')
+        o.append(f'<circle cx="{sx + (x0 + W2 - sx) * (.4 + r() * .3):.0f}" cy="{y0 + H2 * (.18 + r() * .16):.0f}" r="{u * .07:.0f}" fill="{a2}" opacity=".8"/>')
+        o.append(f'<rect x="{sx + (x0 + W2 - sx) * .2:.0f}" y="{sy + (y0 + H2 - sy) * .45:.0f}" width="{(x0 + W2 - sx) * .5:.0f}" height="{(y0 + H2 - sy) * .32:.0f}" rx="8" fill="{mix(sf, ink, .2)}"/>')
+        if flip:
+            o.append("</g>")
+    elif kind == "horizon":                            # туры: солнце, слои гор и волны
+        u = min(w, h)
+        o.append(f'<circle cx="{w * (.62 + r() * .14):.0f}" cy="{h * .34:.0f}" r="{u * .17:.0f}" fill="{a2}"/>')
+        for k, (top, amp, col) in enumerate(((.42, .16, mix(bg, a1, .35)), (.52, .14, mix(bg, a1, .6)), (.62, .1, a1))):
+            pts, x, up = [f"0,{h}"], 0.0, True
+            while x <= w + 40:
+                pts.append(f"{x:.0f},{h * (top + (0 if up else amp * (.6 + r() * .6))):.0f}")
+                x += w * (.12 + r() * .14)
+                up = not up
+            pts.append(f"{w},{h}")
+            o.append(f'<polygon points="{" ".join(pts)}" fill="{col}"/>')
+        y = h * .76
+        o.append(f'<rect x="0" y="{y:.0f}" width="{w}" height="{h - y:.0f}" fill="{ink}"/>')
+        for k in range(4):
+            yy = y + (h - y) * (.22 + k * .2)
+            o.append(f'<path d="M0 {yy:.0f}' + "".join(f" q{w / 16:.0f} {-u * .025:.0f} {w / 8:.0f} 0 t{w / 8:.0f} 0" for _ in range(4)) + f'" fill="none" stroke="{sf}" stroke-opacity="{.5 - k * .1:.2f}" stroke-width="3"/>')
+    elif kind == "spots":                              # груминг: пятна, как на шерсти, и косточка
+        u = min(w, h)
+        for i in range(8):
+            cx, cy, s = w * r(), h * r(), u * (.07 + r() * .1)
+            col = [a1, a2, mix(bg, ink, .75), mix(bg, a1, .4)][i % 4]
+            pts, n = [], 10
+            for k in range(n):
+                ang = k / n * 6.283
+                rr = s * (.86 + r() * .22)
+                pts.append((cx + rr * math.cos(ang), cy + rr * math.sin(ang)))
+            dd = f"M{(pts[0][0] + pts[-1][0]) / 2:.0f} {(pts[0][1] + pts[-1][1]) / 2:.0f}" + "".join(
+                f" Q{pts[k][0]:.0f} {pts[k][1]:.0f} {(pts[k][0] + pts[(k + 1) % n][0]) / 2:.0f} {(pts[k][1] + pts[(k + 1) % n][1]) / 2:.0f}" for k in range(n)) + "Z"
+            o.append(f'<path d="{dd}" fill="{col}"/>')
+        bx, by, bl = w * .5, h * .5, u * .34
+        o.append(f'<g transform="translate({bx:.0f} {by:.0f}) rotate(-24)" fill="{sf}"><rect x="{-bl / 2:.0f}" y="{-u * .035:.0f}" width="{bl:.0f}" height="{u * .07:.0f}"/>'
+                 + "".join(f'<circle cx="{sx * bl / 2:.0f}" cy="{sy * u * .045:.0f}" r="{u * .055:.0f}"/>' for sx in (-1, 1) for sy in (-1, 1)) + "</g>")
+    elif kind == "sprinkles":                          # торты: посыпка и торт сверху с волнистым краем
+        u = min(w, h)
+        cx, cy, R1 = w * (.5 + (r() - .5) * .2), h * (.48 + (r() - .5) * .1), u * .32
+        sc = "".join(f'<circle cx="{cx + R1 * math.cos(k / 18 * 6.283):.0f}" cy="{cy + R1 * math.sin(k / 18 * 6.283):.0f}" r="{u * .055:.0f}"/>' for k in range(18))
+        o.append(f'<g fill="{a2}">{sc}<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{R1:.0f}"/></g><circle cx="{cx:.0f}" cy="{cy:.0f}" r="{R1 * .82:.0f}" fill="{sf}"/>')
+        o.append(f'<circle cx="{cx:.0f}" cy="{cy:.0f}" r="{R1 * .62:.0f}" fill="none" stroke="{a1}" stroke-width="3" stroke-dasharray="2 12" stroke-linecap="round"/>')
+        o.append(f'<circle cx="{cx + R1 * .2:.0f}" cy="{cy - R1 * .22:.0f}" r="{u * .05:.0f}" fill="{mix(a2, ink, .25)}"/>')
+        cols = [a1, a2, mix(a2, sf, .5), mix(bg, a1, .5)]
+        for i in range(30):
+            x, y = w * r(), h * r()
+            if (x - cx) ** 2 + (y - cy) ** 2 < (R1 * 1.25) ** 2:
+                continue
+            s = u * (.018 + r() * .012)
+            o.append(f'<rect x="{-s * 1.6:.0f}" y="{-s / 2:.0f}" width="{s * 3.2:.0f}" height="{s:.0f}" rx="{s / 2:.0f}" fill="{cols[i % 4]}" transform="translate({x:.0f} {y:.0f}) rotate({r() * 180:.0f})"/>')
     else:
         o.append(f'<circle cx="{w / 2:.0f}" cy="{h / 2:.0f}" r="{min(w, h) * .3:.0f}" fill="{a1}"/>')
     if mark:
@@ -269,11 +416,27 @@ def map_svg(pal, seed="m"):
 
 
 # ---------- CSS ----------
+FONT_DIR = __import__("pathlib").Path(__file__).resolve().parent.parent / "ui" / "assets" / "fonts"
+_FONT_DATA = {}
+
+
+def _font_data(src):
+    """Файл шрифта как data: — для предпросмотра в студии (четвёртая рецензия: страница сайта показывается во фрейме без
+    allow-same-origin, а такому фрейму браузер не даёт файлов с диска: «Not allowed to load local resource»)."""
+    if src not in _FONT_DATA:
+        try:
+            _FONT_DATA[src] = "data:font/woff2;base64," + base64.b64encode((FONT_DIR / src).read_bytes()).decode()
+        except OSError:
+            _FONT_DATA[src] = ""
+    return _FONT_DATA[src]
+
+
 def font_faces(fonts, prefix):
+    """prefix "data:" — шрифты внутри страницы (предпросмотр студии), "fonts/" — рядом с опубликованным сайтом."""
     out = []
     for key in K.FONTS.get(fonts, K.FONTS["warm"])["files"]:
         for name, src, fam, style, rng in K.FONT_FILES[key]:
-            url = prefix + (src if prefix.endswith("assets/fonts/") else name)
+            url = (_font_data(src) or "assets/fonts/" + src) if prefix == "data:" else prefix + (src if prefix.endswith("assets/fonts/") else name)
             out.append(f"@font-face{{font-family:\"{fam}\";font-style:{style};font-weight:300 800;font-display:swap;src:url({url}) format(\"woff2\");unicode-range:{rng}}}")
     return "".join(out)
 
@@ -309,7 +472,7 @@ a{color:inherit}
 h1,h2,h3{font-family:var(--fh);font-weight:var(--hw);letter-spacing:var(--tr);line-height:1.08;margin:0;text-wrap:balance}
 h1{font-size:calc(clamp(2.35rem,5.6vw,4.5rem) * var(--hs,1))}
 h2{font-size:calc(clamp(1.8rem,3.7vw,2.9rem) * var(--hs,1));margin-bottom:.45em}
-h3{font-size:1.2rem;line-height:1.25}
+h3{font-size:calc(1.2rem * var(--h3s,1));line-height:1.25}
 p{margin:0 0 .9em}p:last-child{margin-bottom:0}
 .it h1,.it h2{font-style:italic}
 .w{width:min(1160px,100%);margin:0 auto;padding:0 clamp(18px,5vw,40px)}
@@ -450,6 +613,34 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .tbl{width:100%;border-collapse:collapse;font-size:1.02rem}
 .tbl td{padding:15px 0;border-bottom:1px solid var(--sline);vertical-align:baseline}.tbl td+td{text-align:right;font-weight:800;white-space:nowrap;padding-left:20px}
 .tbl small{display:block;color:var(--smut);font-size:.9rem}
+/* цены вкладками: радио + CSS, без скриптов */
+.tabs{position:relative}
+.tb-r{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.tb-l{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:clamp(18px,3vw,30px)}
+.tb-l label{cursor:pointer;padding:.6em 1.15em;border-radius:var(--rb);border:1.5px solid var(--sline);font-weight:700;font-size:.98rem;transition:background .15s,color .15s}
+.tb-l label:hover{border-color:var(--sink)}
+.tb-p{display:none;max-width:860px}
+.tb-r:nth-of-type(1):checked~.tb-l label:nth-child(1){background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}
+.tb-r:nth-of-type(1):checked~.tb-ps .tb-p:nth-child(1){display:block}
+.tb-r:nth-of-type(2):checked~.tb-l label:nth-child(2){background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}
+.tb-r:nth-of-type(2):checked~.tb-ps .tb-p:nth-child(2){display:block}
+.tb-r:nth-of-type(3):checked~.tb-l label:nth-child(3){background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}
+.tb-r:nth-of-type(3):checked~.tb-ps .tb-p:nth-child(3){display:block}
+.tb-r:nth-of-type(4):checked~.tb-l label:nth-child(4){background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}
+.tb-r:nth-of-type(4):checked~.tb-ps .tb-p:nth-child(4){display:block}
+.tb-r:nth-of-type(5):checked~.tb-l label:nth-child(5){background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}
+.tb-r:nth-of-type(5):checked~.tb-ps .tb-p:nth-child(5){display:block}
+.tb-r:nth-of-type(6):checked~.tb-l label:nth-child(6){background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}
+.tb-r:nth-of-type(6):checked~.tb-ps .tb-p:nth-child(6){display:block}
+.tb-r:focus-visible~.tb-l{outline:3px solid var(--slink);outline-offset:6px;border-radius:var(--rb)}
+/* до и после */
+.gal-ba{display:grid;gap:clamp(18px,3vw,32px);grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr))}
+.ba{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ba .media{aspect-ratio:4/5}
+.ba .media:first-child{border-top-right-radius:0;border-bottom-right-radius:0}.ba .media:nth-child(2){border-top-left-radius:0;border-bottom-left-radius:0}
+.ba-l{position:absolute;left:10px;bottom:10px;font:700 .82rem/1 var(--fb);padding:.45em .8em;border-radius:999px;background:var(--bg);color:var(--ink)}
+.ba .media:nth-child(2) .ba-l{background:var(--accent);color:var(--accent-ink)}
+.ba figcaption{grid-column:1/-1;font-weight:600;margin-top:6px}
 /* преимущества */
 .ft-i .mk{width:30px;height:30px;color:var(--slink);margin-bottom:16px}
 .ft-i h3{margin-bottom:6px}
@@ -461,7 +652,7 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .ft-split li{display:grid;grid-template-columns:44px 1fr;gap:16px;padding:22px 0;border-bottom:1px solid var(--sline)}
 .ft-split li .mk{width:28px;height:28px;color:var(--slink)}
 /* шаги */
-.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:clamp(18px,3vw,34px);counter-reset:st}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:clamp(18px,3vw,34px);counter-reset:st}
 .steps li{counter-increment:st;border-top:2px solid var(--sink);padding-top:16px}
 .steps li::before{content:counter(st);font:var(--hw) 2.6rem/1 var(--fh);color:var(--slink);display:block;margin-bottom:14px}
 .steps.v{grid-template-columns:1fr;max-width:760px;gap:0}
@@ -597,13 +788,13 @@ def css(site, mode="preview"):
           "accent": (p["accent"], p["accent_ink"], mix(p["accent"], p["accent_ink"], .2), p["accent_ink"], p["accent"], p["accent_ink"])}[hdr if hdr in ("light", "dark", "accent") else "light"]
     v = {"bg": p["bg"], "ink": p["ink"], "muted": p["muted"], "accent": p["accent"], "accent-ink": p["accent_ink"], "surface": p["surface"],
          "line": p["line"], "dark": p["dark"], "dark-ink": p["dark_ink"], "a2": p["accent2"], "fh": f["head"], "fb": f["body"], "hw": str(f["hw"]),
-         "tr": f["track"], "hs": str(f.get("scale", 1)), "r": f"{rd['r']}px", "rb": f"{rd['btn']}px", "hbg": hb[0], "hink": hb[1], "hline": hb[2], "hbtn": hb[3], "hbtnk": hb[4], "hacc": hb[5],
+         "tr": f["track"], "hs": str(f.get("scale", 1)), "h3s": str(f.get("scale3", 1)), "r": f"{rd['r']}px", "rb": f"{rd['btn']}px", "hbg": hb[0], "hink": hb[1], "hline": hb[2], "hbtn": hb[3], "hbtnk": hb[4], "hacc": hb[5],
          "ftr-mut": mix(p["dark_ink"], p["dark"], .32), "ftr-line": mix(p["dark"], p["dark_ink"], .16)}
     for tone, vals in tone_vars(p).items():
         for k, val in zip(("bg", "ink", "mut", "btn", "btnk", "line", "card", "link"), vals):
             v[f"c-{tone}-{k}"] = val
     root = ":root{" + ";".join(f"--{k}:{val}" for k, val in v.items()) + ";color-scheme:" + ("dark" if lum(p["bg"]) < .2 else "light") + "}"
-    prefix = "assets/fonts/" if mode == "preview" else "fonts/"
+    prefix = "data:" if mode == "preview" else "fonts/"
     return font_faces(th.get("fonts") or "warm", prefix) + root + BASE_CSS + (PREVIEW_CSS if mode == "preview" else "")
 
 
@@ -822,6 +1013,8 @@ def b_prices(b, c, v):
             groups[g] = []
             order.append(g)
         groups[g].append(x)
+    if v == "tabs" and len(order) > 1:
+        return f'<div class="w">{head2(b, btns(b, c))}{price_tabs(b, order[:TAB_MAX], groups)}</div>'
     html_g, star = "", '<span class="star" title="Советуем">★</span>'
     for g in order:
         rows = "".join(f'<div class="pm-r"><span class="t">{one(x.get("title"))}{star if x.get("featured") else ""}'
@@ -829,6 +1022,22 @@ def b_prices(b, c, v):
                        f'<i class="dots"></i><b class="pr">{one(x.get("price"))}</b></div>' for x in groups[g])
         html_g += f'<div class="pm-g">{f"<h3>{E(g)}</h3>" if g else ""}{rows}</div>'
     return f'<div class="w">{head2(b, btns(b, c))}<div class="pm">{html_g}</div></div>'
+
+
+TAB_MAX = 6
+
+
+def price_tabs(b, order, groups):
+    """Цены вкладками по разделам («Терапия», «Гигиена»…) — без скриптов: переключатели-радио и CSS (на опубликованном
+    сайте скриптов нет). Стрелками ←/→ переключаются, как обычные вкладки; без раздела — «Другое»."""
+    k = re.sub(r"[^a-z0-9]", "", str(b.get("_k") or b.get("uid") or "t").lower())[-12:] or "t"
+    radios = "".join(f'<input type="radio" class="tb-r" name="tb{k}" id="tb{k}{i}"{" checked" if i == 0 else ""}>' for i in range(len(order)))
+    labels = "".join(f'<label for="tb{k}{i}">{one(g or "Другое")}</label>' for i, g in enumerate(order))
+    star = '<span class="star" title="Советуем">★</span>'
+    panels = "".join('<div class="tb-p">' + "".join(
+        f'<div class="pm-r"><span class="t">{one(x.get("title"))}{star if x.get("featured") else ""}{opt("span", x.get("text"), "d")}</span>'
+        f'<i class="dots"></i><b class="pr">{one(x.get("price"))}</b></div>' for x in groups[g]) + "</div>" for g in order)
+    return f'<div class="tabs">{radios}<div class="tb-l">{labels}</div><div class="tb-ps">{panels}</div></div>'
 
 
 def b_features(b, c, v):
@@ -849,6 +1058,8 @@ def b_steps(b, c, v):
 
 
 def b_gallery(b, c, v):
+    if v == "pairs":
+        return gallery_pairs(b, c)
     figs = []
     for i, x in enumerate(items(b, c)):
         src = c.img(x.get("image"))
@@ -871,6 +1082,28 @@ def b_gallery(b, c, v):
                 figs[k] = figs[k].replace("<figure>", '<figure class="wd">', 1)
     cls = {"mosaic": "gal mos", "strip": "gal strip"}.get(v, "gal")
     return f'<div class="w">{head2(b)}<div class="{cls}">{"".join(figs)}</div></div>'
+
+
+def gallery_pairs(b, c):
+    """«До и после»: фото идут парами (1-е — до, 2-е — после), подпись — у любого из пары. На сайт попадает только полная
+    пара; в предпросмотре пустые места — узором с подсказкой «Добавьте фото»."""
+    xs, out = items(b, c), []
+    for i in range(0, len(xs), 2):
+        pair = xs[i:i + 2]
+        srcs = [c.img(x.get("image")) for x in pair]
+        if c.mode != "preview" and (len(pair) < 2 or not all(srcs)):
+            continue
+        cap = one(next((x.get("caption") for x in pair if str(x.get("caption") or "").strip()), ""))
+        cells = []
+        for n, lab in enumerate(("До", "После")):
+            src = srcs[n] if n < len(srcs) else ""
+            m = (f'<img src="{E(src)}" alt="{cap + " — " if cap else ""}{lab.lower()}" loading="lazy">' if src
+                 else f'{art_svg(c.art, c.pal, b.get("_k", "g") + str(i + n))}<span class="pvph">Добавьте фото</span>')
+            cells.append(f'<div class="media">{m}<span class="ba-l">{lab}</span></div>')
+        out.append(f'<figure class="ba">{"".join(cells)}{f"<figcaption>{cap}</figcaption>" if cap else ""}</figure>')
+    if not out:
+        return ""
+    return f'<div class="w">{head2(b)}<div class="gal-ba">{"".join(out)}</div></div>'
 
 
 def b_products(b, c, v):

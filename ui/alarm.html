@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
+<base href="alarm.html"><script src="assets/boot.js"></script>
 <meta charset="utf-8">
 <title>Dewiar — напоминание</title>
 <link href="assets/fonts.css" rel="stylesheet">
@@ -109,7 +110,7 @@
 <script src="assets/dewiar.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const q = new URLSearchParams(location.search);
+const q = dwQuery();
 // A — текущее напоминание: сначала из адреса, затем уточняется у ядра (alarm_get) и событиями alarm
 let A = { id: q.get("id") || "", text: q.get("text") || "", title: q.get("title") || "Напоминание", repeat_text: q.get("rep") || "",
           late: q.get("late") === "1", at: q.get("at") || "", att: +(q.get("att") || 0) };

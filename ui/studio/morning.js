@@ -67,16 +67,21 @@ function mnRows(d) {
   else if (k && k.done.length) rows.push(["tasks", `Готово за ночь: ${k.done.length}`, k.done.map(x => `«${x}»`).join(", ")]);
   return rows;
 }
+/* Идея №142 (05.11): «если не указано место — брать моё местоположение из Памяти». Города в «Утре» нет, а в памяти
+   есть («живу в Балашове») — погода по нему (morning.py, city_mem) и под ней «из памяти · Запомнить»: нажали — это город
+   «Утра» (morning_set), и спрашивать больше не будем. */
 function mnWeather(d) {
-  const w = d.weather;
-  if (!d.city) return `<div class="mn-w mn-city"><b>Погода</b><p>Скажите, где вы, — и утром я буду говорить погоду.</p>`
+  const w = d.weather, mem = !d.city && !!d.city_mem && !!w;
+  if (!d.city && !mem) return `<div class="mn-w mn-city"><b>Погода</b><p>Скажите, где вы, — и утром я буду говорить погоду.</p>`
     + `<div class="mn-cin"><input id="mn-city" type="text" placeholder="Ваш город" maxlength="60" aria-label="Город для погоды"><button class="btn small primary" id="mn-cgo">Готово</button></div></div>`;
   if (!w) return `<div class="mn-w"><b class="mn-t">—</b><p>${mnE(d.city)}: прогноз сейчас не получить</p><button class="lnk" id="mn-cedit">Другой город</button></div>`;
   const sky = (MN_SKY.find(([rx]) => rx.test(w.sky_day || w.sky)) || [0, "cloud"])[1];
   return `<div class="mn-w sky-${sky}"><svg class="mn-sky" viewBox="0 0 24 24" aria-hidden="true">${MN_ICON[sky]}</svg>`
     + `<b class="mn-t">${w.now > 0 ? "+" : ""}${w.now}°</b><p class="mn-sk">${mnE(w.sky)}</p>`
     + (w.min != null ? `<p>днём ${w.min > 0 ? "+" : ""}${w.min}…${w.max > 0 ? "+" : ""}${w.max}°${w.rain != null && w.rain >= 30 ? `, осадки ${w.rain}%` : ""}</p>` : "")
-    + `<button class="lnk mn-cname" id="mn-cedit" title="Сменить город">${mnE(w.city)}</button></div>`;
+    + (mem ? `<p class="mn-memrow"><button class="lnk mn-cname" id="mn-cedit" title="Другой город">${mnE(w.city)}</button><span>· из памяти</span></p>`
+        + `<button class="mn-csave" id="mn-csave" title="Сделать «${mnE(w.city)}» городом для погоды и «Утра» — больше не спрашивать">Запомнить город</button>`
+      : `<button class="lnk mn-cname" id="mn-cedit" title="Сменить город">${mnE(w.city)}</button>`) + `</div>`;
 }
 /* Куда ведёт строка «Утра». №467 (01.11, ПК 0.71): «на „Главной“ при нажатии на „Почта“ открывается страница
    настроек, а не список писем» — строка «Почта: N новых» вела в «Подключение». Теперь почта подключена — к письмам
@@ -102,7 +107,7 @@ function mnRender() {
   const daily = d.daily;
   box.hidden = false;
   box.innerHTML = `<div class="mn-head"><h2>Утро с ${mnE(who)}</h2><button class="mn-x" id="mn-hide" title="Скрыть до завтра" aria-label="Скрыть до завтра">×</button></div>`
-    + `<div class="mn-grid">${mnWeather(d)}<ul class="mn-rows">${mnRows(d).map(([k, b, s]) => `<li><button data-mgo="${MN_ROW[k][1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${MN_ROW[k][0]}</svg><span><b>${mnE(b)}</b>${(Array.isArray(s) ? s : [s]).map(x => `<small>${mnE(x)}</small>`).join("")}</span></button></li>`).join("")}</ul></div>`
+    + `<div class="mn-grid">${mnWeather(d)}<ul class="mn-rows">${mnRows(d).map(([k, b, s]) => `<li><button data-mgo="${MN_ROW[k][1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${MN_ROW[k][0]}</svg><span><b>${mnE(b)}</b>${(Array.isArray(s) ? s : [s]).map(x => `<small title="${mnE(x)}">${mnE(x)}</small>`).join("")}</span></button></li>`).join("")}</ul></div>`
     + `<div class="mn-foot"><button class="btn primary" id="mn-say">Расскажи утро</button>`
     + `<label class="mn-daily"><span class="tg"><input type="checkbox" id="mn-dly"${daily ? " checked" : ""}><i></i></span>Каждое утро в <input type="text" id="mn-at" value="${mnE(daily ? daily.at_hm : "08:00")}" maxlength="5" inputmode="numeric" aria-label="Время сводки"> голосом</label>`
     + (!d.mail_on ? `<button class="lnk mn-mail" data-mgo="connect">Подключить почту — скажу о важных письмах</button>` : "") + `</div>`;
@@ -113,7 +118,9 @@ function mnRender() {
   const cgo = $("#mn-cgo"); if (cgo) { const go = () => { const c = $("#mn-city").value.trim(); if (!c) return $("#mn-city").focus(); cgo.disabled = true;
     core.call("morning_set", { city: c }).then(r => { MN = r; mnRender(); if (!r.weather) toast(`«${c}» — прогноз не нашёлся, проверьте название`, 3500); }).catch(e => { cgo.disabled = false; toast(e.message); }); };
     cgo.onclick = go; $("#mn-city").onkeydown = (e) => { if (e.key === "Enter") go(); }; }
-  const ce = $("#mn-cedit"); if (ce) ce.onclick = () => { MN = Object.assign({}, MN, { city: "", weather: null }); mnRender(); const i = $("#mn-city"); if (i) { i.value = (d.settings || {}).city || ""; i.focus(); } };
+  const cs = $("#mn-csave"); if (cs) cs.onclick = () => { cs.disabled = true; const c = (d.weather && (d.weather.place || d.weather.city)) || d.city_mem;
+    core.call("morning_set", { city: c }).then(r => { MN = r; mnRender(); toast(`Запомнила: ${d.weather.city} — для погоды и «Утра»`); }).catch(e => { cs.disabled = false; toast(e.message); }); };
+  const ce = $("#mn-cedit"); if (ce) ce.onclick = () => { MN = Object.assign({}, MN, { city: "", city_mem: "", weather: null }); mnRender(); const i = $("#mn-city"); if (i) { i.value = (d.settings || {}).city || ""; i.focus(); } };
   const dl = $("#mn-dly"), at = $("#mn-at");
   const setDaily = async () => {
     try {

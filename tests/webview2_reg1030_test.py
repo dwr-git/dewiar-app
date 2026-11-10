@@ -75,7 +75,7 @@ except FileNotFoundError:
     ok(True, "другие ключи реестра — как были (ошибка остаётся ошибкой)")
 g["wv2_registry_fix"]()
 ok(getattr(w, "_dewiar_wv2", False), "поправка ставится один раз")
-ok("wv2_registry_fix()\n    try:\n        webview.start(on_start, gui=\"edgechromium\"" in app and "Окна: {getattr(_wf, 'renderer'" in app,
+ok(re.search(r'wv2_registry_fix\(\)\n    try:\n(?:        harden_webview\("edgechromium"\)\n)?        webview\.start\(on_start, gui="edgechromium"', app) and "Окна: {getattr(_wf, 'renderer'" in app,
    "поправка — перед запуском окон; в журнале — каким движком открылись окна")
 # диагностика: где записана среда
 doc = (ROOT / "ui/doctor.py").read_text(encoding="utf-8")

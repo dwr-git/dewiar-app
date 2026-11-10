@@ -457,7 +457,8 @@ class Workspace:
                 pass
         if p.suffix.lower() not in TEXT_EXT and p.stat().st_size > 0:
             return {"path": rel, "binary": True, "size": p.stat().st_size, "mtime": p.stat().st_mtime}
-        data = p.read_bytes()[:limit]
+        with open(p, "rb") as f:                                   # только начало: файл на гигабайты не читаем целиком
+            data = f.read(limit)
         return {"path": rel, "text": data.decode("utf-8", errors="replace"), "size": p.stat().st_size,
                 "mtime": p.stat().st_mtime, "truncated": p.stat().st_size > limit}
 

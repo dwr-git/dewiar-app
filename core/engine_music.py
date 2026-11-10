@@ -187,6 +187,8 @@ class MusicMixin:
             return "Утренняя сводка"
         if cls.JOB_NAMES.get(item.get("preset") or ""):
             return cls.JOB_NAMES[item["preset"]]
+        if item.get("title"):                           # имя дела (плагин: «Дача: заморозки и полив», №557)
+            return str(item["title"])[:60]
         t = re.sub(r"https?://\S+", "", str(item.get("text") or "Дело по расписанию"))
         t = re.split(r"[.:;(\n]|\s[—–-]\s", t, maxsplit=1)[0].strip(" ,") or "Дело по расписанию"
         return t if len(t) <= 40 else t[:40].rsplit(" ", 1)[0].rstrip(" ,") + "…"

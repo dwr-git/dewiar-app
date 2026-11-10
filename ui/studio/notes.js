@@ -53,10 +53,33 @@ const ntCompose = (d) => `${d.fm ? d.fm + "\n" : ""}# ${d.title}\n\n${d.date ? d
 /* Заметка — как в блокноте (25.10, владелец: «в заметках диаграммы сырые и нет цветовых схем»): полный Markdown
    (folder.js md: заголовки, цитаты, таблицы, код, задачи), схемы Mermaid картинкой (rich.js), ссылки — во внешнем браузере;
    цвета — та же схема, что выбрана в блокноте (ui.pad_colors, классы .nt-body[data-cs] в studio.css). */
+/* Ссылки — по готовому дереву, а не регуляркой по разметке (третья рецензия выпуска 5: в блокноте голая ссылка внутри
+   уже собранного атрибута выводила из него и давала onerror=…): голые https://… ищутся только в текстовых узлах вне
+   <a>, <code>, <pre>, адрес ставится свойством. */
+const NT_URL = /(^|[\s(«])(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»])/g;
 function ntRender(text) {
   if (!String(text || "").trim()) return "";
-  return md(String(text)).replace(/<a href="(https?:[^"]+)" target="_blank">/g, '<a href="#" data-ext="$1">')
-    .replace(/(^|[\s>(«])(https?:\/\/[^\s<"]+[^\s<".,;:!?)»])/g, '$1<a href="#" data-ext="$2">$2</a>');   // голые ссылки — тоже ссылками
+  const tpl = document.createElement("template");
+  tpl.innerHTML = md(String(text));
+  tpl.content.querySelectorAll('a[target="_blank"]').forEach(a => {
+    const h = a.getAttribute("href") || "";
+    a.removeAttribute("target");
+    if (/^https?:/i.test(h)) { a.setAttribute("href", "#"); a.dataset.ext = h; }
+  });
+  const walk = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => n.parentElement && n.parentElement.closest("a, code, pre") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  const texts = []; for (let n = walk.nextNode(); n; n = walk.nextNode()) if (/https?:\/\//.test(n.nodeValue)) texts.push(n);
+  for (const n of texts) {                                // голые ссылки — тоже ссылками
+    const frag = document.createDocumentFragment(), s = n.nodeValue; let last = 0;
+    s.replace(NT_URL, (m, pre, u, at) => {
+      frag.appendChild(document.createTextNode(s.slice(last, at) + pre));
+      const a = document.createElement("a"); a.setAttribute("href", "#"); a.dataset.ext = u; a.textContent = u; frag.appendChild(a);
+      last = at + m.length; return m;
+    });
+    frag.appendChild(document.createTextNode(s.slice(last)));
+    n.replaceWith(frag);
+  }
+  return tpl.innerHTML;
 }
 /* Строка-превью в списке — без значков Markdown: «**НА ПОНЕДЕЛЬНИК**» → «НА ПОНЕДЕЛЬНИК» */
 function ntPlain(t) {

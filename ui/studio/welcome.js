@@ -53,7 +53,7 @@ function wlcBoot(d) {
   const w = (S.ui || {}).welcome;
   if (w === "done") return;
   $("#wlc-chip").classList.add("on");
-  if (w !== "later" && !d.pending_import && !new URLSearchParams(location.search).get("import")) wlcOpen();
+  if (w !== "later" && !d.pending_import && !dwQuery().get("import")) wlcOpen();
 }
 $$("#wlc [data-go]").forEach(b => b.onclick = () => { wlcClose(false); save({ ui: { welcome: "later" } }, true); $(`nav button[data-p="${b.dataset.go}"]`).click(); });
 $("#wlc-later").onclick = () => { wlcClose(false); save({ ui: { welcome: "later" } }, true); toast("Вернуться — «Первые шаги» внизу меню"); };
