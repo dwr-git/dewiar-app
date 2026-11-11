@@ -965,7 +965,12 @@ class Api:
         # Windows: окно (WebView2 через .NET Uri) и браузер через «открыть файл» теряют «?token=…» у адресов file://
         # и показывают «Файл не найден» — поэтому там страницы отдаёт маленький локальный веб-сервер (только папка ui).
         base = ui_http_base() if WIN or os.environ.get("DEWIAR_UI_HTTP") else None
-        return (base + page if base else (HERE / page).as_uri()) + f"?token={self.token}&port={WS_PORT}{extra}"
+        try:                                           # язык окна (0.88) — с первой отрисовки, без вспышки русского
+            import i18n
+            lang = i18n.resolve(ui_settings().get("lang"))
+        except Exception:  # noqa: BLE001
+            lang = "ru"
+        return (base + page if base else (HERE / page).as_uri()) + f"?token={self.token}&port={WS_PORT}&lang={lang}{extra}"
 
     def _bridged(self, url):
         """-> (адрес с ключом моста, фасад для js_api): у каждого нового окна свой ключ (bridge_api, guard_bridge)."""

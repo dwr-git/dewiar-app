@@ -1029,7 +1029,12 @@ class CommandsMixin:
 
     def snapshot(self):
         """Всё состояние для окна, только что подключившегося к ядру (ответ на «hello»)."""
-        return {"state": self.state, "persona": self.s.get("persona"), "personas": self.personas.public(),
+        try:
+            import i18n
+            sys_lang = i18n.system_lang()               # «как в системе» для окон (assets/i18n.js; 0.88)
+        except Exception:  # noqa: BLE001
+            sys_lang = "ru"
+        return {"state": self.state, "persona": self.s.get("persona"), "personas": self.personas.public(), "sys_lang": sys_lang,
                 "settings": self.s.snapshot(), "status": self.status, "muted": self.muted,
                 "presets": LLM_PRESETS, "piper_voices": PIPER_VOICES, "voice_fx": voicefx.catalog(), "workspace": str(self.workspace.root), "tools": self.toolbox.catalog(),
                 "version": VERSION, "update": self.updater.public(), "tasks": self.tasks.list(),

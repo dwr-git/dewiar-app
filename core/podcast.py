@@ -713,12 +713,17 @@ def material_ok(rel, d):
         return None
 
 
-def _num(x, cast=float, default=0):
+def _num(x, cast=float, default=0, limit=1e9):
     try:
         v = cast(x)
-        return v if v == v and abs(v) < 1e9 else default
+        return v if v == v and abs(v) < limit else default
     except (TypeError, ValueError):
         return default
+
+
+def _ts(x):
+    """Время в секундах Unix: №655 (11.11) — предел 1e9 у _num обнулял сегодняшние (1,76e9) — «1 января в 04:00»."""
+    return _num(x, int, limit=1e11)
 
 
 def _str(x, n):
@@ -730,7 +735,7 @@ def clean_meta(m, d):
     if not isinstance(m, dict) or not ID_RX.fullmatch(str(m.get("id") or "")):
         raise ValueError("podcast.json: неверный id")
     out = {"id": m["id"], "status": m.get("status") if m.get("status") in STATUSES else "error",
-           "title": _str(m.get("title"), 200) or Path(d).name[:200], "created": _num(m.get("created"), int),
+           "title": _str(m.get("title"), 200) or Path(d).name[:200], "created": _ts(m.get("created")),
            "minutes": m.get("minutes") if m.get("minutes") in LENGTHS else 10,
            "style": m.get("style") if m.get("style") in STYLES else "simple",
            "lang": m.get("lang") if m.get("lang") in ("ru", "en", "auto") else "auto",
@@ -743,7 +748,7 @@ def clean_meta(m, d):
         out.pop("lang_used")
     for k in ("done_at",):
         if k in m:
-            out[k] = _num(m.get(k), int)
+            out[k] = _ts(m.get(k))
     if m.get("duration") is not None:
         out["duration"] = round(_num(m.get("duration")), 2)
     if audio_ok(m.get("audio"), d):

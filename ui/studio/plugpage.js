@@ -55,12 +55,12 @@ function plpNav(list) {
     box.innerHTML = on.map(p => `<button class="nav-g nav-plg" data-plg="${plpEsc(p.id)}" title="${plpEsc(p.tagline || p.name)}" style="--pc:${plpEsc(p.color)}"><i class="nav-gi emo nav-pi" aria-hidden="true">${plpEsc(p.icon)}</i><span>${plpEsc(p.name)}</span></button>`).join("");
     $$("#nav-plugins .nav-plg").forEach(b => b.onclick = () => plpOpen(b.dataset.plg));
   }
-  plpNavCur();
+  plpNavCur();                                            // и ngApply: свёрнутая группа «Плагины» остаётся свёрнутой
   if (PLP.cur && $("#p-plg.cur") && !on.some(p => p.id === PLP.cur)) {      // удалили плагин, пока смотрели его страницу
     PLP.cur = ""; const b = $('nav button[data-p="skills"]'); if (b) b.click();
   }
 }
-function plpNavCur() { const here = !!$("#p-plg.cur"); $$("#nav-plugins .nav-plg").forEach(x => x.classList.toggle("cur", here && x.dataset.plg === PLP.cur)); }
+function plpNavCur() { const here = !!$("#p-plg.cur"); $$("#nav-plugins .nav-plg").forEach(x => x.classList.toggle("cur", here && x.dataset.plg === PLP.cur)); if (typeof ngApply === "function") ngApply(); }
 function plpCatalog() { return core.call("plugins").then(r => { plpNav(r.plugins || []); return r; }).catch(() => {}); }
 // каталог в «Плагинах» обновился (установили, удалили) — и меню тоже
 if (typeof plgSet === "function") { const _plgSet = plgSet; plgSet = function (r) { _plgSet(r); plpNav((r && r.plugins) || PLP.cat); if (PLP.cur && $("#p-plg.cur") && r && r.plugins) plpRefresh(); }; }

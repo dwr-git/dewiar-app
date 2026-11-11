@@ -4,7 +4,15 @@
    на лету), «Опубликовать» / «Обновить на сайте»; после — ссылка, код для сайта, счётчики и последние заявки.
    Ядро — sitechat.py: sitechat_get {fresh}, sitechat_save {patch}, sitechat_publish {patch}, sitechat_forget, sitechat_poll;
    событие «sitechat». */
-const SC = { d: null, t: 0 };
+const SC = { d: null, t: 0, theme: "auto" };
+/* Оформление окна чата на сайте (владелец 11.11: «цвета грустные, дизайн серый — наш светлый, тёмный, ещё несколько»):
+   те же data-theme, что у server/dwrapp/sitechat.php */
+const SC_TH = ["soft", "night", "auto", "brand", "classic", "neo", "neo-dark"];   // имена и пояснения — data/i18n: sc.th.<тема>, sc.th.<тема>.d
+function scThemes() {
+  $("#sc-ths").innerHTML = SC_TH.map((id) => { const n = t(`sc.th.${id}`), d = t(`sc.th.${id}.d`); return `<button type="button" role="radio" class="sc-th${id === SC.theme ? " on" : ""}" aria-checked="${id === SC.theme}" data-th="${id}">`
+    + `<i class="sc-sw" data-theme="${id}" aria-hidden="true"><em></em><u></u><s></s></i><span><b>${n}</b><small>${d}</small></span></button>`; }).join("");
+  $$("#sc-ths .sc-th").forEach(b => b.onclick = () => { SC.theme = b.dataset.th; scThemes(); scDraft(); });
+}
 const scE = (t) => escH(t);
 
 async function loadSitechat() {
@@ -25,6 +33,7 @@ function scFill() {
   const set = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v == null ? "" : v; };
   set("#sc-title", d.title); set("#sc-greet", d.greeting); set("#sc-brief", d.brief); set("#sc-kb", d.kb); set("#sc-pi", d.per_ip); set("#sc-pd", d.per_day);
   $("#sc-ask").checked = !!d.ask_contact; $("#sc-fold").checked = !!d.folders;
+  SC.theme = SC_TH.includes(d.theme) ? d.theme : "auto"; scThemes();
   scFold(); scCount(); scPrev();
 }
 
@@ -38,7 +47,7 @@ function scFold() {
 function scPatch() {
   return { persona: SC.persona, title: $("#sc-title").value.trim(), greeting: $("#sc-greet").value.trim(), brief: $("#sc-brief").value.trim(),
     kb: $("#sc-kb").value, ask_contact: $("#sc-ask").checked, folders: $("#sc-fold").checked && !$("#sc-fold").disabled,
-    per_ip: +$("#sc-pi").value || 40, per_day: +$("#sc-pd").value || 500 };
+    per_ip: +$("#sc-pi").value || 40, per_day: +$("#sc-pd").value || 500, theme: SC.theme };
 }
 
 function scCount() { const n = $("#sc-kb").value.length; $("#sc-kbn").textContent = n ? `· ${n.toLocaleString("ru-RU")} из 60 000 знаков` : ""; $("#sc-kbn").classList.toggle("over", n > 60000); }
@@ -54,13 +63,15 @@ function scInk(hex) {
 function scPrev() {
   const p = scPersonas().find(x => x.id === SC.persona) || {}, a = scPatch();
   const col = /^#[0-9a-fA-F]{6}$/.test(p.color || "") ? scInk(p.color) : "#6a5cf0";
-  $("#sc-prev").style.setProperty("--sc", col);
-  $("#sc-prev").innerHTML = `<div class="scp-win"><header><i class="scp-ava" ${p.avatar_url ? `style="background-image:url('${String(p.avatar_url).replace(/'/g, "%27")}')"` : ""}>${p.avatar_url ? "" : scE((p.name || "?")[0])}</i>`
+  $("#sc-prev").style.setProperty("--sc", col); $("#sc-ths").style.setProperty("--sc", col);
+  const th = SC.theme === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "soft") : SC.theme;
+  $("#sc-prev").dataset.theme = th;
+  $("#sc-prev").innerHTML = `<div class="scp-win" data-theme="${th}"><header><i class="scp-ava" ${p.avatar_url ? `style="background-image:url('${String(p.avatar_url).replace(/'/g, "%27")}')"` : ""}>${p.avatar_url ? "" : scE((p.name || "?")[0])}</i>`
     + `<div><b>${scE(p.name || "Консультант")}</b><small>${scE(a.title ? a.title + " · ИИ-помощник" : "ИИ-помощник · отвечает сразу")}</small></div></header>`
     + `<div class="scp-msgs"><p class="scp-a">${scE(a.greeting || "Здравствуйте! Чем помочь?")}</p><p class="scp-u">Сколько стоит доставка?</p>`
     + `<p class="scp-a scp-dim">Отвечу по вашим знаниям${a.ask_contact ? " — а если там нет ответа, предложу оставить контакт" : ""}.</p></div>`
     + `<div class="scp-in"><span>Ваш вопрос…</span><i>↑</i></div>${a.ask_contact ? `<small class="scp-lead">Оставить контакт</small>` : ""}</div>`
-    + `<span class="scp-btn" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span>`;
+    + `<span class="scp-btn${th === "classic" ? " sq" : ""}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span>`;
 }
 
 function scDraft() {

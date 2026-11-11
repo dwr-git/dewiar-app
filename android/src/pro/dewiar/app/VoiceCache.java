@@ -13,6 +13,7 @@ import java.net.URL;
  *  Без Android — проверяется обычной Java (tests/voice_cache_test.py). */
 final class VoiceCache {
     static final int CACHE_BODY = 600, CACHE_MAX = 200;
+    static final long SLOT_MS = 12L * 3600 * 1000;
     static final String DIR = "tts";
 
     private VoiceCache() { }
@@ -26,7 +27,11 @@ final class VoiceCache {
         File hit = null;
         if (body.length() <= CACHE_BODY) {
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-1");
-            byte[] h = md.digest((url + "\n" + body).getBytes("UTF-8"));
+            // владелец 11.11: «заменил голос Патрика — а „Привет! Это Патрик“ на телефоне прежним голосом»: в теле запроса —
+            // имя персонажа, а не сам голос сервера, и запомненная фраза звучала старым голосом вечно. Теперь запомненное
+            // живёт не дольше SLOT_MS: новый голос на сервере — слышен и в коротких фразах не позже чем через полдня
+            long slot = System.currentTimeMillis() / SLOT_MS;
+            byte[] h = md.digest((url + "\n" + body + "\n" + slot).getBytes("UTF-8"));
             StringBuilder sb = new StringBuilder();
             for (byte x : h) sb.append(String.format("%02x", x));
             hit = new File(dir, sb + ".audio");

@@ -132,14 +132,20 @@ window.hmNav = hmNav;
 /* Группы меню сворачиваются (24.10, владелец: «„Настройка“, „Знания“ — сворачиваемыми, с запоминанием»): щелчок по
    заголовку; что свёрнуто — ui.nav_fold (в настройках, переживает перезапуск). Открытый раздел в свёрнутой группе
    остаётся виден — чтобы было понятно, где вы. */
-const ngKey = (g) => g.dataset.k || (g.dataset.k = g.textContent.trim());
+const ngKey = (g) => g.dataset.foldK || g.dataset.k || (g.dataset.k = g.textContent.trim());   // data-fold-k — прежнее русское имя: свёрнутость не теряется при смене языка (0.88)
 function ngApply() {
   const f = new Set(((S && S.ui) || {}).nav_fold || []);
   $$("nav .ng").forEach(g => {
     const on = f.has(ngKey(g));
     g.classList.toggle("fold", on); g.setAttribute("aria-expanded", String(!on));
     let n = g.nextElementSibling;
-    while (n && !n.classList.contains("ng")) { if (n.tagName === "BUTTON") n.classList.toggle("folded", on && !n.classList.contains("cur")); n = n.nextElementSibling; }
+    while (n && !n.classList.contains("ng")) {
+      // владелец 11.11: «включённые плагины не сворачиваются… сжирают много места» — пункты плагинов и групп «Близких»
+      // лежат в своих блоках (.nav-groups): сворачиваются вместе с заголовком; открытый сейчас — виден
+      const btns = n.tagName === "BUTTON" ? [n] : n.classList.contains("nav-groups") ? [...n.querySelectorAll("button")] : [];
+      btns.forEach(x => x.classList.toggle("folded", on && !x.classList.contains("cur")));
+      n = n.nextElementSibling;
+    }
   });
 }
 function ngToggle(g) {
@@ -151,7 +157,7 @@ function ngToggle(g) {
   core.call("settings_save", { patch: { ui: { nav_fold: list } } }).catch(() => { });
 }
 $$("nav .ng").forEach(g => {
-  g.setAttribute("role", "button"); g.tabIndex = 0; g.title = "Свернуть или развернуть";
+  g.setAttribute("role", "button"); g.tabIndex = 0; g.title = t("nav.fold");
   g.onclick = () => ngToggle(g);
   g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ngToggle(g); } };
 });
@@ -179,10 +185,10 @@ const hmWho = (id) => {
 };
 function hmGreet() {
   const h = new Date().getHours(), name = String(((S && S.user_name) || "")).trim().split(/\s+/)[0];
-  const w = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
+  const w = t(h < 5 ? "home.greet.night" : h < 12 ? "home.greet.morning" : h < 18 ? "home.greet.day" : "home.greet.evening");
   return name ? `${w}, ${name}` : w;
 }
-function hmDate() { const d = new Date(); const s = d.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" }); return s[0].toUpperCase() + s.slice(1); }
+function hmDate() { const d = new Date(); const s = d.toLocaleDateString(dwLocale(), { weekday: "long", day: "numeric", month: "long" }); return s[0].toUpperCase() + s.slice(1); }
 async function loadHome() {
   hmRender();
   if (window.snLoad) snLoad();                          // «Слепок знаний» справа от приветствия (studio/snapshot.js)
@@ -310,7 +316,7 @@ async function hmMailLoad(force) {
   if (!force && HM.mail && Date.now() - HM.mail.at < HMM_TTL) { hmMail(); return; }
   HM.mailBusy = true; if (force) hmMail();
   let r;
-  try { r = await core.call("mail_inbox", { limit: 5 }); }
+  try { r = await core.call("mail_inbox", { limit: 14 }); }   // с запасом: убранные с главной и заглушённые не в счёт
   catch (e) { r = /Детский режим/.test(e.message) ? { on: false, items: [] } : { on: true, items: (HM.mail && HM.mail.items) || [], err: e.message }; }
   HM.mailBusy = false;
   HM.mail = Object.assign({ at: Date.now() }, r || { on: false, items: [] });
@@ -325,23 +331,55 @@ function hmmWhen(d) {
   if (diff === 1) return "вчера";
   return t.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
 }
+/* Владелец 11.11 (Ubuntu): «почта занимает много места и всё время мозолит глаз — сворачивать красиво, с возможностью
+   развернуть, или убирать неинтересные письма». Свернуть — шапкой (одна строка: сколько новых и последнее письмо), выбор
+   запоминается. У письма — «Убрать с главной» (×): письмо уходит только отсюда, в ящике остаётся; тут же можно не показывать
+   этого отправителя вовсе («Не показывать …»), вернуть — «Показать скрытые». Всё — в этом окне (localStorage). */
+const HMM_K = { fold: "dw_mail_fold", hide: "dw_mail_hide", mute: "dw_mail_mute" };
+function hmmGet(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
+function hmmSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
+const hmmKey = (x) => `${x.box || ""}|${x.uid || ""}|${x.date || ""}`;
+const hmmFrom = (x) => hmmAddr(x.from).toLowerCase();
+function hmmShown(items) {
+  const hide = new Set(hmmGet(HMM_K.hide, [])), mute = new Set(hmmGet(HMM_K.mute, []));
+  return (items || []).filter(x => !hide.has(hmmKey(x)) && !mute.has(hmmFrom(x)));
+}
+function hmmHide(x) {
+  const hide = hmmGet(HMM_K.hide, []); hide.push(hmmKey(x)); hmmSet(HMM_K.hide, hide.slice(-300));
+  HM.mailUndo = x; hmMail();
+}
 function hmMail() {
   const box = $("#hm-mail"); if (!box) return;
   const m = HM.mail;
   if (!m || !m.on) { box.hidden = true; box.innerHTML = ""; return; }
   box.hidden = false;
-  const it = m.items || [], un = it.filter(x => x.unread).length;
+  const all = m.items || [], it = hmmShown(all).slice(0, 5), un = it.filter(x => x.unread).length;
+  const fold = !!hmmGet(HMM_K.fold, false), hidden = all.length - hmmShown(all).length;
+  box.classList.toggle("fold", fold);
   const rows = it.map((x, i) => { const who = hmmWho(x.from), sub = x.subject || "(без темы)", sn = String(x.snippet || "").trim();
     return `<li><button type="button" class="hmm-row${x.unread ? " new" : ""}" data-i="${i}" title="${hmEsc(hmmAddr(x.from))}">
       <i class="hmm-av" style="--c:${typeof vlCol === "function" ? vlCol(who) : "#5b8def"}" aria-hidden="true">${hmEsc((who.replace(/^[^\p{L}\d]+/u, "")[0] || "?").toUpperCase())}</i>
       <span class="hmm-t"><span class="hmm-l1"><b>${hmEsc(who)}</b>${x.files && x.files.length ? '<em class="hmm-clip" title="С вложением">📎</em>' : ""}<time>${hmEsc(hmmWhen(x.date))}</time></span>
-        <span class="hmm-l2"><span class="hmm-sub">${hmEsc(sub)}</span>${sn ? `<span class="hmm-sn"> — ${hmEsc(sn.slice(0, 140))}</span>` : ""}</span></span></button></li>`; }).join("");
-  box.innerHTML = `<div class="hmm-head"><h2>Почта</h2>${un ? `<span class="hmm-n">${un} ${un % 10 === 1 && un % 100 !== 11 ? "новое" : "новых"}</span>` : ""}<span class="hmm-sp"></span>
+        <span class="hmm-l2"><span class="hmm-sub">${hmEsc(sub)}</span>${sn ? `<span class="hmm-sn"> — ${hmEsc(sn.slice(0, 140))}</span>` : ""}</span></span></button>
+      <button type="button" class="hmm-x" data-x="${i}" title="Убрать с главной (в ящике письмо останется)" aria-label="Убрать письмо от ${hmEsc(who)} с главной"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>`; }).join("");
+  const last = it[0], u = HM.mailUndo, uw = u ? hmmWho(u.from) : "";
+  const peek = last ? `<span class="hmm-peek"><b>${hmEsc(hmmWho(last.from))}</b> — ${hmEsc(last.subject || "(без темы)")}</span>` : "";
+  box.innerHTML = `<div class="hmm-head"><h2 class="hmm-h2"><button type="button" class="hmm-fold" id="hmm-fold" aria-expanded="${!fold}" aria-controls="hmm-wrap" title="${fold ? "Показать письма" : "Свернуть почту"}">
+        <span class="hmm-h">Почта</span>${un ? `<span class="hmm-n">${un} ${un % 10 === 1 && un % 100 !== 11 ? "новое" : "новых"}</span>` : ""}${fold ? peek : ""}
+        <svg class="hmm-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h2>${fold ? "" : '<span class="hmm-sp"></span>'}
       <button type="button" class="hmm-re${HM.mailBusy ? " busy" : ""}" id="hmm-re" title="Проверить почту" aria-label="Проверить почту"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5A8 8 0 1 0 17.7 17"/><path d="M20.5 5.5v6h-6"/></svg></button></div>`
+    + `<div class="hmm-wrap" id="hmm-wrap"${fold ? " hidden" : ""}>`
+    + (u ? `<p class="hmm-undo" role="status">Письмо убрано с главной. <button type="button" id="hmm-mute">Не показывать письма от ${hmEsc(uw)}</button><button type="button" id="hmm-back">Вернуть</button></p>` : "")
     + (m.err && !it.length ? `<p class="hmm-err">Почта не ответила: ${hmEsc(m.err)} <a href="#" id="hmm-fix">Проверить подключение</a></p>`
-      : !it.length ? `<p class="hmm-empty">${HM.mailBusy ? "Смотрю почту…" : "Во входящих пусто."}</p>` : `<ul class="hmm-list">${rows}</ul>`)
-    + `<p class="hmm-foot">Голосом: «что нового в почте?», «прочитай письмо от…», «ответь ему, что…»</p>`;
+      : !it.length ? `<p class="hmm-empty">${HM.mailBusy ? "Смотрю почту…" : hidden ? "Новых писем для главной нет." : "Во входящих пусто."}</p>` : `<ul class="hmm-list">${rows}</ul>`)
+    + `<p class="hmm-foot">Голосом: «что нового в почте?», «прочитай письмо от…», «ответь ему, что…»`
+    + (hmmGet(HMM_K.hide, []).length || hmmGet(HMM_K.mute, []).length ? ` · <button type="button" class="hmm-all" id="hmm-all">Показать скрытые</button>` : "") + `</p></div>`;
   $("#hmm-re").onclick = () => hmMailLoad(true);
+  $("#hmm-fold").onclick = () => { hmmSet(HMM_K.fold, !fold); HM.mailUndo = null; hmMail(); };
+  $$("#hm-mail .hmm-x").forEach(b => b.onclick = (e) => { e.stopPropagation(); hmmHide(it[+b.dataset.x]); });
+  if ($("#hmm-back")) $("#hmm-back").onclick = () => { hmmSet(HMM_K.hide, hmmGet(HMM_K.hide, []).filter(k => k !== hmmKey(u))); HM.mailUndo = null; hmMail(); };
+  if ($("#hmm-mute")) $("#hmm-mute").onclick = () => { const mu = hmmGet(HMM_K.mute, []); mu.push(hmmFrom(u)); hmmSet(HMM_K.mute, [...new Set(mu)].slice(-100)); HM.mailUndo = null; hmMail(); };
+  if ($("#hmm-all")) $("#hmm-all").onclick = () => { hmmSet(HMM_K.hide, []); hmmSet(HMM_K.mute, []); HM.mailUndo = null; hmMail(); };
   if ($("#hmm-fix")) $("#hmm-fix").onclick = (e) => { e.preventDefault(); hmGo("connect"); setTimeout(() => { const b = $("#mail-box"); if (b) b.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250); };
   $$("#hm-mail .hmm-row").forEach(b => b.onclick = () => hmmOpen(it[+b.dataset.i]));
 }

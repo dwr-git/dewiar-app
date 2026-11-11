@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<base href="hud.html"><script src="assets/boot.js"></script>
+<base href="hud.html"><script src="assets/boot.js"></script><script src="assets/i18n.data.js"></script><script src="assets/i18n.js"></script>
 <meta charset="utf-8">
 <title>Dewiar</title>
 <link href="assets/fonts.css" rel="stylesheet">
@@ -109,6 +109,13 @@
   /* Строка состояния под портретом — не кнопка: стекло, слева точка. Слушает, думает, говорит — точка светится и
      дышит. «Ваша очередь» (ответ закончен, можно говорить без имени) — под надписью тонкая светлая черта тает к центру:
      столько осталось ждать; кончилась — снова покой и сигнал «не слушаю». */
+  /* идея №178 (11.11, Денис: «пишет „Я вас слушаю“, а непонятно, доходит ли речь — полоска уровня, которая дёргается от
+     голоса, и „слышу / тишина / не разобрал“»): пока слушает — пять полосок уровня микрофона; голос есть — они ярче */
+  #lvl { display: none; align-items: flex-end; gap: 2px; height: 13px; flex: none; }
+  #bubble.listen #lvl { display: inline-flex; }
+  #lvl i { width: 3px; height: calc(3px + var(--h, 0) * 10px); border-radius: 2px; background: currentColor; opacity: .35; transition: height .08s linear, opacity .2s; }
+  #bubble.hear #lvl i { opacity: .95; }
+  @media (prefers-reduced-motion: reduce) { #lvl i { transition: none; } }
   #bubble { flex: none; margin-top: 4px; position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 9px;
             background: var(--glass); box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
             color: #fff; border-radius: 999px; padding: 6px 18px 8px 15px; min-width: 120px; font-size: calc(13.5px * var(--okt, 1)); letter-spacing: .01em; transition: background .3s; }
@@ -600,7 +607,7 @@
 <div id="card">
   <div id="orb" title="Нажмите — говорить. Удерживайте (или пробел) — диктовка любой длины, отпустите — отправлю"><canvas id="cv"></canvas>
     <svg id="tarc" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="tarcg" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="90" y2="100"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient></defs><circle class="tk" cx="50" cy="50" r="48.5"/><circle class="fg" cx="50" cy="50" r="48.5" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" stroke="url(#tarcg)" transform="rotate(-90 50 50)"/><circle class="bead" cx="50" cy="1.5" r="1.45"/></svg><span id="tmini"></span></div>
-  <div id="bubble"><span id="say">Подключаюсь…</span><button id="stopb" type="button" aria-label="Остановить ответ" title="Остановить: замолчать и не отвечать дальше (Esc)"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.2"/></svg>Стоп</button></div>
+  <div id="bubble"><span id="lvl" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span id="say">Подключаюсь…</span><button id="stopb" type="button" aria-label="Остановить ответ" title="Остановить: замолчать и не отвечать дальше (Esc)"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2.2"/></svg>Стоп</button></div>
   <div id="mid">
     <div id="cap"><div class="you" id="you"></div><div id="act" title="Ход работы"></div><div class="bot" id="bot"></div><div id="media"></div><button id="more">Открыть целиком</button></div>
     <div id="yn"><button class="yes" id="y">Да</button><button id="ya" hidden title="Команды, которые только смотрят, на этом сервере — дальше без вопроса">Всегда</button><button id="n">Нет</button></div>
@@ -797,6 +804,15 @@ function stopNow(by) {
   if (by === "key") setTimeout(() => { if (canStop()) stopSync(); }, 1500);   // ядро так и не ответило «покой» — кнопка вернётся
   return true;
 }
+/* №178: полоски уровня микрофона (0…1); голос (громче порога) — «слышу» */
+let lvlHear = 0;
+function lvlSet(v) {
+  const bars = document.querySelectorAll("#lvl i"), k = [0.6, 0.85, 1, 0.85, 0.6];
+  v = Math.max(0, Math.min(1, (Number(v) || 0) * 3));
+  bars.forEach((b, i) => b.style.setProperty("--h", (v * k[i] * (0.75 + Math.random() * 0.25)).toFixed(2)));
+  if (v > 0.35) lvlHear = Date.now();
+  $("bubble").classList.toggle("hear", Date.now() - lvlHear < 600);
+}
 function setState(s) {
   if (s === "offline" && updating && Date.now() - updating < 180000) {
     state = "offline"; entity.set({ state: "idle" });
@@ -810,6 +826,7 @@ function setState(s) {
   if (hold && hold.on) return holdShow();
   const say = $("say"), bub = $("bubble");
   bub.classList.toggle("live", s === "listening" || s === "speaking" || s === "thinking");
+  bub.classList.toggle("listen", s === "listening"); if (s !== "listening") lvlSet(0);
   const left = turnUntil - Date.now();
   if (s === "listening" && left > 300) {
     say.textContent = "Ваша очередь — говорите";
@@ -1135,7 +1152,11 @@ core.on("hello", d => {
 .on("settings", e => { TEXT_MODE = !!((e.settings || {}).ui || {}).text_mode; setTextMode(TEXT_MODE); applyLook((e.settings || {}).ui); setLocal(((e.settings || {}).privacy || {}).local_only); featuresSet((e.settings || {}).features); })   // студия → «Оформление» и «Безопасность»
 .on("persona", e => applyPersona(e.persona))
 .on("personas", e => { personas = e.personas; applyPersona(current ? current.id : personas[0].id); })
-.on("level", e => entity.set({ level: e.v, voice: e.src === "voice" }))
+.on("level", e => { entity.set({ level: e.v, voice: e.src === "voice" }); if (e.src !== "voice" && state === "listening") lvlSet(e.v); })
+.on("listen_none", e => {                  // №178: ждала вопрос — речи не было: сказать почему, без голоса
+  const say = $("say"); say.textContent = t(e && e.sound ? "hud.listen.noise" : "hud.listen.none"); say.title = t("hud.listen.tip");
+  clearTimeout(window._lnT); window._lnT = setTimeout(() => { if (state === "idle") setState("idle"); }, 6000);
+})
 .on("wake", () => { /* имя услышано — об этом говорит надпись «Я вас слушаю»; карточку не открываем:
                        если имя почудилось (шум, телевизор), не останется висящих точек */ })
 .on("heard", e => { if (e.text) showCap(e.text, WAIT); else showCap("", "Слушаю…"); })

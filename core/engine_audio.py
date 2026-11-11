@@ -1007,7 +1007,8 @@ class AudioMixin:
             # ждали вопрос, окно истекло, а фразы нет — засыпаем и пишем в журнал, почему могли не услышать
             if (self.state == "listening" and now > self.follow_up_until and not in_speech
                     and now - self.wake_time > 4 and self.stt_q.empty()):
-                if self._listen_peak >= 500 and self._listen_vad >= 0.6:
+                sound = self._listen_peak >= 500 and self._listen_vad >= 0.6
+                if sound:
                     log.info("🎤 Ждал вопрос — звук был (громкость %.0f, «это речь» %.2f), но фраза не сложилась: "
                              "вероятно, вокруг музыка или разговор", self._listen_peak, self._listen_vad)
                 else:
@@ -1015,6 +1016,8 @@ class AudioMixin:
                              "обычный голос — от 500 и 0.6). Если вы говорили — микрофон слишком тихий или не тот",
                              self._listen_peak, self._listen_vad)
                 self.set_state("idle")
+                if self._listen_peak > 30:                  # №178: что-то было, но не вопрос — виджет скажет почему (тишину не трогаем)
+                    self.emit("listen_none", sound=bool(sound), peak=round(self._listen_peak), speech=round(self._listen_vad, 2))
                 self.play_tone("sleep")                    # «больше не слушаю» — ниже, чем «слушаю»: понятно без взгляда на экран
 
     def _on_utterance(self, pcm, t0, now):

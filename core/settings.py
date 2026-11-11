@@ -179,6 +179,7 @@ DEFAULTS = {
                "told": False,
                "mem_warn": True},  # предупреждать, когда памяти не хватает (открыто много других программ) — engine_brain._memory_watch
     "ui": {"hud_x": None, "hud_y": None, "subtitles": True, "force_x11": True, "mic_off": False,
+           "lang": "auto",               # язык программы (0.88): auto — по системе, ru, en (core/i18n.py)
            "wayland_sharp": False,          # Linux: окна прямо на Wayland — чёткий текст при дробном масштабе GNOME (№442), но без «поверх всех» и места окна
            "hud_w": None, "hud_h": None,    # свой размер карточки виджета (растянули за угол), px при масштабе 100 %
            "on_top": True,                  # виджет поверх всех окон (идея №48: можно выключить — студия → «Оформление»)
@@ -319,6 +320,10 @@ class Settings:
                     self.data["ui"]["welcome"] = "done"      # уже пользуются — «Первые шаги» не показываем
                 if "intro" not in (raw.get("ui") or {}):
                     self.data["ui"]["intro"] = "done"        # и знакомство само не начинается (кнопкой — можно)
+                if "lang" not in (raw.get("ui") or {}):
+                    # 0.88: уже пользуются (по-русски) — так и остаётся, даже на английской Windows; «как в системе» —
+                    # только у новых установок, выбрать другой язык — «Оформление» → «Язык программы»
+                    self.data["ui"]["lang"] = "ru"
                 if (raw.get("tts") or {}).get("speed", 1.0) == 1.0 and not (raw.get("tts") or {}).get("speed_v2"):
                     self.data["tts"]["speed"] = 1.25                     # 1.0 — прежнее значение по умолчанию, не выбор пользователя
                 self.data["tts"]["speed_v2"] = True                       # перевод один раз: выбранные потом 1.0 не трогаем

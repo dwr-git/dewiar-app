@@ -971,6 +971,14 @@ class AnswerMixin:
             mine = ""
         if mine:
             out += " " + mine
+        try:                                           # 0.88: программа на английском — и ответы по-английски
+            import i18n
+            from lang2 import en_hint as _en_q
+            if i18n.resolve(self.s.get("ui", "lang")) == "en" and not _en_q(text):
+                out += (" Язык программы у человека — английский: отвечай по-английски (и голосом тоже), если он сам не "
+                        "пишет или не говорит на другом языке.")
+        except Exception:  # noqa: BLE001
+            log.debug("язык программы", exc_info=True)
         try:                                           # №651: «убери вопросы в конце» — к каждому вопросу, важнее характера
             import quality as Q
             sty = Q.style_rules_line(self.workspace.root / Q.TALK_LESSONS_FILE)
@@ -2090,6 +2098,12 @@ class AnswerMixin:
                 prof = dict(prof, temperature=temp)       # творческая просьба — смелее (отзыв 17.10 про креатив)
                 log.info("🎨 Творческая просьба — температура %.2f", temp)
             specs = self.toolbox.specs() if self.s.get("tools", "enabled_all") is not False else []
+            if specs and getattr(turn, "via_job", False) and "[Дело по расписанию]" in text:
+                from engine_music import SUMMARY_JOB_RX
+                if SUMMARY_JOB_RX.search(text.split("»", 1)[0]):
+                    # владелец 11.11, 21:00: «Итог дня» — «Дела: итог», «Деньги: отчёт», а потом навык «Проверка договора»
+                    # (contract-check) — и ни слова итога. Итогу навыки плагинов не нужны
+                    specs = [x for x in specs if x.get("name") != "use_skill"]
             mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(prof))
             if mode in ("native", "prompt"):
                 prof = dict(prof, tools_mode=mode)

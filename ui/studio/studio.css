@@ -4029,18 +4029,65 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
 .sc-lims { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .sc-side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .sc-prev { --sc: #6a5cf0; position: relative; padding: 18px 18px 74px; border-radius: 26px; background: color-mix(in srgb, var(--sc) 10%, var(--glass, transparent)); }
-.scp-win { border-radius: 20px; overflow: hidden; background: #fff; color: #1d2230; box-shadow: 0 22px 50px -26px rgba(20,24,40,.6); }
-.scp-win header { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--sc) 12%, #fff); }
+/* окно — темами, как на сайте (server/dwrapp/sitechat.php; владелец 11.11) */
+.scp-win { --bg: #f7f8fc; --ink: #1b2030; --mut: #687086; --soft: #ffffff; --in: #ffffff; --line: transparent;
+  --head: linear-gradient(135deg, color-mix(in srgb, var(--sc) 16%, #ffffff), #ffffff 70%); --hink: var(--ink); --hmut: var(--mut);
+  --a-sh: 0 1px 2px rgba(20,30,60,.06), 0 8px 18px -12px rgba(20,30,60,.28); --u: linear-gradient(135deg, var(--sc), color-mix(in srgb, var(--sc) 82%, #000));
+  --r: 20px; --rb: 16px; --rt: 5px; --in-sh: 0 1px 2px rgba(20,30,60,.06), 0 10px 24px -16px rgba(20,30,60,.35); --link: var(--sc);
+  border-radius: var(--r); overflow: hidden; background: var(--bg); color: var(--ink); box-shadow: 0 22px 50px -26px rgba(20,24,40,.6); transition: background .2s ease, color .2s ease; }
+.scp-win[data-theme="night"] { --bg: #11141c; --ink: #e9ecf4; --mut: #8d95a8; --soft: #1c2130; --in: #1c2130; --a-sh: none; --in-sh: inset 0 0 0 1px rgba(255,255,255,.06);
+  --head: linear-gradient(180deg, color-mix(in srgb, var(--sc) 26%, #11141c), #11141c); --link: color-mix(in srgb, var(--sc) 55%, #ffffff); }
+.scp-win[data-theme="brand"] { --bg: #ffffff; --soft: #f1f2f6; --in: #f1f2f6; --head: var(--sc); --hink: #fff; --hmut: rgba(255,255,255,.82); --a-sh: none; --u: var(--sc); --in-sh: none; }
+.scp-win[data-theme="classic"] { --bg: #ffffff; --ink: #16191f; --mut: #6a707c; --soft: #f3f4f6; --in: #ffffff; --line: #e3e6eb; --head: #ffffff; --a-sh: none; --u: var(--sc);
+  --r: 12px; --rb: 10px; --rt: 4px; --in-sh: inset 0 0 0 1px #dfe2e8; }
+.scp-win[data-theme="neo"] { --bg: #e6ebf3; --ink: #27304a; --mut: #6c7690; --soft: #e6ebf3; --in: #e6ebf3; --head: #e6ebf3;
+  --a-sh: 4px 4px 10px rgba(150,165,190,.55), -4px -4px 10px rgba(255,255,255,.95); --in-sh: inset 3px 3px 7px rgba(150,165,190,.55), inset -3px -3px 7px rgba(255,255,255,.95); }
+.scp-win[data-theme="neo-dark"] { --bg: #232836; --ink: #e6e9f2; --mut: #9199ad; --soft: #232836; --in: #232836; --head: #232836;
+  --a-sh: 4px 4px 10px rgba(0,0,0,.45), -3px -3px 8px rgba(255,255,255,.05); --in-sh: inset 3px 3px 7px rgba(0,0,0,.45), inset -3px -3px 7px rgba(255,255,255,.05);
+  --link: color-mix(in srgb, var(--sc) 55%, #ffffff); }
+.scp-win[data-theme^="neo"] .scp-ava, .scp-win[data-theme^="neo"] .scp-u, .scp-win[data-theme^="neo"] .scp-in i { box-shadow: var(--a-sh); }
+.scp-win header { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--head); color: var(--hink); border-bottom: 1px solid var(--line); }
 .scp-ava { width: 38px; height: 38px; border-radius: 50%; background: var(--sc) center / cover no-repeat; color: #fff; display: grid; place-items: center; font-style: normal; font-weight: 700; flex: none; }
-.scp-win header b { display: block; font-size: 14.5px; } .scp-win header small { font-size: 12px; color: #6b7180; }
+.scp-win[data-theme="brand"] .scp-ava { box-shadow: 0 0 0 2px rgba(255,255,255,.85); } .scp-win[data-theme="classic"] .scp-ava { border-radius: 10px; }
+.scp-win header b { display: block; font-size: 14.5px; } .scp-win header small { font-size: 12px; color: var(--hmut); }
 .scp-msgs { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
-.scp-msgs p { margin: 0; max-width: 86%; padding: 8px 12px; border-radius: 16px; font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
-.scp-a { align-self: flex-start; background: #eceef4; border-bottom-left-radius: 5px; } .scp-u { align-self: flex-end; background: var(--sc); color: #fff; border-bottom-right-radius: 5px; }
+.scp-msgs p { margin: 0; max-width: 86%; padding: 8px 12px; border-radius: var(--rb); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.scp-a { align-self: flex-start; background: var(--soft); border-bottom-left-radius: var(--rt) !important; box-shadow: var(--a-sh); }
+.scp-win[data-theme="classic"] .scp-a { box-shadow: inset 0 0 0 1px var(--line); }
+.scp-u { align-self: flex-end; background: var(--u); color: #fff; border-bottom-right-radius: var(--rt) !important; }
 .scp-dim { opacity: .7; font-style: italic; }
-.scp-in { margin: 0 12px 12px; display: flex; align-items: center; gap: 8px; padding: 9px 9px 9px 14px; border-radius: 14px; background: #eceef4; color: #6b7180; font-size: 13.5px; }
-.scp-in span { flex: 1; } .scp-in i { width: 30px; height: 30px; border-radius: 10px; background: var(--sc); color: #fff; display: grid; place-items: center; font-style: normal; font-weight: 700; }
-.scp-lead { display: block; padding: 0 14px 12px; color: var(--sc); font-weight: 650; font-size: 12.5px; }
-.scp-btn { position: absolute; right: 18px; bottom: 14px; width: 48px; height: 48px; border-radius: 50%; background: var(--sc); display: grid; place-items: center; box-shadow: 0 10px 24px -8px rgba(0,0,0,.45); }
+.scp-in { margin: 0 12px 12px; display: flex; align-items: center; gap: 8px; padding: 7px 7px 7px 14px; border-radius: calc(var(--r) - 6px); background: var(--in); box-shadow: var(--in-sh); color: var(--mut); font-size: 13.5px; }
+.scp-in span { flex: 1; } .scp-in i { width: 32px; height: 32px; border-radius: calc(var(--r) - 9px); background: var(--u); color: #fff; display: grid; place-items: center; font-style: normal; font-weight: 700; }
+.scp-lead { display: block; padding: 0 14px 12px; color: var(--link); font-weight: 650; font-size: 12.5px; }
+.scp-btn { position: absolute; right: 18px; bottom: 14px; width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, var(--sc), color-mix(in srgb, var(--sc) 80%, #000));
+  display: grid; place-items: center; box-shadow: 0 12px 26px -10px var(--sc), 0 4px 10px -4px rgba(0,0,0,.3); }
+.scp-btn.sq { background: var(--sc); }
+.sc-prev[data-theme="night"] { background: color-mix(in srgb, var(--sc) 14%, #1a1d27); }
+.sc-prev[data-theme="neo"] { background: #dfe5ee; } .sc-prev[data-theme="neo-dark"] { background: #1c202b; }
+/* выбор оформления: плитка с крошечным окном этой темы */
+.sc-thw { margin-top: 14px; }
+.sc-ths { --sc: var(--accent); display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.sc-th { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 8px; border: 0; border-radius: 16px; background: rgba(127,127,140,.08); color: inherit; font: inherit; text-align: left; cursor: pointer;
+  box-shadow: inset 0 0 0 1.5px transparent; transition: background .15s ease, box-shadow .15s ease; }
+.sc-th:hover { background: rgba(127,127,140,.14); }
+.sc-th:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sc-th.on { background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.sc-th span { min-width: 0; } .sc-th b { display: block; font-size: 13px; font-weight: 650; } .sc-th small { display: block; font-size: 11.5px; line-height: 1.3; color: var(--muted); }
+.sc-sw { flex: none; position: relative; width: 44px; height: 52px; border-radius: 10px; overflow: hidden; background: #f7f8fc; box-shadow: 0 4px 12px -6px rgba(20,30,60,.4); }
+.sc-sw em { position: absolute; inset: 0 0 auto; height: 13px; background: linear-gradient(135deg, color-mix(in srgb, var(--sc) 22%, #fff), #fff); }
+.sc-sw u { position: absolute; left: 5px; top: 19px; width: 24px; height: 9px; border-radius: 5px 5px 5px 2px; background: #fff; box-shadow: 0 1px 3px rgba(20,30,60,.18); }
+.sc-sw s { position: absolute; right: 5px; top: 33px; width: 20px; height: 9px; border-radius: 5px 5px 2px 5px; background: var(--sc); }
+.sc-sw[data-theme="night"] { background: #11141c; } .sc-sw[data-theme="night"] em { background: linear-gradient(180deg, color-mix(in srgb, var(--sc) 35%, #11141c), #11141c); }
+.sc-sw[data-theme="night"] u { background: #262c3c; box-shadow: none; }
+.sc-sw[data-theme="auto"] { background: linear-gradient(135deg, #f7f8fc 50%, #11141c 50%); } .sc-sw[data-theme="auto"] em { background: linear-gradient(90deg, color-mix(in srgb, var(--sc) 22%, #fff) 50%, color-mix(in srgb, var(--sc) 35%, #11141c) 50%); }
+.sc-sw[data-theme="brand"] { background: #fff; } .sc-sw[data-theme="brand"] em { background: var(--sc); } .sc-sw[data-theme="brand"] u { background: #eef0f5; box-shadow: none; }
+.sc-sw[data-theme="classic"] { background: #fff; border-radius: 6px; box-shadow: inset 0 0 0 1px #dfe2e8, 0 4px 12px -8px rgba(20,30,60,.4); }
+.sc-sw[data-theme="classic"] em { background: #fff; border-bottom: 1px solid #e3e6eb; } .sc-sw[data-theme="classic"] u { border-radius: 3px; background: #f3f4f6; box-shadow: inset 0 0 0 1px #e3e6eb; }
+.sc-sw[data-theme="classic"] s { border-radius: 3px; }
+.sc-sw[data-theme="neo"] { background: #e6ebf3; } .sc-sw[data-theme="neo"] em { background: #e6ebf3; }
+.sc-sw[data-theme="neo"] u { background: #e6ebf3; box-shadow: 2px 2px 4px rgba(150,165,190,.6), -2px -2px 4px #fff; }
+.sc-sw[data-theme="neo-dark"] { background: #232836; } .sc-sw[data-theme="neo-dark"] em { background: #232836; }
+.sc-sw[data-theme="neo-dark"] u { background: #232836; box-shadow: 2px 2px 4px rgba(0,0,0,.5), -2px -2px 4px rgba(255,255,255,.06); }
 .scp-btn svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .sc-pub { align-self: stretch; justify-content: center; }
 .sc-err { margin: 0; font-size: 13px; line-height: 1.5; color: var(--bad, #FF6B8A); }
@@ -4145,7 +4192,34 @@ html.st-light .fd-res { background: #f6f8fc; box-shadow: 0 24px 60px -18px rgba(
 @media (prefers-reduced-motion: reduce) { .hm-mail.hl { animation: none; } }
 .hmm-head { display: flex; align-items: center; gap: 10px; margin: 0 4px 8px; }
 .hmm-head h2 { margin: 0; font-size: 18px; }
-.hmm-n { padding: 3px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.hmm-h2 { flex: 0 1 auto; min-width: 0; font-weight: inherit; }
+.hm-mail.fold .hmm-h2 { flex: 1 1 auto; }
+.hmm-fold { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; padding: 4px 8px 4px 4px; margin: -4px 0 -4px -4px; border: 0; border-radius: 12px;
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hmm-fold:hover, .hmm-fold:focus-visible { background: rgba(127,127,140,.1); outline: none; }
+.hmm-h { font: 600 18px/1.2 "Unbounded", "Ubuntu", sans-serif; letter-spacing: .01em; color: var(--ink); white-space: nowrap; }
+.hmm-chev { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform .2s ease; }
+.hm-mail.fold .hmm-chev { transform: rotate(-90deg); }
+.hmm-peek { min-width: 0; flex: 1 1 auto; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hmm-peek b { font-weight: 600; color: var(--ink); }
+.hm-mail.fold { padding-top: 12px; padding-bottom: 12px; }
+.hm-mail.fold .hmm-head { margin-bottom: 0; }
+.hmm-wrap[hidden] { display: none; }
+.hmm-list li { position: relative; display: flex; align-items: center; }
+.hmm-list li .hmm-row { flex: 1; min-width: 0; padding-right: 40px; }
+.hmm-x { position: absolute; right: 6px; top: 50%; translate: 0 -50%; width: 28px; height: 28px; border: 0; border-radius: 9px; display: grid; place-items: center;
+  background: var(--glass, rgba(255,255,255,.8)); color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .15s ease; }
+.hmm-list li:hover .hmm-x, .hmm-x:focus-visible { opacity: 1; }
+.hmm-x:hover, .hmm-x:focus-visible { color: var(--ink); background: rgba(127,127,140,.16); outline: none; }
+.hmm-x svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+@media (hover: none) { .hmm-x { opacity: .7; } }
+.hmm-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 10px 8px; padding: 9px 12px; border-radius: 12px; font-size: 13px;
+  color: var(--ink); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.hmm-undo button, .hmm-all { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.hmm-undo button:hover, .hmm-all:hover, .hmm-undo button:focus-visible, .hmm-all:focus-visible { text-decoration: underline; outline: none; }
+@media (prefers-reduced-motion: reduce) { .hmm-chev { transition: none; } }
+.hmm-n { flex: none; white-space: nowrap; padding: 3px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
 .hmm-sp { flex: 1; }
 .hmm-re { width: 34px; height: 34px; border: 0; border-radius: 11px; display: grid; place-items: center; background: none; color: var(--muted); cursor: pointer; }
 .hmm-re:hover, .hmm-re:focus-visible { background: rgba(127,127,140,.13); color: var(--ink); outline: none; }
@@ -4313,7 +4387,11 @@ nav .nh { display: none !important; }
 .sh-set:focus-visible { outline: 0; box-shadow: 0 0 0 2px var(--accent); }
 .sh-now { color: var(--muted); font-size: 12.5px; margin: 10px 2px 14px; }
 .sh-gs { columns: 300px 3; column-gap: 14px; }                       /* панели разной высоты — колонками, без пустот */
-.sh-g { border-radius: 18px; background: var(--glass); padding: 12px 16px 6px; min-width: 0; break-inside: avoid; margin-bottom: 14px; }
+.sh-g { border-radius: 18px; background: var(--glass); padding: 12px 16px 6px; min-width: 0; break-inside: avoid; margin-bottom: 14px;
+  /* владелец 11.11 (Ubuntu): «светлая тень в центре блоков» — WebKitGTK не знает break-inside и рвал панель между колонками
+     (кусок с тенью — в начале соседней колонки). Строчный блок колонками не рвётся нигде */
+  -webkit-column-break-inside: avoid; page-break-inside: avoid; display: inline-block; width: 100%; vertical-align: top; box-sizing: border-box; }
+.sh-g[hidden] { display: none; }
 .sh-gh { display: flex; align-items: center; gap: 10px; padding: 2px 0 8px; }
 .sh-gh b { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .sh-gh small { margin-left: auto; color: var(--dim); font-size: 12px; white-space: nowrap; }

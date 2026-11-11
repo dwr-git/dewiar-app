@@ -24,7 +24,8 @@ from pathlib import Path
 log = logging.getLogger("dewiar.sitechat")
 KB_MAX = 60000
 DEF = {"persona": "", "title": "", "greeting": "", "brief": "", "kb": "", "folders": False, "ask_contact": True,
-       "per_ip": 40, "per_day": 500, "on": False}
+       "per_ip": 40, "per_day": 500, "on": False, "theme": "auto"}
+THEMES = ("soft", "night", "auto", "brand", "classic", "neo", "neo-dark")   # оформление окна чата (владелец 11.11): server/dwrapp/sitechat.php
 PHONE_RX = re.compile(r"\+?\d[\d\s()-]{5,}\d")
 EMAIL_RX = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
@@ -139,6 +140,7 @@ class SiteChat:
                 "brief": c.get("brief") or "", "greeting": c.get("greeting") or "", "title": c.get("title") or "", "kb": kb[:KB_MAX],
                 "color": readable(p.get("color")) if re.fullmatch(r"#[0-9a-fA-F]{6}", str(p.get("color") or "")) else "#6a5cf0",
                 "avatar": self._avatar(p), "ask_contact": bool(c.get("ask_contact")), "on": True,
+                "theme": c.get("theme") if c.get("theme") in THEMES else "auto",
                 "per_ip": int(c.get("per_ip") or 40), "per_day": int(c.get("per_day") or 500)}
 
     def publish(self, patch=None):

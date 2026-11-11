@@ -41,6 +41,7 @@ function grNav(gs) {
     setTimeout(() => clOpen(b.dataset.gid), $("#p-close.cur") ? 0 : 60);
   });
   clFaces(box);
+  if (typeof ngApply === "function") ngApply();           // свёрнутая «Семья и близкие» — и группы свёрнуты (владелец 11.11)
 }
 /* шапка переписки группы; true — это группа */
 function grHead() {

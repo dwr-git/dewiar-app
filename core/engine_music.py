@@ -292,6 +292,10 @@ class MusicMixin:
         ok, text = res.get("ok"), res.get("text") or "нет ответа за 15 минут"
         if ok and not item.get("brief") and self.job_nothing(text):
             log.info("🗓 «%s»: нового нет — не беспокою", title)
+            if SUMMARY_JOB_RX.search(item.get("text", "")) or item.get("preset") in ("evening", "week"):
+                # владелец 11.11: «в 21:00 что-то запустилось — и всё, результат нулевой, непонятно, что это и зачем»:
+                # итог молчит (сегодня только привычки) — строкой в виджете, без голоса
+                self.note(f"🗓 {title}: сегодня, кроме привычных дел, рассказать нечего")
         elif ok and to_bot:
             bot.send(text)                               # только ответ: поручение и заголовок в чат не пишем (29.10)
             self.emit("push", title=f"🗓 {title}", text=text[:300], critical=False)

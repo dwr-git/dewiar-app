@@ -8,7 +8,7 @@
      на Linux (скрипт сразу за рамкой), #раздел — какой раздел открыть. -->
 <html lang="ru">
 <head>
-<base href="settings.html"><script src="assets/boot.js"></script>
+<base href="settings.html"><script src="assets/boot.js"></script><script src="assets/i18n.data.js"></script><script src="assets/i18n.js"></script>
 <meta charset="utf-8">
 <title>Dewiar — студия</title>
 <link href="assets/fonts.css" rel="stylesheet">
@@ -63,81 +63,81 @@
 </script>
 <nav id="nav-main">
   <div class="brand"><canvas id="brand"></canvas><div><b id="bname">Dewiar</b><span id="bsub">голосовой ассистент</span></div>
-    <button class="nav-hide" id="nav-hide" type="button" title="Спрятать меню — раздел на всю ширину (Ctrl+B)" aria-label="Спрятать меню" aria-controls="nav-main" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15M15.5 9.5 13 12l2.5 2.5"/></svg></button></div>
-  <button class="cchip" id="nav-cloud" style="display:none" title="ИИ-баланс: на сколько хватит моделей Dewiar. Нажмите — подробности и пополнение"><span>ИИ-баланс</span><em></em><i><b></b></i></button>
-  <button data-p="home" class="cur" title="Сегодня и все приложения Dewiar">Главная</button>
-  <button data-p="node" class="nav-node" title="Нода Лиры: компьютер помогает Лире отвечать другим людям, пока он вам не нужен, — и зарабатывает талеры">Нода Лиры<i class="ndot" id="node-dot"></i></button>
-  <div class="ng">Для себя</div>
-  <button data-p="chat" title="Вся переписка с персонажами — голосом и текстом">Чат</button>
-  <button data-p="calendar">Календарь</button>
-  <button data-p="reminders">Дела и напоминания</button>
-  <button data-p="notes" title="Все заметки: поиск, фото и файлы">Заметки</button>
-  <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года">Платежи<i class="ndot" id="pay-dot"></i></button>
-  <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать">Сейф паролей</button>
-  <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками">Музыка</button>
-  <div class="ng">Лира делает сама</div>
-  <button data-p="tasks" title="Большая работа, которую Лира делает сама: отчёт, сравнение, программа — пишет, когда готово">Задачи</button>
-  <button data-p="watch" title="«Дозор»: Лира присмотрит за экраном, папкой или страницей и скажет, когда готово">Дозор<i class="ndot" id="wt-dot"></i></button>
-  <button data-p="art" hidden title="Рисунки и анимации плагина «Художник»">Рисунки</button>
-  <button data-p="council" title="«Совет ИИ»: персонажи на разных моделях вместе обсуждают ваш вопрос, спорят и подводят итог">Совет ИИ</button>
-  <button data-p="podcast" title="«Подкасты»: дайте файл, ссылку или тему — Лира и Патрик обсудят её вслух, получится выпуск в MP3 с текстом">Подкасты</button>
-  <div class="ng">Семья и близкие</div>
-  <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
+    <button class="nav-hide" id="nav-hide" type="button" title="Спрятать меню — раздел на всю ширину (Ctrl+B)" aria-label="Спрятать меню" data-i18n-title="nav.hide.tip" data-i18n-aria-label="nav.hide" aria-controls="nav-main" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15M15.5 9.5 13 12l2.5 2.5"/></svg></button></div>
+  <button class="cchip" id="nav-cloud" style="display:none" title="ИИ-баланс: на сколько хватит моделей Dewiar. Нажмите — подробности и пополнение" data-i18n-title="nav.cloud.tip"><span data-i18n="nav.cloud">ИИ-баланс</span><em></em><i><b></b></i></button>
+  <button data-p="home" class="cur" title="Сегодня и все приложения Dewiar" data-i18n="nav.home" data-i18n-title="nav.home.tip">Главная</button>
+  <button data-p="node" class="nav-node" title="Нода Лиры: компьютер помогает Лире отвечать другим людям, пока он вам не нужен, — и зарабатывает талеры" data-i18n="nav.node" data-i18n-title="nav.node.tip">Нода Лиры<i class="ndot" id="node-dot"></i></button>
+  <div class="ng" data-fold-k="Для себя" data-i18n="nav.g.self">Для себя</div>
+  <button data-p="chat" title="Вся переписка с персонажами — голосом и текстом" data-i18n="nav.chat" data-i18n-title="nav.chat.tip">Чат</button>
+  <button data-p="calendar" data-i18n="nav.calendar">Календарь</button>
+  <button data-p="reminders" data-i18n="nav.reminders">Дела и напоминания</button>
+  <button data-p="notes" title="Все заметки: поиск, фото и файлы" data-i18n="nav.notes" data-i18n-title="nav.notes.tip">Заметки</button>
+  <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года" data-i18n="nav.pay" data-i18n-title="nav.pay.tip">Платежи<i class="ndot" id="pay-dot"></i></button>
+  <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать" data-i18n="nav.vault" data-i18n-title="nav.vault.tip">Сейф паролей</button>
+  <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками" data-i18n="nav.music" data-i18n-title="nav.music.tip">Музыка</button>
+  <div class="ng" data-fold-k="Лира делает сама" data-i18n="nav.g.auto">Лира делает сама</div>
+  <button data-p="tasks" title="Большая работа, которую Лира делает сама: отчёт, сравнение, программа — пишет, когда готово" data-i18n="nav.tasks" data-i18n-title="nav.tasks.tip">Задачи</button>
+  <button data-p="watch" title="«Дозор»: Лира присмотрит за экраном, папкой или страницей и скажет, когда готово" data-i18n="nav.watch" data-i18n-title="nav.watch.tip">Дозор<i class="ndot" id="wt-dot"></i></button>
+  <button data-p="art" hidden title="Рисунки и анимации плагина «Художник»" data-i18n="nav.art" data-i18n-title="nav.art.tip">Рисунки</button>
+  <button data-p="council" title="«Совет ИИ»: персонажи на разных моделях вместе обсуждают ваш вопрос, спорят и подводят итог" data-i18n="nav.council" data-i18n-title="nav.council.tip">Совет ИИ</button>
+  <button data-p="podcast" title="«Подкасты»: дайте файл, ссылку или тему — Лира и Патрик обсудят её вслух, получится выпуск в MP3 с текстом" data-i18n="nav.podcast" data-i18n-title="nav.podcast.tip">Подкасты</button>
+  <div class="ng" data-fold-k="Семья и близкие" data-i18n="nav.g.family">Семья и близкие</div>
+  <button data-p="close" title="Переписка с помощниками близких людей" data-i18n="nav.close" data-i18n-title="nav.close.tip">Близкие<i class="ndot" id="close-dot"></i></button>
   <div class="nav-groups" id="nav-groups" hidden></div>
-  <button data-p="family" title="Семейный бюджет: общие траты и платежи с близкими">Семья<i class="ndot" id="fam-dot"></i></button>
-  <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды">Рефералы</button>
-  <div class="ng">Режимы Лиры</div>
-  <button data-p="kids" title="Режим «Для ребёнка»: Лира на этом компьютере становится другом ребёнка — безопасные темы, время и отчёт вам">Для ребёнка</button>
-  <button data-p="senior" title="Режим «Для старших»: крупно и просто, лекарства, «всё хорошо» близким, защита от мошенников">Для старших</button>
-  <div class="ng">Работа</div>
-  <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden>Поручения<i class="ndot" id="team-dot"></i></button>
-  <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden>Клиенты<i class="ndot" id="cr-dot"></i></button>
-  <button data-p="mailing" title="Рассылка: каждому своё письмо с вашей почты — клиентам, сотрудникам или по списку" hidden>Рассылка</button>
-  <button data-p="sites" title="Сайты: Лира делает и переделывает сайт одной фразой, публикация на имя.dewiar.pro, аналитика и заявки">Сайты</button>
-  <button data-p="sitechat" title="Чат для сайта: консультант отвечает посетителям вашего сайта, заявки — в «Клиенты»" hidden>Чат для сайта</button>
-  <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах">Суфлёр</button>
-  <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям">Бот в Telegram</button>
+  <button data-p="family" title="Семейный бюджет: общие траты и платежи с близкими" data-i18n="nav.family" data-i18n-title="nav.family.tip">Семья<i class="ndot" id="fam-dot"></i></button>
+  <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды" data-i18n="nav.ref" data-i18n-title="nav.ref.tip">Рефералы</button>
+  <div class="ng" data-fold-k="Режимы Лиры" data-i18n="nav.g.modes">Режимы Лиры</div>
+  <button data-p="kids" title="Режим «Для ребёнка»: Лира на этом компьютере становится другом ребёнка — безопасные темы, время и отчёт вам" data-i18n="nav.kids" data-i18n-title="nav.kids.tip">Для ребёнка</button>
+  <button data-p="senior" title="Режим «Для старших»: крупно и просто, лекарства, «всё хорошо» близким, защита от мошенников" data-i18n="nav.senior" data-i18n-title="nav.senior.tip">Для старших</button>
+  <div class="ng" data-fold-k="Работа" data-i18n="nav.g.work">Работа</div>
+  <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden data-i18n="nav.team" data-i18n-title="nav.team.tip">Поручения<i class="ndot" id="team-dot"></i></button>
+  <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden data-i18n="nav.clients" data-i18n-title="nav.clients.tip">Клиенты<i class="ndot" id="cr-dot"></i></button>
+  <button data-p="mailing" title="Рассылка: каждому своё письмо с вашей почты — клиентам, сотрудникам или по списку" hidden data-i18n="nav.mailing" data-i18n-title="nav.mailing.tip">Рассылка</button>
+  <button data-p="sites" title="Сайты: Лира делает и переделывает сайт одной фразой, публикация на имя.dewiar.pro, аналитика и заявки" data-i18n="nav.sites" data-i18n-title="nav.sites.tip">Сайты</button>
+  <button data-p="sitechat" title="Чат для сайта: консультант отвечает посетителям вашего сайта, заявки — в «Клиенты»" hidden data-i18n="nav.sitechat" data-i18n-title="nav.sitechat.tip">Чат для сайта</button>
+  <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах" data-i18n="nav.prompter" data-i18n-title="nav.prompter.tip">Суфлёр</button>
+  <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям" data-i18n="nav.pbot" data-i18n-title="nav.pbot.tip">Бот в Telegram</button>
   <!-- «Плагины» (03.11): пункт на каждый установленный плагин — его страница (studio/plugpage.js, раздел p-plg) -->
-  <div class="ng" id="nav-plg-h" hidden>Плагины</div>
+  <div class="ng" id="nav-plg-h" hidden data-fold-k="Плагины" data-i18n="nav.g.plugins">Плагины</div>
   <div class="nav-groups nav-plugins" id="nav-plugins" hidden></div>
-  <button class="nav-g nav-plg nav-plg-new" id="nav-plg-new" type="button" title="Опишите словами — Лира сделает плагин и встроит его сюда"><i class="nav-gi emo nav-pi" aria-hidden="true">✦</i><span>Создать плагин</span></button>
-  <button class="nav-g nav-plg nav-plg-all" id="nav-plg-all" type="button" title="Готовые плагины Dewiar: Художник, Переводчик, Путешествия, Рекрутер, Тендеры и другие — поставить одним нажатием"><i class="nav-gi emo nav-pi" aria-hidden="true">🧩</i><span>Все плагины</span></button>
-  <button data-p="plg" class="sub" hidden>Плагин</button>
-  <button data-p="plgnew" class="sub" hidden>Создать плагин</button>
-  <div class="ng">Обучение</div>
-  <button data-p="course" title="Короткие уроки по пять минут">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
-  <button data-p="lessons" title="ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок">Видеоуроки</button>
-  <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира">Вопрос — ответ</button>
-  <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу">Что я умею</button>
-  <div class="ng">Знания</div>
-  <button data-p="docs" title="Лира читает ваши папки и отвечает по ним">Документы</button>
-  <button data-p="memory">Память</button>
-  <button data-p="diary" title="Дневник, душа, конституция и что ассистент знает о вас">Душа</button>
-  <button data-p="soul" class="sub">Душа</button>
-  <button data-p="const" class="sub">Конституция</button>
-  <button data-p="me" class="sub">Обо мне</button>
-  <button data-p="folder">Папка</button>
-  <div class="ng">Настройка</div>
-  <button data-p="personas">Персонажи</button>
-  <button data-p="brain">Мозг</button>
-  <button data-p="ears">Слух</button>
-  <button data-p="voice">Голос</button>
-  <button data-p="look">Оформление</button>
-  <button data-p="sound">Звук и поведение</button>
-  <button data-p="hands">Руки</button>
-  <button data-p="skills">Плагины</button>
-  <button data-p="features" title="Что показывать: игры, встречи, радар, суфлёр — включайте только нужное">Возможности</button>
-  <div class="ng">Связи и данные</div>
-  <button data-p="devices" title="Все ваши компьютеры и телефоны — одна Лира: подключить, состояние, синхронизация">Устройства</button>
-  <button data-p="dw" id="nav-dw">Dewiar.pro<i class="ndot" id="dw-dot"></i></button>
-  <button data-p="connect">Подключение</button>
-  <button data-p="servers">Серверы</button>
-  <button data-p="safety">Безопасность</button>
+  <button class="nav-g nav-plg nav-plg-new" id="nav-plg-new" type="button" title="Опишите словами — Лира сделает плагин и встроит его сюда" data-i18n-title="nav.plgnew.tip"><i class="nav-gi emo nav-pi" aria-hidden="true">✦</i><span data-i18n="nav.plgnew">Создать плагин</span></button>
+  <button class="nav-g nav-plg nav-plg-all" id="nav-plg-all" type="button" title="Готовые плагины Dewiar: Художник, Переводчик, Путешествия, Рекрутер, Тендеры и другие — поставить одним нажатием" data-i18n-title="nav.plgall.tip"><i class="nav-gi emo nav-pi" aria-hidden="true">🧩</i><span data-i18n="nav.plgall">Все плагины</span></button>
+  <button data-p="plg" class="sub" hidden data-i18n="nav.plg">Плагин</button>
+  <button data-p="plgnew" class="sub" hidden data-i18n="nav.plgnew">Создать плагин</button>
+  <div class="ng" data-fold-k="Обучение" data-i18n="nav.g.learn">Обучение</div>
+  <button data-p="course" title="Короткие уроки по пять минут" data-i18n="nav.course" data-i18n-title="nav.course.tip">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
+  <button data-p="lessons" title="ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок" data-i18n="nav.lessons" data-i18n-title="nav.lessons.tip">Видеоуроки</button>
+  <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира" data-i18n="nav.qa" data-i18n-title="nav.qa.tip">Вопрос — ответ</button>
+  <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу" data-i18n="nav.tricks" data-i18n-title="nav.tricks.tip">Что я умею</button>
+  <div class="ng" data-fold-k="Знания" data-i18n="nav.g.knowledge">Знания</div>
+  <button data-p="docs" title="Лира читает ваши папки и отвечает по ним" data-i18n="nav.docs" data-i18n-title="nav.docs.tip">Документы</button>
+  <button data-p="memory" data-i18n="nav.memory">Память</button>
+  <button data-p="diary" title="Дневник, душа, конституция и что ассистент знает о вас" data-i18n="nav.diary" data-i18n-title="nav.diary.tip">Душа</button>
+  <button data-p="soul" class="sub" data-i18n="nav.soul">Душа</button>
+  <button data-p="const" class="sub" data-i18n="nav.const">Конституция</button>
+  <button data-p="me" class="sub" data-i18n="nav.me">Обо мне</button>
+  <button data-p="folder" data-i18n="nav.folder">Папка</button>
+  <div class="ng" data-fold-k="Настройка" data-i18n="nav.g.setup">Настройка</div>
+  <button data-p="personas" data-i18n="nav.personas">Персонажи</button>
+  <button data-p="brain" data-i18n="nav.brain">Мозг</button>
+  <button data-p="ears" data-i18n="nav.ears">Слух</button>
+  <button data-p="voice" data-i18n="nav.voice">Голос</button>
+  <button data-p="look" data-i18n="nav.look">Оформление</button>
+  <button data-p="sound" data-i18n="nav.sound">Звук и поведение</button>
+  <button data-p="hands" data-i18n="nav.hands">Руки</button>
+  <button data-p="skills" data-i18n="nav.skills">Плагины</button>
+  <button data-p="features" title="Что показывать: игры, встречи, радар, суфлёр — включайте только нужное" data-i18n="nav.features" data-i18n-title="nav.features.tip">Возможности</button>
+  <div class="ng" data-fold-k="Связи и данные" data-i18n="nav.g.links">Связи и данные</div>
+  <button data-p="devices" title="Все ваши компьютеры и телефоны — одна Лира: подключить, состояние, синхронизация" data-i18n="nav.devices" data-i18n-title="nav.devices.tip">Устройства</button>
+  <button data-p="dw" id="nav-dw" data-i18n="nav.dw">Dewiar.pro<i class="ndot" id="dw-dot"></i></button>
+  <button data-p="connect" data-i18n="nav.connect">Подключение</button>
+  <button data-p="servers" data-i18n="nav.servers">Серверы</button>
+  <button data-p="safety" data-i18n="nav.safety">Безопасность</button>
   <div class="grow"></div>
-  <button data-p="ideas" title="Что сделать дальше — предложите идею и голосуйте за чужие">Идеи Лиры<i class="ndot" id="id-dot"></i></button>
-  <button data-p="about">О программе</button>
-  <button type="button" class="nav-bug" id="nav-bug" title="Что-то не так — снимок экрана и пара слов разработчику">Сообщить о проблеме</button>
-  <button class="chip" id="wlc-chip" title="Первые шаги">✨ Первые шаги</button>
+  <button data-p="ideas" title="Что сделать дальше — предложите идею и голосуйте за чужие" data-i18n="nav.ideas" data-i18n-title="nav.ideas.tip">Идеи Лиры<i class="ndot" id="id-dot"></i></button>
+  <button data-p="about" data-i18n="nav.about">О программе</button>
+  <button type="button" class="nav-bug" id="nav-bug" title="Что-то не так — снимок экрана и пара слов разработчику" data-i18n="nav.bug" data-i18n-title="nav.bug.tip">Сообщить о проблеме</button>
+  <button class="chip" id="wlc-chip" title="Первые шаги" data-i18n="nav.welcome" data-i18n-title="nav.welcome.tip">✨ Первые шаги</button>
   <div class="conn" id="conn"><i></i><span>нет связи с ядром</span></div>
 </nav>
 
@@ -1142,6 +1142,7 @@
           <label class="f">Название сайта или компании<input type="text" id="sc-title" maxlength="60" placeholder="Чайный двор"></label>
           <label class="f">Первое сообщение<input type="text" id="sc-greet" maxlength="300" placeholder="Здравствуйте! Помогу выбрать чай и расскажу о доставке."></label>
           <label class="sc-tgl"><span><b>Предлагать оставить контакт</b><small>когда ответа нет в знаниях или человек хочет купить — заявка придёт вам</small></span><span class="tg"><input type="checkbox" id="sc-ask"><i></i></span></label>
+          <div class="sc-thw"><span class="sc-lbl" id="sc-th-h" data-i18n="sc.th.title">Оформление окна</span><div class="sc-ths" id="sc-ths" role="radiogroup" aria-labelledby="sc-th-h"></div></div>
         </div>
         <div class="sc-card">
           <h3>Что знает консультант</h3>
@@ -2395,6 +2396,8 @@
   <section id="p-look">
     <h1>Оформление</h1>
     <p class="lead">Что показывать, размер, фон виджета и то, как голос отзывается вокруг портрета, — выбираются отдельно, любые сочетания. Меняется сразу: держите виджет рядом и смотрите.</p>
+    <div class="ft lang-row" id="lang-row"><div class="ft-t"><b data-i18n="look.lang">Язык программы</b><span data-i18n="look.lang.tip">Язык студии, виджета и ответов Лиры. «Как в системе» — русский, если система на русском, иначе английский.</span></div>
+      <div class="ft-r"><div class="ft-seg" id="lang-seg" role="radiogroup" data-i18n-aria-label="look.lang" aria-label="Язык программы"><button type="button" role="radio" data-v="auto" aria-checked="true" data-i18n="lang.auto">Как в системе</button></div></div></div>
     <h2 id="sh-h">Что показывать</h2>
     <div class="sh" id="show-box">
       <p class="sh-lead">Меню слева и значки «Главной» — только то, чем пользуетесь. Скрытый раздел не загружается и не мешает, но продолжает работать: напоминания звенят, письма близких приходят. Вернуть — здесь же или найти поиском на «Главной».</p>
@@ -2857,6 +2860,7 @@
 <script src="assets/qrcode.js"></script>
 <script src="assets/help.js"></script>
 <script src="studio/core.js"></script>
+<script src="studio/lang.js"></script>
 <script src="studio/tasks.js"></script>
 <script src="studio/council.js"></script>
 <script src="studio/podcast.js"></script>

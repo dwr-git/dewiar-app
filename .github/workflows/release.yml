@@ -42,7 +42,9 @@ jobs:
           }
 
           has_rel() {   # выпуск с такой меткой есть (и черновик: …/releases/tags/… черновиков не видит — 11.11 вышел бы второй)
-            [ -n "$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=40" --jq ".[] | select(.tag_name == \"$1\") | .id" 2>/dev/null)" ]
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$1" >/dev/null 2>&1 && return 0
+            local n; n=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=40" --jq "[.[] | select(.tag_name == \"$1\")] | length" 2>/dev/null)
+            [ "$n" -gt 0 ] 2>/dev/null
           }
 
           release() {   # release <версия> <запись> — пропускает, если метка уже есть

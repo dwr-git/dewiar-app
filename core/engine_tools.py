@@ -92,6 +92,9 @@ class ToolsMixin:
         if not on:
             return f"Инструмент {name} выключен пользователем."
         asked = getattr(turn, "asked", None)
+        # дело по расписанию (via_job): его шаги в окнах не показываем — человеку только итог или ничего (владелец 11.11:
+        # «запустились какие-то процессы — „Навык — готово“, а результата нет, непонятно, что это и зачем»)
+        _temit = (lambda **kw: None) if getattr(turn, "via_job", False) else (lambda **kw: self.emit("tool", **kw))
         if name in QUERY_TOOLS and isinstance(args, dict) and not str(args.get("query") or "").strip() and asked:
             # экзамен 0.38.49: find_notes({}) — модель потеряла аргументы, и «вспомни, что я говорил про работу» искало
             # «ничего»; тема — из самой просьбы («…про работу» → «работу»), иначе просьба целиком
@@ -118,7 +121,7 @@ class ToolsMixin:
         blocked, force, warn_q = self.toolbox.guard(name, args)
         if blocked:
             log.warning("🛡 Защита: %s %s — %s", name, json.dumps(args, ensure_ascii=False)[:200], blocked)
-            self.emit("tool", name=name, title=title, status="error", error="защита: " + blocked)
+            _temit(name=name, title=title, status="error", error="защита: " + blocked)
             return (f"Защита Dewiar не дала это сделать: {blocked}. Объясни пользователю коротко и спокойно, что такое "
                     "ассистент не удаляет и не делает (это может сломать компьютер или стереть важное), и предложи "
                     "безопасный вариант — например, назвать конкретные файлы, которые убрать в корзину.")
@@ -157,15 +160,15 @@ class ToolsMixin:
                 except Exception as e:  # noqa: BLE001
                     log.info("сервер: «всегда» не сохранилось: %s", e)
             if ok is None:                             # промолчали — это не «нет» (№478: «отвечаю „да“ — считает отказом»)
-                self.emit("tool", name=name, title=title, status="error", error="ответа не было — спрошу ещё раз")
+                _temit(name=name, title=title, status="error", error="ответа не было — спрошу ещё раз")
                 return ("Пользователь не ответил на вопрос «Выполнить?» — ответа не дождалась, это НЕ отказ. Ничего не делай; "
                         "одной фразой скажи, что ждёшь его «да» (кнопкой «Выполнить» или словами), и спроси ещё раз. "
                         "Не говори, что он отказался.")
             if not ok:
-                self.emit("tool", name=name, title=title, status="declined")
+                _temit(name=name, title=title, status="declined")
                 return "Пользователь отказался. Ничего не делай и коротко подтверди отказ."
         detail = _tool_detail(name, args)
-        self.emit("tool", name=name, title=title, status="run", args=args, detail=detail)
+        _temit(name=name, title=title, status="run", args=args, detail=detail)
         try:
             res = self.toolbox.run(name, args)
             turn.tools_ok = getattr(turn, "tools_ok", []) + [name]
@@ -187,19 +190,19 @@ class ToolsMixin:
             out = res["text"] if isinstance(res, dict) else str(res)
             if name in FACT_TOOLS and out.strip():          # что узнала — коротко в историю разговора (engine_answer)
                 turn.facts = (getattr(turn, "facts", []) + [fact_line(name, args, out)])[-FACTS_PER_TURN:]
-            self.emit("tool", name=name, title=title, status="done", detail=detail, result=out[:1500])
+            _temit(name=name, title=title, status="done", detail=detail, result=out[:1500])
             if name in NOTE_TOOLS:                          # №633: удалила или поправила заметку — открытый список «Заметок» освежается
                 self.emit("notes_changed")
             log.info("   ↳ %s", (res["text"] if isinstance(res, dict) else res)[:160].replace("\n", " "))
             return res
         except (ToolError, SkillError, MCPError) as e:
             log.info("   ↳ Ошибка: %s", redact(str(e))[:200].replace("\n", " "))    # №316 (пакет 27.10): в журнале не было видно, чем кончилось
-            self.emit("tool", name=name, title=title, status="error", error=str(e))
+            _temit(name=name, title=title, status="error", error=str(e))
             turn.tools_err = getattr(turn, "tools_err", []) + [(name, redact(str(e))[:300])]   # №573: не выдавать за сделанное
             return f"Ошибка: {e}"
         except Exception as e:  # noqa: BLE001
             log.exception("инструмент %s", name)
-            self.emit("tool", name=name, title=title, status="error", error=str(e))
+            _temit(name=name, title=title, status="error", error=str(e))
             turn.tools_err = getattr(turn, "tools_err", []) + [(name, redact(str(e))[:300])]
             return f"Ошибка: {e}"
 

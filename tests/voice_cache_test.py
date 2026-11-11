@@ -73,5 +73,8 @@ srv.shutdown()
 tts = (SRC / "android/src/pro/dewiar/app/Tts.java").read_text(encoding="utf-8")
 ok("newFixedThreadPool(2)" in tts and "VoiceCache.get(" in tts and "x.cancel(true)" in tts and "if (temp)" in tts and "got.get()" in tts,
    "Tts: скачивание наперёд (две фразы), очередь проигрыша, stop() отменяет, запомненное не удаляется")
+src_vc = (SRC / "android/src/pro/dewiar/app/VoiceCache.java").read_text(encoding="utf-8")
+ok("long slot = System.currentTimeMillis() / SLOT_MS;" in src_vc and 'body + "\\n" + slot' in src_vc and "SLOT_MS = 12L * 3600 * 1000" in src_vc,
+   "запомненная фраза живёт не дольше полудня — новый голос персонажа на сервере слышен и в коротких фразах (владелец 11.11)")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)
