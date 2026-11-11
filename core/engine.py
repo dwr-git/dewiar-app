@@ -35,7 +35,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.server = server              # режим сервера (main.py --server): без микрофона и звука, ответы — текстом
         self.state = "idle"
         self.muted = (settings.get("privacy", "mic") == "button"   # замок «Микрофон: только кнопка» (студия → «Безопасность»)
-                      or bool(settings.get("ui", "text_mode")))      # текстовый режим (студия → «Чат», 27.10)
+                      or bool(settings.get("ui", "text_mode"))       # текстовый режим (студия → «Чат», 27.10)
+                      or bool(settings.get("ui", "mic_off")))        # №649: выключили кнопкой — и после перезагрузки выключен
         self._mute_pass = False                          # микрофон выключен, но нажали «говорить» — слушаем одну фразу
         self.stopping = threading.Event()
         self.aec = EchoCancel()

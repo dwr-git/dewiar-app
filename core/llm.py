@@ -13,6 +13,7 @@ import os
 import json
 import logging
 import re
+from html import unescape as html_unescape
 import sys
 import threading
 import time
@@ -273,6 +274,18 @@ def _humanize(e, base_url, model=""):
             # №281 (пакет 27.10): LM Studio «Error rendering prompt with jinja template: No user query found in messages»
             return ("у модели неисправный шаблон разговора (Prompt Template) — так бывает у некоторых сборок в LM Studio. "
                     "Возьмите ту же модель от lmstudio-community или в LM Studio → модель → «Prompt Template» верните шаблон по умолчанию")
+        if re.search(r"<(?:!doctype|html|body|pre|title)\b", body, re.I):
+            # №652 (ночной разбор 11.11): «сервер ответил ошибкой 500: <!DOCTYPE html> <html lang="en"> <head>…» — страница
+            # ошибки сервера модели; человеку — её текст без разметки и что делать
+            try:
+                raw = e.response.text[:4000]
+            except Exception:  # noqa: BLE001
+                raw = body
+            txt = re.sub(r"(?is)<(script|style|head)\b.*?</\1>", " ", raw)
+            txt = re.sub(r"\s+", " ", html_unescape(re.sub(r"(?s)<[^>]+>", " ", txt))).strip()[:160]
+            return (f"сервер модели ответил ошибкой {code}" + (f" («{txt}»)" if txt else "")
+                    + (" — это сбой у сервера модели, не у вас: повторите через минуту; повторяется — перезапустите сервер "
+                       "модели или выберите в «Мозге» другую" if code >= 500 else ""))
         return f"сервер ответил ошибкой {code}: {body}"
     return str(e)
 

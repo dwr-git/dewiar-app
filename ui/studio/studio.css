@@ -4742,3 +4742,8 @@ html.st-light .ch-chip, html.st-light .ch-chip i { background: color-mix(in srgb
 @media (max-width: 640px) { .pd-player { grid-template-columns: 48px minmax(0, 1fr); } .pd-play { width: 48px; height: 48px; } .pd-time, .pd-speed { grid-row: 2; }
   .pd-stage { padding: 20px 16px; } .pd-ln { grid-template-columns: 1fr; gap: 0; } .pd-ln b { text-align: left; line-height: 1.6; } .pd-styles { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .pd-hello .pd-tr i, .pd-work .pd-tr i, .pd-steps li.now::after { animation: none; } .pd-bar b { transition: none; } }
+
+/* Владелец 11.11 (Ubuntu): «в „Что нового“ заголовок всегда в рамке — кажется, что его можно редактировать». Заголовки
+   окон получают фокус программой (tabindex="-1", чтобы первой не выделялась кнопка); это не поле и не кнопка — рамки нет.
+   WebKitGTK показывает её и при :focus-visible, поэтому убираем на любом фокусе. */
+[tabindex="-1"]:focus, [tabindex="-1"]:focus-visible { outline: none; box-shadow: none; }

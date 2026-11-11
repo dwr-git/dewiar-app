@@ -971,6 +971,13 @@ class AnswerMixin:
             mine = ""
         if mine:
             out += " " + mine
+        try:                                           # №651: «убери вопросы в конце» — к каждому вопросу, важнее характера
+            import quality as Q
+            sty = Q.style_rules_line(self.workspace.root / Q.TALK_LESSONS_FILE)
+        except Exception:  # noqa: BLE001
+            sty = ""
+        if sty:
+            out += " " + sty
         if TALER_RX.search(text or ""):                # №542: «на сколько хватает 1 талер?» — по настоящему счёту
             out += " " + self._taler_now()
         if TASK_ASK_RX.search(text or "") or (TASK_GIVE_RX.search(text or "") and self._task_alive()):
@@ -2284,6 +2291,8 @@ class AnswerMixin:
             done_calls, checked = [], False                  # что вызвано с результатами — сверить числа ответа (number_mismatch)
             drew = 0                                         # просили схему, а её нет — попросили нарисовать (до двух раз за ход)
             saved_checked = False                            # «записала» без единого действия — попросили записать (раз за ход)
+            style_saved = False                              # №651: просьба о том, как говорить, — правило записано программой (раз за ход)
+            import quality as Q
             failed_checked = False                           # №573: действие с ошибкой выдано за сделанное — переспросили (раз за ход)
             remind_asked = False                             # пообещала напомнить без set_reminder — попросили поставить (раз за ход)
             repeat_checked = False                           # ответ слово в слово как недавний — попросили ответить по существу (раз за ход)
@@ -2490,6 +2499,16 @@ class AnswerMixin:
                             turn.full += " "
                         self.set_state("thinking")
                         continue
+                if not calls and not turn.cancel.is_set() and not style_saved and "remember" not in called:
+                    style_saved = True
+                    rule = Q.style_rule(text)
+                    if rule:                                 # №651: «убери вопросы в конце» — правило пишет программа, не модель
+                        try:
+                            Q.add_style_rule(self.workspace.root / Q.TALK_LESSONS_FILE, rule)
+                            called.add("remember")             # «записала» теперь правда: проверки «сделала без действия» молчат
+                            log.info("💬 Правило, как говорить, — записала сама: «%s»", rule[:80])
+                        except Exception:  # noqa: BLE001
+                            log.debug("правило общения", exc_info=True)
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
                     fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
                         or saved_claim(text, step_text, called) \
@@ -2691,6 +2710,8 @@ class AnswerMixin:
                 # №573: «открой эту папку» — «открыла», проверка попросила сделать, а модель снова «открыла» без действия
                 from quality import PROMISE_GIVEUP
                 log.warning("✋ И после просьбы — «сделала» без единого действия — говорю правду")
+                if step_text and len(turn.full) > len(step_text) and turn.full.endswith(step_text):
+                    turn.full = turn.full[:-len(step_text)]   # №651: тот же «записала» второй раз — в тексте не повторяем
                 turn.full = PROMISE_GIVEUP if len(turn.full) < 300 else (turn.full.rstrip() + " " + PROMISE_GIVEUP).strip()
                 sentences.put(PROMISE_GIVEUP)
             if failed_checked and not turn.cancel.is_set():

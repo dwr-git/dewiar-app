@@ -999,6 +999,16 @@ class CommandsMixin:
             log.warning("Окно не открылось: %s", e)
             return False
 
+    def _mute_keep(self, muted):
+        """№649 (ПК 0.84.2, 11.11: «забывает, что микрофон выключен, при перезагрузке компьютера»): выключили кнопкой (или
+        сочетанием) — помним и после перезапуска (ui.mic_off; engine.py поднимает с ним). Отдых и текстовый режим — свои."""
+        try:
+            if bool(self.s.get("ui", "mic_off")) != bool(muted):
+                self.s.update({"ui": {"mic_off": bool(muted)}})
+        except Exception:  # noqa: BLE001
+            log.debug("микрофон: запомнить", exc_info=True)
+        return muted
+
     def set_mute(self, on):
         """Микрофон выключен (кнопка в виджете или замок «Только кнопка» в «Безопасности»): имя не слушается, «говорить» —
         одна фраза."""
@@ -2081,12 +2091,12 @@ class CommandsMixin:
             if not a.get("on") and getattr(self, "resting", lambda: False)():          # «Отдых»: включили микрофон — значит, вернулись (№540)
                 self.rest_end("кнопка")
                 return self.muted
-            return self.set_mute(bool(a.get("on")))
+            return self._mute_keep(self.set_mute(bool(a.get("on"))))
         if cmd == "mute_toggle":                          # сочетание «Позвать Лиру» в режиме «микрофон вкл/выкл» (идея №154)
             if self.muted and getattr(self, "resting", lambda: False)():
                 self.rest_end("кнопка")
                 return self.muted
-            return self.set_mute(not self.muted)
+            return self._mute_keep(self.set_mute(not self.muted))
         if cmd in ("rest", "rest_end", "rest_toggle", "rest_state"):   # «Отдых» (engine_rest.py, №540)
             return self.rest_cmd(cmd, a)
         if cmd == "text_mode":
@@ -2105,7 +2115,7 @@ class CommandsMixin:
                 log.info("🔊 Текстовый режим выключен — голос (%s) и микрофон снова включены", ui.get("text_prev") or self._tts_local())
                 self.s.update({"ui": {"text_mode": False}, "tts": {"engine": ui.get("text_prev") or self._tts_local()}})
                 if self.s.get("privacy", "mic") != "button":
-                    self.set_mute(False)
+                    self._mute_keep(self.set_mute(False))
             try:
                 self.apply_engines()
             except Exception as e:  # noqa: BLE001

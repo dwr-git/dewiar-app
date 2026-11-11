@@ -10436,8 +10436,39 @@ async function scanCode() {
   if (!window.DewiarCodes || !window.ZXing) { toast("Сканер здесь недоступен"); return; }
   if (!(await needPerm("android.permission.CAMERA"))) { showBot("Для сканера нужен доступ к камере.", "err"); return; }
   closeSheets(); try { stopListen(); } catch (e) { }
-  DewiarCodes.scan({ title: "Наведите на код", sub: "QR, штрихкод, Data Matrix, печать Dewiar", onError: (m) => showBot("Сканер: " + m, "err"),
+  DewiarCodes.scan({ title: "Наведите на код", sub: "QR, чек, штрихкод, Data Matrix, печать Dewiar", onError: (m) => showBot("Сканер: " + m, "err"),
     onResult: (txt, fmt) => { scanChime(); scanResult(txt, fmt); } });
+}
+/* №650 (11.11, McDuck: «сканер QR-кода чеков — и бухгалтерия расходов»): QR кассового чека России
+   «t=20261111T1530&s=1234.00&fn=…&i=…&fp=…&n=1» — сумма и время покупки прямо в коде. Сканер узнаёт чек и предлагает
+   «Записать трату» с датой чека (n=2 — возврат: доход); тот же чек второй раз не записывается. Товары по строкам — у
+   ФНС, им нужен вход: в плане. */
+function receiptQr(t) {
+  const s = String(t || "").trim();
+  if (!/(?:^|&)t=\d{8}T\d{4}/.test(s) || !/(?:^|&)s=\d/.test(s) || !/(?:^|&)fn=\d{6,}/.test(s)) return null;
+  const p = {}; s.split("&").forEach(kv => { const i = kv.indexOf("="); if (i > 0) p[kv.slice(0, i).toLowerCase()] = kv.slice(i + 1); });
+  const m = /^(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)/.exec(p.t || ""), sum = Math.round(parseFloat(String(p.s || "").replace(",", ".")) * 100) / 100;
+  if (!m || !(sum > 0) || sum > 1e8) return null;
+  return { date: `${m[1]}-${m[2]}-${m[3]}`, time: `${m[4]}:${m[5]}`, sum, kind: String(p.n) === "2" || String(p.n) === "3" ? "income" : "expense",
+    id: `чек ${p.fn}/${p.i || "?"}/${p.fp || "?"}` };
+}
+function receiptOffer(rc) {
+  const [y, mo, d] = rc.date.split("-").map(Number), when = `${d} ${["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"][mo - 1]} ${rc.time}`;
+  const amt = rc.sum.toLocaleString("ru-RU", { minimumFractionDigits: rc.sum % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const have = money().some(x => String(x.note || "").includes(rc.id));
+  showBot(`🧾 Чек на ${amt} ₽ — ${when}${rc.kind === "income" ? " (возврат)" : ""}.` + (have ? " Этот чек уже записан в «Деньгах»." : ""));
+  $("#card").innerHTML = `<div class="start">${have ? "" : `<button class="btn p" id="sc-rc">${rc.kind === "income" ? "Записать возврат" : "Записать трату"}</button>`}<button class="btn" id="sc-copy">Скопировать</button></div>`;
+  $("#sc-copy").onclick = () => { D.copy(`${amt} ₽, ${when}`); toast("Скопировано"); };
+  if (!have) $("#sc-rc").onclick = () => {
+    const m = money(); if (m.some(x => String(x.note || "").includes(rc.id))) { toast("Этот чек уже записан"); return; }
+    const x = { id: uid("m"), date: rc.date, kind: rc.kind, amount: rc.sum, currency: "RUB", category: rc.kind === "income" ? "Возврат" : "Покупки", note: rc.id };
+    m.push(x); saveMoney(m);
+    try { famShareSpend(x); } catch (e) { plog("warn", "семья: " + e.message); }
+    $("#card").innerHTML = "";
+    showBot(`Записала: ${rc.kind === "income" ? "+" : "−"}${amt} ₽, ${x.category}, ${when}. Категорию можно поправить словами: «это были продукты».`);
+    say(`Записала ${rc.kind === "income" ? "возврат" : "трату"} ${amt} рублей.`);
+  };
+  say(`Чек на ${amt} рублей.` + (have ? " Он уже записан." : " Записать трату?"));
 }
 function scanResult(txt, format) {
   const t = String(txt || "").trim();
@@ -10464,6 +10495,8 @@ function scanResult(txt, format) {
       + `что это за товар — коротко. Не нашлось — так и скажи. Если это код «Честного знака», в конце одной фразой: подлинность `
       + `и историю упаковки показывает официальное приложение «Честный знак».`, { hidden: true });
   }
+  const rc = receiptQr(t);
+  if (rc) return receiptOffer(rc);
   showBot("В коде: " + t);
   $("#card").innerHTML = `<div class="start"><button class="btn" id="sc-copy">Скопировать</button></div>`;
   $("#sc-copy").onclick = () => { D.copy(t); toast("Скопировано"); };

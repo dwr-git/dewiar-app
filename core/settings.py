@@ -178,7 +178,7 @@ DEFAULTS = {
                "sig": "",         # для какого «железа» (память/ядра) уже решали — если пользователь выключил, сами не включаем
                "told": False,
                "mem_warn": True},  # предупреждать, когда памяти не хватает (открыто много других программ) — engine_brain._memory_watch
-    "ui": {"hud_x": None, "hud_y": None, "subtitles": True, "force_x11": True,
+    "ui": {"hud_x": None, "hud_y": None, "subtitles": True, "force_x11": True, "mic_off": False,
            "wayland_sharp": False,          # Linux: окна прямо на Wayland — чёткий текст при дробном масштабе GNOME (№442), но без «поверх всех» и места окна
            "hud_w": None, "hud_h": None,    # свой размер карточки виджета (растянули за угол), px при масштабе 100 %
            "on_top": True,                  # виджет поверх всех окон (идея №48: можно выключить — студия → «Оформление»)
