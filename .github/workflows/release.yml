@@ -96,6 +96,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Инструменты (NSIS — установщик Windows, Android SDK — телефон)
+        timeout-minutes: 20      # 11.11: зеркало Ubuntu не отвечало — шаг висел два часа
         run: |
           # 11.11: зеркало Ubuntu у GitHub не отвечало («Temporary failure resolving azure.archive.ubuntu.com») — выпуск 0.87.2
           # остался черновиком без .exe и .deb. Пробуем несколько раз, потом — через основной архив Ubuntu
