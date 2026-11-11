@@ -304,3 +304,17 @@ html.st-light .tp-opt { background: rgba(255,255,255,.85); box-shadow: 0 1px 0 r
 html.st-light .tp-code { background: rgba(75,91,214,.08); box-shadow: inset 0 0 0 1px rgba(75,91,214,.25); }
 html.st-light #cp-shot { background: rgba(255,255,255,.6); border-color: rgba(75,91,214,.45); box-shadow: none; }
 html.st-light #cp-shot:hover, html.st-light #cp-shot:focus-visible, html.st-light #cp-shot.over { background: rgba(75,91,214,.08); border-color: #4b5bd6; }
+
+/* «Подкасты» (0.87): светлые темы — выбранное и бегунок чернилами; неоморфизм — карточки выпуклые, поля и полосы вдавлены */
+html.st-light .pd-bars i { opacity: .7; } html.st-light .pd-bars i.now { opacity: 1; box-shadow: none; outline: 2px solid color-mix(in srgb, var(--ink) 55%, transparent); }
+html.st-light .pd-st.on { background: color-mix(in srgb, var(--accent) 14%, var(--panel2)); }
+html.st-light .pd-eps li em { color: #9a5b00; }
+html.st-light:not(.st-neu) :is(.pd-st, .pd-h, .pd-src li, .pd-steps li, .pd-player, .pd-seg, .pd-speed, .pd-bar) { background: var(--soft); }
+html.st-light:not(.st-neu) :is(.pd-lane, .pd-eps li button.cur) { background: var(--soft2); }
+html.st-neu :is(.pd-card, .pd-stage) { background: var(--sk-glass); box-shadow: var(--raise); }
+html.st-neu :is(.pd-drop, #pd-topic, .pd-seg, .pd-bar, .pd-lane, .pd-opt select) { background: var(--sk-glass); box-shadow: var(--press); outline: 0; }
+html.st-neu .pd-drop.over, html.st-neu .pd-drop:hover { box-shadow: var(--press), 0 0 0 2px var(--accent); }
+html.st-neu :is(.pd-st, .pd-h, .pd-src li, .pd-steps li, .pd-player, .pd-speed) { background: var(--sk-glass); box-shadow: var(--raise-s); }
+html.st-neu :is(.pd-st.on, .pd-steps li.now) { box-shadow: var(--press), inset 0 0 0 1.5px var(--accent); }
+html.st-neu .pd-h select, html.st-neu .pd-h select:focus { background-color: transparent; box-shadow: none; }
+html.st-neu .pd-ln.now { background: color-mix(in srgb, var(--c) 18%, var(--sk-glass)); }

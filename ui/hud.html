@@ -859,7 +859,8 @@ core.on("hello", d => { firstAsk = d.settings && d.settings.ui ? d.settings.ui.f
 core.on("first_ask", e => { if (e.phrases && e.phrases.length) { fqList = e.phrases; fqDraw(); } firstAsk = e.on ? false : true; fqSync(); });
 core.on("state", e => fqSync(e && e.state));          // этот обработчик — раньше того, что меняет state
 core.on("kids", setKids);
-core.on("council", e => { if (e && e.open) { const a = api(); if (a && a.open_settings) a.open_settings("council"); } });   // «собери совет» голосом — обсуждение в студии
+core.on("council", e => { if (e && e.open) { const a = api(); if (a && a.open_settings) a.open_settings("council"); } });
+core.on("podcast", e => { if (e && e.open) { const a = api(); if (a && a.open_settings) a.open_settings("podcast"); } });   // «сделай подкаст» голосом — ход в студии   // «собери совет» голосом — обсуждение в студии
 core.on("plugin_made", e => { if (e && e.open && /^[\w-]+$/.test(e.id || "")) { const a = api(); if (a && a.open_settings) a.open_settings("plg:" + e.id); } });   // Лира сделала плагин голосом — его страница в студии
 document.querySelectorAll("#kids [data-say]").forEach(b => b.onclick = (ev) => { ev.stopPropagation(); core.call("say", { text: b.dataset.say }).catch(showErr); });
 const WAIT = {};   // метка для showCap: ответ готовится — вместо текста мигающие точки
@@ -1741,11 +1742,16 @@ var TEXT_MODE = false;
 const askInChat = () => { const a = api(); if (!TEXT_MODE || !a || !a.open_settings) return false; a.open_settings("chat"); return true; };
 core.on("confirm", () => { if (askInChat()) return; const a = api(); if (mode === "mini") setMode("card", true); else if (a && a.cancel_back) a.cancel_back(); })   // «Да/Нет» нужно видеть
     .on("confirm_done", () => { const a = api(); if (a && mode === "card") a.auto_back(); })
-    .on("wake", () => popUp());                                                                      // спрятанный виджет возвращается на имя
+    .on("wake", () => { wakeAt = Date.now(); wakeWait = true; });                                    // имя — поднимемся, когда подтвердится (№645)
 
 /* трей: виджет спрятан, ассистент слушает. Появляется сам — на имя, «слушаю», напоминание, уведомление, вопрос «Да/Нет»;
    поговорили и стало тихо — прячется обратно. Слушает только окно карточки, чтобы не звать дважды. */
 let backT = null;
+/* №645 (10.11: «выскакивает на экран без вызова»): быстрый слух ловит «имя» в музыке и видео («Имя „патрик“ услышано» →
+   «Ложное срабатывание: имени во фразе нет»), а виджет поднимался из трея на само имя. Теперь на имя ждём, пока точное
+   распознавание его подтвердит: «heard» (вопрос или «Слушаю…»), думает или говорит; ложное — виджет остаётся в трее.
+   «Слушаю» без имени (горячая клавиша, «продолжение разговора») — как раньше, сразу */
+let wakeAt = 0, wakeWait = false;
 function popUp() { const a = api(); if (a && mode === "card") { clearTimeout(backT); a.show(); } }
 function backLater(ms) { const a = api(); if (!a || mode !== "card") return; clearTimeout(backT); backT = setTimeout(() => a.tray_back && a.tray_back(), ms); }
 $("b-pad").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("notes"); };
@@ -1771,7 +1777,11 @@ core.on("window", e => { const a = api(); if (!a || mode !== "card") return;
 /* текст, распознанный с вырезанного куска экрана, — в буфер обмена и тогда, когда блокнот не открыт (pad.js копирует сам) */
 core.on("snip", e => { const a = api(); if (mode === "card" && e.state === "text" && e.text && a && a.clip_text) a.clip_text(String(e.text)); });
 window.trayLeft = () => { if (mode === "card") core.call("settings_save", { patch: { ui: { hud_tray: false } } }).catch(() => {}); };
-core.on("state", e => { if (e.state === "listening") popUp(); if (e.state === "idle") backLater(9000); else clearTimeout(backT); })
+core.on("state", e => {
+      if (e.state === "listening" && !(wakeWait && Date.now() - wakeAt < 20000)) popUp();
+      else if ((e.state === "thinking" || e.state === "speaking") && wakeWait) { wakeWait = false; popUp(); }
+      if (e.state === "idle") { wakeWait = false; backLater(9000); } else clearTimeout(backT); })
+    .on("heard", () => { if (wakeWait) { wakeWait = false; popUp(); } })
     .on("push", e => { if (e && e.quiet) return; popUp(); backLater(12000); })   // №591: тихое — из трея не поднимаемся
     .on("reminder", () => { popUp(); backLater(20000); })
     .on("confirm", () => { if (!TEXT_MODE) popUp(); });

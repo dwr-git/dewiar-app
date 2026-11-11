@@ -134,16 +134,22 @@ with sync_playwright() as p:
     ok(pg.evaluate("document.querySelector('#p-vault').classList.contains('cur')"), "«Открыть «Сейф паролей»» — в сейф")
     # «Главная»: значок сейфа и плагин
     pg.evaluate("S = S || {}; S.ui = {}; document.querySelector('nav button[data-p=\"home\"]').click(); loadHome()"); pg.wait_for_timeout(600)
-    apps = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app')].map(a => a.dataset.app)")
+    apps = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app, #hm-plgs .hm-app[data-app]')].map(a => a.dataset.app)")
     ok("vault" in apps and apps.index("vault") == apps.index("pay") + 1, f"на «Главной» — «Сейф» рядом с «Платежами»: {apps}")
     ok("plg:garden" in apps and "plg:cars" not in apps, "установленный плагин — значком на «Главной», не установленный — нет")
     ok(pg.text_content(".hm-app[data-app='plg:garden'] .hm-plg") == "🌱", "у плагина — его эмодзи")
+    # 11.11 (люди: «путаются, что есть что»): плагины — своим блоком «Плагины», не среди приложений, и «Ещё плагины»
+    ok(pg.evaluate("!document.querySelector('#hm-apps [data-app=\"plg:garden\"]') && !!document.querySelector('#hm-plgs [data-app=\"plg:garden\"]')"),
+       "плагин — в блоке «Плагины», среди приложений его нет")
+    ok(pg.evaluate("!!document.querySelector('#hm-plgs [data-plgall]') && document.querySelector('#hm-plg-h h2').textContent === 'Плагины'"),
+       "у блока «Плагины» — заголовок и плитка «Ещё плагины» (каталог)")
     pg.evaluate("S.ui = { home_apps: ['chat', 'notes'], home_known: HM_APPS.map(x => x.id) }; hmRender()")
     ok(pg.evaluate("hmApps()") == ["chat", "notes", "plg:garden"], f"настроили главную раньше — новый плагин появился сам, в конце: {pg.evaluate('hmApps()')}")
     pg.evaluate("S.ui = { home_apps: ['chat', 'notes'], home_known: HM_APPS.map(x => x.id).concat(['plg:garden']) }; hmRender()")
     ok(pg.evaluate("hmApps()") == ["chat", "notes"], "скрыли плагин с главной — не возвращается")
     pg.evaluate("S.ui = {}; hmRender()")
     if SHOT:
+        pg.evaluate("document.querySelector('#hm-plg-h').scrollIntoView({block: 'center'})"); pg.wait_for_timeout(200)
         pg.screenshot(path=f"{SHOT}/home_plg.png")
     pg.evaluate("window.plgDrawerCalls = []; const o = plgDrawer; plgDrawer = (id) => { plgDrawerCalls.push(id); }")
     pg.click(".hm-app[data-app='plg:garden'] .hm-ic"); pg.wait_for_timeout(300)

@@ -169,6 +169,76 @@ def strip_meta_equiv(html):
     return s
 
 
+_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+         ".svg": "image/svg+xml", ".bmp": "image/bmp", ".ico": "image/x-icon", ".avif": "image/avif",
+         ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf"}
+INLINE_ONE, INLINE_ALL = 8 << 20, 48 << 20
+
+
+def inline_local(html, base, root):
+    """Печать браузером компьютера (рецензия 5e): картинки, шрифты и стили страницы — внутрь копии (data:), а CSP печати
+    без file:. Раньше CSP разрешал img-src file: — без bwrap (Windows, Mac) <img src="file:///…/чужое.png"> попадал в
+    PDF. Берём только обычные файлы внутри root (папка задачи), не больше INLINE_ONE каждый и INLINE_ALL всего;
+    остальное — пустая ссылка. Адреса http(s) и data: не трогаем (сети у печати и так нет)."""
+    import base64
+    from urllib.parse import unquote, urlparse
+    root = os.path.realpath(root)
+    budget = [INLINE_ALL]
+
+    def local(ref, rel_to):
+        ref = (ref or "").strip()
+        if not ref or ref.startswith(("data:", "blob:", "#", "http:", "https:", "about:")):
+            return None
+        if ref.lower().startswith("file:"):
+            ref = unquote(urlparse(ref).path)
+        else:
+            ref = unquote(ref.split("#", 1)[0].split("?", 1)[0])
+        f = os.path.realpath(os.path.join(rel_to, ref))
+        if not _inside(f, root) or not os.path.isfile(f) or os.path.islink(os.path.join(rel_to, ref)):
+            return ""
+        n = os.path.getsize(f)
+        if n > INLINE_ONE or n > budget[0]:
+            return ""
+        budget[0] -= n
+        return f
+
+    def data_uri(ref, rel_to):
+        f = local(ref, rel_to)
+        if f is None:
+            return ref
+        if not f:
+            return ""
+        with open(f, "rb") as fh:
+            body = fh.read()
+        mime = _MIME.get(os.path.splitext(f)[1].lower(), "application/octet-stream")
+        return f"data:{mime};base64,{base64.b64encode(body).decode()}"
+
+    def css_urls(css, rel_to):
+        return re.sub(r"""url\(\s*(['"]?)([^'")]*)\1\s*\)""",
+                      lambda m: f'url("{data_uri(m.group(2), rel_to)}")', css)
+
+    def link_css(m):
+        tag = m.group(0)
+        if not re.search(r"""\brel\s*=\s*["']?[^"'>]*stylesheet""", tag, re.I):
+            return tag
+        h = re.search(r"""\bhref\s*=\s*(["'])([^"']*)\1""", tag, re.I) or re.search(r"\bhref\s*=\s*([^\s>]+)", tag, re.I)
+        f = local(h.group(h.lastindex) if h else "", base)
+        if not f:
+            return "" if f == "" else tag
+        try:
+            css = Path(f).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        css = re.sub(r"@import[^;]*;", "", css)
+        return "<style>" + css_urls(css, os.path.dirname(f)).replace("</", "<\\/") + "</style>"
+
+    html = re.sub(r"<link\b[^>]*>", link_css, html, flags=re.I)
+    html = re.sub(r"""(<(?:img|image|source|video|input)\b[^>]*?\s(?:src|href|xlink:href|poster)\s*=\s*)(["'])([^"']*)\2""",
+                  lambda m: m.group(1) + m.group(2) + data_uri(m.group(3), base) + m.group(2), html, flags=re.I)
+    html = re.sub(r"""\s(?:srcset)\s*=\s*(["'])[^"']*\1""", "", html, flags=re.I)
+    return css_urls(html, base)
+
+
 def print_html(html, scripts=True):
     """Печатная копия страницы: CSP — самой первой строкой (до всего, что есть у страницы), без <meta http-equiv>
     (strip_meta_equiv); презентация без правил печати (слайды прячутся и листаются скриптом) получает их — каждый слайд
@@ -179,11 +249,11 @@ def print_html(html, scripts=True):
     deck = len(re.findall(r"<section\b", low)) >= 2 or len(re.findall(r'class="[^"]*\bslide\b', low)) >= 2
     if deck and "@media print" not in low:
         html = html.replace("</head>", PRINT_DECK + "</head>", 1) if "</head>" in low else PRINT_DECK + html
-    csp = PRINT_CSP if scripts else PRINT_CSP.replace("script-src 'unsafe-inline' file:", "script-src 'none'")
+    csp = PRINT_CSP if scripts else PRINT_CSP_NOSCRIPT
     return f'<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{csp}">' + html
 
 
-def _printable(src, scripts=True):
+def _printable(src, scripts=True, root=None):
     """Что печатать: копия рядом с исходной (относительные ссылки на картинки работают) — print_html.
     scripts=False — скрипты страницы выключены (CSP script-src 'none'): так печатает браузер компьютера без Playwright.
     -> (путь, временный ли). Рядом записать нельзя — копия во временной папке (картинки по относительным ссылкам
@@ -202,6 +272,8 @@ def _printable(src, scripts=True):
         except OSError:
             return src, False
         tmp = src.with_name(f".печать-{src.name}")
+    if not scripts:
+        html = inline_local(html, str(src.parent), root or src.parent)
     try:
         tmp.write_text(print_html(html, scripts), encoding="utf-8")
     except OSError:
@@ -223,7 +295,7 @@ def html_to_pdf(src, dst, timeout=90, root=None):
                 Path(p).unlink(missing_ok=True)
         if got:
             return got
-    p, temp = _printable(src, scripts=False)                  # браузер компьютера: без скриптов (и в bwrap, где он есть)
+    p, temp = _printable(src, scripts=False, root=root)       # браузер компьютера: без скриптов (и в bwrap, где он есть)
     try:
         return _html_to_pdf(p, dst, timeout, root=root)
     finally:
@@ -238,6 +310,11 @@ def html_to_pdf(src, dst, timeout=90, root=None):
 PRINT_CSP = ("default-src 'none'; script-src 'unsafe-inline' file:; style-src 'unsafe-inline' file:; img-src file: data: blob:; "
              "font-src file: data:; media-src file: data: blob:; frame-src 'none'; child-src 'none'; object-src 'none'; "
              "connect-src 'none'; form-action 'none'; base-uri 'none'")
+# браузер компьютера (без Playwright, в том числе без bwrap на Windows и Mac): ни скриптов, ни file: — свои картинки,
+# шрифты и стили уже внутри копии (inline_local), чужой файл с диска странице не достать (рецензия 5e)
+PRINT_CSP_NOSCRIPT = ("default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; "
+                      "media-src data: blob:; frame-src 'none'; child-src 'none'; object-src 'none'; connect-src 'none'; "
+                      "form-action 'none'; base-uri 'none'")
 NO_NET_ARGS = ["--proxy-server=socks5://127.0.0.1:9", "--proxy-bypass-list=<-loopback>",
                "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"]
 

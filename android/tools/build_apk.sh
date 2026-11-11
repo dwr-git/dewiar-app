@@ -4,16 +4,19 @@
 # Ресурсы линкуются с framework-res из пакетов (атрибуты манифеста до Android 11; новее — fgs_type.py), Java — против android.jar API 23
 # (новые API — отражением, см. Compat.java). Подпись — ключом DEWIAR_KEYSTORE (по умолчанию ~/dewiar-keys).
 # Использование: android/tools/build_apk.sh [папка-результата]
+#                android/tools/build_apk.sh --check   — только проверить сборку (ресурсы, манифест, Java, dex) без ключа
+#                                                       подписи и без APK: для проверок (tests/phone_alarm_late087_test.py)
 set -e
 HERE="$(cd "$(dirname "$0")/.." && pwd)"; ROOT="$(cd "$HERE/.." && pwd)"
-OUT="${1:-$ROOT/dist}"; mkdir -p "$OUT"
+CHECK=""; [ "${1:-}" = "--check" ] && { CHECK=1; shift; }
+OUT="${1:-$ROOT/dist}"; [ -n "$CHECK" ] || mkdir -p "$OUT"
 BT=/usr/lib/android-sdk/build-tools/debian
 FR=/usr/share/android-framework-res/framework-res.apk
 AJ=/usr/lib/android-sdk/platforms/android-23/android.jar
 KS="${DEWIAR_KEYSTORE:-/home/claude/dewiar-keys/dewiar-release.jks}"
 KP="${DEWIAR_KEYPASS:-}"                                  # пароль — только из окружения или файла рядом с ключом (<ключ>.pass), не из кода
 [ -z "$KP" ] && [ -f "$KS.pass" ] && KP=$(cat "$KS.pass")
-[ -n "$KP" ] || { echo "нет пароля ключа подписи: задайте DEWIAR_KEYPASS или положите его в $KS.pass" >&2; exit 1; }
+[ -n "$KP" ] || [ -n "$CHECK" ] || { echo "нет пароля ключа подписи: задайте DEWIAR_KEYPASS или положите его в $KS.pass" >&2; exit 1; }
 VER=$(sed -n 's/.*static final String VERSION = "\([0-9.]*\)".*/\1/p' "$HERE/src/pro/dewiar/app/BuildInfo.java")
 CODE=$(echo "$VER" | awk -F. '{print $1*10000+$2*100+$3}')
 B=$(mktemp -d); trap 'rm -rf "$B"' EXIT
@@ -45,6 +48,10 @@ javac -nowarn -Xlint:-options -encoding UTF-8 -source 8 -target 8 -bootclasspath
 if grep -q "exception has occurred in the compiler\|error:" "$B/javac.log"; then echo "Java не скомпилировалась (см. выше)"; rm -f "$ROOT"/javac.*.args; exit 1; fi
 [ -n "$(find "$B/classes" -name '*.class' | head -1)" ] || { echo "Java не скомпилировалась"; exit 1; }
 dalvik-exchange --dex --min-sdk-version=24 --output="$B/classes.dex" "$B/classes" 2>&1 | grep -v JAVA_TOOL_OPTIONS || true
+if [ -n "$CHECK" ]; then
+  [ -s "$B/classes.dex" ] || { echo "dex не собрался" >&2; exit 1; }
+  echo "сборка проходит: ресурсы, манифест, Java и dex — без подписи, APK не создан"; exit 0
+fi
 for V in base hands; do
   cp "$B/base-$V.apk" "$B/u.apk"; (cd "$B" && zip -q u.apk classes.dex)
   "$BT/zipalign" -f -p 4 "$B/u.apk" "$B/a.apk"

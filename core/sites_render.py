@@ -725,6 +725,9 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .form .btn{width:100%;margin-top:6px;--sbtn:var(--accent);--sbtnk:var(--accent-ink)}
 .form .hp{position:absolute;left:-6000px;width:1px;height:1px;overflow:hidden}
 .form small{color:var(--muted);font-size:.8rem}
+.form .pdc{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:.86rem;line-height:1.45;color:var(--muted);cursor:pointer}
+.form .pdc input{width:20px;height:20px;padding:0;margin:1px 0 0;flex:none;accent-color:var(--c-base-btn);cursor:pointer}
+.form .pdc a{color:var(--c-base-link);text-underline-offset:3px}
 .ld .card{background:var(--bg);color:var(--ink)}
 .ld-card .card{max-width:620px;margin:0 auto}
 .ld-card .ldh{text-align:center;max-width:620px;margin:0 auto 26px}
@@ -738,6 +741,30 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .ftr .bot{grid-column:1/-1;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--ftr-line);padding-top:20px;margin-top:20px;font-size:.84rem;color:var(--ftr-mut)}
 .ftr .bot span{display:flex;gap:18px;flex-wrap:wrap}
 .ftr .logo{--hacc:var(--dark-ink)}
+/* подвал: наименование, реквизиты и документы (0.87) — тише меню, но читается; задано пусто — строки нет */
+.ftr .lgl{grid-column:1/-1;display:flex;justify-content:space-between;align-items:flex-start;gap:14px 48px;flex-wrap:wrap;border-top:1px solid var(--ftr-line);padding-top:22px;margin-top:20px;font-size:.86rem;line-height:1.5;color:var(--ftr-mut)}
+.ftr .lgl>div{max-width:62ch}
+.ftr .lg-org{margin:0 0 3px;color:var(--dark-ink);font-weight:700;font-size:.92rem}
+.ftr .lgl ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:3px 18px}
+.ftr .lg-docs{justify-content:flex-end;gap:6px 22px}
+.ftr .lg-docs a{color:var(--dark-ink);text-decoration:underline;text-decoration-color:var(--ftr-line);text-underline-offset:4px;text-decoration-thickness:1.5px}
+.ftr .lg-docs a:hover{text-decoration-color:currentColor}
+.ftr .lgl+.bot{border-top:0;padding-top:6px;margin-top:6px}
+/* страница документа: оферта, политика… — для чтения, в стиле сайта */
+.s.doc{padding-top:clamp(36px,6vw,72px)}
+.doc .w{width:min(860px,100%)}
+.doc-back{display:inline-block;margin-bottom:clamp(22px,3vw,34px);font-weight:600;font-size:.93rem;color:var(--slink);text-decoration:none;border-bottom:1.5px solid currentColor;padding-bottom:1px}
+.doc h1{font-size:calc(clamp(1.9rem,4.2vw,3.1rem) * var(--hs,1));max-width:24ch}
+.doc-ed{color:var(--smut);margin:14px 0 clamp(26px,4vw,44px);font-size:.95rem}
+.doc-text{max-width:68ch;line-height:1.72;overflow-wrap:anywhere}
+.doc-text h2{font-size:calc(1.3rem * var(--h3s,1));line-height:1.3;margin:2em 0 .7em}
+.doc-text h2:first-child{margin-top:0}
+.doc-text ul{margin:0 0 .9em;padding-left:1.25em}.doc-text li{margin:.3em 0}.doc-text li::marker{color:var(--slink)}
+.doc-req{margin-top:clamp(36px,5vw,60px);max-width:68ch}
+.doc-req h2{font-size:calc(1.15rem * var(--h3s,1));margin-bottom:.7em}
+.doc-req .lg-org{font-weight:700;margin-bottom:.3em}
+.doc-req ul{list-style:none;margin:0;padding:0;display:grid;gap:4px;color:var(--smut)}
+.doc-req a{color:var(--slink)}
 @media (max-width:860px){
  .h-split .w,.split,.ft-split{grid-template-columns:1fr}
  .h-split .media{aspect-ratio:16/10}
@@ -746,6 +773,7 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
  .gal{grid-template-columns:repeat(2,1fr)}
  .gal.mos{grid-template-columns:repeat(2,1fr);grid-auto-rows:minmax(120px,38vw)}
  .ftr .w{grid-template-columns:1fr}
+ .ftr .lgl{flex-direction:column;gap:14px}.ftr .lg-docs{justify-content:flex-start;flex-direction:column;gap:2px}.ftr .lg-docs a{display:inline-block;padding:6px 0}
  .steps.v li{grid-template-columns:52px 1fr}
  .ag>div{grid-template-columns:1fr;gap:4px}
 }
@@ -810,6 +838,7 @@ class Ctx:
         self.pages = site.get("pages") or []
         self.art = (site.get("theme") or {}).get("art") or "beans"
         self.contacts = site.get("contacts") or {}
+        self.legal = legal_of(site)                 # подвал и документы (0.87)
         self.anchors = {}                           # якорь -> индекс страницы
         for i, pg in enumerate(self.pages):
             for j, b in enumerate(pg.get("blocks") or []):
@@ -910,9 +939,10 @@ def menu_items(site, c):
     if len(pages) > 1:
         return [(pg.get("title") or f"Страница {i + 1}", c.page_file(i), i == c.page_i) for i, pg in enumerate(pages)]
     out = []
+    pre = "" if c.page_i == 0 or not pages else c.page_file(0)     # со страницы документа — на разделы главной
     for j, b in enumerate(pages[0].get("blocks") or [] if pages else []):
         if b.get("nav") and not b.get("hidden"):
-            out.append((b["nav"], f"#{anchor(b, j)}", False))
+            out.append((b["nav"], f"{pre}#{anchor(b, j)}", False))
     return out[:7]
 
 
@@ -1188,6 +1218,20 @@ def b_contacts(b, c, v):
     return f'<div class="w split"><div><h2>{one(b.get("title") or "Контакты")}</h2>{para(b.get("text"), "lede")}{lst}</div>{mp}</div>'
 
 
+def pd_consent(c):
+    """152-ФЗ: задана политика обработки ПД — в форме заявки галочка «Даю согласие…» со ссылками (обязательная);
+    pd_need — серверу (sites.php), чтобы без галочки заявку не принять и без браузера."""
+    pol = legal_href(c.site, "privacy")
+    if not pol:
+        return ""
+    con = legal_href(c.site, "consent")
+    lk = lambda h, t: f'<a href="{E(h)}" target="_blank" rel="noopener">{t}</a>'
+    txt = (f'Даю {lk(con, "согласие на обработку персональных данных")} в соответствии с {lk(pol, "политикой конфиденциальности")}' if con
+           else f'Даю согласие на обработку персональных данных в соответствии с {lk(pol, "политикой конфиденциальности")}')
+    return (f'<input type="hidden" name="pd_need" value="1"><label class="pdc"><input type="checkbox" name="pd_ok" value="1" required>'
+            f'<span>{txt}</span></label>')
+
+
 def lead_form(b, c):
     pg = slug_of(c.pages[c.page_i], c.page_i) if c.pages else "index"
     action = "/__lead" if c.mode == "publish" else "#"
@@ -1196,8 +1240,8 @@ def lead_form(b, c):
             f'<div class="hp" aria-hidden="true"><label>Не заполняйте<input name="website" tabindex="-1" autocomplete="off"></label></div>'
             f'<label>Как вас зовут<input name="name" maxlength="80" autocomplete="name" required></label>'
             f'<label>Телефон или почта<input name="contact" maxlength="120" autocomplete="tel" inputmode="email" required></label>{msg}'
-            f'<button class="btn" type="submit">{one(b.get("button") or "Отправить")}</button>'
-            f'<small>Нажимая кнопку, вы соглашаетесь, что с вами свяжутся по этим контактам.</small>'
+            f'{pd_consent(c)}<button class="btn" type="submit">{one(b.get("button") or "Отправить")}</button>'
+            f'{"" if legal_href(c.site, "privacy") else "<small>Нажимая кнопку, вы соглашаетесь, что с вами свяжутся по этим контактам.</small>"}'
             f'<p class="ok" id="lead-ok" role="status">{one(b.get("thanks") or "Спасибо! Скоро свяжемся.")}</p></form>')
 
 
@@ -1231,14 +1275,138 @@ def block_html(b, j, c):
     return f'<section id="{anchor(b, j)}" class="{cls.strip()}"{data}>{inner}</section>'
 
 
+# ---------- подвал и документы (0.87) ----------
+def digits(v, n=15):
+    return re.sub(r"\D", "", str(v or ""))[:n]
+
+
+def doc_slug(site, key):
+    """Адрес страницы документа (без .html): oferta, privacy, soglasie, terms; занят страницей сайта — doc-…"""
+    base = K.LEGAL_DOCS[key]["slug"]
+    taken = {slug_of(pg, i) for i, pg in enumerate(site.get("pages") or [])}
+    return base if base not in taken else f"doc-{base}"
+
+
+def legal_of(site):
+    """Что из «Подвала и документов» есть на сайте -> {req: [(вид, текст, ссылка)], org, docs: [(ключ, подпись, ссылка)], links: […]}.
+    Документ «свой текст» — своя страница (ключ.html), «ссылка» — только https (safe_url); пустое не показываем."""
+    lg = site.get("legal") or {}
+    if not isinstance(lg, dict):
+        lg = {}
+    org = re.sub(r"\s+", " ", str(lg.get("org") or "")).strip()
+    inn, ogrn = digits(lg.get("inn"), 12), digits(lg.get("ogrn"), 15)
+    req = []
+    if inn:
+        req.append(("inn", f"ИНН {inn}", ""))
+    if ogrn:
+        req.append(("ogrn", f"{'ОГРНИП' if len(ogrn) == 15 else 'ОГРН'} {ogrn}", ""))
+    if str(lg.get("address") or "").strip():
+        req.append(("address", str(lg["address"]).strip(), ""))
+    if str(lg.get("phone") or "").strip():
+        req.append(("phone", str(lg["phone"]).strip(), phone_href(lg["phone"])))
+    if str(lg.get("email") or "").strip():
+        em = str(lg["email"]).strip()
+        req.append(("email", em, f"mailto:{em}" if re.fullmatch(r"[^@\s<>\"']+@[^@\s<>\"']+\.[^@\s<>\"']+", em) else ""))
+    docs = []
+    for key, meta in K.LEGAL_DOCS.items():
+        d = (lg.get("docs") or {}).get(key) or {}
+        if not isinstance(d, dict):
+            continue
+        if d.get("mode") == "text" and str(d.get("text") or "").strip():
+            docs.append((key, meta["short"], doc_slug(site, key) + ".html"))
+        elif d.get("mode") == "link" and safe_url(d.get("url")):
+            docs.append((key, meta["short"], safe_url(d.get("url"))))
+    links = []
+    for x in (lg.get("links") or [])[:K.LEGAL_LINKS_MAX]:
+        if isinstance(x, dict) and str(x.get("title") or "").strip() and safe_url(x.get("url")):
+            links.append(("", str(x["title"]).strip()[:80], safe_url(x["url"])))
+    return {"org": org, "req": req, "docs": docs + links}
+
+
+def legal_href(site, key):
+    """Ссылка на документ (ключ из LEGAL_DOCS) или ""."""
+    return next((h for k, _, h in legal_of(site)["docs"] if k == key), "")
+
+
+def _a(h, text):
+    """Ссылка (свои страницы, https, mailto, tel — их уже проверили) или просто текст."""
+    return f'<a href="{E(h)}"{" rel=noopener" if h.startswith("https:") else ""}>{text}</a>' if h else text
+
+
+def legal_html(site, c):
+    """Строка подвала: наименование, ИНН, ОГРН, адрес, телефон, почта — и документы. Ничего не задано — пусто."""
+    L = c.legal
+    if not (L["org"] or L["req"] or L["docs"]):
+        return ""
+    req = "".join(f'<li class="lg-{k}">{_a(h, one(t))}</li>' for k, t, h in L["req"])
+    who = (f'<p class="lg-org">{one(L["org"])}</p>' if L["org"] else "") + (f'<ul class="lg-req">{req}</ul>' if req else "")
+    docs = "".join(f"<li>{_a(h, one(t))}</li>" for _, t, h in L["docs"])
+    nav = '<nav aria-label="Документы"><ul class="lg-docs">' + docs + "</ul></nav>" if docs else ""
+    return '<div class="lgl">' + (f"<div>{who}</div>" if who else "") + nav + "</div>"
+
+
 def footer(site, c):
     m = menu_items(site, c)
     links = "".join(f'<a href="{E(h)}">{one(t)}</a>' for t, h, _ in m)
     year = datetime.now().year
     report = '<a href="/__report">Пожаловаться на сайт</a>' if c.mode == "publish" else '<a href="#">Пожаловаться на сайт</a>'
     return (f'<footer class="ftr"><div class="w"><div>{logo_html(site, href=c.page_file(0))}'
-            f'</div><nav aria-label="Разделы">{links}</nav><div>{contact_list(c, ("phone", "email", "address", "telegram"))}</div>'
+            f'</div><nav aria-label="Разделы">{links}</nav><div>{contact_list(c, ("phone", "email", "address", "telegram"))}</div>{legal_html(site, c)}'
             f'<div class="bot"><span>© {year} {one(site.get("name"))}</span><span>{report}<a href="https://dewiar.pro" rel="noopener">Сайт сделан в Dewiar</a></span></div></div></footer>')
+
+
+def doc_text(text):
+    """Текст документа -> HTML: пустая строка — новый абзац; «## …» или короткая строка «1. Общие положения» — заголовок;
+    строки «- …» / «• …» — список. Всё экранировано."""
+    out = []
+    for blk in re.split(r"\n\s*\n", str(text or "").replace("\r", "").strip()):
+        lines = [x.rstrip() for x in blk.strip().split("\n") if x.strip()]
+        if not lines:
+            continue
+        if len(lines) == 1 and (lines[0].startswith("#") or (re.match(r"^\d+(\.\d+)*\.?\s+\S", lines[0]) and len(lines[0]) <= 110
+                                                           and not re.search(r"[.;:,]$", lines[0]))):
+            out.append(f"<h2>{one(lines[0].lstrip('#').strip())}</h2>")
+            continue
+        if lines[0].startswith("#"):
+            out.append(f"<h2>{one(lines[0].lstrip('#').strip())}</h2>")
+            lines = lines[1:]
+        items, para_lines = [], []
+        for ln in lines:
+            mm = re.match(r"^\s*[-•—*]\s+(.*)$", ln)
+            if mm:
+                if para_lines:
+                    out.append("<p>" + "<br>".join(E(x) for x in para_lines) + "</p>")
+                    para_lines = []
+                items.append(f"<li>{E(mm.group(1))}</li>")
+            else:
+                if items:
+                    out.append("<ul>" + "".join(items) + "</ul>")
+                    items = []
+                para_lines.append(ln)
+        if para_lines:
+            out.append("<p>" + "<br>".join(E(x) for x in para_lines) + "</p>")
+        if items:
+            out.append("<ul>" + "".join(items) + "</ul>")
+    return "".join(out)
+
+
+RU_MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
+
+
+def doc_main(site, key, c):
+    meta = K.LEGAL_DOCS[key]
+    d = ((site.get("legal") or {}).get("docs") or {}).get(key) or {}
+    ts = d.get("ts") or site.get("updated")
+    when = ""
+    if ts:
+        dt = datetime.fromtimestamp(int(ts))
+        when = f'<p class="doc-ed">Редакция от {dt.day} {RU_MONTHS[dt.month - 1]} {dt.year} г.</p>'
+    L = c.legal
+    req = "".join(f"<li>{_a(h, one(t))}</li>" for _, t, h in L["req"])
+    card = (f'<aside class="doc-req card"><h2>Реквизиты</h2>{opt("p", L["org"], "lg-org")}{f"<ul>{req}</ul>" if req else ""}</aside>'
+            if (L["org"] or req) else "")
+    return (f'<section class="s t-base doc" id="doc"><div class="w"><a class="doc-back" href="{E(c.page_file(0))}">На главную</a>'
+            f'<h1>{E(meta["title"])}</h1>{when}<div class="doc-text">{doc_text(d.get("text"))}</div>{card}</div></section>')
 
 
 # ---------- страница ----------
@@ -1296,20 +1464,34 @@ def jsonld(site, base_url):
     return json.dumps(d, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
-def page_html(site, i=0, mode="preview", images=None, base_url="", css_text=None):
-    """Одна страница сайта. preview — CSS внутри; publish/export — ссылка на style.css."""
+def doc_keys(site):
+    """Документы «своим текстом» — у каждого своя страница сайта."""
+    docs = (site.get("legal") or {}).get("docs") or {}
+    return [k for k in K.LEGAL_DOCS if isinstance(docs.get(k), dict) and docs[k].get("mode") == "text" and str(docs[k].get("text") or "").strip()]
+
+
+def page_html(site, i=0, mode="preview", images=None, base_url="", css_text=None, doc=""):
+    """Одна страница сайта. preview — CSS внутри; publish/export — ссылка на style.css. doc — страница документа
+    («Подвал и документы»: оферта, политика…) в стиле сайта, с той же шапкой и подвалом."""
     pages = site.get("pages") or []
     if not pages:
         pages = site["pages"] = [{"title": "Главная", "blocks": []}]
-    i = max(0, min(i, len(pages) - 1))
+    doc = doc if doc in doc_keys(site) else ""
+    i = -1 if doc else max(0, min(i, len(pages) - 1))
     c = Ctx(site, mode, i, images, base_url)
     th = site.get("theme") or {}
     fonts = K.FONTS.get(th.get("fonts") or "", K.FONTS["warm"])
-    body = "".join(block_html(b, j, c) for j, b in enumerate(pages[i].get("blocks") or []))
-    title, desc = seo_title(site, i), seo_desc(site, i)
-    url = (base_url.rstrip("/") + "/" + ("" if i == 0 else c.page_file(i))) if base_url else ""
+    if doc:
+        body = doc_main(site, doc, c)
+        title = f'{K.LEGAL_DOCS[doc]["title"]} — {site.get("name") or "Сайт"}'
+        desc = title
+        url = (base_url.rstrip("/") + "/" + doc_slug(site, doc) + ".html") if base_url else ""
+    else:
+        body = "".join(block_html(b, j, c) for j, b in enumerate(pages[i].get("blocks") or []))
+        title, desc = seo_title(site, i), seo_desc(site, i)
+        url = (base_url.rstrip("/") + "/" + ("" if i == 0 else c.page_file(i))) if base_url else ""
     og_img = ""
-    for b in pages[i].get("blocks") or []:
+    for b in (pages[i].get("blocks") or []) if not doc else []:
         if b.get("image") and c.img(b["image"]) and not c.img(b["image"]).startswith("data:"):
             og_img = (base_url.rstrip("/") + "/" + c.img(b["image"])) if base_url else ""
             break
@@ -1342,4 +1524,6 @@ def site_files(site, images, base_url="", mode="publish"):
     files = {"style.css": css(site, mode)}
     for i, pg in enumerate(site.get("pages") or []):
         files[slug_of(pg, i) + ".html"] = page_html(site, i, mode, images, base_url)
+    for k in doc_keys(site):
+        files[doc_slug(site, k) + ".html"] = page_html(site, 0, mode, images, base_url, doc=k)
     return files, font_files((site.get("theme") or {}).get("fonts") or "warm")

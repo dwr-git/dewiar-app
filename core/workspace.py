@@ -876,6 +876,7 @@ class Workspace:
                 word = "раза" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else "раз"
                 lines[i] = f"- {body} (раньше: {prev}; менялось {n} {word}). _({dt.date.today():%d.%m.%Y})_"
                 p.write_text("\n".join(lines), encoding="utf-8")
+                self.mem_changed()
                 return f"Обновил (раньше: {prev})."
         if not p.exists():
             p.write_text(head, encoding="utf-8")
@@ -889,12 +890,20 @@ class Workspace:
         text = p.read_text(encoding="utf-8") if p.exists() else head
         return text[len(head):] if text.startswith(head) else text
 
+    mem_rev = 0                                    # растёт, когда «Обо мне» переписали (забыть, правка) — снимки справки прочь
+
+    def mem_changed(self):
+        """«Обо мне» переписали не дописыванием (забыть факт, правка в студии, удаление с телефона): снимки личной
+        справки в разговоре (Engine._profile_snap) пересобираются — забытое больше не уходит модели (рецензия 0.87)."""
+        self.mem_rev = int(getattr(self, "mem_rev", 0) or 0) + 1
+
     def memory_set(self, body, who=None):
         body = (body or "").strip()
         rel, head = self._mem(who)
         p = self.safe(str(rel))
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(head + (body + "\n" if body else ""), encoding="utf-8")
+        self.mem_changed()
         return True
 
     def memory_text(self, limit=2500, who=None):

@@ -27,14 +27,21 @@ f = EB.fact_line("run_command", {"command": "echo 'Qwerty123' | sudo -S apt upda
 ok("Qwerty123" not in f, f"пароль в команде — ***: {f}")
 
 hist = []
-for n in range(6):
+for n in range(10):
     hist += [{"role": "user", "content": f"вопрос {n}"},
              {"role": "assistant", "content": f"ответ {n}", "who": "lira", "facts": [f"run_command(ip {n}) → 10.0.0.{n}"]}]
 hist.append({"role": "user", "content": "а какой у него провайдер?"})
 out = EA.team_window(hist, "lira", lambda p: "Патрик")
 with_f = [m["content"] for m in out if "[узнано инструментами" in m["content"]]
-ok(len(with_f) == EB.FACT_TURNS and "10.0.0.5" in with_f[-1] and "10.0.0.1" not in " ".join(with_f),
-   f"находки — у последних {EB.FACT_TURNS} ответов, старые не тянем: {len(with_f)}")
+# 0.87 (кэш подсказки): не «последние 4» (тогда с каждым новым ответом пометка пропадала у старого и середина разговора
+# менялась), а пачками: не больше 2·FACT_TURNS, набор меняется раз в FACT_TURNS новых находок
+ok(EB.FACT_TURNS < len(with_f) <= 2 * EB.FACT_TURNS and "10.0.0.9" in with_f[-1] and "10.0.0.1" not in " ".join(with_f),
+   f"находки — у последних ответов (не больше {2 * EB.FACT_TURNS}), старые не тянем: {len(with_f)}")
+h11 = hist + [{"role": "assistant", "content": "ответ 10", "who": "lira", "facts": ["run_command(ip 10) → 10.0.0.10"]},
+                   {"role": "user", "content": "дальше"}]
+out11 = EA.team_window(h11, "lira", lambda p: "Патрик")
+ok([m["content"] for m in out11[:len(out) - 1]] == [m["content"] for m in out[:-1]],
+   "ещё одна находка — начало разговора то же (пометки у старых ответов не пропадают с каждым ответом)")
 ok("опирайся на это" in with_f[-1], "модели сказано: опирайся на найденное, не ищи заново")
 # пометку модель могла повторить — человеку её не показываем и вслух не читаем
 ok(EA.ACTS_RX.sub("", "Провайдер — Ростелеком. [узнано инструментами — опирайся на это: run_command(ip) → 1.2.3.4]").strip() == "Провайдер — Ростелеком.",

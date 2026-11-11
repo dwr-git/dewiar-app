@@ -259,6 +259,18 @@ TONES = {"base": "Основной фон", "alt": "Второй фон", "dark"
 CONTACT_KEYS = {"phone": "Телефон", "email": "Почта", "address": "Адрес", "hours": "Часы работы", "telegram": "Telegram",
                 "whatsapp": "WhatsApp", "vk": "ВКонтакте", "max": "MAX", "instagram": "Instagram", "site": "Другой сайт"}
 
+# «Подвал и документы» (0.87; люди просят: оферта, политика обработки ПД, ИНН/ОГРН, адрес): site["legal"] =
+# {org, inn, ogrn, address, phone, email, docs: {ключ: {mode: link|text, url, text, draft, ts}}, links: [{title, url}]}.
+# Документ «свой текст» — отдельная страница сайта /<адрес> в стиле сайта; «ссылка» — на чужой адрес.
+LEGAL_FIELDS = {"org": "Название организации или ИП", "inn": "ИНН", "ogrn": "ОГРН или ОГРНИП", "address": "Юридический адрес",
+                "phone": "Телефон", "email": "Почта"}
+LEGAL_DOCS = {"oferta": {"title": "Публичная оферта", "slug": "oferta", "short": "Оферта"},
+              "privacy": {"title": "Политика обработки персональных данных", "slug": "privacy", "short": "Политика конфиденциальности"},
+              "consent": {"title": "Согласие на обработку персональных данных", "slug": "soglasie", "short": "Согласие на обработку данных"},
+              "terms": {"title": "Пользовательское соглашение", "slug": "terms", "short": "Пользовательское соглашение"}}
+LEGAL_TEXT_MAX = 40000
+LEGAL_LINKS_MAX = 6
+
 
 def blk(t, variant, tone="base", nav="", **f):
     d = {"type": t, "variant": variant, "tone": tone}

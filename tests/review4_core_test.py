@@ -170,5 +170,17 @@ try:
 except MemoryError:
     ok(False, "растр огромной страницы съел память")
 
+
+# рецензия 5e, п. 3: печать браузером компьютера без bwrap (Windows, Mac) — CSP без file:, свои картинки внутри копии
+import base64  # noqa: E402
+_d = Path(tempfile.mkdtemp()); (_d / "img").mkdir()
+(_d / "img/a.png").write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+(_d / "s.css").write_text("body{background:url(img/a.png)}", encoding="utf-8")
+_out = X.inline_local('<link rel="stylesheet" href="s.css"><img src="img/a.png"><img src="../../etc/passwd">'
+                      '<img src="file:///etc/hostname"><img srcset="file:///etc/hostname 2x" src="x">', str(_d), str(_d))
+ok(_out.count("data:image/png") == 2 and "/etc/" not in _out, "печать без скриптов: свои картинки и стили — внутри копии, чужие файлы — пустая ссылка")
+_pc = X.print_html("<p>Отчёт</p>", scripts=False)
+ok("file:" not in _pc.split("Content-Security-Policy", 1)[1].split(">", 1)[0], "CSP печати браузером компьютера — без file:")
+
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -8,7 +8,12 @@ engine._persona_knowledge). Например, консультант магаз�
 характера персонажа, найденного в знаниях и последних реплик этого чата.
 
 Группы: бот отвечает, когда его упомянули (@имя), ответили на его сообщение или написали /ask; режим приватности
-Telegram по умолчанию и так присылает боту только такие сообщения. Лично — на всё, и на голосовые (до 90 с,
+Telegram по умолчанию и так присылает боту только такие сообщения. №643/№644 и идея №147 (10.11: «в группе не отвечает ни
+на имя, ни на вопросы», «у бота надпись „не имеет доступа к сообщениям“»): по имени («Лира, подскажи…», «…, Лира?») —
+тоже (by_name), но такие сообщения Telegram присылает, только если режим приватности выключен (@BotFather → /setprivacy →
+Disable, затем убрать бота из группы и добавить снова) или бот — администратор группы. getMe говорит это сам
+(can_read_all_group_messages) — студия показывает, что сделать (privacy(), pbot_check); группы, откуда пришло
+сообщение не боту, помечены «слышит всё» (hears). Лично — на всё, и на голосовые (до 90 с,
 тем же слухом, что дома). Ограничения: на человека в день
 (per_user), на всех в день (per_day), в чате не чаще раза в 4 с; сверх — одна вежливая фраза. Последние вопросы
 и ответы видны владельцу в студии (log, до 40), а переписка чата для контекста живёт только в памяти (8 реплик, 2 ч).
@@ -31,7 +36,11 @@ log = logging.getLogger("dewiar.pbot")
 PATH = CONFIG_DIR / "pbot.json"
 HIST, HIST_TTL, CHAT_GAP = 8, 2 * 3600, 4.0
 VOICE_MAX = 90                       # с: голосовое длиннее — просим покороче
-DEFAULTS = {"on": True, "groups": True, "per_user": 30, "per_day": 300, "brief": "", "welcome": ""}
+DEFAULTS = {"on": True, "groups": True, "by_name": True, "per_user": 30, "per_day": 300, "brief": "", "welcome": ""}
+PRIV_TTL = 300                       # с: как часто переспрашивать getMe о режиме приватности
+# перед именем в начале сообщения — обращение («эй, Лира», «скажи, Лира»)
+CALL_LEAD = re.compile(r"(?:(?:эй|привет|приветик|здравствуй(?:те)?|слушай(?:те)?|скажи(?:те)?|подскажи(?:те)?|а|ну|о|"
+                       r"добрый\s+(?:день|вечер)|доброе\s+утро|доброй\s+ночи|уважаем(?:ая|ый))[\s,!.:—-]*)+")
 
 PUBLIC = ("Ты — {name}. Твой характер: {char}\n\n"
           "Сейчас ты — бот в Telegram и отвечаешь {where}. Пишет не твой владелец, а любой человек. У тебя НЕТ доступа к "
@@ -65,6 +74,7 @@ class PersonaBot(Telegram):
         self.last_chat = {}                  # чат -> когда отвечали (не чаще CHAT_GAP)
         self.warned = set()                  # (день, кто) — «на сегодня всё» сказано
         self.users = {}                      # (день, кто) -> сколько ответов
+        self._priv_at = 0.0                  # когда спрашивали getMe о режиме приватности
 
     def _http(self, method, url, **kw):
         """Прокси — свой или тот же, что у личного бота (Telegram заблокирован у провайдера — заблокирован для обоих)."""
@@ -107,13 +117,14 @@ class PersonaBot(Telegram):
                 "running": bool(self._thread and self._thread.is_alive()), "problem": self.problem,
                 "today": today, "total": d.get("total", 0), "chats": list((d.get("chats") or {}).values())[-12:],
                 "log": (d.get("log") or [])[-40:][::-1], "proxy": bool(d.get("proxy")),
+                "read_all": (d.get("bot") or {}).get("read_all"), "names": self.names(),
                 **{k: self.opt(k) for k in DEFAULTS}}
 
     def set(self, patch):
         """Настройки из студии: on, groups, per_user, per_day, brief, welcome, persona."""
         with self._lock:
             for k, v in (patch or {}).items():
-                if k in ("on", "groups"):
+                if k in ("on", "groups", "by_name"):
                     self.data[k] = bool(v)
                 elif k in ("per_user", "per_day"):
                     self.data[k] = max(1, min(5000, int(v or 0) or DEFAULTS[k]))
@@ -129,6 +140,7 @@ class PersonaBot(Telegram):
     def start(self):
         if self.opt("on"):
             super().start()
+            self.privacy_soon()
 
     def connect(self, token, api=""):
         """Проверить токен (getMe) и начать отвечать. Токен личного бота сюда нельзя — у того свой хозяин."""
@@ -149,12 +161,64 @@ class PersonaBot(Telegram):
         with self._lock:
             keep = {k: old[k] for k in (*DEFAULTS, "persona", "total", "log", "chats", "day", "proxy") if k in old}
             self.data = {**keep, "token": token, "api": (api or "").strip(), "offset": old.get("offset", 0) if old.get("token") == token else 0,
-                         "bot": {"id": me.get("id"), "username": me.get("username", ""), "name": me.get("first_name", "")}}
+                         "bot": {"id": me.get("id"), "username": me.get("username", ""), "name": me.get("first_name", ""),
+                                 "read_all": bool(me.get("can_read_all_group_messages"))}}
             self._save()
+        self._priv_at = time.monotonic()
         self.problem = ""
         self.start()
         log.info("Бот персонажа: @%s подключён", me.get("username"))
         return self.public()
+
+    def privacy(self, fresh=False):
+        """Видит ли бот все сообщения групп (режим приватности выключен) — по getMe; не чаще PRIV_TTL, fresh — сейчас.
+        -> True | False | None (не знаем: нет связи). Поменялось — событие «pbot» для студии."""
+        bot = self.data.get("bot") or {}
+        if not self.connected() or (not fresh and time.monotonic() - self._priv_at < PRIV_TTL):
+            return bot.get("read_all")
+        self._priv_at = time.monotonic()
+        try:
+            me = self._call("getMe", timeout=10)
+        except TelegramError as e:
+            log.info("Бот персонажа: getMe не ответил: %s", e)
+            return bot.get("read_all")
+        ra = bool(me.get("can_read_all_group_messages"))
+        if ra != bot.get("read_all"):
+            with self._lock:
+                self.data.setdefault("bot", {})["read_all"] = ra
+                self._save()
+            log.info("Бот персонажа: режим приватности %s", "выключен — видит все сообщения групп" if ra else "включён — в группах видит только обращения через @ и ответы")
+            try:
+                self.host.emit("pbot", read_all=ra)
+            except Exception:  # noqa: BLE001
+                pass
+        return ra
+
+    def privacy_soon(self):
+        """privacy() в фоне — студия открывает раздел, а getMe может думать до 10 с."""
+        if self.connected() and time.monotonic() - self._priv_at >= PRIV_TTL:
+            threading.Thread(target=self.privacy, daemon=True, name="pbot-priv").start()
+
+    def names(self):
+        """Как бота зовут в группе: имя персонажа и имя бота из @BotFather (без повторов)."""
+        out = []
+        for n in ((self.persona() or {}).get("name"), (self.data.get("bot") or {}).get("name")):
+            n = re.sub(r"\s+", " ", str(n or "")).strip()
+            if len(n) >= 2 and n.lower() not in (x.lower() for x in out):
+                out.append(n)
+        return out
+
+    def called(self, text):
+        """Обращаются ли к боту по имени: «Лира, подскажи…», «эй, Лира», «а ты как думаешь, Лира?»; «Лиру спрошу», «я говорил
+        Лира тоже так считает» — нет (другой падеж или имя посреди фразы без запятой — разговор о ней, а не к ней)."""
+        t = re.sub(r"\s+", " ", str(text or "").lower().replace("ё", "е")).strip()
+        for n in self.names():
+            rx = r"\s+".join(re.escape(w) for w in n.lower().replace("ё", "е").split())   # зовут — именем как есть: «Лира», не «Лиру»
+            for m in re.finditer(rf"(?<![\w-]){rx}(?![\w-])", t):
+                before, after = t[:m.start()].rstrip(), t[m.end():].lstrip()
+                if not before or CALL_LEAD.fullmatch(before) or before.endswith((",", "—", "-")) or after[:1] in (",", "?", "!", "—"):
+                    return True
+        return False
 
     def forget(self):
         self.stop()
@@ -169,6 +233,8 @@ class PersonaBot(Telegram):
         if u.get("my_chat_member"):                       # бота добавили в канал или группу (или убрали) — для «Постов»
             if self.posts is not None:
                 self.posts.on_member(u["my_chat_member"])
+            self._priv_at = 0.0                           # добавили в группу — заодно свежий взгляд на режим приватности
+            self.privacy_soon()
             return
         m = u.get("message")
         if not m or (m.get("from") or {}).get("is_bot"):
@@ -193,6 +259,9 @@ class PersonaBot(Telegram):
                 return
             to_me = (cmd == "/ask" or (uname and f"@{uname}" in text.lower())
                      or ((m.get("reply_to_message") or {}).get("from") or {}).get("id") == me.get("id"))
+            if not to_me and not cmd:
+                self._hears(chat)                     # пришло сообщение не боту — значит, в этой группе он видит всё
+                to_me = bool(self.opt("by_name") and text and self.called(text))
             if not to_me:
                 return
             if cmd in ("/start", "/help"):
@@ -230,7 +299,9 @@ class PersonaBot(Telegram):
         bot = self.data.get("bot") or {}
         name = p.get("name") or "ассистент"
         base = f"Здравствуйте! Я — {name}" + (f", бот «{bot['name']}»." if bot.get("name") and bot["name"] != name else ".")
-        how = (f"В группе отвечаю, когда меня упомянут (@{bot.get('username', '')}) или ответят на моё сообщение."
+        by_name = self.opt("by_name") and bot.get("read_all")
+        how = (f"В группе отвечаю, когда меня упомянут (@{bot.get('username', '')})"
+               + (f", назовут по имени («{name}, …»)" if by_name else "") + " или ответят на моё сообщение."
                if group else "Спрашивайте — отвечу.")
         return f"{base} {how}"
 
@@ -252,6 +323,16 @@ class PersonaBot(Telegram):
     def _remember_chat(self, chat):
         self.remember_chat(chat)
 
+    def _hears(self, chat):
+        """Группа, откуда пришло сообщение не боту: режим приватности там не мешает — студия скажет «слышит всё»."""
+        if str(chat.get("id")) not in (self.data.get("chats") or {}):
+            self.remember_chat(chat)
+        c = (self.data.get("chats") or {}).get(str(chat.get("id")))
+        if c is not None and not c.get("hears"):
+            with self._lock:
+                c["hears"] = True
+                self._save()
+
     def remember_chat(self, chat, can=None):
         """Группа или канал, где есть бот: название, вид, @адрес (для ссылок на посты), можно ли публиковать."""
         if chat.get("type") == "private":
@@ -262,7 +343,8 @@ class PersonaBot(Telegram):
             chats[str(chat["id"])] = {"title": chat.get("title") or old.get("title") or "группа", "t": int(time.time()),
                                       "type": chat.get("type") or old.get("type") or "group",
                                       "username": chat.get("username") or old.get("username") or "",
-                                      "can": old.get("can", True) if can is None else bool(can)}
+                                      "can": old.get("can", True) if can is None else bool(can),
+                                      **({"hears": True} if old.get("hears") else {})}
             if len(chats) > 50:
                 for k in sorted(chats, key=lambda k: chats[k]["t"])[:-50]:
                     chats.pop(k)

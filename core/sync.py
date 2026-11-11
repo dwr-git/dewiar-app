@@ -1699,6 +1699,8 @@ class Sync:
         keep = [ln for ln in lines if not ((m := _FACT.match(ln.strip())) and _fact_id(m.group(1)) == fid)]
         if len(keep) != len(lines):
             p.write_text("\n".join(keep) + "\n", encoding="utf-8")
+            if hasattr(ws, "mem_changed"):
+                ws.mem_changed()                          # удалили на телефоне — снимок справки в разговоре прочь (0.87)
 
     # ---------- обмен ----------
 

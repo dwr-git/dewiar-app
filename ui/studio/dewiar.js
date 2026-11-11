@@ -169,7 +169,8 @@ async function dwRef() {
 }
 $("#dw-ref-open").onclick = () => $('nav button[data-p="ref"]').click();
 /* «Сеть Лиры» (04.11, core/liranet.py → server/dwrapp/liranet.php): переключатель «Пускать мои общие вопросы», правила с
-   проверенной подписью (отпечаток ключа сети), «Мой узел» и «Поделиться мощностью» — команда для Ubuntu по приглашению. */
+   проверенной подписью (отпечаток ключа сети), «Мой узел». Стать нодой (в программе или сервером на Ubuntu) — раздел
+   «Нода Лиры» (0.87, studio/node.js). */
 const lnTal = (x) => String(Math.round((+x || 0) * 10000) / 10000).replace(".", ",");
 const lnDate = (ts) => ts ? new Date(ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) : "";
 async function lnLoad(trustNew) {
@@ -183,7 +184,7 @@ async function lnLoad(trustNew) {
   else {
     $("#dw-ln-rules").className = "hint";
     $("#dw-ln-rules").textContent = (r.on ? "Сеть открыта" : "Сеть пока закрыта") + ` · правила подписаны сайтом Dewiar (ключ — у владельца), отпечаток ${sg.fp}` + (sg.first ? " (запомнила его)" : "")
-      + (r.rate != null ? ` · курс ${lnTal(r.rate)} тал. за 1000 токенов` + (r.rate_since ? ` с ${lnDate(r.rate_since)}` : "") : " · начислений пока нет");
+      + (r.pay && r.pay.share != null ? ` · ноде — ${Math.round(r.pay.share * 100)} % от списанного за её ответ` + (r.rate_since ? ` с ${lnDate(r.rate_since)}` : "") : " · начислений пока нет");
   }
   const nodes = me.nodes || [];
   $("#dw-ln-mine").hidden = !nodes.length;
@@ -191,7 +192,7 @@ async function lnLoad(trustNew) {
     const kv = [["Мой узел", nodes.map(n => `${n.gpu || n.name} — ${n.state_text}`).join("; ")],
       ["Ответов за сутки", `${me.answers_day || 0} · токенов ${(me.tokens_day || 0).toLocaleString("ru-RU")}`],
       ["Начислено", `${lnTal(me.paid_total)} тал.` + (me.waiting > 0 ? ` · ещё ${lnTal(me.waiting)} ждут решения владельца` : "")],
-      ["Курс", me.rate != null ? `${lnTal(me.rate)} тал. за 1000 токенов` + (me.rate_since ? `, с ${lnDate(me.rate_since)}` : "") : "не задан — начислений нет"]];
+      ["Доля ноде", me.pay_share != null ? `${Math.round(me.pay_share * 100)} % от списанного за её ответ` + (me.rate_since ? `, с ${lnDate(me.rate_since)}` : "") : "не задана — начислений нет"]];
     if (nodes.some(n => n.new)) kv.push(["Новый узел", "первые 7 дней начисления ×0,5"]);
     $("#dw-ln-kv").innerHTML = kv.map(([k, v]) => `<span>${escH(k)}</span><b>${escH(v)}</b>`).join("");
     $("#dw-ln-pause").checked = nodes.every(n => n.paused);
@@ -210,29 +211,7 @@ $("#dw-ln-pause").onchange = async (e) => {
   catch (x) { e.target.checked = !e.target.checked; res.className = "res bad"; res.textContent = x.message; }
   lnLoad();
 };
-$("#dw-ln-give").ontoggle = () => {
-  if (!$("#dw-ln-give").open || $("#dw-ln-needs").childElementCount) return;
-  const needs = ["Ubuntu 22.04 или 24.04 и видеокарта NVIDIA от 16 ГБ (лучше 24 ГБ: RTX 3090, 4090), 32 ГБ памяти, 60 ГБ на диске.",
-    "Белый IP не нужен: узел сам держит соединение с dewiar.pro и забирает задания, порт открывать не надо.",
-    "Компьютер включён — узел работает; пауза — переключателем «Не брать задания».",
-    "Узел видит только общий вопрос без имени, ключа и адреса спрашивающего."];
-  $("#dw-ln-needs").innerHTML = needs.map(x => `<li>${escH(x)}</li>`).join("");
-};
-$("#dw-ln-inv").onclick = async (ev) => {
-  const b = ev.target, res = $("#dw-ln-res");
-  b.disabled = true; res.className = "res"; res.textContent = "беру приглашение…";
-  try {
-    const d = await core.call("lnet_invite");
-    if (d.needs && d.needs.length) $("#dw-ln-needs").innerHTML = d.needs.map(x => `<li>${escH(x)}</li>`).join("");
-    $("#dw-ln-cmd").textContent = d.cmd; $("#dw-ln-cmd").hidden = false; $("#dw-ln-cmd-row").hidden = false;
-    $("#dw-ln-exp").textContent = `Вставьте в терминал того компьютера. Приглашение действует до ${new Date(d.exp * 1000).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}.`;
-    res.className = "res ok"; res.textContent = "Команда готова. Узел появится у владельца Dewiar «на допуске», а здесь — в «Мой узел».";
-  } catch (x) { res.className = "res bad"; res.textContent = x.message; }
-  b.disabled = false;
-};
-$("#dw-ln-copy").onclick = async () => { const t = $("#dw-ln-cmd").textContent; let okc = false;
-  try { await navigator.clipboard.writeText(t); okc = true; } catch (e) { }
-  $("#dw-ln-res").className = okc ? "res ok" : "res"; $("#dw-ln-res").textContent = okc ? "Скопировано." : "Выделите команду и скопируйте (Ctrl+C)."; };
+$("#dw-ln-node").onclick = () => $('nav button[data-p="node"]').click();     // 0.87: ноды — свой раздел (studio/node.js)
 $("#dw-ln-trust").onclick = async () => {
   if (!await ask("Доверять новому ключу сети? Делайте так, только если владелец Dewiar сам объявил о смене ключа — иначе правила могли подменить.")) return;
   lnLoad(true);
@@ -323,19 +302,22 @@ $("#dw-go").onclick = async () => {
   // 6 цифр вместо логина или пароля — это код «Добавить устройство» с другого устройства, а не вход (пакет 22.10, №167:
   // «код у меня перед глазами» — пять раз «неверный логин или пароль», потом сайт закрыл вход на 15 минут)
   const code = /^\d{6}$/.test(login.replace(/[\s-]/g, "")) ? login.replace(/[\s-]/g, "") : "";   // в поле логина — 6 цифр: это код
-  if (code) {
+  const byCode = async () => {
     $("#dw-go").disabled = true; r.className = "res"; r.textContent = "Это код с другого устройства — подключаю по нему…";
     try { await core.call("pair_claim", { code }); $("#dw-pass").value = ""; r.className = "res ok"; r.textContent = "Подключено по коду — как на том устройстве."; setTimeout(() => dwLoad(), 1500); }
     catch (e) { r.className = "res bad"; r.textContent = e.message + " (код живёт 10 минут: возьмите новый — «Устройства» → «Подключить ещё устройство» на том устройстве)"; }
     finally { $("#dw-go").disabled = false; }
-    return;
-  }
+  };
+  // №636 (пакет 11.11: «в браузере захожу, в программе не могу»): у аккаунтов, что выдаёт команда Dewiar, логин бывает из 6 цифр —
+  // с паролем это вход, а не код. Код — когда пароля нет; есть пароль — сначала вход, «неверный логин или пароль» — тогда код
+  if (code && !password) return byCode();
   if (!login || !password) { r.className = "res bad"; r.textContent = "Введите логин и пароль"; return; }
   $("#dw-go").disabled = true; r.className = "res"; r.textContent = "Вхожу…";
   // после входа ядро само подключает модели и Знания аккаунта — карточки перечитываем чуть позже
   try { const a = await core.call("account_login", { server: $("#dw-server").value.trim() || (DW.acc && DW.acc.server) || "", login, password }); $("#dw-pass").value = ""; renderAccount(a); DW.acc = a; r.className = "res ok"; r.textContent = "Вход выполнен — модели и Знания подключаются…"; setTimeout(() => dwLoad().then(() => { r.textContent = "Вход выполнен."; }), 2500); }
   catch (e) {
     r.className = "res bad"; r.textContent = e.message;
+    if (code && /неверн|логин|пароль/i.test(e.message)) { await byCode(); return; }
     const pc = String(password).replace(/[\s-]/g, "");
     if (/^\d{6}$/.test(pc) && /неверн|логин|пароль/i.test(e.message))     // в поле пароля — 6 цифр: может, это код с другого устройства
       try { await core.call("cloud_connect", { key: pc }); $("#dw-pass").value = ""; r.className = "res ok"; r.textContent = "Это был код с другого устройства — подключено по нему."; setTimeout(() => dwLoad(), 1500); } catch (x) { }

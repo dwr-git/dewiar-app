@@ -374,7 +374,11 @@ public final class Bridge {
     @JavascriptInterface public boolean openSettings(String what) {
         String[] acts;
         if ("assistant".equals(what)) acts = new String[]{"android.settings.MANAGE_DEFAULT_APPS_SETTINGS", "android.settings.VOICE_INPUT_SETTINGS"};
-        else if ("alarms".equals(what)) acts = new String[]{"android.settings.REQUEST_SCHEDULE_EXACT_ALARM"};
+        else if ("alarms".equals(what)) acts = new String[]{"android.settings.REQUEST_SCHEDULE_EXACT_ALARM", "android.settings.APPLICATION_DETAILS_SETTINGS"};
+        // 0.87: окно напоминания поверх блокировки (Android 14+ — отдельное разрешение) и автозапуск у оболочек телефонов
+        else if ("fullscreen".equals(what)) acts = new String[]{"android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT", "android.settings.APP_NOTIFICATION_SETTINGS", "android.settings.APPLICATION_DETAILS_SETTINGS"};
+        else if ("notifications".equals(what)) acts = new String[]{"android.settings.APP_NOTIFICATION_SETTINGS", "android.settings.APPLICATION_DETAILS_SETTINGS"};
+        else if ("autostart".equals(what)) { if (openAutostart()) return true; acts = new String[]{"android.settings.APPLICATION_DETAILS_SETTINGS"}; }
         else if ("tts".equals(what)) acts = new String[]{"com.android.settings.TTS_SETTINGS"};
         else if ("voice".equals(what)) acts = new String[]{"android.settings.VOICE_INPUT_SETTINGS"};
         else if ("accessibility".equals(what)) acts = new String[]{"android.settings.ACCESSIBILITY_SETTINGS"};
@@ -395,13 +399,65 @@ public final class Bridge {
         for (String act : acts) {
             try {
                 Intent i = new Intent(act).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                if (act.endsWith("APPLICATION_DETAILS_SETTINGS") || act.endsWith("SCHEDULE_EXACT_ALARM"))
+                if (act.endsWith("APPLICATION_DETAILS_SETTINGS") || act.endsWith("SCHEDULE_EXACT_ALARM") || act.endsWith("FULL_SCREEN_INTENT"))
                     i.setData(android.net.Uri.parse("package:" + a.getPackageName()));
+                if (act.endsWith("APP_NOTIFICATION_SETTINGS")) i.putExtra("android.provider.extra.APP_PACKAGE", a.getPackageName());
                 a.startActivity(i);
                 return true;
             } catch (Throwable ignored) { }
         }
         return false;
+    }
+
+    /** «Автозапуск» у оболочек телефонов — экраны, которых нет в обычном Android: Xiaomi/Redmi/POCO (MIUI, HyperOS),
+     *  Huawei/Honor («Запуск приложений»), Tecno/Infinix/itel (Phone Master), OPPO/realme/OnePlus (ColorOS), vivo.
+     *  Без него оболочка снимает напоминания вместе с приложением при «очистке» и после перезагрузки. false — не открылось. */
+    private boolean openAutostart() {
+        // {пакет, экран, чьи телефоны}
+        String X = ".*(xiaomi|redmi|poco).*", H = ".*(huawei|honor).*", T = ".*(tecno|infinix|itel).*", O = ".*(oppo|realme|oneplus).*", V = ".*(vivo|iqoo).*";
+        String[][] screens = {
+            {"com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity", X},
+            {"com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity", H},
+            {"com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity", H},
+            {"com.hihonor.systemmanager", "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity", H},
+            {"com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity", T},
+            {"com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity", O},
+            {"com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity", O},
+            {"com.oplus.safecenter", "com.oplus.safecenter.permission.startup.StartupAppListActivity", O},
+            {"com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity", V},
+            {"com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager", V},
+        };
+        String maker = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase(java.util.Locale.ROOT);
+        for (String[] s : screens) {
+            if (!maker.matches(s[2])) continue;
+            try {
+                a.startActivity(new Intent().setClassName(s[0], s[1]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                return true;
+            } catch (Throwable ignored) { }
+        }
+        return false;
+    }
+
+    /** «Напоминания вовремя» (0.87, владелец 11.11: «приходят на час позже»): что мешает напоминаниям звонить в срок —
+     *  {exact, fullscreen, notify, battery, sdk, maker, mode, late: [{due, late, kind, how}] за 14 дней (без текста)}.
+     *  Интерфейс рисует по этому карточку с кнопками (app.js remHealthCard) и пишет строку в журнал отчёта. */
+    @JavascriptInterface public String alarmHealth() {
+        try {
+            JSONObject o = new JSONObject()
+                    .put("exact", Compat.canExact((android.app.AlarmManager) a.getSystemService(Context.ALARM_SERVICE)))
+                    .put("fullscreen", Compat.canFullScreen(a)).put("notify", Compat.notifyOn(a)).put("battery", batteryOk())
+                    .put("sdk", Build.VERSION.SDK_INT).put("maker", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase(java.util.Locale.ROOT))
+                    .put("mode", a.getSharedPreferences("alarms", Context.MODE_PRIVATE).getString("mode", ""));
+            org.json.JSONArray h = new org.json.JSONArray(Alarms.history(a)), late = new org.json.JSONArray();
+            long since = System.currentTimeMillis() - 14 * 86400000L;
+            for (int i = 0; i < h.length(); i++) {
+                JSONObject e = h.optJSONObject(i);
+                if (e == null || e.optLong("time") < since || e.optLong("late") < AlarmTime.LATE_MS) continue;
+                late.put(new JSONObject().put("due", e.optLong("due")).put("late", e.optLong("late")).put("kind", e.optString("kind"))
+                        .put("how", e.optString("how")).put("mode", e.optString("mode")).put("time", e.optLong("time")));
+            }
+            return o.put("late", late).toString();
+        } catch (Exception e) { return "{}"; }
     }
 
     // ---------- руки в других приложениях (Hands.java — служба специальных возможностей) ----------
@@ -633,6 +689,9 @@ public final class Bridge {
     @JavascriptInterface public boolean torch(boolean on) { return Phone.torch(a, on); }
 
     @JavascriptInterface public int volume(String op, int value) { return Phone.volume(a, op, value); }
+    /** Медиа-клавиша для плеера другого приложения (идея №170): next | prev | play | pause | toggle -> JSON {sent, active}. */
+    @JavascriptInterface public String mediaKey(String act) { return Phone.mediaKey(a, act).toString(); }
+    @JavascriptInterface public boolean musicActive() { return Phone.musicActive(a); }
 
     @JavascriptInterface public String battery() { return Phone.battery(a).toString(); }
 

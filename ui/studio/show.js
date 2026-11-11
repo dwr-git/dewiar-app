@@ -55,7 +55,8 @@ window.shNav = shNav;
 
 /* группы — по меню: заголовок .ng начинает группу; после «распорки» (.grow) — нижняя группа «Ещё» */
 function shModel() {
-  const out = []; let g = null;
+  // разделы над первой группой (0.87: «Нода Лиры» — на видном месте, сразу под «Главной») — своя группа «Главное»
+  const out = []; let g = { name: "Главное", items: [] }; out.push(g);
   for (const el of $("nav").children) {
     if (el.classList.contains("ng")) {
       g = el.id === "nav-plg-h" ? null : { name: (el.dataset.k || el.textContent).trim(), items: [] };

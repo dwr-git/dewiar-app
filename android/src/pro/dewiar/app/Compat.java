@@ -77,4 +77,28 @@ public final class Compat {
         try { return (Boolean) android.app.AlarmManager.class.getMethod("canScheduleExactAlarms").invoke(am); }
         catch (Throwable e) { return true; }
     }
+
+    /** Можно ли показывать окно напоминания поверх блокировки (полноэкранное уведомление). Android 14+ спрашивает
+     *  разрешение USE_FULL_SCREEN_INTENT отдельно (Настройки → Приложения → Dewiar → «Полноэкранные уведомления»);
+     *  без него вместо окна — только всплывающее уведомление. До 14 — можно. Не удалось спросить — считаем, что можно. */
+    public static boolean canFullScreen(Context c) {
+        if (Build.VERSION.SDK_INT < 34) return true;
+        try {
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            return (Boolean) NotificationManager.class.getMethod("canUseFullScreenIntent").invoke(nm);
+        } catch (Throwable e) { return true; }
+    }
+
+    /** Уведомления приложения включены и канал напоминаний не выключен человеком (важность 0). */
+    public static boolean notifyOn(Context c) {
+        try {
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= 24 && !(Boolean) NotificationManager.class.getMethod("areNotificationsEnabled").invoke(nm)) return false;
+            if (Build.VERSION.SDK_INT >= 26) {
+                Object ch = NotificationManager.class.getMethod("getNotificationChannel", String.class).invoke(nm, Sounds.channel(c, Sounds.softOn(c)));
+                if (ch != null && (Integer) ch.getClass().getMethod("getImportance").invoke(ch) == 0) return false;
+            }
+            return true;
+        } catch (Throwable e) { return true; }
+    }
 }

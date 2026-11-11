@@ -103,8 +103,10 @@ def _ctx(s, i, w=70):
     return s[max(0, i - w):i].replace("\n", "⏎") + " ‖ " + s[i:i + w].replace("\n", "⏎")
 
 
-def _run_core(name, ws_extra=None, questions=QUESTIONS, settings_extra=None):
-    """Ядро для одного человека; -> список запросов с инструментами (по вопросу — первый шаг)."""
+def _run_core(name, ws_extra=None, questions=QUESTIONS, settings_extra=None, files=None):
+    """Ядро для одного человека; -> список запросов с инструментами (по вопросу — первый шаг).
+    files — {путь в папке ассистента: текст} (заметки — чтобы нашлось «Вспомнил из записей»); в questions можно
+    вставить команду студии словарём {"cmd", "args"} — её ответ ждём, запроса к модели она не даёт."""
     tmp = Path(tempfile.mkdtemp(prefix="dw-prefix-"))
     port, llm = _free(), _free()
     _Mock.log = []
@@ -114,6 +116,9 @@ def _run_core(name, ws_extra=None, questions=QUESTIONS, settings_extra=None):
     ws = tmp / ("ws-" + name)
     (ws / "Память").mkdir(parents=True)
     (ws / "Память/Обо мне.md").write_text(f"# Обо мне\n\n- Меня зовут {name}.\n" + (ws_extra or ""), encoding="utf-8")
+    for rel, txt in (files or {}).items():
+        (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+        (ws / rel).write_text(txt, encoding="utf-8")
     st = {"persona": "lira", "user_name": name, "stt": {"engine": "vosk"}, "tts": {"engine": "off"},
           "audio": {"sounds": False, "follow_up_seconds": 0}, "ui": {"welcome": "done", "intro": "done"},
           "llm": {"active": "m", "tools_modes": {}, "profiles": {"m": {"name": "mock", "kind": "openai",
@@ -150,6 +155,13 @@ def _run_core(name, ws_extra=None, questions=QUESTIONS, settings_extra=None):
         rd = asyncio.ensure_future(reader())
         await asyncio.sleep(2)
         for q in questions:
+            if isinstance(q, dict):                # команда студии между вопросами: {"cmd": …, "args": {…}}
+                cnt[0] += 1
+                await ws_.send(json.dumps({"id": cnt[0], "cmd": q["cmd"], "args": q.get("args") or {}}))
+                end = time.monotonic() + 10
+                while time.monotonic() < end and cnt[0] not in replies:
+                    await asyncio.sleep(0.1)
+                continue
             events.clear()
             marks.append((q, len(_Mock.log)))
             cnt[0] += 1

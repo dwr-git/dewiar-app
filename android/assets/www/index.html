@@ -35,7 +35,9 @@ try { var lb = (window.Dewiar && Dewiar.pref("look_body")) || localStorage.getIt
 <main id="stage">
   <div id="orbwrap"><canvas id="orb"></canvas></div>
   <div id="radiobox" hidden><div id="rchip"><span class="eq"><i></i><i></i><i></i></span><b>Радио</b>
+    <button id="r-prev" title="Предыдущая станция" aria-label="Предыдущая станция"><svg viewBox="0 0 24 24"><path d="M18 6.5v11l-8-5.5z"/><path d="M7 6v12"/></svg></button>
     <button id="r-pp" title="Пауза / играть"><svg class="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg></button>
+    <button id="r-next" title="Следующая станция" aria-label="Следующая станция"><svg viewBox="0 0 24 24"><path d="M6 6.5v11l8-5.5z"/><path d="M17 6v12"/></svg></button>
     <button id="r-x" title="Выключить радио"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></div>
     <p id="rhint">Нажмите микрофон: «дальше», «тише», «пауза»</p></div>
   <div id="tmrs" hidden aria-live="off"></div>

@@ -9,7 +9,7 @@ from engine_chat import CHAT_CMDS
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("lnet_share", "lnet_invite", "lnet_pause", "council_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "homelan_set", "ideas_new", "homelan_pair", "homelan_forget", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
+_KIDS_LOCKED = ("lnet_share", "lnet_invite", "lnet_pause", "lnode_join", "lnode_set", "lnode_leave", "lnode_check", "council_", "podcast_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "homelan_set", "ideas_new", "homelan_pair", "homelan_forget", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",
@@ -425,7 +425,10 @@ class CommandsMixin:
             if cmd == "sites_get":
                 return W.public(sid)
             if cmd == "sites_render":                   # предпросмотр страницы
-                return {"html": W.render(sid, int(a.get("page") or 0))}
+                return {"html": W.render(sid, a.get("page") or 0)}       # номер страницы или «doc:privacy» — документ
+            if cmd == "sites_legal_draft":              # 0.87: «Составить черновик политики ПД по моим данным»
+                r = W.legal_draft(sid, str(a.get("doc") or "privacy"))
+                return dict(W.public(sid), text=r["text"])
             if cmd == "sites_template":
                 return {"html": W.template_preview(str(a.get("template") or ""))}
             if cmd == "sites_create":
@@ -1750,6 +1753,9 @@ class CommandsMixin:
                     r = pb.set(a.get("patch") or {})
                 elif cmd == "pbot_forget":
                     r = pb.forget()
+                elif cmd == "pbot_check":                   # №643: «Проверить снова» — режим приватности по getMe сейчас
+                    pb.privacy(fresh=True)
+                    r = pb.public()
                 elif cmd == "pbot_try":                     # как персонаж ответит незнакомцу — без Telegram
                     q = str(a.get("text") or "").strip()
                     if len(q) < 2:
@@ -1760,6 +1766,7 @@ class CommandsMixin:
                     except Exception as e:  # noqa: BLE001
                         raise ValueError(f"модель не ответила: {e}") from e
                 else:
+                    pb.privacy_soon()                        # режим приватности — в фоне, ответ придёт событием «pbot»
                     r = pb.public()
                     r["personas"] = [{"id": x["id"], "name": x.get("name", ""), "color": x.get("color", ""), "style": x.get("style", ""),
                                       "avatar_url": x.get("avatar_url") or "", "kb": len(x.get("knowledge") or [])}
@@ -1854,6 +1861,7 @@ class CommandsMixin:
             self.last_turn_time = time.monotonic()
             return {"added": len(items)}
         if cmd == "persona_memory":               # своя память у персонажа (0.56): {name, own}
+            self._prof_snaps = {}                   # чья память в справке — другая: снимки справки прочь (0.87)
             return self.persona_memory_set(str(a.get("name") or ""), bool(a.get("own")))
         who = str(a.get("who") or "") if cmd.startswith("memory_") else ""      # студия: «Общая» или своя память персонажа
         if who and who not in self.own_memory():
@@ -2372,6 +2380,9 @@ class CommandsMixin:
                 return self.pair_new()
             except CloudError as e:
                 raise ValueError(str(e)) from e
+        if cmd.startswith("lnode_"):                  # «Нода Лиры» (0.87): компьютер сам отвечает на общие вопросы сети (liranode.py)
+            import liranode
+            return liranode.command(self, cmd, a)
         if cmd.startswith("lnet_"):                   # «Сеть Лиры»: правила с подписью, «Мой узел», приглашение узла (liranet.py)
             import liranet
             try:
@@ -2749,6 +2760,32 @@ class CommandsMixin:
                 if cmd == "council_history":
                     return self.council.history()
             except CouncilError as e:
+                raise ValueError(str(e)) from e
+        if cmd.startswith("podcast_"):               # «Подкасты» (0.87, podcast.py)
+            from podcast import PodcastError
+            P = self.podcasts
+            try:
+                if cmd == "podcast_list":
+                    return {"items": P.list(), "state": P.state(), "hosts": self.council.members(), "pick": [h["id"] for h in P.hosts()]}
+                if cmd == "podcast_get":
+                    return P.get(a.get("id"))
+                if cmd == "podcast_estimate":
+                    return P.estimate(a.get("minutes") or 10, a.get("chars") or 0, a.get("files") or (), a.get("urls") or 0, a.get("topic") or "")
+                if cmd == "podcast_start":
+                    return P.start({"topic": a.get("topic"), "urls": a.get("urls") or [], "files": a.get("files") or []},
+                                   {"minutes": a.get("minutes"), "style": a.get("style"), "hosts": a.get("hosts"), "lang": a.get("lang"),
+                                    "intro": a.get("intro", True)})
+                if cmd == "podcast_resume":
+                    return P.start(resume=str(a.get("id") or ""))
+                if cmd == "podcast_stop":
+                    return P.stop()
+                if cmd == "podcast_delete":
+                    return P.delete(a.get("id"))
+                if cmd == "podcast_send":
+                    return P.send(a.get("id"))
+            except PodcastError as e:
+                raise ValueError(str(e)) from e
+            except WorkspaceError as e:
                 raise ValueError(str(e)) from e
         if cmd == "radio_home":                       # вкладка «Радио» в студии (0.64)
             return self.radio_home()

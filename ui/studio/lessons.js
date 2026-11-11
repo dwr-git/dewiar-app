@@ -28,7 +28,7 @@ const LS_SECT = { "01-council": ["council"], "02-watch": ["watch"], "03-leads": 
   "11-jobs": ["reminders"], "12-morning": ["home", "calendar"], "13-money": ["pay", "family"], "14-tasks": ["tasks"],
   "15-plugins": ["skills"], "16-reminders": ["reminders", "calendar"], "17-close": ["close"], "18-notes": ["notes", "memory", "me"], "19-vault": ["vault"],
   "20-artist": ["skills"], "21-sites": ["sites"], "22-plugin-page": ["plg", "skills"], "23-vault-sync": ["vault"], "24-telegram": ["connect"],
-  "25-my-studio": ["look"] };
+  "25-my-studio": ["look"], "26-node": ["node"], "27-podcasts": ["podcast"] };
 async function lsList() {
   if (Array.isArray(LSN.items)) return LSN.items;
   if (typeof HM !== "undefined" && HM.ac && HM.ac.d && Array.isArray(HM.ac.d.items)) return (LSN.items = HM.ac.d.items);

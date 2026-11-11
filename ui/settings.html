@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="studio/studio.css">
 <link rel="stylesheet" href="studio/sites.css">
 <link rel="stylesheet" href="studio/plugmake.css">
+<link rel="stylesheet" href="studio/node.css">
 <link rel="stylesheet" href="assets/skins.css">
 <link rel="stylesheet" href="studio/theme.css">
 <!-- тема — до первой отрисовки (стили выше уже загружены): окно сразу в своём стиле, без вспышки фирменного фона -->
@@ -65,6 +66,7 @@
     <button class="nav-hide" id="nav-hide" type="button" title="Спрятать меню — раздел на всю ширину (Ctrl+B)" aria-label="Спрятать меню" aria-controls="nav-main" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15M15.5 9.5 13 12l2.5 2.5"/></svg></button></div>
   <button class="cchip" id="nav-cloud" style="display:none" title="ИИ-баланс: на сколько хватит моделей Dewiar. Нажмите — подробности и пополнение"><span>ИИ-баланс</span><em></em><i><b></b></i></button>
   <button data-p="home" class="cur" title="Сегодня и все приложения Dewiar">Главная</button>
+  <button data-p="node" class="nav-node" title="Нода Лиры: компьютер помогает Лире отвечать другим людям, пока он вам не нужен, — и зарабатывает талеры">Нода Лиры<i class="ndot" id="node-dot"></i></button>
   <div class="ng">Для себя</div>
   <button data-p="chat" title="Вся переписка с персонажами — голосом и текстом">Чат</button>
   <button data-p="calendar">Календарь</button>
@@ -78,6 +80,7 @@
   <button data-p="watch" title="«Дозор»: Лира присмотрит за экраном, папкой или страницей и скажет, когда готово">Дозор<i class="ndot" id="wt-dot"></i></button>
   <button data-p="art" hidden title="Рисунки и анимации плагина «Художник»">Рисунки</button>
   <button data-p="council" title="«Совет ИИ»: персонажи на разных моделях вместе обсуждают ваш вопрос, спорят и подводят итог">Совет ИИ</button>
+  <button data-p="podcast" title="«Подкасты»: дайте файл, ссылку или тему — Лира и Патрик обсудят её вслух, получится выпуск в MP3 с текстом">Подкасты</button>
   <div class="ng">Семья и близкие</div>
   <button data-p="close" title="Переписка с помощниками близких людей">Близкие<i class="ndot" id="close-dot"></i></button>
   <div class="nav-groups" id="nav-groups" hidden></div>
@@ -186,6 +189,9 @@
       <section class="hm-try" id="hm-try" aria-label="Попробуйте плагин" hidden></section>
       <div class="hm-h"><h2>Приложения</h2><span class="hint" id="hm-edit-hint" hidden>Переключатель — показать или скрыть: скрытое пропадает и из меню слева, но продолжает работать. Выключить совсем — в «<a href="#" data-go="features">Возможностях</a>», группы меню целиком — в «<a href="#" data-go="look#sh-h">Что показывать</a>». Перетащите значок — переставить</span><button class="btn small ghost" id="hm-edit">Настроить главную</button></div>
       <div class="hm-apps" id="hm-apps"></div>
+      <div class="hm-h hm-plg-h" id="hm-plg-h"><h2>Плагины</h2><span class="hint">дополнения: ставятся и убираются одним нажатием, у каждого своё дело</span>
+        <button class="btn hm-plg-all" type="button" id="hm-plg-all">🧩 Все плагины</button></div>
+      <div class="hm-apps hm-plgs" id="hm-plgs"></div>
       <div class="hm-more2"><div class="hm-card2" id="hm-chat"></div><div class="hm-card2" id="hm-pad"></div></div>
       <div class="hm-h"><h2>Настройка</h2><span class="hint">раз настроили — и можно не возвращаться</span></div>
       <div class="hm-set" id="hm-set"></div>
@@ -306,6 +312,42 @@
     </div>
   </section>
 
+  <!-- «Подкасты» (0.87, core/podcast.py, studio/podcast.js): материал → двое ведущих обсуждают его вслух → MP3 и текст -->
+  <section id="p-podcast" class="wide">
+    <h1>Подкасты</h1>
+    <p class="lead">Дайте материал — файл, ссылку на страницу или видео, или просто тему. Двое ведущих разберут его вслух: с
+      вопросами, примерами и выводами. Через несколько минут здесь будет выпуск — его можно слушать, читать и взять с собой.</p>
+    <div class="pd-grid">
+      <div class="pd-side">
+        <div class="pd-card pd-new" id="pd-new">
+          <h3>Новый выпуск</h3>
+          <label class="pd-drop" id="pd-drop" tabindex="0">
+            <input type="file" id="pd-file" multiple accept=".pdf,.docx,.odt,.epub,.fb2,.rtf,.txt,.md,.html,.htm,.csv,.srt,.vtt" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5V4.5M7.5 9 12 4.5 16.5 9"/><path d="M4.5 14.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/></svg>
+            <span><b>Перетащите файлы</b> или нажмите, чтобы выбрать</span>
+            <small>PDF, Word, EPUB, FB2, TXT — до 10 файлов</small>
+          </label>
+          <ul class="pd-src" id="pd-src" aria-label="Материал выпуска"></ul>
+          <textarea id="pd-topic" rows="3" maxlength="3000" placeholder="Ссылка на страницу или видео YouTube, тема словами или пожелание: «для школьника», «больше про цифры»"></textarea>
+          <div class="pd-ex" id="pd-ex"></div>
+          <div class="pd-row"><span class="pd-lbl" id="pd-len-l">Длина</span>
+            <div class="pd-seg" id="pd-len" role="radiogroup" aria-labelledby="pd-len-l">
+              <button type="button" role="radio" data-m="5">5 мин</button><button type="button" role="radio" data-m="10">10 мин</button><button type="button" role="radio" data-m="20">20 мин</button></div></div>
+          <div class="pd-styles" id="pd-style" role="radiogroup" aria-label="Подача"></div>
+          <div class="pd-hosts" id="pd-hosts"></div>
+          <details class="pd-more"><summary>Ещё настройки</summary>
+            <label class="pd-opt"><span>Язык выпуска</span><select id="pd-lang"><option value="auto">как у материала</option><option value="ru">русский</option><option value="en">английский</option></select></label>
+            <label class="pd-opt pd-chk"><input type="checkbox" id="pd-intro" checked><span>Короткая музыкальная заставка в начале и в конце</span></label>
+          </details>
+          <p class="pd-cost" id="pd-cost" aria-live="polite"></p>
+          <button class="btn primary pd-go" id="pd-go" type="button">Сделать подкаст</button>
+        </div>
+        <div class="pd-card pd-eps"><h3>Выпуски</h3><ul id="pd-list"></ul></div>
+      </div>
+      <div class="pd-main" id="pd-main" aria-live="polite"></div>
+    </div>
+  </section>
+
   <section id="p-pbot" class="wide">
     <h1>Бот персонажа</h1>
     <p class="lead">Персонаж отвечает людям в Telegram — в личных сообщениях и в группах — своим характером и по своим знаниям.
@@ -357,7 +399,9 @@
           <textarea id="bp-brief" rows="4" maxlength="1500" placeholder="Например: ты консультант магазина «Чайный двор»: помогаешь выбрать чай, рассказываешь о доставке и скидках. Цены — только из базы знаний."></textarea>
           <label class="bp-lb" for="bp-welcome">Приветствие на /start <small>необязательно</small></label>
           <input type="text" id="bp-welcome" maxlength="500" placeholder="Здравствуйте! Я — Лира, помогу выбрать чай.">
-          <label class="bp-row"><span>Отвечать в группах<small>когда упомянут или ответят на его сообщение</small></span><span class="tg"><input type="checkbox" id="bp-groups"><i></i></span></label>
+          <label class="bp-row"><span>Отвечать в группах<small>когда упомянут, ответят на его сообщение или позовут по имени</small></span><span class="tg"><input type="checkbox" id="bp-groups"><i></i></span></label>
+          <label class="bp-row" id="bp-byname-row"><span>Отзываться на имя<small id="bp-byname-sub">«Лира, подскажи…» — без @</small></span><span class="tg"><input type="checkbox" id="bp-byname"><i></i></span></label>
+          <div class="bp-priv" id="bp-priv" hidden role="status" aria-live="polite"></div>
           <div class="bp-lims"><label>Одному человеку в день<input type="number" id="bp-pu" min="1" max="5000"></label><label>Всем в день<input type="number" id="bp-pd" min="1" max="5000"></label></div>
           <label class="bp-row"><span>Приветствовать новичков в группах<small>одно сообщение на всех, кто пришёл за несколько секунд</small></span><span class="tg"><input type="checkbox" id="pp-greet"><i></i></span></label>
           <input type="text" id="pp-greet-t" maxlength="600" hidden aria-label="Текст приветствия" placeholder="{имя}, добро пожаловать! Я — {бот}. Спрашивайте — отвечу.">
@@ -477,6 +521,83 @@
       <div class="rf-list" id="rf-list"></div>
       <p class="hint" style="max-width:62ch;margin-top:12px">Переписываться и созваниваться можно с теми, кого пригласили вы, и с тем, кто пригласил вас, — когда оба согласны:
         «Позвать в Близкие» — друг увидит приглашение и примет его или откажется.</p>
+    </div>
+  </section>
+  <!-- «Нода Лиры» (0.87): компьютер сам отвечает на часть общих вопросов Сети Лиры своей моделью — studio/node.js, node.css,
+       ядро core/liranode.py (команды lnode_*), сайт server/dwrapp/liranet.php (kind=app, /net/away, /net/leave) -->
+  <section id="p-node">
+    <h1>Нода Лиры</h1>
+    <p class="lead">Пока компьютер вам не нужен, он помогает Лире отвечать другим людям — вашей моделью (Ollama, LM Studio, llama.cpp).
+      Ноде приходят только общие вопросы вроде «почему небо голубое» — без имён и личного. За каждый принятый ответ — талеры на ваш ИИ-баланс.</p>
+    <div class="dwc nd-hero" id="nd-hero" data-st="none">
+      <svg class="nd-orbit" viewBox="0 0 220 220" aria-hidden="true">
+        <g class="nd-rings"><circle cx="110" cy="110" r="46"/><circle cx="110" cy="110" r="74"/><circle cx="110" cy="110" r="102"/></g>
+        <g class="nd-peers nd-spin1"><circle cx="110" cy="36" r="4"/><circle cx="174" cy="147" r="3.2"/><circle cx="46" cy="147" r="3.6"/></g>
+        <g class="nd-peers nd-spin2"><circle cx="110" cy="8" r="3"/><circle cx="208" cy="128" r="3.6"/><circle cx="31" cy="176" r="2.8"/><circle cx="160" cy="21" r="2.6"/><circle cx="16" cy="84" r="3.2"/></g>
+        <g class="nd-links"><path d="M110 64v-28M150 133l24 14M70 133l-24 14"/></g>
+        <circle class="nd-glow" cx="110" cy="110" r="34"/>
+        <circle class="nd-core" cx="110" cy="110" r="17"/>
+      </svg>
+      <div class="nd-main">
+        <b class="nd-state" id="nd-state">Пока не нода</b>
+        <p class="nd-why" id="nd-why">Проверьте компьютер — и одной кнопкой станьте нодой.</p>
+        <div class="nd-earn" id="nd-earn" hidden><b id="nd-tal">0</b><span id="nd-tal-l">талера сегодня</span><em id="nd-cnt"></em></div>
+        <div class="actions nd-acts"><button class="btn primary" id="nd-go" disabled>Стать нодой</button><span class="hint" id="nd-go-hint">сначала — «Проверить компьютер»</span></div>
+        <p class="res" id="nd-res" role="status"></p>
+      </div>
+    </div>
+    <div class="nd-grid">
+      <div class="dwc" id="nd-check-card">
+        <div class="dh"><h3>Подходит ли мой компьютер</h3><span class="dws" id="nd-check-st">не проверен</span></div>
+        <p class="hint" id="nd-check-hint">Найду вашу модель, посмотрю видеокарту, память и питание, задам модели обычный вопрос и замерю, за сколько она отвечает. Около 10 секунд.</p>
+        <ul class="nd-checks" id="nd-checks"></ul>
+        <div class="actions" style="margin:0"><button class="btn" id="nd-check">Проверить компьютер</button></div>
+      </div>
+      <div class="dwc" id="nd-how">
+        <div class="dh"><h3>Как работать</h3></div>
+        <div class="nd-field"><span>Когда</span>
+          <div class="stabs nd-seg" id="nd-when" role="radiogroup" aria-label="Когда работать">
+            <button data-v="idle" role="radio">Когда простаивает</button><button data-v="night" role="radio">Ночью</button><button data-v="always" role="radio">Всегда</button></div>
+          <em id="nd-when-t"></em></div>
+        <div class="nd-field"><span>Сколько отдавать</span>
+          <div class="stabs nd-seg" id="nd-share" role="radiogroup" aria-label="Сколько отдавать">
+            <button data-v="low" role="radio">Немного</button><button data-v="half" role="radio">Побольше</button><button data-v="all" role="radio">Сколько попросят</button></div>
+          <em id="nd-share-t"></em></div>
+        <div class="nd-field" id="nd-model-f" hidden><span>Модель</span><select id="nd-model"></select></div>
+        <p class="hint" style="margin:6px 0 0">Сама ставится на паузу: от батареи, в игре и фильме на весь экран, когда видеокарта горячая или занята и пока вы говорите с Лирой.</p>
+      </div>
+    </div>
+    <div class="nd-gives">
+      <div><b>Сети</b><p>Люди получают ответ быстро, даже когда серверы Dewiar заняты: каждая нода берёт часть вопросов на себя. Чем больше нод — тем устойчивее Лира.</p></div>
+      <div><b>Вам</b><p>Талеры за принятые ответы — на ИИ-баланс: ими платятся модели Dewiar, задачи в облаке, голоса. Начисляются раз в сутки; в деньги не выводятся.</p></div>
+      <div><b>От компьютера</b><p>Видеокарта от 8 ГБ (или Mac на Apple M), своя модель от 7–8 млрд, например qwen3:8b, и ответ на обычный вопрос быстрее 6 секунд.</p></div>
+    </div>
+    <div class="nd-grid" id="nd-joined" hidden>
+      <div class="dwc">
+        <div class="dh"><h3>Счёт ноды</h3><span class="dws" id="nd-site-st">—</span></div>
+        <div class="dw-kv" id="nd-kv"></div>
+        <p class="hint" id="nd-kv-note" style="margin:0"></p>
+      </div>
+      <div class="dwc">
+        <div class="dh"><h3>Журнал</h3></div>
+        <ol class="nd-log" id="nd-log"></ol>
+        <p class="hint" style="margin:8px 0 0">Тексты чужих вопросов программа не хранит и не показывает — только сколько знаков пришло и ушло.</p>
+      </div>
+    </div>
+    <div class="nd-more">
+      <details><summary>Как это защищено</summary><ul id="nd-safe">
+        <li>Ноде уходит только текст общего вопроса — без истории разговора, памяти, имени, ключа и адреса спрашивающего. Частые имена и телефоны заменяются метками.</li>
+        <li>Личное — память, заметки, письма, деньги, здоровье, адреса, картинки, детский режим и «Для старших» — в сеть не уходит вовсе: только серверам Dewiar.</li>
+        <li>Правила сети подписаны ключом Dewiar<span id="nd-fp"></span>; программа проверяет подпись сама и без неё не работает.</li>
+        <li>Ответы нод проверяются: ссылки, номера карт и телефонов, просьбы о деньгах и коды не пропускаются; контрольные вопросы и выборочная проверка главной моделью. Плохой ответ человек не увидит — ответит сервер Dewiar, а доверие ноды упадёт.</li>
+        <li>Свои вопросы на свою ноду не попадают, а ноде идёт только часть того, что заплатил спрашивающий, — спрашивать самого себя с другого аккаунта невыгодно. Ушли и подключились заново — доверие то же.</li>
+        <li>Ничего не начнётся без вашей кнопки; «Выключить» — сразу, вопросы тут же отвечает сервер Dewiar.</li></ul></details>
+      <details id="nd-pay"><summary>Правила начисления</summary><div id="nd-pay-body" class="hint">Появятся, когда программа получит подписанные правила сети.</div></details>
+      <details id="nd-srv"><summary>Мощный сервер на Ubuntu</summary>
+        <p class="hint">Отдельный компьютер с видеокартой NVIDIA от 16 ГБ можно сделать нодой без Dewiar на нём: одна команда в терминале поставит драйвер, vLLM, модель и службу ноды. Приглашение действует 2 часа.</p>
+        <div class="actions" style="margin:6px 0 0"><button class="btn" id="nd-inv">Получить команду</button><button class="btn" id="nd-inv-copy" hidden>Скопировать</button></div>
+        <div class="dw-path" id="nd-inv-cmd" hidden style="margin-top:8px;user-select:all;word-break:break-all"></div></details>
+      <div class="actions" id="nd-leave-row" hidden style="margin:14px 0 0"><button class="btn small danger" id="nd-leave">Перестать быть нодой</button><span class="hint">ключ ноды сотрётся; накопленные талеры останутся</span></div>
     </div>
   </section>
   <section id="p-lessons" class="wide">
@@ -983,12 +1104,13 @@
       <div class="st-pane" data-t="edit">
         <div class="st-work">
           <aside class="st-side">
-            <div class="st-seg" id="st-seg" role="tablist"><button data-s="blocks" class="on">Разделы</button><button data-s="look">Оформление</button><button data-s="head">Шапка</button><button data-s="info">Контакты</button></div>
+            <div class="st-seg" id="st-seg" role="tablist"><button data-s="blocks" class="on">Разделы</button><button data-s="look">Оформление</button><button data-s="head">Шапка</button><button data-s="info">Контакты</button><button data-s="legal" title="Подвал и документы: реквизиты, оферта, политика">Подвал</button></div>
             <div class="st-panel" data-s="blocks"><div class="st-pages" id="st-pages"></div><ol class="st-blocks" id="st-blocks"></ol>
               <button class="st-add" type="button" id="st-addb"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Добавить раздел</button></div>
             <div class="st-panel" data-s="look" hidden id="st-look"></div>
             <div class="st-panel" data-s="head" hidden id="st-head"></div>
             <div class="st-panel" data-s="info" hidden id="st-info"></div>
+            <div class="st-panel" data-s="legal" hidden id="st-legal"></div>
           </aside>
           <div class="st-stage">
             <div class="st-stbar"><div class="st-dev" role="radiogroup" aria-label="Как смотреть"><button data-d="pc" class="on" role="radio" aria-checked="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Компьютер</button><button data-d="phone" role="radio" aria-checked="false"><svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>Телефон</button></div>
@@ -1579,12 +1701,7 @@
           <div class="dw-kv" id="dw-ln-kv" style="margin-top:10px"></div>
           <div class="switch" style="border:0;padding:8px 0 0"><div>Не брать задания<span>Пауза для всех моих узлов — например, когда компьютер нужен для игр. Снимите — узел снова отвечает.</span></div><label class="tg"><input type="checkbox" id="dw-ln-pause"><i></i></label></div>
         </div>
-        <details id="dw-ln-give" style="margin-top:10px"><summary class="hint" style="cursor:pointer">Поделиться мощностью — подключить свою видеокарту</summary>
-          <ul class="dw-steps" id="dw-ln-needs" style="margin:8px 0 8px 18px"></ul>
-          <div class="actions" style="margin:0"><button class="btn primary" id="dw-ln-inv">Получить команду</button><span style="flex:1"></span><button class="btn" id="dw-ln-trust" hidden>Доверять новому ключу</button></div>
-          <div class="dw-path" id="dw-ln-cmd" hidden style="margin-top:8px;user-select:all;word-break:break-all"></div>
-          <div class="actions" id="dw-ln-cmd-row" hidden style="margin:6px 0 0"><button class="btn" id="dw-ln-copy">Скопировать команду</button><span class="hint" id="dw-ln-exp" style="margin:0"></span></div>
-        </details>
+        <div class="actions" style="margin:10px 0 0"><button class="btn primary" id="dw-ln-node">Стать нодой — «Нода Лиры»</button><span style="flex:1"></span><button class="btn" id="dw-ln-trust" hidden>Доверять новому ключу</button></div>
         <p class="res" id="dw-ln-res"></p>
       </div>
     </div>
@@ -2742,6 +2859,7 @@
 <script src="studio/core.js"></script>
 <script src="studio/tasks.js"></script>
 <script src="studio/council.js"></script>
+<script src="studio/podcast.js"></script>
 <script src="studio/pbot.js"></script>
 <script src="studio/writing.js"></script>
 <script src="studio/day.js"></script>
@@ -2802,5 +2920,6 @@
 <script src="studio/plugpage.js"></script>
 <script src="studio/plugmake.js"></script>
 <script src="studio/ideas.js"></script>
+<script src="studio/node.js"></script>
 </body>
 </html>

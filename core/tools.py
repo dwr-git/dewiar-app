@@ -2303,6 +2303,44 @@ def t_council(a, ctx):
             "сам, когда совет закончит. Скажи об этом одной фразой, без своего ответа на вопрос.")
 
 
+def t_make_podcast(a, ctx):
+    """«Лира, сделай подкаст по этому файлу / ссылке / теме» (0.87, podcast.py): выпуск готовится в фоне несколько минут —
+    отвечаем сразу, о готовности Лира скажет сама; выпуск — в студии «Подкасты» (открывается)."""
+    eng = ctx.get("engine")
+    if eng is None or not hasattr(eng, "podcasts"):
+        raise ToolError("подкасты — в программе Dewiar на компьютере")
+    from podcast import PodcastError, STYLES
+    files = a.get("files") or []
+    if isinstance(files, str):
+        files = [files]
+    urls = a.get("urls") or ([a["url"]] if a.get("url") else [])
+    if isinstance(urls, str):
+        urls = [urls]
+    try:
+        mins = int(a.get("minutes") or 10)
+    except (TypeError, ValueError):
+        mins = 10
+    mins = min((5, 10, 20), key=lambda m: abs(m - mins))
+    style = a.get("style") if a.get("style") in STYLES else "simple"
+    if EXAM_LAUNCH:                                   # экзамен: вызов записан, выпуск не делается (облако не тратится)
+        launch(["make_podcast", json.dumps({"topic": str(a.get("topic") or "")[:200], "urls": urls[:5], "files": files[:10],
+                                            "minutes": mins, "style": style}, ensure_ascii=False)])
+        return (f"Подкаст начат: ведут Лира и Патрик, около {mins} минут, подача — {STYLES[style].lower()}. Готовится в фоне — "
+                f"ход виден в студии «Подкасты»; когда будет готов, скажу сама. Скажи об этом одной-двумя фразами.")
+    try:
+        r = eng.podcasts.start({"topic": str(a.get("topic") or "")[:3000], "urls": [str(u) for u in urls][:5], "paths": [str(f) for f in files][:10]},
+                               {"minutes": mins, "style": style}, announce=True)
+        est = eng.podcasts.estimate(mins, 0, (), len(urls), a.get("topic") or "")
+    except PodcastError as e:
+        raise ToolError(str(e)) from e
+    eng.emit("podcast", id=r["id"], open=True)
+    h = r["hosts"]
+    cost = f" Примерно {str(est['talers']).replace('.', ',')} талера." if est.get("talers") else ""
+    return (f"Подкаст начат: ведут {h['a']['name']} и {h['b']['name']}, около {mins} минут, подача — {STYLES[style].lower()}. "
+            f"Готовится в фоне примерно {est.get('wait') or mins} мин — ход виден в студии «Подкасты» (открылась); когда будет готов, "
+            f"скажу сама.{cost} Скажи об этом одной-двумя фразами и не пересказывай материал сам.")
+
+
 def t_writing_today(a, ctx):
     """«Сколько я написал сегодня?» (0.68, writing.py): прирост слов в своих текстах из папок «Документов»."""
     w = ctx.get("writing")
@@ -3254,22 +3292,53 @@ def t_lab_run(a, ctx):
     return f"Код завершения {r['code']}. Вывод (полностью — {r['log']}):\n{r['output'] or '(пусто)'}"
 
 
+NOW_PLAYING = "@now_playing"
+
+
+def _del_paths(a, hooks):
+    """Пути delete_files; «@now_playing» — файл песни, что играет из «Моей музыки», из библиотеки (идея №169, рецензия
+    0.87: путь не из текста модели)."""
+    out = []
+    for x in (a or {}).get("paths") or []:
+        x = str(x).strip()
+        if x == NOW_PLAYING:
+            mm = (hooks or {}).get("mymusic")
+            p = mm.mine_current_path() if mm is not None else ""
+            if not p:
+                raise ToolError("сейчас ничего не играет из «Моей музыки» — удалять нечего, так и скажи")
+            out.append(p)
+        elif x:
+            out.append(x)
+    return out
+
+
 def t_delete_files(a, ctx):
     """Удаление только в корзину и только того, что разрешил guard.plan_delete (системное и главные папки — нельзя)."""
     import guard
     from workspace import _locked, LOCKED_MSG
     try:
-        plan = guard.plan_delete([str(x) for x in (a.get("paths") or []) if str(x).strip()])
+        plan = guard.plan_delete(_del_paths(a, ctx))
         for it in plan:                              # 05.11: запертые заметки (и папки с ними) — не удаляем
             p = Path(it["path"])
             held = [x for x in ([p] if p.is_file() else p.rglob("*.md") if p.is_dir() else []) if x.suffix.lower() == ".md" and _locked(x)]
             if held:
                 raise ToolError(f"«{held[0].stem}» — {LOCKED_MSG}. Снять замок может только человек (значок 🔒 у заметки); "
                                 "ничего не удалено — так и скажи")
+        mm = ctx.get("mymusic")                      # идея №169: играющая песня — сначала следующая (файл занят)
         if DRY:
             launch(["trash"] + [x["path"] for x in plan])
             return "В корзине (тест)"
+        if mm is not None:
+            try:
+                mm.mine_release([x["path"] for x in plan])
+            except Exception:  # noqa: BLE001
+                pass
         done = guard.trash(plan)
+        if mm is not None:
+            try:
+                mm.mine_forget([x["path"] for x in plan])
+            except Exception:  # noqa: BLE001
+                pass
     except guard.Blocked as e:
         raise ToolError(f"защита Dewiar: {e}. Это удалять нельзя — объясни пользователю почему") from e
     except OSError as e:
@@ -3577,8 +3646,8 @@ def t_call_persona(a, ctx):
 
 # На сервере (main.py --server) нет экрана, звука, камеры и окна — эти инструменты там выключены. Экзамен — тоже ядро
 # --server, но открыть сайт или программу там можно «понарошку» (EXAM_LAUNCH: запуск записывается), а совет идёт без окна
-EXAM_ON = {"open_url", "open_app", "open_path", "council"}
-SERVER_OFF = {"council", "open_url", "open_app", "open_path", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
+EXAM_ON = {"open_url", "open_app", "open_path", "council", "make_podcast"}
+SERVER_OFF = {"council", "make_podcast", "open_url", "open_app", "open_path", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
               "set_volume", "look_at_screen", "save_screenshot", "look_through_camera", "widget", "power"}
 
 
@@ -3768,6 +3837,16 @@ TOOLS = {
                 "Обсуждение идёт в студии (откроется само) минуту-две; итог прозвучит сам, когда совет закончит — сейчас скажи одной "
                 "фразой, что совет собран, и не отвечай на вопрос сам. question — вопрос целиком.",
                 S({"question": {"type": "string"}}, ["question"]), "safe", t_council, "Совет ИИ"),
+    "make_podcast": ("Сделать подкаст: двое ведущих (персонажи, их голосами) живо обсуждают материал — файл (PDF, Word, книга EPUB/FB2, "
+                     "текст), ссылку на страницу или видео YouTube, несколько файлов или просто тему словами; получится MP3 и текст "
+                     "выпуска в студии «Подкасты». Когда просят «сделай подкаст по этому файлу / по ссылке / про …», «озвучь как "
+                     "подкаст», «обсудите вдвоём вслух». files — пути файлов (вложение из сообщения — его путь «Входящие/…»), "
+                     "url — ссылка, topic — тема или пожелание словами; minutes — 5, 10 (по умолчанию) или 20; style — simple "
+                     "(простыми словами, по умолчанию) | deep (глубоко) | debate (спор двух мнений). Готовится несколько минут в фоне — "
+                     "скажи одной фразой, что начала, и не пересказывай материал сам.",
+                     S({"topic": {"type": "string"}, "url": {"type": "string"}, "files": {"type": "array", "items": {"type": "string"}},
+                        "minutes": {"type": "number", "enum": [5, 10, 20]}, "style": {"type": "string", "enum": ["simple", "deep", "debate"]}}, []),
+                     "safe", t_make_podcast, "Подкасты"),
     "writing_today": ("Сколько пользователь написал сегодня в своих текстах (рукопись, статьи, конспекты в папках «Документов»): "
                       "слова за день, цель, за неделю, дни подряд, в каких файлах. Когда спрашивают «сколько я написал сегодня», "
                       "«много ли я написал», «как идёт книга», «сколько слов в моей рукописи».", S({}, []), "safe", t_writing_today, "Пишу"),
@@ -4315,8 +4394,8 @@ class Toolbox:
                 return None, True, f"Осторожно: {v['reason']}. На сервере «{args.get('server', '')}» выполнить: {args.get('command', '')}?"
         if name == "delete_files":
             try:
-                plan = guard.plan_delete([str(x) for x in ((args or {}).get("paths") or []) if str(x).strip()])
-            except guard.Blocked as e:
+                plan = guard.plan_delete(_del_paths(args, self.hooks))
+            except (guard.Blocked, ToolError) as e:
                 return str(e), False, None
             return None, True, guard.describe_delete(plan)
         if name == "close_send" and (args or {}).get("files"):

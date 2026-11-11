@@ -1,7 +1,9 @@
 """Студия → «Бот в Telegram» → «Посты» и «Рубрики» (0.69): видны, только когда бот подключён; каналы и группы — плитками
 (выбранные залиты), «Добавить» @канал; пост — текст или «Придумать» по теме, сейчас (с «Опубликовать сейчас?») или ко
 времени («Запланировать»); ждущий одобрения — «Опубликовать»; рубрика — тема, дни, время, с одобрением; новички —
-переключатель и текст приветствия."""
+переключатель и текст приветствия.
+№641 (10.11): форма рубрики не пересобирается при выборе группы (тема не пропадает), подпись над полем, пустая тема —
+поле подсвечено и в фокусе."""
 import os, re, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -68,9 +70,24 @@ with sync_playwright() as p:
     rs = [a for c, a in st.evaluate("calls") if c == "pbot_rubric_set"]
     ok(rs and rs[0]["days"] == [0, 1, 2, 3] and rs[0]["time"] == "11:00" and rs[0]["approve"] is True, f"рубрика: дни, время, с одобрением: {rs}")
     ok("совет дня о чае" in st.inner_text("#pp-rubs") and "Пн, Вт, Ср, Чт в 11:00" in st.inner_text("#pp-rubs"), "рубрика — в списке")
+    # №641 (10.11): «Добавить рубрику» — плашка, а поля нет: тема пропадала, когда выбирали группу плиткой (форма пересобиралась)
+    ok("о чём писать" in st.inner_text("#pp-rubf"), "над полем темы — подпись, что туда писать")
+    n0 = len([1 for c, a in st.evaluate("calls") if c == "pbot_rubric_set"])
+    st.click("#pp-rubf button[type=submit]"); st.wait_for_timeout(200)
+    ok(len([1 for c, a in st.evaluate("calls") if c == "pbot_rubric_set"]) == n0 and st.evaluate("document.activeElement.id") == "pp-rt"
+       and "need" in st.get_attribute("#pp-rt", "class") and "о чём будут посты" in st.inner_text("#pp-rhint"),
+       "пустая тема — поле подсвечено и в фокусе, подсказка рядом, без похода в ядро")
+    st.fill("#pp-rt", "вопрос недели"); st.click("#pp-rubf .pp-days button[data-d='6']"); tiles.nth(0).click(); st.wait_for_timeout(200)
+    ok(st.input_value("#pp-rt") == "вопрос недели" and "on" in st.get_attribute("#pp-rubf .pp-days button[data-d='6']", "class"),
+       "выбрали группу плиткой — набранная тема и дни на месте")
+    ok("Куда: Клуб любителей" in st.inner_text("#pp-rhint"), f"видно, куда пойдут посты рубрики: {st.inner_text('#pp-rhint')!r}")
+    st.click("#pp-rubf button[type=submit]"); st.wait_for_timeout(300)
+    rs = [a for c, a in st.evaluate("calls") if c == "pbot_rubric_set"]
+    ok(len(rs) == n0 + 1 and rs[-1]["topic"] == "вопрос недели" and rs[-1]["chats"] == ["-700"] and 6 in rs[-1]["days"], f"рубрика ушла с темой и группой: {rs[-1:]}")
+    ok(st.input_value("#pp-rt") == "" and "вопрос недели" in st.inner_text("#pp-rubs"), "после добавления поле очищено, рубрика в списке")
     st.click(".bp-row:has(#pp-greet)"); st.wait_for_timeout(300)
     ok(["pbot_greet", {"on": True}] in st.evaluate("calls") and st.locator("#pp-greet-t").is_visible(), "новички: включили — появился текст приветствия")
-    st.locator("#bp-posts").screenshot(path="/tmp/claude-0/pbot_posts.png"); st.locator("#bp-rub").screenshot(path="/tmp/claude-0/pbot_rub.png")
+    
     ok(not errors, f"без ошибок: {errors[:2]}")
     b.close()
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

@@ -169,6 +169,30 @@ public final class Phone {
         return Math.round(100f * am.getStreamVolume(st) / Math.max(1, max));
     }
 
+    /** Идея №170 (09.11): кнопки плеера ДРУГОГО приложения (Яндекс Музыка, Spotify, VK Музыка, YouTube Music) —
+     *  next | prev | play | pause | toggle: нажатие медиа-клавиши, как на гарнитуре; играющее приложение его и получит.
+     *  -> {"sent": true/false, "active": играла ли музыка до нажатия}. Разрешений не нужно. */
+    public static JSONObject mediaKey(Context c, String act) {
+        JSONObject o = new JSONObject();
+        try {
+            AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+            o.put("active", am.isMusicActive());
+            int code = "next".equals(act) ? android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                    : "prev".equals(act) ? android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                    : "play".equals(act) ? android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+                    : "pause".equals(act) ? android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+                    : android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+            am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code));
+            am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code));
+            o.put("sent", true);
+        } catch (Throwable e) { try { o.put("sent", false); } catch (Exception ignored) { } }
+        return o;
+    }
+
+    public static boolean musicActive(Context c) {
+        try { return ((AudioManager) c.getSystemService(Context.AUDIO_SERVICE)).isMusicActive(); } catch (Throwable e) { return false; }
+    }
+
     public static JSONObject battery(Context c) {
         JSONObject o = new JSONObject();
         try {

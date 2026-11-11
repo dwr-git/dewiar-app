@@ -314,7 +314,7 @@
       alarmCancel(id) { const l = alarms(), i = l.findIndex(a => a.id === id); if (i >= 0) { l.splice(i, 1); saveAlarms(l); } return i >= 0; },
       alarms: () => JSON.stringify(alarms()), alarmHistory: () => LS.get(HK) || "[]", exactAlarms: () => true,
       call: () => false, sms: () => false, contact: () => "", openApp: () => "", apps: () => "[]", torch: () => false,
-      volume: () => -1, battery: () => JSON.stringify({ percent: -1, charging: false }),
+      volume: () => -1, mediaKey: () => JSON.stringify({ sent: false, active: false }), musicActive: () => false,   /* другие приложения браузеру недоступны */ battery: () => JSON.stringify({ percent: -1, charging: false }),
       calEvents: () => JSON.stringify({ events: [] }), calAdd: () => JSON.stringify({ error: "в браузере нет календаря телефона" }), calOpenInsert: () => false,
       openUrl: (u) => { try { window.open(u, "_blank", "noopener"); return true; } catch (e) { return false; } },
       saveDownload(n, m, t) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: m || "text/plain" })); a.download = n; a.click(); return "Загрузки/" + n; },

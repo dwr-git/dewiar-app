@@ -12,7 +12,7 @@
    05.11 (владелец: «как на наш созданный сайт вставить виджет Лиры?»): строка «Чат Лиры на сайте: включён/выключен» в списке
    и в редакторе (sites_chat {id, on}) — «Включить» включает «Чат для сайта» (знания — с этого сайта, если их ещё нет); кнопка
    чата ставится сервером на все опубликованные сайты аккаунта, а в предпросмотре видно, где она появится. */
-const SITES = { chat: null, meta: null, items: [], sid: "", cur: null, hist: [], page: 0, sel: "", open: "", dev: "pc", scroll: 0, tab: "edit", seg: "blocks", t: {}, days: 30, busy: false };
+const SITES = { doc: "", lkx: 0, chat: null, meta: null, items: [], sid: "", cur: null, hist: [], page: 0, sel: "", open: "", dev: "pc", scroll: 0, tab: "edit", seg: "blocks", t: {}, days: 30, busy: false };
 const stE = (t) => escH(t);
 const stI = (p, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 const ST_EG = ["Кофейня «Зерно» на Садовой, 5: кофе, завтраки, своя выпечка, с 8 до 22", "Мастер маникюра Алина, Казань, запись в Telegram @alina_nails",
@@ -92,7 +92,7 @@ function stFromTemplate(tid) { stCreate({ template: tid }, null); }
 /* ---------- редактор ---------- */
 async function stOpen(id, keep, data) {
   try { data = data || await core.call("sites_get", { id }); } catch (e) { toast(e.message, 4000); return; }
-  if (!keep || SITES.sid !== id) { SITES.page = 0; SITES.sel = ""; SITES.open = ""; SITES.scroll = 0; SITES.tab = "edit"; SITES.seg = "blocks"; }
+  if (!keep || SITES.sid !== id) { SITES.page = 0; SITES.doc = ""; SITES.lkx = 0; SITES.sel = ""; SITES.open = ""; SITES.scroll = 0; SITES.tab = "edit"; SITES.seg = "blocks"; }
   SITES.sid = id; SITES.cur = data.site; SITES.hist = data.history || [];
   $("#st-list").hidden = true; $("#st-ed").hidden = false;
   stTab(SITES.tab, true); stSeg(SITES.seg);
@@ -134,7 +134,7 @@ function stLater(key, ops, label) {
 
 /* предпросмотр */
 async function stPreview() {
-  const id = SITES.sid, pg = SITES.page;
+  const id = SITES.sid, pg = SITES.doc ? `doc:${SITES.doc}` : SITES.page;     // 0.87: страница документа из «Подвала»
   try {
     const r = await core.call("sites_render", { id, page: pg });
     if (id !== SITES.sid) return;
@@ -163,7 +163,10 @@ window.addEventListener("message", (e) => {
   else if (d.dwsite === "scroll") SITES.scroll = d.y || 0;
   else if (d.dwsite === "pick") { SITES.sel = d.id; SITES.open = d.id; stSeg("blocks"); stBlocksList(); const row = $(`#st-blocks [data-uid="${d.id}"]`); if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
   else if (d.dwsite === "chat") toast(`Так кнопка чата выглядит на опубликованном сайте: посетитель спросит — ${(SITES.chat || {}).name || "Лира"} ответит, оставленный контакт придёт в «Клиенты». Настроить — «Чат для сайта».`, 6000);
-  else if (d.dwsite === "page") { const i = (SITES.cur.pages || []).findIndex((p, j) => (j === 0 ? "index" : p.slug) === d.slug); if (i >= 0) { SITES.page = i; SITES.scroll = 0; stSide(); stPreview(); } }
+  else if (d.dwsite === "page") {
+    const dk = SITES.meta.legal ? Object.keys(SITES.meta.legal.docs).find(k => stDocSlug(k) === d.slug) : "";
+    if (dk) { SITES.doc = dk; SITES.scroll = 0; stPreview(); return; }
+    const i = (SITES.cur.pages || []).findIndex((p, j) => (j === 0 ? "index" : p.slug) === d.slug); if (i >= 0) { SITES.page = i; SITES.doc = ""; SITES.scroll = 0; stSide(); stPreview(); } }
 });
 
 /* ---------- левая панель ---------- */
@@ -173,7 +176,7 @@ function stSeg(s) {
   $$("#p-sites .st-panel").forEach(p => p.hidden = p.dataset.s !== s);
 }
 function stSide() {
-  stPages(); stBlocksList(); stLook(); stHead(); stInfo();
+  stPages(); stBlocksList(); stLook(); stHead(); stInfo(); stLegal();
   const pgs = SITES.cur.pages || [];
   $("#st-page").hidden = pgs.length < 2;
   $("#st-page").innerHTML = pgs.map((p, i) => `<option value="${i}"${i === SITES.page ? " selected" : ""}>${stE(p.title || "Страница")}</option>`).join("");
@@ -184,7 +187,7 @@ function stPages() {
   $("#st-pages").innerHTML = pgs.map((p, i) => `<button type="button" class="st-pg${i === SITES.page ? " on" : ""}" data-i="${i}">${stE(p.title || "Страница")}</button>`).join("")
     + `<button type="button" class="st-pg add" id="st-addpg" title="Новая страница" aria-label="Новая страница">${stI('<path d="M12 5v14M5 12h14"/>')}</button>`
     + (SITES.page > 0 ? `<button type="button" class="st-pg more" id="st-pgset">Переименовать или удалить</button>` : "");
-  $$("#st-pages .st-pg[data-i]").forEach(b => b.onclick = () => { SITES.page = +b.dataset.i; SITES.scroll = 0; SITES.sel = ""; SITES.open = ""; stSide(); stPreview(); });
+  $$("#st-pages .st-pg[data-i]").forEach(b => b.onclick = () => { SITES.page = +b.dataset.i; SITES.doc = ""; SITES.scroll = 0; SITES.sel = ""; SITES.open = ""; stSide(); stPreview(); });
   $("#st-addpg").onclick = async () => {
     const t = await askText("Название новой страницы — например «Цены», «Доставка», «О нас»", "", { ok: "Добавить" });
     if (t && t.trim() && await stApply([{ op: "add_page", title: t.trim(), blocks: ["text", "lead"] }], `Новая страница «${t.trim()}»`)) { SITES.page = SITES.cur.pages.length - 1; stSide(); stPreview(); }
@@ -417,6 +420,78 @@ function stInfo() {
     if (!await ask(`Удалить сайт «${s.name}» совсем${p.name ? " (и снять с dewiar.pro)" : ""}? Это не отменить.`, { ok: "Удалить" })) return;
     try { await core.call("sites_delete", { id: SITES.sid }); SITES.sid = ""; toast("Сайт удалён"); loadSites(); } catch (e) { toast(e.message, 4000); }
   };
+}
+
+/* ---------- «Подвал и документы» (0.87) ----------
+   Люди просят подвал с офертой, политикой обработки ПД, ИНН/ОГРН и адресом. Реквизиты — внизу каждой страницы (пустые не
+   показываются); документ — ссылкой или своим текстом (тогда у сайта своя страница /privacy и т. п. в стиле сайта);
+   «Составить черновик по моим данным» — Лира пишет политику или согласие (sites_legal_draft), с пометкой «проверьте с
+   юристом» до первой правки. Задана политика — в форме заявки галочка согласия (152-ФЗ). */
+const ST_DOCI = '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>';
+function stDocSlug(k) {
+  const base = SITES.meta.legal.docs[k].slug, taken = (SITES.cur.pages || []).map((p, i) => i === 0 ? "index" : (p.slug || `page${i}`));
+  return taken.includes(base) ? `doc-${base}` : base;
+}
+function stLegal() {
+  const box = $("#st-legal"); if (!box || !SITES.meta.legal) return;
+  const s = SITES.cur, lg = s.legal || {}, ct = s.contacts || {}, M = SITES.meta.legal, docs = lg.docs || {};
+  const links = (lg.links || []).concat(Array.from({ length: SITES.lkx || 0 }, () => ({ title: "", url: "" })));
+  const f = (k, ph, extra = "") => `<label class="st-f${extra}"><span>${stE(M.fields[k])}</span><input data-lg="${k}" value="${stE(lg[k] || "")}" maxlength="${k === "address" ? 300 : 200}" placeholder="${stE(ph)}"${k === "inn" || k === "ogrn" ? ' inputmode="numeric"' : ""}></label>`;
+  const hasLead = (s.pages || []).some(p => (p.blocks || []).some(b => b.type === "lead" && !b.hidden));
+  box.innerHTML = `<h4>Реквизиты</h4><p class="hint">Внизу каждой страницы, мелко и аккуратно. Что не заполнено — не показывается.</p>
+    <div class="st-lgf">${f("org", "ИП Иванова Анна Сергеевна или ООО «Зерно»")}
+    <div class="st-row2">${f("inn", "10 или 12 цифр")}${f("ogrn", "13 или 15 цифр")}</div><p class="st-chk bad" id="st-lgchk" hidden></p>
+    ${f("address", ct.address ? `как в контактах: ${ct.address}` : "Город, улица, дом")}
+    <div class="st-row2">${f("phone", ct.phone || "+7 …")}${f("email", ct.email || "почта@…")}</div></div>
+    <h4>Документы</h4><p class="hint">Ссылка — если документ уже лежит на другом сайте. Свой текст — у сайта появится страница документа в его стиле.</p>
+    <div class="st-docs">${Object.entries(M.docs).map(([k, m]) => { const d = docs[k] || {}, mode = d.mode || "";
+      return `<div class="st-doc${mode ? " on" : ""}" data-k="${k}"><div class="st-dh2"><span class="st-di" aria-hidden="true">${stI(ST_DOCI)}</span><b>${stE(m.title)}</b></div>
+      <div class="st-seg sm st-dm" role="radiogroup" aria-label="${stE(m.title)}">${[["", "Нет"], ["link", "Ссылка"], ["text", "Свой текст"]].map(([v, t]) => `<button type="button" role="radio" data-m="${v}" aria-checked="${mode === v}" class="${mode === v ? "on" : ""}">${t}</button>`).join("")}</div>
+      ${mode === "link" ? `<label class="st-f"><span>Адрес документа</span><input data-du="${k}" value="${stE(d.url || "")}" maxlength="500" placeholder="https://…" inputmode="url"></label>` : ""}
+      ${mode === "text" ? `${d.draft ? `<p class="st-docw">Черновик Лиры — проверьте его с юристом. Поправите текст — пометка уйдёт.</p>` : ""}
+        <label class="st-f"><span>Текст <small>«## Заголовок» — раздел, «- …» — пункт списка</small></span><textarea data-dt="${k}" rows="7" maxlength="${M.text_max}" placeholder="Вставьте текст документа">${stE(d.text || "")}</textarea></label>
+        <div class="st-dact">${(d.text || "").trim() ? `<button type="button" class="btn small" data-pv="${k}">Посмотреть страницу</button><span class="hint">/${stE(stDocSlug(k))}</span>` : ""}</div>` : ""}
+      ${(k === "privacy" || k === "consent") && mode !== "link" ? `<button type="button" class="btn small st-draft" data-dr="${k}">${stI('<path d="M12 3c.9 5 4 8.1 9 9-5 .9-8.1 4-9 9-.9-5-4-8.1-9-9 5-.9 8.1-4 9-9z"/>')}${(d.text || "").trim() ? "Составить заново" : "Составить черновик по моим данным"}</button>` : ""}
+      </div>`; }).join("")}</div>
+    <h4>Ещё ссылки</h4><p class="hint">Доставка и возврат, правила акции, карточка в каталоге — до ${M.links_max}.</p>
+    <div class="st-lks">${links.map((x, i) => `<div class="st-lk" data-i="${i}"><input data-lt value="${stE(x.title || "")}" maxlength="80" placeholder="Название" aria-label="Название ссылки"><input data-lu value="${stE(x.url || "")}" maxlength="500" placeholder="https://…" aria-label="Адрес ссылки" inputmode="url"><button type="button" class="st-ib sm" data-lx title="Убрать" aria-label="Убрать ссылку">${stI('<path d="M6 6l12 12M18 6L6 18"/>')}</button></div>`).join("")}</div>
+    ${links.length < M.links_max ? `<button class="st-add" type="button" id="st-lkadd">${stI('<path d="M12 5v14M5 12h14"/>')}Добавить ссылку</button>` : ""}
+    <p class="hint st-pdh">${hasLead ? "Когда задана политика конфиденциальности, в форме заявки появится галочка «Даю согласие на обработку персональных данных» со ссылкой на неё — так требует закон о персональных данных (152-ФЗ)." : "Добавите форму заявки — при заданной политике в ней сама появится галочка согласия на обработку данных (152-ФЗ)."}</p>`;
+  const chk = () => { const i = (lg.inn || "").length, o = (lg.ogrn || "").length, w = [];
+    if (i && i !== 10 && i !== 12) w.push(`в ИНН ${i} ${stPlural(i, "цифра", "цифры", "цифр")}, а нужно 10 (организация) или 12 (ИП)`);
+    if (o && o !== 13 && o !== 15) w.push(`в ОГРН ${o} ${stPlural(o, "цифра", "цифры", "цифр")}, а нужно 13 (ОГРН) или 15 (ОГРНИП)`);
+    $("#st-lgchk").hidden = !w.length; $("#st-lgchk").textContent = w.length ? "Проверьте: " + w.join("; ") + "." : ""; };
+  chk();
+  $$("#st-legal [data-lg]").forEach(el => el.oninput = () => stLater("lg" + el.dataset.lg, () => [{ op: "legal", [el.dataset.lg]: el.value }], "Подвал: реквизиты"));
+  $$("#st-legal [data-lg=inn], #st-legal [data-lg=ogrn]").forEach(el => el.onchange = () => setTimeout(() => { lg[el.dataset.lg] = el.value.replace(/\D/g, ""); chk(); }, 0));
+  $$("#st-legal .st-doc").forEach(el => {
+    const k = el.dataset.k;
+    $$(".st-dm button", el).forEach(b => b.onclick = () => { if (b.classList.contains("on")) return; stApply([{ op: "legal", docs: { [k]: { mode: b.dataset.m } } }], `Подвал: ${M.docs[k].short}`).then(() => { if (b.dataset.m === "" && SITES.doc === k) { SITES.doc = ""; stPreview(); } }); });
+    const u = $("[data-du]", el); if (u) u.oninput = () => stLater("du" + k, () => [{ op: "legal", docs: { [k]: { url: u.value } } }], `Подвал: ${M.docs[k].short}`);
+    const t = $("[data-dt]", el); if (t) t.oninput = () => { const w = $(".st-docw", el); if (w) w.remove(); stLater("dt" + k, () => [{ op: "legal", docs: { [k]: { text: t.value } } }], `Документ: ${M.docs[k].short}`); };
+    const pv = $("[data-pv]", el); if (pv) pv.onclick = () => { SITES.doc = k; SITES.scroll = 0; stPreview(); };
+    const dr = $("[data-dr]", el); if (dr) dr.onclick = () => stDraft(k, dr);
+  });
+  const saveLinks = () => { const ls = $$("#st-legal .st-lk").map(r => ({ title: $("[data-lt]", r).value.trim(), url: $("[data-lu]", r).value.trim() }));
+    SITES.lkx = ls.filter(x => !x.title && !x.url).length;       // пустые строки ядро не хранит — остаются только здесь
+    return [{ op: "legal", links: ls }]; };
+  $$("#st-legal .st-lk input").forEach(el => el.oninput = () => stLater("lk", saveLinks, "Подвал: ссылки"));
+  $$("#st-legal [data-lx]").forEach(b => b.onclick = () => { b.closest(".st-lk").remove(); stApply(saveLinks(), "Подвал: ссылки"); });
+  if ($("#st-lkadd")) $("#st-lkadd").onclick = () => { SITES.lkx = (SITES.lkx || 0) + 1; stLegal(); const r = $$("#st-legal .st-lk").pop(); if (r) $("[data-lt]", r).focus(); };
+}
+async function stDraft(k, btn) {
+  const d = ((SITES.cur.legal || {}).docs || {})[k] || {};
+  if ((d.text || "").trim() && !await ask("Лира напишет документ заново по вашим реквизитам — нынешний текст заменится (вернуть можно из «Истории»).", { ok: "Составить" })) return;
+  const was = btn.innerHTML; btn.disabled = true; btn.classList.add("busy"); btn.lastChild.textContent = "Лира пишет…";
+  try {
+    const r = await core.call("sites_legal_draft", { id: SITES.sid, doc: k });
+    SITES.cur = r.site; SITES.hist = r.history || []; SITES.doc = k; SITES.scroll = 0;
+    stBar(); stSide(); stPreview();
+    toast("Черновик готов — он уже на странице документа. Проверьте его с юристом перед публикацией.", 6000);
+  } catch (e) {
+    btn.disabled = false; btn.classList.remove("busy"); btn.innerHTML = was;
+    toast(/модел|Мозг/i.test(e.message) ? `${e.message}. Без модели можно вставить готовый текст политики от юриста или из конструктора документов.` : e.message, 7000);
+  }
 }
 
 /* ---------- «Чат Лиры на сайте» ----------
@@ -696,7 +771,7 @@ async function stSeo() {
   const say = s => s >= 85 ? "Сайт готов к продвижению — осталось немного." : s >= 60 ? "Хорошая основа: поправьте отмеченное — и поисковикам, и людям станет понятнее." : "Начните с важного — это быстро, Лира поможет.";
   box.innerHTML = `<div class="st-seohd">${ring(a.score)}<div><h3>${stE(say(a.score))}</h3><p class="hint">Проверка без внешних служб: заголовки и описания страниц, главный заголовок, подписи к фото, вес, контакты и форма, карточка для соцсетей, заглушки.</p></div></div>
     ${bad.length ? `<h4 class="st-h4">Что улучшить</h4><ul class="st-chk2">${bad.map((x, i) => `<li class="${x.level === "важно" ? "hi" : ""}"><span class="st-ci" aria-hidden="true">${stI(x.level === "важно" ? '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.4v.1"/>' : '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/>')}</span>
-      <span class="st-cw"><b>${stE(x.title)}</b><span>${stE(x.detail)}</span></span>${x.fix ? `<button type="button" class="btn small" data-i="${i}">${x.title === "Сайт в интернете" ? "Опубликовать" : x.title === "Фото в галерее" ? "Добавить фото" : "Попросить Лиру исправить"}</button>` : ""}</li>`).join("")}</ul>` : ""}
+      <span class="st-cw"><b>${stE(x.title)}</b><span>${stE(x.detail)}</span></span>${x.fix ? `<button type="button" class="btn small" data-i="${i}">${x.title === "Сайт в интернете" ? "Опубликовать" : x.title === "Фото в галерее" ? "Добавить фото" : x.fix === "Подвал и документы" ? "Открыть «Подвал»" : "Попросить Лиру исправить"}</button>` : ""}</li>`).join("")}</ul>` : ""}
     <details class="st-goodd"${bad.length ? "" : " open"}><summary>Уже хорошо — ${good.length}</summary><ul class="st-chk2 good">${good.map(x => `<li><span class="st-ci ok" aria-hidden="true">${stI('<path d="M5 12.5l4 4 10-10"/>')}</span><span class="st-cw"><b>${stE(x.title)}</b><span>${stE(x.detail)}</span></span></li>`).join("")}</ul></details>
     <div class="st-tips"><h4 class="st-h4">Где рассказать о сайте</h4><ul><li><b>Яндекс Бизнес и Карты, 2ГИС</b> — карточка с адресом, часами и ссылкой на сайт: по ним ищут «рядом».</li>
       <li><b>Соцсети и мессенджеры</b> — ссылка в профиле, закреплённый пост, подпись в каналах.</li><li><b>На месте</b> — QR-код на кассе, визитке, витрине (есть в окне после публикации).</li>
@@ -705,6 +780,7 @@ async function stSeo() {
   $$("#st-seo .st-chk2 [data-i]").forEach(b => b.onclick = async () => {
     const x = bad[+b.dataset.i];
     if (x.title === "Сайт в интернете") { stPublish(); return; }
+    if (x.fix === "Подвал и документы") { stTab("edit"); stSeg("legal"); return; }
     if (x.title === "Фото в галерее") { const g = stBlocks().find(q => q.type === "gallery"); stTab("edit"); stSeg("blocks"); if (g) { SITES.open = SITES.sel = g.uid; stBlocksList(); stShow(g.uid); } return; }
     b.disabled = true; b.textContent = "Лира исправляет…";
     try { const r = await core.call("sites_say", { id: SITES.sid, text: x.fix }); SITES.cur = r.site; SITES.hist = r.history; stBar(); stSide(); stPreview(); toast(r.said || "Исправлено", 4000); stSeo(); }
@@ -729,7 +805,7 @@ async function stSeo() {
   $("#st-pub").onclick = stPublish;
   $("#st-addb").onclick = stAddPop;
   $("#st-say").onsubmit = (e) => { e.preventDefault(); stSay($("#st-sayt").value.trim()); };
-  $("#st-page").onchange = (e) => { SITES.page = +e.target.value; SITES.scroll = 0; stSide(); stPreview(); };
+  $("#st-page").onchange = (e) => { SITES.page = +e.target.value; SITES.doc = ""; SITES.scroll = 0; stSide(); stPreview(); };
   $$("#st-seg button").forEach(b => b.onclick = () => stSeg(b.dataset.s));
   $$("#st-tabs button").forEach(b => b.onclick = () => stTab(b.dataset.t));
   $$("#p-sites .st-dev button").forEach(b => b.onclick = () => { SITES.dev = b.dataset.d; $$("#p-sites .st-dev button").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); stFit(); });

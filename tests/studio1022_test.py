@@ -4,7 +4,9 @@
 - №179 «непонятно, выполнена ли команда — страница не обновляется»: заметка, записанная голосом, сразу появляется на
   открытой странице «Заметки» и видно «Заметка «…» сохранена»;
 - №167 «не могу войти, хотя код у меня перед глазами»: 6 цифр в поле логина — это код с другого устройства: подключаемся
-  по нему, а не пять раз «неверный логин или пароль» до блокировки на 15 минут."""
+  по нему, а не пять раз «неверный логин или пароль» до блокировки на 15 минут;
+- №636 (11.11) «в браузере захожу, в программе не могу»: логин из 6 цифр С ПАРОЛЕМ — это вход, код — только без пароля
+  или когда вход не подошёл."""
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -27,13 +29,14 @@ CORE = r"""
       if (c === "notes_list") return notes;
       if (c === "ws_read") return { path: a.path, text: "# " + a.path + "\n\nтекст" };
       if (c === "cloud_connect") return { ok: true };
-      if (c === "account_login") throw new Error("Неверный логин или пароль");
+      if (c === "rag_scope") return { bases: [] };
+      if (c === "account_login") { if (a.login === "150947") return { logged_in: true, login: a.login, user: { login: a.login } }; throw new Error("Неверный логин или пароль"); }
       return {}; }; };
   ready(); })();
 """
 with sync_playwright() as p:
     b = p.chromium.launch(); errs = []
-    pg = b.new_page(viewport={"width": 1300, "height": 860}); pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg = b.new_page(viewport={"width": 1300, "height": 860}); pg.on("pageerror", lambda e: errs.append(str(e) + str(getattr(e, "stack", ""))[:600]))
     pg.add_init_script(FAKE); pg.add_init_script(CORE)
     pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1&skin=neusky"); pg.wait_for_timeout(1000)
     # №184
@@ -60,12 +63,19 @@ with sync_playwright() as p:
     # №167
     pg.click('nav button[data-p="dw"]'); pg.wait_for_timeout(500)
     if pg.locator("#dw-login").count() and pg.is_visible("#dw-login"):
-        pg.fill("#dw-login", "482 913"); pg.fill("#dw-pass", "x"); pg.click("#dw-go"); pg.wait_for_timeout(500)
+        pg.fill("#dw-login", "482 913"); pg.fill("#dw-pass", ""); pg.click("#dw-go"); pg.wait_for_timeout(500)
         c = pg.evaluate("calls.filter(c => c[0] === 'pair_claim' || c[0] === 'cloud_connect' || c[0] === 'account_login')")
-        ok(c and c[0][0] == "pair_claim" and c[0][1]["code"] == "482913", f"6 цифр в поле логина — подключение по коду (pair_claim, 0.56): {c}")
+        ok(c and c[0][0] == "pair_claim" and c[0][1]["code"] == "482913", f"6 цифр в поле логина без пароля — подключение по коду (pair_claim, 0.56): {c}")
+        pg.evaluate("calls.length = 0"); pg.fill("#dw-login", "482 913"); pg.fill("#dw-pass", "x"); pg.click("#dw-go"); pg.wait_for_timeout(600)
+        c = [x[0] for x in pg.evaluate("calls") if x[0] in ("pair_claim", "cloud_connect", "account_login")]
+        ok(c == ["account_login", "pair_claim"], f"6 цифр и пароль, вход не подошёл — тогда как код: {c}")
         pg.evaluate("calls.length = 0"); pg.fill("#dw-login", "masha"); pg.fill("#dw-pass", "123 456"); pg.click("#dw-go"); pg.wait_for_timeout(600)
         c = [x[0] for x in pg.evaluate("calls") if x[0] in ("cloud_connect", "account_login")]
         ok(c == ["account_login", "cloud_connect"], f"6 цифр в пароле: сначала вход, не вышло — пробуем как код: {c}")
+        # №636 (11.11): логин из 6 цифр и пароль — это вход (в браузере входил, в программе — «код не подошёл»)
+        pg.evaluate("calls.length = 0"); pg.fill("#dw-login", "150947"); pg.fill("#dw-pass", "secret7"); pg.click("#dw-go"); pg.wait_for_timeout(600)
+        c = [x[0] for x in pg.evaluate("calls") if x[0] in ("pair_claim", "cloud_connect", "account_login")]
+        ok(c == ["account_login"], f"№636: логин из 6 цифр с паролем — вход, а не код: {c}")
     else:
         ok(False, "форма входа в «Dewiar.pro» не найдена")
     ok("Есть код из 6 цифр" in (ROOT / "ui/settings.html").read_text(encoding="utf-8"), "поле для кода подписано понятно")

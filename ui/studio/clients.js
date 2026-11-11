@@ -68,8 +68,12 @@ function crCard() {
     + `<div class="cr-next${c.overdue ? " late" : ""}"><h3>Следующий шаг</h3>`
     + (nx ? `<div class="cr-nx"><b>${escH(nx.what.charAt(0).toUpperCase() + nx.what.slice(1))}</b>${nx.at ? `<span>${c.overdue ? "срок прошёл · " : ""}${escH(crWhen(nx.at))}</span>` : ""}`
         + `<div class="cr-nxa"><button class="btn small primary" id="cr-ndone">Сделано</button><button class="btn small" id="cr-nedit">Изменить</button></div></div>` : "")
-    + `<form class="cr-nform" id="cr-nform"${nx ? " hidden" : ""}><input id="cr-nwhat" maxlength="300" placeholder="Что сделать: перезвонить, отправить счёт…" value="${escH(nx ? nx.what : "")}">`
-    + `<input id="cr-nwhen" type="datetime-local" value="${escH(nx && nx.at ? nx.at.slice(0, 16) : "")}" aria-label="Когда"><button class="btn small primary" type="submit">Поставить</button></form></div>`
+    // идея №175 (11.11: «в „Следующем шаге“ под датой — поле „что сделать“ и рабочую кнопку „Поставить“, сейчас только через
+    // Лиру»): поле «что» было без подписи (подсказка-заглушка читалась как надпись), пустое — «Поставить» молча ничего не делал.
+    // Теперь у полей подписи, пустое «что» подсвечено с подсказкой, понятно, что даст дата
+    + `<form class="cr-nform" id="cr-nform" novalidate${nx ? " hidden" : ""}><label class="cr-nf"><span>Что сделать</span><input id="cr-nwhat" type="text" maxlength="300" placeholder="перезвонить, отправить счёт…" value="${escH(nx ? nx.what : "")}"></label>`
+    + `<label class="cr-nf"><span>Когда <small>необязательно</small></span><input id="cr-nwhen" type="datetime-local" value="${escH(nx && nx.at ? nx.at.slice(0, 16) : "")}"></label>`
+    + `<button class="btn small primary" type="submit">Поставить</button><small class="cr-nhint" id="cr-nhint" aria-live="polite">С датой — напомню в «Делах»; без даты — просто запись в карточке.</small></form></div>`
     + (typeof dlClientHtml === "function" ? dlClientHtml(c) : "")
     + `<div class="cr-add"><div class="cr-kinds" role="radiogroup" aria-label="Что записать">${["note", "call", "deal"].map(k => `<button type="button" role="radio" data-k="${k}" aria-checked="${CR.kind === k}" class="${CR.kind === k ? "on" : ""}">${crSvg(CR_KIND[k][1])}${CR_KIND[k][0]}</button>`).join("")}</div>`
     + `<form class="cr-aform" id="cr-aform"><textarea id="cr-atext" rows="2" maxlength="1000" placeholder="О чём договорились, что хочет, что обещали"></textarea><button class="btn primary" type="submit">Записать</button></form></div>`
@@ -85,7 +89,9 @@ function crCard() {
   $("#cr-aform").onsubmit = async (e) => { e.preventDefault(); const t = $("#cr-atext").value.trim(); if (!t) return $("#cr-atext").focus();
     const d = await crCall("client_note", { id: c.id, text: t, kind: CR.kind }); if (d) { CR.card = d; crCard(); crLoadList(); } };
   $("#cr-atext").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#cr-aform").requestSubmit(); };
-  $("#cr-nform").onsubmit = async (e) => { e.preventDefault(); const w = $("#cr-nwhat").value.trim(); if (!w) return $("#cr-nwhat").focus();
+  $("#cr-nwhat").oninput = () => { $("#cr-nwhat").classList.remove("need"); $("#cr-nhint").classList.remove("bad"); };
+  $("#cr-nform").onsubmit = async (e) => { e.preventDefault(); const w = $("#cr-nwhat").value.trim();
+    if (!w) { $("#cr-nwhat").classList.add("need"); $("#cr-nhint").classList.add("bad"); $("#cr-nhint").textContent = "Напишите, что сделать — например, «перезвонить» или «отправить счёт»."; return $("#cr-nwhat").focus(); }
     const at = $("#cr-nwhen").value; const d = await crCall("client_next", { id: c.id, what: w, at: at || "" }, at ? "Напоминание поставлено" : ""); if (d) { CR.card = d; crOpen(c.id); crLoadList(); } };
   if ($("#cr-ndone")) $("#cr-ndone").onclick = async () => { const d = await crCall("client_next_done", { id: c.id }, "Отмечено"); if (d) { crOpen(c.id); crLoadList(); } };
   if ($("#cr-nedit")) $("#cr-nedit").onclick = () => { $("#cr-nform").hidden = false; $(".cr-nx").hidden = true; $("#cr-nwhat").focus(); };

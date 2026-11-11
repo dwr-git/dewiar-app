@@ -31,7 +31,7 @@ import llm  # noqa: E402
 ok(llm._local_base("http://127.0.0.1:8080/v1") and llm._local_base("http://192.168.1.20:11434") and not llm._local_base("https://openrouter.ai/api/v1"),
    "своя модель (этот компьютер, своя сеть) узнаётся по адресу")
 src = (ROOT / "core/llm.py").read_text(encoding="utf-8")
-ok("600 if _local_base(base) else 180" in src, "своей модели — до 10 минут на первое слово")
+ok("600 if _local_base(base) or _ip_base(base) else 180" in src, "своей модели — до 10 минут на первое слово")
 
 tmp = Path(tempfile.mkdtemp())
 LLM, PORT = free(), free()

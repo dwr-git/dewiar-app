@@ -55,6 +55,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     alarmSet(j) { const x = JSON.parse(j); x.id = x.id || uid("a"); const i = alarms.findIndex(a => a.id === x.id); if (i >= 0) alarms[i] = x; else alarms.push(x); return JSON.stringify(x); },
     alarmCancel(id) { const i = alarms.findIndex(a => a.id === id); if (i >= 0) alarms.splice(i, 1); return i >= 0; },
     alarms: () => JSON.stringify(alarms), alarmHistory: () => "[]", exactAlarms: () => true,
+    alarmHealth: () => JSON.stringify(window._remHealth || { exact: true, fullscreen: true, notify: true, battery: true, sdk: 34, maker: "", mode: "clock", late: [] }),
     _w: { on: true, placed: 0, pin: true, look: "glass" }, widgetState() { return JSON.stringify(this._w); }, widgetSet(on) { this._w.on = !!on; },
     widgetPin() { this._w.placed++; return true; }, home() { window._home = (window._home || 0) + 1; },
     _cal: [], calEvents(j) { const q = JSON.parse(j); return JSON.stringify({ events: this._cal.filter(e => e.end > q.from && e.begin < q.to).sort((a, b) => a.begin - b.begin) }); },
@@ -93,6 +94,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     _focusLoss() { const r = this._radio; if (r.state === "playing") { r.state = "paused"; ev({ type: "radio", state: "paused", name: r.name, error: "", by: "focus" }); } },
     radioStop() { const r = this._radio; r.log.push("stop"); r.url = ""; r.state = "stopped"; ev({ type: "radio", state: "stopped", name: r.name, error: "" }); },
     radioDuck(on) { this._radio.duck = on; }, radioVolume(v) { this._radio.volume = v; },
+    mediaKey(act) { (window._media = window._media || []).push(act); return JSON.stringify({ sent: true, active: !!window._musicOn }); }, musicActive: () => !!window._musicOn,
     radioState() { const r = this._radio; return JSON.stringify({ state: r.state, name: r.name, error: r.error }); },
     // руки в других приложениях (Hands.java): в браузере выключены — проверки подменяют эти методы своими
     handsState: () => "", handsScreen: () => "OFF", handsTap: () => "OFF", handsTapText: () => "OFF", handsType: () => "OFF",
@@ -107,6 +109,10 @@ function prefGet(k) { return SANDBOX && k in SANDBOX.prefs ? SANDBOX.prefs[k] : 
 function fileSave(n, t) { if (SANDBOX) { SANDBOX.files[n] = t; return true; } return D.saveFile(n, t); }
 function fileGet(n) { return SANDBOX && n in SANDBOX.files ? SANDBOX.files[n] : D.files(n); }
 function devTorch(on) { if (SANDBOX) { SANDBOX.dev.push({ name: "flashlight", on: !!on, argsObj: { on: !!on }, t: Date.now() }); return true; } return D.torch(on); }
+/* идея №170: медиа-клавиша плееру другого приложения (Яндекс Музыка, Spotify…); в экзамене — только записать */
+function devMedia(act) { if (SANDBOX) { SANDBOX.dev.push({ name: "media_control", act, t: Date.now() }); return { sent: true, active: true }; }
+  try { return JSON.parse(D.mediaKey(act) || "{}"); } catch (e) { return { sent: false }; } }
+function devMusicActive() { if (SANDBOX) return false; try { return !!(D.musicActive && D.musicActive()); } catch (e) { return false; } }
 function devVolume(op, v) { if (SANDBOX) { SANDBOX.dev.push({ name: "set_volume", op, v, t: Date.now() }); return 40; } return D.volume(op, v); }
 
 if (!window.Dewiar) window.Dewiar = D;          // кнопки в разметке вызывают Dewiar.* и в браузере
@@ -228,6 +234,7 @@ const radio = (() => {
   }
   let startSeq = 0;
   async function start(s0) {
+    if (cur && (!s0 || cur.url !== s0.url)) prevCur = cur;
     const my = ++startSeq;                         // новая команда отменяет ожидание прежней (иначе «ждём» 15 с и не замечаем молчание)
     starting = true;
     const s = await resolve(s0);
@@ -277,7 +284,18 @@ const radio = (() => {
     D.radioStop();
     return { ok: false, text: `Ошибка: радио не заиграло: ${errs.join("; ")}. Похоже на сеть телефона — перескажи это простыми словами.` };
   }
-  function remember(s) { played = [s.url, ...played.filter(u => u !== s.url)].slice(0, 8); }
+  function remember(s) { played = [s.url, ...played.filter(u => u !== s.url)].slice(0, 8);
+    if (prevCur && prevCur.url !== s.url && !backing) back = [...back.filter(x => x.url !== prevCur.url), prevCur].slice(-10); }
+  /* идея №170 (09.11: «переключать треки в проигрывателе на телефоне»): «предыдущая» — станция, что играла до этой
+     (стек back: каждая новая кладёт прежнюю; «назад» снимает) */
+  let back = [], prevCur = null, backing = false;
+  async function prev() {
+    if (!cur && st.name) cur = list().find(x => x.name === st.name) || null;
+    const s = back.pop();
+    if (!s) return { ok: false, text: "Раньше этой ничего не играло — скажите «дальше» или назовите станцию." };
+    backing = true; prevCur = null;
+    try { const r = await playOne(s); if (!r.ok && !r.superseded) back.push(s); return r; } finally { backing = false; }
+  }
   async function playOne(s) {                     // «Радио» (radiopage.js): нажали плитку — именно эта станция, без подмены
     const op = ++opSeq; usedAt = Date.now();
     const r = await start(s);
@@ -322,7 +340,7 @@ const radio = (() => {
     el.classList.toggle("paused", st.state === "paused"); el.classList.toggle("wait", st.state === "preparing");
     const n = el.querySelector("b"); if (n) n.textContent = st.name || "Радио";
   }
-  return { play, playOne, search, next, pause, resume, stop, on, playing, recent, render, refresh, match, list, resumeAfterTalk, state: () => st, current: () => cur };
+  return { play, playOne, search, next, prev, pause, resume, stop, on, playing, recent, render, refresh, match, list, resumeAfterTalk, state: () => st, current: () => cur, back: () => back.slice() };
 })();
 
 /* HTTP через Java (Dewiar.http → Net.java): без ограничений CORS, адреса Dewiar — через прокси (NetProxy.java).
@@ -603,7 +621,7 @@ async function reportSend(note, auto, summary, extra) {
   let text = [`Dewiar (телефон) ${info.version || ""} — отчёт ${new Date().toLocaleString("ru-RU")}`,
     `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`, "",
     ...(note ? ["== Со слов человека", note, ""] : []),
-    "== Состояние", JSON.stringify({ state, online: navigator.onLine, sync: syncStatus, cloud: cloudInfo }, null, 1), "",
+    "== Состояние", JSON.stringify({ state, online: navigator.onLine, sync: syncStatus, cloud: cloudInfo, alarms: remHealth() || undefined }, null, 1), "",
     "== Настройки (без ключей)", JSON.stringify(mask(st), null, 1), "",
     ...(info.crash ? ["== Последнее падение приложения", info.crash, ""] : []),
     ...(errs.length ? ["== Ошибки (последние)", ...errs.slice(-40), ""] : []),
@@ -659,7 +677,11 @@ function usageOf(o) {
   const t = o.timings;                                         // llama.cpp: prompt_n — прочитано заново, cache_n — из кэша
   if (t && t.cache_n != null && t.prompt_n != null) return { prompt: (+t.prompt_n || 0) + (+t.cache_n || 0), cached: +t.cache_n || 0 };
   const u = o.usage;
-  if (u && u.prompt_tokens != null) { const c = (u.prompt_tokens_details || {}).cached_tokens; return { prompt: +u.prompt_tokens || 0, cached: c != null ? +c : null }; }
+  if (u && u.prompt_tokens != null) {                          // OpenAI/vLLM/OpenRouter; Kimi — cached_tokens наверху; DeepSeek — prompt_cache_hit_tokens
+    let c = (u.prompt_tokens_details || {}).cached_tokens;
+    if (c == null) c = u.cached_tokens != null ? u.cached_tokens : u.prompt_cache_hit_tokens;
+    return { prompt: +u.prompt_tokens || 0, cached: c != null ? +c : null };
+  }
   if (o.done && o.prompt_eval_count != null) return { prompt: +o.prompt_eval_count || 0, cached: null };   // Ollama
   return null;
 }
@@ -1918,7 +1940,7 @@ function privacyRule() {
 }
 /* Веб-версия (браузер на iPhone, Mac, любом компьютере): чего браузер не умеет — инструментов у модели нет (WEB_NO_TOOLS),
    и она честно говорит, где это есть, а не «звоню» в пустоту. */
-const WEB_NO_TOOLS = new Set(["call", "send_sms", "open_app", "calendar_list", "calendar_add", "flashlight", "set_volume", "battery", "send_message", "phone_settings"]);
+const WEB_NO_TOOLS = new Set(["media_control", "call", "send_sms", "open_app", "calendar_list", "calendar_add", "flashlight", "set_volume", "battery", "send_message", "phone_settings"]);
 /* Экраны настроек телефона (Bridge.openSettings): «включи Bluetooth» — сразу нужный экран, а не поиск по настройкам пальцем
    (отзыв 19.10, Android 13: «попросил включить блютуз, а она на вкладку вайфай переходит») */
 const PHONE_SET = { bluetooth: "Bluetooth", wifi: "Wi‑Fi", internet: "Интернет", nfc: "NFC", airplane: "Режим полёта", display: "Экран и яркость",
@@ -3370,6 +3392,118 @@ function alarmCancelAll(id) {
   [id, ...list.map(x => x.id).filter(x => x !== id && (x === base || String(x).startsWith(base + "-s")))].forEach(x => D.alarmCancel(x));
 }
 window.cancelAlarm = (id, btn) => { alarmCancelAll(id); syncSoon(); tmrShow(); if (btn) btn.closest(".pill").innerHTML = "<span>Отменено</span>"; };
+/* ---------- «Напоминания вовремя» (0.87, владелец 11.11: «задачи ко времени иногда приходят на час позже, как будто
+   телефон спал; разблокирую — не могу найти напоминание, музыка звучит») ----------
+   Телефон говорит, что мешает звонить в срок (Dewiar.alarmHealth, Bridge.java): точные будильники, окно поверх
+   блокировки (Android 14+ — отдельное разрешение), уведомления, экономия батареи, опоздания за 2 недели. По марке —
+   где «Автозапуск» и батарея, с подписями как на экране (как в инструкции «Управлять приложениями», №144). Кнопки
+   открывают нужный экран Android сразу. Карточка — в «Звук напоминаний», коротко — в «Дне», после опоздания — на главном. */
+function remHealth() {
+  if (D.web || typeof D.alarmHealth !== "function") return null;
+  try { const h = JSON.parse(D.alarmHealth() || "null"); return h && typeof h === "object" && "exact" in h ? h : null; } catch (e) { return null; }
+}
+const REM_BRANDS = {          // [название, шаги, кнопки [что открыть, подпись]]
+  xiaomi: ["Xiaomi, Redmi, POCO", [
+    "<b>«Автозапуск»</b> → включите Dewiar.",
+    "Страница Dewiar → <b>«Контроль активности»</b> (на HyperOS — «Батарея») → <b>«Нет ограничений»</b>.",
+    "Страница Dewiar → <b>«Другие разрешения»</b> → разрешите <b>«Экран блокировки»</b> и <b>«Всплывающие окна, когда приложение в фоне»</b>.",
+    "В «Недавних» потяните карточку Dewiar вниз — появится <b>замок</b>: «очистка» не закроет напоминания."],
+    [["autostart", "Автозапуск"], ["app", "Страница Dewiar"]]],
+  samsung: ["Samsung", [
+    "Страница Dewiar → <b>«Батарея»</b> → <b>«Без ограничений»</b>.",
+    "Настройки → <b>«Батарея»</b> → <b>«Ограничения фонового режима»</b> → уберите Dewiar из <b>«Спящих»</b> и <b>«Глубоко спящих приложений»</b>.",
+    "Там же выключите <b>«Переводить неиспользуемые приложения в спящий режим»</b>."],
+    [["app", "Страница Dewiar"]]],
+  huawei: ["Huawei, Honor", [
+    "<b>«Запуск приложений»</b> → Dewiar → выключите «Автоматически» и включите все три: <b>«Автозапуск»</b>, <b>«Косвенный запуск»</b>, <b>«Работа в фоне»</b>.",
+    "В «Недавних» потяните карточку Dewiar вниз — появится <b>замок</b>."],
+    [["autostart", "Запуск приложений"]]],
+  tecno: ["Tecno, Infinix, itel", [
+    "<b>«Phone Master»</b> (Диспетчер телефона) → <b>«Автозапуск»</b> → включите Dewiar.",
+    "Страница Dewiar → <b>«Батарея»</b> → <b>«Без ограничений»</b> (или «Не оптимизировать»).",
+    "В «Недавних» закрепите Dewiar <b>замком</b> — иначе «очистка» закроет его вместе с напоминаниями."],
+    [["autostart", "Автозапуск"], ["app", "Страница Dewiar"]]],
+  oppo: ["OPPO, realme, OnePlus", [
+    "Страница Dewiar → <b>«Использование батареи»</b> → включите <b>«Разрешить фоновую активность»</b> и <b>«Разрешить автозапуск»</b>."],
+    [["app", "Страница Dewiar"]]],
+  vivo: ["vivo, iQOO", [
+    "Настройки → <b>«Батарея»</b> → <b>«Фоновое энергопотребление»</b> → разрешите Dewiar.",
+    "<b>«Автозапуск»</b> → включите Dewiar."],
+    [["autostart", "Автозапуск"], ["app", "Страница Dewiar"]]],
+  "": ["", ["Страница Dewiar → <b>«Батарея»</b> → <b>«Без ограничений»</b> (или «Не оптимизировать»)."], [["app", "Страница Dewiar"]]],
+};
+function remBrand(maker) {
+  const d = String(maker || "").toLowerCase();
+  return /xiaomi|redmi|poco/.test(d) ? "xiaomi" : /samsung/.test(d) ? "samsung" : /huawei|honor/.test(d) ? "huawei" : /tecno|infinix|itel/.test(d) ? "tecno"
+    : /oppo|realme|oneplus/.test(d) ? "oppo" : /vivo|iqoo/.test(d) ? "vivo" : "";
+}
+/* Опоздания за 2 недели: сработавшие позже срока сами (телефон придержал во сне) и пропущенные (выключен, сигнал сняли) */
+function remLates(h) {
+  const l = ((h && h.late) || []).filter(x => x.how !== "dropped" && +x.late >= 5 * 60000);
+  return { n: l.length, max: l.reduce((m, x) => Math.max(m, +x.late), 0), slept: l.filter(x => !x.how).length, last: l.reduce((m, x) => Math.max(m, +x.time || 0), 0) };
+}
+const remSpan = (ms) => { const m = Math.round(ms / 60000); return m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч${m % 60 ? " " + (m % 60) + " мин" : ""}`; };
+/* Что мешает: [ключ, заголовок, почему, кнопка, действие]; важное — первым */
+function remIssues(h) {
+  if (!h) return [];
+  const out = [], sdk = +h.sdk || androidSdk();
+  if (!h.notify || (sdk >= 33 && !D.has(NOTIF))) out.push(["notify", "Уведомления выключены", "Напоминание не покажется и не зазвучит.", "Включить"]);
+  if (!h.exact) out.push(["exact", "Точное время выключено", "Android может задержать напоминание на час и больше. Включите «Будильники и напоминания» для Dewiar.", "Разрешить"]);
+  if (!h.fullscreen) out.push(["fullscreen", "Окно поверх блокировки выключено", "Вместо окна с кнопками — только уведомление. Включите «Полноэкранные уведомления» для Dewiar.", "Разрешить"]);
+  if (!h.battery) out.push(["battery", "Android экономит батарею на Dewiar", "Во сне телефон может придержать напоминание. Выберите «Без ограничений».", "Разрешить"]);
+  return out;
+}
+function remHealthCard() {
+  const h = remHealth(); if (!h) return "";
+  const iss = remIssues(h), lt = remLates(h), b = REM_BRANDS[remBrand(h.maker)] || REM_BRANDS[""], key = remBrand(h.maker);
+  const good = !iss.length && !lt.n;
+  return `<div class="card remok" id="rem-health"><div class="rmst ${good ? "ok" : "bad"}"><i aria-hidden="true">${good ? "✓" : "!"}</i><div><b>${good ? "Напоминания придут вовремя" : "Напоминания могут опаздывать"}</b>
+      <small>${good ? "Точное время, окно поверх блокировки и работа в фоне — всё разрешено." : lt.n ? `За две недели ${lt.n === 1 ? "одно напоминание пришло" : lt.n + " напоминаний пришли"} позже срока — до ${remSpan(lt.max)}. Телефон придерживает их, пока спит.` : "Исправьте пункты ниже — это минута."}</small></div></div>
+    ${iss.map(([k, t, why, btn], i) => `<div class="sw rmiss"><div>${esc(t)}<small>${esc(why)}</small></div><button class="btn${i ? "" : " p"}" data-remfix="${k}">${esc(btn)}</button></div>`).join("")}
+    <details class="hfaq rmbrand"${!good && (lt.n || !iss.length) ? " open" : ""}><summary>${key ? `Настройки ${esc(b[0])}` : "Если всё равно опаздывает"}</summary>
+      <p>${key ? "Оболочка телефона усыпляет приложения сама, даже когда Android всё разрешил:" : "Некоторые телефоны усыпляют приложения сами:"}</p>
+      <ol class="steps hguide">${b[1].map(s => `<li>${s}</li>`).join("")}</ol>
+      <div class="row2">${b[2].map(([k, t], i) => `<button class="btn${i ? "" : " p"}" data-remfix="${k}" style="flex:1">${esc(t)}</button>`).join("")}</div>
+    </details>
+    <p class="hint" style="margin:10px 4px 6px">Звучащее напоминание останавливается кнопкой <b>«Стоп»</b> прямо в уведомлении — в шторке и на экране блокировки; смахнули уведомление — звук тоже смолкнет. Через 2 минуты звук затихает сам.</p>
+    <button class="btn w" id="rem-try">Проверить: напомнить через минуту</button><div class="res" id="rem-res"></div></div>`;
+}
+/* Коротко — в «Дне»: только когда правда мешает (точное время, окно, уведомления) или уже опаздывали */
+function remHealthBrief() {
+  const h = remHealth(); if (!h) return "";
+  const iss = remIssues(h).filter(x => x[0] !== "battery"), lt = remLates(h);
+  if (!iss.length && !lt.n) return "";
+  return `<div class="card rembrief"><b>Напоминания могут опаздывать</b><p class="hint">${esc(iss.length ? iss[0][1] + ". " + iss[0][2] : `За две недели напоминания приходили позже срока — до ${remSpan(lt.max)}.`)}</p>
+    <button class="btn p" onclick="openSettings('sound')">Как исправить</button></div>`;
+}
+function remFix(k) {
+  const back = () => setTimeout(() => { if (setTab === "sound" && $("#rem-health")) renderSettings(); }, 400);
+  if (k === "notify") { if (!D.has(NOTIF)) needPerm(NOTIF).then(back); else D.openSettings("notifications"); }
+  else if (k === "battery") D.askBattery();
+  else if (!D.openSettings(k === "exact" ? "alarms" : k)) toast(k === "autostart" ? "Откройте Настройки → Приложения → Dewiar" : "Откройте Настройки → Приложения → Dewiar → Разрешения", 4000);
+}
+function wireRemHealth() {
+  $$("[data-remfix]").forEach(b => b.onclick = () => remFix(b.dataset.remfix));
+  const t = $("#rem-try");
+  if (t) t.onclick = () => {
+    addAlarm("Проверка напоминания — всё работает ✓", new Date(Date.now() + 60000), "reminder", "");
+    $("#rem-res").className = "res ok"; $("#rem-res").textContent = "Через минуту зазвонит. Заблокируйте телефон и подождите — остановить можно кнопкой «Стоп» в уведомлении.";
+  };
+}
+/* После опоздания (телефон придержал напоминание во сне) — один раз сказать на главном экране и предложить исправить */
+function remLateWatch(boot) {
+  const h = remHealth(); if (!h) return;
+  const lt = remLates(h), iss = remIssues(h);
+  if (boot) plog(iss.length || lt.n ? "warn" : "info", `⏰ напоминания: точное время — ${h.exact ? "да" : "нет"}, окно поверх блокировки — ${h.fullscreen ? "да" : "нет"}, `
+    + `уведомления — ${h.notify ? "да" : "нет"}, батарея — ${h.battery ? "без ограничений" : "экономит"}, сигнал — ${h.mode || "—"}, опозданий за 2 недели — ${lt.n}${lt.n ? " (до " + remSpan(lt.max) + ")" : ""}`);
+  if (!lt.slept || lt.last <= (S.remLateSeen || 0)) return;
+  if (busy || $("#card").innerHTML || $(".sheet.on")) return;            // на свободный экран — или при следующем возвращении
+  S.remLateSeen = lt.last; saveS();
+  showCard(`<div class="card remlate"><p><b>Напоминание пришло позже срока — на ${remSpan(lt.max)}.</b> Телефон придержал его, пока спал. ${iss.length ? esc(iss[0][1]) + " — это и мешает." : "Поможет пара настроек телефона."}</p>
+    <div class="row2"><button class="btn p" id="rl-fix" style="flex:1">Исправить</button><button class="btn" id="rl-no">Позже</button></div></div>`);
+  $("#rl-fix").onclick = () => { showCard(""); openSettings("sound"); };
+  $("#rl-no").onclick = () => showCard("");
+}
 /* ---------- таймер с обратным отсчётом (как у Алисы): на главном экране, а в шторке — тикающий отсчёт (TimerNote.java) ----------
    Таймеры — будильники вида timer (D.alarms); строки рисуются раз в секунду, список перечитывается раз в 2 с. */
 let TMRS = [], tmrIv = 0, tmrRead = 0;
@@ -3696,12 +3830,28 @@ async function quick(text) {
 
 /* радио голосом без модели: «включи радио», «поставь джаз», «Европа Плюс», «дальше», «пауза», «продолжи», «выключи радио» */
 const R_VERBS = "(?:включи(?:те)?|поставь(?:те)?|запусти(?:те)?|вруби|врубай|давай|хочу|сыграй|играй|поиграй)";
+/* идея №170: «следующий трек», «предыдущая песня», «пауза» — плееру другого приложения, когда наше радио не играет, а в
+   телефоне звучит музыка (или прямо сказали «трек», «песню»). В браузере другими приложениями не управляем. */
+const MEDIA_NEXT_RX = /^(?:(?:а|ну|давай|включи|поставь)\s+)*(?:следующ[а-яё]*|дальше|переключи|пропусти|смени|некст)(?:\s+(?:трек[а-яё]*|песн[а-яё]*|композици[а-яё]*))?(?:\s+пожалуйста)?$/;
+const MEDIA_PREV_RX = /^(?:(?:а|ну|давай|верни|включи|поставь)\s+)*(?:предыдущ[а-яё]*|прошл[а-яё]*|назад)(?:\s+(?:трек[а-яё]*|песн[а-яё]*|композици[а-яё]*))?(?:\s+пожалуйста)?$/;
+function mediaQuick(t) {
+  if (D.web || radio.on()) return null;
+  const track = /трек|песн|композици/.test(t), act = MEDIA_NEXT_RX.test(t) ? "next" : MEDIA_PREV_RX.test(t) ? "prev"
+    : /^(?:стоп|пауза|паузу|поставь на паузу|останови музыку|выключи музыку)$/.test(t) ? "pause" : "";
+  if (!act || !(track || devMusicActive()) || (act === "pause" && !devMusicActive())) return null;
+  const r = devMedia(act); if (!r.sent) return null;
+  return { say: act === "next" ? "Следующий трек." : act === "prev" ? "Предыдущий трек." : "Пауза.", silent: true };
+}
 async function radioQuick(t) {
+  { const m = mediaQuick(t); if (m) return m; }
   const said = (r) => r.superseded ? { say: "", silent: true } : r.ok ? { say: `Играет «${r.station.name}».`, silent: false } : { say: r.text.replace(/^Ошибка: /, "").replace(/ Похоже на сеть.*$| Предложи.*$| Скажи пользователю.*$/, "") };
   if (radio.on() && /^(стоп|хватит|пауза|паузу|поставь на паузу|тихо|замолчи|приостанови)$/.test(t)) { radio.pause(); return { say: "Пауза.", silent: true }; }
   // «дальше», «другое радио поставь», «смени станцию» — и пока играет, и сразу после станции, которая не заиграла
   if ((radio.on() || radio.recent()) && /^(?:(?:а|ну|давай|включи|поставь|еще|ещё)\s+)*(?:дальше|следующ[а-яё]*|другую|другое|друго[йе]|переключи(?:сь)?|смени|поменяй|не нравится|некст)(?:\s+(?:станци[а-яё]*|радио|радиостанци[а-яё]*|волн[а-яё]*|музык[а-яё]*))?(?:\s+(?:поставь|включи|давай))?(?:\s+пожалуйста)?$/.test(t))
     return said(await radio.next());
+  // идея №170: «предыдущая», «назад», «верни прошлую станцию»
+  if ((radio.on() || radio.recent()) && /^(?:(?:а|ну|давай|верни|включи|поставь)\s+)*(?:предыдущ[а-яё]*|прошл[а-яё]*|прежн[а-яё]*|назад|обратно)(?:\s+(?:станци[а-яё]*|радио|радиостанци[а-яё]*|волн[а-яё]*))?(?:\s+пожалуйста)?$/.test(t))
+    return said(await radio.prev());
   if (radio.state().state === "paused" && /^(продолжи|продолжай|играй|сними с паузы|включи обратно|верни( радио| музыку)?|дальше играй|play|плей)$/.test(t)) {
     radio.resume(); return { say: "Продолжаю.", silent: true };
   }
@@ -3752,6 +3902,16 @@ function relOf(who) {
   return Object.keys(REL).find(k => REL[k].test(w)) || "";
 }
 let relAsk = null;                                 // {rel, at} — спросили «как жена записана в контактах?», ждём имя
+/* №637: просили ли позвонить — «позвони», «набери», «звякни», «перезвони», «вызови», «соедини», «свяжись», «call»; или Лира
+   только что переспросила «кому позвонить?» / «как мама записана?» и человек отвечает именем */
+let callAskAt = 0;
+const CALL_ASK_RX = /звон|звяк|набер|набра|набир|вызов|вызв|вызыв|соедин|свяж|связать|трубк|дозвон|(?:^|[^a-z])(?:call|dial)(?![a-z])/i;
+const CALL_UNASKED = "Ошибка: человек не просил звонить — call только для телефонного звонка, и звонок не сделан. Выбери подходящую " +
+  "функцию по его словам (будильник, напоминание, таймер — set_reminder; музыка и радио — play_radio; погода — weather) " +
+  "или ответь словами. Про звонки и доступ к контактам не говори.";
+function callAsked(said) {
+  return CALL_ASK_RX.test(String(said || "")) || Date.now() - callAskAt < 180000 || !!(relAsk && Date.now() - relAsk.at < 180000);
+}
 function relRemember(rel, c) { if (!rel || !c || !c.number) return; S.relations = Object.assign({}, S.relations, { [rel]: { name: c.name || "", number: c.number } }); saveS(); }
 function dial(number, name) {
   const ok = D.call(number);
@@ -4317,8 +4477,10 @@ function toolSpecs() {
     { name: "open_url", description: "Открыть сайт или ссылку в браузере (YouTube, карты, поиск). Не для радио — для него play_radio.", parameters: O({ url: STR }, ["url"]) },
     { name: "play_radio", description: "Включить радио онлайн прямо здесь, в приложении: query — название станции («Европа Плюс», «Маяк», «Рекорд»), жанр или настроение («джаз», «рок», «классика», «что-нибудь спокойное»), пусто — на мой вкус. На любую просьбу про радио или «включи музыку» — только этот инструмент: не открывай сайты, Яндекс Музыку и другие приложения.",
       parameters: O({ query: STR }) },
-    { name: "radio_control", description: "Радио, которое уже играет здесь: pause — пауза, resume — продолжить, stop — выключить, next — другая станция.",
-      parameters: O({ action: { type: "string", enum: ["pause", "resume", "stop", "next"] } }, ["action"]) },
+    { name: "radio_control", description: "Радио, которое уже играет здесь: pause — пауза, resume — продолжить, stop — выключить, next — другая станция, prev — предыдущая (та, что играла до этой).",
+      parameters: O({ action: { type: "string", enum: ["pause", "resume", "stop", "next", "prev"] } }, ["action"]) },
+    { name: "media_control", description: "Кнопки плеера ДРУГОГО приложения на телефоне (Яндекс Музыка, Spotify, VK Музыка, YouTube Music) — как на наушниках: next — следующий трек, prev — предыдущий, pause — пауза, play — играть. Радио здесь, в приложении, — radio_control.",
+      parameters: O({ action: { type: "string", enum: ["next", "prev", "pause", "play"] } }, ["action"]) },
     { name: "web_search", description: "Найти в интернете свежие сведения. Не выдумывай результаты.", parameters: O({ query: STR }, ["query"]) },
     { name: "show_images", description: "Показать картинки к тому, о чём рассказываешь (руны и орнаменты, животные, растения, картины, здания, места) — появятся на экране под ответом. Вызывай, когда это лучше увидеть или просят «покажи». query — 2–5 ключевых слов, лучше по-английски; count — 1–6 (обычно 3–4). Не говори «вот изображение», не вызвав инструмент.",
       parameters: O({ query: STR, count: NUM, caption: STR }, ["query"]) },
@@ -4473,7 +4635,16 @@ async function runTool(name, a) {
       return doneSay(r);
     }
     case "done_report": return doneReport(a.days);
-    case "call": { const r = await doCall(a.who || ""); return r.text; }
+    case "call": {
+      // №637 (10.11): маленькая модель (qwen3:8b) звала call на «поставь будильник», «включи радио», «какая погода» — Лира
+      // раз за разом просила доступ к контактам, а на «какое завтра число» однажды набрала номер. Звоним, только когда звонить
+      // и просили (или только что спросили «кому?»), и никогда — без имени
+      let said = String(turnAsk || "").split("\n\nВложения:")[0];
+      if (!said) { const u = (history || []).filter(m => m && m.role === "user").pop(); said = u ? String(typeof u.content === "string" ? u.content : "") : ""; }   // передали другому персонажу — его слова
+      if (!callAsked(said)) { plog("info", "📞 call без просьбы позвонить — не звоню, контакты не прошу"); return CALL_UNASKED; }
+      if (!String(a.who || "").trim()) return "Ошибка: не сказано, кому звонить. Спроси коротко, кому позвонить; доступ к контактам не проси.";
+      const r = await doCall(a.who || ""); if (r && r.ok === false) callAskAt = Date.now(); return r.text;
+    }
     case "send_sms": {
       let num = String(a.who || "").replace(/[^\d+]/g, "");
       if (a.who && num.length < 5) { let c = JSON.parse(D.contact(a.who) || "{}"); if (c.need && await needPerm(CONTACTS)) c = JSON.parse(D.contact(a.who) || "{}"); num = c.number || ""; }
@@ -4500,10 +4671,19 @@ async function runTool(name, a) {
     case "radio_control": {
       const act = a.action || "pause";
       if (act === "next") { const r = await radio.next(); return r.ok ? `Играет «${r.station.name}».` : r.text; }
+      if (act === "prev") { const r = await radio.prev(); return r.ok ? `Играет «${r.station.name}».` : r.text; }
       if (!radio.on() && act !== "resume") return "Радио сейчас не играет.";
       if (act === "stop") { radio.stop(); return "Радио выключено."; }
       if (act === "resume") return radio.resume() ? "Радио снова играет." : "Нечего продолжать — скажи, какое радио включить.";
       radio.pause(); return "На паузе.";
+    }
+    case "media_control": {                       // идея №170: плеер другого приложения — медиа-клавишей
+      if (D.web) return "Ошибка: в браузере нельзя управлять другими приложениями — только радио здесь (radio_control).";
+      const act = ["next", "prev", "pause", "play"].includes(a.action) ? a.action : "toggle";
+      const r = devMedia(act);
+      if (!r.sent) return "Ошибка: телефон не принял кнопку плеера — скажи, что переключить можно в самом приложении.";
+      return { next: "Нажато «следующий трек»", prev: "Нажато «предыдущий трек»", pause: "Нажата пауза", play: "Нажато «играть»", toggle: "Нажато «пауза/играть»" }[act]
+        + (r.active || act === "play" ? "." : " — но музыка в телефоне не играла: если ничего не изменилось, пусть включит плеер.");
     }
     case "web_search": return await webSearch(a.query || "");
     case "show_images": return await webImages(a.query || "", a.count);
@@ -6103,7 +6283,7 @@ function renderDay() {
       + (jobs.length ? `<div class="bugh">По расписанию — делает компьютер</div>` + jobs.map(j => { const d = new Date(j.at);
           return `<div class="it job"><div class="tm">${pad(d.getHours())}:${pad(d.getMinutes())}</div><div class="bd"><b>${esc(jobShort(j))}</b><small>${esc(j.repeat || whenText(d))}</small></div></div>`; }).join("")
         + `<p class="hint" style="margin:6px 4px 0">Изменить или выключить — на компьютере: студия → «Напоминания».</p>` : "")
-      + (D.exactAlarms() ? "" : `<div class="card"><b>Будильники могут опаздывать</b><p class="hint">Разрешите точное время: «Будильники и напоминания».</p><button class="btn p" onclick="Dewiar.openSettings('alarms')">Разрешить</button></div>`);
+      + (remHealth() ? remHealthBrief() : D.exactAlarms() ? "" : `<div class="card"><b>Будильники могут опаздывать</b><p class="hint">Разрешите точное время: «Будильники и напоминания».</p><button class="btn p" onclick="Dewiar.openSettings('alarms')">Разрешить</button></div>`);
     $$("[data-id]", box).forEach(b => b.onclick = (e) => { e.stopPropagation(); D.alarmCancel(b.dataset.id); syncSoon(); renderDay(); });
     $$("[data-note]", box).forEach(b => b.onclick = (e) => { e.stopPropagation(); openNoteSoon(b.dataset.note); });
     $$("[data-edit]", box).forEach(r => r.onclick = (e) => { if (!e.target.closest("button, img")) remEdit(r.dataset.edit); });   // нажали — править руками
@@ -7130,6 +7310,10 @@ async function openLessons() {
 }
 
 $("#r-pp").onclick = () => { D.vibrate(12); if (radio.state().state === "paused") radio.resume(); else radio.pause(); };
+/* идея №170: ⏮ / ⏭ у радио над Лирой — предыдущая (что играла до этой) и следующая станция */
+const rStep = (fn) => { D.vibrate(12); fn().then(r => { if (r && !r.ok && !r.superseded && r.text) toast(r.text.replace(/^Ошибка: /, ""), 3500); }); };
+$("#r-prev").onclick = () => rStep(radio.prev);
+$("#r-next").onclick = () => rStep(radio.next);
 $("#r-x").onclick = () => { D.vibrate(12); radio.stop(); };
 
 /* Что умеет облако Dewiar сейчас (распознавание, озвучка — /models): при запуске и при открытии настроек, чтобы
@@ -7212,6 +7396,7 @@ function setMenuHtml(info) {
   let snd = {}; try { snd = JSON.parse(D.alarmSound ? D.alarmSound() : "{}"); } catch (e) { }
   const sndName = snd.id === "custom" ? (snd.custom || "свой звук") : ((ALARM_SOUNDS.find(x => x[0] === (snd.id || "signature")) || [])[1] || "");
   const permsMissing = [MIC, NOTIF].filter(p => !D.has(p)).length + (D.exactAlarms && !D.exactAlarms() ? 1 : 0);
+  const remBad = (() => { const rh = remHealth(); return rh ? remIssues(rh).filter(x => x[0] !== "battery").length + remLates(rh).n > 0 : false; })();
   let wg = {}; try { wg = JSON.parse(D.widgetState ? D.widgetState() : "{}") || {}; } catch (e) { }
   const sync = !c ? "не подключены" : !S.sync.on ? "синхронизация выключена" : st.ok === false ? "не синхронизировалось" : st.at ? "синхронизировано в " + pad(new Date(st.at).getHours()) + ":" + pad(new Date(st.at).getMinutes()) : c.home ? "по Wi-Fi" : "через dewiar.pro";
   const fOn = ["games", "close"].filter(k => feat(k)).length;
@@ -7219,7 +7404,7 @@ function setMenuHtml(info) {
     ["Главное", [["brain", on ? "думает: " + brainName() : S.llm.trial ? "пробный разговор" : "не подключён", !on && !S.llm.trial],
       ["voice", (S.tts.engine === "cloud" ? "голос Dewiar" : S.tts.engine === "eleven" ? "ElevenLabs" : S.tts.engine === "server" ? "свой сервер голоса" : "голос телефона") + " · скорость " + (+S.tts.rate || 1).toFixed(2)],
       ["devices", sync, st.ok === false]]],
-    ["Вид и звук", [["look", skin], ...(D.web ? [] : [["sound", sndName], ["widget", wg.on === undefined ? "" : wg.on ? (wg.placed ? "на рабочем столе" : "включён") : "выключен"]]),
+    ["Вид и звук", [["look", skin], ...(D.web ? [] : [["sound", remBad ? "напоминания могут опаздывать" : sndName, remBad], ["widget", wg.on === undefined ? "" : wg.on ? (wg.placed ? "на рабочем столе" : "включён") : "выключен"]]),
       ["lite", liteOn() ? "включён" : S.lite === "off" ? "выключен" : "сам, по телефону"]]],
     ["Подключения", [["features", fOn ? "включено " + fOn + " из 2" : "всё выключено"], ...(D.web ? [] : [["smart", S.home.token ? "Яндекс подключён" : haOn() ? "Home Assistant" : "не подключён"]]),
       ["telegram", (S.tg || {}).linked ? "подключён" : "не подключён"], ...(D.web ? [] : [["assist", "долгое нажатие кнопки питания"], ["hands", ""]])]],
@@ -7380,7 +7565,7 @@ function renderSettings() {
       <p class="hint" id="lite-now" style="margin:6px 2px 0">${liteOn() ? `Сейчас включён: ${esc(liteWhyNow)}.` : "Сейчас выключен."} Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут.</p></div>`);
     // звук напоминаний: свои мягкие мелодии (Sounds.java, res/raw), системный или свой файл; ▶ — послушать
     const snd = (() => { try { return JSON.parse(D.alarmSound ? D.alarmSound() : "{}"); } catch (e) { return {}; } })();
-    if (setTab === "sound") h.push(`<div class="card"><p class="hint" style="margin-top:0">Мягко и сначала тихо — громкость прибавляется за 20 секунд.</p>
+    if (setTab === "sound") h.push(remHealthCard() + `<div class="card"><p class="hint" style="margin-top:0">Мягко и сначала тихо — громкость прибавляется за 20 секунд.</p>
       <div class="snds">${ALARM_SOUNDS.map(([id, n, sub]) => `<button class="snd ${id === (snd.id || "signature") ? "on" : ""}" data-snd="${id}"><i>${PLAY_SVG}</i><span><b>${n}</b><small>${sub}</small></span></button>`).join("")}
         <button class="snd ${snd.id === "custom" ? "on" : ""} ${snd.custom ? "" : "nofile"}" data-snd="custom"><i>${PLAY_SVG}</i><span><b>Свой звук</b><small id="snd-name">${snd.custom ? esc(snd.custom) : "Любая мелодия с телефона"}</small></span></button></div>
       <label class="btn w" id="snd-pick"><input type="file" id="snd-file" accept="audio/*" hidden>${snd.custom ? "Выбрать другой файл" : "Выбрать файл…"}</label><div class="res" id="snd-res"></div>
@@ -7492,6 +7677,7 @@ function wireSettings(info) {
     g("lite-now").textContent = (liteOn() ? `Сейчас включён: ${liteWhyNow}.` : "Сейчас выключен.") + " Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут."; };
   // звук напоминаний: нажатие — выбрать и послушать (ещё раз — стоп); «Свой звук» без файла — сразу выбор файла
   const sndPlaying = (id) => $$(".snd").forEach(x => x.classList.toggle("play", x.dataset.snd === id));
+  wireRemHealth();
   $$(".snd").forEach(b => b.onclick = () => {
     const id = b.dataset.snd;
     if (id === "custom" && b.classList.contains("nofile")) return g("snd-file").click();
@@ -9635,6 +9821,8 @@ N.on("htmlview", (e) => { const f = htmlViewSave; htmlViewSave = null; if (e.sav
 N.on("resume", () => { if (tgHandOn()) tgHandLater(300); });
 N.on("resume", () => { if (handsAsked && Date.now() - handsAsked < 10 * 60000 && $("#hands-card")) { $("#hands-card").innerHTML = handsCard(); wireHands(); } });
 N.on("resume", () => { try { handsWatch(false); } catch (e) { } });
+N.on("resume", () => { try { remLateWatch(false); if (setTab === "sound" && $("#rem-health") && $("#sh-set").classList.contains("on")) renderSettings(); } catch (e) { } });   // вернулись из настроек Android — карточка свежая
+setTimeout(() => { try { remLateWatch(true); } catch (e) { } }, 3500);
 setTimeout(() => { try { handsWatch(true); } catch (e) { } }, 2500);   // после приветствия: карточка не перебивает его
 N.on("pause", () => { if (state === "listening") stopListen(), setState("idle"); });
 /* Что пришло снаружи (MainActivity.handle): при запуске — через Dewiar.takeIntent(), когда страница уже открыта — событием

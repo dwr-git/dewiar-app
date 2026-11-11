@@ -48,7 +48,7 @@ function rpNow() {
   const fav = s.url && rpFavs().some(x => x.url === s.url);
   const sub = st.state === "preparing" ? "Подключаюсь…" : st.state === "paused" ? "На паузе" : "В эфире";
   return `<div class="rp-now">${rpLogo(s, true)}<div class="rp-np"><small>${st.state === "playing" ? '<span class="rp-live"></span>' : ""}${sub}</small><b>${esc(s.name)}</b></div>`
-    + `<div class="rp-ctl"><button id="rp-pp" aria-label="${st.state === "paused" ? "Играть" : "Пауза"}">${st.state === "paused"
+    + `<div class="rp-ctl">${radio.back && radio.back().length ? `<button id="rp-prev" aria-label="Предыдущая станция"><svg viewBox="0 0 24 24"><path d="M19 6.2v11.6a.8.8 0 0 1-1.2.7l-8.2-5.8a.8.8 0 0 1 0-1.4l8.2-5.8a.8.8 0 0 1 1.2.7z"/><path class="st" d="M7 5v14"/></svg></button>` : ""}<button id="rp-pp" aria-label="${st.state === "paused" ? "Играть" : "Пауза"}">${st.state === "paused"
       ? '<svg viewBox="0 0 24 24"><path d="M8 5.6v12.8a.9.9 0 0 0 1.4.8l10-6.4a.9.9 0 0 0 0-1.6l-10-6.4A.9.9 0 0 0 8 5.6z"/></svg>'
       : '<svg viewBox="0 0 24 24" class="st"><path d="M8.5 5.5v13M15.5 5.5v13"/></svg>'}</button>`
     + `<button id="rp-next" aria-label="Другая станция"><svg viewBox="0 0 24 24"><path d="M5 6.2v11.6a.8.8 0 0 0 1.2.7l8.2-5.8a.8.8 0 0 0 0-1.4L6.2 5.5A.8.8 0 0 0 5 6.2z"/><path class="st" d="M17 5v14"/></svg></button>`
@@ -83,6 +83,7 @@ function rpRender() {
   if (keep) { const q = $("#rp-q"); q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e) { } }
   const pp = $("#rp-pp"); if (pp) pp.onclick = () => { D.vibrate(12); if (radio.state().state === "paused") radio.resume(); else radio.pause(); };
   const nx = $("#rp-next"); if (nx) nx.onclick = () => { D.vibrate(12); rpStep(); };
+  const pv = $("#rp-prev"); if (pv) pv.onclick = () => { D.vibrate(12); radio.prev().then(r => { if (r && !r.ok && !r.superseded && r.text) toast(r.text, 3500); rpRender(); }); };
   const ht = $("#rp-heart"); if (ht) ht.onclick = () => { const c = radio.current(); if (c) rpFav(c); };
 }
 async function rpSearch(q) {

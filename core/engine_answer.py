@@ -75,6 +75,44 @@ def model_label(prof):
     return str(prof.get("model") if prof.get("model") and prof.get("model") != "chat" else prof.get("title") or prof.get("name") or prof.get("model") or "")
 
 
+def facts_shown(idx, k=None):
+    """У каких ответов из истории показывать «[узнано инструментами…]» (idx — их номера по порядку). Не больше 2·FACT_TURNS
+    и пачками: набор меняется раз в FACT_TURNS новых находок, а не с каждой (0.87, кэш подсказки: раньше с каждым новым
+    ответом с находками пометка пропадала у старого — середина разговора менялась, и свой сервер модели перечитывал всё
+    после неё; у Qwen3.5/3.6 на llama.cpp — всю подсказку, 25 тыс. токенов, 8–9 с на каждый вопрос). -> список номеров."""
+    from engine_base import FACT_TURNS
+    k = k or FACT_TURNS
+    n = len(idx)
+    start = max(0, ((n - 1) // k - 1) * k) if n else 0
+    return idx[start:]
+
+
+# строки справки-счётчики: новая версия заменяет старую (это не удаление сведений о человеке) — снимок не пересобираем
+PROFILE_COUNTERS = ("Дела сейчас:", "ТВОИ КОМПЬЮТЕРЫ")
+
+
+def profile_delta(old, new, limit=1800):
+    """Личная справка в начале разговора — снимок (0.87): меняется она (запомнила, отметила дело, компьютер на связи)
+    — не переписываем начало разговора (сервер модели перечитал бы всю историю), а говорим, что добавилось, в справке к
+    вопросу. -> текст добавленного ("" — ничего) или None — снимок пересобрать: из справки что-то пропало (человек велел
+    забыть, поправил «Обо мне», факт обновился) или добавилось слишком много.
+    Рецензия безопасности 0.87: пропавшее НИКОГДА не повторяем и в снимке не держим — «забудь» действует сразу, как в 0.86.
+    Исключение — строки-счётчики (PROFILE_COUNTERS) с новой версией в добавленном: их старый текст тоже не повторяем."""
+    ol = [x for x in (old or "").splitlines() if x.strip()]
+    nl = [x for x in (new or "").splitlines() if x.strip()]
+    so, sn = set(ol), set(nl)
+    add = [x for x in nl if x not in so]
+    gone = [x for x in ol if x not in sn]
+    for g in gone:
+        pre = next((c for c in PROFILE_COUNTERS if g.strip().startswith(c)), None)
+        if not pre or not any(x.strip().startswith(pre) for x in add):
+            return None
+    if not add:
+        return ""
+    out = "С начала разговора справка «О пользователе и о тебе» обновилась — это свежее и важнее её:\n" + "\n".join(add)
+    return out if len(out) <= limit else None
+
+
 def team_window(hist, me, name_of, model=""):
     """Реплики для модели персонажа me: у каждого персонажа свой разговор (письмо пользователя 23.10: «при переключении
     они нередко продолжали чужую тему — хочется, чтобы мой персонаж помнил разговор со мной, Лира — с Лирой; передавать
@@ -91,8 +129,7 @@ def team_window(hist, me, name_of, model=""):
         if msgs[i]["role"] == "assistant":
             nxt = msgs[i].get("who") or me
         owner[i] = nxt
-    from engine_base import FACT_TURNS
-    with_facts = [k for k, m in enumerate(msgs) if m["role"] == "assistant" and m.get("facts") and owner[k] == me][-FACT_TURNS:]
+    with_facts = facts_shown([k for k, m in enumerate(msgs) if m["role"] == "assistant" and m.get("facts") and owner[k] == me])
     out, i, prev_model = [], 0, ""
     my_name = name_of(me) or "ты"
     while i < len(msgs):
@@ -696,7 +733,8 @@ class AnswerMixin:
         base = self.personas.system_prompt(self.s.get("persona"), "", "")
         base += ("\n\nТекущие дата и время — в справке в начале последнего сообщения пользователя; они верные, а время и даты "
                  "из прошлых реплик разговора устарели — не повторяй их. Справка «О пользователе и о тебе» в начале разговора "
-                 "всегда свежая (программа обновляет её к каждому вопросу) — память, дела и прочее бери из неё.")
+                 "верна на начало разговора; если с тех пор что-то изменилось (память, дела), изменения — в справке к последнему "
+                 "сообщению, они важнее. Память, дела и прочее бери из этих справок.")
         # идея №141 (05.11): устройство — в каждом запросе. Телефон пишет «Android» сам (app.js), здесь — компьютер; система —
         # крупно (Windows / Linux / macOS), без номера сборки: подсказка остаётся общей у многих людей (кэш начала запроса)
         base += (f"\n\nТы работаешь на компьютере пользователя ({device_os()}) — в программе Dewiar для компьютера: команды, файлы "
@@ -868,6 +906,35 @@ class AnswerMixin:
         except Exception:  # noqa: BLE001
             log.debug("подсчёт токенов", exc_info=True)
 
+    def _profile_snap(self, fresh, msgs):
+        """Личная справка для начала разговора — снимок, неизменный, пока разговор начинается с того же сообщения (0.87,
+        кэш подсказки: «⏱ модель: 7.9 с, подсказка 25 087 ток., из кэша 0» на каждый вопрос). Изменилось с тех пор —
+        изменения отдельно, в справку к вопросу (profile_delta). Новый разговор, свёртка начала (содержание тоже в справке),
+        другой персонаж или изменений слишком много — снимок заново. -> (справка для начала, изменения или "")."""
+        import hashlib
+        m0 = (msgs or [{}])[0]
+        c0 = m0.get("content")
+        key = hashlib.sha1((str(self.s.get("persona")) + "\x00" + str(m0.get("role")) + "\x00"
+                            + (c0 if isinstance(c0, str) else json.dumps(c0, ensure_ascii=False, sort_keys=True)))
+                           .encode("utf-8", "replace")).hexdigest()
+        snaps = getattr(self, "_prof_snaps", None)
+        rev = getattr(getattr(self, "workspace", None), "mem_rev", 0)
+        if snaps is None or getattr(self, "_prof_rev", 0) != rev:
+            # «Обо мне» переписали (забыть факт, правка в студии, удаление с телефона) — все снимки прочь (рецензия 0.87)
+            snaps = self._prof_snaps = {}              # по снимку на разговор персонажа: Лира ↔ Патрик не сбивают друг другу
+            self._prof_rev = rev
+        old = snaps.get(key)
+        if old is not None and len(msgs or []) > 1:
+            d = profile_delta(old, fresh)
+            if d is not None:
+                return old, d
+            log.info("🧊 Личная справка изменилась (убрано или много нового) — обновляю её в начале разговора")
+        snaps.pop(key, None)
+        while len(snaps) >= 8:
+            snaps.pop(next(iter(snaps)))
+        snaps[key] = fresh
+        return fresh, ""
+
     def _profile_in_msgs(self, prof):
         """Личное — справкой в начале разговора (а не в подсказке)? Да, кроме Claude (у него кэш идёт «инструменты →
         подсказка», личное в конце подсказки ему не мешает) и если в настройках не вернули по-старому (llm.profile_in_system)."""
@@ -898,6 +965,12 @@ class AnswerMixin:
                 hint = ""
             if hint:
                 out += " " + hint
+        try:
+            mine = self.mine_now_line(text)                # идея №169: «что это играет?», «удали эту песню» — Лира знает, что играет
+        except Exception:  # noqa: BLE001
+            mine = ""
+        if mine:
+            out += " " + mine
         if TALER_RX.search(text or ""):                # №542: «на сколько хватает 1 талер?» — по настоящему счёту
             out += " " + self._taler_now()
         if TASK_ASK_RX.search(text or "") or (TASK_GIVE_RX.search(text or "") and self._task_alive()):
@@ -2021,6 +2094,9 @@ class AnswerMixin:
             pmsg = self._profile_in_msgs(prof)
             system = self._system(bool(specs), personal=not pmsg)
             personal = self._personal(bool(specs)).strip() if pmsg else ""
+            pdelta = ""
+            if personal:                               # 0.87: справка в начале разговора — снимок, изменения — к вопросу
+                personal, pdelta = self._profile_snap(personal, msgs)
             notes = []                                 # подсказки к этой просьбе — в справку к вопросу
             import boundaries
             from llm import POEM_ASK, POEM_NOTE, RECO_ASK, RECO_NOTE
@@ -2037,7 +2113,7 @@ class AnswerMixin:
                 recalled = self.recall.context(text.split("\n\nВложения:")[0])
             except Exception as e:  # noqa: BLE001
                 log.info("Поиск по записям: %s", e)
-            ctx = [self._turn_context(text)] + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней
+            ctx = [self._turn_context(text)] + ([pdelta] if pdelta else []) + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней
             mlines, mpages = self.memory_for(text.split("\n\nВложения:")[0])
             if mlines:                                 # Память 2.0: старое о человеке не теряется — приходит к вопросу
                 log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))

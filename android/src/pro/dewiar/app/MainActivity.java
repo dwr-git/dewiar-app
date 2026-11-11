@@ -280,6 +280,7 @@ public class MainActivity extends Activity implements Net.Sink {
     @Override protected void onResume() {
         super.onResume();
         CloseLive.visible = true;                            // на экране — сообщения и звонки показывает само приложение
+        AlarmReceiver.reopen(this);                          // звенит напоминание, а окна не видно — сразу окно со «Стоп»
         if (pageReady) event("resume", new JSONObject());
     }
 

@@ -222,6 +222,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         except (TypeError, ValueError):
             pass
         self.toolbox.hooks["radio"] = self.radio
+        self.toolbox.hooks["mymusic"] = self                        # идея №169: удалили играющую песню — следующая, забыть её
         _tools.RADIO[:] = [self.radio]
         from money import Money
         from settings import CONFIG_DIR as _CFG
@@ -329,6 +330,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.lat = Latency()                                                  # «Голос без пауз»: от конца фразы до звука
         from council import Council
         self.council = Council(self)                                          # «Совет ИИ»: персонажи обсуждают вопрос
+        from podcast import Podcasts
+        self.podcasts = Podcasts(self)                                        # «Подкасты»: двое ведущих обсуждают материал
         self.toolbox.hooks["music"] = self.music
         self.music.data()                                 # свежий список станций с сайта — в фоне, сразу при запуске
         self._music_app = ("", 0.0)                       # какое музыкальное приложение открывали последним и когда
@@ -394,6 +397,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=lambda: self.stopping.wait(20) or self.mailing.resume(), name="mailing-resume", daemon=True).start()
         threading.Thread(target=lambda: self.stopping.wait(2) or self.auto_join(), name="auto-join", daemon=True).start()
         threading.Thread(target=self._brain_watch, name="brain", daemon=True).start()
+        # «Нода Лиры» (0.87): была включена человеком — снова в работу через минуту (условия и правила проверит сама)
+        threading.Thread(target=lambda: self.stopping.wait(60) or __import__("liranode").autostart(self), name="lnode-start", daemon=True).start()
         if not self.wav_input:
             threading.Thread(target=self._ann_loop, name="announcements", daemon=True).start()
         self.max.start()
@@ -535,6 +540,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             self.sshlink.stop()                                     # туннель ssh не оставляем висеть после выхода
         except Exception:  # noqa: BLE001
             pass
+        node = getattr(self, "lnode", None)
+        if node is not None:
+            node.halt()                                             # «Нода Лиры»: сайту — «ушла» (задания — сразу главному)
         self.telegram.stop()
         self.team.stop()
         self.max.stop()

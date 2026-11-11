@@ -134,6 +134,16 @@ with sync_playwright() as p:
     pg.fill("#cr-q", "альфа"); pg.wait_for_timeout(600)
     ok(pg.evaluate("() => [...document.querySelectorAll('#cr-list .cr-row b')].map(x => x.textContent)") == ["Петров"], "поиск на лету")
     pg.fill("#cr-q", ""); pg.wait_for_timeout(500)
+    # идея №175 (11.11): «Следующий шаг» — поле «что сделать» с подписью и рабочая «Поставить» (не только через Лиру)
+    pg.evaluate("() => [...document.querySelectorAll('#cr-list .cr-row')].find(x => x.textContent.includes('Петрова')).click()"); pg.wait_for_timeout(500)
+    ok(pg.is_visible("#cr-nwhat") and "Что сделать" in pg.inner_text("#cr-nform") and pg.get_attribute("#cr-nwhat", "type") == "text",
+       "№175: у пустого шага — подписанное поле «Что сделать» (type=text — стили поля во всех темах)")
+    pg.evaluate("_calls.length = 0"); pg.click("#cr-nform button[type=submit]"); pg.wait_for_timeout(200)
+    ok(not [c for c in pg.evaluate("_calls") if c[0] == "client_next"] and "need" in (pg.get_attribute("#cr-nwhat", "class") or "")
+       and "Напишите, что сделать" in pg.inner_text("#cr-nhint"), "пустое «что» — подсветка и подсказка, а не молчание")
+    pg.fill("#cr-nwhat", "перезвонить"); pg.fill("#cr-nwhen", "2026-11-20T10:00"); pg.click("#cr-nform button[type=submit]"); pg.wait_for_timeout(400)
+    nx = [a for c, a in pg.evaluate("_calls") if c == "client_next"]
+    ok(nx and nx[0]["what"] == "перезвонить" and nx[0]["at"] == "2026-11-20T10:00", f"«Поставить» — шаг с датой из студии: {nx}")
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

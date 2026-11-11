@@ -55,6 +55,15 @@ KIT2_CSS = """
 .st nav span { padding: 8px 12px; border-radius: 12px; font-size: 18px; font-weight: 700; white-space: nowrap; }
 .st nav span.on { color: #fff; background: var(--brand); }
 .st .pg { padding: 28px 32px; } .st .pg h3 { font: 700 30px Unbounded; } .st .pg > small { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; color: var(--mut); }
+#cur { position: absolute; left: 0; top: 0; width: 34px; height: 34px; z-index: 9; filter: drop-shadow(0 4px 6px rgba(36,50,74,.35)); }
+"""
+# курсор мыши (уроки 26+): разметку — в конец HTML сцены, в JS — walk([[t, [x, y]], …]) и ctr(элемент)
+CURSOR = '<svg id="cur" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.6L10 19z" fill="#fff" stroke="#24324a" stroke-width="1.6" stroke-linejoin="round"/></svg>'
+CURSOR_JS = """
+  const ctr = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  const walk = (KF) => { let p = KF[0][1]; for (let i = 1; i < KF.length; i++) { const [ta, pa] = KF[i - 1], [tb, pb] = KF[i];
+    if (T >= ta) { const k = ease((T - Math.max(ta, tb - 0.9)) / 0.8); p = [lerp(pa[0], pb[0], k), lerp(pa[1], pb[1], k)]; } } return p; };
+  const cursor = (p, o) => { const c = $("#cur"); c.style.opacity = o; c.style.transform = `translate(${p[0] - 4}px, ${p[1] - 2}px)`; };
 """
 
 

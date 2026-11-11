@@ -172,8 +172,8 @@ ok(w[0] == datetime.combine(datetime.now().date() + timedelta(days=1), datetime.
 ok(T._when({"when": "каждый день в 8", "text": "таблетки"})[1] == {"kind": "daily", "time": "08:00"}, "повтор из when — как был")
 ok("show_page" not in T.SERVER_OFF and "open_url" in T.SERVER_OFF, "show_page на сервере не выключен (сохраняет файл), open_url — выключен")
 src_t = (ROOT / "core/tools.py").read_text(encoding="utf-8")
-ok('not (EXAM_LAUNCH and name in EXAM_ON)' in src_t and T.EXAM_ON == {"open_url", "open_app", "open_path", "council"},
-   "экзамен (EXAM_LAUNCH): открыть сайт, программу и собрать совет можно (запуск записывается), звука и экрана нет")
+ok('not (EXAM_LAUNCH and name in EXAM_ON)' in src_t and T.EXAM_ON == {"open_url", "open_app", "open_path", "council", "make_podcast"} and "if EXAM_LAUNCH:                                   # экзамен: вызов записан" in src_t,
+   "экзамен (EXAM_LAUNCH): открыть сайт, программу, собрать совет и начать подкаст можно (запуск записывается, облако на выпуск не тратится), звука и экрана нет")
 import images  # noqa: E402
 its = [{"title": "Heaving line knot ABOK538"}, {"title": "Runestone U 344"}]
 ok(images.relevant(its, "runestone knotwork runic inscription") == [its[1]] and images.relevant(its, "церковь") == [], "картинки: подписи по запросу")

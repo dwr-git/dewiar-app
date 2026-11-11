@@ -94,7 +94,8 @@
 .st-work { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 18px; height: max(600px, calc(100vh - 210px)); }
 .st-side { display: flex; flex-direction: column; min-height: 0; border-radius: 20px; background: var(--st-card); overflow: hidden; }
 .st-seg { display: flex; gap: 2px; padding: 4px; margin: 10px 10px 0; border-radius: 13px; background: var(--st-soft); }
-.st-seg button { flex: 1; border: 0; background: none; color: var(--muted); font: 600 12.5px "Manrope", sans-serif; padding: 8px 6px; border-radius: 10px; cursor: pointer; }
+.st-seg button { flex: 1 1 auto; border: 0; background: none; color: var(--muted); font: 600 12.5px "Manrope", sans-serif; padding: 8px 6px; border-radius: 10px; cursor: pointer; }
+#st-seg { gap: 0; } #st-seg button { padding: 8px 4px; font-size: 12px; min-width: 0; }
 .st-seg button:hover { color: var(--ink); }
 .st-seg button.on { background: var(--st-on); color: var(--st-onk); }
 .st-seg.sm { margin: 0; flex: none; }
@@ -212,6 +213,36 @@
 .m-burger .st-mw i:nth-child(1) { left: 6px; top: 7px; width: 16px; } .m-burger .st-mw i:nth-child(2) { right: 6px; top: 6px; width: 10px; height: 2px; box-shadow: 0 3px 0 currentColor, 0 6px 0 currentColor; } .m-burger .st-mw i:nth-child(3) { left: 6px; right: 6px; top: 16px; height: 1px; }
 .m-side .st-mw i:nth-child(1) { left: 5px; top: 6px; width: 12px; } .m-side .st-mw i:nth-child(2) { left: 5px; top: 14px; width: 9px; height: 2px; box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor; } .m-side .st-mw i:nth-child(3) { left: 22px; top: 0; bottom: 0; width: 1px; height: auto; }
 .st-danger { display: flex; gap: 8px; flex-wrap: wrap; }
+/* «Подвал и документы» (0.87): реквизиты, документы (нет / ссылка / свой текст), ещё ссылки */
+#st-legal > .hint { margin: 0 4px 12px; }
+.st-lgf { display: flex; flex-direction: column; gap: 10px; }
+.st-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#st-lgchk { margin: -4px 2px 0; font-size: 12.5px; line-height: 1.45; }
+.st-docs { display: flex; flex-direction: column; gap: 8px; }
+.st-doc { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; background: var(--st-soft); }
+.st-doc.on { box-shadow: inset 3px 0 0 var(--st-sel); }
+.st-dh2 { display: flex; gap: 10px; align-items: center; }
+.st-dh2 b { font-size: 13.5px; line-height: 1.3; }
+.st-di { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--st-soft); color: var(--st-ic); }
+.st-di svg { width: 16px; height: 16px; }
+.st-doc:not(.on) .st-di { color: var(--dim); }
+.st-dm { align-self: flex-start; background: var(--st-soft); }
+.st-dm button { font-size: 12px; }
+.st-dact { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.st-dact:empty { display: none; }
+.st-dact .hint { font-size: 12px; font-variant-numeric: tabular-nums; }
+.st-docw { margin: 0; padding: 9px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; color: var(--st-warm); background: rgba(255,201,139,.1); box-shadow: inset 0 0 0 1px rgba(255,201,139,.25); }
+.st-draft { align-self: flex-start; display: inline-flex; align-items: center; gap: 7px; }
+.st-draft svg { width: 15px; height: 15px; fill: currentColor; stroke: none; flex: none; }
+.st-draft.busy svg { animation: st-spin 1.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .st-draft.busy svg { animation: none; } }
+.st-lks { display: flex; flex-direction: column; gap: 6px; }
+.st-lks:empty { display: none; }
+.st-lk { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) 30px; gap: 6px; align-items: center; }
+.st-lk input { width: 100%; min-width: 0; border: 0; outline: 0; border-radius: 10px; padding: 9px 11px; background-color: var(--field); font-size: 13px; }
+.st-lk input:focus { box-shadow: 0 0 0 2px rgba(139,140,247,.55); }
+#st-legal .st-add { margin-top: 8px; }
+.st-pdh { margin: 16px 2px 0; }
 
 /* ---------- сцена и предпросмотр ---------- */
 .st-stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 10px; }

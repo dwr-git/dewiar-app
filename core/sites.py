@@ -310,6 +310,7 @@ OPS_HELP = """Операции (JSON-список ops):
 {"op":"logo","text":"…","mark":"<знак>","style":"badge|plain|mono|text"} — знаки: %(marks)s
 {"op":"site","name":"…","tagline":"…","description":"описание для поисковиков 120–160 знаков"}
 {"op":"contacts","phone":"…","email":"…","address":"…","hours":"…","telegram":"…","whatsapp":"…","vk":"…"}
+{"op":"legal","org":"ИП Иванов Иван Иванович","inn":"…","ogrn":"…","address":"юридический адрес","phone":"…","email":"…","docs":{"oferta":{"mode":"link","url":"https://…"}},"links":[{"title":"Доставка и возврат","url":"https://…"}]} — подвал: реквизиты и документы (oferta, privacy, consent, terms; mode link|text|"" — убрать); только то, что назвал человек
 {"op":"template","id":"<шаблон>"} — другой дизайн целиком, тексты остаются: %(tpl)s
 {"op":"add_block","type":"<тип>","after":"<uid блока или пусто — в конец, перед заявкой и контактами>","data":{поля}} — типы: %(blocks)s
 {"op":"remove_block","block":"<uid>"}
@@ -734,6 +735,9 @@ class Sites:
                         else:
                             ct.pop(k, None)
                 done.append("контакты")
+            elif op == "legal":
+                if self._legal(s, o):
+                    done.append("подвал и документы")
             elif op == "template" and o.get("id") in K.TEMPLATES:
                 self._restyle(s, o["id"])
                 done.append(f"дизайн «{K.TEMPLATES[o['id']]['title']}»")
@@ -846,6 +850,107 @@ class Sites:
                     done.append("страница")
         return done
 
+    @staticmethod
+    def _legal(s, o):
+        """«Подвал и документы» (0.87): реквизиты, документы (ссылка или свой текст — своя страница сайта), доп. ссылки.
+        -> поменялось ли что-то."""
+        lg = s.get("legal") if isinstance(s.get("legal"), dict) else {}
+        before = json.dumps(lg, ensure_ascii=False, sort_keys=True)
+        for k in K.LEGAL_FIELDS:
+            if k not in o:
+                continue
+            v = re.sub(r"[\x00-\x1f]", " ", str(o.get(k) or "")).strip()
+            if k in ("inn", "ogrn"):
+                v = re.sub(r"\D", "", v)[:12 if k == "inn" else 15]
+            v = v[:300 if k == "address" else 200]
+            if v:
+                lg[k] = v
+            else:
+                lg.pop(k, None)
+        if isinstance(o.get("docs"), dict):
+            docs = lg.setdefault("docs", {})
+            for k, d in o["docs"].items():
+                if k not in K.LEGAL_DOCS or not isinstance(d, dict):
+                    continue
+                cur = dict(docs.get(k) or {})
+                if "mode" in d:
+                    cur["mode"] = d["mode"] if d["mode"] in ("link", "text") else ""
+                if "url" in d:
+                    cur["url"] = str(d.get("url") or "").strip()[:500]
+                if "text" in d:
+                    t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(d.get("text") or "")).replace("\r\n", "\n")[:K.LEGAL_TEXT_MAX]
+                    if t != cur.get("text"):
+                        cur["text"], cur["ts"] = t, _now()
+                        if not d.get("draft"):
+                            cur.pop("draft", None)          # человек поправил черновик Лиры — он его
+                if d.get("draft"):
+                    cur["draft"] = True
+                if not cur.get("mode") and not cur.get("text") and not cur.get("url"):
+                    docs.pop(k, None)
+                else:
+                    docs[k] = cur
+            if not docs:
+                lg.pop("docs", None)
+        if isinstance(o.get("links"), list):
+            links = []
+            for x in o["links"][:K.LEGAL_LINKS_MAX]:
+                if isinstance(x, dict):
+                    t, u = str(x.get("title") or "").strip()[:80], str(x.get("url") or "").strip()[:500]
+                    if t or u:
+                        links.append({"title": t, "url": u})
+            if links:
+                lg["links"] = links
+            else:
+                lg.pop("links", None)
+        if lg:
+            s["legal"] = lg
+        else:
+            s.pop("legal", None)
+        return json.dumps(lg, ensure_ascii=False, sort_keys=True) != before
+
+    def legal_draft(self, sid, key="privacy"):
+        """«Составить черновик политики ПД по моим данным» (0.87): Лира пишет политику (или согласие) по реквизитам и
+        устройству сайта; кладём «своим текстом» с пометкой draft — в студии: «черновик — проверьте с юристом»."""
+        if key not in ("privacy", "consent"):
+            raise SiteError("черновик Лира пишет для политики обработки данных и согласия")
+        s = self.get(sid)
+        lg = s.get("legal") or {}
+        ct = s.get("contacts") or {}
+        org = str(lg.get("org") or "").strip()
+        if not org:
+            raise SiteError("сначала впишите название организации или ИП — в политике оно обязательно")
+        mail, phone = str(lg.get("email") or ct.get("email") or "").strip(), str(lg.get("phone") or ct.get("phone") or "").strip()
+        if not mail and not phone:
+            raise SiteError("впишите почту или телефон — куда людям писать о своих данных")
+        pub = (s.get("published") or {}).get("url") or ""
+        blocks = [b for pg in s.get("pages") or [] for b in pg.get("blocks") or [] if not b.get("hidden")]
+        lead = next((b for b in blocks if b.get("type") == "lead"), None)
+        fields = ["имя", "телефон, почта или ник в Telegram"] + (["комментарий"] if lead and lead.get("ask_message") else [])
+        facts = "\n".join(x for x in (
+            f"Оператор: {org}", f"ИНН: {lg['inn']}" if lg.get("inn") else "", f"ОГРН/ОГРНИП: {lg['ogrn']}" if lg.get("ogrn") else "",
+            f"Адрес: {lg.get('address') or ct.get('address') or ''}" if (lg.get("address") or ct.get("address")) else "",
+            f"Почта для обращений: {mail}" if mail else "", f"Телефон: {phone}" if phone else "",
+            f"Сайт: «{s.get('name') or ''}» {pub}".strip(), f"Чем занимается: {s.get('tagline') or ''}",
+            ("Форма заявки на сайте собирает: " + ", ".join(fields) + ". Цель — связаться с человеком по его заявке.") if lead
+            else "Формы заявки на сайте нет; данные приходят, только если человек сам напишет или позвонит.",
+            "Сайт работает на сервисе Dewiar (dewiar.pro): заявки хранятся там и передаются владельцу сайта; посещения считаются без cookie и без сторонних счётчиков; cookie сайт не ставит.",
+        ) if x)
+        what = "политику в отношении обработки персональных данных (152-ФЗ, ст. 18.1)" if key == "privacy" else \
+            "согласие посетителя на обработку персональных данных (152-ФЗ, ст. 9), которое он даёт галочкой в форме заявки"
+        system = ("Ты — помощник по документам сайта в программе Dewiar. Напиши " + what + " для небольшого сайта по-русски, "
+                  "простым ясным языком, без воды. Используй ТОЛЬКО факты ниже; чего нет — не выдумывай (не пиши о cookie, "
+                  "рассылках, оплате, передаче за границу, если этого нет в фактах). Разделы — строкой «## Название» (общие "
+                  "положения, кто оператор, какие данные, цели, правовые основания, сроки хранения, кому передаём, права "
+                  "человека и как отозвать согласие, защита данных, изменения документа). Списки — строками «- …». Верни "
+                  "только текст документа, без пояснений до и после.")
+        text = self.llm(system, "ФАКТЫ:\n" + facts, 3500)
+        text = re.sub(r"^```\w*\s*|\s*```\s*$", "", str(text or "").strip()).strip()
+        if len(text) < 400:
+            raise SiteError("модель вернула слишком короткий текст — попробуйте ещё раз")
+        self.apply(sid, [{"op": "legal", "docs": {key: {"mode": "text", "text": text, "draft": True}}}],
+                   f"Черновик: {K.LEGAL_DOCS[key]['title'].lower()}")
+        return {"text": text}
+
     def _restyle(self, s, tid):
         """«Другой дизайн целиком»: тема, меню, вид логотипа и вёрстка блоков — из шаблона tid; тексты и порядок — свои."""
         t = K.TEMPLATES[tid]
@@ -935,8 +1040,12 @@ class Sites:
 
     # ---------- вёрстка ----------
     def render(self, sid, page=0, site=None):
+        """Предпросмотр: page — номер страницы или «doc:privacy» (страница документа из «Подвала и документов»)."""
         s = site or self.get(sid)
-        return R.page_html(s, int(page or 0), "preview", self._images(sid, s, "preview"))
+        pg = str(page or 0)
+        if pg.startswith("doc:"):
+            return R.page_html(s, 0, "preview", self._images(sid, s, "preview"), doc=pg[4:])
+        return R.page_html(s, int(pg) if pg.lstrip("-").isdigit() else 0, "preview", self._images(sid, s, "preview"))
 
     def build(self, sid, mode="publish", base_url=""):
         """Собрать сайт целиком: {путь: bytes}."""
@@ -1010,6 +1119,17 @@ class Sites:
         types = {b["type"] for pg in s.get("pages") or [] for b in pg.get("blocks") or []}
         add("lead" in types, "важно", "Форма заявки", "есть — заявки придут в «Клиенты»" if "lead" in types else "нет формы — посетителю сложнее оставить заявку",
             "Добавь форму заявки перед контактами")
+        pol = R.legal_href(s, "privacy")
+        draft = " (черновик Лиры — проверьте с юристом)" if pol.endswith(".html") and (((s.get("legal") or {}).get("docs") or {}).get("privacy") or {}).get("draft") else ""
+        if pol:
+            pdet = ("есть, в форме заявки — галочка согласия" if "lead" in types else "есть") + draft
+        else:
+            pdet = ("на сайте есть форма заявки, а политики обработки персональных данных нет — по закону (152-ФЗ) она нужна"
+                    if "lead" in types else "формы заявки нет — политика пока не обязательна")
+        add(bool(pol) or "lead" not in types, "важно" if "lead" in types else "полезно", "Политика обработки данных", pdet, "Подвал и документы")
+        org = str((s.get("legal") or {}).get("org") or "").strip()
+        add(bool(org), "полезно", "Реквизиты в подвале", f"есть: {org}" if org else "нет названия организации или ИП и ИНН — людям спокойнее, когда видно, кто за сайтом",
+            "Подвал и документы")
         add(bool(ct.get("address")) or "contacts" in types, "полезно", "Адрес и карта", "есть" if ct.get("address") else "адреса нет — если вы принимаете у себя, его ищут первым",
             "Добавь адрес в контакты")
         add(True, "полезно", "Карточка для соцсетей (Open Graph)", "есть: название, описание и картинка в превью ссылки")
@@ -1278,6 +1398,8 @@ class Sites:
                 "radii": {k: v["title"] for k, v in K.RADII.items()}, "menus": K.MENUS, "headers": K.HEADERS, "tones": K.TONES,
                 "marks": {k: {"title": v[0], "svg": K.mark_svg(k)} for k, v in K.MARKS.items()}, "logo_styles": K.LOGO_STYLES,
                 "contacts": K.CONTACT_KEYS,
+                "legal": {"fields": K.LEGAL_FIELDS, "docs": {k: dict(v) for k, v in K.LEGAL_DOCS.items()}, "links_max": K.LEGAL_LINKS_MAX,
+                          "text_max": K.LEGAL_TEXT_MAX},
                 "blocks": {k: {"title": v["title"], "sub": v["sub"], "variants": v["variants"], "fields": v["fields"],
                                "items": v.get("items")} for k, v in K.BLOCKS.items()}}
 

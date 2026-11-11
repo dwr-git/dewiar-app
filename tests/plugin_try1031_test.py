@@ -82,7 +82,7 @@ with sync_playwright() as p:
     st.click("#ht-on"); st.wait_for_timeout(400)
     ok(["plugin_install", {"id": "kitchen", "values": {}}] in st.evaluate("calls"), "«Включить» — установка одной кнопкой")
     ok("Плагин включён" in st.inner_text("#hm-try") and st.evaluate("!!document.querySelector('#ht-ask')"), "включили — «Плагин включён», «Спросить Лиру»")
-    ok(st.evaluate("!!document.querySelector('#hm-apps [data-app=\"plg:kitchen\"]')"), "и значок плагина появился среди приложений")
+    ok(st.evaluate("!!document.querySelector('#hm-plgs [data-app=\"plg:kitchen\"]')"), "и значок плагина появился среди плагинов")
     st.evaluate("() => { window._asked = null; qaAsk = (t) => { _asked = t; }; }")
     st.click("#ht-ask"); st.wait_for_timeout(200)
     ok(st.evaluate("_asked") == next(x for x in cat["plugins"] if x["id"] == "kitchen")["try"], "«Спросить Лиру» — его фраза в чате: видно, как работает")

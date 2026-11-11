@@ -23,11 +23,14 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import org.json.JSONObject;
 
-/** Окно будильника поверх блокировки (открывает AlarmReceiver): текст крупно, звонок и вибрация, «Понял» и «Отложить
- *  на 10 минут». Звук — выбранный в настройках (Sounds): по кругу, сначала тихо, за 20 секунд — до полной громкости;
+/** Окно будильника поверх блокировки (открывает AlarmReceiver): текст крупно, звонок и вибрация, «Стоп» и «Отложить
+ *  на 10 мин». Звук — выбранный в настройках (Sounds): по кругу, сначала тихо, за 20 секунд — до полной громкости;
  *  уведомление при этом переходит в тихий канал, чтобы не звучать вторым голосом. Звонит 2 минуты, потом смолкает,
  *  окно остаётся. Разметка — кодом, без XML-ресурсов.
- *  «Отложить» ставит новое разовое напоминание через Alarms.put с id вида «<id>-s<секунды>», исходное не трогает. */
+ *  «Отложить» ставит новое разовое напоминание через Alarms.put с id вида «<id>-s<секунды>», исходное не трогает.
+ *  0.87 (владелец 11.11: «разблокирую экран — не могу найти напоминание, музыка звучит»): окно звучит, только пока его
+ *  видно (или экран погас поверх него); спрятали окно при включённом экране — звук возвращается уведомлению с кнопками
+ *  «Стоп» и «Отложить» (AlarmReceiver.handback), окно закрывается. Опоздавшее — строкой «Должно было в 14:00». */
 public class AlarmActivity extends Activity {
     private Ringtone ring;                          // запасной путь: свой файл не открылся — системная мелодия
     private MediaPlayer player;
@@ -35,6 +38,8 @@ public class AlarmActivity extends Activity {
     private Vibrator vib;
     private final Handler h = new Handler();
     private String id, title, kind;
+    private long due;                               // на какое время было поставлено (0 — неизвестно)
+    private boolean resumed, wantSound, handedBack;
 
     @SuppressWarnings("deprecation")
     @Override protected void onCreate(Bundle b) {
@@ -45,7 +50,9 @@ public class AlarmActivity extends Activity {
         id = getIntent().getStringExtra("id");
         title = getIntent().getStringExtra("title");
         kind = getIntent().getStringExtra("kind");
+        due = getIntent().getLongExtra("due", 0);
         if (id == null) { finish(); return; }
+        open = new java.lang.ref.WeakReference<>(this);       // кнопки уведомления найдут окно, даже если его ещё не показали
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -82,14 +89,27 @@ public class AlarmActivity extends Activity {
         text.setTextSize(26);
         text.setGravity(Gravity.CENTER);
         text.setPadding(0, dp(18), 0, dp(40));
-        // напоминание о деле — главная кнопка «Сделано ✓» (дело уходит в журнал «Дела»), «Понял» — просто закрыть
+        // опоздало (телефон спал, был выключен): так и написать — «Должно было в 14:00», чтобы не гадать, что это за звонок
+        String lateNote = AlarmTime.lateNote(due, System.currentTimeMillis(), java.util.TimeZone.getDefault());
+        TextView late = null;
+        if (!lateNote.isEmpty()) {
+            late = new TextView(this);
+            String s = lateNote.trim().replaceAll("^\\(|\\)$", "");
+            late.setText(Character.toUpperCase(s.charAt(0)) + s.substring(1));
+            late.setTextColor(0xFFFFC978);
+            late.setTextSize(15);
+            late.setGravity(Gravity.CENTER);
+            late.setPadding(0, 0, 0, dp(28));
+            text.setPadding(0, dp(18), 0, dp(10));
+        }
+        // напоминание о деле — главная кнопка «Сделано ✓» (дело уходит в журнал «Дела»), «Стоп» — просто закрыть
         boolean task = !"alarm".equals(kind) && !"timer".equals(kind);
         // лекарство («Для старших», 0.62: «Выпить: …», таблетки, капли) — «Выпил(а) ✓»: телефон отметит и не скажет близким
         boolean med = task && title != null && java.util.regex.Pattern.compile("^Выпить:|таблет|лекарств|капл[иею]|капсул|укол|инсулин|давлени|сироп|витамин",
                 java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE).matcher(title).find();
         Button made = task ? button(med ? "Выпил(а) ✓" : "Сделано ✓", 0xFF2FB67E, 0xFF1F8F86) : null;
-        Button ok = task ? button("Понял", 0x22FFFFFF, 0x22FFFFFF) : button("Понял", 0xFF667EEA, 0xFF764BA2);
-        Button snooze = button("Отложить на 10 минут", 0x22FFFFFF, 0x22FFFFFF);
+        Button ok = task ? button("Стоп", 0x22FFFFFF, 0x22FFFFFF) : button("Стоп", 0xFF667EEA, 0xFF764BA2);
+        Button snooze = button("Отложить на 10 мин", 0x22FFFFFF, 0x22FFFFFF);
         final String note = AlarmReceiver.noteFor(this, id);
         Button look = note.isEmpty() ? null : button("Посмотреть вложения", 0xFF5B6CFF, 0xFF8A5BFF);
         if (look != null) look.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { openNote(note); } });
@@ -99,6 +119,7 @@ public class AlarmActivity extends Activity {
         root.addView(head);
         root.addView(clock);
         root.addView(text);
+        if (late != null) root.addView(late);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58));
         lp.bottomMargin = dp(12);
         if (look != null) root.addView(look, lp);
@@ -107,7 +128,10 @@ public class AlarmActivity extends Activity {
         root.addView(snooze, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(58)));
         setContentView(root);
         start();
-        h.postDelayed(new Runnable() { @Override public void run() { stopSound(); } }, 120000);   // не звонить бесконечно, если человека нет рядом
+        // не звонить бесконечно, если человека нет рядом: AlarmTime.RING_MS с первого звука (окно остаётся)
+        long fired = getIntent().getLongExtra("fired", 0);
+        long left = fired > 0 ? Math.max(0, AlarmTime.RING_MS - (System.currentTimeMillis() - fired)) : AlarmTime.RING_MS;
+        h.postDelayed(new Runnable() { @Override public void run() { stopSound(); AlarmReceiver.stopped(AlarmActivity.this, id); } }, left);
     }
 
     private Button button(String t, int c1, int c2) {
@@ -131,10 +155,7 @@ public class AlarmActivity extends Activity {
     private void start() {
         long fired = getIntent().getLongExtra("fired", 0);
         long wait = fired > 0 ? Math.max(0, SOUND_DELAY_MS - (System.currentTimeMillis() - fired)) : 0;
-        try {
-            vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-            if (vib != null) vib.vibrate(new long[]{0, 400, 900, 400, 2400}, 0);   // два мягких толчка и пауза, по кругу
-        } catch (Throwable ignored) { }
+        wantSound = true;
         h.postDelayed(new Runnable() { @Override public void run() { if (!isFinishing()) startSound(); } }, wait);
     }
 
@@ -142,8 +163,15 @@ public class AlarmActivity extends Activity {
 
     @SuppressWarnings("deprecation")
     private void startSound() {
+        // окно ещё не на экране (Android не показал его поверх, оболочка запустила его «за спиной») — звук остаётся у
+        // уведомления, где видны «Стоп» и «Отложить»; окно возьмёт звук, когда его покажут (onResume)
+        if (!resumed || !wantSound || player != null || ring != null) return;
         AlarmReceiver.quiet(this, id, title == null ? "" : title, kind == null ? "reminder" : kind,
-                getIntent().getStringExtra("who") == null ? "" : getIntent().getStringExtra("who"));
+                getIntent().getStringExtra("who") == null ? "" : getIntent().getStringExtra("who"), due);
+        try {                                                       // вибрация — вместе со звуком окна (до того вибрирует уведомление)
+            vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (vib != null) vib.vibrate(new long[]{0, 400, 900, 400, 2400}, 0);   // два мягких толчка и пауза, по кругу
+        } catch (Throwable ignored) { }
         boolean soft = Sounds.soft(this, kind);                             // №72: громкостью уведомлений, не будильника
         player = Sounds.play(this, Sounds.current(this), true, vol, soft);
         if (player != null) {
@@ -167,7 +195,9 @@ public class AlarmActivity extends Activity {
     }
 
     private void stopSound() {
+        wantSound = false;
         try { if (ring != null) ring.stop(); } catch (Throwable ignored) { }
+        ring = null;
         try { if (player != null) { player.stop(); player.release(); } } catch (Throwable ignored) { }
         player = null;
         try { if (vib != null) vib.cancel(); } catch (Throwable ignored) { }
@@ -175,6 +205,7 @@ public class AlarmActivity extends Activity {
 
     private void done() {
         stopSound();
+        AlarmReceiver.stopped(this, id);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(id.hashCode());
         finish();
     }
@@ -183,6 +214,7 @@ public class AlarmActivity extends Activity {
      *  app.js handleIntent → openNote). На заблокированном экране сначала просим снять блокировку. */
     private void openNote(final String note) {
         stopSound();
+        AlarmReceiver.stopped(this, id);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(id.hashCode());
         final Intent i = new Intent(this, MainActivity.class).setAction("pro.dewiar.NOTE").putExtra("note", note)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -199,7 +231,6 @@ public class AlarmActivity extends Activity {
 
     private boolean leaving;                            // ушли смотреть вложения: приложение открылось поверх — окно больше не нужно
 
-    @Override protected void onStop() { super.onStop(); if (leaving) finish(); }
 
     private void snooze() {
         snoozeLater(this, id, title, kind, getIntent().getStringExtra("who"));
@@ -226,7 +257,60 @@ public class AlarmActivity extends Activity {
         if (a != null && id.equals(a.id)) a.runOnUiThread(new Runnable() { @Override public void run() { a.stopSound(); a.finish(); } });
     }
 
-    @Override protected void onResume() { super.onResume(); open = new java.lang.ref.WeakReference<>(this); }
+    /** Отзвенело (AlarmReceiver.expire): звук смолкает, окно остаётся — человек увидит его, когда подойдёт. */
+    static void silenceIfOpen(final String id) {
+        final AlarmActivity a = open.get();
+        if (a != null && id.equals(a.id)) a.runOnUiThread(new Runnable() { @Override public void run() { a.stopSound(); } });
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        open = new java.lang.ref.WeakReference<>(this);
+        resumed = true;
+        if (wantSound && player == null && ring == null) {       // ждали, пока окно покажут: звук — сейчас (или по задержке)
+            long fired = getIntent().getLongExtra("fired", 0);
+            if (fired == 0 || System.currentTimeMillis() - fired >= SOUND_DELAY_MS) startSound();
+        }
+    }
+
+    @Override protected void onPause() { super.onPause(); resumed = false; }
+
+    /** Окно ушло с экрана, а экран включён (разблокировали и попали на рабочий стол, «Домой», другое приложение сверху):
+     *  раньше звук продолжал играть из невидимого окна, а в «Недавних» его нет — не найти. Теперь звук отдаём уведомлению
+     *  (оно в шторке и на экране блокировки, с «Стоп» и «Отложить»), окно закрываем. Погас экран — окно звенит дальше:
+     *  при включении оно снова поверх блокировки. */
+    @Override protected void onStop() {
+        super.onStop();
+        if (leaving) { finish(); return; }
+        if (isFinishing() || isChangingConfigurations() || handedBack || (player == null && ring == null && !wantSound)) return;
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+        boolean screenOn = true;
+        try { screenOn = pm == null || pm.isInteractive(); } catch (Throwable ignored) { }
+        if (!screenOn) return;
+        handedBack = true;
+        stopSound();
+        AlarmReceiver.handback(this, id, title == null ? "" : title, kind == null ? "reminder" : kind,
+                getIntent().getStringExtra("who") == null ? "" : getIntent().getStringExtra("who"), due);
+        finish();
+    }
+
+    /** «Назад» — то же, что «Стоп»: иначе окно закрылось бы, а напоминание осталось звенящим (и открывалось бы снова). */
+    @Override public void onBackPressed() { done(); }
+
+    /** Окно уже открыто (singleInstance), а пришло другое напоминание: прежнее остаётся тихим уведомлением с кнопками,
+     *  окно показывает новое (раньше новое терялось — окно оставалось со старым текстом). */
+    @Override protected void onNewIntent(Intent in) {
+        super.onNewIntent(in);
+        String nid = in.getStringExtra("id");
+        if (nid == null || nid.equals(id)) return;
+        stopSound();
+        AlarmReceiver.stopped(this, id);
+        AlarmReceiver.quiet(this, id, title == null ? "" : title, kind == null ? "reminder" : kind,
+                getIntent().getStringExtra("who") == null ? "" : getIntent().getStringExtra("who"), due);
+        setIntent(in);
+        h.removeCallbacksAndMessages(null);
+        recreate();
+    }
 
     @Override protected void onDestroy() { stopSound(); h.removeCallbacksAndMessages(null); if (open.get() == this) open.clear(); super.onDestroy(); }
 }

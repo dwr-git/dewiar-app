@@ -90,21 +90,42 @@ function ppComp() {
   };
 }
 
+/* №641 (10.11: «нажимаю „Добавить рубрику“ — всплывает плашка, а поля для ввода нет»): форма пересобиралась при каждом
+   ppRender — выбрали группу плиткой выше или пришло событие «pbot_posts» — и набранная тема пропадала, а подсказка-заглушка
+   «Тема: совет дня о чае» читалась как готовый текст. Теперь форма одна и живёт сама по себе (тема, дни, время не теряются),
+   над полем — подпись «О чём рубрика», куда пойдут посты — видно; пустая тема — поле подсвечено, в фокусе, подсказка рядом */
 function ppRubs() {
   const d = PP.d, rs = d.rubrics || [];
   const when = (r) => r.days.length === 7 ? "каждый день" : r.days.join() === "0,1,2,3,4" ? "по будням" : r.days.join() === "5,6" ? "по выходным" : r.days.map(i => PP_DAYS[i]).join(", ");
-  $("#pp-rubs").innerHTML = rs.map(r => `<div class="pp-rub"><span><b>${ppE(r.topic)}</b><small>${when(r)} в ${ppE(r.time)} · ${r.approve ? "с одобрением" : "сразу"} · ${ppE(d.chats.filter(c => r.chats.includes(c.id)).map(c => c.title).join(", "))}</small></span>`
-      + `<button class="btn small" data-rdel="${ppE(r.id)}" aria-label="Убрать рубрику «${ppE(r.topic)}»">Убрать</button></div>`).join("")
-    + `<form class="pp-rubf" id="pp-rubf"><input type="text" id="pp-rt" maxlength="300" placeholder="Тема: совет дня о чае" aria-label="Тема рубрики">`
-    + `<div class="pp-days" role="group" aria-label="Дни">${PP_DAYS.map((x, i) => `<button type="button" data-d="${i}" class="${i < 5 ? "on" : ""}" aria-pressed="${i < 5}">${x}</button>`).join("")}</div>`
-    + `<div class="pp-row"><label class="pp-ck">В <input type="time" id="pp-rtime" value="10:00" aria-label="Время"></label><label class="pp-ck"><input type="checkbox" id="pp-rap" checked> С одобрением</label><span style="flex:1"></span><button class="btn small primary" type="submit">Добавить рубрику</button></div></form>`;
-  $$("#pp-rubs [data-rdel]").forEach(b => b.onclick = () => ppCall("pbot_rubric_del", { id: b.dataset.rdel }, "Рубрика убрана"));
-  $$("#pp-rubf .pp-days button").forEach(b => b.onclick = () => { b.classList.toggle("on"); b.setAttribute("aria-pressed", b.classList.contains("on")); });
-  $("#pp-rubf").onsubmit = (e) => {
-    e.preventDefault();
-    const days = $$("#pp-rubf .pp-days button.on").map(b => +b.dataset.d);
-    ppCall("pbot_rubric_set", { topic: $("#pp-rt").value.trim(), days, time: $("#pp-rtime").value, approve: $("#pp-rap").checked, chats: [...PP.sel] }, "Рубрика добавлена");
-  };
+  if (!$("#pp-rubl")) {
+    $("#pp-rubs").innerHTML = `<div id="pp-rubl"></div>`
+      + `<form class="pp-rubf" id="pp-rubf" novalidate><label class="pp-rlab" for="pp-rt">Новая рубрика — о чём писать</label>`
+      + `<input type="text" id="pp-rt" maxlength="300" placeholder="Например: совет дня о чае" aria-describedby="pp-rhint">`
+      + `<small class="pp-rhint" id="pp-rhint" aria-live="polite"></small>`
+      + `<div class="pp-days" role="group" aria-label="Дни">${PP_DAYS.map((x, i) => `<button type="button" data-d="${i}" class="${i < 5 ? "on" : ""}" aria-pressed="${i < 5}">${x}</button>`).join("")}</div>`
+      + `<div class="pp-row"><label class="pp-ck">В <input type="time" id="pp-rtime" value="10:00" aria-label="Время"></label><label class="pp-ck"><input type="checkbox" id="pp-rap" checked> С одобрением</label><span style="flex:1"></span><button class="btn small primary" type="submit">Добавить рубрику</button></div></form>`;
+    $$("#pp-rubf .pp-days button").forEach(b => b.onclick = () => { b.classList.toggle("on"); b.setAttribute("aria-pressed", b.classList.contains("on")); });
+    $("#pp-rt").oninput = () => { $("#pp-rt").classList.remove("need"); ppRubHint(); };
+    $("#pp-rubf").onsubmit = async (e) => {
+      e.preventDefault();
+      const topic = $("#pp-rt").value.trim(), days = $$("#pp-rubf .pp-days button.on").map(b => +b.dataset.d);
+      if (!topic) { $("#pp-rt").classList.add("need"); $("#pp-rt").focus(); return ppRubHint("Напишите в поле выше, о чём будут посты — например, «совет дня о чае»."); }
+      if (!days.length) return ppRubHint("Выберите хотя бы один день.");
+      const r = await ppCall("pbot_rubric_set", { topic, days, time: $("#pp-rtime").value, approve: $("#pp-rap").checked, chats: [...PP.sel] }, "Рубрика добавлена");
+      if (r) { $("#pp-rt").value = ""; ppRubHint(); }
+    };
+  }
+  $("#pp-rubl").innerHTML = rs.map(r => `<div class="pp-rub"><span><b>${ppE(r.topic)}</b><small>${when(r)} в ${ppE(r.time)} · ${r.approve ? "с одобрением" : "сразу"} · ${ppE(d.chats.filter(c => r.chats.includes(c.id)).map(c => c.title).join(", "))}</small></span>`
+      + `<button class="btn small" data-rdel="${ppE(r.id)}" aria-label="Убрать рубрику «${ppE(r.topic)}»">Убрать</button></div>`).join("");
+  $$("#pp-rubl [data-rdel]").forEach(b => b.onclick = () => ppCall("pbot_rubric_del", { id: b.dataset.rdel }, "Рубрика убрана"));
+  ppRubHint();
+}
+/* подсказка под темой: ошибка — красным; иначе — куда пойдут посты рубрики (те же группы и каналы, что выбраны в «Постах») */
+function ppRubHint(err) {
+  const h = $("#pp-rhint"); if (!h) return;
+  const where = ((PP.d && PP.d.chats) || []).filter(c => PP.sel.has(c.id)).map(c => c.title);
+  h.classList.toggle("bad", !!err);
+  h.textContent = err || (where.length ? "Куда: " + where.join(", ") + " — как выбрано в «Постах»" : "Куда — выберите канал или группу в «Постах» выше");
 }
 
 (function ppInit() {

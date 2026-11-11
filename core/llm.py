@@ -121,6 +121,13 @@ def _local_base(base):
     return bool(host) and bool(_LOCAL_HOST.search(host))
 
 
+def _ip_base(base):
+    """Модель по голому IP-адресу («прямое подключение»: свой сервер, Tailscale 100.x, VPS) — это свой сервер, а не облако:
+    паузы между словами у него бывают долгими (длинная подсказка, размышления без потока) — ждём, как свою (идея №171)."""
+    host = (re.match(r"^\w+://\[?([^/?#\]]+?)\]?(?::\d+)?(?:[/?#]|$)", str(base or "")) or [None, ""])[1]
+    return bool(re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", host) or (":" in host and re.fullmatch(r"[0-9a-fA-F:]+", host)))
+
+
 def _port_open(host, port, timeout=0.35):
     import socket
     try:
@@ -704,6 +711,7 @@ _no_tools = set()          # серверы, которые отказались
 _flat = set()              # серверы, которые не принимают историю вызовов (роль tool, tool_calls) — пишем её текстом
 _no_kw = set()             # серверы, которые отклоняют запрос с chat_template_kwargs (облако Ollama: «upstream returned HTTP 400»)
 _no_usage = set()          # серверы, которые отклонили stream_options (подсчёт токенов в конце потока)
+_llamacpp = set()          # серверы llama.cpp (в ответе были timings): им — cache_prompt (0.87, кэш подсказки)
 _usage = threading.local()
 
 
@@ -723,6 +731,70 @@ def take_usage():
     if not u and not o:
         return None
     return {"prompt": (u or {}).get("prompt"), "cached": (u or {}).get("cached"), "out": o}
+
+
+def _mark_last_block(m, anth):
+    """Сообщение с меткой кэша (cache_control) на последнем непустом блоке; нечего метить — None."""
+    c = m.get("content")
+    if isinstance(c, str):
+        return dict(m, content=[{"type": "text", "text": c, "cache_control": {"type": "ephemeral"}}]) if c else None
+    if not isinstance(c, list) or not c:
+        return None
+    blocks = [dict(b) if isinstance(b, dict) else b for b in c]
+    b = blocks[-1]
+    if not isinstance(b, dict):
+        return None
+    kinds = ("text", "tool_result", "tool_use", "image") if anth else ("text",)
+    if b.get("type") not in kinds or (b.get("type") == "text" and not b.get("text")):
+        return None
+    b["cache_control"] = {"type": "ephemeral"}
+    return dict(m, content=blocks)
+
+
+def hist_mark(messages, anth=False):
+    """0.87, кэш подсказки у Claude (и у Claude/Gemini через OpenRouter): метка кэша на конце истории — на сообщении
+    перед последним (последнее — новый вопрос со справкой к нему, оно всегда своё). Тогда следующий вопрос берёт из
+    кэша и разговор, а не только инструменты и подсказку. -> новый список, исходный не тронут."""
+    msgs = list(messages or [])
+    for i in range(len(msgs) - 2, -1, -1):
+        if not anth and (msgs[i].get("role") != "user" or msgs[i].get("tool_call_id")):
+            continue                               # OpenRouter: метки — в сообщениях пользователя (как в их примерах)
+        m = _mark_last_block(msgs[i], anth)
+        if m is not None:
+            msgs[i] = m
+            break
+    return msgs
+
+
+def cache_key(system):
+    """Ключ кэша для OpenAI (prompt_cache_key): одинаковое начало запроса — один ключ, без личного (хэш подсказки)."""
+    import hashlib
+    return "dewiar-" + hashlib.sha1((system or "")[:8000].encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def cache_hints(body, base, model):
+    """Подсказки серверу про кэш начала запроса (0.87; «⏱ … из кэша 0 (0%)» в журналах людей):
+    - llama.cpp (узнали по timings в ответе) — cache_prompt: true (в старых сборках и обёртках по умолчанию выключен);
+    - OpenRouter, модели Claude и Gemini — метки cache_control на подсказке и на конце истории (без них Claude там не
+      кэширует вовсе — каждый вопрос по полной цене);
+    - OpenAI напрямую — prompt_cache_key: запросы с тем же началом попадают на ту же машину с кэшем.
+    Незнакомым сервисам ничего не добавляем: лишнее поле там — ошибка 400. -> body (тот же словарь)."""
+    host = re.sub(r"^\w+://", "", base or "").split("/")[0].split(":")[0].lower()
+    mdl = str(model or "").lower()
+    if base in _llamacpp:
+        body["cache_prompt"] = True
+    elif re.search(r"(^|\.)openrouter\.ai$", host) and re.match(r"(?:~?anthropic/|google/gemini)", mdl):
+        msgs = body.get("messages") or []
+        if msgs and msgs[0].get("role") == "system" and isinstance(msgs[0].get("content"), str) and msgs[0]["content"]:
+            msgs = [dict(msgs[0], content=[{"type": "text", "text": msgs[0]["content"], "cache_control": {"type": "ephemeral"}}])] + msgs[1:]
+        if len(msgs) > 2:
+            msgs = msgs[:1] + hist_mark(msgs[1:])
+        body["messages"] = msgs
+    elif re.search(r"(^|\.)openai\.com$", host):
+        msgs = body.get("messages") or []
+        if msgs and msgs[0].get("role") == "system":
+            body["prompt_cache_key"] = cache_key(str(msgs[0].get("content") or ""))
+    return body
 
 
 def with_tail(p, messages, tail):
@@ -1642,9 +1714,12 @@ class _Collector:
         self.finish = ""
         self.fmt = ""
         self.raw_head = ""
-        self.pending = ""
+        self._pend, self._pend_n = [], 0  # недочитанный JSON по кускам (pending — склеенный, когда нужен)
+        self.sse = False                  # пришла хоть одна строка «data:» — пустая строка заканчивает событие
+        self.junk = 0                     # выброшенных строк потока, которые не JSON («data: ping», оборванный кусок)
         self.no_cjk = False
         self.usage = None                 # {"prompt": N, "cached": M | None} — если сервер посчитал (last_usage)
+        self.llamacpp = False             # в ответе были timings — сервер llama.cpp (_llamacpp)
         self.out = None                   # токенов в ответе — если сервер посчитал (take_usage; задачи: t.data["quality"])
         self.net = False                  # ответил узел «Сети Лиры» — вызовы из текста не разбираем, из поля — только безопасные
         self.net_q = ""                   # сам вопрос человека (аргументы вызовов узла — только из него)
@@ -1668,12 +1743,16 @@ class _Collector:
             self.usage = {"prompt": int(u0.get("input_tokens") or 0) + rd + int(u0.get("cache_creation_input_tokens") or 0), "cached": rd}
             return
         tm = obj.get("timings") if isinstance(obj.get("timings"), dict) else None
+        if tm:
+            self.llamacpp = True                  # llama.cpp (и сборки на нём): дальше просим cache_prompt
         if tm and "cache_n" in tm and "prompt_n" in tm:
             self.usage = {"prompt": int(tm.get("prompt_n") or 0) + int(tm.get("cache_n") or 0), "cached": int(tm.get("cache_n") or 0)}
             return
         if u and u.get("prompt_tokens") is not None and not self.anthropic:
             det = u.get("prompt_tokens_details") if isinstance(u.get("prompt_tokens_details"), dict) else {}
             c = det.get("cached_tokens", u.get("cached_tokens"))
+            if c is None:                         # DeepSeek: prompt_cache_hit_tokens; Kimi — cached_tokens наверху (выше)
+                c = u.get("prompt_cache_hit_tokens")
             self.usage = {"prompt": int(u.get("prompt_tokens") or 0), "cached": int(c) if isinstance(c, (int, float)) else None}
             return
         if obj.get("done") and obj.get("prompt_eval_count") is not None:
@@ -1746,26 +1825,94 @@ class _Collector:
         out = (self.tags.feed(piece) if piece else "") + self.tags.tail()
         return drop_cjk(out) if self.no_cjk else out
 
+    PENDING_MAX = 256 * 1024              # рецензия 0.87: JSON, разбитый на строки, длиннее — выбросить
+
+    @property
+    def pending(self):
+        return "".join(self._pend)
+
+    @pending.setter
+    def pending(self, v):
+        self._pend, self._pend_n = ([v], len(v)) if v else ([], 0)
+
+    def _pend_add(self, s):
+        if self._pend and self.sse:
+            self._pend.append("\n")
+        self._pend.append(s)
+        self._pend_n += len(s) + 1
+
     def feed_line(self, line):
-        """Строка ответа сервера (SSE «data: …» или строка JSON) -> кусок текста ответа."""
+        """Строка ответа сервера (SSE «data: …» или строка JSON) -> кусок текста ответа.
+
+        Идея №171 (10.11: «при прямом подключении по IP поток обрывается посреди генерации, хотя запрос завершается 200»):
+        одна строка не-JSON в потоке — «data: ping», «id: 7», «retry: 3000», оборванный кусок — раньше оседала в pending,
+        и каждая следующая строка склеивалась с ней и не разбиралась: текст молча кончался, хотя сервер дописывал ответ.
+        Теперь поля SSE id/retry/event и комментарии пропускаем, не-JSON выбрасываем, пустая строка заканчивает событие
+        (недочитанное — выбросить), а целый JSON после мусора разбираем сам по себе."""
         if len(self.raw_head) < 600:
             self.raw_head += line[:600] + "\n"
         s = line.strip()
         if s.startswith(":") and NET_SERVER_RX.match(s):
             self.net = True
-        if not s or s.startswith("event:") or s.startswith(":"):
+        if not s:
+            if self._pend and self.sse:                      # конец события SSE — его данные целиком
+                return self._feed_pending(end=True)
+            return ""
+        if s.startswith(":") or _SSE_FIELD_RX.match(s):
             return ""
         if s.startswith("data:"):
+            self.sse = True
             s = s[5:].strip()
-            if s == "[DONE]":
+            if s == "[DONE]" or not s:
                 return ""
+        if self._pend:
+            # склеиваем и разбираем, только когда строка может закрыть JSON (рецензия 0.87: раньше — на каждой строке,
+            # квадратично); целый объект после мусора — сам по себе
+            closes = s.endswith(("}", "]"))
+            obj = _json_dict(s) if closes and s.startswith("{") else None
+            if obj is not None:
+                self._drop("недочитанный кусок перед целым JSON", self.pending)
+                return self.feed_obj(obj)
+            self._pend_add(s)
+            if self._pend_n > self.PENDING_MAX:
+                self._drop("слишком длинный кусок без конца JSON", self._pend[0])
+                return ""
+            if closes:
+                try:
+                    obj = json.loads(self.pending)
+                except ValueError:
+                    return ""
+                self.pending = ""
+                return self.feed_obj(obj)
+            return ""
         try:
-            obj = json.loads(self.pending + s)
-            self.pending = ""
+            obj = json.loads(s)
         except ValueError:
-            self.pending += s                                  # JSON целиком, разбитый на строки
+            if s[:1] in "{[" and len(s) <= self.PENDING_MAX:
+                self.pending = s                               # JSON целиком, разбитый на строки
+            else:
+                self._drop("строка не JSON", s)               # «data: ping», «keep-alive»
+            return ""
+        if not isinstance(obj, (dict, list)):
+            self._drop("строка не объект JSON", s)
             return ""
         return self.feed_obj(obj)
+
+    def _feed_pending(self, end=False):
+        try:
+            obj = json.loads(self.pending)
+        except ValueError:
+            if end:
+                self._drop("событие SSE без целого JSON", self._pend[0] if self._pend else "")
+            return ""
+        self.pending = ""
+        return self.feed_obj(obj)
+
+    def _drop(self, why, text):
+        self.junk += 1
+        if self.junk <= 3:
+            log.info("Поток модели: пропускаю %s: %r", why, str(text)[:120])
+        self.pending = ""
 
     def tool_calls(self):
         """-> [{"id", "name", "args"}] — из поля tool_calls и из тегов в тексте (им — номера с 1000, после родных).
@@ -1947,6 +2094,81 @@ def wait_hint(sec, info, think_auto=False):
 
 
 _DONE_RX = re.compile(r"^\s*data:\s*\[DONE\]\s*$")
+_SSE_FIELD_RX = re.compile(r"^(?:event|id|retry)\s*:", re.I)      # поля SSE, кроме data — не текст ответа
+
+
+def _stream_lines(r, col):
+    """Строки потока ответа. Сервер уже сказал, что ответ окончен (finish_reason / done), и закрыл соединение без
+    завершающего куска — это конец ответа, а не обрыв (идея №171: ответ целиком помечался ошибкой)."""
+    try:
+        yield from sse_lines(r.iter_bytes(), cancel=getattr(col, "cancel", None))
+    except (httpx.RemoteProtocolError, httpx.ReadError) as e:
+        if not col.finish:
+            raise
+        log.info("Поток модели: сервер закрыл соединение после конца ответа (%s) — ответ целый", str(e)[:120])
+
+
+def _json_dict(s):
+    """Строка — целый объект JSON -> dict, иначе None."""
+    if not s.startswith("{"):
+        return None
+    try:
+        obj = json.loads(s)
+    except ValueError:
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+SSE_LINE_MAX = 8 * 1024 * 1024          # символов в одной строке потока: длиннее — выбросить (рецензия 0.87)
+_EOL_RX = re.compile(r"\r\n|\r|\n")
+
+
+def sse_lines(chunks, cancel=None, limit=None):
+    """Куски байт ответа -> строки текста. Сами, не по заголовкам сервера: всегда UTF-8 (буква, разрезанная между
+    кусками, собирается целой; сервер без charset или с чужим charset не превращает её в «Ð»), концы строк \n, \r\n и
+    \r — в том числе \r в конце одного куска и \n в начале следующего (идея №171).
+    Рецензия 0.87: конец строки ищем только в новом куске (недописанная строка — списком кусков), строка длиннее limit
+    выбрасывается до своего конца, cancel проверяется на каждом куске — и посреди длинной строки."""
+    import codecs
+    limit = SSE_LINE_MAX if limit is None else limit
+    dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    cur, size, cr, skip = [], 0, False, False
+    for chunk in chunks:
+        if cancel is not None and cancel.is_set():
+            return
+        if not chunk:
+            continue
+        text = dec.decode(chunk)
+        if cr and text.startswith("\n"):
+            text = text[1:]                                   # «\r» | «\n» на стыке кусков — один конец строки
+        if not text:
+            cr = False
+            continue
+        cr = text.endswith("\r")
+        start = 0
+        for m in _EOL_RX.finditer(text):
+            piece = text[start:m.start()]
+            start = m.end()
+            if skip:
+                skip = False
+                continue
+            if size + len(piece) > limit:
+                log.info("Поток модели: строка длиннее %d символов — пропускаю", limit)
+            else:
+                cur.append(piece)
+                yield "".join(cur)
+            cur, size = [], 0
+        rest = text[start:]
+        if rest and not skip:
+            size += len(rest)
+            if size > limit:
+                log.info("Поток модели: строка длиннее %d символов — пропускаю до её конца", limit)
+                cur, size, skip = [], 0, True
+            else:
+                cur.append(rest)
+    rest = dec.decode(b"", final=True)
+    if not skip and (cur or rest) and size + len(rest) <= limit:
+        yield "".join(cur) + rest
 
 
 def turn_read_outside(messages):
@@ -1996,14 +2218,14 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         native = p.get("kind") == "ollama" or base in _native    # ещё раз: resolve_model мог узнать, что тут только Ollama
         # своя модель на этом компьютере или в сети (YouTube 26.10: llama.cpp, 27B на встроенной графике — «долгий префил,
         # Dewiar прерывал генерацию и не отвечал на часть вопросов»): первое слово ждём до 10 минут, облако — 3
-        timeout = httpx.Timeout(5, read=float(p.get("timeout") or (600 if _local_base(base) else 180)))
+        timeout = httpx.Timeout(5, read=float(p.get("timeout") or (600 if _local_base(base) or _ip_base(base) else 180)))
         if p.get("kind") == "anthropic":
             url = _anth_root(base) + "/v1/messages"
             # кэш подсказки (GitHub PR №24, maghelp, 26.10): инструменты (≈13 тыс. токенов) и характер уходят с каждым
             # шагом — с cache_control Claude берёт их из кэша в ~10 раз дешевле. Метки — на последнем инструменте и на
             # подсказке (порядок кэша: инструменты → system → сообщения)
             body = {"model": model, "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}] if system else system,
-                    "messages": with_tail(p, messages, p.get("_tail")), "stream": True,
+                    "messages": with_tail(p, messages, p.get("_tail")) if p.get("_tail") else hist_mark(messages, True), "stream": True,
                     "max_tokens": max_tokens, "temperature": prof_temp(p)}
             if tools:
                 body["tools"] = [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
@@ -2042,7 +2264,9 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             # «Голос без пауз»: сколько токенов в подсказке и сколько сервер взял из кэша — в журнал и в пульс
             if body["stream"] and _usage_ok(p, base):
                 body["stream_options"] = {"include_usage": True}
+            cache_hints(body, base, model)          # 0.87: кэш начала запроса — llama.cpp, OpenRouter (Claude, Gemini), OpenAI
         col = _Collector(anthropic=p.get("kind") == "anthropic")
+        col.cancel = cancel                                      # «Стоп» — и посреди длинной строки потока (sse_lines)
         # голый JSON в тексте — вызов, только если такая функция есть (или её зовут по имени — _known: задача, совместимость)
         known_names = [x["name"] for x in (tools_all or [])] + ([n for n in p.get("_known") or ()] if tools_all else [])
         col.tags.known = set(known_names)
@@ -2138,7 +2362,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 col.net = True                                   # ответил узел «Сети Лиры» (не потоком — по заголовку)
             if st is not None:
                 st["phase"] = "stream"                           # сервер ответил — дальше ждём слов модели
-            for line in r.iter_lines():
+            for line in _stream_lines(r, col):
                 if cancel is not None and cancel.is_set():
                     return
                 if _DONE_RX.match(line):
@@ -2158,6 +2382,7 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
             if col.pending:
                 try:
                     piece = bare.feed(col.feed_obj(json.loads(col.pending)))
+                    col.pending = ""
                     if piece and col.net:
                         net_buf.append(piece)
                     elif piece:
@@ -2175,6 +2400,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         if col.usage:
             _usage.v = col.usage
         _usage.out = col.out
+        if col.llamacpp and base not in _llamacpp:
+            _llamacpp.add(base)
         calls = col.tool_calls()
         held, bare_calls = bare.finish()
         if col.net and bare_calls:                               # узел сети: голый JSON — не вызов, просто текст

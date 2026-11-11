@@ -347,6 +347,7 @@ class Task:
         self.beat = 0.0           # monotonic последнего признака жизни шага (кусок ответа модели, начало и конец инструмента)
         self.beat_tool = ""       # какой инструмент сейчас работает ("" — ждём модель)
         self.run_t0 = 0.0         # monotonic запуска потока — для весточек долгой задачи
+        self._save_lock = threading.Lock()
 
     def __getattr__(self, k):
         try:
@@ -355,8 +356,23 @@ class Task:
             raise AttributeError(k) from e
 
     def save(self):
+        """задача.json — через временный файл и замену (как история.json): прежде запись шла поверх, и второй менеджер
+        (перезапуск программы) читал файл посреди записи — задача пропадала из списка (tasks_test, раз из четырёх)."""
         self.data["updated"] = _now()
-        _wr(self.dir / "задача.json", json.dumps(self.data, ensure_ascii=False, indent=1))
+        body = json.dumps(self.data, ensure_ascii=False, indent=1)
+        with self.__dict__.setdefault("_save_lock", threading.Lock()):
+            tmp = self.dir / "задача.json.tmp"
+            _wr(tmp, body)
+            for i in range(5):                          # Windows: читающий в этот миг держит файл — замена ждёт
+                try:
+                    os.replace(tmp, self.dir / "задача.json")
+                    break
+                except PermissionError:
+                    if i == 4:
+                        _wr(self.dir / "задача.json", body)
+                        tmp.unlink(missing_ok=True)
+                    else:
+                        time.sleep(0.02 * (i + 1))
 
     def journal(self, text):
         _wr(self.dir / "журнал.md", f"\n**{dt.datetime.now():%H:%M:%S}** · {text}\n", append=True)
@@ -2598,7 +2614,7 @@ class TaskManager:
             return "\n".join(items)
         return "\n".join(items[:k]) + f"\n… показано 1–{k} из {len(items)} {what}. Сузь: {how}."
 
-    SKIP_SCAN = {"история.json", "история.json.tmp", "задача.json"}
+    SKIP_SCAN = {"история.json", "история.json.tmp", "задача.json", "задача.json.tmp"}
 
     def _scan_root(self, t, args):
         """Где искать (file_grep, file_glob): path — подпапка задачи или папка человека (полный путь); пусто — папка задачи."""
@@ -2798,7 +2814,7 @@ class TaskManager:
             out = []
             for p in sorted(t.dir.rglob("*")):
                 rel = p.relative_to(t.dir)
-                if p.is_file() and not p.is_symlink() and not rel.parts[0].startswith(("рабочая копия", "_run", "_src", SNAP.DIR)) and p.name not in ("задача.json", "история.json", "история.json.tmp", "журнал.md"):
+                if p.is_file() and not p.is_symlink() and not rel.parts[0].startswith(("рабочая копия", "_run", "_src", SNAP.DIR)) and p.name not in ("задача.json", "задача.json.tmp", "история.json", "история.json.tmp", "журнал.md"):
                     out.append(f"{rel.as_posix()} — {p.stat().st_size} байт")
             lab = self._lab_files(t)
             if lab:                                    # №368: что задача положила в «Лабораторию» (lab_write, lab_run)

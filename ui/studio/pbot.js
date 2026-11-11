@@ -26,7 +26,7 @@ function pbRender() {
   $("#bp-n-kb").classList.toggle("dim", !(d.kb && d.kb.length));
   $("#bp-model").textContent = d.model || "общий";
   $("#bp-n-gr").classList.toggle("dim", !d.groups);
-  $("#bp-gr-sub").textContent = d.groups ? "когда упомянут или ответят ему" : "выключено";
+  $("#bp-gr-sub").textContent = !d.groups ? "выключено" : d.read_all && d.by_name !== false ? "когда упомянут, позовут по имени или ответят ему" : "когда упомянут или ответят ему";
   if (d.connected) {
     $("#bp-name").textContent = "@" + d.bot;
     $("#bp-state").textContent = !d.on ? "на паузе — не отвечает" : d.running ? "работает, пока включён этот компьютер" : "запускается…";
@@ -45,11 +45,40 @@ function pbRender() {
   const nk = $("#bp-n-kb"); nk.onclick = pbToKb; nk.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pbToKb(); } };
   for (const [id, k] of [["#bp-brief", "brief"], ["#bp-welcome", "welcome"]]) if (document.activeElement !== $(id)) $(id).value = d[k] || "";
   $("#bp-groups").checked = !!d.groups;
+  $("#bp-byname").checked = d.by_name !== false;
+  pbPriv(d);
   if (document.activeElement !== $("#bp-pu")) $("#bp-pu").value = d.per_user;
   if (document.activeElement !== $("#bp-pd")) $("#bp-pd").value = d.per_day;
   pbLog(d);
   pbEnt(p);
   requestAnimationFrame(pbWires);
+}
+
+/* №643/№644 (10.11: «бот в группе не отвечает ни на имя, ни на вопросы», «надпись „не имеет доступа к сообщениям“, хотя
+   сделал админом»): режим приватности Telegram — бот видит в группе только @упоминания и ответы ему. Ядро спрашивает getMe
+   (can_read_all_group_messages → read_all); выключен — говорим по шагам, что сделать в @BotFather, и «Проверить снова»;
+   включён — что бот теперь слышит, а в группах, откуда ещё ничего не пришло, — «уберите и добавьте снова» */
+function pbPriv(d) {
+  const box = $("#bp-priv"), name = pbPersona().name || "Лира", bot = d.bot ? "@" + pbEsc(d.bot) : "вашего бота";
+  $("#bp-byname-row").hidden = !d.connected || !d.groups;
+  $("#bp-byname-sub").textContent = `«${name}, подскажи…» — без @`;
+  if (!d.connected || !d.groups || d.read_all == null) { box.hidden = true; return; }
+  box.hidden = false; box.classList.toggle("ok", !!d.read_all);
+  const deaf = (d.chats || []).filter(c => c.type !== "channel" && !c.hears).map(c => "«" + pbEsc(c.title) + "»");
+  box.innerHTML = d.read_all
+    ? `<b>Видит сообщения в группах</b><p>Отвечает, когда его упомянут, ответят ему${d.by_name !== false ? ` или позовут по имени — «${pbEsc(name)}, …»` : ""}.`
+      + (deaf.length ? ` Если в ${deaf.join(", ")} бот всё ещё молчит — уберите его из группы и добавьте снова: Telegram включает это только при добавлении.` : "") + `</p>`
+    : `<b>В группах бот видит только @упоминания и ответы ему</b>`
+      + `<p>Так работает «режим приватности» Telegram — отсюда и надпись «не имеет доступа к сообщениям». Чтобы бот слышал группу и отзывался на имя:</p>`
+      + `<ol class="bp-steps"><li>Откройте <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> и отправьте <code>/setprivacy</code></li>`
+      + `<li>Выберите ${bot} и нажмите <b>Disable</b></li><li>Уберите бота из группы и добавьте снова — иначе Telegram не применит</li></ol>`
+      + `<div class="bp-pa"><button class="btn small" type="button" id="bp-priv-go">Проверить снова</button><small id="bp-priv-res"></small></div>`;
+  const go = $("#bp-priv-go");
+  if (go) go.onclick = async () => {
+    go.disabled = true; $("#bp-priv-res").textContent = "спрашиваю Telegram…";
+    try { PB.d = Object.assign(PB.d, await core.call("pbot_check")); pbRender(); if (!PB.d.read_all) $("#bp-priv-res").textContent = "пока включён — проверьте шаги выше"; }
+    catch (e) { $("#bp-priv-res").textContent = e.message; go.disabled = false; }
+  };
 }
 
 /* «Знания» на схеме — кнопка (вопрос пользователя 29.10: «где подключаются Знания (RAG)?»): «Персонажи» → карточка этого
@@ -154,6 +183,7 @@ async function pbTry() {
   };
   $("#bp-on").onchange = () => pbSet({ on: $("#bp-on").checked });
   $("#bp-groups").onchange = () => pbSet({ groups: $("#bp-groups").checked });
+  $("#bp-byname").onchange = () => pbSet({ by_name: $("#bp-byname").checked });
   $("#bp-brief").oninput = () => pbSaveSoon(() => ({ brief: $("#bp-brief").value }));
   $("#bp-welcome").oninput = () => pbSaveSoon(() => ({ welcome: $("#bp-welcome").value }));
   $("#bp-pu").onchange = () => pbSet({ per_user: +$("#bp-pu").value });
@@ -165,6 +195,7 @@ async function pbTry() {
 core.on("pbot", (e) => {                                 // бот ответил в Telegram — обновить ленту, огоньки по проводам
   if (!PB.d || !e) return;
   Object.assign(PB.d, e);
+  if ("read_all" in e && Object.keys(e).length === 1) { if ($("#p-pbot").classList.contains("cur")) pbRender(); return; }   // режим приватности поменялся
   if ($("#p-pbot").classList.contains("cur")) { pbLog(PB.d); pbPulse(); }
 });
 window.loadPbot = loadPbot;

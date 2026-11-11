@@ -719,6 +719,65 @@ def ui_http_base():
                 return str(Path(HERE) / "-нет-")
             return super().translate_path(path)
 
+        def do_GET(self):
+            if self.path.startswith("/podcast-audio/"):
+                return self._podcast()
+            return super().do_GET()
+
+        def _podcast(self):
+            """«Подкасты» (0.87): звук выпуска по номеру из списка ядра (STATE_DIR/podcasts.json, core/podcast.py) — только
+            файлы, которые ядро само туда записало; с поддержкой Range — чтобы ползунок проигрывателя перематывал."""
+            import re as _re
+            from settings import STATE_DIR
+            pid = urllib.parse.unquote(self.path.split("?", 1)[0][len("/podcast-audio/"):]).split(".", 1)[0]
+            f = None
+            if _re.fullmatch(r"[0-9a-f]{10}", pid):
+                try:
+                    p = json.loads((Path(STATE_DIR) / "podcasts.json").read_text(encoding="utf-8")).get(pid)
+                    f = Path(p) if isinstance(p, str) and p else None
+                    # рецензия 0.87: только звук выпуска — mp3/m4a/wav рядом с его podcast.json, без «..» и ссылок наружу
+                    if f is not None and not (f.is_absolute() and f.suffix.lower() in (".mp3", ".m4a", ".wav") and ".." not in f.parts
+                                              and f.is_file() and not f.is_symlink() and (f.parent / "podcast.json").is_file()):
+                        f = None
+                except (OSError, ValueError, TypeError):
+                    f = None
+            if f is None:
+                return self.send_error(404)
+            size = f.stat().st_size
+            a, b = 0, size - 1
+            m = _re.match(r"bytes=(\d*)-(\d*)", self.headers.get("Range") or "")
+            if m and (m.group(1) or m.group(2)):
+                if m.group(1):
+                    a = int(m.group(1))
+                    b = min(size - 1, int(m.group(2))) if m.group(2) else size - 1
+                else:
+                    a = max(0, size - int(m.group(2)))
+                if a > b or a >= size:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.end_headers()
+                    return
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {a}-{b}/{size}")
+            else:
+                self.send_response(200)
+            self.send_header("Content-Type", {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav"}[f.suffix.lower()])
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(b - a + 1))
+            self.end_headers()
+            try:
+                with open(f, "rb") as fh:
+                    fh.seek(a)
+                    left = b - a + 1
+                    while left > 0:
+                        chunk = fh.read(min(65536, left))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        left -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
         def end_headers(self):
             self.send_header("Cache-Control", "no-store")
             super().end_headers()

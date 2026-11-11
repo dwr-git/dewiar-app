@@ -74,6 +74,8 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 #rchip button { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; }
 #rchip button:active { background: var(--frost-hi); }
 #rchip button svg { width: 16px; height: 16px; stroke-width: 2.2; }
+#r-prev svg path:first-child, #r-next svg path:first-child { fill: currentColor; stroke-linejoin: round; }
+#rchip #r-prev, #rchip #r-next { width: 28px; }
 #rchip .i-play { display: none; } #rchip.paused .i-play { display: block; } #rchip.paused .i-pause { display: none; }
 #rchip .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; flex: none; }
 /* столбики — transform, а не height: анимация высоты пересчитывала раскладку шапки 60 раз в секунду (№93) */
@@ -2014,3 +2016,17 @@ body.light .it.tksent.late .bd small { color: #9A5B00; }
 .hfaq { margin: 0 0 12px; font-size: 13.5px; color: var(--muted); }
 .hfaq summary { cursor: pointer; color: var(--accent, #8B8CF7); font-weight: 600; padding: 4px 0; }
 .hfaq p { margin: 8px 0 0; line-height: 1.45; } .hfaq b { color: var(--ink); font-weight: 600; }
+
+/* 0.87 «Напоминания вовремя» (владелец 11.11: «приходят на час позже»): состояние, что мешает — с кнопкой, шаги по марке */
+#rem-health .rmst { display: flex; gap: 12px; align-items: flex-start; padding: 4px 4px 10px; }
+#rem-health .rmst i { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: 15px; }
+#rem-health .rmst.ok i { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); }
+#rem-health .rmst.bad i { background: rgba(255, 201, 120, .18); color: #FFC978; }
+#rem-health .rmst b { display: block; font-size: 15.5px; } #rem-health .rmst small { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; line-height: 1.4; }
+#rem-health .rmiss { border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent); }
+#rem-health .rmiss .btn { flex: none; }
+#rem-health .rmbrand { margin: 6px 4px 4px; } #rem-health .rmbrand ol { padding-left: 20px; margin: 8px 0 10px; color: var(--ink); }
+#rem-health .rmbrand .row2 { gap: 8px; }
+.rembrief .hint { margin: 6px 0 10px; }
+.remlate p { margin: 0 0 10px; line-height: 1.45; }
+body.light #rem-health .rmst.bad i { background: rgba(154, 91, 0, .12); color: #9A5B00; }
