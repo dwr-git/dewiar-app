@@ -33,7 +33,7 @@ jobs:
       matrix:
         include:
           - name: Apple Silicon
-            os: macos-14
+            os: macos-15          # 11.11: macos-14 у GitHub больше нет («configuration … not supported») — с 0.85 образа не было
             arch: arm64
           - name: Intel
             os: macos-15-intel
