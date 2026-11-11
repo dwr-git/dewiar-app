@@ -264,7 +264,7 @@ with sync_playwright() as p:
     pg.add_init_script("window._opened = []; window.pywebview = { api: new Proxy({}, { get: (t, k) => k === 'open_url' ? (u) => { _opened.push(u); return Promise.resolve(true); } : () => Promise.resolve(true) }) };")
     pg.add_init_script(CORE)
     pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1&skin=neusky"); pg.wait_for_timeout(1500)
-    pg.evaluate("() => { try { localStorage.removeItem('dw_mail_view'); } catch (e) {} const w = document.querySelector('#wlc'); if (w) w.remove(); loadHome(); }"); pg.wait_for_timeout(700)
+    pg.evaluate("() => { try { localStorage.removeItem('dw_mail_view'); } catch (e) {} delete hmmMem.mail_view; if (window.S && S.ui) delete S.ui.mail_view; const w = document.querySelector('#wlc'); if (w) w.remove(); loadHome(); }"); pg.wait_for_timeout(700)
     pg.click("#hm-mail .hmm-row >> nth=0"); pg.wait_for_timeout(500)
     ok(["mail_read", {"uid": "2", "html": True}] in pg.evaluate("calls"), "открыли — письмо с HTML (mail_read html)")
     ok(pg.is_visible("#hmm-bar") and pg.locator("#hmm-body .hmm-text").count() == 1 and pg.locator("#hmm-body iframe").count() == 0,
@@ -281,7 +281,7 @@ with sync_playwright() as p:
     pg.click("#hmm-pics"); pg.wait_for_timeout(400)
     sd = pg.evaluate("document.querySelector('.hmm-frame').srcdoc")
     ok("img-src data: https:;" in sd and "script-src" not in sd and pg.is_hidden("#hmm-pics"), "нажали — внешние картинки можно, скрипты — по-прежнему нет")
-    ok(pg.evaluate("localStorage.getItem('dw_mail_view')") == "html", "выбор вида запомнен")
+    ok(pg.evaluate("hmmGet('mail_view', '')") == "html", "выбор вида запомнен")
     # второй рубеж: даже если бы скрипт прошёл чистку — рамка его не выполнит
     pg.evaluate("() => { window._t0 = document.title; HMM.r = Object.assign({}, HMM.r, { html: '<p id=x>ок</p><script>parent.document.title = \"ВЗЛОМ\"; document.getElementById(\"x\").textContent = \"ran\";</script>' }); hmmShow(); }")
     pg.wait_for_timeout(400)

@@ -335,9 +335,24 @@ function hmmWhen(d) {
    развернуть, или убирать неинтересные письма». Свернуть — шапкой (одна строка: сколько новых и последнее письмо), выбор
    запоминается. У письма — «Убрать с главной» (×): письмо уходит только отсюда, в ящике остаётся; тут же можно не показывать
    этого отправителя вовсе («Не показывать …»), вернуть — «Показать скрытые». Всё — в этом окне (localStorage). */
-const HMM_K = { fold: "dw_mail_fold", hide: "dw_mail_hide", mute: "dw_mail_mute" };
-function hmmGet(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
-function hmmSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
+/* Свёрнута ли почта, убранные письма и отправители — в настройках программы (ui.mail_fold, mail_hide, mail_mute), как
+   свёрнутые группы меню. Владелец 11.11 (Ubuntu): «сворачивание писем — ничего не происходит», «удаление — крестик ни к
+   чему не приводит»: в окне студии WebKitGTK хранилище страницы (localStorage) не работает, запись молча пропадала.
+   Прежние значения из хранилища страницы (Windows) читаются, пока в настройках ничего нет. */
+const HMM_K = { fold: "mail_fold", hide: "mail_hide", mute: "mail_mute" };
+const hmmMem = {};
+function hmmGet(k, d) {
+  const u = (typeof S !== "undefined" && S && S.ui) || {};
+  if (u[k] != null) return u[k];
+  if (k in hmmMem) return hmmMem[k];
+  try { const v = JSON.parse(localStorage.getItem("dw_" + k)); return v == null ? d : v; } catch (e) { return d; }
+}
+function hmmSet(k, v) {
+  hmmMem[k] = v;
+  if (typeof S !== "undefined" && S) S.ui = Object.assign({}, S.ui, { [k]: v });
+  if (typeof core !== "undefined") core.call("settings_save", { patch: { ui: { [k]: v } } }).catch(() => { });
+  try { localStorage.setItem("dw_" + k, JSON.stringify(v)); } catch (e) { }
+}
 const hmmKey = (x) => `${x.box || ""}|${x.uid || ""}|${x.date || ""}`;
 const hmmFrom = (x) => hmmAddr(x.from).toLowerCase();
 function hmmShown(items) {
@@ -361,7 +376,7 @@ function hmMail() {
       <i class="hmm-av" style="--c:${typeof vlCol === "function" ? vlCol(who) : "#5b8def"}" aria-hidden="true">${hmEsc((who.replace(/^[^\p{L}\d]+/u, "")[0] || "?").toUpperCase())}</i>
       <span class="hmm-t"><span class="hmm-l1"><b>${hmEsc(who)}</b>${x.files && x.files.length ? '<em class="hmm-clip" title="С вложением">📎</em>' : ""}<time>${hmEsc(hmmWhen(x.date))}</time></span>
         <span class="hmm-l2"><span class="hmm-sub">${hmEsc(sub)}</span>${sn ? `<span class="hmm-sn"> — ${hmEsc(sn.slice(0, 140))}</span>` : ""}</span></span></button>
-      <button type="button" class="hmm-x" data-x="${i}" title="Убрать с главной (в ящике письмо останется)" aria-label="Убрать письмо от ${hmEsc(who)} с главной"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>`; }).join("");
+      <button type="button" class="hmm-rx" data-x="${i}" title="Убрать с главной (в ящике письмо останется)" aria-label="Убрать письмо от ${hmEsc(who)} с главной"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>`; }).join("");
   const last = it[0], u = HM.mailUndo, uw = u ? hmmWho(u.from) : "";
   const peek = last ? `<span class="hmm-peek"><b>${hmEsc(hmmWho(last.from))}</b> — ${hmEsc(last.subject || "(без темы)")}</span>` : "";
   box.innerHTML = `<div class="hmm-head"><h2 class="hmm-h2"><button type="button" class="hmm-fold" id="hmm-fold" aria-expanded="${!fold}" aria-controls="hmm-wrap" title="${fold ? "Показать письма" : "Свернуть почту"}">
@@ -376,7 +391,7 @@ function hmMail() {
     + (hmmGet(HMM_K.hide, []).length || hmmGet(HMM_K.mute, []).length ? ` · <button type="button" class="hmm-all" id="hmm-all">Показать скрытые</button>` : "") + `</p></div>`;
   $("#hmm-re").onclick = () => hmMailLoad(true);
   $("#hmm-fold").onclick = () => { hmmSet(HMM_K.fold, !fold); HM.mailUndo = null; hmMail(); };
-  $$("#hm-mail .hmm-x").forEach(b => b.onclick = (e) => { e.stopPropagation(); hmmHide(it[+b.dataset.x]); });
+  $$("#hm-mail .hmm-rx").forEach(b => b.onclick = (e) => { e.stopPropagation(); hmmHide(it[+b.dataset.x]); });
   if ($("#hmm-back")) $("#hmm-back").onclick = () => { hmmSet(HMM_K.hide, hmmGet(HMM_K.hide, []).filter(k => k !== hmmKey(u))); HM.mailUndo = null; hmMail(); };
   if ($("#hmm-mute")) $("#hmm-mute").onclick = () => { const mu = hmmGet(HMM_K.mute, []); mu.push(hmmFrom(u)); hmmSet(HMM_K.mute, [...new Set(mu)].slice(-100)); HM.mailUndo = null; hmMail(); };
   if ($("#hmm-all")) $("#hmm-all").onclick = () => { hmmSet(HMM_K.hide, []); hmmSet(HMM_K.mute, []); HM.mailUndo = null; hmMail(); };
@@ -390,7 +405,7 @@ function hmMail() {
    ушёл бы на чужой сайт мимо всех запретов, — они списком под письмом, с настоящим адресом, и открываются в браузере.
    Есть у письма своя текстовая часть — по умолчанию «Текстом»; выбор человека запоминается. */
 const HMM = { x: null, r: null, view: "", pics: false, busy: false };
-function hmmView() { try { return localStorage.getItem("dw_mail_view") || ""; } catch (e) { return ""; } }
+function hmmView() { return String(hmmGet("mail_view", "") || ""); }
 function hmmDoc(r, pics) {
   const csp = `default-src 'none'; img-src data:${pics ? " https:" : ""}; style-src 'unsafe-inline'; font-src data:`;
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}">`
@@ -471,7 +486,7 @@ async function hmmOpen(x) {
 if ($("#hmm-dlg")) {
   $("#hmm-x").onclick = () => $("#hmm-dlg").close();
   $("#hmm-dlg").addEventListener("click", (e) => { if (e.target === $("#hmm-dlg")) $("#hmm-dlg").close(); });
-  $$("#hmm-bar .hmm-seg button").forEach(b => b.onclick = () => { HMM.view = b.dataset.v; try { localStorage.setItem("dw_mail_view", HMM.view); } catch (e) { } hmmShow(); });
+  $$("#hmm-bar .hmm-seg button").forEach(b => b.onclick = () => { HMM.view = b.dataset.v; hmmSet("mail_view", HMM.view); hmmShow(); });
   $("#hmm-pics").onclick = () => { HMM.pics = true; hmmShow(); };
   $("#hmm-del").onclick = () => hmmAct("trash");
   $("#hmm-spam").onclick = () => hmmAct("junk");

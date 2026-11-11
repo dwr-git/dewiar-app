@@ -7,6 +7,7 @@
    (общая с core/sync.py и cloud.php ?p=/sync), облако, аккаунт, мессенджеры, запуск.
    В браузере вместо D — заглушка с теми же методами: на ней страницу проверяют тесты tests/android_*. */
 "use strict";
+if (typeof window.t !== "function") window.t = (k) => k;   // словари языков (i18n.js) не подключены — например, в проверках: ключ вместо текста, без ошибки
 const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -4541,6 +4542,7 @@ function toolSpecs() {
   if ((S.home.token || haOn()) && !D.web) t.push({ name: "smart_home", description: "Умный дом (Яндекс и Home Assistant): action list (устройства, сценарии и показания датчиков — температура, влажность)|on|off|brightness|brighter|dimmer|temperature|scenario; target — устройство и/или комната словами («свет в спальне», «весь свет», «кондиционер»), value — число.",
     parameters: O({ action: { type: "string", enum: ["list", "on", "off", "brightness", "brighter", "dimmer", "temperature", "scenario"] }, target: STR, value: NUM }, ["action"]) });
   t.push(...wkTools());                                  // «Работа»: поручения руководителя (work.js), если есть работа
+  if (typeof cliTools === "function") t.push(...cliTools());   // «Клиенты» и «Сделки» (clients.js)
   t.push(...bsTools());                                  // «Сотрудники»: вы — руководитель, доска с компьютера (boss.js)
   if (kidsOn()) { const k = kidsTools(); return t.filter(x => k.has(x.name)); }   // детский режим — только безопасное
   return D.web ? t.filter(x => !WEB_NO_TOOLS.has(x.name)) : t;
@@ -4813,6 +4815,7 @@ async function runTool(name, a) {
       const it = await clSend(a.to || "", a.text || ""); return `Отправлено ${it.to}. Скажи коротко, что отправила.`; }
     case "close_read": return clRecent(a.who || "");
     case "work_tasks": case "work_act": return await wkTool(name, a || {});
+    case "client_note": case "client_info": case "client_next": case "client_list": case "deal_add": case "deal_stage": case "deals_list": return await cliTool(name, a || {});
     case "team_status": case "team_assign": case "team_message": return await bsTool(name, a || {});
     case "close_where": return await radWhereText(a.who || "");
     case "close_wave": { const p = await radWave(a.to || ""); return `Помахала: ${p.name} увидит и услышит «машет вам». Скажи коротко.`; }
@@ -6043,7 +6046,7 @@ function closeSheets(keepDim) {
 $("#dim").onclick = () => closeSheets();
 let touchY = null;
 document.addEventListener("touchstart", e => { const s = e.target.closest(".sheet"); touchY = s && s.scrollTop <= 0 ? e.touches[0].clientY : null; }, { passive: true });
-document.addEventListener("touchend", e => { if (touchY != null && e.changedTouches[0].clientY - touchY > 90) closeSheets(); touchY = null; }, { passive: true });
+document.addEventListener("touchend", e => { if (touchY != null && e.changedTouches[0].clientY - touchY > 90 && !document.body.classList.contains("tab")) closeSheets(); touchY = null; }, { passive: true });   // планшет: раздел — панель сбоку, жест вниз её не закрывает (крестик)
 /* №93 (идея: «прокрутка плавная нужна, как будто телефон тупит»): пока листают лист, портрет под затемнением не рисуется
    (он притушен и почти не виден — а кадр облика занимал главный поток и заставлял заново размывать фон под листом);
    body.scrolling — метка «листают» для стилей и проверки. Слушатель пассивный, в нём только класс и таймер — без
@@ -7237,6 +7240,8 @@ if ($("#bal")) $("#bal").onclick = (e) => { e.stopPropagation(); openTopup(); };
 /* «Всё» (0.60; владелец 28.10: «сверху иконок многовато»): Досуг, Душа, Работа, Идеи, обучение — плитками в одном листе,
    как «Главная» на компьютере; на панели остались звук, «Близкие», день, «Всё» и настройки. */
 const APPS_IC = {
+  pc: '<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/>',
+  clients: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.8 19.5a6.2 6.2 0 0 1 12.4 0"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M17.6 14a6.2 6.2 0 0 1 3.6 5.5"/>',
   play: '<path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/>',
   soul: '<path d="M10.5 2.8l1.9 5.5 5.6 1.9-5.6 1.9-1.9 5.6-1.9-5.6L3 10.2l5.6-1.9z"/><path d="M18.5 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/>',
   work: '<rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5M3 12.5h18"/>',
@@ -7260,21 +7265,27 @@ function appsHtml() {
     return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
   }
   t.push(["soul", "Душа", "дневник и характер"]);
+  if (!kidsOn()) t.push(["clients", window.t("apps.clients"), window.t("apps.clients_d")]);   // 0.9.32: отчёты 657, 658 — бизнес-инструменты и на телефоне
   if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "для сотрудников"]);   // 28.10, владелец: «при чём здесь „по коду“»
   if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
   if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
   if (!kidsOn()) t.push(["safe", "Сейф", "пароли с компьютера"]);       // 03.11: пароли — подглядеть с телефона (safe.js)
   t.push(["radio", "Радио", "станции и жанры"]);
   t.push(["tricks", "Что я умею", "фразы-примеры"], ["course", "Курсы", "урок в день"], ["lessons", "Видеоуроки", "мультфильмы по минуте"], ["qa", "Вопрос — ответ", "как сделать…"]);
+  t.push(["pc", window.t("apps.pc"), window.t("apps.pc_d")]);           // 0.9.32: что есть только на компьютере и как поручить ему отсюда (отчёт 658)
   t.push(["senior", "Для старших", "для мамы и папы"], ["kids", "Детский режим", kidsOn() ? "включён" : "для ребёнка"], ["news", "Что нового", "в этой версии"]);
   return `<div class="apps">${t.map(([k, n, sub]) => `<button class="app a-${k}${k === "lessons" && lsnNew().length ? " new" : ""}" data-app="${k}"><span class="ai"><svg viewBox="0 0 24 24">${APPS_IC[k]}</svg></span><b>${n}</b><small>${sub}</small></button>`).join("")}</div>`;
 }
+/* Открыть раздел «Всё» по ключу — плитка листа «Всё» и меню слева на планшете (tablet.js). */
+function appOpen(k) {
+  ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
+      ideas: () => openIdeas(), safe: () => openSafe(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(), lessons: () => openLessons(),
+      news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9", true), true),
+      clients: () => (typeof openClients === "function" ? openClients() : null), pc: () => (typeof openPcInfo === "function" ? openPcInfo() : null) }[k] || (() => { }))();
+}
 function openApps() {
   $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
-  $$("#apps-body [data-app]").forEach(b => b.onclick = () => { const k = b.dataset.app; closeSheets();
-    setTimeout(() => ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
-      ideas: () => openIdeas(), safe: () => openSafe(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(), lessons: () => openLessons(),
-      news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9", true), true) }[k] || (() => { }))(), 60); });
+  $$("#apps-body [data-app]").forEach(b => b.onclick = () => { const k = b.dataset.app; closeSheets(); setTimeout(() => appOpen(k), 60); });
 }
 $("#b-apps").onclick = () => openApps();
 /* «Видеоуроки» (0.69; владелец 29.10: «показывать их в приложении»): мультфильмы ИИ Академии — с сайта (?p=/academy:
@@ -7900,11 +7911,11 @@ function wireSettings(info) {
    меняешь здесь — меняй и там. Дополнительные виды (soul, mind, diary, dayturn, taskreq, task, done) шлём, только если их знает сервер. */
 const MIND_MAX = 8000, MIND_CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g;
 const mindText = (d) => (d && typeof d.text === "string" && d.text.trim() && d.text.length <= MIND_MAX) ? d.text.replace(MIND_CTRL, "") : "";
-const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory", "safe"];   // safe — сейф шифром мастер-пароля (safe.js)
+const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory", "safe", "client"];   // client — «Клиенты» (clients.js), только зашифрованными   // safe — сейф шифром мастер-пароля (safe.js)
 /* Сквозное шифрование синхронизации (S.sync.e2e, как core/sync.py и core/synckey.py): ключ 32 байта знают только свои
    устройства (pref sync_key; другим своим — конвертом ownShare), личные записи уходят {e2e: 1, c: seal(K, JSON)}.
    Открытыми — метка mind:e2e, задачи для облака (taskreq с cloud) и удаления. */
-const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory", "safe"];
+const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory", "safe", "client"];
 function syncKeyGet() { try { const d = JSON.parse(prefGet("sync_key") || "null"); return d && d.k && DC() && DC().b64d(d.k).length === 32 ? d : null; } catch (e) { return null; } }
 function syncKeyAdopt(kb64, at) {
   let k; try { k = DC().b64d(String(kb64 || "")); } catch (e) { return false; }
@@ -8155,6 +8166,7 @@ function syncSnapshot(st) {
   money().forEach(x => { out["money:" + x.id] = { date: x.date, kind: x.kind, amount: +x.amount, currency: x.currency, category: x.category || "", note: x.note || "" }; });
   (S.memory || []).forEach(f => { out["memory:" + factId(f)] = { text: f }; });
   const ks = ((st || syncSt()) || {}).kinds || [];
+  if (ks.includes("client") && typeof cliSnap === "function") cliSnap(out);   // «Клиенты»: в канал без шифрования не уходят (syncOne)
   if (ks.includes("pmemory") && S.pmem) {                 // своя память персонажей и у кого она своя
     Object.entries(S.pmem.facts || {}).forEach(([n, fs]) => (fs || []).forEach(f => { out["pmemory:" + pmemId(n, f)] = { who: n, text: f }; }));
     if (+S.pmem.at > 0) out["pmemory:own"] = { names: S.pmem.own || [], at: +S.pmem.at };   // меняли хоть раз — иначе не перебивать чужое
@@ -8207,6 +8219,8 @@ function syncApply(it) {
     let m = money().filter(x => x.id !== it.id);
     if (!del && +d.amount > 0) m.push({ id: it.id, date: d.date, kind: d.kind, amount: +d.amount, currency: d.currency, category: d.category || "", note: d.note || "" });
     fileSave("money.json", JSON.stringify(m));
+  } else if (it.kind === "client") {
+    return typeof cliApply === "function" ? cliApply(it.id, d, del, syncChans().find(x => x.key === syncCurKey)) : false;
   } else if (it.kind === "pmemory") {
     S.pmem = Object.assign({ own: [], at: 0, facts: {} }, S.pmem || {});
     if (it.id === "own") { if (!del && Array.isArray(d.names) && +d.at > (+S.pmem.at || 0)) { S.pmem.own = d.names.map(String).slice(0, 40); S.pmem.at = +d.at; } }
@@ -8405,6 +8419,8 @@ async function syncOne(c, opts) {
   const verOf = (lk, h) => { const e = otherR(lk).find(x => x.h === h && +x.u); return e ? +e.u : 0; };
   const snap = syncSnapFor(st), now = Date.now(), changes = [], ek = e2eKey(c);
   (opts.hold || []).forEach(k => { delete snap[k]; });
+  const cliOk = typeof cliChanOk === "function" && cliChanOk(c);       // «Клиенты» — чужие телефоны и почты: только зашифрованными или по Wi-Fi
+  if (!cliOk) for (const k in snap) if (k.startsWith("client:")) delete snap[k];
   // «удалить», «ответить» задаче — туда, откуда она пришла (задание, не переданное «Домашним», живёт только на узле)
   qGet("taskcmd").forEach(x => { const ch = (x.chs || []).filter(k => chans.some(y => y.key === k)); if (ch.length && !ch.includes(c.key)) delete snap["task:" + x.id]; });
   if (ek) snap["mind:e2e"] = { on: true };                          // другим устройствам: шифрование включено — попросите ключ
@@ -8417,7 +8433,7 @@ async function syncOne(c, opts) {
     const t = snap[k].t, upd = again ? now : (e && e.keep === h && +e.u) || verOf(syncLocKey(st, k), h) || ((!e || e.seed) && t ? Math.min(now, t) : now);
     changes.push({ kind, id, data, updated: upd, _h: h }); }
   for (const k in st.idx) { const e = st.idx[k];
-    if (k in snap || e.del || e.skip || e.seed) continue;
+    if (k in snap || e.del || e.skip || e.seed || (!cliOk && k.startsWith("client:"))) continue;   // шифрование выключили — это не удаление клиентов
     if (e.keep !== undefined) { delete st.idx[k]; continue; }      // в канале её и не было — удалять там нечего
     changes.push({ kind: k.slice(0, k.indexOf(":")), id: k.slice(k.indexOf(":") + 1), data: {}, updated: now, deleted: true, _h: null }); }
   const info = JSON.parse(D.info() || "{}");

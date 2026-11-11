@@ -3723,6 +3723,21 @@ img.emj { width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 .03em; 
 .co-msg.sum.typing .co-tx p:last-child::after { background: #fff; }
 .co-end { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .co-end p { margin: 0 auto 0 0; font-size: 13.5px; color: var(--muted); } .co-end p.bad { color: var(--bad, #e0566f); }
+/* Светлые темы (владелец 11.11, неоморфизм: «синяя плашка выбивается из дизайна — сделать органичнее»): «стол» — тот же
+   материал, что карточки слева (стекло темы и её тень), с мягким отсветом акцента сверху; текст — цвета темы. */
+html.st-light .co-stage { color: var(--ink); box-shadow: var(--raise-s, 0 18px 40px -28px rgba(20,30,60,.35));
+  background: radial-gradient(60% 80% at 50% -20%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%), var(--glass); }
+html.st-light .co-qline { color: var(--ink); }
+html.st-light .co-qline span { color: var(--accent); }
+html.st-light .co-stage:not(.live) .co-qline:not(:has(span)) { color: var(--muted); }
+html.st-light .co-seat b { color: var(--ink); }
+html.st-light .co-seat small { color: var(--muted); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+html.st-light .co-st { color: color-mix(in srgb, var(--c) 75%, var(--ink)); }
+html.st-light .co-steps li { color: var(--muted); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+html.st-light .co-steps li::before { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+html.st-light .co-steps li.on { color: #fff; background: var(--accent); } html.st-light .co-steps li.on::before { background: rgba(255,255,255,.25); color: #fff; }
+html.st-light .co-steps li.past { color: var(--ink); }
+html.st-light .co-stop { background: color-mix(in srgb, var(--ink) 8%, transparent) !important; color: var(--ink) !important; }
 @media (max-width: 980px) { .co-grid { grid-template-columns: 1fr; } .co-side { position: static; } }
 @media (prefers-reduced-motion: reduce) { .co-msg, .co-dots i, .co-msg.typing .co-tx p:last-child::after { animation: none; } .co-orb { transition: none; } }
 /* «Совет ИИ» на «Главной». 29.10 (владелец: «0.67 — главная грубая; цвета органичные, без обводок, всё в одном стиле»):
@@ -4206,14 +4221,17 @@ html.st-light .fd-res { background: #f6f8fc; box-shadow: 0 24px 60px -18px rgba(
 .hm-mail.fold { padding-top: 12px; padding-bottom: 12px; }
 .hm-mail.fold .hmm-head { margin-bottom: 0; }
 .hmm-wrap[hidden] { display: none; }
-.hmm-list li { position: relative; display: flex; align-items: center; }
-.hmm-list li .hmm-row { flex: 1; min-width: 0; padding-right: 40px; }
-.hmm-x { position: absolute; right: 6px; top: 50%; translate: 0 -50%; width: 28px; height: 28px; border: 0; border-radius: 9px; display: grid; place-items: center;
-  background: var(--glass, rgba(255,255,255,.8)); color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .15s ease; }
-.hmm-list li:hover .hmm-x, .hmm-x:focus-visible { opacity: 1; }
-.hmm-x:hover, .hmm-x:focus-visible { color: var(--ink); background: rgba(127,127,140,.16); outline: none; }
-.hmm-x svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-@media (hover: none) { .hmm-x { opacity: .7; } }
+/* крестик «убрать с главной» — внутри строки письма, справа (владелец 11.11, Ubuntu: «даже выглядит некрасиво при наведении» —
+   он назывался как крестик окна письма (.hmm-x, position: static ниже) и вылезал за строку отдельной кнопкой) */
+.hmm-list li { position: relative; display: flex; align-items: center; border-radius: 14px; }
+.hmm-list li .hmm-row { flex: 1; min-width: 0; padding-right: 46px; }
+.hmm-list li:hover .hmm-row { background: rgba(127,127,140,.1); }
+.hmm-rx { position: absolute; right: 8px; top: 50%; margin-top: -15px; width: 30px; height: 30px; border: 0; border-radius: 10px; display: grid; place-items: center;
+  background: transparent; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .15s ease, background .15s ease; }
+.hmm-list li:hover .hmm-rx, .hmm-rx:focus-visible { opacity: 1; }
+.hmm-rx:hover, .hmm-rx:focus-visible { color: var(--ink); background: rgba(127,127,140,.18); outline: none; }
+.hmm-rx svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+@media (hover: none) { .hmm-rx { opacity: .7; } }
 .hmm-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 10px 8px; padding: 9px 12px; border-radius: 12px; font-size: 13px;
   color: var(--ink); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .hmm-undo button, .hmm-all { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
@@ -4252,7 +4270,7 @@ html.st-light .hmm-dlg { background: #f6f8fc; box-shadow: 0 30px 80px -20px rgba
 .hmm-dh > span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .hmm-dh small { font-size: 12.5px; color: var(--muted); } .hmm-dh b { font: 600 17px/1.35 "Unbounded", sans-serif; }
 .hmm-x { position: static; flex: none; }
-.hmm-body { padding: 0 20px; overflow: auto; flex: 1; }
+.hmm-body { padding: 0 20px; overflow: auto; flex: 1 1 auto; min-height: 120px; }   /* flex: 1 (основа 0) WebKitGTK сжимал до нуля — письмо было пустым (владелец 11.11) */
 .hmm-to { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); word-break: break-all; }
 .hmm-text { white-space: pre-wrap; font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; padding-bottom: 6px; }
 .hmm-files { font-size: 13px; color: var(--muted); }

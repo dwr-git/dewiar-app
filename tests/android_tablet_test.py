@@ -36,7 +36,9 @@ with sync_playwright() as p:
             pg.wait_for_timeout(500)
             g = pg.evaluate(GEOM)
             mic_c = (g["mic"][0] + g["mic"][1]) / 2
-            ok(g["orb"][0] >= g["kb"][0] - 2 and g["bot"][1] <= g["hist"][1] + 2 and g["bot"][0] > g["orb"][1] and abs(mic_c - g["w"] / 2) < 3
+            # 0.9.32 (отчёты 657, 658): на планшете слева меню разделов — «по центру» значит по центру места правее него
+            rail = pg.evaluate("(() => { const r = document.querySelector('#rail'); return r && getComputedStyle(r).display !== 'none' ? r.getBoundingClientRect().right : 0; })()")
+            ok(g["orb"][0] >= g["kb"][0] - 2 and g["bot"][1] <= g["hist"][1] + 2 and g["bot"][0] > g["orb"][1] and abs(mic_c - (rail + g["w"]) / 2) < 3
                and g["orb"][1] - g["orb"][0] >= 200,
                f"{vw[0]}×{vw[1]} {skin}: облик и ответ — между кнопкой клавиатуры и кнопкой разговора, микрофон по центру: {g}")
         pg.close()

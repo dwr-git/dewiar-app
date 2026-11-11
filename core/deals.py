@@ -141,6 +141,7 @@ class DealsMixin:
                     d["stage"], d["moved"] = st, time.time()
                     d["paid"] = time.time() if st == "paid" else 0
             moved = d["stage"] != old
+            d["u"] = c["updated"] = time.time()          # правка — для слияния с телефоном (clients.merge_remote)
         if moved:
             self.note(cid, self._deal_line(d), kind="deal")
         else:
@@ -155,6 +156,8 @@ class DealsMixin:
             c["deals"] = [x for x in self._deals(c) if x["id"] != did]
             if len(c["deals"]) == n:
                 raise DealError("такой сделки нет")
+            c["gone"] = (list(c.get("gone") or []) + [did])[-200:]   # удалена — с телефона не вернётся (merge_remote)
+            c["updated"] = time.time()
             self._save()
         return True
 

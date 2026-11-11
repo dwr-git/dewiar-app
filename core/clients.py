@@ -233,6 +233,8 @@ class Clients(DealsMixin):
         with self._lock:
             c = self._get(cid)
             c["log"] = [x for x in c["log"] if x.get("id") != nid]
+            c["gone"] = (list(c.get("gone") or []) + [nid])[-200:]
+            c["updated"] = time.time()
             self._save()
             return dict(c)
 
@@ -266,6 +268,49 @@ class Clients(DealsMixin):
             raise ClientError("следующего шага нет")
         self.note(cid, "Сделано: " + n["what"], kind="done")       # «Сделано: отправить счёт»
         return self.set_next(cid, "", None)
+
+    # ---------- телефон и планшет (0.89; отчёты 657, 658: «на планшете нет бизнес-инструментов») ----------
+    # Карточка ходит целиком видом синхронизации client (core/sync.py) — только со сквозным шифрованием или по домашнему
+    # Wi-Fi: это чужие телефоны и почты. Правили на двух устройствах — карточки сливаются одинаково здесь и на телефоне
+    # (cliMerge в android/assets/www/clients.js): поля — из более поздней правки (updated), история и сделки — объединение
+    # по id (сделка — более поздняя по u/moved/created), удалённое (gone) не возвращается.
+
+    SYNC_LOG = 200                                       # записей истории в синхронизации (облако берёт запись до 300 КБ)
+
+    def sync_items(self):
+        """-> {cid: карточка для синхронизации} (без служебного crm, история — последние SYNC_LOG)."""
+        with self._lock:
+            out = {}
+            for cid, c in self.st["clients"].items():
+                d = {k: v for k, v in c.items() if k != "crm"}
+                d["log"] = list(c.get("log") or [])[-self.SYNC_LOG:]
+                out[cid] = json.loads(json.dumps(d, ensure_ascii=False))
+            return out
+
+    def merge_remote(self, cid, d):
+        """Карточка с другого устройства. -> True, если здесь что-то поменялось."""
+        if not isinstance(d, dict) or not _norm(d.get("name")) or not re.fullmatch(r"[0-9a-zA-Z_-]{1,40}", str(cid)):
+            return False
+        with self._lock:
+            c = self.st["clients"].get(cid)
+            m = merge_cards(c, d, cid)
+            if c is not None and m == {k: v for k, v in c.items() if k != "crm"}:
+                return False
+            if c is not None and c.get("crm"):
+                m["crm"] = c["crm"]
+            if c is None and len(self.st["clients"]) >= 5000:
+                return False
+            self.st["clients"][cid] = m
+            self._save()
+        log.info("🔄 Клиент «%s» — правка с другого устройства", self.title(m))
+        return True
+
+    def remove_remote(self, cid):
+        with self._lock:
+            if self.st["clients"].pop(cid, None) is None:
+                return False
+            self._save()
+        return True
 
     # ---------- для модели и студии ----------
 
@@ -333,6 +378,58 @@ class Clients(DealsMixin):
         if owed and not q:
             out.append(self.deals_summary("owed"))           # «кто ждёт?» — и кто нам должен (deals.py)
         return f"Клиентов: {len(items)}. " + " ".join(out)
+
+
+def _num(x):
+    try:
+        return float(x or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def merge_cards(a, b, cid=""):
+    """Слить две версии карточки клиента (a — здесь, может быть None; b — пришедшая). Так же — cliMerge в clients.js
+    телефона: результат один и тот же на обоих устройствах, иначе они перебрасывались бы правками без конца."""
+    a = a or {}
+    def sig(c):                                          # равное время правки — решает текст (одинаково на телефоне)
+        nx = c.get("next") if isinstance(c.get("next"), dict) else {}
+        return "|".join([str(c.get(k) or "") for k in ("name", "company", "phone", "email", "note")]
+                        + [",".join(str(t) for t in (c.get("tags") or [])), str(nx.get("what") or ""), str(nx.get("at") or "")])
+    newer = b if not a or (_num(b.get("updated")), sig(b)) > (_num(a.get("updated")), sig(a)) else a
+    gone = sorted({str(x) for x in list(a.get("gone") or []) + list(b.get("gone") or [])})[-200:]   # порядок не важен — одинаково везде
+    gs = set(gone)
+    logs = {}
+    for x in list(a.get("log") or []) + list(b.get("log") or []):
+        if isinstance(x, dict) and x.get("id") and str(x["id"]) not in gs:
+            y = {"id": str(x["id"]), "ts": _num(x.get("ts")), "t": str(x.get("t") or "")[:1000],
+                 "kind": x.get("kind") if x.get("kind") in ("note", "call", "deal", "done") else "note"}
+            o = logs.get(y["id"])
+            if o is None or (y["ts"], y["t"], y["kind"]) > (o["ts"], o["t"], o["kind"]):   # одна запись в двух видах — одинаково везде
+                logs[y["id"]] = y
+    deals = {}
+    for x in list(a.get("deals") or []) + list(b.get("deals") or []):
+        if not isinstance(x, dict) or not x.get("id") or str(x["id"]) in gs:
+            continue
+        k = str(x["id"])
+        w = lambda y: (max(_num(y.get("u")), _num(y.get("moved")), _num(y.get("created"))), _num(y.get("amount")),
+                       "|".join(str(y.get(f) or "") for f in ("stage", "title", "due", "note")))
+        if k not in deals or w(x) > w(deals[k]):
+            deals[k] = dict(x)
+    out = {"id": str(cid or newer.get("id") or a.get("id") or b.get("id") or "")}
+    for k, lim in (("name", 120), ("company", 120), ("phone", 60), ("email", 120), ("note", 2000)):
+        out[k] = str(newer.get(k) or "")[:lim]
+    out["tags"] = [str(t)[:30] for t in (newer.get("tags") or []) if str(t).strip()][:12]
+    out["created"] = min([v for v in (_num(a.get("created")), _num(b.get("created"))) if v] or [_num(newer.get("updated"))])
+    out["updated"] = max(_num(a.get("updated")), _num(b.get("updated")))
+    out["log"] = sorted(logs.values(), key=lambda x: (x["ts"], x["id"]))[-300:]
+    nx = newer.get("next")
+    out["next"] = {"what": str(nx.get("what") or "")[:300], "at": str(nx.get("at") or "")[:20], "rid": str(nx.get("rid") or "")[:40]} \
+        if isinstance(nx, dict) and str(nx.get("what") or "").strip() else None
+    if deals:
+        out["deals"] = sorted(deals.values(), key=lambda x: (_num(x.get("created")), str(x["id"])))
+    if gone:
+        out["gone"] = gone
+    return out
 
 
 def _t(x):

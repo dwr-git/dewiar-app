@@ -139,5 +139,13 @@ with sync_playwright() as p:
     ok(g0 == "Для себя", "свёрнутость групп помнится под прежними русскими именами (data-fold-k) — при смене языка не теряется")
     ok(not errs, f"без ошибок JavaScript: {errs[:2]}")
     b.close()
+# 0.89: виджет — главные строки состояния из словаря; телефон — те же словари («Клиенты», планшет)
+hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
+ok(all(f'window.t("{k}")' in hud for k in ("hud.st.listen", "hud.st.think", "hud.mic_off", "hud.st.sleep", "hud.upd.go")) and en.get("hud.st.listen") == "I'm listening",
+   "виджет: «Слушаю», «Думаю», микрофон, сон, обновление — по-английски из en.json")
+www = (ROOT / "android/assets/www/index.html").read_text(encoding="utf-8")
+ok("i18n.data.js" in www and "i18n.js" in www and 'cp "$ROOT/ui/assets/i18n.data.js"' in (ROOT / "android/tools/www_assemble.sh").read_text(encoding="utf-8"),
+   "телефон берёт те же словари")
+
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

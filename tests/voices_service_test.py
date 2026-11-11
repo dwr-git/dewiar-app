@@ -149,8 +149,8 @@ open(long_wav, "wb").write(A.wav_bytes(np.full(24000 * 15, 0.2, np.float32)))
 E2 = A.Engine()
 outs, sr = E2.generate({"id": "anna", "kind": "clone", "audio": "long.wav", "text": "Это мой голос."}, ["Привет, я голос Дэвиа\u0301ра.", "Скажи «прив+ет»."], "Russian")
 c0 = _f5["calls"]
-ok(len(c0) == 2 and sr == 24000 and c0[0]["ref_len"] <= 24000 * 12 and c0[0]["ref_text"] == "Это мой г+олос." and c0[0]["nfe"] == A.ESPEECH_NFE,
-   f"ESpeech: образец обрезан до 12 с, текст образца — с ударениями, шагов {A.ESPEECH_NFE}: {[(c['ref_len'], c['ref_text']) for c in c0]}")
+ok(len(c0) == 2 and sr == 24000 and c0[0]["ref_len"] <= 24000 * 12 and c0[0]["ref_text"] == "Это мой г+олос. " and c0[0]["nfe"] == A.ESPEECH_NFE,
+   f"ESpeech: образец обрезан до 12 с, текст образца — с ударениями и «. » в конце (фраза не прилипает к образцу), шагов {A.ESPEECH_NFE}: {[(c['ref_len'], c['ref_text']) for c in c0]}")
 ok(c0[0]["gen"] == ["Привет, я г+олос Дэви+ара."] and _f5["acc"][1][1] == r"\S*\+\S*", f"ударения: своё (а́ → +) сохранено, остальное — RUAccent: {c0[0]['gen']}")
 ok(c0[1]["gen"] == ["Скажи «прив+ет»."], f"«+» пользователя не перебивается: {c0[1]['gen']}")
 ok(sorted(E2.models) == ["espeech"] and _f5["acc_load"]["omograph_model_size"] == "turbo3.1", "загружен ESpeech с RUAccent turbo3.1")

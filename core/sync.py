@@ -42,7 +42,7 @@ log = logging.getLogger("dewiar.sync")
 
 BASE_KINDS = ("reminder", "note", "money", "memory")          # знает любой сервер
 EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory", "safe",
-               "plugin")                          # тот же список $extra в cloud.php; plugin — только между компьютерами (не по Wi-Fi)
+               "plugin", "client")                          # тот же список $extra в cloud.php; plugin — только между компьютерами (не по Wi-Fi)
 VAULT_MAX = 300_000                               # сервер не принимает запись больше 300 КБ — такие заметки не шлём
 VAULT_FILES = 15000
 CHUNK = 400                                       # изменений за один запрос (сервер берёт до 2000; первая отправка большого хранилища — частями)
@@ -62,7 +62,7 @@ CONST_PREV = "Память/Конституция — прежняя.md"
 # Сквозное шифрование (sync.e2e, core/synckey.py): что шифруется на устройстве — всё личное. Открытыми остаются только
 # метка «шифрование включено» (mind:e2e), задачи для облака (taskreq с cloud — их выполняет сервер) и удаления (пустые).
 E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory",
-             "bill", "pay", "payfile", "safe", "plugin")          # safe и без того шифр мастер-пароля — с e2e он ещё и в конверте ключа синхронизации
+             "bill", "pay", "payfile", "safe", "plugin", "client")          # client — «Клиенты» (0.89), только зашифрованными; safe и без того шифр мастер-пароля — с e2e он ещё и в конверте ключа синхронизации
 # «Платежи» между компьютерами (27.10, владелец: «платежи дома заполнил… а на работе их нет»): bill — счёт, pay — оплата,
 # payfile — вложение (платёжка, скриншот) кусками: облако берёт запись до 300 КБ, а зашифрованная на треть длиннее
 PF_CHUNK = 150_000
@@ -485,6 +485,11 @@ class Sync:
             self._snap_payfiles(out, pm)
         if "safe" in ok:
             self._snap_safe(out)
+        cl = getattr(h, "clients", None)
+        if cl is not None and "client" in ok and self._clients_ok():
+            for cid, c in cl.sync_items().items():
+                out["client:" + cid] = c
+                out["client:" + cid + "#t"] = int(float(c.get("updated") or 0) * 1000) or _now_ms()
         if "plugin" in ok and not self.HOME and getattr(h, "plugins", None) is not None:
             self._snap_plugins(out)
         dn = getattr(h, "done", None)
@@ -605,6 +610,8 @@ class Sync:
             return self._apply_vault(iid, d, deleted, it)
         elif kind == "safe":
             return self._apply_safe(iid, d, deleted, it)
+        elif kind == "client":
+            return self._apply_client(iid, d, deleted, it)
         elif kind in EXTRA_KINDS:
             return self._apply_extra(kind, iid, d, deleted, it.get("updated"))
 
@@ -664,6 +671,21 @@ class Sync:
         for rel in [r for r in cache if r not in files]:
             cache.pop(rel, None)
 
+    def _clients_ok(self):
+        """«Клиенты» между устройствами (0.89, отчёты 657 и 658: планшет без бизнес-инструментов) — это чужие телефоны и
+        почты, поэтому только со сквозным шифрованием (облако их не прочтёт) или по домашнему Wi-Fi (облака нет вовсе)."""
+        return bool(self.HOME) or self.e2e_key() is not None
+
+    def _apply_client(self, iid, d, deleted, it):
+        cl = getattr(self.host, "clients", None)
+        if cl is None:
+            return False
+        if deleted:
+            return cl.remove_remote(iid) or None
+        if not self._clients_ok():
+            return False                          # шифрование здесь выключено — карточки не принимаем (и не шлём)
+        cl.merge_remote(iid, d)
+
     def _really_gone(self, key):
         """Запись пропала из снимка — это удаление, только если её источника правда нет. Отключённый диск с хранилищем,
         выключенная галочка «всё хранилище», заметка сверх предела или больше 300 КБ, файл, который сейчас не читается, —
@@ -691,6 +713,9 @@ class Sync:
             if not PS.present(P, pid):
                 return True
             return bool(i) and c is not None and i.isdigit() and int(i) >= c[2]     # сборка стала короче — лишний кусок
+        if kind == "client":                      # шифрование выключили — карточки остаются, это не удаление
+            cl = getattr(self.host, "clients", None)
+            return self._clients_ok() and cl is not None and iid not in cl.st["clients"]
         if kind == "safe":                        # выключили здесь, мастер-пароль сменили, сейф не открылся — не удаление
             vt = getattr(self.host, "vault", None)
             if iid == "key" or vt is None or self._safe_on() is None or self.state.get("_safe_failed"):

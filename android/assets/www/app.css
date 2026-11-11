@@ -129,6 +129,8 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 #talk-x { position: sticky; top: 12px; float: right; width: 34px; height: 34px; margin: 0 -16px 2px 10px; z-index: 2; opacity: .75; }
 #talk-x svg { width: 16px; height: 16px; }
 #talk-x[hidden] { display: none; }
+#talk-x { align-self: flex-end; flex: none; }   /* лёжа и на планшете #talk — flex-колонка: float там не действует, крестик уезжал влево на текст */
+@media (orientation: landscape) and (min-width: 600px) { #talk-x { margin-right: 0; } }
 #talk.away { transition: transform .22s ease, opacity .22s ease; transform: translateX(var(--dx, 60px)); opacity: 0; }
 @media (prefers-reduced-motion: reduce) { #talk.away { transition: none; } }
 #you { color: var(--muted); font-size: 15px; min-height: 0; margin-bottom: 8px; }
@@ -2030,3 +2032,127 @@ body.light .it.tksent.late .bd small { color: #9A5B00; }
 .rembrief .hint { margin: 6px 0 10px; }
 .remlate p { margin: 0 0 10px; line-height: 1.45; }
 body.light #rem-health .rmst.bad i { background: rgba(154, 91, 0, .12); color: #9A5B00; }
+
+/* ---------- планшет (tablet.js, телефон 0.9.32; отчёты 657, 658): меню разделов слева, разделы — панелью справа ----------
+   body.tab — широкий экран (от 760×560), body.tab-wide — от 1100 px (панель рядом с разговором), body.pane — открыт раздел. */
+:root { --railw: 232px; --panew: min(560px, 44vw); }
+#rail, .shx { display: none; }
+body.tab #rail { display: flex; flex-direction: column; gap: 4px; position: fixed; z-index: 12; left: 0; top: 0; bottom: 0; width: var(--railw);
+  padding: 16px 12px calc(14px + var(--safe-b)); overflow-y: auto; overscroll-behavior: contain;
+  background: linear-gradient(rgba(24,24,30,.62), rgba(16,16,22,.72)); border-right: 1px solid var(--glass-line);
+  backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2); }
+body.tab.lite-ui #rail { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(20,20,26,.96); }
+body.tab #rail .rl-brand { font: 600 17px/1 "Unbounded", "Manrope", sans-serif; letter-spacing: .02em; color: var(--ink); padding: 10px 12px 20px; }
+body.tab #rail .rl-g { display: flex; flex-direction: column; gap: 2px; }
+body.tab #rail .rl-g + .rl-g { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-line); }
+body.tab #rail .rl-apps { flex: 1 0 auto; }
+.rl-i { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 8px 12px; border: 0; border-radius: 13px;
+  background: transparent; color: var(--muted); font: 500 14.5px/1.25 "Manrope", sans-serif; text-align: left; cursor: pointer; transition: background .15s, color .15s; }
+.rl-i svg { width: 21px; height: 21px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.rl-i span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-i:active { background: var(--frost); }
+@media (hover: hover) { .rl-i:hover { background: var(--frost); color: var(--ink); } }
+.rl-i.on { background: var(--frost-hi); color: var(--ink); font-weight: 600; }
+.rl-i.on svg { color: var(--accent); }
+.rl-i:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rl-i .dot { position: absolute; left: 30px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: #FF7AB6; box-shadow: 0 0 8px #FF7AB6; display: none; }
+.rl-i[data-k="lessons"] .dot { background: #8B8CF7; box-shadow: 0 0 8px #8B8CF7; }
+.rl-i.has .dot { display: block; }
+body.light.tab #rail { background: rgba(255,255,255,.62); border-right-color: rgba(20,30,60,.08); }
+body.light .rl-i.on { background: #fff; box-shadow: 0 8px 20px -12px rgba(20,30,60,.35); }
+body.neu.tab #rail { background: var(--glass); border-right: 0; box-shadow: 6px 0 22px -10px var(--neu-dark); backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.neu .rl-i.on { background: var(--glass); box-shadow: var(--press); }
+
+/* сцена, панель ввода и верхняя полоса — правее меню; кнопка «Всё» не нужна: всё в меню */
+body.tab #top { left: var(--railw); }
+body.tab #b-apps { display: none; }
+body.tab #stage { left: var(--railw); }
+body.tab #bar { left: var(--railw); padding-left: max(18px, calc((100vw - var(--railw)) / 2 - 380px)); padding-right: max(18px, calc((100vw - var(--railw)) / 2 - 380px)); }
+body.tab #dim { display: none; }
+
+/* раздел — панелью справа во всю высоту, с крестиком; планшет поуже — поверх разговора */
+body.tab .sheet, body.tab .sheet.tall { top: 12px; bottom: 12px; right: 12px; left: auto; width: var(--panew); height: auto; max-height: none;
+  border-radius: 24px; border: 1px solid var(--glass-line); padding: 14px 20px calc(20px + var(--safe-b));
+  transform: translateX(calc(100% + 30px)); box-shadow: -24px 0 60px rgba(0,0,0,.35); }
+body.tab .sheet.on { transform: none; }
+body.tab .sheet:not(.on) { box-shadow: none; visibility: hidden; transition: transform .3s cubic-bezier(.2,.8,.2,1), visibility 0s .3s; }
+body.tab:not(.tab-wide) .sheet, body.tab:not(.tab-wide) .sheet.tall { width: calc(100vw - var(--railw) - 24px); }
+body.tab .sheet .grab { display: none; }
+body.tab .shx { display: grid; place-items: center; position: sticky; top: 0; float: right; z-index: 2; width: 38px; height: 38px; margin: 0 -6px 0 10px;
+  border: 0; border-radius: 50%; background: var(--frost); color: var(--ink); cursor: pointer; }
+body.tab .shx svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+body.tab .shx:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+body.tab .sheet h2 { margin-top: 2px; min-height: 38px; }
+body.light.tab .sheet { box-shadow: -20px 0 50px rgba(20,30,60,.16); }
+body.neu.tab .sheet.on { box-shadow: -10px 0 30px var(--neu-dark); }
+body.tab .apps { grid-template-columns: repeat(3, 1fr); }
+
+/* очень широкий экран: раздел рядом — разговор и панель ввода сужаются, облик над ответом */
+body.tab-wide.pane #stage, body.tab-wide.pane #bar { right: calc(var(--panew) + 24px); }
+body.tab-wide.pane #bar { padding-left: 18px; padding-right: 18px; }
+body.tab-wide.pane #stage { display: flex; flex-direction: column; padding: 0 16px; }
+body.tab-wide.pane #stage #talk { max-width: none; width: 100%; }
+body.tab-wide.pane #stage #orbwrap { width: min(28vw, 30vh, 260px); }
+
+/* ---------- «Клиенты» и «Сделки» (clients.js, 0.9.32): список, карточка, доска сделок ---------- */
+#sh-clients input:not([type=range]), #sh-clients select, #sh-clients textarea { min-width: 0; padding: 11px 13px; border-radius: 13px; border: 0; background: var(--field); outline: none; }
+body.neu #sh-clients input:not([type=range]), body.neu #sh-clients select, body.neu #sh-clients textarea { box-shadow: var(--press); }
+body.light:not(.neu) #sh-clients input:not([type=range]), body.light:not(.neu) #sh-clients select { background: rgba(20,30,60,.06); }
+#sh-clients input:focus-visible, #sh-clients select:focus-visible, #sh-clients textarea:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.cli-q { width: 100%; margin-bottom: 10px; }
+.cli-list { display: flex; flex-direction: column; gap: 4px; }
+.cli-it { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 16px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.cli-it:active { background: var(--frost); } @media (hover: hover) { .cli-it:hover { background: var(--frost); } }
+.cli-ava { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 600 15px "Unbounded", sans-serif; color: #fff; background: var(--brand); }
+.cli-ava.big { width: 52px; height: 52px; font-size: 19px; }
+.cli-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cli-tx b { font-weight: 600; font-size: 15.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cli-tx small { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cli-nx { color: var(--accent) !important; } .cli-nx.late { color: var(--bad) !important; }
+.cli-owe { flex: none; font-weight: 600; font-size: 13px; padding: 4px 10px; border-radius: 99px; background: rgba(255,182,92,.16); color: #FFB65C; }
+body.light .cli-owe { color: #9a5200; background: rgba(255,160,40,.16); }
+.cli-empty { display: flex; flex-direction: column; gap: 6px; padding: 26px 10px; text-align: center; }
+.cli-empty b { font-size: 16px; } .cli-empty small { color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 420px; margin: 0 auto; }
+.cli-lock { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.cli-lock small { line-height: 1.5; }
+.cli-back { margin: 0 0 10px; padding: 6px 2px; color: var(--accent); font-weight: 600; background: none; border: 0; cursor: pointer; }
+.cli-head { display: flex; align-items: center; gap: 14px; }
+.cli-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.cli-acts .btn { white-space: normal; text-align: left; }
+.cli-note { margin: 4px 4px 10px; color: var(--muted); font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.cli-next, .cli-deal { display: flex; align-items: center; gap: 12px; }
+.cli-next.late { box-shadow: inset 3px 0 0 var(--bad); } .cli-deal.late { box-shadow: inset 3px 0 0 var(--bad); }
+.cli-deal select { flex: none; max-width: 46%; }
+.cli-nform, .cli-lform { flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.cli-nform input, .cli-lform input { flex: 1 1 180px; }
+.cli-dform { display: flex; flex-direction: column; gap: 8px; }
+.cli-dform .row2 { gap: 8px; } .cli-dform .row2 > * { flex: 1; }
+.cli-log { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.cli-li { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 14px; background: var(--frost); }
+.cli-li small { color: var(--muted); font-size: 12px; } .cli-li span { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.cli-li.k-deal { box-shadow: inset 3px 0 0 #FFB65C; } .cli-li.k-done { box-shadow: inset 3px 0 0 var(--good); } .cli-li.k-call { box-shadow: inset 3px 0 0 var(--accent); }
+.cli-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.cli-sum > div { padding: 12px 14px; border-radius: 16px; background: var(--frost); display: flex; flex-direction: column; gap: 2px; }
+.cli-sum b { font: 600 17px/1.2 "Unbounded", sans-serif; } .cli-sum small { color: var(--muted); font-size: 12.5px; }
+.cli-sum .late b { color: var(--bad); }
+.cli-board { display: flex; flex-direction: column; gap: 12px; }
+.cli-col h4 { display: flex; justify-content: space-between; gap: 8px; margin: 4px 4px 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.cli-col h4 span { color: var(--ink); }
+.cli-col { display: flex; flex-direction: column; gap: 6px; }
+.cli-dc { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 12px; border: 0; border-radius: 14px; background: var(--frost); color: inherit; text-align: left; cursor: pointer; }
+.cli-dc b { font-size: 14.5px; font-weight: 600; } .cli-dc small { font-size: 12.5px; color: var(--muted); }
+.cli-dc.late { box-shadow: inset 3px 0 0 var(--bad); } .cli-dc.stuck { box-shadow: inset 3px 0 0 #FFB65C; }
+.btn.bad { color: var(--bad); }
+body.tab .cli-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: start; }
+body.neu .cli-li, body.neu .cli-sum > div, body.neu .cli-dc { background: var(--glass); box-shadow: var(--raise-s); }
+body.neu .cli-dc.late { box-shadow: var(--raise-s), inset 3px 0 0 var(--bad); }
+
+/* «Dewiar на компьютере» (tablet.js openPcInfo) */
+.pci-st { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pci-st.ok b::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--good); vertical-align: 1px; }
+.pci-st small { line-height: 1.5; }
+.pci-p { margin: 0 4px 6px; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+.pci-l { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.pci-l li { display: flex; flex-direction: column; gap: 2px; padding: 11px 14px; border-radius: 16px; background: var(--frost); }
+.pci-l b { font-size: 14.5px; font-weight: 600; } .pci-l small { font-size: 12.5px; color: var(--muted); }
+body.neu .pci-l li { background: var(--glass); box-shadow: var(--raise-s); }

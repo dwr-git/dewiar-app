@@ -38,7 +38,7 @@ MAX_BODY = 24 * 1024 * 1024
 ITEM_MAX = 300_000
 ITEMS_MAX = 40_000
 BASE_KINDS = ("reminder", "note", "money", "memory")
-EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory", "safe")
+EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory", "safe", "client")
 
 
 class HubError(Exception):

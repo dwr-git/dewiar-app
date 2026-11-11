@@ -1544,10 +1544,15 @@ class Podcasts:
         res = [None] * len(lines)
         failed = []
 
-        def one(i):
+        def one(i, final=True):
             x = lines[i]
             v, chain = voices[x["who"]], chains[x["who"]]
             order = ([locked[x["who"]]] if x["who"] in locked else []) + [e for e in chain if e is not locked.get(x["who"])]
+            if not final and x["who"] in locked:
+                # владелец 11.11: «часть ответов Патрика — голосом Патрика, часть — другим движком, картавым и быстрым»:
+                # голос сервера был занят, и реплика сразу уходила к запасному голосу. Теперь в первом проходе — только
+                # закреплённый голос; не вышло — реплика ждёт второго прохода (сервер к тому времени освобождается)
+                order = order[:1]
             for eng in order:
                 for attempt in range(3 if eng is locked.get(x["who"]) or isinstance(eng, RemoteTTS) else 1):
                     if job["cancel"].is_set():
@@ -1573,8 +1578,9 @@ class Podcasts:
                             return
                 except Exception:  # noqa: BLE001
                     pass
-            failed.append(i)
+            (failed if final else later).append(i)
 
+        later = []
         # первая реплика каждого ведущего — по очереди (закрепить голос), остальное — три сразу, если голос в облаке
         firsts = []
         for k in ("a", "b"):
@@ -1589,11 +1595,17 @@ class Podcasts:
         par = 3 if all(isinstance(locked.get(k), RemoteTTS) for k in locked) and locked else 1
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(par) as ex:
-            for _ in ex.map(one, rest):
+            for _ in ex.map(lambda i: one(i, final=False), rest):
                 done += 1
                 self._stage(job, "voice", done / max(1, len(lines)), f"реплика {done} из {len(lines)}")
+        if later and not job["cancel"].wait(5):          # второй проход — по одной, тем же голосом; потом уже запасной
+            for i in sorted(later):
+                one(i, final=True)
         if job["cancel"].is_set():
             raise Stopped()
+        alt = [i for i in range(len(lines)) if res[i] is not None and i in later]
+        if alt:
+            log.info("Подкаст: реплик со второго прохода — %d", len(alt))
         if len(failed) > max(2, len(lines) // 5):
             raise PodcastError("голос не справился с репликами — проверьте «Голос» в студии и нажмите «Продолжить»")
         m["voice"] = {k: getattr(e, "name", type(e).__name__) for k, e in locked.items()}

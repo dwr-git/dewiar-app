@@ -15,6 +15,7 @@ check() — проверка связи для студии: напрямую и
 адресом в другой сети ответить так не сможет). Не отвечает — как обычно (прокси или напрямую); проверка — не чаще раза в
 LAN_OK_SEC, неудача — снова не раньше чем через LAN_BAD_SEC."""
 import logging
+import os
 import re
 import threading
 import time
@@ -491,11 +492,31 @@ def _patched_init(self, *a, **kw):
     _orig_init(self, *a, **kw)
 
 
+def keylog_guard():
+    """Отчёт 656 (0.87.2): у человека в системе задана SSLKEYLOGFILE (её ставят отладчики сети, некоторые VPN и
+    антивирусы) с путём, куда писать нельзя (диск без буквы: …Volume{…}/virtual_file.log). Python открывает этот файл при
+    каждом защищённом соединении — и вся сеть падала «Permission denied»: облако, синхронизация, «Близкие», модели.
+    Файл недоступен — переменную для Dewiar убираем (система и другие программы не затронуты). -> убрали ли."""
+    path = os.environ.get("SSLKEYLOGFILE")
+    if not path:
+        return False
+    try:
+        with open(path, "a", encoding="utf-8"):
+            pass
+        return False
+    except (OSError, ValueError) as e:
+        os.environ.pop("SSLKEYLOGFILE", None)
+        log.warning("SSLKEYLOGFILE указывает на файл, куда нельзя писать (%s) — для Dewiar отключена, иначе не работала бы сеть",
+                    type(e).__name__)
+        return True
+
+
 def install():
     """Подменить httpx.Client.__init__ — один раз при запуске ядра (main.py); повторный вызов ничего не делает.
     И сертификаты — из хранилища системы (trust_system)."""
     global _installed
     if not _installed:
+        keylog_guard()
         trust_system()
         httpx.Client.__init__ = _patched_init
         _installed = True

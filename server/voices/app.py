@@ -275,6 +275,16 @@ def stress_fix(text: str) -> str:
     return text
 
 
+def ref_tail(text: str) -> str:
+    """Текст образца для ESpeech (F5-TTS) — с «. » в конце. Модель читает образец и новую фразу одной строкой: без точки
+    и пробела первое слово фразы прилипало к последнему слову образца — «Да» в начале реплики звучало «Тында», первые
+    буквы съедались (владелец 11.11, «Подкасты»). Так же делает сам F5-TTS (preprocess_ref_audio_text)."""
+    t = (text or "").rstrip()
+    if not t:
+        return t
+    return t + " " if t[-1] in ".!?…" else t + ". "
+
+
 def stress_marks(text: str) -> str:
     """Знак ударения после гласной (Дэвиа́р — так пишет Dewiar для серверных голосов) → «+» перед ней, как у ESpeech."""
     return re.sub(r"([%s])\u0301" % VOWELS, r"+\1", text)
@@ -582,7 +592,7 @@ class Engine:
         if key not in self.refs:
             import torch
             a = trim(read_wav(path))[: int(OUT_SR * 12)]
-            self.refs[key] = (torch.from_numpy(np.ascontiguousarray(a)).unsqueeze(0), self.accentize(e, text) or "")
+            self.refs[key] = (torch.from_numpy(np.ascontiguousarray(a)).unsqueeze(0), ref_tail(self.accentize(e, text) or ""))
         return self.refs[key]
 
     def generate(self, spec, texts, lang):
