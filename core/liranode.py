@@ -790,10 +790,21 @@ class Node:
         if me and me.get("ok"):
             mine = [n for n in me.get("nodes") or [] if n.get("id") == self.st.get("node_id")] or \
                 [n for n in me.get("nodes") or [] if n.get("kind") == "app"]
+            if mine:                                    # 0.87.1: честно — сколько принятых сегодня без оплаты
+                up, day = int(mine[0].get("unpaid_day") or 0), time.strftime("%Y-%m-%d")
+                seen = self.st.get("unpaid_seen") or {}
+                was = int(seen.get("n") or 0) if seen.get("day") == day else 0
+                if up > was:
+                    with self.lock:
+                        self.st["unpaid_seen"] = {"day": day, "n": up}
+                    self.note("info", f"без оплаты: ещё {up - was} из принятых сегодня — спрашивающий платил подарочными "
+                                      "или пробными талерами (или касса ничего не списала); в «сегодня» они не входят")
             out["site"] = {"node": mine[0] if mine else None, "paid_total": me.get("paid_total"), "waiting": me.get("waiting"),
                            "est_day": (mine[0] if mine else {}).get("est_day", 0), "share": me.get("pay_share"), "others": len(me.get("nodes") or []) - (1 if mine else 0)}
         elif me:
             out["site"] = {"error": me.get("error")}
+        with self.lock:
+            out["journal"] = list(reversed(self.st.get("journal") or []))[:40]
         out["account"] = bool(self.e.cloud.key)
         return out
 

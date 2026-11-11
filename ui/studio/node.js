@@ -44,8 +44,9 @@ function ndRender() {
     const est = +(site.est_day || 0);
     $("#nd-tal").textContent = (est > 0 ? "≈ " : "") + ndTal(est);
     $("#nd-tal-l").textContent = (est > 0 && est < 1 ? "талера" : ndPl(Math.round(est), "талер", "талера", "талеров")) + " сегодня";
-    const today = sn ? sn.answers_day : d.today;
-    $("#nd-cnt").textContent = `${today} ${ndPl(today, "ответ", "ответа", "ответов")} сегодня · всего начислено ${ndTal(site.paid_total || 0)} тал.`;
+    const today = sn ? sn.answers_day : d.today, unpaid = sn ? +sn.unpaid_day || 0 : 0;
+    $("#nd-cnt").textContent = `${today} ${ndPl(today, "ответ", "ответа", "ответов")} сегодня` + (unpaid ? ` (без оплаты — ${unpaid})` : "")
+      + ` · всего начислено ${ndTal(site.paid_total || 0)} тал.`;
   }
   ndSeg("nd-when", d.joined ? d.when : ND.when); ndSeg("nd-share", d.joined ? d.share : ND.share);
   const wt = d.when_text || {}, stt = d.share_text || {};
@@ -55,7 +56,8 @@ function ndRender() {
   if (d.joined) {
     const kv = [];
     if (sn) {
-      kv.push(["Принято сегодня", `${sn.answers_day} из ${sn.tried_day}` + (sn.bad_day ? ` · не принято ${sn.bad_day}` : "")]);
+      kv.push(["Принято сегодня", `${sn.answers_day} из ${sn.tried_day}` + (sn.bad_day ? ` · не принято ${sn.bad_day}` : "")
+        + (sn.unpaid_day ? ` · без оплаты ${sn.unpaid_day}: спрашивающий платил подарочными талерами` : "")]);
       kv.push(["За 30 дней", `${sn.answers_30d} ${ndPl(sn.answers_30d, "ответ", "ответа", "ответов")}`]);
       kv.push(["Начислено всего", `${ndTal(sn.paid_total)} тал.` + (sn.waiting > 0 ? ` · ещё ${ndTal(sn.waiting)} ждут решения` : "")]);
       kv.push(["Доверие", String(sn.trust).replace(".", ",") + (sn.new ? " · новая нода: первые 7 дней ×0,5" : "") + (sn.trust < 0.5 ? " · ниже 0,5 — без начислений" : "")]);
