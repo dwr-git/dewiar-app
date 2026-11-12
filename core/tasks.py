@@ -80,6 +80,8 @@ SUBS_KEEP = 30                                     # записей о разв�
 # выпуск 7 (начало): бюджет задачи в токенах (tasks.budget_tokens; 0 — без предела) — предупреждение на BUDGET_WARN,
 # на BUDGET_STOP — «подведи итог», ещё BUDGET_GRACE шагов без итога — пауза с причиной; «продолжи» — ещё столько же
 BUDGET_WARN, BUDGET_STOP, BUDGET_GRACE = 0.5, 0.8, 3
+MAIL_WAKE_SEC = 300
+MILESTONE_GAP = 180                                # весточки на вехах плана — не чаще раза в 3 минуты (HARNESS 7)                                # wait on_mail: почту проверяем не чаще раза в 5 минут (выпуск 8)
 NOTEBOOK_HEAD = ("# Блокнот задачи\n\n## Что известно\n\n## Что решено\n\n## Чего ждём\n\n## Что дальше\n")
 # «Большие задачи», выпуски 3–4 (docs/HARNESS.md): критерии готовности, проверка по существу, список дел со статусами, опрос хода
 POLL_EVERY = int(os.environ.get("DEWIAR_TASK_POLL_EVERY") or 8)   # раз в столько шагов — короткий опрос хода (Magentic-One)
@@ -120,8 +122,10 @@ TASK_TOOLS = {
     "log": ("Короткая заметка в журнал задачи: что выяснил, что решил, что дальше.", S({"text": {"type": "string"}}, ["text"])),
     "ask_user": ("Спросить пользователя, если без его решения дальше нельзя. Ответ придёт результатом. "
                  "Спрашивай редко и по делу.", S({"question": {"type": "string"}}, ["question"])),
-    "finish": ("Задача выполнена (или дальше невозможно): итог для пользователя в Markdown — что сделано, где "
-               "результат, что проверить. После этого работа заканчивается.", S({"summary": {"type": "string"}}, ["summary"])),
+    "finish": ("Задача выполнена (или дальше невозможно): итог для пользователя в Markdown — что получилось (ответ, "
+               "главные цифры), где результат (файл — путём), что не удалось и почему, и один следующий шаг, если он "
+               "правда есть. Шаги не пересказывай — они в журнале. После этого работа заканчивается.",
+               S({"summary": {"type": "string"}}, ["summary"])),
     "remember": ("Записать в блокнот задачи важный факт — сразу, как узнал: номер, код брони, сумму, адрес, ответ "
                  "человека или компании, договорённость, срок. Блокнот — твоя память: ранние шаги со временем "
                  "забываются, блокнот — нет.", S({"fact": {"type": "string"}}, ["fact"])),
@@ -133,8 +137,11 @@ TASK_TOOLS = {
     "wait": ("Подождать и вернуться к задаче позже — когда результат зависит от внешнего: ответ на письмо или "
              "обращение, смена статуса, время проверки (например, «за 2 часа до вылета проверить выход»). minutes — "
              "через сколько минут, или until — когда (YYYY-MM-DDTHH:MM, местное время); reason — чего ждёшь и что "
-             "проверишь. Перед wait запиши в блокнот, чего ждёшь. Если пользователь напишет задаче раньше — продолжишь сразу.",
-             S({"minutes": {"type": "number"}, "until": {"type": "string"}, "reason": {"type": "string"}}, ["reason"])),
+             "проверишь. Перед wait запиши в блокнот, чего ждёшь. Если пользователь напишет задаче раньше — продолжишь сразу. "
+             "Ждёшь события — не гадай со временем: on_file — путь к файлу (вернусь, как только он появится или изменится), "
+             "on_mail — от кого или о чём письмо (вернусь, как придёт новое такое письмо); minutes/until тогда — крайний срок.",
+             S({"minutes": {"type": "number"}, "until": {"type": "string"}, "reason": {"type": "string"},
+                "on_file": {"type": "string"}, "on_mail": {"type": "string"}}, ["reason"])),
 }
 # Части задачи: большую работу с независимыми кусками (собрать сведения по пяти компаниям, написать три раздела)
 # задача раздаёт помощникам — они работают одновременно, каждый в своей папке; собрать — wait_parts (итоги и файлы
@@ -457,6 +464,37 @@ class Task:
                 pass
         return d
 
+def tasks_brief(items, today=None):
+    """HARNESS 7: «что с задачами?» — одной фразой: что в работе (с ходом плана), что ждёт человека, что готово сегодня,
+    что не получилось. items — TaskManager.list(). -> «Коротко: …» или ""."""
+    today = today or dt.date.today().isoformat()
+    run = [x for x in items if x.get("status") == "running"]
+    ask = [x for x in items if x.get("status") == "waiting"]
+    zzz = [x for x in items if x.get("status") in ("sleeping", "paused")]
+    day = lambda x: str(x.get("updated") or x.get("created") or "")[:10] == today   # noqa: E731
+    done = [x for x in items if x.get("status") == "done" and day(x)]
+    bad = [x for x in items if x.get("status") in ("failed", "stopped") and day(x)]
+
+    def names(xs, plan=False):
+        out = []
+        for x in xs[:2]:
+            p = x.get("progress") or [0, 0]
+            out.append(f"«{str(x.get('title') or '')[:40]}»" + (f" — {p[0]} из {p[1]} по плану" if plan and p[1] else ""))
+        return ", ".join(out) + (f" и ещё {len(xs) - 2}" if len(xs) > 2 else "")
+    parts = []
+    if run:
+        parts.append(f"в работе {names(run, True)}")
+    if ask:
+        parts.append(f"ждёт вашего ответа {names(ask)}")
+    if zzz:
+        parts.append(f"на паузе или ждёт события {names(zzz)}")
+    if done:
+        parts.append(f"сегодня готово {len(done)}" + (f" ({names(done)})" if len(done) <= 2 else ""))
+    if bad:
+        parts.append(f"не получилось {names(bad)}")
+    return ("Коротко: " + "; ".join(parts) + ".") if parts else ""
+
+
 def usage_text(u, subs=None):
     """Метрики задачи для карточки в студии одной строкой: «токены: 140 тыс. на вход, 6 тыс. на выход · из кэша 78%»
     (+ «· из них помощники 30 тыс.» — разведчики и проверяющие, выпуск 6)."""
@@ -476,6 +514,27 @@ def usage_text(u, subs=None):
     if p.get("n"):                                     # части — свои задачи: их токены сверх счёта задачи
         out += f" · части ({p['n']}) — ещё {k(int(p.get('in') or 0) + int(p.get('out') or 0))}"
     return out
+
+
+
+TASK_KINDS = (("code", r"\bкод|программ|скрипт|репозитор|\bбаг|тест[ыа]?\b|python|функци[юя]|рефактор"),
+              ("doc", r"презентац|документ|доклад|отч[её]т|таблиц|word|excel|pptx|docx|xlsx|pdf|письм[оа]"),
+              ("research", r"исследова|найди|сравни|изучи|обзор|конкурент|рын[оке]|собери|подбер|проанализ"),
+              ("wait", r"дожд|проследи|добей|верни|вернуть|статус|ответ[а-я]* от"))
+EST_MIN_SAMPLES = 2                                # оценка — по стольким завершённым задачам того же вида, не меньше
+EST_ASK_MIN, EST_ASK_TOKENS = 20, 1_500_000        # дольше или дороже — «план, срок, цена — начинаю?» до запуска
+
+
+def task_kind(goal):
+    """Вид задачи по цели (для оценки до старта): code, doc, research, wait или other."""
+    g = str(goal or "").lower()
+    for k, rx in TASK_KINDS:
+        if re.search(rx, g):
+            return k
+    return "other"
+
+
+keep_facts = Q.keep_facts                         # выпуск 8, п.2 (живёт в quality: им пользуется и разговор)
 
 
 def task_spent(d):
@@ -504,6 +563,95 @@ class TaskManager:
         self.load()
         threading.Thread(target=self._scheduler, name="tasks-clock", daemon=True).start()
 
+    # ---------- оценка до старта (HARNESS, выпуск 7 «Бюджет и голос») ----------
+    def estimate(self, goal):
+        """Сколько обычно занимает такая задача у этого человека -> {kind, tokens, minutes, n} по завершённым задачам того
+        же вида (медиана); похожих меньше EST_MIN_SAMPLES — {kind, n, tokens: 0, minutes: 0} (оценки нет, не спрашиваем)."""
+        kind = task_kind(goal)
+        toks, mins = [], []
+        for x in list(self.tasks.values()):
+            d = x.data
+            if d.get("status") != "done" or d.get("parent") or task_kind(d.get("goal") or "") != kind:
+                continue
+            sp = task_spent(d)
+            try:
+                m = (dt.datetime.fromisoformat(str(d.get("updated"))) - dt.datetime.fromisoformat(str(d.get("created")))).total_seconds() / 60
+            except (TypeError, ValueError):
+                m = 0
+            if sp > 0 and 0 < m < 60 * 24:                 # «ждали ответа три дня» — не мерило длительности работы
+                toks.append(sp)
+                mins.append(m)
+        n = len(toks)
+        if n < EST_MIN_SAMPLES:
+            return {"kind": kind, "n": n, "tokens": 0, "minutes": 0}
+        med = lambda xs: sorted(xs)[len(xs) // 2]   # noqa: E731
+        return {"kind": kind, "n": n, "tokens": int(med(toks)), "minutes": int(round(med(mins)))}
+
+    def _wake_on(self, t, args):
+        """wait по событию (выпуск 8, п.7): {file, sig} — файл (в папке задачи или папке человека) появился или изменился;
+        {mail, seen} — пришло новое письмо от кого-то или о чём-то (почта подключена). -> словарь, {} или текст ошибки."""
+        on = {}
+        fp = str(args.get("on_file") or "").strip()
+        if fp:
+            try:
+                p, _ = self._area(t, fp)
+            except Exception as e:  # noqa: BLE001
+                return f"Путь не подходит: {e}"
+            on["file"] = str(p)
+            on["sig"] = self._file_sig(p)
+        q = str(args.get("on_mail") or "").strip()
+        if q:
+            mail = getattr(self.host, "mail", None)
+            if mail is None or not mail.configured():
+                return "Почта не подключена — ждать письма нечем. Подожди по времени (minutes) и проверь сама."
+            on["mail"] = q[:120]
+            on["mail_since"] = _now()
+        return on
+
+    @staticmethod
+    def _file_sig(p):
+        try:
+            st = Path(p).stat()
+            return [int(st.st_mtime), int(st.st_size)]
+        except OSError:
+            return None
+
+    def _event_due(self, t):
+        """Наступило ли событие, которого ждёт спящая задача -> текст «что случилось» или "". Почта — не чаще раза в 5 мин
+        и в своём потоке (будильник не ждёт сервер почты)."""
+        on = t.data.get("wake_on") or {}
+        if on.get("file"):
+            sig = self._file_sig(on["file"])
+            if sig is not None and sig != on.get("sig"):
+                return f"файл «{Path(on['file']).name}» {'появился' if on.get('sig') is None else 'изменился'}"
+        if on.get("mail"):
+            got = on.get("mail_got")
+            if got:
+                return f"пришло письмо: {got}"
+            import time as _t
+            if _t.time() - float(on.get("mail_checked") or 0) >= MAIL_WAKE_SEC and not on.get("mail_busy"):
+                on["mail_checked"], on["mail_busy"] = _t.time(), True
+                threading.Thread(target=self._mail_check, args=(t, on), name="task-mail", daemon=True).start()
+        return ""
+
+    def _mail_check(self, t, on):
+        try:
+            since = dt.datetime.fromisoformat(str(on.get("mail_since") or _now()))
+            from email.utils import parsedate_to_datetime
+            for x in self.host.mail.inbox(limit=15, unread=True, query=on["mail"]) or []:
+                try:
+                    d = parsedate_to_datetime(x.get("date") or "")
+                    d = d.astimezone().replace(tzinfo=None) if d and d.tzinfo else d
+                except (TypeError, ValueError):
+                    d = None
+                if d is None or d >= since - dt.timedelta(minutes=1):
+                    on["mail_got"] = f"{x.get('from', '')} — «{x.get('subject', '')}»"[:200]
+                    break
+        except Exception as e:  # noqa: BLE001
+            log.info("Задача %s: почта для ожидания не проверилась: %s", t.id, e)
+        finally:
+            on["mail_busy"] = False
+
     def _scheduler(self):
         """Поток-будильник (раз в 2 с): будит спящие задачи к сроку или по новому сообщению; через RESUME_SEC после
         запуска программы продолжает задачи, прерванные выключением (auto_resume)."""
@@ -519,6 +667,12 @@ class TaskManager:
                         self.start(t.id)                     # написали, пока поток засыпал, — не ждём срока
                     elif t.status == "sleeping" and t.data.get("wake_at") and dt.datetime.fromisoformat(t.data["wake_at"]) <= now:
                         self.start(t.id, wake=t.data.get("wait_reason") or "время пришло")
+                    elif t.status == "sleeping" and t.data.get("wake_on") and not alive:
+                        ev = self._event_due(t)
+                        if ev:
+                            t.journal(f"🔔 Дождалась: {ev}")
+                            t.data["wake_on"] = None
+                            self.start(t.id, wake=f"{ev} ({t.data.get('wait_reason') or 'ждала этого'})")
                     elif t.data.get("auto_resume") and t.status == "paused" and (now - self._started_at).total_seconds() > RESUME_SEC:
                         t.data.pop("auto_resume", None)
                         t.journal("▶ Компьютер включили — продолжаю, где остановился.")
@@ -974,7 +1128,8 @@ class TaskManager:
              "договорённости, сроки. Ранние шаги со временем уходят из памяти — блокнот остаётся.\n"
              "3. Если результат зависит от внешнего (ответ на письмо, обращение, смена статуса, нужное время) — не "
              "заканчивай: запиши в блокнот, чего ждёшь, и вызови wait (через сколько минут или до какого времени вернуться "
-             "и что проверить). Потом проверь и продолжай. Так задача может идти часы и дни.\n"
+             "и что проверить; ждёшь письма или файла — on_mail / on_file: вернёшься, как только придёт). Потом проверь и "
+             "продолжай. Так задача может идти часы и дни.\n"
              "4. Сообщай пользователю важное по ходу (notify): что выяснил, что изменилось, что дальше — коротко, по делу.\n"
              "5. Не выдумывай результаты — проверяй инструментами. Без решения пользователя дальше нельзя — ask_user.\n"
              "6. finish — только когда цель достигнута (или точно недостижима): итог в Markdown — что сделано, где результат, "
@@ -1050,7 +1205,12 @@ class TaskManager:
             s += "\n\nЧто ты знаешь о пользователе:\n" + (mem if not light else mem[:1500])
         if light:
             return s
-        s += Q.lessons_block(self.lessons_path())          # выводы из прошлых задач (quality.reflect)
+        try:
+            from settings import STATE_DIR as _SD
+            meta = _SD / "task_traces" / Q.LESSONS_META
+        except Exception:  # noqa: BLE001
+            meta = None
+        s += Q.lessons_block(self.lessons_path(), meta)   # выводы прошлых задач (reflect); не помогшие — нет, проверенные — с пометкой
         s += Q.talk_lessons_block(self.host.workspace.root / Q.TALK_LESSONS_FILE)   # и из поправок в разговоре
         sp = getattr(self.host, "skills_prompt", None)
         return s + (sp() if sp else "")
@@ -1128,7 +1288,31 @@ class TaskManager:
             lines.append(f"- {box} {x.get('id')}. {x.get('text')}{tail}")
         return "\n".join(lines) + "\n"
 
+    def _milestone(self, t, items):
+        """Весточка на вехе (HARNESS 7: «весточки на вехах, а не по таймеру»): пункт плана стал «сделано» — коротко человеку,
+        что готово и сколько осталось. Не чаще раза в MILESTONE_GAP, не про последний пункт (о нём скажет итог), не у частей
+        задачи и не в первые 2 минуты (план только расписан)."""
+        import time as _t
+        if t.data.get("parent") or not t.run_t0 or _t.monotonic() - t.run_t0 < 120:
+            return
+        before = int((t.data.get("progress") or [0, 0])[0])
+        done = [x for x in items if x.get("status") == "done"]
+        if len(done) <= before or len(done) >= len(items):
+            return
+        now = _t.monotonic()
+        if now - float(t.data.get("milestone_at") or 0) < MILESTONE_GAP:
+            return
+        t.data["milestone_at"] = now
+        t.data["progress_told_at"] = now                   # весточка по таймеру не повторит ту же новость
+        x = done[-1]
+        self._push(f"✓ «{t.title}»: {len(done)} из {len(items)}", f"Готово: {str(x.get('text') or '')[:120]}. Дальше — по плану.")
+        t.journal(f"✓ Веха: {x.get('text')} ({len(done)} из {len(items)})")
+
     def _save_todos(self, t, items, source="json", render=True, **extra):
+        try:
+            self._milestone(t, items)
+        except Exception:  # noqa: BLE001
+            pass
         d = t._json("задачи.json", {})
         d.update(items=items, source=source, updated=_now(), **extra)
         t.put_json("задачи.json", d)
@@ -1465,6 +1649,25 @@ class TaskManager:
             return False
         return bool(rel.parts) and (rel.parts[0] == "outputs" or rel.parts[0] in Q.SERVICE)
 
+    @staticmethod
+    def _blind_overwrite(t, p, args):
+        """Выпуск 8, п.5 (как в среде Claude: файл не перезаписывают, не прочитав). write_file поверх файла, который задача
+        не создавала и в этой задаче не читала (присланный человеком, его папка), — отказ с подсказкой: прочитать и править
+        точечно (file_edit) или писать новый файл рядом. Дописывание (append) и свои файлы — как раньше. -> текст отказа или ""."""
+        try:
+            if args.get("append") or not p.is_file() or p.stat().st_size == 0:
+                return ""
+            rel = p.relative_to(t.dir).as_posix() if str(p.resolve()).startswith(str(t.dir.resolve())) else ""
+        except (OSError, ValueError):
+            return ""
+        if rel and rel in (t.data.get("authored") or []):
+            return ""
+        if str(p.resolve()) in (t.data.get("seen") or []):
+            return ""
+        t.journal(f"✋ не перезаписал «{p.name}» вслепую — файл не читали в этой задаче")
+        return (f"Ошибка: файл «{p.name}» уже есть, и в этой задаче ты его не читал — перезапись вслепую сотрёт чужое. "
+                "Как исправить: прочитай его (file_read) и правь точечно (file_edit), или запиши результат новым файлом рядом.")
+
     def _evidence_piece(self, t, name, args, r):
         """Что из результата инструмента — опора для сверки -> (заголовок, текст) или None. Не опора (рецензия 0.84): то,
         что пишет сама модель; чтение своих outputs/ и служебных файлов; строки вывода run_python, которые есть в её же
@@ -1651,6 +1854,9 @@ class TaskManager:
                 t.journal("🌐 Браузер: ошибки на страницах — " + "; ".join(f"{k}: {v[0]}" for k, v in bad.items())[:500])
                 return ("СТРАНИЦА С ОШИБКАМИ (открыта в браузере, проверено кодом):\n" + "\n".join(
                     f"- {k}: " + " | ".join(v[:3]) for k, v in bad.items()) + "\nПочини скрипт страницы (file_edit) и снова вызови finish.")
+        look = self._eyes(t, hc, q)                         # HARNESS 8: посмотреть на страницу глазами (модель со зрением)
+        if look:
+            return look
         data = self._data_files(t)
         nums = []
         if not code:
@@ -1844,6 +2050,55 @@ class TaskManager:
         """Счётчики качества задачи в data["quality"]: хранятся в задача.json, поэтому переживают передышки и перезапуск.
         Идут в след задачи (_trace) для уроков."""
         return t.data.setdefault("quality", {"tools": {}, "errors": [], "loop_warns": 0, "refusal": 0, "verify_fail": 0, "critic": 0})
+
+    def _eyes(self, t, hc, q):
+        """Снимки готовых страниц (html_check, экран телефона) — модели со зрением: видно ли пустоту, наложения, обрезанное,
+        заглушки (HARNESS 8, владелец 12.11: «у тебя сила и в том, что ты смотришь скриншоты результата — было бы здорово,
+        если бы и Лира так умела»). Один раз на задачу; модель не видит картинок — молча пропускаем (и запоминаем).
+        -> текст для задачи (поправить) или None."""
+        if t.data.get("look_done") or not hc:
+            return None
+        shots = [(Path(k), v["shot"]) for k, v in hc.items() if v.get("shot") and not v.get("errors")][:2]
+        if not shots:
+            return None
+        prof = self._judge(t) or self.host.llm_profile()
+        if not prof:
+            return None
+        blind = getattr(self.host, "_blind", None)
+        key = f"{prof.get('base_url')}|{prof.get('model')}"
+        if isinstance(blind, set) and key in blind:
+            t.data["look_done"] = True
+            return None
+        from llm import LLMError, stream_chat, user_message
+        bad = []
+        for path, shot in shots:
+            try:
+                rel = path.relative_to(t.dir).as_posix()
+            except ValueError:
+                rel = path.name
+            try:
+                raw = "".join(stream_chat(dict(prof, max_tokens=400, temperature=0, think="off"), Q.LOOK,
+                                          [user_message(prof, f"Цель задачи: {t.goal[:600]}\nФайл: {rel}", [shot])], cancel=t.cancel))
+            except LLMError as e:
+                if re.search(r"image|vision|multimodal|картин|изображ", str(e), re.I) and isinstance(blind, set):
+                    blind.add(key)
+                t.data["look_done"] = True
+                return None
+            except Exception as e:  # noqa: BLE001 — сбой просмотра не валит задачу
+                log.info("Задача %s: просмотр страницы не удался: %s", t.id, e)
+                t.data["look_done"] = True
+                return None
+            v = Q.look_verdict(raw)
+            if v and v[0] == "revise" and v[1]:
+                bad.append(f"{rel}: {v[1]}")
+        t.data["look_done"] = True
+        if not bad:
+            t.journal("👀 Посмотрела на страницу глазами (экран телефона) — видно как надо.")
+            return None
+        q["verify_fail"] = q.get("verify_fail", 0) + 1
+        t.journal("👀 Посмотрела на страницу глазами — видно проблему: " + "; ".join(bad)[:400])
+        return ("ПОСМОТРЕЛА НА СТРАНИЦУ (снимок экрана телефона, ширина 375): " + "; ".join(bad) + ". Поправь вёрстку "
+                "(file_edit), открой страницу снова, если нужно, и снова вызови finish.")
 
     def _ask(self, system, messages):
         """Короткий служебный запрос к модели (самопроверка, уроки): низкая температура, ответ до 900 токенов."""
@@ -2065,6 +2320,12 @@ class TaskManager:
             "steps": t.data.get("steps", 0), "tools": q["tools"], "errors": q["errors"][-10:], "loop_warns": q["loop_warns"],
             "refusal": q["refusal"], "verify_fail": q["verify_fail"], "critic": q["critic"], "usage": q.get("usage") or {},
             "time": _now()})
+        try:                                                 # HARNESS 8, п.9: уроки проверяются следующими задачами
+            ch = Q.lessons_track(STATE_DIR / "task_traces" / Q.LESSONS_META, {"errors": q["errors"][-10:]}, self.lessons_path())
+            for rule, st in ch.items():
+                log.info("🎓 Урок %s: %s", "проверен" if st == "ok" else "не помог — уберу при следующих выводах", rule[:90])
+        except Exception:  # noqa: BLE001
+            log.debug("проверка уроков", exc_info=True)
         self._maybe_reflect(STATE_DIR / "task_traces")
 
     def _maybe_reflect(self, traces):
@@ -2357,16 +2618,24 @@ class TaskManager:
                     when = dt.datetime.now() + dt.timedelta(minutes=max(0.05, float(args["minutes"])))
                 except (TypeError, ValueError):
                     return "minutes — число минут."
+            on = self._wake_on(t, args)                   # выпуск 8, п.7: ждать события, а не гадать со временем
+            if isinstance(on, str):
+                return on
+            if when is None and on:
+                when = dt.datetime.now() + dt.timedelta(days=3)  # событие — главное; крайний срок по умолчанию — 3 дня
             if when is None:
-                return "Скажи, когда вернуться: minutes или until."
+                return "Скажи, когда вернуться: minutes или until (или on_file / on_mail — по событию)."
             if when < dt.datetime.now():
                 return "Это время уже прошло — проверь сейчас."
             when = min(when, dt.datetime.now() + dt.timedelta(days=30))   # не дальше месяца
             # sleep_now — сигнал циклу _run выйти после этого шага; будит _scheduler
-            t.data.update(status="sleeping", wake_at=when.isoformat(timespec="seconds"), wait_reason=reason, sleep_now=True)
+            t.data.update(status="sleeping", wake_at=when.isoformat(timespec="seconds"), wait_reason=reason, sleep_now=True,
+                          wake_on=on or None)
             t.save()
-            t.journal(f"⏳ Жду до {when:%d.%m %H:%M}: {reason}")
-            return f"Хорошо, вернусь к задаче {when:%d.%m в %H:%M} (или раньше, если пользователь напишет)."
+            ev = ("; или как только " + " / ".join(x for x in (f"появится или изменится «{Path(on['file']).name}»" if on.get("file") else "",
+                                                              f"придёт письмо «{on['mail']}»" if on.get("mail") else "") if x)) if on else ""
+            t.journal(f"⏳ Жду до {when:%d.%m %H:%M}{ev}: {reason}")
+            return f"Хорошо, вернусь к задаче {when:%d.%m в %H:%M}{ev} (или раньше, если пользователь напишет)."
         if name == "finish":
             # невыполненные пункты плана — один раз напоминаем, дальше — проверки качества (_finish_gates)
             plan = t.plan()
@@ -2714,6 +2983,7 @@ class TaskManager:
                         pass
                 return (f"Такого файла нет: «{args.get('path')}». Как исправить: посмотри file_glob (или list_files), "
                         "как он называется.")
+            t.data["seen"] = list(dict.fromkeys((t.data.get("seen") or []) + [str(p.resolve())]))[-300:]   # выпуск 8, п.5
             return self._read_lines(t, p, args, name)
         if name == "file_edit":
             import textedit as TE
@@ -2803,10 +3073,14 @@ class TaskManager:
             return self._file_tools(t, name, args)
         if name == "write_file":
             p, f = self._area(t, args.get("path"), write=True)
+            blind = self._blind_overwrite(t, p, args)
+            if blind:
+                return blind
             if f is not None:                              # папка человека (с его разрешения): пишем туда как есть
                 p.parent.mkdir(parents=True, exist_ok=True)
                 with open(p, "a" if args.get("append") else "w", encoding="utf-8") as fh:
                     fh.write(args.get("content") or "")
+                t.data["seen"] = list(dict.fromkeys((t.data.get("seen") or []) + [str(p.resolve())]))[-300:]   # своё — дальше можно
                 t.journal(f"📄 записал {p} ({p.stat().st_size} байт)")
                 return f"Файл {p} — {p.stat().st_size} байт."
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -3299,11 +3573,12 @@ class TaskManager:
                                         f"Ранние шаги, которые уходят из памяти:\n{text}\n\nПерепиши блокнот: сохрани всё, что "
                                         "в нём было, и добавь важное из этих шагов — факты, номера, коды, суммы, ответы людей "
                                         "и компаний, договорённости, что уже сделано, чего ждём, что дальше. Разделы: Что "
-                                        "известно / Что решено / Чего ждём / Что дальше. Коротко, без воды."}],
+                                        "известно / Что решено / Файлы — что в каждом / Ошибки и как обошли / Чего ждём / "
+                                        "Что дальше. Числа, коды, адреса и пути — дословно. Коротко, без воды."}],
                                       cancel=t.cancel)).strip()
             out = re.sub(r"^```(?:markdown|md)?\s*|\s*```$", "", out)
             if len(out) > 40:
-                t.set_notebook(out)
+                t.set_notebook(keep_facts(t.notebook() or "", out))
                 t.journal("🧠 Ранние шаги ушли из памяти — главное перенесено в блокнот.")
                 return
         except Exception as e:  # noqa: BLE001
@@ -3375,6 +3650,16 @@ class TaskManager:
         как max_tokens (рецензия 0.83: окно 4 тыс. — запрос + 2048 на ответ не помещались, задача падала на первом шаге)."""
         win = int(t.data.get("win") or WIN_DEFAULT)
         return max(256, min(int(prof.get("max_tokens") or 2048), win // 4))
+
+    def _fit_reserve(self, t, prof, system, specs, msgs, state=""):
+        """max_tokens для запроса: место под ответ (_reserve), но не больше, чем осталось в окне после самого запроса с
+        запасом (0.90: окно 4 тыс., длинный путь папки задачи и 13 инструментов — неизменная часть сама ~3,1 тыс.;
+        запрос + 1024 переваливал за окно, и сервер отказывал). Не меньше 256 — короче ответ не нужен."""
+        win = int(t.data.get("win") or WIN_DEFAULT)
+        r = self._reserve(t, prof)
+        need = (self._size(system) + (self._size([{"type": "function", "function": x} for x in specs]) if specs else 0)
+                + self._size(msgs) + self._size(state))
+        return max(256, min(r, win - need - max(64, win // 32)))
 
     @staticmethod
     def _win_key(prof):
@@ -4305,7 +4590,16 @@ class TaskManager:
         cont = bool(msgs)                                         # продолжение (после сна, передышки, перезапуска, паузы)
         resume_why = t.data.pop("resume_why", "")
         # чем продолжить разговор — зависит от причины пробуждения (тексты wait_reason задаются ниже и в wait)
-        if not msgs:
+        begun = bool(int(t.data.get("steps") or 0) or (t.data.get("progress") or [0, 0])[1]
+                     or ((t.dir / "outputs").is_dir() and any((t.dir / "outputs").iterdir())))
+        if not msgs and begun:
+            # экзамен 12.11 (Б11, перезапуск посреди работы): история разговора не успела записаться, а работа уже шла —
+            # задача начинала заново. Есть шаги, план или файлы — продолжаем по ним, а не с нуля
+            msgs = [{"role": "user", "content": f"Продолжай задачу: {t.goal}\n\nРабота уже начата, но память разговора "
+                     "не сохранилась (перезапуск). Не начинай заново: сверься с планом, блокнотом и файлами в outputs/ "
+                     "(list_files, file_read) и продолжи с первого несделанного шага."}]
+            t.journal("▶ После перезапуска — продолжаю, где остановился (сверяюсь с планом и файлами).")
+        elif not msgs:
             msgs = [{"role": "user", "content": f"Начинай задачу: {t.goal}"}]
             t.journal(f"▶ Начал работу ({t.persona}).")
         elif wake and wake.startswith("передышка"):
@@ -4420,7 +4714,7 @@ class TaskManager:
                 try:
                     # _tail — «Состояние задачи» в конец запроса (в историю не пишется); _ctx — не резать историю в llm
                     # (_ctx_cut оставил бы ответ инструмента без вызова): «не хватило окна» решаем здесь — сжатием
-                    for kind, val in stream_events(dict(prof, _ctx=True, _tail=state, _known=BY_NAME, max_tokens=self._reserve(t, prof)), system, msgs,
+                    for kind, val in stream_events(dict(prof, _ctx=True, _tail=state, _known=BY_NAME, max_tokens=self._fit_reserve(t, prof, system, specs, msgs, state)), system, msgs,
                                                    cancel=t.cancel, tools=specs):
                         self._beat(t)
                         if kind == "tools":
@@ -4547,10 +4841,18 @@ class TaskManager:
                         t.journal("🔁 Повторяет одно и то же с тем же результатом — предупреждаю.")
                         r = f"{r}\n\n{Q.LOOP_WARN}"
                     elif loop == "finish":
-                        t.data["finish_checked"] = t.data["force_finish"] = True
-                        t.data["force_why"] = "loop"
-                        t.journal("🔁 Зациклился — прошу закончить с тем, что есть.")
-                        r = f"{r}\n\n{Q.LOOP_FINISH}"
+                        pd, pt = (t.data.get("progress") or [0, 0])[:2]
+                        if pt and pd >= pt and not t.data.get("loop_done_nudged"):
+                            # экзамен 12.11 (Б4): план выполнен целиком, всё верно — а задача, перепроверяя одно и то же,
+                            # получала «не выполнено». План сделан — повтор значит «пора сдавать»: итог через обычные проверки
+                            t.data["loop_done_nudged"] = t.data["finish_checked"] = True
+                            t.journal("🔁 План выполнен, а задача перепроверяет одно и то же — прошу сдать итог.")
+                            r = f"{r}\n\n{Q.LOOP_DONE}"
+                        else:
+                            t.data["finish_checked"] = t.data["force_finish"] = True
+                            t.data["force_why"] = "loop"
+                            t.journal("🔁 Зациклился — прошу закончить с тем, что есть.")
+                            r = f"{r}\n\n{Q.LOOP_FINISH}"
                     elif loop == "stop":                           # не послушала LOOP_FINISH — прерываем с ошибкой
                         q["loop_warns"] += 1
                         t.data["looped"] = True

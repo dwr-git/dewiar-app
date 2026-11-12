@@ -42,12 +42,20 @@ with sync_playwright() as p:
     # центр портрета: фото — много разных цветов; пустой круг — почти один (снимок экрана: холст с чужим фото не читается)
     import io
     from PIL import Image
-    colors = []
-    for i in range(pg.locator("#ggrid canvas").count()):
-        im = Image.open(io.BytesIO(pg.locator("#ggrid canvas").nth(i).screenshot())).convert("RGB")
-        w, h = im.size
-        crop = im.crop((int(w * .35), int(h * .35), int(w * .65), int(h * .65)))
-        colors.append(len({(r >> 4, g >> 4, b2 >> 4) for r, g, b2 in crop.getdata()}))
+    def shot_colors():
+        out = []
+        for i in range(pg.locator("#ggrid canvas").count()):
+            im = Image.open(io.BytesIO(pg.locator("#ggrid canvas").nth(i).screenshot())).convert("RGB")
+            w, h = im.size
+            crop = im.crop((int(w * .35), int(h * .35), int(w * .65), int(h * .65)))
+            out.append(len({(r >> 4, g >> 4, b2 >> 4) for r, g, b2 in crop.getdata()}))
+        return out
+    colors = shot_colors()
+    for _ in range(12):                                # под нагрузкой второе фото приходит позже — ждём до ~12 с ещё
+        if len(colors) == 2 and all(c > 40 for c in colors):
+            break
+        pg.wait_for_timeout(1000)
+        colors = shot_colors()
     ok(len(colors) == 2 and all(c > 40 for c in colors), f"фото пришло позже — портреты нарисованы без наведения мыши: разных цветов {colors}")
     if os.environ.get("DEWIAR_SHOTS"):
         pg.locator("#ggrid").screenshot(path=os.environ["DEWIAR_SHOTS"] + "/gallery-still.png")

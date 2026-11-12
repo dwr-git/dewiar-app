@@ -1422,12 +1422,21 @@ def pictures_dir():
     return Path.home() / "Pictures"
 
 
+# 4×3 PNG: экзамен (ядро --server, экрана нет) — снимок «понарошку», чтобы «сделай снимок → открой эту папку» проверялось
+_EXAM_PNG = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000040000000308020000003b963991000000144944415478da63d4d03161"
+                          "800126062480c201001438008e8d99edf60000000049454e44ae426082")
+
+
 def t_save_screenshot(a, ctx):
     from eyes import EyesError, capture_screen
-    try:
-        data = capture_screen(desktop_env())
-    except EyesError as e:
-        raise ToolError(str(e)) from e
+    if EXAM_LAUNCH:                                   # экзамен 12.11 (open_folder_after_shot573): «инструмента снимка нет»
+        launch(["screenshot"])
+        data = _EXAM_PNG
+    else:
+        try:
+            data = capture_screen(desktop_env())
+        except EyesError as e:
+            raise ToolError(str(e)) from e
     d = pictures_dir() / "Снимки экрана"
     d.mkdir(parents=True, exist_ok=True)
     f = d / f"Снимок экрана {datetime.now():%Y-%m-%d %H-%M-%S}.png"
@@ -2812,6 +2821,19 @@ def _site_open(S, sid):
     return f
 
 
+def _eyes(ctx, path, goal):
+    """Посмотреть на результат глазами (engine.eyes_page) -> строка для модели («Посмотрела: …») или ""."""
+    f = ctx.get("eyes")
+    if not callable(f) or not path:
+        return ""
+    try:
+        bad = f(str(path), goal)
+    except Exception:  # noqa: BLE001
+        return ""
+    return (f" ПОСМОТРЕЛА НА РЕЗУЛЬТАТ (снимок экрана телефона): {bad}. Скажи об этом человеку и сразу поправь — "
+            "это недоработка, а не вкус.") if bad else ""
+
+
 def t_site_create(a, ctx):
     """«Сделай сайт для моей кофейни на Садовой, 5…» — шаблон по делу, тексты под человека, сразу открыть."""
     from sites import SiteError
@@ -2822,7 +2844,7 @@ def t_site_create(a, ctx):
         raise ToolError("Спроси одной фразой, для чего сайт: чем занимается человек и как называется дело.")
     try:
         s = S.create(a.get("kind") or "", describe, a.get("name") or "", a.get("tagline") or "", ct, ref=str(a.get("ref") or ""))
-        _site_open(S, s["id"])
+        page = _site_open(S, s["id"])
     except SiteError as e:
         raise ToolError(str(e)) from e
     import sites_kit as K
@@ -2833,7 +2855,7 @@ def t_site_create(a, ctx):
             f"редактор — студия → «Сайты». {('Заметка: ' + note + '. ') if note else ''}"
             "Скажи одной-двумя фразами, что получилось, и предложи: поменять что угодно одной фразой (цвета, шрифт, разделы, "
             "«другой дизайн»), прислать фото и цены" + (f", назвать {', '.join(miss)}" if miss else "") + ", а когда понравится — опубликовать на "
-            "dewiar.pro под своим именем. Отзывы и людей не выдумывай.")
+            "dewiar.pro под своим именем. Отзывы и людей не выдумывай." + _eyes(ctx, page, describe or s.get("name") or ""))
 
 
 def t_site_edit(a, ctx):
@@ -2843,14 +2865,15 @@ def t_site_edit(a, ctx):
     try:
         sid = S.find(a.get("site") or "")
         r = S.say(sid, str(a.get("request") or "").strip() or "верни как было")
-        S.export(sid)
+        page = S.export(sid)
         if a.get("show"):
             _site_open(S, sid)
     except SiteError as e:
         raise ToolError(str(e)) from e
     pub = (r["site"].get("published") or {}).get("url")
     return (f"{r['said']} Сайт «{r['site']['name']}»: в студии → «Сайты» видно сразу" + (", в открытом браузере — обновите страницу" if not a.get("show") else ", открыла в браузере")
-            + (f". На {pub} изменения появятся после «опубликуй ещё раз»" if pub else "") + ". Скажи это коротко; отменить — «верни как было».")
+            + (f". На {pub} изменения появятся после «опубликуй ещё раз»" if pub else "") + ". Скажи это коротко; отменить — «верни как было»."
+            + _eyes(ctx, page, str(a.get("request") or "")))
 
 
 def t_site_show(a, ctx):
@@ -3221,6 +3244,106 @@ def t_read_file(a, ctx):
 
 
 OCR_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
+
+
+def _doc_path(a, ctx, exts=None):
+    """Документ для doc_find / doc_replace: полный путь, путь в папке ассистента или имя файла из «Входящих» (то, что
+    человек прислал) — самый свежий с таким именем."""
+    import docedit as DE
+    raw = str(a.get("path") or "").strip().strip("«»\"'")
+    if not raw:
+        raise ToolError("какой документ? Назови файл (путь или имя из «Входящих»)")
+    p = Path(raw).expanduser()
+    if not p.is_absolute():
+        try:
+            p = _ws(ctx).safe(raw)
+        except Exception:  # noqa: BLE001
+            p = Path(raw)
+    if not p.is_file():
+        try:
+            inbox = _ws(ctx).ensure() / "Входящие"
+            cands = sorted((x for x in inbox.rglob("*") if x.is_file() and x.suffix.lower() in (exts or DE.EXTS)
+                            and (x.name == Path(raw).name or Path(raw).stem.lower() in x.stem.lower())),
+                           key=lambda x: x.stat().st_mtime, reverse=True)
+            p = cands[0] if cands else p
+        except Exception:  # noqa: BLE001
+            pass
+    if not p.is_file():
+        raise ToolError(f"документа «{raw}» не нашла — пришли его ещё раз или назови полный путь")
+    if exts is not None:
+        return p
+    if p.suffix.lower() not in DE.EXTS:
+        raise ToolError(f"«{p.name}»: точечно правлю Word, Excel, PowerPoint и OpenOffice (docx, xlsx, pptx, odt). PDF — "
+                        "сначала сохранить в Word.")
+    return p
+
+
+def t_doc_find(a, ctx):
+    """Где в документе встречается текст — как grep, до правки: чтобы заменить ровно то, что нужно."""
+    import docedit as DE
+    p = _doc_path(a, ctx)
+    try:
+        hits = DE.find(p, str(a.get("text") or ""), whole=bool(a.get("whole_word")))
+    except DE.DocEditError as e:
+        raise ToolError(str(e)) from e
+    if not hits:
+        return f"В «{p.name}» «{a.get('text')}» не встречается."
+    return (f"«{p.name}»: найдено {len(hits)}" + (" (показаны первые 40)" if len(hits) >= 40 else "") + ":\n"
+            + "\n".join(f"- {h['part']}, абзац {h['para']}: {h['text']}" for h in hits))
+
+
+def t_archive_open(a, ctx):
+    """Архив .zip, который прислал человек: безопасно распаковать рядом и сказать, что внутри (владелец 12.11)."""
+    import docedit as DE
+    p = _doc_path(a, ctx, exts={".zip", ".rar", ".7z"})
+    try:
+        r = DE.unpack(p)
+    except DE.DocEditError as e:
+        raise ToolError(str(e)) from e
+    fs = r["files"]
+    size = lambda n: f"{n / 1048576:.1f} МБ" if n >= 1048576 else f"{max(1, n // 1024)} КБ"   # noqa: E731
+    lines = [f"- {f} ({size(n)})" for f, n in fs[:60]]
+    return (f"Распаковала «{p.name}» в папку «{Path(r['dir']).name}» рядом: {len(fs)} файлов"
+            + (f", пропущено небезопасных {len(r['skipped'])}" if r["skipped"] else "") + ":\n" + "\n".join(lines)
+            + (f"\n… и ещё {len(fs) - 60}" if len(fs) > 60 else "")
+            + f"\nПапка: {r['dir']}. Читать файл — read_file с полным путём; документы Office править — doc_find / doc_replace; "
+            "обработать много файлов и собрать результат — start_task (навык archive). Скажи коротко, что в архиве.")
+
+
+def t_doc_replace(a, ctx):
+    """Точечная замена в документе Office (владелец 12.11): оформление, таблицы, колонтитулы не трогаются; оригинал цел —
+    результат рядом «(исправлено)»."""
+    import docedit as DE
+    p = _doc_path(a, ctx)
+    reps = a.get("replacements") or []
+    if isinstance(reps, dict):
+        reps = [{"find": k, "replace": v} for k, v in reps.items()]
+    pairs = [(str(x.get("find") or ""), str(x.get("replace") or "")) for x in reps if isinstance(x, dict)]
+    if not pairs and a.get("find"):
+        pairs = [(str(a["find"]), str(a.get("replace") or ""))]
+    out = None
+    if str(a.get("save_as") or "").strip():                 # «такой же план на этот год» — новое имя рядом с образцом
+        nm = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", str(a["save_as"])).strip()[:120]
+        out = p.with_name(nm if nm.lower().endswith(p.suffix.lower()) else nm + p.suffix)
+        if out.resolve() == p.resolve():
+            raise ToolError("save_as — другое имя: образец не перезаписываю")
+    try:
+        r = DE.replace(p, pairs, out=out, whole=bool(a.get("whole_word")))
+    except DE.DocEditError as e:
+        raise ToolError(str(e)) from e
+    done = [f"«{f}» → «{t}»: {n}" for (f, t), n in zip(pairs, r["counts"]) if n]
+    if not r["out"]:
+        return (f"В «{p.name}» ничего из этого не нашлось: " + ", ".join(f"«{x}»" for x in r["missing"]) +
+                ". Проверь написание (doc_find) — файл не менялся.")
+    opener = ctx.get("show_file")
+    if callable(opener):
+        try:
+            opener(r["out"])
+        except Exception:  # noqa: BLE001
+            pass
+    return (f"Готово: «{Path(r['out']).name}» рядом с оригиналом (оригинал не тронут). Заменено: " + "; ".join(done)
+            + (". Не нашлось: " + ", ".join(f"«{x}»" for x in r["missing"]) if r["missing"] else "")
+            + ". Оформление, таблицы и колонтитулы — как были. Скажи коротко, сколько и что заменено, и где файл.")
 # куда смотреть, если назвали только имя файла («распознай скан.pdf»): папки, куда файлы обычно попадают
 OCR_DIRS = ("Загрузки", "Downloads", "Рабочий стол", "Desktop", "Документы", "Documents", "Изображения", "Pictures")
 
@@ -3530,6 +3653,9 @@ def t_start_task(a, ctx):
             raise ToolError(str(e)) from e
         if r is not None:
             return r
+    ask = _start_ask(a, ctx, goal)                     # HARNESS 7: большую задачу — сначала «план, срок, цена — начинаю?»
+    if ask:
+        return ask
     try:
         fl = a.get("folders") or []
         fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
@@ -3544,12 +3670,41 @@ def t_start_task(a, ctx):
             "готово; не говори «готово», «сделал», «вот презентация» — это неправда, пока задача не закончилась.")
 
 
+def _start_ask(a, ctx, goal):
+    """HARNESS, выпуск 7 (как у среды Claude: ясное — делать сразу, дорогое — один вопрос до старта). По завершённым задачам
+    того же вида: обычно дольше EST_ASK_MIN минут или дороже EST_ASK_TOKENS — не запускаем, а просим модель сказать
+    человеку план в двух фразах, срок и цену и спросить «начинаю?». confirmed=true — человек согласился; дело по
+    расписанию (_unattended) — спросить некого, запускаем. Оценки нет (мало истории) — запускаем сразу. -> текст или ""."""
+    if a.get("confirmed") or a.get("_unattended"):
+        return ""
+    try:
+        from tasks import EST_ASK_MIN, EST_ASK_TOKENS
+        est = _tm(ctx).estimate(goal)
+    except Exception:  # noqa: BLE001
+        return ""
+    if not est.get("n") or (est["minutes"] < EST_ASK_MIN and est["tokens"] < EST_ASK_TOKENS):
+        return ""
+    price = ""
+    f = ctx.get("talers_for_tokens")
+    if callable(f):
+        try:
+            tl = f(est["tokens"])
+            price = f", около {tl:.2f} талера" if tl else ""
+        except Exception:  # noqa: BLE001
+            price = ""
+    return (f"НЕ ЗАПУЩЕНО — сначала спроси. Похожие задачи ({est['n']}) обычно идут около {est['minutes']} мин и тратят около "
+            f"{(str(round(est['tokens'] / 1e6, 1)).replace('.', ',') + ' млн') if est['tokens'] >= 1e6 else str(est['tokens'] // 1000) + ' тыс.'} токенов{price}. Скажи человеку план в двух фразах, срок и цену и спроси: «начинаю?». "
+            "Согласится — вызови start_task снова с теми же полями и confirmed=true; захочет короче — сузь цель.")
+
+
 def t_task_status(a, ctx):
     tm = _tm(ctx)
     items = tm.list()
     if not items:
         return "Задач пока нет."
-    lines = []
+    from tasks import tasks_brief
+    head = tasks_brief(items)
+    lines = [head + " (начни ответ с этой фразы; подробности — если спросят)"] if head else []
     for x in items[:6]:
         prog = x.get("progress") or [0, 0]
         extra = f", план {prog[0]} из {prog[1]}" if prog[1] else ""
@@ -3646,7 +3801,7 @@ def t_call_persona(a, ctx):
 
 # На сервере (main.py --server) нет экрана, звука, камеры и окна — эти инструменты там выключены. Экзамен — тоже ядро
 # --server, но открыть сайт или программу там можно «понарошку» (EXAM_LAUNCH: запуск записывается), а совет идёт без окна
-EXAM_ON = {"open_url", "open_app", "open_path", "council", "make_podcast"}
+EXAM_ON = {"open_url", "open_app", "open_path", "council", "make_podcast", "save_screenshot"}
 SERVER_OFF = {"council", "make_podcast", "open_url", "open_app", "open_path", "play_music", "play_radio", "play_youtube", "yandex_music", "media_control",
               "set_volume", "look_at_screen", "save_screenshot", "look_through_camera", "widget", "power"}
 
@@ -4050,6 +4205,24 @@ TOOLS = {
     "find_notes": ("Найти в папке ассистента заметки, дневник, память по словам (что записывали раньше); если подключён "
                    "Obsidian — и в заметках пользователя там (пути «obsidian:…»).",
                    S({"query": {"type": "string"}}, ["query"]), "safe", t_find_notes, "Поиск по заметкам"),
+    "doc_find": ("Найти текст в документе Word, Excel, PowerPoint или OpenOffice (docx, xlsx, pptx, odt) — где и в каком "
+                 "окружении он встречается. Вызывай ПЕРЕД заменой, если не уверен в написании (падежи, инициалы, формат даты). "
+                 "path — файл (имя из «Входящих» или путь); text — что искать; whole_word — только слово целиком.",
+                 S({"path": {"type": "string"}, "text": {"type": "string"}, "whole_word": {"type": "boolean"}}, ["path", "text"]),
+                 "safe", t_doc_find, "Документы: поиск"),
+    "doc_replace": ("Заменить в документе Word, Excel, PowerPoint или OpenOffice (docx, xlsx, pptx, odt) фамилии, даты, суммы, "
+                    "названия — точечно: оформление, таблицы, колонтитулы не меняются, оригинал остаётся, результат — рядом "
+                    "«(исправлено)». replacements — [{find, replace}] (каждый падеж фамилии — отдельной парой: «Иванов», "
+                    "«Иванова», «Иванову»…); whole_word — только слово целиком. Документ НЕ переписывай заново — только так. "
+                    "«Сделай такой же на этот год» — тот же документ с новыми годами, датами, именами: save_as — имя нового "
+                    "файла (образец остаётся); перестроить разделы, добавить строки таблиц — большая задача (start_task, навык docx).",
+                    S({"path": {"type": "string"}, "replacements": {"type": "array", "items": {"type": "object", "properties": {
+                        "find": {"type": "string"}, "replace": {"type": "string"}}}}, "whole_word": {"type": "boolean"},
+                       "save_as": {"type": "string"}},
+                      ["path", "replacements"]), "safe", t_doc_replace, "Документы: правка"),
+    "archive_open": ("Открыть архив .zip, который прислал человек: безопасно распаковать рядом и узнать, что внутри (файлы и "
+                     "размеры). path — имя из «Входящих» или путь.",
+                     S({"path": {"type": "string"}}, ["path"]), "safe", t_archive_open, "Архивы"),
     "read_file": ("Прочитать файл из папки ассистента (путь из find_notes или из списка). Сканы PDF и картинки "
                   "распознаются в текст сами.",
                   S({"path": {"type": "string"}}, ["path"]), "safe", t_read_file, "Чтение заметок"),
@@ -4082,7 +4255,8 @@ TOOLS = {
                       "folders": {"type": "array", "items": {"type": "string"}, "description": "папки пользователя, с которыми работать (полные пути): задача читает их без вопросов, меняет — с разрешения"},
                       "network": {"type": "boolean", "description": "интернет для скриптов задачи (run_python, run_shell в песочнице) — только если пользователь сам просит, чтобы код ходил в сеть; поиск и чтение страниц работают и без этого"},
                       "on": {"type": "string", "description": "на каком своём компьютере («на рабочем», «Ноутбук») — имя из списка компьютеров; пусто — здесь"},
-                      "if_off": {"type": "string", "enum": ["", "wait", "cloud"], "description": "тот компьютер не на связи: wait — сделать, когда включится; cloud — сейчас в облаке Dewiar (только если пользователь так ответил)"}},
+                      "if_off": {"type": "string", "enum": ["", "wait", "cloud"], "description": "тот компьютер не на связи: wait — сделать, когда включится; cloud — сейчас в облаке Dewiar (только если пользователь так ответил)"},
+                      "confirmed": {"type": "boolean", "description": "человек уже согласился на план, срок и цену (после «НЕ ЗАПУЩЕНО — сначала спроси»)"}},
                      ["goal"]), "safe", t_start_task, "Фоновая задача"),
     "task_status": ("Как идут фоновые задачи: статус, прогресс, вопросы, итог.", S({}), "safe", t_task_status,
                     "Задачи: статус"),

@@ -251,7 +251,8 @@ DEFAULTS = {
     "smarthome": {"client_id": ""},     # ID приложения Яндекс OAuth (iot:view, iot:control) для кнопки «Получить ключ»
     "backup": {"dir": "", "auto": True},  # резервные копии: папка (пусто — «Документы/Dewiar — копии»), раз в неделю сама
     "updates": {"url": "", "auto_check": True,         # пусто = https://dewiar.pro/dwrapp/latest.json
-                "mirror_github": True},             # запасной путь скачивания — GitHub (если latest.json даёт "github"); False — только сайт
+                "mirror_github": True,              # запасной путь скачивания — GitHub (если latest.json даёт "github"); False — только сайт
+                "auto_install": True},              # Windows: скачанное обновление ставится само, когда вы 10 минут не за компьютером
     "tasks": {"llm": "", "max_steps": 80, "cycles": 15, "auto_run": False,   # модель задач (пусто = активная); шагов за круг и кругов подряд; команды без вопроса
               "self_check": True, "learn": True,               # самопроверка итога и уроки из прошлых задач (quality.py)
               "judge_llm": "",    # проверяющий итога (выпуск 3 «Больших задач»): сильная модель; пусто — та же, что у задачи

@@ -864,13 +864,39 @@ class MusicMixin:
         while not self.stopping.is_set():
             try:
                 self._away.away_after = max(5, int(self.s.get("welcome", "away_min") or 20)) * 60
-                gone = self._away.feed(presence.idle_seconds())
+                idle = presence.idle_seconds()
+                gone = self._away.feed(idle)
                 if gone:
                     self._welcome_back(gone)
+                self._auto_update_tick(idle)
             except Exception as e:  # noqa: BLE001
                 log.debug("приветствие: %s", e)
             if self.stopping.wait(5):
                 return
+
+    def _auto_update_tick(self, idle):
+        """Раз в минуту: скачанное обновление поставить самим, пока человека нет (updater.auto_due) — событие update_auto
+        виджету (ставит он: установщик и перезапуск — в сеансе рабочего стола). Одна версия — одно событие за запуск."""
+        import time as _t
+        if _t.monotonic() - float(getattr(self, "_auto_upd_t", 0) or 0) < 60:
+            return False
+        self._auto_upd_t = _t.monotonic()
+        up = getattr(self, "updater", None)
+        a = getattr(up, "available", None) if up else None
+        if not a or getattr(self, "_auto_upd_ver", "") == a.get("version"):
+            return False
+        try:
+            running = any(t.get("status") == "running" for t in self.tasks.list())
+        except Exception:  # noqa: BLE001
+            running = False
+        import updater as U
+        busy = bool(self.turn is not None or self.alarm or self.meeting)
+        if not U.auto_due(self.s, a, idle, self.state, busy, running):
+            return False
+        self._auto_upd_ver = a.get("version")
+        log.info("⬆ Обновление %s — вас нет %d мин: ставлю сама", a.get("version"), int((idle or 0) // 60))
+        self.emit("update_auto", version=a.get("version"), path=a.get("path"))
+        return True
 
     def _upcoming(self, hours=2):
         """Дела и встречи сегодня в ближайшие hours часов -> [("HH:MM", что)]."""

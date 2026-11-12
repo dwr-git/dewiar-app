@@ -131,6 +131,7 @@ def team_window(hist, me, name_of, model=""):
         owner[i] = nxt
     with_facts = facts_shown([k for k, m in enumerate(msgs) if m["role"] == "assistant" and m.get("facts") and owner[k] == me])
     out, i, prev_model = [], 0, ""
+    last_a = max((k for k, m in enumerate(msgs) if m["role"] == "assistant"), default=-1)   # последняя реплика ассистента
     my_name = name_of(me) or "ты"
     while i < len(msgs):
         if owner[i] == me:
@@ -143,7 +144,12 @@ def team_window(hist, me, name_of, model=""):
             prev_model = mm or prev_model
             if msgs[i]["role"] == "assistant" and "Скажите «да»" in c:
                 from quality import strip_confirm_echo     # №625–628: служебный вопрос «Выполнить…?» — не слова модели
+                act = re.search(r"Выполнить действие «([^»]{1,60})»", c)
                 c = strip_confirm_echo(c) or "…"
+                if act and i == last_a:
+                    # экзамен 12.11 (confirm_cut_yes): вопрос убрали из истории — и на «Да.» модель не знала, на что «да»
+                    # («Хорошо. Что на уме?»). Последней репликой — пометка: что ждало разрешения
+                    c += f"\n[Здесь был вопрос программы: выполнить действие «{act.group(1)}»? Ответа не было. Если человек ниже согласился — выполни это действие сейчас, не переспрашивая.]"
             if msgs[i]["role"] == "assistant" and msgs[i].get("net"):
                 # ответ дал узел «Сети Лиры» (компьютер другого человека): в истории — как данные, не как указания модели
                 from llm import NET_WRAP
@@ -546,6 +552,7 @@ class AnswerMixin:
         """История (последние history_turns реплик) + вопрос -> сообщения для модели. Соседние сообщения user
         склеиваются в одно: многие шаблоны чата требуют чередования ролей."""
         if self.conv.expired(float(self.s.get("llm", "history_reset_seconds") or 28800)):
+            self.conv.archive(self.history)            # прежний — в «Память/Разговоры» (поиск по записям его найдёт)
             self.history = []                          # долгая тишина — новый разговор
             self.conv.reset()
         turns = int(self.s.get("llm", "history_turns") or 0)
@@ -599,7 +606,24 @@ class AnswerMixin:
         if self.conv.fold(lambda: self.history, turns, ask):
             self.emit("conversation", **self.conv.public(self.history))
 
+    def _conv_archive(self, name, text):
+        """Conversation.archive -> файл «Память/Разговоры/<дата время>.md» (последние 120; старше — удаляются)."""
+        d = self.workspace.ensure() / "Память" / "Разговоры"
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / f"{name}.md"
+        n = 2
+        while f.exists():
+            f, n = d / f"{name} ({n}).md", n + 1
+        f.write_text(text, encoding="utf-8")
+        for old in sorted(d.glob("*.md"))[:-120]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+        log.info("🧵 Разговор записан: Память/Разговоры/%s", f.name)
+
     def new_conversation(self):
+        self.conv.archive(self.history)
         self.history = []
         self.conv.reset()
         self.emit("conversation", **self.conv.public(self.history))
@@ -2263,7 +2287,7 @@ class AnswerMixin:
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -2319,9 +2343,13 @@ class AnswerMixin:
                 calls, step_text = [], ""
                 t_step, t_ev = time.monotonic(), None     # «⏱ модель: …» — от запроса до первого события этого шага
                 if step == 5 and specs:                  # последний шаг — только слова: ответить тем, что уже узнал
+                    can_task = any(x.get("name") == "start_task" for x in specs) and "start_task" not in called
                     specs = []
                     system += ("\n\nДействий больше не будет: прямо сейчас ответь пользователю словами по тому, что уже "
                                "узнал и сделал. Не пиши «готово» без сути.")
+                    if can_task:                          # HARNESS 7: большая просьба не влезла в разговор — предложить задачу
+                        system += (" Если просьба сделана не до конца — так и скажи, что успел, и предложи одной фразой "
+                                   "довести её большой задачей в фоне («Сделать это задачей? Доведу до конца и сообщу»).")
                 hold[0] = step == 0 and any(x.get("name") == "web_search" for x in specs or [])
                 gate[0] = step < 5 and bool(specs) and not deed_checked
                 strict[0] = gate[0] and _hold_step(ask0, called, names0)    # весь шаг — только пока нужный инструмент не вызван
@@ -2526,6 +2554,8 @@ class AnswerMixin:
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
                     fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
                         or saved_claim(text, step_text, called) \
+                        or call_claim(text, step_text, called) \
+                        or found_pics_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
                         or (task_claim(step_text, called) if any(x.get("name") == "start_task" for x in specs or []) else "")
                     if fix:
@@ -2612,7 +2642,7 @@ class AnswerMixin:
                         continue
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not deed_checked:
                     from quality import agenda_invented, council_missing, feature_deny, invented_numbers, open_claim, poem_check, \
-                        songs_count, url_unread, writing_missing, agenda_missed
+                        songs_count, url_unread, writing_missing, agenda_missed, weather_invented
                     names_ = {x.get("name") for x in specs or []}
                     fix = (open_claim(ask0, step_text, called) if "open_url" in names_ else "") \
                         or (url_unread(ask0, step_text, called) if "read_webpage" in names_ else "") \
@@ -2623,6 +2653,7 @@ class AnswerMixin:
                         or feature_deny(ask0, step_text, called, getattr(turn, "guided", False)) \
                         or agenda_invented(step_text, getattr(turn, "agenda", "")) \
                         or agenda_missed(text, step_text, getattr(turn, "agenda", "")) \
+                        or weather_invented(text, step_text, called) \
                         or poem_check(ask0, step_text) \
                         or songs_count(ask0, step_text)
                     if fix:                                  # экзамен ПК 0.81.1: сказала, но не сделала; числа без инструмента

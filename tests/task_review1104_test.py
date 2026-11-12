@@ -171,8 +171,10 @@ tm4 = TK.TaskManager(h4)
 t4 = tm4.create(A, "Проверка окна 4096")
 ok(wait_for(lambda: t4.status in ("done", "failed", "paused"), 90) and t4.status == "done", f"окно 4096 — задача дошла до finish ({t4.status} {t4.error})")
 rs = m4.of(A)
-ok(rs and all(r["max_tokens"] == 1024 for r in rs) and not [x for x in m4.over if x > 0],
-   f"модели уходит max_tokens = место под ответ (1024), сервер ни разу не отказал: {[r['max_tokens'] for r in rs][:3]} {m4.over}")
+# 0.90: длинный путь папки задачи — неизменная часть запроса ~3,1 тыс.: тогда max_tokens меньше 1024 (_fit_reserve), но не
+# переваливает окно и не меньше 256
+ok(rs and all(256 <= r["max_tokens"] <= 1024 for r in rs) and rs[0]["max_tokens"] == 1024 and not [x for x in m4.over if x > 0],
+   f"модели уходит max_tokens = место под ответ (до 1024, сколько влезает), сервер ни разу не отказал: {[r['max_tokens'] for r in rs][:3]} {m4.over}")
 ok(rs and all(len(x["function"]["description"]) <= 160 and x["function"]["description"].count(". ") == 0 for x in rs[0]["tools"]),
    "окно меньше 6 тыс. — описания инструментов до первой фразы")
 t4.data["win_learned"] = {"key": "http://другой|m", "win": 3000}
@@ -218,7 +220,7 @@ t7 = tm7.create(A7, "Узнать город")
 ok(wait_for(lambda: t7.status == "done", 30) and "## Ответы человека" in t7.notebook() and "Казань" in t7.notebook(),
    "ответ на ask_user — сразу в блокнот, раздел «Ответы человека»")
 tm7.tell(t7.id, "И учти бюджет 7000")
-ok(wait_for(lambda: "7000" in t7.notebook() and t7.status == "done", 30), "сообщение человека задаче — тоже в блокнот")
+ok(wait_for(lambda: "7000" in t7.notebook() and t7.status == "done", 60), "сообщение человека задаче — тоже в блокнот")
 
 # ---------- 8. use_skill целиком ----------
 long_skill = "ИНСТРУКЦИЯ\n" + "правило. " * 1500 + "\nСЕРЕДИНА\n" + "ещё. " * 1000

@@ -46,6 +46,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.conv = Conversation(STATE_DIR / "conversation.json")     # длинный разговор: содержание раньше сказанного
         from chatlog import ChatLog
         self.chatlog = ChatLog(STATE_DIR / "chat.jsonl")               # переписка для студии («Чат»): вся лента, как в мессенджере
+        self.conv.archive_to = self._conv_archive                         # законченный разговор — в «Память/Разговоры»
         self.history = self.conv.restored(float(settings.get("llm", "history_reset_seconds") or 28800))
         from diary import Diary
         from night import NightWatch
@@ -145,6 +146,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             self.s.update({"audio": {"barge_in": "smart", "barge_v2": True}})
         self.toolbox.hooks["call_persona"] = self._tool_call_persona
         self.workspace = Workspace(settings)
+        threading.Thread(target=self.conv.archive_pending, name="conv-archive", daemon=True).start()   # прошлый разговор — в «Память/Разговоры»
         self.pad = Pad(self.workspace, settings, emit=self.emit, share=lambda rel, paths: self.note_files_out(rel, paths))   # блокнот у виджета
         self.toolbox.hooks["workspace"] = self.workspace
         self.workspace.mem_owner = self.mem_owner          # своя память у персонажа (0.56): чья память сейчас
@@ -162,6 +164,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.task_answer_until = 0.0
         self.tasks = TaskManager(self)
         self.toolbox.hooks["tasks"] = self.tasks
+        self.toolbox.hooks["talers_for_tokens"] = self._talers_for_tokens   # HARNESS 7: цена задачи до старта
+        self.toolbox.hooks["eyes"] = self.eyes_page                         # сайт, рисунок — посмотреть глазами (12.11)
         self.toolbox.hooks["remote_task"] = lambda on, title, goal, if_off="": self.remote_task(on, title, goal, if_off)   # «на рабочем компьютере…»
         from account import Account
         self.account = Account()

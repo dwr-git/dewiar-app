@@ -79,6 +79,16 @@ DRAFT_RX = re.compile(r"^(?:[А-ЯЁа-яёA-Za-z]+,\s*)?(?:запиши|доп�
                       r"(?P<kind>книг[уеи]|стать[юи]|стих[иа]?|рассказ|роман|сценари[йи]|черновик|песн[юи]|пост|сказк[уи]|мемуары)"
                       r"(?:\s+[«\"](?P<name>[^»\"]{2,40})[»\"])?\s*(?:[:,—–-]\s*|\s+)(?:что\s+)?(?P<body>\S.{2,})$", re.I | re.S)
 
+
+def art_page(text):
+    """Ответ «Художника» (JSON с полем page — страница рисунка) -> путь к странице или ""."""
+    try:
+        d = json.loads(text)
+        return str(d.get("page") or "") if isinstance(d, dict) else ""
+    except (ValueError, TypeError):
+        m = re.search(r'"page"\s*:\s*"([^"]+\.html)"', text or "")
+        return m.group(1) if m else ""
+
 class ToolsMixin:
     # ---------- инструменты ----------
 
@@ -95,6 +105,8 @@ class ToolsMixin:
         # дело по расписанию (via_job): его шаги в окнах не показываем — человеку только итог или ничего (владелец 11.11:
         # «запустились какие-то процессы — „Навык — готово“, а результата нет, непонятно, что это и зачем»)
         _temit = (lambda **kw: None) if getattr(turn, "via_job", False) else (lambda **kw: self.emit("tool", **kw))
+        if name == "start_task" and isinstance(args, dict) and getattr(turn, "via_job", False):
+            args = dict(args, _unattended=True)           # дело по расписанию: спросить «начинаю?» некого (HARNESS 7)
         if name in QUERY_TOOLS and isinstance(args, dict) and not str(args.get("query") or "").strip() and asked:
             # экзамен 0.38.49: find_notes({}) — модель потеряла аргументы, и «вспомни, что я говорил про работу» искало
             # «ничего»; тема — из самой просьбы («…про работу» → «работу»), иначе просьба целиком
@@ -187,6 +199,12 @@ class ToolsMixin:
                 res = dict(res, text=str(res.get("text", "")) + note) if isinstance(res, dict) else str(res) + note
             if name == "set_reminder" and asked and "\n\nВложения:" in asked and isinstance(res, str):
                 res = self._reminder_link_files(turn, res)
+            if re.search(r"art_(?:draw|animate)$", name):     # «Художник»: посмотреть на рисунок глазами (владелец 12.11)
+                bad = self.eyes_page(art_page(res["text"] if isinstance(res, dict) else str(res)), str(args.get("title") or asked or ""))
+                if bad:
+                    note = (f"\n\nПОСМОТРЕЛА НА РИСУНОК (снимок экрана): {bad}. Поправь рисунок (тот же title, replace=true) — "
+                            "это недоработка, а не вкус.")
+                    res = dict(res, text=str(res.get("text", "")) + note) if isinstance(res, dict) else str(res) + note
             out = res["text"] if isinstance(res, dict) else str(res)
             if name in FACT_TOOLS and out.strip():          # что узнала — коротко в историю разговора (engine_answer)
                 turn.facts = (getattr(turn, "facts", []) + [fact_line(name, args, out)])[-FACTS_PER_TURN:]
@@ -1198,6 +1216,63 @@ class ToolsMixin:
             if sc > score:
                 best, score = c, sc
         return best
+
+    def eyes_page(self, path, goal=""):
+        """«Посмотреть глазами» (владелец 12.11: «посмотреть глазами важно — и в разделе, где она рисует и делает сайты»):
+        страница результата (сайт, рисунок «Художника») — снимок экрана телефона модели со зрением: видно ли пустоту,
+        наложения, обрезанное, нечитаемое, заглушки. -> что видно не так (коротко) или "" (всё видно как надо, браузера нет,
+        модель без зрения — молча: не мешаем). Один и тот же файл с тем же содержимым дважды не смотрим."""
+        import quality as Q
+        from llm import LLMError, stream_chat, user_message
+        p = Path(path)
+        if not p.is_file():
+            return ""
+        prof = self.llm_profile() if hasattr(self, "llm_profile") else None
+        if not prof:
+            return ""
+        key = f"{prof.get('base_url')}|{prof.get('model')}"
+        if key in self._blind:
+            return ""
+        sig = (str(p), int(p.stat().st_mtime), p.stat().st_size)
+        seen = getattr(self, "_eyes_seen", None)
+        if seen is None:
+            seen = self._eyes_seen = {}
+        if sig in seen:
+            return seen[sig]
+        hc = Q.html_check([p], roots=[p.parent, p.parent.parent])
+        v = (hc or {}).get(str(p)) or {}
+        if not v.get("shot"):
+            return ""
+        try:
+            raw = "".join(stream_chat(dict(prof, max_tokens=400, temperature=0, think="off"), Q.LOOK,
+                                      [user_message(prof, f"Цель: {str(goal)[:400]}\nФайл: {p.name}", [v["shot"]])]))
+        except LLMError as e:
+            if re.search(r"image|vision|multimodal|картин|изображ", str(e), re.I):
+                self._blind.add(key)
+            return ""
+        except Exception as e:  # noqa: BLE001
+            log.info("Посмотреть глазами не вышло: %s", e)
+            return ""
+        r = Q.look_verdict(raw)
+        out = r[1] if r and r[0] == "revise" else ""
+        seen[sig] = out
+        log.info("👀 Посмотрела на %s: %s", p.name, out or "видно как надо")
+        return out
+
+    def _talers_for_tokens(self, tokens):
+        """Примерная цена задачи в талерах облака Dewiar (HARNESS 7: «план, срок, цена — начинаю?»): токены задачи — в
+        основном вход (большая часть — из кэша), цены — те же, что у «Подкастов». Своя модель или цен нет — 0."""
+        pc = getattr(self, "podcasts", None)
+        if pc is None:
+            return 0.0
+        try:
+            pr = pc._price(pc._profile())
+        except Exception:  # noqa: BLE001
+            return 0.0
+        if not pr:
+            return 0.0
+        pin, pout = pr[0], pr[1]
+        return round(float(tokens) / 1e6 * (0.85 * pin + 0.15 * pout), 2)
 
     def remote_task(self, on, title, goal, if_off=""):
         """Задача на названный компьютер. -> None (это он и есть — делать здесь) или текст для модели."""

@@ -1351,7 +1351,9 @@
       // а у холста есть размер (30.10, владелец: «персонажи без изображений — появляются, только когда наведу мышь»:
       // фото приходило позже 1,5 с, и кадр замирал пустым)
       if (this.still && this.state === "idle" && now > this._stillAt) {
-        if (this._stillReady()) return 400;
+        // 12.11: замирать, только если ПОСЛЕДНИЙ нарисованный кадр уже был с фото (оно могло догрузиться между кадрами —
+        // тогда кадр замирал пустым, а _stillReady уже говорил «готово»: второй портрет оставался пустым кругом)
+        if (this._stillReady() && this._paintedReady) return 400;
         this._stillAt = now + 250;
       }
       const cv = this.canvas, dpr = window.devicePixelRatio || 1;
@@ -1375,6 +1377,7 @@
       // допуск 8 мс: кадр экрана приходит не точно к сроку — без него лишнее пробуждение на каждый рисунок
       this._mdt = minDt;
       if (now - this._last < minDt - 8) return minDt - (now - this._last);
+      this._paintedReady = this._stillReady();               // этот кадр рисуется уже со всем, что нужно (фото, слои)
       const t0 = performance.now();
       const dt = Math.min(0.1, (now - this._last) / 1000); this._last = now;
       if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }

@@ -310,6 +310,7 @@
  "hud.st.starting": "Dewiar is starting — one moment",
  "hud.st.loading": "Getting ready: loading hearing and voice",
  "hud.upd.go": "Update",
+ "hud.upd.auto": "Installing Dewiar {v} while you're away — back in a minute.",
  "hud.upd.later": "Later",
  "hud.cancel": "Cancel",
  "hud.cancelled": "Cancelled",
@@ -337,5 +338,7 @@
  "hud.rem_del": "Reminder cancelled",
  "hud.bal.empty": "AI balance is empty — top it up",
  "hud.bal.empty_site": "AI balance on dewiar.pro is empty — top it up",
- "hud.upd.new": "A new Dewiar version {v} is out — faster and with fixes. Update now? It takes a minute, everything of yours stays."
+ "hud.upd.new": "A new Dewiar version {v} is out — faster and with fixes. Update now? It takes a minute, everything of yours stays.",
+ "st.upd.auto": "Install updates automatically",
+ "st.upd.auto.tip": "Windows: a downloaded update installs when you haven't touched the mouse or keyboard for about ten minutes — no questions, about a minute, everything of yours stays. On Linux the system asks for a password, so there it's only via the “Update” button."
 }

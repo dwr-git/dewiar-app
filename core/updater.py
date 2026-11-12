@@ -190,6 +190,25 @@ def mac_info(d, base, arch):
             "date": d.get("date", ""), "notes": d.get("notes", "")}
 
 
+# 12.11 (пакет 11.11: 262 компьютера из 541 — на 0.84.2): вопрос «Обновить сейчас?» виджет задаёт только развёрнутым
+# (а с автозапуском он в трее) и раз в 20 часов на минуту — его просто не видят. Windows ставит обновление без вопросов
+# системы (тихий установщик), поэтому скачанное ставим сами, когда человека нет за компьютером: AUTO_IDLE без мыши и
+# клавиатуры, разговора нет, будильник не звенит; идёт фоновая задача — ждём втрое дольше (она продолжится после
+# перезапуска, но зачем её прерывать). Linux спрашивает пароль (pkexec) — там только по нажатию.
+AUTO_IDLE = 10 * 60
+
+
+def auto_due(s, available, idle, state="idle", busy=False, tasks_running=False, win=None):
+    """Пора поставить скачанное обновление самим? -> True/False (решает ядро, ставит интерфейс — событие update_auto)."""
+    if not (WIN if win is None else win) or not available or not available.get("path"):
+        return False
+    if s is not None and s.get("updates", "auto_install") is False:
+        return False
+    if idle is None or idle < AUTO_IDLE or busy or state not in ("idle", "listening"):
+        return False
+    return not tasks_running or idle >= 3 * AUTO_IDLE
+
+
 def vtuple(v):
     """«0.10.11» -> (0, 10, 11): версии сравниваем числами, а не строками («0.9» < «0.10»)."""
     return tuple(int(x) for x in re.findall(r"\d+", str(v or "0")))

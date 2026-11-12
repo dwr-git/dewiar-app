@@ -48,9 +48,46 @@ class Conversation:
         self._lock = threading.Lock()
         self._busy = False
         self._restored = []
+        self.archive_to = None         # (имя, текст) -> записать законченный разговор в «Память/Разговоры» (engine.py)
         self._load()
 
     # ---------- хранение ----------
+    def archive_pending(self):
+        """Разговор, который кончился, пока программа была выключена (restored), — в архив, когда папка ассистента готова."""
+        pend, self._pending = getattr(self, "_pending", None), None
+        if not pend:
+            return False
+        keep = (self.summary, self.started, self.last)
+        self.summary, self.started, self.last = pend[0], pend[1], pend[2]
+        try:
+            return self.archive(pend[3])
+        finally:
+            self.summary, self.started, self.last = keep
+
+    def archive(self, history=()):
+        """Разговор кончился (долгая тишина, «новый разговор») — его содержание и последние реплики в «Память/Разговоры»
+        (владелец 12.11: «как я с тобой в одной беседе два месяца — ответы не деградируют, ты хранишь и делаешь пометки»).
+        Раньше содержание просто стиралось; теперь его находит поиск по записям (recall): «о чём мы говорили во вторник?».
+        Короткие разговоры (меньше 3 пар и без содержания) не архивируются."""
+        f = self.archive_to
+        if not callable(f):
+            return False
+        tail = [m for m in history or () if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str)]
+        if not self.summary and len(tail) < 6:
+            return False
+        lines = []
+        if self.summary.strip():
+            lines += ["## Кратко", "", self.summary.strip(), ""]
+        if tail:
+            lines += ["## Последние реплики", ""] + [f"- **{'Человек' if m['role'] == 'user' else 'Ассистент'}:** "
+                                                     f"{re.sub(chr(10) + '+', ' ', m['content']).strip()[:600]}" for m in tail[-16:]]
+        when = time.localtime(self.started or self.last or time.time())
+        try:
+            f(time.strftime("%Y-%m-%d %H%M", when), f"# Разговор {time.strftime('%d.%m.%Y %H:%M', when)}\n\n" + "\n".join(lines) + "\n")
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.info("Разговор не записался в «Память/Разговоры»: %s", e)
+            return False
     def _load(self):
         try:
             d = json.loads(self.path.read_text(encoding="utf-8"))
@@ -66,6 +103,8 @@ class Conversation:
         """История с прошлого запуска, если разговор ещё не закончился (тишина не дольше max_age секунд); отдаётся
         один раз. Закончился — состояние сбрасывается, файл перезапишет первое сохранение."""
         if not self.last or time.time() - self.last > max_age:
+            if self.last and (self.summary or len(self._restored) >= 6):   # кончился, пока программа была выключена —
+                self._pending = (self.summary, self.started, self.last, list(self._restored))   # в архив, когда готова папка
             self.reset(save=False)
             return []
         h, self._restored = self._restored, []
@@ -179,6 +218,11 @@ class Conversation:
             cur = history_ref()
             if len(cur) < len(old) or any(a is not b for a, b in zip(cur, old)):
                 return 0                                   # пока сворачивали, разговор начали заново
+            try:                                           # числа, имена с цифрами, ссылки из прежнего содержания не теряем
+                from quality import keep_facts
+                text = keep_facts(self.summary, text, head="Из прежнего содержания")
+            except Exception:  # noqa: BLE001
+                pass
             with self._lock:
                 self.summary = text[:SUMMARY_MAX]
                 self.folded += len(old) // 2

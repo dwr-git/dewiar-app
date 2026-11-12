@@ -1619,6 +1619,13 @@ function updAsk(a) {
     row.append(yes, no); $("bot").appendChild(row); hideCapLater(60000);
   }, 20000);
 }
+/* обновление само (Windows, updates.auto_install): ядро видит, что вас 10 минут нет за компьютером, — ставим скачанное
+   (то же, что нажать «Доступна версия…»); интерфейс перезапустится сам */
+core.on("update_auto", d => {
+  if (updating || !UPD.avail || (d && d.version && UPD.avail.version !== d.version)) return;
+  showCap(null, window.t("hud.upd.auto", { v: UPD.avail.version }), false);
+  setTimeout(() => { if (!updating && UPD.avail && $("upd").onclick) $("upd").onclick(); }, 4000);
+});
 function updMsg(t, ms) {
   const u = $("upd"); u.classList.add("on"); u.textContent = t; u.onclick = null; clearTimeout(window._updMsgT);
   if (ms) window._updMsgT = setTimeout(() => { if (!UPD.avail) u.classList.remove("on"); }, ms);
