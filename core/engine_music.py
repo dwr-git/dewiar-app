@@ -116,7 +116,17 @@ class MusicMixin:
             lines.append("Погода: данных нет" + ("" if d.get("city") else " (город не задан)") + " — о погоде, температуре и городе "
                          "не говори ничего, не угадывай.")
         t = d.get("today") or {}
-        lines.append("Дела и напоминания на сегодня: " + ("; ".join(f"{x['time']} {x['title']}".strip() for x in t.get("todo") or []) or "нет") + ".")
+        # владелец 12.11 (и 28.10 — про итог дня): «зачем мне в утренней сводке каждый будний день „не забыть карту в
+        # столовую“?» — привычки (каждый день и по будням) и сами дела по расписанию (итог дня, эта сводка) — не дела дня
+        hids, htexts = self._habits() if hasattr(self, "_habits") else (set(), set())
+        norm = lambda v: re.sub(r"[^\wё]+", " ", str(v or "").lower().replace("ё", "е")).strip()   # noqa: E731
+        hn = {norm(v) for v in htexts}
+        todo = [x for x in t.get("todo") or [] if x.get("kind") != "job" and str(x.get("id") or "") not in hids
+                and norm(x.get("title")) not in hn]
+        lines.append("Дела и напоминания на сегодня: " + ("; ".join(f"{x['time']} {x['title']}".strip() for x in todo) or "нет") + ".")
+        if len(todo) < len(t.get("todo") or []):
+            lines.append("Повторяющиеся каждый день напоминания-привычки и дела по расписанию (итог дня и т. п.) — не дела дня: "
+                         "не называй их, даже если узнаешь о них сама.")
         if t.get("meet"):
             lines.append("Встречи и события из календаря: " + "; ".join(f"{x['time'] or 'весь день'} {x['title']}" + (f" ({x['place']})" if x["place"] else "") for x in t["meet"]) + ".")
         rest = morning.context(dict(d, today=None, tasks=dict(d["tasks"], wait=[]) if d.get("tasks") else None))
@@ -869,6 +879,7 @@ class MusicMixin:
                 if gone:
                     self._welcome_back(gone)
                 self._auto_update_tick(idle)
+                self._listen_watchdog()
             except Exception as e:  # noqa: BLE001
                 log.debug("приветствие: %s", e)
             if self.stopping.wait(5):
@@ -896,6 +907,21 @@ class MusicMixin:
         self._auto_upd_ver = a.get("version")
         log.info("⬆ Обновление %s — вас нет %d мин: ставлю сама", a.get("version"), int((idle or 0) // 60))
         self.emit("update_auto", version=a.get("version"), path=a.get("path"))
+        return True
+
+    def _listen_watchdog(self):
+        """Владелец 12.11: после утренней сводки виджет без конца показывал «Я вас слушаю», а микрофон выключен. Окно
+        «ваша очередь» закрывает поток слуха (engine_audio), а когда слух не идёт (микрофон выключен и поток закрыт, камера
+        держит микрофон) — закрывать было некому. Раз в 5 с: «слушаю», окно истекло, слух 3 с не обрабатывал звук — покой."""
+        if self.state != "listening" or self.turn is not None or getattr(self, "hold", None) is not None:
+            return False
+        now = time.monotonic()
+        if now < float(getattr(self, "follow_up_until", 0) or 0) + 3 or now - float(getattr(self, "_listen_live", 0) or 0) < 3:
+            return False
+        log.info("🎤 «Слушаю», а слух не идёт (микрофон выключен или поток закрыт) — окно истекло, возвращаюсь в покой")
+        self.follow_up_until = 0.0
+        self._mute_pass = False
+        self.set_state("idle")
         return True
 
     def _upcoming(self, hours=2):

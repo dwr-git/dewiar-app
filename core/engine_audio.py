@@ -827,6 +827,7 @@ class AudioMixin:
                 in_speech, utt, silence, starts, preroll = False, [], 0, 0, collections.deque(maxlen=12)
             if not self.wav_input and self._mic_zero_step(zst, frame, now) == "heal":
                 return
+            self._listen_live = now                        # слух обрабатывает звук: окно «ваша очередь» закроет он сам
             speaking = self.state == "speaking"
             if speaking and not self.status["aec"]:
                 # полудуплекс: себя не слушаем — кроме короткого «стоп / хватит / пауза / отмена»

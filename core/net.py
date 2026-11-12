@@ -33,6 +33,7 @@ RESERVE_SEC = 900                      # напрямую dewiar.pro не отк
 _state = {"proxy": "", "hosts": BASE_HOSTS, "provider": None, "reserve": ""}
 _reserve_bad = {}                      # хост -> до какого времени напрямую не пробуем (запасной путь, _DirectFirst)
 on_reserve = None                      # engine: «перешёл на запасной путь» — сказать человеку один раз
+on_proxy_auth = None                   # engine: прокси ответил 407 — логин прокси Dewiar устарел, взять свежий (12.11)
 _direct_ok = {}                        # адрес -> до какого времени ходить к нему напрямую
 _tl = threading.local()                # _tl.off = True — клиенты этого потока без прокси (на время check())
 _orig_init = httpx.Client.__init__
@@ -412,6 +413,15 @@ class _Lazy(httpx.BaseTransport):
             try:
                 return self.t.handle_request(request)
             except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout) as e:
+                if "407" in str(e):
+                    # владелец 12.11, утренняя сводка: «Не получилось: 407 Proxy Authentication Required» дважды — логин
+                    # прокси Dewiar, полученный заранее, устарел; повтор с ним бесполезен — взять свежий и не повторять
+                    if on_proxy_auth:
+                        try:
+                            on_proxy_auth()
+                        except Exception:  # noqa: BLE001
+                            log.debug("net: on_proxy_auth", exc_info=True)
+                    raise
                 if attempt >= (1 if isinstance(e, httpx.ConnectTimeout) else RETRIES):   # молчащий прокси — один повтор (каждый ждёт таймаут)
                     raise
                 log.info("Прокси: %s — повтор %d (%s)", e or type(e).__name__, attempt + 1, request.url.host)

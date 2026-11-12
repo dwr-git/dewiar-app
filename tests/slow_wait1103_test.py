@@ -74,8 +74,11 @@ got = []
 th = threading.Thread(target=lambda: got.extend(llm.stream_events(prof, "sys", [{"role": "user", "content": "Привет"}], cancel=cancel)))
 th.start()
 ok(wait_for(lambda: (llm.wait_info(cancel) or {}).get("phase") == "connect"), "запрос ушёл, сервер молчит — phase connect")
-ok("Сервер модели ещё не ответил" in llm.wait_hint(25, llm.wait_info(cancel)) and "прокси" in llm.wait_hint(25, llm.wait_info(cancel)),
-   "строка: сервер не ответил — проверить интернет и прокси")
+wi = llm.wait_info(cancel)
+ok("читает подсказку" in llm.wait_hint(25, wi) and "Короткая инструкция" in llm.wait_hint(25, wi),
+   "свой сервер (№662, 12.11): не «проверьте интернет», а «читает подсказку» и как ускорить")
+ok("Сервер модели ещё не ответил" in llm.wait_hint(25, dict(wi, local=False)) and "прокси" in llm.wait_hint(25, dict(wi, local=False)),
+   "облако: сервер не ответил — проверить интернет и прокси")
 gate["head"].set()
 ok(wait_for(lambda: (llm.wait_info(cancel) or {}).get("reasoning", 0) > 0), f"сервер ответил, модель размышляет: {llm.wait_info(cancel)}")
 h = llm.wait_hint(30, llm.wait_info(cancel), think_auto=True)

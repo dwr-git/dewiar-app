@@ -95,6 +95,18 @@ class BrainMixin:
         log.info("🌐 Прокси Dewiar получен%s: %s", " (запасной путь, если dewiar.pro не откроется)" if auto else "", net.hide(px) or "раздача выключена")
         return ""
 
+    def _proxy_auth_stale(self):
+        """Прокси ответил 407: если это прокси Dewiar (свой или запасной путь) — свежий логин с сайта, в фоне и не чаще
+        раза в 10 минут (net.on_proxy_auth). Свой прокси человека — тут не поможем: ошибку увидит в «Сети»."""
+        if time.time() - float(getattr(self, "_px_auth_at", 0) or 0) < 600:
+            return False
+        self._px_auth_at = time.time()
+        if not self.s.get("net", "dewiar_secret"):
+            return False
+        log.info("🌐 Прокси ответил 407 — беру свежий логин прокси Dewiar")
+        threading.Thread(target=self._dewiar_proxy_fetch, kwargs={"force": True}, daemon=True).start()
+        return True
+
     def net_cmd(self, cmd, a):
         """Команды студии «Сеть»: net (состояние), net_proxy (свой прокси — сохраняем, только если через него открывается
         сервер обновлений), net_dewiar (галочка прокси Dewiar). -> состояние для окна, с проверкой связи."""

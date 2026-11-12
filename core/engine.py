@@ -309,6 +309,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         net.on_reserve = lambda h: self.chat.notify(
             f"{h} сейчас не открывается напрямую — похоже, его не пускает провайдер или сеть. Я перешёл на запасной путь "
             "(прокси Dewiar): облако, вход и обновления работают как обычно. Выключить: студия → «Dewiar.pro» → «Сеть».")
+        net.on_proxy_auth = self._proxy_auth_stale
         lan = self.s.get("net", "lan") or {}
         net.set_lan(lan.get("public", ""), lan.get("base", ""), lan.get("id", ""))   # дома — напрямую с первого запроса
         # сайт хоть раз ответил напрямую — этот компьютер бывает рядом с сервером: в «Сети» показываем «Запасной вход через SSH»

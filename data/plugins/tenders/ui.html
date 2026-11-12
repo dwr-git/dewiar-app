@@ -291,12 +291,29 @@
   async function renderQ() {
     try { st.settings = await dewiar.settings(); } catch (e) { msg(e.message, "bad"); return; }
     const v = st.settings.values || {}, list = (k) => String(v[k] || "").split(/[;\n,]+/).map(x => x.trim()).filter(x => x.length >= 2);
+    /* свои площадки (владелец 12.11: «как их править, добавлять новые или удалять?») — адреса поиска с {QUERY}, по строке */
+    const ownList = () => String(v.own_url || "").split(/\s+/).filter(u => /^https?:\/\//.test(u) && u.includes("{QUERY}"));
+    const hostOf = (u) => { try { return new URL(u.replace("{QUERY}", "q")).host; } catch (e) { return u; } };
+    const withQuery = (u) => {
+      if (u.includes("{QUERY}")) return u;
+      for (const q of list("queries").concat(list("plus"))) {
+        for (const f of [encodeURIComponent(q), encodeURIComponent(q).replace(/%20/g, "+"), q.replace(/ /g, "+"), q]) {
+          if (f && u.includes(f)) return u.split(f).join("{QUERY}");
+          const lo = u.toLowerCase(), fl = f.toLowerCase(), at = lo.indexOf(fl);
+          if (f && at >= 0) return u.slice(0, at) + "{QUERY}" + u.slice(at + f.length);
+        }
+      }
+      return "";
+    };
     const card = (k, title, hint, cls, ph) => `<div class="card qcard"><h3>${title}</h3><p>${hint}</p><div class="chips">${list(k).map((x, i) => `<span class="qchip ${cls}">${esc(x)}<button data-del="${k}" data-i="${i}" title="Убрать" aria-label="Убрать «${esc(x)}»">✕</button></span>`).join("") || `<span class="dim" style="font-size:13px">Пусто</span>`}</div>
       <div class="qadd"><input type="text" data-add="${k}" placeholder="${ph}"><button class="btn small" data-addb="${k}">Добавить</button></div></div>`;
     $("#qgrid").innerHTML = card("queries", "Что искать", "Каждый запрос ищется на всех площадках. Тот же тендер из двух запросов — одна запись.", "", "например, видеонаблюдение")
       + card("plus", "Плюс-слова", "Если есть в названии — балл выше (+4).", "plus", "например, монтаж")
       + card("minus", "Минус-слова", "Если есть в названии — тендер в конце списка (балл не выше 1).", "minus", "например, продукты питания")
-      + `<div class="card qcard"><h3>Площадки</h3><p>Где искать. Своя площадка — в настройках плагина (адрес поиска с {QUERY}).</p><div class="srcs">${(st.b.sources || []).filter(s => s.id !== "own").map(s => `<label><input type="checkbox" data-src="${esc(s.id)}" ${s.on ? "checked" : ""}>${esc(s.name)}</label>`).join("")}</div>
+      + `<div class="card qcard"><h3>Площадки</h3><p>Где искать. Встроенная не нужна — снимите галочку. Свою — добавьте ниже.</p><div class="srcs">${(st.b.sources || []).filter(s => !s.own && !/^own/.test(s.id)).map(s => `<label><input type="checkbox" data-src="${esc(s.id)}" ${s.on ? "checked" : ""}>${esc(s.name)}</label>`).join("")}</div>
+        <div class="chips" style="margin-top:8px">${ownList().map((u, i) => `<span class="qchip" title="${esc(u)}">${esc(hostOf(u))}<button data-owndel="${i}" title="Убрать" aria-label="Убрать площадку ${esc(hostOf(u))}">✕</button></span>`).join("")}</div>
+        <div class="qadd"><input type="url" id="own-add" placeholder="адрес страницы поиска с площадки"><button class="btn small" id="own-addb">Добавить</button></div>
+        <p class="dim" style="font-size:12px;margin-top:6px">Как добавить: откройте на сайте площадки поиск, найдите любое слово из «Что искать», скопируйте адрес из строки браузера и вставьте сюда — слово само заменится на {QUERY}.</p>
         <p style="margin-top:10px">Присылать от балла: <select id="q-min" style="width:auto;display:inline-block;margin-left:6px">${[0, 2, 3, 4, 5, 6, 8].map(n => `<option ${+v.min_score === n ? "selected" : ""}>${n}</option>`).join("")}</select></p></div>`;
     const save = async (patch, done) => { try { const nv = await dewiar.saveSettings(patch); st.settings.values = nv; msg(done + " — балл в ленте уже пересчитан.", "ok"); await load(); } catch (e) { msg(e.message, "bad"); } };
     const add = (k) => { const i = $(`[data-add="${k}"]`); const x = i.value.trim().replace(/[;]/g, " "); if (x.length < 2) { i.focus(); return; }
@@ -306,6 +323,15 @@
     $$("[data-del]").forEach(b => b.onclick = () => { const k = b.dataset.del, cur = list(k), x = cur.splice(+b.dataset.i, 1)[0]; save({ [k]: cur.join("; ") }, `«${x}» убрано`); });
     $$("[data-src]").forEach(c => c.onchange = () => save({ [c.dataset.src]: c.checked }, c.checked ? "Площадка включена" : "Площадка выключена"));
     $("#q-min").onchange = (e) => save({ min_score: +e.target.value }, "Порог сохранён");
+    const ownAdd = () => { const i = $("#own-add"), raw = i.value.trim();
+      if (!/^https?:\/\//.test(raw)) { msg("Вставьте адрес страницы поиска целиком — он начинается с https://", "bad"); i.focus(); return; }
+      const u = withQuery(raw);
+      if (!u) { msg("В адресе нет слова из «Что искать». Найдите на площадке одно из них и вставьте адрес страницы с результатами — или впишите {QUERY} на место слова сами.", "bad"); i.focus(); return; }
+      const cur = ownList(); if (!cur.includes(u)) cur.push(u);
+      save({ own_url: cur.join("\n") }, `Площадка ${hostOf(u)} добавлена`); };
+    $("#own-addb").onclick = ownAdd;
+    $("#own-add").onkeydown = (e) => { if (e.key === "Enter") ownAdd(); };
+    $$("[data-owndel]").forEach(b => b.onclick = () => { const cur = ownList(), x = cur.splice(+b.dataset.owndel, 1)[0]; save({ own_url: cur.join("\n") }, `Площадка ${hostOf(x)} убрана`); });
   }
 
   function setTab(t) { st.tab = t; $$(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t)); ["feed", "board", "q"].forEach(k => { $("#t-" + k).hidden = k !== t; });

@@ -1098,7 +1098,9 @@ def agenda_missed(ask, answer, agenda=""):
         return ""
     m = _BRIEF_TODO.search(ask or "")
     have = m.group(1).strip() if m and m.group(1).strip().lower() != "нет" else ""
-    if not have and agenda and _HM.search(agenda):
+    # утренняя сводка: её данные — всё, что нужно (привычки и дела по расписанию из них убраны нарочно, 12.11); справка о
+    # планах (agenda) их снова содержит — по ней не переспрашиваем
+    if not have and agenda and _HM.search(agenda) and "[Утро с Лирой]" not in (ask or ""):
         have = "; ".join(l.strip() for l in agenda.splitlines() if _HM.search(l))[:400]
     if not have:
         return ""

@@ -182,6 +182,10 @@ def _humanize(e, base_url, model=""):
         host = (re.match(r"^\w+://([^/:?#]+)", str(base_url or "")) or [None, "сервис"])[1]
         return (f"включён режим «Ничего не уходит в интернет», а модель ({host}) — в интернете. Подключите свою модель "
                 "(Ollama, LM Studio) в «Мозге» или выключите режим: студия → «Безопасность»")
+    if isinstance(e, httpx.ProxyError) and "407" in str(e):
+        # владелец 12.11: «Не получилось: 407 Proxy Authentication Required» — по-английски и непонятно, что делать
+        return ("прокси не пустил: просит логин и пароль (407). Если это прокси Dewiar — я уже беру свежий, повторите через "
+                "минуту; если свой — проверьте логин в студии → «Dewiar.pro» → «Сеть»")
     if isinstance(e, httpx.ConnectError):
         host = (re.match(r"^\w+://([^/:?#]+)", str(base_url or "")) or [None, ""])[1]
         if host and not re.match(r"^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)|\.local$", host):
@@ -2090,6 +2094,12 @@ def wait_hint(sec, info, think_auto=False):
     sec = int(sec)
     if not info:
         return f"Выполняю действие — уже {sec} с. «Стоп» — прервать."
+    if info.get("phase") == "connect" and info.get("local"):
+        # жалоба №662 (12.11): Ollama в своей сети, Gemma 4 — «размышления не отключаются, очень долго думает». Размышления
+        # были выключены (think: false уходит); 15 минут — модель читала подсказку в 14 тыс. токенов на слабом сервере,
+        # а виджет советовал «проверьте интернет»
+        return (f"Модель на вашем сервере читает подсказку — {sec} с (на слабом железе это минуты; размышления выключены). "
+                f"Быстрее: «Мозг» → «Короткая инструкция для модели», модель полегче или облако Dewiar. «Стоп» — прервать.")
     if info.get("phase") == "connect":
         return (f"Сервер модели ещё не ответил — жду {sec} с. Если так обычно не бывает — проверьте интернет "
                 f"(и прокси: студия → «Dewiar.pro» → «Сеть», если он включён). «Стоп» — прервать.")
@@ -2303,6 +2313,16 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                     # не хватило окна — это не отказ формата: не упрощать историю вызовов (_flat запоминается для сервера
                     # навсегда), а сразу к короткой истории (_ctx_retry) или к сжатию задачи (tasks: _ctx в профиле)
                     raise LLMError(CTX_TEXT)
+                if r.status_code == 407:
+                    # владелец 12.11: прокси между компьютером и моделью просит логин — понятным текстом; прокси Dewiar —
+                    # сразу свежий логин (net.on_proxy_auth)
+                    import net as net407
+                    if net407.on_proxy_auth:
+                        try:
+                            net407.on_proxy_auth()
+                        except Exception:  # noqa: BLE001
+                            pass
+                    raise LLMError(_humanize(httpx.ProxyError("407 Proxy Authentication Required"), base))
                 if r.status_code in (503, 529) and not p.get("_busy") and (cancel is None or not cancel.is_set()):
                     # перегружен (Gemini «high demand») — часто проходит через пару секунд: один тихий повтор
                     log.info("Сервер %s перегружен (%s) — повторяю через 3 с", base, r.status_code)

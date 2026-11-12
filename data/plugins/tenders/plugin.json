@@ -61,7 +61,7 @@
   },
   {
    "key": "own_url",
-   "label": "Своя площадка (адрес поиска с {QUERY})",
+   "label": "Свои площадки (адреса поиска с {QUERY}, по одному в строке)",
    "type": "text",
    "placeholder": "https://example.by/search?q={QUERY}"
   }

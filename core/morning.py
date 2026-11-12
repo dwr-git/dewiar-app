@@ -76,7 +76,8 @@ def _today(eng, now):
     cal = eng.calendar_month(now.year, now.month)
     items = cal["days"].get(key, [])
     meet = [{"time": x.get("time") or "", "title": x["title"], "place": x.get("place") or ""} for x in items if x["type"] == "event"]
-    todo = [{"time": x.get("time") or "", "title": x["title"]} for x in items if x["type"] == "reminder" and not x.get("done")]
+    todo = [{"time": x.get("time") or "", "title": x["title"], "id": x.get("id") or "", "kind": x.get("kind") or ""}
+            for x in items if x["type"] == "reminder" and not x.get("done")]
     return {"meet": sorted(meet, key=lambda x: x["time"] or "99"), "todo": sorted(todo, key=lambda x: x["time"] or "99")}
 
 

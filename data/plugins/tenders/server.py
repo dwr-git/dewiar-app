@@ -423,7 +423,13 @@ def fetch(src, query):
     last = None
     for i in range(2):
         try:
-            r = cl.get(url)
+            try:
+                r = cl.get(url)
+            except Exception as e:  # noqa: BLE001
+                if "CERTIFICATE_VERIFY_FAILED" not in str(e) or src["id"] in _SSL_FIXED:
+                    raise
+                cl = client(src, fix_ssl=True)       # владелец 12.11: обе площадки — «unable to get local issuer certificate»
+                r = cl.get(url)
             if r.status_code in (429,) or r.status_code >= 500:
                 last = f"площадка ответила {r.status_code}"
                 time.sleep(3 if r.status_code == 429 else 2)
@@ -437,14 +443,81 @@ def fetch(src, query):
 
 
 _CL = {}
+_SSL_FIXED = set()
+_AIA_OID = bytes.fromhex("06082b06010505073002")          # id-ad-caIssuers: где у сертификата лежит выдавший его
 
 
-def client(src):
+def _aia_urls(der):
+    """Адреса «кто выдал» (caIssuers) из сертификата — без сторонних библиотек: OID и строка IA5 за ним."""
+    out, i = [], 0
+    while True:
+        i = der.find(_AIA_OID, i)
+        if i < 0:
+            return out
+        j = i + len(_AIA_OID)
+        if j + 2 <= len(der) and der[j] == 0x86:
+            n = der[j + 1]
+            url = der[j + 2:j + 2 + n].decode("ascii", "ignore")
+            if url.startswith(("http://", "https://")):
+                out.append(url)
+        i = j
+
+
+def _ssl_context(host, port=443):
+    """Сертификат площадки не проверился (12.11, владелец, Ubuntu: goszakupki.by и icetrade.by — «unable to get local
+    issuer certificate»). Как делает браузер: 1) доверяем и хранилищу системы (антивирус или шлюз с проверкой HTTPS
+    подменяет сертификат своим — его корень есть в системе), 2) сайт не прислал промежуточный сертификат — берём его
+    по адресу из самого сертификата (AIA), до трёх звеньев. Проверка не отключается: цепочка всё так же должна дойти
+    до доверенного корня."""
+    import ssl
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # noqa: BLE001
+        ctx = ssl.create_default_context()
+    try:
+        ctx.load_default_certs()                          # хранилище системы (Linux — /etc/ssl, Windows — своё)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import urllib.request
+        pem = ssl.get_server_certificate((host, port), timeout=15)
+        der = ssl.PEM_cert_to_DER_cert(pem)
+        extra = []
+        for _ in range(3):
+            urls = _aia_urls(der)
+            if not urls:
+                break
+            with urllib.request.urlopen(urls[0], timeout=15) as r:     # noqa: S310 — адрес из сертификата, ответ — сертификат
+                body = r.read(200_000)
+            if body[:1] != b"\x30":                        # PEM вместо DER
+                try:
+                    body = ssl.PEM_cert_to_DER_cert(body.decode("ascii", "ignore"))
+                except ValueError:
+                    break
+            extra.append(ssl.DER_cert_to_PEM_cert(body))
+            der = body
+        if extra:
+            ctx.load_verify_locations(cadata="".join(extra))
+    except Exception as e:  # noqa: BLE001
+        print(f"tenders: промежуточный сертификат {host}: {e}", file=sys.stderr)
+    return ctx
+
+
+def client(src, fix_ssl=False):
     """Один клиент на площадку за проверку: куки, которые площадка ставит на главной (защита от роботов), живут между
-    запросами — как curl с cookie-файлом в модуле владельца. Сначала — главная страница."""
+    запросами — как curl с cookie-файлом в модуле владельца. Сначала — главная страница. fix_ssl — сертификат не
+    проверился: новый клиент с хранилищем системы и недостающими звеньями цепочки (_ssl_context)."""
     import httpx
+    if fix_ssl:
+        old = _CL.pop(src["id"], None)
+        if old is not None:
+            old.close()
+        _SSL_FIXED.add(src["id"])
     if src["id"] not in _CL:
-        cl = httpx.Client(timeout=25, follow_redirects=True, headers={
+        hp = re.match(r"^https?://([^/:]+)(?::(\d+))?", src["base"])
+        verify = _ssl_context(hp[1], int(hp[2] or 443)) if src["id"] in _SSL_FIXED and hp else True
+        cl = httpx.Client(timeout=25, follow_redirects=True, verify=verify, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.6"})
         try:
@@ -473,13 +546,19 @@ def thash(t, src):
     return hashlib.md5(key.encode()).hexdigest()[:16]
 
 
+def own_sites(s):
+    """Свои площадки: адреса поиска с {QUERY} — по одному в строке (или через пробел). Первая — id «own», как раньше."""
+    out = []
+    for u in re.split(r"\s+", str(s.get("own_url") or "").strip()):
+        if u.startswith(("http://", "https://")) and "{QUERY}" in u and not any(x["url"] == u for x in out):
+            m = re.match(r"(https?://[^/?#]+)", u)
+            out.append({"id": "own" if not out else f"own{len(out) + 1}", "name": m[1].split("//")[1], "base": m[1], "url": u})
+    return out
+
+
 def sources(s):
     out = [x for x in SOURCES if s.get(x["toggle"], True) not in (False, "false", "0", 0)]
-    own = str(s.get("own_url") or "").strip()
-    if own.startswith(("http://", "https://")) and "{QUERY}" in own:
-        m = re.match(r"(https?://[^/]+)", own)
-        out.append({"id": "own", "name": m[1].split("//")[1], "base": m[1], "url": own})
-    return out
+    return out + own_sites(s)
 
 
 def scan(query=""):
@@ -631,7 +710,7 @@ def board():
         floor = 0
     return {"items": out, "queries": queries, "plus": plus, "minus": minus, "min_score": floor, "marks": STATUSES,
             "sources": [{"id": x["id"], "name": x["name"], "on": s.get(x["toggle"], True) not in (False, "false", "0", 0)} for x in SOURCES]
-            + ([{"id": "own", "name": "своя площадка", "on": True}] if str(s.get("own_url") or "").strip() else []),
+            + [{"id": x["id"], "name": x["name"], "url": x["url"], "on": True, "own": True} for x in own_sites(s)],
             "last_scan": st.get("last_scan", ""), "last_report": st.get("last_report") or []}
 
 
