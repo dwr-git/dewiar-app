@@ -1069,6 +1069,9 @@ class CommandsMixin:
             if cmd == "care_set":
                 self.s.update({"care": {"on": bool(a.get("on"))}})
             return {"on": (self.s.get("care") or {}).get("on", True) is not False, "items": self.care.public()}
+        if cmd.startswith("insight_"):           # «Радар» — аналитик ниши (engine_insight.py, docs/RADAR.md)
+            import engine_insight
+            return engine_insight.command(self, cmd, a)
         if cmd.startswith("ideas_"):             # «Идеи Лиры»: список, голос, своя идея (ideas.py → сайт)
             import ideas
             return ideas.command(self, cmd, a)

@@ -403,6 +403,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         threading.Thread(target=lambda: self.stopping.wait(20) or self.mailing.resume(), name="mailing-resume", daemon=True).start()
         threading.Thread(target=lambda: self.stopping.wait(2) or self.auto_join(), name="auto-join", daemon=True).start()
         threading.Thread(target=self._brain_watch, name="brain", daemon=True).start()
+        if not self.server and not self.wav_input:           # «Радар» (engine_insight.py): обход источников по расписанию
+            import engine_insight
+            threading.Thread(target=engine_insight.radar(self).loop, args=(self.stopping,), name="insight", daemon=True).start()
         # «Нода Лиры» (0.87): была включена человеком — снова в работу через минуту (условия и правила проверит сама)
         threading.Thread(target=lambda: self.stopping.wait(60) or __import__("liranode").autostart(self), name="lnode-start", daemon=True).start()
         if not self.wav_input:

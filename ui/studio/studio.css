@@ -1782,6 +1782,12 @@ html.st-light .chip.shd.on small { opacity: .8 !important; }
 .hm-card b, .hm-card span { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 .hm-card b { -webkit-line-clamp: 3; line-height: 1.35; } .hm-card span { -webkit-line-clamp: 2; }
 .hm-card.next { background: linear-gradient(135deg, #6a8dff, #4f6cf0); color: #fff; } .hm-card.next small, .hm-card.next span { color: rgba(255,255,255,.8); }
+/* «Радар» — обычная карточка «Главной» из материала темы; знак раздела — едва видные круги радара в углу */
+.hm-card.radar { position: relative; overflow: hidden; isolation: isolate; }
+.hm-card.radar::before { content: ""; position: absolute; z-index: -1; right: -46px; top: -46px; width: 180px; height: 180px; border-radius: 50%; pointer-events: none;
+  background: repeating-radial-gradient(circle, transparent 0 17px, color-mix(in srgb, var(--accent) 18%, transparent) 17px 18.5px);
+  -webkit-mask: radial-gradient(circle, #000 35%, transparent 70%); mask: radial-gradient(circle, #000 35%, transparent 70%); }
+.hm-card.radar small { color: var(--accent); }
 .hm-h { display: flex; align-items: center; gap: 12px; } .hm-h h2 { margin: 0; font-size: 16px; } .hm-h .hint { margin: 0; flex: 1; } .hm-h .btn { margin-left: auto; }
 .hm-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 22px 14px; }
 .hm-app { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; position: relative; border-radius: 22px; padding: 4px 0; }

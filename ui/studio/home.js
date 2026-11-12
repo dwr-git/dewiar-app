@@ -36,15 +36,17 @@ const HM_APPS = [
   { id: "memory", name: "Память", sub: "что Лира знает", g: 1, d: '<circle class="sf" cx="24" cy="24" r="17"/><circle class="ln" cx="24" cy="24" r="17"/><ellipse class="th" cx="24" cy="24" rx="17" ry="7"/><ellipse class="th" cx="24" cy="24" rx="7" ry="17"/><path class="ln" d="M14 18l9 5 9-9M23 23l2 11 9-5M14 18l-1 12 12 4"/><circle class="dt" cx="14" cy="18" r="2.2"/><circle class="dt" cx="23" cy="23" r="2.6"/><circle class="dt" cx="32" cy="14" r="2"/><circle class="dt" cx="25" cy="34" r="2"/><circle class="dt" cx="34" cy="29" r="1.6"/><circle class="dt" cx="13" cy="30" r="1.6"/>' },
   // «Нода Лиры» (0.87): компьютер помогает Лире отвечать другим людям и зарабатывает талеры (studio/node.js)
   { id: "node", name: "Нода Лиры", sub: "талеры за помощь", g: 5, d: '<circle class="sf" cx="24" cy="24" r="8"/><circle class="ln" cx="24" cy="24" r="8"/><circle class="th" cx="24" cy="24" r="15"/><circle class="th" cx="24" cy="24" r="21"/><circle class="dt" cx="24" cy="9" r="2.4"/><circle class="dt" cx="37" cy="31.5" r="2.4"/><circle class="dt" cx="11" cy="31.5" r="2.4"/><circle class="dt" cx="41" cy="12" r="1.6"/><circle class="dt" cx="6" cy="18" r="1.6"/>' },
+  // «Радар» (0.91): Лира читает источники темы, ищет тренды и шлёт срочное (studio/insight.js); подписи — из словаря
+  { id: "insight", get name() { return window.t("nav.insight"); }, get sub() { return window.t("insight.home.sub"); }, g: 8, d: '<circle class="sf" cx="24" cy="25" r="18"/><path class="sf2" d="M24 25V7a18 18 0 0 1 14.6 7.5z"/><circle class="ln" cx="24" cy="25" r="18"/><circle class="th" cx="24" cy="25" r="11.5"/><circle class="th" cx="24" cy="25" r="5"/><path class="ln" d="M24 25l14.6-10.5"/><circle class="dt" cx="31" cy="18.5" r="2.3"/><circle class="dt" cx="14.5" cy="31" r="1.7"/><circle class="dt" cx="33.5" cy="33" r="1.4"/><path class="th" d="M41 6.5l1.2 2.6 2.6 1.2-2.6 1.2L41 14l-1.2-2.5-2.6-1.2 2.6-1.2z"/>' },
   { id: "ref", name: "Рефералы", sub: "приглашённые", g: 2, d: '<circle class="sf" cx="24" cy="24" r="8"/><circle class="ln" cx="24" cy="21.5" r="3.2"/><path class="ln" d="M18.5 30a5.5 5.5 0 0 1 11 0"/><path class="th" d="M17 18L11 12M31 18l6-6M17 31l-6 5M31 31l6 5"/><circle class="ln" cx="9" cy="10" r="3"/><circle class="ln" cx="39" cy="10" r="3"/><circle class="ln" cx="9" cy="38" r="3"/><circle class="ln" cx="39" cy="38" r="3"/><path class="dt" d="M39 18.5l.8 1.7 1.8.3-1.3 1.3.3 1.8-1.6-.9-1.6.9.3-1.8-1.3-1.3 1.8-.3z"/>' }];
 // по умолчанию видно всё (у тех, кто ещё не настраивал, ничего не пропадает); скрытое с главной — скрыто и в меню слева
 // (24.10, владелец: «если с главной отключаю „Рефералы“ — то и слева должно исчезать… иначе не решили нахлобученность»)
-const HM_DEFAULT = ["chat", "close", "family", "calendar", "reminders", "notes", "council", "podcast", "watch", "docs", "pay", "vault", "music", "modes", "qa", "ideas", "tasks", "sites", "team", "clients", "pbot", "play", "prompter", "memory", "ref", "node"];
+const HM_DEFAULT = ["chat", "close", "family", "calendar", "reminders", "notes", "council", "podcast", "watch", "docs", "pay", "vault", "music", "modes", "qa", "ideas", "tasks", "sites", "team", "clients", "pbot", "play", "prompter", "insight", "memory", "ref", "node"];
 /* Новые приложения после выпуска (25.10: «Платежи», «Сейф») у тех, кто уже настраивал главную, — появляются сами, в конце:
    ui.home_known — какие значки человек уже видел, когда настраивал; кого там нет — новый. */
 const HM_OLD = ["chat", "close", "calendar", "reminders", "notes", "tasks", "play", "pad", "prompter", "memory", "folder", "ref"];
 const HM_NAV = { council: ["council"], podcast: ["podcast"], pbot: ["pbot"], ideas: ["ideas"], chat: ["chat"], docs: ["docs"], watch: ["watch"], close: ["close"], calendar: ["calendar"], reminders: ["reminders"], notes: ["notes"], tasks: ["tasks"],
-  prompter: ["prompter"], memory: ["memory"], ref: ["ref"], pay: ["pay"], vault: ["vault"], family: ["family"], music: ["music"], modes: ["kids", "senior"], qa: ["qa"], team: ["team"], clients: ["clients"], sites: ["sites"], node: ["node"] };
+  prompter: ["prompter"], memory: ["memory"], ref: ["ref"], pay: ["pay"], vault: ["vault"], family: ["family"], music: ["music"], modes: ["kids", "senior"], qa: ["qa"], team: ["team"], clients: ["clients"], sites: ["sites"], node: ["node"], insight: ["insight"] };
 /* Два разных переключателя (24.10, владелец: «включить или нет вообще — или показать или скрыть, это разное»):
    — здесь, на «Главной», — только ПОКАЗАТЬ / СКРЫТЬ: значок и раздел в меню; сама функция работает (Лира помнит,
      письма близких приходят, напоминания звенят);
@@ -199,6 +201,8 @@ async function loadHome() {
   // скрытое в «Что показывать» (show.js) не грузится и не напоминает о себе карточкой «Сегодня» (03.11)
   const off = (...ps) => typeof shHiddenBy === "function" && ps.every(p => shHiddenBy(p)), skip = Promise.resolve(null);
   // уроки — с сайта, не ждём их (сеть бывает медленной): пришли — карточка «Новый видеоурок» дорисуется
+  // «Радар» (12.11): бриф дня и самый сильный сигнал — не ждём, пришёл — карточка дорисуется; раздел скрыт — не грузим
+  if (!off("insight")) get("insight_pulse").then(p => { HM.rd = p && p.stats ? p : null; if (HM.data) hmRender(); });
   if (!(HM.ac && Date.now() - HM.ac.at < 6 * 3600e3)) get("academy_list").then(ac => { if (ac && Array.isArray(ac.items)) { HM.ac = { at: Date.now(), d: ac }; if (HM.data) hmRender(); } });
   const [cal, cl, tk, dn, ch, pad, py, pl, cs] = await Promise.all([off("calendar", "reminders") ? skip : get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }),
     off("close") ? skip : get("close_state"), off("tasks") ? skip : get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"),
@@ -226,6 +230,7 @@ function hmToday() {
     .sort((a, b) => (a.now.s === "overdue" ? 0 : 1) - (b.now.s === "overdue" ? 0 : 1));
   if (pyb.length) { const b = pyb[0], late = b.now.s !== "soon";
     out.push({ cls: late ? "pay late" : "pay", lab: late ? "Не оплачено" : "Скоро срок оплаты", b: `${b.icon || "🧾"} ${b.name}`, s: (late ? "срок был " : "до ") + new Date(b.now.due + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + (pyb.length > 1 ? ` · и ещё ${pyb.length - 1}` : ""), go: "pay" }); }
+  const rd = hmRadar(); if (rd) out.push(rd);
   const cs = HM.data.cs, L = cs && cs.lesson;          // курс «Неделя с Лирой»: урок дня ещё не пройден
   if (L && L.open && cs.offer !== false && !L.steps.every(s => s.done))
     out.push({ cls: "course", lab: `Урок дня · ${L.day} из ${cs.total}`, b: `🎓 ${L.title}`, s: `5 минут: ${(L.steps.find(s => !s.done) || L.steps[0]).say}`, go: "course" });
@@ -236,6 +241,19 @@ function hmToday() {
   if (dn) out.push({ cls: "done", lab: "Сделано сегодня", b: `${dn.today || 0} ${(dn.today || 0) % 10 === 1 && (dn.today || 0) % 100 !== 11 ? "дело" : [2, 3, 4].includes((dn.today || 0) % 10) && ![12, 13, 14].includes((dn.today || 0) % 100) ? "дела" : "дел"}`,
     s: dn.streak >= 2 ? `🔥 серия ${dn.streak} дн. подряд` : "отметьте сделанное — голосом или в «Делах»", go: "reminders" });
   return out.slice(0, 4);
+}
+/* «Радар» на «Главной» (владелец 12.11: «на главной показывало находки — лучшее из найденного и проанализированного»):
+   свежий бриф дня (не старше полутора суток) — его заголовок и самый сильный сигнал за сутки; брифа нет — сам сигнал,
+   если он заметный (от 7). Источников нет или тихо — карточки нет: «Главная» не реклама раздела. */
+function hmRadar() {
+  const rd = HM.rd, tt = (k, v) => window.t ? window.t("insight.home." + k, v) : k;
+  if (!rd || !rd.stats || !rd.stats.sources) return null;
+  const top = (rd.field || []).filter(p => p.x >= 6).sort((a, b) => b.s - a.s)[0];
+  const sig = top && top.s >= 6 ? `⚡ ${Number(top.s).toLocaleString(dwLocale(), { maximumFractionDigits: 1 })} · ${top.title}` : "";
+  const b = rd.brief && rd.brief.headline && (rd.brief.at || 0) * 1000 > Date.now() - 36 * 3600e3 ? rd.brief : null;
+  if (b) return { cls: "radar", lab: tt("brief"), b: b.headline, s: sig || (b.points || [])[0] || tt("open"), go: "insight" };
+  if (top && top.s >= 7) return { cls: "radar", lab: tt("signal"), b: top.title, s: tt("day", { n: rd.stats.day || 1 }), go: "insight" };
+  return null;
 }
 function hmBadge(id) {
   const { cl } = HM.data, tk = HM.data.tk || [];

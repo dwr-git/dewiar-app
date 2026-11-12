@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="studio/sites.css">
 <link rel="stylesheet" href="studio/plugmake.css">
 <link rel="stylesheet" href="studio/node.css">
+<link rel="stylesheet" href="studio/insight.css">
 <link rel="stylesheet" href="assets/skins.css">
 <link rel="stylesheet" href="studio/theme.css">
 <!-- тема — до первой отрисовки (стили выше уже загружены): окно сразу в своём стиле, без вспышки фирменного фона -->
@@ -95,6 +96,7 @@
   <button data-p="mailing" title="Рассылка: каждому своё письмо с вашей почты — клиентам, сотрудникам или по списку" hidden data-i18n="nav.mailing" data-i18n-title="nav.mailing.tip">Рассылка</button>
   <button data-p="sites" title="Сайты: Лира делает и переделывает сайт одной фразой, публикация на имя.dewiar.pro, аналитика и заявки" data-i18n="nav.sites" data-i18n-title="nav.sites.tip">Сайты</button>
   <button data-p="sitechat" title="Чат для сайта: консультант отвечает посетителям вашего сайта, заявки — в «Клиенты»" hidden data-i18n="nav.sitechat" data-i18n-title="nav.sitechat.tip">Чат для сайта</button>
+  <button data-p="insight" title="Радар: Лира читает источники вашей ниши, видит тренды и важное" data-i18n="nav.insight" data-i18n-title="nav.insight.tip">Радар<i class="ndot" id="rd-ndot"></i></button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах" data-i18n="nav.prompter" data-i18n-title="nav.prompter.tip">Суфлёр</button>
   <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям" data-i18n="nav.pbot" data-i18n-title="nav.pbot.tip">Бот в Telegram</button>
   <!-- «Плагины» (03.11): пункт на каждый установленный плагин — его страница (studio/plugpage.js, раздел p-plg) -->
@@ -993,6 +995,33 @@
       </div>
       <div class="fm-card fm-feed"><h3>Траты за месяц</h3><ul id="fm-feed"></ul></div>
       </div>
+    </div>
+  </section>
+  <!-- «Радар» (12.11): Лира-аналитик ниши — studio/insight.js, insight.css; ядро core/insight.py, engine_insight.py
+       (команды insight_*), docs/RADAR.md. Всё содержимое рисует код; здесь — каркас комнаты, вкладки и строка вопроса. -->
+  <section id="p-insight" class="wide">
+    <div class="rd-room" id="rd-room">
+      <div class="rd-top">
+        <div class="rd-title"><h1><span id="rd-h" data-i18n="insight.title">Радар</span></h1>
+          <p id="rd-sub" data-i18n="insight.sub">Главное в вашей нише за сутки: сигналы, тренды и выводы</p></div>
+        <div class="rd-chips" id="rd-chips"></div>
+      </div>
+      <div class="rd-tabs stabs" role="tablist" id="rd-tabs">
+        <button role="tab" data-t="pulse" class="on" data-i18n="insight.tab.pulse">Пульс</button>
+        <button role="tab" data-t="feed" data-i18n="insight.tab.feed">Лента</button>
+        <button role="tab" data-t="trends" data-i18n="insight.tab.trends">Тренды</button>
+        <button role="tab" data-t="sources" data-i18n="insight.tab.sources">Источники</button>
+        <button role="tab" data-t="mind" data-i18n="insight.tab.mind">Разум</button>
+        <button role="tab" data-t="galaxy" data-i18n="insight.tab.galaxy">Галактика</button>
+        <button role="tab" data-t="control" data-i18n="insight.tab.control">Управление</button>
+      </div>
+      <div class="rd-pane" id="rd-pulse"></div>
+      <div class="rd-pane" id="rd-feed" hidden></div>
+      <div class="rd-pane" id="rd-trends" hidden></div>
+      <div class="rd-pane" id="rd-sources" hidden></div>
+      <div class="rd-pane" id="rd-mind" hidden></div>
+      <div class="rd-pane" id="rd-galaxy" hidden></div>
+      <div class="rd-pane" id="rd-control" hidden></div>
     </div>
   </section>
   <section id="p-clients" class="wide">
@@ -2926,5 +2955,6 @@
 <script src="studio/plugmake.js"></script>
 <script src="studio/ideas.js"></script>
 <script src="studio/node.js"></script>
+<script src="studio/insight.js"></script>
 </body>
 </html>

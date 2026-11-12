@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 28 · Радар. Светлый неоморфизм серии. Главная вещь урока — двадцать вкладок новостей заменяет один экран: ссылки вставили разом — Лира читает сама, ставит каждому материалу сигнал (луч радара проходит по полю — точки загораются), утром — бриф дня, срочное — сразу на телефон, а на вопрос «почему все пишут про ИИ-агентов?» отвечает по прочитанному со ссылками. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+.win { position: absolute; left: 640px; top: 140px; width: 760px; padding: 12px 14px 14px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.win .bar { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 6px 10px; }
+.win .bar i { width: 13px; height: 13px; border-radius: 50%; background: var(--nd); }
+.win .bar span { margin-left: 14px; flex: 1; padding: 7px 16px; border-radius: 99px; box-shadow: var(--press); font-size: 17px; font-weight: 800; color: var(--mut); }
+.win .bar span b { color: var(--ink); }
+.tgl { width: 76px; height: 42px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; }
+.tgl i { position: absolute; top: 5px; left: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); }
+.tgl.on { background: var(--brand); box-shadow: none; } .tgl.on i { left: 39px; }
+.toast { position: absolute; display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); }
+.toast > i { flex: none; width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; font-size: 32px; font-style: normal; background: rgba(47,179,131,.16); }
+.toast small { display: block; font-size: 16px; font-weight: 800; color: var(--mut); } .toast b { display: block; font-size: 22px; font-weight: 800; margin-top: 2px; }
+.st { position: absolute; display: grid; grid-template-columns: 250px 1fr; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); overflow: hidden; }
+.st nav { padding: 24px 16px; background: rgba(255,255,255,.38); display: flex; flex-direction: column; gap: 3px; }
+.st nav .g { margin: 12px 10px 4px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.st nav .g:first-child { margin-top: 0; }
+.st nav span { padding: 8px 12px; border-radius: 12px; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.st nav span.on { color: #fff; background: var(--brand); }
+.st .pg { padding: 28px 32px; } .st .pg h3 { font: 700 30px Unbounded; } .st .pg > small { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; color: var(--mut); }
+#cur { position: absolute; left: 0; top: 0; width: 34px; height: 34px; z-index: 9; filter: drop-shadow(0 4px 6px rgba(36,50,74,.35)); }
+
+#film { --c1: #3550E0; --hot: #E8467A; --grid: rgba(36,50,74,.1); }
+#plane svg { stroke: var(--accent); }
+#stu { left: 640px; top: 112px; width: 1180px; height: 728px; grid-template-columns: 230px 1fr; }
+#stu nav { padding: 24px 12px; gap: 2px; } #stu nav span { font-size: 17px; } #stu nav span i { font-style: normal; margin-right: 8px; }
+#stu .pg { position: relative; padding: 24px 28px; } #stu .pg > small { font-size: 17px; }
+.chs { display: flex; gap: 8px; margin-top: 12px; } .chs span { padding: 6px 13px; border-radius: 99px; box-shadow: var(--raise-s); font-size: 14px; font-weight: 700; color: var(--mut); }
+.chs b { color: var(--ink); }
+.tabs { display: inline-flex; gap: 2px; margin-top: 14px; padding: 4px; border-radius: 16px; box-shadow: var(--press); }
+.tabs i { font-style: normal; padding: 8px 15px; border-radius: 12px; font-size: 15px; font-weight: 700; color: var(--mut); }
+.tabs i.on { color: var(--accent); box-shadow: var(--raise-s); }
+.pane { position: absolute; left: 28px; right: 28px; top: 196px; bottom: 24px; }
+.cd { padding: 16px 20px; border-radius: 22px; box-shadow: var(--raise-s); }
+.cd h4 { font: 700 18px Unbounded; margin-bottom: 8px; } .cd h4 small { margin-left: 8px; font: 700 13px Manrope; color: var(--mut); }
+/* источники */
+.ta { margin-top: 6px; height: 130px; padding: 12px 14px; border-radius: 16px; box-shadow: var(--press); font: 600 16px/1.6 ui-monospace, "Ubuntu Mono", monospace; color: var(--ink); white-space: pre; overflow: hidden; }
+.ta u { text-decoration: none; display: inline-block; width: 2px; height: 18px; margin-left: 1px; background: var(--accent); vertical-align: -3px; }
+.kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; } .kinds span { padding: 4px 10px; border-radius: 99px; background: rgba(69,96,234,.08); font-size: 13px; font-weight: 700; color: var(--mut); }
+.row2 { display: flex; justify-content: flex-end; margin-top: 12px; }
+.btn { position: relative; display: inline-block; padding: 11px 20px; border-radius: 15px; font-size: 16px; font-weight: 800; box-shadow: var(--raise-s); white-space: nowrap; }
+.btn.pri { color: #fff; background: var(--brand); box-shadow: none; }
+.btn::after { content: ""; position: absolute; inset: -7px; border-radius: 21px; border: 3px solid var(--accent); opacity: var(--ta, 0); transform: scale(var(--ts, 1)); }
+.srcs { margin-top: 14px; }
+.sr { display: grid; grid-template-columns: 50px 1fr auto 60px; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--grid); font-size: 16px; font-weight: 700; }
+.sr:last-child { border-bottom: 0; }
+.sr i { font-style: normal; display: grid; place-items: center; height: 28px; border-radius: 9px; font-size: 12px; font-weight: 800; color: var(--accent); background: rgba(69,96,234,.09); }
+.sr small { color: var(--mut); font-size: 14px; } .sr em { font-style: normal; font-size: 13px; color: #1e9e74; }
+.sr .tg2 { justify-self: end; width: 44px; height: 24px; border-radius: 99px; background: var(--brand); position: relative; } .sr .tg2::after { content: ""; position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+/* пульс */
+.fld { width: 100%; height: auto; display: block; overflow: visible; }
+.fld .gr line { stroke: var(--grid); stroke-width: 1; } .fld .gr text { font: 700 11px Manrope; fill: var(--mut); }
+.fld .now { fill: rgba(79,108,240,.08); }
+.fld .dt { stroke: #fff; stroke-width: 1.4; }
+.fld .sweep { stroke: var(--accent); stroke-width: 2.5; }
+.fld .lb path { stroke: rgba(232,70,122,.5); stroke-width: 1.2; fill: none; } .fld .lb rect { fill: #fff; } .fld .lb text { font: 700 13px Manrope; fill: var(--ink); }
+.lgd { position: absolute; right: 20px; top: 18px; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--mut); }
+.lgd i { width: 64px; height: 6px; border-radius: 6px; background: linear-gradient(90deg, #B4C3FF, #3550E0); } .lgd em { font-style: normal; display: flex; align-items: center; gap: 5px; }
+.lgd em::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--hot); }
+.two { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; margin-top: 14px; }
+.bh { font: 700 22px/1.2 Unbounded; margin: 2px 0 8px; } .bm { font-size: 13px; font-weight: 700; color: var(--mut); }
+.bp { list-style: none; } .bp li { position: relative; padding: 3px 0 3px 18px; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.bp li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 7px; height: 7px; border-radius: 50%; background: var(--c1); }
+.trow { display: grid; grid-template-columns: 1fr 96px 28px; align-items: center; gap: 8px; padding: 6px 0; }
+.trow b { display: block; font-size: 15px; } .trow small { font-size: 12.5px; font-weight: 800; } .trow .v { font: 700 18px Unbounded; text-align: right; }
+.sp { width: 96px; height: 30px; overflow: visible; }
+/* спросить */
+.aq { display: flex; gap: 8px; margin-top: 4px; } .aq .in { flex: 1; padding: 11px 14px; border-radius: 14px; box-shadow: var(--press); font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.aq .in.ph { color: var(--mut); } .aq .go { width: 46px; display: grid; place-items: center; border-radius: 14px; background: var(--brand); color: #fff; font-size: 20px; font-weight: 800; }
+.sg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; } .sg span { padding: 5px 11px; border-radius: 99px; box-shadow: var(--raise-s); font-size: 13px; font-weight: 700; color: var(--mut); }
+.an { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--grid); } .an > b { display: block; font-size: 15px; margin-bottom: 6px; }
+.an p { font-size: 16px; font-weight: 600; line-height: 1.55; min-height: 100px; }
+.rf { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; font-size: 12px; font-weight: 800; color: var(--accent); background: rgba(69,96,234,.12); vertical-align: 1px; }
+.an ol { margin: 8px 0 0 20px; font-size: 14px; font-weight: 700; color: var(--accent); } .an ol li { margin: 3px 0; }
+.dots { display: flex; gap: 6px; align-items: center; color: var(--mut); font-size: 15px; font-weight: 700; } .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--c1); }
+.tc { padding: 14px 16px; border-radius: 18px; box-shadow: var(--raise-s); margin-bottom: 12px; }
+.tc b { font: 700 17px Unbounded; } .tc small { display: block; font-size: 13px; font-weight: 800; margin: 2px 0 4px; } .tc .sp { width: 100%; height: 44px; }
+/* срочное */
+#hot { left: 640px; top: 210px; width: 700px; }
+#hot > i { background: rgba(232,70,122,.14); }
+.phone .scr.lock { background: linear-gradient(160deg, #cfdcf2, #e8eef8); padding: 60px 18px; text-align: center; }
+.lock .tm { font: 600 64px Unbounded; color: #24324a; } .lock .dd { font-size: 17px; font-weight: 700; color: var(--mut); margin-bottom: 28px; }
+.pn { text-align: left; padding: 14px 16px; border-radius: 20px; background: rgba(255,255,255,.88); box-shadow: 0 10px 24px -14px rgba(36,50,74,.5); }
+.pn small { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: var(--mut); } .pn small img { width: 22px; height: 22px; border-radius: 6px; }
+.pn b { display: block; margin-top: 6px; font-size: 17px; } .pn span { display: block; margin-top: 3px; font-size: 15px; font-weight: 600; line-height: 1.4; }
+#studio { top: 170px; width: 900px; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 28 · Радар</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><circle cx="12" cy="12.5" r="8.5"/><circle cx="12" cy="12.5" r="4.2"/><path d="M12 12.5l6.2-5.8"/><circle cx="15.6" cy="9.4" r="1"/><path d="M19.5 2.8v2.8M18.1 4.2h2.8"/></svg></div>
+    <div id="t-title"><h1>Радар</h1><p>Лира читает вашу тему за вас — и говорит главное первым</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div class="st" id="stu"><nav><div class="g">Главное</div><span><i>🏠</i>Главная</span><span><i>✳️</i>Нода Лиры</span><div class="g">Для себя</div><span><i>💬</i>Чат</span><span><i>📅</i>Календарь</span><span><i>📝</i>Заметки</span><div class="g">Лира делает сама</div><span><i>🧩</i>Задачи</span><span><i>👁</i>Дозор</span><span><i>🎙</i>Подкасты</span><div class="g">Работа</div><span><i>🌐</i>Сайты</span><span class=on><i>📡</i>Радар</span><span><i>🎧</i>Суфлёр</span><span><i>✈️</i>Бот в Telegram</span></nav>
+      <div class="pg"><h3>Радар</h3><small>Главное в вашей нише за сутки: сигналы, тренды и выводы</small>
+        <div class="chs"><span><b id="c-src">0</b> источников</span><span><b id="c-day">0</b> разобрано за сутки</span><span>сегодня <b id="c-lim">0</b> из 60 разборов</span></div>
+        <div class="tabs" id="tabs"><i data-t="0">Пульс</i><i data-t="1">Лента</i><i data-t="2">Тренды</i><i data-t="3">Источники</i><i data-t="4">Разум</i><i data-t="5">Галактика</i></div>
+        <div class="pane" id="pS"><div class="cd"><h4>Добавить источники</h4>
+            <div class="kinds"><span>Сайт</span><span>RSS</span><span>YouTube</span><span>Telegram @канал</span><span>Reddit</span><span>GitHub</span><span>VK</span><span>Дзен</span></div>
+            <div class="ta" id="ta"></div><div class="row2"><span class="btn pri" id="add">Добавить</span></div></div>
+          <div class="cd srcs"><h4>Мои источники <small id="s-n"></small></h4><div id="srl"><div class="sr"><i>RSS</i><div>habr.com<small> · 52 за неделю</small></div><em>● прочитан</em><span class="tg2"></span></div><div class="sr"><i>YT</i><div>@lexfridman<small> · 9 за неделю</small></div><em>● прочитан</em><span class="tg2"></span></div><div class="sr"><i>TG</i><div>@ai_newz<small> · 38 за неделю</small></div><em>● прочитан</em><span class="tg2"></span></div><div class="sr"><i>GH</i><div>ollama/ollama<small> · 4 за неделю</small></div><em>● прочитан</em><span class="tg2"></span></div></div></div></div>
+        <div class="pane" id="pP"><div class="cd" style="position:relative"><h4>Поле сигналов<small>260 материалов за неделю</small></h4>
+            <div class="lgd">слабый<i></i>сильный<em>срочное</em></div><svg class="fld" viewBox="0 0 860 230"><rect class="now" x="733.4" y="16" width="116.6" height="188"/><g class="gr"><line x1="34" x2="850" y1="204.0" y2="204.0"/><text x="8" y="208.0">0</text><line x1="34" x2="850" y1="110.0" y2="110.0"/><text x="8" y="114.0">5</text><line x1="34" x2="850" y1="16.0" y2="16.0"/><text x="8" y="20.0">10</text><line x1="34.0" x2="34.0" y1="16" y2="204"/><line x1="150.6" x2="150.6" y1="16" y2="204"/><line x1="267.1" x2="267.1" y1="16" y2="204"/><line x1="383.7" x2="383.7" y1="16" y2="204"/><line x1="500.3" x2="500.3" y1="16" y2="204"/><line x1="616.9" x2="616.9" y1="16" y2="204"/><line x1="733.4" x2="733.4" y1="16" y2="204"/><line x1="850.0" x2="850.0" y1="16" y2="204"/><text x="76.3" y="224">чт, 5</text><text x="192.9" y="224">пт, 6</text><text x="309.4" y="224">сб, 7</text><text x="426.0" y="224">вс, 8</text><text x="542.6" y="224">пн, 9</text><text x="659.1" y="224">вт, 10</text><text x="775.7" y="224">ср, 11</text></g><line class="sweep" id="sweep" x1="0" x2="0" y1="16" y2="204"/><circle class="dt" data-x="1.223" cx="176.6" cy="83.7" r="6.2" fill="rgb(84,108,232)"/><circle class="dt" data-x="1.760" cx="239.2" cy="81.8" r="6.2" fill="rgb(83,107,231)"/><circle class="dt" data-x="1.390" cx="196.0" cy="138.2" r="4.8" fill="rgb(128,148,242)"/><circle class="dt" data-x="2.034" cx="271.1" cy="104.4" r="5.7" fill="rgb(101,123,236)"/><circle class="dt" data-x="3.307" cx="419.5" cy="102.5" r="5.7" fill="rgb(99,122,235)"/><circle class="dt" data-x="1.835" cx="247.9" cy="123.2" r="5.2" fill="rgb(116,137,239)"/><circle class="dt" data-x="0.398" cx="80.4" cy="110.0" r="5.5" fill="rgb(105,127,237)"/><circle class="dt" data-x="6.914" cx="840.0" cy="96.8" r="5.8" fill="rgb(95,118,234)"/><circle class="dt" data-x="2.775" cx="357.5" cy="95.0" r="5.9" fill="rgb(93,117,234)"/><circle class="dt" data-x="6.457" cx="786.7" cy="111.9" r="5.5" fill="rgb(107,129,237)"/><circle class="dt" data-x="4.062" cx="507.5" cy="125.0" r="5.1" fill="rgb(117,138,240)"/><circle class="dt" data-x="2.461" cx="320.9" cy="149.5" r="4.5" fill="rgb(137,156,244)"/><circle class="dt" data-x="2.179" cx="288.0" cy="115.6" r="5.3" fill="rgb(110,131,238)"/><circle class="dt" data-x="0.220" cx="59.6" cy="123.2" r="5.2" fill="rgb(116,137,239)"/><circle class="dt" data-x="5.685" cx="696.8" cy="125.0" r="5.1" fill="rgb(117,138,240)"/><circle class="dt" data-x="4.151" cx="517.9" cy="126.9" r="5.0" fill="rgb(119,140,240)"/><circle class="dt" data-x="6.491" cx="790.6" cy="111.9" r="5.5" fill="rgb(107,129,237)"/><circle class="dt" data-x="3.479" cx="439.5" cy="95.0" r="5.9" fill="rgb(93,117,234)"/><circle class="dt" data-x="1.676" cx="229.4" cy="115.6" r="5.3" fill="rgb(110,131,238)"/><circle class="dt" data-x="5.642" cx="691.7" cy="104.4" r="5.7" fill="rgb(101,123,236)"/><circle class="dt" data-x="5.893" cx="721.0" cy="128.8" r="5.0" fill="rgb(120,141,240)"/><circle class="dt" data-x="2.364" cx="309.6" cy="91.2" r="6.0" fill="rgb(90,114,233)"/><circle class="dt" data-x="6.741" cx="819.8" cy="79.9" r="6.3" fill="rgb(81,106,231)"/><circle class="dt" data-x="1.736" cx="236.3" cy="138.2" r="4.8" fill="rgb(128,148,242)"/><circle class="dt" data-x="1.715" cx="233.9" cy="108.1" r="5.5" fill="rgb(104,126,236)"/><circle class="dt" data-x="5.193" cx="639.4" cy="128.8" r="5.0" fill="rgb(120,141,240)"/><circle class="dt" data-x="3.504" cx="442.5" cy="91.2" r="6.0" fill="rgb(90,114,233)"/><circle class="dt" data-x="6.510" cx="792.9" cy="106.2" r="5.6" fill="rgb(102,125,236)"/><circle class="dt" data-x="2.830" cx="363.9" cy="132.6" r="4.9" fill="rgb(123,144,241)"/><circle class="dt" data-x="3.354" cx="424.9" cy="153.2" r="4.3" fill="rgb(140,158,245)"/><circle class="dt" data-x="4.015" cx="502.0" cy="81.8" r="6.2" fill="rgb(83,107,231)"/><circle class="dt" data-x="4.155" cx="518.3" cy="145.7" r="4.5" fill="rgb(134,153,244)"/><circle class="dt" data-x="4.305" cx="535.9" cy="138.2" r="4.8" fill="rgb(128,148,242)"/><circle class="dt" data-x="5.087" cx="627.0" cy="100.6" r="5.8" fill="rgb(98,121,235)"/><circle class="dt" data-x="2.262" cx="297.7" cy="95.0" r="5.9" fill="rgb(93,117,234)"/><circle class="dt" data-x="2.170" cx="287.0" cy="126.9" r="5.0" fill="rgb(119,140,240)"/><circle class="dt" data-x="6.796" cx="826.2" cy="81.8" r="6.2" fill="rgb(83,107,231)"/><circle class="dt" data-x="4.355" cx="541.7" cy="108.1" r="5.5" fill="rgb(104,126,236)"/><circle class="dt" data-x="3.629" cx="457.0" cy="89.3" r="6.0" fill="rgb(89,112,233)"/><circle class="dt" data-x="4.048" cx="505.9" cy="147.6" r="4.5" fill="rgb(135,154,244)"/><circle class="dt" data-x="0.077" cx="43.0" cy="83.7" r="6.2" fill="rgb(84,108,232)"/><circle class="dt" data-x="3.090" cx="394.2" cy="111.9" r="5.5" fill="rgb(107,129,237)"/><circle class="dt" data-x="2.082" cx="276.6" cy="106.2" r="5.6" fill="rgb(102,125,236)"/><circle class="dt" data-x="1.380" cx="194.9" cy="96.8" r="5.8" fill="rgb(95,118,234)"/><circle class="dt" data-x="5.096" cx="628.1" cy="119.4" r="5.2" fill="rgb(113,134,239)"/><circle class="dt" data-x="4.975" cx="614.0" cy="78.0" r="6.3" fill="rgb(80,104,231)"/><circle class="dt" data-x="0.854" cx="133.6" cy="108.1" r="5.5" fill="rgb(104,126,236)"/><circle class="dt" data-x="5.884" cx="719.9" cy="128.8" r="5.0" fill="rgb(120,141,240)"/><circle class="dt" data-x="6.365" cx="776.0" cy="134.4" r="4.8" fill="rgb(125,145,242)"/><circle class="dt" data-x="4.059" cx="507.1" cy="102.5" r="5.7" fill="rgb(99,122,235)"/><circle class="dt" data-x="6.435" cx="784.1" cy="64.9" r="6.7" fill="rgb(69,95,228)"/><circle class="dt" data-x="3.369" cx="426.8" cy="115.6" r="5.3" fill="rgb(110,131,238)"/><circle class="dt" data-x="3.364" cx="426.2" cy="117.5" r="5.3" fill="rgb(111,133,238)"/><circle class="dt" data-x="5.793" cx="709.3" cy="134.4" r="4.8" fill="rgb(125,145,242)"/><circle class="dt" data-x="2.967" cx="379.9" cy="140.1" r="4.7" fill="rgb(129,149,243)"/><circle class="dt" data-x="4.183" cx="521.6" cy="125.0" r="5.1" fill="rgb(117,138,240)"/><circle class="dt" data-x="6.098" cx="744.8" cy="72.4" r="6.5" fill="rgb(75,100,229)"/><circle class="dt" data-x="4.923" cx="607.9" cy="142.0" r="4.7" fill="rgb(131,150,243)"/><circle class="dt" data-x="3.341" cx="423.4" cy="134.4" r="4.8" fill="rgb(125,145,242)"/><circle class="dt" data-x="6.143" cx="750.1" cy="91.2" r="6.0" fill="rgb(90,114,233)"/><circle class="dt" data-x="5.476" cx="672.4" cy="93.1" r="6.0" fill="rgb(92,115,233)"/><circle class="dt" data-x="0.756" cx="122.1" cy="98.7" r="5.8" fill="rgb(96,119,235)"/><circle class="dt" data-x="2.702" cx="348.9" cy="91.2" r="6.0" fill="rgb(90,114,233)"/><circle class="dt" data-x="0.330" cx="72.4" cy="145.7" r="4.5" fill="rgb(134,153,244)"/><circle class="dt" data-x="5.562" cx="682.3" cy="134.4" r="4.8" fill="rgb(125,145,242)"/><circle class="dt" data-x="0.433" cx="84.5" cy="130.7" r="5.0" fill="rgb(122,142,241)"/><circle class="dt" data-x="0.266" cx="65.0" cy="57.4" r="6.9" fill="rgb(63,89,227)"/><circle class="dt" data-x="3.423" cx="433.1" cy="85.6" r="6.2" fill="rgb(86,110,232)"/><circle class="dt" data-x="0.714" cx="117.3" cy="96.8" r="5.8" fill="rgb(95,118,234)"/><circle class="dt" data-x="2.969" cx="380.1" cy="140.1" r="4.7" fill="rgb(129,149,243)"/><circle class="dt" data-x="3.316" cx="420.5" cy="108.1" r="5.5" fill="rgb(104,126,236)"/><circle class="dt" data-x="5.787" cx="708.6" cy="102.5" r="5.7" fill="rgb(99,122,235)"/><circle class="dt" data-x="6.339" cx="772.9" cy="132.6" r="4.9" fill="rgb(123,144,241)"/><circle class="dt" data-x="6.255" cx="763.2" cy="79.9" r="6.3" fill="rgb(81,106,231)"/><circle class="dt" data-x="0.360" cx="75.9" cy="96.8" r="5.8" fill="rgb(95,118,234)"/><circle class="dt" data-x="3.179" cx="404.6" cy="110.0" r="5.5" fill="rgb(105,127,237)"/><circle class="dt" data-x="0.764" cx="123.1" cy="104.4" r="5.7" fill="rgb(101,123,236)"/><circle class="dt" data-x="2.354" cx="308.4" cy="95.0" r="5.9" fill="rgb(93,117,234)"/><circle class="dt" data-x="3.706" cx="466.0" cy="130.7" r="5.0" fill="rgb(122,142,241)"/><circle class="dt" data-x="5.497" cx="674.8" cy="134.4" r="4.8" fill="rgb(125,145,242)"/><circle class="dt" data-x="6.693" cx="814.2" cy="104.4" r="5.7" fill="rgb(101,123,236)"/><circle class="dt" data-x="4.556" cx="565.1" cy="83.7" r="6.2" fill="rgb(84,108,232)"/><circle class="dt" data-x="1.964" cx="262.9" cy="59.2" r="6.8" fill="rgb(65,91,227)"/><circle class="dt" data-x="4.085" cx="510.2" cy="96.8" r="5.8" fill="rgb(95,118,234)"/><circle class="dt" data-x="3.175" cx="404.1" cy="123.2" r="5.2" fill="rgb(116,137,239)"/><circle class="dt" data-x="3.171" cx="403.7" cy="128.8" r="5.0" fill="rgb(120,141,240)"/><circle class="dt" data-x="1.528" cx="212.1" cy="132.6" r="4.9" fill="rgb(123,144,241)"/><circle class="dt" data-x="4.339" cx="539.8" cy="98.7" r="5.8" fill="rgb(96,119,235)"/><circle class="dt" data-x="6.291" cx="767.3" cy="100.6" r="5.8" fill="rgb(98,121,235)"/><circle class="dt" data-x="4.563" cx="565.9" cy="151.4" r="4.4" fill="rgb(138,157,245)"/><circle class="dt" data-x="6.221" cx="759.2" cy="74.3" r="6.5" fill="rgb(77,102,230)"/><circle class="dt" data-x="1.621" cx="223.0" cy="49.8" r="7.1" fill="rgb(57,84,225)"/><circle class="dt" data-x="6.319" cx="770.6" cy="153.2" r="4.3" fill="rgb(140,158,245)"/><circle class="dt" data-x="6.872" cx="835.1" cy="108.1" r="5.5" fill="rgb(104,126,236)"/><circle class="dt" data-x="0.480" cx="89.9" cy="115.6" r="5.3" fill="rgb(110,131,238)"/><circle class="dt" data-x="2.750" cx="354.5" cy="96.8" r="5.8" fill="rgb(95,118,234)"/><circle class="dt" data-x="6.550" cx="797.5" cy="27.3" r="7.7" fill="#E8467A" data-hot="1"/><circle class="dt" data-x="4.200" cx="523.6" cy="40.4" r="7.3" fill="#E8467A" data-hot="1"/><circle class="dt" data-x="6.800" cx="826.7" cy="51.7" r="7.0" fill="rgb(59,85,225)"/><g class="lb" data-x="6.55"><path d="M797.5 27.3L467.6 30"/><rect x="457.6" y="17" width="390.4" height="21" rx="7"/><text x="466.6" y="32">Утечка исходников движка PHP: в сеть попали ключи</text></g><g class="lb" data-x="4.2"><path d="M523.6 40.4L558.8 54"/><rect x="548.8" y="41" width="299.2" height="21" rx="7"/><text x="557.8" y="56">Майнинговые карты превращаются в A100</text></g></svg></div>
+          <div class="two"><div class="cd"><div class="bm">Бриф собран в 7:00 · по 47 материалам</div><div class="bh" id="bh"></div>
+              <ul class="bp" id="bp"><li>Утечка исходников PHP: в сеть попали ключи сборки — проверьте зависимости.</li><li>В curl — переполнение при разборе заголовков прокси.</li><li>Gemini 4 Carbon: агентная модель в 2–6 раз дешевле.</li></ul></div>
+            <div class="cd"><h4>Тренды</h4><div class="trow"><div><b>ии-агенты</b><small style="color:#E8467A">растёт</small></div><svg viewBox="0 0 120 36" class="sp"><polyline points="0.0,27.3 20.0,24.0 40.0,27.3 60.0,24.0 80.0,20.7 100.0,24.0 120.0,4.0" fill="none" stroke="#E8467A" stroke-width="2.2"/><circle cx="120" cy="4.0" r="3.5" fill="#E8467A"/></svg><span class="v">9</span></div><div class="trow"><div><b>безопасность</b><small style="color:#E8467A">растёт</small></div><svg viewBox="0 0 120 36" class="sp"><polyline points="0.0,22.8 20.0,26.5 40.0,19.0 60.0,22.8 80.0,22.8 100.0,15.2 120.0,4.0" fill="none" stroke="#E8467A" stroke-width="2.2"/><circle cx="120" cy="4.0" r="3.5" fill="#E8467A"/></svg><span class="v">8</span></div><div class="trow"><div><b>php</b><small style="color:#3550E0">новая тема</small></div><svg viewBox="0 0 120 36" class="sp"><polyline points="0.0,34.0 20.0,34.0 40.0,29.0 60.0,34.0 80.0,34.0 100.0,29.0 120.0,4.0" fill="none" stroke="#3550E0" stroke-width="2.2"/><circle cx="120" cy="4.0" r="3.5" fill="#3550E0"/></svg><span class="v">6</span></div></div></div></div>
+        <div class="pane" id="pA"><div class="two" style="margin-top:0;grid-template-columns:1fr 1.25fr">
+            <div class="cd"><div class="bm">Бриф собран в 7:00 · по 47 материалам</div><div class="bh">Неделя уязвимостей: PHP и curl, а ИИ-агенты дешевеют</div>
+              <ul class="bp"><li>Утечка исходников PHP: в сеть попали ключи сборки — проверьте зависимости.</li><li>В curl — переполнение при разборе заголовков прокси.</li><li>Gemini 4 Carbon: агентная модель в 2–6 раз дешевле.</li></ul></div>
+            <div class="cd"><h4>Спросите Лиру о теме</h4><div class="bm">Ответ — по прочитанному Радаром, со ссылками на материалы.</div>
+              <div class="aq"><div class="in ph" id="aq">Например: что важного за неделю?</div><div class="go" id="ago">→</div></div>
+              <div class="sg"><span>Что главное за неделю?</span><span>Почему растёт «ии-агенты»?</span><span>Что сделать первым?</span></div>
+              <div class="an" id="an"><b id="anq">Почему все вдруг пишут про ИИ-агентов?</b><div class="dots" id="adots"><i></i><i></i><i></i>Лира читает материалы…</div>
+                <p id="ant"></p><ol id="anr"><li>Google выпустила Gemini 4 Carbon — @ai_newz</li><li>Биржа автоматизировала диагностику с LLM — habr.com</li></ol></div></div></div></div>
+      </div></div>
+    <div class="toast" id="hot"><i>⚡</i><div><small>РАДАР · СРОЧНО · СИГНАЛ 9,4</small><b>Утечка исходников PHP: в сеть попали ключи сборки</b></div></div>
+    <div class="card" id="studio"><h3>Радар</h3><small>Студия → «Работа» → «Радар»</small>
+      <div class="row"><i>🔗</i>Источники одним полем<em>сайт · YouTube · Telegram</em></div>
+      <div class="row"><i>☀️</i>Бриф дня и тренды<em>каждое утро</em></div>
+      <div class="row"><i>⚡</i>Срочное — сразу<em class="warn">на телефон</em></div>
+      <div class="row"><i>💬</i>«Что нового в моей теме?»<em class="ok">голосом или здесь</em></div></div>
+  </div>
+  <div class="layer" id="L-phone"><div class="phone"><div class="scr lock">
+    <div class="tm">7:42</div><div class="dd">четверг, 12 ноября</div>
+    <div class="pn" id="pn"><small><img src="../../../../data/avatars/lira.webp" alt="">DEWIAR · РАДАР · сейчас</small><b>⚡ Срочно: утечка исходников PHP</b>
+      <span>В сеть попали ключи сборки. Проверьте зависимости и обновите PHP сегодня.</span></div></div></div></div>
+  <svg id="cur" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.6L10 19z" fill="#fff" stroke="#24324a" stroke-width="1.6" stroke-linejoin="round"/></svg>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  add: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  pulse: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  urgent: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  ask: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  const ctr = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  const walk = (KF) => { let p = KF[0][1]; for (let i = 1; i < KF.length; i++) { const [ta, pa] = KF[i - 1], [tb, pb] = KF[i];
+    if (T >= ta) { const k = ease((T - Math.max(ta, tb - 0.9)) / 0.8); p = [lerp(pa[0], pb[0], k), lerp(pa[1], pb[1], k)]; } } return p; };
+  const cursor = (p, o) => { const c = $("#cur"); c.style.opacity = o; c.style.transform = `translate(${p[0] - 4}px, ${p[1] - 2}px)`; };
+
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  const tap = (el, t0) => { const k = (T - t0) / 0.6; const on = k > 0 && k < 1;
+    el.style.setProperty("--ta", on ? (1 - k).toFixed(3) : 0); el.style.setProperty("--ts", on ? (1 + k * 0.2).toFixed(3) : 1);
+    el.style.transform = k > 0 && k < 0.22 ? "scale(.95)" : ""; };
+  // студия: «Источники» → «Пульс»; срочное — на телефоне; потом «Спросите Лиру о теме»
+  const a0 = at("s3a"), ad = LN.s3a.dur, tType = a0 + 0.4, tTyped = a0 + ad * 0.62, tAdd = a0 + ad * 0.78;
+  const stuOn = Math.min(out((T - at("s2b") - 0.4) / 0.5), 1 - out((T - s("urgent").start + 0.4) / 0.4)) + (T > s("ask").start ? out((T - s("ask").start - 0.2) / 0.5) * (1 - out((T - s("how").start + 0.4) / 0.4)) : 0);
+  vis($("#stu"), clamp(stuOn), 24, .97);
+  const tab = T < s("pulse").start ? 3 : 0;
+  [...$("#tabs").children].forEach(c => c.classList.toggle("on", +c.dataset.t === tab));
+  vis($("#pS"), tab === 3 ? 1 : 0, 0); const ask = T >= s("ask").start; vis($("#pP"), tab === 0 && !ask ? out((T - s("pulse").start) / 0.4) : 0, 10); vis($("#pA"), ask ? 1 : 0, 0);
+  // ссылки печатаются, «Добавить», источники встают в список
+  const LT = "https://habr.com/ru/rss/all/\nhttps://www.youtube.com/@lexfridman\n@ai_newz\ngithub.com/ollama/ollama";
+  const typed = type(LT, (T - tType) / (tTyped - tType));
+  $("#ta").innerHTML = typed.replace(/&/g, "&amp;").replace(/</g, "&lt;") + (T < tAdd && Math.floor(T * 2.5) % 2 ? "<u></u>" : "");
+  tap($("#add"), tAdd);
+  [...$("#srl").children].forEach((c, i) => vis(c, out((T - tAdd - 0.3 - i * 0.25) / 0.35), 8));
+  $("#s-n").textContent = T > tAdd + 0.4 ? "4 из 4 включены" : "";
+  const n = (k) => Math.round(clamp(k));
+  $("#c-src").textContent = T > tAdd + 0.3 ? 4 : 0;
+  // пульс: луч радара проходит по неделе — точки загораются; бриф печатается
+  const p0 = s("pulse").start + 0.5, pd = LN.s4a.dur * 0.75, sw = clamp((T - p0) / pd);
+  const fx = 34 + sw * (860 - 44);
+  $("#sweep").setAttribute("x1", fx); $("#sweep").setAttribute("x2", fx); $("#sweep").style.opacity = sw > 0 && sw < 1 ? 1 : 0;
+  document.querySelectorAll("#pP .dt").forEach(c => { const x = 34 + (+c.dataset.x) / 7 * (860 - 44), k = out((fx - x) / 30);
+    c.style.opacity = k; const hot = c.dataset.hot; c.setAttribute("transform", hot && k > 0 && k < 1 ? "" : ""); });
+  document.querySelectorAll("#pP .lb").forEach((g, i) => { g.style.opacity = out((T - p0 - pd - 0.2 - i * 0.3) / 0.4); });
+  const day = Math.round(78 * sw), lim = Math.round(47 * sw);
+  $("#c-day").textContent = T > s("pulse").start ? day : 0; $("#c-lim").textContent = T > s("pulse").start ? lim : 0;
+  const tB = at("s4a") + LN.s4a.dur * 0.7;
+  $("#bh").textContent = type("Неделя уязвимостей: PHP и curl, а ИИ-агенты дешевеют", (T - tB) / 1.4);
+  [...$("#bp").children].forEach((c, i) => vis(c, out((T - tB - 1.2 - i * 0.35) / 0.4), 6));
+  // срочное: весточка в студии и на телефоне
+  const u0 = s("urgent").start;
+  scene($("#hot"), T, u0 + 0.3, s("ask").start, 24);
+  layer("L-phone", T, u0 + 0.5, s("ask").start);
+  vis($("#pn"), out((T - u0 - 1.2) / 0.5), -30);
+  // спросить: вопрос печатается, «→», ответ со ссылками
+  const q0 = at("s6a"), tQ = q0 + 0.3, tQd = q0 + LN.s6a.dur * 0.85, tGo = tQd + 0.3, tAns = at("s6b") + 0.2;
+  const qtxt = type("Почему все вдруг пишут про ИИ-агентов?", (T - tQ) / (tQd - tQ));
+  $("#aq").textContent = T > tQ && T < tGo + 0.3 ? qtxt : "Например: что важного за неделю?"; $("#aq").classList.toggle("ph", !(T > tQ && T < tGo + 0.3));
+  tap($("#ago"), tGo);
+  vis($("#an"), out((T - tGo - 0.2) / 0.4), 8);
+  vis($("#adots"), T < tAns ? 1 : 0, 0); $("#adots").style.display = T < tAns ? "" : "none";
+  const at_ = type("За сутки — 9 материалов против обычных 3: Google выпустила Gemini 4 Carbon, в 2–6 раз дешевле [1], а Московская биржа рассказала, как агенты ведут ночную диагностику [2]. Агенты стали дешёвыми — и их пробуют все.", (T - tAns) / (LN.s6b.dur * 0.75));
+  $("#ant").innerHTML = at_.replace(/\[(\d)\]/g, '<span class="rf">$1</span>');
+  [...$("#anr").children].forEach((c, i) => vis(c, out((T - tAns - LN.s6b.dur * 0.75 - i * 0.3) / 0.4), 6));
+  // курсор: печать ссылок → «Добавить»; вопрос → «→»
+  const KF = [[a0, ctr($("#ta"))], [tAdd, ctr($("#add"))], [tGo - 1.2, ctr($("#aq"))], [tGo, ctr($("#ago"))]];
+  cursor(walk(KF), Math.max(Math.min(out((T - a0 + 0.2) / 0.4), 1 - out((T - tAdd - 0.8) / 0.4)), Math.min(out((T - tQ) / 0.4), 1 - out((T - tGo - 0.9) / 0.4))));
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  [...$("#studio").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - s("how").start - 0.6 - i * 0.3) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>
