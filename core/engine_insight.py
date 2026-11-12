@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from datetime import datetime
+from urllib.parse import urlparse
 
 import insight as I
 
@@ -57,6 +58,17 @@ class Radar:
     def crawl_source(self, src):
         """Один источник -> сколько новых материалов. Лента — сразу; сайт и YouTube — найти ленту на странице, нет ленты —
         ссылки на свои статьи; одна статья — она сама."""
+        d = I.detect(src.get("url") or "")
+        if d and d.get("bad"):
+            raise ValueError("@" + d["bad"])                     # код — студия покажет понятное объяснение
+        if d and int(src.get("v") or 0) < I.DETECT_V:            # добавлен старым detect(): тип и лента — заново
+            fix = {"v": I.DETECT_V}
+            if d["kind"] != src.get("kind") or d.get("feed"):
+                fix.update(kind=d["kind"], feed=d.get("feed") or src.get("feed") or "")
+                if src.get("name") == urlparse(src.get("url") or "").netloc.lower().removeprefix("www.").removeprefix("m."):
+                    fix["name"] = d["name"]
+            self.st.update_source(src["id"], **fix)
+            src = dict(src, **fix)
         kind, feed = src.get("kind"), src.get("feed") or ""
         found = []
         if kind == "telegram":
@@ -75,9 +87,18 @@ class Radar:
                 else:
                     found = I.parse_page_links(page, src["url"])
             if feed:
-                found = I.parse_feed(self.fetch(feed), feed)
+                text = self.fetch(feed)
+                found = I.parse_feed(text, feed)
+                if not found and I.looks_html(text):              # «лента» оказалась страницей — ищем ленту в ней
+                    alt = I.find_feed(text, feed)
+                    if alt and alt != feed:
+                        self.st.update_source(src["id"], feed=alt)
+                        found = I.parse_feed(self.fetch(alt), alt)
+                    else:
+                        found = I.parse_page_links(text, src["url"])
         week = [x for x in found if (x.get("ts") or time.time()) >= time.time() - 8 * 86400]
         n = self.st.add_items(src, week[:40])
+        self.st.update_source(src["id"], found=len(found))     # 0 — студия скажет «ничего не нашлось»
         return n
 
     def crawl(self, force=False):
@@ -343,10 +364,10 @@ def command(eng, cmd, a):
     if cmd == "insight_sources":
         return {"sources": r.sources_view(), "stats": r.stats()}
     if cmd == "insight_add":
-        added, bad = r.st.add_sources(str(a.get("text") or ""))
+        added, bad, why = r.st.add_sources(str(a.get("text") or ""))
         if added:
             _bg(r.tick, True)
-        return {"added": [s["name"] for s in added], "bad": bad, "sources": r.sources_view()}
+        return {"added": [s["name"] for s in added], "bad": bad, "why": why, "sources": r.sources_view()}
     if cmd == "insight_src":
         sid = str(a.get("id") or "")
         if a.get("del"):
@@ -362,7 +383,11 @@ def command(eng, cmd, a):
                 r.st.update_source(sid, last=int(time.time()), err="", last_new=n)
             except Exception as e:  # noqa: BLE001
                 r.st.update_source(sid, last=int(time.time()), err=str(e)[:160])
+                if str(e).startswith("@"):
+                    return {"sources": r.sources_view(), "err": str(e)}
                 raise ValueError(f"не прочитался: {str(e)[:160]}") from e
+            s = next((x for x in r.st.sources() if x["id"] == sid), {})
+            return {"sources": r.sources_view(), "found": int(s.get("found") or 0), "new": n}
         return {"sources": r.sources_view()}
     if cmd == "insight_question":
         return question(eng, a.get("q"))

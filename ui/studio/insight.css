@@ -5,7 +5,7 @@
    (как значок непрочитанного на «Главной»). Цвета холста (поле, галактика) insight.js берёт из этих же переменных. */
 #p-insight {
   /* фирменная (тёмная) и тёмные темы: сильное — ярче */
-  --rd-c0: #56639F; --rd-c1: #A9C8FF; --rd-hot: #FF7EA6; --rd-ok: #46D39A;
+  --rd-c0: #56639F; --rd-c1: #A9C8FF; --rd-hot: #FF7EA6; --rd-ok: #46D39A; --rd-warn: #F2B544;
   --rd-grid: rgba(255, 255, 255, .07); --rd-label: rgba(18, 20, 38, .86); --rd-now: rgba(169, 200, 255, .10);
   --rd-soft: rgba(255, 255, 255, .06); --rd-soft2: rgba(255, 255, 255, .1);
   --rd-shadow: 0 14px 34px -22px rgba(0, 0, 0, .7);
@@ -14,7 +14,7 @@
 }
 html.st-light #p-insight {
   /* светлые и «Неоморфизм»: сильное — глубже, срочное — тёплый розовый */
-  --rd-c0: #B4C3FF; --rd-c1: #3550E0; --rd-hot: #E8467A; --rd-ok: #1E9E74;
+  --rd-c0: #B4C3FF; --rd-c1: #3550E0; --rd-hot: #E8467A; --rd-ok: #1E9E74; --rd-warn: #B7790A;
   --rd-grid: color-mix(in srgb, var(--ink) 8%, transparent); --rd-label: rgba(255, 255, 255, .9); --rd-now: rgba(79, 108, 240, .08);
   --rd-soft: var(--soft, rgba(29, 34, 48, .06)); --rd-soft2: var(--soft2, rgba(29, 34, 48, .1));
   --rd-shadow: var(--sk-shadow, 0 14px 34px -22px rgba(20, 30, 60, .35));
@@ -150,6 +150,8 @@ html.st-neu .rd-tcard { background: var(--sk-glass); box-shadow: var(--raise-s);
 .rd-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--rd-ok); }
 .rd-state.err { color: var(--rd-hot); } .rd-state.err i { background: var(--rd-hot); }
 .rd-state.wait i { background: var(--dim); }
+.rd-state.warn { color: var(--rd-warn); } .rd-state.warn i { background: var(--rd-warn); }
+.rd-why { display: block; margin-top: 4px; max-width: 300px; color: var(--muted); font-size: 12px; line-height: 1.4; white-space: normal; }
 
 /* ---------- «Разум» ---------- */
 .rd-mind { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; margin-bottom: 18px; }

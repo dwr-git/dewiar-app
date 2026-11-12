@@ -348,6 +348,12 @@ class Node:
         self._me = (0.0, None)
         self._away_sent = True
         self._last_check = None
+        # 0.92: ретранслятор — одно соединение WebSocket вместо опросов PHP (адрес даёт сам сайт в ответе опроса)
+        self._ws = None
+        self._ws_url = ""
+        self._ws_next = 0.0
+        self._ws_fails = 0
+        self._ws_ready = False
 
     # --- файл состояния
     def _read(self):
@@ -624,6 +630,7 @@ class Node:
         self._go_away()
 
     def _go_away(self):
+        self._ws_drop("", backoff=0)
         if self._away_sent or not self.st.get("key"):
             return
         try:
@@ -682,7 +689,7 @@ class Node:
             return "blocked"
         self._set("ready", "")
         try:
-            d = self._fetch("/net/pull", {"wait": wait}, timeout=wait + 20)
+            d = self._pull(wait)
         except CloudError as e:
             if re.search(r"узла в Сети Лиры нет|Нужен ключ узла|отключ", str(e)):
                 raise NodeError("нода убрана или отключена на сайте: " + str(e)) from e
@@ -698,7 +705,7 @@ class Node:
                 # «ждёт допуска» — сайт просит 30 с; проверки после допуска приходят сразу — заглядываем раз в 10 с
                 self._sleep(min(10, int(d["wait"])))
             return "idle"
-        self._job(job, rr)
+        self._job(job, rr, ws=d.get("via") == "ws")
         rest = SHARE.get(self.cfg()["share"], SHARE["low"])[1]
         if rest:
             self._sleep(rest)
@@ -714,13 +721,106 @@ class Node:
                 self._rules_at = time.time()
         return self._rules
 
-    def _job(self, job, rr):
+    # --- ретранслятор (0.92)
+    def _relay_ok(self, url):
+        """Адрес ретранслятора — только на том же сайте (ключ ноды чужому серверу не отдаём)."""
+        from urllib.parse import urlsplit
+        try:
+            from cloud import api_base
+            u, me = urlsplit(url), urlsplit(api_base(self._url()))
+        except ValueError:
+            return False
+        return u.scheme in ("wss", "ws") and bool(u.hostname) and u.hostname == me.hostname and (u.scheme == "wss" or u.hostname in LOCAL_HOSTS)
+
+    def _ws_open(self):
+        if self._ws is not None:
+            return self._ws
+        if not self._ws_url or time.time() < self._ws_next or not self._relay_ok(self._ws_url):
+            return None
+        import ssl
+        import wsmini
+        ctx = None
+        try:
+            import certifi
+            ctx = ssl.create_default_context(cafile=certifi.where())
+        except Exception:  # noqa: BLE001
+            ctx = None
+        try:
+            ws = wsmini.Client(self._ws_url, {"Authorization": "Bearer " + (self.st.get("key") or ""), "User-Agent": "Dewiar-node"}, timeout=10, ctx=ctx)
+            hello = (ws.recv(15) or {}).get("hello") or {}
+        except wsmini.WSError as e:
+            self._ws_fail(str(e))
+            return None
+        if not hello.get("ok"):
+            ws.close()
+            self._ws_fail(hello.get("error") or "ретранслятор не принял ноду")
+            return None
+        self._ws, self._ws_fails, self._ws_ready = ws, 0, False
+        self.note("info", "на связи через ретранслятор — одно постоянное соединение вместо опросов")
+        return ws
+
+    def _ws_fail(self, why):
+        self._ws_fails += 1
+        self._ws_next = time.time() + min(600, 30 * 2 ** min(5, self._ws_fails - 1))
+        log.info("нода: ретранслятор недоступен (%s) — пока опросом", why)
+
+    def _ws_drop(self, why="", backoff=30):
+        ws, self._ws, self._ws_ready = self._ws, None, False
+        if ws is not None:
+            ws.close()
+            if why:
+                log.info("нода: связь с ретранслятором прервалась (%s) — пока опросом", why)
+            self._ws_next = time.time() + backoff
+
+    def _pull(self, wait):
+        """Ждать задание: через ретранслятор (если он есть и доступен) или опросом сайта. -> ответ как у /net/pull."""
+        import wsmini
+        ws = self._ws_open()
+        if ws is not None:
+            try:
+                if not self._ws_ready:
+                    ws.send({"ready": True})
+                    self._ws_ready = True
+                m = ws.recv(wait) or {}
+                if m.get("job"):
+                    self._ws_ready = False
+                    return {"job": m["job"], "rules_ver": m.get("rules_ver"), "via": "ws"}
+                if m.get("bye"):
+                    raise wsmini.WSError(str(m["bye"]))
+                if "on" in m and not m["on"]:
+                    return {"state": m.get("state") or "", "via": "ws"}
+                return {"via": "ws"}
+            except wsmini.WSError as e:
+                self._ws_drop(str(e))
+        d = self._fetch("/net/pull", {"wait": wait}, timeout=wait + 20)
+        r = str(d.get("relay") or "")
+        if r and r != self._ws_url:
+            self._ws_url, self._ws_next, self._ws_fails = r, 0.0, 0
+        return d
+
+    def _done(self, body, ws):
+        """Ответ сайту: через ретранслятор (там же, где пришло задание) или прямо /net/done."""
+        if ws and self._ws is not None:
+            import wsmini
+            try:
+                self._ws.send({"done": body})
+                end = time.monotonic() + 25
+                while time.monotonic() < end:
+                    m = self._ws.recv(end - time.monotonic())
+                    if m and "ack" in m:
+                        return
+                return
+            except wsmini.WSError as e:
+                self._ws_drop(str(e))
+        self._fetch("/net/done", body, timeout=20)
+
+    def _job(self, job, rr, ws=False):
         jid = str(job.get("id") or "")
         body = job.get("body") if isinstance(job.get("body"), dict) else {}
         # пришло в ту же секунду, когда человек сел за игру или выдернул зарядку, — отдать назад без штрафа
         why = blocked(dict(self.cfg(), done_ts=[]), self.e, me_busy=True)
         if why or self.stop_ev.is_set():
-            self._fetch("/net/done", {"id": jid, "code": 0, "body": "", "away": True}, timeout=15)
+            self._done({"id": jid, "code": 0, "body": "", "away": True}, ws)
             self._away_sent = False
             self._go_away()                               # отдала — значит, ушла (рецензия 0.87, С2): сайт не ждёт её минуту
             self.note("skip", "вопрос отдан назад: " + (why or "выключена"))
@@ -737,7 +837,7 @@ class Node:
         code, raw = ask_model(self.st.get("base") or "", self.st.get("model") or "", body, limit)
         ms = int((time.monotonic() - t0) * 1000)
         # не вышло — сайту только код (рецензия 0.87, М4: текст ошибки своей модели — адреса, пути — ему ни к чему)
-        self._fetch("/net/done", {"id": jid, "code": code if code == 200 else (code or 0), "body": raw if code == 200 else ""}, timeout=20)
+        self._done({"id": jid, "code": code if code == 200 else (code or 0), "body": raw if code == 200 else ""}, ws)
         if code == 200:
             try:
                 out = json.loads(raw)["choices"][0]["message"].get("content") or ""

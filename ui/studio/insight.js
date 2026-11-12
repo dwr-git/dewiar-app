@@ -268,6 +268,15 @@
     crawl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
     feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
     del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>' };
+  /* состояние источника: ошибка с объяснением, «ничего не нашлось» с подсказкой, прочитан, ждёт */
+  const why = (code) => T("src.why." + code.slice(1));
+  function srcState(s) {
+    if (s.err && s.err[0] === "@") return `<span class="rd-state err"><i></i>${esc(T("src.err"))}</span><small class="rd-why">${esc(why(s.err))}</small>`;
+    if (s.err) return `<span class="rd-state err" title="${esc(s.err)}"><i></i>${esc(T("src.err"))}</span>`;
+    if (s.last && s.found === 0) return `<span class="rd-state warn"><i></i>${esc(T("src.empty"))}</span><small class="rd-why">${esc(T(s.kind === "telegram" ? "src.empty.tg" : "src.empty.t"))}</small>`;
+    if (s.last) return `<span class="rd-state"><i></i>${esc(T("src.read", { t: ago(s.last) }))}</span>`;
+    return `<span class="rd-state wait"><i></i>${esc(T("src.wait"))}</span>`;
+  }
   async function renderSources() {
     const el = q("#rd-sources");
     let d; try { d = await call("insight_sources"); } catch (e) { toast(e.message); return; }
@@ -283,7 +292,7 @@
         ${d.sources.length ? `<div style="overflow-x:auto"><table class="rd-srcs"><thead><tr><th></th><th>${esc(T("src.col.src"))}</th><th>${esc(T("src.col.state"))}</th><th>${esc(T("src.col.week"))}</th><th>${esc(T("src.col.avg"))}</th><th></th></tr></thead><tbody>
           ${d.sources.map(s => `<tr data-id="${esc(s.id)}" class="${s.on === false ? "off" : ""}"><td><span class="rd-kind">${esc(KIND[s.kind] || "WEB")}</span></td>
             <td class="nm"><b>${esc(s.name)}</b><small>${esc(s.url)}</small></td>
-            <td>${s.err ? `<span class="rd-state err" title="${esc(s.err)}"><i></i>${esc(T("src.err"))}</span>` : s.last ? `<span class="rd-state"><i></i>${esc(T("src.read", { t: ago(s.last) }))}</span>` : `<span class="rd-state wait"><i></i>${esc(T("src.wait"))}</span>`}</td>
+            <td>${srcState(s)}</td>
             <td>${s.week}</td><td>${s.avg == null ? "—" : fmt(s.avg)}</td>
             <td><div class="rd-acts"><label class="tg" title="${esc(T("src.on"))}"><input type="checkbox" data-on ${s.on === false ? "" : "checked"} aria-label="${esc(T("src.on"))}"><i></i></label>
               <button class="rd-ico" data-crawl title="${esc(T("src.crawl"))}" aria-label="${esc(T("src.crawl"))}">${IC.crawl}</button>
@@ -293,7 +302,9 @@
     q("#rd-sab").onclick = async () => {
       const v = q("#rd-sa").value.trim(); if (!v) { q("#rd-sa").focus(); return; }
       try { const r = await call("insight_add", { text: v }); q("#rd-sa").value = r.bad.join("\n");
-        toast(r.added.length ? T("src.added", { n: r.added.length }) : T("src.noadd")); if (r.bad.length) toast(T("src.bad", { list: r.bad.slice(0, 3).join(", ") }), 4000);
+        toast(r.added.length ? T("src.added", { n: r.added.length }) : T("src.noadd"));
+        const codes = Object.values(r.why || {}), plain = r.bad.filter(b => !(r.why || {})[b]);
+        if (codes.length) toast(why("@" + codes[0]), 7000); else if (plain.length) toast(T("src.bad", { list: plain.slice(0, 3).join(", ") }), 4000);
         renderSources(); setTimeout(load, 8000); } catch (e) { toast(e.message); } };
     q("#rd-oneb").onclick = async () => {
       const u = q("#rd-one").value.trim(); if (!/^https?:\/\//.test(u)) { toast(T("one.bad")); q("#rd-one").focus(); return; }
@@ -304,7 +315,8 @@
     qa("tr[data-id]", el).forEach(tr => {
       const id = tr.dataset.id;
       q("[data-on]", tr).onchange = (e) => call("insight_src", { id, on: e.target.checked }).then(renderSources).catch(x => toast(x.message));
-      q("[data-crawl]", tr).onclick = async () => { toast(T("src.crawling")); try { await call("insight_src", { id, crawl: true }); toast(T("src.crawled")); } catch (e) { toast(e.message, 4000); } renderSources(); };
+      q("[data-crawl]", tr).onclick = async () => { toast(T("src.crawling")); try { const r = await call("insight_src", { id, crawl: true });
+        toast(r.err ? why(r.err) : r.found ? T("src.found", { n: r.found, m: r.new }) : T("src.found0"), r.err || !r.found ? 6000 : 3000); } catch (e) { toast(e.message, 4000); } renderSources(); };
       q("[data-feed]", tr).onclick = () => { RD.feed.q = q(".nm b", tr).textContent; tab("feed"); };
       q("[data-del]", tr).onclick = async () => { if (!(await ask(T("src.del.ask", { name: q(".nm b", tr).textContent }), { ok: T("src.del.ok") }))) return; await call("insight_src", { id, del: true }).catch(x => toast(x.message)); renderSources(); };
     });

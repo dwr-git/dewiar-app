@@ -29,9 +29,10 @@ ok(r[1] and r[1]["kind"] == "income" and r[1]["sum"] == 99, "возврат пр
 ok(r[2] is None and r[3] is None and r[4] is None and r[5] is None, "нулевая сумма, ссылка, текст, обрывок — не чек")
 ok("const rc = receiptQr(t);\n  if (rc) return receiptOffer(rc);" in src, "сканер: чек узнаётся до «В коде: …»")
 i = src.find("function receiptOffer(rc)")
-body = src[i:i + 2600]
+body = src[i:i + 3200]
 ok("money().some(x => String(x.note || \"\").includes(rc.id))" in body and "Этот чек уже записан" in body, "тот же чек второй раз не записывается")
-ok("date: rc.date" in body and 'currency: "RUB"' in body and "famShareSpend(x)" in body, "запись с датой чека, в рублях, и в общий бюджет семьи")
+ok("date: rc.date" in body and 'currency: cur' in body and 'rc.cur || "RUB"' in body and "famShareSpend(x)" in body,
+   "запись с датой чека, в рублях (чек России; электронный чек Беларуси — в BYN, №666), и в общий бюджет семьи")
 ok('sub: "QR, чек, штрихкод' in src, "в сканере подсказка: «чек»")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

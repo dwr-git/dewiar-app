@@ -60,7 +60,7 @@ ok(ti == "Заголовок статьи" and tx.startswith("Текст абз�
 
 # хранилище
 st = I.Store(tempfile.mkdtemp())
-added, bad = st.add_sources("@ai_newz https://habr.com/ru/rss/all/all/\nнепонятно @ai_newz")
+added, bad, _ = st.add_sources("@ai_newz https://habr.com/ru/rss/all/all/\nнепонятно @ai_newz")
 ok(len(added) == 2 and bad == ["непонятно"], f"добавить пачкой: два источника, повтор — мимо, непонятное — назван: {bad}")
 src = st.sources()[1]
 n1 = st.add_items(src, I.parse_feed(rss))

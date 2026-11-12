@@ -24,6 +24,7 @@ URGENT_MIN = 8.5                 # сигнал, с которого матер�
 URGENT_GAP = 3600                # срочное — не чаще раза в час
 TREND_DAYS = 8                   # спарклайн тренда — столько дней
 TYPES = ("release", "analysis", "news", "practice", "incident", "opinion", "video", "research")
+DETECT_V = 2                     # версия detect(): старые источники при обходе определяются заново
 KINDS = ("rss", "site", "youtube", "telegram", "reddit", "github", "vk", "dzen", "article")
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
@@ -67,6 +68,16 @@ def detect(link):
         ch = ch if ch != "s" else ""
         if ch:
             return {"kind": "telegram", "url": f"https://t.me/{ch}", "feed": f"https://t.me/s/{ch}", "name": "@" + ch}
+    if host == "web.telegram.org":                                       # веб-Telegram: #@канал читается, #-100… — нет
+        ch = (p.fragment or "").lstrip("@")
+        if re.fullmatch(r"[A-Za-z][\w]{3,31}", ch):
+            return {"kind": "telegram", "url": f"https://t.me/{ch}", "feed": f"https://t.me/s/{ch}", "name": "@" + ch}
+        return {"kind": "telegram", "url": s, "feed": "", "name": "Telegram", "bad": "tg_web"}
+    if host == "habr.com":                                               # «Моя лента» Хабра — страница, а не RSS
+        m = re.fullmatch(r"(?:/(ru|en))?/feed(?:/.*)?", path or "/feed")
+        if m:
+            lang = m[1] or "ru"
+            return {"kind": "rss", "url": s, "feed": f"https://habr.com/{lang}/rss/articles/?fl={lang}", "name": "Хабр"}
     if host.endswith("youtube.com") or host == "youtu.be":
         m = re.search(r"/channel/(UC[\w-]{20,})", path)
         feed = f"https://www.youtube.com/feeds/videos.xml?channel_id={m[1]}" if m else ""
@@ -97,6 +108,11 @@ def detect(link):
 def split_links(text):
     """Поле «Добавить источники»: по одной в строке, через пробел или запятую."""
     return [x for x in re.split(r"[\s,;]+", text or "") if x.strip()]
+
+
+def looks_html(text):
+    """Пришла страница, а не лента (RSS-адрес оказался обычной страницей)."""
+    return bool(re.search(r"<(html|body|div)\b", (text or "")[:20000], re.I)) and not re.search(r"<(rss|feed|rdf:RDF)\b", (text or "")[:4000], re.I)
 
 
 def find_feed(page, base):
@@ -262,25 +278,28 @@ class Store:
         return self.load("sources", [])
 
     def add_sources(self, text):
-        """-> (добавлены, не понятые) — по каждой ссылке поля «Добавить источники»."""
+        """-> (добавлены, не понятые, почему) — по каждой ссылке поля «Добавить источники». why: {ссылка: код} для
+        ссылок, которые понятны, но не читаются (веб-Telegram с номером канала)."""
         with self.lock:
             src = self.sources()
             have = {norm_link(s["url"]) for s in src}
-            added, bad = [], []
+            added, bad, why = [], [], {}
             for link in split_links(text):
                 d = detect(link)
-                if not d:
+                if not d or d.get("bad"):
                     bad.append(link)
+                    if d:
+                        why[link] = d["bad"]
                     continue
                 k = norm_link(d["url"])
                 if k in have:
                     continue
                 have.add(k)
-                d.update(id=hashlib.md5(k.encode()).hexdigest()[:10], on=True, added=int(time.time()), last=0, err="", n_week=0)
+                d.update(id=hashlib.md5(k.encode()).hexdigest()[:10], on=True, added=int(time.time()), last=0, err="", n_week=0, v=DETECT_V)
                 src.append(d)
                 added.append(d)
             self.save("sources", src)
-            return added, bad
+            return added, bad, why
 
     def update_source(self, sid, **kw):
         with self.lock:

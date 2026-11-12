@@ -4819,7 +4819,9 @@ async function runTool(name, a) {
     case "team_status": case "team_assign": case "team_message": return await bsTool(name, a || {});
     case "close_where": return await radWhereText(a.who || "");
     case "close_wave": { const p = await radWave(a.to || ""); return `Помахала: ${p.name} увидит и услышит «машет вам». Скажи коротко.`; }
-    case "scan_code": scanCode(); return "Сканер открыт. Скажи коротко: «Наведите камеру на код».";
+    // №666 (12.11): «как только распознается — я сразу внесу расход» — а код разбирает сканер, не модель; потом модель
+    // вписала трату с чужой суммой. Обещать и выдумывать сумму — нельзя
+    case "scan_code": scanCode(); return window.t("tool.scan_code.opened");
     case "app_help": return guideAnswer(a.query || "");
     case "app_update": return await updateSay(a.action === "install");
     case "close_call": { const p = await clCall(a.to || "", !!a.video); return `Звоню ${p.name}. Ничего не говори — идёт звонок.`; }
@@ -10468,23 +10470,64 @@ function receiptQr(t) {
   return { date: `${m[1]}-${m[2]}-${m[3]}`, time: `${m[4]}:${m[5]}`, sum, kind: String(p.n) === "2" || String(p.n) === "3" ? "income" : "expense",
     id: `чек ${p.fn}/${p.i || "?"}/${p.fp || "?"}` };
 }
+/* №666 (12.11, Сергей, Беларусь): «при сканировании QR-кода не добавляет в расходы» — у белорусского электронного чека
+   в QR только ссылка (r.eplus.by/…), суммы в коде нет. Сканер узнаёт такой чек, читает его страницу и предлагает
+   «Записать трату» в белорусских рублях; страница не прочиталась — честно просит назвать сумму (не придумывает). */
+const ERECEIPT = [{ rx: /(^|\.)eplus\.by$/i, cur: "BYN" }];
+function ereceiptHost(url) {
+  let h = ""; try { h = new URL(url).hostname; } catch (e) { return null; }
+  return ERECEIPT.find(x => x.rx.test(h)) || null;
+}
+function ereceiptParse(html) {
+  const t = String(html || "").replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/g, " ").replace(/\s+/g, " ");
+  const m = /(?:ИТОГО(?:\s+К\s+ОПЛАТЕ)?|Итого(?:\s+к\s+оплате)?|К\s+оплате|Всего(?:\s+к\s+оплате)?|Сумма\s+(?:чека|покупки|оплаты))\s*[:=]?\s*(?:BYN|руб\.?|р\.)?\s*(\d{1,3}(?:[ \u00a0]?\d{3})*(?:[.,]\d{1,2})?)/.exec(t);
+  if (!m) return null;
+  const sum = Math.round(parseFloat(m[1].replace(/[ \u00a0]/g, "").replace(",", ".")) * 100) / 100;
+  if (!(sum > 0) || sum > 1e7) return null;
+  const d = /(\d{2})\.(\d{2})\.(\d{4})(?:\D{1,3}(\d{1,2}):(\d{2}))?/.exec(t), now = new Date();
+  return { sum, date: d ? `${d[3]}-${d[2]}-${d[1]}` : now.toISOString().slice(0, 10), time: d && d[4] ? `${d[4].padStart(2, "0")}:${d[5]}` : `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` };
+}
+async function ereceiptFlow(url, er) {
+  showBot(window.t("scan.ereceipt.reading"));
+  let rc = null;
+  try { rc = ereceiptParse((await http("GET", url, { headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 14) Dewiar" }, timeout: 15000 })).body); }
+  catch (e) { plog("warn", "e-receipt: " + e.message); }
+  if (!rc) {
+    const msg = window.t("scan.ereceipt.nosum");
+    showBot(msg); scanNote(window.t("scan.note.ereceipt_nosum", { url }));
+    $("#card").innerHTML = `<div class="start"><button class="btn p" id="sc-open">${esc(window.t("scan.ereceipt.open"))}</button></div>`;
+    $("#sc-open").onclick = () => D.openUrl(url);
+    say(window.t("scan.ereceipt.nosum_say"));
+    return;
+  }
+  return receiptOffer(Object.assign(rc, { kind: "expense", id: "e-receipt " + url.split("/").pop().slice(0, 40), cur: er.cur }));
+}
+/* Что показал сканер — в историю разговора: следующую просьбу («я сосканировал, что теперь?») модель понимает по нему,
+   а не придумывает (№666: вписала трату с суммой прошлого дохода) */
+function scanNote(text) {
+  try { history.push({ role: "assistant", content: window.t("scan.note.prefix") + " " + String(text).slice(0, 600), who: persona().id, t: Date.now() }); saveH(); } catch (e) { }
+}
+const CUR_WORD = { RUB: ["₽", "money.word.RUB"], BYN: ["BYN", "money.word.BYN"] };
 function receiptOffer(rc) {
   const [y, mo, d] = rc.date.split("-").map(Number), when = `${d} ${["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"][mo - 1]} ${rc.time}`;
   const amt = rc.sum.toLocaleString("ru-RU", { minimumFractionDigits: rc.sum % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const cur = rc.cur || "RUB", [sym, wkey] = CUR_WORD[cur] || [cur, ""], word = wkey ? window.t(wkey) : cur;
   const have = money().some(x => String(x.note || "").includes(rc.id));
-  showBot(`🧾 Чек на ${amt} ₽ — ${when}${rc.kind === "income" ? " (возврат)" : ""}.` + (have ? " Этот чек уже записан в «Деньгах»." : ""));
+  showBot(`🧾 Чек на ${amt} ${sym} — ${when}${rc.kind === "income" ? " (возврат)" : ""}.` + (have ? " Этот чек уже записан в «Деньгах»." : ""));
+  scanNote(window.t(have ? "scan.note.receipt_have" : "scan.note.receipt", { amt: `${amt} ${sym}`, when }));
   $("#card").innerHTML = `<div class="start">${have ? "" : `<button class="btn p" id="sc-rc">${rc.kind === "income" ? "Записать возврат" : "Записать трату"}</button>`}<button class="btn" id="sc-copy">Скопировать</button></div>`;
-  $("#sc-copy").onclick = () => { D.copy(`${amt} ₽, ${when}`); toast("Скопировано"); };
+  $("#sc-copy").onclick = () => { D.copy(`${amt} ${sym}, ${when}`); toast("Скопировано"); };
   if (!have) $("#sc-rc").onclick = () => {
     const m = money(); if (m.some(x => String(x.note || "").includes(rc.id))) { toast("Этот чек уже записан"); return; }
-    const x = { id: uid("m"), date: rc.date, kind: rc.kind, amount: rc.sum, currency: "RUB", category: rc.kind === "income" ? "Возврат" : "Покупки", note: rc.id };
+    const x = { id: uid("m"), date: rc.date, kind: rc.kind, amount: rc.sum, currency: cur, category: rc.kind === "income" ? "Возврат" : "Покупки", note: rc.id };
     m.push(x); saveMoney(m);
     try { famShareSpend(x); } catch (e) { plog("warn", "семья: " + e.message); }
     $("#card").innerHTML = "";
-    showBot(`Записала: ${rc.kind === "income" ? "+" : "−"}${amt} ₽, ${x.category}, ${when}. Категорию можно поправить словами: «это были продукты».`);
-    say(`Записала ${rc.kind === "income" ? "возврат" : "трату"} ${amt} рублей.`);
+    showBot(`Записала: ${rc.kind === "income" ? "+" : "−"}${amt} ${sym}, ${x.category}, ${when}. Категорию можно поправить словами: «это были продукты».`);
+    scanNote(window.t("scan.note.saved", { amt: `${rc.kind === "income" ? "+" : "−"}${amt} ${sym}`, cat: x.category }));
+    say(`Записала ${rc.kind === "income" ? "возврат" : "трату"} ${amt} ${word}.`);
   };
-  say(`Чек на ${amt} рублей.` + (have ? " Он уже записан." : " Записать трату?"));
+  say(`Чек на ${amt} ${word}.` + (have ? " Он уже записан." : " Записать трату?"));
 }
 function scanResult(txt, format) {
   const t = String(txt || "").trim();
@@ -10496,8 +10539,11 @@ function scanResult(txt, format) {
   if (/^dewiar:\/\/ref|download\.php\?(?:.*&)?ref=/.test(t)) { const c = (/[?&](?:c|ref)=([A-Za-z0-9]+)/.exec(t) || [])[1] || ""; return handleIntent({ action: "link", url: "dewiar://ref?c=" + c }); }
   if (/^dewiar:/.test(t)) return handleIntent({ action: "link", url: t });
   if (/^https?:\/\//i.test(t)) {
+    const er = ereceiptHost(t);
+    if (er) return ereceiptFlow(t, er);
     let host = t; try { host = new URL(t).hostname; } catch (e) { }
     showBot(`В коде ссылка: ${t}`);
+    scanNote(window.t("scan.note.link", { url: t }));
     $("#card").innerHTML = `<div class="start"><button class="btn p" id="sc-open">Открыть ${esc(host)}</button><button class="btn" id="sc-copy">Скопировать</button></div>`;
     $("#sc-open").onclick = () => D.openUrl(t); $("#sc-copy").onclick = () => { D.copy(t); toast("Скопировано"); };
     say("В коде ссылка на " + host.replace(/^www\./, ""));
@@ -10514,6 +10560,7 @@ function scanResult(txt, format) {
   const rc = receiptQr(t);
   if (rc) return receiptOffer(rc);
   showBot("В коде: " + t);
+  scanNote(window.t("scan.note.text", { text: t }));
   $("#card").innerHTML = `<div class="start"><button class="btn" id="sc-copy">Скопировать</button></div>`;
   $("#sc-copy").onclick = () => { D.copy(t); toast("Скопировано"); };
   if (t.length < 300) say("В коде написано: " + t);
