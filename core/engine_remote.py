@@ -305,12 +305,15 @@ class RemoteMixin:
         self.ask(text, images, via={"done": done, "confirm": tg.ask_confirm, "speak": bool(tg.data.get("voice_home")) and not self.server,
                                     "from": tg.TITLE})
 
-    def push(self, title, text="", critical=False, file=None, telegram=True, quiet=False):
+    def push(self, title, text="", critical=False, file=None, telegram=True, quiet=False, **card):
         """Уведомление о важном: всплывающее окно системы + событие для виджета и студии + Telegram (с файлом итога).
-        quiet — тихое (№591): без всплывающего окна системы, виджет из трея не поднимается — строка в виджете и студии."""
+        quiet — тихое (№591): без всплывающего окна системы, виджет из трея не поднимается — строка в виджете и студии.
+        card — для виджета (12.11, владелец про «Радар: важное»: «всё в кучу, слитно»): open — раздел студии по кнопке,
+        head/body — заголовок и суть отдельно."""
         if not quiet:
             desktop_notify(f"{title}\n{text}".strip(), critical=critical)
-        self.emit("push", title=title, text=text, critical=critical, **({"quiet": True} if quiet else {}))
+        self.emit("push", title=title, text=text, critical=critical, **({"quiet": True} if quiet else {}),
+                  **{k: v for k, v in card.items() if k in ("open", "head", "body") and v})
         if telegram and self.chat.notify_on():
             threading.Thread(target=self.chat.notify, args=(f"🔔 {title}" + (f"\n{text}" if text else ""),),
                              kwargs={"file": file}, daemon=True).start()

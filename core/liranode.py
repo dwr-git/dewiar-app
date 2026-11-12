@@ -48,6 +48,27 @@ JOB_CHARS = 8000          # всё задание (все тексты) — не
 JOB_MSGS = 6
 PULL_MAX = 262_144        # ответ сайта на опрос больше 256 КБ — не читаем (задание и так ≤ JOB_CHARS)
 LOCAL_HOSTS = ("127.0.0.1", "::1", "localhost")
+
+
+def _private(host):
+    import ipaddress
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
+
+
+def relay_url_ok(u, me, pub):
+    """Ретранслятор (urlsplit-ы): u — его адрес, me — куда нода ходит сейчас (дома — адрес сайта в сети), pub — адрес сайта
+    из настроек. wss — того же сайта (или его публичного имени); ws (без шифрования) — только тот же адрес в домашней сети
+    или на этой машине: так же, как нода дома и так ходит на сайт (12.11: дома нода ходила на 192.168.1.46, а ей
+    предлагали wss://dewiar.pro — имена не совпали, и она молча оставалась на опросе)."""
+    h = u.hostname or ""
+    if not h or u.scheme not in ("wss", "ws"):
+        return False
+    if u.scheme == "wss":
+        return h in (me.hostname, pub.hostname)
+    return h == me.hostname and (h in LOCAL_HOSTS or _private(h))
 THINK_RX = re.compile(r"<think>.*?(?:</think>|$)", re.S)
 
 
@@ -198,6 +219,8 @@ def blocked(cfg, engine=None, now=None, me_busy=False):
         h = time.localtime(now).tm_hour
         if not (NIGHT[0] <= h < NIGHT[1]):
             return "сейчас не ночь — работаю с 0 до 7"
+    if is_lan(cfg.get("base") or ""):
+        return ""                                      # модель на сервере в сети — своя видеокарта и процессор ни при чём
     g = SYS.gpu()
     if g and g.get("temp") is not None and g["temp"] >= GPU_HOT:
         return f"видеокарта горячая ({int(g['temp'])} °C) — остывает"
@@ -216,8 +239,8 @@ def blocked(cfg, engine=None, now=None, me_busy=False):
 
 # ------------------------------------------------------------- модель -------------------------------------------------------------
 def models_here(engine=None):
-    """Свои модели на этом компьютере: запущенные Ollama, LM Studio, llama.cpp, vLLM (обычные порты) и свои профили «Мозга»
-    с адресом 127.0.0.1. -> [{name, base_url, models}]."""
+    """Свои модели: запущенные на этом компьютере Ollama, LM Studio, llama.cpp, vLLM (обычные порты) и свои профили «Мозга»
+    с адресом 127.0.0.1 или своего сервера в домашней сети (is_lan). -> [{name, base_url, models, lan?}]."""
     import llm
     out, seen = [], set()
     try:
@@ -229,7 +252,7 @@ def models_here(engine=None):
     if engine is not None:
         for p in (engine.s.get("llm", "profiles") or {}).values():
             b = str(p.get("base_url") or "").rstrip("/")
-            if not is_local(b):
+            if not is_own(b):
                 continue
             if p.get("kind") == "ollama" and not b.endswith("/v1"):
                 b += "/v1"
@@ -237,7 +260,7 @@ def models_here(engine=None):
                 continue
             ids = llm._models_at(b, 1.5)
             if ids is not None:
-                out.append({"name": p.get("name") or "своя модель", "base_url": b, "models": ids})
+                out.append({"name": p.get("name") or "своя модель", "base_url": b, "models": ids, **({"lan": True} if is_lan(b) else {})})
                 seen.add(b)
     return out
 
@@ -252,6 +275,26 @@ def is_local(base):
             and (u.port is None or 0 < u.port < 65536)
     except ValueError:
         return False
+
+
+def is_lan(base):
+    """Своя модель на сервере в домашней сети (№669, 12.11: «Ollama и мои серверы крутятся на другом железе»): адрес —
+    частный IPv4 цифрами (10.x, 172.16–31.x, 192.168.x), без имени и пароля. Берётся только из своих профилей «Мозга» —
+    сайт адрес модели не задаёт."""
+    from urllib.parse import urlsplit
+    import ipaddress
+    try:
+        u = urlsplit(str(base or ""))
+        ip = ipaddress.IPv4Address(u.hostname or "")
+        return u.scheme in ("http", "https") and u.username is None and u.password is None and ip.is_private \
+            and not ip.is_loopback and not ip.is_link_local and (u.port is None or 0 < u.port < 65536)
+    except ValueError:
+        return False
+
+
+def is_own(base):
+    """Своя модель: на этом компьютере или на своём сервере в домашней сети."""
+    return is_local(base) or is_lan(base)
 
 
 def job_clean(body):
@@ -289,8 +332,8 @@ def ask_model(base, model, body, timeout):
     """Задание — своей модели (OpenAI-совместимый /chat/completions, без потока). -> (код, ответ сайту: чистый JSON или,
     если не вышло, причина — её сайту не отправляем, только код)."""
     import httpx
-    if not is_local(base):
-        return 0, "своя модель — только на этом компьютере"
+    if not is_own(base):
+        return 0, "своя модель — только на этом компьютере или своём сервере в домашней сети"
     b, why = job_clean(body)
     if b is None:
         return 0, why
@@ -353,6 +396,7 @@ class Node:
         self._ws_url = ""
         self._ws_next = 0.0
         self._ws_fails = 0
+        self._ws_why = ""
         self._ws_ready = False
 
     # --- файл состояния
@@ -385,7 +429,8 @@ class Node:
 
     def cfg(self):
         with self.lock:
-            return {"when": self.st.get("when") or "idle", "share": self.st.get("share") or "low", "done_ts": list(self.st.get("done_ts") or [])}
+            return {"when": self.st.get("when") or "idle", "share": self.st.get("share") or "low", "done_ts": list(self.st.get("done_ts") or []),
+                    "base": self.st.get("base") or ""}
 
     def note(self, kind, text):
         """Запись в журнал: ok — ответила, skip — пауза/пропуск, err — ошибка, info — прочее. Без чужих текстов."""
@@ -481,17 +526,20 @@ class Node:
                 continue
             ms = [m for m in f["models"] if not re.search(r"embed|whisper|rerank|tts|vision-only", m, re.I)]
             if model and model in f["models"]:
-                pick = {"base": f["base_url"], "model": model, "app": f["name"]}
+                pick = {"base": f["base_url"], "model": model, "app": f["name"], "lan": bool(f.get("lan"))}
             elif ms and not pick:
                 import llm
-                pick = {"base": f["base_url"], "model": llm.pick_model(ms) or ms[0], "app": f["name"]}
+                pick = {"base": f["base_url"], "model": llm.pick_model(ms) or ms[0], "app": f["name"], "lan": bool(f.get("lan"))}
         if pick:
             add("model", True, "Своя модель", f"{pick['app']}: {pick['model']}")
         else:
             add("model", False, "Своя модель", "не нашла запущенной Ollama, LM Studio или llama.cpp — поставьте Ollama и модель (например, qwen3:8b), "
-                "запустите и проверьте снова")
+                "запустите и проверьте снова. Модель на своём сервере в домашней сети — подключите его в «Мозге» (адрес вида "
+                "http://192.168.1.10:11434) и проверьте снова")
         g = SYS.gpu(fresh=True)
-        if g:
+        if pick and pick.get("lan"):
+            add("gpu", None, "Видеокарта", "у сервера в сети — решит замер скорости")
+        elif g:
             enough = g["mem_gb"] >= 8 or g.get("apple")
             add("gpu", True if enough else False, "Видеокарта", f"{g['name']}, {str(g['mem_gb']).replace('.', ',')} ГБ" + ("" if enough else " — мало, нужно от 8 ГБ"))
         else:
@@ -532,15 +580,15 @@ class Node:
             raise NodeError("сначала войдите в Dewiar.pro: аккаунт или ключ")
         if not base or not model:
             raise NodeError("сначала нажмите «Подходит ли мой компьютер» — выберу модель")
-        if not is_local(base):
-            raise NodeError("нода работает только со своей моделью на этом компьютере (127.0.0.1)")
+        if not is_own(base):
+            raise NodeError("нода работает только со своей моделью — на этом компьютере или своём сервере в домашней сети")
         rr, err = self.rules()
         if err:
             raise NodeError(err)
         if not rr.get("on") or (rr.get("app") or {}).get("on") is False:
             raise NodeError("сеть пока закрыта владельцем Dewiar")
         port = int((re.search(r":(\d+)", base.split("//", 1)[-1]) or [0, 80])[1])
-        g = SYS.gpu() or {}
+        g = {} if is_lan(base) else (SYS.gpu() or {})          # модель на сервере в сети — не своя видеокарта
         reg = {"name": "Нода в Dewiar" + (" · " + g["name"][:40] if g.get("name") else ""), "kind": "app", "link": "pull",
                "ports": [{"port": port, "model": model[:160], "gpu_name": (g.get("name") or "")[:120]}]}
         try:
@@ -723,14 +771,14 @@ class Node:
 
     # --- ретранслятор (0.92)
     def _relay_ok(self, url):
-        """Адрес ретранслятора — только на том же сайте (ключ ноды чужому серверу не отдаём)."""
+        """Адрес ретранслятора — только на том же сайте (ключ ноды чужому серверу не отдаём): см. relay_url_ok."""
         from urllib.parse import urlsplit
         try:
             from cloud import api_base
             u, me = urlsplit(url), urlsplit(api_base(self._url()))
         except ValueError:
             return False
-        return u.scheme in ("wss", "ws") and bool(u.hostname) and u.hostname == me.hostname and (u.scheme == "wss" or u.hostname in LOCAL_HOSTS)
+        return relay_url_ok(u, me, urlsplit(self._url()))
 
     def _ws_open(self):
         if self._ws is not None:
@@ -755,11 +803,21 @@ class Node:
             ws.close()
             self._ws_fail(hello.get("error") or "ретранслятор не принял ноду")
             return None
-        self._ws, self._ws_fails, self._ws_ready = ws, 0, False
+        self._ws, self._ws_fails, self._ws_ready, self._ws_why = ws, 0, False, ""
         self.note("info", "на связи через ретранслятор — одно постоянное соединение вместо опросов")
         return ws
 
+    def _ws_note(self):
+        """Для кабинета («Сеть» → «Ретранслятор»): почему опросом. none — сайт ретранслятор не предложил; other — адрес
+        не этого сайта; fail: … — не дошла; wait — пробует снова."""
+        if not self._ws_url:
+            return "none"
+        if not self._relay_ok(self._ws_url):
+            return "other"
+        return ("fail: " + self._ws_why) if getattr(self, "_ws_why", "") else "wait"
+
     def _ws_fail(self, why):
+        self._ws_why = str(why)[:100]
         self._ws_fails += 1
         self._ws_next = time.time() + min(600, 30 * 2 ** min(5, self._ws_fails - 1))
         log.info("нода: ретранслятор недоступен (%s) — пока опросом", why)
@@ -792,7 +850,7 @@ class Node:
                 return {"via": "ws"}
             except wsmini.WSError as e:
                 self._ws_drop(str(e))
-        d = self._fetch("/net/pull", {"wait": wait}, timeout=wait + 20)
+        d = self._fetch("/net/pull", {"wait": wait, "ws": self._ws_note()}, timeout=wait + 20)
         r = str(d.get("relay") or "")
         if r and r != self._ws_url:
             self._ws_url, self._ws_next, self._ws_fails = r, 0.0, 0

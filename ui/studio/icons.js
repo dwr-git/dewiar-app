@@ -75,8 +75,18 @@ const GUIDE_OF = { ideas: "ideas", devices: "sync", personas: "personas", memory
   me: "notes-memory", folder: "folder-docs", docs: "my-docs", senior: "senior", watch: "watch", dw: "brain-account", connect: "install", brain: "brain-account", ears: "talk", voice: "voices",
   hands: "hands", skills: "skills-mcp-servers", sound: "talk", servers: "skills-mcp-servers", safety: "privacy", prompter: "prompter", about: "troubleshooting",
   sites: "sites", sitechat: "sitechat", insight: "radar" };
+/* Справка раздела: assets/help.js или словарь (12.11, «Радар» — сразу по-русски и по-английски): help.<раздел>.title, .what,
+   .how1…, .try1… («фраза → что получится»), .tip1… */
+function helpOf(k) {
+  if ((window.DEWIAR_HELP || {})[k]) return window.DEWIAR_HELP[k];
+  const t = (x) => (window.t ? window.t(x) : x), base = "help." + k + ".";
+  if (t(base + "title") === base + "title") return null;
+  const list = (p) => { const o = []; for (let i = 1; i < 20; i++) { const kk = base + p + i, v = t(kk); if (v === kk) break; o.push(v); } return o; };
+  return { title: t(base + "title"), what: t(base + "what"), how: list("how"), tips: list("tip"),
+    try: list("try").map(x => { const [say, get] = x.split(" → "); return { say, get: get || "" }; }) };
+}
 function showHelp(k) {
-  const H = (window.DEWIAR_HELP || {})[k]; if (!H) return;
+  const H = helpOf(k); if (!H) return;
   const li = (a) => (a || []).map(x => `<li>${escH(x)}</li>`).join("");
   // пример — объект {say, get} или просто фраза (у «Суфлёра» и «О программе» строкой было «undefined», 30.10)
   const TRY = (H.try || []).map(x => typeof x === "string" ? { say: x, get: "" } : x);
@@ -113,7 +123,7 @@ async function helpLessons(k) {
 /* id заголовка переезжает на вложенный span: код меняет текст в нём и не затирает кнопки «?», «жучок» и «лампочку» */
 function hbSpan(h) { if (h.id) { const sp = document.createElement("span"); sp.id = h.id; h.removeAttribute("id"); sp.append(...h.childNodes); h.appendChild(sp); } }
 $$("main section[id^='p-']").forEach(s => {
-  const k = s.id.slice(2), h = s.querySelector("h1"); if (!h || !(window.DEWIAR_HELP || {})[k]) return;
+  const k = s.id.slice(2), h = s.querySelector("h1"); if (!h || !helpOf(k)) return;
   hbSpan(h);
   const b = document.createElement("button"); b.className = "hbtn"; b.textContent = "?"; b.title = "Как работает этот раздел";
   b.onclick = (e) => { e.stopPropagation(); showHelp(k); }; h.appendChild(b);

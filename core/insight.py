@@ -229,8 +229,9 @@ def parse_page_links(page, base):
     return out[:40]
 
 
-def article_text(page):
-    """Текст статьи со страницы: <article> или самый длинный блок абзацев; заголовок — <h1> или <title>."""
+def article_text(page, limit=TEXT_MAX):
+    """Текст статьи со страницы: <article> или самый длинный блок абзацев; заголовок — <h1> или <title>. limit — сколько
+    знаков (для разбора — начало; для «читалки» студии — целиком, с запасом)."""
     t = re.search(r"<h1[^>]*>(.*?)</h1>", page or "", re.S | re.I) or re.search(r"<title[^>]*>(.*?)</title>", page or "", re.S | re.I)
     title = _strip_tags(t.group(1)) if t else ""
     a = re.search(r"<article[^>]*>(.*?)</article>", page or "", re.S | re.I)
@@ -240,7 +241,10 @@ def article_text(page):
     if not text:
         meta = re.search(r'<meta[^>]+(?:name|property)=["\'](?:og:)?description["\'][^>]+content=["\']([^"\']+)', page or "", re.I)
         text = _html.unescape(meta[1]) if meta else ""
-    return title, text[:TEXT_MAX]
+    return title, text[:limit]
+
+
+READ_MAX = 60000                 # «читалка»: текст статьи целиком (знаков)
 
 
 # ---------------- хранилище ----------------
@@ -369,6 +373,20 @@ def lang_name(lang):
     return "English" if (lang or "ru").startswith("en") else "русский"
 
 
+def today_line(lang="ru", now=None):
+    """Владелец 12.11: «гипотезы — в прошедшем времени… модель не знает текущее время». Модель знает мир только до своего
+    обучения — сегодняшнюю дату даём в каждой подсказке Радара, с датами материалов."""
+    d = datetime.fromtimestamp(now or time.time())
+    return (f"Today is {d:%Y-%m-%d}. Treat materials by their dates; your own knowledge may be outdated — the materials are newer."
+            if (lang or "ru").startswith("en") else
+            f"Сегодня {d:%Y-%m-%d}. Смотри на даты материалов; твои собственные знания могут быть устаревшими — материалы новее.")
+
+
+def _date(x):
+    ts = x.get("ts") or x.get("seen") or 0
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d") if ts else "?"
+
+
 def analyze_prompt(mission, item, lang="ru"):
     """Подсказка разбора одного материала -> (system, user). Сигнал — не «интересно ли», а насколько это меняет картину."""
     en = (lang or "ru").startswith("en")
@@ -388,7 +406,7 @@ def analyze_prompt(mission, item, lang="ru"):
            f"summary и why — на языке: {lang_name(lang)}. Не придумывай того, чего нет в тексте."))
     user = ((f"Niche (mission): {mission or 'not set — judge for a general professional reader'}\n" if en else
              f"Ниша (миссия): {mission or 'не задана — оценивай для профессионала вообще'}\n")
-            + f"Source: {item.get('src_name', '')}\nTitle: {item.get('title', '')}\nURL: {item.get('url', '')}\n\n"
+            + f"{today_line(lang)}\nSource: {item.get('src_name', '')}\nDate: {_date(item)}\nTitle: {item.get('title', '')}\nURL: {item.get('url', '')}\n\n"
             + (item.get("text") or "")[:TEXT_MAX])
     return system, user
 
@@ -426,7 +444,7 @@ def brief_prompt(mission, items, tr, lang="ru"):
     """Бриф дня по разобранному за сутки -> (system, user)."""
     en = (lang or "ru").startswith("en")
     top = sorted(items, key=lambda x: -x["a"]["signal"])[:25]
-    lines = "\n".join(f"[{x['id']}] ({x['a']['signal']}) {x['title']} — {x['a']['summary']}" for x in top)
+    lines = "\n".join(f"[{x['id']}] {_date(x)} ({x['a']['signal']}) {x['title']} — {x['a']['summary']}" for x in top)
     tl = ", ".join(f"{t['name']} ({t['status']}, {t['day']} за сутки)" for t in tr[:10])
     system = (("You are the analyst of this niche. Write the morning brief as JSON only: " if en else
                "Ты — аналитик этой ниши. Составь утренний бриф — ТОЛЬКО JSON: ")
@@ -434,8 +452,8 @@ def brief_prompt(mission, items, tr, lang="ru"):
               '"main": [{"id": "material id", "why": "2–3 sentences: what it means and what to do"}] (3 items)}. '
               + (f"Language: {lang_name(lang)}. Only facts from the materials; no generic phrases."
                  if en else f"Язык: {lang_name(lang)}. Только факты из материалов; без общих слов."))
-    user = (f"{'Niche' if en else 'Ниша'}: {mission or '—'}\n{'Trends' if en else 'Тренды'}: {tl or '—'}\n\n"
-            f"{'Materials (id, signal, title — summary)' if en else 'Материалы (id, сигнал, заголовок — суть)'}:\n{lines}")
+    user = (f"{today_line(lang)}\n{'Niche' if en else 'Ниша'}: {mission or '—'}\n{'Trends' if en else 'Тренды'}: {tl or '—'}\n\n"
+            f"{'Materials (id, date, signal, title — summary)' if en else 'Материалы (id, дата, сигнал, заголовок — суть)'}:\n{lines}")
     return system, user
 
 
@@ -454,17 +472,21 @@ def parse_brief(raw, items):
 def evolve_prompt(mission, mind, items, lang="ru"):
     """Ночная «эволюция» разума: тезисы картины мира с опорой на материалы, гипотезы (новые и проверка старых)."""
     en = (lang or "ru").startswith("en")
-    lines = "\n".join(f"[{x['id']}] ({x['a']['signal']}) {x['title']} — {x['a']['summary']}"
+    lines = "\n".join(f"[{x['id']}] {_date(x)} ({x['a']['signal']}) {x['title']} — {x['a']['summary']}"
                       for x in sorted(items, key=lambda x: -x["a"]["signal"])[:40])
+    today = datetime.now().date()
     th = "\n".join(f"- {t['text']}" for t in (mind.get("theses") or [])[:12]) or "—"
     hy = "\n".join(f"- [{h['id']}] {h['text']} (до {h.get('due', '?')})" for h in (mind.get("hyps") or []) if h.get("state") == "open") or "—"
     system = (("You maintain an expert's picture of the niche. JSON only: " if en else "Ты ведёшь картину ниши эксперта. Только JSON: ")
               + '{"theses": [{"text": "a claim about the niche now", "refs": ["material ids"]}] (up to 8, each backed by refs), '
-              '"new_hyps": [{"text": "a checkable forecast", "due": "YYYY-MM-DD within 60 days"}] (up to 3), '
+              f'"new_hyps": [{{"text": "a checkable forecast about the FUTURE", "due": "YYYY-MM-DD between {today + timedelta(days=7)} and {today + timedelta(days=60)}"}}] (up to 3), '
               '"checks": [{"id": "hypothesis id", "state": "confirmed|refuted|open", "refs": ["ids"]}]} '
-              + (f"Language: {lang_name(lang)}. No claim without refs." if en else f"Язык: {lang_name(lang)}. Ни одного тезиса без ссылок."))
-    user = (f"Niche: {mission or '—'}\nCurrent theses:\n{th}\nOpen hypotheses:\n{hy}\n\nNew materials:\n{lines}" if en else
-            f"Ниша: {mission or '—'}\nТекущие тезисы:\n{th}\nОткрытые гипотезы:\n{hy}\n\nНовые материалы:\n{lines}")
+              + (f"Language: {lang_name(lang)}. No claim without refs. Theses describe the niche NOW (by material dates); a forecast is "
+                 f"only about what has not happened yet — never a date before today ({today})."
+                 if en else f"Язык: {lang_name(lang)}. Ни одного тезиса без ссылок. Тезисы — о нише СЕЙЧАС (по датам материалов); прогноз — "
+                 f"только о том, что ещё не случилось, и никогда не о дате раньше сегодняшней ({today})."))
+    user = (f"{today_line(lang)}\nNiche: {mission or '—'}\nCurrent theses:\n{th}\nOpen hypotheses:\n{hy}\n\nNew materials:\n{lines}" if en else
+            f"{today_line(lang)}\nНиша: {mission or '—'}\nТекущие тезисы:\n{th}\nОткрытые гипотезы:\n{hy}\n\nНовые материалы:\n{lines}")
     return system, user
 
 
@@ -487,8 +509,11 @@ def apply_evolve(mind, raw, items):
         if h and h.get("state") == "open" and st in ("confirmed", "refuted"):
             h.update(state=st, closed=int(time.time()), refs=[r for r in (c.get("refs") or []) if r in ids][:5])
             changed += 1
+    today = datetime.now().date()
     for n in (d.get("new_hyps") or [])[:3]:
         if isinstance(n, dict) and str(n.get("text") or "").strip():
+            if not due_ok(n.get("due"), today):              # прогноз в прошлое (12.11) или без срока — не прогноз
+                continue
             hid = hashlib.md5(str(n["text"]).encode()).hexdigest()[:8]
             if hid not in by:
                 hyps.append({"id": hid, "text": str(n["text"]).strip()[:300], "due": str(n.get("due") or "")[:10], "state": "open",
@@ -500,6 +525,33 @@ def apply_evolve(mind, raw, items):
     m["diary"] = (list(m.get("diary") or []) + [{"v": v, "at": int(time.time()), "theses": len(th), "new_hyps": len(d.get("new_hyps") or []),
                                                   "closed": changed}])[-60:]
     return m
+
+
+def due_ok(due, today=None):
+    """Срок гипотезы: дата позже сегодняшней и не дальше полугода."""
+    today = today or datetime.now().date()
+    try:
+        d = datetime.strptime(str(due or "")[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    return today < d <= today + timedelta(days=183)
+
+
+def clean_hyps(mind):
+    """Открытые гипотезы со сроком раньше дня, когда их выдвинули, — «прогноз в прошлое» (до 0.92.2 модель не знала даты):
+    убираем. -> (разум, сколько убрали)."""
+    hs = list(mind.get("hyps") or [])
+    keep = []
+    for h in hs:
+        try:
+            due = datetime.strptime(str(h.get("due") or "")[:10], "%Y-%m-%d").date()
+        except ValueError:
+            due = None
+        born = datetime.fromtimestamp(int(h.get("at") or 0)).date() if h.get("at") else None
+        if h.get("state") == "open" and due and born and due <= born:
+            continue
+        keep.append(h)
+    return dict(mind, hyps=keep), len(hs) - len(keep)
 
 
 def accuracy(mind):
@@ -641,7 +693,7 @@ def question_prompt(question, ctx, mission="", lang="ru"):
         system = ("Ты — Лира, спокойный аналитик темы человека. Отвечай ТОЛЬКО по данным Радара ниже — без фактов со стороны и без "
                   "догадок. Коротко: 2–5 предложений или до 5 коротких пунктов, простым текстом, без заголовков. Ссылайся на материалы "
                   "как [n]. Если в данных ответа нет — честно скажи и подскажи, какие источники добавить. Отвечай по-русски.")
-    user = (f"{'Mission' if en else 'Тема человека'}: {mission or '—'}\n"
+    user = (f"{today_line(lang)}\n{'Mission' if en else 'Тема человека'}: {mission or '—'}\n"
             f"{'Daily brief' if en else 'Бриф дня'}: {b.get('headline') or '—'}\n"
             f"{'Trends (day/norm)' if en else 'Тренды (сутки/норма)'}: {tr or '—'}\n"
             f"{'Materials' if en else 'Материалы'}:\n{rows or '—'}\n\n"

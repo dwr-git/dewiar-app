@@ -196,7 +196,8 @@ def search_text(res):
     """Выдача -> текст для модели: 6 результатов хватает модели и не раздувает контекст."""
     if not res:
         return "Ничего не нашлось."
-    return "\n".join(f"{i + 1}. {x['title']} — {x['snippet']} ({x['url']})" for i, x in enumerate(res[:6]))
+    return ("\n".join(f"{i + 1}. {x['title']} — {x['snippet']} ({x['url']})" for i, x in enumerate(res[:6]))
+            + "\n(Это отрывки страниц. Нужен сам текст целиком — стихотворение, статья, инструкция — открой ссылку: read_webpage.)")
 
 
 def t_web_search(a, ctx):

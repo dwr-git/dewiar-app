@@ -251,8 +251,9 @@ function hmRadar() {
   const top = (rd.field || []).filter(p => p.x >= 6).sort((a, b) => b.s - a.s)[0];
   const sig = top && top.s >= 6 ? `⚡ ${Number(top.s).toLocaleString(dwLocale(), { maximumFractionDigits: 1 })} · ${top.title}` : "";
   const b = rd.brief && rd.brief.headline && (rd.brief.at || 0) * 1000 > Date.now() - 36 * 3600e3 ? rd.brief : null;
-  if (b) return { cls: "radar", lab: tt("brief"), b: b.headline, s: sig || (b.points || [])[0] || tt("open"), go: "insight" };
-  if (top && top.s >= 7) return { cls: "radar", lab: tt("signal"), b: top.title, s: tt("day", { n: rd.stats.day || 1 }), go: "insight" };
+  // 12.11 (владелец: «попадаю во внутренний кабинет Радара, а статью не сразу найти»): сильный сигнал — сразу в «читалку»
+  if (b) return { cls: "radar", lab: tt("brief"), b: b.headline, s: sig || (b.points || [])[0] || tt("open"), go: "insight", sgo: sig ? "insight:" + top.id : "", stip: sig ? tt("read") : "" };
+  if (top && top.s >= 7) return { cls: "radar", lab: tt("signal"), b: top.title, s: tt("day", { n: rd.stats.day || 1 }), go: "insight:" + top.id };
   return null;
 }
 function hmBadge(id) {
@@ -296,7 +297,8 @@ function hmRender() {
     $("#hmc-faces").innerHTML = ps.map((p, i) => `<i style="--c:${hmEsc(p.color || "#8b7cff")};z-index:${9 - i}${p.avatar_url ? `;background-image:url('${String(p.avatar_url).replace(/'/g, "%27")}')` : ""}" class="${p.avatar_url ? "pic" : ""}">${p.avatar_url ? "" : hmEsc((p.name || "?")[0])}</i>`).join("");
     $("#hm-council").hidden = !shown.includes("council");
   }
-  $("#hm-today").innerHTML = t.map(c => `<button class="hm-card ${c.cls}" data-go="${c.go}"${String(c.b).length > 70 ? ` title="${hmEsc(c.b)}"` : ""}><small>${hmEsc(c.lab)}</small><b>${hmEsc(c.b)}</b><span>${hmEsc(c.s)}</span></button>`).join("");
+  $("#hm-today").innerHTML = t.map(c => `<button class="hm-card ${c.cls}" data-go="${c.go}"${String(c.b).length > 70 ? ` title="${hmEsc(c.b)}"` : ""}><small>${hmEsc(c.lab)}</small><b>${hmEsc(c.b)}</b><span${c.sgo ? ` class="hm-sgo" data-sgo="${hmEsc(c.sgo)}" title="${hmEsc(c.stip || "")}"` : ""}>${hmEsc(c.s)}</span></button>`).join("");
+  $$("#hm-today [data-sgo]").forEach(s => s.onclick = (e) => { e.stopPropagation(); hmGo(s.dataset.sgo); });
   // Приложения и плагины — раздельно (11.11, люди: «путаются, что есть что»): встроенное — «Приложения», поставленные
   // дополнения — «Плагины» со своей кнопкой «Все плагины». Порядок и «показать/скрыть» — общие (hmApps), как прежде.
   const tile = a => { const on = shown.includes(a.id), n = hmBadge(a.id);
@@ -523,6 +525,7 @@ function hmGo(p) {
     if (l && typeof lsPlay === "function") setTimeout(() => lsPlay(l), 150);
     return;
   }
+  if (p.startsWith("insight:")) { hmGo("insight"); setTimeout(() => window.rdRead && rdRead(p.slice(8)), 250); return; }   // материал Радара — в «читалку»
   const b = $(`nav button[data-p="${p}"]`); if (b) b.click();
 }
 /* «Чтобы люди узнали про уроки — ненавязчиво» (29.10, владелец): на «Главной» среди карточек «Сегодня» — самый ранний

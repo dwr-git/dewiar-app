@@ -2288,6 +2288,12 @@ const POEM_NOTE = "\n\nСейчас просят стихи. Ремесло: с�
 const STORY_ASK = /коротк[а-яё]*\s+(?:[а-яё]+\s+){0,2}?(?:истори|рассказ|сказк|байк|анекдот)|(?:истори|рассказ|сказк)[а-яё]*\s+(?:[а-яё]+\s+){0,2}?коротк/i;
 const STORY_NOTE = "\n\nПросят короткую историю: не больше 8 предложений, с завязкой, поворотом и концовкой; без вступления «вот тебе история» и без морали в конце, если не просили.";
 let creativeTurn = false;
+/* Прочитать готовое произведение, а не сочинить (№668, как llm.READ_ASK / reading на компьютере): точный текст целиком. */
+const READ_ASK = /(?:прочитай|прочти|почитай|расскажи|продекламируй|процитируй|найди|выучи|напомни)(?![а-яё])[^.?!]{0,40}?(?:стих|поэм|басн|сказк[уи]\s+(?:пушкин|лермонтов|некрасов|есенин|тютчев|фет[ау]?(?![а-яё])|блок[ау]?(?![а-яё])|маяковск|цветаев|ахматов|крылов|барто|чуковск|маршак|михалков|бродск|пастернак|мандельштам|гумил[её]в|бунин|жуковск|заболоцк|высоцк|шекспир|байрон|гёте|гете)|произведени|отрывок из)|наизусть|(?:стих[а-яё]*|басн[а-яё]*|поэм[а-яё]*|сказк[а-яё]*)\s+(?:у\s+)?(?:пушкин|лермонтов|некрасов|есенин|тютчев|фет[ау]?(?![а-яё])|блок[ау]?(?![а-яё])|маяковск|цветаев|ахматов|крылов|барто|чуковск|маршак|михалков|бродск|пастернак|мандельштам|гумил[её]в|бунин|жуковск|заболоцк|высоцк|шекспир|байрон|гёте|гете)|(?:пушкин|лермонтов|некрасов|есенин|тютчев|фет[ау]?(?![а-яё])|блок[ау]?(?![а-яё])|маяковск|цветаев|ахматов|крылов|барто|чуковск|маршак|михалков|бродск|пастернак|мандельштам|гумил[её]в|бунин|жуковск|заболоцк|высоцк|шекспир|байрон|гёте|гете)[а-яё]*\s+(?:стих|басн|поэм)/i;
+const SEARCH_TAIL = () => "\n\n" + window.t("tool.search.tail");
+const WRITE_ASK = /напиши|сочини|придумай|выдумай|в стиле|как у /i;
+const reading = (t) => READ_ASK.test(String(t || "")) && !WRITE_ASK.test(String(t || ""));
+const READ_NOTE = () => "\n\n" + window.t("tool.note.read");
 // своя температура (не 0,7 по умолчанию) главнее творческой (№311, пакет 27.10: «задал 0,3, а стало 0,95»)
 const llmTemp = () => { const t = +S.llm.temperature || 0.7; return creativeTurn && t === 0.7 ? 0.95 : t; };
 function wantsThink(text) {
@@ -2846,7 +2852,7 @@ async function ask(text, opts = {}) {
   const againAsk = !opts.hidden && text.length < 300 && liveHistory().slice(-12).some(m => m.role === "user" && nq(m.content) === nq(text));
   const AGAIN_NOTE = "\n\nЧеловек повторил вопрос, на который ответ уже был, — значит, прошлый ответ его не устроил. Не повторяй его: ответь иначе — конкретнее, с другими примерами, другими словами.";
   // подсказка — одна и та же (кэш сервера модели); подсказки к роду просьбы (стихи, советы, повтор, грубость) — в справку к вопросу
-  const turnNotes = [(!opts.hidden && POEM_ASK.test(text) ? POEM_NOTE : !opts.hidden && RECO_ASK.test(text) ? RECO_NOTE : !opts.hidden && STORY_ASK.test(text) ? STORY_NOTE : ""), (againAsk ? AGAIN_NOTE : ""),
+  const turnNotes = [(!opts.hidden && reading(text) ? READ_NOTE() : !opts.hidden && POEM_ASK.test(text) ? POEM_NOTE : !opts.hidden && RECO_ASK.test(text) ? RECO_NOTE : !opts.hidden && STORY_ASK.test(text) ? STORY_NOTE : ""), (againAsk ? AGAIN_NOTE : ""),
     (rudeNow ? BOUNDARY_NOTE + " Эту фразу ты уже сказала вслух: «Мне неприятно, когда со мной так разговаривают, но помогу». Не повторяй её — сразу помоги с просьбой одной-двумя фразами." : "")].map(x => String(x || "").trim()).filter(Boolean);
   const msgs = [{ role: "system", content: systemStable() }]
     .concat(chatHistory(liveHistory().slice(-2 * (CONV_TURNS + 2 * CONV_MARGIN)), opts.hidden ? text : text.replace(LISTEN_LEAD, "")));
@@ -2883,7 +2889,7 @@ async function ask(text, opts = {}) {
   const longGen = !opts.hidden && (MAKE_ASK_RX.test(text) || DIAGRAM_ASK.test(text));   // программа или схема — длинный ответ, поток может долго молчать
   let econ = !opts.hidden && !modelOnce ? econModel(text, att.length > 0) : "";
   if (econ) { modelOnce = econ; hCount("econ"); plog("info", "💸 простой вопрос — недорогая модель " + econ); }
-  creativeTurn = !opts.hidden && CREATIVE_ASK.test(text);
+  creativeTurn = !opts.hidden && CREATIVE_ASK.test(text) && !reading(text);
   if (creativeTurn) plog("info", "🎨 творческая просьба — смелее (температура " + llmTemp() + ")");
   if (deep) { plog("info", "🧠 сложная просьба — модель подумает перед ответом"); showBot("Подумаю как следует — минутку", "wait"); }
   let final = "", switchTo = null;
@@ -5052,7 +5058,7 @@ async function webSearch(q) {
     try { out = ((await dewiarWeb("search", q)).results || []).slice(0, 6).map(x => `${x.title}\n${x.snippet}\n${x.url}`); }
     catch (e2) { return `Ошибка: поиск недоступен (${e.message}; через сервер Dewiar: ${e2.message}).`; }
   }
-  return out.length ? out.join("\n\n") : "Поиск ничего не дал.";
+  return out.length ? out.join("\n\n") + SEARCH_TAIL() : "Поиск ничего не дал.";
 }
 /* Длинная страница — начало и куски вокруг слов find (или вопроса); пустая — честно «текста нет» (экзамен 14.10: курс
    доллара стоял дальше 7000 знаков — модель его выдумала; пустая страница журнала — выдумала фильм). Как page_excerpt на компьютере. */

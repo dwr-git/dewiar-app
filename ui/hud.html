@@ -192,6 +192,11 @@
   #bot .repask { display: flex; gap: 6px; flex-wrap: wrap; } #bot .repask .rep { display: inline-block; }
   #bot .rep.pay { display: inline-block; padding: 7px 16px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 6px 16px -8px rgba(118,75,162,.9); }
   #bot .rep.pay:hover { filter: brightness(1.1); }
+  #bot .pc-tag { font-size: 11.5px; font-weight: 600; letter-spacing: .01em; color: var(--persona); margin-bottom: 4px; }
+  #bot .pc-head { font-weight: 650; line-height: 1.35; cursor: pointer; }
+  #bot .pc-head:hover { text-decoration: underline; text-underline-offset: 3px; }
+  #bot .pc-body { margin-top: 5px; font-size: 12.5px; line-height: 1.45; opacity: .8; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  #bot .rep.pc-go { display: inline-block; margin-top: 9px; padding: 6px 14px; font-weight: 600; }
   #act { font-size: 12px; color: #D6E4F0; margin-bottom: 4px; display: none; }
   #act.on { display: block; }
   #act.bad { color: #ff8aa2; }
@@ -1010,6 +1015,19 @@ function reportOffer(e) {
   row.append(yes, no); $("bot").appendChild(row); hideCapLater(45000);
 }
 
+/* 12.11 (владелец про «⚡ Радар: важное»: «всё в кучу, слитно… либо разметка, либо переход в Радар»): весточка с разделом
+   студии — карточкой: метка, заголовок материала, суть в несколько строк и «Открыть в Радаре» (так же — нажатие на заголовок). */
+function pushCard(e) {
+  showCap(null, "", false);
+  const bot = $("bot"), go = (ev) => { ev.stopPropagation(); const a = api(); if (a && a.open_settings) a.open_settings(e.open); hideCapLater(1500); };
+  const mk = (cls, txt) => { const d = document.createElement("div"); d.className = cls; d.textContent = txt; return d; };
+  const tag = mk("pc-tag", e.title), head = mk("pc-head", e.head), body = mk("pc-body", e.body || "");
+  const lab = window.t("hud.push.open." + String(e.open).split(":")[0]);      // «insight:<id>» — сразу материал в «читалке»
+  head.onclick = go; head.title = lab;
+  const b = document.createElement("button"); b.className = "rep pc-go"; b.textContent = lab; b.onclick = go;
+  bot.textContent = ""; bot.append(tag, head, ...(e.body ? [body] : []), b);
+  requestAnimationFrame(fitCap); hideCapLater(30000);
+}
 /* 0.82.1 (владелец 04.11: «много новых людей, а донатов нет — чтобы было понятно и просто»): талеры кончились — под текстом
    кнопка «Пополнить»: студия → «Мозг» с уже раскрытой панелью оплаты */
 function topupBtn() {
@@ -1195,7 +1213,7 @@ core.on("hello", d => {
 .on("report_offer", reportOffer)
 .on("prompter", e => { if (e.kind === "open" && mode === "card") { const a = api(); if (a && a.open_prompter) a.open_prompter(); } })
 .on("prompter_offer", prompterOffer)
-.on("push", e => { showCap(null, `${e.title}${e.text ? " — " + e.text : ""}`, !!e.critical && e.title.startsWith("⚠")); hideCapLater(9000); })
+.on("push", e => { if (e && e.open && e.head) return pushCard(e); showCap(null, `${e.title}${e.text ? " — " + e.text : ""}`, !!e.critical && e.title.startsWith("⚠")); hideCapLater(9000); })
 .on("sleep", () => { showCap(null, window.t("hud.st.sleep"), false); hideCapLater(2500); })
 .on("interrupted", () => hideCapLater(1500))
 .on("status", e => note(e.status))

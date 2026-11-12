@@ -4849,3 +4849,7 @@ html.st-light .ch-chip, html.st-light .ch-chip i { background: color-mix(in srgb
    окон получают фокус программой (tabindex="-1", чтобы первой не выделялась кнопка); это не поле и не кнопка — рамки нет.
    WebKitGTK показывает её и при :focus-visible, поэтому убираем на любом фокусе. */
 [tabindex="-1"]:focus, [tabindex="-1"]:focus-visible { outline: none; box-shadow: none; }
+
+/* карточка Радара на «Главной»: строка сильного сигнала — сразу в «читалку» материала (12.11) */
+.hm-card .hm-sgo { cursor: pointer; border-radius: 6px; }
+.hm-card .hm-sgo:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }

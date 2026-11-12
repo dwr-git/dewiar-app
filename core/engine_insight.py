@@ -23,6 +23,7 @@ class Radar:
         self.lock = threading.Lock()                 # один такт за раз
         self.running = None                          # что делается сейчас ({k, x} — студия переводит)
         self.fetch = self._http                     # подменяют проверки
+        self._reads = {}                            # «читалка»: прочитанные целиком — до 30 последних
 
     # ---------- настройки ----------
     def conf(self):
@@ -179,7 +180,7 @@ class Radar:
         return b
 
     def evolve(self):
-        mind = self.st.load("mind", {})
+        mind, _ = I.clean_hyps(self.st.load("mind", {}))      # «прогнозы в прошлое» до 0.92.2 — прочь
         items = self.analyzed(36)
         if len(items) < 3:
             return mind
@@ -209,7 +210,8 @@ class Radar:
             text = (f"«{top['title']}»: {top['day']} materials in 24h" if en else f"«{top['title']}»: {top['day']} материалов за сутки")
         quiet = self.night()
         try:
-            self.e.push(title, text[:400], quiet=quiet)
+            self.e.push(title, text[:400], quiet=quiet, open="insight:" + top["id"] if top["kind"] == "item" else "insight", head=str(top["title"])[:200],
+                        body=str(top.get("text") or (f"{top['day']} materials in 24h" if en else f"{top['day']} материалов за сутки"))[:400])
         except Exception:  # noqa: BLE001
             log.debug("радар: весточка", exc_info=True)
         lg["urgent_at"] = time.time()
@@ -315,13 +317,41 @@ class Radar:
                 "mission": self.conf()["mission"]}
 
     def mind_view(self):
-        m = self.st.load("mind", {})
+        m, gone = I.clean_hyps(self.st.load("mind", {}))
+        if gone:                                         # 12.11: гипотезы со сроком в прошлом — сохранить уже без них
+            self.st.save("mind", m)
         byid = {x["id"]: x for x in self.analyzed()}
         th = [dict(t, refs=[{"id": r, "title": byid[r]["title"], "url": byid[r].get("url")} for r in t.get("refs") or [] if r in byid])
               for t in m.get("theses") or []]
         watch = [self.item_view(x) for x in self.st.items() if x.get("watch")][:20]
         return {"mission": self.conf()["mission"], "v": m.get("v", 0), "theses": th, "hyps": m.get("hyps") or [],
                 "diary": list(reversed(m.get("diary") or []))[:20], "accuracy": I.accuracy(m), "watch": watch}
+
+    def read(self, iid):
+        """«Читалка» (владелец 12.11: «статья интересная, а не сразу удаётся её найти»): материал и его текст целиком —
+        страница читается сейчас (полный текст), не прочиталась — что сохранено при обходе. Пост Telegram — он сам."""
+        x = next((y for y in self.st.items() if y["id"] == iid), None)
+        if not x:
+            raise ValueError("материала уже нет в Радаре")
+        cached = self._reads.get(iid)
+        if cached:
+            return cached
+        text, full = x.get("text") or "", False
+        if x.get("kind") != "telegram" and x.get("url"):
+            try:
+                _, t = I.article_text(self.fetch(x["url"]), I.READ_MAX)
+                if len(t) > len(text):
+                    text, full = t, True
+            except Exception as e:  # noqa: BLE001
+                log.info("📡 Радар: читалка — страница не открылась: %s", e)
+        elif x.get("kind") == "telegram":
+            full = True
+        out = dict(self.item_view(x), text=text, full=full)
+        if full:
+            self._reads[iid] = out
+            if len(self._reads) > 30:
+                self._reads.pop(next(iter(self._reads)))
+        return out
 
     def one(self, url):
         """«Разобрать одну ссылку» — прочитать и разобрать сейчас."""
@@ -391,6 +421,8 @@ def command(eng, cmd, a):
         return {"sources": r.sources_view()}
     if cmd == "insight_question":
         return question(eng, a.get("q"))
+    if cmd == "insight_read":
+        return {"item": r.read(str(a.get("id") or ""))}
     if cmd == "insight_one":
         return {"item": r.one(str(a.get("url") or "").strip())}
     if cmd == "insight_refresh":

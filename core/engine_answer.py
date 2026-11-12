@@ -2144,8 +2144,10 @@ class AnswerMixin:
                 personal, pdelta = self._profile_snap(personal, msgs)
             notes = []                                 # подсказки к этой просьбе — в справку к вопросу
             import boundaries
-            from llm import POEM_ASK, POEM_NOTE, RECO_ASK, RECO_NOTE
-            if POEM_ASK.search(text.split("\n\nВложения:")[0]):
+            from llm import POEM_ASK, POEM_NOTE, READ_NOTE, RECO_ASK, RECO_NOTE, reading
+            if reading(text.split("\n\nВложения:")[0]):
+                notes.append(READ_NOTE)                 # прочитать готовое — точный текст целиком (№668)
+            elif POEM_ASK.search(text.split("\n\nВложения:")[0]):
                 notes.append(POEM_NOTE)                 # стихи — рифмы по ударению подбираются заранее
             elif RECO_ASK.search(text.split("\n\nВложения:")[0]):
                 notes.append(RECO_NOTE)                 # советы фильмов и песен — только существующее

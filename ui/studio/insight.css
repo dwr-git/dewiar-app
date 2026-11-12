@@ -259,3 +259,27 @@ html.st-neu .rd-sg:active { box-shadow: var(--press); }
   .rd-form { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .rd-room * { animation: none !important; transition: none !important; } }
+
+/* «читалка» материала (12.11) — боковая панель студии (.drawer: тема — theme.css) */
+.rd-reader { z-index: 55; width: min(620px, 100%); padding: 28px 30px 70px; }
+.rd-reader .hx { position: absolute; top: 18px; right: 18px; }
+.rd-reader .rr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 2px 44px 12px 0; color: var(--muted); font-size: 12.5px; }
+.rd-reader .rr-sig { display: inline-flex; align-items: baseline; gap: 5px; color: var(--muted); }
+.rd-reader .rr-sig b { color: var(--c); font: 700 15px/1 "Unbounded", "Manrope", sans-serif; }
+.rd-reader h2 { font: 600 21px/1.32 "Unbounded", "Manrope", sans-serif; margin: 0 0 16px; color: var(--ink); text-wrap: balance; }
+.rd-reader h4 { font-size: 12px; font-weight: 700; color: var(--muted); margin: 14px 0 6px; }
+.rd-reader .rr-lira { padding: 4px 18px 14px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); }
+.rd-reader .rr-lira p { margin: 0; line-height: 1.55; color: var(--ink); }
+.rd-reader .rr-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.rd-reader .rr-acts { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 6px; }
+.rd-reader .rr-w.on { color: var(--accent); }
+.rd-reader .rr-th { margin-top: 24px; padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.rd-reader .rr-text { max-width: 64ch; }
+.rd-reader .rr-text p { margin: 0 0 1em; font-size: 15.5px; line-height: 1.7; color: var(--ink); }
+.rd-reader .rr-part { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 12px; }
+.rd-reader .rr-wait { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.rd-reader .rr-wait i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent); animation: rr-spin .9s linear infinite; }
+@keyframes rr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rd-reader .rr-wait i { animation: none; } }

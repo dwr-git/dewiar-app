@@ -90,7 +90,7 @@
         <div class="rd-card rd-brief">${b ? `<div class="meta"><span>${esc(T("brief.at", { t: ago(b.at) }))}</span><span>${esc(T("brief.n", { n: b.n }))}</span></div>
           <h2>${esc(b.headline)}</h2><ul>${(b.points || []).map(p => `<li>${esc(p)}</li>`).join("")}</ul>
           ${(b.main || []).length ? `<div class="rd-main"><span>${esc(T("brief.main"))}</span>${b.main.map((m, i) => `<div class="rd-mainit"><span class="n">${i + 1}</span><div>
-            <b><a href="#" data-url="${esc(m.url)}">${esc(m.title)}</a></b><p>${esc(m.why_brief || m.summary)}</p></div></div>`).join("")}</div>` : ""}`
+            <b><a href="#" ${m.id ? `data-rid="${esc(m.id)}"` : `data-url="${esc(m.url)}"`}>${esc(m.title)}</a></b><p>${esc(m.why_brief || m.summary)}</p></div></div>`).join("")}</div>` : ""}`
           : `<div class="rd-empty"><b>${esc(T("brief.none"))}</b>${esc(T("brief.none.t"))}<div style="margin-top:14px"><button class="btn rd-btn" id="rd-mkbrief">${esc(T("brief.make"))}</button></div></div>`}
         </div>
         <div class="rd-side">${askCard(tr)}<div class="rd-card"><h3>${esc(T("trends"))} <small><a href="#" data-go="trends">${esc(T("all"))}</a></small></h3>
@@ -136,7 +136,7 @@
   }
   function bindAns(b) {
     qa("[data-url]", b).forEach(a => a.onclick = (e) => { e.preventDefault(); openUrl(a.dataset.url); });
-    qa("[data-ref]", b).forEach(a => a.onclick = (e) => { e.preventDefault(); const r = (RD.ans.refs || []).find(x => String(x.n) === a.dataset.ref); if (r) openUrl(r.url); });
+    qa("[data-ref]", b).forEach(a => a.onclick = (e) => { e.preventDefault(); const r = (RD.ans.refs || []).find(x => String(x.n) === a.dataset.ref); if (r) { if (r.id) rdRead(r.id); else openUrl(r.url); } });
     const c = q("#rd-achat", b); if (c) c.onclick = () => { const v = T("ask.prefix") + " " + RD.ans.q; if (typeof qaAsk === "function") qaAsk(v); else core.call("say", { text: v }).catch(() => {}); };
   }
   function bindAsk(el) {
@@ -194,7 +194,7 @@
       if (!p) { tip.hidden = true; return; } tip.hidden = false; tip.innerHTML = `${esc(p.title)}<small>${esc(p.src)} · ${esc(T("signal"))} ${fmt(p.s)}</small>`;
       tip.style.left = Math.min(x + 26, cv.clientWidth - 330) + "px"; tip.style.top = (y + 18) + "px"; };
     cv.onmouseleave = () => { tip.hidden = true; hover = null; requestAnimationFrame(frame); };
-    cv.onclick = (e) => { const [p] = near(e); if (p) { RD.feed.q = ""; RD.focus = p.id; tab("feed"); } };
+    cv.onclick = (e) => { const [p] = near(e); if (p) rdRead(p.id); };
   }
 
   const IC_UP = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.6 10H19a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 17.8 20H7"/></svg>';
@@ -202,7 +202,7 @@
   /* ---------- «Лента» ---------- */
   function itemHtml(x) {
     return `<article class="rd-item" data-id="${esc(x.id)}"><span class="bar" style="background:${sigColor(x.signal)}"></span>
-      <div><h4><a href="#" data-url="${esc(x.url)}">${esc(x.title)}</a></h4>
+      <div><h4><a href="#" data-rid="${esc(x.id)}">${esc(x.title)}</a></h4>
         <p>${esc(x.summary)}${x.why ? ` <em>${esc(x.why)}</em>` : ""}</p>
         <div class="rd-meta"><span>${esc(x.src || "")}</span><span>${esc(ago(x.ts))}</span><span>${esc(typeText(x.type))}</span>
           ${(x.tags || []).map(t => `<span class="rd-tag" data-tag="${esc(t)}">#${esc(t)}</span>`).join("")}
@@ -481,6 +481,64 @@
       try { await call("insight_conf", { conf: { night: [n("#rd-n0"), n("#rd-n1")], daily_max: n("#rd-dm"), tick_day: n("#rd-td"), per_tick_day: n("#rd-pd"), urgent_min: n("#rd-um"),
         brief_hour: n("#rd-bh"), day_long: q("#rd-dl").checked } }); toast(T("saved")); renderControl(); } catch (e) { toast(e.message); } };
   }
+
+  /* ---------- «читалка» материала (владелец 12.11: «статья интересная, а не сразу удаётся её найти — сразу бы прочитать»)
+     Боковая панель: источник и время, сигнал, суть от Лиры и почему важно, текст статьи целиком (ядро читает страницу
+     сейчас: insight_read), «Открыть оригинал», «Спросить Лиру», ☆. Открывается с материала в «Ленте», «Пульсе», точки
+     поля сигналов, ссылки в ответе Лиры, карточки «Главной» и весточки виджета (studioGo("insight:<id>")). */
+  let RR = null;
+  function rrBox() {
+    let d = q("#rd-reader");
+    if (!d) {
+      d = document.createElement("aside"); d.className = "drawer rd-reader"; d.id = "rd-reader";
+      d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); d.setAttribute("aria-labelledby", "rr-h");
+      document.body.appendChild(d);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && d.classList.contains("open")) rrClose(); });
+    }
+    return d;
+  }
+  function rrClose() { const d = q("#rd-reader"); if (d) d.classList.remove("open"); RR = null; }
+  function rrParas(text) {
+    return String(text || "").split(/\n+/).map(x => x.trim()).filter(Boolean).map(x => `<p>${esc(x)}</p>`).join("");
+  }
+  function rrHtml(x, wait) {
+    const meta = [x.src, x.ts ? ago(x.ts) : "", x.type ? typeText(x.type) : ""].filter(Boolean).map(v => `<span>${esc(v)}</span>`).join("");
+    const sig = x.signal == null ? "" : `<span class="rr-sig" style="--c:${sigColor(x.signal)}"><b>${fmt(x.signal)}</b>${esc(T("signal"))}</span>`;
+    const text = wait ? `<p class="rr-wait"><i></i>${esc(T("read.loading"))}</p>`
+      : x.text ? `${x.full ? "" : `<p class="rr-part">${esc(T("read.part"))}</p>`}<div class="rr-text">${rrParas(x.text)}</div>`
+      : `<p class="rr-part">${esc(T("read.notext"))}</p>`;
+    return `<button class="btn icon hx" id="rr-x" title="${esc(T("read.close"))}" aria-label="${esc(T("read.close"))}">✕</button>
+      <div class="rr-meta">${meta}${sig}</div><h2 id="rr-h">${esc(x.title)}</h2>
+      ${x.summary ? `<div class="rr-lira"><h4>${esc(T("read.lira"))}</h4><p>${esc(x.summary)}</p>${x.why ? `<h4>${esc(T("read.why"))}</h4><p>${esc(x.why)}</p>` : ""}
+        ${(x.tags || []).length ? `<div class="rr-tags">${x.tags.map(t => `<span class="rd-tag" data-tag="${esc(t)}">#${esc(t)}</span>`).join("")}</div>` : ""}</div>` : ""}
+      <div class="rr-acts">${x.url ? `<button class="btn primary rd-btn" id="rr-open">${esc(T("read.open"))}</button>` : ""}
+        <button class="btn rd-btn" id="rr-ask">${esc(T("read.ask"))}</button>
+        <button class="btn rd-btn rr-w ${x.watch ? "on" : ""}" id="rr-watch" aria-pressed="${x.watch ? "true" : "false"}">${x.watch ? "★" : "☆"} ${esc(T("watch"))}</button></div>
+      <h4 class="rr-th">${esc(T("read.text"))}</h4>${text}`;
+  }
+  function rrBind(d, x) {
+    q("#rr-x", d).onclick = rrClose;
+    const o = q("#rr-open", d); if (o) o.onclick = () => openUrl(x.url);
+    q("#rr-ask", d).onclick = () => { rrClose(); const v = T("read.q", { title: x.title }); if (RD.tab !== "pulse") { tab("pulse"); setTimeout(() => askNow(v), 450); } else askNow(v);
+      setTimeout(() => { const a = q("#rd-ans"); if (a) a.scrollIntoView({ block: "center", behavior: REDUCE.matches ? "auto" : "smooth" }); }, 500); };
+    const w = q("#rr-watch", d); w.onclick = async () => { const on = !w.classList.contains("on"); await call("insight_mark", { id: x.id, watch: on }).catch(() => {});
+      x.watch = on; w.classList.toggle("on", on); w.setAttribute("aria-pressed", String(on)); w.textContent = (on ? "★ " : "☆ ") + T("watch"); };
+    qa("[data-tag]", d).forEach(a => a.onclick = () => { rrClose(); RD.feed.q = a.dataset.tag; tab("feed"); });
+  }
+  async function rdRead(id, hint) {
+    if (!id) return;
+    const d = rrBox(), me = RR = { id };
+    d.innerHTML = rrHtml(hint || { id, title: "" }, true); rrBind(d, hint || { id }); d.classList.add("open"); d.scrollTop = 0;
+    let x; try { x = (await call("insight_read", { id })).item; } catch (e) { if (RR === me) { rrClose(); toast(e.message); } return; }
+    if (RR !== me || !x) return;
+    d.innerHTML = rrHtml(x, false); rrBind(d, x); setTimeout(() => { const b = q("#rr-open", d) || q("#rr-x", d); if (b) b.focus({ preventScroll: true }); }, 50);
+  }
+  window.rdRead = rdRead;
+  // материал по ссылке data-rid — где бы он ни был в разделе (лента, бриф, «Наблюдаемое» в «Разуме»)
+  q("#p-insight").addEventListener("click", (e) => { const a = e.target.closest("[data-rid]"); if (!a) return; e.preventDefault(); rdRead(a.dataset.rid); });
+  // открыли студию прямо на материале (весточка виджета при закрытой студии): #insight:<id>
+  setTimeout(() => { const m = /^#insight:([\w-]+)$/.exec(location.hash || ""); if (!m) return;
+    const b = q('nav button[data-p="insight"]'); if (b) b.click(); setTimeout(() => rdRead(m[1]), 300); }, 400);
 
   /* ---------- вкладки, загрузка, вопрос ---------- */
   function tab(t) {
