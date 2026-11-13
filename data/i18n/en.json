@@ -761,5 +761,11 @@
  "sites.blog.home.lab": "An article awaits your «Yes»",
  "sites.blog.home.s": "drafts: {n} — read and publish",
  "phone.bal.site": "Balance: {b}",
- "insight.field.tops": "Strongest this week:"
+ "insight.field.tops": "Strongest this week:",
+ "home.mn.fold": "Collapse until tomorrow",
+ "home.mn.folded": "Morning collapsed until tomorrow — expand it right here",
+ "home.mn.open": "Expand",
+ "home.mn.title": "Morning with {who}",
+ "home.council.off": "Remove from Home — AI Council stays in Apps",
+ "home.council.gone": "AI Council removed from Home — it stays in Apps"
 }

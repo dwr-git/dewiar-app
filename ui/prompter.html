@@ -614,6 +614,28 @@ $("#next").onclick = () => { const n = (st.hints || []).filter(h => !h.empty).le
    вопросе; отказ — ошибка там же, «Закончить» — повторить. Поздний ответ старой остановки не закрывает окно, если за это
    время началась другая встреча (сверяем время начала). */
 let stopping = null;
+/* №688 (13.11, Windows 11): тащим окно за шапку — курсор «телепортировался» в сторону: перетаскивание pywebview
+   считает по screenX/screenY страницы, а при масштабе экрана Windows (125–150 %) это не те пиксели. На Windows окно
+   ведёт программа — туда, где курсор сейчас (drag_begin / drag_step, как у виджета, №169); на Linux шапку двигает
+   оконный менеджер (_wm_drag). */
+(function () {
+  if (!/^Win/.test(navigator.platform)) return;
+  const head = document.querySelector("header");
+  head.classList.remove("pywebview-drag-region");
+  let on = false, raf = 0;
+  head.addEventListener("pointerdown", async (ev) => {
+    if (ev.button !== 0 || ev.target.closest("button")) return;
+    const a = api(); if (!a || !a.drag_begin) return;
+    head.setPointerCapture(ev.pointerId);
+    on = await a.drag_begin("prompter").catch(() => false);
+  });
+  head.addEventListener("pointermove", () => {
+    if (!on || raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; const a = api(); if (on && a) a.drag_step("prompter"); });
+  });
+  const end = () => { on = false; };
+  head.addEventListener("pointerup", end); head.addEventListener("pointercancel", end);
+})();
 function winClose() { const a = api(); if (a && a.close_prompter) a.close_prompter(); else window.close(); }
 async function closeWin(sure) {
   if (st && st.on && sure !== true) { endAsk(); return; }       // встреча идёт — сначала спросить (своим окном, не системным диалогом)

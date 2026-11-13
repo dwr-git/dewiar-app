@@ -299,7 +299,13 @@ function hmRender() {
   if ($("#hmc-faces")) {
     const ps = (typeof personas !== "undefined" && Array.isArray(personas) ? personas : []).filter(p => !p.kids).slice(0, 4);
     $("#hmc-faces").innerHTML = ps.map((p, i) => `<i style="--c:${hmEsc(p.color || "#8b7cff")};z-index:${9 - i}${p.avatar_url ? `;background-image:url('${String(p.avatar_url).replace(/'/g, "%27")}')` : ""}" class="${p.avatar_url ? "pic" : ""}">${p.avatar_url ? "" : hmEsc((p.name || "?")[0])}</i>`).join("");
-    $("#hm-council").hidden = !shown.includes("council");
+    // 13.11 (владелец: «нужна ли плашка „Совет ИИ“ на главной, чтобы всё время смотреть на неё?»): плашка — чтобы узнали;
+    // × убирает её с главной, значок «Совет ИИ» в приложениях остаётся
+    const plateOff = typeof S !== "undefined" && S && S.ui && S.ui.council_plate === false;
+    $("#hm-council").hidden = !shown.includes("council") || plateOff;
+    $("#hmc-wrap").hidden = $("#hm-council").hidden;
+    $("#hmc-x").onclick = () => { save({ ui: { council_plate: false } }, true); if (S && S.ui) S.ui.council_plate = false;
+      $("#hm-council").hidden = $("#hmc-wrap").hidden = true; toast(window.t("home.council.gone")); };
   }
   $("#hm-today").innerHTML = t.map(c => `<button class="hm-card ${c.cls}" data-go="${c.go}"${String(c.b).length > 70 ? ` title="${hmEsc(c.b)}"` : ""}><small>${hmEsc(c.lab)}</small><b>${hmEsc(c.b)}</b><span${c.sgo ? ` class="hm-sgo" data-sgo="${hmEsc(c.sgo)}" title="${hmEsc(c.stip || "")}"` : ""}>${hmEsc(c.s)}</span></button>`).join("");
   $$("#hm-today [data-sgo]").forEach(s => s.onclick = (e) => { e.stopPropagation(); hmGo(s.dataset.sgo); });

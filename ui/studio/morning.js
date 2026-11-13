@@ -1,7 +1,7 @@
 /* «Утро с Лирой» на главной студии (0.57; core/morning.py). С 4 до 13 часов — над карточками «Сегодня»: погода
    крупно, и по строке на каждое, что ждёт: встречи и дела, сотрудники, клиенты, почта от людей, задачи. Строка ведёт
    в свой раздел. «Расскажи утро» — та же сводка голосом (job_run brief); «Каждое утро в …» — дело по расписанию
-   (job_add, preset brief — та же карточка, что в «Делах по расписанию»); «Скрыть до завтра». Нет города — поле
+   (job_add, preset brief — та же карточка, что в «Делах по расписанию»); «Свернуть до завтра» (строкой с погодой, «Развернуть» рядом). Нет города — поле
    «Город для погоды». Данные — morning_get (погода и почта из кэша ядра, 20 минут). */
 let MN = null, MN_BUSY = false;
 const MN_SKY = [[/гроз/, "storm"], [/снег|крупа/, "snow"], [/дожд|ливн|морос/, "rain"], [/туман|изморозь/, "fog"], [/пасмур|облач/, "cloud"], [/ясно/, "sun"]];
@@ -102,17 +102,27 @@ function mnGo(p) {
 function mnRender() {
   const box = $("#hm-morning"); if (!box) return;
   const d = MN;
-  if (!d || !mnTime() || ((d.settings || {}).hide === mnDay())) { box.hidden = true; return; }
+  if (!d || !mnTime()) { box.hidden = true; return; }
   const nm = typeof hmWho === "function" ? hmWho("") : "Лира", who = mnWith(nm === "Ассистент" ? "Лира" : nm);
+  // 13.11 (владелец: «закрыл погоду, думал свернётся — а она исчезла, и не знаю, как включить обратно»): × теперь
+  // сворачивает «Утро» в строку до завтра — погода видна, «Развернуть» — рядом
+  if ((d.settings || {}).hide === mnDay()) {
+    const w = d.weather, sky = w ? (MN_SKY.find(([rx]) => rx.test(w.sky_day || w.sky)) || [0, "cloud"])[1] : "cloud";
+    box.hidden = false;
+    box.innerHTML = `<button class="mn-fold" id="mn-open" title="${mnE(window.t("home.mn.open"))}"><svg viewBox="0 0 24 24" aria-hidden="true">${MN_ICON[sky]}</svg>`
+      + `<b>${mnE(window.t("home.mn.title", { who }))}</b>${w ? `<span>${w.now > 0 ? "+" : ""}${w.now}° · ${mnE(w.sky)}</span>` : ""}<em>${mnE(window.t("home.mn.open"))}</em></button>`;
+    $("#mn-open").onclick = () => core.call("morning_set", { hide: "" }).then(r => { MN = r; mnRender(); }).catch(e => toast(e.message));
+    return;
+  }
   const daily = d.daily;
   box.hidden = false;
-  box.innerHTML = `<div class="mn-head"><h2>Утро с ${mnE(who)}</h2><button class="mn-x" id="mn-hide" title="Скрыть до завтра" aria-label="Скрыть до завтра">×</button></div>`
+  box.innerHTML = `<div class="mn-head"><h2>Утро с ${mnE(who)}</h2><button class="mn-x" id="mn-hide" title="${mnE(window.t("home.mn.fold"))}" aria-label="${mnE(window.t("home.mn.fold"))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button></div>`
     + `<div class="mn-grid">${mnWeather(d)}<ul class="mn-rows">${mnRows(d).map(([k, b, s]) => `<li><button data-mgo="${MN_ROW[k][1]}"><svg viewBox="0 0 24 24" aria-hidden="true">${MN_ROW[k][0]}</svg><span><b>${mnE(b)}</b>${(Array.isArray(s) ? s : [s]).map(x => `<small title="${mnE(x)}">${mnE(x)}</small>`).join("")}</span></button></li>`).join("")}</ul></div>`
     + `<div class="mn-foot"><button class="btn primary" id="mn-say">Расскажи утро</button>`
     + `<label class="mn-daily"><span class="tg"><input type="checkbox" id="mn-dly"${daily ? " checked" : ""}><i></i></span>Каждое утро в <input type="text" id="mn-at" value="${mnE(daily ? daily.at_hm : "08:00")}" maxlength="5" inputmode="numeric" aria-label="Время сводки"> голосом</label>`
     + (!d.mail_on ? `<button class="lnk mn-mail" data-mgo="connect">Подключить почту — скажу о важных письмах</button>` : "") + `</div>`;
   $$("#hm-morning [data-mgo]").forEach(b => b.onclick = () => mnGo(b.dataset.mgo));
-  $("#mn-hide").onclick = () => core.call("morning_set", { hide: mnDay() }).then(r => { MN = r; mnRender(); toast("Утро скрыто до завтра"); }).catch(e => toast(e.message));
+  $("#mn-hide").onclick = () => core.call("morning_set", { hide: mnDay() }).then(r => { MN = r; mnRender(); toast(window.t("home.mn.folded")); }).catch(e => toast(e.message));
   $("#mn-say").onclick = () => { if (MN_BUSY) return; MN_BUSY = true; setTimeout(() => { MN_BUSY = false; }, 4000);
     core.call("job_run", { task: "Утренняя сводка", brief: true, deliver: "voice" }).then(() => toast("Рассказываю…")).catch(e => toast(e.message)); };
   const cgo = $("#mn-cgo"); if (cgo) { const go = () => { const c = $("#mn-city").value.trim(); if (!c) return $("#mn-city").focus(); cgo.disabled = true;

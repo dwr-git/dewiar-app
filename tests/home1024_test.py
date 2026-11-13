@@ -59,6 +59,13 @@ try:
         ok(len(apps) == 24 and "insight" in apps and "podcast" in apps and "node" in apps and "sites" in apps and "pbot" in apps and "council" in apps and "ideas" in apps and "docs" in apps and "watch" in apps and "pad" not in apps and "folder" not in apps and "qa" in apps and "music" in apps and "modes" in apps and "kids" not in apps and "chat" in apps and "play" in apps and "ref" in apps and "pay" in apps and "vault" in apps, f"значки приложений — по умолчанию все (с 0.45 — и «Платежи», «Сейф»; с 0.57 — «Документы», с 0.58 — «Дозор», с 0.61 — «Идеи Лиры», с 0.67 — «Совет ИИ», «Бот в Telegram»; 03.11 — «Сайты»; 0.91 — «Радар»): {apps}")
         ok(pg.is_visible("#hm-council") and pg.locator("#hmc-faces i").count() >= 2, "на «Главной» — плашка «Совет ИИ» с лицами персонажей")
         ok(pg.is_visible("nav button[data-p='ref']") and pg.is_visible("nav button[data-p='memory']"), "по умолчанию в меню всё на месте")
+        # 13.11 (владелец: «нужна ли плашка „Совет ИИ“, чтобы всё время смотреть на неё?»): × убирает плашку, значок остаётся
+        pg.hover("#hm-council"); pg.click("#hmc-x"); pg.wait_for_timeout(300)
+        ok(not pg.is_visible("#hm-council") and pg.evaluate("S.ui.council_plate") is False
+           and pg.locator("#hm-apps .hm-app[data-app='council']").count() == 1, "× — плашка «Совет ИИ» ушла с главной, значок в приложениях остался")
+        pg.evaluate("loadHome()"); pg.wait_for_timeout(400)
+        ok(not pg.is_visible("#hm-council"), "и не возвращается при обновлении главной")
+        pg.evaluate("S.ui.council_plate = true; loadHome()"); pg.wait_for_timeout(400)
         ok(pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-ic svg')].length") == len(apps), "у каждого значка — рисунок")
         today = pg.evaluate("document.querySelector('#hm-today').innerText")
         ok("позвонить маме" in today, f"«Сегодня» — ближайшее дело: {today[:120]!r}")

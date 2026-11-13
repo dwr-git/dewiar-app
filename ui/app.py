@@ -1101,7 +1101,14 @@ class Api:
             return max(0, int(x)), max(0, int(y))
 
     def _hwnd(self, mode):
-        """Windows: дескриптор окна режима (у pywebview — Form.Handle; запасной путь — по заголовку)."""
+        """Windows: дескриптор окна режима (у pywebview — Form.Handle; запасной путь — по заголовку). «prompter» — окно
+        суфлёра (№688: его тоже ведёт программа, а не перетаскивание pywebview)."""
+        if mode == "prompter":
+            w = getattr(self, "_prompter", None)
+            try:
+                return int(w.native.Handle.ToInt64()) if w is not None else winshell.hwnd(PROMPTER_TITLE)
+            except Exception:  # noqa: BLE001
+                return winshell.hwnd(PROMPTER_TITLE)
         try:
             return int(self.wins[mode].native.Handle.ToInt64())
         except Exception:  # noqa: BLE001

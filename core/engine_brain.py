@@ -296,16 +296,24 @@ class BrainMixin:
         if on:
             plan, done = light_plan(self.s.get("stt"), self.s.get("tts"), cloud_stt=self._cloud_stt_ok(),
                                     account_stt=self.account.service_url("stt"))
-            self.s.update({"device": {"light": True, "sig": sig}})
+            self.s.update({"device": {"light": True, "sig": sig, "light_stt": plan.get("stt") or ""}})
             self._apply_light_stt(plan.get("stt"))
             if plan.get("tts") == "piper":
                 self.s.update({"tts": {"engine": "piper"}})
         else:
             self.s.update({"device": {"light": False, "sig": sig, "notice": ""}})
             st = self.s.get("stt") or {}
+            rem = st.get("remote") or {}
             if st.get("engine") == "vosk":
                 self.s.update({"stt": {"engine": "gigaam"}})
                 done.append("распознавание — снова точный GigaAM")
+            elif (st.get("engine") == "remote" and self.s.get("device", "light_stt") in ("cloud", "account")
+                  and (rem.get("cloud") or rem.get("from_account"))):
+                # №689 (13.11): лёгкий режим отдал речь серверу Dewiar, а выключаясь, возвращал только голос — распознавание
+                # так и оставалось на сервере («у меня стоит локальное, а там — сервер Dewiar»). Отдал лёгкий режим — он и вернёт.
+                self.s.update({"stt": {"engine": "gigaam", "remote": {"cloud": False, "from_account": False}}})
+                done.append("распознавание — снова своё (GigaAM)")
+            self.s.update({"device": {"light_stt": ""}})
             # голос Piper, потому что Vosk на этом компьютере не успевал за речью (engine_remote._vosk_slow, auto_piper), —
             # остаётся Piper: иначе после лёгкого режима снова минуты на загрузку и секунды на фразу (пакет 22.10, №185)
             if self.s.get("tts", "engine") == "piper" and not self.s.get("tts", "auto_piper"):
@@ -341,6 +349,7 @@ class BrainMixin:
         how = "cloud" if self._cloud_stt_ok() else "account" if self.account.service_url("stt") else ""
         if not how:
             return
+        self.s.update({"device": {"light_stt": how}})
         self._apply_light_stt(how)
         self.apply_engines()
         self.s.update({"device": {"notice": "", "stt_auto": True}})

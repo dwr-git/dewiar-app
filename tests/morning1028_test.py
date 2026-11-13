@@ -180,7 +180,12 @@ with sync_playwright() as p:
     pg.fill("#mn-city", "Гродно"); pg.click("#mn-cgo"); pg.wait_for_timeout(300)
     ok(["morning_set", {"city": "Гродно"}] in pg.evaluate("_calls"), "сменить город — morning_set")
     pg.click("#mn-hide"); pg.wait_for_timeout(300)
-    ok(pg.evaluate("document.querySelector('#hm-morning').hidden"), "«Скрыть до завтра»")
+    # 13.11 (владелец: «закрыл погоду — она исчезла, и не знаю, как включить обратно»): × сворачивает строкой, а не прячет
+    ok(not pg.evaluate("document.querySelector('#hm-morning').hidden") and pg.locator("#mn-open").count() == 1
+       and "Развернуть" in pg.inner_text("#hm-morning") and "°" in pg.inner_text("#hm-morning"), "«Свернуть до завтра» — строкой с погодой и «Развернуть»")
+    pg.evaluate("() => { const oc = core.call; core.call = (c, a) => c === 'morning_set' && a.hide === '' ? (_calls.push([c, a]), _d = Object.assign({}, _d, { settings: {} }), Promise.resolve(_d)) : oc(c, a); }")
+    pg.click("#mn-open"); pg.wait_for_timeout(300)
+    ok(pg.locator("#mn-say").count() == 1, "«Развернуть» — «Утро» снова целиком")
     ok(pg.evaluate("[mnWith('Лира'), mnWith('Патрик'), mnWith('Эва'), mnWith('Гастон')]") == ["Лирой", "Патриком", "Эвой", "Гастоном"], "«Утро с Патриком», «с Эвой»")
     pg.evaluate("() => { _d = Object.assign({}, _d, { city: '', weather: null, settings: {} }); mnLoad(); }"); pg.wait_for_timeout(300)
     ok(pg.locator("#mn-city").count() == 1 and "Скажите, где вы" in pg.inner_text("#hm-morning"), "нет города — поле «Город»")
