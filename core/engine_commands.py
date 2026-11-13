@@ -1560,7 +1560,10 @@ class CommandsMixin:
         if cmd.startswith("course_"):           # курс «Неделя с Лирой» (core/course.py, studio/course.js)
             c = self.course
             if cmd == "course_seen":
-                c.seen(str(a.get("section") or ""))
+                sec = str(a.get("section") or "")
+                if re.fullmatch(r"[a-z][a-z0-9_]{0,30}", sec) and hasattr(self, "health_use"):   # «чем пользуются» (13.11): раздел студии открыли — только имя
+                    self.health_use("s:" + sec)
+                c.seen(sec)
             elif cmd == "course_pick":
                 return c.pick(str(a.get("id") or ""))
             elif cmd == "course_ahead":

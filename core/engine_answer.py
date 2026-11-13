@@ -2662,6 +2662,9 @@ class AnswerMixin:
                         deed_checked = True
                         log.info("✋ %s — прошу переделать", fix.split(" — ")[0].split(":", 1)[-1].strip()[:90])
                         retract(drop=True)                   # ответ дадут заново — неверный в тексте не остаётся
+                        # 13.11, итог недели: «Извини, я ошиблась — 17:50 … это я подтянула» — человек прошлого ответа не видел
+                        fix += (" Прошлый ответ человек не видел: не извиняйся и не говори об ошибке или проверке — просто дай "
+                                "верный ответ.")
                         msgs = msgs + [{"role": "assistant", "content": step_text or "…"}, {"role": "user", "content": fix}]
                         if turn.full.strip() and not turn.full.endswith(" "):
                             turn.full += " "

@@ -24,6 +24,31 @@ from engine_rest import RestMixin  # noqa: E402  «Отдых»: час без �
 from engine_chat import ChatMixin  # noqa: E402  «Чат» студии: «Ещё раз», «Изменить», беседы, выгрузка (0.86)
 
 
+class BlindSet(set):
+    """Модели, которые не видят картинок — на 15 минут (идея №191): LM Studio подхватывает зрение (mmproj), когда модель
+    перезагружена, — Лира проверит снова сама, без перезапуска. set — чтобы старые проверки isinstance(…, set) работали."""
+    TTL = 900
+
+    def __init__(self):
+        super().__init__()
+        self._at = {}
+
+    def add(self, k):
+        import time as _t
+        self._at[k] = _t.monotonic()
+        super().add(k)
+
+    def __contains__(self, k):
+        import time as _t
+        if not super().__contains__(k):
+            return False
+        if _t.monotonic() - self._at.get(k, 0) > self.TTL:
+            self.discard(k)
+            self._at.pop(k, None)
+            return False
+        return True
+
+
 class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin,
              PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin, ChatMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
@@ -156,7 +181,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.reminders.on_change = self._on_reminders_changed
         self.updater = Updater(settings, VERSION, STATE_DIR, emit=self.emit)
         self.on_quit = None
-        self._blind = set()                         # модели, которые не видят картинок (узнаём по первой ошибке)
+        self._blind = BlindSet()                    # модели, которые не видят картинок (узнаём по первой ошибке; на 15 минут)
         self._listen_peak, self._listen_vad = 0.0, 0.0
         self._probing = set()
         self._now_saying = ""
@@ -878,12 +903,23 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
             log.debug("чат: %s", e)
 
     def _g(self, text):
-        """«Выключил музыку» → «Выключила музыку» у Лиры, Эвы и других героинь (только речь самого ассистента)."""
+        """«Выключил музыку» → «Выключила музыку» у Лиры, Эвы и других героинь (только речь самого ассистента); программа
+        не по-русски — фраза на её языке (словарь перевода по тексту, core/i18n.tx)."""
+        try:                                               # 0.96: программа по-английски — и быстрые ответы без модели;
+            import i18n                                    # переводим фразу как она написана в коде, ДО рода персонажа:
+            lang = i18n.resolve(self.s.get("ui", "lang"))  # «Передал в задачу.» есть в словаре, «Передала…» — нет
+            if lang != i18n.SOURCE:
+                t2 = i18n.tx(text, lang)
+                if t2 != text:
+                    return t2
+        except Exception:  # noqa: BLE001
+            pass
         try:
             from gender import for_persona
-            return for_persona(text, (self.personas.get(self.s.get("persona")) or {}).get("gender"))
+            text = for_persona(text, (self.personas.get(self.s.get("persona")) or {}).get("gender"))
         except Exception:  # noqa: BLE001
-            return text
+            pass
+        return text
 
     def set_state(self, st):
         if st != "listening":

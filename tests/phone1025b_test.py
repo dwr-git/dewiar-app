@@ -19,7 +19,9 @@ def ok(c, m):
 
 
 sp = (ROOT / "android/src/pro/dewiar/app/Speech.java").read_text(encoding="utf-8")
-ok("EXTRA_LANGUAGE_PREFERENCE, \"ru-RU\"" in sp and "EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true" in sp, "распознаватель телефона просят «только русский»")
+# 0.96: язык — по языку приложения (lang1: русское — «только русский», английское — «только английский»)
+ok(("EXTRA_LANGUAGE_PREFERENCE, \"ru-RU\"" in sp or ('"ru-RU"' in sp and "EXTRA_LANGUAGE_PREFERENCE, main" in sp))
+   and "EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true" in sp, "распознаватель телефона просят «только русский» (в русском приложении)")
 tmp = Path(tempfile.mkdtemp()); www = tmp / "www"
 shutil.copytree(ROOT / "android/assets/www", www)
 for x in ("entities.js", "rich.js", "skins.js", "skins.css", "privacy.js", "closecrypto.js", "qrcode.js", "call.js", "codes.js"):

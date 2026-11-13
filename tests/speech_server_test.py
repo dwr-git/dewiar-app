@@ -51,6 +51,11 @@ with TestClient(server.app) as c:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(b"\0\0" * 32000)
     r = c.post("/v1/audio/transcriptions", headers=H, files={"file": ("a.wav", buf.getvalue(), "audio/wav")})
     ok(r.status_code == 200 and "2.0" in r.json()["text"], f"распознавание по-прежнему: {r.json()}")
+    # 0.96: language=en — английская модель (GigaAM слышит только русский)
+    r = c.post("/v1/audio/transcriptions", headers=H, data={"language": "en", "model": "gigaam"},
+               files={"file": ("a.wav", buf.getvalue(), "audio/wav")})
+    ok(r.status_code == 200 and r.json()["text"].startswith("test "), f"английская речь — Parakeet: {r.json()}")
+    ok(any(m["id"] == server.MODEL_EN for m in c.get("/v1/models", headers=H).json()["data"]), "английская модель — в списке")
     # №455 (01.11): Ubuntu переустановили — onnx_asr нет: не голый 500, а 503 со словами, что поставить; видно в /health
     os.environ.pop("DEWIAR_SPEECH_FAKE"); server._model = None
     import builtins

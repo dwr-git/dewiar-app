@@ -65,7 +65,7 @@ ok(forms == {1: "one", 2: "few", 5: "many", 11: "many", 21: "one", 22: "few", 25
 ok([i18n.plural_form("en", n) for n in (1, 2, 0)] == ["one", "other", "other"], "английские формы")
 ok([i18n.plural_form("ar", n) for n in (0, 1, 2, 3, 11, 100)] == ["zero", "one", "two", "few", "many", "other"], "арабские формы — на будущее")
 ok(i18n.t("nav.home", "en") == "Home" and i18n.t("nav.home", "ru") == "Главная" and i18n.t("нет.такого", "en") == "нет.такого", "t(): язык, запасной русский, ключ")
-for k in ("LC_ALL", "LC_MESSAGES", "LANGUAGE"):
+for k in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "DEWIAR_SYS_LANG"):   # DEWIAR_SYS_LANG — его задают проверкам run_quick
     os.environ.pop(k, None)
 os.environ["LANG"] = "de_DE.UTF-8"
 ok(i18n.resolve("auto") == "en" and i18n.resolve("ru") == "ru", "система не на русском — английский; выбор человека — главнее")

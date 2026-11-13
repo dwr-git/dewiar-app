@@ -24,7 +24,7 @@ URGENT_MIN = 8.5                 # сигнал, с которого матер�
 URGENT_GAP = 3600                # срочное — не чаще раза в час
 TREND_DAYS = 8                   # спарклайн тренда — столько дней
 TYPES = ("release", "analysis", "news", "practice", "incident", "opinion", "video", "research")
-DETECT_V = 2                     # версия detect(): старые источники при обходе определяются заново
+DETECT_V = 3                     # версия detect(): старые источники при обходе определяются заново (3 — vk.ru, №690)
 KINDS = ("rss", "site", "youtube", "telegram", "reddit", "github", "vk", "dzen", "article")
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
@@ -93,8 +93,9 @@ def detect(link):
         if len(parts) >= 2:
             return {"kind": "github", "url": f"https://github.com/{parts[0]}/{parts[1]}",
                     "feed": f"https://github.com/{parts[0]}/{parts[1]}/releases.atom", "name": f"{parts[0]}/{parts[1]}"}
-    if host.endswith("vk.com"):
-        return {"kind": "vk", "url": s, "feed": "", "name": "VK " + (path.strip("/") or host)}
+    if host in ("vk.com", "vk.ru") or host.endswith((".vk.com", ".vk.ru")):          # vk.ru — новый адрес VK (№690)
+        nm = vk_name(s)
+        return {"kind": "vk", "url": f"https://vk.com/{nm}" if nm else s, "feed": "", "name": "VK " + (nm or host)}
     if host.endswith("dzen.ru") or host.endswith("zen.yandex.ru"):
         return {"kind": "dzen", "url": s, "feed": "", "name": "Дзен " + (path.strip("/").split("/")[-1] or "")}
     if re.search(r"(\.rss|\.atom|\.xml|/rss|/feed|/atom)(/|\?|$)", path + ("?" if p.query else ""), re.I) or "format=rss" in (p.query or ""):
@@ -103,6 +104,42 @@ def detect(link):
     if len([x for x in path.split("/") if x]) >= 2 and re.search(r"[\w-]{12,}", path.split("/")[-1] or ""):
         return {"kind": "article", "url": s, "feed": "", "name": name}
     return {"kind": "site", "url": s, "feed": "", "name": name}
+
+
+def vk_name(url):
+    """vk.com/имя, vk.ru/club123, m.vk.com/public123 -> «имя» / «club123»; не сообщество (wall, feed…) — ""."""
+    p = urlparse(url if "://" in url else "https://" + url)
+    parts = [x for x in p.path.split("/") if x]
+    if not parts:
+        return ""
+    n = parts[0].lower()
+    if n in ("wall", "feed", "im", "away.php", "search", "video", "music", "groups", "friends", "login") or not re.fullmatch(r"[a-z0-9_.]{2,64}", n):
+        return ""
+    return n
+
+
+def first_line(text, n=140):
+    t = re.sub(r"\s+", " ", (text or "").strip().split("\n")[0])
+    return t if len(t) <= n else t[:n - 1].rstrip() + "…"
+
+
+def parse_vk(html, name=""):
+    """Посты со страницы сообщества VK (мобильная m.vk.com: pi_text; обычная: wall_post_text) -> материалы.
+    Ссылка — /wall-123_456 рядом с текстом; дата у разметки VK словами («вчера в 12:30») — берём время чтения."""
+    out, seen = [], set()
+    for m in re.finditer(r'class="(?:pi_text|wall_post_text)[^"]*"[^>]*>(.*?)</div>', html or "", re.S):
+        body = re.sub(r"<br\s*/?>", "\n", m.group(1))
+        text = _html.unescape(re.sub(r"<[^>]+>", "", body)).strip()
+        if len(text) < 20:
+            continue
+        before = html[max(0, m.start() - 4000):m.start()]
+        w = re.findall(r"/wall(-?\d+_\d+)", before)
+        url = f"https://vk.com/wall{w[-1]}" if w else f"https://vk.com/{name}"
+        if url in seen and w:
+            continue
+        seen.add(url)
+        out.append({"title": first_line(text), "url": url, "ts": int(time.time()), "text": text[:6000]})
+    return out[:30]
 
 
 def split_links(text):

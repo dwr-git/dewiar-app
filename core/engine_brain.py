@@ -35,9 +35,12 @@ class BrainMixin:
         extra = [(acc.data.get("server") if acc else "") or "", self.s.get("cloud", "url") or "", self.s.get("updates", "url") or "",
                  (self.s.get("provision") or {}).get("url", "") or "", self._net_try]
         own = self.s.get("net", "proxy") or ""
-        dw = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "dewiar") else ""
+        # 13.11 (владелец: после сна «прокси не пустил: просит логин и пароль (407)» на каждый вопрос, помог только
+        # перезапуск): логин прокси Dewiar устарел — пока не взят свежий, к серверам Dewiar напрямую, без него
+        stale = getattr(self, "_px_stale", False)
+        dw = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "dewiar") and not stale else ""
         # запасной путь: прокси Dewiar, полученный заранее, — только если напрямую dewiar.pro не открылся (net._DirectFirst)
-        rv = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "reserve") is not False else ""
+        rv = self.s.get("net", "dewiar_secret") or "" if self.s.get("net", "reserve") is not False and not stale else ""
         return own or dw, extra, rv, bool(dw and not own)       # 4-е — прокси выдан Dewiar: в подсказках его адрес не показываем
 
     def _lan_fetch(self):
@@ -92,17 +95,19 @@ class BrainMixin:
         except net.NetError as e:
             return str(e)
         self.s.update({"net": {"dewiar_secret": px, "dewiar_at": time.time()}})
+        self._px_stale = False                           # свежий логин — снова можно через прокси Dewiar
         log.info("🌐 Прокси Dewiar получен%s: %s", " (запасной путь, если dewiar.pro не откроется)" if auto else "", net.hide(px) or "раздача выключена")
         return ""
 
     def _proxy_auth_stale(self):
         """Прокси ответил 407: если это прокси Dewiar (свой или запасной путь) — свежий логин с сайта, в фоне и не чаще
         раза в 10 минут (net.on_proxy_auth). Свой прокси человека — тут не поможем: ошибку увидит в «Сети»."""
+        if not self.s.get("net", "dewiar_secret") or self.s.get("net", "proxy"):
+            return False                                 # свой прокси человека (или прокси Dewiar нет) — не наш логин
+        self._px_stale = True                            # до свежего логина — напрямую (_net_conf), не повторять 407
         if time.time() - float(getattr(self, "_px_auth_at", 0) or 0) < 600:
             return False
         self._px_auth_at = time.time()
-        if not self.s.get("net", "dewiar_secret"):
-            return False
         log.info("🌐 Прокси ответил 407 — беру свежий логин прокси Dewiar")
         threading.Thread(target=self._dewiar_proxy_fetch, kwargs={"force": True}, daemon=True).start()
         return True
@@ -592,7 +597,7 @@ class BrainMixin:
             return False
         self._stt_retry_at = time.monotonic()
         if back == "gigaam":
-            name = st.get("gigaam_model") or "gigaam-v3-e2e-rnnt"
+            name = self._asr_name() if hasattr(self, "_asr_name") else (st.get("gigaam_model") or "gigaam-v3-e2e-rnnt")
             g = self.gigaam if getattr(self, "gigaam", None) and self.gigaam.model_name == name else GigaAMSTT(name)
             if not g.ready:
                 if getattr(g, "oom", False):

@@ -59,10 +59,28 @@ def oom_error(e):
                                                         r"memoryerror|не хватает памяти", str(e), re.I))
 
 
+# 0.96: программа по-английски — точное распознавание на этом компьютере не GigaAM (только русский), а NVIDIA Parakeet
+# TDT v3 (CC-BY-4.0): та же библиотека onnx-asr, на процессоре почти так же быстра; 25 европейских языков — английский и
+# русский (человек, который выбрал английский интерфейс, может и по-русски сказать)
+EN_ASR = "nemo-parakeet-tdt-0.6b-v3"
+
+
+def asr_title(model_name):
+    return "Parakeet" if "parakeet" in str(model_name) else "GigaAM"
+
+
+def asr_mb(model_name):
+    return 670 if "parakeet" in str(model_name) else 250
+
+
 class GigaAMSTT:
+    """Точное распознавание на этом компьютере (onnx-asr): GigaAM для русского, Parakeet — когда программа по-английски."""
+
     def __init__(self, model_name="gigaam-v3-e2e-rnnt"):
         self.model_name = model_name
-        self.name = f"GigaAM ({model_name})"
+        self.title, self.mb = asr_title(model_name), asr_mb(model_name)
+        self.hub_key = "gigaam" if self.title == "GigaAM" else model_name.removeprefix("nemo-")
+        self.name = f"{self.title} ({model_name})"
         self.model = None
         self.error = ""
         self.oom = False                # не загрузился из-за нехватки памяти — повторять в фоне бессмысленно
@@ -91,6 +109,13 @@ class GigaAMSTT:
         hub = MODELS_DIR / "hf" / "hub"
         if not hub.is_dir():
             return False
+        if self.hub_key != "gigaam":                  # Parakeet: кодер, декодер и словарь
+            for snap in hub.glob(f"models--*{self.hub_key}*/snapshots/*"):
+                names = [p.name for p in snap.glob("*.onnx") if p.stat().st_size > 1024]
+                if any(n.startswith("encoder") for n in names) and any(n.startswith("decoder") for n in names) \
+                        and (snap / "vocab.txt").exists():
+                    return True
+            return False
         prefix = self.model_name.removeprefix("gigaam-").replace("-", "_")
         for snap in hub.glob("models--*gigaam*/snapshots/*"):
             names = [p.name for p in snap.glob("*.onnx") if p.stat().st_size > 1024]
@@ -103,9 +128,9 @@ class GigaAMSTT:
 
     def _drop_hub(self):
         import shutil
-        for d in (MODELS_DIR / "hf" / "hub").glob("models--*gigaam*"):
+        for d in (MODELS_DIR / "hf" / "hub").glob(f"models--*{self.hub_key}*"):
             shutil.rmtree(d, ignore_errors=True)
-        log.info("GigaAM: неполный кэш Hugging Face удалён — скачаю заново")
+        log.info("%s: неполный кэш Hugging Face удалён — скачаю заново", self.title)
 
     def _from_mirror(self, on_progress=None):
         """Архив модели со своего сайта → MODELS_DIR/<модель>/ (с проверкой sha256). Распаковка во временную папку
@@ -149,7 +174,7 @@ class GigaAMSTT:
                 so.intra_op_num_threads = max(1, min(4, (os.cpu_count() or 2) // 2))
                 so.inter_op_num_threads = 1
                 if on_status:
-                    on_status("Загружаю GigaAM — при первом запуске скачивается ~250 МБ")
+                    on_status(f"Загружаю {self.title} — при первом запуске скачивается ~{self.mb} МБ")
                 t0 = time.monotonic()
                 tried = False
                 if not self.cached() and self.mirror:
@@ -167,7 +192,7 @@ class GigaAMSTT:
                     log.info("GigaAM готов за %.1f с (%s)", time.monotonic() - t0, self.local_dir)
                     self.error = ""
                     return True
-                if not self._hub_ok() and any((MODELS_DIR / "hf" / "hub").glob("models--*gigaam*")):
+                if not self._hub_ok() and any((MODELS_DIR / "hf" / "hub").glob(f"models--*{self.hub_key}*")):
                     self._drop_hub()                       # оборванное скачивание: снимок без кодера — заново
                 with _heavy():                          # кэш Hugging Face — тоже не вместе с голосами
                     try:
@@ -187,13 +212,13 @@ class GigaAMSTT:
                         else:
                             self.model = onnx_asr.load_model(self.model_name, sess_options=so)
                     self.model.recognize(np.zeros(8000, dtype=np.float32))     # прогрев
-                log.info("GigaAM готов за %.1f с", time.monotonic() - t0)
+                log.info("%s готов за %.1f с", self.title, time.monotonic() - t0)
                 self.error = ""
                 return True
             except Exception as e:  # noqa: BLE001
                 self.error = str(e) or type(e).__name__          # MemoryError() — без текста, а это тоже «не загрузился»
                 self.oom = oom_error(e)
-                log.warning("GigaAM не загрузился: %s", self.error)
+                log.warning("%s не загрузился: %s", self.title, self.error)
                 return False
             finally:
                 self.loading = False

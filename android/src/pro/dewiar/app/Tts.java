@@ -25,7 +25,7 @@ public final class Tts {
     private final Context ctx;
     private final Net.Sink sink;
     private TextToSpeech tts;
-    private volatile boolean ready;
+    private volatile boolean ready, readyEn;
     private MediaPlayer player;
     private final Object playLock = new Object();    // ожидание конца фразы в play(); stop() будит его, иначе очередь стоит до таймаута
     private java.util.concurrent.ExecutorService queue = java.util.concurrent.Executors.newSingleThreadExecutor();   // фразы сервера — строго по одной
@@ -39,6 +39,8 @@ public final class Tts {
                 if (status == TextToSpeech.SUCCESS) {
                     int r = tts.setLanguage(new Locale("ru", "RU"));
                     ready = r != TextToSpeech.LANG_MISSING_DATA && r != TextToSpeech.LANG_NOT_SUPPORTED;
+                    // 0.96: английский — у телефона без русского голоса (английское приложение) он обычно есть
+                    try { readyEn = tts.isLanguageAvailable(Locale.US) >= TextToSpeech.LANG_AVAILABLE; } catch (Throwable ignored) { }
                     tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                         @Override public void onStart(String id) { ev("tts_start", id); }
                         @Override public void onDone(String id) { ev("tts_done", id); release(id); }
@@ -60,6 +62,7 @@ public final class Tts {
     }
 
     public boolean ready() { return ready; }
+    public boolean ready(String lang) { return lang != null && lang.startsWith("en") ? readyEn : ready; }
 
     /** Русские голоса движка: [{name, offline}]. */
     public String voices() {
@@ -97,7 +100,7 @@ public final class Tts {
     /** Фраза на другом языке (lang — «en-US»): язык движка — на эту фразу (он запоминается в самой просьбе), затем снова
      *  русский. Голоса этого языка нет — обычная фраза. */
     public void speak(String id, String text, float rate, float pitch, String voice, boolean add, String lang) {
-        if (lang == null || lang.isEmpty() || lang.startsWith("ru") || !ready) { speak(id, text, rate, pitch, voice, add); return; }
+        if (lang == null || lang.isEmpty() || lang.startsWith("ru") || !(ready || readyEn)) { speak(id, text, rate, pitch, voice, add); return; }
         Locale l = Locale.forLanguageTag(lang);
         try {
             if (tts.isLanguageAvailable(l) < TextToSpeech.LANG_AVAILABLE) { speak(id, text, rate, pitch, voice, add); return; }

@@ -4,7 +4,7 @@
 # Те же правила, что в run_all.sh: проверка пройдена, только если нет ❌ И код выхода 0.
 TMPROOT=$(mktemp -d); export TMPDIR="$TMPROOT"; trap 'type _pg_stop >/dev/null 2>&1 && _pg_stop; rm -rf "$TMPROOT"' EXIT
 PY=${1:-python3}; T="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$T")"
-export PYTHONUNBUFFERED=1 DEWIAR_PY=${DEWIAR_PY:-$PY} DEWIAR_FAKE_RAM_GB=${DEWIAR_FAKE_RAM_GB:-16} DEWIAR_FAKE_CORES=${DEWIAR_FAKE_CORES:-8}
+export DEWIAR_SYS_LANG=${DEWIAR_TEST_LANG:-ru} PYTHONUNBUFFERED=1 DEWIAR_PY=${DEWIAR_PY:-$PY} DEWIAR_FAKE_RAM_GB=${DEWIAR_FAKE_RAM_GB:-16} DEWIAR_FAKE_CORES=${DEWIAR_FAKE_CORES:-8}
 FAIL=0
 gh_error() {   # в GitHub Actions — ещё и пометка с причиной: журнал целиком там видно не всем, пометки — всем
   [ -n "$GITHUB_ACTIONS" ] || return 0
@@ -492,6 +492,13 @@ run "Плагины и группы в меню сворачиваются вм�
 run "№655: дата выпуска подкаста — настоящая, не «1 января»" $PY "$T/podcast_date655_test.py"
 run "Языки: ru.json/en.json, разметка = словарь, храповик русского мимо словарей, меню по-английски, переключатель" $PY "$T/i18n_test.py"
 run "Английская студия и виджет (0.95): перевод по тексту, все разделы и окна без русского, образцы, своё не трогаем" $PY "$T/i18n_text0950_test.py"
+run "Английский телефон (0.96): «Как в системе», настройки и листы по-английски, фразы приложения, даты, «Что нового» в веб-версии" $PY "$T/i18n_phone0960_test.py"
+run "Итоги недели без постоянных еженедельных дел; переспрос без «Извини, я ошиблась» (владелец 13.11)" $PY "$T/week_summary1113_test.py"
+run "После сна — не «прокси не пустил (407)» на каждый вопрос: устаревший логин прокси Dewiar — напрямую (владелец 13.11)" $PY "$T/proxy_wake1113_test.py"
+run "PDF на Windows: русский текст и «×» не роняют разбор; «Готово.» вместо ответа — переспрос (№692)" $PY "$T/pdf_win1113_test.py"
+run "Игры: вторая кнопка в светлых играх читается (№697)" $PY "$T/arcade_ghost1113_test.py"
+run "0.96: программа по-английски — распознаёт Parakeet, облако — language=en" $PY "$T/stt_en1113_test.py"
+run "0.96: фразы программы без модели — по-английски (ядро, Engine._g, сводка близким)" $PY "$T/i18n_core1113_test.py"
 run "«Итог дня» (владелец 11.11): шаги дела не в окна, без навыков плагинов, молчит — строкой в виджете" $PY "$T/evening_job1111_test.py"
 run "Отчёт 656: недоступный SSLKEYLOGFILE не роняет сеть; старые файлы задачи не роняют продолжение" $PY "$T/net_keylog656_test.py"
 run "HARNESS выпуск 8 (как среда Claude): пересказ контекста без потери фактов; план-список; проверка последним пунктом" $PY "$T/harness8_test.py"

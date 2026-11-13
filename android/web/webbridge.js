@@ -97,7 +97,7 @@
   function listenWeb(g, hold) {
     if (!SR) { ev({ type: "stt_error", g, code: 9, msg: "в этом браузере нет распознавания речи" }); return; }
     const r = new SR(); rec = r;
-    r.lang = "ru-RU"; r.interimResults = true; r.continuous = !!hold; r.maxAlternatives = 1;
+    r.lang = window.dwLang && dwLang() === "en" ? "en-US" : "ru-RU";   // 0.96: приложение по-английски — слушаем по-английски r.interimResults = true; r.continuous = !!hold; r.maxAlternatives = 1;
     let final = "", said = false;
     r.onstart = () => ev({ type: "stt_start", g });
     r.onresult = (e) => {
@@ -138,7 +138,7 @@
       const pcm = new Int16Array(chunks.reduce((n, c) => n + c.length, 0)); let o = 0; chunks.forEach(c => { pcm.set(c, o); o += c.length; });
       const fd = new FormData();
       fd.append("file", new Blob([wav(pcm, 16000)], { type: "audio/wav" }), "speech.wav");
-      fd.append("model", model || "whisper-1"); fd.append("language", "ru");
+      fd.append("model", model || "whisper-1"); fd.append("language", window.dwLang && dwLang() === "en" ? "en" : "ru");
       try {
         const r = await fetch(url, { method: "POST", headers: key ? { Authorization: "Bearer " + key } : {}, body: fd });
         const t = await r.text(); if (!r.ok) throw new Error("сервер ответил " + r.status);
@@ -304,12 +304,13 @@
       cancelListen() { if (rec) try { rec.abort(); } catch (e) { } if (srv) srv.cancel = true; },
       speak(id, text, rate, pitch, voice) { queue.push({ id, text, rate, pitch, voice }); pump(); },
       speakLang(id, text, rate, pitch, voice, add, lang) { queue.push({ id, text, rate, pitch, voice, lang }); pump(); },
-      sttLang2() { },
+      sttLang2() { }, sttLang1() { },
       speakRemote(id, url, key, body) { pushRemote(id, url, key, body, null); },
       speakRemoteFb(id, url, key, body, fb) { pushRemote(id, url, key, body, fb); },
       stopSpeak() { gen++; queue.length = 0; if (synth) synth.cancel(); if (playing) { try { playing.pause(); } catch (e) { } playing = null; } },
       voices: () => JSON.stringify(ruVoices().map(v => ({ name: v.name, offline: !!v.localService, features: [] }))),
       ttsReady: () => !!synth && ruVoices().length > 0,
+      ttsReadyLang: (l) => !!synth && synth.getVoices().some(v => String(v.lang || "").toLowerCase().startsWith(String(l || "").toLowerCase())),
       alarmSet(j) { const x = JSON.parse(j); x.id = x.id || "a" + Date.now(); const l = alarms(), i = l.findIndex(a => a.id === x.id); if (i >= 0) l[i] = x; else l.push(x); saveAlarms(l); return JSON.stringify(x); },
       alarmCancel(id) { const l = alarms(), i = l.findIndex(a => a.id === id); if (i >= 0) { l.splice(i, 1); saveAlarms(l); } return i >= 0; },
       alarms: () => JSON.stringify(alarms()), alarmHistory: () => LS.get(HK) || "[]", exactAlarms: () => true,

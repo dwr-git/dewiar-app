@@ -448,6 +448,20 @@ let S = (() => { try { return Object.assign({}, DEF, JSON.parse(prefGet("setting
 for (const k of ["llm", "stt", "tts", "home", "account", "net", "tg"]) S[k] = Object.assign({}, DEF[k], S[k] || {});
 { let raw = {}; try { raw = JSON.parse(prefGet("settings") || "{}") || {}; } catch (e) { }
   if (!raw.features || typeof raw.features !== "object") S.features = Object.keys(raw).length ? { games: true, near: true, meet: true } : Object.assign({}, DEF.features); }
+/* Язык приложения (0.96): «auto» — по языку системы (русский — если система на русском, украинском, белорусском,
+   казахском; есть словарь языка системы — он; иначе английский), или выбранный в «Оформлении». Кто пользовался до 0.96 —
+   остаётся по-русски (как на компьютере в 0.88). Словари и перевод — те же, что у студии (assets/i18n.js). */
+{ let raw = {}; try { raw = JSON.parse(prefGet("settings") || "{}") || {}; } catch (e) { }
+  if (!S.lang) S.lang = Object.keys(raw).length ? "ru" : "auto"; }
+function phoneSysLang() {
+  // без телефона и без моста браузера (D.mock — проверки, файл в браузере) — русский, как раньше; проверка английского
+  // ставит window.DW_SYS_LANG сама: у Chromium без экрана язык en-US, и все прежние проверки телефона стали бы английскими
+  if (D.mock && !window.DW_SYS_LANG) return "ru";
+  const l = String(window.DW_SYS_LANG || (navigator.languages && navigator.languages[0]) || navigator.language || "ru").slice(0, 2).toLowerCase();
+  if (["ru", "uk", "be", "kk"].includes(l)) return "ru";
+  return window.dwLangs && dwLangs().some(x => x.code === l) ? l : "en";
+}
+if (window.dwSetLang) dwSetLang(S.lang || "auto", phoneSysLang());
 const FEAT_OPTIN = { family: 1 };                           // эти — по желанию: пока не включили, выключены
 const feat = (k) => { const v = (S.features || {})[k]; return v === undefined ? !FEAT_OPTIN[k] : v !== false; };   // «Возможности»: включено ли (нет ключа — да)
 // 22.10: облако отклоняло chat_template_kwargs, а телефон сразу переходил на функции текстом и запоминал это — один раз
@@ -673,6 +687,8 @@ let bugSnap = null, thanksCache = null, bugWait = 0, bugPick = "";   // bugPick 
 function hLoad() { try { return JSON.parse(prefGet("health") || "{}") || {}; } catch (e) { return {}; } }
 function hSave(h) { try { prefSet("health", JSON.stringify(h)); } catch (e) { } }
 function hCount(k, n = 1) { const h = hLoad(); h[k] = (h[k] || 0) + n; hSave(h); }
+// «Чем пользуются» (13.11, владелец: «понять, чем пользуются и чем нет»): листы sh:имя и умения pt:имя — только имена и числа
+function hUse(k) { if (!/^(sh|pt):[a-z][a-z0-9_]{0,40}$/.test(k)) return; const h = hLoad(); h.uses = h.uses || {}; if (!(k in h.uses) && Object.keys(h.uses).length >= 150) return; h.uses[k] = (h.uses[k] || 0) + 1; hSave(h); }
 /* «Голос без пауз» (04.11): подсказка в токенах и сколько из неё сервер взял из кэша начала запроса — как llm.last_usage */
 function usageOf(o) {
   const t = o.timings;                                         // llama.cpp: prompt_n — прочитано заново, cache_n — из кэша
@@ -747,9 +763,9 @@ async function pulseSend() {
   const body = { dev: devId(), app: "phone", version: info.version || "", os: "Android " + (info.android || ""), hw: { device: info.device || "", webview: webviewVer().replace(/^ · /, "") },
     brain: brainKind(), uptime_h: Math.round((Date.now() - H_T0) / 36e4) / 10, starts: h.starts || [], turns: h.turns || 0, net_ok: h.net_ok || 0,
     net_fail: h.net_fail || 0, net_why: h.net_why || {}, errors: h.errors || 0, rude: h.rude || 0, refused: h.refused || 0, problems: Object.entries(h.problems || {}).map(([sig, p]) => ({ sig, text: p.text, n: p.n })),
-    voice: Object.assign({}, h.voice || {}, { tts_engine: S.tts.engine || "", tts_ready: D.ttsReady() ? 1 : 0, text_mode: S.textMode ? 1 : 0,
+    voice: Object.assign({}, h.voice || {}, { tts_engine: S.tts.engine || "", tts_ready: ttsOk() ? 1 : 0, text_mode: S.textMode ? 1 : 0,
       stt_engine: S.stt.engine || "", recognizer: D.recognizer() ? 1 : 0, vol: (() => { try { return D.volume("get", 0); } catch (e) { return -1; } })() }),
-    pcache: h.pcache || {} };
+    pcache: h.pcache || {}, uses: h.uses || {} };
   let r; try { r = await http("POST", healthBase() + "?p=/pulse", { headers: { "Content-Type": "application/json" }, body, timeout: 20000 }); }
   catch (e) { console.log("💓 пульс не ушёл: " + (e.message || e)); return false; }
   if (r.status >= 400) return false;
@@ -759,6 +775,7 @@ async function pulseSend() {
   if (now.voice) { for (const k of Object.keys(body.voice)) if (typeof now.voice[k] === "number" && !/^(tts_ready|text_mode|recognizer|vol)$/.test(k)) now.voice[k] = Math.max(0, now.voice[k] - (body.voice[k] || 0)); }
   for (const p of body.problems) if (now.problems && now.problems[p.sig]) { now.problems[p.sig].n -= p.n; if (now.problems[p.sig].n <= 0) delete now.problems[p.sig]; }
   now.starts = (now.starts || []).slice(body.starts.length);
+  for (const [k, n] of Object.entries(body.uses)) if (now.uses && now.uses[k]) { now.uses[k] -= n; if (now.uses[k] <= 0) delete now.uses[k]; }
   if (now.pcache) {                                           // кэш подсказки: вычесть отправленное
     for (const k of ["n", "k", "ptok_all", "ptok", "cached"]) if (now.pcache[k]) now.pcache[k] = Math.max(0, now.pcache[k] - (body.pcache[k] || 0));
     for (const [kind, v] of Object.entries(body.pcache.by || {})) { const b = (now.pcache.by || {})[kind]; if (b) { for (let i = 0; i < 3; i++) b[i] = Math.max(0, b[i] - v[i]); if (!b[0]) delete now.pcache.by[kind]; } }
@@ -1076,7 +1093,10 @@ function isEnglish(text) {
   const common = w.filter(x => EN_COMMON.has(x)).length;
   return (common >= 1 && w.length >= 2) || w.length >= 3;
 }
-function lang2Apply() { try { if (D.sttLang2) D.sttLang2(S.lang2 || ""); } catch (e) { } }
+/* 0.96: приложение по-английски — распознавание телефона слушает английский (D.sttLang1), «второй язык» — тогда русский */
+function lang2Apply() {
+  try { if (D.sttLang1) D.sttLang1(window.dwLang && dwLang() === "en" ? "en" : "ru"); if (D.sttLang2) D.sttLang2(S.lang2 || ""); } catch (e) { }
+}
 function turnContext(text) {
   const n = convNote();
   let rp = ""; try { rp = recentPrompt() || ""; } catch (e) { }
@@ -1351,7 +1371,7 @@ function toast(t, ms = 2200) { const el = $("#toast"); el.textContent = t; el.cl
 /* Версия движка страниц (Android System WebView / Chrome): у части планшетов (Huawei без сервисов Google) он старый,
    и новое оформление может выглядеть иначе — в жалобе и пульсе видно, какой. -> " · WebView 99" или "" */
 function webviewVer() { const m = /(?:Chrome|Chromium)\/(\d+)/.exec(navigator.userAgent || ""); return m ? " · WebView " + m[1] : ""; }
-function showYou(t) { $("#you").textContent = t ? "«" + t + "»" : ""; quietCheck(); }
+function showYou(t) { const en = !!(window.dwLang && dwLang() !== "ru"); $("#you").textContent = t ? (en ? "“" + t + "”" : "«" + t + "»") : ""; quietCheck(); }   // не по-русски — английские кавычки (0.96)
 /* Длинный ответ (список, таблица, план) — в рамке: облик уменьшается, текст слева и мельче; когда ответ готов
    (frameAnswer) — разметка и кнопки «Копировать», «В заметки», «Скачать». Отзыв: длинный ответ налезал на облик и поле
    ввода, а сохранить его было нечем. */
@@ -1360,6 +1380,7 @@ let turnMedia = null;                            // картинки этого 
 let turnQ = "";                                 // вопрос этого хода: длинная страница (readPage) — куски по его словам
 const isLongAnswer = (t) => String(t || "").length >= LONG_ANSWER || /\n\s*(?:[-*•]|\d+[.)])\s|\n\s*\||```/.test(String(t || "")) || !!(turnMedia && turnMedia.length);
 function showBot(t, cls) {
+  t = trL(t);
   if (tgTurn && t && cls !== "wait") tgLast = String(t);
   const b = $("#bot"), long = !cls && isLongAnswer(t);
   b.className = cls || (long ? "framed" : ""); b.textContent = t || "";
@@ -1603,7 +1624,7 @@ N.on("stt_start", e => { if (sttMine(e)) sttAlive(); });
 N.on("stt_end", e => {
   if (!sttMine(e) || !sttActive) return;
   sttGuard(sttVia === "server" ? 60000 : 8000, "end");          // запись уходит на сервер — при слабом интернете это не мгновенно
-  if (sttVia === "server" && !String($("#you").textContent || "").trim()) showYou("распознаю…");
+  if (sttVia === "server" && !String($("#you").textContent || "").trim()) showYou(trL("распознаю…"));
 });
 N.on("stt_level", e => { if (!sttMine(e)) return; if (orb && state === "listening") orb.set({ level: e.v }); if (!sttStarted) sttAlive(); });
 N.on("stt_partial", e => { if (!sttMine(e)) return; heardPartial = e.text; showYou((dict ? dict + " " : "") + e.text); sttAlive(); });
@@ -1627,7 +1648,9 @@ N.on("stt_result", e => {
    первый раз — переспрашиваем, и этот вопрос слушает сервер Dewiar; второй раз подряд — сервер слушает насовсем
    (как при «распознаватель не отвечает»). Сервера нет — честно говорим, что делать. Русское слово — счётчик к нулю. */
 const STT_CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
-const sttNotRu = (t) => !/[а-яё]/i.test(t) && (STT_CJK.test(t) || (t.match(/[a-z]{2,}/gi) || []).length >= 2);
+// английский в порядке, когда он второй язык («Понимать английскую речь») или язык самого приложения (0.96)
+const sttEnOk = () => S.lang2 === "en" || !!(window.dwLang && dwLang() === "en");
+const sttNotRu = (t) => !/[а-яё]/i.test(t) && (STT_CJK.test(t) || (!sttEnOk() && (t.match(/[a-z]{2,}/gi) || []).length >= 2));
 function sttForeign(t) {
   if (!sttNotRu(t) || holdTalk) return false;
   S.stt.notRu = (S.stt.notRu || 0) + 1; saveS();
@@ -1788,7 +1811,8 @@ function volCard() {
   };
 }
 function say(text, retry = 0) {
-  if (tgTurn) return;                                         // ответ в Telegram за выключенный компьютер — молча (tgHandle)
+  if (tgTurn) return;
+  text = trL(text);                                         // ответ в Telegram за выключенный компьютер — молча (tgHandle)
   const t = speechText(text); if (!t) return;
   if (S.textMode) { vCount("tts_text"); return; }            // текстовый режим — ответ только на экране
   if (!D.mock) {                                              // звук на нуле — голос всё равно не услышат: не синтезируем
@@ -1813,8 +1837,8 @@ function say(text, retry = 0) {
   }
   const id = "s" + (++sayN); sayLeft++;
   turnTime("said");
-  const cv = (S.tts.engine === "cloud" || (S.tts.engine === "system" && !D.ttsReady())) ? cloudVoice() : null;
-  const srvDown = Date.now() - srvVoiceDownAt < 120e3 && D.ttsReady();   // голос сервера только что не ответил — пока свой
+  const cv = (S.tts.engine === "cloud" || (S.tts.engine === "system" && !ttsOk())) ? cloudVoice() : null;
+  const srvDown = Date.now() - srvVoiceDownAt < 120e3 && ttsOk();   // голос сервера только что не ответил — пока свой
   const fem = persona().gender === "female";
   if (S.tts.engine === "eleven" && S.tts.el_key) {           // ElevenLabs своим ключом: голос героя или героини
     const vid = (fem ? S.tts.el_voice_f : S.tts.el_voice_m) || EL_VOICES[fem ? "f" : "m"];
@@ -1829,7 +1853,7 @@ function say(text, retry = 0) {
     const body = cv ? { model: "tts-1", input: said, voice: persona().voice_remote || (persona().gender === "female" ? "serena" : "aiden"), persona: persona().id || "", response_format: "wav", speed: +S.tts.rate || 1 }
       : { model: S.tts.model || "tts-1", input: said, voice: (fem ? S.tts.voice : (S.tts.voice_m || S.tts.voice)) || "alloy", persona: persona().id || "", response_format: "mp3" };
     const sv0 = sysVoiceFor(persona().gender);
-    if (D.speakRemoteFb && D.ttsReady())     // запасной голос — в той же очереди, по порядку (отчёт №93: два голоса разом)
+    if (D.speakRemoteFb && ttsOk())     // запасной голос — в той же очереди, по порядку (отчёт №93: два голоса разом)
       D.speakRemoteFb(id, url, cv ? cv.key : (S.tts.key || ""), JSON.stringify(body), JSON.stringify({ text: t, rate: +S.tts.rate || 1.0, pitch: sv0.pitch, voice: sv0.name || "" }));
     else D.speakRemote(id, url, cv ? cv.key : (S.tts.key || ""), JSON.stringify(body));
   } else if (srvDown && sayTexts.size && D.speakRemoteFb) {
@@ -1838,13 +1862,13 @@ function say(text, retry = 0) {
     const sv = sysVoiceFor(persona().gender);
     D.speakRemoteFb(id, "", "", "", JSON.stringify({ text: t, rate: +S.tts.rate || 1.0, pitch: sv.pitch, voice: sv.name || "" }));
   } else {
-    if (!D.ttsReady()) {
+    if (!ttsOk()) {
       sayLeft--; vCount("tts_none");
       if (!voiceWarned && !D.mock) { voiceWarned = true; plog("warn", "голоса нет: в устройстве нет русского синтеза речи, озвучка облака " + (cloudVoice() ? "есть, но не выбрана" : "не включена") + " — отвечаю текстом"); toast("В устройстве нет русского голоса — отвечаю текстом. Как включить голос — Настройки → Слух и голос.", 6000); }
       return;
     }
     const sv = sysVoiceFor(persona().gender);                 // героям — мужской голос устройства, героиням — женский
-    if (isEnglish(t) && D.speakLang) D.speakLang(id, t, S.tts.rate || 1.0, sv.pitch, "", true, "en-US");   // по-английски — английским голосом
+    if ((isEnglish(t) || (appEn() && !/[а-яё]/i.test(t))) && D.speakLang) D.speakLang(id, t, S.tts.rate || 1.0, sv.pitch, "", true, "en-US");   // по-английски — английским голосом (приложение по-английски — и короткое «OK.»)
     else D.speak(id, t, S.tts.rate || 1.0, sv.pitch, sv.name, true);
   }
   if (state !== "speaking" && state !== "listening") setState("speaking");
@@ -1865,7 +1889,7 @@ N.on("tts_done", e => {
 N.on("tts_error", e => {
   vCount("tts_err"); plog("warn", "голос сервера: " + e.error);
   const t = sayTexts.get(e.id); sayTexts.delete(e.id);
-  if (t && D.ttsReady()) {                                   // эта фраза — голосом телефона, а не тишина
+  if (t && ttsOk()) {                                   // эта фраза — голосом телефона, а не тишина
     srvVoiceDownAt = Date.now(); sayLeft++;
     if (!e.fallback) {                                       // старое приложение: запасной голос говорим сами
       const sv = sysVoiceFor(persona().gender);
@@ -1923,6 +1947,12 @@ function feminine(t) {
   });
 }
 const gfix = (t) => persona().gender === "female" ? feminine(t) : t;
+/* Язык приложения не русский (0.96): готовые фразы самого приложения — «Фонарик включён.», «Секунду — открываю камеру.» — переводим
+   по словарю перевода по тексту (data/i18n/text). Ответ модели уже на языке приложения — в нём нет кириллицы, dwTx его не трогает. */
+const appEn = () => !!(window.dwLang && dwLang() === "en");
+/* Голос устройства есть: русский — или английский, когда приложение по-английски (0.96: телефон без русского голоса) */
+function ttsOk() { return D.ttsReady() || !!(window.dwLang && dwLang() === "en" && D.ttsReadyLang && D.ttsReadyLang("en")); }
+const trL = (t) => (t && window.dwTx && window.dwLang && dwLang() !== "ru") ? dwTx(String(t)) : t;
 
 /* «Ваши данные» (privacy.js — общий текст со студией): факты для вопросов о конфиденциальности и как устроено у этого
    человека — где думает модель, включена ли синхронизация (как core/privacy.py) */
@@ -1974,6 +2004,7 @@ function systemStable() {
   if (kidsOn()) return kidsSystemPrompt();         // детский режим — своя короткая подсказка с правилами
   const p = persona(), others = PERSONAS.filter(x => x.id !== p.id).map(x => `${x.name} — ${(x.role || "").toLowerCase()}`).join("; ");
   const parts = [p.character, window.DEWIAR_TALK_RULES || "", (window.DEWIAR_GENDER_RULES || {})[p.gender] || "", p.focus, window.DEWIAR_VOICE_RULES || "Отвечай коротко, живой речью, по-русски.",
+    window.dwLang && dwLang() === "en" ? "The app language is English: answer in English, whatever language these instructions are in." : "",
     `Ты — один из команды помощников: ${others}. Позвать коллегу — инструмент call_persona. Разговор пользователя с коллегой приходит тебе справкой «[До этого пользователь говорил не с тобой…]»: это их разговор — не продолжай его и не отвечай за коллегу, пока пользователь сам об этом не попросит; отвечай на то, что он говорит тебе.`,
     (D.web ? WEB_DEVICE_RULE : "Ты работаешь на телефоне пользователя (Android). ") + "СЛОВА НЕ ДЕЙСТВУЮТ: «включаю», «звоню», «отправила», «ставлю» ничего не делают — "
     + "делает только вызов инструмента. Просят действие снова — вызывай инструмент снова, каждый раз; не копируй свой прошлый ответ из разговора. "
@@ -2825,7 +2856,7 @@ async function ask(text, opts = {}) {
   if (cap) captureBack();
   if (fast && fast.switchTo) { setState("idle"); showYou(text); switchPersona(fast.switchTo, fast.question); return; }
   // пакет 27.10 (1437), №356: «звони Дмитрий Коновалов» отвечалось без модели, а в журнале ни слова — что сказали, не видно
-  if (fast) { fast.say = gfix(fast.say); plog("info", `⚡ без модели: ${clip(String(fast.say || "(тихо)"), 120)}`); history.push({ role: "user", content: text }, { role: "assistant", content: fast.say, who: persona().id, t: Date.now() }); saveH(); convAfter(); dayTurn(text, fast.say); answerLocal(fast); return; }
+  if (fast) { fast.say = trL(gfix(fast.say)); plog("info", `⚡ без модели: ${clip(String(fast.say || "(тихо)"), 120)}`); history.push({ role: "user", content: text }, { role: "assistant", content: fast.say, who: persona().id, t: Date.now() }); saveH(); convAfter(); dayTurn(text, fast.say); answerLocal(fast); return; }
   if (!S.llm.base_url && loggedIn()) showBot("Подключаюсь к мозгу — секунду…", "wait");
   await ensureBrain();                             // вошли аккаунтом, а мозг не выбран — модели Dewiar по аккаунту сами
   if (!S.llm.base_url) {
@@ -4574,6 +4605,7 @@ function coerceArgs(name, a) {
 /* Выполнить инструмент модели. -> строка для модели (ошибка — «Ошибка: …» с подсказкой, что сказать человеку);
    take_photo -> {text, image}, call_persona -> {text, switchTo} — их разбирает ask(). */
 async function runTool(name, a) {
+  hUse("pt:" + name);
   if (kidsOn() && !kidsTools().has(name)) return "Ошибка: в детском режиме этого нельзя. Скажи по-доброму, что это можно только вместе с мамой или папой.";
   if (HANDS_SET.has(name)) return handsTool(name, a || {});
   a = coerceArgs(name, a);
@@ -6045,7 +6077,7 @@ async function haConnect(url, token) {
 function haForget() { S.ha = { url: "", token: "", at: Date.now() }; homeInfo = null; saveS(); ownShare().catch(() => { }); }
 
 /* ---------- листы снизу (.sheet): открыть, закрыть, смахнуть вниз; за ними — содержимое каждого листа ---------- */
-function openSheet(id) { closeSheets(true); $(id).classList.add("on"); $("#dim").classList.add("on"); if (typeof courseSeen === "function") courseSeen(id.replace("#sh-", "")); }
+function openSheet(id) { closeSheets(true); hUse("sh:" + String(id).replace("#sh-", "").replace(/-/g, "_")); $(id).classList.add("on"); $("#dim").classList.add("on"); if (typeof courseSeen === "function") courseSeen(id.replace("#sh-", "")); }
 function closeSheets(keepDim) {
   $$(".sheet.on").forEach(s => s.classList.remove("on")); if (!keepDim) $("#dim").classList.remove("on");
   if ($(".snd.play") && D.alarmSoundTry) { D.alarmSoundTry(""); $$(".snd.play").forEach(x => x.classList.remove("play")); }   // проба звука — смолкает с листом
@@ -6138,8 +6170,8 @@ let histLive = false;                              // ход начат из «�
 const histOpen = () => !!$("#sh-hist.on");
 function histRender() {
   const h = history.slice(-40), list = $("#hlist");
-  list.innerHTML = h.length ? h.map((m, i) => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? `<div>${esc(m.content)}</div>`
-      : `<div class="ans">${mdAnswer(m.content)}${m.img && window.DewiarRich ? DewiarRich.gallery(m.img) : ""}</div>`}${m.role !== "user" ? `<small class="mrow">${m.who ? esc((PERSONAS.find(p => p.id === m.who) || {}).name || "") : ""}${speechText(String(m.content || "")) ? `<button class="mlisten" data-li="${i}" aria-label="Прослушать ответ">${LISTEN_IC}<span>Прослушать</span></button>` : ""}${String(m.content || "").trim() ? `<span class="macts"><button data-ma="copy" data-li="${i}" aria-label="Скопировать ответ" title="Скопировать">${ICON_COPY}</button><button data-ma="note" data-li="${i}" aria-label="В заметки" title="В заметки">${ICON_NOTE}</button><button data-ma="save" data-li="${i}" aria-label="Скачать ответ файлом" title="Скачать (.md)">${ICON_SAVE}</button></span>` : ""}</small>` : ""}</div>`).join("")
+  list.innerHTML = h.length ? h.map((m, i) => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? `<div translate="no">${esc(m.content)}</div>`
+      : `<div class="ans" translate="no">${mdAnswer(m.content)}${m.img && window.DewiarRich ? DewiarRich.gallery(m.img) : ""}</div>`}${m.role !== "user" ? `<small class="mrow">${m.who ? esc((PERSONAS.find(p => p.id === m.who) || {}).name || "") : ""}${speechText(String(m.content || "")) ? `<button class="mlisten" data-li="${i}" aria-label="Прослушать ответ">${LISTEN_IC}<span>Прослушать</span></button>` : ""}${String(m.content || "").trim() ? `<span class="macts"><button data-ma="copy" data-li="${i}" aria-label="Скопировать ответ" title="Скопировать">${ICON_COPY}</button><button data-ma="note" data-li="${i}" aria-label="В заметки" title="В заметки">${ICON_NOTE}</button><button data-ma="save" data-li="${i}" aria-label="Скачать ответ файлом" title="Скачать (.md)">${ICON_SAVE}</button></span>` : ""}</small>` : ""}</div>`).join("")
     : `<div class="empty">Разговор пуст. Напишите внизу или нажмите микрофон.</div>`;
   list.insertAdjacentHTML("beforeend", `<div id="hlive"></div>`);
   if (window.DewiarRich) DewiarRich.diagrams(list);
@@ -6853,7 +6885,7 @@ function earlyDone(t) {
 /* ---------- «Что нового» (отзыв 13.10: «что было в обновлении — непонятно, пришлось догадываться»). После обновления — лист
    с новым и тем, как попробовать (фраза в «» — нажмите, и Лира её услышит). Текст — data/whatsnew.json (тот же у компьютера,
    сборка кладёт его в whatsnew.js). Уже виденное — pref news_seen; новая установка листа не показывает. ---------- */
-const verCmp = (a, b) => { const x = String(a || "").split(".").map(Number), y = String(b || "").split(".").map(Number);
+const verCmp = (a, b) => { const x = String(a || "").split(".").map(n => parseInt(n, 10)), y = String(b || "").split(".").map(n => parseInt(n, 10));   // «0.9.38-web» — 38, а не NaN (0.96)
   for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
 function newsList(from, to, all) {
   return (window.DEWIAR_NEWS || []).filter(r => (!from || verCmp(r.phone, from) > 0) && verCmp(r.phone, to) <= 0)
@@ -6872,7 +6904,7 @@ function newsShow(list, all) {
     + `<button class="btn p w" id="nw-ok">Понятно</button>`;
   $("#nw-ok").onclick = () => closeSheets();
   if ($("#nw-ideas")) $("#nw-ideas").onclick = () => { closeSheets(); setTimeout(() => openIdeas(), 200); };   // 0.61: «Что нового» → «Идеи Лиры»
-  $$(".nwtry", $("#news-body")).forEach(b => b.onclick = () => { closeSheets(); if (state !== "idle") interrupt(true); ask(b.dataset.say); });
+  $$(".nwtry", $("#news-body")).forEach(b => b.onclick = () => { closeSheets(); if (state !== "idle") interrupt(true); ask(trL(b.dataset.say)); });
   openSheet("#sh-news");
   return true;
 }
@@ -7534,7 +7566,7 @@ function renderSettings() {
       <div class="row2"><label class="f" style="flex:1"><span>Ключ</span><input id="stt-key" type="password" value="${esc(S.stt.key)}"></label><label class="f" style="flex:1"><span>Модель</span><input id="stt-model" placeholder="whisper-1" value="${esc(S.stt.model)}"></label></div></div>
       <div class="sw"><div>Микрофон Bluetooth-наушников<small>Наушники с микрофоном подключены — слушаю ими, а не телефоном: можно отойти от телефона.${D.btMicAvailable && D.btMicAvailable() ? " Сейчас подключены." : ""}</small></div>
       <label class="tg"><input type="checkbox" id="bt-mic" ${S.btMic !== false ? "checked" : ""}><i></i></label></div>
-      ${D.web ? "" : `<div class="sw"><div>Понимать английскую речь<small>Скажите по-английски — отвечу по-английски и английским голосом. Распознавание телефона само узнаёт язык фразы (Android 14 и новее, распознавание Google).</small></div>
+      ${D.web ? "" : `<div class="sw"><div>${appEn() ? "Понимать и русскую речь" : "Понимать английскую речь"}<small>${appEn() ? "Скажите по-русски — отвечу по-русски. Распознавание телефона само узнаёт язык фразы (Android 14 и новее, распознавание Google)." : "Скажите по-английски — отвечу по-английски и английским голосом. Распознавание телефона само узнаёт язык фразы (Android 14 и новее, распознавание Google)."}</small></div>
       <label class="tg"><input type="checkbox" id="lang2-en" ${S.lang2 === "en" ? "checked" : ""}><i></i></label></div>`}
       <p class="hint">${S.stt.auto ? "Распознавание этого устройства не отвечало — слушает сервер Dewiar. " : ""}${info.recognizer ? (D.web ? "Распознаёт сам браузер (Chrome, Edge) — через интернет. В Safari и на iPhone слушает сервер Dewiar — войдите аккаунтом или кодом." : "Распознавание устройства работает и без интернета, если скачан русский язык (Google → Распознавание речи офлайн).") : D.web && cloudEars() ? "В этом браузере нет распознавания речи — слушает сервер Dewiar." : D.web ? "В этом браузере нет распознавания речи — войдите аккаунтом dewiar.pro (слушать будет сервер Dewiar) или откройте Dewiar в Chrome или Safari." : cloudEars() ? "В устройстве нет распознавания речи — слушает сервер Dewiar." : "В устройстве нет распознавания речи — войдите аккаунтом dewiar.pro (слушать будет сервер Dewiar) или укажите свой сервер."}</p></div>
       <h3>Голос</h3><div class="card">
@@ -7548,7 +7580,7 @@ function renderSettings() {
         <label class="f"><span>Модель</span><select id="el-model"><option value="eleven_flash_v2_5">Быстрая (Flash v2.5)</option><option value="eleven_multilingual_v2">Лучшее качество (Multilingual v2)</option></select></label>
         <p class="hint" style="margin-top:0">Ключ — на elevenlabs.io → Профиль → API Keys. Платите вы сами по тарифу ElevenLabs; ключ хранится только в этом телефоне. ID голоса — в «Voices» на сайте (кнопка «ID»).</p></div>
       <label class="f"><span>Скорость речи: <b id="rate-v">${(+S.tts.rate || 1).toFixed(2)}</b></span><input id="tts-rate" type="range" min="0.7" max="2" step="0.05" value="${+S.tts.rate || 1}"></label>
-      ${(info.tts && !D.web) || D.mock || (D.web && D.ttsReady()) ? "" : cloudVoice() ? `<p class="hint">В ${D.web ? "этом браузере" : "устройстве"} нет русского голоса — говорит голос Dewiar.</p>` : D.web ? `<p class="hint">В этом браузере нет русского голоса — ответы текстом. Войдите аккаунтом dewiar.pro — заговорит голос Dewiar.</p>`
+      ${(info.tts && !D.web) || D.mock || (D.web && ttsOk()) ? "" : cloudVoice() ? `<p class="hint">В ${D.web ? "этом браузере" : "устройстве"} нет русского голоса — говорит голос Dewiar.</p>` : D.web ? `<p class="hint">В этом браузере нет русского голоса — ответы текстом. Войдите аккаунтом dewiar.pro — заговорит голос Dewiar.</p>`
         : `<p class="hint">В устройстве нет русского голоса, поэтому ответы только текстом. Установите голос: «Синтез речи Google» из Play Маркета или бесплатный RHVoice (есть и для устройств без Google — в AppGallery и F-Droid), затем выберите его в настройках Android → «Синтез речи». <a href="#" id="tts-get">Открыть</a></p>`}</div>
       <div id="tts-srv"><label class="f"><span>Адрес (OpenAI-совместимый, …/v1)</span><input id="tts-url" placeholder="http://192.168.1.10:8091/v1" value="${esc(S.tts.url)}"></label>
       <div class="row2"><label class="f" style="flex:1"><span>Ключ</span><input id="tts-key" type="password" value="${esc(S.tts.key)}"></label><label class="f" style="flex:1"><span>Модель</span><input id="tts-model" placeholder="tts-1" value="${esc(S.tts.model)}"></label></div>
@@ -7570,6 +7602,7 @@ function renderSettings() {
     if (setTab === "look") h.push(`<div class="card"><p class="sk-now" id="sk-now">${skCur ? `Сейчас — <b>${esc(skCur.name)}</b>${skCur.sub ? `<small>${esc(skCur.sub)}</small>` : ""}` : ""}</p>
       <div class="skins" role="radiogroup" aria-label="Тема">${PHONE_SKINS.map(skBtn).join("")}</div>
       <label class="f" style="margin-top:6px"><span>Когда говорит</span><select id="ap-fx">${opt([["bars", "Лучи"], ["pulse", "Пульс"], ["wave", "Волна"]], lookFx())}</select></label>
+      <label class="f" style="margin-top:6px"><span>${esc(window.t("look.lang"))}</span><select id="ap-lang" translate="no">${opt([["auto", esc(window.t("lang.auto"))]].concat((window.dwLangs ? dwLangs() : []).map(l => [l.code, esc(l.name)])), S.lang || "auto")}</select></label>
       <div class="sw" style="margin-top:10px"><div>Портрет следит за наклоном<small class="hint" style="display:block;margin:2px 0 0">Наклоните телефон — персонаж чуть повернётся и посмотрит на вас. Камера не нужна.</small></div>
         <label class="tg"><input type="checkbox" id="ap-tilt" ${S.tilt === true ? "checked" : ""}><i></i></label></div></div>`);
     // «Возможности» (24.10): необязательное — по желанию; выключенное прячется, ничего не теряя
@@ -7687,6 +7720,7 @@ function wireSettings(info) {
   if (g("dev-ping")) g("dev-ping").onclick = async () => { const r = g("dev-res"); r.className = "res"; r.textContent = "отправляю…";
     const ok = await pulseSend(); r.className = ok ? "res ok" : "res bad";
     r.textContent = ok ? "Готово — обновите список «Где» в кабинете." : (S.pulse === false ? "«Анонимный пульс» выключен — включите его ниже, и телефон появится." : "Не получилось — проверьте интернет."); };
+  if ($("#ap-lang")) $("#ap-lang").onchange = (e) => { S.lang = e.target.value; saveS(); if (window.dwSetLang) dwSetLang(S.lang, phoneSysLang()); lang2Apply(); };
   $$(".skm").forEach(b => b.onclick = () => { S.skin = b.dataset.skin; saveS(); applyLook(); $$(".skm").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", String(x === b)); });
     const c = PHONE_SKINS.find(x => x.id === b.dataset.skin), n = $("#sk-now"); if (c && n) n.innerHTML = `Сейчас — <b>${esc(c.name)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ""}`; });
   if (g("ap-fx")) g("ap-fx").onchange = () => { S.voice_fx = g("ap-fx").value; saveS(); applyLook(); };
@@ -10564,7 +10598,7 @@ function scanResult(txt, format) {
   // штрихкод или Data Matrix товара — разбирать код здесь не нужно: модель знает, как устроены коды «Честного знака»
   // (01 — GTIN, 21 — серийный номер…), и сама найдёт товар в интернете по штрихкоду
   if (/^(ean|upc|datamatrix)/.test(format || "") && /^[\x1d\x20-\x7e]{8,}$/.test(t) && /\d{8}/.test(t)) {
-    showYou("📦 Что за товар?");
+    showYou(trL("📦 Что за товар?"));
     return ask(`Я отсканировал код на товаре (${format}): ${t.replace(/\x1d/g, "<GS>")}. Разбери его и найди в интернете по штрихкоду, `
       + `что это за товар — коротко. Не нашлось — так и скажи. Если это код «Честного знака», в конце одной фразой: подлинность `
       + `и историю упаковки показывает официальное приложение «Честный знак».`, { hidden: true });

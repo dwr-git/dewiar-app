@@ -574,6 +574,7 @@ public final class Bridge {
 
     /** Второй язык распознавания: "en" — распознаватель сам узнаёт язык фразы (русский или английский), "" — только русский. */
     @JavascriptInterface public void sttLang2(String l) { a.speech.lang2 = l == null ? "" : l; }
+    @JavascriptInterface public void sttLang1(String l) { a.speech.lang1 = "en".equals(l) ? "en" : "ru"; }
 
     @JavascriptInterface public void speakRemote(String id, String url, String key, String body) { a.tts.speakRemote(id, url, key, body); }
     /** То же, но с запасным голосом телефона внутри очереди (fb — {text, rate, pitch, voice}): без двух голосов разом. */
@@ -584,6 +585,7 @@ public final class Bridge {
     @JavascriptInterface public String voices() { return a.tts.voices(); }
 
     @JavascriptInterface public boolean ttsReady() { return a.tts.ready(); }
+    @JavascriptInterface public boolean ttsReadyLang(String l) { return a.tts.ready(l); }
 
     // ---------- напоминания ----------
 

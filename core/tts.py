@@ -746,7 +746,13 @@ class RemoteTTS:
                 "response_format": "pcm", "stream": True, "speed": speed}
         if voice_cfg.get("_pid"):                         # служба голосов Dewiar даёт персонажу его собственный голос
             body["persona"] = voice_cfg["_pid"]
-        body.update(c.get("extra") or {})
+        extra = dict(c.get("extra") or {})
+        # 0.96: «language: Russian» в настройках по умолчанию — а фраза английская (программа по-английски или английская
+        # вставка): служба голосов читала бы её как русскую. Английский текст — английским
+        if str(extra.get("language") or "").lower() in ("russian", "ru") and re.search(r"[A-Za-z]", text or "") \
+                and not re.search(r"[А-Яа-яЁё]", text or ""):
+            extra["language"] = "English"
+        body.update(extra)
         key = f"{c.get('base_url')}|{body.get('model')}|{body.get('voice')}"
         if _RATE_SEEN.get(key) == -1:                      # этот сервер PCM не умеет — сразу WAV
             body["response_format"] = "wav"

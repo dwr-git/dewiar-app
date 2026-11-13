@@ -79,6 +79,13 @@ list(A.synth_iter(long_text, {"id": "anna", "kind": "clone", "audio": "a.wav", "
 lens = [len(c["texts"][0]) for c in A.ENGINE.calls]
 ok(A.ENGINE.calls[0]["role"] == "espeech" and A.ENGINE.calls[0]["texts"] == ["Привет!"] and all(len(c["texts"]) == 1 for c in A.ENGINE.calls)
    and all(n <= 200 for n in lens) and len(A.ENGINE.calls) <= 4, f"ESpeech: «Привет!» отдельно, дальше куски: {lens}")
+# 0.96: ESpeech знает только русский — английскую фразу свой голос говорит клонированием Qwen
+A.ENGINE.calls.clear()
+list(A.synth_iter("Hello! I'm Lira, nice to meet you.", {"id": "anna", "kind": "clone", "audio": "a.wav", "text": "т"}, lang="Auto"))
+ok(A.ENGINE.calls and all(c["role"] == "base" for c in A.ENGINE.calls), f"свой голос по-английски — Qwen: {[c['role'] for c in A.ENGINE.calls]}")
+A.ENGINE.calls.clear()
+list(A.synth_iter("Привет, это Лира.", {"id": "anna", "kind": "clone", "audio": "a.wav", "text": "т"}, lang="Russian"))
+ok(A.ENGINE.calls[0]["role"] == "espeech", "по-русски — по-прежнему ESpeech")
 A.cfg_save({})
 
 # видеокарта общая с vLLM: вторая модель не влезла — служба выгружает первую и продолжает, а не падает

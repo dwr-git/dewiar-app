@@ -122,6 +122,21 @@ class AudioMixin:
         self.s.update({"ui": {"names_note": names}})
         self.note(f"Научите меня имени «{names}»: студия → «Слух» → «Научить имени» (три раза сказать имя).")
 
+    def _ui_en(self):
+        """Программа по-английски (0.96)?"""
+        try:
+            import i18n
+            return i18n.resolve(self.s.get("ui", "lang")) == "en"
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _asr_name(self):
+        """Модель точного распознавания на этом компьютере: GigaAM (русский); программа по-английски — Parakeet (0.96)."""
+        from stt import EN_ASR
+        if self._ui_en():
+            return self.s.get("stt", "en_model") or EN_ASR
+        return self.s.get("stt", "gigaam_model") or "gigaam-v3-e2e-rnnt"
+
     def apply_engines(self):
         """Выставляет распознаватель и удалённый голос по настройкам и сообщает статус в интерфейс.
         GigaAM пересоздаётся только при смене модели — загрузка тяжёлая (её делает _background_loads)."""
@@ -135,7 +150,7 @@ class AudioMixin:
         far = lambda u: not egress.local_host((__import__("urllib.parse").parse.urlparse(u if "://" in u else "http://" + u).hostname or ""))
         if lo and st["engine"] == "remote" and far(st["remote"].get("base_url") or ""):
             # стоп-кран: распознавание в интернете — на паузе, слушаем здесь (GigaAM, если скачан, иначе Vosk)
-            g = GigaAMSTT(st.get("gigaam_model") or "gigaam-v3-e2e-rnnt")
+            g = GigaAMSTT(self._asr_name())
             if g.cached():
                 if not self.gigaam or self.gigaam.model_name != g.model_name:
                     self.gigaam = g
@@ -143,10 +158,13 @@ class AudioMixin:
             else:
                 self.stt = self.vosk_stt
         elif st["engine"] == "remote" and st["remote"].get("base_url"):
-            self.stt = RemoteSTT(st["remote"])
+            rc = dict(st["remote"])
+            if self._ui_en() and str(rc.get("language") or "ru") == "ru":
+                rc["language"] = "en"                     # 0.96: программа по-английски — сервер слушает английскую речь
+            self.stt = RemoteSTT(rc)
         elif st["engine"] == "gigaam":
-            if not self.gigaam or self.gigaam.model_name != st["gigaam_model"]:
-                self.gigaam = GigaAMSTT(st["gigaam_model"])
+            if not self.gigaam or self.gigaam.model_name != self._asr_name():
+                self.gigaam = GigaAMSTT(self._asr_name())
             self.stt = self.gigaam
         else:
             self.stt = self.vosk_stt
@@ -232,12 +250,14 @@ class AudioMixin:
         items.append({"key": "names", "group": "ears", "title": "Слух имени — Vosk, маленькая модель",
                       "about": "Чтобы отзываться на имя без кнопки. Работает без интернета.", "installed": have,
                       "mb": (self._dir_mb(vdir) if (vdir / "am").exists() else self._dir_mb(DATA_DIR / f"{VOSK_NAME}.zip")) if have else 45, "used": True})
-        gm = st.get("gigaam_model") or "gigaam-v3-e2e-rnnt"
+        gm = self._asr_name()
         g = self.gigaam if self.gigaam is not None and self.gigaam.model_name == gm else GigaAMSTT(gm)
         gok = g.cached()
-        items.append({"key": "gigaam", "group": "ears", "title": "GigaAM v3 — точное распознавание речи",
-                      "about": "Лучшее качество для русского, на процессоре, без интернета.", "installed": gok,
-                      "mb": self._dir_mb(g.local_dir, MODELS_DIR / "hf" / "hub") if gok else 250, "used": st.get("engine") == "gigaam"})
+        items.append({"key": "gigaam", "group": "ears",
+                      "title": "Parakeet v3 — точное распознавание речи" if g.title == "Parakeet" else "GigaAM v3 — точное распознавание речи",
+                      "about": "Английский и ещё 24 европейских языка, на процессоре, без интернета." if g.title == "Parakeet"
+                      else "Лучшее качество для русского, на процессоре, без интернета.", "installed": gok,
+                      "mb": self._dir_mb(g.local_dir, MODELS_DIR / "hf" / "hub") if gok else g.mb, "used": st.get("engine") == "gigaam"})
         eng = getattr(self, "english", None)
         if eng is not None and (st.get("english") or eng.installed()):
             from lang2 import EN_MODEL
@@ -279,7 +299,7 @@ class AudioMixin:
                     from listen import ensure_vosk
                     ensure_vosk(DATA_DIR, MODELS_DIR, on_status=self.note, mirror=self._mirror_url("vosk_small"))
                 elif key == "gigaam":
-                    gm = self.s.get("stt", "gigaam_model") or "gigaam-v3-e2e-rnnt"
+                    gm = self._asr_name()
                     g = self.gigaam if self.gigaam is not None and self.gigaam.model_name == gm else GigaAMSTT(gm)
                     m = self._mirror("gigaam")
                     if m and m.get("name", gm) == gm:

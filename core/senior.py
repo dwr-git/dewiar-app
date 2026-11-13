@@ -182,10 +182,19 @@ class Senior:
             d["sent"].append(key)
         self._save()
 
+    def _lang(self):
+        try:
+            import i18n
+            return i18n.resolve(self.s.get("ui", "lang"))
+        except Exception:
+            return "ru"
+
     def summary(self, d=None):
         d = d or self._today()
         who = self.who()
         talk = d.get("talk") or []
+        if self._lang() != "ru":
+            return self._summary_en(d, who, talk)
         if talk:
             t0 = datetime.fromtimestamp(talk[0]).strftime("%H:%M")
             t1 = datetime.fromtimestamp(talk[-1]).strftime("%H:%M")
@@ -199,6 +208,23 @@ class Senior:
         ok = talk and all(m.get("res") == "taken" for m in meds)
         return ("Это Лира, помощница. " + ("Всё хорошо. " if ok else "") + line + "."
                 + (f" Лекарства: {med}." if med else "") + ("" if ok else " Может, позвоните?"))
+
+    def _summary_en(self, d, who, talk):
+        """Сводка близким по-английски: в английском у глаголов нет рода — фраза целиком, без склейки."""
+        if who == "ваш близкий":
+            who = "your loved one"
+        if talk:
+            t0 = datetime.fromtimestamp(talk[0]).strftime("%H:%M")
+            t1 = datetime.fromtimestamp(talk[-1]).strftime("%H:%M")
+            line = f"{who} talked with me today" + (f" from {t0} to {t1}" if t0 != t1 else f" at {t0}")
+        else:
+            line = f"{who} didn't talk with me today"
+        meds = d.get("meds") or []
+        word = {"taken": "taken", "missed": "no answer", "snooze": "postponed", "again": "waiting for an answer"}
+        med = "; ".join(f"{m.get('at', '')} {m.get('text', '')} — {word.get(m.get('res'), '?')}" for m in meds)
+        ok = talk and all(m.get("res") == "taken" for m in meds)
+        return ("This is Lira, the assistant. " + ("All is well. " if ok else "") + line + "."
+                + (f" Medicines: {med}." if med else "") + ("" if ok else " Maybe give them a call?"))
 
     # ---------- мошенники ----------
 

@@ -770,5 +770,7 @@
  "home.council.gone": "AI Council removed from Home — it stays in Apps",
  "sites.style.h": "Style",
  "sites.style.done": "Style: {name}",
- "sites.style.new": "New · Avangard"
+ "sites.style.new": "New · Avangard",
+ "insight.src.why.vk_link": "This isn't a VK community link. Use a group or public page — vk.com/name.",
+ "insight.src.why.vk_need": "VK shows this community’s posts only to signed-in visitors — Radar reads open pages only. Use the community’s website, RSS feed or Telegram channel instead."
 }

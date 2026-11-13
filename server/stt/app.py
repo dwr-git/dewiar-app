@@ -1,7 +1,7 @@
 """Распознавание речи GigaAM на видеокарте — для приложений Dewiar (и всего, что понимает API OpenAI).
 
     POST /v1/audio/transcriptions   (multipart: file=<wav/mp3/ogg…>, response_format)  → {"text": "…", "duration": с}
-                                    поля model и language принимаются, но не влияют: модель одна, русская
+                                    language=en — английская модель (STT_MODEL_EN, Parakeet), иначе GigaAM; model не влияет
     GET  /v1/models                                                                    → {"data": [{"id": …}]}
     GET  /health                                                                       → {"ok": true, "device": …}
     POST /v1/audio/speech           (если задан TTS_UPSTREAM) — синтез речи: тот же вход по токену сайта, запрос
@@ -11,7 +11,7 @@
 (ответ кэшируется на 10 минут), или общий ключ STT_KEY (для своих сервисов). Без токена — 401.
 Адрес этой службы сайт сообщает приложению через DWR_STT_URL / DWR_TTS_URL в login.php.
 
-Окружение: STT_MODEL, STT_MODEL_DIR, STT_LOGIN_URL, STT_KEY, STT_MAX_MB (25), STT_PORT (8020), STT_FAKE (тесты),
+Окружение: STT_MODEL, STT_MODEL_EN, STT_MODEL_DIR, STT_LOGIN_URL, STT_KEY, STT_MAX_MB (25), STT_PORT (8020), STT_FAKE (тесты),
 TTS_UPSTREAM, TTS_UPSTREAM_KEY, TTS_MODEL. Нужен ffmpeg для всего, кроме WAV 16 кГц.
 Запуск: см. server/stt/README.md (Docker с видеокартой). Без видеокарты тоже работает — на процессоре.
 """
@@ -32,6 +32,10 @@ import numpy as np
 
 log = logging.getLogger("dewiar-stt")
 MODEL = os.environ.get("STT_MODEL", "gigaam-v3-e2e-rnnt")
+# 0.96: английская речь (language=en) — Parakeet TDT v2 (NVIDIA, CC-BY-4.0, та же onnx-asr), грузится при первой
+# английской фразе; «0» — без неё
+MODEL_EN = os.environ.get("STT_MODEL_EN", "nemo-parakeet-tdt-0.6b-v2")
+MODEL_EN = "" if MODEL_EN in ("0", "off") else MODEL_EN
 LOGIN_URL = os.environ.get("STT_LOGIN_URL", "http://app/dwrapp/login.php")     # внутри docker-сети сайта
 STATIC_KEY = os.environ.get("STT_KEY", "")
 MAX_BYTES = int(os.environ.get("STT_MAX_MB", "25")) * 1024 * 1024
@@ -41,6 +45,7 @@ TTS_UPSTREAM_KEY = os.environ.get("TTS_UPSTREAM_KEY", "")
 TTS_MODEL = os.environ.get("TTS_MODEL", "")                     # подставить свою модель (приложение шлёт «tts-1»)
 
 _model, _device, _lock = None, "cpu", threading.Lock()
+_en = {"model": None, "err": ""}                 # английская модель: загружается при первой английской фразе
 _tokens = {}                                   # токен → срок проверки
 
 
@@ -76,11 +81,28 @@ def decode(data: bytes):
     return np.frombuffer(r.stdout, dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def recognize(audio):
+def _model_en():
+    """Английская модель (под _lock) или None — не загрузилась: тогда слушает GigaAM, причина — в журнале."""
+    if _en["model"] is None and not _en["err"]:
+        try:
+            import onnx_asr
+            import onnxruntime as ort
+            prov = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in ort.get_available_providers()]
+            _en["model"] = onnx_asr.load_model(MODEL_EN, providers=prov)
+            log.info("Английская модель %s готова", MODEL_EN)
+        except Exception as e:  # noqa: BLE001
+            _en["err"] = str(e) or type(e).__name__
+            log.warning("Английская модель %s не загрузилась: %s", MODEL_EN, _en["err"])
+    return _en["model"]
+
+
+def recognize(audio, lang=""):
+    en = bool(MODEL_EN) and str(lang or "").lower().startswith("en")
     if FAKE:
-        return f"распознано {len(audio) / 16000:.1f} секунды"
+        return f"recognized {len(audio) / 16000:.1f} seconds" if en else f"распознано {len(audio) / 16000:.1f} секунды"
     with _lock:                                  # одна видеокарта — по очереди, фраза за доли секунды
-        res = _model.recognize(audio, sample_rate=16000)
+        m = (_model_en() if en else None) or _model
+        res = m.recognize(audio, sample_rate=16000)
     return res if isinstance(res, str) else getattr(res, "text", str(res))
 
 
@@ -126,7 +148,8 @@ class H(BaseHTTPRequestHandler):
         if path.endswith("/health"):
             return self._json(200, {"ok": True, "model": MODEL, "device": _device})
         if path.endswith("/models"):
-            return self._json(200, {"data": [{"id": MODEL, "object": "model"}, {"id": "gigaam-v3", "object": "model"}]})
+            return self._json(200, {"data": [{"id": MODEL, "object": "model"}, {"id": "gigaam-v3", "object": "model"}]
+                                    + ([{"id": MODEL_EN, "object": "model", "language": "en"}] if MODEL_EN else [])})
         self._json(404, {"error": "not found"})
 
     def _speech(self):
@@ -197,7 +220,7 @@ class H(BaseHTTPRequestHandler):
         t0 = time.monotonic()
         try:
             audio = decode(data)
-            text = recognize(audio).strip()
+            text = recognize(audio, fields.get("language", "")).strip()
         except Exception as e:  # noqa: BLE001
             log.exception("распознавание")
             return self._json(500, {"error": {"message": str(e)[:300]}})

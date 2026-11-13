@@ -287,10 +287,14 @@
     const el = q("#rd-sources");
     let d; try { d = await call("insight_sources"); } catch (e) { toast(e.message); return; }
     chips(d.stats);
-    const kinds = ["site", "rss", "youtube", "telegram", "vk", "dzen", "reddit", "github", "article"];
+    // студия не по-русски (0.96, владелец 13.11: «переходим на международные сервисы») — без VK и Дзена в подсказке; читать их Радар умеет
+    const intl = !!(window.dwLang && dwLang() !== "ru");
+    const kinds = ["site", "rss", "youtube", "telegram", ...(intl ? [] : ["vk", "dzen"]), "reddit", "github", "article"];
+    const ph = intl ? "https://techcrunch.com/category/artificial-intelligence/&#10;https://www.youtube.com/@lexfridman&#10;r/LocalLLaMA"
+      : "https://vc.ru/ai&#10;https://www.youtube.com/@lexfridman&#10;@ai_newz";
     el.innerHTML = `<div class="rd-two"><div class="rd-card"><h3>${esc(T("src.add"))}</h3><p class="rd-hint">${esc(T("src.add.t"))}</p>
         <div class="rd-kinds">${kinds.map(k => `<span>${esc(T("kind." + k))}</span>`).join("")}</div>
-        <textarea id="rd-sa" placeholder="https://vc.ru/ai&#10;https://www.youtube.com/@lexfridman&#10;@ai_newz" aria-label="${esc(T("src.add"))}"></textarea>
+        <textarea id="rd-sa" placeholder="${ph}" aria-label="${esc(T("src.add"))}"></textarea>
         <div class="rd-row-end"><button class="btn primary rd-btn" id="rd-sab">${esc(T("src.add.btn"))}</button></div></div>
       <div class="rd-card"><h3>${esc(T("one"))}</h3><p class="rd-hint">${esc(T("one.t"))}</p><input type="url" id="rd-one" placeholder="https://…" style="width:100%" aria-label="${esc(T("one"))}">
         <div class="rd-row-end"><button class="btn rd-btn" id="rd-oneb">${esc(T("one.btn"))}</button></div><div id="rd-oner"></div></div></div>

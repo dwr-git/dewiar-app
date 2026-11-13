@@ -356,6 +356,13 @@ def current():
     return px, hosts
 
 
+def wake_reset():
+    """Компьютер проснулся (или сеть сменилась): что запомнили про пути к серверам Dewiar до сна — «напрямую не открывается»,
+    «прокси подвёл» — уже неправда; заново, с прямого пути (13.11)."""
+    _direct_ok.clear()
+    _reserve_bad.clear()
+
+
 def reserve():
     """Запасной путь к серверам Dewiar — прокси Dewiar, полученный заранее, пока сайт открывался; действует, только
     когда свой прокси не задан и галочка «Использовать прокси Dewiar» не стоит (тогда и так всё через прокси)."""
@@ -396,7 +403,11 @@ class _Lazy(httpx.BaseTransport):
         except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout) as e:
             try:
                 r = self._direct(request)                        # до сервера через прокси ничего не дошло — повтор безопасен
-            except (httpx.ConnectError, httpx.ConnectTimeout):
+            except (httpx.ConnectError, httpx.ConnectTimeout) as e2:
+                # 13.11: прокси просит логин (407), а напрямую нет связи (компьютер только проснулся) — настоящая причина
+                # в сети, а не в прокси: показываем её («нет интернета»), а не «прокси не пустил»
+                if "407" in str(e):
+                    raise e2 from None
                 raise e from None
             _direct_ok[request.url.host] = time.time() + DIRECT_SEC
             log.info("Прокси не пускает к %s (%s), а напрямую связь есть — хожу напрямую", request.url.host, e or type(e).__name__)

@@ -53,7 +53,7 @@ with sync_playwright() as p:
 ok(not errs, "без ошибок JavaScript" + (f": {errs[:3]}" if errs else ""))
 # нативная часть
 sp = (ROOT / "android/src/pro/dewiar/app/Speech.java").read_text(encoding="utf-8")
-ok("ENABLE_LANGUAGE_DETECTION" in sp and "LANGUAGE_SWITCH_ALLOWED_LANGUAGES" in sp and re.search(r'"en"\.equals\(lang2\)', sp),
+ok("ENABLE_LANGUAGE_DETECTION" in sp and "LANGUAGE_SWITCH_ALLOWED_LANGUAGES" in sp and re.search(r'"en"\.equals\(lang2\)|lang2 != null && !lang2\.isEmpty\(\)', sp),
    "Speech.java: второй язык — определение языка и переключение (Android 14+)")
 tts = (ROOT / "android/src/pro/dewiar/app/Tts.java").read_text(encoding="utf-8")
 br = (ROOT / "android/src/pro/dewiar/app/Bridge.java").read_text(encoding="utf-8")

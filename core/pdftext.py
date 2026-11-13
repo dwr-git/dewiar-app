@@ -53,7 +53,9 @@ for pg in r.pages[:limit]:
     total += len(t)
     if total >= cap:
         break
-sys.stdout.write(json.dumps({"pages": out}, ensure_ascii=False))
+# 13.11, жалоба №692 (Windows: «PDF не прочитался (UnicodeEncodeError: 'charmap' …)» — у трубы кодировка cp1252, а в
+# тексте «×», «¢», значки шрифтов): байтами в UTF-8, мимо кодировки консоли
+sys.stdout.buffer.write(json.dumps({"pages": out}, ensure_ascii=False).encode("utf-8", "replace"))
 '''
 
 

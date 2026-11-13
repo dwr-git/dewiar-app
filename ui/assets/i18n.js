@@ -85,8 +85,13 @@
         const rx = new RegExp("^" + k.split(/(\{\d\})/).map(p => /^\{\d\}$/.test(p) ? "(.*?)" : p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("") + "$");
         const order = (k.match(/\{\d\}/g) || []).map(x => x[1]);
         const b = head.length >= 3 ? head.slice(0, 3) : "";
-        // мало своих букв («ещё {1}») — подстановка не должна быть русским текстом: иначе «ещё не было» станет «не было more»
-        const weak = k.replace(/\{\d\}/g, "").replace(/[^A-Za-zА-Яа-яЁё]/g, "").length < 6;
+        // Какие подстановки не могут остаться русским текстом («строгие»): в коротком образце («ещё {1}», «Сейчас {1}») —
+        // иначе «ещё не было» станет «не было more», «Сейчас выключен» — «Now выключен»; имя в кавычках («Играет «{1}»») — можно.
+        // Приклеенная к слову («Поручения{3}») — всегда строгая: на её месте была разметка, а не текст.
+        const own = k.replace(/\{\d\}/g, "").replace(/[^A-Za-zА-Яа-яЁё]/g, "").length;
+        const quoted = new Set((k.match(/[«“"„]\{\d\}[»”"“]/g) || []).map(x => x.match(/\d/)[0]));
+        const glued = new Set((k.match(/[A-Za-zА-Яа-яЁё]\{\d\}|\{\d\}[A-Za-zА-Яа-яЁё]/g) || []).map(x => x.match(/\d/)[0]));
+        const weak = new Set(order.filter(n => glued.has(n) || (own < 10 && !quoted.has(n))));
         if (!txPat.has(b)) txPat.set(b, []);
         txPat.get(b).push([rx, order, v, weak, k.replace(/\{\d\}/g, "").length]);
       } else txMap.set(k, v);
@@ -100,6 +105,8 @@
     txDepth++;
     try { return txOf(s); } finally { txDepth--; }
   }
+  const TX_MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  const TX_DATE = /^((?:Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье|понедельник|вторник|среда|четверг|пятница|суббота|воскресенье),\s+)?(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)(?:\s+(\d{4}))?(?:\s*г\.)?$/;
   function txOf(s, inner) {
     const k = nrm(s);
     if (!k || !CYR.test(k)) return null;
@@ -116,7 +123,7 @@
           if (CYR.test(c)) {                                // «Утро с Лирой», «2 ядра процессора»: подстановку тоже
             let t = null;
             if (txDepth < 4) { txDepth++; try { t = txOf(c); } finally { txDepth--; } }
-            if (t != null) c = t; else if (weak) ok = false;
+            if (t != null) c = t; else if (weak.has(n)) ok = false;
           }
           got[n] = c;
         });
@@ -132,6 +139,17 @@
     if (m) { const t = txOf(m[1], true); if (t != null) return t + " " + m[2]; }
     m = k.match(/^(.+?)\s*([.:;,!?…]+)$/);                         // «Хранятся у вас.» — точка дописана кодом
     if (m) { const t = txOf(m[1], true); if (t != null) return t.replace(/[.:;,!?…]+$/, "") + m[2]; }
+    // дата, собранная по-русски кодом: «Пятница, 13 ноября», «13 ноября 2026» — названия берём у Intl на языке окна (0.96)
+    const dm = k.match(TX_DATE);
+    if (dm) {
+      try {
+        const mi = TX_MON.indexOf(dm[3].toLowerCase().slice(0, 3)), d = new Date(+(dm[4] || 2026), mi, +dm[2]);
+        const o = { day: "numeric", month: "long" };
+        if (dm[4]) o.year = "numeric";
+        if (dm[1]) o.weekday = "long";
+        if (mi >= 0) return d.toLocaleDateString(lang, o);
+      } catch (e) { }
+    }
     // «3 дела», «0 дел»: число и слово, собранные кодом, — переводим слово; «ноябрь 2026» — тоже
     let nm = k.match(/^([\d][\d\s.,:]*)\s+([А-Яа-яЁё].*)$/);
     if (nm) { const t = txOf(nm[2], true); if (t != null) return nm[1] + " " + t; }
@@ -144,6 +162,12 @@
     if (ds.length > 1 && ds.length < 4) {
       const t = ds.map(txSub);
       if (t.every(v => v != null)) return t.join(" — ");
+    }
+    // «Тёмные · Сдержанная», «Телефон · 0.9.38 · №f3e2»: строка, собранная кодом через точку-разделитель (0.96)
+    const dt = k.split(" · ");
+    if (dt.length > 1 && dt.length < 6) {
+      const t = dt.map(p => CYR.test(p) ? txSub(p) : p);
+      if (t.every(v => v != null)) return t.join(" · ");
     }
     // текст, склеенный кодом из нескольких строк: «Включите — … Своей модели пока нет: …» — по предложениям,
     // самые длинные куски сначала

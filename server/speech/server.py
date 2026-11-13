@@ -4,7 +4,8 @@
 Ставится server/install-server.sh как служба dewiar-speech, настройки — /etc/dewiar-server.env. Это не server/stt:
 там вход по токену сайта, здесь — один общий ключ.
 
-    POST /v1/audio/transcriptions   (multipart: file, model, language, response_format) — model и language не влияют
+    POST /v1/audio/transcriptions   (multipart: file, model, language, response_format) — language=en: английская модель
+                                    (DEWIAR_SPEECH_MODEL_EN, Parakeet), иначе GigaAM; model не влияет
     POST /v1/audio/speech           (JSON: input, voice, speed, response_format wav|mp3|opus|pcm) — голос Vosk TTS на CPU:
                                     голоса персонажей Dewiar (serena, aiden…) — разные дикторы модели по полу; «vosk:N» — диктор N
     GET  /v1/models
@@ -32,6 +33,10 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadF
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 MODEL = os.environ.get("DEWIAR_SPEECH_MODEL", "gigaam-v3-e2e-rnnt")
+# 0.96: английская речь (language=en) — своя модель: GigaAM слышит только русский. Parakeet TDT v2 (NVIDIA, CC-BY-4.0) —
+# та же библиотека onnx-asr; грузится при первой английской фразе. «0» — без неё (английское — тоже GigaAM)
+MODEL_EN = os.environ.get("DEWIAR_SPEECH_MODEL_EN", "nemo-parakeet-tdt-0.6b-v2")
+MODEL_EN = "" if MODEL_EN in ("0", "off") else MODEL_EN
 KEY = os.environ.get("DEWIAR_SPEECH_KEY", "")
 CHUNK_S = 22                         # GigaAM рассчитан на фразы до ~25 с — длинное режем
 log = logging.getLogger("dewiar.speech")
@@ -39,38 +44,49 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 app = FastAPI(title="Dewiar Speech")
 _model, _lock, _model_err = None, threading.Lock(), ""
+_extra = {}                                   # другие модели (английская) по имени
 
 
-def model():
-    """Модель, загруженная при первом обращении (под _lock: тот же замок держит распознавание)."""
+def model(name=None):
+    """Модель, загруженная при первом обращении (под _lock: тот же замок держит распознавание). name — другая модель
+    (английская); её сбой — не сбой основной."""
     global _model
     with _lock:
+        if name and name != MODEL:
+            if name not in _extra:
+                _extra[name] = _load(name)
+            return _extra[name]
         if _model is None:
-            if os.environ.get("DEWIAR_SPEECH_FAKE"):          # для тестов без скачивания модели
-                class Fake:
-                    def recognize(self, a, sample_rate=16000):
-                        return f"тест {len(a) / sample_rate:.1f} секунды"
-                _model = Fake()
-                return _model
-            # №455 (01.11: Ubuntu переустановили — «onnx_asr снова нет, распознавание обрывается»): нет библиотеки — не 500
-            # без объяснений, а 503 со словами, что поставить; ошибка видна и в /health
-            global _model_err
-            try:
-                import onnx_asr
-                import onnxruntime as rt
-            except ImportError as e:
-                _model_err = (f"не установлена библиотека {e.name or 'onnx-asr'} — запустите install-server.sh заново "
-                              "или: pip install onnx-asr[cpu,hub] onnxruntime")
-                log.error("Распознавание: %s", _model_err)
-                raise HTTPException(503, _model_err) from e
-            prov = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in rt.get_available_providers()]
-            log.info("Загружаю %s на %s …", MODEL, prov[0])
-            t0 = time.time()
-            _model = onnx_asr.load_model(MODEL, providers=prov)
-            _model.recognize(np.zeros(16000, dtype=np.float32))
-            _model_err = ""
-            log.info("Готово за %.1f с", time.time() - t0)
+            _model = _load(MODEL)
         return _model
+
+
+def _load(name):
+    global _model_err
+    if os.environ.get("DEWIAR_SPEECH_FAKE"):          # для тестов без скачивания модели
+        class Fake:
+            def recognize(self, a, sample_rate=16000):
+                return f"тест {len(a) / sample_rate:.1f} секунды" if name == MODEL else f"test {len(a) / sample_rate:.1f} seconds"
+        return Fake()
+    # №455 (01.11: Ubuntu переустановили — «onnx_asr снова нет, распознавание обрывается»): нет библиотеки — не 500
+    # без объяснений, а 503 со словами, что поставить; ошибка видна и в /health
+    try:
+        import onnx_asr
+        import onnxruntime as rt
+    except ImportError as e:
+        _model_err = (f"не установлена библиотека {e.name or 'onnx-asr'} — запустите install-server.sh заново "
+                      "или: pip install onnx-asr[cpu,hub] onnxruntime")
+        log.error("Распознавание: %s", _model_err)
+        raise HTTPException(503, _model_err) from e
+    prov = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in rt.get_available_providers()]
+    log.info("Загружаю %s на %s …", name, prov[0])
+    t0 = time.time()
+    m = onnx_asr.load_model(name, providers=prov)
+    m.recognize(np.zeros(16000, dtype=np.float32))
+    if name == MODEL:
+        _model_err = ""
+    log.info("Готово за %.1f с", time.time() - t0)
+    return m
 
 
 def to_pcm16k(data: bytes) -> np.ndarray:
@@ -119,6 +135,8 @@ def health():
 @app.get("/v1/models", dependencies=[Depends(auth)])
 def models():
     data = [{"id": MODEL, "object": "model", "owned_by": "dewiar"}]
+    if MODEL_EN:
+        data.append({"id": MODEL_EN, "object": "model", "owned_by": "dewiar", "language": "en"})
     if TTS_ON:
         data.append({"id": "vosk-tts", "object": "model", "owned_by": "dewiar", "type": "tts"})
     return {"object": "list", "data": data}
@@ -133,7 +151,8 @@ async def transcribe(file: UploadFile = File(...), model_name: str = Form("", al
     t0 = time.time()
     # декодирование и распознавание — в потоке: иначе они держат цикл событий, и пока идёт одна запись, сервер
     # не отвечает даже на /health
-    text, secs = await asyncio.get_running_loop().run_in_executor(None, _recognize, raw)
+    en = MODEL_EN and str(language or "").lower().startswith("en")
+    text, secs = await asyncio.get_running_loop().run_in_executor(None, _recognize, raw, MODEL_EN if en else None)
     log.info("%.1f с аудио → %d мс: %s", secs, (time.time() - t0) * 1000, text[:80])
     if response_format == "text":
         return PlainTextResponse(text)
@@ -143,9 +162,17 @@ async def transcribe(file: UploadFile = File(...), model_name: str = Form("", al
 MAX_BYTES = 50 * 1024 * 1024                 # 50 МБ — больше получаса речи в WAV 16 кГц
 
 
-def _recognize(raw):
+def _recognize(raw, name=None):
     audio = to_pcm16k(raw)
-    m = model()
+    try:
+        m = model(name)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001 — английская модель не скачалась: слушаем основной, а не 500
+        if not name:
+            raise
+        log.warning("Модель %s не загрузилась (%s) — распознаю %s", name, e, MODEL)
+        m = model()
     step = CHUNK_S * 16000
     with _lock:
         parts = [m.recognize(audio[i:i + step], sample_rate=16000) for i in range(0, max(len(audio), 1), step)]

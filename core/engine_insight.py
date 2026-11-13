@@ -51,10 +51,52 @@ class Radar:
     # ---------- сеть ----------
     def _http(self, url):
         import httpx
-        with httpx.Client(timeout=httpx.Timeout(20, connect=10), follow_redirects=True, headers=I.UA) as c:
-            r = c.get(url)
-            r.raise_for_status()
-            return r.text[:3_000_000]
+        try:
+            with httpx.Client(timeout=httpx.Timeout(20, connect=10), follow_redirects=True, headers=I.UA) as c:
+                r = c.get(url)
+                r.raise_for_status()
+                return r.text[:3_000_000]
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            # №690: у провайдера не открывается t.me (timed out) — та же страница через сервер Dewiar, если есть вход
+            html = self._via_dewiar(url)
+            if html is None:
+                raise
+            log.info("📡 Радар: %s — напрямую не открылся (%s), прочитан через сервер Dewiar", url, type(e).__name__)
+            return html
+
+    def _cloud(self, params):
+        """GET к cloud.php с входом человека -> JSON или None (нет входа, запасной путь выключен, сервер не ответил)."""
+        import httpx
+        if self.e.s.get("net", "web_via") is False:
+            return None
+        try:
+            token, _, url = self.e.credentials()
+        except Exception:  # noqa: BLE001
+            return None
+        if not token or not url:
+            return None
+        try:
+            r = httpx.get(url, params=params, headers={"Authorization": "Bearer " + token}, timeout=40)
+            d = r.json()
+        except Exception:  # noqa: BLE001
+            return None
+        return d if r.status_code == 200 else {"_err": (d.get("error") or {}).get("code") or str(r.status_code)}
+
+    def _via_dewiar(self, url):
+        d = self._cloud({"p": "/fetch", "url": url, "raw": "1"})
+        return d.get("html") if d and d.get("html") else None
+
+    def read_vk(self, src):
+        """Сообщество VK: читаем только открытую мобильную страницу (m.vk.com — посты в самой разметке). Ключей VK и
+        запросов к VK через сервер Dewiar нет (владелец 13.11: «держаться от этого сервиса подальше»). Пусто — VK прячет
+        записи от тех, кто не вошёл: понятное объяснение. -> материалы или ValueError("@vk_…")."""
+        name = I.vk_name(src.get("url") or "")
+        if not name:
+            raise ValueError("@vk_link")
+        found = I.parse_vk(self.fetch(f"https://m.vk.com/{name}"), name)
+        if not found:
+            raise ValueError("@vk_need")
+        return found
 
     def crawl_source(self, src):
         """Один источник -> сколько новых материалов. Лента — сразу; сайт и YouTube — найти ленту на странице, нет ленты —
@@ -74,6 +116,8 @@ class Radar:
         found = []
         if kind == "telegram":
             found = I.parse_telegram(self.fetch(feed), src.get("name", ""))
+        elif kind == "vk":
+            found = self.read_vk(src)
         elif kind == "article":
             if src.get("last"):
                 return 0                                         # одна статья читается один раз

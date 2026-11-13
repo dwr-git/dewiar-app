@@ -203,6 +203,11 @@ class MusicMixin:
         t = re.split(r"[.:;(\n]|\s[—–-]\s", t, maxsplit=1)[0].strip(" ,") or "Дело по расписанию"
         return t if len(t) <= 40 else t[:40].rsplit(" ", 1)[0].rstrip(" ,") + "…"
 
+    @staticmethod
+    def _week_job(item):
+        """Итоги недели (готовое дело или своё «итог недели») — привычки в нём шире: всё еженедельное."""
+        return item.get("preset") == "week" or bool(re.search(r"(?<![а-яё])недел", str(item.get("text") or ""), re.I))
+
     def _job_prompt(self, item):
         """Поручение модели для дела по расписанию (или утренней сводки) — модель выполняет его сама, без вопросов."""
         if item.get("brief"):
@@ -216,7 +221,7 @@ class MusicMixin:
                     "следуй его указаниям (use_skill)." + (self._routine_note(silent=False) if hasattr(self, "_routine_note") else ""))
         routine = ""
         if SUMMARY_JOB_RX.search(item.get("text", "")) and hasattr(self, "_routine_note"):
-            routine = self._routine_note()
+            routine = self._routine_note(weekly=MusicMixin._week_job(item))
         chat = ""
         if item.get("deliver") in ("telegram", "max"):   # в мессенджер — как пользователи и просили: строки со смайликами
             chat = (" Ответ уйдёт в мессенджер: без заголовка и без повтора поручения; каждый пункт — отдельной строкой, "
@@ -229,14 +234,19 @@ class MusicMixin:
                 f"сообщения, цены, наличие, новости по теме) и нового или важного нет — ответь ровно одним словом: {JOB_SILENT}. "
                 "Тогда пользователя не беспокоим вовсе." + chat + routine)
 
-    def _habits(self):
-        """Напоминания-привычки (каждый день, через интервал, по будням и чаще) -> (их id, их тексты)."""
+    def _habits(self, weekly=False):
+        """Напоминания-привычки (каждый день, через интервал, три и больше дней в неделю) -> (их id, их тексты).
+        weekly — для итогов недели: всё, что повторяется каждую неделю (13.11, владелец: «итог недели рассказал про
+        постоянные еженедельные события, которые всегда прописаны» — виклик по пятницам, бэкап, выключение компьютера);
+        и сами дела по расписанию тоже."""
         try:
             items = [x for x in self.reminders.items if not x.get("paused")]
         except Exception:  # noqa: BLE001
             items = []
-        hs = [x for x in items if x.get("kind") != "job" and x.get("repeat")
-              and ((x["repeat"].get("kind") in ("daily", "interval")) or (x["repeat"].get("kind") == "weekly" and len(x["repeat"].get("days") or []) >= 5))]
+        # 13.11: «по будням, кроме пятницы, в 17:50» (4 дня) — тоже привычка; раньше считали с 5 дней
+        hs = [x for x in items if (x.get("kind") != "job" or weekly) and x.get("repeat")
+              and ((x["repeat"].get("kind") in ("daily", "interval"))
+                   or (x["repeat"].get("kind") == "weekly" and (weekly or len(x["repeat"].get("days") or []) >= 3)))]
         return {str(x.get("id")) for x in hs if x.get("id")}, {x.get("text", "").strip() for x in hs if x.get("text", "").strip()}
 
     def _done_no_habits(self, st):
@@ -250,15 +260,19 @@ class MusicMixin:
         keep = [x for x in st.get("items") or [] if str(x.get("rid") or "") not in ids and norm(x.get("title")) not in hn]
         return dict(st, items=keep, today=len(keep))
 
-    def _routine_note(self, silent=True):
+    def _routine_note(self, silent=True, weekly=False):
         """28.10 (владелец: «каждый день „не забыть карту“ и „выключить комп“ — мне не нужно, чтобы итог дня каждый раз
         говорил, что завтра опять взять карту»): ежедневные и будничные напоминания-привычки и сами дела по расписанию
-        (этот итог тоже) в итогах не упоминаются; кроме них ничего не было — итог молчит."""
-        habits = sorted(self._habits()[1])[:12]
-        return ("\n\nПовторяющиеся каждый день напоминания-привычки" + (" (" + "; ".join(f"«{h[:60]}»" for h in habits) + ")" if habits else "")
-                + " и сами дела по расписанию (утренняя сводка, этот итог) — не дела дня: не упоминай их ни в сделанном, ни в "
-                "оставшемся, ни в планах на завтра. Говори только о разовых делах, встречах, отметках «сделано» не по привычкам "
-                "и тратах." + (f" Если, кроме привычек, сказать нечего — ответь ровно одним словом: {JOB_SILENT}." if silent else ""))
+        (этот итог тоже) в итогах не упоминаются; кроме них ничего не было — итог молчит. weekly — итог недели: и всё
+        еженедельное (13.11)."""
+        habits = sorted(self._habits(weekly)[1])[:16]
+        what = "Повторяющиеся каждую неделю и чаще дела и напоминания" if weekly else "Повторяющиеся каждый день напоминания-привычки"
+        when = "в планах на следующую неделю" if weekly else "в планах на завтра"
+        return (f"\n\n{what}" + (" (" + "; ".join(f"«{h[:60]}»" for h in habits) + ")" if habits else "")
+                + f" и сами дела по расписанию (утренняя сводка, этот итог) — не события: не упоминай их ни в сделанном, ни в "
+                f"оставшемся, ни {when}, и не говори, что их пропустил(а). Говори только о разовых делах, встречах, отметках "
+                "«сделано» не по привычкам и тратах. Если разовых дел впереди нет — так и скажи одной фразой."
+                + (f" Если, кроме привычек, сказать нечего — ответь ровно одним словом: {JOB_SILENT}." if silent else ""))
 
     JOB_RETRY_MIN = (5, 15)            # дело не удалось (модель или сеть) — ещё попытки через столько минут
 

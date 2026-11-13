@@ -711,6 +711,10 @@ def on_gpu(fn):
 def synth_iter(text, spec, speed=1.0, lang="Russian"):
     """Фраза за фразой: первая — одна (быстрее голос), дальше пачками по BATCH. Каждая пачка отдельно встаёт в очередь
     видеокарты, поэтому два разговора одновременно не ждут друг друга целиком."""
+    if role_for(spec) == "espeech" and lang != "Russian" and not re.search(r"[А-Яа-яЁё]", text or ""):
+        # 0.96: ESpeech обучен только на русской речи — английскую фразу своим голосом читает клонирование Qwen (тот же
+        # образец записи, Qwen3-TTS знает английский)
+        spec = dict(spec, engine="qwen")
     parts = split_text(text)
     groups = [parts[:1]] + [parts[k:k + BATCH] for k in range(1, len(parts), BATCH)] if parts else []
     if role_for(spec) == "espeech" and len(parts) > 1:

@@ -23,6 +23,7 @@ BRACKET_READ = {"search_documents", "find_notes", "read_file", "web_search", "we
                 "calendar_list", "money_report", "money_find", "app_help", "system_status", "task_status", "ask_knowledge",
                 "month_summary", "writing_today", "mailing_status", "team_status", "client_info", "client_list", "client_deals"}
 ROUTE_MAX = 400                    # длиннее — вставленный документ, а не просьба к специалисту (№566)
+ROUTINE_HEAD = "Постоянные (привычки и дела по расписанию) — в итоге не называй"   # agenda_context и quality.agenda_missed
 # инструменты, что меняют папку «Заметки», — после них открытый список освежается сам (№633: удалила — карточка осталась)
 NOTE_TOOLS = {"save_note", "update_note", "delete_files", "save_link", "client_note", "write_diary"}
 
@@ -101,6 +102,9 @@ class ToolsMixin:
         log.info("🛠  %s %s", name, redact(json.dumps(args, ensure_ascii=False))[:200])
         if not on:
             return f"Инструмент {name} выключен пользователем."
+        from tools import TOOLS as _BUILTIN
+        if name in _BUILTIN and hasattr(self, "health_use"):   # «чем пользуются» (13.11): какие встроенные умения зовёт модель —
+            self.health_use("t:" + name)                   # только имя (плагины и MCP — свои имена людей, их не считаем)
         asked = getattr(turn, "asked", None)
         # дело по расписанию (via_job): его шаги в окнах не показываем — человеку только итог или ничего (владелец 11.11:
         # «запустились какие-то процессы — „Навык — готово“, а результата нет, непонятно, что это и зачем»)
@@ -904,6 +908,14 @@ class ToolsMixin:
         """Компьютер проснулся или Dewiar запустился: синхронизация есть — обменяться сейчас (опоздавшие ждут её, см.
         Reminders._loop); синхронизации нет или облако выключено стоп-краном — ждать нечего, звенеть сразу (late_alarm1027:
         без синхронизации пропущенное при запуске звенело только через 90 с)."""
+        try:                                             # 13.11: пути к серверам Dewiar — заново, логин прокси — свежий
+            import net
+            net.wake_reset()
+            self._px_auth_at = 0
+            if getattr(self, "_px_stale", False):
+                threading.Timer(20, self._dewiar_proxy_fetch, kwargs={"force": True}).start()
+        except Exception:  # noqa: BLE001
+            log.debug("wake: net", exc_info=True)
         try:
             import egress
             on = (self.s.get("sync", "enabled") is not False and not getattr(self, "wav_input", None)
@@ -1975,6 +1987,9 @@ class ToolsMixin:
             days = [today + timedelta(days=2)]
         elif "завтра" in low:
             days = [today + timedelta(days=1)]
+        elif re.search(r"следующ\w*\s+недел", low):        # «на следующую неделю» — с понедельника по воскресенье
+            mon = today + timedelta(days=7 - today.weekday())
+            days = [mon + timedelta(days=i) for i in range(7)]
         elif re.search(r"(?<![а-яё])недел", low):          # «на неделю», но не «на понедельник» (в нём тоже «недел»)
             days = [today + timedelta(days=i) for i in range(7)]
         elif any(w in low for w, _ in self.WEEKDAY_Q):
@@ -1984,7 +1999,17 @@ class ToolsMixin:
         else:
             days = [today] + ([today + timedelta(days=1)] if datetime.now().hour >= 18 else [])
         names = {today: "сегодня", today + timedelta(days=1): "завтра", today + timedelta(days=2): "послезавтра"}
-        months, lines = {}, []
+        months, lines, routine = {}, [], []
+        # итог по расписанию («Итог дня», «Итоги недели»): привычки и дела по расписанию — отдельно, с пометкой «не называй»
+        # (13.11, владелец: итог недели перечислил еженедельные виклик, бэкап и выключение компьютера). Время их остаётся в
+        # справке — проверка «время выдумано» их узнает, а «дел нет» их не считает.
+        rids = set()
+        if "[Дело по расписанию]" in t and re.search(r"итог|подвед|сводк|что сделано", t, re.I) and hasattr(self, "_habits"):
+            try:
+                rids = self._habits(weekly=bool(re.search(r"(?<![а-яё])недел", low)))[0]
+            except Exception:  # noqa: BLE001
+                rids = set()
+            rids = rids or {"—"}
         now_hm = datetime.now().strftime("%H:%M")
         try:                                             # память: «в среду в 15:00 встреча» записана с датой «(на 14.10.2026, среда)»
             mem = [x.strip(" -*\t") for x in (self.workspace.memory_get() or "").splitlines() if x.strip()]
@@ -2014,13 +2039,17 @@ class ToolsMixin:
                     ("дело по расписанию (выполнится само)" if x.get("kind") in ("job", "brief") else "напоминание")
                 tm = (x.get("time") or "") + (f"–{x['end']}" if x.get("end") else "")
                 past = d == today and (x.get("done") or (x.get("time") and x["time"] < now_hm))
+                if rids and x.get("type") == "reminder" and (str(x.get("id") or "") in rids or x.get("kind") in ("job", "brief")):
+                    routine.append(f"{head} {tm} {x.get('title', '')}")
+                    continue
                 lines.append(f"{head} {tm} {kind}: {x.get('title', '')}" + (f", {x['place']}" if x.get("place") else "")
                              + (" — уже прошло" if past else "") + (", повторяется" if x.get("repeat") else ""))
         log.info("📅 Вопрос о планах — даю модели дела и календарь (%d стр.)", len(lines))
         return ("\n\nПЛАНЫ ПОЛЬЗОВАТЕЛЯ (напоминания, дела по расписанию и встречи календаря — уже получены, это свежие данные): "
                 "отвечай по ним сразу, без вызова инструментов и без «сейчас посмотрю». Записанное в твоей памяти — тоже планы, называй их. "
                 "Сначала то, что впереди, по времени; "
-                "прошедшее — одной фразой или не упоминай; ничего нет — так и скажи. Ничего не выдумывай.\n" + "\n".join(lines))
+                "прошедшее — одной фразой или не упоминай; ничего нет — так и скажи. Ничего не выдумывай.\n" + "\n".join(lines)
+                + (f"\n{ROUTINE_HEAD}: " + "; ".join(routine[:40]) if routine else ""))
 
     def calendar_month(self, year, month):
         """Всё по дням месяца: напоминания (будущие и сработавшие), деньги, заметки, дневник, задачи."""

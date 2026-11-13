@@ -279,6 +279,10 @@ body.game {
 :root.tone-dark .ghost { color: #f2f3fa; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .16); }
 :root.tone-light .overlay { background: radial-gradient(ellipse at 50% 45%, rgba(236, 241, 248, .12), rgba(214, 224, 238, .45)); }
 :root.tone-light .card { background: rgba(244, 247, 252, .82); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); }
+/* №697 (13.11, телефон, тёмная тема Dewiar + светлая игра — «Судоку»): вторая кнопка была белым текстом на светлом стекле —
+   «сливается, не видно ни надписи, ни самой кнопки». В светлой игре карточка и её кнопки — всегда тёмным по светлому */
+:root.tone-light .card { --ink: #1e2440; --muted: #4f5878; --glass: rgba(255, 255, 255, .7); --line: rgba(30, 40, 80, .16); color: var(--ink); }
+:root.tone-light .ghost { color: #1e2440; background: rgba(255, 255, 255, .72); border: 1px solid rgba(30, 40, 80, .18); }
 @media (max-height: 640px) {          /* низкое окно (лист «Досуг» на компьютере): карточка компактнее, кнопка всегда видна */
   .card { padding: 16px 20px 14px; max-width: 460px; }
   .card h2 { font-size: 28px; margin-bottom: 6px; }

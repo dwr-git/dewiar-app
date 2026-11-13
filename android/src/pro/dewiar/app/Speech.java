@@ -52,6 +52,7 @@ public final class Speech {
     volatile int extraMs = 0;
     /** «Удерживайте и говорите»: распознаватель просят ждать паузу подольше (меньше перезапусков посреди речи). */
     volatile boolean longPause = false;
+    volatile String lang1 = "ru";                    // язык приложения (0.96): "en" — слушаем по-английски
     volatile String lang2 = "";                      // второй язык ("en"): распознаватель сам узнаёт язык фразы (Android 14+)
 
     // ---------- «Триньк» системного распознавателя (отзыв 13.10: «пока держу кнопку — тринькает на каждой паузе») ----------
@@ -178,14 +179,15 @@ public final class Speech {
                     });
                     Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
                     i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU");
-                    // и «только по-русски» — для распознавателей, что берут язык системы (отчёт №253: телефон без русской
+                    final String main = "en".equals(lang1) ? "en-US" : "ru-RU", other = "en".equals(lang1) ? "ru-RU" : "en-US";
+                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, main);
+                    // и «только на языке приложения» — для распознавателей, что берут язык системы (отчёт №253: телефон без русской
                     // прошивки слышал английский и китайский)
-                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ru-RU");
-                    if ("en".equals(lang2)) {
+                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, main);
+                    if (lang2 != null && !lang2.isEmpty()) {
                         // второй язык (28.10): русский или английский — распознаватель решает сам (Android 14+, у Google — да;
                         // старые распознаватели эти пожелания пропускают и слушают по-русски, как раньше)
-                        ArrayList<String> langs = new ArrayList<>(java.util.Arrays.asList("ru-RU", "en-US"));
+                        ArrayList<String> langs = new ArrayList<>(java.util.Arrays.asList(main, other));
                         i.putExtra("android.speech.extra.ENABLE_LANGUAGE_DETECTION", true);
                         i.putStringArrayListExtra("android.speech.extra.LANGUAGE_DETECTION_ALLOWED_LANGUAGES", langs);
                         i.putExtra("android.speech.extra.ENABLE_LANGUAGE_SWITCH", "balanced");
@@ -328,7 +330,7 @@ public final class Speech {
                     }
                     byte[] wav = wav(pcm.toByteArray(), rate);
                     // whisper-1 — имя по умолчанию в OpenAI-совместимом API; свой сервер обычно принимает любое
-                    JSONObject f = new JSONObject().put("model", model == null || model.isEmpty() ? "whisper-1" : model).put("language", "ru");
+                    JSONObject f = new JSONObject().put("model", model == null || model.isEmpty() ? "whisper-1" : model).put("language", "en".equals(lang1) ? "en" : "ru");   // 0.96: язык приложения
                     String r = Net.postMultipart(url, key, wav, "speech.wav", "audio/wav", f);
                     String text;
                     try { text = new JSONObject(r).optString("text", r); } catch (Exception e) { text = r; }   // {"text": …} или просто текст
