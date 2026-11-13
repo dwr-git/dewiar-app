@@ -13,6 +13,9 @@ FILES = {"/call.html": (UI / "call.html", "text/html; charset=utf-8"),
          "/assets/boot.js": (UI / "assets" / "boot.js", "text/javascript; charset=utf-8"),   # первый скрипт каждой страницы (0.85)
          "/assets/call.js": (UI / "assets" / "call.js", "text/javascript; charset=utf-8"),
          "/assets/dewiar.js": (UI / "assets" / "dewiar.js", "text/javascript; charset=utf-8"),
+         "/assets/i18n.data.js": (UI / "assets" / "i18n.data.js", "text/javascript; charset=utf-8"),   # язык окна (0.95)
+         "/assets/i18n.js": (UI / "assets" / "i18n.js", "text/javascript; charset=utf-8"),
+         "/assets/i18n.tx.js": (UI / "assets" / "i18n.tx.js", "text/javascript; charset=utf-8"),   # перевод по тексту — не по-русски
          "/assets/logo-white.png": (UI / "assets" / "logo-white.png", "image/png")}
 _srv = None
 _lock = threading.Lock()

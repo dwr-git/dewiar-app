@@ -13,7 +13,7 @@ const MON = ["января", "февраля", "марта", "апреля", "м
 const MON3 = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 function dDate(iso) { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); }
 /* Имя текущей личности — из подписи под логотипом («сейчас говорит …», её пишет personas.js) */
-function curName() { return ($("#bsub").textContent.match(/говорит (.+)$/) || [])[1] || "ассистент"; }
+function curName() { return window.DW_CUR_NAME || ($("#bsub").textContent.match(/говорит (.+)$/) || [])[1] || "ассистент"; }
 function curA() {                                   // окончание глагола прошедшего времени по полу персонажа: «узнала», «узнал»
   try { const g = (personas.find(p => p.id === active) || {}).gender; return g === "female" ? "а" : g === "male" ? "" : "(а)"; } catch (e) { return "(а)"; }
 }

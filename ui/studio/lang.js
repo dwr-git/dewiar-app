@@ -11,7 +11,7 @@ function langSync() {
   const seg = $("#lang-seg");
   if (seg && window.dwLangs) for (const l of dwLangs()) {
     const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "radio"); b.dataset.v = l.code;
-    b.setAttribute("aria-checked", "false"); b.lang = l.code; b.textContent = l.name; seg.appendChild(b);
+    b.setAttribute("aria-checked", "false"); b.lang = l.code; b.translate = false; b.textContent = l.name; seg.appendChild(b);   // имя языка — на нём самом
   }
   $$("#lang-seg [data-v]").forEach(b => b.onclick = () => {
     const v = b.dataset.v;

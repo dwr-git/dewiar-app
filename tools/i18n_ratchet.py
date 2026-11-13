@@ -7,7 +7,9 @@
 
 Пределы — tests/i18n_baseline.json; проверка — tests/i18n_test.py. Считается: строка в кавычках с кириллицей в .js
 (комментарии не в счёт), в .html — текст и title/placeholder/aria-label/alt с кириллицей без data-i18n…, плюс строки
-встроенных <script>. Комментарии программистам остаются русскими (владелец 11.11)."""
+встроенных <script>. Комментарии программистам остаются русскими (владелец 11.11).
+С 0.95 не считается и то, что переведено по тексту (data/i18n/text/en.json — ui/assets/i18n.js): строка разметки или
+литерал кода, все куски которого (между тегами; ${…} — «{1}») есть в словаре. Что осталось — tools/i18n_texts.py."""
 import json
 import re
 import sys
@@ -18,9 +20,116 @@ ROOT = Path(__file__).resolve().parent.parent
 BASE = ROOT / "tests" / "i18n_baseline.json"
 CYR = re.compile(r"[А-Яа-яЁё]")
 GLOBS = ["ui/*.html", "ui/studio/*.js", "ui/assets/*.js", "android/assets/www/*.js", "android/assets/www/*.html"]
-SKIP = {"ui/assets/i18n.data.js",
+SKIP = {"ui/assets/i18n.data.js", "ui/assets/i18n.tx.js",
         "ui/assets/speechnorm.js", "android/assets/www/exam.js"}   # русская речь и фразы экзамена — не интерфейс
 REGEX_BEFORE = set("(,=:[!&|?{};+-*%<>~^")
+TEXT = ROOT / "data" / "i18n" / "text" / "en.json"
+_TX = None
+
+
+def norm(s):
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def tmpl_key(s):
+    """`Сохранено ${n} из ${all}` -> «Сохранено {1} из {2}» (подстановки по порядку; скобки внутри ${…} — с учётом
+    вложенности)."""
+    out, i, k = [], 0, 0
+    while i < len(s):
+        if s.startswith("${", i):
+            d, j = 1, i + 2
+            while j < len(s) and d:
+                d += {"{": 1, "}": -1}.get(s[j], 0)
+                j += 1
+            k += 1
+            out.append("{%d}" % min(k, 9))
+            i = j
+            continue
+        out.append(s[i])
+        i += 1
+    return "".join(out)
+
+
+def _exprs(s):
+    out, i = [], 0
+    while True:
+        i = s.find("${", i)
+        if i < 0:
+            return out
+        k = _expr_end(s, i + 2)
+        out.append(s[i + 2:k - 1])
+        i = k
+
+
+def pieces(s, js=True):
+    """Куски текста строки так, как они окажутся на странице: между тегами, с «{1}» на месте ${…}; HTML-сущности —
+    как есть (их немного). Пустые и без кириллицы — не куски."""
+    out = []
+    if js:
+        for expr in _exprs(s):     # строки внутри ${…}: «${n ? "все видны" : "скрыта"}»
+            for lit in js_strings(expr):
+                out += pieces(lit)
+        s = tmpl_key(s.replace("\\n", " ").replace('\\"', '"').replace("\\'", "'"))
+    for tag in re.findall(r"<[a-zA-Z][^<>]*>", s):        # подписи в тегах: title, placeholder, aria-label, alt
+        for v in re.findall(r'(?:title|placeholder|aria-label|alt)=(?:"([^"]*)"|\'([^\']*)\')', tag):
+            v = norm(v[0] or v[1])
+            if CYR.search(v) and re.sub(r"\{\d\}", "", v).strip(" .,:;—–-()«»!?…"):
+                out.append(v)
+    for part in re.split(r"<[^<>]*>", s):
+        part = norm(part.replace("&nbsp;", " "))
+        if CYR.search(part) and re.sub(r"\{\d\}", "", part).strip(" .,:;—–-()«»!?…"):
+            out.append(part)
+    return out
+
+
+def tx():
+    global _TX
+    if _TX is None:
+        try:
+            d = json.loads(TEXT.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            d = {}
+        _TX = {norm(k) for k, v in d.items() if v}
+    return _TX
+
+
+def covered(s, js=True):
+    ps = pieces(s, js)
+    return bool(ps) and all(p in tx() for p in ps)
+
+
+def _str_end(src, i):
+    """Конец строки JS, начатой в src[i] (кавычка или `): индекс после закрывающей."""
+    q, j, n = src[i], i + 1, len(src)
+    while j < n and src[j] != q:
+        if src[j] == "\\":
+            j += 2
+            continue
+        if q == "`" and src.startswith("${", j):
+            j = _expr_end(src, j + 2)
+            continue
+        if q != "`" and src[j] == "\n":
+            return j
+        j += 1
+    return j + 1
+
+
+def _expr_end(src, j):
+    """Конец ${…}: индекс после закрывающей скобки (строки внутри — целиком, со своими скобками)."""
+    d, n = 1, len(src)
+    while j < n:
+        ch = src[j]
+        if ch in "'\"`":
+            j = _str_end(src, j)
+            continue
+        if ch == "{":
+            d += 1
+        elif ch == "}":
+            d -= 1
+            if not d:
+                return j + 1
+        j += 1
+    return n
 
 
 def js_strings(src):
@@ -60,6 +169,11 @@ def js_strings(src):
                     continue
                 if c != "`" and src[j] == "\n":
                     break
+                if c == "`" and src.startswith("${", j):     # ${…} целиком, со своими строками и `…` внутри (0.95)
+                    k = _expr_end(src, j + 2)
+                    buf.append(src[j:k])
+                    j = k
+                    continue
                 buf.append(src[j])
                 j += 1
             out.append("".join(buf))
@@ -88,7 +202,7 @@ class _Html(HTMLParser):
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         for k in self.ATTRS:
-            if k in a and CYR.search(a[k] or "") and f"data-i18n-{k}" not in a:
+            if k in a and CYR.search(a[k] or "") and f"data-i18n-{k}" not in a and not covered(a[k], js=False):
                 self.count += 1
         if tag in ("script", "style"):
             self._in = tag
@@ -107,7 +221,7 @@ class _Html(HTMLParser):
             return
         if self._in == "style":
             return
-        if CYR.search(data) and not (self.stack and self.stack[-1]):
+        if CYR.search(data) and not (self.stack and self.stack[-1]) and not covered(data, js=False):
             self.count += 1
 
 
@@ -116,8 +230,8 @@ def count(path):
     if str(path).endswith(".html"):
         p = _Html()
         p.feed(src)
-        return p.count + sum(1 for s in js_strings("\n".join(p.script)) if CYR.search(s))
-    return sum(1 for s in js_strings(src) if CYR.search(s))
+        return p.count + sum(1 for s in js_strings("\n".join(p.script)) if CYR.search(s) and not covered(s))
+    return sum(1 for s in js_strings(src) if CYR.search(s) and not covered(s))
 
 
 def files():

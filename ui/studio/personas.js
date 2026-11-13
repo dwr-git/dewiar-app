@@ -43,7 +43,7 @@ function renderPersonas() {
 /* логотип слева и цвет — по активному персонажу (нужно всегда, даже если «Персонажи» не открывали) */
 function personasHead() {
   const cur = personas.find(p => p.id === active);
-  if (cur) { accent(cur.color); brand.configure({ style: cur.avatar_url && cur.style !== "aura" ? "photo" : cur.style, color: cur.color, image: cur.avatar_url || null, soft: !!cur.kids }); $("#bsub").textContent = `сейчас говорит ${cur.name}`; }
+  if (cur) { accent(cur.color); brand.configure({ style: cur.avatar_url && cur.style !== "aura" ? "photo" : cur.style, color: cur.color, image: cur.avatar_url || null, soft: !!cur.kids }); $("#bsub").textContent = `сейчас говорит ${cur.name}`; window.DW_CUR_NAME = cur.name; }
 }
 
 // первое открытие «Персонажей»: карточки, галерея и голоса Vosk для редактора (раньше их грузили при запуске — dewiar.js)

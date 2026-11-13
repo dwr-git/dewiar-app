@@ -83,7 +83,7 @@ function scDraft() {
 function scLive() {
   const d = SC.d, r = d.remote;
   $("#sc-live").hidden = !r;
-  $("#sc-pub").textContent = r ? "Обновить на сайте" : "Опубликовать";
+  $("#sc-pub").textContent = r ? "Обновить на сайте" : "Опубликовать"; delete $("#sc-pub").dataset.busy;   // новая надпись — не возвращать «was»
   $("#sc-err").hidden = !d.error; $("#sc-err").textContent = d.error ? "Сейчас: " + d.error : "";
   if (!d.signed) { $("#sc-err").hidden = false; $("#sc-err").textContent = "Нужен вход аккаунтом dewiar.pro или ключ Dewiar — студия → «Мозг». С него и платится за ответы."; }
   if (!r) return;
@@ -98,10 +98,10 @@ function scLive() {
   for (const id of ["#sc-title", "#sc-greet", "#sc-brief", "#sc-kb", "#sc-pi", "#sc-pd"]) $(id).addEventListener("input", scDraft);
   for (const id of ["#sc-ask", "#sc-fold"]) $(id).addEventListener("change", scDraft);
   $("#sc-pub").onclick = async () => {
-    const b = $("#sc-pub"); b.disabled = true; const was = b.textContent; b.textContent = "Отправляю…";
-    try { SC.d = await core.call("sitechat_publish", { patch: scPatch() }); toast(was === "Опубликовать" ? "Чат готов — скопируйте ссылку или код для сайта" : "Обновлено на сайте", 3500); scLive(); }
+    const b = $("#sc-pub"); b.disabled = true; const was = b.textContent; b.textContent = "Отправляю…"; b.dataset.busy = "1";
+    try { SC.d = await core.call("sitechat_publish", { patch: scPatch() }); toast(was === "Опубликовать" || was === (window.dwTx ? dwTx("Опубликовать") : "") ? "Чат готов — скопируйте ссылку или код для сайта" : "Обновлено на сайте", 3500); scLive(); }
     catch (e) { toast(e.message, 5000); }
-    b.disabled = false; if (b.textContent === "Отправляю…") b.textContent = was;
+    b.disabled = false; if (b.dataset.busy === "1") { b.textContent = was; delete b.dataset.busy; }   // текст мог перевестись (0.95)
   };
   $$("#p-sitechat [data-cp]").forEach(b => b.onclick = async () => {
     const i = $("#" + b.dataset.cp);

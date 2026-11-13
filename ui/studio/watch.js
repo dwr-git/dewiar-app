@@ -54,7 +54,8 @@ $("#wt-go").onclick = async () => {
   if (k === "screen" && a.what.length < 3) { r.className = "res bad"; r.textContent = "Напишите, чего ждать — например: «Claude закончил и написал ответ»"; $("#wt-what").focus(); return; }
   r.className = "res"; r.textContent = "…";
   try { WT.st = await core.call("watch_add", a); wtRender(); r.className = "res ok"; r.textContent = "Дозор начат — скажу, когда готово";
-    setTimeout(() => { if (r.textContent.startsWith("Дозор начат")) r.textContent = ""; }, 4000); }
+    const n = (WT.msg = (WT.msg || 0) + 1);   // не по тексту: он мог перевестись (0.95)
+    setTimeout(() => { if (WT.msg === n && r.className === "res ok") r.textContent = ""; }, 4000); }
   catch (e) { r.className = "res bad"; r.textContent = e.message; }
 };
 core.on("watch", (st) => { WT.st = st; if ($("#p-watch").classList.contains("cur")) wtRender(); else { const d = $("#wt-dot"); if (d) d.classList.toggle("on", (st.items || []).some(x => x.status === "active")); } });

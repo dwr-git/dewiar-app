@@ -100,7 +100,7 @@ function showHelp(k) {
     `<p class="hguide"><a href="${GUIDE_URL}#${GUIDE_OF[k] || ""}" target="_blank" rel="noopener">Подробное руководство с примерами и снимками экрана</a></p>`;
   $$("#help-body .tplay").forEach(b => b.onclick = async () => {
     const x = TRY[+b.dataset.i]; b.disabled = true;
-    try { await core.call("say", { text: x.say }); toast("Отправил ассистенту — смотрите виджет"); } catch (e) { toast(e.message); }
+    try { await core.call("say", { text: window.dwTx ? dwTx(x.say) : x.say }); toast("Отправил ассистенту — смотрите виджет"); } catch (e) { toast(e.message); }
     setTimeout(() => b.disabled = false, 1500);
   });
   $("#help").classList.add("open");

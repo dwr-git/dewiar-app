@@ -81,7 +81,7 @@ function chatBubble1(x, lastWho) {
   // имя персонажа — над его первым ответом за день и когда отвечает другой персонаж (не над каждым ответом)
   const head = !out && lastWho !== (x.who || "")
     ? `<div class="ch-who"><i style="background:${escH((p && p.color) || "#8A9BFF")}"></i>${escH((p && p.name) || "Ассистент")}</div>` : "";
-  const body = (out ? "" : chatSteps(x.steps, x.id)) + (!x.text ? "" : out ? `<div class="tx">${escH(x.text)}</div>` : `<div class="tx md">${md(x.text)}</div>`);
+  const body = (out ? "" : chatSteps(x.steps, x.id)) + (!x.text ? "" : out ? `<div class="tx" translate="no">${escH(x.text)}</div>` : `<div class="tx md" translate="no">${md(x.text)}</div>`);
   // вложения: картинки — миниатюрами, файлы — плашками; нажать — открыть из «Входящих» папки ассистента
   // картинки к рассказу (show_images) — миниатюры со ссылкой на источник, лентой; свои вложения — из «Входящих»
   const web = (x.att || []).filter(a => a.kind === "image" && a.url && !a.path);
@@ -108,7 +108,7 @@ function chatSteps(steps, id) {
    графике это десятки перерисовок в секунду. Теперь кусок меняет только живой пузырь, не чаще кадра; вся лента — когда
    ответ готов (событие chat). */
 const chatLiveHtml = () => `<div class="cl-m ch-live${CH.live.media ? " wide" : ""}" id="ch-live">${chatLiveInner()}</div>`;
-const chatLiveInner = () => chatSteps(CH.live.steps, "live") + (CH.live.text ? `<div class="tx md">${md(CH.live.text)}</div>` : `<div class="ch-dots"><i></i><i></i><i></i></div>`)
+const chatLiveInner = () => chatSteps(CH.live.steps, "live") + (CH.live.text ? `<div class="tx md" translate="no">${md(CH.live.text)}</div>` : `<div class="ch-dots"><i></i><i></i><i></i></div>`)
   + (CH.live.media && window.DewiarRich ? DewiarRich.gallery(CH.live.media) : "");
 let chLiveRaf = 0;
 function chatLive() {

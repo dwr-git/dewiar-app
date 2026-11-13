@@ -379,7 +379,7 @@ class Posts:
             return
         who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " и " + names[-1]
         bot = self.bot.persona().get("name") or (self.bot.data.get("bot") or {}).get("name") or "бот"
-        text = (self.st["greet"].get("text") or GREET).replace("{имя}", who).replace("{бот}", bot)
+        text = (self.st["greet"].get("text") or GREET).replace("{имя}", who).replace("{бот}", bot).replace("{name}", who).replace("{bot}", bot)   # английская студия (0.95)
         self.bot._send(cid, text)
 
     # ---------- часы ----------

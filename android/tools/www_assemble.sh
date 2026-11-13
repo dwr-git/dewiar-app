@@ -15,7 +15,7 @@ cp "$ROOT/ui/assets/qrcode.js" "$W/"                     # QR-код пригл�
 cp "$ROOT/ui/assets/call.js" "$W/"                       # звонки «Близким» (WebRTC) — тот же код, что у компьютера
 cp "$ROOT/ui/assets/codes.js" "$ROOT/ui/assets/vendor/zxing.min.js" "$W/"   # печать Dewiar (Aztec) и сканер кодов
 cp "$ROOT/ui/assets/refnet.js" "$W/"                     # «Моё созвездие» — приглашённые друзья картиной
-cp "$ROOT/ui/assets/i18n.data.js" "$ROOT/ui/assets/i18n.js" "$W/"   # языки (0.89): те же словари data/i18n, что у студии
+cp "$ROOT/ui/assets/i18n.data.js" "$ROOT/ui/assets/i18n.tx.js" "$ROOT/ui/assets/i18n.js" "$W/"   # языки (0.89): те же словари data/i18n, что у студии
 cp "$ROOT/ui/assets/speechnorm.js" "$W/"                 # числа словами для голоса сервера — как core/speechnorm.py
 cp "$ROOT/ui/assets/rich.js" "$W/"                       # схемы Mermaid и картинки к рассказу — тот же код, что у компьютера
 cp -r "$ROOT/ui/assets/emoji" "$W/emoji"                 # смайлы картинками (Fluent Emoji, MIT) — те же, что в студии
