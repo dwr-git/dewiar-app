@@ -765,6 +765,23 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .doc-req .lg-org{font-weight:700;margin-bottom:.3em}
 .doc-req ul{list-style:none;margin:0;padding:0;display:grid;gap:4px;color:var(--smut)}
 .doc-req a{color:var(--slink)}
+/* «Статьи» (0.93): /blog/ и /blog/<slug> — страницы собирает сервер по шаблону dw-blog.html */
+.dw-crumbs{display:flex;flex-wrap:wrap;gap:8px;font-size:.92rem;margin-bottom:clamp(20px,3vw,30px)}.dw-crumbs a{color:var(--slink);text-decoration:none;font-weight:600}.dw-crumbs span{color:var(--smut)}
+.dw-meta{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--smut);font-size:.95rem;margin:14px 0 clamp(26px,4vw,40px)}
+.dw-body h3{font-size:calc(1.12rem * var(--h3s,1));line-height:1.35;margin:1.6em 0 .5em}
+.dw-body p{margin:0 0 1em}.dw-body ol{margin:0 0 .9em;padding-left:1.4em}.dw-body a{color:var(--slink)}
+.dw-body blockquote{margin:1.3em 0;padding:.1em 0 .1em 1.1em;border-left:3px solid var(--slink);color:var(--smut)}
+.dw-refs,.dw-more{margin-top:clamp(36px,5vw,56px);max-width:68ch}.dw-more{max-width:none}
+.dw-refs>b,.dw-more>b{display:block;font-family:var(--fh);font-weight:var(--hw);font-size:calc(1.12rem * var(--h3s,1));margin-bottom:.8em}
+.dw-refs ul{margin:0;padding-left:1.2em;color:var(--smut)}.dw-refs li{margin:.3em 0}.dw-refs a{color:var(--slink);overflow-wrap:anywhere}
+.dw-blog h1{margin-bottom:clamp(24px,4vw,40px)}
+.dw-posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:clamp(14px,2vw,22px)}
+.dw-card{display:flex;flex-direction:column;gap:8px;padding:clamp(18px,2.4vw,26px);border-radius:var(--r);background:var(--scard);color:var(--sink);text-decoration:none;border:1px solid var(--sline);transition:transform .2s,border-color .2s}
+.dw-card:hover{border-color:var(--slink);transform:translateY(-2px)}.dw-card:focus-visible{outline:2px solid var(--slink);outline-offset:3px}
+.dw-card small{color:var(--smut);font-size:.85rem}.dw-card b{font-family:var(--fh);font-weight:var(--hw);font-size:calc(1.12rem * var(--h3s,1));line-height:1.3}
+.dw-card span{color:var(--smut);font-size:.95rem;line-height:1.5}
+.dw-pages{display:flex;justify-content:space-between;gap:16px;margin-top:28px}.dw-pages a{color:var(--slink);font-weight:600}
+@media (prefers-reduced-motion:reduce){.dw-card{transition:none}.dw-card:hover{transform:none}}
 @media (max-width:860px){
  .h-split .w,.split,.ft-split{grid-template-columns:1fr}
  .h-split .media{aspect-ratio:16/10}
@@ -946,8 +963,16 @@ def menu_items(site, c):
     return out[:7]
 
 
-def header(site, c):
+def menu_with_blog(site, c):
+    """Меню + «Статьи», когда на сайте есть опубликованные статьи (0.93; в предпросмотре студии — нет: /blog/ там не открыть)."""
     m = menu_items(site, c)
+    if c.mode != "preview" and ((site.get("blog") or {}).get("live") or 0) > 0:
+        m = m[:7] + [("Статьи", "/blog/", c.page_i == -2)]
+    return m
+
+
+def header(site, c):
+    m = menu_with_blog(site, c)
     links = "".join(f'<a href="{E(h)}"{" aria-current=page" if cur else ""}>{one(t)}</a>' for t, h, cur in m)
     cta_t = ((site.get("menu") or {}).get("cta") or "").strip()
     has_lead = "lead" in c.anchors
@@ -1470,18 +1495,20 @@ def doc_keys(site):
     return [k for k in K.LEGAL_DOCS if isinstance(docs.get(k), dict) and docs[k].get("mode") == "text" and str(docs[k].get("text") or "").strip()]
 
 
-def page_html(site, i=0, mode="preview", images=None, base_url="", css_text=None, doc=""):
+def page_html(site, i=0, mode="preview", images=None, base_url="", css_text=None, doc="", blog=False):
     """Одна страница сайта. preview — CSS внутри; publish/export — ссылка на style.css. doc — страница документа
     («Подвал и документы»: оферта, политика…) в стиле сайта, с той же шапкой и подвалом."""
     pages = site.get("pages") or []
     if not pages:
         pages = site["pages"] = [{"title": "Главная", "blocks": []}]
     doc = doc if doc in doc_keys(site) else ""
-    i = -1 if doc else max(0, min(i, len(pages) - 1))
+    i = -2 if blog else -1 if doc else max(0, min(i, len(pages) - 1))
     c = Ctx(site, mode, i, images, base_url)
     th = site.get("theme") or {}
     fonts = K.FONTS.get(th.get("fonts") or "", K.FONTS["warm"])
-    if doc:
+    if blog:                      # шаблон статей (0.93): сервер подставляет заголовок, описание, адрес и саму статью
+        body, title, desc, url = "{{dw:main}}", "{{dw:title}}", "{{dw:desc}}", "{{dw:url}}"
+    elif doc:
         body = doc_main(site, doc, c)
         title = f'{K.LEGAL_DOCS[doc]["title"]} — {site.get("name") or "Сайт"}'
         desc = title
@@ -1491,7 +1518,7 @@ def page_html(site, i=0, mode="preview", images=None, base_url="", css_text=None
         title, desc = seo_title(site, i), seo_desc(site, i)
         url = (base_url.rstrip("/") + "/" + ("" if i == 0 else c.page_file(i))) if base_url else ""
     og_img = ""
-    for b in (pages[i].get("blocks") or []) if not doc else []:
+    for b in (pages[i].get("blocks") or []) if not doc and not blog else []:
         if b.get("image") and c.img(b["image"]) and not c.img(b["image"]).startswith("data:"):
             og_img = (base_url.rstrip("/") + "/" + c.img(b["image"])) if base_url else ""
             break
@@ -1511,12 +1538,21 @@ def page_html(site, i=0, mode="preview", images=None, base_url="", css_text=None
         head.append('<link rel="stylesheet" href="style.css">')
         if i == 0:
             head.append(f'<script type="application/ld+json">{jsonld(site, base_url)}</script>')
+            seo = site.get("seo") or {}             # 0.93: подтверждение в Яндекс Вебмастере и Google Search Console
+            for name, k in (("yandex-verification", "verify_yandex"), ("google-site-verification", "verify_google")):
+                if re.fullmatch(r"[A-Za-z0-9_\-]{8,100}", str(seo.get(k) or "")):
+                    head.append(f'<meta name="{name}" content="{E(seo[k])}">')
     cls = " ".join(x for x in ("pv" if mode == "preview" else "", "it" if fonts.get("italic") else "") if x)
     cls_attr = f' class="{cls}"' if cls else ""
     menu = (site.get("menu") or {}).get("style") or "top"
-    return (f'<!doctype html><html lang="ru"{cls_attr}><head>{"".join(h for h in head if h)}</head>'
+    if blog:
+        head = [h.replace('og:type" content="website"', 'og:type" content="article"') for h in head]
+    out = (f'<!doctype html><html lang="ru"{cls_attr}><head>{"".join(h for h in head if h)}</head>'
             f'<body class="m-{E(menu)}{" many" if len(menu_items(site, c)) > 5 else ""}">{header(site, c)}<main>{body}</main>{footer(site, c)}'
             f'{PREVIEW_JS if mode == "preview" else ""}</body></html>')
+    if blog:                      # /blog/… — на уровень глубже: свои адреса от корня сайта (style.css, img/…, страницы, #разделы)
+        out = re.sub(r'\b(href|src)="(?![a-z][a-z0-9+.-]*:|/|\{\{)([^"]*)"', lambda m: f'{m[1]}="/{"" if m[2].startswith("#") else ""}{m[2]}"', out)
+    return out
 
 
 def site_files(site, images, base_url="", mode="publish"):
@@ -1526,4 +1562,6 @@ def site_files(site, images, base_url="", mode="publish"):
         files[slug_of(pg, i) + ".html"] = page_html(site, i, mode, images, base_url)
     for k in doc_keys(site):
         files[doc_slug(site, k) + ".html"] = page_html(site, 0, mode, images, base_url, doc=k)
+    if mode == "publish":         # шаблон страниц «Статей» — сервер собирает по нему /blog/ и /blog/<slug> (0.93)
+        files["dw-blog.html"] = page_html(site, 0, mode, images, base_url, blog=True)
     return files, font_files((site.get("theme") or {}).get("fonts") or "warm")

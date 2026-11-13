@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 29 · Статьи для сайта. Светлый неоморфизм серии. Главная вещь урока — сайт сам приводит людей из поиска: одна кнопка «Вести статьи» — Лира составляет план тем, пишет черновик по свежему из Радара вашей ниши (Радар включается сам), черновик приходит на телефон, «Поправить» и «Опубликовать» — статья на сайте, в меню «Статьи», Яндекс узнаёт о ней сразу. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+.win { position: absolute; left: 640px; top: 140px; width: 760px; padding: 12px 14px 14px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.win .bar { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 6px 10px; }
+.win .bar i { width: 13px; height: 13px; border-radius: 50%; background: var(--nd); }
+.win .bar span { margin-left: 14px; flex: 1; padding: 7px 16px; border-radius: 99px; box-shadow: var(--press); font-size: 17px; font-weight: 800; color: var(--mut); }
+.win .bar span b { color: var(--ink); }
+.tgl { width: 76px; height: 42px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; }
+.tgl i { position: absolute; top: 5px; left: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); }
+.tgl.on { background: var(--brand); box-shadow: none; } .tgl.on i { left: 39px; }
+.toast { position: absolute; display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); }
+.toast > i { flex: none; width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; font-size: 32px; font-style: normal; background: rgba(47,179,131,.16); }
+.toast small { display: block; font-size: 16px; font-weight: 800; color: var(--mut); } .toast b { display: block; font-size: 22px; font-weight: 800; margin-top: 2px; }
+.st { position: absolute; display: grid; grid-template-columns: 250px 1fr; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); overflow: hidden; }
+.st nav { padding: 24px 16px; background: rgba(255,255,255,.38); display: flex; flex-direction: column; gap: 3px; }
+.st nav .g { margin: 12px 10px 4px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.st nav .g:first-child { margin-top: 0; }
+.st nav span { padding: 8px 12px; border-radius: 12px; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.st nav span.on { color: #fff; background: var(--brand); }
+.st .pg { padding: 28px 32px; } .st .pg h3 { font: 700 30px Unbounded; } .st .pg > small { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; color: var(--mut); }
+#cur { position: absolute; left: 0; top: 0; width: 34px; height: 34px; z-index: 9; filter: drop-shadow(0 4px 6px rgba(36,50,74,.35)); }
+
+#plane svg { stroke: var(--accent); }
+#stu { left: 640px; top: 112px; width: 1180px; height: 728px; grid-template-columns: 230px 1fr; }
+#stu nav { padding: 24px 12px; gap: 2px; } #stu nav span { font-size: 17px; } #stu nav span i { font-style: normal; margin-right: 8px; }
+#stu .pg { position: relative; padding: 24px 28px; } #stu .pg > small { font-size: 17px; }
+.tabs { display: inline-flex; gap: 2px; margin-top: 14px; padding: 4px; border-radius: 16px; box-shadow: var(--press); }
+.tabs i { font-style: normal; padding: 8px 15px; border-radius: 12px; font-size: 15px; font-weight: 700; color: var(--mut); }
+.tabs i.on { color: var(--accent); box-shadow: var(--raise-s); }
+.pane { position: absolute; left: 28px; right: 28px; top: 160px; bottom: 24px; }
+.cd { padding: 16px 20px; border-radius: 22px; box-shadow: var(--raise-s); }
+.cd h4 { font: 700 18px Unbounded; margin-bottom: 8px; } .cd h4 small { margin-left: 8px; font: 700 13px Manrope; color: var(--mut); }
+.btn { position: relative; display: inline-block; padding: 11px 20px; border-radius: 15px; font-size: 16px; font-weight: 800; box-shadow: var(--raise-s); white-space: nowrap; }
+.btn.pri { color: #fff; background: var(--brand); box-shadow: none; }
+.btn.ok { color: #fff; background: linear-gradient(135deg, #46d39a, #2fb383); box-shadow: none; }
+.btn::after { content: ""; position: absolute; inset: -7px; border-radius: 21px; border: 3px solid var(--accent); opacity: var(--ta, 0); transform: scale(var(--ts, 1)); }
+/* приглашение */
+#zero { padding: 34px 38px; } #zero h4 { font-size: 26px; margin-bottom: 10px; }
+#zero > p { font-size: 18px; font-weight: 600; line-height: 1.5; color: var(--mut); max-width: 760px; }
+#zero ul { list-style: none; margin: 18px 0 24px; } #zero li { position: relative; padding: 7px 0 7px 34px; font-size: 18px; font-weight: 700; }
+#zero li::before { content: "✓"; position: absolute; left: 0; top: 6px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 14px; color: #fff; background: linear-gradient(135deg, #46d39a, #2fb383); }
+#zero .btn { font-size: 18px; padding: 14px 26px; }
+/* вкладка «Статьи» */
+.sb { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; height: 100%; }
+.nx { display: flex; align-items: center; gap: 14px; } .nx i { font-style: normal; width: 50px; height: 50px; border-radius: 16px; display: grid; place-items: center; font-size: 24px; background: rgba(69,96,234,.1); }
+.nx b { display: block; font-size: 17px; } .nx small { display: block; font-size: 14px; font-weight: 700; color: var(--mut); margin-top: 2px; }
+.nx .btn { margin-left: auto; }
+.pl { margin-top: 14px; } .pl div { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid rgba(36,50,74,.08); font-size: 16px; font-weight: 700; }
+.pl div:last-child { border-bottom: 0; } .pl div i { font-style: normal; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--accent); background: rgba(69,96,234,.1); }
+.kv { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 15px; font-weight: 700; color: var(--mut); }
+.kv b { color: var(--ink); padding: 6px 12px; border-radius: 12px; box-shadow: var(--press); font-size: 15px; }
+.rdr { margin-top: 14px; } .rdr p { font-size: 14px; font-weight: 700; color: var(--mut); line-height: 1.45; }
+.rdr p b { color: var(--ink); }
+.mt { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; margin-top: 9px; padding: 9px 11px; border-radius: 14px; background: rgba(255,255,255,.55); }
+.mt em { font-style: normal; font: 700 15px Unbounded; color: #3550E0; text-align: center; } .mt b { display: block; font-size: 14.5px; } .mt small { font-size: 12.5px; font-weight: 700; color: var(--mut); }
+.dr { position: relative; } .dr .st2 { display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 800; color: #9a6a00; background: rgba(240,180,40,.18); }
+.dr h5 { font: 700 21px/1.25 Unbounded; margin: 10px 0 6px; min-height: 27px; } .dr .ds { font-size: 14px; font-weight: 700; color: var(--mut); min-height: 18px; }
+.dr .tx { margin-top: 10px; font-size: 15px; font-weight: 600; line-height: 1.55; } .dr .tx h6 { font: 700 16px Unbounded; margin: 8px 0 2px; }
+.rf { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; font-size: 12px; font-weight: 800; color: var(--accent); background: rgba(69,96,234,.12); vertical-align: 1px; }
+.qa { margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: rgba(69,96,234,.08); font-size: 15px; font-weight: 700; }
+.qa small { display: block; font-size: 12.5px; font-weight: 800; color: var(--accent); margin-bottom: 3px; }
+.fl { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #3550E0; box-shadow: 0 0 0 4px rgba(53,80,224,.15); }
+#fact { left: 1240px; top: 30px; width: 580px; } #fact > i { background: rgba(69,96,234,.14); }
+/* телефон */
+.phone .scr { overflow: hidden; }
+.phone .scr.lock { background: linear-gradient(160deg, #cfdcf2, #e8eef8); padding: 60px 18px; text-align: center; }
+.lock .tm { font: 600 64px Unbounded; color: #24324a; } .lock .dd { font-size: 17px; font-weight: 700; color: var(--mut); margin-bottom: 28px; }
+.pn { text-align: left; padding: 14px 16px; border-radius: 20px; background: rgba(255,255,255,.88); box-shadow: 0 10px 24px -14px rgba(36,50,74,.5); }
+.pn small { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: var(--mut); } .pn small img { width: 22px; height: 22px; border-radius: 6px; }
+.pn b { display: block; margin-top: 6px; font-size: 17px; } .pn span { display: block; margin-top: 3px; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.scr.ed { position: absolute; inset: 20px; border-radius: 40px; background: var(--bg); padding: 34px 20px 20px; text-align: left; }
+.ed h5 { font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.ed .f { margin-top: 8px; padding: 10px 12px; border-radius: 14px; box-shadow: var(--press); font-size: 15px; font-weight: 700; line-height: 1.4; }
+.ed .f.t { font-size: 17px; font-weight: 800; } .ed .f.b { height: 150px; overflow: hidden; font-weight: 600; font-size: 14px; color: #33415c; }
+.ed .qa { font-size: 14px; }
+.ed .fx { display: flex; gap: 6px; margin-top: 10px; } .ed .fx .f { flex: 1; margin: 0; font-size: 14px; min-height: 40px; } .ed .fx .f.ph { color: var(--mut); }
+.ed .fx .btn { padding: 10px 12px; font-size: 14px; }
+.ed .ok2 { margin-top: 8px; font-size: 13px; font-weight: 800; color: #1e7d5b; min-height: 17px; }
+.ed .btn.pub { display: block; text-align: center; margin-top: 12px; font-size: 17px; padding: 13px; }
+#drt { left: 640px; top: 300px; width: 560px; } #drt b { font-size: 20px; }
+#L-phone .phone { left: 1280px; } #drt > i { background: rgba(240,180,40,.2); }
+/* сайт со статьёй */
+#w3 { left: 640px; top: 110px; width: 1180px; }
+.site { --sb: #FBF4EC; --sf: #3A2A1F; --sm: rgba(58,42,31,.62); --sa: #B8652E; --sc: #FFFFFF; --sh: #F3E3D2;
+  position: relative; height: 610px; overflow: hidden; border-radius: 16px; background: var(--sb); color: var(--sf); font-family: Manrope; }
+.site .nv { display: flex; align-items: center; gap: 26px; padding: 18px 30px; font-size: 16px; font-weight: 700; }
+.site .lg { display: flex; align-items: center; gap: 9px; font: 700 20px Unbounded; margin-right: 10px; }
+.site .lg i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; font-style: normal; background: var(--sa); }
+.site .nv span { color: var(--sm); } .site .nv span.new { color: var(--sf); position: relative; }
+.site .nv span.new::after { content: ""; position: absolute; left: -10px; right: -10px; top: -7px; bottom: -7px; border-radius: 99px; border: 2.5px solid var(--sa); opacity: var(--na, 0); }
+.site .bt { margin-left: auto; padding: 10px 18px; border-radius: 99px; background: var(--sa); color: #fff; font-weight: 800; font-size: 14px; }
+.site .art { max-width: 760px; margin: 8px auto 0; }
+.site .cr { font-size: 14px; font-weight: 700; color: var(--sm); } .site h4 { font: 700 40px/1.12 Unbounded; letter-spacing: -.02em; margin: 10px 0 10px; }
+.site .me { font-size: 14px; font-weight: 700; color: var(--sm); } .site .art p { font-size: 18px; line-height: 1.6; margin-top: 16px; }
+.site .art h6 { font: 700 22px Unbounded; margin-top: 20px; }
+.site .art p .rf { background: var(--sh); color: var(--sa); }
+.site .rs { margin-top: 18px; padding: 14px 18px; border-radius: 18px; background: var(--sc); font-size: 14px; font-weight: 700; color: var(--sm); }
+.site .rs b { display: block; color: var(--sf); margin-bottom: 4px; }
+#idx { left: 1180px; top: 700px; width: 620px; }
+#studio { top: 170px; width: 900px; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 29 · Статьи для сайта</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="13" height="18" rx="2.5"/><path d="M7.5 7.5h6M7.5 11h6M7.5 14.5h3.5"/><path d="M14.5 19.5l5.6-5.6a1.5 1.5 0 0 0-2.1-2.1l-5.6 5.6-.6 2.7z"/></svg></div>
+    <div id="t-title"><h1>Статьи для сайта</h1><p>Лира пишет — вы говорите «Да», а люди находят вас в поиске</p></div></div>
+
+  <div class="layer" id="L-left">
+    <div class="st" id="stu"><nav><div class="g">Главное</div><span><i>🏠</i>Главная</span><span><i>✳️</i>Нода Лиры</span><div class="g">Для себя</div><span><i>💬</i>Чат</span><span><i>📅</i>Календарь</span><span><i>📝</i>Заметки</span><div class="g">Лира делает сама</div><span><i>🧩</i>Задачи</span><span><i>👁</i>Дозор</span><div class="g">Работа</div><span class=on><i>🌐</i>Сайты</span><span><i>📡</i>Радар</span><span><i>🎧</i>Суфлёр</span><span><i>✈️</i>Бот в Telegram</span></nav>
+      <div class="pg"><h3>Кофейня «Зерно»</h3><small>zerno.dewiar.pro · опубликован</small>
+        <div class="tabs" id="tabs"><i data-t="0">Страницы</i><i data-t="1">Вид</i><i data-t="2">Поиск</i><i data-t="3">Статьи</i><i data-t="4">Заявки</i></div>
+        <div class="pane" id="pZ"><div class="cd" id="zero"><h4>Статьи приводят клиентов из поиска</h4>
+            <p>Лира пишет полезные статьи на вопросы ваших клиентов — по свежим новостям вашей ниши из Радара и по тому, что есть на вашем сайте.</p>
+            <ul><li>Факты о вашем деле — только с сайта: Лира не придумает цен, скидок и обещаний.</li>
+              <li>Радар включится сам и подберёт источники вашей ниши — настраивать ничего не нужно.</li>
+              <li>Карта сайта, страница «Статьи» в меню и оповещение Яндекса — автоматически.</li></ul>
+            <span class="btn pri" id="go">Вести статьи</span></div></div>
+        <div class="pane" id="pB"><div class="sb">
+            <div><div class="cd nx"><i>🗓</i><div><b>Следующий черновик — вторник, 17 ноября, 10:00</b><small>«Как выбрать кофе для дома»</small></div></div>
+              <div class="cd" style="margin-top:14px" id="cP"><h4>План тем<small>Лира подобрала сама</small></h4><div class="pl" id="pl"><div><i>1</i>Как выбрать кофе для дома</div><div><i>2</i>Турка или кофемашина: что выбрать</div><div><i>3</i>Как хранить зёрна, чтобы не выдыхались</div><div><i>4</i>Почему кофе горчит — и как это исправить</div><div><i>5</i>Колумбия или Эфиопия: чем отличаются зёрна</div></div></div>
+              <div class="cd dr" style="margin-top:14px" id="cD"><span class="st2">Черновик</span><h5 id="dt"></h5><div class="ds" id="dd"></div>
+                <div class="tx" id="dx"></div><div class="qa" id="dq"><small>Лира спрашивает</small>Какие зёрна у вас берут чаще всего?</div></div></div>
+            <div><div class="cd"><h4>Как вести</h4><div class="kv">Как часто<b>Раз в неделю</b></div><div class="kv">Публикация<b>После моего «Да»</b></div><div class="kv">Длина<b>Средние</b></div></div>
+              <div class="cd rdr" id="cR"><h4>Материалы из Радара</h4><p id="rt">Радар подбирает источники вашей ниши…</p><div id="ml"><div class="mt"><em>8,7</em><div><b>Урожай арабики в Бразилии — ниже прогноза</b><small>coffee-news.ru</small></div></div><div class="mt"><em>7,9</em><div><b>Светлая обжарка: почему её выбирают всё чаще</b><small>@coffee_lab</small></div></div><div class="mt"><em>7,2</em><div><b>Как помол меняет вкус: опыт бариста</b><small>habr.com</small></div></div></div></div></div></div></div>
+      </div></div>
+    <div class="toast" id="fact"><i>🛡</i><div><small>ФАКТЫ О ВАШЕМ ДЕЛЕ</small><b>Цены и скидки — только с вашего сайта</b></div></div>
+    <div class="toast" id="drt"><i>📝</i><div><small>DEWIAR · СТАТЬИ САЙТА</small><b>Черновик статьи для сайта: «Как выбрать кофе для дома»</b></div></div>
+    <div class="win" id="w3"><div class="bar"><i></i><i></i><i></i><span><b>zerno.dewiar.pro</b>/blog/kak-vybrat-kofe-dlya-doma</span></div>
+      <div class="site"><div class="nv"><div class="lg"><i>☕</i>Зерно</div><span>Меню</span><span>О нас</span><span class="new" id="nnew">Статьи</span><span>Контакты</span><span class="bt">Заказать</span></div>
+        <div class="art"><div class="cr">Главная › Статьи</div><h4>Как выбрать кофе для дома</h4><div class="me">12 ноября 2026 · 4 минуты</div>
+          <p>Хороший кофе дома начинается с зёрен. В этом году урожай арабики в Бразилии ниже прогноза <span class="rf">1</span> — тем важнее понимать, за что вы платите.</p>
+          <h6>Обжарка</h6><p>Светлая — кислинка и фрукты, тёмная — горчинка и шоколад. У нас чаще всего берут колумбийскую арабику средней обжарки.</p>
+          <div class="rs"><b>Источники</b>1. Урожай арабики в Бразилии — ниже прогноза · 2. Светлая обжарка: почему её выбирают всё чаще</div></div></div></div>
+    <div class="toast" id="idx"><i>🔎</i><div><small>ПОИСК УЗНАЛ СРАЗУ</small><b>Яндекс оповещён о новой статье</b></div></div>
+    <div class="card" id="studio"><h3>Статьи для сайта</h3><small>Студия → «Сайты» → ваш сайт → «Статьи»</small>
+      <div class="row"><i>🗓</i>План тем и расписание<em>Лира составит сама</em></div>
+      <div class="row"><i>📡</i>Свежее из Радара вашей ниши<em>включится сам</em></div>
+      <div class="row"><i>📱</i>Черновик — на телефон<em class="warn">«Поправить» · «Опубликовать»</em></div>
+      <div class="row"><i>💬</i>«Напиши статью для сайта»<em class="ok">голосом</em></div></div>
+  </div>
+  <div class="layer" id="L-phone"><div class="phone"><div class="scr lock" id="lk">
+    <div class="tm">10:00</div><div class="dd">вторник, 17 ноября</div>
+    <div class="pn" id="pn"><small><img src="../../../../data/avatars/lira.webp" alt="">DEWIAR · сейчас</small><b>Черновик статьи для сайта</b>
+      <span>«Как выбрать кофе для дома» — прочитайте и опубликуйте</span></div></div>
+    <div class="scr ed" id="ed"><h5>Заголовок</h5><div class="f t" id="et">Как выбрать кофе для дома</div>
+      <h5 style="margin-top:12px">Текст</h5><div class="f b">Хороший кофе дома начинается с зёрен.<br><b>## Обжарка</b><br>Светлая — кислинка и фрукты, тёмная — горчинка…<br><b>## Помол</b><br>Для турки — мелкий, для фильтра — средний.<span id="eadd"></span></div>
+      <div class="qa"><small>Лира спрашивает</small>Какие зёрна у вас берут чаще всего?</div>
+      <div class="fx"><div class="f ph" id="efx">Попросить Лиру поправить</div><span class="btn" id="efb">Поправить</span></div>
+      <div class="ok2" id="eok"></div><span class="btn pri pub" id="epub">Опубликовать</span></div></div></div>
+  <svg id="cur" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.6L10 19z" fill="#fff" stroke="#24324a" stroke-width="1.6" stroke-linejoin="round"/></svg>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  on: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  radar: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  phone: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  live: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  const ctr = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  const walk = (KF) => { let p = KF[0][1]; for (let i = 1; i < KF.length; i++) { const [ta, pa] = KF[i - 1], [tb, pb] = KF[i];
+    if (T >= ta) { const k = ease((T - Math.max(ta, tb - 0.9)) / 0.8); p = [lerp(pa[0], pb[0], k), lerp(pa[1], pb[1], k)]; } } return p; };
+  const cursor = (p, o) => { const c = $("#cur"); c.style.opacity = o; c.style.transform = `translate(${p[0] - 4}px, ${p[1] - 2}px)`; };
+
+  const tap = (el, t0) => { const k = (T - t0) / 0.6; const on = k > 0 && k < 1;
+    el.style.setProperty("--ta", on ? (1 - k).toFixed(3) : 0); el.style.setProperty("--ts", on ? (1 + k * 0.2).toFixed(3) : 1);
+    el.style.transform = k > 0 && k < 0.22 ? "scale(.95)" : ""; };
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  // студия: «Сайты» → «Статьи» → «Вести статьи» → план; потом Радар и черновик
+  const o0 = at("s3a"), od = LN.s3a.dur, tGo = o0 + od * 0.55;
+  const stuOn = Math.min(out((T - at("s2b") - 0.3) / 0.5), 1 - out((T - s("phone").start + 0.4) / 0.4));
+  vis($("#stu"), clamp(stuOn), 24, .97);
+  [...$("#tabs").children].forEach(c => c.classList.toggle("on", +c.dataset.t === 3));
+  vis($("#pZ"), T < tGo + 0.5 ? 1 : 0, 0); vis($("#pB"), out((T - tGo - 0.5) / 0.4), 10);
+  tap($("#go"), tGo);
+  [...$("#pl").children].forEach((c, i) => vis(c, out((T - tGo - 0.9 - i * 0.28) / 0.35), 6));
+  // Радар: источники ниши подобрались, материалы читаются — из них пишется черновик
+  const r0 = s("radar").start, rd = LN.s4a.dur + LN.s4b.dur;
+  const nm = Math.round(41 * clamp((T - r0 - 0.4) / 2.2));
+  $("#rt").innerHTML = T > r0 + 0.4 ? `Источников: <b>6</b> · материалов: <b>${nm}</b>. Из них Лира берёт свежие новости вашей ниши.` : "Радар подбирает источники вашей ниши…";
+  [...$("#ml").children].forEach((c, i) => vis(c, out((T - r0 - 0.8 - i * 0.4) / 0.4), 8));
+  const radar = T > r0 - 0.2;
+  vis($("#cP"), radar ? 1 - out((T - r0) / 0.35) : out((T - tGo - 0.6) / 0.4), 0); $("#cP").style.display = T > r0 + 0.35 ? "none" : "";
+  vis($("#cD"), out((T - r0 - 0.35) / 0.4), 10); $("#cD").style.display = T > r0 + 0.35 ? "" : "none";
+  const w0 = r0 + 2.2;
+  $("#dt").textContent = type("Как выбрать кофе для дома", (T - w0) / 0.9);
+  $("#dd").textContent = type("Обжарка, помол и свежесть: три вещи, которые решают вкус", (T - w0 - 0.9) / 0.9);
+  const BODY = ["Хороший кофе дома начинается с зёрен. В этом году урожай арабики в Бразилии ниже прогноза [1] — тем важнее понимать, за что вы платите.", "## Обжарка", "Светлая — кислинка и фрукты, тёмная — горчинка и шоколад. Светлую сейчас выбирают всё чаще [2]."], bk = clamp((T - w0 - 1.9) / (rd * 0.45));
+  let left = Math.round(BODY.join("").length * bk), html = "";
+  for (const b of BODY) { const piece = b.slice(0, Math.max(0, left)); left -= b.length; if (!piece) break;
+    html += b.startsWith("## ") ? `<h6>${piece.slice(3)}</h6>` : `<p>${piece.replace(/\[(\d)\]/g, '<span class="rf">$1</span>')}</p>`; }
+  $("#dx").innerHTML = html;
+  vis($("#dq"), out((T - w0 - 1.9 - rd * 0.45) / 0.4), 6);
+  scene($("#fact"), T, at("s4b") + 0.2, s("phone").start, 20);
+  // телефон: весточка → лист черновика → «Поправить» → «Опубликовать»
+  const p0 = s("phone").start;
+  scene($("#drt"), T, p0 + 0.3, s("live").start, 20);
+  layer("L-phone", T, p0 + 0.4, s("live").start);
+  vis($("#pn"), out((T - p0 - 1.0) / 0.5), -30);
+  const tEd = at("s5b") - 0.1; vis($("#ed"), out((T - tEd) / 0.4), 20); vis($("#lk"), 1 - out((T - tEd) / 0.4), 0);
+  const fx0 = at("s5b") + 0.5, fx1 = fx0 + LN.s5b.dur * 0.35, tFx = fx1 + 0.3, tPub = at("s5b") + LN.s5b.dur * 0.88;
+  const fx = type("добавь, что у нас берут колумбийскую", (T - fx0) / (fx1 - fx0));
+  $("#efx").textContent = T > fx0 && T < tFx + 0.4 ? fx : "Попросить Лиру поправить"; $("#efx").classList.toggle("ph", !(T > fx0 && T < tFx + 0.4));
+  tap($("#efb"), tFx);
+  $("#eok").textContent = T > tFx + 0.7 ? "Поправила — посмотрите и сохраните" : "";
+  $("#eadd").innerHTML = T > tFx + 0.7 ? "<br>У нас чаще всего берут колумбийскую." : "";
+  tap($("#epub"), tPub); $("#epub").classList.toggle("ok", T > tPub + 0.3); $("#epub").textContent = T > tPub + 0.3 ? "Опубликовано ✓" : "Опубликовать";
+  // сайт: статья на месте, в меню «Статьи», Яндекс оповещён
+  const l0 = s("live").start;
+  scene($("#w3"), T, l0 + 0.2, s("how").start, 24);
+  const na = clamp((T - l0 - 1.2) / 0.4) * (1 - clamp((T - l0 - 3.2) / 0.5)); $("#nnew").style.setProperty("--na", na.toFixed(3));
+  scene($("#idx"), T, at("s6a") + LN.s6a.dur * 0.6, s("how").start, 20);
+  // курсор: «Вести статьи»
+  cursor(walk([[o0, [1500, 760]], [tGo, ctr($("#go"))]]), Math.min(out((T - o0 + 0.1) / 0.4), 1 - out((T - tGo - 0.9) / 0.4)));
+  scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  [...$("#studio").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - s("how").start - 0.6 - i * 0.3) / 0.4), 12));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>

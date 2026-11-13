@@ -63,6 +63,7 @@ class S:
 pushes, emits = [], []
 eng = types.SimpleNamespace(s=S(), emit=lambda t, **kw: emits.append(t), push=lambda title, text="", **kw: pushes.append((title, text, kw)))
 r = EI.Radar(eng, tmp / "radar")
+r.night = lambda: False          # такт ночью сам запускает эволюцию («Разум» v=2) — проверка не должна зависеть от часа
 r.fetch = lambda url: PAGES[url.rstrip("/") if url.rstrip("/") in PAGES else url]
 r._ask = ask
 eng.insight = r

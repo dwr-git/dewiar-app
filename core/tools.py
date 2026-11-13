@@ -2918,6 +2918,51 @@ def t_site_publish(a, ctx):
             "посещения — студия → «Сайты» → «Аналитика». Скажи адрес и что после правок нужно сказать «опубликуй ещё раз».")
 
 
+def t_site_article(a, ctx):
+    """«Статьи» сайта (0.93) голосом: «напиши статью для сайта про…», «что с моими статьями», «опубликуй статью», «включи статьи»."""
+    from sites import SiteError
+    import sites_blog as B
+    S = _sites(ctx)
+    act = str(a.get("action") or "list").lower()
+    try:
+        sid = S.find(a.get("site") or "")
+        s = S.get(sid)
+        if not (s.get("published") or {}).get("name"):
+            raise ToolError("Сайт ещё не опубликован — статьи живут на опубликованном. Предложи сначала опубликовать (site_publish).")
+        if act == "on":
+            S.blog_set(sid, {"on": True})
+            b = B.conf(S.get(sid))
+            return (f"Статьи включены для «{s['name']}»: план из {len(b['plan'])} тем, черновик — {B.FREQ[b['freq']]}, первый — по расписанию; "
+                    "Радар сам собирает новости ниши. Черновики приходят на «Да» — в студию («Сайты» → «Статьи») и на телефон. Скажи коротко.")
+        if act == "off":
+            S.blog_set(sid, {"on": False})
+            return "Статьи выключены — опубликованные остаются на сайте. Скажи коротко."
+        if act == "write":
+            art = B.write(S, sid, str(a.get("topic") or "").strip()[:200])
+            st = "опубликована" if art.get("status") == "live" else "черновик ждёт «Да»"
+            return (f"Статья «{art.get('title')}» — {st}. Прочитать и поправить — студия → «Сайты» → «Статьи» или приложение на телефоне "
+                    "(«Всё» → «Статьи сайта»). Скажи коротко, не пересказывай статью.")
+        arts = S.blog_get(sid)["articles"]
+        if act == "publish":
+            q = str(a.get("title") or "").lower()
+            drafts = [x for x in arts if x["status"] == "draft" and (not q or q in x["title"].lower())]
+            if not drafts:
+                raise ToolError("Черновиков для публикации нет." if not q else f"Черновика «{a.get('title')}» нет.")
+            x = drafts[0]
+            B.set_status(S, sid, x["id"], "live")
+            return f"Опубликовано: «{x['title']}» — {x['url']}. Скажи коротко."
+        b = B.conf(S.get(sid))
+        dr = [x["title"] for x in arts if x["status"] == "draft"]
+        lv = [x for x in arts if x["status"] == "live"]
+        return (f"Статьи «{s['name']}»: {'включены' if b['on'] else 'выключены'}; на сайте {len(lv)}"
+                + (f" (просмотров всего {sum(x['views'] for x in lv)})" if lv else "")
+                + (f"; ждут «Да»: {'; '.join(dr[:5])}" if dr else "; черновиков нет")
+                + (f"; следующий черновик — {time.strftime('%d.%m %H:%M', time.localtime(b['next']))}" if b["on"] and b["next"] else "")
+                + ". Скажи главное коротко.")
+    except (SiteError, B.BlogError) as e:
+        raise ToolError(str(e)) from e
+
+
 def t_site_review(a, ctx):
     """«Оцени мой сайт», «как его продвигать» — проверка продвижения + посещения и источники."""
     from sites import SiteError
@@ -4165,6 +4210,12 @@ TOOLS = {
                      "name — имя латиницей, цифры и дефис, 3–30 знаков (spb-zerno → spb-zerno.dewiar.pro); не назвал — спроси или "
                      "предложи по названию. site — какой сайт.",
                      S({"name": {"type": "string"}, "site": {"type": "string"}}), "confirm", t_site_publish, "Сайты: опубликовать"),
+    "site_article": ("Статьи на сайте человека (блог для поиска): «напиши статью для сайта про…» — action write (topic — тема его "
+                     "словами; пусто — следующая из плана); «что с моими статьями» — list; «опубликуй статью» — publish (title — "
+                     "слова из заголовка; пусто — первый черновик); «включи/выключи статьи» — on/off. site — какой сайт.",
+                     S({"action": {"type": "string", "enum": ["list", "write", "publish", "on", "off"]}, "topic": {"type": "string"},
+                        "title": {"type": "string"}, "site": {"type": "string"}}),
+                     "safe", t_site_article, "Сайты: статьи"),
     "site_review": ("Оценить сайт и его продвижение: «оцени мой сайт», «как продвигать сайт», «сколько было посещений», «откуда приходят». "
                     "Проверка заголовков, описаний, контактов, формы, фото + посещения, источники, устройства, заявки — и твои советы.",
                     S({"site": {"type": "string"}}), "safe", t_site_review, "Сайты: оценить и продвигать"),
@@ -4340,7 +4391,7 @@ TOOLS = {
 # Открыть сайт, музыку или карту в браузере человека — можно: это его браузер и его просьба.
 NET_TOOLS = {"web_search", "weather", "read_webpage", "send_email", "mailing", "client_crm", "channel_post", "read_emails", "read_email", "manage_email", "send_telegram", "close_send",
              "close_call", "close_read", "team_assign", "deal_remind", "ask_knowledge", "play_radio", "smart_home", "show_images", "server_run", "app_update",
-             "site_publish"}
+             "site_publish", "site_article"}
 DEFAULT_OFF = set()          # команды терминала включены, но каждая — только после «Выполнить?»
 # «Только безопасное» (студия → «Безопасность», отзыв 18.10: «лучше чтоб пользователь мог выбрать, что можно делать, а не
 # что нельзя — разрешаю только калькулятор»): разговор, напоминания, заметки, деньги, поиск и чтение — ничего на компьютере

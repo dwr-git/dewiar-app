@@ -55,5 +55,8 @@ r = EI.Radar(types.SimpleNamespace(s=S(), emit=lambda *a, **k: None, push=lambda
 r.st.save("mind", old)
 v = r.mind_view()
 ok([h["id"] for h in v["hyps"]] == ["2", "3"] and [h["id"] for h in r.st.load("mind", {})["hyps"]] == ["2", "3"], "«Разум»: при открытии — уже без них")
+import sites_blog as B  # noqa: E402
+src = (ROOT / "core/sites_blog.py").read_text()
+ok(src.count("Сегодня {datetime.now()") == 2, "план тем и черновик статьи — с сегодняшней датой")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} ошибок")
 sys.exit(1 if fails else 0)

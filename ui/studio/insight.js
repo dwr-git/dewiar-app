@@ -85,7 +85,7 @@
     const b = d.brief && d.brief.headline ? d.brief : null;
     const tr = d.trends || [];
     el.innerHTML = `<div class="rd-card rd-field" id="rd-field"><h3>${esc(T("field.title"))} <small>${esc(T("field.week", { n: d.week }))}</small></h3>
-        <div class="rd-legend">${esc(T("weak"))}<i></i>${esc(T("strong"))}<em>${esc(T("urgent.l"))}</em></div><canvas id="rd-fc" aria-label="${esc(T("field.title"))}" role="img"></canvas></div>
+        <div class="rd-legend">${esc(T("weak"))}<i></i>${esc(T("strong"))}<em>${esc(T("urgent.l"))}</em></div><canvas id="rd-fc" aria-label="${esc(T("field.title"))}" role="img"></canvas><div class="rd-tops" id="rd-tops"></div></div>
       <div class="rd-pulse">
         <div class="rd-card rd-brief">${b ? `<div class="meta"><span>${esc(T("brief.at", { t: ago(b.at) }))}</span><span>${esc(T("brief.n", { n: b.n }))}</span></div>
           <h2>${esc(b.headline)}</h2><ul>${(b.points || []).map(p => `<li>${esc(p)}</li>`).join("")}</ul>
@@ -174,19 +174,25 @@
         g.fillStyle = sigColor(p.s, (.55 + p.s / 22) * k); g.beginPath(); g.arc(p.px, p.py, r, 0, 7); g.fill();
         g.strokeStyle = C.light ? `rgba(255,255,255,${.9 * k})` : `rgba(0,0,0,${.25 * k})`; g.lineWidth = 1.2; g.stroke();
       }
-      // подписи трёх сильнейших — тонкой линией к точке
-      g.font = "600 12px Manrope, Ubuntu, sans-serif";
-      top.forEach((p, i) => {      // подписи — стопкой в верхнем правом углу, линия от конца подписи к точке
-        let s = p.title; while (s.length > 8 && g.measureText(s + "…").width > Math.min(360, W * .42)) s = s.slice(0, -1);
-        if (s !== p.title) s = s.trimEnd() + "…";
-        const w = g.measureText(s).width, tx = W - R - 14 - w, ty = Tp + 16 + i * 19;
-        g.strokeStyle = sigColor(p.s, .45); g.lineWidth = 1; g.beginPath(); g.moveTo(tx - 6, ty - 4); g.lineTo(p.px, p.py); g.stroke();
-        g.fillStyle = C.label; g.beginPath(); g.roundRect ? g.roundRect(tx - 8, ty - 14, w + 16, 20, 7) : g.rect(tx - 8, ty - 14, w + 16, 20); g.fill();
-        g.globalAlpha = k; g.fillStyle = C.ink; g.fillText(s, tx, ty); g.globalAlpha = 1;
+      // 13.11 (владелец: «в красивом блоке постоянно какие-то надписи — так и должно быть?»): подписи трёх сильнейших стопкой
+      // в углу закрывали свежие точки и тянули линии через всё поле. Теперь у точки — только номер, сами заголовки — списком
+      // под полем (#rd-tops): видно, что это «сильнейшее за неделю», и нажатием открывается статья.
+      g.font = "700 11px Manrope, Ubuntu, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+      top.forEach((p, i) => {
+        const bx = Math.min(W - R - 9, p.px + p.r + 7), by = Math.max(Tp + 9, p.py - p.r - 7);
+        g.globalAlpha = k; g.fillStyle = C.label; g.beginPath(); g.arc(bx, by, 9, 0, 7); g.fill();
+        g.strokeStyle = sigColor(p.s, .8); g.lineWidth = 1.5; g.stroke();
+        g.fillStyle = C.ink; g.fillText(String(i + 1), bx, by + .5); g.globalAlpha = 1;
       });
+      g.textAlign = "start"; g.textBaseline = "alphabetic";
       if (k < 1) requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+    const tops = q("#rd-tops");
+    if (tops) {
+      tops.innerHTML = top.length ? `<span>${esc(T("field.tops"))}</span>` + top.map((p, i) => `<button type="button" data-rid="${esc(p.id)}"><b>${i + 1}</b><em>${esc(p.title)}</em><small>${esc(p.src || "")} · ${fmt(p.s)}</small></button>`).join("") : "";
+      tops.querySelectorAll("button").forEach(b => b.onclick = () => rdRead(b.dataset.rid));
+    }
     const tip = document.createElement("div"); tip.className = "rd-tip"; tip.hidden = true; q("#rd-field").appendChild(tip);
     const near = (e) => { const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; let best = null, bd = 18 * 18;
       for (const p of P) { const dd = (p.px - x) ** 2 + (p.py - y) ** 2; if (dd < bd) { bd = dd; best = p; } } return [best, x, y]; };
@@ -226,7 +232,7 @@
       q("#rd-fs").onchange = (e) => { f.sort = e.target.value; renderFeed(); };
       q("#rd-fw").onchange = (e) => { f.watch = e.target.checked; renderFeed(); };
     }
-    q("#rd-fq").value = f.q;
+    const fq = q("#rd-fq"); if (fq.value.trim() !== (f.q || "")) fq.value = f.q;   // №670: не трогать то, что человек печатает (пробел в конце не съедать)
     let d; try { d = await call("insight_feed", f); } catch (e) { toast(e.message); return; }
     chips(d.stats);
     const box = q("#rd-fl");

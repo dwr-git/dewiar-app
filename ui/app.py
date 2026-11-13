@@ -3581,6 +3581,17 @@ def ui_path_ok(uri):
     return False
 
 
+def nav_verdict(uri, gesture):
+    """Переход окна или фрейма (GTK): "ok" — пустить, "block" — не пускать, "outside" — открыть системным браузером.
+    13.11 (владелец, Ubuntu): ссылка в блокноте виджета открылась прямо в окне Лиры — как браузер, без «назад». Сайт по
+    нажатию человека — в его браузер, а не внутрь окна; сам по себе (без нажатия) — никуда, как и было."""
+    if ui_path_ok(uri):
+        return "ok"
+    if not gesture:
+        return "block"
+    return "outside" if uri.split(":", 1)[0].lower() in ("http", "https") else "ok"
+
+
 def guard_bridge(gui=""):
     """Охрана моста: подменяет js_bridge_call в webview.util и в уже загруженных модулях платформ. Linux (gui="gtk"):
     alert() фреймов не доходит до окна сообщения, а переходы фреймов без нажатия человека — только по ui_path_ok
@@ -3626,8 +3637,11 @@ def guard_bridge(gui=""):
                         if decision_type == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
                             act = decision.get_navigation_action()
                             uri = act.get_request().get_uri() or ""
-                            if not ui_path_ok(uri) and not act.is_user_gesture():
+                            v = nav_verdict(uri, act.is_user_gesture())
+                            if v != "ok":
                                 decision.ignore()
+                                if v == "outside":
+                                    subprocess.Popen(["xdg-open", uri], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                                 return True
                     except Exception:  # noqa: BLE001
                         pass

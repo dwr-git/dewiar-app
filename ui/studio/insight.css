@@ -51,8 +51,18 @@ html.st-neu .rd-card { background: var(--sk-glass); box-shadow: var(--raise); }
 .rd-btn[disabled] { opacity: .5; cursor: default; }
 
 /* ---------- «Пульс»: поле сигналов, бриф, тренды ---------- */
-.rd-field { position: relative; height: 320px; padding: 18px 20px 26px; display: flex; flex-direction: column; }
-.rd-field canvas { width: 100%; flex: 1; min-height: 0; display: block; cursor: crosshair; }
+.rd-field { position: relative; padding: 18px 20px 18px; display: flex; flex-direction: column; }
+.rd-field canvas { width: 100%; height: 270px; flex: none; display: block; cursor: crosshair; }
+.rd-tops { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--dim); }
+.rd-tops:empty { display: none; }
+.rd-tops > span { margin-right: 2px; }
+.rd-tops button { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; flex: 1 1 260px; padding: 7px 12px 7px 7px;
+  border: 0; border-radius: 12px; background: var(--rd-label); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.rd-tops button b { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: var(--ink, inherit); box-shadow: inset 0 0 0 1.5px var(--rd-c1); }
+.rd-tops button em { font-style: normal; font-weight: 600; color: var(--ink, inherit); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rd-tops button small { flex: none; color: var(--dim); }
+.rd-tops button:hover em { text-decoration: underline; }
+.rd-tops button:focus-visible { outline: 2px solid var(--rd-c1); outline-offset: 2px; }
 .rd-legend { position: absolute; right: 22px; top: 20px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
 .rd-legend i { width: 72px; height: 6px; border-radius: 6px; background: linear-gradient(90deg, var(--rd-c0), var(--rd-c1)); }
 .rd-legend em { font-style: normal; display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; }

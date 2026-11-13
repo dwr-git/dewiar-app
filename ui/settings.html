@@ -1129,6 +1129,7 @@
       <div class="stabs st-tabs" id="st-tabs" role="tablist">
         <button data-t="edit" class="on" role="tab">Редактор</button><button data-t="stats" role="tab">Аналитика</button>
         <button data-t="leads" role="tab">Заявки<i class="st-n" id="st-nleads"></i></button><button data-t="seo" role="tab">Продвижение<i class="st-n" id="st-nseo"></i></button>
+        <button data-t="blog" role="tab"><span data-i18n="sites.blog.tab">Статьи</span><i class="st-n" id="st-nblog"></i></button>
       </div>
       <div class="st-pane" data-t="edit">
         <div class="st-work">
@@ -1154,10 +1155,12 @@
       <div class="st-pane" data-t="stats" hidden id="st-stats"></div>
       <div class="st-pane" data-t="leads" hidden id="st-leads"></div>
       <div class="st-pane" data-t="seo" hidden id="st-seo"></div>
+      <div class="st-pane" data-t="blog" hidden id="st-blog"></div>
     </div>
     <div class="st-modal" id="st-pubm" hidden role="dialog" aria-modal="true" aria-labelledby="st-pubh"><div class="st-mbox" id="st-pubbox"></div></div>
     <div class="st-drawer" id="st-histd" hidden role="dialog" aria-labelledby="st-histh"><div class="st-dbox"><div class="st-dh"><h3 id="st-histh">История версий</h3><button class="st-ib" type="button" id="st-histx" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><p class="hint">Каждое изменение — версия. Вернуть можно любую; текущая тоже останется в истории.</p><ol id="st-histl"></ol></div></div>
     <div class="st-pop" id="st-addp" hidden role="dialog" aria-label="Добавить раздел"></div>
+    <div class="st-modal sb-edm" id="sb-ed" hidden role="dialog" aria-modal="true" aria-labelledby="sb-edh"><div class="st-mbox sb-edbox" id="sb-edbox"></div></div>
   </section>
 
   <section id="p-sitechat" class="wide">
@@ -2936,6 +2939,7 @@
 <script src="studio/pbot_posts.js"></script>
 <script src="studio/sitechat.js"></script>
 <script src="studio/sites.js"></script>
+<script src="studio/sites_blog.js"></script>
 <script src="studio/lessons.js"></script>
 <script src="studio/deals.js"></script>
 <script src="studio/devices.js"></script>

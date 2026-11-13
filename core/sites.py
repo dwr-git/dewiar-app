@@ -384,6 +384,15 @@ def chat_knowledge(site):
             "greeting": f"Здравствуйте! Подскажу по услугам, ценам и записи{' в «' + name + '»' if name else ''}. Что вас интересует?"[:300]}
 
 
+def verify_code(v):
+    """Код подтверждения поисковика: человек вставляет весь метатег («<meta name="yandex-verification" content="…">») или
+    только код — берём код; странное — пусто."""
+    v = str(v or "").strip()
+    m = re.search(r'content\s*=\s*["\']([^"\']+)', v)
+    v = (m.group(1) if m else v).strip()
+    return v if re.fullmatch(r"[A-Za-z0-9_\-]{8,100}", v) else ""
+
+
 def _json_in(text):
     t = str(text or "")
     t = re.sub(r"^```(?:json)?\s*|\s*```\s*$", "", t.strip())
@@ -448,7 +457,8 @@ class Sites:
             out.append({"id": sid, "name": s.get("name"), "tagline": s.get("tagline"), "template": s.get("template"),
                         "updated": s.get("updated"), "created": s.get("created"), "published": s.get("published") or None,
                         "palette": (s.get("theme") or {}).get("palette"), "pages": len(s.get("pages") or []),
-                        "blocks": sum(len(p.get("blocks") or []) for p in s.get("pages") or [])})
+                        "blocks": sum(len(p.get("blocks") or []) for p in s.get("pages") or []),
+                        "blog": {k: (s.get("blog") or {}).get(k) or 0 for k in ("on", "drafts", "live")}})
         return sorted(out, key=lambda x: -(x.get("updated") or 0))
 
     def find(self, who=""):
@@ -724,6 +734,9 @@ class Sites:
                             s.setdefault("logo", {})["text"] = s["name"]
                 if "description" in o:
                     s.setdefault("seo", {})["description"] = _clip("text", o.get("description") or "")[:300]
+                for k in ("verify_yandex", "verify_google"):          # 0.93: подтверждение в Вебмастере и Search Console
+                    if k in o:
+                        s.setdefault("seo", {})[k] = verify_code(o.get(k))
                 done.append("название и описание")
             elif op == "contacts":
                 ct = s.setdefault("contacts", {})
@@ -1149,6 +1162,17 @@ class Sites:
             add(have > 0, "полезно", "Фото в галерее", f"фото: {have}" if have else "фото не добавлены — галерея на сайте не покажется",
                 "Как добавить фото в галерею?")
         pub = (s.get("published") or {}).get("url")
+        seo = s.get("seo") or {}
+        if pub:                                       # 0.93: технический SEO — сам; подтвердить сайт в поисковиках — одно поле
+            add(True, "полезно", "Карта сайта и robots.txt", f"есть сами: {pub}/sitemap.xml — новые страницы и статьи попадают в неё автоматически, "
+                "а Яндекс и Bing узнают о них сразу (IndexNow)")
+            add(bool(seo.get("verify_yandex")), "полезно", "Яндекс Вебмастер", "сайт подтверждён — смотрите в Вебмастере, как Яндекс его видит"
+                if seo.get("verify_yandex") else "не подтверждён — подтвердите: увидите поисковые запросы и ускорите появление в поиске", "@verify")
+            add(bool(seo.get("verify_google")), "полезно", "Google Search Console", "сайт подтверждён" if seo.get("verify_google")
+                else "не подтверждён — подтвердите, чтобы видеть, по каким запросам вас находят в Google", "@verify")
+            bl = s.get("blog") or {}
+            add(bool(bl.get("on")), "полезно", "Статьи", f"Лира ведёт статьи: на сайте {bl.get('live') or 0}" if bl.get("on")
+                else "статей нет — статьи по вопросам клиентов приводят людей из поиска", "@blog")
         add(bool(pub), "важно", "Сайт в интернете", f"опубликован: {pub}" if pub else "ещё не опубликован — поисковики его не видят",
             "Опубликуй сайт")
         w = {"важно": 3, "полезно": 1}
@@ -1194,7 +1218,8 @@ class Sites:
         total = sum(len(v) for v in files.values())
         if total > 8 * 1024 * 1024:
             raise SiteError(f"сайт весит {total // 1024 // 1024} МБ, а можно до 8 — уменьшите или уберите часть фото")
-        body = {"name": n, "title": R.seo_title(s, 0)[:160], "description": R.seo_desc(s, 0)[:300], "site": sid,
+        was = (s.get("published") or {}).get("name") or ""
+        body = {"name": n, "title": R.seo_title(s, 0)[:160], "description": R.seo_desc(s, 0)[:300], "site": sid, "from": was,
                 "files": {k: ({"t": v.decode("utf-8")} if k.endswith((".html", ".css")) else {"b": base64.b64encode(v).decode()}) for k, v in files.items()}}
         d = self._fetch("/sites/publish", body, timeout=90)
         s["published"] = {"name": d.get("name") or n, "url": d.get("url") or f"https://{n}.dewiar.pro", "ts": _now(), "status": "live", "reason": ""}
@@ -1364,6 +1389,51 @@ class Sites:
         except (OSError, ValueError):
             return []
 
+    # ---------- «Статьи» (0.93, sites_blog) ----------
+    def blog_save_conf(self, sid, patch):
+        """Настройки статей сайта — без версии в истории (это не правка сайта)."""
+        with self._lock:
+            s = self.get(sid)
+            b = dict(s.get("blog") or {})
+            b.update(patch)
+            s["blog"] = b
+            (self._dir(sid) / "site.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+        return b
+
+    def blog_get(self, sid, fresh=True):
+        import sites_blog as B
+        s = self.get(sid)
+        arts, err = [], ""
+        if fresh and (s.get("published") or {}).get("name") and self._key():
+            try:
+                arts = B.sync(self, sid)
+            except SiteError as e:
+                err = str(e)
+        b = B.conf(self.get(sid))
+        r = B.radar_of(self)
+        rad = {"sources": len([x for x in r.st.sources() if x.get("on", True)]), "items": len(r.st.items())} if r is not None else None
+        return {"blog": b, "articles": arts, "error": err, "published": bool((s.get("published") or {}).get("name")),
+                "url": (s.get("published") or {}).get("url") or "", "auto_after": B.AUTO_AFTER, "freqs": B.FREQ, "radar": rad}
+
+    def blog_set(self, sid, patch):
+        import sites_blog as B
+        p = B.clean_patch(patch or {})
+        if p.get("mode") == "auto" and B.conf(self.get(sid))["approved"] < B.AUTO_AFTER:
+            raise SiteError(f"«Публиковать сразу» откроется после {B.AUTO_AFTER} одобренных черновиков — сначала посмотрите, как пишет Лира")
+        was = B.conf(self.get(sid))
+        b = self.blog_save_conf(sid, p)
+        if p.get("on") and not was["on"]:                 # включили: Радар — сам, план — сразу, первый черновик — по расписанию
+            boost = B.radar_boost(self, self.get(sid), wait=getattr(self, "blog_wait", False))   # проверки ждут обход
+            self.blog_save_conf(sid, {"radar": bool(boost.get("sources")) or was.get("radar", False)})
+            if not B.conf(self.get(sid))["plan"]:
+                try:
+                    B.make_plan(self, sid)
+                except Exception as e:  # noqa: BLE001
+                    self.blog_save_conf(sid, {"err": str(e)[:200]})
+        if any(k in p for k in ("on", "freq", "day", "hour")):
+            b = self.blog_save_conf(sid, {"next": B.next_slot(B.conf(self.get(sid))) if B.conf(self.get(sid))["on"] else 0})
+        return self.blog_get(sid, fresh=False)
+
     def start(self):
         if self._thread and self._thread.is_alive():
             return
@@ -1377,6 +1447,11 @@ class Sites:
     def _loop(self):
         tick = 0
         while not self._stop.wait(120):
+            try:
+                import sites_blog
+                sites_blog.due(self)                    # 0.93: пора — черновик статьи (по расписанию сайта)
+            except Exception:  # noqa: BLE001
+                log.exception("Сайты: статьи")
             try:
                 self.poll()
                 tick += 1

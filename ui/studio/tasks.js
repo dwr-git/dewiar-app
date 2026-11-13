@@ -238,7 +238,8 @@ async function openTask(id) {
     keep.forEach(([k, v, f]) => { const el = $("#" + k); if (el && v) el.value = v; if (el && f) el.focus(); });
     if ($("#t-msggo")) {
       const send = () => { const v = $("#t-msg").value.trim(); if (!v) return;
-        core.call("task_tell", { id, text: v }).then(() => { toast("Передал задаче"); loadTasks(); openTask(id); }).catch(e => toast(e.message)); };
+        // №674 (13.11): после «Отправить» текст оставался — openTask бережёт черновик поля; отправленное — не черновик
+        core.call("task_tell", { id, text: v }).then(() => { if ($("#t-msg") && $("#t-msg").value.trim() === v) $("#t-msg").value = ""; toast("Передал задаче"); loadTasks(); openTask(id); }).catch(e => toast(e.message)); };
       $("#t-msggo").onclick = send; $("#t-msg").onkeydown = (e) => { if (e.key === "Enter") send(); };
     }
     if (tTab === "results") wireOutputs(t);

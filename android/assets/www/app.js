@@ -7250,6 +7250,7 @@ if ($("#bal")) $("#bal").onclick = (e) => { e.stopPropagation(); openTopup(); };
 const APPS_IC = {
   pc: '<rect x="3" y="4.5" width="18" height="12" rx="2.2"/><path d="M8.5 20h7M12 16.5V20"/>',
   clients: '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.8 19.5a6.2 6.2 0 0 1 12.4 0"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6M17.6 14a6.2 6.2 0 0 1 3.6 5.5"/>',
+  blog: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/>',
   play: '<path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/>',
   soul: '<path d="M10.5 2.8l1.9 5.5 5.6 1.9-5.6 1.9-1.9 5.6-1.9-5.6L3 10.2l5.6-1.9z"/><path d="M18.5 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/>',
   work: '<rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5M3 12.5h18"/>',
@@ -7274,6 +7275,7 @@ function appsHtml() {
   }
   t.push(["soul", "Душа", "дневник и характер"]);
   if (!kidsOn()) t.push(["clients", window.t("apps.clients"), window.t("apps.clients_d")]);   // 0.9.32: отчёты 657, 658 — бизнес-инструменты и на телефоне
+  if (!kidsOn() && typeof blogHas === "function" && blogHas()) t.push(["blog", window.t("phone.blog.title"), blogDraftsN() ? window.t("phone.blog.app_n", { n: blogDraftsN() }) : window.t("phone.blog.app_d")]);   // 0.93: статьи своего сайта
   if (!kidsOn()) t.push(["work", "Работа", wkJobs().length ? "поручения" : "для сотрудников"]);   // 28.10, владелец: «при чём здесь „по коду“»
   if (!kidsOn()) t.push(["ideas", "Идеи Лиры", "голосовать"]);
   if (!kidsOn()) t.push(["month", "Мой месяц", "дела и траты"]);
@@ -7289,7 +7291,7 @@ function appOpen(k) {
   ({ play: () => playOpen(""), soul: () => { renderSoul(); openSheet("#sh-soul"); syncSoon(); }, work: () => openWork("", !wkJobs().length),
       ideas: () => openIdeas(), safe: () => openSafe(), radio: () => openRadio(), month: () => openMonth("now"), senior: () => openSenior(), tricks: () => openTricks(), course: () => openLearn("course"), qa: () => openLearn("qa"), kids: () => openKids(), lessons: () => openLessons(),
       news: () => newsShow(newsList("", JSON.parse(D.info() || "{}").version || "9", true), true),
-      clients: () => (typeof openClients === "function" ? openClients() : null), pc: () => (typeof openPcInfo === "function" ? openPcInfo() : null) }[k] || (() => { }))();
+      clients: () => (typeof openClients === "function" ? openClients() : null), blog: () => (typeof openBlog === "function" ? openBlog() : null), pc: () => (typeof openPcInfo === "function" ? openPcInfo() : null) }[k] || (() => { }))();
 }
 function openApps() {
   $("#apps-body").innerHTML = appsHtml(); openSheet("#sh-apps");
@@ -8820,14 +8822,18 @@ function openTopup() {
     setTimeout(() => (t.querySelector(".pay-steps") ? $("#cl-how") : t).scrollIntoView({ behavior: "smooth", block: "start" }), 60); };
   setTimeout(go, 60);
 }
+const balShort = (b, text) => { const n = +b; if (!isFinite(n) || b == null) return String(text || "").replace(/\s*тал\.?$/, "");
+  return (n >= 10 ? String(Math.floor(n)) : String(Math.floor(n * 10) / 10)).replace(".", ","); };
 /* Значок баланса у имени персонажа (0.82.1): ниже ~30 % — маленькая плашка с процентом; нажали — «Пополнить». */
 function balBadge(c) {
   const b = $("#bal"); if (!b) return;
   const pct = c ? Math.max(0, Math.min(100, +c.percent || 0)) : 100, on = !!c && S.llm.cloud && !c.frozen && (c.empty || pct < 30);
   b.hidden = !on; b.classList.toggle("empty", !!(c && c.empty));
   $("#who").classList.toggle("low", false);
-  if (on) { $("#bal-t").textContent = c.site ? (c.empty ? "0" : (c.balance_text || "")) : pct + "%";
-    b.title = b.ariaLabel = (c.empty ? "Талеры закончились" : `Талеров осталось ${pct}%`) + " — пополнить"; }
+  // 13.11 (владелец: «талеры в виджете — случайно или поехала вёрстка?»): у счёта сайта писали «1,7630 тал.» целиком —
+  // плашка шире аватара и уезжала за край; теперь коротко — «1,8» (меньше 10 — с одной цифрой после запятой), «тал.» — в подсказке
+  if (on) { $("#bal-t").textContent = c.site ? (c.empty ? "0" : balShort(c.balance, c.balance_text)) : pct + "%";
+    b.title = b.ariaLabel = (c.empty ? "Талеры закончились" : c.site ? window.t("phone.bal.site", { b: c.balance_text || balShort(c.balance) }) : `Талеров осталось ${pct}%`) + " — пополнить"; }
 }
 /* Предупреждение заранее (0.82.1): один раз при ~30 % и один раз при ~10 % — Лира говорит, сколько примерно ответов осталось,
    и под фразой карточка с кнопкой «Пополнить» (и полями для контакта, если его ещё нет). Пополнили (≥ 50 %) — снова с начала. */

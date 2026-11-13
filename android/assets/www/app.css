@@ -2156,3 +2156,28 @@ body.neu .cli-dc.late { box-shadow: var(--raise-s), inset 3px 0 0 var(--bad); }
 .pci-l li { display: flex; flex-direction: column; gap: 2px; padding: 11px 14px; border-radius: 16px; background: var(--frost); }
 .pci-l b { font-size: 14.5px; font-weight: 600; } .pci-l small { font-size: 12.5px; color: var(--muted); }
 body.neu .pci-l li { background: var(--glass); box-shadow: var(--raise-s); }
+/* «Статьи сайта» (0.93, blog.js): черновики и опубликованные; черновик — заголовок, описание, текст, вопрос Лиры, «Поправить» */
+#sh-blog input, #sh-blog textarea { width: 100%; box-sizing: border-box; min-width: 0; padding: 11px 13px; border-radius: 13px; border: 0; background: var(--field); outline: none; }
+body.neu #sh-blog input, body.neu #sh-blog textarea { box-shadow: var(--press); }
+body.light:not(.neu) #sh-blog input, body.light:not(.neu) #sh-blog textarea { background: rgba(20,30,60,.06); }
+.blg-h { font-size: 13px; font-weight: 700; color: var(--muted); margin: 16px 4px 8px; }
+.blg-list { display: flex; flex-direction: column; gap: 6px; }
+.blg-i { display: grid; gap: 4px; width: 100%; text-align: left; padding: 13px 15px; border: 0; border-radius: 16px; background: var(--frost); color: inherit; cursor: pointer; font: inherit; }
+.blg-i.draft { box-shadow: inset 3px 0 0 #FFC98B; }
+.blg-i b { font-size: 15px; line-height: 1.35; }
+.blg-i span { font-size: 13px; color: var(--muted); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.blg-i small { font-size: 12px; color: var(--dim); }
+.blg-i:active { filter: brightness(1.08); }
+.blg-zero b { display: block; margin-bottom: 4px; }
+.blg-back { margin: 0 0 10px; }
+.blg-st { font-size: 12.5px; font-weight: 700; color: var(--muted); margin: 0 4px 10px; }
+.blg-st.draft { color: #FFC98B; } .blg-st.live { color: #6CE7A8; }
+body.light .blg-st.draft { color: #9a5b00; } body.light .blg-st.live { color: #1d7f55; }
+.blg-l { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 14px 4px 6px; }
+.blg-body { min-height: 52vh; font-size: 15.5px; line-height: 1.65; resize: vertical; }
+.blg-ask { background: linear-gradient(135deg, rgba(57,135,229,.16), rgba(139,140,247,.12)); }
+.blg-ask p { margin: 6px 0; font-size: 14.5px; line-height: 1.5; }
+.blg-fix { margin-top: 14px; } .blg-fix textarea { margin: 8px 0; }
+.blg-act { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 24px; }
+.blg-del { color: #FF8FA8; align-self: center; margin-top: 6px; }
+body.light .blg-del { color: #c23a5a; }

@@ -103,7 +103,16 @@ def run(lang, data):
         for t in ("pulse", "feed", "trends", "sources", "mind", "galaxy", "control"):
             pg.evaluate(f"document.querySelector('#rd-tabs button[data-t={t}]').click()"); pg.wait_for_timeout(500)
             out[t] = pg.evaluate(f"document.querySelector('#rd-{t}').innerText")
+        # №670 (12.11, McDuck): в поиске «Ленты» пауза после пробела — пробел пропадал (поле перезаписывалось обрезанным)
+        pg.evaluate("document.querySelector('#rd-tabs button[data-t=feed]').click()"); pg.wait_for_timeout(400)
+        pg.click("#rd-fq"); pg.keyboard.type("утечка "); pg.wait_for_timeout(700); pg.keyboard.type("php"); pg.wait_for_timeout(700)
+        out["fq"] = pg.input_value("#rd-fq")
         pg.evaluate("document.querySelector('#rd-tabs button[data-t=pulse]').click()"); pg.wait_for_timeout(500)
+        # 13.11 (владелец: «в поле сигналов постоянно надписи»): заголовки сильнейших — списком под полем, на поле — номера
+        out["tops"] = pg.evaluate("[...document.querySelectorAll('#rd-tops button')].map(b => b.innerText)")
+        out["tops_lab"] = pg.evaluate("(document.querySelector('#rd-tops > span') || {}).innerText || ''")
+        if os.environ.get("SHOT") and out["tops"]:
+            pg.locator("#rd-field").screenshot(path=os.environ["SHOT"] + f"-{lang}.png")
         pg.evaluate("document.querySelector('.rd-sg') && document.querySelector('.rd-sg').click()"); pg.wait_for_timeout(500)
         out["ans"] = pg.evaluate("(document.querySelector('#rd-ans') || {}).innerText || ''")
         out["refs"] = pg.evaluate("document.querySelectorAll('#rd-ans .rd-ref').length")
@@ -120,6 +129,9 @@ for lang in ("ru", "en"):
     raw = [t for t, v in o.items() if isinstance(v, str) and "insight." in v]
     ok(not raw, f"{lang}: нет сырых ключей словаря (вкладки {raw})")
     ok(all(o[t].strip() for t in ("pulse", "feed", "trends", "sources", "mind", "galaxy", "control")), f"{lang}: каждая вкладка нарисована")
+    ok(len(o["tops"]) == min(3, len(R["insight_pulse"]["field"])) and o["tops"] and o["tops_lab"] in ("Сильнейшее за неделю:", "Strongest this week:"),
+       f"{lang}: сильнейшие за неделю — списком под полем: {o['tops_lab']!r} {o['tops'][:1]}")
+    ok(o["fq"] == "утечка php", f"{lang}: №670 — поиск в «Ленте» не съедает пробел: {o['fq']!r}")
     ok(("Утечка исходников движка PHP" in o["feed"]) and ("habr.com" in o["sources"]), f"{lang}: лента и источники — из данных ядра")
 ru, en = run("ru", R), run("en", R)
 ok("Поле сигналов" in ru["pulse"] and "Signal field" in en["pulse"] and "Галактика" in ru["head"] and "Galaxy" in en["head"], "русский и английский — свои подписи")

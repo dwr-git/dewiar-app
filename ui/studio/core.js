@@ -258,6 +258,7 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "pbot" && window.loadPbot) loadPbot();                // «Бот персонажа» (studio/pbot.js)
   if (b.dataset.p === "qa" && window.loadQA) loadQA();
   if (b.dataset.p === "course" && window.loadCourse) loadCourse();       // «Неделя с Лирой» — курс (studio/course.js)                   // «Вопрос — ответ» — руководство (studio/qa.js)
+  if (b.dataset.p === "home" && window.loadHome) loadHome();   // «Главная» — и до настроек (S): карточки «Сегодня» свежие при каждом входе
   if (!S) return;                                    // данные подгрузятся после связи с ядром
   if (b.dataset.p === "sound") loadDevices();
   if (b.dataset.p === "about") core.call("status").then(renderStatus).catch(() => {});
@@ -284,7 +285,6 @@ $$("nav button[data-p]").forEach(b => b.onclick = () => {
   if (b.dataset.p === "look") loadLook();
   if (b.dataset.p === "close") loadClose(true);
   if (b.dataset.p === "chat") loadChat();
-  if (b.dataset.p === "home" && window.loadHome) loadHome();
 });
 /* Идея №156 (11.2026): «кнопка „спрятать меню слева“ — чтобы раздел, например чат, был на всю ширину». Кнопка в углу меню
    прячет его, маленькая кнопка слева вверху — возвращает; Ctrl+B (и Ctrl+И в русской раскладке) — то же с клавиатуры.

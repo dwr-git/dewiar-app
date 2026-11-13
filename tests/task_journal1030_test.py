@@ -51,6 +51,13 @@ with sync_playwright() as p:
     ok(cls == ["pi done", "pi now", "pi blocked"] and "outputs/цифры.csv" in pg.inner_text("#t-view .pi.done small")
        and "нет телефона" in pg.inner_text("#t-view .pi.blocked small"), f"список дел со статусами и доказательствами: {cls}")
     ok("есть 2, нужно 3" in pg.inner_text("#t-view .pc.bad") and pg.locator("#t-view .pc.ok").count() == 1, "«Готово, когда» — критерии с итогом проверки")
+    # №674 (13.11, McDuck): «дополнить задачу» — после отправки текст оставался в поле, приходилось выделять и стирать
+    pg.evaluate("TASK.status = 'done'; window.__told = []; const oc = core.call; core.call = async (c, a) => { if (c === 'task_tell') { __told.push(a.text); return 'ok'; } return oc(c, a); }")
+    pg.evaluate("openTask('t1')"); pg.wait_for_timeout(300)
+    pg.fill("#t-msg", "ещё добавь график по месяцам"); pg.click("#t-msggo"); pg.wait_for_timeout(500)
+    ok(pg.evaluate("__told") == ["ещё добавь график по месяцам"] and pg.input_value("#t-msg") == "", "№674: отправили дополнение — поле пустое")
+    pg.fill("#t-msg", "черновик"); pg.evaluate("openTask('t1')"); pg.wait_for_timeout(300)
+    ok(pg.input_value("#t-msg") == "черновик", "неотправленный черновик при обновлении — бережём, как раньше")
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

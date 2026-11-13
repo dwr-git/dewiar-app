@@ -203,6 +203,8 @@ async function loadHome() {
   // уроки — с сайта, не ждём их (сеть бывает медленной): пришли — карточка «Новый видеоурок» дорисуется
   // «Радар» (12.11): бриф дня и самый сильный сигнал — не ждём, пришёл — карточка дорисуется; раздел скрыт — не грузим
   if (!off("insight")) get("insight_pulse").then(p => { HM.rd = p && p.stats ? p : null; if (HM.data) hmRender(); });
+  // 0.93: черновик статьи ждёт «Да» — карточкой (сразу во вкладку «Статьи» сайта)
+  if (!off("sites")) get("sites_list").then(r => { HM.sb = ((r && r.items) || []).filter(x => x.blog && x.blog.on && x.blog.drafts > 0); if (HM.data) hmRender(); });
   if (!(HM.ac && Date.now() - HM.ac.at < 6 * 3600e3)) get("academy_list").then(ac => { if (ac && Array.isArray(ac.items)) { HM.ac = { at: Date.now(), d: ac }; if (HM.data) hmRender(); } });
   const [cal, cl, tk, dn, ch, pad, py, pl, cs] = await Promise.all([off("calendar", "reminders") ? skip : get("calendar_month", { year: now.getFullYear(), month: now.getMonth() + 1 }),
     off("close") ? skip : get("close_state"), off("tasks") ? skip : get("tasks_list"), get("done"), get("chat_list", { limit: 6 }), get("pad_tabs"),
@@ -231,6 +233,8 @@ function hmToday() {
   if (pyb.length) { const b = pyb[0], late = b.now.s !== "soon";
     out.push({ cls: late ? "pay late" : "pay", lab: late ? "Не оплачено" : "Скоро срок оплаты", b: `${b.icon || "🧾"} ${b.name}`, s: (late ? "срок был " : "до ") + new Date(b.now.due + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + (pyb.length > 1 ? ` · и ещё ${pyb.length - 1}` : ""), go: "pay" }); }
   const rd = hmRadar(); if (rd) out.push(rd);
+  const sb = (HM.sb || [])[0], tb = (k, v) => window.t("sites.blog." + k, v);
+  if (sb) out.push({ cls: "task", lab: tb("home.lab"), b: "📝 " + (sb.name || ""), s: tb("home.s", { n: sb.blog.drafts }), go: "sites-blog:" + sb.id });
   const cs = HM.data.cs, L = cs && cs.lesson;          // курс «Неделя с Лирой»: урок дня ещё не пройден
   if (L && L.open && cs.offer !== false && !L.steps.every(s => s.done))
     out.push({ cls: "course", lab: `Урок дня · ${L.day} из ${cs.total}`, b: `🎓 ${L.title}`, s: `5 минут: ${(L.steps.find(s => !s.done) || L.steps[0]).say}`, go: "course" });
@@ -525,6 +529,7 @@ function hmGo(p) {
     if (l && typeof lsPlay === "function") setTimeout(() => lsPlay(l), 150);
     return;
   }
+  if (p.startsWith("sites-blog:")) return studioGo(p);              // 0.93: черновик статьи — «Статьи» сайта
   if (p.startsWith("insight:")) { hmGo("insight"); setTimeout(() => window.rdRead && rdRead(p.slice(8)), 250); return; }   // материал Радара — в «читалку»
   const b = $(`nav button[data-p="${p}"]`); if (b) b.click();
 }

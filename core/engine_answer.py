@@ -2755,12 +2755,27 @@ class AnswerMixin:
             if saved_checked and not called and not turn.cancel.is_set() and not nudged \
                     and (action_claim(text, turn.full, called) or saved_claim(text, turn.full, called)):
                 # №573: «открой эту папку» — «открыла», проверка попросила сделать, а модель снова «открыла» без действия
-                from quality import PROMISE_GIVEUP
-                log.warning("✋ И после просьбы — «сделала» без единого действия — говорю правду")
-                if step_text and len(turn.full) > len(step_text) and turn.full.endswith(step_text):
-                    turn.full = turn.full[:-len(step_text)]   # №651: тот же «записала» второй раз — в тексте не повторяем
-                turn.full = PROMISE_GIVEUP if len(turn.full) < 300 else (turn.full.rstrip() + " " + PROMISE_GIVEUP).strip()
-                sentences.put(PROMISE_GIVEUP)
+                from quality import PROMISE_GIVEUP, self_fact
+                fact = self_fact(text, turn.full)
+                saved_fact = False
+                if fact:                                 # №675/677/678: человек учил — факт в память кладёт программа
+                    try:
+                        self.workspace.remember(fact)
+                        saved_fact = True
+                        called.add("remember")
+                        log.info("🧠 Модель «запомнила» без памяти — записала сама: «%s»", fact[:80])
+                    except Exception:  # noqa: BLE001
+                        log.debug("сам факт в память", exc_info=True)
+                if saved_fact and not turn.full.strip():
+                    note = "Записано в память: «" + (fact if len(fact) <= 160 else fact[:157] + "…") + "»."
+                    turn.full = note
+                    sentences.put(note)
+                elif not saved_fact:
+                    log.warning("✋ И после просьбы — «сделала» без единого действия — говорю правду")
+                    if step_text and len(turn.full) > len(step_text) and turn.full.endswith(step_text):
+                        turn.full = turn.full[:-len(step_text)]   # №651: тот же «записала» второй раз — в тексте не повторяем
+                    turn.full = PROMISE_GIVEUP if len(turn.full) < 300 else (turn.full.rstrip() + " " + PROMISE_GIVEUP).strip()
+                    sentences.put(PROMISE_GIVEUP)
             if failed_checked and not turn.cancel.is_set():
                 from quality import failed_claim, failed_note
                 if failed_claim(turn.full, getattr(turn, "tools_err", None), getattr(turn, "tools_ok", None) or []):

@@ -665,6 +665,7 @@ function stTab(t, quiet) {
   if (t === "stats") stStats();
   if (t === "leads") stLeads();
   if (t === "seo") stSeo();
+  if (t === "blog") sbLoad();
 }
 
 /* «Аналитика»: просмотры и посетители по дням (линии, подсказка при наведении), откуда, страницы, устройства, заявки */
@@ -771,7 +772,7 @@ async function stSeo() {
   const say = s => s >= 85 ? "Сайт готов к продвижению — осталось немного." : s >= 60 ? "Хорошая основа: поправьте отмеченное — и поисковикам, и людям станет понятнее." : "Начните с важного — это быстро, Лира поможет.";
   box.innerHTML = `<div class="st-seohd">${ring(a.score)}<div><h3>${stE(say(a.score))}</h3><p class="hint">Проверка без внешних служб: заголовки и описания страниц, главный заголовок, подписи к фото, вес, контакты и форма, карточка для соцсетей, заглушки.</p></div></div>
     ${bad.length ? `<h4 class="st-h4">Что улучшить</h4><ul class="st-chk2">${bad.map((x, i) => `<li class="${x.level === "важно" ? "hi" : ""}"><span class="st-ci" aria-hidden="true">${stI(x.level === "важно" ? '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.4v.1"/>' : '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/>')}</span>
-      <span class="st-cw"><b>${stE(x.title)}</b><span>${stE(x.detail)}</span></span>${x.fix ? `<button type="button" class="btn small" data-i="${i}">${x.title === "Сайт в интернете" ? "Опубликовать" : x.title === "Фото в галерее" ? "Добавить фото" : x.fix === "Подвал и документы" ? "Открыть «Подвал»" : "Попросить Лиру исправить"}</button>` : ""}</li>`).join("")}</ul>` : ""}
+      <span class="st-cw"><b>${stE(x.title)}</b><span>${stE(x.detail)}</span></span>${x.fix ? `<button type="button" class="btn small" data-i="${i}">${x.fix[0] === "@" ? stE(TB("seo." + x.fix.slice(1))) : x.title === "Сайт в интернете" ? "Опубликовать" : x.title === "Фото в галерее" ? "Добавить фото" : x.fix === "Подвал и документы" ? "Открыть «Подвал»" : "Попросить Лиру исправить"}</button>` : ""}</li>`).join("")}</ul>` : ""}
     <details class="st-goodd"${bad.length ? "" : " open"}><summary>Уже хорошо — ${good.length}</summary><ul class="st-chk2 good">${good.map(x => `<li><span class="st-ci ok" aria-hidden="true">${stI('<path d="M5 12.5l4 4 10-10"/>')}</span><span class="st-cw"><b>${stE(x.title)}</b><span>${stE(x.detail)}</span></span></li>`).join("")}</ul></details>
     <div class="st-tips"><h4 class="st-h4">Где рассказать о сайте</h4><ul><li><b>Яндекс Бизнес и Карты, 2ГИС</b> — карточка с адресом, часами и ссылкой на сайт: по ним ищут «рядом».</li>
       <li><b>Соцсети и мессенджеры</b> — ссылка в профиле, закреплённый пост, подпись в каналах.</li><li><b>На месте</b> — QR-код на кассе, визитке, витрине (есть в окне после публикации).</li>
@@ -779,6 +780,8 @@ async function stSeo() {
       <button type="button" class="btn" id="st-askl">Спросить Лиру, как продвигать</button></div>`;
   $$("#st-seo .st-chk2 [data-i]").forEach(b => b.onclick = async () => {
     const x = bad[+b.dataset.i];
+    if (x.fix === "@blog") { stTab("blog"); return; }               // 0.93: «Статьи»
+    if (x.fix === "@verify") { sbVerify(); return; }                 // 0.93: Яндекс Вебмастер и Google Search Console
     if (x.title === "Сайт в интернете") { stPublish(); return; }
     if (x.fix === "Подвал и документы") { stTab("edit"); stSeg("legal"); return; }
     if (x.title === "Фото в галерее") { const g = stBlocks().find(q => q.type === "gallery"); stTab("edit"); stSeg("blocks"); if (g) { SITES.open = SITES.sel = g.uid; stBlocksList(); stShow(g.uid); } return; }

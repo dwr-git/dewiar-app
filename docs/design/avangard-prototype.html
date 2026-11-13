@@ -1,0 +1,692 @@
+<title>Шаблон «Авангард»</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800;900&family=Onest:wght@400;500;600;700&display=swap">
+<style>
+/* Авангард: один тёмный мир — баклажановая тушь, кислотный лайм как сигнал «действуй», сиреневый для второго плана,
+   коралл — для поздних шагов. Широкий гротеск крупно — сам себе украшение; разделы пронумерованы, потому что страница — путь. */
+:root {
+  --ink: #15121c;        /* фон */
+  --deep: #100d16;       /* полосы-разделы */
+  --card: #211b2b;       /* поверхности */
+  --line: #3a3149;       /* обводки */
+  --text: #efeaf7;       /* основной текст */
+  --mute: #a79fb6;       /* второстепенный */
+  --lime: #d4ff52;       /* действие и главное */
+  --lilac: #cbbcff;      /* второй план */
+  --coral: #ff8f61;      /* поздние шаги, предупреждение */
+  --on-lime: #16120a;
+  --display: "Unbounded", "Arial Black", "Helvetica Neue", sans-serif;
+  --body: "Onest", "Segoe UI", system-ui, sans-serif;
+  --r: 18px; --r-s: 12px;
+  --wrap: 1180px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { background: var(--ink); color: var(--text); font: 400 17px/1.55 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; border-radius: 8px; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.band { padding-block: clamp(64px, 9vw, 120px); }
+.band.deep { background: var(--deep); }
+.idx { font: 600 12px/1 var(--body); letter-spacing: .14em; color: var(--mute); text-transform: uppercase; }
+.h2 { font: 800 clamp(34px, 6vw, 76px)/.98 var(--display); letter-spacing: -.035em; margin: 10px 0 0; text-wrap: balance; }
+.h2 .soft { color: var(--lilac); }
+.head { display: grid; grid-template-columns: 90px 1fr; gap: 8px 20px; align-items: start; margin-bottom: clamp(32px, 5vw, 56px); }
+.head .idx { padding-top: 14px; }
+.head p { grid-column: 2; margin: 14px 0 0; max-width: 60ch; color: var(--mute); }
+@media (max-width: 700px) { .head { grid-template-columns: 1fr; } .head .idx { padding-top: 0; } .head p { grid-column: 1; } }
+
+/* кнопки-капсулы */
+.btn { display: inline-flex; align-items: center; gap: 14px; padding: 18px 26px 18px 30px; border-radius: 999px; border: 0; cursor: pointer;
+  font: 700 17px/1 var(--body); text-decoration: none; transition: transform .2s ease, background .2s ease; }
+.btn.go { background: var(--lime); color: var(--on-lime); }
+.btn.go:hover { transform: translateY(-2px); }
+.btn.ghost { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1.5px var(--line); }
+.btn.ghost:hover { box-shadow: inset 0 0 0 1.5px var(--lilac); }
+.btn svg { width: 18px; height: 18px; flex: none; transition: transform .2s ease; }
+.btn:hover svg { transform: translateX(3px); }
+
+/* шапка */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--ink) 82%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--ink); }
+.top .wrap { display: flex; align-items: center; gap: 18px; padding-block: 14px; }
+.logo { display: flex; align-items: center; gap: 10px; font: 800 20px/1 var(--display); letter-spacing: -.03em; text-decoration: none; }
+.logo i { width: 30px; height: 30px; border-radius: 9px; background: var(--lime); position: relative; overflow: hidden; }
+.logo i::after { content: ""; position: absolute; left: -4px; right: -4px; top: 13px; height: 4px; background: var(--ink); transform: rotate(-24deg); }
+.logo b { color: var(--lime); }
+.pills { margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); }
+.pills a { padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; text-decoration: none; color: var(--mute); }
+.pills a:hover { color: var(--text); background: var(--card); }
+.top .btn { padding: 11px 18px; font-size: 14px; }
+@media (max-width: 860px) { .pills { display: none; } .top .btn { margin-left: auto; } }
+
+/* обложка */
+.hero { position: relative; padding-block: clamp(40px, 7vw, 90px) clamp(40px, 6vw, 72px); overflow: hidden; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 24px; align-items: center; }
+.eyebrow { font: 500 14px/1.3 var(--body); letter-spacing: .32em; color: var(--mute); }
+.hero h1 { font: 900 clamp(54px, 10.5vw, 148px)/.86 var(--display); letter-spacing: -.055em; margin: 22px 0 0; }
+.hero h1 > span { display: block; }
+.hero h1 .dot { color: var(--lime); }
+.hero .lead { font-size: clamp(18px, 2vw, 22px); max-width: 30ch; margin: 26px 0 30px; color: #d9d2e6; }
+.hero .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.hero .note { font-size: 14px; color: var(--mute); }
+.hero .tag { font: 500 clamp(26px, 3.4vw, 42px)/1.08 var(--body); letter-spacing: -.02em; color: var(--lilac); margin: 46px 0 0; max-width: 16ch; }
+.stage { position: relative; aspect-ratio: 1 / 1.05; max-width: 100%; }
+.stage svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.kin text { font: 600 36px/1 var(--display); letter-spacing: .12em; }
+@media (max-width: 860px) { .hero .wrap { grid-template-columns: 1fr; } .stage { max-width: 520px; margin-top: 10px; } .hero .tag { margin-top: 30px; } }
+
+/* бегущая строка */
+.run { border-block: 1px solid var(--line); overflow: hidden; padding-block: 18px; background: var(--deep); }
+.run .track { display: flex; width: max-content; animation: run 38s linear infinite; }
+.run span { font: 700 clamp(20px, 2.6vw, 30px)/1 var(--display); letter-spacing: -.02em; white-space: nowrap; padding-right: 40px; color: var(--mute); }
+.run span b { color: var(--lime); font-weight: 700; margin-right: 40px; }
+@keyframes run { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .run .track { animation: none; } }
+
+/* система: круг с узлами */
+.sys { display: grid; grid-template-columns: 1fr 260px 1fr; gap: 14px 28px; align-items: center; }
+.sys .col { display: grid; gap: 14px; }
+.node { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; align-items: center; width: 100%; text-align: left; padding: 18px 20px; cursor: pointer;
+  background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r); transition: border-color .25s, background .25s, transform .25s; }
+.node em { font: 600 12px/1 var(--body); font-style: normal; color: var(--lime); grid-row: span 2; }
+.node b { font: 600 21px/1.15 var(--body); letter-spacing: -.01em; }
+.node small { font-size: 13px; color: var(--mute); }
+.node:hover { border-color: var(--lilac); }
+.node.on { border-color: var(--lime); background: color-mix(in srgb, var(--lime) 7%, var(--card)); }
+.core { position: relative; aspect-ratio: 1; display: grid; place-items: center; text-align: center; }
+.core svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.core p { position: relative; margin: 0; font: 500 26px/1.15 var(--body); }
+.core p small { display: block; font-size: 13px; color: var(--mute); margin-top: 6px; letter-spacing: .08em; }
+.sys-say { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 22px; margin-top: 18px; }
+.sys-say span { font: 600 12px/1 var(--body); letter-spacing: .14em; color: var(--mute); text-transform: uppercase; }
+.sys-say p { margin: 0; font-size: 19px; min-height: 2.6em; }
+@media (max-width: 900px) { .sys { grid-template-columns: 1fr; } .core { max-width: 240px; margin: 0 auto; order: -1; } .sys-say { grid-template-columns: 1fr; gap: 8px; } }
+
+/* два пути */
+.paths { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.path { position: relative; overflow: hidden; border-radius: 26px; padding: 30px 30px 26px; min-height: 260px; display: flex; flex-direction: column; }
+.path.now { background: var(--lime); color: var(--on-lime); }
+.path.later { background: var(--card); border: 1.5px solid var(--line); }
+.path .num { position: absolute; right: 18px; top: 74px; font: 900 128px/.8 var(--display); letter-spacing: -.06em; opacity: .14; }
+.path.later .num { color: transparent; -webkit-text-stroke: 2px var(--line); opacity: 1; }
+.path .row { display: flex; justify-content: space-between; align-items: center; font: 700 12px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; }
+.path .row i { font-style: normal; padding: 7px 12px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px currentColor; letter-spacing: .06em; }
+.path h3 { font: 800 clamp(26px, 3vw, 36px)/1.05 var(--display); letter-spacing: -.03em; margin: 36px 0 10px; max-width: 14ch; }
+.path p { margin: 0; max-width: 34ch; }
+.path.later p { color: var(--mute); }
+.path .foot { margin-top: auto; padding-top: 26px; display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid currentColor; padding-bottom: 12px; font: 700 12px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; }
+.path.later .foot { border-color: var(--line); color: var(--mute); }
+.path .foot svg { width: 120px; height: 34px; overflow: visible; }
+.quote { display: flex; gap: 16px; align-items: center; margin-top: 18px; padding: 16px 20px; border-radius: var(--r); background: var(--card); border: 1.5px solid var(--line); max-width: 560px; }
+.quote .ava { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--lilac); color: var(--ink); font: 800 16px/1 var(--display); }
+.quote p { margin: 0; font-weight: 600; } .quote small { display: block; color: var(--mute); font-weight: 400; margin-top: 2px; }
+@media (max-width: 760px) { .paths { grid-template-columns: 1fr; } }
+
+/* кейсы: карусель */
+.cases-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.hint { color: var(--lime); font-weight: 600; }
+.rail { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 18px) / 2); gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 4px; }
+.rail::-webkit-scrollbar { display: none; }
+.case { scroll-snap-align: start; border-radius: 24px; background: var(--card); border: 1.5px solid var(--line); padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.case header { display: flex; justify-content: space-between; font: 600 18px/1 var(--body); }
+.case header em { font-style: normal; color: var(--mute); font-family: var(--display); font-weight: 500; }
+.shot { aspect-ratio: 16 / 9; border-radius: 14px; background: #f3f0f8; color: #1d1828; padding: 16px; display: grid; gap: 10px; grid-template-rows: auto 1fr; overflow: hidden; }
+.shot .t { font: 800 15px/1 var(--display); letter-spacing: -.02em; display: flex; justify-content: space-between; }
+.shot .t small { font: 600 11px/1 var(--body); color: #6d6680; }
+.shot .g { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; min-height: 0; }
+.shot .k { display: grid; gap: 8px; align-content: start; }
+.shot .k div { background: #fff; border-radius: 10px; padding: 8px 10px; font: 500 11px/1.2 var(--body); color: #6d6680; }
+.shot .k b { display: block; font: 800 18px/1.1 var(--display); color: #1d1828; letter-spacing: -.02em; }
+.shot svg { width: 100%; height: 100%; background: #fff; border-radius: 10px; }
+.case p { margin: 0; color: var(--mute); }
+.case .meter { align-self: flex-start; padding: 12px 16px; border-radius: 14px; border: 1.5px solid var(--line); }
+.case .meter b { display: block; font: 800 24px/1 var(--display); letter-spacing: -.03em; }
+.case .meter small { color: var(--mute); font-size: 13px; }
+.ctrl { display: flex; align-items: center; gap: 18px; margin-top: 26px; }
+.ctrl button { flex: none; width: 54px; height: 54px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; background: transparent; box-shadow: inset 0 0 0 1.5px var(--lime); color: var(--lime); }
+.ctrl button.next { background: var(--lime); color: var(--on-lime); }
+.ctrl button:disabled { opacity: .35; cursor: default; }
+.ctrl svg { width: 22px; height: 22px; }
+.bar { flex: 1; height: 3px; background: var(--line); border-radius: 3px; position: relative; overflow: hidden; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--lime); border-radius: 3px; width: 33%; transition: left .3s ease, width .3s ease; }
+.count { font: 600 16px/1 var(--display); color: var(--mute); font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
+@media (max-width: 760px) { .rail { grid-auto-columns: 86%; } }
+
+/* полосы */
+.speed { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 40px; align-items: start; }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+.chip { display: inline-flex; align-items: baseline; gap: 10px; padding: 10px 16px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--line); }
+.chip b { font: 800 22px/1 var(--display); letter-spacing: -.03em; }
+.chip small { font-size: 12px; color: var(--mute); }
+.chip.hot { background: var(--lime); color: var(--on-lime); box-shadow: none; } .chip.hot small { color: var(--on-lime); opacity: .7; }
+.bars { border-radius: 24px; border: 1.5px solid var(--line); padding: 26px; display: grid; gap: 20px; }
+.brow { display: grid; grid-template-columns: 170px 1fr 70px; gap: 16px; align-items: center; font-size: 14px; }
+.brow .tr { height: 10px; border-radius: 10px; background: color-mix(in srgb, var(--line) 60%, transparent); position: relative; overflow: hidden;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(20% - 1px), var(--ink) calc(20% - 1px) 20%); }
+.brow .tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 10px; background: var(--lilac); }
+.brow.fast .tr i { background: var(--lime); }
+.brow.over .tr i { background: repeating-linear-gradient(-45deg, var(--coral) 0 8px, color-mix(in srgb, var(--coral) 55%, transparent) 8px 12px); }
+.brow.over b { color: var(--coral); }
+.brow.over span small { display: block; font-size: 11px; color: var(--mute); }
+.brow b { text-align: right; font: 700 15px/1 var(--body); font-variant-numeric: tabular-nums; }
+.scale { display: grid; grid-template-columns: 170px 1fr 70px; gap: 16px; font-size: 12px; color: var(--mute); }
+.scale span { display: flex; justify-content: space-between; }
+@media (max-width: 860px) { .speed { grid-template-columns: 1fr; } .brow, .scale { grid-template-columns: 110px 1fr 56px; gap: 10px; } }
+
+/* программа: путь змейкой */
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 40px; }
+.tab { display: flex; align-items: center; gap: 14px; padding: 20px 22px; border-radius: var(--r-s); border: 1.5px solid var(--line); background: transparent; cursor: pointer; text-align: left;
+  font: 800 clamp(16px, 1.6vw, 21px)/1.1 var(--display); letter-spacing: -.02em; }
+.tab small { font: 500 11px/1 var(--body); color: var(--mute); }
+.tab[aria-selected="true"] { background: var(--lime); color: var(--on-lime); border-color: var(--lime); }
+.tab[aria-selected="true"] small { color: var(--on-lime); }
+@media (max-width: 760px) { .tabs { grid-template-columns: 1fr; } }
+.snake { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); row-gap: 70px; padding-right: 56px; }
+.snake svg.wire { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.step { position: relative; display: grid; justify-items: center; gap: 12px; text-align: center; z-index: 1; }
+.step .n { width: 74px; height: 74px; border-radius: 20px; display: grid; place-items: center; font: 800 30px/1 var(--display); letter-spacing: -.04em; background: var(--ink); transition: background .3s, color .3s, transform .3s; }
+.step.in .n { background: var(--lime); color: var(--on-lime); box-shadow: 0 0 0 8px color-mix(in srgb, var(--lime) 14%, transparent); }
+.step.out .n { color: var(--line); }
+.step .n.c2 { color: var(--lilac); } .step .n.c3 { color: var(--coral); }
+.step.in .n.c2, .step.in .n.c3 { color: var(--on-lime); }
+.step p { margin: 0; font-weight: 600; font-size: 15px; max-width: 14ch; }
+.step.out p { color: var(--mute); }
+.snake .row2 { order: 2; }
+@media (max-width: 760px) {
+  .snake { grid-template-columns: 1fr; row-gap: 18px; padding-right: 0; }
+  .snake svg.wire { display: none; }
+  .step { grid-row: auto !important; grid-column: auto !important; }
+  .step { grid-template-columns: 64px 1fr; justify-items: start; text-align: left; align-items: center; }
+  .step .n { width: 56px; height: 56px; font-size: 22px; border-radius: 16px; }
+  .step p { max-width: none; }
+}
+.mods { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 50px; align-items: start; }
+.mod { border-radius: var(--r); border: 1.5px solid var(--line); background: var(--card); }
+.mod summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 56px 1fr 32px; gap: 14px; align-items: center; padding: 18px 20px; }
+.mod summary::-webkit-details-marker { display: none; }
+.mod summary em { font: 800 28px/1 var(--display); font-style: normal; color: var(--lime); letter-spacing: -.04em; }
+.mod summary small { display: block; font-size: 12px; color: var(--mute); }
+.mod summary b { font-weight: 700; font-size: 17px; }
+.mod summary i { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); display: grid; place-items: center; font-style: normal; transition: transform .25s; }
+.mod[open] summary i { transform: rotate(45deg); }
+.mod ul { margin: 0; padding: 4px 22px 20px 90px; display: grid; gap: 8px; color: #d9d2e6; border-top: 1px solid var(--line); padding-top: 16px; }
+.mod li::marker { color: var(--lime); }
+.mod.dim { opacity: .45; }
+@media (max-width: 760px) { .mods { grid-template-columns: 1fr; } .mod ul { padding-left: 40px; } }
+
+/* формула */
+.formula { display: flex; flex-wrap: wrap; align-items: flex-end; gap: clamp(10px, 2vw, 24px); }
+.fig { display: grid; gap: 10px; }
+.fig b { font: 900 clamp(80px, 15vw, 190px)/.8 var(--display); letter-spacing: -.07em; font-variant-numeric: tabular-nums; }
+.fig.box b { background: var(--lime); color: var(--on-lime); border-radius: 22px; padding: 18px 22px 12px; }
+.fig.line b { color: transparent; -webkit-text-stroke: 2px var(--lilac); }
+.fig small { font-size: 13px; letter-spacing: .1em; color: var(--mute); text-transform: uppercase; }
+.op { font: 500 clamp(40px, 6vw, 70px)/1 var(--display); color: var(--lilac); padding-bottom: 48px; }
+@media (max-width: 560px) { .op { padding-bottom: 40px; font-size: 34px; } .fig b { font-size: 76px; } .fig.box b { padding: 12px 14px 8px; border-radius: 16px; } }
+
+/* автор */
+.author { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 40px; align-items: center; }
+.pic { position: relative; aspect-ratio: 1 / 1.05; max-width: 520px; }
+.mono { position: absolute; inset: 10% 14%; border-radius: 40% 40% 28px 28px; background: radial-gradient(120% 90% at 50% 0%, #3b2f55 0%, #241d33 55%, var(--card) 100%);
+  display: grid; place-items: center; overflow: hidden; border: 1.5px solid var(--line); }
+.mono span { font: 900 clamp(90px, 14vw, 170px)/1 var(--display); letter-spacing: -.08em; color: transparent; -webkit-text-stroke: 2px var(--lilac); }
+.mono::after { content: "место для вашего фото"; position: absolute; bottom: 14px; font-size: 12px; color: var(--mute); letter-spacing: .06em; }
+.stk { position: absolute; padding: 16px 18px; border-radius: 16px; background: var(--card); border: 1.5px solid var(--line); box-shadow: 0 20px 40px -20px rgba(0,0,0,.7); max-width: 170px; }
+.stk b { display: block; font: 800 30px/1 var(--display); letter-spacing: -.04em; }
+.stk small { font-size: 12px; color: var(--mute); line-height: 1.3; display: block; margin-top: 6px; }
+.stk.hot { background: var(--lime); color: var(--on-lime); border-color: var(--lime); } .stk.hot small { color: var(--on-lime); opacity: .75; }
+.s1 { left: 0; top: 6%; transform: rotate(-6deg); } .s2 { right: 0; top: 0; transform: rotate(5deg); }
+.s3 { left: 2%; bottom: 8%; transform: rotate(-4deg); } .s4 { right: 4%; bottom: 14%; transform: rotate(7deg); }
+.facts { list-style: none; margin: 26px 0 0; padding: 0; }
+.facts li { position: relative; padding: 16px 0 16px 30px; border-bottom: 1px solid var(--line); }
+.facts li::before { content: ""; position: absolute; left: 4px; top: 24px; width: 10px; height: 10px; border-radius: 50%; background: var(--lime); }
+.facts b.pill { display: inline-block; font: 800 18px/1 var(--display); padding: 6px 10px; border-radius: 10px; box-shadow: inset 0 0 0 1.5px var(--line); margin: 0 4px; letter-spacing: -.02em; }
+.who { font: 800 clamp(30px, 4vw, 48px)/1 var(--display); letter-spacing: -.035em; color: var(--lime); margin: 14px 0 0; }
+@media (max-width: 860px) { .author { grid-template-columns: 1fr; } .pic { margin: 0 auto; width: 100%; } }
+
+/* тарифы */
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: stretch; }
+.plan { border-radius: 24px; padding: 26px; border: 1.5px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.plan.main { background: var(--lime); color: var(--on-lime); border-color: var(--lime); }
+.plan > small { font-size: 12px; color: var(--mute); } .plan.main > small { color: var(--on-lime); opacity: .7; }
+.plan h3 { font: 800 24px/1.1 var(--display); letter-spacing: -.03em; margin: 16px 0 14px; }
+.plan s { color: var(--mute); font-weight: 600; } .plan.main s { color: var(--on-lime); opacity: .6; }
+.price { font: 900 clamp(44px, 5vw, 62px)/1 var(--display); letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+.price sup { font-size: .35em; letter-spacing: 0; margin-left: 4px; }
+.plan .btn { justify-content: center; margin: 22px 0 18px; padding: 16px 20px; font-size: 15px; }
+.plan.main .btn { background: var(--on-lime); color: var(--lime); }
+.plan ul { list-style: none; margin: 0; padding: 0; }
+.plan li { padding: 12px 0 12px 24px; border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent); position: relative; font-size: 15px; }
+.plan li::before { content: ""; position: absolute; left: 2px; top: 19px; width: 9px; height: 9px; border-radius: 50%; background: var(--lime); }
+.plan.main li::before { background: var(--on-lime); opacity: .6; }
+.plan li.no { color: var(--mute); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--mute) 50%, transparent); }
+.plan li.no::before { background: var(--line); }
+@media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
+
+/* для кого: вкладки */
+.aud { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 40px; align-items: start; }
+.seg { display: flex; flex-wrap: wrap; gap: 10px; }
+.seg button { padding: 12px 20px; border-radius: 999px; border: 0; background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); cursor: pointer; font-weight: 600; }
+.seg button[aria-selected="true"] { background: var(--lime); color: var(--on-lime); box-shadow: none; }
+.gains h3 { font: 700 26px/1.15 var(--body); margin: 0 0 8px; letter-spacing: -.01em; }
+.gains ol { list-style: none; margin: 0; padding: 0; counter-reset: g; }
+.gains li { counter-increment: g; display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 18px 0; border-top: 1px solid var(--line); }
+.gains li::before { content: counter(g, decimal-leading-zero); font: 800 24px/1 var(--display); color: var(--lime); letter-spacing: -.03em; }
+@media (max-width: 860px) { .aud { grid-template-columns: 1fr; } }
+
+/* отзывы */
+.revs { columns: 3 300px; column-gap: 18px; }
+.rev { break-inside: avoid; margin: 0 0 18px; border-radius: 22px; padding: 22px; background: var(--card); border: 1.5px solid var(--line); }
+.rev.l { background: var(--lime); color: var(--on-lime); border-color: var(--lime); }
+.rev.v { background: var(--lilac); color: #1b1526; border-color: var(--lilac); }
+.rev p { margin: 0 0 18px; }
+.rev footer { display: flex; align-items: center; gap: 12px; font-weight: 700; }
+.rev footer i { font-style: normal; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font: 800 12px/1 var(--display); background: var(--ink); color: var(--lime); }
+.rev footer small { display: block; font-weight: 400; font-size: 12px; opacity: .7; }
+
+/* вопросы */
+.faq { display: grid; gap: 12px; max-width: 860px; }
+.faq details { border-radius: var(--r); border: 1.5px solid var(--line); padding: 0 22px; }
+.faq summary { cursor: pointer; list-style: none; padding: 20px 0; font: 600 19px/1.3 var(--body); display: flex; justify-content: space-between; gap: 20px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font: 500 24px/1 var(--display); color: var(--lime); transition: transform .25s; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq p { margin: 0 0 20px; color: #d9d2e6; max-width: 70ch; }
+
+/* финал */
+.final .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 30px; }
+.final h2 { font: 900 clamp(52px, 10vw, 150px)/.86 var(--display); letter-spacing: -.06em; margin: 0; }
+.final h2 span { display: block; color: var(--lime); }
+.foot { border-top: 1px solid var(--line); padding-block: 34px 40px; font-size: 14px; color: var(--mute); }
+.foot .wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.foot b { color: var(--lime); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; display: block; margin-bottom: 10px; }
+.foot p { margin: 0 0 6px; }
+.proto { margin-top: 26px; font-size: 13px; color: var(--mute); }
+@media (max-width: 760px) { .foot .wrap { grid-template-columns: 1fr; } }
+
+/* появление: при входе в экран, из видимого покоя (без движения — ничего) */
+.rise { will-change: transform; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Школа «Срез»"><i></i>Срез<b>.</b></a>
+    <nav class="pills" aria-label="Разделы">
+      <a href="#system">Система</a><a href="#cases">Кейсы</a><a href="#program">Программа</a><a href="#plans">Тарифы</a>
+    </nav>
+    <a class="btn go" href="#plans">Записаться</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow">Онлайн-курс школы «Срез»</div>
+        <h1><span>Аналитик</span><span>данных<span class="dot">.</span></span></h1>
+        <p class="lead">За 8 недель — от первого SELECT до дашборда, по которому руководитель принимает решения.</p>
+        <div class="cta">
+          <a class="btn go" href="#plans">Начать с первой недели <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
+          <span class="note">Старт 1 декабря · 24 места в потоке</span>
+        </div>
+        <p class="tag">Цифры, которые отвечают на вопрос «что делать».</p>
+      </div>
+      <div class="stage" aria-hidden="true">
+        <svg viewBox="0 0 520 546" id="kin" class="kin">
+          <defs>
+            <path id="k1" d="M30 140 C 130 220, 240 60, 360 120 S 500 80, 540 60"/>
+            <path id="k2" d="M20 300 C 120 250, 220 370, 330 300 S 480 260, 540 300"/>
+            <path id="k3" d="M30 470 C 150 430, 250 520, 370 450 S 500 420, 540 440"/>
+          </defs>
+          <g fill="none" stroke-width="1.5">
+            <use href="#k1" stroke="#d4ff52" opacity=".5"/><use href="#k2" stroke="#cbbcff" opacity=".5"/><use href="#k3" stroke="#cbbcff" opacity=".5"/>
+          </g>
+          <g id="kdots"></g>
+          <text fill="#d4ff52"><textPath href="#k1" id="t1" startOffset="6%">SQL · ОКНА · CTE</textPath></text>
+          <text fill="#cbbcff"><textPath href="#k2" id="t2" startOffset="10%">PYTHON · PANDAS</textPath></text>
+          <text fill="#efeaf7"><textPath href="#k3" id="t3" startOffset="4%">ДАШБОРДЫ · A/B</textPath></text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <div class="run" aria-hidden="true"><div class="track" id="run"></div></div>
+
+  <section class="band" id="system">
+    <div class="wrap">
+      <div class="head"><span class="idx">01 /</span><div><h2 class="h2">Как устроен курс</h2></div>
+        <p>Шесть частей вокруг одного навыка — отвечать на вопросы бизнеса цифрами. Нажмите на часть, чтобы узнать, что в ней.</p></div>
+      <div class="sys" id="sys">
+        <div class="col" id="sysL"></div>
+        <div class="core">
+          <svg viewBox="0 0 260 260" aria-hidden="true">
+            <circle cx="130" cy="130" r="124" fill="none" stroke="#3a3149" stroke-width="1.5"/>
+            <circle cx="130" cy="130" r="104" fill="none" stroke="#d4ff52" stroke-width="1.5" stroke-dasharray="4 7" id="ring"/>
+            <circle cx="130" cy="130" r="84" fill="#211b2b"/>
+            <circle cx="130" cy="26" r="5" fill="#d4ff52" id="orb"/>
+          </svg>
+          <p>Аналитик<small>ЦЕНТР КУРСА</small></p>
+        </div>
+        <div class="col" id="sysR"></div>
+        <div class="sys-say"><span id="sysT">Уроки</span><p id="sysP" aria-live="polite"></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band deep">
+    <div class="wrap">
+      <div class="head"><span class="idx">02 /</span><div><h2 class="h2">Вопрос не «нужна ли аналитика», <span class="soft">а кто будет её делать.</span></h2></div></div>
+      <div class="paths">
+        <article class="path now">
+          <div class="row">Путь 01 <i>сейчас</i></div><span class="num">01</span>
+          <h3>Научиться за 8 недель.</h3>
+          <p>И через два месяца самому собирать отчёт, на который раньше уходила неделя.</p>
+          <div class="foot">двигаться вперёд
+            <svg viewBox="0 0 120 34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path class="draw" d="M2 30 C 30 30, 60 24, 112 6"/><path d="M104 4 L113 6 L109 14"/></svg></div>
+        </article>
+        <article class="path later">
+          <div class="row">Путь 02 <i>через год</i></div><span class="num">02</span>
+          <h3>Ждать, пока объяснят.</h3>
+          <p>И снова просить коллегу «выгрузить табличку» к пятнице.</p>
+          <div class="foot">догонять потом
+            <svg viewBox="0 0 120 34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path class="draw" d="M2 26 L18 26 L26 18 L34 28 L44 14 L54 26 L64 16 L74 26 L84 20 L96 26"/></svg></div>
+        </article>
+      </div>
+      <div class="quote"><span class="ava">ЕВ</span><p>«Курс — для тех, кто выбирает первый путь.»<small>Елена Ворсина, автор курса</small></p></div>
+    </div>
+  </section>
+
+  <section class="band" id="cases">
+    <div class="wrap">
+      <div class="head"><span class="idx">03 /</span><div><h2 class="h2">Проекты выпускников</h2></div></div>
+      <div class="cases-top"><span class="hint">Листайте — по два проекта за раз</span></div>
+      <div class="rail" id="rail" tabindex="0" aria-label="Проекты выпускников, листаются по горизонтали"></div>
+      <div class="ctrl">
+        <button class="prev" id="prev" aria-label="Предыдущие проекты"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12H5M11 6l-6 6 6 6"/></svg></button>
+        <div class="bar"><i id="barI"></i></div>
+        <span class="count" id="count">1–2 / 6</span>
+        <button class="next" id="next" aria-label="Следующие проекты"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="band deep">
+    <div class="wrap speed">
+      <div>
+        <div class="idx">04 /</div>
+        <h2 class="h2">Отчёт за минуты, <span class="soft">а не за дни</span></h2>
+        <p style="color:var(--mute);max-width:44ch;margin:18px 0 0">Сколько времени занимают типовые задачи у выпускников после курса. Шкала — 60 минут; квартальная модель показана отдельно.</p>
+        <div class="chips">
+          <span class="chip hot"><b data-count="6">6 мин</b><small>самая быстрая</small></span>
+          <span class="chip"><b>≈20 мин</b><small>большинство задач</small></span>
+          <span class="chip"><b>5 / 6</b><small>быстрее часа</small></span>
+        </div>
+      </div>
+      <div class="bars" id="bars">
+        <div class="brow fast"><span>Выручка по дням</span><div class="tr"><i style="width:10%"></i></div><b>6 мин</b></div>
+        <div class="brow fast"><span>Воронка заказа</span><div class="tr"><i style="width:20%"></i></div><b>12 мин</b></div>
+        <div class="brow"><span>Отток клиентов</span><div class="tr"><i style="width:33%"></i></div><b>20 мин</b></div>
+        <div class="brow"><span>Итог A/B-теста</span><div class="tr"><i style="width:40%"></i></div><b>24 мин</b></div>
+        <div class="brow"><span>Когорты по месяцам</span><div class="tr"><i style="width:63%"></i></div><b>38 мин</b></div>
+        <div class="brow over"><span>Квартальная модель<small>за шкалой — 210 мин</small></span><div class="tr"><i style="width:100%"></i></div><b>3,5 ч</b></div>
+        <div class="scale"><span></span><span><em>0</em><em>15</em><em>30</em><em>45</em><em>60 мин</em></span><span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="program">
+    <div class="wrap">
+      <div class="head"><span class="idx">05 /</span><div><h2 class="h2">Программа</h2></div>
+        <p>Восемь недель по порядку. Выберите тариф — увидите, какие недели в него входят.</p></div>
+      <div class="tabs" role="tablist" aria-label="Тарифы">
+        <button class="tab" role="tab" id="tb1" aria-selected="true" data-upto="4"><small>01</small>Старт</button>
+        <button class="tab" role="tab" id="tb2" aria-selected="false" data-upto="6"><small>02</small>Аналитик</button>
+        <button class="tab" role="tab" id="tb3" aria-selected="false" data-upto="8"><small>03</small>С наставником</button>
+      </div>
+      <div class="snake" id="snake">
+        <svg class="wire" id="wire" aria-hidden="true"><path id="wireP" fill="none" stroke="#3a3149" stroke-width="2" stroke-dasharray="6 9"/><path id="wireOn" fill="none" stroke="#d4ff52" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </div>
+      <div class="mods" id="mods"></div>
+    </div>
+  </section>
+
+  <section class="band deep">
+    <div class="wrap">
+      <div class="formula">
+        <div class="fig"><b data-count="96">96</b><small>часов практики</small></div>
+        <span class="op">+</span>
+        <div class="fig box"><b data-count="24">24</b><small>задачи с разбором</small></div>
+        <span class="op">=</span>
+        <div class="fig line"><b>3</b><small>проекта в портфолио</small></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap aud">
+      <div>
+        <div class="idx">06 /</div>
+        <h2 class="h2">Для кого</h2>
+        <div class="seg" role="tablist" aria-label="Кому подходит курс" id="seg" style="margin-top:28px"></div>
+      </div>
+      <div class="gains" id="gains" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="band deep">
+    <div class="wrap author">
+      <div class="pic">
+        <div class="mono"><span>ЕВ</span></div>
+        <div class="stk s1"><b data-count="11">11+</b><small>лет в аналитике</small></div>
+        <div class="stk hot s2"><b data-count="1400">1 400+</b><small>выпускников</small></div>
+        <div class="stk s3"><b>4</b><small>банка и 2 маркетплейса</small></div>
+        <div class="stk s4"><b>87%</b><small>сменили работу за полгода</small></div>
+      </div>
+      <div>
+        <div class="idx">07 / Автор курса</div>
+        <p class="who">Елена Ворсина</p>
+        <ul class="facts">
+          <li>Руководила аналитикой в банке и маркетплейсе — <b class="pill">11</b> лет.</li>
+          <li>Ведёт канал о данных: 38 тысяч подписчиков.</li>
+          <li>Сама проверяет итоговые проекты потока.</li>
+          <li>Выпустила <b class="pill">1 400+</b> аналитиков.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="plans">
+    <div class="wrap">
+      <div class="head"><span class="idx">08 /</span><div><h2 class="h2">Тарифы</h2></div></div>
+      <div class="plans">
+        <article class="plan"><small>01</small><h3>Старт</h3><s>29 900 ₽</s><div class="price">19 900<sup>₽</sup></div>
+          <a class="btn go" href="#plans">Выбрать «Старт»</a>
+          <ul><li>Недели 1–4: SQL и Python</li><li>12 задач с автопроверкой</li><li>Доступ на 3 месяца</li><li class="no">Разбор проектов</li><li class="no">Наставник</li></ul></article>
+        <article class="plan main"><small>02 · выбирают чаще</small><h3>Аналитик</h3><s>49 900 ₽</s><div class="price">34 900<sup>₽</sup></div>
+          <a class="btn go" href="#plans">Выбрать «Аналитик»</a>
+          <ul><li>Недели 1–6, до дашбордов</li><li>24 задачи с разбором</li><li>2 проекта в портфолио</li><li>Доступ на 6 месяцев</li><li>Сертификат</li></ul></article>
+        <article class="plan"><small>03</small><h3>С наставником</h3><s>79 900 ₽</s><div class="price">59 900<sup>₽</sup></div>
+          <a class="btn go" href="#plans">Выбрать «С наставником»</a>
+          <ul><li>Все 8 недель</li><li>Наставник 2 месяца</li><li>3 проекта, разбор автором</li><li>Пробное собеседование</li><li>Доступ навсегда</li></ul></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band deep">
+    <div class="wrap">
+      <div class="head"><span class="idx">09 /</span><div><h2 class="h2">Что говорят <span class="soft">выпускники</span></h2></div></div>
+      <div class="revs" id="revs"></div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="head"><span class="idx">10 /</span><div><h2 class="h2">Вопросы</h2></div></div>
+      <div class="faq">
+        <details open><summary>Я никогда не писал код. Получится?</summary><p>Да. Первые две недели — SQL с нуля: мы начинаем с одной таблицы продаж и одного вопроса. Python появляется на третьей неделе, когда вы уже умеете думать запросами.</p></details>
+        <details><summary>Сколько времени нужно в неделю?</summary><p>8–10 часов: два занятия по 1,5 часа и задачи в своём темпе. Записи остаются у вас.</p></details>
+        <details><summary>Что, если не успею?</summary><p>Можно перейти в следующий поток бесплатно — один раз, в течение полугода.</p></details>
+        <details><summary>Можно ли оплатить частями?</summary><p>Да, на 4 или 12 месяцев без переплаты.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="band deep final">
+    <div class="wrap">
+      <h2>Первая неделя<span>бесплатно.</span></h2>
+      <a class="btn go" href="#plans">Начать с первой недели <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div><b>Страницы</b><p>Система · Кейсы · Программа · Тарифы</p></div>
+    <div><b>Связь</b><p>hello@srez.example</p><p>Telegram: @srez_school</p></div>
+    <div><b>Школа</b><p>© 2026 «Срез». Школа и автор выдуманы.</p></div>
+  </div>
+  <div class="wrap"><p class="proto">Прототип стиля «Авангард» для сайтов Dewiar: школа, люди и цифры на странице — пример.</p></div>
+</footer>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* бегущая строка */
+  const words = ["SQL", "Python", "pandas", "Оконные функции", "A/B-тесты", "Когорты", "DataLens", "Статистика", "Воронки", "Юнит-экономика"];
+  const half = words.map(w => `<span><b>✦</b>${w}</span>`).join("");
+  $("#run").innerHTML = half + half;
+
+  /* обложка: слова плывут по кривым, точки бегут по линиям */
+  const tps = [["#t1", 6], ["#t2", 10], ["#t3", 4]];
+  const kd = $("#kdots"), ns = "http://www.w3.org/2000/svg";
+  const paths = ["#k1", "#k2", "#k3"].map(id => $(id));
+  const dots = paths.map((p, i) => { const c = document.createElementNS(ns, "circle"); c.setAttribute("r", "6"); c.setAttribute("fill", i ? "#cbbcff" : "#d4ff52"); kd.appendChild(c); return c; });
+  const place = (t) => paths.forEach((p, i) => { const L = p.getTotalLength(), q = p.getPointAtLength(((t * (0.05 + i * 0.015) + i * .3) % 1) * L); dots[i].setAttribute("cx", q.x); dots[i].setAttribute("cy", q.y); });
+  if (calm) place(0.4);
+  else { const t0 = performance.now(); const tick = (now) => { const t = (now - t0) / 1000;
+      tps.forEach(([id, base], i) => $(id).setAttribute("startOffset", (base + Math.sin(t * (.35 + i * .08) + i) * 5).toFixed(2) + "%"));
+      place(t); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+
+  /* 01 система */
+  const SYS = [
+    ["Уроки", "и разборы вживую", "Два занятия в неделю: короткая теория и сразу разбор на реальных данных магазина, банка и сервиса доставки."],
+    ["SQL", "главный язык данных", "От SELECT до оконных функций и CTE — на базе с миллионом заказов, а не на учебной табличке."],
+    ["Python", "pandas и графики", "Чистим, склеиваем и считаем то, что неудобно в SQL; строим графики, которые понятны без подписи «см. выше»."],
+    ["Дашборды", "в DataLens", "Собираете панель, которую руководитель открывает по утрам: метрики, фильтры, ни одной лишней цифры."],
+    ["Статистика", "и A/B-тесты", "Когда разница — правда, а когда случайность. Считаем размер выборки и не останавливаем тест на третий день."],
+    ["Проекты", "в портфолио", "Три законченных проекта с выводами для бизнеса: их не стыдно показать на собеседовании."]];
+  const nodeHTML = (x, i) => `<button class="node" data-i="${i}" aria-pressed="false"><em>0${i + 1}</em><b>${x[0]}</b><small>${x[1]}</small></button>`;
+  $("#sysL").innerHTML = SYS.slice(0, 3).map((x, i) => nodeHTML(x, i)).join("");
+  $("#sysR").innerHTML = SYS.slice(3).map((x, i) => nodeHTML(x, i + 3)).join("");
+  let sysI = 0, sysAuto = !calm;
+  const sysSet = (i) => { sysI = i; $$(".node").forEach(n => { const on = +n.dataset.i === i; n.classList.toggle("on", on); n.setAttribute("aria-pressed", on); });
+    $("#sysT").textContent = SYS[i][0]; $("#sysP").textContent = SYS[i][2];
+    const a = (i / 6) * Math.PI * 2 - Math.PI / 2; $("#orb").setAttribute("cx", 130 + 104 * Math.cos(a)); $("#orb").setAttribute("cy", 130 + 104 * Math.sin(a)); };
+  $$(".node").forEach(n => n.onclick = () => { sysAuto = false; sysSet(+n.dataset.i); });
+  sysSet(0);
+  setInterval(() => { if (sysAuto && document.visibilityState === "visible") sysSet((sysI + 1) % 6); }, 4200);
+
+  /* 03 кейсы */
+  const CASES = [
+    ["Отток в фитнес-клубе", "Анна К.", "Нашла, что уходят в третий месяц после заморозки, — клуб поменял правила заморозки.", "−18%", "отток за квартал", [3, 5, 4, 7, 6, 9, 8, 11], "48 тыс."],
+    ["Цены в кофейнях", "Игорь Л.", "Модель цены по точкам: где можно поднять стоимость без потери чеков.", "+9%", "к выручке", [6, 6, 7, 6, 8, 9, 9, 10], "1,2 млн"],
+    ["Склад маркетплейса", "Дина Р.", "Прогноз остатков на две недели вместо ручной таблицы на сорок вкладок.", "−31%", "пустых полок", [9, 8, 8, 6, 5, 5, 4, 3], "310 тыс."],
+    ["Реклама онлайн-школы", "Павел С.", "Сквозная воронка от клика до оплаты: два канала из пяти оказались убыточными.", "×1,6", "окупаемость", [2, 3, 3, 5, 6, 6, 8, 9], "86 тыс."],
+    ["Доставка еды", "Мария Т.", "A/B-тест бесплатной доставки: выигрыш только для заказов от 1 200 ₽.", "+4,2%", "к среднему чеку", [5, 6, 5, 7, 6, 7, 8, 8], "2,4 млн"],
+    ["Клиника", "Олег Н.", "Расписание врачей по загрузке: меньше окон днём, меньше очереди вечером.", "−22 мин", "ожидание", [10, 9, 9, 7, 7, 5, 5, 4], "19 тыс."]];
+  const spark = (v, up) => { const W = 200, H = 90, mx = Math.max(...v), mn = Math.min(...v);
+    const pts = v.map((y, i) => [8 + i * (W - 16) / (v.length - 1), H - 10 - (y - mn) / (mx - mn || 1) * (H - 26)]);
+    const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const bars = v.map((y, i) => `<rect x="${8 + i * (W - 16) / v.length + 3}" y="${H - 6 - (y / mx) * 22}" width="${(W - 16) / v.length - 8}" height="${(y / mx) * 22}" rx="2" fill="#e7e2f1"/>`).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${bars}<path d="${d}" fill="none" stroke="${up ? "#5b3df5" : "#e8562a"}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="4" fill="${up ? "#5b3df5" : "#e8562a"}"/></svg>`; };
+  $("#rail").innerHTML = CASES.map((c, i) => `<article class="case"><header><em>0${i + 1} /</em><span>${c[1]}</span></header>
+    <div class="shot"><div class="t">${c[0]}<small>дашборд выпускника</small></div><div class="g">${spark(c[5], c[5].at(-1) > c[5][0])}<div class="k"><div><b>${c[5].length} нед.</b>данные</div><div><b>${c[6]}</b>строк</div></div></div></div>
+    <p>${c[2]}</p><div class="meter"><b>${c[3]}</b><small>${c[4]}</small></div></article>`).join("");
+  const rail = $("#rail"), perView = () => (matchMedia("(max-width: 760px)").matches ? 1 : 2);
+  const railUpd = () => { const n = CASES.length, pv = perView(), w = rail.scrollWidth - rail.clientWidth;
+    const f = w > 0 ? rail.scrollLeft / w : 0, first = Math.min(n - pv, Math.round(f * (n - pv)));
+    $("#count").textContent = pv === 1 ? `${first + 1} / ${n}` : `${first + 1}–${first + pv} / ${n}`;
+    const bi = $("#barI"); bi.style.width = (pv / n * 100) + "%"; bi.style.left = (first / n * 100) + "%";
+    $("#prev").disabled = rail.scrollLeft < 4; $("#next").disabled = rail.scrollLeft > w - 4; };
+  const step = (d) => { const c = rail.querySelector(".case"); rail.scrollBy({ left: d * (c.offsetWidth + 18) * perView(), behavior: calm ? "auto" : "smooth" }); };
+  $("#prev").onclick = () => step(-1); $("#next").onclick = () => step(1);
+  rail.addEventListener("scroll", railUpd, { passive: true }); addEventListener("resize", railUpd); railUpd();
+  rail.addEventListener("keydown", e => { if (e.key === "ArrowRight") { e.preventDefault(); step(1); } if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); } });
+
+  /* 05 программа: змейка */
+  const STEPS = [["Таблицы и SELECT", 1], ["JOIN и агрегаты", 1], ["Окна и CTE", 1], ["Python и pandas", 2], ["Графики и выводы", 2], ["Дашборды", 2], ["Статистика и A/B", 3], ["Итоговый проект", 3]];
+  const MODS = [["Недели 1–2", "SQL с нуля", ["Одна таблица продаж и первый вопрос бизнеса", "Фильтры, сортировки, группировки", "JOIN: склеиваем заказы и клиентов"]],
+    ["Неделя 3", "Окна и CTE", ["Нарастающий итог и доли", "Ранги и «предыдущий месяц»", "Читаемые запросы через CTE"]],
+    ["Недели 4–5", "Python для аналитика", ["pandas: чистка и склейка", "Графики, которые читаются", "Отчёт в Jupyter для руководителя"]],
+    ["Неделя 6", "Дашборды", ["Метрики и их определения", "Панель в DataLens", "Как показывать, чтобы решали"]],
+    ["Неделя 7", "Статистика и A/B", ["Доверительные интервалы без формул в голове", "Размер выборки", "Разбор провалившихся тестов"]],
+    ["Неделя 8", "Итоговый проект", ["Задача от реальной компании", "Разбор с автором", "Защита и портфолио"]]];
+  const MOD_UPTO = [2, 3, 5, 6, 7, 8];
+  const snake = $("#snake");
+  snake.insertAdjacentHTML("beforeend", STEPS.map((s, i) => `<div class="step" data-i="${i}" style="${i >= 4 ? `grid-row:2;grid-column:${8 - i}` : `grid-row:1;grid-column:${i + 1}`}"><div class="n c${s[1]}">0${i + 1}</div><p>${s[0]}</p></div>`).join(""));
+  $("#mods").innerHTML = MODS.map((m, i) => `<details class="mod" data-upto="${MOD_UPTO[i]}"${i < 2 ? " open" : ""}><summary><em>0${i + 1}</em><span><small>${m[0]}</small><b>${m[1]}</b></span><i aria-hidden="true">+</i></summary><ul>${m[2].map(x => `<li>${x}</li>`).join("")}</ul></details>`).join("");
+  let upto = 4;
+  const wire = () => { if (matchMedia("(max-width: 760px)").matches) return;
+    const r = snake.getBoundingClientRect(), c = (el) => { const b = el.querySelector(".n").getBoundingClientRect(); return [b.left - r.left + b.width / 2, b.top - r.top + b.height / 2]; };
+    const st = $$(".step", snake).sort((a, b) => a.dataset.i - b.dataset.i).map(c);
+    const R = (st[4][1] - st[3][1]) / 2, xr = st[3][0] + 56;
+    const seg = (k) => { let d = `M${st[0][0]} ${st[0][1]}`; for (let i = 1; i < k; i++) { if (i === 4) d += ` L${xr - R} ${st[3][1]} A${R} ${R} 0 0 1 ${xr - R} ${st[4][1]} L${st[4][0]} ${st[4][1]}`; else d += ` L${st[i][0]} ${st[i][1]}`; } return d; };
+    $("#wire").setAttribute("viewBox", `0 0 ${r.width} ${r.height}`);
+    $("#wireP").setAttribute("d", seg(8)); const on = $("#wireOn"); on.setAttribute("d", seg(upto));
+    if (!calm) { const L = on.getTotalLength(); on.style.strokeDasharray = L; on.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], { duration: 900, easing: "cubic-bezier(.3,.7,.2,1)" }); } };
+  const setPlan = (btn) => { $$(".tab").forEach(t => t.setAttribute("aria-selected", t === btn)); upto = +btn.dataset.upto;
+    $$(".step", snake).forEach(s => { const i = +s.dataset.i; s.classList.toggle("in", i < upto); s.classList.toggle("out", i >= upto); });
+    $$(".mod").forEach(m => m.classList.toggle("dim", +m.dataset.upto > upto)); wire(); };
+  $$(".tab").forEach(t => t.onclick = () => setPlan(t));
+  setPlan($("#tb1")); addEventListener("resize", () => wire());
+  if (document.fonts) document.fonts.ready.then(wire);
+
+  /* 06 для кого */
+  const AUD = { "Новичкам": ["Без опыта в цифрах", ["Освоите SQL и Python с нуля — на задачах, а не на теории.", "Соберёте 3 проекта, с которыми идут на собеседование.", "Пройдёте пробное собеседование с автором курса."]],
+    "Маркетологам": ["Чтобы не ждать выгрузок", ["Сами посчитаете окупаемость каналов и когорты.", "Проверите гипотезу A/B-тестом, а не ощущением.", "Соберёте дашборд кампаний для руководителя."]],
+    "Финансистам": ["Excel уже тесен", ["Перенесёте отчёты из сорока вкладок в один запрос.", "Автоматизируете сверки на Python.", "Построите прогноз выручки по неделям."]],
+    "Руководителям": ["Решать по данным", ["Поймёте, какие вопросы задавать аналитикам.", "Отличите настоящий рост от случайности.", "Настроите метрики команды на одной панели."]] };
+  const keys = Object.keys(AUD);
+  $("#seg").innerHTML = keys.map((k, i) => `<button role="tab" aria-selected="${!i}" data-k="${k}">${k}</button>`).join("");
+  const setAud = (k) => { $$("#seg button").forEach(b => b.setAttribute("aria-selected", b.dataset.k === k));
+    $("#gains").innerHTML = `<h3>${k}: ${AUD[k][0].toLowerCase()}</h3><ol>${AUD[k][1].map(x => `<li>${x}</li>`).join("")}</ol>`; };
+  $$("#seg button").forEach(b => b.onclick = () => setAud(b.dataset.k)); setAud(keys[0]);
+
+  /* 09 отзывы */
+  const REV = [["Ушла из колл-центра в аналитику банка через четыре месяца после курса. Итоговый проект спросили на собеседовании первым.", "Полина А.", "аналитик, банк", "l"],
+    ["Наконец понял, что такое оконные функции. Объясняют на одной таблице продаж, без магии.", "Кирилл Я.", "маркетолог", ""],
+    ["Дашборд, который я собрала на шестой неделе, теперь открывает директор каждое утро.", "Анна Г.", "финансист", "v"],
+    ["Разбор A/B-тестов — лучшее в курсе. Мы перестали останавливать тесты на третий день.", "Марина Я.", "продакт", ""],
+    ["Задачи по 15–20 минут, можно решать в обед. За 8 недель ни разу не потерялся.", "Юлий Х.", "логист", ""],
+    ["Елена разбирала мой проект 40 минут и нашла ошибку, которую я не видел неделю.", "Олег П.", "аналитик, ритейл", "l"],
+    ["Пришла без кода вообще. Python на третьей неделе уже не пугал.", "Инна О.", "бухгалтер", "v"]];
+  $("#revs").innerHTML = REV.map(r => `<figure class="rev ${r[3]}"><p>«${r[0]}»</p><footer><i>${r[1].split(" ").map(x => x[0]).join("")}</i><span>${r[1]}<small>${r[2]}</small></span></footer></figure>`).join("");
+
+  /* движение при входе в экран: из видимого покоя, только когда блок уже на экране */
+  if (!calm && "IntersectionObserver" in window) {
+    const easing = "cubic-bezier(.2,.7,.2,1)";
+    const countUp = (el) => { const to = +el.dataset.count, txt = el.textContent, suf = (txt.match(/^[\d\s\u00a0]*\d(.*)$/) || [0, ""])[1], t0 = performance.now();
+      const f = (n) => Math.round(n).toLocaleString("ru-RU");
+      const tk = (now) => { const k = Math.min(1, (now - t0) / 1100), e = 1 - Math.pow(1 - k, 3); el.textContent = f(to * e) + suf; if (k < 1) requestAnimationFrame(tk); else el.textContent = txt; };
+      requestAnimationFrame(tk); };
+    const seen = new WeakSet();
+    const io = new IntersectionObserver((es) => es.forEach(e => { if (!e.isIntersecting || seen.has(e.target)) return; seen.add(e.target); const el = e.target;
+      if (el.matches(".h2, .path, .case, .plan, .rev, .node, .stk, .mod")) el.animate([{ transform: "translateY(26px)", opacity: .35 }, { transform: "none", opacity: 1 }], { duration: 700, easing, delay: (el.dataset.d || 0) * 1 });
+      if (el.matches(".brow")) { const i = el.querySelector("i"); i.animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 1100, easing, delay: +el.dataset.d || 0 }); i.style.transformOrigin = "left"; }
+      if (el.matches("[data-count]")) countUp(el);
+      if (el.matches(".draw")) { const L = el.getTotalLength(); el.style.strokeDasharray = L; el.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], { duration: 1200, easing }); }
+    }), { threshold: .25 });
+    $$(".h2, .path, .plan, .rev, .node, .stk, .mod, [data-count], .draw").forEach(el => io.observe(el));
+    $$(".brow").forEach((el, i) => { el.dataset.d = i * 90; io.observe(el); });
+    $$(".plans .plan, .paths .path").forEach((el, i) => { el.dataset.d = (i % 3) * 110; });
+  }
+})();
+</script>

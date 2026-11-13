@@ -415,6 +415,7 @@ class CommandsMixin:
         """«Сайты» (03.11, sites.py) для студии: список, шаблоны, предпросмотр, правки и «Сказать Лире», версии, фото,
         публикация на имя.dewiar.pro, посещения, проверка продвижения, заявки."""
         from sites import SiteError
+        from sites_blog import BlogError as B_ERR
         W = self.sites
         sid = str(a.get("id") or "")
         try:
@@ -479,6 +480,30 @@ class CommandsMixin:
                 return {"items": W.artist_logos()}
             if cmd == "sites_chat":                      # 05.11: «Чат Лиры на сайте» — состояние и «Включить» прямо из «Сайтов»
                 return self._sites_chat(sid, bool(a.get("on")))
+            # «Статьи» (0.93, sites_blog): настройки, план, черновик сейчас, правка, «Опубликовать»
+            import sites_blog as B
+            if cmd == "sites_blog":
+                return W.blog_get(sid)
+            if cmd == "sites_blog_set":
+                return W.blog_set(sid, a.get("patch") or {})
+            if cmd == "sites_blog_plan":
+                B.make_plan(W, sid, more=bool(a.get("more")))
+                return W.blog_get(sid, fresh=False)
+            if cmd == "sites_blog_write":
+                art = B.write(W, sid, str(a.get("topic") or "").strip()[:200])
+                return dict(W.blog_get(sid), written=art)
+            if cmd == "sites_blog_article":
+                return {"article": W._fetch("/sites/article", {"id": int(a.get("aid") or 0)}).get("article")}
+            if cmd == "sites_blog_save":
+                f = {k: a.get(k) for k in ("title", "descr", "body") if a.get(k) is not None}
+                d = W._fetch("/sites/article/save", dict(f, id=int(a.get("aid") or 0)))
+                return {"article": d.get("article")}
+            if cmd == "sites_blog_fix":                 # «Попросить Лиру поправить»: просьба своими словами
+                return {"article": B.fix(W, int(a.get("aid") or 0), str(a.get("text") or "").strip()[:500])}
+            if cmd == "sites_blog_status":
+                return {"article": B.set_status(W, sid, int(a.get("aid") or 0), str(a.get("status") or "")), **W.blog_get(sid)}
+        except B_ERR as e:
+            raise ValueError(str(e)) from e
         except SiteError as e:
             raise ValueError(str(e)) from e
         raise ValueError("неизвестная команда сайтов")

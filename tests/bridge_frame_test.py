@@ -179,6 +179,12 @@ if A is not None:
     ok(A.ui_path_ok("about:srcdoc") and A.ui_path_ok("data:text/html,x") and A.ui_path_ok((ROOT / "ui/settings.html").as_uri())
        and not A.ui_path_ok("http://127.0.0.1:1/x") and not A.ui_path_ok("file:///etc/passwd")
        and not A.ui_path_ok((ROOT / "ui/../core/settings.py").as_uri()), "переходы фреймов: только about:/data:/blob: и папка ui")
+    # 13.11 (владелец, Ubuntu): ссылка в блокноте виджета открылась внутри окна Лиры — теперь в системном браузере
+    ok(A.nav_verdict("https://support.google.com/x", True) == "outside" and A.nav_verdict("https://evil.example/", False) == "block"
+       and A.nav_verdict((ROOT / "ui/hud.html").as_uri(), True) == "ok" and A.nav_verdict("about:blank", False) == "ok",
+       "сайт по нажатию — системным браузером, а не внутри окна; сам по себе — никуда")
+    src_app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
+    ok('v = nav_verdict(uri, act.is_user_gesture())' in src_app and 'if v == "outside":' in src_app, "окно GTK: переход наружу — xdg-open")
     src = (ROOT / "ui/app.py").read_text(encoding="utf-8") + (ROOT / "ui/macui.py").read_text(encoding="utf-8")
     import re
     apis = re.findall(r"js_api=([A-Za-z_]+)", src)

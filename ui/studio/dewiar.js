@@ -339,8 +339,10 @@ window.studioGo = (p) => {
   if (p === "topup") return openTopup();
   // «insight:<id>» (12.11): весточка Радара в виджете — сразу материал в «читалке» Радара
   const m = /^insight:([\w-]+)$/.exec(String(p || "")); if (m) p = "insight";
+  const sb = /^sites-blog:([\w-]+)$/.exec(String(p || "")); if (sb) p = "sites";      // 0.93: черновик статьи — сразу «Статьи» сайта
   ($(`nav button[data-p="${p}"]`) || { click() {} }).click();
   if (m) setTimeout(() => window.rdRead && rdRead(m[1]), 250);
+  if (sb && typeof stOpen === "function") setTimeout(() => stOpen(sb[1]).then(() => stTab("blog")), 300);
 };
 $("#dw-key-go").onclick = async () => { const r = $("#dw-cloud-res"), key = $("#dw-key").value.trim(); if (!key) return; r.className = "res"; r.textContent = "проверяю ключ…";
   try { const c = await core.call("cloud_connect", { key }); DW.cloud = c; cloudFill(c); renderProfiles(); $("#dw-key").value = ""; r.className = "res ok"; r.textContent = "Ключ подключён."; dwLoad(); } catch (e) { r.className = "res bad"; r.textContent = e.message; } };
