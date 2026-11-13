@@ -50,8 +50,8 @@ function stShowList() {
   $$("#st-mine .st-card").forEach(b => b.onclick = () => stOpen(b.dataset.id));
   const nt = (SITES.meta.templates || []).length;
   $("#st-tpln").textContent = `${nt} ${stPlural(nt, "готовый сайт", "готовых сайта", "готовых сайтов")} — у каждого свой характер. Тексты Лира заменит вашими.`;
-  $("#st-tpls").innerHTML = (SITES.meta.templates || []).map(t => `<button type="button" class="st-tpl" data-t="${t.id}"><span class="st-thumb"><iframe tabindex="-1" aria-hidden="true" sandbox="" referrerpolicy="no-referrer" loading="lazy"></iframe></span>
-    <span class="st-cb"><b>${stE(t.title)}</b><small>${stE(t.sub)}</small></span></button>`).join("");
+  $("#st-tpls").innerHTML = (SITES.meta.templates || []).map(t => `<button type="button" class="st-tpl${t.style === "avangard" ? " st-av" : ""}" data-t="${t.id}"><span class="st-thumb"><iframe tabindex="-1" aria-hidden="true" sandbox="" referrerpolicy="no-referrer" loading="lazy"></iframe></span>
+    <span class="st-cb"><b>${stE(t.title)}</b><small>${stE(t.sub)}</small></span>${t.style === "avangard" ? `<em class="st-new">${stE(window.t("sites.style.new"))}</em>` : ""}</button>`).join("");
   $$("#st-tpls .st-tpl").forEach(b => b.onclick = () => stFromTemplate(b.dataset.t));
   stThumbs();
 }
@@ -355,7 +355,10 @@ function stAddPop() {
 /* оформление: палитры, шрифты, углы, шапка */
 function stLook() {
   const th = SITES.cur.theme || {}, M = SITES.meta;
-  $("#st-look").innerHTML = `<h4>Палитра</h4><div class="st-pals">${Object.entries(M.palettes).map(([k, p]) => `<button type="button" class="st-pal${k === th.palette ? " on" : ""}" data-v="${k}" aria-pressed="${k === th.palette}">
+  // 0.94: стиль вёрстки — «Авангард» первым делом (владелец 13.11: «повыше, чтобы использовали чаще»)
+  const sty = th.style || "classic";
+  $("#st-look").innerHTML = `<h4>${stE(window.t("sites.style.h"))}</h4><div class="st-styles">${Object.entries(M.styles || {}).map(([k, s]) => `<button type="button" class="st-sty sv-${k}${k === sty ? " on" : ""}" data-v="${k}" aria-pressed="${k === sty}"><b>${stE(s.title)}</b><small>${stE(s.sub)}</small></button>`).join("")}</div>
+    <h4>Палитра</h4><div class="st-pals">${Object.entries(M.palettes).map(([k, p]) => `<button type="button" class="st-pal${k === th.palette ? " on" : ""}" data-v="${k}" aria-pressed="${k === th.palette}">
       <span class="st-sw" style="background:${p.bg}"><i style="background:${p.surface}"></i><i style="background:${p.accent}"></i><i style="background:${p.accent2}"></i><i style="background:${p.ink}"></i></span><span>${stE(p.title)}</span></button>`).join("")}</div>
     <div class="st-acc"><label class="st-f"><span>Свой цвет акцента</span><span class="st-colr"><input type="color" id="st-acc" value="${stE((th.colors || {}).accent || M.palettes[th.palette || "pistachio"].accent)}"><button type="button" class="btn small" id="st-accx"${(th.colors || {}).accent ? "" : " hidden"}>Как в палитре</button></span></label></div>
     <h4>Шрифты</h4><div class="st-fonts">${Object.entries(M.fonts).map(([k, f]) => `<button type="button" class="st-font${k === th.fonts ? " on" : ""}" data-v="${k}" aria-pressed="${k === th.fonts}">
@@ -364,6 +367,7 @@ function stLook() {
     <h4>Шапка</h4><div class="st-opts">${Object.entries(M.headers).map(([k, t]) => `<button type="button" class="st-opt hdr-${k}${k === (th.header || "light") ? " on" : ""}" data-v="${k}"><i></i>${stE(t)}</button>`).join("")}</div>
     <h4>Другой дизайн целиком</h4><p class="hint">Тексты и разделы останутся — поменяются цвета, шрифты, меню и вёрстка.</p>
     <div class="st-redo">${M.templates.map(t => `<button type="button" class="st-chipb${t.id === SITES.cur.template ? " on" : ""}" data-v="${t.id}">${stE(t.title)}</button>`).join("")}</div>`;
+  $$("#st-look .st-sty").forEach(b => b.onclick = () => b.dataset.v !== sty && stApply([{ op: "style", value: b.dataset.v }], window.t("sites.style.done", { name: M.styles[b.dataset.v].title })));
   $$("#st-look .st-pal").forEach(b => b.onclick = () => stApply([{ op: "palette", name: b.dataset.v }], `Палитра «${M.palettes[b.dataset.v].title}»`));
   $$("#st-look .st-font").forEach(b => b.onclick = () => stApply([{ op: "fonts", name: b.dataset.v }], `Шрифт «${M.fonts[b.dataset.v].title}»`));
   $$("#st-look .rad-sharp, #st-look .rad-soft, #st-look .rad-round").forEach(b => b.onclick = () => stApply([{ op: "radius", name: b.dataset.v }], "Углы"));

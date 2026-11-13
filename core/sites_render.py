@@ -797,6 +797,224 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 @media (max-width:480px){.btns .btn{flex:1 1 100%}.hero h1{word-break:normal;overflow-wrap:anywhere}}
 """
 
+NEW_CSS = r"""
+/* 0.94: блоки «Авангарда» — в любом стиле */
+.hk{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:24px;align-items:center}.hk-t{min-width:0}
+.hero h1.kin{font-size:calc(clamp(2.6rem,6.4vw,6.2rem) * var(--hs,1));line-height:.9;letter-spacing:calc(var(--tr) - .01em);max-width:11ch}
+.hero h1.kin.long{font-size:calc(clamp(2.3rem,5.6vw,5rem) * var(--hs,1));max-width:16ch}
+h1 .dot{display:none;font-style:normal;color:var(--slink)}
+.hk-art{aspect-ratio:540/520;max-width:100%}
+.hk-art svg{width:100%;height:100%;overflow:visible}
+.hk-art .kr{fill:none;stroke:var(--sline);stroke-width:1.5}
+.hk-art .kt{font:600 34px/1 var(--fh);letter-spacing:.1em}
+.hk-art .kd{fill:var(--slink);offset-distance:0%}
+@media (max-width:860px){.hk{grid-template-columns:1fr}.hk-art{max-width:520px}}
+.st-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:clamp(18px,3vw,34px)}
+.st-c b{display:block;font:var(--hw) clamp(2.6rem,6vw,4.6rem)/.95 var(--fh);letter-spacing:var(--tr);color:var(--slink)}
+.st-c span{display:block;margin-top:10px;color:var(--smut)}
+.formula{display:flex;flex-wrap:wrap;align-items:flex-end;gap:clamp(10px,2vw,26px)}
+.fig{display:grid;gap:10px}
+.fig b{font:var(--hw) clamp(4.2rem,14vw,11rem)/.82 var(--fh);letter-spacing:calc(var(--tr) - .02em)}
+.fig.f1 b{background:var(--sbtn);color:var(--sbtnk);border-radius:var(--r);padding:.12em .16em .06em}
+.fig.f2 b{color:transparent;-webkit-text-stroke:2px var(--slink)}
+.fig small{font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--smut)}
+.formula .op{font:500 clamp(2rem,5vw,4rem)/1 var(--fh);color:var(--slink);padding-bottom:2.2rem}
+.sk{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:clamp(28px,5vw,60px);align-items:center}
+.sk-art{position:relative;aspect-ratio:1/1.05;max-width:520px;width:100%}
+.sk-pic{position:absolute;inset:10% 14%;border-radius:40% 40% var(--r) var(--r);overflow:hidden;background:var(--scard);border:1.5px solid var(--sline)}
+.sk-pic img{width:100%;height:100%;object-fit:cover}
+.sk-mono{display:grid;place-items:center}.sk-mono span{font:var(--hw) clamp(4rem,12vw,9rem)/1 var(--fh);color:transparent;-webkit-text-stroke:2px var(--a2)}
+.stk{position:absolute;padding:14px 16px;border-radius:calc(var(--r) * .6 + 6px);background:var(--scard);border:1.5px solid var(--sline);max-width:180px;box-shadow:0 20px 40px -24px rgba(0,0,0,.6)}
+.stk b{display:block;font:var(--hw) 1.8rem/1 var(--fh);letter-spacing:var(--tr)}
+.stk small{display:block;margin-top:6px;font-size:.78rem;line-height:1.3;color:var(--smut)}
+.stk.hot{background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}.stk.hot small{color:inherit;opacity:.75}
+.stk.k0{left:0;top:6%;transform:rotate(-6deg)}.stk.k1{right:0;top:0;transform:rotate(5deg)}.stk.k2{left:2%;bottom:8%;transform:rotate(-4deg)}.stk.k3{right:4%;bottom:14%;transform:rotate(7deg)}
+@media (max-width:860px){.sk{grid-template-columns:1fr}.sk-art{margin:0 auto}}
+.hub{display:grid;grid-template-columns:1fr minmax(180px,260px) 1fr;gap:14px 28px;align-items:center;position:relative}
+.hub-r{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.hub-col{display:grid;gap:12px}
+.hub .node{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;align-items:center;padding:16px 18px;cursor:pointer;background:var(--scard);border:1.5px solid var(--sline);border-radius:var(--r);transition:border-color .25s,transform .25s}
+.hub .node em{font-style:normal;font-size:.75rem;font-weight:700;color:var(--slink);grid-row:span 2}
+.hub .node b{font-size:1.2rem;font-weight:600;line-height:1.2}
+.hub .node small{font-size:.82rem;color:var(--smut)}
+.hub .node:hover{border-color:var(--sink)}
+.hub-core{position:relative;aspect-ratio:1;display:grid;place-items:center;text-align:center}
+.hub-core svg{position:absolute;inset:0;width:100%;height:100%}
+.hub-core .c1{fill:none;stroke:var(--sline);stroke-width:1.5}.hub-core .c2{fill:none;stroke:var(--slink);stroke-width:1.5;stroke-dasharray:4 7}.hub-core .c3{fill:var(--scard)}
+.hub-core p{position:relative;margin:0;font:600 1.4rem/1.15 var(--fh);max-width:9ch}
+.hub-say{grid-column:1/-1;border-top:1px solid var(--sline);padding-top:20px;margin-top:14px;min-height:5em}
+.hub-p{display:none}.hub-p b{display:block;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--smut);margin-bottom:6px}
+.hub-p p{font-size:1.12rem;max-width:70ch}
+.hub-r:nth-of-type(1):checked~.hub-say .hub-p[data-i="0"],.hub-r:nth-of-type(2):checked~.hub-say .hub-p[data-i="1"],.hub-r:nth-of-type(3):checked~.hub-say .hub-p[data-i="2"],.hub-r:nth-of-type(4):checked~.hub-say .hub-p[data-i="3"],.hub-r:nth-of-type(5):checked~.hub-say .hub-p[data-i="4"],.hub-r:nth-of-type(6):checked~.hub-say .hub-p[data-i="5"],.hub-r:nth-of-type(7):checked~.hub-say .hub-p[data-i="6"],.hub-r:nth-of-type(8):checked~.hub-say .hub-p[data-i="7"]{display:block}
+.hub-r:nth-of-type(1):checked~.hub-col .node[data-i="0"],.hub-r:nth-of-type(2):checked~.hub-col .node[data-i="1"],.hub-r:nth-of-type(3):checked~.hub-col .node[data-i="2"],.hub-r:nth-of-type(4):checked~.hub-col .node[data-i="3"],.hub-r:nth-of-type(5):checked~.hub-col .node[data-i="4"],.hub-r:nth-of-type(6):checked~.hub-col .node[data-i="5"],.hub-r:nth-of-type(7):checked~.hub-col .node[data-i="6"],.hub-r:nth-of-type(8):checked~.hub-col .node[data-i="7"]{border-color:var(--slink);background:color-mix(in srgb,var(--slink) 9%,var(--scard))}
+.hub-r:focus-visible~.hub-col .node{outline:2px dashed var(--sline);outline-offset:2px}
+@media (max-width:860px){.hub{grid-template-columns:1fr}.hub-core{max-width:220px;margin:0 auto;order:-1}}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.duo-c{position:relative;overflow:hidden;border-radius:calc(var(--r) + 6px);padding:clamp(22px,3vw,30px);min-height:260px;display:flex;flex-direction:column}
+.duo-c.d0{background:var(--sbtn);color:var(--sbtnk)}
+.duo-c.d1{background:var(--scard);border:1.5px solid var(--sline)}
+.duo-c .dr{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.duo-c .dr i{font-style:normal;padding:6px 12px;border-radius:999px;box-shadow:inset 0 0 0 1.5px currentColor;letter-spacing:.06em}
+.duo-c .num{position:absolute;right:18px;top:70px;font:var(--hw) 8rem/.8 var(--fh);letter-spacing:-.06em;opacity:.14;pointer-events:none}
+.duo-c.d1 .num{opacity:1;color:transparent;-webkit-text-stroke:2px var(--sline)}
+.duo-c h3{font-size:calc(clamp(1.5rem,2.6vw,2.1rem) * var(--h3s,1));margin:34px 0 10px;max-width:14ch;line-height:1.05}
+.duo-c p{max-width:36ch}.duo-c.d1 p{color:var(--smut)}
+.duo-c .foot{margin-top:auto;padding:22px 0 10px;border-bottom:1.5px solid currentColor;font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.duo-c.d1 .foot{border-color:var(--sline);color:var(--smut)}
+@media (max-width:760px){.duo{grid-template-columns:1fr}.duo-c .num{font-size:5rem;top:56px}}
+.bars{display:grid;gap:18px;max-width:900px}
+.br{display:grid;grid-template-columns:minmax(0,190px) 1fr 80px;gap:16px;align-items:center;font-size:.95rem}
+.br .tr{height:10px;border-radius:10px;background:color-mix(in srgb,var(--sline) 70%,transparent);overflow:hidden}
+.br .tr i{display:block;height:100%;border-radius:10px;background:var(--a2);transform-origin:left}
+.br.on .tr i{background:var(--slink)}
+.br b{text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:620px){.br{grid-template-columns:1fr 64px}.br .tr{grid-column:1/-1;grid-row:2}}
+.cs{timeline-scope:--cs}
+.cs-hint{color:var(--slink);font-weight:700}
+.cs-rail{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 18px) / 2);gap:18px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:14px;scroll-timeline:--cs x;scrollbar-width:thin;scrollbar-color:var(--slink) transparent}
+.case{scroll-snap-align:start;display:flex;flex-direction:column;gap:14px;min-width:0}
+.case header{display:flex;justify-content:space-between;font-weight:600}.case header em{font-style:normal;color:var(--smut)}
+.case .media{aspect-ratio:16/10}
+.case-viz{aspect-ratio:16/10;border-radius:calc(var(--r) * .7);background:var(--sbg);border:1.5px solid var(--sline);padding:16px 18px;display:grid;grid-template-rows:auto 1fr;gap:6px;overflow:hidden}
+.case-viz b{font:var(--hw) clamp(2rem,4vw,3rem)/1 var(--fh);letter-spacing:var(--tr);color:var(--slink)}.case-viz small{display:block;color:var(--smut);font-size:.8rem;margin-top:4px}
+.case-viz svg{width:100%;height:100%}.case-viz .ln{fill:none;stroke:var(--slink);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}.case-viz .ar{fill:var(--slink);opacity:.12}.case-viz .gd{stroke:var(--sline);stroke-width:1}
+.case .meter{align-self:flex-start;margin-top:auto;padding:10px 14px;border-radius:calc(var(--r) * .6 + 4px);border:1.5px solid var(--sline)}
+.case .meter b{display:block;font:var(--hw) 1.6rem/1 var(--fh);letter-spacing:var(--tr)}.case .meter small{color:var(--smut)}
+.cs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:18px}
+.cs-bar{display:none;height:3px;border-radius:3px;background:var(--sline);margin-top:14px;overflow:hidden}
+.cs-bar i{display:block;height:100%;width:100%;background:var(--slink);transform-origin:left;transform:scaleX(.2)}
+@supports (animation-timeline:scroll()){.cs-bar{display:block}.cs-rail{scrollbar-width:none}.cs-rail::-webkit-scrollbar{display:none}
+ .cs-bar i{animation:dwBar linear both;animation-timeline:--cs}}
+@keyframes dwBar{from{transform:scaleX(.2)}to{transform:scaleX(1)}}
+@media (max-width:760px){.cs-rail{grid-auto-columns:86%}}
+.plan .pr{white-space:nowrap}.plan .old{color:var(--smut);font-weight:600}.plan.on .old{color:inherit;opacity:.6}
+.rms{columns:3 280px;column-gap:18px}
+.rm{break-inside:avoid;margin:0 0 18px;display:block}
+.rm blockquote{font:400 1.02rem/1.55 var(--fb);letter-spacing:0}
+.rm figcaption{display:flex;align-items:center;gap:12px;margin-top:16px;color:inherit}
+.rm figcaption i{font-style:normal;flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:700 .75rem/1 var(--fh);background:var(--sbg);color:var(--slink)}
+.rm figcaption small{display:block;opacity:.7}
+.rm.acc{background:var(--sbtn);color:var(--sbtnk)}.rm.a2{background:var(--a2);color:var(--dark)}
+.snake{position:relative;display:grid;gap:0}
+.sn-row{list-style:none;margin:0;padding:0 56px 0 0;display:grid;grid-template-columns:repeat(4,1fr);position:relative}
+.sn-row.rev{direction:rtl}.sn-row.rev>li{direction:ltr}
+.sn-row::before{content:"";position:absolute;left:12.5%;right:calc(12.5% + 56px);top:37px;border-top:2px dashed var(--sline)}
+.sn-s{position:relative;display:grid;justify-items:center;gap:10px;text-align:center;padding:0 6px 26px}
+.sn-s .n{position:relative;z-index:1;width:74px;height:74px;border-radius:20px;display:grid;place-items:center;font:var(--hw) 1.7rem/1 var(--fh);letter-spacing:var(--tr);background:var(--sbg);border:2px solid var(--sline)}
+.sn-s .n.c1{color:var(--slink);border-color:var(--slink)}.sn-s .n.c2{color:var(--a2)}.sn-s .n.c3{color:var(--a2)}
+.sn-s b{font-weight:600;max-width:15ch}.sn-s small{color:var(--smut);max-width:22ch}
+.sn-turn{height:44px;margin:-26px 0 0;position:relative}
+.sn-turn::before{content:"";position:absolute;top:-36px;bottom:-37px;width:60px;border:2px dashed var(--sline)}
+.sn-turn.r::before{right:12px;border-left:0;border-radius:0 60px 60px 0}
+.sn-turn.l::before{left:calc(12.5% - 48px);border-right:0;border-radius:60px 0 0 60px}
+@media (max-width:760px){.sn-row,.sn-row.rev{grid-template-columns:1fr;direction:ltr;padding:0}.sn-row::before,.sn-turn{display:none}
+ .sn-s{grid-template-columns:56px 1fr;justify-items:start;text-align:left;align-items:center;padding:0 0 14px}.sn-s .n{width:52px;height:52px;font-size:1.2rem;grid-row:span 2}}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.s.tkr{padding:clamp(16px,2.4vw,24px) 0;overflow:hidden}
+.tk{overflow:hidden}
+.tk-t{display:flex;width:max-content;animation:dwTick 36s linear infinite}
+.tk-t span{font:var(--hw) clamp(1.3rem,2.8vw,2.2rem)/1 var(--fh);letter-spacing:var(--tr);white-space:nowrap;padding-right:1.4em;display:inline-flex;align-items:center;gap:1.4em}
+.tk-t span::after{content:"✦";font-size:.7em;opacity:.8}
+@keyframes dwTick{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.tk-t{animation:none}}
+"""
+
+POSTER_CSS = r"""
+/* 0.94 стиль «Афиша»: узкий шрифт огромными буквами, обводки и жёсткие тени, наклейки, бегущая строка */
+.sty-poster h1,.sty-poster h2,.sty-poster h3{text-transform:uppercase;letter-spacing:.005em}
+.sty-poster h1{font-size:calc(clamp(3rem,9vw,8.4rem) * var(--hs,1));line-height:.88}
+.sty-poster .hero h1.kin{font-size:calc(clamp(3rem,8.4vw,8rem) * var(--hs,1));line-height:.86;max-width:12ch}
+.sty-poster .hero .lede{margin-top:40px}
+.sty-poster h2{font-size:calc(clamp(2.4rem,6vw,5.2rem) * var(--hs,1));line-height:.9}
+.sty-poster .btn{border-radius:0;border:2px solid var(--sink);box-shadow:5px 5px 0 var(--sink);text-transform:uppercase;letter-spacing:.04em;font-weight:800}
+.sty-poster .btn:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--sink)}
+.sty-poster .btn.ghost{background:var(--sbg)}
+.sty-poster .card,.sty-poster .duo-c,.sty-poster .stk,.sty-poster .node,.sty-poster .bars{border:2px solid var(--sink);box-shadow:6px 6px 0 var(--sink);border-radius:0}
+.sty-poster .duo-c.d1{background:var(--sbg)}
+.sty-poster .media{border:2px solid var(--sink);border-radius:0}
+.sty-poster .hd2>div>h2{display:inline}
+.sty-poster .hd2>div:first-child::before{content:"";display:block;width:64px;height:10px;background:var(--slink);margin-bottom:18px}
+.sty-poster .tkr .tk-t span{text-transform:uppercase}
+.sty-poster .chip,.sty-poster .star{transform:rotate(-4deg);display:inline-block}
+.sty-poster .hero .note{display:inline-flex;padding:8px 14px;border:2px solid var(--sink);background:var(--a2);color:var(--dark-ink);transform:rotate(-2deg);margin-top:30px}
+.sty-poster .hero .note::before{display:none}
+.sty-poster .pm-g h3{display:inline-block;background:var(--sink);color:var(--sbg);padding:4px 10px;transform:rotate(-2deg)}
+.sty-poster .st-c b{font-size:clamp(3rem,8vw,6.4rem);line-height:.85}
+.sty-poster .hk-art .kt{font-family:var(--fh);text-transform:uppercase;letter-spacing:.06em;font-size:40px}
+@media (prefers-reduced-motion:no-preference){
+ .sty-poster .stk:hover,.sty-poster .card:hover{transform:rotate(-1deg) translate(-2px,-2px)}
+ .sty-poster .hk-art .kt{animation:dwFloat 6s ease-in-out infinite alternate}.sty-poster .hk-art .kd{animation:dwRun 10s linear infinite}
+ @supports (animation-timeline:view()){
+  .sty-poster .hd2,.sty-poster .card,.sty-poster .duo-c,.sty-poster .st-c{animation:dwSlide linear both;animation-timeline:view();animation-range:entry 0% entry 70%}
+  .sty-poster .br .tr i{animation:dwGrow linear both;animation-timeline:view();animation-range:entry 20% cover 45%}}
+}
+@keyframes dwSlide{from{opacity:.3;transform:translateX(-36px) rotate(-1.5deg)}to{opacity:1;transform:none}}
+"""
+
+ATELIER_CSS = r"""
+/* 0.94 стиль «Ателье»: крупные лёгкие засечки, курсив в акцентах, тонкие линии, арки, много воздуха */
+.sty-atelier{--hw:500}
+.sty-atelier h1,.sty-atelier h2{font-weight:500;letter-spacing:-.01em}
+.sty-atelier h1,.sty-atelier .hero h1{font-size:calc(clamp(2.6rem,5.4vw,5rem) * var(--hs,1));line-height:1}
+.sty-atelier h2{font-size:calc(clamp(2.2rem,4.8vw,4.2rem) * var(--hs,1));line-height:1.02;font-style:italic}
+.sty-atelier .s{padding:clamp(72px,11vw,140px) 0}
+.sty-atelier .hd2{border-top:1px solid var(--sline);padding-top:22px}
+.sty-atelier main{counter-reset:sec}
+.sty-atelier .hd2>div:first-child::before{counter-increment:sec;content:counter(sec,upper-roman);display:block;font:500 1rem/1 var(--fh);font-style:italic;color:var(--slink);margin-bottom:12px}
+.sty-atelier .btn{border-radius:999px;background:transparent;color:var(--sink);border:1px solid var(--sink);font-weight:600;letter-spacing:.02em}
+.sty-atelier .btn:not(.ghost){background:var(--sbtn);color:var(--sbtnk);border-color:var(--sbtn)}
+.sty-atelier .media,.sty-atelier .sk-pic{border-radius:999px 999px var(--r) var(--r)}
+.sty-atelier .h-split .media{aspect-ratio:3/4}
+.sty-atelier .card,.sty-atelier .node,.sty-atelier .duo-c.d1,.sty-atelier .stk{background:transparent;border:1px solid var(--sline);box-shadow:none}
+.sty-atelier .tbl td{padding-block:20px}
+.sty-atelier .st-c b{font-weight:500;font-style:italic}
+.sty-atelier .st-c{border-top:1px solid var(--sline);padding-top:18px}
+.sty-atelier .hub-core .c2{stroke-dasharray:1 6;stroke-linecap:round}
+@media (prefers-reduced-motion:no-preference){@supports (animation-timeline:view()){
+ .sty-atelier .hd2,.sty-atelier .media,.sty-atelier .card,.sty-atelier .st-c,.sty-atelier .node{animation:dwSoft linear both;animation-timeline:view();animation-range:entry 0% entry 80%}}}
+@keyframes dwSoft{from{opacity:.25;filter:blur(6px);transform:translateY(16px)}to{opacity:1;filter:none;transform:none}}
+"""
+
+AV_CSS = r"""
+/* 0.94 стиль «Авангард»: широкий шрифт крупно, разделы по номерам, капсулы, движение при прокрутке (только CSS) */
+.sty-avangard{--rb:999px}
+.sty-avangard h1,.sty-avangard h2{letter-spacing:var(--tr)}
+.sty-avangard h2{font-size:calc(clamp(1.9rem,4.6vw,3.9rem) * var(--hs,1));line-height:1;max-width:18ch}
+.sty-avangard h1 .dot{display:inline}
+.sty-avangard main{counter-reset:sec}
+.sty-avangard .hd2>div:first-child::before{counter-increment:sec;content:counter(sec,decimal-leading-zero) " /";display:block;font:600 .75rem/1 var(--fb);letter-spacing:.14em;color:var(--smut);margin-bottom:14px}
+.sty-avangard .hero .hd2>div:first-child::before,.sty-avangard .sk-t>div:first-child::before{content:none}
+.sty-avangard .btn{border-radius:999px;padding:.9em 1.6em;font-size:1.02rem}
+.sty-avangard .btn:not(.ghost)::after{content:"→";font-weight:700;transition:transform .2s}
+.sty-avangard .btn:hover::after{transform:translateX(3px)}
+.sty-avangard .hdr{background:color-mix(in srgb,var(--hbg) 84%,transparent);backdrop-filter:blur(14px)}
+@media (min-width:861px){.sty-avangard.m-top .hdr .nav{padding:4px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--hline);gap:2px;margin:0 auto}
+ .sty-avangard.m-top .hdr .nav a{padding:8px 16px;border-radius:999px;border:0;font-size:.88rem}
+ .sty-avangard.m-top .hdr .nav a:hover,.sty-avangard.m-top .hdr .nav a[aria-current]{background:var(--c-alt-card,rgba(127,127,127,.12))}}
+.sty-avangard .hero .note{letter-spacing:.02em}
+.sty-avangard .hero .note::before{display:none}
+.sty-avangard .card{border:1.5px solid var(--sline)}
+.sty-avangard .plan.on{border-color:var(--sbtn)}
+.sty-avangard .plan .pr{font-size:clamp(2.4rem,4.4vw,3.6rem);letter-spacing:-.05em}
+.sty-avangard .faq details,.sty-avangard .faq .qa{border-radius:var(--r)}
+@media (prefers-reduced-motion:no-preference){
+ .sty-avangard .hk-art .kt{animation:dwFloat 7s ease-in-out infinite alternate}
+ .sty-avangard .hk-art .kt1{animation-duration:9s;animation-delay:-2s}.sty-avangard .hk-art .kt2{animation-duration:8s;animation-delay:-4s}
+ .sty-avangard .hk-art .kd{animation:dwRun 11s linear infinite}.sty-avangard .hk-art .kd1{animation-duration:14s;animation-delay:-5s}.sty-avangard .hk-art .kd2{animation-duration:12s;animation-delay:-8s}
+ .sty-avangard .hub-core .c2{animation:dwSpin 40s linear infinite;transform-origin:130px 130px}
+ @supports (animation-timeline:view()){
+  .sty-avangard .hd2,.sty-avangard .card,.sty-avangard .duo-c,.sty-avangard .stk,.sty-avangard .fig,.sty-avangard .st-c,.sty-avangard .node,.sty-avangard .sn-s{animation:dwRise linear both;animation-timeline:view();animation-range:entry 0% entry 70%}
+  .sty-avangard .br .tr i{animation:dwGrow linear both;animation-timeline:view();animation-range:entry 20% cover 45%}
+  .sty-avangard .sn-row::before{transform-origin:left;animation:dwGrow linear both;animation-timeline:view();animation-range:entry 30% cover 50%}
+ }
+}
+@keyframes dwRise{from{opacity:.3;transform:translateY(30px)}to{opacity:1;transform:none}}
+@keyframes dwGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes dwFloat{from{transform:translateX(-10px)}to{transform:translateX(14px)}}
+@keyframes dwRun{from{offset-distance:0%}to{offset-distance:100%}}
+@keyframes dwSpin{to{transform:rotate(360deg)}}
+"""
+
 PREVIEW_CSS = """
 html.pv [data-b]{cursor:pointer}
 html.pv [data-b]:hover{box-shadow:inset 0 0 0 3px rgba(120,110,255,.55)}
@@ -821,6 +1039,11 @@ window.addEventListener('message',function(e){var d=e.data||{};if(d.dwsite==='sc
 </script>"""
 
 
+def style_of(site):
+    s = (site.get("theme") or {}).get("style")
+    return s if s in K.STYLES else "classic"
+
+
 def css(site, mode="preview"):
     th = site.get("theme") or {}
     p = colors(th)
@@ -840,7 +1063,8 @@ def css(site, mode="preview"):
             v[f"c-{tone}-{k}"] = val
     root = ":root{" + ";".join(f"--{k}:{val}" for k, val in v.items()) + ";color-scheme:" + ("dark" if lum(p["bg"]) < .2 else "light") + "}"
     prefix = "data:" if mode == "preview" else "fonts/"
-    return font_faces(th.get("fonts") or "warm", prefix) + root + BASE_CSS + (PREVIEW_CSS if mode == "preview" else "")
+    sty = {"avangard": AV_CSS, "poster": POSTER_CSS, "atelier": ATELIER_CSS}.get(style_of(site), "")
+    return font_faces(th.get("fonts") or "warm", prefix) + root + BASE_CSS + NEW_CSS + sty + (PREVIEW_CSS if mode == "preview" else "")
 
 
 # ---------- части страницы ----------
@@ -1017,6 +1241,8 @@ def b_hero(b, c, v):
     if v == "poster":
         big = c.media(b.get("image"), b.get("_k", "h"), "pbig", b.get("title", ""))
         return f'<div class="w">{t}{big}<div class="pside">{lede}{bt}</div>{note}</div>'
+    if v == "kinetic":
+        return f'<div class="w hk"><div class="hk-t">{kin_title(b.get("title") or c.site.get("name"))}{lede}{bt}{note}</div>{kin_art(b, c)}</div>'
     if v == "photo":
         src = c.img(b.get("image"))
         bg = f'<img src="{E(src)}" alt="">' if src else art_svg(c.art, {**c.pal, "surface": c.pal["dark"]}, b.get("_k", "h"), 1600, 1000)
@@ -1055,7 +1281,7 @@ def b_prices(b, c, v):
             on = bool(x.get("featured"))
             bt = f'<a class="btn{"" if on else " ghost"}" href="{E(c.href(b.get("button_to") or "lead"))}">{one(b.get("button") or "Выбрать")}</a>'
             cards.append(f'<article class="card plan{" on" if on else ""}">{"<span class=chip>Чаще выбирают</span>" if on else ""}<h3>{one(x.get("title"))}</h3>'
-                         f'<div class="pr">{one(x.get("price"))}</div>{para(x.get("text"), "mut")}{bt}</article>')
+                         f'{opt("s", x.get("old"), "old")}<div class="pr">{one(x.get("price"))}</div>{para(x.get("text"), "mut")}{bt}</article>')
         return f'<div class="w">{head2(b)}<div class="plans">{"".join(cards)}</div></div>'
     if v == "table":
         rows = "".join(f'<tr><td>{one(x.get("title"))}{opt("small", x.get("text"))}</td>'
@@ -1108,6 +1334,8 @@ def b_features(b, c, v):
 
 
 def b_steps(b, c, v):
+    if v == "snake":
+        return f'<div class="w">{head2(b)}{snake(items(b, c))}</div>'
     lis = "".join(f'<li><div><h3>{one(x.get("title"))}</h3>{para(x.get("text"), "mut")}</div></li>' for x in items(b, c))
     return f'<div class="w">{head2(b)}<ol class="steps{" v" if v == "list" else ""}">{lis}</ol></div>'
 
@@ -1189,6 +1417,12 @@ def b_reviews(b, c, v):
             return ""
         return (f'<div class="w">{head2(b)}<div class="card ph"><p>Здесь будут отзывы ваших клиентов. Пришлите их Лире — она добавит. '
                 f'Выдумывать отзывы Лира не будет.</p></div></div>')
+    if v == "masonry":
+        tones = ("", "acc", "", "a2", "", "", "acc", "a2")
+        figs = "".join(f'<figure class="card rm {tones[i % len(tones)]}"><blockquote>«{one(x.get("text")).strip("«»")}»</blockquote>'
+                       f'<figcaption><i aria-hidden="true">{E(initials(x.get("name")))}</i><span><b>{one(x.get("name"))}</b>{opt("small", x.get("role"))}</span></figcaption></figure>'
+                       for i, x in enumerate(xs))
+        return f'<div class="w rv">{head2(b)}<div class="rms">{figs}</div></div>'
     figs = "".join(f'<figure class="{"card" if v == "cards" else ""}"><blockquote>«{one(x.get("text")).strip("«»")}»</blockquote>'
                    f'<figcaption><b>{one(x.get("name"))}</b>{", " + one(x.get("role")) if x.get("role") else ""}</figcaption></figure>' for x in xs)
     return f'<div class="w rv">{head2(b)}<div class="grid">{figs}</div></div>'
@@ -1277,11 +1511,174 @@ def b_lead(b, c, v):
             f'<div class="card">{lead_form(b, c)}</div></div>')
 
 
+# ---------- блоки «Авангарда» (0.94): работают в любом стиле, движение — только CSS (без скриптов) ----------
+def initials(name):
+    w = [s for s in re.split(r"[\s.]+", str(name or "")) if s]
+    return "".join(s[0] for s in w[:2]).upper() or "•"
+
+
+def kin_title(t):
+    t = re.sub(r"\s+", " ", str(t or "")).strip()
+    dot = "" if not t or t[-1] in ".!?…»\"" else '<i class="dot" aria-hidden="true">.</i>'
+    return f'<h1 class="kin{" long" if len(t) > 30 else ""}">{E(t)}{dot}</h1>'
+
+
+KIN_PATHS = ("M20 120 C 120 200, 230 40, 350 100 S 490 60, 540 40", "M10 280 C 110 230, 210 350, 320 280 S 470 240, 540 280",
+             "M20 440 C 140 400, 240 490, 360 420 S 490 390, 540 410")
+
+
+def kin_art(b, c):
+    words = [w.strip() for w in re.split(r"[·•|,;]", str(b.get("words") or "")) if w.strip()][:6]
+    if not words:
+        words = [w for w in (c.site.get("name"), c.site.get("tagline")) if w] or ["Ваше дело"]
+    lines = [" · ".join(words[i::3]).upper() for i in range(min(3, len(words)))]
+    fills = ("var(--slink)", "var(--a2)", "var(--sink)")
+    k = re.sub(r"[^a-z0-9]", "", b.get("_k", "h")) or "h"
+    defs = "".join(f'<path id="kp{k}{i}" d="{d}"/>' for i, d in enumerate(KIN_PATHS))
+    rails = "".join(f'<use href="#kp{k}{i}" class="kr kr{i}"/>' for i in range(len(lines)))
+    texts = "".join(f'<text class="kt kt{i}" fill="{fills[i]}"><textPath href="#kp{k}{i}" startOffset="{(4, 9, 3)[i]}%">{E(t)}</textPath></text>'
+                    for i, t in enumerate(lines))
+    dots = "".join(f'<circle class="kd kd{i}" r="6" style="offset-path:path(\'{KIN_PATHS[i]}\')"/>' for i in range(len(lines)))
+    return f'<div class="hk-art" aria-hidden="true"><svg viewBox="0 0 540 520"><defs>{defs}</defs>{rails}{dots}{texts}</svg></div>'
+
+
+def num_of(v):
+    m = re.search(r"-?\d+(?:[.,]\d+)?", str(v or "").replace("\u00a0", "").replace(" ", ""))
+    return float(m[0].replace(",", ".")) if m else 0.0
+
+
+def b_stats(b, c, v):
+    xs = [x for x in items(b, c) if str(x.get("value") or "").strip()]
+    if not xs:
+        return ""
+    if v == "formula":
+        parts = []
+        for i, x in enumerate(xs[:3]):
+            if i:
+                parts.append(f'<span class="op" aria-hidden="true">{"+" if i < len(xs[:3]) - 1 else "="}</span>')
+            parts.append(f'<div class="fig f{i}"><b>{one(x.get("value"))}</b>{opt("small", x.get("label"))}</div>')
+        return f'<div class="w">{head2(b)}<div class="formula">{"".join(parts)}</div></div>'
+    if v == "stickers":
+        src = c.img(b.get("image"))
+        pic = (f'<div class="sk-pic"><img src="{E(src)}" alt="{E(b.get("title") or "")}" loading="lazy"></div>' if src else
+               f'<div class="sk-pic sk-mono"><span>{E(initials(c.site.get("name")))}</span></div>')
+        st = "".join(f'<div class="stk k{i}{" hot" if i == 1 else ""}"><b>{one(x.get("value"))}</b>{opt("small", x.get("label"))}</div>' for i, x in enumerate(xs[:4]))
+        t = f'<h2>{one(b.get("title"))}</h2>' if b.get("title") else ""
+        return f'<div class="w sk"><div class="sk-art">{pic}{st}</div><div class="sk-t hd2"><div>{t}{para(b.get("text"), "lede")}</div></div></div>'
+    cells = "".join(f'<div class="st-c"><b>{one(x.get("value"))}</b>{opt("span", x.get("label"))}</div>' for x in xs[:6])
+    return f'<div class="w">{head2(b)}<div class="st-row">{cells}</div></div>'
+
+
+def b_hub(b, c, v):
+    xs = items(b, c)[:8]
+    if not xs:
+        return ""
+    k = re.sub(r"[^a-z0-9]", "", b.get("_k", "h")) or "h"
+    radios = "".join(f'<input class="hub-r" type="radio" name="hub{k}" id="hub{k}-{i}"{" checked" if not i else ""} aria-label="{E(x.get("title") or "")}">'
+                     for i, x in enumerate(xs))
+
+    def lab(i, x):
+        return (f'<label class="node" for="hub{k}-{i}" data-i="{i}"><em>{i + 1:02d}</em><b>{one(x.get("title"))}</b>'
+                f'{opt("small", x.get("sub"))}</label>')
+    half = (len(xs) + 1) // 2
+    left = "".join(lab(i, x) for i, x in enumerate(xs[:half]))
+    right = "".join(lab(i + half, x) for i, x in enumerate(xs[half:]))
+    says = "".join(f'<div class="hub-p" data-i="{i}"><b>{one(x.get("title"))}</b>{para(x.get("text") or x.get("sub"))}</div>' for i, x in enumerate(xs))
+    core = (f'<div class="hub-core"><svg viewBox="0 0 260 260" aria-hidden="true"><circle cx="130" cy="130" r="124" class="c1"/>'
+            f'<circle cx="130" cy="130" r="104" class="c2"/><circle cx="130" cy="130" r="84" class="c3"/></svg>'
+            f'<p>{one(b.get("center") or c.site.get("name"))}</p></div>')
+    return f'<div class="w">{head2(b)}<div class="hub n{len(xs)}">{radios}<div class="hub-col">{left}</div>{core}<div class="hub-col">{right}</div><div class="hub-say">{says}</div></div></div>'
+
+
+def b_duo(b, c, v):
+    xs = items(b, c)[:2]
+    if not xs:
+        return ""
+    cards = "".join(f'<article class="duo-c d{i}"><div class="dr"><span>Путь {i + 1:02d}</span>{opt("i", x.get("tag"))}</div>'
+                    f'<span class="num" aria-hidden="true">{i + 1:02d}</span><h3>{one(x.get("title"))}</h3>{para(x.get("text"))}'
+                    f'{opt("div", x.get("foot"), "foot")}</article>' for i, x in enumerate(xs))
+    return f'<div class="w">{head2(b)}<div class="duo">{cards}</div></div>'
+
+
+def b_bars(b, c, v):
+    xs = [x for x in items(b, c) if str(x.get("title") or "").strip()]
+    if not xs:
+        return ""
+    mx = max([num_of(x.get("value")) for x in xs] + [0]) or 1
+    unit = one(b.get("unit"))
+    rows = "".join(f'<div class="br{" on" if x.get("featured") else ""}"><span>{one(x.get("title"))}</span>'
+                   f'<div class="tr"><i style="width:{max(2, round(num_of(x.get("value")) / mx * 100))}%"></i></div>'
+                   f'<b>{one(x.get("value"))}{(" " + unit) if unit else ""}</b></div>' for x in xs[:10])
+    return f'<div class="w bars-w">{head2(b)}<div class="bars card">{rows}</div></div>'
+
+
+def b_cases(b, c, v):
+    xs = items(b, c)
+    if not xs:
+        return ""
+    cards = []
+    for i, x in enumerate(xs[:12]):
+        has_img = bool(c.img(x.get("image")))
+        m = (f'<div class="meter"><b>{one(x.get("metric"))}</b>{opt("small", x.get("metric_label"))}</div>' if x.get("metric") and has_img else "")
+        vis = (c.media(x.get("image"), b.get("_k", "c") + str(i), "media", x.get("title", "")) if has_img or not x.get("metric")
+               else case_viz(x, b.get("_k", "c") + str(i)))
+        cards.append(f'<article class="case card"><header><em>{i + 1:02d} /</em>{opt("span", x.get("who"))}</header>'
+                     f'{vis}<h3>{one(x.get("title"))}</h3>{para(x.get("text"), "mut")}{m}</article>')
+    if v == "grid":
+        return f'<div class="w">{head2(b)}<div class="cs-grid">{"".join(cards)}</div></div>'
+    return (f'<div class="w cs">{head2(b, "<span class=cs-hint>Листайте →</span>" if len(cards) > 2 else "")}'
+            f'<div class="cs-rail" tabindex="0" role="region" aria-label="{E(b.get("title") or "Кейсы")}">{"".join(cards)}</div>'
+            f'<div class="cs-bar" aria-hidden="true"><i></i></div></div>')
+
+
+def case_viz(x, seed):
+    """Кейс без картинки: результат числом крупно и линия тренда — рост или падение по знаку числа (без выдуманных осей)."""
+    r = _rand(_seed(seed))
+    down = str(x.get("metric") or "").strip().startswith(("−", "-"))
+    ys, y = [], 0.0
+    for _ in range(9):
+        y += (r() - .3) * 1.0
+        ys.append(y)
+    lo, hi = min(ys), max(ys)
+    pts = [(10 + i * 280 / 8, (10 + (yy - lo) / ((hi - lo) or 1) * 80) if down else (90 - (yy - lo) / ((hi - lo) or 1) * 80)) for i, yy in enumerate(ys)]
+    d = " ".join(("M" if i == 0 else "L") + f"{px:.1f} {py:.1f}" for i, (px, py) in enumerate(pts))
+    grid = "".join(f'<line class="gd" x1="0" x2="300" y1="{g}" y2="{g}"/>' for g in (20, 50, 80))
+    return (f'<div class="case-viz"><div><b>{one(x.get("metric"))}</b>{opt("small", x.get("metric_label"))}</div>'
+            f'<svg viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true">{grid}<path class="ar" d="{d} L290 100 L10 100Z"/>'
+            f'<path class="ln" d="{d}"/></svg></div>')
+
+
+def b_ticker(b, c, v):
+    words = [w.strip() for w in re.split(r"[·•|]", str(b.get("text") or "")) if w.strip()][:12]
+    if not words:
+        return ""
+    run = "".join(f"<span>{E(w)}</span>" for w in words)
+    return (f'<p class="vh">{E(" · ".join(words))}</p><div class="tk" aria-hidden="true"><div class="tk-t">{run}{run}</div></div>')
+
+
+def snake(xs):
+    """Шаги змейкой: по 4 в ряд, чётные ряды — справа налево, поворот — дугой у края (на телефоне — столбиком)."""
+    xs = [x for x in xs if str(x.get("title") or "").strip()][:12]
+    rows, out = [xs[i:i + 4] for i in range(0, len(xs), 4)], []
+    n = 0
+    for r, row in enumerate(rows):
+        cells = []
+        for x in row:
+            n += 1
+            cells.append(f'<li class="sn-s"><span class="n c{min(3, 1 + (n - 1) * 3 // max(1, len(xs)))}">{n:02d}</span>'
+                         f'<b>{one(x.get("title"))}</b>{opt("small", x.get("text"))}</li>')
+        out.append(f'<ol class="sn-row{" rev" if r % 2 else ""}" start="{n - len(row) + 1}">{"".join(cells)}</ol>')
+        if r < len(rows) - 1:
+            out.append(f'<div class="sn-turn {"r" if r % 2 == 0 else "l"}" aria-hidden="true"></div>')
+    return f'<div class="snake">{"".join(out)}</div>'
+
+
 RENDER = {"hero": b_hero, "about": b_about, "services": b_services, "prices": b_prices, "features": b_features, "steps": b_steps,
           "gallery": b_gallery, "products": b_products, "schedule": b_schedule, "reviews": b_reviews, "team": b_team, "faq": b_faq,
-          "links": b_links, "cta": b_cta, "text": b_text, "contacts": b_contacts, "lead": b_lead}
+          "links": b_links, "cta": b_cta, "text": b_text, "contacts": b_contacts, "lead": b_lead,
+          "stats": b_stats, "hub": b_hub, "duo": b_duo, "bars": b_bars, "cases": b_cases, "ticker": b_ticker}
 EXTRA_CLS = {"hero": lambda v: f"hero h-{v}", "about": lambda v: f"ab-{v}", "contacts": lambda v: f"ct-{v}", "lead": lambda v: f"ld ld-{v}",
-             "cta": lambda v: f"cta cta-{v}", "text": lambda v: f"tx {v}"}
+             "cta": lambda v: f"cta cta-{v}", "text": lambda v: f"tx {v}", "stats": lambda v: f"stt st-{v}", "ticker": lambda v: "tkr"}
 
 
 def block_html(b, j, c):
@@ -1548,7 +1945,7 @@ def page_html(site, i=0, mode="preview", images=None, base_url="", css_text=None
     if blog:
         head = [h.replace('og:type" content="website"', 'og:type" content="article"') for h in head]
     out = (f'<!doctype html><html lang="ru"{cls_attr}><head>{"".join(h for h in head if h)}</head>'
-            f'<body class="m-{E(menu)}{" many" if len(menu_items(site, c)) > 5 else ""}">{header(site, c)}<main>{body}</main>{footer(site, c)}'
+            f'<body class="m-{E(menu)}{" many" if len(menu_items(site, c)) > 5 else ""} sty-{E(style_of(site))}">{header(site, c)}<main>{body}</main>{footer(site, c)}'
             f'{PREVIEW_JS if mode == "preview" else ""}</body></html>')
     if blog:                      # /blog/… — на уровень глубже: свои адреса от корня сайта (style.css, img/…, страницы, #разделы)
         out = re.sub(r'\b(href|src)="(?![a-z][a-z0-9+.-]*:|/|\{\{)([^"]*)"', lambda m: f'{m[1]}="/{"" if m[2].startswith("#") else ""}{m[2]}"', out)

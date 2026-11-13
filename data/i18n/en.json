@@ -767,5 +767,8 @@
  "home.mn.open": "Expand",
  "home.mn.title": "Morning with {who}",
  "home.council.off": "Remove from Home — AI Council stays in Apps",
- "home.council.gone": "AI Council removed from Home — it stays in Apps"
+ "home.council.gone": "AI Council removed from Home — it stays in Apps",
+ "sites.style.h": "Style",
+ "sites.style.done": "Style: {name}",
+ "sites.style.new": "New · Avangard"
 }

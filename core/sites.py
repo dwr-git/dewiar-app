@@ -216,6 +216,10 @@ BLOCK_WORDS = [("prices", r"цен|прайс|тариф|стоимост|мен
                ("contacts", r"контакт|карт\w|адрес"), ("lead", r"заявк|форм|запис"), ("features", r"преимущ|почему мы|почему нас"),
                ("steps", r"шаг|как (?:мы )?работа|этап"), ("schedule", r"программ|расписан|агенд"), ("products", r"товар|каталог|витрин"),
                ("links", r"ссылк|соцсет"), ("about", r"о нас|о себе|о компании|обо мне|истори"), ("cta", r"призыв|баннер"), ("text", r"текст")]
+BLOCK_WORDS += [("stats", r"цифр|числ|показател|достижени"), ("hub", r"схем|круг\w* с част"), ("duo", r"два пути|двух путей|сравнени\w* (?:с|без)"),
+                ("bars", r"полос|сравнени\w* числ|график"), ("cases", r"кейс|проект\w* (?:клиент|выпускник|учени)"),
+                ("ticker", r"бегущ|строк\w* слов")]
+STYLE_WORDS = [("avangard", r"авангард|avangard"), ("poster", r"афиш|постер"), ("atelier", r"ателье|atelier"), ("classic", r"классич|как было|обычн\w* стил")]
 TEMPLATE_WORDS = [(tid, rx) for tid, rx in K.KIND_WORDS]
 
 
@@ -270,7 +274,11 @@ def quick_ops(text, site):
         if p:
             ops.append({"op": "palette", "name": p})
             said.append(f"палитра «{K.PALETTES[p]['title']}»")
-    if re.search(r"друг\w+ дизайн|смени\w* дизайн|поменя\w* дизайн|переделай\w* (?:весь )?дизайн|нов\w+ дизайн|в стиле|дизайн как у|как у (?:юрист|кофейн|салон)", tt):
+    sty = _find(STYLE_WORDS, tt) if re.search(r"стил|авангард|ателье|афиш", tt) else None
+    if sty and not re.search(r"шрифт|палитр|цвет", tt):          # 0.94: «сделай в стиле Авангард», «стиль — Ателье»
+        ops.append({"op": "style", "value": sty})
+        said.append(f"стиль «{K.STYLES[sty]['title']}»")
+    if not sty and re.search(r"друг\w+ дизайн|смени\w* дизайн|поменя\w* дизайн|переделай\w* (?:весь )?дизайн|нов\w+ дизайн|в стиле|дизайн как у|как у (?:юрист|кофейн|салон)", tt):
         tid = _find(TEMPLATE_WORDS, re.sub(r".*(?:в стиле|как у|под)\s+", "", tt)) if re.search(r"в стиле|как у|под ", tt) else None
         if not tid or tid == site.get("template"):
             order = [x for x in K.TEMPLATE_ORDER if x != site.get("template")]
@@ -304,6 +312,7 @@ OPS_HELP = """Операции (JSON-список ops):
 {"op":"palette","name":"<палитра>"} — цвета; палитры: %(pal)s
 {"op":"colors","accent":"#rrggbb","bg":"#rrggbb",…} — точечно (ключи: bg, surface, ink, muted, accent, accent_ink, dark, dark_ink, accent2, line)
 {"op":"header","value":"light|dark|accent"} — шапка
+{"op":"style","value":"classic|avangard"} — стиль вёрстки: avangard — крупный широкий шрифт, номера разделов, движение (приносит свою палитру и шрифт; "keep":true — оставить свои)
 {"op":"fonts","name":"<пара>"} — шрифты: %(fonts)s
 {"op":"radius","name":"sharp|soft|round"}
 {"op":"menu","style":"top|center|burger|side","cta":"текст кнопки в шапке"}
@@ -332,7 +341,8 @@ def site_brief(site, full=True):
     """Сайт коротко — для модели: тема, страницы, блоки с uid и текстами."""
     th = site.get("theme") or {}
     lines = [f"Сайт «{site.get('name')}» — {site.get('tagline') or ''}. Шаблон {site.get('template')}, палитра {th.get('palette')}, "
-             f"шрифты {th.get('fonts')}, углы {th.get('radius')}, шапка {th.get('header')}, меню {(site.get('menu') or {}).get('style')}.",
+             f"шрифты {th.get('fonts')}, углы {th.get('radius')}, шапка {th.get('header')}, меню {(site.get('menu') or {}).get('style')}, "
+             f"стиль {th.get('style') or 'classic'}.",
              "Контакты: " + json.dumps(site.get("contacts") or {}, ensure_ascii=False)]
     for i, pg in enumerate(site.get("pages") or []):
         lines.append(f"Страница {i} «{pg.get('title')}»:")
@@ -413,7 +423,9 @@ EDIT_SYSTEM = ("Ты — веб-дизайнер в программе Dewiar. �
 FILL_SYSTEM = ("Ты — копирайтер и веб-дизайнер в программе Dewiar. Есть шаблон сайта с текстами-заготовками; человек описал своё дело. "
                "Перепиши тексты под его дело: название, слоган, заголовки, описания, услуги, меню, вопросы. Используй ТОЛЬКО факты "
                "человека; чего он не сказал — пиши в общем виде, без конкретных цифр. Цены — только названные человеком, остальные "
-               "оставь пустыми (\"\"). НЕ выдумывай отзывы, имена людей, награды, годы, количества клиентов. Пиши живо, коротко, "
+               "оставь пустыми (\"\"). НЕ выдумывай отзывы, имена людей, награды, годы, количества клиентов. "
+               "Блоки с числами (stats — «Цифры», bars — «Полосы», cases — «Кейсы»): только числа и проекты, которые назвал человек; "
+               "если их нет — верни для такого блока {\"hidden\": true}. Пиши живо, коротко, "
                "по-русски, без «качественно и недорого». Верни ТОЛЬКО JSON: {\"name\": \"…\", \"tagline\": \"…\", \"description\": "
                "\"описание для поисковиков 120–160 знаков\", \"contacts\": {…только названные}, \"blocks\": {\"<uid>\": {поля и "
                "\"items\": [полный список карточек]}}}.")
@@ -563,7 +575,8 @@ class Sites:
         tid = tid if tid in K.TEMPLATES else "personal"
         t = K.TEMPLATES[tid]
         s = {"id": secrets.token_hex(5), "template": tid, "name": (name or t["name"]).strip()[:80], "tagline": (tagline or t["tagline"]).strip()[:160],
-             "theme": {"palette": t["palette"], "fonts": t["fonts"], "radius": t["radius"], "header": t["header"], "art": t["art"], "colors": {}},
+             "theme": {"palette": t["palette"], "fonts": t["fonts"], "radius": t["radius"], "header": t["header"], "art": t["art"], "colors": {},
+                       "style": t.get("style") or "classic"},
              "logo": {"text": (name or t["name"]).strip()[:60], "mark": t["logo"]["mark"], "style": t["logo"]["style"]},
              "menu": {"style": t["menu"]}, "contacts": dict(contacts if contacts is not None else t["contacts"]), "seo": {"description": ""},
              "pages": copy.deepcopy(t["pages"]), "assets": {}, "published": None, "created": _now()}
@@ -627,6 +640,9 @@ class Sites:
             if k in K.CONTACT_KEYS and str(v or "").strip():
                 s["contacts"][k] = str(v).strip()[:200]
         by = {b["uid"]: b for pg in s["pages"] for b in pg["blocks"]}
+        # 0.94: «Цифры», «Полосы», «Кейсы» шаблона — чужие числа («1 400+ выпускников»): если модель их не переписала
+        # числами человека, на сайт они не выходят (блок скрыт — человек включит, когда впишет свои)
+        nums = {uid: json.dumps(b.get("items") or [], ensure_ascii=False) for uid, b in by.items() if b["type"] in ("stats", "bars", "cases")}
         for uid, f in (d.get("blocks") or {}).items():
             b = by.get(uid)
             if b is None or not isinstance(f, dict):
@@ -638,6 +654,9 @@ class Sites:
                 for x in f["items"]:
                     x.setdefault("todo", True)
             b.update({k: v for k, v in f.items() if k not in ("type", "variant", "tone")})
+        for uid, before in nums.items():
+            if json.dumps(by[uid].get("items") or [], ensure_ascii=False) == before:
+                by[uid]["hidden"] = True
         for b in s["pages"][0]["blocks"]:
             if b["type"] == "hero" and b.get("variant") == "poster" and len(str(b.get("title") or "")) > 24:
                 b["variant"] = "split"                   # длинный заголовок на афише не помещается — вёрстка «текст и картинка»
@@ -695,6 +714,16 @@ class Sites:
                 if o.get("header") in K.HEADERS:
                     th["header"] = o["header"]
                     done.append("шапка")
+            elif op == "style" and o.get("value") in K.STYLES:
+                # стиль (0.94): «Авангард» приносит свои палитру, шрифт и углы — их потом можно поменять отдельно
+                st = K.STYLES[o["value"]]
+                th["style"] = o["value"]
+                for k in ("palette", "fonts", "radius", "header"):
+                    if st.get(k) and not o.get("keep"):
+                        th[k] = st[k]
+                if st.get("palette") and not o.get("keep"):
+                    th["colors"] = {}
+                done.append(f"стиль «{st['title']}»")
             elif op == "header" and o.get("value") in K.HEADERS:
                 th["header"] = o["value"]
                 done.append(K.HEADERS[o["value"]].lower())
@@ -968,7 +997,8 @@ class Sites:
         """«Другой дизайн целиком»: тема, меню, вид логотипа и вёрстка блоков — из шаблона tid; тексты и порядок — свои."""
         t = K.TEMPLATES[tid]
         s["template"] = tid
-        s["theme"] = {"palette": t["palette"], "fonts": t["fonts"], "radius": t["radius"], "header": t["header"], "art": t["art"], "colors": {}}
+        s["theme"] = {"palette": t["palette"], "fonts": t["fonts"], "radius": t["radius"], "header": t["header"], "art": t["art"], "colors": {},
+                      "style": t.get("style") or "classic"}
         s.setdefault("menu", {})["style"] = t["menu"]
         lg = s.setdefault("logo", {})
         lg["style"] = t["logo"]["style"]
@@ -1466,10 +1496,12 @@ class Sites:
     # ---------- для студии ----------
     def meta(self):
         return {"templates": [{"id": k, "title": K.TEMPLATES[k]["title"], "sub": K.TEMPLATES[k]["sub"], "palette": K.TEMPLATES[k]["palette"],
-                               "fonts": K.TEMPLATES[k]["fonts"], "name": K.TEMPLATES[k]["name"]} for k in K.TEMPLATE_ORDER],
+                               "fonts": K.TEMPLATES[k]["fonts"], "name": K.TEMPLATES[k]["name"],
+                               "style": K.TEMPLATES[k].get("style") or "classic"} for k in K.TEMPLATE_ORDER],
                 "palettes": {k: {c: v[c] for c in ("title",) + K.COLOR_KEYS} for k, v in K.PALETTES.items()},
                 "fonts": {k: {"title": v["title"], "sub": v["sub"], "head": v["head"], "body": v["body"], "hw": v["hw"], "italic": bool(v.get("italic"))}
                           for k, v in K.FONTS.items()},
+                "styles": {k: {"title": v["title"], "sub": v["sub"]} for k, v in K.STYLES.items()},
                 "radii": {k: v["title"] for k, v in K.RADII.items()}, "menus": K.MENUS, "headers": K.HEADERS, "tones": K.TONES,
                 "marks": {k: {"title": v[0], "svg": K.mark_svg(k)} for k, v in K.MARKS.items()}, "logo_styles": K.LOGO_STYLES,
                 "contacts": K.CONTACT_KEYS,
