@@ -112,7 +112,21 @@ function dcStat() {
     : [fo.length ? dcPl(fo.length, "папка", "папки", "папок") : "", files ? dcPl(files, "файл", "файла", "файлов") : ""].filter(Boolean).join(", ")
       + (busy ? " — читаю, можно уже спрашивать" : " — Лира готова отвечать");
 }
+/* «Мои файлы» на телефоне (0.98): текст файлов уходит своим телефонам только зашифрованным (core/sync.py _snap_docs) —
+   одна строка: сколько файлов там видно, или одна кнопка, если шифрование выключено. Телефона нет — строки нет. */
+function mfPhone() {
+  const el = $("#mf-phone"); if (!el) return;
+  core.call("knowledge_phone").then(st => {
+    const have = DC.files.length || DC.folders.length, b = $("#mf-e2e");
+    el.hidden = !st.server || !st.phones || !have; b.hidden = !!st.e2e;
+    $("span", el).textContent = !st.e2e ? "На телефоне файлов нет: они уходят туда только зашифрованными." : st.files
+      ? `На телефоне — ${dcPl(st.files, "файл", "файла", "файлов")}: Лира ответит по ним, даже когда компьютер выключен.`
+      : "Скоро будут и на телефоне — после следующего обмена.";
+  }).catch(() => { el.hidden = true; });
+}
+$("#mf-e2e").onclick = () => core.call("sync_e2e", { on: true }).then(() => setTimeout(mfPhone, 1500)).catch(e => toast(e.message));
 function loadDocs() {
+  setTimeout(mfPhone, 600);
   core.call("knowledge_list").then(r => { DC.files = r.files || []; renderKn(DC.files); dcStat(); }).catch(e => ($("#kn-res").textContent = e.message));
   core.call("knowledge_folders").then(renderKnFolders).catch(() => {});
   if (window.loadWriting) loadWriting();                          // «Пишу» — сколько написано за день (studio/writing.js)

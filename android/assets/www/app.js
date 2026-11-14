@@ -1561,6 +1561,7 @@ async function listen() {
   if (!server && (!D.recognizer() || sttOnce)) { const c = sttOnce || cloudEars(); sttOnce = null; if (c) server = { url: c.url, key: c.key, model: "gigaam" }; }
   if (!server && Date.now() < sttNetUntil) { const c = cloudEars(); if (c) server = { url: c.url, key: c.key, model: "gigaam" }; }   // сеть Google сбоит — сервер
   if (server && Date.now() < sttSysUntil && D.recognizer()) server = null;     // сервер не пускает (талеры) — слушает телефон
+  if (!server && !D.recognizer() && D.recognizerAny && D.recognizerAny()) D.useAnyRecognizer();   // №712: iPhone без входа — распознавание Safari
   if (!server && !D.recognizer()) {
     sttActive = false; setState("idle");
     showBot("В этом устройстве нет распознавания речи. Войдите аккаунтом dewiar.pro (Настройки → Мозг) — слушать будет сервер Dewiar. Или напишите текстом.", "err"); return;
@@ -4579,7 +4580,8 @@ function toolSpecs() {
   if (Object.keys(mind().tasks || {}).length) t.push({ name: "remove_task", description: "Удалить большую задачу из «Мой день» → «Сделанное» (и на компьютере): «удали задачу …», «хватит напоминать про задачу». name — часть названия.", parameters: O({ name: STR }, ["name"]) },
     { name: "answer_task", description: "Ответить на вопрос задачи, которая «ждёт ответа»: text — ответ пользователя; name — часть названия (пусто — единственная ждущая).", parameters: O({ name: STR, text: STR }, ["text"]) });
   // «Документы» с телефона (0.62): вопрос — компьютеру, он ищет в своих папках (search_documents), ответ — в «Сделанное»
-  if (S.sync.on && syncChan() && pcSeen() && !kidsOn()) t.push({ name: "pc_documents", description: "Спросить компьютер пользователя о его документах в папках на компьютере: «что в договоре про сроки», «найди счёт от Ромашки», «какой номер полиса в моих файлах». question — вопрос словами пользователя. Ответ придёт через минуту в «Мой день» → «Сделанное».", parameters: O({ question: STR }, ["question"]) });
+  // «Мои файлы» (0.98): копия текста файлов компьютера есть здесь — ищем сами, даже когда компьютер выключен; нет — спрашиваем его
+  if (((S.sync.on && syncChan() && pcSeen()) || docList().length) && !kidsOn()) t.push({ name: "pc_documents", description: "Найти в «Моих файлах» пользователя — его документах с компьютера (договоры, счета, полисы, инструкции): «что в договоре про сроки», «найди счёт от Ромашки», «какой номер полиса в моих файлах». question — вопрос словами пользователя. Вернёт найденные места с названием файла; отвечай по ним.", parameters: O({ question: STR }, ["question"]) });
   if (S.sync.on && syncChan() && pcSeen()) t.push({ name: "start_task", description: "Передать большую задачу компьютеру пользователя: исследование с отчётом, документ, презентация, работа с файлами или кодом. title — коротко, goal — что сделать и какой нужен результат, подробно. Ход и итог появятся в «Мой день» → «Сделанное»."
       + devComputersText() + " on — на каком компьютере, если назвали («на рабочем»); пусто — любой свободный. Тот не на связи — спроси пользователя и вызови снова с if_off: wait (сделать, когда включится) или cloud (сейчас в облаке).",
     parameters: O({ title: STR, goal: STR, on: STR, if_off: { type: "string", enum: ["", "wait", "cloud"] } }, ["goal"]) });
@@ -4888,8 +4890,16 @@ async function runTool(name, a) {
     }
     case "pc_documents": {
       const q = String(a.question || "").trim(); if (q.length < 3) return "Ошибка: скажи, что найти в документах.";
+      const local = docList().length;
+      if (local) {
+        let hits = []; try { hits = await docSearch(q, 5); } catch (e) { plog("warn", "Мои файлы: поиск — " + e.message); }
+        if (hits.length) return "Нашлось в «Моих файлах» (копия текста с компьютера, работает и без него):\n"
+          + hits.map((h, k) => `[${k + 1}] «${h.name}» (${h.path}):\n${clip(h.text, 900)}`).join("\n\n")
+          + "\n\nОтветь по этим местам коротко и назови файл. Чего здесь нет — не выдумывай: скажи, что в файлах этого не нашлось. Открыть файл целиком — «Мой день» → «Заметки» → «Мои файлы».";
+      }
       const pcs = (syncStatus.devices || []).filter(x => x.pc && x.name !== "Облако Dewiar").sort((x, y) => (y.seen || 0) - (x.seen || 0));
-      if (!pcs.length) return "Ошибка: компьютер с Dewiar не найден — документы ищет программа на компьютере.";
+      if (!pcs.length || !(S.sync.on && syncChan())) return local ? `В «Моих файлах» (${docN(local)}) об этом ничего не нашлось. Скажи об этом честно одной фразой.` : "Ошибка: компьютер с Dewiar не найден — документы ищет программа на компьютере.";
+      if (local && !pcOnline()) return `В «Моих файлах» (${docN(local)}) об этом ничего не нашлось, а компьютер «${pcs[0].name}» сейчас не на связи. Скажи об этом честно одной фразой.`;
       try { taskToPc("Документы: " + q.slice(0, 50), "Ответь на вопрос по моим документам на этом компьютере: найди нужное в моих папках (search_documents), "
         + "ответь коротко, процитируй главное место и назови файл. Не нашёл — так и скажи. Вопрос: " + q, pcs[0].name); } catch (e) { return "Не получилось: " + e.message; }
       return (pcOnline() ? `Спросила компьютер «${pcs[0].name}» — он ищет в своих папках; ответ придёт через минуту в «Мой день» → «Сделанное», пришлю уведомление.`
@@ -6365,6 +6375,93 @@ function ntCard(x) {
     + (pv ? `<div class="ntpv">${pv}</div>` : "") + meta + `</div>`
     + (src ? `<span class="nthumb"><img src="${src}" alt="" loading="lazy" decoding="async">${imgs.length > 1 ? `<i class="ntn">${imgs.length}</i>` : ""}</span>` : "") + `</div>`;
 }
+/* «Мои файлы» с компьютера (0.98, владелец 14.11: «папка пользователя будет синхронизироваться при выключенном
+   компьютере… изящное дешёвое решение»). Компьютер присылает уже прочитанный текст своих файлов («Знания» и свои папки,
+   core/knowledge.shared) записями doc:<id файла>.<кусок> — сжатыми и только шифром своих устройств (core/sync.py
+   _snap_docs). Здесь: оглавление docs.json {id: {name, path, mtime, size, n, have}} и куски doc-<id>.<i> как пришли
+   (сжатые); поиск по словам (как core/knowledge, BM25) — в инструменте pc_documents, даже когда компьютер выключен;
+   список — в «Заметках» отдельной папкой «Мои файлы», нажали — текст файла. Оригинал остаётся на компьютере. */
+const DOC_F = "\u0001files";                     // «папка» в фильтре «Заметок» — не может совпасть с настоящей
+function docIdx() { try { return JSON.parse(fileGet("docs.json") || "{}") || {}; } catch (e) { return {}; } }
+const docCache = {};
+function docApply(id, d, del) {
+  const m = /^([0-9a-f]{12})\.(\d{1,4})$/.exec(String(id || "")); if (!m) return;
+  const fid = m[1], i = +m[2], x = docIdx();
+  if (del) {
+    fileSave(`doc-${fid}.${i}`, "");
+    const e = x[fid]; if (e) { e.have = (e.have || []).filter(k => k !== i); if (!e.have.length) delete x[fid]; }
+  } else {
+    const n = +d.n; if (typeof d.z !== "string" || !(n >= 1 && n <= 400) || i >= n) return;
+    const was = x[fid], same = was && was.mtime === +d.mtime && was.size === +d.size && was.n === n;
+    x[fid] = { name: String(d.name || "Файл").slice(0, 160), path: String(d.path || "").slice(0, 300), mtime: +d.mtime || 0, size: +d.size || 0, n,
+      have: [...new Set((same ? was.have || [] : []).concat(i))], at: Date.now() };
+    fileSave(`doc-${fid}.${i}`, d.z);
+  }
+  delete docCache[m[1]];
+  fileSave("docs.json", JSON.stringify(x));
+}
+/* файлы, пришедшие целиком (все куски), — свежие первыми */
+function docList() {
+  return Object.entries(docIdx()).filter(([, e]) => e.n && (e.have || []).length >= e.n && [...Array(e.n).keys()].every(k => e.have.includes(k)))
+    .map(([id, e]) => Object.assign({ id }, e)).sort((a, b) => b.mtime - a.mtime);
+}
+async function docInflate(z) {
+  const bin = Uint8Array.from(atob(z), c => c.charCodeAt(0));
+  const st = new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return JSON.parse(await new Response(st).text());
+}
+/* отрывки файла (как в core/knowledge: ~900 знаков с нахлёстом) — из кэша или собрать из кусков */
+async function docChunks(e) {
+  if (docCache[e.id]) return docCache[e.id];
+  let out = [];
+  for (let i = 0; i < e.n; i++) { const z = fileGet(`doc-${e.id}.${i}`); if (!z) return []; out = out.concat(await docInflate(z)); }
+  return (docCache[e.id] = out.map(String));
+}
+/* текст целиком: соседние отрывки перекрываются — нахлёст убираем */
+function docJoin(ch) {
+  let t = "";
+  ch.forEach((c, i) => {
+    if (!i) { t = c; return; }
+    let cut = 0;
+    for (let k = Math.min(220, c.length - 1); k >= 20; k--) if (t.endsWith(c.slice(0, k))) { cut = k; break; }
+    t += (cut ? "" : "\n\n") + c.slice(cut);
+  });
+  return t;
+}
+const DOC_END = /(ами|ями|ого|его|ому|ему|ыми|ими|ах|ях|ов|ев|ей|ой|ий|ый|ая|яя|ое|ее|ые|ие|ую|юю|ом|ем|ам|ям|ть|ти|ла|ло|ли|ет|ит|ут|ют|ат|ят|ся|сь|а|я|о|е|ы|и|у|ю|ь)$/;
+const docWords = (t) => String(t || "").toLowerCase().replace(/ё/g, "е").split(/[^a-zа-я0-9]+/).filter(Boolean).map(w => w.length > 4 ? w.replace(DOC_END, "") : w);
+async function docSearch(query, limit = 5) {
+  const q = [...new Set(docWords(query).filter(w => w.length > 2))]; if (!q.length) return [];
+  const docs = [];
+  for (const e of docList()) {
+    let ch; try { ch = await docChunks(e); } catch (x) { plog("warn", "Мои файлы: не распаковался " + e.name); continue; }
+    ch.forEach((c, i) => { const ws = docWords(e.name + " " + c), cnt = {}; ws.forEach(w => { cnt[w] = (cnt[w] || 0) + 1; }); docs.push({ e, i, c, cnt, len: ws.length }); });
+  }
+  if (!docs.length) return [];
+  const N = docs.length, avg = docs.reduce((s, d) => s + d.len, 0) / N || 1;
+  const idf = Object.fromEntries(q.map(w => { const df = docs.filter(d => d.cnt[w]).length; return [w, df ? Math.log(1 + (N - df + 0.5) / (df + 0.5)) : 0]; }));
+  const scored = docs.map(d => ({ d, s: q.reduce((s, w) => { const f = d.cnt[w] || 0; return s + (f ? idf[w] * f * 2.2 / (f + 1.2 * (0.25 + 0.75 * d.len / avg)) : 0); }, 0) }))
+    .filter(x => x.s > 0).sort((a, b) => b.s - a.s);
+  const per = {}, out = [];
+  for (const { d, s } of scored) { if ((per[d.e.id] = (per[d.e.id] || 0) + 1) > 2) continue; out.push({ id: d.e.id, name: d.e.name, path: d.e.path, text: d.c, score: +s.toFixed(2) }); if (out.length >= limit) break; }
+  plog("info", `📚 Мои файлы: «${clip(query, 60)}» → ${out.map(x => x.name + " " + x.score).join(", ") || "ничего"} (файлов: ${docList().length})`);
+  return out;
+}
+const docN = (n) => window.dwLang && !/^ru/.test(dwLang()) ? n + (n === 1 ? " file" : " files") : n + " " + (n % 10 === 1 && n % 100 !== 11 ? "файл" : n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? "файла" : "файлов");
+const docSize = (b) => b > 1e6 ? (b / 1e6).toFixed(1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1e3)) + " КБ";
+async function docOpen(id) {
+  const e = docList().find(x => x.id === id); if (!e) { toast("Файл ещё не пришёл целиком"); return; }
+  let text = ""; try { text = docJoin(await docChunks(e)); } catch (x) { toast("Не открылся: " + x.message); return; }
+  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(e.name)}</title>`
+    + `<style>body{font:16px/1.6 system-ui,sans-serif;margin:0;padding:18px 18px 40px;background:#fff;color:#1d1d24}h1{font-size:19px;margin:0 0 4px}`
+    + `.m{color:#6b6b78;font-size:13px;margin-bottom:18px}p{margin:0 0 12px;white-space:pre-wrap;overflow-wrap:anywhere}@media(prefers-color-scheme:dark){body{background:#15151c;color:#e8e8f0}.m{color:#9a9ab0}}</style>`
+    + `<h1>${esc(e.name)}</h1><div class="m">${esc(e.path)} · текст с компьютера, оригинал — на нём</div>`
+    + text.split(/\n{2,}/).map(p => `<p>${esc(p)}</p>`).join("");
+  openHtmlView(e.name, html, () => { const w = D.saveDownload ? D.saveDownload(e.name.replace(/\.[a-z0-9]+$/i, "") + ".txt", "text/plain", text) : ""; toast(w ? "Сохранено: " + w : "Не получилось сохранить", 3500); });
+}
+function docCard(e) {
+  return `<div class="it note doc" data-doc="${esc(e.id)}"><div class="bd"><b class="ntt">${esc(e.name)}</b><div class="ntm"><span class="ntd">${esc(ntWhen(e.mtime * 1000) || "")}</span><span class="ntf">${esc(String(e.path).split("/").slice(0, -1).join("/") || "Мои файлы")}</span><span class="ntf">${docSize(e.size)}</span></div></div></div>`;
+}
 // «Мой день» — какой сегодня день: «Среда, 15 октября» (просьба 15.10: «почему он не пишет число и день недели?»)
 function dayDate(d = new Date()) { const w = WD[d.getDay()]; return `${w[0].toUpperCase()}${w.slice(1)}, ${d.getDate()} ${MON[d.getMonth()]}`; }
 /* Имя дела по расписанию (№557, 05.11): компьютер присылает title («Дача: заморозки и полив»); старый компьютер — только
@@ -6410,14 +6507,17 @@ function renderDay() {
     const f = $("#done-add", box);
     f.onsubmit = (e) => { e.preventDefault(); const t = $("input", f).value.trim(); if (!t) { $("input", f).focus(); return; } markDone([t], "tap"); renderDay(); };
   } else if (dayTab === "notes") {
-    const folds = noteFolders(); if (ntFolder && !folds.includes(ntFolder)) ntFolder = "";
-    const n = notes().filter(x => !ntFolder || String(x.folder || "").trim() === ntFolder).sort((a, b) => (+b.time || 0) - (+a.time || 0));   // новые сверху — и с компьютера тоже
-    const chips = folds.length ? `<div class="ntfolds" role="tablist" aria-label="Папки">${["", ...folds].map(f => `<button role="tab" data-f="${esc(f)}" class="${f === ntFolder ? "on" : ""}" aria-selected="${f === ntFolder}">${f ? esc(f) : "Все"}</button>`).join("")}</div>` : "";
-    box.innerHTML = `<button class="btn p ntnew" id="nt-new">Новая заметка</button>` + chips + (n.length ? `<div class="ntlist">` + n.map(ntCard).join("") + `</div>`
+    const docs = docList(), folds = noteFolders().concat(docs.length ? [DOC_F] : []); if (ntFolder && !folds.includes(ntFolder)) ntFolder = "";
+    const n = ntFolder === DOC_F ? [] : notes().filter(x => !ntFolder || String(x.folder || "").trim() === ntFolder).sort((a, b) => (+b.time || 0) - (+a.time || 0));   // новые сверху — и с компьютера тоже
+    const chips = folds.length ? `<div class="ntfolds" role="tablist" aria-label="Папки">${["", ...folds].map(f => `<button role="tab" data-f="${esc(f)}" class="${f === ntFolder ? "on" : ""}${f === DOC_F ? " docf" : ""}" aria-selected="${f === ntFolder}">${f === DOC_F ? "Мои файлы" : f ? esc(f) : "Все"}</button>`).join("")}</div>` : "";
+    box.innerHTML = `<button class="btn p ntnew" id="nt-new">Новая заметка</button>` + chips + (ntFolder === DOC_F
+      ? `<p class="hint ntdoc">${docN(docs.length)} с компьютера — спросите: «что в договоре про сроки?», Лира найдёт и без компьютера.</p><div class="ntlist">` + docs.map(docCard).join("") + `</div>`
+      : n.length ? `<div class="ntlist">` + n.map(ntCard).join("") + `</div>`
       : `<div class="empty">Заметок нет.<br>Скажите: «запиши в заметки: купить хлеб и молоко» — или нажмите «Новая заметка».</div>`);
     $("#nt-new").onclick = () => openNote("");
     $$(".ntfolds button", box).forEach(b => b.onclick = () => { ntFolder = b.dataset.f; renderDay(); });
-    $$(".it.note", box).forEach(el => el.onclick = () => openNote(el.dataset.id));
+    $$(".it.note:not(.doc)", box).forEach(el => el.onclick = () => openNote(el.dataset.id));
+    $$(".it.doc", box).forEach(el => el.onclick = () => docOpen(el.dataset.doc));
   } else if (dayTab === "made") {
     const l = apps().slice().reverse();
     box.innerHTML = tasksHtml() + (l.length ? `<div class="bugh">Сделано на телефоне</div>` + l.map(x => `<div class="it"><div class="bd" data-open="${esc(x.id)}"><b>${esc(x.title)}</b><small>${esc(whenText(new Date(x.ts)))} · ${Math.max(1, Math.round(x.size / 1024))} КБ · нажмите, чтобы открыть</small></div><button class="x" data-id="${esc(x.id)}">${X_SVG}</button></div>`).join("")
@@ -8039,11 +8139,11 @@ function wireSettings(info) {
    меняешь здесь — меняй и там. Дополнительные виды (soul, mind, diary, dayturn, taskreq, task, done) шлём, только если их знает сервер. */
 const MIND_MAX = 8000, MIND_CTRL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g;
 const mindText = (d) => (d && typeof d.text === "string" && d.text.trim() && d.text.length <= MIND_MAX) ? d.text.replace(MIND_CTRL, "") : "";
-const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory", "safe", "client"];   // client — «Клиенты» (clients.js), только зашифрованными   // safe — сейф шифром мастер-пароля (safe.js)
+const SYNC_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "taskreq", "task", "done", "persona", "pmemory", "safe", "client", "doc"];   // doc — «Мои файлы» с компьютера (0.98), только приходят   // client — «Клиенты» (clients.js), только зашифрованными   // safe — сейф шифром мастер-пароля (safe.js)
 /* Сквозное шифрование синхронизации (S.sync.e2e, как core/sync.py и core/synckey.py): ключ 32 байта знают только свои
    устройства (pref sync_key; другим своим — конвертом ownShare), личные записи уходят {e2e: 1, c: seal(K, JSON)}.
    Открытыми — метка mind:e2e, задачи для облака (taskreq с cloud) и удаления. */
-const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory", "safe", "client"];
+const E2E_KINDS = ["reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory", "safe", "client", "doc"];
 function syncKeyGet() { try { const d = JSON.parse(prefGet("sync_key") || "null"); return d && d.k && DC() && DC().b64d(d.k).length === 32 ? d : null; } catch (e) { return null; } }
 function syncKeyAdopt(kb64, at) {
   let k; try { k = DC().b64d(String(kb64 || "")); } catch (e) { return false; }
@@ -8317,6 +8417,7 @@ const TASK_RU = { running: "в работе", waiting: "ждёт ответа", 
    выводы — их ведёт компьютер; очереди dayturn/taskreq): syncRun помечает её skip, чтобы не отправить обратно удалением. */
 function syncApply(it) {
   const d = it.data || {}, del = it.deleted;
+  if (it.kind === "doc") { docApply(it.id, d, del); return false; }   // файлы ведёт компьютер: отсюда ни правок, ни удалений
   if (it.kind === "safe") return typeof safeApply === "function" ? safeApply(it) : false;
   if (it.kind === "persona") {                      // свой персонаж с компьютера или другого телефона
     const l = myPersonas().filter(x => x.id !== it.id);

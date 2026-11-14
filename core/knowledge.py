@@ -491,6 +491,30 @@ class Knowledge:
                 break
         return out
 
+    def shared(self, total):
+        """«Мои файлы» на всех устройствах (0.98, владелец 14.11: «папка пользователя будет синхронизироваться при
+        выключенном компьютере… изящное дешёвое решение»): текст своих файлов — «Знания» и свои папки, без папок,
+        которые только у персонажей, — свежие первыми, пока весь текст не больше total знаков.
+        -> [{key, name, path, mtime, size, chunks}]. Сам файл не уходит — только уже прочитанный текст."""
+        def pre(fs):
+            return tuple("@" + Path(os.path.expanduser(str(f))).resolve().as_posix().rstrip("/") + "/" for f in fs)
+        mine, only = pre(self.folders() or []), pre(self.extra() or [])
+        with self._lock:
+            items = [(k, e) for k, e in self.index.items() if e.get("chunks") and not e.get("error")
+                     and not (only and k.startswith(only) and not k.startswith(mine))
+                     and (not k.startswith("@") or (mine and k.startswith(mine)))]
+        items.sort(key=lambda x: -float(x[1].get("mtime") or 0))
+        out, used = [], 0
+        for k, e in items:
+            n = sum(len(c) for c in e["chunks"])
+            if used + n > total:
+                continue                           # большой не влез — следующий поменьше ещё может
+            used += n
+            lab = self.label(k)
+            out.append({"key": k, "name": Path(lab).name, "path": lab if k.startswith("@") else FOLDER + "/" + lab,
+                        "mtime": int(float(e.get("mtime") or 0)), "size": int(e.get("size") or 0), "chunks": list(e["chunks"])})
+        return out
+
     def add(self, name, data: bytes):
         """Документ из студии — в корень «Знаний» под свободным именем. Из name берётся только имя файла: путь
         от браузера не должен увести запись за пределы папки. -> путь внутри «Знаний»."""

@@ -146,7 +146,7 @@ def cfg_load() -> dict:
     c.setdefault("default", {})
     c["default"].setdefault("female", "serena")
     c["default"].setdefault("male", "aiden")
-    for k in ("personas", "aliases", "voices"):
+    for k in ("personas", "aliases", "voices", "personas_en"):
         if not isinstance(c.get(k), dict):
             c[k] = {}
     return c
@@ -173,11 +173,15 @@ def own_voice(c: dict, gender: str) -> str:
     return own[0][0] if own else ""
 
 
-def resolve(voice: str = "", persona: str = "", gender: str = "") -> dict:
+def resolve(voice: str = "", persona: str = "", gender: str = "", lang: str = "Russian") -> dict:
     """Какой голос звучит: персонаж → псевдоним → свой голос → встроенный → голос по умолчанию для пола.
-    Встроенные выключены (TTS_BUILTIN=0) — вместо них голос по умолчанию для пола, если он свой, или любой свой того же пола."""
+    Встроенные выключены (TTS_BUILTIN=0) — вместо них голос по умолчанию для пола, если он свой, или любой свой того же пола.
+    Речь не по-русски — сначала свой английский голос персонажа (personas_en, 14.11: владелец — «дать англоязычным
+    пользователям нормальные голоса для Лиры и Патрика»: русский образец по-английски звучит с акцентом)."""
     c = cfg_load()
-    name = c["personas"].get((persona or "").strip().lower(), "")
+    p = (persona or "").strip().lower()
+    en = c["personas_en"].get(p) or c["personas_en"].get((voice or "").strip().lower()) if lang != "Russian" else ""
+    name = en if en and exists(c, en) else c["personas"].get(p, "")
     if not name:
         v = (voice or "").strip().lower()
         name = c["aliases"].get(v, v)
@@ -222,7 +226,7 @@ def voices_public() -> dict:
                     "builtin": False, "text": v.get("text", ""), "instruct": v.get("instruct", ""),
                     "designed": v.get("designed", ""), "added": v.get("added", 0)})
     return {"object": "list", "voices": out, "data": [{"id": x["id"], "object": "voice"} for x in out],
-            "personas": c["personas"], "aliases": c["aliases"], "default": c["default"], "clone_engine": CLONE_ENGINE,
+            "personas": c["personas"], "personas_en": c["personas_en"], "aliases": c["aliases"], "default": c["default"], "clone_engine": CLONE_ENGINE,
             "builtin_on": BUILTIN_ON}
 
 
@@ -315,12 +319,20 @@ def split_text(text: str, first_max: int = 70, max_len: int = 220):
     return out
 
 
+def too_long(text: str) -> float:
+    """Сколько секунд — уже явно сбой генерации: обычная речь ~14 знаков в секунду, здесь — с запасом в два с лишним раза."""
+    return 3.0 + len(plain(text) if text else "") / 6.0
+
+
 def lang_of(text: str, asked: str = "") -> str:
     if asked:
         return {"ru": "Russian", "en": "English", "zh": "Chinese", "de": "German", "fr": "French", "es": "Spanish",
                 "it": "Italian", "pt": "Portuguese", "ja": "Japanese", "ko": "Korean"}.get(asked.lower()[:2], asked)
     # одни цифры («14:10», «2026») — по-русски, а не «на угад» (отзыв 16.10: время прозвучало как «ствисе»)
-    if re.search(r"[А-Яа-яЁё]", text) or (re.search(r"\d", text) and not re.search(r"[A-Za-z]", text)):
+    # 14.11 (урок по-английски: «In Деви+ар, every character…» читал русский ESpeech — «ужас»): язык — по большинству букв,
+    # одно русское слово английскую фразу русской не делает
+    cyr, lat = len(re.findall(r"[А-Яа-яЁё]", text)), len(re.findall(r"[A-Za-z]", text))
+    if (cyr and cyr * 3 >= lat) or (re.search(r"\d", text) and not lat):
         return "Russian"
     # 14.11 (владелец: английский урок своим голосом — «ужасающий акцент»): явно английский текст — языком English,
     # а не «на угад»: с образцом голоса модель меньше тянет произношение образца
@@ -579,8 +591,10 @@ class Engine:
         if key not in self.prompts:
             m = self.get("base")
             q = m.model if "base" in self.fast else m        # у быстрого Qwen исходная модель — внутри
-            a = trim(read_wav(path))
-            self.prompts[key] = q.create_voice_clone_prompt(ref_audio=(a, OUT_SR), ref_text=None if xvec else plain(text),
+            # 14.11 (урок по-английски: в начале фраз — «when t…», «when she…» — хвост образца): образец заканчивается
+            # тишиной, а текст образца — точкой, иначе модель продолжает последнее слово записи в начало новой фразы
+            a = np.concatenate([trim(read_wav(path)), np.zeros(int(OUT_SR * 0.4), np.float32)])
+            self.prompts[key] = q.create_voice_clone_prompt(ref_audio=(a, OUT_SR), ref_text=None if xvec else ref_tail(plain(text)).strip(),
                                                             x_vector_only_mode=xvec)
         return self.prompts[key]
 
@@ -605,12 +619,32 @@ class Engine:
 
     def generate(self, spec, texts, lang):
         try:
-            return self._generate(spec, texts, lang)
+            out, sr = self._generate(spec, texts, lang)
         except ValueError as e:                           # язык не из списка модели — пусть определит сама
             if "language" not in str(e).lower() or lang == "Auto":
                 raise
             log.warning("язык %s не принят моделью — говорю с Auto", lang)
-            return self._generate(spec, texts, "Auto")
+            lang = "Auto"
+            out, sr = self._generate(spec, texts, lang)
+        return self.runaway(spec, texts, lang, out, sr), sr
+
+    def runaway(self, spec, texts, lang, out, sr):
+        """Qwen иногда не останавливается: фраза в 3 секунды — 23 секунды бормотания (14.11, урок 1 по-английски, «Then we
+        argue — to the point, and by name.»). Такую фразу — ещё раз (каждый раз модель говорит заново), и берём короткую."""
+        if role_for(spec) == "espeech":
+            return out
+        out = list(out)
+        for i, (t, w) in enumerate(zip(texts, out)):
+            if w.size / max(1, sr) <= too_long(t):
+                continue
+            log.warning("фраза «%s» вышла %.1f с вместо ~%.1f — говорю заново", t[:50], w.size / sr, len(t) / 14)
+            try:
+                w2 = to_mono(self._generate(spec, [t], lang)[0][0])
+            except Exception as e:  # noqa: BLE001
+                log.warning("повтор не удался: %s", e)
+                continue
+            out[i] = w2 if w2.size < w.size else w
+        return out
 
     def _generate(self, spec, texts, lang):
         role = role_for(spec)
@@ -635,7 +669,7 @@ class Engine:
             out, sr = [], OUT_SR
             for t in texts:
                 if role == "base":
-                    w, sr = m.generate_voice_clone(text=t, language=lang, ref_text=None if cross else plain(spec.get("text", "")),
+                    w, sr = m.generate_voice_clone(text=t, language=lang, ref_text=None if cross or not spec.get("text") else ref_tail(plain(spec.get("text", ""))).strip(),
                                                    voice_clone_prompt=self.prompt(vdir(spec["audio"]), spec.get("text", ""), cross))
                 elif role == "design":
                     w, sr = m.generate_voice_design(text=t, instruct=ins, language=lang)
@@ -722,10 +756,13 @@ def on_gpu(fn):
 def synth_iter(text, spec, speed=1.0, lang="Russian"):
     """Фраза за фразой: первая — одна (быстрее голос), дальше пачками по BATCH. Каждая пачка отдельно встаёт в очередь
     видеокарты, поэтому два разговора одновременно не ждут друг друга целиком."""
-    if role_for(spec) == "espeech" and lang != "Russian" and not re.search(r"[А-Яа-яЁё]", text or ""):
+    if role_for(spec) == "espeech" and spec.get("kind", "clone") == "clone" and not (spec.get("text") or "").strip():
+        spec = dict(spec, engine="qwen")                 # образец без текста — ESpeech без текста не умеет: только тембр (Qwen)
+    if role_for(spec) == "espeech" and lang != "Russian":
         # 0.96: ESpeech обучен только на русской речи — английскую фразу своим голосом читает клонирование Qwen (тот же
-        # образец записи, Qwen3-TTS знает английский)
+        # образец записи, Qwen3-TTS знает английский); знаки ударения «+» для русского ему не нужны
         spec = dict(spec, engine="qwen")
+        text = text.replace("+", "")
     parts = split_text(text)
     groups = [parts[:1]] + [parts[k:k + BATCH] for k in range(1, len(parts), BATCH)] if parts else []
     if role_for(spec) == "espeech" and len(parts) > 1:
@@ -846,7 +883,7 @@ def add_voice(name, title, gender, text, audio: np.ndarray = None, draft: str = 
         entry["designed"] = designed
     if not FAKE:                                          # образец проверяется сразу: плохой файл — ошибка сейчас, а не в разговоре
         try:
-            if role_for({"kind": "clone"}) == "espeech":     # проверяем тем движком, что будет озвучивать, — не грузим лишнюю модель
+            if role_for({"kind": "clone"}) == "espeech" and text:     # проверяем тем движком, что будет озвучивать (без текста — Qwen по тембру)
                 on_gpu(lambda: ENGINE.ref(ENGINE.get("espeech"), vdir(fn), text))
             else:
                 on_gpu(lambda: ENGINE.prompt(vdir(fn), text))
@@ -922,7 +959,7 @@ def delete_voice(vid):
 def set_config(body):
     with CFG_LOCK:
         c = cfg_load()
-        for m in ("personas", "aliases"):
+        for m in ("personas", "aliases", "personas_en"):
             if isinstance(body.get(m), dict):
                 new = {}
                 for k, v in body[m].items():
@@ -1109,14 +1146,14 @@ class H(BaseHTTPRequestHandler):
         if MAX_WAITING and STATE["waiting"] >= MAX_WAITING:
             stat_add(busy_rejects=1)
             return self._err(503, f"голоса заняты: в очереди уже {STATE['waiting']} — много людей сразу", "busy")
-        spec = resolve(str(body.get("voice") or ""), str(body.get("persona") or ""), str(body.get("gender") or ""))
+        lang = lang_of(text, str(body.get("language") or ""))
+        spec = resolve(str(body.get("voice") or ""), str(body.get("persona") or ""), str(body.get("gender") or ""), lang)
         if body.get("instruct") and spec.get("kind") == "speaker":          # манера на один ответ: «радостно», «шёпотом»
             spec = dict(spec, instruct=(spec.get("instruct", "") + " " + str(body["instruct"])).strip())
         speed = min(2.0, max(0.5, float(body.get("speed") or 1.0)))
         fmt = str(body.get("response_format") or "mp3").lower()
         sse = str(body.get("stream_format") or "") == "sse"
         stream = sse or fmt == "pcm" or (bool(body.get("stream")) and fmt == "wav")
-        lang = lang_of(text, str(body.get("language") or ""))
         if lang == "Russian" and speech_norm is not None:
             # модели голосов читают цифры странными звуками (отзыв 15.10): числа, даты, годы, проценты, градусы, время —
             # словами и в роде слова после них («одна минута», «пятнадцатое октября»); латиницу модель читает сама

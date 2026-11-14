@@ -338,18 +338,34 @@ def ask_model(base, model, body, timeout):
     if b is None:
         return 0, why
     b.update(model=model, stream=False)
-    try:
-        r = httpx.post(base.rstrip("/") + "/chat/completions", json=b, timeout=timeout)
-    except httpx.HTTPError as e:
-        return 0, "своя модель не ответила: " + str(e)[:120]
-    if r.status_code != 200:
-        return r.status_code, r.text[:300]
-    try:
-        j = r.json()
-        m = j["choices"][0]["message"]
-    except (ValueError, KeyError, IndexError, TypeError):
-        return 0, "своя модель ответила не по образцу"
-    text = THINK_RX.sub("", m.get("content") if isinstance(m.get("content"), str) else "").strip()   # размышления сайту не нужны
+    # №711 (14.11, Роман: «нода не видит ответа модели, хотя она отвечает за 0,6 с»): LM Studio не знает
+    # chat_template_kwargs, и Qwen 3.5 тратил весь предел на размышления — ответ пустой. Тогда — ещё раз с «/no_think»
+    # (так Qwen выключает размышления сам); и снова пусто — честная причина, что сделать.
+    for again in (False, True):
+        try:
+            r = httpx.post(base.rstrip("/") + "/chat/completions", json=b, timeout=timeout)
+        except httpx.HTTPError as e:
+            return 0, "своя модель не ответила: " + str(e)[:120]
+        if r.status_code != 200:
+            return r.status_code, r.text[:300]
+        try:
+            j = r.json()
+            m = j["choices"][0]["message"]
+        except (ValueError, KeyError, IndexError, TypeError):
+            return 0, "своя модель ответила не по образцу"
+        raw = m.get("content") if isinstance(m.get("content"), str) else ""
+        text = THINK_RX.sub("", raw).strip()                               # размышления сайту не нужны
+        thought = bool(m.get("reasoning_content") or m.get("reasoning")) or "<think>" in raw
+        if text or not thought:
+            break
+        if again:
+            return 0, "модель всё время размышляет и не успевает ответить — выключите для неё размышления (Thinking) в LM Studio или Ollama"
+        msgs = [dict(x) for x in b["messages"]]
+        last = next((x for x in reversed(msgs) if x.get("role") == "user"), None)
+        if last is None:
+            return 0, "модель ответила только размышлениями"
+        last["content"] = str(last.get("content") or "") + " /no_think"
+        b = dict(b, messages=msgs)
     msg = {"role": "assistant", "content": text[:6000]}                # действий нода не делает — только текст
     u = j.get("usage") or {}
     return 200, json.dumps({"choices": [{"message": msg, "finish_reason": "stop"}],

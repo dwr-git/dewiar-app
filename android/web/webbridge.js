@@ -11,6 +11,7 @@
   // распознавание браузера — только где оно надёжно (Chrome, Edge; на iPhone и в Safari — слушает сервер Dewiar)
   const SR0 = window.SpeechRecognition || window.webkitSpeechRecognition;
   const SR = SR0 && /Chrome\/|Edg\//.test(navigator.userAgent) && !/iPhone|iPad|iPod|CriOS|EdgiOS/.test(navigator.userAgent) ? SR0 : null;
+  let SRuse = SR;
   const synth = window.speechSynthesis;
   const LS = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
                set: (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } } };
@@ -95,9 +96,10 @@
   // ---------- слух: Web Speech (если есть) или запись 16 кГц для сервера (как Speech.listenServer на Android) ----------
   let rec = null, srv = null, extraMs = 0;
   function listenWeb(g, hold) {
-    if (!SR) { ev({ type: "stt_error", g, code: 9, msg: "в этом браузере нет распознавания речи" }); return; }
-    const r = new SR(); rec = r;
-    r.lang = window.dwLang && dwLang() === "en" ? "en-US" : "ru-RU";   // 0.96: приложение по-английски — слушаем по-английски r.interimResults = true; r.continuous = !!hold; r.maxAlternatives = 1;
+    if (!SRuse) { ev({ type: "stt_error", g, code: 9, msg: "в этом браузере нет распознавания речи" }); return; }
+    const r = new SRuse(); rec = r;
+    r.lang = window.dwLang && dwLang() === "en" ? "en-US" : "ru-RU";   // 0.96: приложение по-английски — слушаем по-английски
+    r.interimResults = true; r.continuous = !!hold; r.maxAlternatives = 1;   // 14.11: в 0.96 эта строка ушла в комментарий выше
     let final = "", said = false;
     r.onstart = () => ev({ type: "stt_start", g });
     r.onresult = (e) => {
@@ -295,7 +297,10 @@
       },
       keepScreen() { }, setFace() { }, bars() { },
       immersive(on) { try { if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => { }); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => { }); } catch (e) { } },
-      recognizer: () => !!SR,
+      recognizer: () => !!SRuse,
+      // №712 (14.11: «на айфоне распознавание речи — просит только писать»): сервера Dewiar нет (не вошли) — лучше
+      // распознавание Safari, чем «пишите текстом»; не справится (Siri выключена) — код 13, app.js скажет честно
+      recognizerAny: () => !!SR0, useAnyRecognizer() { SRuse = SR0; },
       listen(g) { listenWeb(g, false); }, listenHold(g) { listenWeb(g, true); },
       listenServer(g, url, key, model) { listenServer(g, url, key, model, false); },
       listenServerHold(g, url, key, model) { listenServer(g, url, key, model, true); },

@@ -42,7 +42,7 @@ log = logging.getLogger("dewiar.sync")
 
 BASE_KINDS = ("reminder", "note", "money", "memory")          # знает любой сервер
 EXTRA_KINDS = ("soul", "mind", "diary", "dayturn", "taskreq", "task", "vault", "done", "persona", "bill", "pay", "payfile", "pmemory", "safe",
-               "plugin", "client")                          # тот же список $extra в cloud.php; plugin — только между компьютерами (не по Wi-Fi)
+               "plugin", "client", "doc")                   # тот же список $extra в cloud.php; doc — «Мои файлы» на телефоне (0.98); plugin — только между компьютерами (не по Wi-Fi)
 VAULT_MAX = 300_000                               # сервер не принимает запись больше 300 КБ — такие заметки не шлём
 VAULT_FILES = 15000
 CHUNK = 400                                       # изменений за один запрос (сервер берёт до 2000; первая отправка большого хранилища — частями)
@@ -62,13 +62,18 @@ CONST_PREV = "Память/Конституция — прежняя.md"
 # Сквозное шифрование (sync.e2e, core/synckey.py): что шифруется на устройстве — всё личное. Открытыми остаются только
 # метка «шифрование включено» (mind:e2e), задачи для облака (taskreq с cloud — их выполняет сервер) и удаления (пустые).
 E2E_KINDS = ("reminder", "note", "money", "memory", "soul", "mind", "diary", "dayturn", "done", "persona", "vault", "task", "taskreq", "pmemory",
-             "bill", "pay", "payfile", "safe", "plugin", "client")          # client — «Клиенты» (0.89), только зашифрованными; safe и без того шифр мастер-пароля — с e2e он ещё и в конверте ключа синхронизации
+             "bill", "pay", "payfile", "safe", "plugin", "client", "doc")   # doc — только зашифрованным или по Wi-Fi;   # client — «Клиенты» (0.89), только зашифрованными; safe и без того шифр мастер-пароля — с e2e он ещё и в конверте ключа синхронизации
 # «Платежи» между компьютерами (27.10, владелец: «платежи дома заполнил… а на работе их нет»): bill — счёт, pay — оплата,
 # payfile — вложение (платёжка, скриншот) кусками: облако берёт запись до 300 КБ, а зашифрованная на треть длиннее
 PF_CHUNK = 150_000
 PF_MAX = 6_000_000                                # больше — файл не синхронизируем (запись счёта его всё равно помнит)
 E2E_MARK = "mind:e2e"
 SEALED_MAX = 290_000                              # сервер не берёт запись больше 300 КБ — зашифрованная на треть длиннее
+# «Мои файлы» на всех устройствах (0.98, владелец 14.11): телефон ищет по тексту файлов компьютера, даже когда тот
+# выключен. Уходит уже прочитанный текст (отрывки core/knowledge.py), сжатый и только зашифрованным ключом своих
+# устройств (или по домашнему Wi-Fi) — облако хранит шифр. Запись doc:<id файла>.<номер куска>; свежие файлы — первыми.
+DOC_PART = 120_000                                # знаков в куске: сжатый и зашифрованный — с запасом меньше 300 КБ
+DOC_TOTAL = 20_000_000                            # всего текста с одного компьютера (≈ 6 МБ шифра в облаке)
 
 
 def _mind_text(d, limit):
@@ -407,6 +412,13 @@ class Sync:
     def _snap_extra(self, out):
         h = self.host
         ok = set(self.state.get("kinds") or ())
+        self.state["_doc_failed"] = False
+        if "doc" in ok and self._docs_ok():
+            try:
+                self._snap_docs(out)
+            except Exception as e:  # noqa: BLE001 — файлы не должны мешать остальному обмену
+                self.state["_doc_failed"] = True
+                log.warning("Синхронизация: «Мои файлы» не собрались: %s", e)
         if "pmemory" in ok:                         # своя память персонажей (0.56): факты по файлам «Память/Персонажи» и кто со своей
             for name, facts in self._pfacts().items():
                 for fact in facts:
@@ -612,6 +624,8 @@ class Sync:
             return self._apply_safe(iid, d, deleted, it)
         elif kind == "client":
             return self._apply_client(iid, d, deleted, it)
+        elif kind == "doc":
+            return False                                  # файлы другого компьютера здесь не нужны: у него свои «Мои файлы»
         elif kind in EXTRA_KINDS:
             return self._apply_extra(kind, iid, d, deleted, it.get("updated"))
 
@@ -686,6 +700,59 @@ class Sync:
             return False                          # шифрование здесь выключено — карточки не принимаем (и не шлём)
         cl.merge_remote(iid, d)
 
+    # ---------- «Мои файлы» на телефоне (doc) ----------
+    def _docs_ok(self):
+        """Текст файлов — личное: только со сквозным шифрованием (облако его не прочтёт) или по домашнему Wi-Fi."""
+        return getattr(self.host, "knowledge", None) is not None and (bool(self.HOME) or self.e2e_key() is not None)
+
+    @staticmethod
+    def _doc_parts(chunks):
+        """Отрывки файла -> куски не длиннее DOC_PART знаков (отрывок не режется)."""
+        parts, cur, n = [], [], 0
+        for c in chunks:
+            if cur and n + len(c) > DOC_PART:
+                parts.append(cur)
+                cur, n = [], 0
+            cur.append(c[:DOC_PART])
+            n += len(cur[-1])
+        if cur:
+            parts.append(cur)
+        return parts
+
+    def _snap_docs(self, out):
+        """Файлы -> записи doc:<id>.<номер> (данные None + отпечаток; текст собираем, только когда отправлять — _doc_read)."""
+        dm = {}
+        for f in self.host.knowledge.shared(DOC_TOTAL):
+            fid = hashlib.sha1(f["key"].encode("utf-8")).hexdigest()[:12]
+            n = len(self._doc_parts(f["chunks"]))
+            sig = hashlib.sha1(("\n".join(f["chunks"]) + f["path"]).encode("utf-8")).hexdigest()[:16]
+            dm[fid] = {"key": f["key"], "sig": sig, "n": n, "name": f["name"], "path": f["path"], "mtime": f["mtime"], "size": f["size"]}
+            for i in range(n):
+                out[f"doc:{fid}.{i}"] = None
+                out[f"doc:{fid}.{i}#h"] = f"{sig}:{i}:{n}"
+        self.state["dmap"] = dm
+
+    def _doc_read(self, iid):
+        import zlib
+        fid, _, i = iid.partition(".")
+        m = (self.state.get("dmap") or {}).get(fid)
+        kn = getattr(self.host, "knowledge", None)
+        e = kn.index.get(m["key"]) if m and kn is not None else None
+        if not m or not e or not i.isdigit():
+            return None
+        parts = self._doc_parts(e.get("chunks") or [])
+        if len(parts) != m["n"] or int(i) >= len(parts):
+            return None                                   # файл успели перечитать — уйдёт следующим обменом
+        z = base64.b64encode(zlib.compress(json.dumps(parts[int(i)], ensure_ascii=False).encode("utf-8"), 6)).decode("ascii")
+        return {"f": fid, "name": m["name"], "path": m["path"], "mtime": m["mtime"], "size": m["size"], "i": int(i), "n": m["n"], "z": z}
+
+    def doc_status(self):
+        """Для «Моих файлов» в студии: сколько файлов видно с телефона и почему, если нисколько."""
+        dm = self.state.get("dmap") or {}
+        kinds = set(self.state.get("kinds") or ())
+        return {"files": len(dm) if self._docs_ok() else 0, "e2e": self.e2e_key() is not None, "server": "doc" in kinds,
+                "enabled": bool(self.status.get("enabled"))}
+
     def _really_gone(self, key):
         """Запись пропала из снимка — это удаление, только если её источника правда нет. Отключённый диск с хранилищем,
         выключенная галочка «всё хранилище», заметка сверх предела или больше 300 КБ, файл, который сейчас не читается, —
@@ -713,6 +780,8 @@ class Sync:
             if not PS.present(P, pid):
                 return True
             return bool(i) and c is not None and i.isdigit() and int(i) >= c[2]     # сборка стала короче — лишний кусок
+        if kind == "doc":                         # шифрование выключили, собрать не вышло — не удаление; файл пропал или
+            return self._docs_ok() and not self.state.get("_doc_failed") and not self.state.get("_extra_failed")   # выпал из предела — удаление
         if kind == "client":                      # шифрование выключили — карточки остаются, это не удаление
             cl = getattr(self.host, "clients", None)
             return self._clients_ok() and cl is not None and iid not in cl.st["clients"]
@@ -1783,6 +1852,10 @@ class Sync:
                         continue
                 elif data is None and key.startswith("safe:"):
                     data = self._safe_read(key.split(":", 1)[1])
+                    if data is None:
+                        continue
+                elif data is None and key.startswith("doc:"):
+                    data = self._doc_read(key.split(":", 1)[1])
                     if data is None:
                         continue
                 elif data is None and key.startswith("plugin:"):

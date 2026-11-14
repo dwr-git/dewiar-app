@@ -1255,11 +1255,15 @@ class AnswerMixin:
     def find_persona(self, name):
         """«Лиру», «Патрика», «эва» → id персонажа или None. Сравниваем имя, слова вызова, другие написания и id
         без последней буквы (грубо отбрасываем падежное окончание); точное совпадение важнее."""
+        return self._match_persona(name, self.personas.all())
+
+    @staticmethod
+    def _match_persona(name, items):
         q = re.sub(r"[^\wё]", "", (name or "").lower().replace("ё", "е"))
         if not q:
             return None
         best = None
-        for p in self.personas.all():
+        for p in items:
             names = {p["name"].lower().replace("ё", "е")} | {w.lower().replace("ё", "е") for w in (p.get("wake") or [])} \
                 | {w.lower() for w in (p.get("aliases") or [])} | {p["id"].lower()}
             for n in names:
@@ -1976,9 +1980,24 @@ class AnswerMixin:
         task — поручение (идея №137, Gray: «передать задачу, а не только слово — второй начинает с чистого листа»):
         уходит новому персонажу явной вводной. -> текст для модели: что сказать сейчас."""
         pid = self.find_persona(name)
+        added = ""
+        if not pid:
+            # №715 (14.11: «попросила подключить Гастона — Лира пишет, что не понимает, о ком речь»): готовый персонаж,
+            # которого ещё нет в команде, — добавить в команду и позвать
+            try:
+                gal = [g for g in self.personas.gallery() if not g.get("installed")]
+                gid = self._match_persona(name, gal)
+                if gid:
+                    pid = self.personas.gallery_add(gid)
+                    added = self.personas.get(pid)["name"]
+                    log.info("👥 «%s» добавлен(а) в команду из готовых по просьбе", added)
+                    self.emit("personas", personas=self.personas.public())
+            except Exception as e:  # noqa: BLE001
+                log.warning("Готовый персонаж «%s» не добавился: %s", name, e)
         if not pid:
             names = ", ".join(p["name"] for p in self.personas.all())
-            raise ToolError(f"нет персонажа «{name}». Есть: {names}")
+            ready = ", ".join(g["name"] for g in self.personas.gallery() if not g.get("installed"))
+            raise ToolError(f"нет персонажа «{name}». В команде: {names}" + (f". Готовые (добавятся сами, если позвать): {ready}" if ready else ""))
         if pid == self.s.get("persona"):
             return "Это ты сам(а). Просто продолжай разговор."
         t = self.turn
@@ -1986,7 +2005,8 @@ class AnswerMixin:
             t.switch_to = pid
             t.switch_task = str(task or "").strip()[:1500]
         who = self.personas.get(pid)["name"]
-        return (f"Готово: как только ты договоришь, {who} откликнется сам(а) своим голосом" + (" и возьмётся за поручение" if task else "")
+        return ((f"{who} добавлен(а) в команду (студия → «Персонажи»). " if added else "")
+                + f"Готово: как только ты договоришь, {who} откликнется сам(а) своим голосом" + (" и возьмётся за поручение" if task else "")
                 + f". Скажи одну короткую фразу, что передаёшь слово, и не отвечай за {who}.")
 
     def _maybe_learn(self, said, prof):

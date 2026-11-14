@@ -3282,6 +3282,8 @@ html:not(.st-light) .vs-pill.ok { color: var(--good); } html:not(.st-light) .vs-
 .mf-where.site { background: color-mix(in srgb, #23a06e 14%, transparent); color: var(--ink); }
 .mf-box .kn-row[hidden] { display: none; }
 .mf-empty { margin: 0; padding: 22px 14px; text-align: center; color: var(--dim); font-size: 13.5px; line-height: 1.5; }
+.mf-phone { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 2px 0; color: var(--dim); font-size: 13.5px; line-height: 1.5; }
+.mf-phone[hidden] { display: none; }
 .mf-check { margin-top: 26px; }
 .mf-check > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--dim); list-style: none; }
 .mf-check > summary::-webkit-details-marker { display: none; }

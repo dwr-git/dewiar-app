@@ -1301,6 +1301,10 @@ class CommandsMixin:
                 return kn.list()
             if cmd == "knowledge_search":
                 return kn.search(a.get("query", ""))
+            if cmd == "knowledge_phone":               # «Мои файлы» на телефоне (0.98): сколько видно оттуда и почему, если нисколько
+                st = self.sync.doc_status()
+                st["phones"] = sum(1 for d in (self.sync.status.get("all") or []) if d.get("app") in ("phone", "web") and not d.get("me"))
+                return st
             if cmd == "knowledge_open":
                 from tools import launch
                 launch(["xdg-open", str(kn.root)])

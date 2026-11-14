@@ -43,7 +43,8 @@ e._generate(spec, ["See you in the next lesson!"], A.lang_of("See you in the nex
 ok(("prompt", None, True) in calls and ("gen", "English", True) in calls, f"английская фраза русским образцом — только отпечаток голоса: {calls}")
 calls.clear()
 e._generate(spec, ["Увидимся в следующем уроке!"], "Russian")
-ok(("prompt", "Привет, это образец моего голоса", False) in calls and ("gen", "Russian", False) in calls, f"по-русски — как было, с образцом и текстом: {calls}")
+ok(("prompt", "Привет, это образец моего голоса.", False) in calls and ("gen", "Russian", False) in calls,
+   f"по-русски — как было, с образцом и текстом (текст образца — с точкой в конце, 14.11): {calls}")
 calls.clear()
 e._generate(dict(spec, text="Hello, this is my English sample"), ["See you!"], "English")
 ok(("gen", "English", False) in calls, "образец английский — полный образец (свой язык)")
