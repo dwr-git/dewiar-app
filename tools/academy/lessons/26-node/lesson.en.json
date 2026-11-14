@@ -28,7 +28,7 @@
    "scene": "problem",
    "who": "patrik",
    "sub": "The Dewiar server carries thousands of people. How can I help?",
-   "tts": "The Dewiar server carries thousands of people. How can I help?"
+   "tts": "The Deviar server carries thousands of people. How can I help?"
   },
   {
    "id": "s2b",
@@ -91,7 +91,7 @@
    "scene": "end",
    "who": "lira",
    "sub": "Dewiar is free, at dewiar.pro.",
-   "tts": "Dewiar is free, at dewiar dot pro."
+   "tts": "Deviar is free, at deviar dot pro."
   },
   {
    "id": "s9b",

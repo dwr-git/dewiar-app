@@ -25,5 +25,5 @@
 Лира: All of this is in the studio: “Work” → “Radar”. Or ask by voice: “What's new in my field?” | All of this is in the studio: Work, Radar. Or ask by voice: What's new in my field?
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

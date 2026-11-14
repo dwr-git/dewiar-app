@@ -763,6 +763,8 @@ def synth_iter(text, spec, speed=1.0, lang="Russian"):
         # образец записи, Qwen3-TTS знает английский); знаки ударения «+» для русского ему не нужны
         spec = dict(spec, engine="qwen")
         text = text.replace("+", "")
+    if lang != "Russian":                            # владелец 14.11: по-английски имя звучит верно только как «Deviar»
+        text = re.sub(r"(?i)dewiar", lambda m: "Deviar" if m.group(0)[0].isupper() else "deviar", text)
     parts = split_text(text)
     groups = [parts[:1]] + [parts[k:k + BATCH] for k in range(1, len(parts), BATCH)] if parts else []
     if role_for(spec) == "espeech" and len(parts) > 1:

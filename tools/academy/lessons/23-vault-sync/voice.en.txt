@@ -23,5 +23,5 @@
 Лира: Write the master password down: only you have it, and it can't be recovered.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

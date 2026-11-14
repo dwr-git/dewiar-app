@@ -25,5 +25,5 @@
 Лира: Turn on “Artist” in the studio, in “Plugins” — or right on the home screen, in the “Try a plugin” card. | Turn on Artist in the studio, in Plugins — or right on the home screen, in the Try a plugin card.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

@@ -47,6 +47,9 @@ def rest_after(full, spoken):
     return full[pos:].strip()
 
 
+LONG_WAKE_S = 6.0            # №717: имя посреди сплошной речи дольше — сначала проверка точной моделью (видео, разговор рядом)
+
+
 def stop_mid_phrase(in_speech, utt_s):
     """Слово-стоп от быстрого слуха посреди длинной фразы (дольше 1,5 с) — не команда: «схватит» ≈ «хватит» (№404)."""
     return bool(in_speech) and utt_s > 1.5
@@ -907,9 +910,17 @@ class AudioMixin:
                         # имя посреди долгой «фразы» (играет музыка, вокруг говорят): иначе команда утонет в 20 секундах
                         # звука. Фраза начинается заново за 1,6 с до срабатывания — с самого имени.
                         keep = int(1.6 / FRAME_S)
-                        log.info("🎤 Имя посреди долгого звука (%.1f с) — начинаю фразу с имени", len(utt) * FRAME_S)
+                        long_s = len(utt) * FRAME_S
+                        log.info("🎤 Имя посреди долгого звука (%.1f с) — начинаю фразу с имени", long_s)
                         utt = utt[-keep:]
                         t0, silence, speech_frames = now - len(utt) * FRAME_S, 0, len(utt)
+                        if long_s > LONG_WAKE_S and self.state == "idle" and self.wake_checker() is not None:
+                            # №717 (14.11: «смотрю видео на YouTube — он включается, записывает часть голосового от видео»):
+                            # имя посреди долгой сплошной речи — почти всегда видео или разговор рядом («агент», «Оскар»
+                            # в ролике). Не откликаемся сразу: точная модель проверит, звучит ли имя обращением в начале
+                            log.info("🎧 «%s» посреди %.0f с сплошной речи — похоже на видео, проверю точной моделью", phrase, long_s)
+                            self.vosk_wake_check, self._vosk_wake_word = self.utt_id, phrase
+                            continue
                     self.emit("wake", phrase=phrase)
                     if self.state in ("speaking", "thinking") and barge != "off":
                         self.interrupt("имя")

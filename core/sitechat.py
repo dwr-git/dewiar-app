@@ -10,7 +10,11 @@
     клиента (crm.py: «новых — сразу»), у знакомого — новые записи комментарием.
 
 Настройки — settings["sitechat"]: {persona, title, greeting, brief, kb, folders, ask_contact, per_ip, per_day, on};
-что ответил сервер (ссылка, счётчики) — в памяти (remote)."""
+что ответил сервер (ссылка, счётчики) — в памяти (remote).
+
+Свой консультант для каждого сайта (14.11, владелец: «для каждого сайта свой консультант — просто логично»): настройки
+сайта — settings["sitechat"]["sites"][<имя сайта на dewiar.pro>] (новый — копия общих, выключен), на сервере — свой чат
+с site; сайт без своего показывает общий. Заявки забираются одним запросом со всех чатов, у заявки — сайт."""
 
 import base64
 import io
@@ -56,25 +60,69 @@ def readable(hex_color, min_ratio=4.5):
 class SiteChat:
     def __init__(self, host):
         self.host = host
-        self.remote, self.error = None, ""
+        self.remotes, self.error = {}, ""          # что ответил сервер — по сайтам ('' — общий чат)
         self._stop = threading.Event()
         self._thread = None
         self.recent = []                          # последние заявки (для студии): [{ts, name, contact, cid}]
 
     # ---------- настройки ----------
-    def cfg(self):
-        return {**DEF, **(self.host.s.get("sitechat") or {})}
+    def _raw(self):
+        return dict(self.host.s.get("sitechat") or {})
 
-    def public(self, fresh=False):
-        if fresh and self.cfg().get("on"):
+    def cfg(self, site=""):
+        base = {**DEF, **{k: v for k, v in self._raw().items() if k != "sites"}}
+        if not site:
+            return base
+        own = (self._raw().get("sites") or {}).get(site)
+        return {**base, "on": False, **(own or {})}            # свой ещё не сделан — начинаем с общих настроек
+
+    def _store(self, c, site=""):
+        c = {k: v for k, v in c.items() if k in DEF}
+        if site:
+            sites = dict(self._raw().get("sites") or {})
+            sites[site] = c
+            self.host.s.update({"sitechat": {"sites": sites}})
+        else:
+            self.host.s.update({"sitechat": c})
+
+    def any_on(self):
+        return bool(self.cfg().get("on")) or any((v or {}).get("on") for v in (self._raw().get("sites") or {}).values())
+
+    def site_names(self):
+        """Опубликованные сайты на dewiar.pro — для выбора «Для какого сайта»."""
+        S = getattr(self.host, "sites", None)
+        out = []
+        try:
+            for x in S.list() if S is not None and hasattr(S, "list") else []:
+                n = ((x.get("published") or {}).get("name") or "") if isinstance(x, dict) else ""
+                if n and n not in out:
+                    out.append(n)
+        except Exception:  # noqa: BLE001
+            pass
+        return out
+
+    def public(self, fresh=False, site=""):
+        site = site if site in self.site_names() or site in (self._raw().get("sites") or {}) else ""
+        if fresh and (self.cfg(site).get("on") or (site and self.cfg().get("on"))):
             try:
-                self.remote = self._fetch("/sitechat/get")
+                self.remotes[site] = self._fetch("/sitechat/get", {"site": site})
             except SiteChatError as e:
                 self.error = str(e)
-        c = self.cfg()
-        r = self.remote if self.remote and not self.remote.get("none") else None
+        c = self.cfg(site)
+        rem = self.remotes.get(site)
+        r = rem if rem and not rem.get("none") else None
+        own = self._raw().get("sites") or {}
         return {**c, "kb_chars": len(c.get("kb") or ""), "remote": r, "error": self.error, "recent": self.recent[-10:][::-1],
-                "signed": bool(self._key())}
+                "signed": bool(self._key()), "site": site,
+                "sites": [{"name": n, "own": bool((own.get(n) or {}).get("on"))} for n in self.site_names()]}
+
+    @property
+    def remote(self):
+        return self.remotes.get("")
+
+    @remote.setter
+    def remote(self, v):
+        self.remotes[""] = v
 
     def _key(self):
         return (getattr(getattr(self.host, "cloud", None), "key", "") or "").strip()
@@ -143,8 +191,8 @@ class SiteChat:
                 "theme": c.get("theme") if c.get("theme") in THEMES else "auto",
                 "per_ip": int(c.get("per_ip") or 40), "per_day": int(c.get("per_day") or 500)}
 
-    def publish(self, patch=None):
-        """Сохранить настройки и отправить на сервер — ссылка и код для сайта в ответе."""
+    def publish(self, patch=None, site=""):
+        """Сохранить настройки и отправить на сервер — ссылка и код для сайта в ответе. site — свой консультант этого сайта."""
         patch = {k: v for k, v in (patch or {}).items() if k in DEF}
         for k in ("title", "greeting"):
             if k in patch:
@@ -153,21 +201,28 @@ class SiteChat:
             patch["brief"] = str(patch["brief"] or "").strip()[:1500]
         if "kb" in patch:
             patch["kb"] = str(patch["kb"] or "")[:KB_MAX]
-        c = {**self.cfg(), **patch, "on": True}
-        self.remote = self._fetch("/sitechat/save", self.build(c))
+        c = {**self.cfg(site), **patch, "on": True}
+        body = self.build(c)
+        if site:
+            body["site"] = site
+        r = self._fetch("/sitechat/save", body)
+        if site and not r.get("per_site"):
+            raise SiteChatError("сервер Dewiar ещё не умеет отдельный чат для сайта — обновите сервер")
+        self.remotes[site] = r
         self.error = ""
-        self.host.s.update({"sitechat": c, "features": {"clients": True}})      # заявки — в «Клиенты»: раздел включаем
-        log.info("💬 Чат для сайта опубликован: %s", self.remote.get("link"))
+        self._store(c, site)
+        self.host.s.update({"features": {"clients": True}})      # заявки — в «Клиенты»: раздел включаем
+        log.info("💬 Чат для сайта%s опубликован: %s", f" {site}" if site else "", r.get("link"))
         self.start()
-        return self.public()
+        return self.public(site=site)
 
-    def forget(self):
+    def forget(self, site=""):
         try:
-            self._fetch("/sitechat/forget", {})
+            self._fetch("/sitechat/forget", {"site": site} if site else {})
         finally:
-            self.remote = None
-            self.host.s.update({"sitechat": {"on": False}})
-        return self.public()
+            self.remotes.pop(site, None)
+            self._store({**self.cfg(site), "on": False}, site)
+        return self.public(site=site)
 
     # ---------- заявки ----------
     def _find_client(self, contact):
@@ -190,7 +245,8 @@ class SiteChat:
         talk = "\n".join(("Посетитель: " if m.get("role") == "user" else "Консультант: ") + str(m.get("text") or "")[:500]
                          for m in (lead.get("talk") or [])[-12:])
         when = datetime.fromtimestamp(lead.get("ts") or time.time()).strftime("%d.%m %H:%M")
-        text = f"Заявка с сайта ({when}): {contact}" + (f" — {lead['note']}" if lead.get("note") else "") + (f"\n{talk}" if talk else "")
+        where = f" {lead['site']}.dewiar.pro" if lead.get("site") else ""
+        text = f"Заявка с сайта{where} ({when}): {contact}" + (f" — {lead['note']}" if lead.get("note") else "") + (f"\n{talk}" if talk else "")
         cid = self._find_client(contact)
         if cid:
             C.note(cid, text)
@@ -205,14 +261,15 @@ class SiteChat:
 
     def poll(self):
         """Забрать новые заявки, завести клиентов, подтвердить серверу."""
-        if not self.cfg().get("on") or not self._key():
+        if not self.any_on() or not self._key():
             return 0
         try:
             d = self._fetch("/sitechat/leads", {})
         except SiteChatError as e:
             self.error = str(e)
             return 0
-        self.remote = {k: v for k, v in d.items() if k != "leads"}
+        if not d.get("per_site") or "" in (d.get("sites") or {}):      # счётчики в ответе — общего чата (если он есть)
+            self.remote = {k: v for k, v in d.items() if k not in ("leads", "sites")}
         self.error = ""
         done = []
         for lead in d.get("leads") or []:
@@ -222,6 +279,14 @@ class SiteChat:
                 log.warning("💬 Заявка с сайта не завелась: %s", e)
                 continue
             done.append(lead["id"])
+            sites = getattr(self.host, "sites", None)
+            if lead.get("site") and sites is not None and hasattr(sites, "_lead_log"):
+                # 0.99 (владелец 14.11: «заявка в «Заявках» сайта не появилась, нашёл случайно в «Клиентах»»): заявка из чата —
+                # и во вкладку «Заявки» своего сайта, с пометкой, что из чата
+                try:
+                    sites._lead_log(dict(lead, page="chat"), cid)
+                except Exception:  # noqa: BLE001
+                    log.exception("💬 Заявка: журнал сайта")
             self.recent.append({"ts": lead.get("ts"), "name": lead.get("name") or "", "contact": lead.get("contact") or "", "cid": cid})
             self.recent = self.recent[-20:]
             try:
@@ -251,7 +316,7 @@ class SiteChat:
 
     def _loop(self):
         while not self._stop.wait(5 if not self.remote else 120):
-            if not self.cfg().get("on"):
+            if not self.any_on():
                 continue
             try:
                 self.poll()

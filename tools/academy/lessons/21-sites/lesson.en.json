@@ -34,7 +34,7 @@
    "scene": "problem",
    "who": "lira",
    "sub": "Done: zerno.dewiar.pro — on the computer and on the phone. And here's the first request!",
-   "tts": "Done: zerno.dewiar dot pro — on the computer and on the phone. And here's the first request!"
+   "tts": "Done: zerno.deviar dot pro — on the computer and on the phone. And here's the first request!"
   },
   {
    "id": "s3a",
@@ -83,7 +83,7 @@
    "scene": "end",
    "who": "lira",
    "sub": "Dewiar is free, at dewiar.pro.",
-   "tts": "Dewiar is free, at dewiar dot pro."
+   "tts": "Deviar is free, at deviar dot pro."
   },
   {
    "id": "s8b",

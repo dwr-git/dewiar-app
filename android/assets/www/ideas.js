@@ -30,8 +30,8 @@ function ideasHtml() {
   const empty = IDV.q ? `По «${esc(IDV.q)}» ничего — предложите это сверху.` : IDV.tab === "mine" ? "Вы ещё не предлагали идей — напишите сверху, что Лире уметь."
     : IDV.tab === "done" ? "Здесь появятся сделанные идеи — с версией." : "Пока пусто — станьте первым.";
   return `<p class="hint" style="margin-top:0">Что Лире уметь дальше — решаем вместе. Поддержите голосом нужное: чем больше голосов, тем раньше возьмёмся.</p>
-    <div class="idnew"><div class="idq">${IDEA_SVG}<input id="idq" maxlength="120" placeholder="Опишите идею — поищу похожие" value="${esc(IDV.draft || "")}"></div>
-      <div id="idsim"></div><div id="idsend" ${((IDV.draft || "").length >= 4) ? "" : "hidden"}><textarea id="idbody" rows="2" maxlength="2000" placeholder="Подробнее (необязательно)"></textarea>
+    <div class="idnew"><div class="idq">${IDEA_SVG}<input id="idq" maxlength="120" placeholder="Ваша идея в двух словах: что Лире уметь?" value="${esc(IDV.draft || "")}"></div>
+      <div id="idsim"></div><div id="idsend"><textarea id="idbody" rows="2" maxlength="2000" placeholder="Подробнее (необязательно)"></textarea>
       <button class="btn p w" id="idgo">Предложить идею</button></div><div class="res" id="idres"></div></div>
     <div class="idtabs" role="tablist">${tab("plan", "В планах")}${tab("done", "Сделано")}${tab("mine", "Мои")}</div>
     <input id="idfind" class="idfind" placeholder="Поиск по идеям" value="${esc(IDV.q)}" aria-label="Поиск по идеям">
@@ -76,7 +76,7 @@ function ideasBind() {
   if ($("#idmore")) $("#idmore").onclick = () => { IDV.page++; ideasLoad(true); };
   $("#idfind").oninput = () => { clearTimeout(IDV.findT); IDV.findT = setTimeout(() => { IDV.q = $("#idfind").value.trim(); ideasLoad(); }, 350); };
   $("#idq").oninput = () => {
-    const q = IDV.draft = $("#idq").value.trim(); $("#idsend").hidden = q.length < 4; $("#idres").textContent = "";
+    const q = IDV.draft = $("#idq").value.trim(); $("#idres").textContent = "";   // форма — всегда на виду (владелец 14.11)
     clearTimeout(IDV.simT); if (q.length < 4) { $("#idsim").innerHTML = ""; return; }
     IDV.simT = setTimeout(async () => {
       let d; try { d = await ideaCall("/ideas/similar", { q }); } catch (e) { return; }

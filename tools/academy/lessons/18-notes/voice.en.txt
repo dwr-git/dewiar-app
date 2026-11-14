@@ -22,5 +22,5 @@
 Лира: Ask: “What do you know about me?” — and correct me if something's wrong. | Ask: What do you know about me? — and correct me if something's wrong.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

@@ -26,5 +26,5 @@
 Лира: In the studio: “Calendar” → “Money”. On the phone: “My day” → “Money”. | In the studio: Calendar, Money. On the phone: My day, Money.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

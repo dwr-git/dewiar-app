@@ -5,7 +5,7 @@
 
 ## problem
 Патрик: Lira, make a website for my coffee shop!
-Лира: Done: zerno.dewiar.pro — on the computer and on the phone. And here's the first request! | Done: zerno.dewiar dot pro — on the computer and on the phone. And here's the first request!
+Лира: Done: zerno.dewiar.pro — on the computer and on the phone. And here's the first request! | Done: zerno.deviar dot pro — on the computer and on the phone. And here's the first request!
 
 ## ask
 Лира: Say: “A coffee shop on Garden Street, breakfasts, table booking” — and in a minute the site is ready. | Say: A coffee shop on Garden Street, breakfasts, table booking — and in a minute the site is ready.
@@ -24,5 +24,5 @@
 Лира: In the studio — the “Websites” section. Or just say: “Make a website for my business.” | In the studio — the Websites section. Or just say: Make a website for my business.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

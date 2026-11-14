@@ -118,8 +118,9 @@ function toast(t, ms) { const el = $("#toast"); el.textContent = t; el.classList
 const get = (path) => path.split(".").reduce((o, k) => (o || {})[k], S);
 function patchOf(path, v) { const keys = path.split("."), out = {}; let cur = out; keys.slice(0, -1).forEach(k => cur = cur[k] = {}); cur[keys.at(-1)] = v; return out; }
 let saveT = {};
+/* ядро вернуло пусто (сбой, старая версия) — прежние настройки остаются, а не S = null: иначе падает всё, что читает S (0.99: набор «Для себя» сохраняется сразу после hello) */
 function save(patch, quiet) {
-  return core.call("settings_save", { patch }).then(s => { S = s; if (!quiet) toast("Сохранено"); refreshStatic(); }).catch(e => toast(e.message));
+  return core.call("settings_save", { patch }).then(s => { S = s || S; if (!quiet) toast("Сохранено"); refreshStatic(); }).catch(e => toast(e.message));
 }
 
 /* «Безопасность» → «Ваши данные»: общий текст assets/privacy.js (тот же — на телефоне и у самой помощницы) */

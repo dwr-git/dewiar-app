@@ -23,5 +23,5 @@
 Лира: All reminders are in the studio, “Tasks and reminders”, and in the calendar: you can change the time in one tap. | All reminders are in the studio, Tasks and reminders, and in the calendar: you can change the time in one tap.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

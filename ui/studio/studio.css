@@ -955,29 +955,25 @@ html.framed #wlc { top: 38px; }
 #wlc-ent { display: block; width: 96px; height: 96px; margin: 0 auto 6px; }
 #wlc h2 { font: 600 21px/1.3 "Unbounded", "Manrope", sans-serif; text-align: center; margin: 0 0 6px; }
 #wlc .sub { text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.5; margin: 0 auto 18px; max-width: 440px; }
-.wst { display: flex; align-items: center; gap: 14px; padding: 13px 14px; border-radius: 16px; background: var(--frost); margin-bottom: 8px; transition: background .2s; }
-.wst > i { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 600 14px/1 "Unbounded", sans-serif;
-           font-style: normal; background: rgba(255,255,255,.1); color: #fff; }
-.wst > div { flex: 1; min-width: 0; } .wst b { display: block; font-size: 14.5px; } .wst span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
-.wst.ok > i { background: rgba(75,227,161,.2); color: transparent; position: relative; }
-.wst.ok > i::after { content: ""; position: absolute; inset: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234BE3A1' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center/16px no-repeat; }
-.wst.ok span { color: #8EF0C6; }
-/* «Попробуйте сказать» (отзыв 18.10: «сказал привет, ответили голосом, а что делать дальше — ума не приложу»): фразы-примеры,
-   нажатие отправляет фразу ассистенту — ответ в виджете */
-#wlc .tries { margin-top: 14px; }
-#wlc .th { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); } #wlc .th b { color: var(--ink); font-size: 13.5px; }
-#wlc .tlist { display: flex; flex-wrap: wrap; gap: 6px; }
-#wlc .tq { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px 7px 9px; border-radius: 999px; border: 0; cursor: pointer;
-           background: rgba(255,255,255,.08); color: inherit; font: 500 13px/1.3 "Manrope", sans-serif; text-align: left; transition: background .15s; }
-#wlc .tq:hover { background: rgba(255,255,255,.14); } #wlc .tq:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-#wlc .tq i { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); }
-#wlc .tq i svg { width: 9px; height: 9px; fill: #fff; margin-left: 1px; }
-#wlc .tq.sent { background: rgba(75,227,161,.16); }
-#wlc .tq { margin: 0; }
-#wlc .free { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-#wlc .free summary { cursor: pointer; width: max-content; color: var(--ink); font-weight: 600; font-size: 13px; }
-#wlc .free summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
-#wlc .free p { margin: 6px 0 0; }
+/* Первый запуск (0.99): три вопроса крупно, ответ — пузырём под ними; без мозга — одна карточка «Подключить» */
+#wlc .wq { display: grid; gap: 8px; }
+#wlc .tq { display: block; width: 100%; padding: 13px 18px; border-radius: 16px; border: 1px solid rgba(255,255,255,.08); cursor: pointer;
+           background: var(--frost); color: inherit; font: 500 14.5px/1.4 "Manrope", sans-serif; text-align: left; transition: background .15s, border-color .15s; }
+#wlc .tq:hover { background: rgba(255,255,255,.12); } #wlc .tq:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#wlc .tq.sent { border-color: var(--accent); background: rgba(139,140,247,.16); }
+#wlc .wbrain { display: flex; align-items: center; gap: 14px; padding: 15px 16px; border-radius: 16px; background: var(--frost); }
+#wlc .wbrain > div { flex: 1; min-width: 0; } #wlc .wbrain b { display: block; font-size: 14.5px; }
+#wlc .wbrain span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+#wlc .wans { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; animation: updin .25s ease; }
+#wlc .wans-ava { flex: none; width: 8px; height: 8px; margin-top: 15px; border-radius: 50%; background: var(--accent); }
+#wlc .wans p { margin: 0; flex: 1; padding: 11px 15px; border-radius: 4px 16px 16px 16px; background: rgba(255,255,255,.07);
+               font-size: 14px; line-height: 1.55; white-space: pre-wrap; max-height: 34vh; overflow-y: auto; }
+#wlc .wans.wait p::after { content: "…"; display: inline-block; animation: wdots 1.2s steps(4, end) infinite; width: 1.2em; overflow: hidden; vertical-align: bottom; }
+@keyframes wdots { from { width: 0; } to { width: 1.2em; } }
+#wlc .actions { display: flex; align-items: center; gap: 8px; margin: 20px 0 0; } #wlc .actions .grow { flex: 1; }
+#wlc [hidden] { display: none !important; }
+#wlc .btn.link { background: none; box-shadow: none; padding-left: 0; color: var(--muted); } #wlc .btn.link:hover { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #wlc .wans, #wlc.on { animation: none; } #wlc .wans.wait p::after { animation: none; width: auto; } }
 #wlc .tplay, #help .tplay { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
                background: var(--brand); color: #fff; box-shadow: 0 6px 16px -8px rgba(118,75,162,.9); transition: transform .15s; }
 #wlc .tplay svg { width: 14px; height: 14px; fill: currentColor; margin-left: 2px; }
@@ -4096,6 +4092,16 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
 #p-sitechat [hidden] { display: none !important; }
 #p-sitechat .sc-top .lead { margin-bottom: 16px; max-width: 76ch; }
 .sc-main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; align-items: start; }
+/* «Для сайта» (14.11): общий консультант или свой у сайта — строка над настройкой; свой — точкой цвета бренда */
+.sc-sites { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 16px; }
+.sc-sites-l { font: 600 13px Manrope, sans-serif; color: var(--muted); }
+.sc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 0; border-radius: 999px; background: var(--glass); color: inherit; font: 600 13px Manrope, sans-serif; cursor: pointer; box-shadow: var(--raise-s, none); }
+.sc-chip span { margin-left: -6px; font-weight: 500; color: var(--muted); }
+.sc-chip.on { background: var(--brand); color: #fff; } .sc-chip.on span { color: rgba(255,255,255,.75); }
+.sc-chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.sc-own { width: 7px; height: 7px; border-radius: 50%; background: var(--good, #4BE3A1); }
+#sc-site-hint { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
 .sc-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .sc-card { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px; border-radius: 22px; background: var(--glass); box-shadow: var(--raise-s, none); min-width: 0; }
 .sc-card h3 { margin: 0; font: 600 15px Manrope, sans-serif; }

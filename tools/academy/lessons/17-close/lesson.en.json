@@ -34,7 +34,7 @@
    "scene": "invite",
    "who": "lira",
    "sub": "In “My people”, invite your own: show the Dewiar seal or send a link — and you're connected.",
-   "tts": "In My people, invite your own: show the Dewiar seal or send a link — and you're connected."
+   "tts": "In My people, invite your own: show the Deviar seal or send a link — and you're connected."
   },
   {
    "id": "s4a",
@@ -76,7 +76,7 @@
    "scene": "end",
    "who": "lira",
    "sub": "Dewiar is free, at dewiar.pro.",
-   "tts": "Dewiar is free, at dewiar dot pro."
+   "tts": "Deviar is free, at deviar dot pro."
   },
   {
    "id": "s9b",

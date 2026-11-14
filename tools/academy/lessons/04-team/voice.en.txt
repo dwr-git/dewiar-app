@@ -8,7 +8,7 @@
 
 ## assign
 Лира: Tell me: “Assign Olga to update the price list by Friday.” | Tell me: Assign Olga to update the price list by Friday.
-Лира: Olga gets the assignment — in Telegram, MAX or the Dewiar app.
+Лира: Olga gets the assignment — in Telegram, MAX or the Dewiar app. | Olga gets the assignment — in Telegram, MAX or the Deviar app.
 
 ## work
 Лира: Olga taps “I'll take it”. Done — “Done”, with a photo. | Olga taps I'll take it. Done — Done, with a photo.
@@ -26,5 +26,5 @@
 Лира: To turn it on — in the studio: “Work” → “Assignments”. | To turn it on — in the studio: Work, Assignments.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

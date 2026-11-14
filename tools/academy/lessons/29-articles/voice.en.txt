@@ -25,5 +25,5 @@
 Лира: All of this is in the studio: “Websites” → your site → “Articles”. Or by voice: “Write an article for my website.” | All of this is in the studio: Websites, your site, Articles. Or by voice: Write an article for my website.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

@@ -26,5 +26,5 @@
 Лира: To stop a watch — right there, or by voice: “Lira, stop watching.” | To stop a watch — right there, or by voice: Lira, stop watching.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

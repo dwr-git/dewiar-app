@@ -209,6 +209,33 @@ PALETTE_WORDS = [("pistachio", r"фисташ|оливков"), ("espresso", r"�
                  ("mint", r"мят|бирюз|медицин"), ("sun", r"солн|жёлт|желт|ярк\w* жёлт"), ("ice", r"лёд|лед\b|бел\w* (?:фон|сайт)|изумруд|чист"),
                  ("sage", r"шалфе|зелён|зелен|природ|эко"), ("concrete", r"бетон|сер(?:ый|ая|ое|ые)\b"), ("berry", r"ягод|малин|вишн"),
                  ("night", r"ноч|космос")]
+# цвета словами — для фона (0.99): «оранжево-красный градиент» -> по порядку слов
+COLOR_WORDS = [("#FF7A18", r"оранж"), ("#E52D27", r"красн|алый|алого"), ("#7A1F2B", r"бордов"), ("#FFC93C", r"жёлт|желт"),
+               ("#D4A537", r"золот"), ("#2EAD5B", r"зелён|зелен"), ("#9BE3C7", r"мятн"), ("#1FB5A8", r"бирюз"), ("#5BB8F5", r"голуб"),
+               ("#2D6BE0", r"\bсин|синего|синий"), ("#14234B", r"тёмно-?син|темно-?син"), ("#7B4BD6", r"фиолет"), ("#B59CE8", r"сирен|лилов"),
+               ("#F06BA8", r"розов"), ("#FFB38A", r"персик"), ("#E9DCC6", r"бежев"), ("#6B4226", r"коричнев"), ("#8A8F98", r"сер(?:ый|ого|ым|ая|ой)\b"),
+               ("#111318", r"чёрн|черн"), ("#FFFFFF", r"бел(?:ый|ого|ым|ая|ой)\b")]
+
+
+def _colors_in(tt):
+    """Цвета из фразы по порядку: «#ff7a18», «оранжево-красный» -> ["#FF7A18", "#E52D27"]."""
+    found = [(m.start(), m.group(0).upper()) for m in re.finditer(r"#[0-9a-fA-F]{6}\b", tt)]
+    for hx, rx in COLOR_WORDS:
+        m = re.search(rx, tt)
+        if m and not (hx == "#2D6BE0" and re.search(r"тёмно-?син|темно-?син", tt)):
+            found.append((m.start(), hx))
+    out = []
+    for _, c in sorted(found):
+        if c not in out:
+            out.append(c)
+    return out
+
+
+def mix_hex(a, b, t):
+    from sites_render import mix
+    return mix(a, b, t)
+
+
 FONT_WORDS = [("strict", r"строг|делов|современ|плотн"), ("warm", r"тёпл|тепл|уютн|засечк"), ("bold", r"смел|ярк\w* шрифт|крупн\w* шрифт|молодёж|молодеж"),
               ("classic", r"классич|солидн|традиц"), ("editorial", r"журнал|элегант|курсив|изящн|нежн"), ("light", r"прост|лёгк|легк|системн|обычн")]
 BLOCK_WORDS = [("prices", r"цен|прайс|тариф|стоимост|меню"), ("services", r"услуг"), ("reviews", r"отзыв"), ("faq", r"вопрос|faq|чаво"),
@@ -269,7 +296,18 @@ def quick_ops(text, site):
               else "center" if re.search(r"центр", tt) else "top")
         ops.append({"op": "menu", "style": st})
         said.append("меню — " + K.MENUS[st].lower())
-    if re.search(r"цвет|палитр|гамм|оформлени|тем[аеуы]\b", tt) and not re.search(r"шапк", tt):
+    bgw = re.search(r"\bфон|градиент", tt) and not re.search(r"шапк|кнопк|раздел\w* с|картинк|фото", tt)
+    if bgw:
+        cs = _colors_in(tt)
+        if re.search(r"убер\w*|убр\w*|как был|обычн\w* фон|без градиент", tt) and not cs:
+            ops.append({"op": "background", "colors": []})
+            said.append("фон — как в палитре")
+        elif cs:
+            if re.search(r"градиент|переход|перелив", tt) and len(cs) == 1:
+                cs = [cs[0], mix_hex(cs[0], "#000000", .35)]
+            ops.append({"op": "background", "colors": cs[:2]})
+            said.append("фон " + ("градиентом" if len(cs) > 1 else "одним цветом") + " — под всеми разделами")
+    if not bgw and re.search(r"цвет|палитр|гамм|оформлени|тем[аеуы]\b", tt) and not re.search(r"шапк", tt):
         p = _find(PALETTE_WORDS, tt)
         if p:
             ops.append({"op": "palette", "name": p})
@@ -311,6 +349,7 @@ def quick_ops(text, site):
 OPS_HELP = """Операции (JSON-список ops):
 {"op":"palette","name":"<палитра>"} — цвета; палитры: %(pal)s
 {"op":"colors","accent":"#rrggbb","bg":"#rrggbb",…} — точечно (ключи: bg, surface, ink, muted, accent, accent_ink, dark, dark_ink, accent2, line)
+{"op":"background","colors":["#rrggbb"] или ["#rrggbb","#rrggbb"]} — ФОН САЙТА целиком: один цвет или градиент под всеми разделами (и тёмными); «фон», «цвет фона», «градиент» — это он, а не accent; [] — убрать
 {"op":"header","value":"light|dark|accent"} — шапка
 {"op":"style","value":"classic|avangard"} — стиль вёрстки: avangard — крупный широкий шрифт, номера разделов, движение (приносит свою палитру и шрифт; "keep":true — оставить свои)
 {"op":"fonts","name":"<пара>"} — шрифты: %(fonts)s
@@ -342,7 +381,7 @@ def site_brief(site, full=True):
     th = site.get("theme") or {}
     lines = [f"Сайт «{site.get('name')}» — {site.get('tagline') or ''}. Шаблон {site.get('template')}, палитра {th.get('palette')}, "
              f"шрифты {th.get('fonts')}, углы {th.get('radius')}, шапка {th.get('header')}, меню {(site.get('menu') or {}).get('style')}, "
-             f"стиль {th.get('style') or 'classic'}.",
+             f"стиль {th.get('style') or 'classic'}" + (f", фон сайта {' → '.join(th['bg'])}" if th.get("bg") else "") + ".",
              "Контакты: " + json.dumps(site.get("contacts") or {}, ensure_ascii=False)]
     for i, pg in enumerate(site.get("pages") or []):
         lines.append(f"Страница {i} «{pg.get('title')}»:")
@@ -705,7 +744,17 @@ class Sites:
             op = o.get("op")
             if op == "palette" and o.get("name") in K.PALETTES:
                 th["palette"], th["colors"] = o["name"], {}
+                th.pop("bg", None)                     # новая палитра — со своим фоном
                 done.append(f"палитра {K.PALETTES[o['name']]['title']}")
+            elif op == "background":
+                cs = [c for c in (o.get("colors") if isinstance(o.get("colors"), list) else [o.get("colors")] if o.get("colors") else [])
+                      if re.fullmatch(r"#[0-9a-fA-F]{6}", str(c or ""))][:2]
+                if cs:
+                    th["bg"] = cs
+                    done.append("фон " + ("градиентом" if len(cs) > 1 and cs[0] != cs[1] else "одним цветом"))
+                elif "colors" in o and th.get("bg"):
+                    th.pop("bg", None)
+                    done.append("фон — как в палитре")
             elif op == "colors":
                 cs = {k: v for k, v in o.items() if k in K.COLOR_KEYS and re.fullmatch(r"#[0-9a-fA-F]{6}", str(v or ""))}
                 if cs:
@@ -1261,10 +1310,25 @@ class Sites:
                 pass
         s["published"]["reach"] = reach(s["published"]["url"])
         self._save(s, f"Опубликован: {s['published']['url']}")
+        if not s["published"]["reach"]["ok"]:
+            # новый адрес часто открывается через несколько секунд (DNS, сертификат) — проверить ещё раз скоро, а не через полчаса
+            # (владелец 14.11: «домен сразу стал открываться в браузере, а в Лире — „ждёт адреса“»)
+            threading.Thread(target=self._reach_soon, args=(sid,), name="site-reach", daemon=True).start()
         log.info("🌐 Сайт опубликован: %s%s", s["published"]["url"],
                  "" if s["published"]["reach"]["ok"] else f" — по адресу пока не открывается ({s['published']['reach']['why']})")
         self.start()
         return s
+
+    def _reach_soon(self, sid, waits=(10, 30, 90, 240)):
+        for w in waits:
+            time.sleep(w)
+            try:
+                st = self.recheck(sid)
+            except Exception:  # noqa: BLE001
+                return
+            self._emit(sid)
+            if ((st.get("published") or {}).get("reach") or {}).get("ok"):
+                return
 
     def recheck(self, sid):
         """Открывается ли опубликованный сайт по своему адресу — снова (кнопка «Проверить адрес», фон раз в полчаса)."""

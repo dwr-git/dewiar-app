@@ -4,7 +4,7 @@
 Лира: This is Lira's Academy, lesson twenty-six — “Lira's node”. | This is Lira's Academy, lesson twenty-six — Lira's node.
 
 ## problem
-Патрик: The Dewiar server carries thousands of people. How can I help?
+Патрик: The Dewiar server carries thousands of people. How can I help? | The Deviar server carries thousands of people. How can I help?
 Лира: A check — and “Become a node”. That's it: your computer answers people and earns thalers. | A check — and Become a node. That's it: your computer answers people and earns thalers.
 
 ## check
@@ -27,5 +27,5 @@
 Лира: All of this is in the studio, “Lira's node”. You need a graphics card with 8 GB or more and your own model. | All of this is in the studio, Lira's node. You need a graphics card with 8 GB or more and your own model.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

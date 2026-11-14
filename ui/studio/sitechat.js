@@ -4,7 +4,7 @@
    на лету), «Опубликовать» / «Обновить на сайте»; после — ссылка, код для сайта, счётчики и последние заявки.
    Ядро — sitechat.py: sitechat_get {fresh}, sitechat_save {patch}, sitechat_publish {patch}, sitechat_forget, sitechat_poll;
    событие «sitechat». */
-const SC = { d: null, t: 0, theme: "auto" };
+const SC = { d: null, t: 0, theme: "auto", site: "" };   // site — свой консультант этого сайта (14.11); "" — общий
 /* Оформление окна чата на сайте (владелец 11.11: «цвета грустные, дизайн серый — наш светлый, тёмный, ещё несколько»):
    те же data-theme, что у server/dwrapp/sitechat.php */
 const SC_TH = ["soft", "night", "auto", "brand", "classic", "neo", "neo-dark"];   // имена и пояснения — data/i18n: sc.th.<тема>, sc.th.<тема>.d
@@ -16,8 +16,21 @@ function scThemes() {
 const scE = (t) => escH(t);
 
 async function loadSitechat() {
-  try { SC.d = await core.call("sitechat_get", { fresh: true }); } catch (e) { toast(e.message, 4000); return; }
-  scFill(); scLive();
+  try { SC.d = await core.call("sitechat_get", { fresh: true, site: SC.site }); } catch (e) { toast(e.message, 4000); return; }
+  SC.site = SC.d.site || ""; scSites(); scFill(); scLive();
+}
+
+/* «Для сайта» (14.11, владелец: «для каждого сайта — свой консультант»): общий — на всех сайтах без своего и по коду на
+   любом сайте; у сайта на dewiar.pro может быть свой. Нет опубликованных сайтов — строки нет. */
+function scSites() {
+  const l = SC.d.sites || [], box = $("#sc-sites");
+  box.hidden = !l.length; if (!l.length) return;
+  const OWN = '<i class="sc-own" title="' + scE(t("sc.own")) + '"></i>';
+  $("#sc-chips").innerHTML = [{ name: "", own: false }].concat(l).map(x => '<button type="button" role="tab" aria-selected="' + (x.name === SC.site) + '" class="sc-chip' + (x.name === SC.site ? " on" : "")
+    + '" data-site="' + scE(x.name) + '">' + (x.name ? scE(x.name) + "<span>.dewiar.pro</span>" + (x.own ? OWN : "") : scE(t("sc.all"))) + "</button>").join("");
+  const cur = l.find(x => x.name === SC.site), host = SC.site + ".dewiar.pro";
+  $("#sc-site-hint").textContent = !SC.site ? t("sc.hint.all") : cur && cur.own ? t("sc.hint.own", { site: host }) : t("sc.hint.none", { site: host });
+  $$("#sc-chips .sc-chip").forEach(b => b.onclick = () => { if (b.dataset.site === SC.site) return; SC.site = b.dataset.site; loadSitechat(); });
 }
 
 function scPersonas() { return (typeof personas !== "undefined" ? personas : []).filter(p => !p.kids); }
@@ -77,7 +90,8 @@ function scPrev() {
 function scDraft() {
   scCount(); scPrev();
   clearTimeout(SC.t);
-  SC.t = setTimeout(() => core.call("sitechat_save", { patch: scPatch() }).catch(() => {}), 600);
+  const site = SC.site;
+  SC.t = setTimeout(() => core.call("sitechat_save", { patch: scPatch(), site }).catch(() => {}), 600);
 }
 
 function scLive() {
@@ -99,7 +113,7 @@ function scLive() {
   for (const id of ["#sc-ask", "#sc-fold"]) $(id).addEventListener("change", scDraft);
   $("#sc-pub").onclick = async () => {
     const b = $("#sc-pub"); b.disabled = true; const was = b.textContent; b.textContent = "Отправляю…"; b.dataset.busy = "1";
-    try { SC.d = await core.call("sitechat_publish", { patch: scPatch() }); toast(was === "Опубликовать" || was === (window.dwTx ? dwTx("Опубликовать") : "") ? "Чат готов — скопируйте ссылку или код для сайта" : "Обновлено на сайте", 3500); scLive(); }
+    try { SC.d = await core.call("sitechat_publish", { patch: scPatch(), site: SC.site }); scSites(); toast(was === "Опубликовать" || was === (window.dwTx ? dwTx("Опубликовать") : "") ? "Чат готов — скопируйте ссылку или код для сайта" : "Обновлено на сайте", 3500); scLive(); }
     catch (e) { toast(e.message, 5000); }
     b.disabled = false; if (b.dataset.busy === "1") { b.textContent = was; delete b.dataset.busy; }   // текст мог перевестись (0.95)
   };
@@ -108,9 +122,11 @@ function scLive() {
     try { await navigator.clipboard.writeText(i.value); toast("Скопировано"); } catch (e) { i.select(); toast("Выделила — нажмите Ctrl+C"); }
   });
   $("#sc-off").onclick = async () => {
-    if (!await ask("Отключить чат на сайте? Кнопка исчезнет, ссылка перестанет работать. Клиенты в «Клиентах» останутся.", { ok: "Отключить" })) return;
-    try { SC.d = await core.call("sitechat_forget"); toast("Чат отключён"); scLive(); } catch (e) { toast(e.message, 4000); }
+    const own = !!SC.site;
+    const q = own ? t("sc.off.own", { site: SC.site + ".dewiar.pro" }) : "Отключить чат на сайте? Кнопка исчезнет, ссылка перестанет работать. Клиенты в «Клиентах» останутся.";
+    if (!await ask(q, { ok: own ? t("sc.off.own.ok") : "Отключить" })) return;
+    try { SC.d = await core.call("sitechat_forget", { site: SC.site }); toast(own ? t("sc.off.own.done") : "Чат отключён"); scSites(); scLive(); } catch (e) { toast(e.message, 4000); }
   };
-  core.on("sitechat", (e) => { if (e && "persona" in e) { SC.d = e; if ($("#p-sitechat").classList.contains("cur")) scLive(); } });
+  core.on("sitechat", (e) => { if (e && "persona" in e && (e.site || "") === SC.site) { SC.d = e; if ($("#p-sitechat").classList.contains("cur")) scLive(); } });
   window.loadSitechat = loadSitechat;
 })();

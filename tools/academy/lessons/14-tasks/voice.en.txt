@@ -19,11 +19,11 @@
 Лира: If I need to clarify something — I'll ask. Meanwhile, get on with your own things.
 
 ## phone
-Лира: From the phone too: “My day” → “Done” → “Hand over”. Computer off — the Dewiar cloud will do it. | From the phone too: My day, Done, Hand over. Computer off — the Dewiar cloud will do it.
+Лира: From the phone too: “My day” → “Done” → “Hand over”. Computer off — the Dewiar cloud will do it. | From the phone too: My day, Done, Hand over. Computer off — the Deviar cloud will do it.
 
 ## how
 Лира: In the studio — the “Tasks” section. Or just say: “Make a presentation about tomorrow's weather.” | In the studio — the Tasks section. Or just say: Make a presentation about tomorrow's weather.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

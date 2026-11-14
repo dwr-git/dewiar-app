@@ -831,6 +831,7 @@
       <h2 style="margin-top:6px">С чего начать</h2>
       <p class="hint" style="margin:-4px 0 14px">Нажмите на идею — задача подставится, останется нажать «Начать». Или скажите то же самое голосом.</p>
       <div class="tideas" id="t-ideas-grid"></div>
+      <p class="hint" id="t-where" style="margin:14px 0 0">Поставленная задача появится здесь вместо идей: план, ход по шагам и результаты. Закончит — скажет голосом и пришлёт уведомление в виджет. Ответ в разговоре — не задача: его ищите в «Чате».</p>
     </div>
     <div class="fbox" id="t-box">
       <div class="ftree" id="t-list"></div>
@@ -1167,6 +1168,7 @@
   <section id="p-sitechat" class="wide">
     <div class="sc-top"><div><h1>Чат для сайта</h1><p class="lead">Консультант отвечает посетителям вашего сайта — круглой кнопкой в углу или по ссылке.
       Отвечает сервер Dewiar, даже когда компьютер выключен; расход — с вашего счёта. Оставили контакт — заявка придёт в «Клиенты».</p></div></div>
+    <div class="sc-sites" id="sc-sites" hidden><span class="sc-sites-l" data-i18n="sc.sites">Для сайта</span><div class="sc-chips" id="sc-chips" role="tablist" aria-label="Для какого сайта" data-i18n-aria-label="sc.sites.aria"></div><small id="sc-site-hint"></small></div>
     <div class="sc-main">
       <form class="sc-form" id="sc-form" autocomplete="off">
         <div class="sc-card"><h3 id="sc-h-who">Кто отвечает</h3><div class="co-ms" id="sc-ps" role="radiogroup" aria-labelledby="sc-h-who"></div></div>
@@ -2709,11 +2711,11 @@
     </div>
     <div class="id-compose">
       <label class="id-q"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2V16h5v-.1c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>
-        <input id="id-q" maxlength="120" placeholder="Опишите идею — я сразу поищу похожие" aria-label="Ваша идея или поиск"></label>
+        <input id="id-q" maxlength="120" placeholder="Ваша идея в двух словах: что Лире уметь?" aria-label="Ваша идея"></label>
       <div class="id-sim" id="id-sim" hidden></div>
-      <div class="id-new" id="id-new" hidden>
+      <div class="id-new" id="id-new">
         <textarea id="id-body" rows="2" maxlength="2000" placeholder="Подробнее — зачем и как бы вы пользовались (необязательно)"></textarea>
-        <div class="id-acts"><button class="btn primary" id="id-send" type="button">Предложить идею</button><span class="hint" id="id-send-h"></span></div>
+        <div class="id-acts"><button class="btn primary" id="id-send" type="button">Предложить идею</button><span class="hint" id="id-send-h">Похожие на вашу идею покажу сразу, пока пишете.</span></div>
       </div>
       <p class="res" id="id-res"></p>
     </div>
@@ -2791,14 +2793,12 @@
 
 <div id="wlc"><div class="box">
   <canvas id="wlc-ent"></canvas>
-  <h2>Добро пожаловать в Dewiar</h2>
-  <p class="sub">Три шага — и ассистент готов. Любой можно пропустить и вернуться позже: кнопка «Первые шаги» внизу меню.</p>
-  <div class="wst" data-s="1"><i>1</i><div><b>Мозг — кто будет думать</b><span data-t>Ключ Dewiar, свой сервер, программа на компьютере или облако по ключу.</span></div><button class="btn primary" data-go="brain">Выбрать</button></div>
-  <div class="wst" data-s="2"><i>2</i><div><b>Микрофон и имя</b><span data-t id="wlc-s2">Скажите: «Лира, привет». Не откликается — научите имени.</span></div><button class="btn" data-go="ears">Научить имени</button></div>
-  <div class="wst" data-s="3"><i>3</i><div><b>Telegram — ассистент в телефоне</b><span data-t>Одна кнопка — и пишите ему откуда угодно. Можно позже.</span></div><button class="btn" data-go="connect">Подключить</button></div>
-  <div class="tries" id="wlc-tries"><p class="th"><b>Попробуйте сказать</b> — голосом или нажмите на фразу</p><div class="tlist" id="wlc-tlist"></div></div>
-  <details class="free" id="wlc-free"><summary>Что здесь бесплатно?</summary><p>Программа — целиком. Думать ей помогает «мозг»: облако Dewiar по входу (расход считается в ИИ-талерах, на старте они уже есть), ваш компьютер с Ollama или LM Studio — бесплатно, но нужна видеокарта, — или сервис по своему ключу: тогда платите сервису.</p></details>
-  <div class="actions" style="margin:18px 0 0;justify-content:flex-end"><button class="btn" id="wlc-intro" style="margin-right:auto" title="Персонаж сам расскажет о себе голосом, проверит микрофон и покажет кнопки">👋 Познакомиться</button><button class="btn" id="wlc-later">Позже</button><button class="btn primary" id="wlc-done">Готово</button></div>
+  <h2>Привет! Я — <span class="wn">Лира</span></h2>
+  <p class="sub" id="wlc-sub">Спросите о чём-нибудь — нажмите или скажите вслух: «<span class="wn">Лира</span>, …»</p>
+  <div class="wq" id="wlc-qs" role="group" aria-label="Первый вопрос"></div>
+  <div class="wbrain" id="wlc-brain" hidden><div><b>Сначала — мозг: кто будет думать</b><span id="wlc-brain-t">Бесплатно: облако Dewiar по входу или своя модель на компьютере (Ollama, LM Studio).</span></div><button class="btn primary" data-go="brain">Подключить</button></div>
+  <div class="wans" id="wlc-ans" hidden aria-live="polite"><i class="wans-ava" aria-hidden="true"></i><p></p></div>
+  <div class="actions"><button class="btn link" id="wlc-intro" title="Персонаж сам расскажет о себе голосом и проверит микрофон">👋 Познакомиться голосом</button><span class="grow"></span><button class="btn" id="wlc-later">Позже</button><button class="btn primary" id="wlc-done" hidden>Готово</button></div>
 </div></div>
 <div class="drawer" id="help"><button class="btn icon hx" id="help-x" title="Закрыть">✕</button><div id="help-body"></div></div>
 <div class="drawer" id="drawer">

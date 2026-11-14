@@ -204,6 +204,7 @@ DEFAULTS = {
            "mail_fold": False, "mail_hide": [], "mail_mute": [],   # «Почта» на главной: свёрнута, убранные письма и отправители — home.js
            "nav_fold": None,                # студия: свёрнутые группы меню («Знания», «Настройка»…) — home.js
            "nav_hide": None,                # студия → «Оформление» → «Что показывать»: скрытые разделы меню без значка на главной (show.js)
+           "preset": "self",                # 0.99 (владелец 14.11): новым — набор «Для себя» (без работы и бизнеса); "all" — как было; "done" — применён
            "studio_lite": "auto"},          # «Облегчённый вид» студии: auto (сам на слабом компьютере) | on | off (core.js studioLite)
     "reminders": {"ring_minutes": 2,    # сколько звенит, если никто не ответил (потом — «пропущено» в окне)
                   "sound": "signature",  # signature («Пульс») | noon | night | wave | sparks (audio_io.BRAND_SOUNDS; 0.52)
@@ -322,6 +323,8 @@ class Settings:
                     self.data["ui"]["welcome"] = "done"      # уже пользуются — «Первые шаги» не показываем
                 if "intro" not in (raw.get("ui") or {}):
                     self.data["ui"]["intro"] = "done"        # и знакомство само не начинается (кнопкой — можно)
+                if "preset" not in (raw.get("ui") or {}):
+                    self.data["ui"]["preset"] = "all"        # уже пользуются — меню как было (набор «Для себя» — только новым)
                 if "net_share" not in (raw.get("cloud") or {}):
                     # «Сеть Лиры» (владелец 14.11, вариант А): по умолчанию — только у новых установок; кто уже пользовался — как было
                     self.data["cloud"]["net_share"] = False

@@ -27,5 +27,5 @@
 Лира: To turn it on — in the studio: “Prompter”. Or say: “Turn on the prompter.” | To turn it on — in the studio: Prompter. Or say: Turn on the prompter.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

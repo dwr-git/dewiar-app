@@ -528,13 +528,24 @@ class CommandsMixin:
                 SC.publish(patch)
             except SiteChatError as e:
                 raise ValueError(str(e)) from e
-        c = SC.cfg()
+        name = ""
+        try:
+            name = ((self.sites.get(sid).get("published") or {}).get("name") or "") if sid else ""
+        except Exception:  # noqa: BLE001
+            name = ""
+        try:
+            own = bool(name and SC.cfg(name).get("on"))       # у сайта свой консультант (14.11)
+        except TypeError:                                      # прежний SiteChat без сайтов
+            own = False
+        c = SC.cfg(name) if own else SC.cfg()
         p = SC._persona(c.get("persona"))
         col = str(p.get("color") or "")
-        r = SC.remote if SC.remote and not SC.remote.get("none") else {}
+        rem = (getattr(SC, "remotes", None) or {}).get(name if own else "") if own else SC.remote
+        r = rem if rem and not rem.get("none") else {}
         return {"available": True, "on": bool(c.get("on")), "signed": bool(SC._key()), "name": p.get("name") or "Лира",
                 "color": readable(col) if re.fullmatch(r"#[0-9a-fA-F]{6}", col) else "#6a5cf0",
-                "knows": bool(str(c.get("kb") or "").strip() or str(c.get("brief") or "").strip()), "link": (r or {}).get("link", ""), "seeded": seeded}
+                "knows": bool(str(c.get("kb") or "").strip() or str(c.get("brief") or "").strip()), "link": (r or {}).get("link", ""), "seeded": seeded,
+                "own": own, "site": name}
 
     def _plugin_cmd(self, cmd, a):
         """plugins — каталог; plugin_install {id, values} / plugin_remove {id, jobs: снимать ли его дела} / plugin_values {id, values} /
@@ -1170,15 +1181,17 @@ class CommandsMixin:
             from sitechat import SiteChatError
             W = self.sitechat
             try:
+                site = str(a.get("site") or "")       # свой консультант сайта (14.11); '' — общий
                 if cmd == "sitechat_get":
-                    return W.public(fresh=bool(a.get("fresh")))
+                    return W.public(fresh=bool(a.get("fresh")), site=site)
                 if cmd == "sitechat_publish":
-                    return W.publish(a.get("patch") or {})
+                    return W.publish(a.get("patch") or {}, site=site)
                 if cmd == "sitechat_save":             # только настройки, без отправки (черновик)
-                    self.s.update({"sitechat": {k: v for k, v in (a.get("patch") or {}).items() if k in __import__("sitechat").DEF and k != "on"}})
-                    return W.public()
+                    patch = {k: v for k, v in (a.get("patch") or {}).items() if k in __import__("sitechat").DEF and k != "on"}
+                    W._store({**W.cfg(site), **patch}, site) if site else self.s.update({"sitechat": patch})
+                    return W.public(site=site)
                 if cmd == "sitechat_forget":
-                    return W.forget()
+                    return W.forget(site=site)
                 if cmd == "sitechat_poll":
                     n = W.poll()
                     return dict(W.public(), took=n)

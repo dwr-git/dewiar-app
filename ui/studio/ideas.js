@@ -65,12 +65,13 @@ function idBind(root) {
   });
 }
 
-/* «Опишите идею»: похожие — сразу, по мере набора; кнопка «Предложить» — когда написано хоть несколько слов */
+/* Форма идеи видна всегда (владелец 14.11: «на странице просто нет формы — кто догадается, что она открывается, только когда
+   начинаешь вводить»): похожие — сразу, по мере набора; «Предложить идею» — всегда на виду */
 $("#id-q").oninput = () => {
   const q = $("#id-q").value.trim();
-  $("#id-new").hidden = q.length < 4; $("#id-res").textContent = "";
+  $("#id-res").textContent = "";
   clearTimeout(ID.simT);
-  if (q.length < 4) { $("#id-sim").hidden = true; return; }
+  if (q.length < 4) { $("#id-sim").hidden = true; $("#id-send").textContent = "Предложить идею"; $("#id-send").classList.add("primary"); return; }
   ID.simT = setTimeout(async () => {
     let d; try { d = await core.call("ideas_similar", { q }); } catch (e) { return; }
     if ($("#id-q").value.trim() !== q) return;
@@ -84,15 +85,15 @@ $("#id-q").oninput = () => {
     $("#id-send-h").textContent = ID.sim.length ? "" : "Похожих нет — ваша будет первой.";
   }, 350);
 };
-$("#id-q").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); if (!$("#id-new").hidden) $("#id-body").focus(); } };
+$("#id-q").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#id-body").focus(); } };
 $("#id-send").onclick = async () => {
   const title = $("#id-q").value.trim(), text = $("#id-body").value.trim(), r = $("#id-res");
-  if (title.length < 4) { r.className = "res bad"; r.textContent = "Напишите идею хотя бы в несколько слов."; return; }
+  if (title.length < 4) { r.className = "res bad"; r.textContent = "Напишите идею хотя бы в несколько слов — в поле выше."; $("#id-q").focus(); return; }
   $("#id-send").disabled = true;
   try {
     const d = await core.call("ideas_new", { title, text });
     r.className = "res ok"; r.textContent = d.text || "Спасибо! Идея на рассмотрении.";
-    $("#id-q").value = ""; $("#id-body").value = ""; $("#id-new").hidden = true; $("#id-sim").hidden = true;
+    $("#id-q").value = ""; $("#id-body").value = ""; $("#id-sim").hidden = true;
     ID.tab = "mine"; ID.q = ""; $("#id-find").value = ""; loadIdeas();
   } catch (e) { r.className = "res bad"; r.textContent = e.message; }
   finally { $("#id-send").disabled = false; }

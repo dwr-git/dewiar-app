@@ -20,7 +20,8 @@ FAKE_CORE = """(() => {
   const ready = () => { if (!window.core) return setTimeout(ready, 5);
     core.retry = () => {}; core.connect = () => {}; if (core.ws) { core.ws.onclose = null; core.ws.onerror = null; try { core.ws.close(); } catch (e) {} }
     core.call = async (c, a) => { calls.push([c, a]);
-      if (c === "sitechat_get" || c === "sitechat_save") return base;
+      if (c === "sitechat_get" || c === "sitechat_save") return Object.assign({}, base, window.SITES_ON ? { site: a.site || "", sites: [{ name: "trt", own: a.site === "trt" }, { name: "ai-academy", own: false }],
+        title: a.site === "trt" ? "Матрица ролей" : "" } : {});
       if (c === "sitechat_publish") return Object.assign({}, base, a.patch, { on: true, remote: { id: "abc123def0", link: "https://dewiar.pro/dwrapp/sitechat.php?id=abc123def0",
         embed: '<script src="https://dewiar.pro/dwrapp/sitechat.js" data-id="abc123def0" async></script>', today: 3, total: 41, leads_wait: 0 },
         recent: [{ ts: 1761800000, name: "Анна", contact: "+375 29 111-22-33", cid: "c1" }] });
@@ -62,6 +63,18 @@ with sync_playwright() as p:
     st.click(".dwq .yes"); st.wait_for_timeout(300)
     ok(any(c == "sitechat_forget" for c, a in st.evaluate("calls")) and st.locator("#sc-live").is_hidden(), "отключили")
     ok(not errors, f"без ошибок: {errors[:2]}")
+    # 14.11 (владелец: «для каждого сайта — свой консультант»): строка «Для сайта» — только при опубликованных сайтах
+    ok(st.locator("#sc-sites").is_hidden(), "сайтов нет — строки «Для сайта» нет")
+    st.evaluate("window.SITES_ON = true; loadSitechat()"); st.wait_for_timeout(400)
+    chips = st.locator("#sc-chips .sc-chip")
+    ok(st.locator("#sc-sites").is_visible() and chips.count() == 3 and "on" in chips.nth(0).get_attribute("class"), "«Для сайта»: «Все сайты» и оба сайта, выбран общий")
+    chips.nth(1).click(); st.wait_for_timeout(400)
+    gets = [a for c, a in st.evaluate("calls") if c == "sitechat_get"]
+    ok(gets[-1].get("site") == "trt" and st.input_value("#sc-title") == "Матрица ролей" and "свой консультант" in st.inner_text("#sc-site-hint"),
+       f"выбрали сайт — его настройки и подсказка: {st.inner_text('#sc-site-hint')!r}")
+    st.fill("#sc-greet", "Привет!"); st.wait_for_timeout(800)
+    ok(any(c == "sitechat_save" and a.get("site") == "trt" for c, a in st.evaluate("calls")), "черновик сайта сохраняется для этого сайта")
+    st.locator("#p-sitechat .sc-sites").screenshot(path=str(Path(os.environ.get("SHOTS", "/tmp/claude-0")) / "sitechat_sites.png"))
     b.close()
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

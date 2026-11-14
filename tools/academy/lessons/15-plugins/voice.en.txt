@@ -26,5 +26,5 @@
 Лира: In the studio — the “Plugins” section: what each one can do and what to say to it. | In the studio — the Plugins section: what each one can do and what to say to it.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

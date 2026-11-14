@@ -97,13 +97,17 @@ async function stOpen(id, keep, data) {
   $("#st-list").hidden = true; $("#st-ed").hidden = false;
   stTab(SITES.tab, true); stSeg(SITES.seg);
   stBar(); stSide(); stPreview(); stChatShow();
+  // адрес не открывался — проверить снова при открытии (раз в минуту), а не держать «проверяю адрес» до получасовой проверки
+  const rc = (SITES.cur.published || {}).reach || {};
+  if (rc.ok === false && Date.now() / 1000 - (rc.at || 0) > 60)
+    core.call("sites_reach", { id }).then(r => { if (SITES.sid === id) { SITES.cur.published = r.site.published; stBar(); } }).catch(() => {});
 }
 
 function stBar() {
   const s = SITES.cur, p = s.published || {};
   if (document.activeElement !== $("#st-name")) $("#st-name").value = s.name || "";
   const nr = p.name && (p.reach || {}).ok === false;          // №549: опубликован, но адрес ещё не открывается
-  $("#st-state").outerHTML = `<span class="st-chip${p.status === "blocked" ? " bad" : nr ? " wait" : p.name ? " live" : ""}" id="st-state"${nr ? ` title="${stE(stReachSay(p.url))}"` : ""}>${p.status === "blocked" ? "Заблокирован" : p.name ? `<i></i><a href="${stE(p.url)}" data-ext="1">${stE(p.name)}.dewiar.pro</a>${nr ? " · ждёт адреса" : ""}` : "Черновик"}</span>`;
+  $("#st-state").outerHTML = `<span class="st-chip${p.status === "blocked" ? " bad" : nr ? " wait" : p.name ? " live" : ""}" id="st-state"${nr ? ` title="${stE(stReachSay(p.url))}"` : ""}>${p.status === "blocked" ? "Заблокирован" : p.name ? `<i></i><a href="${stE(p.url)}" data-ext="1">${stE(p.name)}.dewiar.pro</a>${nr ? " · проверяю адрес" : ""}` : "Черновик"}</span>`;
   const sa = $("#st-state a[data-ext]"); if (sa) sa.onclick = (e) => { e.preventDefault(); nr ? stRecheck(sa, null) : openExt(p.url); };
   $("#st-pub").textContent = p.name ? "Обновить на сайте" : "Опубликовать";
   $("#st-pub").disabled = p.status === "blocked";
@@ -416,14 +420,18 @@ function stInfo() {
   $$("#st-info [data-c]").forEach(el => el.oninput = () => stLater("c" + el.dataset.c, () => [{ op: "contacts", [el.dataset.c]: el.value }], "Контакты"));
   $("#st-sname").oninput = (e) => stLater("sname", () => [{ op: "site", name: e.target.value }], "Название сайта");
   $("#st-desc2").oninput = (e) => { dn(); stLater("desc", () => [{ op: "site", description: e.target.value }], "Описание для поисковиков"); };
-  if ($("#st-unpub")) $("#st-unpub").onclick = async () => {
-    if (!await ask(`Снять сайт с ${p.name}.dewiar.pro? Адрес перестанет открываться, его сможет занять другой человек. Сам сайт останется здесь.`, { ok: "Снять" })) return;
+  if ($("#st-unpub")) $("#st-unpub").onclick = stUnpublish;
+  $("#st-delsite").onclick = stDeleteSite;
+}
+async function stUnpublish() {
+  const p = SITES.cur.published || {};
+  if (!await ask(`Снять сайт с ${p.name}.dewiar.pro? Адрес перестанет открываться, его сможет занять другой человек. Сам сайт останется здесь.`, { ok: "Снять" })) return;
     try { const r = await core.call("sites_unpublish", { id: SITES.sid }); SITES.cur = r.site; SITES.hist = r.history; stBar(); stInfo(); toast("Сайт снят с публикации"); } catch (e) { toast(e.message, 4000); }
-  };
-  $("#st-delsite").onclick = async () => {
-    if (!await ask(`Удалить сайт «${s.name}» совсем${p.name ? " (и снять с dewiar.pro)" : ""}? Это не отменить.`, { ok: "Удалить" })) return;
-    try { await core.call("sites_delete", { id: SITES.sid }); SITES.sid = ""; toast("Сайт удалён"); loadSites(); } catch (e) { toast(e.message, 4000); }
-  };
+}
+async function stDeleteSite() {
+  const s = SITES.cur, p = s.published || {};
+  if (!await ask(`Удалить сайт «${s.name}» совсем${p.name ? " (и снять с dewiar.pro)" : ""}? Это не отменить.`, { ok: "Удалить" })) return;
+  try { await core.call("sites_delete", { id: SITES.sid }); SITES.sid = ""; toast("Сайт удалён"); loadSites(); } catch (e) { toast(e.message, 4000); }
 }
 
 /* ---------- «Подвал и документы» (0.87) ----------
@@ -562,6 +570,9 @@ function stChatPv(html) {
 async function stSay(text) {
   const b = $("#st-sayb"), inp = $("#st-sayt");
   if (!text) { inp.focus(); return; }
+  // «удали сайт», «сними с публикации» — не правка, а действие над сайтом (владелец 14.11: «не понятно, как удалить сайт»)
+  if (/^(?:удали(?:ть)?|сотри|убери)\s+(?:этот\s+|весь\s+)?сайт(?![а-яё\w])/i.test(text)) { inp.value = ""; return stDeleteSite(); }
+  if (/сним\w*\s+(?:сайт\s+)?с\s+публикац|убери\w*\s+(?:сайт\s+)?из\s+интернет/i.test(text) && (SITES.cur.published || {}).name) { inp.value = ""; return stUnpublish(); }
   b.disabled = true; inp.disabled = true; b.textContent = "Меняю…"; $("#st-say").classList.add("busy");
   try {
     const r = await core.call("sites_say", { id: SITES.sid, text });
@@ -757,10 +768,10 @@ async function stLeads() {
   try { its = (await core.call("sites_leads", { id: SITES.sid })).items || []; } catch (e) { }
   $("#st-nleads").textContent = its.length ? its.length : "";
   box.innerHTML = its.length ? `<div class="st-shead"><div><h3>Заявки с сайта</h3><span class="hint">Каждая — уже в «Клиентах» (знакомый по телефону или почте — записью в его историю). Приходят раз в 2 минуты.</span></div></div>
-    <ul class="st-leadl">${its.map(x => `<li><span class="st-la">${stE((x.name || x.contact || "?").trim()[0] || "?").toUpperCase()}</span><span class="st-lw"><b>${stE(x.name || "Без имени")}</b><span>${stE(x.contact)}</span>${x.note ? `<q>${stE(x.note)}</q>` : ""}</span>
+    <ul class="st-leadl">${its.map(x => `<li><span class="st-la">${stE((x.name || x.contact || "?").trim()[0] || "?").toUpperCase()}</span><span class="st-lw"><b>${stE(x.name || "Без имени")}</b><span>${stE(x.contact)}${x.page === "chat" ? " · из чата консультанта" : ""}</span>${x.note ? `<q>${stE(x.note)}</q>` : ""}</span>
       <span class="st-lm"><small>${new Date((x.ts || 0) * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</small>${x.cid ? `<button type="button" class="btn small" data-cl="${stE(x.cid)}">Открыть в «Клиентах»</button>` : ""}</span></li>`).join("")}</ul>`
     : `<div class="st-zero"><div class="st-zart" aria-hidden="true">${stI('<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 9h8M8 12.5h8"/><rect x="8" y="15" width="5" height="2" rx="1"/>')}</div><h3>Заявок пока нет</h3>
-      <p>${(SITES.cur.published || {}).name ? "Когда посетитель оставит имя и телефон в форме, заявка появится здесь и в «Клиентах», а вам придёт уведомление." : "Опубликуйте сайт — заявки из формы будут приходить сюда и в «Клиенты»."}</p></div>`;
+      <p>${(SITES.cur.published || {}).name ? "Когда посетитель оставит имя и телефон в форме или в чате консультанта, заявка появится здесь и в «Клиентах», а вам придёт уведомление." : "Опубликуйте сайт — заявки из формы будут приходить сюда и в «Клиенты»."}</p></div>`;
   $$("#st-leads [data-cl]").forEach(b => b.onclick = () => { if (window.CR) CR.cur = b.dataset.cl; const n = $('nav button[data-p="clients"]'); if (n) { n.hidden = false; n.click(); } });
 }
 
@@ -820,7 +831,10 @@ async function stSeo() {
   core.on("sites", (e) => {
     if (!$("#p-sites").classList.contains("cur")) return;
     if (!SITES.sid) { core.call("sites_list").then(r => { SITES.items = r.items || []; if (!SITES.sid) stShowList(); }).catch(() => {}); return; }
-    if (e && e.id === SITES.sid && !SITES.busy && document.activeElement && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
+    if (e && e.id === SITES.sid && !SITES.busy && document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
+      // человек печатает — правки не трогаем, но адрес («проверяю адрес» → открывается) обновляем
+      core.call("sites_get", { id: SITES.sid }).then(r => { if (JSON.stringify(r.site.published) !== JSON.stringify(SITES.cur.published)) { SITES.cur.published = r.site.published; stBar(); } }).catch(() => {});
+    } else if (e && e.id === SITES.sid && !SITES.busy && document.activeElement) {
       core.call("sites_get", { id: SITES.sid }).then(r => { if (JSON.stringify(r.site) !== JSON.stringify(SITES.cur)) { SITES.cur = r.site; SITES.hist = r.history; stBar(); stSide(); stPreview(); } }).catch(() => {});
     }
   });

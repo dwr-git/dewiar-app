@@ -1841,6 +1841,9 @@ class Sync:
                 again = (reseal_all or (st or {}).get("reseal")) and ek is not None
                 if st and st.get("h") == h and not st.get("del") and not again:
                     continue
+                big = self.__dict__.setdefault("_too_big", {})
+                if big.get(key) == h:                     # не влезла шифром и не менялась — не шифруем каждую минуту заново
+                    continue
                 data = snap[key]
                 if data is None and key.startswith("vault:"):
                     data = self._vault_read(key.split(":", 1)[1])
@@ -1876,7 +1879,8 @@ class Sync:
                 if ek is not None and self._sealable(kind, iid, data):
                     data = sealed = _seal(ek, data)
                     if len(sealed["c"]) > SEALED_MAX:
-                        log.info("Синхронизация: %s слишком большая для зашифрованной отправки — пропускаю", key)
+                        big[key] = h                      # отчёт №720: 4 записи сейфа писались в журнал каждую минуту
+                        log.info("Синхронизация: %s слишком большая для зашифрованной отправки — пропускаю (до изменения)", key)
                         continue
                 changes.append({"kind": kind, "id": iid, "data": data, "updated": upd, "_h": h})
                 if kind in ("vault", "note") and st and st.get("u") is not None and not st.get("del"):

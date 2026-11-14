@@ -772,5 +772,15 @@
  "sites.style.done": "Style: {name}",
  "sites.style.new": "New · Avangard",
  "insight.src.why.vk_link": "This isn't a VK community link. Use a group or public page — vk.com/name.",
- "insight.src.why.vk_need": "VK shows this community’s posts only to signed-in visitors — Radar reads open pages only. Use the community’s website, RSS feed or Telegram channel instead."
+ "insight.src.why.vk_need": "VK shows this community’s posts only to signed-in visitors — Radar reads open pages only. Use the community’s website, RSS feed or Telegram channel instead.",
+ "sc.own": "own consultant",
+ "sc.all": "All sites",
+ "sc.hint.all": "The shared consultant — on every site without its own, and on any site via the code.",
+ "sc.hint.own": "{site} has its own consultant.",
+ "sc.hint.none": "{site} uses the shared one for now. Set it up below and press “Publish” — it will get its own.",
+ "sc.off.own": "Remove the own consultant from {site}? The site will use the shared one again. Clients in “Clients” stay.",
+ "sc.off.own.ok": "Remove",
+ "sc.off.own.done": "The site uses the shared consultant again",
+ "sc.sites": "For site",
+ "sc.sites.aria": "Which site"
 }

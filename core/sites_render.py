@@ -1064,7 +1064,31 @@ def css(site, mode="preview"):
     root = ":root{" + ";".join(f"--{k}:{val}" for k, val in v.items()) + ";color-scheme:" + ("dark" if lum(p["bg"]) < .2 else "light") + "}"
     prefix = "data:" if mode == "preview" else "fonts/"
     sty = {"avangard": AV_CSS, "poster": POSTER_CSS, "atelier": ATELIER_CSS}.get(style_of(site), "")
-    return font_faces(th.get("fonts") or "warm", prefix) + root + BASE_CSS + NEW_CSS + sty + (PREVIEW_CSS if mode == "preview" else "")
+    return font_faces(th.get("fonts") or "warm", prefix) + root + BASE_CSS + NEW_CSS + sty + bg_css(th, p) + (PREVIEW_CSS if mode == "preview" else "")
+
+
+def bg_of(theme):
+    """Фон сайта целиком (0.99, владелец 14.11: «прошу фон градиентом оранжево-красным — „ничего не изменилось“, а цвет фона
+    меняет акценты»): theme.bg = [цвет] или [цвет, цвет] — один цвет или градиент под всеми разделами. -> список или []."""
+    v = (theme or {}).get("bg") or []
+    v = [c for c in (v if isinstance(v, list) else [v]) if re.fullmatch(r"#[0-9a-fA-F]{6}", str(c or ""))][:2]
+    return v
+
+
+def bg_css(theme, p):
+    """Фон под всеми разделами (кроме разделов цвета акцента): разделы прозрачные, текст — светлый или тёмный по фону."""
+    v = bg_of(theme)
+    if not v:
+        return ""
+    a, b = v[0], v[-1]
+    mid = mix(a, b, .5)
+    light_ink = lum(mid) < .42
+    ink = "#FFFFFF" if light_ink else (p["ink"] if contrast(p["ink"], mid) >= 4.5 else "#15171C")
+    card = "rgba(255,255,255,.12)" if light_ink else "rgba(255,255,255,.62)"
+    line = "rgba(255,255,255,.26)" if light_ink else "rgba(0,0,0,.14)"
+    bg = a if a == b else f"linear-gradient(165deg,{a} 0%,{b} 100%)"
+    return (f"html{{background:{b}}}body{{background:{bg};background-color:{a}}}"
+            f".t-base,.t-alt,.t-dark{{--sbg:transparent;--sink:{ink};--smut:{mix(ink, mid, .3)};--sline:{line};--scard:{card};--slink:{ink}}}")
 
 
 # ---------- части страницы ----------

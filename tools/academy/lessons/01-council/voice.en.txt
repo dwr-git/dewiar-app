@@ -9,7 +9,7 @@
 Лира: Should you switch to remote work? Buy an apartment — or keep saving?
 
 ## table
-Лира: In Dewiar, every character can have a brain of its own.
+Лира: In Dewiar, every character can have a brain of its own. | In Deviar, every character can have a brain of its own.
 Лира: For example, I think with ChatGPT, and Patrick — with Claude.
 Лира: Gather us at one table.
 
@@ -31,5 +31,5 @@
 Лира: Or open “AI Council” in the studio. The minutes are saved in the “Council” folder. | Or open AI Council in the studio. The minutes are saved in the Council folder.
 
 ## end
-Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.
 Лира: See you in the next lesson!

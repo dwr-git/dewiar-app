@@ -41,7 +41,7 @@
    "scene": "assign",
    "who": "lira",
    "sub": "Olga gets the assignment — in Telegram, MAX or the Dewiar app.",
-   "tts": "Olga gets the assignment — in Telegram, MAX or the Dewiar app."
+   "tts": "Olga gets the assignment — in Telegram, MAX or the Deviar app."
   },
   {
    "id": "s4a",
@@ -97,7 +97,7 @@
    "scene": "end",
    "who": "lira",
    "sub": "Dewiar is free, at dewiar.pro.",
-   "tts": "Dewiar is free, at dewiar dot pro."
+   "tts": "Deviar is free, at deviar dot pro."
   },
   {
    "id": "s8b",

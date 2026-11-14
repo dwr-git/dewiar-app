@@ -1,50 +1,72 @@
 /* Студия Dewiar: окно «Первые шаги» и раздел «Безопасность» (сейф и резервные копии).
-   Первые шаги — три пункта (модель отвечает, имя слышно, Telegram подключён); llm_test, tg_get, say и события wake,
-   telegram; выбор «потом / готово» хранится в настройке ui.welcome. Сейф: vault_list/put/delete/reveal; копии:
+   Первые шаги (0.99) — одно окно: привет, три вопроса, ответ здесь же; llm_test, say и события answer, state, wake;
+   выбор «потом / готово» хранится в настройке ui.welcome. Сейф: vault_list/put/delete/reveal; копии:
    backup_info/make/restore/inspect/open, папка копий — настройка backup.dir.
    Здесь же объявлены SVG() и значки I_* — ими пользуются файлы ниже (day.js — только при отрисовке).
    Файлы студии подключаются по порядку из ui/settings.html и делят одну глобальную область; wlcBoot зовёт dewiar.js
    после связи с ядром. */
-/* ---------- первые шаги (первый запуск) ----------
-   wlcHeard — ассистент уже слышал своё имя (событие wake) с момента открытия студии; ядро этого не помнит. */
-let wlcEnt = null, wlcHeard = false;
-function wlcSet(n, ok, text) {
-  const el = $(`.wst[data-s="${n}"]`); if (!el) return;
-  el.classList.toggle("ok", !!ok); if (text) el.querySelector("[data-t]").textContent = text;
+/* ---------- первый запуск: одно окно, один шаг (0.99, владелец 14.11: «элегантно, гармонично») ----------
+   Персонаж здоровается и предлагает три вопроса; нажали (или сказали вслух с именем) — ответ появляется здесь же,
+   под вопросами, по событиям answer (живой текст, done — итог), лицо дышит по state. Мозга нет или он не отвечает
+   (llm_test) — вместо вопросов одна карточка «Подключить» (раздел «Мозг»). Микрофон и имя проверяет «Познакомиться
+   голосом» (intro_start); Telegram и прочее — потом, в своих разделах. ui.welcome: "later" / "done". */
+let wlcEnt = null, wlcBrainOk = null, wlcWait = false, wlcTimer = 0;
+const WLC_QS = ["{n}, что ты умеешь?", "Какая погода завтра?", "Напомни через 10 минут позвонить маме"];
+function wlcName() { const p = (typeof personas !== "undefined" && personas || []).find(x => x.id === S.persona) || {}; return [p, p.name || "Лира"]; }
+function wlcQs(name) {
+  const box = $("#wlc-qs"); if (!box) return;
+  box.innerHTML = WLC_QS.map(t => { const q = t.replace("{n}", name); return `<button class="tq" data-q="${escH(q)}">${escH(q)}</button>`; }).join("");
+  $$(".tq", box).forEach(b => b.onclick = () => wlcAsk(b));
 }
+/* мозг: настоящий запрос к модели — отвечает ли она, а не только настроена ли */
 async function wlcRefresh() {
   const prof = S && S.llm && S.llm.profiles && S.llm.profiles[S.llm.active];
-  if (!prof) wlcSet(1, false, "Модель ещё не выбрана — выберите, где она будет работать.");
-  else {
-    wlcSet(1, false, `Проверяю «${prof.name || prof.model}»…`);
-    // настоящий запрос к модели: проверяем, что она отвечает, а не только что настроена
-    const r = await core.call("llm_test", { profile: prof }).catch(e => ({ error: e.message }));
-    wlcBrainOk = !!r.ok;
-    wlcSet(1, !!r.ok, r.ok ? `Подключён: ${prof.name || r.model} — отвечает за ${((r.total_ms || 0) / 1000).toFixed(1)} с.` : "Модель не отвечает — выберите другую или проверьте сервер.");
-  }
-  if (wlcHeard) wlcSet(2, true, "Слышу вас — имя работает.");
-  const tg = await core.call("tg_get").catch(() => null);
-  if (tg && tg.paired) wlcSet(3, true, `Подключён: @${tg.bot}.`);
-  const n = $$(".wst.ok").length; $("#wlc-chip").textContent = `✨ Первые шаги · ${n} из 3`;
+  if (!prof) { wlcBrainOk = false; return wlcBrain(); }
+  const r = await core.call("llm_test", { profile: prof }).catch(e => ({ error: e.message }));
+  wlcBrainOk = !!(r && r.ok); wlcBrain(r && r.error);
 }
-/* облик и имя текущего персонажа (Лира — с живым лицом) */
-function wlcPersona() {
-  const p = (typeof personas !== "undefined" && personas || []).find(x => x.id === S.persona) || {};
-  $$("#wlc .wn").forEach(el => el.textContent = p.name || "Лира");
-  wlcTries(p.name || "Лира");
-  if (!$('.wst[data-s="2"]').classList.contains("ok")) $("#wlc-s2").textContent = `Скажите: «${p.name || "Лира"}, привет». Не откликается — научите имени.`;
-  return p;
+function wlcBrain(err) {
+  const off = wlcBrainOk === false;
+  $("#wlc-brain").hidden = !off; $("#wlc-qs").hidden = off; $("#wlc-sub").hidden = off;
+  $("#wlc-brain-t").textContent = err && S.llm && S.llm.active ? "Модель не отвечает — выберите другую или проверьте сервер."
+    : "Бесплатно: облако Dewiar по входу или своя модель на компьютере (Ollama, LM Studio).";
 }
+function wlcAsk(b) {
+  if (wlcBrainOk === false) return wlcBrain();
+  $$("#wlc .tq").forEach(x => x.classList.toggle("sent", x === b));
+  wlcShow("", true);
+  core.call("say", { text: b.dataset.q }).catch(e => wlcShow(e.message, false));
+}
+/* пузырь ответа: wait — ещё думает (три точки); через 45 с без ответа — подсказка, где искать */
+function wlcShow(text, wait) {
+  const box = $("#wlc-ans"); box.hidden = false; box.classList.toggle("wait", !!wait && !text);
+  $("p", box).textContent = text || (wait ? "" : "…"); wlcWait = !!wait;
+  clearTimeout(wlcTimer);
+  if (wait) wlcTimer = setTimeout(() => { if (wlcWait && !$("p", box).textContent) { wlcWait = false; box.classList.remove("wait"); $("p", box).textContent = "Ответ задерживается — он появится в виджете и в «Чате»."; } }, 45000);
+}
+core.on("answer", e => {
+  if (!e || !$("#wlc").classList.contains("on") || (!wlcWait && $("#wlc-ans").hidden)) return;
+  if (e.text) wlcShow(e.text, !e.done);
+  if (e.done) { wlcWait = false; $("#wlc-done").hidden = false; $("#wlc-later").hidden = true; }
+});
+core.on("state", e => {
+  if (!wlcEnt || !e || !$("#wlc").classList.contains("on")) return;
+  wlcEnt.set({ state: e.state === "speaking" || e.state === "thinking" || e.state === "listening" ? e.state : "idle" });
+});
+/* сказали имя вслух — ответ тоже сюда */
+core.on("wake", e => { if (e && $("#wlc").classList.contains("on") && !wlcWait) wlcShow("", true); });
 function wlcOpen() {
   $("#wlc").classList.add("on");
-  const p = wlcPersona();
+  const [p, name] = wlcName();
+  $$("#wlc .wn").forEach(el => el.textContent = name);
+  wlcQs(name); wlcWait = false; $("#wlc-ans").hidden = true; $("#wlc-done").hidden = true; $("#wlc-later").hidden = false;
   const opt = { style: p.avatar_url && p.style !== "aura" ? "photo" : (p.style || "nexus"), color: p.color || "#8A9BFF", image: p.avatar_url || null, live: p.live || "" };
   if (!wlcEnt) wlcEnt = new DewiarEntity($("#wlc-ent"), opt); else wlcEnt.configure(opt);
   wlcEnt.set({ state: "idle", level: 0.2 }); wlcRefresh();
 }
 function introGo() { core.call("intro_start").then(ok => toast(ok === false ? "Знакомство уже идёт — смотрите виджет" : "Смотрите и слушайте виджет 👋")).catch(e => toast(e.message)); }
 function wlcClose(done) {
-  $("#wlc").classList.remove("on");
+  $("#wlc").classList.remove("on"); wlcWait = false; clearTimeout(wlcTimer);
   if (done) { save({ ui: { welcome: "done" } }, true); $("#wlc-chip").classList.remove("on"); }
 }
 /* После связи с ядром: значок «Первые шаги» в меню, пока не нажато «Готово»; само окно — только если его не отложили
@@ -62,21 +84,7 @@ $("#wlc-chip").onclick = () => wlcOpen();
 $("#wlc-intro").onclick = () => { wlcClose(false); introGo(); };
 $("#ab-intro").onclick = introGo;
 core.on("intro", e => { if (wlcEnt && e && e.step) wlcEnt.set({ state: e.step === "done" ? "idle" : "speaking" }); });
-/* «Попробуйте сказать»: то, что работает сразу после подключения мозга, без настроек (отзыв 18.10: «сказал привет — а что
-   делать дальше, ума не приложу»). {n} — имя персонажа. Нажали — фраза уходит ассистенту, ответ в виджете. */
-const WLC_TRIES = ["{n}, что ты умеешь?", "Напомни через 10 минут позвонить маме", "Какая погода завтра?",
-  "Включи спокойное радио", "Что нового в мире сегодня?", "Запиши заметку: купить хлеб"];
-let wlcBrainOk = false;
-function wlcTries(name) {
-  const box = $("#wlc-tlist"); if (!box) return;
-  box.innerHTML = WLC_TRIES.map(t => { const q = t.replace("{n}", name); return `<button class="tq" data-q="${escH(q)}" title="Отправить ассистенту"><i><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg></i>${escH(q)}</button>`; }).join("");
-  $$(".tq", box).forEach(b => b.onclick = () => {
-    if (!wlcBrainOk) { toast("Сначала шаг 1 — выберите, кто будет думать"); return; }
-    core.call("say", { text: b.dataset.q }).then(() => { b.classList.add("sent"); toast("Отправил ассистенту — ответ в виджете"); }).catch(e => toast(e.message));
-  });
-}
-core.on("wake", e => { if (e && !wlcHeard) { wlcHeard = true; if ($("#wlc").classList.contains("on")) wlcSet(2, true, "Слышу вас — имя работает."); } });
-core.on("telegram", e => { if (e && e.paired) wlcSet(3, true, `Подключён: @${e.bot}.`); });
+$("#wlc").addEventListener("keydown", e => { if (e.key === "Escape") $("#wlc-later").click(); });
 
 /* ---------- безопасность: сейф и резервная копия ----------
    vault_list отдаёт только названия и длину значения; само значение приходит лишь по vault_reveal

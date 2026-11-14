@@ -181,6 +181,17 @@ if ($("#lite-seg")) $$("#lite-seg button").forEach(b => b.onclick = async () => 
   toast(v === "auto" ? "Облегчённый вид — сам, когда компьютеру тяжело" : v === "on" ? "Облегчённый вид включён" : "Облегчённый вид выключен");
 });
 
+/* 0.99 (владелец 14.11: «Для себя» по умолчанию): новая установка — сразу набор «Для себя» (без клиентов, рассылок, сайтов,
+   суфлёра, ботов); раз и молча, дальше человек меняет как хочет. Кто уже пользовался — ui.preset "all", меню как было. */
+function shFirstPreset() {
+  const ui = (S && S.ui) || {};
+  if (ui.preset !== "self" || SH.busy || !$("nav button[data-p]")) return;
+  S.ui = Object.assign({}, ui, { preset: "done" });
+  if (ui.nav_hide == null && ui.home_apps == null) shSave(new Set(shHideable().filter(p => SH_SETS[1].hide(p))));
+  save({ ui: { preset: "done" } }, true).catch(() => {});
+}
+window.shFirstPreset = shFirstPreset;
 document.addEventListener("studio-sec", (e) => { if (e.detail === "look") { shRender(); liteRender(); } });
-core.on("settings", () => setTimeout(() => { if (secOn("look") && !SH.busy) shRender(); }, 0))
+core.on("hello", () => setTimeout(shFirstPreset, 0))
+  .on("settings", () => setTimeout(() => { shFirstPreset(); if (secOn("look") && !SH.busy) shRender(); }, 0))
   .on("plugins", () => setTimeout(() => { shNav(); if (secOn("look")) shRender(); }, 0));
