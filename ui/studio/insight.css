@@ -242,6 +242,13 @@ html.st-neu .rd-sg:active { box-shadow: var(--press); }
 .rd-ans { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rd-grid); }
 .rd-aq { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
 .rd-at p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.6; }
+.rd-at .rd-alead { font-size: 16px; font-weight: 700; line-height: 1.45; margin-bottom: 12px; text-wrap: pretty; }
+.rd-alist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.rd-alist li { position: relative; padding-left: 16px; font-size: 14.5px; line-height: 1.55; }
+.rd-alist li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.rd-alist b { font-weight: 700; }
+.rd-at .rd-anext { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 9%, transparent); font-size: 14px; }
+.rd-at .rd-anext::before { content: "→ "; font-weight: 700; color: var(--accent); }
 .rd-refw { white-space: nowrap; }
 .rd-ref { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; margin: 0 1px; border-radius: 6px; vertical-align: 1px;
   font-size: 11px; font-weight: 700; line-height: 1; text-decoration: none; background: var(--rd-soft2); color: var(--accent) !important; }

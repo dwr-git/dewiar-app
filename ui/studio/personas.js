@@ -46,6 +46,32 @@ function personasHead() {
   if (cur) { accent(cur.color); brand.configure({ style: cur.avatar_url && cur.style !== "aura" ? "photo" : cur.style, color: cur.color, image: cur.avatar_url || null, soft: !!cur.kids }); $("#bsub").textContent = `сейчас говорит ${cur.name}`; window.DW_CUR_NAME = cur.name; }
 }
 
+/* №708 (14.11, McDuck): «выбор персонажа на ПК сделать также как на телефоне — левый верхний угол, это проще и быстрее».
+   Нажали на облик и имя слева вверху — короткий список персонажей: одно нажатие — говорит он; «Все персонажи…» — раздел. */
+function brandPick() {
+  const old = $("#br-pick"); if (old) { old.remove(); return; }
+  const m = document.createElement("div"); m.id = "br-pick"; m.className = "br-pick"; m.setAttribute("role", "menu");
+  const face = (p) => p.avatar_url ? "background-image:url(" + JSON.stringify(String(p.avatar_url)) + ")" : "background:" + (p.color || "#8A9BFF");
+  m.innerHTML = personas.filter(p => p && p.id).map(p => `<button type="button" role="menuitemradio" aria-checked="${p.id === active}" data-id="${escH(p.id)}"${p.id === active ? " class=on" : ""}>`
+      + `<i style="${escH(face(p))}"></i><span>${escH(p.name || p.id)}</span></button>`).join("")
+    + `<button type="button" class="all" data-all="1">${escH(window.dwTx ? dwTx("Все персонажи…") : "Все персонажи…")}</button>`;
+  $(".brand").appendChild(m);
+  m.onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    m.remove();
+    if (b.dataset.all) { const n = $('nav button[data-p="personas"]'); if (n) n.click(); return; }
+    if (b.dataset.id !== active) core.call("persona_set", { id: b.dataset.id }).catch(err => toast(err.message));
+  };
+  setTimeout(() => document.addEventListener("click", function off(e) { if (!e.target.closest(".brand")) { m.remove(); document.removeEventListener("click", off); } }), 0);
+  const first = m.querySelector("button.on") || m.querySelector("button"); if (first) first.focus();
+}
+(() => {
+  const b = $(".brand"); if (!b) return;
+  b.tabIndex = 0; b.setAttribute("role", "button"); b.title = "Сменить персонажа";
+  b.addEventListener("click", (e) => { if (!e.target.closest("#br-pick")) brandPick(); });
+  b.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === b) { e.preventDefault(); brandPick(); } if (e.key === "Escape") { const m = $("#br-pick"); if (m) m.remove(); } });
+})();
+
 // первое открытие «Персонажей»: карточки, галерея и голоса Vosk для редактора (раньше их грузили при запуске — dewiar.js)
 secLazy("personas", () => { renderPersonas(); if (typeof vkSpeakers !== "undefined" && !vkSpeakers.length && typeof loadVosk === "function") loadVosk(); });
 

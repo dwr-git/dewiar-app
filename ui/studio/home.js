@@ -41,7 +41,7 @@ const HM_APPS = [
   { id: "ref", name: "Рефералы", sub: "приглашённые", g: 2, d: '<circle class="sf" cx="24" cy="24" r="8"/><circle class="ln" cx="24" cy="21.5" r="3.2"/><path class="ln" d="M18.5 30a5.5 5.5 0 0 1 11 0"/><path class="th" d="M17 18L11 12M31 18l6-6M17 31l-6 5M31 31l6 5"/><circle class="ln" cx="9" cy="10" r="3"/><circle class="ln" cx="39" cy="10" r="3"/><circle class="ln" cx="9" cy="38" r="3"/><circle class="ln" cx="39" cy="38" r="3"/><path class="dt" d="M39 18.5l.8 1.7 1.8.3-1.3 1.3.3 1.8-1.6-.9-1.6.9.3-1.8-1.3-1.3 1.8-.3z"/>' }];
 // по умолчанию видно всё (у тех, кто ещё не настраивал, ничего не пропадает); скрытое с главной — скрыто и в меню слева
 // (24.10, владелец: «если с главной отключаю „Рефералы“ — то и слева должно исчезать… иначе не решили нахлобученность»)
-const HM_DEFAULT = ["chat", "close", "family", "calendar", "reminders", "notes", "council", "podcast", "watch", "docs", "pay", "vault", "music", "modes", "qa", "ideas", "tasks", "sites", "team", "clients", "pbot", "play", "prompter", "insight", "memory", "ref", "node"];
+const HM_DEFAULT = ["chat", "close", "family", "calendar", "reminders", "notes", "council", "podcast", "watch", "pay", "vault", "music", "docs", "modes", "qa", "ideas", "tasks", "sites", "team", "clients", "pbot", "play", "prompter", "insight", "memory", "ref", "node"];
 /* Новые приложения после выпуска (25.10: «Платежи», «Сейф») у тех, кто уже настраивал главную, — появляются сами, в конце:
    ui.home_known — какие значки человек уже видел, когда настраивал; кого там нет — новый. */
 const HM_OLD = ["chat", "close", "calendar", "reminders", "notes", "tasks", "play", "pad", "prompter", "memory", "folder", "ref"];

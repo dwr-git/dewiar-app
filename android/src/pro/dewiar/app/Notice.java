@@ -81,14 +81,61 @@ public class Notice extends JobService {
         if (cfg.has("lat") && cfg.has("lon")) {
             try { String w = weather(cfg.optDouble("lat"), cfg.optDouble("lon"), h, en); if (!w.isEmpty()) why.add(0, w); } catch (Throwable ignored) { }
         }
+        String url = "";
+        if (why.isEmpty() && cfg.optJSONObject("world") != null) {     // «Интересное в мире»: только исключительное и по вкусу
+            try {
+                JSONObject w = world(cfg.getJSONObject("world"), en, sp, now);
+                if (w != null) { why.add(w.optString("title") + " — " + w.optString("text")); url = w.optString("url"); }
+            } catch (Throwable ignored) { }
+        }
         if (why.isEmpty()) return "";
         String who = cfg.optString("who", "Лира");
         StringBuilder sb = new StringBuilder();
         for (String s : why) { if (sb.length() > 0) sb.append(". "); sb.append(Character.toUpperCase(s.charAt(0))).append(s.substring(1)); }
         String text = sb.toString() + ".";
         sp.edit().putString("notice_day", today).putInt("notice_n", sp.getInt("notice_n", 0) + 1).apply();
-        show(c, who + (en ? " noticed" : " заметила"), text);
+        show(c, who + (en ? " noticed" : " заметила"), text, url);
         return text;
+    }
+
+    static final int WORLD_WEEK = 2;          // «Интересное в мире» — не чаще двух раз в неделю
+    static final double WORLD_MIN = 9.0;      // и только исключительное: оценка выпуска + 1.5 × вес темы человека
+
+    /** Лучшая для человека новость выпуска (?p=/world), которой он не видел, если она исключительная и неделя позволяет. */
+    static JSONObject world(JSONObject cfg, boolean en, SharedPreferences sp, long now) throws Exception {
+        JSONArray sent = new JSONArray(sp.getString("world_sent", "[]"));
+        int week = 0;
+        for (int i = 0; i < sent.length(); i++) if (now - sent.optLong(i) < 7 * 86400000L) week++;
+        if (week >= WORLD_WEEK) return null;
+        String base = cfg.optString("base", "");
+        if (!base.startsWith("https://")) return null;
+        JSONObject d = new JSONObject(get(base + "?p=/world&lang=" + (en ? "en" : "ru")));
+        JSONObject pick = pickWorld(d.optJSONArray("items"), cfg.optJSONObject("w"), cfg.optJSONArray("seen"), sp.getString("world_ids", ""));
+        if (pick == null) return null;
+        JSONArray keep = new JSONArray();
+        for (int i = 0; i < sent.length(); i++) if (now - sent.optLong(i) < 7 * 86400000L) keep.put(sent.optLong(i));
+        keep.put(now);
+        String ids = (sp.getString("world_ids", "") + " " + pick.optString("id")).trim();
+        if (ids.length() > 600) ids = ids.substring(ids.length() - 600);
+        sp.edit().putString("world_sent", keep.toString()).putString("world_ids", ids).apply();
+        return pick;
+    }
+
+    static JSONObject pickWorld(JSONArray items, JSONObject w, JSONArray seen, String sentIds) {
+        if (items == null) return null;
+        java.util.HashSet<String> skip = new java.util.HashSet<>();
+        if (seen != null) for (int i = 0; i < seen.length(); i++) skip.add(seen.optString(i));
+        for (String s : sentIds.split(" ")) if (!s.isEmpty()) skip.add(s);
+        JSONObject best = null; double bs = -1;
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject x = items.optJSONObject(i);
+            if (x == null || skip.contains(x.optString("id")) || !x.optString("url").startsWith("http")) continue;
+            double k = w == null ? 0 : w.optDouble(x.optString("topic"), 0);
+            if (k <= -2) continue;
+            double sc = x.optDouble("score", 0) + 1.5 * k;
+            if (sc > bs) { bs = sc; best = x; }
+        }
+        return bs >= WORLD_MIN ? best : null;
     }
 
     /** Повод из прогноза на остаток дня: осадки с вероятностью от 60 %, гроза, жара от 30°, мороз до −15°, ветер от 15 м/с. */
@@ -131,10 +178,11 @@ public class Notice extends JobService {
         } finally { c.disconnect(); }
     }
 
-    static void show(Context c, String title, String text) {
+    static void show(Context c, String title, String text, String url) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        Intent open = new Intent(c, MainActivity.class).setAction("pro.dewiar.NOTICE");
+        Intent open = url != null && url.startsWith("http") ? new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))     // новость — сразу читать
+                : new Intent(c, MainActivity.class).setAction("pro.dewiar.NOTICE");
         PendingIntent pi = PendingIntent.getActivity(c, JOB, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification.Builder b = Compat.builder(c, Compat.CH_INFO);
         b.setSmallIcon(R.drawable.ic_stat).setContentTitle(title).setContentText(text)

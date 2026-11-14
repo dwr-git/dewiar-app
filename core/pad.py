@@ -57,6 +57,13 @@ class Pad:
         return d
 
     def _path(self, name) -> Path:
+        # 14.11 (владелец: «несколько версий вкладки без возможности их удалить»): копия синхронизации называлась длиннее
+        # 60 знаков — по обрезанному имени файла не было, и «Удалить» молча ничего не делало. Есть файл с таким именем — он.
+        raw = str(name or "")
+        if raw and "/" not in raw and "\\" not in raw and ".." not in raw:
+            exact = self.root() / f"{raw}.md"
+            if exact.is_file() and exact.parent == self.root():
+                return exact
         n = _name(name)
         p = self.root() / f"{n}.md"
         if p.parent != self.root():

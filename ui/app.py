@@ -722,6 +722,12 @@ def ui_http_base():
         def do_GET(self):
             if self.path.startswith("/podcast-audio/"):
                 return self._podcast()
+            if self.path.startswith("/academy-cache/"):
+                # №707 (14.11): «Нельзя перематывать видео» — урок отдавался без Range, ползунок не перематывал
+                f = Path(self.translate_path(self.path))
+                ext = f.suffix.lower()
+                if ext in (".mp4", ".webm") and f.is_file():
+                    return self._ranged(f, "video/mp4" if ext == ".mp4" else "video/webm")
             return super().do_GET()
 
         def _podcast(self):
@@ -743,6 +749,11 @@ def ui_http_base():
                     f = None
             if f is None:
                 return self.send_error(404)
+            return self._ranged(f, {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav"}[f.suffix.lower()])
+
+        def _ranged(self, f, ctype):
+            """Файл с поддержкой Range (206) — чтобы ползунок проигрывателя перематывал (звук подкаста, видеоурок)."""
+            import re as _re
             size = f.stat().st_size
             a, b = 0, size - 1
             m = _re.match(r"bytes=(\d*)-(\d*)", self.headers.get("Range") or "")
@@ -761,7 +772,7 @@ def ui_http_base():
                 self.send_header("Content-Range", f"bytes {a}-{b}/{size}")
             else:
                 self.send_response(200)
-            self.send_header("Content-Type", {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav"}[f.suffix.lower()])
+            self.send_header("Content-Type", ctype)
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(b - a + 1))
             self.end_headers()

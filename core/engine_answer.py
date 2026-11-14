@@ -650,6 +650,8 @@ class AnswerMixin:
         except Exception:  # noqa: BLE001
             pass
         add("insights", "Выводы ночи (до послезавтра)", self.diary.prompt(), "diary", "убрать — «×» в «Дневнике»")
+        if getattr(self, "insight", None) is not None:
+            add("radar", "Радар: самое интересное за сутки", self.insight.prompt_line(), "insight", "«👎 Не то» у материала — не предлагать")
         add("summary", "Содержание долгого разговора", self.conv.prompt(), "chat", "«новый разговор» — с чистого листа")
         turns = int(self.s.get("llm", "history_turns") or 0)
         mine = self.conv.window(self.history, turns) if turns > 0 else []
@@ -881,6 +883,9 @@ class AnswerMixin:
             log.debug("душа: подсказка", exc_info=True)
         base += self.conv.prompt()                     # долгий разговор: что было раньше
         base += self.diary.prompt()                    # выводы, которые ассистент записал ночью в дневник
+        r = getattr(self, "insight", None)              # «Радар» настроен — самое интересное за сутки (владелец 14.11)
+        if r is not None:
+            base += r.prompt_line()
         if with_tools:
             base += self.toolbox.off_note()            # выключенные человеком умения — «выключено», а не «не умею»
             try:

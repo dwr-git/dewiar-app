@@ -121,7 +121,21 @@
   function ansHtml(a) {
     if (a.wait) return `<div class="rd-wait"><i></i><i></i><i></i><span>${esc(T("ask.wait"))}</span></div>`;
     if (a.err) return `<p class="rd-aerr">${esc(a.err)}</p>`;
-    const body = esc(a.text).replace(/\s*\[(\d{1,2})\]([.,;:!?)]?)/g, (m, n, p) => `<span class="rd-refw">\u00a0<a href="#" class="rd-ref" data-ref="${n}">${n}</a>${p}</span>`).split(/\n+/).map(x => `<p>${x}</p>`).join("");
+    // владелец 14.11: «как каша — сложно читать»: главное крупно, пункты с темой, «→ что сделать» отдельно
+    const refs = (h) => h.replace(/\s*\[(\d{1,2})\]([.,;:!?)]?)/g, (m, n, p) => `<span class="rd-refw">\u00a0<a href="#" class="rd-ref" data-ref="${n}">${n}</a>${p}</span>`);
+    const lines = esc(a.text).split(/\n+/).map(x => x.trim()).filter(Boolean);
+    let body = "", list = [];
+    const flush = () => { if (list.length) body += `<ul class="rd-alist">${list.join("")}</ul>`; list = []; };
+    lines.forEach((x, i) => {
+      if (/^[•\-*]\s*/.test(x)) {
+        const t = x.replace(/^[•\-*]\s*/, ""), m = t.match(/^([^[]{2,64}?)(\s[—–-]\s|:\s)(.+)$/);
+        list.push(`<li>${m ? `<b>${m[1]}</b>${m[2].trim() === ":" ? ": " : " — "}${refs(m[3])}` : refs(t)}</li>`); return;
+      }
+      flush();
+      if (/^(→|->)\s*/.test(x)) body += `<p class="rd-anext">${refs(x.replace(/^(→|->)\s*/, ""))}</p>`;
+      else body += `<p${i === 0 ? ' class="rd-alead"' : ""}>${refs(x)}</p>`;
+    });
+    flush();
     return `<div class="rd-aq">${esc(a.q)}</div><div class="rd-at">${body}</div>
       ${(a.refs || []).length ? `<ol class="rd-arefs">${a.refs.map(r => `<li value="${r.n}"><a href="#" data-url="${esc(r.url)}">${esc(r.title)}</a> <small>${esc(r.source || "")}</small></li>`).join("")}</ol>` : ""}
       <button type="button" class="rd-achat" id="rd-achat">${esc(T("ask.chat"))}</button>`;

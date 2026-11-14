@@ -28,9 +28,15 @@ def local_name(url, cloud_url):
     u = str(url or "").split("?", 1)[0].split("#", 1)[0]
     if not u.startswith(pub):
         raise ValueError("это не файл видеоурока")
-    name = re.sub(r"[^\w.-]", "_", u[len(pub):])[:120]
+    name = re.sub(r"[^\w.-]", "_", u[len(pub):])[:110]
     if not EXT_RX.search(name) or name.startswith("."):
         raise ValueError("это не файл видеоурока")
+    # 14.11 (владелец: «в справке старый ролик… видео с обложкой обновил»): сайт ставит ?v=время файла — заменили видео,
+    # у копии новое имя, и старая из кэша не показывается (её уберёт _prune)
+    v = re.search(r"[?&]v=(\d{1,12})(?:&|#|$)", str(url or ""))
+    if v:
+        stem, ext = name.rsplit(".", 1)
+        name = f"{stem}.v{v.group(1)}.{ext}"
     return name
 
 

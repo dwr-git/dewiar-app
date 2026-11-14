@@ -235,7 +235,7 @@ DEFAULTS = {
                  "sync_all": False},    # всё хранилище (тексты .md) — одинаковое на всех компьютерах через облако Dewiar
     "calendars": {"items": [], "remind_minutes": 10},   # календари по ссылке iCal (Google, Яндекс…), напомнить за N минут
     "cloud": {"key": "", "url": "", "account": False, "stt_ok": False, "tts_ok": False,
-              "net_share": False, "net_pub": "",   # «Сеть Лиры»: пускать общие вопросы на узлы людей; ключ сети (доверие при первом использовании)
+              "net_share": True, "net_pub": "",   # «Сеть Лиры»: пускать общие вопросы на узлы людей; ключ сети (доверие при первом использовании)
               "join": {}},      # заявка на Dewiar из программы: {id, secret, url} — ждём ключ (engine_brain._join_loop)   # ключ Dewiar Облака (dw-…): модели сервера Dewiar с зарядом в талерах
     "kids": {"on": False},   # детский режим (kids.py): ребёнок, время, что можно; PIN — в STATE_DIR/kids.json
     "net": {"proxy": "", "dewiar": False, "web_via": True,   # прокси для серверов Dewiar, если провайдер блокирует dewiar.pro: свой (socks5://… или http://…) или «Использовать прокси Dewiar»
@@ -322,6 +322,9 @@ class Settings:
                     self.data["ui"]["welcome"] = "done"      # уже пользуются — «Первые шаги» не показываем
                 if "intro" not in (raw.get("ui") or {}):
                     self.data["ui"]["intro"] = "done"        # и знакомство само не начинается (кнопкой — можно)
+                if "net_share" not in (raw.get("cloud") or {}):
+                    # «Сеть Лиры» (владелец 14.11, вариант А): по умолчанию — только у новых установок; кто уже пользовался — как было
+                    self.data["cloud"]["net_share"] = False
                 if "lang" not in (raw.get("ui") or {}):
                     # 0.88: уже пользуются (по-русски) — так и остаётся, даже на английской Windows; «как в системе» —
                     # только у новых установок, выбрать другой язык — «Оформление» → «Язык программы»

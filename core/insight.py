@@ -724,18 +724,41 @@ def question_prompt(question, ctx, mission="", lang="ru"):
     b = ctx.get("brief") or {}
     if en:
         system = ("You are Lira, a calm analyst of the user's field. Answer ONLY from the Radar data below — no outside facts, no guesses. "
-                  "Be brief: 2–5 sentences or up to 5 short bullets, plain text, no headings. Cite materials as [n]. If the data does not "
-                  "answer the question, say so honestly and suggest which sources to add. Answer in English.")
+                  "Format, plain text, no Markdown:\n"
+                  "line 1 — the main point in one short sentence;\n"
+                  "then 2–5 lines, each starting with “• ”: a short topic (2–5 words), “ — ”, one or two sentences, citation [n];\n"
+                  "optionally a last line starting with “→ ” — what to do first.\n"
+                  "If the data does not answer the question, say so honestly and suggest which sources to add. Answer in English.")
     else:
+        # владелец 14.11: ответ «весь такой неструктурированный, как каша… сложно читать» — главное, пункты, что сделать
         system = ("Ты — Лира, спокойный аналитик темы человека. Отвечай ТОЛЬКО по данным Радара ниже — без фактов со стороны и без "
-                  "догадок. Коротко: 2–5 предложений или до 5 коротких пунктов, простым текстом, без заголовков. Ссылайся на материалы "
-                  "как [n]. Если в данных ответа нет — честно скажи и подскажи, какие источники добавить. Отвечай по-русски.")
+                  "догадок. Формат, простым текстом, без Markdown:\n"
+                  "строка 1 — главное одним коротким предложением;\n"
+                  "дальше 2–5 строк, каждая с «• »: короткая тема (2–5 слов), « — », одно-два предложения, ссылка [n];\n"
+                  "по желанию последняя строка с «→ » — что сделать первым.\n"
+                  "Если в данных ответа нет — честно скажи и подскажи, какие источники добавить. Отвечай по-русски.")
     user = (f"{today_line(lang)}\n{'Mission' if en else 'Тема человека'}: {mission or '—'}\n"
             f"{'Daily brief' if en else 'Бриф дня'}: {b.get('headline') or '—'}\n"
             f"{'Trends (day/norm)' if en else 'Тренды (сутки/норма)'}: {tr or '—'}\n"
             f"{'Materials' if en else 'Материалы'}:\n{rows or '—'}\n\n"
             f"{'Question' if en else 'Вопрос'}: {question}")
     return system, user
+
+
+def structure_answer(text):
+    """Модель ответила сплошным абзацем — делим сами: первое предложение — главное, остальные — пункты (по ссылкам [n])."""
+    if "\n• " in text or len(text) < 320:
+        return text
+    sents = [x.strip() for x in re.split(r"(?<=[.!?…])\s+(?=[A-ZА-ЯЁ«“\"(])", text) if x.strip()]
+    if len(sents) < 3:
+        return text
+    lead, pts = sents[0], []
+    for x in sents[1:]:
+        if pts and not re.search(r"\[\d{1,2}\]", pts[-1]) and len(pts[-1]) < 160:
+            pts[-1] += " " + x                                  # пункт ещё без ссылки — продолжение мысли
+        else:
+            pts.append(x)
+    return lead + "\n" + "\n".join("• " + x for x in pts)
 
 
 def parse_answer(raw, ctx):
@@ -755,5 +778,6 @@ def parse_answer(raw, ctx):
         return ""
     text = re.sub(r"\[(\d{1,2})\]", ref, text)
     text = re.sub(r"[ \t]+([.,;:])", r"\1", text).strip()
+    text = structure_answer(text)
     return {"text": text[:3000], "refs": [{"n": n, "id": items[n - 1]["id"], "title": items[n - 1]["title"], "url": items[n - 1].get("url"),
                                            "source": items[n - 1].get("source")} for n in used]}

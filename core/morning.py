@@ -146,6 +146,13 @@ def _tasks(eng):
     return {"done": done[:4], "wait": wait[:3]} if done or wait else None
 
 
+def _radar(eng):
+    """Радар настроен — одно-два самых интересных за сутки (владелец 14.11: «Лира иногда туда смотрела… вместо того, чтобы
+    пересказывать напоминания»); на телефон уходит со ссылкой — «кратко услышать с возможностью перейти»."""
+    r = getattr(eng, "insight", None)
+    return r.highlights() if r is not None else None
+
+
 def city(eng):
     return str((eng.s.get("morning") or {}).get("city") or "").strip()
 
@@ -154,8 +161,9 @@ def gather(eng, net=True, fresh=False):
     """Всё утро одним словарём (разделы, которых нет, — None). net=False — без погоды и почты (быстро, без сети)."""
     now = datetime.now()
     d = {"date": now.strftime("%Y-%m-%d"), "weekday": WD[now.weekday()], "time": now.strftime("%H:%M"), "city": city(eng),
-         "weather": None, "today": None, "team": None, "clients": None, "mail": None, "tasks": None}
-    for k, fn in (("today", lambda: _today(eng, now)), ("team", lambda: _team(eng)), ("clients", lambda: _clients(eng, now)), ("tasks", lambda: _tasks(eng))):
+         "weather": None, "today": None, "team": None, "clients": None, "mail": None, "tasks": None, "radar": None}
+    for k, fn in (("today", lambda: _today(eng, now)), ("team", lambda: _team(eng)), ("clients", lambda: _clients(eng, now)), ("tasks", lambda: _tasks(eng)),
+                  ("radar", lambda: _radar(eng))):
         try:
             d[k] = fn()
         except Exception:  # noqa: BLE001
@@ -218,6 +226,11 @@ def context(d):
             out.append("Готово за ночь (фоновые задачи): " + "; ".join(f"«{x}»" for x in tk["done"]) + ".")
         if tk["wait"]:
             out.append("Задача ждёт ответа пользователя: " + "; ".join(f"«{x['title']}» — {x['q']}" for x in tk["wait"]) + ".")
+    rd = d.get("radar")
+    if rd and rd.get("items"):
+        out.append("Радар (своя лента новостей по теме человека): " + (f"бриф дня — «{rd['headline']}»; " if rd.get("headline") else "")
+                   + "самое интересное — " + "; ".join(f"«{x['title']}» — {x['why']}" for x in rd["items"])
+                   + ". Скажи одно, самое интересное, одной фразой и предложи открыть в «Радаре».")
     return "\n".join(out)
 
 

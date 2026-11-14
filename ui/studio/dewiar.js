@@ -739,7 +739,8 @@ $("#dk-go").onclick = async (ev) => {
   }
   if (c) {
     $("#dk-key").value = ""; r.className = "res ok";
-    r.textContent = `Подключено${c.label ? ": " + c.label : ""}${c.tail ? " · ключ …" + c.tail : ""}. Заряд ${c.percent ?? "—"}%.`;
+    r.textContent = `Подключено${c.label ? ": " + c.label : ""}${c.tail ? " · ключ …" + c.tail : ""}. Заряд ${c.percent ?? "—"}%.`
+      + (S && S.cloud && S.cloud.net_share ? " " + dwTx("Общие вопросы без личного иногда отвечают компьютеры других людей — «Сеть Лиры» (выключить — карточка «Сеть Лиры» ниже).") : "");
     // подключение уже удалось — сбой перерисовки не выдаём за «не получилось» (24.10: так и было), а пишем в журнал
     try { cloudFill(c); renderProfiles(); await wizardCheck(c.profile); }
     catch (e) { console.error(e); window.__jsErr.push("после подключения: " + e.message); core.call("js_errors", { errors: window.__jsErr.splice(0) }).catch(() => {}); }

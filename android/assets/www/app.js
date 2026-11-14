@@ -448,6 +448,11 @@ let S = (() => { try { return Object.assign({}, DEF, JSON.parse(prefGet("setting
 for (const k of ["llm", "stt", "tts", "home", "account", "net", "tg"]) S[k] = Object.assign({}, DEF[k], S[k] || {});
 { let raw = {}; try { raw = JSON.parse(prefGet("settings") || "{}") || {}; } catch (e) { }
   if (!raw.features || typeof raw.features !== "object") S.features = Object.keys(raw).length ? { games: true, near: true, meet: true } : Object.assign({}, DEF.features); }
+/* «Сеть Лиры» (владелец 14.11, вариант А: «на ноды ничего не приходит» — переключатель у всех был выключен): у НОВОЙ
+   установки общие вопросы (без личного; имена и телефоны — метками) иногда отвечает Сеть; кто уже пользовался — как было.
+   Честная строка — в «Мозге» у облака и в карточке «Сеть Лиры». */
+{ let raw = {}; try { raw = JSON.parse(prefGet("settings") || "{}") || {}; } catch (e) { }
+  if (!Object.keys(raw).length && S.netShare === undefined) S.netShare = true; }
 /* Язык приложения (0.96): «auto» — по языку системы (русский — если система на русском, украинском, белорусском,
    казахском; есть словарь языка системы — он; иначе английский), или выбранный в «Оформлении». Кто пользовался до 0.96 —
    остаётся по-русски (как на компьютере в 0.88). Словари и перевод — те же, что у студии (assets/i18n.js). */
@@ -4526,6 +4531,8 @@ function toolSpecs() {
       parameters: O({ url: STR, find: { type: "string", description: "что ищешь на длинной странице: «Доллар США», «15 октября»" } }, ["url"]) },
     { name: "world_time", description: "Который час сейчас в другом городе или стране (по часовому поясу). Время в других городах не считай в уме — только этим.", parameters: O({ city: STR }, ["city"]) },
     { name: "weather", description: "Погода сейчас и на ближайшие дни: city — город (если пользователь не назвал — из памяти о нём).", parameters: O({ city: STR, days: NUM }, ["city"]) },
+    { name: "world_news", description: "Интересное в мире сегодня: подборка любопытных новостей (наука, космос, техника, природа, кино…) с учётом вкуса пользователя. Для «что интересного в мире?», «расскажи новость», «что нового в науке?». topic — тема, если назвал: science, space, tech, ai, health, nature, culture, money, travel, food, sport, curious.",
+      parameters: O({ topic: STR }) },
     { name: "flashlight", description: "Фонарик: on true/false.", parameters: O({ on: { type: "boolean" } }, ["on"]) },
     { name: "phone_settings", description: "Открыть нужный экран настроек телефона: bluetooth, wifi, internet (Wi‑Fi и мобильный интернет), nfc, airplane (режим полёта), display (яркость, экран), sound, data (мобильная сеть), hotspot (точка доступа), location (геолокация). Включить или выключить Bluetooth, Wi‑Fi, режим полёта приложениям Android сам не даёт — открой экран этим инструментом; дальше переключатель нажимают руки (phone_screen, phone_tap) или пользователь.",
       parameters: O({ section: { type: "string", enum: Object.keys(PHONE_SET) } }, ["section"]) },
@@ -4747,6 +4754,7 @@ async function runTool(name, a) {
     }
     case "world_time": { const r = await worldTime(a.city || ""); return r ? r + " [Посчитано по часовому поясу — называй именно это время.]" : `Город «${a.city || ""}» не нашёлся — уточни. Время не считай в уме.`; }
     case "weather": return await weather(a.city || "", a.days || 3);
+    case "world_news": return await worldNewsTool(WORLD_TOPICS.some(x => x[0] === a.topic) ? a.topic : "");
     case "flashlight": return devTorch(!!a.on) ? (a.on ? "Фонарик включён." : "Фонарик выключен.") : "Фонарика нет.";
     case "phone_settings": {
       const sec = PHONE_SET[a.section] ? a.section : "", name = PHONE_SET[sec];
@@ -5328,7 +5336,10 @@ async function noticeSync() {
       try { const q = await wqGeocode(city); if (q) { S.noticeGeo = { city, lat: q.lat, lon: q.lon }; prefSet("settings", JSON.stringify(S)); } } catch (e) { }
     }
     const g = S.noticeGeo && S.noticeGeo.city === city ? S.noticeGeo : null;
-    j = JSON.stringify(Object.assign({ on: true, lang: appEn() ? "en" : "ru", who: trL((persona() || {}).name || "Лира"), days: noticeDays().map(d => Object.assign(d, { text: trL(d.text) })) }, g ? { lat: g.lat, lon: g.lon, place: g.city } : {}));
+    // «Интересное в мире»: исключительная новость (оценка с учётом вкуса ≥ 9) — тоже повод, не чаще 2 раз в неделю (Notice.java)
+    const wt = worldTaste(), world = wt.on && !kidsOn() ? { base: annBase(), w: worldWeights(), seen: wt.seen.slice(-40) } : null;
+    j = JSON.stringify(Object.assign({ on: true, lang: appEn() ? "en" : "ru", who: trL((persona() || {}).name || "Лира"), days: noticeDays().map(d => Object.assign(d, { text: trL(d.text) })) },
+      g ? { lat: g.lat, lon: g.lon, place: g.city } : {}, world ? { world } : {}));
   }
   if (j !== noticeSync.last) { noticeSync.last = j; try { D.notice(j); } catch (e) { } }
 }
@@ -7405,7 +7416,7 @@ setTimeout(() => lsnCheck(), 9000);
 async function openLessons() {
   const box = $("#lessons-body"); box.innerHTML = `<p class="lsn-empty">Загружаю уроки…</p>`; openSheet("#sh-lessons");
   let items = [];
-  try { const r = await http("GET", annBase() + "?p=/academy", { timeout: 15000 }); items = (JSON.parse(r.body || "{}").items || []); }
+  try { const r = await http("GET", annBase() + "?p=/academy" + (appEn() ? "&lang=en" : ""), { timeout: 15000 }); items = (JSON.parse(r.body || "{}").items || []); }
   catch (e) { box.innerHTML = `<p class="lsn-empty">Нет связи с dewiar.pro — попробуйте позже.</p>`; return; }
   S.lsnKnown = items.map(x => x.id); S.lsnSeen = [...new Set((S.lsnSeen || []).concat(S.lsnKnown))]; S.lsnAt = Date.now(); saveS(); lsnDot();
   const m = (x) => x ? `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}` : "";
@@ -7680,6 +7691,11 @@ function renderSettings() {
     const snd = (() => { try { return JSON.parse(D.alarmSound ? D.alarmSound() : "{}"); } catch (e) { return {}; } })();
     if (setTab === "sound" && D.notice) h.push(`<div class="card"><div class="sw" style="margin:0"><div>Лира заметила<small>Дождь или снег сегодня, жара, мороз, день рождения близкого — одно уведомление, когда есть повод; не чаще раза в день и не ночью.${S.notice && S.notice.on && !wqHome() ? " Скажите Лире свой город — и она будет предупреждать о погоде." : ""}</small></div>
       <label class="tg"><input type="checkbox" id="nt-on" ${S.notice && S.notice.on ? "checked" : ""}><i></i></label></div></div>`);
+    // «Интересное в мире» (14.11): одна новость в сводке дня; темы — какие интересны (остальное подстроится по «👍 / Не моё»)
+    if (setTab === "sound") { const wt = worldTaste().t; h.push(`<div class="card"><div class="sw" style="margin:0"><div>Интересное в мире<small>Одна любопытная новость в сводке дня — наука, космос, техника, природа… Под ней «Читать», «👍» и «Не моё» — Лира запоминает ваш вкус.</small></div>
+      <label class="tg"><input type="checkbox" id="wn-on" ${worldTaste().on ? "checked" : ""}><i></i></label></div>
+      <div class="wn-topics" id="wn-topics">${WORLD_TOPICS.map(([id, n]) => `<button type="button" data-t="${id}" class="${(+wt[id] || 0) > 0 ? "on" : (+wt[id] || 0) <= -2 ? "off" : ""}">${esc(trL(n))}</button>`).join("")}</div>
+      <p class="hint" style="margin:6px 2px 0">Нажмите тему: интересно → не моё → всё равно.</p></div>`); }
     if (setTab === "sound") h.push(remHealthCard() + `<div class="card"><p class="hint" style="margin-top:0">Мягко и сначала тихо — громкость прибавляется за 20 секунд.</p>
       <div class="snds">${ALARM_SOUNDS.map(([id, n, sub]) => `<button class="snd ${id === (snd.id || "signature") ? "on" : ""}" data-snd="${id}"><i>${PLAY_SVG}</i><span><b>${n}</b><small>${sub}</small></span></button>`).join("")}
         <button class="snd ${snd.id === "custom" ? "on" : ""} ${snd.custom ? "" : "nofile"}" data-snd="custom"><i>${PLAY_SVG}</i><span><b>Свой звук</b><small id="snd-name">${snd.custom ? esc(snd.custom) : "Любая мелодия с телефона"}</small></span></button></div>
@@ -7819,6 +7835,12 @@ function wireSettings(info) {
     fr.readAsDataURL(f);
   };
   if (g("br-think")) g("br-think").addEventListener("change", () => { if (g("br-think").checked) delete S.llm.think; else S.llm.think = "off"; saveS(); });
+  if (g("wn-on")) g("wn-on").addEventListener("change", () => { S.world = Object.assign(worldTaste(), { on: g("wn-on").checked }); saveS(); });
+  document.querySelectorAll("#wn-topics button").forEach(b => b.onclick = () => {
+    const w = worldTaste(), id = b.dataset.t, v = +w.t[id] || 0, nv = v > 0 ? -2 : v <= -2 ? 0 : 2;   // по кругу: интересно → не моё → всё равно
+    if (nv) w.t[id] = nv; else delete w.t[id];
+    S.world = w; saveS(); b.className = nv > 0 ? "on" : nv < 0 ? "off" : "";
+  });
   if (g("nt-on")) g("nt-on").addEventListener("change", async () => { if (g("nt-on").checked) await needPerm("android.permission.POST_NOTIFICATIONS").catch(() => {}); noticeSet(g("nt-on").checked); });
   if (g("br-net-on")) g("br-net-on").addEventListener("change", () => { S.netShare = g("br-net-on").checked; saveS();
     toast(S.netShare ? "Общие вопросы иногда ответит Сеть Лиры — похожие на личные только сервер Dewiar" : "Всё отвечает сервер Dewiar", 3000); });
@@ -8607,10 +8629,14 @@ async function syncOne(c, opts) {
       }
       if (it.kind === "note") {                                       // 05.11: запертую здесь правка оттуда не перетирает
         const loc = notes().find(n => n.id === lk.slice(5)), d0 = it.data || {};
-        if (loc && noteLocked(loc.text) && (it.deleted || !noteLockOnly(loc.text, d0.text || ""))) {
-          if (!it.deleted && !same) {                                   // их правка — рядом копией, без замка
-            const all = notes(); all.push({ id: uid("n"), title: `${d0.title || loc.title || "Заметка"} (правка с другого устройства — заметка заперта)`,
-              text: noteLockSet(d0.text || "", false), folder: d0.folder || loc.folder || "", time: Date.now() }); fileSave("notes.json", JSON.stringify(all)); }
+        // 14.11 (владелец: «несколько версий вкладки без возможности удалить»): пришла тоже запертая — там знали о замке,
+        // это их последняя правка: обычный обмен (новее побеждает), без копии — иначе обе стороны множили копии
+        if (loc && noteLocked(loc.text) && (it.deleted || (!noteLockOnly(loc.text, d0.text || "") && !noteLocked(d0.text || "")))) {
+          if (!it.deleted && !same) {                                   // их правка — рядом копией, без замка; та же уже лежит — не дублируем
+            const all = notes(), base = String(d0.title || loc.title || "Заметка").slice(0, 36), t2 = noteLockSet(d0.text || "", false);
+            if (!all.some(n => String(n.title || "").startsWith(base + " (") && noteNorm(n.title, n.text) === noteNorm(n.title, t2))) {
+              all.push({ id: uid("n"), title: `${base} (копия с другого устройства)`, text: t2, folder: d0.folder || loc.folder || "", time: Date.now() });
+              fileSave("notes.json", JSON.stringify(all)); } }
           st.idx[k] = { h: "older", u: it.updated }; plog("info", `🔒 заметка «${clip(loc.title || "", 40)}» заперта — ${it.deleted ? "удаление" : "правка"} с другого устройства не принята`); continue;
         }
       }
@@ -8703,12 +8729,19 @@ async function joinDone(key, d) {
   S.join = null; if (auto) S.autoJoined = true; saveS();
   if (auto) {                      // автоподключение — тихо: человек, может, уже разговаривает; голосом — только если ждёт
     plog("info", `☁ автоподключение: мозг Dewiar подключён (${(d && d.gift) || "?"})`);
-    toast(giftLine(d), 6000);
+    toast(giftLine(d), 6000); netNote();
     if (!busy && state === "idle") showBot(gfix(`Я подключена к мозгу Dewiar и готова. Спросите меня что-нибудь!`));
     startCardCheck(); return;
   }
   const msg = gfix("Готово — Dewiar подключён" + (d && d.reply ? ` («${d.reply}»)` : "") + ". Спросите меня что-нибудь!");
   showBot(msg); toast(d && d.gift ? giftLine(d) : "Мозг подключён: модели Dewiar", 5000); say(msg);
+  netNote();
+}
+/* «Сеть Лиры» включена по умолчанию у новых (14.11, вариант А) — честно, один раз, сразу после подключения мозга */
+function netNote() {
+  if (S.netShare !== true || S.netNoted) return;
+  S.netNoted = Date.now(); saveS();
+  setTimeout(() => toast("Общие вопросы без личного иногда отвечают компьютеры других людей — «Сеть Лиры». Выключить: ⚙ → Мозг.", 7000), 6500);
 }
 /* 0.82.1 (владелец 04.11: «много новых людей, а донатов нет — чтобы было понятно и просто»): вместо «бесплатный мозг — теперь
    умею всё» — честно: сколько примерно ответов в подарке и где пополнить; подарок здесь уже был — так и говорим. */
@@ -12076,8 +12109,65 @@ function welcomePrompt(p) {
   const d = new Date(), wd = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"][d.getDay()];
   if (p.kind === "eve") return p.facts.join("\n") + `\n\n[Вечер, пользователь вернулся в приложение, не было ${p.gone}] Подведи итог дня: скажи, сколько дел он сегодня сделал, похвали тепло и конкретно (назови одно-два дела своими словами); если есть другие новости отсюда — одной фразой. 2–3 коротких предложения, без списков, без вопросов в конце, без инструментов.`;
   if (p.kind === "day") return `Сегодня ${d.toLocaleDateString("ru-RU")}, ${wd}, сейчас ${pad(d.getHours())}:${pad(d.getMinutes())}.\n` + p.facts.join("\n")
-    + `\n\n[Пользователь открыл приложение — первый раз за день, не было ${p.gone}] Поздоровайся первым (в своём роде), по имени, если знаешь, и коротко скажи главное на сегодня из этих данных: погода (если есть), напоминания, что ждёт от сотрудников и клиентов, важные письма от людей. Не всё подряд — самое нужное. 2–4 коротких предложения, живо и тепло, без списков, без вопросов в конце, без инструментов.`;
+    + `\n\n[Пользователь открыл приложение — первый раз за день, не было ${p.gone}] Поздоровайся первым (в своём роде), по имени, если знаешь, и коротко скажи главное на сегодня из этих данных: погода (если есть), напоминания, что ждёт от сотрудников и клиентов, важные письма от людей, одна интересная новость из Радара (если есть). Не всё подряд — самое нужное; дела, которые он и так видит, не пересказывай целиком. 2–4 коротких предложения, живо и тепло, без списков, без вопросов в конце, без инструментов.`;
   return p.facts.join("\n") + `\n\n[Пользователь вернулся в приложение, не было ${p.gone}] Коротко поприветствуй и скажи главное из этого — 1–2 коротких предложения, живо, без списков и без вопросов в конце, без инструментов.`;
+}
+/* «Интересное в мире» (14.11, владелец: «интересное и необычное в мире — от Лиры кратко услышать с возможностью перейти…
+   у всех разные вкусы»). Сервер раз в ~12 часов собирает ОДИН общий выпуск (core/world.py: до 14 любопытных материалов
+   по темам, без политики, войн и катастроф; ?p=/world — без входа). Вкус — только здесь: веса тем S.world.t (выбранные
+   темы и «👍 Интересно» / «👎 Не моё» под карточкой) плюс намёки из памяти («люблю космос»); из выпуска — одна лучшая
+   для этого человека новость, которой он ещё не видел. Говорит её сводка дня, под ней карточка «Читать». */
+const WORLD_TOPICS = [["science", "Наука"], ["space", "Космос"], ["tech", "Технологии"], ["ai", "ИИ"], ["health", "Здоровье"],
+  ["nature", "Природа и животные"], ["culture", "Кино, книги, музыка"], ["money", "Деньги"], ["travel", "Путешествия"], ["food", "Еда"],
+  ["sport", "Спорт"], ["curious", "Необычное"]];
+const WORLD_HINT = { space: /космос|звёзд|звезд|астроном|nasa|space|\bstars?\b/i, science: /наук|физик|химик|биолог|science/i,
+  tech: /техник|гаджет|смартфон|компьютер|программ|gadget|\btech/i, ai: /нейросет|искусственн|\bии\b|\bai\b/i,
+  health: /здоров|бег\b|бегаю|йог|фитнес|health|fitness/i, nature: /природ|животн|собак|кошк|птиц|рыбал|nature|animal|\bdogs?\b|\bcats?\b/i,
+  culture: /кино|фильм|сериал|книг|музык|театр|movie|book|music/i, money: /инвест|финанс|бизнес|акци[ия]|invest|business/i,
+  travel: /путешеств|туризм|поездк|travel/i, food: /готовить|кулинар|рецепт|выпечк|cook|recipe|food/i, sport: /футбол|хоккей|спорт|теннис|бокс|football|sport/i };
+const worldName = (id) => trL((WORLD_TOPICS.find(x => x[0] === id) || [id, id])[1]);
+function worldTaste() { const w = Object.assign({ on: true, t: {}, seen: [] }, S.world || {}); w.t = w.t || {}; w.seen = w.seen || []; return w; }
+function worldWeights() {
+  const w = worldTaste(), out = Object.assign({}, w.t), mem = [...(S.memory || []), ...Object.values((S.pmem && S.pmem.facts) || {}).flat()].map(String).join("\n");
+  for (const [id, rx] of Object.entries(WORLD_HINT)) if (!(id in out) && rx.test(mem)) out[id] = 1;     // «люблю космос» — космос повыше
+  return out;
+}
+async function worldLoad(force) {
+  let c = null; try { c = JSON.parse(fileGet("world.json") || "null"); } catch (e) { }
+  const lang = appEn() ? "en" : "ru";
+  if (!force && c && c.lang === lang && Date.now() - (+c.fetched || 0) < 3 * 3600e3) return c.items || [];
+  try {
+    const r = await http("GET", annBase() + "?p=/world&lang=" + lang, { timeout: 12000 }), d = JSON.parse(r.body || "{}");
+    if (Array.isArray(d.items)) { c = { lang, at: +d.at || 0, fetched: Date.now(), items: d.items.slice(0, 16) }; fileSave("world.json", JSON.stringify(c)); }
+  } catch (e) { }
+  return (c && c.lang === lang && Date.now() - (+c.at || 0) * 1000 < 3 * 86400e3 ? c.items : null) || [];
+}
+/* лучшая для этого человека: оценка выпуска + 1.5 × вес темы; «не моё» (вес ≤ −2) — никогда; уже видел — нет */
+function worldPick(items, min = 6.5) {
+  const w = worldTaste(), wt = worldWeights(), seen = new Set(w.seen);
+  let best = null, bs = -1;
+  for (const x of items || []) {
+    if (!x || !x.id || !x.url || seen.has(x.id)) continue;
+    const k = +wt[x.topic] || 0; if (k <= -2) continue;
+    const sc = (+x.score || 0) + 1.5 * k; if (sc > bs) { bs = sc; best = x; }
+  }
+  return bs >= min ? best : null;
+}
+function worldSeen(id) { const w = worldTaste(); if (!id || w.seen.includes(id)) return; w.seen = w.seen.concat(id).slice(-80); S.world = w; saveS(); }
+function worldFeel(topic, d) {
+  const w = worldTaste(); if (!topic) return;
+  w.t[topic] = Math.max(-3, Math.min(3, Math.round(((+w.t[topic] || 0) + d) * 10) / 10)); S.world = w; saveS();
+}
+async function worldNewsTool(topic) {
+  const items = await worldLoad(), wt = worldWeights(), seen = new Set(worldTaste().seen);
+  if (!items.length) return "Подборки «Интересное в мире» пока нет — нет связи с dewiar.pro или выпуск ещё не собран.";
+  const list = items.filter(x => (!topic || x.topic === topic) && (+wt[x.topic] || 0) > -2)
+    .sort((a, b) => (+b.score + 1.5 * (+wt[b.topic] || 0) - (seen.has(b.id) ? 3 : 0)) - (+a.score + 1.5 * (+wt[a.topic] || 0) - (seen.has(a.id) ? 3 : 0))).slice(0, 4);
+  if (!list.length) return "По этой теме в сегодняшней подборке ничего нет.";
+  list.forEach(x => worldSeen(x.id));
+  setTimeout(() => newsCard({ title: list[0].title, url: list[0].url, world: list[0] }), 1500);
+  return "Интересное в мире сегодня (под ответом — карточка «Читать» к первой):\n" + list.map((x, i) => `${i + 1}. [${worldName(x.topic)}] ${x.title} — ${x.text} (${x.source})`).join("\n")
+    + "\nРасскажи коротко 1–2 самых интересных своими словами, без ссылок вслух.";
 }
 /* «Утро с Лирой» (0.57, core/morning.py): компьютер присылает своё утро (конверт own {morning}) — погода по городу из
    его настроек, сотрудники, клиенты, почта. Сводка дня здесь берёт из него то, чего на телефоне нет; доска сотрудников —
@@ -12086,7 +12176,7 @@ function mornTake(m) {
   let cur = null; try { cur = JSON.parse(fileGet("morning.json") || "null"); } catch (e) { }
   if (cur && +cur.at >= +m.at) return;
   fileSave("morning.json", JSON.stringify({ at: +m.at || Date.now(), date: String(m.date || ""), city: String(m.city || "").slice(0, 60), dev: String(m.dev || ""),
-    weather: m.weather || null, team: m.team || null, clients: m.clients || null, mail: m.mail || null }));
+    weather: m.weather || null, team: m.team || null, clients: m.clients || null, mail: m.mail || null, radar: m.radar || null }));
 }
 async function mornFacts() {
   let m = null; try { m = JSON.parse(fileGet("morning.json") || "null"); } catch (e) { }
@@ -12106,6 +12196,19 @@ async function mornFacts() {
     if ((m.clients.today || []).length) out.push(`Клиенты сегодня${from}: ` + m.clients.today.map(x => `${x.time} ${x.name} — ${x.what}`.trim()).join("; ") + ".");
     if ((m.clients.owed || []).length) out.push(`Должны, срок оплаты прошёл${from}: ` + m.clients.owed.map(x => `${x.name} — ${x.what}`).join("; ") + ".");
   }
+  // владелец 14.11: «интересное… от Лиры кратко услышать с возможностью перейти»: Радар с компьютера — одна новость и карточка «Читать»
+  const rd = fresh && m.radar && (m.radar.items || []).filter(x => x && x.title);
+  if (rd && rd.length) {
+    out.push(`Радар — своя лента новостей по теме${from}: ` + rd.map(x => `«${x.title}» — ${x.why || ""}`.trim()).join("; ") + ". Если есть место — одной фразой самое интересное отсюда (ссылка будет на карточке).");
+    mornFacts.radar = rd[0];
+  }
+  if (!mornFacts.radar && worldTaste().on && !kidsOn()) {
+    try {
+      const x = worldPick(await Promise.race([worldLoad(), sleep(6000).then(() => [])]));
+      if (x) { out.push(`Интересное в мире (${worldName(x.topic)}): «${x.title}» — ${x.text} Если есть место — одной фразой самое интересное отсюда (ссылка будет на карточке).`);
+        mornFacts.radar = { title: x.title, url: x.url, why: x.text, world: x }; }
+    } catch (e) { }
+  }
   if (fresh && m.mail && m.mail.unread) out.push(`Почта${from}: непрочитанных ${m.mail.unread}` + ((m.mail.people || []).length ? ". От людей: " + m.mail.people.map(x => `${x.from} — «${x.subject}»`).join("; ") : ", всё — рассылки") + ".");
   return out;
 }
@@ -12114,14 +12217,32 @@ async function welcomeCheck(shownAt) {
   if (w.on === false || busy || state !== "idle" || lastUserAct > shownAt || document.hidden) return false;
   const p = welcomePlan(Date.now(), w.seen, w.at, Object.values(mind().tasks || {}), JSON.parse(D.alarms() || "[]"), doneStats(), w.eve);
   if (!p) return false;
+  mornFacts.radar = null;
   if (p.kind === "day" && !kidsOn()) { try { p.facts.unshift(...await mornFacts()); } catch (e) { plog("info", "утро: " + e.message); } }
   if (busy || lastUserAct > shownAt || document.hidden) return false;
   await ensureBrain();
   if (!S.llm.base_url || busy || lastUserAct > shownAt) return false;
   S.welcome = Object.assign({}, w, { at: Date.now() }, p.kind === "eve" ? { eve: dayKey(Date.now()) } : {}); saveS();
   plog("info", `👋 ${p.kind === "day" ? "сводка дня" : p.kind === "eve" ? "итог дня" : "с возвращением"} (не было ${p.gone})`);
+  const news = mornFacts.radar;
   ask(welcomePrompt(p), { hidden: true });
+  if (news && news.url) setTimeout(() => newsCard(news), 2500);
   return true;
+}
+/* Карточка новости из Радара под сводкой дня: заголовок и «Читать» — открыть полностью в браузере (держится 3 минуты). */
+function newsCard(x) {
+  if (!x || !/^https?:\/\//.test(String(x.url || ""))) return;
+  const w = x.world;
+  if (w) worldSeen(w.id);
+  showCard(`<div class="rd-news"><small>${esc(w ? trL("Интересное в мире") + " · " + worldName(w.topic) : trL("Радар · самое интересное"))}</small><b>${esc(x.title)}</b>`
+    + `<div class="rd-news-b"><button type="button" id="rd-news-go">${esc(trL("Читать"))}</button>`
+    + (w ? `<button type="button" class="ghost" id="rd-news-up" title="${esc(trL("Интересно — чаще такое"))}">👍</button><button type="button" class="ghost" id="rd-news-down">${esc(trL("Не моё"))}</button>` : "")
+    + `</div></div>`);
+  cardSticky = Date.now() + 180000;
+  const b = $("#rd-news-go"); if (b) b.onclick = () => { D.openUrl(x.url); if (w) worldFeel(w.topic, 0.5); };
+  const up = $("#rd-news-up"), dn = $("#rd-news-down");
+  if (up) up.onclick = () => { worldFeel(w.topic, 1); up.disabled = true; up.textContent = "👍 " + trL("Понял"); };
+  if (dn) dn.onclick = () => { worldFeel(w.topic, -1.5); cardSticky = 0; showCard(`<div class="rd-news"><small>${esc(trL("Понял — такого будет меньше"))}</small></div>`); setTimeout(clearCard, 2500); };
 }
 function welcomeSeen() { S.welcome = Object.assign({}, S.welcome || {}, { seen: Date.now() }); saveS(); }
 let welcomeT = 0;

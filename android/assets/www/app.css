@@ -2192,3 +2192,15 @@ body.light .blg-del { color: #c23a5a; }
 .nt-offer .btn { flex: 1; }
 @keyframes ntIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .nt-offer { animation: none; } }
+
+/* Радар: новость под сводкой дня (14.11) — заголовок и «Читать» */
+.rd-news { display: grid; gap: 6px; padding: 14px 16px; border-radius: 18px; background: var(--card, rgba(255,255,255,.08)); text-align: left; }
+.rd-news small { opacity: .7; font-size: 12px; }
+.rd-news b { font-size: 15px; line-height: 1.35; }
+.rd-news-b { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.rd-news button { padding: 8px 16px; border-radius: 12px; border: 0; background: var(--accent, #5b7cfa); color: #fff; font: inherit; font-weight: 700; }
+.rd-news button.ghost { background: rgba(127,127,127,.16); color: inherit; font-weight: 600; }
+.wn-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.wn-topics button { padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(127,127,127,.3); background: transparent; color: inherit; font: inherit; font-size: 13px; }
+.wn-topics button.on { background: var(--accent, #5b7cfa); border-color: transparent; color: #fff; }
+.wn-topics button.off { opacity: .45; text-decoration: line-through; }

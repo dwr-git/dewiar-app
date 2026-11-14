@@ -612,10 +612,43 @@ class Space:
             self._save_reqs()
 
 
+class WorldJob(threading.Thread):
+    """«Интересное в мире» (core/world.py): облако просит выпуск (ответ очереди — world: {grant, langs, sources}) — читаем
+    ленты, модель облака по доверенности служебного ключа выбирает материалы, выпуск — в ?p=/runner/world."""
+
+    def __init__(self, job):
+        super().__init__(daemon=True, name="world")
+        self.job = job
+
+    def fetch(self, url):
+        r = httpx.get(url, timeout=20, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (Dewiar world digest)"})
+        r.raise_for_status()
+        return r.text
+
+    def ask(self, system, user):
+        r = httpx.post(f"{URL}?p=/chat/completions", timeout=180, headers={"Authorization": "Bearer " + _cred(self.job["grant"])},
+                       json={"model": self.job.get("model") or MODEL, "max_tokens": 3000, "temperature": 0.3,
+                             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
+        r.raise_for_status()
+        return ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+
+    def run(self):
+        import world as W
+        for lang in self.job.get("langs") or ["ru"]:
+            try:
+                src = (self.job.get("sources") or {}).get(lang) or None
+                d = W.digest(self.fetch, self.ask, lang, src)
+                log.info("Интересное в мире (%s): %d материалов, не открылось источников %d", lang, len(d["items"]), len(d["errs"]))
+                httpx.post(URL, params={"p": "/runner/world"}, timeout=30, headers={"X-Runner-Key": KEY}, json=d).raise_for_status()
+            except Exception:  # noqa: BLE001 — не вышло сегодня — облако попросит снова позже
+                log.exception("Интересное в мире (%s)", lang)
+
+
 class Runner:
     def __init__(self):
         self.spaces, self.stopping = {}, threading.Event()
         self.exam = None
+        self.world = None
         DIR.mkdir(parents=True, exist_ok=True)
         for d in sorted(DIR.iterdir()) if DIR.is_dir() else []:      # после перезапуска — продолжить начатое
             g = d / "grant"
@@ -640,6 +673,10 @@ class Runner:
                 return []
             d = r.json()
             self.exam_offer(d.get("exam"))
+            w = d.get("world")
+            if w and w.get("grant") and not (self.world and self.world.is_alive()):
+                self.world = WorldJob(w)
+                self.world.start()
             return d.get("tasks") or []
         except (httpx.HTTPError, ValueError) as e:
             log.info("Очередь задач: %s", e)

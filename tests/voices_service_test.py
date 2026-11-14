@@ -35,7 +35,9 @@ p = A.split_text("Длинное предложение без точки, " * 1
 ok(all(len(x) <= 220 for x, _ in p) and len(p) >= 2, f"длинное — по запятым, не длиннее 220: {[len(x) for x, _ in p]}")
 ok(A.clean("**Дэвиа\u0301р** — `код`") == "Дэвиа\u0301р — код" and A.plain("Дэвиа\u0301р, прив+ет, 2+2") == "Дэвиар, привет, 2+2"
    and A.stress_marks("Дэвиа\u0301р") == "Дэви+ар", "разметка убрана; ударения: ESpeech — «+» перед гласной, Qwen — без них (2+2 не трогаем)")
-ok(A.lang_of("Привет") == "Russian" and A.lang_of("Hello") == "Auto" and A.lang_of("x", "en") == "English", "язык по тексту")
+ok(A.lang_of("Привет") == "Russian" and A.lang_of("Hello") == "English" and A.lang_of("x", "en") == "English", "язык по тексту")
+ok(A.lang_of("Hi! This is Lira's Academy, lesson one — AI Council.") == "English" and A.lang_of("See you in the next lesson!") == "English" and A.lang_of("iPhone 15") == "Auto",
+   "14.11: явно английский текст — English (с образцом меньше акцента)")
 ok(A.lang_of("14:10") == "Russian" and A.lang_of("2026.") == "Russian" and A.lang_of("iPhone 15") == "Auto",
    "одни цифры («14:10») — по-русски (отзыв 16.10: время прозвучало «ствисе»)")
 import numpy as _np  # noqa: E402

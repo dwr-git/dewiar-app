@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 import insight as I
@@ -238,6 +238,49 @@ class Radar:
             self.st.save("mind", nm)
             return nm
         return mind
+
+    def highlights(self, n=2):
+        """Владелец 14.11: «если Радар настроен — чтобы Лира иногда туда смотрела… вместо того, чтобы постоянно пересказывать
+        напоминания и заметки»; и на телефоне — «кратко услышать с возможностью перейти». Самое сильное за сутки (главное
+        брифа — первым), без «👎 Не то». -> {headline, items:[{title, why, url, signal}]} или None, если Радар не настроен
+        или читать нечего."""
+        if not self.st.sources():
+            return None
+        b = self.st.load("brief", {})
+        recent = sorted(self.analyzed(36), key=lambda x: -float(x["a"].get("signal") or 0))
+        byid = {x["id"]: x for x in recent}
+        pick = [byid[m["id"]] for m in (b.get("main") or []) if isinstance(m, dict) and m.get("id") in byid]
+        why = {m["id"]: m.get("why") for m in (b.get("main") or []) if isinstance(m, dict) and m.get("id")}
+        for x in recent:
+            if len(pick) >= n:
+                break
+            if x not in pick and float(x["a"].get("signal") or 0) >= 6:
+                pick.append(x)
+        pick = pick[:n]
+        fresh = b.get("day") in (datetime.now().strftime("%Y-%m-%d"), (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"))
+        if not pick and not fresh:
+            return None
+        return {"headline": (b.get("headline") or "") if fresh else "",
+                "items": [{"title": x.get("title") or "", "why": (why.get(x["id"]) or x["a"].get("why") or x["a"].get("summary") or "")[:220],
+                           "url": x.get("url") or "", "signal": float(x["a"].get("signal") or 0)} for x in pick]}
+
+    def prompt_line(self):
+        """Кусок системной подсказки: что сегодня в Радаре — чтобы Лира могла сама рассказать одно интересное к месту."""
+        try:
+            h = self.highlights()
+        except Exception:  # noqa: BLE001
+            return ""
+        if not h or not (h["headline"] or h["items"]):
+            return ""
+        if self.lang().startswith("en"):
+            return ("\n\nRADAR (the user's own news feed on their field): " + (f"brief of the day — “{h['headline']}”. " if h["headline"] else "")
+                    + "Top: " + "; ".join(f"“{x['title']}” — {x['why']}" for x in h["items"])
+                    + ". When the user asks what's new or what's interesting, is bored, or the talk is free — you may briefly tell ONE "
+                      "thing from here and offer to open it in Radar. Not unprompted every time; at most once per conversation.")
+        return ("\n\nРАДАР (своя лента новостей человека по его теме): " + (f"бриф дня — «{h['headline']}». " if h["headline"] else "")
+                + "Главное: " + "; ".join(f"«{x['title']}» — {x['why']}" for x in h["items"])
+                + ". Когда человек спрашивает, что нового или что интересного, скучает или разговор свободный, — можно коротко "
+                  "рассказать ОДНО отсюда и предложить открыть в «Радаре». Не каждый раз и не чаще раза за разговор.")
 
     def urgent(self):
         lg = self.st.load("log", {})

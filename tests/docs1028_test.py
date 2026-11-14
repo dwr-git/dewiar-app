@@ -75,7 +75,7 @@ with sync_playwright() as p:
     pg.evaluate("() => { _folders = [{ path: '/home/u/Книги', name: 'Книги', exists: true, files: null, busy: true, chunks: 0 }]; loadDocs(); }"); pg.wait_for_timeout(300)
     ok("читаю, можно уже спрашивать" in pg.inner_text("#dc-stat"), "читает в фоне — так и сказано")
     pg.click("#dc-try button >> nth=0"); pg.wait_for_timeout(400)
-    ok(pg.evaluate("document.querySelector('#p-chat').classList.contains('cur') && document.querySelector('#ch-text').value") == "Что в моих документах про отпуск?",
+    ok(pg.evaluate("document.querySelector('#p-chat').classList.contains('cur') && document.querySelector('#ch-text').value") == "Что в моих файлах про отпуск?",
        "пример → вопрос в «Чате», остаётся отправить")
     pg.evaluate("document.querySelector('nav button[data-p=me]').click()"); pg.wait_for_timeout(300)
     pg.click('#p-me [data-goto="docs"]'); pg.wait_for_timeout(300)

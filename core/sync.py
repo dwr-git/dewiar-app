@@ -1570,19 +1570,29 @@ class Sync:
         same_place = not str(d.get("folder") or "") or str(d.get("folder") or "") == ("" if folder == "." else folder)
         if strip(cur) == strip(text) and same_place:
             return None                                   # изменился только замок (открыли там руками) — принимаем
-        who = self._dev_name(getattr(self, "_cur_dev", "")) or "другого устройства"
-        alt = p.with_name(f"{p.stem} (правка с «{who}» — заметка заперта, {dt.datetime.now():%d.%m %H-%M}).md")
+        if note_front(text)[0].get("locked") and strip(cur)[1] != strip(text)[1]:
+            # 14.11 (владелец: «в блокноте несколько версий вкладки»): пришла тоже запертая — значит, там знали о замке и это
+            # их последняя правка (до замка). Копию не делаем — обычный обмен: новее побеждает. Раньше обе стороны держали
+            # свою запертую, делали копию и отправляли свою снова — копии множились при каждом обмене.
+            return None
+        who = (self._dev_name(getattr(self, "_cur_dev", "")) or "другого устройства")[:18].strip()
+        stamp = f"{dt.datetime.now():%d.%m %H-%M}"
+        base = p.stem[:max(8, 60 - len(who) - len(stamp) - 12)].rstrip(" .")
+        alt = p.with_name(f"{base} (копия с {who}, {stamp}).md")      # до 60 знаков — как имя вкладки блокнота (pad._name)
         n = 2
         while alt.exists():
-            alt = p.with_name(f"{p.stem} (правка с «{who}» — заметка заперта, {dt.datetime.now():%d.%m %H-%M}) {n}.md")
+            alt = p.with_name(f"{base} (копия с {who}, {stamp}) {n}.md")
             n += 1
+        same_copy = next((f for f in p.parent.iterdir() if f != p and f.name.startswith(base + " (") and f.suffix == ".md" and f.is_file()
+                          and strip(f.read_text(encoding="utf-8", errors="replace")) == strip(text)), None)
         meta, body = note_front(text)
         if meta.get("locked"):                            # копия — обычная заметка, без замка
             from workspace import note_front_set
             text = note_front_set(text, {"locked": False})
         title = str(d.get("title") or p.stem)
         try:
-            alt.write_text(text if text.lstrip().startswith(("#", "---")) else f"# {title}\n\n{text.lstrip(chr(10))}\n", encoding="utf-8")
+            if same_copy is None:                         # та же правка уже лежит копией — вторую не делаем
+                alt.write_text(text if text.lstrip().startswith(("#", "---")) else f"# {title}\n\n{text.lstrip(chr(10))}\n", encoding="utf-8")
         except OSError:
             pass
         self.__dict__.setdefault("_note_resend", set()).add("note:" + sid)

@@ -322,6 +322,10 @@ def lang_of(text: str, asked: str = "") -> str:
     # одни цифры («14:10», «2026») — по-русски, а не «на угад» (отзыв 16.10: время прозвучало как «ствисе»)
     if re.search(r"[А-Яа-яЁё]", text) or (re.search(r"\d", text) and not re.search(r"[A-Za-z]", text)):
         return "Russian"
+    # 14.11 (владелец: английский урок своим голосом — «ужасающий акцент»): явно английский текст — языком English,
+    # а не «на угад»: с образцом голоса модель меньше тянет произношение образца
+    if len(re.findall(r"\b(?:the|and|you|is|to|of|it|in|for|on|with|what|this|that|your|my|a|i|we|are|be|lesson|see|hi|hello)\b", text, re.I)) >= 1:
+        return "English"
     return "Auto"
 
 
@@ -566,14 +570,18 @@ class Engine:
         STATE["loaded"] = sorted(self.models)
         log.info("%s выгружена", role)
 
-    def prompt(self, path, text):
-        key = (path, os.path.getmtime(path), text)
+    def prompt(self, path, text, xvec=False):
+        """Подсказка клонирования. xvec — только «отпечаток» голоса (тембр), без продолжения записи-образца: так речь на
+        другом языке не тянет произношение образца (14.11, владелец: английский урок русским образцом — «ужасный акцент»;
+        с образцом и его текстом модель продолжает запись — и говорит по-английски с русским акцентом)."""
+        xvec = xvec or not text
+        key = (path, os.path.getmtime(path), text, xvec)
         if key not in self.prompts:
             m = self.get("base")
             q = m.model if "base" in self.fast else m        # у быстрого Qwen исходная модель — внутри
             a = trim(read_wav(path))
-            self.prompts[key] = q.create_voice_clone_prompt(ref_audio=(a, OUT_SR), ref_text=plain(text) or None,
-                                                            x_vector_only_mode=not text)
+            self.prompts[key] = q.create_voice_clone_prompt(ref_audio=(a, OUT_SR), ref_text=None if xvec else plain(text),
+                                                            x_vector_only_mode=xvec)
         return self.prompts[key]
 
     def accentize(self, e, text):
@@ -620,12 +628,15 @@ class Engine:
         n = len(texts)
         m = self.get(role)
         ins = spec.get("instruct") or ""
+        # образец по-русски, а говорим на другом языке — только тембр образца (cross_lang), произношение — родное для языка
+        cross = role == "base" and lang != "Russian" and bool(re.search(r"[А-Яа-яЁё]", spec.get("text", "") or "")) \
+            and not any(re.search(r"[А-Яа-яЁё]", t) for t in texts)
         if role in self.fast:                            # быстрый Qwen — по одной фразе, каждая в разы быстрее
             out, sr = [], OUT_SR
             for t in texts:
                 if role == "base":
-                    w, sr = m.generate_voice_clone(text=t, language=lang, ref_text=plain(spec.get("text", "")),
-                                                   voice_clone_prompt=self.prompt(vdir(spec["audio"]), spec.get("text", "")))
+                    w, sr = m.generate_voice_clone(text=t, language=lang, ref_text=None if cross else plain(spec.get("text", "")),
+                                                   voice_clone_prompt=self.prompt(vdir(spec["audio"]), spec.get("text", ""), cross))
                 elif role == "design":
                     w, sr = m.generate_voice_design(text=t, instruct=ins, language=lang)
                 else:
@@ -633,7 +644,7 @@ class Engine:
                 out.append(to_mono(w[0] if isinstance(w, (list, tuple)) else w))
             return out, int(sr)
         if role == "base":
-            p = self.prompt(vdir(spec["audio"]), spec.get("text", ""))
+            p = self.prompt(vdir(spec["audio"]), spec.get("text", ""), cross)
             wavs, sr = m.generate_voice_clone(text=texts, language=[lang] * n, voice_clone_prompt=p * n)
         elif role == "design":
             wavs, sr = m.generate_voice_design(text=texts, instruct=[ins] * n, language=[lang] * n)

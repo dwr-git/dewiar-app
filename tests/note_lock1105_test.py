@@ -150,7 +150,7 @@ locked_text = "---\nlocked: true\n---\n\n# Сейф\n\nкод 1111\n"
 sy.state["map"]["s1"] = "Сейф.md"
 sy._apply_note("s1", {"title": "Сейф", "folder": "", "text": "# Сейф\n\nкод 0000 — стёр случайно\n"}, False, upd=int(time.time() * 1000))
 ok((root / "Сейф.md").read_text(encoding="utf-8") == locked_text, "правка с другого устройства не перетёрла запертую")
-alt = [x for x in root.glob("Сейф (правка с*.md")]
+alt = [x for x in root.glob("Сейф (копия с*.md")]
 ok(alt and "0000" in alt[0].read_text(encoding="utf-8") and not W._locked(alt[0]), f"их правка — рядом копией без замка: {[x.name for x in alt]}")
 ok("note:s1" in getattr(sy, "_note_resend", set()), "запертая уйдёт туда следующим обменом — и вернёт замок")
 sy._apply_note("s1", {}, True)
