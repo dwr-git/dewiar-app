@@ -1,0 +1,146 @@
+{
+ "title": "Lesson 1 · AI Council",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "ask": 0.6,
+  "table": 0.9,
+  "r1": 0.6,
+  "r2": 0.5,
+  "sum": 0.5,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! I'm Lira.",
+   "tts": "Hi! I'm Lira."
+  },
+  {
+   "id": "s1b",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is “AI Academy”, lesson one — “AI Council”.",
+   "tts": "This is AI Academy, lesson one — AI Council."
+  },
+  {
+   "id": "s2a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Some questions need more than one opinion.",
+   "tts": "Some questions need more than one opinion."
+  },
+  {
+   "id": "s2b",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Should you switch to remote work? Buy an apartment — or keep saving?",
+   "tts": "Should you switch to remote work? Buy an apartment — or keep saving?"
+  },
+  {
+   "id": "s3a",
+   "scene": "table",
+   "who": "lira",
+   "sub": "In Dewiar, every character can have a brain of its own.",
+   "tts": "In Dewiar, every character can have a brain of its own."
+  },
+  {
+   "id": "s3b",
+   "scene": "table",
+   "who": "lira",
+   "sub": "For example, I think with ChatGPT, and Patrick — with Claude.",
+   "tts": "For example, I think with ChatGPT, and Patrick — with Claude."
+  },
+  {
+   "id": "s3c",
+   "scene": "table",
+   "who": "lira",
+   "sub": "Gather us at one table.",
+   "tts": "Gather us at one table."
+  },
+  {
+   "id": "s4a",
+   "scene": "r1",
+   "who": "lira",
+   "sub": "First, each of us answers alone — with our own position.",
+   "tts": "First, each of us answers alone — with our own position."
+  },
+  {
+   "id": "s4b",
+   "scene": "r1",
+   "who": "patrik",
+   "sub": "Remote work — yes. But agree on a schedule first.",
+   "tts": "Remote work — yes. But agree on a schedule first."
+  },
+  {
+   "id": "s5a",
+   "scene": "r2",
+   "who": "lira",
+   "sub": "Then we argue — to the point, and by name.",
+   "tts": "Then we argue — to the point, and by name."
+  },
+  {
+   "id": "s5b",
+   "scene": "r2",
+   "who": "patrik",
+   "sub": "Lira, I agree about freedom. But it's easy to burn out at home.",
+   "tts": "Lira, I agree about freedom. But it's easy to burn out at home."
+  },
+  {
+   "id": "s5c",
+   "scene": "r2",
+   "who": "lira",
+   "sub": "Patrick is right. So let's start with two days a week at home.",
+   "tts": "Patrick is right. So let's start with two days a week at home."
+  },
+  {
+   "id": "s6a",
+   "scene": "sum",
+   "who": "lira",
+   "sub": "And at the end — a summary: where we agreed, where we didn't,",
+   "tts": "And at the end — a summary: where we agreed, where we didn't,"
+  },
+  {
+   "id": "s6b",
+   "scene": "sum",
+   "who": "lira",
+   "sub": "what we advise — and the first step for today.",
+   "tts": "what we advise — and the first step for today."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "Just say: “Lira, gather the council” — and ask your question.",
+   "tts": "Just say: Lira, gather the council — and ask your question."
+  },
+  {
+   "id": "s7b",
+   "scene": "how",
+   "who": "lira",
+   "sub": "Or open “AI Council” in the studio. The minutes are saved in the “Council” folder.",
+   "tts": "Or open AI Council in the studio. The minutes are saved in the Council folder."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

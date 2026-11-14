@@ -194,6 +194,16 @@ public final class Bridge {
         CloseLive.apply(a);
     }
 
+    /** «Лира заметила» (Notice, 0.97): что смотреть в фоне — {on, lat, lon, place, who, days} строкой JSON; "" — выключить. */
+    @JavascriptInterface public void notice(String json) {
+        prefs.edit().putString("notice", json == null ? "" : json).apply();
+        boolean on = false; try { on = json != null && !json.isEmpty() && new org.json.JSONObject(json).optBoolean("on"); } catch (Throwable ignored) { }
+        Notice.schedule(a, on);
+    }
+
+    /** Сколько раз «Лира заметила» уже говорила (для счётчика «чем пользуются» и проверки). */
+    @JavascriptInterface public int noticeCount() { return prefs.getInt("notice_n", 0); }
+
     /** «Близкие» на связи, когда приложение закрыто (служба CloseLive): включить или выключить. */
     @JavascriptInterface public void closeLive(boolean on) {
         prefs.edit().putBoolean("close_live", on).apply();

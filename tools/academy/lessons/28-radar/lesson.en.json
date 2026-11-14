@@ -1,0 +1,104 @@
+{
+ "title": "Lesson 28 · Radar",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "add": 0.6,
+  "pulse": 0.6,
+  "urgent": 0.6,
+  "ask": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-eight — “Radar”.",
+   "tts": "This is Lira's Academy, lesson twenty-eight — Radar."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "Every morning — twenty news tabs, and I still hear about the important stuff last.",
+   "tts": "Every morning — twenty news tabs, and I still hear about the important stuff last."
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Give me your sources. I'll do the reading.",
+   "tts": "Give me your sources. I'll do the reading."
+  },
+  {
+   "id": "s3a",
+   "scene": "add",
+   "who": "lira",
+   "sub": "Paste the links all at once: websites, YouTube, Telegram channels — and “Add”. I'll figure out the type myself.",
+   "tts": "Paste the links all at once: websites, YouTube, Telegram channels — and Add. I'll figure out the type myself."
+  },
+  {
+   "id": "s4a",
+   "scene": "pulse",
+   "who": "lira",
+   "sub": "I read every piece and give it a signal — how much it matters to you in particular. And in the morning — a brief of the day.",
+   "tts": "I read every piece and give it a signal — how much it matters to you in particular. And in the morning — a brief of the day."
+  },
+  {
+   "id": "s5a",
+   "scene": "urgent",
+   "who": "patrik",
+   "sub": "PHP source code leaked — and I found out first?",
+   "tts": "PHP source code leaked — and I found out first?"
+  },
+  {
+   "id": "s5b",
+   "scene": "urgent",
+   "who": "lira",
+   "sub": "Urgent things I send right away, to your phone. And at night — silence.",
+   "tts": "Urgent things I send right away, to your phone. And at night — silence."
+  },
+  {
+   "id": "s6a",
+   "scene": "ask",
+   "who": "patrik",
+   "sub": "And why is everyone suddenly writing about AI agents?",
+   "tts": "And why is everyone suddenly writing about AI agents?"
+  },
+  {
+   "id": "s6b",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "I answer only from what I've read — and with links, so you can check.",
+   "tts": "I answer only from what I've read — and with links, so you can check."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All of this is in the studio: “Work” → “Radar”. Or ask by voice: “What's new in my field?”",
+   "tts": "All of this is in the studio: Work, Radar. Or ask by voice: What's new in my field?"
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

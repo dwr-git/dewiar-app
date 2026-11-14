@@ -89,6 +89,7 @@
         </receiver>
         <!-- «Близкие»: раз в ~15 минут — есть ли новые сообщения, пока приложение закрыто -->
         <service android:name=".CloseWatch" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE"/>
+        <service android:name=".Notice" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE"/>
         <!-- «Близкие» на связи: длинный запрос к облаку — сообщения и звонки сразу, даже когда приложение закрыто.
              тип — remoteMessaging (0x200, Android 14): в framework-res сборки этого имени нет, поэтому здесь метка
              «camera|microphone|location», которую android/tools/fgs_type.py в собранном манифесте меняет на 0x200 -->

@@ -1133,7 +1133,8 @@ class CommandsMixin:
         if cmd == "academy_list":                 # «Видеоуроки» (0.69): уроки ИИ Академии с сайта (cloud.php ?p=/academy)
             from cloud import CloudError, base_of, public
             try:
-                d = public(self.cloud.url, "/academy", timeout=12)
+                en = hasattr(self, "_ui_en") and self._ui_en()   # 14.11: программа по-английски — английские ролики
+                d = public(self.cloud.url, "/academy" + ("&lang=en" if en else ""), timeout=12)
             except CloudError as e:
                 raise ValueError(str(e)) from e
             # дома запрос ушёл на сайт напрямую (net._LanFirst) — и ссылки сайт собрал с домашним адресом

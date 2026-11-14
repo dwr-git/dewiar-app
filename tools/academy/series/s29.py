@@ -192,7 +192,7 @@ JS = CURSOR_JS + """
   const w0 = r0 + 2.2;
   $("#dt").textContent = type(\"""" + TTL + """\", (T - w0) / 0.9);
   $("#dd").textContent = type(\"""" + DESC + """\", (T - w0 - 0.9) / 0.9);
-  const BODY = """ + repr(BODY).replace("'", '"') + """, bk = clamp((T - w0 - 1.9) / (rd * 0.45));
+  const BODY = """ + repr(BODY).replace("'", '"') + """.map(window.DW_FILM_TX || (s => s)), bk = clamp((T - w0 - 1.9) / (rd * 0.45));
   let left = Math.round(BODY.join("").length * bk), html = "";
   for (const b of BODY) { const piece = b.slice(0, Math.max(0, left)); left -= b.length; if (!piece) break;
     html += b.startsWith("## ") ? `<h6>${piece.slice(3)}</h6>` : `<p>${piece.replace(/\\[(\\d)\\]/g, '<span class="rf">$1</span>')}</p>`; }

@@ -1,0 +1,98 @@
+{
+ "title": "Lesson 15 · Plugins",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "catalog": 0.6,
+  "install": 0.6,
+  "use": 0.6,
+  "jobs": 0.6,
+  "remove": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson fifteen — “Plugins”.",
+   "tts": "Hi! This is Lira's Academy, lesson fifteen — Plugins."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Everyone needs something different: a gardener — weather and watering, a cook — menus, a traveller — exchange rates and a packing list.",
+   "tts": "Everyone needs something different: a gardener — weather and watering, a cook — menus, a traveller — exchange rates and a packing list."
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Build everything in at once — and it's easy to get lost.",
+   "tts": "Build everything in at once — and it's easy to get lost."
+  },
+  {
+   "id": "s3a",
+   "scene": "catalog",
+   "who": "lira",
+   "sub": "That's why I have plugins — ready-made skills. You turn on only what you need.",
+   "tts": "That's why I have plugins — ready-made skills. You turn on only what you need."
+  },
+  {
+   "id": "s4a",
+   "scene": "install",
+   "who": "lira",
+   "sub": "Open the “Garden” plugin, enter your city and what grows there — and tap “Install”.",
+   "tts": "Open the Garden plugin, enter your city and what grows there — and tap Install."
+  },
+  {
+   "id": "s5a",
+   "scene": "use",
+   "who": "lira",
+   "sub": "Now just ask: “Will there be frost this week?” — I'll answer from your city's weather.",
+   "tts": "Now just ask: Will there be frost this week? — I'll answer from your city's weather."
+  },
+  {
+   "id": "s6a",
+   "scene": "jobs",
+   "who": "lira",
+   "sub": "Plugins can have scheduled jobs: every evening I'll check the forecast and warn you if there's frost at night.",
+   "tts": "Plugins can have scheduled jobs: every evening I'll check the forecast and warn you if there's frost at night."
+  },
+  {
+   "id": "s7a",
+   "scene": "remove",
+   "who": "lira",
+   "sub": "Don't need it — “Remove”, in one tap. Nothing else in me changes.",
+   "tts": "Don't need it — Remove, in one tap. Nothing else in me changes."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio — the “Plugins” section: what each one can do and what to say to it.",
+   "tts": "In the studio — the Plugins section: what each one can do and what to say to it."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

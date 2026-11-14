@@ -1,0 +1,27 @@
+# Lesson 22 · Plugin page
+
+## title
+Лира: This is Lira's Academy, lesson twenty-two — “Plugin page”. | This is Lira's Academy, lesson twenty-two — Plugin page.
+
+## problem
+Патрик: Forty résumés for an accountant job. When am I supposed to read them all?
+Лира: Drop them on the “Recruiter” page. I've sorted and compared them: Irina Kovaleva fits best. | Drop them on the Recruiter page. I've sorted and compared them: Irina Kovaleva fits best.
+
+## open
+Лира: Install a plugin — and its page appears in the menu on the left, in the “Plugins” group. | Install a plugin — and its page appears in the menu on the left, in the Plugins group.
+
+## act
+Лира: Every action is a button: fill in a field, tap — and the result comes as a table, no chatting needed.
+
+## ask
+Лира: Or in words: “Compare Kovaleva and Petrov” — I'll answer point by point. | Or in words: Compare Kovaleva and Petrov — I'll answer point by point.
+
+## settings
+Лира: In “Settings” — the résumé folder. On weekdays at ten I'll sort the new ones myself. | In Settings — the résumé folder. On weekdays at ten I'll sort the new ones myself.
+
+## how
+Лира: Every plugin has its own page: “Tenders” has a feed, “Artist” has drawings. | Every plugin has its own page: Tenders has a feed, Artist has drawings.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

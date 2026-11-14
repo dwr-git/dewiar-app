@@ -1,0 +1,105 @@
+{
+ "title": "Lesson 7 · Posts in Telegram",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "write": 0.7,
+  "when": 0.6,
+  "rubric": 0.6,
+  "poll": 0.6,
+  "group": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson seven — “Posts in Telegram”.",
+   "tts": "Hi! This is AI Academy, lesson seven — Posts in Telegram."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "You have a channel, but no time to write. The last post was a month ago.",
+   "tts": "You have a channel, but no time to write. The last post was a month ago."
+  },
+  {
+   "id": "s3a",
+   "scene": "write",
+   "who": "lira",
+   "sub": "Make the character's bot an administrator of the channel — and I'll publish.",
+   "tts": "Make the character's bot an administrator of the channel — and I'll publish."
+  },
+  {
+   "id": "s3b",
+   "scene": "write",
+   "who": "lira",
+   "sub": "“Come up with a post about the new oolong” — I'll write it in my own character, from your knowledge.",
+   "tts": "Come up with a post about the new oolong — I'll write it in my own character, from your knowledge."
+  },
+  {
+   "id": "s4a",
+   "scene": "when",
+   "who": "lira",
+   "sub": "I'll publish it right away or on schedule — say, Friday at ten.",
+   "tts": "I'll publish it right away or on schedule — say, Friday at ten."
+  },
+  {
+   "id": "s5a",
+   "scene": "rubric",
+   "who": "lira",
+   "sub": "A column like “weekdays at ten — tip of the day” writes itself. All you do is tap “Publish”.",
+   "tts": "A column like weekdays at ten — tip of the day writes itself. All you do is tap Publish."
+  },
+  {
+   "id": "s6a",
+   "scene": "poll",
+   "who": "lira",
+   "sub": "A poll works too: “Which tea should we bring next time?”",
+   "tts": "A poll works too: Which tea should we bring next time?"
+  },
+  {
+   "id": "s7a",
+   "scene": "group",
+   "who": "lira",
+   "sub": "I'll welcome newcomers to the group — with one message for everyone.",
+   "tts": "I'll welcome newcomers to the group — with one message for everyone."
+  },
+  {
+   "id": "s7b",
+   "scene": "group",
+   "who": "lira",
+   "sub": "And honestly: on behalf of the channel, with no made-up reviews or people.",
+   "tts": "And honestly: on behalf of the channel, with no made-up reviews or people."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All of this is in the studio: “Telegram bot” → “Posts”.",
+   "tts": "All of this is in the studio: Telegram bot, Posts."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

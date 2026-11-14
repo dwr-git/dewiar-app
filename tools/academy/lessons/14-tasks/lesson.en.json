@@ -1,0 +1,91 @@
+{
+ "title": "Lesson 14 · Big tasks",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "give": 0.6,
+  "plan": 0.6,
+  "result": 0.6,
+  "ask": 0.6,
+  "phone": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson fourteen — “Big tasks”.",
+   "tts": "Hi! This is Lira's Academy, lesson fourteen — Big tasks."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Compare five laptops, put together a report, make a presentation — that's hours of work.",
+   "tts": "Compare five laptops, put together a report, make a presentation — that's hours of work."
+  },
+  {
+   "id": "s3a",
+   "scene": "give",
+   "who": "lira",
+   "sub": "Hand it to me: “Compare five laptops under a thousand dollars and make a table.”",
+   "tts": "Hand it to me: Compare five laptops under a thousand dollars and make a table."
+  },
+  {
+   "id": "s4a",
+   "scene": "plan",
+   "who": "lira",
+   "sub": "I'll make a plan and go step by step: you can see what's done and what I'm doing now.",
+   "tts": "I'll make a plan and go step by step: you can see what's done and what I'm doing now."
+  },
+  {
+   "id": "s5a",
+   "scene": "result",
+   "who": "lira",
+   "sub": "Done: the table, presentation or report opens right in the studio.",
+   "tts": "Done: the table, presentation or report opens right in the studio."
+  },
+  {
+   "id": "s6a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "If I need to clarify something — I'll ask. Meanwhile, get on with your own things.",
+   "tts": "If I need to clarify something — I'll ask. Meanwhile, get on with your own things."
+  },
+  {
+   "id": "s7a",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "From the phone too: “My day” → “Done” → “Hand over”. Computer off — the Dewiar cloud will do it.",
+   "tts": "From the phone too: My day, Done, Hand over. Computer off — the Dewiar cloud will do it."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio — the “Tasks” section. Or just say: “Make a presentation about tomorrow's weather.”",
+   "tts": "In the studio — the Tasks section. Or just say: Make a presentation about tomorrow's weather."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

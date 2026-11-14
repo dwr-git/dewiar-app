@@ -2,7 +2,7 @@
 <html lang="ru"><head><meta charset="utf-8">
 <link rel="stylesheet" href="../../../../ui/assets/fonts.css">
 <style>
-/* Урок 9 · Ваши документы. Светлый неоморфизм серии. Главная вещь урока — стена файлов справа: Лира прочитала папку, и на вопрос загорается ровно тот файл, из которого ответ. */
+/* Урок 9 · Мои файлы. Светлый неоморфизм серии. Главная вещь урока — стена файлов справа: Лира прочитала папку, и на вопрос загорается ровно тот файл, из которого ответ. */
 :root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
   --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
   --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
@@ -80,21 +80,21 @@ html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--
 </style></head>
 <body><div id="film">
   <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
-  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 9 · Ваши документы</span></div></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 9 · Мои файлы</span></div></div>
   <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h8"/></svg></div>
-    <div id="t-title"><h1>Ваши документы</h1><p>Спросите — найду в ваших папках и покажу файл</p></div></div>
+    <div id="t-title"><h1>Мои файлы</h1><p>Добавьте файл и спросите — отвечу и покажу, откуда</p></div></div>
 
   <div class="layer" id="L-wall"><div id="wall"><div class="fl pdf"><i></i><span>Договор_Ромашка_2026.pdf</span></div><div class="fl doc"><i></i><span>Инструкция_склад.docx</span></div><div class="fl xls"><i></i><span>Прайс_октябрь.xlsx</span></div><div class="fl pdf"><i></i><span>Договор_Ока.pdf</span></div><div class="fl doc"><i></i><span>Регламент_отпусков.docx</span></div><div class="fl pdf"><i></i><span>Сертификат_ГОСТ.pdf</span></div><div class="fl xls"><i></i><span>Остатки.xlsx</span></div><div class="fl doc"><i></i><span>Письмо_поставщику.docx</span></div><div class="fl pdf"><i></i><span>Договор_Вектор.pdf</span></div><div class="fl xls"><i></i><span>Прайс_сентябрь.xlsx</span></div><div class="fl doc"><i></i><span>Памятка_новичку.docx</span></div><div class="fl pdf"><i></i><span>Счёт_4471.pdf</span></div><div class="fl doc"><i></i><span>Протокол_встречи.docx</span></div><div class="fl pdf"><i></i><span>Договор_Ромашка_2025.pdf</span></div><div class="fl xls"><i></i><span>Бюджет_2026.xlsx</span></div><div class="fl doc"><i></i><span>Оферта.docx</span></div><div class="fl pdf"><i></i><span>Акт_сверки.pdf</span></div><div class="fl doc"><i></i><span>Устав.docx</span></div><div class="fl xls"><i></i><span>Клиенты.xlsx</span></div><div class="fl pdf"><i></i><span>Лицензия.pdf</span></div></div></div>
   <div class="layer" id="L-left">
     <div id="mess"><small>СРОК ПОСТАВКИ ПО «РОМАШКЕ»</small><b>Где-то в договоре…<br>в одном из сорока файлов</b></div>
-    <div id="folder"><div class="h"><i>📁</i><div><b>Договоры и прайсы</b><small id="fn">Читаю…</small></div></div><div class="pb"><i id="fp"></i></div><p id="fr"></p></div>
+    <div id="folder"><div class="h"><i>📁</i><div><b>Договоры и прайсы · копия у Лиры</b><small id="fn">Читаю…</small></div></div><div class="pb"><i id="fp"></i></div><p id="fr"></p></div>
     <div id="q">Что в договоре с Ромашкой про сроки?</div>
     <div id="ans"><p>Поставка — <mark>в течение 14 рабочих дней после оплаты</mark>. Задержка — пеня 0,1% в день.</p><span>📄 Договор_Ромашка_2026.pdf · п. 4.2</span></div>
     <div id="priv"><div class="box"><i>💻</i><b>Ваш компьютер</b><small>поиск — здесь</small></div><div class="ar"><em id="frag">отрывок</em></div><div class="box"><i>🧠</i><b>Модель</b><small>видит только найденное</small></div></div>
-    <div id="nope"><span>✓ файлы остаются на месте</span><span class="no">весь архив в облако</span></div>
+    <div id="nope"><span>✓ доступ к папкам не нужен</span><span class="no">весь архив в облако</span></div>
     <div id="phone"><div class="scr"><div class="me" id="pm">Что в договоре с Ромашкой про сроки?</div><div class="wait" id="pw">💻 спрашиваю компьютер…</div><div class="li" id="pa">14 рабочих дней после оплаты — п. 4.2 договора 2026 года.</div></div></div>
     <div id="link"><i id="li"></i>через интернет, зашифровано</div><div id="pcx"><i>💻</i><b>Ваш компьютер</b><small>ищет в ваших папках</small></div>
-    <div id="studio"><h3>Документы</h3><p>Лира читает ваши папки и отвечает по ним</p><span class="go">Добавить папку…</span><div class="ok">2 папки, 418 файлов — Лира готова отвечать</div></div>
+    <div id="studio"><h3>Мои файлы</h3><p>Спросите свои файлы — Лира прочитает и ответит</p><span class="go">Добавить файлы…</span><div class="ok">2 папки, 418 файлов — Лира готова отвечать</div></div>
   </div>
 
   <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Почта голосом»</span></div></div>
@@ -142,7 +142,7 @@ function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - 
 function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
 function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
 
-const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+const type = (txt, k) => { txt = (window.DW_FILM_TX || (s => s))(txt); return txt.slice(0, Math.round(txt.length * clamp(k))); };
 window.render = function (T, f) {
   const s = (id) => SC[id];
   $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;

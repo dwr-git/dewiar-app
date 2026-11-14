@@ -2181,3 +2181,14 @@ body.light .blg-st.draft { color: #9a5b00; } body.light .blg-st.live { color: #1
 .blg-act { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 24px; }
 .blg-del { color: #FF8FA8; align-self: center; margin-top: 6px; }
 body.light .blg-del { color: #c23a5a; }
+
+/* «Лира заметила» (0.97): предложение один раз — под ответом, тихой карточкой */
+.nt-offer { margin: 14px auto 0; max-width: 520px; padding: 14px 16px; border-radius: 22px; background: var(--glass, rgba(255,255,255,.6));
+  box-shadow: inset 0 0 0 1px var(--frost-hi, rgba(255,255,255,.5)); display: flex; flex-direction: column; gap: 12px; animation: ntIn .35s ease-out; }
+.nt-offer p { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.nt-offer b { font-size: 15.5px; color: var(--ink); }
+.nt-offer span { font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.nt-offer div { display: flex; gap: 8px; }
+.nt-offer .btn { flex: 1; }
+@keyframes ntIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nt-offer { animation: none; } }

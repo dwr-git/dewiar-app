@@ -46,6 +46,7 @@ function renderProfiles() {
     $("small", el).textContent = p.cloud ? `${S.cloud && S.cloud.account ? "по аккаунту dewiar.pro" : "по ключу …" + (p.api_key || "").slice(-4)} · ${p.title || p.model || ""}` : `${p.base_url || ""}${p.model ? " · " + p.model : ""}`;
     $$("[data-f]", el).forEach(inp => {
       const k = inp.dataset.f; if (inp.type === "checkbox") inp.checked = !!p[k]; else inp.value = p[k] ?? "";
+      if (p.cloud && k === "kind") { inp.value = "openai"; inp.disabled = true; inp.title = "Облако Dewiar отвечает по OpenAI-протоколу"; }   // №706
       inp.onchange = () => { let v = inp.type === "checkbox" ? inp.checked : inp.value; if (inp.type === "number") v = v === "" ? null : +v; S.llm.profiles[id][k] = v; save({ llm: { profiles: S.llm.profiles } }, true).then(renderProfiles); };
     });
     $(".head input", el).onclick = (ev) => { ev.stopPropagation(); save({ llm: { active: id } }).then(renderProfiles); };

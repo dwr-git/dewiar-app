@@ -112,7 +112,7 @@ with sync_playwright() as p:
     order = ["music", "vault", "chat", "notes", "reminders", "calendar", "pay", "council", "tasks", "watch", "plg:kitchen", "plg:dacha", "close"]
     pg.evaluate("(o) => hmSave(o)", order); pg.wait_for_timeout(300)
     got = navs("Для себя")
-    ok(got == ["music", "vault", "chat", "notes", "reminders", "calendar", "pay"], f"перетащили значки — «Для себя» в том же порядке сразу: {got}")
+    ok(got == ["music", "vault", "chat", "notes", "reminders", "calendar", "pay", "docs"], f"перетащили значки — «Для себя» в том же порядке сразу: {got}")
     ok(navs("Лира делает сама")[:2] == ["council", "tasks"], f"и в других группах — внутри своей группы: {navs('Лира делает сама')}")
     ok(pg.evaluate("() => [...document.querySelectorAll('nav .ng')].map(x => x.textContent.trim()).slice(0, 2)") == ["Для себя", "Лира делает сама"],
        "группы и их заголовки — на месте")
@@ -121,7 +121,7 @@ with sync_playwright() as p:
     # перезапуск: настройки пришли с ядром — порядок тот же (hello → hmNav)
     pg.reload(); pg.wait_for_timeout(1200)
     pg.evaluate("(o) => core.emit('settings', { settings: Object.assign({}, S || {}, { ui: Object.assign({}, (S && S.ui) || {}, { home_apps: o }) }) })", order); pg.wait_for_timeout(400)
-    ok(navs("Для себя") == ["music", "vault", "chat", "notes", "reminders", "calendar", "pay"], "после перезапуска — тот же порядок")
+    ok(navs("Для себя") == ["music", "vault", "chat", "notes", "reminders", "calendar", "pay", "docs"], "после перезапуска — тот же порядок")
     if SHOTS:
         pg.screenshot(path=f"{SHOTS}/nav558.png", clip={"x": 0, "y": 0, "width": 260, "height": 900})
 

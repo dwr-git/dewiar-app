@@ -1,0 +1,31 @@
+# Lesson 3 · Leads from your website
+
+## title
+Лира: Hi! This is “AI Academy”, lesson three — “Leads from your website”. | Hi! This is AI Academy, lesson three — Leads from your website.
+
+## night
+Патрик: Night. A customer visits your website — and nobody's there to answer.
+Лира: Somebody is. I'm the consultant on your website.
+
+## chat
+Лира: I answer from your knowledge: prices, delivery, address.
+Лира: If it's not in your knowledge, I don't make it up — I offer to leave a contact.
+
+## lead
+Лира: The customer leaves a phone number.
+
+## crm
+Лира: And by morning the lead is already in “Clients” — together with the conversation. | And by morning the lead is already in Clients — together with the conversation.
+Лира: And straight into Bitrix24 as a lead.
+
+## next
+Патрик: I'll call her back at ten.
+Лира: I'll remind you.
+
+## how
+Лира: To turn it on — in the studio: “Work” → “Website chat”. | To turn it on — in the studio: Work, Website chat.
+Лира: One line on your website — and a chat button appears in the corner.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

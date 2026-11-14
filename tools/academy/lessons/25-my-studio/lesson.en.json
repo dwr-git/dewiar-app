@@ -1,0 +1,90 @@
+{
+ "title": "Lesson 25 · A studio that fits you",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "sets": 0.6,
+  "hide": 0.6,
+  "find": 0.6,
+  "lite": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-five — “A studio that fits you”.",
+   "tts": "This is Lira's Academy, lesson twenty-five — A studio that fits you."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "All I need is tasks, notes and my people. And here — clients, mailings, websites…",
+   "tts": "All I need is tasks, notes and my people. And here — clients, mailings, websites…"
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Tap “Minimum” — and the menu shows only what's yours. Hidden sections don't even load.",
+   "tts": "Tap Minimum — and the menu shows only what's yours. Hidden sections don't even load."
+  },
+  {
+   "id": "s3a",
+   "scene": "sets",
+   "who": "lira",
+   "sub": "In “Appearance” — “What to show”: “Everything”, “For myself” — without work — and “Minimum”.",
+   "tts": "In Appearance — What to show: Everything, For myself — without work — and Minimum."
+  },
+  {
+   "id": "s4a",
+   "scene": "hide",
+   "who": "lira",
+   "sub": "Or with switches — a whole group or a single section. Hidden things keep working: reminders still arrive.",
+   "tts": "Or with switches — a whole group or a single section. Hidden things keep working: reminders still arrive."
+  },
+  {
+   "id": "s5a",
+   "scene": "find",
+   "who": "lira",
+   "sub": "Need a hidden section? Find it with search on “Home” and bring it back in one tap.",
+   "tts": "Need a hidden section? Find it with search on Home and bring it back in one tap."
+  },
+  {
+   "id": "s6a",
+   "scene": "lite",
+   "who": "lira",
+   "sub": "Slow computer? “Light view”: no blur or glass — and the studio responds faster.",
+   "tts": "Slow computer? Light view: no blur or glass — and the studio responds faster."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All of this is in the studio, the “Appearance” section, at the very top.",
+   "tts": "All of this is in the studio, the Appearance section, at the very top."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

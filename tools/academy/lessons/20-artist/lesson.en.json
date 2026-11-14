@@ -1,0 +1,91 @@
+{
+ "title": "Lesson 20 · Artist",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "ask": 0.6,
+  "draw": 0.6,
+  "fix": 0.6,
+  "anim": 0.6,
+  "gallery": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson twenty — “Artist”.",
+   "tts": "Hi! This is Lira's Academy, lesson twenty — Artist."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "A card for mom, a picture for a post, a badge for a club — and no artist at hand.",
+   "tts": "A card for mom, a picture for a post, a badge for a club — and no artist at hand."
+  },
+  {
+   "id": "s3a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Say: “Draw a birthday card for mom.” I'll draw it myself — without third-party services.",
+   "tts": "Say: Draw a birthday card for mom. I'll draw it myself — without third-party services."
+  },
+  {
+   "id": "s4a",
+   "scene": "draw",
+   "who": "lira",
+   "sub": "The card opens in the browser: “Save PNG” — and you can send it in a messenger or print it.",
+   "tts": "The card opens in the browser: Save PNG — and you can send it in a messenger or print it."
+  },
+  {
+   "id": "s5a",
+   "scene": "fix",
+   "who": "lira",
+   "sub": "Want to change something — say it in words: “Add balloons and confetti.” I'll add them.",
+   "tts": "Want to change something — say it in words: Add balloons and confetti. I'll add them."
+  },
+  {
+   "id": "s6a",
+   "scene": "anim",
+   "who": "lira",
+   "sub": "I can do animation too: “Snow over a city at night.” Tap “Record video” — and the clip is ready.",
+   "tts": "I can do animation too: Snow over a city at night. Tap Record video — and the clip is ready."
+  },
+  {
+   "id": "s7a",
+   "scene": "gallery",
+   "who": "lira",
+   "sub": "All works are in the “Gallery”, in the “Drawings” folder.",
+   "tts": "All works are in the Gallery, in the Drawings folder."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "Turn on “Artist” in the studio, in “Plugins” — or right on the home screen, in the “Try a plugin” card.",
+   "tts": "Turn on Artist in the studio, in Plugins — or right on the home screen, in the Try a plugin card."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

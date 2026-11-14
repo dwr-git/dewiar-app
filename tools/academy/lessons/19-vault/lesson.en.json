@@ -1,0 +1,83 @@
+{
+ "title": "Lesson 19 · Password safe",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "save": 0.6,
+  "show": 0.6,
+  "lock": 0.6,
+  "phone": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson nineteen — “Password safe”.",
+   "tts": "Hi! This is Lira's Academy, lesson nineteen — Password safe."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "The Wi-Fi password, the alarm code, the bank card PIN — all on scraps of paper.",
+   "tts": "The Wi-Fi password, the alarm code, the bank card PIN — all on scraps of paper."
+  },
+  {
+   "id": "s3a",
+   "scene": "save",
+   "who": "lira",
+   "sub": "Say: “Remember the Wi-Fi password: Sunshine twenty-five.” It goes to the safe, not to notes.",
+   "tts": "Say: Remember the Wi-Fi password: Sunshine twenty-five. It goes to the safe, not to notes."
+  },
+  {
+   "id": "s4a",
+   "scene": "show",
+   "who": "lira",
+   "sub": "Ask: “What's the Wi-Fi password?” — I'll show it on screen, not say it out loud.",
+   "tts": "Ask: What's the Wi-Fi password? — I'll show it on screen, not say it out loud."
+  },
+  {
+   "id": "s5a",
+   "scene": "lock",
+   "who": "lira",
+   "sub": "The safe is encrypted with your computer's key and kept apart from notes — it never goes anywhere unencrypted.",
+   "tts": "The safe is encrypted with your computer's key and kept apart from notes — it never goes anywhere unencrypted."
+  },
+  {
+   "id": "s6a",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "On the phone — the same safe: passwords travel only encrypted.",
+   "tts": "On the phone — the same safe: passwords travel only encrypted."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio — “Password safe”: entries, search and secret pages.",
+   "tts": "In the studio — Password safe: entries, search and secret pages."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

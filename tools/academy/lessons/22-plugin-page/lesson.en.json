@@ -1,0 +1,90 @@
+{
+ "title": "Lesson 22 · Plugin page",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "open": 0.6,
+  "act": 0.6,
+  "ask": 0.6,
+  "settings": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-two — “Plugin page”.",
+   "tts": "This is Lira's Academy, lesson twenty-two — Plugin page."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "Forty résumés for an accountant job. When am I supposed to read them all?",
+   "tts": "Forty résumés for an accountant job. When am I supposed to read them all?"
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Drop them on the “Recruiter” page. I've sorted and compared them: Irina Kovaleva fits best.",
+   "tts": "Drop them on the Recruiter page. I've sorted and compared them: Irina Kovaleva fits best."
+  },
+  {
+   "id": "s3a",
+   "scene": "open",
+   "who": "lira",
+   "sub": "Install a plugin — and its page appears in the menu on the left, in the “Plugins” group.",
+   "tts": "Install a plugin — and its page appears in the menu on the left, in the Plugins group."
+  },
+  {
+   "id": "s4a",
+   "scene": "act",
+   "who": "lira",
+   "sub": "Every action is a button: fill in a field, tap — and the result comes as a table, no chatting needed.",
+   "tts": "Every action is a button: fill in a field, tap — and the result comes as a table, no chatting needed."
+  },
+  {
+   "id": "s5a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Or in words: “Compare Kovaleva and Petrov” — I'll answer point by point.",
+   "tts": "Or in words: Compare Kovaleva and Petrov — I'll answer point by point."
+  },
+  {
+   "id": "s6a",
+   "scene": "settings",
+   "who": "lira",
+   "sub": "In “Settings” — the résumé folder. On weekdays at ten I'll sort the new ones myself.",
+   "tts": "In Settings — the résumé folder. On weekdays at ten I'll sort the new ones myself."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "Every plugin has its own page: “Tenders” has a feed, “Artist” has drawings.",
+   "tts": "Every plugin has its own page: Tenders has a feed, Artist has drawings."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

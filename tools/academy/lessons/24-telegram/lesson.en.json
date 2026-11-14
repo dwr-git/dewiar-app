@@ -1,0 +1,89 @@
+{
+ "title": "Lesson 24 · A Telegram bot from any device",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "account": 0.6,
+  "who": 0.6,
+  "reserve": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-four — “A Telegram bot from any device”.",
+   "tts": "This is Lira's Academy, lesson twenty-four — A Telegram bot from any device."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "I'm on the road and my laptop at home is off. Lira, what do I have tomorrow?",
+   "tts": "I'm on the road and my laptop at home is off. Lira, what do I have tomorrow?"
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "At ten — the dentist, at three — a call with Anna. The laptop is asleep — your phone answered.",
+   "tts": "At ten — the dentist, at three — a call with Anna. The laptop is asleep — your phone answered."
+  },
+  {
+   "id": "s3a",
+   "scene": "account",
+   "who": "lira",
+   "sub": "The bot now belongs to your account, not to one computer: all your devices know it.",
+   "tts": "The bot now belongs to your account, not to one computer: all your devices know it."
+  },
+  {
+   "id": "s4a",
+   "scene": "who",
+   "who": "lira",
+   "sub": "The computer you talked to last answers. The others stand by.",
+   "tts": "The computer you talked to last answers. The others stand by."
+  },
+  {
+   "id": "s5a",
+   "scene": "reserve",
+   "who": "lira",
+   "sub": "One message — one answer, no duplicates.",
+   "tts": "One message — one answer, no duplicates."
+  },
+  {
+   "id": "s5b",
+   "scene": "reserve",
+   "who": "lira",
+   "sub": "Computers off — the phone answers. And if nobody's online — I'll answer from the server.",
+   "tts": "Computers off — the phone answers. And if nobody's online — I'll answer from the server."
+  },
+  {
+   "id": "s6a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio — “Connection”, the Telegram card: it shows who is answering right now.",
+   "tts": "In the studio — Connection, the Telegram card: it shows who is answering right now."
+  },
+  {
+   "id": "s7a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s7b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

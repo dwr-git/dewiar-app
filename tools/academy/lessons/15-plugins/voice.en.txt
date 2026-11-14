@@ -1,0 +1,30 @@
+# Lesson 15 · Plugins
+
+## title
+Лира: Hi! This is Lira's Academy, lesson fifteen — “Plugins”. | Hi! This is Lira's Academy, lesson fifteen — Plugins.
+
+## problem
+Лира: Everyone needs something different: a gardener — weather and watering, a cook — menus, a traveller — exchange rates and a packing list.
+Лира: Build everything in at once — and it's easy to get lost.
+
+## catalog
+Лира: That's why I have plugins — ready-made skills. You turn on only what you need.
+
+## install
+Лира: Open the “Garden” plugin, enter your city and what grows there — and tap “Install”. | Open the Garden plugin, enter your city and what grows there — and tap Install.
+
+## use
+Лира: Now just ask: “Will there be frost this week?” — I'll answer from your city's weather. | Now just ask: Will there be frost this week? — I'll answer from your city's weather.
+
+## jobs
+Лира: Plugins can have scheduled jobs: every evening I'll check the forecast and warn you if there's frost at night.
+
+## remove
+Лира: Don't need it — “Remove”, in one tap. Nothing else in me changes. | Don't need it — Remove, in one tap. Nothing else in me changes.
+
+## how
+Лира: In the studio — the “Plugins” section: what each one can do and what to say to it. | In the studio — the Plugins section: what each one can do and what to say to it.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

@@ -9,39 +9,53 @@
    openExt и obLast отсюда использует memory.js. */
 /* ---------- обо мне: память и «Знания» ---------- */
 function fmtSize(b) { return b > 1e6 ? (b / 1e6).toFixed(1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1e3)) + " КБ"; }
+/* «Мои файлы» (0.97): один список — у каждой строки значок, имя, подробность и где лежит («у Лиры», «папка», «dewiar.pro») */
+const MF_ICO = {
+  file: '<svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>',
+  site: '<svg viewBox="0 0 24 24"><path d="M7.5 18.5h9a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.4A3.3 3.3 0 0 0 7.5 18.5z"/></svg>' };
+function mfRow(kind, name, sub, where, whereCls, bad) {
+  const row = document.createElement("div"); row.className = "kn-row";
+  row.innerHTML = `<span class="mf-ico">${MF_ICO[kind]}</span><span class="mf-txt"><b></b><small></small></span><span class="mf-where ${whereCls}"></span>`;
+  $(".mf-txt b", row).textContent = name; const sm = $(".mf-txt small", row); sm.textContent = sub; if (bad) sm.className = "bad";
+  $(".mf-where", row).textContent = where; return row;
+}
+function mfEmpty() {
+  const site = $("#kn-site"), none = !DC.files.length && !DC.folders.length && (!site || site.hidden);
+  const e = $("#mf-empty"); if (e) e.hidden = !none;
+}
 function renderKn(files) {
-  const box = $("#kn-list"); box.innerHTML = ""; DC.files = files; dcStat();
-  if (!files.length) { box.innerHTML = '<p class="hint">Отдельных файлов нет.</p>'; return; }
+  const box = $("#kn-list"); box.innerHTML = ""; DC.files = files; dcStat(); mfEmpty();
   files.forEach(f => {
-    const row = document.createElement("div"); row.className = "kn-row";
-    row.innerHTML = `<b></b><span class="${f.error ? "bad" : ""}"></span><span>${fmtSize(f.size)}</span><button class="btn small" title="Убрать из «Знаний»">Убрать</button>`;
-    $("b", row).textContent = f.path; $("span", row).textContent = f.error ? f.error : `${f.chunks} ${f.chunks % 10 === 1 && f.chunks % 100 !== 11 ? "отрывок" : "отрывков"}`;
-    $("button", row).onclick = () => core.call("knowledge_remove", { path: f.path }).then(renderKn).catch(e => toast(e.message));
-    box.appendChild(row);
+    const name = String(f.path).split(/[\\/]/).pop();
+    const row = mfRow("file", name, f.error ? f.error : `${fmtSize(f.size)} · ${dcPl(f.chunks || 0, "отрывок", "отрывка", "отрывков")}`, "у Лиры", "lira", !!f.error);
+    row.title = f.path;
+    const del = document.createElement("button"); del.className = "btn small"; del.type = "button"; del.textContent = "Убрать";
+    del.title = "Убрать файл у Лиры (ваш оригинал не трогается)";
+    del.onclick = () => core.call("knowledge_remove", { path: f.path }).then(renderKn).catch(e => toast(e.message));
+    row.appendChild(del); box.appendChild(row);
   });
 }
-/* свои папки для поиска (core/knowledge.py: индексируются в фоне; пока идёт — «читаю: 120 из 400») */
+/* подключённые папки (core/knowledge.py: индексируются в фоне; пока идёт — «читаю: 120 из 400») */
 let knFT = 0;
 function renderKnFolders(list) {
-  const box = $("#kn-folders"); box.innerHTML = ""; clearTimeout(knFT); DC.folders = list; dcStat();
-  if (!list.length) { box.innerHTML = '<p class="hint">Папок пока нет — «Добавить папку…» вверху.</p>'; return; }
+  const box = $("#kn-folders"); box.innerHTML = ""; clearTimeout(knFT); DC.folders = list; dcStat(); mfEmpty();
   list.forEach(f => {
-    const row = document.createElement("div"); row.className = "kn-row";
-    row.innerHTML = `<b></b><span></span><span></span><button class="btn small" title="Больше не искать в этой папке (файлы остаются)">Убрать</button>`;
-    $("b", row).textContent = f.path; row.title = f.path;
-    const st = $$("span", row);
-    st[0].className = f.error || !f.exists ? "bad" : "";
-    st[0].textContent = !f.exists ? "папки нет" : f.error ? f.error : f.busy ? `читаю: ${f.indexed || 0} из ${f.files || "…"}` : f.files == null ? "ждёт очереди" : `файлов: ${f.files}${f.skipped ? " (дальше — не берём)" : ""}`;
-    st[1].textContent = f.chunks ? `${f.chunks} отрывков` : "";
-    $("button", row).onclick = () => core.call("knowledge_folder_remove", { path: f.path }).then(renderKnFolders).catch(e => toast(e.message));
-    box.appendChild(row);
+    const st = !f.exists ? "папки нет" : f.error ? f.error : f.busy ? `читаю: ${f.indexed || 0} из ${f.files || "…"}` : f.files == null ? "ждёт очереди"
+      : `${dcPl(f.files, "файл", "файла", "файлов")}${f.skipped ? " (дальше — не берём)" : ""}`;
+    const row = mfRow("folder", f.name || String(f.path).split(/[\\/]/).filter(Boolean).pop() || f.path, `${st} · ${f.path}`, "папка", "", !!(f.error || !f.exists));
+    row.title = f.path;
+    const del = document.createElement("button"); del.className = "btn small"; del.type = "button"; del.textContent = "Убрать";
+    del.title = "Больше не искать в этой папке (файлы остаются)";
+    del.onclick = () => core.call("knowledge_folder_remove", { path: f.path }).then(renderKnFolders).catch(e => toast(e.message));
+    row.appendChild(del); box.appendChild(row);
   });
   if (list.some(f => f.busy || f.files == null)) knFT = setTimeout(() => core.call("knowledge_folders").then(renderKnFolders).catch(() => {}), 2500);
 }
 $("#kn-fadd").onclick = async () => {
   const a = window.api && window.api(); let path = "";
   if (a && a.pick_folder) path = await a.pick_folder();
-  else path = await askText("Полный путь к папке с документами:") || "";
+  else path = await askText("Полный путь к папке с файлами:") || "";
   if (!path) return;
   try { renderKnFolders(await core.call("knowledge_folder_add", { path })); $("#kn-fres").className = "res ok"; $("#kn-fres").textContent = "Добавлено — читаю файлы в фоне"; }
   catch (e) { $("#kn-fres").className = "res bad"; $("#kn-fres").textContent = e.message; }
@@ -94,7 +108,7 @@ function dcStat() {
   const fo = DC.folders.filter(f => f.exists !== false), files = fo.reduce((n, f) => n + (f.files || 0), 0) + DC.files.length;
   const busy = fo.some(f => f.busy || f.files == null);
   el.classList.toggle("on", !!(fo.length || DC.files.length));
-  el.textContent = !fo.length && !DC.files.length ? "Пока пусто — начните с папки, где лежат договоры, инструкции или конспекты."
+  el.textContent = !fo.length && !DC.files.length ? "Пока пусто — добавьте договор, инструкцию или конспект, и спросите о нём."
     : [fo.length ? dcPl(fo.length, "папка", "папки", "папок") : "", files ? dcPl(files, "файл", "файла", "файлов") : ""].filter(Boolean).join(", ")
       + (busy ? " — читаю, можно уже спрашивать" : " — Лира готова отвечать");
 }
@@ -102,7 +116,16 @@ function loadDocs() {
   core.call("knowledge_list").then(r => { DC.files = r.files || []; renderKn(DC.files); dcStat(); }).catch(e => ($("#kn-res").textContent = e.message));
   core.call("knowledge_folders").then(renderKnFolders).catch(() => {});
   if (window.loadWriting) loadWriting();                          // «Пишу» — сколько написано за день (studio/writing.js)
-  const a = S && lastAccount; $("#kn-site").textContent = a && a.logged_in ? `Знания с сайта тоже подключены: аккаунт ${a.user && a.user.login || a.login} — Лира ищет и там.` : "";
+  mfSite();
+}
+function mfSite() {                                  // «Знания» с dewiar.pro — строкой в том же списке, если вошли в аккаунт
+  const el = $("#kn-site"); if (!el) return;
+  const a = S && lastAccount; el.innerHTML = ""; el.hidden = !(a && a.logged_in);
+  if (!el.hidden) {
+    const r = mfRow("site", "Знания на dewiar.pro", `аккаунт ${a.user && a.user.login || a.login} — Лира ищет и там`, "dewiar.pro", "site");
+    while (r.firstChild) el.appendChild(r.firstChild);
+  }
+  mfEmpty();
 }
 $$("#dc-try button").forEach(b => b.onclick = () => {             // пример — вопросом в «Чат»: остаётся нажать «Отправить»
   const nb = $('nav button[data-p="chat"]'); if (nb) nb.click();
@@ -120,7 +143,7 @@ $("#kn-file").onchange = async (ev) => {
   const files = [...ev.target.files]; ev.target.value = ""; const r = $("#kn-res"); let n = 0;
   for (const f of files) {
     // файл идёт в ядро одним сообщением base64 (+⅓ к размеру), а сообщение — не больше 16 МБ (core/bridge.py)
-    if (f.size > 11e6) { toast(`«${f.name}» больше 11 МБ — положите его в папку сами: «Открыть папку»`); continue; }
+    if (f.size > 11e6) { toast(`«${f.name}» больше 11 МБ — положите его сами: «Открыть папку с файлами Лиры»`); continue; }
     r.className = "res"; r.textContent = `добавляю ${f.name}…`;
     const b64 = await new Promise((ok, bad) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = bad; fr.readAsDataURL(f); });
     try { const res = await core.call("knowledge_add", { name: f.name, b64 }); renderKn(res.files); n++; }
@@ -557,7 +580,7 @@ $('nav button[data-p="voice"]') && $('nav button[data-p="voice"]').addEventListe
 });
 function renderAccount(a) {
   if (!a) return;
-  lastAccount = a;
+  lastAccount = a; if (typeof mfSite === "function") mfSite();
   setTimeout(renderSrvStt, 0); setTimeout(renderSrvTts, 0); setTimeout(renderSrvSttOpt, 0); setTimeout(tgSharedVis, 0);
   $("#acc-out").style.display = a.logged_in ? "none" : ""; $("#acc-in").style.display = a.logged_in ? "" : "none";
   if (!$("#acc-server").value && a.server) $("#acc-server").placeholder = a.server;

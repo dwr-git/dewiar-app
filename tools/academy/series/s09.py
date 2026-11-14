@@ -1,7 +1,7 @@
-TITLE = "Урок 9 · Ваши документы"
+TITLE = "Урок 9 · Мои файлы"
 IDEA = "Главная вещь урока — стена файлов справа: Лира прочитала папку, и на вопрос загорается ровно тот файл, из которого ответ."
-H1 = "Ваши документы"
-TAG = "Спросите — найду в ваших папках и покажу файл"
+H1 = "Мои файлы"
+TAG = "Добавьте файл и спросите — отвечу и покажу, откуда"
 NEXT = "Следующий урок — «Почта голосом»"
 ICON = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h8"/></svg>'
 SCENES = ["title", "problem", "add", "ask", "private", "phone", "how", "end"]
@@ -57,14 +57,14 @@ HTML = """
   <div class="layer" id="L-wall"><div id="wall">""" + "".join(f'<div class="fl {k}"><i></i><span>{n}</span></div>' for k, n in FILES) + """</div></div>
   <div class="layer" id="L-left">
     <div id="mess"><small>СРОК ПОСТАВКИ ПО «РОМАШКЕ»</small><b>Где-то в договоре…<br>в одном из сорока файлов</b></div>
-    <div id="folder"><div class="h"><i>📁</i><div><b>Договоры и прайсы</b><small id="fn">Читаю…</small></div></div><div class="pb"><i id="fp"></i></div><p id="fr"></p></div>
+    <div id="folder"><div class="h"><i>📁</i><div><b>Договоры и прайсы · копия у Лиры</b><small id="fn">Читаю…</small></div></div><div class="pb"><i id="fp"></i></div><p id="fr"></p></div>
     <div id="q">Что в договоре с Ромашкой про сроки?</div>
     <div id="ans"><p>Поставка — <mark>в течение 14 рабочих дней после оплаты</mark>. Задержка — пеня 0,1% в день.</p><span>📄 Договор_Ромашка_2026.pdf · п. 4.2</span></div>
     <div id="priv"><div class="box"><i>💻</i><b>Ваш компьютер</b><small>поиск — здесь</small></div><div class="ar"><em id="frag">отрывок</em></div><div class="box"><i>🧠</i><b>Модель</b><small>видит только найденное</small></div></div>
-    <div id="nope"><span>✓ файлы остаются на месте</span><span class="no">весь архив в облако</span></div>
+    <div id="nope"><span>✓ доступ к папкам не нужен</span><span class="no">весь архив в облако</span></div>
     <div id="phone"><div class="scr"><div class="me" id="pm">Что в договоре с Ромашкой про сроки?</div><div class="wait" id="pw">💻 спрашиваю компьютер…</div><div class="li" id="pa">14 рабочих дней после оплаты — п. 4.2 договора 2026 года.</div></div></div>
     <div id="link"><i id="li"></i>через интернет, зашифровано</div><div id="pcx"><i>💻</i><b>Ваш компьютер</b><small>ищет в ваших папках</small></div>
-    <div id="studio"><h3>Документы</h3><p>Лира читает ваши папки и отвечает по ним</p><span class="go">Добавить папку…</span><div class="ok">2 папки, 418 файлов — Лира готова отвечать</div></div>
+    <div id="studio"><h3>Мои файлы</h3><p>Спросите свои файлы — Лира прочитает и ответит</p><span class="go">Добавить файлы…</span><div class="ok">2 папки, 418 файлов — Лира готова отвечать</div></div>
   </div>
 """
 JS = """

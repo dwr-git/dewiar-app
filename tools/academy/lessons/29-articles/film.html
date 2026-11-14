@@ -250,7 +250,7 @@ function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - 
 function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
 function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
 
-const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+const type = (txt, k) => { txt = (window.DW_FILM_TX || (s => s))(txt); return txt.slice(0, Math.round(txt.length * clamp(k))); };
 window.render = function (T, f) {
   const s = (id) => SC[id];
   $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
@@ -286,7 +286,7 @@ window.render = function (T, f) {
   const w0 = r0 + 2.2;
   $("#dt").textContent = type("Как выбрать кофе для дома", (T - w0) / 0.9);
   $("#dd").textContent = type("Обжарка, помол и свежесть: три вещи, которые решают вкус", (T - w0 - 0.9) / 0.9);
-  const BODY = ["Хороший кофе дома начинается с зёрен. В этом году урожай арабики в Бразилии ниже прогноза [1] — тем важнее понимать, за что вы платите.", "## Обжарка", "Светлая — кислинка и фрукты, тёмная — горчинка и шоколад. Светлую сейчас выбирают всё чаще [2]."], bk = clamp((T - w0 - 1.9) / (rd * 0.45));
+  const BODY = ["Хороший кофе дома начинается с зёрен. В этом году урожай арабики в Бразилии ниже прогноза [1] — тем важнее понимать, за что вы платите.", "## Обжарка", "Светлая — кислинка и фрукты, тёмная — горчинка и шоколад. Светлую сейчас выбирают всё чаще [2]."].map(window.DW_FILM_TX || (s => s)), bk = clamp((T - w0 - 1.9) / (rd * 0.45));
   let left = Math.round(BODY.join("").length * bk), html = "";
   for (const b of BODY) { const piece = b.slice(0, Math.max(0, left)); left -= b.length; if (!piece) break;
     html += b.startsWith("## ") ? `<h6>${piece.slice(3)}</h6>` : `<p>${piece.replace(/\[(\d)\]/g, '<span class="rf">$1</span>')}</p>`; }

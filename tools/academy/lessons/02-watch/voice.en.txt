@@ -1,0 +1,30 @@
+# Lesson 2 · Watch
+
+## title
+Лира: Hi! This is “AI Academy”, lesson two — “Watch”. | Hi! This is AI Academy, lesson two — Watch.
+
+## wait
+Лира: Sometimes you just wait: for a movie to download, a neural network to answer, an application to be approved.
+Патрик: And you sit there staring at the screen. Every two minutes.
+
+## ask
+Лира: Don't sit there. Tell me: “Lira, tell me when the movie has downloaded.” | Don't sit there. Tell me: Lira, tell me when the movie has downloaded.
+Лира: I'll keep watch, and you get on with your day.
+
+## kinds
+Лира: I keep an eye on the screen — and notice when what you're waiting for appears.
+Лира: On a folder — when a file appears in “Downloads”. | On a folder — when a file appears in Downloads.
+Лира: And on a web page — when the right word shows up. For example, “Approved”. | And on a web page — when the right word shows up. For example, Approved.
+
+## done
+Патрик: And while Lira keeps watch, you can have a cup of tea.
+Лира: Done — the movie has downloaded!
+Лира: I'll say it out loud and send it to your phone — even if you're in another room.
+
+## how
+Лира: All watches are in the studio, in the “Watch” section: what we're waiting for and how long I'll keep waiting. | All watches are in the studio, in the Watch section: what we're waiting for and how long I'll keep waiting.
+Лира: To stop a watch — right there, or by voice: “Lira, stop watching.” | To stop a watch — right there, or by voice: Lira, stop watching.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

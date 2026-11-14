@@ -1,0 +1,31 @@
+# Lesson 7 · Posts in Telegram
+
+## title
+Лира: Hi! This is “AI Academy”, lesson seven — “Posts in Telegram”. | Hi! This is AI Academy, lesson seven — Posts in Telegram.
+
+## problem
+Патрик: You have a channel, but no time to write. The last post was a month ago.
+
+## write
+Лира: Make the character's bot an administrator of the channel — and I'll publish.
+Лира: “Come up with a post about the new oolong” — I'll write it in my own character, from your knowledge. | Come up with a post about the new oolong — I'll write it in my own character, from your knowledge.
+
+## when
+Лира: I'll publish it right away or on schedule — say, Friday at ten.
+
+## rubric
+Лира: A column like “weekdays at ten — tip of the day” writes itself. All you do is tap “Publish”. | A column like weekdays at ten — tip of the day writes itself. All you do is tap Publish.
+
+## poll
+Лира: A poll works too: “Which tea should we bring next time?” | A poll works too: Which tea should we bring next time?
+
+## group
+Лира: I'll welcome newcomers to the group — with one message for everyone.
+Лира: And honestly: on behalf of the channel, with no made-up reviews or people.
+
+## how
+Лира: All of this is in the studio: “Telegram bot” → “Posts”. | All of this is in the studio: Telegram bot, Posts.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

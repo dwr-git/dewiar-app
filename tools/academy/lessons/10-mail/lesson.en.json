@@ -1,0 +1,90 @@
+{
+ "title": "Lesson 10 · Email by voice",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "new": 0.6,
+  "read": 0.6,
+  "reply": 0.6,
+  "boxes": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson ten — “Email by voice”.",
+   "tts": "Hi! This is AI Academy, lesson ten — Email by voice."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "A hundred emails. Where, among the newsletters, is the one that really matters?",
+   "tts": "A hundred emails. Where, among the newsletters, is the one that really matters?"
+  },
+  {
+   "id": "s3a",
+   "scene": "new",
+   "who": "lira",
+   "sub": "Ask: “What's new in my mail?” — I'll briefly tell you who wrote and what about.",
+   "tts": "Ask: What's new in my mail? — I'll briefly tell you who wrote and what about."
+  },
+  {
+   "id": "s4a",
+   "scene": "read",
+   "who": "lira",
+   "sub": "“Read the email from Olga” — I'll read it or retell the main points.",
+   "tts": "Read the email from Olga — I'll read it or retell the main points."
+  },
+  {
+   "id": "s5a",
+   "scene": "reply",
+   "who": "lira",
+   "sub": "“Reply: agreed, Thursday at ten” — I'll write the email.",
+   "tts": "Reply: agreed, Thursday at ten — I'll write the email."
+  },
+  {
+   "id": "s5b",
+   "scene": "reply",
+   "who": "lira",
+   "sub": "I'll show it to you — and send it only after your “yes”.",
+   "tts": "I'll show it to you — and send it only after your yes."
+  },
+  {
+   "id": "s6a",
+   "scene": "boxes",
+   "who": "lira",
+   "sub": "Work and personal mailboxes — ask about all at once or one at a time.",
+   "tts": "Work and personal mailboxes — ask about all at once or one at a time."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "To connect — in the studio: “Connection” → “Mail”. Gmail, Outlook, Yandex and others.",
+   "tts": "To connect — in the studio: Connection, Mail. Gmail, Outlook, Yandex and others."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

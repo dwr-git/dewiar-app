@@ -1,0 +1,124 @@
+{
+ "title": "Lesson 2 · Watch",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "wait": 0.6,
+  "ask": 0.7,
+  "kinds": 0.8,
+  "done": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson two — “Watch”.",
+   "tts": "Hi! This is AI Academy, lesson two — Watch."
+  },
+  {
+   "id": "s2a",
+   "scene": "wait",
+   "who": "lira",
+   "sub": "Sometimes you just wait: for a movie to download, a neural network to answer, an application to be approved.",
+   "tts": "Sometimes you just wait: for a movie to download, a neural network to answer, an application to be approved."
+  },
+  {
+   "id": "s2b",
+   "scene": "wait",
+   "who": "patrik",
+   "sub": "And you sit there staring at the screen. Every two minutes.",
+   "tts": "And you sit there staring at the screen. Every two minutes."
+  },
+  {
+   "id": "s3a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Don't sit there. Tell me: “Lira, tell me when the movie has downloaded.”",
+   "tts": "Don't sit there. Tell me: Lira, tell me when the movie has downloaded."
+  },
+  {
+   "id": "s3b",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "I'll keep watch, and you get on with your day.",
+   "tts": "I'll keep watch, and you get on with your day."
+  },
+  {
+   "id": "s4a",
+   "scene": "kinds",
+   "who": "lira",
+   "sub": "I keep an eye on the screen — and notice when what you're waiting for appears.",
+   "tts": "I keep an eye on the screen — and notice when what you're waiting for appears."
+  },
+  {
+   "id": "s4b",
+   "scene": "kinds",
+   "who": "lira",
+   "sub": "On a folder — when a file appears in “Downloads”.",
+   "tts": "On a folder — when a file appears in Downloads."
+  },
+  {
+   "id": "s4c",
+   "scene": "kinds",
+   "who": "lira",
+   "sub": "And on a web page — when the right word shows up. For example, “Approved”.",
+   "tts": "And on a web page — when the right word shows up. For example, Approved."
+  },
+  {
+   "id": "s5a",
+   "scene": "done",
+   "who": "patrik",
+   "sub": "And while Lira keeps watch, you can have a cup of tea.",
+   "tts": "And while Lira keeps watch, you can have a cup of tea."
+  },
+  {
+   "id": "s5b",
+   "scene": "done",
+   "who": "lira",
+   "sub": "Done — the movie has downloaded!",
+   "tts": "Done — the movie has downloaded!"
+  },
+  {
+   "id": "s5c",
+   "scene": "done",
+   "who": "lira",
+   "sub": "I'll say it out loud and send it to your phone — even if you're in another room.",
+   "tts": "I'll say it out loud and send it to your phone — even if you're in another room."
+  },
+  {
+   "id": "s6a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All watches are in the studio, in the “Watch” section: what we're waiting for and how long I'll keep waiting.",
+   "tts": "All watches are in the studio, in the Watch section: what we're waiting for and how long I'll keep waiting."
+  },
+  {
+   "id": "s6b",
+   "scene": "how",
+   "who": "lira",
+   "sub": "To stop a watch — right there, or by voice: “Lira, stop watching.”",
+   "tts": "To stop a watch — right there, or by voice: Lira, stop watching."
+  },
+  {
+   "id": "s7a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s7b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

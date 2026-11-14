@@ -1,0 +1,118 @@
+{
+ "title": "Lesson 5 · Working with clients",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "card": 0.7,
+  "ask": 0.5,
+  "deals": 0.7,
+  "paid": 0.5,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson five — “Working with clients”.",
+   "tts": "Hi! This is AI Academy, lesson five — Working with clients."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "Who did I promise to call back? Who owes money? It's all in my head — and it all gets forgotten.",
+   "tts": "Who did I promise to call back? Who owes money? It's all in my head — and it all gets forgotten."
+  },
+  {
+   "id": "s3a",
+   "scene": "card",
+   "who": "lira",
+   "sub": "Just say: “Note: Ivanov from Romashka wants two hundred boxes by Friday.”",
+   "tts": "Just say: Note: Ivanov from Romashka wants two hundred boxes by Friday."
+  },
+  {
+   "id": "s3b",
+   "scene": "card",
+   "who": "lira",
+   "sub": "I'll create a card and remember the agreement.",
+   "tts": "I'll create a card and remember the agreement."
+  },
+  {
+   "id": "s4a",
+   "scene": "card",
+   "who": "lira",
+   "sub": "“Call Ivanov back on Thursday at eleven” — and I'll remind you.",
+   "tts": "Call Ivanov back on Thursday at eleven — and I'll remind you."
+  },
+  {
+   "id": "s5a",
+   "scene": "ask",
+   "who": "patrik",
+   "sub": "What's up with Ivanov?",
+   "tts": "What's up with Ivanov?"
+  },
+  {
+   "id": "s5b",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "He wants two hundred boxes by Friday. The call — Thursday at eleven.",
+   "tts": "He wants two hundred boxes by Friday. The call — Thursday at eleven."
+  },
+  {
+   "id": "s6a",
+   "scene": "deals",
+   "who": "lira",
+   "sub": "Deals go by stages: request, offer, invoice, paid.",
+   "tts": "Deals go by stages: request, offer, invoice, paid."
+  },
+  {
+   "id": "s6b",
+   "scene": "deals",
+   "who": "lira",
+   "sub": "Who owes and who's overdue — you see it at once. I'll remind the client about payment by email.",
+   "tts": "Who owes and who's overdue — you see it at once. I'll remind the client about payment by email."
+  },
+  {
+   "id": "s7a",
+   "scene": "paid",
+   "who": "patrik",
+   "sub": "Romashka has paid!",
+   "tts": "Romashka has paid!"
+  },
+  {
+   "id": "s7b",
+   "scene": "paid",
+   "who": "lira",
+   "sub": "I'll mark it — and the money goes straight to income.",
+   "tts": "I'll mark it — and the money goes straight to income."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "To turn it on — in the studio: “Features” → “Clients”.",
+   "tts": "To turn it on — in the studio: Features, Clients."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

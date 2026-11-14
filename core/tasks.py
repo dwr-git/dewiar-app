@@ -1860,7 +1860,9 @@ class TaskManager:
         data = self._data_files(t)
         nums = []
         if not code:
-            sizes = " ".join(str(p.stat().st_size) for p in outs)
+            # №700 (пакет 14.11): «17.4 МБ» в итоге — это размер файла (17 365 198 байт), не выдумка; опора — и в КБ/МБ/ГБ
+            sizes = " ".join(f"{n} {n / 1e3:.3f} {n / 1e6:.3f} {n / 1e9:.3f} {n / 1024:.3f} {n / 1024 ** 2:.3f} {n / 1024 ** 3:.3f}"
+                             for n in (p.stat().st_size for p in outs))
             pool = Q.number_pool("\n".join([evidence, facts, sizes] + [x for _, x in data]))
             nums = Q.unsupported_numbers(claims, pool)
         if nums and not t.data.get("nums_checked"):

@@ -76,6 +76,7 @@
   <button data-p="pay" title="Обязательные оплаты: счета, сроки, показания, итоги года" data-i18n="nav.pay" data-i18n-title="nav.pay.tip">Платежи<i class="ndot" id="pay-dot"></i></button>
   <button data-p="vault" title="Пароли, пин-коды, коды от домофона — найти и скопировать" data-i18n="nav.vault" data-i18n-title="nav.vault.tip">Сейф паролей</button>
   <button data-p="music" title="Своя папка с музыкой: подборки и ведущий между треками" data-i18n="nav.music" data-i18n-title="nav.music.tip">Музыка</button>
+  <button data-p="docs" title="Ваши файлы — Лира читает их и отвечает по ним" data-i18n="nav.docs" data-i18n-title="nav.docs.tip">Мои файлы</button>
   <div class="ng" data-fold-k="Лира делает сама" data-i18n="nav.g.auto">Лира делает сама</div>
   <button data-p="tasks" title="Большая работа, которую Лира делает сама: отчёт, сравнение, программа — пишет, когда готово" data-i18n="nav.tasks" data-i18n-title="nav.tasks.tip">Задачи</button>
   <button data-p="watch" title="«Дозор»: Лира присмотрит за экраном, папкой или страницей и скажет, когда готово" data-i18n="nav.watch" data-i18n-title="nav.watch.tip">Дозор<i class="ndot" id="wt-dot"></i></button>
@@ -112,7 +113,6 @@
   <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира" data-i18n="nav.qa" data-i18n-title="nav.qa.tip">Вопрос — ответ</button>
   <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу" data-i18n="nav.tricks" data-i18n-title="nav.tricks.tip">Что я умею</button>
   <div class="ng" data-fold-k="Знания" data-i18n="nav.g.knowledge">Знания</div>
-  <button data-p="docs" title="Лира читает ваши папки и отвечает по ним" data-i18n="nav.docs" data-i18n-title="nav.docs.tip">Документы</button>
   <button data-p="memory" data-i18n="nav.memory">Память</button>
   <button data-p="diary" title="Дневник, душа, конституция и что ассистент знает о вас" data-i18n="nav.diary" data-i18n-title="nav.diary.tip">Душа</button>
   <button data-p="soul" class="sub" data-i18n="nav.soul">Душа</button>
@@ -1482,23 +1482,24 @@
     </div>
 
     <h2>Мои документы</h2>
-    <p class="hint">Папки и файлы, по которым Лира ищет и отвечает, — теперь в своём разделе: <button class="linkbtn" type="button" data-goto="docs">«Документы»</button>.</p>
+    <p class="hint">Файлы и папки, по которым Лира ищет и отвечает, — в своём разделе: <button class="linkbtn" type="button" data-goto="docs">«Мои файлы»</button>.</p>
   </section>
 
   <section id="p-docs" class="wide">
     <div class="dc-hero">
       <div class="dc-say">
-        <h1>Документы</h1>
-        <p class="dc-big">Спросите свои документы — Лира прочитает и ответит</p>
-        <p class="lead">Покажите ей папку с договорами, инструкциями, конспектами или книгами. Спросите голосом или текстом — она найдёт
-          нужное место, ответит своими словами и покажет, из какого файла это взято.</p>
+        <h1>Мои файлы</h1>
+        <p class="dc-big">Спросите свои файлы — Лира прочитает и ответит</p>
+        <p class="lead">Договоры, инструкции, конспекты, книги. Спросите голосом или текстом — Лира найдёт нужное место, ответит своими
+          словами и покажет, из какого файла это взято.</p>
         <div class="dc-acts">
-          <button class="btn primary" id="kn-fadd" type="button">Добавить папку…</button>
-          <label class="btn">Добавить файлы…<input type="file" id="kn-file" multiple accept=".pdf,.docx,.odt,.txt,.md,.html,.htm,.csv" hidden></label>
+          <label class="btn primary" tabindex="0">Добавить файлы…<input type="file" id="kn-file" multiple accept=".pdf,.docx,.odt,.txt,.md,.html,.htm,.csv,.epub,.fb2,.rtf" hidden></label>
+          <button class="btn" id="kn-fadd" type="button">Подключить папку…</button>
         </div>
         <p class="dc-stat" id="dc-stat"></p>
-        <p class="dc-safe">Поиск идёт на этом компьютере, без интернета; файлы остаются на месте и никуда не копируются. Для ответа модель
-          получает только найденные отрывки.</p>
+        <p class="dc-safe"><b>«Добавить файлы»</b> — Лира берёт к себе копию только выбранных файлов: доступ к вашим папкам ей не нужен.
+          <b>«Подключить папку»</b> — Лира читает папку на месте и сама замечает новые файлы. Поиск идёт на этом компьютере, без
+          интернета; для ответа модель получает только найденные отрывки.</p>
       </div>
       <figure class="dc-demo" aria-label="Пример: вопрос, ответ и файл, из которого он взят">
         <figcaption>Так выглядит ответ</figcaption>
@@ -1506,6 +1507,24 @@
         <p class="dc-a">Четырнадцать календарных дней с момента получения — это пункт 6.2. Возврат оформляется актом.</p>
         <p class="dc-src"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span><b>Договор поставки.pdf</b><small>Работа / Договоры · нажать — открыть</small></span></p>
       </figure>
+    </div>
+
+    <div class="mf-head"><h2>Ваши файлы</h2><button class="btn small" id="kn-open" type="button" title="Папка, куда Лира кладёт добавленные файлы">Открыть папку с файлами Лиры</button></div>
+    <div class="mf-box" id="mf-box">
+      <div id="kn-list" class="kn-list"></div>
+      <div id="kn-folders" class="kn-list"></div>
+      <div class="kn-row mf-site" id="kn-site" hidden></div>
+      <p class="mf-empty" id="mf-empty" hidden>Здесь появятся ваши файлы. Начните с одного — договора, инструкции или конспекта:
+        «Добавить файлы…» вверху.</p>
+    </div>
+    <div class="actions" style="margin:8px 0 0"><span class="res" id="kn-res"></span><span class="res" id="kn-fres"></span></div>
+
+    <h2>Попробуйте спросить</h2>
+    <div class="dc-try" id="dc-try">
+      <button type="button">Что в моих документах про отпуск?</button>
+      <button type="button">Найди в договоре, когда срок оплаты</button>
+      <button type="button">Перескажи коротко инструкцию к котлу</button>
+      <button type="button">Сравни, что в двух договорах про штрафы</button>
     </div>
 
     <div class="wr-card" id="wr-card" aria-label="Пишу: сколько написано">
@@ -1524,33 +1543,14 @@
         Лира будет считать, сколько вы написали за день, и подбодрит. Спросите: «Сколько я написал сегодня?»</p>
     </div>
 
-    <h2>Папки, по которым Лира ищет</h2>
-    <p class="hint" style="margin-bottom:10px">Рабочая папка, «Документы», папка с договорами — Лира прочитает их в фоне и будет следить за новыми
-      файлами. Читаются PDF, Word, ODT, текст, Markdown, HTML, CSV; служебные и скрытые папки пропускаются.</p>
-    <div id="kn-folders" class="kn-list"></div>
-    <div class="actions" style="margin:8px 0 0"><span class="res" id="kn-fres"></span></div>
-
-    <h2>Отдельные файлы</h2>
-    <p class="hint" style="margin-bottom:10px">Добавленные кнопкой «Добавить файлы…» лежат в папке «Знания» внутри папки ассистента.</p>
-    <div id="kn-list" class="kn-list"></div>
-    <div class="actions" style="margin:8px 0 0"><button class="btn" id="kn-open" type="button">Открыть папку «Знания»</button><span class="res" id="kn-res"></span></div>
-
-    <h2>Попробуйте спросить</h2>
-    <div class="dc-try" id="dc-try">
-      <button type="button">Что в моих документах про отпуск?</button>
-      <button type="button">Найди в договоре, когда срок оплаты</button>
-      <button type="button">Перескажи коротко инструкцию к котлу</button>
-      <button type="button">Сравни, что в двух договорах про штрафы</button>
-    </div>
-
-    <h2>Проверить поиск</h2>
+    <details class="mf-check"><summary>Проверить поиск</summary>
     <p class="hint" style="margin-bottom:10px">Покажет отрывки, которые Лира возьмёт к такому вопросу.</p>
     <div class="actions" style="margin:0">
       <input type="text" id="kn-q" placeholder="например, «отпуск»" style="flex:1;min-width:220px">
       <button class="btn" id="kn-go" type="button">Найти</button>
     </div>
     <div id="kn-found"></div>
-    <p class="hint" id="kn-site" style="margin-top:14px"></p>
+    </details>
   </section>
 
   <section id="p-devices" class="wide">

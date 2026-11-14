@@ -1,0 +1,29 @@
+# Lesson 12 · Morning with Lira
+
+## title
+Лира: Hi! This is “AI Academy”, lesson twelve — “Morning with Lira”. | Hi! This is AI Academy, lesson twelve — Morning with Lira.
+
+## problem
+Патрик: Every morning I open five apps: weather, calendar, mail, tasks…
+
+## brief
+Лира: One summary instead of five: weather, meetings and today's tasks.
+
+## work
+Лира: Employees — what's overdue and what's waiting for review. Clients — who to call today.
+
+## mail
+Лира: Emails from people — briefly, newsletters — just a count. And what got done overnight.
+
+## voice
+Лира: Say: “Tell me about the morning” — or I'll tell you myself at eight, by voice. | Say: Tell me about the morning — or I'll tell you myself at eight, by voice.
+
+## phone
+Лира: The same summary comes to your phone too.
+
+## how
+Лира: In the mornings — on the studio's “Home”, the “Morning with Lira” card. | In the mornings — on the studio's Home, the Morning with Lira card.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

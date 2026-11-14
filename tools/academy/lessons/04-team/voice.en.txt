@@ -1,0 +1,30 @@
+# Lesson 4 · Assignments for your team
+
+## title
+Лира: Hi! This is “AI Academy”, lesson four — “Assignments for your team”. | Hi! This is AI Academy, lesson four — Assignments for your team.
+
+## problem
+Патрик: You assign something in a chat — and forget. Done or not? Who knows.
+
+## assign
+Лира: Tell me: “Assign Olga to update the price list by Friday.” | Tell me: Assign Olga to update the price list by Friday.
+Лира: Olga gets the assignment — in Telegram, MAX or the Dewiar app.
+
+## work
+Лира: Olga taps “I'll take it”. Done — “Done”, with a photo. | Olga taps I'll take it. Done — Done, with a photo.
+Лира: Can't make it — “Postpone”, with a reason. | Can't make it — Postpone, with a reason.
+
+## board
+Лира: And you get a board: who took what, what's done, who's past the deadline.
+Патрик: Accepted.
+Лира: Or send it back with a remark — Olga sees it right away.
+
+## repeat
+Лира: A report every Monday? I'll assign it myself. And in the evening — a day summary.
+
+## how
+Лира: To turn it on — in the studio: “Work” → “Assignments”. | To turn it on — in the studio: Work, Assignments.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

@@ -1,0 +1,27 @@
+# Lesson 23 · The safe on all your devices
+
+## title
+Лира: This is Lira's Academy, lesson twenty-three — “The safe on all your devices”. | This is Lira's Academy, lesson twenty-three — The safe on all your devices.
+
+## problem
+Патрик: I'm at the checkout, and the store password is back on my computer!
+Лира: It's on your phone too: “Safe” → “Copy”. In thirty seconds the clipboard clears itself. | It's on your phone too: Safe, Copy. In thirty seconds the clipboard clears itself.
+
+## sync
+Лира: On the computer, open “Password safe” and turn on “One safe on all my devices”. | On the computer, open Password safe and turn on One safe on all my devices.
+
+## master
+Лира: Pick a master password. The key from it lives only on your devices — the server sees nothing but ciphertext.
+
+## phone
+Лира: On the phone — “All”, “Safe” and the same master password. Edit an entry on one — it changes on all. | On the phone — All, Safe and the same master password. Edit an entry on one — it changes on all.
+
+## guard
+Лира: The password is hidden: “Show” — for fifteen seconds. Put the phone away — the safe locks itself. | The password is hidden: Show — for fifteen seconds. Put the phone away — the safe locks itself.
+
+## how
+Лира: Write the master password down: only you have it, and it can't be recovered.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

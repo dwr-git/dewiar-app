@@ -1,0 +1,28 @@
+# Lesson 27 · Podcasts
+
+## title
+Лира: This is Lira's Academy, lesson twenty-seven — “Podcasts”. | This is Lira's Academy, lesson twenty-seven — Podcasts.
+
+## problem
+Патрик: A three-hundred-page book, and no time to read it.
+Лира: Give it here: ten minutes, “In simple words” — and “Make a podcast”. | Give it here: ten minutes, In simple words — and Make a podcast.
+
+## make
+Лира: While you're busy, I'll read the book, write a conversation between two hosts, check it against the text — and voice it.
+
+## listen
+Патрик: So what's this book about, in a nutshell?
+Лира: About habits: a small step every day beats a big push once a year.
+
+## player
+Лира: Each host has a track of their own, and the text lights up. Tap a line — the episode jumps to it.
+
+## phone
+Лира: “To phone” — and the episode arrives as a file in Telegram or MAX. Listen on the go. | To phone — and the episode arrives as a file in Telegram or MAX. Listen on the go.
+
+## how
+Лира: All of this is in the studio, the “Podcasts” section. Give me a file, a link, a video — or just a topic. | All of this is in the studio, the Podcasts section. Give me a file, a link, a video — or just a topic.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

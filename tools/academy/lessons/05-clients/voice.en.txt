@@ -1,0 +1,31 @@
+# Lesson 5 · Working with clients
+
+## title
+Лира: Hi! This is “AI Academy”, lesson five — “Working with clients”. | Hi! This is AI Academy, lesson five — Working with clients.
+
+## problem
+Патрик: Who did I promise to call back? Who owes money? It's all in my head — and it all gets forgotten.
+
+## card
+Лира: Just say: “Note: Ivanov from Romashka wants two hundred boxes by Friday.” | Just say: Note: Ivanov from Romashka wants two hundred boxes by Friday.
+Лира: I'll create a card and remember the agreement.
+Лира: “Call Ivanov back on Thursday at eleven” — and I'll remind you. | Call Ivanov back on Thursday at eleven — and I'll remind you.
+
+## ask
+Патрик: What's up with Ivanov?
+Лира: He wants two hundred boxes by Friday. The call — Thursday at eleven.
+
+## deals
+Лира: Deals go by stages: request, offer, invoice, paid.
+Лира: Who owes and who's overdue — you see it at once. I'll remind the client about payment by email.
+
+## paid
+Патрик: Romashka has paid!
+Лира: I'll mark it — and the money goes straight to income.
+
+## how
+Лира: To turn it on — in the studio: “Features” → “Clients”. | To turn it on — in the studio: Features, Clients.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

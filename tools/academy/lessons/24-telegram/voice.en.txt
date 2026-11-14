@@ -1,0 +1,25 @@
+# Lesson 24 · A Telegram bot from any device
+
+## title
+Лира: This is Lira's Academy, lesson twenty-four — “A Telegram bot from any device”. | This is Lira's Academy, lesson twenty-four — A Telegram bot from any device.
+
+## problem
+Патрик: I'm on the road and my laptop at home is off. Lira, what do I have tomorrow?
+Лира: At ten — the dentist, at three — a call with Anna. The laptop is asleep — your phone answered.
+
+## account
+Лира: The bot now belongs to your account, not to one computer: all your devices know it.
+
+## who
+Лира: The computer you talked to last answers. The others stand by.
+
+## reserve
+Лира: One message — one answer, no duplicates.
+Лира: Computers off — the phone answers. And if nobody's online — I'll answer from the server.
+
+## how
+Лира: In the studio — “Connection”, the Telegram card: it shows who is answering right now. | In the studio — Connection, the Telegram card: it shows who is answering right now.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

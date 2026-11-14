@@ -1,0 +1,98 @@
+{
+ "title": "Lesson 13 · Money by voice",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "say": 0.6,
+  "income": 0.6,
+  "ask": 0.6,
+  "month": 0.6,
+  "family": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson thirteen — “Money by voice”.",
+   "tts": "Hi! This is Lira's Academy, lesson thirteen — Money by voice."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Where did the money go this month? The receipts are lost, and opening a budgeting app is too much effort.",
+   "tts": "Where did the money go this month? The receipts are lost, and opening a budgeting app is too much effort."
+  },
+  {
+   "id": "s3a",
+   "scene": "say",
+   "who": "lira",
+   "sub": "Just say: “Spent twelve hundred on groceries.”",
+   "tts": "Just say: Spent twelve hundred on groceries."
+  },
+  {
+   "id": "s3b",
+   "scene": "say",
+   "who": "lira",
+   "sub": "I'll record the expense and sort it into categories myself.",
+   "tts": "I'll record the expense and sort it into categories myself."
+  },
+  {
+   "id": "s4a",
+   "scene": "income",
+   "who": "lira",
+   "sub": "And income: “Got my salary, eighty thousand.”",
+   "tts": "And income: Got my salary, eighty thousand."
+  },
+  {
+   "id": "s5a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Ask: “How much did I spend on cafés in October?” — I'll count it exactly, not in my head.",
+   "tts": "Ask: How much did I spend on cafés in October? — I'll count it exactly, not in my head."
+  },
+  {
+   "id": "s6a",
+   "scene": "month",
+   "who": "lira",
+   "sub": "At the start of the month — “My month”: where the money went, big and clear.",
+   "tts": "At the start of the month — My month: where the money went, big and clear."
+  },
+  {
+   "id": "s7a",
+   "scene": "family",
+   "who": "lira",
+   "sub": "A shared budget with your family: everyone you invited sees the spending.",
+   "tts": "A shared budget with your family: everyone you invited sees the spending."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio: “Calendar” → “Money”. On the phone: “My day” → “Money”.",
+   "tts": "In the studio: Calendar, Money. On the phone: My day, Money."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

@@ -1,0 +1,91 @@
+{
+ "title": "Lesson 12 · Morning with Lira",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "brief": 0.6,
+  "work": 0.6,
+  "mail": 0.6,
+  "voice": 0.6,
+  "phone": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson twelve — “Morning with Lira”.",
+   "tts": "Hi! This is AI Academy, lesson twelve — Morning with Lira."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "Every morning I open five apps: weather, calendar, mail, tasks…",
+   "tts": "Every morning I open five apps: weather, calendar, mail, tasks…"
+  },
+  {
+   "id": "s3a",
+   "scene": "brief",
+   "who": "lira",
+   "sub": "One summary instead of five: weather, meetings and today's tasks.",
+   "tts": "One summary instead of five: weather, meetings and today's tasks."
+  },
+  {
+   "id": "s4a",
+   "scene": "work",
+   "who": "lira",
+   "sub": "Employees — what's overdue and what's waiting for review. Clients — who to call today.",
+   "tts": "Employees — what's overdue and what's waiting for review. Clients — who to call today."
+  },
+  {
+   "id": "s5a",
+   "scene": "mail",
+   "who": "lira",
+   "sub": "Emails from people — briefly, newsletters — just a count. And what got done overnight.",
+   "tts": "Emails from people — briefly, newsletters — just a count. And what got done overnight."
+  },
+  {
+   "id": "s6a",
+   "scene": "voice",
+   "who": "lira",
+   "sub": "Say: “Tell me about the morning” — or I'll tell you myself at eight, by voice.",
+   "tts": "Say: Tell me about the morning — or I'll tell you myself at eight, by voice."
+  },
+  {
+   "id": "s7a",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "The same summary comes to your phone too.",
+   "tts": "The same summary comes to your phone too."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the mornings — on the studio's “Home”, the “Morning with Lira” card.",
+   "tts": "In the mornings — on the studio's Home, the Morning with Lira card."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

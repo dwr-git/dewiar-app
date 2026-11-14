@@ -1,0 +1,111 @@
+{
+ "title": "Lesson 4 · Assignments for your team",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "assign": 0.7,
+  "work": 0.7,
+  "board": 0.7,
+  "repeat": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson four — “Assignments for your team”.",
+   "tts": "Hi! This is AI Academy, lesson four — Assignments for your team."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "You assign something in a chat — and forget. Done or not? Who knows.",
+   "tts": "You assign something in a chat — and forget. Done or not? Who knows."
+  },
+  {
+   "id": "s3a",
+   "scene": "assign",
+   "who": "lira",
+   "sub": "Tell me: “Assign Olga to update the price list by Friday.”",
+   "tts": "Tell me: Assign Olga to update the price list by Friday."
+  },
+  {
+   "id": "s3b",
+   "scene": "assign",
+   "who": "lira",
+   "sub": "Olga gets the assignment — in Telegram, MAX or the Dewiar app.",
+   "tts": "Olga gets the assignment — in Telegram, MAX or the Dewiar app."
+  },
+  {
+   "id": "s4a",
+   "scene": "work",
+   "who": "lira",
+   "sub": "Olga taps “I'll take it”. Done — “Done”, with a photo.",
+   "tts": "Olga taps I'll take it. Done — Done, with a photo."
+  },
+  {
+   "id": "s4b",
+   "scene": "work",
+   "who": "lira",
+   "sub": "Can't make it — “Postpone”, with a reason.",
+   "tts": "Can't make it — Postpone, with a reason."
+  },
+  {
+   "id": "s5a",
+   "scene": "board",
+   "who": "lira",
+   "sub": "And you get a board: who took what, what's done, who's past the deadline.",
+   "tts": "And you get a board: who took what, what's done, who's past the deadline."
+  },
+  {
+   "id": "s5b",
+   "scene": "board",
+   "who": "patrik",
+   "sub": "Accepted.",
+   "tts": "Accepted."
+  },
+  {
+   "id": "s5c",
+   "scene": "board",
+   "who": "lira",
+   "sub": "Or send it back with a remark — Olga sees it right away.",
+   "tts": "Or send it back with a remark — Olga sees it right away."
+  },
+  {
+   "id": "s6a",
+   "scene": "repeat",
+   "who": "lira",
+   "sub": "A report every Monday? I'll assign it myself. And in the evening — a day summary.",
+   "tts": "A report every Monday? I'll assign it myself. And in the evening — a day summary."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "To turn it on — in the studio: “Work” → “Assignments”.",
+   "tts": "To turn it on — in the studio: Work, Assignments."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

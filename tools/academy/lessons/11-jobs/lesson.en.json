@@ -1,0 +1,90 @@
+{
+ "title": "Lesson 11 · Scheduled jobs",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "ask": 0.6,
+  "hourly": 0.6,
+  "quiet": 0.6,
+  "where": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson eleven — “Scheduled jobs”.",
+   "tts": "Hi! This is AI Academy, lesson eleven — Scheduled jobs."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "Every morning — exchange rates, mail, news. Half an hour on the same thing.",
+   "tts": "Every morning — exchange rates, mail, news. Half an hour on the same thing."
+  },
+  {
+   "id": "s3a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Hand it to me: “Every weekday at nine, send me the dollar rate in Telegram.”",
+   "tts": "Hand it to me: Every weekday at nine, send me the dollar rate in Telegram."
+  },
+  {
+   "id": "s3b",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "I'll do it myself on time and send you only the result.",
+   "tts": "I'll do it myself on time and send you only the result."
+  },
+  {
+   "id": "s4a",
+   "scene": "hourly",
+   "who": "lira",
+   "sub": "“On weekdays from nine to six, check my mail every hour and tell me about anything important.”",
+   "tts": "On weekdays from nine to six, check my mail every hour and tell me about anything important."
+  },
+  {
+   "id": "s5a",
+   "scene": "quiet",
+   "who": "lira",
+   "sub": "Nothing new — I stay quiet and don't distract you.",
+   "tts": "Nothing new — I stay quiet and don't distract you."
+  },
+  {
+   "id": "s6a",
+   "scene": "where",
+   "who": "lira",
+   "sub": "Where to tell you — by voice, in Telegram or in MAX.",
+   "tts": "Where to tell you — by voice, in Telegram or in MAX."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All jobs are in the studio: “Tasks and reminders”.",
+   "tts": "All jobs are in the studio: Tasks and reminders."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

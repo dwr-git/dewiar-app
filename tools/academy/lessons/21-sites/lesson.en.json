@@ -1,0 +1,97 @@
+{
+ "title": "Lesson 21 · Websites",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "ask": 0.6,
+  "redo": 0.6,
+  "publish": 0.6,
+  "leads": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-one — “Websites”.",
+   "tts": "This is Lira's Academy, lesson twenty-one — Websites."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "Lira, make a website for my coffee shop!",
+   "tts": "Lira, make a website for my coffee shop!"
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Done: zerno.dewiar.pro — on the computer and on the phone. And here's the first request!",
+   "tts": "Done: zerno.dewiar dot pro — on the computer and on the phone. And here's the first request!"
+  },
+  {
+   "id": "s3a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Say: “A coffee shop on Garden Street, breakfasts, table booking” — and in a minute the site is ready.",
+   "tts": "Say: A coffee shop on Garden Street, breakfasts, table booking — and in a minute the site is ready."
+  },
+  {
+   "id": "s4a",
+   "scene": "redo",
+   "who": "lira",
+   "sub": "Not the right mood? Say: “Redo it in dark colours.” Every version is kept — you can go back any time.",
+   "tts": "Not the right mood? Say: Redo it in dark colours. Every version is kept — you can go back any time."
+  },
+  {
+   "id": "s5a",
+   "scene": "publish",
+   "who": "lira",
+   "sub": "Tap “Publish” and pick a name — the site is open to everyone. And the QR code goes on the shop window.",
+   "tts": "Tap Publish and pick a name — the site is open to everyone. And the QR code goes on the shop window."
+  },
+  {
+   "id": "s6a",
+   "scene": "leads",
+   "who": "lira",
+   "sub": "Requests from the form and from my chat on the site go straight to “Clients”.",
+   "tts": "Requests from the form and from my chat on the site go straight to Clients."
+  },
+  {
+   "id": "s6b",
+   "scene": "leads",
+   "who": "lira",
+   "sub": "And “Analytics” shows how many people came and where from.",
+   "tts": "And Analytics shows how many people came and where from."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio — the “Websites” section. Or just say: “Make a website for my business.”",
+   "tts": "In the studio — the Websites section. Or just say: Make a website for my business."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

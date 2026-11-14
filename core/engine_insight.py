@@ -203,7 +203,10 @@ class Radar:
 
     def analyzed(self, hours=None):
         now = time.time()
-        return [x for x in self.st.items() if x.get("a") and (hours is None or (x.get("ts") or x.get("seen") or 0) >= now - hours * 3600)]
+        # №705 (пакет 14.11): «👎 Не то» (кликбейт, реклама) — материал больше не идёт в бриф, срочное, тренды, «Галактику»
+        # и ответы по теме; в ленте остаётся внизу — чтобы передумать
+        return [x for x in self.st.items() if x.get("a") and x.get("fb", 0) != -1
+                and (hours is None or (x.get("ts") or x.get("seen") or 0) >= now - hours * 3600)]
 
     def make_brief(self, force=False):
         b = self.st.load("brief", {})
@@ -347,7 +350,8 @@ class Radar:
             if words and not all(w in (x["title"] + " " + a.get("summary", "") + " " + " ".join(a.get("tags") or [])).lower() for w in words):
                 continue
             rows.append(x)
-        key = (lambda x: -(x["a"]["signal"])) if sort == "signal" else (lambda x: -(x.get("ts") or x.get("seen") or 0))
+        key = (lambda x: (x.get("fb", 0) == -1, -(x["a"]["signal"]))) if sort == "signal" else \
+            (lambda x: (x.get("fb", 0) == -1, -(x.get("ts") or x.get("seen") or 0)))
         return [self.item_view(x) for x in sorted(rows, key=key)[:limit]]
 
     def pulse(self):

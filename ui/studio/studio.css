@@ -3250,6 +3250,34 @@ html:not(.st-light) .vs-pill.ok { color: var(--good); } html:not(.st-light) .vs-
 .dc-src svg { width: 30px; height: 30px; flex: none; fill: none; stroke: #23a06e; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .dc-src span { display: flex; flex-direction: column; } .dc-src b { font-size: 13px; } .dc-src small { font-size: 11.5px; color: var(--dim); }
 #p-docs h2 { margin-top: 26px; }
+/* «Мои файлы» (0.97, владелец 13–14.11: «Документы» и «Знания» — в одно место на виду; кто боится открывать папки —
+   «Добавить файлы»: Лира берёт копию только выбранного). Один список: файлы у Лиры, папки компьютера, «Знания» сайта */
+.dc-safe b { color: var(--ink); font-weight: 600; }
+.mf-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+.mf-head h2 { margin: 0; }
+.mf-box { margin-top: 10px; padding: 8px; border-radius: 20px; background: var(--glass); box-shadow: var(--raise-s, none); display: flex; flex-direction: column; gap: 6px; }
+.mf-box .kn-list { display: flex; flex-direction: column; gap: 6px; }
+.mf-box .kn-list:empty { display: none; }
+.mf-box .kn-row { background: transparent; padding: 10px 12px; border-radius: 14px; }
+.mf-box .kn-row:hover { background: var(--glass2); }
+.mf-ico { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 11px; background: var(--glass2); }
+.mf-ico svg { width: 19px; height: 19px; fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+.mf-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mf-txt b { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-txt small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-txt small.bad { color: var(--bad); white-space: normal; }
+.mf-where { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; background: var(--soft); color: var(--dim); }
+.mf-where.lira { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
+.mf-where.site { background: color-mix(in srgb, #23a06e 14%, transparent); color: var(--ink); }
+.mf-box .kn-row[hidden] { display: none; }
+.mf-empty { margin: 0; padding: 22px 14px; text-align: center; color: var(--dim); font-size: 13.5px; line-height: 1.5; }
+.mf-check { margin-top: 26px; }
+.mf-check > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--dim); list-style: none; }
+.mf-check > summary::-webkit-details-marker { display: none; }
+.mf-check > summary::before { content: "›"; display: inline-block; margin-right: 8px; transition: transform .15s; }
+.mf-check[open] > summary::before { transform: rotate(90deg); }
+.mf-check[open] > summary { margin-bottom: 10px; }
+@media (max-width: 640px) { .mf-where { display: none; } }
 .dc-try { display: flex; flex-wrap: wrap; gap: 8px; }
 .dc-try button { border: 0; cursor: pointer; font: inherit; font-size: 13.5px; color: var(--ink); padding: 9px 14px; border-radius: 999px; background: var(--soft); }
 .dc-try button:hover { background: var(--soft2); } .dc-try button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

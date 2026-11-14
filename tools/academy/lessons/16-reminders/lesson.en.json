@@ -1,0 +1,90 @@
+{
+ "title": "Lesson 16 · Reminders",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "say": 0.6,
+  "days": 0.6,
+  "ring": 0.6,
+  "phone": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson sixteen — “Reminders”.",
+   "tts": "Hi! This is Lira's Academy, lesson sixteen — Reminders."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Important things are easy to forget: call mom, pay for the internet, take out the trash on Tuesdays.",
+   "tts": "Important things are easy to forget: call mom, pay for the internet, take out the trash on Tuesdays."
+  },
+  {
+   "id": "s3a",
+   "scene": "say",
+   "who": "lira",
+   "sub": "Just say: “Remind me tomorrow at nine to call mom.” I'll understand the time and the task myself.",
+   "tts": "Just say: Remind me tomorrow at nine to call mom. I'll understand the time and the task myself."
+  },
+  {
+   "id": "s4a",
+   "scene": "days",
+   "who": "lira",
+   "sub": "Repeats — the way you say them: “on weekdays except Friday”, “every Tuesday and Thursday”, “every month on the fifth”.",
+   "tts": "Repeats — the way you say them: on weekdays except Friday, every Tuesday and Thursday, every month on the fifth."
+  },
+  {
+   "id": "s5a",
+   "scene": "ring",
+   "who": "lira",
+   "sub": "At the right moment I'll ring and say it out loud. Answer “Got it” — and I'll go quiet.",
+   "tts": "At the right moment I'll ring and say it out loud. Answer Got it — and I'll go quiet."
+  },
+  {
+   "id": "s5b",
+   "scene": "ring",
+   "who": "lira",
+   "sub": "No time — “Snooze for ten minutes”.",
+   "tts": "No time — Snooze for ten minutes."
+  },
+  {
+   "id": "s6a",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "On the phone, reminders ring on their own — even when the computer is off.",
+   "tts": "On the phone, reminders ring on their own — even when the computer is off."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All reminders are in the studio, “Tasks and reminders”, and in the calendar: you can change the time in one tap.",
+   "tts": "All reminders are in the studio, Tasks and reminders, and in the calendar: you can change the time in one tap."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

@@ -33,7 +33,7 @@ html = f"""<!doctype html>
 {R('js_base')}const POS = {{
 {pos},
 }};
-{R('js_mid')}const type = (txt, k) => txt.slice(0, Math.round(txt.length * clamp(k)));
+{R('js_mid')}const type = (txt, k) => { txt = (window.DW_FILM_TX || (s => s))(txt); return txt.slice(0, Math.round(txt.length * clamp(k))); };
 window.render = function (T, f) {{
   const s = (id) => SC[id];
   $("#b1").style.transform = `translate(${{-150 + 120 * Math.sin(T / 9)}}px, ${{-200 + 80 * Math.cos(T / 11)}}px)`;

@@ -1,0 +1,104 @@
+{
+ "title": "Lesson 29 · Articles for your website",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "on": 0.6,
+  "radar": 0.6,
+  "phone": 0.6,
+  "live": 0.8,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-nine — “Articles for your website”.",
+   "tts": "This is Lira's Academy, lesson twenty-nine — Articles for your website."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "They say a site needs articles to show up in Google. But when am I supposed to write them?",
+   "tts": "They say a site needs articles to show up in Google. But when am I supposed to write them?"
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "I'll do the writing. All you do is say “Yes”.",
+   "tts": "I'll do the writing. All you do is say Yes."
+  },
+  {
+   "id": "s3a",
+   "scene": "on",
+   "who": "lira",
+   "sub": "In “Websites”, open the “Articles” tab and tap “Run articles”. I'll make the topic plan myself.",
+   "tts": "In Websites, open the Articles tab and tap Run articles. I'll make the topic plan myself."
+  },
+  {
+   "id": "s4a",
+   "scene": "radar",
+   "who": "lira",
+   "sub": "I don't write off the top of my head: I take the latest from your niche's Radar. Radar turns on by itself — nothing to set up.",
+   "tts": "I don't write off the top of my head: I take the latest from your niche's Radar. Radar turns on by itself — nothing to set up."
+  },
+  {
+   "id": "s4b",
+   "scene": "radar",
+   "who": "lira",
+   "sub": "And facts about your business — only from your own site: I won't make up prices or discounts.",
+   "tts": "And facts about your business — only from your own site: I won't make up prices or discounts."
+  },
+  {
+   "id": "s5a",
+   "scene": "phone",
+   "who": "patrik",
+   "sub": "The draft came straight to my phone?",
+   "tts": "The draft came straight to my phone?"
+  },
+  {
+   "id": "s5b",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "Read it. Want it different — ask for changes in your own words. And “Publish”.",
+   "tts": "Read it. Want it different — ask for changes in your own words. And Publish."
+  },
+  {
+   "id": "s6a",
+   "scene": "live",
+   "who": "lira",
+   "sub": "The article is on the site at once, “Articles” appears in the menu, and search engines learn about it that same minute.",
+   "tts": "The article is on the site at once, Articles appears in the menu, and search engines learn about it that same minute."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All of this is in the studio: “Websites” → your site → “Articles”. Or by voice: “Write an article for my website.”",
+   "tts": "All of this is in the studio: Websites, your site, Articles. Or by voice: Write an article for my website."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

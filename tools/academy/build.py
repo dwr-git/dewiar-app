@@ -5,6 +5,8 @@
     python3 tools/academy/build.py lessons/01-council            # голос → таймлайн → звук → видео (MP4 1080p)
     python3 tools/academy/build.py lessons/01-council 4 27 53    # только кадры в эти секунды (still-*.png) — проверить вёрстку
     python3 tools/academy/build.py lessons/01-council --voices voices-01-council.zip   # голоса с сервера (voices_server.py)
+    python3 tools/academy/build.py lessons/01-council --en --voices voices-en.zip      # английская: lesson.en.json → out.en/
+    python3 tools/academy/build.py lessons/01-council --en --scan     # что на экране осталось по-русски → out.en/missing.json
 
 Голоса — те же, что у персонажей в программе (Piper: Лира — irina, Патрик — denis; core/personas.py). Модели берутся из
 выпусков sherpa-onnx на GitHub в ~/.cache/dewiar-academy. Облики — настоящие (ui/assets/entities.js, живые лица), рот
@@ -23,6 +25,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CACHE = Path.home() / ".cache/dewiar-academy"
 VOICES = {"lira": ("ru_RU-irina-medium", 1.0), "patrik": ("ru_RU-denis-medium", 1.02)}
+VOICES_EN = {"lira": ("en_US-amy-medium", 1.0), "patrik": ("en_US-ryan-medium", 1.0)}   # черновой английский — до записи владельца
 EQ = {"lira": "highpass=f=80,equalizer=f=4500:t=q:w=1:g=3,equalizer=f=250:t=q:w=1:g=-2",
       "patrik": "highpass=f=60,equalizer=f=180:t=q:w=1:g=3,equalizer=f=5000:t=q:w=1:g=-1"}
 URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-{}.tar.bz2"
@@ -50,7 +53,7 @@ def speak(les, out):
     """Реплики → wav (кэш по тексту), длительности → таймлайн, громкость по кадрам → рот обликов."""
     L, fps = les["lines"], les["fps"]
     for l in L:
-        name, ls = VOICES[l["who"]]
+        name, ls = (VOICES_EN if les.get("lang") == "en" else VOICES)[l["who"]]
         wav = out / f"{l['id']}.wav"
         key = out / f"{l['id']}.txt"
         if not wav.exists() or not key.exists() or key.read_text(encoding="utf-8") != l["tts"]:
@@ -130,10 +133,10 @@ def mix(tl, out, pad_gain=0.28):
     (out / "mix.f32").unlink()
 
 
-def import_voices(lesson, out, vz):
+def import_voices(lesson, out, vz, lj="lesson.json"):
     """Голоса из архива (voices_server.py или страница «Академия» в кабинете) -> out/<id>.wav и .txt; новый урок — его реплики."""
     import zipfile
-    les0 = json.loads((lesson / "lesson.json").read_text(encoding="utf-8")) if (lesson / "lesson.json").exists() else None
+    les0 = json.loads((lesson / lj).read_text(encoding="utf-8")) if (lesson / lj).exists() else None
     with zipfile.ZipFile(vz) as z:
         names = set(z.namelist())
         zl = json.loads(z.read("lesson.json")) if "lesson.json" in names else None
@@ -146,7 +149,7 @@ def import_voices(lesson, out, vz):
         else:
             ren = {}
             if zl and not les0:
-                (lesson / "lesson.json").write_text(json.dumps(zl, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+                (lesson / lj).write_text(json.dumps(zl, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
             elif zl:
                 sys.exit(f"в архиве {len(zl['lines'])} реплик, а в уроке {len(les0['lines'])} — сверьте текст урока")
         for n in names:
@@ -154,7 +157,7 @@ def import_voices(lesson, out, vz):
                 stem, ext = n.rsplit(".", 1)
                 (out / f"{ren.get(stem, stem)}.{ext}").write_bytes(z.read(n))
     if les0 and ren:
-        (lesson / "lesson.json").write_text(json.dumps(les0, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        (lesson / lj).write_text(json.dumps(les0, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
 
 CLOCK = """(() => { let now = 0; let q = []; let timers = []; let tid = 1;
@@ -167,7 +170,26 @@ window.__tick = (ms) => { now += ms; const due = timers.filter(t => t.at <= now)
 })();"""
 
 
-def render(lesson, out, tl, stills=None):
+def en_script():
+    """Английский кадр: тот же film.html, надписи на экране переводит словарь студии (ui/assets/i18n.tx.js — перевод по
+    тексту, как в окнах программы) плюс свои строки фильмов (tools/academy/i18n.en.json — у них приоритет)."""
+    A = HERE.parent.parent / "ui/assets"
+    own = json.loads((HERE / "i18n.en.json").read_text(encoding="utf-8")) if (HERE / "i18n.en.json").exists() else {}
+    return "\n".join([(A / "i18n.data.js").read_text(encoding="utf-8"), (A / "i18n.tx.js").read_text(encoding="utf-8"),
+                      "window.DW_TX.en = Object.assign({}, window.DW_TX.en, " + json.dumps(own, ensure_ascii=False) + ");",
+                      'window.dwQuery = () => new URLSearchParams("lang=en");',
+                      # текст, который фильм печатает по буквам, переводится целиком до печати (type/typed/typeIn)
+                      'window.DW_FILM_TX = (s) => (window.DW_TX.en[String(s).trim()] || s);', (A / "i18n.js").read_text(encoding="utf-8")])
+
+
+MISSING = """() => { const out = new Set(), w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = w.nextNode());) { const t = n.nodeValue.trim(); if (!/[А-Яа-яЁё]/.test(t)) continue;
+    const el = n.parentElement; if (!el || el.closest("script,style,#sub")) continue;
+    const cs = getComputedStyle(el); if (cs.display === "none" || cs.visibility === "hidden") continue; out.add(t); }
+  return [...out]; }"""
+
+
+def render(lesson, out, tl, stills=None, en=False, scan=False):
     from playwright.sync_api import sync_playwright
     fps = tl["fps"]
     with sync_playwright() as p:
@@ -176,18 +198,24 @@ def render(lesson, out, tl, stills=None):
         errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.add_init_script(CLOCK)
+        if en:
+            pg.add_init_script(en_script())
         pg.goto((lesson / "film.html").as_uri() + "?tl=" + (out / "timeline.js").as_uri())
         pg.wait_for_function("window.__ready === true")
         pg.evaluate("document.fonts.ready")
         time.sleep(1.5)                                    # портреты и живые лица
         for _ in range(30):
             pg.evaluate("__tick(33.3)")
+        miss = set()                                       # английский кадр: что осталось по-русски
         if stills:
             for t in stills:
                 pg.evaluate(f"render({t}, {int(t * fps)})")
-                for _ in range(20):
+                for _ in range(6 if scan else 20):
                     pg.evaluate("__tick(33.3)")
-                pg.screenshot(path=str(out / f"still-{t:05.1f}.png"))
+                if not scan:
+                    pg.screenshot(path=str(out / f"still-{t:05.1f}.png"))
+                if en:
+                    miss.update(pg.evaluate(MISSING))
         else:
             n = int(tl["total"] * fps)
             ff = subprocess.Popen(["ffmpeg", "-y", "-v", "error", "-f", "image2pipe", "-framerate", str(fps), "-c:v", "mjpeg", "-i", "-",
@@ -197,12 +225,18 @@ def render(lesson, out, tl, stills=None):
             for f in range(n):
                 pg.evaluate(f"render({f / fps}, {f})")
                 pg.evaluate(f"__tick({1000 / fps})")
+                if en and f % fps == 0:
+                    miss.update(pg.evaluate(MISSING))
                 ff.stdin.write(pg.screenshot(type="jpeg", quality=93))
                 if f % 300 == 0:
                     print(f"кадр {f} из {n}, {time.time() - t0:.0f} с", flush=True)
             ff.stdin.close()
             ff.wait()
         b.close()
+        if en:
+            (out / "missing.json").write_text(json.dumps(sorted(miss), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+            if miss:
+                print(f"по-русски на экране осталось строк: {len(miss)} — {out / 'missing.json'} (перевод — tools/academy/i18n.en.json)")
         if errs:
             print("ошибки на странице:", errs[:3])
 
@@ -214,24 +248,33 @@ if __name__ == "__main__":
         i = args.index("--voices")
         vz = Path(args[i + 1]).resolve()
         del args[i:i + 2]
+    en = "--en" in args                                      # английская версия: lesson.en.json → out.en/ (на сайт — <урок>.en.mp4)
+    if en:
+        args.remove("--en")
+    lj = "lesson.en.json" if en else "lesson.json"
+    scan = "--scan" in args                                  # с --en: только найти, что на экране осталось по-русски
+    if scan:
+        args.remove("--scan")
     sys.argv = [sys.argv[0]] + args
     lesson = (HERE / sys.argv[1]).resolve() if not Path(sys.argv[1]).is_absolute() else Path(sys.argv[1])
-    out = lesson / "out"
+    out = lesson / ("out.en" if en else "out")
     out.mkdir(exist_ok=True)
     if vz:
-        import_voices(lesson, out, vz)
+        import_voices(lesson, out, vz, lj)
         # голос Qwen — не Piper: нормализуем в моно 24 кГц, чтобы громкость и рот считались одинаково
         for w in out.glob("*.wav"):
             tmp = w.with_suffix(".tmp.wav")
             subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(w), "-ac", "1", "-ar", "24000", str(tmp)], check=True)
             tmp.replace(w)
-    les = json.loads((lesson / "lesson.json").read_text(encoding="utf-8"))
+    les = json.loads((lesson / lj).read_text(encoding="utf-8"))
     tl = speak(les, out)
-    if len(sys.argv) > 2:
-        render(lesson, out, tl, [float(x) for x in sys.argv[2:]])
+    if scan:
+        render(lesson, out, tl, [float(x) for x in range(int(tl["total"]))], en, scan=True)
+    elif len(sys.argv) > 2:
+        render(lesson, out, tl, [float(x) for x in sys.argv[2:]], en)
     else:
         mix(tl, out)
-        render(lesson, out, tl)
+        render(lesson, out, tl, en=en)
         # обложка для «Видеоуроков» (server/dwrapp/academy/<урок>.jpg): заставка до первого титра, 960×540
         at = max(0.6, les["lead"].get(tl["scenes"][0]["id"], 1.4) - 0.25)
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{at:.2f}", "-i", str(out / "lesson.mp4"), "-frames:v", "1",

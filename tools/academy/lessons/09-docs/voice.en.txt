@@ -1,0 +1,28 @@
+# Lesson 9 · My files
+
+## title
+Лира: Hi! This is “AI Academy”, lesson nine — “My files”. | Hi! This is AI Academy, lesson nine — My files.
+
+## problem
+Патрик: The contract had a delivery deadline. But which of forty files was it in?
+
+## add
+Лира: Add your files for me — contracts, manuals, price lists. I'll take a copy; I don't need access to your folders.
+
+## ask
+Лира: Ask: “What does the Romashka contract say about deadlines?” | Ask: What does the Romashka contract say about deadlines?
+Лира: I'll answer — and show which file it's from.
+
+## private
+Лира: I search on your computer, without the internet.
+Лира: The model only gets the passages I found — not the whole archive.
+
+## phone
+Лира: On the go, ask from your phone — it will ask your computer.
+
+## how
+Лира: In the studio: “My files” → “Add files”. Prefer a whole folder? — “Connect a folder”. | In the studio: My files, Add files. Prefer a whole folder? — Connect a folder.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

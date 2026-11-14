@@ -1,0 +1,105 @@
+{
+ "title": "Lesson 8 · Prompter for negotiations",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "before": 0.6,
+  "listen": 0.6,
+  "hint": 0.6,
+  "hidden": 0.6,
+  "after": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson eight — “Prompter for negotiations”.",
+   "tts": "Hi! This is AI Academy, lesson eight — Prompter for negotiations."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "A call with a client. They asked about a discount — and I froze.",
+   "tts": "A call with a client. They asked about a discount — and I froze."
+  },
+  {
+   "id": "s3a",
+   "scene": "before",
+   "who": "lira",
+   "sub": "Before the meeting, give me the goal and materials: price list, contract, plan.",
+   "tts": "Before the meeting, give me the goal and materials: price list, contract, plan."
+  },
+  {
+   "id": "s3b",
+   "scene": "before",
+   "who": "lira",
+   "sub": "I'll prepare a cheat sheet in advance — what they might ask and what to answer.",
+   "tts": "I'll prepare a cheat sheet in advance — what they might ask and what to answer."
+  },
+  {
+   "id": "s4a",
+   "scene": "listen",
+   "who": "lira",
+   "sub": "During the call I stay quiet and listen — to you and to the other side.",
+   "tts": "During the call I stay quiet and listen — to you and to the other side."
+  },
+  {
+   "id": "s5a",
+   "scene": "hint",
+   "who": "lira",
+   "sub": "When they ask or object, a hint appears on the side: the key point in large letters, and where it comes from.",
+   "tts": "When they ask or object, a hint appears on the side: the key point in large letters, and where it comes from."
+  },
+  {
+   "id": "s5b",
+   "scene": "hint",
+   "who": "patrik",
+   "sub": "Right: five percent — when paying for a year. Thanks!",
+   "tts": "Right: five percent — when paying for a year. Thanks!"
+  },
+  {
+   "id": "s6a",
+   "scene": "hidden",
+   "who": "lira",
+   "sub": "On Windows, the prompter window isn't visible even when you share your screen.",
+   "tts": "On Windows, the prompter window isn't visible even when you share your screen."
+  },
+  {
+   "id": "s7a",
+   "scene": "after",
+   "who": "lira",
+   "sub": "After the meeting — a summary: what you agreed on and who does what.",
+   "tts": "After the meeting — a summary: what you agreed on and who does what."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "To turn it on — in the studio: “Prompter”. Or say: “Turn on the prompter.”",
+   "tts": "To turn it on — in the studio: Prompter. Or say: Turn on the prompter."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

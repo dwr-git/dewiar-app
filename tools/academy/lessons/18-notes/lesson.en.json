@@ -1,0 +1,83 @@
+{
+ "title": "Lesson 18 · Notes and memory",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "remember": 0.6,
+  "notes": 0.6,
+  "find": 0.6,
+  "map": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson eighteen — “Notes and memory”.",
+   "tts": "Hi! This is Lira's Academy, lesson eighteen — Notes and memory."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Your son's shoe size, the intercom code, a gift idea — it's hard to keep it all in your head.",
+   "tts": "Your son's shoe size, the intercom code, a gift idea — it's hard to keep it all in your head."
+  },
+  {
+   "id": "s3a",
+   "scene": "remember",
+   "who": "lira",
+   "sub": "Say: “Remember: Dima's shoe size is thirty-two.” Ask later — I'll answer.",
+   "tts": "Say: Remember: Dima's shoe size is thirty-two. Ask later — I'll answer."
+  },
+  {
+   "id": "s4a",
+   "scene": "notes",
+   "who": "lira",
+   "sub": "Longer things go to notes: “Write a note: vacation ideas.” With tags, colours and pictures.",
+   "tts": "Longer things go to notes: Write a note: vacation ideas. With tags, colours and pictures."
+  },
+  {
+   "id": "s5a",
+   "scene": "find",
+   "who": "lira",
+   "sub": "Don't remember where you wrote it? “What did I write about the vacation?” — I'll find it in notes, the diary and documents.",
+   "tts": "Don't remember where you wrote it? What did I write about the vacation? — I'll find it in notes, the diary and documents."
+  },
+  {
+   "id": "s6a",
+   "scene": "map",
+   "who": "lira",
+   "sub": "And in “Memory” everything is shown as a map: what I know about you and how one thing connects to another.",
+   "tts": "And in Memory everything is shown as a map: what I know about you and how one thing connects to another."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "Ask: “What do you know about me?” — and correct me if something's wrong.",
+   "tts": "Ask: What do you know about me? — and correct me if something's wrong."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

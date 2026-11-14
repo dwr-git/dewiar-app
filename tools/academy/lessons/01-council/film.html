@@ -155,7 +155,7 @@ makeEnt("lira", "#9BD4FF", "lira"); makeEnt("patrik", "#FFB547", "patrik");
 
 function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
 function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
-function typed(el, text, k) { const n = Math.round(text.length * clamp(k)); const p = el.querySelector("p");
+function typed(el, text, k) { text = (window.DW_FILM_TX || (s => s))(text); const n = Math.round(text.length * clamp(k)); const p = el.querySelector("p");
   p.innerHTML = text.slice(0, n).replace(/&/g, "&amp;").replace(/</g, "&lt;") + (k > 0 && k < 1 ? '<span class="caret"></span>' : ""); }
 
 window.render = function (T, f) {

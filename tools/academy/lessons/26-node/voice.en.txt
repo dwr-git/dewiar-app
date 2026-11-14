@@ -1,0 +1,31 @@
+# Lesson 26 · Lira's node
+
+## title
+Лира: This is Lira's Academy, lesson twenty-six — “Lira's node”. | This is Lira's Academy, lesson twenty-six — Lira's node.
+
+## problem
+Патрик: The Dewiar server carries thousands of people. How can I help?
+Лира: A check — and “Become a node”. That's it: your computer answers people and earns thalers. | A check — and Become a node. That's it: your computer answers people and earns thalers.
+
+## check
+Лира: “Check computer” finds the model and the graphics card and measures how fast it answers. | Check computer finds the model and the graphics card and measures how fast it answers.
+
+## when
+Лира: When to work — while the computer is idle, or at night. And how much to give.
+
+## earn
+Лира: For accepted answers — thalers on your AI balance: for models, voices and cloud tasks.
+
+## safe
+Лира: Nothing personal goes to the node, and one button turns it off. Gaming or on battery — it pauses itself.
+
+## net
+Патрик: So my computer is now a little piece of Lira?
+Лира: Yes. Thousands of computers — one Lira that can't be switched off.
+
+## how
+Лира: All of this is in the studio, “Lira's node”. You need a graphics card with 8 GB or more and your own model. | All of this is in the studio, Lira's node. You need a graphics card with 8 GB or more and your own model.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

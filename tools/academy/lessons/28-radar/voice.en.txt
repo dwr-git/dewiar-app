@@ -1,0 +1,29 @@
+# Lesson 28 · Radar
+
+## title
+Лира: This is Lira's Academy, lesson twenty-eight — “Radar”. | This is Lira's Academy, lesson twenty-eight — Radar.
+
+## problem
+Патрик: Every morning — twenty news tabs, and I still hear about the important stuff last.
+Лира: Give me your sources. I'll do the reading.
+
+## add
+Лира: Paste the links all at once: websites, YouTube, Telegram channels — and “Add”. I'll figure out the type myself. | Paste the links all at once: websites, YouTube, Telegram channels — and Add. I'll figure out the type myself.
+
+## pulse
+Лира: I read every piece and give it a signal — how much it matters to you in particular. And in the morning — a brief of the day.
+
+## urgent
+Патрик: PHP source code leaked — and I found out first?
+Лира: Urgent things I send right away, to your phone. And at night — silence.
+
+## ask
+Патрик: And why is everyone suddenly writing about AI agents?
+Лира: I answer only from what I've read — and with links, so you can check.
+
+## how
+Лира: All of this is in the studio: “Work” → “Radar”. Or ask by voice: “What's new in my field?” | All of this is in the studio: Work, Radar. Or ask by voice: What's new in my field?
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

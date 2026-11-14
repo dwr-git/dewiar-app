@@ -1,0 +1,31 @@
+# Lesson 6 · Mailing
+
+## title
+Лира: Hi! This is “AI Academy”, lesson six — “Mailing”. | Hi! This is AI Academy, lesson six — Mailing.
+
+## problem
+Патрик: A hundred clients — a hundred emails by hand? Or one for everyone — and everyone sees the others' addresses.
+
+## split
+Лира: Say: “Send to all clients: from Monday we're open until eight.” | Say: Send to all clients: from Monday we're open until eight.
+Лира: Everyone gets their own email — with their own name. Nobody sees anyone else's address.
+
+## who
+Лира: To whom — clients, only those with a tag, employees or your own list.
+
+## send
+Лира: Emails go out one by one. Mail services allow about three hundred a day — the rest go out tomorrow on their own.
+
+## ads
+Лира: Ads — only to those who agreed. Replied “Unsubscribe” — I don't write again. | Ads — only to those who agreed. Replied Unsubscribe — I don't write again.
+
+## done
+Патрик: How many went out?
+Лира: A hundred out of a hundred. I'll send the summary myself.
+
+## how
+Лира: All of this is in the studio: “Work” → “Mailing”. | All of this is in the studio: Work, Mailing.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

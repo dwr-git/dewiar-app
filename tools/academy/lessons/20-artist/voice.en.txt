@@ -1,0 +1,29 @@
+# Lesson 20 · Artist
+
+## title
+Лира: Hi! This is Lira's Academy, lesson twenty — “Artist”. | Hi! This is Lira's Academy, lesson twenty — Artist.
+
+## problem
+Лира: A card for mom, a picture for a post, a badge for a club — and no artist at hand.
+
+## ask
+Лира: Say: “Draw a birthday card for mom.” I'll draw it myself — without third-party services. | Say: Draw a birthday card for mom. I'll draw it myself — without third-party services.
+
+## draw
+Лира: The card opens in the browser: “Save PNG” — and you can send it in a messenger or print it. | The card opens in the browser: Save PNG — and you can send it in a messenger or print it.
+
+## fix
+Лира: Want to change something — say it in words: “Add balloons and confetti.” I'll add them. | Want to change something — say it in words: Add balloons and confetti. I'll add them.
+
+## anim
+Лира: I can do animation too: “Snow over a city at night.” Tap “Record video” — and the clip is ready. | I can do animation too: Snow over a city at night. Tap Record video — and the clip is ready.
+
+## gallery
+Лира: All works are in the “Gallery”, in the “Drawings” folder. | All works are in the Gallery, in the Drawings folder.
+
+## how
+Лира: Turn on “Artist” in the studio, in “Plugins” — or right on the home screen, in the “Try a plugin” card. | Turn on Artist in the studio, in Plugins — or right on the home screen, in the Try a plugin card.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

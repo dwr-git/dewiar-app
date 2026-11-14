@@ -1,0 +1,90 @@
+{
+ "title": "Lesson 17 · My people",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "invite": 0.6,
+  "chat": 0.6,
+  "call": 0.6,
+  "group": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is Lira's Academy, lesson seventeen — “My people”.",
+   "tts": "Hi! This is Lira's Academy, lesson seventeen — My people."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Photos of the grandkids for mom, a file for your brother, just a call for dad. And all in different apps.",
+   "tts": "Photos of the grandkids for mom, a file for your brother, just a call for dad. And all in different apps."
+  },
+  {
+   "id": "s3a",
+   "scene": "invite",
+   "who": "lira",
+   "sub": "In “My people”, invite your own: show the Dewiar seal or send a link — and you're connected.",
+   "tts": "In My people, invite your own: show the Dewiar seal or send a link — and you're connected."
+  },
+  {
+   "id": "s4a",
+   "scene": "chat",
+   "who": "lira",
+   "sub": "Write, send photos and files. Or by voice: “Text mom that I'm leaving now.”",
+   "tts": "Write, send photos and files. Or by voice: Text mom that I'm leaving now."
+  },
+  {
+   "id": "s4b",
+   "scene": "chat",
+   "who": "lira",
+   "sub": "Everything is encrypted on your devices — even the server can't read it.",
+   "tts": "Everything is encrypted on your devices — even the server can't read it."
+  },
+  {
+   "id": "s5a",
+   "scene": "call",
+   "who": "lira",
+   "sub": "A call — with one button, with video. Or say: “Call mom.”",
+   "tts": "A call — with one button, with video. Or say: Call mom."
+  },
+  {
+   "id": "s6a",
+   "scene": "group",
+   "who": "lira",
+   "sub": "Groups of up to twelve people — family, friends: a shared chat, photos and a reminder for everyone at once.",
+   "tts": "Groups of up to twelve people — family, friends: a shared chat, photos and a reminder for everyone at once."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio — the “My people” section; on the phone — the same conversation.",
+   "tts": "In the studio — the My people section; on the phone — the same conversation."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

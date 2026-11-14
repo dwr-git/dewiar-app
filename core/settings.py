@@ -341,6 +341,7 @@ class Settings:
                 self.data["audio"]["follow_v2"] = True                        # перевод один раз: выбранные потом 8 с не трогаем
                 if (raw.get("llm") or {}).get("history_reset_seconds") in (300, 1200):
                     self.data["llm"]["history_reset_seconds"] = 28800    # 300 и 1200 — прежние значения по умолчанию, не выбор пользователя
+                self._cloud_kind()
             except FileNotFoundError:
                 self.data = copy.deepcopy(DEFAULTS)
                 if system_dark():                                         # №259 (25.10): тёмная система — с первого запуска
@@ -353,9 +354,18 @@ class Settings:
                     pass
                 self.data = copy.deepcopy(DEFAULTS)
 
+    def _cloud_kind(self):
+        """№706 (пакет 14.11): у «Dewiar Облака» в «Мозге» протокол переключили на Anthropic — облако отвечает только
+        по OpenAI-протоколу, и модель стала «не найдено: проверьте адрес». Профиль облака — всегда openai."""
+        for p in ((self.data.get("llm") or {}).get("profiles") or {}).values():
+            if isinstance(p, dict) and p.get("cloud") and "/dwrapp/cloud.php" in str(p.get("base_url") or "") \
+                    and p.get("kind") != "openai":
+                p["kind"] = "openai"
+
     def save(self):
         """Через .tmp с правами 600 (в файле ключи API): файл не останется недописанным и не будет виден другим."""
         with self._lock:
+            self._cloud_kind()
             self.path.parent.mkdir(parents=True, exist_ok=True)
             # №269 (пакет 27.10): антивирус (Касперский) на миг держит файл — WinError 5, и настройки не сохранялись.
             # Пять попыток с растущей паузой; не вышло — исключение, как раньше. Пакет 04.11: и временный файл бывает занят

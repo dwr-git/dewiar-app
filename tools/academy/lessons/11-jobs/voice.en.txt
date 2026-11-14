@@ -1,0 +1,27 @@
+# Lesson 11 · Scheduled jobs
+
+## title
+Лира: Hi! This is “AI Academy”, lesson eleven — “Scheduled jobs”. | Hi! This is AI Academy, lesson eleven — Scheduled jobs.
+
+## problem
+Патрик: Every morning — exchange rates, mail, news. Half an hour on the same thing.
+
+## ask
+Лира: Hand it to me: “Every weekday at nine, send me the dollar rate in Telegram.” | Hand it to me: Every weekday at nine, send me the dollar rate in Telegram.
+Лира: I'll do it myself on time and send you only the result.
+
+## hourly
+Лира: “On weekdays from nine to six, check my mail every hour and tell me about anything important.” | On weekdays from nine to six, check my mail every hour and tell me about anything important.
+
+## quiet
+Лира: Nothing new — I stay quiet and don't distract you.
+
+## where
+Лира: Where to tell you — by voice, in Telegram or in MAX.
+
+## how
+Лира: All jobs are in the studio: “Tasks and reminders”. | All jobs are in the studio: Tasks and reminders.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

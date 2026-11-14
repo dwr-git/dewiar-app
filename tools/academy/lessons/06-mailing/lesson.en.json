@@ -1,0 +1,105 @@
+{
+ "title": "Lesson 6 · Mailing",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "split": 0.7,
+  "who": 0.6,
+  "send": 0.6,
+  "ads": 0.6,
+  "done": 0.5,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson six — “Mailing”.",
+   "tts": "Hi! This is AI Academy, lesson six — Mailing."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "A hundred clients — a hundred emails by hand? Or one for everyone — and everyone sees the others' addresses.",
+   "tts": "A hundred clients — a hundred emails by hand? Or one for everyone — and everyone sees the others' addresses."
+  },
+  {
+   "id": "s3a",
+   "scene": "split",
+   "who": "lira",
+   "sub": "Say: “Send to all clients: from Monday we're open until eight.”",
+   "tts": "Say: Send to all clients: from Monday we're open until eight."
+  },
+  {
+   "id": "s3b",
+   "scene": "split",
+   "who": "lira",
+   "sub": "Everyone gets their own email — with their own name. Nobody sees anyone else's address.",
+   "tts": "Everyone gets their own email — with their own name. Nobody sees anyone else's address."
+  },
+  {
+   "id": "s4a",
+   "scene": "who",
+   "who": "lira",
+   "sub": "To whom — clients, only those with a tag, employees or your own list.",
+   "tts": "To whom — clients, only those with a tag, employees or your own list."
+  },
+  {
+   "id": "s5a",
+   "scene": "send",
+   "who": "lira",
+   "sub": "Emails go out one by one. Mail services allow about three hundred a day — the rest go out tomorrow on their own.",
+   "tts": "Emails go out one by one. Mail services allow about three hundred a day — the rest go out tomorrow on their own."
+  },
+  {
+   "id": "s6a",
+   "scene": "ads",
+   "who": "lira",
+   "sub": "Ads — only to those who agreed. Replied “Unsubscribe” — I don't write again.",
+   "tts": "Ads — only to those who agreed. Replied Unsubscribe — I don't write again."
+  },
+  {
+   "id": "s7a",
+   "scene": "done",
+   "who": "patrik",
+   "sub": "How many went out?",
+   "tts": "How many went out?"
+  },
+  {
+   "id": "s7b",
+   "scene": "done",
+   "who": "lira",
+   "sub": "A hundred out of a hundred. I'll send the summary myself.",
+   "tts": "A hundred out of a hundred. I'll send the summary myself."
+  },
+  {
+   "id": "s8a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All of this is in the studio: “Work” → “Mailing”.",
+   "tts": "All of this is in the studio: Work, Mailing."
+  },
+  {
+   "id": "s9a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s9b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

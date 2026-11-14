@@ -1,0 +1,97 @@
+{
+ "title": "Lesson 9 · My files",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "problem": 0.6,
+  "add": 0.6,
+  "ask": 0.6,
+  "private": 0.6,
+  "phone": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson nine — “My files”.",
+   "tts": "Hi! This is AI Academy, lesson nine — My files."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "The contract had a delivery deadline. But which of forty files was it in?",
+   "tts": "The contract had a delivery deadline. But which of forty files was it in?"
+  },
+  {
+   "id": "s3a",
+   "scene": "add",
+   "who": "lira",
+   "sub": "Add your files for me — contracts, manuals, price lists. I'll take a copy; I don't need access to your folders.",
+   "tts": "Add your files for me — contracts, manuals, price lists. I'll take a copy; I don't need access to your folders."
+  },
+  {
+   "id": "s4a",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "Ask: “What does the Romashka contract say about deadlines?”",
+   "tts": "Ask: What does the Romashka contract say about deadlines?"
+  },
+  {
+   "id": "s4b",
+   "scene": "ask",
+   "who": "lira",
+   "sub": "I'll answer — and show which file it's from.",
+   "tts": "I'll answer — and show which file it's from."
+  },
+  {
+   "id": "s5a",
+   "scene": "private",
+   "who": "lira",
+   "sub": "I search on your computer, without the internet.",
+   "tts": "I search on your computer, without the internet."
+  },
+  {
+   "id": "s5b",
+   "scene": "private",
+   "who": "lira",
+   "sub": "The model only gets the passages I found — not the whole archive.",
+   "tts": "The model only gets the passages I found — not the whole archive."
+  },
+  {
+   "id": "s6a",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "On the go, ask from your phone — it will ask your computer.",
+   "tts": "On the go, ask from your phone — it will ask your computer."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "In the studio: “My files” → “Add files”. Prefer a whole folder? — “Connect a folder”.",
+   "tts": "In the studio: My files, Add files. Prefer a whole folder? — Connect a folder."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

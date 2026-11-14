@@ -469,7 +469,7 @@ const feat = (k) => { const v = (S.features || {})[k]; return v === undefined ? 
 // 22.10, вечер: настоящая причина — сайт превращал пустой {} в схеме функции в [] (cloud.php chat_schema_fix): ещё раз
 if (S.llm.tools_prompt && !S.llm.rej_v3) { delete S.llm.tools_prompt; S.llm.rej_v3 = 1; }
 applyProxy();                                      // прокси для серверов Dewiar — с первого запроса
-function saveS() { llmRemember(); prefSet("settings", JSON.stringify(S)); applyProxy(); setTimeout(startCardCheck, 0); }
+function saveS() { llmRemember(); prefSet("settings", JSON.stringify(S)); applyProxy(); setTimeout(startCardCheck, 0); setTimeout(() => { try { noticeSync(); } catch (e) { } }, 0); }
 /* Прежние мозги (отчёт №117, 19.10: «отправил настройки с компьютера — телефон не подключается, и на Dewiar не вернуться; на
    компьютере между моделями переключаюсь, на телефоне нет»). Подключили другой мозг — прежний запоминается (до 5) и в
    «Мозге» его можно вернуть одной кнопкой. Забыли ключ или вышли из аккаунта — облачные из списка уходят. */
@@ -3124,7 +3124,7 @@ async function ask(text, opts = {}) {
       turnMedia && turnMedia.length ? { img: turnMedia.map(x => ({ src: x.src, full: x.full, page: x.page, title: x.title, author: x.author, license: x.license })) } : {})); saveH(); convAfter();
     if (!opts.hidden) { dayTurn(text, (sink.text() || final).trim() || quiet); try { dayLogAdd(text, (sink.text() || final).trim() || quiet); } catch (x) { } }
     if (turnAbort === ctl) frameAnswer(sink.text() || final);
-    netRecovered(); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe();
+    netRecovered(); hCount("turns"); hCount("net_ok"); pauseOk(); contactMaybe(); setTimeout(() => { try { noticeOffer(); } catch (e) { } }, 4000);
     if (isRefused(sink.text() || final)) hCount("refused");
     if (S.llm.cloud) setTimeout(() => cloudBalance(false).catch(() => {}), 1500);
   } catch (e) {
@@ -5295,6 +5295,65 @@ function wqHome() {
   for (const f of S.memory || []) { const m = String(f || "").match(WQ_FROM); if (m) return m[1].trim(); }                          // «я из Минска»
   return "";
 }
+/* «Лира заметила» (0.97, владелец 14.11: «иногда активировалась и находила полезное — предупредила о дожде… а не так,
+   что каждое утро будет злить»). Сам поиск повода — в фоне, Notice.java (раз в ~3 часа: погода на остаток дня,
+   день рождения близкого сегодня или завтра; есть повод — одно уведомление, не чаще раза в день, не до 8 и не после 21;
+   нет — тишина). Здесь — что ему смотреть: координаты города (запомненного — wqHome) и дни рождения из памяти. */
+const NT_MON = ["январ", "феврал", "март", "апрел", "ма[йя]", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр"];
+function noticeDays(now = new Date()) {
+  const out = [], seen = new Set(), facts = [...(S.memory || []).map(String)];
+  try { for (const [who, fs] of Object.entries((S.pmem && S.pmem.facts) || {})) (fs || []).forEach(f => facts.push(`${who}: ${f}`)); } catch (e) { }
+  for (const f of facts) {
+    if (!/д(ень|\.)\s*р(ождени|\.)|др\b/i.test(f)) continue;
+    const m = f.match(new RegExp(`(\\d{1,2})\\s+(${NT_MON.join("|")})`, "i")); if (!m) continue;
+    const mon = NT_MON.findIndex(x => new RegExp("^" + x, "i").test(m[2])); if (mon < 0) continue;
+    const who = (f.match(/(?:^|\s)у\s+([А-ЯЁа-яё-]+)/i) || f.match(/^([^:]+):/) || [])[1] || "";
+    for (const add of [0, 1]) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + add);
+      if (d.getMonth() === mon && d.getDate() === +m[1]) {
+        const key = d.toDateString() + who; if (seen.has(key)) continue; seen.add(key);
+        out.push({ date: isoLocal(d).slice(0, 10), text: who ? `день рождения у ${who.trim()} — не забудьте поздравить` : "чей-то день рождения из вашей памяти" });
+      }
+    }
+  }
+  return out.slice(0, 4);
+}
+async function noticeSync() {
+  if (!D.notice) return;
+  const n = S.notice || {};
+  let j = "";
+  if (n.on) {
+    const city = wqHome().replace(/^во?\s+/i, "");
+    if (city && (!S.noticeGeo || S.noticeGeo.city !== city)) {
+      try { const q = await wqGeocode(city); if (q) { S.noticeGeo = { city, lat: q.lat, lon: q.lon }; prefSet("settings", JSON.stringify(S)); } } catch (e) { }
+    }
+    const g = S.noticeGeo && S.noticeGeo.city === city ? S.noticeGeo : null;
+    j = JSON.stringify(Object.assign({ on: true, lang: appEn() ? "en" : "ru", who: trL((persona() || {}).name || "Лира"), days: noticeDays().map(d => Object.assign(d, { text: trL(d.text) })) }, g ? { lat: g.lat, lon: g.lon, place: g.city } : {}));
+  }
+  if (j !== noticeSync.last) { noticeSync.last = j; try { D.notice(j); } catch (e) { } }
+}
+function noticeSet(on) {
+  S.notice = Object.assign({}, S.notice || {}, { on: !!on, asked: true }); saveS();
+  hUse(on ? "sh:notice_on" : "sh:notice_off");
+  noticeSync();
+}
+/* предложить один раз — после первого настоящего ответа, на следующий день после установки или позже */
+function noticeOffer() {
+  if (!D.notice || D.mock || (S.notice && S.notice.asked) || $("#nt-offer")) return;
+  const first = +S.firstRun || 0; if (!first) { S.firstRun = Date.now(); saveS(); return; }
+  if (Date.now() - first < 20 * 3600e3) return;
+  const el = document.createElement("div"); el.id = "nt-offer"; el.className = "nt-offer";
+  el.innerHTML = `<p><b>Подсказывать, если замечу важное?</b><span>Дождь или снег сегодня, день рождения близкого — одно уведомление, не чаще раза в день. Нечего сказать — молчу.</span></p>
+    <div><button class="btn" id="nt-yes">Да</button><button class="btn ghost" id="nt-no">Не надо</button></div>`;
+  const st = $("#stage"); if (!st) return; st.appendChild(el);
+  $("#nt-yes").onclick = async () => {
+    el.remove(); await needPerm("android.permission.POST_NOTIFICATIONS").catch(() => {});
+    noticeSet(true);
+    if (!wqHome()) { const c = (prompt("В каком вы городе? Чтобы предупреждать о погоде.") || "").trim(); if (c) { S.weatherCity = "в " + c.replace(/^во?\s+/i, ""); saveS(); noticeSync(); } }
+    toast("Хорошо — скажу, только когда замечу важное");
+  };
+  $("#nt-no").onclick = () => { el.remove(); noticeSet(false); toast("Не буду. Включить — «Настройки» → «Звук»"); };
+}
 async function weatherQuick(text) {
   const c = wqParse(text); if (!c) return null;
   let phrase = c.city, pre = c.pre;
@@ -7338,7 +7397,7 @@ const lsnNew = () => (S.lsnKnown || []).filter(id => !(S.lsnSeen || []).includes
 function lsnDot() { const b = $("#b-apps"); if (b) b.classList.toggle("has", !!lsnNew().length && !kidsOn()); }
 async function lsnCheck() {
   if (Date.now() - (+S.lsnAt || 0) < 12 * 3600e3) return lsnDot();
-  try { const r = await http("GET", annBase() + "?p=/academy", { timeout: 15000 }); const it = JSON.parse(r.body || "{}").items;
+  try { const r = await http("GET", annBase() + "?p=/academy" + (appEn() ? "&lang=en" : ""), { timeout: 15000 }); const it = JSON.parse(r.body || "{}").items;
     if (Array.isArray(it)) { S.lsnKnown = it.map(x => x.id); S.lsnAt = Date.now(); saveS(); } } catch (e) { }
   lsnDot();
 }
@@ -7619,6 +7678,8 @@ function renderSettings() {
       <p class="hint" id="lite-now" style="margin:6px 2px 0">${liteOn() ? `Сейчас включён: ${esc(liteWhyNow)}.` : "Сейчас выключен."} Портрет в покое неподвижен, проверки реже, «Близкие» без постоянной связи — раз в 15 минут.</p></div>`);
     // звук напоминаний: свои мягкие мелодии (Sounds.java, res/raw), системный или свой файл; ▶ — послушать
     const snd = (() => { try { return JSON.parse(D.alarmSound ? D.alarmSound() : "{}"); } catch (e) { return {}; } })();
+    if (setTab === "sound" && D.notice) h.push(`<div class="card"><div class="sw" style="margin:0"><div>Лира заметила<small>Дождь или снег сегодня, жара, мороз, день рождения близкого — одно уведомление, когда есть повод; не чаще раза в день и не ночью.${S.notice && S.notice.on && !wqHome() ? " Скажите Лире свой город — и она будет предупреждать о погоде." : ""}</small></div>
+      <label class="tg"><input type="checkbox" id="nt-on" ${S.notice && S.notice.on ? "checked" : ""}><i></i></label></div></div>`);
     if (setTab === "sound") h.push(remHealthCard() + `<div class="card"><p class="hint" style="margin-top:0">Мягко и сначала тихо — громкость прибавляется за 20 секунд.</p>
       <div class="snds">${ALARM_SOUNDS.map(([id, n, sub]) => `<button class="snd ${id === (snd.id || "signature") ? "on" : ""}" data-snd="${id}"><i>${PLAY_SVG}</i><span><b>${n}</b><small>${sub}</small></span></button>`).join("")}
         <button class="snd ${snd.id === "custom" ? "on" : ""} ${snd.custom ? "" : "nofile"}" data-snd="custom"><i>${PLAY_SVG}</i><span><b>Свой звук</b><small id="snd-name">${snd.custom ? esc(snd.custom) : "Любая мелодия с телефона"}</small></span></button></div>
@@ -7758,6 +7819,7 @@ function wireSettings(info) {
     fr.readAsDataURL(f);
   };
   if (g("br-think")) g("br-think").addEventListener("change", () => { if (g("br-think").checked) delete S.llm.think; else S.llm.think = "off"; saveS(); });
+  if (g("nt-on")) g("nt-on").addEventListener("change", async () => { if (g("nt-on").checked) await needPerm("android.permission.POST_NOTIFICATIONS").catch(() => {}); noticeSet(g("nt-on").checked); });
   if (g("br-net-on")) g("br-net-on").addEventListener("change", () => { S.netShare = g("br-net-on").checked; saveS();
     toast(S.netShare ? "Общие вопросы иногда ответит Сеть Лиры — похожие на личные только сервер Dewiar" : "Всё отвечает сервер Dewiar", 3000); });
   if (setTab === "brain") {

@@ -1,0 +1,118 @@
+{
+ "title": "Lesson 3 · Leads from your website",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.4,
+  "night": 0.6,
+  "chat": 0.7,
+  "lead": 0.7,
+  "crm": 0.6,
+  "next": 0.5,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "Hi! This is “AI Academy”, lesson three — “Leads from your website”.",
+   "tts": "Hi! This is AI Academy, lesson three — Leads from your website."
+  },
+  {
+   "id": "s2a",
+   "scene": "night",
+   "who": "patrik",
+   "sub": "Night. A customer visits your website — and nobody's there to answer.",
+   "tts": "Night. A customer visits your website — and nobody's there to answer."
+  },
+  {
+   "id": "s2b",
+   "scene": "night",
+   "who": "lira",
+   "sub": "Somebody is. I'm the consultant on your website.",
+   "tts": "Somebody is. I'm the consultant on your website."
+  },
+  {
+   "id": "s3a",
+   "scene": "chat",
+   "who": "lira",
+   "sub": "I answer from your knowledge: prices, delivery, address.",
+   "tts": "I answer from your knowledge: prices, delivery, address."
+  },
+  {
+   "id": "s3b",
+   "scene": "chat",
+   "who": "lira",
+   "sub": "If it's not in your knowledge, I don't make it up — I offer to leave a contact.",
+   "tts": "If it's not in your knowledge, I don't make it up — I offer to leave a contact."
+  },
+  {
+   "id": "s4a",
+   "scene": "lead",
+   "who": "lira",
+   "sub": "The customer leaves a phone number.",
+   "tts": "The customer leaves a phone number."
+  },
+  {
+   "id": "s5a",
+   "scene": "crm",
+   "who": "lira",
+   "sub": "And by morning the lead is already in “Clients” — together with the conversation.",
+   "tts": "And by morning the lead is already in Clients — together with the conversation."
+  },
+  {
+   "id": "s5b",
+   "scene": "crm",
+   "who": "lira",
+   "sub": "And straight into Bitrix24 as a lead.",
+   "tts": "And straight into Bitrix24 as a lead."
+  },
+  {
+   "id": "s6a",
+   "scene": "next",
+   "who": "patrik",
+   "sub": "I'll call her back at ten.",
+   "tts": "I'll call her back at ten."
+  },
+  {
+   "id": "s6b",
+   "scene": "next",
+   "who": "lira",
+   "sub": "I'll remind you.",
+   "tts": "I'll remind you."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "To turn it on — in the studio: “Work” → “Website chat”.",
+   "tts": "To turn it on — in the studio: Work, Website chat."
+  },
+  {
+   "id": "s7b",
+   "scene": "how",
+   "who": "lira",
+   "sub": "One line on your website — and a chat button appears in the corner.",
+   "tts": "One line on your website — and a chat button appears in the corner."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

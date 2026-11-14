@@ -1,0 +1,97 @@
+{
+ "title": "Lesson 27 · Podcasts",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "make": 0.6,
+  "listen": 0.6,
+  "player": 0.6,
+  "phone": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-seven — “Podcasts”.",
+   "tts": "This is Lira's Academy, lesson twenty-seven — Podcasts."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "A three-hundred-page book, and no time to read it.",
+   "tts": "A three-hundred-page book, and no time to read it."
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Give it here: ten minutes, “In simple words” — and “Make a podcast”.",
+   "tts": "Give it here: ten minutes, In simple words — and Make a podcast."
+  },
+  {
+   "id": "s3a",
+   "scene": "make",
+   "who": "lira",
+   "sub": "While you're busy, I'll read the book, write a conversation between two hosts, check it against the text — and voice it.",
+   "tts": "While you're busy, I'll read the book, write a conversation between two hosts, check it against the text — and voice it."
+  },
+  {
+   "id": "s4a",
+   "scene": "listen",
+   "who": "patrik",
+   "sub": "So what's this book about, in a nutshell?",
+   "tts": "So what's this book about, in a nutshell?"
+  },
+  {
+   "id": "s4b",
+   "scene": "listen",
+   "who": "lira",
+   "sub": "About habits: a small step every day beats a big push once a year.",
+   "tts": "About habits: a small step every day beats a big push once a year."
+  },
+  {
+   "id": "s5a",
+   "scene": "player",
+   "who": "lira",
+   "sub": "Each host has a track of their own, and the text lights up. Tap a line — the episode jumps to it.",
+   "tts": "Each host has a track of their own, and the text lights up. Tap a line — the episode jumps to it."
+  },
+  {
+   "id": "s6a",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "“To phone” — and the episode arrives as a file in Telegram or MAX. Listen on the go.",
+   "tts": "To phone — and the episode arrives as a file in Telegram or MAX. Listen on the go."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "All of this is in the studio, the “Podcasts” section. Give me a file, a link, a video — or just a topic.",
+   "tts": "All of this is in the studio, the Podcasts section. Give me a file, a link, a video — or just a topic."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

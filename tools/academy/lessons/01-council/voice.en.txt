@@ -1,0 +1,35 @@
+# Lesson 1 · AI Council
+
+## title
+Лира: Hi! I'm Lira.
+Лира: This is “AI Academy”, lesson one — “AI Council”. | This is AI Academy, lesson one — AI Council.
+
+## ask
+Лира: Some questions need more than one opinion.
+Лира: Should you switch to remote work? Buy an apartment — or keep saving?
+
+## table
+Лира: In Dewiar, every character can have a brain of its own.
+Лира: For example, I think with ChatGPT, and Patrick — with Claude.
+Лира: Gather us at one table.
+
+## r1
+Лира: First, each of us answers alone — with our own position.
+Патрик: Remote work — yes. But agree on a schedule first.
+
+## r2
+Лира: Then we argue — to the point, and by name.
+Патрик: Lira, I agree about freedom. But it's easy to burn out at home.
+Лира: Patrick is right. So let's start with two days a week at home.
+
+## sum
+Лира: And at the end — a summary: where we agreed, where we didn't,
+Лира: what we advise — and the first step for today.
+
+## how
+Лира: Just say: “Lira, gather the council” — and ask your question. | Just say: Lira, gather the council — and ask your question.
+Лира: Or open “AI Council” in the studio. The minutes are saved in the “Council” folder. | Or open AI Council in the studio. The minutes are saved in the Council folder.
+
+## end
+Лира: Dewiar is free, at dewiar.pro. | Dewiar is free, at dewiar dot pro.
+Лира: See you in the next lesson!

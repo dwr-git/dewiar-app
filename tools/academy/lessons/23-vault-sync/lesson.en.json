@@ -1,0 +1,90 @@
+{
+ "title": "Lesson 23 · The safe on all your devices",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "sync": 0.6,
+  "master": 0.6,
+  "phone": 0.6,
+  "guard": 0.6,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson twenty-three — “The safe on all your devices”.",
+   "tts": "This is Lira's Academy, lesson twenty-three — The safe on all your devices."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "I'm at the checkout, and the store password is back on my computer!",
+   "tts": "I'm at the checkout, and the store password is back on my computer!"
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "It's on your phone too: “Safe” → “Copy”. In thirty seconds the clipboard clears itself.",
+   "tts": "It's on your phone too: Safe, Copy. In thirty seconds the clipboard clears itself."
+  },
+  {
+   "id": "s3a",
+   "scene": "sync",
+   "who": "lira",
+   "sub": "On the computer, open “Password safe” and turn on “One safe on all my devices”.",
+   "tts": "On the computer, open Password safe and turn on One safe on all my devices."
+  },
+  {
+   "id": "s4a",
+   "scene": "master",
+   "who": "lira",
+   "sub": "Pick a master password. The key from it lives only on your devices — the server sees nothing but ciphertext.",
+   "tts": "Pick a master password. The key from it lives only on your devices — the server sees nothing but ciphertext."
+  },
+  {
+   "id": "s5a",
+   "scene": "phone",
+   "who": "lira",
+   "sub": "On the phone — “All”, “Safe” and the same master password. Edit an entry on one — it changes on all.",
+   "tts": "On the phone — All, Safe and the same master password. Edit an entry on one — it changes on all."
+  },
+  {
+   "id": "s6a",
+   "scene": "guard",
+   "who": "lira",
+   "sub": "The password is hidden: “Show” — for fifteen seconds. Put the phone away — the safe locks itself.",
+   "tts": "The password is hidden: Show — for fifteen seconds. Put the phone away — the safe locks itself."
+  },
+  {
+   "id": "s7a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "Write the master password down: only you have it, and it can't be recovered.",
+   "tts": "Write the master password down: only you have it, and it can't be recovered."
+  },
+  {
+   "id": "s8a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar is free, at dewiar.pro.",
+   "tts": "Dewiar is free, at dewiar dot pro."
+  },
+  {
+   "id": "s8b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

@@ -179,7 +179,7 @@ for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
 for (let i = 0; i < 70; i++) { const s = document.createElement("i"); s.style.left = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) % 1 * 1920 + "px"; s.style.top = ((Math.sin(i * 78.233) * 12345.678 % 1 + 1) % 1) * 600 + "px"; s.dataset.k = i; $("#night").appendChild(s); }
 function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
 function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
-function typeIn(el, text, k) { el.textContent = text.slice(0, Math.round(text.length * clamp(k))); }
+function typeIn(el, text, k) { text = (window.DW_FILM_TX || (s => s))(text); el.textContent = text.slice(0, Math.round(text.length * clamp(k))); }
 
 window.render = function (T, f) {
   const s = (id) => SC[id];
