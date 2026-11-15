@@ -307,14 +307,34 @@ function ckUrl(raw) {
   }
   return u;
 }
-function ckPreset(prov) {
+function ckPreset(prov, rawUrl) {
   if (prov !== "custom") return Object.assign({}, S_presets[prov] || {});
-  const url = ckUrl($("#ck-url").value);
+  const url = ckUrl(rawUrl != null ? rawUrl : $("#ck-url").value);
   let host = url; try { host = new URL(url).host; } catch (e) { }
   return { name: host || "Свой сервис", kind: "openai", base_url: url };
 }
 function ckHint() { const prov = $("#ck-prov").value; $("#ck-hint").innerHTML = CLOUD[prov].hint; $("#ck-url-f").style.display = prov === "custom" ? "" : "none"; }
 $("#ck-prov").onchange = ckHint; ckHint();
+/* Ключ сервиса -> список его моделей: советуемые первыми, поиск по смыслу — в конец (15.11: то же — в «Кто чем думает»
+   на «Главной», brain.js). prof — профиль с ключом (base_url может поправиться: свой адрес без /v1). -> {ordered, rec} */
+async function ckModels(prov, prof) {
+  let models = [];
+  try { models = await core.call("llm_models", { profile: prof }); }
+  catch (e) {                                   // свой адрес без /v1 — частая ошибка: пробуем с /v1
+    if (prov !== "custom" && CLOUD[prov].rec.length && !/401|403|ключ/i.test(e.message)) models = [];   // нет списка — не беда, проверка покажет
+    else if (prov !== "custom" || /\/v1$/.test(prof.base_url)) throw e;
+    else {
+      const p2 = Object.assign({}, prof, { base_url: prof.base_url + "/v1" });
+      models = await core.call("llm_models", { profile: p2 }); prof.base_url = p2.base_url;
+    }
+  }
+  if (!models.length && CLOUD[prov].rec.length) models = CLOUD[prov].rec.slice();   // список не отдал (бывает у GLM) — проверим первую из советуемых
+  if (!models.length) throw new Error("сервис не вернул список моделей");
+  const rec = CLOUD[prov].rec.filter(m => models.includes(m));
+  const side = (m) => /embed|rerank|tts|whisper|dall-e|image|moderation|audio|transcribe|realtime/i.test(m) ? 1 : 0;   // не для разговора — в конец
+  const ordered = rec.concat(models.filter(m => !rec.includes(m)).sort((a, b) => side(a) - side(b) || a.localeCompare(b)));
+  return { ordered, rec };
+}
 let ckId = null, ckSvc = "";
 $("#ck-go").onclick = async (ev) => {
   const prov = $("#ck-prov").value, key = $("#ck-key").value.trim(), r = $("#ck-res"), btn = $("#ck-go");
@@ -326,21 +346,7 @@ $("#ck-go").onclick = async (ev) => {
     btn.disabled = false; r.className = "res bad"; r.textContent = "Студия ещё не на связи с ядром — подождите секунду и нажмите снова"; return;
   }
   try {
-    let models = [];
-    try { models = await core.call("llm_models", { profile: prof }); }
-    catch (e) {                                   // свой адрес без /v1 — частая ошибка: пробуем с /v1
-      if (prov !== "custom" && CLOUD[prov].rec.length && !/401|403|ключ/i.test(e.message)) models = [];   // нет списка — не беда, проверка покажет
-      else if (prov !== "custom" || /\/v1$/.test(prof.base_url)) throw e;
-      else {
-        const p2 = Object.assign({}, prof, { base_url: prof.base_url + "/v1" });
-        models = await core.call("llm_models", { profile: p2 }); prof.base_url = p2.base_url;
-      }
-    }
-    if (!models.length && CLOUD[prov].rec.length) models = CLOUD[prov].rec.slice();   // список не отдал (бывает у GLM) — проверим первую из советуемых
-    if (!models.length) throw new Error("сервис не вернул список моделей");
-    const rec = CLOUD[prov].rec.filter(m => models.includes(m));
-    const side = (m) => /embed|rerank/i.test(m) ? 1 : 0;                   // поиск по смыслу — в конец, остальное по алфавиту
-    const ordered = rec.concat(models.filter(m => !rec.includes(m)).sort((a, b) => side(a) - side(b) || a.localeCompare(b)));
+    const { ordered, rec } = await ckModels(prov, prof);
     prof.model = ordered[0]; ckSvc = prof.name; prof.name = `${prof.name} — ${prof.model}`;
     ckId = uid(); S.llm.profiles[ckId] = prof;
     await save({ llm: { profiles: S.llm.profiles, active: ckId } }); renderProfiles();

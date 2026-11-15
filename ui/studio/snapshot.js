@@ -44,11 +44,15 @@ function snChip() {
     $("#sn-chip").onclick = () => snToggle(!SN.open);
   }
   $("#sn-chip").classList.toggle("old", old);
+  // 15.11 (владелец: «изящнее… не свалка»): всё хорошо — только значок с зелёной точкой (подробности — в подсказке и по
+  // нажатию); слепка нет или он старше недели — полностью, с текстом
+  $("#sn-chip").classList.toggle("quiet", !!x && !old && !SN.open);
+  $("#sn-chip").setAttribute("aria-label", "Слепок знаний — " + (x ? snWhen(x.time) : "ещё не было"));
   $("#sn-chip small").innerHTML = `<i></i>${x ? snEsc(snWhen(x.time)) : "ещё не было — сделайте"}`;
   $("#sn-chip").title = x ? `Последний слепок — ${snWhen(x.time)}${old ? ". Пора сделать новый" : ""}` : "Слепков ещё нет";
 }
 function snToggle(on) {
-  SN.open = on; $("#sn-pop").hidden = !on; $("#sn-chip").setAttribute("aria-expanded", String(on));
+  SN.open = on; $("#sn-pop").hidden = !on; $("#sn-chip").setAttribute("aria-expanded", String(on)); snChip();
   if (on) { snPop(); snLoad(); }
 }
 function snPop() {

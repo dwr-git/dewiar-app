@@ -236,10 +236,12 @@ function hmToday() {
   const sb = (HM.sb || [])[0], tb = (k, v) => window.t("sites.blog." + k, v);
   if (sb) out.push({ cls: "task", lab: tb("home.lab"), b: "📝 " + (sb.name || ""), s: tb("home.s", { n: sb.blog.drafts }), go: "sites-blog:" + sb.id });
   const cs = HM.data.cs, L = cs && cs.lesson;          // курс «Неделя с Лирой»: урок дня ещё не пройден
+  const nl = hmLesson();                                // новый видеоурок — пока не посмотрели (3 дня, потом молча)
+  // 15.11 (владелец: «изящнее, не свалка»): урок дня и новый видеоурок — одна карточка «Учиться», а не половина ряда
   if (L && L.open && cs.offer !== false && !L.steps.every(s => s.done))
-    out.push({ cls: "course", lab: `Урок дня · ${L.day} из ${cs.total}`, b: `🎓 ${L.title}`, s: `5 минут: ${(L.steps.find(s => !s.done) || L.steps[0]).say}`, go: "course" });
-  const nl = hmLesson();                                // новый видеоурок — одной карточкой, пока не посмотрели (3 дня, потом молча)
-  if (nl) out.push({ cls: "lesson", lab: `Новый видеоурок · ${nl.sec ? nl.sec + " с" : "минута"}`, b: `🎬 ${nl.title}`, s: nl.about || "мультфильм о том, как это работает", go: "lesson:" + nl.id });
+    out.push(Object.assign({ cls: "course", lab: `Учиться · урок дня ${L.day} из ${cs.total}`, b: `🎓 ${L.title}`, s: `5 минут: ${(L.steps.find(s => !s.done) || L.steps[0]).say}`, go: "course" },
+      nl ? { s: `🎬 и новый видеоурок «${nl.title}»`, sgo: "lesson:" + nl.id, stip: "Смотреть видеоурок" } : {}));
+  else if (nl) out.push({ cls: "lesson", lab: `Учиться · видеоурок ${nl.sec ? nl.sec + " с" : "на минуту"}`, b: `🎬 ${nl.title}`, s: nl.about || "мультфильм о том, как это работает", go: "lesson:" + nl.id });
   const w = tk.find(t => t.status === "waiting");
   if (w) out.push({ cls: "task", lab: "Задача ждёт ответа", b: `⏳ ${w.title}`, s: w.question || "откройте и ответьте", go: "tasks" });
   if (dn) out.push({ cls: "done", lab: "Сделано сегодня", b: `${dn.today || 0} ${(dn.today || 0) % 10 === 1 && (dn.today || 0) % 100 !== 11 ? "дело" : [2, 3, 4].includes((dn.today || 0) % 10) && ![12, 13, 14].includes((dn.today || 0) % 100) ? "дела" : "дел"}`,
@@ -319,6 +321,7 @@ function hmRender() {
   const items = list.filter(Boolean), apps = items.filter(a => !a.plg), plgs = items.filter(a => a.plg);
   $$("#hm-apps, #hm-plgs").forEach(g => g.classList.toggle("edit", HM.edit));
   $("#hm-apps").innerHTML = apps.map(tile).join("");
+  hmFold();
   const offPlg = typeof S !== "undefined" && S && S.ui && Array.isArray(S.ui.nav_hidden) && S.ui.nav_hidden.includes("plugins");
   $("#hm-plgs").innerHTML = plgs.map(tile).join("") + (HM.edit ? "" : `<div class="hm-app hm-add"><button class="hm-ic" data-plgall="1" title="Каталог плагинов — поставить одним нажатием" aria-label="Все плагины"><i class="hm-plg" aria-hidden="true">＋</i></button><b>Ещё плагины</b><small>каталог Dewiar</small></div>`);
   $("#hm-plg-h").hidden = $("#hm-plgs").hidden = !!offPlg;
@@ -434,7 +437,37 @@ function hmMail() {
    картинки» (до того отправитель не узнает, что письмо открыли). Ссылки внутри рамки не нажимаются — переход внутри неё
    ушёл бы на чужой сайт мимо всех запретов, — они списком под письмом, с настоящим адресом, и открываются в браузере.
    Есть у письма своя текстовая часть — по умолчанию «Текстом»; выбор человека запоминается. */
-const HMM = { x: null, r: null, view: "", pics: false, busy: false };
+const HMM = { x: null, r: null, view: "", pics: false, busy: false, tr: null };
+/* 15.11 (владелец: «открываю письмо — иногда хочется перевести на русский»): письмо не на языке программы — «Перевести на
+   русский» (на английский — в английской программе). Переводит Лира тем же мозгом (pad_ai, act translate — как в блокноте),
+   текст появляется по мере перевода; «Показать оригинал» — обратно. Перевод — только на экране, в письмо не пишется. */
+const hmmLang = () => (document.documentElement.lang || "ru").slice(0, 2) === "en" ? "en" : "ru";
+function hmmForeign(t) {
+  const s = String(t || "").slice(0, 4000), cyr = (s.match(/[а-яё]/gi) || []).length, lat = (s.match(/[a-z]/gi) || []).length;
+  if (cyr + lat < 40) return false;
+  return hmmLang() === "ru" ? cyr / (cyr + lat) < 0.3 : cyr / (cyr + lat) > 0.5;
+}
+function hmmTrLabel() {
+  const b = $("#hmm-tr"); if (!b) return; const on = HMM.tr && HMM.tr.show;
+  $("span", b).textContent = on ? "Показать оригинал" : (hmmLang() === "en" ? "Translate to English" : "Перевести на русский");
+  b.setAttribute("aria-pressed", String(!!on));
+}
+async function hmmTranslate() {
+  const r = HMM.r; if (!r) return;
+  if (HMM.tr && HMM.tr.text && !HMM.tr.busy) { HMM.tr.show = !HMM.tr.show; hmmShow(); return; }
+  if (HMM.tr && HMM.tr.busy) return;
+  HMM.tr = { id: "", text: "", busy: true, show: true, err: "" }; hmmShow();
+  try {
+    const d = await core.call("pad_ai", { act: "translate", text: String(r.text || "").slice(0, 15000), doc: "", lang: hmmLang() });
+    if (HMM.tr) HMM.tr.id = d.id;
+  } catch (e) { HMM.tr = null; hmmShow(); hmmStatus("Не перевелось: " + e.message, true); }
+}
+core.on("pad_ai", (e) => {
+  const t = HMM.tr; if (!t || !e || e.id !== t.id) return;
+  t.text = e.text || t.text;
+  if (e.done) { t.busy = false; if (e.error) { HMM.tr = null; hmmStatus("Не перевелось: " + e.error, true); } }
+  if ($("#hmm-dlg") && $("#hmm-dlg").open) hmmShow();
+});
 function hmmView() { return String(hmmGet("mail_view", "") || ""); }
 function hmmDoc(r, pics) {
   const csp = `default-src 'none'; img-src data:${pics ? " https:" : ""}; style-src 'unsafe-inline'; font-src data:`;
@@ -448,11 +481,20 @@ function hmmShow() {
   const r = HMM.r, body = $("#hmm-body"); if (!r) return;
   const html = !!r.html && HMM.view === "html", txt = String(r.text || "").trim();
   $$("#hmm-bar .hmm-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (html ? "html" : "text"))));
-  $("#hmm-bar").hidden = !r.html;
+  const foreign = hmmForeign(txt);
+  $("#hmm-bar").hidden = !r.html && !foreign;
+  $("#hmm-bar .hmm-seg").hidden = !r.html;
+  $("#hmm-tr").hidden = !foreign; hmmTrLabel();
   $("#hmm-pics").hidden = !html || HMM.pics || !(r.html_remote > 0);
   if (!$("#hmm-pics").hidden) $("#hmm-pics span").textContent = `Показать картинки · ${r.html_remote}`;
   const head = `<p class="hmm-to">${hmEsc(hmmAddr(r.from || HMM.x.from))}${r.to ? ` → ${hmEsc(r.to)}` : ""}</p>`;
   const files = (r.files || []).length ? `<p class="hmm-files">📎 ${r.files.map(hmEsc).join(" · ")}</p>` : "";
+  if (HMM.tr && HMM.tr.show) {                          // перевод — текстом, поверх выбранного вида
+    $$("#hmm-bar .hmm-seg button").forEach(b => b.setAttribute("aria-pressed", "false"));
+    body.innerHTML = head + `<p class="hmm-trn">${HMM.tr.busy ? "Лира переводит…" : "Перевод Лиры"}</p>`
+      + `<div class="hmm-text">${HMM.tr.text ? hmEsc(HMM.tr.text) : "<i>…</i>"}</div>` + files;
+    return;
+  }
   if (!html) { body.innerHTML = head + `<div class="hmm-text">${txt ? hmEsc(txt) : "<i>В письме нет текста.</i>"}</div>` + files; return; }
   const links = (r.html_links || []).filter(l => /^(https?:|mailto:)/i.test(l.url));
   body.innerHTML = head + `<div class="hmm-paper"><iframe class="hmm-frame" sandbox="" referrerpolicy="no-referrer" title="Письмо: ${hmEsc(r.subject || "")}"></iframe></div>` + files
@@ -497,7 +539,8 @@ async function hmmAct(action) {
 async function hmmOpen(x) {
   if (!x) return;
   const d = $("#hmm-dlg"), body = $("#hmm-body");
-  HMM.x = x; HMM.r = null; HMM.pics = false; HMM.busy = false; hmmBusy(false); hmmStatus("");
+  if (HMM.tr && HMM.tr.busy && HMM.tr.id) core.call("pad_ai_stop", { id: HMM.tr.id }).catch(() => {});
+  HMM.x = x; HMM.r = null; HMM.pics = false; HMM.busy = false; HMM.tr = null; hmmBusy(false); hmmStatus("");
   hmmFwd(false); $("#hmm-bar").hidden = true;
   $("#hmm-dfrom").textContent = `${hmmWho(x.from)} · ${hmmWhen(x.date)}`; $("#hmm-dt").textContent = x.subject || "(без темы)";
   body.innerHTML = `<p class="hmm-load">Открываю письмо…</p>`;
@@ -516,7 +559,8 @@ async function hmmOpen(x) {
 if ($("#hmm-dlg")) {
   $("#hmm-x").onclick = () => $("#hmm-dlg").close();
   $("#hmm-dlg").addEventListener("click", (e) => { if (e.target === $("#hmm-dlg")) $("#hmm-dlg").close(); });
-  $$("#hmm-bar .hmm-seg button").forEach(b => b.onclick = () => { HMM.view = b.dataset.v; hmmSet("mail_view", HMM.view); hmmShow(); });
+  $$("#hmm-bar .hmm-seg button").forEach(b => b.onclick = () => { HMM.view = b.dataset.v; hmmSet("mail_view", HMM.view); if (HMM.tr) HMM.tr.show = false; hmmShow(); });
+  if ($("#hmm-tr")) $("#hmm-tr").onclick = hmmTranslate;
   $("#hmm-pics").onclick = () => { HMM.pics = true; hmmShow(); };
   $("#hmm-del").onclick = () => hmmAct("trash");
   $("#hmm-spam").onclick = () => hmmAct("junk");
@@ -622,6 +666,24 @@ function hmTry() {
     } catch (e) { toast(e.message); if ($("#ht-on")) $("#ht-on").disabled = false; }
   };
 }
+/* 15.11 (владелец: «изящнее… найти ту эстетику и сдержанность, но важное — в досягаемости»): «Приложения» — два ряда
+   в порядке «Настроить главную», остальные — по «Все приложения · ещё N» (и «Свернуть»). В настройке видно всё. */
+function hmFold() {
+  const g = $("#hm-apps"); if (!g) return;
+  $$(".hm-fold", g).forEach(x => x.remove());
+  const tiles = $$(".hm-app", g); tiles.forEach(t => t.hidden = false);
+  if (HM.edit || !tiles.length) return;
+  const cols = Math.max(1, getComputedStyle(g).gridTemplateColumns.split(" ").filter(Boolean).length), cap = cols * 2;
+  if (tiles.length <= cap) return;
+  const open = !!HM.appsOpen, keep = open ? tiles.length : cap - 1;
+  tiles.forEach((t, i) => { t.hidden = i >= keep; });
+  const f = document.createElement("div"); f.className = "hm-fold";
+  f.innerHTML = `<button class="hm-ic" type="button" aria-expanded="${open}" title="${open ? "Показать два ряда" : "Все приложения"}"><i class="hm-plg" aria-hidden="true">${open ? "−" : "⋯"}</i></button>`
+    + `<b>${open ? "Свернуть" : "Все приложения"}</b><small>${open ? "два ряда" : `ещё ${tiles.length - keep}`}</small>`;
+  $("button", f).onclick = () => { HM.appsOpen = !open; hmFold(); };
+  g.appendChild(f);
+}
+{ let hmFt = 0; window.addEventListener("resize", () => { clearTimeout(hmFt); hmFt = setTimeout(() => { if ($("#p-home") && $("#p-home").classList.contains("cur")) hmFold(); }, 150); }); }
 function hmWire() {
   $$("#hm-body [data-go]").forEach(b => b.onclick = () => hmGo(b.dataset.go));
   $$("#hm-body [data-pad]").forEach(b => b.onclick = () => hmOpen("pad"));

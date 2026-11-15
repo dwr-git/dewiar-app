@@ -72,6 +72,22 @@ def relay_url_ok(u, me, pub):
 THINK_RX = re.compile(r"<think>.*?(?:</think>|$)", re.S)
 
 
+
+MIN_VRAM_GB = 16          # 15.11: видеокарта ноды — не меньше (как NET_MIN_VRAM_GB на сайте)
+
+
+def node_vram_ok(g):
+    """Хватит ли видеокарты для ноды: NVIDIA/AMD — от 16 ГБ; Mac на Apple M (память общая) — от 24 ГБ памяти."""
+    if not g:
+        return True
+    if g.get("apple"):
+        try:
+            import device
+            return (device.ram_gb()[0] or 0) >= 23.5
+        except Exception:  # noqa: BLE001
+            return True
+    return float(g.get("mem_gb") or 0) >= MIN_VRAM_GB - 0.6        # «16 ГБ» карта показывает 15,6–16
+
 class NodeError(Exception):
     pass
 
@@ -556,8 +572,11 @@ class Node:
         if pick and pick.get("lan"):
             add("gpu", None, "Видеокарта", "у сервера в сети — решит замер скорости")
         elif g:
-            enough = g["mem_gb"] >= 8 or g.get("apple")
-            add("gpu", True if enough else False, "Видеокарта", f"{g['name']}, {str(g['mem_gb']).replace('.', ',')} ГБ" + ("" if enough else " — мало, нужно от 8 ГБ"))
+            # 15.11 (владелец: «запретить всё меньше 16 ГБ — маленькие модели на 8-гиговых картах не справляются»)
+            enough = node_vram_ok(g)
+            add("gpu", True if enough else False, "Видеокарта", f"{g['name']}, {str(g['mem_gb']).replace('.', ',')} ГБ"
+                + ("" if enough else (" — мало: у Mac нужно от 24 ГБ общей памяти" if g.get("apple") else
+                                      f" — мало: нужна видеокарта от {MIN_VRAM_GB} ГБ, на меньших модели не справляются с вопросами людей")))
         else:
             add("gpu", None, "Видеокарта", "не узнала (не NVIDIA?) — решит замер скорости")
         try:
@@ -605,8 +624,11 @@ class Node:
             raise NodeError("сеть пока закрыта владельцем Dewiar")
         port = int((re.search(r":(\d+)", base.split("//", 1)[-1]) or [0, 80])[1])
         g = {} if is_lan(base) else (SYS.gpu() or {})          # модель на сервере в сети — не своя видеокарта
+        if g and not node_vram_ok(g):
+            raise NodeError(f"ноде нужна видеокарта от {MIN_VRAM_GB} ГБ памяти (Mac — от 24 ГБ общей): на меньших модели не справляются с вопросами людей")
         reg = {"name": "Нода в Dewiar" + (" · " + g["name"][:40] if g.get("name") else ""), "kind": "app", "link": "pull",
-               "ports": [{"port": port, "model": model[:160], "gpu_name": (g.get("name") or "")[:120]}]}
+               "ports": [{"port": port, "model": model[:160], "gpu_name": (g.get("name") or "")[:120],
+                          **({"gpu_mem": float(g["mem_gb"])} if g.get("mem_gb") and not g.get("apple") else {})}]}
         try:
             if self.st.get("key"):                       # уже нода — только сменить модель (своим ключом ноды)
                 import httpx

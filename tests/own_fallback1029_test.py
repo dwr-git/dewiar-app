@@ -70,8 +70,9 @@ EA.AnswerMixin._own_fallback(e, LOCAL, DOWN)
 ok(len(notes) == 1, "подсказка — один раз за запуск")
 
 notes.clear()
-e = eng({"llm": {"profiles": {"dewiar-cloud": CLOUDP}, "own_fallback": True}})
-for prof, err, why in ((CLOUDP, DOWN, "облако Dewiar"), ({"base_url": "https://api.openai.com/v1"}, DOWN, "чужой облачный сервис"),
+e = eng({"llm": {"profiles": {"dewiar-cloud": CLOUDP}, "own_fallback": True, "key_fallback": False}})
+# 15.11: сервис по ключу (OpenAI, Kimi…) — своя подстраховка llm.key_fallback (brain_who1115); здесь она выключена
+for prof, err, why in ((CLOUDP, DOWN, "облако Dewiar"), ({"base_url": "https://api.openai.com/v1"}, DOWN, "чужой облачный сервис без подстраховки"),
                        (LOCAL, "сервер модели не ответил вовремя (timeout)", "своя модель медленная, а не выключена")):
     ok(EA.AnswerMixin._own_fallback(e, prof, err) is None, f"{why} — не подменяем")
 ok(EA.AnswerMixin._own_fallback(eng({"llm": {"profiles": {}, "own_fallback": True}}), LOCAL, DOWN) is None, "мозга Dewiar нет — нечем подменить")

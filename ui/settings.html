@@ -158,7 +158,7 @@
       <linearGradient id="hg9" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fe07a"/><stop offset="1" stop-color="#23a06e"/></linearGradient>
     </defs></svg>
     <div id="hm-body">
-      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p><button class="hm-mode" type="button" id="hm-mode" aria-haspopup="dialog"><i aria-hidden="true"></i><span>Лира — для меня</span></button></div>
+      <div class="hm-hi"><div><h1 id="hm-greet">Здравствуйте</h1><p id="hm-date"></p><button class="hm-mode" type="button" id="hm-mode" aria-haspopup="dialog"><i aria-hidden="true"></i><span>Лира — для меня</span></button><button class="hm-mode hm-brain" type="button" id="hm-brain" aria-haspopup="dialog" title="Кто чем думает: модель у каждого персонажа"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 4.5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2 3.2 3.2 0 0 0 2.5 5.3 3 3 0 0 0 3 1.5h.5V4.6a3 3 0 0 0-1 0zM14.5 4.5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.2 3.2 3.2 0 0 1-2.5 5.3 3 3 0 0 1-3 1.5H13.5V4.6a3 3 0 0 1 1 0z"/></svg><span>Мозг</span></button></div>
         <div class="hm-side"><div class="sn-wrap" id="sn"></div>
           <div class="fd" role="search"><label class="fd-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></svg>
             <input type="search" id="fd-q" placeholder="Найти: почта, пароли, голос…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="fd-res" aria-autocomplete="list" aria-label="Найти раздел или настройку"><kbd aria-hidden="true">Ctrl K</kbd></label>
@@ -167,11 +167,18 @@
       <div class="hm-morning hm-month" id="hm-month" hidden></div>
       <div class="hm-today" id="hm-today"></div>
       <div class="hm-mail" id="hm-mail" hidden></div>
+      <!-- 15.11 «Кто чем думает» (studio/brain.js brOpen): модель у каждого персонажа, сервис по ключу — несколькими нажатиями -->
+      <dialog class="hmm-dlg br-dlg" id="br-dlg" aria-labelledby="br-t"><div class="hmm-dh"><span><small id="br-sub">У каждого персонажа может быть своя модель</small><b id="br-t">Кто чем думает</b></span>
+        <button class="ls-x hmm-x" type="button" id="br-x" aria-label="Закрыть" title="Закрыть (Esc)">×</button></div>
+        <div class="hmm-body br-body" id="br-body"></div>
+        <p class="hmm-st" id="br-st" role="status" aria-live="polite" hidden></p>
+        <div class="br-foot"><label class="br-fb"><input type="checkbox" id="br-fb"><span><b>Подстраховка</b> — если сервис по ключу не ответил (нет связи, кончились деньги), ответит Dewiar</span></label></div></dialog>
       <dialog class="hmm-dlg" id="hmm-dlg" aria-labelledby="hmm-dt"><div class="hmm-dh"><span><small id="hmm-dfrom"></small><b id="hmm-dt"></b></span>
         <button class="ls-x hmm-x" type="button" id="hmm-x" aria-label="Закрыть" title="Закрыть (Esc)">×</button></div>
         <!-- №562 (05.11): «как в письме» (безопасная рамка, studio/home.js hmmFrame) или «текстом»; картинки — по кнопке -->
         <div class="hmm-bar" id="hmm-bar" hidden><div class="hmm-seg" role="group" aria-label="Как показать письмо">
           <button type="button" data-v="html" aria-pressed="true">Как в письме</button><button type="button" data-v="text" aria-pressed="false">Текстом</button></div>
+          <button type="button" class="hmm-pics hmm-tr" id="hmm-tr" hidden title="Перевод делает Лира — тем же мозгом, что и разговор"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h9M8.5 4v1.5M6 5.5c.7 3.4 2.9 6 6 7.5M11 5.5c-.8 3.6-3.3 6.5-7 8"/><path d="m12.5 20 3.8-9 3.7 9M13.8 17h5"/></svg><span>Перевести на русский</span></button>
           <button type="button" class="hmm-pics" id="hmm-pics" hidden title="Картинки грузятся с сайта отправителя — он может узнать, что письмо открыли"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m4 17.5 5-4.5 3.5 3 3-2.5 4.5 4"/></svg><span>Показать картинки</span></button></div>
         <div class="hmm-body" id="hmm-body"></div>
         <form class="hmm-fwd" id="hmm-fwd" hidden novalidate><b class="hmm-fh">Переслать письмо</b>
@@ -573,7 +580,7 @@
     <div class="nd-gives">
       <div><b>Сети</b><p>Люди получают ответ быстро, даже когда серверы Dewiar заняты: каждая нода берёт часть вопросов на себя. Чем больше нод — тем устойчивее Лира.</p></div>
       <div><b>Вам</b><p>Талеры за принятые ответы — на ИИ-баланс: ими платятся модели Dewiar, задачи в облаке, голоса. Начисляются раз в сутки; в деньги не выводятся.</p></div>
-      <div><b>От компьютера</b><p>Видеокарта от 8 ГБ (или Mac на Apple M), своя модель от 7–8 млрд, например qwen3:8b, и ответ на обычный вопрос быстрее 6 секунд.</p></div>
+      <div><b>От компьютера</b><p>Видеокарта от 16 ГБ (или Mac на Apple M от 24 ГБ), своя модель от 14 млрд, например qwen3:14b, и ответ на обычный вопрос быстрее 6 секунд. На меньших картах модели не справляются — такую ноду сеть не примет.</p></div>
     </div>
     <div class="nd-grid" id="nd-joined" hidden>
       <div class="dwc">

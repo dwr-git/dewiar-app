@@ -153,7 +153,7 @@ try:
         b = pw.chromium.launch(); pg = b.new_page(viewport={"width": 1400, "height": 1000})
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.goto((ROOT / "ui/settings.html").as_uri() + f"?token={tok}&port={PORT}"); time.sleep(3)
-        ok("Урок дня" in pg.inner_text("#hm-today") and "Разговор и напоминания" in pg.inner_text("#hm-today"), "«Главная»: карточка «Урок дня»")
+        ok("урок дня" in pg.inner_text("#hm-today").lower() and "Разговор и напоминания" in pg.inner_text("#hm-today"), "«Главная»: карточка «Урок дня»")
         pg.click('nav button[data-p="course"]'); time.sleep(1.2)
         t = pg.inner_text("#p-course")
         ok("Разговор и напоминания" in t and "Сделано" in t and "Ждём" in t and pg.locator("#cs-days li").count() == 7, "студия: 7 дней, урок дня, шаги «Сделано» и «Ждём»")

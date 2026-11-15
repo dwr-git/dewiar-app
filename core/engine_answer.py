@@ -1377,9 +1377,23 @@ class AnswerMixin:
         свою модель часто выбирают ради приватности."""
         from cloud import PROFILE_ID, is_cloud
         from health import brain_kind, why_kind
-        if is_cloud(prof) or brain_kind(prof) not in ("local", "server") or why_kind(e) != "connect":
-            return None
         fb = (self.s.get("llm", "profiles") or {}).get(PROFILE_ID)
+        # 15.11 (владелец: «вставить ключ Gemini, потом Kimi или GLM… пусть Лира поработает на нём»): сервис по ключу не
+        # ответил — нет связи, кончились деньги, ключ отозван, сервис лёг — отвечает мозг Dewiar, и одной фразой — почему.
+        # Вопрос и так уходил в интернет чужому сервису; выключить — «Кто чем думает» → «Подстраховка» (llm.key_fallback)
+        why = why_kind(e)
+        if not is_cloud(prof) and fb and brain_kind(prof) == "cloud" and why in ("connect", "timeout", "key", "balance", "server", "busy") \
+                and self.s.get("llm", "key_fallback") is not False:
+            svc = str(prof.get("name") or prof.get("model") or "сервис").split(" — ")[0]
+            what = {"connect": "нет связи", "timeout": "не ответил вовремя", "key": "ключ не подошёл", "balance": "кончились деньги на ключе",
+                    "server": "сбой у сервиса", "busy": "сервис перегружен"}[why]
+            log.warning("Сервис по ключу «%s» не ответил (%s) — отвечает мозг Dewiar", svc, e)
+            self.note(f"«{svc}» не ответил ({what}) — ответила через Dewiar.")
+            threading.Timer(20, lambda: self.note("")).start()
+            mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(fb))
+            return dict(fb, tools_mode=mode) if mode in ("native", "prompt") else dict(fb)
+        if is_cloud(prof) or brain_kind(prof) not in ("local", "server") or why != "connect":
+            return None
         if self.s.get("llm", "own_fallback") and fb:
             log.warning("Своя модель не отвечает (%s) — отвечает мозг Dewiar", e)
             self.note("Своя модель не отвечает — ответила через Dewiar. Запустите LM Studio или Ollama, и я вернусь к ней.")

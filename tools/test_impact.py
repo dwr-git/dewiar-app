@@ -106,17 +106,55 @@ def load():
     return {t: {files[i] for i in ix} for t, ix in d["tests"].items()}
 
 
+def last_tag():
+    r = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "--match", "v*"], cwd=ROOT, capture_output=True, text=True)
+    return r.stdout.strip() or "HEAD~1"
+
+
 def changed(base):
     """Изменённые файлы: с base до HEAD, плюс незакоммиченное и новые файлы."""
     if not base:
-        r = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "--match", "v*"], cwd=ROOT, capture_output=True, text=True)
-        base = r.stdout.strip() or "HEAD~1"
+        base = last_tag()
     out = set()
     for cmd in (["git", "diff", "--name-only", base, "HEAD"], ["git", "diff", "--name-only", "HEAD"],
                 ["git", "ls-files", "--others", "--exclude-standard"]):
         r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
         out |= {x for x in r.stdout.splitlines() if x}
     return sorted(out)
+
+
+VERSION_FILES = ("core/version.py", "packaging/dewiar-setup", "packaging/DEBIAN/control", "android/src/pro/dewiar/app/BuildInfo.java")
+VERSION_LINE = re.compile(r'^(?:VERSION\s*=\s*"[\d.]+"|Version:\s*[\d.]+|public static final (?:String VERSION\s*=\s*"[\d.]+"|int CODE\s*=\s*\d+);)\s*$')
+
+
+def version_only(f, base):
+    """Выпуск поднял номер версии — и только: такие строки не задевают проверки (кроме тех, что про сам номер)."""
+    if f not in VERSION_FILES:
+        return False
+    d = subprocess.run(["git", "diff", "-U0", base, "--", f], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
+    body = [ln[1:].strip() for ln in d if ln[:1] in "+-" and not ln.startswith(("+++", "---"))]
+    return bool(body) and all(VERSION_LINE.match(b) for b in body if b)
+
+
+def registrations_only(f, base):
+    """Изменение прогона — только добавленные/убранные строки «run …» (так каждая новая проверка встаёт в прогон)?
+    -> имена файлов этих проверок или None (менялось что-то ещё — устройство прогона)."""
+    if not base:
+        r = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "--match", "v*"], cwd=ROOT, capture_output=True, text=True)
+        base = r.stdout.strip() or "HEAD~1"
+    d = subprocess.run(["git", "diff", "-U0", base, "--", f], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
+    out = set()
+    for ln in d:
+        if ln.startswith(("+++", "---", "@@", "diff ", "index ")) or not ln[:1] in "+-":
+            continue
+        body = ln[1:].strip()
+        if not body:
+            continue
+        m = re.match(r'^(?:[A-Z_]+=\S+\s+)*run\s+".*"\s+\$PY\s+"\$T/([\w.-]+)"\s*$', body)
+        if not m:
+            return None
+        out.add(m.group(1))
+    return out
 
 
 def hits(f, dep):
@@ -136,17 +174,32 @@ def pick(base=None, verbose=True):
     new = sorted(have - set(deps))
     ch = changed(base)
     why = []
+    added = set()
     for f in ch:
+        if f in ("tests/run_quick.sh", "tests/run_all.sh"):
+            reg = registrations_only(f, base)
+            if reg is not None:                        # только записи «run …» — новые проверки, устройство то же
+                added |= reg
+                why.append(f"{f}: только новые записи проверок ({len(reg)})")
+                continue
         if f.startswith(INFRA):
             return "ALL", [f"изменилось устройство прогона: {f}"]
     chosen = set(t for t in SMOKE if t in have)
     for t in new:                                   # новые проверки — в карте их ещё нет: гоняем их самих
         chosen.add(t)
+    chosen |= {t for t in added if t in have}
     unknown = []
     for f in ch:
+        if f in ("tests/run_quick.sh", "tests/run_all.sh"):
+            continue
         if f.startswith("tests/") and f.rsplit("/", 1)[-1] in have:
             chosen.add(f.rsplit("/", 1)[-1])
             why.append(f"{f}: сама проверка")
+            continue
+        if version_only(f, base or last_tag()):
+            vt = [t for t in have if "version" in t]
+            chosen.update(vt)
+            why.append(f"{f}: только номер версии — проверки номера ({len(vt)})")
             continue
         ts = [t for t, d in deps.items() if any(hits(f, x) for x in d)]
         if ts:

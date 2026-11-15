@@ -647,3 +647,146 @@ function featuresApply() {
   if (window.hmNav) hmNav();                                     // меню — ещё и по «Главной» (home.js): скрытое там скрыто и тут
   featuresRender();
 }
+
+/* ---------- «Кто чем думает» (15.11, владелец: «многие локальными пользоваться не могут… вставить ключ Gemini, потом Kimi
+   или GLM — несколькими кликами, чтобы каждый персонаж мог работать на своей модели… гибридные системы»; «важно подрубать
+   любых внешних вендоров, а в них любые модели»). «Главная» → вторая кнопка рядом с «Лира — для меня»: чем думает
+   говорящий сейчас персонаж. Окно: «Все» (общий мозг) и по строке на персонажа → выбор из подключённых или «＋ Подключить
+   по ключу»: плитки сервисов (connect.js CLOUD) и «Свой адрес» → ключ → весь список моделей сервиса с поиском (ckModels)
+   → кому. Профиль = сервис + модель: та же пара — тот же профиль. Персонажу — llm.persona[id] (как в его карточке),
+   всем — llm.active. Подстраховка — llm.key_fallback (ядро: engine_answer._own_fallback). Нового раздела нет: окно —
+   короткий путь к тому же, что в «Мозге» и в карточке персонажа. ---------- */
+const BR = { view: "list", who: "", prov: "", prof: null, models: [], rec: [], q: "", busy: false };
+const BR_SVC = [["gemini", "Gemini", "Google"], ["kimi", "Kimi", "Moonshot"], ["glm", "GLM", "Zhipu · z.ai"], ["deepseek", "DeepSeek", ""],
+  ["qwen", "Qwen", "Alibaba"], ["openai", "OpenAI", "GPT"], ["anthropic", "Claude", "Anthropic"], ["openrouter", "OpenRouter", "сотни моделей"],
+  ["mistral", "Mistral", ""], ["xai", "Grok", "xAI"], ["vsegpt", "VseGPT", "карта РФ"], ["proxyapi", "ProxyAPI", "карта РФ"], ["custom", "Свой адрес", "любой «как OpenAI»"]];
+const brProfs = () => (S && S.llm && S.llm.profiles) || {};
+const brShort = (prof, id) => { const n = brainName(prof, id) || ""; return n.replace(/^DWR Chat\s*/i, "").replace(/^Dewiar Облако$/i, "Dewiar"); };
+function brOf(pid) { return pid ? brainOf(pid) : ((S.llm || {}).active || ""); }      // "" у персонажа — «как у всех»
+function brChip() {
+  const b = $("#hm-brain"); if (!b || !S || !S.llm) return;
+  const id = brOf(active) || S.llm.active, prof = brProfs()[id];
+  $("span", b).textContent = prof ? brShort(prof, id) : "Подключить мозг";
+}
+function brSay(t, bad) { const el = $("#br-st"); el.hidden = !t; el.textContent = t || ""; el.classList.toggle("bad", !!bad); }
+function brAva(p) {
+  if (!p) return `<span class="br-ava br-all" aria-hidden="true">✦</span>`;
+  return p.avatar_url ? `<span class="br-ava" style="--c:${escH(p.color || "#7a7ff0")}"><img src="${escH(p.avatar_url)}" alt=""></span>`
+    : `<span class="br-ava" style="--c:${escH(p.color || "#7a7ff0")}">${escH((p.name || "?").slice(0, 1))}</span>`;
+}
+function brRender() {
+  const body = $("#br-body"); if (!body || !S) return;
+  const profs = brProfs(), all = S.llm.active || "";
+  $("#br-fb").checked = S.llm.key_fallback !== false;
+  if (BR.view === "list") {
+    $("#br-sub").textContent = "У каждого персонажа может быть своя модель";
+    const row = (pid, p) => { const own = brOf(pid), shown = own || all;
+      return `<button type="button" class="br-row" data-who="${escH(pid)}">${brAva(p)}<span class="br-n"><b>${escH(p ? p.name : "Все")}</b>`
+        + `<small>${p ? (p.id === active ? "говорит сейчас" : escH(p.tagline || p.role || "")) : "общий мозг — у кого нет своего"}</small></span>`
+        + `<span class="br-m${own || !p ? "" : " dim"}">${escH(own || !p ? brShort(profs[shown], shown) || "не выбран" : "как у всех")}</span><i class="br-go" aria-hidden="true"></i></button>`; };
+    body.innerHTML = `<div class="br-list">${row("", null)}${personas.map(p => row(p.id, p)).join("")}</div>`
+      + `<button type="button" class="br-add" data-add="1"><span>＋</span><b>Подключить модель по ключу</b><small>Gemini, Kimi, GLM, DeepSeek, Claude, GPT и любой сервис «как OpenAI»</small></button>`;
+    $$("#br-body .br-row").forEach(b => b.onclick = () => { BR.who = b.dataset.who; BR.view = "pick"; brRender(); });
+    $("#br-body [data-add]").onclick = () => { BR.who = ""; BR.view = "svc"; brRender(); };
+    return;
+  }
+  const p = personas.find(x => x.id === BR.who), whoName = p ? p.name : "общий мозг";
+  const back = `<button type="button" class="br-back" id="br-back">← Назад</button>`;
+  if (BR.view === "pick") {
+    $("#br-sub").textContent = p ? `Чем думает ${p.name}` : "Общий мозг — у кого нет своего";
+    const cur = brOf(BR.who);
+    const opts = (p ? [["", `Как у всех — ${brShort(profs[all], all) || "общий мозг"}`]] : []).concat(Object.keys(profs).map(id => [id, brShort(profs[id], id)]));
+    body.innerHTML = back + `<div class="br-list">${opts.map(([id, n]) => `<button type="button" class="br-opt" role="radio" aria-checked="${id === cur}" data-id="${escH(id)}">`
+      + `<i aria-hidden="true"></i><b>${escH(n)}</b><small>${id ? escH(profs[id].cloud ? "облако Dewiar" : brKind(profs[id])) : ""}</small></button>`).join("")}</div>`
+      + `<button type="button" class="br-add" data-add="1"><span>＋</span><b>Подключить модель по ключу</b><small>новый сервис или другая модель того же</small></button>`;
+    $("#br-back").onclick = () => { BR.view = "list"; brRender(); };
+    $$("#br-body .br-opt").forEach(b => b.onclick = () => brAssign(b.dataset.id));
+    $("#br-body [data-add]").onclick = () => { BR.view = "svc"; brRender(); };
+    return;
+  }
+  if (BR.view === "svc") {
+    $("#br-sub").textContent = `Подключить по ключу · ${whoName}`;
+    body.innerHTML = back + `<div class="br-tiles">${BR_SVC.map(([k, n, s]) => `<button type="button" class="br-tile${BR.prov === k ? " on" : ""}" data-p="${k}"><b>${escH(n)}</b><small>${escH(s)}</small></button>`).join("")}</div>`
+      + (BR.prov ? `<div class="br-key"><p class="hint">${CLOUD[BR.prov].hint}${BR.prov === "gemini" ? " Из России сервис Google без VPN обычно не отвечает." : ""}</p>`
+        + (BR.prov === "custom" ? `<label class="br-f"><span>Адрес сервиса</span><input id="br-url" placeholder="https://api.example.com/v1" spellcheck="false" autocomplete="off"></label>` : "")
+        + `<label class="br-f"><span>Ключ API</span><input id="br-k" type="password" placeholder="вставьте ключ" spellcheck="false" autocomplete="off"></label>`
+        + `<div class="br-acts"><button type="button" class="btn primary" id="br-go">Подключить</button></div></div>` : "");
+    $("#br-back").onclick = () => { BR.view = BR.who ? "pick" : "list"; BR.prov = ""; brRender(); };
+    $$("#br-body .br-tile").forEach(b => b.onclick = () => { BR.prov = b.dataset.p; brRender(); const f = $("#br-url") || $("#br-k"); if (f) f.focus(); });
+    if ($("#br-go")) { $("#br-go").onclick = brConnect; $("#br-k").onkeydown = (e) => { if (e.key === "Enter") brConnect(); }; }
+    return;
+  }
+  if (BR.view === "models") {
+    $("#br-sub").textContent = `${BR.prof.name} — выберите модель · ${whoName}`;
+    const q = BR.q.trim().toLowerCase(), list = BR.models.filter(m => !q || m.toLowerCase().includes(q));
+    body.innerHTML = back + `<label class="br-f br-q"><span>Найти модель · всего ${BR.models.length}</span><input id="br-q" value="${escH(BR.q)}" placeholder="например, flash или k2" spellcheck="false" autocomplete="off"></label>`
+      + `<div class="br-list br-ms">${list.slice(0, 80).map(m => `<button type="button" class="br-opt" data-m="${escH(m)}"><i aria-hidden="true"></i><b>${escH(m)}</b><small>${BR.rec.includes(m) ? "рекомендую" : ""}</small></button>`).join("")
+      || `<p class="hint">Такой модели у сервиса нет.</p>`}${list.length > 80 ? `<p class="hint">и ещё ${list.length - 80} — уточните поиск</p>` : ""}</div>`;
+    $("#br-back").onclick = () => { BR.view = "svc"; brRender(); };
+    const qi = $("#br-q"); qi.oninput = () => { BR.q = qi.value; const pos = qi.selectionStart; brRender(); const n = $("#br-q"); n.focus(); n.setSelectionRange(pos, pos); };
+    $$("#br-body [data-m]").forEach(b => b.onclick = () => brUseModel(b.dataset.m));
+  }
+}
+function brKind(prof) {
+  const h = String(prof.base_url || "").toLowerCase().replace(/^\w+:\/\//, "").split("/")[0].split(":")[0];
+  return /^(localhost|127\.|::1|0\.0\.0\.0)/.test(h) ? "на этом компьютере" : (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h) || h.endsWith(".local") || !h.includes(".")) ? "свой сервер" : "по ключу · " + h.replace(/^api\./, "");
+}
+async function brAssign(id) {
+  if (BR.busy) return; BR.busy = true;
+  const pid = BR.who, p = personas.find(x => x.id === pid), prof = brProfs()[id];
+  const patch = pid ? { llm: { persona: { [pid]: id }, persona_model: { [pid]: "" } } } : { llm: { active: id } };
+  try {
+    S = await core.call("settings_save", { patch }); try { refreshStatic(); } catch (e) { }
+    brChip(); BR.view = "list"; brRender();
+    brSay(pid ? (id ? `${p.name} думает моделью «${brShort(prof, id)}»` : `${p.name} думает общим мозгом`) : `Все думают моделью «${brShort(prof, id)}»`);
+    if (typeof renderPersonas === "function") renderPersonas();
+  } catch (e) { brSay("Не сохранилось: " + e.message, true); }
+  BR.busy = false;
+}
+async function brConnect() {
+  const key = ($("#br-k").value || "").trim(), raw = $("#br-url") ? $("#br-url").value : "", btn = $("#br-go");
+  if (BR.prov === "custom" && !ckUrl(raw)) { brSay("Впишите адрес сервиса", true); return; }
+  if (!key) { brSay("Вставьте ключ API", true); return; }
+  const prof = Object.assign({ api_key: key, model: "" }, ckPreset(BR.prov, raw)); delete prof.models; delete prof.preset;
+  if (!prof.base_url) { brSay("Студия ещё не на связи с ядром — подождите секунду", true); return; }
+  btn.disabled = true; brSay("Проверяю ключ…");
+  try {
+    const { ordered, rec } = await ckModels(BR.prov, prof);
+    BR.prof = prof; BR.models = ordered; BR.rec = rec; BR.q = ""; BR.view = "models"; brSay(""); brRender();
+  } catch (e) { brSay("Не получилось: " + e.message, true); btn.disabled = false; }
+}
+async function brUseModel(m) {
+  if (BR.busy) return;
+  const base = BR.prof, profs = brProfs();
+  // та же пара «сервис + ключ + модель» — тот же профиль; иначе — новый «Сервис — модель». Сначала живой вопрос, и только
+  // ответила — в настройки: модель, что не отвечает, не оставляет за собой профиль
+  let id = Object.keys(profs).find(k => profs[k].base_url === base.base_url && profs[k].api_key === base.api_key && profs[k].model === m);
+  const cand = id ? profs[id] : Object.assign({}, base, { model: m, name: `${base.name} — ${m}` });
+  BR.busy = true; brSay(`Проверяю «${m}»…`);
+  let r = null; try { r = await core.call("llm_test", { profile: cand }); } catch (e) { r = { ok: false, error: e.message }; }
+  if (!r || !r.ok) { BR.busy = false; brSay(`Модель «${m}» не ответила: ${(r && r.error) || "неизвестная ошибка"}. Выберите другую.`, true); return; }
+  if (!id) {
+    id = uid(); profs[id] = cand;
+    try { S = await core.call("settings_save", { patch: { llm: { profiles: profs } } }); } catch (e) { BR.busy = false; brSay("Не сохранилось: " + e.message, true); return; }
+  }
+  BR.busy = false;
+  await brAssign(id);
+  brSay($("#br-st").textContent + ` — ответила за ${(r.total_ms / 1000).toFixed(1).replace(".", ",")} с`);
+  try { renderProfiles(); } catch (e) { }
+}
+function brOpen() {
+  const d = $("#br-dlg"); if (!d || !S) return;
+  BR.view = "list"; BR.prov = ""; BR.q = ""; brSay(""); brRender();
+  if (!d.open) d.showModal();
+}
+if ($("#br-dlg")) {
+  $("#hm-brain").onclick = brOpen;
+  $("#br-x").onclick = () => $("#br-dlg").close();
+  $("#br-dlg").addEventListener("click", (e) => { if (e.target === $("#br-dlg")) $("#br-dlg").close(); });
+  $("#br-fb").onchange = async (e) => {
+    try { S = await core.call("settings_save", { patch: { llm: { key_fallback: e.target.checked } } }); brSay(e.target.checked ? "Подстраховка включена" : "Подстраховка выключена — если сервис не ответит, Лира так и скажет"); }
+    catch (x) { e.target.checked = !e.target.checked; brSay(x.message, true); }
+  };
+  core.on("hello", () => setTimeout(brChip, 0)).on("settings", () => setTimeout(() => { brChip(); if ($("#br-dlg").open && BR.view === "list") brRender(); }, 0))
+    .on("personas", () => setTimeout(brChip, 0)).on("persona", () => setTimeout(brChip, 0));
+}
