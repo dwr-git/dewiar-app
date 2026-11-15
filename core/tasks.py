@@ -2653,7 +2653,11 @@ class TaskManager:
                 return note
             summary = self._russian((args.get("summary") or "").strip()) or "Готово."
             if t.data.get("unfinished"):                 # №368: честное «не выполнено» — остановка, а не успех
-                summary = f"**Не выполнено:** {t.data['unfinished']}.\n\nЧто успела:\n\n{summary}"
+                # экзамен 0.99 (15.11): «Не выполнено: проверка не согласилась…» — и ниже «**Готово — поездка спланирована**»,
+                # «0 ошибок»: человек читал два противоречащих итога. Заголовок «Готово» из рассказа задачи убираем
+                summary = re.sub(r"\A\s*(?:#+\s*)?\**\s*готово\b[^\n]*\n+", "", summary, flags=re.I) or summary
+                summary = (f"**Не выполнено:** {t.data['unfinished']}.\n\nЧто успела (так считает сама задача — проверка с "
+                           f"итогом не согласилась, перепроверьте):\n\n{summary}")
             _wr(t.dir / "итог.md", f"# Итог: {t.title}\n\n{summary}\n")
             t.data.update(result=summary, finished=True)
             return "Задача завершена." if not t.data.get("unfinished") else "Задача остановлена: не выполнено."

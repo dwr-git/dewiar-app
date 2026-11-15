@@ -37,6 +37,43 @@ def month_years(text, now):
             ". Этот год пиши и в запросах поиска, и в ответе.")
 
 
+def month_year_wrong(ask, answer, now=None):
+    """Спросили месяц без года (ноябрь 2026, «с 1 по 14 января»), а в ответе этот месяц с прошедшим годом («январь 2026»)
+    -> подсказка переделать или "" (экзамен 0.99, 15.11: подсказка «январь — 2027» была, а после долгого поиска ответ —
+    «на январь 2026 года»)."""
+    now = now or datetime.now()
+    t = ask or ""
+    if not answer or re.search(r"(?<!\d)(?:19|20)\d\d(?!\d)", t):
+        return ""
+    for m, rx in _MONTH_RX:
+        if not rx.search(t):
+            continue
+        y = now.year + 1 if m < now.month else now.year
+        for mm in re.finditer(r"(" + rx.pattern + r")[а-яё]*\s+((?:19|20)\d\d)", answer, re.I):
+            if int(mm.group(2)) < y:
+                return (f"ПРОВЕРКА: «{mm.group(0)}» — этот месяц уже прошёл. Спрашивали про ближайший: {_MONTH_NOM[m - 1]} {y} года. "
+                        f"Ответь ещё раз про {_MONTH_NOM[m - 1]} {y}, тем же содержанием, с верным годом.")
+    return ""
+
+
+POEM_READ_RX = re.compile(r"(?:прочитай|прочти|продекламируй|расскажи|найди|зачитай|процитируй)\s+(?:мне\s+|нам\s+)?(?:\w+\s+){0,3}?"
+                          r"(?:стих|басн|поэм)|(?:стих|басн|поэм)\w*\s.{0,120}?(?:прочитай|прочти|продекламируй|зачитай|процитируй)", re.I)
+
+
+def poem_unsourced(ask, answer, called=()):
+    """«Прочитай стихотворение Некрасова „Однажды в студёную…“ целиком» — точный текст только из найденного (экзамен 0.99,
+    15.11: модель «прочитала» по памяти, наполовину сочинив). Не искала и не читала страницу, а в ответе стихи -> подсказка."""
+    if not answer or not POEM_READ_RX.search(ask or "") or re.search(r"напиши|сочин|придумай", ask or "", re.I):
+        return ""
+    if set(called or ()) & {"web_search", "read_webpage", "search_documents", "find_notes"}:
+        return ""
+    if len([ln for ln in answer.splitlines() if ln.strip()]) < 4:
+        return ""
+    return ("ПРОВЕРКА: точный текст стихотворения по памяти не пересказывай — он выходит с ошибками и выдуманными строками. "
+            "Найди его: web_search (название и автор + «текст»), затем read_webpage найденной страницы, и прочитай текст оттуда "
+            "слово в слово. Не нашлось — честно скажи, что текста под рукой нет.")
+
+
 # №390: вопрос про фоновые задачи («задача работает?», «почему не запущена», «что с заданием») — к нему их настоящее состояние
 TASK_ASK_RX = re.compile(r"задач|задани|фонов|застрял|выполня(?:ется|ешь|ет)|запущ|работает ли|что с (?:ней|ним)", re.I)
 def _no_money(e):
@@ -2682,7 +2719,9 @@ class AnswerMixin:
                         or agenda_missed(text, step_text, getattr(turn, "agenda", "")) \
                         or weather_invented(text, step_text, called) \
                         or poem_check(ask0, step_text) \
-                        or songs_count(ask0, step_text)
+                        or songs_count(ask0, step_text) \
+                        or month_year_wrong(ask0, step_text) \
+                        or (poem_unsourced(ask0, step_text, called) if "web_search" in names_ else "")
                     if fix:                                  # экзамен ПК 0.81.1: сказала, но не сделала; числа без инструмента
                         deed_checked = True
                         log.info("✋ %s — прошу переделать", fix.split(" — ")[0].split(":", 1)[-1].strip()[:90])

@@ -5,6 +5,7 @@
 быстрые ответы без модели (_capture, _say_quick, _money_cmd); сводка месяца для календаря (calendar_month).
 Связи: разбор времени — when.py, расписание дел — jobs.py, деньги — money.py, синхронизация — sync.py и cloud.php."""
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
+import modules
 
 
 # просьба записать: «запиши», «сохрани», «в заметки», «запомни списком», «зафиксируй», «в файл»
@@ -101,6 +102,10 @@ class ToolsMixin:
         title = self.toolbox.title(name)
         log.info("🛠  %s %s", name, redact(json.dumps(args, ensure_ascii=False))[:200])
         if not on:
+            m = modules.of(name)
+            if m is not None and self.toolbox.fuse.tripped(m["id"]):    # предохранитель (1.0): не «выключен пользователем»
+                return (f"«{m['title']}» сейчас на паузе после сбоя и вернётся сама через несколько минут — скажи это человеку "
+                        "одной фразой; остальное работает.")
             return f"Инструмент {name} выключен пользователем."
         from tools import TOOLS as _BUILTIN
         if name in _BUILTIN and hasattr(self, "health_use"):   # «чем пользуются» (13.11): какие встроенные умения зовёт модель —
@@ -134,6 +139,14 @@ class ToolsMixin:
                     "говори, просто ответь на вопрос прямо в чате (список — пунктами в самом ответе).")
         if name == "set_reminder" and asked and isinstance(args, dict):
             args = self._reminder_time_guard(asked, args)
+        if name in ("run_command", "server_run") and not str((args or {}).get("command") or "").strip():
+            # экзамен 0.99 (15.11): run_command {} — пустой вызов, а человеку «Выполнить?» с пустой командой и «жду вашего
+            # да»; «сколько места на диске» так и не узнали. Пустой вызов — не вопрос человеку, а подсказка модели
+            log.info("🛠 %s без команды — не спрашиваю «Выполнить?»", name)
+            _temit(name=name, title=title, status="error", error="без команды")
+            return ("Команда пустая — ничего не выполнено, человека не спрашивай. Место на диске, память, нагрузка — "
+                    "system_status (сразу, без вопроса). Разобрать папки и предложить структуру — start_task. Иначе вызови "
+                    "run_command снова, с самой командой в поле command.")
         blocked, force, warn_q = self.toolbox.guard(name, args)
         if blocked:
             log.warning("🛡 Защита: %s %s — %s", name, json.dumps(args, ensure_ascii=False)[:200], blocked)
@@ -1979,10 +1992,13 @@ class ToolsMixin:
         встречи календаря на эти дни сразу в подсказку модели. Раньше модель отвечала «достаю календарь — одну секунду»
         и не вызывала инструменты (отчёт 14.10): данные уже перед ней — отвечать есть чем. -> текст для системной подсказки или ""."""
         t = (text or "").split("\n\nВложения:")[0]
-        if not self.AGENDA_Q.search(t):
+        if not self.AGENDA_Q.search(t) or "[Утро с Лирой]" in t:
+            # утренняя сводка несёт свои данные «Утра» (экзамен 0.99, 15.11: справка о планах взяла «завтра» из наших же
+            # слов «ни в планах на завтра» и показала только завтрашний пустой день — сводка сказала «дел нет», а в 23:58 «мама»)
             return ""
         today = datetime.now().date()
-        low = t.lower()
+        # дни — по словам человека, а не по нашим же пояснениям к поручению (там «в планах на завтра», «на следующую неделю»)
+        low = re.split(r"\n\n(?:Повторяющиеся кажд(?:ый|ую)|ПРОВЕРКА:)", t)[0].lower()
         if "послезавтра" in low:
             days = [today + timedelta(days=2)]
         elif "завтра" in low:

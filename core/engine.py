@@ -150,6 +150,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.mcp = MCPManager(settings, on_change=lambda: self.emit("mcp", status=self.mcp.status()))
         self.plugins.tool_texts = self.mcp.plugin_tool_texts       # №507: слова плагина без words — и из его действий
         self.toolbox = Toolbox(settings, self.reminders, self.skills, self.mcp)
+        # предохранитель модулей (1.0): сработал — счётчик «чем пользуются»; имена серверов плагинов — людей, их не считаем
+        self.toolbox.fuse.on_trip = lambda k: hasattr(self, "health_use") and self.health_use("fuse:" + ("plugin" if k.startswith("mcp:") else k))
         from kids import Kids
         self.kids = Kids(settings, STATE_DIR / "kids.json")          # детский режим: время, отчёт, PIN родителя
         self.toolbox.hooks["kids"] = self.kids

@@ -962,8 +962,6 @@ async def seed(core, sd):
         r = await core.call("reminder_add", phrase=ph)
         if isinstance(r, dict) and r.get("id"):
             made["reminders"].append(r["id"])
-    if (sd or {}).get("history"):                     # разговор до сценария (№625–628: перебитый вопрос «Выполнить?»)
-        await core.call("exam_history", items=sd["history"])
     for tk in (sd or {}).get("tasks") or []:         # фоновая задача (не запущена) — «удали задачу …» (24.10)
         r = await core.call("task_create", title=tk["title"], goal=tk.get("goal") or tk["title"], start=False)
         if isinstance(r, dict) and r.get("id"):
@@ -1040,6 +1038,20 @@ async def reset_state(core):
         (core.tmp / "st" / "reminders-log.json").unlink()
     except OSError:
         pass
+    # и отметки «сделано» (экзамен 0.99, 15.11: «я позвонил в банк» — «сегодня уже 3 дела, „Тройка“» за первое дело,
+    # «у тебя 7 дел за день», «хлеб куплен, ремонт ванной» в «что по плану» — всё из прошлых испытаний)
+    for _ in range(4):
+        try:
+            items = (await core.call("done") or {}).get("items") or []
+        except Exception:  # noqa: BLE001
+            break
+        if not items:
+            break
+        for x in items:
+            try:
+                await core.call("done_undo", id=x.get("id"))
+            except Exception:  # noqa: BLE001
+                pass
     try:                                           # «Собери совет» прошлого испытания не должен договаривать итог в этом
         await core.call("council_stop")
     except Exception:  # noqa: BLE001
@@ -1117,6 +1129,10 @@ async def run_scenario(core, sc, judge_prof, work, log):
 async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
     try:
         await core.say("Начнём новый разговор", timeout=30)
+        if (sc.get("seed") or {}).get("history"):
+            # разговор до сценария (№625–628: перебитый вопрос «Выполнить?») — ПОСЛЕ «нового разговора»: раньше он
+            # ставился до него и тут же стирался — модель не знала, на что «Да.» (экзамен 0.99, 15.11)
+            await core.call("exam_history", items=sc["seed"]["history"])
         if sc.get("big"):
             state_text = await run_big(core, sc, res, t0, work, log)
         elif sc.get("code"):
@@ -1180,8 +1196,11 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                                       "detail": ", ".join(got) or "источников нет"})
             for name in sc.get("tool") or {}:              # действие правда выполнено (как на телефоне): show_images, mark_done…
                 used = [x["name"] for s in res["steps"] for x in s.get("tools") or []]
-                res["checks"].append({"name": f"действие {name} выполнено", "ok": any(x["name"] == name and x["ok"] for s in res["steps"]
-                                                                                   for x in s.get("tools") or []), "detail": ", ".join(used)})
+                # {"tried": true} — довольно попытки: инструмент сам честно ответил «сайта нет» (site_article без сайта, 15.11)
+                tried = isinstance(sc["tool"][name], dict) and sc["tool"][name].get("tried")
+                res["checks"].append({"name": f"действие {name} " + ("вызвано" if tried else "выполнено"),
+                                      "ok": any(x["name"] == name and (x["ok"] or tried) for s in res["steps"] for x in s.get("tools") or []),
+                                      "detail": ", ".join(used)})
             # «как в жизни» (18.10: на съёмке «позвони», «включи видео» срабатывали раз, а потом — одни слова; «Я Лира.»
             # повторялось слово в слово): действие — на каждую просьбу, а не только на первую; ответы — не копия прошлых
             real = [s_ for s_ in res["steps"] if s_["say"] != "[новый разговор]"]

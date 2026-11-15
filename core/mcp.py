@@ -395,6 +395,11 @@ class MCPManager:
     def has(self, name):
         return name in self._index()
 
+    def server_of(self, name):
+        """Имя сервера инструмента — ключ предохранителя (core/modules.py): чужой сломанный сервер — на паузу отдельно."""
+        it = self._index().get(name)
+        return it[0].name if it else ""
+
     def needs_confirm(self, name):
         """Спрашивать ли «Выполнить?»: нет — серверу доверяют (trust) или инструмент сам объявил, что только читает."""
         s, t = self._index()[name]

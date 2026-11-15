@@ -24,6 +24,7 @@ from pathlib import Path
 
 import httpx
 
+import modules
 from settings import MAC, STATE_DIR, WIN
 
 if WIN:
@@ -4422,6 +4423,19 @@ class Toolbox:
         self.hooks = {}          # объекты и действия ядра (почта, задачи, Telegram, позвать персонажа…) — кладёт engine.py,
                                  # уходят в ctx обработчиков; по ним же policy решает, подключена ли служба
 
+    @property
+    def fuse(self):
+        """Предохранитель модулей и серверов плагинов (core/modules.py) — свой у каждого Toolbox, создаётся при первом обращении."""
+        f = self.__dict__.get("_fuse")
+        if f is None:
+            f = self.__dict__["_fuse"] = modules.Fuse()
+        return f
+
+    def module_ok(self, m, name):
+        """Модуль можно звать: включён в «Возможностях», подключён и не на паузе предохранителя."""
+        return (modules.feature_on(m, self.s) and modules.ready(m, name, self.hooks, self.s)
+                and not self.fuse.tripped(m["id"]))
+
     def policy(self, name):
         """-> (включён, нужно подтверждение). Инструменты неподключённых служб выключены — модель о них и не узнает."""
         kids = self.hooks.get("kids")
@@ -4430,60 +4444,20 @@ class Toolbox:
         if name in SKILL_TOOLS:
             return bool(self.skills and self.skills.enabled()), False
         if self.mcp and self.mcp.has(name):
+            if self.fuse.tripped("mcp:" + self.mcp.server_of(name)):
+                return False, False             # сервер плагина на паузе предохранителя
             conf = (self.s.get("tools", "confirm") or {}).get(name)
             return True, self.mcp.needs_confirm(name) if conf is None else bool(conf)
         if name not in TOOLS:
             return False, False
-        if name in ("send_email", "read_emails", "read_email", "manage_email", "mail_table", "mailing", "mailing_status"):     # только когда почта подключена
-            m = self.hooks.get("mail")
-            if not (m and m.configured()):
-                return False, False
+        m = modules.of(name)                    # одна дверь (1.0): модуль выключен в «Возможностях», не подключён или на
+        if m is not None and not self.module_ok(m, name):   # паузе предохранителя — модель о нём и не узнает
+            return False, False
         # сервер без экрана и звука: «открыла сайт» было бы неправдой. Экзамен (EXAM_LAUNCH) — тоже ядро --server, но запуск
         # программ и браузера там записывается (launch), а «Совет ИИ» идёт без окна: выключать нечего (экзамен ПК 0.81.1:
         # open_url, show_page и council не было — «открой сайт», «покажи в браузере», «собери совет» проваливались)
         if name in SERVER_OFF and self.hooks.get("server") and not (EXAM_LAUNCH and name in EXAM_ON):
             return False, False
-        if name == "smart_home":                # только когда подключён умный дом (Яндекс или Home Assistant)
-            h = self.hooks.get("home")
-            if not (h and h.connected()):
-                return False, False
-        if name == "send_telegram":             # только когда бот подключён к владельцу
-            tg = self.hooks.get("telegram")
-            if not (tg and tg.paired()):
-                return False, False
-        if name == "channel_post":               # посты — когда бот персонажа подключён и состоит в канале или группе
-            P = self.hooks.get("pbot_posts")
-            if not (P is not None and P.bot.connected() and any(c["can"] for c in P.chats())):
-                return False, False
-        if name.startswith("client_") or name == "deal_remind":   # «Клиенты»: включены в «Возможностях»
-            if not (self.hooks.get("clients") is not None and (self.s.get("features") or {}).get("clients")):
-                return False, False
-            if name == "client_crm" and not (self.hooks.get("crm") and self.hooks["crm"].connected()):   # и CRM подключена
-                return False, False
-        if name in ("plugin_create", "plugin_change"):   # Лира делает плагин (03.11): ядро с plugin_maker
-            if self.hooks.get("maker") is None:
-                return False, False
-            if name == "plugin_change" and not any(p.get("made") for p in self.hooks["maker"].P.items.values()):
-                return False, False
-        if name.startswith("site_"):               # «Сайты» (03.11): есть, пока не выключены в «Возможностях»
-            if self.hooks.get("sites") is None or (self.s.get("features") or {}).get("sites") is False:
-                return False, False
-        if name in ("team_assign", "team_status", "team_message"):   # «Поручения»: раздел включён и бот компании подключён
-            tm = self.hooks.get("team")
-            if not (tm and tm.connected() and (self.s.get("features") or {}).get("team")):
-                return False, False
-        if name == "server_run":                # только когда добавлен хотя бы один сервер
-            sv = self.hooks.get("servers")
-            if not (sv and sv.items):
-                return False, False
-        if name == "search_documents":          # только когда в «Знаниях» есть документы
-            kn = self.hooks.get("knowledge")
-            if not (kn and kn.has_files()):
-                return False, False
-        if name == "ask_knowledge":             # только после входа в аккаунт сайта
-            acc = self.hooks.get("account")
-            if not (acc and acc.logged_in()):
-                return False, False
         if name in NET_TOOLS and (self.s.get("privacy") or {}).get("local_only"):
             return False, False                 # стоп-кран «Ничего не уходит в интернет»: этим нужен интернет (off_note скажет модели)
         if name == "run_command" and (self.s.get("privacy") or {}).get("files") == "folder":
@@ -4520,6 +4494,12 @@ class Toolbox:
         if pv.get("files") == "folder":
             out += ("\n\nВ «Безопасности» стоит замок «Файлы: только папка Dewiar»: команды терминала выключены, удалять и отправлять "
                     "можно только файлы из папки ассистента. Просят другое — скажи об этом одной фразой и где снять замок.")
+        paused = self.fuse.paused()
+        if paused:
+            names = ", ".join(modules.title_of(k) for k in paused)
+            out += (f"\n\nСейчас на паузе после сбоев (предохранитель, вернётся сам через несколько минут): {names}. Просят это — "
+                    "скажи одной фразой, что эта часть временно отдыхает после ошибки и вернётся сама; остальное работает. "
+                    "Если повторится — пусть нажмут жучка.")
         if pv.get("local_only"):
             out += ("\n\nВключён стоп-кран «Ничего не уходит в интернет» (студия → «Безопасность»): поиск, погода, сайты, почта, "
                     "Telegram, «Близкие» и облако сейчас недоступны — соединение наружу не откроется. Просят такое — не пробуй, "
@@ -4538,19 +4518,9 @@ class Toolbox:
     def _needs(self, name):
         """Чего не хватает инструменту (№264, 25.10: «включаю — пишет „Сохранено“, а переключатель не включается»: почта,
         Telegram, «Знания», аккаунт не подключены). -> (что сделать, раздел студии) или None."""
-        h = self.hooks
-        if name in ("send_email", "read_emails", "read_email", "manage_email", "mail_table", "mailing", "mailing_status") and not (h.get("mail") and h["mail"].configured()):
-            return "Сначала подключите почту — «Подключение» → «Почта»", "connect"
-        if name == "send_telegram" and not (h.get("telegram") and h["telegram"].paired()):
-            return "Сначала подключите Telegram или MAX — «Подключение»", "connect"
-        if name == "smart_home" and not (h.get("home") and h["home"].connected()):
-            return "Сначала подключите умный дом (Яндекс или Home Assistant) — «Подключение»", "connect"
-        if name == "server_run" and not (h.get("servers") and h["servers"].items):
-            return "Сначала добавьте сервер — «Серверы»", "servers"
-        if name == "search_documents" and not (h.get("knowledge") and h["knowledge"].has_files()):
-            return "Сначала добавьте документы в «Знания» — «Обо мне» → «Мои документы»", "me"
-        if name == "ask_knowledge" and not (h.get("account") and h["account"].logged_in()):
-            return "Нужен вход аккаунтом dewiar.pro — «Dewiar.pro»", "dw"
+        m = modules.of(name)
+        if m is not None and m.get("need") and not modules.ready(m, name, self.hooks, self.s):
+            return m["need"]
         if name in NET_TOOLS and (self.s.get("privacy") or {}).get("local_only"):
             return "Включён стоп-кран «Ничего не уходит в интернет» — «Безопасность»", "safety"
         if name == "run_command" and (self.s.get("privacy") or {}).get("files") == "folder":
@@ -4770,10 +4740,26 @@ class Toolbox:
         if name == "read_skill_file":
             return self.skills.read_file(str(args.get("name", "")), str(args.get("path", "")))
         if self.mcp and self.mcp.has(name):
-            return self.mcp.call(name, args or {})
+            return self._fused("mcp:" + self.mcp.server_of(name), lambda: self.mcp.call(name, args or {}))
         # _truncated — служебная пометка llm.py об оборванном ответе, обработчикам не нужна
         args = {k: v for k, v in coerce_args(TOOLS[name][1], args).items() if not k.startswith("_trunc")}
-        return TOOLS[name][3](args or {}, {"settings": self.s, "reminders": self.reminders, "skills": self.skills, **self.hooks})
+        call = lambda: TOOLS[name][3](args or {}, {"settings": self.s, "reminders": self.reminders, "skills": self.skills, **self.hooks})  # noqa: E731
+        m = modules.of(name)
+        return call() if m is None else self._fused(m["id"], call)
+
+    def _fused(self, key, call):
+        """Вызов модуля под предохранителем: ToolError — честный ответ, не сбой; любое другое исключение — сбой модуля."""
+        try:
+            out = call()
+        except ToolError:
+            self.fuse.ok(key)
+            raise
+        except Exception:
+            if self.fuse.fail(key):
+                log.warning("🔌 предохранитель: %s — пауза %d мин после %d сбоев", key, modules.FUSE_PAUSE // 60, modules.FUSE_FAILS)
+            raise
+        self.fuse.ok(key)
+        return out
 
 
 def coerce_args(schema, args):

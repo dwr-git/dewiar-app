@@ -226,6 +226,7 @@ def main():
         b.close()
     phone(tmp)
     styles(tmp)
+    styles(tmp, "en")
     if SITE.is_dir():                                   # в открытой копии сайта нет — только картинки README
         site_faces(tmp)
         Image.open(OUT / "banner.webp").convert("RGB").save(SITE / "dewiar_banner.jpg", "JPEG", quality=86, optimize=True)   # превью ссылки
@@ -295,20 +296,28 @@ def phone(tmp):
         b.close()
 
 
-def styles(tmp):
+STYLE_TEXT = {"ru": {"names": ["Глассморфизм", "Неоморфизм", "Фирменная", "Вижн", "Белоснежная"], "lira": "Лира",
+                     "q": "Что у меня в среду?", "a": "В 15:00 — встреча с подрядчиком по кухне. Напомнить за час?"},
+              "en": {"names": ["Glassmorphism", "Neumorphism", "Signature", "Vision", "Snow-white"], "lira": "Lira",
+                     "q": "What do I have on Wednesday?", "a": "At 3 pm — a meeting with the kitchen contractor. Remind you an hour before?"}}
+
+
+def styles(tmp, lang="ru"):
     """Витрина стилей виджета (docs/img/styles.webp и dewiar_styles.webp для страницы «Скачать»): настоящий виджет
-    ui/hud.html с Лирой в нескольких темах (assets/skins.*), разложенный как на презентации дизайн-студии."""
+    ui/hud.html с Лирой в нескольких темах (assets/skins.*), разложенный как на презентации дизайн-студии.
+    lang="en" — то же по-английски (dewiar_styles.en.webp — английской странице «Скачать», владелец 15.11)."""
     from playwright.sync_api import sync_playwright
-    shots = [("glass", "Глассморфизм"), ("neu", "Неоморфизм"), ("brand", "Фирменная"), ("vision", "Вижн"), ("snow", "Белоснежная")]
+    T = STYLE_TEXT[lang]
+    shots = list(zip(["glass", "neu", "brand", "vision", "snow"], T["names"]))
     with sync_playwright() as p:
         b = p.chromium.launch()
         pg = b.new_page(viewport={"width": 300, "height": 420}, device_scale_factor=2)
         pg.add_init_script("window.pywebview = { api: new Proxy({}, { get: () => () => Promise.resolve(true) }) };")
-        pg.goto((ROOT / "ui/hud.html").as_uri() + "?mode=card&port=1")
+        pg.goto((ROOT / "ui/hud.html").as_uri() + "?mode=card&port=1" + ("&lang=en" if lang == "en" else ""))
         pg.wait_for_timeout(1000)
-        pg.evaluate("""(img) => { personas = [{ id: 'lira', name: 'Лира', color: '#9BD4FF', style: 'strings', avatar_url: img, live: 'lira' }];
+        pg.evaluate("""([img, T]) => { personas = [{ id: 'lira', name: T.lira, color: '#9BD4FF', style: 'strings', avatar_url: img, live: 'lira' }];
             applyPersona('lira'); setState('idle'); core.emit('turn', { seconds: 60 });
-            showCap('Что у меня в среду?', 'В 15:00 — встреча с подрядчиком по кухне. Напомнить за час?'); }""", (ROOT / "data/avatars/lira.webp").as_uri())
+            showCap(T.q, T.a); }""", [(ROOT / "data/avatars/lira.webp").as_uri(), T])
         pg.wait_for_timeout(1500)
         for k, _ in shots:
             pg.evaluate("(k) => applyLook({ skin: k })", k)
@@ -333,6 +342,11 @@ figcaption {{ font-size: 18px; font-weight: 600; color: #2a3140; letter-spacing:
         pg2.locator("#s").screenshot(path=str(tmp / "styles.png"))
         b.close()
     im = Image.open(tmp / "styles.png").convert("RGB")
+    if lang == "en":
+        if SITE.is_dir():
+            im.save(SITE / "dewiar_styles.en.webp", "WEBP", quality=86, method=6)
+            print(SITE / "dewiar_styles.en.webp")
+        return
     im.save(OUT / "styles.webp", "WEBP", quality=88, method=6)
     print(OUT / "styles.webp")
     if SITE.is_dir():

@@ -697,6 +697,7 @@ body.neu .snd.on i, body.neu .snd.play i { background: var(--brand); }
 #b-apps { position: relative; } #b-apps .dot { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: #8B8CF7; box-shadow: 0 0 8px #8B8CF7; display: none; }
 #b-apps.has .dot { display: block; }
 .app.a-lessons { position: relative; } .app.a-lessons.new::after { content: "новое"; position: absolute; top: 8px; right: 8px; padding: 2px 7px; border-radius: 99px; background: #8B8CF7; color: #fff; font-size: 10.5px; font-weight: 700; }
+html[lang]:not([lang="ru"]) .app.a-lessons.new::after { content: "new"; }   /* подпись в CSS — словарь её не видит */
 @media (max-width: 420px) { .who svg { display: none; } .who { padding-right: 12px; } }   /* своё имя «Меган» не обрезается до «Мег…» (19.10) */
 @media (max-width: 380px) { #top { gap: 3px; } #top .ib { width: 38px; height: 38px; } #top .ib svg { width: 20px; height: 20px; } .who span { max-width: 72px; }
   .who { gap: 7px; padding-right: 10px; } .who svg { display: none; } }   /* стрелка — лишняя: имя важнее */

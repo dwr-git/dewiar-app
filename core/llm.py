@@ -2262,7 +2262,10 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
         native = p.get("kind") == "ollama" or base in _native    # ещё раз: resolve_model мог узнать, что тут только Ollama
         # своя модель на этом компьютере или в сети (YouTube 26.10: llama.cpp, 27B на встроенной графике — «долгий префил,
         # Dewiar прерывал генерацию и не отвечал на часть вопросов»): первое слово ждём до 10 минут, облако — 3
-        timeout = httpx.Timeout(5, read=float(p.get("timeout") or (600 if _local_base(base) or _ip_base(base) else 180)))
+        # соединение: своя модель — 5 с; облако — 10 с (1.0 «без ответа»: «сервер модели не ответил вовремя» — 406 раз у 119
+        # компьютеров за 30 дней, отчёт №69 — через 5 с; рукопожатие TLS через прокси, VPN, телефон-модем дольше 5 с)
+        near = _local_base(base) or _ip_base(base)
+        timeout = httpx.Timeout(5 if near else 10, read=float(p.get("timeout") or (600 if near else 180)))
         if p.get("kind") == "anthropic":
             url = _anth_root(base) + "/v1/messages"
             # кэш подсказки (GitHub PR №24, maghelp, 26.10): инструменты (≈13 тыс. токенов) и характер уходят с каждым
