@@ -158,6 +158,16 @@ $("#nd-inv").onclick = async (ev) => {
   } catch (e) { $("#nd-res").className = "res bad"; $("#nd-res").textContent = e.message; }
   b.disabled = false;
 };
+/* Серверы-ноды человека (с сайта, как в «Dewiar.pro» → «Сеть Лиры») — там же, где команда для них (15.11: «как сервер
+   с видеокартами сделать нодой — не понял порядок»): поставил — видно здесь, ждёт допуска или работает. */
+async function ndServers() {
+  const box = $("#nd-srv-list"); if (!box) return;
+  let me = {}; try { me = (await core.call("lnet_info")).me || {}; } catch (e) { return; }
+  const nodes = me.nodes || [];
+  box.hidden = !nodes.length;
+  box.innerHTML = nodes.map(n => `<li><b>${escH(n.gpu || n.name || "Сервер")}</b><span>${escH(n.state_text || "")}${n.paused ? " · не берёт задания" : ""}</span></li>`).join("");
+}
+$("#nd-srv").addEventListener("toggle", (e) => { if (e.target.open) ndServers(); });
 $("#nd-inv-copy").onclick = async () => {
   let okc = false; try { await navigator.clipboard.writeText($("#nd-inv-cmd").textContent); okc = true; } catch (e) { }
   toast(okc ? "Скопировано" : "Выделите команду и скопируйте (Ctrl+C)");

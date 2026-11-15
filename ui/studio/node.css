@@ -90,3 +90,12 @@ html.st-lite .nd-hero * { animation: none !important; }
   .nd-hero { grid-template-columns: 1fr; justify-items: start; padding: 20px; }
   .nd-orbit { width: 150px; height: 150px; }
 }
+
+/* «Сервер на Ubuntu» (15.11): три шага по порядку */
+.nd-steps { margin: 10px 0 6px; padding-left: 22px; display: grid; gap: 10px; }
+.nd-steps li { line-height: 1.45; }
+.nd-steps li > b { display: block; margin-bottom: 2px; }
+#nd-srv code { font-size: .92em; padding: 1px 5px; border-radius: 6px; background: var(--panel2); }
+.nd-srvs { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.nd-srvs li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-radius: 12px; background: var(--panel2); }
+.nd-srvs li span { color: var(--muted); text-align: right; }

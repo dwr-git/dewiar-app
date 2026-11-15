@@ -265,6 +265,16 @@ class StationHealth:
             self.data[url] = {"ok": bool(ok), "at": int(time.time()), "why": why}
             self._save()
 
+    def alias(self, old, new=None):
+        """Станция списка молчит, а та же станция из каталога играет: old -> new (запомнить или прочитать). -> url или ""."""
+        k = "alias:" + str(old or "")
+        with self._lock:
+            if new is None:
+                return str((self.data.get(k) or {}).get("url") or "")
+            self.data[k] = {"url": str(new), "at": int(time.time()), "ok": True}
+            self._save()
+            return str(new)
+
     def dead(self, url):
         d = self.data.get(url)
         return bool(d) and not d["ok"] and time.time() - d["at"] < self.TTL

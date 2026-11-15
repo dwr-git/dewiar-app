@@ -294,6 +294,12 @@ BLOCKS = {
     "cta": {"title": "Призыв", "sub": "полоса с главной кнопкой",
             "variants": {"band": "Полоса", "card": "Карточка"},
             "fields": [("title", "Заголовок", "line"), ("text", "Текст", "text")] + _BTN},
+    # 15.11 (люди: «сайты красивые, но бездушные — хочется своё», вставленный код видео показывался текстом): ролики по ссылке —
+    # YouTube, Rutube, VK Видео или файл .mp4/.webm; код встраивания (<iframe …>) сайт превращает в ссылку сам
+    "video": {"title": "Видео", "sub": "ролики с YouTube, Rutube, VK или файл",
+              "variants": {"one": "Крупно", "grid": "Сеткой"},
+              "fields": [("title", "Заголовок", "line"), ("text", "Вступление", "text")],
+              "items": ([("url", "Ссылка на видео", "url"), ("caption", "Подпись", "line")], "Добавить видео")},
     "text": {"title": "Текст", "sub": "свободный раздел",
              "variants": {"plain": "Колонка", "wide": "Крупно"},
              "fields": [("title", "Заголовок", "line"), ("text", "Текст", "text")]},
@@ -1112,6 +1118,7 @@ def blank_block(t):
                                it(title="С заботой", text="Что важно вашим клиентам", mark="heart")]},
         "steps": {"items": [it(title="Заявка", text="Человек пишет или звонит"), it(title="Встреча", text="Обсуждаете задачу"), it(title="Результат", text="Делаете работу")]},
         "gallery": {"items": [it(caption=""), it(caption=""), it(caption=""), it(caption="")]},
+        "video": {"items": [it(url="", caption="")]},
         "products": {"items": [it(title="Товар", text="Короткое описание", price="1 000 ₽"), it(title="Товар", text="Короткое описание", price="1 500 ₽")]},
         "schedule": {"items": [it(time="10:00", title="Начало", text=""), it(time="12:00", title="Главное событие", text="")]},
         "reviews": {"items": []},

@@ -1028,22 +1028,66 @@ class MusicMixin:
             if self.stopping.wait(6 * 3600):
                 return
 
+    def _station_renew(self, st, limit=3):
+        """Станция списка молчит — она же в каталоге radio-browser (название то же или начинается так же), живые адреса.
+        -> [станция с прежним названием и новым url] (пусто — не нашлась или каталог недоступен)."""
+        try:
+            from radio import search
+            name = str(st.get("name") or "").strip()
+            low = name.lower().replace("ё", "е")
+            known = self.radio_health.alias(st.get("url"))
+            out = [known] if known and not self.radio_health.dead(known) else []    # уже находили — первым
+            exact, near = [], []
+            from concurrent.futures import ThreadPoolExecutor
+            ex = ThreadPoolExecutor(max_workers=1)
+            try:                                       # каталог не ответил за 4 с — сразу другая станция, не ждём
+                rows = ex.submit(search, name, 8).result(timeout=4)
+            finally:
+                ex.shutdown(wait=False)
+            for x in rows or []:
+                n = str(x.get("name") or "").lower().replace("ё", "е").strip()
+                u = x.get("url") or ""
+                if not u or u == st.get("url") or self.radio_health.dead(u):
+                    continue
+                if n == low:
+                    exact.append(u)                    # «Русское Радио» — та же
+                elif n.startswith((low + " ", low + ".", low + " (")):
+                    near.append(u)                     # «Русское Радио (Москва)» — её же вещание
+            urls = list(dict.fromkeys(out + exact + near))[:limit]
+            return [dict(st, url=u, _cat=True) for u in urls]
+        except Exception as e:  # noqa: BLE001
+            log.info("Радио: каталог недоступен: %s", e)
+            return []
+
     def _play_station(self, cands, said, phrase):
         """Сказать «Включаю …» и запустить станцию в фоновом потоке; нет 2 секунд звука за 11 с — следующая из cands.
         Станции, которые в этой сети молчат (фоновая проверка), — в конце: не ждём на них. Свой список кончился —
         пробуем каталог radio-browser; молчат две и больше — диагностика (ffmpeg, сеть) и сообщение пользователю."""
         first0 = cands[0]
         cands = self.radio_health.order(cands)
-        if cands[0] is not first0:
+        renew = None
+        if cands[0] is not first0 and not first0.get("own") and not first0.get("_cat"):
+            # 15.11 (№739, №741: в списке молчат 6 из 23 — у станций сменились адреса потоков): та же станция по новому
+            # адресу из каталога radio-browser — раньше, чем другая станция
+            renew = first0
+            st = first0
+        elif cands[0] is not first0:
             log.info("📻 «%s» сейчас не отвечает (проверка) — сначала «%s»", first0.get("name"), cands[0].get("name"))
             phrase = "«" + first0.get("name", "") + "» сейчас не отвечает — включаю «{}»."
-        st = cands[0]
+            st = cands[0]
+        else:
+            st = cands[0]
         self._say_quick(phrase.format(st["name"]), said)
 
         def run():
             why = ""
             alts = list(cands)
-            first = cands[0]
+            if renew is not None:
+                fresh = self._station_renew(renew)
+                if fresh:
+                    log.info("📻 «%s»: старый адрес молчит — пробую из каталога: %s", renew["name"], ", ".join(x["url"] for x in fresh))
+                    alts = fresh + alts
+            first = renew or cands[0]
             tried = set()
             i = -1
             while alts:
@@ -1069,6 +1113,8 @@ class MusicMixin:
                     return
                 if self.radio.playing and self.radio.got >= _B * 2:
                     self.radio_health.mark(s["url"], True)
+                    if renew is not None and s.get("_cat") and s.get("name") == renew.get("name"):
+                        self.radio_health.alias(renew["url"], s["url"])    # в следующий раз — сразу по новому адресу
                     v = round(self.radio.volume * 100)
                     quiet = f" Громкость радио всего {v}% — скажите «громче»." if v <= 20 else ""
                     if i:

@@ -454,18 +454,26 @@ function qrPretty(text, ec) {
   const q = qrcode(0, ec || (text.length > 300 ? "L" : "M")); q.addData(text); q.make();
   const n = q.getModuleCount(), m = 1.5, W = n + m * 2;
   const eye = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
-  let dots = "";
+  // 15.11 (№739: на ПК с нехваткой памяти код домашнего Wi-Fi был пустым квадратом): точки — одним путём, а не тысячами
+  // <rect> (длинная ссылка с несколькими адресами — ~2000 точек, 116 КБ разметки); то же скругление
+  let d = "";
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
     if (!q.isDark(r, c) || eye(r, c)) continue;
-    dots += `<rect x="${(c + m + 0.07).toFixed(2)}" y="${(r + m + 0.07).toFixed(2)}" width=".86" height=".86" rx=".3"/>`;
+    d += `M${(c + m + 0.22).toFixed(2)} ${(r + m + 0.22).toFixed(2)}h.56v.56h-.56z`;   // + обводка .3 со скруглением = точка .86
   }
+  const dots = d ? `<path d="${d}" stroke="#111" stroke-width=".3" stroke-linejoin="round"/>` : "";
   const eyeSvg = (r, c) => { const x = c + m, y = r + m;
     return `<rect x="${x + 0.5}" y="${y + 0.5}" width="6" height="6" rx="1.9" fill="none" stroke="#111" stroke-width="1"/>` +
            `<rect x="${x + 2}" y="${y + 2}" width="3" height="3" rx="1"/>`; };
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${W}" shape-rendering="geometricPrecision"><rect width="${W}" height="${W}" fill="#fff"/>` +
     `<g fill="#111">${dots}${eyeSvg(0, 0)}${eyeSvg(0, n - 7)}${eyeSvg(n - 7, 0)}</g></svg>`;
 }
-function qrSvg(text) { return qrPretty(text); }
+/* Код не нарисовался (нет библиотеки, ошибка) — не пустой белый квадрат, а честная строка: ссылку можно открыть на телефоне. */
+function qrSvg(text) {
+  let s = "";
+  try { s = qrPretty(String(text || "")); } catch (e) { console.warn("QR:", e); }
+  return s || `<div class="qr-fail">Код не нарисовался. Обновите студию (Ctrl+R) или перезапустите Dewiar.</div>`;
+}
 /* Первый код — ссылка на Dewiar.apk; второй (c.url) переносит настройки и содержит ключи API открытым текстом,
    поэтому рисуется только по кнопке «Показать код». */
 async function phFill() {

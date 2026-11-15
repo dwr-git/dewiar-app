@@ -25,7 +25,9 @@ one() {   # выполнить проверку в своей папке -> вы
   local ws; ws=$(mktemp -d); mkdir -p "$ws/tmp"
   # вывод — в файл, не в трубу: проверка, убитая по времени, оставляла живым ядро с её stdout — труба не закрывалась,
   # и весь прогон висел (03.11, kids1027). После — добиваем всё, что запущено с её TMPDIR
-  DEWIAR_WORKSPACE_DIR=$ws TMPDIR=$ws/tmp timeout "${T_OUT:-300}" "$@" > "$ws/out.txt" 2>&1; local rc=$?
+  # запись «какие файлы трогает проверка» (DEWIAR_TRACE_DIR, 15.11) — для выбора проверок по изменению: tools/test_impact.py
+  local tenv=() s; if [ -n "$DEWIAR_TRACE_DIR" ]; then for s in "$@"; do case "$s" in "$T"/*) tenv=(DEWIAR_TRACE_FILE="$DEWIAR_TRACE_DIR/${s##*/}.txt" DEWIAR_TRACE_ROOT="$ROOT" PYTHONPATH="$T/trace${PYTHONPATH:+:$PYTHONPATH}");; esac; done; fi
+  env "${tenv[@]}" DEWIAR_WORKSPACE_DIR=$ws TMPDIR=$ws/tmp timeout "${T_OUT:-300}" "$@" > "$ws/out.txt" 2>&1; local rc=$?
   tr -d "\r" < "$ws/out.txt"; echo "RC=$rc"; reap "$ws"; rm -rf "$ws"; }
 reap() { local p; for p in /proc/[0-9]*; do grep -qzxF "TMPDIR=$1/tmp" "$p/environ" 2>/dev/null && kill -9 "${p#/proc/}" 2>/dev/null; done; return 0; }
 # Несколько проверок сразу (28.10, владелец: «жаль, что так долго»): DEWIAR_JOBS=3 tests/run_quick.sh — проверки идут
@@ -33,7 +35,14 @@ reap() { local p; for p in /proc/[0-9]*; do grep -qzxF "TMPDIR=$1/tmp" "$p/envir
 # нагрузка (тайминги игр, анимации), в строке так и сказано: «со второго раза, одна». По умолчанию — по одной, как раньше.
 JOBS=${DEWIAR_JOBS:-1}; Q="$TMPROOT/q"; mkdir -p "$Q"; N=0
 sec() { if [ "$JOBS" -le 1 ]; then echo "$1"; else N=$((N+1)); printf '%s' "$1" > "$Q/$(printf %04d $N).sec"; fi; }
+# Только задетые изменением (15.11, «выпуски стали очень долгими»): DEWIAR_ONLY — список имён файлов проверок по строке
+# (или файл с ним; ALL — все). Его даёт tools/test_impact.py pick; удобнее — tests/run_changed.sh.
+ONLY=""; SKIP=0
+if [ -n "$DEWIAR_ONLY" ] && [ "$DEWIAR_ONLY" != ALL ]; then ONLY=$([ -f "$DEWIAR_ONLY" ] && cat "$DEWIAR_ONLY" || printf '%s' "$DEWIAR_ONLY"); fi
+skip_run() { [ -n "$ONLY" ] || return 1; local s k=""; for s in "$@"; do case "$s" in "$T"/*) k=${s##*/};; esac; done
+  [ -n "$k" ] && ! grep -qxF "$k" <<<"$ONLY"; }
 run() { local name=$1; shift
+  if skip_run "$@"; then SKIP=$((SKIP+1)); return; fi
   if [ "$JOBS" -le 1 ]; then local out; out=$(one "$@"); local rc=${out##*RC=}; judge "$name" "$rc" "${out%RC=*}"; return; fi
   N=$((N+1)); local id; id=$(printf %04d $N); printf '%s' "$name" > "$Q/$id.name"
   # перепроверка в конце — с теми же T_OUT / JOIN_DB / RUNNER_DB, что у первого раза (их ставят перед run)
@@ -523,6 +532,7 @@ run "Язык телефона (№732): английская прошивка, 
 run "Отчёты 15.11: время дел плагина — в «Календаре» (№725), OpenCode на телефоне (№734)" $PY "$T/reports_1115_test.py"
 run "Отчёты 15.11 (вторые): «Радио» без падения (№736), статья закона — по найденному тексту (№738)" $PY "$T/reports_1115b_test.py"
 run "Харнесс, шаг 1: облегчённый вопрос — ядро действий всегда, модули и пачки по словам, недавнему и more_tools" $PY "$T/slim_tools1115_test.py"
+run "Отчёты 15.11 (третья пачка): код Wi-Fi одним путём (№739), http:// для своего сервера в сети (№741), радио по новому адресу, «Радар» по ссылке" $PY "$T/reports_1115c_test.py"
 run "0.96: фразы программы без модели — по-английски (ядро, Engine._g, сводка близким)" $PY "$T/i18n_core1113_test.py"
 run "«Итог дня» (владелец 11.11): шаги дела не в окна, без навыков плагинов, молчит — строкой в виджете" $PY "$T/evening_job1111_test.py"
 run "Отчёт 656: недоступный SSLKEYLOGFILE не роняет сеть; старые файлы задачи не роняют продолжение" $PY "$T/net_keylog656_test.py"
@@ -636,5 +646,6 @@ if [ -n "$DEWIAR_TEST_PG" ] && psql "$(_pg_url "$DEWIAR_TEST_PG")" -c 'select 1'
 fi
 # с базой, если она есть (выше), иначе — только SQLite
 finish
+[ -n "$ONLY" ] && echo "Только задетые изменением: пропущено $SKIP — их проверит полный прогон после выпуска."
 
 exit $FAIL

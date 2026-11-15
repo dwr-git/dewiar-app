@@ -37,7 +37,54 @@ from pathlib import Path
 
 import sites_kit as K
 
-def ref_outline(url, timeout=12.0):
+def fetch_image(url, timeout=20.0, limit=25 * 1024 * 1024):
+    """Картинка по ссылке -> байты (только http(s), не больше 25 МБ, тип image/*)."""
+    import httpx
+    u = str(url or "").strip()
+    if not re.match(r"^https?://[^/\s]+", u, re.I):
+        raise SiteError("нужна ссылка на картинку (https://…)")
+    try:
+        with httpx.stream("GET", u, timeout=timeout, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 Dewiar"}) as r:
+            r.raise_for_status()
+            if not r.headers.get("content-type", "").lower().startswith("image/"):
+                raise SiteError("по ссылке не картинка")
+            buf = b""
+            for ch in r.iter_bytes():
+                buf += ch
+                if len(buf) > limit:
+                    raise SiteError("картинка больше 25 МБ")
+            return buf
+    except httpx.HTTPError as e:
+        raise SiteError(f"картинка не скачалась: {e}") from e
+
+
+def page_media(base, page, images=12, videos=4):
+    """Фото и видео страницы (15.11: «сделай сайт по моей странице, возьми фото и видео с сайта»): большие картинки
+    (без значков, логотипов и svg), ролики (YouTube, Rutube, VK, .mp4 — из <video>, <iframe>, ссылок). -> {images, videos}."""
+    from urllib.parse import urljoin
+    import sites_render as SR
+    imgs, vids = [], []
+    for m in re.finditer(r"(?is)<img\b[^>]*>", page):
+        tag = m.group(0)
+        src = (re.search(r"(?i)\b(?:data-src|data-lazy-src|src)\s*=\s*[\"']([^\"']+)", tag) or [None, ""])[1]
+        w = int((re.search(r"(?i)\bwidth\s*=\s*[\"']?(\d+)", tag) or [None, "999"])[1])
+        if not src or src.startswith("data:") or w < 200 or re.search(r"(?i)logo|icon|avatar|sprite|pixel|\.svg(?:\?|$)|gravatar", src):
+            continue
+        u = urljoin(base, src.strip())
+        if re.match(r"^https?://", u) and u not in imgs:
+            imgs.append(u)
+    for u in re.findall(r"(?i)(?:src|href|content)\s*=\s*[\"']([^\"']+)", page):
+        u = urljoin(base, u.strip())
+        if SR.video_embed(u)[0] and u not in vids:
+            vids.append(u)
+    og = re.search(r"(?is)<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)", page)
+    if og:
+        u = urljoin(base, og.group(1))
+        imgs = [u] + [x for x in imgs if x != u]
+    return {"images": imgs[:images], "videos": vids[:videos]}
+
+
+def ref_outline(url, timeout=12.0, media=None):
     """№552 (05.11: «в „Сайтах“ — поле для ссылки на сайт-референс, по которому создать свой»): схема чужой страницы без
     её текстов — заголовок, разделы (h1–h3), меню, кнопки, основные цвета. -> строка до ~1500 знаков; не открылась — SiteError."""
     import html as _h
@@ -51,6 +98,8 @@ def ref_outline(url, timeout=12.0):
     except httpx.HTTPError as e:
         raise SiteError(f"сайт-образец не открылся: {e}") from e
     page = r.text[:600_000]
+    if media is not None:
+        media.update(page_media(str(r.url), page))
     page = re.sub(r"(?is)<(script|style|noscript|svg)\b.*?</\1>", " ", page)
     txt = lambda x: re.sub(r"\s+", " ", _h.unescape(re.sub(r"<[^>]+>", " ", x))).strip()   # noqa: E731
     title = txt((re.search(r"(?is)<title[^>]*>(.*?)</title>", page) or [None, ""])[1])[:120]
@@ -64,6 +113,53 @@ def ref_outline(url, timeout=12.0):
     if not heads and not title:
         raise SiteError("на странице-образце не нашлось ни заголовков, ни разделов")
     return res
+
+
+EMBED_RX = re.compile(r"(?is)<\s*(?:iframe|video|source|embed|object)\b[^>]*>|<\s*/\s*(?:iframe|video|object)\s*>")
+URL_RX = re.compile(r"https?://[^\s\"'<>]+", re.I)
+
+
+def code_to_video(s):
+    """15.11 (люди: «отдал Лире код видео — он просто показан на сайте текстом»): код встраивания (<iframe>, <video>) в
+    текстовых полях не показываем никогда. Ролик из него (YouTube, Rutube, VK, .mp4) — разделом «Видео»: текстовый раздел, где
+    был только код, сам становится «Видео»; иначе «Видео» встаёт сразу после него. -> сколько роликов нашлось."""
+    found = 0
+    for pg in s.get("pages") or []:
+        out = []
+        for b in pg.get("blocks") or []:
+            vids = []
+            for x in [b] + [i for i in b.get("items") or [] if isinstance(i, dict)]:
+                for k, v in list(x.items()):
+                    if not isinstance(v, str) or not EMBED_RX.search(v):
+                        continue
+                    us = [u.rstrip(").,;") for u in URL_RX.findall(v) if R.video_embed(u.rstrip(").,;"))[0]]
+                    if b.get("type") == "video" and k == "url" and x is not b:
+                        x[k] = us[0] if us else ""         # код вставили в поле ссылки — оставляем саму ссылку
+                        continue
+                    vids += us
+                    x[k] = re.sub(r"[ \t]+", " ", re.sub(r"(?is)<[^>]+>", " ", v)).strip()
+                    x[k] = "\n".join(ln.strip() for ln in x[k].splitlines() if ln.strip() and not URL_RX.fullmatch(ln.strip()))
+            vids = list(dict.fromkeys(u.rstrip(").,;") for u in vids))
+            found += len(vids)
+            if vids and b.get("type") == "video":
+                b.setdefault("items", []).extend({"url": u, "caption": ""} for u in vids)
+                out.append(b)
+            elif vids and b.get("type") == "text" and not str(b.get("text") or "").strip():
+                b.update(type="video", variant="one", items=[{"url": u, "caption": ""} for u in vids])
+                b.pop("text", None)
+                out.append(b)
+            else:
+                out.append(b)
+                if vids:
+                    out.append({"type": "video", "variant": "one", "tone": b.get("tone", "base"), "title": "Видео", "uid": _uid(),
+                                "items": [{"url": u, "caption": ""} for u in vids]})
+        pg["blocks"] = out
+    return found
+
+
+# «…и добавь с сайта фото и видео», «возьми картинки с моей страницы» — взять медиа со страницы-образца (она его)
+TAKE_MEDIA_RX = re.compile(r"(?:фото|картин|изображ|снимк|видео|ролик)[^.!?]{0,60}(?:с\s+(?:мо(?:его|ей)\s+)?(?:сайт|страниц|образц)|оттуда)|"
+                           r"(?:с\s+(?:мо(?:его|ей)\s+)?(?:сайт|страниц|образц)\w*|оттуда)[^.!?]{0,60}(?:фото|картин|изображ|снимк|видео|ролик)", re.I)
 
 
 REACH_SAY = ("Сайт сохранён на dewiar.pro. Адрес {url} заработает, когда сервер сайтов будет настроен — администратор об этом знает; "
@@ -365,6 +461,13 @@ OPS_HELP = """Операции (JSON-список ops):
 {"op":"move_block","block":"<uid>","to":<номер позиции с 0>}
 {"op":"block","block":"<uid>","variant":"…","tone":"base|alt|dark|accent","nav":"подпись в меню", …поля блока, "items":[…полный новый список карточек]}
 {"op":"add_page","title":"…","blocks":["<тип>",…]} / {"op":"remove_page","page":<номер>}
+{"op":"image","url":"https://…картинка","block":"<uid>","index":<номер карточки или нет>,"caption":"…"} — картинка ПО ССЫЛКЕ (человек
+дал ссылку или попросил фото со своего сайта): скачается и встанет в раздел (в галерее — новой карточкой). Картинка, которую
+человек ПРИЛОЖИЛ в чат («сохранена: Входящие/…»): {"op":"image","file":"Входящие/имя.jpg","block":…} — так же. Видео — раздел video:
+{"op":"add_block","type":"video","data":{"items":[{"url":"https://youtu.be/…","caption":"…"}]}} (YouTube, Rutube, VK Видео, файл .mp4).
+Код встраивания (<iframe>, <video>, HTML) в текст не вставляй никогда — только ссылку в раздел video.
+{"op":"media_from","url":"https://сайт-человека/страница","photo":true,"video":true} — человек просит взять фото и видео со СВОЕЙ
+страницы: первое фото — на обложку, остальные — в галерею, ролики — в «Видео». Чужие сайты без просьбы — нет.
 """
 
 
@@ -531,6 +634,7 @@ class Sites:
     def _save(self, s, label, to=None, merge=False):
         """Записать и положить версию в историю. merge — правка текста в студии: та же подпись в пределах 90 с не плодит
         версии, а обновляет последнюю (печатают по буквам)."""
+        code_to_video(s)                               # код встраивания — не текстом, а разделом «Видео» (15.11)
         with self._lock:
             d = self._dir(s["id"])
             (d / "history").mkdir(parents=True, exist_ok=True)
@@ -631,10 +735,10 @@ class Sites:
     def create(self, template="", describe="", name="", tagline="", contacts=None, fill=True, ref=""):
         """Новый сайт: шаблон (или по описанию), своё имя и контакты; тексты — моделью под дело человека.
         ref — сайт-образец (№552): его разделы и тон — подсказкой для шаблона и текстов, тексты и бренды — не копируем."""
-        outline = ""
+        outline, media = "", {}
         if str(ref or "").strip():
             try:
-                outline = ref_outline(str(ref).strip())
+                outline = ref_outline(str(ref).strip(), media=media)
             except SiteError as e:
                 log.info("🌐 Сайт-образец не прочитался: %s", e)
         tid = template if template in K.TEMPLATES else K.pick_template(f"{describe} {name} {outline[:600]}")
@@ -655,7 +759,48 @@ class Sites:
                 note = "тексты пока из шаблона — модель не ответила"
         s["logo"]["text"] = s["name"]
         self._save(s, f"Создан из шаблона «{K.TEMPLATES[tid]['title']}»")
+        if media and TAKE_MEDIA_RX.search(str(describe or "")):
+            try:                                        # «…и добавь с сайта фото и видео» — сайт его, просьба прямая
+                s = self.take_media(s["id"], media, video=bool(re.search(r"видео|ролик", describe, re.I)),
+                                    photo=bool(re.search(r"фото|картин|изображ|снимк", describe, re.I)))
+            except SiteError as e:
+                log.info("🌐 Фото и видео с образца не взялись: %s", e)
         s["_note"] = note
+        return s
+
+    def take_media(self, sid, media, photo=True, video=True):
+        """Фото и видео со страницы человека (page_media) — на его сайт: первое фото — на обложку, остальные — в «Галерею»
+        (нет — добавится), ролики — в «Видео» (нет — добавится). Только по прямой просьбе человека (TAKE_MEDIA_RX)."""
+        s = self.get(sid)
+        blocks = s["pages"][0]["blocks"]
+        ops = []
+        imgs = list(media.get("images") or [])[:9] if photo else []
+        if imgs:
+            hero = next((b for b in blocks if b["type"] == "hero"), None)
+            if hero is not None:
+                ops.append({"op": "image", "url": imgs.pop(0), "block": hero["uid"]})
+            if imgs:
+                gal = next((b for b in blocks if b["type"] == "gallery"), None)
+                if gal is None:
+                    gal = dict(K.blank_block("gallery"), uid=_uid(), items=[])
+                    at = next((i for i, b in enumerate(blocks) if b["type"] in ("lead", "contacts")), len(blocks))
+                    blocks.insert(at, gal)
+                else:
+                    gal["items"] = [x for x in gal.get("items") or [] if x.get("image")]
+                ops += [{"op": "image", "url": u, "block": gal["uid"]} for u in imgs]
+        vids = list(media.get("videos") or [])[:4] if video else []
+        if vids:
+            vb = next((b for b in blocks if b["type"] == "video"), None)
+            if vb is None:
+                vb = dict(K.blank_block("video"), uid=_uid())
+                at = next((i for i, b in enumerate(blocks) if b["type"] in ("lead", "contacts")), len(blocks))
+                blocks.insert(at, vb)
+            vb["items"] = [{"url": u, "caption": ""} for u in vids]
+        if not ops and not vids:
+            return s
+        self._save(s, "Фото и видео с сайта-образца")
+        if ops:
+            s = self.apply(sid, ops, "Фото с сайта-образца")
         return s
 
     def fill(self, s, describe, ref=""):
@@ -729,10 +874,65 @@ class Sites:
         s = self.get(sid)
         if any(o.get("op") == "undo" for o in ops or [] if isinstance(o, dict)):
             return self.undo(sid)
-        done = self.apply_ops(s, ops)
+        mf = [o for o in ops or [] if isinstance(o, dict) and o.get("op") == "media_from" and o.get("url")]
+        if mf:                                         # «возьми фото и видео с моего сайта …» — со страницы человека
+            media = {}
+            ref_outline(str(mf[0]["url"]), media=media)
+            s = self.take_media(sid, media, photo=mf[0].get("photo", True) is not False, video=mf[0].get("video", True) is not False)
+            ops = [o for o in ops if o not in mf]
+            if not ops:
+                return s
+        ops, got = self._images_by_url(sid, s, ops)
+        done = self.apply_ops(s, ops) + got
+        if done and all(x.startswith("картинка не взялась") for x in done):
+            raise SiteError("; ".join(done))           # одни неудачи — версию не пишем, модель скажет честно
         if not done:
             raise SiteError("ничего не поменялось")
         return self._save(s, label or "; ".join(done)[:120], merge=merge)
+
+    def _images_by_url(self, sid, s, ops):
+        """{"op":"image","url":…,"block":uid[,"index":n]} — картинка по ссылке (15.11, люди: «хочу свои картинки — дать их Лире,
+        а она разместит»; «возьми фото с моего сайта»): скачать, уменьшить в webp сайта и поставить в раздел или карточку;
+        index нет у галереи — новой карточкой. Не скачалась — честно в списке сделанного. -> (прочие операции, сделанное)."""
+        rest, done = [], []
+        for o in ops or []:
+            if not (isinstance(o, dict) and o.get("op") == "image" and (o.get("url") or o.get("file"))):
+                rest.append(o)
+                continue
+            try:
+                data = self._own_image(o["file"]) if o.get("file") else fetch_image(str(o["url"]))
+                name = self.image_add(sid, data, o.get("alt") or "")
+                s.setdefault("assets", {}).update(self.get(sid).get("assets") or {})
+                pi, j, b = self._block(s, o.get("block"))
+            except SiteError as e:
+                done.append(f"картинка не взялась ({e})")
+                continue
+            i = o.get("index")
+            if isinstance(i, int) and 0 <= i < len(b.get("items") or []):
+                b["items"][i]["image"] = name
+            elif b["type"] == "gallery" or (K.BLOCKS.get(b["type"], {}).get("items") and not any(f[0] == "image" for f in K.BLOCKS[b["type"]]["fields"])):
+                its = [x for x in b.setdefault("items", []) if x.get("image") or str(x.get("caption") or x.get("title") or "").strip()]
+                b["items"] = its + [{"image": name, "caption": str(o.get("caption") or "")[:200]}]
+            else:
+                b["image"] = name
+            done.append(f"картинка в разделе {K.BLOCKS.get(b['type'], {}).get('title', b['type'])}")
+        return rest, done
+
+    IMG_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+
+    def _own_image(self, rel):
+        """Картинка, которую человек приложил в чат (сохранена во «Входящие» его папки): только картинки и только внутри
+        папки ассистента — модель не может взять на сайт файл откуда угодно (15.11)."""
+        ws = getattr(self.host, "workspace", None)
+        root = Path(getattr(ws, "root", "") or "") if ws is not None else None
+        if not root or not str(root) or str(root) == ".":
+            raise SiteError("свои картинки — приложите их в чат")
+        f = (root / str(rel).strip().lstrip("/\\")).resolve()
+        if root.resolve() not in f.parents or f.suffix.lower() not in self.IMG_EXT or not f.is_file():
+            raise SiteError(f"нет такой картинки: {rel}")
+        if f.stat().st_size > 25 * 1024 * 1024:
+            raise SiteError("картинка больше 25 МБ")
+        return f.read_bytes()
 
     def apply_ops(self, s, ops):
         """Операции к сайту (на месте). -> список того, что сделано (для истории)."""
@@ -1164,6 +1364,33 @@ class Sites:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_bytes(v)
         return d / "index.html"
+
+    def export_zip(self, sid, folder=None):
+        """Сайт архивом для своего сервера и домена (15.11, люди: «можно ли сайты из Лиры ставить на свой сервер под свой
+        домен?»): те же файлы, что «Открыть с диска» (ссылки на .html — работает на любом хостинге без настроек), zip в
+        «Загрузки». Заявки с формы идут в Dewiar, пока сайт опубликован и здесь. -> путь к .zip."""
+        import zipfile
+        import export as X
+        s = self.get(sid)
+        files = self.build(sid, "export")
+        base = translit(s.get("name") or "")[:40].strip("-") or "site"
+        d = Path(folder) if folder else X.downloads_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        out, n = d / f"{base}.zip", 2
+        while out.exists():
+            out, n = d / f"{base}-{n}.zip", n + 1
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+            for k, v in sorted(files.items()):
+                z.writestr(k, v)
+            z.writestr("КАК-ПОСТАВИТЬ.txt", ("Сайт «" + str(s.get("name") or "") + "» из Dewiar.\n\nПоложите все файлы архива в корень сайта на своём "
+                       "хостинге (папка public_html, www или htdocs) — так, чтобы index.html лежал сверху. Свой домен направьте на этот "
+                       "хостинг у регистратора. Больше ничего настраивать не нужно.\n\n"
+                       + ("Кнопка заявки ведёт к форме сайта на dewiar.pro — заявки приходят в Dewiar («Клиенты»), пока сайт там опубликован.\n"
+                          if (s.get("published") or {}).get("url") else
+                          "Форма заявки работает только у сайта, опубликованного в Dewiar: опубликуйте его и скачайте архив снова — "
+                          "кнопка заявки поведёт к форме, а заявки придут в «Клиенты».\n")
+                       + "\nИзменили сайт в Dewiar — скачайте архив снова и замените файлы.\n").encode("utf-8"))
+        return out
 
     # ---------- продвижение ----------
     def audit(self, sid):

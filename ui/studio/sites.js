@@ -263,6 +263,7 @@ function stField(key, label, kind, val, scope) {
     const cur = val || "lead";
     return `<label class="st-f"><span>${stE(label)}</span><select data-k="${key}">${opts.map(([v, t]) => `<option value="${stE(v)}"${v === cur ? " selected" : ""}>${stE(t)}</option>`).join("")}${opts.some(o => o[0] === cur) ? "" : `<option value="${stE(cur)}" selected>${stE(cur)}</option>`}</select></label>`;
   }
+  if (kind === "url") return `<label class="st-f"><span>${stE(label)}</span><input id="${id}" data-k="${key}" value="${stE(val || "")}" maxlength="500" placeholder="https://youtu.be/… · rutube.ru/video/… · vk.com/video…" inputmode="url"></label>`;
   return `<label class="st-f"><span>${stE(label)}</span><input id="${id}" data-k="${key}" value="${stE(val || "")}"></label>`;
 }
 function stBlockForm(b) {
@@ -304,7 +305,7 @@ function stBlockWire(li, b) {
     it.querySelector(".st-iu").onclick = () => { const its = (b.items || []).slice(); its.splice(i - 1, 0, its.splice(i, 1)[0]); stApply([{ op: "block", block: uid, items: its }], "Порядок карточек"); };
   });
   const add = box.querySelector(".st-iadd");
-  if (add) add.onclick = () => { const f = stMetaB(b.type).items[0], d = {}; f.forEach(([k, l, kind]) => { if (kind === "line" || kind === "text") d[k] = ""; }); d[f[0][0]] = f[0][2] === "image" ? "" : "Новая"; stApply([{ op: "item", block: uid, data: d }], "Новая карточка"); };
+  if (add) add.onclick = () => { const f = stMetaB(b.type).items[0], d = {}; f.forEach(([k, l, kind]) => { if (kind === "line" || kind === "text" || kind === "url") d[k] = ""; }); d[f[0][0]] = ["image", "url"].includes(f[0][2]) ? "" : "Новая"; stApply([{ op: "item", block: uid, data: d }], "Новая карточка"); };
 }
 /* одно поле: строки — по мере ввода; флаги, списки, фото, знаки — сразу */
 function stWireField(el, put) {
@@ -414,12 +415,16 @@ function stInfo() {
     <h4>Для поисковиков и соцсетей</h4>
     <label class="st-f"><span>Название сайта</span><input id="st-sname" value="${stE(s.name || "")}" maxlength="80"></label>
     <label class="st-f"><span>Описание <small id="st-dn"></small></span><textarea id="st-desc2" rows="4" maxlength="300" placeholder="Что вы предлагаете, где и почему к вам: 120–160 знаков">${stE(d)}</textarea></label>
+    <h4>Свой сервер и домен</h4><p class="hint">Архив готовых файлов — положите его на любой хостинг и направьте туда свой домен. Изменили сайт здесь — скачайте снова.</p>
+    <div class="actions"><button type="button" class="btn small" id="st-zip">Скачать сайт архивом</button></div>
     <h4>Сайт</h4><div class="st-danger">${p.name ? `<button type="button" class="btn small" id="st-unpub">Снять с публикации</button>` : ""}<button type="button" class="btn small danger" id="st-delsite">Удалить сайт</button></div>`;
   const dn = () => { const n = $("#st-desc2").value.length; $("#st-dn").textContent = `${n} знаков${n < 120 ? " — лучше 120–160" : n > 170 ? " — длинновато" : " — хорошо"}`; };
   dn();
   $$("#st-info [data-c]").forEach(el => el.oninput = () => stLater("c" + el.dataset.c, () => [{ op: "contacts", [el.dataset.c]: el.value }], "Контакты"));
   $("#st-sname").oninput = (e) => stLater("sname", () => [{ op: "site", name: e.target.value }], "Название сайта");
   $("#st-desc2").oninput = (e) => { dn(); stLater("desc", () => [{ op: "site", description: e.target.value }], "Описание для поисковиков"); };
+  // 15.11 (люди: «можно ли сайты из Лиры ставить на свой сервер под свой домен?»)
+  $("#st-zip").onclick = () => core.call("sites_zip", { id: SITES.sid }).then(r => toast(`Архив «${r.name}» — в «Загрузках». Внутри — как поставить.`, 6000)).catch(e => toast(e.message, 5000));
   if ($("#st-unpub")) $("#st-unpub").onclick = stUnpublish;
   $("#st-delsite").onclick = stDeleteSite;
 }

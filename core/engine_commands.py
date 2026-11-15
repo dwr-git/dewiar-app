@@ -456,6 +456,12 @@ class CommandsMixin:
                 import tools as _t
                 _t.launch(["xdg-open", str(W.export(sid))])
                 return {"ok": True}
+            if cmd == "sites_zip":                       # 15.11: сайт архивом — на свой сервер и домен
+                out = W.export_zip(sid)
+                if a.get("reveal", True) and not os.environ.get("DEWIAR_DRY_TOOLS"):
+                    import export as X
+                    X.reveal(out)
+                return {"path": str(out), "name": out.name}
             if cmd == "sites_check":
                 return W.check_name(str(a.get("name") or ""), sid)
             if cmd == "sites_suggest":

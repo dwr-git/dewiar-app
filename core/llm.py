@@ -169,6 +169,11 @@ def connect_hint(base_url):
             return LMSTUDIO_HOW.rstrip(".").replace("«Найти»", "«Проверить»")
         return ("на этом компьютере не запущена программа с моделью (Ollama или LM Studio). Если модель на другом компьютере "
                 "или сервере — впишите в «Мозге» его адрес (например 192.168.1.5:11434): 127.0.0.1 — это сам этот компьютер")
+    if LAN_HOST_RX.search(host) and u.scheme == "https" and _port_open(host, port):
+        # №741 (15.11): «192.168.1.106:5000/v1» (OmniRoute) записалось как https:// — порт открыт, а сертификата у
+        # своего сервера в сети нет
+        return (f"{host}:{port} отвечает, но без https — у своих серверов в домашней сети его обычно нет. Впишите адрес "
+                f"с http://, например http://{host}:{port}{u.path or '/v1'}")
     if LAN_HOST_RX.search(host):
         return (f"компьютер {host} не отвечает на порту {port}. На нём должна быть запущена программа с моделью и открыт "
                 "доступ из сети: в Ollama — переменная OLLAMA_HOST=0.0.0.0, в LM Studio — «Serve on Local Network». "

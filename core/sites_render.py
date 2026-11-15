@@ -660,6 +660,11 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .steps.v li::before{margin:0}
 /* галерея */
 .gal{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
+.vids{display:grid;gap:20px;max-width:960px;margin:0 auto}.vids.vg{grid-template-columns:repeat(2,1fr);max-width:none}
+.vid{position:relative;aspect-ratio:16/9;border-radius:var(--r);overflow:hidden;background:#000}
+.vid iframe,.vid video{position:absolute;inset:0;width:100%;height:100%;border:0}
+.vid.vph{display:grid;place-items:center;align-content:center;gap:8px;background:var(--scard);color:var(--smut);text-align:center;padding:16px}
+.vid.vph span{font-size:42px;color:var(--slink)}.vids figcaption{margin-top:8px;color:var(--smut);font-size:.95em}
 .gal figure{margin:0}.gal .media{aspect-ratio:1}
 .gal figcaption{font-size:.9rem;color:var(--smut);margin-top:8px}
 .gal.mos{grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(150px,min(19vw,240px));grid-auto-flow:dense}
@@ -788,6 +793,7 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
  .h-poster .w{grid-template-columns:1fr}.h-poster .pside,.h-poster .pbig{grid-column:1;grid-row:auto}
  .row{grid-template-columns:1fr auto}.row>p{grid-column:1/-1;grid-row:2}
  .gal{grid-template-columns:repeat(2,1fr)}
+ .vids.vg{grid-template-columns:1fr}
  .gal.mos{grid-template-columns:repeat(2,1fr);grid-auto-rows:minmax(120px,38vw)}
  .ftr .w{grid-template-columns:1fr}
  .ftr .lgl{flex-direction:column;gap:14px}.ftr .lg-docs{justify-content:flex-start;flex-direction:column;gap:2px}.ftr .lg-docs a{display:inline-block;padding:6px 0}
@@ -1517,6 +1523,13 @@ def pd_consent(c):
 
 def lead_form(b, c):
     pg = slug_of(c.pages[c.page_i], c.page_i) if c.pages else "index"
+    pub = str((c.site.get("published") or {}).get("url") or "")
+    if c.mode == "export" and re.match(r"^https://", pub):
+        # 15.11: сайт архивом на своём хостинге — форма там не отправит (заявки принимает dewiar.pro): кнопка ведёт к форме
+        # опубликованной копии, заявка всё так же приходит в «Клиенты»
+        href = pub.rstrip("/") + "/" + ("" if pg == "index" else pg + ".html") + "#lead"
+        return (f'<div class="form"><a class="btn" href="{E(href)}" target="_blank" rel="noopener">{one(b.get("button") or "Оставить заявку")}</a>'
+                f'<small>Форма откроется в новой вкладке.</small></div>')
     action = "/__lead" if c.mode == "publish" else "#"
     msg = '<label>Комментарий<textarea name="note" maxlength="600"></textarea></label>' if b.get("ask_message") else ""
     return (f'<form class="form" method="post" action="{action}"><input type="hidden" name="page" value="{E(pg)}">'
@@ -1697,10 +1710,55 @@ def snake(xs):
     return f'<div class="snake">{"".join(out)}</div>'
 
 
+VIDEO_FILE = re.compile(r"^https://[^\s\"'<>]+\.(?:mp4|webm|m4v)(?:\?[^\s\"'<>]*)?$", re.I)
+
+
+def video_embed(url):
+    """Ссылка на ролик -> (вид, адрес для встраивания): youtube | rutube | vk — iframe, file — <video>; не ролик — (None, "").
+    Только известные площадки и https — чужой код на сайт не попадает (15.11)."""
+    u = str(url or "").strip()
+    m = re.match(r"^https?://(?:www\.|m\.)?(?:youtube\.com/(?:watch\?(?:[^#\s]*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})", u, re.I)
+    if m:
+        return "youtube", f"https://www.youtube-nocookie.com/embed/{m.group(1)}"
+    m = re.match(r"^https?://(?:www\.)?rutube\.ru/(?:video|play/embed|shorts)/([0-9a-f]{32})", u, re.I)
+    if m:
+        return "rutube", f"https://rutube.ru/play/embed/{m.group(1)}"
+    m = re.match(r"^https?://(?:www\.|m\.)?(?:vk\.com|vkvideo\.ru)/(?:video|clip)(-?\d+)_(\d+)", u, re.I) \
+        or re.match(r"^https?://(?:www\.)?vk\.com/video_ext\.php\?oid=(-?\d+)&id=(\d+)", u, re.I)
+    if m:
+        return "vk", f"https://vk.com/video_ext.php?oid={m.group(1)}&id={m.group(2)}&hd=2"
+    if VIDEO_FILE.match(u):
+        return "file", u
+    return None, ""
+
+
+def b_video(b, c, v):
+    figs = []
+    for x in items(b, c):
+        kind, src = video_embed(x.get("url"))
+        cap = one(x.get("caption"))
+        if not kind:
+            if c.mode != "preview":
+                continue                              # пустая или непонятная ссылка — на сайте не показываем
+            m = '<div class="vid vph"><span>▶</span><small>Добавьте ссылку на видео (YouTube, Rutube, VK или .mp4)</small></div>'
+        elif c.mode == "preview" and kind != "file":
+            host = {"youtube": "YouTube", "rutube": "Rutube", "vk": "VK Видео"}[kind]
+            m = f'<div class="vid vph"><span>▶</span><small>Видео {host} — на сайте будет плеер</small></div>'
+        elif kind == "file":
+            m = f'<div class="vid"><video src="{E(src)}" controls preload="metadata" playsinline></video></div>'
+        else:
+            m = (f'<div class="vid"><iframe src="{E(src)}" title="{E(x.get("caption") or b.get("title") or "Видео")}" loading="lazy" allowfullscreen '
+                 f'allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>')
+        figs.append(f'<figure>{m}{f"<figcaption>{cap}</figcaption>" if cap else ""}</figure>')
+    if not figs:
+        return ""
+    return f'<div class="w">{head2(b)}<div class="vids{" vg" if v == "grid" and len(figs) > 1 else ""}">{"".join(figs)}</div></div>'
+
+
 RENDER = {"hero": b_hero, "about": b_about, "services": b_services, "prices": b_prices, "features": b_features, "steps": b_steps,
           "gallery": b_gallery, "products": b_products, "schedule": b_schedule, "reviews": b_reviews, "team": b_team, "faq": b_faq,
           "links": b_links, "cta": b_cta, "text": b_text, "contacts": b_contacts, "lead": b_lead,
-          "stats": b_stats, "hub": b_hub, "duo": b_duo, "bars": b_bars, "cases": b_cases, "ticker": b_ticker}
+          "stats": b_stats, "hub": b_hub, "duo": b_duo, "bars": b_bars, "cases": b_cases, "ticker": b_ticker, "video": b_video}
 EXTRA_CLS = {"hero": lambda v: f"hero h-{v}", "about": lambda v: f"ab-{v}", "contacts": lambda v: f"ct-{v}", "lead": lambda v: f"ld ld-{v}",
              "cta": lambda v: f"cta cta-{v}", "text": lambda v: f"tx {v}", "stats": lambda v: f"stt st-{v}", "ticker": lambda v: "tkr"}
 

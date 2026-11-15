@@ -596,10 +596,22 @@
         <li>Свои вопросы на свою ноду не попадают, а ноде идёт только часть того, что заплатил спрашивающий, — спрашивать самого себя с другого аккаунта невыгодно. Ушли и подключились заново — доверие то же.</li>
         <li>Ничего не начнётся без вашей кнопки; «Выключить» — сразу, вопросы тут же отвечает сервер Dewiar.</li></ul></details>
       <details id="nd-pay"><summary>Правила начисления</summary><div id="nd-pay-body" class="hint">Появятся, когда программа получит подписанные правила сети.</div></details>
-      <details id="nd-srv"><summary>Мощный сервер на Ubuntu</summary>
-        <p class="hint">Отдельный компьютер с видеокартой NVIDIA от 16 ГБ можно сделать нодой без Dewiar на нём: одна команда в терминале поставит драйвер, vLLM, модель и службу ноды. Приглашение действует 2 часа.</p>
-        <div class="actions" style="margin:6px 0 0"><button class="btn" id="nd-inv">Получить команду</button><button class="btn" id="nd-inv-copy" hidden>Скопировать</button></div>
-        <div class="dw-path" id="nd-inv-cmd" hidden style="margin-top:8px;user-select:all;word-break:break-all"></div></details>
+      <details id="nd-srv"><summary>Сервер на Ubuntu с видеокартами — тоже нода</summary>
+        <p class="hint">Отдельной «версии для сервера» нет и не нужно: Dewiar на сервер не ставится. Команда отсюда сама поставит
+          на сервер всё нужное — драйвер NVIDIA, модель и службу ноды. Несколько видеокарт — каждая работает своей копией модели.</p>
+        <ol class="nd-steps">
+          <li><b>Получите команду</b>Здесь, на этом компьютере. Команда действует 2 часа.
+            <div class="actions" style="margin:6px 0 0"><button class="btn" id="nd-inv">Получить команду</button><button class="btn" id="nd-inv-copy" hidden>Скопировать</button></div>
+            <div class="dw-path" id="nd-inv-cmd" hidden style="margin-top:8px;user-select:all;word-break:break-all"></div></li>
+          <li><b>Вставьте её в терминал сервера и нажмите Enter</b>За самим сервером или по SSH: <code>ssh имя@адрес-сервера</code>.
+            Спросит пароль — это пароль от сервера. В первый раз скачается около 26 ГБ: от получаса до часа.</li>
+          <li><b>Дождитесь «готово — узел подключён»</b>Сервер появится здесь со словами «ждёт допуска»: владелец Dewiar
+            проверяет новые ноды, обычно в течение дня. Дальше сервер работает сам, пока включён, — и после перезагрузки тоже.</li>
+        </ol>
+        <ul class="nd-srvs" id="nd-srv-list" hidden aria-label="Мои серверы-ноды"></ul>
+        <p class="hint">Нужно: Ubuntu 22.04 или 24.04, видеокарта NVIDIA от 16 ГБ памяти (лучше 24 ГБ), 32 ГБ оперативной памяти,
+          60 ГБ на диске, интернет от 50 Мбит/с. Белый IP и открытые порты не нужны. Проверить сервер:
+          <code>sudo dewiar-worker status</code>.</p></details>
       <div class="actions" id="nd-leave-row" hidden style="margin:14px 0 0"><button class="btn small danger" id="nd-leave">Перестать быть нодой</button><span class="hint">ключ ноды сотрётся; накопленные талеры останутся</span></div>
     </div>
   </section>

@@ -294,11 +294,17 @@ const CLOUD = {
   custom: { hint: 'Любой сервис, который говорит «как OpenAI»: LiteLLM, Kimi, российские агрегаторы, свой прокси. Адрес обычно оканчивается на <code>/v1</code> — он есть в документации сервиса.',
             rec: [] },
 };
-/* Адрес, который вписали: без пробелов и хвоста /chat/completions, с https:// — -> строка или "" */
+/* Адрес, который вписали: без пробелов и хвоста /chat/completions; без схемы — https://, а адрес домашней сети
+   (192.168.*, 10.*, 172.16–31.*, localhost, имя без точки, *.local) — http:// (№741: «192.168.1.106:5000/v1» OmniRoute
+   становился https://… и «не отвечает»: свои серверы в сети почти всегда без сертификата) -> строка или "" */
 function ckUrl(raw) {
   let u = String(raw || "").trim().replace(/\/+$/, "").replace(/\/chat\/completions$/, "").replace(/\/models$/, "");
   if (!u) return "";
-  if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+  if (!/^https?:\/\//i.test(u)) {
+    const host = u.split(/[/:?#]/)[0].toLowerCase();
+    const lan = /^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|127\.|169\.254\.)/.test(host) || host === "localhost" || /\.(?:local|lan|home)$/.test(host) || (host && !host.includes("."));
+    u = (lan ? "http://" : "https://") + u;
+  }
   return u;
 }
 function ckPreset(prov) {

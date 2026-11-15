@@ -592,6 +592,9 @@
       e.preventDefault(); const go = () => { const i = q("#rd-ask-q"); if (i) i.focus(); }; if (RD.tab !== "pulse") { tab("pulse"); setTimeout(go, 400); } else go(); }
   });
   core.on("insight", () => { if (q("#p-insight").classList.contains("cur") && (RD.tab === "pulse" || RD.tab === "feed")) load(); });
+  // 15.11 (владелец, Ubuntu: «перешёл по ссылке из виджета — „Пульс“ пустой, помогает „Лента“ и обратно»): студия открылась
+  // прямо на «Радаре» раньше, чем связалась с ядром, — load() молча вышел; связь появилась — загружаем то, что открыто
+  core.on("hello", () => { if (q("#p-insight").classList.contains("cur")) load(); });
   // тема сменилась (светлая / тёмная / неоморфизм) — цвета холста заново; другие классы <html> не трогают раздел
   const skinSig = () => { const r = document.documentElement; return [r.dataset.skin, r.classList.contains("st-light"), r.classList.contains("st-neu")].join(); };
   let skinNow = skinSig();
