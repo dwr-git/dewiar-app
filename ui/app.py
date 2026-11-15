@@ -4405,6 +4405,11 @@ def main_win(args, extra):
         try:                                    # каким движком открылись окна (№419: MSHTML вместо WebView2 — виджет не грузился)
             from webview.platforms import winforms as _wf
             print(f"Окна: {getattr(_wf, 'renderer', '?')}", file=sys.stderr)
+            # №728 (15.11, «виджет не открывается, хотя Edge установлен»): нет среды WebView2 (это не браузер Edge) — pywebview
+            # молча берёт старый движок Internet Explorer, виджет в нём не работает. Не ждём три проверки по минуте — сразу
+            # «WebView2 нет» (как №469): окна прочь, ссылка на установщик Microsoft, студия в браузере
+            if getattr(_wf, "renderer", "") == "mshtml":
+                WV2_FAIL.set()
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -4526,6 +4531,7 @@ def main_win(args, extra):
         минуту человек выходил — «Dewiar не запускается». Теперь окна убираем, говорим прямо, что сломано и как починить,
         студия — в браузере, ассистент слушает."""
         print("WebView2 не запустился (среда повреждена или удалена) — окна скрыты, студия в браузере", file=sys.stderr)
+        remember_fail(int(uis.get("widget_fail2") or 0) + 1)    # дважды — дальше без окна и без вопроса; в студии — почему
         for w in list(api.wins.values()):
             try:
                 w.hide()
@@ -4553,8 +4559,9 @@ def main_win(args, extra):
 
 
 WV2_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"      # установщик среды WebView2 (Evergreen) у Microsoft
-WV2_BROKEN_TEXT = ("Окно Dewiar не открылось: компонент Windows «Microsoft Edge WebView2», в котором рисуются окна, на этом "
-                   "компьютере повреждён или удалён (так бывает после программ, которые «удаляют Edge»).\n\n"
+WV2_BROKEN_TEXT = ("Окно Dewiar не открылось: компонента Windows «Microsoft Edge WebView2 Runtime», в котором рисуются окна, на "
+                   "этом компьютере нет или он повреждён. Это не сам браузер Edge — отдельный компонент, его ставят с сайта "
+                   "Microsoft.\n\n"
                    "Ассистент работает и слушает, настройки откроются в браузере.\n\n"
                    "Установить WebView2 заново? Откроется страница Microsoft: скачайте установщик, запустите его, "
                    "затем перезапустите Dewiar.")

@@ -36,7 +36,7 @@ wb = mw[mw.index("def wv2_broken():"):mw.index("print(f\"Виджет: {api._url
 ok("w.hide()" in wb and "winshell.ask_yes_no(WV2_BROKEN_TEXT" in wb and "os.startfile(WV2_URL)" in wb and "studio_in_browser()" in wb,
    "окна убираем, предлагаем переустановить WebView2, студия — в браузере")
 ok(mw.index("wv2_fail_watch()") < mw.index("webview.start("), "журнал слушаем до запуска окон")
-ok("повреждён или удалён" in app.WV2_BROKEN_TEXT and "Ассистент работает" in app.WV2_BROKEN_TEXT and app.WV2_URL.startswith("https://go.microsoft.com/"),
+ok("нет или он повреждён" in app.WV2_BROKEN_TEXT and "не сам браузер Edge" in app.WV2_BROKEN_TEXT and "Ассистент работает" in app.WV2_BROKEN_TEXT and app.WV2_URL.startswith("https://go.microsoft.com/"),
    "понятный текст и страница загрузки у Microsoft")
 
 import doctor  # noqa: E402
@@ -66,5 +66,12 @@ ok("dewiar-ui.log" in src and "dewiar-ui.log" in dsrc, "нет папки жур
 # №457 (журнал): сторож сигнала «покажись» переживает ошибку временной папки
 w = mw[mw.index("def watch():"):mw.index("threading.Thread(target=watch")]
 ok("except OSError" in w and "sig.exists()" in w.split("except OSError")[0] and "continue" in w, "WinError во временной папке не убивает сторожа")
+src_app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
+ok('if getattr(_wf, "renderer", "") == "mshtml":\n                WV2_FAIL.set()' in src_app, "№728: окна открылись движком Internet Explorer (нет WebView2) — сразу «нет WebView2», без минуты ожидания")
+ok('remember_fail(int(uis.get("widget_fail2") or 0) + 1)    # дважды' in src_app, "№728: «нет WebView2» считается сбоем — на третий раз без вопроса, в студии — почему")
+ok("WebView2 Runtime» — это не браузер Edge" in (ROOT / "ui/settings.html").read_text(encoding="utf-8"), "№728: в студии — «это не браузер Edge» и ссылка на Microsoft")
+ws_src = (ROOT / "ui/winshell.py").read_text(encoding="utf-8")
+ok(ws_src.count('encoding="utf-8", errors="replace"') >= 2 and "[Console]::OutputEncoding = [Text.Encoding]::UTF8" in ws_src,
+   "№728: ответ tasklist/PowerShell не роняет поток чтения (UnicodeDecodeError) — прежний запуск находится верно")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

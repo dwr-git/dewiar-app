@@ -366,7 +366,7 @@ function plpSettings(box) {
   const p = PLP.page.plugin;
   box.innerHTML = `${p.settings.length ? `<div class="plp-card plp-set"><div class="row one">${p.settings.map(s => plgField(p, s).replace(/id="pls-/g, 'id="pps-')).join("")}</div>
       <p class="hint plp-saved" id="plp-saved">${p.installed ? "Меняется сразу — сохранять не нужно." : "Заполнится при установке."}</p></div>` : ""}
-    ${p.jobs.length ? `<h2 class="plp-h2">Дела по расписанию <small>Лира делает сама и сообщает итог</small></h2><div class="plp-card">${p.jobs.map(j => `<div class="switch"><div>${plpEsc(j.title)}</div><label class="tg"><input type="checkbox" data-job="${plpEsc(j.id)}" ${j.on ? "checked" : ""} ${p.installed ? "" : "disabled"}><i></i></label></div>`).join("")}</div>` : ""}`;
+    ${p.jobs.length ? `<h2 class="plp-h2">Дела по расписанию <small>Лира делает сама и сообщает итог</small></h2><div class="plp-card">${p.jobs.map(j => `<div class="switch"><div>${plpEsc(j.title)}</div><label class="tg"><input type="checkbox" data-job="${plpEsc(j.id)}" ${j.on ? "checked" : ""} ${p.installed ? "" : "disabled"}><i></i></label></div>`).join("")}${p.installed ? `<p class="hint" style="margin:8px 0 0">Время и дни включённого дела меняются в «Календаре»: нажмите на дело и поставьте своё время. <a href="#" class="plp-cal">Открыть календарь</a></p>` : ""}</div>` : ""}`;
   const vals = () => { const o = {}; $$("#plp-body [data-k]").forEach(el => { o[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value; }); return o; };
   let t = 0;
   const saveNow = (msg) => { if (!p.installed) return; clearTimeout(t);
@@ -378,6 +378,7 @@ function plpSettings(box) {
     const path = await a.pick_folder(); if (!path) return;
     const inp = $(`#plp-body [data-k="${b.dataset.pick}"]`); if (inp) inp.value = path; saveNow("Папка выбрана и сохранена ✓");
   });
+  $$("#plp-body .plp-cal").forEach(a => a.onclick = (e) => { e.preventDefault(); const b = $('nav button[data-p="calendar"]'); if (b) b.click(); });   // №725
   $$("#plp-body [data-job]").forEach(c => c.onchange = () => core.call("plugin_job", { id: p.id, job: c.dataset.job, on: c.checked })
     .then(r => { plgSet(r); toast(c.checked ? "Дело включено — Лира сделает его сама" : "Дело выключено"); }).catch(e => toast(e.message)));
 }

@@ -42,6 +42,22 @@ except pdftext.PdfTextError as e:
     ok(False, f"PDF с русским и «×» читается и при cp1252 у трубы: {e}")
 finally:
     sys.executable = real
+# №724 (15.11, 0.99): ответ байтами уже был, а предупреждение pypdf о шрифте («\uf0b7») в stderr с cp1252 роняло разбор
+fake2 = tmp / "py1252err"
+fake2.write_text("#!/bin/sh\nexec " + sys.executable + " -I -S -c \"import sys, io; sys.argv = sys.argv[1:]; "
+                 "sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='cp1252', errors='strict'); "
+                 "sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='cp1252', errors='strict'); "
+                 "src = sys.argv[0].replace('r = PdfReader(path)', 'import warnings; warnings.warn(chr(0xf0b7) + chr(0xd7)); r = PdfReader(path)'); "
+                 "exec(compile(src, 'child', 'exec'))\" \"$4\" \"$5\" \"$6\" \"$7\" \"$8\" \"$9\"\n")
+fake2.chmod(fake2.stat().st_mode | stat.S_IEXEC)
+sys.executable = str(fake2)
+try:
+    txt = " ".join(pdftext.pages(pdf))
+    ok("Флуктуационный" in txt, f"предупреждение pypdf со значком шрифта при cp1252 у stderr — PDF всё равно читается (№724): {txt[:60]!r}")
+except pdftext.PdfTextError as e:
+    ok(False, f"предупреждение pypdf со значком шрифта при cp1252 у stderr — PDF всё равно читается (№724): {e}")
+finally:
+    sys.executable = real
 ok("Флуктуационный" in " ".join(pdftext.pages(pdf)), "обычный запуск — как раньше")
 # модель не смогла прочитать файлы, попробовала скриптами в «Лаборатории» и ответила одним «Готово.» — просим ответ по существу
 import quality as Q  # noqa: E402

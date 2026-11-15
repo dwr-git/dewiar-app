@@ -27,6 +27,14 @@ class PdfTextError(RuntimeError):
 
 CHILD = r'''
 import sys, json
+# 15.11, №724 (Windows, 0.99: снова «PDF не прочитался (UnicodeEncodeError: 'charmap' …)»): ответ уже шёл байтами (№692),
+# но pypdf печатает предупреждения о шрифтах («\uf0b7»…) в stderr — а у него на Windows тоже cp1252, и предупреждение
+# роняло весь разбор. Обе трубы — в UTF-8 с заменой непечатного
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 try:
     import resource
     resource.setrlimit(resource.RLIMIT_AS, (int(sys.argv[5]), int(sys.argv[5])))

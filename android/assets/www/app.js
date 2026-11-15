@@ -462,10 +462,20 @@ function phoneSysLang() {
   // без телефона и без моста браузера (D.mock — проверки, файл в браузере) — русский, как раньше; проверка английского
   // ставит window.DW_SYS_LANG сама: у Chromium без экрана язык en-US, и все прежние проверки телефона стали бы английскими
   if (D.mock && !window.DW_SYS_LANG) return "ru";
+  const RU = ["ru", "uk", "be", "kk"];
   const l = String(window.DW_SYS_LANG || (navigator.languages && navigator.languages[0]) || navigator.language || "ru").slice(0, 2).toLowerCase();
-  if (["ru", "uk", "be", "kk"].includes(l)) return "ru";
+  if (RU.includes(l)) return "ru";
+  // 15.11, №732 («проблема вернулась: язык распознавания английский, русскую речь не распознаёт, прошивка не русифицирована»):
+  // Xiaomi и другие с глобальной прошивкой — система по-английски, а человек говорит по-русски. Как на компьютере (русская
+  // раскладка): русский среди языков системы или часовой пояс России, Беларуси, Казахстана, Украины — русский
+  if (!window.DW_SYS_LANG && l === "en") {
+    const all = (navigator.languages || []).map(x => String(x).slice(0, 2).toLowerCase());
+    let tz = ""; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { }
+    if (all.some(x => RU.includes(x)) || RU_TZ.test(tz)) return "ru";
+  }
   return window.dwLangs && dwLangs().some(x => x.code === l) ? l : "en";
 }
+const RU_TZ = /^(Europe\/(Moscow|Minsk|Kaliningrad|Samara|Volgograd|Saratov|Ulyanovsk|Astrakhan|Kirov|Kiev|Kyiv|Simferopol)|Asia\/(Yekaterinburg|Omsk|Novosibirsk|Barnaul|Tomsk|Novokuznetsk|Krasnoyarsk|Irkutsk|Chita|Yakutsk|Khandyga|Vladivostok|Ust-Nera|Magadan|Sakhalin|Srednekolymsk|Kamchatka|Anadyr|Almaty|Qostanay|Aqtobe|Aqtau|Atyrau|Oral|Qyzylorda))$/;
 if (window.dwSetLang) dwSetLang(S.lang || "auto", phoneSysLang());
 const FEAT_OPTIN = { family: 1 };                           // эти — по желанию: пока не включили, выключены
 const feat = (k) => { const v = (S.features || {})[k]; return v === undefined ? !FEAT_OPTIN[k] : v !== false; };   // «Возможности»: включено ли (нет ключа — да)
@@ -2082,7 +2092,18 @@ const ollamaRoot = () => llmBase().replace(/\/v1$/, "");
 function llmHeaders() { const h = { "Content-Type": "application/json" }; if (S.llm.api_key) h.Authorization = "Bearer " + S.llm.api_key;
   if (S.llm.cloud) h["X-Dewiar-Pay"] = "2";        // 0.82.1: умеем кнопку «Пополнить» — 402 с номером DW-… и короткой фразой
   if (/openrouter/.test(llmBase())) { h["HTTP-Referer"] = "https://dewiar.pro"; h["X-Title"] = "Dewiar"; }
+  // №734 (15.11, «на телефоне не работает подписка OpenCode Go»): без заголовка сессии OpenCode отвечает 400 «missing
+  // x-opencode-session» — на компьютере это починено 04.11 (№524), телефону — то же: постоянный id этой установки
+  if (/opencode\.ai/i.test(llmBase())) h["x-opencode-session"] = ocSession();
   return h; }
+function ocSession() {
+  let sid = prefGet("oc_session") || "";
+  if (!/^[0-9a-f-]{16,64}$/.test(sid)) {
+    sid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("" + Date.now().toString(16) + Math.random().toString(16).slice(2)).slice(0, 32).padEnd(32, "0");
+    prefSet("oc_session", sid);
+  }
+  return sid;
+}
 /* «Сеть Лиры» (server/dwrapp/liranet.php): человек сам разрешил общие вопросы на узлы людей — заголовок только к основному
    ходу разговора (ask → llmStream с opt.net), не к служебным вызовам (итог разговора, экзамен, проверки); в детском режиме
    и «Для старших» — никогда (рецензия 04.11) */

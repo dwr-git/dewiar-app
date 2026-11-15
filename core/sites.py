@@ -1308,7 +1308,7 @@ class Sites:
                 self._fetch("/sites/remove", {"name": old})
             except SiteError:
                 pass
-        s["published"]["reach"] = reach(s["published"]["url"])
+        s["published"]["reach"] = self._reach(s["published"])
         self._save(s, f"Опубликован: {s['published']['url']}")
         if not s["published"]["reach"]["ok"]:
             # новый адрес часто открывается через несколько секунд (DNS, сертификат) — проверить ещё раз скоро, а не через полчаса
@@ -1318,6 +1318,21 @@ class Sites:
                  "" if s["published"]["reach"]["ok"] else f" — по адресу пока не открывается ({s['published']['reach']['why']})")
         self.start()
         return s
+
+    def _reach(self, pub):
+        """Открывается ли сайт: сначала отсюда; не открылся — спросить сервер (владелец 15.11: «оранжевым горит „проверяю
+        адрес“, хотя сайт открывается — я в подсети сайта»): отсюда мешают своя сеть, роутер без «петли», прокси, VPN.
+        Сервер видит адрес как все в интернете; его «открывается» — правда. Сервер без этой проверки (старый) — как было."""
+        r = reach(pub["url"])
+        if r["ok"] or not pub.get("name"):
+            return r
+        try:
+            d = self._fetch("/sites/reach", {"name": pub["name"]}, timeout=20)
+        except SiteError:
+            return r
+        if d.get("reach") is True:
+            return {"ok": True, "why": "", "at": r["at"], "via": "server", "here": r["why"]}
+        return dict(r, why=d.get("why") or r["why"]) if d.get("reach") is False else r
 
     def _reach_soon(self, sid, waits=(10, 30, 90, 240)):
         for w in waits:
@@ -1337,7 +1352,7 @@ class Sites:
         if not pub.get("url"):
             return s
         was = (pub.get("reach") or {}).get("ok")
-        pub["reach"] = reach(pub["url"])
+        pub["reach"] = self._reach(pub)
         s["published"] = pub
         with self._lock:
             (self._dir(sid) / "site.json").write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")

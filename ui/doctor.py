@@ -292,7 +292,7 @@ def main():
         try:
             r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
                                 "Get-Process pythonw,python -ErrorAction SilentlyContinue | ForEach-Object { \"$($_.Id)  $($_.StartTime)  $($_.Path)\" }"],
-                               capture_output=True, text=True, timeout=20, creationflags=CREATE_NO_WINDOW)
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, creationflags=CREATE_NO_WINDOW)
             L += [x for x in (r.stdout or "").splitlines() if x.strip()] or ["не запущен"]
         except (OSError, subprocess.SubprocessError) as e:
             L.append(f"не удалось узнать: {e}")

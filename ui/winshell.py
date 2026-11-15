@@ -527,9 +527,12 @@ def our_pythons(folder):
     """Процессы python/pythonw из папки программы (folder — папка Dewiar) -> [pid, …] без нашего и родителя. Для №555:
     мьютекс держит осиротевший процесс прошлого запуска, а номер в ui.pid — уже не его."""
     try:
+        # №728 (15.11): вывод — в кодировке консоли (cp866), а читали как UTF-8 — «UnicodeDecodeError» в потоке чтения, список
+        # пустой. PowerShell пишет в UTF-8 (папка программы бывает с русскими буквами), читаем с заменой непонятного
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                            "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
                             "Get-Process pythonw,python -ErrorAction SilentlyContinue | ForEach-Object { \"$($_.Id)|$($_.Path)\" }"],
-                           capture_output=True, text=True, timeout=20, creationflags=NO_WINDOW)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, creationflags=NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return []
     return pythons_in(r.stdout or "", folder, (os.getpid(), os.getppid()))
@@ -553,7 +556,9 @@ def pid_alive(pid):
     except (TypeError, ValueError):
         return False
     try:
-        r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, timeout=10, creationflags=NO_WINDOW)
+        # №728: ответ tasklist — в кодировке консоли; номер и «python» — латиница, остальное заменяем, а не падаем
+        r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=10, creationflags=NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return True                      # не знаем — считаем живым (ничего не убиваем)
     return str(pid) in (r.stdout or "") and "python" in (r.stdout or "").lower()

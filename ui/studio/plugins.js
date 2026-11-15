@@ -59,7 +59,7 @@ function plgDrawer(id) {
       ${p.installed ? `<div class="actions" style="margin-top:6px"><button class="btn" id="pld-save">Сохранить настройки</button></div>` : `<p class="hint">Заполнится при установке — поменять можно в любой момент.</p>`}` : ""}
     ${p.jobs.length ? `<h2>Дела по расписанию</h2><p class="hint" style="margin:-4px 0 6px">Помощница делает их сама и сообщает итог. Каждое — по желанию.</p>
       ${p.jobs.map(j => `<div class="switch"><div>${plgEsc(j.title)}</div><label class="tg"><input type="checkbox" data-job="${plgEsc(j.id)}" ${j.on ? "checked" : ""} ${p.installed ? "" : "disabled"}><i></i></label></div>`).join("")}
-      ${p.installed ? "" : `<p class="hint">Включаются после установки.</p>`}` : ""}
+      ${p.installed ? `<p class="hint">Время и дни включённого дела меняются в «Календаре»: нажмите на дело и поставьте своё время. <a href="#" class="pld-cal">Открыть календарь</a></p>` : `<p class="hint">Включаются после установки.</p>`}` : ""}
     <h2>Что внутри</h2>
     <ul class="pld-in">
       ${p.skills.length ? `<li><b>Навык${p.skills.length > 1 ? "и" : ""}</b> ${p.skills.map(plgEsc).join(", ")} — инструкция, по которой помощница действует</li>` : ""}
@@ -86,6 +86,8 @@ function plgDrawer(id) {
     if (p.installed) run("plugin_values", { id, values: plgValues() }, "Папка выбрана и сохранена");   // сразу в силу — без второй кнопки
   });
   $$("#pld [data-link]").forEach(b => b.onclick = () => core.call("ws_open", { path: p.links[+b.dataset.link].path }).catch(e => res(e.message, false)));
+  // №725 (15.11: «как менять время уведомлений? не могу найти»): время дела — одно место, «Календарь» (там же правка)
+  $$("#pld .pld-cal").forEach(a => a.onclick = (e) => { e.preventDefault(); const b = $('nav button[data-p="calendar"]'); if (b) b.click(); });
   $$("#pld [data-job]").forEach(c => c.onchange = () => run("plugin_job", { id, job: c.dataset.job, on: c.checked }, c.checked ? "Дело включено — помощница сделает его сама" : "Дело выключено"));
   // установлен — фраза сразу уходит Лире в чат (видно, как работает); нет — копируется
   $$("#pld .pld-ph .chip").forEach(b => b.onclick = () => { if (p.installed && typeof qaAsk === "function") { plgClose(); qaAsk(b.dataset.t); return; }
