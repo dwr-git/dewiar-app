@@ -67,7 +67,7 @@ function rpRender() {
     + `<div class="rp-chips">${[["", "Популярные"]].concat(g.map(x => [x, x[0].toUpperCase() + x.slice(1)])).map(([k, l]) =>
         `<button class="rp-chip${(RP.res || RP.busy ? RP.q.toLowerCase() === k : !k) ? " on" : ""}" data-g="${esc(k)}">${esc(l)}</button>`).join("")}</div>`
     + (mine.length ? `<h3 class="rp-h">Мои станции</h3><div data-l="mine">${rpTiles(mine, "")}</div>` : "")
-    + `<h3 class="rp-h">${RP.busy ? `Ищу «${esc(RP.q)}»…` : RP.res ? `«${esc(RP.q[0].toUpperCase() + RP.q.slice(1))}»` : "Популярные"}</h3>`
+    + `<h3 class="rp-h">${RP.busy ? `Ищу «${esc(RP.q)}»…` : RP.res && RP.q ? `«${esc(RP.q[0].toUpperCase() + RP.q.slice(1))}»` : "Популярные"}</h3>`   /* №736: стёрли поиск — пока ищется заново, без падения */
     + `<div data-l="top">${RP.busy ? `<div class="rp-grid">${'<div class="rp-t sk"></div>'.repeat(6)}</div>`
       : rpTiles(RP_LISTS.top, RP.err ? esc(RP.err) : RP.res ? "Не нашлось — попробуйте по-другому: «Европа», «jazz», «Минск»." : "Список станций ещё не загрузился.")}</div>`
     + (mine.length ? "" : `<p class="rp-hint">♥ на станции — и она в «Моих станциях»; потом можно просто сказать: «включи …» и её название.</p>`);

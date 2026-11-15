@@ -203,6 +203,8 @@ def compare(a, b):
     return {"sys": cs, "sys_len": max(len(sa), len(sb)), "sys_at": "" if sa == sb else _ctx(sa, cs),
             "tools": ct, "tools_len": max(len(ta), len(tb)), "tools_at": "" if ta == tb else _ctx(ta, ct),
             "tool_names_same": [t["function"]["name"] for t in a.get("tools") or []] == [t["function"]["name"] for t in b.get("tools") or []],
+            "tools_grow": (lambda na, nb: len(nb) > len(na) and nb[:len(na)] == na)([t["function"]["name"] for t in a.get("tools") or []],
+                                                                                    [t["function"]["name"] for t in b.get("tools") or []]),
             "render": cr, "render_len": min(len(ra), len(rb)), "render_sys_tools": len(render(dict(a, messages=a["messages"][:1]))),
             "render_at": "" if ra == rb else _ctx(ra, cr)}
 

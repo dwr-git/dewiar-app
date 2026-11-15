@@ -22,12 +22,12 @@ function blogDraftsN() { return ((BLG.list || {}).articles || []).filter(a => a.
 async function blogCheck(quiet) {
   if (!blogCred() || (typeof kidsOn === "function" && kidsOn())) return;
   try { BLG.list = await blogCall("/sites/articles", {}); BLG.err = ""; } catch (e) { BLG.err = e.message; return; }
-  const seen = new Set(JSON.parse(prefGet("blog_seen") || "[]")), fresh = BLG.list.articles.filter(a => a.status === "draft" && !seen.has(a.id));
+  const seen = new Set(JSON.parse(prefGet("blog_seen") || "[]")), fresh = (BLG.list.articles || []).filter(a => a.status === "draft" && !seen.has(a.id));   // ответ без списка (старый сайт, сбой) — не падаем
   if (fresh.length && !quiet) {
     try { D.notify(BT("note.t"), BT("note.x", { t: fresh[0].title })); } catch (e) { }
     toast("📝 " + BT("note.x", { t: fresh[0].title }), 6000);
   }
-  BLG.list.articles.filter(a => a.status === "draft").forEach(a => seen.add(a.id));
+  (BLG.list.articles || []).filter(a => a.status === "draft").forEach(a => seen.add(a.id));
   prefSet("blog_seen", JSON.stringify([...seen].slice(-200)));
   blogRender();
 }

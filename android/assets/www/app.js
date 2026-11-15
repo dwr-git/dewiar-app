@@ -3074,7 +3074,7 @@ async function ask(text, opts = {}) {
       }
       // экзамен 0.9.18: «на столько же минут» — другое число; погода числами без weather; «покажи, как выглядит» — без картинок;
       // «в Dewiar такого нет» без руководства; «через сколько дней» — без числа; поручение — «Я проверю.» (один раз за ход)
-      const xfix = !opts.hidden && !r.calls.length && !xAsked && round < maxRounds - 1 ? (sameMinutesFix(text, doneCalls) || inventedFacts(text, sink.text() + (r.text || ""), called)
+      const xfix = !opts.hidden && !r.calls.length && !xAsked && round < maxRounds - 1 ? (sameMinutesFix(text, doneCalls) || inventedFacts(text, sink.text() + (r.text || ""), called) || lawUnsourced(text, sink.text() + (r.text || ""), called)
         || imagesMissing(text, r.text || "", called) || appHelpMissing(text, r.text || "", called) || daysMissing(text, sink.text() + (r.text || ""), called)
         || (!nudged ? orderUndone(text, r.text || "", called) : "")) : "";
       if (xfix) { xAsked = true; msgs.push(aMsg(r.text), { role: "user", content: xfix }); sink.push(" "); continue; }
@@ -4289,6 +4289,19 @@ function inventedFacts(ask, answer, called) {
   plog("warn", "✋ погода или курс числами без инструмента — прошу узнать по-настоящему");
   return "ПРОВЕРКА: ты назвал(а) числа (погода, температура или курс), но не вызвал(а) ни weather, ни web_search — эти числа выдуманы. "
     + "Узнай их сейчас инструментом (погода — weather с городом; курс — web_search) и ответь только по результату. Уже сказанное не повторяй, выдуманные числа не повторяй.";
+}
+/* №738 (15.11, персонаж-юрист): «Поясни про главу 39 ГК РФ» — по памяти чужая глава. Номер статьи или главы и кодекс
+   (закон) в вопросе — ответ по найденному тексту; тот же, что law_unsourced в core/engine_answer.py */
+const LAW_REF = /(?:стат(?:ья|ьи|ью|ье|ей)|ст\.|глав(?:а|ы|у|е|ой)|пункт|п\.)\s*№?\s*\d+/i;
+const LAW_CODE = /(?:^|[^а-яёa-z])(?:ГК|УК|КоАП|ТК|НК|ЖК|СК|АПК|ГПК|УПК|ЗК|БК|ГрК|КАС)(?![а-яёa-z])|кодекс|конституц|\d+\s*-\s*ФЗ|федеральн[а-яё]*\s+закон|закон[а-яё]*\s+об?(?![а-яё])/i;
+function lawUnsourced(ask, answer, called) {
+  const a = String(ask || ""), t = String(answer || "");
+  if (t.length < 160 || !LAW_REF.test(a) || !LAW_CODE.test(a)) return "";
+  if (called && ["web_search", "read_webpage", "search_documents", "find_notes", "ask_knowledge"].some(n => called.has(n))) return "";
+  plog("warn", "✋ статья или глава закона по памяти — прошу найти текст");
+  return "ПРОВЕРКА: номера статей и глав законов по памяти путаются — так легко выдать чужую главу за нужную. Найди текст: web_search "
+    + "(например «глава 39 ГК РФ» — consultant.ru или garant.ru), затем read_webpage найденной страницы, и отвечай по найденному: как называется "
+    + "глава (статья), что она регулирует; источник назови. Уже сказанное не повторяй. Не нашлось — честно скажи.";
 }
 /* «Расскажи про руническую вязь и покажи, как она выглядит» — рассказала словами, show_images не вызвала */
 const SHOW_ASK = /(?:покажи|показать|покажите)[^.?!]{0,50}(?:как\s+(?:он[аио]?\s+|они\s+)?выгляд|картинк|изображени|фото|рисун|иллюстрац)|как\s+(?:он[аио]?\s+|они\s+)?выгляд[а-яё]*\s+[а-яё]/i;

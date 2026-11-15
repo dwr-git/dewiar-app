@@ -344,6 +344,8 @@ function wkEmptyHtml() {
     + (syncCred() ? "" : `<p class="hint">Сначала войдите в Dewiar: Настройки → Мозг → «Подключить мозг Dewiar».</p>`)
     + `<button class="btn p w" id="wk-scan">${WK_CAM}<span>Сканировать печать</span></button>`
     + `<div class="card wk-paste"><label class="f"><span>Или вставьте ссылку</span><input id="wk-plink" placeholder="https://dewiar.pro/…?work=…" autocomplete="off"></label><button class="btn w" id="wk-pgo">Открыть приглашение</button><div class="res" id="wk-pres"></div></div>`
+    // 15.11 (планшет: «функционала не хватает — нужен раздел Работа, а его нет»): руководителю — где его «Работа»
+    + `<div class="card wk-boss"><b>Вы руководитель?</b><p class="hint" style="margin:6px 0 0">Поручения сотрудникам, клиенты и сайты ведёт Dewiar на компьютере — там сама доска. Поставьте его (dewiar.pro → «Скачать») и подключите этот телефон или планшет: «Настройки» → «Устройства». Здесь появится вкладка «Сотрудники» — поручать и проверять можно отсюда.</p></div>`
     + `<p class="hint wk-foot">Уйдёте с работы — уйдёт и всё рабочее. Личное — заметки, напоминания, близкие — остаётся с вами. Работ может быть несколько.</p>`
     + (wkAdd ? `<button class="btn w" id="wk-back">Назад к поручениям</button>` : "");
 }

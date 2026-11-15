@@ -3868,6 +3868,17 @@ def S(props, req=()):
 
 
 # имя: (описание для модели, схема, риск, обработчик, название в студии)
+def t_more_tools(args, ctx):
+    """Модель попросила действия, которых в этом вопросе не было (харнесс, шаг 1): сами действия добавит разговор
+    (engine_answer — следующий шаг уже с ними); здесь — ответ, что добавлено."""
+    ids = [str(x) for x in (args.get("packs") or []) if str(x)]
+    known = {g["id"]: g["title"] for g in modules.groups()}
+    got = [known[i] for i in ids if i in known]
+    if not got:
+        raise ToolError("таких групп нет — смотри список в описании more_tools")
+    return "Добавлены действия: " + ", ".join(got) + ". Вызывай нужное из них."
+
+
 TOOLS = {
     "route": ("Маршрут на карте: «как дойти до…», «проложи маршрут», «построй пешком дворами», геоточка или ссылка на карту. "
               "to — куда: адрес с городом, место или координаты, ссылка на карту; from — откуда (пусто — от того места, где "
@@ -3928,6 +3939,9 @@ TOOLS = {
                    "и калькулятором — только этим. city — город.", S({"city": {"type": "string"}}, ["city"]), "safe", t_world_time,
                    "Время в городе"),
     "list_reminders": ("Список активных напоминаний.", S({}), "safe", t_list_reminders, "Напоминания: список"),
+    # харнесс, шаг 1 (15.11): описание собирается в Toolbox.specs — со списком отложенных групп этого вопроса
+    "more_tools": ("Нужных действий нет среди доступных — попроси их: packs — id групп.", S({"packs": {"type": "array", "items": {"type": "string"}}},
+                   ["packs"]), "safe", t_more_tools, "Ещё действия"),
     "change_reminder": ("Изменить напоминание: время, дни повтора или текст. id (из list_reminders) или text — какое; when — "
                         "новое время и повтор обычными словами: «по будням, кроме пятницы, в 17:50», «с понедельника по четверг "
                         "в 17:50», «каждый день в 8»; new_text — новый текст. В один день недели нужно другое время (по пятницам "
@@ -4467,18 +4481,46 @@ class Toolbox:
         conf = t.get("confirm", {}).get(name, TOOLS[name][2] == "confirm")
         return bool(on), bool(conf)
 
-    def specs(self):
-        """Описания включённых инструментов для модели: [{name, description, parameters}]."""
+    def specs(self, text=None, keep=()):
+        """Описания включённых инструментов для модели: [{name, description, parameters}]. text — вопрос: облегчённый набор
+        (харнесс, шаг 1, 15.11; настройка tools.slim, по умолчанию включено): ядро — всегда, модули и пачки действий
+        (modules.groups) — когда вопрос про них, ими пользовались последние 15 минут или модель попросила (keep, more_tools);
+        отложенные — списком в описании more_tools. text None — весь набор (большие задачи, проверки, справка)."""
         out = [{"name": n, "description": d, "parameters": p} for n, (d, p, *_rest) in TOOLS.items()
-               if self.policy(n)[0]]
+               if n != "more_tools" and self.policy(n)[0]]
+        if text is not None and (self.s.get("tools") or {}).get("slim", True) is not False:
+            # порядок — ради кэша начала запроса («Голос без пауз»): ядро и more_tools (описание неизменное — все группы
+            # человека) одинаковы у всех вопросов; подобранное — после, в порядке появления в разговоре; предложенное
+            # группа остаётся 15 минут — набор в разговоре только растёт, и сервер не перечитывает разговор заново
+            now = time.time()
+            used, offered = self.__dict__.setdefault("_used", {}), self.__dict__.setdefault("_offered", {})
+            fresh = {g for g, t in list(used.items()) + list(offered.items()) if now - t < modules.SLIM_RECENT}
+            all_groups = {g: g_t for g, g_t in modules.slim(out, "", {x["id"] for x in modules.groups()})[1].items()}
+            core, extra, _left = modules.slim(out, text, set(keep) | fresh)
+            first = self.__dict__.setdefault("_first", {})
+            for g in extra:
+                if now - offered.get(g, 0) >= modules.SLIM_RECENT:
+                    first[g] = now                      # снова появилась после перерыва — в конец
+                offered[g] = now
+            out = core
+            if all_groups:
+                titles = {x["id"]: x["title"] for x in modules.groups()}
+                p = TOOLS["more_tools"][1]
+                out = out + [{"name": "more_tools", "parameters": p, "description": (
+                    "Здесь главные действия, остальные — группами. Для просьбы нужна группа, которой нет среди действий, — сначала "
+                    "попроси её (packs — id), следующим шагом её действия появятся; не говори «не умею», не попросив: "
+                    + "; ".join(f"{g} — {titles[g]}" for g in sorted(all_groups)) + ".")}]
+            tail = [x for g in sorted(extra, key=lambda g: (first.get(g, now), g)) for x in extra[g]]
+        else:
+            tail = []
         kids = self.hooks.get("kids")
         if kids is not None and kids.on():
-            return out                          # детский режим: ни навыков, ни подключённых MCP — только KIDS_TOOLS
+            return out + tail                   # детский режим: ни навыков, ни подключённых MCP — только KIDS_TOOLS
         if self.skills and self.skills.enabled():
             out += [{"name": n, "description": d, "parameters": p} for n, (d, p) in SKILL_TOOLS.items()]
         if self.mcp:
             out += self.mcp.specs()
-        return out
+        return out + tail                       # подобранное к вопросу — в самом конце (кэш начала запроса)
 
     def off_note(self):
         """Что человек сам выключил в студии («Руки» → «Умения») — чтобы модель не говорила «не умею» (№144, 20.10:
@@ -4744,6 +4786,9 @@ class Toolbox:
         # _truncated — служебная пометка llm.py об оборванном ответе, обработчикам не нужна
         args = {k: v for k, v in coerce_args(TOOLS[name][1], args).items() if not k.startswith("_trunc")}
         call = lambda: TOOLS[name][3](args or {}, {"settings": self.s, "reminders": self.reminders, "skills": self.skills, **self.hooks})  # noqa: E731
+        g = modules.pack_of(name)
+        if g is not None:                               # пользовались — группа остаётся у модели ещё 15 минут (specs)
+            self.__dict__.setdefault("_used", {})[g["id"]] = time.time()
         m = modules.of(name)
         return call() if m is None else self._fused(m["id"], call)
 

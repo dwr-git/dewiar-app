@@ -74,6 +74,24 @@ def poem_unsourced(ask, answer, called=()):
             "слово в слово. Не нашлось — честно скажи, что текста под рукой нет.")
 
 
+# №738 (15.11, телефон, персонаж-юрист): «Поясни про главу 39 ГК РФ» — по памяти «Ограничение дееспособности», а это
+# «Возмездное оказание услуг». Номер статьи или главы и кодекс (закон) в вопросе — отвечаем по найденному тексту
+LAW_REF_RX = re.compile(r"(?:стат(?:ья|ьи|ью|ье|ей)|ст\.|глав(?:а|ы|у|е|ой)|пункт|п\.)\s*№?\s*\d+", re.I)
+LAW_CODE_RX = re.compile(r"\b(?:ГК|УК|КоАП|ТК|НК|ЖК|СК|АПК|ГПК|УПК|ЗК|БК|ГрК|КАС)\b|кодекс|конституц|\d+\s*-\s*ФЗ|федеральн\w*\s+закон|\bзакон\w*\s+(?:о|об)\b", re.I)
+
+
+def law_unsourced(ask, answer, called=()):
+    """Вопрос про статью или главу закона (кодекса) — ответ только по найденному тексту закона, не по памяти (№738)."""
+    a = ask or ""
+    if not answer or len(answer) < 160 or not LAW_REF_RX.search(a) or not LAW_CODE_RX.search(a):
+        return ""
+    if set(called or ()) & {"web_search", "read_webpage", "search_documents", "find_notes", "ask_knowledge"}:
+        return ""
+    return ("ПРОВЕРКА: номера статей и глав законов по памяти путаются — так легко выдать чужую главу за нужную. Найди текст: "
+            "web_search (например «глава 39 ГК РФ» — consultant.ru или garant.ru), затем read_webpage найденной страницы, и отвечай "
+            "по найденному: как называется глава (статья), что она регулирует; источник назови. Не нашлось — честно скажи.")
+
+
 # №390: вопрос про фоновые задачи («задача работает?», «почему не запущена», «что с заданием») — к нему их настоящее состояние
 TASK_ASK_RX = re.compile(r"задач|задани|фонов|застрял|выполня(?:ется|ешь|ет)|запущ|работает ли|что с (?:ней|ним)", re.I)
 def _no_money(e):
@@ -2183,7 +2201,11 @@ class AnswerMixin:
             if temp != prof_temp(prof):
                 prof = dict(prof, temperature=temp)       # творческая просьба — смелее (отзыв 17.10 про креатив)
                 log.info("🎨 Творческая просьба — температура %.2f", temp)
-            specs = self.toolbox.specs() if self.s.get("tools", "enabled_all") is not False else []
+            # харнесс, шаг 1 (15.11): к вопросу — ядро действий и только нужные модули (Toolbox.specs(text)); прочее модель
+            # попросит сама (more_tools) — вопрос легче вдвое: окно своей модели, свой ключ, очередь облака
+            slim_text = text.split("\n\nВложения:")[0] + "\n" + "\n".join(
+                str(m.get("content") or "")[:300] for m in self.history[-4:] if m.get("role") == "user" and isinstance(m.get("content"), str))
+            specs = self.toolbox.specs(slim_text) if self.s.get("tools", "enabled_all") is not False else []
             if specs and getattr(turn, "via_job", False) and "[Дело по расписанию]" in text:
                 from engine_music import SUMMARY_JOB_RX
                 if SUMMARY_JOB_RX.search(text.split("»", 1)[0]):
@@ -2721,7 +2743,8 @@ class AnswerMixin:
                         or poem_check(ask0, step_text) \
                         or songs_count(ask0, step_text) \
                         or month_year_wrong(ask0, step_text) \
-                        or (poem_unsourced(ask0, step_text, called) if "web_search" in names_ else "")
+                        or (poem_unsourced(ask0, step_text, called) if "web_search" in names_ else "") \
+                        or (law_unsourced(ask0, step_text, called) if "web_search" in names_ else "")
                     if fix:                                  # экзамен ПК 0.81.1: сказала, но не сделала; числа без инструмента
                         deed_checked = True
                         log.info("✋ %s — прошу переделать", fix.split(" — ")[0].split(":", 1)[-1].strip()[:90])
@@ -2766,6 +2789,12 @@ class AnswerMixin:
                     done_calls.append({"name": c.get("name"), "args": c.get("args") or {}, "result": str(r_)[:300]})
                 if turn.cancel.is_set():
                     break
+                more = [str(g) for c, r in zip(calls, results) if c.get("name") == "more_tools" and str(r).startswith("Добавлены")
+                        for g in (c.get("args") or {}).get("packs") or []]
+                if more and specs:                      # модель попросила группу действий — следующий шаг уже с ними
+                    turn.packs = set(getattr(turn, "packs", None) or ()) | set(more)
+                    specs = self.toolbox.specs(slim_text, keep=turn.packs)
+                    log.info("🧰 Модель попросила действия: %s", ", ".join(sorted(turn.packs)))
                 if any(c.get("name") == "start_task" and not str(r).startswith(("Ошибка", "Инструмент")) for c, r in zip(calls, results)):
                     specs = []                          # задача запущена — делает она; в разговоре только сказать, что взялся
                     log.info("🧵 Задача запущена — в разговоре дальше без действий")

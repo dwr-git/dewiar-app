@@ -174,7 +174,7 @@ ok('self.toolbox.fuse.on_trip' in eng and '"fuse:" + ("plugin" if k.startswith("
 et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 ok("на паузе после сбоя" in et and "fuse.tripped" in et, "в разговоре — «на паузе после сбоя», а не «выключен пользователем»")
 src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
-p = src[src.index("    def policy(self, name):"):src.index("    def specs(self):")]
+p = src[src.index("    def policy(self, name):"):src.index("    def specs(self")]
 ok("configured()" not in p and "paired()" not in p and 'startswith("site_")' not in p, "в policy больше нет веток отдельных служб — только дверь")
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)
