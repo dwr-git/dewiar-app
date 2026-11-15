@@ -264,6 +264,15 @@ class Radar:
                 "items": [{"title": x.get("title") or "", "why": (why.get(x["id"]) or x["a"].get("why") or x["a"].get("summary") or "")[:220],
                            "url": x.get("url") or "", "signal": float(x["a"].get("signal") or 0)} for x in pick]}
 
+    def day_trend(self):
+        """Самая растущая тема Радара за сутки (растёт или новая, от 3 материалов) -> {name, day, status} или None.
+        Владелец 15.11: «итог дня — рассказать нечего… а в Радаре сегодня проскакивали растущие тренды»."""
+        try:
+            t = next((x for x in I.trends(self.analyzed(), time.time()) if x["status"] in ("up", "new") and x["day"] >= 3), None)
+        except Exception:  # noqa: BLE001
+            return None
+        return {"name": t["name"], "day": t["day"], "status": t["status"]} if t else None
+
     def prompt_line(self):
         """Кусок системной подсказки: что сегодня в Радаре — чтобы Лира могла сама рассказать одно интересное к месту."""
         try:

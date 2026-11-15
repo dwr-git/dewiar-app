@@ -128,6 +128,12 @@ public class MainActivity extends Activity implements Net.Sink {
                     out = new Uri[n];
                     for (int k = 0; k < n; k++) out[k] = data.getClipData().getItemAt(k).getUri();
                 } else if (data.getData() != null) out = new Uri[]{data.getData()};
+                else {
+                    // №753 (15.11, Xiaomi): «Свой звук» → «Рингтоны» → нажал мелодию — «не добавляется». Выбор мелодий
+                    // системы отвечает не адресом файла, а EXTRA_RINGTONE_PICKED_URI — берём его
+                    Uri r = data.getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+                    if (r != null) out = new Uri[]{r};
+                }
             }
             fileCb.onReceiveValue(out);
             fileCb = null;

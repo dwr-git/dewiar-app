@@ -2014,6 +2014,34 @@
    "judge": "Нашёл в руководстве (app_help) и сказал точно: код из 6 цифр (и QR) — на устройстве, где Dewiar уже работает: «Устройства» → «Подключить ещё устройство» (на телефоне — «Настройки» → «Устройства»); на новом компьютере — «Устройства» → «Ввести код». Отправить новую заявку или «Мозг» → «Добавить устройство» (старый путь) — 0 баллов."
   },
   {
+   "id": "help_ubuntu_cmd",
+   "group": "Как в жизни",
+   "title": "«Дай команду для скачки» на Ubuntu — настоящий адрес, а не выдуманный (№755)",
+   "steps": [
+    {
+     "say": "У меня Ubuntu 24.04, я в терминале. Дай команду, чтобы скачать и поставить Dewiar."
+    }
+   ],
+   "expect": {
+    "any": [
+     "github.com/dwr-git/dewiar-app",
+     "dewiar.pro/dwrapp/download.php"
+    ],
+    "any2": [
+     "apt install",
+     "dpkg -i"
+    ],
+    "none": [
+     "dewiar.pro/downloads/",
+     "не выпускается"
+    ]
+   },
+   "tool": {
+    "app_help": {}
+   },
+   "judge": "Нашёл в руководстве и дал настоящую команду: wget https://github.com/dwr-git/dewiar-app/releases/latest/download/dewiar-assistant_all.deb && sudo apt install ./dewiar-assistant_all.deb (или страница dewiar.pro/dwrapp/download.php). Выдуманный адрес (dewiar.pro/downloads/…) или «для Ubuntu Dewiar не выпускается» — 0 баллов."
+  },
+  {
    "id": "help_kids",
    "group": "Как в жизни",
    "title": "Как включить детский режим — по руководству",

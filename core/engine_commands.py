@@ -29,6 +29,26 @@ def _kids_blocked(cmd, a):
 
 
 class CommandsMixin:
+    def _max_shared_ok(self):
+        """Бот Dewiar в MAX настроен на сайте? (№748, 15.11: «пишет, что MAX не подключён к сервису» — на сайте нет токена
+        бота, а студия предлагала «Подключить MAX»). Сайт без токена отвечает 503 «MAX пока не подключён». Кэш 30 минут;
+        не узнали (нет связи) — None: студия показывает кнопку как раньше. -> {"ok": True | False | None}"""
+        c = getattr(self, "_max_shared_c", None)
+        if c and time.time() - c[0] < 1800:
+            return {"ok": c[1]}
+        ok = None
+        try:
+            import httpx
+            from maxbot import SHARED_URL
+            u = self.s.get("max_url") or self.account.service_url("max") or SHARED_URL
+            r = httpx.get(u, timeout=8)
+            ok = False if (r.status_code == 503 and "не подключён" in r.text) else True
+        except Exception:  # noqa: BLE001
+            ok = None
+        if ok is not None:
+            self._max_shared_c = (time.time(), ok)
+        return {"ok": ok}
+
     def _course_did(self, key):
         """Шаг урока «сделайте в студии…» (course.did) — без ошибок, если курса нет."""
         try:
@@ -1734,6 +1754,8 @@ class CommandsMixin:
             if cmd in ("server_add", "server_remove"):
                 self.emit("tools", tools=self.toolbox.catalog())
             return sv.public()
+        if cmd == "max_shared":                  # 15.11 (№748): бот Dewiar в MAX настроен на сайте? (раз в 30 минут)
+            return self._max_shared_ok()
         if cmd.startswith("max_"):               # MAX: бот Dewiar (через сайт) или свой бот организации
             from telegram import TelegramError
             from maxbot import SHARED_URL as MAX_URL

@@ -138,7 +138,7 @@ function openEditor(p) {
    на Claude»): чипы — «Как у всех» и все модели из «Мозга»; выбор сохраняется сразу (llm.persona[id]). */
 function brainName(prof, id) {
   if (!prof) return "";
-  if (prof.cloud) return prof.title || "Модели Dewiar";
+  if (prof.cloud) return "Dewiar";                 // какая модель стоит на сервере Dewiar — не показываем (владелец 15.11)
   return prof.name || prof.model || id;
 }
 function brainOf(pid) {

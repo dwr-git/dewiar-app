@@ -797,7 +797,13 @@ def ui_http_base():
             self.send_error(404)
             return None
 
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(HERE)))
+    class Server(http.server.ThreadingHTTPServer):
+        # 15.11 (№747, №752): окно студии просит ~80 файлов разом; очередь в 5 соединений (по умолчанию) на Windows под
+        # антивирусом переполнялась — отдельный файл не приходил, и студия открывалась не целиком
+        request_queue_size = 256
+        daemon_threads = True
+
+    srv = Server(("127.0.0.1", 0), functools.partial(Handler, directory=str(HERE)))
     threading.Thread(target=srv.serve_forever, name="ui-http", daemon=True).start()
     _UI_HTTP.append(f"http://127.0.0.1:{srv.server_address[1]}/")
     return _UI_HTTP[0]

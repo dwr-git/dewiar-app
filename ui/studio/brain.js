@@ -661,7 +661,9 @@ const BR_SVC = [["gemini", "Gemini", "Google"], ["kimi", "Kimi", "Moonshot"], ["
   ["qwen", "Qwen", "Alibaba"], ["openai", "OpenAI", "GPT"], ["anthropic", "Claude", "Anthropic"], ["openrouter", "OpenRouter", "сотни моделей"],
   ["mistral", "Mistral", ""], ["xai", "Grok", "xAI"], ["vsegpt", "VseGPT", "карта РФ"], ["proxyapi", "ProxyAPI", "карта РФ"], ["custom", "Свой адрес", "любой «как OpenAI»"]];
 const brProfs = () => (S && S.llm && S.llm.profiles) || {};
-const brShort = (prof, id) => { const n = brainName(prof, id) || ""; return n.replace(/^DWR Chat\s*/i, "").replace(/^Dewiar Облако$/i, "Dewiar"); };
+/* облако Dewiar — просто «Dewiar»: какая модель стоит на сервере, людям знать не нужно (владелец 15.11: «внутреннюю кухню
+   не показывать»); у моделей по ключу и своих — их имя */
+const brShort = (prof, id) => brainName(prof, id) || "";
 function brOf(pid) { return pid ? brainOf(pid) : ((S.llm || {}).active || ""); }      // "" у персонажа — «как у всех»
 function brChip() {
   const b = $("#hm-brain"); if (!b || !S || !S.llm) return;

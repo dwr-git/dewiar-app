@@ -9,6 +9,28 @@
      sessionStorage — у каждого окна свой, а фреймам-песочницам (другое происхождение) он недоступен;
    — ключ моста (bn) живёт только в замыкании ниже: им подписан каждый вызов pywebview.api.* (Python без него не
      исполняет — ui/app.py: guard_bridge). Код страниц прежний: pywebview.api.X(...). */
+/* 15.11 (№747, №752 — «Студия загрузилась не целиком»: у разных людей не пришёл то один файл, то другой — entities.js,
+   brain.js; сами файлы на месте): окно грузит ~80 файлов разом со своего 127.0.0.1, и на Windows под нагрузкой (антивирус
+   проверяет каждый файл) отдельный запрос обрывался. Ядро теперь держит очередь длиннее (ui/app.py), а здесь — с самого
+   начала, раньше всех файлов: какой файл не пришёл — в список ошибок страницы (с именем), и страница один раз сама
+   перечитывается (не чаще раза в минуту — если файла правда нет, плашка «не целиком» назовёт его). */
+(function () {
+  window.__jsErr = window.__jsErr || []; window.__jsErrAll = window.__jsErrAll || [];
+  window.addEventListener("error", function (e) {
+    const t = e.target;
+    if (!t || t === window || (t.tagName !== "SCRIPT" && t.tagName !== "LINK")) return;
+    const s = "файл не загрузился @ " + String(t.src || t.href || "").split("?")[0].split("/").pop() + ":0";
+    window.__jsErr.push(s);
+    if (window.__jsErrAll.length < 10) window.__jsErrAll.push(s);
+    if (t.tagName !== "SCRIPT" || !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) return;
+    try {
+      const k = "dw.reload:" + location.pathname;
+      if (Date.now() - (+sessionStorage.getItem(k) || 0) < 60000) return;
+      sessionStorage.setItem(k, String(Date.now()));
+    } catch (x) { return; }
+    setTimeout(function () { location.reload(); }, 300);
+  }, true);
+})();
 (function () {
   const KEY = "dw.page:" + location.pathname;
   let raw = location.search;

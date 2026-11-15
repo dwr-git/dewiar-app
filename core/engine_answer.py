@@ -7,6 +7,14 @@
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
 
 # инструменты «узнать» (не «сделать»): после них ответ без слов — не ответ, «Готово.» вместо сути не подставляем
+# вопрос о данных и приватности (харнесс, шаг 2: «Ваши данные» — справкой только к таким вопросам)
+# «Говори помедленнее» (идея №257, 15.11: «озвучка звучит очень быстро, она не может себя замедлить»; курс «Неделя с Лирой»
+# это обещал): короткая просьба о темпе — без модели, «Голос» → «Темп речи» на шаг
+SPEED_RX = re.compile(r"(?i)^(?:(?P<who>[а-яё]+)(?P<sep>[,!]?)\s+)?(?:(?:говори|говорите|разговаривай|читай|можно|пожалуйста)\s+)*"
+                      r"(?:(?:по)?(?P<how>медленнее|быстрее)|не\s+так\s+(?P<notfast>быстро))(?:\s*,?\s*(?:пожалуйста|говори|пожалуй))*\s*[.!?]*$")
+PRIVACY_ASK_RX = re.compile(r"(?i)конфиденциальн|приватн|персональн\w* данн|(?:мо[иё]|наш)\w* данн|данн\w* (?:хран|уход|передаёт|передает)|"
+                            r"кто (?:видит|читает|слышит)|где хран|куда (?:уход|отправ|передаёт|передает)|слива|утеч|шифру|"
+                            r"безопасн\w* (?:ли|данн)|152-?фз|gdpr|privacy|(?:хран|сохраня)\w*.{0,25}(?:разговор|переписк)|облак\w* видит")
 # вопрос про даты и сроки — тогда к нему справка «ближайшие дни» и «считай calc» (_turn_context)
 DATE_ASK_RX = re.compile(r"дн(я|ей|и|ём)\b|недел|понедельник|вторник|сред[уыа]|четверг|пятниц|суббот|воскресен|завтра|послезавтра|"
                          r"числ[оа]|дат[аыуе]|когда|сколько.{0,20}(дн|недел|месяц|осталось)|через\s+\d|рождени|праздник|"
@@ -477,6 +485,8 @@ class AnswerMixin:
                 return
         if not raw and not quiet and not via and not images and not K and self._pc_cmd(text):
             return
+        if not raw and not quiet and not images and not K and self._speed_cmd(text, via):
+            return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._vault_cmd(text, via):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._home_cmd(text, via):
@@ -832,12 +842,8 @@ class AnswerMixin:
             base += kids.prompt()                      # детский режим: правила разговора с ребёнком (kids.py)
         elif getattr(self, "senior", None) is not None and self.senior.on():
             base += self.senior.prompt()               # «Для старших»: просто, тепло, неторопливо; осторожно с деньгами
-        try:                                           # «Ваши данные»: что хранится и куда уходит (privacy.py)
-            import privacy
-            base += "\n\n" + privacy.rule((self.s.active_llm() or {}).get("base_url", ""),
-                                           bool(getattr(self, "_sync_on", lambda: False)()))
-        except Exception:  # noqa: BLE001
-            log.debug("конфиденциальность: подсказка", exc_info=True)
+        if not self._slim_prompt(with_tools):            # «Ваши данные» (privacy.py); в облегчённой — справкой к вопросу о данных
+            base += self._privacy_rule()
         # сами фразы ловит _window_cmd без модели; это — чтобы ассистент мог подсказать их, если спросят
         base += ("\n\nЕсли спросят, как тебя спрятать или выключить: «спрячься» — виджет уходит в трей, а ты слушаешь и "
                  "появляешься на имя; «покажись» — вернуть виджет; «отключись» — выйти из Dewiar совсем (включить снова — "
@@ -912,8 +918,25 @@ class AnswerMixin:
                      # OS_NAME на Windows — «Windows 10»/«Windows 11», поэтому систему узнаём по os.name, не по строке
                      + (" Нужны права администратора — пиши sudo как обычно: Dewiar сам покажет окно для пароля. Никогда "
                         "не проси пароль в разговоре и не вставляй его в команды (echo … | sudo -S)." if os.name != "nt" else ""))
-            base += self.skills.prompt_lean() if lean else self.skills.prompt()
+            base += self.skills.prompt_lean() if (lean or self._slim_prompt(with_tools)) else self.skills.prompt()
         return base
+
+    def _slim_prompt(self, with_tools=True):
+        """Харнесс, шаг 2 (15.11): облегчённая подсказка — вместе с облегчённым набором действий (tools.slim, по умолчанию
+        да): навыки — только именами (описания 1–3 подходящих — справкой к вопросу), «Ваши данные» — справкой к вопросу
+        о данных. Минус ~6 тыс. знаков (~2 тыс. токенов) к каждому вопросу. Выключить — tools.slim: false."""
+        try:
+            return bool(with_tools) and (self.s.get("tools", "slim") is not False)
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _privacy_rule(self):
+        try:
+            import privacy
+            return "\n\n" + privacy.rule((self.s.active_llm() or {}).get("base_url", ""), bool(getattr(self, "_sync_on", lambda: False)()))
+        except Exception:  # noqa: BLE001
+            log.debug("конфиденциальность: подсказка", exc_info=True)
+            return ""
 
     def _personal(self, with_tools=False):
         """Личное — то, что у каждого своё и меняется со временем: имя, память «Обо мне», уроки из поправок, душа,
@@ -1042,13 +1065,15 @@ class AnswerMixin:
             note = self.conv.turn_note()
         except Exception:  # noqa: BLE001
             note = ""
-        if self.s.get("llm", "lean_prompt") and text:      # короткая инструкция: описания навыков — к подходящему вопросу
+        if (self.s.get("llm", "lean_prompt") or self._slim_prompt()) and text:   # описания навыков — к подходящему вопросу
             try:
                 hint = self.skills.hint_for(text)
             except Exception:  # noqa: BLE001
                 hint = ""
             if hint:
                 out += " " + hint
+        if self._slim_prompt() and text and PRIVACY_ASK_RX.search(text):     # «где хранятся мои данные?» — факты сюда
+            out += self._privacy_rule().replace("\n\n", " ", 1)
         try:
             mine = self.mine_now_line(text)                # идея №169: «что это играет?», «удали эту песню» — Лира знает, что играет
         except Exception:  # noqa: BLE001
@@ -1964,6 +1989,35 @@ class AnswerMixin:
         except Exception as e:  # noqa: BLE001
             log.info("Пауза не получилась: %s", e)
             return False
+
+    def _speed_cmd(self, text, via=None):
+        """«Говори помедленнее», «быстрее», «не так быстро» -> True (темп сменён и сказано), иначе False."""
+        m = SPEED_RX.match((text or "").strip().replace("ё", "е").replace("Ё", "Е"))
+        if not m:
+            return False
+        who = (m.group("who") or "").lower()
+        if who and not m.group("sep") and who not in ("говори", "говорите", "можно", "пожалуйста", "читай", "разговаривай"):
+            names = set()                                # «Лира медленнее» — да; «машина быстрее» — не просьба о темпе
+            try:
+                for p in self.personas.all():
+                    names |= {str(x).lower() for x in [p.get("name")] + list(p.get("aliases") or p.get("wake") or [])}
+            except Exception:  # noqa: BLE001
+                pass
+            if who not in names:
+                return False
+        slower = (m.group("how") or "").lower() == "медленнее" or bool(m.group("notfast"))
+        if not slower and not re.search(r"(?i)говори|разговаривай|читай", text):
+            return False                                 # «быстрее!» без «говори» — скорее «поторопись», чем о темпе голоса
+        v = float(self.s.get("tts", "speed") or 1.25)
+        nv = round(min(1.4, max(0.7, v + (-0.15 if slower else 0.15))), 2)
+        if nv == round(v, 2):
+            self._say_quick("Медленнее уже некуда — это самый спокойный темп." if slower else "Быстрее уже некуда — это самый быстрый темп.", text, via)
+            return True
+        self.s.update({"tts": {"speed": nv}})
+        log.info("🗣 Темп речи: %.2f → %.2f («%s»)", v, nv, text)
+        self.emit("settings", settings=self.s.snapshot())    # студия: ползунок «Темп речи» — на новом месте
+        self._say_quick("Хорошо, говорю медленнее." if slower else "Хорошо, говорю быстрее.", text, via)
+        return True
 
     def _media_word(self, word):
         """Пока играет радио — одно слово без имени, как у колонки: «дальше», «громче», «тише»."""
@@ -2945,7 +2999,13 @@ class AnswerMixin:
             if is_cloud(prof) and key_gone(e) and self._cloud_key_gone():
                 msg = "Ключ Dewiar удалён на сайте — теперь думаю по аккаунту dewiar.pro. Повторите, пожалуйста, вопрос."
             turn.error = msg
-            if getattr(e, "topup", False):
+            from health import why_kind
+            if getattr(turn, "greet", False) and why_kind(e) in ("connect", "timeout"):
+                # 15.11 (владелец: после сна вместо «С возвращением» — «не могу подключиться к dewiar.pro»): приветствие
+                # человек не просил — сеть ещё не поднялась, значит, просто молчим; спросит сам — ответим или скажем почему
+                log.info("👋 приветствие не вышло — сеть ещё не готова (%s): молчу", e)
+                turn.full, turn.error = "", ""
+            elif getattr(e, "topup", False):
                 # 0.82.1: талеры кончились — на экран полный текст (номер DW-…, как пополнить), голосом — коротко и без
                 # ссылки; виджет и студия показывают кнопку «Пополнить» (topup)
                 self.emit("error", text=msg, topup=True)

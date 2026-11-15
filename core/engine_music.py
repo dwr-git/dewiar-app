@@ -319,7 +319,15 @@ class MusicMixin:
             if SUMMARY_JOB_RX.search(item.get("text", "")) or item.get("preset") in ("evening", "week"):
                 # владелец 11.11: «в 21:00 что-то запустилось — и всё, результат нулевой, непонятно, что это и зачем»:
                 # итог молчит (сегодня только привычки) — строкой в виджете, без голоса
-                self.note(f"🗓 {title}: сегодня, кроме привычных дел, рассказать нечего")
+                # владелец 15.11: «рассказать нечего — успех; а в Радаре сегодня росли темы — могла бы рассказать»: тогда
+                # вместо «нечего» — одна строка о растущей теме (без голоса, как и было)
+                tr = getattr(self, "insight", None)
+                tr = tr.day_trend() if tr is not None else None
+                if tr:
+                    self.note(f"🗓 {title}: из дел — ничего нового. В «Радаре» {'новая тема' if tr['status'] == 'new' else 'растёт тема'} "
+                              f"«{tr['name']}» — {tr['day']} {__import__('mymusic')._plural(tr['day'], 'материал', 'материала', 'материалов')} за сутки")
+                else:
+                    self.note(f"🗓 {title}: сегодня, кроме привычных дел, рассказать нечего")
         elif ok and to_bot:
             bot.send(text)                               # только ответ: поручение и заголовок в чат не пишем (29.10)
             self.emit("push", title=f"🗓 {title}", text=text[:300], critical=False)

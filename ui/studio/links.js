@@ -459,6 +459,15 @@ $("#mx-test").onclick = async (ev) => { const t = await mxDo(ev, "max_test", {},
 $("#mx-recode").onclick = async () => { const t = await mxDo(null, "max_new_code"); if (t) $("#mx-res").textContent = "Прежний владелец отвязан — новый владелец открывает ссылку и жмёт «Начать»."; };
 $("#mx-off").onclick = async () => { const t = await mxDo(null, "max_forget"); if (t) { mxWas = null; $("#mx-res").textContent = "MAX отключён — бот вам больше не пишет."; } };
 core.on("max", e => mxFill(e));
+/* №748 (15.11): бот Dewiar в MAX на сайте ещё не настроен — не обещаем «Подключить MAX», а честно говорим и оставляем
+   Telegram и свой бот организации (ниже) */
+function mxShared() {
+  core.call("max_shared").then(r => {
+    const sh = $("#mx-setup .tg-shared"); if (!sh || !r || r.ok !== false) return;
+    sh.innerHTML = `<div><b>Бот Dewiar в MAX — скоро</b><span>Пока пишите Лире в Telegram (выше) или подключите своего бота организации — ниже.</span></div>`;
+  }).catch(() => {});
+}
+document.addEventListener("studio-sec", (e) => { if (e.detail === "connect") mxShared(); });
 
 
 /* ---------- Obsidian ---------- */

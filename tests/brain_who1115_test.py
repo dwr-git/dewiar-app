@@ -55,7 +55,8 @@ with sync_playwright() as p:
     pg.goto((ROOT / "ui/settings.html").as_uri() + "?port=1&skin=neusky")
     pg.wait_for_timeout(1800)
     pg.evaluate("() => { const w = document.querySelector('#wlc'); if (w) w.remove(); }")
-    ok(pg.is_visible("#hm-brain") and "Qwen 3.8" in pg.inner_text("#hm-brain"), f"на «Главной» — чем думает Лира: {pg.inner_text('#hm-brain')!r}")
+    ok(pg.is_visible("#hm-brain") and pg.inner_text("#hm-brain").strip().endswith("Dewiar") and "Qwen" not in pg.inner_text("#hm-brain"),
+       f"на «Главной» — чем думает Лира; облако — просто «Dewiar», без модели сервера (владелец 15.11): {pg.inner_text('#hm-brain')!r}")
     pg.click("#hm-brain")
     pg.wait_for_timeout(300)
     rows = pg.locator("#br-body .br-row")

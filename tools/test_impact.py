@@ -190,8 +190,8 @@ def pick(base=None, verbose=True):
     chosen |= {t for t in added if t in have}
     unknown = []
     for f in ch:
-        if f in ("tests/run_quick.sh", "tests/run_all.sh"):
-            continue
+        if f in ("tests/run_quick.sh", "tests/run_all.sh", "tests/impact.json"):
+            continue                                   # записи проверок — выше; сама карта проверок ничего не задевает
         if f.startswith("tests/") and f.rsplit("/", 1)[-1] in have:
             chosen.add(f.rsplit("/", 1)[-1])
             why.append(f"{f}: сама проверка")

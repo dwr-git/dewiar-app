@@ -7957,12 +7957,14 @@ function wireSettings(info) {
     const f = g("snd-file").files[0]; if (!f) return;
     if (f.size > 12 * 1024 * 1024) { g("snd-res").className = "res bad"; g("snd-res").textContent = "Файл больше 12 МБ — выберите покороче."; return; }
     g("snd-res").className = "res"; g("snd-res").textContent = "Сохраняю…";
+    // мелодия из «Рингтонов» телефона приходит без имени файла (№753) — «Своя мелодия», а не номер
+    const nm = /^\d*$/.test(f.name.replace(/\.[a-z0-9]+$/i, "")) ? "Своя мелодия" : f.name.replace(/\.[a-z0-9]+$/i, "");
     const fr = new FileReader();
     fr.onload = () => {
-      const err = D.alarmSoundCustom ? D.alarmSoundCustom(String(fr.result).split(",")[1] || "", f.name.replace(/\.[a-z0-9]+$/i, "")) : "нет на этом телефоне";
+      const err = D.alarmSoundCustom ? D.alarmSoundCustom(String(fr.result).split(",")[1] || "", nm) : "нет на этом телефоне";
       if (err) { g("snd-res").className = "res bad"; g("snd-res").textContent = "Не подошёл: " + err + "."; return; }
       g("snd-res").className = "res ok"; g("snd-res").textContent = "Свой звук выбран.";
-      const c = $('.snd[data-snd="custom"]'); c.classList.remove("nofile"); g("snd-name").textContent = f.name.replace(/\.[a-z0-9]+$/i, "");
+      const c = $('.snd[data-snd="custom"]'); c.classList.remove("nofile"); g("snd-name").textContent = nm;
       $$(".snd").forEach(x => x.classList.toggle("on", x === c));
       sndPlaying(D.alarmSoundTry && D.alarmSoundTry("custom") ? "custom" : "");
     };

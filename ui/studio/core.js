@@ -71,15 +71,33 @@ function safeFrame(html, cls) {                    // -> <iframe> (srcdoc ста
 }
 function escH(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 // ошибки страницы — в журнал ядра (в отчёт): какой файл не загрузился и почему видно сразу, без догадок
-window.__jsErr = window.__jsErr || [];
-window.addEventListener("error", (e) => { if (/^ResizeObserver loop/i.test(e.message || "")) return; window.__jsErr.push(`${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno || 0}`); });
+window.__jsErr = window.__jsErr || []; window.__jsErrAll = window.__jsErrAll || [];
+/* 15.11 (№749: «Музыка: не открывает папки, не открывается выбор Радио», а в отчёте — ни одной ошибки страницы): ошибки
+   уходили в журнал один раз, через 3 с после подключения, а случившиеся позже (раздел открыли потом) — терялись. Теперь
+   каждая — в журнал ядра через 2 с (пачкой, не больше 30 за сеанс). */
+let jsErrT = 0, jsErrSent = 0;
+function jsErr(t) {
+  window.__jsErr.push(String(t).slice(0, 300));
+  if (window.__jsErrAll.length < 10) window.__jsErrAll.push(String(t).slice(0, 300));   // для плашки «не целиком» — и после отправки
+  if (jsErrT || jsErrSent >= 30) return;
+  jsErrT = setTimeout(() => {
+    jsErrT = 0;
+    if (!(window.core && core.connected) || !window.__jsErr.length) return;   // до связи — их отправит news.js после hello
+    const errs = window.__jsErr.splice(0, 30 - jsErrSent); jsErrSent += errs.length;
+    core.call("js_errors", { errors: errs }).catch(() => {});
+  }, 2000);
+}
+window.addEventListener("error", (e) => { if (/^ResizeObserver loop/i.test(e.message || "")) return; if (e.target && e.target !== window) return; jsErr(`${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno || 0}`); });
+window.addEventListener("unhandledrejection", (e) => { const r = e.reason; if (!r || !(r instanceof Error) || !/TypeError|ReferenceError|SyntaxError|RangeError/.test(r.name)) return;
+  jsErr(`${r.name}: ${r.message} @ ${String((r.stack || "").split("\n")[1] || "").trim().split("/").pop().replace(/\)$/, "")}`); });
+// незагрузившийся файл (№747) ловит assets/boot.js — первый скрипт окна, раньше всех файлов
 /* №530 (04.11, «раздел „Мозг“ после обновления пустой»): человек правил файлы программы сам, после обновления часть файлов
    студии не сошлась — скрипт упал ещё до подключения к ядру, и студия молча показывала пустые поля и «нет связи с ядром»,
    хотя ядро работало. Теперь связь отмечается отсюда (первый файл студии), а если основной файл студии (studio/dewiar.js)
    не дошёл до конца — вверху честная плашка: какой файл с ошибкой и что делать (переустановить поверх), а ошибки — в журнал ядра. */
 function studioBroken() {
   if (window.__studioReady || document.getElementById("studio-broken")) return;
-  const errs = (window.__jsErr || []).slice(0, 3);
+  const errs = (window.__jsErrAll || window.__jsErr || []).slice(0, 3);
   const file = (errs.map(e => (/ @ ([\w.-]+\.(?:js|html)):\d+/.exec(e) || [])[1]).find(Boolean)) || "";
   const b = document.createElement("div"); b.id = "studio-broken"; b.setAttribute("role", "alert");
   b.style.cssText = "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;max-width:min(760px,calc(100vw - 32px));"
@@ -146,7 +164,7 @@ function secLazy(p, fn) {
 }
 function secLazyRun(p) {
   if (!S) return;
-  (SEC.lazy[p] || []).forEach(fn => { if (SEC.done.has(fn)) return; SEC.done.add(fn); try { fn(); } catch (e) { console.warn("раздел", p, e); } });
+  (SEC.lazy[p] || []).forEach(fn => { if (SEC.done.has(fn)) return; SEC.done.add(fn); try { fn(); } catch (e) { console.warn("раздел", p, e); jsErr(`раздел «${p}»: ${e && e.message} @ ${String((e && e.stack || "").split("\n")[1] || "").trim().split("/").pop().replace(/\)$/, "")}`); } });
 }
 /* связь с ядром появилась (hello): разделам, открытым раньше, — их первая загрузка */
 function secHello() { SEC.seen.forEach(secLazyRun); }

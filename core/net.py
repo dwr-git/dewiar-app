@@ -145,7 +145,19 @@ class _LanFirst(httpx.BaseTransport):
                 return self.t.handle_request(req)
             except (httpx.ConnectError, httpx.ConnectTimeout):
                 st["ok_until"], st["bad_until"] = 0.0, time.time() + (LAN_BAD_SEC if st is _lan else 20)   # ушли из дома — как обычно
-        return self.inner.handle_request(request)
+        try:
+            return self.inner.handle_request(request)
+        except httpx.ConnectError as e:
+            # по имени сайт отказал сразу («Connection refused»), а домашний адрес у нас есть и его недавно сочли
+            # недоступным (проверяли при сне или до подъёма сети) — проверить его сейчас же и пойти туда, если он наш
+            st = _lan if (_lan["public"] and url.startswith(_lan["public"]) and time.time() >= _lan["ok_until"]) else None
+            if st is None or "refused" not in str(e).lower():
+                raise
+            st["bad_until"] = 0.0
+            if not _lan_ok(st):
+                raise
+            log.info("Дома: по имени сайт отказал, домашний адрес отвечает — иду туда")
+            return self.handle_request(request)
 
     def close(self):
         for x in (self.t, self.inner):
@@ -361,6 +373,11 @@ def wake_reset():
     «прокси подвёл» — уже неправда; заново, с прямого пути (13.11)."""
     _direct_ok.clear()
     _reserve_bad.clear()
+    # 15.11 (владелец, Ubuntu после сна: «Connection refused» на https://dewiar.pro, а в браузере открывается): «дома —
+    # напрямую» проверили, когда сеть ещё не поднялась, и 3 минуты не пробовали; а по имени изнутри дома роутер часто не
+    # пускает (нет «петли») — отсюда отказ. После сна — проверить домашний адрес заново, при первом же запросе
+    for st in (_lan, _ssh):
+        st["ok_until"], st["bad_until"] = 0.0, 0.0
 
 
 def reserve():
