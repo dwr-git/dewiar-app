@@ -196,7 +196,7 @@ ok(r[0]["ok"] and not E.check_answer({"none": ["ничего не заплани
    "экзамен: «больше ничего не запланировано» после дела — не провал; просто «ничего» — провал")
 sc = {s["id"]: s for s in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}
 ok("help_kids_have" in sc and sc["open_site_named"]["tool"] == {"open_url": 1}, "сценарии экзамена: «есть для детей?», «открой python.org»")
-src_e = (ROOT / "core/exam.py").read_text(encoding="utf-8")
+src_e = srctext.text(ROOT, "core/exam.py")
 ok('"reminders-log.json"' in src_e and "Traceback: {exc" in src_e, "экзамен: журнал напоминаний чистится, в отчёте — строка исключения")
 src_m = (ROOT / "core/engine_music.py").read_text(encoding="utf-8")
 ok("Погода: данных нет" in src_m and "узнай инструментом weather по" not in src_m, "утро без погоды — «данных нет, не называй»")

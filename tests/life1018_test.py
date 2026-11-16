@@ -10,6 +10,8 @@ tool_count (действие на каждую просьбу) и distinct (от
 import json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -27,7 +29,7 @@ ok(all(i in pc for i in ("life_about_twice", "life_youtube", "life_plan_done")) 
    "компьютер: «как в жизни» — повтор просьб, действие на каждую, фразы без знаков")
 ok(all(f'id: "{i}"' in ex for i in ("life_about_twice", "life_call_again", "life_send_two", "life_plan_done"))
    and "tool_count: { close_call: 3 }" in ex and "tool_count: { close_send: 2 }" in ex, "телефон: «как в жизни» — звонок снова, два сообщения, план и отметки")
-src = (ROOT / "core/exam.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/exam.py")
 ok('sc.get("tool_count")' in src and 'sc.get("distinct")' in src and 'env["DEWIAR_EXAM_LAUNCH"]' in src,
    "компьютер: проверки «на каждую просьбу» и «не копия»; браузер и программы в экзамене — записываются, а не запускаются")
 app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")

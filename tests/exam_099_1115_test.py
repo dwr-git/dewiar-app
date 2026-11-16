@@ -83,7 +83,7 @@ k = ts.index('if t.data.get("unfinished"):                 # №368')
 ok("готово" in ts[k:k + 700] and "проверка с " in ts[k:k + 900], "невыполненная задача: «Готово» из её рассказа убрано, рассказ — с оговоркой")
 
 # 6. сам экзамен
-ex = (ROOT / "core/exam.py").read_text(encoding="utf-8")
+ex = srctext.text(ROOT, "core/exam.py")
 r = ex.index("async def reset_state(core)")
 ok('"done_undo"' in ex[r:r + 4000], "между испытаниями — и отметки «сделано» прочь")
 rs = ex.index("async def _run_scenario(")

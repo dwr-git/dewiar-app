@@ -1,0 +1,76 @@
+{
+ "source": "core/sites.py",
+ "cls": "Sites",
+ "base": null,
+ "patch": [
+  "reach",
+  "fetch_image"
+ ],
+ "alias": "SIB",
+ "rules": {
+  "module": "sites_base",
+  "doc": "«Сайты» — основа (чистое ядро 1.0.18 — docs/CORE_PLAN.md): шаблоны и стили, имена и адреса, быстрые операции\nбез модели, проверка адреса (reach), фото по ссылке (fetch_image). Работа с сайтами — core/sites.py (Sites), части —\nsites_make, sites_edit, sites_out; прежние имена sites.X на месте. Подменять в проверках — здесь (sites_base.reach…)."
+ },
+ "mixins": {
+  "sites_make": {
+   "cls": "MakeMixin",
+   "doc": "«Сайты» — создание (часть Sites, чистое ядро 1.0.18): из шаблона или по описанию, своё имя и контакты, фото и\nвидео со страницы человека, тексты под дело человека (fill).",
+   "methods": [
+    "from_template",
+    "create",
+    "take_media",
+    "fill",
+    "llm"
+   ]
+  },
+  "sites_edit": {
+   "cls": "EditMixin",
+   "doc": "«Сайты» — изменения (часть Sites, чистое ядро 1.0.18): операции к сайту (apply_ops), картинки по ссылке и из чата,\nподвал и документы, черновик политики, другой дизайн, фраза человека -> изменение, картинки сайта.",
+   "methods": [
+    "_block",
+    "apply",
+    "_images_by_url",
+    "_own_image",
+    "apply_ops",
+    "_legal",
+    "legal_draft",
+    "_restyle",
+    "say",
+    "image_add",
+    "_images"
+   ]
+  },
+  "sites_out": {
+   "cls": "OutMixin",
+   "doc": "«Сайты» — наружу (часть Sites, чистое ядро 1.0.18): вёрстка и сборка, архив для своего хостинга, проверка\nпродвижения, публикация на dewiar.pro и проверка адреса, заявки с формы, «Статьи», фоновый цикл.",
+   "methods": [
+    "render",
+    "build",
+    "export",
+    "export_zip",
+    "audit",
+    "_key",
+    "_fetch",
+    "check_name",
+    "suggest_name",
+    "publish",
+    "_reach",
+    "_reach_soon",
+    "recheck",
+    "unpublish",
+    "stats",
+    "sync_status",
+    "take",
+    "poll",
+    "_lead_log",
+    "leads",
+    "blog_save_conf",
+    "blog_get",
+    "blog_set",
+    "start",
+    "stop",
+    "_loop"
+   ]
+  }
+ }
+}

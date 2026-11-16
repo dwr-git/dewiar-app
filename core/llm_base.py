@@ -46,3 +46,13 @@ def prompt_tools_mode(p):
     if p.get("kind") == "anthropic" or p.get("tools_mode") == "native":
         return False
     return p.get("tools_mode") == "prompt" or str(p.get("base_url") or "").rstrip("/") in _no_tools
+
+
+class LLMError(Exception):
+    """Ошибка с понятным человеку текстом. say — короче для голоса (без ссылок), topup — нужна кнопка «Пополнить»
+    (облако Dewiar: талеры кончились, 402 — 0.82.1); приходят из текста _humanize (HumanText)."""
+
+    def __init__(self, *a):
+        super().__init__(*a)
+        self.say = getattr(a[0], "say", "") if a else ""
+        self.topup = bool(getattr(a[0], "topup", False)) if a else False

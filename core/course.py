@@ -144,7 +144,6 @@ COURSES.append({"id": "team_ai", "title": "Команда Лиры", "sub": "п�
         ("«Проверить ответ» — спросите как посетитель", "потом «Добавить в группу» — и упомяните бота там", "did:pbot_try")]),
 ]})
 BY_ID = {c["id"]: c for c in COURSES}
-LESSONS = COURSES[0]["lessons"]                          # прежнее имя — «Неделя с Лирой»
 
 
 class Course:

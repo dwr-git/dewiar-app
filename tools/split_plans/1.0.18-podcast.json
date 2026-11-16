@@ -1,0 +1,51 @@
+{
+ "source": "core/podcast.py",
+ "cls": "Podcasts",
+ "base": null,
+ "patch": [
+  "_addrs",
+  "_bad_ip",
+  "_private"
+ ],
+ "alias": "PB",
+ "rules": {
+  "module": "podcast_base",
+  "doc": "Подкасты — основа (чистое ядро 1.0.18 — docs/CORE_PLAN.md): постоянные, тексты для модели, чтение ссылок (защита\nот внутренних адресов: _addrs, _bad_ip, _private — подменять в проверках здесь), разбор и очистка. Подкасты —\ncore/podcast.py (Podcasts), части — podcast_make, podcast_voice; прежние имена podcast.X на месте."
+ },
+ "mixins": {
+  "podcast_make": {
+   "cls": "MakeMixin",
+   "doc": "Подкасты — сценарий (часть Podcasts, чистое ядро 1.0.18): собрать источники (файлы, ссылки, вопрос), выжимка,\nплан, ведущие, сценарий и его проверка.",
+   "methods": [
+    "_save_files",
+    "_resolve_path",
+    "_copy_files",
+    "_resolve",
+    "_gather",
+    "_ask",
+    "_digest",
+    "_lang_note",
+    "_plan",
+    "_roles",
+    "_script",
+    "_check"
+   ]
+  },
+  "podcast_voice": {
+   "cls": "VoiceMixin",
+   "doc": "Подкасты — озвучка и сборка (часть Podcasts, чистое ядро 1.0.18): голоса ведущих, цепочка движков, озвучка реплик,\nсведение, текст выпуска, ход работы и итог.",
+   "methods": [
+    "_voices",
+    "_chain",
+    "_say",
+    "_voice_all",
+    "_mix",
+    "_text_md",
+    "_run",
+    "_cost",
+    "_save_quiet",
+    "_finish"
+   ]
+  }
+ }
+}

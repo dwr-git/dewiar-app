@@ -498,7 +498,7 @@ else:
         if host == "rebind.test":                        # первое разрешение — «публичный», следующее — внутренний
             return ["127.0.0.1"] if seen_dns.count("rebind.test") == 1 else ["127.0.0.2"]
         return real_addrs(host, port)
-    PC._addrs, PC._bad_ip = fake_addrs, (lambda ip: ip != "127.0.0.1")
+    __import__("podcast_base")._addrs, __import__("podcast_base")._bad_ip = fake_addrs, (lambda ip: ip != "127.0.0.1")
     op = outer.server_port
 
     def refused(url):
@@ -518,15 +518,15 @@ else:
     ok(t == "Статья" and "рассеивается" in txt and HITS["host"] == [f"attacker.test:{op}"] * 2,
        f"обычная переадресация на том же сайте — читается, соединение к проверенному адресу с Host по имени: {HITS['host']}")
     ok("переадресаций" in refused(f"http://attacker.test:{op}/loop"), "бесконечная переадресация — отказ")
-    PC._addrs, PC._bad_ip = real_addrs, real_bad
+    __import__("podcast_base")._addrs, __import__("podcast_base")._bad_ip = real_addrs, real_bad
     ok(PC._bad_ip("::ffff:127.0.0.1") and PC._bad_ip("169.254.169.254") and PC._bad_ip("10.0.0.1") and not PC._bad_ip("93.184.216.34"),
        "внутренние адреса узнаются, в том числе IPv4 внутри IPv6 и адрес метаданных облака")
     # PoC рецензии: _private подменён «публичным» для первого адреса — внутренний сервер всё равно не получает запрос
     calls = []
     real_private = PC._private
-    PC._private = lambda h: (calls.append(h), False if len(calls) == 1 else real_private(h))[1]
+    __import__("podcast_base")._private = lambda h: (calls.append(h), False if len(calls) == 1 else real_private(h))[1]
     refused(f"http://127.0.0.1:{op}/ip")
-    PC._private = real_private
+    __import__("podcast_base")._private = real_private
     ok(not HITS["inner"], "PoC рецензии (redir_poc) больше не доходит до внутреннего сервера")
     inner.shutdown(); outer.shutdown()
 

@@ -15,6 +15,8 @@
 | `1.0.16-engine_audio.json` | `python3 tools/split_class.py <план> [--write]`, затем `tools/split_headers.py` | `core/engine_audio.py` → `ears_*` |
 | `1.0.16-engine_tools.json` | `python3 tools/split_class.py <план> [--write]`, затем `tools/split_headers.py` | `core/engine_tools.py` → `acts_*` |
 | `1.0.16-sync.json` | `python3 tools/split_class.py <план> [--write]`, затем `tools/split_headers.py` | `core/sync.py` → `sync_*` (`_version`, `default_device_name` — заранее подняты выше класса) |
+| `1.0.16-cloud_php.json` | `python3 tools/split_php.py <план> [--write]` (разбор PHP — `tools/php_toplevel.php`) | `server/dwrapp/cloud.php` → `server/dwrapp/cloud/*.php` (18 разделов; `DWC_DIR` вместо `__DIR__`) |
+| `1.0.17-app_js.md` | `python3 tools/app_join.py` (склейка частей в app.js) | телефон: `android/assets/www/app.js` ← `android/www-src/app/*.js` |
 
 Повторно запускать не нужно — раскладка уже сделана. Новый план: тот же формат; сначала без `--write` (отчёт), потом
 с ним; заголовки разделов — `python3 tools/split_headers.py <копия прежнего файла> <исходный> <модули…>`; проверки,

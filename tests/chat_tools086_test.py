@@ -382,7 +382,7 @@ ok("ворчлив" in PS.JARVIS_CHAR and "сарказм" in PS.JARVIS_CHAR and
 olds = PS.OLD_DEFAULTS["jarvis"]
 ok(isinstance(olds, list) and any(o.get("character") == PS.JARVIS_CHAR_085 for o in olds), "прежний текст Джарвиса — в OLD_DEFAULTS (сохранённый персонаж получит новый)")
 sc = {s["id"]: s for s in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}
-ok("jarvis_irony" in sc and sc["jarvis_irony"]["steps"][0].get("template") == "jarvis" and 'stp.get("template")' in (ROOT / "core/exam.py").read_text(encoding="utf-8"),
+ok("jarvis_irony" in sc and sc["jarvis_irony"]["steps"][0].get("template") == "jarvis" and 'stp.get("template")' in srctext.text(ROOT, "core/exam.py"),
    "сценарий экзамена: Джарвис отвечает точно, на «вы», с одной сухой ремаркой")
 ok(not errs, f"без ошибок JavaScript: {errs[:3]}")
 print("\nИТОГ:", "всё хорошо" if not fails else f"{len(fails)} проблем(ы)")

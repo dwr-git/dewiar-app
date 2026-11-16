@@ -6,6 +6,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 W="$1"; mkdir -p "$W"
+python3 "$ROOT/tools/app_join.py" --check >/dev/null || { echo "app.js не совпадает с частями android/www-src/app — соберите: python3 tools/app_join.py" >&2; exit 1; }   # 1.0.18: app.js собран из частей
 cp -r "$HERE/assets/www/." "$W/"
 cp "$ROOT/ui/assets/entities.js" "$W/entities.js"
 cp "$ROOT/ui/assets/skins.css" "$ROOT/ui/assets/skins.js" "$W/"     # темы оформления — те же, что у виджета

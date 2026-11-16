@@ -97,7 +97,7 @@ ok(("memory_set", None, "") in cs and ("reminder_cancel", "r1", None) in cs and 
    and ("task_stop", "t1", None) in cs and ("task_delete", "t1", None) in cs and ("task_delete", "t2", None) in cs
    and not (tmp / "ws" / "Заметки").exists(),
    f"экзамен компьютера: перед испытанием — без памяти, заметок, напоминаний, расходов и задач прошлых: {cs}")
-ok("await reset_state(core)" in (ROOT / "core/exam.py").read_text(encoding="utf-8"), "сброс — перед каждым испытанием")
+ok("await reset_state(core)" in srctext.text(ROOT, "core/exam.py"), "сброс — перед каждым испытанием")
 
 # ---------- телефон: адрес страницы из слов человека; экзамен телефона с чистого листа ----------
 from playwright.sync_api import sync_playwright  # noqa: E402

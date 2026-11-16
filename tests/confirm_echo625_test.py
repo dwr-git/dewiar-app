@@ -82,6 +82,6 @@ src = srctext.text(ROOT, "core/engine_tools.py")
 ok("turn.sys_said = " in src and "turn.asking = title or name" in src, "вопрос программы отмечается как её слова")
 sc = {s["id"]: s for s in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}
 ok("confirm_cut_yes" in sc and sc["confirm_cut_yes"]["seed"].get("history"), "сценарий экзамена: перебили на «Выполнить?» — «да» делает")
-ok('"exam_history"' in (ROOT / "core/exam.py").read_text(encoding="utf-8"), "экзамен умеет положить разговор до сценария")
+ok('"exam_history"' in srctext.text(ROOT, "core/exam.py"), "экзамен умеет положить разговор до сценария")
 print("\nИТОГ:", "всё прошло" if not fails else f"не прошло {len(fails)}")
 sys.exit(1 if fails else 0)

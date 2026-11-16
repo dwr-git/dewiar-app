@@ -1,3 +1,4 @@
+/* app.js СОБРАН из частей android/www-src/app/*.js (tools/app_join.py) — править части, не этот файл; склейку проверяет tests/app_parts_test.py. */
 /* Dewiar для Android — интерфейс и «мозг» на телефоне (страница index.html в WebView MainActivity).
    Нативная часть (Bridge.java и соседи) даёт слух, голос, сеть без CORS, будильники и руки телефона через window.Dewiar (D);
    ответы долгих дел приходят событиями в N.ev({type, ...}). Думает модель (свой сервер, облако по ключу или Dewiar Облако —

@@ -237,7 +237,7 @@ info = exam.make_fixture("anki", d, 1)
 chs = exam.BIG_CHECKS["anki"](d, info, {"status": "done"})
 c = [x for x in chs if not x["ok"]]
 ok(len(c) == 1 and c[0]["name"] == "перезапуск не проверен" and c[0].get("unchecked"), f"Б11 без перезапуска — «перезапуск не проверен», не «пройдено»: {c}")
-es = (ROOT / "core/exam.py").read_text(encoding="utf-8")
+es = srctext.text(ROOT, "core/exam.py")
 ok('"start_new_session": True' in es and "os.killpg(self.proc.pid" in es, "ядро экзамена — своя группа процессов, stop() гасит группу")
 co = exam.Core({}, TMP / "core")
 co.proc = subprocess.Popen([sys.executable, "-c", "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']);"

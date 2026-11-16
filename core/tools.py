@@ -1082,7 +1082,3 @@ def coerce_args(schema, args):
             out[k] = v.strip().lower() in ("true", "1", "да", "yes")
     return out
 
-
-def say_command(cmd):
-    """Команда списком -> строка для показа человеку (с кавычками shell)."""
-    return " ".join(shlex.quote(c) for c in cmd)
