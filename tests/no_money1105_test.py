@@ -3,6 +3,7 @@
 уходил дважды: второй раз «без действий» — с тем же пустым счётом.
 Теперь: название сервиса и страница пополнения по адресу, выход без своего ключа — «Dewiar Облако» в «Мозге»; повтора
 без действий нет; дела по расписанию по-прежнему не повторяют (ошибка постоянная)."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import json, os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -41,7 +42,7 @@ ok(llm.topup_page("http://127.0.0.1:1234/v1") == ("127.0.0.1", ""), "незна�
 
 import engine_answer as EA  # noqa: E402
 ok(EA._no_money(llm.LLMError(z)) and not EA._no_money(llm.LLMError("сервер модели не ответил вовремя")), "«нет денег» узнаётся")
-src = (ROOT / "core" / "engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok('and "без текста" not in str(e) and not _no_money(e):' in src, "повтора «без действий» на пустой счёт нет — один запрос на вопрос")
 mus = (ROOT / "core" / "engine_music.py").read_text(encoding="utf-8")
 ok("NO_MONEY_TEXT[:40] in text" in mus, "дела по расписанию: пустой счёт — без повторов через 5 и 15 минут")

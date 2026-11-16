@@ -2,6 +2,7 @@
 программе и на телефоне было видно только «на сколько хватит всего счёта» — и то, пока он не пуст; Лира отвечала наугад.
 Теперь: сервер отдаёт per_taler (и до пополнения), «Мозг» → «ИИ-баланс» показывает «1 талер ≈ N ответов» (ПК и телефон),
 в руководстве — раздел «Талер», а к вопросу о талерах Лира получает настоящие числа своего счёта."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import json, os, re, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -47,7 +48,7 @@ ok("1 талер ≈ 64 обычных ответов" in s and "примерн�
 e.cloud = type("C", (), {"status": lambda self: {"connected": False}})()
 ok("не подключены" in e._taler_now(), "облако не подключено — так и скажет")
 import engine_answer as EA  # noqa: E402
-ok(EA.TALER_RX.search("на сколько хватает 1 талер?") and "_taler_now()" in (ROOT / "core" / "engine_answer.py").read_text(encoding="utf-8"),
+ok(EA.TALER_RX.search("на сколько хватает 1 талер?") and "_taler_now()" in srctext.text(ROOT, "core/engine_answer.py"),
    "вопрос о талерах — справка с числами к вопросу")
 print("ALL OK" if not fails else f"FAILED: {len(fails)}")
 sys.exit(1 if fails else 0)

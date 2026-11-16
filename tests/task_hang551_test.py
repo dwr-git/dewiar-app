@@ -4,6 +4,7 @@
 Теперь: сторож (taskguard) ставит на паузу с понятной причиной — шаг молчит вдвое дольше порога или час без единого пункта
 плана; разговор передаёт задаче сведения и папки (tell_task, папки — только после «да»); набранный в «Чате» ответ на вопрос
 задачи уходит ей; вопрос задачи виден в виджете и «Чате» с кнопками «Да / Нет»."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import os, re, sys, tempfile, threading, time
 from pathlib import Path
 from types import SimpleNamespace
@@ -142,9 +143,9 @@ e.task_answer_until = time.monotonic() + 100
 ok(e._task_reply("В папке Bot на диске F"), "сразу после вопроса — любой короткий ответ уходит задаче")
 e.tasks = SimpleNamespace(waiting=lambda: None)
 ok(not e._task_reply("разрешаю"), "никто не спрашивает — обычный разговор")
-cmd = (ROOT / "core" / "engine_commands.py").read_text(encoding="utf-8")
+cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok("self._task_reply(text)" in cmd, "набранное в «Чате» проверяется на ответ задаче")
-ans = (ROOT / "core" / "engine_answer.py").read_text(encoding="utf-8")
+ans = srctext.text(ROOT, "core/engine_answer.py")
 ok("TASK_GIVE_RX" in ans and "tell_task" in ans, "«может, тебе дать доступ» при живой задаче — модель видит задачу и tell_task")
 import engine_answer as EA  # noqa: E402
 ok(EA.TASK_GIVE_RX.search("может тебе дать доступ") and EA.TASK_GIVE_RX.search("стоишь там на одном месте"), "фразы из журнала №551")

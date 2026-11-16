@@ -2,6 +2,7 @@
 пользователь хочет создать свой сайт». Теперь: поле «Сайт-образец» в «Сайтах» и ref у site_create — Лира читает схему
 страницы (заголовок, разделы по порядку, меню, кнопки, цвета — без её текстов) и делает по мотивам: разделы и тон, но
 тексты, названия и бренды — свои. Образец не открылся — сайт всё равно делается по описанию."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import json, os, sys, tempfile, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -74,7 +75,7 @@ except sites.SiteError:
 # инструмент и студия
 spec = TL.TOOLS["site_create"]
 ok("ref" in json.dumps(spec[1]) and "сайт-образец" in spec[0], "site_create принимает ref — «сделай как у …»")
-cmd = (ROOT / "core" / "engine_commands.py").read_text(encoding="utf-8")
+cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok('ref=str(a.get("ref") or "")' in cmd, "команда студии передаёт ссылку")
 html = (ROOT / "ui" / "settings.html").read_text(encoding="utf-8")
 js = (ROOT / "ui" / "studio" / "sites.js").read_text(encoding="utf-8")

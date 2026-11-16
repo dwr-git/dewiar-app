@@ -9,8 +9,8 @@ from pathlib import Path
 # файл -> его части после раскладки (шаблоны относительно корня проекта)
 PARTS = {
     "core/tools.py": ("core/tools_*.py",),
-    "core/engine_commands.py": ("core/commands/*.py",),
-    "core/engine_answer.py": ("core/hints/*.py",),
+    "core/engine_commands.py": ("core/commands_*.py",),
+    "core/engine_answer.py": ("core/answer_*.py",),
 }
 
 

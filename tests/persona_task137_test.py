@@ -2,6 +2,7 @@
 периодом и запиши вывод“ — второй начинает с чистого листа и угадывает мотив». Теперь у call_persona есть task —
 поручение своими словами; новый персонаж получает его явной вводной (сделать самому, инструментами, данные — из
 разговора, заметок и файлов), а итог длиннее пары фраз кладёт в общую заметку «Команда: …»."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import os, sys, tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -38,7 +39,7 @@ e.turn = SimpleNamespace()
 r = e._tool_call_persona("Патрик", "сверь цифры за октябрь с сентябрём")
 ok(e.turn.switch_to == "patrik" and e.turn.switch_task == "сверь цифры за октябрь с сентябрём" and "возьмётся за поручение" in r,
    f"ход запоминает, кому и что передано: {r[:80]}")
-src = (ROOT / "core" / "engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("передал(а) тебе поручение пользователя" in src and "«Команда: <о чём>»" in src, "новый персонаж получает поручение явной вводной; итог — в общую заметку")
 print("ALL OK" if not fails else f"FAILED: {len(fails)}")
 sys.exit(1 if fails else 0)

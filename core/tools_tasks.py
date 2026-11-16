@@ -83,11 +83,37 @@ def _start_ask(a, ctx, goal):
             "Согласится — вызови start_task снова с теми же полями и confirmed=true; захочет короче — сузь цель.")
 
 
+POD_RU = {"working": "готовится", "done": "готов", "error": "не получился", "stopped": "остановлен"}
+
+
+def _podcasts_brief(ctx, days=3):
+    """Подкасты за последние дни (№788: «мой подкаст готов?» — task_status отвечал «задач нет», хотя выпуск был готов
+    и ждал в «Подкастах»). -> строка для модели или ""."""
+    import time
+    eng = ctx.get("engine")
+    try:
+        pods = eng.podcasts.list() if eng is not None and hasattr(eng, "podcasts") else []
+    except Exception:  # noqa: BLE001 — подкасты не главное в ответе о задачах
+        return ""
+    since = time.time() - days * 86400
+    pods = [x for x in pods if x.get("status") == "working" or (x.get("created") or 0) >= since][:3]
+    if not pods:
+        return ""
+    out = []
+    for x in pods:
+        d = int(x.get("duration") or 0)
+        ln = f" — {d // 60}:{d % 60:02d}" if d and x.get("status") == "done" else ""
+        out.append(f"«{x.get('title')}» — {POD_RU.get(x.get('status'), x.get('status'))}{ln}"
+                   + (f" ({x['error'][:120]})" if x.get("status") == "error" and x.get("error") else ""))
+    return "Подкасты (слушать — студия → «Подкасты»): " + "; ".join(out)
+
+
 def t_task_status(a, ctx):
     tm = _tm(ctx)
     items = tm.list()
+    pods = _podcasts_brief(ctx)
     if not items:
-        return "Задач пока нет."
+        return pods or "Задач пока нет."
     from tasks import tasks_brief
     head = tasks_brief(items)
     lines = [head + " (начни ответ с этой фразы; подробности — если спросят)"] if head else []
@@ -106,6 +132,8 @@ def t_task_status(a, ctx):
             lines.append(f"Блокнот «{cur.title}»:\n" + "\n".join(facts))
     except (KeyError, AttributeError, OSError):
         pass
+    if pods:
+        lines.append(pods)
     return "\n".join(lines)
 
 

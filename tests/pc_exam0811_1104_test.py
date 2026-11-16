@@ -18,7 +18,7 @@
   напоминаний чистится между испытаниями; в отчёт — строка исключения, а не одно «Traceback».
 Обычный разговор («как дела?», «сколько градусов в прямом угле?», совет фильма) — без переспросов."""
 import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
-import asyncio, json, os, socket, subprocess, sys, tempfile, threading
+import asyncio, json, os, re, socket, subprocess, sys, tempfile, threading
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -173,7 +173,7 @@ ok(w[0] == datetime.combine(datetime.now().date() + timedelta(days=1), datetime.
 ok(T._when({"when": "каждый день в 8", "text": "таблетки"})[1] == {"kind": "daily", "time": "08:00"}, "повтор из when — как был")
 ok("show_page" not in T.SERVER_OFF and "open_url" in T.SERVER_OFF, "show_page на сервере не выключен (сохраняет файл), open_url — выключен")
 src_t = srctext.text(ROOT, "core/tools.py")
-ok('not (EXAM_LAUNCH and name in EXAM_ON)' in src_t and T.EXAM_ON == {"open_url", "open_app", "open_path", "council", "make_podcast", "save_screenshot"} and "if EXAM_LAUNCH:                                   # экзамен: вызов записан" in src_t,
+ok('not (EXAM_LAUNCH and name in EXAM_ON)' in src_t and T.EXAM_ON == {"open_url", "open_app", "open_path", "council", "make_podcast", "save_screenshot"} and re.search(r"if (?:base\.)?EXAM_LAUNCH:\s+# экзамен: вызов записан", src_t),
    "экзамен (EXAM_LAUNCH): открыть сайт, программу, собрать совет, начать подкаст и снять экран «понарошку» можно (запуск записывается, облако на выпуск не тратится), звука нет")
 import images  # noqa: E402
 its = [{"title": "Heaving line knot ABOK538"}, {"title": "Runestone U 344"}]

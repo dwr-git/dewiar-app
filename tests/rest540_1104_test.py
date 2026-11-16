@@ -4,6 +4,7 @@
 «Лира, отдохни час» — не слушает и не говорит сама, напоминания и фразы копятся; конец — по времени, кнопкой «Вернуть»,
 нажатием на лицо или написанным вопросом: «Я снова с вами» и накопленное, напоминание — окном, одним звонком.
 Перезапуск программы отдых не прерывает."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import json, os, re, sys, tempfile, threading, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -123,7 +124,7 @@ ok(not e5.resting() and any("Я снова с вами" in s for s in e5.said), 
 e5.stopping.set(); e.stopping.set(); e2.stopping.set(); e4.stopping.set()
 
 # ---------- ядро: кнопки и фразы проведены в настоящих местах ----------
-src = {n: (ROOT / "core" / n).read_text(encoding="utf-8") for n in ("engine.py", "engine_commands.py", "engine_answer.py", "engine_remote.py", "engine_tools.py")}
+src = {n: srctext.text(ROOT, "core/" + n) for n in ("engine.py", "engine_commands.py", "engine_answer.py", "engine_remote.py", "engine_tools.py")}
 ok("RestMixin" in src["engine.py"] and "self.rest_boot()" in src["engine.py"], "Engine собран с RestMixin, отдых восстанавливается при запуске")
 ok('"rest": self.rest_public()' in src["engine_commands.py"], "в hello — состояние отдыха (виджет открылся посреди отдыха)")
 ok('cmd in ("rest", "rest_end", "rest_toggle", "rest_state")' in src["engine_commands.py"], "команды rest / rest_end / rest_toggle")

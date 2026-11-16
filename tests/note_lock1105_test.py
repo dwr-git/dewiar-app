@@ -5,6 +5,7 @@
 открыть замок — только руками (note_meta из студии, pad_lock из блокнота), у модели такого инструмента нет.
 Блокнот: замок в шапке файла, лист её не показывает и не теряет. Синхронизация и Obsidian: правка с другого устройства
 не перетирает запертую молча — ложится рядом копией; пришло «то же, но без замка» — замок открыли там, принимаем."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import os, sys, tempfile, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -135,7 +136,7 @@ ws.note_meta(pt.relative_to(ws.ensure()).as_posix(), {"color": "TEAL"})      # �
 pad.write("Важное", "Пароль от роутера: admin-43\n")
 raw = pt.read_text(encoding="utf-8")
 ok(raw.startswith("---") and "color: TEAL" in raw and "admin-43" in raw and "locked" not in raw, "открыли — правка проходит, шапку (цвет) лист не теряет")
-cmd = (ROOT / "core" / "engine_commands.py").read_text(encoding="utf-8")
+cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok('cmd == "pad_lock"' in cmd, "команда pad_lock — кнопка 🔒 блокнота")
 
 # 5) синхронизация: правка запертой с другого устройства — рядом копией, замок — полем заметки

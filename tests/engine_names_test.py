@@ -16,6 +16,16 @@ def ok(c, m):
 
 eng = (ROOT / "core/engine.py").read_text(encoding="utf-8")
 bases = re.search(r"class Engine\(([^)]*)\)", eng).group(1).replace(" ", "").split(",")
+# чистое ядро (1.0.9–1.0.10): примеси сами собраны из примесей (CommandsMixin ← WorkCommands…, AnswerMixin ← PromptMixin…) —
+# их методы тоже методы Engine; берём всю цепочку предков
+_defs = {m.group(1): m.group(2) for p in (ROOT / "core").glob("*.py")
+         for m in re.finditer(r"^class (\w+)\(([^)]*)\):", p.read_text(encoding="utf-8"), re.M)}
+_todo = list(bases)
+while _todo:
+    for b in _defs.get(_todo.pop(), "").replace(" ", "").split(","):
+        if b and b in _defs and b not in bases:
+            bases.append(b)
+            _todo.append(b)
 files = [ROOT / "core/engine.py"] + [p for p in (ROOT / "core").glob("*.py") if re.search(r"^class (" + "|".join(bases) + r")\b", p.read_text(encoding="utf-8"), re.M)]
 methods, attrs = {}, {}
 for f in files:
