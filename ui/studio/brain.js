@@ -40,7 +40,7 @@ function renderProfiles() {
       <label class="f">Максимум токенов в ответе<input type="number" data-f="max_tokens" placeholder="600"></label>
       <label class="f">Температура<input type="number" step="0.1" min="0" max="2" data-f="temperature" placeholder="0.7"></label>
       <label class="f" style="justify-content:end"><span><input type="checkbox" data-f="disable_thinking"> отключать «размышления» (Qwen3 и подобные в vLLM)</span></label>
-    </div><div class="actions"><button class="btn primary" data-a="test">Проверить</button><button class="btn" data-a="models">Список моделей</button><span style="flex:1"></span><button class="btn danger" data-a="del">Удалить</button></div></div>`;
+    </div><div class="actions"><button class="btn primary" data-a="test">Проверить</button><button class="btn" data-a="models">Список моделей</button>${p.cloud ? `<button class="btn" data-a="cloud-reset" title="Адрес, модель и ключ — как при подключении Dewiar">Вернуть настройки Dewiar</button>` : ""}<span style="flex:1"></span><button class="btn danger" data-a="del">Удалить</button></div></div>`;
     $("b", el).textContent = p.name || "Без названия";
     if (p.economy && !p.cloud) $("b", el).insertAdjacentHTML("afterend", `<em class="econ-tag" title="Простые вопросы — ${escH(p.economy)}">экономно</em>`);
     $("small", el).textContent = p.cloud ? `${S.cloud && S.cloud.account ? "по аккаунту dewiar.pro" : "по ключу …" + (p.api_key || "").slice(-4)} · ${p.title || p.model || ""}` : `${p.base_url || ""}${p.model ? " · " + p.model : ""}`;
@@ -52,6 +52,13 @@ function renderProfiles() {
     $(".head input", el).onclick = (ev) => { ev.stopPropagation(); save({ llm: { active: id } }).then(renderProfiles); };
     $(".head .btn", el).onclick = (ev) => { ev.stopPropagation(); openProf = openProf === id ? null : id; renderProfiles(); };
     const res = $(".head .res", el);
+    // №770 (16.11): «подключил сервис через API и убрал настройки внутреннего сервиса Dewiar — где их взять? пусть будут по
+    // кнопке» — в профиле моделей Dewiar поменяли адрес и модель; вернуть — тем же ключом или входом, что был
+    const cr = $('[data-a="cloud-reset"]', el);
+    if (cr) cr.onclick = async (ev) => {
+      ev.target.disabled = true; res.className = "res"; res.textContent = "возвращаю…";
+      try { await core.call("cloud_connect", { use: true }); res.className = "res ok"; res.textContent = "настройки Dewiar возвращены"; }
+      catch (e) { res.className = "res bad"; res.textContent = e.message; } finally { ev.target.disabled = false; } };
     $('[data-a="test"]', el).onclick = async (ev) => {
       ev.target.disabled = true; res.className = "res"; res.textContent = "проверяю…";
       try { const r = await core.call("llm_test", { profile: S.llm.profiles[id] });

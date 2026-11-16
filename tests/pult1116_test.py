@@ -76,7 +76,7 @@ ok('self.emit("recall", q=shown_q(text)' in ea, "ядро говорит, что
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok('mode if mode in ("play", "pult")' in app and '"&mode=" + mode' in app, "лист открывается сразу на пульте (pad_toggle('pult'))")
 hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
-ok('id="b-pult"' in hud and 'a.pad_toggle("pult")' in hud and "pult = !!on && m === \"pult\"" in hud, "значок пульта у виджета, подсвечен, пока пульт открыт")
+ok('id="b-pult"' not in hud and "body.rest #corner-l :is(#b-bug, #b-idea" in hud, "значков у виджета не прибавилось (16.11: «иконок стало много»); в отдыхе — только метка")
 st = (ROOT / "ui/settings.html").read_text(encoding="utf-8")
 ok('data-k="ui.pult_on"' in st, "«Оформление»: пульт выключается совсем")
 import settings as S  # noqa: E402
@@ -143,8 +143,14 @@ with sync_playwright() as p:
     shot(pg, "onboard")
     pg.click("#pu-ob-ok"); pg.wait_for_timeout(200)
     ok(not pg.is_visible("#pu-ob") and any(c[0] == "settings_save" and c[1]["patch"]["ui"].get("pult_seen") for c in pg.evaluate("calls")), "«Понятно» — больше не показывается")
-    n = pg.evaluate("document.querySelectorAll('#pu-sky .pu-dots circle').length")
-    ok(n == 31, f"созвездие — каждая заметка точкой ({n})")
+    n = pg.evaluate("document.querySelectorAll('#pu-sky .pu-ev .e').length")
+    ok(n == len(r["day"]) and n >= 3, f"циферблат дня: точка на каждое событие суток — дневник, Радар, заявка, дела ({n} из {len(r['day'])})")
+    ok(pg.evaluate("document.querySelector('.pu-time').textContent").count(":") == 1 and "Позвонить маме" in pg.inner_text("#pu-center"),
+       "в центре — время и что дальше")
+    pg.hover("#pu-sky .pu-ev .e.remind .hit", force=True); pg.wait_for_timeout(150)
+    ok(pg.is_visible(".pu-tip") and "Позвонить маме" in pg.inner_text(".pu-tip") and "через" in pg.inner_text(".pu-tip"), "наведение — что это и через сколько")
+    pg.click("#pu-sky .pu-ev .e.remind .hit", force=True); pg.wait_for_timeout(150)
+    ok(["open_settings", "reminders"] in pg.evaluate("apiCalls"), "нажатие — открывает в студии")
     cards = pg.evaluate("[...document.querySelectorAll('#pu-cards .pu-card')].map(c => c.className)")
     ok(cards == ["pu-card diary", "pu-card radar", "pu-card next"], f"фон: дневник, Радар, «Дальше»: {cards}")
     ok("торты без сахара" in pg.inner_text("#pu-cards") and "Позвонить маме" in pg.inner_text("#pu-cards") and "Разобрала почту" in pg.inner_text("#pu-cards"),
@@ -155,8 +161,8 @@ with sync_playwright() as p:
     ok(pg.is_visible("#pu-q") and "по торту" in pg.inner_text("#pu-qt") and not pg.is_visible("#pu-cards"), "думает: вопрос в центре, фон убран")
     steps = pg.inner_text("#pu-steps")
     ok("Подняла заметку «Рецепт торта»" in steps and "Смотрю календарь" in steps and "из памяти" in steps, f"шаги — настоящие: {steps!r}")
-    hot = pg.evaluate("document.querySelectorAll('#pu-sky circle.hot').length"); rays = pg.evaluate("document.querySelectorAll('#pu-sky .pu-rays path').length")
-    ok(hot == 1 and rays == 1 and "Рецепт торта" in pg.inner_text("#pu-names"), f"поднятая заметка светится и тянется к вопросу ({hot}, {rays})")
+    ok(pg.evaluate("document.querySelectorAll('#pu-sky .pu-sweep').length") == 1 and not pg.is_visible("#pu-center"),
+       "думает: по кругу бежит свет, в центре — вопрос вместо часов")
     shot(pg, "think")
     pg.evaluate('core.emit("tool", { name: "calendar", title: "Нашла в календаре", status: "done" }); core.emit("state", { state: "speaking" })'); pg.wait_for_timeout(200)
     ok("Нашла в календаре" in pg.inner_text("#pu-steps") and "Смотрю календарь" not in pg.inner_text("#pu-steps"), "шаг обновился на месте, а не продублировался")
@@ -195,11 +201,11 @@ with sync_playwright() as p:
 
     # ---- шестерёнка ----
     pg.click("#pu-gear"); pg.wait_for_timeout(200)
-    ok(pg.is_visible("#pu-pop") and pg.evaluate("document.querySelectorAll('#pu-pop input').length") == 4, "что показывать — на самой вкладке")
+    ok(pg.is_visible("#pu-pop") and pg.evaluate("document.querySelectorAll('#pu-pop input').length") == 3, "что показывать — на самой вкладке")
     shot(pg, "settings")
-    pg.click("#pu-pop label:nth-child(3)"); pg.wait_for_timeout(200)
-    ok(pg.evaluate("document.querySelectorAll('#pu-sky circle').length") == 0
-       and any(c[0] == "settings_save" and c[1]["patch"]["ui"].get("pult", {}).get("stars") is False for c in pg.evaluate("calls")), "созвездие выключили — точек нет, выбор сохранён")
+    pg.click("#pu-pop label:nth-child(2)"); pg.wait_for_timeout(200)
+    ok(pg.evaluate("document.querySelectorAll('#pu-cards .pu-card').length") == 0
+       and any(c[0] == "settings_save" and c[1]["patch"]["ui"].get("pult", {}).get("background") is False for c in pg.evaluate("calls")), "фоновые дела выключили — карточек нет, выбор сохранён")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(150)
     ok(not pg.is_visible("#pu-pop") and pg.is_visible("#pult"), "Esc закрывает настройки, лист остаётся")
     pg.evaluate('core.emit("settings", { settings: { ui: { pult_on: false } } })'); pg.wait_for_timeout(200)

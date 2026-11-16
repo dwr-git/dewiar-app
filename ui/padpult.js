@@ -9,7 +9,7 @@
    Что показывать — шестерёнка на самой вкладке (ui.pult); выключить совсем — «Оформление» → «Пульт Лиры» (ui.pult_on).
    Первый раз — одна карточка «Это Пульт» (ui.pult_seen). Обводок нет: цвет, тень, свечение, прозрачность. */
 (() => {
-  const DEF = { thoughts: true, background: true, stars: true, auto: true, names: "hover", motion: "full" };
+  const DEF = { thoughts: true, background: true, auto: true, motion: "full" };
   const PU = { on: true, cfg: {}, seen: true, active: false, auto: false, touched: false, key: 0, state: "idle", was: "idle",
                q: "", steps: [], recall: null, data: null, at: 0, lead: null, leadTs: -1, backT: 0, who: "Лира", nodes: [] };
   const cfg = () => Object.assign({}, DEF, PU.cfg || {});
@@ -31,8 +31,10 @@
       <button class="ib" id="pu-gear" type="button" title="Что показывать на пульте" aria-label="Что показывать на пульте" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button></div>
     <div class="pu-lead" id="pu-lead" hidden></div>
     <div class="pu-stage" id="pu-stage">
-      <svg id="pu-sky" aria-hidden="true"></svg>
-      <div id="pu-names" aria-hidden="true"></div>
+      <svg id="pu-sky" aria-label="Циферблат дня: прошедшее слева, впереди справа"></svg>
+      <div class="pu-center" id="pu-center"></div>
+      <div class="pu-feed" id="pu-feed" hidden></div>
+      <div id="pu-names"></div>
       <article class="pu-q" id="pu-q" hidden><p id="pu-qt"></p><ol id="pu-steps"></ol></article>
       <p class="pu-empty" id="pu-empty" hidden></p>
     </div>
@@ -174,7 +176,6 @@
     tab.hidden = !PU.on;
     if (!PU.on) { leave(true); strip.hidden = true; }
     document.body.classList.toggle("pu-calm", calm());
-    document.body.classList.toggle("pu-names", cfg().names === "always");
     if (PU.active) draw();
   }
   core.on("hello", (d) => { applySettings((d && d.settings) || {}); if (Q.get("mode") === "pult") enter(false); });
@@ -188,78 +189,96 @@
     box.dataset.st = PU.state;
   }
   const busy = () => PU.state === "thinking" || PU.state === "speaking";
-  function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; }
-  const norm = (s) => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/\.md$/, "").trim();
-  function layout(w, h) {
-    // созвездия — папки заметок по кругу; внутри — спираль по свежести. Положение не прыгает от раза к разу (хэш имени)
-    const notes = ((PU.data && PU.data.notes) || []).slice(0, 140).map(n => Object.assign({}, n));
-    const rec = PU.recall ? PU.recall.notes.map(norm) : [];
-    for (const r of PU.recall ? PU.recall.notes : []) if (!notes.some(n => norm(n.t) === norm(r))) notes.push({ t: r, f: "", m: Date.now() / 1000 });
-    const groups = {};
-    for (const n of notes) (groups[n.f || "·"] = groups[n.f || "·"] || []).push(n);
-    const keys = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
-    const cx = w / 2, cy = h / 2, rx = w * 0.36, ry = h * 0.34, now = Date.now() / 1000;
-    const out = [];
-    keys.forEach((k, gi) => {
-      const ang = (gi / Math.max(1, keys.length)) * Math.PI * 2 + hash(k) * 0.6 - Math.PI / 2;
-      const gx = keys.length === 1 ? cx : cx + Math.cos(ang) * rx, gy = keys.length === 1 ? cy : cy + Math.sin(ang) * ry;
-      const g = groups[k].sort((a, b) => (b.m || 0) - (a.m || 0));
-      const spread = Math.min(w, h) * (keys.length === 1 ? 0.42 : 0.17);
-      g.forEach((n, i) => {
-        const a = i * 2.39996 + hash(n.t) * 0.5, r = spread * Math.sqrt((i + 0.6) / Math.max(4, g.length));
-        const age = Math.max(0, now - (n.m || 0)) / 86400;
-        out.push({ t: n.t, f: n.f, p: n.p || "", x: Math.max(10, Math.min(w - 10, gx + Math.cos(a) * r)), y: Math.max(10, Math.min(h - 10, gy + Math.sin(a) * r)),
-                   r: 1.6 + 2.6 * Math.exp(-age / 10), hot: rec.includes(norm(n.t)), fresh: age < 1, g: gi, i });
-      });
-    });
-    return out;
-  }
-  function drawSky() {
-    const st = el("#pu-stage"), svg = el("#pu-sky"), names = el("#pu-names");
+  /* «Циферблат дня» (16.11, владелец о созвездии: «выглядит странно и как будто бесполезно… хочется красоты и интерактива»).
+     Круг — сутки вокруг «сейчас»: «сейчас» всегда наверху, слева уходит прошедшее (12 ч), справа — что впереди (12 ч).
+     Точки — настоящее: записи дневника (что Лира сделала), находки Радара, заявки с сайта, напоминания и дела. Наведите —
+     что это, нажмите — откроется в студии. Думает — по кругу бежит свет, в центре вопрос и шаги. */
+  const KIND = { diary: ["Дневник", "diary"], radar: ["Радар", "insight"], lead: ["Заявка с сайта", "clients"],
+                 remind: ["Напоминание", "reminders"], job: ["Дело по расписанию", "reminders"] };
+  const H12 = 12 * 3600;
+  const left = (ts) => { const m = Math.round((ts - Date.now() / 1000) / 60); if (m < 1) return "сейчас";
+    const h = Math.floor(m / 60), mm = m % 60; return "через " + (h ? `${h} ч ` : "") + (mm || !h ? `${mm} мин` : "").trim(); };
+  function dial() {
+    const st = el("#pu-stage"), svg = el("#pu-sky");
     const w = st.clientWidth || 400, h = st.clientHeight || 260;
+    const wide = w >= 600 && cfg().background;
+    const S = Math.max(150, Math.min(h - 16, wide ? w * 0.48 : w - 24, 330));
+    const cx = wide ? Math.min(w * 0.3, S / 2 + 28) : w / 2, cy = h / 2, R = S / 2 - 14;
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.setAttribute("width", w); svg.setAttribute("height", h);
-    if (!cfg().stars) { svg.innerHTML = ""; names.innerHTML = ""; PU.nodes = []; return; }
-    const ns = layout(w, h); PU.nodes = ns;
-    const cx = w / 2, cy = h / 2, think = busy() && cfg().thoughts;
-    let lines = "", dots = "", hot = "";
-    // линии созвездий: каждая звезда — к ближайшей более свежей своей папки
-    for (const n of ns) {
-      if (!n.i) continue;
-      let best = null, bd = 1e9;
-      for (const m of ns) if (m.g === n.g && m.i < n.i) { const d = (m.x - n.x) ** 2 + (m.y - n.y) ** 2; if (d < bd) { bd = d; best = m; } }
-      if (best && bd < (Math.min(w, h) * 0.22) ** 2) lines += `<path d="M${best.x.toFixed(1)} ${best.y.toFixed(1)}L${n.x.toFixed(1)} ${n.y.toFixed(1)}"/>`;
+    box.style.setProperty("--pu-cx", cx.toFixed(0) + "px"); box.style.setProperty("--pu-r", R.toFixed(0) + "px");
+    const now = Date.now() / 1000;
+    const ang = (ts) => Math.max(-1, Math.min(1, (ts - now) / H12)) * Math.PI;            // −π…π, 0 — наверху
+    const pt = (a, r) => [cx + r * Math.sin(a), cy - r * Math.cos(a)];
+    const arc = (a0, a1, r) => { const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r); return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${Math.abs(a1 - a0) > Math.PI ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+    // часы по кругу: каждые 3 часа — подпись, каждый час — штрих
+    let ticks = "", labels = "";
+    const h0 = Math.ceil((now - H12) / 3600) * 3600;
+    for (let t = h0; t <= now + H12; t += 3600) {
+      const a = ang(t), hr = new Date(t * 1000).getHours(), big = hr % 3 === 0;
+      const [x0, y0] = pt(a, R - 9), [x1, y1] = pt(a, R - (big ? 15 : 12));
+      ticks += `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)}L${x1.toFixed(1)} ${y1.toFixed(1)}" class="${big ? "big" : ""}"/>`;
+      if (big && Math.abs(a) > 0.28) { const [lx, ly] = pt(a, R - 27); labels += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${String(hr).padStart(2, "0")}</text>`; }
     }
-    for (const n of ns) {
-      if (n.hot && think) hot += `<path class="pu-ray" d="M${n.x.toFixed(1)} ${n.y.toFixed(1)}Q${((n.x + cx) / 2 + (n.y - cy) * 0.18).toFixed(1)} ${((n.y + cy) / 2 - (n.x - cx) * 0.18).toFixed(1)} ${cx} ${cy}"/>`;
-      dots += `<circle class="${n.hot ? "hot" : n.fresh ? "fresh" : ""}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${(n.hot ? n.r + 2.2 : n.r).toFixed(1)}"/>`;
+    // точки дня; близкие по времени — друг над другом, наружу
+    const ev = ((PU.data && PU.data.day) || []).filter(x => KIND[x.k]).map(x => Object.assign({}, x, { a: ang(x.ts) }));
+    if (PU.lead && !ev.some(x => x.k === "lead" && Math.abs(x.ts - PU.lead.ts) < 60)) ev.push({ k: "lead", ts: PU.lead.ts, t: PU.lead.name || "Посетитель сайта", a: ang(PU.lead.ts) });
+    ev.sort((x, y) => x.ts - y.ts);
+    const placed = [];
+    for (const x of ev) {
+      let lift = 0; while (placed.some(p => Math.abs(p.a - x.a) * R < 13 && p.lift === lift)) lift++;
+      x.lift = Math.min(lift, 3); placed.push(x);
+      [x.x, x.y] = pt(x.a, R + x.lift * 12);
     }
-    svg.innerHTML = `<g class="pu-ln">${lines}</g><g class="pu-rays">${hot}</g><g class="pu-dots">${dots}</g>`;
-    // подписи: поднятые к ответу — всегда; остальные — при наведении (или все свежие, если «Названия — всегда»)
-    const always = cfg().names === "always";
-    names.innerHTML = ns.filter(n => n.hot || (always && n.fresh)).slice(0, 10)
-      .map(n => `<span class="${n.hot ? "hot" : ""}" style="left:${n.x.toFixed(0)}px;top:${n.y.toFixed(0)}px">${esc(n.t)}</span>`).join("");
-    const empty = el("#pu-empty");
-    empty.hidden = !!ns.length || think;
-    if (!ns.length) empty.textContent = "Заметок пока нет. Запишите что-нибудь — здесь появится созвездие ваших записей, а когда Лира думает, видно, что она вспоминает.";
+    PU.nodes = ev;
+    const [nx, ny] = pt(0, R);
+    const think = busy() && cfg().thoughts;
+    svg.innerHTML = `<defs><linearGradient id="pu-fut" x1="0" x2="1"><stop offset="0" stop-color="var(--pu-mem)" stop-opacity=".55"/><stop offset="1" stop-color="var(--pu-mem)" stop-opacity=".06"/></linearGradient>
+        <linearGradient id="pu-past" x1="1" x2="0"><stop offset="0" stop-color="var(--pu-think)" stop-opacity=".45"/><stop offset="1" stop-color="var(--pu-think)" stop-opacity=".04"/></linearGradient></defs>
+      <circle class="pu-face" cx="${cx}" cy="${cy}" r="${R - 4}"/>
+      <path class="pu-past" d="${arc(-Math.PI + 0.001, 0, R)}"/><path class="pu-fut" d="${arc(0, Math.PI - 0.001, R)}"/>
+      <g class="pu-ticks">${ticks}</g><g class="pu-hours">${labels}</g>
+      ${think ? `<g class="pu-sweep" style="transform-origin:${cx}px ${cy}px"><path d="${arc(-0.9, 0, R)}"/></g>` : ""}
+      <g class="pu-ev">${ev.map((x, i) => `<g class="e ${x.k}${x.ts < now ? " was" : ""}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(hhmm(x.ts) + " · " + KIND[x.k][0] + ": " + x.t)}"><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="9" class="hit"/><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="${x.k === "lead" ? 6 : 4.6}" class="dot"/></g>`).join("")}</g>
+      <circle class="pu-now" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="6"/>`;
+    // центр: время, что дальше; лента «Сегодня» справа на широком листе
+    const nextOne = ev.find(x => x.ts > now);
+    const c = el("#pu-center");
+    c.hidden = think;
+    c.innerHTML = `<b class="pu-time">${esc(hhmm(now))}</b>`
+      + (nextOne ? `<span class="pu-nx"><i class="${nextOne.k}"></i>${esc(hhmm(nextOne.ts))} · ${esc(nextOne.t)}</span><small>${esc(left(nextOne.ts))}</small>`
+                 : `<span class="pu-nx quiet">Впереди пусто — можно отдыхать</span>`);
+    const f = el("#pu-feed");
+    f.hidden = !wide;
+    if (wide) {
+      const past = ev.filter(x => x.ts <= now).reverse().slice(0, 5);
+      f.innerHTML = `<p class="pu-k">Сегодня</p>` + (past.length ? `<ul>${past.map(x => `<li><button type="button" data-go="${KIND[x.k][1]}"><time>${esc(hhmm(x.ts))}</time><i class="${x.k}"></i><span>${esc(x.t)}</span></button></li>`).join("")}</ul>`
+        : `<p class="pu-fe">Пока тихо. Всё, что Лира сделает за день, — запишет в дневник, и оно появится здесь и на круге.</p>`);
+    }
+    el("#pu-empty").hidden = true;
   }
   let tip = null;
-  el("#pu-stage").addEventListener("pointermove", (e) => {
-    if (!PU.nodes.length) return;
-    const r = el("#pu-stage").getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-    let best = null, bd = 196;
-    for (const n of PU.nodes) { const d = (n.x - x) ** 2 + (n.y - y) ** 2; if (d < bd) { bd = d; best = n; } }
-    if (!tip) { tip = document.createElement("span"); tip.className = "tip"; el("#pu-names").appendChild(tip); }
-    if (!tip.isConnected) el("#pu-names").appendChild(tip);
-    tip.hidden = !best;
-    if (best) { tip.textContent = best.t + (best.f ? ` · ${best.f}` : ""); tip.style.left = best.x.toFixed(0) + "px"; tip.style.top = best.y.toFixed(0) + "px"; }
-  });
-  el("#pu-stage").addEventListener("pointerleave", () => { if (tip) tip.hidden = true; });
-  el("#pu-stage").addEventListener("click", () => {
-    if (!tip || tip.hidden) return;
-    const n = PU.nodes.find(x => tip.textContent.startsWith(x.t));
-    const a = A();
-    if (n && a && a.open_settings) a.open_settings("notes", n.t);
-  });
+  function tipFor(g) {
+    const x = g ? PU.nodes[+g.dataset.i] : null;
+    if (!tip) { tip = document.createElement("div"); tip.className = "pu-tip"; tip.setAttribute("role", "tooltip"); el("#pu-names").appendChild(tip); }
+    tip.hidden = !x;
+    if (!x) return;
+    const now = Date.now() / 1000;
+    tip.innerHTML = `<p class="pu-k ${x.k}">${esc(KIND[x.k][0])} · ${esc(hhmm(x.ts))}</p><p>${esc(x.t)}</p>`
+      + (x.src || x.ts > now ? `<small>${esc([x.src, x.ts > now ? left(x.ts) : ""].filter(Boolean).join(" · "))}</small>` : "");
+    const st = el("#pu-stage"), tw = Math.min(240, st.clientWidth - 24);
+    tip.style.width = tw + "px";
+    tip.style.left = Math.max(12, Math.min(st.clientWidth - tw - 12, x.x - tw / 2)) + "px";
+    tip.style.top = (x.y > st.clientHeight / 2 ? x.y - 14 : x.y + 14) + "px";
+    tip.classList.toggle("up", x.y > st.clientHeight / 2);
+  }
+  el("#pu-stage").addEventListener("pointerover", (e) => tipFor(e.target.closest(".pu-ev .e")));
+  el("#pu-stage").addEventListener("pointerleave", () => tipFor(null));
+  el("#pu-stage").addEventListener("focusin", (e) => tipFor(e.target.closest(".pu-ev .e")));
+  el("#pu-stage").addEventListener("focusout", () => tipFor(null));
+  const goEv = (g) => { const x = g && PU.nodes[+g.dataset.i]; const a = A(); if (x && a && a.open_settings) a.open_settings(KIND[x.k][1]); };
+  el("#pu-stage").addEventListener("click", (e) => goEv(e.target.closest(".pu-ev .e")));
+  el("#pu-stage").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".pu-ev .e")) { e.preventDefault(); goEv(e.target.closest(".pu-ev .e")); } });
+  setInterval(() => { if (PU.active && !document.hidden) dial(); }, 60000);   // стрелка «сейчас» идёт
   function drawQ() {
     head();
     const q = el("#pu-q"), think = busy() && cfg().thoughts && PU.q;
@@ -309,15 +328,14 @@
   function draw() {
     if (!PU.active) return;
     head(); drawCards(); drawQ();
-    requestAnimationFrame(drawSky);
+    requestAnimationFrame(dial);
   }
-  window.addEventListener("resize", () => { if (PU.active) drawSky(); });
+  window.addEventListener("resize", () => { if (PU.active) dial(); });
 
   /* ---------- что показывать (шестерёнка) ---------- */
   const OPTS = [
     ["thoughts", "Мысли при ответе", "вопрос, поднятые заметки и шаги"],
     ["background", "Фоновые дела", "дневник, Радар, что дальше"],
-    ["stars", "Созвездие заметок", "все записи точками, по папкам"],
     ["auto", "Открываться самому", "когда Лира думает или пришла заявка"],
   ];
   function pop(on) {
@@ -327,7 +345,6 @@
     if (!on) return;
     const c = cfg();
     p.innerHTML = OPTS.map(([k, t, s]) => `<label class="pu-o"><span><b>${t}</b><small>${s}</small></span><input type="checkbox" data-o="${k}"${c[k] ? " checked" : ""}><i aria-hidden="true"></i></label>`).join("")
-      + `<div class="pu-seg" role="radiogroup" aria-label="Названия заметок"><span>Названия</span><button type="button" role="radio" data-n="hover" aria-checked="${c.names !== "always"}">по наведению</button><button type="button" role="radio" data-n="always" aria-checked="${c.names === "always"}">свежие всегда</button></div>`
       + `<div class="pu-seg" role="radiogroup" aria-label="Движение"><span>Движение</span><button type="button" role="radio" data-m="full" aria-checked="${c.motion !== "calm"}">живое</button><button type="button" role="radio" data-m="calm" aria-checked="${c.motion === "calm"}">тихое</button></div>`
       + `<p class="pu-hint">Убрать пульт совсем — студия → «Оформление»</p>`;
   }
@@ -335,14 +352,13 @@
     PU.cfg = Object.assign({}, cfg(), patch);
     core.call("settings_save", { patch: { ui: { pult: PU.cfg } } }).catch(() => { });
     document.body.classList.toggle("pu-calm", calm());
-    document.body.classList.toggle("pu-names", cfg().names === "always");
     draw();
   }
   el("#pu-gear").onclick = (e) => { e.stopPropagation(); pop(); };
   el("#pu-pop").addEventListener("change", (e) => { const k = e.target.dataset.o; if (k) setCfg({ [k]: e.target.checked }); });
   el("#pu-pop").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.n) setCfg({ names: b.dataset.n }); else if (b.dataset.m) setCfg({ motion: b.dataset.m });
+    if (b.dataset.m) setCfg({ motion: b.dataset.m });
     b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === b)));
   });
   document.addEventListener("pointerdown", (e) => { if (!el("#pu-pop").hidden && !e.target.closest("#pu-pop, #pu-gear")) pop(false); });

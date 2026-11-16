@@ -30,7 +30,7 @@ ok(not Q.self_fact("Что у меня в среду?", "Записала."), "�
 ok(not Q.self_fact("Открой эту папку", "Открыла."), "просьба сделать — не факт")
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 ok("fact = self_fact(text, turn.full)" in src and "self.workspace.remember(fact)" in src, "ядро: после второй неудачи — сама в память")
-ok("elif not saved_fact:" in src and "PROMISE_GIVEUP if len(turn.full) < 300" in src, "не факт — честное «пока ничего не сделано», как раньше")
+ok("elif not saved_fact:" in src and "else PROMISE_GIVEUP" in src and "honest_rest(text, turn.full)" in src, "не факт — честное «пока ничего не сделано», как раньше")
 sc = {x["id"]: x for x in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}
 ok("teach_fact675" in sc and any(s.get("new") for s in sc["teach_fact675"]["steps"]), "сценарий экзамена: научил → новый разговор → помнит")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

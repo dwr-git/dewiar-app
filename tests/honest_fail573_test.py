@@ -46,7 +46,7 @@ for path, want in (("Изображения/Снимки экрана", tmp / "P
 src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
 ok("failed_claim(step_text, turn.tools_err" in src and "failed_note(turn.tools_err" in src, "ядро: переспрос и честная приписка после ошибки действия")
 ok("_failed_c(s_, turn.tools_err" in src, "фраза «открыла» после ошибки — не звучит, пока проверка не прошла")
-ok("PROMISE_GIVEUP if len(turn.full) < 300" in src, "«сделала» без действия и после просьбы — честное «пока ничего не сделано»")
+ok("else PROMISE_GIVEUP" in src and "honest_rest(text, turn.full)" in src, "«сделала» без действия и после просьбы — честное «пока ничего не сделано»")
 et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 ok(et.count("turn.tools_err = getattr(turn, \"tools_err\", [])") == 2, "ошибки действий хода запоминаются")
 sc = {x["id"]: x for x in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}

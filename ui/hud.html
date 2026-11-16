@@ -317,7 +317,7 @@
   #kids .kb button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
   #kids.over .kb button { filter: saturate(.55); opacity: .75; }
   @media (prefers-reduced-motion: reduce) { #kids .kb button img { transition: none; } }
-  body.kids :is(#b-team, #team, #b-cal, #b-notes, #b-chat, #b-set, #b-bug, #b-idea, #b-upd, #b-pad, #b-pult, #b-watch, #bar .sep) { display: none !important; }
+  body.kids :is(#b-team, #team, #b-cal, #b-notes, #b-chat, #b-set, #b-bug, #b-idea, #b-upd, #b-pad, #b-watch, #bar .sep) { display: none !important; }
   body.mini #kids { display: none; }
   #tarc { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); pointer-events: none; display: none; overflow: visible; }
   #tarc.on { display: block; animation: tarcin .6s ease-out; }
@@ -507,6 +507,9 @@
   #corner-l #b-rst[hidden], body.light #corner-l #b-rst[hidden] { display: none; }
   body.light #corner-l #b-rst { color: #0d4f8b; background: rgba(226,240,255,.95); box-shadow: 0 1px 4px rgba(20,70,130,.18); }
   body.rest #b-rest { color: #a9d8ff; }
+  /* владелец 16.11 (снимок): «нажимаю „отдыхать“ — всё выглядит очень плохо» — метка наезжала на жука, обновление и лампочку.
+     Пока Лира отдыхает, в левом углу — только метка (жалоба и идея — после возвращения) */
+  body.rest #corner-l :is(#b-bug, #b-idea, #b-upd:not(.has)) { display: none !important; }
   body.light #corner-l #b-tm { color: #7f4a00; background: rgba(255,243,222,.94); box-shadow: 0 1px 4px rgba(120,70,0,.18); }   /* сплошная подложка: метка читается и на ярком портрете (contrast1018) */
   /* щит, дозор, стоп-кран, обновление — видны всегда; остальное в углу (жук, лампочка и «обновления», когда нового нет) —
      только под курсором (30.10, владелец: «жук и лампочка пропадают, а обновление остаётся») */
@@ -526,8 +529,8 @@
   #b-upd.has::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #ff6f9c; box-shadow: 0 0 0 2px rgba(0,0,0,.15); }
   #b-upd.busy svg { animation: updSpin 1.1s linear infinite; } @keyframes updSpin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { #b-upd.busy svg { animation: none; } }                                  /* блокнот открыт — кнопка видна и подсвечена */
-  #b-pad.on, #b-play.on, #b-pult.on { color: var(--accent, #8B8CF7); background: rgba(139,140,247,.14); }
-  body.light #b-pad.on, body.light #b-play.on, body.light #b-pult.on { color: var(--accent, #4f6cf0); background: rgba(79,108,240,.12); }
+  #b-pad.on, #b-play.on { color: var(--accent, #8B8CF7); background: rgba(139,140,247,.14); }
+  body.light #b-pad.on, body.light #b-play.on { color: var(--accent, #4f6cf0); background: rgba(79,108,240,.12); }
   #b-play[hidden] { display: none; }
   body.mini #corner, body.mini #corner-l { display: none; }
 
@@ -668,8 +671,6 @@
   <div id="corner">
     <!-- блокнот у виджета (20.10): вкладки, ссылки, картинки, таблицы, задачи — выезжает рядом, синхронизируется (ui/pad.html) -->
     <!-- «Досуг» (24.10): милые игры в том же листе, что блокнот (ui/pad.html, assets/arcade); выключается в «Возможностях» -->
-    <!-- «Пульт Лиры» (1.0.6): лист у виджета сразу на пульте — что она вспоминает, делает, что у неё в фоне (ui/padpult.js) -->
-    <button class="btn" id="b-pult" hidden title="Пульт — чем Лира занята прямо сейчас: что вспоминает, что делает, что в дневнике и Радаре" aria-label="Пульт Лиры"><svg viewBox="0 0 24 24"><circle cx="6" cy="16" r="1.8"/><circle cx="12" cy="7" r="1.8"/><circle cx="18" cy="14" r="1.8"/><path d="M7.4 14.7 10.8 8.6M13.6 7.9l3.2 4.6M7.8 16.2l8.4-1.7"/></svg></button>
     <button class="btn" id="b-play" hidden title="Досуг — милые игры на пару минут. Или скажите: «Лира, давай поиграем»"><svg viewBox="0 0 24 24"><path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.3 5.8l-1.1 3.7a2.3 2.3 0 0 1-3.9.9L14 15.5h-4l-1.8 2.4a2.3 2.3 0 0 1-3.9-.9l-1.1-3.7a4.5 4.5 0 0 1 4.3-5.8z"/><path d="M8 10.5v3M6.5 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/></svg></button>
     <button class="btn" id="b-pad" title="Блокнот — вкладки под рукой: ссылки, задачи, таблицы, картинки. Синхронизируется между устройствами"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2.5"/><path d="M8.5 3v4M12 3v4M15.5 3v4"/><path d="M8.5 11h7M8.5 14.5h7M8.5 18h4"/></svg></button>
     <!-- «Отдых» (№540): час без Лиры одним нажатием — не слушает и не говорит, напоминания подождут -->
@@ -1809,16 +1810,16 @@ function popUp() { const a = api(); if (a && mode === "card") { clearTimeout(bac
 function backLater(ms) { const a = api(); if (!a || mode !== "card") return; clearTimeout(backT); backT = setTimeout(() => a.tray_back && a.tray_back(), ms); }
 $("b-pad").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("notes"); };
 $("b-play").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("play"); };
-$("b-pult").onclick = () => { const a = api(); if (a && a.pad_toggle) a.pad_toggle("pult"); };
 let pultOn = true;                                         // «Оформление» → «Пульт Лиры» (ui.pult_on); нет ключа — включён
 let gamesFeature = true;                                  // «Возможности» → «Досуг» (features.games); нет ключа — включено
-const padCheck = () => { const a = api(); $("b-pad").hidden = !(a && a.pad_toggle); $("b-play").hidden = !(a && a.play_open) || !gamesFeature; $("b-pult").hidden = !(a && a.pad_toggle) || !pultOn; };   // окно без блокнота (старая оболочка) — кнопки нет
+const padCheck = () => { const a = api(); $("b-pad").hidden = !(a && a.pad_toggle); $("b-play").hidden = !(a && a.play_open) || !gamesFeature; };   // окно без блокнота (старая оболочка) — кнопки нет
 window.addEventListener("pywebviewready", padCheck); setTimeout(padCheck, 1500);
 const featuresSet = (f) => { gamesFeature = !(f && f.games === false); padCheck(); };
 /* окно блокнота не поднялось (Windows: WebView2 не создал страницу, №375) — сказать здесь, кнопка снова работает */
 let padFailUntil = 0;
 window.padFail = (t) => { padFailUntil = Date.now() + 12000; health(t, true); };
-window.padMark = (on, m) => { const play = !!on && m === "play", pult = !!on && m === "pult"; $("b-pad").classList.toggle("on", !!on && !play && !pult); $("b-play").classList.toggle("on", play); $("b-pult").classList.toggle("on", pult);
+// значок пульта у виджета убран (владелец 16.11: «иконок стало много») — пульт открыт: подсвечен блокнот
+window.padMark = (on, m) => { const play = !!on && m === "play"; $("b-pad").classList.toggle("on", !!on && !play); $("b-play").classList.toggle("on", play);
   $("corner").classList.toggle("pinned", !!on); };
 $("b-tray").onclick = () => { const a = api(); if (!a || !a.to_tray) return; a.to_tray();
   core.call("settings_save", { patch: { ui: { hud_tray: true } } }).catch(() => {}); };

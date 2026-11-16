@@ -255,6 +255,15 @@ class Telegram:
         self._px_skip = time.time() + 1800
         return r
 
+    def _bad_status(self, code):
+        """Ответ не JSON -> понятный текст. №778 (16.11, Mac): «Telegram ответил 302» десяток раз — это перенаправление
+        (шлюз общего бота на сайте обновлялся / провайдер подменил ответ), а человек видел голый код."""
+        if code in (301, 302, 303, 307, 308):
+            return ("сайт Dewiar сейчас перенаправляет запросы (обновляется или временно недоступен) — попробуйте через минуту; "
+                    "не помогает — «Отменить — подключить иначе»: свой бот или прокси" if self.shared() else
+                    "запрос к Telegram перенаправили — похоже, провайдер подменяет ответ: укажите прокси ниже")
+        return f"Telegram ответил {code}"
+
     def _call(self, method, timeout=20, files=None, **params):
         """Метод Bot API -> поле result ответа. С files — multipart (вложенные dict/list уходят строкой JSON,
         так требует Bot API), без них — JSON. Любая неудача — TelegramError с понятным человеку текстом."""
@@ -273,7 +282,7 @@ class Telegram:
         try:
             d = r.json()
         except ValueError as e:
-            raise TelegramError(f"Telegram ответил {r.status_code}") from e
+            raise TelegramError(self._bad_status(r.status_code)) from e
         if not d.get("ok"):
             if r.status_code == 401:
                 raise TelegramAuthError(self._e401())
@@ -671,7 +680,7 @@ class Telegram:
         try:
             d = r.json()
         except ValueError as e:
-            raise TelegramError(f"Telegram ответил {r.status_code}") from e
+            raise TelegramError(self._bad_status(r.status_code)) from e
         if not d.get("ok"):
             if r.status_code == 401:
                 raise TelegramAuthError(self._e401())

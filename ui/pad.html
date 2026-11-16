@@ -357,24 +357,57 @@
   .pu-orb.big { width: 30px; height: 30px; box-shadow: 0 0 26px var(--pu-glow); background: radial-gradient(circle at 35% 35%, #fff 0, var(--pu-think) 62%); }
   #pult[data-st="thinking"] .pu-head .pu-orb, #pult[data-st="speaking"] .pu-head .pu-orb { background: radial-gradient(circle at 35% 35%, #fff 0, var(--pu-think) 65%); box-shadow: 0 0 12px var(--pu-think); }
   #pult[data-st="thinking"] .pu-head .pu-orb { animation: pu-breathe 1.6s ease-in-out infinite; }
-  .pu-stage { position: relative; flex: 1 1 auto; min-height: 150px; border-radius: 20px; overflow: hidden;
+  .pu-stage { position: relative; flex: 1 1 auto; min-height: 200px; border-radius: 20px; overflow: hidden;
               background: radial-gradient(ellipse at 50% 46%, var(--pu-glow), transparent 72%), var(--chip); }
   body.light .pu-stage { background: radial-gradient(ellipse at 50% 46%, rgba(255,255,255,.7), transparent 70%), var(--chip); }
   body.neu.light .pu-stage { background: var(--paper); box-shadow: inset 5px 5px 12px var(--neu-dark, #b8c5d6), inset -5px -5px 12px var(--neu-light, #fff); }
   #pu-sky { position: absolute; inset: 0; }
-  .pu-ln path { stroke: var(--ink); stroke-opacity: .11; stroke-width: 1; fill: none; }
-  .pu-dots circle { fill: var(--ink); fill-opacity: .32; transition: fill-opacity .4s; }
-  .pu-dots circle.fresh { fill: var(--pu-think); fill-opacity: .85; }
-  .pu-dots circle.hot { fill: var(--pu-mem); fill-opacity: 1; filter: drop-shadow(0 0 5px var(--pu-mem)); }
-  #pult.thinking .pu-dots circle:not(.hot), #pult.thinking .pu-ln path { fill-opacity: .14; stroke-opacity: .05; }
-  .pu-rays path { stroke: var(--pu-mem); stroke-width: 1.6; stroke-linecap: round; fill: none; opacity: .8; stroke-dasharray: 900; animation: pu-draw 1.4s ease-out both; }
   #pu-names { position: absolute; inset: 0; pointer-events: none; }
-  #pu-names span { position: absolute; transform: translate(-50%, calc(-100% - 9px)); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-                   padding: 2px 9px; border-radius: 9px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--paper); box-shadow: var(--pu-lift); }
-  #pu-names span.hot { color: var(--pu-mem); }
-  #pu-names span.tip { color: var(--ink); z-index: 2; }
-  #pu-names span[hidden] { display: none; }
-  .pu-q { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(86%, 380px); padding: 14px 16px 12px; border-radius: 18px;
+  /* «Циферблат дня» (16.11): круг — сутки вокруг «сейчас»; слева прошедшее, справа впереди */
+  .pu-face { fill: var(--paper); fill-opacity: .55; }
+  body.neu.light .pu-face { fill: var(--paper); fill-opacity: 1; filter: drop-shadow(6px 6px 10px var(--neu-dark, #b8c5d6)) drop-shadow(-6px -6px 10px var(--neu-light, #fff)); }
+  .pu-past, .pu-fut { fill: none; stroke-width: 7; stroke-linecap: round; }
+  .pu-past { stroke: url(#pu-past); } .pu-fut { stroke: url(#pu-fut); }
+  .pu-ticks path { stroke: var(--ink); stroke-opacity: .16; stroke-width: 1.2; stroke-linecap: round; }
+  .pu-ticks path.big { stroke-opacity: .32; stroke-width: 1.6; }
+  .pu-hours text { font: 600 10.5px "Manrope", sans-serif; fill: var(--muted); text-anchor: middle; font-variant-numeric: tabular-nums; }
+  .pu-now { fill: var(--paper); stroke: var(--pu-think); stroke-width: 3; filter: drop-shadow(0 0 6px var(--pu-think)); }
+  .pu-sweep { animation: pu-spin 2.4s linear infinite; }
+  .pu-sweep path { fill: none; stroke: var(--pu-think); stroke-width: 7; stroke-linecap: round; opacity: .9; filter: drop-shadow(0 0 6px var(--pu-think)); }
+  .pu-ev .e { cursor: pointer; outline: none; }
+  .pu-ev .hit { fill: transparent; }
+  .pu-ev .dot { stroke: var(--paper); stroke-width: 2; }
+  .pu-ev .e.diary .dot { fill: var(--pu-think); } .pu-ev .e.radar .dot { fill: var(--pu-radar); }
+  .pu-ev .e.lead .dot { fill: var(--pu-lead); filter: drop-shadow(0 0 5px var(--pu-lead)); }
+  .pu-ev .e.remind .dot, .pu-ev .e.job .dot { fill: var(--pu-mem); }
+  .pu-ev .e:hover .dot, .pu-ev .e:focus-visible .dot { r: 7px; }
+  .pu-ev .e:focus-visible .hit, .pu-ev .e:hover .hit { fill: var(--pu-glow); }
+  .pu-center { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); width: calc(var(--pu-r, 120px) * 1.3);
+               display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; pointer-events: none; }
+  .pu-time { font: 600 clamp(24px, calc(var(--pu-r, 120px) * .25), 40px)/1 "Unbounded", "Manrope", sans-serif; color: var(--ink); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .pu-nx { max-width: 100%; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.35;
+           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pu-nx i, .pu-feed i { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--pu-mem); }
+  .pu-nx.quiet { color: var(--muted); font-weight: 500; }
+  .pu-center small { font-size: 11.5px; color: var(--muted); }
+  #pult i.diary { background: var(--pu-think); } #pult i.radar { background: var(--pu-radar); } #pult i.lead { background: var(--pu-lead); }
+  .pu-feed { position: absolute; right: 14px; top: 14px; bottom: 14px; left: calc(var(--pu-cx) + var(--pu-r) + 34px); display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .pu-feed ul { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .pu-feed button { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 2px 8px; width: 100%; padding: 6px 8px; border-radius: 11px; text-align: left; font-size: 12.5px; line-height: 1.35; color: var(--ink); }
+  .pu-feed button:hover { background: var(--chip2); }
+  .pu-feed time { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .pu-feed i { margin: 0; align-self: center; }
+  .pu-feed span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pu-fe { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+  .pu-tip { position: absolute; z-index: 3; padding: 9px 12px; border-radius: 13px; background: var(--paper); box-shadow: 0 14px 30px rgba(0,0,0,.28); font-size: 12.5px; line-height: 1.4; color: var(--ink); pointer-events: none; }
+  body.light .pu-tip { box-shadow: 0 14px 30px rgba(36,50,74,.18); }
+  .pu-tip.up { transform: translateY(-100%); }
+  .pu-tip[hidden] { display: none; }
+  .pu-tip .pu-k { margin-bottom: 3px; } .pu-tip .pu-k.diary { color: var(--pu-think); } .pu-tip .pu-k.radar { color: var(--pu-radar); } .pu-tip .pu-k.lead { color: var(--pu-lead); }
+  .pu-tip .pu-k.remind, .pu-tip .pu-k.job { color: var(--pu-mem); }
+  .pu-tip small { display: block; margin-top: 2px; color: var(--muted); }
+  @keyframes pu-spin { to { transform: rotate(360deg); } }
+  .pu-q { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); width: min(calc(100% - 32px), calc(var(--pu-r, 140px) * 1.7), 380px); padding: 14px 16px 12px; border-radius: 18px;
           background: var(--paper); box-shadow: 0 16px 36px var(--pu-glow), var(--pu-lift); animation: pu-rise .45s cubic-bezier(.2,.8,.2,1) both; z-index: 1; }
   #pu-qt { font: 600 15px/1.42 "Manrope", sans-serif; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   #pu-steps { list-style: none; display: flex; flex-direction: column; gap: 3px; margin-top: 9px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }

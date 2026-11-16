@@ -1904,6 +1904,9 @@
           <span class="hint"><i class="spin-dot"></i> жду, когда нажмёте «Запустить»…</span>
           <details style="margin-top:6px"><summary class="hint" style="cursor:pointer">Кнопки «Запустить» нет?</summary>
             <p class="hint" style="margin-top:6px">Отправьте боту сообщение: <span id="tg-code" style="user-select:all;color:#fff">/start …</span></p></details>
+          <!-- №778 (16.11): «бот на старт не реагирует и пропал раздел подключиться к своему боту» — пока ждём «Запустить»,
+               настройка была спрятана целиком. Отменить ожидание — и снова видно всё, в том числе «Свой бот» -->
+          <button class="btn ghost" id="tg-pair-cancel" style="margin-top:8px">Отменить — подключить иначе (свой бот, прокси)</button>
         </div>
         <div id="tg-qr" title="Ссылка на бота — для телефона"></div>
       </div>

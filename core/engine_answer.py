@@ -20,6 +20,22 @@ DISK_ASK_RX = re.compile(r"(?i)^(?:[а-яё]+[,!]\s+)?(?:проверь|посм
 SONGS_ASK_RX = re.compile(r"(?i)(?:плейлист|подбери|посоветуй|предложи|составь|назови)\s+(?:\w+\s+){0,3}(?:пес[ен]|песн|трек|музык|композиц)|плейлист")
 BIG_PC_RX = re.compile(r"(?i)(?:проанализируй|изучи|осмотри|разбери|просканируй|наведи\s+порядок)\s+(?:\w+\s+){0,3}"
                        r"(?:компьютер|комп\b|пк\b|папк|диск|файл)[^.?!]{0,80}(?:структур|порядок|разлож|предлож|покажи)")
+def honest_rest(ask, answer):
+    """№782: длинный ответ, где модель «сделала» без действия, -> он же без фраз о сделанном и без прошлого отказа."""
+    from quality import PROMISE_GIVEUP, action_claim, saved_claim
+    body = str(answer or "").replace(PROMISE_GIVEUP, " ")
+    keep = []
+    for sent in re.split(r"(?<=[.!?…])\s+", body):
+        if not sent.strip():
+            continue
+        if action_claim(ask, sent, set()) or saved_claim(ask, sent, set()) or re.search(
+                r"(?i)(?<![а-яё])(?:готово|вызываю|вызвала|вызвал|выполняю|обновляю|устанавливаю|создаю|обновлен\w*|обновлён\w*|"
+                r"создан\w*|установлен\w*|исправляю это)(?![а-яё])", sent):
+            continue
+        keep.append(sent.strip())
+    return " ".join(keep).strip()
+
+
 def shown_q(text):
     """Вопрос для «Пульта»: без вложений и служебного, одной строкой до 160 знаков."""
     return " ".join(str(text or "").split("\n\nВложения:")[0].split())[:160]
@@ -2988,6 +3004,7 @@ class AnswerMixin:
                     turn.full = turn.full[:-len(step_text)] if step_text and turn.full.endswith(step_text) else \
                         re.sub(r"\[[^\]\n]{0,400}\]", "", turn.full)
                 giveup = FAKE_GIVEUP if faked else PROMISE_GIVEUP
+                turn.full = turn.full.replace(PROMISE_GIVEUP, "").strip()   # №782: модель переписала прошлый отказ из разговора
                 turn.full = (turn.full.rstrip() + " " + giveup).strip()
                 sentences.put(giveup)
             if saved_checked and not called and not turn.cancel.is_set() and not nudged \
@@ -3012,7 +3029,13 @@ class AnswerMixin:
                     log.warning("✋ И после просьбы — «сделала» без единого действия — говорю правду")
                     if step_text and len(turn.full) > len(step_text) and turn.full.endswith(step_text):
                         turn.full = turn.full[:-len(step_text)]   # №651: тот же «записала» второй раз — в тексте не повторяем
-                    turn.full = PROMISE_GIVEUP if len(turn.full) < 300 else (turn.full.rstrip() + " " + PROMISE_GIVEUP).strip()
+                    # №782 (16.11): «Готово, навык обновлён… Простите, до дела так и не дошло» — длинное «готово» без единого
+                    # действия оставалось в ответе рядом с отказом. Неправду не храним: из длинного ответа уходят фразы
+                    # «сделала / вызываю / обновлён», короткий — заменяется честной фразой
+                    rest = honest_rest(text, turn.full) if len(turn.full) >= 300 else ""
+                    whole = len(turn.full.replace(PROMISE_GIVEUP, "").strip())
+                    # остались полезные сведения (≥ 60 % и 120 знаков) — с ними; почти всё было «сделала» — только честная фраза
+                    turn.full = (rest + " " + PROMISE_GIVEUP).strip() if len(rest) >= max(120, 0.6 * whole) else PROMISE_GIVEUP
                     sentences.put(PROMISE_GIVEUP)
             if failed_checked and not turn.cancel.is_set():
                 from quality import failed_claim, failed_note

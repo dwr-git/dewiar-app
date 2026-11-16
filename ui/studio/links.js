@@ -318,6 +318,12 @@ function tgSharedVis() {
   $("#tg-shared-info").style.display = "none";
   $("#tg-own-sum").textContent = "Дополнительно: свой бот (создаётся у @BotFather)";
 }
+$("#tg-pair-cancel").onclick = async (ev) => {
+  ev.target.disabled = true;
+  try { const t = await core.call("tg_forget"); tgFill(t && typeof t === "object" && "connected" in t ? t : await core.call("tg_get"));
+        $("#tg-own").open = true; $("#tg-res").className = "res"; $("#tg-res").textContent = "Ожидание отменено. Можно подключить своего бота ниже или указать прокси."; }
+  catch (e) { $("#tg-res").className = "res bad"; $("#tg-res").textContent = e.message; } finally { ev.target.disabled = false; }
+};
 $("#tg-shared-go").onclick = async (ev) => {
   const r = $("#tg-res"); ev.target.disabled = true; r.className = "res"; r.textContent = "подключаю…";
   try { const t = await core.call("tg_connect_shared"); r.textContent = ""; tgFill(t); }

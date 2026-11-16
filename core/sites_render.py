@@ -78,13 +78,55 @@ def colors(theme):
 
 
 # ---------- текст ----------
+# ссылки в тексте разделов (владелец 16.11, снимок: «Лира на сайтах ссылки показывает в виде текста» — модель написала в
+# текст раздела <a href="…">читайте статью</a>, а страница показала это кодом): <a href>, [текст](адрес) и голый адрес —
+# настоящей ссылкой; адрес — только https/mailto/tel или свой (#раздел, страница.html, /blog/…); остальное — как было, текстом
+LINK_RX = re.compile(r"""<a\s[^>]*?href\s*=\s*["']([^"']{1,500})["'][^>]*>(.*?)</a\s*>"""
+                     r"|\[([^\]\n]{1,200})\]\(([^)\s]{1,500})\)"
+                     r"""|(?<![\w/="'])((?:https?://|www\.)[^\s<>"'«»]{3,500})""", re.I | re.S)
+
+
+def own_url(u):
+    """Адрес на своём сайте: #раздел, about.html, /blog/статья — без схемы и без «..»."""
+    u = str(u or "").strip()
+    return u if re.match(r"^[#/]?[\w\-./#?=&%]{1,300}$", u) and ":" not in u and ".." not in u and not u.startswith("//") else ""
+
+
+def inline(x):
+    """Строка текста -> HTML: всё экранировано, ссылки — ссылками."""
+    x = str(x or "")
+    out, pos = [], 0
+    for m in LINK_RX.finditer(x):
+        out.append(E(x[pos:m.start()]))
+        tail = ""
+        if m.group(1) is not None:
+            href, txt = m.group(1), re.sub(r"<[^>]*>", "", m.group(2) or "").strip()
+        elif m.group(3) is not None:
+            href, txt = m.group(4), m.group(3).strip()
+        else:
+            raw = m.group(5)
+            href = raw.rstrip(".,;:!?)")
+            tail, txt = raw[len(href):], href
+        h = href.strip()
+        u = own_url(h) if re.match(r"^[#/]|^[\w-]+\.html?([#?].*)?$", h) else safe_url(h)
+        if u and txt:
+            ext = u.startswith(("https://", "http://"))
+            out.append(f'<a href="{E(u)}"' + (' target="_blank" rel="noopener"' if ext else "") + f">{E(txt)}</a>")
+        else:
+            out.append(E(m.group(0)))
+        out.append(E(tail))
+        pos = m.end()
+    out.append(E(x[pos:]))
+    return "".join(out)
+
+
 def para(text, cls=""):
-    """Абзацы: пустая строка — новый <p>, перенос строки — <br>. Всё экранировано."""
+    """Абзацы: пустая строка — новый <p>, перенос строки — <br>. Всё экранировано, ссылки — ссылками (inline)."""
     t = str(text or "").strip()
     if not t:
         return ""
     c = f' class="{cls}"' if cls else ""
-    return "".join(f"<p{c}>" + "<br>".join(E(x) for x in p.split("\n")) + "</p>" for p in re.split(r"\n\s*\n", t) if p.strip())
+    return "".join(f"<p{c}>" + "<br>".join(inline(x) for x in p.split("\n")) + "</p>" for p in re.split(r"\n\s*\n", t) if p.strip())
 
 
 def one(text):
@@ -1879,16 +1921,16 @@ def doc_text(text):
             mm = re.match(r"^\s*[-•—*]\s+(.*)$", ln)
             if mm:
                 if para_lines:
-                    out.append("<p>" + "<br>".join(E(x) for x in para_lines) + "</p>")
+                    out.append("<p>" + "<br>".join(inline(x) for x in para_lines) + "</p>")
                     para_lines = []
-                items.append(f"<li>{E(mm.group(1))}</li>")
+                items.append(f"<li>{inline(mm.group(1))}</li>")
             else:
                 if items:
                     out.append("<ul>" + "".join(items) + "</ul>")
                     items = []
                 para_lines.append(ln)
         if para_lines:
-            out.append("<p>" + "<br>".join(E(x) for x in para_lines) + "</p>")
+            out.append("<p>" + "<br>".join(inline(x) for x in para_lines) + "</p>")
         if items:
             out.append("<ul>" + "".join(items) + "</ul>")
     return "".join(out)

@@ -1557,6 +1557,14 @@ class Api:
         if self.in_tray:
             self.popped = True
         if WIN:
+            # №769 (16.11): «пишу в чате — вдруг курсор исчезает»: виджет «поднимался» на каждое «слушаю», а pywebview
+            # show() в Windows — это ещё и Activate(): фокус уходил из поля «Чата». Уже видимый виджет не трогаем
+            h = self._hwnd(self.mode)
+            try:
+                if h and winshell.visible(h):
+                    return
+            except Exception:  # noqa: BLE001
+                pass
             self.wins[self.mode].show()
             self._win_shape(self.mode)
             return

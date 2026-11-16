@@ -34,7 +34,7 @@ class CommandsMixin:
         Только то, что уже есть: заметки (созвездие), дневник сегодня, Радар (свежее и растущая тема), что дальше по
         напоминаниям и делам, заявки с сайтов за сутки. Ничего не придумывает и не грузит модель."""
         now = time.time()
-        out = {"notes": [], "counts": {}, "diary": None, "radar": None, "next": [], "leads": [], "who": ""}
+        out = {"notes": [], "counts": {}, "diary": None, "radar": None, "next": [], "leads": [], "who": "", "day": []}
         try:
             out["who"] = self.persona_name()
         except Exception:  # noqa: BLE001
@@ -60,6 +60,14 @@ class CommandsMixin:
                 last = parts[-1] if len(parts) > 1 else ""
                 head, _, body = last.partition("\n")
                 out["diary"] = {"at": head.strip()[:40], "text": " ".join(body.split())[:420], "mtime": p.stat().st_mtime}
+                # «Циферблат дня» (16.11, владелец: созвездие «выглядит странно и бесполезно») — все записи сегодня по времени
+                day0 = _dt.datetime.combine(_dt.date.today(), _dt.time())
+                for part in parts[1:]:
+                    hd, _, bd = part.partition("\n")
+                    m = re.match(r"\s*(\d{1,2}):(\d{2})", hd)
+                    ts = int((day0 + _dt.timedelta(hours=int(m.group(1)), minutes=int(m.group(2)))).timestamp()) if m and int(m.group(1)) < 24 else 0
+                    if ts and ts <= now + 60:                  # запись «из будущего» (часы, правка руками) — не на круг
+                        out["day"].append({"k": "diary", "ts": ts, "t": " ".join(bd.split())[:220]})
         except Exception:  # noqa: BLE001
             pass
         ins = getattr(self, "insight", None)
@@ -70,6 +78,10 @@ class CommandsMixin:
                                            "signal": float((x.get("a") or {}).get("signal") or 0), "ts": x.get("ts") or x.get("seen") or 0}
                                           for x in fresh],
                                 "trend": ins.day_trend(), "n": len(ins.analyzed(24))}
+                for x in ins.analyzed(24):
+                    ts = x.get("ts") or x.get("seen") or 0
+                    if ts and now - ts < 12 * 3600:
+                        out["day"].append({"k": "radar", "ts": int(ts), "t": (x.get("title") or "")[:160], "src": x.get("src_name") or ""})
                 if not out["radar"]["items"]:
                     out["radar"] = None
             except Exception:  # noqa: BLE001
@@ -87,7 +99,9 @@ class CommandsMixin:
                 if now - 60 <= at <= now + 36 * 3600:
                     soon.append({"at": int(at), "text": (x.get("text") or ("Будильник" if x.get("kind") == "alarm" else "Напоминание"))[:80],
                                  "job": x.get("kind") == "job"})
-            out["next"] = sorted(soon, key=lambda r: r["at"])[:3]
+            soon.sort(key=lambda r: r["at"])
+            out["next"] = soon[:3]
+            out["day"] += [{"k": "job" if r["job"] else "remind", "ts": r["at"], "t": r["text"]} for r in soon if r["at"] <= now + 12 * 3600][:12]
         except Exception:  # noqa: BLE001
             pass
         sc = getattr(self, "sitechat", None)
@@ -98,8 +112,11 @@ class CommandsMixin:
                     ts = ts / 1000 if ts > 1e12 else ts
                     if ts and now - ts < 24 * 3600:
                         out["leads"].append({"ts": int(ts), "name": (r.get("name") or "")[:60], "cid": r.get("cid") or ""})
+                    if ts and now - ts < 12 * 3600:
+                        out["day"].append({"k": "lead", "ts": int(ts), "t": (r.get("name") or "Посетитель сайта")[:60]})
             except Exception:  # noqa: BLE001
                 pass
+        out["day"] = sorted((x for x in out["day"] if abs(x["ts"] - now) <= 12 * 3600), key=lambda x: x["ts"])[-40:]
         return out
 
     def _max_shared_ok(self):
