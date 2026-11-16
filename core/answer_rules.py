@@ -408,3 +408,40 @@ def device_os():
     """Система крупно для подсказки: Windows, macOS или Linux (без версии — подсказка общая у многих людей)."""
     import sys as _sys
     return "Windows" if os.name == "nt" else ("macOS" if _sys.platform == "darwin" else "Linux")
+
+
+# Подсказки к просьбе (из _turn_prepare, чистое ядро 1.0.12): какая просьба — какая справка модели. Каждая — с номером
+# жалобы или экзамена в комментарии; порядок и «или-или» (плагин / сайт / страница) — как были.
+def turn_hints(text, specs):
+    """text — вопрос (с «Вложениями»), specs — действия к ходу. -> (ask0 — вопрос без вложений, [справка к вопросу],
+    добавка к системной подсказке)."""
+    out, sys_ = [], ""
+    from quality import DIAGRAM_ASK, PAGE_ASK, PLUGIN_ASK, PLUGIN_EDIT_ASK, PLUGIN_NOTE, SITE_ASK, SITE_EDIT_ASK, SITE_NOTE
+    ask0 = text.split("\n\nВложения:")[0]
+    if specs and (PLUGIN_ASK.search(ask0) or PLUGIN_EDIT_ASK.search(ask0)) and any(x.get("name") == "plugin_create" for x in specs):
+        out.append(PLUGIN_NOTE.strip())           # Creator (03.11): плагин — инструментом, а не HTML в чате
+    elif specs and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)) and any(x.get("name") == "site_create" for x in specs):
+        out.append(SITE_NOTE.strip())             # «Сайты» (03.11): сайт — инструментами, а не HTML в чате
+    elif PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
+        out.append("СЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "
+                   "вызовом show_page передай html содержимого — разделы <section> с <h2>, списки, таблицы; оформление "
+                   "добавится само, страница откроется в браузере. HTML в ответе не пиши, скрипты для этого не пиши; "
+                   "после — одна фраза, что открыла.")
+    from quality import COUNCIL_ASK, COUNCIL_NOTE, WEATHER_ASK, WRITING_ASK, WRITING_NOTE, _READ_ASK, ask_url
+    names_ = {x.get("name") for x in specs or []}
+    if COUNCIL_ASK.search(ask0) and "council" in names_:
+        sys_ += COUNCIL_NOTE                    # экзамен ПК 0.81.1: «собери совет» — call_persona вместо council
+    if WRITING_ASK.search(ask0) and "writing_today" in names_:
+        sys_ += WRITING_NOTE                    # «сколько я написал сегодня?» — числа выдумывала
+    url_ = ask_url(ask0)
+    if url_ and _READ_ASK.search(ask0) and "read_webpage" in names_:
+        out.append(f"В вопросе ссылка {url_}: прежде чем рассказывать о ней, прочитай страницу read_webpage — "
+                   "отвечай по прочитанному, не по памяти.")
+    if WEATHER_ASK.search(ask0) and "weather" in names_ and not re.search(r"погод|градус|температур|прогноз|осадк", ask0, re.I):
+        out.append("Человек едет в поездку: сначала узнай погоду там на эти даты (weather с городом из вопроса) и "
+                   "собери советы под неё; погоду и градусы — только из weather.")
+    if DIAGRAM_ASK.search(text):                  # экзамен 15.10: «Схема готова и уже на экране» — а схемы нет
+        out.append("СЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи "
+                   "узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши "
+                   "«схема готова» или «на экране», не нарисовав её. Сначала блок, потом одна-две фразы о главном.")
+    return ask0, out, sys_

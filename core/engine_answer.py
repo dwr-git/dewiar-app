@@ -12,7 +12,7 @@ from answer_rules import (
     JOB_ASK_RX, LAW_CODE_RX, LAW_REF_RX, law_unsourced, model_label, _MONTH_NOM, _MONTH_RX, month_year_wrong,
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
     PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, REPEAT_RX, shown_q, SONGS_ASK_RX,
-    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, VISION_HINT)  # noqa: F401 — прежние имена на месте
+    SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT)  # noqa: F401 — прежние имена на месте
 from answer_prompt import PromptMixin
 from answer_models import ModelsMixin
 from answer_report import ReportMixin
@@ -315,6 +315,177 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
     WAIT_NOTE_SEC = 20          # модель молчит дольше — в виджете строка, чего ждём и что можно сделать (№446)
     GREET_LATE_SEC = 60         # приветствие «С возвращением» без единого слова дольше — уже не к месту: молчим
 
+    def _turn_prepare(self, turn, text, images, prof):
+        """Ход разговора, шаг «подготовить запрос» (из _run_turn, чистое ядро 1.0.12): модель (облако, пробная, думать ли,
+        экономный режим), действия к вопросу и их режим, системная подсказка, справка к ходу (подсказки к просьбе, память,
+        знания персонажа, картинки), окно контекста. Ошибка (нет модели) — LLMError, как и раньше.
+        -> (prof, msgs, specs, system, ask0, ctx, econ_main, pmsg, slim_text)."""
+        if not prof and (self.account.logged_in() or self.s.get("cloud", "key")):
+            try:                                   # модели нет, а вход dewiar.pro (или ключ) есть — подключаем модели Dewiar сами
+                self._cloud_use()
+                prof = self.persona_llm()
+            except Exception as e:  # noqa: BLE001
+                log.info("🧠 Модели Dewiar сами не подключились: %s", e)
+        if not prof:                               # 29.10 (пакет: 28% компьютеров так и не подключили мозг и молчат)
+            threading.Thread(target=self.auto_join, args=("вопрос без мозга",), daemon=True).start()   # подключится — дальше полный
+            prof = self._trial_llm()               # а этот ответ — сразу, пробным разговором сайта, без настройки
+        if not prof:
+            raise LLMError("я пока не подключён к языковой модели — откройте настройки, раздел «Мозг»"
+                           + (": войдите в аккаунт dewiar.pro — модели Dewiar подключатся сами" if not self.account.logged_in() else ""))
+        msgs = self._messages(text, images, prof)
+        if prof.get("cloud") and prof.get("net") and not images and not self._net_closed() and self._net_rules_ok():
+            prof = dict(prof, _net_turn=True)       # «Сеть Лиры»: заголовок — только к основному ходу разговора (llm._headers)
+        from llm import wants_think
+        if prof.get("think") not in ("on", "off") and self.s.get("llm", "think_auto") is not False and wants_think(think_ask(text, getattr(turn, "raw", False))):
+            # сложная просьба — модель думает (дольше, но стих с рифмой, а расчёт со смыслом); лимит — с запасом на размышления
+            prof = dict(prof, think="on", max_tokens=max(6144, int(prof.get("max_tokens") or 0)))
+            turn.think_auto = True
+            log.info("🧠 Сложная просьба — модель подумает перед ответом")
+        econ_main = None                            # экономный режим (economy.py): простое — дешёвой модели, основная — запасом
+        try:
+            import economy
+            cheap = economy.model_for(prof, text, self.history, bool(images), think=prof.get("think") == "on")
+        except Exception:  # noqa: BLE001
+            cheap = ""
+        if cheap:
+            econ_main = prof
+            prof = dict(prof, model=cheap)
+            self.health_count("econ")
+            log.info("💸 Простой вопрос — отвечает недорогая модель «%s»", cheap)
+        from llm import creative_temp, prof_temp
+        ask0 = text.split("\n\nВложения:")[0]
+        temp = creative_temp(ask0, prof.get("temperature"))
+        if temp != prof_temp(prof):
+            prof = dict(prof, temperature=temp)       # творческая просьба — смелее (отзыв 17.10 про креатив)
+            log.info("🎨 Творческая просьба — температура %.2f", temp)
+        # харнесс, шаг 1 (15.11): к вопросу — ядро действий и только нужные модули (Toolbox.specs(text)); прочее модель
+        # попросит сама (more_tools) — вопрос легче вдвое: окно своей модели, свой ключ, очередь облака
+        slim_text = text.split("\n\nВложения:")[0] + "\n" + "\n".join(
+            str(m.get("content") or "")[:300] for m in self.history[-4:] if m.get("role") == "user" and isinstance(m.get("content"), str))
+        specs = self.toolbox.specs(slim_text) if self.s.get("tools", "enabled_all") is not False else []
+        if specs and getattr(turn, "via_job", False) and "[Дело по расписанию]" in text:
+            from engine_music import SUMMARY_JOB_RX
+            if SUMMARY_JOB_RX.search(text.split("»", 1)[0]):
+                # владелец 11.11, 21:00: «Итог дня» — «Дела: итог», «Деньги: отчёт», а потом навык «Проверка договора»
+                # (contract-check) — и ни слова итога. Итогу навыки плагинов не нужны
+                specs = [x for x in specs if x.get("name") != "use_skill"]
+        mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(prof))
+        if mode in ("native", "prompt"):
+            prof = dict(prof, tools_mode=mode)
+        elif mode is None and specs:
+            self.probe_tools_bg()                  # ещё не проверяли — проверим в фоне, этот ответ — в режиме по умолчанию
+        # «Голос без пауз» (04.11): подсказка — общая для всех и неизменная; личное (имя, память, душа, дела сегодня) —
+        # справкой в начале разговора, подсказки к роду просьбы (стихи, советы, схема, грубость) — в справке к вопросу.
+        # Иначе каждая такая добавка ломала кэш начала запроса и для всех инструментов после подсказки (tools/prefix_audit.py)
+        pmsg = self._profile_in_msgs(prof)
+        system = self._system(bool(specs), personal=not pmsg)
+        personal = self._personal(bool(specs)).strip() if pmsg else ""
+        pdelta = ""
+        if personal:                               # 0.87: справка в начале разговора — снимок, изменения — к вопросу
+            personal, pdelta = self._profile_snap(personal, msgs)
+        notes = []                                 # подсказки к этой просьбе — в справку к вопросу
+        import boundaries
+        from llm import POEM_ASK, POEM_NOTE, READ_NOTE, RECO_ASK, RECO_NOTE, reading
+        if reading(text.split("\n\nВложения:")[0]):
+            notes.append(READ_NOTE)                 # прочитать готовое — точный текст целиком (№668)
+        elif POEM_ASK.search(text.split("\n\nВложения:")[0]):
+            notes.append(POEM_NOTE)                 # стихи — рифмы по ударению подбираются заранее
+        elif RECO_ASK.search(text.split("\n\nВложения:")[0]):
+            notes.append(RECO_NOTE)                 # советы фильмов и песен — только существующее
+        if boundaries.rude(text):                  # грубят самому помощнику — спокойная граница в этом ходе, счётчик в пульс
+            notes.append(boundaries.NOTE)
+            self.health_count("rude")
+            log.info("🛡 грубость в адрес помощника — отвечу спокойно, с границей")
+        recalled = ""
+        try:
+            recalled = self.recall.context(text.split("\n\nВложения:")[0])
+        except Exception as e:  # noqa: BLE001
+            log.info("Поиск по записям: %s", e)
+        ctx = [self._turn_context(text)] + ([pdelta] if pdelta else []) + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней
+        mlines, mpages = self.memory_for(text.split("\n\nВложения:")[0])
+        if mlines:                                 # Память 2.0: старое о человеке не теряется — приходит к вопросу
+            log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))
+            ctx.append("Из памяти о пользователе (подобрано к этому вопросу из «Обо мне» — используй, если к месту, "
+                       "не пересказывай всё):\n" + mlines)
+        try:                                         # «Пульт Лиры» (16.11): что подняла к вопросу — светится в окне заметок
+            self.emit("recall", q=shown_q(text), notes=re.findall(r"^\[([^\]]+)\]", recalled or "", re.M)[:6], memory=list(mpages or [])[:4])
+        except Exception:  # noqa: BLE001
+            pass
+        if recalled:
+            log.info("📎 Вспомнил из записей: %s", ", ".join(re.findall(r"^\[([^\]]+)\]", recalled, re.M)))
+            ctx.append("Из записей пользователя в твоей папке (нашлось по словам вопроса). Если это отвечает на "
+                       "вопрос — ответь по ним и коротко скажи, откуда («в заметке …»). Если не относится — не "
+                       "упоминай:\n" + recalled)
+        try:
+            ag = self.agenda_context(text)             # «что у нас по плану» — дела и календарь сразу перед моделью
+            if ag.strip():
+                ctx.append(ag.strip())
+            cr = self.care_context(text, turn)         # «Заботливая память»: прошло важное — спросить, как прошло
+            if cr:
+                ctx.append(cr)
+            ask0, hints, hint_sys = turn_hints(text, specs)
+            ctx += hints
+            system += hint_sys
+            turn.agenda = ag
+        except Exception as e:  # noqa: BLE001
+            log.info("План на день: %s", e)
+        if turn.via and not turn.via_job:
+            src = turn.via.get("from") or "Telegram"
+            ctx.append(f"Сейчас пользователь пишет тебе из {src} (не голосом): ответ уйдёт ему сообщением. Можно "
+                       "чуть подробнее и со списками; файлы из папки ассистента — инструментом send_telegram"
+                       + (" (to: max)." if src == "MAX" else "."))
+        if mode == "none" and specs:
+            specs = []
+            system = self._system(False, personal=not pmsg) + ("\n\nЭта модель не умеет выполнять действия (музыка, скриншоты, "
+                                            "программы). Если просят действие — честно скажи одной фразой, что с этой "
+                                            "моделью действия недоступны, и предложи выбрать другую модель в «Мозге».")
+        slow_at = (getattr(self, "_tools_slow", None) or {}).get(self._tools_key(prof))
+        if specs and slow_at is not None and time.monotonic() - slow_at < 1200:
+            # своя модель только что не дождалась ответа с инструментами (180 с) — 20 минут спрашиваем без них, а не
+            # ждём те же 180 с на каждом вопросе и потом ещё ответ без них (№133, 20.10: 4 ядра, Ollama, «вечно в думках»)
+            specs = []
+            system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: модель на "
+                                            "этом компьютере не успевает с ними. Если просят действие — честно скажи "
+                                            "это одной фразой.")
+        turn.plugin_hint = self._plugin_hint(text) if specs else ""
+        turn.plugin_acts = self._plugin_acts(text) if turn.plugin_hint else ("", [])
+        if turn.plugin_hint:                       # №461/463/483: просьба к плагину — сразу его навык и действия
+            log.info("🧩 %s", turn.plugin_hint.split(":")[0].split(" — ")[0])
+            ctx.append(turn.plugin_hint)
+        kb = self._persona_knowledge(text, turn)
+        if kb:
+            ctx.append(kb.strip())
+        if images:
+            ctx.append(VISION_HINT)                      # фото: перевод, документ, еда (идеи пользователей 24.10)
+        elif len(text) < 400:
+            try:
+                import guide
+                # экзамен ПК 0.81.1 (как appGuideFor на телефоне): «как сделать, чтобы сын говорил с тобой безопасно?»,
+                # «есть видеоуроки?», «как добавить маму?» — вопрос о самом приложении: руководство прикладываем сами
+                # (как вызов app_help — и в событиях хода, и для экзамена)
+                gh = guide.attach(text.split("\n\nВложения:")[0], "pc")
+                if gh:
+                    turn.guided = True
+                    log.info("📖 Вопрос о приложении — руководство приложено к вопросу")
+                    self.emit("tool", name="app_help", title="Руководство", status="done", args={"query": text[:200]},
+                              detail="руководство приложено к вопросу", result="руководство приложено к вопросу приложением")
+                else:
+                    gh = guide.hint(text, "pc")              # «как защищены мои данные?» — раздел руководства сразу
+                    if gh:                                   # экзамен 1.0.5 (help_ubuntu_cmd): ответ по руководству — и
+                        turn.guided = True                   # в событиях хода так и видно (как с attach)
+                        self.emit("tool", name="app_help", title="Руководство", status="done", args={"query": text[:200]},
+                                  detail="раздел руководства приложен к вопросу", result="раздел руководства приложен к вопросу приложением")
+                if gh:
+                    ctx.append(gh)
+            except Exception:  # noqa: BLE001
+                pass
+        msgs = _put_context(msgs, "\n\n".join(c for c in ctx if c))
+        if personal:
+            from llm import put_profile
+            msgs = put_profile(msgs, personal)
+        system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)
+        return prof, msgs, specs, system, ask0, ctx, econ_main, pmsg, slim_text
+
     def _run_turn(self, turn, text, images=()):
         """Поток turn-N: один ход разговора. Фразы ответа идут в очередь sentences — их озвучивает отдельный поток
         (_speak_worker; для сообщений без голоса — _drain_worker), None в очереди — конец. До 6 шагов
@@ -333,195 +504,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
         self.set_state("thinking")
         threading.Thread(target=self._wait_watch, args=(turn,), name=f"wait-{turn.n}", daemon=True).start()
         try:
-            if not prof and (self.account.logged_in() or self.s.get("cloud", "key")):
-                try:                                   # модели нет, а вход dewiar.pro (или ключ) есть — подключаем модели Dewiar сами
-                    self._cloud_use()
-                    prof = self.persona_llm()
-                except Exception as e:  # noqa: BLE001
-                    log.info("🧠 Модели Dewiar сами не подключились: %s", e)
-            if not prof:                               # 29.10 (пакет: 28% компьютеров так и не подключили мозг и молчат)
-                threading.Thread(target=self.auto_join, args=("вопрос без мозга",), daemon=True).start()   # подключится — дальше полный
-                prof = self._trial_llm()               # а этот ответ — сразу, пробным разговором сайта, без настройки
-            if not prof:
-                raise LLMError("я пока не подключён к языковой модели — откройте настройки, раздел «Мозг»"
-                               + (": войдите в аккаунт dewiar.pro — модели Dewiar подключатся сами" if not self.account.logged_in() else ""))
-            msgs = self._messages(text, images, prof)
-            if prof.get("cloud") and prof.get("net") and not images and not self._net_closed() and self._net_rules_ok():
-                prof = dict(prof, _net_turn=True)       # «Сеть Лиры»: заголовок — только к основному ходу разговора (llm._headers)
-            from llm import wants_think
-            if prof.get("think") not in ("on", "off") and self.s.get("llm", "think_auto") is not False and wants_think(think_ask(text, getattr(turn, "raw", False))):
-                # сложная просьба — модель думает (дольше, но стих с рифмой, а расчёт со смыслом); лимит — с запасом на размышления
-                prof = dict(prof, think="on", max_tokens=max(6144, int(prof.get("max_tokens") or 0)))
-                turn.think_auto = True
-                log.info("🧠 Сложная просьба — модель подумает перед ответом")
-            econ_main = None                            # экономный режим (economy.py): простое — дешёвой модели, основная — запасом
-            try:
-                import economy
-                cheap = economy.model_for(prof, text, self.history, bool(images), think=prof.get("think") == "on")
-            except Exception:  # noqa: BLE001
-                cheap = ""
-            if cheap:
-                econ_main = prof
-                prof = dict(prof, model=cheap)
-                self.health_count("econ")
-                log.info("💸 Простой вопрос — отвечает недорогая модель «%s»", cheap)
-            from llm import creative_temp, prof_temp
-            ask0 = text.split("\n\nВложения:")[0]
-            temp = creative_temp(ask0, prof.get("temperature"))
-            if temp != prof_temp(prof):
-                prof = dict(prof, temperature=temp)       # творческая просьба — смелее (отзыв 17.10 про креатив)
-                log.info("🎨 Творческая просьба — температура %.2f", temp)
-            # харнесс, шаг 1 (15.11): к вопросу — ядро действий и только нужные модули (Toolbox.specs(text)); прочее модель
-            # попросит сама (more_tools) — вопрос легче вдвое: окно своей модели, свой ключ, очередь облака
-            slim_text = text.split("\n\nВложения:")[0] + "\n" + "\n".join(
-                str(m.get("content") or "")[:300] for m in self.history[-4:] if m.get("role") == "user" and isinstance(m.get("content"), str))
-            specs = self.toolbox.specs(slim_text) if self.s.get("tools", "enabled_all") is not False else []
-            if specs and getattr(turn, "via_job", False) and "[Дело по расписанию]" in text:
-                from engine_music import SUMMARY_JOB_RX
-                if SUMMARY_JOB_RX.search(text.split("»", 1)[0]):
-                    # владелец 11.11, 21:00: «Итог дня» — «Дела: итог», «Деньги: отчёт», а потом навык «Проверка договора»
-                    # (contract-check) — и ни слова итога. Итогу навыки плагинов не нужны
-                    specs = [x for x in specs if x.get("name") != "use_skill"]
-            mode = (self.s.get("llm", "tools_modes") or {}).get(self._tools_key(prof))
-            if mode in ("native", "prompt"):
-                prof = dict(prof, tools_mode=mode)
-            elif mode is None and specs:
-                self.probe_tools_bg()                  # ещё не проверяли — проверим в фоне, этот ответ — в режиме по умолчанию
-            # «Голос без пауз» (04.11): подсказка — общая для всех и неизменная; личное (имя, память, душа, дела сегодня) —
-            # справкой в начале разговора, подсказки к роду просьбы (стихи, советы, схема, грубость) — в справке к вопросу.
-            # Иначе каждая такая добавка ломала кэш начала запроса и для всех инструментов после подсказки (tools/prefix_audit.py)
-            pmsg = self._profile_in_msgs(prof)
-            system = self._system(bool(specs), personal=not pmsg)
-            personal = self._personal(bool(specs)).strip() if pmsg else ""
-            pdelta = ""
-            if personal:                               # 0.87: справка в начале разговора — снимок, изменения — к вопросу
-                personal, pdelta = self._profile_snap(personal, msgs)
-            notes = []                                 # подсказки к этой просьбе — в справку к вопросу
-            import boundaries
-            from llm import POEM_ASK, POEM_NOTE, READ_NOTE, RECO_ASK, RECO_NOTE, reading
-            if reading(text.split("\n\nВложения:")[0]):
-                notes.append(READ_NOTE)                 # прочитать готовое — точный текст целиком (№668)
-            elif POEM_ASK.search(text.split("\n\nВложения:")[0]):
-                notes.append(POEM_NOTE)                 # стихи — рифмы по ударению подбираются заранее
-            elif RECO_ASK.search(text.split("\n\nВложения:")[0]):
-                notes.append(RECO_NOTE)                 # советы фильмов и песен — только существующее
-            if boundaries.rude(text):                  # грубят самому помощнику — спокойная граница в этом ходе, счётчик в пульс
-                notes.append(boundaries.NOTE)
-                self.health_count("rude")
-                log.info("🛡 грубость в адрес помощника — отвечу спокойно, с границей")
-            recalled = ""
-            try:
-                recalled = self.recall.context(text.split("\n\nВложения:")[0])
-            except Exception as e:  # noqa: BLE001
-                log.info("Поиск по записям: %s", e)
-            ctx = [self._turn_context(text)] + ([pdelta] if pdelta else []) + [n.strip() for n in notes]   # меняющееся — в справку к вопросу, подсказка остаётся прежней
-            mlines, mpages = self.memory_for(text.split("\n\nВложения:")[0])
-            if mlines:                                 # Память 2.0: старое о человеке не теряется — приходит к вопросу
-                log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))
-                ctx.append("Из памяти о пользователе (подобрано к этому вопросу из «Обо мне» — используй, если к месту, "
-                           "не пересказывай всё):\n" + mlines)
-            try:                                         # «Пульт Лиры» (16.11): что подняла к вопросу — светится в окне заметок
-                self.emit("recall", q=shown_q(text), notes=re.findall(r"^\[([^\]]+)\]", recalled or "", re.M)[:6], memory=list(mpages or [])[:4])
-            except Exception:  # noqa: BLE001
-                pass
-            if recalled:
-                log.info("📎 Вспомнил из записей: %s", ", ".join(re.findall(r"^\[([^\]]+)\]", recalled, re.M)))
-                ctx.append("Из записей пользователя в твоей папке (нашлось по словам вопроса). Если это отвечает на "
-                           "вопрос — ответь по ним и коротко скажи, откуда («в заметке …»). Если не относится — не "
-                           "упоминай:\n" + recalled)
-            try:
-                ag = self.agenda_context(text)             # «что у нас по плану» — дела и календарь сразу перед моделью
-                if ag.strip():
-                    ctx.append(ag.strip())
-                cr = self.care_context(text, turn)         # «Заботливая память»: прошло важное — спросить, как прошло
-                if cr:
-                    ctx.append(cr)
-                from quality import DIAGRAM_ASK, PAGE_ASK, PLUGIN_ASK, PLUGIN_EDIT_ASK, PLUGIN_NOTE, SITE_ASK, SITE_EDIT_ASK, SITE_NOTE
-                ask0 = text.split("\n\nВложения:")[0]
-                if specs and (PLUGIN_ASK.search(ask0) or PLUGIN_EDIT_ASK.search(ask0)) and any(x.get("name") == "plugin_create" for x in specs):
-                    ctx.append(PLUGIN_NOTE.strip())           # Creator (03.11): плагин — инструментом, а не HTML в чате
-                elif specs and (SITE_ASK.search(ask0) or SITE_EDIT_ASK.search(ask0)) and any(x.get("name") == "site_create" for x in specs):
-                    ctx.append(SITE_NOTE.strip())             # «Сайты» (03.11): сайт — инструментами, а не HTML в чате
-                elif PAGE_ASK.search(text):                     # 28.10: HTML писала в чат и читала теги вслух
-                    ctx.append("СЕЙЧАС ПРОСЯТ СТРАНИЦУ В БРАУЗЕРЕ: собери данные (find_notes, read_file, web_search) и одним "
-                               "вызовом show_page передай html содержимого — разделы <section> с <h2>, списки, таблицы; оформление "
-                               "добавится само, страница откроется в браузере. HTML в ответе не пиши, скрипты для этого не пиши; "
-                               "после — одна фраза, что открыла.")
-                from quality import COUNCIL_ASK, COUNCIL_NOTE, WEATHER_ASK, WRITING_ASK, WRITING_NOTE, _READ_ASK, ask_url
-                names_ = {x.get("name") for x in specs or []}
-                if COUNCIL_ASK.search(ask0) and "council" in names_:
-                    system += COUNCIL_NOTE                    # экзамен ПК 0.81.1: «собери совет» — call_persona вместо council
-                if WRITING_ASK.search(ask0) and "writing_today" in names_:
-                    system += WRITING_NOTE                    # «сколько я написал сегодня?» — числа выдумывала
-                url_ = ask_url(ask0)
-                if url_ and _READ_ASK.search(ask0) and "read_webpage" in names_:
-                    ctx.append(f"В вопросе ссылка {url_}: прежде чем рассказывать о ней, прочитай страницу read_webpage — "
-                               "отвечай по прочитанному, не по памяти.")
-                if WEATHER_ASK.search(ask0) and "weather" in names_ and not re.search(r"погод|градус|температур|прогноз|осадк", ask0, re.I):
-                    ctx.append("Человек едет в поездку: сначала узнай погоду там на эти даты (weather с городом из вопроса) и "
-                               "собери советы под неё; погоду и градусы — только из weather.")
-                turn.agenda = ag
-                if DIAGRAM_ASK.search(text):                  # экзамен 15.10: «Схема готова и уже на экране» — а схемы нет
-                    ctx.append("СЕЙЧАС ПРОСЯТ СХЕМУ: в этом ответе обязательно блок ```mermaid (flowchart LR или TD, подписи "
-                               "узлов по-русски в кавычках) — только он и рисует схему на экране. Без блока схемы нет: не пиши "
-                               "«схема готова» или «на экране», не нарисовав её. Сначала блок, потом одна-две фразы о главном.")
-            except Exception as e:  # noqa: BLE001
-                log.info("План на день: %s", e)
-            if turn.via and not turn.via_job:
-                src = turn.via.get("from") or "Telegram"
-                ctx.append(f"Сейчас пользователь пишет тебе из {src} (не голосом): ответ уйдёт ему сообщением. Можно "
-                           "чуть подробнее и со списками; файлы из папки ассистента — инструментом send_telegram"
-                           + (" (to: max)." if src == "MAX" else "."))
-            if mode == "none" and specs:
-                specs = []
-                system = self._system(False, personal=not pmsg) + ("\n\nЭта модель не умеет выполнять действия (музыка, скриншоты, "
-                                                "программы). Если просят действие — честно скажи одной фразой, что с этой "
-                                                "моделью действия недоступны, и предложи выбрать другую модель в «Мозге».")
-            slow_at = (getattr(self, "_tools_slow", None) or {}).get(self._tools_key(prof))
-            if specs and slow_at is not None and time.monotonic() - slow_at < 1200:
-                # своя модель только что не дождалась ответа с инструментами (180 с) — 20 минут спрашиваем без них, а не
-                # ждём те же 180 с на каждом вопросе и потом ещё ответ без них (№133, 20.10: 4 ядра, Ollama, «вечно в думках»)
-                specs = []
-                system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (музыка, скриншоты, программы) недоступны: модель на "
-                                                "этом компьютере не успевает с ними. Если просят действие — честно скажи "
-                                                "это одной фразой.")
-            turn.plugin_hint = self._plugin_hint(text) if specs else ""
-            turn.plugin_acts = self._plugin_acts(text) if turn.plugin_hint else ("", [])
-            if turn.plugin_hint:                       # №461/463/483: просьба к плагину — сразу его навык и действия
-                log.info("🧩 %s", turn.plugin_hint.split(":")[0].split(" — ")[0])
-                ctx.append(turn.plugin_hint)
-            kb = self._persona_knowledge(text, turn)
-            if kb:
-                ctx.append(kb.strip())
-            if images:
-                ctx.append(VISION_HINT)                      # фото: перевод, документ, еда (идеи пользователей 24.10)
-            elif len(text) < 400:
-                try:
-                    import guide
-                    # экзамен ПК 0.81.1 (как appGuideFor на телефоне): «как сделать, чтобы сын говорил с тобой безопасно?»,
-                    # «есть видеоуроки?», «как добавить маму?» — вопрос о самом приложении: руководство прикладываем сами
-                    # (как вызов app_help — и в событиях хода, и для экзамена)
-                    gh = guide.attach(text.split("\n\nВложения:")[0], "pc")
-                    if gh:
-                        turn.guided = True
-                        log.info("📖 Вопрос о приложении — руководство приложено к вопросу")
-                        self.emit("tool", name="app_help", title="Руководство", status="done", args={"query": text[:200]},
-                                  detail="руководство приложено к вопросу", result="руководство приложено к вопросу приложением")
-                    else:
-                        gh = guide.hint(text, "pc")              # «как защищены мои данные?» — раздел руководства сразу
-                        if gh:                                   # экзамен 1.0.5 (help_ubuntu_cmd): ответ по руководству — и
-                            turn.guided = True                   # в событиях хода так и видно (как с attach)
-                            self.emit("tool", name="app_help", title="Руководство", status="done", args={"query": text[:200]},
-                                      detail="раздел руководства приложен к вопросу", result="раздел руководства приложен к вопросу приложением")
-                    if gh:
-                        ctx.append(gh)
-                except Exception:  # noqa: BLE001
-                    pass
-            msgs = _put_context(msgs, "\n\n".join(c for c in ctx if c))
-            if personal:
-                from llm import put_profile
-                msgs = put_profile(msgs, personal)
-            system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)
+            prof, msgs, specs, system, ask0, ctx, econ_main, pmsg, slim_text = self._turn_prepare(turn, text, images, prof)
             split, last, codef = SentenceSplitter(), 0.0, CodeFilter()
             # вслух — не больше ~900 символов (около минуты): длинный ответ дальше только на экране («Открыть целиком»);
             # сказки, истории и чтение вслух — целиком
@@ -1160,6 +1143,12 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 log.exception("итог хода")
         if turn.cancel.is_set():
             return
+        self._turn_finish(turn, text, images)
+
+    def _turn_finish(self, turn, text, images=()):
+        """Ход разговора, шаг «после ответа» (из _run_turn, чистое ядро 1.0.12): ответ — в историю (с действиями, фактами,
+        передачей слова), «Ваша очередь» (окно продолжения разговора), возврат к главному персонажу после специалиста и
+        передача слова, если её попросил инструмент. Отменённый ход сюда не доходит."""
         if turn.full.strip():
             said = text + (" [к сообщению была приложена картинка]" if images else "")
             acts = list(dict.fromkeys(getattr(turn, "tools_ok", None) or []))
