@@ -1,0 +1,266 @@
+{
+ "source": "core/tools.py",
+ "base": "tools_base",
+ "patch": [
+  "launch",
+  "DRY",
+  "EXAM_LAUNCH",
+  "WIN",
+  "MAC",
+  "winsys",
+  "macsys"
+ ],
+ "facade_note": "# действия модели разложены по модулям (чистое ядро, 1.0.8 — docs/CORE_PLAN.md); здесь — реестр TOOLS и Toolbox,\n# а все прежние имена по-прежнему доступны как tools.<имя>\n",
+ "modules": {
+  "tools_base": {
+   "doc": "Основа действий модели: окружение рабочего стола (запуск программ, браузер), общие флаги и ошибка инструмента.\nПроверки подменяют здесь launch, DRY, EXAM_LAUNCH, WIN, MAC — остальные модули tools_* читают их отсюда (base.X).",
+   "names": [
+    "log",
+    "DRY",
+    "EXAM_LAUNCH",
+    "UA",
+    "ToolError",
+    "RADIO",
+    "desktop_env",
+    "launch",
+    "_BROWSER_NEW_WINDOW",
+    "browser_cmd",
+    "winsys",
+    "macsys"
+   ]
+  },
+  "tools_web": {
+   "doc": "Действия модели: интернет и быстрые ответы — сайты, поиск, картинки, чтение страниц, погода, время в городах,\nмаршрут, калькулятор.",
+   "names": [
+    "calc_eval",
+    "t_calc",
+    "t_open_url",
+    "t_route",
+    "parse_ddg",
+    "searx_results",
+    "search_text",
+    "t_web_search",
+    "t_show_images",
+    "html_to_text",
+    "PAGE_MAX",
+    "PAGE_EMPTY",
+    "_STOP",
+    "_terms",
+    "page_excerpt",
+    "WMO",
+    "t_weather",
+    "home_city",
+    "CITY_TZ",
+    "city_tz",
+    "world_time",
+    "t_world_time",
+    "t_read_webpage",
+    "page_links"
+   ]
+  },
+  "tools_pc": {
+   "doc": "Действия модели: компьютер — программы, папки, команды и серверы, звук, система, снимок экрана и камера,\nуведомления, питание, умный дом, виджет, удаление файлов.",
+   "names": [
+    "t_app_update",
+    "desktop_apps",
+    "APP_ALIASES",
+    "_TR",
+    "find_app",
+    "t_open_app",
+    "OPEN_ALIASES",
+    "_known_dir",
+    "_LAST_SAVED",
+    "t_open_path",
+    "desktop_notify",
+    "human_error",
+    "t_volume",
+    "t_system",
+    "t_run_command",
+    "SUDO_AT",
+    "PASS_IN_CMD",
+    "ASKPASS",
+    "askpass_path",
+    "t_server_run",
+    "pictures_dir",
+    "_EXAM_PNG",
+    "t_save_screenshot",
+    "t_look_screen",
+    "_camera_mic_lock",
+    "t_look_camera",
+    "NOW_PLAYING",
+    "_del_paths",
+    "t_delete_files",
+    "t_smart_home",
+    "_NOT_PC",
+    "t_power",
+    "t_widget"
+   ]
+  },
+  "tools_media": {
+   "doc": "Действия модели: музыка и видео — радио, YouTube, Яндекс Музыка, управление проигрывателем, телевизор.",
+   "names": [
+    "_mpris_status",
+    "_mpris_players",
+    "MUSIC_APPS",
+    "yandex_music_installed",
+    "t_yandex_music",
+    "t_play_radio",
+    "t_play_youtube",
+    "media_players",
+    "media_playing",
+    "t_media",
+    "t_play_music",
+    "_catt",
+    "_tv_device",
+    "t_tv"
+   ]
+  },
+  "tools_mail": {
+   "doc": "Действия модели: почта и сообщения — письма, Telegram, рассылка, посты в каналы.",
+   "names": [
+    "_mail",
+    "t_send_email",
+    "t_send_telegram",
+    "t_read_emails",
+    "mail_table_make",
+    "t_mail_table",
+    "t_read_email",
+    "t_manage_email",
+    "_mailing",
+    "t_mailing",
+    "t_mailing_status",
+    "_post_target",
+    "t_channel_post"
+   ]
+  },
+  "tools_remind": {
+   "doc": "Напоминания, будильники, таймеры и дела по расписанию: класс Reminders и действия модели над ними.",
+   "lines": [
+    [
+     1515,
+     2106
+    ]
+   ]
+  },
+  "tools_notes": {
+   "doc": "Действия модели: папка ассистента — заметки, память, дневник, страницы, поиск по записям, «Совет ИИ», подкаст,\nидеи, календарь, справка по программе.",
+   "names": [
+    "_ws",
+    "_ws_call",
+    "t_watch",
+    "t_save_link",
+    "PAGE_CSS",
+    "page_html",
+    "md_html",
+    "t_show_page",
+    "t_debate",
+    "t_council",
+    "t_make_podcast",
+    "t_writing_today",
+    "t_month_summary",
+    "t_suggest_idea",
+    "t_save_note",
+    "t_update_note",
+    "t_app_help",
+    "t_calendar_list",
+    "NOTES_GENERIC",
+    "_latest_notes",
+    "_memory_hits",
+    "_chat_hits",
+    "t_find_notes",
+    "t_remember",
+    "t_write_diary"
+   ]
+  },
+  "tools_money": {
+   "doc": "Действия модели: деньги — записать, найти, поправить трату, отчёт.",
+   "names": [
+    "PLAN_RX",
+    "SPENT_RX",
+    "is_plan",
+    "t_money_add",
+    "_money_line",
+    "t_money_find",
+    "t_money_fix",
+    "t_money_report"
+   ]
+  },
+  "tools_people": {
+   "doc": "Действия модели: люди — «Близкие», команда, клиенты и сделки.",
+   "names": [
+    "t_close_send",
+    "t_close_call",
+    "t_close_read",
+    "_team",
+    "t_team_assign",
+    "t_team_message",
+    "t_team_status",
+    "_clients",
+    "t_client_note",
+    "t_client_info",
+    "t_client_crm",
+    "t_client_next",
+    "t_client_list",
+    "t_client_deal",
+    "t_deal_remind",
+    "t_client_deals"
+   ]
+  },
+  "tools_docs": {
+   "doc": "Действия модели: документы и файлы — поиск по документам и Знаниям, чтение и распознавание (OCR), поиск и\nзамена в Word/Excel, архивы, Радар, лаборатория, навыки.",
+   "names": [
+    "t_search_documents",
+    "t_ask_knowledge",
+    "t_create_skill",
+    "_ocr_vision",
+    "_ocr_say",
+    "t_read_file",
+    "OCR_EXTS",
+    "_doc_path",
+    "t_doc_find",
+    "t_archive_open",
+    "t_insight_ask",
+    "t_doc_replace",
+    "OCR_DIRS",
+    "_ocr_path",
+    "t_ocr",
+    "t_lab_write",
+    "t_lab_run"
+   ]
+  },
+  "tools_sites": {
+   "doc": "Действия модели: «Сайты» (сделать, переделать фразой, показать, опубликовать, статьи, оценка) и плагины\n(включить, сделать, изменить).",
+   "names": [
+    "_sites",
+    "_site_open",
+    "_eyes",
+    "t_site_create",
+    "t_site_edit",
+    "t_site_show",
+    "t_site_publish",
+    "t_site_article",
+    "t_site_review",
+    "t_plugin_enable",
+    "_maker",
+    "_maker_by",
+    "_plugin_done",
+    "t_plugin_create",
+    "t_plugin_change"
+   ]
+  },
+  "tools_tasks": {
+   "doc": "Действия модели: фоновые задачи (начать, состояние, дополнить, остановить, продолжить) и позвать персонажа.",
+   "lines": [
+    [
+     3708,
+     3888
+    ]
+   ]
+  }
+ },
+ "keep": [],
+ "no_reexport": [
+  "winsys",
+  "macsys"
+ ]
+}

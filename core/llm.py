@@ -918,8 +918,18 @@ def flat_messages(messages):
 
 
 def _clean_messages(messages):
-    """Пустой текст ассистента — "" а не null: часть серверов отклоняет null."""
-    return [dict(m, content="") if m.get("content") is None and m.get("role") == "assistant" else m for m in messages]
+    """Пустой текст ассистента — "" а не null: часть серверов отклоняет null. №798 (16.11, шлюз Vercel AI Gateway):
+    «user message must have content» — в истории оказалось сообщение человека без текста, и ни один вопрос больше не
+    проходил. Пустое сообщение человека — «…» (роль и порядок те же)."""
+    out = []
+    for m in messages:
+        c = m.get("content")
+        if c is None and m.get("role") == "assistant":
+            m = dict(m, content="")
+        elif m.get("role") == "user" and not m.get("tool_call_id") and (c is None or (isinstance(c, str) and not c.strip())):
+            m = dict(m, content="…")
+        out.append(m)
+    return out
 # Лимит ответа, если в профиле не задан: при меньшем ответ обрывается, когда модель начинает размышлять,
 # а аргументы инструментов (файл, страница) не помещаются целиком.
 DEFAULT_MAX_TOKENS = 2048
@@ -2293,8 +2303,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                 body["tools"] = [{"type": "function", "function": t} for t in tools]
         else:
             url = base + "/chat/completions"
-            hist = flat_messages(messages) if (p.get("_flat") or base in _flat or prompt_tools_mode(p) or not tools) \
-                and _has_tool_history(messages) else _clean_messages(messages)
+            hist = _clean_messages(flat_messages(messages) if (p.get("_flat") or base in _flat or prompt_tools_mode(p) or not tools)
+                                   and _has_tool_history(messages) else messages)
             if p.get("_lite"):                         # последняя попытка: короче — начало задачи и последние шаги
                 hist = (hist[:1] + [{"role": "assistant", "content": "…"}] + hist[-10:]) if len(hist) > 12 else hist
                 system = system[:14000]

@@ -12,6 +12,7 @@ PARTS = {
     "core/engine_commands.py": ("core/commands_*.py",),
     "core/engine_answer.py": ("core/answer_*.py",),
     "core/tasks.py": ("core/tasks_*.py",),
+    "core/quality.py": ("core/quality_*.py",),
 }
 
 

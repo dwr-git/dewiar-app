@@ -663,3 +663,20 @@ class PromptMixin:
         if len(body) > 90:
             body = body[:90].rsplit(" ", 1)[0] + "…"
         return "Заметка: " + body if body else ""
+
+    def _reminder_times(self):
+        """Времена «ЧЧ:ММ» стоящих напоминаний и дел на ближайшие сутки (для quality.remind_claim: «в 21:00 напомню про итог
+        дня» — правда, если дело уже стоит). Сбой — пусто: проверка работает как раньше."""
+        try:
+            from datetime import datetime as _d
+            now = time.time()
+            out = set()
+            for x in list(getattr(self, "reminders", None).items or []):
+                if x.get("paused"):
+                    continue
+                at = _d.fromisoformat(x["at"])
+                if now - 60 <= at.timestamp() <= now + 24 * 3600:
+                    out.add(at.strftime("%H:%M"))
+            return out
+        except Exception:  # noqa: BLE001
+            return set()

@@ -1,0 +1,220 @@
+{
+ "source": "core/tasks.py",
+ "cls": "TaskManager",
+ "base": null,
+ "patch": [
+  "stream_events",
+  "RETRY_MIN",
+  "dt",
+  "BUDGET",
+  "EXPLORE_STEPS",
+  "PART_STEPS",
+  "POLL_LOCAL",
+  "POLL_EVERY",
+  "SRC_MAX"
+ ],
+ "rules": {
+  "module": "tasks_base",
+  "doc": "Фоновые задачи — основа (чистое ядро 1.0.10 — docs/CORE_PLAN.md): постоянные (бюджеты, шаги, опрос), одна задача (Task)\nи помощники. Менеджер задач — core/tasks.py (TaskManager), его части — tasks_*.py; прежние имена tasks.X на месте.\nПодменять в проверках — здесь (tasks_base.BUDGET, tasks_base.stream_events…): части читают их через основу."
+ },
+ "mixins": {
+  "tasks_sched": {
+   "cls": "SchedMixin",
+   "doc": "Фоновые задачи, часть «расписание» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nоценка, «разбудить по событию» (файл, письмо, событие календаря), планировщик и сторож, напоминание о вопросе.",
+   "methods": [
+    "estimate",
+    "_wake_on",
+    "_file_sig",
+    "_event_due",
+    "_mail_check",
+    "_scheduler",
+    "_watch",
+    "_ask_remind",
+    "_problem"
+   ]
+  },
+  "tasks_plan": {
+   "cls": "PlanMixin",
+   "doc": "Фоновые задачи, часть «план» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nсистемная подсказка задачи, состояние, план и вехи, список дел, критерии готовности.",
+   "methods": [
+    "_system",
+    "_state",
+    "_todo_text",
+    "_plan_md",
+    "_milestone",
+    "_save_todos",
+    "_sync_md",
+    "_proof_bad",
+    "_todo_update",
+    "_set_criteria",
+    "_auto_criteria"
+   ]
+  },
+  "tasks_verify": {
+   "cls": "VerifyMixin",
+   "doc": "Фоновые задачи, часть «проверка» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nкритерии (команда, адрес, страница), доказательства и источники, судья, осмотр результата («глаза»), ворота перед «готово».",
+   "methods": [
+    "_crit_path",
+    "_crit_cmd",
+    "_url_inner",
+    "_crit_url",
+    "_page_roots",
+    "_browser_ok",
+    "_check_criteria",
+    "_prose",
+    "_own_path",
+    "_blind_overwrite",
+    "_evidence_piece",
+    "_src_log",
+    "_src_backfill",
+    "_given",
+    "_evidence",
+    "_data_files",
+    "_ask_with",
+    "_judge",
+    "_verify",
+    "_src_block",
+    "_fetch_src",
+    "_eyes",
+    "_promised_missing",
+    "_finish_gates",
+    "_stop_why",
+    "_gates",
+    "_verify_tool",
+    "_files_facts",
+    "_look",
+    "_review"
+   ]
+  },
+  "tasks_loop": {
+   "cls": "LoopMixin",
+   "doc": "Фоновые задачи, часть «ход работы» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nопрос и застревание, сверка, уроки, вопросы человеку, интернет и лаборатория, след и размышление.",
+   "methods": [
+    "_poll",
+    "_poll_every",
+    "_work_sig",
+    "_stall",
+    "_reconcile",
+    "_opt",
+    "lessons_path",
+    "_q",
+    "_ask",
+    "_web_used",
+    "_web_available",
+    "_lab_files",
+    "_clean",
+    "_trace",
+    "_maybe_reflect"
+   ]
+  },
+  "tasks_tools": {
+   "cls": "ToolsMixin",
+   "doc": "Фоновые задачи, часть «действия» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nкаталог и поиск действий, вызов, разрешения, вывод — большие ответы в файл.",
+   "methods": [
+    "_catalog",
+    "_specs",
+    "_first",
+    "_stems",
+    "_connect",
+    "_find_tool",
+    "_unknown",
+    "_coerce",
+    "_tool",
+    "_out_max",
+    "_offload",
+    "_tool_raw",
+    "_permit",
+    "_tool_on"
+   ]
+  },
+  "tasks_files": {
+   "cls": "FilesMixin",
+   "doc": "Фоновые задачи, часть «файлы» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nпути и папки задачи, чтение и запись, поиск по маске и обход, файловые действия.",
+   "methods": [
+    "_path",
+    "_folders",
+    "_area",
+    "_shown",
+    "_load_text",
+    "_save_text",
+    "_read_lines",
+    "_limit",
+    "_scan_root",
+    "_glob_rx",
+    "_walk",
+    "_file_tools"
+   ]
+  },
+  "tasks_exec": {
+   "cls": "ExecMixin",
+   "doc": "Фоновые задачи, часть «исполнение» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nрабочая папка, Python и оболочка, песочница, git, службы, снимки и откат.",
+   "methods": [
+    "_work",
+    "_py_env",
+    "_run_python",
+    "_run_shell",
+    "_oversize",
+    "_git_state",
+    "_git_check",
+    "_sbx_mode",
+    "_sbx_prompt",
+    "_task_python",
+    "_sbx_kw",
+    "_sandboxed",
+    "_relink_work",
+    "_svc_state",
+    "_svc_check",
+    "_snap",
+    "_rewind_tool",
+    "_after_rewind"
+   ]
+  },
+  "tasks_context": {
+   "cls": "ContextMixin",
+   "doc": "Фоновые задачи, часть «окно модели» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nсообщения человека, свёртка и сжатие истории, окно и запас, бюджет, обрезка вызовов, сбои и циклы.",
+   "methods": [
+    "_short",
+    "_add_user",
+    "_note_human",
+    "_consolidate",
+    "_compact",
+    "_window",
+    "_reserve",
+    "_fit_reserve",
+    "_win_key",
+    "_size",
+    "_budget",
+    "_calls_of",
+    "_stub",
+    "_trim",
+    "_slim_args",
+    "_fail",
+    "_transient",
+    "_cycles",
+    "_progress_sig",
+    "_setting_int"
+   ]
+  },
+  "tasks_parts": {
+   "cls": "PartsMixin",
+   "doc": "Фоновые задачи, часть «помощники» (примесь TaskManager, core/tasks.py; чистое ядро 1.0.10 — docs/CORE_PLAN.md):\nразведка, части задачи у помощников, их бюджет и ожидание.",
+   "methods": [
+    "_parts_max",
+    "_sub_begin",
+    "_sub_usage",
+    "_sub_end",
+    "_explore",
+    "_explore_final",
+    "_explore_refs",
+    "_budget_check",
+    "_parts",
+    "_brief",
+    "_part_inputs",
+    "_spawn_parts",
+    "_launch_parts",
+    "_wait_parts"
+   ]
+  }
+ },
+ "alias": "TB"
+}
