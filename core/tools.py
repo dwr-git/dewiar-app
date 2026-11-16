@@ -687,7 +687,15 @@ def _known_dir(name):
     return next((c for c in cand if c and c.exists()), cand[0])
 
 
+_LAST_SAVED = {"path": "", "at": 0.0}             # что Лира только что сохранила (снимок) — «открой эту папку»
+
+
 def t_open_path(a, ctx):
+    # экзамен 1.0.5 (open_folder_after_shot573): «сделай снимок» → «открой эту папку» → модель открыла «/». Корень, «~»,
+    # «.» или пусто сразу после сохранения — это папка только что сохранённого
+    want = str(a.get("path") or "").strip()
+    if want in ("", "/", "\\", ".", "~", "./") and _LAST_SAVED["path"] and time.time() - _LAST_SAVED["at"] < 900:
+        a = dict(a, path=str(Path(_LAST_SAVED["path"]).parent))
     p = Path(os.path.expanduser((a.get("path") or "~").strip()))
     # №573 (05.11): «сделай снимок» → «сохранил в „Изображения/Снимки экрана“», «открой эту папку» → open_path с тем же
     # «Изображения/Снимки экрана» — «нет такого пути», а модель сказала, что открыла. Первая часть пути — имя папки
@@ -1449,6 +1457,7 @@ def t_save_screenshot(a, ctx):
         Image.open(io.BytesIO(data)).save(buf, "PNG")
         data = buf.getvalue()
     f.write_bytes(data)
+    _LAST_SAVED.update(path=str(f), at=time.time())
     return f"Снимок экрана сохранён: {f}. Скажи пользователю коротко, что сохранил в «Изображения/Снимки экрана»."
 
 
@@ -2028,6 +2037,10 @@ def _items_arg(v):
     return [x.strip() for x in re.split(r"\s*[;\n]\s*", str(v or "")) if x.strip()][:12]
 
 
+MARK_ASK_RX = re.compile(r"(?i)\?\s*$|^\s*(?:что|какие|какой|сколько|когда|где|есть ли|расскажи|покажи|напомни,? что)\b")
+MARK_DONE_RX = re.compile(r"(?i)сделал|сделала|готово|выполн|отмет|закр[ыо]|\b[а-яё]{3,}(?:л|ла|ли)\b")
+
+
 def t_mark_done(a, ctx):
     """Отметить дела сделанными (done.py): подходящее разовое напоминание на сегодня закрывается, повторяющееся остаётся."""
     import done as D
@@ -2051,6 +2064,16 @@ def t_mark_done(a, ctx):
             eng.emit("done", **dn.public())
         return (f"Отметка снята: {', '.join('«' + x['title'] + '»' for x in gone)}. Сегодня сделано {dn.stats()['today']}."
                 if gone else "Среди сегодняшних отметок такого нет.")
+    # экзамен 1.0.5 (plan_today): «Что у нас по плану?» — модель «закрыла» «Полить цветы» и сказала, что дел нет. Отмечать —
+    # только когда человек сам сказал, что сделал; вопрос без «сделал/готово/отметь» и без глагола в прошедшем — не отметка
+    said = ""
+    try:
+        said = str((ctx.get("turn_text") or (lambda: ""))() or "")
+    except Exception:  # noqa: BLE001
+        said = ""
+    if said and MARK_ASK_RX.search(said) and not MARK_DONE_RX.search(said):
+        raise ToolError("человек спрашивает о делах, а не говорит, что сделал, — ничего не отмечено. Просто ответь, что "
+                        "впереди (list_reminders / план дня), без отметок")
     rem = ctx.get("reminders")
     closed, lst = [], []
     for t in items:
@@ -3965,7 +3988,7 @@ TOOLS = {
              "weekday(\"2026-10-14\") — день недели, date_add(\"2026-10-10\", 30) — дата через 30 дней.",
              S({"expression": {"type": "string", "description": "выражение"}}, ["expression"]), "safe", t_calc, "Калькулятор"),
     "cancel_reminder": ("Отменить напоминание по id или тексту.", S({"id": {"type": "string"}}, ["id"]), "safe", t_cancel_reminder, "Напоминания: отмена"),
-    "mark_done": ("Отметить дела сделанными: пользователь говорит, что сделал («я позвонил Игорю и сделал тренировку», «отметь как "
+    "mark_done": ("Только когда человек сам сказал, что сделал (на «что по плану?», «что сегодня?» — НЕ вызывать). Отметить дела сделанными: пользователь говорит, что сделал («я позвонил Игорю и сделал тренировку», «отметь как "
                   "исполненное», «готово, купил хлеб»). items — каждое дело отдельно и коротко, как оно называется («Позвонить Игорю», "
                   "«Тренировка»); подходящее напоминание на сегодня закроется само. undo: true — снять отметку, если отметили по ошибке.",
                   S({"items": {"type": "array", "items": {"type": "string"}}, "undo": {"type": "boolean"}}, ["items"]), "safe", t_mark_done, "Дела: сделано"),

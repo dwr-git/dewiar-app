@@ -319,7 +319,7 @@ class RemoteMixin:
                              kwargs={"file": file}, daemon=True).start()
         log.info("🔔 %s — %s", title, text)
 
-    def announce(self, text):
+    def announce(self, text, tag=""):
         """Сказать что-то по своей инициативе (напоминание, итог задачи) в фоновом потоке: дождаться (до 60 с),
         пока текущий ответ закончится, сыграть сигнал, сказать и послушать ответ follow_up_seconds."""
         text = self._g(text)
@@ -338,6 +338,7 @@ class RemoteMixin:
             with self._turn_lock:
                 self.turn_n += 1
                 turn = Turn(self.turn_n)
+                turn.tag = tag                           # «confirm» — вопрос задачи: ответили кнопкой — замолчать (16.11)
                 self.turn = turn
             q = queue.Queue()
             q.put(text)

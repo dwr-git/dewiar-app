@@ -5,6 +5,7 @@
 открыт. «Сон: никогда» — ничего не меняется. Только Windows: в Linux открытый микрофон сну не мешает."""
 
 import os
+import shutil
 import re
 import subprocess
 import time
@@ -83,7 +84,11 @@ def release_due(idle_s, standby_s, voice_ago_s, busy):
 # идея №111 (01.11: «во время Дозора частая проблема — засыпание компьютера; если Дозор включён, засыпать не должен»):
 # пока есть активный дозор — просим систему не засыпать (экран гаснуть может). Windows: SetThreadExecutionState из потока
 # дозора (состояние — на поток); Linux: systemd-inhibit на время дозора. keep_awake(False) — снова можно спать.
-_awake = {"on": False, "proc": None}
+# 16.11 (владелец, Ubuntu: «поставил Дозор, а экран гаснет через 10 минут, потом гибернация — дозором полноценно
+# пользоваться сложно»): GNOME засыпает и гасит экран сам (gsd-power), запрет logind он не всегда слушает, а Дозор смотрит
+# на экран — погасший экран для него слепой. Поэтому на время дозора — ещё и запрет GNOME «простой и сон»
+# (gnome-session-inhibit), а на Windows — и экран не гасить (ES_DISPLAY_REQUIRED).
+_awake = {"on": False, "proc": None, "gnome": None}
 
 
 def keep_awake(on):
@@ -92,14 +97,28 @@ def keep_awake(on):
     if on == _awake["on"]:
         return False
     _awake["on"] = on
-    ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+    ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
     if os.name == "nt":
         try:
             import ctypes
-            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0))
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ((ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED) if on else 0))
         except Exception:  # noqa: BLE001
             pass
         return True
+    g = _awake["gnome"]
+    if on and g is None and shutil.which("gnome-session-inhibit") and (os.environ.get("DBUS_SESSION_BUS_ADDRESS") or os.environ.get("XDG_RUNTIME_DIR")):
+        try:
+            _awake["gnome"] = subprocess.Popen(["gnome-session-inhibit", "--inhibit", "idle:suspend", "--reason", "Идёт Дозор",
+                                                "--app-id", "pro.dewiar.Dewiar", "sleep", "infinity"],
+                                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, ValueError):
+            _awake["gnome"] = None
+    elif not on and g is not None:
+        try:
+            g.terminate()
+        except OSError:
+            pass
+        _awake["gnome"] = None
     p = _awake["proc"]
     if on and p is None:
         try:

@@ -199,6 +199,9 @@ DEFAULTS = {
            "pad_w": None, "pad_h": None,    # свой размер блокнота у виджета (растянули за уголок), px при 100 % (ui/app.py pad_resize)
            "pad_text": None,                # размер текста в блокноте, 0.8–1.7 (ui/pad.js textSize); пусто — как задумано
            "pad_colors": None,              # цвета текста в блокноте: forest/sea/dusk/theme/plain (ui/pad.js colorScheme); пусто — «Чернила»
+           "pult_on": True,                 # «Пульт Лиры» — первая вкладка блокнота и значок у виджета (ui/padpult.js); «Оформление»
+           "pult": {},                      # что на пульте: thoughts, background, stars, auto, names ("hover"|"always"), motion ("full"|"calm")
+           "pult_seen": False,              # карточка «Это Пульт» показана
            "pad_side": "auto",              # блокнот у виджета: "auto" (к середине экрана), "left", "right" — кнопка ⇄ (pad.js)
            "home_apps": None,               # студия → «Главная»: какие значки и в каком порядке (home.js); пусто — как задумано
            "home_known": None,              # какие значки «Главной» человек уже видел, когда настраивал (новые после выпуска — сами в конце)

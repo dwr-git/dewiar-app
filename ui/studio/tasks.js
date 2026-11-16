@@ -154,8 +154,11 @@ function renderOutputs(t) {
       <button class="btn small primary" id="o-dl">Скачать</button><button class="btn small primary" id="o-pdf">PDF</button></div>
       <div id="o-view"></div></div>`;
 }
+let tKeepView = null;
 async function wireOutputs(t) {
   const rel = tOutSel; if (!rel) return;
+  const o0 = (t.outputs || []).find(o => o.path === rel) || {};
+  const vkey = `${t.id}|${rel}|${o0.time || ""}|${o0.mtime || ""}`;   // файл изменился (mtime) — показ обновится
   const dirRel = "Задачи/" + t.dir.replace(/\\/g, "/").split("/Задачи/").pop();   // ws_* принимают пути от корня папки ассистента
   $$("#t-view .oi").forEach(b => b.onclick = () => { tOutSel = b.dataset.p; openTask(t.id); });
   $("#o-name").textContent = rel;
@@ -176,6 +179,8 @@ async function wireOutputs(t) {
   $("#o-full").style.display = ["html", "htm", "png", "jpg", "jpeg", "webp", "svg"].includes(ext) ? "" : "none";
   $("#o-full").onclick = () => { const el = v.firstElementChild; if (el) (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el); };
   const openHint = `<p class="hint" style="padding:30px">Этот файл открывается в своей программе — нажмите «Открыть».</p>`;
+  if (tKeepView && tKeepView.dataset.key === vkey) { v.replaceWith(tKeepView); tKeepView = null; return; }
+  v.dataset.key = vkey;
   if (["html", "htm"].includes(ext)) {
     // на всех системах — текстом в srcdoc без allow-same-origin и с CSP (safeFrame, core.js): у страницы нет прав студии
     try {
@@ -199,6 +204,10 @@ async function openTask(id) {
   tCur = id;
   try {
     const t = await core.call("task_get", { id });
+    // 16.11 (Кодер: «подтормаживания… периодически не видел результата»): карточка перерисовывается на каждое событие задачи,
+    // и показ результата (страница в рамке) каждый раз грузился заново — мигал и тормозил. Тот же файл той же версии —
+    // оставляем как был
+    tKeepView = $("#o-view") && $("#o-view").dataset.key ? $("#o-view") : null;
     // карточка перерисовывается целиком на каждое событие задачи — запоминаем набранный текст и фокус полей
     const keep = tOpenedFor === id ? ["t-msg", "t-ans"].map(k => [k, $("#" + k) ? $("#" + k).value : "", document.activeElement && document.activeElement.id === k]) : [];
     const outs = t.outputs || [];
@@ -233,6 +242,7 @@ async function openTask(id) {
       ${t.status === "waiting" ? `<div class="tq"><b>Вопрос:</b> ${escH(t.question)}<div class="actions" style="margin-top:8px"><input type="text" id="t-ans" placeholder="Ваш ответ" style="flex:1"><button class="btn primary" id="t-ansgo">Ответить</button></div></div>` : ""}
       <div class="tabs">${tabs.map(([k, n]) => `<button data-tab="${k}" class="${k === tTab ? "on" : ""}">${n}</button>`).join("")}</div>${body}
       ${t.status !== "waiting" ? `<div class="tmsg"><input type="text" id="t-msg" placeholder="${t.status === "done" ? "Дополнить задачу: что ещё сделать…" : "Написать задаче: новые сведения, уточнение, просьба…"}"><button class="btn" id="t-msggo">Отправить</button></div>` : ""}
+      ${t.project && !["accepted", "discarded"].includes(t.code_state) ? `<p class="hint tcopy">Работаю в копии вашей папки — сам проект не меняется, пока вы не нажмёте «Принять изменения». Что поменяется — на вкладке «Изменения».</p>` : ""}
       <div class="actions">${acts.join("")}</div>`;
     $("#t-view .fhead b").textContent = t.title;
     keep.forEach(([k, v, f]) => { const el = $("#" + k); if (el && v) el.value = v; if (el && f) el.focus(); });

@@ -563,8 +563,16 @@ class Personas:
                         # живое лицо, главная роль, маршрут к специалисту не теряются
                         base = items.get(pid) or copy.deepcopy(TEMPLATES.get(pid) or (GALLERY.get(pid) if p.get("gallery") else None) or {})
                         p = dict(base, **p, id=pid, builtin=pid in BUILTIN)
-                        if "voice" in p:
-                            p["voice"] = fix_voice(p.get("voice"), p.get("gender"), (base or {}).get("voice"))
+                        # №766 (16.11): персонаж, записанный в обход студии (Кодером), — без голоса, с обликом «stratum»,
+                        # словом запуска строкой: студия не открывала его редактор. Чего нет или что неверно — по умолчанию
+                        p["voice"] = fix_voice(p.get("voice") if isinstance(p.get("voice"), dict) else {}, p.get("gender"),
+                                               (base or {}).get("voice"))
+                        if p.get("style") not in STYLES + ["nexus", "brain", "brandmark"]:
+                            p["style"] = "particles"
+                        if isinstance(p.get("wake"), str):
+                            p["wake"] = [w.strip() for w in p["wake"].split(",") if w.strip()]
+                        if not isinstance(p.get("wake"), list):
+                            p["wake"] = []
                         p.setdefault("aliases", [w for w in p.get("wake", [])])
                         items[pid] = p
                     except (OSError, json.JSONDecodeError) as e:

@@ -87,7 +87,13 @@ with sync_playwright() as p:
     ok(st.input_value("#pp-rt") == "" and "вопрос недели" in st.inner_text("#pp-rubs"), "после добавления поле очищено, рубрика в списке")
     st.click(".bp-row:has(#pp-greet)"); st.wait_for_timeout(300)
     ok(["pbot_greet", {"on": True}] in st.evaluate("calls") and st.locator("#pp-greet-t").is_visible(), "новички: включили — появился текст приветствия")
-    
+    # №759 (15.11): «добавлять канал можно, а удалить — нет»: крестик → подтверждение → pbot_chat_del
+    x = st.locator("#pp-where .pp-x")
+    ok(x.count() == 2, "у каждого канала и группы — «Убрать»")
+    x.nth(0).click(); st.wait_for_timeout(300)
+    ok("Убрать «" in st.inner_text(".dwq") and "останется там" in st.inner_text(".dwq"), "спрашивает и честно говорит, что бот останется в канале")
+    st.click(".dwq button.yes"); st.wait_for_timeout(300)
+    ok(any(c == "pbot_chat_del" for c, a in st.evaluate("calls")), "подтвердили — канал убран из списка (pbot_chat_del)")
     ok(not errors, f"без ошибок: {errors[:2]}")
     b.close()
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

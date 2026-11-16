@@ -2334,7 +2334,12 @@ html.st-light .brainpick .bp.on { background: color-mix(in srgb, var(--accent) 1
 .mm-np small { color: #B9BDF0; font-weight: 700; font-size: 12px; }
 .mm-np h2 { margin: 2px 0 0; font: 600 21px/1.25 Unbounded, Manrope, sans-serif; color: #fff; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .mm-np .ar { color: #CFD2FF; font-size: 14px; }
-.mm-ctl { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
+.mm-ctl { display: flex; gap: 10px; margin-top: 12px; align-items: center; flex-wrap: wrap; row-gap: 8px; }
+/* №767 (16.11): окно уже — круглая «Пауза» сплющивалась в овал, а громкость вылезала за карточку. Кнопки не сжимаются,
+   громкость переносится строкой ниже */
+.mm-ctl button { flex: none; }
+.mm-ctl .mm-vol { flex: 1 1 140px; min-width: 120px; max-width: 220px; }
+.mm-ctl .mm-vol input { min-width: 0; flex: 1; }
 .mm-ctl button { width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: #fff;
   background: rgba(255,255,255,.12); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 6px 14px -8px rgba(0,0,0,.5); backdrop-filter: blur(6px);
   transition: background .15s, transform .15s, box-shadow .15s; }
@@ -4061,6 +4066,8 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
 .pp-chat:hover { background: rgba(127,127,140,.14); }
 .pp-chat.on { background: color-mix(in srgb, #2AABEE 20%, transparent); }
 .pp-chat.no { opacity: .5; cursor: default; }
+.pp-x { margin-left: -6px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--mut); font: 18px/1 inherit; cursor: pointer; }
+.pp-x:hover, .pp-x:focus-visible { background: rgba(127,127,140,.14); color: var(--ink); }
 .pp-chat:focus-visible, .pp-days button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pp-chat i { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(145deg, #5cc6f5, #2AABEE); flex: none; }
 .pp-chat i svg { width: 17px; height: 17px; fill: none; stroke: #fff; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }

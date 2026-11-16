@@ -2046,7 +2046,11 @@ body.tab.lite-ui #rail { backdrop-filter: none; -webkit-backdrop-filter: none; b
 body.tab #rail .rl-brand { font: 600 17px/1 "Unbounded", "Manrope", sans-serif; letter-spacing: .02em; color: var(--ink); padding: 10px 12px 20px; }
 body.tab #rail .rl-g { display: flex; flex-direction: column; gap: 2px; }
 body.tab #rail .rl-g + .rl-g { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-line); }
-body.tab #rail .rl-apps { flex: 1 0 auto; }
+body.tab #rail > .rl-g:last-child { margin-top: auto; }
+.rl-h { margin: 0; padding: 2px 12px 4px; font: 600 11.5px/1.3 "Unbounded", "Manrope", sans-serif; letter-spacing: .02em; color: var(--muted); opacity: .8; }
+.rl-n { display: block; width: 100%; margin: 2px 0 0; padding: 6px 12px 6px 45px; border: 0; border-radius: 11px; background: transparent; color: var(--muted);
+  font: 500 12.5px/1.4 "Manrope", sans-serif; text-align: left; cursor: pointer; }
+@media (hover: hover) { .rl-n:hover { background: var(--frost); color: var(--ink); } }
 .rl-i { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 8px 12px; border: 0; border-radius: 13px;
   background: transparent; color: var(--muted); font: 500 14.5px/1.25 "Manrope", sans-serif; text-align: left; cursor: pointer; transition: background .15s, color .15s; }
 .rl-i svg { width: 21px; height: 21px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }

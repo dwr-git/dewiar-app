@@ -331,6 +331,121 @@
   #ask.on { display: flex; } #ask b { flex: 1; font-weight: 600; }
   #ask button { padding: 6px 12px; border-radius: 9px; background: var(--chip); font-weight: 700; }
   #ask button.danger { background: #FF6B8A; color: #fff; }
+  /* «Пульт Лиры» (1.0.6, ui/padpult.js; макеты владельца 15.11): первая вкладка — чем Лира занята прямо сейчас.
+     Обводок нет: цвет, тень, свечение, прозрачность. Движется только настоящее: дышит то, что идёт сейчас; тишина — тихо. */
+  body { --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #f0a35a; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
+         --pu-card: rgba(255,255,255,.045); --pu-lift: 0 10px 26px rgba(0,0,0,.28); --pu-glow: rgba(154,166,255,.30);
+         --pu-veil: rgba(10,12,20,.55); --pu-leadbg: rgba(95,208,143,.11); }
+  body.light { --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #a85a0e; --pu-lead: #23784a; --pu-err: #c4473a;
+               --pu-card: rgba(255,255,255,.6); --pu-lift: 0 10px 24px rgba(36,50,74,.12); --pu-glow: rgba(74,99,216,.24);
+               --pu-veil: rgba(219,229,241,.72); --pu-leadbg: #e2efe7; }
+  body.neu.light { --pu-card: var(--paper); --pu-lift: 6px 6px 14px var(--neu-dark, #b8c5d6), -6px -6px 14px var(--neu-light, #fff); }
+  .tab.pt { gap: 7px; padding-right: 12px; }
+  .tab.pt[hidden], body.play .tab.pt { display: none; }
+  .pt-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .3s, box-shadow .3s; }
+  .tab.pt.on .pt-dot { background: var(--pu-mem); }
+  .tab.pt.live .pt-dot { background: var(--pu-think); box-shadow: 0 0 0 4px var(--pu-glow); animation: pu-breathe 1.6s ease-in-out infinite; }
+  body.pult #tabs .tab.on { background: transparent; box-shadow: none; color: var(--muted); }
+  #pult { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 10px; padding: 2px 12px 12px; position: relative; }
+  body.pult #pult { display: flex; }
+  body.pult #tools, body.pult #sheet, body.pult #foot, body.pult #play, body.pult #pu-strip { display: none !important; }
+  #pult [hidden] { display: none !important; }
+  .pu-head { display: flex; align-items: center; justify-content: space-between; min-height: 30px; }
+  .pu-st { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-width: 0; }
+  .pu-st b { font: 600 13px/1 "Unbounded", "Manrope", sans-serif; color: var(--ink); letter-spacing: .01em; }
+  .pu-orb { flex: none; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0, var(--pu-mem) 65%); box-shadow: 0 0 10px var(--pu-mem); }
+  .pu-orb.big { width: 30px; height: 30px; box-shadow: 0 0 26px var(--pu-glow); background: radial-gradient(circle at 35% 35%, #fff 0, var(--pu-think) 62%); }
+  #pult[data-st="thinking"] .pu-head .pu-orb, #pult[data-st="speaking"] .pu-head .pu-orb { background: radial-gradient(circle at 35% 35%, #fff 0, var(--pu-think) 65%); box-shadow: 0 0 12px var(--pu-think); }
+  #pult[data-st="thinking"] .pu-head .pu-orb { animation: pu-breathe 1.6s ease-in-out infinite; }
+  .pu-stage { position: relative; flex: 1 1 auto; min-height: 150px; border-radius: 20px; overflow: hidden;
+              background: radial-gradient(ellipse at 50% 46%, var(--pu-glow), transparent 72%), var(--chip); }
+  body.light .pu-stage { background: radial-gradient(ellipse at 50% 46%, rgba(255,255,255,.7), transparent 70%), var(--chip); }
+  body.neu.light .pu-stage { background: var(--paper); box-shadow: inset 5px 5px 12px var(--neu-dark, #b8c5d6), inset -5px -5px 12px var(--neu-light, #fff); }
+  #pu-sky { position: absolute; inset: 0; }
+  .pu-ln path { stroke: var(--ink); stroke-opacity: .11; stroke-width: 1; fill: none; }
+  .pu-dots circle { fill: var(--ink); fill-opacity: .32; transition: fill-opacity .4s; }
+  .pu-dots circle.fresh { fill: var(--pu-think); fill-opacity: .85; }
+  .pu-dots circle.hot { fill: var(--pu-mem); fill-opacity: 1; filter: drop-shadow(0 0 5px var(--pu-mem)); }
+  #pult.thinking .pu-dots circle:not(.hot), #pult.thinking .pu-ln path { fill-opacity: .14; stroke-opacity: .05; }
+  .pu-rays path { stroke: var(--pu-mem); stroke-width: 1.6; stroke-linecap: round; fill: none; opacity: .8; stroke-dasharray: 900; animation: pu-draw 1.4s ease-out both; }
+  #pu-names { position: absolute; inset: 0; pointer-events: none; }
+  #pu-names span { position: absolute; transform: translate(-50%, calc(-100% - 9px)); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                   padding: 2px 9px; border-radius: 9px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--paper); box-shadow: var(--pu-lift); }
+  #pu-names span.hot { color: var(--pu-mem); }
+  #pu-names span.tip { color: var(--ink); z-index: 2; }
+  #pu-names span[hidden] { display: none; }
+  .pu-q { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(86%, 380px); padding: 14px 16px 12px; border-radius: 18px;
+          background: var(--paper); box-shadow: 0 16px 36px var(--pu-glow), var(--pu-lift); animation: pu-rise .45s cubic-bezier(.2,.8,.2,1) both; z-index: 1; }
+  #pu-qt { font: 600 15px/1.42 "Manrope", sans-serif; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  #pu-steps { list-style: none; display: flex; flex-direction: column; gap: 3px; margin-top: 9px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+  #pu-steps li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #pu-steps li i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pu-think); }
+  #pu-steps li.ok i { background: var(--pu-think); opacity: .55; }
+  #pu-steps li.mem i { background: var(--pu-mem); opacity: 1; }
+  #pu-steps li.err i { background: var(--pu-err); }
+  #pu-steps li.run { color: var(--ink); }
+  #pu-steps li.run i { box-shadow: 0 0 0 3px var(--pu-glow); animation: pu-breathe 1.2s ease-in-out infinite; }
+  .pu-empty { position: absolute; left: 22px; right: 22px; top: 50%; transform: translateY(-50%); text-align: center; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .pu-cards { flex: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; max-height: 40%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--chip2) transparent; padding: 2px; }
+  #pult.thinking .pu-cards, #pult.thinking .pu-lead { display: none; }
+  .pu-card { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 18px; background: var(--pu-card); box-shadow: var(--pu-lift); }
+  .pu-k { display: flex; align-items: center; gap: 6px; font: 600 11px/1.2 "Unbounded", "Manrope", sans-serif; letter-spacing: .01em; color: var(--muted); }
+  .pu-card.diary .pu-k { color: var(--pu-think); } .pu-card.radar .pu-k { color: var(--pu-radar); } .pu-card.next .pu-k { color: var(--pu-mem); }
+  .pu-dt { font: italic 14px/1.55 "Lora", Georgia, serif; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .pu-tr { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 13.5px; line-height: 1.3; }
+  .pu-tr svg { flex: none; width: 40px; height: 18px; fill: var(--pu-radar); }
+  .pu-tr svg rect:nth-child(1), .pu-tr svg rect:nth-child(2), .pu-tr svg rect:nth-child(3) { fill-opacity: .35; } .pu-tr svg rect:nth-child(4) { fill-opacity: .65; }
+  .pu-tr span { min-width: 0; }
+  .pu-tr small, .pu-ri small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+  .pu-ri { font-size: 13px; line-height: 1.4; }
+  .pu-card.next ul { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.35; }
+  .pu-card.next time { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .pu-a { align-self: flex-start; margin-top: auto; padding: 3px 0; font-weight: 700; font-size: 12.5px; color: var(--pu-think); }
+  .pu-a:hover { color: var(--ink); }
+  .pu-lead { flex: none; display: grid; gap: 3px; justify-items: start; padding: 12px 14px; border-radius: 18px; background: var(--pu-leadbg);
+             box-shadow: 0 12px 28px rgba(46,139,87,.22), var(--pu-lift); animation: pu-rise .5s cubic-bezier(.2,.8,.2,1) both; }
+  .pu-lead .pu-k { color: var(--pu-lead); }
+  .pu-lead b { font: 600 15px/1.35 "Unbounded", "Manrope", sans-serif; color: var(--ink); }
+  .pu-lead span { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .pu-live { width: 8px; height: 8px; border-radius: 50%; background: var(--pu-lead); animation: pu-breathe 1.6s ease-in-out infinite; }
+  .pu-btn { padding: 8px 14px; border-radius: 13px; font-weight: 700; font-size: 13px; background: var(--chip2); color: var(--ink); }
+  .pu-btn.main { background: var(--pu-think); color: #fff; box-shadow: 0 8px 18px var(--pu-glow); }
+  .pu-lead .pu-btn.main { background: var(--pu-lead); box-shadow: 0 8px 18px rgba(46,139,87,.3); }
+  body:not(.light) .pu-btn.main { color: #10131c; }
+  #pult button:focus-visible, .tab.pt:focus-visible, #pu-strip button:focus-visible { outline: none; box-shadow: 0 0 16px var(--pu-glow); background: var(--chip2); }
+  .pu-o:focus-within { background: var(--chip2); }
+  .pu-pop { position: absolute; right: 12px; top: 36px; z-index: 5; width: min(310px, calc(100% - 24px)); display: flex; flex-direction: column; gap: 2px; padding: 8px;
+            border-radius: 18px; background: var(--paper); box-shadow: 0 18px 44px rgba(0,0,0,.4); animation: pu-rise .22s cubic-bezier(.2,.8,.2,1) both; }
+  body.light .pu-pop { box-shadow: 0 18px 44px rgba(36,50,74,.22); }
+  .pu-o { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 12px; cursor: pointer; }
+  .pu-o:hover { background: var(--chip); }
+  .pu-o b { display: block; font-size: 13px; line-height: 1.3; } .pu-o small { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+  .pu-o input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .pu-o i { flex: none; position: relative; width: 34px; height: 20px; border-radius: 10px; background: var(--chip2); transition: background .2s; }
+  .pu-o i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--paper); box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .18s; }
+  .pu-o input:checked + i { background: var(--pu-think); } .pu-o input:checked + i::after { transform: translateX(14px); background: #fff; }
+  .pu-seg { display: flex; align-items: center; gap: 3px; padding: 6px 10px; font-size: 12.5px; }
+  .pu-seg span { flex: 1; font-weight: 700; }
+  .pu-seg button { white-space: nowrap; font-size: 12px; padding: 4px 9px; border-radius: 10px; color: var(--muted); font-weight: 600; }
+  .pu-seg button[aria-checked="true"] { background: var(--chip2); color: var(--ink); box-shadow: var(--shadow); }
+  .pu-hint { padding: 4px 10px 2px; font-size: 11.5px; color: var(--faint); }
+  .pu-ob { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; padding: 16px; background: var(--pu-veil); }
+  .pu-ob-c { max-width: 340px; display: flex; flex-direction: column; gap: 10px; padding: 22px 22px 18px; border-radius: 24px; background: var(--paper);
+             box-shadow: 0 24px 60px rgba(0,0,0,.4); animation: pu-rise .4s cubic-bezier(.2,.8,.2,1) both; }
+  body.light .pu-ob-c { box-shadow: 0 24px 60px rgba(36,50,74,.25); }
+  .pu-ob-c h2 { font: 600 18px/1.25 "Unbounded", "Manrope", sans-serif; }
+  .pu-ob-c p { font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+  .pu-ob-b { display: flex; gap: 8px; margin-top: 4px; }
+  #pu-strip { display: flex; align-items: center; gap: 9px; margin: 0 12px 4px; padding: 6px 6px 6px 12px; border-radius: 14px; background: var(--chip); box-shadow: 0 8px 20px var(--pu-glow); font-size: 12.5px; }
+  #pu-strip[hidden] { display: none; }
+  #pu-strip i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pu-think); animation: pu-breathe 1.6s ease-in-out infinite; }
+  #pu-strip span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+  #pu-strip button { flex: none; padding: 4px 10px; border-radius: 10px; font-weight: 700; color: var(--pu-think); background: var(--paper); }
+  @keyframes pu-breathe { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
+  @keyframes pu-draw { from { stroke-dashoffset: 900; } to { stroke-dashoffset: 0; } }
+  @keyframes pu-rise { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
+  body.pu-calm #pult *, body.pu-calm .tab.pt *, body.pu-calm #pu-strip * { animation: none !important; }
+  @media (prefers-reduced-motion: reduce) { #pult *, .tab.pt *, #pu-strip * { animation: none !important; } }
 </style>
 </head>
 <body>
@@ -391,6 +506,7 @@
 <script src="assets/arcade/shelf.js"></script>
 <script src="assets/rich.js"></script>
 <script src="pad.js"></script>
+<script src="padpult.js"></script>
 <script src="padai.js"></script>
 </body>
 </html>

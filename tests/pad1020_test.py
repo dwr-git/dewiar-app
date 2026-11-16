@@ -141,7 +141,7 @@ with sync_playwright() as p:
     rt = pg.evaluate("(cs) => cs.map(c => PadMD.html2md(PadMD.md2html(c)))", cases)
     bad = [(c, r) for c, r in zip(cases, rt) if c != r]
     ok(not bad, f"Markdown → вид → Markdown без потерь (заголовки, списки, задачи, таблицы, код, ссылки, картинки): {bad[:2]}")
-    st = pg.evaluate("() => ({ tabs: [...document.querySelectorAll('.tab span')].map(x => x.textContent), on: document.querySelector('.tab.on span').textContent, "
+    st = pg.evaluate("() => ({ tabs: [...document.querySelectorAll('#tabs .tab span')].map(x => x.textContent), on: document.querySelector('.tab.on span').textContent, "
                      "h1: !!document.querySelector('#ed h1'), tasks: [...document.querySelectorAll('#ed li.task')].map(l => l.dataset.done), "
                      "link: document.querySelector('#ed a') && document.querySelector('#ed a').href, cls: document.body.className })")
     ok(st["tabs"] == ["Главное", "Работа"] and st["on"] == "Главное", f"вкладки и открытая: {st['tabs']}")

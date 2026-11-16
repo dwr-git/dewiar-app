@@ -35,7 +35,7 @@ for t, k, g in (("Лира, давай поиграем", "play", ""), ("хоч�
 cmd = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
 ok('kind == "play"' in cmd and '.get("games") is False' in cmd and 'self.emit("window", do="play", game=game)' in cmd, "ядро: «поиграем» — событие окну, выключено — подсказка про «Возможности»")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
-ok("def play_open(self, game=\"\")" in app and "def pad_toggle(self, mode=\"notes\")" in app and '"&mode=play"' in app, "окно: блокнот открывается сразу «Досугом»")
+ok("def play_open(self, game=\"\")" in app and "def pad_toggle(self, mode=\"notes\")" in app and ('"&mode=play"' in app or '"&mode=" + mode' in app), "окно: блокнот открывается сразу «Досугом»")
 hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
 ok('id="b-play"' in hud and 'a.pad_toggle("play")' in hud and 'e.do === "play" && a.play_open' in hud, "виджет: кнопка 🎮 и «давай поиграем»")
 

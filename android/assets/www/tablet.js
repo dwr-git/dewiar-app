@@ -30,6 +30,8 @@ function tabItems() {
   const cb = $("#b-close"); if (cb && !cb.hidden) head.push(["close", tbT("tab.close"), ""]);
   return { head, apps, tail: [["set", tbT("tab.set"), ""]] };
 }
+const TAB_GRP = { clients: "work", blog: "work", work: "work", pc: "work", soul: "me", month: "me", safe: "me", radio: "me", play: "me",
+  tricks: "learn", course: "learn", lessons: "learn", qa: "learn" };
 function tabIcon(k) { return TAB_IC[k] || (typeof APPS_IC !== "undefined" && APPS_IC[k]) || TAB_IC.talk; }
 function tabRender() {
   const rail = $("#rail"); if (!rail) return;
@@ -37,10 +39,15 @@ function tabRender() {
   if (sig !== tabSig) {
     tabSig = sig;
     const btn = ([k, n, sub]) => `<button class="rl-i" data-k="${k}" title="${esc(sub ? n + " — " + sub : n)}"><svg viewBox="0 0 24 24" aria-hidden="true">${tabIcon(k)}</svg><span>${esc(n)}</span><i class="dot"></i></button>`;
-    rail.innerHTML = `<div class="rl-brand">Dewiar</div><div class="rl-g">${it.head.map(btn).join("")}</div><div class="rl-g rl-apps">${it.apps.map(btn).join("")}</div><div class="rl-g">${it.tail.map(btn).join("")}</div>`;
+    // разделы — группами (1.0.6; люди с планшетов: «добавить хотя бы раздел РАБОТА», владелец 15.11 — «хорошо»): только
+    // меню, без второй копии разделов. «Работа» — клиенты, статьи, поручения и строка о том, что есть только на компьютере
+    const grp = {}; for (const a of it.apps) (grp[TAB_GRP[a[0]] || "more"] = grp[TAB_GRP[a[0]] || "more"] || []).push(a);
+    const apps = ["work", "me", "learn", "more"].filter(g => grp[g]).map(g => `<div class="rl-g rl-apps"><p class="rl-h">${esc(tbT("tab.g." + g))}</p>${grp[g].map(btn).join("")}`
+      + (g === "work" && grp[g].some(a => a[0] === "pc") ? `<button class="rl-n" data-k="pc">${esc(tbT("tab.g.work_pc"))}</button>` : "") + "</div>").join("");
+    rail.innerHTML = `<div class="rl-brand">Dewiar</div><div class="rl-g">${it.head.map(btn).join("")}</div>${apps}<div class="rl-g">${it.tail.map(btn).join("")}</div>`;
     rail.querySelectorAll("[data-k]").forEach(b => b.onclick = () => tabGo(b.dataset.k));
   }
-  rail.querySelectorAll("[data-k]").forEach(b => { b.classList.toggle("on", b.dataset.k === tabCur); b.setAttribute("aria-current", b.dataset.k === tabCur ? "page" : "false"); });
+  rail.querySelectorAll(".rl-i[data-k]").forEach(b => { b.classList.toggle("on", b.dataset.k === tabCur); b.setAttribute("aria-current", b.dataset.k === tabCur ? "page" : "false"); });
   tabDots();
 }
 /* точки «новое» — как у кнопок сверху: непрочитанное в «Близких», новые видеоуроки */

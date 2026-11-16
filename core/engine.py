@@ -49,6 +49,12 @@ class BlindSet(set):
         return True
 
 
+
+# шаги хода, которые только смотрят (руководство, поиск, чтение): «Ещё раз» в «Чате» не спрашивает «действия повторятся?»
+LOOK_ONLY = {"app_help", "knowledge", "web_search", "read_webpage", "show_images", "weather", "world_time", "calc", "read_emails",
+             "read_email", "search_documents", "look_screen", "look_camera", "list_reminders", "money_find", "close_read",
+             "client_list", "calendar_list", "find_notes", "read_file", "doc_find", "show_page", "site_show"}
+
 class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, BrainMixin, RemoteMixin, CommandsMixin, IntroMixin, HealthMixin,
              PayMixin, SeniorMixin, WatchMixin, HomeMixin, RestMixin, ChatMixin):
     def __init__(self, settings, personas, bridge, wav_input=None, null_player=False, server=False):
@@ -191,6 +197,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.task_answer_until = 0.0
         self.tasks = TaskManager(self)
         self.toolbox.hooks["tasks"] = self.tasks
+        self.toolbox.hooks["turn_text"] = lambda: getattr(self, "_turn_text", "")   # mark_done: вопрос — не отметка (экзамен 1.0.5)
         self.toolbox.hooks["talers_for_tokens"] = self._talers_for_tokens   # HARNESS 7: цена задачи до старта
         self.toolbox.hooks["eyes"] = self.eyes_page                         # сайт, рисунок — посмотреть глазами (12.11)
         self.toolbox.hooks["remote_task"] = lambda on, title, goal, if_off="": self.remote_task(on, title, goal, if_off)   # «на рабочем компьютере…»
@@ -842,6 +849,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
                 tl = self._turn_tools = []
             if type_ == "tool" and kw.get("status") in ("done", "error") and kw.get("title"):
                 st = {"t": str(kw["title"])[:140], "s": kw["status"]}
+                if kw.get("name") in LOOK_ONLY:            # только посмотрела — «Ещё раз» не спрашивает «действия повторятся?»
+                    st["r"] = 1
                 if kw.get("error"):
                     st["e"] = str(kw["error"])[:200]
                 tl.append(st)

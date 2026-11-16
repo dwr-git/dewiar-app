@@ -35,10 +35,17 @@ function ppRender() {
   if (!PP.sel.size && chats.some(c => c.can)) PP.sel.add(chats.find(c => c.can).id);
   $("#pp-stat").textContent = d.wait ? `ждут одобрения: ${d.wait}` : "";
   $("#pp-where").innerHTML = `<div class="pp-chats" role="group" aria-label="Куда публиковать">` + chats.map(c => `<button type="button" class="pp-chat${PP.sel.has(c.id) ? " on" : ""}${c.can ? "" : " no"}" data-id="${ppE(c.id)}" aria-pressed="${PP.sel.has(c.id)}" ${c.can ? "" : `disabled title="Бот не может здесь публиковать — сделайте его администратором"`}>`
-      + `<i aria-hidden="true">${PP_IC[c.type === "channel" ? "channel" : "group"]}</i><span><b>${ppE(c.title)}</b><small>${c.type === "channel" ? "канал" : "группа"}${c.username ? " · @" + ppE(c.username) : ""}</small></span></button>`).join("")
+      + `<i aria-hidden="true">${PP_IC[c.type === "channel" ? "channel" : "group"]}</i><span><b>${ppE(c.title)}</b><small>${c.type === "channel" ? "канал" : "группа"}${c.username ? " · @" + ppE(c.username) : ""}</small></span></button>`
+      // №759 (15.11): «можно добавлять канал или группу, а удалить — нет» — крестик у каждой
+      + `<button type="button" class="pp-x" data-x="${ppE(c.id)}" title="Убрать «${ppE(c.title)}» из списка" aria-label="Убрать «${ppE(c.title)}» из списка">×</button>`).join("")
     + `<form class="pp-add" id="pp-addf"><input type="text" id="pp-ref" placeholder="@канал или группа" aria-label="Адрес канала или группы" spellcheck="false"><button class="btn small" type="submit">Добавить</button></form></div>`
     + (chats.length ? "" : `<p class="co-tip">Добавьте бота в канал администратором с правом публиковать сообщения (или в группу) — он появится здесь сам. Или впишите @адрес.</p>`);
   $$("#pp-where .pp-chat").forEach(b => b.onclick = () => { const id = b.dataset.id; PP.sel.has(id) ? PP.sel.delete(id) : PP.sel.add(id); if (!PP.sel.size) PP.sel.add(id); ppRender(); });
+  $$("#pp-where .pp-x").forEach(b => b.onclick = async () => {
+    const c = chats.find(x => x.id === b.dataset.x); if (!c) return;
+    if (!await ask(`Убрать «${c.title}» из списка? Посты туда больше не пойдут. Сам бот останется там — уберите его в Telegram, если не нужен, иначе он снова появится здесь.`)) return;
+    PP.sel.delete(c.id); ppCall("pbot_chat_del", { id: c.id }, "Убрано из списка");
+  });
   $("#pp-addf").onsubmit = (e) => { e.preventDefault(); const r = $("#pp-ref").value.trim(); if (r) ppCall("pbot_chat_add", { ref: r }, "Добавлено — можно публиковать"); };
   // посты по группам
   const groups = ["wait", "plan", "sent", "failed"].map(st => [st, (d.posts || []).filter(p => p.status === st)]).filter(([, ps]) => ps.length);

@@ -20,6 +20,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))      # модули ядра импортируются по имени: import settings
 
+
+def own_python(exe=None, here=None):
+    """№761–764 (16.11, Windows): ядро запустили вручную «python main.py --debug» — системным Python 3.11, а не тем, что
+    поставил установщик (<папка Dewiar>\\python): нет vosk и других библиотек, слух падает, студия — «нет связи с ядром».
+    -> путь к своему python.exe, если Dewiar установлен установщиком и запущен чужим Python; иначе None."""
+    here = Path(here or __file__).resolve()
+    exe = Path(exe or sys.executable)
+    own = here.parent.parent.parent / "python" / "python.exe"        # <папка>\app\core\main.py -> <папка>\python
+    try:
+        if own.is_file() and own.resolve().parent != exe.resolve().parent:
+            return own
+    except OSError:
+        return None
+    return None
+
 from settings import WS_PORT, Settings, ensure_token, migrate_from_cortex  # noqa: E402
 
 from version import VERSION  # noqa: E402
@@ -36,6 +51,13 @@ def main():
                     help="режим сервера: без микрофона и звука — задачи с телефона, синхронизация, Telegram, напоминания "
                          "круглосуточно (packaging/dewiar-server.service)")
     args = ap.parse_args()
+
+    own = own_python() if os.name == "nt" else None
+    if own is not None:                         # чужой Python — перезапуск своим, с теми же ключами
+        print(f"Dewiar: ядро запущено не тем Python ({sys.executable}). Запускаю своим: {own}\n"
+              "Обычно Dewiar запускают ярлыком «Dewiar» в меню «Пуск» — ядро и окна поднимаются сами.", flush=True)
+        import subprocess
+        sys.exit(subprocess.call([str(own), "-X", "utf8", str(Path(__file__).resolve()), *sys.argv[1:]]))
 
     if os.name == "nt":                         # Windows: вывод в UTF-8, даже если запустили без -X utf8
         for s in (sys.stdout, sys.stderr):

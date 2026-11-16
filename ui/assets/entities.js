@@ -1417,7 +1417,9 @@
       }
       const spin = this.vinyl && VINYL_STATES.has(this.state);
       ctx.globalCompositeOperation = plate && LIGHTER.has(this.style) && !spin ? "lighter" : "source-over";
-      (spin ? vinyl : STYLES[this.style])(spin ? Object.assign({}, g, { c: this.color }) : this.style === "photo" ? gm : g, this);
+      // №766: облик, которого нет (персонаж записан в обход студии, style: «stratum»), — не пустой круг и ошибка каждый
+      // кадр, а обычные «частицы»
+      (spin ? vinyl : (STYLES[this.style] || STYLES.particles))(spin ? Object.assign({}, g, { c: this.color }) : this.style === "photo" ? gm : g, this);
       ctx.globalCompositeOperation = "source-over";
       if (ringOn && !spin) stateRing(gm, this);
       if (plate) {

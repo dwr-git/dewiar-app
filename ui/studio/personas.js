@@ -116,6 +116,10 @@ let ed = null, pv = new DewiarEntity($("#pv"), { style: "nexus", color: "#8A9BFF
 function openEditor(p) {
   ed = p ? JSON.parse(JSON.stringify(p)) : { name: "", gender: "female", wake: [], tagline: "", character: "", style: "particles", color: COLORS[Math.floor(Math.random() * COLORS.length)], voice: { piper: "ru_RU-irina-medium", length_scale: 1, remote: "" } };
   ed.avatar_data = null;
+  // №766 (16.11): персонаж, записанный в обход студии (Кодером), — без голоса: редактор падал на ed.voice.piper и не
+  // открывался вовсе. Чего нет — по умолчанию
+  ed.voice = Object.assign({ piper: "ru_RU-irina-medium", length_scale: 1, remote: "" }, ed.voice && typeof ed.voice === "object" ? ed.voice : {});
+  ed.wake = Array.isArray(ed.wake) ? ed.wake : (ed.wake ? String(ed.wake).split(/,\s*/) : []);
   $("#dtitle").textContent = p ? p.name : "Новый персонаж";
   $("#e-name").value = ed.name; $("#e-gender").value = ed.gender || "neutral";
   $("#e-wake").value = (ed.wake || []).join(", "); $("#e-tag").value = ed.tagline || ""; $("#e-char").value = ed.character || "";

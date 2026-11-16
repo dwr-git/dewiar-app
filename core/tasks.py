@@ -1041,6 +1041,14 @@ class TaskManager:
         except (OSError, ValueError):
             d["snaps"] = []
         d["helpers"] = self.helpers(t)                    # выпуск 6: кто что делает — части, разведчики, проверяющие
+        # 16.11: время правки каждого показанного файла — студия перерисует показ, только когда файл правда изменился
+        outs = []
+        for o in d.get("outputs") or []:
+            try:
+                outs.append(dict(o, mtime=(t.dir / o.get("path", "")).stat().st_mtime))
+            except (OSError, TypeError, ValueError):
+                outs.append(dict(o))
+        d["outputs"] = outs
         m = self._sbx_mode(t)
         d["sandbox"] = {"mode": m, "net": bool(t.data.get("net")), "text": SBX.describe(m, bool(t.data.get("net"))),
                         "net_note": SBX.net_note(m)}
@@ -2701,7 +2709,7 @@ class TaskManager:
                         return f"Защита Dewiar запретила эту команду: {v['reason']}. Найди другой путь."
                     warn = guard.describe_warn(v) + " " if v["level"] == "warn" else ""
                     if warn or not self.host.code_auto_run():
-                        okd, why = self._permit(t, "code_run", f"Задача «{t.title}»: {warn}выполнить в проекте «{cmd}»?")
+                        okd, why = self._permit(t, "code_run" + (":" + cmd if warn else ""), f"Задача «{t.title}»: {warn}выполнить в проекте «{cmd}»?")
                         if not okd:
                             return why
                     if args.get("background"):
@@ -3133,6 +3141,14 @@ class TaskManager:
             return self._rewind_tool(t, args)
         if name == "show":
             p = self._path(t, args.get("path"))
+            # 16.11 (Кодер правил сайт человека: «первый раз „Посмотреть“ показал, потом — старый вариант, а в его папке —
+            # старое»): задача над проектом работает в «рабочей копии» — показываем файл оттуда (живой), а не
+            # одноимённый, записанный когда-то рядом в папке задачи
+            if t.data.get("project"):
+                rel0 = str(args.get("path") or "").strip().lstrip("/\\")
+                wc = t.dir / "рабочая копия"
+                if rel0 and not rel0.startswith("рабочая копия") and (wc / rel0).is_file():
+                    p = self._path(t, "рабочая копия/" + rel0)
             if not p.is_file():
                 return "Такого файла нет — сначала создай его."
             rel = p.relative_to(t.dir).as_posix()
@@ -3262,7 +3278,7 @@ class TaskManager:
             # под охраной команда оболочки ничем не заперта — спрашиваем всегда, даже при автозапуске кода (N3)
             warn = guard.describe_warn(v) + " " if v["level"] == "warn" else ""
             if True:
-                okd, why = self._permit(t, "run_shell", f"Задача «{t.title}»: {warn}выполнить в папке задачи «{cmd[:300]}»?")
+                okd, why = self._permit(t, "run_shell" + (":" + cmd[:300] if warn else ""), f"Задача «{t.title}»: {warn}выполнить в папке задачи «{cmd[:300]}»?")
                 if not okd:
                     return why
         (t.dir / "outputs").mkdir(exist_ok=True)
@@ -3863,6 +3879,13 @@ class TaskManager:
         на паузу (pause_now), а не спрашивает без конца и не жжёт токены (№54: «Лаборатория: запись?» раз за разом;
         №58: ночью команды по одной каждые 2 минуты, никто не отвечал)."""
         st = self.__dict__.setdefault("_asks", {}).setdefault(t.id, {"no": set(), "declined": 0, "silent": 0})
+        # 16.11 (Кодер на Windows: «каждую секунду просил подтверждения вслух, пока не нашёл переключатель»): «Всегда» —
+        # это действие в этой задаче больше не спрашиваем; вслух — только первый вопрос задачи, дальше — на экране
+        ok_keys = st.setdefault("ok", set())
+        if key in ok_keys:
+            return True, ""
+        quiet = st.get("asked", 0) >= 1
+        st["asked"] = st.get("asked", 0) + 1
         if key in st["no"]:                                   # уже отказали, а модель снова за своё — это тоже в счёт
             st["declined"] += 1
             if st["declined"] >= ASK_DECLINES:
@@ -3872,10 +3895,14 @@ class TaskManager:
                            "обойдись без него или спроси (ask_user), что делать.")
         import inspect
         try:
-            takes_cancel = "cancel" in inspect.signature(self.host.confirm).parameters
+            params = inspect.signature(self.host.confirm).parameters
         except (TypeError, ValueError):
-            takes_cancel = False
-        ans = self.host.confirm(question, cancel=t.cancel) if takes_cancel else self.host.confirm(question)
+            params = {}
+        kw = {k: v for k, v in (("cancel", t.cancel), ("always", True), ("quiet", quiet)) if k in params}
+        ans = self.host.confirm(question, **kw)
+        if ans == "always":
+            ok_keys.add(key)
+            t.journal(f"✅ «Всегда» — {key} в этой задаче больше не спрашиваю")
         if ans:
             st["silent"] = 0
             return True, ""

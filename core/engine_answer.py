@@ -12,6 +12,19 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 # это обещал): короткая просьба о темпе — без модели, «Голос» → «Темп речи» на шаг
 SPEED_RX = re.compile(r"(?i)^(?:(?P<who>[а-яё]+)(?P<sep>[,!]?)\s+)?(?:(?:говори|говорите|разговаривай|читай|можно|пожалуйста)\s+)*"
                       r"(?:(?:по)?(?P<how>медленнее|быстрее)|не\s+так\s+(?P<notfast>быстро))(?:\s*,?\s*(?:пожалуйста|говори|пожалуй))*\s*[.!?]*$")
+# «Сколько места на диске?» — числа сразу, без модели (экзамен 1.0.5 disk_free_real_call: своя модель отвечала 89 с, вызвала
+# run_command пустым и написала «команда df -h готова, жду вашего да»)
+DISK_ASK_RX = re.compile(r"(?i)^(?:[а-яё]+[,!]\s+)?(?:проверь|посмотри|скажи|узнай)?[,\s]*(?:сколько|много ли|есть ли)\s+(?:ещё\s+|еще\s+|осталось\s+)?"
+                         r"(?:свободного\s+)?мест[ао]\s+(?:осталось\s+)?(?:на|в)\s+(?:моём\s+|моем\s+|этом\s+)?(?:диске|компьютере|компе)"
+                         r"(?:\s+(?:этого|моего)\s+компьютера)?\s*[?.!]*$")
+SONGS_ASK_RX = re.compile(r"(?i)(?:плейлист|подбери|посоветуй|предложи|составь|назови)\s+(?:\w+\s+){0,3}(?:пес[ен]|песн|трек|музык|композиц)|плейлист")
+BIG_PC_RX = re.compile(r"(?i)(?:проанализируй|изучи|осмотри|разбери|просканируй|наведи\s+порядок)\s+(?:\w+\s+){0,3}"
+                       r"(?:компьютер|комп\b|пк\b|папк|диск|файл)[^.?!]{0,80}(?:структур|порядок|разлож|предлож|покажи)")
+def shown_q(text):
+    """Вопрос для «Пульта»: без вложений и служебного, одной строкой до 160 знаков."""
+    return " ".join(str(text or "").split("\n\nВложения:")[0].split())[:160]
+
+
 PRIVACY_ASK_RX = re.compile(r"(?i)конфиденциальн|приватн|персональн\w* данн|(?:мо[иё]|наш)\w* данн|данн\w* (?:хран|уход|передаёт|передает)|"
                             r"кто (?:видит|читает|слышит)|где хран|куда (?:уход|отправ|передаёт|передает)|слива|утеч|шифру|"
                             r"безопасн\w* (?:ли|данн)|152-?фз|gdpr|privacy|(?:хран|сохраня)\w*.{0,25}(?:разговор|переписк)|облак\w* видит")
@@ -487,6 +500,18 @@ class AnswerMixin:
             return
         if not raw and not quiet and not images and not K and self._speed_cmd(text, via):
             return
+        if not raw and not quiet and not images and not K and DISK_ASK_RX.match((text or "").strip()):
+            import shutil
+            try:
+                du = shutil.disk_usage(str(Path.home()))
+                free, total = du.free / 1e9, du.total / 1e9
+                msg = (f"На диске свободно {free:.0f} ГБ из {total:.0f}." + (" Маловато — могу помочь найти, что занимает место."
+                                                                            if free < max(10, total * 0.08) else ""))
+                log.info("💽 «%s» → %s", text, msg)
+                self._say_quick(msg, text, via)
+                return
+            except Exception:  # noqa: BLE001
+                log.debug("диск: быстрый ответ не вышел", exc_info=True)
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._vault_cmd(text, via):
             return
         if not raw and not quiet and not images and "\n\nВложения:" not in text and not K and self._home_cmd(text, via):
@@ -1074,6 +1099,16 @@ class AnswerMixin:
                 out += " " + hint
         if self._slim_prompt() and text and PRIVACY_ASK_RX.search(text):     # «где хранятся мои данные?» — факты сюда
             out += self._privacy_rule().replace("\n\n", " ", 1)
+        if text and SONGS_ASK_RX.search(text):
+            # экзамен 1.0.5 (playlist): «пять песен под настроение» — модель приписала песни не тем исполнителям
+            # («Дельфин — „Полковнику никто не пишет“»). Только те, в которых уверена целиком: исполнитель + название
+            out += (" Называй только песни, в которых точно уверена — исполнитель и название вместе (сомневаешься — не "
+                    "называй или найди web_search); лучше меньше, но настоящие.")
+        if text and BIG_PC_RX.search(text):
+            # экзамен 1.0.5 (task_folders720): «проанализируй компьютер, папки, диски и предложи структуру» — модель взялась
+            # командами по одной (каждая — «Выполнить?») и встала на «жду вашего да». Это работа на много шагов — задачей
+            out += (" Это большая работа на много шагов (осмотреть диски и папки, предложить структуру): сразу запусти "
+                    "фоновую задачу start_task с этой целью и коротко скажи, что взялась; по одной команде в разговоре не делай.")
         try:
             mine = self.mine_now_line(text)                # идея №169: «что это играет?», «удали эту песню» — Лира знает, что играет
         except Exception:  # noqa: BLE001
@@ -1126,6 +1161,12 @@ class AnswerMixin:
             if off and time.time() - seen.get(off["id"], 0) > 6 * 3600:
                 seen[off["id"]] = time.time()
                 return pl.offer_hint(off)
+            if off:
+                # экзамен 1.0.5 (draw_offer_plugin): второй раз за 6 часов — без справки, и модель ушла в расспросы про день
+                # рождения. Плагин всё так же выключен — напомнить одной фразой, но кнопку «Выполнить?» не навязывать
+                return (f"Это умеет плагин «{off['name']}», но он выключен (включить уже предлагали). Не делай по-своему и не "
+                        f"расспрашивай: одной фразой скажи, что это делает «{off['name']}», и спроси, включить ли его "
+                        f"(согласятся — plugin_enable с id «{off['id']}»).")
             return ""
         except Exception as e:  # noqa: BLE001
             log.info("подсказка плагина: %s", e)
@@ -1300,20 +1341,30 @@ class AnswerMixin:
     def code_auto_run(self):
         return bool(self.s.get("tasks", "auto_run"))
 
-    def confirm(self, question, timeout=120, cancel=None):
+    def confirm(self, question, timeout=120, cancel=None, always=False, quiet=False):
         """Спросить «да/нет» вне разговора (для фоновой задачи): голосом и кнопками в виджете.
         Блокирует вызывающий поток до ответа, timeout секунд или cancel (Event задачи: «останови задачу» не ждёт
-        двух минут, №54) -> True при «да», False при «нет», None — никто не ответил или задачу остановили."""
+        двух минут, №54) -> True при «да», False при «нет», None — никто не ответил или задачу остановили; «always» —
+        кнопка «Всегда» (always=True: «для этой задачи больше не спрашивать»).
+        16.11 (Кодер: «каждую секунду просил подтверждения вслух одной и той же фразой; жмёшь — всё равно договаривает»):
+        quiet — только на экране, без голоса; ответили кнопкой — недосказанный вопрос замолкает сразу."""
         for _ in range(240):                                   # один вопрос за раз: ждём до 2 мин, пока ответят на прежний
             if self.pending_confirm is None or (cancel is not None and cancel.is_set()):
                 break
             time.sleep(0.5)
         if cancel is not None and cancel.is_set():
             return None
-        box = {"event": threading.Event(), "answer": False}
+        box = {"event": threading.Event(), "answer": False, "always": False}
         self.pending_confirm = box
-        self.emit("confirm", text=question)
-        self.announce(_spoken_question(question) + " Скажите «да» или «нет».")
+        self.emit("confirm", text=question, always=bool(always), always_title="Для этой задачи больше не спрашивать")
+        if quiet:
+            self.play_tone("wake") if hasattr(self, "play_tone") else None
+        else:
+            say = _spoken_question(question) + " Скажите «да» или «нет»" + (" — или «всегда», и в этой задаче больше не спрошу." if always else ".")
+            try:
+                self.announce(say, tag="confirm")
+            except TypeError:                              # announce без пометки (облачный исполнитель, заглушки)
+                self.announce(say)
         end = time.monotonic() + timeout
         while not box["event"].wait(min(0.5, max(0.0, end - time.monotonic()))):
             if time.monotonic() >= end or (cancel is not None and cancel.is_set()):
@@ -1322,8 +1373,17 @@ class AnswerMixin:
         if self.pending_confirm is box:
             self.pending_confirm = None
         self.emit("confirm_done", ok=box["answer"])
-        log.info("Подтверждение (задача): %s", ("да" if box["answer"] else "нет") if answered else "без ответа")
-        return box["answer"] if answered else None
+        if answered and getattr(self, "_turn_lock", None) is not None:   # ответили кнопкой посреди вопроса — не договаривать
+            with self._turn_lock:
+                t = self.turn
+                if t is not None and getattr(t, "tag", "") == "confirm":
+                    t.cancel.set()
+                    if getattr(self, "player", None):
+                        self.player.stop()
+        log.info("Подтверждение (задача): %s", (("всегда" if box.get("always") else "да") if box["answer"] else "нет") if answered else "без ответа")
+        if not answered:
+            return None
+        return "always" if box["answer"] and box.get("always") and always else box["answer"]
 
     def ask_user(self, task, question):
         """Задача спрашивает: говорим вопрос; следующая фраза пользователя без имени в течение 2 минут — ответ
@@ -2318,6 +2378,10 @@ class AnswerMixin:
                 log.info("🧠 Из памяти к вопросу: %s", ", ".join(mpages))
                 ctx.append("Из памяти о пользователе (подобрано к этому вопросу из «Обо мне» — используй, если к месту, "
                            "не пересказывай всё):\n" + mlines)
+            try:                                         # «Пульт Лиры» (16.11): что подняла к вопросу — светится в окне заметок
+                self.emit("recall", q=shown_q(text), notes=re.findall(r"^\[([^\]]+)\]", recalled or "", re.M)[:6], memory=list(mpages or [])[:4])
+            except Exception:  # noqa: BLE001
+                pass
             if recalled:
                 log.info("📎 Вспомнил из записей: %s", ", ".join(re.findall(r"^\[([^\]]+)\]", recalled, re.M)))
                 ctx.append("Из записей пользователя в твоей папке (нашлось по словам вопроса). Если это отвечает на "
@@ -2403,6 +2467,10 @@ class AnswerMixin:
                                   detail="руководство приложено к вопросу", result="руководство приложено к вопросу приложением")
                     else:
                         gh = guide.hint(text, "pc")              # «как защищены мои данные?» — раздел руководства сразу
+                        if gh:                                   # экзамен 1.0.5 (help_ubuntu_cmd): ответ по руководству — и
+                            turn.guided = True                   # в событиях хода так и видно (как с attach)
+                            self.emit("tool", name="app_help", title="Руководство", status="done", args={"query": text[:200]},
+                                      detail="раздел руководства приложен к вопросу", result="раздел руководства приложен к вопросу приложением")
                     if gh:
                         ctx.append(gh)
                 except Exception:  # noqa: BLE001
@@ -2559,11 +2627,17 @@ class AnswerMixin:
                                 if not getattr(self, "_ctx_noted", False):
                                     self._ctx_noted = True
                                     self.note("У модели маленькое окно контекста — отвечаю без действий и почти без памяти "
-                                              "разговора. В LM Studio или Ollama поставьте длину контекста 8192 или больше.")
+                                              "разговора. В LM Studio или Ollama поставьте длину контекста 16384 или больше: "
+                                              "с действиями нужно около 12–16 тыс.")
                             specs = []
-                            system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (музыка, скриншоты, программы) "
-                                                            "недоступны: эта модель не умеет вызывать инструменты. Если "
-                                                            "просят действие — честно скажи это одной фразой.")
+                            # №760 (15.11, своя qwen3-4b, окно мало): без действий модель называла курс евро «по памяти»
+                            # и выдумывала, что взяла его с cbr.ru. Без инструментов свежих данных нет — так и сказать
+                            system = self._system(False, personal=not pmsg) + ("\n\nСейчас действия (поиск в интернете, открыть "
+                                                            "ссылку, музыка, программы) недоступны. Свежие данные — курсы валют, "
+                                                            "цены, погоду, новости, что написано по ссылке — ты сейчас проверить "
+                                                            "НЕ можешь: не называй таких цифр и не говори, что где-то их посмотрела. "
+                                                            "Если просят действие или свежие данные — честно скажи одной фразой, что "
+                                                            "сейчас не можешь это проверить.")
                             try:
                                 events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=None))
                             except LLMError as e2:

@@ -29,6 +29,79 @@ def _kids_blocked(cmd, a):
 
 
 class CommandsMixin:
+    def _pult_data(self):
+        """«Пульт Лиры» (16.11, макеты владельца): чем она занята в фоне и что в тишине — одним ответом для окна заметок.
+        Только то, что уже есть: заметки (созвездие), дневник сегодня, Радар (свежее и растущая тема), что дальше по
+        напоминаниям и делам, заявки с сайтов за сутки. Ничего не придумывает и не грузит модель."""
+        now = time.time()
+        out = {"notes": [], "counts": {}, "diary": None, "radar": None, "next": [], "leads": [], "who": ""}
+        try:
+            out["who"] = self.persona_name()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            ns = self.workspace.notes(limit=160)
+            out["notes"] = [{"t": (n.get("title") or "")[:60], "f": (n.get("folder") or "").split("/")[0][:30], "m": n.get("mtime") or 0,
+                             "p": n.get("path") or ""} for n in ns]
+            out["counts"]["notes"] = len(ns)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            mem = self.workspace.memory_get() or ""
+            out["counts"]["memory"] = sum(1 for ln in str(mem).splitlines() if ln.strip().startswith(("-", "*")))
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            import datetime as _dt
+            p = self.workspace.root / "Дневник" / f"{_dt.date.today():%Y-%m-%d}.md"
+            if p.is_file():
+                txt = p.read_text(encoding="utf-8", errors="replace")
+                parts = re.split(r"\n### ", txt)
+                last = parts[-1] if len(parts) > 1 else ""
+                head, _, body = last.partition("\n")
+                out["diary"] = {"at": head.strip()[:40], "text": " ".join(body.split())[:420], "mtime": p.stat().st_mtime}
+        except Exception:  # noqa: BLE001
+            pass
+        ins = getattr(self, "insight", None)
+        if ins is not None:
+            try:
+                fresh = sorted(ins.analyzed(24), key=lambda x: -(x.get("ts") or x.get("seen") or 0))[:3]
+                out["radar"] = {"items": [{"title": (x.get("title") or "")[:140], "src": x.get("src_name") or "",
+                                           "signal": float((x.get("a") or {}).get("signal") or 0), "ts": x.get("ts") or x.get("seen") or 0}
+                                          for x in fresh],
+                                "trend": ins.day_trend(), "n": len(ins.analyzed(24))}
+                if not out["radar"]["items"]:
+                    out["radar"] = None
+            except Exception:  # noqa: BLE001
+                out["radar"] = None
+        try:
+            from datetime import datetime as _d
+            soon = []
+            for x in list(self.reminders.items):
+                if x.get("paused"):
+                    continue
+                try:
+                    at = _d.fromisoformat(x["at"]).timestamp()
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if now - 60 <= at <= now + 36 * 3600:
+                    soon.append({"at": int(at), "text": (x.get("text") or ("Будильник" if x.get("kind") == "alarm" else "Напоминание"))[:80],
+                                 "job": x.get("kind") == "job"})
+            out["next"] = sorted(soon, key=lambda r: r["at"])[:3]
+        except Exception:  # noqa: BLE001
+            pass
+        sc = getattr(self, "sitechat", None)
+        if sc is not None:
+            try:
+                for r in (sc.recent or [])[-5:][::-1]:
+                    ts = r.get("ts") or 0
+                    ts = ts / 1000 if ts > 1e12 else ts
+                    if ts and now - ts < 24 * 3600:
+                        out["leads"].append({"ts": int(ts), "name": (r.get("name") or "")[:60], "cid": r.get("cid") or ""})
+            except Exception:  # noqa: BLE001
+                pass
+        return out
+
     def _max_shared_ok(self):
         """Бот Dewiar в MAX настроен на сайте? (№748, 15.11: «пишет, что MAX не подключён к сервису» — на сайте нет токена
         бота, а студия предлагала «Подключить MAX»). Сайт без токена отвечает 503 «MAX пока не подключён». Кэш 30 минут;
@@ -2910,6 +2983,8 @@ class CommandsMixin:
             return list_devices()
         if cmd == "tools":
             return self.toolbox.catalog()
+        if cmd == "pult_data":                         # «Пульт Лиры» в окне заметок (16.11)
+            return self._pult_data()
         if cmd == "confirm_answer":
             box = self.pending_confirm
             if box:

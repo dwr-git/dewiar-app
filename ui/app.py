@@ -3144,7 +3144,7 @@ class Api:
     def pad_toggle(self, mode="notes"):
         """Кнопка блокнота (или «Досуга», mode="play") в углу виджета: открыть / закрыть (страница сама «въезжает» и
         «уезжает»). Лист открыт в другом режиме — не закрываем, а переключаем: блокнот ↔ игры."""
-        mode = "play" if mode == "play" else "notes"
+        mode = mode if mode in ("play", "pult") else "notes"
         if getattr(self, "_pad_on", False) and self._pad_dead():    # №375: окно есть, а страницы в нём нет — заново
             self._pad_reset("нажали кнопку")
         if getattr(self, "_pad_on", False):
@@ -3214,7 +3214,7 @@ class Api:
 
     def pad_mode_mark(self, mode):
         """Страница блокнота сама сменила режим (кнопки 🎮 и «к блокноту» на листе) — отметить у виджета."""
-        self._pad_mode = "play" if mode == "play" else "notes"
+        self._pad_mode = mode if mode in ("play", "pult") else "notes"
         self._js(f"window.padMark && padMark(true, '{self._pad_mode}')")
         return True
 
@@ -3245,8 +3245,8 @@ class Api:
 
     def pad_open(self, mode="notes"):
         """Окно блокнота (pad.html): одно на всё время; открыть — поставить у карточки и показать.
-        mode="play" — сразу «Досуг» (полка игр в том же листе)."""
-        mode = "play" if mode == "play" else "notes"
+        mode="play" — сразу «Досуг» (полка игр в том же листе), mode="pult" — сразу «Пульт Лиры» (ui/padpult.js)."""
+        mode = mode if mode in ("play", "pult") else "notes"
         self._pad_mode = mode
         import threading
         import webview
@@ -3294,7 +3294,7 @@ class Api:
         skin, light = ui_skin()
         import json
         q = "&cfg=" + urllib.parse.quote(json.dumps({"side": g["side"], "gap": g["gap"], "clips": g["clips"]})) + "&skin=" + urllib.parse.quote(skin) \
-            + ("&mode=play" if mode == "play" else "") + ("&game=" + getattr(self, "_pad_game", "") if mode == "play" and getattr(self, "_pad_game", "") else "")
+            + ("&mode=" + mode if mode in ("play", "pult") else "") + ("&game=" + getattr(self, "_pad_game", "") if mode == "play" and getattr(self, "_pad_game", "") else "")
         self._pad_game = ""
         url, bridge = self._bridged(self._url("pad.html", q))
         win = webview.create_window(PAD_TITLE, url, width=W, height=g["h"], x=g["x"], y=g["y"],

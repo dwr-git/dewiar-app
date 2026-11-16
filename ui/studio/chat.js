@@ -423,7 +423,7 @@ $("#ch-msgs").addEventListener("click", async (ev) => {
   } else if (b.dataset.regen) {
     const x = find(b.dataset.regen); if (!x) return;
     // в ответе были действия (напоминание, письмо…) — при повторе модель может сделать их ещё раз: спросить
-    const acts = (x.steps || []).filter(st => st.s === "done" || st.s === "yes").map(st => st.t);
+    const acts = (x.steps || []).filter(st => (st.s === "done" || st.s === "yes") && !st.r).map(st => st.t);   // r — только смотрела
     if (acts.length && !await ask(`В этом ответе ${acts.length > 1 ? "были действия" : "было действие"}: ${acts.slice(0, 3).join("; ")}.\nПри повторе ${acts.length > 1 ? "они могут выполниться" : "оно может выполниться"} ещё раз. Спросить заново?`, { ok: "Спросить заново", danger: false })) return;
     CH.regen = x.id; CH.view[x.id] = undefined; $("#ch-res").textContent = "";
     core.call("chat_regen", { id: x.id }).catch(e => { CH.regen = ""; $("#ch-res").textContent = e.message; chatRender("stay"); });
