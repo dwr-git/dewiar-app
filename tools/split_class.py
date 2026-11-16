@@ -16,7 +16,7 @@
   импорт нужных имён из rules и нужные строки импортов исходника; имя, которого нет нигде, — в отчёт;
 - base: null — у исходника своя шапка импортов: правилам и примесям достаются нужные им строки импортов слово в слово;
 - patch: имена, которые проверки подменяют (BUDGET, dt, stream_events…), — в перенесённом и в оставшемся классе
-  читаются через модуль правил (base.X): подмена <rules>.X действует везде;
+  читаются через модуль правил (base.X, имя — «alias», по умолчанию base): подмена <rules>.X действует везде;
 - без --write — только отчёт.
 """
 import ast
@@ -47,11 +47,13 @@ def wrap(prefix, names):
     return prefix + "(\n" + "\n".join(parts) + ")"
 
 
-def rewrite(seg_lines, first_line, node, patch, prefix="base."):
+def rewrite(seg_lines, first_line, node, patch, prefix):
     """Строки узла (seg_lines начинаются со строки first_line, 1-based) с patch-именами -> prefix + имя."""
     if not patch:
         return seg_lines
     loc = locals_of(node) - global_names(node)
+    if prefix.rstrip(".") in loc:
+        raise SystemExit(f"имя {prefix.rstrip('.')} в строке {first_line} — местное: возьмите другое «alias» в плане")
     reps = sorted({(y.lineno, y.col_offset, y.end_col_offset, y.id) for y in ast.walk(node)
                    if isinstance(y, ast.Name) and y.id in patch and isinstance(y.ctx, ast.Load) and y.id not in loc},
                   reverse=True)
@@ -77,6 +79,7 @@ def main():
         base_names = {n for n in dir(__import__(base)) if not n.startswith("__")}
     patch = set(plan.get("patch") or ())
     rules = plan.get("rules")
+    alias = plan.get("alias", "base")                  # имя модуля правил в коде: base.X (своё, если base занято)
     # строки импортов верхнего уровня исходника: имя -> строка
     imp_line = {}
     for n in tree.body:
@@ -96,9 +99,12 @@ def main():
                 std.append(v)
             else:
                 frm.setdefault(v[1], []).append(v[2])
-        out = sorted(set(std), key=lambda s: (s.split()[1] not in ("datetime", "json", "logging", "os", "re"), s))
-        out += [wrap(f"from {m} import ", ns) for m, ns in sorted(frm.items(), key=lambda kv: (kv[0] != "pathlib", kv[0]))]
-        return out
+        local = lambda m: (src_path.parent / f"{m.split('.')[0]}.py").exists()      # свои модули ядра — после стандартных
+        out = sorted(set(s for s in std if not local(s.split()[1])))
+        out += [wrap(f"from {m} import ", ns) for m, ns in sorted(frm.items()) if not local(m)]
+        loc = sorted(set(s for s in std if local(s.split()[1])))
+        loc += [wrap(f"from {m} import ", ns) for m, ns in sorted(frm.items()) if local(m)]
+        return out + ([""] if out and loc else []) + loc
 
     report, files = [], {}
     head_base = [f"from {base} import *  # noqa: F401,F403 — общие импорты и помощники движка"] if base else []
@@ -120,7 +126,7 @@ def main():
         body = "".join(lines[start:end]).rstrip("\n") + "\n"
         head = [f'"""{rules["doc"]}"""'] + head_base
         if not base:
-            head += import_block((need - BUILTINS - rule_names) & set(imp_line))
+            head += import_block(((need - BUILTINS - rule_names) | patch) & set(imp_line))   # подменяемые — и здесь
         files[rules["module"]] = "\n".join(head) + "\n\n" + body
         report.append(f"{rules['module']}: {len(top)} определений, {body.count(chr(10))} строк")
     src_top = {d for n in tree.body if n.lineno > cls.end_lineno for d in defined(n)}   # то, что после класса
@@ -146,7 +152,7 @@ def main():
             u = used(n) - (locals_of(n) - global_names(n))
             pat |= bool(u & patch)
             need |= u - patch
-            chunks.append("".join(rewrite(lines[s:e], s + 1, n, patch)).rstrip("\n") + "\n")
+            chunks.append("".join(rewrite(lines[s:e], s + 1, n, patch, alias + ".")).rstrip("\n") + "\n")
             drop |= set(range(s, e))
         need -= BUILTINS
         from_rules = sorted(need & rule_names)
@@ -161,7 +167,7 @@ def main():
         if from_rules and rules:
             head.append(wrap(f"from {rules['module']} import ", from_rules))
         if pat and rules:
-            head.append(f"import {rules['module']} as base  # {', '.join(sorted(patch))} — через основу: проверки подменяют их там")
+            head.append(f"import {rules['module']} as {alias}  # подменяемые в проверках имена — через основу")
         files[mod] = "\n".join(head) + "\n\n\n" + f"class {spec['cls']}:\n" + "\n".join(chunks)
         report.append(f"{mod}: {spec['cls']} — {len(spec['methods'])} методов, {files[mod].count(chr(10))} строк")
         imports.append(f"from {mod} import {spec['cls']}")
@@ -170,7 +176,7 @@ def main():
     if patch and rules:
         for nm, (s, e, n) in spans.items():
             if nm not in moved:
-                seg = rewrite(lines[s:e], s + 1, n, patch)
+                seg = rewrite(lines[s:e], s + 1, n, patch, alias + ".")
                 if seg != lines[s:e]:
                     keep_rw[s] = (e, seg)
     print("\n".join(report))
@@ -183,7 +189,7 @@ def main():
             if k == start:
                 out.append(wrap(f"from {rules['module']} import ", rule_names) + "  # noqa: F401 — прежние имена на месте\n")
                 if keep_rw:
-                    out.append(f"import {rules['module']} as base  # {', '.join(sorted(patch))} — подменяют их там\n")
+                    out.append(f"import {rules['module']} as {alias}  # подменяемые в проверках имена — через основу\n")
                 if start is not None:
                     out.append("\n".join(imports) + "\n")
             k += 1

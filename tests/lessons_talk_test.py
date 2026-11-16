@@ -1,6 +1,7 @@
 """Учиться на ошибках в разговоре: человек поправил ассистента («нет, я же просил коротко») — модель выводит общее правило,
 оно ложится в «Память/Уроки.md» и идёт в подсказку разговоров и задач. Не поправка — ничего не пишется; то же правило не
 дублируется; файл правится руками — правки учитываются. Распознавание кандидатов — без модели."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import os, sys, tempfile, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -68,7 +69,7 @@ ok(any(a and a[0] == "lesson" for a, k in calls) and "Отвечай корот�
    f"ядро: поправка после ответа — урок в фоне: {Q.read_lessons(path)[-1:]}")
 E.Engine._maybe_learn(eng, "Какая погода?", {"name": "x"})
 ok(len(Q.read_lessons(path)) == 3, "обычный вопрос — модель не спрашиваем")
-src = (ROOT / "core/tasks.py").read_text()
+src = srctext.text(ROOT, "core/tasks.py")
 ok("talk_lessons_block" in src, "задачи тоже получают уроки из поправок")
 print("ALL OK" if not fails else f"ошибок: {len(fails)}")
 sys.exit(1 if fails else 0)

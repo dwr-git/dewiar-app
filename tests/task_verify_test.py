@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 os.environ["DEWIAR_TASK_BROWSER"] = "0"
 from task_mock import Host, Mock, done, ok, wait_for  # noqa: E402
 import tasks as TK  # noqa: E402
+import tasks_base as TKB  # noqa: E402 — подменяемые имена задач живут здесь (чистое ядро 1.0.10)
 
 PAGES = {"/teplo.html": ("Тепловой насос для дома", "Установка теплового насоса воздух-вода в доме 120 м²: от 650 000 до 900 000 рублей. "
                                                     "COP при −7 °C — от 3,2 до 4."),
@@ -302,12 +303,12 @@ ok(TK.TaskManager._url_inner(t, "http://169.254.169.254/latest/meta-data") and T
    and not TK.TaskManager._url_inner(t, SURL + "/a.html"), "F: link-local и частные сети — нельзя; свой поиск задачи — можно")
 
 # ---------- 11. нет ложных возвратов за ссылки ----------
-TK.SRC_MAX = 3000
+TKB.SRC_MAX = 3000
 G2 = "G переполненная опора"
 t = run(G2, "Отчёт outputs/отчёт.md", [("read_webpage", {"url": WEB + f"/p{i}.html"}) for i in range(5)] + [
     ("write_file", {"path": "outputs/отчёт.md", "content": f"# Отчёт\n\nДанные — {WEB}/p4.html\n"}), ("show", {"path": "outputs/отчёт.md"}),
     ("finish", {"summary": "Готово: outputs/отчёт.md"})])
-TK.SRC_MAX = 8 << 20
+TKB.SRC_MAX = 8 << 20
 ok(t.status == "done" and len(mock.of(G2)) == 8, "G: опора переполнена — адрес прочитанной после страницы всё равно виден")
 long = WEB + "/doc?token=" + "x" * 700
 H2 = "H длинная ссылка"

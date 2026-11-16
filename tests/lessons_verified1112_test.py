@@ -2,6 +2,7 @@
 У урока — против какой ошибки он (against из дайджеста). Задачи после него — проверка: ошибка не повторилась
 LESSON_OK раз — урок «проверено», идёт в подсказку последним (обрезка его не теряет) с пометкой; повторилась LESSON_WEAK
 раз — не помог: из подсказки убран, при следующих выводах модель получает его в «НЕ ПОМОГЛИ» и пишет лучше."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import json, os, sys, tempfile, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -93,7 +94,7 @@ m = Q.lessons_meta(meta)
 ok(renc not in m and m[r403]["seen"] >= Q.LESSON_OK and any("chardet" in k and v["seen"] == 0 for k, v in m.items()),
    "проверка: убранный забыт, проверенный хранит счёт, новый — с нуля")
 
-tk = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+tk = srctext.text(ROOT, "core/tasks.py")
 ok("Q.lessons_track(" in tk and "Q.LESSONS_META" in tk and "Q.lessons_block(self.lessons_path(), meta)" in tk, "задачи: след каждой — проверка уроков; подсказка — с проверкой")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} ошибок")
 sys.exit(1 if fails else 0)

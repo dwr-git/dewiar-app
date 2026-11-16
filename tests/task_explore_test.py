@@ -17,6 +17,7 @@ from pathlib import Path
 os.environ["DEWIAR_TASK_BROWSER"] = "0"
 from task_mock import Host, Mock, done, ok, wait_for  # noqa: E402
 import tasks as TK  # noqa: E402
+import tasks_base as TKB  # noqa: E402 — подменяемые имена задач живут здесь (чистое ядро 1.0.10)
 
 mock = Mock({})
 FINAL = []                                             # итоговые выжимки без инструментов (шаги разведчика кончились)
@@ -116,7 +117,7 @@ ok("🔭 Разведчик" in journal(t) and "🔭 `file_grep`" in journal(t),
 ok(not (t.dir / "_explore").exists(), f"по готовности отчёты разведчика (служебное) убраны: {sorted(p.name for p in t.dir.iterdir())}")
 
 # ---------- 2. бюджет шагов: кончились — выжимка одним запросом по прочитанному ----------
-TK.EXPLORE_STEPS = 3
+TKB.EXPLORE_STEPS = 3
 mock.scripts["@explore"] = [("file_glob", {"pattern": "*.md", "path": str(folder)})] * 10
 mock.pos.pop("@explore", None)
 mock.scripts["Бюджет разведчика"] = [("explore", {"question": "Срок поставки?", "paths": [str(folder)]}),
@@ -128,7 +129,7 @@ ok(len(mock.of("@explore")) - n0 == 3, f"разведчик остановлен
 ok(FINAL and "Шаги разведки кончились" in FINAL[-1] and "ПРОЧИТАНО" in FINAL[-1], "итоговая выжимка — одним запросом по прочитанному")
 out = next((c for c in tool_results(mock.of("Бюджет разведчика")[1]) if isinstance(c, str) and c.startswith("РАЗВЕДКА")), "")
 ok("кончились шаги разведчика (3)" in out and "14 дней" in out, f"задача знает, что разведчик упёрся в бюджет: {out[:160]}")
-TK.EXPLORE_STEPS = 0
+TKB.EXPLORE_STEPS = 0
 
 # ---------- 3. остановили задачу — разведчик останавливается вместе с ней ----------
 def stop_now(req):
@@ -156,7 +157,7 @@ ok(r and r[0].startswith("Ошибка поручения: нет формата
 ok(not [c for c in tm.tasks.values() if c.data.get("parent") == t.id], "ни одна часть не запущена (поручение целиком отклонено)")
 
 # ---------- 4б. часть по поручению: те же права (поиск задачи), бюджет шагов — итог с тем, что есть ----------
-TK.PART_STEPS = 4
+TKB.PART_STEPS = 4
 mock.scripts["Бесконечная часть"] = [("remember", {"fact": f"погода, источник {i}"}) for i in range(30)]
 mock.scripts["Части с бюджетом"] = [
     ("spawn_parts", {"parts": [{"title": "Бесконечная часть", "goal": "Собери всё о погоде", "output": "outputs/погода.md: таблица",
@@ -180,7 +181,7 @@ hp = [h for h in tm.helpers(t) if h["kind"] == "part"]
 ok(hp and hp[0]["limit"] == 4 and hp[0]["what"] == "outputs/погода.md: таблица", f"часть — в «Помощниках» студии: {hp[:1]}")
 tm.delete(t.id)
 ok(kid.id not in tm.tasks and not kid.dir.exists(), "удалили задачу — её части ушли вместе с ней")
-TK.PART_STEPS = 60
+TKB.PART_STEPS = 60
 tg = tm.create("Главная с файлом", "Дашборд outputs/дашборд.html и справки", start=False)
 real_start = tm.start
 tm.start = lambda tid, wake="": tm.tasks[tid]                      # части не запускаем — нужны только их критерии

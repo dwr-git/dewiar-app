@@ -1,5 +1,6 @@
 """Долгие задачи: части работают одновременно (spawn_parts / wait_parts) и задача не упирается в 400 шагов, но и
 не буксует бесконечно. Модель — заглушка со сценарием по названию задачи (как в long_task_test)."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import json, os, re, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -150,7 +151,7 @@ host.s.v[("tasks", "cycles")] = 2
 ok(tm._cycles() == 2, "число кругов — из настроек tasks.cycles")
 
 # GitHub, 23.10: «готово» записывалось раньше истории, история — не атомарно: проверка читала пустой файл (JSONDecodeError)
-src = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tasks.py")
 ok("hist.write_text" not in src and "os.replace(tmp, path)" in src[src.index("def _write_hist"):], "история задачи пишется через временный файл и замену")
 end = src[src.index("пользователь написал, пока задача заканчивала круг"):]
 ok(end.index("_write_hist(hist, msgs)") < end.index("t.save()"), "в конце круга история пишется раньше состояния «готово»")

@@ -3,6 +3,7 @@
 2. подстройка паузы росла до +900 мс и почти не таяла — потолок +600, тает вдвое быстрее (pause_learn_test), «Вернуть обычную»;
 3. «Обновить» на Windows ставил новую версию в %LOCALAPPDATA%\\Programs\\Dewiar, даже если Dewiar в другой папке — /D=папка;
 5. OpenAI напрямую, GPT-5: 400 — нужен max_completion_tokens и без temperature (и повтор так, если сервер сам попросил)."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import ast, json, os, re, sys, tempfile, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -60,7 +61,7 @@ except Exception as e:  # noqa: BLE001
     lst = f"сбой: {e!r}"
 shutil.copytree = _ct
 ok("a.py" in lst and "lmstudio.env" not in lst, f"файл без доступа пропущен, остальное — в работе: {lst!r}")
-ok("except OSError as e:" in (ROOT / "core/tasks.py").read_text(encoding="utf-8"), "ошибка доступа в шаге задачи — «Ошибка: нет доступа…», а не отчёт о сбое")
+ok("except OSError as e:" in srctext.text(ROOT, "core/tasks.py"), "ошибка доступа в шаге задачи — «Ошибка: нет доступа…», а не отчёт о сбое")
 
 # 3. обновление на Windows — в ту же папку
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")

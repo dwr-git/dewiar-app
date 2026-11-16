@@ -69,7 +69,7 @@ finally:
     httpx.get = real_get
 ok("не придумывай" in err, f"нет связи — честная ошибка, а не числа: {err}")
 src = srctext.text(ROOT, "core/engine_answer.py")
-ok("weather" in T.TOOLS and '"weather"' in src.split("INFO_TOOLS", 1)[1][:200] and "инструментом weather" in src
+ok("weather" in T.TOOLS and '"weather"' in src.split("INFO_TOOLS =", 1)[1][:200] and "инструментом weather" in src
    and "погода — инструментом weather" in T.TOOLS["web_search"][0],
    "погода — инструментом weather (в списке инструментов, подсказке и описании поиска)")
 

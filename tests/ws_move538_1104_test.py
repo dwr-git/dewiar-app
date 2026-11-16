@@ -73,7 +73,7 @@ ok("мало места" in got and not (tmp / "Мало" ).exists() or not any(
 # ядро: ws_move — перенос и переключение тем же путём, что ws_set_path; детям — нельзя
 cm = srctext.text(ROOT, "core/engine_commands.py")
 h = cm[cm.index('if cmd == "ws_move":'):][:900]
-ok("self.workspace.move_to(" in h and 'cmd = "ws_set_path"' in h and '"ws_move"' in cm[:2000], "ядро: ws_move → копия → ws_set_path; в детском режиме закрыто")
+ok("self.workspace.move_to(" in h and 'cmd = "ws_set_path"' in h and '"ws_move"' in cm[cm.index("_KIDS_LOCKED = "):][:3000], "ядро: ws_move → копия → ws_set_path; в детском режиме закрыто")
 
 # студия: «Перенести…» — выбор папки, вопрос, ws_move, итог
 from playwright.sync_api import sync_playwright  # noqa: E402

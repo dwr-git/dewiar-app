@@ -1,6 +1,7 @@
 """№700 (пакет 14.11): клип собран и лежит на рабочем столе, а большая задача остановлена «не выполнено»: проверка
 итога трижды нашла «ЦИФРЫ БЕЗ ОПОРЫ: 17.4» — это размер файла (17 365 198 байт = 17.4 МБ). Размеры результатов теперь
 опора и в КБ/МБ/ГБ (десятичных и двоичных)."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import os, re, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -15,7 +16,7 @@ def ok(c, m):
 
 
 import quality as Q  # noqa: E402
-src = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tasks.py")
 m = re.search(r'sizes = " "\.join\((f".*?")\s*\n\s*for n in \(p\.stat\(\)\.st_size for p in outs\)\)', src, re.S)
 ok(bool(m), "размеры результатов — в байтах, КБ, МБ, ГБ")
 d = Path(tempfile.mkdtemp()); f = d / "клип.mp4"; f.write_bytes(b"\0" * 17365198)

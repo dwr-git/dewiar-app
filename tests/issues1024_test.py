@@ -22,6 +22,7 @@ def ok(c, m):
 
 
 import tasks as TK  # noqa: E402
+import tasks_base as TKB  # noqa: E402 — подменяемые имена задач живут здесь (чистое ядро 1.0.10)
 import codework  # noqa: E402
 import tools as T  # noqa: E402
 from llm import LLMError  # noqa: E402
@@ -71,9 +72,9 @@ def fake_stream(prof, system, msgs, cancel=None, tools=None, **k):
     yield "text", "вторая попытка — её быть не должно"
 
 
-_se, _rm = TK.stream_events, TK.RETRY_MIN
-TK.stream_events = fake_stream
-TK.RETRY_MIN = (0, 0, 0, 0)                             # повтор сразу — планировщик (раз в 2 с) успел бы его запустить
+_se, _rm = TKB.stream_events, TKB.RETRY_MIN
+TKB.stream_events = fake_stream
+TKB.RETRY_MIN = (0, 0, 0, 0)                             # повтор сразу — планировщик (раз в 2 с) успел бы его запустить
 try:
     t = tm.create("Зависший запрос", "Проверка остановки во время запроса")
     ok(wait(lambda: len(entered) == 1), "задача отправила запрос к модели, он висит")
@@ -86,16 +87,16 @@ try:
        f"#15: поздний сбой не назначил повтор: статус {t.status}, wake_at {t.data.get('wake_at')!r}, запросов {len(entered)}")
     ok("Остановлено" in (t.dir / "журнал.md").read_text(encoding="utf-8"), "в журнале — «Остановлено», а не «Попробую снова»")
     # контроль: без остановки временный сбой по-прежнему даёт повтор
-    entered.clear(); gate.set(); TK.RETRY_MIN = (30,)
+    entered.clear(); gate.set(); TKB.RETRY_MIN = (30,)
     t2 = tm.create("Сбой сети", "Повтор после временного сбоя")
     ok(wait(lambda: t2.status == "sleeping") and t2.data.get("retries") == 1 and t2.data.get("wake_at"),
        f"без остановки временный сбой — по-прежнему повтор позже ({t2.status}, попытка {t2.data.get('retries')})")
     tm.stop(t2.id)
 finally:
-    TK.stream_events, TK.RETRY_MIN = _se, _rm
+    TKB.stream_events, TKB.RETRY_MIN = _se, _rm
 
 # ---------- #12: одинаковые названия в одну минуту ----------
-_real_dt = TK.dt
+_real_dt = TKB.dt
 
 
 class FixedDT(dt.datetime):
@@ -104,13 +105,13 @@ class FixedDT(dt.datetime):
         return cls(2026, 10, 24, 15, 7, 30)
 
 
-TK.dt = type("dtmod", (), {"datetime": FixedDT, "timedelta": dt.timedelta, "date": dt.date})
+TKB.dt = type("dtmod", (), {"datetime": FixedDT, "timedelta": dt.timedelta, "date": dt.date})
 try:
     a = tm.create("Same title", "Goal one", start=False)
     b = tm.create("Same title", "Goal two", start=False)
     c = tm.create("Same title", "Goal three", start=False)
 finally:
-    TK.dt = _real_dt
+    TKB.dt = _real_dt
 ok(len({a.dir, b.dir, c.dir}) == 3, f"#12: три задачи — три папки: {[x.dir.name for x in (a, b, c)]}")
 ok(b.dir.name.endswith("(2)") and c.dir.name.endswith("(3)"), "вторая и третья — с суффиксом (2), (3)")
 ok(json.loads((a.dir / "задача.json").read_text(encoding="utf-8"))["id"] == a.id and "Goal one" in (a.dir / "план.md").read_text(encoding="utf-8"),

@@ -59,7 +59,7 @@ for name in ("songs_count(ask0", "agenda_missed(text"):
     ok(name in ea, f"проверка {name.split('(')[0]} — в цепочке проверок ответа")
 ok("_norm_answer(ask0) in prev_asked" in ea and "prev_asked = {" in ea, "длинный повтор слово в слово ловим, когда и вопрос повторён")
 
-tk = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+tk = srctext.text(ROOT, "core/tasks.py")
 ok('"прошла (код выхода 0)" + (f", вывод: {tail}"' in tk, "команда критерия: «прошла (код выхода 0), вывод: 5», а не голое «код 0»")
 ok("выдержка обрезана: показано" in tk and "это не обрыв" in tk, "обрезанная выдержка помечена — не «обрыв файла»")
 ok("Изменено в рабочей копии:" in tk, "задача по коду: изменённые файлы рабочей копии — в списке для проверяющего")

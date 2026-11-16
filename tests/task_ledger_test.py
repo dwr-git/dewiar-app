@@ -12,6 +12,7 @@ import threading
 os.environ.update(DEWIAR_TASK_STUCK_STEPS="6", DEWIAR_TASK_BROWSER="0", DEWIAR_TASK_POLL_LOCAL="8")   # заглушка модели — на 127.0.0.1
 from task_mock import Host, Mock, done, ok, wait_for  # noqa: E402
 import tasks as TK  # noqa: E402
+import tasks_base as TKB  # noqa: E402 — подменяемые имена задач живут здесь (чистое ядро 1.0.10)
 
 mock = Mock({})
 POLL = {}                                    # цель задачи -> ответ на опрос хода
@@ -104,12 +105,12 @@ t3 = tm.create("План 0.83", "x", start=False)
 (t3.dir / "план.md").write_text("# План\n\n- [ ] собрать\n- [ ] свести\n", encoding="utf-8")
 tm._tool_raw(t3, "todo_update", {"items": [{"text": "показать"}]})
 ok([x["text"] for x in t3.todos()] == ["собрать", "свести", "показать"], f"задача 0.83: пункты старого плана сохранены: {[x['text'] for x in t3.todos()]}")
-TK.POLL_LOCAL = 3 * TK.POLL_EVERY
+TKB.POLL_LOCAL = 3 * TKB.POLL_EVERY
 ok(TK.TaskManager._poll_every({"base_url": "http://127.0.0.1:8080/v1"}) == 3 * TK.POLL_EVERY
    and TK.TaskManager._poll_every({"base_url": "http://192.168.1.5:1234/v1"}) == 3 * TK.POLL_EVERY
-   and TK.TaskManager._poll_every({"base_url": "https://api.anthropic.com", "kind": "anthropic"}) == TK.POLL_EVERY,
+   and TK.TaskManager._poll_every({"base_url": "https://api.anthropic.com", "kind": "anthropic"}) == TKB.POLL_EVERY,
    "свой сервер модели (кэш одного разговора) — опрос хода втрое реже")
-TK.POLL_LOCAL = TK.POLL_EVERY
+TKB.POLL_LOCAL = TKB.POLL_EVERY
 
 # ---------- 2. застой -> новый план, а не пауза ----------
 A = "Застой"
@@ -187,7 +188,7 @@ tc = tm.create(C, "Сводка для опроса хода")
 ok(wait_for(lambda: tc.status in ("done", "failed", "paused"), 60) and tc.status == "done", f"опрос хода сработал, задача доделана ({tc.status})")
 jc = journal(tc)
 ok("🧭 Опрос хода: хода нет, ходит по кругу. Дальше: свести данные одним скриптом" in jc and "🔄 Застой (опрос хода" in jc, "«петля, хода нет» — новый план")
-r9 = [x for x in mock.of(C) if x["i"] == TK.POLL_EVERY][0]
+r9 = [x for x in mock.of(C) if x["i"] == TKB.POLL_EVERY][0]
 ok("Опрос хода (шаг 8): дальше — свести данные одним скриптом" in r9["messages"][-1]["content"], "«что дальше» — в «Состоянии задачи»")
 polls = [x for x in ASKED if "Сводка для опроса хода" in x]
 ok(len(polls) == tc.steps // TK.POLL_EVERY and all(len(x) < 4000 for x in polls), f"опрос — короткий и раз в {TK.POLL_EVERY} шагов: {len(polls)} за {tc.steps} шагов")

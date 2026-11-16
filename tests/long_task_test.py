@@ -11,6 +11,7 @@ os.environ.update(DEWIAR_WORKSPACE=str(tmp / "ws"), DEWIAR_STATE_DIR=str(tmp / "
 sys.path.insert(0, str(ROOT / "core"))
 from workspace import Workspace  # noqa: E402
 import tasks as TK  # noqa: E402
+import tasks_base as TKB  # noqa: E402 — подменяемые имена задач живут здесь (чистое ядро 1.0.10)
 import tools as T  # noqa: E402
 
 FAILS = []
@@ -161,8 +162,8 @@ ok("✋" in j and t.status != "done", "ранний finish остановлен:
 guard = [r for r in reqs if r["title"] == A and r["i"] == 6]
 ok(guard and "найти багаж" in json.dumps(guard[0]["messages"][-1], ensure_ascii=False), "модель получила список невыполненного")
 
-w = TK.dt.datetime.fromisoformat(t.data["wake_at"])
-ok(w - TK.dt.datetime.now() > TK.dt.timedelta(hours=9), "долгое ожидание — до 10 часов")
+w = TKB.dt.datetime.fromisoformat(t.data["wake_at"])
+ok(w - TKB.dt.datetime.now() > TKB.dt.timedelta(hours=9), "долгое ожидание — до 10 часов")
 r = T.t_tell_task({"name": "перебронировать", "text": "Багаж нашли: AMS-777"}, {"tasks": tm})
 ok("Передал" in r, "tell_task из разговора: " + r)
 ok(wait_for(lambda: t.status == "done", 15), f"новые сведения разбудили задачу — она довела дело до конца ({t.status})")
@@ -174,7 +175,7 @@ d = tm.detail(t.id)
 ok("AMS-777" in d.get("notebook", ""), "студия получает блокнот (task_get)")
 
 # ---------- 2. сжатие памяти: ранние шаги уходят, важное остаётся в блокноте ----------
-TK.BUDGET = 4000
+TKB.BUDGET = 4000
 B = "Большое исследование"
 tb = tm.create(B, "Собрать много сведений и сделать вывод")
 ok(wait_for(lambda: tb.status == "done", 30), f"длинная задача завершена ({tb.status} {tb.error})")
@@ -185,7 +186,7 @@ ok(len(late["messages"]) < 2 * 11, f"разговор задачи сжат ({le
 ok("ранние шаги убраны" in late["messages"][0]["content"] and "Собрать много" in late["messages"][0]["content"], "цель на месте, пометка о сжатии")
 ok("4242" in st_of(late) and "консолидировано" in st_of(late), "факт из ранних шагов виден через блокнот")
 ok("🧠" in (tb.dir / "журнал.md").read_text(encoding="utf-8"), "сжатие отмечено в журнале")
-TK.BUDGET = 60000
+TKB.BUDGET = 60000
 
 # ---------- 3. сбой модели — не падаем, повторяем позже ----------
 C = "Сбой модели"
@@ -233,7 +234,7 @@ ok(any("Ещё проверь" in json.dumps(r["messages"], ensure_ascii=False) 
 
 # ---------- 6. остановка ждущей ----------
 tf = tm2.create("Ждать долго", "ждать", start=False)
-tf.data.update(status="sleeping", wake_at=(TK.dt.datetime.now() + TK.dt.timedelta(hours=5)).isoformat(timespec="seconds")); tf.save()
+tf.data.update(status="sleeping", wake_at=(TKB.dt.datetime.now() + TKB.dt.timedelta(hours=5)).isoformat(timespec="seconds")); tf.save()
 tm2.stop(tf.id)
 ok(tf.status == "stopped" and not tf.data.get("wake_at"), "остановленная ждущая не проснётся")
 

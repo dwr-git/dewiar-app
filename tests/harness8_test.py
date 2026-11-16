@@ -42,7 +42,7 @@ ok("12 500" in out and "ivan@shop.ru" in out and "https://shop.example/order/77"
 ok(out.count("4567-123") == 1 and out.count("отчёт.docx") == 1, "то, что в пересказе осталось, не дублируется")
 ok("Просто мысль" not in out, "строки без фактов не возвращаются (пересказ вправе их сжать)")
 ok(tasks.keep_facts("", "x") == "x" and tasks.keep_facts("- 123456", "есть 123456") == "есть 123456", "нечего возвращать — как есть")
-src = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tasks.py")
 i = src.index("def _consolidate(")
 body = src[i:src.index("def _compact(", i)]
 ok("Файлы — что в каждом" in body and "Ошибки и как обошли" in body and "дословно" in body, "пересказ по схеме: файлы, ошибки, числа дословно")
@@ -137,7 +137,7 @@ i = src.index('elif loop == "finish":')
 blk = src[i:i + 1400]
 ok("pd >= pt" in blk and "Q.LOOP_DONE" in blk and blk.index("Q.LOOP_DONE") < blk.index('force_why"] = "loop"'), "при выполненном плане повтор не помечает задачу «не выполнено»")
 # экзамен 12.11 (Б11): перезапуск посреди работы — история не успела записаться, и задача «▶ Начал работу» заново
-src = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tasks.py")
 i = src.index("begun = bool(")
 blk = src[i:i + 1200]
 ok("if not msgs and begun:" in blk and "продолжаю, где остановился" in blk and "Не начинай заново" in blk,

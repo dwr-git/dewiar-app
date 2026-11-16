@@ -43,7 +43,7 @@ ok(r1[0] and r2[0] and len(tm.host.calls) == 1, f"«Всегда» — та же
 ok(tm.host.calls[0]["always"] and not tm.host.calls[0]["quiet"], "первый вопрос — вслух и с «Всегда»")
 r3 = tm._permit(t, "write_files", "Задача «Сайт» хочет изменить файлы. Разрешить?")
 ok(r3[0] and tm.host.calls[-1]["quiet"], "второй вопрос задачи — на экране, без голоса")
-src = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tasks.py")
 ok('"code_run" + (":" + cmd if warn else "")' in src and '"run_shell" + (":" + cmd[:300] if warn else "")' in src,
    "опасная команда (предупреждение защиты) — своим ключом: «Всегда» её не пропускает")
 

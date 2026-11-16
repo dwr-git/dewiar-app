@@ -75,6 +75,7 @@ names = {x["name"] for x in sk.catalog()}
 need = {"slides", "html-app", "html-viz", "data-report", "media-transcribe", "research", "xlsx", "docx", "pptx", "pdf", "web-download"}
 ok(need <= names and "deck.html" in sk.use("slides") and "<section class=\"slide title\">" in sk.read_file("slides", "deck.html"),
    f"навыки мастерской на месте ({len(names)} навыков), шаблон презентации читается")
-ok(len(sk.use("html-viz")) > 12000, "длинный навык отдаётся целиком")
+_hv = (ROOT / "data/skills/html-viz/SKILL.md").read_text(encoding="utf-8").split("---", 2)[-1].strip()   # 1.0.5: навык стал короче
+ok(len(_hv) > 6000 and _hv[-200:] in sk.use("html-viz"), "длинный навык отдаётся целиком")
 spec_names = {x["name"] for x in tm._specs(t)} if hasattr(h, "toolbox") else set(WORK_TOOLS)
 ok(set(WORK_TOOLS) <= spec_names, "инструменты мастерской доступны задаче")

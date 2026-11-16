@@ -78,7 +78,7 @@ ea = srctext.text(ROOT, "core/engine_answer.py")
 ok("or month_year_wrong(ask0, step_text)" in ea and "poem_unsourced(ask0, step_text, called)" in ea, "обе проверки — в цепочке проверок ответа")
 
 # 5. итог невыполненной задачи
-ts = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+ts = srctext.text(ROOT, "core/tasks.py")
 k = ts.index('if t.data.get("unfinished"):                 # №368')
 ok("готово" in ts[k:k + 700] and "проверка с " in ts[k:k + 900], "невыполненная задача: «Готово» из её рассказа убрано, рассказ — с оговоркой")
 

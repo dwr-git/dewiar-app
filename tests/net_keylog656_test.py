@@ -5,6 +5,7 @@ virtual_file.log'» — облако, синхронизация, «Близки
 
 Там же: задача, поставленная до 0.86, хранила в «files» записи {"name", "b64"} — продолжение после паузы падало
 «sequence item 0: expected str instance, dict found». Теперь в описание задачи идут имена."""
+import srctext  # noqa: E402 — текст модуля с частями (чистое ядро)
 import os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -43,7 +44,7 @@ import tasks  # noqa: E402
 ok(tasks._file_names([{"name": "чек.pdf", "b64": "AAAA"}, "Входящие/фото.jpg", "", None]) == ["чек.pdf", "Входящие/фото.jpg"],
    "старые записи файлов задачи {name, b64} -> имена")
 ok(tasks._file_names(None) == [] and tasks._file_names("a.txt") == ["a.txt"], "пусто и одна строка")
-ts = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
+ts = srctext.text(ROOT, "core/tasks.py")
 ok('"; ".join(t.data["files"]' not in ts and '"; ".join(tf[:20])' in ts, "описание задачи собирается из имён")
 
 if fails:
