@@ -256,8 +256,26 @@ class MusicMixin:
             return st
         ids, texts = self._habits()
         norm = lambda t: re.sub(r"[^\wё]+", " ", str(t or "").lower().replace("ё", "е")).strip()   # noqa: E731
-        hn = {norm(t) for t in texts}
-        keep = [x for x in st.get("items") or [] if str(x.get("rid") or "") not in ids and norm(x.get("title")) not in hn]
+        hn = {norm(t) for t in texts} - {""}
+        # 16.11 (владелец, снова «не забыл взять карту на обед»): привычка могла быть только на телефоне (у его напоминания
+        # свой id, компьютер его не знает) или называться чуть иначе. Привычка — и то, что сам журнал «сделано» видит в
+        # другие дни: тот же текст или то же напоминание — в 2 и больше прежних днях за три недели.
+        days = {}
+        today = datetime.now().date()
+        for x in list(getattr(getattr(self, "done", None), "items", None) or []):
+            try:
+                d = datetime.fromtimestamp(int(x.get("at") or 0) / 1000).date()
+            except (TypeError, ValueError, OverflowError, OSError):
+                continue
+            if d >= today or (today - d).days > 21:
+                continue
+            for k in (("t", norm(x.get("title"))), ("r", str(x.get("rid") or ""))):
+                if k[1]:
+                    days.setdefault(k, set()).add(d)
+        habit = lambda x: (str(x.get("rid") or "") in ids or norm(x.get("title")) in hn      # noqa: E731
+                           or any(len(h) >= 8 and (h in norm(x.get("title")) or norm(x.get("title")) in h) for h in hn if norm(x.get("title")))
+                           or len(days.get(("t", norm(x.get("title"))), ())) >= 2 or len(days.get(("r", str(x.get("rid") or "")), ())) >= 2)
+        keep = [x for x in st.get("items") or [] if not habit(x)]
         return dict(st, items=keep, today=len(keep))
 
     def _routine_note(self, silent=True, weekly=False):
