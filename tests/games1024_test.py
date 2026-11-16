@@ -5,6 +5,7 @@
 - «Возможности» → «Досуг» выключен — кнопки нет, режим не открывается;
 - голосом: «Лира, давай поиграем», «поиграем в змейку» — window_phrase "play", play_game; «сыграем в города» — модели;
 - игры без сети: шрифт Rubik свой, ни одного адреса в интернете."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys, urllib.parse
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -32,7 +33,7 @@ for t, k, g in (("Лира, давай поиграем", "play", ""), ("хоч�
                 ("давай поиграем в пять в ряд", "play", "five"), ("сыграем в гомоку", "play", "five"), ("открой найди пару", "play", "pairs"), ("поиграем в пары", "play", "pairs"),
                 ("давай поиграем пару минут", None, "")):
     ok(EB.window_phrase(t) == k and (k != "play" or EB.play_game(t) == g), f"«{t}» → {EB.window_phrase(t)} {EB.play_game(t)!r}")
-cmd = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok('kind == "play"' in cmd and '.get("games") is False' in cmd and 'self.emit("window", do="play", game=game)' in cmd, "ядро: «поиграем» — событие окну, выключено — подсказка про «Возможности»")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok("def play_open(self, game=\"\")" in app and "def pad_toggle(self, mode=\"notes\")" in app and ('"&mode=play"' in app or '"&mode=" + mode' in app), "окно: блокнот открывается сразу «Досугом»")

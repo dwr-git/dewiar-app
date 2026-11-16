@@ -189,7 +189,6 @@ MARKS = {
     "mountain": ("Горы", '<path d="M2.5 19.5 9.5 7l4.2 7.4L16 11l5.5 8.5z"/><path d="M7.6 10.4 9.5 11.6l1.8-1.2"/>'),
     "blocks": ("Кубики", '<rect x="3.5" y="12" width="8" height="8" rx="1.2"/><rect x="12.5" y="12" width="8" height="8" rx="1.2"/><rect x="8" y="4" width="8" height="8" rx="1.2"/>'),
 }
-MARK_TITLES = {k: v[0] for k, v in MARKS.items()}
 # узоры вместо фото (sites_render.art_svg) — у каждого шаблона свой мотив
 ARTS = {"beans": "Зёрна", "arches": "Арки", "frames": "Рамки", "dots": "Точки", "blocks": "Фигуры", "rings": "Круги", "stripes": "Полосы",
         "grid": "Сетка", "pulse": "Пульс", "pebbles": "Галька", "confetti": "Конфетти", "hazard": "Сигнальные полосы", "botanic": "Ветви",

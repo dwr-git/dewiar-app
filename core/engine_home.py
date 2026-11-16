@@ -103,11 +103,3 @@ class HomeMixin:
             return self.home_public()
         raise ValueError("неизвестная команда " + cmd)
 
-    def home_wait_phone(self, tid, timeout=1.0):
-        """Для проверок: телефон с этим ключом уже обменялся?"""
-        t0 = time.time()
-        while time.time() - t0 < timeout:
-            if any(p["tid"] == tid for p in (self.homehub.phones() if self.homehub else [])):
-                return True
-            time.sleep(0.1)
-        return False

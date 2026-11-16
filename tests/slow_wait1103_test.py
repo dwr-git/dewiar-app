@@ -5,6 +5,7 @@
 — пока модель молчит, движок знает, чего ждём (сервер не ответил / размышляет / пишет действие / слова пошли);
 — через WAIT_NOTE_SEC в строке состояния — что происходит и что сделать; с первым словом строка убирается;
 — приветствие, на которое модель не ответила за GREET_LATE_SEC, отменяется — без «Думаю…» на минуты."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -44,7 +45,7 @@ ok(EA.think_ask(job, True) == "Сравни цены на гречку в трё
 ok(not llm.wants_think(EA.think_ask(job.replace("Сравни цены на гречку в трёх магазинах", "Курс доллара"), True)),
    "простое дело по расписанию — без размышлений, хоть поручение и длинное")
 ok(EA.think_ask("Напиши стих про осень", False) == "Напиши стих про осень", "вопрос человека — как раньше")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("wants_think(think_ask(text, getattr(turn, \"raw\", False)))" in src and "turn.raw = raw" in src, "ход знает, что он служебный")
 
 # ── 2. чего ждём: мок сервера — молчит, потом размышляет, потом отвечает ──

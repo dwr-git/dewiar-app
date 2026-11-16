@@ -8,6 +8,7 @@
 - большие задачи: проверяющий принимал обрезанную выдержку за обрыв файла, «код 0» команды критерия — за «0 слайдов», а файлы
   задачи по коду искал среди готовых файлов (там _undo/…, код.json);
 - синтез речи у исполнителя на сервере: нет tts_remote — не падаем."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, tempfile, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -52,7 +53,7 @@ ok("данные «Утра с Лирой»" in sk and "только инстр�
 songs = "Три проверенных:\n\n1. **«Ветер» — Сплин**. Тёплая\n2. **«Здесь» — Дельфин**. Спокойная\n3. **«Тёплый ветер» — Земфира**."
 ok(Q.songs_count("Подбери мне плейлист под настроение, штук пять песен.", songs), "просили пять песен — дали три: переспрос")
 ok(not Q.songs_count("посоветуй 3 песни", songs) and not Q.songs_count("что послушать?", songs), "три из трёх или без числа — не переспрос")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok("РОВНО сколько просили" in ea and "не сокращай список" in ea, "правило о песнях: ровно сколько просили")
 for name in ("songs_count(ask0", "agenda_missed(text"):
     ok(name in ea, f"проверка {name.split('(')[0]} — в цепочке проверок ответа")

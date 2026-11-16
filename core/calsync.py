@@ -373,11 +373,3 @@ class Calendars:
                 "remind": int(self.s.get("calendars", "remind_minutes") or 0)}
 
 
-def day_text(evs):
-    """Для сводки и модели: «10:00–11:00 Планёрка (Google Календарь)»."""
-    out = []
-    for e in evs:
-        t = "весь день" if e["allday"] else f"{e['start']:%H:%M}–{e['end']:%H:%M}"
-        out.append(f"{t} {e['title']}" + (f", {e['place']}" if e.get("place") else "") + f" ({e['cal']})")
-    return out
-

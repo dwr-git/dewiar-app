@@ -2,6 +2,7 @@
 рода задачах он должен быть выше»). Стихи, сказки, поздравления, тосты, «придумай» — температура не ниже 0.95 (для дел
 и фактов остаётся из профиля, 0.7); стихам — ремесло рифмы: пары рифм по ударному слогу подбираются заранее.
 Музыка («включи песню») и обычные вопросы — без изменений. Компьютер и телефон одинаково."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -25,7 +26,7 @@ ok(got == CASES, f"компьютер: творческое — 0.95, стихи
 ok(llm.creative_temp("Напиши стих", 1.1) == 1.1, "температуру выше заданной человеком не снижаем")
 ok(llm.creative_temp("Напиши стих", 0.3) == 0.3 and llm.creative_temp("Напиши стих", None) == 0.95 and llm.creative_temp("Который час?", None) == 0.7,
    "№311: свою температуру в профиле (0,3) творческая просьба не поднимает; без неё — 0,95")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 # 04.11 «Голос без пауз»: ремесло рифмы — в справке к вопросу (notes → ctx), подсказка остаётся прежней (кэш начала запроса)
 ok("prof = dict(prof, temperature=temp)" in src and "notes.append(POEM_NOTE)" in src, "компьютер: ответ берёт эту температуру и ремесло рифмы")
 

@@ -2,6 +2,7 @@
 эхоподавление) — проверка в mic_heal_test (второй раз — напрямую); и «мозг» — qwen2.5-coder:7b: по-русски отвечает плохо,
 сбивается на английский («Я не понимаю по-английски») и печатает JSON. Теперь: один раз за запуск — подсказка, какую модель
 взять для разговора; обычные модели — без подсказки."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -29,6 +30,6 @@ e3 = types.SimpleNamespace(note=lambda t: notes.append(t), CODER_RX=EA.AnswerMix
 ok(not EA.AnswerMixin._coder_brain(e3, {"model": "qwen2.5-coder:7b"}), "у Кодера модель для кода — так и задумано, без подсказки")
 ok(all(EA.AnswerMixin.CODER_RX.search(m) for m in ("deepseek-coder-v2:16b", "codellama:7b", "starcoder2", "codestral", "devstral")),
    "узнаются и другие модели для кода")
-ok("self._coder_brain(prof)" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"), "проверка — при первых словах ответа")
+ok("self._coder_brain(prof)" in srctext.text(ROOT, "core/engine_answer.py"), "проверка — при первых словах ответа")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

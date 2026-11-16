@@ -3,6 +3,7 @@
 модель дважды отвечала «запомнил / буду искать там» без remember, проверка честности отвечала «до дела так и не дошло».
 Теперь: человек сообщил факт — после второй неудачи программа сама кладёт его в память (quality.self_fact), и «запомнил»
 становится правдой; напоминания, траты и вопросы — по-прежнему через свои проверки. Сценарий экзамена teach_fact675."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -28,7 +29,7 @@ ok(not Q.self_fact("Запомни: напомни завтра купить х�
 ok(not Q.self_fact("Запомни, я потратил 500 рублей на такси", "Записала."), "трата — не факт (своя проверка)")
 ok(not Q.self_fact("Что у меня в среду?", "Записала."), "вопрос — не факт")
 ok(not Q.self_fact("Открой эту папку", "Открыла."), "просьба сделать — не факт")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("fact = self_fact(text, turn.full)" in src and "self.workspace.remember(fact)" in src, "ядро: после второй неудачи — сама в память")
 ok("elif not saved_fact:" in src and "else PROMISE_GIVEUP" in src and "honest_rest(text, turn.full)" in src, "не факт — честное «пока ничего не сделано», как раньше")
 sc = {x["id"]: x for x in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}

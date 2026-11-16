@@ -5,6 +5,7 @@
 Секретная страница: вид «Страница» в той же форме, текст до 50 000 знаков, то же шифрование ключом компьютера; в списке —
 название и число строк, текст — только по «Открыть» (vault_reveal); открытая без дела — прячется сама, уход из раздела —
 закрывает; голосом страница не зачитывается и не выводится в ответ — «откройте в студии»."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, re, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -46,7 +47,7 @@ v.put("Серверы", "Сервер 3\n", item_id=pgx["id"], kind="page")
 ok(v.get(pgx["id"])["value"] == "Сервер 3\n" and v.get(pgx["id"])["kind"] == "page", "правка страницы — по id, вид остаётся")
 ex = v.export_plain(); v3 = Vault(d / "v3.bin", d / "k.key"); v3.import_plain(ex)
 ok(any(x.get("kind") == "page" for x in v3.list()), "закрытая копия (слепок) переносит и страницы")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('kind=a.get("kind")' in src and 'a.get("kind") != "page"' in src, "vault_put: вид передаётся; пустой текст страницы не подменяется прежним")
 mus = (ROOT / "core/engine_music.py").read_text(encoding="utf-8")
 ok('x.get("kind") == "page"' in mus and "откройте её в студии" in mus, "голосом страница не выводится в ответ — «откройте в студии»")

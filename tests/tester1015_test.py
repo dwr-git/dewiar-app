@@ -8,6 +8,7 @@
   а не запомнил); одинаковый вызов несколько раз в одном ответе — один раз; ещё два вида вызова текстом
   («<\\n\\nfunction=f>», {"function": "f"}{…}); «нарисуй схему» — словами → просим нарисовать ```mermaid;
   дата в set_reminder вида «…T08:00:00+03:00» — тоже дата."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, shutil, subprocess, sys, tempfile, threading, time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -121,7 +122,7 @@ ASK = "Нарисуй схему: как заявка проходит от кл
 ok(Q.diagram_missing(ASK, "Клиент → менеджер → склад → клиент.") and "```mermaid" in Q.diagram_missing(ASK, ""), "схема словами — просим нарисовать mermaid")
 ok(not Q.diagram_missing(ASK, "Вот:\n```mermaid\nflowchart LR\n```") and not Q.diagram_missing("Нарисуй кота", "Мяу"),
    "нарисовал — тихо; «нарисуй кота» — не схема")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("diagram_missing(text, turn.full + step_text, called)" in src, "разговор на компьютере сверяет ответ со схемой")
 
 # ── 5. телефон ──

@@ -1,6 +1,7 @@
 """Пакет 27.10, 11:31. №348: DeepSeek v4.1 (polza.ai) писал вызовы «<DSML calls><DSML invoke …><DSML parameter
 name="arguments" string="false">{json}» — без «｜» и одним JSON; Dewiar не узнавал их и читал код вслух («бэкслэш,
 бэкслэш…»). №347: «Запустишь заново?» — «Перезапустила», а задачи нет — в «Задачах» пусто."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -34,7 +35,7 @@ ok(Q.task_claim("Перезапустила задачу — скоро буде
 ok(not Q.task_claim("Перезапустила.", {"start_task"}), "запуск был — всё правда")
 ok(not Q.task_claim("Я запустила задачу 10 минут назад, она работает.") and not Q.task_claim("Перезапустить задачу?")
    and not Q.task_claim("Не перезапустила — жду ваш ответ."), "рассказ о прошлом запуске, вопрос и «не перезапустила» — не трогаем")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("task_claim(step_text, called)" in src, "ответ проверяется на «перезапустила» без запуска")
 app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
 ok("/^Script error\\.?$/i.test(e.message) && !e.filename" in app, "веб-версия: «Script error. (:0)» чужих скриптов (расширения браузера) — не сбой Dewiar, не шлётся")

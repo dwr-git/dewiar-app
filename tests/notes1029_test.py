@@ -6,6 +6,7 @@
 «По цвету» (цвет — разделом); новая заметка при открытой метке — сразу с этой меткой.
 Тот же день: «плитками создание новой заметки выглядит ещё хуже; картинка — красиво в плитке или списком»: картинка в плитке —
 во всю ширину в своих пропорциях (была полоской: flex:1 от поля названия), в списке — крупная миниатюра."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, re, sys, tempfile, time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -67,7 +68,7 @@ r = sy._apply({"kind": "note", "id": "s1", "data": {}, "deleted": True})
 ok(r is False and w.safe(rel).is_file() and w.safe(rel).stat().st_mtime > old + 1000,
    f"удаление с телефона: заметка с замком осталась и стала новее удаления (вернётся туда): {r}")
 
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok("self.workspace.remove(a.get(\"path\", \"\"))" in src, "ws_delete идёт через workspace.remove — там и проверка замка")
 
 # ---------- студия ----------

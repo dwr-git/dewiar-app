@@ -4,6 +4,7 @@
 пускает (нет «петли») — отказ. Теперь: 1) после сна домашний адрес проверяется заново при первом же запросе;
 2) по имени отказали сразу («refused») — домашний адрес проверяется тут же, и запрос идёт туда; 3) приветствие «С
 возвращением», которое человек не просил, при неготовой сети молчит, а не показывает ошибку."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -71,7 +72,7 @@ finally:
     net._lan_ok = real
     net.set_lan("", "", "")
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 i = src.index("приветствие не вышло")
 ok('getattr(turn, "greet", False) and why_kind(e) in ("connect", "timeout")' in src[i - 600:i] and 'turn.full, turn.error = "", ""' in src[i:i + 200],
    "приветствие «С возвращением» при неготовой сети — молчит, без ошибки на экране")

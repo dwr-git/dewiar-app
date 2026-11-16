@@ -5,6 +5,7 @@
 - думает мозгом персонажа (свой мозг Патрика), отвечает по его знаниям (папка), без памяти владельца, без разметки;
 - ограничения: на человека в день (одна вежливая фраза сверх), пауза бота — молчит; добавили в группу — здоровается;
 - студия: схема, «Проверить ответ», «Что спрашивали», группы."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, socket, stat, subprocess, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -256,7 +257,7 @@ bot._handle({"update_id": 2, "message": {"message_id": 6, "chat": {"id": 801, "t
 got = wait_sent(801, n0)
 ok(got and "покороче" in got[0]["text"] and len(heard) == 1, "длинное голосовое — просим покороче, не распознаём")
 srv2.shutdown()
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('"pbot_"' in src.split("_KIDS_LOCKED")[1][:200], "в детском режиме без PIN — недоступно")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

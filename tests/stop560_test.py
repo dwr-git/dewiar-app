@@ -3,6 +3,7 @@
 Теперь, пока Лира думает или говорит, в строке состояния виджета — кнопка «■ Стоп» (то же, что голосом: ядро «stop»),
 в подсказке «отвечает долго» — тоже кнопка, Esc в виджете — то же самое. На телефоне и в веб-версии — «Стоп» рядом
 с «Думаю/Говорю»: замолкает, не включая микрофон; Esc на клавиатуре — тоже."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -66,7 +67,7 @@ with sync_playwright() as p:
 ok(not errs, f"виджет без ошибок страницы: {errs[:2]}")
 hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
 ok("«Стоп» — прервать`" not in hud, "подсказка больше не отсылает к несуществующей кнопке")
-eng = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_commands.py")
 # 0.86: перед обрывом написанное уходит в ленту «Чата» («остановлено») — строка между ними допустима
 ok(bool(re.search(r'if cmd == "stop":\n(?:[^\n]*\n)?            self\.interrupt\("кнопка", follow=False\)', eng)), "ядро: «stop» — тот же обрыв, что голосом, без «слушаю дальше»")
 

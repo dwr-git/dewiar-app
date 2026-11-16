@@ -41,7 +41,8 @@ except M.MailError as e:
     err = str(e)
 ok("не нашла письма" in err, f"не нашла — так и говорит: {err!r}")
 ctx = {"mail": mm, "settings": None}
-T._mail = lambda c: mm
+import tools_mail  # noqa: E402 — почтовые действия (1.0.8)
+tools_mail._mail = lambda c: mm
 out = T.t_send_email({"reply_to": "Иван", "body": "Согласен."}, ctx)
 ok(out.startswith("Ответ на письмо «Встреча в пятницу» отправлен: ivan@firma.by"), f"инструмент send_email с reply_to: {out!r}")
 spec = T.TOOLS["send_email"]

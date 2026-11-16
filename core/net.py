@@ -387,15 +387,6 @@ def reserve():
     return "" if px else rv
 
 
-def uses_proxy(url):
-    """Пойдёт ли этот адрес через прокси: сам адрес Dewiar или его поддомен."""
-    px, hosts = current()
-    if not px:
-        return False
-    h = host_of(url)
-    return any(h == d or h.endswith("." + d) for d in hosts)
-
-
 class _Lazy(httpx.BaseTransport):
     """Транспорт через прокси, который создаётся только при первом запросе (обычные запросы не платят за него)."""
 
@@ -653,7 +644,6 @@ def blocked_hint():
         where = host_of(px) + (f":{urlparse(px).port}" if urlparse(px).port else "")   # свой прокси — только адрес и порт, без логина
         return f" Сейчас Dewiar ходит туда через ваш прокси {where} — проверьте, что он работает (студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»)."
     return " Если dewiar.pro у вас блокирует провайдер — укажите прокси: студия → «Dewiar.pro» → «Компьютер, сеть…» → «Сеть»."
-
 
 
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "0.0.0.0", "::1")

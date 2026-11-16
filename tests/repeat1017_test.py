@@ -2,6 +2,7 @@
 свой прошлый ответ из разговора. Теперь ответ слово в слово как недавний (короткий, без действий) — ядро просит модель
 ответить по существу, и человек получает нормальный ответ. Первый раз «Я Лира.» не трогаем — повтора ещё нет.
 Ядро — настоящее, модель — tests/mock_llm.py (на этот вопрос отвечает «Я Лира.», на просьбу не повторяться — по существу)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import asyncio, json, os, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 import websockets
@@ -126,9 +127,9 @@ r = [ET.ToolsMixin._send_cmd(e2, q) for q in ("отправь сообщение
                                                "напиши андрею письмо", "андрей напиши стих")]
 ok(r == [True, True, False, False] and sent == [("p3", "Привет как дела"), ("p4", "Во сколько встречаемся завтра")],
    f"без запятых и двоеточий — тоже отправка близкому: {r}, {sent}")
-ok("self._send_cmd(text, via)" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"), "быстрая отправка стоит перед моделью")
+ok("self._send_cmd(text, via)" in srctext.text(ROOT, "core/engine_answer.py"), "быстрая отправка стоит перед моделью")
 # «Включи смешное видео на YouTube» — сразу play_youtube, без модели (съёмка 17.10: «говорит, что включает, — и ничего»)
-import tools as TT  # noqa: E402
+import tools_base as TT  # noqa: E402 — запуск и браузер — в основе действий (1.0.8)
 opened = []
 TT.launch = lambda cmd, **k: opened.append(cmd[-1])
 said3 = []
@@ -160,15 +161,15 @@ ok(bc == ["/usr/bin/google-chrome-stable", "--new-window", "https://www.youtube.
 import engine_answer as EA  # noqa: E402
 w = EA.team_window([{"role": "user", "content": "включи видео"}, {"role": "assistant", "content": "Включаю.", "who": "lira", "acts": ["play_youtube"]}],
                    "lira", lambda x: x)
-ok("выполнено инструментами: play_youtube" in w[-1]["content"] and "СЛОВА НЕ ДЕЙСТВУЮТ" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"),
+ok("выполнено инструментами: play_youtube" in w[-1]["content"] and "СЛОВА НЕ ДЕЙСТВУЮТ" in srctext.text(ROOT, "core/engine_answer.py"),
    "в истории для модели ответ помечен выполненным действием; в подсказке — «слова не действуют, вызывай снова»")
 from llm import CodeFilter  # noqa: E402
 cf = CodeFilter()
 spoken = cf.feed("Включаю.\n[в этом ответе выполнено инструментами: play_youtube]\nГотово.") + cf.flush()
 ok(spoken == "Включаю.\nГотово." and EA.ACTS_RX.sub("", "Включаю. [в этом ответе выполнено инструментами: x]") == "Включаю.",
    f"пометку модель могла повторить — вслух и на экране её нет: {spoken!r}")
-ok("self._call_cmd(text, via)" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"), "быстрый звонок стоит перед моделью")
-ok("or action_claim(text, step_text, called)" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"), "проверка стоит в ходе разговора")
+ok("self._call_cmd(text, via)" in srctext.text(ROOT, "core/engine_answer.py"), "быстрый звонок стоит перед моделью")
+ok("or action_claim(text, step_text, called)" in srctext.text(ROOT, "core/engine_answer.py"), "проверка стоит в ходе разговора")
 if fails:
     print("\n".join(l for l in log.splitlines() if "dewiar" in l)[-3000:])
 print("\nИТОГ:", "всё прошло" if not fails else f"не прошло {len(fails)}")

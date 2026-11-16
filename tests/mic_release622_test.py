@@ -10,6 +10,7 @@
 — кольцо последних кадров очищается: удержание после включения не начинается со звука минутной давности;
 — audio.mic_release = false — по-старому, поток открыт;
 — идея №165: на время снимка с веб-камеры (mic_paused) поток закрыт, после — открыт снова."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import collections, os, sys, threading, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -182,7 +183,7 @@ e3.stopping.set(); th3.join(2)
 src = (ROOT / "core/engine_rest.py").read_text(encoding="utf-8")
 ok("self.set_mute(True)" in src, "«Отдых» выключает микрофон через set_mute — значит, поток закрывается тем же путём")
 # ── 8. снимок с камеры — через mic_paused, если микрофон из той же камеры ──
-tsrc = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+tsrc = srctext.text(ROOT, "core/tools.py")
 ok("mic_paused" in tsrc and "mic_shares_camera" in tsrc, "look_camera закрывает микрофон камеры на время кадра")
 print("\nИТОГ:", "всё прошло" if not fails else f"не прошло {len(fails)}")
 sys.exit(1 if fails else 0)

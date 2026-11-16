@@ -3,6 +3,7 @@
 Ядро: дозор за папкой (новый докачанный файл), страницей (слово или изменение), экраном (сначала своё сравнение, модель —
 только если экран изменился; «ДА — …» — готово); срок — сам кончается; «Стоп». Готово — голос, уведомление, конверт
 своему телефону, Telegram. Голосом — инструмент watch. Студия — раздел «Дозор» и значок на «Главной»; виджет — глаз."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import io, os, re, sys, tempfile, threading, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -186,7 +187,7 @@ out = TL.t_watch({"kind": "file", "folder": str(dl4)}, {"watch": e4})
 ok("Дозор начат" in out and "новый файл" in out, f"голосом: «скажи, когда появится файл» — дозор начат: {out[:80]}")
 ok("Идут дозоры: новый файл" in TL.t_watch({"action": "list"}, {"watch": e4}), "«что ты сейчас ждёшь?»")
 ok(TL.t_watch({"action": "stop"}, {"watch": e4}) == "Остановлено дозоров: 1." and "watch" in TL.SAFE_CORE, "«хватит присматривать» — все дозоры остановлены")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('cmd == "watch_add"' in src and '"watch": self.watch_public()' in src and '"watch_add",' in src, "ядро: watch_get/add/stop, в hello; в детском режиме — закрыто")
 
 # --- студия, «Главная», виджет ---

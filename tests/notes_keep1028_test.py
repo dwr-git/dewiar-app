@@ -4,6 +4,7 @@
 нет; второй раз — без копий); метки, цвет, «закрепить», «в архив» — в шапку заметки (остальная шапка не трогается);
 закреплённые — сверху; #метки из текста — тоже метки. Студия: фильтр над списком, «Закреплённые» сверху, вид плитками
 с цветом и заметкой поверх, под названием — «Закрепить», «Цвет», метки, «В архив»; ссылка отдельной строкой — карточкой."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import io, json, os, re, sys, tempfile, time, zipfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -74,7 +75,7 @@ sl = [x for x in w.notes() if x["title"] == "Как я сделал свой Lin
 ok(sl and sl[0]["tags"] == ["интересное", "linux"] and "Автор собирает" in w.safe(sl[0]["path"]).read_text(encoding="utf-8") and "видео" in out,
    f"«сохрани это видео и перескажи» — заметка с названием ролика, меткой «интересное» и пересказом: {out}")
 ok("save_link" in TL.SAFE_CORE and "save_link" in TL.TOOLS, "save_link — среди безопасных умений")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('cmd == "note_meta"' in src and 'cmd == "notes_import_keep"' in src and 'cmd == "link_meta"' in src, "ядро: note_meta, notes_import_keep, link_meta")
 
 NOTES = [

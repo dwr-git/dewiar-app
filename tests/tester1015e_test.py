@@ -7,6 +7,7 @@
 — «поставь таймер» — а модель переспросила «скажи — поставлю»: просили прямо — ставь (и на компьютере — promise_test);
 — «составь список идей» — мини-программа «на экране» вместо списка; «нарисуй схему» — программа вместо схемы (и в экзамене);
 — «Напиши Андрею…», а его нет в «Близких» — модель говорит об этом, а не «Готово»."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, shutil, subprocess, sys, tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -41,7 +42,7 @@ F = type("F", (), {"workspace": ws})()
 ok(EA.AnswerMixin._fresh_note(F) == "", "заметок нет — не выдумываем")
 ws.save_note("Если у пользователя", "Если у пользователя отключён звук на устройстве, не синтезировать для него голос")
 ok(EA.AnswerMixin._fresh_note(F).startswith("Заметка: Если у пользователя отключён звук"), f"компьютер: «об этом» — только что записанная заметка: {EA.AnswerMixin._fresh_note(F)}")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("REF_RX.match(r.get(\"text\") or \"\")" in src or 'REF_RX.match(r.get("text") or "")' in src, "быстрое напоминание на компьютере проверяет «об этом»")
 shutil.copytree(ROOT / "android/assets/www", www)
 for x in ("entities.js", "rich.js", "skins.js", "skins.css"):

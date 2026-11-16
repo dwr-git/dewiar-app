@@ -148,8 +148,6 @@ class Snapshots:
                 dst.parent.mkdir(parents=True, exist_ok=True)
             os.replace(tmp, dst)
 
-    def has_step(self, step):
-        return any(d.get("kind") == "step" and d.get("step") == step for d in self.all())
 
     def take(self, step, why, kind="step", prune=True):
         """Запомнить outputs/. kind="step" — один раз на шаг (перед первой записью шага). -> (seq | None, текст-причина,

@@ -4,6 +4,7 @@
 Студия: свой раздел и значок на «Главной»; поиск по названию, логину, сайту, заметке; Enter — скопировать первый;
 «Скопировать» — через окно (clip_secret, стирание через 30 с); «Показать» — 15 с; «Придумать» — 16 знаков всех видов;
 правка, удаление; «Безопасность» ведёт в сейф. «Главная»: установленный плагин — значок, нажать — его карточка."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -28,7 +29,7 @@ lst = v.list()
 ok(lst[0]["login"] == "misha@ya.ru" and "value" not in lst[0] and lst[0]["length"] == 10, "список — без паролей, с длиной")
 v.put("Почта Яндекса", "Новый-456", item_id=x["id"])
 ok(v.get(x["id"])["value"] == "Новый-456" and v.get(x["id"])["login"] == "misha@ya.ru", "правка без логина — логин прежний")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('if a.get("id") and not val and a.get("kind") != "page":' in src, "правка в студии без нового пароля — пароль прежний (vault_put)")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok("def clip_secret(self, text, sec=30):" in app and "CanIncludeInClipboardHistory" in app and "cb.wait_for_text() == text" in app,

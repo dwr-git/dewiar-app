@@ -3,6 +3,7 @@
 «Ход работы (3)»: «Дела: итог», «Деньги: отчёт», навык contract-check — и ни слова итога (итог решил промолчать, а шаги
 дела уже показались). Теперь: шаги дела по расписанию в окнах не показываются (только итог или ничего); итогу дня навыки
 плагинов не даются (use_skill убран из его инструментов); итог молчит — строка в виджете «рассказать нечего», без голоса."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, threading
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -20,7 +21,7 @@ et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 i, j = et.index("def _use_tool("), et.index("def _reminder_link_files(")
 ok(et[i:j].count('self.emit("tool"') == 1 and et[i:j].count("_temit(") >= 7, "шаги дела по расписанию — не в окна (все события «tool» хода — через _temit)")
 ok('_temit = (lambda **kw: None) if getattr(turn, "via_job", False)' in et, "у дела по расписанию _temit молчит")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok('specs = [x for x in specs if x.get("name") != "use_skill"]' in ea and 'SUMMARY_JOB_RX.search(text.split("»", 1)[0])' in ea,
    "итогу дня навыки плагинов не даются")
 

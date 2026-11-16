@@ -5,6 +5,7 @@
 Поиск: под «Слепком знаний»; разделы, настройки внутри разделов (переход с подсветкой), слова людей («письма», «пароль»,
 «скорость голоса»), «Вопрос — ответ»; стрелки/Enter/Esc; Ctrl+K — из любого раздела; ничего — «Спросить Лиру».
 Почта: пять писем, новые — жирно с точкой, «N новых»; нажали — письмо целиком; нет почты — карточки нет."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -103,7 +104,7 @@ with sync_playwright() as p:
     pg.set_viewport_size({"width": 760, "height": 900}); pg.wait_for_timeout(200)
     ok(pg.evaluate("document.documentElement.scrollWidth <= innerWidth"), "узкое окно — без прокрутки вбок")
     b.close()
-eng = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_commands.py")
 ok('cmd == "mail_inbox"' in eng and 'return {"on": False, "items": []}' in eng and 'cmd == "mail_read"' in eng and '"mail_"' in eng.split("_KIDS_LOCKED")[1][:2000],
    "ядро: mail_inbox (нет почты — on: false, без сети), mail_read; в детском режиме почта закрыта")
 ok(not errs, f"без ошибок на странице: {errs[:3]}")

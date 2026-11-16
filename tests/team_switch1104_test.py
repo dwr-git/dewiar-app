@@ -3,6 +3,7 @@
 что до него говорила Лира («Кодер и Лира, вы работаете сообща?»). Теперь на месте чужого разговора — пометка «до этого
 пользователь говорил с коллегой — Лира; дальше отвечаешь ты — Кодер» (без самого разговора), а смена модели у персонажа
 — пометка «до этого отвечала модель A, дальше — B». Модель ответа хранится в истории и переживает перезапуск."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -75,7 +76,7 @@ ok(EA.model_label({"model": "chat", "title": "DWR Chat Qwen 3.8"}) == "DWR Chat 
    "имя модели: облачная — по названию, своя — по модели")
 
 # 4) модель ответа — в истории и в conversation.json
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok('turn.model = model_label(prof)' in src and '{"model": turn.model}' in src, "ответ запоминает, какой моделью дан")
 ok('model=model_label(prof) if prof else ""' in src, "окно модели знает нынешнюю модель персонажа")
 import conversation  # noqa: E402

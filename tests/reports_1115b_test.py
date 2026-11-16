@@ -3,6 +3,7 @@
 №738 (телефон, персонаж-юрист): «Какой же это юрист? Глючит на простом вопросе» — «Поясни про главу 39 ГК РФ»: по памяти
      «Ограничение дееспособности», а глава 39 — «Возмездное оказание услуг». Статья или глава закона и кодекс в вопросе —
      отвечать по найденному тексту (web_search → read_webpage); одно правило на компьютере и телефоне; сценарий экзамена."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, subprocess, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -25,7 +26,7 @@ ok(EA.law_unsourced("Что в статье 80 ТК?", wrong, []) and EA.law_uns
 ok(not EA.law_unsourced("Поясни про главу 39 ГК РФ", wrong, ["web_search", "read_webpage"]), "нашла и прочитала — хорошо")
 ok(not EA.law_unsourced("Прочитай главу 3 книги", wrong, []) and not EA.law_unsourced("Что такое ГК РФ?", wrong, []),
    "глава книги или вопрос без номера — не про это")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok("law_unsourced(ask0, step_text, called)" in ea, "в цепочке проверок ответа")
 sc = {s["id"]: s for s in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}
 ok("law_chapter_sourced" in sc and "дееспособн" in sc["law_chapter_sourced"]["expect"]["none"], "экзамен компьютера: «глава 39 ГК РФ»")

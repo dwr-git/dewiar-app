@@ -1,0 +1,183 @@
+"""Действия модели: фоновые задачи (начать, состояние, дополнить, остановить, продолжить) и позвать персонажа."""
+
+from pathlib import Path
+from tools_base import ToolError
+
+
+def _tm(ctx):
+    """TaskManager (tasks.py) из ctx, иначе ToolError."""
+    tm = ctx.get("tasks")
+    if tm is None:
+        raise ToolError("фоновые задачи недоступны")
+    return tm
+
+
+def _net_note():
+    """Честно: что именно получит код задачи с сетью в этой песочнице (S3) — своя сеть или сеть компьютера целиком."""
+    try:
+        import sandbox
+        return sandbox.net_note(sandbox.mode())
+    except Exception:  # noqa: BLE001
+        return "сеть этого компьютера, включая локальные службы"
+
+
+def _wants_net(a):
+    """start_task(network=true): модель просит сеть для кода задачи (строку «true» тоже понимаем)."""
+    v = (a or {}).get("network")
+    return v is True or str(v).strip().lower() == "true"
+
+
+def t_start_task(a, ctx):
+    goal = (a.get("goal") or "").strip()
+    if not goal:
+        raise ToolError("опиши цель задачи")
+    on = (a.get("on") or "").strip()
+    if on and ctx.get("remote_task"):                  # «на рабочем компьютере…» (0.56): задача названному своему компьютеру
+        try:
+            r = ctx["remote_task"](on, a.get("title") or "", goal, (a.get("if_off") or "").strip())
+        except ValueError as e:
+            raise ToolError(str(e)) from e
+        if r is not None:
+            return r
+    ask = _start_ask(a, ctx, goal)                     # HARNESS 7: большую задачу — сначала «план, срок, цена — начинаю?»
+    if ask:
+        return ask
+    try:
+        fl = a.get("folders") or []
+        fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
+        kw = {"folders": fl} if fl else {}
+        if _wants_net(a):                                  # сеть для кода задачи — с «да» человека (Toolbox.guard)
+            kw["net"] = True
+        t = _tm(ctx).create(a.get("title") or goal[:50], goal, a.get("project") or "", **kw)
+    except ValueError as e:
+        raise ToolError(str(e)) from e
+    return (f"Задача «{t.title}» запущена в фоне. План и журнал — в папке «Задачи» и в студии. Результата ЕЩЁ НЕТ — он "
+            "появится через несколько минут или дольше. Скажи пользователю одной фразой, что взялся и сообщишь, когда будет "
+            "готово; не говори «готово», «сделал», «вот презентация» — это неправда, пока задача не закончилась.")
+
+
+def _start_ask(a, ctx, goal):
+    """HARNESS, выпуск 7 (как у среды Claude: ясное — делать сразу, дорогое — один вопрос до старта). По завершённым задачам
+    того же вида: обычно дольше EST_ASK_MIN минут или дороже EST_ASK_TOKENS — не запускаем, а просим модель сказать
+    человеку план в двух фразах, срок и цену и спросить «начинаю?». confirmed=true — человек согласился; дело по
+    расписанию (_unattended) — спросить некого, запускаем. Оценки нет (мало истории) — запускаем сразу. -> текст или ""."""
+    if a.get("confirmed") or a.get("_unattended"):
+        return ""
+    try:
+        from tasks import EST_ASK_MIN, EST_ASK_TOKENS
+        est = _tm(ctx).estimate(goal)
+    except Exception:  # noqa: BLE001
+        return ""
+    if not est.get("n") or (est["minutes"] < EST_ASK_MIN and est["tokens"] < EST_ASK_TOKENS):
+        return ""
+    price = ""
+    f = ctx.get("talers_for_tokens")
+    if callable(f):
+        try:
+            tl = f(est["tokens"])
+            price = f", около {tl:.2f} талера" if tl else ""
+        except Exception:  # noqa: BLE001
+            price = ""
+    return (f"НЕ ЗАПУЩЕНО — сначала спроси. Похожие задачи ({est['n']}) обычно идут около {est['minutes']} мин и тратят около "
+            f"{(str(round(est['tokens'] / 1e6, 1)).replace('.', ',') + ' млн') if est['tokens'] >= 1e6 else str(est['tokens'] // 1000) + ' тыс.'} токенов{price}. Скажи человеку план в двух фразах, срок и цену и спроси: «начинаю?». "
+            "Согласится — вызови start_task снова с теми же полями и confirmed=true; захочет короче — сузь цель.")
+
+
+def t_task_status(a, ctx):
+    tm = _tm(ctx)
+    items = tm.list()
+    if not items:
+        return "Задач пока нет."
+    from tasks import tasks_brief
+    head = tasks_brief(items)
+    lines = [head + " (начни ответ с этой фразы; подробности — если спросят)"] if head else []
+    for x in items[:6]:
+        prog = x.get("progress") or [0, 0]
+        extra = f", план {prog[0]} из {prog[1]}" if prog[1] else ""
+        q = f", вопрос: {x['question']}" if x.get("question") else ""
+        w = f", ждёт: {x['wait_reason']}" if x.get("status") == "sleeping" and x.get("wait_reason") else ""
+        lines.append(f"«{x['title']}» — {x['status_ru']}, шагов {x.get('steps', 0)}{extra}{q}{w}"
+                     + (f". Итог: {x['result'][:300]}" if x.get("result") else ""))
+    try:                                                    # главное из блокнота текущей задачи — что уже известно
+        cur = tm.get("")
+        nb = cur.notebook() if cur.status != "done" else ""
+        facts = [ln.strip() for ln in nb.splitlines() if ln.strip().startswith("- ")][:8]
+        if facts:
+            lines.append(f"Блокнот «{cur.title}»:\n" + "\n".join(facts))
+    except (KeyError, AttributeError, OSError):
+        pass
+    return "\n".join(lines)
+
+
+def t_remove_task(a, ctx):
+    """24.10, владелец: «попросил удалить задачу — она долго рассказывала, что не умеет»."""
+    tm = _tm(ctx)
+    try:
+        t = tm.get(str(a.get("name") or "").strip() or "\u0000")
+    except KeyError as e:
+        raise ToolError(f"{e}. Задачи: " + ", ".join(f"«{x['title']}»" for x in tm.list()[:8])) from e
+    title = t.title
+    tm.delete(t.id)
+    return f"Задача «{title}» удалена — напоминаний о ней больше не будет."
+
+
+def t_tell_task(a, ctx):
+    """№551 (04.11): «я спросил дать права — молчит». Задача «Анализ кода и БД проекта» час ходила по своей папке, не зная, где
+    проект, а «может, тебе дать доступ» уходило в разговор — передать задаче было нечем. Теперь разговор передаёт задаче
+    сообщение, ответ на её вопрос или папки человека (папки — только после «да» человека, см. Toolbox.guard)."""
+    tm = _tm(ctx)
+    text = (a.get("text") or "").strip()
+    fl = a.get("folders") or []
+    fl = [fl] if isinstance(fl, str) else [str(x) for x in fl if str(x).strip()]
+    if not text and not fl:
+        raise ToolError("что передать задаче: text (сообщение, ответ) или folders (папки)")
+    try:
+        t = tm.get(a.get("name") or "")
+    except KeyError as e:
+        raise ToolError(str(e)) from e
+    if fl:
+        have = list(t.data.get("folders") or [])
+        add = []
+        for x in fl:
+            fp = Path(x).expanduser()
+            if not fp.is_dir():
+                raise ToolError(f"папки нет: {x}")
+            if fp.resolve() == Path(fp.resolve().anchor):
+                raise ToolError(f"«{fp.resolve()}» — это весь диск; задаче можно дать только конкретную папку")
+            if str(fp.resolve()) not in have:
+                add.append(str(fp.resolve()))
+        if add:
+            t.data["folders"] = have + add
+            t.save()
+        text = ((text + "\n\n") if text else "") + ("Пользователь дал задаче доступ к папкам: " + "; ".join(add or fl)
+                                                     + ". Читай и ищи в них без вопросов, менять — только с разрешения.")
+    try:
+        tm.tell(t.id, text)
+    except ValueError as e:
+        raise ToolError(str(e)) from e
+    return (f"Передала задаче «{t.title}»" + (f" доступ к папкам: {'; '.join(fl)}" if fl else "")
+            + ". Задача продолжит с этим — результата ещё нет, не говори, что готово.")
+
+
+def t_stop_task(a, ctx):
+    try:
+        t = _tm(ctx).stop(a.get("name") or "")
+    except KeyError as e:
+        raise ToolError(str(e)) from e
+    return f"Задача «{t.title}» остановлена."
+
+
+def t_resume_task(a, ctx):
+    try:
+        t = _tm(ctx).start(a.get("name") or "")
+    except KeyError as e:
+        raise ToolError(str(e)) from e
+    return f"Продолжаю задачу «{t.title}»."
+
+
+def t_call_persona(a, ctx):
+    fn = ctx.get("call_persona")
+    if fn is None:
+        raise ToolError("переключение персонажей недоступно")
+    task = str(a.get("task") or "").strip()[:1500]
+    return fn(str(a.get("name", "")), task) if task else fn(str(a.get("name", "")))

@@ -4,6 +4,7 @@
 Радар настроен — в подсказке Лиры одно-два самых интересных за сутки (бриф дня первым, без «👎 Не то»): рассказать к
 месту, не чаще раза за разговор; в «Утре с Лирой» — строкой; на телефон утро уходит со ссылкой — сводка дня говорит одну
 новость, под ней карточка «Читать». Радар не настроен — ничего не добавляется."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, subprocess, sys, tempfile, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -45,7 +46,7 @@ ok([x["title"][:3] for x in h["items"]] == ["FAA", "Май"], f"главное �
 ok(h["items"][0]["why"] == "первое такое внедрение в стране" and h["items"][0]["url"] == "https://x/2", "с объяснением и ссылкой")
 pl = r.prompt_line()
 ok("РАДАР" in pl and "FAA" in pl and "ОДНО" in pl and "не чаще раза за разговор" in pl and "Кликбейт" not in pl, f"подсказка Лиры: {pl[:120]!r}")
-ans = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ans = srctext.text(ROOT, "core/engine_answer.py")
 ok("base += r.prompt_line()" in ans, "в личной части подсказки — Радар (после выводов ночи)")
 d = {"radar": h}
 ctx = M.context(d)

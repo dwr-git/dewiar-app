@@ -1,6 +1,7 @@
 """«Радар» в движке (engine_insight.py): источники пачкой → обход (лента, сайт без ленты — лента со страницы, Telegram)
 → разбор моделью с лимитом в сутки → бриф → эволюция ночью → срочное весточкой (раз в час) → команды студии и
 инструмент модели insight_ask. Сеть и модель — подменные."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -118,7 +119,7 @@ ok("не настроен" in EI.ask_tool(eng2, "")["empty"], "источник�
 ok("не настроен" in EI.command(eng2, "insight_question", {"q": "что нового?"})["text"], "вопрос без источников — подсказка, как начать")
 import tools as T  # noqa: E402
 ok("insight_ask" in T.TOOLS and T.TOOLS["insight_ask"][2] == "safe", "инструмент модели есть и безопасный")
-ec = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+ec = srctext.text(ROOT, "core/engine_commands.py")
 en = (ROOT / "core/engine.py").read_text(encoding="utf-8")
 ok('cmd.startswith("insight_")' in ec and "engine_insight.radar(self).loop" in en, "команды студии и фоновый обход подключены")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} ошибок")

@@ -4,6 +4,7 @@
 — разметка: русский текст у data-i18n совпадает с ru.json (иначе студия и словарь разойдутся), все ключи есть;
 — храповик: русского мимо словарей не больше, чем было (tests/i18n_baseline.json; новый текст — только ключом);
 — ядро: core/i18n.py — формы чисел, язык по системе; окно с ?lang=en — меню по-английски, переключатель — без перезапуска."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, subprocess, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -100,7 +101,7 @@ ok(Settings(td / "new.json").get("ui", "lang") == "auto", "новая устан
 ok("_win_ru_keyboard()" in (ROOT / "core/i18n.py").read_text(encoding="utf-8"), "Windows: русская раскладка — значит, русский")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok("&lang={lang}{extra}" in app and "i18n.resolve(ui_settings().get(\"lang\"))" in app, "окна открываются сразу на языке программы")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok("Язык программы у человека — английский: отвечай по-английски" in ea, "программа на английском — Лира отвечает по-английски")
 
 os.environ["LANG"] = "en_US.UTF-8"                 # браузер берёт язык системы для «как в системе»

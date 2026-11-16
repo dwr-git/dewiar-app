@@ -4,6 +4,7 @@
   до конца» — тоже целиком; в первый раз фраза об обрыве подсказывает, где включить.
 - владелец: «на Windows виджет с прямыми углами, нет скруглений» — форма окна (регион) проверяется раз в 3 с и ставится
   заново, если слетела (winshell.has_shape), с записью в ui.log."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, re, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -19,7 +20,7 @@ def ok(c, m):
 
 from settings import DEFAULTS  # noqa: E402
 ok(DEFAULTS["tts"]["read_all"] is False, "по умолчанию — около минуты вслух, как раньше")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 m = re.search(r'voice_cap = 10 \*\* 9 if \(self\.s\.get\("tts", "read_all"\) or re\.search\(r"([^"]+)"', src)
 ok(bool(m), "предел снимается настройкой tts.read_all")
 rx = re.compile(m.group(1)) if m else re.compile("$^")

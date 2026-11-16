@@ -1,6 +1,7 @@
 """«Рисунки» в студии (31.10, владелец: «закрыл открытку, хотел показать — и не знаю, где она; в „Лира делает сама“ и в
 „Задачах“ нет»): раздел «Рисунки» виден, когда установлен «Художник», показывает работы с превью (ядро art_list),
 нажатие — работа в браузере. И сам «Художник»: надпись шире плашки — человеку не показываем, сначала поправить."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -24,7 +25,7 @@ r = A.draw("Открытка", SVG)
 ok(not r["shown"] and "НЕ ПОКАЗАНО" in r["say"] and "шире плашки" in r["say"] and "replace: true" in r["say"], f"надпись шире кнопки — не показано, просят поправить: {r['say'][:120]}")
 r2 = A.draw("Открытка", SVG.replace('font-size="44"', 'font-size="22"'), replace=True)
 ok(r2["shown"] and "студия → «Рисунки»" in r2["say"], "поправила — открыто, и сказано, где все работы")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('if cmd == "art_list":' in src, "ядро: команда art_list")
 from playwright.sync_api import sync_playwright  # noqa: E402
 items = [{"title": "Открытка", "kind": "picture", "at": "2026-10-31T10:00:00", "page": "Рисунки/Открытка.html",

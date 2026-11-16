@@ -88,5 +88,3 @@ def open_data(k, d):
     return json.loads(CC.unseal(k, CC.b64d(d.get("c") or "")).decode("utf-8"))
 
 
-def is_sealed(d):
-    return isinstance(d, dict) and d.get("e2e") and isinstance(d.get("c"), str)

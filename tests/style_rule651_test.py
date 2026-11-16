@@ -5,6 +5,7 @@
 — правило: программа сама пишет его в «Память/Уроки.md» («Как со мной говорить: …»), «записала» становится правдой
 (проверки молчат), и правило идёт к каждому вопросу — важнее характера. Повтор того же «записала» после просьбы в текст не
 идёт. Сценарий экзамена style_rule651."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -44,7 +45,7 @@ ok("Не рассказывай, что ты это записала" in line, "
 ok(not Q.style_rules_line(tmp / "нет.md"), "правил нет — строки нет")
 ok("Как со мной говорить: Говори короче" in Q.talk_lessons_block(p), "правило и в блоке уроков системной подсказки")
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("rule = Q.style_rule(text)" in src and "Q.add_style_rule(self.workspace.root / Q.TALK_LESSONS_FILE, rule)" in src
    and 'called.add("remember")' in src, "ядро: правило пишет программа, «записала» — правда")
 ok("Q.style_rules_line(self.workspace.root / Q.TALK_LESSONS_FILE)" in src, "ядро: правило — к каждому вопросу (_turn_context)")

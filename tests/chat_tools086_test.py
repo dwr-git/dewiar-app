@@ -15,6 +15,7 @@
   команда mute_toggle;
 — №155: карточка виджета — текст крупнее вместе с ней, уголок для растягивания виден, место запоминается при «спрятать»/выходе;
 — №159: Джарвис — ворчливый дворецкий с сухой иронией (новый текст, прежний — в OLD_DEFAULTS), сценарий экзамена."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import base64, json, os, re, socket, stat, subprocess, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -367,7 +368,7 @@ ok(q == "да" and not e._just_agreed(types.SimpleNamespace(asked=q, n=7)),
    "«Ещё раз» после «да» с действием (send_email): переспрошенное «да» — не согласие, «Выполнить?» спросят заново")
 e._chat_replay = 0
 ok(not e._just_agreed(types.SimpleNamespace(asked=q, n=7, replay=True)), "ход «Ещё раз»/«Изменить» помечен turn.replay — тоже не согласие")
-ans = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ans = srctext.text(ROOT, "core/engine_answer.py")
 ok("turn.replay = bool(rp and" in ans and "self._chat_replay = 0" in ans, "ask переносит метку повтора в ход и сбрасывает её")
 kb = engine_commands._kids_blocked
 lock = ["chat_thread_open", "chat_thread_new", "chat_thread_rename", "chat_thread_delete", "chat_threads", "chat_export", "chat_regen", "chat_edit", "chat_clear"]

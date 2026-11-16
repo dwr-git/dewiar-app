@@ -6,6 +6,7 @@
 - экзамен компьютера: память, заметки, напоминания и фоновые задачи прошлых испытаний попадали в следующие («на тебе
   висит отчёт», «Отчёт по продажам готова» вместо презентации) — теперь каждое испытание с чистого листа;
 - экзамен телефона: таймеры прошлых испытаний («сколько осталось?» — три таймера), имя и память владельца — тоже."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import asyncio, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -67,7 +68,7 @@ try:
 finally:
     httpx.get = real_get
 ok("не придумывай" in err, f"нет связи — честная ошибка, а не числа: {err}")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("weather" in T.TOOLS and '"weather"' in src.split("INFO_TOOLS", 1)[1][:200] and "инструментом weather" in src
    and "погода — инструментом weather" in T.TOOLS["web_search"][0],
    "погода — инструментом weather (в списке инструментов, подсказке и описании поиска)")

@@ -6,6 +6,7 @@
 - своя станция не подменяется чужой, если не отвечает; модель тоже может передать ссылку (play_radio url);
 - каталог не подсовывает станцию без общего слова с запросом; не нашли — так и сказать и подсказать, как добавить;
 - студия → «Музыка» → «Свои радиостанции»: список, «Включить», убрать, добавить по ссылке."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 from types import SimpleNamespace
@@ -70,7 +71,7 @@ ok(not run("вот статья https://habr.com/ru/articles/1/") and not run("�
    "просто ссылка в разговоре и файл без «включи» — не радио")
 src = (ROOT / "core/engine_music.py").read_text(encoding="utf-8")
 ok('not s.get("own")' in src and "не подменяем её чужой" in src and "Не нашёл станцию" in src, "своя не подменяется чужой; не нашли — подсказка")
-ok('"url": {"type": "string"' in (ROOT / "core/tools.py").read_text(encoding="utf-8"), "модель может передать ссылку (play_radio url)")
+ok('"url": {"type": "string"' in srctext.text(ROOT, "core/tools.py"), "модель может передать ссылку (play_radio url)")
 
 # студия
 LLM, PORT = free(), free()

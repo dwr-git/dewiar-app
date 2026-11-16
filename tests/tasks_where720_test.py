@@ -3,6 +3,7 @@
 одной командой терминала в разговоре (её отменило «остановись») — в «Задачах» ничего и не появилось.
 Теперь: в пустых «Задачах» под идеями — где появится задача (план, ход, результаты) и что ответ в разговоре ищут в
 «Чате»; модели в описании run_command — большая работа по папкам — start_task; сценарий экзамена task_folders720."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -17,7 +18,7 @@ def ok(c, m):
         fails.append(m)
 
 
-src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tools.py")
 m = re.search(r'"run_command": \((.+?)S\(\{"command"', src, re.S)
 ok(m and "start_task" in m.group(1) and "папки" in m.group(1), "run_command: большая работа по папкам — start_task, а не команда")
 sc = {s["id"]: s for s in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}

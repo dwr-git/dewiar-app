@@ -940,7 +940,6 @@ def open_claim(ask, answer, called=()):
 # «Посмотри сайт https://www.python.org/ и коротко напиши, что там есть» — «Я посмотрела сайт…» и рассказ по памяти,
 # read_webpage не было
 URL_RX = re.compile(r"https?://[^\s<>«»\"')]+|(?<![@\w.])(?:www\.)?[a-z0-9][a-z0-9-]{1,62}\.(?:ru|com|org|net|by|pro|io|dev|info|рф|su|ua|kz)(?:/[^\s<>«»\"')]*)?", re.I)
-READ_TOOLS = {"read_webpage", "open_url", "site_review", "web_search", "ask_knowledge"}
 _READ_ASK = re.compile(r"(?<![а-яё])(?:посмотри|глянь|прочитай|прочти|изучи|разбери|оцени|проанализируй|перескажи|кратко|коротко|"
                        r"что\s+(?:там|на\s+(?:нём|нем|сайте|странице))|о\s+ч[её]м|какие\s+разделы|что\s+есть)", re.I)
 

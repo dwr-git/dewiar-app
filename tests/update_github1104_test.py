@@ -8,6 +8,7 @@
 - фоновая проверка качает через случайную задержку 0–6 ч (помнится между запусками), ручная — сразу;
 - ручная проверка отвечает за секунды, скачивание идёт в фоне с ходом: «Скачиваю 0.82.2 — 45 % (с …)» — и в виджете;
 - publish_update.py пишет "github", только если sha256 файла на GitHub тот же."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import hashlib, json, os, subprocess, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -281,7 +282,7 @@ with sync_playwright() as p:
     ok("Скачиваю" not in pg.inner_text("#upd") or not pg.is_visible("#upd"), "фоновое скачивание — тихо")
     ok(not errs, f"без ошибок на странице: {errs[:3]}")
     b.close()
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok("self.updater.check(wait=False)" in src, "команда update_check не ждёт скачивания")
 srv.shutdown(); g.shutdown()
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

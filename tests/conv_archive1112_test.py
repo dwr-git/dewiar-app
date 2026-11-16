@@ -4,6 +4,7 @@
 блокнот задачи); 2) кончился разговор (долгая тишина, «новый разговор», кончился, пока программа выключена) — его
 содержание и последние реплики ложатся в «Память/Разговоры» (поиск по записям находит их: «о чём говорили во вторник?»),
 а не стираются."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -48,7 +49,7 @@ cv4.archive_to = lambda name, text: got.append((name, text))
 ok(cv4.restored(28800) == [] and not got, "после долгой тишины история не продолжается")
 ok(cv4.archive_pending() and got and "15:00" in got[0][1], "прошлый разговор ушёл в архив, когда программа была готова")
 ok(cv4.summary == "" and not cv4.archive_pending(), "состояние нового разговора чистое; повторно не пишем")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok("self.conv.archive(self.history)" in ea and '"Память" / "Разговоры"' in ea, "долгая тишина и «новый разговор» — в «Память/Разговоры»")
 ok("archive_pending" in (ROOT / "core/engine.py").read_text(encoding="utf-8"), "при запуске — то, что кончилось, пока программа была выключена")
 rc = (ROOT / "core/recall.py").read_text(encoding="utf-8")

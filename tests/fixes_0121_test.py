@@ -16,7 +16,8 @@ import eyes, tools  # noqa: E401,E402
 from PIL import Image  # noqa: E402
 b = io.BytesIO(); Image.new("RGB", (64, 40), (30, 60, 90)).save(b, "PNG")
 eyes.capture_screen = lambda env: b.getvalue()
-tools.pictures_dir = lambda: tmp / "home" / "Изображения"
+import tools_pc  # noqa: E402 — снимки экрана — в действиях компьютера (1.0.8)
+tools_pc.pictures_dir = lambda: tmp / "home" / "Изображения"
 r = tools.t_save_screenshot({}, {})
 shots = list((tmp / "home" / "Изображения" / "Снимки экрана").glob("*.png"))
 ok(len(shots) == 1 and shots[0].read_bytes()[:4] == b"\x89PNG" and "сохранён" in r, f"скриншот сохранён файлом: {shots[0].name if shots else '—'}")

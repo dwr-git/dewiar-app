@@ -12,6 +12,7 @@
 6. Сам экзамен: отметки «сделано» прошлых испытаний («Тройка» за первое дело, «7 дел за день», «хлеб куплен»); разговор
    до сценария (перебитый «Выполнить?») стирался «новым разговором»; «напиши статью для сайта» без сайта — честный ответ
    инструмента засчитывается; судье — что на стикере."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -73,7 +74,7 @@ ask = "Стихотворение Некрасова «Однажды в сту�
 ok(EA.poem_unsourced(ask, poem, []) and "web_search" in EA.poem_unsourced(ask, poem, []), "«прочитай стихотворение» без поиска — найди и читай со страницы")
 ok(not EA.poem_unsourced(ask, poem, ["web_search", "read_webpage"]) and not EA.poem_unsourced("Напиши четверостишие про осень", poem, []),
    "нашла и прочитала — хорошо; «напиши стих» — не про это")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok("or month_year_wrong(ask0, step_text)" in ea and "poem_unsourced(ask0, step_text, called)" in ea, "обе проверки — в цепочке проверок ответа")
 
 # 5. итог невыполненной задачи

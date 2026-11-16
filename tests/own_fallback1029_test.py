@@ -5,6 +5,7 @@
 - только «нет связи» со своей моделью на этом компьютере или в своей сети; облако, чужие сервисы, медленная модель — нет;
 - включили, а мозга Dewiar нет — заявка запасным: ключ подключается, но главной остаётся своя модель;
 - в студии переключатель виден, только когда главная — своя модель."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -92,7 +93,7 @@ next(c for c in vars(EB).values() if isinstance(c, type) and "_join_done" in var
 ok(connected == [False] and e.s.get("cloud", "join", "standby") is False and e.s.get("llm", "active") == "lm",
    "ключ пришёл — подключён запасным, главная модель та же")
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("fb = self._own_fallback(prof, e)" in src, "в ходе разговора: облако не ответило — запасной; своя модель не ответила — Dewiar (по согласию)")
 
 from playwright.sync_api import sync_playwright  # noqa: E402

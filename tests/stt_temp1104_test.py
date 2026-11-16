@@ -4,6 +4,7 @@
 настройки насовсем («Свой GigaAM не загрузился — речь распознаёт сервер Dewiar», и через секунду «GigaAM готов»).
 Теперь: на сервер — только если своя модель правда не загрузилась, и временно (stt.auto_from помнит выбор человека);
 при следующем запуске и раз в час — снова своя модель; студия показывает «временно — сервер Dewiar»."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, tempfile, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -162,7 +163,7 @@ ok('self.status.get("stt_ready") is False' not in eb and "self._stt_temp_server(
 ok("self._stt_retry_own()" in src[src.index("def _brain_watch"):], "раз в час при проверке мозга пробуем свою модель")
 ok("self._stt_temp_server()" in (ROOT / "core/engine_audio.py").read_text(encoding="utf-8"), "сбой загрузки GigaAM — сразу временная замена")
 ok("self._stt_choice_back()" in (ROOT / "core/engine.py").read_text(encoding="utf-8"), "при запуске — выбор человека")
-cmd = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok(cmd.count('{"stt": {"auto_from": ""}}') >= 3, "ручной выбор (настройки, «Сервер Dewiar» по ключу и по аккаунту) стирает замену")
 
 # 7) студия: отмечен выбор человека, строка «Сейчас» — «временно — сервер Dewiar»

@@ -17,6 +17,7 @@
 - экзамен: «Больше ничего не запланировано» — не провал проверки «нет: ничего не запланировано»; журнал сработавших
   напоминаний чистится между испытаниями; в отчёт — строка исключения, а не одно «Traceback».
 Обычный разговор («как дела?», «сколько градусов в прямом угле?», совет фильма) — без переспросов."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import asyncio, json, os, socket, subprocess, sys, tempfile, threading
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -136,7 +137,7 @@ ok(Q.hold_sentence("Ладно", "Запиши потраченную 2.000 ру
    and not Q.hold_sentence("Ладно", "Запиши потраченную 2.000 руб.", "Записала.", {"money_add"}, NM), "деньги: «записала» без money_add — придерживаем, после — нет")
 ok(Q.hold_sentence("Что по плану?", "Что по плану?", "В 13:17 презентация.", set(), NM, agenda=AG)
    and not Q.hold_sentence("Что по плану?", "Что по плану?", "В 10:00 встреча с Ирой.", set(), NM, agenda=AG), "планы: только дело не из планов")
-src_a = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src_a = srctext.text(ROOT, "core/engine_answer.py")
 ok("strict[0] = gate[0] and _hold_step(ask0, called, names0)" in src_a and "_hold_s(ask0, text, s_, called" in src_a
    and "_PL)" not in src_a and "_app\n" not in src_a, "ядро: строгий режим — по hold_step/hold_sentence на каждом шаге, а не весь ход")
 
@@ -171,7 +172,7 @@ w = T._when({"when": "завтра в 9", "text": "Встреча с Ирой �
 ok(w[0] == datetime.combine(datetime.now().date() + timedelta(days=1), datetime.min.time()).replace(hour=9), f"when «завтра в 9» главнее текста: {w[0]}")
 ok(T._when({"when": "каждый день в 8", "text": "таблетки"})[1] == {"kind": "daily", "time": "08:00"}, "повтор из when — как был")
 ok("show_page" not in T.SERVER_OFF and "open_url" in T.SERVER_OFF, "show_page на сервере не выключен (сохраняет файл), open_url — выключен")
-src_t = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+src_t = srctext.text(ROOT, "core/tools.py")
 ok('not (EXAM_LAUNCH and name in EXAM_ON)' in src_t and T.EXAM_ON == {"open_url", "open_app", "open_path", "council", "make_podcast", "save_screenshot"} and "if EXAM_LAUNCH:                                   # экзамен: вызов записан" in src_t,
    "экзамен (EXAM_LAUNCH): открыть сайт, программу, собрать совет, начать подкаст и снять экран «понарошку» можно (запуск записывается, облако на выпуск не тратится), звука нет")
 import images  # noqa: E402

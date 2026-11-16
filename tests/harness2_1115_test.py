@@ -2,6 +2,7 @@
 умолчанию да). Навыки — только именами (описания 1–3 подходящих — справкой к вопросу), «Ваши данные» — справкой только к
 вопросу о данных; подсказка не меняется от вопроса к вопросу (кэш сервера цел). tools.slim: false — всё как раньше.
 Сравнение размеров на живом ядре — lean_prompt1023 (короче на ~6 тыс. знаков)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -37,7 +38,7 @@ e.s = S({"tools": {}})
 ok(EA.AnswerMixin._slim_prompt(e, True) and not EA.AnswerMixin._slim_prompt(e, False), "по умолчанию облегчённая — только с действиями")
 e.s = S({"tools": {"slim": False}})
 ok(not EA.AnswerMixin._slim_prompt(e, True), "tools.slim: false — подсказка как раньше")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 st = src[src.index("    def _system_stable("):src.index("    def _slim_prompt(")]
 ok("if not self._slim_prompt(with_tools):" in st and "self._privacy_rule()" in st, "«Ваши данные» в подсказке — только без облегчения")
 ok("self.skills.prompt_lean() if (lean or self._slim_prompt(with_tools)) else self.skills.prompt()" in st, "навыки — именами при облегчении")

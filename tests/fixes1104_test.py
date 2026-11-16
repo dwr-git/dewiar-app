@@ -14,6 +14,7 @@
 - «PermissionError … close.tmp»: своё имя временного файла и повторы (core/atomicio.py).
 - телефон: «ResizeObserver loop …» — шум, не сбой.
 - идея №128: своё имя близкого; №131: dewiar-server со своей моделью — вход на dewiar.pro необязателен."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys, tempfile, threading, types
 from pathlib import Path
 from unittest import mock
@@ -182,7 +183,7 @@ ok("x-opencode-session" not in llm._headers({"kind": "openai", "base_url": "http
 # ---------- №525: «На паузе» ----------
 for f, bad in (("core/engine_answer.py", "Радио на паузе"), ("ui/studio/mymusic.js", "Радио на паузе"),
                ("android/assets/www/app.js", "Радио на паузе"), ("core/tools.py", "» на паузе\"")):
-    ok(bad not in (ROOT / f).read_text(encoding="utf-8"), f"{f}: «На паузе» — и для радио, и для своей музыки")
+    ok(bad not in srctext.text(ROOT, f), f"{f}: «На паузе» — и для радио, и для своей музыки")
 
 # ---------- №526: прокси с логином ----------
 import net  # noqa: E402
@@ -267,7 +268,7 @@ st = c.rename("p1", "")
 ok(next(p for p in st["people"] if p["pid"] == "p1")["name"] == "Без имени" and "p1" not in c.st["names"], "пустое имя — снова как он сам себя назвал")
 ok('core.call("close_rename"' in (ROOT / "ui/studio/close.js").read_text(encoding="utf-8")
    and 'id="cl-ren"' in (ROOT / "ui/settings.html").read_text(encoding="utf-8")
-   and 'cmd == "close_rename"' in (ROOT / "core/engine_commands.py").read_text(encoding="utf-8"), "студия: кнопка «Переименовать» в переписке")
+   and 'cmd == "close_rename"' in srctext.text(ROOT, "core/engine_commands.py"), "студия: кнопка «Переименовать» в переписке")
 
 # ---------- идея №131: dewiar-server со своей моделью — без входа ----------
 import importlib.machinery, importlib.util  # noqa: E401,E402

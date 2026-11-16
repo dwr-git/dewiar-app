@@ -1,6 +1,7 @@
 """Персонажи не отвечают друг за друга (отзыв 13.10: «обсудила задачу с Патриком, переключилась на Лиру — а она мне
 про задачу Патрика»). core/engine_answer.team_window: разговор с коллегой — одной справкой «это их разговор, не
 продолжай его», свой — дословно; перед вопросом после чужого разговора — «[Теперь пользователь обращается к тебе:]»."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -59,7 +60,7 @@ ok(msgs[-1]["role"] == "user" and msgs[-1]["content"].endswith("[Теперь п
 eng.history = H2
 msgs = cls._messages(eng, "Что думаешь?") if "cls" in dir() else EA.AnswerMixin._messages(eng, "Что думаешь?")
 ok("[Теперь пользователь обращается к тебе:]" in msgs[-1]["content"], "после передачи слова — вопрос явно к Лире")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('m["who"] = a["id"] + "~удалён"' in src, "удалили персонажа — его разговор в архив, новый с тем же именем начнёт с чистого листа")
 pp = (ROOT / "core/personas.py").read_text(encoding="utf-8")
 app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")

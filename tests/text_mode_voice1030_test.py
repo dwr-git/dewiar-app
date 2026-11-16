@@ -3,6 +3,7 @@
 ни строки, в виджете ни следа.
 Теперь: метка «голос выключен» в виджете видна всегда, нажали — режим выключен; «Прослушать» в текстовом режиме читает
 прежним голосом; включение и выключение — в журнале; поиск по студии не ставит курсор на флажки и переключатели."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, re, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -44,7 +45,7 @@ ok(len(ch) == 1 and isinstance(ch[0], tts.RemoteTTS), f"«Прослушать»
 ok(f._engines_for_speech(None, True)[0] is ch[0], "голос для «Прослушать» создаётся один раз")
 g = Fake({"tts": {"engine": "off", "remote": REM}, "ui": {}})
 ok(g._engines_for_speech(None, True) == [], "голос выключен сам («Без голоса») — «Прослушать» не включает его без спроса")
-cmd = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok("⌨ Текстовый режим включён" in cmd and "🔊 Текстовый режим выключен" in cmd, "включение и выключение текстового режима — в журнале")
 fj = (ROOT / "ui/studio/find.js").read_text(encoding="utf-8")
 ok(":not([type=checkbox]):not([type=radio])" in fj, "поиск по студии не ставит курсор на флажки и переключатели")

@@ -6,6 +6,7 @@
 обещание узнаётся и в этих формах; просим сделать до двух раз; не взялась и тогда — честно говорим, что ничего не сделано.
 Шаг плагина в виджете и «Чате» подписан по-человечески: «Плагин «Рекрутер»: разобрать резюме…».
 №461 ещё: путь к папке с резюме — кнопкой «Выбрать папку…» (тип настройки folder)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import asyncio, json, os, socket, subprocess, sys, tempfile, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -65,7 +66,7 @@ h = P.hint_for("Разбери резюме в папке", {}, {"recruiter": "�
 ok("не работают" in h and "не найдена программа" in h, "сервер плагина не запустился — честно сказать, а не обещать")
 ok("use_skill travel-buddy" in P.hint_for("Путешествие в ОАЭ — что взять?"), "плагин без своего кода — его навык")
 ok(P.hint_for("Сколько будет 2+2?") == "", "обычный вопрос — без справки о плагинах")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("keep=self._plugin_keep(text)" in src and "in keep]" in src, "маленькое окно модели: действия плагина, к которому просьба, не выбрасываются")
 
 # ---------- подпись шага плагина ----------

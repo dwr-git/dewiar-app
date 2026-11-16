@@ -3,6 +3,7 @@
 — инструмент прямо говорит модели «результата ЕЩЁ НЕТ, не говори "готово"» (компьютер и телефон);
 — модель всё равно сказала «Готово! Вот презентация» — помощник тут же поправляется вслух и в тексте; «взялась, сообщу,
   когда будет готово» — без поправки; модель промолчала — «Задача передана — пришлю уведомление», а не «Сделала»."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,7 +21,7 @@ def ok(c, m):
 
 
 import engine_brain as E  # noqa: E402
-src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tools.py")
 ok("Результата ЕЩЁ НЕТ" in src and "не говори «готово»" in src, "компьютер: start_task говорит модели, что результата ещё нет")
 early = lambda full, tools=("start_task",): E.BrainMixin._early_done(None, SimpleNamespace(full=full, tools_ok=list(tools)))  # noqa: E731
 for t, want in (("Готово! Презентация уже в папке.", True), ("Сделала! Вот презентация о погоде.", True), ("Отлично, отчёт готов.", True),
@@ -28,7 +29,7 @@ for t, want in (("Готово! Презентация уже в папке.", T
                 ("Приступаю. Как только закончу — скажу.", False)):
     ok(bool(early(t)) == want, f"компьютер: «{t}» — {'поправиться' if want else 'честно'}")
 ok(early("Готово!", ("set_reminder",)) == "", "без фоновой задачи «Готово» — правда, не поправляем")
-ans = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ans = srctext.text(ROOT, "core/engine_answer.py")
 ok('"Задача запущена — сообщу, когда будет готово." if "start_task" in turn.tools_ok' in ans and "self._early_done(turn)" in ans,
    "компьютер: модель промолчала после задачи — не «Готово.»; поправка — в ответе")
 

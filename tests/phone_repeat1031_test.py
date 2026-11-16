@@ -2,6 +2,7 @@
 через Alcor (заказ 125672). Записала: расход 3 795 руб, Alcor, заказ 125672.» Модель сказала итог до действия
 (money_add) и повторила его после. Теперь начало следующего круга придерживается: повтор уже сказанного не
 показывается и не озвучивается; новое — как обычно."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, subprocess, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -45,7 +46,7 @@ import engine_answer as EA  # noqa: E402
 ok(EA.repeat_head(A, "Записала: рас") is None and EA.repeat_head(A, "Записала: расход 3 795 руб, Alcor") is True
    and EA.repeat_head(A, "Ещё поставила напоминание на завтра") is False and EA.repeat_head(A, "Готово.", fin=True) is False,
    "компьютер: начало шага — повтор сказанного / новое / рано судить")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("probing = False" in src and "repeat_head(turn.full, probe)" in src and "repeat_head(turn.full, probe, fin=True)" in src,
    "компьютер: начало следующего шага придерживается, повтор не говорится")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

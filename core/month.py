@@ -6,7 +6,6 @@ gather(eng, ym) -> {ym, title («октябрь»), done {n, best_day, best_n, s
 cats}, notes {n}, diary {days}, watch {n}, care {n}, empty}. context(d) — строки для модели («расскажи мой месяц»).
 Студия: карточка на «Главной» в первые 7 дней месяца — о прошлом; голосом — «как прошёл мой месяц?» (инструмент month)."""
 import datetime as dt
-import json
 from pathlib import Path
 
 MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
@@ -139,5 +138,3 @@ PROMPT = ("Расскажи пользователю его месяц тепл�
           "доброе пожелание на следующий месяц. Без списков и без цифр подряд.")
 
 
-def as_json(d):
-    return json.dumps(d, ensure_ascii=False, default=str)

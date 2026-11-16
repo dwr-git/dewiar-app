@@ -5,6 +5,7 @@
 сказано), дело без времени — на 20:00. «Я позвонил в банк» закрывает дело из плана и считается в достижениях; без
 «отметь / готово» — только если это и правда дело из плана («я позвонил маме» не закрывает «позвонить в банк»).
 Компьютер (core/dayplan.py, engine_tools._plan_cmd/_mark_cmd) и телефон (planQuick/doneQuick) одинаково."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, shutil, subprocess, sys, tempfile, types
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -99,7 +100,7 @@ ET.ToolsMixin._mark_cmd(eng, "Готово, купил подарок маме")
 ev = [k for e, k in events if e == "done"][-1]
 ok(not eng.reminders.items and "новое достижение «Тройка»" in said[-1][0] and [a["name"] for a in ev["fresh"]] == ["Тройка"]
    and ev["added"] == ["Купить подарок маме"], f"третье дело — значок «Тройка», студия получает его в событии: {said[-1][0]}")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok(src.index("self._plan_cmd(text, via)") < src.index("parse_when(text)") and "self._mark_cmd(text, via)" in src, "план и отметки — до модели и до разбора «напомни»")
 brain = (ROOT / "ui/studio/brain.js").read_text(encoding="utf-8")
 ok('if ((e.added || []).length) doneCelebrate(e);' in brain and brain.count("doneCelebrate(") == 2,

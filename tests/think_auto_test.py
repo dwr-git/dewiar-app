@@ -1,6 +1,7 @@
 """Сложная просьба — модель думает перед ответом (компьютер): стихи, задачи, анализ, сравнение, планы, код, длинные
 просьбы. Простые вопросы, «почему…» и команды (включи песню, напомни) — сразу, без размышлений. Запрос к модели:
 без chat_template_kwargs {enable_thinking: false} и с запасом лимита; переключатель llm.think_auto в студии."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -48,7 +49,7 @@ srv.shutdown()
 ok("chat_template_kwargs" not in seen[0] and seen[0]["max_tokens"] == 6144, f"думает: размышления не выключаются, лимит 6144: {seen[0].get('chat_template_kwargs')} {seen[0]['max_tokens']}")
 ok(seen[1].get("chat_template_kwargs") == {"enable_thinking": False}, "обычный вопрос — размышления выключены, как раньше")
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok('wants_think(think_ask(text' in src and 'think="on"' in src and '"think_auto"' in src, "ядро: сложная просьба — профиль хода с think=on (выключается llm.think_auto)")
 from settings import DEFAULTS  # noqa: E402
 ok(DEFAULTS["llm"]["think_auto"] is True and 'data-k="llm.think_auto"' in (ROOT / "ui/settings.html").read_text(encoding="utf-8"),

@@ -1,6 +1,7 @@
 """Идея №141 (05.11, «Автопрефикс устройства в каждом запросе»): ассистент должен знать, на каком устройстве идёт разговор.
 Телефон пишет «Ты работаешь на телефоне пользователя (Android)» в каждой подсказке (app.js); компьютер — теперь тоже: «Ты
 работаешь на компьютере пользователя (Windows / Linux / macOS)» — крупно, без версии, чтобы начало запроса оставалось общим."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -16,7 +17,7 @@ def ok(c, m):
 
 import engine_answer as E  # noqa: E402
 ok(E.device_os() in ("Windows", "Linux", "macOS"), f"система крупно: {E.device_os()}")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 i = src.index("def _system_stable"); body = src[i:i + 3000]
 ok("Ты работаешь на компьютере пользователя ({device_os()})" in body, "в общей части подсказки компьютера — устройство")
 js = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")

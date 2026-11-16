@@ -8,6 +8,7 @@
 3. Предохранитель: настоящий сбой модуля (не ToolError) 3 раза за 10 минут — модуль на паузе 15 минут: инструментов
    у модели нет, модель знает, что сказать; удача обнуляет счёт; пауза кончилась — снова в строю. Серверы плагинов (MCP) —
    каждый отдельно. Ядро не выключается никогда. Сработал — счётчик «fuse:…» (имена плагинов не считаем)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -173,7 +174,7 @@ eng = (ROOT / "core/engine.py").read_text(encoding="utf-8")
 ok('self.toolbox.fuse.on_trip' in eng and '"fuse:" + ("plugin" if k.startswith("mcp:") else k)' in eng, "сработал — «fuse:<модуль>» / «fuse:plugin»")
 et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 ok("на паузе после сбоя" in et and "fuse.tripped" in et, "в разговоре — «на паузе после сбоя», а не «выключен пользователем»")
-src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tools.py")
 p = src[src.index("    def policy(self, name):"):src.index("    def specs(self")]
 ok("configured()" not in p and "paired()" not in p and 'startswith("site_")' not in p, "в policy больше нет веток отдельных служб — только дверь")
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

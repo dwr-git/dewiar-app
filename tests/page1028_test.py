@@ -2,6 +2,7 @@
 нашла, но потом создала кучу питоновских скриптов, и вроде создала HTML-разметку, но не в файле, а в самом чате, и начала
 зачитывать его структуру со всеми тегами». Теперь: инструмент show_page (файл в «Страницы» + браузер), подсказка модели,
 когда просят страницу; HTML в ответе — Лира сама сохраняет страницей и открывает; теги и CSS вслух не читаются."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json
 import os
 import sys
@@ -32,7 +33,7 @@ spec = T.TOOLS["show_page"]
 # экзамен ПК 0.81.1: на сервере без окна show_page не выключен, а честно сохраняет файл (tests/pc_exam0811_1104_test.py)
 ok("НЕ пиши HTML в ответе" in spec[0] and spec[2] == "safe" and "show_page" in T.SAFE_CORE and "show_page" not in T.SERVER_OFF,
    "инструмент show_page: безопасный, в основном наборе; на сервере без браузера — сохраняет файл")
-ok("show_page" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8").split("СЕЙЧАС ПРОСЯТ СТРАНИЦУ")[1][:200],
+ok("show_page" in srctext.text(ROOT, "core/engine_answer.py").split("СЕЙЧАС ПРОСЯТ СТРАНИЦУ")[1][:200],
    "просят страницу — модели подсказка: show_page, а не HTML в ответе")
 
 
@@ -40,7 +41,8 @@ class FakeS:
     def get(self, *k, default=None): return str(tmp / "ws") if k == ("workspace", "path") else default
 
 
-T.DRY = str(tmp / "launch.log")
+import tools_base  # noqa: E402 — запуск программ — в основе действий (1.0.8)
+tools_base.DRY = str(tmp / "launch.log")
 ws = Workspace(FakeS())
 r = T.t_show_page({"title": "Рецепты: из заметок", "html": "<section><h2>Сырники</h2><ul><li>творог 400 г</li><li>яйцо</li></ul></section>"},
                   {"workspace": ws})
@@ -71,7 +73,7 @@ ok(f2.exists() and "<h2>Тёмное дело</h2>" in pg2 and "<b>Милевы 
 ok("<script>alert" not in pg2 and "&lt;script&gt;" in pg2, "HTML внутри заметки — текстом, не выполняется")
 ok("file" in T.TOOLS["show_page"][1]["properties"] and "как есть" in T.TOOLS["show_page"][0], "модели — как показать свою заметку (file)")
 import boundaries as B  # noqa: E402
-ok("не отказывайся" in B.OWN_MATERIAL and "OWN_MATERIAL" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ok("не отказывайся" in B.OWN_MATERIAL and "OWN_MATERIAL" in srctext.text(ROOT, "core/engine_answer.py")
    and "МАТЕРИАЛ ПОЛЬЗОВАТЕЛЯ" in (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8"),
    "в подсказке компьютера и телефона: свой материал — показывать как есть, без нотаций")
 try:
@@ -85,7 +87,7 @@ doc = Q.page_html_in(ans)
 ok(doc.startswith("<!DOCTYPE html>") and doc.endswith("</html>"), "HTML-документ в ответе находится целиком")
 ok(Q.page_html_in("```html\n<html><body>a</body></html>\n```").startswith("<html>"), "и в блоке ```html")
 ok(Q.page_html_in("Обычный ответ без страницы, a < b.") == "", "обычный ответ — не страница")
-eng = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_answer.py")
 ok('self.toolbox.run("show_page"' in eng and "page_html_in(step_text)" in eng, "HTML в ответе — Лира сама сохраняет страницей и открывает")
 
 

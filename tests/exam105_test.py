@@ -7,6 +7,7 @@
 - playlist: песни не тех исполнителей — справка «только те, в которых уверена».
 - big_b13_dashboard: «echarts is not defined» — навык html-viz обещал готовые библиотеки в js/, которых нет.
 - help_ubuntu_cmd: ответ по разделу руководства — и событие app_help, как при attach."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -50,7 +51,7 @@ import engine_answer as EA  # noqa: E402
 for t in ("Проверь, сколько свободного места на диске этого компьютера.", "сколько места на диске?", "Лира, сколько осталось места на диске"):
     ok(EA.DISK_ASK_RX.match(t), f"«{t}» — место на диске сразу, без модели")
 ok(not EA.DISK_ASK_RX.match("сколько места занимает папка Загрузки"), "«сколько места занимает папка» — не то")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("DISK_ASK_RX.match((text or \"\").strip())" in src and "shutil.disk_usage" in src, "быстрый ответ о диске — до модели")
 
 import tempfile  # noqa: E402
@@ -58,12 +59,13 @@ shots = Path(tempfile.mkdtemp()) / "Снимки экрана"
 shots.mkdir()
 T._LAST_SAVED.update(path=str(shots / "x.png"), at=time.time())
 seen = []
-real_launch = T.launch
-T.launch = lambda cmd: seen.append(cmd)
+import tools_base as TB  # noqa: E402 — launch живёт в основе действий (1.0.8)
+real_launch = TB.launch
+TB.launch = lambda cmd: seen.append(cmd)
 try:
     r = T.t_open_path({"path": "/"}, {})
 finally:
-    T.launch = real_launch
+    TB.launch = real_launch
     T._LAST_SAVED.update(path="", at=0.0)
 ok("Снимки экрана" in r, f"open_folder_after_shot573: «/» сразу после снимка — папка снимка ({r})")
 

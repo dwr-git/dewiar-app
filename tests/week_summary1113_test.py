@@ -8,6 +8,7 @@
   считает (иначе заставляла перечислить постоянное);
 - «на следующую неделю» — с понедельника по воскресенье;
 - при переспросе после проверки модель не извиняется: человек прошлого ответа не видел."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, types
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -90,7 +91,7 @@ ok(Q.agenda_invented(ans, ag) == "" and Q.agenda_missed("итоги недели
 ok(Q.agenda_missed("итоги недели", "На следующую неделю ничего не запланировано.", ag) != "", "а разовое дело забыть нельзя")
 ok(Q.agenda_invented("в пятницу в 15:25 виклик", ag) == "", "время постоянного не считается выдуманным")
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("не извиняйся и не говори об ошибке" in src, "переспрос после проверки — без «Извини, я ошиблась»")
 
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

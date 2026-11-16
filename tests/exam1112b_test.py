@@ -5,6 +5,7 @@
 - draw_picture_honest: «сгенерируй картинку» → show_images и «Показал.» — переспрос: сказать, что картинки найденные;
 - open_folder_after_shot573: в экзамене (ядро --server) снимка экрана не было вовсе — «инструмента нет»; теперь снимок
   «понарошку» (запись + маленький PNG в «Снимки экрана»), чтобы «открой эту папку» проверялось."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -52,7 +53,7 @@ ok(not Q.found_pics_claim(pic, "Рисовать пока не умею — во
 ok(not Q.found_pics_claim(pic, "Нарисовала.", {"show_images", "artist-main__art_draw"}), "нарисовала «Художником» — не трогаем")
 ok(not Q.found_pics_claim("покажи котов-космонавтов", "Показала.", {"show_images"}), "просили показать, а не нарисовать — не трогаем")
 
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 for name in ("weather_invented(text", "call_claim(text", "found_pics_claim(text"):
     ok(name in ea, f"проверка {name.split('(')[0]} — в цепочке проверок ответа")
 

@@ -2,6 +2,7 @@
 запускает молча — по завершённым задачам того же вида знает, сколько такая обычно идёт и стоит, и сначала говорит
 человеку «план в двух фразах, срок, цена — начинаю?». Простые и без истории — сразу; «да» — start_task с confirmed;
 дело по расписанию — спросить некого, запускаем."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import datetime as dt, os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -67,12 +68,12 @@ made.clear()
 r4 = tools.t_start_task({"goal": "Изучи рынок самокатов", "_unattended": True}, ctx)
 ok("запущена" in r4 and made, "дело по расписанию — спросить некого, запускаем")
 spec = tools.TOOLS["start_task"][1] if hasattr(tools, "TOOLS") else None
-src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tools.py")
 ok('"confirmed": {"type": "boolean"' in src, "у start_task есть confirmed")
 et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 ok('args = dict(args, _unattended=True)' in et and "def _talers_for_tokens" in et, "дело по расписанию помечено; цена — из цен облака")
 # большая просьба не влезла в 6 шагов разговора — на последнем шаге предложить задачу (а не молча оборвать)
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 i = ea.index("if step == 5 and specs:")
 blk = ea[i:i + 1200]
 ok('"start_task" not in called' in blk and "Сделать это задачей?" in blk, "последний шаг разговора: не доделал — предлагает «сделать это задачей»")

@@ -5,6 +5,7 @@
    планах (там привычки снова есть) — для сводки он смотрит только её данные;
 3) после неё — бесконечное «Я вас слушаю» при выключенном микрофоне: окно «ваша очередь» при выключенном микрофоне не
    открывается, а если «слушаю» осталось, а слух не идёт, — сторож раз в 5 с возвращает покой."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -69,7 +70,7 @@ w.follow_up_until, w._listen_live = time.monotonic() + 5, 0
 ok(not EM.MusicMixin._listen_watchdog(w), "окно ещё открыто — не трогаем")
 w.follow_up_until, w.hold = 0, {"pcm": []}
 ok(not EM.MusicMixin._listen_watchdog(w), "держат «говорить» — не трогаем")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok('if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0):\n            follow = 0.0' in ea,
    "микрофон выключен — «ваша очередь» после ответа не открывается")
 au = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")

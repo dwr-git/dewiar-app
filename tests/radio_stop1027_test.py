@@ -1,6 +1,7 @@
 """№315 (пакет 27.10): «много раз просил выключить радио — Джарвис отвечает „отключил“, а оно играет». «Выключить
 радио», «выключи, пожалуйста, радио» не узнавались быстрой командой, модель включала новую станцию. Теперь — стоп без
 модели; «включи радио» по-прежнему включает."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -20,7 +21,7 @@ for t in ("выключить радио", "выключи пожалуйста 
     ok(music.parse(t, active=True) == {"op": "stop"}, f"«{t}» — стоп без модели")
 ok(music.parse("включи радио", active=True) != {"op": "stop"}, "«включи радио» — не стоп")
 ok(music.parse("выключи свет", active=True) is None, "«выключи свет» — не про радио")
-tools_src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+tools_src = srctext.text(ROOT, "core/tools.py")
 ok("media_control с action stop, а не play_radio" in tools_src, "модели сказано: выключать — media_control, а не play_radio")
 print("ИТОГ:", "OK" if not fails else f"{len(fails)} ошибок")
 sys.exit(1 if fails else 0)

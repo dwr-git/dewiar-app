@@ -6,6 +6,7 @@
 — «Server disconnected without sending a response» и шаблон jinja в LM Studio (№281) — по-русски, с советом;
 — №332: macOS — «macOS», а не «Linux»;  №311: в отчёте max_tokens не прячется звёздочками;
 — №309: папка ассистента — один и тот же (раскрытый) путь, relative_to не падает."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, subprocess, sys, tempfile, types
 from pathlib import Path
 from unittest import mock
@@ -24,7 +25,8 @@ def ok(c, m):
 
 import tools  # noqa: E402
 fake = types.SimpleNamespace(shell=lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired("powershell", 30)))
-with mock.patch.object(tools, "WIN", True), mock.patch.object(tools, "winsys", fake, create=True), \
+import tools_base  # noqa: E402 — флаги и winsys — в основе действий (1.0.8)
+with mock.patch.object(tools_base, "WIN", True), mock.patch.object(tools_base, "winsys", fake, create=True), \
         mock.patch.dict(os.environ, {"DEWIAR_DRY_TOOLS": ""}):
     try:
         r = tools.t_run_command({"command": "Get-ChildItem Z:\\ -Recurse"}, {})
@@ -72,7 +74,7 @@ e = httpx.HTTPStatusError("400", request=httpx.Request("POST", "http://127.0.0.1
 t = llm._humanize(e, "http://127.0.0.1:1234/v1", "m")
 ok("шаблон" in t and "lmstudio-community" in t, f"jinja — подсказка про шаблон: {t[:80]!r}")
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 import re  # noqa: E402
 rx = re.search(r'secret = re.compile\(r"([^"]+)", re.I\)', src).group(1)
 sec = re.compile(rx, re.I)

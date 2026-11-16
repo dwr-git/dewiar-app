@@ -1,6 +1,7 @@
 """Заметки на компьютере легко найти (отзыв 11.10: «сложно найти, а они важны»): «Календарь» → «Заметки» — все заметки
 папки ассистента (и пришедшие с телефона), новые сверху, поиск по словам в названии, тексте и папке (без регистра и «ё»),
 подсветка найденного, правка на месте, «Новая заметка». Ядро — workspace.notes, студия — с подменённым ядром."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, tempfile, time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -101,7 +102,7 @@ with sync_playwright() as p:
     ok("**" not in r["plain"] and "```" not in r["plain"] and "схема" in r["plain"], f"строка в списке — без значков Markdown: {r['plain']}")
     b.close()
 ok(not errs, f"без ошибок на странице: {errs[:3]}")
-cmds = (ROOT / "core/engine_commands.py").read_text()
+cmds = srctext.text(ROOT, "core/engine_commands.py")
 ok('cmd == "notes_list"' in cmds and '("note_attach", "note_file")' in cmds, "ядро: notes_list, note_attach, note_file")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

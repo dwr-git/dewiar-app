@@ -2,6 +2,7 @@
 «верх правильный, низ не добавлено» — в «Куда ушли деньги» только три категории, сумма не сходилась с «потрачено».
 №406 (компьютер): «выключи свет в зале» выключал свет везде (короткое «Зал» не узнавалось в «зале»), а «выключи сет в зале»
 (ослышка) — модель звала power: выключить компьютер."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, subprocess, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -61,7 +62,7 @@ ok(Q.money_claim("Ладно, остановимся на 65 тысячах.", "
    and Q.saved_claim("Ладно, остановимся на 65 тысячах.", "Окей, записала 65 000.", []).startswith("ПРОВЕРКА"),
    "сумма-решение («остановимся на 65 тысячах») — не трата: общая проверка, а не money_add")
 ok("money_add" in Q.saved_claim("потратил 300", "Записала.", []), "общая проверка «записала» тоже называет money_add")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("money_claim(text, step_text, called)" in src, "компьютер: проверка в ходе ответа")
 import json  # noqa: E402
 sc = json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]

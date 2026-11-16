@@ -2,6 +2,7 @@
 кнопкой микрофон (или сочетанием «Позвать Лиру» в режиме вкл/выкл) не запоминался — после перезапуска Dewiar снова
 слушал. Теперь выбор кнопки хранится в настройках (ui.mic_off), ядро поднимается с ним; включили кнопкой или вышли из
 текстового режима — снова слушает и после перезапуска. Отдых и замок «Только кнопка» — своими путями, их не трогаем."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -47,7 +48,7 @@ ok(f._mute_keep(f.set_mute(False)) is False and Settings(path).get("ui", "mic_of
 f.set_mute(True)                                    # отдых и другие пути — без _mute_keep: не запоминаются
 ok(Settings(path).get("ui", "mic_off") is False, "выключение не кнопкой (отдых) — не запоминается")
 
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('return self._mute_keep(self.set_mute(bool(a.get("on"))))' in src, "команда mute (кнопка виджета) запоминает выбор")
 ok("return self._mute_keep(self.set_mute(not self.muted))" in src, "mute_toggle (сочетание клавиш) запоминает выбор")
 ok("self._mute_keep(self.set_mute(False))" in src, "вышли из текстового режима — микрофон включён и после перезапуска")

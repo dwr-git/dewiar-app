@@ -15,6 +15,7 @@
    без потока ошибок; «модели не хватило контекста» (LM Studio) — повтор с короткой историей и понятный совет;
    проверка порта окном — не «сбой» в журнале.
 7. Windows: «оба окна просто чёрные» — пустое окно узнаём по снимку (blank_image) и включаем простую отрисовку."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import collections, http.server, json, logging, os, shutil, socket, subprocess, sys, tempfile, threading, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -90,7 +91,7 @@ import net as _net  # noqa: E402
 ok(_net.lan_url("http://127.0.0.1:1234/v1", "192.168.1.5") == ("http://192.168.1.5:1234/v1", True)
    and _net.lan_url("https://api.openai.com/v1", "192.168.1.5") == ("https://api.openai.com/v1", False),
    "QR для телефона: модель «127.0.0.1:1234» компьютера → адрес компьютера в домашней сети (19.10: 16 сбоев «Failed to connect to 127.0.0.1»)")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok("_net.lan_url(" in src and "Serve on Local" in src, "phone_config: адрес модели переписывается и есть подсказка про LM Studio / Ollama")
 
 # ---------- 6. рабочая папка, Obsidian, контекст ----------

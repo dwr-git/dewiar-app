@@ -203,8 +203,6 @@ class RemoteMixin:
                 log.debug("Telegram: проверка напоминаний: %s", e)
         return occ in getattr(self, "_tg_fired", set())
 
-    def _on_telegram(self, kind, d):
-        self._on_messenger(self.telegram, kind, d)
 
     def _on_messenger(self, tg, kind, d):
         """События бота Telegram или MAX: подключение, кнопки подтверждения и будильника, «стоп», «статус» и

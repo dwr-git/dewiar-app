@@ -4,6 +4,7 @@
      прямо: свежие данные (курсы, цены, погода, новости, что по ссылке) не называть и не говорить, что где-то посмотрела;
      совет про окно — 16384 (с действиями нужно 12–16 тыс.), а не 8192.
 №759: «Посты в каналы и группы» — добавить канал можно, удалить нельзя → крестик (проверка — pbot_posts_studio1029)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -17,7 +18,7 @@ def ok(c, m):
         fails.append(m)
 
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 i = src.index("Модель не справилась с инструментами (%s)")
 part = src[i:i + 4000]
 ok("Свежие данные — курсы валют" in part and "не говори, что где-то их посмотрела" in part, "№760: без действий — свежих цифр не выдумывать")

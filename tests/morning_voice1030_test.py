@@ -2,6 +2,7 @@
 без данных «Утра» (погода, дела, сотрудники, клиенты, почта), и она могла сочинить. Теперь фраза — та же сводка, что
 кнопка «Расскажи утро» на «Главной»: ход модели с поручением _job_prompt({"brief": True}) (данные — morning.gather).
 Посторонние «расскажи про утро в деревне» — не перехватываются. И сценарий экзамена morning_tell — на компьютере."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -23,7 +24,7 @@ no = ["расскажи про утро в деревне", "расскажи у
       "расскажи что-нибудь про утро", "сводка погоды"]
 ok(all(EA.MORNING_RX.match(t) for t in yes), f"«Расскажи утро» и похожее — сводка: {[t for t in yes if not EA.MORNING_RX.match(t)]}")
 ok(not any(EA.MORNING_RX.match(t) for t in no), f"постороннее — не перехватываем: {[t for t in no if EA.MORNING_RX.match(t)]}")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 i = src.index("MORNING_RX.match(text)")
 ok('self.ask(self._job_prompt({"brief": True}), via=via, raw=True, shown=text)' in src[i:i + 400] and "not K" in src[i - 80:i],
    "голосом — та же сводка, что кнопка (поручение brief с данными «Утра»), в детском режиме — нет")

@@ -7,6 +7,7 @@
 shot_hide) и возвращается всегда, даже если страница не вернула его сама.
 Идея №142 (05.11): погода без названного города — город «Утра», потом из памяти («живу в Балашове», «я из Минска»);
 «Утро» на «Главной» показывает погоду по городу из памяти (city_mem); «Дача и огород» без «Где дача» — тот же город."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys, tempfile, time
 from pathlib import Path
 from unittest import mock
@@ -148,7 +149,7 @@ ok(g["city"] == "" and g["city_mem"] == "Балашове" and g["weather"]["pla
    f"«Утро»: погода по городу из памяти, сам город «Утра» не задан (карточка предложит «Запомнить город»): {g.get('city_mem')}")
 
 # «Дача и огород» без «Где дача»: дело получает город человека
-ec = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+ec = srctext.text(ROOT, "core/engine_commands.py")
 ok('P.job_text(pid, jid, fallback={"city": home_city(self)[0]})' in ec and '"title": P.job_label(pid, jid)' in ec,
    "дело «Дачи» заводится с городом из «Утра»/памяти и с именем для людей")
 

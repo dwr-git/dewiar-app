@@ -3,6 +3,7 @@
 с учётом всей вкладки… одни функции — для выделенного, другие — для всей страницы»).
 core/padai.py: подсказки модели, чистка ответа, поток событий; ui/padai.js: меню по правой кнопке и ✨, карточка ответа,
 «Заменить» / «Вставить сверху» / «Вставить схему», Ctrl+Z, схема Mermaid картинкой и блоком ```mermaid в файле."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, threading, time, urllib.parse
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -84,7 +85,7 @@ r1 = A3.start({"act": "rephrase", "text": "раз", "doc": ""}); r2 = A3.start({
 time.sleep(0.6)
 ok(not any(x.get("done") and x.get("id") == r1["id"] for x in e3.ev) and any(x.get("done") and x.get("id") == r2["id"] for x in e3.ev),
    "новый запрос останавливает прежний")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('cmd in ("pad_ai", "pad_ai_stop")' in src, "команды pad_ai и pad_ai_stop у ядра")
 
 # ---------- страница ----------

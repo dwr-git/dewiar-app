@@ -2,6 +2,7 @@
 засчитывается по фразе и по открытому разделу, урок пройден — следующий завтра (или «следующий сейчас»), предложение —
 раз в день и не после «не сегодня». Часть 2 — настоящее ядро с моком модели: фразы урока засчитываются сами, «урок дня»
 отвечает без модели, утреннее приветствие предлагает урок; студия → «Неделя с Лирой» и карточка на «Главной»."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import asyncio, json, os, socket, subprocess, sys, tempfile, time
 from datetime import date, timedelta
 from pathlib import Path
@@ -69,7 +70,7 @@ ok(not bad, f"каждый «Откройте…» ведёт в существ�
 L4 = tm["lessons"][3]
 ok([x.get("open") or x.get("did") for x in L4["steps"]] == ["pbot", "pbot_connect", "pbot_try"],
    "урок «Бот персонажа»: открыть раздел, подключить бота, проверить ответ — засчитываются сами")
-cmds = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+cmds = srctext.text(ROOT, "core/engine_commands.py")
 ok('self._course_did("pbot_connect")' in cmds and 'self._course_did("pbot_try")' in cmds, "ядро отмечает шаги «подключил» и «проверил»")
 
 from playwright.sync_api import sync_playwright  # noqa: E402

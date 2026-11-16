@@ -2,6 +2,7 @@
 (site_create, site_edit) и рисунок «Художника» (art_draw, art_animate) — снимок экрана телефона модели со зрением
 (engine.eyes_page, Q.LOOK): видно пустоту, наложения, обрезанное, нечитаемое — замечание уходит модели вместе с
 результатом («поправь сразу»). Модель без зрения, браузера нет — молча; тот же файл дважды не смотрим."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -60,7 +61,7 @@ else:
 ok(ET.art_page('{"saved": "/a/Кот.svg", "page": "/a/Кот.html"}') == "/a/Кот.html" and ET.art_page("нет") == "", "из ответа «Художника» — страница рисунка")
 ok(tools._eyes({"eyes": lambda p, g: "текст белым по белому"}, "/x/index.html", "кофейня").startswith(" ПОСМОТРЕЛА НА РЕЗУЛЬТАТ")
    and tools._eyes({}, "/x", "") == "" and tools._eyes({"eyes": lambda p, g: ""}, "/x", "") == "", "сайт: замечание — к ответу инструмента; без глаз — ничего")
-src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tools.py")
 ok(src.count("_eyes(ctx, page,") == 2, "смотрим после site_create и site_edit")
 et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 ok('re.search(r"art_(?:draw|animate)$", name)' in et and "self.eyes_page(art_page(" in et, "смотрим после art_draw и art_animate")

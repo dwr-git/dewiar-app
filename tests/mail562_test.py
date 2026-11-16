@@ -4,6 +4,7 @@
 кнопке, ссылки — списком под письмом; «Текстом» — как раньше. «Удалить» — в «Корзину» почты (папка по пометке \\Trash,
 иначе по имени), «В спам» — в «Спам» (\\Junk), «Переслать» — письмо целиком (оригинал вложением .eml); голосом — то же
 (manage_email, с вопросом «Удалить письмо …?»). Почта — поддельный IMAP/SMTP на 127.0.0.1."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import base64, email, json, os, re, socket, socketserver, sys, tempfile, threading
 from email.message import EmailMessage
 from pathlib import Path
@@ -238,7 +239,7 @@ SENT.clear()
 out = T.TOOLS["manage_email"][3]({"action": "forward", "uid": "2", "to": "andrey@example.org"}, {"mail": mm})
 ok("переслано: andrey@example.org" in out and SENT, f"«перешли Андрею»: {out!r}")
 ok("manage_email" in T.NET_TOOLS, "при стоп-кране «ничего в интернет» — инструмента нет")
-eng = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_commands.py")
 ok('if cmd == "mail_act":' in eng and '"mail_"' in eng.split("_KIDS_LOCKED")[1][:900], "студия: mail_act; в детском режиме — закрыто (mail_)")
 
 # ---------- студия: рамка, картинки, ссылки, кнопки ----------

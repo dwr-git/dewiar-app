@@ -2,6 +2,7 @@
 Между делом сказано «завтра иду к врачу», «в пятницу собеседование», «мама приезжает в субботу» — Лира запоминает с датой;
 событие прошло — один раз тепло спрашивает, как прошло: в приветствии (вернулись к компьютеру) или в конце ответа.
 Вопросы, просьбы о напоминании, погода, чужие дела — не события. Компьютер (care.py) и телефон (app.js)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import datetime as dt, json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -47,7 +48,7 @@ clock[0] = dt.datetime(2026, 11, 8, 10, 0)
 ok(c.context() == ("", []), "прошло больше 5 дней — уже не спрашивает")
 p = presence.plan(4 * 3600, dt.datetime(2026, 10, 30, 10), [], [], dt.datetime(2026, 10, 30, 9), now=dt.datetime(2026, 10, 30, 14), care="[Заботливая память] …")
 ok(p and p["kind"] == "back" and "один тёплый вопрос" in presence.prompt(p), "вернулись к компьютеру — в приветствии можно один тёплый вопрос")
-eng = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_answer.py")
 ok("care_context(text, turn)" in eng, "в ответах — тоже (care_context)")
 
 # телефон

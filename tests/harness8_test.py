@@ -8,6 +8,7 @@
 его папка), — отказ с подсказкой (file_read → file_edit или новый файл рядом); свои файлы и дописывание — как раньше.
 П.7 — ждать события, а не гадать со временем: wait on_file (файл появился или изменился) и on_mail (пришло новое
 письмо от кого-то или о чём-то); minutes/until — крайний срок (по умолчанию 3 дня)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -192,7 +193,7 @@ it = [{"title": "Отчёт по ценам", "status": "running", "progress": [
 b = tasks.tasks_brief(it)
 ok(b == "Коротко: в работе «Отчёт по ценам» — 3 из 5 по плану; ждёт вашего ответа «Сайт кофейни»; на паузе или ждёт события "
    "«Погода»; сегодня готово 1 («Письма»).", f"сводка задач одной фразой: {b}")
-ok(tasks.tasks_brief([]) == "" and "tasks_brief(items)" in (Path(tasks.__file__).parent / "tools.py").read_text(encoding="utf-8"),
+ok(tasks.tasks_brief([]) == "" and "tasks_brief(items)" in srctext.text(Path(tasks.__file__).parent.parent, "core/tools.py"),
    "нет задач — без сводки; task_status начинает со сводки")
 
 if fails:

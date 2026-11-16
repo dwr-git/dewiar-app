@@ -2,6 +2,7 @@
 разговора оставался только её ответ словами. Теперь то, что узнали инструменты (поиск, погода, команда, файл…), коротко
 (до 280 знаков, до 3 за ответ) лежит в истории и идёт модели с последними 4 ответами; пароли — ***; модель не повторяет
 эту пометку человеку. И (GitHub #7) повторный запуск на Linux возвращает виджет на экран."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -51,7 +52,7 @@ spoken = cf.feed("Провайдер — Ростелеком.\n[узнано и
 ok("узнано" not in spoken and "Ростелеком" in spoken and "Всё" in spoken, f"вслух пометку не читаем: {spoken!r}")
 src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
 ok("name in FACT_TOOLS" in src and "turn.facts" in src, "находки инструментов копятся в ходе")
-ok('"facts": facts' in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"), "и ложатся в историю с ответом")
+ok('"facts": facts' in srctext.text(ROOT, "core/engine_answer.py"), "и ложатся в историю с ответом")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok("api.bring_back()" in app and "_keep_on_screen(gw)" in app[app.index("def bring_back"):app.index("def tray_state")],
    "Linux: повторный запуск — виджет поверх и целиком на экране (GitHub #7)")

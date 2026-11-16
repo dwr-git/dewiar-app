@@ -5,6 +5,7 @@
 - место из вопроса («в Праге») должно быть в запросе поиска; его нет, а есть другое слово с большой буквы — поиск не
   выполняется, модель один раз просят искать заново, с местом из вопроса;
 - месяц без года — ближайший будущий: к вопросу — «январь — 2027 года», и в поиске, и в ответе."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import asyncio, json, os, socket, subprocess, sys, tempfile, threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -49,7 +50,7 @@ ok("январь — 2027 года" in m and "в запросах поиска" 
 ok("декабрь — 2026 года" in month_years("Отпуск в декабре", n) and "ноябрь — 2026 года" in month_years("до 20 ноября", n),
    "декабрь и ноябрь — этого года")
 ok(month_years("с 1 по 14 января 2027", n) == "" and month_years("Как дела?", n) == "", "год назван или месяца нет — без подсказки")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("my = month_years(text, now)" in src, "подсказка о годе — в справке к вопросу про даты")
 
 

@@ -3,6 +3,7 @@
 Студия: раздел рядом с «Близкими» — код, печать, правила, друзья; «Позвать в Близкие» → ждём ответа; «Написать» ведёт в
 переписку; в «Близких» — «… зовёт вас» с «Принять». Телефон: вкладки «Близкие» | «Рефералы» в одном листе. Ядро — close.py.
 Сервер — tests/close_server_test.py."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -71,7 +72,7 @@ ok(c.ref_close("r2") == {"offered": True} and c.ref_close("r3")["person"]["name"
 c.st["offers"] = [{"pid": "pV", "name": "Вера"}]
 st = c.offer("pV", True)
 ok([p["name"] for p in st["people"]] == ["Вера"] and st["offers"] == [] and calls[-1] == ("/close/offer", {"pid": "pV", "yes": True}), "ядро: «Принять» — близкий, предложение убрано")
-cmds = (ROOT / "core/engine_commands.py").read_text()
+cmds = srctext.text(ROOT, "core/engine_commands.py")
 ok(all(f'cmd == "{x}"' in cmds for x in ("close_refs", "close_ref", "close_offer")), "команды студии: close_refs, close_ref, close_offer")
 
 tmp = Path(tempfile.mkdtemp())

@@ -4,6 +4,7 @@
 пустую, без переноса. Теперь студия → «Папка» → «Перенести…»: выбрать папку — ядро всё копирует, сверяет число файлов и размер,
 и только тогда переключается; старая остаётся на месте. Выбрали корень диска — внутри него «Dewiar»; там уже папка Dewiar —
 просто переключиться; мало места, папка внутри старой, чужое непустое — понятный отказ, ничего не меняется."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, shutil, sys, tempfile, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -70,7 +71,7 @@ finally:
 ok("мало места" in got and not (tmp / "Мало" ).exists() or not any((tmp / "Мало").iterdir()), f"мало места — отказ до копирования: {got}")
 
 # ядро: ws_move — перенос и переключение тем же путём, что ws_set_path; детям — нельзя
-cm = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+cm = srctext.text(ROOT, "core/engine_commands.py")
 h = cm[cm.index('if cmd == "ws_move":'):][:900]
 ok("self.workspace.move_to(" in h and 'cmd = "ws_set_path"' in h and '"ws_move"' in cm[:2000], "ядро: ws_move → копия → ws_set_path; в детском режиме закрыто")
 

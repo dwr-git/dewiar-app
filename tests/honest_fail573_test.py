@@ -4,6 +4,7 @@
 сделать, модель снова «открыла» — и это ушло человеку. Теперь: open_path понимает русские и английские имена папок системы
 в начале пути; действие с ошибкой, выданное за сделанное, — переспрос (core/quality.py failed_claim), не помогло — честная
 приписка; «сделала» без действия и после просьбы — честное «пока ничего не сделано». Сценарий экзамена open_folder_after_shot573."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -38,12 +39,14 @@ ok(Q.failed_note(ERR, []).startswith("Честно: это не получило
 (tmp / "Pictures" / "Снимки экрана").mkdir(parents=True)
 (tmp / "Downloads").mkdir()
 T.WIN = T.MAC = False
+import tools_base  # noqa: E402 — флаги системы читаются из основы действий (1.0.8)
+tools_base.WIN = tools_base.MAC = False
 for path, want in (("Изображения/Снимки экрана", tmp / "Pictures" / "Снимки экрана"), ("Изображения\\Снимки экрана", tmp / "Pictures" / "Снимки экрана"),
                    ("Pictures/Снимки экрана", tmp / "Pictures" / "Снимки экрана"), ("загрузки", tmp / "Downloads")):
     r = T.t_open_path({"path": path}, {})
     ok(r == f"Открыл {want}", f"open_path «{path}» → {r}")
 
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("failed_claim(step_text, turn.tools_err" in src and "failed_note(turn.tools_err" in src, "ядро: переспрос и честная приписка после ошибки действия")
 ok("_failed_c(s_, turn.tools_err" in src, "фраза «открыла» после ошибки — не звучит, пока проверка не прошла")
 ok("else PROMISE_GIVEUP" in src and "honest_rest(text, turn.full)" in src, "«сделала» без действия и после просьбы — честное «пока ничего не сделано»")

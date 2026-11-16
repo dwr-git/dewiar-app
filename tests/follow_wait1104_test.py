@@ -5,6 +5,7 @@
 Теперь: «Сколько ждать, пока я молчу» (8/15/30 с) в «Слухе», по умолчанию 15 (и после имени тоже); обращение ко мне
 («смотри», «слушай», «тебе») — моё при любой длине, порог «разговора рядом» — 12 с / 32 слова; в долгой речи пауза конца
 фразы длиннее, а склейка после долгой фразы ждёт продолжения до 1,5 с."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import collections, json, os, sys, tempfile, time
 from pathlib import Path
 from types import SimpleNamespace
@@ -106,7 +107,7 @@ for want, conf in ((30, 30), (15, 15), (8, 0)):
     E.Engine.listen_for_command(e)
     left = e.follow_up_until - time.monotonic()
     ok(want - 1 < left <= want, f"после имени — ждём {want} с (выбрано {conf}): {left:.1f}")
-cmd = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok("self.listen_for_command(8)" not in cmd, "кнопка микрофона тоже ждёт, сколько выбрано")
 
 # 5) долгая речь: пауза конца фразы длиннее; склейка после долгой фразы — до 1,5 с

@@ -23,9 +23,6 @@ CURRENCIES = {"BYN": ("руб.", r"бел(?:орусск\w*)?\s*руб\w*|byn|br
               "GEL": ("₾", r"лари\b|gel|₾"), "AZN": ("₼", r"манат\w*|azn|₼"), "MDL": ("лей", r"молдавск\w*\s*ле\w*|mdl"),
               "GBP": ("£", r"фунт\w*\s*стерлинг\w*|фунт\w*|gbp|£"), "ILS": ("₪", r"шекел\w*|ils|₪"), "CZK": ("Kč", r"чешск\w*\s*крон\w*|czk"),
               "TRY": ("₺", r"турецк\w*\s*лир\w*|₺")}       # просто «лира» — имя помощницы, не валюта
-CURRENCY_NAMES = {"BYN": "белорусские рубли", "RUB": "российские рубли", "UAH": "гривны", "KZT": "тенге", "USD": "доллары",
-                  "EUR": "евро", "PLN": "злотые", "UZS": "сумы", "KGS": "сомы", "AMD": "драмы", "GEL": "лари", "AZN": "манаты",
-                  "MDL": "леи", "GBP": "фунты", "ILS": "шекели", "CZK": "кроны", "TRY": "лиры", "CNY": "юани"}
 _EURO = "DE FR IT ES PT NL BE AT FI IE GR SK SI EE LV LT LU MT CY HR".split()
 COUNTRY_CUR = dict({"BY": "BYN", "RU": "RUB", "UA": "UAH", "KZ": "KZT", "UZ": "UZS", "KG": "KGS", "AM": "AMD", "GE": "GEL",
                     "AZ": "AZN", "MD": "MDL", "PL": "PLN", "US": "USD", "GB": "GBP", "IL": "ILS", "CZ": "CZK", "TR": "TRY",

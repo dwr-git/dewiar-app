@@ -2,6 +2,7 @@
 «запомни: в среду в 15:00 встреча» — в память с точной датой и в календарь; «сколько раз я менял бюджет» и «если
 дождь — напомни…» — модели, а не быстрым ответом; счёт — сразу и точно; калькулятор calc у модели; «сделай потише» на
 сервере — честно и с уточнением; экранных инструментов на сервере нет; числа словами — понятные озвучке."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import asyncio, datetime as dt, json, os, re, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -134,7 +135,7 @@ ws.remember("Начальник просил подготовить презен
 import tools as TT  # noqa: E402
 r = TT.t_find_notes({"query": "работа"}, {"workspace": ws})
 ok("отчёт по продажам" in r and "презентацию для инвесторов" in r and "Обо мне" in r, f"поиск «работа» показывает запомненное о работе: {r[-300:]}")
-ok("отвечай отсюда" in (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"), "подсказка: «вспомни…» — из памяти")
+ok("отвечай отсюда" in srctext.text(ROOT, "core/engine_answer.py"), "подсказка: «вспомни…» — из памяти")
 import privacy as PV  # noqa: E402
 ok("на этом компьютере" in PV.rule("https://dewiar.pro/dwrapp/cloud.php?p="), "«где мои данные» — обязательно: у вас на компьютере")
 import recall as RC  # noqa: E402

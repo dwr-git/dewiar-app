@@ -2,6 +2,7 @@
 „ранен“, „убит“»). Игра во фрейме у хозяина (телефон — app.js, компьютер — pad.js): {arcade: 'heard'} — ход, итог хода и
 выстрел Лиры — одной фразой {arcade: 'say'}; кнопка микрофона — {arcade: 'listen'}. Касаниями — молча, как раньше.
 Компьютер: пока игра открыта (game_mark), «бэ пять» — не вопрос модели, а ход (событие game); game_say говорит итог."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, re, sys, shutil, tempfile, time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -43,7 +44,7 @@ talk = ["какая погода завтра", "расскажи анекдот
 ok(not any(E._game_voice(m) for m in talk) and not E.ev, "обычные просьбы в игре — по-прежнему Лире")
 E._game_on = ("snake", time.monotonic())
 ok(not E._game_voice("бэ пять"), "другая игра — голосом не ходим")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8"); ec = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py"); ec = srctext.text(ROOT, "core/engine_commands.py")
 ok(ea.index("self._game_voice(text)") < ea.index("self._window_cmd(text)") and 'cmd == "game_mark"' in ec and 'cmd == "game_say"' in ec and "keep=False" in ec,
    "ядро: ход — до остальных быстрых команд; game_mark / game_say; ход игры не пишется в разговор")
 src = (ROOT / "ui/pad.js").read_text(encoding="utf-8")

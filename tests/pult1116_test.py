@@ -5,6 +5,7 @@
 - сам открывается, когда Лира думает (вы не печатаете 5 с), и через 4 с после ответа возвращает на вашу вкладку;
   печатаете — не перехватывает: точка на вкладке и живая полоса внизу листа;
 - первый раз — карточка «Это Пульт»; что показывать — шестерёнка на вкладке (ui.pult)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys, tempfile, time, urllib.parse
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -69,9 +70,9 @@ ok(r["radar"]["trend"]["name"] == "торты без сахара" and r["radar"
 ok([x["text"] for x in r["next"]] == ["Позвонить маме"], f"«Дальше» — только будущее и не на паузе: {r['next']}")
 ok([x["name"] for x in r["leads"]] == ["Анна"] and "contact" not in r["leads"][0], f"заявки — за сутки, без контакта на пульте: {r['leads']}")
 ok(r["who"] == "Лира", "имя помощницы")
-src = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_commands.py")
 ok('if cmd == "pult_data":' in src, "команда pult_data")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok('self.emit("recall", q=shown_q(text)' in ea, "ядро говорит, что подняло к вопросу (событие recall)")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok('mode if mode in ("play", "pult")' in app and '"&mode=" + mode' in app, "лист открывается сразу на пульте (pad_toggle('pult'))")

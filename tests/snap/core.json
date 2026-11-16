@@ -1,0 +1,3504 @@
+{
+ "commands": [
+  "academy_file",
+  "academy_list",
+  "account_ask",
+  "account_check",
+  "account_login",
+  "account_logout",
+  "account_stt",
+  "account_tts",
+  "alarm_ack",
+  "alarm_get",
+  "alarm_snooze",
+  "alarm_test",
+  "ann",
+  "ann_seen",
+  "art_list",
+  "auto_join",
+  "av_copy",
+  "av_exclude",
+  "av_status",
+  "backup_forget_pw",
+  "backup_info",
+  "backup_inspect",
+  "backup_make",
+  "backup_open",
+  "backup_restore",
+  "brains_pull",
+  "brains_status",
+  "bug_shot",
+  "bug_shot_drop",
+  "bug_state",
+  "cal_add",
+  "cal_list",
+  "cal_refresh",
+  "cal_remove",
+  "cal_toggle",
+  "calendar_month",
+  "calib_cancel",
+  "calib_reset",
+  "calib_start",
+  "call_done",
+  "call_fast",
+  "call_ice",
+  "call_info",
+  "call_sig",
+  "cameras",
+  "capture_parse",
+  "capture_save",
+  "care_get",
+  "care_remove",
+  "care_set",
+  "chat_clear",
+  "chat_list",
+  "client_add",
+  "client_deal_add",
+  "client_deal_del",
+  "client_deal_remind",
+  "client_deal_remind_send",
+  "client_deal_set",
+  "client_del",
+  "client_get",
+  "client_next",
+  "client_next_done",
+  "client_note",
+  "client_note_del",
+  "client_save",
+  "clients_deal_income",
+  "clients_deals",
+  "clients_deals_export",
+  "clients_list",
+  "close_accept",
+  "close_call",
+  "close_card",
+  "close_face",
+  "close_forget",
+  "close_forward",
+  "close_group",
+  "close_history",
+  "close_invite",
+  "close_meet",
+  "close_name",
+  "close_offer",
+  "close_peek",
+  "close_poll",
+  "close_react",
+  "close_ref",
+  "close_refs",
+  "close_remove",
+  "close_rename",
+  "close_send",
+  "close_speak",
+  "close_state",
+  "close_thumb",
+  "close_wave",
+  "cloud_connect",
+  "cloud_fallback",
+  "cloud_forget",
+  "cloud_model",
+  "cloud_models",
+  "cloud_status",
+  "cloud_stt",
+  "cloud_topup",
+  "cloud_topup_send",
+  "cloud_tts",
+  "cloud_usage",
+  "complaint_send",
+  "complaints",
+  "complaints_seen",
+  "config_apply",
+  "config_export",
+  "config_pending",
+  "config_preview",
+  "confirm_answer",
+  "const_get",
+  "const_reset",
+  "const_save",
+  "contact_get",
+  "contact_set",
+  "council_history",
+  "council_members",
+  "council_start",
+  "council_state",
+  "council_stop",
+  "course_ahead",
+  "course_offer",
+  "course_pick",
+  "course_restart",
+  "course_seen",
+  "course_skip",
+  "crm_auto",
+  "crm_connect",
+  "crm_forget",
+  "crm_get",
+  "crm_send",
+  "crm_test",
+  "ctx_view",
+  "device",
+  "device_forget",
+  "device_light",
+  "device_rename",
+  "devices",
+  "devices_get",
+  "diary_entry_delete",
+  "diary_entry_save",
+  "diary_insight_drop",
+  "diary_list",
+  "diary_write_now",
+  "discover",
+  "done",
+  "done_add",
+  "done_reminder",
+  "done_undo",
+  "exam_history",
+  "exam_traces",
+  "exam_traces_remove",
+  "fam_accept",
+  "fam_bill",
+  "fam_bill_del",
+  "fam_get",
+  "fam_invite",
+  "fam_leave",
+  "fam_limit",
+  "fam_paid",
+  "fam_remind",
+  "fam_share",
+  "gallery",
+  "gallery_add",
+  "game_mark",
+  "game_say",
+  "guide",
+  "ha_connect",
+  "ha_forget",
+  "ha_get",
+  "ha_refresh",
+  "hello",
+  "hold_end",
+  "hold_start",
+  "home_connect",
+  "home_forget",
+  "home_get",
+  "home_refresh",
+  "intro_start",
+  "intro_stop",
+  "job_add",
+  "job_run",
+  "join_check",
+  "join_forget",
+  "join_send",
+  "js_errors",
+  "kids_get",
+  "kids_lock",
+  "kids_on",
+  "kids_pin",
+  "kids_set",
+  "kids_unlock",
+  "knowledge_add",
+  "knowledge_folder_add",
+  "knowledge_folder_remove",
+  "knowledge_folders",
+  "knowledge_open",
+  "knowledge_open_file",
+  "knowledge_phone",
+  "knowledge_remove",
+  "knowledge_search",
+  "link_meta",
+  "llm_economy_suggest",
+  "llm_models",
+  "llm_no_chat",
+  "llm_test",
+  "lnet_info",
+  "mail_act",
+  "mail_forget",
+  "mail_guess",
+  "mail_inbox",
+  "mail_read",
+  "mail_save",
+  "mail_send_test",
+  "mail_test",
+  "mailing_draft",
+  "mailing_forget",
+  "mailing_get",
+  "mailing_one",
+  "mailing_preview",
+  "mailing_start",
+  "mailing_stop",
+  "mailing_stopset",
+  "max_connect",
+  "max_connect_shared",
+  "max_forget",
+  "max_new_code",
+  "max_set",
+  "max_shared",
+  "max_test",
+  "mcp_status",
+  "memory_add",
+  "memory_find",
+  "memory_forget",
+  "memory_get",
+  "memory_graph",
+  "memory_set",
+  "memory_view",
+  "mode_get",
+  "mode_set",
+  "models_get",
+  "models_status",
+  "money_add",
+  "money_delete",
+  "money_list",
+  "money_relabel",
+  "money_summary",
+  "money_update",
+  "month_get",
+  "month_hide",
+  "month_say",
+  "morning_get",
+  "morning_set",
+  "mute",
+  "mute_toggle",
+  "net",
+  "net_check",
+  "net_dewiar",
+  "net_proxy",
+  "net_reserve",
+  "news",
+  "news_seen",
+  "note_attach",
+  "note_file",
+  "note_meta",
+  "notes_import_keep",
+  "notes_list",
+  "obsidian_connect",
+  "obsidian_forget",
+  "obsidian_set",
+  "obsidian_sync",
+  "ocr_install",
+  "ocr_status",
+  "own_fallback",
+  "pad_ai",
+  "pad_ai_stop",
+  "pad_attach",
+  "pad_delete",
+  "pad_file",
+  "pad_lock",
+  "pad_new",
+  "pad_order",
+  "pad_read",
+  "pad_rename",
+  "pad_tabs",
+  "pad_write",
+  "pair_claim",
+  "pair_new",
+  "pbot_chat_add",
+  "pbot_chat_del",
+  "pbot_check",
+  "pbot_connect",
+  "pbot_forget",
+  "pbot_greet",
+  "pbot_post_add",
+  "pbot_post_del",
+  "pbot_post_edit",
+  "pbot_post_ok",
+  "pbot_post_retry",
+  "pbot_post_write",
+  "pbot_posts",
+  "pbot_rubric_del",
+  "pbot_rubric_set",
+  "pbot_set",
+  "pbot_try",
+  "persona_delete",
+  "persona_memory",
+  "persona_save",
+  "persona_set",
+  "phone_config",
+  "phone_home",
+  "plugin_change",
+  "plugin_data",
+  "plugin_delete",
+  "plugin_fetch",
+  "plugin_files",
+  "plugin_grant",
+  "plugin_install",
+  "plugin_job",
+  "plugin_make",
+  "plugin_open",
+  "plugin_page",
+  "plugin_remove",
+  "plugin_restart",
+  "plugin_restore",
+  "plugin_run",
+  "plugin_store",
+  "plugin_templates",
+  "plugin_theme",
+  "plugin_ui",
+  "plugin_undo",
+  "plugin_values",
+  "plugin_versions",
+  "plugin_zip",
+  "plugins",
+  "podcast_delete",
+  "podcast_estimate",
+  "podcast_get",
+  "podcast_list",
+  "podcast_resume",
+  "podcast_send",
+  "podcast_start",
+  "podcast_stop",
+  "power_cancel",
+  "probe_server",
+  "prompter_file",
+  "prompter_file_remove",
+  "prompter_hint",
+  "prompter_meeting_remove",
+  "prompter_meetings",
+  "prompter_open",
+  "prompter_pause",
+  "prompter_start",
+  "prompter_state",
+  "prompter_stop",
+  "prompter_voice",
+  "ptt",
+  "pult_data",
+  "quit",
+  "radio_custom_add",
+  "radio_custom_del",
+  "radio_custom_list",
+  "radio_custom_play",
+  "radio_fav",
+  "radio_home",
+  "radio_list",
+  "radio_play",
+  "radio_search",
+  "radio_status",
+  "radio_stop",
+  "rag_scope",
+  "recall",
+  "ref_info",
+  "ref_use",
+  "reminder_add",
+  "reminder_cancel",
+  "reminder_files",
+  "reminder_parse",
+  "reminder_split",
+  "reminder_update",
+  "reminders",
+  "report",
+  "report_auto",
+  "report_send",
+  "rest",
+  "rest_end",
+  "rest_state",
+  "rest_toggle",
+  "say",
+  "screenshot_attach",
+  "security_set",
+  "security_state",
+  "self_check",
+  "senior_med_add",
+  "senior_set",
+  "senior_test",
+  "server_add",
+  "server_check",
+  "server_key",
+  "server_list",
+  "server_remove",
+  "server_update",
+  "settings_save",
+  "sitechat_forget",
+  "sitechat_get",
+  "sitechat_poll",
+  "sitechat_publish",
+  "sitechat_save",
+  "sites_apply",
+  "sites_audit",
+  "sites_blog",
+  "sites_blog_article",
+  "sites_blog_fix",
+  "sites_blog_plan",
+  "sites_blog_save",
+  "sites_blog_set",
+  "sites_blog_status",
+  "sites_blog_write",
+  "sites_chat",
+  "sites_check",
+  "sites_create",
+  "sites_delete",
+  "sites_get",
+  "sites_image",
+  "sites_leads",
+  "sites_legal_draft",
+  "sites_list",
+  "sites_logos",
+  "sites_meta",
+  "sites_open",
+  "sites_publish",
+  "sites_reach",
+  "sites_render",
+  "sites_restore",
+  "sites_say",
+  "sites_stats",
+  "sites_suggest",
+  "sites_template",
+  "sites_undo",
+  "sites_unpublish",
+  "sites_zip",
+  "skill_draft",
+  "skill_export",
+  "skill_get",
+  "skill_install",
+  "skill_remove",
+  "skill_save",
+  "skill_toggle",
+  "skills",
+  "skills_catalog",
+  "skills_folder",
+  "skills_reload",
+  "snip_ack",
+  "snip_cancel",
+  "snip_done",
+  "snip_shot",
+  "snip_take",
+  "soul_delete",
+  "soul_get",
+  "soul_save",
+  "soul_update",
+  "sshlink",
+  "sshlink_save",
+  "sshlink_test",
+  "status",
+  "stop",
+  "sync_e2e",
+  "sync_now",
+  "sync_set",
+  "sync_status",
+  "task_accept",
+  "task_answer",
+  "task_create",
+  "task_delete",
+  "task_discard",
+  "task_export",
+  "task_get",
+  "task_net",
+  "task_open_result",
+  "task_resume",
+  "task_rewind",
+  "task_stop",
+  "task_tell",
+  "tasks_list",
+  "team_accept",
+  "team_app_invite",
+  "team_assign",
+  "team_back",
+  "team_cancel",
+  "team_connect",
+  "team_forget",
+  "team_get",
+  "team_member_add",
+  "team_member_code",
+  "team_member_del",
+  "team_member_set",
+  "team_message",
+  "team_photo",
+  "team_remind",
+  "team_repeat_del",
+  "team_set",
+  "text_mode",
+  "tg_connect",
+  "tg_connect_shared",
+  "tg_forget",
+  "tg_join",
+  "tg_new_code",
+  "tg_proxy",
+  "tg_set",
+  "tg_sync",
+  "tg_test",
+  "tools",
+  "tricks",
+  "update_check",
+  "update_status",
+  "vault_delete",
+  "vault_list",
+  "vault_put",
+  "vault_reveal",
+  "vault_sync",
+  "voice_test",
+  "voices_warm",
+  "vosk_voices",
+  "watch_add",
+  "watch_get",
+  "watch_stop",
+  "writing_get",
+  "writing_goal",
+  "ws_delete",
+  "ws_delete_dir",
+  "ws_export",
+  "ws_move",
+  "ws_new_note",
+  "ws_open",
+  "ws_read",
+  "ws_rename",
+  "ws_set_path",
+  "ws_tree",
+  "ws_write"
+ ],
+ "names": [
+  "APP_ALIASES",
+  "ASKPASS",
+  "CITY_TZ",
+  "DEFAULT_OFF",
+  "DRY",
+  "EXAM_LAUNCH",
+  "EXAM_ON",
+  "MAC",
+  "MARK_ASK_RX",
+  "MARK_DONE_RX",
+  "MUSIC_APPS",
+  "NET_TOOLS",
+  "NOTES_GENERIC",
+  "NOW_PLAYING",
+  "OCR_DIRS",
+  "OCR_EXTS",
+  "OPEN_ALIASES",
+  "PAGE_CSS",
+  "PAGE_EMPTY",
+  "PAGE_MAX",
+  "PASS_IN_CMD",
+  "PLAN_RX",
+  "RADIO",
+  "REPEAT_WORDS",
+  "Reminders",
+  "S",
+  "SAFE_CORE",
+  "SERVER_OFF",
+  "SKILL_TOOLS",
+  "SPENT_RX",
+  "SUDO_AT",
+  "TOOLS",
+  "ToolError",
+  "Toolbox",
+  "UA",
+  "WIN",
+  "WMO",
+  "_BROWSER_NEW_WINDOW",
+  "_EXAM_PNG",
+  "_LAST_SAVED",
+  "_NOT_PC",
+  "_STOP",
+  "_TR",
+  "_WEEKDAYS_RX",
+  "_WEEKENDS_RX",
+  "_camera_mic_lock",
+  "_catt",
+  "_chat_hits",
+  "_clients",
+  "_del_paths",
+  "_doc_path",
+  "_eyes",
+  "_fix_days",
+  "_items_arg",
+  "_known_dir",
+  "_latest_notes",
+  "_mail",
+  "_mailing",
+  "_maker",
+  "_maker_by",
+  "_memory_hits",
+  "_money_line",
+  "_mpris_players",
+  "_mpris_status",
+  "_net_note",
+  "_ocr_path",
+  "_ocr_say",
+  "_ocr_vision",
+  "_plugin_done",
+  "_post_target",
+  "_site_open",
+  "_sites",
+  "_start_ask",
+  "_team",
+  "_terms",
+  "_tm",
+  "_tv_device",
+  "_wants_net",
+  "_when",
+  "_ws",
+  "_ws_call",
+  "askpass_path",
+  "browser_cmd",
+  "calc_eval",
+  "city_tz",
+  "coerce_args",
+  "desktop_apps",
+  "desktop_env",
+  "desktop_notify",
+  "find_app",
+  "home_city",
+  "html_to_text",
+  "human_error",
+  "is_plan",
+  "job_short",
+  "launch",
+  "log",
+  "mail_table_make",
+  "md_html",
+  "media_players",
+  "media_playing",
+  "page_excerpt",
+  "page_html",
+  "page_links",
+  "parse_ddg",
+  "pictures_dir",
+  "say_command",
+  "search_text",
+  "searx_results",
+  "t_app_help",
+  "t_app_update",
+  "t_archive_open",
+  "t_ask_knowledge",
+  "t_calc",
+  "t_calendar_list",
+  "t_call_persona",
+  "t_cancel_reminder",
+  "t_change_reminder",
+  "t_channel_post",
+  "t_client_crm",
+  "t_client_deal",
+  "t_client_deals",
+  "t_client_info",
+  "t_client_list",
+  "t_client_next",
+  "t_client_note",
+  "t_close_call",
+  "t_close_read",
+  "t_close_send",
+  "t_council",
+  "t_create_skill",
+  "t_deal_remind",
+  "t_debate",
+  "t_delete_files",
+  "t_doc_find",
+  "t_doc_replace",
+  "t_done_report",
+  "t_find_notes",
+  "t_insight_ask",
+  "t_lab_run",
+  "t_lab_write",
+  "t_list_reminders",
+  "t_look_camera",
+  "t_look_screen",
+  "t_mail_table",
+  "t_mailing",
+  "t_mailing_status",
+  "t_make_podcast",
+  "t_manage_email",
+  "t_mark_done",
+  "t_media",
+  "t_money_add",
+  "t_money_find",
+  "t_money_fix",
+  "t_money_report",
+  "t_month_summary",
+  "t_more_tools",
+  "t_ocr",
+  "t_open_app",
+  "t_open_path",
+  "t_open_url",
+  "t_play_music",
+  "t_play_radio",
+  "t_play_youtube",
+  "t_plugin_change",
+  "t_plugin_create",
+  "t_plugin_enable",
+  "t_power",
+  "t_read_email",
+  "t_read_emails",
+  "t_read_file",
+  "t_read_webpage",
+  "t_remember",
+  "t_reminder",
+  "t_remove_task",
+  "t_resume_task",
+  "t_route",
+  "t_run_command",
+  "t_save_link",
+  "t_save_note",
+  "t_save_screenshot",
+  "t_schedule_job",
+  "t_search_documents",
+  "t_send_email",
+  "t_send_telegram",
+  "t_server_run",
+  "t_show_images",
+  "t_show_page",
+  "t_site_article",
+  "t_site_create",
+  "t_site_edit",
+  "t_site_publish",
+  "t_site_review",
+  "t_site_show",
+  "t_smart_home",
+  "t_start_task",
+  "t_stop_task",
+  "t_suggest_idea",
+  "t_system",
+  "t_task_status",
+  "t_team_assign",
+  "t_team_message",
+  "t_team_status",
+  "t_tell_task",
+  "t_tv",
+  "t_update_note",
+  "t_volume",
+  "t_watch",
+  "t_weather",
+  "t_web_search",
+  "t_widget",
+  "t_world_time",
+  "t_write_diary",
+  "t_writing_today",
+  "t_yandex_music",
+  "world_time",
+  "yandex_music_installed"
+ ],
+ "sets": {
+  "DEFAULT_OFF": [],
+  "EXAM_ON": [
+   "council",
+   "make_podcast",
+   "open_app",
+   "open_path",
+   "open_url",
+   "save_screenshot"
+  ],
+  "NET_TOOLS": [
+   "app_update",
+   "ask_knowledge",
+   "channel_post",
+   "client_crm",
+   "close_call",
+   "close_read",
+   "close_send",
+   "deal_remind",
+   "mailing",
+   "manage_email",
+   "play_radio",
+   "read_email",
+   "read_emails",
+   "read_webpage",
+   "send_email",
+   "send_telegram",
+   "server_run",
+   "show_images",
+   "site_article",
+   "site_publish",
+   "smart_home",
+   "team_assign",
+   "weather",
+   "web_search"
+  ],
+  "SAFE_CORE": [
+   "app_help",
+   "ask_knowledge",
+   "calc",
+   "calendar_list",
+   "call_persona",
+   "cancel_reminder",
+   "change_reminder",
+   "client_deal",
+   "client_deals",
+   "client_info",
+   "client_list",
+   "client_next",
+   "client_note",
+   "done_report",
+   "find_notes",
+   "list_reminders",
+   "mark_done",
+   "media_control",
+   "money_add",
+   "money_find",
+   "money_fix",
+   "money_report",
+   "month_summary",
+   "ocr",
+   "payments",
+   "play_radio",
+   "read_file",
+   "read_webpage",
+   "remember",
+   "save_link",
+   "save_note",
+   "search_documents",
+   "set_reminder",
+   "set_volume",
+   "show_images",
+   "show_page",
+   "site_create",
+   "site_edit",
+   "site_review",
+   "site_show",
+   "suggest_idea",
+   "system_status",
+   "task_status",
+   "update_note",
+   "watch",
+   "weather",
+   "web_search",
+   "widget",
+   "world_time",
+   "write_diary",
+   "writing_today"
+  ],
+  "SERVER_OFF": [
+   "council",
+   "look_at_screen",
+   "look_through_camera",
+   "make_podcast",
+   "media_control",
+   "open_app",
+   "open_path",
+   "open_url",
+   "play_music",
+   "play_radio",
+   "play_youtube",
+   "power",
+   "save_screenshot",
+   "set_volume",
+   "widget",
+   "yandex_music"
+  ],
+  "SKILL_TOOLS": [
+   "read_skill_file",
+   "use_skill"
+  ]
+ },
+ "tools": {
+  "app_help": {
+   "description": "Руководство Dewiar — как пользоваться самим этим приложением: где кнопка или раздел, как настроить, как пригласить близкого или друга, сканер, стили, напоминания на часах, синхронизация, данные и т. п. Вызывай, когда спрашивают про Dewiar и его функции («как…», «где…», «что ты умеешь…»), — не выдумывай меню и кнопки. query — о чём спросили; where — pc|phone, если ясно, про какое устройство.",
+   "fn": "t_app_help",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "where": {
+      "enum": [
+       "pc",
+       "phone"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Руководство"
+  },
+  "app_update": {
+   "description": "Проверить обновления Dewiar на этом компьютере прямо сейчас: «проверь обновления», «есть новая версия?», «обновись». Ставит обновление человек — нажатием в виджете.",
+   "fn": "t_app_update",
+   "level": "safe",
+   "parameters": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Обновления Dewiar"
+  },
+  "archive_open": {
+   "description": "Открыть архив .zip, который прислал человек: безопасно распаковать рядом и узнать, что внутри (файлы и размеры). path — имя из «Входящих» или путь.",
+   "fn": "t_archive_open",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Архивы"
+  },
+  "ask_knowledge": {
+   "description": "Спросить Знания пользователя на сайте Dewiar — его загруженные документы, регламенты, базы знаний компании. Вызывай, когда вопрос про его документы, работу, компанию или «что у меня в Знаниях». Вопрос пиши полностью, без «это» и «там». Ответ приходит с источниками — назови их.",
+   "fn": "t_ask_knowledge",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "base": {
+      "description": "необязательно: название папки или раздела публичной библиотеки, если пользователь его назвал («в Библии», «в истории РФ»)",
+      "type": "string"
+     },
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "question"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Знания с сайта"
+  },
+  "calc": {
+   "description": "Посчитать точно: любые вычисления (проценты, суммы, скидки, деление, курсы) и даты. Считай ВСЕГДА этим инструментом, не в уме. Выражение как в Python: 2350 * 17 / 100, (1200 - 15%) * 3; даты в виде ГГГГ-ММ-ДД: days_until(\"2027-01-01\") — сколько дней осталось до даты, days_between(\"2026-10-01\", \"2026-12-31\"), weekday(\"2026-10-14\") — день недели, date_add(\"2026-10-10\", 30) — дата через 30 дней.",
+   "fn": "t_calc",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "expression": {
+      "description": "выражение",
+      "type": "string"
+     }
+    },
+    "required": [
+     "expression"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Калькулятор"
+  },
+  "calendar_list": {
+   "description": "Календарь пользователя за период: встречи и события из его календарей (Google, Яндекс), напоминания (и что уже прозвенело), заметки, дневник, задачи, деньги — по дням. Для «что у меня завтра?», «какие встречи на неделе?», «что я сделал за неделю». from/to — ГГГГ-ММ-ДД (пусто — последние 7 дней; про будущее — укажи даты вперёд).",
+   "fn": "t_calendar_list",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "from": {
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Календарь"
+  },
+  "call_persona": {
+   "description": "Позвать другого персонажа команды (Агент, Лира, Патрик, Джарвис, Эва, Кодер или созданного пользователем), когда пользователь просит позвать, подключить, передать слово или поговорить с ним. Готовый персонаж, которого ещё нет в команде (Гастон — повар, Фемида — юрист, Доктор, Оскар — финансы, Ника — тренер, Мишель — языки, Ирис, Профессор…), добавится в команду сам — просто позови по имени. После твоего ответа персонаж сам откликнется своим голосом и обликом и продолжит разговор. task — поручение ему своими словами, если пользователь его дал («Патрик, сверь эти цифры с прошлым периодом и запиши вывод»): что сделать, с чем (файлы, заметки, цифры из разговора) и куда положить итог.",
+   "fn": "t_call_persona",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "name": {
+      "description": "имя персонажа",
+      "type": "string"
+     },
+     "task": {
+      "description": "поручение: что сделать и где взять данные",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Позвать персонажа"
+  },
+  "cancel_reminder": {
+   "description": "Отменить напоминание по id или тексту.",
+   "fn": "t_cancel_reminder",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "id": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Напоминания: отмена"
+  },
+  "change_reminder": {
+   "description": "Изменить напоминание: время, дни повтора или текст. id (из list_reminders) или text — какое; when — новое время и повтор обычными словами: «по будням, кроме пятницы, в 17:50», «с понедельника по четверг в 17:50», «каждый день в 8»; new_text — новый текст. В один день недели нужно другое время (по пятницам раньше) — change_reminder без этого дня («с понедельника по четверг в 17:50») и set_reminder на этот день («по пятницам в 16:40»). Не говори «изменила», не вызвав инструмент.",
+   "fn": "t_change_reminder",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "new_text": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "when": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Напоминания: изменить"
+  },
+  "channel_post": {
+   "description": "Опубликовать пост от имени бота персонажа в Telegram-канале или группе, где он состоит: «опубликуй в канале…», «запланируй пост на пятницу в 10», «сделай опрос в группе». text — пост целиком (напиши его сам, по делу, без выдуманных отзывов, цифр и собеседников — только факты пользователя), when — когда словами (пусто — сейчас), chat — название канала или группы, если назван; опрос — poll_question и 2–10 poll_options.",
+   "fn": "t_channel_post",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "chat": {
+      "type": "string"
+     },
+     "poll_options": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "poll_question": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "when": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Пост в канал"
+  },
+  "client_crm": {
+   "description": "«Клиенты»: передать клиента в CRM пользователя (Битрикс24 или свой вебхук) — «передай Иванова в Битрикс», «заведи лид на „Ромашку“», «отправь в CRM, о чём договорились с Петровым». Первый раз — новым лидом, дальше — новые записи комментарием. who — имя или компания.",
+   "fn": "t_client_crm",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: в CRM"
+  },
+  "client_deal": {
+   "description": "«Клиенты» → сделки: новая сделка или её этап. Этапы: lead — заявка, offer — предложение (КП, смета), invoice — счёт выставлен (нам должны), paid — оплачено, lost — отказ. «Ромашке выставили счёт на 1200 за коробки, оплатить до пятницы» → who «Ромашка», title «Коробки», amount 1200, stage invoice, due «до пятницы»; «Ромашка оплатила счёт» → stage paid (оплата сама запишется в доходы); «Иванов отказался» → lost. Есть открытая сделка — двигает её; new true — точно новая. title — коротко, что продаём; due — срок оплаты словами.",
+   "fn": "t_client_deal",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "amount": {
+      "type": "number"
+     },
+     "due": {
+      "type": "string"
+     },
+     "new": {
+      "type": "boolean"
+     },
+     "stage": {
+      "enum": [
+       "lead",
+       "offer",
+       "invoice",
+       "paid",
+       "lost"
+      ],
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: сделка"
+  },
+  "client_deals": {
+   "description": "«Клиенты» → сделки: «кто нам должен?» (what owed — выставленные неоплаченные счета, итог, просроченные), «какие сделки зависли?» (stuck — без движения неделю, просроченная оплата), или все открытые (пусто).",
+   "fn": "t_client_deals",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "what": {
+      "enum": [
+       "owed",
+       "stuck",
+       ""
+      ],
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: кто должен"
+  },
+  "client_info": {
+   "description": "«Клиенты»: карточка клиента — контакты, о чём договаривались (последние записи), следующий шаг. «Что у нас с Ивановым?», «напомни, о чём договорились с „Ромашкой“». who — имя или компания.",
+   "fn": "t_client_info",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: карточка"
+  },
+  "client_list": {
+   "description": "«Клиенты»: кто ждёт ответа (просроченные шаги), ближайшие шаги, клиенты без следующего шага. «Кому из клиентов надо перезвонить?», «что по клиентам на этой неделе?». query — поиск по имени, компании или записям, или пусто.",
+   "fn": "t_client_list",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: кто ждёт"
+  },
+  "client_next": {
+   "description": "«Клиенты»: следующий шаг с клиентом — что сделать и когда («перезвонить Иванову в четверг в 11», «отправить «Ромашке» счёт завтра»); когда — словами, как сказал пользователь; будет напоминание в «Делах». done true — следующий шаг сделан («я перезвонил Иванову»).",
+   "fn": "t_client_next",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "done": {
+      "type": "boolean"
+     },
+     "what": {
+      "type": "string"
+     },
+     "when": {
+      "type": "string"
+     },
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: следующий шаг"
+  },
+  "client_note": {
+   "description": "«Клиенты» (личная CRM): записать в карточку клиента, о чём договорились, что хочет, звонок, сделку. «Запиши: Иванов из „Ромашки“ хочет 200 коробок до пятницы», «клиент Петров звонил, просит скидку». Нет такого клиента — карточка заведётся сама. who — имя клиента как сказал (или название компании); company — компания в именительном падеже («Ромашка»), если названа; text — суть, коротко, своими словами в прошедшем или настоящем («Хочет 200 коробок до пятницы»); kind — note|call|deal; phone, email — если продиктовали.",
+   "fn": "t_client_note",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "company": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "note",
+       "call",
+       "deal"
+      ],
+      "type": "string"
+     },
+     "phone": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who",
+     "text"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: записать"
+  },
+  "close_call": {
+   "description": "Позвонить человеку из «Близких» через Dewiar — откроется окно звонка (video true — видеозвонок). Только когда пользователь прямо просит позвонить кому-то из близких.",
+   "fn": "t_close_call",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "to": {
+      "type": "string"
+     },
+     "video": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "to"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Близкие: позвонить"
+  },
+  "close_read": {
+   "description": "Последние сообщения от близких (и мои им): «что мне писали», «что ответил Андрей»; группа — «что ответили в группе Семья», «кто что берёт?» (собери ответы по людям). who — имя, группа или пусто — все.",
+   "fn": "t_close_read",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Близкие: прочитать"
+  },
+  "close_send": {
+   "description": "Написать человеку из «Близких» (переписка между помощниками Dewiar: дойдёт в его приложение, его помощник скажет вслух). Только когда пользователь прямо просит написать, передать или сказать кому-то из близких. to — имя как сказал пользователь («Андрею», «маме») или группа своих («в группу Семья» — письмо всем в ней); text — само сообщение от лица пользователя, как он сказал бы сам («Задержусь на полчаса»), без «передай»; files — пути файлов (необязательно). «Напомни всем в группе Семья в субботу в 10 про дачу» — to: группа, text: о чём («Едем на дачу»), remind_when: когда («в субботу в 10») — напоминание встанет у всех.",
+   "fn": "t_close_send",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "files": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "remind_when": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "to",
+     "text"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Близкие: написать"
+  },
+  "council": {
+   "description": "«Совет ИИ»: персонажи (у каждого свой характер и своя модель) вместе обсуждают вопрос, спорят и подводят итог — когда просят «собери совет», «посоветуйся с командой», «что скажет совет ИИ о …», «обсудите вместе». Обсуждение идёт в студии (откроется само) минуту-две; итог прозвучит сам, когда совет закончит — сейчас скажи одной фразой, что совет собран, и не отвечай на вопрос сам. question — вопрос целиком.",
+   "fn": "t_council",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "question"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Совет ИИ"
+  },
+  "create_skill": {
+   "description": "Создать или ИЗМЕНИТЬ навык (инструкцию для особой задачи), когда пользователь просит «создай навык», «обнови навык», научиться чему-то или запомнить порядок действий. name — латиницей через дефис (тот же name — правка прежнего); description — когда применять; instructions — пошаговые инструкции для тебя самого. Навык — только инструкция: дело по расписанию ставится отдельно (set_reminder с повтором). Не говори «создала/обновила навык», пока это действие не выполнено.",
+   "fn": "t_create_skill",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "description": {
+      "type": "string"
+     },
+     "instructions": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "description",
+     "instructions"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Создание навыка"
+  },
+  "deal_remind": {
+   "description": "Напомнить клиенту об оплате выставленного счёта — вежливое письмо с его почты пользователя («напомни Ромашке об оплате», «напиши Иванову, что ждём оплату»). who — клиент, title — какая сделка (если счетов несколько).",
+   "fn": "t_deal_remind",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Клиенты: напомнить об оплате"
+  },
+  "debate": {
+   "description": "Спор моделей: две разные модели ИИ отвечают на трудный вопрос и возражают друг другу, потом ты подводишь итог — когда просят «пусть модели поспорят», «устрой спор моделей», «что скажут разные ИИ о …». question — вопрос целиком.",
+   "fn": "t_debate",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "question"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Спор моделей"
+  },
+  "delete_files": {
+   "description": "Удалить файлы или папки пользователя — В КОРЗИНУ (можно восстановить). paths — полные пути (~ — домашняя папка). Системные папки, домашнюю папку целиком и главные папки (Документы, Загрузки, Рабочий стол…) удалить нельзя — защита откажет. Для удаления используй только это, не команды терминала. Если просят «удали всё» — сначала уточни, что именно.",
+   "fn": "t_delete_files",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "paths": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "paths"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Удаление в корзину"
+  },
+  "doc_find": {
+   "description": "Найти текст в документе Word, Excel, PowerPoint или OpenOffice (docx, xlsx, pptx, odt) — где и в каком окружении он встречается. Вызывай ПЕРЕД заменой, если не уверен в написании (падежи, инициалы, формат даты). path — файл (имя из «Входящих» или путь); text — что искать; whole_word — только слово целиком.",
+   "fn": "t_doc_find",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "whole_word": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "path",
+     "text"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Документы: поиск"
+  },
+  "doc_replace": {
+   "description": "Заменить в документе Word, Excel, PowerPoint или OpenOffice (docx, xlsx, pptx, odt) фамилии, даты, суммы, названия — точечно: оформление, таблицы, колонтитулы не меняются, оригинал остаётся, результат — рядом «(исправлено)». replacements — [{find, replace}] (каждый падеж фамилии — отдельной парой: «Иванов», «Иванова», «Иванову»…); whole_word — только слово целиком. Документ НЕ переписывай заново — только так. «Сделай такой же на этот год» — тот же документ с новыми годами, датами, именами: save_as — имя нового файла (образец остаётся); перестроить разделы, добавить строки таблиц — большая задача (start_task, навык docx).",
+   "fn": "t_doc_replace",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "replacements": {
+      "items": {
+       "properties": {
+        "find": {
+         "type": "string"
+        },
+        "replace": {
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "save_as": {
+      "type": "string"
+     },
+     "whole_word": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "path",
+     "replacements"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Документы: правка"
+  },
+  "done_report": {
+   "description": "Что пользователь сделал и его достижения: days — за сколько дней (1 — сегодня, 7 — неделя). Для «что я сегодня сделал», «сколько дел за неделю», «какие у меня достижения».",
+   "fn": "t_done_report",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "days": {
+      "type": "number"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Дела: итог"
+  },
+  "find_notes": {
+   "description": "Найти в папке ассистента заметки, дневник, память по словам (что записывали раньше); если подключён Obsidian — и в заметках пользователя там (пути «obsidian:…»).",
+   "fn": "t_find_notes",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Поиск по заметкам"
+  },
+  "insight_ask": {
+   "description": "«Радар» — что происходит в нише человека по его источникам (сайты, каналы, ленты): бриф дня, тренды (что растёт), разобранные материалы с сигналом важности и тезисы. Зови на «что нового в моей теме», «что важного за неделю», «почему растёт X», «что писали про Y». query — слова темы (пусто — самое важное). Отвечай по данным, со ссылками на материалы; нет данных — скажи, что Радар пока не настроен.",
+   "fn": "t_insight_ask",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Радар"
+  },
+  "lab_run": {
+   "description": "Запустить скрипт из лаборатории (.py — Python, .sh — bash) и получить вывод. Работает 2 минуты максимум.",
+   "fn": "t_lab_run",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "args": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Лаборатория: запуск"
+  },
+  "lab_write": {
+   "description": "Записать файл в свою лабораторию (скрипт .py или .sh, данные, черновик) — когда задачу удобнее решить кодом: расчёты, обработка файлов, анализ. name — имя файла, можно с подпапкой.",
+   "fn": "t_lab_write",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "content": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "content"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Лаборатория: запись"
+  },
+  "list_reminders": {
+   "description": "Список активных напоминаний.",
+   "fn": "t_list_reminders",
+   "level": "safe",
+   "parameters": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Напоминания: список"
+  },
+  "look_at_screen": {
+   "description": "Посмотреть на экран пользователя (снимок придёт картинкой; нужна модель со зрением). Когда спрашивают, что на экране, просят посмотреть на ошибку, окно, текст, график.",
+   "fn": "t_look_screen",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Смотрю на экран"
+  },
+  "look_through_camera": {
+   "description": "Сделать кадр с веб-камеры (придёт картинкой). Когда просят посмотреть на что-то в руках или в комнате.",
+   "fn": "t_look_camera",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Камера"
+  },
+  "mail_table": {
+   "description": "Таблица Excel (.xlsx) по почте пользователя — все письма ящика: дата, отправитель, адрес, тема, есть ли вложение, прочитано, и лист «По отправителям» (сколько писем с какого адреса). Когда просят выгрузить, сделать таблицу, Excel, отчёт или статистику по письмам. days — только за последние N дней; box — один ящик; limit — сколько писем (по умолчанию 1000). Файл ложится в «Загрузки».",
+   "fn": "t_mail_table",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "box": {
+      "type": "string"
+     },
+     "days": {
+      "type": "integer"
+     },
+     "limit": {
+      "type": "integer"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Почта: таблица Excel"
+  },
+  "mailing": {
+   "description": "Рассылка писем многим со своей почты пользователя: КАЖДОМУ своё письмо (адресов друг друга не видят) — «разошли всем клиентам…», «напиши всем сотрудникам письмо…», «отправь этим 20 адресам…». recipients: clients — «Клиенты» (у кого есть почта; tag — только с этой меткой), team — сотрудники, list — свой список в list (строки «Имя адрес»). В теме и тексте {имя} — обращение по имени: «Здравствуйте, {имя}!». kind: work — деловое письмо (сотрудникам, клиентам по делу), ads — реклама и новости (только тем, кто согласился; строка «отписаться» добавится сама). Одному-трём адресатам — send_email, не рассылка. Пиши письмо полностью, вежливо.",
+   "fn": "t_mailing",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "body": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "work",
+       "ads"
+      ],
+      "type": "string"
+     },
+     "list": {
+      "type": "string"
+     },
+     "recipients": {
+      "enum": [
+       "clients",
+       "team",
+       "list"
+      ],
+      "type": "string"
+     },
+     "subject": {
+      "type": "string"
+     },
+     "tag": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "subject",
+     "body",
+     "recipients"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Рассылка писем"
+  },
+  "mailing_status": {
+   "description": "Как идёт рассылка писем: сколько ушло, ошибки, ждёт ли следующего дня.",
+   "fn": "t_mailing_status",
+   "level": "safe",
+   "parameters": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Как идёт рассылка"
+  },
+  "make_podcast": {
+   "description": "Сделать подкаст: двое ведущих (персонажи, их голосами) живо обсуждают материал — файл (PDF, Word, книга EPUB/FB2, текст), ссылку на страницу или видео YouTube, несколько файлов или просто тему словами; получится MP3 и текст выпуска в студии «Подкасты». Когда просят «сделай подкаст по этому файлу / по ссылке / про …», «озвучь как подкаст», «обсудите вдвоём вслух». files — пути файлов (вложение из сообщения — его путь «Входящие/…»), url — ссылка, topic — тема или пожелание словами; minutes — 5, 10 (по умолчанию) или 20; style — simple (простыми словами, по умолчанию) | deep (глубоко) | debate (спор двух мнений). Готовится несколько минут в фоне — скажи одной фразой, что начала, и не пересказывай материал сам.",
+   "fn": "t_make_podcast",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "files": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "minutes": {
+      "enum": [
+       5,
+       10,
+       20
+      ],
+      "type": "number"
+     },
+     "style": {
+      "enum": [
+       "simple",
+       "deep",
+       "debate"
+      ],
+      "type": "string"
+     },
+     "topic": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Подкасты"
+  },
+  "manage_email": {
+   "description": "Письмо из почты пользователя: удалить (action=delete — в «Корзину» почты), в спам (spam — в её «Спам») или переслать (forward: to — адрес; note — пара слов сверху, если просили). uid — номер письма из read_emails или от кого оно («Андрей», «счёт»). «Удали это письмо», «отправь в спам», «перешли Андрею». Адрес по имени — из памяти о пользователе; нет его — спроси одной фразой. Номера нет — сначала read_emails.",
+   "fn": "t_manage_email",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "delete",
+       "spam",
+       "forward"
+      ],
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     },
+     "uid": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "action",
+     "uid"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Почта: удалить, в спам, переслать"
+  },
+  "mark_done": {
+   "description": "Только когда человек сам сказал, что сделал (на «что по плану?», «что сегодня?» — НЕ вызывать). Отметить дела сделанными: пользователь говорит, что сделал («я позвонил Игорю и сделал тренировку», «отметь как исполненное», «готово, купил хлеб»). items — каждое дело отдельно и коротко, как оно называется («Позвонить Игорю», «Тренировка»); подходящее напоминание на сегодня закроется само. undo: true — снять отметку, если отметили по ошибке.",
+   "fn": "t_mark_done",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "items": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "undo": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "items"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Дела: сделано"
+  },
+  "media_control": {
+   "description": "Нажать кнопку плеера, который уже открыт (Яндекс Музыка, браузер, Spotify…): play — играть, pause — пауза, next/previous — трек вперёд/назад. Всегда этим, а не кликами по экрану и не командами терминала.",
+   "fn": "t_media",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "play",
+       "pause",
+       "play_pause",
+       "next",
+       "previous",
+       "stop"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Управление плеером"
+  },
+  "money_add": {
+   "description": "Записать уже сделанный расход или полученный доход: «купил продукты на 40», «получил зарплату». Бюджет, лимит, план («бюджет на мебель — 50 тысяч», «заложим 70») — НЕ расход и не доход: это remember. kind — expense|income; amount — число; currency — код (BYN, RUB, USD, EUR), пусто — основная; category — категория по-русски («Продукты», «Транспорт», «Зарплата»…); note — что именно; date — ГГГГ-ММ-ДД, пусто — сегодня. Несколько покупок — несколько вызовов.",
+   "fn": "t_money_add",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "amount": {
+      "type": "number"
+     },
+     "category": {
+      "type": "string"
+     },
+     "currency": {
+      "type": "string"
+     },
+     "date": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "expense",
+       "income"
+      ],
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "amount"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Деньги: записать"
+  },
+  "money_find": {
+   "description": "Найти записи о деньгах, чтобы удалить или исправить («удали вчерашний кофе», «трата на такси записалась дважды», «это было в гривнах, а не в рублях»). from/to или date — ГГГГ-ММ-ДД (пусто — последний месяц); amount — сумма; text — слова из заметки или категории; currency — код; kind — expense|income. Потом — money_fix с id найденного.",
+   "fn": "t_money_find",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "amount": {
+      "type": "number"
+     },
+     "currency": {
+      "type": "string"
+     },
+     "date": {
+      "type": "string"
+     },
+     "from": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "expense",
+       "income"
+      ],
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Деньги: найти запись"
+  },
+  "money_fix": {
+   "description": "Удалить или исправить найденные записи о деньгах (id — из money_find). action — delete|update; для update — что поменять: amount, currency (код: UAH, RUB, BYN…), category, note, date, kind. Человек подтверждает сам.",
+   "fn": "t_money_fix",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "delete",
+       "update"
+      ],
+      "type": "string"
+     },
+     "amount": {
+      "type": "number"
+     },
+     "category": {
+      "type": "string"
+     },
+     "currency": {
+      "type": "string"
+     },
+     "date": {
+      "type": "string"
+     },
+     "ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "kind": {
+      "enum": [
+       "expense",
+       "income"
+      ],
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "ids",
+     "action"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Деньги: удалить или исправить"
+  },
+  "money_report": {
+   "description": "Итоги личного бюджета за период: доходы, расходы по категориям, остаток, последние операции. from/to — ГГГГ-ММ-ДД (пусто — текущий месяц).",
+   "fn": "t_money_report",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "from": {
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Деньги: отчёт"
+  },
+  "month_summary": {
+   "description": "Итоги месяца пользователя («Мой месяц с Лирой»): сделанные дела, напоминания, траты по категориям, заметки, дневник — когда спрашивают «как прошёл мой месяц», «итоги октября», «что я сделал за месяц». month — 2026-10, prev — прошлый месяц, пусто — текущий.",
+   "fn": "t_month_summary",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "month": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Мой месяц"
+  },
+  "more_tools": {
+   "description": "Нужных действий нет среди доступных — попроси их: packs — id групп.",
+   "fn": "t_more_tools",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "packs": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "packs"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Ещё действия"
+  },
+  "ocr": {
+   "description": "Распознать текст на картинке или в скане PDF (фото документа, чек, скриншот, PDF без текста) — когда просят «прочитай скан», «что написано на фото», «распознай текст», а файл — картинка или PDF. path — полный путь или имя файла (ищется в папке ассистента, «Загрузках», «Рабочем столе», «Документах»); pages — страницы PDF («1-3»). install: true — поставить распознавание текста, когда пользователь просит «поставь распознавание».",
+   "fn": "t_ocr",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "install": {
+      "type": "boolean"
+     },
+     "pages": {
+      "type": "string"
+     },
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Распознать текст"
+  },
+  "open_app": {
+   "description": "Запустить установленную программу по названию (Firefox, Терминал, Telegram, Калькулятор…).",
+   "fn": "t_open_app",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Запуск программ"
+  },
+  "open_path": {
+   "description": "Открыть файл или папку (можно «загрузки», «документы», «рабочий стол» или путь).",
+   "fn": "t_open_path",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Открытие файлов и папок"
+  },
+  "open_url": {
+   "description": "Открыть сайт в браузере по умолчанию.",
+   "fn": "t_open_url",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "url": {
+      "description": "адрес сайта",
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Браузер: открыть сайт"
+  },
+  "payments": {
+   "description": "«Платежи» — реестр обязательных оплат (коммунальные, связь, кредиты, страховка): у каждого счёта реквизиты «как платить», срок, история оплат с показаниями счётчика. action: open — что не оплачено в этом месяце; report — сводка (или bill — по одному счёту: как платить и последние оплаты); year — итоги года по счетам (year); add_payment — записать оплату (bill, amount, reading — показание, used — расход, date ГГГГ-ММ-ДД, status paid|unpaid); add_bill — новый вид платежа (bill — название, kind meter|fixed|loan|yearly|other, day — число срока, how — реквизиты). Это не «Деньги»: разовые покупки — туда, а счета и их оплаты — сюда.",
+   "fn": "<lambda>",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "open",
+       "report",
+       "year",
+       "add_payment",
+       "add_bill"
+      ],
+      "type": "string"
+     },
+     "amount": {
+      "type": "number"
+     },
+     "bill": {
+      "type": "string"
+     },
+     "date": {
+      "type": "string"
+     },
+     "day": {
+      "type": "integer"
+     },
+     "how": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "month": {
+      "type": "integer"
+     },
+     "note": {
+      "type": "string"
+     },
+     "reading": {
+      "type": "number"
+     },
+     "status": {
+      "enum": [
+       "paid",
+       "unpaid"
+      ],
+      "type": "string"
+     },
+     "used": {
+      "type": "number"
+     },
+     "year": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Платежи"
+  },
+  "play_music": {
+   "description": "Включить музыку: открывает поиск в YouTube Music.",
+   "fn": "t_play_music",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "description": "исполнитель, песня или настроение",
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Музыка в YouTube Music"
+  },
+  "play_radio": {
+   "description": "Включить радио онлайн внутри ассистента: по названию станции («Европа Плюс», «Радио Маяк»), жанру («джаз», «рок», «классика», «релакс») или пусто — популярное русское. Только чтобы ВКЛЮЧИТЬ: «выключи радио», «хватит» — это media_control с action stop, а не play_radio. Не говори «выключила», не вызвав media_control.",
+   "fn": "t_play_radio",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "url": {
+      "description": "прямая ссылка на поток, если человек её дал (http…)",
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Радио"
+  },
+  "play_youtube": {
+   "description": "Найти и показать ролик на YouTube (откроется в браузере и сразу заиграет): клип, видео, лекция, обзор. query — что искать.",
+   "fn": "t_play_youtube",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Ролик YouTube"
+  },
+  "plugin_change": {
+   "description": "Изменить плагин, который сделала Лира, словами — новая версия: «сделай крупнее», «добавь график по неделям», «поменяй цвета», «верни как было» (undo — откат на шаг). request — просьба словами человека; plugin — название плагина (пусто — последний); code — только если человек просит свою программу на компьютере. by — имя персонажа, если человек просит, чтобы правил именно он («Патрик, добавь кнопку…» к другому персонажу); пусто — правишь ты своей моделью.",
+   "fn": "t_plugin_change",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "by": {
+      "type": "string"
+     },
+     "code": {
+      "type": "boolean"
+     },
+     "plugin": {
+      "type": "string"
+     },
+     "request": {
+      "type": "string"
+     },
+     "undo": {
+      "type": "boolean"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Плагины: изменить"
+  },
+  "plugin_create": {
+   "description": "Сделать человеку ПЛАГИН — свою страницу в студии Dewiar по описанию словами (как Creator Mode): «сделай плагин, который показывает статистику наших разговоров», «сделай трекер привычек», «нужна читалка статей», «сделай переключатель темы», «панель расходов по категориям», «таймер помидора». Плагин сразу появится в меню «Плагины» и откроется. describe — всё, что человек хочет, его словами (что на странице, какие данные, как выглядит); name — если назвал. code — true ТОЛЬКО если человек сам просит, чтобы плагин запускал программу на компьютере (файлы, сеть, расчёты) — будет вопрос «Выполнить?». НЕ пиши HTML и код в ответе — вызывай. by — имя персонажа, если человек просит, чтобы плагин сделал именно он («пусть Патрик сделает»); пусто — делаешь ты своей моделью.",
+   "fn": "t_plugin_create",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "by": {
+      "type": "string"
+     },
+     "code": {
+      "type": "boolean"
+     },
+     "describe": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "describe"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Плагины: сделать"
+  },
+  "plugin_enable": {
+   "description": "Включить ГОТОВЫЙ плагин Dewiar из каталога (Художник, Курсы и цены, Тендеры, Рекрутер…), если просьба — для него, а он выключен (так сказано в справке к вопросу). id — id плагина из справки. Человек подтвердит кнопкой «Выполнить?». Не для своих плагинов (их делает plugin_create).",
+   "fn": "t_plugin_enable",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "id": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Плагины: включить готовый"
+  },
+  "power": {
+   "description": "Питание компьютера: shutdown — выключить, reboot — перезагрузить (оба через минуту, можно отменить), sleep — спящий режим, lock — заблокировать экран, logout — выйти из системы, cancel — отменить выключение. Только когда пользователь явно просит выключить КОМПЬЮТЕР. «Выключи свет», «выключи в зале», лампу, телевизор, кондиционер — это умный дом (smart_home), не power.",
+   "fn": "t_power",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "shutdown",
+       "reboot",
+       "sleep",
+       "lock",
+       "logout",
+       "cancel"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Питание компьютера"
+  },
+  "read_email": {
+   "description": "Прочитать одно письмо целиком по номеру из read_emails.",
+   "fn": "t_read_email",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "uid": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "uid"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Прочитать письмо"
+  },
+  "read_emails": {
+   "description": "Посмотреть почту пользователя: последние письма (кто, тема, начало). unread_only — только непрочитанные, query — слово для поиска (отправитель, тема, текст). Письма не помечаются прочитанными. Ящиков несколько — смотрит все сразу; box — адрес одного ящика, если пользователь его назвал.",
+   "fn": "t_read_emails",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "box": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     },
+     "query": {
+      "type": "string"
+     },
+     "unread_only": {
+      "type": "boolean"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Проверить почту"
+  },
+  "read_file": {
+   "description": "Прочитать файл из папки ассистента (путь из find_notes или из списка). Сканы PDF и картинки распознаются в текст сами.",
+   "fn": "t_read_file",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Чтение заметок"
+  },
+  "read_webpage": {
+   "description": "Прочитать текст веб-страницы по адресу (например, из результатов поиска). Длинная страница — начало и места со словами find (или вопроса).",
+   "fn": "t_read_webpage",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "find": {
+      "description": "что ищешь на странице, если она длинная: «Доллар США», «15 октября»",
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Чтение веб-страниц"
+  },
+  "remember": {
+   "description": "Запомнить надолго факт о пользователе: имя, близкие, работа, предпочтения, привычки, важные даты. Одна короткая фраза в третьем лице («Любит крепкий чай», «Дочь зовут Аня»).",
+   "fn": "t_remember",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "fact": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "fact"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Память о вас"
+  },
+  "remove_task": {
+   "description": "Удалить фоновую задачу совсем — из списка «Задачи», с её папкой и файлами (name — часть названия). Когда просят «удали задачу», «убери эту задачу», «хватит напоминать про задачу». Сначала спроси, если у задачи есть готовые файлы, которые человек мог бы хотеть сохранить.",
+   "fn": "t_remove_task",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Задачи: удалить"
+  },
+  "resume_task": {
+   "description": "Продолжить остановленную или приостановленную задачу (или ждущую — прямо сейчас).",
+   "fn": "t_resume_task",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Задачи: продолжить"
+  },
+  "route": {
+   "description": "Маршрут на карте: «как дойти до…», «проложи маршрут», «построй пешком дворами», геоточка или ссылка на карту. to — куда: адрес с городом, место или координаты, ссылка на карту; from — откуда (пусто — от того места, где пользователь сейчас); mode — walk (пешком, по умолчанию) | transit | car | bike; app — yandex (по умолчанию) | google. Карта сама строит кратчайший путь (пешком — и дворами); не выдумывай улицы и время.",
+   "fn": "t_route",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "app": {
+      "enum": [
+       "yandex",
+       "google"
+      ],
+      "type": "string"
+     },
+     "from": {
+      "type": "string"
+     },
+     "mode": {
+      "enum": [
+       "walk",
+       "transit",
+       "car",
+       "bike"
+      ],
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "to"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Карта: маршрут"
+  },
+  "run_command": {
+   "description": "Выполнить команду в терминале Linux (bash) и вернуть вывод. Только если пользователь явно просит. Большая работа (разобрать папки и диски, навести порядок, проанализировать много файлов и предложить структуру) — не командой, а start_task: у задачи план, ход и результат видны в «Задачах».",
+   "fn": "t_run_command",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "command": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "command"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Команды терминала"
+  },
+  "save_link": {
+   "description": "Сохранить ссылку — видео, статью, сайт — в «Заметки» (там она карточкой с обложкой, с меткой «интересное»): когда просят «сохрани это видео / ссылку / статью», «отложи почитать», «запомни этот ролик». url — адрес целиком; summary — короткий пересказ своими словами, если просили пересказать (сначала прочитай страницу read_webpage); tags — свои метки (необязательно); title — если пользователь назвал сам.",
+   "fn": "t_save_link",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "summary": {
+      "type": "string"
+     },
+     "tags": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "title": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Заметки"
+  },
+  "save_note": {
+   "description": "Сохранить заметку в папку ассистента (Markdown): когда просят записать, запомнить текст, составить список, план, конспект. title — короткое название; text — содержимое в Markdown; folder — подпапка (необязательно); append=true — дописать в существующую заметку.",
+   "fn": "t_save_note",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "append": {
+      "type": "boolean"
+     },
+     "folder": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "title",
+     "text"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Заметки"
+  },
+  "save_screenshot": {
+   "description": "Сделать снимок экрана и сохранить его файлом в «Изображения/Снимки экрана». Вызывай, когда просят «сделай скриншот», «сфотографируй экран», «сохрани экран». Смотреть на снимок не нужно.",
+   "fn": "t_save_screenshot",
+   "level": "safe",
+   "parameters": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Скриншот"
+  },
+  "schedule_job": {
+   "description": "Дело по расписанию, которое делаешь ТЫ сам: проверить почту и сообщить о важном, прислать курс или новости, собрать сводку, следить за чем-то. В срок ты выполняешь его с инструментами и сообщаешь итог — человеку ничего делать не нужно. Просят регулярно «проверяй / присылай / сообщай / следи» — только это, не set_reminder. task — что сделать, своими словами (как поручение тебе); when — повтор обычными словами: «каждый день в 9», «по будням с 9 до 18 каждый час», «каждые 2 часа»; «периодически» без интервала — «каждый час». deliver — куда сообщать итог: voice (голосом, по умолчанию), telegram, max.",
+   "fn": "t_schedule_job",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "deliver": {
+      "enum": [
+       "voice",
+       "telegram",
+       "max"
+      ],
+      "type": "string"
+     },
+     "task": {
+      "type": "string"
+     },
+     "when": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "task",
+     "when"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Дела по расписанию"
+  },
+  "search_documents": {
+   "description": "Найти в документах пользователя на этом компьютере (папка «Знания» и его папки, выбранные для поиска: инструкции, договоры, регламенты, книги, конспекты, рабочие файлы). Вызывай, когда вопрос про его документы или файлы, «что написано в…», «найди в моих документах». Запрос — ключевые слова по-русски, без лишних слов.",
+   "fn": "t_search_documents",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Мои документы"
+  },
+  "send_email": {
+   "description": "Отправить письмо со своей почты пользователя. Кому (to) — адреса через запятую; пусто — самому пользователю («пришли мне на почту»). Тема, текст письма целиком и вложения — пути файлов из папки ассистента (заметки, отчёты задач, «Входящие»). Пиши письмо полностью, вежливо, по-русски. «Отправь карточку организации / реквизиты Ивану» — найди заметку с реквизитами (find_notes: «реквизиты», «карточка») и приложи её файл; адрес по имени — из памяти о пользователе, а если его там нет — спроси одной фразой. ОТВЕТ НА ПИСЬМО («ответь Ивану», «ответь на последнее письмо»): reply_to — номер письма из read_emails (или от кого оно: «Иван») и body — текст ответа; кому, тему «Re:» и цитату подставлю сама. Не пиши «читаю» — сразу read_emails (если номера нет), затем send_email с reply_to.",
+   "fn": "t_send_email",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "attachments": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "body": {
+      "type": "string"
+     },
+     "from": {
+      "description": "с какого ящика (адрес), если подключено несколько и назван; иначе — главный",
+      "type": "string"
+     },
+     "reply_to": {
+      "description": "ответ на письмо: номер из read_emails или от кого оно",
+      "type": "string"
+     },
+     "subject": {
+      "type": "string"
+     },
+     "to": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "body"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Отправить письмо"
+  },
+  "send_telegram": {
+   "description": "Прислать пользователю в мессенджер (Telegram или MAX — куда подключён) сообщение (text) и/или файлы из папки ассистента (files — пути: заметки, отчёты задач, «Входящие», снимки). «Пришли мне в телеграм…», «скинь в макс…», «скинь на телефон…». to — telegram или max, если назван мессенджер.",
+   "fn": "t_send_telegram",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "files": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "text": {
+      "type": "string"
+     },
+     "to": {
+      "enum": [
+       "telegram",
+       "max"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Прислать в Telegram или MAX"
+  },
+  "server_run": {
+   "description": "Выполнить команду на сервере пользователя по SSH (Linux, bash) и вернуть вывод: проверить место, нагрузку, логи, службы, сайт; исправить проблему. server — имя сервера из списка, command — команда. Сначала смотри (df -h, free -m, systemctl status, journalctl -n 50, tail логов), потом предлагай исправление одной понятной командой. Интерактивное (top без -b, nano, less) не работает — бери top -bn1, cat, tail. Каждую команду пользователь подтверждает.",
+   "fn": "t_server_run",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "command": {
+      "type": "string"
+     },
+     "server": {
+      "type": "string"
+     },
+     "timeout": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "server",
+     "command"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Команды на сервере"
+  },
+  "set_reminder": {
+   "description": "Поставить напоминание, будильник или таймер, в том числе повторяющееся. when — когда, обычными словами по-русски: «через 10 минут», «завтра в 9», «в пятницу в 18:30», «каждый день в 8», «по будням в 9:15», «по будням, кроме пятницы, в 17:50», «каждые 2 часа». Будни, выходные, дни недели — только в when, не в text. text — о чём напомнить, коротко. Напоминание — ЧЕЛОВЕКУ: в срок он сам что-то сделает. Если делать должен ТЫ («проверяй почту», «присылай курс», «сообщай о важном», «следи за…») — это schedule_job, а не напоминание.",
+   "fn": "t_reminder",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "at": {
+      "type": "string"
+     },
+     "in_minutes": {
+      "type": "number"
+     },
+     "repeat": {
+      "enum": [
+       "daily",
+       "weekdays",
+       "weekends",
+       "weekly",
+       "monthly",
+       "hourly"
+      ],
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "when": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Напоминания и таймеры"
+  },
+  "set_volume": {
+   "description": "Громкость системы: percent (0–150), или change (+/-), или mute (true/false).",
+   "fn": "t_volume",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "change": {
+      "type": "integer"
+     },
+     "mute": {
+      "type": "boolean"
+     },
+     "percent": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Громкость"
+  },
+  "show_images": {
+   "description": "Показать пользователю картинки к тому, о чём рассказываешь (руны и орнаменты, животные и растения, картины, здания, места, устройство вещей) — они появятся на экране рядом с ответом. Вызывай, когда рассказ о том, что лучше увидеть, или просят «покажи». Ищет как поисковик картинок. query — 2–5 ключевых слов («руническая вязь камень», «Urnes style runestone»); count — сколько (1–6, обычно 3–4); caption — подпись. Не говори «вот изображение», не вызвав инструмент.",
+   "fn": "t_show_images",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "caption": {
+      "type": "string"
+     },
+     "count": {
+      "type": "integer"
+     },
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Картинки к рассказу"
+  },
+  "show_page": {
+   "description": "Показать в браузере красиво оформленную страницу — когда просят «покажи в браузере», «оформи красиво», «сделай страницу / подборку / таблицу»: рецепты, список, сравнение, отчёт. Сначала собери данные (find_notes, read_file, web_search), потом одним вызовом передай html — разметку содержимого: <section> с <h2>, списки, таблицы (оформление и заголовок добавятся сами) или полный документ. Сохранится в «Страницы» и откроется. НЕ пиши HTML в ответе, НЕ пиши скрипты ради этого. Показать СВОЮ заметку или файл пользователя («выведи мою заметку про … в браузере») — передай file: путь из find_notes, без html: текст покажется целиком, как есть.",
+   "fn": "t_show_page",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "file": {
+      "type": "string"
+     },
+     "html": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Страницы"
+  },
+  "site_article": {
+   "description": "Статьи на сайте человека (блог для поиска): «напиши статью для сайта про…» — action write (topic — тема его словами; пусто — следующая из плана); «что с моими статьями» — list; «опубликуй статью» — publish (title — слова из заголовка; пусто — первый черновик); «включи/выключи статьи» — on/off. site — какой сайт.",
+   "fn": "t_site_article",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "list",
+       "write",
+       "publish",
+       "on",
+       "off"
+      ],
+      "type": "string"
+     },
+     "site": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "topic": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Сайты: статьи"
+  },
+  "site_create": {
+   "description": "Сделать человеку САЙТ (лендинг, визитку, сайт компании, кофейни, мастера, школы, магазина…) — «сделай сайт для моей кофейни», «нужен сайт-визитка», «сделай лендинг для курса». Сайт сразу красивый и адаптивный, с формой заявки, откроется в браузере; потом его можно менять фразой (site_edit) и опубликовать на dewiar.pro (site_publish). describe — всё, что человек рассказал о деле, его словами (чем занимается, где, для кого, цены, особенности); name — название, если назвал; kind — вид дела (шаблон), если ясно; контакты — только продиктованные; ref — ссылка на сайт-образец, если человек дал пример («сделай как у …»): возьмём разделы и стиль, но тексты и бренды — свои. НЕ пиши HTML и не обещай «сделаю» — вызывай.",
+   "fn": "t_site_create",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "address": {
+      "type": "string"
+     },
+     "describe": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     },
+     "hours": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "",
+       "course",
+       "bistro",
+       "beauty",
+       "coffee",
+       "salon",
+       "fitness",
+       "dental",
+       "lawyer",
+       "kids",
+       "school",
+       "auto",
+       "shop",
+       "cakes",
+       "photo",
+       "wedding",
+       "clinic",
+       "realty",
+       "travel",
+       "pets",
+       "event",
+       "startup",
+       "personal",
+       "repair"
+      ],
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "phone": {
+      "type": "string"
+     },
+     "ref": {
+      "type": "string"
+     },
+     "tagline": {
+      "type": "string"
+     },
+     "telegram": {
+      "type": "string"
+     },
+     "vk": {
+      "type": "string"
+     },
+     "whatsapp": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "describe"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Сайты: сделать"
+  },
+  "site_edit": {
+   "description": "Изменить сайт человека ЛЮБОЙ просьбой одной фразой — от текста до дизайна: «сделай шапку тёмной», «добавь раздел с ценами: стрижка 1500, окрашивание 3000», «поменяй шрифт на строгий», «меню — бургером», «другой дизайн целиком», «убери галерею», «телефон теперь …», «поставь это фото на обложку», «добавь видео https://youtu.be/…», «верни как было». request — просьба словами человека, с его фактами, ссылками и путями приложенных картинок («Входящие/…»); site — название сайта, если их несколько; show — открыть в браузере после правки.",
+   "fn": "t_site_edit",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "request": {
+      "type": "string"
+     },
+     "show": {
+      "type": "boolean"
+     },
+     "site": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "request"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Сайты: изменить"
+  },
+  "site_publish": {
+   "description": "Опубликовать сайт на dewiar.pro по адресу имя.dewiar.pro (или обновить уже опубликованный — «опубликуй ещё раз»). name — имя латиницей, цифры и дефис, 3–30 знаков (spb-zerno → spb-zerno.dewiar.pro); не назвал — спроси или предложи по названию. site — какой сайт.",
+   "fn": "t_site_publish",
+   "level": "confirm",
+   "parameters": {
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "site": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Сайты: опубликовать"
+  },
+  "site_review": {
+   "description": "Оценить сайт и его продвижение: «оцени мой сайт», «как продвигать сайт», «сколько было посещений», «откуда приходят». Проверка заголовков, описаний, контактов, формы, фото + посещения, источники, устройства, заявки — и твои советы.",
+   "fn": "t_site_review",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "site": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Сайты: оценить и продвигать"
+  },
+  "site_show": {
+   "description": "Открыть сайт человека в браузере, сказать, какие сайты есть и опубликованы ли они. site — название (пусто — последний). zip: true — «хочу сайт на свой сервер/хостинг, под свой домен»: архив файлов сайта в «Загрузки».",
+   "fn": "t_site_show",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "site": {
+      "type": "string"
+     },
+     "zip": {
+      "type": "boolean"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Сайты: показать"
+  },
+  "smart_home": {
+   "description": "Умный дом (Яндекс — устройства, что у Алисы, и Home Assistant): action — list (какие есть устройства, сценарии и показания датчиков: температура, влажность в комнатах), on, off, brightness (value 1–100), brighter, dimmer, temperature (value, °C), warm (value −1 теплее, 1 холоднее), scenario (target — название сценария). target — устройство и/или комната словами: «свет в спальне», «весь свет», «кондиционер», «розетка на кухне».",
+   "fn": "t_smart_home",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "list",
+       "on",
+       "off",
+       "brightness",
+       "brighter",
+       "dimmer",
+       "temperature",
+       "warm",
+       "scenario"
+      ],
+      "type": "string"
+     },
+     "target": {
+      "type": "string"
+     },
+     "value": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Умный дом"
+  },
+  "start_task": {
+   "description": "Запустить большую задачу в фоне: исследование с отчётом, работа с кодом проекта, подготовка документа, разбор файлов, дело на несколько дней с ожиданием ответов (вернуть билет, добиться ответа, проследить статус) — всё, что требует многих шагов. Ассистент работает сам по плану, ведёт блокнот фактов, ждёт и возвращается к делу, сообщает новости и скажет, когда готово. project — путь к папке проекта для работы с кодом (необязательно).",
+   "fn": "t_start_task",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "confirmed": {
+      "description": "человек уже согласился на план, срок и цену (после «НЕ ЗАПУЩЕНО — сначала спроси»)",
+      "type": "boolean"
+     },
+     "folders": {
+      "description": "папки пользователя, с которыми работать (полные пути): задача читает их без вопросов, меняет — с разрешения",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "goal": {
+      "description": "подробная цель",
+      "type": "string"
+     },
+     "if_off": {
+      "description": "тот компьютер не на связи: wait — сделать, когда включится; cloud — сейчас в облаке Dewiar (только если пользователь так ответил)",
+      "enum": [
+       "",
+       "wait",
+       "cloud"
+      ],
+      "type": "string"
+     },
+     "network": {
+      "description": "интернет для скриптов задачи (run_python, run_shell в песочнице) — только если пользователь сам просит, чтобы код ходил в сеть; поиск и чтение страниц работают и без этого",
+      "type": "boolean"
+     },
+     "on": {
+      "description": "на каком своём компьютере («на рабочем», «Ноутбук») — имя из списка компьютеров; пусто — здесь",
+      "type": "string"
+     },
+     "project": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "goal"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Фоновая задача"
+  },
+  "stop_task": {
+   "description": "Остановить фоновую задачу (name — часть названия; пусто — текущую).",
+   "fn": "t_stop_task",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Задачи: стоп"
+  },
+  "suggest_idea": {
+   "description": "Предложить идею разработчику Dewiar («Идеи Лиры»): когда пользователь просит «предложи идею…» или согласился предложить то, чего ты не умеешь. title — суть одной фразой («Будильник с плавным рассветом»), text — подробнее, если человек объяснил. Похожая уже есть — голос уйдёт за неё. Без согласия пользователя не вызывай.",
+   "fn": "t_suggest_idea",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "text": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Идеи Лиры"
+  },
+  "system_status": {
+   "description": "Состояние компьютера: батарея, память, диск, нагрузка и какие программы занимают больше всего памяти. Компьютер тормозит или программа зависла — посмотри здесь, назови виновника и предложи закрыть его (run_command, pkill по имени программы — только после согласия человека).",
+   "fn": "t_system",
+   "level": "safe",
+   "parameters": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Состояние компьютера"
+  },
+  "task_status": {
+   "description": "Как идут фоновые задачи: статус, прогресс, вопросы, итог.",
+   "fn": "t_task_status",
+   "level": "safe",
+   "parameters": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Задачи: статус"
+  },
+  "team_assign": {
+   "description": "Поручить задачу сотруднику (раздел «Поручения») — уйдёт ему в Telegram с кнопками «Беру», «Сделано», «Перенести». Только когда пользователь прямо поручает что-то сотруднику («поручи Анне…», «пусть Иван подготовит…»). who — имя как сказал пользователь; task — что сделать, коротко, повелительно или как дело («Подготовить договор поставки»); due — срок словами как сказал («до четверга 15:00», «завтра к 12») или пусто; повторяющееся поручение — срок с «каждый»/«по будням» как сказал («каждый понедельник к 18», «по будням к 10»); note — подробности.",
+   "fn": "t_team_assign",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "due": {
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     },
+     "task": {
+      "type": "string"
+     },
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who",
+     "task"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Поручения: поручить"
+  },
+  "team_message": {
+   "description": "Написать сотруднику из «Поручений» не по поручению — ответить на его сообщение или сказать что-то («напиши Анне, что отчёт жду к обеду», «ответь Ивану: хорошо»). Дойдёт туда, где он получает поручения. who — имя, text — само сообщение от лица пользователя.",
+   "fn": "t_team_message",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "text": {
+      "type": "string"
+     },
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "who",
+     "text"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Поручения: написать сотруднику"
+  },
+  "team_status": {
+   "description": "Что с поручениями сотрудникам: кто взял, кто сделал (с отчётом), что перенесено и почему, что просрочено. who — имя или пусто — все.",
+   "fn": "t_team_status",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "who": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Поручения: что с ними"
+  },
+  "tell_task": {
+   "description": "Передать фоновой задаче новые сведения, уточнение, ответ на её вопрос, разрешение или просьбу пользователя (например: «по багажу ответили, номер такой-то», «бюджет до 500 евро»). Ждущая задача сразу проснётся и учтёт. Пользователь даёт задаче папку («дай ей доступ к папке проекта F:\\Bot») — folders: полные пути (спросим его «да»). name — часть названия (пусто — текущая).",
+   "fn": "t_tell_task",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "folders": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "name": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Задачи: сообщить"
+  },
+  "tv": {
+   "description": "Телевизор с Chromecast / Google TV / Android TV в домашней сети. action: play — включить видео по ссылке или найти на YouTube (query); site — показать сайт; pause, resume, stop, volume (level 0–100), status; devices — какие телевизоры видны. Используй, когда просят включить что-то на телевизоре или «транслировать на ТВ».",
+   "fn": "t_tv",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "play",
+       "site",
+       "pause",
+       "resume",
+       "stop",
+       "volume",
+       "status",
+       "devices"
+      ],
+      "type": "string"
+     },
+     "device": {
+      "description": "имя телевизора, если их несколько",
+      "type": "string"
+     },
+     "level": {
+      "type": "integer"
+     },
+     "query": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Телевизор"
+  },
+  "update_note": {
+   "description": "Дописать в СУЩЕСТВУЮЩУЮ заметку пользователя: «добавь итог в эту заметку», «сохрани краткое описание в ту же заметку», «допиши в заметку про ремонт». note — путь из find_notes (Заметки/….md) или название заметки; text — что дописать (Markdown); where — end (в конец, по умолчанию) или top (сразу под заголовком: краткое содержание над текстом). Прежний текст не стирается. Ответ «Готово, сохранено» — значит записано: так и скажи. Новую заметку — save_note.",
+   "fn": "t_update_note",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "note": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "where": {
+      "enum": [
+       "end",
+       "top"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "note",
+     "text"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Заметки"
+  },
+  "watch": {
+   "description": "«Дозор»: присмотреть и сказать, когда готово — «скажи, когда Claude ответит», «присмотри за экраном, пока идёт экспорт», «скажи, когда в Загрузках появится файл», «скажи, когда на странице появится „Одобрено“». action: add (по умолчанию) | list (что сейчас под присмотром) | stop (id или пусто — все). kind: screen — экран (what — что должно появиться, своими словами, конкретно), file — папка (folder: «Загрузки» или путь; pattern: «*.mp4»), page — страница (url; what — слово, которое должно появиться, или пусто — любое изменение). every_minutes — как часто смотреть (экран — по умолчанию 5), hours — сколько ждать (по умолчанию 3).",
+   "fn": "t_watch",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "add",
+       "list",
+       "stop"
+      ],
+      "type": "string"
+     },
+     "every_minutes": {
+      "type": "number"
+     },
+     "folder": {
+      "type": "string"
+     },
+     "hours": {
+      "type": "number"
+     },
+     "id": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "screen",
+       "file",
+       "page"
+      ],
+      "type": "string"
+     },
+     "pattern": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     },
+     "what": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Дозор"
+  },
+  "weather": {
+   "description": "Погода сейчас и на ближайшие дни по городу (настоящий прогноз; погоду не ищи в интернете — бери отсюда). city — город (не назван — из памяти о пользователе: «живу в …», «город …»; нет там — спроси; не угадывай и не подставляй другой город), days — на сколько дней (1–7).",
+   "fn": "t_weather",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "city": {
+      "type": "string"
+     },
+     "days": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "city"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Погода"
+  },
+  "web_search": {
+   "description": "Найти в интернете свежую информацию (новости, курсы, факты; погода — инструментом weather). Возвращает список результатов со ссылками.",
+   "fn": "t_web_search",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Поиск в интернете"
+  },
+  "widget": {
+   "description": "Спрятать свой виджет в трей (tray) или вернуть на экран (show) — когда просят «спрячься», «уйди в трей», «покажись». Скажи после этого одной короткой фразой.",
+   "fn": "t_widget",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "action": {
+      "enum": [
+       "tray",
+       "show"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Окно ассистента"
+  },
+  "world_time": {
+   "description": "Который час сейчас в другом городе или стране (по часовому поясу). Время в других городах не считай в уме и калькулятором — только этим. city — город.",
+   "fn": "t_world_time",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "city": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "city"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Время в городе"
+  },
+  "write_diary": {
+   "description": "Записать в свой дневник короткое наблюдение после содержательного разговора: что обсуждали, что пользователю важно, что в следующий раз сделать лучше. Не чаще раза за разговор.",
+   "fn": "t_write_diary",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "entry": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "entry"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Дневник"
+  },
+  "writing_today": {
+   "description": "Сколько пользователь написал сегодня в своих текстах (рукопись, статьи, конспекты в папках «Документов»): слова за день, цель, за неделю, дни подряд, в каких файлах. Когда спрашивают «сколько я написал сегодня», «много ли я написал», «как идёт книга», «сколько слов в моей рукописи».",
+   "fn": "t_writing_today",
+   "level": "safe",
+   "parameters": {
+    "properties": {},
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Пишу"
+  },
+  "yandex_music": {
+   "description": "Яндекс Музыка: открыть поиск (жанр, настроение, исполнитель, песня) в приложении Яндекс Музыки, если оно установлено, иначе на сайте. Когда просят музыку в Яндекс Музыке или пользователь только что открыл её. Запустить/остановить воспроизведение потом — media_control.",
+   "fn": "t_yandex_music",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Яндекс Музыка"
+  }
+ }
+}

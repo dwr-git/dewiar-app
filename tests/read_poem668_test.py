@@ -2,6 +2,7 @@
 и температура 0.95; модель сочиняла и пересказывала, прочитала пять строк, и человек решил, что обрывается голос. Теперь
 просьба прочитать готовое произведение (llm.reading) — без творческой температуры, с подсказкой READ_NOTE: точный текст
 целиком, не уверена — найти и открыть страницу; выдача поиска напоминает, что это отрывки. Телефон — так же (app.js)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, subprocess, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -28,7 +29,7 @@ ok(not any(llm.reading(t) for t in WRITE), f"сочинить и прочее �
 ok(llm.creative_temp(READ[0]) == 0.7 and llm.creative_temp("сочини стихотворение про осень") == 0.95,
    "прочитать — без творческой температуры, сочинить — как раньше 0.95")
 ok("read_webpage" in llm.READ_NOTE and "целиком" in llm.READ_NOTE and "сочиняй" in llm.READ_NOTE, "подсказка: точный текст целиком, страница")
-src = (ROOT / "core/engine_answer.py").read_text()
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok(re.search(r"if reading\(text\.split[^\n]+\n\s+notes\.append\(READ_NOTE\)\s+#[^\n]*\n\s+elif POEM_ASK", src),
    "в ходе разговора: прочитать — READ_NOTE вместо ремесла рифмы")
 st = tools.search_text([{"title": "Мужичок с ноготок", "snippet": "Однажды в студёную…", "url": "https://rustih.ru/x"}])

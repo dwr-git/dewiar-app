@@ -5,6 +5,7 @@
 - всё влезает — без изменений; не влезает — по ступеням: без старой истории → без действий → самая короткая подсказка;
   заметка с советом — один раз;
 - облако и Dewiar не трогаем (окно у них большое и не наше)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys, threading, types
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -118,7 +119,7 @@ sa = llm.put_profile([{"role": "assistant", "content": "Привет!"}, {"role"
 sc = llm._ctx_cut(sa)
 ok(llm.take_profile(sa) == "Имя: Миша." and sc[0]["content"].count("(Дальше — разговор)") == 1 and llm.take_profile(sc) == "Имя: Миша."
    and llm.drop_profile(sa)[0]["role"] == "assistant", "справка отдельным сообщением: читается без метки, после _ctx_cut метка одна, снимается целиком")
-src6 = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src6 = srctext.text(ROOT, "core/engine_answer.py")
 ok("system, msgs = self._system_min(), drop_profile(msgs[-1:])" in src6, "запасной путь «и без действий не влезло» — тоже без личной справки")
 
 for prof, why in (({"base_url": "https://dewiar.pro/dwrapp/cloud.php?p=", "cloud": True}, "облако Dewiar"),
@@ -140,7 +141,7 @@ ok(r["ok"] and r["ctx"] == 65536 and r["ctx_note"] == "", "окно 65536 — б
 llm.stream_chat, llm.probe_tools = orig
 br = (ROOT / "ui/studio/brain.js").read_text(encoding="utf-8")
 ok("r.ctx_note" in br, "студия «Мозг» показывает совет про окно")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)" in src and "self._system_min(), drop_profile(msgs[-1:])" in src,
    "в ходе разговора: подгонка до запроса; и без действий не влезло — самая короткая подсказка")
 srv.shutdown()

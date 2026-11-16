@@ -4,6 +4,7 @@
 (weatherq.py, engine_music._weather_cmd): город — названный, из «Утра», из памяти; нет нигде — спросить; названный
 запоминается; падеж («в Минске», «в Нижнем Новгороде») и область («Железногорск Курской области» — не красноярский);
 «погода в доме» и «песню погода в доме» — не перехватываем; сервис молчит — честно. Для экзамена — событие weather."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, types
 from datetime import date, timedelta
 from pathlib import Path
@@ -111,7 +112,7 @@ ok(E3._weather_cmd("Какая погода в доме у Петровых") is
 FAIL = True
 E4 = Eng("живу в Минске")
 ok(E4._weather_cmd("какая погода?") and "сервис погоды не отвечает" in E4.said[-1][0], "сеть упала — честно, без выдумок")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("self._weather_cmd(text, via)" in src and src.index("self._home_cmd(text, via)") < src.index("self._weather_cmd(text, via)"),
    "в разговоре: после умного дома («температура в спальне» — датчик), до модели")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

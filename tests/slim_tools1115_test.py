@@ -2,6 +2,7 @@
 токенов из ≈20 тыс.). Теперь: ядро действий — всегда и всегда первым, в одном порядке (кэш начала запроса); модули и пачки
 (деньги, близкие, файлы, компьютер, маршруты…) — когда вопрос про них (их слова в core/modules.py), ими пользовались
 последние 15 минут, или модель попросила сама (more_tools — в его описании список отложенного). tools.slim false — как раньше."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, re, sys, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -61,7 +62,7 @@ tb.__dict__["_used"]["money"] = tb.__dict__["_offered"]["money"] = time.time() -
 ok("money_add" not in names(tb.specs("а за неделю?")), "через 15 минут — снова по словам")
 tb.s = Sett({"slim": False})
 ok(names(tb.specs("Привет")) == names(full), "tools.slim false — весь набор, как раньше")
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 ok("self.toolbox.specs(slim_text)" in ea and "self.toolbox.specs(slim_text, keep=turn.packs)" in ea and '"more_tools"' in ea,
    "разговор: облегчённый набор, more_tools — следующий шаг уже с группой")
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

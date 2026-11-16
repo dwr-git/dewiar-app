@@ -76,9 +76,6 @@ class Latency:
             xs, self.samples = self.samples, []
         return self.summary(xs)
 
-    def put_back(self, xs):
-        with self._lock:
-            self.samples = (xs + self.samples)[-self.keep:]
 
     @staticmethod
     def summary(xs):

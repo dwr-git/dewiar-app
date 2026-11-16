@@ -2,6 +2,7 @@
 изменением плагина занялся Патрик — менять настройки Лиры не хочется»): плагин пишет модель персонажа — того, кто
 отвечает, или названного («пусть Патрик сделает», by), и выбранного в студии («Кто делает»); общий «Мозг» — только если у
 персонажа своей модели нет."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, tempfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -81,11 +82,11 @@ for _n in ("plugin_create", "plugin_change"):
        and "by" in _v[1]["properties"] and "by —" in _v[0], f"{_n}: описание, схема с by, исполнитель — на своих местах")
 ok(all(isinstance(v[4], str) for v in T.TOOLS.values()), "у всех действий подпись — текст (каталог для окна сериализуется)")
 _json.dumps({n: [v[0], v[1], v[2], v[4]] for n, v in T.TOOLS.items()})
-src = (ROOT / "core/tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/tools.py")
 ok('"by": {"type": "string"}' in src and "пусть Патрик сделает" in src, "у plugin_create и plugin_change — поле by")
 js = (ROOT / "ui/studio/plugmake.js").read_text(encoding="utf-8") + (ROOT / "ui/studio/plugpage.js").read_text(encoding="utf-8")
 ok('pmkWho("pmk-who")' in js and 'by: pmkWhoVal("pmk-who")' in js and 'pmkWho("plp-ed-who")' in js, "студия: «Кто делает» при создании и правке плагина")
-eng = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_commands.py")
 ok(eng.count('M.using(str(a.get("by") or "") or None)') == 2, "ядро: plugin_make и plugin_change берут by из студии")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} ошибок")
 sys.exit(1 if fails else 0)

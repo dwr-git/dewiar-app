@@ -5,6 +5,7 @@
      В руководстве — настоящая команда (GitHub, последняя версия) и что на VPS без экрана не ставят; сценарий экзамена.
 №757: «Мозг: нет настройки запасного мозга» — Лира обещала «при сбое DeepSeek пересяду на Ollama» (так нельзя): руководство
      говорит честно, где какой запасной."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import json, os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -50,7 +51,7 @@ for t in ("машина быстрее", "едет медленнее", "быс�
     ok(not run(t), f"«{t}» — не просьба о темпе голоса")
 e.s.d["tts"]["speed"] = 0.7
 ok(run("помедленнее") and e.s.d["tts"]["speed"] == 0.7 and "некуда" in said[-1], "медленнее некуда — так и сказано")
-src = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_answer.py")
 ok("self._speed_cmd(text, via)" in src, "просьба о темпе проверяется до модели")
 
 g = (ROOT / "data/guide.json").read_text(encoding="utf-8")

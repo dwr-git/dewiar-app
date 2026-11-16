@@ -4,6 +4,7 @@
   ответили кнопкой — недосказанный вопрос замолкает (опасная команда — по-прежнему каждый раз).
 - Задача над проектом показывает файл из рабочей копии (живой), карточка говорит, что работа идёт в копии.
 - Показ результата не перезагружается на каждое событие задачи — только когда файл правда изменился (mtime)."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import os, sys, tempfile, threading
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -46,7 +47,7 @@ src = (ROOT / "core/tasks.py").read_text(encoding="utf-8")
 ok('"code_run" + (":" + cmd if warn else "")' in src and '"run_shell" + (":" + cmd[:300] if warn else "")' in src,
    "опасная команда (предупреждение защиты) — своим ключом: «Всегда» её не пропускает")
 
-ea = (ROOT / "core/engine_answer.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_answer.py")
 i = ea.index("    def confirm(self, question")
 c = ea[i:i + 4200]
 ok("quiet=False" in c and 'tag="confirm"' in c and 'getattr(t, "tag", "") == "confirm"' in c and "self.player.stop()" in c,

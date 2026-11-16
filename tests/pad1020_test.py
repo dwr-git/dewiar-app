@@ -4,6 +4,7 @@
 синхронизация не дописывает вкладке заголовок и сообщает открытому блокноту; картинки — с путём, другой компьютер
 кладёт их туда же. Страница (ui/pad.html): Markdown туда-обратно без потерь, «- », «[] », «# » на лету, галочки,
 вставка картинки и таблицы с сайта, сохранение само. Виджет: кнопка в углу; окно — рядом с карточкой."""
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import base64, json, os, re, subprocess, sys, tempfile, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
@@ -79,7 +80,7 @@ src = (ROOT / "core/close.py").read_text(encoding="utf-8")
 ok('"rel": str(rel)' in src and "self._natt_rel(f.get(\"rel\"))" in src, "компьютер отправляет путь файла, другой компьютер его принимает")
 
 # команды ядра и окно
-ec = (ROOT / "core/engine_commands.py").read_text(encoding="utf-8")
+ec = srctext.text(ROOT, "core/engine_commands.py")
 ok(all(f'cmd == "{c}"' in ec for c in ("pad_tabs", "pad_read", "pad_write", "pad_new", "pad_rename", "pad_delete", "pad_order", "pad_attach", "pad_file")), "команды pad_* в ядре")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok("def pad_toggle" in app and "def pad_hide" in app and "self._pad_follow_at(x, y)" in app and "self.pad_hide()" in app,

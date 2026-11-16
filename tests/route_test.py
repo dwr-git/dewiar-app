@@ -53,7 +53,8 @@ ok("пешком" in s and "дворами" in s and "не выдумывай у
 
 # компьютер: инструмент
 opened = []
-T.launch = lambda cmd, *a, **k: opened.append(cmd)
+import tools_base  # noqa: E402 — запуск — в основе действий (1.0.8)
+tools_base.launch = lambda cmd, *a, **k: opened.append(cmd)
 R.geocode = lambda q, get=None: (55.7539, 37.6208, "Красная площадь, Москва, Россия")
 out = T.TOOLS["route"][3]({"to": "Красная площадь, Москва"}, {})
 ok(opened and opened[-1][-1] == "https://yandex.ru/maps/?rtext=~55.753900,37.620800&rtt=pd" and "Открыла маршрут пешком" in out, f"компьютер: открыл в браузере: {opened[-1:]} {out[:60]}")
