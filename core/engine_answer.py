@@ -551,7 +551,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -747,10 +747,12 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     say(s_)
                 if not calls and step == 0 and not turn.cancel.is_set() and any(x.get("name") == "web_search" for x in specs or []):
                     if looks_like_refusal(step_text):      # «нет доступа к интернету», а поиск есть — просим поискать (только на шаге 0)
-                        log.info("✋ Модель отказалась («нет доступа»), не попробовав поиск — прошу поискать")
+                        watch = WATCH_ASK_RX.search(turn.asked or "") and any(x.get("name") == "schedule_job" for x in specs or [])
+                        log.info("✋ Модель отказалась («нет доступа»), не попробовав %s", "дело по расписанию — прошу завести"
+                                 if watch else "поиск — прошу поискать")
                         held.clear()                           # отговорка так и не прозвучала
-                        sentences.put("Секунду — посмотрю в интернете.")
-                        msgs = msgs + [{"role": "assistant", "content": step_text}, {"role": "user", "content": REFUSAL_NUDGE}]
+                        sentences.put("Секунду — настрою." if watch else "Секунду — посмотрю в интернете.")
+                        msgs = msgs + [{"role": "assistant", "content": step_text}, {"role": "user", "content": WATCH_NUDGE if watch else REFUSAL_NUDGE}]
                         turn.full = ""
                         self.set_state("thinking")
                         continue

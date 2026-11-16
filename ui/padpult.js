@@ -207,38 +207,47 @@
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.setAttribute("width", w); svg.setAttribute("height", h);
     box.style.setProperty("--pu-cx", cx.toFixed(0) + "px"); box.style.setProperty("--pu-r", R.toFixed(0) + "px");
     const now = Date.now() / 1000;
-    const ang = (ts) => Math.max(-1, Math.min(1, (ts - now) / H12)) * Math.PI;            // −π…π, 0 — наверху
+    // как обычные часы (владелец 16.11: «22:30 должно быть слева сверху»): 12 наверху, 3 справа, стрелка — «сейчас».
+    // 10 утра и 10 вечера — одно место на циферблате, поэтому дорожки две: внешняя — следующие 12 ч, внутренняя — прошедшие
+    const ang = (ts) => { const d = new Date(ts * 1000); return ((d.getHours() % 12) * 3600 + d.getMinutes() * 60 + d.getSeconds()) / H12 * 2 * Math.PI; };
     const pt = (a, r) => [cx + r * Math.sin(a), cy - r * Math.cos(a)];
     const arc = (a0, a1, r) => { const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r); return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${Math.abs(a1 - a0) > Math.PI ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
-    // часы по кругу: каждые 3 часа — подпись, каждый час — штрих
+    const an = ang(now), RP = R - 22;                                                       // RP — дорожка прошлого
+    // часы: штрих — каждый час, подпись — 12, 3, 6, 9
     let ticks = "", labels = "";
-    const h0 = Math.ceil((now - H12) / 3600) * 3600;
-    for (let t = h0; t <= now + H12; t += 3600) {
-      const a = ang(t), hr = new Date(t * 1000).getHours(), big = hr % 3 === 0;
-      const [x0, y0] = pt(a, R - 9), [x1, y1] = pt(a, R - (big ? 15 : 12));
+    for (let hr = 0; hr < 12; hr++) {
+      const a = hr / 12 * 2 * Math.PI, big = hr % 3 === 0;
+      const [x0, y0] = pt(a, R - 8), [x1, y1] = pt(a, R - (big ? 15 : 12));
       ticks += `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)}L${x1.toFixed(1)} ${y1.toFixed(1)}" class="${big ? "big" : ""}"/>`;
-      if (big && Math.abs(a) > 0.28) { const [lx, ly] = pt(a, R - 27); labels += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${String(hr).padStart(2, "0")}</text>`; }
+      if (big) { const [lx, ly] = pt(a, R - 38); labels += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${hr || 12}</text>`; }
     }
-    // точки дня; близкие по времени — друг над другом, наружу
-    const ev = ((PU.data && PU.data.day) || []).filter(x => KIND[x.k]).map(x => Object.assign({}, x, { a: ang(x.ts) }));
+    // впереди — ярче у стрелки и бледнее к концу полусуток; прошлое — так же внутри
+    let fut = "", past = "";
+    for (let i = 0; i < 12; i++) {
+      const a0 = an + i / 12 * 2 * Math.PI, a1 = a0 + 2 * Math.PI / 12 - 0.004, o = (0.55 * (1 - i / 12) + 0.05).toFixed(2);
+      fut += `<path d="${arc(a0, a1, R)}" style="stroke-opacity:${o}"/>`;
+      past += `<path d="${arc(an - (i + 1) / 12 * 2 * Math.PI + 0.004, an - i / 12 * 2 * Math.PI, RP)}" style="stroke-opacity:${(o * 0.7).toFixed(2)}"/>`;
+    }
+    // точки дня: будущее — снаружи, прошедшее — на внутренней дорожке; близкие по времени — друг над другом
+    const ev = ((PU.data && PU.data.day) || []).filter(x => KIND[x.k] && Math.abs(x.ts - now) < H12).map(x => Object.assign({}, x, { a: ang(x.ts) }));
     if (PU.lead && !ev.some(x => x.k === "lead" && Math.abs(x.ts - PU.lead.ts) < 60)) ev.push({ k: "lead", ts: PU.lead.ts, t: PU.lead.name || "Посетитель сайта", a: ang(PU.lead.ts) });
     ev.sort((x, y) => x.ts - y.ts);
     const placed = [];
     for (const x of ev) {
-      let lift = 0; while (placed.some(p => Math.abs(p.a - x.a) * R < 13 && p.lift === lift)) lift++;
-      x.lift = Math.min(lift, 3); placed.push(x);
-      [x.x, x.y] = pt(x.a, R + x.lift * 12);
+      const was = x.ts < now, r0 = was ? RP : R, step = was ? -9 : 12;
+      let lift = 0; while (placed.some(p => p.was === was && Math.abs(Math.atan2(Math.sin(p.a - x.a), Math.cos(p.a - x.a))) * r0 < 13 && p.lift === lift)) lift++;
+      x.was = was; x.lift = Math.min(lift, was ? 1 : 3); placed.push(x);
+      [x.x, x.y] = pt(x.a, r0 + x.lift * step);
     }
     PU.nodes = ev;
-    const [nx, ny] = pt(0, R);
+    const [nx, ny] = pt(an, R), [hx, hy] = pt(an, RP - 6);
     const think = busy() && cfg().thoughts;
-    svg.innerHTML = `<defs><linearGradient id="pu-fut" x1="0" x2="1"><stop offset="0" stop-color="var(--pu-mem)" stop-opacity=".55"/><stop offset="1" stop-color="var(--pu-mem)" stop-opacity=".06"/></linearGradient>
-        <linearGradient id="pu-past" x1="1" x2="0"><stop offset="0" stop-color="var(--pu-think)" stop-opacity=".45"/><stop offset="1" stop-color="var(--pu-think)" stop-opacity=".04"/></linearGradient></defs>
-      <circle class="pu-face" cx="${cx}" cy="${cy}" r="${R - 4}"/>
-      <path class="pu-past" d="${arc(-Math.PI + 0.001, 0, R)}"/><path class="pu-fut" d="${arc(0, Math.PI - 0.001, R)}"/>
+    svg.innerHTML = `<circle class="pu-face" cx="${cx}" cy="${cy}" r="${R - 4}"/>
+      <g class="pu-past">${past}</g><g class="pu-fut">${fut}</g>
       <g class="pu-ticks">${ticks}</g><g class="pu-hours">${labels}</g>
-      ${think ? `<g class="pu-sweep" style="transform-origin:${cx}px ${cy}px"><path d="${arc(-0.9, 0, R)}"/></g>` : ""}
-      <g class="pu-ev">${ev.map((x, i) => `<g class="e ${x.k}${x.ts < now ? " was" : ""}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(hhmm(x.ts) + " · " + KIND[x.k][0] + ": " + x.t)}"><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="9" class="hit"/><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="${x.k === "lead" ? 6 : 4.6}" class="dot"/></g>`).join("")}</g>
+      <path class="pu-hand" d="M${hx.toFixed(1)} ${hy.toFixed(1)}L${nx.toFixed(1)} ${ny.toFixed(1)}"/>
+      ${think ? `<g class="pu-sweep" style="transform-origin:${cx}px ${cy}px"><path d="${arc(an - 0.9, an, R)}"/></g>` : ""}
+      <g class="pu-ev">${ev.map((x, i) => `<g class="e ${x.k}${x.was ? " was" : ""}" data-i="${i}" tabindex="0" role="button" aria-label="${esc(hhmm(x.ts) + " · " + KIND[x.k][0] + ": " + x.t)}"><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="9" class="hit"/><circle cx="${x.x.toFixed(1)}" cy="${x.y.toFixed(1)}" r="${x.k === "lead" ? 6 : x.was ? 3.8 : 4.6}" class="dot"/></g>`).join("")}</g>
       <circle class="pu-now" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="6"/>`;
     // центр: время, что дальше; лента «Сегодня» справа на широком листе
     const nextOne = ev.find(x => x.ts > now);
@@ -252,9 +261,16 @@
     if (wide) {
       const past = ev.filter(x => x.ts <= now).reverse().slice(0, 5);
       f.innerHTML = `<p class="pu-k">Сегодня</p>` + (past.length ? `<ul>${past.map(x => `<li><button type="button" data-go="${KIND[x.k][1]}"><time>${esc(hhmm(x.ts))}</time><i class="${x.k}"></i><span>${esc(x.t)}</span></button></li>`).join("")}</ul>`
-        : `<p class="pu-fe">Пока тихо. Всё, что Лира сделает за день, — запишет в дневник, и оно появится здесь и на круге.</p>`);
+        : quiet());
     }
     el("#pu-empty").hidden = true;
+  }
+  // тихо — вместо пустой ленты одна находка Радара с «Сутью от Лиры»; нет и её — как раньше
+  function quiet() {
+    const pk = PU.data && PU.data.radar && PU.data.radar.pick;
+    if (!pk) return `<p class="pu-fe">Пока тихо. Всё, что Лира сделает за день, — запишет в дневник, и оно появится здесь и на круге.</p>`;
+    return `<button type="button" class="pu-pick" data-go="insight"><span class="pu-k radar">Из Радара${pk.src ? " · " + esc(pk.src) : ""}</span>`
+      + `<b>${esc(pk.title)}</b><span>${esc(pk.gist)}</span><small>Открыть в Радаре</small></button>`;
   }
   let tip = null;
   function tipFor(g) {

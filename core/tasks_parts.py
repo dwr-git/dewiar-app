@@ -318,6 +318,7 @@ class PartsMixin:
         import shutil
         cands = list(b.get("files") or [])
         cands += [m for m in re.findall(r"[\wА-Яа-яЁё./-]+\.[A-Za-z0-9]{1,5}\b", b.get("sources") or "") if "://" not in m]
+        cands += self._part_range(" ".join(map(str, b.get("files") or [])) + " " + str(b.get("sources") or ""))
         root, out, size = t.dir.resolve(), [], 0
         for rel in dict.fromkeys(cands):
             try:
@@ -345,6 +346,23 @@ class PartsMixin:
                 log.info("часть: копия %s не удалась: %s", rel, e)
                 continue
             out.append(dst.relative_to(c.dir).as_posix())
+        return out
+
+    # №793 (16.11): перевод скана на 107 страниц — части получили «pages/page_055.png … page_081.png», а в inputs/ легли
+    # только два файла по краям: части повторяли одно и то же и тратили заряд. Диапазон «a … b» (…, ..., -, –, —, до) из
+    # файлов с одним именем и номером — все файлы между ними
+    PART_RANGE_RX = re.compile(r"((?:[\wА-Яа-яЁё.-]+/)*)([\wА-Яа-яЁё-]*?)(\d+)\.([A-Za-z0-9]{1,5})\s*(?:\.\.\.|…|-|–|—|до|по|to)\s*"
+                               r"(?:\1)?\2(\d+)\.\4\b")
+
+    def _part_range(self, text):
+        out = []
+        for m in self.PART_RANGE_RX.finditer(text or ""):
+            d, stem, a, ext, b = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
+            lo, hi = int(a), int(b)
+            if not 0 < hi - lo <= 1000:
+                continue
+            w = len(a) if a.startswith("0") else 0
+            out += [f"{d}{stem}{str(n).zfill(w)}.{ext}" for n in range(lo, hi + 1)]
         return out
 
     def _spawn_parts(self, t, parts):

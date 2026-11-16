@@ -366,8 +366,9 @@
   /* «Циферблат дня» (16.11): круг — сутки вокруг «сейчас»; слева прошедшее, справа впереди */
   .pu-face { fill: var(--paper); fill-opacity: .55; }
   body.neu.light .pu-face { fill: var(--paper); fill-opacity: 1; filter: drop-shadow(6px 6px 10px var(--neu-dark, #b8c5d6)) drop-shadow(-6px -6px 10px var(--neu-light, #fff)); }
-  .pu-past, .pu-fut { fill: none; stroke-width: 7; stroke-linecap: round; }
-  .pu-past { stroke: url(#pu-past); } .pu-fut { stroke: url(#pu-fut); }
+  .pu-past path, .pu-fut path { fill: none; stroke-linecap: butt; }
+  .pu-fut path { stroke: var(--pu-mem); stroke-width: 7; } .pu-past path { stroke: var(--pu-think); stroke-width: 3; }
+  .pu-hand { stroke: var(--pu-think); stroke-width: 2; stroke-linecap: round; stroke-opacity: .55; }
   .pu-ticks path { stroke: var(--ink); stroke-opacity: .16; stroke-width: 1.2; stroke-linecap: round; }
   .pu-ticks path.big { stroke-opacity: .32; stroke-width: 1.6; }
   .pu-hours text { font: 600 10.5px "Manrope", sans-serif; fill: var(--muted); text-anchor: middle; font-variant-numeric: tabular-nums; }
@@ -380,15 +381,23 @@
   .pu-ev .e.diary .dot { fill: var(--pu-think); } .pu-ev .e.radar .dot { fill: var(--pu-radar); }
   .pu-ev .e.lead .dot { fill: var(--pu-lead); filter: drop-shadow(0 0 5px var(--pu-lead)); }
   .pu-ev .e.remind .dot, .pu-ev .e.job .dot { fill: var(--pu-mem); }
+  .pu-ev .e.was .dot { stroke-width: 1.5; opacity: .8; }
   .pu-ev .e:hover .dot, .pu-ev .e:focus-visible .dot { r: 7px; }
   .pu-ev .e:focus-visible .hit, .pu-ev .e:hover .hit { fill: var(--pu-glow); }
-  .pu-center { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); width: calc(var(--pu-r, 120px) * 1.3);
+  .pu-center { position: absolute; left: var(--pu-cx, 50%); top: 50%; transform: translate(-50%, -50%); width: calc((var(--pu-r, 120px) - 50px) * 2);   /* между подписями 9 и 3 */
                display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; pointer-events: none; }
   .pu-time { font: 600 clamp(24px, calc(var(--pu-r, 120px) * .25), 40px)/1 "Unbounded", "Manrope", sans-serif; color: var(--ink); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
   .pu-nx { max-width: 100%; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.35;
            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .pu-nx i, .pu-feed i { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--pu-mem); }
   .pu-nx.quiet { color: var(--muted); font-weight: 500; }
+  .pu-feed .pu-pick { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 14px; margin-top: 2px;
+             border: 0; border-radius: 14px; background: var(--chip2); font: inherit; cursor: pointer; }
+  .pu-feed .pu-pick:hover, .pu-feed .pu-pick:focus-visible { background: var(--pu-glow); outline: none; }
+  .pu-feed .pu-pick .pu-k { font-size: 11.5px; font-weight: 700; color: var(--pu-radar); -webkit-line-clamp: 1; }
+  .pu-feed .pu-pick b { font-size: 14px; line-height: 1.35; }
+  .pu-feed .pu-pick span:not(.pu-k) { font-size: 12.5px; line-height: 1.5; color: var(--muted); -webkit-line-clamp: 5; }
+  .pu-feed .pu-pick small { font-size: 12px; font-weight: 600; color: var(--pu-radar); }
   .pu-center small { font-size: 11.5px; color: var(--muted); }
   #pult i.diary { background: var(--pu-think); } #pult i.radar { background: var(--pu-radar); } #pult i.lead { background: var(--pu-lead); }
   .pu-feed { position: absolute; right: 14px; top: 14px; bottom: 14px; left: calc(var(--pu-cx) + var(--pu-r) + 34px); display: flex; flex-direction: column; gap: 6px; overflow: hidden; }

@@ -353,6 +353,14 @@ class TasksCommands:
                                            "signal": float((x.get("a") or {}).get("signal") or 0), "ts": x.get("ts") or x.get("seen") or 0}
                                           for x in fresh],
                                 "trend": ins.day_trend(), "n": len(ins.analyzed(24))}
+                # тихий «Пульт» (владелец 16.11: «в моменты, когда тихо, — что-то из новых трендов»): сильнейшее за сутки
+                # с «Сутью от Лиры» — одна карточка «Из Радара» вместо пустой ленты «Сегодня»
+                best = max(ins.analyzed(24), key=lambda x: float((x.get("a") or {}).get("signal") or 0), default=None)
+                if best and str((best.get("a") or {}).get("summary") or "").strip():
+                    gist = " ".join(str(best["a"]["summary"]).split())
+                    cut = re.search(r"^.{40,240}?[.!?…](?=\s|$)", gist)
+                    out["radar"]["pick"] = {"title": (best.get("title") or "")[:140], "src": best.get("src_name") or "",
+                                            "gist": cut.group(0) if cut else gist[:240]}
                 for x in ins.analyzed(24):
                     ts = x.get("ts") or x.get("seen") or 0
                     if ts and now - ts < 12 * 3600:
