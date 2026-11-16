@@ -8,6 +8,8 @@ import os, sys, threading, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 os.environ["DEWIAR_AUDIO_BACKEND"] = "sounddevice"
 os.environ["DEWIAR_FAKE_DEFMIC"] = "2|Микрофон (Realtek)"
 fails = []
@@ -69,7 +71,7 @@ eng.capture = cap2
 os.environ["DEWIAR_FAKE_DEFMIC"] = "3|Headset (Sony WH-1000XM4)"
 ok(not moved(), "выбран конкретный микрофон — смена главного в Windows его не трогает")
 
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 lst = src[src.index("    def _listen(self):"):]
 ok("self._default_mic_moved()" in lst[:4000] and "self.restart_audio.set()" in lst[lst.index("self._default_mic_moved()"):][:200],
    "в цикле слуха: сменился главный микрофон — restart_audio (переоткрытие без «Микрофон недоступен»)")

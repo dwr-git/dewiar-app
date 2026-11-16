@@ -33,7 +33,7 @@ ok((M.parse_more("и ещё 500 на такси", last) or {}).get("category") =
 ok(M.parse_more("ещё 5 минут", last) is None and M.parse_more("И ещё раз", last) is None and M.parse_more("ещё 3 песни", last) is None,
    "«ещё 5 минут», «ещё раз», «ещё 3 песни» — не деньги")
 ok(M.parse_more("И ещё 1250 на кафе.", None) is None, "без недавней записи — не перехватываем")
-et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+et = srctext.text(ROOT, "core/engine_tools.py")
 ok("parse_more(text, last" in et and "time.time() - last[\"ts\"] < 15 * 60" in et and "self._money_last = {" in et,
    "ядро: продолжение — только 15 минут после записи")
 

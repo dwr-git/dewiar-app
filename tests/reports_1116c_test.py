@@ -9,6 +9,8 @@ import json, os, subprocess, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path[:0] = [str(ROOT), str(ROOT / "core")]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -28,7 +30,7 @@ b.data = {"mode": "dewiar"}
 ok("перенаправляет" in b._bad_status(302) and "302" not in b._bad_status(302), f"№778: 302 общего бота — по-человечески: {b._bad_status(302)}")
 b.data = {"mode": ""}
 ok("прокси" in b._bad_status(302) and b._bad_status(500) == "Telegram ответил 500", "свой бот: перенаправление — про прокси; прочее — как было")
-au = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+au = srctext.text(ROOT, "core/engine_audio.py")
 ok("remote audio" in au and "Запись с этого компьютера" in au, "№780: удалённый рабочий стол — что включить в подключении")
 
 # №776: телефон — ставим по словам человека

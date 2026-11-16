@@ -20,6 +20,8 @@ def ok(c, m):
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 from PIL import Image  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 tmp = Path(tempfile.mkdtemp())
 www = tmp / "www"
 shutil.copytree(ROOT / "android/assets/www", www)
@@ -74,7 +76,7 @@ with sync_playwright() as p:
 
 app = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
 ok('sink.push("Мне неприятно, когда со мной так разговаривают, но помогу. ")' in app, "грубость — граница своей фразой всегда, модель только помогает")
-eng = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_tools.py")
 ok("Записывать не нужно" in app and "Записывать не нужно" in eng and "Не записано: пользователь" not in app + eng,
    "save_note без просьбы — «Записывать не нужно… это не ошибка», а не «Не записано» (модель говорила «система не дала»)")
 print("\nИТОГ:", "всё прошло" if not fails else f"не прошло {len(fails)}")

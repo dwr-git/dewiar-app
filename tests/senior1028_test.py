@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -145,7 +147,7 @@ ok(not E.senior.scam("Мне позвонили из банка, просят к
 
 # голос: «выпила» закрывает звонок лекарства, «нет, не пила» — спросить ещё раз
 ok({"выпила", "выпил", "приняла"} <= ToolsMixin.ACK_WORDS, "«выпила», «приняла» — ответ на звонок")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok('self.alarm_finish("seen" if med else "ack")' in src and "Отлично, отметила." in src, "заговорили о другом — лекарство не считается выпитым")
 
 # Часть 2 — студия: «Лира — для меня ▾» на «Главной», три карточки, раздел «Для старших»

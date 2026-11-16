@@ -19,7 +19,7 @@ def ok(c, m):
 
 
 # 1. длинное без имени — по выбору человека
-ea = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_audio.py")
 ok(re.search(r'long_ = \(dur is not None and dur > FOLLOW_MAX_S\) or len\(ws\) > FOLLOW_MAX_WORDS\n\s+if self\.s\.get\("audio", "follow_long"\):\s+[^\n]*\n\s+long_ = False', ea) is not None,
    "audio.follow_long — длинная фраза без имени тоже мне")
 import settings  # noqa: E402

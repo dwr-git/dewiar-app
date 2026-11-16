@@ -6,6 +6,8 @@ import os, sys, threading, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -23,7 +25,7 @@ stub = types.SimpleNamespace(state="idle", hold=None, restart_audio=threading.Ev
                              push=lambda title, text, **k: pushed.append((title, text)), report_problem=lambda *a: None,
                              s=types.SimpleNamespace(get=lambda *k: ""))
 stub._mic_silent = lambda exact=True: E._mic_silent(stub, exact)
-engine_audio.list_devices = lambda: [{"name": "real", "description": "Встроенный микрофон", "kind": "source"}]
+__import__("ears_base").list_devices = lambda: [{"name": "real", "description": "Встроенный микрофон", "kind": "source"}]
 zero, voice = b"\x00" * 1024, (b"\x10\x05" * 512)
 st = {"since": None, "told": False, "all": True}
 acts = [E._mic_zero_step(stub, st, zero, t / 10) for t in range(0, 70)]          # 7 с нулей
@@ -62,9 +64,9 @@ ok("heal" in a5 and not getattr(s5, "_aec_bypass", False) and len(told) == n0, "
 st5 = {"since": None, "told": False, "all": True}
 a5 = [E._mic_zero_step(s5, st5, zero, 200 + t / 10) for t in range(0, 70)]
 ok("heal" in a5 and getattr(s5, "_aec_bypass", False) and "напрямую" in told[-1], f"нули снова — микрофон напрямую, без эхоподавления: {told[-1][:70]}")
-ok('not getattr(self, "_aec_bypass", False) and self.aec.setup' in (ROOT / "core/engine_audio.py").read_text(encoding="utf-8"),
+ok('not getattr(self, "_aec_bypass", False) and self.aec.setup' in srctext.text(ROOT, "core/engine_audio.py"),
    "при переоткрытии эхоподавление пропускается")
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok('self._mic_zero_step(zst, frame, now) == "heal"' in src, "главный цикл слуха проверяет каждый кадр этим шагом")
 # «почти тишина» (пик ≤ 3, не нули) — массив микрофонов AMD с шумоподавлением в тихой комнате (№136, 20.10): тревога
 # и автоотчёт после каждого перезапуска, а микрофон работал. Теперь: подсказка только через минуту; микрофон в этом запуске

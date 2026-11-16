@@ -55,7 +55,7 @@ ok(f"{today:%d.%m} (сегодня)" in ctx and "Позвонить маме" in
 ok(f"{today + timedelta(days=1):%d.%m} (завтра)" in Eng(cal).agenda_context("Что у меня завтра?"), "«что завтра?» человека — по-прежнему завтра")
 
 # 2. пустой run_command
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 i = src.index('if name in ("run_command", "server_run") and not str((args or {}).get("command") or "").strip():')
 j = src.index("blocked, force, warn_q = self.toolbox.guard(name, args)")
 ok(i < j and "system_status" in src[i:j] and "start_task" in src[i:j] and "_confirm" not in src[i:j],

@@ -70,7 +70,7 @@ ok("запущена" in r4 and made, "дело по расписанию — с
 spec = tools.TOOLS["start_task"][1] if hasattr(tools, "TOOLS") else None
 src = srctext.text(ROOT, "core/tools.py")
 ok('"confirmed": {"type": "boolean"' in src, "у start_task есть confirmed")
-et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+et = srctext.text(ROOT, "core/engine_tools.py")
 ok('args = dict(args, _unattended=True)' in et and "def _talers_for_tokens" in et, "дело по расписанию помечено; цена — из цен облака")
 # большая просьба не влезла в 6 шагов разговора — на последнем шаге предложить задачу (а не молча оборвать)
 ea = srctext.text(ROOT, "core/engine_answer.py")

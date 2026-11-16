@@ -29,7 +29,7 @@ ok(not any(nl(t) for t in ["спасибо", "как дела", "да", "сто�
 
 src = srctext.text(ROOT, "core/engine_answer.py")
 ok("thanks_phrase(text)" in src and "def _thanks" in src and "THANKS_REPLIES" in src, "ядро: на «спасибо» — короткий ответ, затем звук «не слушаю»")
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok("self._name_like(text)" in src and "thanks_phrase(rest)" in src, "«Лира, спасибо» и ослышанное имя — через новые проверки")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

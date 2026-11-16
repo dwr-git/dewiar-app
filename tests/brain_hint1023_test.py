@@ -8,6 +8,8 @@ from pathlib import Path
 import httpx
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -70,7 +72,7 @@ ok("ключ" in t and "модели" not in t, f"неверный ключ — 
 t = llm._humanize(http_err(400, '{"error":{"message":"\\"x/flux2-klein:4b\\" does not support chat","type":"invalid_request_error"}}'),
                   "http://127.0.0.1:11434/v1", "x/flux2-klein:4b")
 ok("«x/flux2-klein:4b» не умеет разговаривать" in t and "«Список моделей»" in t, f"модель для картинок — понятно, что выбрать другую: {t}")
-src = (ROOT / "core/llm.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/llm.py")
 ok("flux" in src[src.index("def list_models"):src.index("def list_models") + 4000], "в списке моделей разговора нет моделей для картинок (flux, sdxl)")
 
 if fails:

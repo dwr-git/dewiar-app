@@ -5,6 +5,8 @@ import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import llm  # noqa: E402
 fails = []
 
@@ -27,7 +29,7 @@ ok(llm.wants_cjk([{"role": "user", "content": "Как будет «спасиб�
 ok(llm.wants_cjk([{"role": "user", "content": "что значит 谢谢"}]), "человек сам написал иероглифы — нужны")
 ok(not llm.wants_cjk([{"role": "user", "content": "какие у меня дела"}]), "обычный вопрос — иероглифы прочь")
 ok(llm.wants_cjk([{"role": "user", "content": [{"type": "text", "text": "переведи на китайский"}]}]), "вопрос с картинкой (список частей) — тоже понимаем")
-src = (ROOT / "core/llm.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/llm.py")
 ok("col.no_cjk = not wants_cjk(messages)" in src, "включено для каждого ответа модели")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

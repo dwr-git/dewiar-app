@@ -7,6 +7,8 @@ ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.par
 tmp = Path(tempfile.mkdtemp())
 os.environ["DEWIAR_STATE_DIR"] = str(tmp / "st"); os.environ["DEWIAR_CONFIG_DIR"] = str(tmp / "cfg")
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -43,7 +45,7 @@ ok(not g.cached(), "без кодера — не скачано (докачае�
 (hub / "encoder-model.int8.onnx").write_bytes(b"0" * 2048)
 ok(g.cached(), "кодер, декодер и словарь — скачано")
 
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok('rc["language"] = "en"' in src and "self._ui_en()" in src, "облачное распознавание — language=en, когда программа по-английски")
 ok("Parakeet v3 — точное распознавание речи" in src, "в «Моделях» студии — Parakeet, а не GigaAM")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

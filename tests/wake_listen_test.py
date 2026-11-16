@@ -10,6 +10,8 @@ from types import SimpleNamespace
 import numpy as np
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 ok = lambda c, m: print(("✅ " if c else "❌ ") + m)
 import engine as E  # noqa: E402
 from radio import Radio  # noqa: E402
@@ -121,7 +123,7 @@ ok(run("Стол.", False, follow=True, dur=0.8) == [("ask", "Стол.")] and r
 from engine_base import is_sleep_phrase as _isp  # noqa: E402
 ok(all(_isp(t) for t in ("Ctop.", "Хорошо, Ctop", "Пayзa", "хватить")) and not any(_isp(t) for t in ("Стол", "сто", "Топ")),
    "is_sleep_phrase: латиница и ослышки — стоп, «стол», «сто», «топ» — нет")
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok('bool(lf.get("follow"))' in src and '"follow": follow}' in src, "склейка частей фразы не превращает фразу без имени в вопрос")
 
 # --- цикл слушания: 20 с «музыки», которую детектор принимает за речь, и имя в конце ---

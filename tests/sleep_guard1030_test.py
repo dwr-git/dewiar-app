@@ -6,6 +6,8 @@ import os, sys, types, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -53,7 +55,7 @@ ok(not AudioMixin._sleep_due(eng), "ядро: играет радио — не �
 eng.radio.playing = False
 eng.s = types.SimpleNamespace(get=lambda *k: False if k == ("audio", "let_sleep") else None)
 ok(not AudioMixin._sleep_due(eng), "ядро: настройка выключена — не отпускать")
-src = (ROOT / "core/engine_audio.py").read_text()
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok("self._mic_asleep = True" in src and "idle_seconds()" in src and "Снова слушаю микрофон" in src, "аудиопоток: отпустил — ждёт мышь и открывает снова")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

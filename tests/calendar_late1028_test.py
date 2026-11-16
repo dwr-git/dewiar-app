@@ -22,6 +22,8 @@ ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.par
 tmp = Path(tempfile.mkdtemp())
 os.environ.update(DEWIAR_STATE_DIR=str(tmp / "st"), DEWIAR_CONFIG_DIR=str(tmp / "cfg"), DEWIAR_HOME=str(tmp / "home"))
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -215,7 +217,7 @@ with sync_playwright() as p:
 ok(not errs, "без ошибок JavaScript" + (f": {errs[:3]}" if errs else ""))
 
 # ядро: новое время повторяющегося — для всех повторов, ближайший в будущем
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok("rep = dict(rep, time=at.strftime(\"%H:%M\"))" in src and "at = next_time(rep, datetime.now())" in src, "ядро: у повтора меняется и время повтора; прошло сегодня — со следующего раза")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -12,6 +12,8 @@ import json, os, sys, threading, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -76,7 +78,7 @@ e3 = Eng(); e3.turn = Turn(1); e3.turn.spoken = ["Расскажу коротк�
 e3._cancel_locked()
 ok(e3.history[-1]["content"] == "Расскажу коротко. …(меня перебили)" and not getattr(e3, "_confirm_cut", None),
    "перебили не на вопросе — как раньше")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok("turn.sys_said = " in src and "turn.asking = title or name" in src, "вопрос программы отмечается как её слова")
 sc = {s["id"]: s for s in json.loads((ROOT / "data/exam/scenarios.json").read_text(encoding="utf-8"))["scenarios"]}
 ok("confirm_cut_yes" in sc and sc["confirm_cut_yes"]["seed"].get("history"), "сценарий экзамена: перебили на «Выполнить?» — «да» делает")

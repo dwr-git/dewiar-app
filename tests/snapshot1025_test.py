@@ -10,6 +10,8 @@ import io, json, os, shutil, sys, tempfile, zipfile
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -100,7 +102,7 @@ ok(json.loads((cfg / "settings.json").read_text())["llm"]["profiles"]["x"]["api_
 bk.pw_set(""); ok(bk.pw_get() == "" and not (cfg / "snapshot.pw").exists(), "пароль можно забыть")
 # merge_json по-простому
 ok(B.merge_json({"a": [1, 2], "b": {"x": 1}}, {"a": [2, 3], "b": {"x": 9, "y": 2}, "c": 5}) == {"a": [1, 2, 3], "b": {"x": 1, "y": 2}, "c": 5}, "слияние JSON: недостающее добавлено, своё не заменено")
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok("self.backup.make(folder, password=self.backup.pw_get(), auto=True)" in src, "автокопия — с запомненным паролем (закрытая, с сейфом)")
 shutil.rmtree(tmp, ignore_errors=True)
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

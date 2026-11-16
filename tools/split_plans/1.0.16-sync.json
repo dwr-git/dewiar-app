@@ -1,0 +1,130 @@
+{
+ "source": "core/sync.py",
+ "cls": "Sync",
+ "base": null,
+ "patch": [
+  "_now_ms",
+  "STATE_DIR",
+  "_seal"
+ ],
+ "alias": "SB",
+ "rules": {
+  "module": "sync_base",
+  "doc": "Синхронизация — основа (чистое ядро 1.0.16 — docs/CORE_PLAN.md): виды записей и пределы, шифрование записи\n(_seal/_open), id заметок и фактов, время. Обмен — core/sync.py (Sync, HomeSync), части — sync_*.py; прежние имена\nsync.X на месте. Подменять в проверках — здесь (sync_base._now_ms, STATE_DIR, _seal): части читают через основу."
+ },
+ "mixins": {
+  "sync_e2e": {
+   "cls": "E2EMixin",
+   "doc": "Синхронизация — сквозное шифрование (часть Sync, чистое ядро 1.0.16): ключ на этом устройстве, включить и\nвыключить, ключ с другого устройства, метка «шифрование включено».",
+   "methods": [
+    "e2e_key",
+    "_sealable",
+    "e2e_status",
+    "e2e_enable",
+    "key_arrived",
+    "_any_key",
+    "_apply_mark"
+   ]
+  },
+  "sync_snap": {
+   "cls": "SnapMixin",
+   "doc": "Синхронизация — снимок этого устройства (часть Sync, чистое ядро 1.0.16): заметки и их id (в том числе вторые id\nдо 0.83), напоминания, деньги, память, душа и дневник, своя память персонажей.",
+   "methods": [
+    "_notes_root",
+    "_note_paths",
+    "_sib_rel",
+    "_note_alias",
+    "note_sid",
+    "snapshot",
+    "_snap_extra",
+    "_facts",
+    "_pfacts",
+    "_apply_pmemory",
+    "_hash_of"
+   ]
+  },
+  "sync_apply": {
+   "cls": "ApplyMixin",
+   "doc": "Синхронизация — чужие изменения (часть Sync, чистое ядро 1.0.16): применить запись, удаление только доказанное,\nперсонаж с телефона, душа и дневник, заметки (замок, конфликт правок, смена папки), вкладки блокнота, «Обо мне».",
+   "methods": [
+    "_apply",
+    "_really_gone",
+    "_apply_persona",
+    "_apply_extra",
+    "_q_seen",
+    "_apply_note",
+    "_locked_keep",
+    "_file_h",
+    "_note_conflict",
+    "_note_change",
+    "_dev_name",
+    "_move_to_folder",
+    "_pad_event",
+    "_apply_fact"
+   ]
+  },
+  "sync_files": {
+   "cls": "FilesMixin",
+   "doc": "Синхронизация — файлы (часть Sync, чистое ядро 1.0.16): хранилище Obsidian, «Клиенты», «Мои файлы» на телефоне\n(текст — только со сквозным шифрованием).",
+   "methods": [
+    "_vault_files",
+    "_snap_vault",
+    "_clients_ok",
+    "_apply_client",
+    "_docs_ok",
+    "_doc_parts",
+    "_snap_docs",
+    "_doc_read",
+    "doc_status",
+    "_vault_read",
+    "_apply_vault"
+   ]
+  },
+  "sync_safe": {
+   "cls": "SafeMixin",
+   "doc": "Синхронизация — «Сейф паролей» (часть Sync, чистое ядро 1.0.16): только своим устройствам и только зашифрованным.",
+   "methods": [
+    "_safe_on",
+    "_snap_safe",
+    "_safe_read",
+    "_apply_safe",
+    "_safe_event",
+    "safe_refetch",
+    "safe_status"
+   ]
+  },
+  "sync_plugins": {
+   "cls": "PluginsMixin",
+   "doc": "Синхронизация — свои плагины Лиры между компьютерами (часть Sync, чистое ядро 1.0.16): заголовок и куски,\nсборка и установка, старые куски.",
+   "methods": [
+    "_snap_plugins",
+    "_plg_prune",
+    "_plugin_read",
+    "_plg_dir",
+    "_apply_plugin",
+    "_plugin_try"
+   ]
+  },
+  "sync_pay": {
+   "cls": "PayMixin",
+   "doc": "Синхронизация — «Платежи» (часть Sync, чистое ядро 1.0.16): счета, оплаты и вложения кусками.",
+   "methods": [
+    "_pf_dir",
+    "_snap_payfiles",
+    "_payfile_read",
+    "_apply_pay"
+   ]
+  },
+  "sync_tasks": {
+   "cls": "TasksMixin",
+   "doc": "Синхронизация — задачи между устройствами (часть Sync, чистое ядро 1.0.16): просьбы с телефона, файлы-результаты,\nзадача другому своему устройству.",
+   "methods": [
+    "_task_want",
+    "_upload_outputs",
+    "_claim_tasks",
+    "_start_task",
+    "send_taskreq"
+   ]
+  }
+ }
+}

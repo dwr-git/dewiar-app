@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import audio_io  # noqa: E402
 from audio_io import ALARM_RATE, BRAND_SOUNDS, alarm_tone, signature_tone  # noqa: E402
 fails = []
@@ -37,7 +39,7 @@ ok(alarm_tone("signature") == signature_tone(ALARM_RATE), "нет файла —
 audio_io._wav_tone = real
 html = (ROOT / "ui/settings.html").read_text(encoding="utf-8")
 ok(all(f'<option value="{v}">' in html for v in BRAND_SOUNDS) and 'value="chasha"' not in html, "студия: пять звонков в списке, прежних нет")
-et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+et = srctext.text(ROOT, "core/engine_tools.py")
 ok("pl.start(ALARM_RATE)" in et, "звонок играется с той же частотой, что записан")
 if fails:
     raise SystemExit(1)

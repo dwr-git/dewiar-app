@@ -80,7 +80,7 @@ ok(pushed and emitted == ["paused"], "на телефон и в виджет")
 ok(G.check(host, now) == [], "второй раз — не повторяет")
 src = srctext.text(ROOT, "core/tasks.py")
 ok('t.cancel.is_set() and t.status != "paused"' in src, "цикл задачи после отмены оставляет «на паузе» (не «остановлено»)")
-eng = (ROOT / "core" / "engine_audio.py").read_text(encoding="utf-8") + (ROOT / "core" / "engine.py").read_text(encoding="utf-8")
+eng = srctext.text(ROOT, "core/engine_audio.py") + (ROOT / "core" / "engine.py").read_text(encoding="utf-8")
 ok("def _task_guard_loop" in eng and "target=self._task_guard_loop" in eng, "сторож запускается вместе с фоновыми службами")
 
 

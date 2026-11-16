@@ -50,7 +50,7 @@ ok(EA.ACTS_RX.sub("", "Провайдер — Ростелеком. [узнан�
 cf = llm.CodeFilter()
 spoken = cf.feed("Провайдер — Ростелеком.\n[узнано инструментами — опирайся: x]\nВсё.\n")
 ok("узнано" not in spoken and "Ростелеком" in spoken and "Всё" in spoken, f"вслух пометку не читаем: {spoken!r}")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok("name in FACT_TOOLS" in src and "turn.facts" in src, "находки инструментов копятся в ходе")
 ok('"facts": facts' in srctext.text(ROOT, "core/engine_answer.py"), "и ложатся в историю с ответом")
 app = (ROOT / "ui/app.py").read_text(encoding="utf-8")

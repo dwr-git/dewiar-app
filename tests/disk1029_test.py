@@ -6,6 +6,8 @@ import os, sys, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -28,7 +30,7 @@ BR.BrainMixin._disk_check(me)
 ok(len(notes) == 1, "повторно — не раньше чем через 6 часов")
 os.environ["DEWIAR_DISK_MIN_MB"] = "0"
 ok(BR.BrainMixin._disk_check(types.SimpleNamespace()) is False, "места хватает — молчим")
-au = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+au = srctext.text(ROOT, "core/engine_audio.py")
 ok("elif last_err and disk_full(last_err):" in au and "self.note(disk_full_note())" in au, "звук: при заполненном диске — не «микрофон недоступен», а про диск")
 ok("self._disk_check()" in (ROOT / "core/engine_brain.py").read_text(encoding="utf-8"), "фоновая проверка раз в 10 минут")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

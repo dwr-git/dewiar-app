@@ -9,6 +9,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -77,7 +79,7 @@ ok(e2._quiet_until == 0.0 and not e2.status["note"], "ответ, начатый
 e3 = E(); e3.wake_time = time.monotonic() - 60                    # долгий разговор по голосу — остановили спустя минуту
 e3.command("ptt", {})
 ok(e3._quiet_until == 0.0, "остановили спустя минуту разговора — это не ложное срабатывание")
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok('if kind == "wake" and self.state == "idle" and now < self._quiet_until:' in src, "быстрый слух: имя в эту минуту пропускается")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

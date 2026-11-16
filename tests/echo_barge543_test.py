@@ -10,6 +10,8 @@ import collections, os, sys, tempfile, threading, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 tmp = Path(tempfile.mkdtemp())
 os.environ.update(DEWIAR_CONFIG_DIR=str(tmp / "cfg"), DEWIAR_STATE_DIR=str(tmp / "st"), DEWIAR_WORKSPACE=str(tmp / "ws"))
 fails = []
@@ -131,7 +133,7 @@ e._said.append((time.monotonic(), "Джарвис расскажет подро�
 e._now_saying = "Джарвис расскажет подробнее про нишу YouTube."
 ok(e._own_word("джарвис"), "имя есть в том, что я сейчас говорю")
 ok(e._is_self_echo("Джарвис расскажет подробнее", barge=True), "точная модель услышала «Джарвис расскажет…» — это моя фраза")
-src = (ROOT / "core" / "engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok("имя в моей же речи (эхо), не перебиваю" in src and "barge_floor(list(spk_all))" in src and "now >= self._barge_name_until" in src,
    "в слухе: имя из своей речи не перебивает; порог речи без AEC; после эха — только по имени")
 ok('self.status["aec_real"] = bool(use_aec)' in src, "наушники — не настоящий AEC (status.aec_real)")

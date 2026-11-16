@@ -161,7 +161,7 @@ src = (ROOT / "core/engine_brain.py").read_text(encoding="utf-8")
 eb = src[src.index("def _ensure_brain"):src.index("def _own_stt_failed")]
 ok('self.status.get("stt_ready") is False' not in eb and "self._stt_temp_server()" in eb, "_ensure_brain больше не путает «грузится» и «не загрузился»")
 ok("self._stt_retry_own()" in src[src.index("def _brain_watch"):], "раз в час при проверке мозга пробуем свою модель")
-ok("self._stt_temp_server()" in (ROOT / "core/engine_audio.py").read_text(encoding="utf-8"), "сбой загрузки GigaAM — сразу временная замена")
+ok("self._stt_temp_server()" in srctext.text(ROOT, "core/engine_audio.py"), "сбой загрузки GigaAM — сразу временная замена")
 ok("self._stt_choice_back()" in (ROOT / "core/engine.py").read_text(encoding="utf-8"), "при запуске — выбор человека")
 cmd = srctext.text(ROOT, "core/engine_commands.py")
 ok(cmd.count('{"stt": {"auto_from": ""}}') >= 3, "ручной выбор (настройки, «Сервер Dewiar» по ключу и по аккаунту) стирает замену")

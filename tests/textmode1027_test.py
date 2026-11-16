@@ -27,10 +27,12 @@ def free():
 
 
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import llm  # noqa: E402
 ok(llm._local_base("http://127.0.0.1:8080/v1") and llm._local_base("http://192.168.1.20:11434") and not llm._local_base("https://openrouter.ai/api/v1"),
    "своя модель (этот компьютер, своя сеть) узнаётся по адресу")
-src = (ROOT / "core/llm.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/llm.py")
 ok("near = _local_base(base) or _ip_base(base)" in src and "600 if near else 180" in src, "своей модели — до 10 минут на первое слово")   # 1.0: near — и для соединения
 
 tmp = Path(tempfile.mkdtemp())

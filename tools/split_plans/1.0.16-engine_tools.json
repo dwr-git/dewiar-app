@@ -1,0 +1,113 @@
+{
+ "source": "core/engine_tools.py",
+ "cls": "ToolsMixin",
+ "base": "engine_base",
+ "patch": [],
+ "rules": {
+  "module": "acts_base",
+  "doc": "Действия — основа (чистое ядро 1.0.16 — docs/CORE_PLAN.md): слова просьб и подтверждений (NOTE_ASK_RX, CONFIRM_YES…),\nкакие действия только читают, помощники. Действия модели и их окружение — core/engine_tools.py (ToolsMixin), части —\nacts_*.py; прежние имена engine_tools.X на месте."
+ },
+ "mixins": {
+  "acts_confirm": {
+   "cls": "ConfirmMixin",
+   "doc": "Действия — вопрос «да/нет» (часть Engine, чистое ядро 1.0.16): спросить голосом и кнопками, разобрать ответ,\nкороткое «да» в ответ на вопрос, ответ задаче в чате.",
+   "methods": [
+    "_just_agreed",
+    "_confirm",
+    "_task_reply",
+    "_answer_confirm"
+   ]
+  },
+  "acts_quick": {
+   "cls": "QuickMixin",
+   "doc": "Действия без модели (часть Engine, чистое ядро 1.0.16): «сколько времени», план дня, «удали задачу», «я позвонил\nв банк», звонок и сообщение близким, YouTube, черновик книги, таблица почты, таймеры, заметка или факт сразу\n(_capture), ответ одной фразой (_say_quick).",
+   "methods": [
+    "_reminder_time_guard",
+    "_clock_cmd",
+    "_plan_cmd",
+    "_task_del_cmd",
+    "_mark_cmd",
+    "_call_cmd",
+    "_youtube_cmd",
+    "_send_cmd",
+    "_send_loose",
+    "_draft_cmd",
+    "_mail_table_cmd",
+    "_timer_cmd",
+    "_capture",
+    "_say_quick"
+   ]
+  },
+  "acts_alarm": {
+   "cls": "AlarmMixin",
+   "doc": "Напоминания и будильник (часть Engine, чистое ядро 1.0.16): окно-будильник, звонок и голосовые «отложи/понял»,\nкоманды студии для напоминаний и дел, вложения напоминаний, журнал сработавших, имена дел по расписанию.",
+   "methods": [
+    "_reminder_public",
+    "_reminder_note",
+    "_reminder_files",
+    "reminders_list",
+    "_reminders_wake",
+    "_on_reminders_changed",
+    "_on_reminder",
+    "_alarm_loop",
+    "_ring",
+    "_say_now",
+    "alarm_finish",
+    "_alarm_voice",
+    "_alarm_public",
+    "_done_cmd",
+    "_reminder_cmd",
+    "_reminder_log",
+    "job_title",
+    "job_label",
+    "_log_reminder"
+   ]
+  },
+  "acts_devices": {
+   "cls": "DevicesMixin",
+   "doc": "Свои устройства (часть Engine, чистое ядро 1.0.16): вход в облако, общее для своих устройств, «Взять мозги»,\nпоручения с телефона руководителя, своя память персонажа, мои компьютеры и задача на названный, «Устройства».",
+   "methods": [
+    "credentials",
+    "_dewiar_web",
+    "own_snapshot",
+    "brains_share",
+    "brains_pull",
+    "brains_status",
+    "_brains_take",
+    "_team_on",
+    "team_changed",
+    "_team_publish",
+    "team_phone_cmd",
+    "own_apply",
+    "sync_key_wanted",
+    "note_rel_of",
+    "own_ask",
+    "own_share",
+    "device_name",
+    "own_memory",
+    "mem_owner",
+    "persona_memory_set",
+    "computers",
+    "find_computer",
+    "eyes_page",
+    "_talers_for_tokens",
+    "remote_task",
+    "devices_public",
+    "sync_public"
+   ]
+  },
+  "acts_day": {
+   "cls": "DayMixin",
+   "doc": "Деньги и календарь (часть Engine, чистое ядро 1.0.16): «купил … за …», валюта, «Заботливая память», вопросы о планах\n(agenda_context), всё по дням месяца (calendar_month).",
+   "methods": [
+    "_default_currency",
+    "_auto_currency",
+    "_money_cmd",
+    "care_on",
+    "care_context",
+    "agenda_context",
+    "calendar_month"
+   ]
+  }
+ }
+}

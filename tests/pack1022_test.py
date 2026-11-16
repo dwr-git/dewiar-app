@@ -12,6 +12,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 os.environ["DEWIAR_RATE_WAIT"] = "5,5,5"
 fails = []
 
@@ -73,7 +75,7 @@ import tasks  # noqa: E402
 name = tasks._clean("Внести правки в Obsidian по результатам аудита (приоритет 1 и 2)")
 ok(not name.endswith((" ", ".")) and len(name) <= 60, f"имя папки задачи — без пробела на конце (Windows его срезает): {name!r}")
 ok(tasks._clean("отчёт.") == "отчёт" and tasks._clean("   ") == "задача", "точка на конце и пустое имя")
-src = (ROOT / "core/sync.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/sync.py")
 ok("Задача с телефона не создалась" in src, "одна задача с телефона, которая не создалась, не роняет весь обмен")
 
 ok(not any("openrouter.ai/keys\"" in (ROOT / f).read_text(encoding="utf-8") or "openrouter.ai/keys<" in (ROOT / f).read_text(encoding="utf-8")

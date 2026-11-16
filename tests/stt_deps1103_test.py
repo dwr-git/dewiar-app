@@ -13,6 +13,8 @@ ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.par
 tmp = Path(tempfile.mkdtemp())
 os.environ["DEWIAR_STATE_DIR"] = str(tmp / "st"); os.environ["DEWIAR_CONFIG_DIR"] = str(tmp / "cfg")
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -111,7 +113,7 @@ cloud = S.RemoteSTT({"base_url": "https://dewiar.pro/dwrapp/cloud.php?p=", "clou
 ok("Облако Dewiar" in S.stt_error_text(cloud, e500, vosk), "облако — своими словами, без советов про свой сервер")
 eto = httpx.ConnectTimeout("timed out")
 ok("не отвечает" in S.stt_error_text(remote, eto, vosk), "сервер не отвечает — так и сказано")
-asrc = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+asrc = srctext.text(ROOT, "core/engine_audio.py")
 ok(asrc.count("self._stt_spare(") >= 2 and "пробую Vosk" not in asrc, "фразы и диктовка — через _stt_spare")
 
 # ---------- установщик Linux: по одной, если общий список не встал ----------

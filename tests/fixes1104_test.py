@@ -59,7 +59,7 @@ def hint(srcs, cur):
     st = types.SimpleNamespace(note=lambda t: told.append(t), push=lambda title, text, **k: pushed.append(text),
                                report_problem=lambda *a: None, _mic_alive=False,
                                s=types.SimpleNamespace(get=lambda *k: cfg.get(k[-1], ""), update=lambda p: None))
-    engine_audio.list_devices = lambda: [{"name": n, "description": n, "kind": "source"} for n in srcs]
+    __import__("ears_base").list_devices = lambda: [{"name": n, "description": n, "kind": "source"} for n in srcs]
     with mock.patch.object(engine_audio.os, "name", "nt"):
         E._mic_silent(st, exact=False)
     return told[-1] if told else ""

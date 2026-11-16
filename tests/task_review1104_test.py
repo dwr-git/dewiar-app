@@ -27,6 +27,8 @@ import llm  # noqa: E402
 import tasks as TK  # noqa: E402
 import textedit as TE  # noqa: E402
 import tools as T  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 
 mock = Mock({})
 host = Host(mock)
@@ -103,7 +105,7 @@ try:
     ok(False, "весь диск — отказ и при создании")
 except ValueError as e:
     ok("весь диск" in str(e), "весь диск — отказ и при создании задачи (откуда бы ни пришла просьба)")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok("self.toolbox.guard(name, args)" in src and "if need_confirm or force:" in src, "разговор спрашивает человека, когда guard требует (force)")
 tp = tm.create("С частями", "цель", start=False, folders=[str(mine)])
 tm.start = lambda tid, wake="": tm.tasks[tid]                      # части не запускаем — нужна только их папка

@@ -73,7 +73,7 @@ ok(not EM.MusicMixin._listen_watchdog(w), "держат «говорить» —
 ea = srctext.text(ROOT, "core/engine_answer.py")
 ok('if getattr(self, "muted", False) or getattr(self, "_mic_pause", 0):\n            follow = 0.0' in ea,
    "микрофон выключен — «ваша очередь» после ответа не открывается")
-au = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+au = srctext.text(ROOT, "core/engine_audio.py")
 mu = (ROOT / "core/engine_music.py").read_text(encoding="utf-8")
 ok("self._listen_live = now" in au and "self._listen_watchdog()" in mu, "слух отмечает, что идёт; сторож — в фоновом потоке присутствия")
 # 4) «Не получилось: 407 Proxy Authentication Required» (дважды, 09:01 и 09:02): понятный текст и свежий логин прокси
@@ -107,7 +107,7 @@ b = types.SimpleNamespace(s=types.SimpleNamespace(get=lambda a, k: "http://u:p@p
 ok(cls._proxy_auth_stale(b) and not cls._proxy_auth_stale(b), "свежий логин — не чаще раза в 10 минут")
 time.sleep(0.2)
 ok(fetched == [True], f"берётся с сайта (force): {fetched}")
-lsrc = (ROOT / "core/llm.py").read_text(encoding="utf-8")
+lsrc = srctext.text(ROOT, "core/llm.py")
 ok("if r.status_code == 407:" in lsrc, "ответ 407 от сервера модели через прокси — тот же понятный текст")
 print("ИТОГ:", "всё прошло" if not fails else f"{len(fails)} ошибок")
 sys.exit(1 if fails else 0)

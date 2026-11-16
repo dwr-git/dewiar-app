@@ -5,6 +5,8 @@ import os, sys
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import music  # noqa: E402
 fails = []
 
@@ -24,7 +26,7 @@ for t, q in (("можно джаз", "джаз"), ("хочу русское ра
     ok(r and r["op"] == "play" and r["query"] == q, f"музыка: «{t}» → {r}")
 ok(music.genre_tag("поправить") == "" and music.genre_tag("попсу") == "pop" and music.genre_tag("роковое") == "rock" and music.genre_tag("рокировка") == "",
    "жанр — по основе с коротким окончанием: «поправить», «рокировка» — не жанры")
-src = (ROOT / "core/llm.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/llm.py")
 ok('("ProgramFiles", "Ollama")' in src, "Ollama ищется и в Program Files, и в scoop")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

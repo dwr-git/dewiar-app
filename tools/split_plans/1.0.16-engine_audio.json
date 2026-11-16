@@ -1,0 +1,109 @@
+{
+ "source": "core/engine_audio.py",
+ "cls": "AudioMixin",
+ "base": "engine_base",
+ "patch": [
+  "list_devices"
+ ],
+ "alias": "EB",
+ "rules": {
+  "module": "ears_base",
+  "doc": "Слух — основа (чистое ядро 1.0.16 — docs/CORE_PLAN.md): пороги перебивания и сбоев микрофона, помощники\n(barge_floor, rest_after, stop_mid_phrase). Слух и голос — core/engine_audio.py (AudioMixin), его части — ears_*.py;\nпрежние имена engine_audio.X на месте. Подменять в проверках — здесь (ears_base.list_devices): части читают через основу."
+ },
+ "mixins": {
+  "ears_models": {
+   "cls": "ModelsMixin",
+   "doc": "Слух и голос — движки и модели (часть Engine, чистое ядро 1.0.16): слух имён (Vosk), точное распознавание\n(GigaAM, сервер), выбор движков, скачивание моделей и голосов (Vosk TTS, Piper), ход загрузки.",
+   "methods": [
+    "build_spotter",
+    "wake_checker",
+    "_names_note",
+    "_ui_en",
+    "_asr_name",
+    "apply_engines",
+    "_background_loads",
+    "_gigaam_fail_text",
+    "_dir_mb",
+    "models_status",
+    "models_get",
+    "_mirror",
+    "_mirror_url",
+    "ensure_vosk_tts",
+    "ensure_voice",
+    "_dl",
+    "_load",
+    "_loaded",
+    "current_stt"
+   ]
+  },
+  "ears_mic": {
+   "cls": "MicMixin",
+   "doc": "Слух — микрофон (часть Engine, чистое ядро 1.0.16): открыть микрофон и динамик (эхоподавление), поток audio с\nпереоткрытием после сбоя, микрофон выключен или занят камерой, сон Windows, «микрофон молчит», Bluetooth-гарнитура.",
+   "methods": [
+    "_open_audio",
+    "_out_crash_check",
+    "_audio_loop",
+    "_mic_rest_due",
+    "_mic_kick_now",
+    "_mic_rest",
+    "mic_paused",
+    "_sleep_due",
+    "_mic_silent",
+    "_mic_zero_step",
+    "_default_mic_moved"
+   ]
+  },
+  "ears_listen": {
+   "cls": "ListenMixin",
+   "doc": "Слух — фразы (часть Engine, чистое ядро 1.0.16): главный цикл _listen (кадр за кадром), конец фразы и выученная\nпауза, удержание «говорить», длинная запись, поток stt и запасной распознаватель, второй язык, диктовка удержанием.",
+   "methods": [
+    "_listen",
+    "_on_utterance",
+    "_pause_apply",
+    "_end_need",
+    "_pause_check",
+    "_pause_ok",
+    "hold_start",
+    "hold_end",
+    "_transcribe_long",
+    "_stt_spare",
+    "_stt_worker",
+    "_lang2",
+    "handle_held"
+   ]
+  },
+  "ears_name": {
+   "cls": "NameMixin",
+   "doc": "Слух — имя (часть Engine, чистое ядро 1.0.16): поток name-check, созвоны (кто слушает микрофон, «только главный»),\nимя по звучанию, ослышанное имя, ожидание вопроса после имени.",
+   "methods": [
+    "_check_worker",
+    "_noisy",
+    "_meeting_mode",
+    "_wake_aliases",
+    "_meeting_ignores",
+    "_meeting_watch",
+    "_check_voiceprint",
+    "_after_name",
+    "_wake_misheard",
+    "_name_like",
+    "listen_for_command"
+   ]
+  },
+  "ears_echo": {
+   "cls": "EchoMixin",
+   "doc": "Слух — «стоп» и своё эхо (часть Engine, чистое ядро 1.0.16): проверка слова-стоп точной моделью, свой голос из\nколонок, ложное перебивание — договорить ответ.",
+   "methods": [
+    "_stop_verify",
+    "_stop_checker",
+    "_stop_hit",
+    "_stop_check",
+    "_own_word",
+    "_is_self_echo",
+    "_barge_keep",
+    "_echo_resume",
+    "_resume_say",
+    "_echo_heard"
+   ]
+  }
+ }
+}

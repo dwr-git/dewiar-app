@@ -172,7 +172,7 @@ ok("«bad»" in tb2.off_note(), "модель знает и про плагин 
 # счётчик «чем пользуются»: имена плагинов людей не считаем
 eng = (ROOT / "core/engine.py").read_text(encoding="utf-8")
 ok('self.toolbox.fuse.on_trip' in eng and '"fuse:" + ("plugin" if k.startswith("mcp:") else k)' in eng, "сработал — «fuse:<модуль>» / «fuse:plugin»")
-et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+et = srctext.text(ROOT, "core/engine_tools.py")
 ok("на паузе после сбоя" in et and "fuse.tripped" in et, "в разговоре — «на паузе после сбоя», а не «выключен пользователем»")
 src = srctext.text(ROOT, "core/tools.py")
 p = src[src.index("    def policy(self, name):"):src.index("    def specs(self")]

@@ -17,7 +17,7 @@ def ok(c, m):
         fails.append(m)
 
 
-et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+et = srctext.text(ROOT, "core/engine_tools.py")
 i, j = et.index("def _use_tool("), et.index("def _reminder_link_files(")
 ok(et[i:j].count('self.emit("tool"') == 1 and et[i:j].count("_temit(") >= 7, "шаги дела по расписанию — не в окна (все события «tool» хода — через _temit)")
 ok('_temit = (lambda **kw: None) if getattr(turn, "via_job", False)' in et, "у дела по расписанию _temit молчит")

@@ -22,6 +22,8 @@ def ok(c, m):
 
 
 sys.path.insert(0, str(ROOT / "data/plugins/artist"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 import server as A  # noqa: E402
 
 EVIL = """```svg
@@ -159,7 +161,7 @@ mgr.reconcile()
 M.Server = orig
 x = M.plugin_expand(seen.get("artist-main") or {})
 ok(x.get("env", {}).get("DEWIAR_WORKSPACE") == str(tmp / "Мои документы"), "плагину — папка Dewiar из настроек (туда — «Рисунки»)")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok("«Художник» (действие …art_draw)" in src and "если включить плагин «Художник»" in src, "«нарисуй» без плагина — честно и с подсказкой включить; с плагином — рисует")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

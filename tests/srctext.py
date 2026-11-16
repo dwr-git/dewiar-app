@@ -13,6 +13,11 @@ PARTS = {
     "core/engine_answer.py": ("core/answer_*.py",),
     "core/tasks.py": ("core/tasks_*.py",),
     "core/quality.py": ("core/quality_*.py",),
+    "core/llm.py": ("core/llm_*.py",),
+    "core/engine_audio.py": ("core/ears_*.py",),
+    "core/engine_tools.py": ("core/acts_*.py",),
+    "core/sync.py": ("core/sync_*.py",),
+    "core/sites_render.py": ("core/sites_parts.py", "core/sites_style.py", "core/sites_art.py", "core/sites_blocks.py"),
 }
 
 

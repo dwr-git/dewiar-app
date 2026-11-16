@@ -63,7 +63,7 @@ ok(tools._eyes({"eyes": lambda p, g: "текст белым по белому"},
    and tools._eyes({}, "/x", "") == "" and tools._eyes({"eyes": lambda p, g: ""}, "/x", "") == "", "сайт: замечание — к ответу инструмента; без глаз — ничего")
 src = srctext.text(ROOT, "core/tools.py")
 ok(src.count("_eyes(ctx, page,") == 2, "смотрим после site_create и site_edit")
-et = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+et = srctext.text(ROOT, "core/engine_tools.py")
 ok('re.search(r"art_(?:draw|animate)$", name)' in et and "self.eyes_page(art_page(" in et, "смотрим после art_draw и art_animate")
 ok('self.toolbox.hooks["eyes"] = self.eyes_page' in (ROOT / "core/engine.py").read_text(encoding="utf-8"), "крючок eyes — у инструментов")
 if fails:

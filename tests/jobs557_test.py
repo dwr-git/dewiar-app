@@ -74,10 +74,10 @@ ok(eng.job_label({"id": "q", "kind": "job", "text": RAW, "title": "Свой"}) =
 ok(eng.job_label({"id": "q", "kind": "job", "text": "x", "preset": "evening"}) == "Итог дня", "готовое дело — название карточки")
 ok(eng.job_label({"id": "q", "kind": "job", "text": RAW}) == "Посмотри прогноз погоды для города «Балашов» на 2 дня", "своё без имени — первая фраза")
 ok(eng.job_title({"id": "q", "kind": "job", "text": RAW}) == RAW, "двойники (_on_reminder) по-прежнему сравниваются по полному поручению")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok('title = self.job_label(r) if job else r["text"]' in src and 'e["title"] = self.job_label(item)' in src,
    "календарь, «Утро», «Дальше сегодня» и журнал «прозвенело» — по job_label")
-sy = (ROOT / "core/sync.py").read_text(encoding="utf-8")
+sy = srctext.text(ROOT, "core/sync.py")
 ok('h.job_label(r)' in sy and '"title": title' in sy, "телефону («Мой день») уходит имя дела")
 from engine_music import MusicMixin  # noqa: E402
 ok(MusicMixin.job_name({"text": RAW, "title": "Дача: заморозки и полив"}) == "Дача: заморозки и полив", "уведомление — тоже по имени дела")

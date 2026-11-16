@@ -6,6 +6,8 @@ import json, os, re, sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 fails = []
 
@@ -67,7 +69,7 @@ with sync_playwright() as p:
 ok(not errs, f"без ошибок страницы: {errs[:2]}")
 
 # ядро: перенос на другой день — тем же reminder_update (patch.at — любая дата и время)
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 h = src[src.index('if cmd == "reminder_update":'):][:3000]
 ok('patch = dict(a.get("patch") or {})' in h and "self.reminders.update(" in h, "ядро: reminder_update берёт новое at целиком (с датой)")
 print("ALL OK" if not fails else f"FAILS: {len(fails)}")

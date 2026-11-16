@@ -116,7 +116,7 @@ e._end_frames = 20
 ok(E.Engine._end_need(e, 1.5) == 20, "короткая команда — пауза как раньше (быстрый ответ)")
 ok(E.Engine._end_need(e, 5.0) == 20 + int(LONG_SPEECH[1][1] / FRAME_S), "говорят 5 с — ждём дольше")
 ok(E.Engine._end_need(e, 12.0) == 20 + int(LONG_SPEECH[0][1] / FRAME_S), "говорят 12 с — ещё дольше")
-ea = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+ea = srctext.text(ROOT, "core/engine_audio.py")
 ok("silence >= self._end_need(len(utt) * FRAME_S)" in ea, "конец фразы считается с учётом того, сколько уже говорят")
 learned = []
 e = stub()

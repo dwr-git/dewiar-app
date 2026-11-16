@@ -7,6 +7,8 @@ import os, sys, threading, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -72,7 +74,7 @@ net._reserve_bad["dewiar.pro"] = time.time() + 900
 net._direct_ok["dewiar.pro"] = time.time() + 900
 net.wake_reset()
 ok(not net._reserve_bad and not net._direct_ok, "проснулись — забыли, что знали о путях до сна")
-tsrc = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+tsrc = srctext.text(ROOT, "core/engine_tools.py")
 ok("net.wake_reset()" in tsrc.split("def _reminders_wake")[1][:1500] and "self._px_auth_at = 0" in tsrc, "при пробуждении — сброс и свежий логин")
 
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

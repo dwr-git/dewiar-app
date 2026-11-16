@@ -6,6 +6,8 @@
 import os, re, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 fails = []
 
@@ -19,7 +21,7 @@ def ok(c, m):
 CORE = """(() => { const ready = () => { if (!window.core) return setTimeout(ready, 5);
   core.retry = () => {}; core.connect = () => {}; if (core.ws) { core.ws.onclose = null; core.ws.onerror = null; try { core.ws.close(); } catch (e) {} }
   core.call = async () => ({}); setTimeout(() => { core.emit("hello", { settings: { ui: { skin: "neusky" }, llm: { active: "m" }, features: {} }, status: {}, persona: "lira", personas: [{ id: "lira", name: "Лира" }], reminders: [], state: "idle" }); }, 150); }; ready(); })();"""
-au = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+au = srctext.text(ROOT, "core/engine_audio.py")
 ok('self.emit("listen_none", sound=bool(sound)' in au, "ядро: ждало вопрос, а речи не было — событие listen_none (звук был или нет)")
 errs = []
 with sync_playwright() as p:

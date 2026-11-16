@@ -14,6 +14,8 @@ ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.par
 TESTS = Path(__file__).resolve().parent
 PY = os.environ.get("DEWIAR_PY") or sys.executable
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -98,7 +100,7 @@ for txt, want in (("Да.", True), ("да, давай", True), ("нет, дав�
 t0 = time.monotonic()
 r = e._confirm(Turn(2), "Выполнить команду: echo 2?", drained(), timeout=1)
 ok(r is None and time.monotonic() - t0 < 4, f"молчание — не «нет», а «ответа не было»: {r}")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok("timeout = 90 if" in src and "else 30" in src, "ждём 30 с, в текстовом режиме — 90 (было 15)")
 
 # первое «Выполнить?» после «да» на вопрос ассистента — уже отвечено

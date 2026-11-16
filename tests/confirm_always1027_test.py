@@ -6,6 +6,8 @@ import os, queue, sys, threading, time
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -81,7 +83,7 @@ ok(r == "always", "кнопка «Всегда» в окне")
 tb = T.Toolbox.__new__(T.Toolbox)
 ok(tb.server_readonly({"command": "ps aux --sort=-%cpu | head -15; free -m; df -h /"}) and not tb.server_readonly({"command": "systemctl restart nginx"})
    and not tb.server_readonly({"command": "rm -rf /var/log/old"}), "«только посмотреть»: ps, free, df — да; перезапуск и удаление — нет")
-src = (ROOT / "core/engine_tools.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_tools.py")
 ok('srv.update(s_["id"], {"ask": "changes"})' in src, "«всегда» сохраняется в настройке сервера (студия → «Серверы»)")
 hud = (ROOT / "ui/hud.html").read_text(encoding="utf-8")
 ok('id="ya"' in hud and "always: true" in hud, "виджет: кнопка «Всегда»")

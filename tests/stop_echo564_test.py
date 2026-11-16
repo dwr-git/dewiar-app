@@ -8,6 +8,8 @@ import collections, os, queue, sys, threading, time, types
 from pathlib import Path
 ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.parent)
 sys.path.insert(0, str(ROOT / "core"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import srctext  # noqa: E402 — текст исходника вместе с частями (tests/srctext.py)
 fails = []
 
 
@@ -106,7 +108,7 @@ while time.monotonic() < end and (e.check_q.qsize() or getattr(e, "_stop_checkin
     time.sleep(0.01)
 ok(e.checker.got and not e.stopped and not e._stop_checking, "поток проверки имени разбирает и проверку «стоп»")
 e.stopping.set(); e.check_q.put(("stop", b"", ("x", 0)))
-src = (ROOT / "core/engine_audio.py").read_text(encoding="utf-8")
+src = srctext.text(ROOT, "core/engine_audio.py")
 ok("self._stop_verify(w, b\"\".join(half_pcm), now)" in src, "полудуплекс: слово-стоп идёт через проверку")
 print("\nИТОГ:", "всё прошло" if not fails else f"не прошло {len(fails)}")
 sys.exit(1 if fails else 0)
