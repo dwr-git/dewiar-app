@@ -358,11 +358,15 @@ def t_calendar_list(a, ctx):
     end = _dt.date.fromisoformat(a.get("to") or _dt.date.today().isoformat())
     start = _dt.date.fromisoformat(a.get("from") or (end - _dt.timedelta(days=6)).isoformat())
     out, y, m = [], start.year, start.month
+    turn = getattr(eng, "turn", None)
+    habit = getattr(turn, "habit", None) if getattr(turn, "no_habits", False) else None   # ход-итог: без привычек (engine_answer)
     while (y, m) <= (end.year, end.month):
         days = eng.calendar_month(y, m)["days"]
         for d in sorted(days):
             if start.isoformat() <= d <= end.isoformat():
                 for it in days[d]:
+                    if habit is not None and it.get("type") == "reminder" and (it.get("kind") in ("job", "brief") or habit(it.get("title"), it.get("rid") or it.get("id"))):
+                        continue                                 # привычка или само дело по расписанию — в итог не идут
                     if it["type"] == "money":
                         out.append(f"{d} деньги: {'+' if it['kind'] == 'income' else '−'}{it['amount']} {it['currency']} {it['title']}")
                     else:

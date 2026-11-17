@@ -474,7 +474,8 @@ def disk_full(e):
     """Ошибка — от заполненного диска: «No space left on device» (ENOSPC) или «No usable temporary directory» (Python не
     смог создать временный файл ни в одной папке — так бывает, когда места нет совсем; отчёт №395)."""
     t = str(e)
-    return getattr(e, "errno", None) == 28 or "No space left" in t or "No usable temporary directory" in t or "[Errno 28]" in t
+    return (getattr(e, "errno", None) == 28 or getattr(e, "winerror", None) == 112 or "No space left" in t
+            or "No usable temporary directory" in t or "[Errno 28]" in t or "os error 112" in t)   # 112 — Windows: диск полон (№844)
 
 
 def disk_free_mb(path=None):

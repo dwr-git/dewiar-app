@@ -100,7 +100,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     mediaKey(act) { (window._media = window._media || []).push(act); return JSON.stringify({ sent: true, active: !!window._musicOn }); }, musicActive: () => !!window._musicOn,
     radioState() { const r = this._radio; return JSON.stringify({ state: r.state, name: r.name, error: r.error }); },
     // руки в других приложениях (Hands.java): в браузере выключены — проверки подменяют эти методы своими
-    handsState: () => "", handsScreen: () => "OFF", handsTap: () => "OFF", handsTapText: () => "OFF", handsType: () => "OFF",
+    handsState: () => "none", handsScreen: () => "OFF", handsTap: () => "OFF", handsTapText: () => "OFF", handsType: () => "OFF",
     handsScroll: () => "OFF", handsNav: () => "OFF", toFront() {},
   };
 })());

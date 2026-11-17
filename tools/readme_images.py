@@ -23,7 +23,7 @@ import personas as P  # noqa: E402
 
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "docs/img"
 SITE = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "server/dwrapp"   # лица и обложка для страницы «Скачать»
-COLLECTION = ["dewiar", "agent", "jarvis", "eva", "professor", "femida", "doctor", "iris", "oskar", "gaston", "nika", "mishel"]
+COLLECTION = ["dewiar", "agent", "jarvis", "eva", "professor", "femida", "doctor", "iris", "oskar", "gaston", "nika"]
 
 
 def people():

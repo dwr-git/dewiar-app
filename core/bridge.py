@@ -182,7 +182,14 @@ class Bridge:
                 log.error("Команда %s упала: %s", msg.get("cmd"), e, exc_info=True)    # ошибка в программе — в отчёт разработчику
             else:
                 log.warning("Команда %s: %s", msg.get("cmd"), e)
-            out = {"type": "reply", "id": mid, "ok": False, "error": str(e)}
+            err = str(e)
+            try:                              # №844: «[Errno 28] No space left on device» — человеку понятнее, что делать
+                from engine_base import disk_full, disk_full_note
+                if disk_full(e):
+                    err = disk_full_note()
+            except Exception:  # noqa: BLE001
+                pass
+            out = {"type": "reply", "id": mid, "ok": False, "error": err}
         try:
             await ws.send(json.dumps(out, ensure_ascii=False))
         except Exception:  # noqa: BLE001

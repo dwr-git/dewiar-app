@@ -213,7 +213,7 @@ class DayMixin:
             d = when[:10]
             if first.date().isoformat() <= d <= last.date().isoformat():
                 same = closed.get((h["id"], d)) if h.get("id") else None
-                it = {"type": "reminder", "time": when[11:16], "title": h.get("title") or h.get("text", ""), "done": True,
+                it = {"type": "reminder", "time": when[11:16], "title": h.get("title") or h.get("text", ""), "done": True, "rid": h.get("id") or "",
                       "kind": h.get("kind") or "reminder", "skipped": bool(h.get("skipped")),
                       "fired": h["at"][:16] if h.get("due") and not h.get("skipped") else ""}
                 if same:                                        # закрыли «сделано» в тот же день
@@ -223,7 +223,7 @@ class DayMixin:
         for (_rid, d), xs in closed.items():
             for x, t in xs:
                 put(d, {"type": "reminder", "kind": "done", "time": t.strftime("%H:%M"), "title": x.get("title") or "Дело",
-                        "done": True, "closed": True, "closed_at": t.strftime("%H:%M"), "did": x["id"]})
+                        "done": True, "closed": True, "closed_at": t.strftime("%H:%M"), "did": x["id"], "rid": x.get("rid") or ""})
         for m in self.money.list(first.date().isoformat(), last.date().isoformat()):
             put(m["date"], {"type": "money", "id": m["id"], "kind": m["kind"], "amount": m["amount"],
                             "currency": m["currency"], "title": m["note"] or m["category"], "category": m["category"]})

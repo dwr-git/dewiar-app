@@ -71,6 +71,76 @@ if _FILE and _ROOT:
 
     sys.addaudithook(_hook)
 
+    # Какие функции проекта выполнились (17.11, владелец: «код модульный… значительно сократить количество проверок»):
+    # «fn:core/llm.py::Llm.chat» — по разу на функцию (DISABLE после первого входа: почти без замедления). Вложенные
+    # функции и lambda — на счёт внешней («f.<locals>.g» → «f»). Тексты проверок (tests/) — не пишем.
+    _mon = getattr(sys, "monitoring", None)
+    if _mon is not None:
+        _tool = None
+        for _id in (_mon.COVERAGE_ID, _mon.PROFILER_ID, 4):
+            try:
+                _mon.use_tool_id(_id, "dewiar-trace")
+                _tool = _id
+                break
+            except ValueError:
+                continue
+        if _tool is not None:
+            _DIS = _mon.DISABLE
+            _fseen = {}
+
+            def _start(code, _off):
+                fn = code.co_filename
+                rel = _fseen.get(fn)
+                if rel is None:
+                    rel = ""
+                    try:
+                        if fn.endswith(".py"):
+                            q = os.path.normpath(fn if os.path.isabs(fn) else os.path.join(os.getcwd(), fn))
+                            if not q.startswith(_root) and os.path.realpath(q).startswith(_root):
+                                q = os.path.realpath(q)
+                            if q.startswith(_root):
+                                r = os.path.relpath(q, _root).replace(os.sep, "/")
+                                if not r.startswith(("tests/", "..")):
+                                    rel = r
+                    except Exception:  # noqa: BLE001
+                        rel = ""
+                    _fseen[fn] = rel
+                if rel and code.co_name != "<module>":
+                    q = code.co_qualname.split(".<locals>", 1)[0]
+                    if not q.startswith("<"):
+                        _note(f"fn:{rel}::{q}")
+                return _DIS
+
+            try:
+                _mon.register_callback(_tool, _mon.events.PY_START, _start)
+                _mon.set_events(_tool, _mon.events.PY_START)
+            except Exception:  # noqa: BLE001
+                pass
+
+    # исходник .py, прочитанный как ТЕКСТ (а не импортом), — «src:…»: такой проверке важен весь файл, а не функции
+    def _src_hook(ev, args):
+        if _busy[0] or ev != "open":
+            return
+        try:
+            p = args[0] if args else None
+            if not isinstance(p, str) or not p.endswith(".py"):
+                return
+            f = sys._getframe(1)
+            for _ in range(8):
+                if f is None:
+                    break
+                if str(f.f_globals.get("__name__", "")).startswith(("importlib", "_frozen_importlib", "pkgutil", "zipimport", "site",
+                                                                       "linecache", "traceback", "inspect", "tokenize")):
+                    return
+                f = f.f_back
+            q = os.path.normpath(p if os.path.isabs(p) else os.path.join(os.getcwd(), p))
+            if q.startswith(_root):
+                _note("src:" + os.path.relpath(q, _root).replace(os.sep, "/"))
+        except Exception:  # noqa: BLE001
+            pass
+
+    sys.addaudithook(_src_hook)
+
 # прежний sitecustomize (у системы он может быть свой) — выполнить, как будто нас нет
 _here = os.path.dirname(os.path.abspath(__file__))
 for _d in sys.path:

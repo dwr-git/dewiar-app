@@ -83,6 +83,7 @@
   <button data-p="art" hidden title="Рисунки и анимации плагина «Художник»" data-i18n="nav.art" data-i18n-title="nav.art.tip">Рисунки</button>
   <button data-p="council" title="«Совет ИИ»: персонажи на разных моделях вместе обсуждают ваш вопрос, спорят и подводят итог" data-i18n="nav.council" data-i18n-title="nav.council.tip">Совет ИИ</button>
   <button data-p="podcast" title="«Подкасты»: дайте файл, ссылку или тему — Лира и Патрик обсудят её вслух, получится выпуск в MP3 с текстом" data-i18n="nav.podcast" data-i18n-title="nav.podcast.tip">Подкасты</button>
+  <button data-p="insight" title="Радар: Лира читает источники вашей ниши, видит тренды и важное" data-i18n="nav.insight" data-i18n-title="nav.insight.tip">Радар<i class="ndot" id="rd-ndot"></i></button>
   <div class="ng" data-fold-k="Семья и близкие" data-i18n="nav.g.family">Семья и близкие</div>
   <button data-p="close" title="Переписка с помощниками близких людей" data-i18n="nav.close" data-i18n-title="nav.close.tip">Близкие<i class="ndot" id="close-dot"></i></button>
   <div class="nav-groups" id="nav-groups" hidden></div>
@@ -97,7 +98,6 @@
   <button data-p="mailing" title="Рассылка: каждому своё письмо с вашей почты — клиентам, сотрудникам или по списку" hidden data-i18n="nav.mailing" data-i18n-title="nav.mailing.tip">Рассылка</button>
   <button data-p="sites" title="Сайты: Лира делает и переделывает сайт одной фразой, публикация на имя.dewiar.pro, аналитика и заявки" data-i18n="nav.sites" data-i18n-title="nav.sites.tip">Сайты</button>
   <button data-p="sitechat" title="Чат для сайта: консультант отвечает посетителям вашего сайта, заявки — в «Клиенты»" hidden data-i18n="nav.sitechat" data-i18n-title="nav.sitechat.tip">Чат для сайта</button>
-  <button data-p="insight" title="Радар: Лира читает источники вашей ниши, видит тренды и важное" data-i18n="nav.insight" data-i18n-title="nav.insight.tip">Радар<i class="ndot" id="rd-ndot"></i></button>
   <button data-p="prompter" title="Молчаливые подсказки на встречах и переговорах" data-i18n="nav.prompter" data-i18n-title="nav.prompter.tip">Суфлёр</button>
   <button data-p="pbot" title="«Бот персонажа»: персонаж отвечает людям в Telegram — лично и в группах — по своим знаниям" data-i18n="nav.pbot" data-i18n-title="nav.pbot.tip">Бот в Telegram</button>
   <!-- «Плагины» (03.11): пункт на каждый установленный плагин — его страница (studio/plugpage.js, раздел p-plg) -->
@@ -1547,7 +1547,7 @@
       <label class="ld-drop" id="ld-drop" tabindex="0">
         <input type="file" id="ld-file" multiple hidden accept=".pdf,.docx,.odt,.xlsx,.pptx,.txt,.md,.csv,.html,.htm,.jpg,.jpeg,.png,.webp">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V6m-4 4 4-4 4 4M5 15v2a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-2"/></svg>
-        <b>Перетащите файлы сюда</b><span>или нажмите, чтобы выбрать</span>
+        <b>Перетащите файлы сюда</b><span>или нажмите, чтобы выбрать, или Ctrl+V</span>
         <small>PDF, Word, Excel, PowerPoint, текст, картинки · до 25 МБ</small>
       </label>
       <div class="ld-off" id="ld-off" hidden><p id="ld-off-t"></p><button class="btn primary" id="ld-on" type="button">Включить облако</button></div>
@@ -1571,7 +1571,7 @@
       <button type="button">Сравни, что в двух договорах про штрафы</button>
     </div>
 
-    <div class="wr-card" id="wr-card" aria-label="Пишу: сколько написано">
+    <div class="wr-card" id="wr-card" aria-label="Пишу: сколько написано" hidden>
       <div class="wr-now">
         <span class="wr-k">Сегодня написано</span>
         <b id="wr-today">0</b><span class="wr-u" id="wr-u">слов</span>

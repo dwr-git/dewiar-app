@@ -1005,6 +1005,7 @@ function errText(e) {
 function showErr(e) {
   const msg = errText(e);
   showCap(null, msg, true); hideCapLater(12000);
+  if (/^Диск заполнен/.test(msg)) return;   // №844: место на диске освобождает человек — отчёт разработчику тут не поможет
   // сразу после ошибки — отчёт разработчику одним нажатием (журнал + настройки без ключей); нет связи — файлом на рабочий стол
   const b = document.createElement("button"); b.className = "rep"; b.textContent = "Отправить отчёт разработчику";
   b.onclick = (ev) => { ev.stopPropagation(); b.disabled = true; b.textContent = "Отправляю…"; hideCapLater(60000);

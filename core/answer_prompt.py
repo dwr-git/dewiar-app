@@ -376,7 +376,7 @@ class PromptMixin:
                 log.debug("компьютеры: подсказка", exc_info=True)
             try:
                 import done as _done
-                base += _done.now_line(self.done)      # сколько дел сделано сегодня (меняется с каждой отметкой)
+                base += _done.now_line(self.done, skip=self._habit_pred() if hasattr(self, "_habit_pred") else None)   # без привычек
             except Exception:  # noqa: BLE001
                 log.debug("дела: подсказка", exc_info=True)
             base += f"\n\nТвоя папка: «{self.workspace.root}». Компьютер пользователя: {OS_NAME}."

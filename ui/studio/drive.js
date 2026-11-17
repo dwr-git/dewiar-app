@@ -6,7 +6,7 @@
 const LDV = { st: null, adding: [] };
 const LDV_K = { pdf: "PDF", doc: "DOC", sheet: "XLS", slides: "PPT", image: "IMG", text: "TXT" };
 const LDV_EXT = /\.(pdf|docx|odt|xlsx|pptx|txt|md|csv|html?|jpe?g|png|webp)$/i;
-const cldMB = (b) => b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 : 1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1024)) + " КБ";
+const cldMB = (b) => !b ? "0 МБ" : b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 : 1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1024)) + " КБ";
 const cldKind = (n) => { const e = (String(n).split(".").pop() || "").toLowerCase();
   return e === "pdf" ? "pdf" : /^(docx|odt)$/.test(e) ? "doc" : /^(xlsx|csv)$/.test(e) ? "sheet" : e === "pptx" ? "slides" : /^(jpe?g|png|webp)$/.test(e) ? "image" : "text"; };
 const LDV_DEV = {
@@ -76,10 +76,40 @@ async function cldLoad(fresh) {
   try { cldRender(await core.call("drive_status", { fresh: !!fresh })); } catch (e) { /* ядро старее — карточка остаётся как есть */ }
 }
 
+/* что бросили: сами файлы, а если система отдала только ссылки file://… (17.11, владелец: «перетягиваю pdf — ничего не
+   происходит»; так бывает на Linux под Wayland, из браузера и некоторых файловых менеджеров) — пути, их ядро возьмёт с диска */
+function cldDropped(e) {
+  const dt = e.dataTransfer || {}, files = [...(dt.files || [])];
+  const uris = files.length ? "" : String((dt.getData && dt.getData("text/uri-list")) || "");
+  const paths = uris.split(/\r?\n/).map(u => u.trim()).filter(u => /^file:\/\//i.test(u)).map(u => {
+    const p = decodeURIComponent(u.replace(/^file:\/\/(localhost)?/i, "")); return /^\/[A-Za-z]:\//.test(p) ? p.slice(1) : p; });
+  return { files, paths, types: [...(dt.types || [])].join(",") };
+}
+
 /* добавить: файл в «Мои файлы» (как «Добавить файлы…»), облако заберёт его сразу (ядро будит обмен) */
-async function cldAdd(files) {
+async function cldAdd(files, paths, types) {
   const a = window.api && window.api();
-  for (const f of files) {
+  if (!files.length && !(paths || []).length) {
+    toast("Файл не дошёл до окна — нажмите на поле с пунктиром и выберите его", 5000);
+    // 17.11 (владелец, Windows): перетаскивание «ничего не делает» — в журнал, что пришло вместо файла
+    core.call("js_errors", { errors: [`cloud (studio): drop without a file, got: ${types || "nothing"}`] }).catch(() => {});
+    return;
+  }
+  // владелец 17.11: положил файл в облако — включаем облако сами (шифрование на устройстве), без кнопки «Включить»
+  const st = await core.call("drive_status", {}).catch(() => LDV.st);
+  if (st && st.why === "e2e") {
+    try { await core.call("sync_e2e", { on: true }); toast("Облако включено — файлы шифруются на ваших устройствах", 3500); }
+    catch (e) { /* не вышло — файл ляжет в «Мои файлы», облако подскажет кнопкой */ }
+  }
+  for (const p of paths || []) {
+    const n = p.split(/[\\/]/).pop();
+    if (!LDV_EXT.test(n)) { toast(`«${n}» — такие файлы облако не берёт: PDF, Word, Excel, PowerPoint, текст и картинки`, 5000); continue; }
+    LDV.adding.push(n); cldGrid();
+    try { const r = await core.call("drive_add_path", { path: p }); if (typeof renderKn === "function" && r && r.files) renderKn(r.files); }
+    catch (e) { toast(`${n}: ${e.message}`, 5000); }
+    LDV.adding = LDV.adding.filter(x => x !== n);
+  }
+  for (const f of files || []) {
     if (!LDV_EXT.test(f.name)) { toast(`«${f.name}» — такие файлы облако не берёт: PDF, Word, Excel, PowerPoint, текст и картинки`, 5000); continue; }
     if (f.size > 25 * 1048576) { toast(`«${f.name}» больше 25 МБ — в облако такой не поместится`, 5000); continue; }
     LDV.adding.push(f.name); cldGrid();
@@ -103,12 +133,23 @@ async function cldAdd(files) {
 (function cldInit() {
   if (!$("#ld")) return;
   const drop = $("#ld-drop");
-  $("#ld-file").onchange = (e) => { const fs = [...e.target.files]; e.target.value = ""; cldAdd(fs); };
+  $("#ld-file").onchange = (e) => { const fs = [...e.target.files]; e.target.value = ""; if (fs.length) cldAdd(fs, []); };
   drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#ld-file").click(); } });
-  ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.add("over"); }));
-  ["dragleave", "dragend"].forEach(t => drop.addEventListener(t, () => drop.classList.remove("over")));
-  drop.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.remove("over");
-    const fs = [...(e.dataTransfer && e.dataTransfer.files || [])]; if (fs.length) { drop.classList.add("caught"); setTimeout(() => drop.classList.remove("caught"), 700); cldAdd(fs); } });
+  // принимает вся карточка облака, а не только поле с пунктиром (бросили на плитки — тоже в облако)
+  const card = $("#ld");
+  ["dragenter", "dragover"].forEach(t => card.addEventListener(t, (e) => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; drop.classList.add("over"); }));
+  card.addEventListener("dragleave", (e) => { if (!card.contains(e.relatedTarget)) drop.classList.remove("over"); });
+  card.addEventListener("dragend", () => drop.classList.remove("over"));
+  card.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.remove("over");
+    const d = cldDropped(e); if (d.files.length || d.paths.length) { drop.classList.add("caught"); setTimeout(() => drop.classList.remove("caught"), 700); } cldAdd(d.files, d.paths, d.types); });
+  // Ctrl+V: файл, скопированный в проводнике (Ctrl+C), — тоже в облако, пока открыты «Мои файлы»
+  document.addEventListener("paste", (e) => {
+    const pg = $("#p-docs"); if (!pg || !pg.classList.contains("cur") || /^(INPUT|TEXTAREA)$/.test((e.target || {}).tagName || "")) return;
+    const cd = e.clipboardData || {}, fs = [...(cd.files || [])];
+    const d = fs.length ? { files: fs, paths: [] } : cldDropped({ dataTransfer: cd });
+    if (!d.files.length && !d.paths.length) return;
+    e.preventDefault(); cldAdd(d.files, d.paths);
+  });
   $("#ld-on").onclick = () => core.call("sync_e2e", { on: true }).then(() => { toast("Облако включено — файлы уже летят", 3500); setTimeout(() => cldLoad(true), 1500); }).catch(e => toast(e.message));
   $("#ld-grid").addEventListener("click", async (e) => {
     const x = e.target.closest("[data-x]");

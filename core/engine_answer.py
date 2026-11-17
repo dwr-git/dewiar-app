@@ -19,6 +19,11 @@ from answer_report import ReportMixin
 from answer_direct import DirectMixin
 
 
+
+# ход-итог: дело по расписанию «итог / подведи / сводка / что сделано» или такая просьба человека
+HABIT_TURN_RX = re.compile(r"\[Дело по расписанию\][^«]*«[^»]*(?:итог|подвед|сводк|что сделано)|^\W*(?:[а-яё]+,\s*)?(?:итог(?:и)? (?:дня|недели)|"
+                           r"подвед[её]?\w* итог|что я (?:сегодня|за день) сделал)", re.I)
+
 class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
     # ---------- ответ ----------
     CODER_RX = re.compile(r"coder|codellama|codegemma|starcoder|codestral|devstral|sqlcoder|code-?llama|wizardcoder", re.I)
@@ -227,6 +232,17 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             turn.back_to = prev if handoff and self.s.get("team", "back") is not False else None
             turn.persona = self.s.get("persona")      # кто отвечает; по нему _cancel_locked решает, возвращать ли слово главному
             turn.raw = raw                            # служебное поручение (приветствие, дело по расписанию) — не вопрос человека
+            # итог («Итог дня» по расписанию, «подведи итоги») — без привычек В САМИХ ДАННЫХ (владелец 17.11, в четвёртый раз:
+            # «Сегодня сделано: обед с картой (отмечено)» — «Обед — не забудь взять карту» каждый будний день; просьба «не
+            # называй» в поручении не помогала: календарь отдавал модели «сделано: Обед…»). Календарь и список напоминаний
+            # в этот ход отдают всё, кроме привычек; назвала всё же — переделать (quality.habit_said)
+            turn.no_habits = bool(HABIT_TURN_RX.search(text.split("»", 1)[0] if raw else text.split("\n\n", 1)[0]))
+            turn.habit = None
+            if turn.no_habits and hasattr(self, "_habit_pred"):
+                try:
+                    turn.habit = self._habit_pred(weekly=bool(re.search(r"(?<![а-яё])недел", text.split("»", 1)[0], re.I)))
+                except Exception:  # noqa: BLE001
+                    log.debug("привычки", exc_info=True)
             turn.greet = bool(raw and str(shown or "").startswith("👋"))   # приветствие «С возвращением»: опоздало — не нужно
             self.turn = turn
         threading.Thread(target=self._run_turn, args=(turn, text, images or []), name=f"turn-{turn.n}", daemon=True).start()
@@ -538,7 +554,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             # (quality.hold_sentence: «открыла» без открытия, выдуманные градусы, дело не из планов, «записала» без money_add),
             # или весь шаг, если нужный инструмент ещё не вызывался (quality.hold_step: ссылка, «сколько написал», совет).
             # После вызова нужного инструмента фразы идут сразу; стихи и вопросы о приложении не придерживаются — проверка после.
-            from quality import COUNCIL_ASK as _CA, hold_sentence as _hold_s, hold_step as _hold_step, failed_claim as _failed_c
+            from quality import COUNCIL_ASK as _CA, hold_sentence as _hold_s, hold_step as _hold_step, failed_claim as _failed_c, habit_said as _habit_s
             names0 = {x.get("name") for x in specs or []}
             known0 = text + "\n" + "\n".join(c for c in ctx if c)
             strict, gate = [False], [True]           # gate: на последнем шаге (только слова) проверок нет — не придерживаем
@@ -547,7 +563,8 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 if gate[0] and not strict[0] and not turn.cancel.is_set():
                     try:
                         strict[0] = _hold_s(ask0, text, s_, called, names0, known0, getattr(turn, "agenda", "")) \
-                            or bool(getattr(turn, "tools_err", None) and _failed_c(s_, turn.tools_err, getattr(turn, "tools_ok", None) or []))
+                            or bool(getattr(turn, "tools_err", None) and _failed_c(s_, turn.tools_err, getattr(turn, "tools_ok", None) or [])) \
+                            or bool(getattr(turn, "no_habits", False) and _habit_s(s_, getattr(turn, "habit", None)))   # итог: привычка — не вслух
                     except Exception:  # noqa: BLE001
                         strict[0] = False
                 if strict[0] or (hold[0] and (held or looks_like_refusal(s_))):
@@ -902,7 +919,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         continue
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not deed_checked:
                     from quality import agenda_invented, council_missing, feature_deny, invented_numbers, open_claim, poem_check, \
-                        songs_count, url_unread, writing_missing, agenda_missed, weather_invented, system_invented, plugin_offer_missed
+                        songs_count, url_unread, writing_missing, agenda_missed, weather_invented, system_invented, plugin_offer_missed, habit_said
                     names_ = {x.get("name") for x in specs or []}
                     fix = (open_claim(ask0, step_text, called) if "open_url" in names_ else "") \
                         or (url_unread(ask0, step_text, called) if "read_webpage" in names_ else "") \
@@ -916,6 +933,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         or agenda_missed(text, step_text, getattr(turn, "agenda", "")) \
                         or weather_invented(text, step_text, called) \
                         or poem_check(ask0, step_text) \
+                        or (habit_said(step_text, getattr(turn, "habit", None)) if getattr(turn, "no_habits", False) else "") \
                         or plugin_offer_missed(getattr(turn, "plugin_hint", ""), step_text, called) \
                         or songs_count(ask0, step_text) \
                         or month_year_wrong(ask0, step_text) \

@@ -8,7 +8,7 @@
   const A = () => (window.pywebview && window.pywebview.api) || null;
   const K = { pdf: "PDF", doc: "DOC", sheet: "XLS", slides: "PPT", image: "IMG", text: "TXT" };
   const EXT = /\.(pdf|docx|odt|xlsx|pptx|txt|md|csv|html?|jpe?g|png|webp)$/i;
-  const mb = (b) => b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 : 1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1024)) + " КБ";
+  const mb = (b) => !b ? "0 МБ" : b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 : 1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1024)) + " КБ";
   const CL = { active: false, st: null, msg: "" };
 
   const tab = document.createElement("button");
@@ -24,38 +24,79 @@
   const box = document.createElement("section");
   box.id = "cloud"; box.setAttribute("aria-label", "Облако Лиры");
   box.innerHTML = `
-    <div class="cl-hd"><span class="cl-ico" aria-hidden="true"><svg viewBox="0 0 48 48"><defs><linearGradient id="cl-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset=".55" stop-color="#8b8cf7"/><stop offset="1" stop-color="#c58cf7"/></linearGradient></defs><path d="M14.5 37h20a8.5 8.5 0 0 0 1.3-16.9A11.5 11.5 0 0 0 13.6 18 9.5 9.5 0 0 0 14.5 37z" fill="url(#cl-g)"/><path d="M24 31v-9m-4 3.6 4-4 4 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><b>Облако Лиры</b><small id="cl-sub">ваши файлы — на всех ваших устройствах</small></div>
-      <span class="cl-used" id="cl-used"></span></div>
-    <div class="cl-bar"><i id="cl-fill"></i></div>
+    <div class="cl-hd"><span class="cl-ico" aria-hidden="true"><svg class="cl-ring" viewBox="0 0 56 56"><defs><linearGradient id="cl-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset=".55" stop-color="#8b8cf7"/><stop offset="1" stop-color="#c58cf7"/></linearGradient></defs>
+        <circle class="cl-rt" cx="28" cy="28" r="25"/><circle class="cl-rf" id="cl-ring" cx="28" cy="28" r="25" stroke="url(#cl-g)"/></svg>
+        <svg class="cl-cloud" viewBox="0 0 48 48"><path d="M14.5 37h20a8.5 8.5 0 0 0 1.3-16.9A11.5 11.5 0 0 0 13.6 18 9.5 9.5 0 0 0 14.5 37z" fill="url(#cl-g)"/><path d="M24 31v-9m-4 3.6 4-4 4 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div class="cl-tt"><b>Облако Лиры</b><small id="cl-sub">ваши файлы — на всех ваших устройствах</small></div>
+      <span class="cl-used" id="cl-used"><b id="cl-used-n"></b><small id="cl-used-q"></small></span></div>
+    <div class="cl-off" id="cl-off" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>
+      <p id="cl-off-t"></p><button type="button" class="cl-btn" id="cl-on">Включить</button></div>
     <label class="cl-drop" id="cl-drop" tabindex="0"><input type="file" id="cl-file" multiple hidden accept=".pdf,.docx,.odt,.xlsx,.pptx,.txt,.md,.csv,.html,.jpg,.jpeg,.png,.webp">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V6m-4 4 4-4 4 4M5 15v2a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-2"/></svg>
-      <b id="cl-say">Бросьте файл сюда</b><small>или нажмите · PDF, Word, Excel, PowerPoint, текст, картинки до 25 МБ</small></label>
-    <div class="cl-off" id="cl-off" hidden><p id="cl-off-t"></p><button type="button" class="cl-btn" id="cl-on">Открыть в студии</button></div>
+      <b id="cl-say">Перетащите файл сюда</b><small>или нажмите, чтобы выбрать, или Ctrl+V · PDF, Word, Excel, PowerPoint, текст, картинки до 25 МБ</small>
+      <em class="cl-why">Инструкция, договор, фото — откроются на всех ваших устройствах, а Лира ответит по ним</em></label>
     <div class="cl-grid" id="cl-grid"></div>
     <button type="button" class="cl-more" id="cl-more">Всё облако — в студии</button>`;
   (el("#pult") || el("#play")).after(box);
 
   function render() {
     const st = CL.st || { files: [] };
+    // выключено — короткая строка с одной кнопкой, а поле приёма остаётся (владелец 17.11: «когда пусто — понятный блок
+    // загрузки нажатием или перетаскиванием»): файл ляжет здесь и уйдёт в облако, как только его включат
     el("#cl-off").hidden = !st.why; box.classList.toggle("off", !!st.why);
-    if (st.why) el("#cl-off-t").textContent = st.why === "e2e" ? "Облако хранит файлы зашифрованными — ключ только у ваших устройств. Включите его в студии одной кнопкой." : "Облаку нужен мозг Dewiar или вход аккаунтом.";
+    if (st.why && !CL.kept) el("#cl-off-t").textContent = st.why === "e2e" ? "Облако выключено — файлы пока только на этом компьютере. Шифруются на ваших устройствах, сервер их не прочтёт." : "Облаку нужен мозг Dewiar или вход аккаунтом.";
+    el("#cl-on").textContent = st.why === "e2e" ? "Включить" : "Открыть студию";
+    box.classList.toggle("empty", !(st.files || []).length);
     const q = st.quota || 0, u = st.used || 0;
-    el("#cl-used").textContent = q ? `${mb(u)} из ${mb(q)}` : "";
-    el("#cl-fill").style.width = q ? Math.min(100, Math.round(u / q * 100)) + "%" : "0";
+    // место — кольцом вокруг облачка (владелец 17.11: «серую длинную полосу — симпатичнее, живее»): занятое светится
+    // цветами Лиры, а число — крупно справа, как в ролике урока
+    el("#cl-used").hidden = !q; el("#cl-used-n").textContent = mb(u); el("#cl-used-q").textContent = q ? "из " + mb(q) : "";
+    const C = 2 * Math.PI * 25, pct = q ? Math.min(1, u / q) : 0, ring = el("#cl-ring");
+    ring.style.strokeDasharray = `${C}`; ring.style.strokeDashoffset = `${C * (1 - (pct && Math.max(pct, 0.03)))}`;
+    box.classList.toggle("full", pct > 0.9);
     if (CL.msg) el("#cl-say").textContent = CL.msg;
     const busy = String(st.busy || "");
     el("#cl-grid").innerHTML = (st.files || []).map(f => {
       const moving = busy.startsWith("up:" + f.name + ":") || busy.startsWith("down:" + f.name + ":");
       return `<button type="button" class="cl-f k-${esc(f.kind)}${moving ? " moving" : ""}" data-f="${esc(f.name)}" title="${esc(f.name)}"><i>${K[f.kind] || "TXT"}</i>`
         + `<span>${esc(f.name)}</span><small>${mb(f.size || 0)}${f.here ? "" : " · скоро будет здесь"}</small></button>`; }).join("")
-      || (st.why ? "" : `<p class="cl-empty">Пока пусто. Бросьте сюда инструкцию, договор или фото — и они будут на всех ваших устройствах, а Лира сможет по ним ответить.</p>`);
+      || "";
   }
   async function load(fresh) {
     try { CL.st = await core.call("drive_status", { fresh: !!fresh }); } catch (e) { CL.st = CL.st || { files: [] }; }
     if (CL.active) render();
   }
-  function say(t) { CL.msg = t; const s = el("#cl-say"); if (s) s.textContent = t; clearTimeout(CL.t); CL.t = setTimeout(() => { CL.msg = ""; const x = el("#cl-say"); if (x) x.textContent = "Бросьте файл сюда"; }, 5000); }
-  async function put(files) {
+  function say(t) { CL.msg = t; const s = el("#cl-say"); if (s) s.textContent = t; clearTimeout(CL.t); CL.t = setTimeout(() => { CL.msg = ""; const x = el("#cl-say"); if (x) x.textContent = "Перетащите файл сюда"; }, 5000); }
+  // что бросили: сами файлы, а если система отдала только ссылки file://… (17.11, владелец: «перетягиваю pdf — ничего не
+  // происходит»; так бывает на Linux под Wayland, из браузера и некоторых файловых менеджеров) — пути, их ядро возьмёт с диска
+  const dropped = (e) => {
+    const dt = e.dataTransfer || {}, files = [...(dt.files || [])];
+    const uris = files.length ? "" : String((dt.getData && dt.getData("text/uri-list")) || "");
+    const paths = uris.split(/\r?\n/).map(u => u.trim()).filter(u => /^file:\/\//i.test(u)).map(u => {
+      const p = decodeURIComponent(u.replace(/^file:\/\/(localhost)?/i, "")); return /^\/[A-Za-z]:\//.test(p) ? p.slice(1) : p; });
+    return { files, paths, types: [...(dt.types || [])].join(",") };
+  };
+  async function put(files, paths, types) {
+    if (!files.length && !(paths || []).length) {
+      say("Файл не дошёл до окна — нажмите сюда и выберите его");
+      // 17.11 (владелец, Windows): перетаскивание «ничего не делает» — в журнал, что пришло вместо файла
+      try { core.call("js_errors", { errors: [`cloud (pad): drop without a file, got: ${types || "nothing"}`] }).catch(() => {}); } catch (e) { }
+      return;
+    }
+    // владелец 17.11: «обязательно включать? пусть включается само, если человек кладёт файл» — положил файл в облако,
+    // значит, облако ему нужно: включаем шифрование сами (как кнопка «Включить»), без лишнего шага
+    const st = await core.call("drive_status", {}).catch(() => CL.st);   // свежее: вкладку могли открыть только что
+    if (st && st.why === "e2e") {
+      try { await core.call("sync_e2e", { on: true }); CL.st = Object.assign({}, CL.st, { why: "" }); render(); say("Облако включено — кладу файл…"); }
+      catch (e) { /* не вышло — файл всё равно ляжет здесь, а облако подскажет кнопкой */ }
+    }
+    for (const p of paths || []) {
+      const n = p.split(/[\\/]/).pop();
+      if (!EXT.test(n)) { say(`«${n}» — такие файлы облако не берёт`); continue; }
+      say(`Кладу «${n}» в облако…`);
+      try { await core.call("drive_add_path", { path: p }); say(`«${n}» — в облаке, скоро будет на всех устройствах`); }
+      catch (e) { say(`${n}: ${e.message}`); }
+    }
     for (const f of files) {
       if (!EXT.test(f.name)) { say(`«${f.name}» — такие файлы облако не берёт`); continue; }
       if (f.size > 25 * 1048576) { say(`«${f.name}» больше 25 МБ`); continue; }
@@ -72,6 +113,8 @@
         say(`«${f.name}» — в облаке, скоро будет на всех устройствах`);
       } catch (e) { say(`${f.name}: ${e.message}`); }
     }
+    // облако выключено (зона приёма скрыта) — сказать там, где видно: файл здесь, в облако уйдёт после включения
+    if (CL.st && CL.st.why) { CL.kept = true; el("#cl-off-t").textContent = "Файл сохранён на этом компьютере. В облако и на другие устройства он уйдёт, как только облако включите."; }
     setTimeout(() => load(true), 1200);
   }
 
@@ -93,25 +136,38 @@
   tab.onclick = () => (CL.active ? null : enter());
   el("#tabs").addEventListener("click", leave, true);
   for (const id of ["#b-new", "#b-play", "#b-list", "#pt-tab"]) { const b = el(id); if (b) b.addEventListener("click", leave, true); }
-  el("#cl-file").onchange = (e) => { const fs = [...e.target.files]; e.target.value = ""; put(fs); };
+  el("#cl-file").onchange = (e) => { const fs = [...e.target.files]; e.target.value = ""; if (fs.length) put(fs, []); };
   const drop = el("#cl-drop");
   drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el("#cl-file").click(); } });
-  box.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  box.addEventListener("dragover", (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; drop.classList.add("over"); });
   box.addEventListener("dragleave", (e) => { if (!box.contains(e.relatedTarget)) drop.classList.remove("over"); });
-  box.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over");
-    const fs = [...((e.dataTransfer && e.dataTransfer.files) || [])]; if (fs.length) put(fs); });
+  box.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); const d = dropped(e); put(d.files, d.paths, d.types); });
+  // Ctrl+V: файл, скопированный в проводнике (Ctrl+C), — тоже в облако (17.11: на Windows перетаскивание не доходило)
+  document.addEventListener("paste", (e) => {
+    if (!CL.active) return;
+    const cd = e.clipboardData || {}, fs = [...(cd.files || [])];
+    const d = fs.length ? { files: fs, paths: [] } : dropped({ dataTransfer: cd });
+    if (!d.files.length && !d.paths.length) return;
+    e.preventDefault(); put(d.files, d.paths);
+  });
   el("#cl-grid").addEventListener("click", (e) => {
     const b = e.target.closest("[data-f]"); if (!b) return;
     core.call("drive_open", { name: b.dataset.f }).catch(er => say(er.message));
   });
   const studio = () => { const a = A(); if (a && a.open_settings) a.open_settings("docs"); };
-  el("#cl-more").onclick = studio; el("#cl-on").onclick = studio;
+  el("#cl-more").onclick = studio;
+  // «Включить» — прямо здесь, как кнопка в студии (sync_e2e): ключ шифрования создаётся на этом устройстве
+  el("#cl-on").onclick = () => {
+    if (!CL.st || CL.st.why !== "e2e") return studio();
+    el("#cl-on").disabled = true;
+    core.call("sync_e2e", { on: true }).then(() => { CL.kept = false; say("Облако включено — файлы уже летят"); setTimeout(() => load(true), 1500); })
+      .catch(e => { el("#cl-off-t").textContent = e.message; }).finally(() => { el("#cl-on").disabled = false; });
+  };
   core.on("drive", (e) => { CL.st = e; if (CL.active) render(); });
   // перетащили файл на блокнот, когда открыт лист, — подсказать флешку (сам файл в заметку не вставляется)
   document.addEventListener("dragenter", (e) => { if (!CL.active && e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files")) tab.classList.add("hint"); });
   document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) tab.classList.remove("hint"); });
   document.addEventListener("drop", () => tab.classList.remove("hint"));
-  tab.addEventListener("dragover", (e) => { e.preventDefault(); });
-  tab.addEventListener("drop", (e) => { e.preventDefault(); tab.classList.remove("hint"); const fs = [...((e.dataTransfer && e.dataTransfer.files) || [])];
-    enter(); if (fs.length) put(fs); });
+  tab.addEventListener("dragover", (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; });
+  tab.addEventListener("drop", (e) => { e.preventDefault(); tab.classList.remove("hint"); const d = dropped(e); enter(); put(d.files, d.paths, d.types); });
 })();

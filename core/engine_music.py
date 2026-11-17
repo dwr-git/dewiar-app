@@ -249,12 +249,11 @@ class MusicMixin:
                    or (x["repeat"].get("kind") == "weekly" and (weekly or len(x["repeat"].get("days") or []) >= 3)))]
         return {str(x.get("id")) for x in hs if x.get("id")}, {x.get("text", "").strip() for x in hs if x.get("text", "").strip()}
 
-    def _done_no_habits(self, st):
-        """Сделанное сегодня без привычек (29.10, владелец: «„С возвращением“ опять рассказала, как я взял карту на обед и
-        выключил компьютер» — итог дня при возвращении брал отметки «сделано» у ежедневных напоминаний)."""
-        if not st:
-            return st
-        ids, texts = self._habits()
+    def _habit_pred(self, weekly=False):
+        """-> habit(title, rid): привычка ли — напоминание каждый день или 3+ дня в неделю (как «Обед — не забудь взять
+        карту» по будням), похожее по названию, или то, что журнал «сделано» видел в 2+ прежних днях за три недели (привычка
+        могла быть только на телефоне — у её напоминания свой id, компьютер его не знает)."""
+        ids, texts = self._habits(weekly)
         norm = lambda t: re.sub(r"[^\wё]+", " ", str(t or "").lower().replace("ё", "е")).strip()   # noqa: E731
         hn = {norm(t) for t in texts} - {""}
         # 16.11 (владелец, снова «не забыл взять карту на обед»): привычка могла быть только на телефоне (у его напоминания
@@ -272,10 +271,21 @@ class MusicMixin:
             for k in (("t", norm(x.get("title"))), ("r", str(x.get("rid") or ""))):
                 if k[1]:
                     days.setdefault(k, set()).add(d)
-        habit = lambda x: (str(x.get("rid") or "") in ids or norm(x.get("title")) in hn      # noqa: E731
-                           or any(len(h) >= 8 and (h in norm(x.get("title")) or norm(x.get("title")) in h) for h in hn if norm(x.get("title")))
-                           or len(days.get(("t", norm(x.get("title"))), ())) >= 2 or len(days.get(("r", str(x.get("rid") or "")), ())) >= 2)
-        keep = [x for x in st.get("items") or [] if not habit(x)]
+
+        def habit(title, rid=""):
+            t, r = norm(title), str(rid or "")
+            return bool((r and r in ids) or (t and (t in hn or any(len(h) >= 8 and (h in t or t in h) for h in hn)
+                                                     or len(days.get(("t", t), ())) >= 2)) or (r and len(days.get(("r", r), ())) >= 2))
+        habit.titles = sorted(hn | {k[1] for k, v in days.items() if k[0] == "t" and len(v) >= 2})
+        return habit
+
+    def _done_no_habits(self, st):
+        """Сделанное сегодня без привычек (29.10, владелец: «„С возвращением“ опять рассказала, как я взял карту на обед и
+        выключил компьютер» — итог дня при возвращении брал отметки «сделано» у ежедневных напоминаний)."""
+        if not st:
+            return st
+        habit = MusicMixin._habit_pred(self)
+        keep = [x for x in st.get("items") or [] if not habit(x.get("title"), x.get("rid"))]
         return dict(st, items=keep, today=len(keep))
 
     def _routine_note(self, silent=True, weekly=False):

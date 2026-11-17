@@ -3913,10 +3913,10 @@ html.st-light .co-stop { background: color-mix(in srgb, var(--ink) 8%, transpare
 /* ---------- «Пишу» в «Документах» (0.68, studio/writing.js): число дня крупно, цель тонкой полосой, две недели столбиками
    одного цвета (сегодня ярче), факты справа. Без рамок; цель выполнена — карточка теплеет. ---------- */
 .wr-card { display: grid; grid-template-columns: minmax(180px, 230px) minmax(220px, 1fr) minmax(200px, 280px); gap: 18px 28px; align-items: center;
-  padding: 20px 24px; margin: -6px 0 26px; border-radius: 24px; background: radial-gradient(60% 120% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), var(--glass);
+  padding: 20px 24px; margin: 22px 0 26px; border-radius: 24px; background: radial-gradient(60% 120% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), var(--glass);
   box-shadow: var(--raise-s, none); transition: background .4s; }
 .wr-card.met { background: radial-gradient(60% 120% at 0% 0%, color-mix(in srgb, var(--good) 20%, transparent), transparent 70%), var(--glass); }
-.wr-card.none { display: block; padding: 16px 20px; } .wr-card.none > :not(.wr-empty) { display: none; }
+.wr-card[hidden] { display: none; } .wr-card.none { display: block; padding: 16px 20px; } .wr-card.none > :not(.wr-empty) { display: none; }
 .wr-empty { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); max-width: 70ch; }
 .wr-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .wr-k { flex-basis: 100%; font-size: 12.5px; font-weight: 700; color: var(--muted); }

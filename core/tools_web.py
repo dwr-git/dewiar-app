@@ -57,6 +57,119 @@ def parse_ddg(page):
     return out
 
 
+# Отчёт 839 (17.11): «поиск при первом же обращении — „поисковик просит капчу“» — DuckDuckGo отказал из сети человека,
+# а запасной путь через сервер Dewiar ищет там же и получил то же (ответ 202). Теперь запасные поисковики по очереди:
+# облегчённый DuckDuckGo, Bing, Mojeek; попросивший капчу полчаса не трогаем. Адреса — переменными (для проверок).
+CAPTCHA_RX = re.compile(r"anomaly|captcha|unusual traffic|are you a robot|challenge-form|cf-chl|подтвердите, что вы", re.I)
+_ENGINE_REST = {}                    # поисковик -> до какого времени не трогаем (попросил капчу или отказал)
+
+
+def _clean(s):
+    return html.unescape(re.sub(r"<[^>]+>", "", s or "")).strip()
+
+
+def _real_url(href):
+    """Переход поисковика -> настоящий адрес: DuckDuckGo (uddg=…), Bing (ck/a?…&u=a1<base64>)."""
+    import base64
+    h = html.unescape(href or "")
+    if h.startswith("//"):
+        h = "https:" + h
+    p = urllib.parse.urlparse(h)
+    qs = urllib.parse.parse_qs(p.query)
+    if "uddg" in qs:
+        return qs["uddg"][0]
+    if "bing.com" in p.netloc and p.path.startswith("/ck/") and qs.get("u", [""])[0].startswith("a1"):
+        b = qs["u"][0][2:]
+        try:
+            return base64.urlsafe_b64decode(b + "=" * (-len(b) % 4)).decode("utf-8", "replace")
+        except (ValueError, UnicodeError):
+            return h
+    return h
+
+
+def parse_ddg_lite(page):
+    """lite.duckduckgo.com: ссылки «result-link», описание — ячейка «result-snippet» ниже."""
+    out = []
+    links = list(re.finditer(r"<a[^>]+class=['\"]result-link['\"][^>]*>(.*?)</a>", page, re.S))
+    for i, m in enumerate(links):
+        href = re.search(r"href=['\"]([^'\"]+)['\"]", m.group(0))
+        end = links[i + 1].start() if i + 1 < len(links) else len(page)
+        sn = re.search(r"class=['\"]result-snippet['\"][^>]*>(.*?)</td>", page[m.end():end], re.S)
+        url = _real_url(href.group(1)) if href else ""
+        if url and "duckduckgo.com/y.js" not in url:
+            out.append({"title": _clean(m.group(1)), "url": url, "snippet": _clean(sn.group(1)) if sn else ""})
+    return out
+
+
+def parse_bing(page):
+    """www.bing.com: блоки <li class="b_algo">: заголовок — <h2><a href>, описание — первый <p>."""
+    out = []
+    for blk in re.split(r'<li[^>]+class="b_algo[^"]*"', page)[1:]:
+        blk = blk.split("</li>", 1)[0] if "</li>" in blk else blk
+        a = re.search(r"<h2[^>]*>\s*<a[^>]+href=\"([^\"]+)\"[^>]*>(.*?)</a>", blk, re.S)
+        if not a:
+            continue
+        p = re.search(r"<p[^>]*>(.*?)</p>", blk, re.S)
+        out.append({"title": _clean(a.group(2)), "url": _real_url(a.group(1)), "snippet": _clean(p.group(1)) if p else ""})
+    return out
+
+
+def parse_mojeek(page):
+    """www.mojeek.com: <a class="title" href>заголовок</a>, описание — <p class="s">."""
+    out = []
+    for m in re.finditer(r'<a[^>]+class="title"[^>]+href="([^"]+)"[^>]*>(.*?)</a>(.*?)(?=<a[^>]+class="title"|$)', page, re.S):
+        sn = re.search(r'<p class="s"[^>]*>(.*?)</p>', m.group(3), re.S)
+        out.append({"title": _clean(m.group(2)), "url": html.unescape(m.group(1)), "snippet": _clean(sn.group(1)) if sn else ""})
+    return out
+
+
+def _engines(q):
+    """(имя, функция() -> выдача) по очереди; каждая бросает httpx.HTTPError, если не вышло (сеть, капча, пусто)."""
+    def ddg():
+        r = httpx.post(os.environ.get("DEWIAR_DDG_HTML") or "https://html.duckduckgo.com/html/", data={"q": q, "kl": "ru-ru"},
+                       headers=UA, timeout=10, follow_redirects=True)
+        return r, parse_ddg
+    def lite():
+        r = httpx.get(os.environ.get("DEWIAR_DDG_LITE") or "https://lite.duckduckgo.com/lite/", params={"q": q, "kl": "ru-ru"},
+                      headers=UA, timeout=10, follow_redirects=True)
+        return r, parse_ddg_lite
+    def bing():
+        r = httpx.get(os.environ.get("DEWIAR_BING") or "https://www.bing.com/search", params={"q": q, "setlang": "ru", "cc": "RU"},
+                      headers=UA, timeout=10, follow_redirects=True)
+        return r, parse_bing
+    def mojeek():
+        r = httpx.get(os.environ.get("DEWIAR_MOJEEK") or "https://www.mojeek.com/search", params={"q": q}, headers=UA, timeout=10,
+                      follow_redirects=True)
+        return r, parse_mojeek
+    return [("DuckDuckGo", ddg), ("DuckDuckGo Lite", lite), ("Bing", bing), ("Mojeek", mojeek)]
+
+
+def search_engines(q, rest=1800):
+    """Поиск по очереди поисковиков -> (выдача, кто нашёл). Ничего не вышло — httpx.HTTPError с причиной первого."""
+    import time as _t
+    first = None
+    now = _t.time()
+    for name, fn in _engines(q):
+        if _ENGINE_REST.get(name, 0) > now:
+            continue
+        try:
+            r, parse = fn()
+            if r.status_code == 202 or r.status_code >= 400:
+                raise httpx.HTTPError(f"{name}: ответ {r.status_code}" + (" — просит капчу" if r.status_code == 202 else ""))
+            res = parse(r.text)
+            if not res:
+                if CAPTCHA_RX.search(r.text[:20000]):
+                    raise httpx.HTTPError(f"{name} просит капчу")
+                return [], name                                  # честно пусто — дальше не ищем
+            return res, name
+        except httpx.HTTPError as e:
+            first = first or e
+            if "капч" in str(e) or "202" in str(e) or "429" in str(e) or "403" in str(e):
+                _ENGINE_REST[name] = now + rest                  # полчаса не трогаем — не злим его дальше
+            log.info("Поиск: %s не ответил (%s) — пробую следующий", name, e)
+    raise first or httpx.HTTPError("поисковики недоступны")
+
+
 def searx_results(base, q):
     """Поиск через SearXNG (JSON) -> [{title, url, snippet}]. Ошибка сети — httpx.HTTPError."""
     r = httpx.get(base.rstrip("/") + "/search", params={"q": q, "format": "json", "language": "ru"}, headers=UA, timeout=12)
@@ -83,12 +196,9 @@ def t_web_search(a, ctx):
         if searx:                                                   # свой SearXNG (JSON)
             res = searx_results(searx, q)
         else:
-            r = httpx.post("https://html.duckduckgo.com/html/", data={"q": q, "kl": "ru-ru"}, headers=UA, timeout=12,
-                           follow_redirects=True)
-            r.raise_for_status()
-            res = parse_ddg(r.text)
-            if not res and via and ("anomaly" in r.text or "captcha" in r.text.lower()):
-                raise httpx.HTTPError("поисковик просит капчу")
+            res, who = search_engines(q)                           # DuckDuckGo, запасные — по очереди (отчёт 839)
+            if who != "DuckDuckGo":
+                log.info("Поиск: нашёл %s", who)
     except httpx.HTTPError as e:
         # поисковик бывает недоступен из сети пользователя (провайдер рвёт соединение, капча) — ищем через сервер Dewiar
         res = None

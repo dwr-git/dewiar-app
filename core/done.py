@@ -262,13 +262,14 @@ def say(r, closed=()):
     return out + " Похвали коротко и тепло, одной фразой" + (", назови достижение" if ach else "") + "; не перечисляй дела заново."
 
 
-def report(done, days=1):
+def report(done, days=1, skip=None):
+    """skip(title, rid) -> True — не показывать (привычки в ходе-итоге, engine_music._habit_pred)."""
     d = max(1, min(60, int(days or 1)))
     s = done.stats()
     start = dt.datetime.combine(dt.date.today() - dt.timedelta(days=d - 1), dt.time())
     since = start.timestamp() * 1000
     with done._lock:
-        it = [x for x in done.items if x["at"] >= since]
+        it = [x for x in done.items if x["at"] >= since and not (skip and skip(x.get("title"), x.get("rid")))]
     by = {}
     for x in it:
         by.setdefault(day_key(x["at"]), []).append(x["title"])
@@ -307,12 +308,14 @@ def rules():
            "mark_done с undo. «Что я сегодня сделал», «мои достижения» — done_report.")
 
 
-def now_line(done):
-    """Сколько дел сделано сегодня — меняется, поэтому отдельно от правил."""
+def now_line(done, skip=None):
+    """Сколько дел сделано сегодня — меняется, поэтому отдельно от правил. skip(title, rid) — привычки: их отметки «сделано»
+    в справку не идут (владелец 17.11: «обед с картой (отмечено)» в итоге дня — в четвёртый раз)."""
     s = done.stats()
-    out = f"\n\nДела сейчас: сегодня сделано {s['today']} {dela(s['today'])}"
-    if s["items"]:
-        out += " (" + "; ".join(x["title"] for x in s["items"][-6:]) + ")"
+    items = [x for x in s["items"] if not (skip and skip(x.get("title"), x.get("rid")))]
+    out = f"\n\nДела сейчас: сегодня сделано {len(items)} {dela(len(items))}"
+    if items:
+        out += " (" + "; ".join(x["title"] for x in items[-6:]) + ")"
     if s["streak"] >= 2:
         out += f", серия {s['streak']} {dney(s['streak'])} подряд"
     return out + f", всего {s['total']}."

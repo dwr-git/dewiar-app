@@ -13,6 +13,8 @@ async function loadWriting() {
 function wrRender() {
   const d = WR.d; if (!d || !$("#wr-card")) return;
   const none = !d.files;
+  // до ответа ядра карточки не видно (17.11, снимок владельца: «0 слов» с полной полосой — разметка без данных)
+  $("#wr-card").hidden = false;
   $("#wr-card").classList.toggle("none", none);
   $("#wr-empty").hidden = !none;
   if (none) return;

@@ -99,7 +99,7 @@ const D = window.Dewiar || (window.DewiarWeb || (s => s))((() => {
     mediaKey(act) { (window._media = window._media || []).push(act); return JSON.stringify({ sent: true, active: !!window._musicOn }); }, musicActive: () => !!window._musicOn,
     radioState() { const r = this._radio; return JSON.stringify({ state: r.state, name: r.name, error: r.error }); },
     // руки в других приложениях (Hands.java): в браузере выключены — проверки подменяют эти методы своими
-    handsState: () => "", handsScreen: () => "OFF", handsTap: () => "OFF", handsTapText: () => "OFF", handsType: () => "OFF",
+    handsState: () => "none", handsScreen: () => "OFF", handsTap: () => "OFF", handsTapText: () => "OFF", handsType: () => "OFF",
     handsScroll: () => "OFF", handsNav: () => "OFF", toFront() {},
   };
 })());
@@ -10080,6 +10080,8 @@ async function updateSay(install) {
     const a = (JSON.parse((await http("GET", UPD_URL, { timeout: 10000 })).body || "{}") || {}).android;
     if (!a || cmpVer(a.version, mine) <= 0) return `У вас последняя версия — ${mine}.`;
     if (typeof kidsOn === "function" && kidsOn()) return `Есть новая версия ${a.version}. Обновление ставит взрослый.`;
+    if (typeof D.handsState === "function" && D.handsState() !== "none" && !a.hands_apk)     // отчёт 835: «руки» не теряем
+      return `Есть версия ${a.version}, но версии «с руками» ещё нет — обновлю, как только она появится.`;
     if (!install) {
       if (!SANDBOX) { openSettings("about"); setTimeout(() => { checkUpdate(true); }, 400); }
       return `Есть версия ${a.version}. Скажите «обновись» — обновлю.`;
@@ -10095,8 +10097,14 @@ async function checkUpdate(manual) {
   try {
     const d = JSON.parse((await http("GET", UPD_URL, { timeout: 10000 })).body || "{}"), a = d.android;
     const newer = a && cmpVer(a.version, JSON.parse(D.info() || "{}").version || "0") > 0;
+    const hands = typeof D.handsState === "function" && D.handsState() !== "none";     // стоит версия с «руками» — и обновляем её
+    if (newer && hands && !a.hands_apk) {
+      // отчёт 835 (17.11): «скачиваю версию с руками, приходит обновление — и руки слетают; после каждого обновления
+      // скачивать заново» — в выпуске не было сборки с «руками», и ставилась обычная. Теперь ждём её, обычной не заменяем
+      if (r) { r.className = "res"; r.textContent = `Есть Dewiar ${a.version}, но версии «с руками» ещё нет — обновлю, как только она появится. Обычная версия управление приложениями не умеет.`; }
+      return false;
+    }
     if (newer) {
-      const hands = typeof D.handsState === "function" && D.handsState() !== "none";     // стоит версия с «руками» — и обновляем её
       const url = UPD_URL.replace(/latest\.json$/, hands && a.hands_apk ? a.hands_apk : a.apk);
       updInfo = { version: a.version, url, sha: hands && a.hands_apk ? a.hands_sha256 : a.sha256 };
       if (r) {

@@ -820,6 +820,11 @@ core.on("hello", d => {
   else if (q.get("note") && !DW.noteShown) { DW.noteShown = true; ntGoto(q.get("note")); }    // заметка из окна напоминания
   else if (location.hash === "#topup") setTimeout(openTopup, 300);
   else if (!S.llm.active && !location.hash) $('nav button[data-p="brain"]').click();
+  // владелец 17.11: «из блокнота „Всё облако — в студии“ — „Мои файлы“ пустые, а через другой раздел — всё есть». Студию
+  // открыли сразу на разделе (#docs): кнопку раздела нажали при загрузке, ещё до связи с ядром (S нет — данные раздела не
+  // грузились) — после первой связи нажимаем её ещё раз
+  else if (!DW.hashLoaded && /^#[\w-]+$/.test(location.hash) && $(`nav button[data-p="${location.hash.slice(1)}"]`)) {
+    DW.hashLoaded = true; $(`nav button[data-p="${location.hash.slice(1)}"]`).click(); }
   wlcBoot(d);
 })
 .on("offline", () => { $("#conn").classList.remove("ok"); $("#conn span").textContent = "нет связи с ядром"; })

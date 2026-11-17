@@ -455,6 +455,10 @@ def t_change_reminder(a, ctx):
 def t_list_reminders(a, ctx):
     from when import describe_repeat, human
     items = [x for x in ctx["reminders"].items if not x.get("paused")]
+    turn = getattr(ctx.get("engine"), "turn", None)
+    habit = getattr(turn, "habit", None) if getattr(turn, "no_habits", False) else None
+    if habit is not None:                                       # ход-итог (engine_answer): привычки и дела по расписанию — не события
+        items = [x for x in items if x.get("kind") not in ("job", "brief") and not habit(x.get("text"), x.get("id"))]
     if not items:
         return "Напоминаний нет."
     return "\n".join(f"{x['id']}: {human(datetime.fromisoformat(x['at']))} — {x['text']}" +
@@ -537,4 +541,6 @@ def t_done_report(a, ctx):
         days = int(float(a.get("days") or 1))
     except (TypeError, ValueError):
         days = 1
-    return D.report(dn, days)
+    turn = getattr(ctx.get("engine"), "turn", None)
+    habit = getattr(turn, "habit", None) if getattr(turn, "no_habits", False) else None
+    return D.report(dn, days, skip=habit)                      # ход-итог — без отметок у привычек

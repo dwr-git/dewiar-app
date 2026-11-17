@@ -1,0 +1,30 @@
+TITLE
+Lira Cloud: your files on every device — and AI answers from them | Lira's AI Academy, lesson 9
+
+DESCRIPTION
+The clause you need is somewhere in forty files — and on your work computer. In Dewiar, files live in Lira Cloud: they're on all your devices, and Lira answers from them and shows which file the answer came from.
+
+How it works:
+• Drag files into “My files” → “Lira Cloud”: contracts, manuals, price lists — PDF, Word, Excel, PowerPoint, text and images up to 25 MB.
+• Ask by voice or text: “What does the Romashka contract say about deadlines?” — Lira answers and names the file and the clause.
+• In the cloud, files are encrypted: only your own devices can read them; the server sees nothing but ciphertext.
+• The model only gets the passages Lira found — not your whole archive.
+• Files appear on their own at home, at work and on your phone (“Notes” → “My files”).
+• Quick access: the little cloud tab in the notebook next to the widget — drop a file right onto it.
+
+0:00 Where is that clause?
+0:15 Drop your files and ask
+0:32 Encrypted: only your devices can read them
+0:43 On every device — and where to find it
+
+Dewiar is a voice AI assistant for your computer (Windows, Linux, Mac) and phone (Android, iPhone in the browser). Free: https://dewiar.pro
+
+All lessons — the “Lira's AI Academy” playlist.
+
+#Dewiar #AI #AIassistant #ChatWithPDF #CloudStorage #Productivity
+
+TAGS (comma-separated)
+Dewiar, Lira, Lira's AI Academy, AI assistant, Lira Cloud, cloud storage, files on all devices, file sync, chat with PDF, AI document search, ask your documents, encrypted cloud, voice assistant, AI for work, productivity
+
+COVER
+09-docs-youtube.en.jpg (1280×720)
