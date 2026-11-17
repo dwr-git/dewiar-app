@@ -130,7 +130,7 @@ async function vlAct(v, x, row) {
 }
 /* надёжный пароль: 16 знаков, без похожих (0/O, 1/l/I), обязательно буквы обоих регистров, цифры и знак */
 function vlGen(n = 16) {
-  const L = "abcdefghijkmnpqrstuvwxyz", U = "ABCDEFGHJKLMNPQRSTUVWXYZ", D = "23456789", P = "!@#$%*-_+=?", all = L + U + D + P;
+  const L = "abcdefghijkmnpqrstuvwxyz", U = "ABCDEFGHJKLMNPQRSTUVWXYZ", D = "23456789", P = "!@#$%*-+=?", all = L + U + D + P;
   const r = (s) => { const b = new Uint32Array(1); crypto.getRandomValues(b); return s[b[0] % s.length]; };
   const out = [r(L), r(U), r(D), r(P)]; while (out.length < n) out.push(r(all));
   for (let i = out.length - 1; i > 0; i--) { const b = new Uint32Array(1); crypto.getRandomValues(b); const j = b[0] % (i + 1); [out[i], out[j]] = [out[j], out[i]]; }

@@ -136,7 +136,7 @@
 .st-f > span small { font-weight: 500; color: var(--dim); }
 .st-f input, .st-f textarea, .st-f select { width: 100%; border: 0; outline: 0; border-radius: 10px; padding: 9px 11px; background-color: var(--field); font-size: 13.5px; line-height: 1.45; }
 .st-f select { padding-right: 32px; background-repeat: no-repeat; background-position: right 11px center; }
-.st-f textarea { resize: vertical; min-height: 64px; }
+.st-f textarea { resize: vertical; min-height: 64px; field-sizing: content; max-height: 60vh; }   /* №292: поле растёт с текстом (ответ в «Вопросах», «О человеке»…) */
 .st-f input:focus, .st-f textarea:focus, .st-f select:focus { box-shadow: 0 0 0 2px rgba(139,140,247,.55); }
 .st-f select option { background: #1a1a2e; }
 .st-row2 { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }

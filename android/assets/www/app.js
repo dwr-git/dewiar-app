@@ -5715,7 +5715,7 @@ function noteHtml(t) {
   const flushQuote = () => { if (quote.length) { out.push(`<blockquote>${quote.map(inl).join("<br>")}</blockquote>`); quote = []; } };
   const flushTable = () => {
     if (!table.length) return;
-    const rows = table.filter(r => !/^\|?\s*:?-{2,}/.test(r)).map(r => r.replace(/^\||\|$/g, "").split("|").map(c => inl(c.trim())));
+    const rows = table.filter(r => !/^\|?\s*:?-{2,}/.test(r)).map(r => r.replace(/^\||\|$/g, "").split("|").map(c => c.trim().split(/<br\s*\/?>/i).map(inl).join("<br>")));   // перевод строки в ячейке — <br> (блокнот)
     out.push(`<div class="tbl"><table>${rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join("")}</tr>`).join("")}</table></div>`);
     table = [];
   };

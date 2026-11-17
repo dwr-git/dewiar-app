@@ -33,6 +33,9 @@
   }
   const LI = /^(\s*)([-*+]|\d+[.)])\s+(?:\[([ xX])\]\s+)?(.*)$/;
   const cells = (l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, "|"));
+  /* перевод строки в ячейке таблицы — «<br>», как в GitHub и Obsidian (№ пакета 17.11, владелец: «переношу каждую строку
+     на новую, а потом оно опять слипается» — раньше переводы в ячейке при сохранении становились пробелами) */
+  const cell = (c) => c.split(/<br\s*\/?>/i).map(inline).join("<br>");
 
   function md2html(md) {
     const L = String(md || "").replace(/\r\n?/g, "\n").split("\n");
@@ -54,8 +57,8 @@
       if (/\|/.test(l) && isTableSep(L[i + 1])) {                                // таблица
         const head = cells(l); i += 2;
         let rows = "";
-        while (i < L.length && /\|/.test(L[i]) && L[i].trim()) { rows += "<tr>" + cells(L[i]).map(c => `<td>${inline(c)}</td>`).join("") + "</tr>"; i++; }
-        out += `<table><thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
+        while (i < L.length && /\|/.test(L[i]) && L[i].trim()) { rows += "<tr>" + cells(L[i]).map(c => `<td>${cell(c)}</td>`).join("") + "</tr>"; i++; }
+        out += `<table><thead><tr>${head.map(c => `<th>${cell(c)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
         continue;
       }
       if (/^\s*>/.test(l)) {                                                       // цитата
@@ -163,7 +166,7 @@
     return out.join("\n");
   }
   function table(n) {
-    const rows = [...n.querySelectorAll("tr")].map(tr => [...tr.children].map(c => [...c.childNodes].map(inl).join("").replace(/\n/g, " ").replace(/\|/g, "\\|").trim()));
+    const rows = [...n.querySelectorAll("tr")].map(tr => [...tr.children].map(c => [...c.childNodes].map(k => k.nodeType === 1 && BLOCK.test(k.tagName) ? "\n" + inl(k) + "\n" : inl(k)).join("").trim().replace(/\n+/g, "<br>").replace(/\|/g, "\\|")));
     if (!rows.length) return "";
     const w = Math.max(...rows.map(r => r.length));
     rows.forEach(r => { while (r.length < w) r.push(""); });

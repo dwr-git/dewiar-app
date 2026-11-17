@@ -8,7 +8,7 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 from answer_rules import (
     ACTS_RX, APPT_RX, APPT_TIME_RX, ATT_DEFAULT_Q, ATT_PATH_RX, ATT_REF_RX, BIG_PC_RX, CORE_TOOLS, COURSE_RX,
-    crash_blocks, _CRASH_RX, DATE_ASK_RX, device_os, DISK_ASK_RX, facts_shown, honest_rest, IDEA_RULE, INFO_TOOLS,
+    crash_blocks, _CRASH_RX, DATE_ASK_RX, device_os, DISK_ASK_RX, facts_shown, honest_rest, IDEA_RULE, INFO_TOOLS, told,
     JOB_ASK_RX, LAW_CODE_RX, LAW_REF_RX, law_unsourced, model_label, _MONTH_NOM, _MONTH_RX, month_year_wrong,
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
     PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, REPEAT_RX, shown_q, SONGS_ASK_RX,
@@ -611,10 +611,17 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         econ_main = None
                         events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
                 except LLMError as e:
+                    # №805 (пакет 17.11): действия уже сделаны (ответ MCP-программы, поиск), а модель вернула пустоту — не
+                    # «Не получилось: ответ без текста» и не молчание, а ниже, после цикла: «ответь словами по сделанному»
+                    quiet = bool(step and done_calls and "без текста" in str(e) and not turn.cancel.is_set() and not turn.full.strip()
+                                 and getattr(turn, "blank_nudged", False))
                     fb = self._cloud_fallback(prof, e) if step == 0 and not turn.full and not turn.cancel.is_set() else None
                     if not fb and step == 0 and not turn.full and not turn.cancel.is_set():
                         fb = self._own_fallback(prof, e)    # своя модель выключена — мозг Dewiar (если человек согласился)
-                    if fb:                                  # облако не ответило / заряд кончился — отвечает запасной мозг
+                    if quiet:
+                        log.warning("Модель замолчала после действий (%s) — попрошу ответить по сделанному", e)
+                        events = iter(())
+                    elif fb:                                # облако не ответило / заряд кончился — отвечает запасной мозг
                         prof = fb
                         events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
                     elif not _has_images(msgs):
@@ -623,7 +630,13 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                             turn.blank_nudged = True
                             log.warning("Модель ответила пустотой (%s) — повторяю с подсказкой", e)
                             msgs = msgs + [{"role": "user", "content": "Ответь на мой вопрос: вызови нужный инструмент или ответь словами."}]
-                            events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
+                            try:
+                                events = _first_then_stream(stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None))
+                            except LLMError as e3:
+                                if not (step and done_calls and "без текста" in str(e3)):
+                                    raise
+                                log.warning("Модель замолчала после действий (%s) — попрошу ответить по сделанному", e3)
+                                events = iter(())
                         elif specs and step == 0 and not turn.full and not turn.cancel.is_set() and not self._cloud_said(prof, e) \
                                 and "без текста" not in str(e) and not _no_money(e):     # деньги на ключе кончились — без действий не поможет
                             # с инструментами модель не отвечает — ответим хотя бы без них
@@ -963,7 +976,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                     turn.full += " "
                 self.set_state("thinking")
             ok_tools = set(getattr(turn, "tools_ok", None) or [])
-            if not turn.cancel.is_set() and not turn.full.strip() and done_calls and (not ok_tools or ok_tools & INFO_TOOLS):
+            if not turn.cancel.is_set() and not turn.full.strip() and done_calls and (not ok_tools or told(ok_tools)):
                 # отчёт №69: прочитала страницу трижды, поискала — и вернула пустоту («Не получилось: пустой ответ»).
                 # Сведения уже есть — просим ответить по ним словами, без новых действий (один раз).
                 # №524 (04.11, разобрал сам человек): справочное ВМЕСТЕ с действием (calc + world_time, web_search +
@@ -984,7 +997,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         speak(s_)
                 except LLMError as e:
                     log.info("И по найденному ответа нет: %s", e)
-                if not turn.full.strip() and not turn.cancel.is_set() and ok_tools - INFO_TOOLS:
+                if not turn.full.strip() and not turn.cancel.is_set() and ok_tools - told(ok_tools):
                     # и так ничего, но действие сделано (№524) — как у одних действий: «Готово.» / «Задача запущена…»
                     turn.full = "Задача запущена — сообщу, когда будет готово." if "start_task" in ok_tools else "Готово."
                     sentences.put(turn.full)
@@ -1053,7 +1066,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 turn.full = (turn.full.rstrip() + " " + REMIND_NOT_SET).strip()
                 sentences.put(REMIND_NOT_SET)
             if not turn.cancel.is_set():
-                if not turn.full.strip() and getattr(turn, "tools_ok", None) and not (set(turn.tools_ok) & INFO_TOOLS):
+                if not turn.full.strip() and getattr(turn, "tools_ok", None) and not told(turn.tools_ok):
                     # действие сделано, а слов модель не добавила; фоновая задача только началась — не «Готово» (отзыв 13.10)
                     turn.full = "Задача запущена — сообщу, когда будет готово." if "start_task" in turn.tools_ok else "Готово."
                     sentences.put(turn.full)

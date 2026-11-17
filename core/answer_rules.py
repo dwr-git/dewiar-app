@@ -144,6 +144,13 @@ INFO_TOOLS = {"web_search", "weather", "read_webpage", "find_notes", "read_file"
               "read_emails", "read_email", "search_documents", "ask_knowledge", "system_status", "task_status", "look_at_screen",
               "look_through_camera", "app_update", "ocr"}
 
+
+def told(names):
+    """Действия, после которых есть что рассказать: справочные (INFO_TOOLS) и инструменты подключённых программ (MCP,
+    «mcp_<сервер>_<действие>»). №805 (пакет 17.11): «подключалась к MCP-серверу pen.dev, управлять не удавалось — и молчала,
+    пока я не спрашивал»: ответ MCP считался «действием», и на тишину модели выходило «Готово.» вместо рассказа. -> set."""
+    return {n for n in names or () if n in INFO_TOOLS or str(n).startswith("mcp_")}
+
 JOB_ASK_RX = re.compile(r"Поручение пользователя: «(.+?)»\. Выполни", re.S)
 
 

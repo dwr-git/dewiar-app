@@ -42,7 +42,8 @@ function md(src) {
       const row = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
       const head = row(l); i += 2; const rows = [];
       while (i < L.length && /^\|.*\|\s*$/.test(L[i])) rows.push(row(L[i++]));
-      out.push(`<table><tr>${head.map(h => `<th>${mdInline(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map(c => `<td>${mdInline(c)}</td>`).join("")}</tr>`).join("")}</table>`); continue; }
+      const cell = (c) => c.split(/<br\s*\/?>/i).map(mdInline).join("<br>");     // перевод строки в ячейке — <br> (блокнот)
+      out.push(`<table><tr>${head.map(h => `<th>${cell(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join("")}</tr>`).join("")}</table>`); continue; }
     if (/^>\s?/.test(l)) { const buf = []; while (i < L.length && /^>\s?/.test(L[i])) buf.push(L[i++].replace(/^>\s?/, ""));
       out.push(`<blockquote>${md(buf.join("\n"))}</blockquote>`); continue; }
     if (/^\s*([-*+]|\d+[.)])\s+/.test(l)) {

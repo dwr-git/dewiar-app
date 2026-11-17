@@ -732,6 +732,13 @@ class RemoteMixin:
                             self.player.start(play_rate)
                             fx = voicefx.VoiceFX(fx_name, rate)
                         if not self.player.write(fx.process(pcm) if fx else pcm):
+                            if not turn.cancel.is_set():
+                                # №804 (пакет 17.11, Windows): «обрывает чтение на середине», а в журнале — ни одного
+                                # перебивания. Вывод звука упал посреди фразы (устройство сменилось, драйвер, другая
+                                # программа) — раньше все следующие фразы молча «проговаривались» в никуда. Теперь — в
+                                # журнал, и следующая фраза открывает вывод заново
+                                log.warning("🔇 Звук оборвался посреди фразы «%s» — открываю вывод заново", text[:50])
+                                started = False
                             break
                     turn.spoken.append(s)
                 except AudioOutError as e:            # звук не вывести — дело не в голосе, другие движки не помогут

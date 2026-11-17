@@ -98,6 +98,9 @@ with sync_playwright() as p:
     ok(len(gen) == 16 and re.search(r"[a-z]", gen) and re.search(r"[A-Z]", gen) and re.search(r"\d", gen) and re.search(r"[^\w]", gen) and not re.search(r"[0O1lI]", gen),
        f"«Придумать» — 16 знаков: строчные, заглавные, цифры, знаки, без похожих: {gen}")
     ok("надёжный" in pg.text_content("#vl-str"), "подпись — «надёжный»")
+    # 17.11 (прогон 1.0.19): «_» единственным знаком — генератор считал его знаком, а индикатор надёжности нет; 300 паролей подряд
+    bad = pg.evaluate("() => { const b = []; for (let i = 0; i < 300; i++) { const p = vlGen(); if (!/[^\\w]/.test(p) || /[0O1lI]/.test(p)) b.push(p); } return b; }")
+    ok(not bad, f"300 придуманных паролей — у каждого есть знак не из букв и цифр: {bad[:3]}")
     pg.fill("#vl-value", "12345"); pg.dispatch_event("#vl-value", "input")
     ok("пин-код" in pg.text_content("#vl-str"), "цифры — «пин-код или код»")
     pg.fill("#vl-value", "qwerty"); pg.dispatch_event("#vl-value", "input")

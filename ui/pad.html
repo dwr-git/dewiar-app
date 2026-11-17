@@ -336,7 +336,8 @@
   body { --pu-think: #9aa6ff; --pu-mem: #45c7bd; --pu-radar: #f0a35a; --pu-lead: #5fd08f; --pu-err: #ef7a6a;
          --pu-card: rgba(255,255,255,.045); --pu-lift: 0 10px 26px rgba(0,0,0,.28); --pu-glow: rgba(154,166,255,.30);
          --pu-veil: rgba(10,12,20,.55); --pu-leadbg: rgba(95,208,143,.11); }
-  body.light { --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #a85a0e; --pu-lead: #23784a; --pu-err: #c4473a;
+  /* Радар в светлой теме — яркий оранжевый, а не коричневый (владелец 17.11: «грустноватый»); контраст с листом ≥ 4,3 */
+  body.light { --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #c2410c; --pu-lead: #23784a; --pu-err: #c4473a;
                --pu-card: rgba(255,255,255,.6); --pu-lift: 0 10px 24px rgba(36,50,74,.12); --pu-glow: rgba(74,99,216,.24);
                --pu-veil: rgba(219,229,241,.72); --pu-leadbg: #e2efe7; }
   body.neu.light { --pu-card: var(--paper); --pu-lift: 6px 6px 14px var(--neu-dark, #b8c5d6), -6px -6px 14px var(--neu-light, #fff); }

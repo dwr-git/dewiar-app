@@ -423,6 +423,10 @@
   #card.crowd #orb { width: calc(104px * var(--ok, 1)); height: calc(104px * var(--ok, 1)); }      /* тесно (fitCap): карточки и кнопки важнее большого облика */
   #card.long #orb { width: calc(84px * var(--ok, 1)); height: calc(84px * var(--ok, 1)); }          /* длинный текст — сфера уступает место полю */
   #card.long #bubble, #card.long #note, #card.long #cap { display: none; }
+  /* №802 (пакет 17.11): длинная подсказка («Микрофон почти ничего не слышит…») выталкивала поле ввода за край виджета —
+     пока открыто поле вопроса, подсказка — одной строкой с многоточием, целиком — во всплывающей подсказке */
+  #card.asking:not(.long) #cap:not(.show) ~ #note:not(:empty) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1;
+    overflow: hidden; white-space: normal; }
   .ab { flex: none; width: 32px; height: 32px; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
   .ab:hover { background: rgba(255,255,255,.09); color: var(--ink); }
   .ab svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -1361,6 +1365,8 @@ new MutationObserver(() => {
   const b = $("cap").classList.contains("show") || $("yn").classList.contains("on") || $("ask").style.display === "block";
   // строка задачи/обновления не требует уменьшать облик
   $("card").classList.toggle("busy", b);
+  $("card").classList.toggle("asking", $("ask").style.display === "block");
+  $("note").title = $("ask").style.display === "block" ? $("note").textContent : "";
 }).observe($("mid"), { subtree: true, attributes: true, attributeFilter: ["class", "style"] });
 
 /* перетаскивание — за любое место карточки; нажатие на сферу — говорить. Окно двигает программа (move_to,
@@ -1608,7 +1614,7 @@ function renderTask_() {
     : `<div class="tl"><span class="spin"></span><b>${esc(t.title)}</b><em>${t.progress && t.progress[1] ? `${t.progress[0]}/${t.progress[1]}` : `шаг ${t.steps}`}</em></div>` +
       (t.activity ? `<div class="tsub">${esc(t.activity)}</div>` : "") + `<i class="tp"><b style="width:${Math.max(4, pr * 100)}%"></b></i>`;
 }
-core.on("hello", d => { (d.tasks || []).forEach(t => tasks[t.id] = t); renderTask(); CUR_VER = d.version || (d.update || {}).current || CUR_VER; updTitle(); if (d.update && (d.update.available || d.update.failed)) showUpd(d.update); })
+core.on("hello", d => { (d.tasks || []).forEach(t => tasks[t.id] = t); renderTask(); CUR_VER = d.version || (d.update || {}).current || CUR_VER; updSince(CUR_VER); updTitle(); if (d.update && (d.update.available || d.update.failed)) showUpd(d.update); })
     .on("task", e => {
       const prev = tasks[e.task.id];
       if (e.task.status === "done" && (!prev || prev.status !== "done")) doneAt[e.task.id] = Date.now();
@@ -1630,9 +1636,19 @@ $("task").onclick = (ev) => {
 const UPD = { avail: null, want: 0 };   // want — нажали значок, версия ещё качается: скачается — ставим
 /* 29.10 (236 компьютеров на 0.45.3: строку «Доступна версия…» легко не заметить) — раз в сутки, когда я свободна,
    спрашиваю прямо: «Вышла новая версия — обновить сейчас?» с одной кнопкой (она жмёт ту же строку). «Позже» — завтра. */
+/* №288 (идеи 17.11: «только новую скачал — при запуске уже ОПЯТЬ обнова, бесит»): выпуски бывают несколько раз в день —
+   вопрос всплывает не раньше чем через 3 суток с установки нынешней версии; значок у кнопки и строка в карточке — сразу */
+const UPD_CALM = 3 * 24 * 3600e3;
+function updSince(ver) {
+  if (!ver) return 0;
+  let m = {}; try { m = JSON.parse(localStorage.getItem("upd_since") || "{}") || {}; } catch (e) { }
+  if (!m[ver]) { m = { [ver]: Date.now() }; try { localStorage.setItem("upd_since", JSON.stringify(m)); } catch (e) { } }
+  return m[ver];
+}
 function updAsk(a) {
   let last = 0; try { last = +localStorage.getItem("upd_ask") || 0; } catch (e) { }
   if (Date.now() - last < 20 * 3600e3 || mode !== "card") return;
+  if (CUR_VER && Date.now() - updSince(CUR_VER) < UPD_CALM) return;
   setTimeout(() => {
     if (!UPD.avail || (state !== "idle" && state !== "listening") || $("cap").classList.contains("show")) return;
     try { localStorage.setItem("upd_ask", String(Date.now())); } catch (e) { }

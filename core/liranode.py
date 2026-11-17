@@ -171,7 +171,8 @@ class Sys:
             return None
 
     def gpu(self, fresh=False):
-        """NVIDIA: {name, mem_gb, temp, util} (nvidia-smi, раз в 15 с) или None."""
+        """Видеокарта с наибольшей памятью: {name, mem_gb, temp, util} (раз в 15 с) или None. NVIDIA — nvidia-smi;
+        AMD и Intel — gpu_other(); Mac на Apple M — общая память."""
         at, v = self._gpu
         if not fresh and time.time() - at < 15:
             return v
@@ -190,6 +191,8 @@ class Sys:
             v = best
         except (OSError, ValueError, subprocess.SubprocessError):
             v = None
+        if v is None:
+            v = gpu_other()                                    # №801: AMD Radeon и Intel Arc — без nvidia-smi
         if v is None and sys.platform == "darwin":
             try:
                 chip = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, timeout=3).stdout.strip()
@@ -200,6 +203,94 @@ class Sys:
                 pass
         self._gpu = (time.time(), v)
         return v
+
+
+GPU_CLASS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"   # видеоадаптеры
+DRM = "/sys/class/drm"
+
+
+def gpu_other(drm=DRM, reg=None):
+    """№801 (пакет 17.11: «не определяет мою видеокарту Radeon RX 6700 XT 12 ГБ»): видеокарта не NVIDIA — самая большая по
+    памяти, {name, mem_gb, temp, util} (temp и util — None, где не узнать) или None. Windows — реестр видеоадаптеров
+    (HardwareInformation.qwMemorySize: AdapterRAM из WMI 32-битный и упирается в 4 ГБ); Linux — amdgpu и Intel в /sys
+    (mem_info_vram_total, gpu_busy_percent, hwmon). Встроенные (меньше 2 ГБ своей памяти) не в счёт. reg — для проверок:
+    [{DriverDesc, HardwareInformation.qwMemorySize}] вместо реестра."""
+    best = None
+
+    def put(name, mem, temp=None, util=None):
+        nonlocal best
+        if mem and mem >= 2 * 1024 ** 3 and (not best or mem / 1024 ** 3 > best["mem_gb"]):
+            best = {"name": (name or "Видеокарта").strip()[:120], "mem_gb": round(mem / 1024 ** 3, 1), "temp": temp, "util": util}
+    if reg is not None or os.name == "nt":
+        for a in (reg if reg is not None else _win_adapters()):
+            name = str(a.get("DriverDesc") or "")
+            if "nvidia" in name.lower():
+                continue                                       # NVIDIA — nvidia-smi, он знает и температуру
+            mem = a.get("HardwareInformation.qwMemorySize") or a.get("HardwareInformation.MemorySize")
+            if isinstance(mem, bytes):
+                mem = int.from_bytes(mem[:8], "little")
+            put(name, mem if isinstance(mem, int) else None)
+        return best
+    try:
+        cards = sorted(x for x in os.listdir(drm) if re.fullmatch(r"card\d+", x))
+    except OSError:
+        return None
+    for c in cards:
+        d = os.path.join(drm, c, "device")
+        vendor = _read(os.path.join(d, "vendor")).lower()
+        if vendor not in ("0x1002", "0x8086"):              # AMD, Intel
+            continue
+        mem = _num(_read(os.path.join(d, "mem_info_vram_total")))
+        name = _read(os.path.join(d, "product_name")) or ("AMD Radeon" if vendor == "0x1002" else "Intel")
+        temp = None
+        try:
+            for h in os.listdir(os.path.join(d, "hwmon")):
+                t = _num(_read(os.path.join(d, "hwmon", h, "temp1_input")))
+                if t is not None:
+                    temp = round(t / 1000)
+                    break
+        except OSError:
+            pass
+        put(name, int(mem) if mem else None, temp, _num(_read(os.path.join(d, "gpu_busy_percent"))))
+    return best
+
+
+def _read(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _win_adapters():
+    """Видеоадаптеры из реестра Windows: [{DriverDesc, HardwareInformation.qwMemorySize, …}]."""
+    out = []
+    try:
+        import winreg
+        root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, GPU_CLASS)
+    except (ImportError, OSError):
+        return out
+    for i in range(64):
+        try:
+            sub = winreg.EnumKey(root, i)
+        except OSError:
+            break
+        if not sub.isdigit():
+            continue
+        a = {}
+        try:
+            with winreg.OpenKey(root, sub) as k:
+                for name in ("DriverDesc", "HardwareInformation.qwMemorySize", "HardwareInformation.MemorySize"):
+                    try:
+                        a[name] = winreg.QueryValueEx(k, name)[0]
+                    except OSError:
+                        pass
+        except OSError:
+            continue
+        if a:
+            out.append(a)
+    return out
 
 
 def _num(x):
@@ -578,7 +669,7 @@ class Node:
                 + ("" if enough else (" — мало: у Mac нужно от 24 ГБ общей памяти" if g.get("apple") else
                                       f" — мало: нужна видеокарта от {MIN_VRAM_GB} ГБ, на меньших модели не справляются с вопросами людей")))
         else:
-            add("gpu", None, "Видеокарта", "не узнала (не NVIDIA?) — решит замер скорости")
+            add("gpu", None, "Видеокарта", "не узнала — решит замер скорости")
         try:
             import device
             ram = device.ram_gb()[0]
