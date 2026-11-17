@@ -187,6 +187,9 @@
 .st-opt.on { box-shadow: inset 0 0 0 1.5px var(--st-sel); background: rgba(139,140,247,.12); }
 .st-opt i { width: 18px; height: 14px; border: 2px solid currentColor; opacity: .75; }
 .st-opt.rad-sharp i { border-radius: 1px; } .st-opt.rad-soft i { border-radius: 5px; } .st-opt.rad-round i { border-radius: 9px; }
+/* отступы (отчёт 825): рамка — край раздела, заливка — содержимое; чем шире поле, тем меньше заливка */
+.st-opt[class*="sp-"] i { box-sizing: border-box; border-radius: 3px; background: currentColor; background-clip: content-box; }
+.st-opt.sp-compact i { padding: 1px; } .st-opt.sp-normal i { padding: 2px 3px; } .st-opt.sp-airy i { padding: 3px 5px; }
 .st-opt.hdr-light i { background: #f1efe9; border-color: #f1efe9; } .st-opt.hdr-dark i { background: #23262c; border-color: #777; } .st-opt.hdr-accent i { background: #8b8cf7; border-color: #8b8cf7; }
 .st-redo { display: flex; flex-wrap: wrap; gap: 6px; }
 .st-chipb { border: 0; background: var(--st-soft); color: var(--muted); font-size: 12px; padding: 6px 11px; border-radius: 999px; cursor: pointer; }

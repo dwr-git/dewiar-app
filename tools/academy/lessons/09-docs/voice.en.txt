@@ -4,24 +4,24 @@
 Лира: Hi! This is “AI Academy”, lesson nine — “My files”. | Hi! This is AI Academy, lesson nine — My files.
 
 ## problem
-Патрик: The contract had a delivery deadline. But which of forty files was it in?
+Патрик: The contract had a delivery deadline. But which of forty files was it in — and on which computer? | The contract had a delivery deadline. But which of forty files was it in — and on which computer?
 
 ## add
-Лира: Add your files for me — contracts, manuals, price lists. I'll take a copy; I don't need access to your folders.
+Лира: Drop your files on me — contracts, manuals, price lists. They go to “Lira Cloud”. | Drop your files on me — contracts, manuals, price lists. They go to Lira Cloud.
 
 ## ask
 Лира: Ask: “What does the Romashka contract say about deadlines?” | Ask: What does the Romashka contract say about deadlines?
 Лира: I'll answer — and show which file it's from.
 
 ## private
-Лира: I search on your computer, without the internet.
+Лира: In the cloud, your files are encrypted — only your own devices can read them.
 Лира: The model only gets the passages I found — not the whole archive.
 
 ## phone
-Лира: On the go, ask from your phone — it will ask your computer.
+Лира: Your files are on all your devices: at home, at work, and on your phone, in “Notes”. | Your files are on all your devices: at home, at work, and on your phone, in Notes.
 
 ## how
-Лира: In the studio: “My files” → “Add files”. Prefer a whole folder? — “Connect a folder”. | In the studio: My files, Add files. Prefer a whole folder? — Connect a folder.
+Лира: In the studio: “My files” → “Lira Cloud”. Or in the notebook by the widget — the tab with a little cloud. | In the studio: My files, Lira Cloud. Or in the notebook by the widget — the tab with a little cloud.
 
 ## end
 Лира: Dewiar is free, at dewiar.pro. | Deviar is free, at deviar dot pro.

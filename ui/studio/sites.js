@@ -369,6 +369,7 @@ function stLook() {
     <h4>Шрифты</h4><div class="st-fonts">${Object.entries(M.fonts).map(([k, f]) => `<button type="button" class="st-font${k === th.fonts ? " on" : ""}" data-v="${k}" aria-pressed="${k === th.fonts}">
       <span class="st-fa" style="font-family:${stE(f.head)};font-weight:${f.hw};${f.italic ? "font-style:italic;" : ""}">Аа</span><span><b>${stE(f.title)}</b><small>${stE(f.sub)}</small></span></button>`).join("")}</div>
     <h4>Углы</h4><div class="st-opts">${Object.entries(M.radii).map(([k, t]) => `<button type="button" class="st-opt rad-${k}${k === th.radius ? " on" : ""}" data-v="${k}"><i></i>${stE(t)}</button>`).join("")}</div>
+    ${M.spaces ? `<h4>Отступы</h4><div class="st-opts">${Object.entries(M.spaces).map(([k, t]) => `<button type="button" class="st-opt sp-${k}${k === (th.space || "normal") ? " on" : ""}" data-v="${k}"><i></i>${stE(t)}</button>`).join("")}</div>` : ""}
     <h4>Шапка</h4><div class="st-opts">${Object.entries(M.headers).map(([k, t]) => `<button type="button" class="st-opt hdr-${k}${k === (th.header || "light") ? " on" : ""}" data-v="${k}"><i></i>${stE(t)}</button>`).join("")}</div>
     <h4>Другой дизайн целиком</h4><p class="hint">Тексты и разделы останутся — поменяются цвета, шрифты, меню и вёрстка.</p>
     <div class="st-redo">${M.templates.map(t => `<button type="button" class="st-chipb${t.id === SITES.cur.template ? " on" : ""}" data-v="${t.id}">${stE(t.title)}</button>`).join("")}</div>`;
@@ -376,6 +377,7 @@ function stLook() {
   $$("#st-look .st-pal").forEach(b => b.onclick = () => stApply([{ op: "palette", name: b.dataset.v }], `Палитра «${M.palettes[b.dataset.v].title}»`));
   $$("#st-look .st-font").forEach(b => b.onclick = () => stApply([{ op: "fonts", name: b.dataset.v }], `Шрифт «${M.fonts[b.dataset.v].title}»`));
   $$("#st-look .rad-sharp, #st-look .rad-soft, #st-look .rad-round").forEach(b => b.onclick = () => stApply([{ op: "radius", name: b.dataset.v }], "Углы"));
+  $$("#st-look .sp-compact, #st-look .sp-normal, #st-look .sp-airy").forEach(b => b.onclick = () => stApply([{ op: "space", name: b.dataset.v }], "Отступы"));
   $$('#st-look [class*="hdr-"]').forEach(b => b.onclick = () => stApply([{ op: "header", value: b.dataset.v }], "Шапка"));
   $$("#st-look .st-redo .st-chipb").forEach(b => b.onclick = () => stApply([{ op: "template", id: b.dataset.v }], `Дизайн «${b.textContent}»`));
   $("#st-acc").onchange = (e) => stApply([{ op: "colors", accent: e.target.value }], "Свой цвет акцента");

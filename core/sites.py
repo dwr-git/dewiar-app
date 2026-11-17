@@ -207,7 +207,7 @@ class Sites(MakeMixin, EditMixin, OutMixin):
                 "fonts": {k: {"title": v["title"], "sub": v["sub"], "head": v["head"], "body": v["body"], "hw": v["hw"], "italic": bool(v.get("italic"))}
                           for k, v in K.FONTS.items()},
                 "styles": {k: {"title": v["title"], "sub": v["sub"]} for k, v in K.STYLES.items()},
-                "radii": {k: v["title"] for k, v in K.RADII.items()}, "menus": K.MENUS, "headers": K.HEADERS, "tones": K.TONES,
+                "radii": {k: v["title"] for k, v in K.RADII.items()}, "spaces": {k: v["title"] for k, v in K.SPACES.items()}, "menus": K.MENUS, "headers": K.HEADERS, "tones": K.TONES,
                 "marks": {k: {"title": v[0], "svg": K.mark_svg(k)} for k, v in K.MARKS.items()}, "logo_styles": K.LOGO_STYLES,
                 "contacts": K.CONTACT_KEYS,
                 "legal": {"fields": K.LEGAL_FIELDS, "docs": {k: dict(v) for k, v in K.LEGAL_DOCS.items()}, "links_max": K.LEGAL_LINKS_MAX,

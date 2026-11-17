@@ -140,6 +140,9 @@ class EditMixin:
             elif op == "radius" and o.get("name") in K.RADII:
                 th["radius"] = o["name"]
                 done.append(K.RADII[o["name"]]["title"].lower())
+            elif op == "space" and o.get("name") in K.SPACES:
+                th["space"] = o["name"]
+                done.append(f"отступы {K.SPACES[o['name']]['title'].lower()}")
             elif op == "art" and o.get("name") in K.ARTS:
                 th["art"] = o["name"]
                 done.append("узор")

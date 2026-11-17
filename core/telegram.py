@@ -382,10 +382,32 @@ class Telegram:
                     continue
                 raise
             with self._lock:
-                self.data["code"] = code
+                self.data["code"], self.data["code_at"] = code, int(time.time())
                 self._save()
             return code
         raise TelegramError("не удалось получить код привязки — попробуйте ещё раз")
+
+    CODE_FRESH = 20 * 60      # отчёты 827/828: код из ссылки сервер держал 30 минут, а студия показывала его сутками —
+    _code_try = 0.0           # «Код не подошёл», и сколько ни жми — то же. Пока владельца нет — свежий код каждые 20 минут
+
+    def _code_fresh(self, now=None):
+        """Общий бот ещё не привязан, а коду ссылки больше 20 минут -> зарегистрировать новый (студия сама перерисует ссылку
+        и QR по событию). -> обновлён ли. Неудача — не чаще раза в минуту."""
+        now = time.time() if now is None else now
+        if not self.shared() or self.paired() or now - float(self.data.get("code_at") or 0) < self.CODE_FRESH \
+                or now - self._code_try < 60:
+            return False
+        self._code_try = now
+        try:
+            self._register_code()
+        except TelegramError as e:
+            log.info("%s: код привязки не обновился — %s", self.TITLE, e)
+            return False
+        try:
+            self.on_message("nodes", {})          # студии — новая ссылка (engine_remote: событие telegram / max)
+        except Exception:  # noqa: BLE001
+            log.exception("%s: событие о новом коде", self.TITLE)
+        return True
 
     def _node_params(self):
         """Кто этот компьютер — для сервера (device, name, act); пусто, если Engine не сказал."""
@@ -639,6 +661,7 @@ class Telegram:
                 rare = not self._conflict_gone()
                 self.problem, wait = (CONFLICT_SAY if rare else ""), 3
                 self.last_seen = time.time()
+                self._code_fresh(self.last_seen)
                 if rare:
                     self._stop.wait(self.CONFLICT_RARE)     # №512: бот отвечает с другого компьютера — не перебиваем его
                 elif not ups and self._php():

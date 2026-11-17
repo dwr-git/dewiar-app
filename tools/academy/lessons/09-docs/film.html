@@ -2,7 +2,7 @@
 <html lang="ru"><head><meta charset="utf-8">
 <link rel="stylesheet" href="../../../../ui/assets/fonts.css">
 <style>
-/* Урок 9 · Мои файлы. Светлый неоморфизм серии. Главная вещь урока — стена файлов справа: Лира прочитала папку, и на вопрос загорается ровно тот файл, из которого ответ. */
+/* Урок 9 · Мои файлы. Светлый неоморфизм серии. Главная вещь урока — стена файлов справа: файлы ложатся в «Облако Лиры», и на вопрос загорается ровно тот файл, из которого ответ; потом те же файлы — на всех устройствах (1.0.23). */
 :root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
   --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
   --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
@@ -39,11 +39,20 @@ html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--
 .fl span { font-size: 13px; font-weight: 800; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fl.hit { background: #fff; box-shadow: 0 0 0 0 transparent, 0 20px 40px -18px rgba(69,96,234,.55); transform: scale(1.12); }
 .fl.hit span { color: var(--accent); }
-#folder { position: absolute; left: 620px; top: 230px; width: 680px; padding: 32px 36px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
-#folder .h { display: flex; align-items: center; gap: 18px; } #folder .h i { font-size: 54px; font-style: normal; }
-#folder b { display: block; font: 600 30px Unbounded; } #folder small { font-size: 20px; color: var(--mut); font-weight: 700; }
-#folder .pb { height: 14px; border-radius: 99px; box-shadow: var(--press); margin-top: 24px; overflow: hidden; } #folder .pb i { display: block; height: 100%; border-radius: 99px; background: var(--brand); }
-#folder p { font-size: 22px; font-weight: 800; margin-top: 16px; }
+/* «Облако Лиры» (1.0.23): тот же градиент облака, что в студии и блокноте */
+#cloud { position: absolute; left: 620px; top: 190px; width: 700px; padding: 30px 34px; border-radius: 34px; background: var(--bg); box-shadow: var(--raise); }
+.ch { display: flex; align-items: center; gap: 18px; } .ch svg { width: 66px; height: 66px; flex: none; }
+.ch b { display: block; font: 700 30px Unbounded; } .ch small { display: block; font-size: 19px; font-weight: 700; color: var(--mut); margin-top: 4px; }
+.ch .mt { margin-left: auto; text-align: right; font-size: 18px; font-weight: 800; color: var(--mut); white-space: nowrap; } .ch .mt em { display: block; font: 600 26px Unbounded; font-style: normal; color: var(--ink); }
+#drop { margin-top: 24px; height: 128px; border-radius: 24px; border: 3px dashed rgba(69,96,234,.35); display: grid; place-items: center; font-size: 24px; font-weight: 800; color: var(--accent); transition: none; }
+#drop.over { background: rgba(69,96,234,.08); border-color: var(--accent); }
+#tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.tl { padding: 13px 14px; border-radius: 16px; box-shadow: var(--raise-s); display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tl i { width: 26px; height: 32px; flex: none; border-radius: 5px 10px 5px 5px; background: #f0a3a3; } .tl.doc i { background: #9fb8f5; } .tl.xls i { background: #94d9b4; }
+.tl span { font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl b { width: 9px; height: 9px; flex: none; border-radius: 50%; background: #2fb383; margin-left: auto; }
+.fly { position: absolute; z-index: 5; width: 120px; padding: 12px; border-radius: 16px; background: #fff; box-shadow: 0 18px 30px -14px rgba(36,50,74,.45); display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; }
+.fly i { width: 24px; height: 30px; flex: none; border-radius: 5px 9px 5px 5px; background: #f0a3a3; } .fly.doc i { background: #9fb8f5; } .fly.xls i { background: #94d9b4; }
 #q { position: absolute; left: 620px; top: 190px; max-width: 680px; padding: 22px 28px; border-radius: 26px 26px 8px 26px; background: var(--brand); color: #fff; font-size: 26px; font-weight: 700; }
 #ans { position: absolute; left: 620px; top: 330px; width: 680px; padding: 28px 32px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
 #ans p { font-size: 26px; font-weight: 700; line-height: 1.45; } #ans mark { background: rgba(255,207,122,.55); border-radius: 6px; padding: 0 4px; color: inherit; }
@@ -54,22 +63,36 @@ html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--
 #priv .box small { display: block; font-size: 21px; color: var(--mut); font-weight: 700; margin-top: 6px; }
 #priv .ar { position: relative; height: 4px; background: repeating-linear-gradient(90deg, var(--nd) 0 10px, transparent 10px 18px); }
 #priv .ar em { position: absolute; left: 0; top: -24px; padding: 10px 14px; border-radius: 12px; background: rgba(255,207,122,.6); font-style: normal; font-size: 19px; font-weight: 800; white-space: nowrap; }
-#nope { position: absolute; left: 620px; top: 560px; display: flex; gap: 14px; width: 700px; flex-wrap: wrap; }
-#nope span { padding: 14px 22px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 22px; font-weight: 800; }
-#nope span.no { color: #b04a5c; text-decoration: line-through; }
-#phone { position: absolute; left: 640px; top: 150px; width: 380px; height: 640px; border-radius: 56px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
-#phone .scr { width: 100%; height: 100%; border-radius: 40px; background: #eef2f8; padding: 26px 18px; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; }
-#phone .me { align-self: flex-end; max-width: 86%; padding: 12px 16px; border-radius: 18px 18px 6px 18px; background: var(--brand); color: #fff; font-size: 17px; font-weight: 700; }
-#phone .wait { align-self: flex-start; font-size: 16px; color: var(--mut); font-weight: 800; }
-#phone .li { align-self: flex-start; max-width: 90%; padding: 12px 16px; border-radius: 18px 18px 18px 6px; background: #fff; font-size: 17px; font-weight: 700; line-height: 1.4; }
-#link { position: absolute; left: 1050px; top: 420px; width: 260px; text-align: center; font-size: 20px; font-weight: 800; color: var(--mut); }
-#link i { display: block; height: 4px; margin-bottom: 12px; background: repeating-linear-gradient(90deg, var(--accent) 0 10px, transparent 10px 18px); background-size: 36px 4px; }
-#pcx { position: absolute; left: 1340px; top: 300px; width: 380px; padding: 30px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); text-align: center; }
-#pcx i { display: block; font-size: 64px; font-style: normal; } #pcx b { display: block; font: 600 26px Unbounded; margin-top: 10px; } #pcx small { font-size: 19px; color: var(--mut); font-weight: 700; }
-#studio { position: absolute; left: 620px; top: 210px; width: 700px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 30px 34px; }
-#studio h3 { font: 700 30px Unbounded; margin-bottom: 14px; } #studio p { font-size: 21px; color: var(--mut); font-weight: 700; }
-#studio .go { display: inline-block; margin-top: 22px; padding: 16px 26px; border-radius: 16px; color: #fff; background: var(--brand); font-size: 21px; font-weight: 800; }
-#studio .ok { margin-top: 22px; padding: 16px 20px; border-radius: 18px; background: rgba(47,179,131,.14); color: #1e7d5b; font-size: 21px; font-weight: 800; }
+#lock { position: absolute; left: 620px; top: 160px; width: 1180px; display: grid; grid-template-columns: 1fr 300px; gap: 40px; align-items: center; }
+#lock .cl { padding: 26px 30px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#lock .gib { margin-top: 18px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--press); font: 600 20px/1.5 "JetBrains Mono", monospace; color: var(--mut); letter-spacing: .04em; word-break: break-all; height: 96px; overflow: hidden; }
+#lock .keys { display: flex; flex-direction: column; gap: 14px; } #lock .keys span { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; }
+#lock .keys span i { font-style: normal; font-size: 28px; } #lock .keys span em { margin-left: auto; font-style: normal; font-size: 24px; }
+#priv { top: 560px; }
+#devs { position: absolute; left: 620px; top: 170px; width: 1220px; height: 660px; }
+.dv { position: absolute; padding: 18px 20px 22px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.dv h5 { display: flex; align-items: center; gap: 12px; font: 700 22px Unbounded; } .dv h5 i { font-style: normal; font-size: 30px; } .dv h5 small { margin-left: auto; font: 800 15px Manrope, sans-serif; color: #1e7d5b; }
+.dv .tl { margin-top: 12px; background: var(--bg); }
+#d-home { left: 0; top: 0; width: 440px; } #d-work { left: 0; top: 330px; width: 440px; }
+#phone { position: absolute; left: 760px; top: -30px; width: 400px; height: 700px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+#phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 20px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+#phone h6 { font: 700 24px Unbounded; margin: 6px 4px 6px; }
+#phone .chp { display: flex; gap: 8px; } #phone .chp span { padding: 9px 15px; border-radius: 99px; background: #fff; font-size: 15px; font-weight: 800; color: var(--mut); }
+#phone .chp span.on { color: #fff; background: var(--brand); }
+#phone .tl { background: #fff; box-shadow: none; }
+#sync { position: absolute; left: 470px; top: 300px; width: 270px; height: 4px; background: repeating-linear-gradient(90deg, var(--accent) 0 10px, transparent 10px 18px); background-size: 36px 4px; }
+#studio { position: absolute; left: 620px; top: 190px; width: 700px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); padding: 28px 32px; }
+#studio .crumb { font-size: 19px; font-weight: 800; color: var(--mut); margin-bottom: 16px; } #studio .crumb b { color: var(--accent); }
+#studio #drop2 { margin-top: 18px; height: 92px; border-radius: 20px; border: 3px dashed rgba(69,96,234,.35); display: grid; place-items: center; font-size: 21px; font-weight: 800; color: var(--accent); }
+#pad { position: absolute; left: 1360px; top: 300px; width: 500px; padding: 20px 20px 26px; border-radius: 32px; background: var(--bg); box-shadow: var(--raise); }
+#pad .top { display: flex; align-items: center; gap: 6px; }
+#pad .tab { display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-radius: 14px; font-size: 20px; font-weight: 700; color: var(--mut); white-space: nowrap; }
+#pad .tab.on { background: #fff; color: var(--ink); box-shadow: var(--raise-s); }
+#pad .tab .dt { width: 9px; height: 9px; border-radius: 50%; background: #9aa6ba; }
+#pad .cl { width: 46px; justify-content: center; padding: 8px 0; margin-left: -4px; color: var(--accent); box-shadow: 0 0 0 3px rgba(69,96,234,var(--rg,0)); }
+#pad .cl svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#pad .lines { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; } #pad .lines i { height: 12px; border-radius: 6px; background: rgba(36,50,74,.1); }
+#pad p { margin-top: 18px; font-size: 20px; font-weight: 800; color: var(--accent); text-align: center; }
 
 #end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
 #end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
@@ -82,19 +105,27 @@ html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--
   <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
   <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 9 · Мои файлы</span></div></div>
   <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h8"/></svg></div>
-    <div id="t-title"><h1>Мои файлы</h1><p>Добавьте файл и спросите — отвечу и покажу, откуда</p></div></div>
+    <div id="t-title"><h1>Мои файлы</h1><p>Положите файл в облако и спросите — отвечу и покажу, откуда</p></div></div>
 
   <div class="layer" id="L-wall"><div id="wall"><div class="fl pdf"><i></i><span>Договор_Ромашка_2026.pdf</span></div><div class="fl doc"><i></i><span>Инструкция_склад.docx</span></div><div class="fl xls"><i></i><span>Прайс_октябрь.xlsx</span></div><div class="fl pdf"><i></i><span>Договор_Ока.pdf</span></div><div class="fl doc"><i></i><span>Регламент_отпусков.docx</span></div><div class="fl pdf"><i></i><span>Сертификат_ГОСТ.pdf</span></div><div class="fl xls"><i></i><span>Остатки.xlsx</span></div><div class="fl doc"><i></i><span>Письмо_поставщику.docx</span></div><div class="fl pdf"><i></i><span>Договор_Вектор.pdf</span></div><div class="fl xls"><i></i><span>Прайс_сентябрь.xlsx</span></div><div class="fl doc"><i></i><span>Памятка_новичку.docx</span></div><div class="fl pdf"><i></i><span>Счёт_4471.pdf</span></div><div class="fl doc"><i></i><span>Протокол_встречи.docx</span></div><div class="fl pdf"><i></i><span>Договор_Ромашка_2025.pdf</span></div><div class="fl xls"><i></i><span>Бюджет_2026.xlsx</span></div><div class="fl doc"><i></i><span>Оферта.docx</span></div><div class="fl pdf"><i></i><span>Акт_сверки.pdf</span></div><div class="fl doc"><i></i><span>Устав.docx</span></div><div class="fl xls"><i></i><span>Клиенты.xlsx</span></div><div class="fl pdf"><i></i><span>Лицензия.pdf</span></div></div></div>
   <div class="layer" id="L-left">
     <div id="mess"><small>СРОК ПОСТАВКИ ПО «РОМАШКЕ»</small><b>Где-то в договоре…<br>в одном из сорока файлов</b></div>
-    <div id="folder"><div class="h"><i>📁</i><div><b>Договоры и прайсы · копия у Лиры</b><small id="fn">Читаю…</small></div></div><div class="pb"><i id="fp"></i></div><p id="fr"></p></div>
+    <div id="cloud"><div class="ch"><svg viewBox="0 0 48 48"><defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset=".55" stop-color="#8b8cf7"/><stop offset="1" stop-color="#c58cf7"/></linearGradient></defs><path d="M14.5 37h20a8.5 8.5 0 0 0 1.3-16.9A11.5 11.5 0 0 0 13.6 18 9.5 9.5 0 0 0 14.5 37z" fill="url(#cg)"/><path d="M24 31v-9m-4 3.6 4-4 4 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><b>Облако Лиры</b><small>на всех ваших устройствах</small></div><div class="mt"><em id="mb">0 МБ</em>из 200 МБ</div></div>
+      <div id="drop">Перетащите файлы сюда</div><div id="tiles"><div class="tl t0"><i></i><span>Договор_Ромашка_2026.pdf</span><b></b></div><div class="tl doc t1"><i></i><span>Инструкция_склад.docx</span><b></b></div><div class="tl xls t2"><i></i><span>Прайс_октябрь.xlsx</span><b></b></div></div></div>
+    <div class="fly f0"><i></i>Договор…</div><div class="fly doc f1"><i></i>Инструкция…</div><div class="fly xls f2"><i></i>Прайс…</div>
     <div id="q">Что в договоре с Ромашкой про сроки?</div>
     <div id="ans"><p>Поставка — <mark>в течение 14 рабочих дней после оплаты</mark>. Задержка — пеня 0,1% в день.</p><span>📄 Договор_Ромашка_2026.pdf · п. 4.2</span></div>
-    <div id="priv"><div class="box"><i>💻</i><b>Ваш компьютер</b><small>поиск — здесь</small></div><div class="ar"><em id="frag">отрывок</em></div><div class="box"><i>🧠</i><b>Модель</b><small>видит только найденное</small></div></div>
-    <div id="nope"><span>✓ доступ к папкам не нужен</span><span class="no">весь архив в облако</span></div>
-    <div id="phone"><div class="scr"><div class="me" id="pm">Что в договоре с Ромашкой про сроки?</div><div class="wait" id="pw">💻 спрашиваю компьютер…</div><div class="li" id="pa">14 рабочих дней после оплаты — п. 4.2 договора 2026 года.</div></div></div>
-    <div id="link"><i id="li"></i>через интернет, зашифровано</div><div id="pcx"><i>💻</i><b>Ваш компьютер</b><small>ищет в ваших папках</small></div>
-    <div id="studio"><h3>Мои файлы</h3><p>Спросите свои файлы — Лира прочитает и ответит</p><span class="go">Добавить файлы…</span><div class="ok">2 папки, 418 файлов — Лира готова отвечать</div></div>
+    <div id="lock"><div class="cl"><div class="ch"><svg viewBox="0 0 48 48"><defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset=".55" stop-color="#8b8cf7"/><stop offset="1" stop-color="#c58cf7"/></linearGradient></defs><path d="M14.5 37h20a8.5 8.5 0 0 0 1.3-16.9A11.5 11.5 0 0 0 13.6 18 9.5 9.5 0 0 0 14.5 37z" fill="url(#cg)"/><path d="M24 31v-9m-4 3.6 4-4 4 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><b>Облако Лиры</b><small>сервер хранит только шифр</small></div><div class="mt"><em>🔒</em></div></div>
+      <div class="gib" id="gib"></div></div>
+      <div class="keys"><span><i>💻</i>Дом<em>🔑</em></span><span><i>💼</i>Работа<em>🔑</em></span><span><i>📱</i>Телефон<em>🔑</em></span></div></div>
+    <div id="priv"><div class="box"><i>💻</i><b>Ваше устройство</b><small>поиск — здесь</small></div><div class="ar"><em id="frag">отрывок</em></div><div class="box"><i>🧠</i><b>Модель</b><small>видит только найденное</small></div></div>
+    <div id="devs"><div class="dv" id="d-home"><h5><i>💻</i>Дома<small>✓ на месте</small></h5><div class="tl"><i></i><span>Договор_Ромашка_2026.pdf</span><b></b></div><div class="tl doc"><i></i><span>Инструкция_склад.docx</span><b></b></div><div class="tl xls"><i></i><span>Прайс_октябрь.xlsx</span><b></b></div></div>
+      <div class="dv" id="d-work"><h5><i>💼</i>На работе<small>✓ на месте</small></h5><div class="tl"><i></i><span>Договор_Ромашка_2026.pdf</span><b></b></div><div class="tl doc"><i></i><span>Инструкция_склад.docx</span><b></b></div><div class="tl xls"><i></i><span>Прайс_октябрь.xlsx</span><b></b></div></div><i id="sync"></i>
+      <div id="phone"><div class="scr"><h6>Заметки</h6><div class="chp"><span>Все</span><span>Работа</span><span class="on">Мои файлы</span></div><div class="tl"><i></i><span>Договор_Ромашка_2026.pdf</span><b></b></div><div class="tl doc"><i></i><span>Инструкция_склад.docx</span><b></b></div><div class="tl xls"><i></i><span>Прайс_октябрь.xlsx</span><b></b></div></div></div></div>
+    <div id="studio"><div class="crumb">Студия · <b>Мои файлы</b></div><div class="ch"><svg viewBox="0 0 48 48"><defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset=".55" stop-color="#8b8cf7"/><stop offset="1" stop-color="#c58cf7"/></linearGradient></defs><path d="M14.5 37h20a8.5 8.5 0 0 0 1.3-16.9A11.5 11.5 0 0 0 13.6 18 9.5 9.5 0 0 0 14.5 37z" fill="url(#cg)"/><path d="M24 31v-9m-4 3.6 4-4 4 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div><b>Облако Лиры</b><small>Ваши файлы — на всех ваших устройствах</small></div><div class="mt"><em>12 МБ</em>из 200 МБ</div></div>
+      <div id="drop2">Перетащите файлы сюда</div><div id="tiles2" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px"><div class="tl"><i></i><span>Договор_Ромашка_2026.pdf</span><b></b></div><div class="tl doc"><i></i><span>Инструкция_склад.docx</span><b></b></div><div class="tl xls"><i></i><span>Прайс_октябрь.xlsx</span><b></b></div></div></div>
+    <div id="pad"><div class="top"><span class="tab"><i class="dt"></i>Пульт</span><span class="tab cl"><svg viewBox="0 0 24 24"><path d="M7 18.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 9.6a4.5 4.5 0 0 0 0 8.9z"/><path d="M12 16v-5m-2.2 2.1L12 10.9l2.2 2.2"/></svg></span><span class="tab on">Главное</span><span class="tab">Работа</span></div>
+      <div class="lines"><i style="width:80%"></i><i style="width:64%"></i><i style="width:72%"></i></div><p>Блокнот у виджета</p></div>
   </div>
 
   <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Следующий урок — «Почта голосом»</span></div></div>
@@ -155,26 +186,33 @@ window.render = function (T, f) {
   const fl = [...$("#wall").children];
   fl.forEach((c, i) => { const k = out((T - s("problem").start - 0.5 - i * 0.05) / 0.4); c.style.opacity = k; });
   scene($("#mess"), T, at("s2a") + 0.3, s("add").start);
-  scene($("#folder"), T, s("add").start + 0.2, s("ask").start);
-  const rd = clamp((T - s("add").start - 0.8) / 3.0);
-  $("#fp").style.width = (rd * 100) + "%"; $("#fn").textContent = rd < 1 ? `Читаю… ${Math.round(418 * rd)} из 418` : "418 файлов прочитано";
-  $("#fr").textContent = rd >= 1 ? "Лира готова отвечать" : "";
-  fl.forEach((c, i) => { const r = clamp((rd * 20 - i)); c.style.filter = s("add").start < T && T < s("ask").start ? `saturate(${0.3 + 0.7 * r})` : ""; });
+  // «добавить»: три файла со стены летят в облако — плитки, место растёт
+  scene($("#cloud"), T, s("add").start + 0.2, s("ask").start);
+  const ad = s("add").start;
+  const FROM = [[1360, 160], [1490, 300], [1620, 440]], TO = [700, 360];
+  [0, 1, 2].forEach(k => { const f = $(".f" + k), t0 = ad + 1.0 + k * 0.55, q = clamp((T - t0) / 0.9), live = T > t0 && T < t0 + 1.0 && T < s("ask").start;
+    f.style.opacity = live ? 1 : 0; const e = ease(q);
+    f.style.transform = `translate(${lerp(FROM[k][0], TO[0] + k * 40, e)}px, ${lerp(FROM[k][1], TO[1], e) - Math.sin(e * Math.PI) * 70}px) rotate(${(1 - e) * (k - 1) * 8}deg) scale(${1 - e * 0.15})`;
+    vis($(".t" + k), out((T - t0 - 0.9) / 0.3), 10); });
+  $("#drop").classList.toggle("over", T > ad + 1.0 && T < ad + 3.2);
+  $("#mb").textContent = (T < ad + 1.9 ? "0" : T < ad + 2.4 ? "4" : T < ad + 3.0 ? "7" : "12") + " МБ";
   scene($("#q"), T, s("ask").start + 0.2, s("private").start, 20);
   scene($("#ans"), T, at("s4b") - 0.4, s("private").start);
   const hit = T > at("s4b") - 0.2 && T < s("private").start;
   fl[0].classList.toggle("hit", hit); fl.forEach((c, i) => { if (i && hit) c.style.opacity = 0.45; });
-  scene($("#priv"), T, s("private").start + 0.2, s("phone").start);
-  $("#frag").style.left = (clamp((T - s("private").start - 1.2) / 2.2) * 62) + "%";
-  scene($("#nope"), T, at("s5b") + 0.2, s("phone").start, 16);
-  scene($("#phone"), T, s("phone").start + 0.2, s("how").start);
-  vis($("#pm"), out((T - s("phone").start - 0.6) / 0.4), 14);
-  vis($("#pw"), out((T - s("phone").start - 1.2) / 0.4) * (1 - out((T - s("phone").start - 3.2) / 0.3)), 10);
-  vis($("#pa"), out((T - s("phone").start - 3.4) / 0.4), 14);
-  scene($("#link"), T, s("phone").start + 1.0, s("how").start, 10);
-  scene($("#pcx"), T, s("phone").start + 0.8, s("how").start);
-  $("#li").style.backgroundPosition = `${(T * 60) % 36}px 0`;
+  // «где ищу»: в облаке — только шифр, ключи у своих устройств; модели — только отрывок
+  scene($("#lock"), T, s("private").start + 0.2, s("phone").start);
+  const G = "a9F2kQ7xLm0vRt8ZpW3nYc6HdJ1sUe4BgK5oTi9MqXr2VbNf7Ly0Cz3PwAh8Sj6DuEk1Og4Iv5";
+  $("#gib").textContent = Array.from({ length: 120 }, (_, n) => G[(n * 7 + Math.floor(T * 9)) % G.length]).join("");
+  scene($("#priv"), T, at("s5b") - 0.2, s("phone").start);
+  $("#frag").style.left = (clamp((T - at("s5b") - 0.6) / 2.2) * 62) + "%";
+  // «на всех устройствах»: дома, на работе, в телефоне — в «Заметках» папка «Мои файлы»
+  scene($("#devs"), T, s("phone").start + 0.2, s("how").start);
+  [["#d-home", 0.3], ["#d-work", 0.9], ["#phone", 1.5]].forEach(([q, d]) => vis($(q), out((T - s("phone").start - d) / 0.4), 16));
+  $("#sync").style.backgroundPosition = `${(T * 60) % 36}px 0`; $("#sync").style.opacity = out((T - s("phone").start - 1.0) / 0.4);
   scene($("#studio"), T, s("how").start + 0.2, s("end").start);
+  scene($("#pad"), T, s("how").start + 2.6, s("end").start, 16);
+  const rg = T - s("how").start - 3.2; $("#pad .cl").style.setProperty("--rg", rg > 0 ? (0.35 + 0.65 * Math.abs(Math.sin(rg * 2.4))).toFixed(2) : 0);
 
   layer("L-end", T, s("end").start + 0.2, TL.total + 5);
   for (const who of ["lira", "patrik"]) {

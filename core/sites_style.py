@@ -125,8 +125,8 @@ h2{font-size:calc(clamp(1.8rem,3.7vw,2.9rem) * var(--hs,1));margin-bottom:.45em}
 h3{font-size:calc(1.2rem * var(--h3s,1));line-height:1.25}
 p{margin:0 0 .9em}p:last-child{margin-bottom:0}
 .it h1,.it h2{font-style:italic}
-.w{width:min(1160px,100%);margin:0 auto;padding:0 clamp(18px,5vw,40px)}
-.s{background:var(--sbg);color:var(--sink);padding:clamp(56px,9vw,116px) 0;position:relative}
+.w{width:min(1160px,100%);margin:0 auto;padding:0 max(14px,calc(clamp(18px,5vw,40px)*var(--sp,1)))}
+.s{background:var(--sbg);color:var(--sink);padding:calc(clamp(56px,9vw,116px)*var(--sp,1)) 0;position:relative}
 .s .mut,.s .lede{color:var(--smut)}
 .lede{font-size:1.15rem;max-width:62ch}
 .hd2{display:flex;justify-content:space-between;align-items:end;gap:24px;flex-wrap:wrap;margin-bottom:clamp(26px,4vw,48px)}
@@ -194,7 +194,7 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
  .logo small{display:none}
 }
 /* обложка */
-.hero{padding:clamp(48px,8vw,104px) 0}
+.hero{padding:calc(clamp(48px,8vw,104px)*var(--sp,1)) 0}
 .hero h1{max-width:16ch}
 .hero .lede{margin-top:22px;font-size:clamp(1.08rem,1.6vw,1.28rem)}
 .hero .note{margin-top:28px;font-weight:600;font-size:.95rem;display:flex;gap:10px;align-items:center;color:var(--smut)}
@@ -207,7 +207,7 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .h-center .hmark{width:76px;height:76px;margin:0 auto 26px;color:var(--slink)}
 .h-center .hmark.lg-mono{width:84px;height:84px;font-size:2.1rem;border-radius:50%}
 .h-center .wide{margin-top:clamp(36px,6vw,64px);aspect-ratio:21/8}
-.h-poster{padding:clamp(40px,7vw,90px) 0 clamp(48px,7vw,90px);overflow:hidden}
+.h-poster{padding:calc(clamp(40px,7vw,90px)*var(--sp,1)) 0 calc(clamp(48px,7vw,90px)*var(--sp,1));overflow:hidden}
 .h-poster .w{display:grid;grid-template-columns:1fr minmax(240px,.42fr);gap:clamp(24px,4vw,56px);align-items:end}
 .h-poster h1{font-size:clamp(3.3rem,12.5vw,10.5rem);line-height:.88;max-width:none;letter-spacing:calc(var(--tr) - .02em);grid-column:1/-1}
 .h-poster .pside{grid-column:2;grid-row:2}
@@ -359,7 +359,7 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 /* призыв */
 .cta .w{display:flex;justify-content:space-between;gap:28px;align-items:center;flex-wrap:wrap}
 .cta h2{margin:0 0 .3em}.cta .w>div{max-width:640px}
-.cta-card .card{text-align:center;padding:clamp(32px,6vw,72px)}.cta-card .card .lede{margin:0 auto}.cta-card .btns{justify-content:center}
+.cta-card .card{text-align:center;padding:calc(clamp(32px,6vw,72px)*var(--sp,1))}.cta-card .card .lede{margin:0 auto}.cta-card .btns{justify-content:center}
 /* текст */
 .tx .w>div{max-width:720px}.tx.wide .lede{font:var(--hw) clamp(1.4rem,2.6vw,2rem)/1.35 var(--fh);letter-spacing:var(--tr);max-width:none}
 /* контакты */
@@ -406,7 +406,7 @@ a:focus-visible,.btn:focus-visible,summary:focus-visible,input:focus-visible,tex
 .ftr .lg-docs a:hover{text-decoration-color:currentColor}
 .ftr .lgl+.bot{border-top:0;padding-top:6px;margin-top:6px}
 /* страница документа: оферта, политика… — для чтения, в стиле сайта */
-.s.doc{padding-top:clamp(36px,6vw,72px)}
+.s.doc{padding-top:calc(clamp(36px,6vw,72px)*var(--sp,1))}
 .doc .w{width:min(860px,100%)}
 .doc-back{display:inline-block;margin-bottom:clamp(22px,3vw,34px);font-weight:600;font-size:.93rem;color:var(--slink);text-decoration:none;border-bottom:1.5px solid currentColor;padding-bottom:1px}
 .doc h1{font-size:calc(clamp(1.9rem,4.2vw,3.1rem) * var(--hs,1));max-width:24ch}
@@ -616,7 +616,7 @@ ATELIER_CSS = r"""
 .sty-atelier h1,.sty-atelier h2{font-weight:500;letter-spacing:-.01em}
 .sty-atelier h1,.sty-atelier .hero h1{font-size:calc(clamp(2.6rem,5.4vw,5rem) * var(--hs,1));line-height:1}
 .sty-atelier h2{font-size:calc(clamp(2.2rem,4.8vw,4.2rem) * var(--hs,1));line-height:1.02;font-style:italic}
-.sty-atelier .s{padding:clamp(72px,11vw,140px) 0}
+.sty-atelier .s{padding:calc(clamp(72px,11vw,140px)*var(--sp,1)) 0}
 .sty-atelier .hd2{border-top:1px solid var(--sline);padding-top:22px}
 .sty-atelier main{counter-reset:sec}
 .sty-atelier .hd2>div:first-child::before{counter-increment:sec;content:counter(sec,upper-roman);display:block;font:500 1rem/1 var(--fh);font-style:italic;color:var(--slink);margin-bottom:12px}
@@ -711,6 +711,7 @@ def css(site, mode="preview"):
     p = colors(th)
     f = K.FONTS.get(th.get("fonts") or "", K.FONTS["warm"])
     rd = K.RADII.get(th.get("radius") or "", K.RADII["soft"])
+    sp = K.SPACES.get(th.get("space") or "", K.SPACES["normal"])
     hdr = th.get("header") or "light"
     hb = {"light": (p["bg"], p["ink"], p["line"], p["accent"], p["accent_ink"], readable_on(p["accent"], p["bg"], 3)),
           "dark": (p["dark"], p["dark_ink"], mix(p["dark"], p["dark_ink"], .14), *tone_vars(p)["dark"][3:5],
@@ -718,7 +719,7 @@ def css(site, mode="preview"):
           "accent": (p["accent"], p["accent_ink"], mix(p["accent"], p["accent_ink"], .2), p["accent_ink"], p["accent"], p["accent_ink"])}[hdr if hdr in ("light", "dark", "accent") else "light"]
     v = {"bg": p["bg"], "ink": p["ink"], "muted": p["muted"], "accent": p["accent"], "accent-ink": p["accent_ink"], "surface": p["surface"],
          "line": p["line"], "dark": p["dark"], "dark-ink": p["dark_ink"], "a2": p["accent2"], "fh": f["head"], "fb": f["body"], "hw": str(f["hw"]),
-         "tr": f["track"], "hs": str(f.get("scale", 1)), "h3s": str(f.get("scale3", 1)), "r": f"{rd['r']}px", "rb": f"{rd['btn']}px", "hbg": hb[0], "hink": hb[1], "hline": hb[2], "hbtn": hb[3], "hbtnk": hb[4], "hacc": hb[5],
+         "tr": f["track"], "hs": str(f.get("scale", 1)), "h3s": str(f.get("scale3", 1)), "r": f"{rd['r']}px", "rb": f"{rd['btn']}px", "sp": str(sp["k"]), "hbg": hb[0], "hink": hb[1], "hline": hb[2], "hbtn": hb[3], "hbtnk": hb[4], "hacc": hb[5],
          "ftr-mut": mix(p["dark_ink"], p["dark"], .32), "ftr-line": mix(p["dark"], p["dark_ink"], .16)}
     for tone, vals in tone_vars(p).items():
         for k, val in zip(("bg", "ink", "mut", "btn", "btnk", "line", "card", "link"), vals):

@@ -525,7 +525,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
             t_start = time.monotonic()
             if getattr(self, "lat", None) is not None:
                 self.lat.mark("req", t_start)
-            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
+            from quality import DELIVERABLE, FAKE_NUDGE, REFUSAL_NUDGE, REMIND_NOT_SET, WATCH_ASK_RX, WATCH_NUDGE, action_claim, call_claim, found_pics_claim, fake_call, bare_done, diagram_missing, reminder_missing, remind_claim, saved_claim, note_claim, money_claim, looks_like_promise, looks_like_refusal, number_mismatch, promise_nudge, task_claim
             called, nudged = set(), 0                    # какие действия уже были; сколько раз просили «сделай, а не обещай»
             deliver = bool(DELIVERABLE.search(text)) and any(x.get("name") == "start_task" for x in specs or [])
             # отговорку «нет доступа к интернету» на шаге 0 (когда есть поиск) просим переделать (ниже) — значит, первую
@@ -813,6 +813,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not saved_checked:
                     fix = reminder_missing(text, turn.full, called) or money_claim(text, step_text, called) \
                         or saved_claim(text, step_text, called) \
+                        or (note_claim(text, step_text, called) if "save_note" in {x.get("name") for x in specs or []} else "") \
                         or call_claim(text, step_text, called) \
                         or found_pics_claim(text, step_text, called) \
                         or action_claim(text, step_text, called) or bare_done(text, step_text, called) \
@@ -901,19 +902,21 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                         continue
                 if not calls and not turn.cancel.is_set() and step < 5 and specs and not deed_checked:
                     from quality import agenda_invented, council_missing, feature_deny, invented_numbers, open_claim, poem_check, \
-                        songs_count, url_unread, writing_missing, agenda_missed, weather_invented
+                        songs_count, url_unread, writing_missing, agenda_missed, weather_invented, system_invented, plugin_offer_missed
                     names_ = {x.get("name") for x in specs or []}
                     fix = (open_claim(ask0, step_text, called) if "open_url" in names_ else "") \
                         or (url_unread(ask0, step_text, called) if "read_webpage" in names_ else "") \
                         or (invented_numbers(text, step_text, called, known=text + "\n" + "\n".join(c for c in ctx if c))
                             if names_ & {"weather", "web_search"} else "") \
                         or (writing_missing(ask0, step_text, called) if "writing_today" in names_ else "") \
+                        or (system_invented(ask0, step_text, called) if "system_status" in names_ else "") \
                         or (council_missing(ask0, step_text, called) if "council" in names_ else "") \
                         or feature_deny(ask0, step_text, called, getattr(turn, "guided", False)) \
                         or agenda_invented(step_text, getattr(turn, "agenda", "")) \
                         or agenda_missed(text, step_text, getattr(turn, "agenda", "")) \
                         or weather_invented(text, step_text, called) \
                         or poem_check(ask0, step_text) \
+                        or plugin_offer_missed(getattr(turn, "plugin_hint", ""), step_text, called) \
                         or songs_count(ask0, step_text) \
                         or month_year_wrong(ask0, step_text) \
                         or (poem_unsourced(ask0, step_text, called) if "web_search" in names_ else "") \

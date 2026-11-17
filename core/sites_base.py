@@ -164,8 +164,10 @@ NAME_RX = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$")
 RESERVED = {"www", "api", "admin", "mail", "dwrapp", "app", "cloud", "pro", "dewiar", "support", "help", "static", "cdn", "ftp",
             "smtp", "imap", "pop", "ns1", "ns2", "dashboard", "login", "account", "billing", "pay", "test", "dev", "stage", "blog",
             "shop", "news", "status", "docs", "id", "auth", "oauth", "voice", "voices", "web", "lira", "academy", "abuse", "security"}
-TEXT_MAX = {"title": 200, "text": 3000, "note": 200, "button": 60, "button2": 60, "nav": 40, "caption": 200, "price": 60, "q": 300,
-            "a": 2000, "name": 120, "role": 160, "time": 60, "group": 80, "href": 500, "thanks": 200}
+# «text» и «a» — длинные: «Вопросы и ответы» и текстовый блок люди используют и под статьи (отчёт 823: ответ обрезался на
+# 2000 знаках — «на сайте только 38 строк»)
+TEXT_MAX = {"title": 200, "text": 12000, "note": 200, "button": 60, "button2": 60, "nav": 40, "caption": 200, "price": 60, "q": 300,
+            "a": 12000, "name": 120, "role": 160, "time": 60, "group": 80, "href": 500, "thanks": 200}
 
 
 class SiteError(Exception):
@@ -362,6 +364,20 @@ def quick_ops(text, site):
         r = "sharp" if re.search(r"остр|прям|строг|без скругл", tt) else "round" if re.search(r"кругл|сильн", tt) else "soft"
         ops.append({"op": "radius", "name": r})
         said.append(K.RADII[r]["title"].lower() + " углы" if r != "soft" else "мягкие углы")
+    if re.search(r"отступ|поля\b|полей|расстояни\w* между|пуст\w* мест|воздух", tt) and not re.search(r"шапк|кнопк|меню|логотип", tt):
+        # отчёт 825: «сделай отступы меньше» — весь сайт одним махом (плотные / обычные / просторные)
+        cur = ((site or {}).get("theme") or {}).get("space") or "normal"
+        if re.search(r"меньш|уже|уменьш|сократ|убер|плотн|компакт|слишком\s+(?:больш|широк)|огромн", tt):
+            sp = "compact" if cur != "airy" else "normal"
+        elif re.search(r"больш|шире|увелич|просторн|добав\w* воздух|побольше|слишком\s+(?:мал|узк|тесн)|тесно", tt):
+            sp = "airy" if cur != "compact" else "normal"
+        elif re.search(r"обычн|как было|стандарт|по умолчанию", tt):
+            sp = "normal"
+        else:
+            sp = ""
+        if sp:
+            ops.append({"op": "space", "name": sp})
+            said.append(f"отступы {K.SPACES[sp]['title'].lower()}")
     if re.search(r"\bменю\b", tt) and re.search(r"бургер|кнопк|спрят|свер\w+ в|сбоку|слева|боков|по центру|центр|сверху|наверх", tt):
         st = ("burger" if re.search(r"бургер|кнопк|спрят|свер\w+ в", tt) else "side" if re.search(r"сбоку|слева|боков", tt)
               else "center" if re.search(r"центр", tt) else "top")
@@ -426,6 +442,7 @@ OPS_HELP = """Операции (JSON-список ops):
 {"op":"style","value":"classic|avangard"} — стиль вёрстки: avangard — крупный широкий шрифт, номера разделов, движение (приносит свою палитру и шрифт; "keep":true — оставить свои)
 {"op":"fonts","name":"<пара>"} — шрифты: %(fonts)s
 {"op":"radius","name":"sharp|soft|round"}
+{"op":"space","name":"compact|normal|airy"} — отступы (поля) разделов всего сайта: «отступы меньше / плотнее» — compact, «больше воздуха» — airy
 {"op":"menu","style":"top|center|burger|side","cta":"текст кнопки в шапке"}
 {"op":"logo","text":"…","mark":"<знак>","style":"badge|plain|mono|text"} — знаки: %(marks)s
 {"op":"site","name":"…","tagline":"…","description":"описание для поисковиков 120–160 знаков"}

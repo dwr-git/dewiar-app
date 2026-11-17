@@ -26,15 +26,15 @@
    "id": "s2a",
    "scene": "problem",
    "who": "patrik",
-   "sub": "The contract had a delivery deadline. But which of forty files was it in?",
-   "tts": "The contract had a delivery deadline. But which of forty files was it in?"
+   "sub": "The contract had a delivery deadline. But which of forty files was it in — and on which computer?",
+   "tts": "The contract had a delivery deadline. But which of forty files was it in — and on which computer?"
   },
   {
    "id": "s3a",
    "scene": "add",
    "who": "lira",
-   "sub": "Add your files for me — contracts, manuals, price lists. I'll take a copy; I don't need access to your folders.",
-   "tts": "Add your files for me — contracts, manuals, price lists. I'll take a copy; I don't need access to your folders."
+   "sub": "Drop your files on me — contracts, manuals, price lists. They go to “Lira Cloud”.",
+   "tts": "Drop your files on me — contracts, manuals, price lists. They go to Lira Cloud."
   },
   {
    "id": "s4a",
@@ -54,8 +54,8 @@
    "id": "s5a",
    "scene": "private",
    "who": "lira",
-   "sub": "I search on your computer, without the internet.",
-   "tts": "I search on your computer, without the internet."
+   "sub": "In the cloud, your files are encrypted — only your own devices can read them.",
+   "tts": "In the cloud, your files are encrypted — only your own devices can read them."
   },
   {
    "id": "s5b",
@@ -68,15 +68,15 @@
    "id": "s6a",
    "scene": "phone",
    "who": "lira",
-   "sub": "On the go, ask from your phone — it will ask your computer.",
-   "tts": "On the go, ask from your phone — it will ask your computer."
+   "sub": "Your files are on all your devices: at home, at work, and on your phone, in “Notes”.",
+   "tts": "Your files are on all your devices: at home, at work, and on your phone, in Notes."
   },
   {
    "id": "s7a",
    "scene": "how",
    "who": "lira",
-   "sub": "In the studio: “My files” → “Add files”. Prefer a whole folder? — “Connect a folder”.",
-   "tts": "In the studio: My files, Add files. Prefer a whole folder? — Connect a folder."
+   "sub": "In the studio: “My files” → “Lira Cloud”. Or in the notebook by the widget — the tab with a little cloud.",
+   "tts": "In the studio: My files, Lira Cloud. Or in the notebook by the widget — the tab with a little cloud."
   },
   {
    "id": "s8a",
