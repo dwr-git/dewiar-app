@@ -11,7 +11,8 @@
    (llm_test) — вместо вопросов одна карточка «Подключить» (раздел «Мозг»). Микрофон и имя проверяет «Познакомиться
    голосом» (intro_start); Telegram и прочее — потом, в своих разделах. ui.welcome: "later" / "done". */
 let wlcEnt = null, wlcBrainOk = null, wlcWait = false, wlcTimer = 0;
-const WLC_QS = ["{n}, что ты умеешь?", "Какая погода завтра?", "Напомни через 10 минут позвонить маме"];
+// те же три, что под портретом в виджете (engine_intro.first_try): одна функция — одни слова
+const WLC_QS = ["Какая завтра погода?", "Напомни через 5 минут проверить чайник", "{n}, что ты умеешь?"];
 function wlcName() { const p = (typeof personas !== "undefined" && personas || []).find(x => x.id === S.persona) || {}; return [p, p.name || "Лира"]; }
 function wlcQs(name) {
   const box = $("#wlc-qs"); if (!box) return;
@@ -53,8 +54,10 @@ core.on("state", e => {
   if (!wlcEnt || !e || !$("#wlc").classList.contains("on")) return;
   wlcEnt.set({ state: e.state === "speaking" || e.state === "thinking" || e.state === "listening" ? e.state : "idle" });
 });
-/* сказали имя вслух — ответ тоже сюда */
+/* сказали имя вслух — ответ тоже сюда; «первая минута» (1.0.26): Лира поздоровалась и слушает без имени — услышанная
+   фраза (heard с текстом) тоже вопрос, ответ — сюда */
 core.on("wake", e => { if (e && $("#wlc").classList.contains("on") && !wlcWait) wlcShow("", true); });
+core.on("heard", e => { if (e && e.text && $("#wlc").classList.contains("on") && !wlcWait) wlcShow("", true); });
 function wlcOpen() {
   $("#wlc").classList.add("on");
   const [p, name] = wlcName();

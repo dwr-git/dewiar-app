@@ -53,7 +53,17 @@ with sync_playwright() as p:
     ok(adds(pg) == [["drive_add_path", "/home/u/Документы/Счёт 1.pdf"], ["drive_add_path", "C:/Users/u/plan.docx"]],
        f"система отдала только ссылки file:// — пути в ядро (кириллица, пробел, диск Windows): {adds(pg)}")
     ok("в облаке" in pg.inner_text("#cl-say"), f"и сказано, что файл в облаке: {pg.inner_text('#cl-say')}")
+    # 1.0.26 (владелец 22:05, Ubuntu: «перетягиваю — ничего»): страница файла не получила, а окно GTK его видело — отдаёт путями
+    pg.wait_for_timeout(3100)                                  # прошлое «положили» — давно
     pg.evaluate("calls.length = 0"); pg.evaluate(DROP, ["#cl-drop", "none"]); pg.wait_for_timeout(300)
+    pg.evaluate("() => dwNativeDrop(['/home/u/Загрузки/Договор аренды.pdf'])"); pg.wait_for_timeout(1700)
+    ok(adds(pg) == [["drive_add_path", "/home/u/Загрузки/Договор аренды.pdf"]] and "не дошёл" not in pg.inner_text("#cl-say"),
+       f"страница файла не получила — его отдало окно (GTK), файл в облаке, без подсказки «не дошёл»: {adds(pg)} | {pg.inner_text('#cl-say')}")
+    pg.evaluate("calls.length = 0"); pg.evaluate(DROP, ["#cl-drop", "file"]); pg.wait_for_timeout(200)
+    pg.evaluate("() => dwNativeDrop(['/tmp/Договор.pdf'])"); pg.wait_for_timeout(400)
+    ok(adds(pg) == [["knowledge_add", "Договор.pdf"]], f"страница файл приняла — окно второй раз не кладёт: {adds(pg)}")
+    pg.wait_for_timeout(3100)
+    pg.evaluate("calls.length = 0"); pg.evaluate(DROP, ["#cl-drop", "none"]); pg.wait_for_timeout(1900)
     ok(not adds(pg) and "нажмите" in pg.inner_text("#cl-say"), f"не дошло ничего — не тишина, а подсказка: {pg.inner_text('#cl-say')}")
     ok(pg.evaluate("calls.some(c => c[0] === 'js_errors' && /drop without a file, got: text\\/plain/.test(c[1].errors[0]))"),
        "и в журнал — что пришло вместо файла (для разбора на Windows)")
@@ -89,7 +99,13 @@ with sync_playwright() as p:
     pg.evaluate("calls.length = 0"); pg.evaluate(DROP, ["#ld-drop", "uri"]); pg.wait_for_timeout(500)
     ok(adds(pg) == [["drive_add_path", "/home/u/Документы/Счёт 1.pdf"], ["drive_add_path", "C:/Users/u/plan.docx"]],
        f"студия: только ссылки — пути в ядро: {adds(pg)}")
+    pg.evaluate("() => { document.querySelectorAll('.page').forEach(x => x.classList.remove('cur')); document.querySelector('#p-docs').classList.add('cur'); }")
+    pg.wait_for_timeout(3100)
     pg.evaluate("calls.length = 0"); pg.evaluate(DROP, ["#ld-drop", "none"]); pg.wait_for_timeout(300)
+    pg.evaluate("() => dwNativeDrop(['/home/u/Счёт.pdf'])"); pg.wait_for_timeout(500)
+    ok(adds(pg) == [["drive_add_path", "/home/u/Счёт.pdf"]], f"студия: файл отдало окно (GTK) — в облако: {adds(pg)}")
+    pg.wait_for_timeout(3100)
+    pg.evaluate("calls.length = 0"); pg.evaluate(DROP, ["#ld-drop", "none"]); pg.wait_for_timeout(1900)
     ok(not adds(pg) and "нажмите" in pg.inner_text("#toast"), f"студия: не дошло — подсказка: {pg.inner_text('#toast')}")
     pg.evaluate("calls.length = 0"); pg.evaluate(DROP, ["#ld-grid", "file"]); pg.wait_for_timeout(500)
     ok(adds(pg) == [["knowledge_add", "Договор.pdf"]], f"студия: бросили мимо пунктира, на плитки, — тоже в облако: {adds(pg)}")
@@ -117,6 +133,13 @@ with sync_playwright() as p:
     ok(not errs, f"без ошибок JavaScript: {errs[:2]}")
     b.close()
 
+sys.path.insert(0, str(ROOT / "ui"))
+import app as UI  # noqa: E402
+ok(UI.Api.drop_paths(["file:///home/u/%D0%A1%D1%87%D1%91%D1%82%201.pdf", "https://x.ru/a.pdf", "file:///home/u/%D0%A1%D1%87%D1%91%D1%82%201.pdf", "# коммент"])
+   == ["/home/u/Счёт 1.pdf"], "окно: адреса file:// — пути (кириллица, пробел), чужие и повторы — мимо")
+asrc = (ROOT / "ui/app.py").read_text(encoding="utf-8")
+ok('wv.connect("drag-data-received", on_data)' in asrc and 'wv.connect("drag-drop", on_drop)' in asrc and "_drop_hook(PAD_TITLE, win)" in asrc
+   and "_drop_hook(STUDIO_TITLE, win)" in asrc, "окно блокнота и студии на Linux слушают перетаскивание сами (GTK)")
 src = (ROOT / "core/commands_sync.py").read_text(encoding="utf-8")
 ok('if cmd == "drive_add_path":' in src and "src.is_file()" in src and "FILE_MAX" in src, "ядро берёт файл по пути само и проверяет вид и размер")
 print("\nИТОГ: " + ("всё прошло" if not fails else f"не прошло {len(fails)}"))

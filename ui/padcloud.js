@@ -78,11 +78,16 @@
   };
   async function put(files, paths, types) {
     if (!files.length && !(paths || []).length) {
-      say("Файл не дошёл до окна — нажмите сюда и выберите его");
-      // 17.11 (владелец, Windows): перетаскивание «ничего не делает» — в журнал, что пришло вместо файла
-      try { core.call("js_errors", { errors: [`cloud (pad): drop without a file, got: ${types || "nothing"}`] }).catch(() => {}); } catch (e) { }
+      // страница файла не получила — на Linux его следом отдаст окно (ui/app.py _drop_hook → dwNativeDrop); не дождались —
+      // подсказка и строка в журнал, что пришло вместо файла
+      clearTimeout(CL.missT);
+      CL.missT = setTimeout(() => {
+        say("Файл не дошёл до окна — нажмите сюда и выберите его");
+        try { core.call("js_errors", { errors: [`cloud (pad): drop without a file, got: ${types || "nothing"}`] }).catch(() => {}); } catch (e) { }
+      }, 1600);
       return;
     }
+    clearTimeout(CL.missT); CL.lastDrop = Date.now();
     // владелец 17.11: «обязательно включать? пусть включается само, если человек кладёт файл» — положил файл в облако,
     // значит, облако ему нужно: включаем шифрование сами (как кнопка «Включить»), без лишнего шага
     const st = await core.call("drive_status", {}).catch(() => CL.st);   // свежее: вкладку могли открыть только что
@@ -133,6 +138,14 @@
     tab.classList.remove("on"); tab.setAttribute("aria-selected", "false");
   }
   window.cloudLeave = leave;
+  // файл, брошенный на окно, отдало само окно (Linux: GTK видит адреса file://, а страница — не всегда; ui/app.py
+  // _drop_hook): страница его уже приняла — ничего; облако открыто или файл бросили на облачко — кладём по путям
+  window.dwNativeDrop = (paths) => {
+    if (Date.now() - (CL.lastDrop || 0) < 3000 || !Array.isArray(paths) || !paths.length) return;
+    if (!CL.active && !CL.missT) return;              // бросили на лист заметки — это не облаку
+    if (!CL.active) enter();
+    put([], paths);
+  };
   tab.onclick = () => (CL.active ? null : enter());
   el("#tabs").addEventListener("click", leave, true);
   for (const id of ["#b-new", "#b-play", "#b-list", "#pt-tab"]) { const b = el(id); if (b) b.addEventListener("click", leave, true); }

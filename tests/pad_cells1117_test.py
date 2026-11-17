@@ -37,7 +37,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("PadMD.md2html('| <b>x</b><br><img src=x onerror=alert(1)> |\\n| --- |\\n')").count("<img") == 0,
        "в ячейке понимается только <br>, прочая разметка — текстом")
     b.close()
-for rel, mark in (("ui/studio/folder.js", "c.split(/<br\\s*\\/?>/i).map(mdInline)"), ("android/www-src/app/11-notes.js", ".split(/<br\\s*\\/?>/i).map(inl)"),
+for rel, mark in (("ui/studio/folder.js", "c.split(/<br\\s*\\/?>/i).map(mdInline)"), ("android/www-src/app/13-notes.js", ".split(/<br\\s*\\/?>/i).map(inl)"),
                   ("android/assets/www/app.js", ".split(/<br\\s*\\/?>/i).map(inl)")):
     ok(mark in (ROOT / rel).read_text(encoding="utf-8"), f"{rel}: перевод строки в ячейке показывается так же")
 print("ИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")

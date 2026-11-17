@@ -320,8 +320,6 @@ class ApplyMixin:
                 n += 1
             self.state["map"][sid] = rel
         else:
-            if self._locked_keep(sid, rel, d, root) == "mine":   # 05.11: запертую правка с другого устройства не перетирает
-                return None
             if self._note_conflict(sid, rel, d, upd) == "mine":   # до переноса в другую папку: отпечаток — с прежней папкой
                 return None                                # здешняя правка позже — она остаётся, пришедшая — копией рядом
             rel = self._move_to_folder(sid, rel, d, root)
@@ -343,58 +341,48 @@ class ApplyMixin:
             pass
         self._pad_event(rel, False)
 
-    def _locked_keep(self, sid, rel, d, root):
-        """Владелец, 05.11: замок на заметке. Здесь она заперта, а с другого устройства пришла другая — правка (старое
-        приложение без замков или правка, сделанная до того, как замок туда дошёл) не перетирает запертую молча: здешняя
-        остаётся и уходит туда следующим обменом, пришедшая ложится рядом копией «(правка с „…“ — заметка заперта)».
-        Пришло то же самое, только без замка (его открыли руками там) или с другой папкой без правки текста — замок
-        открывается здесь. -> "mine" или None."""
-        from workspace import _locked, note_front
-        p = root / rel
-        if not p.is_file() or not _locked(p):
-            return None
-        try:
-            cur = p.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return None
-        text = str(d.get("text") or "")
-        strip = lambda t: ({k: v for k, v in note_front(t)[0].items() if k != "locked" and v}, _note_norm(p.stem, note_front(t)[1]))  # noqa: E731
-        folder = p.parent.relative_to(root).as_posix()
-        same_place = not str(d.get("folder") or "") or str(d.get("folder") or "") == ("" if folder == "." else folder)
-        if strip(cur) == strip(text) and same_place:
-            return None                                   # изменился только замок (открыли там руками) — принимаем
-        if note_front(text)[0].get("locked") and strip(cur)[1] != strip(text)[1]:
-            # 14.11 (владелец: «в блокноте несколько версий вкладки»): пришла тоже запертая — значит, там знали о замке и это
-            # их последняя правка (до замка). Копию не делаем — обычный обмен: новее побеждает. Раньше обе стороны держали
-            # свою запертую, делали копию и отправляли свою снова — копии множились при каждом обмене.
-            return None
-        who = (self._dev_name(getattr(self, "_cur_dev", "")) or "другого устройства")[:18].strip()
-        stamp = f"{dt.datetime.now():%d.%m %H-%M}"
-        base = p.stem[:max(8, 60 - len(who) - len(stamp) - 12)].rstrip(" .")
-        alt = p.with_name(f"{base} (копия с {who}, {stamp}).md")      # до 60 знаков — как имя вкладки блокнота (pad._name)
-        n = 2
-        while alt.exists():
-            alt = p.with_name(f"{base} (копия с {who}, {stamp}) {n}.md")
-            n += 1
-        same_copy = next((f for f in p.parent.iterdir() if f != p and f.name.startswith(base + " (") and f.suffix == ".md" and f.is_file()
-                          and strip(f.read_text(encoding="utf-8", errors="replace")) == strip(text)), None)
-        meta, body = note_front(text)
-        if meta.get("locked"):                            # копия — обычная заметка, без замка
-            from workspace import note_front_set
-            text = note_front_set(text, {"locked": False})
-        title = str(d.get("title") or p.stem)
-        try:
-            if same_copy is None:                         # та же правка уже лежит копией — вторую не делаем
-                alt.write_text(text if text.lstrip().startswith(("#", "---")) else f"# {title}\n\n{text.lstrip(chr(10))}\n", encoding="utf-8")
-        except OSError:
-            pass
-        self.__dict__.setdefault("_note_resend", set()).add("note:" + sid)
-        try:
-            os.utime(p, None)                              # здешняя запертая — новее пришедшей: уйдёт туда и вернёт замок
-        except OSError:
-            pass
-        log.info("🔒 Заметка «%s» заперта — правка с «%s» не перетёрла её, лежит рядом: %s", p.stem, who, alt.name)
-        return "mine"
+    COPY_RX = re.compile(r"^(?P<base>.+?) \((?:копия с [^)]*|правка с [^)]*|конфликт с [^)]*)\)(?: \d+)?$")
+
+    def _copies_tidy(self):
+        """Владелец 17.11: «замучился с вкладками: правлю на работе, а дома вместо поправленной — старая и поправленная
+        по отдельности; удаляю — опять». До 1.0.26 запертая заметка (замок 05.11) не принимала правку со своих же
+        устройств и клала её рядом копией «(копия с …)» — теперь правка со своих устройств обычная (новее побеждает), а
+        копии, которые совпадают со своей заметкой слово в слово (без замка и заголовка), убираются здесь — удаление
+        уходит обычным обменом. Копии с другим текстом не трогаем: в них может быть нужное. -> сколько убрано."""
+        from workspace import note_front
+        root = self._notes_root()
+        if not root.is_dir():
+            return 0
+
+        def body(f, title):
+            try:
+                t = note_front(f.read_text(encoding="utf-8"))[1]
+            except (OSError, UnicodeDecodeError):
+                return None
+            t = t.replace("\r\n", "\n").strip()
+            first = t.split("\n", 1)[0]
+            if first.startswith("# ") and first[2:].strip().startswith(title):
+                t = t[len(first):].strip()
+            return re.sub(r"\s+", " ", t)
+
+        gone = 0
+        for f in list(root.rglob("*(*).md")):
+            m = self.COPY_RX.match(f.stem)
+            orig = f.with_name(m.group("base") + ".md") if m else None
+            if orig is None or not orig.is_file() or not f.is_file():
+                continue
+            a, b = body(f, m.group("base")), body(orig, m.group("base"))
+            if a is not None and a == b:
+                try:
+                    f.unlink()
+                except OSError:
+                    continue
+                gone += 1
+                log.info("🧹 Копия «%s» совпадает с «%s» — убрана", f.stem, orig.stem)
+                rel = f.relative_to(root).as_posix()
+                if rel.startswith(PAD_DIR + "/") and rel.count("/") == 1:
+                    self._pad_event(rel, True)
+        return gone
 
     def _file_h(self, rel):
         try:

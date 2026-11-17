@@ -2162,6 +2162,9 @@ class Api:
                 getattr(win.events, ev).__iadd__(lambda *a, m=m: setattr(self, "_studio_minimized", m))
         if not WIN:
             win.events.shown += lambda *a: __import__("threading").Thread(target=self._raise_studio, daemon=True).start()
+            if not MAC:                                    # перетаскивание файла в «Мои файлы» (Linux, _drop_hook)
+                drop = lambda *a: __import__("threading").Thread(target=self._gtk, args=(lambda: self._drop_hook(STUDIO_TITLE, win),), daemon=True).start()  # noqa: E731
+                win.events.loaded += drop
         if own:
             import threading
             hook = lambda *a: threading.Thread(target=self._gtk, args=(self._studio_frame,), daemon=True).start()  # noqa: E731
@@ -2231,6 +2234,68 @@ class Api:
         wv.connect("button-press-event", on_press)
         wv.connect("motion-notify-event", on_motion)
         wv.connect("button-release-event", on_release)
+
+    # ---------- перетаскивание файлов в окно силами GTK (Linux) ----------
+
+    @staticmethod
+    def drop_paths(uris):
+        """«file:///home/u/%D0%A1%D1%87%D1%91%D1%82.pdf» -> ["/home/u/Счёт.pdf"]; прочие адреса — мимо."""
+        out = []
+        for u in uris or []:
+            u = str(u or "").strip()
+            if u.startswith("file://"):
+                pth = urllib.parse.unquote(urllib.parse.urlparse(u).path)
+                if pth and pth not in out:
+                    out.append(pth)
+        return out
+
+    def _drop_hook(self, title, win):
+        """Владелец 17.11 (Ubuntu): «перетягиваю pdf на облако у блокнота и в студии — ничего не происходит, только
+        кнопкой». Перетаскивание из файлового менеджера доходит до окна (GTK отдаёт адреса file://), а до страницы — не
+        всегда (WebKitGTK, Wayland/XWayland). Слушаем у самого WebView: адреса запоминаем, пока файл несут над окном
+        (drag-data-received), на «бросили» (drag-drop) — через 0,9 с отдаём странице путями (dwNativeDrop): если страница
+        сама приняла файл, она это помнит и второй раз не кладёт. Главный поток GTK; подключается к окну один раз."""
+        from gi.repository import GLib, Gtk
+        gw = next((g for g in Gtk.Window.list_toplevels() if g.get_title() == title), None)
+        if gw is None or getattr(gw, "_dw_drop", False):
+            return gw is not None
+        gw._dw_drop = True
+        view = [gw]
+        while not type(view[-1]).__name__ == "WebView" and isinstance(view[-1], Gtk.Bin) and view[-1].get_child():
+            view.append(view[-1].get_child())
+        wv, st = view[-1], {"paths": []}
+
+        def on_data(_w, _ctx, _x, _y, data, _info, _t):
+            try:
+                uris = data.get_uris() or [ln for ln in (data.get_text() or "").splitlines()]
+            except Exception:  # noqa: BLE001
+                uris = []
+            paths = self.drop_paths(uris)
+            if paths:
+                st["paths"] = paths
+            return False
+
+        def give():
+            paths, st["paths"] = st["paths"], []
+            if paths:
+                _ui_log(f"перетаскивание в «{title}»: файлов {len(paths)}")
+                code = f"window.dwNativeDrop && window.dwNativeDrop({json.dumps(paths, ensure_ascii=False)})"
+
+                def run():                                # evaluate_js ждёт главный цикл — не из него самого
+                    try:
+                        win.evaluate_js(code)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"Перетаскивание: {e}", file=sys.stderr)
+                threading.Thread(target=run, daemon=True).start()
+            return False
+
+        def on_drop(*_a):
+            GLib.timeout_add(900, give)
+            return False                                  # обычный путь WebKit — как был
+
+        wv.connect("drag-data-received", on_data)
+        wv.connect("drag-drop", on_drop)
+        return True
 
     # ---------- своя рамка студии (Linux) ----------
 
@@ -3311,6 +3376,8 @@ class Api:
         self._pad, self._pad_born = win, time.monotonic()
         win.events.closed += lambda *a: (setattr(self, "_pad", None), setattr(self, "_pad_on", False)) if getattr(self, "_pad", None) is win else None
         win.events.loaded += lambda *a: setattr(self, "_pad_tries", 0)
+        if not WIN and not MAC:                            # перетаскивание файла на облако у блокнота (Linux, _drop_hook)
+            win.events.loaded += lambda *a: threading.Thread(target=self._gtk, args=(lambda: self._drop_hook(PAD_TITLE, win),), daemon=True).start()
         threading.Timer(self.PAD_WAIT, self._pad_watch, args=(win, mode)).start()
         done, lock = [], threading.Lock()
 

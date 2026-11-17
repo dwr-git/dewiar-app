@@ -68,14 +68,15 @@ class IntroMixin:
         if self.stopping.is_set() or (self.s.get("ui", "intro") or "") != "":
             return
         self.stopping.wait(2.5)                       # окна успели открыться и отрисоваться
-        self.intro_start()
+        self.intro_start(short=True)
 
-    def intro_start(self):
-        """Начать знакомство (повторный вызов во время знакомства ничего не делает). -> True, если началось."""
+    def intro_start(self, short=False):
+        """Начать знакомство (повторный вызов во время знакомства ничего не делает). short — «первая минута» при первом
+        запуске (_intro_short), иначе — полное знакомство кнопкой «Познакомиться голосом». -> True, если началось."""
         if self._intro_running:
             return False
         self._intro_running = True
-        threading.Thread(target=self._intro_run, name="intro", daemon=True).start()
+        threading.Thread(target=self._intro_run, args=(short,), name="intro", daemon=True).start()
         return True
 
     def intro_stop(self):
@@ -175,12 +176,12 @@ class IntroMixin:
             self.set_state("idle")
         return ear["text"], ear["peak"]
 
-    def _intro_run(self):
+    def _intro_run(self, short=False):
         self._intro_stop = False
         if self.s.get("ui", "first_ask") is None:          # новенький: до первого вопроса — подсказки в виджете (0.74)
             self.s.update({"ui": {"first_ask": False}})
         try:
-            self._intro_script()
+            (self._intro_short if short else self._intro_script)()
         except Exception as e:  # noqa: BLE001
             log.warning("знакомство прервалось: %s", e)
         finally:
@@ -283,6 +284,35 @@ class IntroMixin:
                 except Exception as e:  # noqa: BLE001
                     log.info("знакомство: утро не добавилось: %s", e)
         return True
+
+    def _intro_short(self):
+        """«Первая минута» (1.0.26; воронка 17.11: из 965 свежих компьютеров с мозгом 416 так и не получили ни одного ответа,
+        217 из них закрыли программу в первые 10 минут, ни о чём не спросив). Прежнее знакомство при первом запуске шло
+        полторы-две минуты (имя, город, утро, кнопки, мозг) и кончалось «зови меня по имени» — а рядом студия открывала
+        «Первые шаги» с вопросами: два рассказа сразу. Теперь — одна фраза голосом под окно «Первые шаги» и сразу слушаю
+        вопрос без имени; ответ приходит в то же окно. Имя, город, утро — потом и по желанию («Познакомиться голосом»)."""
+        pid = self.s.get("persona")
+        name = self.personas.get(pid)["name"]
+        log.info("👋 Первая минута: %s", name)
+        self.emit("intro", step="start", name=name)
+        try:
+            self.ensure_voice(pid)
+        except Exception as e:  # noqa: BLE001
+            log.debug("первая минута: голос: %s", e)
+        hearing = getattr(self, "_audio_thread", None) is not None and not self.muted
+        self._intro_probe = {"n": 0, "peak": 0.0}
+        tries = self.first_try()
+        if not self._intro_say(f"Привет! Я {name}. Спросите меня о чём угодно — нажмите на вопрос или просто скажите вслух.",
+                               "hello", phrases=tries):
+            return
+        no_mic = hearing and self._mic_absent()
+        self._intro_probe = None
+        if no_mic:                                       # говорить некуда — не просим, а показываем, как писать
+            self._intro_say("Микрофона я не слышу — напишите мне: кнопка с клавиатурой внизу окошка.", "mic_none", buttons=["b-type"])
+            return
+        if hearing and not getattr(self, "_intro_stop", False):
+            self.emit("intro", step="try", phrases=tries)
+            self.listen_for_command(25)                  # первая фраза — вопрос модели, без имени: ответ — в «Первые шаги»
 
     def _intro_script(self):
         pid = self.s.get("persona")

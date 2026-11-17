@@ -103,7 +103,7 @@ nw = (ROOT / "ui/studio/news.js").read_text(encoding="utf-8")
 ok('go.textContent = "Обновить"' in nw and "#up-check" in nw and "download" in nw, "объявление со ссылкой на «Скачать» → «Обновить» в программе")
 
 # ---------- №818, №820: телефон
-tools = (ROOT / "android/www-src/app/10-tools.js").read_text(encoding="utf-8")
+tools = (ROOT / "android/www-src/app/12-tools.js").read_text(encoding="utf-8")
 ok("HANDS_APK" not in tools and "a.hands_apk" in tools and "UPD_URL" in tools.split("async function handsUrl")[1][:300],
    "«с руками» — файл из описания выпуска, нет его — страница «Скачать» и подсказка")
 bt = (ROOT / "android/src/pro/dewiar/app/BtMic.java").read_text(encoding="utf-8")

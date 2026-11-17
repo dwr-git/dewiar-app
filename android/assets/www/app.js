@@ -543,7 +543,7 @@ function startCardCheck() {
   const c = $("#card [data-first], #card [onclick*='joinPoll']");
   if (!c || !((S.llm.base_url && !S.llm.trial) || loggedIn())) return;     // пробный разговор — ещё не «подключено»
   showCard("");
-  if (!busy && state === "idle") showBot(`Готово, всё подключено${loggedIn() ? " — аккаунт " + (S.account.login || "") : ""}. Нажмите на микрофон или удерживайте его и говорите.`);
+  if (!busy && state === "idle") greet(`Готово, всё подключено${loggedIn() ? " — аккаунт " + (S.account.login || "") : ""}. Нажмите на вопрос ниже — или на микрофон и говорите.`);
   plog("info", "🧠 мозг подключён — карточка первого запуска убрана");
 }
 
@@ -1413,6 +1413,7 @@ let turnMedia = null;                            // картинки этого 
 let turnQ = "";                                 // вопрос этого хода: длинная страница (readPage) — куски по его словам
 const isLongAnswer = (t) => String(t || "").length >= LONG_ANSWER || /\n\s*(?:[-*•]|\d+[.)])\s|\n\s*\||```/.test(String(t || "")) || !!(turnMedia && turnMedia.length);
 function showBot(t, cls) {
+  greetOnly = false;                               // ответ или другое сообщение — уже не «только приветствие»
   t = trL(t);
   if (tgTurn && t && cls !== "wait") tgLast = String(t);
   const b = $("#bot"), long = !cls && isLongAnswer(t);
@@ -1510,6 +1511,11 @@ function quietCheck() {
    человек новичок (сам спросил меньше 4 раз) и экран пуст — фразы-примеры, нажатие спрашивает. Кто пользовался раньше
    (есть разговор или память) — не показываем: S.tries заводится при первом запуске этой версии. */
 const TRIES_MAX = 4;
+/* «Первая минута» (1.0.26; воронка 17.11: на телефоне 257 из 749 новых закрыли приложение в первые 10 минут, ни о чём не
+   спросив): на экране первого запуска приветствие («Говорите сразу…», «Готово, всё подключено…») — экран не пуст, и
+   фразы-примеры не показывались. Пока на экране только приветствие (greetOnly) — показываем. */
+var greetOnly = false;                             // var, не let: showBot могут позвать раньше этой строки
+function greet(t) { showBot(t); greetOnly = true; quietCheck(); }
 function triesState() {
   if (!S.tries) S.tries = { n: history.some(m => m.role === "user") || (S.memory || []).length ? TRIES_MAX : 0, off: false };
   return S.tries;
@@ -1521,9 +1527,12 @@ function triesList() {
 function triesCheck(quiet) {
   const box = $("#tries"); if (!box) return;
   const t = triesState(), brain = !!(S.llm.base_url || loggedIn());
-  const show = quiet && brain && !t.off && t.n < TRIES_MAX && state === "idle";
-  if (show && !box.childElementCount) {
-    box.innerHTML = `<p class="th">Попробуйте сказать — или нажмите</p><div class="tlist">${triesList().map(q => `<button class="tq" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`
+  const show = (quiet || greetOnly) && brain && !t.off && t.n < TRIES_MAX && state === "idle";
+  const g = greetOnly ? "1" : "";                // под приветствием — три вопроса без заголовка: оно само зовёт «нажмите на вопрос ниже»
+  if (show && (!box.childElementCount || box.dataset.g !== g)) {
+    box.dataset.g = g;
+    const list = g ? triesList().filter((_, i) => i === 0 || i === 2 || i === 4) : triesList();
+    box.innerHTML = (g ? "" : `<p class="th">Попробуйте сказать — или нажмите</p>`) + `<div class="tlist">${list.map(q => `<button class="tq" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`
       + `<button class="lnk tx" id="tries-x">Больше не показывать</button>`;
     box.querySelectorAll(".tq").forEach(b => b.onclick = () => ask(b.dataset.q));
     $("#tries-x").onclick = () => { triesState().off = true; saveS(); quietCheck(); };
@@ -2399,6 +2408,7 @@ function econSuggest(models) {                       // как economy.suggest: 
   for (const c of ECON_CHEAP) { const m = ms.find(x => x.toLowerCase().includes(c)); if (m) return m; }
   return ms.find(m => /(?:^|[-_/:.])(?:mini|nano|haiku|flash|lite|small|turbo|[789]b)(?:$|[-_/:.])/i.test(m)) || "";
 }
+/* ---------- мозг: ответ модели потоком ---------- */
 /* Ответ модели потоком (OpenAI-совместимый /chat/completions или Ollama /api/chat). onText(кусок) — текст по мере прихода,
    уже без размышлений и вызовов функций текстом; -> {text, calls:[{id,name,args}]} */
 var turnServers = new Set();                        // серверы облака, отвечавшие в этом ходе (экзамен: строка «сервер»)
@@ -2848,6 +2858,7 @@ function sentenceSink() {
   return api;
 }
 
+/* ---------- мозг: ход разговора ---------- */
 /* Один ход разговора: быстрые команды без модели (quick) → модель с инструментами, до 6 кругов (шестой — без
    инструментов, чтобы модель ответила словами). Ответ показывается и озвучивается по предложениям по мере прихода.
    opts.hidden — служебный запрос: реплика человека не показывается и не пишется в историю. */
@@ -8920,19 +8931,9 @@ async function syncOne(c, opts) {
         const loc = notes().find(n => n.id === lk.slice(5)), d0 = it.data || {};
         same = !!loc && noteBase(loc.title) === noteBase(d0.title) && String(loc.folder || "") === String(d0.folder || "") && noteNorm(loc.title, loc.text) === noteNorm(d0.title, d0.text);
       }
-      if (it.kind === "note") {                                       // 05.11: запертую здесь правка оттуда не перетирает
-        const loc = notes().find(n => n.id === lk.slice(5)), d0 = it.data || {};
-        // 14.11 (владелец: «несколько версий вкладки без возможности удалить»): пришла тоже запертая — там знали о замке,
-        // это их последняя правка: обычный обмен (новее побеждает), без копии — иначе обе стороны множили копии
-        if (loc && noteLocked(loc.text) && (it.deleted || (!noteLockOnly(loc.text, d0.text || "") && !noteLocked(d0.text || "")))) {
-          if (!it.deleted && !same) {                                   // их правка — рядом копией, без замка; та же уже лежит — не дублируем
-            const all = notes(), base = String(d0.title || loc.title || "Заметка").slice(0, 36), t2 = noteLockSet(d0.text || "", false);
-            if (!all.some(n => String(n.title || "").startsWith(base + " (") && noteNorm(n.title, n.text) === noteNorm(n.title, t2))) {
-              all.push({ id: uid("n"), title: `${base} (копия с другого устройства)`, text: t2, folder: d0.folder || loc.folder || "", time: Date.now() });
-              fileSave("notes.json", JSON.stringify(all)); } }
-          st.idx[k] = { h: "older", u: it.updated }; plog("info", `🔒 заметка «${clip(loc.title || "", 40)}» заперта — ${it.deleted ? "удаление" : "правка"} с другого устройства не принята`); continue;
-        }
-      }
+      // 1.0.26 (владелец 17.11: «правлю вкладку на работе, а дома — старая и поправленная по отдельности»): замок защищает
+      // от случайной правки на этом устройстве, а правка со своих же устройств — обычная: новее побеждает, без копий
+      // «(копия с другого устройства)» (раньше запертая здесь правку оттуда не принимала и клала рядом копией)
       let okApply; syncCurKey = c.key;
       if (same) { got++; st.idx[k] = { h: null, u: it.updated, r: 1 }; syncCurKey = ""; continue; }
       try { okApply = syncApply(lk === k ? it : Object.assign({}, it, { id: lk.slice(lk.indexOf(":") + 1) })); } catch (e2) { console.error("sync", it.kind, it.id, e2); continue; }
@@ -12571,7 +12572,7 @@ setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока о
     showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — подробные ответы и дела</button></div>`);
   } else if (!S.llm.base_url && !loggedIn() && autoOk() && !(S.join && !S.join.auto) && trialOn()) {
     // 0.69, первый запуск: говорим сразу (пробный разговор), бесплатный мозг Dewiar подключается сам — без анкеты
-    showBot(gfix(`Привет! Я ${persona().name}. Говорите сразу — нажмите на меня или удерживайте и говорите. Мозг Dewiar подключается сам — на старте подарок.`));
+    greet(gfix(`Привет! Я ${persona().name}. Спросите о чём угодно — нажмите на вопрос ниже или на меня и говорите. На старте — подарок.`));
     showCard(`<div class="start" data-first="1"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button></div>`);
     setTimeout(() => autoJoin("первый запуск").then(ok => { if (ok) showCard(""); }), 1200);
   } else if (!S.llm.base_url && !loggedIn()) {

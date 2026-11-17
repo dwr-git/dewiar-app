@@ -1,4 +1,4 @@
-//@ Телефон и веб-версия, часть 14: синхронизация с компьютером через облако.
+//@ Телефон и веб-версия, часть 16: синхронизация с компьютером через облако.
 //@ Собирается в android/assets/www/app.js (tools/app_join.py) — порядок частей = порядок исполнения; шапка «//@» в app.js не попадает.
 /* ---------- синхронизация с компьютером через облако Dewiar (cloud.php ?p=/sync) ----------
    Напоминания и будильники, заметки, расходы, память «Обо мне» — одинаковые на телефоне и компьютере. Раз в минуту, пока
@@ -598,19 +598,9 @@ async function syncOne(c, opts) {
         const loc = notes().find(n => n.id === lk.slice(5)), d0 = it.data || {};
         same = !!loc && noteBase(loc.title) === noteBase(d0.title) && String(loc.folder || "") === String(d0.folder || "") && noteNorm(loc.title, loc.text) === noteNorm(d0.title, d0.text);
       }
-      if (it.kind === "note") {                                       // 05.11: запертую здесь правка оттуда не перетирает
-        const loc = notes().find(n => n.id === lk.slice(5)), d0 = it.data || {};
-        // 14.11 (владелец: «несколько версий вкладки без возможности удалить»): пришла тоже запертая — там знали о замке,
-        // это их последняя правка: обычный обмен (новее побеждает), без копии — иначе обе стороны множили копии
-        if (loc && noteLocked(loc.text) && (it.deleted || (!noteLockOnly(loc.text, d0.text || "") && !noteLocked(d0.text || "")))) {
-          if (!it.deleted && !same) {                                   // их правка — рядом копией, без замка; та же уже лежит — не дублируем
-            const all = notes(), base = String(d0.title || loc.title || "Заметка").slice(0, 36), t2 = noteLockSet(d0.text || "", false);
-            if (!all.some(n => String(n.title || "").startsWith(base + " (") && noteNorm(n.title, n.text) === noteNorm(n.title, t2))) {
-              all.push({ id: uid("n"), title: `${base} (копия с другого устройства)`, text: t2, folder: d0.folder || loc.folder || "", time: Date.now() });
-              fileSave("notes.json", JSON.stringify(all)); } }
-          st.idx[k] = { h: "older", u: it.updated }; plog("info", `🔒 заметка «${clip(loc.title || "", 40)}» заперта — ${it.deleted ? "удаление" : "правка"} с другого устройства не принята`); continue;
-        }
-      }
+      // 1.0.26 (владелец 17.11: «правлю вкладку на работе, а дома — старая и поправленная по отдельности»): замок защищает
+      // от случайной правки на этом устройстве, а правка со своих же устройств — обычная: новее побеждает, без копий
+      // «(копия с другого устройства)» (раньше запертая здесь правку оттуда не принимала и клала рядом копией)
       let okApply; syncCurKey = c.key;
       if (same) { got++; st.idx[k] = { h: null, u: it.updated, r: 1 }; syncCurKey = ""; continue; }
       try { okApply = syncApply(lk === k ? it : Object.assign({}, it, { id: lk.slice(lk.indexOf(":") + 1) })); } catch (e2) { console.error("sync", it.kind, it.id, e2); continue; }

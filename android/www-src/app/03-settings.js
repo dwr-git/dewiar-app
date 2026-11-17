@@ -108,7 +108,7 @@ function startCardCheck() {
   const c = $("#card [data-first], #card [onclick*='joinPoll']");
   if (!c || !((S.llm.base_url && !S.llm.trial) || loggedIn())) return;     // пробный разговор — ещё не «подключено»
   showCard("");
-  if (!busy && state === "idle") showBot(`Готово, всё подключено${loggedIn() ? " — аккаунт " + (S.account.login || "") : ""}. Нажмите на микрофон или удерживайте его и говорите.`);
+  if (!busy && state === "idle") greet(`Готово, всё подключено${loggedIn() ? " — аккаунт " + (S.account.login || "") : ""}. Нажмите на вопрос ниже — или на микрофон и говорите.`);
   plog("info", "🧠 мозг подключён — карточка первого запуска убрана");
 }
 

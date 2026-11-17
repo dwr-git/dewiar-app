@@ -1,4 +1,4 @@
-//@ Телефон и веб-версия, часть 15: Dewiar Облако, заявка и перенос, приглашения, аккаунт dewiar.pro, Telegram.
+//@ Телефон и веб-версия, часть 17: Dewiar Облако, заявка и перенос, приглашения, аккаунт dewiar.pro, Telegram.
 //@ Собирается в android/assets/www/app.js (tools/app_join.py) — порядок частей = порядок исполнения; шапка «//@» в app.js не попадает.
 /* ---------- Dewiar Облако (server/dwrapp/cloud.php): ключ dw-… или вход аккаунтом, заряд в талерах ----------
    Пути — параметром ?p=: /balance, /models, /usage, /topup, /netcfg, /report, /sync. Для модели base_url облака

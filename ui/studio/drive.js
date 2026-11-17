@@ -90,11 +90,15 @@ function cldDropped(e) {
 async function cldAdd(files, paths, types) {
   const a = window.api && window.api();
   if (!files.length && !(paths || []).length) {
-    toast("Файл не дошёл до окна — нажмите на поле с пунктиром и выберите его", 5000);
-    // 17.11 (владелец, Windows): перетаскивание «ничего не делает» — в журнал, что пришло вместо файла
-    core.call("js_errors", { errors: [`cloud (studio): drop without a file, got: ${types || "nothing"}`] }).catch(() => {});
+    // на Linux файл следом отдаст окно (ui/app.py _drop_hook → dwNativeDrop); не дождались — подсказка и строка в журнал
+    clearTimeout(LDV.missT);
+    LDV.missT = setTimeout(() => {
+      toast("Файл не дошёл до окна — нажмите на поле с пунктиром и выберите его", 5000);
+      core.call("js_errors", { errors: [`cloud (studio): drop without a file, got: ${types || "nothing"}`] }).catch(() => {});
+    }, 1600);
     return;
   }
+  clearTimeout(LDV.missT); LDV.lastDrop = Date.now();
   // владелец 17.11: положил файл в облако — включаем облако сами (шифрование на устройстве), без кнопки «Включить»
   const st = await core.call("drive_status", {}).catch(() => LDV.st);
   if (st && st.why === "e2e") {
@@ -129,6 +133,14 @@ async function cldAdd(files, paths, types) {
   cldGrid();
   setTimeout(() => cldLoad(true), 1200);
 }
+
+/* файл, брошенный на окно студии, отдало само окно (Linux, ui/app.py _drop_hook): страница его уже приняла — ничего;
+   открыты «Мои файлы» — в облако */
+window.dwNativeDrop = (paths) => {
+  if (Date.now() - (LDV.lastDrop || 0) < 3000 || !Array.isArray(paths) || !paths.length) return;
+  const pg = $("#p-docs"); if (!pg || !pg.classList.contains("cur")) return;
+  cldAdd([], paths);
+};
 
 (function cldInit() {
   if (!$("#ld")) return;

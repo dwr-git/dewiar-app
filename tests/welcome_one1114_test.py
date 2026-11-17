@@ -34,7 +34,7 @@ with sync_playwright() as p:
     vis = lambda sel: pg.evaluate("(s) => { const e = document.querySelector(s); return !!e && e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden'; }", sel)
     ok(vis("#wlc .box") and "Лира" in pg.inner_text("#wlc h2"), "первый запуск — окно с приветствием персонажа по имени")
     qs = pg.evaluate("() => [...document.querySelectorAll('#wlc-qs .tq')].map(b => b.textContent)")
-    ok(len(qs) == 3 and qs[0].startswith("Лира, "), f"три вопроса, первый — с именем: {qs}")
+    ok(len(qs) == 3 and any(q.startswith("Лира, ") for q in qs), f"три вопроса (те же, что в виджете), один — с именем: {qs}")
     ok(not pg.query_selector("#wlc .wst") and not pg.query_selector("#wlc-free") and not pg.query_selector("#wlc-tlist"),
        "нет шагов 1-2-3, «Telegram», списка фраз и «Что бесплатно» — одно действие")
     ok(not vis("#wlc-brain") and not vis("#wlc-done") and vis("#wlc-later"), "мозг отвечает — карточки «Подключить» нет; пока не спросил — «Позже»")

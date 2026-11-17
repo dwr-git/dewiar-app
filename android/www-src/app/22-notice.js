@@ -1,4 +1,4 @@
-//@ Телефон и веб-версия, часть 20: «сам замечает».
+//@ Телефон и веб-версия, часть 22: «сам замечает».
 //@ Собирается в android/assets/www/app.js (tools/app_join.py) — порядок частей = порядок исполнения; шапка «//@» в app.js не попадает.
 /* ---------- «сам замечает»: открыли приложение после перерыва — коротко о главном (как core/presence.py) ----------
    Перерыв считается от того, когда приложение последний раз было на экране (S.welcome.seen). Первый раз за день после 3 часов —
@@ -194,7 +194,7 @@ setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока о
     showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — подробные ответы и дела</button></div>`);
   } else if (!S.llm.base_url && !loggedIn() && autoOk() && !(S.join && !S.join.auto) && trialOn()) {
     // 0.69, первый запуск: говорим сразу (пробный разговор), бесплатный мозг Dewiar подключается сам — без анкеты
-    showBot(gfix(`Привет! Я ${persona().name}. Говорите сразу — нажмите на меня или удерживайте и говорите. Мозг Dewiar подключается сам — на старте подарок.`));
+    greet(gfix(`Привет! Я ${persona().name}. Спросите о чём угодно — нажмите на вопрос ниже или на меня и говорите. На старте — подарок.`));
     showCard(`<div class="start" data-first="1"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button></div>`);
     setTimeout(() => autoJoin("первый запуск").then(ok => { if (ok) showCard(""); }), 1200);
   } else if (!S.llm.base_url && !loggedIn()) {

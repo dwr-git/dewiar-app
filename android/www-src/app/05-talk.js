@@ -393,6 +393,7 @@ let turnMedia = null;                            // картинки этого 
 let turnQ = "";                                 // вопрос этого хода: длинная страница (readPage) — куски по его словам
 const isLongAnswer = (t) => String(t || "").length >= LONG_ANSWER || /\n\s*(?:[-*•]|\d+[.)])\s|\n\s*\||```/.test(String(t || "")) || !!(turnMedia && turnMedia.length);
 function showBot(t, cls) {
+  greetOnly = false;                               // ответ или другое сообщение — уже не «только приветствие»
   t = trL(t);
   if (tgTurn && t && cls !== "wait") tgLast = String(t);
   const b = $("#bot"), long = !cls && isLongAnswer(t);
@@ -490,6 +491,11 @@ function quietCheck() {
    человек новичок (сам спросил меньше 4 раз) и экран пуст — фразы-примеры, нажатие спрашивает. Кто пользовался раньше
    (есть разговор или память) — не показываем: S.tries заводится при первом запуске этой версии. */
 const TRIES_MAX = 4;
+/* «Первая минута» (1.0.26; воронка 17.11: на телефоне 257 из 749 новых закрыли приложение в первые 10 минут, ни о чём не
+   спросив): на экране первого запуска приветствие («Говорите сразу…», «Готово, всё подключено…») — экран не пуст, и
+   фразы-примеры не показывались. Пока на экране только приветствие (greetOnly) — показываем. */
+var greetOnly = false;                             // var, не let: showBot могут позвать раньше этой строки
+function greet(t) { showBot(t); greetOnly = true; quietCheck(); }
 function triesState() {
   if (!S.tries) S.tries = { n: history.some(m => m.role === "user") || (S.memory || []).length ? TRIES_MAX : 0, off: false };
   return S.tries;
@@ -501,9 +507,12 @@ function triesList() {
 function triesCheck(quiet) {
   const box = $("#tries"); if (!box) return;
   const t = triesState(), brain = !!(S.llm.base_url || loggedIn());
-  const show = quiet && brain && !t.off && t.n < TRIES_MAX && state === "idle";
-  if (show && !box.childElementCount) {
-    box.innerHTML = `<p class="th">Попробуйте сказать — или нажмите</p><div class="tlist">${triesList().map(q => `<button class="tq" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`
+  const show = (quiet || greetOnly) && brain && !t.off && t.n < TRIES_MAX && state === "idle";
+  const g = greetOnly ? "1" : "";                // под приветствием — три вопроса без заголовка: оно само зовёт «нажмите на вопрос ниже»
+  if (show && (!box.childElementCount || box.dataset.g !== g)) {
+    box.dataset.g = g;
+    const list = g ? triesList().filter((_, i) => i === 0 || i === 2 || i === 4) : triesList();
+    box.innerHTML = (g ? "" : `<p class="th">Попробуйте сказать — или нажмите</p>`) + `<div class="tlist">${list.map(q => `<button class="tq" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`
       + `<button class="lnk tx" id="tries-x">Больше не показывать</button>`;
     box.querySelectorAll(".tq").forEach(b => b.onclick = () => ask(b.dataset.q));
     $("#tries-x").onclick = () => { triesState().off = true; saveS(); quietCheck(); };

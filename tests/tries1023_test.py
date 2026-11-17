@@ -33,7 +33,7 @@ try:
             core.call = (cmd, a) => { if (cmd === 'say') window._said.push(a.text); return Promise.resolve(null); }; wlcOpen(); }""")
         pg.wait_for_timeout(300)
         qs = pg.evaluate("() => [...document.querySelectorAll('#wlc .tq')].map(b => b.dataset.q)")
-        ok(len(qs) == 3 and qs[0].startswith("Лира, "), f"в «Первых шагах» (0.99 — одно окно) — три вопроса с именем персонажа: {qs}")
+        ok(len(qs) == 3 and any(q.startswith("Лира, ") for q in qs), f"в «Первых шагах» (0.99 — одно окно) — три вопроса, один с именем персонажа: {qs}")
         ok(pg.evaluate("() => !document.querySelector('#wlc-brain').hidden") and pg.evaluate("window._said") == [],
            "мозг ещё не выбран — вместо вопросов карточка «Подключить», ничего не уходит")
         free = pg.inner_text("#wlc-brain")
@@ -59,6 +59,12 @@ try:
         ok(pg.evaluate("window._asked") == ["Включи радио"], f"нажатие — спрашивает: {pg.evaluate('window._asked')}")
         pg.evaluate("() => { $('#bot').textContent = 'Ответ'; quietCheck(); }")
         ok(not vis(), "на экране ответ — подсказок нет")
+        # «первая минута» (1.0.26): на экране только приветствие первого запуска — подсказки видны; пришёл ответ — нет
+        pg.evaluate("() => greet('Готово, всё подключено. Нажмите на вопрос ниже — или на микрофон и говорите.')")
+        box = pg.evaluate("() => { const r = $('#tries').getBoundingClientRect(), m = $('#mic').getBoundingClientRect(); return [r.bottom, m.top]; }")
+        ok(vis() and box[0] <= box[1], f"приветствие первого запуска — подсказки под ним видны и не под микрофоном: {box}")
+        pg.evaluate("() => showBot('Ответ')")
+        ok(not vis(), "пришёл ответ — подсказки ушли")
         pg.evaluate("() => { $('#bot').textContent = ''; quietCheck(); setState('listening'); }")
         ok(not vis(), "слушает — подсказок нет")
         pg.evaluate("() => setState('idle')")

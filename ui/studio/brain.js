@@ -22,7 +22,7 @@ function renderProfiles() {
   if (Object.keys(profs).length > 1 || own.length) {               // над списком, а не в нём: .prof:first-child — первый профиль
     const n = document.createElement("p"); n.className = "hint prof-note"; n.id = "prof-note"; n.style.margin = "0 0 10px";
     n.textContent = "Отмеченная — общая: ею думают персонажи без своей модели."
-      + (own.length ? " Свои: " + own.map(p => `${p.name} — «${brainName(profs[brainOf(p.id)], brainOf(p.id))}»`).join(", ") + " (меняется в «Персонажи» → персонаж → «Мозг»)." : "");
+      + (own.length ? " Свои: " + own.map(p => `${p.name} — «${brainLabel(p.id)}»`).join(", ") + " (меняется в «Персонажи» → персонаж → «Мозг»)." : "");
     box.before(n);
   }
   Object.entries(profs).forEach(([id, p]) => {
@@ -692,7 +692,7 @@ function brRender() {
     const row = (pid, p) => { const own = brOf(pid), shown = own || all;
       return `<button type="button" class="br-row" data-who="${escH(pid)}">${brAva(p)}<span class="br-n"><b>${escH(p ? p.name : "Все")}</b>`
         + `<small>${p ? (p.id === active ? "говорит сейчас" : escH(p.tagline || p.role || "")) : "общий мозг — у кого нет своего"}</small></span>`
-        + `<span class="br-m${own || !p ? "" : " dim"}">${escH(own || !p ? brShort(profs[shown], shown) || "не выбран" : "как у всех")}</span><i class="br-go" aria-hidden="true"></i></button>`; };
+        + `<span class="br-m${own || !p ? "" : " dim"}">${escH(own || !p ? (own && p ? brainLabel(pid) : brShort(profs[shown], shown)) || "не выбран" : "как у всех")}</span><i class="br-go" aria-hidden="true"></i></button>`; };
     body.innerHTML = `<div class="br-list">${row("", null)}${personas.map(p => row(p.id, p)).join("")}</div>`
       + `<button type="button" class="br-add" data-add="1"><span>＋</span><b>Подключить модель по ключу</b><small>Gemini, Kimi, GLM, DeepSeek, Claude, GPT и любой сервис «как OpenAI»</small></button>`;
     $$("#br-body .br-row").forEach(b => b.onclick = () => { BR.who = b.dataset.who; BR.view = "pick"; brRender(); });

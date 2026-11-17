@@ -55,11 +55,11 @@ sy._apply_note("g", {"title": "Главное", "folder": "", "text": theirs_loc
 copies = [x.name for x in root.glob("Главное (*.md")]
 ok(not copies and "Уроки универ" in (root / "Главное.md").read_text(encoding="utf-8"),
    f"пришла тоже запертая с другим текстом — их правка принята, копии нет: {copies}")
-for i in range(3):                                         # старое приложение без замков шлёт одну и ту же правку
-    sy._apply_note("g", {"title": "Главное", "folder": "", "text": "# Главное\n\nстёрто\n"}, False, upd=int(time.time() * 1000) + i)
+for i in range(3):                                         # 1.0.26: правка со своего устройства без замка (открыли там и поправили)
+    sy._apply_note("g", {"title": "Главное", "folder": "", "text": "# Главное\n\nпоправил на работе\n"}, False, upd=int(time.time() * 1000) + i)
 copies = [x.name for x in root.glob("Главное (*.md")]
-ok(len(copies) == 1 and all(len(Path(c).stem) <= 60 for c in copies), f"правка мимо замка — одна копия, имя до 60 знаков: {copies}")
-ok(copies and "(копия с HONOR CLK-LX1" in copies[0], f"в имени — откуда: {copies}")
+ok(not copies and "поправил на работе" in (root / "Главное.md").read_text(encoding="utf-8"),
+   f"1.0.26: правка со своего устройства принята и у запертой, копий нет (владелец 17.11): {copies}")
 
 import pad as PD  # noqa: E402
 pad = PD.Pad(ws, FakeS())
@@ -71,6 +71,6 @@ ok("старая копия" in pad.read(long).get("text", ""), "открыва�
 pad.delete(long)
 ok(not (pad.root() / f"{long}.md").exists() and long not in [t["name"] for t in pad.tabs()["tabs"]], "и удаляется (раньше «Удалить» молча ничего не делало)")
 js = (ROOT / "android/assets/www/app.js").read_text(encoding="utf-8")
-ok("!noteLocked(d0.text || \"\")" in js and "(копия с другого устройства)" in js, "телефон: та же логика — запертая оттуда без копии, копия без дублей")
+ok("noteLockSet(d0.text" not in js and "${base} (копия с другого устройства)" not in js, "телефон: та же логика — копий у запертой больше не делает")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

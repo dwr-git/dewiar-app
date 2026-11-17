@@ -98,7 +98,7 @@ function pmkWho(id) {
   const list = (typeof personas !== "undefined" ? personas : []).filter(p => p && p.id && p.installed !== false);
   if (list.length < 2) return "";
   const profs = (S.llm || {}).profiles || {}, cur = S.persona;
-  const brain = (p) => { try { return typeof brainOf === "function" && typeof brainName === "function" ? brainName(profs[brainOf(p.id)], brainOf(p.id)) : ""; } catch (e) { return ""; } };
+  const brain = (p) => { try { return typeof brainLabel === "function" ? brainLabel(p.id) : ""; } catch (e) { return ""; } };
   return `<label class="pmk-who" for="${id}"><span>Кто делает</span><select id="${id}">${list.map(p =>
     `<option value="${pmkEsc(p.id)}"${p.id === cur ? " selected" : ""}>${pmkEsc(p.name)}${brain(p) ? " — " + pmkEsc(brain(p)) : ""}</option>`).join("")}</select></label>`;
 }

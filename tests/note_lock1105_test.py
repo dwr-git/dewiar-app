@@ -149,11 +149,12 @@ root = sy._notes_root()
 locked_text = "---\nlocked: true\n---\n\n# Сейф\n\nкод 1111\n"
 (root / "Сейф.md").write_text(locked_text, encoding="utf-8")
 sy.state["map"]["s1"] = "Сейф.md"
-sy._apply_note("s1", {"title": "Сейф", "folder": "", "text": "# Сейф\n\nкод 0000 — стёр случайно\n"}, False, upd=int(time.time() * 1000))
-ok((root / "Сейф.md").read_text(encoding="utf-8") == locked_text, "правка с другого устройства не перетёрла запертую")
-alt = [x for x in root.glob("Сейф (копия с*.md")]
-ok(alt and "0000" in alt[0].read_text(encoding="utf-8") and not W._locked(alt[0]), f"их правка — рядом копией без замка: {[x.name for x in alt]}")
-ok("note:s1" in getattr(sy, "_note_resend", set()), "запертая уйдёт туда следующим обменом — и вернёт замок")
+sy._apply_note("s1", {"title": "Сейф", "folder": "", "text": "# Сейф\n\nкод 0000 — поправил на работе\n"}, False, upd=int(time.time() * 1000))
+# 1.0.26 (владелец 17.11: «правлю на работе, дома — старая и поправленная по отдельности»): правка со своего устройства —
+# обычная, новее побеждает, без копий; замок защищает от правки на этом устройстве и от удаления
+ok("0000" in (root / "Сейф.md").read_text(encoding="utf-8") and not list(root.glob("Сейф (копия с*.md")),
+   "правка запертой со своего устройства принята, без копий (1.0.26)")
+(root / "Сейф.md").write_text(locked_text, encoding="utf-8")
 sy._apply_note("s1", {}, True)
 ok((root / "Сейф.md").is_file(), "удаление с другого устройства — запертую не удаляем")
 sy._apply_note("s1", {"title": "Сейф", "folder": "", "text": "# Сейф\n\nкод 1111\n"}, False, upd=int(time.time() * 1000) + 5000)
@@ -161,7 +162,7 @@ ok(not W._locked(root / "Сейф.md") and "1111" in (root / "Сейф.md").read
 sy._apply_note("s1", {"title": "Сейф", "folder": "", "text": locked_text}, False, upd=int(time.time() * 1000) + 9000)
 ok(W._locked(root / "Сейф.md"), "заперли на другом устройстве — заперта и здесь")
 sy._apply_note("s1", {"title": "Сейф", "folder": "Другая", "text": locked_text}, False, upd=int(time.time() * 1000) + 12000)
-ok((root / "Сейф.md").is_file(), "перенос запертой в другую папку с другого устройства — не принимаем")
+ok((root / "Другая" / "Сейф.md").is_file() and W._locked(root / "Другая" / "Сейф.md"), "перенос запертой со своего устройства — принят, замок на месте (1.0.26)")
 
 # 6) Obsidian: правка запертой в хранилище — рядом, удаление — возвращаем
 import obsidian as OB  # noqa: E402

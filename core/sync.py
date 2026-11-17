@@ -125,6 +125,10 @@ class Sync(E2EMixin, SnapMixin, ApplyMixin, FilesMixin, SafeMixin, PluginsMixin,
             self.status["enabled"] = True
             if not self.HOME:
                 self._upload_outputs(url, token)
+            try:                                            # 1.0.26: копии «(копия с …)», совпавшие со своей заметкой, — прочь
+                self._copies_tidy()
+            except Exception as e:  # noqa: BLE001
+                log.warning("Синхронизация: уборка копий не удалась: %s", e)
             snap = self.snapshot()
             ek = self.e2e_key()
             if ek is not None:

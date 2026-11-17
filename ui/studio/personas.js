@@ -25,7 +25,7 @@ function renderPersonas() {
     $("h3", c).textContent = p.name; $("p", c).textContent = p.tagline || ""; if (p.role) $(".role", c).textContent = p.role;
     const own = typeof brainOf === "function" ? brainOf(p.id) : "";
     if (own) { const m = document.createElement("span"); m.className = "pbrain"; m.title = "Свой мозг персонажа";
-      m.textContent = "🧠 " + brainName(((S.llm || {}).profiles || {})[own], own); $("h3", c).after(m); }
+      m.textContent = "🧠 " + brainLabel(p.id); $("h3", c).after(m); }
     if (ownMem().includes(p.name)) { const m = document.createElement("span"); m.className = "pbrain"; m.title = "Своя память персонажа"; m.textContent = "🗂 своя память"; $("h3", c).after(m); }
     (p.skills || []).slice(0, 4).forEach(t => { const li = document.createElement("li"); li.textContent = t; $("ul.sk", c).appendChild(li); });
     const e = new DewiarEntity($("canvas", c), { style: p.avatar_url && p.style !== "aura" ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true });
@@ -149,6 +149,13 @@ function brainOf(pid) {
   const own = ((S.llm || {}).persona || {})[pid] || "", profs = (S.llm || {}).profiles || {};
   return own && profs[own] ? own : "";
 }
+/* №845 (17.11): у Патрика выбрана своя модель профиля (llm.persona_model, «Модель Патрик» → gemini), а карточка и кнопка
+   показывали модель профиля (deepseek) — казалось, что выбор не сохранился. Своя модель — в названии везде. */
+function brainLabel(pid) {
+  const own = brainOf(pid), prof = ((S.llm || {}).profiles || {})[own], m = (((S.llm || {}).persona_model || {})[pid] || "").trim();
+  if (!own) return "";
+  return m && prof && !prof.cloud ? `${String(prof.name || own).split(" — ")[0]} — ${m}` : brainName(prof, own);
+}
 /* GitHub №30: выбор модели персонажа — успех только после подтверждения ядра. Сохранения идут по одному и по порядку
    (последний выбор не перезапишется более ранним, даже если ответы придут наоборот); ответ относится к тому персонажу,
    для которого выбирали (pid и имя запомнены до запроса), — открытый за это время другой персонаж или закрытый редактор
@@ -181,7 +188,8 @@ function renderBrain() {
   if (!ed || !ed.id) { box.innerHTML = `<p class="hint" style="margin:0">Сначала сохраните персонажа — потом можно выбрать ему модель.</p>`; return; }
   const ids = Object.keys(profs);
   box.innerHTML = `<button role="radio" data-b="" class="bp${cur ? "" : " on"}" aria-checked="${!cur}"><b>Как у всех</b><small>${escH(brainName(profs[act], act) || "общий мозг не выбран")}</small></button>`
-    + ids.map(id => `<button role="radio" data-b="${escH(id)}" class="bp${cur === id ? " on" : ""}" aria-checked="${cur === id}"><b>${escH(brainName(profs[id], id))}</b><small>${escH(profs[id].cloud ? "облако Dewiar" : (profs[id].model || "") + (profs[id].base_url ? " · " + profs[id].base_url.replace(/^https?:\/\//, "").split("/")[0] : ""))}</small></button>`).join("")
+    + ids.map(id => { const mm = cur === id && !profs[id].cloud ? (((S.llm || {}).persona_model || {})[ed.id] || "") : "";
+      return `<button role="radio" data-b="${escH(id)}" class="bp${cur === id ? " on" : ""}" aria-checked="${cur === id}"><b>${escH(cur === id ? brainLabel(ed.id) : brainName(profs[id], id))}</b><small>${escH(profs[id].cloud ? "облако Dewiar" : (mm || profs[id].model || "") + (profs[id].base_url ? " · " + profs[id].base_url.replace(/^https?:\/\//, "").split("/")[0] : ""))}</small></button>`; }).join("")
     + `<button class="bp add" id="e-brain-add"><b>＋ Другая модель</b><small>добавить в «Мозге»: GPT, Claude, Gemini, своя</small></button>`
     // №403 (29.10: «не получается установить персонажам разные модели — слетает к последнему»): у сервера вроде Ollama много
     // моделей — персонажу своя модель того же сервера (llm.persona_model[id]), профиль у остальных не меняется
