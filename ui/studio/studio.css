@@ -4121,6 +4121,7 @@ html.st-neu .gr-ic { background: var(--sk-glass); box-shadow: var(--raise-s); } 
 .sc-card h3 { margin: 0; font: 600 15px Manrope, sans-serif; }
 .sc-card .co-ms { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
 .sc-tgl { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
+.sc-fit { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--warn, #d97706) 12%, transparent); }
 .sc-tgl > span:first-child { display: flex; flex-direction: column; gap: 2px; } .sc-tgl b { font-size: 13.5px; font-weight: 650; } .sc-tgl small { font-size: 12px; color: var(--muted); }
 .sc-lbl small { color: var(--dim, var(--muted)); } .sc-lbl small.over { color: var(--bad, #FF6B8A); }
 #sc-kb { min-height: 190px; line-height: 1.5; }

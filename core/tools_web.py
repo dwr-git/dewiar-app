@@ -379,6 +379,36 @@ def t_world_time(a, ctx):
     return r + " [Посчитано по часовому поясу — называй именно это время.]"
 
 
+PDF_URL_MAX = 40 << 20                           # PDF по ссылке — не больше 40 МБ
+
+
+def pdf_url_text(data):
+    """Текст PDF по ссылке постранично («=== стр. N ===» — модель называет страницу). №296 (идеи 17.11): «скилл для
+    чтения PDF — технические руководства; read_webpage PDF не читает» — раньше двоичный PDF уходил модели «текстом».
+    Тот же разбор, что у «Моих файлов» (pdftext: pypdf в отдельном процессе с пределами). Скан без текста — честно."""
+    import os
+    import tempfile
+    import pdftext
+    if len(data) > PDF_URL_MAX:
+        raise ToolError(f"PDF слишком большой ({len(data) >> 20} МБ) — скачай его (download) и читай частями")
+    fd, path = tempfile.mkstemp(suffix=".pdf")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        pages = pdftext.pages(path, limit=400)
+    except Exception as e:  # noqa: BLE001
+        raise ToolError(f"PDF не разобрался ({e})") from e
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    if not "".join(pages).strip():
+        return ("PDF открылся, но текста в нём нет — это скан (картинки страниц). Ничего не пересказывай и не выдумывай: "
+                "скажи человеку, что это скан, и предложи прислать файл — Лира распознает текст.")
+    return "\n".join(f"=== стр. {i} ===\n{x.strip()}" for i, x in enumerate(pages, 1))
+
+
 def t_read_webpage(a, ctx):
     """Текст страницы, не больше PAGE_MAX символов — чтобы одна страница не съела контекст модели; длинная — начало и
     куски вокруг нужных слов (find или слова вопроса), пустая — честно «текста нет»."""
@@ -410,6 +440,8 @@ def t_read_webpage(a, ctx):
             except Exception as e2:  # noqa: BLE001
                 log.info("Страница через сервер Dewiar не открылась: %s", e2)
         raise ToolError(f"страница не открылась: {e}") from e
+    if "pdf" in r.headers.get("content-type", "").lower() or r.content[:5] == b"%PDF-":
+        return page_excerpt(pdf_url_text(r.content), find, question)      # №296: инструкция, договор по ссылке
     if "html" not in r.headers.get("content-type", "html"):
         return page_excerpt(r.text, find, question)
     out = page_excerpt(html_to_text(r.text), find, question)

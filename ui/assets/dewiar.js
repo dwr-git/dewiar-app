@@ -7,6 +7,9 @@
    window.api() — методы окна pywebview (там, где окно открыто через него), иначе null. */
 /* Ключ моста окна и параметры адреса — в assets/boot.js (первый скрипт каждой страницы): адрес окна там же очищается. */
 (function () {
+  // №814 (пакет 17.11): «почему нет связи с ядром?» — ядро так и не ответило: сказать, что делать, а не только что случилось.
+  // Внутри обёртки: файл может подключиться к странице второй раз (№566) — повторное const снаружи ломало бы весь скрипт
+  const NO_CORE = "нет связи с ядром — фоновая часть Dewiar не отвечает. Подождите полминуты; не поможет — закройте Dewiar (значок у часов → «Выход») и откройте снова";
   const q = window.dwQuery ? dwQuery() : new URLSearchParams(location.search);
   class Core {
     constructor() {
@@ -72,7 +75,7 @@
       if (!this.connected) return new Promise((resolve, reject) => {
         let done = false;
         const go = () => { if (done) return; done = true; clearTimeout(t); this.off("hello", go); this.call(cmd, args).then(resolve, reject); };
-        const t = setTimeout(() => { if (done) return; done = true; this.off("hello", go); reject(new Error("нет связи с ядром")); }, window.DEWIAR_CALL_WAIT || 6000);
+        const t = setTimeout(() => { if (done) return; done = true; this.off("hello", go); reject(new Error(NO_CORE)); }, window.DEWIAR_CALL_WAIT || 6000);
         this.on("hello", go);
       });
       return new Promise((resolve, reject) => {

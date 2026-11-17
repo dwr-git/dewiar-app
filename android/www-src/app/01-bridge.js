@@ -132,8 +132,18 @@ const N = window.N = {
 /* Приложение свёрнуто (MainActivity.onPause → событие «pause»): WebView не всегда ставит document.hidden, и фоновые опросы
    (синхронизация, радар, объявления…) шли раз в 30–60 с и в кармане — Huawei: «частое обновление данных в фоновом
    режиме» (владелец 17.11). Опросы по таймеру смотрят сюда; сообщения и звонки в фоне — служба CloseLive. */
+/* №813 (пакет 17.11): системный «Размер шрифта» Android — всё приложение крупнее, пропорционально (только текст ломал бы
+   вёрстку — поэтому WebView держит textZoom 100), не больше 1,3; «Для старших» — ещё ×1,12 поверх */
+const FONT_MAX = 1.3;
+function fontApply() {
+  let f = 1; try { f = D.fontScale ? +D.fontScale() || 1 : 1; } catch (e) { }
+  const z = f > 1.02 ? Math.min(f, FONT_MAX) : 1;
+  document.documentElement.style.zoom = z > 1 ? String(z) : "";
+  document.documentElement.style.setProperty("--vz", String(z));   // app.css: высоты листов в vh делятся на него
+}
+fontApply();
 let appPaused = false;
 N.on("pause", () => { appPaused = true; });
-N.on("resume", () => { appPaused = false; });
+N.on("resume", () => { appPaused = false; fontApply(); });   // поменяли размер шрифта в настройках — вернулись крупнее
 const appAway = () => document.hidden || appPaused;
 

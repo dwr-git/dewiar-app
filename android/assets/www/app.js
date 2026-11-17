@@ -131,9 +131,19 @@ const N = window.N = {
 /* Приложение свёрнуто (MainActivity.onPause → событие «pause»): WebView не всегда ставит document.hidden, и фоновые опросы
    (синхронизация, радар, объявления…) шли раз в 30–60 с и в кармане — Huawei: «частое обновление данных в фоновом
    режиме» (владелец 17.11). Опросы по таймеру смотрят сюда; сообщения и звонки в фоне — служба CloseLive. */
+/* №813 (пакет 17.11): системный «Размер шрифта» Android — всё приложение крупнее, пропорционально (только текст ломал бы
+   вёрстку — поэтому WebView держит textZoom 100), не больше 1,3; «Для старших» — ещё ×1,12 поверх */
+const FONT_MAX = 1.3;
+function fontApply() {
+  let f = 1; try { f = D.fontScale ? +D.fontScale() || 1 : 1; } catch (e) { }
+  const z = f > 1.02 ? Math.min(f, FONT_MAX) : 1;
+  document.documentElement.style.zoom = z > 1 ? String(z) : "";
+  document.documentElement.style.setProperty("--vz", String(z));   // app.css: высоты листов в vh делятся на него
+}
+fontApply();
 let appPaused = false;
 N.on("pause", () => { appPaused = true; });
-N.on("resume", () => { appPaused = false; });
+N.on("resume", () => { appPaused = false; fontApply(); });   // поменяли размер шрифта в настройках — вернулись крупнее
 const appAway = () => document.hidden || appPaused;
 
 /* ---------- радио: играет внутри приложения (как на компьютере), а не на сайтах и в чужих приложениях ----------
@@ -5201,6 +5211,13 @@ async function readPage(url, find) {
   try {
     const r = await http("GET", url, { headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 14) Dewiar" }, timeout: 20000 });
     if (r.status === 403 || r.status === 451) throw new Error("сайт не пускает (" + r.status + ")");
+    // №296 (идеи 17.11): PDF по ссылке (инструкция, договор) — текстом с сервера Dewiar (там его разбирает pdftotext);
+    // не вышло — честно, и компьютер, если он подключён (на компьютере Лира читает PDF по ссылке сама)
+    if (/^%PDF-/.test(String(r.body || "").slice(0, 8)) || /\.pdf(?:[?#]|$)/i.test(url)) {
+      try { return pageExcerpt(String((await dewiarWeb("fetch", url)).text || ""), find, turnQ); }
+      catch (e) { return "Это PDF — на телефоне прочитать его не получилось. Скажи честно и не пересказывай по догадке. "
+        + (S.sync.on && syncChan() && pcSeen() ? "Компьютер подключён: предложи передать ему (start_task: прочитать PDF по ссылке) — он читает PDF сам." : "На компьютере Лира читает PDF по ссылке сама."); }
+    }
     // отчёт №69 (как на компьютере, tools.html_to_text): без меню и боковых панелей; есть <main>/<article> — он;
     // в конце — разделы того же сайта, их можно открыть
     let h = String(r.body || "").replace(/<(nav|header|footer|aside|noscript|svg)\b[\s\S]*?<\/\1>/gi, " ");

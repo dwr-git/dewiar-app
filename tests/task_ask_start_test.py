@@ -111,6 +111,21 @@ t2.run_t0 = time.monotonic() - 30
 tm._milestone(t2, [dict(x, status="done") if i == 0 else x for i, x in enumerate(items[:1] + [{"id": 9, "text": "x", "status": "pending"}])])
 ok(len(pushes) == 1, "первые 2 минуты — без весточек (план только расписан)")
 
+# голосом — у долгой задачи (идёт дольше VOICE_AFTER) и не чаще VOICE_GAP; короткая — только уведомление (харнесс 17.11)
+said = []
+tm.host = type("H", (), {"announce": staticmethod(lambda text, *a, **k: said.append(text))})()
+ok(not said, "задача идёт 5 минут — вехи без голоса")
+t3 = TT()
+t3.run_t0 = time.monotonic() - 1500
+its = [{"id": 1, "text": "Собрать цены", "status": "done"}, {"id": 2, "text": "Сравнить тарифы", "status": "done"},
+       {"id": 3, "text": "Вывод", "status": "pending"}]
+tm._milestone(t3, its)
+ok(len(said) == 1 and "«Рынок»: готово 2 из 3 — сравнить тарифы." == said[0], f"задача идёт 25 минут — веха и голосом: {said}")
+t3.data.update(progress=[2, 4], milestone_at=0)
+its2 = its[:2] + [{"id": 3, "text": "Вывод", "status": "done"}, {"id": 4, "text": "Проверить", "status": "pending"}]
+tm._milestone(t3, its2)
+ok(len(said) == 1 and len(pushes) >= 2, "следующая веха раньше чем через 15 минут — уведомлением, без голоса")
+
 if fails:
     print(f"\n❌ провалов: {len(fails)}")
     sys.exit(1)

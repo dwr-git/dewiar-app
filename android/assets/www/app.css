@@ -106,7 +106,7 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 /* сцена между верхней строкой и нижней панелью: облик, состояние, разговор (#you — сказанное, #bot — ответ, #card — карточка) */
 #stage { position: fixed; top: 62px; left: 0; right: 0; bottom: calc(124px + var(--safe-b)); z-index: 1;
   display: flex; flex-direction: column; align-items: center; }
-#orbwrap { width: min(70vw, 42vh, 330px); aspect-ratio: 1; margin-top: 2vh; flex: none; position: relative; }
+#orbwrap { width: min(calc(70vw / var(--vzt)), calc(42vh / var(--vzt)), 330px); aspect-ratio: 1; margin-top: 2vh; flex: none; position: relative; }
 #orb { width: 100%; height: 100%; display: block; transform-origin: 50% 50%; }
 #orbwrap.tap { transform: scale(.97); transition: transform .15s; }
 #state { margin-top: 10px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); min-height: 18px; text-align: center; }
@@ -202,11 +202,11 @@ body.typing #bar { padding-top: 6px; padding-bottom: calc(10px + var(--safe-b));
 /* листы */
 #dim { position: fixed; inset: 0; z-index: 9; background: rgba(4,4,10,.55); opacity: 0; pointer-events: none; transition: opacity .25s; }
 #dim.on { opacity: 1; pointer-events: auto; }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; max-height: 82vh; overflow-y: auto; padding: 8px 18px calc(24px + var(--safe-b));
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; max-height: calc(82vh / var(--vzt)); overflow-y: auto; padding: 8px 18px calc(24px + var(--safe-b));
   border-radius: 26px 26px 0 0; background: linear-gradient(rgba(30,30,36,.74), rgba(18,18,24,.86)); transform: translateY(105%);
   backdrop-filter: blur(30px) saturate(1.25); -webkit-backdrop-filter: blur(30px) saturate(1.25); border-top: 1px solid var(--glass-line);
   transition: transform .3s cubic-bezier(.2,.8,.2,1); box-shadow: 0 -30px 80px rgba(0,0,0,.5); }
-.sheet.tall { height: 88vh; max-height: 88vh; }
+.sheet.tall { height: calc(88vh / var(--vzt)); max-height: calc(88vh / var(--vzt)); }
 /* Плавная прокрутка листов (№93): прокрутка не «проваливается» в страницу под листом.
    Размытие фона под листом дорогое — его пересчитывают на каждом кадре прокрутки. Поэтому: у неоморфизма фон листа
    непрозрачный — размытие не нужно вовсе; у светлых тем лист почти белый — хватает лёгкого; в лёгком режиме (слабый
@@ -466,7 +466,7 @@ details.brainalt[open] > summary { margin-bottom: 10px; } details.brainalt[open]
   #talk { grid-column: 2; grid-row: 1 / 6; align-self: stretch; max-width: none; text-align: left; display: flex; flex-direction: column; padding: 16px 8px; }
   #talk::before, #talk::after { content: ""; flex: 1 1 0; }      /* по центру по высоте, а длинный ответ прокручивается с начала */
   #card { margin-left: 0; }
-  .sheet { max-height: 92vh; } .sheet.tall { height: 92vh; max-height: 92vh; }
+  .sheet { max-height: calc(92vh / var(--vzt)); } .sheet.tall { height: calc(92vh / var(--vzt)); max-height: calc(92vh / var(--vzt)); }
 }
 @media (orientation: landscape) and (max-height: 520px) {          /* телефон лёжа: ниже панель и облик */
   #mic { width: 64px; height: 64px; } #mic svg { width: 26px; height: 26px; }
@@ -719,7 +719,7 @@ html[lang]:not([lang="ru"]) .app.a-lessons.new::after { content: "new"; }   /* �
   color: #12131c; background: radial-gradient(circle at 35% 30%, #fff, var(--c, #9BD4FF) 70%); box-shadow: 0 6px 16px -8px var(--c, #9BD4FF); }
 .clh { display: flex; align-items: center; gap: 10px; margin: -6px 0 10px; }
 .clh b { display: block; font-size: 16px; } .clh small { color: var(--muted); font-size: 12.5px; }
-.clmsgs { display: flex; flex-direction: column; gap: 8px; height: calc(88vh - 210px - var(--safe-b)); overflow-y: auto; padding: 4px 2px 8px; }
+.clmsgs { display: flex; flex-direction: column; gap: 8px; height: calc(88vh / var(--vzt) - 210px - var(--safe-b)); overflow-y: auto; padding: 4px 2px 8px; }
 .clm { align-self: flex-start; max-width: 82%; padding: 9px 13px 6px; border-radius: 18px 18px 18px 6px; background: var(--frost); display: flex; flex-direction: column; gap: 6px;
   white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; -webkit-user-select: text; user-select: text; }
 .clm.out { align-self: flex-end; border-radius: 18px 18px 6px 18px; background: linear-gradient(135deg, rgba(102,126,234,.5), rgba(118,75,162,.5)); }
@@ -1736,7 +1736,7 @@ body .clview .clv-acts .btn:not(.p) { background: rgba(255,255,255,.12); color: 
 .cla-f b { display: block; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cla-f small { opacity: .65; font-size: 12px; }
 .cla-f .ib { width: 38px; height: 38px; flex: none; color: #fff; background: rgba(255,255,255,.1); } .cla-f .ib svg { width: 18px; height: 18px; }
 .clfwd { justify-content: flex-end; background: rgba(8,9,14,.6); padding: 0; }
-.clfwd-card { background: linear-gradient(#1e1e26, #15151b); color: var(--ink); border-radius: 26px 26px 0 0; padding: 14px 16px calc(18px + var(--safe-b, 0px)); max-height: 75vh; display: flex; flex-direction: column; }
+.clfwd-card { background: linear-gradient(#1e1e26, #15151b); color: var(--ink); border-radius: 26px 26px 0 0; padding: 14px 16px calc(18px + var(--safe-b, 0px)); max-height: calc(75vh / var(--vzt)); display: flex; flex-direction: column; }
 body.light .clfwd-card, body.neu.light .clfwd-card { background: #f4f6fb; }
 .clfwd-card .clv-top small { color: var(--muted); opacity: 1; }
 .clfwd-list { overflow-y: auto; margin-top: 8px; }
@@ -1787,7 +1787,8 @@ body.senior { zoom: 1.12; }
 #sh-senior h3 { margin: 18px 2px 8px; }
 .row2 .grname { min-width: 0; }
 .srmed em { display: block; font-style: normal; font-size: 12.5px; color: #e5a43a; margin-top: 2px; } .srmed em.ok { color: #2fb67e; }
-body.senior .sheet { max-height: 73vh; } body.senior .sheet.tall { height: 78.5vh; max-height: 78.5vh; }   /* zoom 1.12 умножает и vh — лист не выше прежнего */
+/* zoom умножает и vh: высоты листов делятся на общий коэффициент --vzt (системный шрифт × «Для старших», №813) */
+:root { --vz: 1; --vzt: var(--vz); } body { --vzt: var(--vz); } body.senior { --vzt: calc(var(--vz) * 1.12); }
 
 /* Смайлы картинками (emoji/emoji.js, Fluent Emoji): в тексте — размером с букву, «только смайлы» — крупно */
 img.emj { width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 .03em; object-fit: contain; }

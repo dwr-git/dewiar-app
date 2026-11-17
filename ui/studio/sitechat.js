@@ -55,6 +55,16 @@ function scFold() {
   const p = scPersonas().find(x => x.id === SC.persona) || {}, fold = (p.knowledge || []).filter(b => b.kind === "folder");
   $("#sc-fold").disabled = !fold.length;
   $("#sc-foldtip").textContent = fold.length ? `${fold.map(b => b.label || b.path.split(/[\\/]/).pop()).join(", ")} — текст файлов уйдёт на сервер Dewiar вместе со знаниями` : "у этого персонажа нет папок со знаниями";
+  scFit();
+}
+
+/* Отзыв 17.11 «книги»: книги в папке — а в чат сайта влезает 60 000 знаков; сказать честно, что вошло, чтобы не ждать ответов по всему */
+function scFit() {
+  const fit = SC.d && SC.d.fit, part = !!(fit && $("#sc-fold").checked && (fit.cut.length || fit.out));
+  $("#sc-foldfit").hidden = !part;
+  if (!part) return;
+  const cut = fit.cut.length ? `, от «${fit.cut[0]}» — только начало` : "";
+  $("#sc-foldfit").textContent = `Вошло ${fit.full} из ${fit.files} файлов${cut}: чат на сайте отвечает только по тому, что вошло (до 60 000 знаков — это 30–40 страниц). Для книг целиком он не подходит — оставьте в папке главное: цены, условия, ответы на частые вопросы. Вся папка доступна персонажу в программе.`;
 }
 
 function scPatch() {
@@ -113,7 +123,7 @@ function scLive() {
   for (const id of ["#sc-ask", "#sc-fold"]) $(id).addEventListener("change", scDraft);
   $("#sc-pub").onclick = async () => {
     const b = $("#sc-pub"); b.disabled = true; const was = b.textContent; b.textContent = "Отправляю…"; b.dataset.busy = "1";
-    try { SC.d = await core.call("sitechat_publish", { patch: scPatch(), site: SC.site }); scSites(); toast(was === "Опубликовать" || was === (window.dwTx ? dwTx("Опубликовать") : "") ? "Чат готов — скопируйте ссылку или код для сайта" : "Обновлено на сайте", 3500); scLive(); }
+    try { SC.d = await core.call("sitechat_publish", { patch: scPatch(), site: SC.site }); scSites(); scFold(); toast(was === "Опубликовать" || was === (window.dwTx ? dwTx("Опубликовать") : "") ? "Чат готов — скопируйте ссылку или код для сайта" : "Обновлено на сайте", 3500); scLive(); }
     catch (e) { toast(e.message, 5000); }
     b.disabled = false; if (b.dataset.busy === "1") { b.textContent = was; delete b.dataset.busy; }   // текст мог перевестись (0.95)
   };

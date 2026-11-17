@@ -64,6 +64,7 @@ class SiteChat:
         self._stop = threading.Event()
         self._thread = None
         self.recent = []                          # последние заявки (для студии): [{ts, name, contact, cid}]
+        self.fit, self.fits = None, {}            # что из папок персонажа вошло в знания сайта (отзыв 17.11 «книги») — по сайтам
 
     # ---------- настройки ----------
     def _raw(self):
@@ -113,7 +114,7 @@ class SiteChat:
         r = rem if rem and not rem.get("none") else None
         own = self._raw().get("sites") or {}
         return {**c, "kb_chars": len(c.get("kb") or ""), "remote": r, "error": self.error, "recent": self.recent[-10:][::-1],
-                "signed": bool(self._key()), "site": site,
+                "signed": bool(self._key()), "site": site, "fit": self.fits.get(site),
                 "sites": [{"name": n, "own": bool((own.get(n) or {}).get("on"))} for n in self.site_names()]}
 
     @property
@@ -161,26 +162,39 @@ class SiteChat:
         """Текст документов из папок знаний персонажа (по порядку, сколько влезет)."""
         from knowledge import EXTS, extract
         out = []
+        # отзыв 17.11: «чат на сайте книг не видит и уверенно фантазирует» — в знания сайта влезает 60 000 знаков, а книга —
+        # это 500 000 и больше: уходило начало первой. Теперь владелец видит в студии, что вошло (fit), а что — нет
+        fit = {"files": 0, "full": 0, "cut": [], "out": 0}
         for b in p.get("knowledge") or []:
             if b.get("kind") != "folder" or not b.get("path"):
                 continue
             for f in sorted(Path(b["path"]).rglob("*")):
+                if not (f.is_file() and f.suffix.lower() in EXTS and f.stat().st_size < 20 * 1024 * 1024):
+                    continue
+                fit["files"] += 1
                 if room <= 200:
-                    break
-                if f.is_file() and f.suffix.lower() in EXTS and f.stat().st_size < 20 * 1024 * 1024:
-                    try:
-                        t = re.sub(r"\n{3,}", "\n\n", extract(f) or "").strip()
-                    except Exception:  # noqa: BLE001
-                        continue
-                    if t:
-                        t = f"Документ «{f.name}»:\n{t}"[:room]
-                        out.append(t)
-                        room -= len(t) + 2
+                    fit["out"] += 1
+                    continue
+                try:
+                    t = re.sub(r"\n{3,}", "\n\n", extract(f) or "").strip()
+                except Exception:  # noqa: BLE001
+                    continue
+                if t:
+                    whole = f"Документ «{f.name}»:\n{t}"
+                    t = whole[:room]
+                    if len(t) < len(whole):
+                        fit["cut"].append(f.name)
+                    else:
+                        fit["full"] += 1
+                    out.append(t)
+                    room -= len(t) + 2
+        self.fit = fit
         return "\n\n".join(out)
 
     def build(self, c):
         p = self._persona(c.get("persona"))
         kb = (c.get("kb") or "").strip()[:KB_MAX]
+        self.fit = None
         if c.get("folders"):
             extra = self._folder_text(p, KB_MAX - len(kb) - 2)
             kb = (kb + "\n\n" + extra).strip() if extra else kb
@@ -209,6 +223,7 @@ class SiteChat:
         if site and not r.get("per_site"):
             raise SiteChatError("сервер Dewiar ещё не умеет отдельный чат для сайта — обновите сервер")
         self.remotes[site] = r
+        self.fits[site] = self.fit
         self.error = ""
         self._store(c, site)
         self.host.s.update({"features": {"clients": True}})      # заявки — в «Клиенты»: раздел включаем

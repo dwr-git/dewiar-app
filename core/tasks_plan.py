@@ -212,6 +212,12 @@ class PlanMixin:
         x = done[-1]
         self._push(f"✓ «{t.title}»: {len(done)} из {len(items)}", f"Готово: {str(x.get('text') or '')[:120]}. Дальше — по плану.")
         t.journal(f"✓ Веха: {x.get('text')} ({len(done)} из {len(items)})")
+        # голосом — только у долгой задачи и не чаще раза в VOICE_GAP (HARNESS 7: «голосовые весточки на вехах»; человек
+        # отошёл от экрана — слышит, что дело идёт); announce сам молчит в «Отдыхе» и на встрече с суфлёром
+        if now - t.run_t0 >= TB.VOICE_AFTER and now - float(t.data.get("voice_at") or 0) >= TB.VOICE_GAP and hasattr(self.host, "announce"):
+            t.data["voice_at"] = now
+            what = re.sub(r"\s+", " ", str(x.get("text") or "")).strip(" .")[:90]
+            self.host.announce(f"«{t.title}»: готово {len(done)} из {len(items)}" + (f" — {what[:1].lower() + what[1:]}." if what else "."))
 
     def _save_todos(self, t, items, source="json", render=True, **extra):
         try:

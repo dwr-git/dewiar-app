@@ -210,6 +210,12 @@ public final class Bridge {
         CloseLive.apply(a);
     }
 
+    /** Системный размер шрифта (Настройки → Экран → Размер шрифта): 1.0 — обычный. №813 (пакет 17.11): «нет возможности
+     *  изменить размер текста — неудобно тем, у кого проблемы со зрением»; приложение увеличивается целиком (app.js). */
+    @JavascriptInterface public float fontScale() {
+        try { return a.getResources().getConfiguration().fontScale; } catch (Throwable e) { return 1f; }
+    }
+
     /** Не усыпляет ли система Dewiar в фоне (экономия батареи). До Android 6 — не усыпляет. */
     @JavascriptInterface public boolean batteryOk() {
         if (Build.VERSION.SDK_INT < 23) return true;

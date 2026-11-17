@@ -16,7 +16,16 @@ def t_search_documents(a, ctx):
     kn = ctx.get("knowledge")
     if not kn:
         raise ToolError("папка «Знания» недоступна")
-    res = kn.search(a.get("query", ""), limit=5)
+    q = a.get("query", "")
+    mine = []
+    try:                                           # Отзыв 17.11 «книги»: папки текущего персонажа — первыми (его книги, его база)
+        mine = list((ctx.get("persona_folders") or (lambda: []))() or [])
+    except Exception:  # noqa: BLE001
+        mine = []
+    res = kn.search(q, limit=5, within=mine) if mine else []
+    if len(res) < 5:
+        seen = {(r["path"], r["text"][:80]) for r in res}
+        res += [r for r in kn.search(q, limit=5) if (r["path"], r["text"][:80]) not in seen][:5 - len(res)]
     if not res:
         return "В документах («Знания» и свои папки) ничего подходящего не нашлось."
     if ctx.get("sources"):                         # под ответом — кнопки «открыть» найденных файлов (Engine._turn_sources)

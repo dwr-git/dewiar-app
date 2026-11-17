@@ -26,6 +26,9 @@ def free():
 import answer_rules as AR  # noqa: E402
 ok(AR.told(["mcp_pen_get_state", "set_reminder"]) == {"mcp_pen_get_state"} and AR.told(["web_search"]) == {"web_search"},
    "результат MCP и справочные — «есть что рассказать», напоминание — нет")
+# №816 (пакет 17.11 10:30): разбор таблицы кодом в «Лаборатории», ход кончился, модель замолчала — «Готово.» вместо цифр
+ok(AR.told(["lab_write", "lab_run"]) == {"lab_run"} and AR.told(["run_python"]) == {"run_python"},
+   "вывод запуска кода (lab_run, run_python) — тоже «есть что рассказать», запись файла — нет")
 SEEN = []
 
 

@@ -638,10 +638,28 @@ async def seed(core, sd):
             if any(x.get("path") == str(d.resolve()) and x.get("chunks") and not x.get("busy") for x in st):
                 break
             await asyncio.sleep(0.5)
+    pd = (sd or {}).get("persona")
+    if pd:                                             # Отзыв 17.11 «книги»: свой персонаж с папкой знаний (книги) — он и отвечает
+        d = core.tmp / "docs" / pd["folder"]["name"]
+        for f in pd["folder"].get("files") or []:
+            (d / f["name"]).parent.mkdir(parents=True, exist_ok=True)
+            (d / f["name"]).write_text(f["text"], encoding="utf-8")
+        r = await core.call("persona_save", persona={"name": pd["name"], "gender": pd.get("gender", "female"),
+                                                      "character": pd.get("character", ""),
+                                                      "knowledge": [{"kind": "folder", "path": str(d), "label": pd["folder"]["name"]}]})
+        made["persona"] = r["id"]
+        await core.call("persona_set", id=r["id"])
+        await asyncio.sleep(5)                         # папка персонажа читается в фоне (kick) — пара коротких файлов
     return made
 
 
 async def unseed(core, made):
+    if made.get("persona"):
+        try:
+            await core.call("persona_set", id="lira")
+            await core.call("persona_delete", id=made["persona"])
+        except Exception:  # noqa: BLE001
+            pass
     for f in made.get("notes") or []:
         try:
             f.unlink()
@@ -842,6 +860,16 @@ async def _run_scenario(core, sc, judge_prof, work, log, t0, res):
                 ans, ev = await core.say(said, img)
                 src = [x.get("label") or x.get("name") for e in ev if e.get("type") == "answer" and e.get("done") for x in e.get("sources") or []]
                 res["steps"].append({"say": said, "image": stp.get("image"), "answer": ans[:2000], "tools": tools_of(ev), "sources": src})
+                # проверки шага (Б12 «Человек в контуре», 17.11): что должно быть в ответе ИМЕННО этого шага и каких действий
+                # на нём быть не должно («сначала спроси, потом отправляй»)
+                n_ = len(res["steps"])
+                for c in check_answer(stp.get("expect"), ans):
+                    res["checks"].append(dict(c, name=f"шаг {n_}: {c['name']}"))
+                if stp.get("ask"):
+                    res["checks"].append({"name": f"шаг {n_}: уточняющий вопрос", "ok": "?" in ans, "detail": ans[:120]})
+                for name in stp.get("no_tool") or []:
+                    hit = [x for x in res["steps"][-1]["tools"] if x["name"] == name]
+                    res["checks"].append({"name": f"шаг {n_}: без {name}", "ok": not hit, "detail": ", ".join(str(x.get("args"))[:80] for x in hit)})
                 if core.timed_out:                      # шаг не уложился в STEP_S — прерываем ход, дальше не идём
                     await core.interrupt()
                     res["steps"][-1]["timeout"] = True

@@ -9,6 +9,10 @@ import sandbox as SBX
 import snapshots as SNAP
 from tasks_base import LIST_MAX
 
+DOC_EXT = {".pdf", ".docx", ".odt", ".xlsx", ".pptx"}   # file_read и file_grep читают их текст (Б10, 17.11)
+DOC_MAX = 60 << 20                                       # больше — не разбираем целиком
+DOC_PAGES = 600                                          # страниц PDF — не больше
+
 
 class FilesMixin:
     @staticmethod
@@ -119,6 +123,49 @@ class FilesMixin:
         crlf = b"\r\n" in data
         return (text.replace("\r\n", "\n") if crlf else text), enc, crlf
 
+    _DOCS = {}                                             # (путь, размер, время) -> текст: 120 страниц PDF не разбираем на каждый шаг
+
+    def _doc_text(self, p):
+        """Текст документа для file_read и file_grep (Б10 «Длинный документ», 17.11: раньше PDF и Word задача читала только
+        кодом на Python — а он спрашивает разрешения). PDF — постранично, перед страницей строка «=== стр. N ===», чтобы
+        модель называла номер страницы; скан без текстового слоя — ValueError с советом. Тот же разбор, что у «Моих файлов»
+        и проверок (pdftext — pypdf в отдельном процессе с пределами, quality_files.file_text — Office)."""
+        try:
+            st = p.stat()
+        except OSError as e:
+            raise ValueError(f"{p.name} не читается ({e})") from None
+        key = (str(p.resolve()), st.st_size, st.st_mtime_ns)
+        if key in self._DOCS:
+            return self._DOCS[key]
+        if st.st_size > DOC_MAX:
+            raise ValueError(f"{p.name} — {st.st_size // (1 << 20)} МБ, это слишком много. Как исправить: попроси человека "
+                             "файл поменьше или разбери его кодом (run_python) по частям")
+        if p.suffix.lower() == ".pdf":
+            import pdftext
+            try:
+                pages = pdftext.pages(p, limit=DOC_PAGES)
+            except Exception as e:  # noqa: BLE001
+                raise ValueError(f"PDF «{p.name}» не разобрался ({e})") from None
+            if pages and not "".join(pages).strip():
+                raise ValueError(f"«{p.name}» — скан без текстового слоя. Как исправить: распознай его (ocr) или попроси "
+                                 "человека текстовую версию")
+            text = "\n".join(f"=== стр. {i} ===\n{x.strip()}" for i, x in enumerate(pages, 1))
+        else:
+            from quality_files import file_text
+            text = file_text(p)
+            if p.suffix.lower() in (".docx", ".odt"):
+                import knowledge
+                try:
+                    text = knowledge.extract(p) or text      # абзацы — строками (file_text сливает их в одну строку)
+                except Exception:  # noqa: BLE001
+                    pass
+        if not text.strip():
+            raise ValueError(f"в «{p.name}» не нашлось текста. Как исправить: проверь, тот ли это файл (file_glob)")
+        if len(self._DOCS) > 16:
+            self._DOCS.clear()
+        self._DOCS[key] = text
+        return text
+
     @staticmethod
     def _save_text(p, text, enc, crlf):
         """Записать так же, как было: та же кодировка и те же переводы строк. Символ не кодируется — ValueError."""
@@ -132,9 +179,10 @@ class FilesMixin:
         p.write_bytes(data)
 
     def _read_lines(self, t, p, args, name="file_read"):
-        """Кусок файла с номерами строк, не больше _out_max знаков: «показаны строки a–b из N; дальше — start=…»."""
+        """Кусок файла с номерами строк, не больше _out_max знаков: «показаны строки a–b из N; дальше — start=…».
+        Документ (PDF, Word, ODT, Excel, PowerPoint) — его текст (PDF — со строками «=== стр. N ===»)."""
         try:
-            text = self._load_text(p)[0]
+            text = self._doc_text(p) if p.suffix.lower() in DOC_EXT else self._load_text(p)[0]
         except ValueError as e:
             return f"Ошибка: {e}."
         lines = text.splitlines()
@@ -302,18 +350,24 @@ class FilesMixin:
             hits, nfiles = [], 0
             base = t.dir.resolve() if f is None else None
             for p in files:
-                try:
-                    if p.stat().st_size > 5 << 20:
+                if p.suffix.lower() in DOC_EXT:          # документ — по его тексту (PDF — со страницами)
+                    try:
+                        text = self._doc_text(p)
+                    except ValueError:
                         continue
-                    data = p.read_bytes()
-                except OSError:
-                    continue
-                if b"\0" in data[:4096]:
-                    continue                               # не текст
-                try:
-                    text = data.decode("utf-8")
-                except UnicodeDecodeError:
-                    text = data.decode("cp1251", errors="replace")
+                else:
+                    try:
+                        if p.stat().st_size > 5 << 20:
+                            continue
+                        data = p.read_bytes()
+                    except OSError:
+                        continue
+                    if b"\0" in data[:4096]:
+                        continue                           # не текст
+                    try:
+                        text = data.decode("utf-8")
+                    except UnicodeDecodeError:
+                        text = data.decode("cp1251", errors="replace")
                 got = False
                 for i, ln in enumerate(text.splitlines(), 1):
                     if rx.search(ln):

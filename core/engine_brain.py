@@ -1028,20 +1028,38 @@ class BrainMixin:
         if not folders or kn is None:
             return ""
         labels = ", ".join(f"«{b.get('label') or Path(b['path']).name}»" for b in folders)
+        paths = [b["path"] for b in folders]
         try:
-            res = kn.search(q, limit=6, within=[b["path"] for b in folders])
+            res = kn.search(q, limit=6, within=paths)
+            prev = prev_ask(getattr(self, "history", None) or [], q)
+            if len(res) < 3 and prev:                     # «а что было дальше?» — слова прошлого вопроса тоже в поиск
+                seen = {(r["path"], r["text"][:80]) for r in res}
+                res += [r for r in kn.search(prev + " " + q, limit=6, within=paths) if (r["path"], r["text"][:80]) not in seen]
+                res = res[:6]
         except Exception as e:  # noqa: BLE001
             log.warning("Знания персонажа (папки): %s", e)
             return ""
         log.info("📚 Папки персонажа (%s): найдено отрывков %d", labels, len(res))
+        # отзыв 17.11 (человек с книгами в папке персонажа): «то по книге отвечает, то „дай файлы, я прогоню“, хотя всё в
+        # подключённой папке; полез в заметки». Модель не знала, что книги у неё есть, — видела только «ничего не нашлось».
+        # Теперь всегда: какие файлы в папке, искать дальше самой (search_documents ищет и в её папках), не просить их у
+        # человека и не лезть в его заметки
+        files = folder_files(kn, paths)
+        have = (f" В них: {', '.join(files[:12])}" + (f" и ещё {len(files) - 12}" if len(files) > 12 else "") + "." if files else "")
+        rule = (" Эти файлы уже у тебя — НЕ проси человека прислать их или «полный текст». Нужного нет в отрывках — поищи "
+                "сама: search_documents с другими словами (имена, события, названия глав). Заметки человека (find_notes) не "
+                "трогай, если он сам о них не просит.")
         if not res:
             busy = any(st.get("busy") for st in getattr(kn, "fstate", {}).values())
-            return (f"\n\nВ твоих папках со знаниями ({labels}) по этому вопросу ничего не нашлось"
-                    + (" — они ещё читаются" if busy else "") + ". Если отвечаешь от себя — так и скажи одной фразой.")
+            if busy:
+                return (f"\n\nТвои папки со знаниями ({labels}) ещё читаются — новые файлы проиндексируются за несколько "
+                        f"минут.{have} Скажи об этом честно и предложи спросить чуть позже; не выдумывай.")
+            return (f"\n\nТВОИ ПАПКИ СО ЗНАНИЯМИ ({labels}).{have} По словам этого вопроса ничего не нашлось.{rule} "
+                    "Не нашла и так — скажи честно, что в этих файлах ответа не нашла; от себя — только с этой оговоркой.")
         if not quiet:
             self.emit("tool", name="knowledge", title=f"Найдено в {labels}", status="done")
-        return ("\n\nТВОЯ БАЗА ЗНАНИЙ (папки на компьютере пользователя) — найдено по вопросу. Отвечай, опираясь на это, "
-                "называй файл, откуда взято; чего в найденном нет — не выдумывай.\n\n"
+        return (f"\n\nТВОЯ БАЗА ЗНАНИЙ (папки на компьютере пользователя: {labels}).{have} Найдено по вопросу — отвечай, "
+                f"опираясь на это, называй файл, откуда взято; чего в найденном нет — не выдумывай.{rule}\n\n"
                 + "\n\n".join(f"### Файл «{Path(r['path']).name}»\n{r['text'][:1500]}" for r in res)[:7000])
 
     def _show_rag_images(self, images):
@@ -1219,6 +1237,27 @@ class BrainMixin:
                     return
             except Exception as e:  # noqa: BLE001
                 log.info("Голосовой ответ в Telegram (%s): %s", type(eng).__name__, e)
+
+
+def prev_ask(history, q):
+    """Прошлый вопрос человека, если нынешний короткий и продолжает его («а дальше?», «кто это сделал?») — его слова тоже
+    в поиск по папкам персонажа (отзыв 17.11 «книги»). Длинный самостоятельный вопрос — пусто."""
+    if len((q or "").split()) > 8:
+        return ""
+    asks = [m.get("content") for m in history if m.get("role") == "user" and isinstance(m.get("content"), str)]
+    asks = [a for a in asks if a.strip() and a.strip() != (q or "").strip()]
+    return asks[-1][:300] if asks else ""
+
+
+def folder_files(kn, paths):
+    """Имена файлов, уже прочитанных в папки персонажа, — чтобы модель знала, что книги у неё есть (отзыв 17.11 «книги»)."""
+    pre = [Path(os.path.expanduser(str(p))).resolve().as_posix().rstrip("/") + "/" for p in paths]
+    try:
+        keys = list(getattr(kn, "index", {}) or {})
+    except Exception:  # noqa: BLE001
+        return []
+    names = sorted({Path(k[1:]).name for k in keys if k.startswith("@") and any(k[1:].startswith(x) for x in pre)})
+    return names
 
 
 def _who_am_i():

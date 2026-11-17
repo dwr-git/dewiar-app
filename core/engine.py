@@ -209,6 +209,10 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
                                    extra=self._persona_folders)
         self.toolbox.hooks["knowledge"] = self.knowledge
         self.toolbox.hooks["sources"] = self._turn_sources          # найденные документы — источниками под ответом
+        # Отзыв 17.11 «книги»: персонаж с книгами в своей папке ищет в них и сам (search_documents), а не просит «дай файлы»
+        self.toolbox.hooks["persona_folders"] = lambda: [b["path"] for b in ((self.personas.get(self.s.get("persona")) or {})
+                                                                            .get("knowledge") or [])
+                                                         if b.get("kind") == "folder" and b.get("path")]
         threading.Thread(target=self.knowledge.watch, name="knowledge-folders", daemon=True).start()
         from writing import Writing
         import knowledge as _kn

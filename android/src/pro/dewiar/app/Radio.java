@@ -122,8 +122,18 @@ final class Radio implements AudioManager.OnAudioFocusChangeListener {
         gen++;                                       // поздние обратные вызовы этого проигрывателя — уже не в счёт
         release();
         state = "error";
-        error = why;
+        // №815 (пакет 17.11): «не работает большинство радиостанций» — на снимке включён VPN: российские станции часто не
+        // отдают поток на зарубежные адреса. Подсказать, что делать, а не только «попробуйте другую»
+        error = vpnOn() ? why + " — похоже, мешает VPN: выключите его или добавьте Dewiar в исключения" : why;
         emit();
+    }
+
+    private boolean vpnOn() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
+            android.net.NetworkCapabilities nc = cm == null ? null : cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN);
+        } catch (Throwable e) { return false; }
     }
 
     /** Убрать проигрыватель, не задерживая экран: звук глушим сразу, а reset/release — в фоне. MediaPlayer с сетевым

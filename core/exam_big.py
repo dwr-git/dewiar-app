@@ -3,7 +3,7 @@
 make_fixture(kind, dir, seed) кладёт заготовку в папку задачи (её видят инструменты задачи) и возвращает сведения для
 проверки (ответы — их задача не видит: экзамен хранит их у себя). BIG_CHECKS[kind](папка задачи, сведения, задача) ->
 [{name, ok, detail}]. Без интернета и почты: Б3 (папка из 200 файлов), Б4 (скрипт по выпискам), Б5 (сайт из трёх
-страниц), Б6 (сверка трёх таблиц), Б7 (поездка с бюджетом), Б11 (продолжение после перезапуска); Б1 (исследование по 5
+страниц), Б6 (сверка трёх таблиц), Б7 (поездка с бюджетом), Б10 (длинный PDF), Б11 (продолжение после перезапуска); Б1 (исследование по 5
 источникам) — на локальном «интернете» (WebFixture: страницы и поиск на 127.0.0.1). Далее — Б2, Б8, Б9, Б10, Б12, Б13
 (живой веб, почта и календарь, длинный PDF, человек в контуре, части).
 Данные зависят только от seed: одна заготовка — одни и те же байты (exam_big_test)."""
@@ -907,10 +907,167 @@ def check_dashboard(tdir, info, task=None, browser=True):
     return out
 
 
+# ---------- Б10: длинный документ ----------
+# Годовой отчёт на 120 страниц (≈250 тыс. знаков — больше любого окна) с 10 ключевыми цифрами 2025 года на известных
+# страницах; те же показатели за 2024 год — на других страницах (ловушка: в таблицу нужен 2025 год).
+
+LONG_PAGES = 120
+LONG_FACTS = [   # (ключ, показатель, единица, вид числа, фраза 2025, фраза 2024)
+    ("revenue", "Выручка", "млн ₽", "m", "Выручка компании за 2025 год составила {v} млн ₽.", "В 2024 году выручка составляла {v} млн ₽."),
+    ("profit", "Чистая прибыль", "млн ₽", "m", "Чистая прибыль по итогам 2025 года — {v} млн ₽.", "Чистая прибыль 2024 года была {v} млн ₽."),
+    ("ebitda", "EBITDA", "млн ₽", "m", "Показатель EBITDA за 2025 год достиг {v} млн ₽.", "EBITDA 2024 года — {v} млн ₽."),
+    ("staff", "Численность персонала", "человек", "i", "На конец 2025 года в компании работали {v} человек.", "На конец 2024 года штат насчитывал {v} человек."),
+    ("export", "Доля экспорта в выручке", "%", "p", "Доля экспорта в выручке 2025 года — {v} %.", "Годом ранее, в 2024 году, экспорт давал {v} % выручки."),
+    ("capex", "Капитальные вложения", "млн ₽", "m", "Капитальные вложения в 2025 году составили {v} млн ₽.", "Капитальные вложения 2024 года — {v} млн ₽."),
+    ("debt", "Чистый долг", "млн ₽", "m", "Чистый долг на 31 декабря 2025 года — {v} млн ₽.", "Чистый долг на конец 2024 года был {v} млн ₽."),
+    ("dividend", "Дивиденд на акцию", "₽", "d", "Совет директоров рекомендовал дивиденд за 2025 год — {v} ₽ на акцию.", "Дивиденд за 2024 год составил {v} ₽ на акцию."),
+    ("clients", "Число клиентов", "", "i", "Число клиентов в 2025 году выросло до {v}.", "В 2024 году у компании было {v} клиентов."),
+    ("salary", "Средняя заработная плата", "₽ в месяц", "i", "Средняя заработная плата в 2025 году — {v} ₽ в месяц.", "Средняя зарплата 2024 года — {v} ₽ в месяц."),
+]
+LONG_CHAPTERS = ["Обращение председателя совета директоров", "О компании", "Рынок и конкуренция", "Стратегия до 2030 года",
+                 "Производство", "Продажи и клиенты", "Экспорт", "Персонал", "Финансовые результаты", "Инвестиции",
+                 "Управление рисками", "Устойчивое развитие", "Корпоративное управление", "Акционерный капитал и дивиденды",
+                 "Приложения"]
+LONG_WORDS = ("модернизация линии", "складская логистика", "сервисное обслуживание", "региональные филиалы", "цифровые каналы",
+              "энергоэффективность", "качество продукции", "закупки сырья", "обучение сотрудников", "работа с поставщиками",
+              "контроль затрат", "новые рынки", "клиентский сервис", "охрана труда", "автоматизация учёта", "долгосрочные контракты")
+
+
+def _num_ru(v, kind):
+    """Число по-русски: 4 812,6 (млн), 14,20 (₽), 18 430 (целое), 23,4 (%)."""
+    if kind == "i":
+        return f"{int(v):,}".replace(",", " ")
+    s = f"{v:,.2f}" if kind == "d" else f"{v:,.1f}"
+    return s.replace(",", " ").replace(".", ",")
+
+
+def _pdf_pages(pages):
+    """PDF из страниц-строк без сторонних библиотек: шрифт Helvetica, текст в cp1251 и карта ToUnicode — текстовый
+    слой читается любым извлекателем (pypdf, pdftotext) по-русски. Одни и те же строки — одни и те же байты."""
+    tou = ["/CIDInit /ProcSet findresource begin", "12 dict begin", "begincmap", "/CMapName /DW-cp1251 def",
+           "1 begincodespacerange <00> <FF> endcodespacerange"]
+    pairs = []
+    for b in range(0x20, 0x100):
+        ch = bytes([b]).decode("cp1251", "replace")
+        if ch != "�":
+            pairs.append(f"<{b:02X}> <{ord(ch):04X}>")
+    for i in range(0, len(pairs), 100):
+        chunk = pairs[i:i + 100]
+        tou += [f"{len(chunk)} beginbfchar"] + chunk + ["endbfchar"]
+    tou += ["endcmap", "CMapName currentdict /CMap defineresource pop", "end", "end"]
+    cmap = "\n".join(tou).encode()
+    n = len(pages)
+    objs = {1: b"<< /Type /Catalog /Pages 2 0 R >>",
+            3: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding /ToUnicode 4 0 R >>",
+            4: b"<< /Length %d >>\nstream\n" % len(cmap) + cmap + b"\nendstream"}
+    kids = []
+    for i, lines in enumerate(pages):
+        po, co = 5 + 2 * i, 6 + 2 * i
+        kids.append(b"%d 0 R" % po)
+        esc = lambda t: t.encode("cp1251", "replace").replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
+        body = b"BT /F1 10 Tf 13 TL 50 800 Td " + b" ".join(b"(" + esc(x) + b") Tj T*" for x in lines) + b" ET"
+        objs[po] = b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents %d 0 R /Resources << /Font << /F1 3 0 R >> >> >>" % co
+        objs[co] = b"<< /Length %d >>\nstream\n" % len(body) + body + b"\nendstream"
+    objs[2] = b"<< /Type /Pages /Kids [" + b" ".join(kids) + b"] /Count %d >>" % n
+    out, offs = b"%PDF-1.4\n", {}
+    for k in sorted(objs):
+        offs[k] = len(out)
+        out += b"%d 0 obj\n" % k + objs[k] + b"\nendobj\n"
+    x, total = len(out), max(objs) + 1
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % total + b"".join(b"%010d 00000 n \n" % offs[k] for k in range(1, total))
+    return out + b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (total, x)
+
+
+def _wrap(text, width=92):
+    out, cur = [], ""
+    for w in text.split():
+        if len(cur) + len(w) + 1 > width:
+            out.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    return out + ([cur] if cur else [])
+
+
+def fix_longdoc(d, rng):
+    """годовой_отчёт_2025.pdf: 120 страниц, 10 ключевых цифр 2025 года на известных страницах (и цифры 2024 — на других)."""
+    company = "АО «Северный ветер»"
+    pages_25 = rng.sample(range(6, LONG_PAGES - 2), len(LONG_FACTS))
+    pages_24 = rng.sample([p for p in range(4, LONG_PAGES - 2) if p not in pages_25], len(LONG_FACTS))
+    facts = {}
+    for (key, name, unit, kind, _, _), p25, p24 in zip(LONG_FACTS, pages_25, pages_24):
+        base = {"m": rng.uniform(300, 9000), "i": rng.randint(900, 60000), "p": rng.uniform(8, 45), "d": rng.uniform(3, 40)}[kind]
+        v25 = round(base, 2 if kind == "d" else 1) if kind != "i" else int(base)
+        v24 = round(v25 * rng.uniform(0.78, 0.93), 2 if kind == "d" else 1) if kind != "i" else int(v25 * rng.uniform(0.78, 0.93))
+        if kind == "i" and key == "salary":
+            v25, v24 = int(round(v25 * 3, -2)) + 60000, int(round(v24 * 3, -2)) + 52000
+        facts[key] = {"name": name, "unit": unit, "kind": kind, "value": v25, "page": p25, "prev": v24, "prev_page": p24}
+    on_page = {}
+    for (key, _, _, kind, s25, s24) in LONG_FACTS:
+        f = facts[key]
+        on_page.setdefault(f["page"], []).append(s25.format(v=_num_ru(f["value"], kind)).replace("₽.", "руб.").replace("₽", "руб."))   # «₽» нет в cp1251
+        on_page.setdefault(f["prev_page"], []).append(s24.format(v=_num_ru(f["prev"], kind)).replace("₽.", "руб.").replace("₽", "руб."))
+    pages = []
+    per = LONG_PAGES // len(LONG_CHAPTERS)
+    for p in range(1, LONG_PAGES + 1):
+        ch = min((p - 1) // per, len(LONG_CHAPTERS) - 1)
+        lines = [f"{company}. Годовой отчёт за 2025 год", f"Глава {ch + 1}. {LONG_CHAPTERS[ch]}", ""]
+        sents = []
+        for _ in range(17):
+            a, b = rng.sample(LONG_WORDS, 2)
+            sents.append(rng.choice([
+                f"В отчётном периоде направление «{a}» развивалось по плану, а «{b}» потребовало дополнительных решений.",
+                f"Работа по теме «{a}» велась в {rng.randint(3, 19)} подразделениях; результаты учтены в плане на следующий год.",
+                f"Совет директоров рассмотрел вопросы «{a}» и «{b}» на {rng.randint(2, 11)} заседаниях и одобрил предложения менеджмента.",
+                f"Для направления «{a}» утверждена программа на {rng.randint(2, 5)} года с контрольными точками каждый квартал.",
+                f"По теме «{b}» проведено {rng.randint(4, 60)} проверок; замечания устранены в установленные сроки."]))
+        extra = on_page.get(p, [])
+        for s in extra:
+            sents.insert(rng.randint(3, len(sents)), s)
+        for i in range(0, len(sents), 3):
+            lines += _wrap(" ".join(sents[i:i + 3])) + [""]
+        lines.append(f"— {p} —")
+        pages.append(lines)
+    (Path(d) / "годовой_отчёт_2025.pdf").write_bytes(_pdf_pages(pages))
+    return {"kind": "longdoc", "facts": facts, "pages": LONG_PAGES}
+
+
+def check_longdoc(tdir, info, task=None):
+    f = Path(tdir) / "outputs" / "выжимка.md"
+    if not f.is_file():
+        return [_chk("outputs/выжимка.md есть", False, "файла нет")]
+    text = f.read_text(encoding="utf-8", errors="replace")
+    rows = [ln for ln in text.splitlines() if ln.strip().startswith("|") and not re.match(r"^\s*\|[\s:|-]+\|\s*$", ln)]
+    prose = "\n".join(ln for ln in text.splitlines() if not ln.strip().startswith("|") and not ln.lstrip().startswith("#"))
+    plen = len(re.sub(r"\s+", " ", prose).strip())
+    out = [_chk("выжимка на страницу: 1500–4500 знаков текста (без таблицы и заголовков)", 1500 <= plen <= 4500, f"знаков: {plen}")]
+
+    def near(n, v):
+        return abs(n - v) <= max(0.051, abs(v) * 0.0005) or abs(n * 1000 - v) <= abs(v) * 0.005   # «4,8 млрд» за 4 812,6 млн — да
+
+    hit, miss = 0, []
+    for key, fct in info["facts"].items():
+        ok_row = False
+        for r in rows:
+            nums = _nums(r)
+            if any(near(n, fct["value"]) for n in nums) and any(n == fct["page"] for n in nums if float(n).is_integer()):
+                ok_row = True
+                break
+        hit += ok_row
+        if not ok_row:
+            prev = any(any(near(n, fct["prev"]) for n in _nums(r)) for r in rows)
+            miss.append(fct["name"] + (" (взята цифра 2024 года)" if prev else ""))
+    out.append(_chk("таблица: не меньше 8 из 10 ключевых цифр 2025 года с верной страницей", hit >= 8,
+                    f"верно: {hit} из 10" + (f"; нет: {', '.join(miss[:5])}" if miss else "")))
+    return out
+
+
 FIXTURES = {"research": fix_research, "downloads": fix_downloads, "statements": fix_statements, "bakery": fix_bakery,
-            "reconcile": fix_reconcile, "trip": fix_trip, "anki": fix_anki, "dashboard": fix_dashboard}
+            "reconcile": fix_reconcile, "trip": fix_trip, "anki": fix_anki, "dashboard": fix_dashboard,
+            "longdoc": fix_longdoc}
 BIG_CHECKS = {"research": check_research, "downloads": check_downloads, "statements": check_statements, "bakery": check_bakery,
-              "reconcile": check_reconcile, "trip": check_trip, "anki": check_anki, "dashboard": check_dashboard}
+              "reconcile": check_reconcile, "trip": check_trip, "anki": check_anki, "dashboard": check_dashboard,
+              "longdoc": check_longdoc}
 
 
 def make_fixture(kind, d, seed=1, **kw):

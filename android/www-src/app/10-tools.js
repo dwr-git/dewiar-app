@@ -837,6 +837,13 @@ async function readPage(url, find) {
   try {
     const r = await http("GET", url, { headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 14) Dewiar" }, timeout: 20000 });
     if (r.status === 403 || r.status === 451) throw new Error("сайт не пускает (" + r.status + ")");
+    // №296 (идеи 17.11): PDF по ссылке (инструкция, договор) — текстом с сервера Dewiar (там его разбирает pdftotext);
+    // не вышло — честно, и компьютер, если он подключён (на компьютере Лира читает PDF по ссылке сама)
+    if (/^%PDF-/.test(String(r.body || "").slice(0, 8)) || /\.pdf(?:[?#]|$)/i.test(url)) {
+      try { return pageExcerpt(String((await dewiarWeb("fetch", url)).text || ""), find, turnQ); }
+      catch (e) { return "Это PDF — на телефоне прочитать его не получилось. Скажи честно и не пересказывай по догадке. "
+        + (S.sync.on && syncChan() && pcSeen() ? "Компьютер подключён: предложи передать ему (start_task: прочитать PDF по ссылке) — он читает PDF сам." : "На компьютере Лира читает PDF по ссылке сама."); }
+    }
     // отчёт №69 (как на компьютере, tools.html_to_text): без меню и боковых панелей; есть <main>/<article> — он;
     // в конце — разделы того же сайта, их можно открыть
     let h = String(r.body || "").replace(/<(nav|header|footer|aside|noscript|svg)\b[\s\S]*?<\/\1>/gi, " ");
