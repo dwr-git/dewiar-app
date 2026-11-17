@@ -444,7 +444,11 @@ class Knowledge:
         def pre(fs):
             return tuple("@" + Path(os.path.expanduser(str(f))).resolve().as_posix().rstrip("/") + "/" for f in fs)
         if within is not None:
-            items = [x for x in items if x[0].startswith(pre(within))]
+            # «Облако Лиры» у персонажа (1.0.23): папка «Знания» — её файлы в индексе без «@» (по пути внутри папки)
+            rt = self.root.resolve()
+            cloud = any(Path(os.path.expanduser(str(f))).resolve() == rt for f in within)
+            rest = [f for f in within if Path(os.path.expanduser(str(f))).resolve() != rt]
+            items = [x for x in items if (rest and x[0].startswith(pre(rest))) or (cloud and not x[0].startswith("@"))]
         else:                                    # общий поиск: «Знания» и свои папки, а папки персонажей — только их
             mine, only = pre(self.folders() or []), pre(self.extra() or [])
             items = [x for x in items if not (x[0].startswith(only) and not x[0].startswith(mine))] if only else items
@@ -519,8 +523,9 @@ class Knowledge:
         """Документ из студии — в корень «Знаний» под свободным именем. Из name берётся только имя файла: путь
         от браузера не должен увести запись за пределы папки. -> путь внутри «Знаний»."""
         name = Path(str(name or "")).name.strip()
-        if not name or Path(name).suffix.lower() not in EXTS:
-            raise ValueError("такие файлы не подходят: нужны PDF, Word, ODT, текст, Markdown, HTML или CSV")
+        from drive import EXTS as DX               # «Облако Лиры» (1.0.23): и Excel, PowerPoint, картинки — их Лира хранит,
+        if not name or Path(name).suffix.lower() not in EXTS | DX:   # а ищет по тексту PDF, Word, ODT, текста
+            raise ValueError("такие файлы не подходят: нужны PDF, Word, Excel, PowerPoint, текст или картинки")
         dst = self.root / name
         n = 2
         while dst.exists():

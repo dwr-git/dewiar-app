@@ -60,7 +60,7 @@ with sync_playwright() as p:
     ok(pg.inner_text("#dc-stat") == "2 папки, 418 файлов — Лира готова отвечать", f"сводка: {pg.inner_text('#dc-stat')!r}")
     ok("Договоры" in pg.inner_text("#kn-folders") and "Инструкция к котлу.pdf" in pg.inner_text("#kn-list"), "папки и отдельные файлы — списками")
     # 0.97 «Мои файлы»: один список с пометкой, где лежит; «Добавить файлы» — главная кнопка; меню — в «Для себя» под «Музыкой»
-    ok("у Лиры" in pg.inner_text("#kn-list") and "папка" in pg.inner_text("#kn-folders") and pg.evaluate("document.querySelector('#mf-empty').hidden"),
+    ok("у Лиры" in pg.inner_text("#kn-list") and "папка" in pg.inner_text("#kn-folders") and not pg.evaluate("document.querySelector('#mf-empty')"),
        "«Мои файлы»: один список — у Лиры и папки, пометка, где лежит")
     ok(pg.evaluate("document.querySelector('.dc-acts .btn.primary').textContent.startsWith('Добавить файлы')"), "главная кнопка — «Добавить файлы…»")
     ok(pg.evaluate("(() => { const m = document.querySelector('nav button[data-p=music]'), d = document.querySelector('nav button[data-p=docs]'); return m.nextElementSibling === d && d.textContent.trim() === 'Мои файлы'; })()"),
@@ -71,7 +71,8 @@ with sync_playwright() as p:
     pg.evaluate("() => { _folders = []; _files = []; loadDocs(); }"); pg.wait_for_timeout(300)
     pg.evaluate("() => { lastAccount = null; mfSite(); }")
     ok(pg.evaluate("getComputedStyle(document.querySelector('#kn-site')).display") == "none", "не вошли — пустой строки «Знаний» нет")
-    ok("Пока пусто" in pg.inner_text("#dc-stat") and not pg.evaluate("document.querySelector('#mf-empty').hidden"), "пусто — подсказка, с чего начать")
+    # 1.0.23: подсказка «с чего начать» — в «Облаке Лиры» (одна на раздел), отдельной строки под списком больше нет
+    ok("Пока пусто" in pg.inner_text("#dc-stat") and "положите сюда первый файл" in pg.inner_text("#ld-know"), "пусто — подсказка, с чего начать")
     pg.evaluate("() => { _folders = [{ path: '/home/u/Книги', name: 'Книги', exists: true, files: null, busy: true, chunks: 0 }]; loadDocs(); }"); pg.wait_for_timeout(300)
     ok("читаю, можно уже спрашивать" in pg.inner_text("#dc-stat"), "читает в фоне — так и сказано")
     pg.click("#dc-try button >> nth=0"); pg.wait_for_timeout(400)

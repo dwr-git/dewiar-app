@@ -841,6 +841,24 @@ public final class Bridge {
         } catch (Exception e) { return ""; }
     }
 
+    /** «Облако Лиры» (1.0.23): файл из облака — в «Загрузки/Dewiar» и сразу открыть приложением телефона (PDF — читалкой,
+     *  Word — редактором). Открыть не вышло (нет приложения для этого вида, Android 9 и старше) — файл всё равно сохранён. */
+    @JavascriptInterface public String saveOpenB64(String name, String mime, String b64) {
+        String w = saveDownloadB64(name, mime, b64);
+        if (w.isEmpty()) return "";
+        try {
+            if (Build.VERSION.SDK_INT >= 29 && lastSaved != null) {
+                Intent i = new Intent(Intent.ACTION_VIEW);
+                i.setDataAndType(lastSaved, mime);
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                a.startActivity(Intent.createChooser(i, name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } else openDownloads();
+        } catch (Exception e) { /* нет приложения для такого файла — он в «Загрузках» */ }
+        return w;
+    }
+
+    private android.net.Uri lastSaved;
+
     private String saveBytes(String name, String mime, byte[] b) {
         String n = name.replaceAll("[\\\\/:*?\"<>|\\x00-\\x1f]", "_");
         try {
@@ -854,6 +872,7 @@ public final class Bridge {
                 java.io.OutputStream o = a.getContentResolver().openOutputStream(u);
                 o.write(b);
                 o.close();
+                lastSaved = u;
                 return "Загрузки/Dewiar/" + n;
             }
             File d = new File(a.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "Dewiar");

@@ -275,6 +275,8 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.care = Care(STATE_DIR / "care.json")        # «Заботливая память»: прошло важное — спросить, как прошло (care.py)
         from sync import Sync
         self.sync = Sync(self)                         # телефон ↔ компьютер через облако Dewiar
+        from drive import Drive
+        self.drive = Drive(self, STATE_DIR / "drive.json")   # «Облако Лиры»: файлы «Моих файлов» на всех устройствах (1.0.23)
         from close import Close
         self.close = Close(self)                       # «Близкие»: переписка с помощниками других людей (сквозное шифрование)
         from family import Family
@@ -412,6 +414,7 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.mcp.reconcile()
         threading.Thread(target=self.updater.loop, args=(self.stopping,), name="updates", daemon=True).start()
         threading.Thread(target=self.obsidian.loop, args=(self.stopping,), name="obsidian", daemon=True).start()
+        threading.Thread(target=self.drive.run, args=(self.stopping,), name="drive", daemon=True).start()
         if self.s.get("sync", "enabled") is not False and not self.wav_input:
             threading.Thread(target=self.sync.loop, args=(self.stopping,), name="sync", daemon=True).start()
         if not self.wav_input:

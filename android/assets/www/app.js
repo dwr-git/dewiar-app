@@ -6549,6 +6549,108 @@ async function docOpen(id) {
 function docCard(e) {
   return `<div class="it note doc" data-doc="${esc(e.id)}"><div class="bd"><b class="ntt">${esc(e.name)}</b><div class="ntm"><span class="ntd">${esc(ntWhen(e.mtime * 1000) || "")}</span><span class="ntf">${esc(String(e.path).split("/").slice(0, -1).join("/") || "Мои файлы")}</span><span class="ntf">${docSize(e.size)}</span></div></div></div>`;
 }
+/* «Облако Лиры» на телефоне (1.0.23 · 0.9.53; владелец 17.11: «сетевая флешка — закидываешь, и открывается с любого
+   устройства»). Те же файлы, что в «Моих файлах» компьютеров (core/drive.py, сервер cloud/drive.php): список, открыть сам
+   файл (скачать, расшифровать, открыть приложением телефона), добавить с телефона, убрать отовсюду. Шифр — ключ
+   синхронизации (e2eKey, 14-sync.js), как у заметок; без него облако просит включить шифрование. Http приложения —
+   текстом, поэтому куски ходят base64 (?b64=1, X-Drive-B64). */
+const DRV = { st: null, busy: "", at: 0 };
+const DRV_PART = 2 * 1024 * 1024, DRV_MAX = 25 * 1024 * 1024;
+const DRV_EXT = /\.(pdf|docx|odt|xlsx|pptx|txt|md|csv|html?|jpe?g|png|webp)$/i;
+const DRV_MIME = { pdf: "application/pdf", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", odt: "application/vnd.oasis.opendocument.text",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  txt: "text/plain", md: "text/markdown", csv: "text/csv", html: "text/html", htm: "text/html", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const drvExt = (n) => (String(n).split(".").pop() || "").toLowerCase();
+const drvKind = (n) => { const e = drvExt(n); return e === "pdf" ? "pdf" : /^(docx|odt)$/.test(e) ? "doc" : /^(xlsx|csv)$/.test(e) ? "sheet" : e === "pptx" ? "slides" : /^(jpe?g|png|webp)$/.test(e) ? "image" : "text"; };
+const DRV_K = { pdf: "PDF", doc: "DOC", sheet: "XLS", slides: "PPT", image: "IMG", text: "TXT" };
+function drvHdr(c, more) { const h = Object.assign({ Authorization: "Bearer " + c.token }, more || {}); if (c.link && c.link !== c.token) h["X-Sync-Link"] = c.link;
+  h["X-Drive-Dev"] = (syncSt() || {}).device || ""; return h; }
+async function drvReq(method, path, opts) {
+  const c = syncCred(); if (!c) throw new Error("нужен ключ Dewiar или вход");
+  const r = await http(method, c.base + "?p=" + path, Object.assign({ timeout: 60000 }, opts, { headers: drvHdr(c, (opts || {}).headers) }));
+  let d = {}; try { d = JSON.parse(r.body || "{}"); } catch (e) { d = {}; }
+  if (r.status >= 400) throw new Error((d.error && d.error.message) || "облако ответило " + r.status);
+  return d;
+}
+async function drvLoad() {
+  const k = e2eKey();
+  if (!syncCred()) return (DRV.st = { why: "nokey", files: [] });
+  if (!k) return (DRV.st = { why: "e2e", files: [] });
+  const d = await drvReq("GET", "/drive", { timeout: 20000 });
+  d.files = (d.files || []).map(f => { try { return Object.assign(f, JSON.parse(DC().fromUtf8(DC().unseal(k, DC().b64d(f.meta))))); } catch (e) { return null; } })
+    .filter(f => f && f.name);
+  DRV.at = Date.now();
+  return (DRV.st = d);
+}
+const drvHex = (b) => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+async function drvOpen(id) {
+  const f = ((DRV.st || {}).files || []).find(x => x.id === id), k = e2eKey(); if (!f || !k) return;
+  try {
+    const parts = [];
+    for (let n = 0; n < (f.parts || 1); n++) {
+      DRV.busy = `Скачиваю «${f.name}» — ${Math.round(n / (f.parts || 1) * 100)} %`; drvBar();
+      parts.push(DC().unseal(k, DC().b64d((await drvReq("GET", `/drive/get&id=${f.id}&n=${n}&b64=1`)).b64.replace(/\+/g, "-").replace(/\//g, "_"))));
+    }
+    const all = new Uint8Array(parts.reduce((s, p) => s + p.length, 0)); let o = 0; parts.forEach(p => { all.set(p, o); o += p.length; });
+    if (f.sha && drvHex(DC().sha256(all)).slice(0, 32) !== f.sha) throw new Error("файл пришёл испорченным — попробуйте ещё раз");
+    const b64 = btoa(Array.from({ length: Math.ceil(all.length / 0x8000) }, (_, i) => String.fromCharCode.apply(null, all.subarray(i * 0x8000, (i + 1) * 0x8000))).join(""));
+    const mime = DRV_MIME[drvExt(f.name)] || "application/octet-stream";
+    const w = D.saveOpenB64 ? D.saveOpenB64(f.name, mime, b64) : D.saveDownloadB64 ? D.saveDownloadB64(f.name, mime, b64) : "";
+    toast(w ? "Сохранено в " + w : "Не получилось сохранить файл", 3500);
+  } catch (e) { toast("Облако: " + e.message, 4500); }
+  DRV.busy = ""; drvBar();
+}
+async function drvAdd(files) {
+  const k = e2eKey(); if (!k) { toast("Сначала включите шифрование — облако хранит файлы только им", 4000); return; }
+  for (const file of files) {
+    if (!DRV_EXT.test(file.name)) { toast(`«${file.name}» — такие файлы облако не берёт`, 3500); continue; }
+    if (file.size > DRV_MAX) { toast(`«${file.name}» больше 25 МБ`, 3500); continue; }
+    try {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const meta = DC().b64e(DC().seal(k, DC().utf8(JSON.stringify({ name: file.name, sha: drvHex(DC().sha256(data)).slice(0, 32), mtime: Math.round(Date.now() / 1000) }))));
+      const id = drvHex(DC().randomBytes(12)), of = Math.max(1, Math.ceil(data.length / DRV_PART));
+      for (let n = 0; n < of; n++) {
+        DRV.busy = `Отправляю «${file.name}» — ${Math.round(n / of * 100)} %`; drvBar();
+        const sealed = DC().seal(k, data.subarray(n * DRV_PART, (n + 1) * DRV_PART));
+        await drvReq("POST", `/drive/put&id=${id}&n=${n}&of=${of}`, { body: DC().b64e(sealed).replace(/-/g, "+").replace(/_/g, "/"), timeout: 120000,
+          headers: Object.assign({ "Content-Type": "text/plain", "X-Drive-B64": "1" }, n === 0 ? { "X-Drive-Meta": meta, "X-Drive-Size": String(data.length) } : {}) });
+      }
+      toast(`«${file.name}» — в облаке, скоро будет и на компьютерах`, 3000);
+    } catch (e) { toast("Облако: " + e.message, 4500); }
+  }
+  DRV.busy = ""; await drvLoad().catch(() => {}); renderDay();
+}
+async function drvDel(id) {
+  const f = ((DRV.st || {}).files || []).find(x => x.id === id); if (!f) return;
+  if (!confirm(`Убрать «${f.name}» из облака? Файл пропадёт на всех ваших устройствах.`)) return;
+  try { await drvReq("POST", "/drive/del", { body: { id }, headers: { "Content-Type": "application/json" } }); } catch (e) { toast("Облако: " + e.message, 4000); }
+  await drvLoad().catch(() => {}); renderDay();
+}
+function drvBar() { const b = $("#drv-busy"); if (b) { b.textContent = DRV.busy; b.hidden = !DRV.busy; } }
+const drvMB = (b) => b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 : 1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1024)) + " КБ";
+function drvHtml() {
+  const st = DRV.st;
+  if (!st) return `<div class="drv"><p class="hint">Открываю облако…</p></div>`;
+  if (st.why) return `<div class="drv off"><b>Облако Лиры</b><p class="hint">${st.why === "e2e" ? "Облако хранит файлы зашифрованными — ключ есть только у ваших устройств. Включите шифрование, и файлы с компьютера будут здесь."
+    : "Облаку нужен ключ Dewiar или вход аккаунтом."}</p>${st.why === "e2e" ? `<button class="btn p" id="drv-on">Включить шифрование</button>` : ""}</div>`;
+  const used = st.used || 0, quota = st.quota || 200 * 1048576, pct = Math.min(100, Math.round(used / quota * 100));
+  return `<div class="drv"><div class="drv-top"><span class="drv-ico" aria-hidden="true">☁️</span><div><b>Облако Лиры</b><small>${drvMB(used)} из ${drvMB(quota)} · на всех устройствах</small></div></div>`
+    + `<div class="drv-bar"><i style="width:${pct}%"></i></div>`
+    + `<label class="btn w drv-add"><input type="file" id="drv-file" multiple hidden accept=".pdf,.docx,.odt,.xlsx,.pptx,.txt,.md,.csv,.html,.jpg,.jpeg,.png,.webp">Добавить файл</label>`
+    + `<p class="hint drv-busy" id="drv-busy"${DRV.busy ? "" : " hidden"}>${esc(DRV.busy)}</p>`
+    + (st.files.length ? `<div class="drv-grid">` + st.files.map(f => { const kd = drvKind(f.name);
+        return `<div class="drv-f k-${kd}" data-drv="${esc(f.id)}"><span class="drv-k">${DRV_K[kd]}</span><b>${esc(f.name)}</b><small>${drvMB(f.size)}</small>`
+          + `<button class="x" data-drvx="${esc(f.id)}" aria-label="Убрать «${esc(f.name)}»">${X_SVG}</button></div>`; }).join("") + `</div>`
+      : `<p class="hint">Пока пусто. Добавьте файл здесь или на компьютере в «Мои файлы» — он появится на всех ваших устройствах.</p>`)
+    + `</div>`;
+}
+function drvWire(box) {
+  const f = $("#drv-file", box); if (f) f.onchange = (e) => { const fs = [...e.target.files]; e.target.value = ""; drvAdd(fs); };
+  const on = $("#drv-on", box); if (on) on.onclick = () => { e2eEnable(true); DRV.st = null; renderDay(); };
+  $$("[data-drv]", box).forEach(el => el.onclick = (e) => { if (!e.target.closest("[data-drvx]")) drvOpen(el.dataset.drv); });
+  $$("[data-drvx]", box).forEach(b => b.onclick = (e) => { e.stopPropagation(); drvDel(b.dataset.drvx); });
+  if (!DRV.st || Date.now() - DRV.at > 60000) drvLoad().then(() => { if (dayTab === "notes" && ntFolder === DOC_F) renderDay(); }).catch(e => { DRV.st = { why: "", files: [], used: 0, quota: 0, err: e.message }; });
+}
 // «Мой день» — какой сегодня день: «Среда, 15 октября» (просьба 15.10: «почему он не пишет число и день недели?»)
 function dayDate(d = new Date()) { const w = WD[d.getDay()]; return `${w[0].toUpperCase()}${w.slice(1)}, ${d.getDate()} ${MON[d.getMonth()]}`; }
 /* Имя дела по расписанию (№557, 05.11): компьютер присылает title («Дача: заморозки и полив»); старый компьютер — только
@@ -6594,17 +6696,18 @@ function renderDay() {
     const f = $("#done-add", box);
     f.onsubmit = (e) => { e.preventDefault(); const t = $("input", f).value.trim(); if (!t) { $("input", f).focus(); return; } markDone([t], "tap"); renderDay(); };
   } else if (dayTab === "notes") {
-    const docs = docList(), folds = noteFolders().concat(docs.length ? [DOC_F] : []); if (ntFolder && !folds.includes(ntFolder)) ntFolder = "";
+    const docs = docList(), folds = noteFolders().concat(docs.length || syncCred() ? [DOC_F] : []); if (ntFolder && !folds.includes(ntFolder)) ntFolder = "";
     const n = ntFolder === DOC_F ? [] : notes().filter(x => !ntFolder || String(x.folder || "").trim() === ntFolder).sort((a, b) => (+b.time || 0) - (+a.time || 0));   // новые сверху — и с компьютера тоже
     const chips = folds.length ? `<div class="ntfolds" role="tablist" aria-label="Папки">${["", ...folds].map(f => `<button role="tab" data-f="${esc(f)}" class="${f === ntFolder ? "on" : ""}${f === DOC_F ? " docf" : ""}" aria-selected="${f === ntFolder}">${f === DOC_F ? "Мои файлы" : f ? esc(f) : "Все"}</button>`).join("")}</div>` : "";
     box.innerHTML = `<button class="btn p ntnew" id="nt-new">Новая заметка</button>` + chips + (ntFolder === DOC_F
-      ? `<p class="hint ntdoc">${docN(docs.length)} с компьютера — спросите: «что в договоре про сроки?», Лира найдёт и без компьютера.</p><div class="ntlist">` + docs.map(docCard).join("") + `</div>`
+      ? drvHtml() + `<p class="hint ntdoc">${docN(docs.length)} с компьютера — спросите: «что в договоре про сроки?», Лира найдёт и без компьютера.</p><div class="ntlist">` + docs.map(docCard).join("") + `</div>`
       : n.length ? `<div class="ntlist">` + n.map(ntCard).join("") + `</div>`
       : `<div class="empty">Заметок нет.<br>Скажите: «запиши в заметки: купить хлеб и молоко» — или нажмите «Новая заметка».</div>`);
     $("#nt-new").onclick = () => openNote("");
     $$(".ntfolds button", box).forEach(b => b.onclick = () => { ntFolder = b.dataset.f; renderDay(); });
     $$(".it.note:not(.doc)", box).forEach(el => el.onclick = () => openNote(el.dataset.id));
     $$(".it.doc", box).forEach(el => el.onclick = () => docOpen(el.dataset.doc));
+    if (ntFolder === DOC_F) drvWire(box);
   } else if (dayTab === "made") {
     const l = apps().slice().reverse();
     box.innerHTML = tasksHtml() + (l.length ? `<div class="bugh">Сделано на телефоне</div>` + l.map(x => `<div class="it"><div class="bd" data-open="${esc(x.id)}"><b>${esc(x.title)}</b><small>${esc(whenText(new Date(x.ts)))} · ${Math.max(1, Math.round(x.size / 1024))} КБ · нажмите, чтобы открыть</small></div><button class="x" data-id="${esc(x.id)}">${X_SVG}</button></div>`).join("")

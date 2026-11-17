@@ -943,10 +943,13 @@ class BrainMixin:
                       + ("" if not mine else " — выбрать их можно в «Мозге»"), telegram=False)
 
     def _persona_folders(self):
-        """Папки на этом компьютере, подключённые к персонажам как знания (YouTube 27.10) — для индекса knowledge.py."""
+        """Папки на этом компьютере, подключённые к персонажам как знания (YouTube 27.10) — для индекса knowledge.py.
+        «Облако Лиры» (папка «Знания») не в счёт: она и так в индексе."""
         try:
+            kn = getattr(self, "knowledge", None)
+            rt = str(kn.root.resolve()) if kn is not None else ""
             return list(dict.fromkeys(b["path"] for p in self.personas.all() for b in (p.get("knowledge") or [])
-                                      if b.get("kind") == "folder" and b.get("path")))
+                                      if b.get("kind") == "folder" and b.get("path") and str(Path(b["path"]).resolve()) != rt))
         except Exception:  # noqa: BLE001
             return []
 
@@ -1254,9 +1257,11 @@ def folder_files(kn, paths):
     pre = [Path(os.path.expanduser(str(p))).resolve().as_posix().rstrip("/") + "/" for p in paths]
     try:
         keys = list(getattr(kn, "index", {}) or {})
+        cloud = kn.root.resolve().as_posix().rstrip("/") + "/" in pre       # «Облако Лиры» — файлы «Знаний» без «@»
     except Exception:  # noqa: BLE001
         return []
-    names = sorted({Path(k[1:]).name for k in keys if k.startswith("@") and any(k[1:].startswith(x) for x in pre)})
+    names = sorted({Path(k[1:]).name for k in keys if k.startswith("@") and any(k[1:].startswith(x) for x in pre)}
+                   | ({Path(k).name for k in keys if not k.startswith("@")} if cloud else set()))
     return names
 
 

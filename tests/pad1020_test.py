@@ -156,7 +156,7 @@ with sync_playwright() as p:
     saved = [c for c in pg.evaluate("calls") if c[0] == "pad_write"]
     ok(saved and "- [x] купить хлеб" in saved[-1][1]["text"], f"щелчок по квадратику — задача сделана и сохранена: {saved[-1][1]['text'][:80] if saved else saved}")
     # Markdown на лету: «- », «[] », «# »
-    pg.click(".tab:nth-child(2)"); pg.wait_for_timeout(400)          # пустая вкладка «Работа» — как в первый раз
+    pg.click("#tabs .tab:nth-child(2)"); pg.wait_for_timeout(400)    # пустая вкладка «Работа» — как в первый раз
     ok(pg.evaluate("document.querySelector('#ed').classList.contains('blank')"), "пустая вкладка — с подсказкой, как писать")
     pg.click("#ed"); pg.keyboard.type("[] "); pg.keyboard.type("позвонить маме"); pg.keyboard.press("Enter"); pg.keyboard.type("написать Пете")
     pg.wait_for_timeout(1000)

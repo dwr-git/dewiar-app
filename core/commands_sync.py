@@ -60,7 +60,40 @@ class SyncCommands:
             return self.models_get(str(a.get("key") or ""))
         if cmd == "sync_e2e":                     # шифрование синхронизации на устройстве (core/synckey.py)
             self.sync.e2e_enable(bool(a.get("on")))
+            self.drive.kick.set()                 # «Облако Лиры» работает только шифром — включили: сразу обмен
             return self.sync_public()
+        if cmd.startswith("drive_"):              # «Облако Лиры» (core/drive.py)
+            dv = self.drive
+            if cmd == "drive_status":
+                if a.get("fresh") or time.time() - (dv.last.get("at") or 0) > 60:
+                    dv.kick.set()
+                return dv.status()
+            if cmd == "drive_sync":
+                return dv.tick()
+            if cmd == "drive_remove":
+                dv.remove(str(a.get("name") or ""))
+                self.emit("tools", tools=self.toolbox.catalog())
+                return dv.status()
+            if cmd == "drive_open":
+                p = dv.local().get(str(a.get("name") or ""))
+                if p is None:
+                    raise ValueError("этот файл ещё не пришёл на этот компьютер — подождите минуту")
+                from tools import launch
+                launch(["xdg-open", str(p)])
+                return True
+            if cmd == "drive_add_path":           # «Добавить файлы…» окном выбора: путь, без пересылки содержимого (до 25 МБ)
+                from drive import EXTS as DX, FILE_MAX
+                src = Path(str(a.get("path") or ""))
+                if not src.is_file():
+                    raise ValueError("такого файла нет")
+                if src.suffix.lower() not in DX:
+                    raise ValueError("такие файлы облако не берёт: PDF, Word, Excel, PowerPoint, текст и картинки")
+                if src.stat().st_size > FILE_MAX:
+                    raise ValueError(f"«{src.name}» больше 25 МБ")
+                rel = self.knowledge.add(src.name, src.read_bytes())
+                dv.kick.set()
+                self.emit("tools", tools=self.toolbox.catalog())
+                return {"added": rel, "files": self.knowledge.list(), "drive": dv.status()}
         if cmd.startswith("knowledge_"):         # «Знания» на этом компьютере
             kn = self.knowledge
             if cmd == "knowledge_add":
@@ -68,10 +101,16 @@ class SyncCommands:
                 raw = a.get("b64", "")
                 raw = raw.split(",", 1)[1] if raw.startswith("data:") else raw
                 rel = kn.add(a.get("name", ""), base64.b64decode(raw))
+                self.drive.kick.set()                  # «Облако Лиры»: новый файл — сразу на другие устройства
                 self.emit("tools", tools=self.toolbox.catalog())
                 return {"added": rel, "files": kn.list()}
             if cmd == "knowledge_remove":
-                kn.remove(a.get("path", ""))
+                rel = str(a.get("path", ""))
+                if "/" not in rel and "\\" not in rel:      # файл «Моих файлов» верхнего уровня — он и в «Облаке Лиры»: убрать везде
+                    self.drive.remove(rel)
+                    kn.refresh()
+                else:
+                    kn.remove(rel)
                 self.emit("tools", tools=self.toolbox.catalog())
                 return kn.list()
             if cmd == "knowledge_search":

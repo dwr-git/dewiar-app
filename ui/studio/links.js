@@ -21,8 +21,10 @@ function mfRow(kind, name, sub, where, whereCls, bad) {
   $(".mf-where", row).textContent = where; return row;
 }
 function mfEmpty() {
-  const site = $("#kn-site"), none = !DC.files.length && !DC.folders.length && (!site || site.hidden);
-  const e = $("#mf-empty"); if (e) e.hidden = !none;
+  // файлы — плитками в «Облаке Лиры» (studio/drive.js); здесь — подключённые папки и «Знания» сайта: их нет — блока нет
+  const site = $("#kn-site"), any = DC.folders.length || (site && !site.hidden);
+  [$("#mf-box"), $("#mf-box") && $("#mf-box").previousElementSibling].forEach(x => { if (x) x.hidden = !any; });
+  if (window.cldGrid) cldGrid();
 }
 function renderKn(files) {
   const box = $("#kn-list"); box.innerHTML = ""; DC.files = files; dcStat(); mfEmpty();
@@ -118,7 +120,7 @@ function mfPhone() {
   const el = $("#mf-phone"); if (!el) return;
   core.call("knowledge_phone").then(st => {
     const have = DC.files.length || DC.folders.length, b = $("#mf-e2e");
-    el.hidden = !st.server || !st.phones || !have; b.hidden = !!st.e2e;
+    el.hidden = !st.server || !st.phones || !have || !!st.e2e; b.hidden = !!st.e2e;   // шифрование включено — про телефон говорит «Облако Лиры»
     $("span", el).textContent = !st.e2e ? "На телефоне файлов нет: они уходят туда только зашифрованными." : st.files
       ? `На телефоне — ${dcPl(st.files, "файл", "файла", "файлов")}: Лира ответит по ним, даже когда компьютер выключен.`
       : "Скоро будут и на телефоне — после следующего обмена.";
@@ -127,6 +129,7 @@ function mfPhone() {
 $("#mf-e2e").onclick = () => core.call("sync_e2e", { on: true }).then(() => setTimeout(mfPhone, 1500)).catch(e => toast(e.message));
 function loadDocs() {
   setTimeout(mfPhone, 600);
+  if (window.cldLoad) cldLoad();                                      // «Облако Лиры» (studio/drive.js)
   core.call("knowledge_list").then(r => { DC.files = r.files || []; renderKn(DC.files); dcStat(); }).catch(e => ($("#kn-res").textContent = e.message));
   core.call("knowledge_folders").then(renderKnFolders).catch(() => {});
   if (window.loadWriting) loadWriting();                          // «Пишу» — сколько написано за день (studio/writing.js)

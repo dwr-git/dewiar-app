@@ -59,6 +59,7 @@
     if (!PU.on || PU.active) { if (PU.active && !auto) { PU.auto = false; } return; }
     if (document.body.classList.contains("play")) { if (auto) return; window.padMode && padMode("notes"); }
     keep = ED.contains((getSelection() || {}).anchorNode || null) ? sel() : null;
+    if (window.cloudLeave) cloudLeave();
     PU.active = true; PU.auto = !!auto; PU.touched = false;
     document.body.classList.add("pult");
     tab.classList.add("on"); tab.setAttribute("aria-selected", "true");
@@ -79,6 +80,7 @@
     if (restore) setTimeout(() => { try { ED.focus({ preventScroll: true }); if (keep) { const s = getSelection(); s.removeAllRanges(); s.addRange(keep); } } catch (e) { } }, 60);
   }
   window.pultOpen = () => enter(false);
+  window.pultLeave = () => leave(false);                // «Облако Лиры» — своя вкладка рядом (ui/padcloud.js)
   tab.onclick = () => (PU.active ? (PU.auto = false, PU.touched = true) : enter(false));
   // своя вкладка, «+», «Досуг» — пульт уступает место
   el("#tabs").addEventListener("click", () => leave(false), true);

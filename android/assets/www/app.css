@@ -2210,3 +2210,22 @@ body.light .blg-del { color: #c23a5a; }
 .wn-topics button { padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(127,127,127,.3); background: transparent; color: inherit; font: inherit; font-size: 13px; }
 .wn-topics button.on { background: var(--accent, #5b7cfa); border-color: transparent; color: #fff; }
 .wn-topics button.off { opacity: .45; text-decoration: line-through; }
+
+/* «Облако Лиры» на телефоне (1.0.23 · 0.9.53, 12-sheets.js drvHtml) */
+.drv { margin: 10px 0 12px; padding: 14px; border-radius: 18px; background: var(--frost); }
+.drv.off b { display: block; margin-bottom: 4px; } .drv.off .btn { margin-top: 8px; }
+.drv-top { display: flex; align-items: center; gap: 12px; }
+.drv-top b { display: block; font-size: 16px; } .drv-top small { color: var(--muted); font-size: 12.5px; }
+.drv-ico { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; font-size: 22px;
+  background: linear-gradient(135deg, color-mix(in srgb, #8fd3ff 35%, transparent), color-mix(in srgb, #c58cf7 35%, transparent)); }
+.drv-bar { height: 6px; margin: 12px 0; border-radius: 6px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
+.drv-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #8fd3ff, #8b8cf7, #c58cf7); }
+.drv-add { margin-bottom: 8px; } .drv-busy { margin: 4px 2px 8px; }
+.drv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.drv-f { position: relative; display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 11px; border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent); --k: #8a8fa3; }
+.drv-f.k-pdf { --k: #e5484d; } .drv-f.k-doc { --k: #3e7bfa; } .drv-f.k-sheet { --k: #2fa36b; } .drv-f.k-slides { --k: #f08c2e; } .drv-f.k-image { --k: #a35cf0; }
+.drv-k { align-self: flex-start; padding: 2px 6px; border-radius: 6px; font: 800 10px "Manrope", sans-serif; letter-spacing: .06em; color: #fff; background: var(--k); }
+.drv-f b { font-size: 13.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; padding-right: 22px; }
+.drv-f small { color: var(--muted); font-size: 12px; }
+.drv-f .x { position: absolute; top: 6px; right: 6px; }

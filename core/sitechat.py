@@ -169,7 +169,7 @@ class SiteChat:
             if b.get("kind") != "folder" or not b.get("path"):
                 continue
             for f in sorted(Path(b["path"]).rglob("*")):
-                if not (f.is_file() and f.suffix.lower() in EXTS and f.stat().st_size < 20 * 1024 * 1024):
+                if not (f.is_file() and f.suffix.lower() in EXTS and f.stat().st_size < 20 * 1024 * 1024) or f.name == "О папке.md":
                     continue
                 fit["files"] += 1
                 if room <= 200:

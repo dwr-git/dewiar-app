@@ -54,7 +54,8 @@
   body:not(.snap) .clip { transition-delay: 0s; }
 
   /* вкладки */
-  #top { display: flex; align-items: center; gap: 6px; padding: 10px 10px 6px 12px; }
+  #top { display: flex; align-items: center; gap: 4px; padding: 10px 10px 6px 10px; }
+  #top > .ib { width: 28px; }   /* 1.0.23: рядом с «Пультом» встала вкладка облака — ряд чуть плотнее, чтобы листам хватило места */
   #tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
   #tabs::-webkit-scrollbar { display: none; }
   .tab { flex: none; display: flex; align-items: center; gap: 4px; max-width: 170px; padding: 6px 8px 6px 12px; border-radius: 11px;
@@ -62,7 +63,7 @@
   .tab span { overflow: hidden; text-overflow: ellipsis; }
   .tab:hover { background: var(--chip); color: var(--ink); }
   .tab.on { background: var(--chip2); color: var(--ink); box-shadow: var(--shadow); }
-  .tab .x { width: 18px; height: 18px; border-radius: 6px; display: grid; place-items: center; opacity: 0; color: var(--muted); }
+  .tab .x { width: 16px; height: 16px; border-radius: 6px; display: grid; place-items: center; opacity: 0; color: var(--muted); }
   .tab:hover .x, .tab.on .x { opacity: .7; } .tab .x:hover { opacity: 1; background: var(--chip2); }
   .tab.drop { box-shadow: inset 2px 0 0 var(--acc); }
   /* 05.11, владелец: замок — запертую вкладку не изменить и не удалить, пока не откроют 🔒 */
@@ -341,7 +342,7 @@
                --pu-card: rgba(255,255,255,.6); --pu-lift: 0 10px 24px rgba(36,50,74,.12); --pu-glow: rgba(74,99,216,.24);
                --pu-veil: rgba(219,229,241,.72); --pu-leadbg: #e2efe7; }
   body.neu.light { --pu-card: var(--paper); --pu-lift: 6px 6px 14px var(--neu-dark, #b8c5d6), -6px -6px 14px var(--neu-light, #fff); }
-  .tab.pt { gap: 7px; padding-right: 12px; }
+  .tab.pt { gap: 6px; padding: 6px 9px 6px 10px; }
   .tab.pt[hidden], body.play .tab.pt { display: none; }
   .pt-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .3s, box-shadow .3s; }
   .tab.pt.on .pt-dot { background: var(--pu-mem); }
@@ -443,6 +444,45 @@
   .pu-ri { font-size: 13px; line-height: 1.4; }
   button.pu-ri { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
   button.pu-ri:hover { text-decoration: underline; } button.pu-ri:focus-visible { outline: 2px solid var(--pu-radar); outline-offset: 2px; border-radius: 4px; }
+  /* «Облако Лиры» — вкладка-флешка рядом с «Пультом» (ui/padcloud.js) */
+  /* вплотную к «Пульту» — одна пара «режимов» блокнота; при обычной ширине (440) два листа по-прежнему влезают без «⌄» */
+  .tab.cl { width: 30px; padding: 6px 0; justify-content: center; margin-left: -2px; } .tab.pt[hidden] + .tab.cl { margin-left: 0; } .tab.cl .cl-usb { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+  .tab.cl:hover .cl-usb { transform: translateY(-1.5px); } .tab.cl.on { color: var(--pu-think); }
+  body.play .tab.cl { display: none; }
+  .tab.cl.hint { color: var(--pu-think); box-shadow: 0 0 0 2px var(--pu-glow); animation: pu-breathe 1.2s ease-in-out infinite; }
+  body.cloud #tabs .tab.on { background: transparent; box-shadow: none; color: var(--muted); }
+  #cloud { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 12px; padding: 4px 12px 12px; overflow-y: auto; }
+  body.cloud #cloud { display: flex; }
+  body.cloud #tools, body.cloud #sheet, body.cloud #foot, body.cloud #play, body.cloud #pult, body.cloud #pu-strip { display: none !important; }
+  .cl-hd { display: flex; align-items: center; gap: 11px; }
+  .cl-hd b { display: block; font-size: 16px; } .cl-hd small { color: var(--muted); font-size: 12.5px; }
+  .cl-ico { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: color-mix(in srgb, var(--pu-think) 12%, transparent); }
+  .cl-ico svg { width: 34px; height: 34px; filter: drop-shadow(0 4px 10px color-mix(in srgb, #8b8cf7 45%, transparent)); }
+  .cl-used { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .cl-bar { flex: none; height: 5px; border-radius: 5px; background: color-mix(in srgb, currentColor 10%, transparent); overflow: hidden; }
+  .cl-bar i { display: block; height: 100%; width: 0; border-radius: 5px; background: linear-gradient(90deg, #8fd3ff, #8b8cf7, #c58cf7); transition: width .6s; }
+  .cl-drop { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 16px 12px; border-radius: 16px; cursor: pointer; text-align: center;
+    border: 1.5px dashed color-mix(in srgb, var(--pu-think) 50%, transparent); background: color-mix(in srgb, var(--pu-think) 6%, transparent); transition: background .2s, transform .2s; }
+  .cl-drop:hover, .cl-drop:focus-visible { background: color-mix(in srgb, var(--pu-think) 11%, transparent); outline: none; }
+  .cl-drop.over { border-style: solid; transform: scale(1.01); background: color-mix(in srgb, var(--pu-think) 16%, transparent); }
+  .cl-drop svg { width: 24px; height: 24px; fill: none; stroke: var(--pu-think); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .cl-drop b { font-size: 14px; } .cl-drop small { font-size: 11.5px; color: var(--muted); }
+  #cloud.off .cl-drop { display: none; }
+  .cl-off { padding: 12px 14px; border-radius: 14px; background: var(--pu-card); font-size: 13px; line-height: 1.45; } .cl-off[hidden] { display: none; }
+  .cl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .cl-f { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; padding: 10px 11px; border: 0; border-radius: 14px;
+    background: var(--pu-card); box-shadow: var(--pu-lift); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: transform .15s; --k: #8a8fa3; }
+  .cl-f:hover { transform: translateY(-2px); } .cl-f:focus-visible { outline: 2px solid var(--pu-think); outline-offset: 2px; }
+  .cl-f.k-pdf { --k: #e5484d; } .cl-f.k-doc { --k: #3e7bfa; } .cl-f.k-sheet { --k: #2fa36b; } .cl-f.k-slides { --k: #f08c2e; } .cl-f.k-image { --k: #a35cf0; }
+  .cl-f i { padding: 2px 6px; border-radius: 6px; font: normal 800 10px/1.4 system-ui, sans-serif; letter-spacing: .05em; color: #fff; background: var(--k); }
+  .cl-f span { width: 100%; font-size: 13px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .cl-f small { font-size: 11.5px; color: var(--muted); }
+  .cl-f.moving::after { content: ""; position: absolute; left: 11px; right: 11px; bottom: 5px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--pu-think), transparent); background-size: 200% 100%; animation: cl-run 1.2s linear infinite; }
+  @keyframes cl-run { to { background-position: -200% 0; } }
+  .cl-empty { margin: 4px 2px; color: var(--muted); font-size: 13px; line-height: 1.5; grid-column: 1 / -1; }
+  .cl-more { align-self: flex-start; border: 0; background: none; color: var(--pu-think); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px; }
+  @media (prefers-reduced-motion: reduce) { .tab.cl.hint, .cl-f.moving::after { animation: none; } .cl-f:hover, .cl-drop.over { transform: none; } }
   .pu-card.next ul { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.35; }
   .pu-card.next time { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 8px; }
   .pu-a { align-self: flex-start; margin-top: auto; padding: 3px 0; font-weight: 700; font-size: 12.5px; color: var(--pu-think); }
@@ -552,6 +592,7 @@
 <script src="assets/rich.js"></script>
 <script src="pad.js"></script>
 <script src="padpult.js"></script>
+<script src="padcloud.js"></script>
 <script src="padai.js"></script>
 </body>
 </html>

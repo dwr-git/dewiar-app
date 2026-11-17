@@ -283,14 +283,25 @@ function kbKey(b) { return b.kind === "folder" ? `folder:${b.path}` : `${b.kind}
 function renderKb(open) {
   const box = $("#e-kb"); if (!box || !ed) return;
   const sel = ed.knowledge || [];
-  box.innerHTML = `<div class="kbsel"></div><div class="actions" style="margin:0"><button class="btn small" id="kb-folder">Папка на компьютере…</button>`
+  box.innerHTML = `<div class="kbsel"></div><div class="actions" style="margin:0"><button class="btn small" id="kb-cloud" title="Файлы «Облака Лиры» — те же на всех ваших устройствах">☁️ Облако Лиры</button><button class="btn small" id="kb-folder">Папка на компьютере…</button>`
     + `<button class="btn small" id="kb-pick">${open ? "Свернуть" : sel.some(b => b.kind !== "folder") ? "Изменить базы сайта" : "Базы с сайта…"}</button></div>`;
   const chips = $(".kbsel", box);
   if (!sel.length) chips.innerHTML = '<span class="hint" style="background:none;padding:0">Не подключено — персонаж отвечает по своим знаниям.</span>';
-  sel.forEach((b, i) => { const c = document.createElement("span"); c.textContent = (b.kind === "folder" ? "📁 " : "") + b.label; if (b.path) c.title = b.path;
+  sel.forEach((b, i) => { const c = document.createElement("span"); c.textContent = (b.kind === "folder" ? (b.label === "Облако Лиры" ? "☁️ " : "📁 ") : "") + b.label; if (b.path) c.title = b.path;
     const x = document.createElement("button"); x.textContent = "×"; x.title = "Отключить";
     x.onclick = () => { ed.knowledge.splice(i, 1); renderKb(open); }; c.appendChild(x); chips.appendChild(c); });
   $("#kb-pick").onclick = () => renderKb(!open);
+  // «Облако Лиры» (1.0.23, владелец 17.11: «оттуда же могут брать знания боты на Лире в Telegram или виджет на сайт»):
+  // папка облака на этом компьютере — как своя папка персонажа; бот персонажа и чат для сайта берут знания из неё
+  $("#kb-cloud").onclick = async () => {
+    let st = null; try { st = await core.call("drive_status", {}); } catch (e) { return toast(e.message); }
+    if (!st || !st.root) return toast("Облако Лиры появится после обновления программы");
+    ed.knowledge = ed.knowledge || [];
+    if (ed.knowledge.some(x => x.kind === "folder" && x.path === st.root)) return toast("Облако Лиры уже подключено");
+    if (ed.knowledge.length >= 6) return toast("Не больше шести баз у одного персонажа");
+    ed.knowledge.push({ kind: "folder", path: st.root, label: "Облако Лиры" });
+    renderKb(open); toast("Сохраните персонажа — он будет отвечать по файлам облака, и его бот в Telegram тоже", 4000);
+  };
   // YouTube 27.10: «нет возможности добавить знания из локальной папки, только с сервера»
   $("#kb-folder").onclick = async () => {
     const a = window.api && window.api(); let p = "";

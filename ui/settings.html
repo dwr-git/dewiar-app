@@ -1531,13 +1531,34 @@
       </figure>
     </div>
 
-    <div class="mf-head"><h2>Ваши файлы</h2><button class="btn small" id="kn-open" type="button" title="Папка, куда Лира кладёт добавленные файлы">Открыть папку с файлами Лиры</button></div>
+    <!-- «Облако Лиры» (1.0.23, владелец 17.11: «сетевая флешка… красиво, стильно, привлекательно»): ui/studio/drive.js -->
+    <div class="ld" id="ld" role="region" aria-labelledby="ld-h">
+      <div class="ld-top">
+        <div class="ld-id">
+          <span class="ld-ico" aria-hidden="true"><svg viewBox="0 0 48 48"><defs><linearGradient id="ld-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset=".55" stop-color="#8b8cf7"/><stop offset="1" stop-color="#c58cf7"/></linearGradient></defs><path d="M14.5 37h20a8.5 8.5 0 0 0 1.3-16.9A11.5 11.5 0 0 0 13.6 18 9.5 9.5 0 0 0 14.5 37z" fill="url(#ld-g)"/><path d="M24 31v-9m-4 3.6 4-4 4 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <div><h2 id="ld-h">Облако Лиры</h2><p id="ld-sub">Ваши файлы — на всех ваших устройствах. Лира знает, что в них, и ответит.</p></div>
+        </div>
+        <div class="ld-meter" id="ld-meter" role="img" aria-label="Занято в облаке">
+          <svg viewBox="0 0 44 44" aria-hidden="true"><circle class="ld-mt" cx="22" cy="22" r="18"/><circle class="ld-mf" id="ld-ring" cx="22" cy="22" r="18"/></svg>
+          <span><b id="ld-used">0 МБ</b><small id="ld-quota">из 200 МБ</small></span>
+        </div>
+      </div>
+      <ul class="ld-devs" id="ld-devs" aria-label="Ваши устройства"></ul>
+      <label class="ld-drop" id="ld-drop" tabindex="0">
+        <input type="file" id="ld-file" multiple hidden accept=".pdf,.docx,.odt,.xlsx,.pptx,.txt,.md,.csv,.html,.htm,.jpg,.jpeg,.png,.webp">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V6m-4 4 4-4 4 4M5 15v2a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-2"/></svg>
+        <b>Перетащите файлы сюда</b><span>или нажмите, чтобы выбрать</span>
+        <small>PDF, Word, Excel, PowerPoint, текст, картинки · до 25 МБ</small>
+      </label>
+      <div class="ld-off" id="ld-off" hidden><p id="ld-off-t"></p><button class="btn primary" id="ld-on" type="button">Включить облако</button></div>
+      <div class="ld-grid" id="ld-grid" aria-live="polite"></div>
+      <p class="ld-foot"><span id="ld-know"></span><button class="linkbtn" id="kn-open" type="button" title="Папка, где лежат файлы облака на этом компьютере">Открыть папку</button></p>
+    </div>
+    <div class="mf-head"><h2>Подключённые папки</h2></div>
     <div class="mf-box" id="mf-box">
       <div id="kn-list" class="kn-list"></div>
       <div id="kn-folders" class="kn-list"></div>
       <div class="kn-row mf-site" id="kn-site" hidden></div>
-      <p class="mf-empty" id="mf-empty" hidden>Здесь появятся ваши файлы. Начните с одного — договора, инструкции или конспекта:
-        «Добавить файлы…» вверху.</p>
     </div>
     <p class="mf-phone" id="mf-phone" hidden><span></span><button class="btn small" id="mf-e2e" type="button" hidden>Включить шифрование</button></p>
     <div class="actions" style="margin:8px 0 0"><span class="res" id="kn-res"></span><span class="res" id="kn-fres"></span></div>
@@ -2930,6 +2951,7 @@
 <script src="studio/icons.js"></script>
 <script src="studio/memory.js"></script>
 <script src="studio/links.js"></script>
+<script src="studio/drive.js"></script>
 <script src="studio/mempages.js"></script>
 <script src="studio/safety.js"></script>
 <script src="studio/folder.js"></script>
