@@ -238,7 +238,7 @@ async function radShare(to, mode) {
   return radPush(true);
 }
 function radTick() {
-  if (document.hidden || (typeof EXAM !== "undefined" && EXAM)) return;
+  if (appAway() || (typeof EXAM !== "undefined" && EXAM)) return;
   if (radOn()) radPush(false);
   if ($("#rad-body") && $("#sh-close").classList.contains("on")) { if (radCan() && (!radMe || Date.now() - radMe.ts > 30000)) radLocate(false); else radRender(); }
 }

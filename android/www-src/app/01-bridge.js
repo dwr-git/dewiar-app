@@ -129,4 +129,11 @@ const N = window.N = {
     const sn = $("#sh-note.on.nte"); if (sn && noteCur) { noteMode = "view"; notePend = []; renderNote(); return true; }   // правка → назад к чтению
     const s = $(".sheet.on"); if (s) { closeSheets(); return true; } if (state !== "idle") { interrupt(); return true; } return false; },
 };
+/* Приложение свёрнуто (MainActivity.onPause → событие «pause»): WebView не всегда ставит document.hidden, и фоновые опросы
+   (синхронизация, радар, объявления…) шли раз в 30–60 с и в кармане — Huawei: «частое обновление данных в фоновом
+   режиме» (владелец 17.11). Опросы по таймеру смотрят сюда; сообщения и звонки в фоне — служба CloseLive. */
+let appPaused = false;
+N.on("pause", () => { appPaused = true; });
+N.on("resume", () => { appPaused = false; });
+const appAway = () => document.hidden || appPaused;
 

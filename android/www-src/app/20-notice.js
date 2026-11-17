@@ -183,7 +183,7 @@ function welcomeArm(byIntent) {                   // приложение на �
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) { clearTimeout(welcomeT); welcomeSeen(); } else welcomeArm(false); });
 addEventListener("pagehide", welcomeSeen);
-setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // пока открыто — «последний раз видели» свежее
+setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока открыто — «последний раз видели» свежее
 
 (function boot() {
   applyPersona(); setState("idle"); quietCheck();

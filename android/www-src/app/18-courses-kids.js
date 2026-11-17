@@ -821,13 +821,16 @@ function clReBind(p, h) {
 function clReOut(e) { if (!e.target.closest(".clrepick")) clReClose(); }
 function clReClose() { $$(".clrepick").forEach(x => x.remove()); document.removeEventListener("pointerdown", clReOut, true); }
 let clInvOpen = false;
-const clLiveWanted = () => !(S.close && S.close.live === false);
+/* постоянная связь — только если человек включил её сам (владелец 17.11: «можно, сейчас редко этим пользуются»; Huawei
+   ругался на частое обновление в фоне): по умолчанию новые сообщения — проверкой раз в 15 минут (CloseWatch) */
+const clLiveWanted = () => !!(S.close && S.close.live === true);
 const clLiveOn = () => clLiveWanted() && !liteOn();      // лёгкий режим — без постоянной связи: проверка раз в 15 минут
 function clLiveCard() {
   if (!D.closeLive || !clLoad().people.length) return "";
   const batt = clLiveOn() && D.batteryOk && !D.batteryOk();
   return `<h3>Когда приложение закрыто</h3><div class="card"><div class="sw"><div>Сообщения и звонки — сразу<small>В шторке — тихий значок «Dewiar на связи»; звонок близкого — на весь экран, даже на заблокированном</small></div>
     <label class="tg"><input type="checkbox" id="cl-live" ${clLiveWanted() ? "checked" : ""}><i></i></label></div>
+    ${!clLiveWanted() ? `<p class="hint" style="margin:8px 2px 0">Сейчас новые сообщения — проверкой раз в 15 минут: так бережнее к батарее. Включите, если близкие часто звонят через Dewiar.</p>` : ""}
     ${clLiveWanted() && liteOn() ? `<p class="hint" style="margin:8px 2px 0">Сейчас лёгкий режим (${esc(liteWhyNow)}): новые сообщения — проверка раз в 15 минут, без постоянной связи.</p>` : ""}
     ${batt ? `<button class="btn w" id="cl-batt" style="margin-top:10px">Разрешить работу в фоне</button><p class="hint" style="margin:6px 2px 0">Иначе телефон может усыплять Dewiar, и звонки будут доходить с опозданием.</p>` : ""}</div>`;
 }

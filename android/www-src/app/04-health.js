@@ -229,7 +229,7 @@ async function cmpTick(min) {
   prefSet("cmp_at", String(Date.now()));
   try { await complaintsCheck(); } catch (e) { }
 }
-setInterval(() => cmpTick(15 * 6e4 - 3e4), window.DEWIAR_CMP_EVERY || 15 * 6e4);   // сама решает, пора ли (cmpWait)
+setInterval(() => cmpTick(15 * 6e4 - 3e4), window.DEWIAR_CMP_EVERY || 15 * 6e4);   // и в фоне: ответ разработчика — уведомлением (раз в 15 мин, только пока жалоба без ответа)   // сама решает, пора ли (cmpWait)
 document.addEventListener("visibilitychange", () => { if (!document.hidden) cmpTick(2 * 6e4); });
 /* Прокси только для серверов Dewiar: dewiar.pro, поддомены, свой сайт аккаунта и облака (Java: NetProxy). */
 function proxyHosts(extra) {

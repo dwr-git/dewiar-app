@@ -660,6 +660,7 @@ function syncCard() {                             // 0.56: синхрониза�
 /* №329 (пакет 27.10): «невозможно найти, где создаётся код синхронизации» — кнопка была только в карточке баланса и
    пропадала, когда мозг свой. Теперь — и здесь, в «Синхронизации», с тем ключом, которым идёт синхронизация. */
 let syncTick = 0;
-setInterval(() => { if (!document.hidden && (!liteOn() || ++syncTick % 3 === 0)) syncRun(false); }, 60000);   // лёгкий режим — раз в 3 минуты
+setInterval(() => { if (!appAway() && (!liteOn() || ++syncTick % 3 === 0)) syncRun(false); }, 60000);   // лёгкий режим — раз в 3 минуты
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { syncSoon(); doneInbox(); } });
+N.on("resume", () => { syncSoon(); doneInbox(); });     // развернули: WebView не всегда шлёт visibilitychange (опросы в фоне стоят)
 

@@ -128,7 +128,7 @@ async function pairClaim(code) {
   return d.key;
 }
 let joinTick = 0;
-setInterval(() => { if (S.join && !document.hidden && !busy && (!liteOn() || ++joinTick % 3 === 0)) joinPoll(false).catch(() => {}); }, 60000);
+setInterval(() => { if (S.join && !appAway() && !busy && (!liteOn() || ++joinTick % 3 === 0)) joinPoll(false).catch(() => {}); }, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && S.join) setTimeout(() => joinPoll(false).catch(() => {}), 1500); });
 async function cloudGet(base, key, path) {
   const r = await http("GET", base.split("?")[0] + "?p=" + path, { headers: { Authorization: "Bearer " + key }, timeout: 10000 });

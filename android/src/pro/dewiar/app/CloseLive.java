@@ -28,6 +28,13 @@ import org.json.JSONObject;
  *  CloseWatch; включена ли — close_live (Bridge.closeLive). */
 public class CloseLive extends Service {
     static final int NOTE = 7301, RING_NOTE = 7302, NEWS_NOTE = 7303;
+    static final long QUIET_MS = 15000;                      // передышка при погасшем экране, если нового не было
+    private volatile boolean empty;
+
+    private boolean screenOn() {
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+        return pm == null || pm.isInteractive();
+    }
     static final String CH_LIVE = "close_live", CH_CALL = "close_call", ACT_DECLINE = "pro.dewiar.CLOSE_DECLINE";
     static volatile boolean visible = false;
     private static volatile Thread loop;
@@ -84,6 +91,9 @@ public class CloseLive extends Service {
             try {
                 if (!once()) { stopSelf(); return; }
                 pause = 2000;
+                // экран погас, а нового не было — передышка между ожиданиями: раз в ~20 с без остановки (≈4 тыс. запросов
+                // в сутки) Huawei считал «частым обновлением данных в фоне» (владелец 17.11); звонок дойдёт в пределах ~35 с
+                if (empty && !screenOn()) Thread.sleep(QUIET_MS);
             } catch (InterruptedException e) {
                 return;
             } catch (Throwable e) {                                // нет сети, облако недоступно — подождать и снова
@@ -109,6 +119,7 @@ public class CloseLive extends Service {
         if (code != 200) throw new Exception("облако ответило " + code);
         JSONObject d = new JSONObject(Net.readAll(h.getInputStream()));
         JSONArray items = d.optJSONArray("items");
+        empty = items == null || items.length() == 0;
         long last = Math.max(seen, d.optLong("last"));
         for (int i = 0; items != null && i < items.length(); i++) {
             JSONObject it = items.getJSONObject(i);

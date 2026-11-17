@@ -84,7 +84,7 @@ function annShow(n) {
 setTimeout(() => annCheck(false), 6000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(() => annCheck(false), 1500); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && clCur && $("#sh-close").classList.contains("on")) clSeen(clCur); });   // вернулись в открытую переписку — «прочитано»
-setInterval(() => { if (!document.hidden) annCheck(false); }, 5 * 60000);
+setInterval(() => { if (!appAway()) annCheck(false); }, 5 * 60000);
 const MON_G = MON;
 function dayHuman(iso) { const d = new Date(iso + "T12:00"); if (isNaN(d)) return iso; const t = new Date(); const y = new Date(Date.now() - 864e5);
   const same = (a, b) => a.toDateString() === b.toDateString();

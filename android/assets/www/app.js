@@ -128,6 +128,13 @@ const N = window.N = {
     const sn = $("#sh-note.on.nte"); if (sn && noteCur) { noteMode = "view"; notePend = []; renderNote(); return true; }   // правка → назад к чтению
     const s = $(".sheet.on"); if (s) { closeSheets(); return true; } if (state !== "idle") { interrupt(); return true; } return false; },
 };
+/* Приложение свёрнуто (MainActivity.onPause → событие «pause»): WebView не всегда ставит document.hidden, и фоновые опросы
+   (синхронизация, радар, объявления…) шли раз в 30–60 с и в кармане — Huawei: «частое обновление данных в фоновом
+   режиме» (владелец 17.11). Опросы по таймеру смотрят сюда; сообщения и звонки в фоне — служба CloseLive. */
+let appPaused = false;
+N.on("pause", () => { appPaused = true; });
+N.on("resume", () => { appPaused = false; });
+const appAway = () => document.hidden || appPaused;
 
 /* ---------- радио: играет внутри приложения (как на компьютере), а не на сайтах и в чужих приложениях ----------
    Свой список станций — тот же, что у компьютера (data/radio.json; свежий — с dewiar.pro раз в 6 часов);
@@ -920,7 +927,7 @@ async function cmpTick(min) {
   prefSet("cmp_at", String(Date.now()));
   try { await complaintsCheck(); } catch (e) { }
 }
-setInterval(() => cmpTick(15 * 6e4 - 3e4), window.DEWIAR_CMP_EVERY || 15 * 6e4);   // сама решает, пора ли (cmpWait)
+setInterval(() => cmpTick(15 * 6e4 - 3e4), window.DEWIAR_CMP_EVERY || 15 * 6e4);   // и в фоне: ответ разработчика — уведомлением (раз в 15 мин, только пока жалоба без ответа)   // сама решает, пора ли (cmpWait)
 document.addEventListener("visibilitychange", () => { if (!document.hidden) cmpTick(2 * 6e4); });
 /* Прокси только для серверов Dewiar: dewiar.pro, поддомены, свой сайт аккаунта и облака (Java: NetProxy). */
 function proxyHosts(extra) {
@@ -7323,7 +7330,7 @@ function annShow(n) {
 setTimeout(() => annCheck(false), 6000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(() => annCheck(false), 1500); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && clCur && $("#sh-close").classList.contains("on")) clSeen(clCur); });   // вернулись в открытую переписку — «прочитано»
-setInterval(() => { if (!document.hidden) annCheck(false); }, 5 * 60000);
+setInterval(() => { if (!appAway()) annCheck(false); }, 5 * 60000);
 const MON_G = MON;
 function dayHuman(iso) { const d = new Date(iso + "T12:00"); if (isNaN(d)) return iso; const t = new Date(); const y = new Date(Date.now() - 864e5);
   const same = (a, b) => a.toDateString() === b.toDateString();
@@ -8837,8 +8844,9 @@ function syncCard() {                             // 0.56: синхрониза�
 /* №329 (пакет 27.10): «невозможно найти, где создаётся код синхронизации» — кнопка была только в карточке баланса и
    пропадала, когда мозг свой. Теперь — и здесь, в «Синхронизации», с тем ключом, которым идёт синхронизация. */
 let syncTick = 0;
-setInterval(() => { if (!document.hidden && (!liteOn() || ++syncTick % 3 === 0)) syncRun(false); }, 60000);   // лёгкий режим — раз в 3 минуты
+setInterval(() => { if (!appAway() && (!liteOn() || ++syncTick % 3 === 0)) syncRun(false); }, 60000);   // лёгкий режим — раз в 3 минуты
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { syncSoon(); doneInbox(); } });
+N.on("resume", () => { syncSoon(); doneInbox(); });     // развернули: WebView не всегда шлёт visibilitychange (опросы в фоне стоят)
 
 /* ---------- Dewiar Облако (server/dwrapp/cloud.php): ключ dw-… или вход аккаунтом, заряд в талерах ----------
    Пути — параметром ?p=: /balance, /models, /usage, /topup, /netcfg, /report, /sync. Для модели base_url облака
@@ -8968,7 +8976,7 @@ async function pairClaim(code) {
   return d.key;
 }
 let joinTick = 0;
-setInterval(() => { if (S.join && !document.hidden && !busy && (!liteOn() || ++joinTick % 3 === 0)) joinPoll(false).catch(() => {}); }, 60000);
+setInterval(() => { if (S.join && !appAway() && !busy && (!liteOn() || ++joinTick % 3 === 0)) joinPoll(false).catch(() => {}); }, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && S.join) setTimeout(() => joinPoll(false).catch(() => {}), 1500); });
 async function cloudGet(base, key, path) {
   const r = await http("GET", base.split("?")[0] + "?p=" + path, { headers: { Authorization: "Bearer " + key }, timeout: 10000 });
@@ -11698,13 +11706,16 @@ function clReBind(p, h) {
 function clReOut(e) { if (!e.target.closest(".clrepick")) clReClose(); }
 function clReClose() { $$(".clrepick").forEach(x => x.remove()); document.removeEventListener("pointerdown", clReOut, true); }
 let clInvOpen = false;
-const clLiveWanted = () => !(S.close && S.close.live === false);
+/* постоянная связь — только если человек включил её сам (владелец 17.11: «можно, сейчас редко этим пользуются»; Huawei
+   ругался на частое обновление в фоне): по умолчанию новые сообщения — проверкой раз в 15 минут (CloseWatch) */
+const clLiveWanted = () => !!(S.close && S.close.live === true);
 const clLiveOn = () => clLiveWanted() && !liteOn();      // лёгкий режим — без постоянной связи: проверка раз в 15 минут
 function clLiveCard() {
   if (!D.closeLive || !clLoad().people.length) return "";
   const batt = clLiveOn() && D.batteryOk && !D.batteryOk();
   return `<h3>Когда приложение закрыто</h3><div class="card"><div class="sw"><div>Сообщения и звонки — сразу<small>В шторке — тихий значок «Dewiar на связи»; звонок близкого — на весь экран, даже на заблокированном</small></div>
     <label class="tg"><input type="checkbox" id="cl-live" ${clLiveWanted() ? "checked" : ""}><i></i></label></div>
+    ${!clLiveWanted() ? `<p class="hint" style="margin:8px 2px 0">Сейчас новые сообщения — проверкой раз в 15 минут: так бережнее к батарее. Включите, если близкие часто звонят через Dewiar.</p>` : ""}
     ${clLiveWanted() && liteOn() ? `<p class="hint" style="margin:8px 2px 0">Сейчас лёгкий режим (${esc(liteWhyNow)}): новые сообщения — проверка раз в 15 минут, без постоянной связи.</p>` : ""}
     ${batt ? `<button class="btn w" id="cl-batt" style="margin-top:10px">Разрешить работу в фоне</button><p class="hint" style="margin:6px 2px 0">Иначе телефон может усыплять Dewiar, и звонки будут доходить с опозданием.</p>` : ""}</div>`;
 }
@@ -11979,7 +11990,7 @@ async function radShare(to, mode) {
   return radPush(true);
 }
 function radTick() {
-  if (document.hidden || (typeof EXAM !== "undefined" && EXAM)) return;
+  if (appAway() || (typeof EXAM !== "undefined" && EXAM)) return;
   if (radOn()) radPush(false);
   if ($("#rad-body") && $("#sh-close").classList.contains("on")) { if (radCan() && (!radMe || Date.now() - radMe.ts > 30000)) radLocate(false); else radRender(); }
 }
@@ -12403,7 +12414,7 @@ function welcomeArm(byIntent) {                   // приложение на �
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) { clearTimeout(welcomeT); welcomeSeen(); } else welcomeArm(false); });
 addEventListener("pagehide", welcomeSeen);
-setInterval(() => { if (!document.hidden) welcomeSeen(); }, 60000);     // пока открыто — «последний раз видели» свежее
+setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока открыто — «последний раз видели» свежее
 
 (function boot() {
   applyPersona(); setState("idle"); quietCheck();
