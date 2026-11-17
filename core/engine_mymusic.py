@@ -371,8 +371,13 @@ class MyMusicMixin:
                     for t in tracks[:1000]]
         if cmd == "mm_folder":
             folder = str(a.get("folder") or "").strip()
-            if folder and not Path(folder).expanduser().is_dir():
-                raise ValueError("такой папки нет")
+            if folder:
+                from workspace import user_dir
+                got = user_dir(folder)
+                if got is None:                  # №821: сказать, какой путь не нашёлся, и как выбрать иначе
+                    raise ValueError(f"не нашла папку «{folder[:120]}» — проверьте путь (его можно скопировать из адресной "
+                                     "строки Проводника) — и вставьте ещё раз")
+                folder = str(got)
             self.s.update({"music": {"folder": folder}})
             threading.Thread(target=self._mine_rescan, name="mymusic", daemon=True).start()
             return True

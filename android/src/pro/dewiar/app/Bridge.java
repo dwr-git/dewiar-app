@@ -575,6 +575,9 @@ public final class Bridge {
     /** Слушать микрофоном Bluetooth-наушников, когда они подключены (настройка «Микрофон наушников»). */
     @JavascriptInterface public void btMic(boolean on) { a.speech.btMic = on; if (!on) BtMic.offNow(a); }
     @JavascriptInterface public boolean btMicAvailable() { return BtMic.available(a); }
+    /** №820 (17.11: «нет звука — ни радио, ни голоса Лиры» в Bluetooth-наушниках): в отчёт — громкость, режим звука и куда
+     *  он идёт, чтобы видеть, не застрял ли голосовой канал гарнитуры. */
+    @JavascriptInterface public String audioInfo() { return BtMic.info(a); }
     @JavascriptInterface public void pauseExtra(int ms) { a.speech.extraMs = Math.max(0, Math.min(900, ms)); }
 
     @JavascriptInterface public void cancelListen() { a.speech.cancel(); }

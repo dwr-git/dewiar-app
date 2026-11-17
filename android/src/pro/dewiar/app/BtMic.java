@@ -88,6 +88,23 @@ final class BtMic {
         }
     }
 
+    /** Для отчёта: громкость медиа, режим звука, включён ли голосовой канал гарнитуры и куда сейчас идёт звук. */
+    static String info(Context c) {
+        try {
+            AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+            StringBuilder out = new StringBuilder();
+            for (AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+                if (out.length() > 0) out.append(',');
+                out.append(d.getType());
+            }
+            return "{\"music\":" + am.getStreamVolume(AudioManager.STREAM_MUSIC) + ",\"music_max\":" + am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                    + ",\"mode\":" + am.getMode() + ",\"sco\":" + am.isBluetoothScoOn() + ",\"bt_mic\":" + on
+                    + ",\"a2dp\":" + am.isBluetoothA2dpOn() + ",\"outs\":[" + out + "]}";
+        } catch (Throwable e) {
+            return "{}";
+        }
+    }
+
     /** Слушание кончилось: выключить через 1,2 с, если не начнётся новое. */
     static void stopSoon() {
         if (!on) return;
@@ -103,10 +120,10 @@ final class BtMic {
             AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
             if (Build.VERSION.SDK_INT >= 31) {
                 try { AudioManager.class.getMethod("clearCommunicationDevice").invoke(am); } catch (Throwable ignored) { }
-            } else {
-                am.setBluetoothScoOn(false);
-                am.stopBluetoothSco();
             }
+            // №820: на части прошивок (Infinix, Android 16) одного clearCommunicationDevice мало — гарнитура оставалась в
+            // голосовом канале, и музыка с голосом уходили «в никуда». Старый способ выключить тоже: если канала нет — ничего
+            try { if (am.isBluetoothScoOn()) am.setBluetoothScoOn(false); am.stopBluetoothSco(); } catch (Throwable ignored) { }
             // №284 (пакет 27.10): «голосом отвечает один раз, потом только после перезапуска» — если гарнитура так и не
             // подключилась (on = false), режим связи оставался включённым, и голос уходил «в трубку». Возвращаем всегда
             if (on || am.getMode() == AudioManager.MODE_IN_COMMUNICATION) am.setMode(AudioManager.MODE_NORMAL);

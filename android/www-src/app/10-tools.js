@@ -58,7 +58,17 @@ const HANDS_TOOLS = [
     parameters: O({ action: { type: "string", enum: ["back", "home", "recents", "notifications", "dewiar"] } }, ["action"]) },
 ];
 const HANDS_SET = new Set(HANDS_TOOLS.map(t => t.name));
-const HANDS_APK = "https://dewiar.pro/dwrapp/Dewiar-hands.apk";
+const HANDS_PAGE = "https://dewiar.pro/dwrapp/download.php";
+/* №818 (17.11, Олег: «скачать версию с руками — ссылка не работает», ERR_TOO_MANY_REDIRECTS): постоянного файла
+   Dewiar-hands.apk на сайте может не быть (его кладёт «Опубликовать», когда загружены оба APK) — тогда сайт уводил по кругу.
+   Берём файл из описания выпуска (latest.json, то же, что обновление); нет его — страница «Скачать» и честная подсказка. */
+async function handsUrl() {
+  try {
+    const a = (JSON.parse((await http("GET", UPD_URL, { timeout: 8000 })).body || "{}").android) || {};
+    if (a.hands_apk) return UPD_URL.replace(/latest\.json$/, a.hands_apk);
+  } catch (e) { }
+  return "";
+}
 function handsCard() {
   const st = typeof D.handsState === "function" ? D.handsState() : "";
   if (st === "none") return `<p class="hint" style="margin:0 0 10px">Ассистент может сам нажимать кнопки, вводить текст и листать в других приложениях: «напиши маме в Telegram…», «найди в YouTube…». Для этого нужна расширенная версия Dewiar — она ставится поверх этой, всё сохранится.
@@ -105,7 +115,12 @@ function handsDevice() {
 function androidSdk() { try { return +JSON.parse(D.info() || "{}").sdk || 0; } catch (e) { return 0; } }
 function wireHands() {
   const dl = $("#hands-dl");
-  if (dl) dl.onclick = () => { D.openUrl(HANDS_APK); };
+  if (dl) dl.onclick = async () => {
+    const u = await handsUrl();
+    if (u) return D.openUrl(u);
+    toast("Версию с управлением приложениями ещё не выложили на сайт — открываю страницу «Скачать»: загляните чуть позже", 6000);
+    D.openUrl(HANDS_PAGE);
+  };
   const b = $("#hands-go");
   if (b) b.onclick = () => { handsAsked = Date.now(); if (!D.openSettings("accessibility")) toast("Откройте Настройки Android → Специальные возможности → Dewiar"); };
   const ap = $("#hands-app");

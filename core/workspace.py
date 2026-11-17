@@ -90,6 +90,47 @@ def fact_parts(fact):
 _DEFAULT_OK = []
 
 
+_LOOKS_LAT = str.maketrans("СсАаВЕеКкМНОоРрТХхDd", "CcAaBEeKkMHOoPpTXxDd")
+_SHELL = {"Desktop": ("desktop", "рабочий стол"), "Documents": ("documents", "документы", "мои документы"),
+          "Music": ("music", "музыка"), "Downloads": ("downloads", "загрузки")}
+
+
+def user_dir(raw):
+    """Папка, которую человек вписал или вставил сам (№821, 17.11: «C:\\Users\\777\\Desktop\\Муза» — «такой папки нет»,
+    хотя папка есть). Прощаем то, на чём спотыкаются руками: кавычки от «Копировать как путь», %USERPROFILE% и ~, русскую
+    «С» в букве диска (раскладка не переключена), рабочий стол и документы, перенесённые в OneDrive или на другой диск.
+    -> Path существующей папки или None."""
+    s = str(raw or "").strip().strip("\"'«»“”„").strip()
+    if not s:
+        return None
+    s = os.path.expandvars(os.path.expanduser(s))
+    if re.match(r"^[^\W\d_]:[\\/]", s):
+        s = s[0].translate(_LOOKS_LAT) + s[1:]
+    p = Path(s)
+    if p.is_dir():
+        return p
+    try:                                    # …\Desktop\Муза, а рабочий стол на самом деле в OneDrive
+        rel = p.relative_to(Path.home())
+    except ValueError:
+        return None
+    head = rel.parts[0].lower() if rel.parts else ""
+    for name, alts in _SHELL.items():
+        if head == name.lower() or head in alts:
+            if os.name == "nt":
+                try:
+                    import winsys
+                    real = winsys.known_folder(name)
+                except Exception:  # noqa: BLE001
+                    real = None
+            else:
+                real = None
+            for base in [x for x in (real, Path.home() / "OneDrive" / name) if x]:
+                q = base.joinpath(*rel.parts[1:])
+                if q.is_dir():
+                    return q
+    return None
+
+
 def default_dir():
     """Папка по умолчанию, в которую правда можно писать. «Документы» бывают сломаны: перенесены на отключённый диск,
     удалены чистильщиком, ссылка в никуда — тогда FileNotFoundError на каждом шаге (19.10: 342 сбоя синхронизации

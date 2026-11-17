@@ -94,7 +94,10 @@ class SyncCommands:
             if cmd in ("knowledge_folders", "knowledge_folder_add", "knowledge_folder_remove"):   # свои папки для поиска
                 cur = [str(x) for x in (self.s.get("knowledge", "folders") or [])]
                 if cmd != "knowledge_folders":
-                    path = str(Path(os.path.expanduser(str(a.get("path") or "").strip())).resolve()) if a.get("path") else ""
+                    from workspace import user_dir     # №821: кавычки, %USERPROFILE%, «С:», рабочий стол в OneDrive
+                    raw = str(a.get("path") or "").strip()
+                    got = user_dir(raw) if cmd == "knowledge_folder_add" else None
+                    path = str((got or Path(os.path.expanduser(raw))).resolve()) if raw else ""
                     if cmd == "knowledge_folder_add":
                         if not path or not Path(path).is_dir():
                             raise ValueError("такой папки нет")

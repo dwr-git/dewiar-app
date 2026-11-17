@@ -195,6 +195,8 @@
      что это, нажмите — откроется в студии. Думает — по кругу бежит свет, в центре вопрос и шаги. */
   const KIND = { diary: ["Дневник", "diary"], radar: ["Радар", "insight"], lead: ["Заявка с сайта", "clients"],
                  remind: ["Напоминание", "reminders"], job: ["Дело по расписанию", "reminders"] };
+  // находка Радара — сразу статья в «читалке» (владелец 17.11: «из Пульта открывается просто Радар, а не статья»)
+  const goOf = (x) => x.k === "radar" && x.id ? "insight:" + x.id : KIND[x.k][1];
   const H12 = 12 * 3600;
   const left = (ts) => { const m = Math.round((ts - Date.now() / 1000) / 60); if (m < 1) return "сейчас";
     const h = Math.floor(m / 60), mm = m % 60; return "через " + (h ? `${h} ч ` : "") + (mm || !h ? `${mm} мин` : "").trim(); };
@@ -260,7 +262,7 @@
     f.hidden = !wide;
     if (wide) {
       const past = ev.filter(x => x.ts <= now).reverse().slice(0, 5);
-      f.innerHTML = `<p class="pu-k">Сегодня</p>` + (past.length ? `<ul>${past.map(x => `<li><button type="button" data-go="${KIND[x.k][1]}"><time>${esc(hhmm(x.ts))}</time><i class="${x.k}"></i><span>${esc(x.t)}</span></button></li>`).join("")}</ul>`
+      f.innerHTML = `<p class="pu-k">Сегодня</p>` + (past.length ? `<ul>${past.map(x => `<li><button type="button" data-go="${esc(goOf(x))}"><time>${esc(hhmm(x.ts))}</time><i class="${x.k}"></i><span>${esc(x.t)}</span></button></li>`).join("")}</ul>`
         : quiet());
     }
     el("#pu-empty").hidden = true;
@@ -269,7 +271,7 @@
   function quiet() {
     const pk = PU.data && PU.data.radar && PU.data.radar.pick;
     if (!pk) return `<p class="pu-fe">Пока тихо. Всё, что Лира сделает за день, — запишет в дневник, и оно появится здесь и на круге.</p>`;
-    return `<button type="button" class="pu-pick" data-go="insight"><span class="pu-k radar">Из Радара${pk.src ? " · " + esc(pk.src) : ""}</span>`
+    return `<button type="button" class="pu-pick" data-go="${pk.id ? "insight:" + esc(pk.id) : "insight"}"><span class="pu-k radar">Из Радара${pk.src ? " · " + esc(pk.src) : ""}</span>`
       + `<b>${esc(pk.title)}</b><span>${esc(pk.gist)}</span><small>Открыть в Радаре</small></button>`;
   }
   let tip = null;
@@ -291,7 +293,7 @@
   el("#pu-stage").addEventListener("pointerleave", () => tipFor(null));
   el("#pu-stage").addEventListener("focusin", (e) => tipFor(e.target.closest(".pu-ev .e")));
   el("#pu-stage").addEventListener("focusout", () => tipFor(null));
-  const goEv = (g) => { const x = g && PU.nodes[+g.dataset.i]; const a = A(); if (x && a && a.open_settings) a.open_settings(KIND[x.k][1]); };
+  const goEv = (g) => { const x = g && PU.nodes[+g.dataset.i]; const a = A(); if (x && a && a.open_settings) a.open_settings(goOf(x)); };
   el("#pu-stage").addEventListener("click", (e) => goEv(e.target.closest(".pu-ev .e")));
   el("#pu-stage").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".pu-ev .e")) { e.preventDefault(); goEv(e.target.closest(".pu-ev .e")); } });
   setInterval(() => { if (PU.active && !document.hidden) dial(); }, 60000);   // стрелка «сейчас» идёт
@@ -328,7 +330,7 @@
         const top = (r.items || [])[0];
         out.push(`<article class="pu-card radar"><p class="pu-k">Радар${r.n ? " · " + r.n + " за сутки" : ""}</p>`
           + (r.trend ? `<p class="pu-tr"><svg viewBox="0 0 40 18" aria-hidden="true"><rect x="0" y="12" width="6" height="6" rx="2"/><rect x="8" y="10" width="6" height="8" rx="2"/><rect x="16" y="8" width="6" height="10" rx="2"/><rect x="24" y="4" width="6" height="14" rx="2"/><rect x="32" y="0" width="6" height="18" rx="2"/></svg><span>${r.trend.status === "new" ? "Новая тема" : "Растёт"} «${esc(r.trend.name)}»<small>${r.trend.day} за сутки</small></span></p>` : "")
-          + (top ? `<p class="pu-ri">${esc(top.title)}${top.src ? `<small>${esc(top.src)}</small>` : ""}</p>` : "")
+          + (top ? `<button type="button" class="pu-ri" data-go="${top.id ? "insight:" + esc(top.id) : "insight"}">${esc(top.title)}${top.src ? `<small>${esc(top.src)}</small>` : ""}</button>` : "")
           + `<button type="button" class="pu-a" data-go="insight">Открыть Радар</button></article>`);
       }
       if ((d.next || []).length) out.push(`<article class="pu-card next"><p class="pu-k">Дальше</p><ul>${d.next.map(x => `<li><time>${esc(hhmm(x.at))}</time>${esc(x.text)}</li>`).join("")}</ul><button type="button" class="pu-a" data-go="reminders">Все дела</button></article>`);

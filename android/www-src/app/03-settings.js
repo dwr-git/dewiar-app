@@ -234,7 +234,7 @@ async function reportSend(note, auto, summary, extra) {
   let text = [`Dewiar (телефон) ${info.version || ""} — отчёт ${new Date().toLocaleString("ru-RU")}`,
     `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`, "",
     ...(note ? ["== Со слов человека", note, ""] : []),
-    "== Состояние", JSON.stringify({ state, online: navigator.onLine, sync: syncStatus, cloud: cloudInfo, alarms: remHealth() || undefined }, null, 1), "",
+    "== Состояние", JSON.stringify({ state, online: navigator.onLine, sync: syncStatus, cloud: cloudInfo, alarms: remHealth() || undefined, audio: audioInfo() }, null, 1), "",
     "== Настройки (без ключей)", JSON.stringify(mask(st), null, 1), "",
     ...(info.crash ? ["== Последнее падение приложения", info.crash, ""] : []),
     ...(errs.length ? ["== Ошибки (последние)", ...errs.slice(-40), ""] : []),

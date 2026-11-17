@@ -26,10 +26,23 @@
       let ws;
       try { ws = new WebSocket(`ws://127.0.0.1:${this.port}`); } catch (e) { return this.retry(); }
       this.ws = ws;
+      /* №819 (17.11: виджет полчаса «Подключаюсь…», перезапуск не помог — студия при этом работала): попытка подключиться,
+         начатая, пока ядро перезапускалось после обновления, может зависнуть навсегда — ни ответа, ни закрытия, а новая
+         попытка шла только после закрытия. Сторож: за 8 с соединение не открылось или за 40 с нет «hello» (слабый компьютер
+         собирает снимок долго — не торопим) — бросаем эту попытку и пробуем снова. */
+      const W = window.DEWIAR_WS_WAIT || 8000;
+      let guard;
+      const drop = () => {
+        if (this.ws !== ws || this.connected) return;
+        ws.onclose = ws.onerror = ws.onmessage = null;
+        try { ws.close(); } catch (e) { /* уже закрыт */ }
+        this.retry();
+      };
+      guard = setTimeout(() => { if (ws.readyState === 0) drop(); else guard = setTimeout(drop, W * 4); }, W);
       ws.onopen = () => ws.send(JSON.stringify({ cmd: "hello", token: this.token }));
       ws.onmessage = (m) => {
         const e = JSON.parse(m.data);
-        if (e.type === "hello") { this.snapshot = e.data; this.connected = true; this.emit("hello", e.data); this._flush(); return; }
+        if (e.type === "hello") { clearTimeout(guard); this.snapshot = e.data; this.connected = true; this.emit("hello", e.data); this._flush(); return; }
         if (e.type === "reply") {
           const p = this.pending[e.id]; delete this.pending[e.id];
           if (p) e.ok ? p.resolve(e.data) : p.reject(new Error(e.error || "ошибка"));
@@ -38,6 +51,7 @@
         this.emit(e.type, e); this.emit("*", e);
       };
       ws.onclose = () => {
+        clearTimeout(guard);
         if (this.connected) this.emit("offline", {});
         this.connected = false;
         // lost — запрос ушёл, ответ потерян: сделано или нет, неизвестно (блокнот, GitHub №34, так и пишет)

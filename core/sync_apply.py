@@ -187,6 +187,15 @@ class ApplyMixin:
                                "Если меняли не вы — верните их в «Душе» и перевыпустите ключ Dewiar в кабинете.")
                     except Exception:  # noqa: BLE001
                         pass
+        elif kind == "mind" and iid == "radar":
+            try:
+                from engine_insight import radar as _radar
+                moved = _radar(h).setup_apply(d)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Радар с другого компьютера: %s", e)
+                moved = False
+            if moved:
+                log.info("🔄 Радар: источники и задача — с другого компьютера")
         elif kind == "mind" and iid == "insights":
             cur = h.diary.data.get("insights") or {}
             if d.get("lines") and str(d.get("day", "")) > str(cur.get("day", "")):

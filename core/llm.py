@@ -1080,12 +1080,17 @@ def probe_server(address, port=""):
                    "проверьте адрес и порт, и что сервер доступен из этой сети")
 
 
-def _models_at(url, timeout=0.6):
-    """Список моделей сервера по адресу …/v1 или None, если там никто не отвечает."""
+def _models_at(url, timeout=0.6, key="", known=""):
+    """Список моделей сервера по адресу …/v1 или None, если там никто не отвечает. key — ключ своего профиля (№821, 17.11:
+    Strata на 127.0.0.1 отвечает на /models только с ключом — «Нода Лиры» её не видела); known — модель профиля: сервер
+    отвечает, а списка моделей не даёт (нет /models) — значит, есть та, которой уже думаем."""
     try:
-        r = httpx.get(url + "/models", timeout=timeout)
+        r = httpx.get(url + "/models", timeout=timeout, headers={"Authorization": f"Bearer {key}"} if key else None)
         if r.status_code == 200:
-            return [m.get("id") for m in r.json().get("data", []) if m.get("id")]
+            ids = [m.get("id") for m in (r.json().get("data") or []) if isinstance(m, dict) and m.get("id")]
+            return ids or ([known] if known else ids)
+        if known and r.status_code in (404, 405):
+            return [known]
     except Exception:  # noqa: BLE001
         pass
     return None

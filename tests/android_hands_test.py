@@ -94,10 +94,17 @@ with sync_playwright() as p:
     opened = pg.evaluate("() => { let w = ''; D.openSettings = (x) => { w = x; return true; }; document.querySelector('#hands-go').click(); return w; }")
     ok(opened == "accessibility", "кнопка открывает «Специальные возможности»")
     # основная сборка без «рук» (Dewiar.apk ставится без предупреждений Android) — карточка ведёт к версии с руками
-    url = pg.evaluate("""() => { D.handsState = () => "none"; let u = ""; D.openUrl = (x) => { u = x; return true; };
-        renderSettings(); const b = document.querySelector('#hands-dl'); if (b) b.click(); return u; }""")
+    # №818 (17.11): ссылка — из описания выпуска (latest.json → hands_apk), а не постоянный адрес, которого может не быть
+    pg.evaluate("""() => { D.handsState = () => "none"; window._u = ""; D.openUrl = (x) => { window._u = x; return true; };
+        window.http = async () => ({ body: JSON.stringify({ android: { hands_apk: "Dewiar-0.9.52-hands.apk" } }) });
+        renderSettings(); const b = document.querySelector('#hands-dl'); if (b) b.click(); }""")
+    pg.wait_for_timeout(300)
+    url = pg.evaluate("window._u")
     card2 = pg.evaluate("() => { const c = document.querySelector('#hands-card'); return c ? c.innerText : ''; }")
-    ok(url.endswith("/Dewiar-hands.apk") and "расширенная версия" in card2, f"в основной сборке — «Скачать версию с «руками»»: {url}")
+    ok(url.endswith("/dwrapp/Dewiar-0.9.52-hands.apk") and "расширенная версия" in card2, f"в основной сборке — «Скачать версию с «руками»» из описания выпуска: {url}")
+    pg.evaluate("""() => { window._u = ""; window.http = async () => ({ body: "{}" }); document.querySelector('#hands-dl').click(); }""")
+    pg.wait_for_timeout(300)
+    ok(pg.evaluate("window._u").endswith("/download.php"), "файла с руками ещё нет — страница «Скачать», а не мёртвая ссылка")
     ok(not errors, f"без ошибок страницы {errors[:2]}")
     b.close()
 print("ALL OK" if not fails else f"ошибок: {len(fails)}")

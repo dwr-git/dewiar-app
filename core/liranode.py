@@ -365,7 +365,7 @@ def models_here(engine=None):
                 b += "/v1"
             if b in seen:
                 continue
-            ids = llm._models_at(b, 1.5)
+            ids = llm._models_at(b, 3, key=str(p.get("api_key") or ""), known=str(p.get("model") or ""))
             if ids is not None:
                 out.append({"name": p.get("name") or "своя модель", "base_url": b, "models": ids, **({"lan": True} if is_lan(b) else {})})
                 seen.add(b)
@@ -435,7 +435,23 @@ def job_clean(body):
     return b, ""
 
 
-def ask_model(base, model, body, timeout):
+def own_key(engine, base):
+    """Ключ своего профиля «Мозга» с этим адресом (№821: Strata на 127.0.0.1 — только с ключом). Ключ уходит лишь на свой
+    адрес (is_own проверяет ask_model) — сайту и сети он не виден. -> "" если профиля нет."""
+    b0 = str(base or "").rstrip("/")
+    try:
+        for p in (engine.s.get("llm", "profiles") or {}).values():
+            b = str(p.get("base_url") or "").rstrip("/")
+            if p.get("kind") == "ollama" and not b.endswith("/v1"):
+                b += "/v1"
+            if b == b0 and p.get("api_key"):
+                return str(p["api_key"])
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def ask_model(base, model, body, timeout, key=""):
     """Задание — своей модели (OpenAI-совместимый /chat/completions, без потока). -> (код, ответ сайту: чистый JSON или,
     если не вышло, причина — её сайту не отправляем, только код)."""
     import httpx
@@ -450,7 +466,8 @@ def ask_model(base, model, body, timeout):
     # (так Qwen выключает размышления сам); и снова пусто — честная причина, что сделать.
     for again in (False, True):
         try:
-            r = httpx.post(base.rstrip("/") + "/chat/completions", json=b, timeout=timeout)
+            r = httpx.post(base.rstrip("/") + "/chat/completions", json=b, timeout=timeout,
+                           headers={"Authorization": f"Bearer {key}"} if key else None)
         except httpx.HTTPError as e:
             return 0, "своя модель не ответила: " + str(e)[:120]
         if r.status_code != 200:
@@ -480,13 +497,13 @@ def ask_model(base, model, body, timeout):
                            ensure_ascii=False)
 
 
-def speed_test(base, model, timeout=30):
+def speed_test(base, model, timeout=30, key=""):
     """Замер: обычный общий вопрос, как пришёл бы от сети. -> {ok, s, chars, tps, text, error}."""
     body = {"messages": [{"role": "system", "content": "Ты — Лира, голосовой помощник. Отвечай коротко и по-русски."},
                          {"role": "user", "content": "Почему небо голубое? Ответь в двух-трёх предложениях."}],
             "max_tokens": 300, "temperature": 0.3, "chat_template_kwargs": {"enable_thinking": False}}
     t0 = time.monotonic()
-    code, raw = ask_model(base, model, body, timeout)
+    code, raw = ask_model(base, model, body, timeout, key=key)
     s = time.monotonic() - t0
     if code != 200:
         return {"ok": False, "s": round(s, 1), "error": raw[:200] if isinstance(raw, str) else "нет ответа"}
@@ -681,7 +698,7 @@ class Node:
         add("power", None if bat is None else (not bat), "Питание", "от сети" if bat is False else "от батареи — нода ждёт зарядку" if bat else "не узнала")
         speed = None
         if pick:
-            speed = speed_test(pick["base"], pick["model"])
+            speed = speed_test(pick["base"], pick["model"], key=own_key(self.e, pick["base"]))
             lim = float(app.get("max_answer_s") or 6)
             if not speed["ok"]:
                 add("speed", False, "Скорость", "модель не ответила: " + (speed.get("error") or ""))
@@ -1021,7 +1038,8 @@ class Node:
             pass
         self._set("work", "")
         t0 = time.monotonic()
-        code, raw = ask_model(self.st.get("base") or "", self.st.get("model") or "", body, limit)
+        code, raw = ask_model(self.st.get("base") or "", self.st.get("model") or "", body, limit,
+                              key=own_key(self.e, self.st.get("base") or ""))
         ms = int((time.monotonic() - t0) * 1000)
         # не вышло — сайту только код (рецензия 0.87, М4: текст ошибки своей модели — адреса, пути — ему ни к чему)
         self._done({"id": jid, "code": code if code == 200 else (code or 0), "body": raw if code == 200 else ""}, ws)

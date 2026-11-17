@@ -230,6 +230,14 @@ class SnapMixin:
         if diary is not None and "mind" in ok and (diary.data.get("insights") or {}).get("lines"):
             ins = diary.data["insights"]
             out["mind:insights"] = {"day": ins.get("day", ""), "title": ins.get("title", ""), "lines": list(ins.get("lines") or [])}
+        if "mind" in ok and getattr(h, "s", None) is not None:   # настройка Радара — та же на всех компьютерах (17.11)
+            try:
+                from engine_insight import radar as _radar
+                rs = _radar(h).setup_snap()
+            except Exception:  # noqa: BLE001
+                rs = None
+            if rs:
+                out["mind:radar"] = rs
         if "diary" in ok:
             d = h.workspace.ensure() / "Дневник"
             titles = (diary.data.get("titles") if diary is not None else None) or {}

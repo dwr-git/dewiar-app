@@ -242,6 +242,9 @@ window.cancelAlarm = (id, btn) => { alarmCancelAll(id); syncSoon(); tmrShow(); i
    блокировки (Android 14+ — отдельное разрешение), уведомления, экономия батареи, опоздания за 2 недели. По марке —
    где «Автозапуск» и батарея, с подписями как на экране (как в инструкции «Управлять приложениями», №144). Кнопки
    открывают нужный экран Android сразу. Карточка — в «Звук напоминаний», коротко — в «Дне», после опоздания — на главном. */
+/* №820: звук телефона для отчёта — громкость, режим, голосовой канал гарнитуры (Bridge.audioInfo) */
+function audioInfo() { try { return D.audioInfo ? JSON.parse(D.audioInfo() || "{}") : undefined; } catch (e) { return undefined; } }
+
 function remHealth() {
   if (D.web || typeof D.alarmHealth !== "function") return null;
   try { const h = JSON.parse(D.alarmHealth() || "null"); return h && typeof h === "object" && "exact" in h ? h : null; } catch (e) { return null; }

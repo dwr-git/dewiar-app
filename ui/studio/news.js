@@ -29,7 +29,15 @@ function annShow(it) {
   $("#an-k").classList.toggle("warn", it.level === "warn");
   $("#an-title").textContent = it.title || ""; $("#an-title").hidden = !it.title;
   $("#an-text").textContent = it.text || "";
-  const go = $("#an-go"); go.hidden = !/^https:\/\//.test(it.link || ""); if (!go.hidden) { go.href = it.link; go.textContent = it.link_label || "Смотреть"; }
+  const go = $("#an-go"); go.hidden = !/^https:\/\//.test(it.link || ""); go.onclick = null;
+  if (!go.hidden) { go.href = it.link; go.textContent = it.link_label || "Смотреть"; }
+  /* идея №300 (17.11: «нажимаю „обновить“ — ведёт на сайт, ещё одна кнопка „скачать“…, а в „О программе“ — одна кнопка»):
+     объявление о новой версии со ссылкой на страницу «Скачать» — в программе это обновление на месте, без сайта */
+  if (!go.hidden && /dewiar\.pro\/(dwrapp\/)?download/i.test(it.link)) {
+    go.textContent = "Обновить"; go.removeAttribute("href");
+    go.onclick = (e) => { e.preventDefault(); $("#an-ok").click(); const b = $('nav button[data-p="about"]'); if (b) b.click();
+      setTimeout(() => { const c = $("#up-check"); if (c) c.click(); }, 150); };
+  }
   d.dataset.id = it.id; if (!d.open) d.showModal(); $("#an-title").focus();
   return true;
 }

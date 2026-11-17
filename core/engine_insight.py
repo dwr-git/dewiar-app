@@ -12,7 +12,7 @@ log = logging.getLogger("dewiar.engine")
 
 DEFAULTS = {"on": True, "mission": "", "daily_max": I.DAILY_MAX, "urgent_min": I.URGENT_MIN, "mode": "always",
             "night": [1, 7], "tick_day": 20, "tick_night": 5, "per_tick_day": 5, "per_tick_night": 25, "day_long": False,
-            "every_day": 180, "every_night": 60, "brief_hour": 7}
+            "every_day": 180, "every_night": 60, "brief_hour": 7, "setup_at": 0}
 
 
 class Radar:
@@ -35,6 +35,48 @@ class Radar:
         allowed = {k: v for k, v in (patch or {}).items() if k in DEFAULTS}
         self.e.s.update({"insight": allowed})
         return self.conf()
+
+    # ---------- одинаковый Радар на всех компьютерах (владелец 17.11: «дома настроил, на работе пришлось заново») ----------
+    def setup_touch(self):
+        """Человек поменял источники или задачу Радара — время правки: синхронизация отдаёт настройку, новее побеждает."""
+        self.set_conf({"setup_at": int(time.time() * 1000)})
+
+    def _setup_at(self, c=None, src=None):
+        """Когда человек последний раз настраивал Радар (мс). Настроенный до 1.0.22 — по самому свежему источнику."""
+        c = c or self.conf()
+        src = self.st.sources() if src is None else src
+        return int(c.get("setup_at") or 0) or max([int(s.get("added") or 0) * 1000 for s in src] or [0])
+
+    def setup_snap(self):
+        """-> запись mind:radar для других устройств ({at, mission, on, sources: [{url, on}]}) или None — настраивать нечего."""
+        c, src = self.conf(), self.st.sources()
+        if not src and not c.get("mission"):
+            return None
+        return {"at": self._setup_at(c, src), "mission": c.get("mission") or "", "on": c.get("on") is not False,
+                "sources": [{"url": s["url"], "on": s.get("on") is not False} for s in src][:300]}
+
+    def setup_apply(self, d):
+        """Настройка Радара с другого устройства: новее нашей — те же источники (добавить, убрать, вкл/выкл) и задача.
+        Собранные материалы и разборы у каждого свои — переносится только то, что настраивал человек. -> поменялось ли."""
+        at = int(d.get("at") or 0)
+        if at <= self._setup_at():
+            return False
+        want = {I.norm_link(x.get("url") or ""): x for x in (d.get("sources") or []) if x.get("url")}
+        have = {I.norm_link(s["url"]): s for s in self.st.sources()}
+        miss = [x["url"] for k, x in want.items() if k not in have]
+        if miss:
+            self.st.add_sources("\n".join(miss))
+        for k, s in {I.norm_link(s["url"]): s for s in self.st.sources()}.items():
+            if k not in want:
+                self.st.remove_source(s["id"])
+            elif bool(want[k].get("on", True)) != (s.get("on") is not False):
+                self.st.update_source(s["id"], on=bool(want[k].get("on", True)))
+        self.set_conf({"mission": str(d.get("mission") or "")[:600], "on": d.get("on") is not False, "setup_at": at})
+        try:
+            self.e.emit("insight", what="sources")
+        except Exception:  # noqa: BLE001
+            pass
+        return True
 
     def lang(self):
         try:
@@ -496,14 +538,17 @@ def command(eng, cmd, a):
     if cmd == "insight_add":
         added, bad, why = r.st.add_sources(str(a.get("text") or ""))
         if added:
+            r.setup_touch()
             _bg(r.tick, True)
         return {"added": [s["name"] for s in added], "bad": bad, "why": why, "sources": r.sources_view()}
     if cmd == "insight_src":
         sid = str(a.get("id") or "")
         if a.get("del"):
             r.st.remove_source(sid)
+            r.setup_touch()
         elif "on" in a:
             r.st.update_source(sid, on=bool(a["on"]))
+            r.setup_touch()
         elif a.get("crawl"):
             src = next((s for s in r.st.sources() if s["id"] == sid), None)
             if not src:
@@ -532,6 +577,7 @@ def command(eng, cmd, a):
         return r.mind_view()
     if cmd == "insight_mission":
         r.set_conf({"mission": str(a.get("text") or "").strip()[:600]})
+        r.setup_touch()
         return r.mind_view()
     if cmd == "insight_evolve":
         _bg(r.evolve)

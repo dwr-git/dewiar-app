@@ -29,7 +29,7 @@ ok(N.is_own("http://127.0.0.1:11434/v1") and N.is_own(LAN[0]) and not N.is_own(N
 
 # «Подходит ли мой компьютер»: профиль «Мозга» на сервере в сети — находится
 llm.discover_local = lambda start=False: []
-llm._models_at = lambda b, t=1.5: ["gemma4:26b", "qwen3.8:27b"] if "192.168.2.44" in b else None
+llm._models_at = lambda b, t=1.5, key="", known="": ["gemma4:26b", "qwen3.8:27b"] if "192.168.2.44" in b else None
 eng = types.SimpleNamespace(s=types.SimpleNamespace(get=lambda a, b=None: {
     "p1": {"name": "Сервер 192.168.2.44 — gemma4:26b", "kind": "openai", "base_url": "http://192.168.2.44:11434/v1"},
     "p2": {"name": "Облако", "kind": "openai", "base_url": "https://api.example.com/v1"}} if (a, b) == ("llm", "profiles") else None))

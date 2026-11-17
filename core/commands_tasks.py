@@ -349,7 +349,8 @@ class TasksCommands:
         if ins is not None:
             try:
                 fresh = sorted(ins.analyzed(24), key=lambda x: -(x.get("ts") or x.get("seen") or 0))[:3]
-                out["radar"] = {"items": [{"title": (x.get("title") or "")[:140], "src": x.get("src_name") or "",
+                # id — чтобы из «Пульта» открывалась сама статья в «читалке» Радара, а не весь Радар (владелец 17.11)
+                out["radar"] = {"items": [{"id": x.get("id") or "", "title": (x.get("title") or "")[:140], "src": x.get("src_name") or "",
                                            "signal": float((x.get("a") or {}).get("signal") or 0), "ts": x.get("ts") or x.get("seen") or 0}
                                           for x in fresh],
                                 "trend": ins.day_trend(), "n": len(ins.analyzed(24))}
@@ -359,12 +360,13 @@ class TasksCommands:
                 if best and str((best.get("a") or {}).get("summary") or "").strip():
                     gist = " ".join(str(best["a"]["summary"]).split())
                     cut = re.search(r"^.{40,240}?[.!?…](?=\s|$)", gist)
-                    out["radar"]["pick"] = {"title": (best.get("title") or "")[:140], "src": best.get("src_name") or "",
+                    out["radar"]["pick"] = {"id": best.get("id") or "", "title": (best.get("title") or "")[:140], "src": best.get("src_name") or "",
                                             "gist": cut.group(0) if cut else gist[:240]}
                 for x in ins.analyzed(24):
                     ts = x.get("ts") or x.get("seen") or 0
                     if ts and now - ts < 12 * 3600:
-                        out["day"].append({"k": "radar", "ts": int(ts), "t": (x.get("title") or "")[:160], "src": x.get("src_name") or ""})
+                        out["day"].append({"k": "radar", "ts": int(ts), "t": (x.get("title") or "")[:160], "src": x.get("src_name") or "",
+                                           "id": x.get("id") or ""})
                 if not out["radar"]["items"]:
                     out["radar"] = None
             except Exception:  # noqa: BLE001
