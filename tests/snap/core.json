@@ -96,6 +96,7 @@
   "cloud_connect",
   "cloud_fallback",
   "cloud_forget",
+  "cloud_limits",
   "cloud_model",
   "cloud_models",
   "cloud_status",

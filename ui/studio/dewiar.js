@@ -408,7 +408,9 @@ function cloudFill(c) {
     : c.frozen ? "Ключ приостановлен — напишите администратору." : c.empty ? "Заряд закончился — пополните, и ассистент снова будет отвечать."
     : `Хватит примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` + (c.low ? " — скоро понадобится пополнить" : "");
   if (c.error && !err) $("#cc-turns").textContent += ` · сейчас не обновилось: ${c.error}`;   // показано последнее известное — честно говорим
-  const pt = perTaler(c); $("#cc-per").textContent = pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы, размышления и картинки дороже` : "";
+  const pt = perTaler(c); $("#cc-per").textContent = (pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы, размышления и картинки дороже.` : "") + monthGiftLine(c);
+  if (!err && !c.empty && !c.frozen) $("#cc-turns").textContent += daysLine(c);
+  limFill(c.limits);
   // №544/№545 (04.11: «пополнил — ничего не пришло»): заявка видна прямо в карточке, со сроком
   if (c.pending) $("#cc-turns").textContent += ` · ${pendingLine()}`;
   // №567/569/571: переустановили с «удалить настройки» — новый ключ с нулём, а заряд остался на прежнем ключе этого
@@ -434,6 +436,33 @@ function cloudFill(c) {
   // расход и список моделей — отдельные запросы к сайту: при открытом «Мозге» не чаще раза в 15 с
   if ($("#p-brain").classList.contains("cur") && Date.now() - (cloudFill._t || 0) > 15000) { cloudFill._t = Date.now(); ccUsage(); ccOpts(); }
 }
+/* 1.0.31 «Баланс» (владелец 18.11): на сколько дней хватит, подарок месяца, свои лимиты, история пополнений */
+const daysWord = (n) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? "день" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "дня" : "дней"; };
+function daysLine(c) {
+  const n = c && c.days_left;
+  if (n == null || n < 0) return "";
+  return n > 365 ? " · при нынешних тратах — больше чем на год" : ` · при нынешних тратах — примерно на ${n.toLocaleString("ru-RU")} ${daysWord(n)}`;
+}
+function monthGiftLine(c) {
+  const g = c && c.gift;
+  if (!g || g.left == null) return "";
+  const until = new Date(g.until + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  const num = (v) => (+v).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+  return ` Подарок месяца: осталось ${num(g.left)} из ${num(g.amount)} тал. до ${until} — не копится, тратится первым.`;
+}
+function limFill(l) {
+  if (!l) { $("#cc-lim").style.display = "none"; return; }
+  $("#cc-lim").style.display = "";
+  const put = (el, v) => { if (document.activeElement !== el) el.value = +v > 0 ? String(+v).replace(".", ",") : ""; };
+  put($("#cc-lim-d"), l.day); put($("#cc-lim-m"), l.month);
+}
+function limSave() {
+  const v = (el) => { const x = el.value.trim().replace(",", "."); return x === "" ? 0 : +x; };
+  const day = v($("#cc-lim-d")), month = v($("#cc-lim-m"));
+  if (!(day >= 0) || !(month >= 0)) { toast("Лимит — число талеров, например 0,5"); return; }
+  core.call("cloud_limits", { day, month }).then(r => toast(r.day || r.month ? "Лимит сохранён — для всех ваших устройств" : "Без лимита")).catch(e => toast(e.message));
+}
+$("#cc-lim-d").onchange = limSave; $("#cc-lim-m").onchange = limSave;
 core.on("cloud", cloudFill);
 $("#nav-cloud").onclick = () => $('nav button[data-p="brain"]').click();
 $("#cc-top").onclick = () => { const t = $("#cc-pay"), open = t.style.display === "none"; t.style.display = open ? "" : "none"; if (open) cpLoad(); };
@@ -444,7 +473,13 @@ function cpList(reqs) {
   $("#cp-list").innerHTML = (reqs || []).map(r => `<div class="rqi ${r.status}"><span>${new Date(r.ts * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
     ${r.amount ? " · " + r.amount + " тал." : ""}${r.reply ? " · «" + escH(r.reply) + "»" : ""}</span><b>${RQ[r.status] || r.status}${r.status === "done" ? " +" + r.credited : ""}</b></div>`).join("");
 }
-async function cpLoad() { try { const r = await core.call("cloud_topup"); ymFill(r.yoomoney); cxFill(payPick(r.pay, "crypto")); payArrange(r.pay); topupText(r.text || ""); cpList(r.requests); } catch (e) { $("#cc-topup").textContent = e.message; } }
+async function cpLoad() { try { const r = await core.call("cloud_topup"); ymFill(r.yoomoney); cxFill(payPick(r.pay, "crypto")); payArrange(r.pay); topupText(r.text || ""); cpList(r.requests); cpHist(r.history); } catch (e) { $("#cc-topup").textContent = e.message; } }
+const HK = { paid: "пополнение", gift: "подарок", burn: "остаток подарка сгорел", minus: "списано" };
+function cpHist(list) {                              // 1.0.31: история — пополнения, подарки, сгоревшие остатки
+  if (!(list || []).length) return;
+  $("#cp-list").insertAdjacentHTML("beforeend", `<div class="cp-hh">История</div>` + list.map(h => `<div class="rqi ${escH(h.kind)}"><span>${new Date(h.ts * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+    · ${escH(HK[h.kind] || h.kind)}${h.note && h.kind === "paid" ? " · " + escH(h.note) : ""}</span><b>${h.amount > 0 ? "+" : "−"}${Math.abs(h.amount).toLocaleString("ru-RU", { maximumFractionDigits: 4 })}</b></div>`).join(""));
+}
 /* «Оплатить картой» (ЮMoney, 03.11; владелец: «пришли оплаты — только номера карт и суммы, как найти этих людей?»): сервер
    отдаёт ссылку перевода с меткой человека DW-… (yoomoney.url), суммы и курс; сумма дописывается, страница ЮMoney открывается
    в браузере, а талеры зачисляются сами (cloud.php ym_notify) — потом баланс обновляем несколько раз, чтобы «+N» было видно */

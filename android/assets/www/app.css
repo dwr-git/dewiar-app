@@ -309,6 +309,9 @@ body.lite-ui .sheet { backdrop-filter: none; -webkit-backdrop-filter: none; back
 .cl-shot img { display: none; max-height: 90px; max-width: 160px; border-radius: 10px; } .cl-shot.has img { display: block; }
 #cl-reqs .rqi { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); padding-top: 6px; }
 #cl-reqs .rqi b { color: var(--ink); } #cl-reqs .rqi.done b { color: var(--good); } #cl-reqs .rqi.rejected b { color: var(--bad); }
+#cl-reqs .cp-hh { margin-top: 12px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+#cl-reqs .rqi.gift b { color: var(--good); } #cl-reqs .rqi.burn b, #cl-reqs .rqi.minus b { color: var(--muted); font-weight: 500; }
+.cl-lim summary { font-size: 13.5px; font-weight: 600; cursor: pointer; }
 /* 0.82.1 (владелец 04.11: «много новых людей, а донатов нет — чтобы было понятно и просто»): «Пополнить» — три шага;
    «Забыть ключ» — ссылкой внизу; карточка «Пополнить» под фразой Лиры; значок баланса у имени персонажа */
 .pay-steps { list-style: none; margin: 2px 0 0; padding: 0; }

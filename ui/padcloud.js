@@ -9,7 +9,7 @@
   const K = { pdf: "PDF", doc: "DOC", sheet: "XLS", slides: "PPT", image: "IMG", text: "TXT" };
   const EXT = /\.(pdf|docx|odt|xlsx|pptx|txt|md|csv|html?|jpe?g|png|webp)$/i;
   const mb = (b) => !b ? "0 МБ" : b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 : 1).replace(".", ",") + " МБ" : Math.max(1, Math.round(b / 1024)) + " КБ";
-  const CL = { active: false, st: null, msg: "" };
+  const CL = { active: false, st: null, msg: "", ask: null };
 
   const tab = document.createElement("button");
   tab.id = "cl-tab"; tab.className = "tab cl"; tab.type = "button"; tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", "false");
@@ -56,10 +56,15 @@
     box.classList.toggle("full", pct > 0.9);
     if (CL.msg) el("#cl-say").textContent = CL.msg;
     const busy = String(st.busy || "");
+    // убрать файл — и здесь, как в студии (владелец 18.11): «×» на плитке, подтверждение — прямо в плитке, без окон
     el("#cl-grid").innerHTML = (st.files || []).map(f => {
       const moving = busy.startsWith("up:" + f.name + ":") || busy.startsWith("down:" + f.name + ":");
-      return `<button type="button" class="cl-f k-${esc(f.kind)}${moving ? " moving" : ""}" data-f="${esc(f.name)}" title="${esc(f.name)}"><i>${K[f.kind] || "TXT"}</i>`
-        + `<span>${esc(f.name)}</span><small>${mb(f.size || 0)}${f.here ? "" : " · скоро будет здесь"}</small></button>`; }).join("")
+      if (CL.ask === f.name) return `<div class="cl-f ask k-${esc(f.kind)}" data-ask="${esc(f.name)}"><span>Убрать «${esc(f.name)}»?</span>`
+        + `<small>Пропадёт на всех ваших устройствах, здесь — в корзину</small><div class="cl-ask"><button type="button" class="cl-yes" data-yes>Убрать</button>`
+        + `<button type="button" class="cl-no" data-no>Отмена</button></div></div>`;
+      return `<div role="button" tabindex="0" class="cl-f k-${esc(f.kind)}${moving ? " moving" : ""}" data-f="${esc(f.name)}" title="${esc(f.name)}"><i>${K[f.kind] || "TXT"}</i>`
+        + `<span>${esc(f.name)}</span><small>${mb(f.size || 0)}${f.here ? "" : " · скоро будет здесь"}</small>`
+        + (moving ? "" : `<button type="button" class="cl-x" data-x aria-label="Убрать «${esc(f.name)}»" title="Убрать отовсюду">×</button>`) + `</div>`; }).join("")
       || "";
   }
   async function load(fresh) {
@@ -163,9 +168,22 @@
     if (!d.files.length && !d.paths.length) return;
     e.preventDefault(); put(d.files, d.paths);
   });
-  el("#cl-grid").addEventListener("click", (e) => {
+  el("#cl-grid").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-no]")) { CL.ask = null; render(); return; }
+    if (e.target.closest("[data-yes]")) {
+      const name = e.target.closest("[data-ask]").dataset.ask;
+      CL.ask = null;
+      try { CL.st = await core.call("drive_remove", { name }); render(); say(`«${name}» убран из облака`); }
+      catch (er) { render(); say(er.message); }
+      return;
+    }
     const b = e.target.closest("[data-f]"); if (!b) return;
+    if (e.target.closest("[data-x]")) { CL.ask = b.dataset.f; render(); const y = el("#cl-grid [data-no]"); if (y) y.focus(); return; }
     core.call("drive_open", { name: b.dataset.f }).catch(er => say(er.message));
+  });
+  el("#cl-grid").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && CL.ask) { CL.ask = null; render(); return; }
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".cl-f[data-f]")) { e.preventDefault(); e.target.click(); }
   });
   const studio = () => { const a = A(); if (a && a.open_settings) a.open_settings("docs"); };
   el("#cl-more").onclick = studio;

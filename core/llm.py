@@ -790,7 +790,8 @@ def stream_events(p, system, messages, cancel=None, tools=None, _retry=0):
                         time.sleep(0.2)
                     yield from stream_events(dict(p, _busy=True), system, messages, cancel, tools, _retry)
                     return
-                if r.status_code == 429 and n < len(RATE_WAIT) and not NO_MONEY_RX.search(err):   # «много запросов» — подождать (денег нет — не ждать)
+                # «много запросов» — подождать (денег нет — не ждать; свой лимит дня или месяца облака Dewiar — тоже: до завтра)
+                if r.status_code == 429 and n < len(RATE_WAIT) and not NO_MONEY_RX.search(err) and not re.search(r'"(?:user_limit|day_limit)"', err):
                     try:
                         wait = min(90.0, float(r.headers.get("retry-after") or RATE_WAIT[n]))
                     except ValueError:

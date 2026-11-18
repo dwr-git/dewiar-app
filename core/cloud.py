@@ -321,6 +321,13 @@ class Cloud:
     def usage(self):
         return fetch(self.url, self.key, "/usage") if self.key else {"days": []}
 
+    def limits_set(self, day=None, month=None):
+        """1.0.31: свои лимиты трат (талеры в день и в месяц, 0 — без лимита) — на сайте, для всех устройств этого ключа."""
+        if not self.key:
+            raise CloudError("сначала подключите ключ Dewiar")
+        body = {k: v for k, v in (("day", day), ("month", month)) if v is not None and str(v).strip() != ""}
+        return fetch(self.url, self.key, "/limits", body=body)
+
     def topup_info(self):
         return fetch(self.url, self.key, "/topup") if self.key else {}
 

@@ -144,6 +144,38 @@ async function cloudPost(path, body) {
   return d;
 }
 const RQ = { new: "на проверке", done: "зачислено", rejected: "отклонено" };
+/* 1.0.31 «Баланс» (владелец 18.11): на сколько дней хватит, подарок месяца, свои лимиты, история — как в студии компьютера */
+const daysWord = (n) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? "день" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "дня" : "дней"; };
+function daysLine(c) {
+  const n = c && c.days_left;
+  if (n == null || n < 0) return "";
+  return n > 365 ? " · при нынешних тратах — больше чем на год" : ` · при нынешних тратах — примерно на ${n.toLocaleString("ru-RU")} ${daysWord(n)}`;
+}
+function monthGiftLine(c) {
+  const g = c && c.gift;
+  if (!g || g.left == null) return "";
+  const until = new Date(g.until + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  const num = (v) => (+v).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+  return ` Подарок месяца: осталось ${num(g.left)} из ${num(g.amount)} тал. до ${until} — не копится, тратится первым.`;
+}
+function limFill(l) {
+  const box = $("#cl-lim"); if (!box) return;
+  box.style.display = l ? "" : "none"; if (!l) return;
+  const put = (el, v) => { if (el && document.activeElement !== el) el.value = +v > 0 ? String(+v).replace(".", ",") : ""; };
+  put($("#cl-lim-d"), l.day); put($("#cl-lim-m"), l.month);
+  const save = () => {
+    const v = (el) => { const x = el.value.trim().replace(",", "."); return x === "" ? 0 : +x; };
+    const day = v($("#cl-lim-d")), month = v($("#cl-lim-m"));
+    if (!(day >= 0) || !(month >= 0)) { toast("Лимит — число талеров, например 0,5"); return; }
+    cloudPost("/limits", { day, month }).then(r => toast(r.day || r.month ? "Лимит сохранён — для всех ваших устройств" : "Без лимита")).catch(e => toast(e.message));
+  };
+  $("#cl-lim-d").onchange = save; $("#cl-lim-m").onchange = save;
+}
+const HK = { paid: "пополнение", gift: "подарок", burn: "остаток подарка сгорел", minus: "списано" };
+function clHist(list) {
+  const el = $("#cl-reqs"); if (!el || !(list || []).length) return;
+  el.insertAdjacentHTML("beforeend", `<div class="cp-hh">История</div>` + list.map(h => `<div class="rqi ${esc(h.kind)}"><span>${new Date(h.ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} · ${esc(HK[h.kind] || h.kind)}</span><b>${h.amount > 0 ? "+" : "−"}${Math.abs(h.amount).toLocaleString("ru-RU", { maximumFractionDigits: 4 })}</b></div>`).join(""));
+}
 function clReqs(list) {
   const el = $("#cl-reqs"); if (!el) return;
   el.innerHTML = (list || []).map(r => `<div class="rqi ${esc(r.status)}"><span>${new Date(r.ts * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}${r.amount ? " · " + (+r.amount || 0) + " тал." + (rubText(+r.amount) ? " " + rubText(+r.amount) : "") : ""}${r.reply ? " · «" + esc(r.reply) + "»" : ""}</span><b>${RQ[r.status] || esc(r.status)}${r.status === "done" ? " +" + (+r.credited || 0) : ""}</b></div>`).join("");
@@ -228,7 +260,7 @@ function cxOpen() {
 }
 async function clPayLoad() {
   try { const r = await cloudGet(cloudBase(), S.llm.api_key, "/topup");
-    ymFill(r.yoomoney); cxFill(payPick(r.pay, "crypto")); payArrange(r.pay); clTopFill(r.text, r.code, r.rub); clReqs(r.requests); }
+    ymFill(r.yoomoney); cxFill(payPick(r.pay, "crypto")); payArrange(r.pay); clTopFill(r.text, r.code, r.rub); clReqs(r.requests); clHist(r.history); }
   catch (e) { if ($("#cl-top")) $("#cl-top").textContent = e.message; }
 }
 /* «Как пополнить» (0.82.1): текст владельца — шагом «1. Оплатите»; ссылки в нём нажимаются (и после «Обновить» — раньше
@@ -366,7 +398,9 @@ function cloudFill(c) {
     : c.frozen ? "Ключ приостановлен — напишите администратору." : c.empty ? "Заряд закончился — пополните, и ассистент снова будет отвечать."
     : `Хватит примерно на ${c.turns.toLocaleString("ru-RU")} ${turnsWord(c.turns)}` + (c.low ? " — скоро понадобится пополнить" : "");
   const pt = (+c.per_taler) || (+c.balance > 0 && +c.turns > 0 ? Math.max(1, Math.round(c.turns / c.balance)) : 0);   // №542
-  if ($("#cl-per")) $("#cl-per").textContent = pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы и размышления дороже` : "";
+  if ($("#cl-per")) $("#cl-per").textContent = (pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы и размышления дороже.` : "") + monthGiftLine(c);
+  if (!c.empty && !c.frozen) $("#cl-turns").textContent += daysLine(c);
+  limFill(c.limits);
   if (c.pending) $("#cl-turns").textContent += " · " + pendingLine();     // №544/№545: заявка видна, со сроком
   clBal = +c.balance || 0;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); clTopFill(c.topup, c.code, c.rub);
