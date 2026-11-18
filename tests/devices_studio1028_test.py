@@ -80,6 +80,10 @@ with sync_playwright() as p:
     ok("Жду ответа" in pg.inner_text("#dv-brains-res"), "«Взять мозги» — жду ответа")
     pg.evaluate("async () => dvBrains(await core.call('brains_status'))"); pg.wait_for_timeout(200)
     ok("С «Рабочий»: Qwen домашний, Claude" in pg.inner_text("#dv-brains-res"), f"пришли мозги — видно, с какого устройства и какие: {pg.inner_text('#dv-brains-res')}")
+    pg.evaluate("""() => dvBrains({ waiting: true, got: [], miss: ["«bonsai-2:27b» работает только на самом «ai» (адрес 127.0.0.1) — в Ollama на нём: Settings → «Expose Ollama to the network»"] })"""); pg.wait_for_timeout(100)
+    rt = pg.inner_text("#dv-brains-res")
+    ok("Expose Ollama to the network" in rt and "ещё раз" in rt and "bad" in pg.get_attribute("#dv-brains-res", "class"),
+       f"№871: мозги не пришли — сказано почему и что включить на том компьютере: {rt[:90]}")
     # телефон «Дома по Wi-Fi» у другого компьютера (04.11): «на связи через „Домашний“»; давно — «был N мин назад»
     pg.evaluate("(via) => { _st = via; return loadMyDevices(true); }", dict(DEV, devices=DEV["devices"][:1] + [
         {"id": "phone-2", "name": "Pixel Вани", "app": "phone", "ver": "0.9.21", "seen": now - 50, "via": "Домашний"},

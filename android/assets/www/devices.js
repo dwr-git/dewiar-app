@@ -105,7 +105,7 @@ function devCloudMore(c) {                          // «Ввести код» �
       <div class="row2"><input id="dv-in" class="dvin" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" aria-label="Код из 6 цифр" style="flex:1;min-width:0;font-size:20px;letter-spacing:.12em;text-align:center"><button class="btn p" id="dv-take-go">Подключить</button></div>
       ${window.DewiarCodes && window.ZXing ? `<button class="btn w" id="dv-scan" style="margin-top:8px">Сканировать код с экрана</button>` : ""}<div class="res" id="dv-take-res"></div></div>
     <h3>Мозги с другого устройства</h3><div class="card"><p class="hint" style="margin:0 0 10px">Настроили модель на компьютере — возьмите её сюда: адрес, модель и ключ придут зашифрованными, только вашим устройствам. Своя модель останется; новые — в «Мозг» → «Прежние мозги».</p>
-      <button class="btn w" id="dv-brains" ${c && !c.home ? "" : "disabled"}>Взять мозги</button><div class="res ${devBrainsGot.length ? "ok" : ""}" id="dv-brains-res">${esc(devBrainsGot.map(g => `С «${g.from}»: ${g.names.join(", ")}`).join(" · "))}</div></div>`;
+      <button class="btn w" id="dv-brains" ${c && !c.home ? "" : "disabled"}>Взять мозги</button><div class="res ${devBrainsGot.length ? "ok" : devBrainsMissed.length ? "bad" : ""}" id="dv-brains-res">${esc(devBrainsGot.map(g => `С «${g.from}»: ${g.names.join(", ")}`).join(" · ") + (devBrainsMissed.length ? (devBrainsGot.length ? " · " : "") + devBrainsMissed.join(". ") : ""))}</div></div>`;
 }
 /* «Компьютер дома — по Wi-Fi» (0.59): подключён — имя компьютера и «Отключить»; нет — «Сканировать код компьютера» */
 function devHomeHtml(c) {
@@ -283,7 +283,7 @@ function devTaskOn(a) {
 /* «Взять мозги с другого устройства» (письмо 28.10: «на компе настроил — другие надо легко подключить, свои мозги-модели»):
    просьба своим устройствам конвертом own {want: ["brains"]}; ответ {brains: {from, profiles}} — только им, зашифрованно.
    Своя модель остаётся; пришедшие — в «Прежние мозги» (вернуть одной кнопкой); мозга не было — первая станет главной. */
-let devBrainsUntil = 0, devBrainsGot = [];
+let devBrainsUntil = 0, devBrainsGot = [], devBrainsMissed = [];
 async function devOwnSend(body) {
   if (!syncCred() || !DC()) return false;
   const k = clKeys(); let fresh = false;
@@ -315,9 +315,32 @@ function devBrainsShare() {
     out.push({ name: l.name || "", kind: l.kind || "openai", base_url: l.base_url, api_key: l.api_key || "", model: l.model || "", economy: l.economy || "", title: l.title || "" }); }
   return out.length ? { from: devMyName(), at: Date.now(), profiles: out.slice(0, 12) } : null;
 }
-async function devBrainsPull() { devBrainsUntil = Date.now() + 600000; devBrainsGot = []; return devOwnSend({ want: ["brains"], from: devMyName() }); }
-function devBrainsTake(b) {
+async function devBrainsPull() { devBrainsUntil = Date.now() + 600000; devBrainsGot = []; devBrainsMissed = []; return devOwnSend({ want: ["brains"], from: devMyName() }); }
+/* №871: модель на том компьютере (Ollama, LM Studio) видна только ему самому — он отдаёт её по адресу в домашней сети (lan);
+   берём, только если отвечает отсюда, иначе — что включить там */
+function devBrainsHint(base) {
+  const b = String(base || "");
+  return /:11434|ollama/i.test(b) ? "в Ollama на нём: Settings → «Expose Ollama to the network»" : /:1234\b/.test(b) ? "в LM Studio на нём: Developer → Settings → «Serve on Local Network»"
+    : "в программе модели на нём разрешите подключения из сети (не только с 127.0.0.1)";
+}
+async function devBrainsReach(base, key) {
+  try { const x = await http("GET", String(base).replace(/\/+$/, "") + "/models", { headers: key ? { Authorization: "Bearer " + key } : {}, timeout: 3000 }); return x.status > 0 && x.status < 500; }
+  catch (e) { return false; }
+}
+async function devBrainsTake(b) {
   if (!b || !Array.isArray(b.profiles) || Date.now() > devBrainsUntil) return;
+  const frm = String(b.from || "другого устройства").slice(0, 40), miss = [];
+  for (const lo of (b.local || []).slice(0, 6)) { if (!lo) continue; const nm = lo.name || "модель", hint = devBrainsHint(lo.base_url);
+    miss.push(`«${nm}» работает только на самом «${frm}» (адрес 127.0.0.1) — ${hint}`); }
+  const ok = [];
+  for (const pr of b.profiles.slice(0, 12)) {
+    if (pr && pr.lan && !(await devBrainsReach(pr.base_url, pr.api_key))) {
+      const nm = pr.name || pr.model || "модель", hint = devBrainsHint(pr.base_url);
+      miss.push(`«${nm}» на «${frm}» не отвечает по домашней сети — ${hint}, и телефон — в том же Wi-Fi`); continue; }
+    ok.push(pr);
+  }
+  if (miss.length) { devBrainsMissed = devBrainsMissed.concat(miss); const r = $("#dv-brains-res"); if (r) { r.className = "res bad"; r.textContent = miss.join(". ") + ". Потом нажмите «Взять мозги» ещё раз."; } }
+  b = Object.assign({}, b, { profiles: ok });
   const have = new Set([S.llm].concat(S.llmSaved || []).filter(Boolean).map(l => String(l.base_url || "").replace(/\/+$/, "") + "|" + (l.model || "")));
   const added = [];
   for (const pr of b.profiles.slice(0, 12)) {

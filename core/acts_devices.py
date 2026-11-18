@@ -58,17 +58,47 @@ class DevicesMixin:
     # ---------- «Взять мозги с другого устройства» (0.56; письмо 28.10: «на компе настроил — другие компы надо легко
 
     def brains_share(self):
-        out = []
+        """Свои модели — своему устройству. Модель на этом же компьютере (127.0.0.1 — Ollama, LM Studio) другой не
+        достанет (№871, 18.11: «не удаётся взять мозги с другого устройства», Ollama на 127.0.0.1): отдаём её по адресу
+        этого компьютера в домашней сети (lan — тот проверит, отвечает ли), а нет такого адреса — только имя (local),
+        чтобы там сказали, почему не пришло."""
+        out, local = [], []
+        lan = ""
         for pid, pr in (self.s.get("llm", "profiles") or {}).items():
             base = str(pr.get("base_url") or "")
-            if not base or pr.get("cloud") or re.search(r"//(?:localhost|127\.|0\.0\.0\.0|\[::1\])", base):
+            if not base or pr.get("cloud"):
                 continue
-            out.append({k: pr.get(k) for k in ("name", "kind", "base_url", "api_key", "model", "economy", "title") if pr.get(k) not in (None, "")})
-        return {"from": self.device_name(), "at": int(time.time() * 1000), "profiles": out[:12]} if out else None
+            item = {k: pr.get(k) for k in ("name", "kind", "base_url", "api_key", "model", "economy", "title") if pr.get(k) not in (None, "")}
+            if re.search(r"//(?:localhost|127\.|0\.0\.0\.0|\[::1\])", base):
+                if lan == "":
+                    try:
+                        from homehub import lan_addresses
+                        lan = (lan_addresses() or [None])[0] or None
+                    except Exception:  # noqa: BLE001
+                        lan = None
+                if not lan:
+                    local.append({"name": item.get("name") or item.get("model") or "модель", "base_url": base})
+                    continue
+                item["base_url"] = re.sub(r"//(?:localhost|127\.[\d.]+|0\.0\.0\.0|\[::1\])", "//" + lan, base, count=1)
+                item["lan"] = True
+            out.append(item)
+        if not out and not local:
+            return None
+        return {"from": self.device_name(), "at": int(time.time() * 1000), "profiles": out[:12], **({"local": local[:6]} if local else {})}
+
+    @staticmethod
+    def brains_hint(base):
+        """Что сделать на том компьютере, чтобы его модель была видна в домашней сети."""
+        b = str(base or "")
+        if ":11434" in b or "ollama" in b.lower():
+            return "в Ollama на нём: Settings → «Expose Ollama to the network»"
+        if ":1234" in b:
+            return "в LM Studio на нём: Developer → Settings → «Serve on Local Network»"
+        return "в программе модели на нём разрешите подключения из сети (не только с 127.0.0.1)"
 
     def brains_pull(self):
         """Попросить свои устройства прислать мозги; ответ примется 10 минут (own_apply). -> {sent}"""
-        self._brains_until, self._brains_got = time.time() + 600, []
+        self._brains_until, self._brains_got, self._brains_miss = time.time() + 600, [], []
         try:
             sent = self.close.own_send({"want": ["brains"], "from": self.device_name()})
         except Exception as e:  # noqa: BLE001
@@ -76,26 +106,41 @@ class DevicesMixin:
         return {"sent": bool(sent), "until": int(self._brains_until)}
 
     def brains_status(self):
-        return {"waiting": time.time() < getattr(self, "_brains_until", 0), "got": list(getattr(self, "_brains_got", []))}
+        return {"waiting": time.time() < getattr(self, "_brains_until", 0), "got": list(getattr(self, "_brains_got", [])),
+                "miss": list(getattr(self, "_brains_miss", []))}
 
     def _brains_take(self, b):
         """Пришли мозги со своего устройства: добавить в профили те, которых нет (тот же адрес и модель — уже есть).
-        Работающую модель не меняем; мозга не было — главной становится первая пришедшая."""
+        Работающую модель не меняем; мозга не было — главной становится первая пришедшая. Модель того компьютера по
+        домашней сети (lan) — только если отвечает отсюда; нет — в miss с подсказкой (№871)."""
         import hashlib
         profiles = dict(self.s.get("llm", "profiles") or {})
         have = {(str(x.get("base_url") or "").rstrip("/"), str(x.get("model") or "")) for x in profiles.values()}
-        added = []
+        added, miss = [], []
+        frm = str(b.get("from") or "другого устройства")[:40]
         for pr in (b.get("profiles") or [])[:12]:
             if not isinstance(pr, dict) or not str(pr.get("base_url") or "").startswith(("http://", "https://")):
                 continue
             key = (str(pr["base_url"]).rstrip("/"), str(pr.get("model") or ""))
             if key in have:
                 continue
+            nm = str(pr.get("name") or "") or key[1] or "Модель"
+            if pr.get("lan") and not self._brains_reach(key[0], str(pr.get("api_key") or "")):
+                miss.append(f"«{nm}» на «{frm}» не отвечает по домашней сети — {self.brains_hint(key[0])}, и оба устройства — в одной сети")
+                continue
             pid = "dev-" + hashlib.sha1("|".join(key).encode()).hexdigest()[:8]
             profiles[pid] = {k: str(pr.get(k) or "") for k in ("name", "kind", "base_url", "api_key", "model", "economy", "title")}
-            profiles[pid]["name"] = profiles[pid]["name"] or key[1] or "Модель"
-            have.add(key); added.append(profiles[pid]["name"])
+            profiles[pid]["name"] = nm
+            have.add(key); added.append(nm)
+        for lo in (b.get("local") or [])[:6]:
+            if isinstance(lo, dict):
+                miss.append(f"«{lo.get('name') or 'модель'}» работает только на самом «{frm}» (адрес 127.0.0.1) — {self.brains_hint(lo.get('base_url'))}")
+        if miss:
+            self._brains_miss = list(getattr(self, "_brains_miss", [])) + miss
+            log.info("🧠 Мозги с «%s» не взялись: %s", frm, "; ".join(miss))
         if not added:
+            if miss:
+                self.emit("brains", data=self.brains_status())
             return []
         patch = {"profiles": profiles}
         if not self._has_own_brain() and not (self.s.get("llm", "active") or ""):
@@ -108,6 +153,16 @@ class DevicesMixin:
         except Exception:  # noqa: BLE001
             pass
         return added
+
+    @staticmethod
+    def _brains_reach(base, key=""):
+        """Отвечает ли модель по этому адресу (список моделей, 3 с)."""
+        import httpx
+        try:
+            r = httpx.get(base.rstrip("/") + "/models", headers={"Authorization": f"Bearer {key}"} if key else {}, timeout=3.0)
+            return r.status_code < 500
+        except Exception:  # noqa: BLE001
+            return False
 
     def _team_on(self):
         T = getattr(self, "team", None)

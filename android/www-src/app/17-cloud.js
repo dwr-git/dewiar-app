@@ -426,6 +426,7 @@ function cloudFill(c) {
   if (c.pending) $("#cl-turns").textContent += " · " + pendingLine();     // №544/№545: заявка видна, со сроком
   clBal = +c.balance || 0;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); clTopFill(c.topup, c.code, c.rub);
+  if (typeof coPhoneFill === "function") coPhoneFill(c);          // «Компания»: кто платит, код от компании (23-company.js)
 }
 /* key — ключ dw-… или (account) токен входа на сайт: его регистр не трогаем. activate:false — только запомнить, своя модель остаётся. */
 async function cloudConnect(key, base, opts = {}) {

@@ -18,7 +18,7 @@ js = r"""const src = require('fs').readFileSync(process.argv[1], 'utf8');
 const a = src.indexOf('let devWay = ""'), b = src.indexOf('function devBind()');
 globalThis.D = {}; globalThis.S = { sync: { home: { t: "t", k: "k", n: "DESKTOP" } } }; globalThis.syncStatus = { chans: [] };
 globalThis.esc = (x) => String(x); globalThis.DEV_IC = { cloud: "", home: "" }; globalThis.window = {};
-globalThis.devOwnBrain = () => false; globalThis.devBrainsGot = [];
+globalThis.devOwnBrain = () => false; globalThis.devBrainsGot = []; globalThis.devBrainsMissed = [];
 globalThis.homeOn = () => true; let CRED = { token: "x", via: "ключ" };
 globalThis.syncCred = () => CRED;
 eval(src.slice(a, b).replace(/^let devWay = ""/, 'globalThis.devWay = ""'));

@@ -239,6 +239,30 @@ class SiteChat:
             self._store({**self.cfg(site), "on": False}, site)
         return self.public(site=site)
 
+    # ---------- свой бот в Telegram (18.11, пилот «Компания», часть А) ----------
+    def tg(self, token, site=""):
+        """Тот же консультант — ещё и в своём боте компании в Telegram; отвечает облако (компьютер может быть выключен).
+        token — из @BotFather; "" — отключить. Токен уходит на сервер Dewiar и здесь не хранится. -> public()."""
+        token = str(token or "").strip()
+        if token:
+            mine = []
+            for owner in (getattr(self.host, "telegram", None), getattr(getattr(self.host, "team", None), "bot", None)):
+                t = (getattr(owner, "data", None) or {}).get("token") if owner is not None else ""
+                if t:
+                    mine.append(t)
+            if token in mine:
+                raise SiteChatError("этот бот уже работает у вас в программе (личный Telegram или «Поручения») — "
+                                    "для клиентов нужен отдельный: @BotFather → /newbot")
+            if not (self.remotes.get(site) and not self.remotes[site].get("none")):
+                raise SiteChatError("сначала опубликуйте чат — бот отвечает по тем же знаниям")
+        body = {"token": token}
+        if site:
+            body["site"] = site
+        self.remotes[site] = self._fetch("/sitechat/tg", body)
+        self.error = ""
+        log.info("💬 Чат для сайта: бот в Telegram %s", self.remotes[site].get("tg") or "отключён")
+        return self.public(site=site)
+
     # ---------- заявки ----------
     def _find_client(self, contact):
         C = self.host.clients
@@ -261,7 +285,8 @@ class SiteChat:
                          for m in (lead.get("talk") or [])[-12:])
         when = datetime.fromtimestamp(lead.get("ts") or time.time()).strftime("%d.%m %H:%M")
         where = f" {lead['site']}.dewiar.pro" if lead.get("site") else ""
-        text = f"Заявка с сайта{where} ({when}): {contact}" + (f" — {lead['note']}" if lead.get("note") else "") + (f"\n{talk}" if talk else "")
+        head = "Заявка из Telegram" if lead.get("via") == "tg" else f"Заявка с сайта{where}"
+        text = f"{head} ({when}): {contact}" + (f" — {lead['note']}" if lead.get("note") else "") + (f"\n{talk}" if talk else "")
         cid = self._find_client(contact)
         if cid:
             C.note(cid, text)
@@ -294,8 +319,14 @@ class SiteChat:
                 log.warning("💬 Заявка с сайта не завелась: %s", e)
                 continue
             done.append(lead["id"])
+            team = getattr(self.host, "team", None)
+            if team is not None and hasattr(team, "lead_task"):      # «Поручения»: заявку — сотруднику, если выбран (18.11)
+                try:
+                    team.lead_task(lead, cid)
+                except Exception:  # noqa: BLE001
+                    log.exception("💬 Заявка: поручение")
             sites = getattr(self.host, "sites", None)
-            if lead.get("site") and sites is not None and hasattr(sites, "_lead_log"):
+            if lead.get("site") and lead.get("via") != "tg" and sites is not None and hasattr(sites, "_lead_log"):
                 # 0.99 (владелец 14.11: «заявка в «Заявках» сайта не появилась, нашёл случайно в «Клиентах»»): заявка из чата —
                 # и во вкладку «Заявки» своего сайта, с пометкой, что из чата
                 try:
@@ -305,7 +336,7 @@ class SiteChat:
             self.recent.append({"ts": lead.get("ts"), "name": lead.get("name") or "", "contact": lead.get("contact") or "", "cid": cid})
             self.recent = self.recent[-20:]
             try:
-                self.host.push("Заявка с сайта", f"{lead.get('name') or 'Посетитель'}, {lead.get('contact')} — в «Клиентах»")
+                self.host.push("Заявка из Telegram" if lead.get("via") == "tg" else "Заявка с сайта", f"{lead.get('name') or 'Посетитель'}, {lead.get('contact')} — в «Клиентах»")
             except Exception:  # noqa: BLE001
                 pass
         if done:

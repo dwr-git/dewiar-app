@@ -428,6 +428,11 @@ class Team:
                 self.st["boss"] = str(a.get("boss") or "").strip()[:60]
             if "speak" in a:
                 self.st["speak"] = bool(a.get("speak"))
+            if "leads_to" in a:                        # заявки клиентов (сайт, Telegram) — поручением этому сотруднику ("" — никому)
+                w = str(a.get("leads_to") or "")
+                if w and w not in self.st["members"]:
+                    raise TeamError("нет такого сотрудника")
+                self.st["leads_to"] = w
             if "digest" in a:                          # «18:30» или "" — итог дня не присылать
                 d = str(a.get("digest") or "").strip()
                 self.st["digest"] = d if re.fullmatch(r"\d{1,2}:\d\d", d) else ""
@@ -616,7 +621,7 @@ class Team:
             tid = secrets.token_hex(4)
             t = {"id": tid, "who": mid, "title": title, "note": str(note or "").strip()[:500],
                  "due": at.strftime("%Y-%m-%dT%H:%M") if at else "", "state": "new", "created": time.time(), "log": []}
-            self._ev(t, "assign", "голосом" if via == "voice" else "по расписанию" if via == "repeat" else "с телефона" if via == "phone" else "")
+            self._ev(t, "assign", "голосом" if via == "voice" else "по расписанию" if via == "repeat" else "с телефона" if via == "phone" else "заявка клиента" if via == "lead" else "")
             self.st["tasks"][tid] = t
         chat = (m.get("tg") or {}).get("chat")
         if chat:
@@ -625,6 +630,30 @@ class Team:
                 self._ev(t, "sent")
         self._changed()
         return dict(t, name=m["name"], joined=bool(chat), sent=bool(t.get("msg")))
+
+    def lead_task(self, lead, cid=""):
+        """Заявка клиента (сайт или Telegram) -> поручение сотруднику из «leads_to» (18.11, «Компания», часть А): позвонить
+        или написать, срок — через 2 часа в рабочее время (вечером — завтра к 10). Никого не выбрали — None."""
+        mid = self.st.get("leads_to") or ""
+        if mid not in self.st["members"]:
+            return None
+        name = str(lead.get("name") or "").strip()
+        contact = str(lead.get("contact") or "").strip()
+        where = "из Telegram" if lead.get("via") == "tg" else (f"с сайта {lead['site']}.dewiar.pro" if lead.get("site") else "с сайта")
+        asks = [str(m.get("text") or "") for m in (lead.get("talk") or []) if m.get("role") == "user"]
+        now = datetime.now()
+        due = now + timedelta(hours=2)
+        if due.hour >= 19 or due.date() != now.date() or now.hour < 8:
+            due = (now if now.hour < 8 else now + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+        note = (f"Заявка {where}" + (f" · {lead['note']}" if lead.get("note") else "")
+                + (f"\nСпрашивал: «{asks[-1][:200]}»" if asks else "") + "\nКарточка клиента — в «Клиентах».")
+        try:
+            t = self.assign(mid, f"Связаться с клиентом: {name + ', ' if name else ''}{contact}", due.strftime("%Y-%m-%dT%H:%M"), note, via="lead")
+            self._tell("👥 Поручения", f"Заявка {where} ({contact}) — поручено: {name_case(t['name'], 'dat')}.", speak=False)
+            return t
+        except TeamError as e:
+            log.info("Поручения: заявка не стала поручением: %s", e)
+            return None
 
     def repeat_add(self, who, title, every, note=""):
         """Повторяющееся поручение: правило из фразы every; первое уйдёт само в день ближайшего срока."""
@@ -745,7 +774,26 @@ class Team:
             raise TeamError("на этом компьютере нет связи с Dewiar")
         return c
 
-    def app_invite(self, mid, renew=False):
+    def hire(self, name, role=""):
+        """«Компания» (18.11): «Пригласить сотрудника» у руководителя — одно приглашение на всё. Сотрудник в «Поручениях»
+        (способ «Приложение Dewiar» включается сам) и, тем же входом, — место в компании: ответы его Лиры оплачивает котёл.
+        -> public() + {hired: {id, name, link, expires}}."""
+        if not self.bots["app"].ready():
+            raise TeamError("нужен вход в Dewiar на этом компьютере — студия → «Мозг»")
+        name = re.sub(r"\s+", " ", str(name or "")).strip()[:60]
+        mid = next((k for k, m in self.st["members"].items() if name and m["name"].lower() == name.lower() and not m.get("tg")), None)
+        if not mid:
+            self.member_add(name, role)
+            mid = next(k for k, m in self.st["members"].items() if m["name"].lower() == name.lower())
+        if not self.st.get("app_on"):
+            with self._lock:
+                self.st["app_on"] = True
+        self.app_invite(mid, seat=True)
+        m = self.st["members"][mid]
+        return dict(self.public(), hired={"id": mid, "name": m["name"], "link": (m.get("app_inv") or {}).get("link", ""),
+                                          "expires": (m.get("app_inv") or {}).get("expires", 0)})
+
+    def app_invite(self, mid, renew=False, seat=False):
         """Код для входа сотрудника в приложении: печать Dewiar (ссылка) — 14 дней. Новый телефон или другой аккаунт —
         «Новая ссылка» (renew) тому же сотруднику: история и поручения на месте, прежняя связь заменится."""
         m = self.st["members"].get(mid)
@@ -755,11 +803,14 @@ class Team:
             raise TeamError("включите способ «Приложение Dewiar» — «Поручения» → «Как это работает»")
         from close import CloseError
         try:
-            d = self._app_close().work_invite(mid, team=self.company(), who=m["name"], boss=self.boss(), renew=renew)
+            d = self._app_close().work_invite(mid, team=self.company(), who=m["name"], boss=self.boss(), renew=renew,
+                                              seat=seat or bool(m.get("seat")))
         except CloseError as e:
             raise TeamError(str(e)) from e
         with self._lock:
             m["app_inv"] = {"link": d.get("link", ""), "token": d.get("token", ""), "expires": int(d.get("expires") or 0)}
+            if seat:
+                m["seat"] = True                        # «Новая ссылка» этому сотруднику — тоже с местом в компании
         self._changed()
         return self.public()
 
@@ -1159,6 +1210,10 @@ class Team:
             text = self.digest(now)
             if text:
                 self._tell("Поручения — итог дня", text)
+            if now.weekday() == 4:                     # пятница — ещё итог недели (18.11, «Компания»: отчёт директору)
+                wk = self.week(now)
+                if wk:
+                    self._tell("Поручения — итог недели", wk, speak=False)
         if changed:
             self._changed()
 
@@ -1190,6 +1245,42 @@ class Team:
         if tomorrow:
             parts.append(f"На завтра — {tomorrow} {'поручение' if tomorrow % 10 == 1 and tomorrow % 100 != 11 else 'поручения' if tomorrow % 10 in (2, 3, 4) and tomorrow % 100 not in (12, 13, 14) else 'поручений'}.")
         return "Итог дня по поручениям. " + " ".join(parts)
+
+    def week(self, now=None):
+        """Итог недели руководителю (пятница, вместе с итогом дня): сколько поручено и сделано, кто сколько сделал,
+        что просрочено, заявки клиентов — сколько пришло и по скольким связались. Ничего не было — ""."""
+        now = now or datetime.now()
+        t0 = (now - timedelta(days=7)).timestamp()
+        nowk = now.strftime("%Y-%m-%dT%H:%M")
+        first = lambda mid: ((self.st["members"].get(mid) or {}).get("name") or "—").split()[0]
+        given = done = 0
+        leads = leads_done = 0
+        by, late = {}, []
+        for t in self.st["tasks"].values():
+            log_ = t.get("log") or []
+            made = t.get("created", 0) >= t0
+            lead = any(e.get("ev") == "assign" and e.get("t") == "заявка клиента" for e in log_)
+            fin = any(e.get("ev") in ("done", "ok") and e.get("ts", 0) >= t0 for e in log_)
+            if made:
+                given += 1
+                if lead:
+                    leads += 1
+                    leads_done += 1 if t["state"] in ("done", "ok") else 0
+            if fin and t["state"] in ("done", "ok"):
+                done += 1
+                by[first(t["who"])] = by.get(first(t["who"]), 0) + 1
+            if t["state"] in OPEN and t.get("due") and t["due"] <= nowk:
+                late.append(f"{first(t['who'])} — «{t['title']}»")
+        if not (given or done or late):
+            return ""
+        parts = [f"Поручено {given}, сделано {done}."]
+        if by:
+            parts.append("Кто сделал: " + ", ".join(f"{n} — {k}" for n, k in sorted(by.items(), key=lambda x: -x[1])[:8]) + ".")
+        if leads:
+            parts.append(f"Заявок клиентов {leads}, связались по {leads_done}.")
+        if late:
+            parts.append(f"Просрочено {len(late)}: " + "; ".join(late[:6]) + ".")
+        return "Итог недели. " + " ".join(parts)
 
     # ---------- для студии и модели ----------
 
@@ -1230,6 +1321,7 @@ class Team:
                 "running": any(b["running"] for b in bots),
                 "company": self.company() if self.connected() or self.st.get("company") else "", "boss": self.boss(),
                 "speak": self.st.get("speak", True) is not False, "members": members, "tasks": tasks, "digest": self.st.get("digest", "18:30"),
+                "leads_to": self.st.get("leads_to", "") if self.st.get("leads_to", "") in self.st["members"] else "",
                 "repeats": [dict(r, name=(self.st["members"].get(r["who"]) or {}).get("name", "—"), rule=repeat_text(r["rep"]),
                                  next_text=due_text(r["next"], now)) for r in sorted(self.st.get("repeats", {}).values(), key=lambda x: x["next"])],
                 "inbox": [dict(x, name=(self.st["members"].get(x["who"]) or {}).get("name", "—")) for x in self.st.get("inbox", [])[-20:]],

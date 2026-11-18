@@ -1220,6 +1220,18 @@
           <p class="sc-hint">Код — на сайт перед &lt;/body&gt; (в Тильде — блок T123 «HTML-код»; в WordPress — в подвал темы или плагином для вставки кода). В углу появится кнопка чата.</p>
           <div class="sc-stats" id="sc-stats"></div>
           <ul class="sc-leads" id="sc-leads"></ul>
+          <div class="sc-tg" id="sc-tg">  <!-- тот же консультант — в своём боте в Telegram, отвечает облако (sitechat_tg.php) -->
+            <h3>И в Telegram</h3>
+            <div id="sc-tg-on" hidden>
+              <p class="sc-tg-name"><i aria-hidden="true"></i><span>Отвечает в боте <b id="sc-tg-bot"></b> — даже когда компьютер выключен. Заявки оттуда — тоже в «Клиентах».</span></p>
+              <div class="sc-tg-acts"><a class="btn small" id="sc-tg-open" target="_blank" rel="noopener">Открыть бота</a><button class="btn small ghost" type="button" id="sc-tg-off">Отключить бота</button></div>
+            </div>
+            <div id="sc-tg-set">
+              <p class="sc-hint">Свой бот компании: клиенты пишут ему — отвечает этот же консультант, по тем же знаниям. В Telegram откройте @BotFather → /newbot → придумайте имя — он пришлёт токен. Вставьте его сюда.</p>
+              <div class="sc-copy"><input type="text" id="sc-tg-tok" placeholder="123456789:AA…" autocomplete="off" spellcheck="false" aria-label="Токен бота из @BotFather"><button class="btn small primary" type="button" id="sc-tg-go">Подключить</button></div>
+              <p class="sc-hint">Нужен отдельный бот — не тот, что для «Поручений» или вашего личного Telegram. Разговор бот помнит три дня.</p>
+            </div>
+          </div>
           <button class="btn small danger" type="button" id="sc-off">Отключить чат</button>
         </div>
       </aside>
@@ -1236,6 +1248,7 @@
       <button data-t="people">Сотрудники</button>
       <button data-t="how">Как это работает</button>
     </div>
+    <div class="tm-co" id="tm-co" hidden></div>  <!-- «Компания»: котёл и места — у руководителя (ui/studio/company.js) -->
     <div id="tm-setup" class="tm-setup" hidden>
       <div class="tm-scard">
         <h2>Как сотрудники получат поручения</h2>
@@ -2143,6 +2156,18 @@
         <button class="btn small" id="cc-use">Отвечать моделями Dewiar</button><button class="btn small" id="cc-ref">Обновить</button><button class="btn small" id="cc-pair" title="Код из 6 цифр и QR — в «Устройствах»">Подключить ещё устройство</button><button class="btn small danger" id="cc-off">Убрать ключ</button></span></div>
       <p class="hint cc-per" id="cc-per" style="margin:6px 0 0"></p>
       <div class="cc-prev" id="cc-prev" hidden><p id="cc-prev-t"></p><button class="btn small primary" id="cc-prev-go">Перенести прежний заряд</button></div>
+      <!-- «Компания» (пилот 18.11, ui/studio/company.js): за ИИ платит компания; войти по коду руководителя -->
+      <div class="cc-co" id="cc-co" hidden><span id="cc-co-t"></span><button class="btn small" id="cc-co-go" type="button"></button></div>
+      <details class="cc-join" id="cc-join" hidden><summary>Компания: код от руководителя или своя</summary>
+        <div class="cc-join-f"><input type="text" id="cc-join-code" placeholder="XXXX-XXXX" maxlength="9" autocomplete="off" spellcheck="false" aria-label="Код компании"><button class="btn small primary" id="cc-join-go" type="button">Войти в компанию</button></div>
+        <p class="hint">Код даёт руководитель: «Поручения» → «Компания». Ответы Лиры будет оплачивать компания, ваш баланс сохранится.</p><p class="res" id="cc-join-res"></p>
+        <div class="cc-new">  <!-- руководитель заводит компанию сам (company_self_create) -->
+          <b>Вы руководитель? Создайте компанию</b>
+          <p class="hint">Общий баланс и места: сотрудники получают поручения в приложении, их ответы Лиры оплачивает компания, вы видите расход каждого. Консультант для сайта и Telegram отвечает клиентам, заявки уходят поручением.</p>
+          <div class="cc-join-f"><input type="text" id="cc-new-name" placeholder="Название, например «Электро Плюс»" maxlength="80" aria-label="Название компании"><button class="btn small" id="cc-new-go" type="button">Создать компанию</button></div>
+          <label class="chk cc-new-mv" id="cc-new-mvl"><input type="checkbox" id="cc-new-mv" checked><span>Перенести мой баланс в котёл компании</span></label>
+          <p class="res" id="cc-new-res"></p>
+        </div></details>
       <p class="res" id="cc-pair-res" style="margin:6px 0 0"></p>
       <div class="cc-pay" id="cc-pay" style="display:none">
         <div class="ym" id="cc-ym" style="display:none">
@@ -3021,6 +3046,7 @@
 <script src="studio/art.js"></script>
 <script src="studio/plugpage.js"></script>
 <script src="studio/transcribe.js"></script>
+<script src="studio/company.js"></script>
 <script src="studio/plugmake.js"></script>
 <script src="studio/ideas.js"></script>
 <script src="studio/node.js"></script>

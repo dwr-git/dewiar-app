@@ -104,8 +104,8 @@ try:
         groups = pg.evaluate("[...document.querySelectorAll('#sh-groups .sh-g')].map(g => g.querySelector('.sh-gh b').textContent)")
         ok(all(g in groups for g in ("Для себя", "Семья и близкие", "Режимы Лиры", "Работа", "Обучение", "Знания", "Настройка")),
            "«Оформление» → «Что показывать»: группы меню — " + ", ".join(groups))
-        ok(pg.evaluate("document.querySelectorAll('#sh-sets .sh-set').length") == 3 and pg.evaluate("document.querySelector('#sh-sets [aria-pressed=true]')?.dataset.set") == "all",
-           "три готовых набора, сейчас — «Всё»")
+        ok(pg.evaluate("document.querySelectorAll('#sh-sets .sh-set').length") == 4 and pg.evaluate("document.querySelector('#sh-sets [aria-pressed=true]')?.dataset.set") == "all",
+           "четыре готовых набора (с 1.0.33 — «Для работы»), сейчас — «Всё»")
         ok(pg.evaluate("!document.querySelector('.sh-g.lock input') && document.querySelector('.sh-g.lock')?.textContent.includes('Оформление')"),
            "«Настройка» — всегда в меню, без переключателей (иначе не вернуть)")
         if SHOTS:

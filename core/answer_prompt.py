@@ -2,6 +2,29 @@
 и её свёртка, окно контекста, системная подсказка (постоянная и короткая), о человеке и персонаже, справка к ходу
 (_turn_context), плагины, задачи и заряд, память персонажа и навыки."""
 from engine_base import *  # noqa: F401,F403 — общие импорты и помощники движка
+
+
+def prompt_parts(system, specs, msgs, profile="", ask=""):
+    """Быстрый голос, шаг 2 (18.11): из чего состоит подсказка — в токенах (оценка): правила и персонаж (sys), описания
+    действий (tools), справка о человеке (prof), разговор (hist), справка к вопросу (ask). Только числа — в пульс (health_cache),
+    чтобы сокращать то, что весит больше, а не наугад."""
+    from llm import est_tokens
+
+    def text_of(ms):
+        out = []
+        for m in ms or []:
+            c = m.get("content")
+            out.append(c if isinstance(c, str) else " ".join(x.get("text", "") for x in c or [] if isinstance(x, dict)))
+            if m.get("tool_calls"):
+                out.append(json.dumps(m["tool_calls"], ensure_ascii=False))
+        return "\n".join(out)
+    allm = est_tokens(text_of(msgs))
+    pt = est_tokens(profile) if profile else 0
+    at = est_tokens(ask) if ask else 0
+    return {"sys": est_tokens(system or ""), "tools": est_tokens(json.dumps(specs, ensure_ascii=False)) if specs else 0,
+            "prof": min(pt, allm), "ask": min(at, max(0, allm - pt)), "hist": max(0, allm - pt - at)}
+
+
 from answer_rules import (
     BIG_PC_RX, CORE_TOOLS, DATE_ASK_RX, device_os, IDEA_RULE, model_label, month_years, PRIVACY_ASK_RX,
     profile_delta, SONGS_ASK_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window)

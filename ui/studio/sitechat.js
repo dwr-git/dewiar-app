@@ -39,7 +39,7 @@ function scFill() {
   const d = SC.d;
   const ps = scPersonas(), cur = d.persona || (S && S.persona) || (ps[0] || {}).id;
   $("#sc-ps").innerHTML = ps.map(x => `<button type="button" role="radio" class="co-m${x.id === cur ? " on" : ""}" aria-checked="${x.id === cur}" data-id="${scE(x.id)}" style="--c:${scE(x.color || "#8B7CFF")}">`
-    + (x.avatar_url ? `<i class="pic" aria-hidden="true" style="background-image:url('${String(x.avatar_url).replace(/'/g, "%27")}')"></i>` : `<i aria-hidden="true">${scE((x.name || "?")[0])}</i>`)
+    + (x.avatar_url ? `<i class="pic" aria-hidden="true" style="background-image:url('${String(x.avatar_url).replace(/\u0027/g, "%27")}')"></i>` : `<i aria-hidden="true">${scE((x.name || "?")[0])}</i>`)
     + `<span><b>${scE(x.name)}</b><small>${scE((x.character || "").slice(0, 60))}</small></span></button>`).join("");
   SC.persona = cur;
   $$("#sc-ps .co-m").forEach(b => b.onclick = () => { SC.persona = b.dataset.id; $$("#sc-ps .co-m").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); scFold(); scDraft(); });
@@ -89,7 +89,7 @@ function scPrev() {
   $("#sc-prev").style.setProperty("--sc", col); $("#sc-ths").style.setProperty("--sc", col);
   const th = SC.theme === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "soft") : SC.theme;
   $("#sc-prev").dataset.theme = th;
-  $("#sc-prev").innerHTML = `<div class="scp-win" data-theme="${th}"><header><i class="scp-ava" ${p.avatar_url ? `style="background-image:url('${String(p.avatar_url).replace(/'/g, "%27")}')"` : ""}>${p.avatar_url ? "" : scE((p.name || "?")[0])}</i>`
+  $("#sc-prev").innerHTML = `<div class="scp-win" data-theme="${th}"><header><i class="scp-ava" ${p.avatar_url ? `style="background-image:url('${String(p.avatar_url).replace(/\u0027/g, "%27")}')"` : ""}>${p.avatar_url ? "" : scE((p.name || "?")[0])}</i>`
     + `<div><b>${scE(p.name || "Консультант")}</b><small>${scE(a.title ? a.title + " · ИИ-помощник" : "ИИ-помощник · отвечает сразу")}</small></div></header>`
     + `<div class="scp-msgs"><p class="scp-a">${scE(a.greeting || "Здравствуйте! Чем помочь?")}</p><p class="scp-u">Сколько стоит доставка?</p>`
     + `<p class="scp-a scp-dim">Отвечу по вашим знаниям${a.ask_contact ? " — а если там нет ответа, предложу оставить контакт" : ""}.</p></div>`
@@ -115,6 +115,27 @@ function scLive() {
   $("#sc-stats").innerHTML = `<span><b>${r.today || 0}</b>вопросов сегодня</span><span><b>${r.total || 0}</b>всего</span><span><b>${(d.recent || []).length}</b>заявок за сеанс</span>`;
   $("#sc-leads").innerHTML = (d.recent || []).map(x => `<li><b>${scE(x.name || x.contact)}</b><small>${scE(x.contact)} · ${new Date((x.ts || 0) * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}</small><button class="btn small" data-cl="${scE(x.cid)}">В «Клиентах»</button></li>`).join("");
   $$("#sc-leads [data-cl]").forEach(b => b.onclick = () => { if (window.CR) CR.cur = b.dataset.cl; const n = $('nav button[data-p="clients"]'); if (n) n.click(); });
+  scTg(r);
+}
+
+/* «И в Telegram» (18.11, «Компания», часть А): тот же консультант в своём боте компании; токен уходит на сервер, сюда — только имя */
+function scTg(r) {
+  const bot = (r && r.tg) || "";
+  $("#sc-tg-on").hidden = !bot; $("#sc-tg-set").hidden = !!bot;
+  if (bot) { $("#sc-tg-bot").textContent = bot; $("#sc-tg-open").href = "https://t.me/" + bot.replace(/^@/, ""); }
+}
+async function scTgSet(token) {
+  const go = $("#sc-tg-go"), off = $("#sc-tg-off");
+  go.disabled = off.disabled = true;
+  try {
+    SC.d = await core.call("sitechat_tg", { token, site: SC.site });
+    $("#sc-tg-tok").value = "";
+    const bot = (SC.d.remote || {}).tg || "";
+    if (token) toast(`Бот ${bot} отвечает клиентам`, 3500);
+    else toast("Бот отключён", 3500);
+    scLive();
+  } catch (e) { toast(e.message, 5000); }
+  finally { go.disabled = off.disabled = false; }
 }
 
 (function scInit() {
@@ -137,6 +158,9 @@ function scLive() {
     if (!await ask(q, { ok: own ? t("sc.off.own.ok") : "Отключить" })) return;
     try { SC.d = await core.call("sitechat_forget", { site: SC.site }); toast(own ? t("sc.off.own.done") : "Чат отключён"); scSites(); scLive(); } catch (e) { toast(e.message, 4000); }
   };
+  $("#sc-tg-go").onclick = () => { const v = $("#sc-tg-tok").value.trim(); if (!v) { $("#sc-tg-tok").focus(); return; } scTgSet(v); };
+  $("#sc-tg-tok").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#sc-tg-go").click(); } };
+  $("#sc-tg-off").onclick = async () => { if (await ask("Отключить бота? Клиенты в Telegram перестанут получать ответы. Сам бот в @BotFather останется.", { ok: "Отключить" })) scTgSet(""); };
   core.on("sitechat", (e) => { if (e && "persona" in e && (e.site || "") === SC.site) { SC.d = e; if ($("#p-sitechat").classList.contains("cur")) scLive(); } });
   window.loadSitechat = loadSitechat;
 })();

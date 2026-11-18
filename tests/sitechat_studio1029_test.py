@@ -25,6 +25,8 @@ FAKE_CORE = """(() => {
       if (c === "sitechat_publish") return Object.assign({}, base, a.patch, { on: true, remote: { id: "abc123def0", link: "https://dewiar.pro/dwrapp/sitechat.php?id=abc123def0",
         embed: '<script src="https://dewiar.pro/dwrapp/sitechat.js" data-id="abc123def0" async></script>', today: 3, total: 41, leads_wait: 0 },
         recent: [{ ts: 1761800000, name: "Анна", contact: "+375 29 111-22-33", cid: "c1" }] });
+      if (c === "sitechat_tg") return Object.assign({}, base, { on: true, remote: { id: "abc123def0", link: "https://dewiar.pro/dwrapp/sitechat.php?id=abc123def0",
+        embed: "<script></script>", today: 3, total: 41, tg: a.token ? "@elektro_help_bot" : "" }, recent: [] });
       if (c === "sitechat_forget") return base;
       return {}; };
     setTimeout(() => core.emit("hello", {}), 200); };
@@ -58,6 +60,23 @@ with sync_playwright() as p:
        and st.inner_text("#sc-pub") == "Обновить на сайте", "после — ссылка, код для сайта, «Обновить на сайте»")
     ok("3вопросов сегодня" in st.inner_text("#sc-stats").replace("\n", "") and "Анна" in st.inner_text("#sc-leads"), "счётчики и последние заявки")
     st.locator("#p-sitechat").screenshot(path="/tmp/claude-0/sitechat_studio.png")
+    # 18.11 «Компания», часть А: тот же консультант — в своём боте в Telegram
+    ok(st.locator("#sc-tg-set").is_visible() and st.locator("#sc-tg-on").is_hidden() and "@BotFather" in st.inner_text("#sc-tg-set"),
+       "«И в Telegram»: как получить токен у @BotFather и поле для него")
+    st.click("#sc-tg-go"); st.wait_for_timeout(150)
+    ok(not [a for c, a in st.evaluate("calls") if c == "sitechat_tg"], "пустой токен — никуда не отправляем")
+    st.fill("#sc-tg-tok", "7012345678:AAHfakeTokenForDewiarTests_abcdefghijk"); st.press("#sc-tg-tok", "Enter"); st.wait_for_timeout(400)
+    tgc = [a for c, a in st.evaluate("calls") if c == "sitechat_tg"]
+    ok(tgc and tgc[-1]["token"].startswith("7012345678:") and tgc[-1]["site"] == "", f"«Подключить» — токен в ядро: {tgc[-1:]}")
+    ok(st.locator("#sc-tg-on").is_visible() and st.inner_text("#sc-tg-bot") == "@elektro_help_bot"
+       and st.get_attribute("#sc-tg-open", "href") == "https://t.me/elektro_help_bot" and st.input_value("#sc-tg-tok") == "",
+       "подключили — «Отвечает в боте @…», ссылка на бота, поле токена очищено")
+    st.locator("#sc-tg").screenshot(path=str(Path(os.environ.get("SHOTS", "/tmp/claude-0")) / "sitechat_tg.png"))
+    st.click("#sc-tg-off"); st.wait_for_timeout(200)
+    ok(st.locator(".dwq").count() == 1, "«Отключить бота» — сначала вопрос")
+    st.click(".dwq .yes"); st.wait_for_timeout(400)
+    tgc = [a for c, a in st.evaluate("calls") if c == "sitechat_tg"]
+    ok(tgc[-1]["token"] == "" and st.locator("#sc-tg-set").is_visible(), "отключили бота — снова поле для токена")
     st.click("#sc-off"); st.wait_for_timeout(200)
     ok(st.locator(".dwq").count() == 1, "«Отключить» — сначала вопрос")
     st.click(".dwq .yes"); st.wait_for_timeout(300)

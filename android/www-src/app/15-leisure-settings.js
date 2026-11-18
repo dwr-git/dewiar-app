@@ -494,6 +494,10 @@ function renderSettings() {
         <div class="sw" style="margin:6px 0"><div><small id="cl-auto-t" style="display:block"></small></div><label class="tg"><input type="checkbox" id="cl-auto-on"><i></i></label></div>
         <div class="row2"><label class="f" style="flex:1;margin:0">Меньше, тал.<input id="cl-auto-below" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">Пополнять на<input id="cl-auto-amt" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">В месяц до<input id="cl-auto-cap" inputmode="decimal"></label></div>
         <small class="hint" id="cl-auto-st" style="display:block;margin-top:4px"></small><button class="btn" id="cl-auto-forget" style="margin-top:6px" hidden>Забыть карту</button></details>
+      <div class="cl-co" id="cl-co" hidden><span id="cl-co-t"></span><button class="btn" id="cl-co-go" hidden>Выйти из компании</button></div>
+      <details class="cl-lim" id="cl-join" hidden><summary>Код от компании</summary>
+        <div class="row2" style="margin-top:6px"><input id="cl-join-code" placeholder="XXXX-XXXX" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Код компании" style="flex:1"><button class="btn p" id="cl-join-go">Войти</button></div>
+        <small class="hint" style="display:block;margin-top:4px">Код даёт руководитель. Ответы Лиры будет оплачивать компания, ваш баланс сохранится.</small><small class="hint" id="cl-join-res" style="display:block"></small></details>
       <div class="cl-use" id="cl-use"></div>
       <div class="row2" style="margin-top:10px"><button class="btn" id="cl-ref" style="flex:1">Обновить</button><button class="btn p" id="cl-how" style="flex:1">Пополнить</button></div>
       <div id="cl-pay" style="display:none;margin-top:12px"><div class="ym" id="cl-ym" style="display:none"><div class="ym-h"><b>Оплатить картой</b><span>Талеры зачислятся сами — через минуту после оплаты, снимок не нужен</span></div>

@@ -336,6 +336,17 @@ class Cloud:
         body = {k: args[k] for k in ("on", "below", "amount", "cap", "forget") if k in args and args[k] not in (None, "")}
         return fetch(self.url, self.key, "/autopay", body=body)
 
+    def company(self, args):
+        """«Компания» (пилот 18.11, сервер — cloud/company.php): op info|join|create {name, move}|invite|seat|remove|limit|leave|uninvite.
+        Ответ — {company: {...}} (и code у приглашения); после изменения заряд обновляется сразу (кто платит — поменялось)."""
+        if not self.key:
+            raise CloudError("сначала подключите ключ Dewiar")
+        body = {k: args[k] for k in ("op", "code", "name", "key", "lim", "move") if k in args and args[k] is not None}
+        r = fetch(self.url, self.key, "/company", body=body)
+        if body.get("op") in ("join", "leave", "remove", "seat", "limit", "create"):
+            threading.Thread(target=self.refresh, daemon=True).start()
+        return r
+
     def topup_info(self):
         return fetch(self.url, self.key, "/topup") if self.key else {}
 

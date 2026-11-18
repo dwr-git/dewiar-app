@@ -17,7 +17,7 @@ from commands_tasks import TasksCommands
 
 
 # Детский режим (kids.py): пока родитель не ввёл PIN, окна не могут менять настройки и делать взрослое
-_KIDS_LOCKED = ("lnet_share", "lnet_invite", "lnet_pause", "lnode_join", "lnode_set", "lnode_leave", "lnode_check", "council_", "podcast_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "homelan_set", "ideas_new", "homelan_pair", "homelan_forget", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup", "cloud_limits", "cloud_autopay",
+_KIDS_LOCKED = ("lnet_share", "lnet_invite", "lnet_pause", "lnode_join", "lnode_set", "lnode_leave", "lnode_check", "council_", "podcast_", "pbot_", "mailing_", "crm_", "sitechat_", "sites_", "account_", "backup_", "mode_set", "senior_", "notes_import", "watch_add", "homelan_set", "ideas_new", "homelan_pair", "homelan_forget", "home_forget", "cal_add", "cal_remove", "cloud_connect", "own_fallback", "cloud_forget", "cloud_model", "cloud_topup", "cloud_limits", "cloud_autopay", "cloud_company",
                 "config_", "const_", "gallery_add", "ha_connect", "ha_forget", "home_connect", "home_forget", "job_", "knowledge_add", "drive_remove", "drive_add_path",
                 "knowledge_remove", "knowledge_folder", "llm_", "mail_", "max_", "memory_forget", "memory_set", "money_",
                 "net_dewiar", "net_proxy", "net_reserve", "sshlink_", "obsidian_", "pay_", "persona_", "plugin", "prompter_", "quit",

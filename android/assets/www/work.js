@@ -161,7 +161,8 @@ async function wkAccept() {
     const j = wkJobs().find(x => x.team === (p.team || x.team) && x.boss === (p.boss || x.boss)) || wkJobs().slice(-1)[0];
     wkCur = j ? j.pid : ""; wkRender();
     if (j) wkSend(j.pid, { act: "hello" }).catch(() => { });
-    say("Готово! Поручения с работы теперь здесь.");
+    say(d.company ? `Готово! Поручения с работы теперь здесь, а ответы Лиры оплачивает компания «${d.company}».` : "Готово! Поручения с работы теперь здесь.");
+    if (d.company && typeof cloudBalance === "function") setTimeout(() => cloudBalance(true).then(cloudFill).catch(() => {}), 400);   // «Мозг» → кто платит
     clSchedule(); setTimeout(clPoll, 2500);
   } catch (e) { if (r) { r.className = "res err"; r.textContent = e.message; } }
 }
@@ -354,7 +355,8 @@ function wkJoinHtml(p) {
   return `<div class="wk-hero join">${WK_IC}<small>Приглашение на работу</small><b>${esc(p.team || "Команда")}</b>`
     + `<p>${p.boss ? `${esc(p.boss)} зовёт вас` : "Вас зовут"}${p.who ? ` как «${esc(p.who)}»` : ""} получать поручения здесь, в «Работе».</p></div>`
     + `<div class="card wk-terms"><p>✓ Руководитель видит только поручения: что вы взяли, сделали или перенесли, и что вы ему написали.</p>`
-    + `<p>✓ Ваши заметки, напоминания, близкие и разговоры с Лирой ему не видны.</p><p>✓ Уйти можно в любой момент — рабочее исчезнет с телефона.</p></div>`
+    + `<p>✓ Ваши заметки, напоминания, близкие и разговоры с Лирой ему не видны.</p><p>✓ Уйти можно в любой момент — рабочее исчезнет с телефона.</p>`
+    + (p.company ? `<p>✓ Ответы Лиры оплачивает компания «${esc(p.company)}» — ваш собственный баланс не тратится.</p>` : "") + `</div>`
     + `<button class="btn p w" id="wk-jok">Присоединиться</button><button class="btn w" id="wk-jno" style="margin-top:8px">Не сейчас</button><div class="res" id="wk-jres"></div>`
     + (days ? `<p class="hint wk-foot">Приглашение действует ещё ${days} ${days === 1 ? "день" : days < 5 ? "дня" : "дней"}.</p>` : "");
 }

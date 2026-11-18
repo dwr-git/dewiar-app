@@ -272,8 +272,12 @@ $("#dv-brains-go").onclick = async (ev) => {
   } catch (e) { r.className = "res bad"; r.textContent = e.message; ev.target.disabled = false; }
 };
 function dvBrains(st) {
-  const r = $("#dv-brains-res"); if (!r || !st || !(st.got || []).length) return;
-  r.className = "res ok"; r.textContent = st.got.map(g => `С «${g.from}»: ${g.names.join(", ")}`).join(" · ") + ". Выбрать — в «Мозге».";
+  const r = $("#dv-brains-res"), got = (st && st.got) || [], miss = (st && st.miss) || [];
+  if (!r || (!got.length && !miss.length)) return;
+  // №871: модель того компьютера видна только ему самому (127.0.0.1) — сказать, что включить там
+  r.className = "res " + (got.length ? "ok" : "bad");
+  r.textContent = (got.length ? got.map(g => `С «${g.from}»: ${g.names.join(", ")}`).join(" · ") + ". Выбрать — в «Мозге»." : "")
+    + (miss.length ? (got.length ? " " : "") + miss.join(". ") + ". Потом нажмите «Взять мозги» ещё раз." : "");
   $("#dv-brains-go").disabled = false; clearInterval(DV_BR);
 }
 core.on("brains", (e) => dvBrains(e.data));

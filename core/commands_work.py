@@ -111,6 +111,8 @@ class WorkCommands:
                     return W.public(site=site)
                 if cmd == "sitechat_forget":
                     return W.forget(site=site)
+                if cmd == "sitechat_tg":               # свой бот компании в Telegram — тот же консультант (18.11)
+                    return W.tg(a.get("token") or "", site=site)
                 if cmd == "sitechat_poll":
                     n = W.poll()
                     return dict(W.public(), took=n)
@@ -295,6 +297,8 @@ class WorkCommands:
                 return dict(T.public(), made=({"repeat": True, "rule": r["rule"], "name": r["name_dat"]} if r.get("repeat") else {}))
             if cmd == "team_message":                   # написать сотруднику: ответ на сообщение или просто слово
                 return T.message(str(a.get("id") or a.get("who") or ""), str(a.get("text") or ""))
+            if cmd == "team_hire":                      # «Компания»: одно приглашение — «Поручения» в приложении и место в компании
+                return T.hire(a.get("name"), a.get("role") or "")
             if cmd == "team_app_invite":                # приложение Dewiar: печать и ссылка сотруднику (renew — новые)
                 return T.app_invite(str(a.get("id") or ""), bool(a.get("renew")))
             if cmd == "team_repeat_del":

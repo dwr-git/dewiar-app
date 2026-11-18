@@ -17,10 +17,16 @@ Object.entries(HM_NAV).forEach(([a, ps]) => ps.forEach(p => { SH_APP[p] = a; }))
 /* готовые наборы — что скрыть (остальное показать) */
 const SH_WORK = new Set(["team", "clients", "mailing", "sites", "sitechat", "prompter", "pbot", "ref"]);
 const SH_MIN = new Set(["chat", "calendar", "reminders", "notes", "close", "memory", "qa", "dw"]);
+/* «Для работы» (пилот «Лира для компании», владелец 18.11: «часть функций скрывать… клиенты, поручения, радар, виджет, сайты
+   и телеграм повыше»): личное и развлечения — скрыть; рабочее — включить и поднять на «Главной» первым */
+const SH_HOME = new Set(["node", "music", "pay", "art", "council", "podcast", "family", "ref", "kids", "senior", "course", "diary", "soul", "const"]);
+const SH_WORK_FIRST = ["team", "clients", "insight", "sites", "chat", "reminders", "calendar", "notes", "docs", "tasks"];
 const SH_SETS = [
   { id: "all", name: "Всё", sub: "Все разделы на виду", hide: () => false },
   { id: "self", name: "Для себя", sub: "Без работы и бизнеса: клиентов, рассылок, сайтов, суфлёра, ботов", hide: (p) => SH_WORK.has(p) },
   { id: "min", name: "Минимум", sub: "Чат, дела, календарь, заметки, близкие, память — и настройки", hide: (p) => !SH_MIN.has(p) },
+  { id: "work", name: "Для работы", sub: "Клиенты, поручения, Радар, сайты и боты — наверху; личное и развлечения скрыты", hide: (p) => SH_HOME.has(p),
+    feats: { team: true, clients: true, sites: true }, first: SH_WORK_FIRST },
 ];
 const SH = { busy: false };
 
@@ -83,7 +89,7 @@ function shCurSet() {
 
 /** Сохранить: hidden — какие разделы скрыть (из тех, что здесь есть); feats — что включить в «Возможностях»; play —
     значок «Досуг» на «Главной» (true/false; undefined — как есть) */
-async function shSave(hidden, feats, play) {
+async function shSave(hidden, feats, play, first) {
   if (SH.busy) return;
   let apps = hmApps().slice();
   const nav = [];
@@ -94,6 +100,7 @@ async function shSave(hidden, feats, play) {
     nav.push(p);
   }
   for (const [a, ps] of Object.entries(HM_NAV)) if (ps.some(q => !hidden.has(q)) && !apps.includes(a)) apps.push(a);
+  if (first) apps = [...first.filter(a => apps.includes(a) || (HM_NAV[a] && HM_NAV[a].some(q => !hidden.has(q)))), ...apps.filter(a => !first.includes(a))];   // «Для работы»: рабочее — первым
   if (play === false) apps = apps.filter(x => x !== "play");
   if (play === true && !apps.includes("play")) apps.push("play");
   if (!apps.length) { toast("Хотя бы один раздел со значком на «Главной» оставьте"); shRender(); return; }
@@ -130,8 +137,15 @@ function shPreset(id) {
   const h = new Set(shHideable().filter(p => s.hide(p)));
   const left = shModel().flatMap(g => g.items).filter(i => !h.has(i.p)).length;
   toast(id === "all" ? "Всё снова на виду" : `Набор «${s.name}»: в меню ${left} ${plural(left, "раздел", "раздела", "разделов")}. Вернуть — здесь же`, 3200);
-  return shSave(h, null, id === "min" ? false : id === "all" ? true : undefined);
+  return shSave(h, s.feats || null, id === "min" || id === "work" ? false : id === "all" ? true : undefined, s.first);
 }
+/* «Компания»: вошли в компанию — набор «Для работы», раз и молча (если меню ещё не настраивали руками: свой набор не трогаем) */
+function shApplyWork() {
+  const cur = shCurSet();
+  if (cur !== "self" && cur !== "all") return;          // свой набор, «Минимум» или уже «Для работы» — не трогаем
+  return shPreset("work");
+}
+window.shApplyWork = shApplyWork;
 
 function shRender() {
   const box = $("#sh-groups"); if (!box || !S) return;

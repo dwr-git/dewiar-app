@@ -1225,12 +1225,14 @@ class Close:
             self._save()
         return self.st["work"]
 
-    def work_invite(self, mid, team="", who="", boss="", renew=False):
-        """Код и ссылка для сотрудника mid (печать Dewiar — та же ссылка). -> {token, link, app, expires}."""
+    def work_invite(self, mid, team="", who="", boss="", renew=False, seat=False):
+        """Код и ссылка для сотрудника mid (печать Dewiar — та же ссылка). seat — руководитель компании: тем же входом
+        сотрудник получит и место в ней (одно приглашение, 18.11). -> {token, link, app, expires}."""
         self._keys()
         if not self.st.get("me") or time.time() - float(self.st.get("hello_at") or 0) > 600:
             self.hello()                                 # ключ этого устройства — на сервере до того, как сотрудник войдёт
-        d = self._req("POST", "/work/invite", {"mid": mid, "team": team, "who": who, "boss": boss, "renew": bool(renew)}).json()
+        d = self._req("POST", "/work/invite", {"mid": mid, "team": team, "who": who, "boss": boss, "renew": bool(renew),
+                                                 **({"seat": True} if seat else {})}).json()
         with self._lock:
             self.st["work_wait"] = max(_int(self.st.get("work_wait")), _int(d.get("expires")))   # ждём входа — опрос чаще
             self._save()

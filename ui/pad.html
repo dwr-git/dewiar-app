@@ -341,7 +341,12 @@
   body.light { --pu-think: #4a63d8; --pu-mem: #177e7a; --pu-radar: #c2410c; --pu-lead: #23784a; --pu-err: #c4473a;
                --pu-card: rgba(255,255,255,.6); --pu-lift: 0 10px 24px rgba(36,50,74,.12); --pu-glow: rgba(74,99,216,.24);
                --pu-veil: rgba(219,229,241,.72); --pu-leadbg: #e2efe7; }
-  body.neu.light { --pu-card: var(--paper); --pu-lift: 6px 6px 14px var(--neu-dark, #b8c5d6), -6px -6px 14px var(--neu-light, #fff); }
+  /* 18.11 вечер, владелец: «слишком белый блок… нижние на каком-то фоне, скруглённые уголки на углах без скруглений»: тень
+     «бумаги» (6px вокруг) обрезалась прокруткой ряда карточек прямоугольником. Карточки — то же стекло, что сцена, тень —
+     короткая, вниз, в запас ряда (padding) */
+  body.neu.light { --pu-card: linear-gradient(165deg, rgba(255,255,255,.34), rgba(255,255,255,.14));
+    --pu-lift: inset 0 1px 0 rgba(255,255,255,.75), inset 0 0 0 1px rgba(255,255,255,.32), 0 8px 18px -12px rgba(36,50,74,.3); }
+  body.neu.light .pu-cards { padding: 2px 4px 12px; margin: 0 -4px -10px; }
   .tab.pt { gap: 6px; padding: 6px 9px 6px 10px; }
   .tab.pt[hidden], body.play .tab.pt { display: none; }
   .pt-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .3s, box-shadow .3s; }
@@ -365,9 +370,9 @@
   /* 18.11, владелец: «вдавленное обычно у полей ввода, а здесь мы не вводим… светлая матовая, как полупрозрачное стекло»:
      сцена — матовое стекло (светлый полупрозрачный лист, размытие под ним, светлая кромка, мягкая тень); циферблат на нём —
      с тенью мягче, чем на бумаге */
-  body.neu.light .pu-stage { background: linear-gradient(165deg, rgba(255,255,255,.62), rgba(255,255,255,.26) 60%);
+  body.neu.light .pu-stage { background: linear-gradient(165deg, rgba(255,255,255,.36), rgba(255,255,255,.12) 62%);
     -webkit-backdrop-filter: blur(18px) saturate(1.15); backdrop-filter: blur(18px) saturate(1.15);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.4), 0 22px 44px -26px rgba(36,50,74,.32); }
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8), inset 0 0 0 1px rgba(255,255,255,.3), 0 18px 36px -26px rgba(36,50,74,.28); }
   #pu-sky { position: absolute; inset: 0; }
   #pu-names { position: absolute; inset: 0; pointer-events: none; }
   /* «Циферблат дня» (16.11): круг — сутки вокруг «сейчас»; слева прошедшее, справа впереди */

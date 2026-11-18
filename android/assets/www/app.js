@@ -7909,6 +7909,10 @@ function renderSettings() {
         <div class="sw" style="margin:6px 0"><div><small id="cl-auto-t" style="display:block"></small></div><label class="tg"><input type="checkbox" id="cl-auto-on"><i></i></label></div>
         <div class="row2"><label class="f" style="flex:1;margin:0">Меньше, тал.<input id="cl-auto-below" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">Пополнять на<input id="cl-auto-amt" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">В месяц до<input id="cl-auto-cap" inputmode="decimal"></label></div>
         <small class="hint" id="cl-auto-st" style="display:block;margin-top:4px"></small><button class="btn" id="cl-auto-forget" style="margin-top:6px" hidden>Забыть карту</button></details>
+      <div class="cl-co" id="cl-co" hidden><span id="cl-co-t"></span><button class="btn" id="cl-co-go" hidden>Выйти из компании</button></div>
+      <details class="cl-lim" id="cl-join" hidden><summary>Код от компании</summary>
+        <div class="row2" style="margin-top:6px"><input id="cl-join-code" placeholder="XXXX-XXXX" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Код компании" style="flex:1"><button class="btn p" id="cl-join-go">Войти</button></div>
+        <small class="hint" style="display:block;margin-top:4px">Код даёт руководитель. Ответы Лиры будет оплачивать компания, ваш баланс сохранится.</small><small class="hint" id="cl-join-res" style="display:block"></small></details>
       <div class="cl-use" id="cl-use"></div>
       <div class="row2" style="margin-top:10px"><button class="btn" id="cl-ref" style="flex:1">Обновить</button><button class="btn p" id="cl-how" style="flex:1">Пополнить</button></div>
       <div id="cl-pay" style="display:none;margin-top:12px"><div class="ym" id="cl-ym" style="display:none"><div class="ym-h"><b>Оплатить картой</b><span>Талеры зачислятся сами — через минуту после оплаты, снимок не нужен</span></div>
@@ -9441,6 +9445,7 @@ function cloudFill(c) {
   if (c.pending) $("#cl-turns").textContent += " · " + pendingLine();     // №544/№545: заявка видна, со сроком
   clBal = +c.balance || 0;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); clTopFill(c.topup, c.code, c.rub);
+  if (typeof coPhoneFill === "function") coPhoneFill(c);          // «Компания»: кто платит, код от компании (23-company.js)
 }
 /* key — ключ dw-… или (account) токен входа на сайт: его регистр не трогаем. activate:false — только запомнить, своя модель остаётся. */
 async function cloudConnect(key, base, opts = {}) {
@@ -12710,3 +12715,40 @@ const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы при
   try { const r = JSON.parse(D.radioState() || "{}"); if (r.state) N.ev({ type: "radio", state: r.state, name: r.name || "", error: r.error || "" }); } catch (e) { }
 })();
 window.DEWIAR_STARTED = true;                      // веб-версия: страница ожила (иначе index.html скажет человеку и сайту — tools/build_web.sh)
+/* ---------- «Компания» на телефоне (пилот 18.11; сервер — server/dwrapp/cloud/company.php, студия — ui/studio/company.js).
+   «Мозг» → «Баланс»: в компании — кто платит, свой лимит и потрачено, «Пополнить» прячется у сотрудника (пополняет
+   руководитель), «Выйти из компании»; не в компании — «Код от компании». Места и приглашения — у руководителя на компьютере. */
+const coNumP = (v) => { const n = +v || 0; return (Math.abs(n) < 0.01 && n ? n.toFixed(4) : n.toFixed(2)).replace(/\.?0+$/, "").replace(".", ","); };
+function coPhoneFill(c) {
+  const box = $("#cl-co"), join = $("#cl-join");
+  if (!box || !join) return;
+  const co = c && c.company;
+  join.hidden = !!co || !!c.site || !!S.llm.account;
+  box.hidden = !co;
+  if (!co) return;
+  const lim = +co.lim || 0;
+  $("#cl-sub").textContent = `Компания «${co.name}»`;
+  $("#cl-co-t").textContent = co.role === "owner"
+    ? `Вы — руководитель. Котёл компании: доля месяца ${coNumP(co.month_left)} + начислено ${coNumP(co.bought)} тал. Мест: ${co.seats_n}. Места и приглашения — в Лире на компьютере: «Поручения».`
+    : `За ответы Лиры платит компания «${co.name}». ` + (lim ? `Ваш лимит — ${coNumP(lim)} тал. в месяц, потрачено ${coNumP(co.spent_month)}.` : `Потрачено в этом месяце: ${coNumP(co.spent_month)} тал.`);
+  const go = $("#cl-co-go");
+  go.hidden = co.role === "owner";
+  go.onclick = async () => {
+    if (!confirm(`Выйти из компании «${co.name}»? Ответы Лиры снова будет оплачивать ваш собственный баланс.`)) return;
+    try { await cloudPost("/company", { op: "leave" }); toast("Вы вышли из компании"); cloudBalance(true).then(cloudFill).catch(() => {}); } catch (e) { toast(e.message); }
+  };
+  if (co.role !== "owner") { const how = $("#cl-how"); if (how) how.style.display = "none"; const pay = $("#cl-pay"); if (pay) pay.style.display = "none"; }
+}
+document.addEventListener("click", async (e) => {
+  if (!e.target.closest || !e.target.closest("#cl-join-go")) return;
+  const res = $("#cl-join-res"), code = ($("#cl-join-code").value || "").trim();
+  if (!/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/.test(code)) { res.textContent = "Код — 8 знаков, как его дал руководитель: XXXX-XXXX"; return; }
+  e.target.disabled = true;
+  try {
+    const r = await cloudPost("/company", { op: "join", code });
+    res.textContent = r.message || "Вы в компании";
+    $("#cl-join-code").value = "";
+    setTimeout(() => cloudBalance(true).then(cloudFill).catch(() => {}), 300);
+  } catch (x) { res.textContent = x.message; }
+  finally { e.target.disabled = false; }
+});

@@ -2235,3 +2235,9 @@ body.light .blg-del { color: #c23a5a; }
 .drv-f .x { position: absolute; top: 6px; right: 6px; }
 .start .legal { margin: 10px 4px 0; font-size: 12px; line-height: 1.45; color: var(--dim, rgba(255,255,255,.55)); text-align: center; }   /* 1.0.29: согласие одной строкой */
 .start .legal a { color: inherit; text-decoration: underline; }
+/* «Компания» (пилот 18.11, 23-company.js): кто платит за ответы */
+.cl-co { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.45;
+  background: color-mix(in srgb, var(--pu-think, #8B8CF7) 10%, transparent); }
+.cl-co[hidden], #cl-join[hidden] { display: none; }
+.cl-co .btn { align-self: flex-start; }
+#cl-join-code { text-transform: uppercase; letter-spacing: .06em; font-family: ui-monospace, Menlo, monospace; }

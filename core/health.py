@@ -249,6 +249,13 @@ class HealthMixin:
                 b[0] += 1
                 b[1] += int(u["prompt"])
                 b[2] += int(u["cached"])
+            parts = getattr(self, "_pparts", None)              # из чего подсказка (prompt_parts) — один раз на ход
+            if isinstance(parts, dict):
+                self._pparts = None
+                pp = pc.setdefault("parts", {})
+                pp["n"] = int(pp.get("n", 0)) + 1
+                for k in ("sys", "tools", "prof", "hist", "ask"):
+                    pp[k] = int(pp.get(k, 0)) + int(parts.get(k) or 0)
 
     def health_use(self, what, n=1):
         """«Чем пользуются» (0.67): сколько раз за день собирали «Совет ИИ», отвечал «Бот персонажа»… — только числа, чтобы
@@ -441,6 +448,12 @@ class HealthMixin:
                     pc["by"][kind] = [max(0, int(b[i]) - int(v[i])) for i in range(3)]
                     if not pc["by"][kind][0]:
                         del pc["by"][kind]
+            sp, pp = sent_pc.get("parts") or {}, pc.get("parts")
+            if isinstance(pp, dict):                              # из чего подсказка — тоже вычесть отправленное
+                for k in ("n", "sys", "tools", "prof", "hist", "ask"):
+                    pp[k] = max(0, int(pp.get(k, 0)) - int(sp.get(k, 0)))
+                if not pp.get("n"):
+                    pc.pop("parts", None)
             if pc and not pc.get("n"):
                 self._h.pop("pcache", None)
             u = self._h.get("uses") or {}

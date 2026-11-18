@@ -429,6 +429,7 @@ function cloudFill(c) {
   // по аккаунту ключа нет — «Убрать ключ» только у своего ключа dw-
   $("#cc-off").style.display = c.account || c.site ? "none" : "";
   DW.cloud = Object.assign({}, DW.cloud, c); dkAccFill();
+  if (typeof coFill === "function") coFill(c);            // «Компания»: кто платит, код от компании (ui/studio/company.js)
   $("i b", chip).style.width = (err ? 0 : pct) + "%"; $("em", chip).textContent = err ? "?" : c.site ? bal : pct + "%";
   chip.title = c.site ? `ИИ-баланс — ваш счёт на dewiar.pro: ${bal}. Нажмите — подробности и пополнение`
     : `ИИ-баланс: заряд моделей Dewiar ${pct}%` + (c.turns ? `, примерно на ${c.turns} ${turnsWord(c.turns)}` : "") + ". Нажмите — подробности и пополнение";

@@ -13,7 +13,7 @@ from answer_rules import (
     month_years, MORNING_RX, _no_money, _norm_answer, _plural, POEM_READ_RX, poem_unsourced, PRIVACY_ASK_RX,
     PROFILE_COUNTERS, profile_delta, _put_context, REF_RX, _rep_norm, repeat_head, REPEAT_RX, shown_q, SONGS_ASK_RX,
     SPEED_RX, TALER_RX, TASK_ASK_RX, TASK_GIVE_RX, team_window, think_ask, _thumb, turn_hints, VISION_HINT)  # noqa: F401 — прежние имена на месте
-from answer_prompt import PromptMixin
+from answer_prompt import PromptMixin, prompt_parts
 from answer_models import ModelsMixin
 from answer_report import ReportMixin
 from answer_direct import DirectMixin
@@ -501,6 +501,7 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                 from llm import put_profile
                 msgs = put_profile(msgs, personal)
             system, specs, msgs = self._fit_window(prof, system, specs, msgs, keep=self._plugin_keep(text), personal=not pmsg)
+            self._pparts = prompt_parts(system, specs, msgs, personal if personal else "", "\n\n".join(c for c in ctx if c))
         except LLMError as e:
             e.turn_prof = prof                         # сбой при подготовке — какой моделью шёл ход
             raise
