@@ -370,12 +370,46 @@ class TaskManager(SchedMixin, PlanMixin, VerifyMixin, LoopMixin, ToolsMixin, Fil
                         "net_note": SBX.net_note(m)}
         c = t.code()
         if c and c.work.exists():
-            try:
-                d["changes"] = c.changes()
-                d["diff"] = c.diff()
-            except CodeError as e:
-                d["changes"], d["diff"] = [], f"(не получилось: {e})"
+            d.update(self._code_view(t, c))
         return d
+
+    CODE_VIEW_WAIT = 3.0                                    # сколько карточка ждёт «Изменения»; дольше — досчитываются в фоне
+
+    def _code_view(self, t, c):
+        """«Изменения» задачи по коду для карточки: {changes, diff} — или {changes: [], diff: "", diff_pending: True}.
+        №848/849 (17.11, Windows): карточка задачи открывалась 196 с и всё это время студия ничего не могла — каждый
+        task_get заново делал git add и diff всей рабочей копии большого проекта. Теперь: один расчёт на состояние задачи
+        (шаги, статус, время правки), в своём потоке; не уложился в CODE_VIEW_WAIT — карточка приходит сразу, «Изменения»
+        досчитываются в фоне и приходят событием task (студия перерисует)."""
+        key = (t.status, t.data.get("steps"), t.data.get("updated"), t.data.get("code_state"))
+        cache = self.__dict__.setdefault("_cv_cache", {})
+        lock = self.__dict__.setdefault("_cv_lock", threading.Lock())
+        with lock:
+            got = cache.get(t.id)
+            if got and got["key"] == key and "view" in got:
+                return dict(got["view"])
+            if not got or got["key"] != key:
+                got = cache[t.id] = {"key": key, "done": threading.Event()}
+
+                def run(got=got):
+                    try:
+                        view = {"changes": c.changes(), "diff": c.diff()}
+                    except CodeError as e:
+                        view = {"changes": [], "diff": f"(не получилось: {e})"}
+                    except Exception as e:  # noqa: BLE001 — сбой git (тайм-аут, нет программы) не роняет карточку
+                        view = {"changes": [], "diff": f"(не получилось: {e})"}
+                    got["view"] = view
+                    got["done"].set()
+                    if got.get("slow"):
+                        try:
+                            self._emit(t)                          # пришло позже — студия перерисует карточку
+                        except Exception:  # noqa: BLE001
+                            pass
+                threading.Thread(target=run, name=f"code-view-{t.id}", daemon=True).start()
+        if got["done"].wait(self.CODE_VIEW_WAIT):
+            return dict(got["view"])
+        got["slow"] = True
+        return {"changes": [], "diff": "", "diff_pending": True}
 
     def helpers(self, t):
         """Помощники задачи для студии (выпуск 6): части (отдельные задачи) и разведчики/проверяющие (t.data["subs"]) —

@@ -391,6 +391,7 @@ def parse(text, now=None):
     Час без части суток: для напоминаний «в 3», когда 3:00 уже прошло, а 15:00 нет, — 15:00; для повторов 1–6 — днём;
     будильник — как сказано. Прошедшее время без дня — завтра; с явным днём («сегодня в 8», уже прошло) — None."""
     now =(now or datetime.now()).replace(microsecond=0)
+    guessed = None                                      # №857: час без «утра/вечера» сочли вечерним — сказать модели
     t = _norm(text)
     if re.search(r"(?:^|\s)(?:если|ежели|в случае|когда будет|если не)\s", t) or re.search(r"\b(?:иначе|а если|если нет)\b", t):
         return None              # «если завтра дождь — напомни про зонт, иначе…» — условие: решает модель (узнает прогноз)
@@ -454,6 +455,7 @@ def parse(text, now=None):
         if clock:
             spans.append(clock[3])
             if not clock[2] and rep["kind"] != "interval" and 1 <= hh <= 6:
+                guessed = (f"{hh:02d}:{mi:02d}", f"{hh + 12:02d}:{mi:02d}")
                 hh += 12                                   # «каждый день в 3» — скорее днём
         rep["time"] = f"{hh:02d}:{mi:02d}"
         if rep["kind"] == "weekly" and not rep.get("days"):
@@ -484,6 +486,7 @@ def parse(text, now=None):
         when = datetime.combine(d, datetime.min.time()).replace(hour=hh, minute=mi)
         if not explicit and 1 <= hh <= 11 and kind != "alarm":
             if not day and when <= now and when.replace(hour=hh + 12) > now:
+                guessed = (f"{hh:02d}:{mi:02d}", f"{hh + 12:02d}:{mi:02d}")
                 when = when.replace(hour=hh + 12)        # «в 3» в 10 утра — это 15:00
         if when <= now:
             if day and re.search(r"понедельник|вторник|сред|четверг|пятниц|суббот|воскресен", rest[day[1][0]:day[1][1]]):
@@ -506,7 +509,22 @@ def parse(text, now=None):
     if not what:
         what = {"alarm": "Будильник", "timer": "Таймер"}.get(kind, "Напоминание")
     what = what[:1].upper() + what[1:]
-    return {"text": what, "at": when, "repeat": rep, "kind": kind}
+    out = {"text": what, "at": when, "repeat": rep, "kind": kind}
+    if guessed:
+        out["guessed"] = guessed                         # (как сказано, как поставили): «05:30» → «17:30»
+    return out
+
+
+def guess_note(r):
+    """№857 (18.11): «каждый день в 5:30» прислать прогноз погоды — ставилось на 17:30 (час без части суток для повторов
+    1–6 считается днём), и модель трижды переставляла на то же. Подсказка модели к ответу инструмента: что выбрано и как
+    поправить по смыслу разговора. Пусто, если угадывать не пришлось."""
+    g = (r or {}).get("guessed")
+    if not g:
+        return ""
+    a, b = g
+    return (f" Час был без «утра» или «вечера» — поставлено на {b.lstrip('0')}. Если по разговору это утро (подъём, утренняя "
+            f"сводка, прогноз на день) — сразу переставь на «в {a.lstrip('0')} утра» и скажи человеку, на какое время.")
 
 
 def _pl(n, one, few, many):

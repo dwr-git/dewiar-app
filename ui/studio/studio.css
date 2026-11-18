@@ -4936,6 +4936,9 @@ html.st-light .ch-chip, html.st-light .ch-chip i { background: color-mix(in srgb
 
 /* «Кто чем думает» (15.11, studio/brain.js): кнопка рядом с «Лира — для меня» и окно — та же основа, что у письма */
 .hm-brain { margin-left: 8px; }
+/* 18.11 (владелец: «список моделей чуть выше „Лира — для меня“»): у «Мозга» подпись с overflow:hidden — по базовой линии
+   inline-flex такая кнопка садится иначе; обе кнопки — по верху строки */
+.hm-mode { vertical-align: top; }
 .hm-brain svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; opacity: .75; }
 .hm-brain span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .br-dlg { width: min(620px, calc(100vw - 32px)); }

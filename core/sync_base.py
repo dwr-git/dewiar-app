@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 
-from settings import STATE_DIR
+from settings import CONFIG_DIR, STATE_DIR  # noqa: F401 — CONFIG_DIR: копия id устройства (sync_device, №851)
 
 log = logging.getLogger("dewiar.sync")
 

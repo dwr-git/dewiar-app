@@ -306,8 +306,10 @@ def _when(a):
         alone = parse("напомни " + phrase) if text else None
         if alone and re.search(r"\d|через|полчаса|час|утр|вечер|дн[её]м|ночь|полдень|полночь|кажд|будн|выходн", phrase, re.I) \
                 and (not r or (alone["at"], alone["repeat"]) != (r["at"], r["repeat"])):
+            a["_guessed"] = alone.get("guessed")
             return alone["at"], alone["repeat"], text, (r or alone)["kind"]
         if r:
+            a["_guessed"] = r.get("guessed")
             return r["at"], r["repeat"], text or r["text"], r["kind"]
     rep = a.get("repeat")
     if isinstance(rep, str):
@@ -386,8 +388,9 @@ def t_reminder(a, ctx):
             when += timedelta(days=1)
         moved = " Это время сегодня уже прошло — поэтому на завтра; так и скажи."
     item = ctx["reminders"].add(when, text or "Напоминание", rep, kind)
+    from when import guess_note
     return (f"Напоминание «{item['text']}» поставлено: {human(when)}" + (f", {describe_repeat(rep)}" if rep else "") +
-            f" (id {item['id']}).{moved} Подтверди коротко одной фразой.")
+            f" (id {item['id']}).{moved} Подтверди коротко одной фразой." + guess_note({"guessed": a.pop("_guessed", None)}))
 
 
 def t_schedule_job(a, ctx):
@@ -406,9 +409,11 @@ def t_schedule_job(a, ctx):
     deliver = a.get("deliver") if a.get("deliver") in ("telegram", "max", "voice") else "voice"
     title = " ".join(str(a.get("title") or "").split())[:80]           # имя для людей (дело плагина: «Дача: заморозки и полив»)
     item = ctx["reminders"].add(r["at"], task[0].upper() + task[1:], r["repeat"], "job", {"deliver": deliver, "brief": False, "title": title})
+    from when import guess_note
     return (f"Дело «{item['text']}» заведено: {describe_repeat(r['repeat'])}, первый раз {human(r['at'])} (id {item['id']}). "
             "В срок его выполнишь ты сам и сообщишь итог"
-            + (" в Telegram" if deliver == "telegram" else " в Max" if deliver == "max" else " голосом") + ". Подтверди одной фразой.")
+            + (" в Telegram" if deliver == "telegram" else " в Max" if deliver == "max" else " голосом") + ". Подтверди одной фразой."
+            + guess_note(r))
 
 
 def job_short(text, n=80):
@@ -448,8 +453,9 @@ def t_change_reminder(a, ctx):
     if not patch:
         return "Что изменить? Нужен when (время и повтор) или new_text."
     y = rs.update(x["id"], patch)
+    from when import guess_note
     return (f"Изменено: «{y['text']}» — {human(datetime.fromisoformat(y['at']))}" + (f", {describe_repeat(y['repeat'])}" if y.get("repeat") else "")
-            + f" (id {y['id']}). Подтверди коротко.")
+            + f" (id {y['id']}). Подтверди коротко." + (guess_note(r) if str(a.get("when") or "").strip() else ""))
 
 
 def t_list_reminders(a, ctx):

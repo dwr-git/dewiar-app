@@ -1035,8 +1035,52 @@ def _on_terminate(api):
         log(f"выход по Cmd+Q: {e}")
 
 
+def dock_hooks(api, items):
+    """№847 (17.11, Mac mini, macOS 27): «значок в строке меню не виден, клик по Dewiar в Доке — никакой реакции».
+    Значок в Доке — у процесса интерфейса (у пускача его нет, launcher.m), а делегат приложения здесь — pywebview: ни
+    повторного открытия, ни меню Дока он не знает. Добавляем: клик в Доке — виджет убран в трей → показать его, виден →
+    открыть студию; правый клик по значку в Доке — те же пункты, что у значка в строке меню (его может скрыть вырез
+    экрана или «Строка меню» в настройках macOS). Вызывать в главном потоке Cocoa до первого клика."""
+    import AppKit
+    import objc
+    from webview.platforms.cocoa import BrowserView
+
+    def dock_click():
+        if getattr(api, "in_tray", False):
+            api.from_tray()
+            api.bring_back()
+        else:
+            api.open_settings()
+
+    def reopen(self, app, flag):
+        threading.Thread(target=dock_click, daemon=True).start()
+        return False
+
+    target = STATUS[1] if len(STATUS) > 1 else None
+    dock = AppKit.NSMenu.alloc().init()
+    for i, (title, fn) in enumerate(items):
+        if title is None or fn in (api.quit_all, api.to_tray) or target is None:
+            continue                                     # «Выйти» в меню Дока macOS добавляет сама
+        mi = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, "act:", "")
+        mi.setTarget_(target)
+        mi.setTag_(i)
+        dock.addItem_(mi)
+
+    def dock_menu(self, app):
+        return dock if dock.numberOfItems() else None
+
+    objc.classAddMethods(BrowserView.AppDelegate, [
+        objc.selector(reopen, selector=b"applicationShouldHandleReopen:hasVisibleWindows:", signature=b"Z@:@Z"),
+        objc.selector(dock_menu, selector=b"applicationDockMenu:", signature=b"@@:@")])
+    KEEP.append(dock)
+
+
 def _status(api, items):
     try:
         api._tray = status_item(api, items)          # «убрать в трей» тогда говорит про значок, а не про меню программ
     except Exception as e:  # noqa: BLE001 — без значка всё остальное работает
         log(f"значок в строке меню: {e}")
+    try:
+        dock_hooks(api, items)
+    except Exception as e:  # noqa: BLE001
+        log(f"Док (клик и меню): {e}")

@@ -230,7 +230,9 @@ async function openTask(id) {
     if (tTab === "journal") body = tJournal(t.journal);
     if (tTab === "summary") body = `<div class="md">${md(t.summary)}</div>`;
     if (tTab === "snaps") body = renderSnaps(t, ["running"].includes(t.status));
-    if (tTab === "diff") body = t.diff ? renderDiff(t.diff) : `<div class="fempty">${t.code_state === "accepted" ? "Изменения уже перенесены в проект." : t.code_state === "discarded" ? "Изменения отклонены." : "Изменений пока нет."}</div>`;
+    // №848/849: в большом проекте изменения считаются в фоне — карточка не ждёт их (придут событием задачи)
+    if (tTab === "diff") body = t.diff_pending ? `<div class="fempty">Считаю изменения — в большом проекте это может занять минуту. Карточка обновится сама.</div>`
+      : t.diff ? renderDiff(t.diff) : `<div class="fempty">${t.code_state === "accepted" ? "Изменения уже перенесены в проект." : t.code_state === "discarded" ? "Изменения отклонены." : "Изменений пока нет."}</div>`;
     const pr = t.status === "done" ? 1 : (t.progress && t.progress[1] ? t.progress[0] / t.progress[1] : 0);
     const mins = Math.max(0, Math.round((Date.now() - new Date(t.created)) / 60000));
     const live = ["running", "waiting"].includes(t.status);

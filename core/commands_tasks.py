@@ -211,9 +211,9 @@ class TasksCommands:
             return True
         if cmd == "phone_home":                   # только умный дом — на телефон (QR в студии; ключ не уходит на сервер)
             import base64
-            if not self.home.connected():
+            if not self.home.connected() and not self.ha.connected():
                 raise ValueError("умный дом не подключён")
-            raw = json.dumps({"dewiar": 1, "home": {"token": self.home.data.get("token", "")}}, separators=(",", ":")).encode("utf-8")
+            raw = json.dumps(dict({"dewiar": 1}, **self._phone_homes()), separators=(",", ":")).encode("utf-8")
             return {"url": "dewiar://import?c=" + base64.urlsafe_b64encode(raw).decode().rstrip("=")}
         if cmd == "phone_config":                 # QR для телефона: мозг, слух, голос, умный дом — одним снимком камеры
             # безопасность: в ссылке открытым текстом ключи API и токен умного дома — QR показывать только владельцу;
@@ -239,8 +239,7 @@ class TasksCommands:
                 if x.get("engine") == "remote" and (x.get("remote") or {}).get("base_url"):
                     r = x["remote"]
                     out[sec] = {"engine": "remote", "remote": {k: r[k] for k in ("base_url", "api_key", "model", "voice") if r.get(k)}}
-            if self.home.connected():
-                out["home"] = {"token": self.home.data.get("token", "")}
+            out.update(self._phone_homes())
             raw = json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             return {"url": "dewiar://import?c=" + base64.urlsafe_b64encode(raw).decode().rstrip("="),
                     "apk": (self.s.get("updates", "url") or "https://dewiar.pro/dwrapp/latest.json").rsplit("/", 1)[0] + "/Dewiar.apk",
@@ -303,6 +302,18 @@ class TasksCommands:
         if cmd == "status":
             return self.status
         return NotImplemented
+
+    def _phone_homes(self):
+        """Умный дом для телефона в QR «Перенести настройки»: Яндекс (токен) и Home Assistant (адрес и токен).
+        №852 (18.11): «мозг перенёсся, а настройки Home Assistant нет» — HA в код не клали. Адрес 127.0.0.1/localhost
+        на телефоне — сам телефон: подменяем адресом компьютера в домашней сети (net.lan_url)."""
+        out = {}
+        if self.home.connected():
+            out["home"] = {"token": self.home.data.get("token", "")}
+        if self.ha.connected():
+            import net as _net
+            out["ha"] = {"url": _net.lan_url(self.ha.data.get("url", ""))[0], "token": self.ha.data.get("token", "")}
+        return out
 
     def _pult_data(self):
         """«Пульт Лиры» (16.11, макеты владельца): чем она занята в фоне и что в тишине — одним ответом для окна заметок.

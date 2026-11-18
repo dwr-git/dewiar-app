@@ -48,7 +48,7 @@ README = """Слепок знаний Dewiar — открытый формат (
 """
 STATE_FILES = ["reminders.json", "reminders-log.json", "knowledge.json", "radio.json"]
 STATE_DIRS = ["voiceprints"]
-CONFIG_SKIP = {"token", "vault.key", "vault.bin", "snapshot.pw"}   # не копируем и не восстанавливаем: сейф идёт отдельно (vault.json)
+CONFIG_SKIP = {"token", "vault.key", "vault.bin", "snapshot.pw", "sync_device"}   # не копируем и не восстанавливаем: сейф идёт отдельно (vault.json); sync_device — id этого компьютера (№851)
 WS_SKIP_DIRS = {"рабочая копия", "_run", "_src", "_out", "_snap", "_explore", "_guard", ".git", "__pycache__", "node_modules", ".venv", "venv", ".trash", ".obsidian"}
 BIG = 100 << 20                     # файлы больше 100 МБ (видео в задачах) не копируем
 SECRET_DIRS = ("ssh/",)             # ключи серверов — только в копию с паролем

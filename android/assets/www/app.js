@@ -10026,8 +10026,22 @@ function cfgAsk(m) {
   const host = (u) => { try { return new URL(String(u)).host; } catch (e) { return String(u || "").slice(0, 60); } };
   const l = (m && m.llm) || {}, prof = (l.profiles || {})[l.active] || Object.values(l.profiles || {})[0] || {};
   const rows = [prof.base_url && "Мозг: " + host(prof.base_url), m && m.stt && m.stt.remote && m.stt.remote.base_url && "Распознавание речи: " + host(m.stt.remote.base_url),
-                m && m.tts && m.tts.remote && m.tts.remote.base_url && "Голос: " + host(m.tts.remote.base_url)].filter(Boolean);
+                m && m.tts && m.tts.remote && m.tts.remote.base_url && "Голос: " + host(m.tts.remote.base_url),
+                m && m.ha && m.ha.url && "Home Assistant: " + host(m.ha.url)].filter(Boolean);
   return confirm("Перенести настройки?\n\n" + (rows.join("\n") || "без серверов") + "\n\nСоглашайтесь, только если сами открыли этот код в своей студии Dewiar.");
+}
+/* Умный дом из кода «Перенести настройки» (№852, 18.11: «мозг перенёсся, а Home Assistant — нет»): Яндекс — токен,
+   Home Assistant — адрес и токен; дальше они расходятся по своим устройствам, как при ручном подключении. */
+function cfgHomesName(m) {
+  const y = m && m.home && m.home.token, h = m && m.ha && m.ha.token;
+  return y && h ? "умный дом Яндекса и Home Assistant" : h ? "Home Assistant" : "умный дом Яндекса";
+}
+function cfgHomes(m) {
+  if (m && m.home && m.home.token) homeSet(String(m.home.token));
+  if (!D.web && m && m.ha && m.ha.url && m.ha.token) {
+    S.ha = { url: haUrl(m.ha.url), token: String(m.ha.token).trim(), at: Date.now() }; homeInfo = null; saveS();
+    ownShare().catch(e => plog("info", "Home Assistant на свои устройства: " + e.message));
+  }
 }
 function applyConfig(m, key) {
   const fill = (v) => typeof v === "string" ? v.replace(/\$\{KEY\}/g, key || "") : v;
@@ -10307,13 +10321,13 @@ function handleIntent(e) {
     try {
       let c = (/[?&]c=([^&]+)/.exec(e.url) || [])[1] || ""; c = c.replace(/-/g, "+").replace(/_/g, "/"); while (c.length % 4) c += "=";
       const m = JSON.parse(decodeURIComponent(escape(atob(c))));
-      if (!m.llm && m.home && m.home.token) {                                      // только умный дом с компьютера
-        if (!confirm("Подключить на телефоне умный дом Яндекса — тот же, что на компьютере? Мозг и голос телефона не изменятся.")) return;
-        homeSet(String(m.home.token));
+      if (!m.llm && ((m.home && m.home.token) || (m.ha && m.ha.token))) {          // только умный дом с компьютера
+        if (!confirm(`Подключить на телефоне ${cfgHomesName(m)} — тот же, что на компьютере? Мозг и голос телефона не изменятся.`)) return;
+        cfgHomes(m);
         showBot("Готово — умный дом подключён. Скажите: «включи свет в спальне»."); say("Готово! Умный дом подключён."); return;
       }
       if (!cfgAsk(m)) return;
-      applyConfig(m, ""); if (m.home && m.home.token) homeSet(String(m.home.token));
+      applyConfig(m, ""); cfgHomes(m);
       showBot(`Готово — настройки с компьютера перенесены. Мозг: ${brainName()}. Нажмите микрофон и спросите что-нибудь.`); say("Готово! Настройки перенесены.");
     } catch (x) { showBot("Код с настройками не подошёл: " + x.message, "err"); }
   }

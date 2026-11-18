@@ -85,15 +85,43 @@ class Sync(E2EMixin, SnapMixin, ApplyMixin, FilesMixin, SafeMixin, PluginsMixin,
         сервер отличает компьютеры от телефонов); idx — ключ записи → {h: наш отпечаток, u: время версии, del, skip,
         b: для vault — отпечаток версии, с которой облако согласно}; map — id заметки → путь в «Заметках»; who — чей ключ;
         kinds — какие виды знает сервер; mt/vt/vmap — кэши заметок и хранилища."""
+        why = None
         try:
             d = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(d, dict):
                 d.setdefault("idx", {})
                 d.setdefault("map", {})
+                if not str(d.get("device") or "").startswith("pc-"):
+                    d["device"] = self._kept_device() or "pc-" + uuid.uuid4().hex[:10]
                 return d
-        except (OSError, ValueError):
+            why = "не словарь"
+        except FileNotFoundError:
             pass
-        return {"rev": 0, "device": "pc-" + uuid.uuid4().hex[:10], "idx": {}, "map": {}, "who": ""}
+        except (OSError, ValueError) as e:
+            why = e
+        # №851 (18.11): «при каждом запуске клонируется подключённое устройство» — пять «DESKTOP-…» в «Устройствах»: если
+        # sync.json не прочитался (или пропал), компьютер заводил себе новый id и выходил на связь новым устройством. id
+        # хранится ещё и рядом с настройками (sync_device) — компьютер остаётся собой; почему не прочиталось — в журнал
+        dev = self._kept_device()
+        if why is not None:
+            log.warning("Синхронизация: sync.json не прочитался (%s) — %s", why, f"устройство прежнее ({dev})" if dev else "новое устройство")
+        return {"rev": 0, "device": dev or "pc-" + uuid.uuid4().hex[:10], "idx": {}, "map": {}, "who": ""}
+
+    def _kept_device(self):
+        """id этого компьютера из CONFIG_DIR/sync_device (копия на случай, если sync.json пропадёт) или ""."""
+        try:
+            v = (SB.CONFIG_DIR / "sync_device").read_text(encoding="utf-8").strip()
+            return v if re.fullmatch(r"pc-[0-9a-f]{6,32}", v) else ""
+        except OSError:
+            return ""
+
+    def _keep_device(self):
+        dev = str(self.state.get("device") or "")
+        if dev.startswith("pc-") and self._kept_device() != dev:
+            try:
+                (SB.CONFIG_DIR / "sync_device").write_text(dev, encoding="utf-8")
+            except OSError as e:
+                log.debug("sync_device: %s", e)
 
     def _save(self):
         # через временный файл: оборванная запись не испортит sync.json (иначе всё ушло бы заново и с удалениями)
@@ -101,6 +129,7 @@ class Sync(E2EMixin, SnapMixin, ApplyMixin, FilesMixin, SafeMixin, PluginsMixin,
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.state, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self.path)
+        self._keep_device()
 
 
     PLG_STALE = 7 * 86400                    # куски сборки, которая так и не собралась (другой компьютер ушёл, сборку сменили)
