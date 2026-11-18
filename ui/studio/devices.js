@@ -81,6 +81,7 @@ function dvRender() {
     try { DV = await core.call("device_forget", { id: b.dataset.forget }); dvRender(); toast("Убрано из списка"); } catch (e) { toast(e.message, 3500); }
   });
   dvMap(devs);
+  dvNear(st);
   if (d.home) dvHome(d.home);
   dvWay(DV_WAY || ((d.home && d.home.on) || !d.can_pair ? "home" : "cloud"));
   const h = d.home || {};
@@ -90,6 +91,39 @@ function dvRender() {
     $("#dv-sync-st").textContent = h.ok === false ? "По Wi-Fi не синхронизировалось: " + h.error : (h.phones || []).length ? `Телефон по Wi-Fi${ht ? " · обмен в " + ht : ""}` : "Дома по Wi-Fi: включено — покажите телефону код ниже.";
     $("#dv-via").textContent = "через dewiar.pro — нужен вход; по Wi-Fi — включено ниже";
   }
+}
+
+/* «Рядом — ещё одна Лира» (1.0.36; письмо 18.11: «у меня 4 Лиры… частично синхронизированы… не вижу, кто с кем
+   контачит»): сервер видит устройства из этой же сети, чьи данные пока отдельно (near.php). Здесь — «Сделать одной Лирой»
+   (на том устройстве появится вопрос) или «Это не моё» (устройство кого-то из семьи — больше не показывать); пришло предложение — «Да, одна Лира» / «Нет». Слияние — на сервере:
+   ключи и балансы у каждого свои, общими становятся память, заметки, дела и напоминания. Ядро: near_ask, near_answer, near_hide. */
+const DV_WORD = { pc: "Компьютер", phone: "Телефон", web: "Браузер" };
+function dvNear(st) {
+  const box = $("#dv-near"); if (!box) return;
+  const asks = st.asks || [], near = st.near || [];
+  box.hidden = !asks.length && !near.length;
+  if (box.hidden) { box.innerHTML = ""; return; }
+  const ic = (app) => `<span class="dv-ic ${escH(app || "pc")}"><svg viewBox="0 0 24 24">${DV_IC[app] || DV_IC.pc}</svg></span>`;
+  box.innerHTML = asks.map(a => `<div class="dv-nr ask">${ic(a.app)}<div class="dv-nt"><b>«${escH(a.from || "Устройство")}» предлагает стать одной Лирой</b>
+      <small>Оно в этой же сети. Соглашайтесь, только если это ваше устройство: память, заметки, дневник, дела и напоминания станут общими. Баланс у каждого останется свой.</small></div>
+      <div class="dv-nb"><button class="btn primary" type="button" data-nyes="${escH(a.id)}">Да, одна Лира</button><button class="btn" type="button" data-nno="${escH(a.id)}">Нет</button></div></div>`).join("")
+    + near.map(x => `<div class="dv-nr">${ic(x.app)}<div class="dv-nt"><b>Рядом — ещё одна Лира: «${escH(x.name || DV_APP[x.app] || "Устройство")}»</b>
+      <small>${escH(DV_WORD[x.app] || "Устройство")} в этой же сети, ${escH(dvAgo(x.seen))}. Если это тоже ваше — сделайте их одной Лирой. Если это устройство кого-то из семьи — «Это не моё»: Лира у каждого своя.</small></div>
+      <div class="dv-nb">${x.asked ? `<span class="dv-nw">Ждёт ответа на «${escH(x.name || "том устройстве")}»</span>`
+        : `<button class="btn primary" type="button" data-nask="${escH(x.id)}">Сделать одной Лирой</button><button class="btn" type="button" data-nhide="${escH(x.id)}">Это не моё</button>`}</div></div>`).join("");
+  const busy = (on) => $$("#dv-near button").forEach(b => { b.disabled = on; });
+  $$("#dv-near [data-nask]").forEach(b => b.onclick = async () => {
+    busy(true);
+    try { DV = await core.call("near_ask", { to: b.dataset.nask }); dvRender(); toast(`Готово — подтвердите на «${DV.asked || "том устройстве"}»: там появится вопрос`, 5000); }
+    catch (e) { busy(false); toast(e.message, 4500); }
+  });
+  $$("#dv-near [data-nhide]").forEach(b => b.onclick = async () => { try { DV = await core.call("near_hide", { id: b.dataset.nhide }); dvRender(); } catch (e) { toast(e.message); } });
+  $$("#dv-near [data-nyes], #dv-near [data-nno]").forEach(b => b.onclick = async () => {
+    busy(true);
+    try { DV = await core.call("near_answer", { id: b.dataset.nyes || b.dataset.nno, yes: !!b.dataset.nyes }); dvRender();
+      if (DV.linked) toast(`Теперь это одна Лира с «${DV.with_name || "тем устройством"}» — забираю общее`, 5000); }
+    catch (e) { busy(false); toast(e.message, 4500); }
+  });
 }
 
 /* карта: Лира в середине, устройства по кругу (0.66, владелец: «схему — немножко красивее и аккуратнее»; обводки он не
@@ -281,3 +315,5 @@ function dvBrains(st) {
   $("#dv-brains-go").disabled = false; clearInterval(DV_BR);
 }
 core.on("brains", (e) => dvBrains(e.data));
+// синхронизация принесла «давай станем одной Лирой» — раздел открыт: показать сразу
+core.on("devices_near", () => { if ($("#p-devices") && $("#p-devices").classList.contains("cur")) loadMyDevices(false); });

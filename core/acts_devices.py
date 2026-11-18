@@ -489,6 +489,76 @@ class DevicesMixin:
         return {"me": me, "devices": devs, "sync": st, "home": self.home_public() if hasattr(self, "home_public") else None, "mode": "account" if self.account.logged_in() else ("key" if tok else ""),
                 "login": (self.account.data.get("login") or "") if self.account.logged_in() else "", "can_pair": bool(tok), "error": err}
 
+    # ---------- «Рядом — ещё одна Лира» (1.0.36; near.php) ----------
+
+    def _near_post(self, path, body):
+        import httpx
+        tok, link, url = self.credentials()
+        if not tok:
+            raise ValueError("здесь нет входа в Dewiar")
+        h = {"Authorization": "Bearer " + tok}
+        if link and link != tok:
+            h["X-Sync-Link"] = link
+        try:
+            r = httpx.post(url, params={"p": path}, json=dict(body, device=self.sync.state.get("device", "")), headers=h, timeout=20)
+        except httpx.HTTPError as e:
+            raise ValueError("сайт Dewiar не ответил — попробуйте через минуту") from e
+        try:
+            d = r.json()
+        except ValueError:
+            d = {}
+        if r.status_code != 200:
+            raise ValueError((d.get("error") or {}).get("message") or f"сайт ответил {r.status_code}")
+        return d
+
+    def near_ask(self, to):
+        """Предложить устройству из той же сети стать одной Лирой: на нём появится вопрос, ответят там."""
+        self._near_post("/sync/near/ask", {"to": to})
+        n = next((x for x in self.sync.status.get("near") or [] if x.get("id") == to), {})
+        for x in self.sync.status.get("near") or []:
+            if x.get("id") == to:
+                x["asked"] = int(time.time())
+        log.info("🔗 Предложила «%s» стать одной Лирой", n.get("name") or to)
+        return dict(self.devices_public(fresh=False), asked=n.get("name") or "")
+
+    def near_answer(self, ask_id, yes):
+        """Ответ на «давай станем одной Лирой». Да — данные этого устройства и того сливаются на сервере (ключи и балансы —
+        у каждого свои), и синхронизация сразу забирает всё общее с начала."""
+        d = self._near_post("/sync/near/answer", {"id": ask_id, "yes": bool(yes)})
+        ask = next((x for x in self.sync.status.get("asks") or [] if x.get("id") == ask_id), {})
+        self.sync.status["asks"] = [x for x in self.sync.status.get("asks") or [] if x.get("id") != ask_id]
+        if d.get("linked"):
+            self.sync.state["rev"] = 0
+            if d.get("sid"):
+                self.sync.state["sid"] = d["sid"]
+            self.sync.soon.set()
+            log.info("🔗 Одна Лира с «%s» — забираю общее", ask.get("from") or "другим устройством")
+        return dict(self.devices_public(fresh=False), linked=bool(d.get("linked")), with_name=ask.get("from") or "")
+
+    def near_asked(self, asks):
+        """Синхронизация принесла новое «давай станем одной Лирой» — сказать человеку (раз на просьбу)."""
+        for a in asks[:2]:
+            name = a.get("from") or "другое устройство"
+            try:
+                self.chat.notify(f"🔗 «{name}» в этой же сети предлагает стать одной Лирой. Если это ваше устройство — ответьте "
+                                 f"в студии, «Устройства»: память, заметки, дела и напоминания станут общими.")
+            except Exception:  # noqa: BLE001
+                log.info("🔗 «%s» предлагает стать одной Лирой", name)
+            self.emit("devices_near", asks=asks)
+
+    def last_act(self):
+        """Когда человек последний раз говорил с Лирой здесь (сам, не через Telegram) — секунды эпохи или 0."""
+        return int(getattr(self, "local_act", 0) or 0)
+
+    def others_act(self):
+        """Самый свежий разговор на других своих устройствах (по синхронизации) — секунды эпохи или 0."""
+        me = self.sync.state.get("device", "")
+        acts = [int(d.get("act") or 0) for d in self.sync.status.get("all") or [] if not d.get("me") and d.get("id") != me]
+        hs = getattr(self, "home_sync", None)
+        if hs is not None:
+            acts += [int(d.get("act") or 0) for d in hs.status.get("all") or [] if not d.get("me")]
+        return max(acts or [0])
+
     def sync_public(self):
         st = dict(self.sync.status)
         if st.get("error") and disk_full(st["error"]):    # пакет 04.11: «[Errno 28] No space left on device» — по-человечески
@@ -498,4 +568,6 @@ class DevicesMixin:
         st["on"] = self.s.get("sync", "enabled") is not False
         st["e2e"] = self.sync.e2e_status()
         st["via"] = "аккаунту dewiar.pro" if self.account.logged_in() else ("ключу Dewiar …" + (self.s.get("cloud", "key") or "")[-4:] if tok else "")
+        hid = self.s.get("sync", "near_hide") or {}
+        st["near"] = [x for x in st.get("near") or [] if x.get("id") not in hid]
         return st

@@ -206,7 +206,8 @@ class HomeHub:
         by = {}
         for d in devs:
             if isinstance(d, dict) and d.get("id"):
-                by[d["id"]] = {"id": d["id"], "name": d.get("name", ""), "seen": int(d.get("seen", 0) or 0), "app": d.get("app", "phone"), "ver": d.get("ver", "")}
+                by[d["id"]] = {"id": d["id"], "name": d.get("name", ""), "seen": int(d.get("seen", 0) or 0), "app": d.get("app", "phone"), "ver": d.get("ver", ""),
+                               **({"act": int(d["act"])} if d.get("act") else {})}
         ext = []
         if callable(self.others):
             try:
@@ -268,12 +269,19 @@ class HomeHub:
                     written += 1
                     if cur is None:
                         count += 1
-                devs = [d for d in self._devs() if isinstance(d, dict) and d.get("id") != dev and d.get("seen", 0) > self.now() - 90 * 86400]
+                old = [d for d in self._devs() if isinstance(d, dict)]
+                devs = [d for d in old if d.get("id") != dev and d.get("seen", 0) > self.now() - 90 * 86400]
                 if dev:
+                    try:                                 # когда говорили с Лирой на телефоне (1.0.36) — приветствию компьютера
+                        act = min(int(body.get("act") or 0), int(self.now()))
+                    except (TypeError, ValueError):
+                        act = 0
+                    act = max([act] + [int(d.get("act") or 0) for d in old if d.get("id") == dev])
                     app = str(body.get("app") or "")
                     devs.append({"id": dev, "name": str(body.get("name") or "")[:60], "seen": int(self.now()),
                                  "app": app if app in ("pc", "phone", "web") else ("pc" if dev.startswith("pc-") else "phone"),
-                                 "ver": "".join(ch for ch in str(body.get("ver") or "") if ch.isalnum() or ch in "._-")[:20], "tid": tid})
+                                 "ver": "".join(ch for ch in str(body.get("ver") or "") if ch.isalnum() or ch in "._-")[:20], "tid": tid,
+                                 **({"act": act} if act else {})})
                     if tid:
                         db.execute("UPDATE keys SET seen = ?, name = ?, dev = ? WHERE tid = ?", (int(self.now()), str(body.get("name") or "")[:60], dev, tid))
                 self._meta_set("rev", rev)

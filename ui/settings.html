@@ -1253,7 +1253,7 @@
       <button data-t="people">Сотрудники</button>
       <button data-t="how">Как это работает</button>
     </div>
-    <div class="tm-co" id="tm-co" hidden></div>  <!-- «Компания»: котёл и места — у руководителя (ui/studio/company.js) -->
+    <div class="tm-co" id="tm-co" hidden></div>  <!-- «Компания»: баланс и сотрудники — у руководителя (ui/studio/company.js) -->
     <div id="tm-setup" class="tm-setup" hidden>
       <div class="tm-scard">
         <h2>Как сотрудники получат поручения</h2>
@@ -1617,9 +1617,10 @@
 
   <section id="p-devices" class="wide">
     <div class="dv-top">
-      <div><h1>Устройства</h1><p class="lead">Одна Лира на всех ваших компьютерах и телефонах: память, заметки, дела, платежи и свои персонажи — общие.
-        Связать их можно двумя способами: через dewiar.pro — работает везде, или дома по Wi-Fi — без интернета. Без ключей и паролей: код на экране.</p></div>
+      <div><h1>Устройства</h1><p class="lead">Одна Лира на всех ваших компьютерах и телефонах: память, заметки, дела, напоминания, платежи и свои персонажи — общие.
+        Устройства связываются через dewiar.pro кодом на экране, без ключей и паролей. Дома телефон может обмениваться с компьютером ещё и напрямую по Wi-Fi — Лира та же, путь короче.</p></div>
     </div>
+    <div class="dv-near" id="dv-near" hidden></div>
     <div class="dv-hero">
       <div class="dv-map" id="dv-map" aria-hidden="true"></div>
       <div class="dv-me">
@@ -1635,7 +1636,7 @@
       <div class="dv-ways-h"><h2>Как связать устройства</h2>
         <div class="dv-seg" role="tablist" aria-label="Способ синхронизации">
           <button role="tab" type="button" data-way="cloud" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 18.5h9a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.4A3.3 3.3 0 0 0 7.5 18.5z"/></svg><span><b>Через dewiar.pro</b><small>везде, где есть интернет</small></span></button>
-          <button role="tab" type="button" data-way="home" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.2 14.6a4 4 0 0 1 5.6 0M10.8 16.6a1.6 1.6 0 0 1 2.4 0"/></svg><span><b>Дома по Wi-Fi</b><small>без интернета и dewiar.pro</small></span></button>
+          <button role="tab" type="button" data-way="home" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.2 14.6a4 4 0 0 1 5.6 0M10.8 16.6a1.6 1.6 0 0 1 2.4 0"/></svg><span><b>Дома по Wi-Fi</b><small>ещё и напрямую, без интернета</small></span></button>
         </div></div>
       <p class="dv-way-note" data-for="cloud">Телефоны и компьютеры связываются через ваш вход в Dewiar — синхронизация идёт в дороге, на работе и дома.
         Включите «Шифровать на устройстве» — и сайт видит только шифротекст.</p>
@@ -2172,7 +2173,7 @@
           <b>Вы руководитель? Создайте компанию</b>
           <p class="hint">Общий баланс и места: сотрудники получают поручения в приложении, их ответы Лиры оплачивает компания, вы видите расход каждого. Консультант для сайта и Telegram отвечает клиентам, заявки уходят поручением.</p>
           <div class="cc-join-f"><input type="text" id="cc-new-name" placeholder="Название, например «Электро Плюс»" maxlength="80" aria-label="Название компании"><button class="btn small" id="cc-new-go" type="button">Создать компанию</button></div>
-          <label class="chk cc-new-mv" id="cc-new-mvl"><input type="checkbox" id="cc-new-mv" checked><span>Перенести мой баланс в котёл компании</span></label>
+          <label class="chk cc-new-mv" id="cc-new-mvl"><input type="checkbox" id="cc-new-mv" checked><span>Перенести мой баланс на счёт компании</span></label>
           <p class="res" id="cc-new-res"></p>
         </div></details>
       <p class="res" id="cc-pair-res" style="margin:6px 0 0"></p>

@@ -345,7 +345,7 @@ try:
         pg.wait_for_timeout(700)
         ok(pg.is_visible("#dv-home") and pg.get_attribute("#dv-ways [data-way=home]", "aria-selected") == "true",
            "входа в Dewiar нет — в «Как связать устройства» сразу открыт способ «Дома по Wi-Fi»")
-        ok("без интернета и dewiar.pro" in pg.inner_text("#dv-ways") and "везде, где есть интернет" in pg.inner_text("#dv-ways"),
+        ok("ещё и напрямую, без интернета" in pg.inner_text("#dv-ways") and "везде, где есть интернет" in pg.inner_text("#dv-ways"),
            "два способа рядом — и чем отличаются")
         pg.locator("#dv-ways").screenshot(path=str(Path(os.environ.get("DEWIAR_SHOTS") or tmp) / "home-studio-ways.png"))
         pg.click("#dv-ways [data-way=cloud]")

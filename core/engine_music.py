@@ -996,6 +996,13 @@ class MusicMixin:
             return False
         if getattr(self, "_tray_at", 0) > (self.last_turn_time or 0):
             return False                                 # «спрячься» — значит, просили не мешать
+        try:                                             # 1.0.36 «одна Лира»: говорили на телефоне или другом компьютере —
+            other = self.others_act()                    # отлучка — с того разговора, а не «не было 18 часов»
+        except Exception:  # noqa: BLE001
+            other = 0
+        if other and 0 <= time.time() - other < gone:
+            log.info("👋 здесь не было %s, но с Лирой говорили на другом устройстве %s назад", presence._hm(gone), presence._hm(time.time() - other))
+            gone = max(0.0, time.time() - other)
         try:
             tasks = self.tasks.list()
         except Exception:  # noqa: BLE001

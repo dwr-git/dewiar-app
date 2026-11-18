@@ -371,6 +371,35 @@ def _fix_days(a, rep, text):
     return rep, text
 
 
+def _rings_too(ctx):
+    """Где ещё прозвенит (1.0.36, письмо 18.11: «сказал на компьютере — напомни завтра в час… а на телефоне? там тоже
+    напомнит?»): свои устройства, бывшие на связи за неделю, — напоминание приходит к ним синхронизацией и звенит там
+    само. -> « Прозвенит и на других ваших устройствах: …» или ""."""
+    eng = ctx.get("engine")
+    sy = getattr(eng, "sync", None)
+    if sy is None:
+        return ""
+    try:
+        st = sy.status or {}
+        if not st.get("ok"):
+            return ""
+        week = time.time() - 7 * 86400
+        devs = [d for d in st.get("all") or [] if not d.get("me") and int(d.get("seen") or 0) > week and d.get("app") in ("pc", "phone")]
+        hs = getattr(eng, "home_sync", None)
+        if hs is not None:
+            seen = {d.get("id") for d in devs}
+            devs += [d for d in hs.status.get("all") or [] if not d.get("me") and d.get("id") not in seen and int(d.get("seen") or 0) > week]
+    except Exception:  # noqa: BLE001
+        return ""
+    phones = [d.get("name") or "телефон" for d in devs if d.get("app") == "phone"]
+    pcs = [d.get("name") or "компьютер" for d in devs if d.get("app") != "phone"]
+    names = [f"«{n}»" for n in (phones + pcs)[:4]]
+    if not names:
+        return ""
+    return (" Прозвенит и на других устройствах человека: " + ", ".join(names)
+            + (" — где он будет, там и напомнит; если человек спросит, так и скажи." if phones else "."))
+
+
 def t_reminder(a, ctx):
     from when import describe_repeat, human
     when, rep, text, kind = _when(a)
@@ -390,7 +419,8 @@ def t_reminder(a, ctx):
     item = ctx["reminders"].add(when, text or "Напоминание", rep, kind)
     from when import guess_note
     return (f"Напоминание «{item['text']}» поставлено: {human(when)}" + (f", {describe_repeat(rep)}" if rep else "") +
-            f" (id {item['id']}).{moved} Подтверди коротко одной фразой." + guess_note({"guessed": a.pop("_guessed", None)}))
+            f" (id {item['id']}).{moved}" + (_rings_too(ctx) if kind in (None, "", "reminder") else "") + " Подтверди коротко одной фразой."
+            + guess_note({"guessed": a.pop("_guessed", None)}))
 
 
 def t_schedule_job(a, ctx):

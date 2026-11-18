@@ -29,6 +29,15 @@ class SyncCommands:
             if r.status_code != 200:
                 raise ValueError(((r.json() if r.headers.get("content-type", "").startswith("application/json") else {}).get("error") or {}).get("message") or f"сайт ответил {r.status_code}")
             return self.devices_public(fresh=True)
+        if cmd == "near_ask":                     # «Рядом — ещё одна Лира» → «Сделать одной Лирой» (1.0.36)
+            return self.near_ask(str(a.get("to") or ""))
+        if cmd == "near_answer":                  # то устройство предложило — «Да, одна Лира» / «Нет»
+            return self.near_answer(str(a.get("id") or ""), bool(a.get("yes")))
+        if cmd == "near_hide":                    # «Это не моё» — это устройство здесь больше не предлагать
+            hid = dict(self.s.get("sync", "near_hide") or {})
+            hid[str(a.get("id") or "")] = int(time.time())
+            self.s.update({"sync": {"near_hide": dict(sorted(hid.items(), key=lambda kv: kv[1])[-50:])}})
+            return self.devices_public(fresh=False)
         if cmd == "brains_pull":                  # «Взять мозги с другого устройства» (конвертом своим устройствам)
             return self.brains_pull()
         if cmd == "brains_status":

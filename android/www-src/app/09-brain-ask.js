@@ -48,6 +48,7 @@ async function ask(text, opts = {}) {
   if (pics.length) { if (opts.camShot) { showCard(photoCard(pics[0].url)); cardSticky = Date.now() + 180000; }
     else { showCard(`<div class="attshow">${pics.map(a => `<img src="${a.url}" alt="">`).join("")}</div>`); cardSticky = Date.now() + 60000; } }
   turnAtt = att; turnAsk = opts.hidden ? "" : text;    // hidden — просьба приложения (сканер, сводка): без проверки
+  if (!opts.hidden) prefSet("act_at", String(Math.round(Date.now() / 1000)));   // 1.0.36: другим устройствам — когда говорили здесь
   const cap = !opts.hidden && captureAt && Date.now() - captureAt < 120000; captureAt = 0;     // сказано после «Записать»
   let fast = opts.hidden || kidsOn() ? null : att.length ? (remindAttQuick(text, att) || (() => { const say = noteQuick(text, att); return say ? { say } : null; })()) : await quick(text);
   if (cap && (!fast || fast.switchTo)) fast = { say: ideaNote(text, att) };       // не напоминание и не заметка по форме — в «Идеи»

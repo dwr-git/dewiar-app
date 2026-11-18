@@ -2917,6 +2917,7 @@ async function ask(text, opts = {}) {
   if (pics.length) { if (opts.camShot) { showCard(photoCard(pics[0].url)); cardSticky = Date.now() + 180000; }
     else { showCard(`<div class="attshow">${pics.map(a => `<img src="${a.url}" alt="">`).join("")}</div>`); cardSticky = Date.now() + 60000; } }
   turnAtt = att; turnAsk = opts.hidden ? "" : text;    // hidden — просьба приложения (сканер, сводка): без проверки
+  if (!opts.hidden) prefSet("act_at", String(Math.round(Date.now() / 1000)));   // 1.0.36: другим устройствам — когда говорили здесь
   const cap = !opts.hidden && captureAt && Date.now() - captureAt < 120000; captureAt = 0;     // сказано после «Записать»
   let fast = opts.hidden || kidsOn() ? null : att.length ? (remindAttQuick(text, att) || (() => { const say = noteQuick(text, att); return say ? { say } : null; })()) : await quick(text);
   if (cap && (!fast || fast.switchTo)) fast = { say: ideaNote(text, att) };       // не напоминание и не заметка по форме — в «Идеи»
@@ -8788,6 +8789,9 @@ async function syncRun(manual) {
     syncStatus = { ok: true, at: Date.now(), error: "", devices: devs, all, counts: good.reduce((o, r) => ({ sent: o.sent + r.sent, got: o.got + r.got }), { sent: 0, got: 0 }),
       via: syncChan().via, chans: chs };
     if (all) { DEVS = all; try { devFresh(); bsBoot(); } catch (e) { } }
+    const cr = good.find(r => !r.c.home);
+    if (cr) { NEAR = { near: cr.d.near || [], asks: cr.d.asks || [] }; try { devNearFresh(); } catch (e) { } }
+    remWatchSet();
     const got = good.reduce((n, r) => n + r.got, 0);
     if (got && qGet("natt_in").length) setTimeout(() => nattIn().catch(() => { }), 0);    // пришла заметка, которую ждали фото с компьютера
     if (got && $("#sh-day") && $("#sh-day").classList.contains("on") && document.activeElement !== $("#tk-goal")) renderDay();
@@ -8901,7 +8905,8 @@ async function syncOne(c, opts) {
     if (e.keep !== undefined) { delete st.idx[k]; continue; }      // в канале её и не было — удалять там нечего
     changes.push({ kind: k.slice(0, k.indexOf(":")), id: k.slice(k.indexOf(":") + 1), data: {}, updated: now, deleted: true, _h: null }); }
   const info = JSON.parse(D.info() || "{}");
-  let body = { since: st.rev || 0, device, name: devMyName(), app: D.web ? "web" : "phone", ver: info.version || "", kinds: SYNC_KINDS, changes: changes.map(({ _h, ...x }) => x) }, got = 0, d = {}, kept = 0;
+  let body = { since: st.rev || 0, device, name: devMyName(), app: D.web ? "web" : "phone", ver: info.version || "", kinds: SYNC_KINDS, changes: changes.map(({ _h, ...x }) => x),
+    act: +prefGet("act_at") || 0 }, got = 0, d = {}, kept = 0;
   const hdr = { Authorization: "Bearer " + c.token, "Content-Type": "application/json" };
   if (c.link && c.link !== c.token) hdr["X-Sync-Link"] = c.link;
   for (let round = 0; round < 20; round++) {
@@ -8927,6 +8932,10 @@ async function syncOne(c, opts) {
     if (qdone.task.length) qSet("taskcmd", qGet("taskcmd").filter(x => !qdone.task.includes(x.id)));   // команда задаче ушла — дальше решает компьютер
     body.changes = [];
     if (srv.some(k => !(st.kinds || []).includes(k))) { st.kinds = srv; st.rev = 0; body.since = 0; save(); continue; }   // сервер узнал новое — история с начала
+    if (!c.home && d.sid && st.sid !== d.sid) {     // 1.0.36: данные слились с другой Лирой («Рядом — ещё одна Лира») — номер rev прежний
+      const old = st.sid; st.sid = d.sid; save();
+      if (old) { st.rev = 0; body.since = 0; save(); plog("info", "🔗 одна Лира с другими устройствами — забираю всё с начала"); continue; }
+    }
     for (let it of d.items || []) {
       const k = it.kind + ":" + it.id, e = st.idx[k] || {};
       if (it.dev === st.device && e.u === it.updated) continue;     // наша же правка вернулась — уже применена
@@ -8988,6 +8997,15 @@ async function syncOne(c, opts) {
   if (!c.home && +d.box > (+clLoad().cursor || 0)) setTimeout(() => clPoll().catch(() => { }), 0);   // в ящике своих устройств новое — сразу
   if (kept && !opts.more) { const r2 = await syncOne(c, Object.assign({}, opts, { more: true })); return { ok: true, d: r2.d, sent: changes.length + r2.sent, got: got + r2.got }; }   // засев: недостающее — сразу
   return { ok: true, d, sent: changes.length, got };
+}
+/* 1.0.36: напоминания с компьютера и при закрытом приложении (RemWatch.java раз в ~15 минут) — только канал облака и
+   без шифрования на устройстве (ключ есть лишь здесь); номер — до какого изменения приложение уже всё забрало */
+let NEAR = { near: [], asks: [] };
+function remWatchSet() {
+  if (!D.remWatch) return;
+  const c = syncChans().find(x => !x.home), st = c && syncStOk(c);
+  const j = c && st && S.sync.on && !S.sync.e2e ? JSON.stringify({ base: c.base, token: c.token, link: c.link && c.link !== c.token ? c.link : "", since: +st.rev || 0, sid: st.sid || "" }) : "";
+  if (j !== remWatchSet.last) { remWatchSet.last = j; D.remWatch(j); }
 }
 function syncSoon() { if (SANDBOX) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncRun(false), 3000); }   // экзамен — без обмена   // несколько правок подряд — один обмен
 /* Значок «Записать» на рабочем столе (CaptureWidget.java): включён по умолчанию; «Добавить на экран» — Android 8+ */
@@ -12729,7 +12747,7 @@ function coPhoneFill(c) {
   const lim = +co.lim || 0;
   $("#cl-sub").textContent = `Компания «${co.name}»`;
   $("#cl-co-t").textContent = co.role === "owner"
-    ? `Вы — руководитель. Котёл компании: доля месяца ${coNumP(co.month_left)} + начислено ${coNumP(co.bought)} тал. Мест: ${co.seats_n}. Места и приглашения — в Лире на компьютере: «Поручения».`
+    ? `Вы — руководитель. На балансе компании — ${coNumP(co.left)} тал.: с него идут ответы Лиры у всех ${co.seats_n} человек. Сотрудники и приглашения — в Лире на компьютере: «Поручения».`
     : `За ответы Лиры платит компания «${co.name}». ` + (lim ? `Ваш лимит — ${coNumP(lim)} тал. в месяц, потрачено ${coNumP(co.spent_month)}.` : `Потрачено в этом месяце: ${coNumP(co.spent_month)} тал.`);
   const go = $("#cl-co-go");
   go.hidden = co.role === "owner";

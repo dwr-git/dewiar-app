@@ -70,9 +70,60 @@ function devHtml() {
       <div class="sw" style="margin-top:10px"><div>Синхронизировать<small class="hint" style="display:block;margin:2px 0 0">${esc(c.via)}</small></div><label class="tg"><input type="checkbox" id="sy-on" ${S.sync.on ? "checked" : ""}><i></i></label></div>
       ${c.home ? `<p class="hint" style="margin:8px 0 0">Обмен идёт только по домашней сети и зашифрован ключом с экрана компьютера.</p>`
         : `<div class="sw" style="margin-top:6px"><div>Шифровать на устройстве<small class="hint" style="display:block;margin:2px 0 0">облако видит только шифротекст</small></div><label class="tg"><input type="checkbox" id="sy-e2e" ${S.sync.e2e && syncKeyGet() ? "checked" : ""} ${S.sync.on ? "" : "disabled"}><i></i></label></div>`}` : ""}</div>
-    ${devWays(c)}
+    ${devNearHtml(c)}${devWays(c)}
     <h3>Все устройства${others.length ? ` · на связи: ${on + 1} из ${others.length + 1}` : ""}</h3><div class="card dvlist" id="dv-list">${rows}</div>
     <p class="hint">Синхронизация идёт сама — раз в минуту и сразу после правок: напоминания, заметки и блокнот, расходы, память «Обо мне», душа, свои персонажи, дневник и задачи.</p>`;
+}
+
+/* «Рядом — ещё одна Лира» (1.0.36; письмо 18.11: «у меня 4 Лиры… частично синхронизированы… не вижу, кто с кем контачит»):
+   сервер видит устройства из этой же сети, чьи данные пока отдельно (near.php). Здесь — «Сделать одной Лирой» (на том
+   устройстве появится вопрос) или «Это не моё» (больше не показывать); пришло предложение — «Да, одна Лира» / «Нет».
+   Слияние — на сервере: ключи и балансы у каждого свои, общими становятся память, заметки, дела и напоминания. */
+const devNearHid = () => { try { return JSON.parse(prefGet("near_hide") || "{}") || {}; } catch (e) { return {}; } };
+const devAppWord = (a) => ({ pc: "компьютер", phone: "телефон", web: "браузер" })[a] || "устройство";
+function devNearHtml(c) {
+  if (!c || c.home || typeof NEAR === "undefined") return "";
+  const hid = devNearHid();
+  const asks = NEAR.asks || [], near = (NEAR.near || []).filter(x => !hid[x.id]);
+  if (!asks.length && !near.length) return "";
+  return `<div class="card dvnear">` + asks.map(a => `<p style="margin:0 0 8px"><b>«${esc(a.from || "Устройство")}»</b> в этой же сети предлагает стать одной Лирой.
+      Соглашайтесь, только если это ваше устройство: память, заметки, дневник, дела и напоминания станут общими. Баланс у каждого останется свой.</p>
+      <div class="row2"><button class="btn p" data-nyes="${esc(a.id)}">Да, одна Лира</button><button class="btn" data-nno="${esc(a.id)}">Нет</button></div>`).join("")
+    + near.map(x => `<p style="margin:${asks.length ? "12px" : "0"} 0 8px">Рядом — ещё одна Лира, пока отдельная от этой: <b>«${esc(x.name || DEV_APP[x.app] || "Устройство")}»</b>
+      (${devAppWord(x.app)}, ${esc(devAgo(x.seen))}). Если это тоже ваше — сделайте их одной Лирой. Если это устройство кого-то из семьи — «Это не моё»: Лира у каждого своя.</p>
+      ${x.asked ? `<p class="hint" style="margin:0">Предложение отправлено — ответьте «Да» на «${esc(x.name || "том устройстве")}»: там появится вопрос.</p>`
+        : `<div class="row2"><button class="btn p" data-nask="${esc(x.id)}">Сделать одной Лирой</button><button class="btn" data-nhide="${esc(x.id)}">Это не моё</button></div>`}`).join("")
+    + `<div class="res" id="dv-near-res"></div></div>`;
+}
+function devNearBind() {
+  const res = () => $("#dv-near-res");
+  $$("[data-nask]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await devCall("POST", "/sync/near/ask", { to: b.dataset.nask, device: (syncSt() || {}).device || "" });
+      const x = (NEAR.near || []).find(y => y.id === b.dataset.nask); if (x) x.asked = Date.now(); renderSettings(); }
+    catch (e) { b.disabled = false; if (res()) { res().className = "res bad"; res().textContent = netErr(e.message || e); } }
+  });
+  $$("[data-nhide]").forEach(b => b.onclick = () => { const h = devNearHid(); h[b.dataset.nhide] = Math.round(Date.now() / 1000); prefSet("near_hide", JSON.stringify(h)); renderSettings(); });
+  $$("[data-nyes],[data-nno]").forEach(b => b.onclick = async () => {
+    const yes = !!b.dataset.nyes, id = b.dataset.nyes || b.dataset.nno, a = (NEAR.asks || []).find(x => x.id === id) || {};
+    $$("[data-nyes],[data-nno]").forEach(x => { x.disabled = true; });
+    try {
+      const d = await devCall("POST", "/sync/near/answer", { id, yes, device: (syncSt() || {}).device || "" });
+      NEAR.asks = (NEAR.asks || []).filter(x => x.id !== id);
+      if (d.linked) { const c = syncChans().find(x => !x.home), st = c && syncStFor(c);
+        if (st) { st.rev = 0; if (d.sid) st.sid = d.sid; prefSet(c.key, JSON.stringify(st)); }
+        toast(`Теперь это одна Лира с «${a.from || "тем устройством"}» — забираю общее`, 4000); syncSoon(); }
+      renderSettings();
+    } catch (e) { $$("[data-nyes],[data-nno]").forEach(x => { x.disabled = false; }); if (res()) { res().className = "res bad"; res().textContent = netErr(e.message || e); } }
+  });
+}
+/* синхронизация принесла «рядом» — новое предложение сказать один раз; вкладка открыта — перерисовать */
+function devNearFresh() {
+  let told = []; try { told = JSON.parse(prefGet("near_told") || "[]"); } catch (e) { told = []; }
+  const fresh = (NEAR.asks || []).filter(a => !told.includes(a.id));
+  if (fresh.length) { prefSet("near_told", JSON.stringify(told.concat(fresh.map(a => a.id)).slice(-20)));
+    toast(`«${fresh[0].from || "Другое устройство"}» предлагает стать одной Лирой — ответьте в «Настройки» → «Устройства»`, 6000); }
+  if (setTab === "devices" && $("#sh-set") && $("#sh-set").classList.contains("on") && !document.activeElement.matches("input")) renderSettings();
 }
 
 /* «Как связать устройства» (0.59, владелец 28.10: «всё в одном месте… чётко, просто и понятно»): два способа —
@@ -95,7 +146,7 @@ function devWays(c) {
   const way = devWay || (homeOn() && !syncCred() ? "home" : "cloud");
   const tab = (id, ic, t, sub) => `<button role="tab" data-way="${id}" class="${way === id ? "on" : ""}" aria-selected="${way === id}"><svg viewBox="0 0 24 24">${ic}</svg><span><b>${t}</b><small>${sub}</small></span></button>`;
   return `<h3>Как связать устройства</h3><div class="dvways" role="tablist" aria-label="Способ синхронизации">
-      ${tab("cloud", DEV_IC.cloud, "Через dewiar.pro", "везде, где есть интернет")}${tab("home", DEV_IC.home, "Дома по Wi-Fi", "без интернета")}</div>
+      ${tab("cloud", DEV_IC.cloud, "Через dewiar.pro", "везде, где есть интернет")}${tab("home", DEV_IC.home, "Дома по Wi-Fi", "ещё и напрямую, без интернета")}</div>
     <p class="hint dvwnote">${way === "home" ? "Телефон связывается прямо с компьютером, когда вы дома в одной сети. В интернет ничего не уходит, обмен зашифрован ключом из кода. Вне дома правки копятся здесь и уходят, когда вернётесь."
       : "Телефоны и компьютеры связываются через ваш вход в Dewiar — синхронизация идёт в дороге, на работе и дома."}</p>`
     + (way === "home" ? devHomeHtml(c) : devGiveHtml(c) + devCloudMore(c));   // 04.11: вход в Dewiar и Wi-Fi — вместе (облако главное, Wi-Fi запасной)
@@ -125,6 +176,7 @@ function devHomeHtml(c) {
 
 function devBind() {
   const g = (id) => document.getElementById(id);
+  devNearBind();
   if (g("dv-home-scan")) g("dv-home-scan").onclick = () => scanCode();
   $$(".dvways [data-way]").forEach(b => b.onclick = () => { devWay = b.dataset.way; renderSettings(); });
   if (g("dv-home-off")) g("dv-home-off").onclick = () => {

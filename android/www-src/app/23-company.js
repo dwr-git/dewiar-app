@@ -14,7 +14,7 @@ function coPhoneFill(c) {
   const lim = +co.lim || 0;
   $("#cl-sub").textContent = `Компания «${co.name}»`;
   $("#cl-co-t").textContent = co.role === "owner"
-    ? `Вы — руководитель. Котёл компании: доля месяца ${coNumP(co.month_left)} + начислено ${coNumP(co.bought)} тал. Мест: ${co.seats_n}. Места и приглашения — в Лире на компьютере: «Поручения».`
+    ? `Вы — руководитель. На балансе компании — ${coNumP(co.left)} тал.: с него идут ответы Лиры у всех ${co.seats_n} человек. Сотрудники и приглашения — в Лире на компьютере: «Поручения».`
     : `За ответы Лиры платит компания «${co.name}». ` + (lim ? `Ваш лимит — ${coNumP(lim)} тал. в месяц, потрачено ${coNumP(co.spent_month)}.` : `Потрачено в этом месяце: ${coNumP(co.spent_month)} тал.`);
   const go = $("#cl-co-go");
   go.hidden = co.role === "owner";

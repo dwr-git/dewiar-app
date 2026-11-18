@@ -86,6 +86,8 @@ with sync_playwright() as p:
     ok("41,5" in tc and "Иван, монтажник" in tc and "4,6 из 5 тал. за месяц" in tc and "0,3 из 8" in tc and "ещё не был" in tc and "ABCD-EFGH" in tc,
        "котёл, места: расход за месяц из лимита, «на связи», ждущие коды")
     ok("привет" not in tc.lower(), "разговоров нет — только расход")
+    ok(not re.search(r"котёл|котле|котла|доля месяца|начислено", tc.lower()) and "тал. на балансе" in tc and "потратил 4,6 из 5 тал. за месяц" in tc,
+       f"18.11 (партнёр: «вообще непонятно, о чём речь»): без «котла» и «доли месяца» — баланс компании и «потратил» у каждого")
     pg.click("#co-inv"); pg.fill("#co-nm", "Пётр, электрик"); pg.click("#co-mk"); pg.wait_for_timeout(300)
     nw = pg.inner_text("#co-new")
     ok("download.php?work=Tok123456789" in nw and ["team_hire", {"name": "Пётр", "role": "электрик"}] in pg.evaluate("calls")
@@ -142,7 +144,7 @@ with sync_playwright() as p:
     pg.click("#cc-new-go"); pg.wait_for_timeout(100)
     ok("название" in pg.inner_text("#cc-new-res"), "без названия — подсказка, без запроса")
     pg.fill("#cc-new-name", "Свет и Ток"); pg.click("#cc-new-go"); pg.wait_for_timeout(200)
-    ok(pg.locator(".dwq").count() == 1 and "котёл компании" in pg.inner_text(".dwq") and "перейдёт" in pg.inner_text(".dwq"), "сначала вопрос: что изменится с деньгами")
+    ok(pg.locator(".dwq").count() == 1 and "баланса компании" in pg.inner_text(".dwq") and "перейдёт" in pg.inner_text(".dwq"), "сначала вопрос: что изменится с деньгами")
     pg.click(".dwq .yes"); pg.wait_for_timeout(300)
     ok(["cloud_company", {"op": "create", "name": "Свет и Ток", "move": True}] in pg.evaluate("calls") and "создана" in pg.inner_text("#cc-new-res"),
        "«Создать компанию» — сам, без администратора")

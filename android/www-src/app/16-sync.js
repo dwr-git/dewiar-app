@@ -423,6 +423,9 @@ async function syncRun(manual) {
     syncStatus = { ok: true, at: Date.now(), error: "", devices: devs, all, counts: good.reduce((o, r) => ({ sent: o.sent + r.sent, got: o.got + r.got }), { sent: 0, got: 0 }),
       via: syncChan().via, chans: chs };
     if (all) { DEVS = all; try { devFresh(); bsBoot(); } catch (e) { } }
+    const cr = good.find(r => !r.c.home);
+    if (cr) { NEAR = { near: cr.d.near || [], asks: cr.d.asks || [] }; try { devNearFresh(); } catch (e) { } }
+    remWatchSet();
     const got = good.reduce((n, r) => n + r.got, 0);
     if (got && qGet("natt_in").length) setTimeout(() => nattIn().catch(() => { }), 0);    // пришла заметка, которую ждали фото с компьютера
     if (got && $("#sh-day") && $("#sh-day").classList.contains("on") && document.activeElement !== $("#tk-goal")) renderDay();
@@ -536,7 +539,8 @@ async function syncOne(c, opts) {
     if (e.keep !== undefined) { delete st.idx[k]; continue; }      // в канале её и не было — удалять там нечего
     changes.push({ kind: k.slice(0, k.indexOf(":")), id: k.slice(k.indexOf(":") + 1), data: {}, updated: now, deleted: true, _h: null }); }
   const info = JSON.parse(D.info() || "{}");
-  let body = { since: st.rev || 0, device, name: devMyName(), app: D.web ? "web" : "phone", ver: info.version || "", kinds: SYNC_KINDS, changes: changes.map(({ _h, ...x }) => x) }, got = 0, d = {}, kept = 0;
+  let body = { since: st.rev || 0, device, name: devMyName(), app: D.web ? "web" : "phone", ver: info.version || "", kinds: SYNC_KINDS, changes: changes.map(({ _h, ...x }) => x),
+    act: +prefGet("act_at") || 0 }, got = 0, d = {}, kept = 0;
   const hdr = { Authorization: "Bearer " + c.token, "Content-Type": "application/json" };
   if (c.link && c.link !== c.token) hdr["X-Sync-Link"] = c.link;
   for (let round = 0; round < 20; round++) {
@@ -562,6 +566,10 @@ async function syncOne(c, opts) {
     if (qdone.task.length) qSet("taskcmd", qGet("taskcmd").filter(x => !qdone.task.includes(x.id)));   // команда задаче ушла — дальше решает компьютер
     body.changes = [];
     if (srv.some(k => !(st.kinds || []).includes(k))) { st.kinds = srv; st.rev = 0; body.since = 0; save(); continue; }   // сервер узнал новое — история с начала
+    if (!c.home && d.sid && st.sid !== d.sid) {     // 1.0.36: данные слились с другой Лирой («Рядом — ещё одна Лира») — номер rev прежний
+      const old = st.sid; st.sid = d.sid; save();
+      if (old) { st.rev = 0; body.since = 0; save(); plog("info", "🔗 одна Лира с другими устройствами — забираю всё с начала"); continue; }
+    }
     for (let it of d.items || []) {
       const k = it.kind + ":" + it.id, e = st.idx[k] || {};
       if (it.dev === st.device && e.u === it.updated) continue;     // наша же правка вернулась — уже применена
@@ -623,6 +631,15 @@ async function syncOne(c, opts) {
   if (!c.home && +d.box > (+clLoad().cursor || 0)) setTimeout(() => clPoll().catch(() => { }), 0);   // в ящике своих устройств новое — сразу
   if (kept && !opts.more) { const r2 = await syncOne(c, Object.assign({}, opts, { more: true })); return { ok: true, d: r2.d, sent: changes.length + r2.sent, got: got + r2.got }; }   // засев: недостающее — сразу
   return { ok: true, d, sent: changes.length, got };
+}
+/* 1.0.36: напоминания с компьютера и при закрытом приложении (RemWatch.java раз в ~15 минут) — только канал облака и
+   без шифрования на устройстве (ключ есть лишь здесь); номер — до какого изменения приложение уже всё забрало */
+let NEAR = { near: [], asks: [] };
+function remWatchSet() {
+  if (!D.remWatch) return;
+  const c = syncChans().find(x => !x.home), st = c && syncStOk(c);
+  const j = c && st && S.sync.on && !S.sync.e2e ? JSON.stringify({ base: c.base, token: c.token, link: c.link && c.link !== c.token ? c.link : "", since: +st.rev || 0, sid: st.sid || "" }) : "";
+  if (j !== remWatchSet.last) { remWatchSet.last = j; D.remWatch(j); }
 }
 function syncSoon() { if (SANDBOX) return; clearTimeout(syncTimer); syncTimer = setTimeout(() => syncRun(false), 3000); }   // экзамен — без обмена   // несколько правок подряд — один обмен
 /* Значок «Записать» на рабочем столе (CaptureWidget.java): включён по умолчанию; «Добавить на экран» — Android 8+ */

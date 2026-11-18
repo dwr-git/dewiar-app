@@ -1,8 +1,8 @@
 /* «Компания» в студии (пилот «А и Б вместе», владелец 18.11; сервер — server/dwrapp/cloud/company.php, ядро — cloud_company).
    Раздела в меню нет:
-   - «Мозг» → «ИИ-баланс»: в компании — «за ИИ платит компания «…»» (сотруднику — котёл, свой лимит и потрачено; «Пополнить»
+   - «Мозг» → «ИИ-баланс»: в компании — «за ИИ платит компания «…»» (сотруднику — баланс компании, свой лимит и потрачено; «Пополнить»
      прячется — пополняет руководитель); не в компании — «Код от компании» (войти по коду руководителя);
-   - «Поручения» (вверху, только у руководителя): котёл (доля месяца + начислено), места — кто сколько потратил за месяц и
+   - «Поручения» (вверху, только у руководителя): баланс компании (18.11: без «котла» и «доли» — партнёр не понял), места — кто сколько потратил за месяц и
      когда был на связи (разговоров не видно), лимит на человека, «Пригласить сотрудника» (код на 14 дней), «Убрать». */
 (() => {                                                  // свои имена — внутри: в студии много общих (CO, coEsc…)
 const COMP = { c: null, busy: false };
@@ -10,6 +10,11 @@ const coNum = (v, d = 2) => { const n = +v || 0; return (Math.abs(n) < 0.01 && n
 const coEsc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const coAgo = (t) => { if (!t) return "ещё не был"; const s = Date.now() / 1000 - t; if (s < 600) return "на связи"; if (s < 3600) return `${Math.round(s / 60)} мин назад`;
   if (s < 86400) return `${Math.round(s / 3600)} ч назад`; return new Date(t * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }); };
+
+/* подарок мест на этот месяц (только если у компании есть плата за места) — одной фразой; на пилоте его нет */
+function coBonus(co) {
+  return +co.seat_amt > 0 && +co.month_left > 0 ? ` Из них ${coNum(co.month_left)} — подарок за места на этот месяц, сгорит 1-го числа.` : "";
+}
 
 function coFill(c) {
   const co = c && c.connected ? c.company : null;
@@ -23,7 +28,7 @@ function coFill(c) {
     const lim = +co.lim || 0;
     $("#cc-sub").textContent = `Компания «${co.name}»` + (c.active ? " · отвечает облако" : "");
     $("#cc-co-t").textContent = co.role === "owner"
-      ? `Вы — руководитель. Котёл компании: доля месяца ${coNum(co.month_left)} + начислено ${coNum(co.bought)} тал. Мест: ${co.seats_n}.`
+      ? `Вы — руководитель. На балансе компании — ${coNum(co.left)} тал.${+c.turns ? ` (≈ ${(+c.turns).toLocaleString("ru-RU")} ответов Лиры)` : ""}. С него идут ответы Лиры у всех ${co.seats_n} человек, пополняете вы.` + coBonus(co)
       : `За ответы Лиры платит компания «${co.name}». ` + (lim ? `Ваш лимит — ${coNum(lim)} тал. в месяц, потрачено ${coNum(co.spent_month)}.` : `Потрачено в этом месяце: ${coNum(co.spent_month)} тал.`)
         + " Ваш собственный баланс сохранится.";
     const go = $("#cc-co-go");
@@ -63,8 +68,8 @@ $("#cc-join-go") && ($("#cc-join-go").onclick = async () => {
 $("#cc-new-go") && ($("#cc-new-go").onclick = async () => {
   const r = $("#cc-new-res"), name = $("#cc-new-name").value.trim();
   if (name.length < 2) { r.className = "res bad"; r.textContent = "Напишите название компании"; $("#cc-new-name").focus(); return; }
-  if (!await ask(`Создать компанию «${name}»? Вы станете её руководителем: ответы Лиры у вас и у сотрудников будет оплачивать котёл компании`
-    + ($("#cc-new-mv").checked ? ", а ваш нынешний баланс перейдёт в него." : ". Ваш баланс останется вашим, котёл пополняется оплатой."), { ok: "Создать" })) return;
+  if (!await ask(`Создать компанию «${name}»? Вы станете её руководителем: ответы Лиры у вас и у сотрудников будут списываться с баланса компании`
+    + ($("#cc-new-mv").checked ? ", а ваш нынешний баланс перейдёт на него." : ". Ваш баланс останется вашим, баланс компании пополняется оплатой."), { ok: "Создать" })) return;
   $("#cc-new-go").disabled = true;
   try {
     const x = await core.call("cloud_company", { op: "create", name, move: $("#cc-new-mv").checked });
@@ -95,15 +100,15 @@ function coTeam(force) {
   COMP.sig = sig;
   const seats = co.seats || [], inv = co.invites || [];
   const max = Math.max(0.0001, ...seats.map(s => +s.spent_month || 0), ...seats.map(s => +s.lim || +co.lim_default || 0));
-  const left = +co.left || 0, full = Math.max(left, (+co.seat_amt || 15) * Math.max(1, co.seats_n) + Math.max(0, +co.bought || 0));
+  const left = +co.left || 0, full = Math.max(left, left + seats.reduce((a, s) => a + (+s.spent_month || 0), 0));
   box.innerHTML = coSteps(co, team) + `<div class="co-head">
-      <div class="co-t"><b>Компания «${coEsc(co.name)}»</b><span>Каждое место приносит ${coNum(co.seat_amt)} тал. в месяц в общий котёл; начисленное копится. Разговоров сотрудников здесь нет — только расход.</span></div>
-      <div class="co-left"><b>${coNum(left)}</b><span>тал. в котле</span><i class="co-bar"><i style="width:${Math.max(left > 0 ? 2 : 0, Math.min(100, left / full * 100))}%"></i></i>
-        <small>доля месяца ${coNum(co.month_left)} · начислено ${coNum(co.bought)}</small></div>
+      <div class="co-t"><b>Компания «${coEsc(co.name)}»</b><span>Один баланс на всю компанию: каждый просто пользуется Лирой, ответы списываются отсюда сами. Ниже — сколько потратил каждый; разговоров сотрудников здесь не видно.</span></div>
+      <div class="co-left"><b>${coNum(left)}</b><span>тал. на балансе</span><i class="co-bar"><i style="width:${Math.max(left > 0 ? 2 : 0, Math.min(100, left / full * 100))}%"></i></i>
+        ${coBonus(co) ? `<small>${coEsc(coBonus(co).trim())}</small>` : ""}</div>
     </div>
     <ul class="co-seats">${seats.map(s => { const lim = +s.lim || +co.lim_default || 0, sp = +s.spent_month || 0;
       return `<li data-k="${s.key}"><span class="co-who"><b>${coEsc(s.name)}</b><small>${s.role === "owner" && !/^руководител/i.test(s.name) ? "руководитель · " : ""}${coEsc(coAgo(s.seen))}</small></span>
-        <span class="co-sp"><i class="co-bar${lim && sp >= lim ? " over" : ""}"><i style="width:${Math.min(100, sp / (lim || max) * 100)}%"></i></i><small>${coNum(sp)}${lim ? ` из ${coNum(lim)}` : ""} тал. за месяц</small></span>
+        <span class="co-sp"><i class="co-bar${lim && sp >= lim ? " over" : ""}"><i style="width:${Math.min(100, sp / (lim || max) * 100)}%"></i></i><small>потратил ${coNum(sp)}${lim ? ` из ${coNum(lim)}` : ""} тал. за месяц</small></span>
         <span class="co-act">${s.role === "owner" ? "" : `<button class="btn small" data-lim="${s.key}" title="Лимит этого человека в месяц">${+s.lim ? "Лимит " + coNum(s.lim) : "Лимит"}</button><button class="btn small ghost" data-rm="${s.key}">Убрать</button>`}</span></li>`; }).join("")}</ul>
     ${inv.length ? `<p class="co-inv">Ждут входа: ${inv.map(i => `<span class="co-code" title="действует до ${new Date(i.until * 1000).toLocaleDateString("ru-RU")}"><code>${coEsc(i.code)}</code>${i.name ? " · " + coEsc(i.name) : ""}<button class="co-x" data-un="${coEsc(i.code)}" aria-label="Отменить код ${coEsc(i.code)}">×</button></span>`).join("")}</p>` : ""}
     <div class="co-acts"><button class="btn primary" id="co-inv">Пригласить сотрудника</button>
@@ -134,7 +139,7 @@ function coSteps(co, team) {
   if (sc === undefined) { COMP.sc = null; core.call("sitechat_get", {}).then(d => { COMP.sc = d || {}; coTeam(true); }).catch(() => { COMP.sc = {}; }); }
   const r = (sc && sc.remote) || null;
   const steps = [
-    ["Компания", `«${co.name}» заведена, котёл — ${coNum(co.left)} тал.`, true, ""],
+    ["Компания", `«${co.name}» заведена, на балансе — ${coNum(co.left)} тал.`, true, ""],
     ["Знания", r && (sc.kb_chars || r.kb_chars) ? "консультант знает цены и услуги — спросите его как клиент" : "впишите цены, услуги, адрес и часы работы — по ним Лира отвечает клиентам", !!(r && (sc.kb_chars || r.kb_chars)), "chat"],
     ["Каналы", r ? (r.tg ? `сайт и Telegram-бот ${r.tg}` : "ссылка и окно для сайта готовы; подключите и Telegram-бота") : "ссылка для сайта и свой бот в Telegram — клиенты пишут, Лира отвечает", !!(r && r.tg), "chat"],
     ["Люди", co.seats_n > 1 ? `в компании ${co.seats_n} — поручения и ответы Лиры за счёт компании` : "пригласите сотрудников — одна ссылка на каждого", co.seats_n > 1, "inv"],
@@ -160,7 +165,7 @@ async function coOp(args, msg) {
 }
 
 /* «Пригласить сотрудника» (18.11: одно приглашение на всё): ссылка — сотрудник открывает её на телефоне, поручения приходят
-   в «Работу», а ответы его Лиры оплачивает котёл (team_hire → /work/invite с местом компании). Только компьютер —
+   в «Работу», а ответы его Лиры идут с баланса компании (team_hire → /work/invite с местом компании). Только компьютер —
    «Код для компьютера» (8 знаков, вводится в «Мозге»). */
 async function coInvite() {
   const box = $("#co-new");

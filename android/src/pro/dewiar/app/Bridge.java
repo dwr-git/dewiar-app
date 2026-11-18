@@ -194,6 +194,12 @@ public final class Bridge {
         CloseLive.apply(a);
     }
 
+    /** Напоминания с других устройств в фоне (RemWatch, 1.0.36): {base, token, link, since, sid} строкой JSON; "" — выключить. */
+    @JavascriptInterface public void remWatch(String json) {
+        prefs.edit().putString("rem_watch", json == null ? "" : json).apply();
+        RemWatch.schedule(a, json != null && !json.isEmpty());
+    }
+
     /** «Лира заметила» (Notice, 0.97): что смотреть в фоне — {on, lat, lon, place, who, days} строкой JSON; "" — выключить. */
     @JavascriptInterface public void notice(String json) {
         prefs.edit().putString("notice", json == null ? "" : json).apply();

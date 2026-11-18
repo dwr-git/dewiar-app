@@ -428,15 +428,21 @@ class Updater:
 
     def _spread_at(self, ver):
         """Когда фоновой проверке можно качать версию ver: случайно в ближайшие SPREAD секунд, своё время у каждого
-        компьютера; помнится в updates/spread.json — перезапуск программы не перебрасывает жребий."""
+        компьютера; помнится в updates/spread.json — перезапуск программы не перебрасывает жребий.
+        Жребий за версию, которая так и не встала, переходит на новую (№881, 18.11): выпуски бывают по нескольку
+        в день, и компьютер, включённый весь день, раньше каждый раз тянул новые 0…6 ч и не обновлялся неделями."""
         f = self.dir / "spread.json"
+        at = None
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
             if d.get("version") == ver:
                 return float(d.get("at") or 0)
+            if vtuple(d.get("version")) > vtuple(self.version):
+                at = min(float(d.get("at") or 0), time.time() + SPREAD)
         except (OSError, ValueError, TypeError):
             pass
-        at = time.time() + random.uniform(0, SPREAD)
+        if at is None:
+            at = time.time() + random.uniform(0, SPREAD)
         try:
             self.dir.mkdir(parents=True, exist_ok=True)
             f.write_text(json.dumps({"version": ver, "at": at}), encoding="utf-8")

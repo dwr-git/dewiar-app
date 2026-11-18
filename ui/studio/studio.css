@@ -3088,6 +3088,18 @@ html:not(.st-light) .vs-pill.ok { color: var(--good); } html:not(.st-light) .vs-
 .dv-in { display: flex; gap: 8px; }
 .dv-in input { flex: 1; min-width: 0; font-size: 22px; letter-spacing: .12em; font-variant-numeric: tabular-nums; text-align: center; padding: 10px 12px; }
 .dv-brains { margin-bottom: 26px; flex-direction: row; align-items: center; gap: 20px; flex-wrap: wrap; } .dv-brains > div:first-child { flex: 1 1 360px; } .dv-brains .res { flex-basis: 100%; margin: 0; }
+/* «Рядом — ещё одна Лира» (1.0.36): над картой, пока есть что предложить */
+.dv-near { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.dv-nr { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: 22px; background: var(--glass); box-shadow: var(--raise-s, none); }
+.dv-nr.ask { background: linear-gradient(135deg, rgba(139,124,255,.16), rgba(95,220,182,.12)), var(--glass); }
+.dv-nr .dv-ic { width: 42px; height: 42px; border-radius: 14px; flex: none; display: grid; place-items: center; background: linear-gradient(140deg, #9a8cff, #6a55e6); }
+.dv-nr .dv-ic.phone { background: linear-gradient(140deg, #5fdcb6, #1fa585); } .dv-nr .dv-ic.web { background: linear-gradient(140deg, #7fc8ff, #4a86ee); }
+.dv-nr .dv-ic svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.dv-nt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dv-nt b { font-size: 14.5px; line-height: 1.3; } .dv-nt small { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.dv-nb { display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
+.dv-nw { font-size: 12.5px; color: var(--muted); }
+@media (max-width: 760px) { .dv-nr { flex-wrap: wrap; } .dv-nb { width: 100%; } }
 /* «Как связать устройства» (0.59): два способа — через dewiar.pro или дома по Wi-Fi; выбор — крупные вкладки */
 .dv-ways { margin-bottom: 26px; display: flex; flex-direction: column; gap: 12px; }
 .dv-ways-h { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 0 4px; }

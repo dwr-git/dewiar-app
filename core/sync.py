@@ -236,6 +236,12 @@ class Sync(E2EMixin, SnapMixin, ApplyMixin, FilesMixin, SafeMixin, PluginsMixin,
             body = {"since": int(self.state.get("rev") or 0), "device": self.state["device"], "name": self.host.device_name(),
                     "app": "pc", "ver": _version(), "kinds": kinds,
                     "changes": []}
+            act = getattr(self.host, "last_act", None)
+            if callable(act):                            # когда здесь последний раз говорили с Лирой — другим устройствам (1.0.36)
+                try:
+                    body["act"] = int(act() or 0)
+                except Exception:  # noqa: BLE001
+                    pass
             via = self._via()
             if via:                                      # телефоны, что синхронизируются с этим компьютером по Wi-Fi (04.11)
                 body["via"] = via
@@ -277,6 +283,18 @@ class Sync(E2EMixin, SnapMixin, ApplyMixin, FilesMixin, SafeMixin, PluginsMixin,
                     body["since"] = 0
                     body["changes"] = []
                     continue
+                sid = str(d.get("sid") or "")
+                if sid and self.state.get("sid") != sid:
+                    # данные этого устройства слились с другой Лирой («Рядом — ещё одна Лира», 1.0.36; связали ключ с
+                    # аккаунтом): номер rev — из прежнего пространства, забираем всё с начала (своё уже на сервере)
+                    old = self.state.get("sid")
+                    self.state["sid"] = sid
+                    if old:
+                        log.info("🔗 Синхронизация: теперь одна Лира с другими устройствами — забираю всё с начала")
+                        self.state["rev"] = 0
+                        body["since"] = 0
+                        body["changes"] = []
+                        continue
                 body["changes"], rest = rest[:CHUNK], rest[CHUNK:]
                 for it in d.get("items") or []:
                     key = it["kind"] + ":" + it["id"]
@@ -347,7 +365,16 @@ class Sync(E2EMixin, SnapMixin, ApplyMixin, FilesMixin, SafeMixin, PluginsMixin,
                 except Exception:  # noqa: BLE001
                     pass
             self.status.update(ok=True, at=int(time.time()), error="", devices=d.get("devices") or [], space=d.get("space", ""), all=d.get("all") or [],
-                               counts={"sent": len(changes), "got": got}, e2e=self.e2e_status())
+                               counts={"sent": len(changes), "got": got}, e2e=self.e2e_status(),
+                               near=d.get("near") or [], asks=d.get("asks") or [])
+            fresh = [a for a in self.status["asks"] if a.get("id") and a["id"] not in self.state.setdefault("asks_told", [])]
+            if fresh and callable(getattr(self.host, "near_asked", None)):
+                self.state["asks_told"] = (self.state["asks_told"] + [a["id"] for a in fresh])[-20:]
+                self._save()
+                try:
+                    self.host.near_asked(fresh)
+                except Exception:  # noqa: BLE001
+                    log.debug("рядом: сообщить", exc_info=True)
             if changes or got:
                 log.info("🔄 Синхронизация: отправлено %d, получено %d", len(changes), got)
             return True
