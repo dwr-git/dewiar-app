@@ -167,7 +167,7 @@ class SyncCommands:
         if cmd == "bug_state":
             return self.bug_state()
         if cmd == "complaint_send":
-            return self.complaint_send(a.get("note", ""), a.get("who", ""), bool(a.get("shot", True)))
+            return self.complaint_send(a.get("note", ""), a.get("who", ""), bool(a.get("shot", True)), talk=a.get("talk", True) is not False)
         # суфлёр (core/prompter.py): окно ui/prompter.html
         if cmd.startswith("prompter_"):
             pr = self.prompter

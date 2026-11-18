@@ -2229,3 +2229,5 @@ body.light .blg-del { color: #c23a5a; }
 .drv-f b { font-size: 13.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; padding-right: 22px; }
 .drv-f small { color: var(--muted); font-size: 12px; }
 .drv-f .x { position: absolute; top: 6px; right: 6px; }
+.start .legal { margin: 10px 4px 0; font-size: 12px; line-height: 1.45; color: var(--dim, rgba(255,255,255,.55)); text-align: center; }   /* 1.0.29: согласие одной строкой */
+.start .legal a { color: inherit; text-decoration: underline; }

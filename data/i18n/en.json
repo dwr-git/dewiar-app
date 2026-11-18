@@ -587,6 +587,7 @@
  "insight.src.empty.t": "The page opened but has no posts. Use a feed, a channel or a site section with articles — check the link.",
  "insight.src.empty.tg": "The channel is private or has no public preview. Radar reads public channels — ones that open at t.me/s/name without signing in.",
  "insight.src.why.tg_web": "This is a Telegram Web link: a channel can't be read by its number. Use the channel's public link — t.me/name or @name (it's in the channel info).",
+ "insight.src.why.dzen": "Dzen does not give its articles to apps — the Radar can't read it. Add the author's Telegram channel or website instead: many Dzen authors have one.",
  "insight.src.found": "Found {n}, {m} new — they'll be analysed on the next pass",
  "insight.src.found0": "Nothing found — check the link",
  "tool.search.tail": "(These are page snippets. If the full text is needed — a poem, an article, instructions — open the link: read_webpage.)",

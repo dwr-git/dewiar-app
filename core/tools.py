@@ -724,14 +724,14 @@ class Toolbox:
     def specs(self, text=None, keep=()):
         """Описания включённых инструментов для модели: [{name, description, parameters}]. text — вопрос: облегчённый набор
         (харнесс, шаг 1, 15.11; настройка tools.slim, по умолчанию включено): ядро — всегда, модули и пачки действий
-        (modules.groups) — когда вопрос про них, ими пользовались последние 15 минут или модель попросила (keep, more_tools);
+        (modules.groups) — когда вопрос про них, их предлагали или ими пользовались последние 6 часов (SLIM_RECENT) или модель попросила (keep, more_tools);
         отложенные — списком в описании more_tools. text None — весь набор (большие задачи, проверки, справка)."""
         out = [{"name": n, "description": d, "parameters": p} for n, (d, p, *_rest) in TOOLS.items()
                if n != "more_tools" and self.policy(n)[0]]
         if text is not None and (self.s.get("tools") or {}).get("slim", True) is not False:
             # порядок — ради кэша начала запроса («Голос без пауз»): ядро и more_tools (описание неизменное — все группы
             # человека) одинаковы у всех вопросов; подобранное — после, в порядке появления в разговоре; предложенное
-            # группа остаётся 15 минут — набор в разговоре только растёт, и сервер не перечитывает разговор заново
+            # группа остаётся 6 часов — набор в разговоре только растёт, и сервер не перечитывает разговор заново
             now = time.time()
             used, offered = self.__dict__.setdefault("_used", {}), self.__dict__.setdefault("_offered", {})
             fresh = {g for g, t in list(used.items()) + list(offered.items()) if now - t < modules.SLIM_RECENT}
@@ -1027,7 +1027,7 @@ class Toolbox:
         args = {k: v for k, v in coerce_args(TOOLS[name][1], args).items() if not k.startswith("_trunc")}
         call = lambda: TOOLS[name][3](args or {}, {"settings": self.s, "reminders": self.reminders, "skills": self.skills, **self.hooks})  # noqa: E731
         g = modules.pack_of(name)
-        if g is not None:                               # пользовались — группа остаётся у модели ещё 15 минут (specs)
+        if g is not None:                               # пользовались — группа остаётся у модели ещё 6 часов (specs)
             self.__dict__.setdefault("_used", {})[g["id"]] = time.time()
         m = modules.of(name)
         return call() if m is None else self._fused(m["id"], call)

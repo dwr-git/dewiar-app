@@ -97,7 +97,9 @@ def detect(link):
         nm = vk_name(s)
         return {"kind": "vk", "url": f"https://vk.com/{nm}" if nm else s, "feed": "", "name": "VK " + (nm or host)}
     if host.endswith("dzen.ru") or host.endswith("zen.yandex.ru"):
-        return {"kind": "dzen", "url": s, "feed": "", "name": "Дзен " + (path.strip("/").split("/")[-1] or "")}
+        # №861 (18.11): Дзен — страница, собираемая скриптом, без ленты: Радар не находил на ней ни одной статьи и молчал.
+        # Честно сразу: не прочитать, и что взять взамен
+        return {"kind": "dzen", "url": s, "feed": "", "name": "Дзен " + (path.strip("/").split("/")[-1] or ""), "bad": "dzen"}
     if re.search(r"(\.rss|\.atom|\.xml|/rss|/feed|/atom)(/|\?|$)", path + ("?" if p.query else ""), re.I) or "format=rss" in (p.query or ""):
         return {"kind": "rss", "url": s, "feed": s, "name": name}
     # длинный путь со «словами» — одна статья; корень или раздел — сайт

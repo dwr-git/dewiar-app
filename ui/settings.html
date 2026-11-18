@@ -1689,7 +1689,9 @@
     <div class="dwc dw-me" id="dw-me" hidden>
       <div class="dh"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2a3.4 3.4 0 0 1 6.4 0M14 10h4M14 13.5h3"/></svg><h3>Как к вам обращаться</h3></div>
       <p class="hint">Бесплатный мозг Dewiar подключился сам, без анкеты. Оставьте имя и контакт — почту, Telegram или телефон, —
-        если что-то сломается, разработчик сможет вам ответить. По желанию; поменять можно в любой момент.</p>
+        если что-то сломается, разработчик сможет вам ответить. По желанию; поменять можно в любой момент.
+        Контакт видит только команда Dewiar; удалить — «О программе» → «Сообщить о проблеме» со словами «Мои данные».
+        <a href="https://dewiar.pro/dwrapp/privacy.php" target="_blank" rel="noopener">Политика конфиденциальности</a></p>
       <div class="actions" style="margin:0;flex-wrap:wrap">
         <input type="text" id="dw-me-name" maxlength="80" placeholder="Имя" style="flex:1;min-width:140px">
         <input type="text" id="dw-me-contact" maxlength="120" placeholder="Почта, Telegram или телефон" style="flex:2;min-width:200px">
@@ -2804,6 +2806,7 @@
         <div class="bugtxt">
           <textarea id="rep-note" rows="4" maxlength="2000" placeholder="Что случилось? Например: «спросил погоду — молчит» или «в машине не слышит меня». Снимок из буфера — Ctrl+V"></textarea>
           <input type="text" id="bug-who" maxlength="40" placeholder="Как подписать вас в «Помощниках проекта» — необязательно">
+          <label class="chk" title="Последние фразы разговора помогают найти ошибку. Почта и телефоны в отчёте скрываются"><input type="checkbox" id="bug-talk" checked> приложить последние фразы разговора</label>
           <div class="actions" style="margin:0"><button class="btn primary" id="bug-send">Отправить разработчику</button>
             <button class="btn" id="rep-go" title="Отчёт одним файлом на рабочий стол — если нет интернета">Сохранить отчёт в файл</button><span class="res" id="rep-res"></span></div>
         </div>
@@ -2844,6 +2847,7 @@
   <div class="wbrain" id="wlc-brain" hidden><div><b>Сначала — мозг: кто будет думать</b><span id="wlc-brain-t">Бесплатно: облако Dewiar по входу или своя модель на компьютере (Ollama, LM Studio).</span></div><button class="btn primary" data-go="brain">Подключить</button></div>
   <div class="wans" id="wlc-ans" hidden aria-live="polite"><i class="wans-ava" aria-hidden="true"></i><p></p></div>
   <div class="actions"><button class="btn link" id="wlc-intro" title="Персонаж сам расскажет о себе голосом и проверит микрофон">👋 Познакомиться голосом</button><span class="grow"></span><button class="btn" id="wlc-later">Позже</button><button class="btn primary" id="wlc-done" hidden>Готово</button></div>
+  <p class="wlegal" id="wlc-legal">Пользуясь Dewiar, вы принимаете <a href="https://dewiar.pro/dwrapp/terms.php" target="_blank" rel="noopener">Условия использования</a> и <a href="https://dewiar.pro/dwrapp/privacy.php" target="_blank" rel="noopener">Политику конфиденциальности</a>. Анонимный пульс выключается в «О программе».</p>
 </div></div>
 <div class="drawer" id="help"><button class="btn icon hx" id="help-x" title="Закрыть">✕</button><div id="help-body"></div></div>
 <div class="drawer" id="drawer">

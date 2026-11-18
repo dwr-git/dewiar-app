@@ -2047,8 +2047,10 @@ $("askin").addEventListener("keydown", (e) => {
 <div id="htip" role="tooltip" aria-hidden="true"></div>
 <script>
 (function () {                                  // подсказки кнопок внутри карточки (см. #htip в стилях)
-  const tip = document.getElementById("htip"); let cur = null, timer = 0;
+  const tip = document.getElementById("htip"); let cur = null, timer = 0, my = -1;
   const hide = () => { clearTimeout(timer); tip.classList.remove("on"); cur = null; };
+  // №868: подсказка под маленькой кнопкой пряталась под указателем-рукой — ставим её ниже самого указателя (~28 px)
+  document.addEventListener("mousemove", (e) => { my = e.clientY; }, true);
   document.addEventListener("mouseover", (e) => {
     const el = e.target.closest && e.target.closest("[title], [data-tip]");
     if (!el || el === cur) return;
@@ -2060,7 +2062,8 @@ $("askin").addEventListener("keydown", (e) => {
       tip.textContent = el.dataset.tip;
       const r = el.getBoundingClientRect(), w = Math.min(tip.offsetWidth, innerWidth - 20), h = tip.offsetHeight;
       const x = Math.max(10, Math.min(innerWidth - w - 10, r.left + r.width / 2 - w / 2));
-      const y = r.bottom + 8 + h <= innerHeight - 6 ? r.bottom + 8 : Math.max(6, r.top - h - 8);
+      const below = Math.max(r.bottom + 8, my >= 0 ? my + 28 : 0);
+      const y = below + h <= innerHeight - 6 ? below : Math.max(6, Math.min(r.top, my >= 0 ? my - 6 : r.top) - h - 8);
       tip.style.left = x + "px"; tip.style.top = y + "px"; tip.classList.add("on");
     }, 550);
   });

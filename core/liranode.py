@@ -497,15 +497,29 @@ def ask_model(base, model, body, timeout, key=""):
                            ensure_ascii=False)
 
 
+LOAD_WAIT = 180          # с: первый вопрос замера — с загрузкой модели в видеопамять (27B с диска — минута и больше)
+WARM_AGAIN_S = 8         # с: первый ответ дольше — модель, видимо, загружалась: меряем ещё раз
+
+
 def speed_test(base, model, timeout=30, key=""):
     """Замер: обычный общий вопрос, как пришёл бы от сети. -> {ok, s, chars, tps, text, error}."""
     body = {"messages": [{"role": "system", "content": "Ты — Лира, голосовой помощник. Отвечай коротко и по-русски."},
                          {"role": "user", "content": "Почему небо голубое? Ответь в двух-трёх предложениях."}],
             "max_tokens": 300, "temperature": 0.3, "chat_template_kwargs": {"enable_thinking": False}}
+    # №866 (Ollama с несколькими моделями на сервере в сети: «модель не ответила: timed out», хотя в чате отвечает): первый
+    # вопрос часто ждёт, пока модель загрузится в видеопамять, — это не её скорость. Первый раз ждём дольше (LOAD_WAIT),
+    # и если ответ был долгим — меряем вторым вопросом, когда модель уже загружена
     t0 = time.monotonic()
-    code, raw = ask_model(base, model, body, timeout, key=key)
+    code, raw = ask_model(base, model, body, max(timeout, LOAD_WAIT), key=key)
     s = time.monotonic() - t0
+    if code == 200 and s > WARM_AGAIN_S:
+        t1 = time.monotonic()
+        code2, raw2 = ask_model(base, model, body, timeout, key=key)
+        if code2 == 200:
+            code, raw, s = code2, raw2, time.monotonic() - t1
     if code != 200:
+        if code == 0 and isinstance(raw, str) and "timed out" in raw.lower():
+            raw = f"не ответила за {max(timeout, LOAD_WAIT)} с — модель не загрузилась или сервер занят другой моделью"
         return {"ok": False, "s": round(s, 1), "error": raw[:200] if isinstance(raw, str) else "нет ответа"}
     j = json.loads(raw)
     text = j["choices"][0]["message"]["content"]
@@ -661,6 +675,16 @@ class Node:
             add("rules", True, "Правила сети", "подписаны ключом Dewiar, сеть открыта")
         found = models_here(self.e)
         pick = None
+        if not model:                                 # №866: без выбора — та модель, которой Лира уже думает (она загружена;
+            try:                                      # чужая с того же сервера заставит Ollama менять модели в памяти)
+                ap = (self.e.s.get("llm", "profiles") or {}).get(self.e.s.get("llm", "active") or "") or {}
+                ab = str(ap.get("base_url") or "").rstrip("/")
+                if ap.get("kind") == "ollama" and ab and not ab.endswith("/v1"):
+                    ab += "/v1"
+                if ab and (not base or base.rstrip("/") == ab) and ap.get("model") and any(f["base_url"].rstrip("/") == ab and ap["model"] in f["models"] for f in found):
+                    base, model = base or ab, ap["model"]
+            except Exception:  # noqa: BLE001
+                pass
         for f in found:
             if base and f["base_url"].rstrip("/") != base.rstrip("/"):
                 continue

@@ -718,7 +718,8 @@ $("#bug-send").onclick = guardBtn(async () => {
   if (note.length < 3) { r.className = "res bad"; r.textContent = "Напишите хотя бы пару слов — что пошло не так"; $("#rep-note").focus(); return; }
   r.className = "res"; r.textContent = "собираю и отправляю…";
   try {
-    const x = await core.call("complaint_send", { note, who: $("#bug-who").value.trim(), shot: !!bugPreview && $("#bug-use").checked });
+    const x = await core.call("complaint_send", { note, who: $("#bug-who").value.trim(), shot: !!bugPreview && $("#bug-use").checked,
+      talk: !$("#bug-talk") || $("#bug-talk").checked });   // 1.0.29: можно без фраз разговора
     r.className = "res ok"; r.textContent = `Жалоба №${x.id} у разработчика${x.shots > 1 ? ` (снимков: ${x.shots})` : ""} — спасибо! Ответ придёт сюда.`;
     $("#rep-note").value = ""; bugShow("");
     core.call("complaints").then(bugRender).catch(() => {});

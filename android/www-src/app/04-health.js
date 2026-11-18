@@ -118,13 +118,13 @@ function bugSnapTake() {                                    // открыли н
 const bugPickHtml = () => bugPick
   ? `<div class="bpk"><img src="${bugPick}" alt="Фото к жалобе" id="bug-pickimg"><button class="x" id="bug-pickx" title="Убрать фото" aria-label="Убрать фото">${X_SVG}</button></div>`
   : `<label class="btn w"><input type="file" id="bug-file" accept="image/*" hidden>📎 Добавить фото или скриншот</label><p class="hint" style="margin:6px 2px 0">Откроется галерея — свежие скриншоты в ней первыми.</p>`;
-async function complaintSend(note, who, withShot, via) {
+async function complaintSend(note, who, withShot, via, talk) {
   note = String(note || "").trim();
   if (note.length < 3) throw new Error("напишите хотя бы пару слов — что пошло не так");
   who = String(who || "").replace(/[<>"]/g, "").trim().slice(0, 40); S.who = who;
   const snap = withShot && bugSnap && Date.now() - bugSnap.ts < 30 * 6e4 ? "data:image/jpeg;base64," + bugSnap.b64 : "";
   const shot = snap && bugPick ? await stitchShots([bugPick, snap]) : (bugPick || snap);    // снимок один — оба рядом
-  const d = await reportSend(note, false, `жалоба (${via || "кнопкой"})`, { shot, who });
+  const d = await reportSend(note, false, `жалоба (${via || "кнопкой"})`, { shot, who, talk: talk !== false });
   S.complaints = (S.complaints || []).filter(c => Date.now() / 1000 - c.ts < 180 * 86400).slice(-49)
     .concat([{ id: d.id, s: d.secret || "", base: d.base, note: note.slice(0, 2000), ts: Math.round(Date.now() / 1000), status: "new", reply: "", fixed: "", shot: !!shot }]);
   saveS(); if (shot) { bugSnap = null; bugPick = ""; }

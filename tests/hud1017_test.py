@@ -48,6 +48,18 @@ with sync_playwright() as p:
         return { on: t.classList.contains('on'), text: t.textContent, l: b.left, r: b.right, top: b.top, bot: b.bottom, title: o.getAttribute('title') }; }""")
     ok(r["on"] and "диктовка любой длины" in r["text"] and r["l"] >= 0 and r["r"] <= 300 and r["top"] >= 0 and r["bot"] <= 420 and r["title"] is None,
        f"подсказка у портрета — внутри карточки, по словам, без системной: {r}")
+    # №868: подсказка не под указателем-рукой — ниже указателя (или выше кнопки), а не вплотную под кнопкой
+    pg.mouse.move(5, 5); pg.wait_for_timeout(300)
+    btn = pg.evaluate("""() => { const b = [...document.querySelectorAll('button[title], button[data-tip]')].find(x => {
+        const r = x.getBoundingClientRect(); return r.width > 8 && r.height > 8 && r.top >= 0 && r.top < 120 && getComputedStyle(x).visibility !== 'hidden'; });
+        if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, id: b.id }; }""")
+    if btn:
+        pg.mouse.move(btn["x"], btn["y"]); pg.wait_for_timeout(900)
+        t = pg.evaluate("() => { const t = document.getElementById('htip'), b = t.getBoundingClientRect(); return { on: t.classList.contains('on'), top: b.top, bot: b.bottom }; }")
+        ok(t["on"] and (t["top"] >= btn["y"] + 26 or t["bot"] <= btn["y"] - 4),
+           f"№868: подсказка кнопки {btn['id']} не под указателем (мышь y={btn['y']:.0f}): {t}")
+    else:
+        print("(в верхней части виджета нет видимой кнопки с подсказкой — пропуск)")
     pg.mouse.move(5, 5); pg.wait_for_timeout(300)
     ok(not pg.evaluate("document.getElementById('htip').classList.contains('on')"), "увели мышь — подсказка ушла")
     b.close()

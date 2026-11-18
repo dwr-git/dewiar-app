@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSION = "1.0.28"
+VERSION = "1.0.29"
 APP = Path("/opt/dewiar")
 HOME = Path.home()
 UNIT_DIR = HOME / ".config/systemd/user"

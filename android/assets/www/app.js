@@ -656,6 +656,14 @@ function reportOffer(summary) {
   $("#rq-yes").onclick = () => { S.report = { auto: true }; saveS(); showCard(""); toast("Хорошо — при сбое отчёт уйдёт сам"); };
   $("#rq-no").onclick = () => { S.report = { auto: false }; saveS(); showCard(""); };
 }
+/* 1.0.29: почта и телефоны в отчёте — n***@домен и +*** ** 67 (Политика конфиденциальности); строки разговора в журнале */
+const TALK_LINE_RX = /[❓📝⚡💬🔧📎🗣]|👥 \S+ передаёт вопрос/u;
+function maskPersonal(t) {
+  // без «взгляда назад» (старый Safari веб-версии не разбирает весь файл): символ перед — своей группой и обратно в замену
+  return String(t || "").replace(/(^|[^\w.+-])([A-Za-z0-9])[A-Za-z0-9._%+-]*@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/g, "$1$2***@$3")
+    .replace(/(^|[^\w.+\/:-])(\+\d[\d ()-]{8,18}\d|\(?\d{1,4}\)?(?:[ -]\(?\d{2,4}\)?){2,5})(?![\w.:\/])/g,
+      (m, pre, num) => { const d = num.replace(/\D/g, ""); return d.length >= 10 && d.length <= 15 ? pre + "+*** ** " + d.slice(-2) : m; });
+}
 async function reportSend(note, auto, summary, extra) {
   let info = {}; try { info = JSON.parse(D.info() || "{}"); } catch (e) { }
   // в отчёт не попадает секретное: ключи, токены, пароли, прокси (в нём бывает логин) — звёздочками; ниже то же для текста журнала
@@ -665,6 +673,8 @@ async function reportSend(note, auto, summary, extra) {
   // пакет 04.11 (№529): «Дома по Wi-Fi» — ключ шифрования (k), токен (t) и номер связки (h) уходили в отчёт как есть
   if (S.sync && S.sync.home) st.sync = Object.assign({}, S.sync, { home: Object.assign({}, S.sync.home, { k: "***", t: "***", h: "***" }) });
   const errs = PLOG.filter(l => /^\S+ (ERROR|WARNING) /.test(l));
+  // 1.0.29 (Политика конфиденциальности): «без фраз разговора» — строки с текстом человека и ответами не уходят
+  const plog = extra && extra.talk === false ? PLOG.filter(l => !TALK_LINE_RX.test(l)) : PLOG;
   note = String(note || "").trim().slice(0, 2000);
   let text = [`Dewiar (телефон) ${info.version || ""} — отчёт ${new Date().toLocaleString("ru-RU")}`,
     `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`, "",
@@ -673,12 +683,13 @@ async function reportSend(note, auto, summary, extra) {
     "== Настройки (без ключей)", JSON.stringify(mask(st), null, 1), "",
     ...(info.crash ? ["== Последнее падение приложения", info.crash, ""] : []),
     ...(errs.length ? ["== Ошибки (последние)", ...errs.slice(-40), ""] : []),
-    "== Журнал (последние строки)", ...PLOG.slice(auto ? -200 : -400)].join("\n");
+    "== Журнал (последние строки)", ...plog.slice(auto ? -200 : -400)].join("\n");
   text = text.replace(/(Bearer\s+)[\w.-]+/g, "$1***").replace(/\bdw-[a-z0-9]{4,}(?:-[a-z0-9]{2,})+/gi, "dw-***")
     // пакет 25.10, №256: токен умного дома целиком в журнале — JWT, ключи API, «токен: <длинное>» → ***
     .replace(/\beyJ[\w-]{6,}\.[\w-]{6,}\.[\w-]{6,}/g, "eyJ***").replace(/\b(sk-(?:ant-|proj-)?|ghp_|github_pat_|glpat-|hf_|AIza)[\w-]{12,}/g, "$1***")
     .replace(/\bbot\d{5,}:[\w-]{20,}/g, "bot***")
     .replace(/((?:токен\S*|token|api[_ -]?key|ключ\S*|secret|секрет\S*)(?:\s+api)?["']?\s*[:=]?\s*["'«]?)(?=[\w.+\/=-]*\d)(?=[\w.+\/=-]*[A-Za-z])[\w.+\/=-]{20,}/gi, "$1***");
+  text = maskPersonal(text);                                 // почта и телефоны (как core/engine_base.mask_personal)
   // принимает облако (cloud.php ?p=/report): с аккаунтом или ключом — от их имени, без них — анонимно на общий адрес
   const c = syncCred(), base = (c ? c.base : CLOUD_URL).split("?")[0];
   const headers = { "Content-Type": "application/json" }; if (c) headers.Authorization = "Bearer " + c.token;
@@ -826,13 +837,13 @@ function bugSnapTake() {                                    // открыли н
 const bugPickHtml = () => bugPick
   ? `<div class="bpk"><img src="${bugPick}" alt="Фото к жалобе" id="bug-pickimg"><button class="x" id="bug-pickx" title="Убрать фото" aria-label="Убрать фото">${X_SVG}</button></div>`
   : `<label class="btn w"><input type="file" id="bug-file" accept="image/*" hidden>📎 Добавить фото или скриншот</label><p class="hint" style="margin:6px 2px 0">Откроется галерея — свежие скриншоты в ней первыми.</p>`;
-async function complaintSend(note, who, withShot, via) {
+async function complaintSend(note, who, withShot, via, talk) {
   note = String(note || "").trim();
   if (note.length < 3) throw new Error("напишите хотя бы пару слов — что пошло не так");
   who = String(who || "").replace(/[<>"]/g, "").trim().slice(0, 40); S.who = who;
   const snap = withShot && bugSnap && Date.now() - bugSnap.ts < 30 * 6e4 ? "data:image/jpeg;base64," + bugSnap.b64 : "";
   const shot = snap && bugPick ? await stitchShots([bugPick, snap]) : (bugPick || snap);    // снимок один — оба рядом
-  const d = await reportSend(note, false, `жалоба (${via || "кнопкой"})`, { shot, who });
+  const d = await reportSend(note, false, `жалоба (${via || "кнопкой"})`, { shot, who, talk: talk !== false });
   S.complaints = (S.complaints || []).filter(c => Date.now() / 1000 - c.ts < 180 * 86400).slice(-49)
     .concat([{ id: d.id, s: d.secret || "", base: d.base, note: note.slice(0, 2000), ts: Math.round(Date.now() / 1000), status: "new", reply: "", fixed: "", shot: !!shot }]);
   saveS(); if (shot) { bugSnap = null; bugPick = ""; }
@@ -8024,6 +8035,7 @@ function renderSettings() {
       <div class="bugpick" id="bug-pickbox">${bugPickHtml()}</div>
       <label class="f"><span>Что случилось</span><textarea id="rep-note" rows="3" maxlength="2000" placeholder="Например: «прошу другое радио — играет старое»"></textarea></label>
       <label class="f"><span>Как подписать вас в «Помощниках проекта» — необязательно</span><input id="bug-who" maxlength="40" value="${esc(S.who || "")}" placeholder="Имя или ник"></label>
+      <label class="chk" style="margin:4px 0 10px"><input type="checkbox" id="bug-talk" checked><span>Приложить последние фразы разговора — помогают найти ошибку. Почта и телефоны скрываются</span></label>
       <button class="btn p w" id="rep-send">Отправить разработчику</button><div class="res" id="rep-res"></div>
       <div id="bug-mine">${complaintsHtml()}</div><div id="bug-thx"></div>
       <div class="sw" style="margin-top:8px"><div>Отправлять отчёт самому при сбое<small>Только при ошибках приложения, не чаще раза в полдня на одну и ту же</small></div>
@@ -8312,7 +8324,8 @@ function wireSettings(info) {
     if (g("bug-pickbox")) pickWire();
     if (g("rep-send")) g("rep-send").onclick = async () => { const b = g("rep-send"), r = g("rep-res"); b.disabled = true; r.className = "res"; r.textContent = "отправляю…";
       try {
-        const d = await complaintSend(g("rep-note").value, g("bug-who").value, !!(g("bug-use") && g("bug-use").checked), "кнопкой");
+        const d = await complaintSend(g("rep-note").value, g("bug-who").value, !!(g("bug-use") && g("bug-use").checked), "кнопкой",
+          !g("bug-talk") || g("bug-talk").checked);
         r.className = "res ok"; r.textContent = `Жалоба №${d.id} у разработчика — спасибо! Ответ придёт сюда.`; g("rep-note").value = "";
         if (g("bug-mine")) g("bug-mine").innerHTML = complaintsHtml(); if (g("bug-img")) g("bug-img").parentNode.remove();
         if (g("bug-pickbox")) { g("bug-pickbox").innerHTML = bugPickHtml(); pickWire(); }
@@ -9084,7 +9097,8 @@ function contactMaybe() {
 function contactCardHtml(ask) {
   return `<div class="card ctc"><b>${ask ? "Оставите контакт?" : "Как к вам обращаться"}</b><p class="hint" style="margin:4px 0 10px">Мозг Dewiar подключился сам, без анкеты. Если что-то сломается — разработчик сможет вам ответить. По желанию.</p>
     <input id="ct-name" class="grname" maxlength="80" placeholder="Имя"><input id="ct-contact" class="grname" maxlength="120" placeholder="Почта, Telegram или телефон" style="margin-top:8px">
-    <div class="row2" style="margin-top:10px"><button class="btn p" id="ct-go" style="flex:1">Сохранить</button>${ask ? `<button class="btn" id="ct-x">Не сейчас</button>` : ""}</div></div>`;
+    <div class="row2" style="margin-top:10px"><button class="btn p" id="ct-go" style="flex:1">Сохранить</button>${ask ? `<button class="btn" id="ct-x">Не сейчас</button>` : ""}</div>
+    <p class="hint" style="margin:10px 0 0">Контакт видит только команда Dewiar; удалить — «Настройки» → «Сообщить о проблеме» со словами «Мои данные». <a href="${siteUrl("dwrapp/privacy.php")}">Политика конфиденциальности</a></p></div>`;
 }
 function contactWire() {
   const go = $("#ct-go"); if (!go) return;
@@ -12586,17 +12600,19 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) { cle
 addEventListener("pagehide", welcomeSeen);
 setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока открыто — «последний раз видели» свежее
 
+/* 1.0.29: согласие одной строкой — в первой карточке, где человек и так нажимает «Подключить» (Политика и Условия на сайте) */
+const legalLine = () => `<p class="legal">Пользуясь Dewiar, вы принимаете <a href="${siteUrl("dwrapp/terms.php")}">Условия</a> и <a href="${siteUrl("dwrapp/privacy.php")}">Политику конфиденциальности</a>.</p>`;
 (function boot() {
   applyPersona(); setState("idle"); quietCheck();
   const last = history.filter(m => m.role === "assistant").slice(-1)[0];
   if (D.web && (S.llm.trial || trialOn()) && !loggedIn()) {
     // веб-версия без входа: говорим сразу (пробный разговор); войти — без ограничений и с действиями
     showBot(gfix(`Привет! Я ${persona().name}. Давайте поговорим прямо сейчас — без входа и установки. Нажмите на меня и говорите или напишите.`));
-    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — подробные ответы и дела</button></div>`);
+    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="startLogin()">Войти — подробные ответы и дела</button>${legalLine()}</div>`);
   } else if (!S.llm.base_url && !loggedIn() && autoOk() && !(S.join && !S.join.auto) && trialOn()) {
     // 0.69, первый запуск: говорим сразу (пробный разговор), бесплатный мозг Dewiar подключается сам — без анкеты
     greet(gfix(`Привет! Я ${persona().name}. Спросите о чём угодно — нажмите на вопрос ниже или на меня и говорите. На старте — подарок.`));
-    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button></div>`);
+    showCard(`<div class="start" data-first="1"><button class="btn w" onclick="openSettings('brain')">Своя модель или код с компьютера</button>${legalLine()}</div>`);
     setTimeout(() => autoJoin("первый запуск").then(ok => { if (ok) showCard(""); }), 1200);
   } else if (!S.llm.base_url && !loggedIn()) {
     // первый запуск: одна понятная кнопка (отзыв: «не понимаю, как ей мозг включить») — бесплатная проба Dewiar;
@@ -12604,7 +12620,7 @@ setInterval(() => { if (!appAway()) welcomeSeen(); }, 60000);     // пока о
     if (S.join) { showBot(gfix(`Привет! Я ${persona().name}. Заявка отправлена — как только её одобрят, я подключусь сама и скажу. Обычно это быстро.`)); setTimeout(() => joinPoll(false).catch(() => {}), 2500); }
     else showBot(gfix(`Привет! Я ${persona().name}. Чтобы мы могли поговорить, меня нужно один раз подключить — без регистрации, на старте подарок. Это займёт минуту.`));
     showCard(S.join ? `<div class="row2"><button class="btn p" onclick="joinPoll(true).then(d => d && !d.key && toast((d && d.text) || 'Пока ждёт проверки')).catch(e => toast(e.message))" style="flex:1">Проверить</button><button class="btn" onclick="openBrain()" style="flex:1">Другие способы</button></div>`
-      : `<div class="start" data-first="1"><button class="btn p w" onclick="openBrain('join')">Подключить мозг Dewiar</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button></div>`); }
+      : `<div class="start" data-first="1"><button class="btn p w" onclick="openBrain('join')">Подключить мозг Dewiar</button><button class="btn w" onclick="openSettings('devices')">Dewiar уже есть на компьютере — ввести код</button><button class="btn w ghost" onclick="openBrain()">Свой ключ или своя модель</button>${legalLine()}</div>`); }
   // последний ответ — только свежий (до 20 минут): старый («С возвращением. В 15:00 встреча…» с утра) после каждого
   // запуска и обновления выглядел как новое сообщение (отчёты №52, №53). Он в истории разговора — там его и видно.
   else if (last && last.t && Date.now() - last.t < 20 * 60e3) showBot(last.content.slice(0, 400));

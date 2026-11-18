@@ -620,6 +620,7 @@ function renderSettings() {
       <div class="bugpick" id="bug-pickbox">${bugPickHtml()}</div>
       <label class="f"><span>Что случилось</span><textarea id="rep-note" rows="3" maxlength="2000" placeholder="Например: «прошу другое радио — играет старое»"></textarea></label>
       <label class="f"><span>Как подписать вас в «Помощниках проекта» — необязательно</span><input id="bug-who" maxlength="40" value="${esc(S.who || "")}" placeholder="Имя или ник"></label>
+      <label class="chk" style="margin:4px 0 10px"><input type="checkbox" id="bug-talk" checked><span>Приложить последние фразы разговора — помогают найти ошибку. Почта и телефоны скрываются</span></label>
       <button class="btn p w" id="rep-send">Отправить разработчику</button><div class="res" id="rep-res"></div>
       <div id="bug-mine">${complaintsHtml()}</div><div id="bug-thx"></div>
       <div class="sw" style="margin-top:8px"><div>Отправлять отчёт самому при сбое<small>Только при ошибках приложения, не чаще раза в полдня на одну и ту же</small></div>
@@ -908,7 +909,8 @@ function wireSettings(info) {
     if (g("bug-pickbox")) pickWire();
     if (g("rep-send")) g("rep-send").onclick = async () => { const b = g("rep-send"), r = g("rep-res"); b.disabled = true; r.className = "res"; r.textContent = "отправляю…";
       try {
-        const d = await complaintSend(g("rep-note").value, g("bug-who").value, !!(g("bug-use") && g("bug-use").checked), "кнопкой");
+        const d = await complaintSend(g("rep-note").value, g("bug-who").value, !!(g("bug-use") && g("bug-use").checked), "кнопкой",
+          !g("bug-talk") || g("bug-talk").checked);
         r.className = "res ok"; r.textContent = `Жалоба №${d.id} у разработчика — спасибо! Ответ придёт сюда.`; g("rep-note").value = "";
         if (g("bug-mine")) g("bug-mine").innerHTML = complaintsHtml(); if (g("bug-img")) g("bug-img").parentNode.remove();
         if (g("bug-pickbox")) { g("bug-pickbox").innerHTML = bugPickHtml(); pickWire(); }

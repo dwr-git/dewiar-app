@@ -20,7 +20,7 @@ import secrets
 import threading
 import time
 
-from engine_base import STATE_DIR, VERSION, log
+from engine_base import STATE_DIR, VERSION, log, mask_personal
 
 PULSE_EVERY = 6 * 3600
 # «сообщи об ошибке: …», «передай разработчику, что …», «пожалуйся разработчику: …», «отправь жалобу …»
@@ -374,7 +374,7 @@ class HealthMixin:
                 "uptime_h": round((time.time() - self._h_t0) / 3600, 1), "starts": h.get("starts") or [],
                 "turns": h.get("turns", 0), "net_ok": h.get("net_ok", 0), "net_fail": h.get("net_fail", 0), "errors": h.get("errors", 0),
                 "rude": h.get("rude", 0), "refused": h.get("refused", 0), "net_why": h.get("net_why") or {},
-                "problems": [{"sig": k, "text": v["text"], "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
+                "problems": [{"sig": k, "text": mask_personal(v["text"]), "n": v["n"]} for k, v in (h.get("problems") or {}).items()],
                 "lat": self._lat_summary(), "uses": self._uses(), "pcache": h.get("pcache") or {}}
 
     def _lat_how(self):
@@ -576,7 +576,7 @@ class HealthMixin:
         b["seen"] = True
         return {"preview": b["preview"], "shots": _bug_pub(lst)}
 
-    def complaint_send(self, note, who="", shot=True, via="кнопкой"):
+    def complaint_send(self, note, who="", shot=True, via="кнопкой", talk=True):
         """Жалоба разработчику: слова человека (обязательно), снимок экрана (если снят и shot), подпись для «Помощников»,
         отчёт с журналом. -> {"id"}; ошибка — ValueError с понятным текстом."""
         note = (note or "").strip()
@@ -585,7 +585,7 @@ class HealthMixin:
         who = re.sub(r"[<>\"]", "", (who or "").strip())[:40]
         self.s.update({"report": {"who": who}})
         jpegs = [b["jpeg"] for b in _bug_list(self)] if shot else []
-        r = self.report_send(note, shot=jpegs or None, who=who, summary=f"жалоба ({via})")
+        r = self.report_send(note, shot=jpegs or None, who=who, summary=f"жалоба ({via})", talk=talk)
         self._bug, self._bugs = None, []
         self._complaints_add({"id": r["id"], "s": r.get("secret", ""), "note": note[:2000], "ts": int(time.time()), "status": "new",
                               "reply": "", "fixed": "", "shot": bool(jpegs), "shots": len(jpegs)})

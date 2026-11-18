@@ -973,6 +973,7 @@ html.framed #wlc { top: 38px; }
 #wlc .wans.wait p::after { content: "…"; display: inline-block; animation: wdots 1.2s steps(4, end) infinite; width: 1.2em; overflow: hidden; vertical-align: bottom; }
 @keyframes wdots { from { width: 0; } to { width: 1.2em; } }
 #wlc .actions { display: flex; align-items: center; gap: 8px; margin: 20px 0 0; } #wlc .actions .grow { flex: 1; }
+#wlc .wlegal { margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: var(--dim); } #wlc .wlegal a { color: inherit; text-decoration: underline; }   /* 1.0.29: согласие одной строкой */
 #wlc [hidden] { display: none !important; }
 #wlc .btn.link { background: none; box-shadow: none; padding-left: 0; color: var(--muted); } #wlc .btn.link:hover { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { #wlc .wans, #wlc.on { animation: none; } #wlc .wans.wait p::after { animation: none; width: auto; } }
@@ -1053,6 +1054,7 @@ html.framed:not(.max) #fedge { display: block; position: fixed; inset: 0; border
 .bugbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
 .bugbar .btn, .bugbar .chk { white-space: nowrap; }    /* №605 (снимок): «Снять / экран» в две строки и «прило:» обрезано */
 .bugbar .chk { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); margin: 0; }
+.bugtxt > .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 0 0 10px; cursor: pointer; }   /* 1.0.29: «приложить последние фразы» */
 .bugbar .chk input { accent-color: var(--accent); margin: 0; }
 .bugshot.off img { opacity: .35; filter: grayscale(1); }
 .bugtxt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }

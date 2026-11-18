@@ -63,7 +63,7 @@ class ReportMixin:
                 "sound", warn=True)
         return out
 
-    def build_report(self, note="", tail_lines=1500, fresh=False):
+    def build_report(self, note="", tail_lines=1500, fresh=False, talk=True):
         """Отчёт для разработчика: версия, система, состояние, настройки без ключей, звуковые устройства, следы задач и журнал.
         fresh — только то, что случилось после прошлого отправленного отчёта (журнал, ошибки, задачи, ui.log): иначе
         давно исправленная ошибка тянется из отчёта в отчёт и мешает увидеть новую. Отметка — report_mark.json."""
@@ -100,13 +100,15 @@ class ReportMixin:
                 lines += ["== Задачи: следы последних"] + [f.read_text(encoding="utf-8", errors="replace")[:1500] for f in ts] + [""]
             recent = [x for x in self.tasks.tasks.values() if not since or (x.dir / "задача.json").exists()
                       and (x.dir / "задача.json").stat().st_mtime >= since]
-            for t in sorted(recent, key=lambda x: str(x.data.get("created", "")))[-3:]:
+            for t in (sorted(recent, key=lambda x: str(x.data.get("created", "")))[-3:] if talk else []):   # план и журнал — тексты человека
                 j = (t.dir / "журнал.md").read_text(encoding="utf-8", errors="replace").splitlines() if (t.dir / "журнал.md").exists() else []
                 lines += [f"== Задача «{t.title}»: {t.status} {t.data.get('error', '')}", "-- План:",
                           t.plan()[:2000], "-- Журнал (конец):"] + j[-120:] + [""]
         except Exception as e:  # noqa: BLE001
             lines += [f"== Задачи: {e}", ""]
         tail = self._log_tail(mark if since else None)
+        if not talk:                                    # 1.0.29: «без фраз разговора» — строки с текстом человека и ответов
+            tail = [ln for ln in tail if not TALK_LINE_RX.search(ln)]
         errs = [ln for ln in tail if re.match(r"\d\d:\d\d:\d\d (ERROR|CRITICAL)", ln)]
         if errs:
             lines += ["== Ошибки (последние)"] + errs[-40:] + [""]
@@ -137,7 +139,7 @@ class ReportMixin:
         text = re.sub(r"\bdw-[a-z0-9]{4,}(?:-[a-z0-9]{2,})+", "dw-***", text, flags=re.I)
         text = re.sub(r"\bbot\d{5,}:[\w-]{20,}", "bot***", text)                     # токен Telegram в адресах API
         text = re.sub(r"(://[^/\s:@]+:)[^@\s/]+@", r"\1***@", text)                    # пароль в адресе (прокси и т. п.)
-        return mask_tokens(text)                                                       # JWT, ключи API, «токен: …»
+        return mask_personal(mask_tokens(text))                                        # JWT, ключи API, «токен: …»; почта, телефоны
 
     @staticmethod
     def _log_tail(mark=None):
@@ -212,7 +214,7 @@ class ReportMixin:
                 if re.match(r"\d\d:\d\d:\d\d (ERROR|CRITICAL)", ln)]
         return "; ".join(dict.fromkeys(errs[-6:]))[:480]
 
-    def report_send(self, note="", auto=False, summary="", shot=None, who="", plain=False):
+    def report_send(self, note="", auto=False, summary="", shot=None, who="", plain=False, talk=True):
         """«Отправить отчёт разработчику»: отчёт сразу появляется в управлении облаком (cloud.php → «Здоровье»).
         Ключ Dewiar — если есть (по нему видно, чей отчёт); без него тоже принимается. shot — снимок экрана (JPEG) и
         who — подпись автора: это жалоба (core/health.py). plain — только note и сведения о программе, без журнала
@@ -223,7 +225,7 @@ class ReportMixin:
         from cloud import DEFAULT_URL, base_of, norm_key
         note = (note or "").strip()[:2000]
         text = (f"Dewiar {VERSION} — {OS_NAME} {platform.machine()}\n\n{note}" if plain
-                else self.build_report(note, tail_lines=600 if auto else 1500, fresh=not shot and not who))
+                else self.build_report(note, tail_lines=600 if auto else 1500, fresh=not shot and not who, **({} if talk else {"talk": False})))
         url = os.environ.get("DEWIAR_REPORT_URL") or base_of(self.s.get("cloud", "url") or DEFAULT_URL)
         key = (self.s.get("cloud", "key") or "").strip()
         body = {"kind": "auto" if auto else "manual", "app": "desktop", "version": VERSION, "os": f"{OS_NAME} {platform.machine()}",

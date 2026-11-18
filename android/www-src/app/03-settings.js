@@ -221,6 +221,14 @@ function reportOffer(summary) {
   $("#rq-yes").onclick = () => { S.report = { auto: true }; saveS(); showCard(""); toast("Хорошо — при сбое отчёт уйдёт сам"); };
   $("#rq-no").onclick = () => { S.report = { auto: false }; saveS(); showCard(""); };
 }
+/* 1.0.29: почта и телефоны в отчёте — n***@домен и +*** ** 67 (Политика конфиденциальности); строки разговора в журнале */
+const TALK_LINE_RX = /[❓📝⚡💬🔧📎🗣]|👥 \S+ передаёт вопрос/u;
+function maskPersonal(t) {
+  // без «взгляда назад» (старый Safari веб-версии не разбирает весь файл): символ перед — своей группой и обратно в замену
+  return String(t || "").replace(/(^|[^\w.+-])([A-Za-z0-9])[A-Za-z0-9._%+-]*@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/g, "$1$2***@$3")
+    .replace(/(^|[^\w.+\/:-])(\+\d[\d ()-]{8,18}\d|\(?\d{1,4}\)?(?:[ -]\(?\d{2,4}\)?){2,5})(?![\w.:\/])/g,
+      (m, pre, num) => { const d = num.replace(/\D/g, ""); return d.length >= 10 && d.length <= 15 ? pre + "+*** ** " + d.slice(-2) : m; });
+}
 async function reportSend(note, auto, summary, extra) {
   let info = {}; try { info = JSON.parse(D.info() || "{}"); } catch (e) { }
   // в отчёт не попадает секретное: ключи, токены, пароли, прокси (в нём бывает логин) — звёздочками; ниже то же для текста журнала
@@ -230,6 +238,8 @@ async function reportSend(note, auto, summary, extra) {
   // пакет 04.11 (№529): «Дома по Wi-Fi» — ключ шифрования (k), токен (t) и номер связки (h) уходили в отчёт как есть
   if (S.sync && S.sync.home) st.sync = Object.assign({}, S.sync, { home: Object.assign({}, S.sync.home, { k: "***", t: "***", h: "***" }) });
   const errs = PLOG.filter(l => /^\S+ (ERROR|WARNING) /.test(l));
+  // 1.0.29 (Политика конфиденциальности): «без фраз разговора» — строки с текстом человека и ответами не уходят
+  const plog = extra && extra.talk === false ? PLOG.filter(l => !TALK_LINE_RX.test(l)) : PLOG;
   note = String(note || "").trim().slice(0, 2000);
   let text = [`Dewiar (телефон) ${info.version || ""} — отчёт ${new Date().toLocaleString("ru-RU")}`,
     `Android ${info.android || ""}; ${info.device || ""}; распознаватель: ${info.recognizer}; голос: ${info.tts}`, "",
@@ -238,12 +248,13 @@ async function reportSend(note, auto, summary, extra) {
     "== Настройки (без ключей)", JSON.stringify(mask(st), null, 1), "",
     ...(info.crash ? ["== Последнее падение приложения", info.crash, ""] : []),
     ...(errs.length ? ["== Ошибки (последние)", ...errs.slice(-40), ""] : []),
-    "== Журнал (последние строки)", ...PLOG.slice(auto ? -200 : -400)].join("\n");
+    "== Журнал (последние строки)", ...plog.slice(auto ? -200 : -400)].join("\n");
   text = text.replace(/(Bearer\s+)[\w.-]+/g, "$1***").replace(/\bdw-[a-z0-9]{4,}(?:-[a-z0-9]{2,})+/gi, "dw-***")
     // пакет 25.10, №256: токен умного дома целиком в журнале — JWT, ключи API, «токен: <длинное>» → ***
     .replace(/\beyJ[\w-]{6,}\.[\w-]{6,}\.[\w-]{6,}/g, "eyJ***").replace(/\b(sk-(?:ant-|proj-)?|ghp_|github_pat_|glpat-|hf_|AIza)[\w-]{12,}/g, "$1***")
     .replace(/\bbot\d{5,}:[\w-]{20,}/g, "bot***")
     .replace(/((?:токен\S*|token|api[_ -]?key|ключ\S*|secret|секрет\S*)(?:\s+api)?["']?\s*[:=]?\s*["'«]?)(?=[\w.+\/=-]*\d)(?=[\w.+\/=-]*[A-Za-z])[\w.+\/=-]{20,}/gi, "$1***");
+  text = maskPersonal(text);                                 // почта и телефоны (как core/engine_base.mask_personal)
   // принимает облако (cloud.php ?p=/report): с аккаунтом или ключом — от их имени, без них — анонимно на общий адрес
   const c = syncCred(), base = (c ? c.base : CLOUD_URL).split("?")[0];
   const headers = { "Content-Type": "application/json" }; if (c) headers.Authorization = "Bearer " + c.token;

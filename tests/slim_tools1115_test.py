@@ -57,9 +57,11 @@ try:
     tb.run("money_report", {})
 finally:
     T.TOOLS["money_report"] = real
-ok("money_add" in names(tb.specs("а за неделю?")), "пользовались деньгами — «а за неделю?» тоже с ними (15 минут)")
+ok("money_add" in names(tb.specs("а за неделю?")), "пользовались деньгами — «а за неделю?» тоже с ними (6 часов)")
+tb.__dict__["_used"]["money"] = tb.__dict__["_offered"]["money"] = time.time() - 3600
+ok("money_add" in names(tb.specs("Привет")), "через час после денег — набор тот же (кэш начала запроса, отчёт 830)")
 tb.__dict__["_used"]["money"] = tb.__dict__["_offered"]["money"] = time.time() - modules.SLIM_RECENT - 1
-ok("money_add" not in names(tb.specs("а за неделю?")), "через 15 минут — снова по словам")
+ok("money_add" not in names(tb.specs("а за неделю?")), "через 6 часов — снова по словам")
 tb.s = Sett({"slim": False})
 ok(names(tb.specs("Привет")) == names(full), "tools.slim false — весь набор, как раньше")
 ea = srctext.text(ROOT, "core/engine_answer.py")
