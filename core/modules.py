@@ -75,6 +75,9 @@ MODULES = [
     {"id": "maker", "title": "Плагин словами", "words": r"плагин|расширени", "tools": ("plugin_create", "plugin_change"), "ready": _maker,
      "tool_ready": {"plugin_change": _maker_change}},
     # модули без условий подключения — в двери ради предохранителя и единого счёта (пилот 1.0)
+    {"id": "transcribe", "title": "Расшифровка", "words": r"расшифр|транскри|стенограм|субтитр|о ч[её]м (?:был|говорили)|созвон|запис[ьиюе]\s+(?:встреч|звонк|созвон|лекци|интервью|разговор)",
+     "tools": ("transcribe", "transcripts"), "ready": lambda h, s: bool(h.get("transcripts") and h["transcripts"].on()),
+     "need": ("Включите плагин «Расшифровка» — «Плагины»", "plugins")},
     {"id": "podcast", "title": "Подкасты", "words": r"подкаст|аудиокниг|озвуч|беседу двух", "tools": ("make_podcast",)},
     {"id": "council", "title": "Совет ИИ", "words": r"совет|посовет|мнени|дебат|поспорь|спор[ау]?\b|обсуд|за и против|плюсы и минусы|что выбрать|как лучше|стоит ли", "tools": ("council", "debate")},
     {"id": "radar", "title": "Радар", "words": r"радар|тренд|сигнал|источник|новост|что нового", "tools": ("insight_ask",)},

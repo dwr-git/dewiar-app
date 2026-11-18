@@ -52,5 +52,10 @@ with sync_playwright() as p:
     b.close()
 # №499 (03.11): «О программе» нажали раньше, чем загрузился tasks.js, — «renderUpdate is not defined» в журнале
 ok('typeof renderUpdate === "function"' in (ROOT / "ui/studio/core.js").read_text(encoding="utf-8"), "«О программе» до загрузки tasks.js — без ошибки")
+# №326 (18.11): «Обновления» трудно найти под «Сообщить о проблеме» — теперь второй блок, сразу под «Проверкой»
+_h = (ROOT / "ui/settings.html").read_text(encoding="utf-8")
+_ab = _h[_h.index('<section id="p-about"'):]; _ab = _ab[:_ab.index("</section>")]
+_hs = [x.split("<")[0] for x in _ab.split('<h3 style="font-size:15px;margin-bottom:6px">')[1:]]
+ok(_hs[:3] == ["Проверка", "Обновления", "Сообщить о проблеме"], f"«О программе»: «Обновления» — сразу под «Проверкой» (№326): {_hs[:3]}")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

@@ -72,13 +72,15 @@ class BrainCommands:
         if cmd == "llm_no_chat":                          # №258: в списке нет ни одной модели для разговора — что делать
             from llm import no_chat_help
             return no_chat_help((a.get("profile") or {}).get("base_url", ""), a.get("models") or [])
-        if cmd in ("cloud_usage", "cloud_topup", "cloud_topup_send", "cloud_limits", "cloud_models", "cloud_model", "cloud_stt", "cloud_tts", "cloud_fallback"):
+        if cmd in ("cloud_usage", "cloud_topup", "cloud_topup_send", "cloud_limits", "cloud_autopay", "cloud_models", "cloud_model", "cloud_stt", "cloud_tts", "cloud_fallback"):
             from cloud import CloudError
             try:
                 if cmd == "cloud_usage":
                     return self.cloud.usage()
                 if cmd == "cloud_topup":
                     return self.cloud.topup_info()
+                if cmd == "cloud_autopay":                 # 1.0.32: автопополнение (правила, вкл/выкл, забыть карту)
+                    return self.cloud.autopay_set(a)
                 if cmd == "cloud_limits":                  # 1.0.31: свои лимиты трат — день и месяц (0 — без лимита)
                     return self.cloud.limits_set(a.get("day"), a.get("month"))
                 if cmd == "cloud_topup_send":

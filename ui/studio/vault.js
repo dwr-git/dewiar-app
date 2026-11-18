@@ -3,7 +3,7 @@
    список приходит БЕЗ значений, пароль — только по vault_reveal, на 15 секунд на экране или в буфер обмена.
    Копирование — через окно (api.clip_secret): в буфер с пометкой «не в журнал буфера» (Windows) и стирание через 30 с, если
    там всё ещё этот пароль. Поиск — по названию, логину, сайту и заметке; Enter — скопировать первый найденный. */
-const VL = { items: [], edit: null, loaded: false, kind: "", snap: "", idle: 0, pg: 0 };
+const VL = { items: [], edit: null, loaded: false, kind: "", snap: "", idle: 0, pg: 0, read: false };
 /* Страницы списка (30.10, владелец: «в Сейф паролей пагинацию страниц? Уже много и не очень симпатично — приходится
    скроллить»): на странице столько записей, сколько входит в окно без прокрутки (6–12); поиск начинает с первой страницы;
    PageUp/PageDown в поиске листают; новая запись — на её странице; окно растянули — первая запись страницы остаётся видна. */
@@ -101,7 +101,7 @@ function vlReveal(id) {
   const row = $(`#vl-list .vl-item[data-id="${CSS.escape(id)}"]`);
   if (row) { row.classList.add("fresh"); setTimeout(() => row.classList.remove("fresh"), 1600); row.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 }
-async function vlCopy(text, what) {
+async function vlCopy(text, what, msg) {
   const a = window.pywebview && window.pywebview.api;
   let ok = false;
   try { if (a && a.clip_secret) ok = !!(await a.clip_secret(text, VL_CLIP_S)); } catch (e) { ok = false; }
@@ -111,14 +111,14 @@ async function vlCopy(text, what) {
     if (a) setTimeout(() => navigator.clipboard.writeText("").catch(() => {}), VL_CLIP_S * 1000);
     else setTimeout(async () => { try { if (await navigator.clipboard.readText() === text) await navigator.clipboard.writeText(""); } catch (e) { } }, VL_CLIP_S * 1000);
   }
-  toast(`${what} скопирован — сотрётся из буфера через ${VL_CLIP_S} с`, 2600);
+  toast(msg || `${what} скопирован — сотрётся из буфера через ${VL_CLIP_S} с`, 2600);
 }
 async function vlAct(v, x, row) {
   if (!x) return;
   try {
     if (v === "edit") { if (VL.edit !== x.id && !await vlLeave()) return; return vlForm(x); }
     if (v === "page") { if (VL.edit === x.id) return; if (!await vlLeave()) return;
-      return vlForm(x, "", (await core.call("vault_reveal", { id: x.id })).value || "", true); }
+      return vlForm(x, "", (await core.call("vault_reveal", { id: x.id })).value || "", true, true); }
     if (v === "login") { await navigator.clipboard.writeText(x.login || ""); toast("Логин скопирован"); return; }
     const val = (await core.call("vault_reveal", { id: x.id })).value || "";
     if (v === "copy") { await vlCopy(val, "Пароль"); row.classList.add("copied"); setTimeout(() => row.classList.remove("copied"), 1200); return; }
@@ -154,37 +154,53 @@ function vlKind(k) {
   VL.kind = k === "page" ? "page" : "";
   const pg = VL.kind === "page", old = VL.edit && VL.edit !== "new";
   $("#vl-pg").hidden = !pg; $("#vl-grid").hidden = pg; $("#vl-pcopy").hidden = !(pg && old);
-  $("#vl-del").hidden = !old; $("#vl-cancel").textContent = pg && old ? "Закрыть" : "Отмена";
+  $("#vl-del").hidden = !old; $("#vl-cancel").textContent = pg && old && VL.read ? "Закрыть" : "Отмена";
   $$("#vl-kind [data-k]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === VL.kind)));
   $("#vl-kind").hidden = !!old;
   $("#vl-form-h").textContent = pg ? (old ? "Секретная страница" : "Новая страница") : (old ? "Изменить запись" : "Новая запись");
   $("#vl-form").classList.toggle("page", pg);
-  if (pg) vlGrow();
+  vlView();
+  if (pg && !VL.read) vlGrow();
+}
+/* 18.11 (владелец: «красивее как страничку, а не сырые данные»): открытая страница — для чтения: заголовки, ряды «подпись:
+   значение» с «Скопировать», секреты точками (ui/assets/secretpage.js, тот же код на телефоне); «Изменить» — к тексту */
+function vlView() {
+  const read = VL.read && VL.kind === "page" && VL.edit && VL.edit !== "new", v = $("#vl-view");
+  $("#vl-form").classList.toggle("read", !!read);
+  v.hidden = !read; $$("#vl-pg .vl-pe").forEach(l => l.hidden = !!read);
+  $("#vl-pedit").hidden = !read; $("#vl-save").hidden = !!read;
+  if (!read) { v.innerHTML = ""; return; }
+  const x = VL.items.find(i => i.id === VL.edit) || {}, text = $("#vl-ptext").value, r = window.SecretPage.render(text);
+  const n = text.split("\n").filter(l => l.trim()).length;
+  $("#vl-form-h").innerHTML = `${escH(x.name || $("#vl-pname").value)}<small>Секретная страница · ${n} ${typeof plural === "function" ? plural(n, "строка", "строки", "строк") : "строк"}</small>`;
+  v.innerHTML = r.html;
+  window.SecretPage.bind(v, r.secrets, { open: (u) => openExt(u),
+    copy: (t, what) => { vlCopy(t, what, `Скопировано${what ? ": " + what : ""} — сотрётся из буфера через ${VL_CLIP_S} с`); vlIdle(); } });
 }
 function vlGrow() { const t = $("#vl-ptext"); t.style.height = "auto"; t.style.height = Math.min(Math.max(280, t.scrollHeight + 4), innerHeight * 0.7) + "px"; }
 function vlIdle() {
   clearTimeout(VL.idle);
   if (VL.kind === "page" && VL.edit && VL.edit !== "new") VL.idle = setTimeout(() => { if (!vlDirty()) { vlFormClose(); toast("Страница спрятана — открыта без дела 3 минуты"); } else vlIdle(); }, VL_PAGE_IDLE);
 }
-function vlForm(x, name, text, page) {
-  VL.edit = x ? x.id : "new";
+function vlForm(x, name, text, page, read) {
+  VL.edit = x ? x.id : "new"; VL.read = !!(read && x);
   const f = $("#vl-form"); f.hidden = false; $("#vl-add").hidden = true;
   $("#vl-form-h").textContent = x ? "Изменить запись" : "Новая запись";
   $("#vl-name").value = x ? x.name : (name || ""); $("#vl-login").value = (x && x.login) || ""; $("#vl-url").value = (x && x.url) || "";
   $("#vl-note").value = (x && x.note) || ""; $("#vl-value").value = ""; $("#vl-value").type = "password"; $("#vl-eye").setAttribute("aria-pressed", "false");
   $("#vl-value").placeholder = x ? "оставьте пустым — пароль не изменится" : "";
   $("#vl-del").hidden = !x; $("#vl-res").textContent = ""; $("#vl-res").className = "res"; vlStr();
-  $("#vl-pname").value = x ? x.name : (name || ""); $("#vl-ptext").value = text || "";
+  $("#vl-pname").value = x ? x.name : (name || ""); $("#vl-ptext").value = text || ""; VL.orig = text || "";
   vlKind(page || (x && x.kind === "page") ? "page" : "");
   VL.snap = vlVals(); vlIdle();
   $$("#vl-list .vl-item.cur").forEach(r => r.classList.remove("cur"));
   if (x) { const r = $(`#vl-list .vl-item[data-id="${CSS.escape(x.id)}"]`); if (r) r.classList.add("cur"); }
   f.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  $(VL.kind === "page" ? (x ? "#vl-ptext" : "#vl-pname") : x ? "#vl-value" : "#vl-name").focus();
+  $(VL.read ? "#vl-pedit" : VL.kind === "page" ? (x ? "#vl-ptext" : "#vl-pname") : x ? "#vl-value" : "#vl-name").focus();
 }
 function vlFormClose() {
-  VL.edit = null; VL.snap = ""; clearTimeout(VL.idle); $("#vl-form").hidden = true; $("#vl-add").hidden = false;
-  $("#vl-value").value = ""; $("#vl-ptext").value = "";               // текст страницы в странице не остаётся
+  VL.edit = null; VL.snap = ""; VL.read = false; clearTimeout(VL.idle); $("#vl-form").hidden = true; $("#vl-add").hidden = false; vlView();
+  $("#vl-value").value = ""; $("#vl-ptext").value = ""; VL.orig = "";   // текст страницы в странице не остаётся
   $$("#vl-list .vl-item.cur").forEach(r => r.classList.remove("cur"));
 }
 function vlStr() { const [k, t] = vlStrength($("#vl-value").value); const s = $("#vl-str"); s.className = "vl-str " + k; s.textContent = t; }
@@ -198,7 +214,12 @@ $("#vl-q").onkeydown = (e) => {
   if (first && row) vlAct(first.kind === "page" ? "page" : "copy", first, row);
 };
 $("#vl-add").onclick = () => { if (VL.edit) { $("#vl-form").scrollIntoView({ block: "nearest", behavior: "smooth" }); return; } vlForm(null, ""); };
-$("#vl-cancel").onclick = async () => { if (await vlLeave()) vlFormClose(); };
+$("#vl-cancel").onclick = async () => {
+  if (VL.kind === "page" && VL.edit && VL.edit !== "new" && !VL.read) {     // правка открытой страницы — «Отмена» назад к чтению
+    if (!await vlLeave()) return;
+    $("#vl-ptext").value = VL.orig || ""; VL.read = true; vlKind("page"); VL.snap = vlVals(); $("#vl-pedit").focus(); return;
+  }
+  if (await vlLeave()) vlFormClose(); };
 $$("#vl-kind [data-k]").forEach(b => b.onclick = () => {          // «Пароль» ↔ «Страница»: название переходит в другое поле
   if ((b.dataset.k || "") === VL.kind) return;
   const n = (VL.kind === "page" ? $("#vl-pname") : $("#vl-name")).value;
@@ -207,6 +228,7 @@ $$("#vl-kind [data-k]").forEach(b => b.onclick = () => {          // «Паро�
 });
 $("#vl-ptext").oninput = () => { vlGrow(); vlIdle(); };
 $("#vl-ptext").onkeydown = (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); $("#vl-form").requestSubmit(); } };
+$("#vl-pedit").onclick = () => { VL.read = false; vlKind("page"); vlIdle(); const t = $("#vl-ptext"); t.focus(); t.setSelectionRange(0, 0); t.scrollTop = 0; };
 $("#vl-pcopy").onclick = () => vlCopy($("#vl-ptext").value, "Текст страницы");
 $("#vl-form").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); $("#vl-cancel").click(); } });
 document.addEventListener("click", (e) => {                   // ушли из сейфа — открытая страница без правок закрывается
@@ -226,7 +248,7 @@ $("#vl-form").onsubmit = async (e) => {
     if (!a.value.trim()) { r.className = "res bad"; r.textContent = "Страница пустая — впишите текст"; $("#vl-ptext").focus(); return; }
     if (!a.id && VL.items.some(x => x.kind === "page" && vlNorm(x.name) === vlNorm(a.name)) && !await ask(`Страница «${a.name}» уже есть. Заменить её текст?`)) return;
     try { const res = await core.call("vault_put", a); VL.items = res.items || VL.items;
-      if (res.item && res.item.id) { VL.edit = res.item.id; vlKind("page"); VL.snap = vlVals(); vlIdle(); }   // страница остаётся открытой
+      if (res.item && res.item.id) { VL.edit = res.item.id; VL.read = true; VL.orig = a.value; vlKind("page"); VL.snap = vlVals(); vlIdle(); $("#vl-pedit").focus(); }   // страница остаётся открытой — для чтения
       r.className = "res ok"; r.textContent = "Сохранено"; vlRender(); if (!a.id && res.item && res.item.id) vlReveal(res.item.id); toast("Страница в сейфе"); }
     catch (err) { r.className = "res bad"; r.textContent = err.message; }
     return;

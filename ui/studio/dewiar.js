@@ -410,7 +410,7 @@ function cloudFill(c) {
   if (c.error && !err) $("#cc-turns").textContent += ` · сейчас не обновилось: ${c.error}`;   // показано последнее известное — честно говорим
   const pt = perTaler(c); $("#cc-per").textContent = (pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы, размышления и картинки дороже.` : "") + monthGiftLine(c);
   if (!err && !c.empty && !c.frozen) $("#cc-turns").textContent += daysLine(c);
-  limFill(c.limits);
+  limFill(c.limits); autoFill(c.autopay);
   // №544/№545 (04.11: «пополнил — ничего не пришло»): заявка видна прямо в карточке, со сроком
   if (c.pending) $("#cc-turns").textContent += ` · ${pendingLine()}`;
   // №567/569/571: переустановили с «удалить настройки» — новый ключ с нулём, а заряд остался на прежнем ключе этого
@@ -463,6 +463,29 @@ function limSave() {
   core.call("cloud_limits", { day, month }).then(r => toast(r.day || r.month ? "Лимит сохранён — для всех ваших устройств" : "Без лимита")).catch(e => toast(e.message));
 }
 $("#cc-lim-d").onchange = limSave; $("#cc-lim-m").onchange = limSave;
+/* 1.0.32 автопополнение (владелец 18.11: только по желанию, потолок по умолчанию 20 в месяц): виден, только когда на сайте
+   есть способ оплаты с сохранением карты; правила — словами рядом с переключателем (честное согласие) */
+const payLangOk = (m) => !m || !m.lang || (m.lang === "ru") === ((window.dwLang ? dwLang() : "ru") === "ru");
+const numR = (v) => (+v || 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+function autoFill(a) {
+  const box = $("#cc-auto"); if (!box) return;
+  box.style.display = a && a.available ? "" : "none"; if (!a || !a.available) return;
+  $("#cc-auto-on").checked = !!a.on;
+  const put = (el, v) => { if (document.activeElement !== el) el.value = String(v).replace(".", ","); };
+  put($("#cc-auto-below"), a.below); put($("#cc-auto-amt"), a.amount); put($("#cc-auto-cap"), a.cap);
+  $("#cc-auto-t").textContent = `Когда останется меньше ${numR(a.below)} тал. — пополним на ${numR(a.amount)} тал. (1 тал. = $1) с карты${a.card ? " " + a.card : ", которую сохраните при оплате"}, не больше ${numR(a.cap)} тал. в месяц. После каждого списания — строка в истории и чек на почту; выключить — здесь же.`;
+  $("#cc-auto-st").textContent = a.stopped || (a.on ? `В этом месяце пополнено: ${numR(a.month_sum)} из ${numR(a.cap)} тал.` : "");
+  $("#cc-auto-forget").hidden = !a.card;
+}
+function autoSave(extra) {
+  const v = (id) => $(id).value.trim().replace(",", ".");
+  return core.call("cloud_autopay", Object.assign({ on: $("#cc-auto-on").checked, below: v("#cc-auto-below"), amount: v("#cc-auto-amt"), cap: v("#cc-auto-cap") }, extra || {}))
+    .then(r => { autoFill(r); if (r.need_card) { toast(r.message, 6000); if (r.setup && r.setup.url) openExt(r.setup.url); } else toast(r.on ? "Автопополнение включено" : "Автопополнение выключено"); })
+    .catch(e => toast(e.message));
+}
+$("#cc-auto-on").onchange = () => autoSave();
+["#cc-auto-below", "#cc-auto-amt", "#cc-auto-cap"].forEach(id => $(id).onchange = () => autoSave());
+$("#cc-auto-forget").onclick = () => autoSave({ forget: true, on: false });
 core.on("cloud", cloudFill);
 $("#nav-cloud").onclick = () => $('nav button[data-p="brain"]').click();
 $("#cc-top").onclick = () => { const t = $("#cc-pay"), open = t.style.display === "none"; t.style.display = open ? "" : "none"; if (open) cpLoad(); };
@@ -486,7 +509,7 @@ function cpHist(list) {                              // 1.0.31: история �
 let ymCur = null, ymT = 0;
 const ymTal = (y, s) => (Math.round(s * y.rate * 1e4) / 1e4).toLocaleString("ru-RU") + " тал.";
 function ymFill(y) {
-  ymCur = y && y.url ? y : null;
+  ymCur = y && y.url && payLangOk({ lang: "ru" }) ? y : null;      // ЮMoney — только в русской программе (владелец 18.11)
   $("#cc-ym").style.display = ymCur ? "" : "none";
   if (!ymCur) return;
   $("#cc-ym-sums").innerHTML = (y.sums || []).map(s => `<button type="button" data-s="${+s}"><b>${(+s).toLocaleString("ru-RU")} ₽</b><small>${ymTal(y, +s)}</small></button>`).join("");

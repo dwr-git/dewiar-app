@@ -490,6 +490,10 @@ function renderSettings() {
       <div class="cl-bar"><i id="cl-fill"></i></div><div class="hint" id="cl-turns" style="margin:0"></div><div class="hint" id="cl-per" style="margin:4px 0 0"></div>
       <details class="cl-lim" id="cl-lim" style="display:none;margin-top:8px"><summary>Мои лимиты</summary><small class="hint" style="display:block;margin:4px 0 6px">Не тратить больше — в день и в месяц, на всех ваших устройствах. Пусто — без лимита.</small>
         <div class="row2"><label class="f" style="flex:1;margin:0">В день, тал.<input id="cl-lim-d" inputmode="decimal" placeholder="без лимита"></label><label class="f" style="flex:1;margin:0">В месяц, тал.<input id="cl-lim-m" inputmode="decimal" placeholder="без лимита"></label></div></details>
+      <details class="cl-lim" id="cl-auto" style="display:none;margin-top:8px"><summary>Автопополнение</summary>
+        <div class="sw" style="margin:6px 0"><div><small id="cl-auto-t" style="display:block"></small></div><label class="tg"><input type="checkbox" id="cl-auto-on"><i></i></label></div>
+        <div class="row2"><label class="f" style="flex:1;margin:0">Меньше, тал.<input id="cl-auto-below" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">Пополнять на<input id="cl-auto-amt" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">В месяц до<input id="cl-auto-cap" inputmode="decimal"></label></div>
+        <small class="hint" id="cl-auto-st" style="display:block;margin-top:4px"></small><button class="btn" id="cl-auto-forget" style="margin-top:6px" hidden>Забыть карту</button></details>
       <div class="cl-use" id="cl-use"></div>
       <div class="row2" style="margin-top:10px"><button class="btn" id="cl-ref" style="flex:1">Обновить</button><button class="btn p" id="cl-how" style="flex:1">Пополнить</button></div>
       <div id="cl-pay" style="display:none;margin-top:12px"><div class="ym" id="cl-ym" style="display:none"><div class="ym-h"><b>Оплатить картой</b><span>Талеры зачислятся сами — через минуту после оплаты, снимок не нужен</span></div>

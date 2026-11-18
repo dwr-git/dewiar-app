@@ -11,6 +11,7 @@ cp -r "$HERE/assets/www/." "$W/"
 cp "$ROOT/ui/assets/entities.js" "$W/entities.js"
 cp "$ROOT/ui/assets/skins.css" "$ROOT/ui/assets/skins.js" "$W/"     # темы оформления — те же, что у виджета
 cp "$ROOT/ui/assets/privacy.js" "$W/"                    # «Ваши данные» — тот же текст, что в студии
+cp "$ROOT/ui/assets/secretpage.js" "$W/"                 # «Сейф»: секретная страница для чтения — тот же код, что в студии
 cp "$ROOT/ui/assets/closecrypto.js" "$W/"                # «Близкие»: шифрование — то же, что у компьютера (core/closecrypto.py)
 cp "$ROOT/ui/assets/qrcode.js" "$W/"                     # QR-код приглашения в «Близкие»
 cp "$ROOT/ui/assets/call.js" "$W/"                       # звонки «Близким» (WebRTC) — тот же код, что у компьютера

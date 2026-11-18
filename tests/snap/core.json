@@ -93,6 +93,7 @@
   "close_state",
   "close_thumb",
   "close_wave",
+  "cloud_autopay",
   "cloud_connect",
   "cloud_fallback",
   "cloud_forget",
@@ -752,6 +753,8 @@
   "t_team_message",
   "t_team_status",
   "t_tell_task",
+  "t_transcribe",
+  "t_transcripts",
   "t_tv",
   "t_update_note",
   "t_volume",
@@ -3259,6 +3262,49 @@
    },
    "rest": [],
    "title": "Задачи: сообщить"
+  },
+  "transcribe": {
+   "description": "Плагин «Расшифровка»: расшифровать аудио или видео (созвон, лекция, интервью, голосовое) в текст с метками времени и субтитры .srt. Идёт в фоне — сразу скажи, что начала, а когда будет готово, ты скажешь сама. path — файл (полный путь, имя в «Моих файлах» или во «Входящих»); name — как назвать запись.",
+   "fn": "t_transcribe",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Расшифровка"
+  },
+  "transcripts": {
+   "description": "Расшифровки записей (плагин «Расшифровка»): без параметров — список; query — найти, где в записях говорили о чём-то («где про сроки»), с метками времени; name или id — весь текст одной записи (для выжимки, решений, задач и вопросов «о чём был разговор с юристом?»). Отвечай по тексту, называй время [мм:сс].",
+   "fn": "t_transcripts",
+   "level": "safe",
+   "parameters": {
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "rest": [],
+   "title": "Расшифровки"
   },
   "tv": {
    "description": "Телевизор с Chromecast / Google TV / Android TV в домашней сети. action: play — включить видео по ссылке или найти на YouTube (query); site — показать сайт; pause, resume, stop, volume (level 0–100), status; devices — какие телевизоры видны. Используй, когда просят включить что-то на телевизоре или «транслировать на ТВ».",

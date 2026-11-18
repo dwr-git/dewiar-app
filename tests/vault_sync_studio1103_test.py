@@ -55,6 +55,25 @@ with sync_playwright() as p:
     ok(not pg.is_checked("#vs-on") and not pg.query_selector("#vs-form"), "выключено: переключатель снят, формы нет")
     pg.click("#vl-sync label.tg"); pg.wait_for_timeout(100)
     ok(pg.is_visible("#vs-pw") and pg.is_visible("#vs-pw2"), "включить — форма «Придумайте мастер-пароль» дважды")
+    # владелец 18.11: «Ещё раз» было ниже первого поля — оценку пароля под первым полем считали в высоту ряда
+    pg.fill("#vs-pw", "проверка-надёжности-9"); pg.wait_for_timeout(100)
+    bx = pg.evaluate("""() => Object.fromEntries(['#vs-pw', '#vs-pw2', '#vs-go', '#vs-cancel', '#vs-str', '.vs-warn'].map(s => {
+        const r = document.querySelector(s).getBoundingClientRect(); return [s, [r.top, r.bottom]]; }))""")
+    ok(abs(bx["#vs-pw"][0] - bx["#vs-pw2"][0]) < 1 and abs(bx["#vs-pw"][1] - bx["#vs-pw2"][1]) < 1,
+       f"оба поля мастер-пароля на одном уровне: {bx['#vs-pw']} / {bx['#vs-pw2']}")
+    ok(abs(bx["#vs-go"][1] - bx["#vs-pw2"][1]) < 1.5 and abs(bx["#vs-cancel"][1] - bx["#vs-pw2"][1]) < 1.5, "кнопки — вровень с полями")
+    ok(bx["#vs-str"][1] - bx["#vs-str"][0] > 5 and bx["#vs-str"][1] <= bx[".vs-warn"][0], f"оценка пароля видна и не налезает на подсказку: {bx['#vs-str']} / {bx['.vs-warn']}")
+    pg.set_viewport_size({"width": 700, "height": 950}); pg.wait_for_timeout(150)
+    bx = pg.evaluate("""() => Object.fromEntries(['#vs-pw', '#vs-pw2', '#vs-str'].map(s => {
+        const r = document.querySelector(s).getBoundingClientRect(); return [s, [r.top, r.bottom]]; }))""")
+    ok(bx["#vs-str"][1] <= pg.evaluate("document.querySelector('#vs-pw2').closest('label').getBoundingClientRect().top") + 0.5,
+       f"узкое окно, поля друг под другом — оценка пароля не налезает на «Ещё раз»: {bx}")
+    if SHOT:
+        pg.screenshot(path=str(Path(SHOT) / "vault-sync-form-narrow.png"))
+    pg.set_viewport_size({"width": 1400, "height": 950}); pg.wait_for_timeout(150)
+    if SHOT:
+        pg.locator("#vl-sync").screenshot(path=str(Path(SHOT) / "vault-sync-form.png"))
+    pg.fill("#vs-pw", "")
     n = len(pg.evaluate("calls"))
     pg.fill("#vs-pw", "кор"); pg.fill("#vs-pw2", "кор"); pg.click("#vs-go"); pg.wait_for_timeout(100)
     ok("Не короче" in pg.inner_text("#vs-res") and len(pg.evaluate("calls")) == n, "короткий — отказ здесь же, ядро не спрашиваем")

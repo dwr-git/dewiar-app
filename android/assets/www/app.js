@@ -7905,6 +7905,10 @@ function renderSettings() {
       <div class="cl-bar"><i id="cl-fill"></i></div><div class="hint" id="cl-turns" style="margin:0"></div><div class="hint" id="cl-per" style="margin:4px 0 0"></div>
       <details class="cl-lim" id="cl-lim" style="display:none;margin-top:8px"><summary>Мои лимиты</summary><small class="hint" style="display:block;margin:4px 0 6px">Не тратить больше — в день и в месяц, на всех ваших устройствах. Пусто — без лимита.</small>
         <div class="row2"><label class="f" style="flex:1;margin:0">В день, тал.<input id="cl-lim-d" inputmode="decimal" placeholder="без лимита"></label><label class="f" style="flex:1;margin:0">В месяц, тал.<input id="cl-lim-m" inputmode="decimal" placeholder="без лимита"></label></div></details>
+      <details class="cl-lim" id="cl-auto" style="display:none;margin-top:8px"><summary>Автопополнение</summary>
+        <div class="sw" style="margin:6px 0"><div><small id="cl-auto-t" style="display:block"></small></div><label class="tg"><input type="checkbox" id="cl-auto-on"><i></i></label></div>
+        <div class="row2"><label class="f" style="flex:1;margin:0">Меньше, тал.<input id="cl-auto-below" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">Пополнять на<input id="cl-auto-amt" inputmode="decimal"></label><label class="f" style="flex:1;margin:0">В месяц до<input id="cl-auto-cap" inputmode="decimal"></label></div>
+        <small class="hint" id="cl-auto-st" style="display:block;margin-top:4px"></small><button class="btn" id="cl-auto-forget" style="margin-top:6px" hidden>Забыть карту</button></details>
       <div class="cl-use" id="cl-use"></div>
       <div class="row2" style="margin-top:10px"><button class="btn" id="cl-ref" style="flex:1">Обновить</button><button class="btn p" id="cl-how" style="flex:1">Пополнить</button></div>
       <div id="cl-pay" style="display:none;margin-top:12px"><div class="ym" id="cl-ym" style="display:none"><div class="ym-h"><b>Оплатить картой</b><span>Талеры зачислятся сами — через минуту после оплаты, снимок не нужен</span></div>
@@ -9182,6 +9186,28 @@ function limFill(l) {
   };
   $("#cl-lim-d").onchange = save; $("#cl-lim-m").onchange = save;
 }
+/* 1.0.32 автопополнение — как в студии компьютера: виден, только когда на сайте есть способ с сохранением карты */
+const payLangOk = (m) => !m || !m.lang || (m.lang === "ru") === ((window.dwLang ? dwLang() : "ru") === "ru");
+const numR = (v) => (+v || 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+function autoFill(a) {
+  const box = $("#cl-auto"); if (!box) return;
+  box.style.display = a && a.available ? "" : "none"; if (!a || !a.available) return;
+  $("#cl-auto-on").checked = !!a.on;
+  const put = (el, v) => { if (el && document.activeElement !== el) el.value = String(v).replace(".", ","); };
+  put($("#cl-auto-below"), a.below); put($("#cl-auto-amt"), a.amount); put($("#cl-auto-cap"), a.cap);
+  $("#cl-auto-t").textContent = `Когда останется меньше ${numR(a.below)} тал. — пополним на ${numR(a.amount)} тал. (1 тал. = $1) с карты${a.card ? " " + a.card : ", которую сохраните при оплате"}, не больше ${numR(a.cap)} тал. в месяц. После каждого списания — строка в истории и чек на почту; выключить — здесь же.`;
+  $("#cl-auto-st").textContent = a.stopped || (a.on ? `В этом месяце пополнено: ${numR(a.month_sum)} из ${numR(a.cap)} тал.` : "");
+  $("#cl-auto-forget").hidden = !a.card;
+  const save = (extra) => {
+    const v = (id) => $(id).value.trim().replace(",", ".");
+    cloudPost("/autopay", Object.assign({ on: $("#cl-auto-on").checked, below: v("#cl-auto-below"), amount: v("#cl-auto-amt"), cap: v("#cl-auto-cap") }, extra || {}))
+      .then(r => { autoFill(r); if (r.need_card) { toast(r.message, 6000); if (r.setup && r.setup.url) D.openUrl(r.setup.url); } else toast(r.on ? "Автопополнение включено" : "Автопополнение выключено"); })
+      .catch(e => toast(e.message));
+  };
+  $("#cl-auto-on").onchange = () => save();
+  ["#cl-auto-below", "#cl-auto-amt", "#cl-auto-cap"].forEach(id => $(id).onchange = () => save());
+  $("#cl-auto-forget").onclick = () => save({ forget: true, on: false });
+}
 const HK = { paid: "пополнение", gift: "подарок", burn: "остаток подарка сгорел", minus: "списано" };
 function clHist(list) {
   const el = $("#cl-reqs"); if (!el || !(list || []).length) return;
@@ -9203,7 +9229,7 @@ const ymStrip = (t) => {             // строки-ссылки для ста�
   return s;
 };
 function ymFill(y) {
-  ymCur = y && y.url ? y : null;
+  ymCur = y && y.url && payLangOk({ lang: "ru" }) ? y : null;      // ЮMoney — только в русской программе (владелец 18.11)
   const box = $("#cl-ym"); if (!box) return;
   box.style.display = ymCur ? "" : "none";
   if (!ymCur) return;
@@ -9411,7 +9437,7 @@ function cloudFill(c) {
   const pt = (+c.per_taler) || (+c.balance > 0 && +c.turns > 0 ? Math.max(1, Math.round(c.turns / c.balance)) : 0);   // №542
   if ($("#cl-per")) $("#cl-per").textContent = (pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы и размышления дороже.` : "") + monthGiftLine(c);
   if (!c.empty && !c.frozen) $("#cl-turns").textContent += daysLine(c);
-  limFill(c.limits);
+  limFill(c.limits); autoFill(c.autopay);
   if (c.pending) $("#cl-turns").textContent += " · " + pendingLine();     // №544/№545: заявка видна, со сроком
   clBal = +c.balance || 0;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); clTopFill(c.topup, c.code, c.rub);

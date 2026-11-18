@@ -294,3 +294,26 @@ def t_lab_run(a, ctx):
         base.launch(["lab_run", a.get("name", "")])
     r = _ws_call(lambda: _ws(ctx).lab_run(a.get("name", ""), a.get("args", "")))
     return f"Код завершения {r['code']}. Вывод (полностью — {r['log']}):\n{r['output'] or '(пусто)'}"
+
+
+def _transcripts(ctx):
+    T = ctx.get("transcripts")
+    if T is None or not T.on():
+        raise ToolError("Расшифровка — плагин: включите его в «Плагинах» → «Расшифровка» (студия на компьютере)")
+    return T
+
+
+def t_transcribe(a, ctx):
+    """Плагин «Расшифровка» (1.0.33): аудио или видео -> текст с метками времени и .srt; идёт в фоне, готово — Лира скажет."""
+    try:
+        return _transcripts(ctx).tool_start(a.get("path") or "", a.get("name") or "")
+    except ValueError as e:
+        raise ToolError(str(e)) from e
+
+
+def t_transcripts(a, ctx):
+    """Расшифровки: список, поиск фразы по всем записям (с метками времени) или текст одной записи — для выжимки и вопросов."""
+    try:
+        return _transcripts(ctx).tool_find(a.get("query") or "", a.get("id") or "", a.get("name") or "")
+    except ValueError as e:
+        raise ToolError(str(e)) from e

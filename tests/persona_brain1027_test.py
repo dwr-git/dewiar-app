@@ -72,6 +72,11 @@ try:
         ok(pg.is_visible("#pr-new") and pg.is_visible("#pr-gal") and pg.locator("#pgrid .card.new").count() == 1, "«Персонажи»: «Создать своего» и «Готовые персонажи» — на виду")
         pg.evaluate("() => { const D = window.DewiarEntity; window.DewiarEntity = function () { throw new Error('нет облика'); }; renderPersonas(); window.DewiarEntity = D; }")
         ok(pg.locator("#pgrid .card.new").count() == 1, "облик не нарисовался — «Создать своего» всё равно на месте")
+        # №864/№870 («включил ноутбук — в „Персонажах“ никого, даже Лиры»): облик не нарисовался — карточки остаются
+        ok(pg.locator("#pgrid .card:not(.new)").count() >= 2 and "Лира" in pg.inner_text("#pgrid"),
+           "№864/№870: облик не нарисовался — карточки персонажей всё равно на месте")
+        pg.evaluate("() => { personas = []; renderPersonas(); }"); time.sleep(1.5)
+        ok("Лира" in pg.inner_text("#pgrid") and "Патрик" in pg.inner_text("#pgrid"), "№864/№870: список пришёл пустым — студия спросила ядро заново")
         pg.evaluate("renderPersonas()"); time.sleep(0.3)
         pg.click("#pr-new"); time.sleep(0.4)
         ok(pg.evaluate("document.querySelector('#drawer').classList.contains('open')"), "«+ Создать своего персонажа» открывает редактор")

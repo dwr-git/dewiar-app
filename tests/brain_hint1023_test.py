@@ -26,8 +26,12 @@ llm._port_open = lambda host, port, timeout=0.35: int(port) in opened
 llm.ollama_installed = lambda: inst["ollama"]
 llm.lmstudio_installed = lambda: inst["lms"]
 
+h8 = llm.connect_hint("http://127.0.0.1:8080/v1")      # пакет 18.11: 64 раза — llama.cpp, а подсказка звала Ollama и LM Studio
+ok("не отвечает llama.cpp (порт 8080)" in h8 and "сам этот компьютер" in h8, f"порт 8080 — подсказка называет llama.cpp: {h8[:90]}")
+h9 = llm.connect_hint("http://127.0.0.1:9999/v1")
+ok("Ollama, LM Studio или llama.cpp" in h9, "незнакомый порт — названы все три программы")
 h = llm.connect_hint("http://127.0.0.1:11434/v1")
-ok("не запущена программа с моделью" in h and "192.168.1.5:11434" in h and "сам этот компьютер" in h,
+ok("не отвечает Ollama (порт 11434)" in h and "192.168.1.5:11434" in h and "сам этот компьютер" in h,
    f"на этом компьютере ничего нет — объясняем, что 127.0.0.1 — это он сам, и куда вписать адрес сервера: {h}")
 opened.add(1234)
 h = llm.connect_hint("http://127.0.0.1:11434/v1")

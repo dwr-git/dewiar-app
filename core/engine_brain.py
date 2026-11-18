@@ -1166,10 +1166,11 @@ class BrainMixin:
                 return self.vosk_stt.transcribe(r.stdout).strip()
             raise
 
-    def transcribe_file(self, path, cancel=None, chunk=22.0):
+    def transcribe_file(self, path, cancel=None, chunk=22.0, progress=None):
         """Аудио или видео любой длины -> [(начало_с, конец_с, текст)]: режем по тихим местам на куски до chunk секунд
         (~22 с уверенно слышит GigaAM) и распознаём тем же слухом, что дома; не вышло — запасным Vosk.
-        Работает долго (на чтение файла ffmpeg даётся до 30 мин); cancel прерывает между кусками."""
+        Работает долго (на чтение файла ffmpeg даётся до 30 мин); cancel прерывает между кусками;
+        progress(сделано_с, всего_с) — после каждого куска (плагин «Расшифровка», 1.0.33)."""
         import numpy as np
         from eyes import ffmpeg_path
         exe = ffmpeg_path()
@@ -1213,6 +1214,11 @@ class BrainMixin:
                 if txt:
                     out.append((start / sr, end / sr, txt))
             start = end
+            if progress is not None:
+                try:
+                    progress(start / sr, n / sr)
+                except Exception:  # noqa: BLE001 — ход работы не должен ронять распознавание
+                    pass
         return out
 
     def _tg_voice_reply(self, answer, bot=None):

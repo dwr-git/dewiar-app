@@ -89,7 +89,8 @@ for pid in ("recruiter", "tenders", "artist"):
                 raw.append(f"{pid}.{t['name']}.{k}")
 ok(not raw, f"у каждого действия и поля — человеческая подпись (plugin.json ui): {raw}")
 for pid, p in P.items.items():
-    ok(p["builtin"] and (p["ui"]["asks"] or p["mcp"]) and all("{" not in a["say"] or a["fields"] for a in p["ui"]["asks"]),
+    # «Расшифровка» (18.11) — своя вкладка «Расшифровки» (ui/studio/transcribe.js) вместо действий: распознаёт ядро
+    ok(p["builtin"] and (p["ui"]["asks"] or p["mcp"] or pid == "transcribe") and all("{" not in a["say"] or a["fields"] for a in p["ui"]["asks"]),
        f"«{p['name']}»: на странице есть что сделать — действия или «Попросить Лиру»")
 ok(P.items["recruiter"]["page"] and not P.items["kitchen"]["page"], "своя страница (ui.html) — у «Рекрутёра»")
 ok("recruit_board" not in json.dumps(mgr.specs()), "действие только для страницы (recruit_board) помощнице не показывается")

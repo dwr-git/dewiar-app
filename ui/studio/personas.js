@@ -14,6 +14,13 @@ function renderPersonas() {
   // карточки и галерея с обликами — только когда раздел открывали (03.11: при запуске студии их строили впрок,
   // и полтора десятка обликов в закрытом разделе грузили компьютер); до того — лишь логотип и подпись слева
   if (!secSeen("personas")) return;
+  if (!Array.isArray(personas)) personas = [];
+  if (!personas.length && !renderPersonas._ask && window.core && core.connected) {
+    // №864/№870: персонажей в студии нет вовсе (Лира есть всегда) — список пришёл пустым; спросить ядро заново, один раз
+    renderPersonas._ask = true;
+    core.call("hello").then(d => { if (d && Array.isArray(d.personas) && d.personas.length) { personas = d.personas; renderPersonas(); }
+      else jsErr("персонажи: ядро отдало пустой список"); }).catch(() => {}).finally(() => setTimeout(() => { renderPersonas._ask = false; }, 5000));
+  }
   entities.forEach(e => e.destroy()); entities = [];
   const g = $("#pgrid"); g.innerHTML = "";
   // №369 (28.10, Windows 10: «нет кнопки Добавить и Создать»): одна сломавшаяся карточка (облик не нарисовался) больше
@@ -23,22 +30,44 @@ function renderPersonas() {
     c.className = "card" + (p.id === active ? " cur" : ""); c.style.setProperty("--c", p.color); c.tabIndex = 0;
     c.innerHTML = `${p.id === active ? '<span class="tag">активен</span>' : ""}<button class="btn small edit">Изменить</button><div class="disc"><canvas></canvas></div><h3></h3>${p.role ? '<span class="role"></span>' : ""}<p></p><ul class="sk"></ul>`;
     $("h3", c).textContent = p.name; $("p", c).textContent = p.tagline || ""; if (p.role) $(".role", c).textContent = p.role;
+    c.onclick = (ev) => { if (ev.target.closest(".edit")) return openEditor(p); core.call("persona_set", { id: p.id }).catch(err => toast(err.message)); };
+    c.onkeydown = (ev) => { if (ev.key === "Enter") c.click(); };
+    g.appendChild(c);                         // №864/№870: карточка — сразу; что ниже не вышло, её уже не убирает
     const own = typeof brainOf === "function" ? brainOf(p.id) : "";
     if (own) { const m = document.createElement("span"); m.className = "pbrain"; m.title = "Свой мозг персонажа";
       m.textContent = "🧠 " + brainLabel(p.id); $("h3", c).after(m); }
     if (ownMem().includes(p.name)) { const m = document.createElement("span"); m.className = "pbrain"; m.title = "Своя память персонажа"; m.textContent = "🗂 своя память"; $("h3", c).after(m); }
     (p.skills || []).slice(0, 4).forEach(t => { const li = document.createElement("li"); li.textContent = t; $("ul.sk", c).appendChild(li); });
-    const e = new DewiarEntity($("canvas", c), { style: p.avatar_url && p.style !== "aura" ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true });
-    e.calm = !!stTight; e.set({ state: "idle", level: 0 }); entities.push(e);   // оживает при наведении — иначе десяток анимаций грузит компьютер
-    c.onclick = (ev) => { if (ev.target.closest(".edit")) return openEditor(p); core.call("persona_set", { id: p.id }).catch(err => toast(err.message)); };
-    c.onkeydown = (ev) => { if (ev.key === "Enter") c.click(); };
-    c.onmouseenter = () => e.set({ state: "speaking", level: 0.35 }); c.onmouseleave = () => e.set({ state: "idle", level: 0 });
-    g.appendChild(c);
-  } catch (err) { console.warn("персонаж", p && p.id, err); } });
+    // №864/№870 («включил ноутбук — в „Персонажах“ никого, даже Лиры»): облик не нарисовался (холст не создался, мало
+    // памяти после сна) — карточка всё равно остаётся, облик — простым кругом или фото
+    const e = faceOf($("canvas", c), { style: p.avatar_url && p.style !== "aura" ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true }, p);
+    if (e) { e.calm = !!stTight; e.set({ state: "idle", level: 0 }); entities.push(e);   // оживает при наведении — иначе десяток анимаций грузит компьютер
+      c.onmouseenter = () => e.set({ state: "speaking", level: 0.35 }); c.onmouseleave = () => e.set({ state: "idle", level: 0 }); }
+  } catch (err) { console.warn("персонаж", p && p.id, err); cardErr("персонаж", p, err); } });
   const n = document.createElement("div"); n.className = "card new"; n.tabIndex = 0;
   n.innerHTML = "<div><b>+</b>Создать своего<br><span class='hint'>имя, характер, голос, фото</span></div>";
   n.onclick = () => openEditor(null); g.appendChild(n);
+  // ни одна карточка не встала, хотя персонажи есть, — сказать в журнал и нарисовать ещё раз (один раз)
+  if (personas.length && !g.querySelector(".card:not(.new)")) {
+    jsErr(`персонажи: ни одна карточка не нарисовалась (${personas.length})`);
+    if (!renderPersonas._again) { renderPersonas._again = true; setTimeout(() => { renderPersonas(); renderPersonas._again = false; }, 1500); }
+  }
   loadGallery();
+}
+/* облик карточки; не вышло — круг цвета персонажа или его фото, и строка в журнал (один раз за отрисовку) */
+function faceOf(canvas, opts, p) {
+  try { return new DewiarEntity(canvas, opts); }
+  catch (err) {
+    cardErr("облик", p, err);
+    const d = canvas.parentElement; canvas.remove();
+    d.style.background = opts.image ? `center / cover no-repeat url(${JSON.stringify(String(opts.image))})` : `radial-gradient(circle at 35% 30%, #fff8, ${p.color || "#8A9BFF"})`;
+    return null;
+  }
+}
+function cardErr(what, p, err) {
+  if (cardErr._n > 3) return;
+  cardErr._n = (cardErr._n || 0) + 1;
+  jsErr(`${what} ${p && p.id}: ${err && err.message} @ ${String((err && err.stack || "").split("\n")[1] || "").trim().split("/").pop().replace(/\)$/, "")}`);
 }
 /* логотип слева и цвет — по активному персонажу (нужно всегда, даже если «Персонажи» не открывали) */
 function personasHead() {
@@ -101,10 +130,11 @@ async function loadGallery() {
     const b = $(".gbtn", c); b.textContent = p.installed ? "В команде ✓" : "+ Добавить"; b.className = "btn gbtn" + (p.installed ? "" : " primary");
     b.onclick = async () => { if (p.installed) { core.call("persona_set", { id: p.id }).catch(e => toast(e.message)); return; }
       b.disabled = true; try { await core.call("gallery_add", { id: p.id }); toast(`${p.name} в команде — позовите: «${p.name}, …»`); } catch (e) { toast(e.message); b.disabled = false; } };
-    const e = new DewiarEntity($("canvas", c), { style: p.avatar_url ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true }); e.calm = !!stTight; e.set({ state: "idle", level: 0 }); galEnts.push(e);
-    c.onmouseenter = () => e.set({ state: "speaking", level: 0.35 }); c.onmouseleave = () => e.set({ state: "idle", level: 0 });
     g.appendChild(c);
-  } catch (err) { console.warn("готовый персонаж", p && p.id, err); } });
+    const e = faceOf($("canvas", c), { style: p.avatar_url ? "photo" : p.style, color: p.color, image: p.avatar_url || null, live: p.live || "", still: true }, p);
+    if (e) { e.calm = !!stTight; e.set({ state: "idle", level: 0 }); galEnts.push(e);
+      c.onmouseenter = () => e.set({ state: "speaking", level: 0.35 }); c.onmouseleave = () => e.set({ state: "idle", level: 0 }); }
+  } catch (err) { console.warn("готовый персонаж", p && p.id, err); cardErr("готовый персонаж", p, err); } });
 }
 if ($("#pr-new")) {
   $("#pr-new").onclick = () => openEditor(null);

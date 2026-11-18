@@ -44,12 +44,11 @@ function snChip() {
     $("#sn-chip").onclick = () => snToggle(!SN.open);
   }
   $("#sn-chip").classList.toggle("old", old);
-  // 15.11 (владелец: «изящнее… не свалка»): всё хорошо — только значок с зелёной точкой (подробности — в подсказке и по
-  // нажатию); слепка нет или он старше недели — полностью, с текстом
-  $("#sn-chip").classList.toggle("quiet", !!x && !old && !SN.open);
+  // 15.11 кнопка становилась значком, пока слепок свежий; 18.11 владелец: «как раньше — у неё есть место, она красивее» —
+  // снова с подписью и временем всегда. Всплывающей подсказки нет: время и так на кнопке, а подсказка у края окна обрезалась
   $("#sn-chip").setAttribute("aria-label", "Слепок знаний — " + (x ? snWhen(x.time) : "ещё не было"));
   $("#sn-chip small").innerHTML = `<i></i>${x ? snEsc(snWhen(x.time)) : "ещё не было — сделайте"}`;
-  $("#sn-chip").title = x ? `Последний слепок — ${snWhen(x.time)}${old ? ". Пора сделать новый" : ""}` : "Слепков ещё нет";
+  $("#sn-chip").removeAttribute("title");
 }
 function snToggle(on) {
   SN.open = on; $("#sn-pop").hidden = !on; $("#sn-chip").setAttribute("aria-expanded", String(on)); snChip();

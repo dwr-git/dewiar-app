@@ -135,11 +135,11 @@ function safeGen(n = 16) {                           // как vlGen в студ
   for (let i = out.length - 1; i > 0; i--) { const j = DC().randomBytes(4).reduce((a, b) => a * 256 + b, 0) % (i + 1); [out[i], out[j]] = [out[j], out[i]]; }
   return out.join("");
 }
-function safeCopy(text, what) {                      // в буфер с пометкой «секрет»; через SAFE_CLIP с — стереть
+function safeCopy(text, what, msg) {                      // в буфер с пометкой «секрет»; через SAFE_CLIP с — стереть
   let ok = false;
   try { ok = !!(D.copySecret && D.copySecret(text, SAFE_CLIP)); } catch (e) { ok = false; }
   if (!ok) { D.copy(text); setTimeout(() => { try { D.copy(""); } catch (e) { } }, SAFE_CLIP * 1000); }
-  toast(`${what} скопирован — сотрётся из буфера через ${SAFE_CLIP} с`, 2600);
+  toast(msg || `${what} скопирован — сотрётся из буфера через ${SAFE_CLIP} с`, 2600);
 }
 
 /* ---------- экран ---------- */
@@ -227,7 +227,7 @@ function sfCard(box) {
     <button class="sf-back" id="sf-back">${sfSvg("back")}Все записи</button>
     <div class="sf-ch"><i class="sf-mono big" style="--c:${sfCol(x.name)}" aria-hidden="true">${page ? sfSvg("page") : esc(sfMono(x.name))}</i><b>${esc(x.name)}</b></div>
     ${x.login ? `<div class="sf-row"><span>Логин</span><code class="sf-v">${esc(x.login)}</code><button class="sf-ib" id="sf-lcopy" aria-label="Скопировать логин">${sfSvg("copy")}</button></div>` : ""}
-    ${page ? `<div class="sf-row col"><span>Текст · ${lnWord(sfLines(x), "строка", "строки", "строк")}</span><pre class="sf-page" id="sf-pv" data-shown="0">Скрыт — нажмите «Показать»</pre></div>`
+    ${page ? `<div class="sf-row col"><span>Текст · ${lnWord(sfLines(x), "строка", "строки", "строк")}</span><div class="sf-page" id="sf-pv" data-shown="0">Скрыт — нажмите «Показать»</div></div>`
       : `<div class="sf-row pass"><span>Пароль</span><code class="sf-v" id="sf-pv" data-shown="0" aria-label="пароль скрыт">${sfDots(x)}</code></div>`}
     <div class="sf-acts"><button class="btn" id="sf-show">${sfSvg("eye")}Показать</button><button class="btn p" id="sf-copy">${sfSvg("copy")}Скопировать</button></div>
     ${host ? `<div class="sf-row"><span>Сайт</span><a href="#" class="sf-v sf-url" id="sf-url">${esc(host)}${sfSvg("link")}</a></div>` : ""}
@@ -236,12 +236,16 @@ function sfCard(box) {
   $("#sf-back").onclick = () => { SF.view = "list"; safeRender(); };
   if ($("#sf-lcopy")) $("#sf-lcopy").onclick = () => { D.copy(x.login); toast("Логин скопирован"); safeIdle(); };
   if ($("#sf-url")) $("#sf-url").onclick = (e) => { e.preventDefault(); D.openUrl(url); };
-  const pv = $("#sf-pv"), hide = () => { clearTimeout(SF.show); if (!pv.isConnected) return; pv.dataset.shown = "0"; pv.textContent = page ? "Скрыт — нажмите «Показать»" : sfDots(x);
+  const pv = $("#sf-pv"), hide = () => { clearTimeout(SF.show); if (!pv.isConnected) return; pv.dataset.shown = "0"; pv.classList.remove("sp-on"); pv.textContent = page ? "Скрыт — нажмите «Показать»" : sfDots(x);
     pv.setAttribute("aria-label", page ? "текст скрыт" : "пароль скрыт"); $("#sf-show").lastChild.textContent = "Показать"; };
   $("#sf-show").onclick = () => {
     safeIdle();
     if (pv.dataset.shown === "1") return hide();
-    pv.dataset.shown = "1"; pv.textContent = x.value; pv.setAttribute("aria-label", page ? "текст показан" : "пароль показан"); $("#sf-show").lastChild.textContent = "Скрыть";
+    pv.dataset.shown = "1";
+    // 18.11: страница — как документ (ui/assets/secretpage.js, тот же код, что в студии): ряды «подпись: значение», секреты точками
+    if (page && window.SecretPage) { const r = SecretPage.render(x.value); pv.innerHTML = r.html; pv.classList.add("sp-on");
+      SecretPage.bind(pv, r.secrets, { open: (u) => D.openUrl(u), copy: (t, what) => { safeCopy(t, what, `Скопировано${what ? ": " + what : ""} — сотрётся из буфера через ${SAFE_CLIP} с`); safeIdle(); } }); }
+    else pv.textContent = x.value; pv.setAttribute("aria-label", page ? "текст показан" : "пароль показан"); $("#sf-show").lastChild.textContent = "Скрыть";
     clearTimeout(SF.show); SF.show = setTimeout(hide, page ? SAFE_IDLE : SAFE_SHOW);
   };
   $("#sf-copy").onclick = () => { safeCopy(x.value, page ? "Текст" : "Пароль"); safeIdle(); };

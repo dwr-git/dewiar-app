@@ -7,6 +7,9 @@ from engine_base import *  # noqa: F401,F403 — общие импорты и п
 
 class FilesCommands:
     def _cmd_files(self, cmd, a):
+        if cmd.startswith("transcribe_") and getattr(self, "transcripts", None) is not None:   # плагин «Расшифровка» (1.0.33)
+            import transcribe
+            return transcribe.command(self.transcripts, cmd, a)
         if cmd.startswith("pad_"):                              # блокнот у виджета (ui/pad.html, core/pad.py)
             return self._pad_cmd(cmd, a)
         if cmd.startswith("snip_"):                             # «Вырезать кусок экрана» (ui/snip.html → блокнот)

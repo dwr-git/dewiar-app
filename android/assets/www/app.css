@@ -138,7 +138,7 @@ body.radio-on #state.idle { display: none; }      /* в покое вместо 
 #bot { font-size: 19px; line-height: 1.5; font-weight: 500; color: var(--ink); -webkit-user-select: text; user-select: text; white-space: pre-wrap; }
 #bot.wait::after { content: ""; display: inline-block; width: 26px; height: 8px; vertical-align: middle;
   background: radial-gradient(circle 3px, var(--muted) 98%, transparent) 0 50%/9px 8px repeat-x; animation: dots 1s steps(3) infinite; }
-@keyframes dots { from { width: 8px; } to { width: 27px; } }
+@keyframes dots { from { width: 9px; } to { width: 36px; } }   /* steps(3) до «to» не доходит: 9 → 18 → 27 = 1, 2, 3 точки целиком */
 #bot.err { color: #FFB3C3; font-size: 16px; }
 #card { margin: 12px auto 0; max-width: 420px; }
 /* «Попробуйте сказать» у новичка на пустом экране (app.js triesCheck) */
@@ -1989,6 +1989,7 @@ body.senior .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sf-url svg { width: 15px; height: 15px; flex: none; }
 .sf-page { margin: 0; white-space: pre-wrap; font: 14px/1.5 ui-monospace, "SF Mono", Menlo, monospace; max-height: 46vh; overflow: auto; -webkit-user-select: text; user-select: text; }
 .sf-page[data-shown="0"] { color: var(--muted); font-family: "Manrope", sans-serif; }
+.sf-page.sp-on { white-space: normal; font: inherit; max-height: none; overflow: visible; color: var(--ink); }   /* 18.11: страница как документ */
 .sf-note { margin: 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
 .sf-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 2px 0 12px; }
 .sf-acts .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 10px; }

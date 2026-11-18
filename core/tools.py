@@ -58,7 +58,8 @@ from tools_people import (  # noqa: F401,E402 — прежние имена tool
     t_team_status, _team)
 from tools_docs import (  # noqa: F401,E402 — прежние имена tools.* на месте
     _doc_path, OCR_DIRS, OCR_EXTS, _ocr_path, _ocr_say, _ocr_vision, t_archive_open, t_ask_knowledge, t_create_skill,
-    t_doc_find, t_doc_replace, t_insight_ask, t_lab_run, t_lab_write, t_ocr, t_read_file, t_search_documents)
+    t_doc_find, t_doc_replace, t_insight_ask, t_lab_run, t_lab_write, t_ocr, t_read_file, t_search_documents,
+    t_transcribe, t_transcripts)
 from tools_sites import (  # noqa: F401,E402 — прежние имена tools.* на месте
     _eyes, _maker, _maker_by, _plugin_done, _site_open, _sites, t_plugin_change, t_plugin_create, t_plugin_enable,
     t_site_article, t_site_create, t_site_edit, t_site_publish, t_site_review, t_site_show)
@@ -526,6 +527,15 @@ TOOLS = {
                     "важного за неделю», «почему растёт X», «что писали про Y». query — слова темы (пусто — самое важное). "
                     "Отвечай по данным, со ссылками на материалы; нет данных — скажи, что Радар пока не настроен.",
                     S({"query": {"type": "string"}}), "safe", t_insight_ask, "Радар"),
+    "transcribe": ("Плагин «Расшифровка»: расшифровать аудио или видео (созвон, лекция, интервью, голосовое) в текст с "
+                   "метками времени и субтитры .srt. Идёт в фоне — сразу скажи, что начала, а когда будет готово, ты скажешь "
+                   "сама. path — файл (полный путь, имя в «Моих файлах» или во «Входящих»); name — как назвать запись.",
+                   S({"path": {"type": "string"}, "name": {"type": "string"}}, ["path"]), "safe", t_transcribe, "Расшифровка"),
+    "transcripts": ("Расшифровки записей (плагин «Расшифровка»): без параметров — список; query — найти, где в записях "
+                    "говорили о чём-то («где про сроки»), с метками времени; name или id — весь текст одной записи (для "
+                    "выжимки, решений, задач и вопросов «о чём был разговор с юристом?»). Отвечай по тексту, называй время [мм:сс].",
+                    S({"query": {"type": "string"}, "name": {"type": "string"}, "id": {"type": "string"}}), "safe", t_transcripts,
+                    "Расшифровки"),
     "doc_find": ("Найти текст в документе Word, Excel, PowerPoint или OpenOffice (docx, xlsx, pptx, odt) — где и в каком "
                  "окружении он встречается. Вызывай ПЕРЕД заменой, если не уверен в написании (падежи, инициалы, формат даты). "
                  "path — файл (имя из «Входящих» или путь); text — что искать; whole_word — только слово целиком.",

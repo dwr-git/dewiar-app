@@ -362,12 +362,17 @@
   .pu-stage { position: relative; flex: 1 1 auto; min-height: 200px; border-radius: 20px; overflow: hidden;
               background: radial-gradient(ellipse at 50% 46%, var(--pu-glow), transparent 72%), var(--chip); }
   body.light .pu-stage { background: radial-gradient(ellipse at 50% 46%, rgba(255,255,255,.7), transparent 70%), var(--chip); }
-  body.neu.light .pu-stage { background: var(--paper); box-shadow: inset 5px 5px 12px var(--neu-dark, #b8c5d6), inset -5px -5px 12px var(--neu-light, #fff); }
+  /* 18.11, владелец: «вдавленное обычно у полей ввода, а здесь мы не вводим… светлая матовая, как полупрозрачное стекло»:
+     сцена — матовое стекло (светлый полупрозрачный лист, размытие под ним, светлая кромка, мягкая тень); циферблат на нём —
+     с тенью мягче, чем на бумаге */
+  body.neu.light .pu-stage { background: linear-gradient(165deg, rgba(255,255,255,.62), rgba(255,255,255,.26) 60%);
+    -webkit-backdrop-filter: blur(18px) saturate(1.15); backdrop-filter: blur(18px) saturate(1.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.4), 0 22px 44px -26px rgba(36,50,74,.32); }
   #pu-sky { position: absolute; inset: 0; }
   #pu-names { position: absolute; inset: 0; pointer-events: none; }
   /* «Циферблат дня» (16.11): круг — сутки вокруг «сейчас»; слева прошедшее, справа впереди */
   .pu-face { fill: var(--paper); fill-opacity: .55; }
-  body.neu.light .pu-face { fill: var(--paper); fill-opacity: 1; filter: drop-shadow(6px 6px 10px var(--neu-dark, #b8c5d6)) drop-shadow(-6px -6px 10px var(--neu-light, #fff)); }
+  body.neu.light .pu-face { fill: var(--paper); fill-opacity: 1; filter: drop-shadow(4px 5px 9px rgba(140,158,184,.45)) drop-shadow(-4px -4px 9px rgba(255,255,255,.9)); }
   .pu-past path, .pu-fut path { fill: none; stroke-linecap: butt; }
   .pu-fut path { stroke: var(--pu-mem); stroke-width: 7; } .pu-past path { stroke: var(--pu-think); stroke-width: 3; }
   .pu-hand { stroke: var(--pu-think); stroke-width: 2; stroke-linecap: round; stroke-opacity: .55; }

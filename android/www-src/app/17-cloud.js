@@ -171,6 +171,28 @@ function limFill(l) {
   };
   $("#cl-lim-d").onchange = save; $("#cl-lim-m").onchange = save;
 }
+/* 1.0.32 автопополнение — как в студии компьютера: виден, только когда на сайте есть способ с сохранением карты */
+const payLangOk = (m) => !m || !m.lang || (m.lang === "ru") === ((window.dwLang ? dwLang() : "ru") === "ru");
+const numR = (v) => (+v || 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+function autoFill(a) {
+  const box = $("#cl-auto"); if (!box) return;
+  box.style.display = a && a.available ? "" : "none"; if (!a || !a.available) return;
+  $("#cl-auto-on").checked = !!a.on;
+  const put = (el, v) => { if (el && document.activeElement !== el) el.value = String(v).replace(".", ","); };
+  put($("#cl-auto-below"), a.below); put($("#cl-auto-amt"), a.amount); put($("#cl-auto-cap"), a.cap);
+  $("#cl-auto-t").textContent = `Когда останется меньше ${numR(a.below)} тал. — пополним на ${numR(a.amount)} тал. (1 тал. = $1) с карты${a.card ? " " + a.card : ", которую сохраните при оплате"}, не больше ${numR(a.cap)} тал. в месяц. После каждого списания — строка в истории и чек на почту; выключить — здесь же.`;
+  $("#cl-auto-st").textContent = a.stopped || (a.on ? `В этом месяце пополнено: ${numR(a.month_sum)} из ${numR(a.cap)} тал.` : "");
+  $("#cl-auto-forget").hidden = !a.card;
+  const save = (extra) => {
+    const v = (id) => $(id).value.trim().replace(",", ".");
+    cloudPost("/autopay", Object.assign({ on: $("#cl-auto-on").checked, below: v("#cl-auto-below"), amount: v("#cl-auto-amt"), cap: v("#cl-auto-cap") }, extra || {}))
+      .then(r => { autoFill(r); if (r.need_card) { toast(r.message, 6000); if (r.setup && r.setup.url) D.openUrl(r.setup.url); } else toast(r.on ? "Автопополнение включено" : "Автопополнение выключено"); })
+      .catch(e => toast(e.message));
+  };
+  $("#cl-auto-on").onchange = () => save();
+  ["#cl-auto-below", "#cl-auto-amt", "#cl-auto-cap"].forEach(id => $(id).onchange = () => save());
+  $("#cl-auto-forget").onclick = () => save({ forget: true, on: false });
+}
 const HK = { paid: "пополнение", gift: "подарок", burn: "остаток подарка сгорел", minus: "списано" };
 function clHist(list) {
   const el = $("#cl-reqs"); if (!el || !(list || []).length) return;
@@ -192,7 +214,7 @@ const ymStrip = (t) => {             // строки-ссылки для ста�
   return s;
 };
 function ymFill(y) {
-  ymCur = y && y.url ? y : null;
+  ymCur = y && y.url && payLangOk({ lang: "ru" }) ? y : null;      // ЮMoney — только в русской программе (владелец 18.11)
   const box = $("#cl-ym"); if (!box) return;
   box.style.display = ymCur ? "" : "none";
   if (!ymCur) return;
@@ -400,7 +422,7 @@ function cloudFill(c) {
   const pt = (+c.per_taler) || (+c.balance > 0 && +c.turns > 0 ? Math.max(1, Math.round(c.turns / c.balance)) : 0);   // №542
   if ($("#cl-per")) $("#cl-per").textContent = (pt ? `1 талер ≈ ${pt.toLocaleString("ru-RU")} ${turnsWord(pt)} — длинные ответы и размышления дороже.` : "") + monthGiftLine(c);
   if (!c.empty && !c.frozen) $("#cl-turns").textContent += daysLine(c);
-  limFill(c.limits);
+  limFill(c.limits); autoFill(c.autopay);
   if (c.pending) $("#cl-turns").textContent += " · " + pendingLine();     // №544/№545: заявка видна, со сроком
   clBal = +c.balance || 0;
   ymFill(c.yoomoney); cxFill(payPick(c.pay, "crypto")); payArrange(c.pay); clTopFill(c.topup, c.code, c.rub);

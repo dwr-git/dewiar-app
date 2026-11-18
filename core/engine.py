@@ -208,6 +208,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         self.knowledge = Knowledge(self.workspace, STATE_DIR / "knowledge.json", folders=lambda: self.s.get("knowledge", "folders") or [],
                                    extra=self._persona_folders)
         self.toolbox.hooks["knowledge"] = self.knowledge
+        from transcribe import Transcripts                 # плагин «Расшифровка» (1.0.33): аудио и видео -> текст, .srt, поиск
+        self.transcripts = Transcripts(self)
+        self.toolbox.hooks["transcripts"] = self.transcripts
         self.toolbox.hooks["sources"] = self._turn_sources          # найденные документы — источниками под ответом
         # Отзыв 17.11 «книги»: персонаж с книгами в своей папке ищет в них и сам (search_documents), а не просит «дай файлы»
         self.toolbox.hooks["persona_folders"] = lambda: [b["path"] for b in ((self.personas.get(self.s.get("persona")) or {})

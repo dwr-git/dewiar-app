@@ -2187,6 +2187,12 @@
         <div class="cc-lim" id="cc-lim"><b>Мои лимиты</b><span class="hint">Не тратить больше — в день и в месяц, на всех ваших устройствах. Пусто — без лимита.</span>
           <label class="f">В день, тал.<input type="text" id="cc-lim-d" inputmode="decimal" placeholder="без лимита"></label>
           <label class="f">В месяц, тал.<input type="text" id="cc-lim-m" inputmode="decimal" placeholder="без лимита"></label></div>
+        <div class="cc-auto" id="cc-auto" style="display:none">
+          <div class="switch" style="border:0;padding:0"><div>Автопополнение<span id="cc-auto-t"></span></div><label class="tg"><input type="checkbox" id="cc-auto-on"><i></i></label></div>
+          <div class="cc-auto-f"><label class="f">Когда останется меньше, тал.<input type="text" id="cc-auto-below" inputmode="decimal"></label>
+            <label class="f">Пополнять на, тал.<input type="text" id="cc-auto-amt" inputmode="decimal"></label>
+            <label class="f">Не больше в месяц, тал.<input type="text" id="cc-auto-cap" inputmode="decimal"></label></div>
+          <p class="hint" id="cc-auto-st" style="margin:0"></p><div><button class="btn small" id="cc-auto-forget" hidden>Забыть карту</button></div></div>
         <div class="switch" id="cc-stt-w" style="display:none;border:0;padding:4px 0 0"><div>Распознавать речь в облаке<span>Для слабого компьютера: голос в текст превращает сервер Dewiar (немного расходует заряд).</span></div>
           <label class="tg"><input type="checkbox" id="cc-stt"><i></i></label></div>
       </div>
@@ -2631,8 +2637,9 @@
       <div class="vl-fhead"><h3 id="vl-form-h">Новая запись</h3>
         <span class="vl-kind" id="vl-kind" role="group" aria-label="Что добавить"><button type="button" data-k="" aria-pressed="true">Пароль</button><button type="button" data-k="page" aria-pressed="false" title="Много паролей, ключей и адресов одним текстом — как на обычной странице, но зашифровано">Страница</button></span></div>
       <div class="vl-pg" id="vl-pg" hidden>
-        <label class="f"><span>Название</span><input type="text" id="vl-pname" maxlength="120" placeholder="Серверы, ключи API, коды от подъездов"></label>
-        <label class="f"><span>Текст — хранится зашифрованным, как пароли</span><textarea id="vl-ptext" spellcheck="false" autocomplete="off" placeholder="Пишите как на обычной странице: по строке на сервис, адреса, ключи, ответы на секретные вопросы…"></textarea></label>
+        <div class="vl-view" id="vl-view" hidden></div>
+        <label class="f vl-pe"><span>Название</span><input type="text" id="vl-pname" maxlength="120" placeholder="Серверы, ключи API, коды от подъездов"></label>
+        <label class="f vl-pe"><span>Текст — хранится зашифрованным, как пароли</span><textarea id="vl-ptext" spellcheck="false" autocomplete="off" placeholder="Пишите как на обычной странице: по строке на сервис, адреса, ключи, ответы на секретные вопросы…"></textarea></label>
       </div>
       <div class="vl-grid" id="vl-grid">
         <label class="f"><span>Что это</span><input type="text" id="vl-name" maxlength="120" placeholder="Почта Яндекса, вайфай дома, домофон"></label>
@@ -2645,7 +2652,7 @@
         <label class="f"><span>Сайт <i>необязательно</i></span><input type="text" id="vl-url" maxlength="300" placeholder="mail.yandex.ru" autocomplete="off"></label>
         <label class="f vl-wide"><span>Заметка <i>необязательно</i></span><input type="text" id="vl-note" maxlength="300" placeholder="секретный вопрос, номер договора…"></label>
       </div>
-      <div class="actions" style="margin:0"><button class="btn primary" id="vl-save" type="submit">Сохранить</button><button class="btn" id="vl-pcopy" type="button" hidden>Скопировать всё</button><button class="btn" id="vl-cancel" type="button">Отмена</button>
+      <div class="actions" style="margin:0"><button class="btn primary" id="vl-pedit" type="button" hidden>Изменить</button><button class="btn primary" id="vl-save" type="submit">Сохранить</button><button class="btn" id="vl-pcopy" type="button" hidden>Скопировать всё</button><button class="btn" id="vl-cancel" type="button">Отмена</button>
         <span style="flex:1"></span><button class="btn danger" id="vl-del" type="button" hidden>Удалить</button></div>
       <p class="res" id="vl-res"></p>
     </form>
@@ -2789,6 +2796,18 @@
       <div class="actions" style="margin:0"><button class="btn primary" id="sc-go">Проверить всё</button><button class="btn" id="ab-news">✨ Что нового</button><button class="btn" id="ab-intro" title="Персонаж сам расскажет о себе голосом, проверит микрофон и покажет кнопки">👋 Познакомиться заново</button></div>
       <div class="sclist" id="sc-list"></div>
     </div>
+    <!-- №326: «Обновления» — сразу под «Проверкой», выше «Сообщить о проблеме» -->
+    <div class="prof on" style="padding:16px 18px;margin-bottom:18px">
+      <h3 style="font-size:15px;margin-bottom:6px">Обновления</h3>
+      <p class="hint" id="up-state">Проверяю…</p>
+      <div class="md" id="up-notes" style="margin-top:8px;font-size:13.5px"></div>
+      <div class="actions" style="margin-top:10px">
+        <button class="btn primary" id="up-install" style="display:none">Обновить</button>
+        <button class="btn" id="up-check">Проверить сейчас</button>
+      </div>
+      <div class="switch" style="margin-top:12px"><div data-i18n="st.upd.auto">Ставить обновления самой<span data-i18n="st.upd.auto.tip">Windows: скачанное обновление ставится, когда вы минут десять не трогаете мышь и клавиатуру, — без вопросов, за минуту, всё ваше сохраняется. На Linux система спрашивает пароль — там только по кнопке «Обновить».</span></div><label class="tg"><input type="checkbox" data-k="updates.auto_install"><i></i></label></div>
+      <label class="f" style="margin-top:12px">Адрес обновлений<input type="url" placeholder="https://dewiar.pro/dwrapp/latest.json" data-k="updates.url"></label>
+    </div>
     <div class="prof on bug" id="bug" style="padding:16px 18px;margin-bottom:18px">
       <h3 style="font-size:15px;margin-bottom:6px">Сообщить о проблеме</h3>
       <p class="hint" style="margin-bottom:12px">Что-то не так — напишите пару слов. Разработчик увидит ваши слова, снимок экрана и журнал работы
@@ -2818,17 +2837,6 @@
       <div id="bug-thanks"></div>
       <div class="switch" style="margin-top:12px"><div>Отправлять отчёт самому, если что-то сломалось<span>Только при ошибках, не чаще раза в полдня на одну и ту же. В отчёте — журнал работы (в нём бывают ваши последние фразы ассистенту) и настройки без ключей и паролей.</span></div><label class="tg"><input type="checkbox" data-k="report.auto"><i></i></label></div>
       <div class="switch"><div>Анонимный пульс для разработчика<span>Раз в несколько часов: версия, система, за сколько секунд запустился, сколько было сбоев и их текст. Без разговоров, файлов, ключей и имени компьютера — так разработчик видит, что у людей ломается чаще всего.</span></div><label class="tg"><input type="checkbox" data-k="report.pulse"><i></i></label></div>
-    </div>
-    <div class="prof on" style="padding:16px 18px;margin-bottom:18px">
-      <h3 style="font-size:15px;margin-bottom:6px">Обновления</h3>
-      <p class="hint" id="up-state">Проверяю…</p>
-      <div class="md" id="up-notes" style="margin-top:8px;font-size:13.5px"></div>
-      <div class="actions" style="margin-top:10px">
-        <button class="btn primary" id="up-install" style="display:none">Обновить</button>
-        <button class="btn" id="up-check">Проверить сейчас</button>
-      </div>
-      <div class="switch" style="margin-top:12px"><div data-i18n="st.upd.auto">Ставить обновления самой<span data-i18n="st.upd.auto.tip">Windows: скачанное обновление ставится, когда вы минут десять не трогаете мышь и клавиатуру, — без вопросов, за минуту, всё ваше сохраняется. На Linux система спрашивает пароль — там только по кнопке «Обновить».</span></div><label class="tg"><input type="checkbox" data-k="updates.auto_install"><i></i></label></div>
-      <label class="f" style="margin-top:12px">Адрес обновлений<input type="url" placeholder="https://dewiar.pro/dwrapp/latest.json" data-k="updates.url"></label>
     </div>
     <details class="prof on ctxv" id="ctxv" style="padding:14px 18px;margin-top:18px">
       <summary><b>Для отладки: что Лира сейчас учитывает</b> <span class="hint">— из чего складывается каждый её ответ</span></summary>
@@ -3000,6 +3008,7 @@
 <script src="studio/devices.js"></script>
 <script src="studio/qa.js"></script>
 <script src="studio/course.js"></script>
+<script src="assets/secretpage.js"></script>
 <script src="studio/vault.js"></script>
 <script src="studio/snapshot.js"></script>
 <script src="studio/capture.js"></script>
@@ -3011,6 +3020,7 @@
 <script src="studio/watch.js"></script>
 <script src="studio/art.js"></script>
 <script src="studio/plugpage.js"></script>
+<script src="studio/transcribe.js"></script>
 <script src="studio/plugmake.js"></script>
 <script src="studio/ideas.js"></script>
 <script src="studio/node.js"></script>

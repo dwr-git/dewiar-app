@@ -328,6 +328,14 @@ class Cloud:
         body = {k: v for k, v in (("day", day), ("month", month)) if v is not None and str(v).strip() != ""}
         return fetch(self.url, self.key, "/limits", body=body)
 
+    def autopay_set(self, args):
+        """1.0.32: автопополнение — on, below, amount, cap, forget (POST /autopay). Без сохранённой карты сайт отвечает
+        need_card и адресом страницы оплаты (setup.url)."""
+        if not self.key:
+            raise CloudError("сначала подключите ключ Dewiar")
+        body = {k: args[k] for k in ("on", "below", "amount", "cap", "forget") if k in args and args[k] not in (None, "")}
+        return fetch(self.url, self.key, "/autopay", body=body)
+
     def topup_info(self):
         return fetch(self.url, self.key, "/topup") if self.key else {}
 

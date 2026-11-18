@@ -89,6 +89,9 @@ with sync_playwright() as p:
     ok(abs(rd - rn) < 3, "будущее — на внешней дорожке")
     feed = pg.inner_text("#pu-feed")
     ok(pg.is_visible(".pu-pick") and "Из Радара" in feed and "Fable 5.2" in feed and "Про новый Fable" in feed, "тихо — в «Сегодня» находка Радара с сутью")
+    st = pg.evaluate("(() => { const c = getComputedStyle(document.querySelector('.pu-stage')); return [c.boxShadow, c.backgroundImage, c.backdropFilter]; })()")
+    ok(st[0].count("inset") <= 2 and not st[0].startswith("rgb(184") and "rgba(36, 50, 74" in st[0] and "linear-gradient" in st[1] and "blur" in st[2],
+       f"светлая тема: сцена — матовое стекло, не вдавленная (владелец 18.11): {st[0][:80]}…")
     pg.click(".pu-pick")
     ok(not errs, f"без ошибок: {errs}")
     if os.environ.get("PULT_SHOTS"):

@@ -140,11 +140,12 @@ function plpTabs() {
   const r = PLP.page, p = r.plugin, tabs = [];
   if (p.page && p.installed) tabs.push(["page", (p.ui && p.ui.page_title) || "Своя страница"]);
   if (p.id === "artist" && p.installed) tabs.push(["art", "Рисунки"]);
-  if (!p.made || r.tools.length || (p.ui && (p.ui.asks || []).length)) tabs.push(["do", "Сделать сейчас"]);
+  if (p.id === "transcribe" && p.installed) tabs.push(["tr", "Расшифровки"]);   // 1.0.33: своя вкладка (ui/studio/transcribe.js)
+  if (p.id !== "transcribe" && (!p.made || r.tools.length || (p.ui && (p.ui.asks || []).length))) tabs.push(["do", "Сделать сейчас"]);
   if (p.made) tabs.push(["edit", "Изменить и версии"]);
   if ((p.data || []).length || p.theme) tabs.push(["access", "Доступ"]);
   if (p.settings.length || p.jobs.length) tabs.push(["set", "Настройки"]);
-  if (!p.made || r.tools.length) tabs.push(["files", "Файлы"]);
+  if ((!p.made || r.tools.length) && p.id !== "transcribe") tabs.push(["files", "Файлы"]);
   return tabs;
 }
 function plpRender() {
@@ -166,6 +167,7 @@ function plpBody() {
   const b = $("#plp-body"); if (!b) return;
   if (PLP.tab === "page") return plpFrame(b);
   if (PLP.tab === "art") return plpArt(b);
+  if (PLP.tab === "tr" && typeof trPage === "function") return trPage(b);
   if (PLP.tab === "set") return plpSettings(b);
   if (PLP.tab === "files") return plpFiles(b);
   if (PLP.tab === "edit") return plpEdit(b);

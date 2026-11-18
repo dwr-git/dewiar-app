@@ -57,6 +57,8 @@ with sync_playwright() as p:
             pg.close(); continue
         chip = pg.evaluate("[document.querySelector('#sn-chip').classList.contains('old'), document.querySelector('#sn-chip small').textContent]")
         ok(chip[1].startswith("сегодня в") and not chip[0], f"на «Главной» — «Слепок знаний»: когда последний, зелёный: {chip}")
+        ok(pg.is_visible("#sn-chip b") and pg.is_visible("#sn-chip small") and not pg.get_attribute("#sn-chip", "title"),
+           "владелец 18.11: свежий слепок — кнопка всё равно с подписью и временем (не значок), без подсказки у края окна")
         if SHOT: pg.screenshot(path=f"{SHOT}/sn-chip.png", clip={"x": 180, "y": 0, "width": 1100, "height": 300})
         pg.click("#sn-chip"); pg.wait_for_timeout(300)
         ok(pg.is_visible("#sn-pop") and "Последний — сегодня" in pg.text_content("#sn-pop") and "48,0 МБ" in pg.text_content("#sn-pop"), "меню: последний слепок и размер")
