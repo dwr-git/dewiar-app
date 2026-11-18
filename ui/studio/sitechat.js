@@ -158,6 +158,22 @@ async function scTgSet(token) {
     if (!await ask(q, { ok: own ? t("sc.off.own.ok") : "Отключить" })) return;
     try { SC.d = await core.call("sitechat_forget", { site: SC.site }); toast(own ? t("sc.off.own.done") : "Чат отключён"); scSites(); scLive(); } catch (e) { toast(e.message, 4000); }
   };
+  $("#sc-site-go").onclick = async () => {
+    const url = $("#sc-site-url").value.trim(), r = $("#sc-site-res"), b = $("#sc-site-go");
+    if (!url) { $("#sc-site-url").focus(); return; }
+    b.disabled = true; r.className = "sc-hint"; r.textContent = "Читаю сайт…";
+    try {
+      const d = await core.call("sitechat_from_site", { url });
+      const kb = $("#sc-kb"), add = `— С сайта ${d.host} —\n${d.text}`;
+      kb.value = (kb.value.trim() ? kb.value.trim() + "\n\n" : "") + add;
+      scDraft();
+      r.className = "sc-hint ok";
+      r.textContent = `Добавлено ${d.pages.length} стр. (${d.pages.map(x => x.title).slice(0, 4).join("; ")}). Проверьте текст выше: лишнее уберите, цены уточните — консультант отвечает только по нему.`;
+      kb.scrollTop = kb.scrollHeight;
+    } catch (e) { r.className = "sc-hint bad"; r.textContent = e.message; }
+    finally { b.disabled = false; }
+  };
+  $("#sc-site-url").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#sc-site-go").click(); } };
   $("#sc-tg-go").onclick = () => { const v = $("#sc-tg-tok").value.trim(); if (!v) { $("#sc-tg-tok").focus(); return; } scTgSet(v); };
   $("#sc-tg-tok").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#sc-tg-go").click(); } };
   $("#sc-tg-off").onclick = async () => { if (await ask("Отключить бота? Клиенты в Telegram перестанут получать ответы. Сам бот в @BotFather останется.", { ok: "Отключить" })) scTgSet(""); };

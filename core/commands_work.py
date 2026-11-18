@@ -111,6 +111,8 @@ class WorkCommands:
                     return W.public(site=site)
                 if cmd == "sitechat_forget":
                     return W.forget(site=site)
+                if cmd == "sitechat_from_site":        # «Взять с сайта»: текст главной и страниц цен, услуг, контактов
+                    return W.from_site(a.get("url") or "")
                 if cmd == "sitechat_tg":               # свой бот компании в Telegram — тот же консультант (18.11)
                     return W.tg(a.get("token") or "", site=site)
                 if cmd == "sitechat_poll":

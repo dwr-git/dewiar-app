@@ -161,6 +161,8 @@ class TalkCommands:
                 self.s.update({"ui": {"text_mode": False}, "tts": {"engine": ui.get("text_prev") or self._tts_local()}})
                 if self.s.get("privacy", "mic") != "button":
                     self._mute_keep(self.set_mute(False))
+                if not getattr(self.stt, "ready", True):        # распознавание в текстовом режиме не грузили (№876) — теперь
+                    threading.Thread(target=self._background_loads, name="loader", daemon=True).start()
             try:
                 self.apply_engines()
             except Exception as e:  # noqa: BLE001

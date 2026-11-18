@@ -414,6 +414,7 @@
   "server_update",
   "settings_save",
   "sitechat_forget",
+  "sitechat_from_site",
   "sitechat_get",
   "sitechat_poll",
   "sitechat_publish",

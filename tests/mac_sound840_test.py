@@ -32,5 +32,30 @@ ok("setTitlebarAppearsTransparent_(True)" in mac and "(1 << 15)" in mac and "sea
    "студия на Mac: строка заголовка прозрачная, страница под ней")
 ok("mac-seam" in mac and "html.mac-seam main" in (ROOT / "ui/studio/studio.css").read_text(encoding="utf-8"),
    "страница даёт место светофору сверху")
+# №879 (18.11, 1.0.32: «полоса всё ещё портит интерфейс»): native бывает обёрткой — окно берём у неё; без линии под
+# строкой; страница — во всю высоту; результат — в журнал окна
+import types as _ty  # noqa: E402
+sys.path.insert(0, str(ROOT / "ui"))
+_pt = _ty.ModuleType("PyObjCTools"); _ah = _ty.ModuleType("PyObjCTools.AppHelper"); _ah.callAfter = lambda fn: fn(); _pt.AppHelper = _ah
+sys.modules.setdefault("PyObjCTools", _pt); sys.modules.setdefault("PyObjCTools.AppHelper", _ah)
+import macui  # noqa: E402
+_calls = []
+
+
+class _NS:
+    m = 15
+    def setTitlebarAppearsTransparent_(self, v): _calls.append("transparent")
+    def setTitleVisibility_(self, v): _calls.append("notitle")
+    def styleMask(self): return self.m
+    def setStyleMask_(self, v): self.m = v
+    def setTitlebarSeparatorStyle_(self, v): _calls.append(("sep", v))
+    def contentView(self): return _ty.SimpleNamespace(setFrameSize_=lambda x: _calls.append(("full", x)))
+    def frame(self): return _ty.SimpleNamespace(size=_ty.SimpleNamespace(width=1200, height=800))
+
+
+macui.seamless(_ty.SimpleNamespace(native=_ty.SimpleNamespace(window=_NS())))
+ok("transparent" in _calls and ("sep", 1) in _calls and ("full", (1200, 800)) in _calls,
+   f"№879: окно берётся и у обёртки pywebview; без линии; страница во всю высоту: {_calls}")
+ok("win.events.loaded += lambda *a: (seamless(win)" in mac, "№879: ещё раз — когда страница загрузилась")
 print("\nИТОГ:", "всё прошло" if not fails else f"провалов {len(fails)}")
 sys.exit(1 if fails else 0)

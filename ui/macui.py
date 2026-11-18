@@ -166,12 +166,24 @@ def seamless(win):
     за верхний край; отступ сверху даёт страница (html.mac-seam в studio.css)."""
     def run():
         nw = getattr(win, "native", None)
-        if nw is None:
+        # №879 (18.11, 1.0.32: «полоса с тремя кнопками всё ещё портит интерфейс»): у части версий pywebview native — не
+        # само NSWindow, а его обёртка; берём окно и у неё. Что вышло — в журнал окна (разбор по отчёту)
+        if nw is not None and not hasattr(nw, "setTitlebarAppearsTransparent_"):
+            nw = getattr(nw, "window", None) or getattr(nw, "native", None)
+        if nw is None or not hasattr(nw, "setTitlebarAppearsTransparent_"):
+            log(f"строка заголовка студии: нет окна Cocoa ({type(getattr(win, 'native', None)).__name__})")
             return
         try:
             nw.setTitlebarAppearsTransparent_(True)
             nw.setTitleVisibility_(1)                          # NSWindowTitleHidden
             nw.setStyleMask_(nw.styleMask() | (1 << 15))       # NSWindowStyleMaskFullSizeContentView
+            if hasattr(nw, "setTitlebarSeparatorStyle_"):
+                nw.setTitlebarSeparatorStyle_(1)               # NSTitlebarSeparatorStyleNone (macOS 11+): без линии
+            cv = nw.contentView()
+            if cv is not None and hasattr(nw, "frame"):        # страница — под строку заголовка, во всю высоту окна
+                f = nw.frame()
+                cv.setFrameSize_((f.size.width, f.size.height))
+            log(f"строка заголовка студии: прозрачная (маска {int(nw.styleMask())})")
         except Exception as e:  # noqa: BLE001 — старый macOS: остаётся обычная строка заголовка
             log(f"строка заголовка студии: {e}")
     _main(run)
@@ -320,9 +332,23 @@ class MacWindows:
         return p
 
     def show(self):
+        """Виджет на имя (№880, 18.11, Mac: «слышу звук, что виджет открылся, а на экране его нет — показывается с
+        четвёртого-пятого раза»): окно могло остаться за краем (экран отключили, сменилось разрешение) — сначала на
+        видимый экран; поверх — ещё раз чуть позже (на случай, если в этот момент его прятало «скрыть по таймеру»).
+        Что вышло — в журнал окна."""
         if self.in_tray:
             self.popped = True
-        front(self.wins[self.mode])
+        win = self.wins[self.mode]
+        try:
+            x, y = self.get_pos(self.mode)
+            cx, cy = self._clamp(self.mode, x, y)
+            if (cx, cy) != (x, y):
+                win.move(cx, cy)
+                log(f"виджет: был за краем экрана ({x}, {y}) — вернула на ({cx}, {cy})")
+        except Exception as e:  # noqa: BLE001
+            log(f"виджет: положение не проверить: {e}")
+        front(win)
+        threading.Timer(0.35, lambda: front(win)).start()
 
     def _hide_now(self):
         self.wins[self.mode].hide()
@@ -468,7 +494,7 @@ class MacWindows:
         self._studio, self._studio_born = win, time.monotonic()
         win.events.closed += lambda *a: self._studio_closed(win)
         win.events.shown += lambda *a: (seamless(win), front(win, activate=True))
-        win.events.loaded += lambda *a: win.evaluate_js("document.documentElement.classList.add('mac-seam')")
+        win.events.loaded += lambda *a: (seamless(win), win.evaluate_js("document.documentElement.classList.add('mac-seam')"))
         if hasattr(win.events, "resized"):
             win.events.resized += lambda *a: self._studio_resized(win, *a[:2])
 
@@ -855,6 +881,14 @@ def status_item(api, items):
         mi.setTag_(i)
         menu.addItem_(mi)
     item.setMenu_(menu)
+    # №880 (18.11, macOS 27: «значка в строке меню просто нет»): значок, который когда-то утащили с Cmd из строки, macOS
+    # помнит скрытым — показываем явно; что вышло — в журнал окна
+    try:
+        if hasattr(item, "setVisible_"):
+            item.setVisible_(True)
+        log(f"значок в строке меню: {'картинка' if img is not None else 'надпись'}, виден: {bool(item.isVisible()) if hasattr(item, 'isVisible') else '?'}")
+    except Exception as e:  # noqa: BLE001
+        log(f"значок в строке меню: {e}")
     STATUS[:] = [item, target, menu]
     return item
 

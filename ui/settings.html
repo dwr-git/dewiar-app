@@ -1203,6 +1203,11 @@
           <label class="f">О чём он<textarea id="sc-brief" rows="3" maxlength="1500" placeholder="Ты консультант магазина чая: помогаешь выбрать, рассказываешь о доставке и скидках."></textarea></label>
           <label class="f"><span class="sc-lbl">Знания: цены, адрес, часы работы, доставка <small id="sc-kbn"></small></span>
             <textarea id="sc-kb" rows="9" placeholder="Вставьте прайс, ответы на частые вопросы, условия доставки… Чего здесь нет — консультант не придумает."></textarea></label>
+          <div class="sc-site">  <!-- «Взять с сайта» (sitechat.from_site): текст главной и страниц цен, услуг, контактов — в знания -->
+            <input type="text" id="sc-site-url" placeholder="ваш сайт, например elektro-plus.ru" autocomplete="off" spellcheck="false" aria-label="Адрес сайта компании">
+            <button class="btn small" type="button" id="sc-site-go">Взять с сайта</button>
+          </div>
+          <p class="sc-hint" id="sc-site-res">Лира прочитает главную и страницы с ценами, услугами и контактами и добавит текст в знания — проверьте и поправьте его.</p>
           <label class="sc-tgl"><span><b>Добавить документы из папок персонажа</b><small id="sc-foldtip">текст файлов уйдёт на сервер Dewiar вместе со знаниями</small></span><span class="tg"><input type="checkbox" id="sc-fold"><i></i></span></label>
           <p class="sc-fit" id="sc-foldfit" role="status" hidden></p>
           <div class="sc-lims"><label class="f">Одному посетителю в день<input type="number" id="sc-pi" min="1" max="500"></label><label class="f">Всем в день<input type="number" id="sc-pd" min="1" max="5000"></label></div>
@@ -1684,7 +1689,9 @@
     <div class="dv-card dv-brains" id="dv-brains">
       <div><h2>Мозги с другого устройства</h2>
         <p class="hint">Настроили модель на другом компьютере или телефоне — возьмите её сюда одной кнопкой: адрес, модель и ключ придут
-          зашифрованными, только вашим устройствам. Ваша модель здесь останется главной; выбрать новую — в «Мозге».</p></div>
+          зашифрованными, только вашим устройствам. Ваша модель здесь останется главной; выбрать новую — в «Мозге».
+          Модели с ключом (OpenAI, DeepSeek, OpenRouter…) работают отовсюду; своя модель того компьютера (Ollama, LM Studio) — только
+          в одной с ним домашней сети.</p></div>
       <div class="dv-acts"><button class="btn" id="dv-brains-go" type="button">Взять мозги</button></div>
       <p class="res" id="dv-brains-res"></p>
     </div>

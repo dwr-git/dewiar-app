@@ -840,7 +840,32 @@ class Telegram:
         except TelegramError as e:
             log.warning("Telegram: не отправилось: %s", e)
             self.problem = str(e)
+            if self.shared() and "не привязан" in str(e):
+                self._lost_link()
             return False
+
+    def _lost_link(self):
+        """№874 (18.11: «пишет „подключён… владелец“ и тут же „Telegram ещё не привязан“; из телеги — компьютеры не на
+        связи»): сервер бота Dewiar не знает привязки этого компьютера (ключ сменился, вошли в аккаунт или вышли), а здесь
+        владелец остался записанным. Привязка есть у аккаунта — подхватить; нет — забыть устаревшего владельца и показать
+        свежий код: студия сама покажет «отправьте боту код», а не два противоречащих статуса. -> подхвачен ли."""
+        if self._adopt():
+            self.problem = ""
+            return True
+        with self._lock:
+            if not self.data.get("owner"):
+                return False
+            log.warning("%s: сервер не знает привязки этого компьютера — владелец забыт, нужен новый код", self.TITLE)
+            self.data["owner"] = None
+            self.data["code_at"] = 0
+            self._save()
+        self._code_try = 0.0
+        if not self._code_fresh():
+            try:
+                self.on_message("nodes", {})
+            except Exception:  # noqa: BLE001
+                log.debug("%s: событие о потере привязки", self.TITLE, exc_info=True)
+        return False
 
     def ask_confirm(self, question):
         """Вопрос с кнопками «Да/Нет»; нажатие придёт в on_message("confirm", {"ok": …})."""

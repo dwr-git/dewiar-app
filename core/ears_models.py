@@ -140,7 +140,10 @@ class ModelsMixin:
         """Поток loader: загрузка GigaAM (до готовности распознаёт Vosk, см. current_stt) и голоса персонажа."""
         low_priority()
         self._names_note()
-        if isinstance(self.stt, GigaAMSTT) and not self.stt.ready:
+        text_only = bool(self.s.get("ui", "text_mode"))         # №876: микрофона нет — распознавание не нужно, запуск быстрее
+        if text_only and isinstance(self.stt, GigaAMSTT) and not self.stt.ready:
+            log.info("⌨ Текстовый режим — точное распознавание не загружаю (включится вместе с голосом)")
+        if not text_only and isinstance(self.stt, GigaAMSTT) and not self.stt.ready:
             self.note("Загружаю GigaAM (при первом запуске ~250 МБ) — пока распознаю запасной моделью")
             self._load("stt", "Точное распознавание речи" if self.stt.cached() else "Скачиваю точное распознавание речи (~250 МБ)")
             if not self.stt.cached():

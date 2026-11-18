@@ -291,6 +291,9 @@ class MicMixin:
                 self.s.update({"audio": {"mic_hint_at": int(time.time())}})
             except Exception:  # noqa: BLE001
                 pass
+        if not real or (fake and not real):                 # №876: настоящего микрофона нет — может, он и не нужен
+            text += (" Микрофона нет и не будет? Включите «Текстовый режим» (студия → «Чат», внизу): Лира не будет его слушать "
+                     "и не станет загружать распознавание — запуск быстрее.")
         self._mic_hint_at = time.monotonic()
         log.warning("🎤 %s от микрофона %s — %s (микрофоны: %s)", "15 с" if exact else "Минута", "полная тишина (нули)" if exact else "почти тишина (пик ≤ 3)",
                     text[:80], ", ".join(names) or "—")

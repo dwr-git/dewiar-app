@@ -140,6 +140,40 @@ ok(UI.Api.drop_paths(["file:///home/u/%D0%A1%D1%87%D1%91%D1%82%201.pdf", "https:
 asrc = (ROOT / "ui/app.py").read_text(encoding="utf-8")
 ok('wv.connect("drag-data-received", on_data)' in asrc and 'wv.connect("drag-drop", on_drop)' in asrc and "_drop_hook(PAD_TITLE, win)" in asrc
    and "_drop_hook(STUDIO_TITLE, win)" in asrc, "окно блокнота и студии на Linux слушают перетаскивание сами (GTK)")
+# 18.11 (владелец: «на работе перетаскивание работало, дома после обновления — „Файл не дошёл до окна“»): Wayland и новые
+# «Файлы» отдают ключ портала вместо file:// — меняем его на пути (FileTransfer.RetrieveFiles); виды — в журнал
+import types as _t  # noqa: E402
+_seen = []
+
+
+class _Res:
+    def unpack(self): return (["/home/u/Счёт.pdf", "relative/skip"],)
+
+
+class _Bus:
+    def call_sync(self, name, path, iface, method, args, rtype, flags, timeout, cancel):
+        _seen.append((name, iface, method, args)); return _Res()
+
+
+_gi = _t.ModuleType("gi"); _rep = _t.ModuleType("gi.repository")
+_rep.GLib = _t.SimpleNamespace(Variant=lambda sig, val: (sig, val), VariantType=_t.SimpleNamespace(new=lambda x: x))
+_rep.Gio = _t.SimpleNamespace(DBusCallFlags=_t.SimpleNamespace(NONE=0), BusType=_t.SimpleNamespace(SESSION=0), bus_get_sync=lambda *a: _Bus())
+_gi.repository = _rep
+_old = {k: sys.modules.get(k) for k in ("gi", "gi.repository")}
+sys.modules["gi"], sys.modules["gi.repository"] = _gi, _rep
+try:
+    got = UI.Api.portal_paths("abc123\x00", bus=_Bus())
+finally:
+    for k, v in _old.items():
+        if v is None:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v
+ok(got == ["/home/u/Счёт.pdf"] and _seen and _seen[0][1:3] == ("org.freedesktop.portal.FileTransfer", "RetrieveFiles") and _seen[0][3] == ("(sa{sv})", ("abc123", {})),
+   f"ключ портала (Wayland, новые «Файлы») — пути через FileTransfer.RetrieveFiles: {got}")
+ok(UI.Api.portal_paths("") == [], "пустой ключ — ничего")
+ok('"application/vnd.portal.filetransfer"' in asrc and "w.drag_get_data(ctx" in asrc and "перетаскивание в «{title}»: виды" in asrc,
+   "нет file:// — окно само просит ключ портала; что предложил источник — в журнал")
 src = (ROOT / "core/commands_sync.py").read_text(encoding="utf-8")
 ok('if cmd == "drive_add_path":' in src and "src.is_file()" in src and "FILE_MAX" in src, "ядро берёт файл по пути само и проверяет вид и размер")
 print("\nИТОГ: " + ("всё прошло" if not fails else f"не прошло {len(fails)}"))

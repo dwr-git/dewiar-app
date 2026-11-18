@@ -80,7 +80,13 @@ APP_ALIASES = {"телеграм": "telegram", "телеграмм": "telegram",
                "фаерфокс": "firefox", "файрфокс": "firefox", "мозилла": "firefox", "терминал": "terminal",
                "консоль": "terminal", "вскод": "code", "вс код": "code", "визуал студио": "code", "стим": "steam",
                "дискорд": "discord", "спотифай": "spotify", "зум": "zoom", "обс": "obs", "вайбер": "viber",
-               "ватсап": "whatsapp", "либреофис": "libreoffice", "ворд": "writer", "эксель": "calc",
+               "ватсап": "whatsapp", "либреофис": "libreoffice", "ворд": ("word", "writer"), "эксель": ("excel", "calc"),
+               "майкрософт ворд": "word", "майкрософт эксель": "excel", "пауэрпоинт": ("powerpoint", "impress"),
+               "пауэр поинт": ("powerpoint", "impress"), "аутлук": "outlook", "фотошоп": "photoshop", "адоб фотошоп": "photoshop",
+               "иллюстратор": "illustrator", "корел": "coreldraw", "корел дро": "coreldraw", "корел драв": "coreldraw",
+               "корел дроу": "coreldraw", "корэл": "coreldraw", "coral draw": "coreldraw", "coral dro": "coreldraw",
+               "автокад": "autocad", "скайп": "skype", "эдж": "edge", "яндекс браузер": "yandex", "блокнот": "notepad",
+               "калькулятор": "calculator", "пейнт": "paint", "компас": "kompas", "1с": "1cv8", "один эс": "1cv8",
                "настройки": "settings", "файлы": "files", "яндекс музыка": "yandex music", "яндекс музыку": "yandex music",
                "яндекс.музыка": "yandex music", "проводник": "files", "гимп": "gimp", "блендер": "blender"}
 
@@ -94,17 +100,31 @@ def find_app(query, apps):
     """Программа по словам пользователя -> элемент apps | None. Сравниваем с названием, русским названием, id
     и ключевыми словами (как есть, через APP_ALIASES и транслитерацию); ниже похожести 0.72 — не угадываем."""
     import difflib
-    q = query.lower().strip()
-    variants = {q, APP_ALIASES.get(q, q), "".join(_TR.get(ch, ch) for ch in q)}
+    q = re.sub(r"^(?:программ[уа]|приложение)\s+", "", query.lower().strip())
+    al = APP_ALIASES.get(q, q)
+    variants = {q, "".join(_TR.get(ch, ch) for ch in q), *((al,) if isinstance(al, str) else al)}
+    variants |= {v.replace(" ", "") for v in variants if " " in v}          # «corel draw» — и «coreldraw»
+    plain = lambda n: re.sub(r"\s*(\((?:x?64|32)[- ]?bit\)|x64|x86|\b(?:19|20)\d\d\b|\bv?\d+(\.\d+)+\b)", " ", n).strip()
     best, score = None, 0.0
     for a in apps:
-        names = [a["name"], a["ru"], a["id"].split(".")[-1]] + [k for k in a["keywords"].split(";") if k]
-        for n in names:
-            n = n.lower().strip()
+        # №878 (18.11): «CorelDRAW» открыл «Corel CAPTURE 2020 (64-Bit)» — у того в словах есть папка «Corel», а «corel»
+        # входит в «coreldraw» (0,9 — столько же, сколько у самого CorelDRAW). Теперь: название содержит запрос — выше,
+        # чем запрос содержит кусок названия (папку, производителя); годы и «(64-Bit)» не мешают
+        names = [(a["name"], 1.0), (a["ru"], 1.0), (a["id"].split(".")[-1], 0.95)] + [(k, 0.9) for k in a["keywords"].split(";") if k]
+        for n, w in names:
+            n = plain(n.lower().strip())
             if not n:
                 continue
             for v in variants:
-                s = 1.0 if n == v else 0.9 if (v in n or n in v) and len(v) >= 3 else difflib.SequenceMatcher(None, v, n).ratio()
+                if n == v:
+                    s = 1.0
+                elif v in n and len(v) >= 3:
+                    s = 0.88 + 0.1 * len(v) / len(n)
+                elif n in v and len(n) >= 3:
+                    s = 0.74 + 0.1 * len(n) / len(v)
+                else:
+                    s = difflib.SequenceMatcher(None, v, n).ratio()
+                s *= w
                 if s > score:
                     best, score = a, s
     return best if score >= 0.72 else None
@@ -117,7 +137,8 @@ def t_open_app(a, ctx):
     if not app:
         sample = ", ".join(sorted({x["ru"] or x["name"] for x in apps})[:40])
         raise ToolError(f"не нашёл программу «{q}». Установлены, например: {sample}")
-    base.launch(["gio", "launch", app["path"]] if shutil.which("gio") or base.DRY or base.MAC else ["gtk-launch", app["id"]])
+    # №878: в Windows ярлык открываем по пути (раньше уходило имя — «[WinError 2] Не удается найти указанный файл»)
+    base.launch(["gio", "launch", app["path"]] if shutil.which("gio") or base.DRY or base.MAC or base.WIN else ["gtk-launch", app["id"]])
     if ctx.get("music_app") and re.search(r"yandex.?music|яндекс.?музык", f"{app.get('id', '')} {app['name']} {app['ru']}".lower()):
         ctx["music_app"]("yandex")                  # запомнить: следующие «включи электронную», «играй» — в ней
     return f"Запустил {app['ru'] or app['name']}"

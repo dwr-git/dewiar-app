@@ -2264,6 +2264,27 @@ class Api:
                     out.append(pth)
         return out
 
+    PORTAL_DND = ("application/vnd.portal.filetransfer", "application/vnd.portal.files")
+
+    @staticmethod
+    def portal_paths(key, bus=None):
+        """Файлы из перетаскивания через портал (Ubuntu с Wayland, новые «Файлы»/Nautilus на GTK4 и программы в Snap/Flatpak
+        отдают не адреса file://, а ключ передачи — №18.11, владелец: «на работе перетаскивание работало, дома после
+        обновления — „Файл не дошёл до окна“»). Ключ меняем на пути у xdg-desktop-portal: FileTransfer.RetrieveFiles. -> [пути]."""
+        key = str(key or "").strip().strip("\x00")
+        if not key:
+            return []
+        try:
+            from gi.repository import Gio, GLib
+            bus = bus or Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            res = bus.call_sync("org.freedesktop.portal.Documents", "/org/freedesktop/portal/documents",
+                                "org.freedesktop.portal.FileTransfer", "RetrieveFiles",
+                                GLib.Variant("(sa{sv})", (key, {})), GLib.VariantType.new("(as)"), Gio.DBusCallFlags.NONE, 3000, None)
+            return [str(x) for x in (res.unpack()[0] or []) if str(x).startswith("/")]
+        except Exception as e:  # noqa: BLE001
+            _ui_log(f"перетаскивание: портал не отдал файлы ({e.__class__.__name__}: {str(e)[:120]})")
+            return []
+
     def _drop_hook(self, title, win):
         """Владелец 17.11 (Ubuntu): «перетягиваю pdf на облако у блокнота и в студии — ничего не происходит, только
         кнопкой». Перетаскивание из файлового менеджера доходит до окна (GTK отдаёт адреса file://), а до страницы — не
@@ -2282,10 +2303,21 @@ class Api:
 
         def on_data(_w, _ctx, _x, _y, data, _info, _t):
             try:
-                uris = data.get_uris() or [ln for ln in (data.get_text() or "").splitlines()]
+                kind = data.get_data_type().name() if data.get_data_type() else ""
             except Exception:  # noqa: BLE001
-                uris = []
-            paths = self.drop_paths(uris)
+                kind = ""
+            if kind in self.PORTAL_DND:                   # портал: ключ передачи -> пути (portal_paths)
+                try:
+                    raw = bytes(data.get_data() or b"").decode("utf-8", "replace")
+                except Exception:  # noqa: BLE001
+                    raw = ""
+                paths = self.portal_paths(raw)
+            else:
+                try:
+                    uris = data.get_uris() or [ln for ln in (data.get_text() or "").splitlines()]
+                except Exception:  # noqa: BLE001
+                    uris = []
+                paths = self.drop_paths(uris)
             if paths:
                 st["paths"] = paths
             return False
@@ -2304,7 +2336,22 @@ class Api:
                 threading.Thread(target=run, daemon=True).start()
             return False
 
-        def on_drop(*_a):
+        def on_drop(w, ctx, _x, _y, t):
+            # что предлагает источник — в журнал (разбор: «Файл не дошёл до окна»); адресов file:// нет, а ключ портала
+            # есть — просим его сами: WebKit такого вида не знает и не попросит
+            try:
+                kinds = [a.name() for a in ctx.list_targets()]
+            except Exception:  # noqa: BLE001
+                kinds = []
+            _ui_log(f"перетаскивание в «{title}»: виды {', '.join(kinds[:8]) or '—'}")
+            if "text/uri-list" not in kinds:
+                want = next((k for k in self.PORTAL_DND if k in kinds), None)
+                if want:
+                    from gi.repository import Gdk
+                    try:
+                        w.drag_get_data(ctx, Gdk.Atom.intern(want, False), t)
+                    except Exception as e:  # noqa: BLE001
+                        _ui_log(f"перетаскивание: не попросить {want}: {e}")
             GLib.timeout_add(900, give)
             return False                                  # обычный путь WebKit — как был
 

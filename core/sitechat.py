@@ -239,6 +239,94 @@ class SiteChat:
             self._store({**self.cfg(site), "on": False}, site)
         return self.public(site=site)
 
+    # ---------- знания с сайта (18.11, «Компания»: «минимум ручных настроек») ----------
+    SITE_HINT = re.compile(r"(?i)цен|прайс|стоим|услуг|работ|каталог|контакт|о нас|о компании|доставк|оплат|гарант|вопрос|faq|"
+                           r"price|service|contact|about|delivery|payment|warranty")
+
+    def from_site(self, url, max_pages=8, limit=40000):
+        """«Взять с сайта»: главная и до max_pages страниц того же сайта, похожих на цены, услуги, контакты, доставку, вопросы,
+        — текстом (заголовки и абзацы строками, без меню, скриптов и повторов). -> {text, pages: [{url, title, chars}]}.
+        Человек видит текст в «Знаниях» и правит его сам — ничего не публикуется без «Опубликовать»."""
+        import html as _h
+        from urllib.parse import urljoin, urlparse
+        import httpx
+        url = str(url or "").strip()
+        if not re.match(r"(?i)^https?://", url):
+            url = "https://" + url
+        host = urlparse(url).netloc.lower()
+        if not host or "." not in host:
+            raise SiteChatError("впишите адрес сайта, например example.ru")
+
+        def get(u):
+            r = httpx.get(u, timeout=12, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (Dewiar; site knowledge)"})
+            if r.status_code >= 400 or "html" not in r.headers.get("content-type", "html"):
+                raise SiteChatError(f"сайт ответил {r.status_code}")
+            return str(r.url), r.text[:1_500_000]
+
+        def text_of(page):
+            t = re.sub(r"(?is)<(head|script|style|noscript|svg|nav|footer|form|iframe)[^>]*>.*?</\1>", " ", page)
+            t = re.sub(r"(?is)<!--.*?-->", " ", t)
+            t = re.sub(r"(?is)<a\s[^>]*>(.*?)</a>", "\x01\\1\x02", t)          # ссылки помечаем: строка из одних ссылок — меню
+            t = re.sub(r"(?i)</?(br|p|h[1-6]|tr|div|section|article|header|main|aside|dd|dt|ul|ol|table)\b[^>]*>", "\n", t)
+            t = re.sub(r"(?i)<li[^>]*>", "\n• ", t)
+            t = re.sub(r"<[^>]+>", " ", t)
+            out = []
+            for x in t.split("\n"):
+                if "\x01" in x and not re.search(r"\w{3}", re.sub(r"\x01.*?\x02|•", "", x)):
+                    continue                                      # одни ссылки — меню или список разделов
+                x = re.sub(r"[ \t\xa0]+", " ", _h.unescape(x.replace("\x01", "").replace("\x02", ""))).strip()
+                if len(x) >= 3 and not re.fullmatch(r"[\W\d_]+", x):
+                    out.append(x)
+            return out
+
+        def title_of(page):
+            m = re.search(r"(?is)<title[^>]*>(.*?)</title>", page)
+            return re.sub(r"\s+", " ", _h.unescape(m.group(1))).strip()[:120] if m else ""
+        try:
+            first, page = get(url)
+        except httpx.HTTPError as e:
+            raise SiteChatError(f"сайт не открылся: {e.__class__.__name__}") from e
+        host = urlparse(first).netloc.lower()
+        links = []
+        for m in re.finditer(r'(?is)<a\s[^>]*href=["\']([^"\'#]+)["\'][^>]*>(.*?)</a>', page):
+            u = urljoin(first, _h.unescape(m.group(1)).strip())
+            label = re.sub(r"<[^>]+>|\s+", " ", m.group(2)).strip()
+            pu = urlparse(u)
+            if pu.scheme not in ("http", "https") or pu.netloc.lower() != host or re.search(r"(?i)\.(pdf|jpe?g|png|gif|webp|zip|docx?|xlsx?)$", pu.path):
+                continue
+            u = u.split("#")[0]
+            if u.rstrip("/") == first.rstrip("/") or u in [x[0] for x in links]:
+                continue
+            if self.SITE_HINT.search(label + " " + pu.path):
+                links.append((u, label))
+        pages, seen, out, total = [], set(), [], 0
+        for u, pg in [(first, page)] + [(u, None) for u, _ in links[:max_pages]]:
+            if total >= limit:
+                break
+            if pg is None:
+                try:
+                    u, pg = get(u)
+                except (httpx.HTTPError, SiteChatError):
+                    continue
+            keep = []
+            for ln in text_of(pg):
+                k = ln.lower()
+                if k in seen:                              # меню, шапка, подвал — повторяются на каждой странице
+                    continue
+                seen.add(k)
+                keep.append(ln)
+            body = "\n".join(keep)[: max(0, limit - total)]
+            if len(body) < 40:
+                continue
+            ttl = title_of(pg) or urlparse(u).path or host
+            out.append(f"## {ttl}\n{body}")
+            total += len(body)
+            pages.append({"url": u, "title": ttl, "chars": len(body)})
+        if not pages:
+            raise SiteChatError("на сайте не нашлось текста — возможно, он собран скриптами; вставьте знания вручную")
+        log.info("💬 Знания с сайта %s: %d стр., %d знаков", host, len(pages), total)
+        return {"text": "\n\n".join(out), "pages": pages, "host": host}
+
     # ---------- свой бот в Telegram (18.11, пилот «Компания», часть А) ----------
     def tg(self, token, site=""):
         """Тот же консультант — ещё и в своём боте компании в Telegram; отвечает облако (компьютер может быть выключен).
