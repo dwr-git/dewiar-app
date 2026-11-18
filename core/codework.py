@@ -123,22 +123,26 @@ def _tail(path, n):
     return t.strip() or "(пока пусто)"
 
 
+TEST_PATH_RX = re.compile(r"(?:^|/)(?:tests?|__tests__|spec)/|(?:^|/)test_[^/]*\.py$|_test\.(?:py|go)$|"
+                          r"\.(?:test|spec)\.[cm]?[jt]sx?$", re.I)
+
+
+def is_test_path(rel):
+    """Файл тестов по пути: tests/…, test_*.py, *_test.py, *_test.go, *.test.js, *.spec.ts…"""
+    return bool(TEST_PATH_RX.search(str(rel).replace("\\", "/")))
+
+
 def check_syntax(p, rel):
-    """После записи: Python и JSON — проверить, что файл разбирается. -> "" или предупреждение для модели."""
+    """После записи: файл разбирается? (syntaxcheck: Python, JSON, JS, HTML, CSS, YAML, TOML, XML, bash, PHP) -> "" или
+    предупреждение для модели — со строкой, в ответе того же действия (харнесс 1.0.30)."""
     try:
-        if p.suffix == ".py":
-            compile(p.read_text(encoding="utf-8"), str(rel), "exec")
-        elif p.suffix == ".json":
-            import json
-            json.loads(p.read_text(encoding="utf-8"))
-    except SyntaxError as e:
-        return (f"\n⚠ После правки файл не разбирается: SyntaxError, строка {e.lineno}: {e.msg}"
-                + (f"\n    {e.text.rstrip()}" if e.text else "") + "\nИсправь это сразу.")
-    except ValueError as e:
-        return f"\n⚠ После правки JSON не разбирается: {e}. Исправь это сразу."
-    except OSError:
-        pass
-    return ""
+        import syntaxcheck
+        bad = syntaxcheck.syntax_error(p.read_text(encoding="utf-8"), p.suffix)
+    except (OSError, UnicodeDecodeError):
+        return ""
+    if not bad:
+        return ""
+    return f"\n⚠ После правки {rel} не разбирается: {bad}\nИсправь это сразу (code_read вокруг этой строки, затем code_edit)."
 
 
 # неточная правка куском — общий модуль textedit (им же пользуется file_edit задач, выпуск 2 «Больших задач»)
@@ -555,6 +559,66 @@ class CodeWork:
                     res.append(({"A": "added", "D": "deleted"}.get(st[0], "modified"), rel))
             return res
         return self._copy_changes()
+
+    # ---------- замок на тесты (харнесс 1.0.30, по образцу Aigen) ----------
+
+    def original(self, rel):
+        """Файл, каким он был в проекте до задачи -> bytes или None (его не было)."""
+        m = self.mode
+        if m.get("mode") == "git":
+            try:
+                return self.wgit("show", f"{m['base']}:{rel}", raw=True)
+            except CodeError:
+                return None
+        p = self.project / rel
+        try:
+            return p.read_bytes() if p.is_file() and not p.is_symlink() else None
+        except OSError:
+            return None
+
+    def touched_tests(self):
+        """Тесты, которые были в проекте до задачи и которые задача изменила или удалила -> [(статус, путь)]."""
+        return [(st, rel) for st, rel in self.changes() if st in ("modified", "deleted") and is_test_path(rel)]
+
+    def run_with_original_tests(self, command, rels, timeout=600):
+        """Прогнать тесты проекта на нынешнем коде, но с прежними (до задачи) версиями тестов rels: модель не может сделать
+        тесты «зелёными», переписав их. Файлы подменяются на время прогона и возвращаются в любом случае. -> вывод run."""
+        saved = {}
+
+        def drop_pyc(rel):
+            # байткод Python (и переписанный pytest) сверяется по времени и размеру файла: подмена той же длины в ту же
+            # секунду взяла бы старый .pyc — прогнался бы тест задачи, а не прежний
+            p = self.path(rel)
+            for c in (p.parent / "__pycache__").glob(p.stem + ".*.pyc") if p.suffix == ".py" else ():
+                try:
+                    c.unlink()
+                except OSError:
+                    pass
+        try:
+            for rel in rels:
+                old = self.original(rel)
+                if old is None:
+                    continue
+                p = self.path(rel)
+                saved[rel] = p.read_bytes() if p.is_file() else None
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(old)
+                drop_pyc(rel)
+            command = command or test_command(self.work)    # удалила все тесты — команду видно только с прежними
+            if not command:
+                return "Код завершения 0\n(как запускать тесты проекта, не понять — проверка пропущена)"
+            return self._run(command, timeout)
+        finally:
+            for rel, data in saved.items():
+                p = self.path(rel)
+                try:
+                    if data is None:
+                        p.unlink(missing_ok=True)
+                    else:
+                        p.write_bytes(data)
+                    drop_pyc(rel)
+                except OSError:
+                    log.warning("замок на тесты: не вернулся файл %s", rel)
 
     # ---------- откат правок ----------
 

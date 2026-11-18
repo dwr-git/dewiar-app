@@ -571,7 +571,9 @@ VERIFY = (
     "так (цифра, файл, ссылка, пункт цели) и что сделать\"} — есть ошибка, выдумка, пропуск ИЛИ спорное место, которое не "
     "подтверждается выдержками. Спорное — revise, а не ok. Стиль и оформление — не повод для revise. Не требуй того, о чём "
     "цель не просила. Задача, которая честно объясняет, почему цель недостижима, — ok. ЗАДАЧА ПО КОДУ: пройди по каждому "
-    "требованию цели по diff; нарушено — revise с примером: вход → что получится → что должно быть.\n"
+    "требованию цели по diff; нарушено — revise с примером: вход → что получится → что должно быть. Замечание о конкретном "
+    "месте кода — с ДОСЛОВНОЙ цитатой этой строки из diff в «ёлочках» (без цитаты оно не засчитается); не выполненное "
+    "требование, которого в коде нет вовсе, — без цитаты: «нет …».\n"
     "Критерий с ✓ и ФАКТЫ ОТ СИСТЕМЫ проверены кодом — это истина, по выдержкам их не оспаривай. Выдержка с пометкой «выдержка "
     "обрезана» — только начало файла: её конец — не обрыв файла, а чего в выдержке не видно — не ошибка и не повод для revise "
     "(файл целиком проверен машинно); revise — только за то, что видно и неверно. ЗАДАЧА ПО КОДУ: изменённые файлы лежат в "
@@ -631,6 +633,12 @@ def verify_task(ask, goal, summary, files, facts="", diff="", criteria="", excer
             attempt += 1
             continue
         v, p = parse_verdict(raw)
+        if v == "revise" and diff:
+            p, dropped = drop_false_quotes(p, msg)
+            if dropped:
+                log.info("Проверяющий: отброшены замечания с цитатами, которых нет в материалах: %s", dropped)
+            if not p:                                  # все замечания держались на выдуманных цитатах — решают машинные проверки
+                return "unclear", ""
         if v in ("ok", "revise"):
             return v, p
         items = parse_look(raw) if left else []
@@ -645,6 +653,33 @@ def verify_task(ask, goal, summary, files, facts="", diff="", criteria="", excer
         note = note or p
         attempt += 1
     return "unclear", note
+
+
+_QUOTE_RX = re.compile(r"«([^«»]{6,300})»|`([^`\n]{6,300})`|\"([^\"\n]{6,300})\"")
+
+
+def _norm_q(x):
+    return re.sub(r"\s+", " ", x or "").strip().lower()
+
+
+def drop_false_quotes(problems, material):
+    """Харнесс 1.0.30 (по образцу Aigen): замечание проверяющего держится на цитате кода — цитата обязана быть в том, что
+    ему показали (diff, выдержки, итог, дочитанное). Выдуманная цитата — выдуманное замечание: такой пункт отбрасываем.
+    Пункты без цитат («нет функции …») остаются. -> (замечания без выдуманных, [отброшенные])."""
+    text = (problems or "").strip()
+    if not text:
+        return text, []
+    hay = _norm_q(material)
+    parts = [x for x in re.split(r"\n+|(?<=[.;])\s+(?=(?:\d+[.)]|[-•])\s)|;\s+(?=\d+[.)]\s)", text) if x.strip()]
+    keep, dropped = [], []
+    for part in parts:
+        qs = [next(g for g in m.groups() if g) for m in _QUOTE_RX.finditer(part)]
+        qs = [q for q in qs if re.search(r"[(){}\[\]=.:;<>+\-*/]", q)]      # похожее на код, а не просто слово в кавычках
+        if qs and not any(_norm_q(re.sub(r"^[+\- ]", "", q)) in hay for q in qs):
+            dropped.append(part.strip()[:160])
+        else:
+            keep.append(part.strip())
+    return "\n".join(keep), dropped
 
 
 def parse_verdict(raw):

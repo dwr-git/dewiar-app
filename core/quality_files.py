@@ -149,16 +149,27 @@ def summarize(problems, limit=8):
 
 
 def quick_check(path, rel=None):
-    """Сразу после записи файла: только .py/.json/.html, чтобы не запускать сломанное. -> предупреждение или ""."""
+    """Сразу после записи файла, чтобы не запускать сломанное: .py/.json/.html — check_file; с 1.0.30 ещё синтаксис JS,
+    встроенных <script>, CSS, YAML, TOML, XML/SVG, bash, PHP (syntaxcheck). -> предупреждение или ""."""
     p = Path(path)
     ext = p.suffix.lower()
-    if ext not in (".py", ".json", ".html", ".htm"):
+    more = (".js", ".mjs", ".cjs", ".ts", ".css", ".yaml", ".yml", ".toml", ".xml", ".svg", ".sh", ".bash", ".php")
+    if ext not in (".py", ".json", ".html", ".htm") + more:
         return ""
     if ext in (".html", ".htm"):
         txt = p.read_text(encoding="utf-8", errors="replace")
         if "</html>" not in txt.lower():
             return ""                                         # пишется частями — проверим, когда допишет
-    probs = check_file(p, rel)
+    probs = check_file(p, rel) if ext in (".py", ".json", ".html", ".htm") else []
+    if not probs:
+        try:
+            import syntaxcheck
+            bad = syntaxcheck.syntax_error(p.read_text(encoding="utf-8", errors="replace"), ext)
+        except Exception:  # noqa: BLE001 — проверка не должна ронять запись
+            bad = ""
+        if bad:
+            probs = [f"{rel or p.name} не разбирается: {bad}" + (" (если ещё дописываешь файл частями — допиши, проверка "
+                                                                  "повторится)" if "не закрыт" in bad and ext not in (".html", ".htm") else "") + "."]
     return ("⚠ ПРОВЕРКА: " + " ".join(probs)) if probs else ""
 
 

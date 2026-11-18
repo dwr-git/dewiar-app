@@ -145,7 +145,7 @@ class Mock:
             sc = self.scripts.get(title, [])
             step = sc[i] if i < len(sc) else ("finish", {"summary": "Готово."})
             req = {"title": title, "i": i, "system": sysm, "tools": body.get("tools") or [], "messages": body["messages"][1:],
-                   "size": size, "max_tokens": body.get("max_tokens")}
+                   "size": size, "max_tokens": body.get("max_tokens"), "kw": body.get("chat_template_kwargs")}
             self.reqs.append(req)
         if callable(step):
             step = step(req)

@@ -592,6 +592,9 @@ class VerifyMixin:
                             "с задачей и было до тебя — объясни это в итоге и снова вызови finish.")
                 t.data["tests_gate"] = 9                  # прошли — больше не проверяем
                 t.journal(f"🧪 Проверка перед итогом: тесты проходят ({cmd}).")
+        lock = self._tests_lock(t, code, q)              # харнесс 1.0.30: «зелёные» тесты — не переписанные ради итога
+        if lock:
+            return lock
         if True:                                          # выпуск 3: проверка по существу (критерии, ссылки, цифры, проверяющий)
             files = []
             for p in sorted(t.dir.rglob("*")):
@@ -600,7 +603,10 @@ class VerifyMixin:
                     files.append(f"{rel.as_posix()} — {p.stat().st_size} байт")
             files += [f"Лаборатория/{p.relative_to(self.host.workspace.root / 'Лаборатория').as_posix()} — {p.stat().st_size} байт"
                       for p in self._lab_files(t)]
-            facts = (f"Шагов: {t.data.get('steps', 0)}. Инструменты: " +
+            lf = t.data.get("lock_fail") or []
+            facts = (("ВНИМАНИЕ: задача изменила прежние тесты проекта (" + ", ".join(lf[:6]) + "), и их прежние версии на новом "
+                      "коде НЕ проходят — это повод для revise, если цель не просила менять эти тесты. " if lf else "") +
+                     f"Шагов: {t.data.get('steps', 0)}. Инструменты: " +
                      ", ".join(f"{k}×{v}" for k, v in sorted(q["tools"].items(), key=lambda x: -x[1])[:12]) +
                      (f". Показано пользователю: {', '.join(shown)}" if shown else "") +
                      (". Это задача по коду: изменения пользователь примет сам (рабочая копия)." if t.data.get("project") else ""))
@@ -619,6 +625,48 @@ class VerifyMixin:
                     log.debug("diff для самопроверки", exc_info=True)
             return self._verify(t, summary, q, files, facts, diff)
         return None
+
+    TESTS_ASKED_RX = re.compile(r"(?:измени|поправ|исправ|обнов|перепиш|почин|удали|убери|fix|update|change|rewrite|remove)\w*"
+                                r"\s+(?:\S+\s+){0,3}(?:тест|test)|(?:тест|test)\w*\s+(?:\S+\s+){0,2}"
+                                r"(?:неверн|устарел|сломан|ошибочн|wrong|outdated|broken)", re.I)
+
+    def _tests_lock(self, t, code, q):
+        """Замок на тесты (харнесс 1.0.30, по образцу Aigen): задача изменила или удалила тесты, что были в проекте до неё, —
+        прежние версии этих тестов прогоняются на новом коде. Не проходят — итог не принят (два раза спорим, дальше —
+        пометка проверяющему). Цель сама просила поправить тесты — замка нет. -> текст отказа или None."""
+        if code is None or int(t.data.get("lock_gate") or 0) >= 2 or not self.host.code_auto_run():
+            return None
+        if self.TESTS_ASKED_RX.search(f"{t.title}\n{t.goal}"):
+            return None
+        from codework import test_command
+        try:
+            if not code.work.exists():
+                return None
+            touched = code.touched_tests()
+            if not touched:
+                return None
+            cmd = test_command(code.work)                 # None — тестов не осталось: команду узнаем с прежними
+        except (CodeError, OSError) as e:
+            log.info("замок на тесты: %s", e)
+            return None
+        rels = [rel for _st, rel in touched]
+        out = code.run_with_original_tests(cmd, rels, 600)
+        if out.startswith("Код завершения 0"):
+            t.data["lock_gate"] = 9
+            t.data.pop("lock_fail", None)
+            t.journal("🔒 Замок на тесты: прежние тесты изменены, но и их прежние версии на новом коде проходят.")
+            return None
+        t.data["lock_gate"] = int(t.data.get("lock_gate") or 0) + 1
+        t.data["lock_fail"] = rels[:20]
+        q["verify_fail"] += 1
+        t.journal("🔒 Замок на тесты: изменены прежние тесты (" + ", ".join(rels[:6]) + "), и на новом коде их прежние версии "
+                  "не проходят — итог не принят.")
+        if t.data["lock_gate"] >= 2:
+            return None
+        return ("Итог не принят: ты изменил(а) или удалил(а) тесты, которые были в проекте до задачи (" + ", ".join(rels[:8]) +
+                "), а их ПРЕЖНИЕ версии на новом коде не проходят. Тесты — договор о поведении: исправь код так, чтобы прошли "
+                f"прежние тесты, и верни им прежний вид. Прежние версии прогнаны{' командой ' + cmd if cmd else ''}:\n{out[-2500:]}\n\nЕсли прежний "
+                "тест действительно неверен — оставь свою правку, объясни в итоге, какой тест и почему, и снова вызови finish.")
 
     def _verify_tool(self, t, args):
         """verify — проверяющий с чистым контекстом по ходу работы (до finish): машинные критерии + проверяющий-подагент

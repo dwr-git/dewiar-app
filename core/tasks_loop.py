@@ -119,6 +119,35 @@ class LoopMixin:
         return "\n".join(lines)
 
     # ---------- качество (quality.py): проверка кодом, самопроверка, уроки ----------
+    THINK_MAX = 4                     # обдуманных шагов за задачу (харнесс 1.0.30)
+    THINK_MIN_WIN = 16000             # окно меньше — на рассуждение не хватит места, шаг сорвётся
+
+    def _think_why(self, t, prof, fail_run, q):
+        """Харнесс 1.0.30 (по образцу Aigen, «выборочные рассуждения»): модель думает перед шагом только в ключевые моменты —
+        первый шаг задачи, после двух неудачных шагов подряд, после отказа проверки перед итогом, после повтора одного и
+        того же. Не больше THINK_MAX за задачу; дважды сорвало шаг — до конца задачи без него. Только главная задача (не
+        части), только если человек не включил или не выключил размышления сам («думать всегда/никогда» в «Мозге») и не
+        выключил «Думать над сложными просьбами». -> причина словами или ""."""
+        try:
+            if prof.get("think") in ("on", "off") or self.host.s.get("llm", "think_auto") is False:
+                return ""
+        except Exception:  # noqa: BLE001
+            return ""
+        if t.data.get("parent") or t.data.get("think_off") or int(t.data.get("think_n") or 0) >= self.THINK_MAX:
+            return ""
+        if int(t.data.get("win") or WIN_DEFAULT) < self.THINK_MIN_WIN:
+            return ""
+        seen = t.data.get("think_seen") or [0, 0]
+        if not int(t.data.get("steps") or 0):
+            return "первый шаг — как буду решать"
+        if int(q.get("verify_fail") or 0) > int(seen[0]):
+            return "проверка не приняла итог"
+        if int(q.get("loop_warns") or 0) > int(seen[1]):
+            return "повторяю одно и то же — нужен другой подход"
+        if fail_run >= 2:
+            return "два шага подряд не вышли"
+        return ""
+
     def _opt(self, key):
         """Настройка tasks.<key> (self_check, learn — см. settings.py); None — не задана, считается включённой."""
         try:

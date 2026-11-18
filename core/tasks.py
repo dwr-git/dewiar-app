@@ -640,6 +640,7 @@ class TaskManager(SchedMixin, PlanMixin, VerifyMixin, LoopMixin, ToolsMixin, Fil
         idle, acted, run_steps = 0, False, 0
         chance, bad = False, 0                                    # второй шанс после ответов без действий; вызовы «текстом» подряд
         guard = Q.LoopGuard()                                     # живёт один запуск потока
+        fail_run = 0                                              # шагов подряд, где все действия — ошибки (обдумать шаг)
         self.__dict__.setdefault("_asks", {}).pop(t.id, None)    # отказы и вопросы без ответа — счёт заново на каждый запуск
         t.data.pop("pause_now", None)
         prog_sig, prog_step = self._progress_sig(t), int(t.data.get("steps") or 0)   # «буксует»: шагов без продвижения
@@ -723,10 +724,17 @@ class TaskManager(SchedMixin, PlanMixin, VerifyMixin, LoopMixin, ToolsMixin, Fil
                 budget = self._budget(t, prof, system, specs, state)
                 msgs = self._compact(t, prof, msgs, budget)
                 t_call = time.monotonic()
+                think_why = self._think_why(t, prof, fail_run, q)
+                if think_why:                                 # харнесс 1.0.30: думать — в ключевые моменты, а не на каждом шаге
+                    t.data["think_n"] = int(t.data.get("think_n") or 0) + 1
+                    t.data["think_seen"] = [int(q.get("verify_fail") or 0), int(q.get("loop_warns") or 0)]
+                    t.journal(f"💡 Обдумываю шаг: {think_why}.")
+                    fail_run = 0                                  # следующий повод — снова две неудачи подряд
                 try:
                     # _tail — «Состояние задачи» в конец запроса (в историю не пишется); _ctx — не резать историю в llm
                     # (_ctx_cut оставил бы ответ инструмента без вызова): «не хватило окна» решаем здесь — сжатием
-                    for kind, val in TB.stream_events(dict(prof, _ctx=True, _tail=state, _known=BY_NAME, max_tokens=self._fit_reserve(t, prof, system, specs, msgs, state)), system, msgs,
+                    for kind, val in TB.stream_events(dict(prof, _ctx=True, _tail=state, _known=BY_NAME, max_tokens=self._fit_reserve(t, prof, system, specs, msgs, state),
+                                                           **({"think": "on"} if think_why else {})), system, msgs,
                                                    cancel=t.cancel, tools=specs):
                         self._beat(t)
                         if kind == "tools":
@@ -748,6 +756,11 @@ class TaskManager(SchedMixin, PlanMixin, VerifyMixin, LoopMixin, ToolsMixin, Fil
                         t.journal(f"↻ Модели не хватило окна — сжал память задачи и повторяю шаг (окно ≈{int(t.data['win'])} ток.).")
                         _write_hist(hist, msgs)
                         continue
+                    if think_why:                              # рассуждение сломало шаг: дважды — до конца задачи без него
+                        t.data["think_fail"] = int(t.data.get("think_fail") or 0) + 1
+                        if t.data["think_fail"] >= 2:
+                            t.data["think_off"] = True
+                            t.journal("💡 Обдумывание дважды сорвало шаг — дальше без него.")
                     blanks = int(t.data.get("blank_replies") or 0)
                     # «Задачи на часы» (пакет 29.10: «модель думала, но так и не ответила» — 42 раза у 4 человек, и задача
                     # падала): ушла в размышления и не уложилась — это тоже сбой шага, а не конец работы
@@ -878,6 +891,8 @@ class TaskManager(SchedMixin, PlanMixin, VerifyMixin, LoopMixin, ToolsMixin, Fil
                         prog_step = int(t.data["steps"])
                     if t.data.get("finished") or t.cancel.is_set() or t.data.get("sleep_now") or t.data.get("pause_now"):
                         break
+                fail_run = fail_run + 1 if results and all(isinstance(r, str) and r.startswith(("Ошибка", "Защита Dewiar"))
+                                                           for r in results) else 0
                 # на каждый вызов нужен ответ, иначе модель отвергнет историю — невыполненные закрываем заглушкой
                 results += ["(не выполнено: задача ушла ждать — повтори после пробуждения, если нужно)"] * (len(calls) - len(results))
                 msgs += tool_turn_messages(prof, text, calls, results)

@@ -1,7 +1,7 @@
 """Правка текста куском — общее для кода (codework.CodeWork.edit) и задач (tasks: file_edit). Выпуск 2 «Больших задач»
 (docs/HARNESS.md): старый кусок → новый; не нашёлся точно — неточный поиск без учёта отступов и пробелов (fuzzy_find,
 только если совпадение одно) с переносом отступов (reindent); несколько совпадений — «встречается N раз, строки …»; не
-нашёлся совсем — самый похожий кусок с номерами строк (nearest). После правки — проверка синтаксиса (.py, .json, .html)."""
+нашёлся совсем — самый похожий кусок с номерами строк (nearest). После правки — проверка синтаксиса (syntaxcheck: .py, .json, .html, .js, .css, .yaml, .toml, .xml, .sh, .php)."""
 import difflib
 import re
 
@@ -123,7 +123,13 @@ def apply_edit(text, old, new, replace_all=False, reread="file_read"):
 
 
 def syntax_error(text, suffix):
-    """Синтаксис файла по расширению: .py, .json, .html. -> "" или «что не так» (строка и причина)."""
+    """Синтаксис файла по расширению -> "" или «что не так» (строка и причина). С 1.0.30 — syntaxcheck: ещё JS, встроенные
+    <script>, CSS, YAML, TOML, XML/SVG, bash, PHP."""
+    try:
+        import syntaxcheck
+        return syntaxcheck.syntax_error(text, suffix)
+    except ImportError:
+        pass
     suffix = (suffix or "").lower()
     try:
         if suffix == ".py":
