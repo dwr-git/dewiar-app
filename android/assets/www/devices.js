@@ -160,7 +160,7 @@ function devBind() {
   if (g("dv-scan")) g("dv-scan").onclick = () => scanCode();
   if (g("dv-brains")) g("dv-brains").onclick = async () => {
     const r = g("dv-brains-res"); g("dv-brains").disabled = true; r.className = "res"; r.textContent = "Спрашиваю ваши устройства…";
-    try { const ok = await devBrainsPull(); r.textContent = ok ? "Жду ответа — устройство с мозгами должно быть включено (до 10 минут)." : "Других ваших устройств пока не видно — подключите их кодом выше."; }
+    try { const ok = await devBrainsPull(); r.textContent = ok ? "Жду ответа — устройство с мозгами должно быть включено (до 10 минут)." : devBrainsMiss(false); }
     catch (e) { r.className = "res bad"; r.textContent = netErr(e.message || e); } finally { g("dv-brains").disabled = false; }
     setTimeout(() => clPoll().catch(() => { }), 4000);
   };
@@ -286,12 +286,26 @@ function devTaskOn(a) {
 let devBrainsUntil = 0, devBrainsGot = [];
 async function devOwnSend(body) {
   if (!syncCred() || !DC()) return false;
-  const k = clKeys(); if (!clLoad().me.pid || Date.now() - (CLS.hello || 0) > 600000) await clHello();
-  const t = {}; ((CLS.me || {}).devs || []).forEach(d => { if (d.pub && d.dev && d.dev !== k.dev) t[d.dev] = DC().b64d(d.pub); });
+  const k = clKeys(); let fresh = false;
+  if (!clLoad().me.pid || Date.now() - (CLS.hello || 0) > 600000) { await clHello(); fresh = true; }
+  const peers = () => { const t = {}; ((CLS.me || {}).devs || []).forEach(d => { if (d.pub && d.dev && d.dev !== k.dev) t[d.dev] = DC().b64d(d.pub); }); return t; };
+  let t = peers();
+  if (!Object.keys(t).length && !fresh) { await clHello(); t = peers(); }   // №843: список мог устареть — спросить заново
   if (!Object.keys(t).length) return false;
   t[k.dev] = DC().b64d(k.pub);
   await clReq("POST", "/close/self", { env: DC().encryptFor(Object.assign({ ts: Date.now() }, body), DC().b64d(k.priv), k.dev, t) });
   return true;
+}
+/* «Взять мозги» не нашло, у кого спросить (№843, 17.11: «пишет, что других устройств нет, хотя компьютер подключён»).
+   Синхронизация и передача мозгов — разные каналы: второй открывается, когда то устройство само представится серверу
+   (Dewiar на нём запущен; раз в час и при запуске). Видно его в «Все устройства» — так и сказать, по имени. */
+function devBrainsMiss(pcHint) {
+  const others = (DEVS || syncStatus.all || []).filter(d => !d.me && d.app !== "cloud");
+  if (!others.length) return pcHint ? "Других ваших устройств пока не видно — на компьютере: студия → «Устройства» → «Подключить ещё устройство», здесь — «Устройства» → «Ввести код»."
+    : "Других ваших устройств пока не видно — подключите их кодом выше.";
+  const d = others[0], name = d.name || DEV_APP[d.app] || "компьютер";
+  return `«${name}» связан с этим телефоном, но ещё не открыл канал для передачи мозгов. Запустите на нём Dewiar` +
+    (d.ver ? ` (у него ${d.ver} — лучше обновить)` : "") + " и через минуту нажмите «Взять мозги» снова.";
 }
 function devBrainsShare() {
   const local = (b) => /\/\/(?:localhost|127\.|0\.0\.0\.0)/.test(b || "");

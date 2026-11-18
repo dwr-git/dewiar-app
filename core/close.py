@@ -1280,7 +1280,10 @@ class Close:
                     self.error = "на паузе: включён режим «Ничего не уходит в интернет»"
                     token = ""
                 if token:
-                    if time.time() - float(self.st.get("hello_at") or 0) > 3600:   # раз в час: новые близкие и «зовут в Близкие»
+                    # раз в час: новые близкие и «зовут в Близкие»; и сразу при запуске (№843: телефон по «Взять мозги» не
+                    # находил компьютер, пока тот не представился — «запустите Dewiar на нём» теперь действительно помогает)
+                    if time.time() - float(self.st.get("hello_at") or 0) > 3600 or not getattr(self, "_hello_boot", False):
+                        self._hello_boot = True                  # одна попытка при запуске; не вышло — как раньше, раз в час
                         self.hello()
                     self.poll()
                     self.error = ""

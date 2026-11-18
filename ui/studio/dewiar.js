@@ -789,7 +789,10 @@ core.on("hello", d => {
   S = d.settings; personas = d.personas; active = d.persona; S_presets = d.presets; S_voices = d.piper_voices; S_fx = d.voice_fx || [];
   $("#conn").classList.add("ok"); $("#conn span").textContent = "ядро на связи";
   $("#presets").innerHTML = ""; Object.entries(S_presets).forEach(([k, p]) => { const b = document.createElement("button"); b.className = "chip"; b.textContent = "+ " + p.name; b.onclick = () => addProfile(k); $("#presets").appendChild(b); });
-  renderPersonas(); renderProfiles(); refreshStatic(); renderStatus(d.status); fillNamePick();
+  // №834: сначала масштаб, тема и видимые разделы (refreshStatic) — сбой отрисовки персонажей или профилей не должен
+  // оставлять студию в чужом масштабе и с лишними пунктами меню до первого изменения настроек
+  for (const f of [refreshStatic, renderPersonas, renderProfiles, () => renderStatus(d.status), fillNamePick])
+    try { f(); } catch (e) { console.error(e); if (typeof jsErr === "function") jsErr("studio hello: " + (e && e.stack || e)); }
   renderCurrent();
   // раздел, открытый до связи с ядром (по #адресу или кликом), получает свои данные только теперь — кликаем снова
   const curNav = $("nav button.cur");

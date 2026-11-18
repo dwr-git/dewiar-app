@@ -80,6 +80,8 @@ nav .conn i { display: inline-block; width: 7px; height: 7px; border-radius: 50%
 nav .conn.ok i { background: var(--good); }
 
 main { position: relative; z-index: 1; overflow-y: auto; padding: 34px 44px 80px; }
+/* №840: Mac — строка заголовка прозрачная, страница под ней (macui.seamless): место светофору и верхнему краю окна */
+html.mac-seam nav { padding-top: 46px; } html.mac-seam main { padding-top: 46px; }
 section { display: none; max-width: 1040px; }
 section.cur { display: block; }
 section.wide { max-width: none; }                 /* календарь, задачи, папка, память — во всю ширину окна */

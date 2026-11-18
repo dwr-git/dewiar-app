@@ -454,6 +454,21 @@ def ui_settings():
         return {}
 
 
+def ui_zoom_q():
+    """Масштаб и текст студии — сразу в адресе (№834, 17.11: «открываешь — шрифт крупный, свернёшь Лиру — уменьшается,
+    что-то исчезает из меню»: масштаб из настроек ставился только после связи с ядром). -> «&zoom=…&text=…» или ""."""
+    ui = ui_settings()
+    out = ""
+    for k in ("zoom", "text"):
+        try:
+            v = float(ui.get(k) or 1)
+        except (TypeError, ValueError):
+            continue
+        if 0.5 <= v <= 2 and abs(v - 1) > 0.001:
+            out += f"&{k}={v:g}"
+    return out
+
+
 def studio_go_js(page):
     """JS для открытой студии: перейти в раздел page. «topup» (0.82.1) — «Мозг» с раскрытой панелью оплаты (studioGo в
     ui/studio/dewiar.js); студия старее — просто кнопка раздела."""
@@ -2148,7 +2163,7 @@ class Api:
         own = not WIN and ui_settings().get("studio_frame", "custom") != "native"
         sw, sh = self._studio_size()
         skin, light = ui_skin()                     # тема — сразу в адресе: студия открывается в своём стиле, без вспышки
-        url, bridge = self._bridged(self._url("settings.html", ("&frame=1" if own else "") + "&skin=" + urllib.parse.quote(skin) + query + ("#" + page if page else "")))
+        url, bridge = self._bridged(self._url("settings.html", ("&frame=1" if own else "") + "&skin=" + urllib.parse.quote(skin) + ui_zoom_q() + query + ("#" + page if page else "")))
         self._studio = webview.create_window(STUDIO_TITLE, url,
                                             width=sw, height=sh, min_size=(min(820, sw), min(560, sh)), background_color="#e3eaf4" if light else "#0a0a0f",
                                             maximized=bool(ui_settings().get("studio_max", True)),

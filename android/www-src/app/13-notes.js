@@ -359,8 +359,17 @@ function renderNote() {
     <div class="ntatt">${attHtml(true)}</div>
     <div class="ntadd"><label class="btn">${NT_IC.photo}<input type="file" id="nt-photo" accept="image/*" multiple hidden>Фото</label><label class="btn">${NT_IC.file}<input type="file" id="nt-file" multiple hidden>Файл</label></div>
     <div class="ntbar">${n ? `<button class="btn" id="nt-cancel">Отмена</button>` : ""}<button class="btn p" id="nt-save">Сохранить</button></div>`;
-  const ta = $("#nt-text"), grow = () => { ta.style.height = "auto"; ta.style.height = Math.min(Math.max(ta.scrollHeight + 2, 180), innerHeight * 0.55) + "px"; };
+  // №842 (17.11, планшет лёжа): высота поля считалась по экрану без клавиатуры — открылась клавиатура, а низ длинной
+  // заметки (там, где курсор) остался под ней и под кнопками. Теперь — по видимой части экрана, пересчёт при каждом её
+  // изменении, и поле с курсором — в виду (scroll-margin в app.css учитывает полосу «Отмена / Сохранить»).
+  const vh = () => (window.visualViewport ? visualViewport.height : innerHeight);
+  const ta = $("#nt-text"), grow = () => { if (!ta.isConnected) return; ta.style.height = "auto";
+    ta.style.height = Math.max(Math.min(ta.scrollHeight + 2, vh() * 0.55, vh() - 200), 160) + "px"; };
+  const inView = () => { if (!ta.isConnected) { (window.visualViewport || window).removeEventListener("resize", onVh); return; }
+    grow(); if (document.activeElement === ta) ta.scrollIntoView({ block: "nearest" }); };
+  const onVh = () => setTimeout(inView, 60);
   ta.addEventListener("input", grow); setTimeout(grow, 0);
+  (window.visualViewport || window).addEventListener("resize", onVh); ta.addEventListener("focus", () => setTimeout(inView, 350));
   $$("#nt-folds [data-f]").forEach(b => b.onclick = () => { $$("#nt-folds [data-f]").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); $("#nt-folder").value = b.dataset.f; });
   $("#nt-newf").onclick = () => {
     const box = $("#nt-folds"); if ($("#nt-fname")) { $("#nt-fname").focus(); return; }

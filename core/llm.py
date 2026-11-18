@@ -124,7 +124,10 @@ def _base(p):
 # бессмысленно: пакет 22.10 — по 3 повтора с ожиданием до минуты на каждый вопрос, человек минутами ждал тишину.
 NO_MONEY_RX = re.compile(r"insufficient (balance|quota|funds)|no resource package|exceeded your current quota|"
                          r"credit balance is too low|payment required|недостаточно средств|"
-                         r"no credits remaining|insufficient credits|can only afford|add (more )?credits|out of credits", re.I)   # №324, OpenRouter
+                         r"no credits remaining|insufficient credits|can only afford|add (more )?credits|out of credits|"
+                         # OpenRouter без денег: «Prompt tokens limit exceeded: 17987 > 17725 … upgrade to a paid account» —
+                         # это не окно модели, а предел бесплатного ключа (сбои 18.11: тот же компьютер, тот же час)
+                         r"prompt tokens limit exceeded", re.I)   # №324, OpenRouter
 LOCATION_RX = re.compile(r"location is not supported|unsupported_country|not available in your (country|region)", re.I)
 
 

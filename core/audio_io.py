@@ -231,8 +231,9 @@ def warn_rare(key, msg, *args, every=600):
 
 
 def list_devices():
-    """-> [{"name", "description", "kind": "source" | "sink"}] — микрофоны и выходы, без наших dewiar_* и мониторов."""
-    if WIN:
+    """-> [{"name", "description", "kind": "source" | "sink"}] — микрофоны и выходы, без наших dewiar_* и мониторов.
+    Mac — тоже через PortAudio (CoreAudio): №840 (17.11) — список был пуст, в «Звук и поведение» — только «по умолчанию»."""
+    if WIN or MAC:
         try:
             sd_refresh()                        # подключили микрофон после запуска — студия его увидит
             with _SD_LOCK:

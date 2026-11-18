@@ -160,6 +160,23 @@ def everywhere(win):
     _main(run)
 
 
+def seamless(win):
+    """№840 (17.11, Mac): «окно портит линия сверху с тремя кнопками». Строка заголовка студии — прозрачная, без
+    надписи, страница уходит под неё (как в Safari и «Заметках»): светофор остаётся на месте и окно по-прежнему тянется
+    за верхний край; отступ сверху даёт страница (html.mac-seam в studio.css)."""
+    def run():
+        nw = getattr(win, "native", None)
+        if nw is None:
+            return
+        try:
+            nw.setTitlebarAppearsTransparent_(True)
+            nw.setTitleVisibility_(1)                          # NSWindowTitleHidden
+            nw.setStyleMask_(nw.styleMask() | (1 << 15))       # NSWindowStyleMaskFullSizeContentView
+        except Exception as e:  # noqa: BLE001 — старый macOS: остаётся обычная строка заголовка
+            log(f"строка заголовка студии: {e}")
+    _main(run)
+
+
 def work_area(x=None, y=None):
     """Рабочая область экрана (без строки меню и Дока), где точка (x, y) в координатах окон pywebview (от левого
     верхнего угла главного экрана). -> (x, y, ш, в); не узнали — экран pywebview или очень большая область."""
@@ -444,13 +461,14 @@ class MacWindows:
                 pass
         sw, sh = self._studio_size()
         skin, light = A.ui_skin()
-        url = self._url("settings.html", "&skin=" + urllib.parse.quote(skin) + query + ("#" + page if page else ""))
+        url = self._url("settings.html", "&skin=" + urllib.parse.quote(skin) + A.ui_zoom_q() + query + ("#" + page if page else ""))
         url, bridge = self._bridged(url)
         win = webview.create_window(A.STUDIO_TITLE, url, width=sw, height=sh, min_size=(min(820, sw), min(560, sh)),
                                     background_color="#e3eaf4" if light else "#0a0a0f", text_select=True, js_api=bridge)
         self._studio, self._studio_born = win, time.monotonic()
         win.events.closed += lambda *a: self._studio_closed(win)
-        win.events.shown += lambda *a: front(win, activate=True)
+        win.events.shown += lambda *a: (seamless(win), front(win, activate=True))
+        win.events.loaded += lambda *a: win.evaluate_js("document.documentElement.classList.add('mac-seam')")
         if hasattr(win.events, "resized"):
             win.events.resized += lambda *a: self._studio_resized(win, *a[:2])
 

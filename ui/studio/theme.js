@@ -47,6 +47,14 @@
   try { early = dwQuery().get("skin") || ""; } catch (e) { }
   if (!early) try { early = localStorage.getItem("studio_skin") || ""; } catch (e) { }
   studioSkin(early || "neusky");
+  /* №834 (17.11): масштаб и текст — тоже сразу (из адреса, иначе последние запомненные), а не после связи с ядром:
+     иначе студия открывалась крупной и «сжималась» при первом же изменении настроек. Полностью — DewiarZoom.apply. */
+  try {
+    const q = dwQuery(); let z = +q.get("zoom") || 0, t = +q.get("text") || 0;
+    if (!z && !t) { const c = JSON.parse(localStorage.getItem("studio_zoom") || "{}"); z = +c.zoom || 0; t = +c.text || 0; }
+    if (z >= 0.5 && z <= 2 && z !== 1) { root.style.zoom = String(z); root.dataset.zoom = String(z); }
+    if (t >= 0.5 && t <= 2) root.style.setProperty("--dw-text", String(t));
+  } catch (e) { }
   /* Тема из плагина (Creator, 03.11: dewiar.theme в плагине «Тема оформления»): переменные студии поверх выбранного фона —
      <style id="plg-theme"> с !important (фон темы ставится в style корня). mode light/dark — свои поля и кнопки
      (html.st-light). null — сброс: выбранный фон заново. Хранится в settings.ui.plugin_theme (ядро проверяет значения:

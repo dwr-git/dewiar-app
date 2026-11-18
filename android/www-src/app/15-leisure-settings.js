@@ -775,7 +775,7 @@ function wireSettings(info) {
     };
     if (g("br-pull")) g("br-pull").onclick = async () => {
       const r = g("br-pull-res"); g("br-pull").disabled = true; r.className = "res"; r.textContent = "Спрашиваю ваши устройства…";
-      try { const ok = await devBrainsPull(); r.textContent = ok ? "Жду ответа — компьютер должен быть включён и Dewiar запущен (до 10 минут)." : "Других ваших устройств пока не видно — на компьютере: студия → «Устройства» → «Подключить ещё устройство», здесь — «Устройства» → «Ввести код»."; }
+      try { const ok = await devBrainsPull(); r.textContent = ok ? "Жду ответа — компьютер должен быть включён и Dewiar запущен (до 10 минут)." : devBrainsMiss(true); }
       catch (e) { r.className = "res bad"; r.textContent = netErr(e.message || e); } finally { g("br-pull").disabled = false; }
       setTimeout(() => clPoll().catch(() => { }), 4000);
     };

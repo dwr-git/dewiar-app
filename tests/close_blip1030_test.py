@@ -41,6 +41,7 @@ class Soon:
 
 
 c.poll = poll
+c.hello = lambda: None          # 1.0.28 (№843): при запуске — hello; здесь проверяем опрос
 c.soon = Soon()
 c.active = lambda: True
 c._fast = lambda: False
