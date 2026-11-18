@@ -699,7 +699,9 @@ class AnswerMixin(PromptMixin, ModelsMixin, ReportMixin, DirectMixin):
                             raise
                     else:
                         log.info("Модель %s не приняла картинку (%s) — отвечаю без неё", prof.get("model"), e)
-                        self._blind.add(blind_key)
+                        from health import why_kind
+                        if why_kind(e) != "timeout":         # не дождались — не значит «не видит» (№885: сервер был медленным)
+                            self._blind.add(blind_key)
                         msgs = _drop_images(msgs)
                         events = stream_events(prof, system, msgs, cancel=turn.cancel, tools=specs or None)
                 # №435 (31.10, на телефоне и так же здесь): итог сказан до действия и повторён после — начало следующего

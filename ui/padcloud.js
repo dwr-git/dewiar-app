@@ -46,11 +46,16 @@
     el("#cl-off").hidden = !st.why; box.classList.toggle("off", !!st.why);
     if (st.why && !CL.kept) el("#cl-off-t").textContent = st.why === "e2e" ? "Облако выключено — файлы пока только на этом компьютере. Шифруются на ваших устройствах, сервер их не прочтёт." : "Облаку нужен мозг Dewiar или вход аккаунтом.";
     el("#cl-on").textContent = st.why === "e2e" ? "Включить" : "Открыть студию";
-    box.classList.toggle("empty", !(st.files || []).length);
+    // ещё не сверились с облаком (открыли сразу после запуска) — не «пусто»: запомненные файлы и «сверяю с облаком…»,
+    // а если их нет — три мерцающие плитки (владелец 18.11: «секунд 10 ничего, переживал, что файлы потерялись»)
+    const checking = !CL.st || !!st.checking, none = !(st.files || []).length;
+    box.classList.toggle("empty", none && !checking);
+    box.classList.toggle("checking", checking);
+    el("#cl-sub").textContent = checking ? "сверяю с облаком…" : "ваши файлы — на всех ваших устройствах";
     const q = st.quota || 0, u = st.used || 0;
     // место — кольцом вокруг облачка (владелец 17.11: «серую длинную полосу — симпатичнее, живее»): занятое светится
     // цветами Лиры, а число — крупно справа, как в ролике урока
-    el("#cl-used").hidden = !q; el("#cl-used-n").textContent = mb(u); el("#cl-used-q").textContent = q ? "из " + mb(q) : "";
+    el("#cl-used").hidden = !q || (!CL.st || st.checking) && !u; el("#cl-used-n").textContent = mb(u); el("#cl-used-q").textContent = q ? "из " + mb(q) : "";
     const C = 2 * Math.PI * 25, pct = q ? Math.min(1, u / q) : 0, ring = el("#cl-ring");
     ring.style.strokeDasharray = `${C}`; ring.style.strokeDashoffset = `${C * (1 - (pct && Math.max(pct, 0.03)))}`;
     box.classList.toggle("full", pct > 0.9);
@@ -65,7 +70,8 @@
       return `<div role="button" tabindex="0" class="cl-f k-${esc(f.kind)}${moving ? " moving" : ""}" data-f="${esc(f.name)}" title="${esc(f.name)}"><i>${K[f.kind] || "TXT"}</i>`
         + `<span>${esc(f.name)}</span><small>${mb(f.size || 0)}${f.here ? "" : " · скоро будет здесь"}</small>`
         + (moving ? "" : `<button type="button" class="cl-x" data-x aria-label="Убрать «${esc(f.name)}»" title="Убрать отовсюду">×</button>`) + `</div>`; }).join("")
-      || "";
+      || (checking ? '<div class="cl-f cl-sk" aria-hidden="true"></div>'.repeat(3) : "");
+    el("#cl-grid").setAttribute("aria-busy", checking ? "true" : "false");
   }
   async function load(fresh) {
     try { CL.st = await core.call("drive_status", { fresh: !!fresh }); } catch (e) { CL.st = CL.st || { files: [] }; }

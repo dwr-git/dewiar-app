@@ -317,25 +317,32 @@ function ckHint() { const prov = $("#ck-prov").value; $("#ck-hint").innerHTML = 
 $("#ck-prov").onchange = ckHint; ckHint();
 /* Ключ сервиса -> список его моделей: советуемые первыми, поиск по смыслу — в конец (15.11: то же — в «Кто чем думает»
    на «Главной», brain.js). prof — профиль с ключом (base_url может поправиться: свой адрес без /v1). -> {ordered, rec} */
+const ckFree = (m) => /(?::|[-_ ])free\b/i.test(m);
+// №885 (18.11): посредник по адресу (AgentRouter) не отдаёт список моделей по ключу (401) — раньше тупик «ключ отклонён»;
+// теперь — вписать имя модели из консоли сервиса и проверить её разговором
+const ckOwnErr = () => Object.assign(new Error("Сервис не отдал список моделей по этому ключу. Так бывает у посредников, которые пускают ключ только в свои программы, или ключ скопирован не целиком. Впишите имя модели из консоли сервиса и нажмите «Выбрать эту» — проверим её коротким вопросом."), { own: true });
 async function ckModels(prov, prof) {
   let models = [];
   try { models = await core.call("llm_models", { profile: prof }); }
   catch (e) {                                   // свой адрес без /v1 — частая ошибка: пробуем с /v1
     if (prov !== "custom" && CLOUD[prov].rec.length && !/401|403|ключ/i.test(e.message)) models = [];   // нет списка — не беда, проверка покажет
-    else if (prov !== "custom" || /\/v1$/.test(prof.base_url)) throw e;
+    else if (prov !== "custom") throw e;
+    else if (/\/v1$/.test(prof.base_url)) { if (/401|403|ключ/i.test(e.message)) throw ckOwnErr(); throw e; }
     else {
       const p2 = Object.assign({}, prof, { base_url: prof.base_url + "/v1" });
-      models = await core.call("llm_models", { profile: p2 }); prof.base_url = p2.base_url;
+      try { models = await core.call("llm_models", { profile: p2 }); } catch (e2) { if (/401|403|ключ/i.test(e2.message)) { prof.base_url = p2.base_url; throw ckOwnErr(); } throw e2; }
+      prof.base_url = p2.base_url;
     }
   }
   if (!models.length && CLOUD[prov].rec.length) models = CLOUD[prov].rec.slice();   // список не отдал (бывает у GLM) — проверим первую из советуемых
   if (!models.length) throw new Error("сервис не вернул список моделей");
   const rec = CLOUD[prov].rec.filter(m => models.includes(m));
   const side = (m) => /embed|rerank|tts|whisper|dall-e|image|moderation|audio|transcribe|realtime/i.test(m) ? 1 : 0;   // не для разговора — в конец
-  const ordered = rec.concat(models.filter(m => !rec.includes(m)).sort((a, b) => side(a) - side(b) || a.localeCompare(b)));
+  const ordered = rec.concat(models.filter(m => !rec.includes(m)).sort((a, b) => side(a) - side(b) || ckFree(b) - ckFree(a) || a.localeCompare(b)));   // бесплатные — первыми
   return { ordered, rec };
 }
-let ckId = null, ckSvc = "";
+let ckId = null, ckSvc = "", ckPend = null;
+const ckSel = (own) => { $("#ck-sel-f").hidden = !!own; $("#ck-own-f").hidden = !own; $("#ck-found").style.display = ""; };
 $("#ck-go").onclick = async (ev) => {
   const prov = $("#ck-prov").value, key = $("#ck-key").value.trim(), r = $("#ck-res"), btn = $("#ck-go");
   if (prov === "custom" && !ckUrl($("#ck-url").value)) { r.className = "res bad"; r.textContent = "Впишите адрес сервиса"; return; }
@@ -345,21 +352,36 @@ $("#ck-go").onclick = async (ev) => {
   if (!prof.base_url) {        // список сервисов приходит от ядра с «hello» — студия открылась раньше (пакет 22.10: KeyError 'base_url')
     btn.disabled = false; r.className = "res bad"; r.textContent = "Студия ещё не на связи с ядром — подождите секунду и нажмите снова"; return;
   }
+  ckPend = null; ckId = null; ckSvc = prof.name;
   try {
     const { ordered, rec } = await ckModels(prov, prof);
-    prof.model = ordered[0]; ckSvc = prof.name; prof.name = `${prof.name} — ${prof.model}`;
-    ckId = uid(); S.llm.profiles[ckId] = prof;
-    await save({ llm: { profiles: S.llm.profiles, active: ckId } }); renderProfiles();
-    $("#ck-model").innerHTML = ordered.map(m => `<option value="${escH(m)}">${escH(m)}${rec.includes(m) ? " — рекомендую" : ""}</option>`).join("");
-    $("#ck-found").style.display = ""; r.textContent = ""; $("#ck-key").value = "";
-    await wizardCheck(ckId);
-  } catch (e) { r.className = "res bad"; r.textContent = "Не получилось: " + e.message; }
+    $("#ck-model").innerHTML = ordered.map(m => `<option value="${escH(m)}">${escH(m)}${rec.includes(m) ? " — рекомендую" : ckFree(m) ? " — бесплатная" : ""}</option>`).join("");
+    ckSel(false); $("#ck-key").value = "";
+    if (rec.includes(ordered[0])) {             // советуемая модель есть — подключаем её и проверяем сразу
+      prof.model = ordered[0]; prof.name = `${ckSvc} — ${prof.model}`;
+      ckId = uid(); S.llm.profiles[ckId] = prof;
+      await save({ llm: { profiles: S.llm.profiles, active: ckId } }); renderProfiles();
+      r.textContent = ""; await wizardCheck(ckId);
+    } else {
+      // №882 (18.11): первая по алфавиту у посредника — часто самая дорогая (claude-opus…), и проверка была настоящим
+      // запросом к ней. Советовать нечего — человек выбирает сам, проверяем только выбранную.
+      ckPend = prof; const nf = ordered.filter(ckFree).length;
+      r.className = "res ok"; r.textContent = `Ключ принят: моделей — ${ordered.length}${nf ? `, из них бесплатных — ${nf} (они первыми)` : ""}. Выберите модель и нажмите «Выбрать эту» — проверим её одним коротким вопросом.`;
+    }
+  } catch (e) {
+    if (e.own) { ckPend = prof; ckSel(true); $("#ck-key").value = ""; r.className = "res bad"; r.textContent = e.message; setTimeout(() => $("#ck-model-own").focus(), 0); }
+    else { r.className = "res bad"; r.textContent = "Не получилось: " + e.message; }
+  }
   btn.disabled = false;
 };
 $("#ck-key").onkeydown = (e) => { if (e.key === "Enter") $("#ck-go").click(); };
 $("#ck-use").onclick = async () => {
+  const m = !$("#ck-own-f").hidden ? $("#ck-model-own").value.trim() : $("#ck-model").value;
+  if (!m) { $("#ck-res").className = "res bad"; $("#ck-res").textContent = "Впишите имя модели"; $("#ck-model-own").focus(); return; }
+  if (!ckId && ckPend) { ckId = uid(); S.llm.profiles[ckId] = ckPend; ckPend = null; }
   if (!ckId || !S.llm.profiles[ckId]) return;
-  const m = $("#ck-model").value, p = S.llm.profiles[ckId]; p.model = m; p.name = `${ckSvc || ckPreset($("#ck-prov").value).name} — ${m}`;
+  $("#ck-res").textContent = "";
+  const p = S.llm.profiles[ckId]; p.model = m; p.name = `${ckSvc || ckPreset($("#ck-prov").value).name} — ${m}`;
   await save({ llm: { profiles: S.llm.profiles, active: ckId } }); renderProfiles(); await wizardCheck(ckId);
 };
 

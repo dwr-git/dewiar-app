@@ -596,6 +596,7 @@ h1 svg.hi { width: 26px; height: 26px; margin: 0 10px -4px 0; fill: none; stroke
 .row.one { grid-template-columns: 1fr; }
 .row.three { grid-template-columns: 1fr 1fr 1fr; }
 label.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+label.f[hidden] { display: none; }
 /* 29.10 (владелец: «0.67 — главная неаккуратная, грубая»): поле без type (город в «Утре», время сводки, клиенты, сделки,
    платежи) рисовалось системным — с чёрной рамкой; :where — классы самих полей важнее */
 input[type=text], input[type=password], input[type=number], input[type=url], input[type=email], input[type=search], input[type=time], input[type=date], input[type=datetime-local], select, textarea,

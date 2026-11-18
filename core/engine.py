@@ -953,7 +953,9 @@ class Engine(AudioMixin, AnswerMixin, ToolsMixin, MusicMixin, MyMusicMixin, Brai
         if radio is not None:
             # слушаем и думаем — радио молчит (команду слышно без крика, фраза кончается вовремя);
             # говорим — тихо под голосом; потом — как было
-            radio.duck(0.0 if st in ("listening", "thinking") else 0.25 if st == "speaking" else 1.0)
+            # текстовый режим (№884, 18.11): не слушаем и не говорим — музыка не приглушается вовсе (было: тише на время ответа)
+            quiet = bool(self.s.get("ui", "text_mode"))
+            radio.duck(1.0 if quiet else 0.0 if st in ("listening", "thinking") else 0.25 if st == "speaking" else 1.0)
         self.emit("state", state=st, persona=self.s.get("persona"))
 
     def note(self, text):

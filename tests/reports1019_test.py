@@ -263,7 +263,15 @@ try:
         pg.evaluate("() => { document.querySelectorAll('dialog[open]').forEach(d => d.close()); document.querySelector('#ck-go').click(); }")
         for _ in range(40):
             pg.wait_for_timeout(250)
-            if "Готово" in (pg.inner_text("#w-done") or "") or "Не получилось" in pg.inner_text("#ck-res"):
+            if "Готово" in (pg.inner_text("#w-done") or "") or "Не получилось" in pg.inner_text("#ck-res") or "Выберите модель" in pg.inner_text("#ck-res"):
+                break
+        # №882 (18.11): советовать нечего — сами ничего не запускаем: человек выбирает модель, проверяем только её
+        ok("Выберите модель" in pg.inner_text("#ck-res") and "Готово" not in (pg.inner_text("#w-done") or ""),
+           f"№882 свой сервис: ключ принят, модель выбирает человек — до выбора ни одного настоящего запроса: {pg.inner_text('#ck-res')}")
+        pg.click("#ck-use")
+        for _ in range(40):
+            pg.wait_for_timeout(250)
+            if "Готово" in (pg.inner_text("#w-done") or "") or "не ответила" in (pg.inner_text("#w-done") or ""):
                 break
         prof = pg.evaluate("() => S.llm.profiles[S.llm.active]")
         ok(prof.get("base_url") == f"http://127.0.0.1:{MOCK}/v1" and prof.get("model") == "mock-qwen" and prof.get("api_key") == "sk-test"

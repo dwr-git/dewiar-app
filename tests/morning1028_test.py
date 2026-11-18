@@ -101,7 +101,7 @@ E.team.st["inbox"].append({"ts": time.time() - 3 * 86400, "who": "m1", "t": "с�
 c1 = E.clients.add("Сергей Иванов", "Ромашка")
 E.clients.set_next(c1["id"], "перезвонить про 200 коробок", now - timedelta(days=1))
 c2 = E.clients.add("Мария Лис")
-E.clients.set_next(c2["id"], "отправить договор", now.replace(hour=23, minute=0))
+E.clients.set_next(c2["id"], "отправить договор", min(now + timedelta(minutes=5), now.replace(hour=23, minute=59)))   # «сегодня, позже» — и около полуночи (было 23:00: после 23 — уже просрочено)
 c3 = E.clients.add("Пётр Далёкий")
 E.clients.set_next(c3["id"], "встреча", now + timedelta(days=5))
 

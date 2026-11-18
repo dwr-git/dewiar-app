@@ -517,8 +517,14 @@
   .cl-f.moving::after { content: ""; position: absolute; left: 11px; right: 11px; bottom: 5px; height: 2px; border-radius: 2px;
     background: linear-gradient(90deg, transparent, var(--pu-think), transparent); background-size: 200% 100%; animation: cl-run 1.2s linear infinite; }
   @keyframes cl-run { to { background-position: -200% 0; } }
+  /* сверяем с облаком: подпись мерцает, пустых плиток — три «скелета» */
+  #cloud.checking #cl-sub { animation: cl-pulse 1.4s ease-in-out infinite; }
+  @keyframes cl-pulse { 50% { opacity: .45; } }
+  .cl-f.cl-sk { min-height: 78px; cursor: default; box-shadow: none; background: linear-gradient(90deg, var(--pu-card), color-mix(in srgb, var(--pu-think) 10%, var(--pu-card)), var(--pu-card));
+    background-size: 200% 100%; animation: cl-run 1.4s linear infinite; }
+  .cl-f.cl-sk:hover { transform: none; }
   .cl-more { align-self: flex-start; border: 0; background: none; color: var(--pu-think); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px; }
-  @media (prefers-reduced-motion: reduce) { .tab.cl.hint, .cl-f.moving::after, .cl-cloud { animation: none; } .cl-rf { transition: none; } .cl-f:hover, .cl-drop.over { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .tab.cl.hint, .cl-f.moving::after, .cl-cloud, .cl-f.cl-sk, #cloud.checking #cl-sub { animation: none; } .cl-rf { transition: none; } .cl-f:hover, .cl-drop.over { transform: none; } }
   .pu-card.next ul { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.35; }
   .pu-card.next time { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 8px; }
   .pu-a { align-self: flex-start; margin-top: auto; padding: 3px 0; font-weight: 700; font-size: 12.5px; color: var(--pu-think); }

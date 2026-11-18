@@ -59,7 +59,11 @@ class Drive:
         self.lock = threading.Lock()
         self.kick = threading.Event()
         self.st = self._load()
-        self.last = {"used": 0, "quota": 0, "files": [], "error": "", "at": 0}
+        # прошлый список облака — сразу (владелец 18.11: «открываю облако после обновления — пусто, через 10 секунд
+        # появляются файлы; переживал, что потерялись»): показываем запомненное, пока первый обмен сверяет его с облаком
+        v = self.st.get("view") if isinstance(self.st.get("view"), dict) else {}
+        self.last = {"used": int(v.get("used") or 0), "quota": int(v.get("quota") or 0), "files": list(v.get("files") or []),
+                     "error": "", "at": 0}
         self.busy = ""
 
     # ---------- состояние ----------
@@ -321,6 +325,7 @@ class Drive:
             self._save()
             log.info("☁️ Облако Лиры: «%s» пришёл с другого устройства", dst.name)
         self.last.update(used=space["used"], quota=space["quota"], files=self._view(rem))
+        self.st["view"] = {"used": self.last["used"], "quota": self.last["quota"], "files": self.last["files"]}
         if changed:
             try:
                 self.host.knowledge.refresh()
@@ -351,8 +356,15 @@ class Drive:
             root = str(self.root())
         except Exception:  # noqa: BLE001
             root = ""
+        files = self.last.get("files", [])
+        if not self.last.get("at") and files:            # запомненный список: «есть здесь» — по папке сейчас
+            try:
+                here = self.local()
+                files = [dict(f, here=f.get("name") in here) for f in files]
+            except Exception:  # noqa: BLE001
+                pass
         return {"why": self.ready(), "devices": self.devices(), "root": root, "error": self.last.get("error", ""), "used": self.last.get("used", 0),
-                "quota": self.last.get("quota", 0), "files": self.last.get("files", []), "busy": self.busy,
+                "quota": self.last.get("quota", 0), "files": files, "busy": self.busy, "checking": not self.last.get("at"),
                 "at": self.last.get("at", 0), "full": self.last.get("full", ""), "max_mb": FILE_MAX // (1024 * 1024),
                 "exts": sorted(EXTS)}
 
@@ -376,8 +388,12 @@ class Drive:
         return True
 
     def run(self, stop):
-        """Фоновый обмен: раз в EVERY секунд и сразу по kick (добавили или убрали файл, пришёл ключ)."""
-        time.sleep(20)
+        """Фоновый обмен: раз в EVERY секунд и сразу по kick (добавили или убрали файл, пришёл ключ). Первый — через 20 с
+        после запуска или сразу, как только облако открыли (kick)."""
+        if self.kick.wait(20):
+            self.kick.clear()
+        if stop.is_set():
+            return
         while not stop.is_set():
             try:
                 self.tick()

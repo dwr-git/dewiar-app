@@ -197,6 +197,14 @@ e2.emit = lambda *a, **k: None
 for st in ("listening", "thinking", "speaking", "idle"):
     E.Engine.set_state(e2, st); seen[st] = r._duck
 ok(seen == {"listening": 0.0, "thinking": 0.0, "speaking": 0.25, "idle": 1.0}, f"радио: слушаем/думаем — тишина, говорим — 25%, потом как было: {seen}")
+# №884 (18.11): текстовый режим — не слушаем и не говорим: музыка не приглушается вовсе
+seen = {}
+e7 = stub(); e7.muted, e7.state, e7.radio = False, "idle", r
+e7.emit = lambda *a, **k: None
+e7.s = SimpleNamespace(get=lambda *k, default=None: True if k == ("ui", "text_mode") else default)
+for st in ("listening", "thinking", "speaking", "idle"):
+    E.Engine.set_state(e7, st); seen[st] = r._duck
+ok(set(seen.values()) == {1.0}, f"№884 текстовый режим — музыка не тише ни на время вопроса, ни на время ответа: {seen}")
 r.set_volume(0.05)
 ok(r.volume == 0.1, "громкость радио не опускается до неслышных 5%")
 
