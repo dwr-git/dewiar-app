@@ -102,7 +102,7 @@ try:
         b = p.chromium.launch(); pg = b.new_page(viewport={"width": 1400, "height": 1000})
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.goto((ROOT / "ui/settings.html").as_uri() + f"?token={tok}&port={PORT2}"); time.sleep(2.5)
-        pg.click('nav button[data-p="diary"]'); time.sleep(1.2)
+        pg.evaluate("navGo('diary')"); time.sleep(1.2)
         ok(pg.locator("#d-page .dentry [data-ed]").count() == 1 and pg.locator("#d-page .dentry [data-del]").count() == 1, "у записи — «Поправить» и «Удалить»")
         pg.hover("#d-page .dentry"); pg.click("#d-page [data-ed]"); time.sleep(0.3)
         pg.fill("#dent-text", "Мысль дня про самовар."); pg.click("#dent-save"); time.sleep(1.2)

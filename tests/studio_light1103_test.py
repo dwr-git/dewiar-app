@@ -102,7 +102,7 @@ try:
         # 4. «Что показывать»
         nav("look"); time.sleep(0.8)
         groups = pg.evaluate("[...document.querySelectorAll('#sh-groups .sh-g')].map(g => g.querySelector('.sh-gh b').textContent)")
-        ok(all(g in groups for g in ("Для себя", "Семья и близкие", "Режимы Лиры", "Работа", "Обучение", "Знания", "Настройка")),
+        ok(all(g in groups for g in ("Для себя", "Семья и близкие", "Работа", "Знания", "Настройка", "Ещё")),
            "«Оформление» → «Что показывать»: группы меню — " + ", ".join(groups))
         ok(pg.evaluate("document.querySelectorAll('#sh-sets .sh-set').length") == 4 and pg.evaluate("document.querySelector('#sh-sets [aria-pressed=true]')?.dataset.set") == "all",
            "четыре готовых набора (с 1.0.33 — «Для работы»), сейчас — «Всё»")
@@ -132,7 +132,7 @@ try:
         nav("look"); time.sleep(0.6)
         pg.evaluate("document.querySelector('#sh-sets [data-set=\"min\"]').click()"); time.sleep(1.2)
         vis = set(pg.evaluate(NAVVIS))
-        want = {"home", "chat", "calendar", "reminders", "notes", "close", "memory", "qa", "dw", "personas", "brain", "ears", "voice", "look", "sound", "hands", "skills", "features", "about"}
+        want = {"home", "chat", "calendar", "reminders", "notes", "close", "memory", "course", "dw", "personas", "brain", "ears", "voice", "look", "sound", "hands", "skills", "features", "about"}
         ok(vis - {"soul", "const", "me"} == want, "«Минимум»: в меню только главное и настройки; лишнее: " + ", ".join(sorted(vis - want - {"soul", "const", "me"})) + "; нет: " + ", ".join(sorted(want - vis)))
         ok(pg.evaluate("document.querySelector('#sh-sets [aria-pressed=true]')?.dataset.set") == "min", "набор «Минимум» отмечен")
         if SHOTS:
@@ -151,7 +151,7 @@ try:
         nav("look"); time.sleep(0.6)
         pg.evaluate("document.querySelector('#sh-sets [data-set=\"all\"]').click()"); time.sleep(1.2)
         vis = set(pg.evaluate(NAVVIS))
-        ok({"sites", "pbot", "pay", "kids", "senior", "tasks", "council", "folder", "course", "servers"} <= vis, "«Всё» — всё снова в меню")
+        ok({"sites", "pbot", "pay", "tasks", "council", "folder", "course", "servers"} <= vis, "«Всё» — всё снова в меню (режимы — когда включены, 19.11)")
 
         # 5. «Облегчённый вид»
         blur = "[...document.querySelectorAll('*')].filter(e => { const c = getComputedStyle(e); return c.backdropFilter && c.backdropFilter !== 'none'; }).length"

@@ -788,5 +788,10 @@
  "sc.off.own.ok": "Remove",
  "sc.off.own.done": "The site uses the shared consultant again",
  "sc.sites": "For site",
- "sc.sites.aria": "Which site"
+ "sc.sites.aria": "Which site",
+ "nav.learn": "Learning",
+ "nav.learn.tip": "A week with Lira, video lessons, questions and answers, short phrases",
+ "nav.memsoul": "Memory and soul",
+ "nav.memsoul.tip": "What Lira remembers, the diary, soul, constitution and what she knows about you",
+ "nav.diary.tab": "Diary"
 }

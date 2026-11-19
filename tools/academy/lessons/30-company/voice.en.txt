@@ -1,0 +1,44 @@
+# Lesson 30 · Lira for your company
+
+## title
+Лира: This is Lira's Academy, lesson thirty — “Lira for your company”. | This is Lira's Academy, lesson thirty — Lira for your company.
+
+## problem
+Патрик: I have ten people, a website and a Telegram channel. I can't see who's doing what, leads get lost, and clients wait. | I have ten people, a website and a Telegram channel. I can't see who's doing what, leads get lost, and clients wait.
+Лира: Let's put it all in one place. Half an hour of setup — and then your company runs itself. | Let's put it all in one place. Half an hour of setup — and then your company runs itself.
+
+## company
+Лира: Studio, “Brain”, “Create company”. The company has one balance for everyone, and each employee has their own limit. | Studio, Brain, Create company. The company has one balance for everyone, and each employee has their own limit.
+
+## people
+Лира: “Invite an employee”: a name and what they do. Send the link in a messenger. They open it on their phone — nothing to install. | Invite an employee: a name, and what they do. Send the link in a messenger. They open it on their phone — nothing to install.
+
+## tasks
+Патрик: Lira, tell Sergey to replace the wiring at the Ivanovs' by Friday. | Lira, tell Sergey to replace the wiring at the Ivanovs' by Friday.
+Лира: Sergey taps “I'll take it”, then “Done” — with a photo. He can only reschedule with a reason. An hour before the deadline, I'll remind him myself. | Sergey taps I'll take it, then Done — with a photo. He can only reschedule with a reason. An hour before the deadline, I'll remind him myself.
+Лира: And the board shows at a glance: who's doing what, what's waiting for your review, and what's overdue.
+
+## site
+Лира: I'll build the website from a description. In “Website chat”, I take the knowledge from your site in one click — prices, services, address. | I'll build the website from a description. In Website chat, I take the knowledge from your site in one click — prices, services, address.
+Лира: The assistant answers clients day and night — on the site and in the company's Telegram bot, even when the computer is off.
+
+## lead
+Лира: A client left a phone number — a card appears in “Clients”, and the lead instantly becomes a task for an employee: get in touch within two hours. | A client left a phone number — a card appears in Clients, and the lead instantly becomes a task for an employee: get in touch within two hours.
+
+## clients
+Лира: The card shows what you agreed and the next step. Deals move from lead to payment, and who owes you is shown in red.
+
+## week
+Лира: Every Friday — the week in review: tasks given and done, who did how much, how many leads came in, and what's overdue.
+Патрик: And all of this from my phone?
+Лира: From your phone: the same board — assign, accept, send back with a comment.
+
+## everyone
+Лира: And every day, I'm an assistant for everyone: I'll remind you of a meeting, sort your mail, find what you need in your documents. For the manager and for every employee — by voice, on the computer and on the phone.
+
+## how
+Лира: Studio, “Brain”, “Create company” — then “Company launch” walks you through five steps with checkboxes. | Studio, Brain, Create company — then Company launch walks you through five steps with checkboxes.
+
+## end
+Лира: Dewiar — at dewiar.pro. | Dewiar — at dewiar dot pro.
+Лира: See you in the next lesson!

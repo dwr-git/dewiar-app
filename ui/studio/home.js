@@ -105,6 +105,7 @@ function hmNav() {
   for (const [id, feat] of Object.entries(HM_FEAT)) {
     if (!HM_OPTIN[id]) continue;
     const b = $(`nav button[data-p="${(HM_NAV[id] || [id])[0]}"]`); if (!b) continue;
+    if (b.classList.contains("sub")) continue;                   // вкладка другого раздела («Семья» в «Платежах») — «+» там (navTabsSync)
     const name = [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("").trim();
     let o = b.nextElementSibling && b.nextElementSibling.classList.contains("nopt") ? b.nextElementSibling : null;
     const want = ((S && S.features) || {})[feat] !== true && shown.includes(id);
@@ -118,12 +119,14 @@ function hmNav() {
     if (o) o.hidden = !want;
   }
   if (typeof shNav === "function") shNav();                     // «Оформление» → «Что показывать» (show.js): класс .nh
+  if (typeof navTabsSync === "function") navTabsSync();         // вкладки «Памяти и души», «Обучения», «Платежей», «Dewiar.pro» (core.js)
   const cur = $("nav button.cur");
   if (cur && (cur.hidden || cur.classList.contains("nh"))) { const h = $('nav button[data-p="home"]'); if (h) h.click(); }
   $$("nav .ng").forEach(g => {                                   // заголовок группы, под которым всё скрыто, — тоже прочь
     let n = g.nextElementSibling, any = false;
     while (n && !n.classList.contains("ng")) {
-      if (!n.hidden && !n.classList.contains("nh") && (n.tagName === "BUTTON" || (n.classList.contains("nav-groups") && n.querySelector("button")))) any = true;
+      const tab = n.classList.contains("sub") || (n.classList.contains("nmode") && !n.classList.contains("on") && !n.classList.contains("cur"));
+      if (!n.hidden && !tab && !n.classList.contains("nh") && (n.tagName === "BUTTON" || (n.classList.contains("nav-groups") && n.querySelector("button")))) any = true;
       n = n.nextElementSibling;
     }
     g.hidden = !any;

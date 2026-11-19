@@ -47,6 +47,11 @@ function mdChip() {
   if (window.hmRender && $("#p-home") && $("#p-home").classList.contains("cur")) try { hmRender(); } catch (e) { }   // плитка «Режимы»: «сейчас: …»
   b.dataset.mode = MD.st.mode; $("span", b).textContent = "Лира — " + (MD_NAME[MD.st.mode] || MD_NAME.me);
   document.documentElement.classList.toggle("md-senior", MD.st.mode === "senior");
+  // 19.11 (вычитание меню): «Для ребёнка» и «Для старших» слева — только включённый режим (и пока раздел открыт)
+  const kb = $('nav button[data-p="kids"]'), sb = $('nav button[data-p="senior"]');
+  if (kb) kb.classList.toggle("on", MD.st.mode === "kid");
+  if (sb) sb.classList.toggle("on", MD.st.mode === "senior");
+  if (window.hmNav) try { hmNav(); } catch (e) { }
 }
 function mdOpen(first) {
   let d = $("#md-dlg");

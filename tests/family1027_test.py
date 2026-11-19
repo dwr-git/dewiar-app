@@ -218,8 +218,11 @@ with sync_playwright() as p:
             ok(pg.locator('.hm-app[data-app="family"]').count() == 1, "на «Главной» — значок «Семья»")
             if os.environ.get("DEWIAR_SHOTS"):
                 pg.screenshot(path=os.environ["DEWIAR_SHOTS"] + "/family-home.png")
-        ok(pg.is_visible('nav button[data-p="family"]'), f"{w}: «Семья» в меню (включена в «Возможностях»)")
-        pg.click('nav button[data-p="family"]'); time.sleep(1.2)
+        # 19.11 (вычитание меню): «Семья» — вкладка «Платежей»; точка «зовут в семью» — у «Платежей» слева
+        ok(pg.evaluate("[...document.querySelectorAll('nav button[data-p=pay] .ndot')].some(x => x.classList.contains('on'))"), f"{w}: точка у «Платежей» — Дима приглашает")
+        pg.click('nav button[data-p="pay"]'); time.sleep(0.6)
+        ok(pg.is_visible('#p-pay > .ntabs button[data-go="family"]'), f"{w}: «Семья» — вкладкой «Платежей» (включена в «Возможностях»)")
+        pg.click('#p-pay > .ntabs button[data-go="family"]'); time.sleep(1.2)
         t = pg.inner_text("#p-family").replace("\u00a0", " ").replace("\u202f", " ")
         ok("1 510" in t and "из 2 500 на месяц" in t and "Анна" in t and "приглашает вас" in t and "Газ" in t and "Напомнить" in t,
            f"{w}: итог, лимит, люди, платежи: {t[:240]!r}")

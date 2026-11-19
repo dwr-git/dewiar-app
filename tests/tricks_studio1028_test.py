@@ -43,7 +43,7 @@ try:
             pg = b.new_page(viewport={"width": w, "height": 1000})
             pg.on("pageerror", lambda e: errs.append(str(e)))
             pg.goto((ROOT / "ui/settings.html").as_uri() + f"?token={tok}&port={PORT}"); time.sleep(2.5)
-            pg.click('nav button[data-p="tricks"]'); time.sleep(1)
+            pg.evaluate("navGo('tricks')"); time.sleep(1)
             tiles = pg.locator("#tr-box .tr-tile")
             ok(tiles.count() == len(pc) and pg.locator("#tr-box .tr-tile svg").count() == len(pc), f"{w}: плитки разделов со значками ({tiles.count()} из {len(pc)})")
             size = pg.evaluate("(() => { const i = document.querySelector('#tr-box .tr-tile i').getBoundingClientRect(); const b = getComputedStyle(document.querySelector('#tr-box .trk b')); return [i.width, parseFloat(b.fontSize)]; })()")

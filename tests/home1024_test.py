@@ -10,6 +10,7 @@ ROOT = Path(os.environ.get("DEWIAR_ROOT") or Path(__file__).resolve().parent.par
 TESTS = Path(__file__).resolve().parent
 PY = os.environ.get("DEWIAR_PY") or sys.executable
 SHOTS = os.environ.get("DEWIAR_SHOTS")
+REF_TAB = "(() => { const x = document.querySelector('#p-dw > .ntabs button[data-go=ref]'); return !!x && !x.hidden; })()"   # 19.11: «Рефералы» — вкладка «Dewiar.pro»
 fails = []
 
 
@@ -58,7 +59,7 @@ try:
         apps = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app')].map(a => a.dataset.app)")
         ok(len(apps) == 24 and "insight" in apps and "podcast" in apps and "node" in apps and "sites" in apps and "pbot" in apps and "council" in apps and "ideas" in apps and "docs" in apps and "watch" in apps and "pad" not in apps and "folder" not in apps and "qa" in apps and "music" in apps and "modes" in apps and "kids" not in apps and "chat" in apps and "play" in apps and "ref" in apps and "pay" in apps and "vault" in apps, f"значки приложений — по умолчанию все (с 0.45 — и «Платежи», «Сейф»; с 0.57 — «Документы», с 0.58 — «Дозор», с 0.61 — «Идеи Лиры», с 0.67 — «Совет ИИ», «Бот в Telegram»; 03.11 — «Сайты»; 0.91 — «Радар»): {apps}")
         ok(pg.is_visible("#hm-council") and pg.locator("#hmc-faces i").count() >= 2, "на «Главной» — плашка «Совет ИИ» с лицами персонажей")
-        ok(pg.is_visible("nav button[data-p='ref']") and pg.is_visible("nav button[data-p='memory']"), "по умолчанию в меню всё на месте")
+        ok(pg.evaluate(REF_TAB) and pg.is_visible("nav button[data-p='memory']"), "по умолчанию в меню всё на месте («Рефералы» — вкладкой «Dewiar.pro»)")
         # 13.11 (владелец: «нужна ли плашка „Совет ИИ“, чтобы всё время смотреть на неё?»): × убирает плашку, значок остаётся
         pg.hover("#hm-council"); pg.click("#hmc-x"); pg.wait_for_timeout(300)
         ok(not pg.is_visible("#hm-council") and pg.evaluate("S.ui.council_plate") is False
@@ -84,7 +85,7 @@ try:
         pg.click("#hm-apps .hm-app[data-app='ref'] .hm-tg"); time.sleep(0.3)
         ok(not pg.evaluate("document.querySelector('[data-tg=ref]').checked") and pg.is_visible("#hm-apps .hm-app[data-app='ref']"),
            "в правке скрытый значок остаётся (выключенным) — можно вернуть")
-        ok(not pg.is_visible("nav button[data-p='ref']"), "скрыли «Рефералы» на главной — пропали и из меню слева")
+        ok(not pg.evaluate(REF_TAB), "скрыли «Рефералы» на главной — пропали и из вкладок «Dewiar.pro»")
         pg.drag_and_drop("#hm-apps .hm-app[data-app='play']", "#hm-apps .hm-app[data-app='chat']"); time.sleep(0.3)
         pg.click("#hm-edit"); time.sleep(1.2)
         saved = json.loads((cfg / "settings.json").read_text(encoding="utf-8"))["ui"].get("home_apps")
@@ -96,11 +97,11 @@ try:
         again = pg.evaluate("[...document.querySelectorAll('#hm-apps .hm-app')].map(a => a.dataset.app)")
         ok(again == shown, f"после перезагрузки — так же: {again}")
         ok(pg.evaluate("document.querySelectorAll('#hm-set .hm-pill').length") >= 4, "внизу — ссылки на настройки")
-        ok(not pg.is_visible("nav button[data-p='ref']"), "после перезагрузки «Рефералы» в меню всё так же скрыты")
+        ok(not pg.evaluate(REF_TAB), "после перезагрузки «Рефералы» всё так же скрыты")
         # спрятали раздел, который открыт, — переходим на «Главную»; спрятали всё в группе — заголовка группы нет
         pg.click("#hm-edit"); time.sleep(0.2); pg.click("#hm-apps .hm-app[data-app='ref'] .hm-tg"); time.sleep(0.3); pg.click("#hm-edit"); time.sleep(0.5)
-        ok(pg.is_visible("nav button[data-p='ref']"), "вернули значок — раздел снова в меню")
-        pg.click("nav button[data-p='ref']"); time.sleep(0.4)
+        ok(pg.evaluate(REF_TAB), "вернули значок — раздел снова на месте")
+        pg.evaluate("navGo('ref')"); time.sleep(0.4)
         pg.evaluate("S.ui.home_apps = hmApps().filter(x => x !== 'ref'); hmNav()"); time.sleep(0.4)
         ok(pg.evaluate("document.querySelector('section.cur').id") == "p-home", "открытый раздел спрятали — студия на «Главной»")
         pg.evaluate("S.ui.home_apps = ['chat']; hmNav()"); time.sleep(0.2)

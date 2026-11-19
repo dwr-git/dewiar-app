@@ -16,7 +16,7 @@ const SH_APP = {};                                          // раздел → 
 Object.entries(HM_NAV).forEach(([a, ps]) => ps.forEach(p => { SH_APP[p] = a; }));
 /* готовые наборы — что скрыть (остальное показать) */
 const SH_WORK = new Set(["team", "clients", "mailing", "sites", "sitechat", "prompter", "pbot", "ref"]);
-const SH_MIN = new Set(["chat", "calendar", "reminders", "notes", "close", "memory", "qa", "dw"]);
+const SH_MIN = new Set(["chat", "calendar", "reminders", "notes", "close", "memory", "qa", "course", "dw"]);   // course — «Обучение» (там «Вопрос — ответ», 19.11)
 /* «Для работы» (пилот «Лира для компании», владелец 18.11: «часть функций скрывать… клиенты, поручения, радар, виджет, сайты
    и телеграм повыше»): личное и развлечения — скрыть; рабочее — включить и поднять на «Главной» первым */
 const SH_HOME = new Set(["node", "music", "pay", "art", "council", "podcast", "family", "ref", "kids", "senior", "course", "diary", "soul", "const"]);
@@ -54,7 +54,7 @@ function shFeat(p) {
 /** Меню: скрытые здесь разделы и страницы плагинов — класс .nh (вызывает hmNav после своих правил) */
 function shNav() {
   const nh = shNavHide();
-  $$("nav button[data-p]").forEach(b => b.classList.toggle("nh", nh.has(b.dataset.p) && !SH_LOCK.has(b.dataset.p)));
+  $$("nav button[data-p]").forEach(b => b.classList.toggle("nh", nh.has(b.dataset.p) && !SH_LOCK.has(b.dataset.p) && !b.classList.contains("sub")));   // вкладки — вместе со своим разделом
   ["#nav-plg-h", "#nav-plugins", "#nav-plg-new", "#nav-plg-all"].forEach(s => { const e = $(s); if (e) e.classList.toggle("nh", nh.has("plugins")); });
 }
 window.shNav = shNav;
@@ -74,7 +74,9 @@ function shModel() {
       continue;
     }
     if (el.classList.contains("grow")) { g = { name: "Ещё", items: [] }; out.push(g); continue; }
-    if (!g || el.tagName !== "BUTTON" || !el.dataset.p || el.classList.contains("sub") || SH_SKIP.has(el.dataset.p)) continue;
+    // вкладки (.sub) — вместе со своим разделом; но у которых свой значок на «Главной» («Семья», «Рефералы», «Вопрос — ответ»,
+    // 19.11) — и здесь: скрыть значок — скрыть и вкладку
+    if (!g || el.tagName !== "BUTTON" || !el.dataset.p || (el.classList.contains("sub") && !SH_APP[el.dataset.p]) || SH_SKIP.has(el.dataset.p)) continue;
     const ic = el.querySelector("svg.ni");
     g.items.push({ p: el.dataset.p, name: shName(el), sub: el.title || "", lock: SH_LOCK.has(el.dataset.p), svg: ic ? ic.outerHTML : "" });
   }

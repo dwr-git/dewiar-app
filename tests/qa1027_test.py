@@ -42,7 +42,7 @@ try:
         for w in (1400, 900):
             pg = b.new_page(viewport={"width": w, "height": 1000}); pg.on("pageerror", lambda e: errs.append(str(e)))
             pg.goto((ROOT / "ui/settings.html").as_uri() + f"?token={tok}&port={PORT}"); time.sleep(2.5)
-            pg.click('nav button[data-p="qa"]'); time.sleep(1.2)
+            pg.evaluate("navGo('qa')"); time.sleep(1.2)
             tiles = pg.locator("#qa-left .qa-tile")
             groups = list(dict.fromkeys(s["group"] for s in G))
             ok(tiles.count() == len(groups) and "статьи" in pg.inner_text("#qa-left") or "статей" in pg.inner_text("#qa-left"), f"{w}: плитки разделов ({tiles.count()} из {len(groups)}) со счётчиками")
@@ -85,7 +85,7 @@ try:
             ok("Уго" in log or "Уго" in dry, "«Попробуйте сказать» ▶ — фраза ушла Лире")
             pg.click("#qa-go"); time.sleep(0.6)
             ok(pg.evaluate("document.querySelector('nav button.cur').dataset.p") == "kids", "«Открыть раздел» — студия → «Дети»")
-            pg.click('nav button[data-p="qa"]'); time.sleep(0.4)
+            pg.evaluate("navGo('qa')"); time.sleep(0.4)
             pg.fill("#qa-q", "квантовая хромодинамика"); time.sleep(1.0)
             ok("Ничего не нашлось" in pg.inner_text("#qa-left") and "Спросить Лиру" in pg.inner_text("#qa-left"), "не нашлось — честно и подсказка спросить Лиру")
             pg.click("#qa-ask"); time.sleep(1.0)

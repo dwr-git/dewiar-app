@@ -625,8 +625,12 @@ function featuresRender() {
     return `<div class="ft" data-k="${f.k}"><div class="ft-t"><b>${escH(f.name)}</b><span>${escH(f.sub)}</span></div>
       <div class="ft-r"><div class="ft-seg" role="radiogroup" aria-label="${escH(f.name)}">${opts.map(([v, l]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === st}">${l}</button>`).join("")}</div>
       <small class="ft-now">${f.app ? FT_SAY[st] : st === "off" ? FT_SAY.off : "Работает."}</small></div></div>`;
-  }).join("");
+  }).join("")
+    // режимы (19.11, вычитание меню): «Для ребёнка» и «Для старших» в меню — только пока включены; выбор — один, на «Главной»
+    + `<div class="ft ft-modes"><div class="ft-t"><b>Для ребёнка и для старших</b><span>Особые режимы Лиры: безопасный друг для ребёнка или крупно и просто для старших. Пока режим не включён, его раздела нет в меню.</span></div>
+      <div class="ft-r"><button type="button" class="btn" id="ft-mode">Выбрать режим</button><small class="ft-now">${typeof MD !== "undefined" && MD.st && MD.st.mode !== "me" ? (MD.st.mode === "kid" ? "Сейчас: для ребёнка." : "Сейчас: для старших.") : "Сейчас: для меня."}</small></div></div>`;
   $$("#ft-list .ft-seg button").forEach(b => b.onclick = () => ftSet(FT.find(x => x.k === b.closest(".ft").dataset.k), b.dataset.v));
+  const fm = $("#ft-mode"); if (fm) fm.onclick = () => { if (typeof mdOpen === "function") mdOpen(false); };
 }
 featuresRender();                                   // сразу, ещё до связи с ядром — потом перерисуется по настройкам
 async function ftSet(f, st) {

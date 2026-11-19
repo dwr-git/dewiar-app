@@ -48,6 +48,10 @@ nav button:hover { color: var(--ink); background: rgba(255,255,255,.07); }
 nav button.cur { color: #fff; background: var(--brand); box-shadow: 0 6px 22px -8px rgba(118,75,162,.8); font-weight: 600; }
 nav .grow { flex: 1; }
 nav button.sub { display: none; }
+nav button.nmode:not(.on):not(.cur) { display: none; }       /* «Для ребёнка», «Для старших» — только включённый режим (modes.js) */
+.ntabs[hidden], .ntabs button[hidden] { display: none !important; }
+.ntabs button.dot::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #FFB86B; box-shadow: 0 0 10px #FFB86B; }
+.ntabs button.nopt::before { content: "+"; font-weight: 700; opacity: .8; }   /* «+ Семья» — включить и открыть */
 nav button.nopt { padding-block: 6px; font-size: 12.5px; color: var(--dim); opacity: .85; }
 nav button.nopt i { width: 18px; height: 18px; flex: none; display: grid; place-items: center; font-style: normal; font-weight: 700; border-radius: 6px; border: 1px dashed currentColor; font-size: 12px; }
 nav button.nopt:hover { opacity: 1; color: var(--accent); }

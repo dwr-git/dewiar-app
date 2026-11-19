@@ -232,29 +232,72 @@ function liteProbe() {
 setTimeout(liteProbe, 4000);
 
 /* навигация */
-/* «Душа»: дневник, душа, конституция и «Обо мне» — один пункт слева; каждая страница остаётся отдельной <section>,
-   а сверху у неё полоска вкладок. Вкладку открывает скрытая кнопка nav с тем же data-p; _direct отличает такой
-   переход от клика по пункту «Душа», который возвращает на последнюю открытую вкладку (soul_tab). */
-const SOUL_TABS = [["diary", "Дневник"], ["soul", "Душа"], ["const", "Конституция"], ["me", "Обо мне"]];
+/* Вкладки вместо пунктов меню. «Душа» (дневник, душа, конституция, «Обо мне») была одним пунктом с вкладками; 19.11
+   (владелец: «самые не популярные разделы… убрать лишнее, но элегантно, чтобы и было, но не мелькало») так же собраны:
+   «Память и душа», «Обучение» (неделя с Лирой, видеоуроки, вопрос — ответ, что я умею), «Платежи» + «Семья»,
+   «Dewiar.pro» + «Рефералы». Каждая страница остаётся своей <section>, сверху — полоска вкладок; вкладку открывает
+   скрытая кнопка nav (.sub) с тем же data-p, а первый пункт группы слева возвращает на последнюю открытую вкладку
+   (tab_<первый>). Скрытый на «Главной» или выключенный раздел — скрыт и во вкладках (navTabsSync). */
+const NAV_TABS = [
+  [["memory", "nav.memory", "Память"], ["diary", "nav.diary.tab", "Дневник"], ["soul", "nav.soul", "Душа"], ["const", "nav.const", "Конституция"], ["me", "nav.me", "Обо мне"]],
+  [["course", "nav.course", "Неделя с Лирой"], ["lessons", "nav.lessons", "Видеоуроки"], ["qa", "nav.qa", "Вопрос — ответ"], ["tricks", "nav.tricks", "Что я умею"]],
+  [["pay", "nav.pay", "Платежи"], ["family", "nav.family", "Семья"]],
+  [["dw", "nav.dw", "Dewiar.pro"], ["ref", "nav.ref", "Рефералы"]]];
+const navTabGroup = (p) => NAV_TABS.find(g => g.some(t => t[0] === p));
 const lsGet = (k, d) => { try { return LS.get(k, d); } catch (e) { return d; } };   // LS объявлен позже, в memory.js
-function soulGo(p) { const b = $(`nav button[data-p="${p}"]`); if (!b) return; b._direct = true; b.click(); b._direct = false; }
-SOUL_TABS.forEach(([p]) => {
+function navGo(p) { const b = $(`nav button[data-p="${p}"]`); if (!b) return; b._direct = true; b.click(); b._direct = false; }
+const soulGo = navGo;                                      // прежнее имя
+NAV_TABS.forEach(g => g.forEach(([p]) => {
   const sec = $("#p-" + p); if (!sec) return;
-  const bar = document.createElement("div"); bar.className = "stabs";
-  bar.innerHTML = SOUL_TABS.map(([q, t]) => `<button data-go="${q}">${t}</button>`).join("");
-  $$("button", bar).forEach(x => x.onclick = () => soulGo(x.dataset.go));
+  const bar = document.createElement("div"); bar.className = "stabs ntabs";
+  bar.innerHTML = g.map(([q, k, t]) => `<button type="button" data-go="${q}" data-i18n="${k}">${t}</button>`).join("");
+  $$("button", bar).forEach(x => x.onclick = () => navGo(x.dataset.go));
   sec.insertBefore(bar, sec.firstChild);
+}));
+/* точка «новое» у спрятанного пункта («Семья»: зовут в семью) — на его вкладке и у первого пункта группы слева */
+NAV_TABS.forEach(g => {
+  const lead = $(`nav button[data-p="${g[0][0]}"]`), dots = g.slice(1).map(([p]) => [p, $(`nav button[data-p="${p}"] .ndot`)]).filter(x => x[1]);
+  if (!lead || !dots.length) return;
+  const mir = document.createElement("i"); mir.className = "ndot"; mir.setAttribute("aria-hidden", "true"); lead.appendChild(mir);
+  const sync = () => {
+    mir.classList.toggle("on", dots.some(([, d]) => d.classList.contains("on")) && !lead.querySelector(".ndot:not(:last-child).on"));
+    dots.forEach(([p, d]) => $$(`.ntabs button[data-go="${p}"]`).forEach(x => x.classList.toggle("dot", d.classList.contains("on"))));
+  };
+  dots.forEach(([, d]) => new MutationObserver(sync).observe(d, { attributes: true, attributeFilter: ["class"] }));
 });
+/** Вкладки — по меню: скрытый раздел (на «Главной», в «Возможностях») — без вкладки; группа из одной — без полоски */
+/* Раздел «по желанию» (HM_OPTIN, home.js: «Семья») ещё не включён — вкладка «+ Семья», как строка «+» в меню: нажали —
+   включено и открыто (выключить — в «Возможностях») */
+function navOptin(p) {
+  if (typeof HM_NAV === "undefined" || typeof HM_OPTIN === "undefined") return "";
+  const id = Object.keys(HM_NAV).find(a => HM_NAV[a].includes(p)), feat = id && HM_OPTIN[id] && HM_FEAT[id];
+  if (!feat || ((S && S.features) || {})[feat] === true) return "";
+  return typeof hmApps !== "function" || hmApps().includes(id) ? feat : "";
+}
+function navTabsSync() {
+  NAV_TABS.forEach(g => {
+    const opt = {}, vis = new Set(g.filter(([p], i) => { const b = $(`nav button[data-p="${p}"]`); if (!b) return false;
+      if (i === 0 || !b.hidden) return true; return !!(opt[p] = navOptin(p)); }).map(t => t[0]));
+    g.forEach(([p]) => { const bar = $(`#p-${p} > .ntabs`); if (!bar) return;
+      $$("button", bar).forEach(x => { const q = x.dataset.go; x.hidden = !vis.has(q); x.classList.toggle("nopt", !!opt[q]);
+        x.onclick = opt[q] ? async () => { await save({ features: { [opt[q]]: true } }, true);
+          if (window.featuresApply) featuresApply(); toast(`«${x.textContent.trim()}»: включено — выключить можно в «Возможностях»`); navGo(q); }
+          : () => navGo(q); });
+      bar.hidden = vis.size < 2; });
+  });
+}
+window.navTabsSync = navTabsSync;
 $$("nav button[data-p]").forEach(b => b.onclick = () => {
-  if (b.dataset.p === "diary" && !b._direct) {                 // «Душа» слева — открываем вкладку, на которой были
-    const t = lsGet("soul_tab", "diary");
-    if (t !== "diary" && SOUL_TABS.some(x => x[0] === t)) return soulGo(t);
+  const tg = navTabGroup(b.dataset.p);
+  if (tg && tg[0][0] === b.dataset.p && !b._direct) {          // первый пункт группы слева — вкладка, на которой были
+    const t = lsGet("tab_" + b.dataset.p, b.dataset.p), tb = $(`nav button[data-p="${t}"]`);
+    if (t !== b.dataset.p && tg.some(x => x[0] === t) && tb && !tb.hidden) return navGo(t);
   }
   $$("nav button").forEach(x => x.classList.toggle("cur", x === b));
   $$("section").forEach(s => s.classList.toggle("cur", s.id === "p-" + b.dataset.p));
   secOpen(b.dataset.p);
   if (core.connected) core.call("course_seen", { section: b.dataset.p }).catch(() => {});   // курс: «откройте …» — шаг засчитан
-  if (SOUL_TABS.some(t => t[0] === b.dataset.p)) { $('nav button[data-p="diary"]').classList.add("cur"); $$(".stabs button").forEach(x => x.classList.toggle("on", x.dataset.go === b.dataset.p)); try { LS.set("soul_tab", b.dataset.p); } catch (e) { } }
+  if (tg) { $(`nav button[data-p="${tg[0][0]}"]`).classList.add("cur"); $$(".ntabs button").forEach(x => x.classList.toggle("on", x.dataset.go === b.dataset.p)); try { LS.set("tab_" + tg[0][0], b.dataset.p); } catch (e) { } }
   if (b.dataset.p === "soul") loadSoul();
   if (b.dataset.p === "const") loadConst();
   if (b.dataset.p === "ref") loadRefs();             // «Рефералы» — с облака, настройки не нужны

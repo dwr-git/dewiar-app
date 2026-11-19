@@ -30,7 +30,7 @@ with sync_playwright() as p:
       featuresApply(); }""")
     pg.wait_for_timeout(300)
     r = pg.evaluate("() => [...document.querySelectorAll('nav .nopt')].filter(x => !x.hidden).map(x => x.textContent)")
-    ok(set(r) == {"+Семья", "+Поручения", "+Клиенты"}, f"выключенные разделы «по желанию» — тихими строками «+ …» на своём месте: {r}")
+    ok(set(r) == {"+Поручения", "+Клиенты"}, f"выключенные разделы «по желанию» — тихими строками «+ …» на своём месте («+ Семья» — вкладкой «Платежей», 19.11): {r}")
     ok(pg.evaluate("document.querySelector('nav button[data-p=team]').hidden"), "сам раздел, пока выключен, — скрыт")
     if os.environ.get("DEWIAR_SHOTS"): pg.screenshot(path=str(Path(os.environ["DEWIAR_SHOTS"]) / "studio-nav-optin.png"), clip={"x": 0, "y": 0, "width": 260, "height": 1000})
     pg.click("nav .nopt[data-feat=team]"); pg.wait_for_timeout(500)

@@ -97,7 +97,7 @@ class Family:
         self._send([p["pid"]], {"op": "invite"},
                    text=f"Приглашаю вести общий семейный бюджет в Dewiar: траты и общие платежи у всех вместе. "
                         "Принять: на телефоне — «Близкие» → вкладка «Семья» (обновите приложение Dewiar, если её нет), "
-                        "на компьютере — студия → «Семья».")
+                        "на компьютере — студия → «Платежи» → «Семья».")
         self._changed()
         return self.public()
 
@@ -223,7 +223,7 @@ class Family:
                     except Exception:  # noqa: BLE001
                         log.debug("семья: включить раздел", exc_info=True)
                     try:
-                        self.host.push("👪 Семейный бюджет", f"{name} приглашает вести общий бюджет — студия → «Семья»")
+                        self.host.push("👪 Семейный бюджет", f"{name} приглашает вести общий бюджет — студия → «Платежи» → «Семья»")
                     except Exception:  # noqa: BLE001
                         pass
             elif kind == "join" and not out:

@@ -142,7 +142,7 @@ class CommandsMixin(WorkCommands, SyncCommands, ServicesCommands, AccountCommand
         if tg is not None and getattr(tg, "paired", lambda: False)():
             try:
                 tg.send(f"🧸 Детский режим: {name} попросил(а) то, что нельзя: «{text[:120]}». Совёнок отказал и "
-                        "предложил спросить вас. Весь разговор — студия → «Дети».")
+                        "предложил спросить вас. Весь разговор — студия → «Для ребёнка».")
             except Exception:  # noqa: BLE001
                 log.debug("детский режим: Telegram", exc_info=True)
 
@@ -386,7 +386,7 @@ class CommandsMixin(WorkCommands, SyncCommands, ServicesCommands, AccountCommand
             return self.family_cmd(cmd, a)
         kids = getattr(self, "kids", None)
         if kids and kids.locked() and _kids_blocked(cmd, a):
-            raise ValueError("Детский режим: это может только взрослый — студия → «Дети», PIN родителя")
+            raise ValueError("Детский режим: это может только взрослый — студия → «Для ребёнка», PIN родителя")
         for part in _PARTS:                    # ветки по темам — в модулях commands_*: та же очередь проверок, что была
             r = part(self, cmd, a)             # функцией класса: проверки зовут Engine.command с подставным движком
             if r is not NotImplemented:

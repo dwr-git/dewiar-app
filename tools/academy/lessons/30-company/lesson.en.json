@@ -1,0 +1,157 @@
+{
+ "title": "Lesson 30 · Lira for your company",
+ "fps": 30,
+ "gap_in": 0.32,
+ "gap_scene": 1.0,
+ "tail": 2.2,
+ "lead": {
+  "title": 1.2,
+  "problem": 0.5,
+  "company": 0.7,
+  "people": 0.7,
+  "tasks": 0.6,
+  "site": 0.7,
+  "lead": 0.7,
+  "clients": 0.7,
+  "week": 0.7,
+  "everyone": 0.7,
+  "how": 0.7,
+  "end": 0.7
+ },
+ "lines": [
+  {
+   "id": "s1a",
+   "scene": "title",
+   "who": "lira",
+   "sub": "This is Lira's Academy, lesson thirty — “Lira for your company”.",
+   "tts": "This is Lira's Academy, lesson thirty — Lira for your company."
+  },
+  {
+   "id": "s2a",
+   "scene": "problem",
+   "who": "patrik",
+   "sub": "I have ten people, a website and a Telegram channel. I can't see who's doing what, leads get lost, and clients wait.",
+   "tts": "I have ten people, a website and a Telegram channel. I can't see who's doing what, leads get lost, and clients wait."
+  },
+  {
+   "id": "s2b",
+   "scene": "problem",
+   "who": "lira",
+   "sub": "Let's put it all in one place. Half an hour of setup — and then your company runs itself.",
+   "tts": "Let's put it all in one place. Half an hour of setup — and then your company runs itself."
+  },
+  {
+   "id": "s3a",
+   "scene": "company",
+   "who": "lira",
+   "sub": "Studio, “Brain”, “Create company”. The company has one balance for everyone, and each employee has their own limit.",
+   "tts": "Studio, Brain, Create company. The company has one balance for everyone, and each employee has their own limit."
+  },
+  {
+   "id": "s4a",
+   "scene": "people",
+   "who": "lira",
+   "sub": "“Invite an employee”: a name and what they do. Send the link in a messenger. They open it on their phone — nothing to install.",
+   "tts": "Invite an employee: a name, and what they do. Send the link in a messenger. They open it on their phone — nothing to install."
+  },
+  {
+   "id": "s5a",
+   "scene": "tasks",
+   "who": "patrik",
+   "sub": "Lira, tell Sergey to replace the wiring at the Ivanovs' by Friday.",
+   "tts": "Lira, tell Sergey to replace the wiring at the Ivanovs' by Friday."
+  },
+  {
+   "id": "s5b",
+   "scene": "tasks",
+   "who": "lira",
+   "sub": "Sergey taps “I'll take it”, then “Done” — with a photo. He can only reschedule with a reason. An hour before the deadline, I'll remind him myself.",
+   "tts": "Sergey taps I'll take it, then Done — with a photo. He can only reschedule with a reason. An hour before the deadline, I'll remind him myself."
+  },
+  {
+   "id": "s5c",
+   "scene": "tasks",
+   "who": "lira",
+   "sub": "And the board shows at a glance: who's doing what, what's waiting for your review, and what's overdue.",
+   "tts": "And the board shows at a glance: who's doing what, what's waiting for your review, and what's overdue."
+  },
+  {
+   "id": "s6a",
+   "scene": "site",
+   "who": "lira",
+   "sub": "I'll build the website from a description. In “Website chat”, I take the knowledge from your site in one click — prices, services, address.",
+   "tts": "I'll build the website from a description. In Website chat, I take the knowledge from your site in one click — prices, services, address."
+  },
+  {
+   "id": "s6b",
+   "scene": "site",
+   "who": "lira",
+   "sub": "The assistant answers clients day and night — on the site and in the company's Telegram bot, even when the computer is off.",
+   "tts": "The assistant answers clients day and night — on the site and in the company's Telegram bot, even when the computer is off."
+  },
+  {
+   "id": "s7a",
+   "scene": "lead",
+   "who": "lira",
+   "sub": "A client left a phone number — a card appears in “Clients”, and the lead instantly becomes a task for an employee: get in touch within two hours.",
+   "tts": "A client left a phone number — a card appears in Clients, and the lead instantly becomes a task for an employee: get in touch within two hours."
+  },
+  {
+   "id": "s8a",
+   "scene": "clients",
+   "who": "lira",
+   "sub": "The card shows what you agreed and the next step. Deals move from lead to payment, and who owes you is shown in red.",
+   "tts": "The card shows what you agreed and the next step. Deals move from lead to payment, and who owes you is shown in red."
+  },
+  {
+   "id": "s9a",
+   "scene": "week",
+   "who": "lira",
+   "sub": "Every Friday — the week in review: tasks given and done, who did how much, how many leads came in, and what's overdue.",
+   "tts": "Every Friday — the week in review: tasks given and done, who did how much, how many leads came in, and what's overdue."
+  },
+  {
+   "id": "s9b",
+   "scene": "week",
+   "who": "patrik",
+   "sub": "And all of this from my phone?",
+   "tts": "And all of this from my phone?"
+  },
+  {
+   "id": "s9c",
+   "scene": "week",
+   "who": "lira",
+   "sub": "From your phone: the same board — assign, accept, send back with a comment.",
+   "tts": "From your phone: the same board — assign, accept, send back with a comment."
+  },
+  {
+   "id": "s10a",
+   "scene": "everyone",
+   "who": "lira",
+   "sub": "And every day, I'm an assistant for everyone: I'll remind you of a meeting, sort your mail, find what you need in your documents. For the manager and for every employee — by voice, on the computer and on the phone.",
+   "tts": "And every day, I'm an assistant for everyone: I'll remind you of a meeting, sort your mail, find what you need in your documents. For the manager and for every employee — by voice, on the computer and on the phone."
+  },
+  {
+   "id": "s11a",
+   "scene": "how",
+   "who": "lira",
+   "sub": "Studio, “Brain”, “Create company” — then “Company launch” walks you through five steps with checkboxes.",
+   "tts": "Studio, Brain, Create company — then Company launch walks you through five steps with checkboxes."
+  },
+  {
+   "id": "s12a",
+   "scene": "end",
+   "who": "lira",
+   "sub": "Dewiar — at dewiar.pro.",
+   "tts": "Deviar — at deviar dot pro."
+  },
+  {
+   "id": "s12b",
+   "scene": "end",
+   "who": "lira",
+   "sub": "See you in the next lesson!",
+   "tts": "See you in the next lesson!"
+  }
+ ],
+ "lang": "en"
+}

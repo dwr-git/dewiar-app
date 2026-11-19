@@ -87,11 +87,11 @@
   <div class="ng" data-fold-k="Семья и близкие" data-i18n="nav.g.family">Семья и близкие</div>
   <button data-p="close" title="Переписка с помощниками близких людей" data-i18n="nav.close" data-i18n-title="nav.close.tip">Близкие<i class="ndot" id="close-dot"></i></button>
   <div class="nav-groups" id="nav-groups" hidden></div>
-  <button data-p="family" title="Семейный бюджет: общие траты и платежи с близкими" data-i18n="nav.family" data-i18n-title="nav.family.tip">Семья<i class="ndot" id="fam-dot"></i></button>
-  <button data-p="ref" title="Приглашённые друзья: созвездие, ссылка, награды" data-i18n="nav.ref" data-i18n-title="nav.ref.tip">Рефералы</button>
+  <button data-p="family" class="sub" title="Семейный бюджет: общие траты и платежи с близкими" data-i18n="nav.family" data-i18n-title="nav.family.tip">Семья<i class="ndot" id="fam-dot"></i></button>
+  <button data-p="ref" class="sub" title="Приглашённые друзья: созвездие, ссылка, награды" data-i18n="nav.ref" data-i18n-title="nav.ref.tip">Рефералы</button>
   <div class="ng" data-fold-k="Режимы Лиры" data-i18n="nav.g.modes">Режимы Лиры</div>
-  <button data-p="kids" title="Режим «Для ребёнка»: Лира на этом компьютере становится другом ребёнка — безопасные темы, время и отчёт вам" data-i18n="nav.kids" data-i18n-title="nav.kids.tip">Для ребёнка</button>
-  <button data-p="senior" title="Режим «Для старших»: крупно и просто, лекарства, «всё хорошо» близким, защита от мошенников" data-i18n="nav.senior" data-i18n-title="nav.senior.tip">Для старших</button>
+  <button data-p="kids" class="nmode" title="Режим «Для ребёнка»: Лира на этом компьютере становится другом ребёнка — безопасные темы, время и отчёт вам" data-i18n="nav.kids" data-i18n-title="nav.kids.tip">Для ребёнка</button>
+  <button data-p="senior" class="nmode" title="Режим «Для старших»: крупно и просто, лекарства, «всё хорошо» близким, защита от мошенников" data-i18n="nav.senior" data-i18n-title="nav.senior.tip">Для старших</button>
   <div class="ng" data-fold-k="Работа" data-i18n="nav.g.work">Работа</div>
   <button data-p="team" title="Поручения сотрудникам: берут, делают с фото, переносят с причиной" hidden data-i18n="nav.team" data-i18n-title="nav.team.tip">Поручения<i class="ndot" id="team-dot"></i></button>
   <button data-p="clients" title="Клиенты: кто это, о чём договорились, следующий шаг" hidden data-i18n="nav.clients" data-i18n-title="nav.clients.tip">Клиенты<i class="ndot" id="cr-dot"></i></button>
@@ -107,14 +107,9 @@
   <button class="nav-g nav-plg nav-plg-all" id="nav-plg-all" type="button" title="Готовые плагины Dewiar: Художник, Переводчик, Путешествия, Рекрутер, Тендеры и другие — поставить одним нажатием" data-i18n-title="nav.plgall.tip"><i class="nav-gi emo nav-pi" aria-hidden="true">🧩</i><span data-i18n="nav.plgall">Все плагины</span></button>
   <button data-p="plg" class="sub" hidden data-i18n="nav.plg">Плагин</button>
   <button data-p="plgnew" class="sub" hidden data-i18n="nav.plgnew">Создать плагин</button>
-  <div class="ng" data-fold-k="Обучение" data-i18n="nav.g.learn">Обучение</div>
-  <button data-p="course" title="Короткие уроки по пять минут" data-i18n="nav.course" data-i18n-title="nav.course.tip">Неделя с Лирой<i class="ndot" id="course-dot"></i></button>
-  <button data-p="lessons" title="ИИ Академия Лиры: мультфильмы по минуте — по одной возможности на урок" data-i18n="nav.lessons" data-i18n-title="nav.lessons.tip">Видеоуроки</button>
-  <button data-p="qa" title="Ответы на вопросы обо всём, что умеет Лира" data-i18n="nav.qa" data-i18n-title="nav.qa.tip">Вопрос — ответ</button>
-  <button data-p="tricks" title="Короткие фразы, которые помощник понимает сразу" data-i18n="nav.tricks" data-i18n-title="nav.tricks.tip">Что я умею</button>
   <div class="ng" data-fold-k="Знания" data-i18n="nav.g.knowledge">Знания</div>
-  <button data-p="memory" data-i18n="nav.memory">Память</button>
-  <button data-p="diary" title="Дневник, душа, конституция и что ассистент знает о вас" data-i18n="nav.diary" data-i18n-title="nav.diary.tip">Душа</button>
+  <button data-p="memory" title="Что Лира помнит, дневник, душа, конституция и что она знает о вас" data-i18n="nav.memsoul" data-i18n-title="nav.memsoul.tip">Память и душа</button>
+  <button data-p="diary" class="sub">Дневник</button>
   <button data-p="soul" class="sub" data-i18n="nav.soul">Душа</button>
   <button data-p="const" class="sub" data-i18n="nav.const">Конституция</button>
   <button data-p="me" class="sub" data-i18n="nav.me">Обо мне</button>
@@ -136,6 +131,10 @@
   <button data-p="servers" data-i18n="nav.servers">Серверы</button>
   <button data-p="safety" data-i18n="nav.safety">Безопасность</button>
   <div class="grow"></div>
+  <button data-p="course" title="Неделя с Лирой, видеоуроки, вопросы и ответы, короткие фразы" data-i18n="nav.learn" data-i18n-title="nav.learn.tip">Обучение<i class="ndot" id="course-dot"></i></button>
+  <button data-p="lessons" class="sub" data-i18n="nav.lessons">Видеоуроки</button>
+  <button data-p="qa" class="sub" data-i18n="nav.qa">Вопрос — ответ</button>
+  <button data-p="tricks" class="sub" data-i18n="nav.tricks">Что я умею</button>
   <button data-p="ideas" title="Что сделать дальше — предложите идею и голосуйте за чужие" data-i18n="nav.ideas" data-i18n-title="nav.ideas.tip">Идеи Лиры<i class="ndot" id="id-dot"></i></button>
   <button data-p="about" data-i18n="nav.about">О программе</button>
   <button type="button" class="nav-bug" id="nav-bug" title="Что-то не так — снимок экрана и пара слов разработчику" data-i18n="nav.bug" data-i18n-title="nav.bug.tip">Сообщить о проблеме</button>

@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../../../ui/assets/fonts.css">
+<style>
+/* Урок 30 · Лира для компании. Светлый неоморфизм серии. Главная вещь урока — полный цикл компании в одном месте (владелец 19.11: «руководитель, посмотрев одно видео, сразу понимал бы, зачем она ему»): компания и общий баланс, сотрудник по ссылке, поручение голосом → «Беру» → «Сделано» с фото, доска; сайт и консультант на сайте и в Telegram; заявка → карточка клиента и поручение; сделки и кто должен; итог недели; каждому — помощник на каждый день; «Запуск компании» — пять шагов. */
+:root { --bg: #dbe5f1; --nd: #b8c5d6; --nl: #f7fbff; --ink: #24324a; --mut: rgba(36,50,74,.66); --accent: #4560ea;
+  --brand: linear-gradient(135deg, #6a8dff 0%, #4f6cf0 100%); --lira: #5aa9e6; --patrik: #e59a1f; --ok: #2fb383; --tg: #2AABEE;
+  --raise: 14px 14px 32px var(--nd), -14px -14px 32px var(--nl); --raise-s: 6px 6px 14px var(--nd), -6px -6px 14px var(--nl);
+  --press: inset 4px 4px 9px var(--nd), inset -4px -4px 9px var(--nl); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; color: var(--ink); }
+#film { position: relative; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; background: var(--bg); }
+#bg { position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 90% at 50% 0%, #e7eef8 0%, var(--bg) 60%); }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .5; z-index: -1; }
+#b1 { width: 900px; height: 900px; background: radial-gradient(circle, rgba(42,171,238,.25), transparent 65%); }
+#b2 { width: 760px; height: 760px; background: radial-gradient(circle, rgba(255,200,120,.22), transparent 65%); }
+.layer { position: absolute; inset: 0; }
+#brand { position: absolute; left: 64px; top: 50px; display: flex; align-items: center; gap: 16px; }
+#brand img { width: 52px; height: 52px; border-radius: 16px; padding: 7px; background: var(--bg); box-shadow: var(--raise-s); }
+#brand b { display: block; font: 600 22px/1.2 Unbounded, sans-serif; } #brand span { display: block; font-size: 17px; color: var(--mut); margin-top: 3px; font-weight: 600; }
+.seat { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 0 0; }
+.orb { position: relative; border-radius: 50%; box-shadow: var(--raise); background: var(--bg); }
+.orb::before { content: ""; position: absolute; inset: 4%; border-radius: 50%; background: var(--c); filter: blur(34px); opacity: var(--glow, .22); z-index: -1; }
+.orb canvas { width: 100%; height: 100%; display: block; }
+.seat b { font: 600 34px/1.2 Unbounded, sans-serif; margin-top: 22px; white-space: nowrap; }
+#t-title { position: absolute; left: 0; right: 0; top: 660px; text-align: center; }
+#t-title h1 { font: 700 112px/1 Unbounded, sans-serif; letter-spacing: -.02em; } #t-title p { font-size: 32px; color: var(--mut); margin-top: 22px; font-weight: 600; }
+#plane { position: absolute; left: 1080px; top: 230px; width: 220px; height: 220px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise); display: grid; place-items: center; }
+#plane svg { width: 110px; height: 110px; fill: none; stroke: var(--tg); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+
+
+#plane svg { stroke: var(--accent); }
+.say { position: absolute; left: 620px; top: 190px; max-width: 760px; padding: 22px 28px; border-radius: 28px 28px 8px 28px; background: var(--brand); color: #fff; font-size: 28px; font-weight: 700; line-height: 1.35; }
+.card { position: absolute; left: 620px; top: 200px; width: 820px; padding: 32px 38px; border-radius: 36px; background: var(--bg); box-shadow: var(--raise); }
+.card h3 { font: 700 32px Unbounded; margin-bottom: 8px; } .card > small { display: block; font-size: 18px; font-weight: 800; color: var(--mut); margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 18px; box-shadow: var(--raise-s); margin-top: 14px; font-size: 23px; font-weight: 700; }
+.row i { font-style: normal; font-size: 30px; } .row em { margin-left: auto; white-space: nowrap; font-style: normal; font-size: 18px; font-weight: 800; padding: 9px 15px; border-radius: 12px; color: var(--accent); background: rgba(69,96,234,.1); }
+.row em.ok { color: #1e7d5b; background: rgba(47,179,131,.15); } .row em.warn { color: #b04a5c; background: rgba(176,74,92,.1); }
+.chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; } .chips span { padding: 14px 20px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 22px; font-weight: 700; }
+.chips span.on { color: #fff; background: var(--brand); box-shadow: none; }
+.phone { position: absolute; left: 1420px; top: 130px; width: 400px; height: 720px; border-radius: 58px; background: var(--bg); box-shadow: var(--raise); padding: 20px; }
+.phone .scr { width: 100%; height: 100%; border-radius: 42px; background: #eef2f8; padding: 30px 22px; overflow: hidden; }
+.phone h5 { font: 700 25px Unbounded; margin-bottom: 16px; }
+.bub { padding: 14px 18px; border-radius: 20px; background: #fff; font-size: 19px; font-weight: 600; line-height: 1.4; margin-top: 12px; max-width: 86%; }
+.bub.me { margin-left: auto; color: #fff; background: var(--brand); }
+.big { font: 600 64px Unbounded; color: var(--accent); }
+.mess { position: absolute; left: 620px; top: 200px; width: 1180px; height: 560px; }
+.mess span { position: absolute; padding: 16px 22px; border-radius: 20px; background: var(--bg); box-shadow: var(--raise-s); font-size: 24px; font-weight: 800; white-space: nowrap; }
+.mess b { position: absolute; left: 300px; top: 470px; font: 600 40px Unbounded; color: #b04a5c; }
+
+.win { position: absolute; left: 640px; top: 140px; width: 760px; padding: 12px 14px 14px; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); }
+.win .bar { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 6px 10px; }
+.win .bar i { width: 13px; height: 13px; border-radius: 50%; background: var(--nd); }
+.win .bar span { margin-left: 14px; flex: 1; padding: 7px 16px; border-radius: 99px; box-shadow: var(--press); font-size: 17px; font-weight: 800; color: var(--mut); }
+.win .bar span b { color: var(--ink); }
+.tgl { width: 76px; height: 42px; border-radius: 99px; box-shadow: var(--press); position: relative; flex: none; }
+.tgl i { position: absolute; top: 5px; left: 5px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: var(--raise-s); }
+.tgl.on { background: var(--brand); box-shadow: none; } .tgl.on i { left: 39px; }
+.toast { position: absolute; display: flex; align-items: center; gap: 18px; padding: 20px 26px; border-radius: 26px; background: var(--bg); box-shadow: var(--raise); }
+.toast > i { flex: none; width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; font-size: 32px; font-style: normal; background: rgba(47,179,131,.16); }
+.toast small { display: block; font-size: 16px; font-weight: 800; color: var(--mut); } .toast b { display: block; font-size: 22px; font-weight: 800; margin-top: 2px; }
+.st { position: absolute; display: grid; grid-template-columns: 250px 1fr; border-radius: 30px; background: var(--bg); box-shadow: var(--raise); overflow: hidden; }
+.st nav { padding: 24px 16px; background: rgba(255,255,255,.38); display: flex; flex-direction: column; gap: 3px; }
+.st nav .g { margin: 12px 10px 4px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.st nav .g:first-child { margin-top: 0; }
+.st nav span { padding: 8px 12px; border-radius: 12px; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.st nav span.on { color: #fff; background: var(--brand); }
+.st .pg { padding: 28px 32px; } .st .pg h3 { font: 700 30px Unbounded; } .st .pg > small { display: block; margin-top: 6px; font-size: 18px; font-weight: 700; color: var(--mut); }
+#cur { position: absolute; left: 0; top: 0; width: 34px; height: 34px; z-index: 9; filter: drop-shadow(0 4px 6px rgba(36,50,74,.35)); }
+
+#plane svg { stroke: var(--accent); }
+.st { left: 640px; top: 112px; width: 1180px; height: 728px; grid-template-columns: 230px 1fr; }
+.st nav { padding: 24px 12px; gap: 2px; } .st nav span { font-size: 17px; } .st nav span i { font-style: normal; margin-right: 8px; }
+.st .pg { position: relative; padding: 26px 30px; } .st .pg > small { font-size: 17px; }
+.cd { padding: 18px 22px; border-radius: 22px; box-shadow: var(--raise-s); }
+.cd h4 { font: 700 19px Unbounded; margin-bottom: 10px; } .cd h4 small { margin-left: 8px; font: 700 14px Manrope; color: var(--mut); }
+.btn { position: relative; display: inline-block; padding: 12px 22px; border-radius: 15px; font-size: 17px; font-weight: 800; box-shadow: var(--raise-s); white-space: nowrap; }
+.btn.pri { color: #fff; background: var(--brand); box-shadow: none; }
+.btn.ok { color: #fff; background: linear-gradient(135deg, #46d39a, #2fb383); box-shadow: none; }
+.btn::after { content: ""; position: absolute; inset: -7px; border-radius: 21px; border: 3px solid var(--accent); opacity: var(--ta, 0); transform: scale(var(--ts, 1)); }
+.fld { margin-top: 10px; padding: 12px 16px; border-radius: 14px; box-shadow: var(--press); font-size: 18px; font-weight: 700; min-height: 48px; }
+.fld.ph { color: var(--mut); }
+.lbl { margin-top: 14px; font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--mut); }
+.ava { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 18px; }
+.pp { display: flex; align-items: center; gap: 14px; padding: 12px 6px; border-bottom: 1px solid rgba(36,50,74,.08); font-size: 18px; font-weight: 700; }
+.pp:last-child { border-bottom: 0; } .pp small { display: block; font-size: 14px; color: var(--mut); } .pp em { margin-left: auto; font-style: normal; font-size: 15px; font-weight: 800; color: var(--mut); }
+.pp em.ok { color: #1e7d5b; }
+/* компания */
+#coBal { display: flex; align-items: baseline; gap: 14px; margin-top: 6px; } #coBal b { font: 600 46px Unbounded; color: var(--accent); }
+#coBal span { font-size: 17px; font-weight: 700; color: var(--mut); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+#stu.narrow { width: 760px; } #stu.narrow .board { gap: 10px; } #stu.narrow .tk b { font-size: 15px; } #stu.narrow .tk small { font-size: 12.5px; }
+/* доска поручений */
+.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+.board > div > h6 { font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--mut); margin: 0 4px 8px; }
+.tk { padding: 14px 16px; border-radius: 18px; box-shadow: var(--raise-s); margin-bottom: 12px; }
+.tk b { display: block; font-size: 17px; } .tk small { display: flex; justify-content: space-between; margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--mut); }
+.tk.late { box-shadow: none; background: rgba(176,74,92,.12); } .tk.late small i { color: #b04a5c; font-style: normal; }
+.tk.new { box-shadow: none; background: rgba(69,96,234,.1); }
+/* телефон: «Работа» */
+.ph2 .scr { padding: 34px 18px; }
+.ph2 .scr > small { display: block; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mut); }
+.job { margin-top: 12px; padding: 16px; border-radius: 22px; background: #fff; }
+.job b { display: block; font-size: 19px; line-height: 1.3; } .job small { display: block; margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--mut); }
+.job .acts { display: flex; gap: 8px; margin-top: 14px; } .job .btn { padding: 10px 14px; font-size: 15px; }
+.job .photo { margin-top: 12px; height: 120px; border-radius: 16px; background: linear-gradient(160deg, #e9e1d6, #cbbfae); position: relative; overflow: hidden; }
+.job .photo::after { content: ""; position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 18px;
+  background: radial-gradient(circle at 36% 50%, #3a4256 0 5px, transparent 6px), radial-gradient(circle at 64% 50%, #3a4256 0 5px, transparent 6px), radial-gradient(circle, #fff 0 26px, #f1f3f7 27px);
+  box-shadow: 0 8px 18px -8px rgba(36,50,74,.5); }
+.job .st3 { display: inline-block; margin-top: 10px; padding: 5px 11px; border-radius: 99px; font-size: 13px; font-weight: 800; color: #1e7d5b; background: rgba(47,179,131,.16); }
+.msg { margin-top: 10px; padding: 12px 14px; border-radius: 18px; background: #fff; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.msg u { text-decoration: none; color: var(--accent); font-weight: 800; }
+/* сайт с чатом */
+#w1 { left: 640px; top: 120px; width: 830px; }
+.site { --sb: #F2F6FB; --sf: #1D2B44; --sm: rgba(29,43,68,.62); --sa: #F2A516; position: relative; height: 560px; overflow: hidden; border-radius: 16px; background: var(--sb); color: var(--sf); }
+.site .nv { display: flex; align-items: center; gap: 24px; padding: 18px 28px; font-size: 16px; font-weight: 700; }
+.site .lg { display: flex; align-items: center; gap: 9px; font: 700 20px Unbounded; margin-right: 8px; }
+.site .lg i { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-style: normal; font-size: 17px; background: var(--sa); }
+.site .nv span { color: var(--sm); }
+.site .hero { padding: 40px 28px 0; } .site .hero h4 { font: 700 40px/1.12 Unbounded; letter-spacing: -.02em; max-width: 520px; }
+.site .hero p { margin-top: 14px; font-size: 18px; font-weight: 600; color: var(--sm); max-width: 470px; line-height: 1.5; }
+.site .hero .bt { display: inline-block; margin-top: 22px; padding: 13px 22px; border-radius: 14px; background: var(--sa); color: #1D2B44; font-weight: 800; }
+.chatw { position: absolute; right: 20px; bottom: 20px; width: 360px; padding: 16px; border-radius: 22px; background: #fff; box-shadow: 0 20px 44px -18px rgba(29,43,68,.45); }
+.chatw > small { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; } .chatw > small img { width: 28px; height: 28px; border-radius: 50%; }
+.cb { margin-top: 10px; padding: 10px 13px; border-radius: 16px; font-size: 15px; font-weight: 600; line-height: 1.4; background: #eef2f8; max-width: 88%; }
+.cb.me { margin-left: auto; color: #fff; background: #3550E0; }
+#kn { left: 900px; top: 770px; width: 620px; } #kn > i { background: rgba(69,96,234,.14); }
+.tgch .scr { background: #dfe9f2; padding: 30px 14px; }
+.tgch .hd { display: flex; align-items: center; gap: 10px; padding: 0 6px 12px; font-size: 16px; font-weight: 800; }
+.tgch .hd i { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-style: normal; background: var(--sa, #F2A516); }
+.tgch .hd small { display: block; font-size: 12px; color: var(--mut); }
+.tb { margin-top: 10px; padding: 10px 13px; border-radius: 16px; font-size: 15px; font-weight: 600; line-height: 1.4; background: #fff; max-width: 88%; }
+.tb.me { margin-left: auto; background: #e1f7cf; }
+#L-tg .phone { left: 1500px; top: 160px; width: 340px; height: 640px; }
+/* заявка */
+#lt { left: 640px; top: 130px; width: 560px; } #lt > i { background: rgba(240,180,40,.2); }
+#ccard { left: 640px; top: 290px; width: 560px; }
+#ctask { left: 1250px; top: 290px; width: 570px; }
+.kvl { display: flex; justify-content: space-between; padding: 9px 0; font-size: 17px; font-weight: 700; color: var(--mut); border-bottom: 1px solid rgba(36,50,74,.08); }
+.kvl:last-child { border-bottom: 0; } .kvl b { color: var(--ink); }
+.quote { margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: rgba(69,96,234,.08); font-size: 16px; font-weight: 600; line-height: 1.45; }
+.quote small { display: block; font-size: 13px; font-weight: 800; color: var(--accent); margin-bottom: 3px; }
+/* сделки */
+.deals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 16px; }
+.deals > div > h6 { display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--mut); margin: 0 4px 8px; }
+.deals > div > h6 b { color: var(--ink); letter-spacing: 0; }
+.owe { display: flex; align-items: center; gap: 18px; margin-top: 6px; } .owe b { font: 600 40px Unbounded; color: #b04a5c; } .owe span { font-size: 17px; font-weight: 700; color: var(--mut); }
+.owe em { margin-left: auto; font-style: normal; font-size: 16px; font-weight: 800; color: #1e7d5b; padding: 9px 14px; border-radius: 12px; background: rgba(47,179,131,.15); }
+/* итог недели */
+#wk { left: 640px; top: 150px; width: 760px; } #wk h3 { font-size: 30px; }
+#wk .ln { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid rgba(36,50,74,.08); font-size: 22px; font-weight: 700; line-height: 1.4; }
+#wk .ln:last-child { border-bottom: 0; } #wk .ln i { font-style: normal; flex: none; }
+#wk .ln.late { color: #b04a5c; }
+#L-boss .phone { left: 1460px; }
+.mini { margin-top: 10px; padding: 11px 13px; border-radius: 16px; background: #fff; font-size: 15px; font-weight: 700; }
+.mini small { display: block; font-size: 12.5px; font-weight: 800; color: var(--mut); margin-bottom: 3px; } .mini.late { background: rgba(176,74,92,.12); }
+.mini .acts { display: flex; gap: 6px; margin-top: 8px; } .mini .btn { padding: 7px 10px; font-size: 13px; }
+/* каждому — помощник */
+.dayg { position: absolute; left: 640px; top: 170px; width: 1180px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
+.dayg .toast { position: relative; } .dayg .toast > i { background: rgba(69,96,234,.12); }
+.dayg .toast b { font-size: 24px; } .dayg .toast small { font-size: 17px; }
+.who { position: absolute; left: 640px; top: 600px; width: 1180px; display: flex; gap: 22px; }
+.who span { flex: 1; display: flex; align-items: center; gap: 14px; padding: 20px 24px; border-radius: 24px; box-shadow: var(--raise-s); font-size: 21px; font-weight: 800; }
+.who span i { font-style: normal; font-size: 30px; }
+/* как начать */
+#how { top: 150px; width: 980px; }
+.chk { display: flex; gap: 12px; margin-top: 16px; } .chk span { flex: 1; display: flex; align-items: center; gap: 10px; padding: 14px 14px; border-radius: 18px; box-shadow: var(--raise-s); font-size: 18px; font-weight: 800; }
+.chk span i { flex: none; width: 26px; height: 26px; border-radius: 8px; box-shadow: var(--press); display: grid; place-items: center; font-style: normal; font-size: 15px; color: #fff; }
+.chk span.on i { background: linear-gradient(135deg, #46d39a, #2fb383); box-shadow: none; }
+
+#end { position: absolute; left: 0; right: 0; top: 600px; text-align: center; }
+#end h1 { font: 700 96px/1 Unbounded; letter-spacing: -.02em; } #end p { font-size: 34px; color: var(--mut); margin-top: 20px; font-weight: 600; }
+#end .next { display: inline-block; margin-top: 34px; padding: 16px 32px; border-radius: 99px; background: var(--bg); box-shadow: var(--raise-s); font-size: 26px; font-weight: 700; }
+#sub { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%); max-width: 1500px; text-align: center; padding: 16px 32px; border-radius: 24px;
+  background: rgba(36,50,74,.86); font: 600 38px/1.3 Manrope; color: #fff; text-wrap: balance; box-shadow: 0 18px 40px -18px rgba(36,50,74,.6); }
+#sub b { color: #ffcf7a; font-weight: 800; }
+</style></head>
+<body><div id="film">
+  <div id="bg"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+  <div id="brand"><img src="../../../../ui/assets/logo.png" alt=""><div><b>ИИ Академия Лиры</b><span>Урок 30 · Лира для компании</span></div></div>
+  <div class="layer" id="L-title"><div id="plane"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/><path d="M3 12.5h18M10.5 12.5v1.5h3v-1.5"/></svg></div>
+    <div id="t-title"><h1>Лира для компании</h1><p>Сотрудники, клиенты, сайт и деньги — в одном месте</p></div></div>
+<div class="mess" id="mess"><span style="left:0px;top:0px">Кто взял заказ Ивановых?</span><span style="left:420px;top:50px">Заявка с сайта — 2 дня без ответа</span><span style="left:800px;top:10px">Сергей, ты где?</span><span style="left:120px;top:170px">Счёт «Ромашке» оплатили?</span><span style="left:560px;top:200px">Telegram: 14 непрочитанных</span><span style="left:30px;top:320px">Где фото работ?</span><span style="left:480px;top:330px">Смета — у кого?</span><span style="left:860px;top:300px">Клиент ждёт звонка</span><b>Всё — в голове руководителя</b></div>
+  <div class="layer" id="L-left">
+    <div class="st" id="stu"><nav><div class="g">Главное</div><span data-n=""><i>🏠</i>Главная</span><div class="g">Для себя</div><span data-n=""><i>💬</i>Чат</span><span data-n=""><i>📅</i>Календарь</span><div class="g">Работа</div><span data-n="team"><i>📋</i>Поручения</span><span data-n="clients"><i>👥</i>Клиенты</span><span data-n="sites"><i>🌐</i>Сайты</span><span data-n="sitechat"><i>💭</i>Чат для сайта</span><div class="g">Настройка</div><span data-n="brain"><i>🧠</i>Мозг</span></nav>
+      <div class="pg">
+        <div class="pane" id="pCo"><h3>Мозг</h3><small>Компания: код от руководителя или своя</small>
+          <div class="cd" style="margin-top:18px" id="coNew"><div class="lbl" style="margin-top:0">Название компании</div><div class="fld" id="coName"></div>
+            <div style="margin-top:16px"><span class="btn pri" id="coGo">Создать компанию</span></div></div>
+          <div id="coDone"><div class="cd" style="margin-top:18px"><h4>Компания «Электро Плюс»<small>Вы — руководитель</small></h4>
+              <div id="coBal"><b>120 т.</b><span>баланс компании — один на всех</span></div></div>
+            <div class="grid2"><div class="cd"><h4>Места и лимиты</h4><div class="pp"><span class="ava" style="background:#5aa9e6">С</span><div>Сергей<small>электрик</small></div><em>лимит 10 т./мес.</em></div><div class="pp"><span class="ava" style="background:#e59a1f">А</span><div>Анна<small>менеджер</small></div><em>лимит 10 т./мес.</em></div><div class="pp"><span class="ava" style="background:#2fb383">О</span><div>Олег<small>сметчик</small></div><em>лимит 10 т./мес.</em></div></div>
+              <div class="cd"><h4>Запуск компании</h4><div id="coSteps"><div class="pp"><span class="ava" style="background:#2fb383">✓</span><div>Компания</div></div><div class="pp"><span class="ava" style="background:#b8c5d6">2</span><div>Знания</div></div><div class="pp"><span class="ava" style="background:#b8c5d6">3</span><div>Каналы</div></div></div></div></div></div></div>
+        <div class="pane" id="pIn"><h3>Поручения</h3><small>Пригласить сотрудника</small>
+          <div class="cd" style="margin-top:18px;max-width:560px"><div class="lbl" style="margin-top:0">Имя</div><div class="fld" id="inName"></div>
+            <div class="lbl">Чем занят</div><div class="fld" id="inRole"></div>
+            <div style="margin-top:16px"><span class="btn pri" id="inGo">Получить ссылку</span></div>
+            <div class="fld" id="inLink" style="margin-top:14px;color:var(--accent)">dewiar.pro/j/Kx7m-Q2</div></div></div>
+        <div class="pane" id="pBo"><h3>Поручения</h3><small>Компания «Электро Плюс» · доска</small>
+          <div class="board"><div><h6>Ждут проверки</h6><div class="tk " data-c="0"><b>Проводка у Ивановых</b><small><span>Сергей</span><i>📷 фото</i></small></div></div><div><h6>В работе</h6><div class="tk " data-c="1"><b>Счёт для «Ромашки»</b><small><span>Анна</span><i>до завтра</i></small></div><div class="tk " data-c="1"><b>Розетки в офисе</b><small><span>Сергей</span><i>сегодня</i></small></div></div><div><h6>Просрочено</h6><div class="tk late" data-c="2"><b>Смета для школы</b><small><span>Олег</span><i>вчера</i></small></div></div></div></div>
+        <div class="pane" id="pDe"><h3>Клиенты</h3><small>Сделки и кто должен</small>
+          <div class="cd" style="margin-top:16px"><div class="owe"><b>1 450</b><span>вам должны · срок оплаты прошёл</span><em>оплачено за месяц: 5 900</em></div></div>
+          <div class="deals"><div><h6>Заявка<b>1 200</b></h6><div class="tk "><b>Петрова</b><small><span>замена проводки</span></small></div></div><div><h6>Предложение<b>3 400</b></h6><div class="tk "><b>Школа №5</b><small><span>освещение</span></small></div></div><div><h6>Счёт<b>1 450</b></h6><div class="tk late"><b>«Ромашка»</b><small><span>до 15 ноября</span></small></div></div><div><h6>Оплачено<b>5 900</b></h6><div class="tk "><b>Ивановы</b><small><span>проводка</span></small></div></div></div></div>
+      </div></div>
+    <div class="win" id="w1"><div class="bar"><i></i><i></i><i></i><span><b>elektroplus.dewiar.pro</b></span></div>
+      <div class="site"><div class="nv"><div class="lg"><i>⚡</i>Электро Плюс</div><span>Услуги</span><span>Цены</span><span>Контакты</span></div>
+        <div class="hero"><h4>Электрик на дом за 2 часа</h4><p>Проводка, розетки, щиты и освещение. Гарантия на работы — 2 года.</p><span class="bt">Вызвать мастера</span></div>
+        <div class="chatw" id="chw"><small><img src="../../../../data/avatars/lira.webp" alt="">Консультант · онлайн</small>
+          <div class="cb me" id="cq">Сколько стоит заменить розетку?</div>
+          <div class="cb" id="ca">От 25 руб. за розетку, выезд сегодня с 14 до 18. Оставите телефон — мастер перезвонит.</div>
+          <div class="cb me" id="cp">+375 29 •••-••-17, Анна</div></div></div></div>
+    <div class="toast" id="kn"><i>🌐</i><div><small>ЗНАНИЯ — С ВАШЕГО САЙТА</small><b>Цены, услуги, адрес и часы работы</b></div></div>
+    <div class="toast" id="lt"><i>🔔</i><div><small>НОВАЯ ЗАЯВКА · САЙТ</small><b>Анна оставила телефон</b></div></div>
+    <div class="card" id="ccard"><h3>Анна Петрова</h3><small>Клиенты · новая карточка</small>
+      <div class="kvl">Телефон<b>+375 29 •••-••-17</b></div><div class="kvl">Откуда<b>чат на сайте</b></div>
+      <div class="quote"><small>О чём договорились</small>Заменить розетки на кухне, сегодня после 14:00</div>
+      <div class="kvl">Следующий шаг<b>позвонить · Сергей</b></div></div>
+    <div class="card" id="ctask"><h3>Поручение</h3><small>Заявка клиента — сразу сотруднику</small>
+      <div class="tk new" style="margin-top:14px"><b>Связаться с клиентом: Анна Петрова</b><small><span>Сергей</span><i>за 2 часа · до 16:40</i></small></div>
+      <div class="kvl">Сергею<b>пришло в «Работу»</b></div></div>
+    <div class="card" id="wk"><h3>Итог недели</h3><small>Пятница, 18:00 · компания «Электро Плюс»</small><div class="ln"><i>📋</i><span>Поручено 24, сделано 21.</span></div><div class="ln"><i>👷</i><span>Кто сделал: Сергей — 9, Анна — 7, Олег — 5.</span></div><div class="ln"><i>📨</i><span>Заявок клиентов 12, связались по 12.</span></div><div class="ln late"><i>⚠️</i><span>Просрочено 1: Олег — «Смета для школы».</span></div></div>
+    <div class="dayg" id="dayg"><div class="toast"><i>⏰</i><div><small>в 15:00 — «Ромашка»</small><b>Напомню о встрече</b></div></div><div class="toast"><i>✉️</i><div><small>3 важных из 40</small><b>Разберу почту</b></div></div><div class="toast"><i>📄</i><div><small>договор со школой, п. 4</small><b>Найду в документах</b></div></div><div class="toast"><i>✅</i><div><small>5 дел, 2 звонка</small><b>Дела на день</b></div></div></div>
+    <div class="who" id="whoR"><span><i>💻</i>Руководителю</span><span><i>📱</i>Каждому сотруднику</span><span><i>🎙</i>Голосом</span></div>
+    <div class="card" id="how"><h3>Лира для компании</h3><small>Студия → «Мозг» → «Создать компанию»</small>
+      <div class="lbl" style="margin-top:22px">Запуск компании — пять шагов</div>
+      <div class="chk" id="chk"><span><i>✓</i>Компания</span><span><i>✓</i>Знания</span><span><i>✓</i>Каналы</span><span><i>✓</i>Люди</span><span><i>✓</i>Заявки</span></div>
+      <div class="row"><i>📋</i>Поручения: «Беру» → «Сделано» с фото<em>доска и календарь</em></div>
+      <div class="row"><i>💭</i>Консультант на сайте и в Telegram<em>днём и ночью</em></div>
+      <div class="row"><i>👥</i>Заявка → карточка клиента и поручение<em class="ok">сама</em></div></div>
+  </div>
+  <div class="layer" id="L-emp"><div class="phone ph2"><div class="scr" id="emp">
+    <small>Работа · Электро Плюс</small>
+    <div class="msg" id="eInv">Вас пригласили в компанию «Электро Плюс»: <u>dewiar.pro/j/Kx7m-Q2</u></div>
+    <div class="job" id="eJob"><b>Заменить проводку у Ивановых</b><small>до пятницы · от руководителя</small>
+      <div class="acts" id="eActs"><span class="btn pri" id="eTake">Беру</span><span class="btn" id="eDone">Сделано</span><span class="btn">Перенести</span></div>
+      <div class="photo" id="ePh"></div><span class="st3" id="eSt">Сделано · с фото</span></div>
+    <div class="msg" id="eRem">⏰ Через час срок: «Заменить проводку у Ивановых»</div></div></div></div>
+  <div class="layer" id="L-tg"><div class="phone tgch"><div class="scr">
+    <div class="hd"><i>⚡</i><div>Электро Плюс<small>бот компании</small></div></div>
+    <div class="tb me" id="tq">Вы работаете в субботу?</div>
+    <div class="tb" id="ta">Да, в субботу с 10 до 16. Оставьте телефон — мастер перезвонит.</div></div></div></div>
+  <div class="layer" id="L-boss"><div class="phone"><div class="scr">
+    <h5>Сотрудники</h5><small style="font-size:13px;font-weight:800;color:var(--mut)">ЖДУТ ВАШЕЙ ПРОВЕРКИ</small>
+    <div class="mini"><small>Сергей · 📷 фото</small>Проводка у Ивановых<div class="acts"><span class="btn ok" id="bOk">Принять</span><span class="btn">Вернуть</span></div></div>
+    <small style="display:block;margin-top:14px;font-size:13px;font-weight:800;color:var(--mut)">ПРОСРОЧЕНО</small>
+    <div class="mini late"><small>Олег · вчера</small>Смета для школы<div class="acts"><span class="btn">Напомнить</span><span class="btn">Написать</span></div></div>
+    <div style="margin-top:14px"><span class="btn pri" id="bAs">Поручить</span></div></div></div></div>
+  <svg id="cur" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.6L10 19z" fill="#fff" stroke="#24324a" stroke-width="1.6" stroke-linejoin="round"/></svg>
+
+  <div class="layer" id="L-end"><div id="end"><h1>dewiar.pro</h1><p>Бесплатно · Windows, Linux, Android и браузер</p><span class="next">Скоро — новые уроки</span></div></div>
+
+  <div class="seat" id="s-lira" style="--c:var(--lira)"><div class="orb"><canvas id="e-lira" width="600" height="600"></canvas></div><b>Лира</b></div>
+  <div class="seat" id="s-patrik" style="--c:var(--patrik)"><div class="orb"><canvas id="e-patrik" width="600" height="600"></canvas></div><b>Патрик</b></div>
+  <div id="sub"></div>
+</div>
+<script>document.write('<script src="' + (new URLSearchParams(location.search).get("tl") || "out/timeline.js") + '"><\/script>');</script>
+<script src="../../../../ui/assets/entities.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const LN = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+const SC = Object.fromEntries(TL.scenes.map(s => [s.id, s]));
+const at = (id) => LN[id].start, end = (id) => LN[id].start + LN[id].dur;
+const P = (who, x, y, sz, o) => ({ [who]: [x, y, sz, o] });
+const POS = {
+  title: { lira: [700, 320, 330, 1], patrik: [1500, 420, 240, 0] },
+  problem: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  company: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  people: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  tasks: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  site: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  lead: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  clients: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  week: { lira: [330, 730, 210, 1], patrik: [330, 350, 250, 1] },
+  everyone: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  how: { lira: [330, 470, 280, 1], patrik: [330, 470, 300, 0] },
+  end: { lira: [960, 330, 300, 1], patrik: [330, 470, 300, 0] },
+};
+const ORDER = TL.scenes.map(s => s.id);
+function sceneAt(T) { let i = 0; ORDER.forEach((id, k) => { if (T >= SC[id].start) i = k; }); return i; }
+function seatPos(who, T) {
+  const i = sceneAt(T), cur = POS[ORDER[i]][who], prev = i ? POS[ORDER[i - 1]][who] : cur;
+  return cur.map((v, j) => lerp(prev[j], v, ease((T - SC[ORDER[i]].start) / 1.1)));
+}
+const ENT = {};
+for (const [who, color] of [["lira", "#9BD4FF"], ["patrik", "#FFB547"]]) {
+  ENT[who] = new DewiarEntity($("#e-" + who), { style: "photo", color, image: `../../../../data/avatars/${who}.webp`, live: who, ring: false, plate: false, tone: "neu", voiceLevels: true, fx: "wave", lipsync: true });
+  ENT[who].set({ state: "idle" });
+}
+function vis(el, k, dy = 0, sc = 1) { el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px) scale(${lerp(sc, 1, k)})`; el.style.visibility = k > 0.001 ? "visible" : "hidden"; }
+function layer(id, T, from, to) { const k = Math.min(out((T - from) / 0.6), 1 - out((T - to + 0.5) / 0.5)); vis($("#" + id), clamp(k)); return clamp(k); }
+// карточка слева видна только в своей сцене
+function scene(el, T, a, b, dy = 30) { vis(el, Math.min(out((T - a) / 0.5), 1 - out((T - b + 0.4) / 0.4)), dy, .97); }
+function post(el, T, t0) { const k = out((T - t0) / 0.5); el.style.display = T >= t0 ? "" : "none"; el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * 30}px)`; }
+
+const type = (txt, k) => { txt = (window.DW_FILM_TX || (s => s))(txt); return txt.slice(0, Math.round(txt.length * clamp(k))); };
+window.render = function (T, f) {
+  const s = (id) => SC[id];
+  $("#b1").style.transform = `translate(${-150 + 120 * Math.sin(T / 9)}px, ${-200 + 80 * Math.cos(T / 11)}px)`;
+  $("#b2").style.transform = `translate(${1300 + 140 * Math.cos(T / 10)}px, ${560 + 90 * Math.sin(T / 8)}px)`;
+  layer("L-title", T, 0.2, s("problem").start);
+  vis($("#plane"), out((T - 0.8) / 0.6), 0, .8);
+
+  const ctr = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  const walk = (KF) => { let p = KF[0][1]; for (let i = 1; i < KF.length; i++) { const [ta, pa] = KF[i - 1], [tb, pb] = KF[i];
+    if (T >= ta) { const k = ease((T - Math.max(ta, tb - 0.9)) / 0.8); p = [lerp(pa[0], pb[0], k), lerp(pa[1], pb[1], k)]; } } return p; };
+  const cursor = (p, o) => { const c = $("#cur"); c.style.opacity = o; c.style.transform = `translate(${p[0] - 4}px, ${p[1] - 2}px)`; };
+
+  scene($("#mess"), T, s("problem").start + 0.3, s(ORDER[2]).start);
+  [...$("#mess").querySelectorAll("span")].forEach((c, i) => { const k = out((T - s("problem").start - 0.5 - i * 0.3) / 0.4);
+    c.style.opacity = k; c.style.transform = `translate(${Math.sin(T * 0.9 + i) * 8}px, ${(1 - k) * 20 + Math.cos(T * 0.7 + i) * 6}px) rotate(${Math.sin(i * 1.7) * 4}deg)`; });
+  vis($("#mess b"), out((T - s("problem").start - 3.2) / 0.4), 12);
+
+  const tap = (el, t0) => { const k = (T - t0) / 0.6; const on = k > 0 && k < 1;
+    el.style.setProperty("--ta", on ? (1 - k).toFixed(3) : 0); el.style.setProperty("--ts", on ? (1 + k * 0.2).toFixed(3) : 1);
+    el.style.transform = k > 0 && k < 0.22 ? "scale(.95)" : ""; };
+  const navOn = (n) => [...$("#stu nav").querySelectorAll("span")].forEach(c => c.classList.toggle("on", c.dataset.n === n));
+  layer("L-left", T, s("problem").start + 0.2, s("end").start);
+  const S = (id) => s(id).start, E = (id) => s(ORDER[ORDER.indexOf(id) + 1]).start;
+  // студия: компания → приглашение → доска → (сайт отдельно) → сделки
+  const stuK = Math.max(
+    Math.min(out((T - S("company") - 0.2) / 0.5), 1 - out((T - E("people") + 0.4) / 0.4)),
+    Math.min(out((T - at("s5c") + 0.3) / 0.5), 1 - out((T - E("tasks") + 0.4) / 0.4)),
+    Math.min(out((T - S("clients") - 0.2) / 0.5), 1 - out((T - E("clients") + 0.4) / 0.4)));
+  vis($("#stu"), clamp(stuK), 24, .97);
+  const pane = T < S("people") ? "pCo" : T < S("tasks") ? "pIn" : T < S("clients") ? "pBo" : "pDe";
+  ["pCo", "pIn", "pBo", "pDe"].forEach(p => $("#" + p).style.display = p === pane ? "" : "none");
+  navOn({ pCo: "brain", pIn: "team", pBo: "team", pDe: "clients" }[pane]);
+  $("#stu").classList.toggle("narrow", pane === "pIn" || pane === "pBo");     // рядом телефон сотрудника
+  // компания: название → «Создать компанию» → баланс, места, «Запуск компании»
+  const c0 = S("company"), cd = LN.s3a.dur, tCo = c0 + 0.5 + cd * 0.28;
+  $("#coName").textContent = type("Электро Плюс", (T - c0 - 0.6) / (cd * 0.18));
+  vis($("#coNew"), T < tCo + 0.5 ? 1 : 0, 0); $("#coNew").style.display = T < tCo + 0.5 ? "" : "none";
+  vis($("#coDone"), out((T - tCo - 0.5) / 0.4), 12); $("#coDone").style.display = T < tCo + 0.5 ? "none" : "";
+  tap($("#coGo"), tCo);
+  // приглашение: имя, чем занят → ссылка → у сотрудника на телефоне
+  const i0 = S("people"), id_ = LN.s4a.dur, tIn = i0 + 0.5 + id_ * 0.3;
+  $("#inName").textContent = type("Сергей", (T - i0 - 0.4) / (id_ * 0.1));
+  $("#inRole").textContent = type("электрик", (T - i0 - 0.4 - id_ * 0.12) / (id_ * 0.12));
+  tap($("#inGo"), tIn); vis($("#inLink"), out((T - tIn - 0.4) / 0.4), 8);
+  layer("L-emp", T, i0 + id_ * 0.55, E("tasks"));
+  vis($("#eInv"), out((T - i0 - id_ * 0.6) / 0.4), 10);
+  // поручение: Патрик голосом → у Сергея «Беру» → «Сделано» с фото → напоминание; доска
+  const t0 = S("tasks"), tTake = at("s5b") + LN.s5b.dur * 0.15, tDone = at("s5b") + LN.s5b.dur * 0.35;
+  vis($("#eJob"), out((T - at("s5a") - LN.s5a.dur * 0.6) / 0.4), 14);
+  tap($("#eTake"), tTake); tap($("#eDone"), tDone);
+  vis($("#eActs"), T < tDone + 0.5 ? 1 : 0, 0); $("#eActs").style.display = T < tDone + 0.5 ? "" : "none";
+  $("#ePh").style.display = T > tDone + 0.5 ? "" : "none"; vis($("#ePh"), out((T - tDone - 0.5) / 0.4), 10);
+  $("#eSt").style.display = T > tDone + 0.8 ? "" : "none";
+  vis($("#eRem"), out((T - at("s5b") - LN.s5b.dur * 0.75) / 0.4), 10);
+  [...$("#pBo").querySelectorAll(".tk")].forEach(c => vis(c, out((T - at("s5c") - 0.3 - (+c.dataset.c) * 0.5) / 0.4), 10));
+  // сайт: консультант отвечает; знания — с сайта; бот компании в Telegram
+  const w0 = S("site");
+  scene($("#w1"), T, w0 + 0.2, E("site"), 24);
+  vis($("#chw"), out((T - w0 - 0.8) / 0.4), 20); vis($("#cq"), out((T - w0 - 1.2) / 0.3), 8);
+  vis($("#ca"), out((T - w0 - 2.2) / 0.4), 8); vis($("#cp"), out((T - at("s6a") - LN.s6a.dur * 0.85) / 0.4), 8);
+  scene($("#kn"), T, at("s6a") + LN.s6a.dur * 0.45, at("s6b"), 20);
+  layer("L-tg", T, at("s6b") + 0.3, E("site"));
+  vis($("#tq"), out((T - at("s6b") - 0.8) / 0.3), 8); vis($("#ta"), out((T - at("s6b") - 1.8) / 0.4), 8);
+  // заявка: клиент оставил телефон → карточка → поручение Сергею
+  const l0 = S("lead"), ld = LN.s7a.dur;
+  scene($("#lt"), T, l0 + 0.2, E("lead"), 20);
+  scene($("#ccard"), T, l0 + ld * 0.25, E("lead"), 24);
+  scene($("#ctask"), T, l0 + ld * 0.55, E("lead"), 24);
+  // сделки: колонки и долг
+  [...$("#pDe").querySelectorAll(".deals > div")].forEach((c, i) => vis(c, out((T - S("clients") - 0.8 - i * 0.35) / 0.4), 10));
+  // итог недели и доска на телефоне руководителя
+  const k0 = S("week");
+  scene($("#wk"), T, k0 + 0.2, E("week"), 24);
+  [...$("#wk").querySelectorAll(".ln")].forEach((c, i) => vis(c, out((T - k0 - 0.7 - i * 0.45) / 0.4), 10));
+  layer("L-boss", T, at("s9c") - 0.2, E("week"));
+  tap($("#bOk"), at("s9c") + LN.s9c.dur * 0.55);
+  // каждому — помощник
+  const d0 = S("everyone");
+  vis($("#dayg"), Math.min(out((T - d0 - 0.2) / 0.5), 1 - out((T - E("everyone") + 0.4) / 0.4)), 20, .97);
+  [...$("#dayg").children].forEach((c, i) => vis(c, out((T - d0 - 0.5 - i * 0.4) / 0.4), 12));
+  vis($("#whoR"), Math.min(out((T - d0 - LN.s10a.dur * 0.55) / 0.5), 1 - out((T - E("everyone") + 0.4) / 0.4)), 16);
+  // как начать
+  const h0 = S("how");
+  scene($("#how"), T, h0 + 0.2, S("end"));
+  [...$("#chk").children].forEach((c, i) => c.classList.toggle("on", T > h0 + LN.s11a.dur * 0.45 + i * 0.35));
+  [...$("#how").querySelectorAll(".row")].forEach((c, i) => vis(c, out((T - h0 - 0.8 - i * 0.3) / 0.4), 12));
+  // курсор: «Создать компанию», «Получить ссылку»
+  cursor(walk([[c0, [1500, 760]], [tCo, ctr($("#coGo"))], [i0 + 0.3, ctr($("#coGo"))], [tIn, ctr($("#inGo"))]]),
+    T < S("people") ? Math.min(out((T - c0 - 0.2) / 0.4), 1 - out((T - tCo - 0.9) / 0.4)) : Math.min(out((T - i0 - 0.2) / 0.4), 1 - out((T - tIn - 0.9) / 0.4)));
+
+  layer("L-end", T, s("end").start + 0.2, TL.total + 5);
+  for (const who of ["lira", "patrik"]) {
+    const [x, y, size, o] = seatPos(who, T), el = $("#s-" + who);
+    el.style.opacity = o; el.style.visibility = o > 0.01 ? "visible" : "hidden";
+    const orb = el.querySelector(".orb"); orb.style.width = orb.style.height = size + "px";
+    el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+    el.querySelector("b").style.fontSize = Math.round(size / 9.5) + "px";
+    const lv = TL.env[who][f + 1] || 0, talking = TL.lines.some(l => l.who === who && T >= l.start - 0.05 && T <= l.start + l.dur + 0.1);
+    ENT[who].set({ state: talking ? "speaking" : "idle", level: lv, voice: true });
+    orb.style.setProperty("--glow", (0.18 + (talking ? 0.25 + lv * 0.35 : 0)).toFixed(3));
+  }
+  const cur = TL.lines.find(l => T >= l.start - 0.12 && T <= l.start + l.dur + 0.35);
+  const sub = $("#sub");
+  if (cur) { sub.style.opacity = 1; sub.innerHTML = (cur.who === "patrik" ? "<b>Патрик:</b> " : "") + cur.sub; } else sub.style.opacity = 0;
+};
+window.__ready = true;
+</script>
+</body></html>
